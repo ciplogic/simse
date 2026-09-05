@@ -1,6 +1,6 @@
 # Value types: inline containers
 
-Status: draft — being defined interactively.
+Status: design baseline — suitable for the first self-hosted implementation.
 
 Value types store their storage inline where the variable lives and deep-copy
 on copy. This document collects the container families built on that idea.
@@ -24,8 +24,9 @@ collections stay tiny.
 
 Each distinct inline capacity `N` is a **reified type** created by the compiler
 for that constant. `N` is not carried as an abstract runtime parameter; the
-layout is baked in per concrete type, written e.g. `SV4<T>` (for `N=4`) or
-`SV24<u8>` (for `N=24`).
+layout is baked in per concrete type. `SmallVector<N, T>` is the canonical
+source spelling; `SV<N, T>` and names such as `SV24<u8>` are compiler-internal
+spellings and may be used in diagnostics, but are not required user syntax.
 
 `SmallVector` layout (4-byte packing, 32-bit sizes):
 
@@ -68,9 +69,16 @@ total); strings up to 23 chars stay inline and beyond that spill to the heap
 Str = SV24<u8>   // 4 length + 4 capacity + 24 buffer = 32 bytes, NUL-terminated
 ```
 
-### Open questions
+## Aliasing and relocation
 
-- Does the language let a value type hold a raw `&T`/`*T` to something outside
-  itself (the classic small-buffer + aliasing concern)?
-- Are `SmallVector` / `SV<N, T>` spelling and the reified naming (`SV24`, etc.)
-  user-visible syntax or an internal representation?
+Value containers may contain counted references (`&T`), but may not contain raw
+pointers (`*T`) as ordinary fields. A raw pointer is an explicitly unsafe,
+non-owning borrow and cannot be stored in a value that can be copied or moved.
+This prevents a copied or relocated `SmallVector` from leaving an internal raw
+pointer pointing at the old storage. Programs that need an address-bearing
+object must use a stable counted box (`&T`) and take a raw pointer only for a
+lexically bounded unsafe operation.
+
+`SmallVector` copy and move operations preserve value semantics: elements are
+copied or moved, and heap storage is never shared implicitly. Implementations
+must update the inline/heap representation before exposing any raw pointer.
