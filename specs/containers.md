@@ -2,6 +2,9 @@
 
 Status: design baseline — suitable for the first self-hosted implementation.
 
+Generic types are reified; see `generics.md`. In particular, every distinct
+`SmallVector<N, T>` instantiation is a distinct concrete type in generated C++.
+
 Value types store their storage inline where the variable lives and deep-copy
 on copy. This document collects the container families built on that idea.
 
@@ -55,19 +58,30 @@ class List<T> {
 
 Consequence: lists up to 4 elements are stored inline with no heap allocation;
 only longer lists allocate on the heap.
+`List<T>` is mutable: it supports element assignment and sequence operations
+such as append, insert, remove, and clear. These operations may change its
+length and may move its heap buffer, so raw pointers into a list are not stable
+across mutations that relocate storage.
 
 ## `Str`
 
-`Str` is the inline string type. It is the reified `SV24<u8>` described above,
+`Str` is the inline string type. It is the reified `SmallVector<24, Char>`
+described above,
 built for C interop: the inline buffer is **always NUL-terminated** (a trailing
 `\0` is reserved), so `Str::data()` is always a valid C string with no copy.
 This leaves **23 usable inline bytes** (buffer is still 24 → `Str` is 32 bytes
 total); strings up to 23 chars stay inline and beyond that spill to the heap
-(also NUL-terminated). Copying a `Str` deep-copies its text.
+(also NUL-terminated). `Str` is mutable like `std::string`: its characters,
+length, and contents may be changed, and it may be appended to, cleared,
+resized, or have ranges modified. Copying a `Str` deep-copies its text. The
+terminating NUL is maintained automatically and is not included in `length`.
 
 ```text
-Str = SV24<u8>   // 4 length + 4 capacity + 24 buffer = 32 bytes, NUL-terminated
+Str = SmallVector<24, Char>   // 4 length + 4 capacity + 24-byte buffer
 ```
+
+`Char` is signed 8-bit, so `Str` is a byte string. See `built-in-types.md` for
+the complete built-in type list and for `Array<T>` and `RawArray<T>`.
 
 ## Aliasing and relocation
 
@@ -82,3 +96,6 @@ lexically bounded unsafe operation.
 `SmallVector` copy and move operations preserve value semantics: elements are
 copied or moved, and heap storage is never shared implicitly. Implementations
 must update the inline/heap representation before exposing any raw pointer.
+
+`Dictionary<K, V>` is the built-in value dictionary. Its value semantics and
+currently unspecified hashing rules are defined in `dictionary.md`.

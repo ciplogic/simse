@@ -6,6 +6,7 @@
 
 int main() {
     Scanner scanner;
+    List<TokenMatcher> rules = getTokenRules();
 
     return 0;
 }

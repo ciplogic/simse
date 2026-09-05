@@ -28,10 +28,10 @@ var found: Opt<Point> = table.find(id)   // Opt: has a Point, or empty
 
 ## `Str`
 
-`Str` is the language's **inline string** type: a value type whose characters
-are stored inline, so copying a `Str` deep-copies its text. Concretely, `Str`
-is `SmallVector<24, uint8>` and stores up to 23 characters inline (see
-`containers.md`).
+`Str` is the language's **inline byte-string** type: a value type whose
+characters are stored inline, so copying a `Str` deep-copies its text.
+Concretely, `Str` is `SmallVector<24, Char>` and stores up to 23 characters
+inline (see `built-in-types.md` and `containers.md`).
 
 ## `Res<T>`
 

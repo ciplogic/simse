@@ -20,10 +20,18 @@ compiler and runtime-defined types.
 
 ### Arrays
 
-Arrays live on the heap and behave like Java/C# arrays: the variable holds a
-reference, the elements are a heap allocation, and assignment shares the
-reference (no deep copy). Arrays are already a reference; they take no memory
-operator.
+`Array<T>` lives on the heap and behaves like a reference-counted Java/C#-style
+array: the variable holds a reference, and assignment shares the allocation
+with no element deep copy. The allocation contains the reference count, the
+element count, and the elements immediately afterward in one block. `Array<T>`
+is already a reference and takes no memory operator. `RawArray<T>` is the
+separate unmanaged `T*` form. See `built-in-types.md` for the complete layout.
+
+`Array<T>` is mutable through its elements, but its length is fixed at
+construction, like a Java or C# array. Assignment such as `a = b` shares the
+same allocation, so changing an element through either handle is visible
+through the other. Growing, shrinking, inserting, and removing elements are
+not array operations.
 
 ## Memory operators on types
 
@@ -32,7 +40,9 @@ reached.
 
 ### `&T` — counted reference (reference class)
 
-`&T` is a **counted/shared reference** to a value of layout `T`.
+`&T` is a **counted/shared reference** to a value of layout `T`. Its box uses
+the common ref-counted allocation header described in `ref-counted-layout.md`:
+`[reference count][typeId][boxed value]`.
 
 - To obtain a `&T`, a `T` value is *boxed* into a ref-counted heap object; the
   handle owns one count.

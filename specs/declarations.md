@@ -63,7 +63,8 @@ it does not recursively freeze a referenced value.
 For the initial implementation, constructors must receive one argument for
 each declared field, in declaration order. Default field values, named
 arguments, inheritance, and generated methods beyond construction/copying are
-not part of this baseline.
+not part of this baseline. Methods may be declared in the class body, but they
+are compiled as static receiver functions; see `functions.md`.
 
 ## `enum`
 

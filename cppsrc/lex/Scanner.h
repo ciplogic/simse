@@ -1,7 +1,7 @@
 #pragma once
 #include "../rtl/simse.hpp"
 
-enum TokenType : int {
+enum TokenKind : int {
     None,
     Space,
     Identifier,
@@ -11,11 +11,27 @@ enum TokenType : int {
     Operator,
 };
 
+struct StrView {
+    Str* str{};
+    int start;
+    int len;
+    char at(int index) {
+        return str->at(start + index);
+    }
+};
+
+StrView viewOf(Str* str);
+
+using MatchLenFunc = Func<int(StrView)>;
+
 struct TokenMatcher {
-    TokenType TokenKind;
-    Func<int()> Match;
+    TokenKind tokenKind;
+    MatchLenFunc match;
 };
 
 struct Scanner {
-
+    int Pos;
+    Str Source;
 };
+
+List<TokenMatcher> getTokenRules();
