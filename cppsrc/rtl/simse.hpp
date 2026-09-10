@@ -1,27 +1,15 @@
 #pragma once
 
-#include <functional>
-#include <string>
-#include <vector>
-#include <unordered_map>
+// simse.hpp is the root of the Simse runtime library (RTL). It is the umbrella
+// header that pulls in every runtime type. Translation units may include
+// simse.hpp directly, or include only the narrower topic header they need.
+// Each topic header is self-contained (owns its includes and #pragma once).
 
-template <class T, int N>
-struct SmallVector{
-    int _len {};
-    int _cap = N;
-    union {
-        T _data[N];
-        T* heapElements{};
-    };
-};
-
-template <class T>
-using List = std::vector<T>;
-
-template <class TKey, class TValue>
-using Dictionary = std::unordered_map<TKey, TValue>;
-
-template <class T>
-using Func = std::function<T>;
-
-using Str = std::string;
+// Order follows dependencies: types and containers have no RTL-relative
+// dependencies, and the higher-level headers build on them.
+#include "types.hpp"        // scalar aliases and Str
+#include "containers.hpp"   // SmallVector, List, PList, Dictionary, Array, RawArray
+#include "optional.hpp"     // Opt<T>
+#include "functional.hpp"   // Func, Action, AutoDefer
+#include "result.hpp"       // Result/Res, ok, resError, err
+#include "xml.hpp"          // Attribute, XmlNode

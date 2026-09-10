@@ -2,10 +2,25 @@
 // Created by cipri on 9/4/2026.
 //
 
-#include "FileUtils.h"
+#include "common.h"
 #include <filesystem>
+#include <cstdio>
 
-namespace FileUtils {
+namespace common {
+    Str readFile(const Str &filePath) {
+        Str result;
+        FILE* file = fopen(filePath.c_str(), "rb");
+        AutoDefer a([file]() {
+            fclose(file);
+        });
+        fseek(file, 0, SEEK_END);
+        int fileSize = ftell(file);
+        fseek(file, 0, SEEK_SET);
+        result.resize(fileSize);
+        fread(result.data(), 1, fileSize, file);
+        return result;
+    }
+
     List<Str> filesInDir(const Str &dirPath, Str ext) {
         List<Str> matchingFiles;
 

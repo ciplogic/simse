@@ -10,6 +10,11 @@ add_executable(simse
         cppsrc/lex/Scanner.cpp
         cppsrc/lex/Scanner.h
         cppsrc/rtl/simse.hpp
-        cppsrc/rtl/simse.hpp
-        cppsrc/common/FileUtils.cpp
-        cppsrc/common/FileUtils.h)
+        cppsrc/rtl/types.hpp
+        cppsrc/rtl/containers.hpp
+        cppsrc/rtl/optional.hpp
+        cppsrc/rtl/functional.hpp
+        cppsrc/rtl/result.hpp
+        cppsrc/rtl/xml.hpp
+        cppsrc/common/common.cpp
+        cppsrc/common/common.h)
