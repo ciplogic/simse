@@ -1,0 +1,34 @@
+Module @1:1
+  Function useLater @1:1
+    Return Int
+    Body
+      VarDecl val p: Point @2:5
+        Init
+          Call @2:20
+            Callee
+              Name Point @2:20
+            Arg
+              IntLit 1 @2:26
+            Arg
+              IntLit 2 @2:29
+      Return @3:5
+        Call @3:12
+          Callee
+            Name helper @3:12
+          Arg
+            Member .x @3:19
+              Receiver
+                Name p @3:19
+  DataClass Point @6:1
+    Field var x: Int @6:18
+    Field var y: Int @6:30
+  Function helper @8:1
+    Param value: Int
+    Return Int
+    Body
+      Return @9:5
+        Binary + @9:12
+          Lhs
+            Name value @9:12
+          Rhs
+            IntLit 1 @9:20

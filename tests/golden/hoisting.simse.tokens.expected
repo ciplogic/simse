@@ -1,0 +1,91 @@
+ReservedWord	1:1	fun
+Space	1:4	 
+Identifier	1:5	useLater
+Operator	1:13	(
+Operator	1:14	)
+Operator	1:15	:
+Space	1:16	 
+Identifier	1:17	Int
+Space	1:20	 
+Operator	1:21	{
+EndOfLine	1:22	\n
+Space	2:1	    
+ReservedWord	2:5	val
+Space	2:8	 
+Identifier	2:9	p
+Operator	2:10	:
+Space	2:11	 
+Identifier	2:12	Point
+Space	2:17	 
+Operator	2:18	=
+Space	2:19	 
+Identifier	2:20	Point
+Operator	2:25	(
+Number	2:26	1
+Operator	2:27	,
+Space	2:28	 
+Number	2:29	2
+Operator	2:30	)
+EndOfLine	2:31	\n
+Space	3:1	    
+ReservedWord	3:5	return
+Space	3:11	 
+Identifier	3:12	helper
+Operator	3:18	(
+Identifier	3:19	p
+Operator	3:20	.
+Identifier	3:21	x
+Operator	3:22	)
+EndOfLine	3:23	\n
+Operator	4:1	}
+EndOfLine	4:2	\n
+EndOfLine	5:1	\n
+ReservedWord	6:1	data
+Space	6:5	 
+ReservedWord	6:6	class
+Space	6:11	 
+Identifier	6:12	Point
+Operator	6:17	(
+ReservedWord	6:18	var
+Space	6:21	 
+Identifier	6:22	x
+Operator	6:23	:
+Space	6:24	 
+Identifier	6:25	Int
+Operator	6:28	;
+Space	6:29	 
+ReservedWord	6:30	var
+Space	6:33	 
+Identifier	6:34	y
+Operator	6:35	:
+Space	6:36	 
+Identifier	6:37	Int
+Operator	6:40	)
+EndOfLine	6:41	\n
+EndOfLine	7:1	\n
+ReservedWord	8:1	fun
+Space	8:4	 
+Identifier	8:5	helper
+Operator	8:11	(
+Identifier	8:12	value
+Operator	8:17	:
+Space	8:18	 
+Identifier	8:19	Int
+Operator	8:22	)
+Operator	8:23	:
+Space	8:24	 
+Identifier	8:25	Int
+Space	8:28	 
+Operator	8:29	{
+EndOfLine	8:30	\n
+Space	9:1	    
+ReservedWord	9:5	return
+Space	9:11	 
+Identifier	9:12	value
+Space	9:17	 
+Operator	9:18	+
+Space	9:19	 
+Number	9:20	1
+EndOfLine	9:21	\n
+Operator	10:1	}
+EndOfLine	10:2	\n

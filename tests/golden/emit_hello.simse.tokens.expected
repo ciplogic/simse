@@ -1,0 +1,185 @@
+ReservedWord	1:1	data
+Space	1:5	 
+ReservedWord	1:6	class
+Space	1:11	 
+Identifier	1:12	Counter
+Operator	1:19	(
+ReservedWord	1:20	var
+Space	1:23	 
+Identifier	1:24	value
+Operator	1:29	:
+Space	1:30	 
+Identifier	1:31	Int
+Operator	1:34	)
+Space	1:35	 
+Operator	1:36	{
+EndOfLine	1:37	\n
+Space	2:1	    
+ReservedWord	2:5	fun
+Space	2:8	 
+Identifier	2:9	bump
+Operator	2:13	(
+Operator	2:14	)
+Operator	2:15	:
+Space	2:16	 
+Identifier	2:17	Int
+Space	2:20	 
+Operator	2:21	{
+EndOfLine	2:22	\n
+Space	3:1	        
+ReservedWord	3:9	return
+Space	3:15	 
+ReservedWord	3:16	this
+Operator	3:20	.
+Identifier	3:21	value
+Space	3:26	 
+Operator	3:27	+
+Space	3:28	 
+Number	3:29	1
+EndOfLine	3:30	\n
+Space	4:1	    
+Operator	4:5	}
+EndOfLine	4:6	\n
+Operator	5:1	}
+EndOfLine	5:2	\n
+EndOfLine	6:1	\n
+ReservedWord	7:1	fun
+Space	7:4	 
+Identifier	7:5	main
+Operator	7:9	(
+Operator	7:10	)
+Operator	7:11	:
+Space	7:12	 
+Identifier	7:13	Int
+Space	7:16	 
+Operator	7:17	{
+EndOfLine	7:18	\n
+Space	8:1	    
+ReservedWord	8:5	var
+Space	8:8	 
+Identifier	8:9	i
+Operator	8:10	:
+Space	8:11	 
+Identifier	8:12	Int
+Space	8:15	 
+Operator	8:16	=
+Space	8:17	 
+Number	8:18	0
+EndOfLine	8:19	\n
+Space	9:1	    
+ReservedWord	9:5	var
+Space	9:8	 
+Identifier	9:9	total
+Operator	9:14	:
+Space	9:15	 
+Identifier	9:16	Int
+Space	9:19	 
+Operator	9:20	=
+Space	9:21	 
+Number	9:22	0
+EndOfLine	9:23	\n
+Space	10:1	    
+ReservedWord	10:5	while
+Space	10:10	 
+Operator	10:11	(
+Identifier	10:12	i
+Space	10:13	 
+Operator	10:14	<
+Space	10:15	 
+Number	10:16	5
+Operator	10:17	)
+Space	10:18	 
+Operator	10:19	{
+EndOfLine	10:20	\n
+Space	11:1	        
+Identifier	11:9	total
+Space	11:14	 
+Operator	11:15	=
+Space	11:16	 
+Identifier	11:17	total
+Space	11:22	 
+Operator	11:23	+
+Space	11:24	 
+Identifier	11:25	i
+EndOfLine	11:26	\n
+Space	12:1	        
+Identifier	12:9	i
+Space	12:10	 
+Operator	12:11	=
+Space	12:12	 
+Identifier	12:13	i
+Space	12:14	 
+Operator	12:15	+
+Space	12:16	 
+Number	12:17	1
+EndOfLine	12:18	\n
+Space	13:1	    
+Operator	13:5	}
+EndOfLine	13:6	\n
+Space	14:1	    
+ReservedWord	14:5	val
+Space	14:8	 
+Identifier	14:9	c
+Operator	14:10	:
+Space	14:11	 
+Identifier	14:12	Counter
+Space	14:19	 
+Operator	14:20	=
+Space	14:21	 
+Identifier	14:22	Counter
+Operator	14:29	(
+Number	14:30	10
+Operator	14:32	)
+EndOfLine	14:33	\n
+Space	15:1	    
+ReservedWord	15:5	if
+Space	15:7	 
+Operator	15:8	(
+Identifier	15:9	total
+Space	15:14	 
+Operator	15:15	>
+Space	15:16	 
+Number	15:17	5
+Operator	15:18	)
+Space	15:19	 
+Operator	15:20	{
+EndOfLine	15:21	\n
+Space	16:1	        
+Identifier	16:9	println
+Operator	16:16	(
+Identifier	16:17	total
+Operator	16:22	)
+EndOfLine	16:23	\n
+Space	17:1	    
+Operator	17:5	}
+Space	17:6	 
+ReservedWord	17:7	else
+Space	17:11	 
+Operator	17:12	{
+EndOfLine	17:13	\n
+Space	18:1	        
+Identifier	18:9	println
+Operator	18:16	(
+Identifier	18:17	c
+Operator	18:18	.
+Identifier	18:19	bump
+Operator	18:23	(
+Operator	18:24	)
+Operator	18:25	)
+EndOfLine	18:26	\n
+Space	19:1	    
+Operator	19:5	}
+EndOfLine	19:6	\n
+Space	20:1	    
+Identifier	20:5	println
+Operator	20:12	(
+ReservedWord	20:13	true
+Operator	20:17	)
+EndOfLine	20:18	\n
+Space	21:1	    
+ReservedWord	21:5	return
+Space	21:11	 
+Number	21:12	0
+EndOfLine	21:13	\n
+Operator	22:1	}
+EndOfLine	22:2	\n

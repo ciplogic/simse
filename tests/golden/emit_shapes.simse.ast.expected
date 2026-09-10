@@ -1,0 +1,71 @@
+Module @1:1
+  Enum Shape @1:1
+    Member Circle @2:5
+    Member Square = 4 @3:5
+  Function describe @6:1
+    Receiver Str
+    Return Str
+    Body
+      Return @7:5
+        Name this @7:12
+  Function area @10:1
+    Param width: Int
+    Param height: Int
+    Return Int
+    Body
+      Return @11:5
+        Binary * @11:12
+          Lhs
+            Name width @11:12
+          Rhs
+            Name height @11:20
+  Function main @14:1
+    Return Int
+    Body
+      VarDecl val name: Str @15:5
+        Init
+          StrLit "box" @15:21
+      ExprStmt @16:5
+        Call @16:5
+          Callee
+            Name println @16:5
+          Arg
+            Call @16:13
+              Callee
+                Member .describe @16:13
+                  Receiver
+                    Name name @16:13
+      ExprStmt @17:5
+        Call @17:5
+          Callee
+            Name println @17:5
+          Arg
+            Call @17:13
+              Callee
+                Name area @17:13
+              Arg
+                IntLit 3 @17:18
+              Arg
+                IntLit 4 @17:21
+      ExprStmt @18:5
+        Call @18:5
+          Callee
+            Name println @18:5
+          Arg
+            Binary == @18:13
+              Lhs
+                Member .Circle @18:13
+                  Receiver
+                    Name Shape @18:13
+              Rhs
+                Member .Circle @18:29
+                  Receiver
+                    Name Shape @18:29
+      ExprStmt @19:5
+        Call @19:5
+          Callee
+            Name println @19:5
+          Arg
+            CharLit 'a' @19:13
+      Return @20:5
+        IntLit 0 @20:12

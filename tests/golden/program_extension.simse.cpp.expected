@@ -1,0 +1,1 @@
+CodegenError program_extension.simse:10:12: unsupported: generic-qualified call 'Opt<...>'
