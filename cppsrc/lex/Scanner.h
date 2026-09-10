@@ -4,10 +4,11 @@
 namespace lex {
     using common::StrView;
 
-    enum TokenKind : int {
+    enum class TokenKind : int {
         None,
         Space,
         Comment,
+        EndOfLine,
         Identifier,
         ReservedWord,
         Number,
@@ -36,10 +37,17 @@ namespace lex {
 
         explicit Scanner(List<TokenMatcher> * rules);
 
-        Result<Token> nextToken();
+        Res<Token> nextToken();
 
         void setSource(const Str & str);
     };
 
     List<TokenMatcher> getTokenRules();
+
+    // Reads `fileName`, scans it to end of input, and collects every token up to
+    // (but not including) the Eof token. Returns the scanning error, if any.
+    Res<List<Token>> readFileAsTokens(Scanner* scanner, const Str& fileName);
+
+    // Like readFileAsTokens, but drops Space and Comment tokens.
+    Res<List<Token>> readFileAndSkipSpacesTokens(Scanner* scanner, const Str& fileName);
 }

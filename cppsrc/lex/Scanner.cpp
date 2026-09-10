@@ -60,8 +60,9 @@ namespace lex {
         return false;
     }
 
+    // Horizontal whitespace only. Line endings are their own token kind.
     bool isSpace(char ch) {
-        return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n';
+        return ch == ' ' || ch == '\t';
     }
 
     bool isDigit(char ch) {
@@ -98,6 +99,24 @@ namespace lex {
 
     int matchSpaces(StrView Source) {
         return matchAllOfRule(Source, isSpace);
+    }
+
+    // A line ending is CRLF, LF, or CR, matched as a whole.
+    int matchEndOfLine(StrView Source) {
+        if (Source.len == 0) {
+            return 0;
+        }
+        char ch = Source.at(0);
+        if (ch == '\n') {
+            return 1;
+        }
+        if (ch == '\r') {
+            if (Source.len >= 2 && Source.at(1) == '\n') {
+                return 2;
+            }
+            return 1;
+        }
+        return 0;
     }
 
     int matchIdentifier(StrView Source) {
@@ -217,7 +236,7 @@ namespace lex {
         Pos = 0;
     }
 
-    Result<Token> Scanner::nextToken() {
+    Res<Token> Scanner::nextToken() {
         while (this->Pos < (int) this->Source.length()) {
             StrView sourceView = common::viewOfAtPos(&this->Source, this->Pos);
             for (TokenMatcher &rule: *_rules) {
@@ -253,14 +272,52 @@ namespace lex {
         List<TokenMatcher> Rules;
         // Order matters: comments before operators (so `//` is not two `/`),
         // reserved words before identifiers, and operators last.
-        addRule(&Rules, Comment, matchComment);
-        addRule(&Rules, Space, matchSpaces);
-        addRule(&Rules, String, matchStringLiteral);
-        addRule(&Rules, Character, matchCharLiteral);
-        addRule(&Rules, Number, matchNumber);
-        addRule(&Rules, ReservedWord, matchReservedWord);
-        addRule(&Rules, Identifier, matchIdentifier);
-        addRule(&Rules, Operator, matchOperator);
+        addRule(&Rules, TokenKind::Comment, matchComment);
+        addRule(&Rules, TokenKind::Space, matchSpaces);
+        addRule(&Rules, TokenKind::EndOfLine, matchEndOfLine);
+        addRule(&Rules, TokenKind::String, matchStringLiteral);
+        addRule(&Rules, TokenKind::Character, matchCharLiteral);
+        addRule(&Rules, TokenKind::Number, matchNumber);
+        addRule(&Rules, TokenKind::ReservedWord, matchReservedWord);
+        addRule(&Rules, TokenKind::Identifier, matchIdentifier);
+        addRule(&Rules, TokenKind::Operator, matchOperator);
         return Rules;
+    }
+
+    Res<List<Token>> readFileAsTokens(Scanner *scanner, const Str &fileName) {
+        Str content = common::readFile(fileName);
+        scanner->setSource(content);
+
+        List<Token> tokens;
+        while (true) {
+            Res<Token> result = scanner->nextToken();
+            if (!result.isOk()) {
+                return resError<List<Token>>(result.Error);
+            }
+            if (result.Value.kind == TokenKind::Eof) {
+                return ok(tokens);
+            }
+            tokens.push_back(result.Value);
+        }
+    }
+
+    bool isSpaceBasedToken(TokenKind kind) {
+        return kind == TokenKind::Space || kind == TokenKind::Comment;
+    }
+
+    Res<List<Token>> readFileAndSkipSpacesTokens(Scanner *scanner, const Str &fileName) {
+        Res<List<Token>> allTokens = readFileAsTokens(scanner, fileName);
+        if (!allTokens.isOk()) {
+            return resError<List<Token>>(allTokens.Error);
+        }
+
+        List<Token> tokens;
+        for (Token token: allTokens.Value) {
+            if (isSpaceBasedToken(token.kind)) {
+                continue;
+            }
+            tokens.push_back(token);
+        }
+        return ok(tokens);
     }
 }

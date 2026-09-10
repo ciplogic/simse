@@ -17,4 +17,6 @@ add_executable(simse
         cppsrc/rtl/result.hpp
         cppsrc/rtl/xml.hpp
         cppsrc/common/common.cpp
-        cppsrc/common/common.h)
+        cppsrc/common/common.h
+        cppsrc/skelparser/SkeletonParser.cpp
+        cppsrc/skelparser/SkeletonParser.h)

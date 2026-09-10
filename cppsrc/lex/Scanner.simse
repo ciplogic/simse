@@ -4,7 +4,7 @@
 // type. It mirrors cppsrc/lex/Scanner.h and cppsrc/lex/Scanner.cpp so that the
 // C++ scanner can tokenize this file as a self-scan fixture.
 //
-// StrView lives in cppsrc/common/common.simse.
+// StrView lives in cppsrc/common/StrView.simse.
 
 import cppsrc.common
 
@@ -12,6 +12,7 @@ enum TokenKind {
     None,
     Space,
     Comment,
+    EndOfLine,
     Identifier,
     ReservedWord,
     Number,
@@ -29,8 +30,9 @@ data class Token(var text: Str; var kind: TokenKind)
 // A matcher returns how many leading characters it accepts, or 0 for no match.
 data class TokenMatcher(var tokenKind: TokenKind; var match: MatchLenFunc)
 
+// Horizontal whitespace only. Line endings are their own token kind.
 fun isSpace(ch: Char): Bool {
-    return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n'
+    return ch == ' ' || ch == '\t'
 }
 
 fun isDigit(ch: Char): Bool {
@@ -137,6 +139,24 @@ fun isReservedWord(view: StrView): Bool {
 
 fun matchSpaces(view: StrView): Int {
     return matchAllOfRule(view, isSpace)
+}
+
+// A line ending is CRLF, LF, or CR, matched as a whole.
+fun matchEndOfLine(view: StrView): Int {
+    if (view.len == 0) {
+        return 0
+    }
+    val ch: Char = view.at(0)
+    if (ch == '\n') {
+        return 1
+    }
+    if (ch == '\r') {
+        if (view.len >= 2 && view.at(1) == '\n') {
+            return 2
+        }
+        return 1
+    }
+    return 0
 }
 
 fun matchIdentifier(view: StrView): Int {
@@ -259,6 +279,7 @@ fun getTokenRules(): &List<TokenMatcher> {
     var rules: &List<TokenMatcher> = &List<TokenMatcher>()
     addRule(rules, TokenKind.Comment, matchComment)
     addRule(rules, TokenKind.Space, matchSpaces)
+    addRule(rules, TokenKind.EndOfLine, matchEndOfLine)
     addRule(rules, TokenKind.String, matchStringLiteral)
     addRule(rules, TokenKind.Character, matchCharLiteral)
     addRule(rules, TokenKind.Number, matchNumber)
@@ -293,4 +314,47 @@ data class Scanner(var rules: &List<TokenMatcher>; var pos: Int; var source: Str
         }
         return Res<Token>.ok(Token("", TokenKind.Eof))
     }
+}
+
+// Reads `fileName`, scans it to end of input, and collects every token up to
+// (but not including) the Eof token. Returns the scanning error, if any.
+fun readFileAsTokens(scanner: *Scanner, fileName: Str): Res<List<Token>> {
+    val content: Str = readFile(fileName)
+    scanner.setSource(content)
+
+    var tokens: List<Token> = List<Token>()
+    while (true) {
+        val result: Res<Token> = scanner.nextToken()
+        if (!result.isOk()) {
+            return Res<List<Token>>.err(result.error)
+        }
+        if (result.value.kind == TokenKind.Eof) {
+            return Res<List<Token>>.ok(tokens)
+        }
+        tokens.append(result.value)
+    }
+}
+
+fun isSpaceBasedToken(kind: TokenKind): Bool {
+    return kind == TokenKind.Space || kind == TokenKind.Comment
+}
+
+// Like readFileAsTokens, but drops Space and Comment tokens.
+fun readFileAndSkipSpacesTokens(scanner: *Scanner, fileName: Str): Res<List<Token>> {
+    val allResult: Res<List<Token>> = readFileAsTokens(scanner, fileName)
+    if (!allResult.isOk()) {
+        return Res<List<Token>>.err(allResult.error)
+    }
+
+    var tokens: List<Token> = List<Token>()
+    val all: List<Token> = allResult.value
+    var i = 0
+    while (i < all.size()) {
+        val token: Token = all[i]
+        if (!isSpaceBasedToken(token.kind)) {
+            tokens.append(token)
+        }
+        i = i + 1
+    }
+    return Res<List<Token>>.ok(tokens)
 }

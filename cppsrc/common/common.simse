@@ -1,0 +1,6 @@
+// common.simse
+//
+// Native file utilities. The declarations supply the Simse types/signatures;
+// the bodies are owned by C++ (see impl_specs/plan-to-selfhost.md).
+
+native fun readFile(filePath: Str): Str

@@ -6,7 +6,7 @@
 // carries an error message as a Str. There being no exceptions, functions that
 // can fail return a Result/Res (specs/core-types.md).
 template <class T>
-struct Result {
+struct Res {
     T Value;
     Str Error;
 
@@ -16,18 +16,14 @@ struct Result {
 };
 
 template <class T>
-Result<T> ok(T value) {
-    return Result<T>{value, ""};
+Res<T> ok(T value) {
+    return Res<T>{value, ""};
 }
 
 template <class T>
-Result<T> resError(Str errorMessage) {
-    return Result<T>{{}, errorMessage};
+Res<T> resError(Str errorMessage) {
+    return Res<T>{{}, errorMessage};
 }
-
-// Res<T> is the spec name (specs/core-types.md) for Result<T>.
-template <class T>
-using Res = Result<T>;
 
 template <class T>
 Res<T> err(Str errorMessage) {
