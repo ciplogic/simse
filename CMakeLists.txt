@@ -34,10 +34,13 @@ add_library(simse_lib STATIC
         tests/test_support.cpp
         tests/test_support.h)
 
-# The RTL surface the transpiler loads as a prelude (no import required). The
-# path is baked in so the CLI and the in-process test harness agree.
+# The RTL surface the transpiler loads as a prelude (no import required) and the
+# repository root used to resolve `import a.b.c` directories. The paths are baked
+# in so the CLI, the build, and the in-process test harness agree regardless of
+# the working directory.
 target_compile_definitions(simse_lib PUBLIC
-        SIMSE_DEFAULT_PRELUDE="${CMAKE_CURRENT_SOURCE_DIR}/cppsrc/rtl/rtl.simse")
+        SIMSE_DEFAULT_PRELUDE="${CMAKE_CURRENT_SOURCE_DIR}/cppsrc/rtl/rtl.simse"
+        SIMSE_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
 
 add_executable(simse cppsrc/main.cpp)
 target_link_libraries(simse PRIVATE simse_lib)
@@ -54,8 +57,7 @@ target_link_libraries(simse_native PUBLIC simse_lib)
 add_executable(simse_tests tests/test_main.cpp)
 target_link_libraries(simse_tests PRIVATE simse_lib)
 target_compile_definitions(simse_tests PRIVATE
-        SIMSE_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures"
-        SIMSE_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
+        SIMSE_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
 
 # --- T8: end-to-end slice (transpile -> compile -> run -> compare) -----------
 # Each fixture below is transpiled by simse_transpile, compiled as a normal
@@ -76,7 +78,7 @@ foreach(e2e_name IN ITEMS emit_hello emit_shapes emit_generics native_readfile e
             OUTPUT "${e2e_generated}"
             COMMAND "${CMAKE_COMMAND}" -E make_directory "${SIMSE_E2E_DIR}"
             COMMAND $<TARGET_FILE:simse_transpile> "${e2e_fixture}" -o "${e2e_generated}"
-            DEPENDS "${e2e_fixture}"
+            DEPENDS "${e2e_fixture}" simse_transpile
             COMMENT "T8: transpiling ${e2e_name}.simse"
             VERBATIM)
 
@@ -100,3 +102,54 @@ foreach(e2e_name IN ITEMS emit_hello emit_shapes emit_generics native_readfile e
             COMMENT "T8: running e2e_${e2e_name} and comparing stdout"
             VERBATIM)
 endforeach()
+
+# --- T11: differential scanner (hand-written C++ vs transpiled Simse) --------
+# Scanner.simse is transpiled and compiled with a small hand-written driver. The
+# reference driver uses the hand-written lex::Scanner. Both print the same
+# canonical token dump over tests/fixtures/*.simse; the build diffs them. This is
+# part of ALL so a normal build exercises the port.
+set(SIMSE_SELFHOST_DIR "${CMAKE_BINARY_DIR}/selfhost")
+set(SIMSE_SCANNER_GENERATED "${SIMSE_SELFHOST_DIR}/Scanner.simse.cpp")
+set(SIMSE_SCANNER_FIXTURES "${SIMSE_REPO_ROOT}/tests/fixtures")
+
+add_custom_command(
+        OUTPUT "${SIMSE_SCANNER_GENERATED}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${SIMSE_SELFHOST_DIR}"
+        COMMAND $<TARGET_FILE:simse_transpile>
+                "${SIMSE_REPO_ROOT}/cppsrc/lex/Scanner.simse" -o "${SIMSE_SCANNER_GENERATED}"
+        DEPENDS "${SIMSE_REPO_ROOT}/cppsrc/lex/Scanner.simse" simse_transpile
+        COMMENT "T11: transpiling Scanner.simse"
+        VERBATIM)
+
+add_executable(scanner_ref tests/scanner_ref_main.cpp)
+target_link_libraries(scanner_ref PRIVATE simse_lib)
+
+add_executable(scanner_simse tests/scanner_simse_main.cpp "${SIMSE_SCANNER_GENERATED}")
+# The generated file is pulled in by the driver's `#include`, so it must not be
+# compiled as its own translation unit; marker keeps it a build dependency only.
+set_source_files_properties("${SIMSE_SCANNER_GENERATED}" PROPERTIES HEADER_FILE_ONLY TRUE)
+target_include_directories(scanner_simse PRIVATE "${SIMSE_SELFHOST_DIR}" "${SIMSE_REPO_ROOT}")
+target_link_libraries(scanner_simse PRIVATE simse_native)
+
+set_target_properties(scanner_ref scanner_simse PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${SIMSE_SELFHOST_DIR}")
+
+add_custom_target(scanner_diff ALL
+        COMMAND "${CMAKE_COMMAND}"
+                -DEXE=$<TARGET_FILE:scanner_ref>
+                -DEXE_ARGS=${SIMSE_SCANNER_FIXTURES}
+                -DOUT=${SIMSE_SELFHOST_DIR}/scanner.ref.out
+                -DWORKDIR=${SIMSE_REPO_ROOT}
+                -P "${SIMSE_REPO_ROOT}/tests/run_capture.cmake"
+        COMMAND "${CMAKE_COMMAND}"
+                -DEXE=$<TARGET_FILE:scanner_simse>
+                -DEXE_ARGS=${SIMSE_SCANNER_FIXTURES}
+                -DOUT=${SIMSE_SELFHOST_DIR}/scanner.simse.out
+                -DWORKDIR=${SIMSE_REPO_ROOT}
+                -P "${SIMSE_REPO_ROOT}/tests/run_capture.cmake"
+        COMMAND "${CMAKE_COMMAND}" -E compare_files --ignore-eol
+                "${SIMSE_SELFHOST_DIR}/scanner.ref.out"
+                "${SIMSE_SELFHOST_DIR}/scanner.simse.out"
+        DEPENDS scanner_ref scanner_simse
+        COMMENT "T11: diffing hand-written and transpiled scanner token dumps"
+        VERBATIM)

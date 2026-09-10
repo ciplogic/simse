@@ -1000,6 +1000,13 @@ namespace parser {
                         return false;
                     }
                     for (const Str &file: files) {
+                        Str fileCanon = canonicalPath(file);
+                        if (isActive(fileCanon)) {
+                            error = path + ":" + std::to_string(import.pos.line) + ":"
+                                    + std::to_string(import.pos.column) + ": import cycle via '"
+                                    + dottedPath(import.path) + "'";
+                            return false;
+                        }
                         if (!load(file, merged)) return false;
                     }
                 }

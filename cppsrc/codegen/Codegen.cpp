@@ -336,6 +336,10 @@ namespace codegen {
                 for (const ast::Field &field: decl.fields) {
                     line(1, type(*field.type) + " " + field.name + ";");
                 }
+                // A default constructor is emitted alongside the field constructor
+                // so the type can be default-initialized where C++ needs it (for
+                // example the payload of a failed Res<T>).
+                line(1, decl.name + "() = default;");
                 if (!decl.fields.empty()) {
                     line(1, decl.name + "(" + join(params, ", ") + ") : " + join(inits, ", ") + " {}");
                 }

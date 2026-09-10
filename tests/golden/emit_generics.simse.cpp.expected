@@ -8,6 +8,7 @@ template <class A, class B>
 struct Pair {
     A first;
     B second;
+    Pair() = default;
     Pair(A first, B second) : first(first), second(second) {}
 };
 template <class T>

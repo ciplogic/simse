@@ -6,6 +6,7 @@
 // emit_hello.simse:1
 struct Counter {
     Int value;
+    Counter() = default;
     Counter(Int value) : value(value) {}
 };
 Int bump(Counter& self);

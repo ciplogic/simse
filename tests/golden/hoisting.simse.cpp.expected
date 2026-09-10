@@ -7,6 +7,7 @@
 struct Point {
     Int x;
     Int y;
+    Point() = default;
     Point(Int x, Int y) : x(x), y(y) {}
 };
 Int useLater();

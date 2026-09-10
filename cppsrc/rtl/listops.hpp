@@ -3,6 +3,8 @@
 #include "containers.hpp"
 #include "types.hpp"
 
+#include <type_traits>
+
 // Native implementations behind the Simse prelude `cppsrc/rtl/rtl.simse`
 // (impl_specs/native-interop.md). These are the operations the language exposes
 // as `native("symbol") fun name(...)` extensions.
@@ -11,9 +13,11 @@
 // no-exceptions policy: `removeAt`/`removeRange` with an out-of-range index or
 // range is undefined behavior (see specs/language-decisions.md).
 
-// Appends `value` to the end of `self` (std::vector::push_back).
+// Appends `value` to the end of `self` (std::vector::push_back). The value is a
+// non-deduced context so a literal argument (e.g. a `const char[]`) converts to
+// the element type instead of making `T` ambiguous.
 template <class T>
-void simse_list_append(List<T>& self, const T& value) {
+void simse_list_append(List<T>& self, const std::type_identity_t<T>& value) {
     self.push_back(value);
 }
 

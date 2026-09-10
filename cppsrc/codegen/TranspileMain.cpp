@@ -27,6 +27,14 @@ static const char *kDefaultPrelude = SIMSE_DEFAULT_PRELUDE;
 static const char *kDefaultPrelude = "";
 #endif
 
+// The repository root used to resolve `import a.b.c` directories. Baked in at
+// configure time so the CLI works from any working directory; --root overrides.
+#ifdef SIMSE_SOURCE_ROOT
+static const char *kSourceRoot = SIMSE_SOURCE_ROOT;
+#else
+static const char *kSourceRoot = ".";
+#endif
+
 using namespace common;
 using namespace lex;
 
@@ -63,6 +71,7 @@ int main(int argc, char **argv) {
     List<Str> inputs;
     Str output;
     Str preludePath;
+    Str rootDir = kSourceRoot;
     bool preludeExplicit = false;
     for (int i = 1; i < argc; i++) {
         Str arg = argv[i];
@@ -79,9 +88,15 @@ int main(int argc, char **argv) {
             }
             preludePath = argv[++i];
             preludeExplicit = true;
+        } else if (arg == "--root") {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "simse_transpile: --root requires a path\n");
+                return 2;
+            }
+            rootDir = argv[++i];
         } else if (arg == "-h" || arg == "--help") {
             printf("usage: simse_transpile <input.simse>... -o <output.cpp>"
-                   " [--prelude <file>]\n");
+                   " [--prelude <file>] [--root <dir>]\n");
             return 0;
         } else {
             inputs.push_back(arg);
@@ -140,9 +155,9 @@ int main(int argc, char **argv) {
 
     for (const Str &file: inputs) {
         // Resolve the file's imports (each `import a.b.c` is a directory under
-        // the repo root) and merge their declarations into this module before
-        // analysis and emission (specs/functions.md).
-        Res<ast::Module> parsed = parser::parseFileWithImports(file, ".");
+        // the repository root) and merge their declarations into this module
+        // before analysis and emission (specs/functions.md).
+        Res<ast::Module> parsed = parser::parseFileWithImports(file, rootDir);
         if (!parsed.isOk()) {
             fprintf(stderr, "%s\n", parsed.Error.c_str());
             return 1;
