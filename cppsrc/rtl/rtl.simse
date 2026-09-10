@@ -12,3 +12,8 @@
 native("simse_list_append") fun append<T>(this: List<T>, value: T): Unit
 native("simse_list_removeAt") fun removeAt<T>(this: List<T>, index: Int): Unit
 native("simse_list_removeRange") fun removeRange<T>(this: List<T>, start: Int, end: Int): Unit
+
+// Scalar/string conversions. `Str` is a byte string, so `append` takes a Char;
+// `Int.toString()` is the scalar-to-inline-string conversion.
+native("simse_str_append") fun append(this: Str, value: Char): Unit
+native("simse_int_toString") fun toString(this: Int): Str

@@ -1,6 +1,9 @@
 #include "Parser.h"
 
+#include <algorithm>
+#include <filesystem>
 #include <string>
+#include <system_error>
 
 using lex::Token;
 using lex::TokenKind;
@@ -902,5 +905,126 @@ namespace parser {
         }
         List<lex::Token> tokenList = tokens.Value;
         return parseModule(tokenList, fileName);
+    }
+
+    namespace {
+        Str canonicalPath(const Str &path) {
+            std::error_code ec;
+            std::filesystem::path canonical =
+                std::filesystem::weakly_canonical(std::filesystem::path(path), ec);
+            return ec ? path : canonical.string();
+        }
+
+        // The `*.simse` files directly under `dir` (non-recursive), sorted.
+        List<Str> simseFilesInDir(const Str &dir) {
+            List<Str> files;
+            std::error_code ec;
+            if (!std::filesystem::is_directory(dir, ec)) {
+                return files;
+            }
+            for (const auto &entry: std::filesystem::directory_iterator(dir, ec)) {
+                if (entry.is_regular_file() && entry.path().extension() == ".simse") {
+                    files.push_back(entry.path().string());
+                }
+            }
+            std::sort(files.begin(), files.end());
+            return files;
+        }
+
+        Str dottedPath(const List<Str> &path) {
+            Str dotted;
+            for (int i = 0; i < (int) path.size(); i++) {
+                if (i > 0) dotted += ".";
+                dotted += path[i];
+            }
+            return dotted;
+        }
+
+        Str joinedPath(const List<Str> &path) {
+            Str joined;
+            for (int i = 0; i < (int) path.size(); i++) {
+                if (i > 0) joined += "/";
+                joined += path[i];
+            }
+            return joined;
+        }
+
+        // Depth-first import loader. `loading` is the active stack (cycle
+        // detection); `loaded` records modules already merged (diamond dedup).
+        struct ImportLoader {
+            Str rootDir;
+            List<Str> loading;
+            List<Str> loaded;
+            Str error;
+
+            bool isActive(const Str &canon) const {
+                for (const Str &active: loading) {
+                    if (active == canon) return true;
+                }
+                return false;
+            }
+
+            bool isLoaded(const Str &canon) const {
+                for (const Str &done: loaded) {
+                    if (done == canon) return true;
+                }
+                return false;
+            }
+
+            bool load(const Str &path, ast::Module &merged) {
+                Str canon = canonicalPath(path);
+                if (isActive(canon)) {
+                    error = path + ": import cycle detected";
+                    return false;
+                }
+                if (isLoaded(canon)) {
+                    return true;
+                }
+
+                Res<ast::Module> parsed = parseFile(path);
+                if (!parsed.isOk()) {
+                    error = parsed.Error;
+                    return false;
+                }
+
+                loading.push_back(canon);
+                for (const ast::Import &import: parsed.Value.imports) {
+                    Str dir = rootDir.empty() ? joinedPath(import.path)
+                                              : (rootDir + "/" + joinedPath(import.path));
+                    List<Str> files = simseFilesInDir(dir);
+                    if (files.empty()) {
+                        error = path + ":" + std::to_string(import.pos.line) + ":"
+                                + std::to_string(import.pos.column)
+                                + ": cannot resolve import '" + dottedPath(import.path)
+                                + "': no .simse files under " + dir;
+                        return false;
+                    }
+                    for (const Str &file: files) {
+                        if (!load(file, merged)) return false;
+                    }
+                }
+
+                for (const ast::Import &import: parsed.Value.imports) {
+                    merged.imports.push_back(import);
+                }
+                for (const ast::DeclPtr &decl: parsed.Value.declarations) {
+                    merged.declarations.push_back(decl);
+                }
+                loading.pop_back();
+                loaded.push_back(canon);
+                return true;
+            }
+        };
+    }
+
+    Res<ast::Module> parseFileWithImports(const Str &fileName, const Str &rootDir) {
+        ImportLoader loader;
+        loader.rootDir = rootDir;
+        ast::Module merged;
+        merged.pos = common::SourcePos{0, 1, 1};
+        if (!loader.load(fileName, merged)) {
+            return resError<ast::Module>(loader.error);
+        }
+        return ok(merged);
     }
 }

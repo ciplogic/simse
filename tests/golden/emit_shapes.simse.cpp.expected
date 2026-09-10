@@ -8,10 +8,10 @@ enum class Shape {
     Circle,
     Square = 4,
 };
-Str describe(Str self);
+Str describe(Str& self);
 Int area(Int width, Int height);
 // emit_shapes.simse:6
-Str describe(Str self) {
+Str describe(Str& self) {
     return self;
 }
 // emit_shapes.simse:10

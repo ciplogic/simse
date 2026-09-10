@@ -98,3 +98,25 @@ not allowed; use `toInt()` or `fromInt(...)` explicitly.
 Enum members are immutable constants. Duplicate integer values are allowed, so
 multiple names may represent the same value; `fromInt` returns the enum value
 but does not promise which alias name is preferred for display.
+
+### Enum member qualification
+
+Status: required for the first implementation.
+
+Enum member access is qualified as `EnumType.Member`. An enum remains a distinct
+type whose runtime representation is `Int`; unqualified member names are not
+introduced into scope.
+
+## Hoisting
+
+Status: required for the first implementation.
+
+Module-level declarations (functions, `data class`, `enum`, and `typealias`) are
+**hoisted**. They are visible throughout the module regardless of textual order,
+like Kotlin, Java, or C#. Declarations may be referenced before their textual
+definition, and mutually recursive functions need no source-level forward
+declaration. Methods within a class body are likewise order-independent relative
+to one another and to the class's fields.
+
+Local variables are **not** hoisted: a local is visible only from its declaration
+onward, so a local use-before-declaration is an error.

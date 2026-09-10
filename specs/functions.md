@@ -211,3 +211,56 @@ and they must follow the static receiver-function rules above.
 Implementations should either skip unsupported body constructs as balanced token
 regions or report a clear unsupported-body diagnostic. They must not partially
 compile unsupported non-method code.
+
+## Imports
+
+Status: required for the first implementation.
+
+`import a.b.c` imports all top-level declarations of the module identified by
+the dotted path. The exact file-versus-package resolution remains **provisional**:
+for the bootstrap implementation, a dotted path names a directory relative to the
+repository root and the import merges every `*.simse` file directly under that
+directory into the importer's module scope. Import cycles must be detected and
+reported rather than followed indefinitely.
+
+## Native functions
+
+Status: required for the first implementation (bootstrap fallback).
+
+A declaration `native fun name(params): Ret` introduces a function with a Simse
+type/signature but no body; its implementation is provided by hand-written C++.
+An optional explicit-symbol form `native("Symbol") fun name(...)` may be used
+when the source name and the C++ symbol differ. Native bodies are absent from
+Simse. The declaration form may be combined with a type-parameter list and the
+explicit `this` receiver form.
+
+```text
+native fun readFile(path: Str): Str
+native("simse_native_readFile") fun readFile(path: Str): Str
+native("simse_list_append") fun append<T>(this: List<T>, value: T): Unit
+```
+
+The exact symbol naming, linkage, and build integration are deferred; see
+`impl_specs/native-interop.md`.
+
+## Control flow: `break` and `continue`
+
+Status: required for the first implementation.
+
+`break` and `continue` are reserved keywords and are valid inside `while` and
+`for` loops. Using either outside a loop is an error.
+
+## Default parameter values
+
+Status: deferred.
+
+Default parameter values are not supported for now and must not be relied on by
+the parser or the mirrors.
+
+## Statement separation
+
+Status: required for the first implementation.
+
+A line ending (the `EndOfLine` token: LF, CR, or CRLF) separates statements; an
+explicit `;` is optional and equivalent. Space and comment tokens are ignored
+everywhere by the parser.

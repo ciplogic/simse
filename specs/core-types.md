@@ -71,3 +71,24 @@ Accessing a missing optional or a failed result is a compile-time/error-path
 operation, not a null dereference or exception. Code must test or pattern-match
 the state before extracting the payload. `&` and `*` do not unwrap `Opt` or
 `Res`; they apply only to an actual value/reference expression.
+
+## Inspection of `Opt` and `Res`
+
+Status: required for the first implementation.
+
+`Res<T>` exposes the state and payload as:
+
+- `isOk(): Bool`;
+- `value: T` (the success payload); and
+- `error: Str` (the failure message).
+
+`Opt<T>` exposes the state and payload as:
+
+- `hasValue(): Bool`; and
+- `value(): T`,
+
+in addition to the `none`/`some` constructors above.
+
+Accessing `value`, `error`, or `value()` on an empty (`Opt`) or failed (`Res`)
+value is an error-path operation and must be guarded by a test of `isOk()` or
+`hasValue()`.

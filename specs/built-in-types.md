@@ -22,6 +22,27 @@ same representation, range, layout, and arithmetic behavior as `Int8`.
 `Int` is the default integer type and is currently an alias of `Int32`. Code
 that requires a fixed width should use an explicit integer type.
 
+### `Bool`
+
+Status: required for the first implementation.
+
+`Bool` is a built-in type with exactly two values, `true` and `false`.
+`true` and `false` are reserved keywords rather than ordinary identifiers.
+
+### Character literals
+
+Status: required for the first implementation.
+
+`'c'` denotes a `Char` (`Int8`) value. The supported escapes are
+`\n`, `\r`, `\t`, `\0`, `\\`, `\'`, and `\"`. An unknown escape is an error.
+`Char` is not a Unicode scalar.
+
+```text
+val newline: Char = '\n'
+val quote: Char = '\''
+val letter: Char = 'a'
+```
+
 ## `List<T>`
 
 `List<T>` is a mutable value type with deep-copy semantics. It stores a
@@ -57,6 +78,22 @@ assigned, and the string can be appended to, cleared, resized, or have ranges
 modified. Copying a `Str` deep-copies its characters and storage. NUL
 termination is maintained after every mutation; the trailing terminator is not
 part of the logical string length.
+
+### Minimal `Str` API
+
+Status: required for the first implementation.
+
+`Str()` constructs an empty string. The minimally supported operations are:
+
+- `size(): Int`;
+- indexing `s[i]`, for both reading and assignment;
+- `append(ch: Char)` and `append(s: Str)`;
+- `clear()`;
+- `resize(n: Int)`; and
+- `data()`, which returns a NUL-terminated buffer for C interop.
+
+Indexing and member calls are permitted directly on a `&Str` and on a `*Str`,
+with automatic dereference (see `memory-model.md`).
 
 ## `RawArray<T>`
 

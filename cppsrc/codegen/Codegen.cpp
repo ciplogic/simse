@@ -40,6 +40,16 @@ namespace codegen {
             bool prelude = false; // comes from the RTL; not emitted
         };
 
+        // A native extension method, e.g. `native("sym") fun append<T>(this:
+        // List<T>, value: T)`. The receiver pattern picks the right overload when
+        // several extensions share a name (`append` on `List<T>` vs on `Str`).
+        struct NativeExt {
+            Str symbol;
+            ast::TypePtr receiver;
+            ast::TypePtr returnType;
+            List<Str> typeParams;
+        };
+
         // Strips the surrounding quotes from a string token's raw text.
         Str unquote(const Str &text) {
             if (text.length() >= 2 && text.front() == '"' && text.back() == '"') {
@@ -94,15 +104,17 @@ namespace codegen {
             Dictionary<Str, bool> receiverFnNames;
             List<NativeDecl> nativeDecls;
             Dictionary<Str, Str> nativeSymbols; // Simse name -> C++ symbol
-            // Explicit-`this` native extensions: method name -> C++ symbol.
-            Dictionary<Str, Str> nativeExtensions;
+            // Explicit-`this` native extensions: method name -> overloads.
+            Dictionary<Str, List<NativeExt>> nativeExtensions;
 
             // C++ type parameters currently in scope (for generic declarations).
             Dictionary<Str, bool> activeTypeParams;
 
-            // Per-function name kinds.
+            // Per-function name kinds and declared/inferred types.
             Dictionary<Str, NameKind> nameKinds;
+            Dictionary<Str, ast::TypePtr> localTypes;
             NameKind selfKind = NameKind::Value;
+            ast::TypePtr selfType;
 
             // ---- diagnostics ----------------------------------------------
 
@@ -178,7 +190,12 @@ namespace codegen {
                                 // A native with an explicit `this` first parameter is an
                                 // extension method; member calls lower to symbol(receiver, ...).
                                 if (!decl->params.empty() && decl->params[0].name == "this") {
-                                    nativeExtensions[decl->name] = native.symbol;
+                                    NativeExt ext;
+                                    ext.symbol = native.symbol;
+                                    ext.receiver = decl->params[0].type;
+                                    ext.returnType = decl->returnType;
+                                    ext.typeParams = decl->functionTypeParams;
+                                    nativeExtensions[decl->name].push_back(ext);
                                 }
                             }
                             addFunction(decl.get(),
@@ -403,17 +420,33 @@ namespace codegen {
                 }
             }
 
-            void beginScope(const Fn &fn, bool hasSelf, NameKind selfK) {
+            void beginScope(const Fn &fn, NameKind selfK, const ast::TypePtr &selfTypePtr) {
                 nameKinds.clear();
+                localTypes.clear();
                 selfKind = selfK;
+                selfType = selfTypePtr;
                 if (fn.receiver) {
                     nameKinds["self"] = selfK;
                 }
                 for (const ast::Param &param: fn.decl->params) {
                     if (param.type) {
                         nameKinds[param.name] = kindOf(*param.type);
+                        localTypes[param.name] = param.type;
                     }
                 }
+            }
+
+            // The C++ parameter form of a receiver. Value receivers are taken by
+            // reference so mutations through `this` reach the caller (data-class
+            // methods like `setSource`/`advance` rely on this). Counted
+            // references and raw pointers keep their handle form.
+            Str receiverParam(const ast::TypePtr &receiverType) {
+                Str mapped = type(*receiverType);
+                if (receiverType->kind == TypeKind::Reference
+                    || receiverType->kind == TypeKind::Pointer) {
+                    return mapped + " self";
+                }
+                return mapped + "& self";
             }
 
             void emitFunction(const Fn &fn, bool prototypeOnly) {
@@ -435,10 +468,12 @@ namespace codegen {
                 List<Str> params;
                 bool hasSelf = false;
                 NameKind selfK = NameKind::Value;
+                ast::TypePtr selfTypePtr;
                 if (fn.receiver) {
-                    params.push_back(type(*fn.receiver) + " self");
+                    params.push_back(receiverParam(fn.receiver));
                     hasSelf = true;
                     selfK = kindOf(*fn.receiver);
+                    selfTypePtr = fn.receiver;
                     if (failed) return;
                 }
                 for (const ast::Param &param: decl.params) {
@@ -447,9 +482,10 @@ namespace codegen {
                         return;
                     }
                     if (param.name == "this" && !hasSelf) {
-                        params.push_back(type(*param.type) + " self");
+                        params.push_back(receiverParam(param.type));
                         hasSelf = true;
                         selfK = kindOf(*param.type);
+                        selfTypePtr = param.type;
                     } else {
                         params.push_back(type(*param.type) + " " + param.name);
                     }
@@ -475,7 +511,7 @@ namespace codegen {
                 sourceComment(decl.pos);
                 if (!tmpl.empty()) line(0, tmpl);
                 line(0, signature + " {");
-                beginScope(fn, hasSelf, selfK);
+                beginScope(fn, selfK, selfTypePtr);
                 emitStmts(decl.body, 1);
                 if (failed) return;
                 line(0, "}");
@@ -510,12 +546,15 @@ namespace codegen {
 
                         if (stmt.type) {
                             nameKinds[stmt.name] = kindOf(*stmt.type);
+                            localTypes[stmt.name] = stmt.type;
                         } else if (stmt.init) {
                             nameKinds[stmt.name] = stmt.init->kind == ExprKind::Ref
                                                        ? NameKind::Shared
                                                        : (stmt.init->kind == ExprKind::Deref
                                                               ? NameKind::Pointer
                                                               : NameKind::Value);
+                            ast::TypePtr inferred = inferType(*stmt.init);
+                            if (inferred) localTypes[stmt.name] = inferred;
                         }
                         return;
                     }
@@ -608,9 +647,285 @@ namespace codegen {
                 return NameKind::Value;
             }
 
+            // ---- lightweight type inference ---------------------------------
+            //
+            // Codegen needs just enough type information to pick the right
+            // lowering for a member/index/call receiver: `.` vs `->`, whether to
+            // auto-dereference a `&T`/`*T` handle, which overloaded native
+            // extension applies (`append` on `List<T>` vs on `Str`), and the
+            // `Res<T>.value`/`.error` field spelling. It is deliberately best
+            // effort: an unknown type yields null and the caller falls back to the
+            // syntactic name-kind tracking.
+
+            ast::TypePtr namedType(const Str &name) {
+                auto type = std::make_shared<ast::TypeExpr>();
+                type->kind = TypeKind::Named;
+                type->name = name;
+                return type;
+            }
+
+            ast::TypePtr genericType(const Str &name, const List<ast::TypePtr> &args) {
+                auto type = std::make_shared<ast::TypeExpr>();
+                type->kind = TypeKind::Generic;
+                type->name = name;
+                type->typeArgs = args;
+                return type;
+            }
+
+            // The pointee after stripping any number of `&`/`*` handles.
+            const ast::TypeExpr *pointee(const ast::TypePtr &type) {
+                const ast::TypeExpr *current = type.get();
+                while (current && (current->kind == TypeKind::Reference
+                                   || current->kind == TypeKind::Pointer)
+                       && current->inner) {
+                    current = current->inner.get();
+                }
+                return current;
+            }
+
+            bool isTypeParamName(const Str &name, const List<Str> &typeParams) {
+                for (const Str &param: typeParams) {
+                    if (param == name) return true;
+                }
+                return false;
+            }
+
+            // Structural unification of an extension receiver pattern (which may
+            // mention the extension's type parameters) against an actual receiver
+            // type. Mirrors the sema checker's rule.
+            bool unifyType(const ast::TypeExpr &pattern, const ast::TypeExpr &actual,
+                           const List<Str> &typeParams) {
+                const ast::TypeExpr *actualPtr = &actual;
+                if (pattern.kind != TypeKind::Reference && pattern.kind != TypeKind::Pointer) {
+                    while ((actualPtr->kind == TypeKind::Reference
+                            || actualPtr->kind == TypeKind::Pointer) && actualPtr->inner) {
+                        actualPtr = actualPtr->inner.get();
+                    }
+                }
+                const ast::TypeExpr &a = *actualPtr;
+                switch (pattern.kind) {
+                    case TypeKind::IntLit:
+                        return a.kind == TypeKind::IntLit && a.text == pattern.text;
+                    case TypeKind::Named:
+                        if (isTypeParamName(pattern.name, typeParams)) return true;
+                        return a.kind == TypeKind::Named && a.name == pattern.name;
+                    case TypeKind::Generic:
+                        if (isTypeParamName(pattern.name, typeParams)) return true;
+                        if (a.kind != TypeKind::Generic || a.name != pattern.name) return false;
+                        if (a.typeArgs.size() != pattern.typeArgs.size()) return false;
+                        for (int i = 0; i < (int) a.typeArgs.size(); i++) {
+                            if (!unifyType(*pattern.typeArgs[i], *a.typeArgs[i], typeParams)) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    case TypeKind::Reference:
+                        return a.kind == TypeKind::Reference && a.inner && pattern.inner
+                               && unifyType(*pattern.inner, *a.inner, typeParams);
+                    case TypeKind::Pointer:
+                        return a.kind == TypeKind::Pointer && a.inner && pattern.inner
+                               && unifyType(*pattern.inner, *a.inner, typeParams);
+                    case TypeKind::Function:
+                        return false;
+                }
+                return false;
+            }
+
+            ast::TypePtr functionReturn(const Str &name) {
+                for (const Fn &fn: functions) {
+                    if (fn.decl->name == name && fn.decl->returnType) {
+                        return fn.decl->returnType;
+                    }
+                }
+                return nullptr;
+            }
+
+            // The return type of a member call (`recv.name(...)`) when it resolves
+            // to a known extension function or a built-in accessor.
+            ast::TypePtr memberCallReturn(const ast::Expr &callee) {
+                ast::TypePtr receiverType = inferType(*callee.lhs);
+                const ast::TypeExpr *recv = pointee(receiverType);
+                for (const Fn &fn: functions) {
+                    if (fn.decl->isNative || !fn.receiver) continue;
+                    if (fn.decl->name != callee.text) continue;
+                    if (recv && unifyType(*fn.receiver, *recv, fn.templateParams)
+                        && fn.decl->returnType) {
+                        return fn.decl->returnType;
+                    }
+                }
+                auto extensions = nativeExtensions.find(callee.text);
+                if (extensions != nativeExtensions.end()) {
+                    for (const NativeExt &ext: extensions->second) {
+                        if (recv && ext.receiver && unifyType(*ext.receiver, *recv, ext.typeParams)
+                            && ext.returnType) {
+                            return ext.returnType;
+                        }
+                    }
+                }
+                if (recv && recv->kind == TypeKind::Generic) {
+                    if (callee.text == "value" && recv->name == "Opt" && !recv->typeArgs.empty()) {
+                        return recv->typeArgs[0];
+                    }
+                }
+                if (recv && (callee.text == "size" || callee.text == "count")) {
+                    if (recv->name == "List" || recv->name == "Str" || recv->name == "Array"
+                        || recv->name == "Dictionary" || recv->name == "SmallVector") {
+                        return namedType("Int");
+                    }
+                }
+                if (callee.text == "isOk" || callee.text == "hasValue") {
+                    return namedType("Bool");
+                }
+                return nullptr;
+            }
+
+            ast::TypePtr inferType(const ast::Expr &e) {
+                switch (e.kind) {
+                    case ExprKind::IntLit:
+                        return namedType("Int");
+                    case ExprKind::FloatLit:
+                        return namedType("Float64");
+                    case ExprKind::StrLit:
+                        return namedType("Str");
+                    case ExprKind::CharLit:
+                        return namedType("Char");
+                    case ExprKind::BoolLit:
+                        return namedType("Bool");
+                    case ExprKind::NullLit:
+                        return nullptr;
+                    case ExprKind::Name: {
+                        if (e.text == "this") return selfType;
+                        auto it = localTypes.find(e.text);
+                        if (it != localTypes.end()) return it->second;
+                        return nullptr;
+                    }
+                    case ExprKind::GenericName:
+                        return genericType(e.text, e.typeArgs);
+                    case ExprKind::Member: {
+                        ast::TypePtr baseType = inferType(*e.lhs);
+                        const ast::TypeExpr *base = pointee(baseType);
+                        if (!base) return nullptr;
+                        if (base->kind == TypeKind::Generic && base->name == "Res") {
+                            if (e.text == "value" && !base->typeArgs.empty()) return base->typeArgs[0];
+                            if (e.text == "error") return namedType("Str");
+                        }
+                        if (base->kind == TypeKind::Named || base->kind == TypeKind::Generic) {
+                            auto it = types.find(base->name);
+                            if (it != types.end() && it->second->kind == DeclKind::DataClass) {
+                                for (const ast::Field &field: it->second->fields) {
+                                    if (field.name == e.text) return field.type;
+                                }
+                            }
+                        }
+                        return nullptr;
+                    }
+                    case ExprKind::Call: {
+                        const ast::Expr &callee = *e.lhs;
+                        if (callee.kind == ExprKind::GenericName) {
+                            if (types.count(callee.text) > 0 || isRtlTypeName(callee.text)) {
+                                return genericType(callee.text, callee.typeArgs);
+                            }
+                            return functionReturn(callee.text);
+                        }
+                        if (callee.kind == ExprKind::Name) {
+                            if (types.count(callee.text) > 0 || isRtlTypeName(callee.text)) {
+                                return namedType(callee.text);
+                            }
+                            return functionReturn(callee.text);
+                        }
+                        if (callee.kind == ExprKind::Member) {
+                            return memberCallReturn(callee);
+                        }
+                        return nullptr;
+                    }
+                    case ExprKind::Index: {
+                        const ast::TypeExpr *base = pointee(inferType(*e.lhs));
+                        if (!base) return nullptr;
+                        if (base->kind == TypeKind::Named && base->name == "Str") return namedType("Char");
+                        if (base->kind != TypeKind::Generic || base->typeArgs.empty()) return nullptr;
+                        if (base->name == "SmallVector" && base->typeArgs.size() == 2) {
+                            return base->typeArgs[1]; // <N, T>
+                        }
+                        if (base->name == "Dictionary" && base->typeArgs.size() == 2) {
+                            return base->typeArgs[1];
+                        }
+                        return base->typeArgs[0];
+                    }
+                    case ExprKind::Ref: {
+                        auto type = std::make_shared<ast::TypeExpr>();
+                        type->kind = TypeKind::Reference;
+                        type->inner = inferType(*e.lhs);
+                        return type;
+                    }
+                    case ExprKind::Deref: {
+                        auto type = std::make_shared<ast::TypeExpr>();
+                        type->kind = TypeKind::Pointer;
+                        type->inner = inferType(*e.lhs);
+                        return type;
+                    }
+                    case ExprKind::Copy:
+                    case ExprKind::Unary:
+                        return inferType(*e.lhs);
+                    case ExprKind::Binary: {
+                        if (e.text == "==" || e.text == "!=" || e.text == "<" || e.text == ">"
+                            || e.text == "<=" || e.text == ">=" || e.text == "&&" || e.text == "||") {
+                            return namedType("Bool");
+                        }
+                        return inferType(*e.lhs);
+                    }
+                    case ExprKind::Lambda:
+                        return nullptr;
+                }
+                return nullptr;
+            }
+
+            // The receiver argument for a lowered call, dereferencing a counted
+            // reference or raw pointer when the callee's receiver is a value.
+            Str receiverArg(const ast::TypePtr &pattern, const ast::Expr &recv) {
+                if (pattern && (pattern->kind == TypeKind::Reference
+                                || pattern->kind == TypeKind::Pointer)) {
+                    return expr(recv, 9);
+                }
+                ast::TypePtr recvType = inferType(recv);
+                if (recvType && (recvType->kind == TypeKind::Reference
+                                 || recvType->kind == TypeKind::Pointer)) {
+                    return "(*" + expr(recv, 9) + ")";
+                }
+                return expr(recv, 9);
+            }
+
+            // Finds a Simse-declared extension/method whose receiver matches the
+            // given receiver expression's type. Returns null when unknown.
+            const Fn *findExtensionFn(const Str &name, const ast::Expr &recvExpr) {
+                const ast::TypeExpr *recv = pointee(inferType(recvExpr));
+                if (!recv) return nullptr;
+                for (const Fn &fn: functions) {
+                    if (fn.decl->isNative || !fn.receiver) continue;
+                    if (fn.decl->name != name) continue;
+                    if (unifyType(*fn.receiver, *recv, fn.templateParams)) return &fn;
+                }
+                return nullptr;
+            }
+
+            const NativeExt *findNativeExt(const Str &name, const ast::Expr &recvExpr) {
+                auto it = nativeExtensions.find(name);
+                if (it == nativeExtensions.end()) return nullptr;
+                const ast::TypeExpr *recv = pointee(inferType(recvExpr));
+                if (!recv) return nullptr;
+                for (const NativeExt &ext: it->second) {
+                    if (ext.receiver && unifyType(*ext.receiver, *recv, ext.typeParams)) return &ext;
+                }
+                return nullptr;
+            }
+
             Str memberAccess(const ast::Expr &base, const Str &name) {
                 bool arrow = false;
-                if (base.kind == ExprKind::Name) {
+                ast::TypePtr baseType = inferType(base);
+                if (baseType) {
+                    arrow = baseType->kind == TypeKind::Reference
+                            || baseType->kind == TypeKind::Pointer;
+                } else if (base.kind == ExprKind::Name) {
+                    // Fallback for a receiver whose type we could not infer.
                     if (base.text == "this") {
                         arrow = selfKind != NameKind::Value;
                     } else {
@@ -620,7 +935,15 @@ namespace codegen {
                         }
                     }
                 }
-                return expr(base, 9) + (arrow ? "->" : ".") + name;
+                // Res<T> exposes its payload as the `value`/`error` properties; the
+                // RTL field spellings are Value/Error.
+                Str field = name;
+                const ast::TypeExpr *recv = pointee(baseType);
+                if (recv && recv->kind == TypeKind::Generic && recv->name == "Res") {
+                    if (name == "value") field = "Value";
+                    else if (name == "error") field = "Error";
+                }
+                return expr(base, 9) + (arrow ? "->" : ".") + field;
             }
 
             Str exprInner(const ast::Expr &e) {
@@ -647,8 +970,15 @@ namespace codegen {
                         return memberAccess(*e.lhs, e.text);
                     case ExprKind::Call:
                         return call(e);
-                    case ExprKind::Index:
-                        return expr(*e.lhs, 9) + "[" + expr(*e.rhs, 0) + "]";
+                    case ExprKind::Index: {
+                        Str baseExpr = expr(*e.lhs, 9);
+                        ast::TypePtr baseType = inferType(*e.lhs);
+                        if (baseType && baseType->kind == TypeKind::Reference) {
+                            // Auto-dereference a counted reference: `(*handle)[i]`.
+                            return "(*" + baseExpr + ")[" + expr(*e.rhs, 0) + "]";
+                        }
+                        return baseExpr + "[" + expr(*e.rhs, 0) + "]";
+                    }
                     case ExprKind::Unary:
                         return e.text + expr(*e.lhs, 7);
                     case ExprKind::Binary: {
@@ -659,20 +989,29 @@ namespace codegen {
                         fail(e.pos, "unsupported: lambda expression");
                         return "/*unsupported*/";
                     case ExprKind::Ref: {
+                        // `&List<T>()` is the counted empty-list construction.
+                        if (e.lhs && e.lhs->kind == ExprKind::Call && e.lhs->lhs
+                            && e.lhs->lhs->kind == ExprKind::GenericName
+                            && e.lhs->lhs->text == "List" && e.lhs->args.empty()) {
+                            return "makeList<" + typeArgsString("List", e.lhs->lhs->typeArgs) + ">()";
+                        }
                         Str operand = expr(*e.lhs, 0);
                         return "std::make_shared<std::remove_cvref_t<decltype((" + operand + "))>>("
                                + operand + ")";
                     }
                     case ExprKind::Deref: {
                         Str operand = expr(*e.lhs, 7);
-                        if (operandKind(*e.lhs) == NameKind::Shared) {
+                        ast::TypePtr operandType = inferType(*e.lhs);
+                        NameKind kind = operandType ? kindOf(*operandType) : operandKind(*e.lhs);
+                        if (kind == NameKind::Shared) {
                             return "(" + operand + ").get()";
                         }
                         return "*" + operand;
                     }
                     case ExprKind::Copy: {
                         Str operand = expr(*e.lhs, 0);
-                        NameKind kind = operandKind(*e.lhs);
+                        ast::TypePtr operandType = inferType(*e.lhs);
+                        NameKind kind = operandType ? kindOf(*operandType) : operandKind(*e.lhs);
                         if (kind == NameKind::Shared || kind == NameKind::Pointer) {
                             return "*(" + operand + ")";
                         }
@@ -710,34 +1049,51 @@ namespace codegen {
                     return calleeName + "(" + join(args, ", ") + ")";
                 }
                 if (callee.kind == ExprKind::Member) {
-                    if (callee.lhs && callee.lhs->kind == ExprKind::GenericName) {
-                        fail(e.pos, "unsupported: generic-qualified static call '"
-                                       + callee.lhs->text + "<...>." + callee.text + "'");
-                        return "/*unsupported*/";
-                    }
                     List<Str> args;
                     for (const ast::ExprPtr &arg: e.args) {
                         args.push_back(expr(*arg, 0));
                     }
-                    if (receiverFnNames.count(callee.text) > 0) {
-                        // A lowered extension/method function: the receiver is the
-                        // first argument.
-                        Str receiver = expr(*callee.lhs, 9);
-                        Str all = receiver;
-                        for (const Str &arg: args) {
-                            all += ", " + arg;
+                    // Generic-qualified static call: `Res<T>.ok(x)` lowers to
+                    // `Res<T>::ok(x)` (RTL Opt/Res provide static constructors).
+                    if (callee.lhs && callee.lhs->kind == ExprKind::GenericName) {
+                        return callee.lhs->text + "<"
+                               + typeArgsString(callee.lhs->text, callee.lhs->typeArgs)
+                               + ">::" + callee.text + "(" + join(args, ", ") + ")";
+                    }
+
+                    const ast::TypeExpr *receiver = pointee(inferType(*callee.lhs));
+                    if (receiver) {
+                        // Receiver type is known: pick the extension (or native
+                        // extension) overload whose receiver unifies with it.
+                        const Fn *fn = findExtensionFn(callee.text, *callee.lhs);
+                        if (fn) {
+                            Str all = receiverArg(fn->receiver, *callee.lhs);
+                            for (const Str &arg: args) all += ", " + arg;
+                            return fn->decl->name + "(" + all + ")";
                         }
+                        const NativeExt *ext = findNativeExt(callee.text, *callee.lhs);
+                        if (ext) {
+                            Str all = receiverArg(ext->receiver, *callee.lhs);
+                            for (const Str &arg: args) all += ", " + arg;
+                            return ext->symbol + "(" + all + ")";
+                        }
+                        // Known receiver but no Simse/native extension: an RTL
+                        // member call such as List::size or Res::isOk.
+                        return memberAccess(*callee.lhs, callee.text)
+                               + "(" + join(args, ", ") + ")";
+                    }
+
+                    // Unknown receiver type: keep the name-based precedence.
+                    if (receiverFnNames.count(callee.text) > 0) {
+                        Str all = expr(*callee.lhs, 9);
+                        for (const Str &arg: args) all += ", " + arg;
                         return callee.text + "(" + all + ")";
                     }
                     auto extension = nativeExtensions.find(callee.text);
-                    if (extension != nativeExtensions.end()) {
-                        // A native extension: receiver first, then the arguments.
-                        Str receiver = expr(*callee.lhs, 9);
-                        Str all = receiver;
-                        for (const Str &arg: args) {
-                            all += ", " + arg;
-                        }
-                        return extension->second + "(" + all + ")";
+                    if (extension != nativeExtensions.end() && !extension->second.empty()) {
+                        Str all = expr(*callee.lhs, 9);
+                        for (const Str &arg: args) all += ", " + arg;
+                        return extension->second[0].symbol + "(" + all + ")";
                     }
                     return memberAccess(*callee.lhs, callee.text)
                            + "(" + join(args, ", ") + ")";

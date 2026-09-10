@@ -13,6 +13,15 @@ struct Res {
     bool isOk() {
         return Error.length() == 0;
     }
+
+    // The static forms used by Simse's `Res<T>.ok(x)` / `Res<T>.err(msg)`.
+    // The free functions below are kept for existing hand-written C++ callers.
+    static Res<T> ok(T value) {
+        return Res<T>{value, ""};
+    }
+    static Res<T> err(Str errorMessage) {
+        return Res<T>{{}, errorMessage};
+    }
 };
 
 template <class T>

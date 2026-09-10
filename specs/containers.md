@@ -63,6 +63,27 @@ such as append, insert, remove, and clear. These operations may change its
 length and may move its heap buffer, so raw pointers into a list are not stable
 across mutations that relocate storage.
 
+### Minimal `List<T>` API
+
+Status: required for the first implementation.
+
+The minimally supported `List<T>` operations are:
+
+- `size(): Int`;
+- indexing `list[i]`, for both reading and assignment, where assignment requires
+  a mutable variable;
+- `append(value: T)`;
+- `insert(index: Int, value: T)`;
+- `removeAt(index: Int)`;
+- `removeRange(start: Int, end: Int)`, which removes the half-open range
+  `[start, end)`; and
+- `clear()`.
+
+Indexing and member calls are permitted directly on a `&List<T>` and on a
+`*List<T>`, with automatic dereference (see `memory-model.md`). The `append`,
+`removeAt`, and `removeRange` operations are exposed to the compiler as native
+extensions (`impl_specs/tasks/12-container-methods-as-native.md`).
+
 ## `Str`
 
 `Str` is the inline string type. It is the reified `SmallVector<24, Char>`

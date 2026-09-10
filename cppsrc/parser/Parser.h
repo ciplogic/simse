@@ -16,4 +16,12 @@ namespace parser {
     // Reads, scans, and parses `fileName`. Convenience for callers that do not
     // already hold a token stream (for example loading a prelude).
     Res<ast::Module> parseFile(const Str& fileName);
+
+    // Reads, scans, and parses `fileName`, then recursively merges the modules it
+    // imports into the result. `import a.b.c` names the directory
+    // `<rootDir>/a/b/c`; every `*.simse` file directly under it is parsed and its
+    // declarations merged (see specs/functions.md). Import cycles are reported
+    // rather than followed. Declarations are hoisted, so merge order is
+    // irrelevant; files are visited in sorted order for determinism.
+    Res<ast::Module> parseFileWithImports(const Str& fileName, const Str& rootDir);
 }

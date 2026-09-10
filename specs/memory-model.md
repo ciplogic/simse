@@ -102,6 +102,18 @@ var b: &Point = &a   // b is a counted reference to a copy of a
 var p: *Point = *b   // p is a raw pointer to the same box that b manages
 ```
 
+### Automatic dereference
+
+Status: required for the first implementation.
+
+Member access, indexing, and method calls through a counted reference (`&T`) or
+a raw pointer (`*T`) automatically reach the pointee. For example, if `source`
+has type `&Str`, then `source[i]`, `source.size()`, and any member call on
+`source` operate on the `Str` it points to, not on the handle. This is a
+syntactic convenience only: it does not change the ownership, nullability, or
+unsafety rules of the reference, and dereferencing a null/dangling handle is
+still unchecked undefined behavior.
+
 ## Type aliases
 
 `typealias` names a (possibly composed) type, so memory operators can be given

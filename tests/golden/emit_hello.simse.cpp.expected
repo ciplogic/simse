@@ -8,9 +8,9 @@ struct Counter {
     Int value;
     Counter(Int value) : value(value) {}
 };
-Int bump(Counter self);
+Int bump(Counter& self);
 // emit_hello.simse:2
-Int bump(Counter self) {
+Int bump(Counter& self) {
     return self.value + 1;
 }
 // emit_hello.simse:7

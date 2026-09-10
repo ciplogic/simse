@@ -19,10 +19,10 @@ struct Point {
 using IntPredicate = Func<Bool(Int)>;
 // program_basic.simse:16
 using FloatHandler = Func<void(Float64*)>;
-Int sum(Point self);
+Int sum(Point& self);
 Int add(Int a, Int b);
 // program_basic.simse:9
-Int sum(Point self) {
+Int sum(Point& self) {
     return self.x + self.y;
 }
 // program_basic.simse:18

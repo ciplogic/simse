@@ -133,22 +133,16 @@ int main(int argc, char **argv) {
         }
     }
 
-    List<TokenMatcher> rules = getTokenRules();
-    Scanner scanner(&rules);
-
     List<codegen::Input> modules;
     if (hasPrelude) {
         modules.push_back(preludeInput);
     }
 
     for (const Str &file: inputs) {
-        Res<List<Token>> tokens = readFileAndSkipSpacesTokens(&scanner, file);
-        if (!tokens.isOk()) {
-            fprintf(stderr, "%s\n", tokens.Error.c_str());
-            return 1;
-        }
-        List<Token> tokenList = tokens.Value;
-        Res<ast::Module> parsed = parser::parseModule(tokenList, file);
+        // Resolve the file's imports (each `import a.b.c` is a directory under
+        // the repo root) and merge their declarations into this module before
+        // analysis and emission (specs/functions.md).
+        Res<ast::Module> parsed = parser::parseFileWithImports(file, ".");
         if (!parsed.isOk()) {
             fprintf(stderr, "%s\n", parsed.Error.c_str());
             return 1;
