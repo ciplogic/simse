@@ -1,0 +1,42 @@
+Identifier	1:1	a
+Operator	1:2	->
+Identifier	1:4	b
+Space	1:5	 
+Operator	1:6	==
+Space	1:8	 
+Identifier	1:9	c
+Space	1:10	 
+Operator	1:11	&&
+Space	1:13	 
+Identifier	1:14	d
+Space	1:15	 
+Operator	1:16	||
+Space	1:18	 
+Identifier	1:19	e
+Space	1:20	 
+Operator	1:21	<=
+Space	1:23	 
+Identifier	1:24	f
+Space	1:25	 
+Operator	1:26	!=
+Space	1:28	 
+Identifier	1:29	g
+Space	1:30	 
+Operator	1:31	>=
+Space	1:33	 
+Identifier	1:34	h
+Space	1:35	 
+Operator	1:36	+=
+Space	1:38	 
+Identifier	1:39	i
+Space	1:40	 
+Operator	1:41	+
+Space	1:42	 
+Operator	1:43	-
+Space	1:44	 
+Operator	1:45	*
+Space	1:46	 
+Operator	1:47	/
+Space	1:48	 
+Operator	1:49	%
+EndOfLine	1:50	\n

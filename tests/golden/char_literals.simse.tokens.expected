@@ -1,0 +1,8 @@
+Character	1:1	'a'
+Space	1:4	 
+Character	1:5	'\\n'
+Space	1:9	 
+Character	1:10	'\\''
+Space	1:14	 
+Character	1:15	'\\\\'
+EndOfLine	1:19	\n

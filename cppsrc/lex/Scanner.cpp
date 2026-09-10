@@ -235,6 +235,28 @@ namespace lex {
     Scanner::Scanner(List<TokenMatcher> *rules) {
         _rules = rules;
         Pos = 0;
+        Line = 1;
+        Column = 1;
+    }
+
+    // Advances `pos` by `matchLength` characters, updating `line` and `column`
+    // one character at a time. A newline is '\n', or '\r' that is not
+    // immediately followed by '\n' (so CRLF counts once). Tabs count as a single
+    // column.
+    void advancePosition(const Str &source, int &pos, int &line, int &column, int matchLength) {
+        for (int i = 0; i < matchLength; i++) {
+            char ch = source.at(pos);
+            bool isNewline = ch == '\n'
+                             || (ch == '\r'
+                                 && (pos + 1 >= (int) source.length() || source.at(pos + 1) != '\n'));
+            if (isNewline) {
+                line += 1;
+                column = 1;
+            } else {
+                column += 1;
+            }
+            pos += 1;
+        }
     }
 
     Res<Token> Scanner::nextToken() {
@@ -253,20 +275,23 @@ namespace lex {
                 Token token;
                 token.text = tokenSlice.toString();
                 token.kind = rule.tokenKind;
+                token.pos = SourcePos{this->Pos, this->Line, this->Column};
 
-                this->Pos += matchLength;
+                advancePosition(this->Source, this->Pos, this->Line, this->Column, matchLength);
                 return ok(token);
             }
             return resError<Token>("Unexpected character");
         }
 
-        Token eofToken{"", TokenKind::Eof};
+        Token eofToken{"", TokenKind::Eof, SourcePos{this->Pos, this->Line, this->Column}};
         return ok(eofToken);
     }
 
     void Scanner::setSource(const Str &str) {
         this->Source = str;
         this->Pos = 0;
+        this->Line = 1;
+        this->Column = 1;
     }
 
     List<TokenMatcher> getTokenRules() {

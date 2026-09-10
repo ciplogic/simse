@@ -1,0 +1,6 @@
+Identifier	1:1	x
+Space	1:2	 
+Comment	1:3	/* a\nb */
+Space	2:5	 
+Identifier	2:6	y
+EndOfLine	2:7	\n

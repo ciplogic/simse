@@ -2,6 +2,7 @@
 #include "../common/common.h"
 
 namespace lex {
+    using common::SourcePos;
     using common::StrView;
 
     enum class TokenKind : int {
@@ -25,14 +26,18 @@ namespace lex {
         MatchLenFunc match;
     };
 
+    // A scanned token: its source text, kind, and start position.
     struct Token {
         Str text;
         TokenKind kind;
+        SourcePos pos;
     };
 
     struct Scanner {
         List<TokenMatcher> *_rules;
         int Pos;
+        int Line;
+        int Column;
         Str Source;
 
         explicit Scanner(List<TokenMatcher> * rules);

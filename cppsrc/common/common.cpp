@@ -5,6 +5,7 @@
 #include "common.h"
 #include <filesystem>
 #include <cstdio>
+#include <algorithm>
 
 namespace common {
     Str readFile(const Str &filePath) {
@@ -36,6 +37,9 @@ namespace common {
                 matchingFiles.push_back(entry.path().string());
             }
         }
+
+        // Sort so multi-file consumers (and golden tests) see a deterministic order.
+        std::sort(matchingFiles.begin(), matchingFiles.end());
 
         return matchingFiles;
 
