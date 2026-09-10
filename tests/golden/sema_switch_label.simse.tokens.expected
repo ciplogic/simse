@@ -1,0 +1,72 @@
+Comment	1:1	// Negative fixture: a case label that is not a constant expression.
+EndOfLine	1:69	\n
+ReservedWord	2:1	fun
+Space	2:4	 
+Identifier	2:5	f
+Operator	2:6	(
+Operator	2:7	)
+Operator	2:8	:
+Space	2:9	 
+Identifier	2:10	Int
+Space	2:13	 
+Operator	2:14	{
+EndOfLine	2:15	\n
+Space	3:1	    
+ReservedWord	3:5	return
+Space	3:11	 
+Number	3:12	1
+EndOfLine	3:13	\n
+Operator	4:1	}
+EndOfLine	4:2	\n
+EndOfLine	5:1	\n
+ReservedWord	6:1	fun
+Space	6:4	 
+Identifier	6:5	pick
+Operator	6:9	(
+Identifier	6:10	n
+Operator	6:11	:
+Space	6:12	 
+Identifier	6:13	Int
+Operator	6:16	)
+Operator	6:17	:
+Space	6:18	 
+Identifier	6:19	Int
+Space	6:22	 
+Operator	6:23	{
+EndOfLine	6:24	\n
+Space	7:1	    
+ReservedWord	7:5	switch
+Space	7:11	 
+Operator	7:12	(
+Identifier	7:13	n
+Operator	7:14	)
+Space	7:15	 
+Operator	7:16	{
+EndOfLine	7:17	\n
+Space	8:1	        
+ReservedWord	8:9	case
+Space	8:13	 
+Identifier	8:14	f
+Operator	8:15	(
+Operator	8:16	)
+Operator	8:17	:
+EndOfLine	8:18	\n
+Space	9:1	            
+ReservedWord	9:13	return
+Space	9:19	 
+Number	9:20	1
+EndOfLine	9:21	\n
+Space	10:1	        
+ReservedWord	10:9	default
+Operator	10:16	:
+EndOfLine	10:17	\n
+Space	11:1	            
+ReservedWord	11:13	return
+Space	11:19	 
+Number	11:20	0
+EndOfLine	11:21	\n
+Space	12:1	    
+Operator	12:5	}
+EndOfLine	12:6	\n
+Operator	13:1	}
+EndOfLine	13:2	\n

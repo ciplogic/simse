@@ -1,0 +1,213 @@
+Module @1:1
+  Function main @3:1
+    Return Int
+    Body
+      VarDecl val raw: Str @4:5
+        Init
+          StrLit "  Hello,World  " @4:20
+      VarDecl val text: Str @5:5
+        Init
+          Call @5:21
+            Callee
+              Member .trim @5:21
+                Receiver
+                  Name raw @5:21
+      ExprStmt @6:5
+        Call @6:5
+          Callee
+            Name println @6:5
+          Arg
+            Name text @6:13
+      ExprStmt @7:5
+        Call @7:5
+          Callee
+            Name println @7:5
+          Arg
+            Call @7:13
+              Callee
+                Member .toUpper @7:13
+                  Receiver
+                    Name text @7:13
+      ExprStmt @8:5
+        Call @8:5
+          Callee
+            Name println @8:5
+          Arg
+            Call @8:13
+              Callee
+                Member .toLower @8:13
+                  Receiver
+                    Name text @8:13
+      ExprStmt @9:5
+        Call @9:5
+          Callee
+            Name println @9:5
+          Arg
+            Call @9:13
+              Callee
+                Member .isEmpty @9:13
+                  Receiver
+                    Name text @9:13
+      ExprStmt @10:5
+        Call @10:5
+          Callee
+            Name println @10:5
+          Arg
+            Call @10:13
+              Callee
+                Member .isEmpty @10:13
+                  Receiver
+                    Call @10:13
+                      Callee
+                        Name Str @10:13
+      ExprStmt @11:5
+        Call @11:5
+          Callee
+            Name println @11:5
+          Arg
+            Call @11:13
+              Callee
+                Member .size @11:13
+                  Receiver
+                    Name text @11:13
+      VarDecl val parts: List<Str> @13:5
+        Init
+          Call @13:28
+            Callee
+              Member .split @13:28
+                Receiver
+                  Name text @13:28
+            Arg
+              StrLit "," @13:39
+      ExprStmt @14:5
+        Call @14:5
+          Callee
+            Name println @14:5
+          Arg
+            Call @14:13
+              Callee
+                Member .size @14:13
+                  Receiver
+                    Name parts @14:13
+      ExprStmt @15:5
+        Call @15:5
+          Callee
+            Name println @15:5
+          Arg
+            Index @15:13
+              Receiver
+                Name parts @15:13
+              Index
+                IntLit 0 @15:19
+      ExprStmt @16:5
+        Call @16:5
+          Callee
+            Name println @16:5
+          Arg
+            Index @16:13
+              Receiver
+                Name parts @16:13
+              Index
+                IntLit 1 @16:19
+      ExprStmt @18:5
+        Call @18:5
+          Callee
+            Name println @18:5
+          Arg
+            Call @18:13
+              Callee
+                Member .charAt @18:13
+                  Receiver
+                    Name text @18:13
+              Arg
+                IntLit 0 @18:25
+      ExprStmt @19:5
+        Call @19:5
+          Callee
+            Name println @19:5
+          Arg
+            Call @19:13
+              Callee
+                Member .indexOf @19:13
+                  Receiver
+                    Name text @19:13
+              Arg
+                StrLit "World" @19:26
+      ExprStmt @20:5
+        Call @20:5
+          Callee
+            Name println @20:5
+          Arg
+            Call @20:13
+              Callee
+                Member .find @20:13
+                  Receiver
+                    Name text @20:13
+              Arg
+                StrLit "zzz" @20:23
+      ExprStmt @21:5
+        Call @21:5
+          Callee
+            Name println @21:5
+          Arg
+            Call @21:13
+              Callee
+                Member .lastIndexOf @21:13
+                  Receiver
+                    Name text @21:13
+              Arg
+                StrLit "l" @21:30
+      ExprStmt @22:5
+        Call @22:5
+          Callee
+            Name println @22:5
+          Arg
+            Call @22:13
+              Callee
+                Member .substr @22:13
+                  Receiver
+                    Name text @22:13
+              Arg
+                IntLit 6 @22:25
+              Arg
+                IntLit 5 @22:28
+      ExprStmt @23:5
+        Call @23:5
+          Callee
+            Name println @23:5
+          Arg
+            Call @23:13
+              Callee
+                Member .startsWith @23:13
+                  Receiver
+                    Name text @23:13
+              Arg
+                StrLit "Hello" @23:29
+      ExprStmt @24:5
+        Call @24:5
+          Callee
+            Name println @24:5
+          Arg
+            Call @24:13
+              Callee
+                Member .endsWith @24:13
+                  Receiver
+                    Name text @24:13
+              Arg
+                StrLit "World" @24:27
+      ExprStmt @25:5
+        Call @25:5
+          Callee
+            Name println @25:5
+          Arg
+            Call @25:13
+              Callee
+                Member .replace @25:13
+                  Receiver
+                    Name text @25:13
+              Arg
+                StrLit "World" @25:26
+              Arg
+                StrLit "Simse" @25:35
+      Return @26:5
+        IntLit 0 @26:12

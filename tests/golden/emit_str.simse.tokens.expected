@@ -1,0 +1,251 @@
+Comment	1:1	// T17: the Str library (charAt, trim, split, case folding, search).
+EndOfLine	1:69	\n
+EndOfLine	2:1	\n
+ReservedWord	3:1	fun
+Space	3:4	 
+Identifier	3:5	main
+Operator	3:9	(
+Operator	3:10	)
+Operator	3:11	:
+Space	3:12	 
+Identifier	3:13	Int
+Space	3:16	 
+Operator	3:17	{
+EndOfLine	3:18	\n
+Space	4:1	    
+ReservedWord	4:5	val
+Space	4:8	 
+Identifier	4:9	raw
+Operator	4:12	:
+Space	4:13	 
+Identifier	4:14	Str
+Space	4:17	 
+Operator	4:18	=
+Space	4:19	 
+String	4:20	"  Hello,World  "
+EndOfLine	4:37	\n
+Space	5:1	    
+ReservedWord	5:5	val
+Space	5:8	 
+Identifier	5:9	text
+Operator	5:13	:
+Space	5:14	 
+Identifier	5:15	Str
+Space	5:18	 
+Operator	5:19	=
+Space	5:20	 
+Identifier	5:21	raw
+Operator	5:24	.
+Identifier	5:25	trim
+Operator	5:29	(
+Operator	5:30	)
+EndOfLine	5:31	\n
+Space	6:1	    
+Identifier	6:5	println
+Operator	6:12	(
+Identifier	6:13	text
+Operator	6:17	)
+EndOfLine	6:18	\n
+Space	7:1	    
+Identifier	7:5	println
+Operator	7:12	(
+Identifier	7:13	text
+Operator	7:17	.
+Identifier	7:18	toUpper
+Operator	7:25	(
+Operator	7:26	)
+Operator	7:27	)
+EndOfLine	7:28	\n
+Space	8:1	    
+Identifier	8:5	println
+Operator	8:12	(
+Identifier	8:13	text
+Operator	8:17	.
+Identifier	8:18	toLower
+Operator	8:25	(
+Operator	8:26	)
+Operator	8:27	)
+EndOfLine	8:28	\n
+Space	9:1	    
+Identifier	9:5	println
+Operator	9:12	(
+Identifier	9:13	text
+Operator	9:17	.
+Identifier	9:18	isEmpty
+Operator	9:25	(
+Operator	9:26	)
+Operator	9:27	)
+EndOfLine	9:28	\n
+Space	10:1	    
+Identifier	10:5	println
+Operator	10:12	(
+Identifier	10:13	Str
+Operator	10:16	(
+Operator	10:17	)
+Operator	10:18	.
+Identifier	10:19	isEmpty
+Operator	10:26	(
+Operator	10:27	)
+Operator	10:28	)
+EndOfLine	10:29	\n
+Space	11:1	    
+Identifier	11:5	println
+Operator	11:12	(
+Identifier	11:13	text
+Operator	11:17	.
+Identifier	11:18	size
+Operator	11:22	(
+Operator	11:23	)
+Operator	11:24	)
+EndOfLine	11:25	\n
+EndOfLine	12:1	\n
+Space	13:1	    
+ReservedWord	13:5	val
+Space	13:8	 
+Identifier	13:9	parts
+Operator	13:14	:
+Space	13:15	 
+Identifier	13:16	List
+Operator	13:20	<
+Identifier	13:21	Str
+Operator	13:24	>
+Space	13:25	 
+Operator	13:26	=
+Space	13:27	 
+Identifier	13:28	text
+Operator	13:32	.
+Identifier	13:33	split
+Operator	13:38	(
+String	13:39	","
+Operator	13:42	)
+EndOfLine	13:43	\n
+Space	14:1	    
+Identifier	14:5	println
+Operator	14:12	(
+Identifier	14:13	parts
+Operator	14:18	.
+Identifier	14:19	size
+Operator	14:23	(
+Operator	14:24	)
+Operator	14:25	)
+EndOfLine	14:26	\n
+Space	15:1	    
+Identifier	15:5	println
+Operator	15:12	(
+Identifier	15:13	parts
+Operator	15:18	[
+Number	15:19	0
+Operator	15:20	]
+Operator	15:21	)
+EndOfLine	15:22	\n
+Space	16:1	    
+Identifier	16:5	println
+Operator	16:12	(
+Identifier	16:13	parts
+Operator	16:18	[
+Number	16:19	1
+Operator	16:20	]
+Operator	16:21	)
+EndOfLine	16:22	\n
+EndOfLine	17:1	\n
+Space	18:1	    
+Identifier	18:5	println
+Operator	18:12	(
+Identifier	18:13	text
+Operator	18:17	.
+Identifier	18:18	charAt
+Operator	18:24	(
+Number	18:25	0
+Operator	18:26	)
+Operator	18:27	)
+EndOfLine	18:28	\n
+Space	19:1	    
+Identifier	19:5	println
+Operator	19:12	(
+Identifier	19:13	text
+Operator	19:17	.
+Identifier	19:18	indexOf
+Operator	19:25	(
+String	19:26	"World"
+Operator	19:33	)
+Operator	19:34	)
+EndOfLine	19:35	\n
+Space	20:1	    
+Identifier	20:5	println
+Operator	20:12	(
+Identifier	20:13	text
+Operator	20:17	.
+Identifier	20:18	find
+Operator	20:22	(
+String	20:23	"zzz"
+Operator	20:28	)
+Operator	20:29	)
+EndOfLine	20:30	\n
+Space	21:1	    
+Identifier	21:5	println
+Operator	21:12	(
+Identifier	21:13	text
+Operator	21:17	.
+Identifier	21:18	lastIndexOf
+Operator	21:29	(
+String	21:30	"l"
+Operator	21:33	)
+Operator	21:34	)
+EndOfLine	21:35	\n
+Space	22:1	    
+Identifier	22:5	println
+Operator	22:12	(
+Identifier	22:13	text
+Operator	22:17	.
+Identifier	22:18	substr
+Operator	22:24	(
+Number	22:25	6
+Operator	22:26	,
+Space	22:27	 
+Number	22:28	5
+Operator	22:29	)
+Operator	22:30	)
+EndOfLine	22:31	\n
+Space	23:1	    
+Identifier	23:5	println
+Operator	23:12	(
+Identifier	23:13	text
+Operator	23:17	.
+Identifier	23:18	startsWith
+Operator	23:28	(
+String	23:29	"Hello"
+Operator	23:36	)
+Operator	23:37	)
+EndOfLine	23:38	\n
+Space	24:1	    
+Identifier	24:5	println
+Operator	24:12	(
+Identifier	24:13	text
+Operator	24:17	.
+Identifier	24:18	endsWith
+Operator	24:26	(
+String	24:27	"World"
+Operator	24:34	)
+Operator	24:35	)
+EndOfLine	24:36	\n
+Space	25:1	    
+Identifier	25:5	println
+Operator	25:12	(
+Identifier	25:13	text
+Operator	25:17	.
+Identifier	25:18	replace
+Operator	25:25	(
+String	25:26	"World"
+Operator	25:33	,
+Space	25:34	 
+String	25:35	"Simse"
+Operator	25:42	)
+Operator	25:43	)
+EndOfLine	25:44	\n
+Space	26:1	    
+ReservedWord	26:5	return
+Space	26:11	 
+Number	26:12	0
+EndOfLine	26:13	\n
+Operator	27:1	}
+EndOfLine	27:2	\n

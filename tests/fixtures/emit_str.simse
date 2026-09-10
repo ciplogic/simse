@@ -1,0 +1,27 @@
+// T17: the Str library (charAt, trim, split, case folding, search).
+
+fun main(): Int {
+    val raw: Str = "  Hello,World  "
+    val text: Str = raw.trim()
+    println(text)
+    println(text.toUpper())
+    println(text.toLower())
+    println(text.isEmpty())
+    println(Str().isEmpty())
+    println(text.size())
+
+    val parts: List<Str> = text.split(",")
+    println(parts.size())
+    println(parts[0])
+    println(parts[1])
+
+    println(text.charAt(0))
+    println(text.indexOf("World"))
+    println(text.find("zzz"))
+    println(text.lastIndexOf("l"))
+    println(text.substr(6, 5))
+    println(text.startsWith("Hello"))
+    println(text.endsWith("World"))
+    println(text.replace("World", "Simse"))
+    return 0
+}

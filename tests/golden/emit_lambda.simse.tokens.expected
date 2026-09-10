@@ -1,0 +1,546 @@
+Comment	1:1	// T18: lambdas assigned to callable values and passed as arguments.
+EndOfLine	1:69	\n
+EndOfLine	2:1	\n
+ReservedWord	3:1	typealias
+Space	3:10	 
+Identifier	3:11	Mapper
+Space	3:17	 
+Operator	3:18	=
+Space	3:19	 
+Operator	3:20	(
+Identifier	3:21	Int
+Operator	3:24	)
+Space	3:25	 
+Operator	3:26	->
+Space	3:28	 
+Identifier	3:29	Int
+EndOfLine	3:32	\n
+ReservedWord	4:1	typealias
+Space	4:10	 
+Identifier	4:11	Predicate
+Space	4:20	 
+Operator	4:21	=
+Space	4:22	 
+Operator	4:23	(
+Identifier	4:24	Int
+Operator	4:27	)
+Space	4:28	 
+Operator	4:29	->
+Space	4:31	 
+Identifier	4:32	Bool
+EndOfLine	4:36	\n
+EndOfLine	5:1	\n
+ReservedWord	6:1	fun
+Space	6:4	 
+Identifier	6:5	apply
+Operator	6:10	(
+Identifier	6:11	f
+Operator	6:12	:
+Space	6:13	 
+Identifier	6:14	Mapper
+Operator	6:20	,
+Space	6:21	 
+Identifier	6:22	value
+Operator	6:27	:
+Space	6:28	 
+Identifier	6:29	Int
+Operator	6:32	)
+Operator	6:33	:
+Space	6:34	 
+Identifier	6:35	Int
+Space	6:38	 
+Operator	6:39	{
+EndOfLine	6:40	\n
+Space	7:1	    
+ReservedWord	7:5	return
+Space	7:11	 
+Identifier	7:12	f
+Operator	7:13	(
+Identifier	7:14	value
+Operator	7:19	)
+EndOfLine	7:20	\n
+Operator	8:1	}
+EndOfLine	8:2	\n
+EndOfLine	9:1	\n
+ReservedWord	10:1	fun
+Space	10:4	 
+Identifier	10:5	countIf
+Operator	10:12	(
+Identifier	10:13	items
+Operator	10:18	:
+Space	10:19	 
+Operator	10:20	&
+Identifier	10:21	List
+Operator	10:25	<
+Identifier	10:26	Int
+Operator	10:29	>
+Operator	10:30	,
+Space	10:31	 
+Identifier	10:32	predicate
+Operator	10:41	:
+Space	10:42	 
+Identifier	10:43	Predicate
+Operator	10:52	)
+Operator	10:53	:
+Space	10:54	 
+Identifier	10:55	Int
+Space	10:58	 
+Operator	10:59	{
+EndOfLine	10:60	\n
+Space	11:1	    
+ReservedWord	11:5	var
+Space	11:8	 
+Identifier	11:9	count
+Operator	11:14	:
+Space	11:15	 
+Identifier	11:16	Int
+Space	11:19	 
+Operator	11:20	=
+Space	11:21	 
+Number	11:22	0
+EndOfLine	11:23	\n
+Space	12:1	    
+ReservedWord	12:5	var
+Space	12:8	 
+Identifier	12:9	c
+Operator	12:10	:
+Space	12:11	 
+Identifier	12:12	Cursor
+Operator	12:18	<
+Identifier	12:19	Int
+Operator	12:22	>
+Space	12:23	 
+Operator	12:24	=
+Space	12:25	 
+Identifier	12:26	cursorOf
+Operator	12:34	(
+Identifier	12:35	items
+Operator	12:40	)
+EndOfLine	12:41	\n
+Space	13:1	    
+ReservedWord	13:5	while
+Space	13:10	 
+Operator	13:11	(
+Identifier	13:12	c
+Operator	13:13	.
+Identifier	13:14	hasValue
+Operator	13:22	(
+Operator	13:23	)
+Operator	13:24	)
+Space	13:25	 
+Operator	13:26	{
+EndOfLine	13:27	\n
+Space	14:1	        
+ReservedWord	14:9	if
+Space	14:11	 
+Operator	14:12	(
+Identifier	14:13	predicate
+Operator	14:22	(
+Identifier	14:23	c
+Operator	14:24	.
+Identifier	14:25	value
+Operator	14:30	(
+Operator	14:31	)
+Operator	14:32	)
+Operator	14:33	)
+Space	14:34	 
+Operator	14:35	{
+EndOfLine	14:36	\n
+Space	15:1	            
+Identifier	15:13	count
+Space	15:18	 
+Operator	15:19	=
+Space	15:20	 
+Identifier	15:21	count
+Space	15:26	 
+Operator	15:27	+
+Space	15:28	 
+Number	15:29	1
+EndOfLine	15:30	\n
+Space	16:1	        
+Operator	16:9	}
+EndOfLine	16:10	\n
+Space	17:1	        
+Identifier	17:9	c
+Space	17:10	 
+Operator	17:11	=
+Space	17:12	 
+Identifier	17:13	c
+Operator	17:14	.
+Identifier	17:15	next
+Operator	17:19	(
+Operator	17:20	)
+EndOfLine	17:21	\n
+Space	18:1	    
+Operator	18:5	}
+EndOfLine	18:6	\n
+Space	19:1	    
+ReservedWord	19:5	return
+Space	19:11	 
+Identifier	19:12	count
+EndOfLine	19:17	\n
+Operator	20:1	}
+EndOfLine	20:2	\n
+EndOfLine	21:1	\n
+ReservedWord	22:1	fun
+Space	22:4	 
+Identifier	22:5	makeAdder
+Operator	22:14	(
+Identifier	22:15	factor
+Operator	22:21	:
+Space	22:22	 
+Identifier	22:23	Int
+Operator	22:26	)
+Operator	22:27	:
+Space	22:28	 
+Identifier	22:29	Mapper
+Space	22:35	 
+Operator	22:36	{
+EndOfLine	22:37	\n
+Space	23:1	    
+ReservedWord	23:5	return
+Space	23:11	 
+Operator	23:12	(
+Identifier	23:13	v
+Operator	23:14	:
+Space	23:15	 
+Identifier	23:16	Int
+Operator	23:19	)
+Space	23:20	 
+Operator	23:21	->
+Space	23:23	 
+Identifier	23:24	v
+Space	23:25	 
+Operator	23:26	+
+Space	23:27	 
+Identifier	23:28	factor
+EndOfLine	23:34	\n
+Operator	24:1	}
+EndOfLine	24:2	\n
+EndOfLine	25:1	\n
+ReservedWord	26:1	fun
+Space	26:4	 
+Identifier	26:5	main
+Operator	26:9	(
+Operator	26:10	)
+Operator	26:11	:
+Space	26:12	 
+Identifier	26:13	Int
+Space	26:16	 
+Operator	26:17	{
+EndOfLine	26:18	\n
+Space	27:1	    
+ReservedWord	27:5	val
+Space	27:8	 
+Identifier	27:9	doubler
+Operator	27:16	:
+Space	27:17	 
+Identifier	27:18	Mapper
+Space	27:24	 
+Operator	27:25	=
+Space	27:26	 
+Operator	27:27	(
+Identifier	27:28	v
+Operator	27:29	:
+Space	27:30	 
+Identifier	27:31	Int
+Operator	27:34	)
+Space	27:35	 
+Operator	27:36	->
+Space	27:38	 
+Identifier	27:39	v
+Space	27:40	 
+Operator	27:41	*
+Space	27:42	 
+Number	27:43	2
+EndOfLine	27:44	\n
+Space	28:1	    
+Identifier	28:5	println
+Operator	28:12	(
+Identifier	28:13	doubler
+Operator	28:20	(
+Number	28:21	21
+Operator	28:23	)
+Operator	28:24	)
+EndOfLine	28:25	\n
+Space	29:1	    
+Identifier	29:5	println
+Operator	29:12	(
+Identifier	29:13	apply
+Operator	29:18	(
+Identifier	29:19	doubler
+Operator	29:26	,
+Space	29:27	 
+Number	29:28	5
+Operator	29:29	)
+Operator	29:30	)
+EndOfLine	29:31	\n
+EndOfLine	30:1	\n
+Space	31:1	    
+Comment	31:5	// A lambda passed directly as an argument.
+EndOfLine	31:48	\n
+Space	32:1	    
+Identifier	32:5	println
+Operator	32:12	(
+Identifier	32:13	apply
+Operator	32:18	(
+Operator	32:19	(
+Identifier	32:20	v
+Operator	32:21	:
+Space	32:22	 
+Identifier	32:23	Int
+Operator	32:26	)
+Space	32:27	 
+Operator	32:28	->
+Space	32:30	 
+Identifier	32:31	v
+Space	32:32	 
+Operator	32:33	+
+Space	32:34	 
+Number	32:35	1
+Operator	32:36	,
+Space	32:37	 
+Number	32:38	41
+Operator	32:40	)
+Operator	32:41	)
+EndOfLine	32:42	\n
+EndOfLine	33:1	\n
+Space	34:1	    
+Comment	34:5	// A closure capturing a local by value.
+EndOfLine	34:45	\n
+Space	35:1	    
+ReservedWord	35:5	val
+Space	35:8	 
+Identifier	35:9	add10
+Operator	35:14	:
+Space	35:15	 
+Identifier	35:16	Mapper
+Space	35:22	 
+Operator	35:23	=
+Space	35:24	 
+Identifier	35:25	makeAdder
+Operator	35:34	(
+Number	35:35	10
+Operator	35:37	)
+EndOfLine	35:38	\n
+Space	36:1	    
+Identifier	36:5	println
+Operator	36:12	(
+Identifier	36:13	add10
+Operator	36:18	(
+Number	36:19	5
+Operator	36:20	)
+Operator	36:21	)
+EndOfLine	36:22	\n
+EndOfLine	37:1	\n
+Space	38:1	    
+ReservedWord	38:5	var
+Space	38:8	 
+Identifier	38:9	items
+Operator	38:14	:
+Space	38:15	 
+Identifier	38:16	List
+Operator	38:20	<
+Identifier	38:21	Int
+Operator	38:24	>
+Space	38:25	 
+Operator	38:26	=
+Space	38:27	 
+Identifier	38:28	List
+Operator	38:32	<
+Identifier	38:33	Int
+Operator	38:36	>
+Operator	38:37	(
+Operator	38:38	)
+EndOfLine	38:39	\n
+Space	39:1	    
+Identifier	39:5	items
+Operator	39:10	.
+Identifier	39:11	append
+Operator	39:17	(
+Number	39:18	1
+Operator	39:19	)
+EndOfLine	39:20	\n
+Space	40:1	    
+Identifier	40:5	items
+Operator	40:10	.
+Identifier	40:11	append
+Operator	40:17	(
+Number	40:18	2
+Operator	40:19	)
+EndOfLine	40:20	\n
+Space	41:1	    
+Identifier	41:5	items
+Operator	41:10	.
+Identifier	41:11	append
+Operator	41:17	(
+Number	41:18	3
+Operator	41:19	)
+EndOfLine	41:20	\n
+Space	42:1	    
+Identifier	42:5	items
+Operator	42:10	.
+Identifier	42:11	append
+Operator	42:17	(
+Number	42:18	4
+Operator	42:19	)
+EndOfLine	42:20	\n
+Space	43:1	    
+ReservedWord	43:5	val
+Space	43:8	 
+Identifier	43:9	view
+Operator	43:13	:
+Space	43:14	 
+Operator	43:15	&
+Identifier	43:16	List
+Operator	43:20	<
+Identifier	43:21	Int
+Operator	43:24	>
+Space	43:25	 
+Operator	43:26	=
+Space	43:27	 
+Operator	43:28	&
+Identifier	43:29	items
+EndOfLine	43:34	\n
+EndOfLine	44:1	\n
+Space	45:1	    
+ReservedWord	45:5	val
+Space	45:8	 
+Identifier	45:9	isEven
+Operator	45:15	:
+Space	45:16	 
+Identifier	45:17	Predicate
+Space	45:26	 
+Operator	45:27	=
+Space	45:28	 
+Operator	45:29	(
+Identifier	45:30	v
+Operator	45:31	:
+Space	45:32	 
+Identifier	45:33	Int
+Operator	45:36	)
+Space	45:37	 
+Operator	45:38	->
+Space	45:40	 
+Identifier	45:41	v
+Space	45:42	 
+Operator	45:43	%
+Space	45:44	 
+Number	45:45	2
+Space	45:46	 
+Operator	45:47	==
+Space	45:49	 
+Number	45:50	0
+EndOfLine	45:51	\n
+Space	46:1	    
+Identifier	46:5	println
+Operator	46:12	(
+Identifier	46:13	countIf
+Operator	46:20	(
+Identifier	46:21	view
+Operator	46:25	,
+Space	46:26	 
+Identifier	46:27	isEven
+Operator	46:33	)
+Operator	46:34	)
+EndOfLine	46:35	\n
+Space	47:1	    
+Identifier	47:5	println
+Operator	47:12	(
+Identifier	47:13	countIf
+Operator	47:20	(
+Identifier	47:21	view
+Operator	47:25	,
+Space	47:26	 
+Operator	47:27	(
+Identifier	47:28	v
+Operator	47:29	:
+Space	47:30	 
+Identifier	47:31	Int
+Operator	47:34	)
+Space	47:35	 
+Operator	47:36	->
+Space	47:38	 
+Identifier	47:39	v
+Space	47:40	 
+Operator	47:41	>
+Space	47:42	 
+Number	47:43	2
+Operator	47:44	)
+Operator	47:45	)
+EndOfLine	47:46	\n
+EndOfLine	48:1	\n
+Space	49:1	    
+Comment	49:5	// A block-bodied lambda.
+EndOfLine	49:30	\n
+Space	50:1	    
+ReservedWord	50:5	val
+Space	50:8	 
+Identifier	50:9	big
+Operator	50:12	:
+Space	50:13	 
+Identifier	50:14	Mapper
+Space	50:20	 
+Operator	50:21	=
+Space	50:22	 
+Operator	50:23	(
+Identifier	50:24	v
+Operator	50:25	:
+Space	50:26	 
+Identifier	50:27	Int
+Operator	50:30	)
+Space	50:31	 
+Operator	50:32	->
+Space	50:34	 
+Operator	50:35	{
+EndOfLine	50:36	\n
+Space	51:1	        
+ReservedWord	51:9	if
+Space	51:11	 
+Operator	51:12	(
+Identifier	51:13	v
+Space	51:14	 
+Operator	51:15	>
+Space	51:16	 
+Number	51:17	0
+Operator	51:18	)
+Space	51:19	 
+Operator	51:20	{
+EndOfLine	51:21	\n
+Space	52:1	            
+ReservedWord	52:13	return
+Space	52:19	 
+Identifier	52:20	v
+Space	52:21	 
+Operator	52:22	*
+Space	52:23	 
+Number	52:24	100
+EndOfLine	52:27	\n
+Space	53:1	        
+Operator	53:9	}
+EndOfLine	53:10	\n
+Space	54:1	        
+ReservedWord	54:9	return
+Space	54:15	 
+Number	54:16	0
+EndOfLine	54:17	\n
+Space	55:1	    
+Operator	55:5	}
+EndOfLine	55:6	\n
+Space	56:1	    
+Identifier	56:5	println
+Operator	56:12	(
+Identifier	56:13	big
+Operator	56:16	(
+Number	56:17	3
+Operator	56:18	)
+Operator	56:19	)
+EndOfLine	56:20	\n
+EndOfLine	57:1	\n
+Space	58:1	    
+ReservedWord	58:5	return
+Space	58:11	 
+Number	58:12	0
+EndOfLine	58:13	\n
+Operator	59:1	}
+EndOfLine	59:2	\n

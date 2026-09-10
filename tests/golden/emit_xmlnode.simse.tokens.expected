@@ -1,0 +1,1178 @@
+Comment	1:1	// T15: builds, by hand, the XmlNode AST that the C++ converter
+EndOfLine	1:64	\n
+Comment	2:1	// (ast::toXmlNode) produces for `data class Tile(var n: Int)`
+EndOfLine	2:63	\n
+Comment	3:1	// (tests/fixtures/xml_probe.simse), then dumps it in the canonical XmlNode
+EndOfLine	3:76	\n
+Comment	4:1	// format. The expected stdout is the same tree the C++ converter emits, so a
+EndOfLine	4:78	\n
+Comment	5:1	// passing end-to-end run proves the Simse language can carry and manipulate the
+EndOfLine	5:81	\n
+Comment	6:1	// AST in XmlNode form.
+EndOfLine	6:24	\n
+EndOfLine	7:1	\n
+ReservedWord	8:1	fun
+Space	8:4	 
+Identifier	8:5	attr
+Operator	8:9	(
+Identifier	8:10	name
+Operator	8:14	:
+Space	8:15	 
+Identifier	8:16	Str
+Operator	8:19	,
+Space	8:20	 
+Identifier	8:21	value
+Operator	8:26	:
+Space	8:27	 
+Identifier	8:28	Str
+Operator	8:31	)
+Operator	8:32	:
+Space	8:33	 
+Identifier	8:34	Attribute
+Space	8:43	 
+Operator	8:44	{
+EndOfLine	8:45	\n
+Space	9:1	    
+ReservedWord	9:5	return
+Space	9:11	 
+Identifier	9:12	Attribute
+Operator	9:21	(
+Identifier	9:22	name
+Operator	9:26	,
+Space	9:27	 
+Identifier	9:28	value
+Operator	9:33	)
+EndOfLine	9:34	\n
+Operator	10:1	}
+EndOfLine	10:2	\n
+EndOfLine	11:1	\n
+ReservedWord	12:1	fun
+Space	12:4	 
+Identifier	12:5	attrs3
+Operator	12:11	(
+Identifier	12:12	a
+Operator	12:13	:
+Space	12:14	 
+Identifier	12:15	Attribute
+Operator	12:24	,
+Space	12:25	 
+Identifier	12:26	b
+Operator	12:27	:
+Space	12:28	 
+Identifier	12:29	Attribute
+Operator	12:38	,
+Space	12:39	 
+Identifier	12:40	c
+Operator	12:41	:
+Space	12:42	 
+Identifier	12:43	Attribute
+Operator	12:52	)
+Operator	12:53	:
+Space	12:54	 
+Identifier	12:55	List
+Operator	12:59	<
+Identifier	12:60	Attribute
+Operator	12:69	>
+Space	12:70	 
+Operator	12:71	{
+EndOfLine	12:72	\n
+Space	13:1	    
+ReservedWord	13:5	var
+Space	13:8	 
+Identifier	13:9	list
+Operator	13:13	:
+Space	13:14	 
+Identifier	13:15	List
+Operator	13:19	<
+Identifier	13:20	Attribute
+Operator	13:29	>
+Space	13:30	 
+Operator	13:31	=
+Space	13:32	 
+Identifier	13:33	List
+Operator	13:37	<
+Identifier	13:38	Attribute
+Operator	13:47	>
+Operator	13:48	(
+Operator	13:49	)
+EndOfLine	13:50	\n
+Space	14:1	    
+Identifier	14:5	list
+Operator	14:9	.
+Identifier	14:10	append
+Operator	14:16	(
+Identifier	14:17	a
+Operator	14:18	)
+EndOfLine	14:19	\n
+Space	15:1	    
+Identifier	15:5	list
+Operator	15:9	.
+Identifier	15:10	append
+Operator	15:16	(
+Identifier	15:17	b
+Operator	15:18	)
+EndOfLine	15:19	\n
+Space	16:1	    
+Identifier	16:5	list
+Operator	16:9	.
+Identifier	16:10	append
+Operator	16:16	(
+Identifier	16:17	c
+Operator	16:18	)
+EndOfLine	16:19	\n
+Space	17:1	    
+ReservedWord	17:5	return
+Space	17:11	 
+Identifier	17:12	list
+EndOfLine	17:16	\n
+Operator	18:1	}
+EndOfLine	18:2	\n
+EndOfLine	19:1	\n
+ReservedWord	20:1	fun
+Space	20:4	 
+Identifier	20:5	attrs4
+Operator	20:11	(
+Identifier	20:12	a
+Operator	20:13	:
+Space	20:14	 
+Identifier	20:15	Attribute
+Operator	20:24	,
+Space	20:25	 
+Identifier	20:26	b
+Operator	20:27	:
+Space	20:28	 
+Identifier	20:29	Attribute
+Operator	20:38	,
+Space	20:39	 
+Identifier	20:40	c
+Operator	20:41	:
+Space	20:42	 
+Identifier	20:43	Attribute
+Operator	20:52	,
+Space	20:53	 
+Identifier	20:54	d
+Operator	20:55	:
+Space	20:56	 
+Identifier	20:57	Attribute
+Operator	20:66	)
+Operator	20:67	:
+Space	20:68	 
+Identifier	20:69	List
+Operator	20:73	<
+Identifier	20:74	Attribute
+Operator	20:83	>
+Space	20:84	 
+Operator	20:85	{
+EndOfLine	20:86	\n
+Space	21:1	    
+ReservedWord	21:5	var
+Space	21:8	 
+Identifier	21:9	list
+Operator	21:13	:
+Space	21:14	 
+Identifier	21:15	List
+Operator	21:19	<
+Identifier	21:20	Attribute
+Operator	21:29	>
+Space	21:30	 
+Operator	21:31	=
+Space	21:32	 
+Identifier	21:33	List
+Operator	21:37	<
+Identifier	21:38	Attribute
+Operator	21:47	>
+Operator	21:48	(
+Operator	21:49	)
+EndOfLine	21:50	\n
+Space	22:1	    
+Identifier	22:5	list
+Operator	22:9	.
+Identifier	22:10	append
+Operator	22:16	(
+Identifier	22:17	a
+Operator	22:18	)
+EndOfLine	22:19	\n
+Space	23:1	    
+Identifier	23:5	list
+Operator	23:9	.
+Identifier	23:10	append
+Operator	23:16	(
+Identifier	23:17	b
+Operator	23:18	)
+EndOfLine	23:19	\n
+Space	24:1	    
+Identifier	24:5	list
+Operator	24:9	.
+Identifier	24:10	append
+Operator	24:16	(
+Identifier	24:17	c
+Operator	24:18	)
+EndOfLine	24:19	\n
+Space	25:1	    
+Identifier	25:5	list
+Operator	25:9	.
+Identifier	25:10	append
+Operator	25:16	(
+Identifier	25:17	d
+Operator	25:18	)
+EndOfLine	25:19	\n
+Space	26:1	    
+ReservedWord	26:5	return
+Space	26:11	 
+Identifier	26:12	list
+EndOfLine	26:16	\n
+Operator	27:1	}
+EndOfLine	27:2	\n
+EndOfLine	28:1	\n
+ReservedWord	29:1	fun
+Space	29:4	 
+Identifier	29:5	noChildren
+Operator	29:15	(
+Operator	29:16	)
+Operator	29:17	:
+Space	29:18	 
+Operator	29:19	&
+Identifier	29:20	List
+Operator	29:24	<
+Identifier	29:25	XmlNode
+Operator	29:32	>
+Space	29:33	 
+Operator	29:34	{
+EndOfLine	29:35	\n
+Space	30:1	    
+ReservedWord	30:5	return
+Space	30:11	 
+Operator	30:12	&
+Identifier	30:13	List
+Operator	30:17	<
+Identifier	30:18	XmlNode
+Operator	30:25	>
+Operator	30:26	(
+Operator	30:27	)
+EndOfLine	30:28	\n
+Operator	31:1	}
+EndOfLine	31:2	\n
+EndOfLine	32:1	\n
+ReservedWord	33:1	fun
+Space	33:4	 
+Identifier	33:5	oneChild
+Operator	33:13	(
+Identifier	33:14	child
+Operator	33:19	:
+Space	33:20	 
+Identifier	33:21	XmlNode
+Operator	33:28	)
+Operator	33:29	:
+Space	33:30	 
+Operator	33:31	&
+Identifier	33:32	List
+Operator	33:36	<
+Identifier	33:37	XmlNode
+Operator	33:44	>
+Space	33:45	 
+Operator	33:46	{
+EndOfLine	33:47	\n
+Space	34:1	    
+ReservedWord	34:5	var
+Space	34:8	 
+Identifier	34:9	children
+Operator	34:17	:
+Space	34:18	 
+Operator	34:19	&
+Identifier	34:20	List
+Operator	34:24	<
+Identifier	34:25	XmlNode
+Operator	34:32	>
+Space	34:33	 
+Operator	34:34	=
+Space	34:35	 
+Operator	34:36	&
+Identifier	34:37	List
+Operator	34:41	<
+Identifier	34:42	XmlNode
+Operator	34:49	>
+Operator	34:50	(
+Operator	34:51	)
+EndOfLine	34:52	\n
+Space	35:1	    
+Identifier	35:5	children
+Operator	35:13	.
+Identifier	35:14	append
+Operator	35:20	(
+Identifier	35:21	child
+Operator	35:26	)
+EndOfLine	35:27	\n
+Space	36:1	    
+ReservedWord	36:5	return
+Space	36:11	 
+Identifier	36:12	children
+EndOfLine	36:20	\n
+Operator	37:1	}
+EndOfLine	37:2	\n
+EndOfLine	38:1	\n
+ReservedWord	39:1	fun
+Space	39:4	 
+Identifier	39:5	escapeText
+Operator	39:15	(
+Identifier	39:16	text
+Operator	39:20	:
+Space	39:21	 
+Identifier	39:22	Str
+Operator	39:25	)
+Operator	39:26	:
+Space	39:27	 
+Identifier	39:28	Str
+Space	39:31	 
+Operator	39:32	{
+EndOfLine	39:33	\n
+Space	40:1	    
+ReservedWord	40:5	var
+Space	40:8	 
+Identifier	40:9	out
+Operator	40:12	:
+Space	40:13	 
+Identifier	40:14	Str
+Space	40:17	 
+Operator	40:18	=
+Space	40:19	 
+Identifier	40:20	Str
+Operator	40:23	(
+Operator	40:24	)
+EndOfLine	40:25	\n
+Space	41:1	    
+ReservedWord	41:5	var
+Space	41:8	 
+Identifier	41:9	i
+Operator	41:10	:
+Space	41:11	 
+Identifier	41:12	Int
+Space	41:15	 
+Operator	41:16	=
+Space	41:17	 
+Number	41:18	0
+EndOfLine	41:19	\n
+Space	42:1	    
+ReservedWord	42:5	while
+Space	42:10	 
+Operator	42:11	(
+Identifier	42:12	i
+Space	42:13	 
+Operator	42:14	<
+Space	42:15	 
+Identifier	42:16	text
+Operator	42:20	.
+Identifier	42:21	size
+Operator	42:25	(
+Operator	42:26	)
+Operator	42:27	)
+Space	42:28	 
+Operator	42:29	{
+EndOfLine	42:30	\n
+Space	43:1	        
+ReservedWord	43:9	val
+Space	43:12	 
+Identifier	43:13	ch
+Operator	43:15	:
+Space	43:16	 
+Identifier	43:17	Char
+Space	43:21	 
+Operator	43:22	=
+Space	43:23	 
+Identifier	43:24	text
+Operator	43:28	[
+Identifier	43:29	i
+Operator	43:30	]
+EndOfLine	43:31	\n
+Space	44:1	        
+ReservedWord	44:9	if
+Space	44:11	 
+Operator	44:12	(
+Identifier	44:13	ch
+Space	44:15	 
+Operator	44:16	==
+Space	44:18	 
+Character	44:19	'\\\\'
+Operator	44:23	)
+Space	44:24	 
+Operator	44:25	{
+EndOfLine	44:26	\n
+Space	45:1	            
+Identifier	45:13	out
+Operator	45:16	.
+Identifier	45:17	append
+Operator	45:23	(
+Character	45:24	'\\\\'
+Operator	45:28	)
+EndOfLine	45:29	\n
+Space	46:1	            
+Identifier	46:13	out
+Operator	46:16	.
+Identifier	46:17	append
+Operator	46:23	(
+Character	46:24	'\\\\'
+Operator	46:28	)
+EndOfLine	46:29	\n
+Space	47:1	        
+Operator	47:9	}
+Space	47:10	 
+ReservedWord	47:11	else
+Space	47:15	 
+ReservedWord	47:16	if
+Space	47:18	 
+Operator	47:19	(
+Identifier	47:20	ch
+Space	47:22	 
+Operator	47:23	==
+Space	47:25	 
+Character	47:26	'\\n'
+Operator	47:30	)
+Space	47:31	 
+Operator	47:32	{
+EndOfLine	47:33	\n
+Space	48:1	            
+Identifier	48:13	out
+Operator	48:16	.
+Identifier	48:17	append
+Operator	48:23	(
+Character	48:24	'\\\\'
+Operator	48:28	)
+EndOfLine	48:29	\n
+Space	49:1	            
+Identifier	49:13	out
+Operator	49:16	.
+Identifier	49:17	append
+Operator	49:23	(
+Character	49:24	'n'
+Operator	49:27	)
+EndOfLine	49:28	\n
+Space	50:1	        
+Operator	50:9	}
+Space	50:10	 
+ReservedWord	50:11	else
+Space	50:15	 
+ReservedWord	50:16	if
+Space	50:18	 
+Operator	50:19	(
+Identifier	50:20	ch
+Space	50:22	 
+Operator	50:23	==
+Space	50:25	 
+Character	50:26	'\\r'
+Operator	50:30	)
+Space	50:31	 
+Operator	50:32	{
+EndOfLine	50:33	\n
+Space	51:1	            
+Identifier	51:13	out
+Operator	51:16	.
+Identifier	51:17	append
+Operator	51:23	(
+Character	51:24	'\\\\'
+Operator	51:28	)
+EndOfLine	51:29	\n
+Space	52:1	            
+Identifier	52:13	out
+Operator	52:16	.
+Identifier	52:17	append
+Operator	52:23	(
+Character	52:24	'r'
+Operator	52:27	)
+EndOfLine	52:28	\n
+Space	53:1	        
+Operator	53:9	}
+Space	53:10	 
+ReservedWord	53:11	else
+Space	53:15	 
+ReservedWord	53:16	if
+Space	53:18	 
+Operator	53:19	(
+Identifier	53:20	ch
+Space	53:22	 
+Operator	53:23	==
+Space	53:25	 
+Character	53:26	'\\t'
+Operator	53:30	)
+Space	53:31	 
+Operator	53:32	{
+EndOfLine	53:33	\n
+Space	54:1	            
+Identifier	54:13	out
+Operator	54:16	.
+Identifier	54:17	append
+Operator	54:23	(
+Character	54:24	'\\\\'
+Operator	54:28	)
+EndOfLine	54:29	\n
+Space	55:1	            
+Identifier	55:13	out
+Operator	55:16	.
+Identifier	55:17	append
+Operator	55:23	(
+Character	55:24	't'
+Operator	55:27	)
+EndOfLine	55:28	\n
+Space	56:1	        
+Operator	56:9	}
+Space	56:10	 
+ReservedWord	56:11	else
+Space	56:15	 
+ReservedWord	56:16	if
+Space	56:18	 
+Operator	56:19	(
+Identifier	56:20	ch
+Space	56:22	 
+Operator	56:23	==
+Space	56:25	 
+Character	56:26	'\\''
+Operator	56:30	)
+Space	56:31	 
+Operator	56:32	{
+EndOfLine	56:33	\n
+Space	57:1	            
+Identifier	57:13	out
+Operator	57:16	.
+Identifier	57:17	append
+Operator	57:23	(
+Character	57:24	'\\\\'
+Operator	57:28	)
+EndOfLine	57:29	\n
+Space	58:1	            
+Identifier	58:13	out
+Operator	58:16	.
+Identifier	58:17	append
+Operator	58:23	(
+Character	58:24	'\\''
+Operator	58:28	)
+EndOfLine	58:29	\n
+Space	59:1	        
+Operator	59:9	}
+Space	59:10	 
+ReservedWord	59:11	else
+Space	59:15	 
+Operator	59:16	{
+EndOfLine	59:17	\n
+Space	60:1	            
+Identifier	60:13	out
+Operator	60:16	.
+Identifier	60:17	append
+Operator	60:23	(
+Identifier	60:24	ch
+Operator	60:26	)
+EndOfLine	60:27	\n
+Space	61:1	        
+Operator	61:9	}
+EndOfLine	61:10	\n
+Space	62:1	        
+Identifier	62:9	i
+Space	62:10	 
+Operator	62:11	=
+Space	62:12	 
+Identifier	62:13	i
+Space	62:14	 
+Operator	62:15	+
+Space	62:16	 
+Number	62:17	1
+EndOfLine	62:18	\n
+Space	63:1	    
+Operator	63:5	}
+EndOfLine	63:6	\n
+Space	64:1	    
+ReservedWord	64:5	return
+Space	64:11	 
+Identifier	64:12	out
+EndOfLine	64:15	\n
+Operator	65:1	}
+EndOfLine	65:2	\n
+EndOfLine	66:1	\n
+ReservedWord	67:1	fun
+Space	67:4	 
+Identifier	67:5	indentation
+Operator	67:16	(
+Identifier	67:17	depth
+Operator	67:22	:
+Space	67:23	 
+Identifier	67:24	Int
+Operator	67:27	)
+Operator	67:28	:
+Space	67:29	 
+Identifier	67:30	Str
+Space	67:33	 
+Operator	67:34	{
+EndOfLine	67:35	\n
+Space	68:1	    
+ReservedWord	68:5	var
+Space	68:8	 
+Identifier	68:9	out
+Operator	68:12	:
+Space	68:13	 
+Identifier	68:14	Str
+Space	68:17	 
+Operator	68:18	=
+Space	68:19	 
+Identifier	68:20	Str
+Operator	68:23	(
+Operator	68:24	)
+EndOfLine	68:25	\n
+Space	69:1	    
+ReservedWord	69:5	var
+Space	69:8	 
+Identifier	69:9	i
+Operator	69:10	:
+Space	69:11	 
+Identifier	69:12	Int
+Space	69:15	 
+Operator	69:16	=
+Space	69:17	 
+Number	69:18	0
+EndOfLine	69:19	\n
+Space	70:1	    
+ReservedWord	70:5	while
+Space	70:10	 
+Operator	70:11	(
+Identifier	70:12	i
+Space	70:13	 
+Operator	70:14	<
+Space	70:15	 
+Identifier	70:16	depth
+Space	70:21	 
+Operator	70:22	*
+Space	70:23	 
+Number	70:24	2
+Operator	70:25	)
+Space	70:26	 
+Operator	70:27	{
+EndOfLine	70:28	\n
+Space	71:1	        
+Identifier	71:9	out
+Operator	71:12	.
+Identifier	71:13	append
+Operator	71:19	(
+Character	71:20	' '
+Operator	71:23	)
+EndOfLine	71:24	\n
+Space	72:1	        
+Identifier	72:9	i
+Space	72:10	 
+Operator	72:11	=
+Space	72:12	 
+Identifier	72:13	i
+Space	72:14	 
+Operator	72:15	+
+Space	72:16	 
+Number	72:17	1
+EndOfLine	72:18	\n
+Space	73:1	    
+Operator	73:5	}
+EndOfLine	73:6	\n
+Space	74:1	    
+ReservedWord	74:5	return
+Space	74:11	 
+Identifier	74:12	out
+EndOfLine	74:15	\n
+Operator	75:1	}
+EndOfLine	75:2	\n
+EndOfLine	76:1	\n
+ReservedWord	77:1	fun
+Space	77:4	 
+Identifier	77:5	dumpNode
+Operator	77:13	(
+Identifier	77:14	node
+Operator	77:18	:
+Space	77:19	 
+Identifier	77:20	XmlNode
+Operator	77:27	,
+Space	77:28	 
+Identifier	77:29	depth
+Operator	77:34	:
+Space	77:35	 
+Identifier	77:36	Int
+Operator	77:39	)
+Operator	77:40	:
+Space	77:41	 
+Identifier	77:42	Str
+Space	77:45	 
+Operator	77:46	{
+EndOfLine	77:47	\n
+Space	78:1	    
+ReservedWord	78:5	var
+Space	78:8	 
+Identifier	78:9	out
+Operator	78:12	:
+Space	78:13	 
+Identifier	78:14	Str
+Space	78:17	 
+Operator	78:18	=
+Space	78:19	 
+Identifier	78:20	indentation
+Operator	78:31	(
+Identifier	78:32	depth
+Operator	78:37	)
+Space	78:38	 
+Operator	78:39	+
+Space	78:40	 
+Identifier	78:41	node
+Operator	78:45	.
+Identifier	78:46	name
+EndOfLine	78:50	\n
+Space	79:1	    
+ReservedWord	79:5	var
+Space	79:8	 
+Identifier	79:9	i
+Operator	79:10	:
+Space	79:11	 
+Identifier	79:12	Int
+Space	79:15	 
+Operator	79:16	=
+Space	79:17	 
+Number	79:18	0
+EndOfLine	79:19	\n
+Space	80:1	    
+ReservedWord	80:5	while
+Space	80:10	 
+Operator	80:11	(
+Identifier	80:12	i
+Space	80:13	 
+Operator	80:14	<
+Space	80:15	 
+Identifier	80:16	node
+Operator	80:20	.
+Identifier	80:21	attributes
+Operator	80:31	.
+Identifier	80:32	size
+Operator	80:36	(
+Operator	80:37	)
+Operator	80:38	)
+Space	80:39	 
+Operator	80:40	{
+EndOfLine	80:41	\n
+Space	81:1	        
+ReservedWord	81:9	val
+Space	81:12	 
+Identifier	81:13	attribute
+Operator	81:22	:
+Space	81:23	 
+Identifier	81:24	Attribute
+Space	81:33	 
+Operator	81:34	=
+Space	81:35	 
+Identifier	81:36	node
+Operator	81:40	.
+Identifier	81:41	attributes
+Operator	81:51	[
+Identifier	81:52	i
+Operator	81:53	]
+EndOfLine	81:54	\n
+Space	82:1	        
+Identifier	82:9	out
+Space	82:12	 
+Operator	82:13	=
+Space	82:14	 
+Identifier	82:15	out
+Space	82:18	 
+Operator	82:19	+
+Space	82:20	 
+String	82:21	" "
+Space	82:24	 
+Operator	82:25	+
+Space	82:26	 
+Identifier	82:27	attribute
+Operator	82:36	.
+Identifier	82:37	name
+Space	82:41	 
+Operator	82:42	+
+Space	82:43	 
+String	82:44	"='"
+Space	82:48	 
+Operator	82:49	+
+Space	82:50	 
+Identifier	82:51	escapeText
+Operator	82:61	(
+Identifier	82:62	attribute
+Operator	82:71	.
+Identifier	82:72	value
+Operator	82:77	)
+Space	82:78	 
+Operator	82:79	+
+Space	82:80	 
+String	82:81	"'"
+EndOfLine	82:84	\n
+Space	83:1	        
+Identifier	83:9	i
+Space	83:10	 
+Operator	83:11	=
+Space	83:12	 
+Identifier	83:13	i
+Space	83:14	 
+Operator	83:15	+
+Space	83:16	 
+Number	83:17	1
+EndOfLine	83:18	\n
+Space	84:1	    
+Operator	84:5	}
+EndOfLine	84:6	\n
+Space	85:1	    
+Identifier	85:5	out
+Space	85:8	 
+Operator	85:9	=
+Space	85:10	 
+Identifier	85:11	out
+Space	85:14	 
+Operator	85:15	+
+Space	85:16	 
+String	85:17	"\\n"
+EndOfLine	85:21	\n
+EndOfLine	86:1	\n
+Space	87:1	    
+ReservedWord	87:5	val
+Space	87:8	 
+Identifier	87:9	children
+Operator	87:17	:
+Space	87:18	 
+Operator	87:19	&
+Identifier	87:20	List
+Operator	87:24	<
+Identifier	87:25	XmlNode
+Operator	87:32	>
+Space	87:33	 
+Operator	87:34	=
+Space	87:35	 
+Identifier	87:36	node
+Operator	87:40	.
+Identifier	87:41	Children
+EndOfLine	87:49	\n
+Space	88:1	    
+ReservedWord	88:5	var
+Space	88:8	 
+Identifier	88:9	j
+Operator	88:10	:
+Space	88:11	 
+Identifier	88:12	Int
+Space	88:15	 
+Operator	88:16	=
+Space	88:17	 
+Number	88:18	0
+EndOfLine	88:19	\n
+Space	89:1	    
+ReservedWord	89:5	while
+Space	89:10	 
+Operator	89:11	(
+Identifier	89:12	j
+Space	89:13	 
+Operator	89:14	<
+Space	89:15	 
+Identifier	89:16	children
+Operator	89:24	.
+Identifier	89:25	size
+Operator	89:29	(
+Operator	89:30	)
+Operator	89:31	)
+Space	89:32	 
+Operator	89:33	{
+EndOfLine	89:34	\n
+Space	90:1	        
+Identifier	90:9	out
+Space	90:12	 
+Operator	90:13	=
+Space	90:14	 
+Identifier	90:15	out
+Space	90:18	 
+Operator	90:19	+
+Space	90:20	 
+Identifier	90:21	dumpNode
+Operator	90:29	(
+Identifier	90:30	children
+Operator	90:38	[
+Identifier	90:39	j
+Operator	90:40	]
+Operator	90:41	,
+Space	90:42	 
+Identifier	90:43	depth
+Space	90:48	 
+Operator	90:49	+
+Space	90:50	 
+Number	90:51	1
+Operator	90:52	)
+EndOfLine	90:53	\n
+Space	91:1	        
+Identifier	91:9	j
+Space	91:10	 
+Operator	91:11	=
+Space	91:12	 
+Identifier	91:13	j
+Space	91:14	 
+Operator	91:15	+
+Space	91:16	 
+Number	91:17	1
+EndOfLine	91:18	\n
+Space	92:1	    
+Operator	92:5	}
+EndOfLine	92:6	\n
+Space	93:1	    
+ReservedWord	93:5	return
+Space	93:11	 
+Identifier	93:12	out
+EndOfLine	93:15	\n
+Operator	94:1	}
+EndOfLine	94:2	\n
+EndOfLine	95:1	\n
+ReservedWord	96:1	fun
+Space	96:4	 
+Identifier	96:5	main
+Operator	96:9	(
+Operator	96:10	)
+Operator	96:11	:
+Space	96:12	 
+Identifier	96:13	Int
+Space	96:16	 
+Operator	96:17	{
+EndOfLine	96:18	\n
+Space	97:1	    
+ReservedWord	97:5	val
+Space	97:8	 
+Identifier	97:9	typeNode
+Operator	97:17	:
+Space	97:18	 
+Identifier	97:19	XmlNode
+Space	97:26	 
+Operator	97:27	=
+Space	97:28	 
+Identifier	97:29	XmlNode
+Operator	97:36	(
+String	97:37	"Type"
+Operator	97:43	,
+Space	97:44	 
+Identifier	97:45	attrs4
+Operator	97:51	(
+Identifier	97:52	attr
+Operator	97:56	(
+String	97:57	"kind"
+Operator	97:63	,
+Space	97:64	 
+String	97:65	"Type.Named"
+Operator	97:77	)
+Operator	97:78	,
+Space	97:79	 
+Identifier	97:80	attr
+Operator	97:84	(
+String	97:85	"line"
+Operator	97:91	,
+Space	97:92	 
+String	97:93	"1"
+Operator	97:96	)
+Operator	97:97	,
+Space	97:98	 
+Identifier	97:99	attr
+Operator	97:103	(
+String	97:104	"column"
+Operator	97:112	,
+Space	97:113	 
+String	97:114	"24"
+Operator	97:118	)
+Operator	97:119	,
+Space	97:120	 
+Identifier	97:121	attr
+Operator	97:125	(
+String	97:126	"name"
+Operator	97:132	,
+Space	97:133	 
+String	97:134	"Int"
+Operator	97:139	)
+Operator	97:140	)
+Operator	97:141	,
+Space	97:142	 
+Identifier	97:143	noChildren
+Operator	97:153	(
+Operator	97:154	)
+Operator	97:155	)
+EndOfLine	97:156	\n
+Space	98:1	    
+ReservedWord	98:5	val
+Space	98:8	 
+Identifier	98:9	fieldNode
+Operator	98:18	:
+Space	98:19	 
+Identifier	98:20	XmlNode
+Space	98:27	 
+Operator	98:28	=
+Space	98:29	 
+Identifier	98:30	XmlNode
+Operator	98:37	(
+String	98:38	"Field"
+Operator	98:45	,
+Space	98:46	 
+Identifier	98:47	attrs4
+Operator	98:53	(
+Identifier	98:54	attr
+Operator	98:58	(
+String	98:59	"name"
+Operator	98:65	,
+Space	98:66	 
+String	98:67	"n"
+Operator	98:70	)
+Operator	98:71	,
+Space	98:72	 
+Identifier	98:73	attr
+Operator	98:77	(
+String	98:78	"isVar"
+Operator	98:85	,
+Space	98:86	 
+String	98:87	"true"
+Operator	98:93	)
+Operator	98:94	,
+Space	98:95	 
+Identifier	98:96	attr
+Operator	98:100	(
+String	98:101	"line"
+Operator	98:107	,
+Space	98:108	 
+String	98:109	"1"
+Operator	98:112	)
+Operator	98:113	,
+Space	98:114	 
+Identifier	98:115	attr
+Operator	98:119	(
+String	98:120	"column"
+Operator	98:128	,
+Space	98:129	 
+String	98:130	"17"
+Operator	98:134	)
+Operator	98:135	)
+Operator	98:136	,
+Space	98:137	 
+Identifier	98:138	oneChild
+Operator	98:146	(
+Identifier	98:147	typeNode
+Operator	98:155	)
+Operator	98:156	)
+EndOfLine	98:157	\n
+Space	99:1	    
+ReservedWord	99:5	val
+Space	99:8	 
+Identifier	99:9	dataClassNode
+Operator	99:22	:
+Space	99:23	 
+Identifier	99:24	XmlNode
+Space	99:31	 
+Operator	99:32	=
+Space	99:33	 
+Identifier	99:34	XmlNode
+Operator	99:41	(
+String	99:42	"DataClass"
+Operator	99:53	,
+Space	99:54	 
+Identifier	99:55	attrs4
+Operator	99:61	(
+Identifier	99:62	attr
+Operator	99:66	(
+String	99:67	"kind"
+Operator	99:73	,
+Space	99:74	 
+String	99:75	"DataClass"
+Operator	99:86	)
+Operator	99:87	,
+Space	99:88	 
+Identifier	99:89	attr
+Operator	99:93	(
+String	99:94	"line"
+Operator	99:100	,
+Space	99:101	 
+String	99:102	"1"
+Operator	99:105	)
+Operator	99:106	,
+Space	99:107	 
+Identifier	99:108	attr
+Operator	99:112	(
+String	99:113	"column"
+Operator	99:121	,
+Space	99:122	 
+String	99:123	"1"
+Operator	99:126	)
+Operator	99:127	,
+Space	99:128	 
+Identifier	99:129	attr
+Operator	99:133	(
+String	99:134	"name"
+Operator	99:140	,
+Space	99:141	 
+String	99:142	"Tile"
+Operator	99:148	)
+Operator	99:149	)
+Operator	99:150	,
+Space	99:151	 
+Identifier	99:152	oneChild
+Operator	99:160	(
+Identifier	99:161	fieldNode
+Operator	99:170	)
+Operator	99:171	)
+EndOfLine	99:172	\n
+Space	100:1	    
+ReservedWord	100:5	val
+Space	100:8	 
+Identifier	100:9	moduleNode
+Operator	100:19	:
+Space	100:20	 
+Identifier	100:21	XmlNode
+Space	100:28	 
+Operator	100:29	=
+Space	100:30	 
+Identifier	100:31	XmlNode
+Operator	100:38	(
+String	100:39	"Module"
+Operator	100:47	,
+Space	100:48	 
+Identifier	100:49	attrs3
+Operator	100:55	(
+Identifier	100:56	attr
+Operator	100:60	(
+String	100:61	"kind"
+Operator	100:67	,
+Space	100:68	 
+String	100:69	"Module"
+Operator	100:77	)
+Operator	100:78	,
+Space	100:79	 
+Identifier	100:80	attr
+Operator	100:84	(
+String	100:85	"line"
+Operator	100:91	,
+Space	100:92	 
+String	100:93	"1"
+Operator	100:96	)
+Operator	100:97	,
+Space	100:98	 
+Identifier	100:99	attr
+Operator	100:103	(
+String	100:104	"column"
+Operator	100:112	,
+Space	100:113	 
+String	100:114	"1"
+Operator	100:117	)
+Operator	100:118	)
+Operator	100:119	,
+Space	100:120	 
+Identifier	100:121	oneChild
+Operator	100:129	(
+Identifier	100:130	dataClassNode
+Operator	100:143	)
+Operator	100:144	)
+EndOfLine	100:145	\n
+EndOfLine	101:1	\n
+Space	102:1	    
+Identifier	102:5	print
+Operator	102:10	(
+Identifier	102:11	dumpNode
+Operator	102:19	(
+Identifier	102:20	moduleNode
+Operator	102:30	,
+Space	102:31	 
+Number	102:32	0
+Operator	102:33	)
+Operator	102:34	)
+EndOfLine	102:35	\n
+Space	103:1	    
+ReservedWord	103:5	return
+Space	103:11	 
+Number	103:12	0
+EndOfLine	103:13	\n
+Operator	104:1	}
+EndOfLine	104:2	\n

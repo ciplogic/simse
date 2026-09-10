@@ -1,0 +1,950 @@
+Comment	1:1	// T14: exercises switch, null nullability, the Str/Char library, numeric
+EndOfLine	1:74	\n
+Comment	2:1	// conversions, min/max, and enum toInt/fromInt.
+EndOfLine	2:49	\n
+EndOfLine	3:1	\n
+ReservedWord	4:1	enum
+Space	4:5	 
+Identifier	4:6	Color
+Space	4:11	 
+Operator	4:12	{
+EndOfLine	4:13	\n
+Space	5:1	    
+Identifier	5:5	Red
+Operator	5:8	,
+EndOfLine	5:9	\n
+Space	6:1	    
+Identifier	6:5	Green
+Space	6:10	 
+Operator	6:11	=
+Space	6:12	 
+Number	6:13	4
+Operator	6:14	,
+EndOfLine	6:15	\n
+Space	7:1	    
+Identifier	7:5	Blue
+EndOfLine	7:9	\n
+Operator	8:1	}
+EndOfLine	8:2	\n
+EndOfLine	9:1	\n
+ReservedWord	10:1	data
+Space	10:5	 
+ReservedWord	10:6	class
+Space	10:11	 
+Identifier	10:12	Box
+Operator	10:15	(
+ReservedWord	10:16	var
+Space	10:19	 
+Identifier	10:20	value
+Operator	10:25	:
+Space	10:26	 
+Identifier	10:27	Int
+Operator	10:30	)
+EndOfLine	10:31	\n
+EndOfLine	11:1	\n
+ReservedWord	12:1	fun
+Space	12:4	 
+Identifier	12:5	label
+Operator	12:10	(
+Identifier	12:11	c
+Operator	12:12	:
+Space	12:13	 
+Identifier	12:14	Color
+Operator	12:19	)
+Operator	12:20	:
+Space	12:21	 
+Identifier	12:22	Str
+Space	12:25	 
+Operator	12:26	{
+EndOfLine	12:27	\n
+Space	13:1	    
+ReservedWord	13:5	switch
+Space	13:11	 
+Operator	13:12	(
+Identifier	13:13	c
+Operator	13:14	)
+Space	13:15	 
+Operator	13:16	{
+EndOfLine	13:17	\n
+Space	14:1	        
+ReservedWord	14:9	case
+Space	14:13	 
+Identifier	14:14	Color
+Operator	14:19	.
+Identifier	14:20	Red
+Operator	14:23	:
+EndOfLine	14:24	\n
+Space	15:1	            
+ReservedWord	15:13	return
+Space	15:19	 
+String	15:20	"red"
+EndOfLine	15:25	\n
+Space	16:1	        
+ReservedWord	16:9	case
+Space	16:13	 
+Identifier	16:14	Color
+Operator	16:19	.
+Identifier	16:20	Green
+Operator	16:25	:
+EndOfLine	16:26	\n
+Space	17:1	            
+ReservedWord	17:13	return
+Space	17:19	 
+String	17:20	"green"
+EndOfLine	17:27	\n
+Space	18:1	        
+ReservedWord	18:9	default
+Operator	18:16	:
+EndOfLine	18:17	\n
+Space	19:1	            
+ReservedWord	19:13	return
+Space	19:19	 
+String	19:20	"other"
+EndOfLine	19:27	\n
+Space	20:1	    
+Operator	20:5	}
+EndOfLine	20:6	\n
+Operator	21:1	}
+EndOfLine	21:2	\n
+EndOfLine	22:1	\n
+ReservedWord	23:1	fun
+Space	23:4	 
+Identifier	23:5	describe
+Operator	23:13	(
+Identifier	23:14	n
+Operator	23:15	:
+Space	23:16	 
+Identifier	23:17	Int
+Operator	23:20	)
+Operator	23:21	:
+Space	23:22	 
+Identifier	23:23	Str
+Space	23:26	 
+Operator	23:27	{
+EndOfLine	23:28	\n
+Space	24:1	    
+ReservedWord	24:5	switch
+Space	24:11	 
+Operator	24:12	(
+Identifier	24:13	n
+Operator	24:14	)
+Space	24:15	 
+Operator	24:16	{
+EndOfLine	24:17	\n
+Space	25:1	        
+ReservedWord	25:9	case
+Space	25:13	 
+Number	25:14	0
+Operator	25:15	:
+EndOfLine	25:16	\n
+Space	26:1	            
+ReservedWord	26:13	return
+Space	26:19	 
+String	26:20	"zero"
+EndOfLine	26:26	\n
+Space	27:1	        
+ReservedWord	27:9	case
+Space	27:13	 
+Number	27:14	1
+Operator	27:15	:
+EndOfLine	27:16	\n
+Space	28:1	            
+ReservedWord	28:13	return
+Space	28:19	 
+String	28:20	"one"
+EndOfLine	28:25	\n
+Space	29:1	        
+ReservedWord	29:9	default
+Operator	29:16	:
+EndOfLine	29:17	\n
+Space	30:1	            
+ReservedWord	30:13	return
+Space	30:19	 
+String	30:20	"many"
+EndOfLine	30:26	\n
+Space	31:1	    
+Operator	31:5	}
+EndOfLine	31:6	\n
+Operator	32:1	}
+EndOfLine	32:2	\n
+EndOfLine	33:1	\n
+ReservedWord	34:1	fun
+Space	34:4	 
+Identifier	34:5	maybeRef
+Operator	34:13	(
+Identifier	34:14	flag
+Operator	34:18	:
+Space	34:19	 
+Identifier	34:20	Bool
+Operator	34:24	)
+Operator	34:25	:
+Space	34:26	 
+Operator	34:27	&
+Identifier	34:28	Box
+Space	34:31	 
+Operator	34:32	{
+EndOfLine	34:33	\n
+Space	35:1	    
+ReservedWord	35:5	if
+Space	35:7	 
+Operator	35:8	(
+Identifier	35:9	flag
+Operator	35:13	)
+Space	35:14	 
+Operator	35:15	{
+EndOfLine	35:16	\n
+Space	36:1	        
+ReservedWord	36:9	return
+Space	36:15	 
+Operator	36:16	&
+Identifier	36:17	Box
+Operator	36:20	(
+Number	36:21	7
+Operator	36:22	)
+EndOfLine	36:23	\n
+Space	37:1	    
+Operator	37:5	}
+EndOfLine	37:6	\n
+Space	38:1	    
+ReservedWord	38:5	return
+Space	38:11	 
+ReservedWord	38:12	null
+EndOfLine	38:16	\n
+Operator	39:1	}
+EndOfLine	39:2	\n
+EndOfLine	40:1	\n
+ReservedWord	41:1	fun
+Space	41:4	 
+Identifier	41:5	maybePointer
+Operator	41:17	(
+Identifier	41:18	box
+Operator	41:21	:
+Space	41:22	 
+Operator	41:23	&
+Identifier	41:24	Box
+Operator	41:27	,
+Space	41:28	 
+Identifier	41:29	flag
+Operator	41:33	:
+Space	41:34	 
+Identifier	41:35	Bool
+Operator	41:39	)
+Operator	41:40	:
+Space	41:41	 
+Operator	41:42	*
+Identifier	41:43	Box
+Space	41:46	 
+Operator	41:47	{
+EndOfLine	41:48	\n
+Space	42:1	    
+ReservedWord	42:5	if
+Space	42:7	 
+Operator	42:8	(
+Identifier	42:9	flag
+Operator	42:13	)
+Space	42:14	 
+Operator	42:15	{
+EndOfLine	42:16	\n
+Space	43:1	        
+ReservedWord	43:9	return
+Space	43:15	 
+Operator	43:16	*
+Identifier	43:17	box
+EndOfLine	43:20	\n
+Space	44:1	    
+Operator	44:5	}
+EndOfLine	44:6	\n
+Space	45:1	    
+ReservedWord	45:5	return
+Space	45:11	 
+ReservedWord	45:12	null
+EndOfLine	45:16	\n
+Operator	46:1	}
+EndOfLine	46:2	\n
+EndOfLine	47:1	\n
+ReservedWord	48:1	fun
+Space	48:4	 
+Identifier	48:5	main
+Operator	48:9	(
+Operator	48:10	)
+Operator	48:11	:
+Space	48:12	 
+Identifier	48:13	Int
+Space	48:16	 
+Operator	48:17	{
+EndOfLine	48:18	\n
+Space	49:1	    
+Identifier	49:5	println
+Operator	49:12	(
+Identifier	49:13	label
+Operator	49:18	(
+Identifier	49:19	Color
+Operator	49:24	.
+Identifier	49:25	Red
+Operator	49:28	)
+Operator	49:29	)
+EndOfLine	49:30	\n
+Space	50:1	    
+Identifier	50:5	println
+Operator	50:12	(
+Identifier	50:13	label
+Operator	50:18	(
+Identifier	50:19	Color
+Operator	50:24	.
+Identifier	50:25	Green
+Operator	50:30	)
+Operator	50:31	)
+EndOfLine	50:32	\n
+Space	51:1	    
+Identifier	51:5	println
+Operator	51:12	(
+Identifier	51:13	label
+Operator	51:18	(
+Identifier	51:19	Color
+Operator	51:24	.
+Identifier	51:25	Blue
+Operator	51:29	)
+Operator	51:30	)
+EndOfLine	51:31	\n
+Space	52:1	    
+Identifier	52:5	println
+Operator	52:12	(
+Identifier	52:13	describe
+Operator	52:21	(
+Number	52:22	0
+Operator	52:23	)
+Operator	52:24	)
+EndOfLine	52:25	\n
+Space	53:1	    
+Identifier	53:5	println
+Operator	53:12	(
+Identifier	53:13	describe
+Operator	53:21	(
+Number	53:22	5
+Operator	53:23	)
+Operator	53:24	)
+EndOfLine	53:25	\n
+EndOfLine	54:1	\n
+Space	55:1	    
+Identifier	55:5	println
+Operator	55:12	(
+Identifier	55:13	Color
+Operator	55:18	.
+Identifier	55:19	Green
+Operator	55:24	.
+Identifier	55:25	toInt
+Operator	55:30	(
+Operator	55:31	)
+Operator	55:32	)
+EndOfLine	55:33	\n
+Space	56:1	    
+ReservedWord	56:5	val
+Space	56:8	 
+Identifier	56:9	parsed
+Operator	56:15	:
+Space	56:16	 
+Identifier	56:17	Opt
+Operator	56:20	<
+Identifier	56:21	Color
+Operator	56:26	>
+Space	56:27	 
+Operator	56:28	=
+Space	56:29	 
+Identifier	56:30	Color
+Operator	56:35	.
+Identifier	56:36	fromInt
+Operator	56:43	(
+Number	56:44	4
+Operator	56:45	)
+EndOfLine	56:46	\n
+Space	57:1	    
+ReservedWord	57:5	if
+Space	57:7	 
+Operator	57:8	(
+Identifier	57:9	parsed
+Operator	57:15	.
+Identifier	57:16	hasValue
+Operator	57:24	(
+Operator	57:25	)
+Operator	57:26	)
+Space	57:27	 
+Operator	57:28	{
+EndOfLine	57:29	\n
+Space	58:1	        
+Identifier	58:9	println
+Operator	58:16	(
+String	58:17	"parsed"
+Operator	58:25	)
+EndOfLine	58:26	\n
+Space	59:1	    
+Operator	59:5	}
+EndOfLine	59:6	\n
+Space	60:1	    
+ReservedWord	60:5	val
+Space	60:8	 
+Identifier	60:9	missingColor
+Operator	60:21	:
+Space	60:22	 
+Identifier	60:23	Opt
+Operator	60:26	<
+Identifier	60:27	Color
+Operator	60:32	>
+Space	60:33	 
+Operator	60:34	=
+Space	60:35	 
+Identifier	60:36	Color
+Operator	60:41	.
+Identifier	60:42	fromInt
+Operator	60:49	(
+Number	60:50	9
+Operator	60:51	)
+EndOfLine	60:52	\n
+Space	61:1	    
+ReservedWord	61:5	if
+Space	61:7	 
+Operator	61:8	(
+Operator	61:9	!
+Identifier	61:10	missingColor
+Operator	61:22	.
+Identifier	61:23	hasValue
+Operator	61:31	(
+Operator	61:32	)
+Operator	61:33	)
+Space	61:34	 
+Operator	61:35	{
+EndOfLine	61:36	\n
+Space	62:1	        
+Identifier	62:9	println
+Operator	62:16	(
+String	62:17	"missing color"
+Operator	62:32	)
+EndOfLine	62:33	\n
+Space	63:1	    
+Operator	63:5	}
+EndOfLine	63:6	\n
+EndOfLine	64:1	\n
+Space	65:1	    
+ReservedWord	65:5	val
+Space	65:8	 
+Identifier	65:9	present
+Operator	65:16	:
+Space	65:17	 
+Operator	65:18	&
+Identifier	65:19	Box
+Space	65:22	 
+Operator	65:23	=
+Space	65:24	 
+Identifier	65:25	maybeRef
+Operator	65:33	(
+ReservedWord	65:34	true
+Operator	65:38	)
+EndOfLine	65:39	\n
+Space	66:1	    
+ReservedWord	66:5	if
+Space	66:7	 
+Operator	66:8	(
+Identifier	66:9	present
+Space	66:16	 
+Operator	66:17	!=
+Space	66:19	 
+ReservedWord	66:20	null
+Operator	66:24	)
+Space	66:25	 
+Operator	66:26	{
+EndOfLine	66:27	\n
+Space	67:1	        
+Identifier	67:9	println
+Operator	67:16	(
+Identifier	67:17	present
+Operator	67:24	.
+Identifier	67:25	value
+Operator	67:30	)
+EndOfLine	67:31	\n
+Space	68:1	    
+Operator	68:5	}
+EndOfLine	68:6	\n
+Space	69:1	    
+ReservedWord	69:5	val
+Space	69:8	 
+Identifier	69:9	absent
+Operator	69:15	:
+Space	69:16	 
+Operator	69:17	&
+Identifier	69:18	Box
+Space	69:21	 
+Operator	69:22	=
+Space	69:23	 
+Identifier	69:24	maybeRef
+Operator	69:32	(
+ReservedWord	69:33	false
+Operator	69:38	)
+EndOfLine	69:39	\n
+Space	70:1	    
+ReservedWord	70:5	if
+Space	70:7	 
+Operator	70:8	(
+Identifier	70:9	absent
+Space	70:15	 
+Operator	70:16	==
+Space	70:18	 
+ReservedWord	70:19	null
+Operator	70:23	)
+Space	70:24	 
+Operator	70:25	{
+EndOfLine	70:26	\n
+Space	71:1	        
+Identifier	71:9	println
+Operator	71:16	(
+String	71:17	"absent"
+Operator	71:25	)
+EndOfLine	71:26	\n
+Space	72:1	    
+Operator	72:5	}
+EndOfLine	72:6	\n
+Space	73:1	    
+ReservedWord	73:5	val
+Space	73:8	 
+Identifier	73:9	boxed
+Operator	73:14	:
+Space	73:15	 
+Operator	73:16	&
+Identifier	73:17	Box
+Space	73:20	 
+Operator	73:21	=
+Space	73:22	 
+Operator	73:23	&
+Identifier	73:24	Box
+Operator	73:27	(
+Number	73:28	3
+Operator	73:29	)
+EndOfLine	73:30	\n
+Space	74:1	    
+ReservedWord	74:5	val
+Space	74:8	 
+Identifier	74:9	rawPresent
+Operator	74:19	:
+Space	74:20	 
+Operator	74:21	*
+Identifier	74:22	Box
+Space	74:25	 
+Operator	74:26	=
+Space	74:27	 
+Identifier	74:28	maybePointer
+Operator	74:40	(
+Identifier	74:41	boxed
+Operator	74:46	,
+Space	74:47	 
+ReservedWord	74:48	true
+Operator	74:52	)
+EndOfLine	74:53	\n
+Space	75:1	    
+ReservedWord	75:5	if
+Space	75:7	 
+Operator	75:8	(
+Identifier	75:9	rawPresent
+Space	75:19	 
+Operator	75:20	!=
+Space	75:22	 
+ReservedWord	75:23	null
+Operator	75:27	)
+Space	75:28	 
+Operator	75:29	{
+EndOfLine	75:30	\n
+Space	76:1	        
+Identifier	76:9	println
+Operator	76:16	(
+Identifier	76:17	rawPresent
+Operator	76:27	.
+Identifier	76:28	value
+Operator	76:33	)
+EndOfLine	76:34	\n
+Space	77:1	    
+Operator	77:5	}
+EndOfLine	77:6	\n
+Space	78:1	    
+ReservedWord	78:5	val
+Space	78:8	 
+Identifier	78:9	rawAbsent
+Operator	78:18	:
+Space	78:19	 
+Operator	78:20	*
+Identifier	78:21	Box
+Space	78:24	 
+Operator	78:25	=
+Space	78:26	 
+Identifier	78:27	maybePointer
+Operator	78:39	(
+Identifier	78:40	boxed
+Operator	78:45	,
+Space	78:46	 
+ReservedWord	78:47	false
+Operator	78:52	)
+EndOfLine	78:53	\n
+Space	79:1	    
+ReservedWord	79:5	if
+Space	79:7	 
+Operator	79:8	(
+Identifier	79:9	rawAbsent
+Space	79:18	 
+Operator	79:19	==
+Space	79:21	 
+ReservedWord	79:22	null
+Operator	79:26	)
+Space	79:27	 
+Operator	79:28	{
+EndOfLine	79:29	\n
+Space	80:1	        
+Identifier	80:9	println
+Operator	80:16	(
+String	80:17	"null raw"
+Operator	80:27	)
+EndOfLine	80:28	\n
+Space	81:1	    
+Operator	81:5	}
+EndOfLine	81:6	\n
+EndOfLine	82:1	\n
+Space	83:1	    
+ReservedWord	83:5	val
+Space	83:8	 
+Identifier	83:9	text
+Operator	83:13	:
+Space	83:14	 
+Identifier	83:15	Str
+Space	83:18	 
+Operator	83:19	=
+Space	83:20	 
+String	83:21	"hello world"
+EndOfLine	83:34	\n
+Space	84:1	    
+Identifier	84:5	println
+Operator	84:12	(
+Identifier	84:13	text
+Operator	84:17	.
+Identifier	84:18	find
+Operator	84:22	(
+String	84:23	"world"
+Operator	84:30	)
+Operator	84:31	)
+EndOfLine	84:32	\n
+Space	85:1	    
+Identifier	85:5	println
+Operator	85:12	(
+Identifier	85:13	text
+Operator	85:17	.
+Identifier	85:18	find
+Operator	85:22	(
+String	85:23	"zzz"
+Operator	85:28	)
+Operator	85:29	)
+EndOfLine	85:30	\n
+Space	86:1	    
+Identifier	86:5	println
+Operator	86:12	(
+Identifier	86:13	text
+Operator	86:17	.
+Identifier	86:18	substr
+Operator	86:24	(
+Number	86:25	0
+Operator	86:26	,
+Space	86:27	 
+Number	86:28	5
+Operator	86:29	)
+Operator	86:30	)
+EndOfLine	86:31	\n
+Space	87:1	    
+Identifier	87:5	println
+Operator	87:12	(
+Identifier	87:13	text
+Operator	87:17	.
+Identifier	87:18	startsWith
+Operator	87:28	(
+String	87:29	"hello"
+Operator	87:36	)
+Operator	87:37	)
+EndOfLine	87:38	\n
+Space	88:1	    
+Identifier	88:5	println
+Operator	88:12	(
+Identifier	88:13	text
+Operator	88:17	.
+Identifier	88:18	endsWith
+Operator	88:26	(
+String	88:27	"world"
+Operator	88:34	)
+Operator	88:35	)
+EndOfLine	88:36	\n
+Space	89:1	    
+Identifier	89:5	println
+Operator	89:12	(
+Identifier	89:13	text
+Operator	89:17	.
+Identifier	89:18	replace
+Operator	89:25	(
+String	89:26	"world"
+Operator	89:33	,
+Space	89:34	 
+String	89:35	"simse"
+Operator	89:42	)
+Operator	89:43	)
+EndOfLine	89:44	\n
+Space	90:1	    
+ReservedWord	90:5	val
+Space	90:8	 
+Identifier	90:9	number
+Operator	90:15	:
+Space	90:16	 
+Identifier	90:17	Opt
+Operator	90:20	<
+Identifier	90:21	Int
+Operator	90:24	>
+Space	90:25	 
+Operator	90:26	=
+Space	90:27	 
+String	90:28	"42"
+Operator	90:32	.
+Identifier	90:33	toInt
+Operator	90:38	(
+Operator	90:39	)
+EndOfLine	90:40	\n
+Space	91:1	    
+ReservedWord	91:5	if
+Space	91:7	 
+Operator	91:8	(
+Identifier	91:9	number
+Operator	91:15	.
+Identifier	91:16	hasValue
+Operator	91:24	(
+Operator	91:25	)
+Operator	91:26	)
+Space	91:27	 
+Operator	91:28	{
+EndOfLine	91:29	\n
+Space	92:1	        
+Identifier	92:9	println
+Operator	92:16	(
+Identifier	92:17	number
+Operator	92:23	.
+Identifier	92:24	value
+Operator	92:29	(
+Operator	92:30	)
+Operator	92:31	)
+EndOfLine	92:32	\n
+Space	93:1	    
+Operator	93:5	}
+EndOfLine	93:6	\n
+Space	94:1	    
+ReservedWord	94:5	val
+Space	94:8	 
+Identifier	94:9	badNumber
+Operator	94:18	:
+Space	94:19	 
+Identifier	94:20	Opt
+Operator	94:23	<
+Identifier	94:24	Int
+Operator	94:27	>
+Space	94:28	 
+Operator	94:29	=
+Space	94:30	 
+String	94:31	"nope"
+Operator	94:37	.
+Identifier	94:38	toInt
+Operator	94:43	(
+Operator	94:44	)
+EndOfLine	94:45	\n
+Space	95:1	    
+ReservedWord	95:5	if
+Space	95:7	 
+Operator	95:8	(
+Operator	95:9	!
+Identifier	95:10	badNumber
+Operator	95:19	.
+Identifier	95:20	hasValue
+Operator	95:28	(
+Operator	95:29	)
+Operator	95:30	)
+Space	95:31	 
+Operator	95:32	{
+EndOfLine	95:33	\n
+Space	96:1	        
+Identifier	96:9	println
+Operator	96:16	(
+String	96:17	"bad int"
+Operator	96:26	)
+EndOfLine	96:27	\n
+Space	97:1	    
+Operator	97:5	}
+EndOfLine	97:6	\n
+Space	98:1	    
+ReservedWord	98:5	val
+Space	98:8	 
+Identifier	98:9	fraction
+Operator	98:17	:
+Space	98:18	 
+Identifier	98:19	Opt
+Operator	98:22	<
+Identifier	98:23	Float64
+Operator	98:30	>
+Space	98:31	 
+Operator	98:32	=
+Space	98:33	 
+String	98:34	"2.5"
+Operator	98:39	.
+Identifier	98:40	toFloat
+Operator	98:47	(
+Operator	98:48	)
+EndOfLine	98:49	\n
+Space	99:1	    
+ReservedWord	99:5	if
+Space	99:7	 
+Operator	99:8	(
+Identifier	99:9	fraction
+Operator	99:17	.
+Identifier	99:18	hasValue
+Operator	99:26	(
+Operator	99:27	)
+Operator	99:28	)
+Space	99:29	 
+Operator	99:30	{
+EndOfLine	99:31	\n
+Space	100:1	        
+Identifier	100:9	println
+Operator	100:16	(
+Identifier	100:17	fraction
+Operator	100:25	.
+Identifier	100:26	value
+Operator	100:31	(
+Operator	100:32	)
+Operator	100:33	)
+EndOfLine	100:34	\n
+Space	101:1	    
+Operator	101:5	}
+EndOfLine	101:6	\n
+EndOfLine	102:1	\n
+Space	103:1	    
+ReservedWord	103:5	val
+Space	103:8	 
+Identifier	103:9	letter
+Operator	103:15	:
+Space	103:16	 
+Identifier	103:17	Char
+Space	103:21	 
+Operator	103:22	=
+Space	103:23	 
+Character	103:24	'a'
+EndOfLine	103:27	\n
+Space	104:1	    
+Identifier	104:5	println
+Operator	104:12	(
+Identifier	104:13	letter
+Operator	104:19	.
+Identifier	104:20	isAlpha
+Operator	104:27	(
+Operator	104:28	)
+Operator	104:29	)
+EndOfLine	104:30	\n
+Space	105:1	    
+Identifier	105:5	println
+Operator	105:12	(
+Identifier	105:13	letter
+Operator	105:19	.
+Identifier	105:20	isDigit
+Operator	105:27	(
+Operator	105:28	)
+Operator	105:29	)
+EndOfLine	105:30	\n
+Space	106:1	    
+Identifier	106:5	println
+Operator	106:12	(
+Character	106:13	'7'
+Operator	106:16	.
+Identifier	106:17	isDigit
+Operator	106:24	(
+Operator	106:25	)
+Operator	106:26	)
+EndOfLine	106:27	\n
+Space	107:1	    
+Identifier	107:5	println
+Operator	107:12	(
+Character	107:13	' '
+Operator	107:16	.
+Identifier	107:17	isSpace
+Operator	107:24	(
+Operator	107:25	)
+Operator	107:26	)
+EndOfLine	107:27	\n
+EndOfLine	108:1	\n
+Space	109:1	    
+ReservedWord	109:5	val
+Space	109:8	 
+Identifier	109:9	small
+Operator	109:14	:
+Space	109:15	 
+Identifier	109:16	Int8
+Space	109:20	 
+Operator	109:21	=
+Space	109:22	 
+Number	109:23	5
+EndOfLine	109:24	\n
+Space	110:1	    
+Identifier	110:5	println
+Operator	110:12	(
+Identifier	110:13	small
+Operator	110:18	.
+Identifier	110:19	toString
+Operator	110:27	(
+Operator	110:28	)
+Operator	110:29	)
+EndOfLine	110:30	\n
+Space	111:1	    
+Identifier	111:5	println
+Operator	111:12	(
+ReservedWord	111:13	true
+Operator	111:17	.
+Identifier	111:18	toString
+Operator	111:26	(
+Operator	111:27	)
+Operator	111:28	)
+EndOfLine	111:29	\n
+Space	112:1	    
+Identifier	112:5	println
+Operator	112:12	(
+Number	112:13	2.5
+Operator	112:16	.
+Identifier	112:17	toString
+Operator	112:25	(
+Operator	112:26	)
+Operator	112:27	)
+EndOfLine	112:28	\n
+EndOfLine	113:1	\n
+Space	114:1	    
+Identifier	114:5	println
+Operator	114:12	(
+Identifier	114:13	min
+Operator	114:16	(
+Number	114:17	3
+Operator	114:18	,
+Space	114:19	 
+Number	114:20	9
+Operator	114:21	)
+Operator	114:22	)
+EndOfLine	114:23	\n
+Space	115:1	    
+Identifier	115:5	println
+Operator	115:12	(
+Identifier	115:13	max
+Operator	115:16	(
+Number	115:17	3
+Operator	115:18	,
+Space	115:19	 
+Number	115:20	9
+Operator	115:21	)
+Operator	115:22	)
+EndOfLine	115:23	\n
+EndOfLine	116:1	\n
+Space	117:1	    
+ReservedWord	117:5	return
+Space	117:11	 
+Number	117:12	0
+EndOfLine	117:13	\n
+Operator	118:1	}
+EndOfLine	118:2	\n

@@ -1,0 +1,280 @@
+Module @1:1
+  TypeAlias Mapper @3:1
+    Target (Int) -> Int
+  TypeAlias Predicate @4:1
+    Target (Int) -> Bool
+  Function apply @6:1
+    Param f: Mapper
+    Param value: Int
+    Return Int
+    Body
+      Return @7:5
+        Call @7:12
+          Callee
+            Name f @7:12
+          Arg
+            Name value @7:14
+  Function countIf @10:1
+    Param items: &List<Int>
+    Param predicate: Predicate
+    Return Int
+    Body
+      VarDecl var count: Int @11:5
+        Init
+          IntLit 0 @11:22
+      VarDecl var c: Cursor<Int> @12:5
+        Init
+          Call @12:26
+            Callee
+              Name cursorOf @12:26
+            Arg
+              Name items @12:35
+      While @13:5
+        Cond
+          Call @13:12
+            Callee
+              Member .hasValue @13:12
+                Receiver
+                  Name c @13:12
+        Body
+          If @14:9
+            Cond
+              Call @14:13
+                Callee
+                  Name predicate @14:13
+                Arg
+                  Call @14:23
+                    Callee
+                      Member .value @14:23
+                        Receiver
+                          Name c @14:23
+            Then
+              Assign = @15:13
+                Target
+                  Name count @15:13
+                Value
+                  Binary + @15:21
+                    Lhs
+                      Name count @15:21
+                    Rhs
+                      IntLit 1 @15:29
+          Assign = @17:9
+            Target
+              Name c @17:9
+            Value
+              Call @17:13
+                Callee
+                  Member .next @17:13
+                    Receiver
+                      Name c @17:13
+      Return @19:5
+        Name count @19:12
+  Function makeAdder @22:1
+    Param factor: Int
+    Return Mapper
+    Body
+      Return @23:5
+        Lambda @23:13
+          Params v
+          Body
+            ExprStmt @23:24
+              Binary + @23:24
+                Lhs
+                  Name v @23:24
+                Rhs
+                  Name factor @23:28
+  Function main @26:1
+    Return Int
+    Body
+      VarDecl val doubler: Mapper @27:5
+        Init
+          Lambda @27:28
+            Params v
+            Body
+              ExprStmt @27:39
+                Binary * @27:39
+                  Lhs
+                    Name v @27:39
+                  Rhs
+                    IntLit 2 @27:43
+      ExprStmt @28:5
+        Call @28:5
+          Callee
+            Name println @28:5
+          Arg
+            Call @28:13
+              Callee
+                Name doubler @28:13
+              Arg
+                IntLit 21 @28:21
+      ExprStmt @29:5
+        Call @29:5
+          Callee
+            Name println @29:5
+          Arg
+            Call @29:13
+              Callee
+                Name apply @29:13
+              Arg
+                Name doubler @29:19
+              Arg
+                IntLit 5 @29:28
+      ExprStmt @32:5
+        Call @32:5
+          Callee
+            Name println @32:5
+          Arg
+            Call @32:13
+              Callee
+                Name apply @32:13
+              Arg
+                Lambda @32:20
+                  Params v
+                  Body
+                    ExprStmt @32:31
+                      Binary + @32:31
+                        Lhs
+                          Name v @32:31
+                        Rhs
+                          IntLit 1 @32:35
+              Arg
+                IntLit 41 @32:38
+      VarDecl val add10: Mapper @35:5
+        Init
+          Call @35:25
+            Callee
+              Name makeAdder @35:25
+            Arg
+              IntLit 10 @35:35
+      ExprStmt @36:5
+        Call @36:5
+          Callee
+            Name println @36:5
+          Arg
+            Call @36:13
+              Callee
+                Name add10 @36:13
+              Arg
+                IntLit 5 @36:19
+      VarDecl var items: List<Int> @38:5
+        Init
+          Call @38:28
+            Callee
+              GenericName List<Int> @38:28
+      ExprStmt @39:5
+        Call @39:5
+          Callee
+            Member .append @39:5
+              Receiver
+                Name items @39:5
+          Arg
+            IntLit 1 @39:18
+      ExprStmt @40:5
+        Call @40:5
+          Callee
+            Member .append @40:5
+              Receiver
+                Name items @40:5
+          Arg
+            IntLit 2 @40:18
+      ExprStmt @41:5
+        Call @41:5
+          Callee
+            Member .append @41:5
+              Receiver
+                Name items @41:5
+          Arg
+            IntLit 3 @41:18
+      ExprStmt @42:5
+        Call @42:5
+          Callee
+            Member .append @42:5
+              Receiver
+                Name items @42:5
+          Arg
+            IntLit 4 @42:18
+      VarDecl val view: &List<Int> @43:5
+        Init
+          Ref @43:28
+            Operand
+              Name items @43:29
+      VarDecl val isEven: Predicate @45:5
+        Init
+          Lambda @45:30
+            Params v
+            Body
+              ExprStmt @45:41
+                Binary == @45:41
+                  Lhs
+                    Binary % @45:41
+                      Lhs
+                        Name v @45:41
+                      Rhs
+                        IntLit 2 @45:45
+                  Rhs
+                    IntLit 0 @45:50
+      ExprStmt @46:5
+        Call @46:5
+          Callee
+            Name println @46:5
+          Arg
+            Call @46:13
+              Callee
+                Name countIf @46:13
+              Arg
+                Name view @46:21
+              Arg
+                Name isEven @46:27
+      ExprStmt @47:5
+        Call @47:5
+          Callee
+            Name println @47:5
+          Arg
+            Call @47:13
+              Callee
+                Name countIf @47:13
+              Arg
+                Name view @47:21
+              Arg
+                Lambda @47:28
+                  Params v
+                  Body
+                    ExprStmt @47:39
+                      Binary > @47:39
+                        Lhs
+                          Name v @47:39
+                        Rhs
+                          IntLit 2 @47:43
+      VarDecl val big: Mapper @50:5
+        Init
+          Lambda @50:24
+            Params v
+            Body
+              If @51:9
+                Cond
+                  Binary > @51:13
+                    Lhs
+                      Name v @51:13
+                    Rhs
+                      IntLit 0 @51:17
+                Then
+                  Return @52:13
+                    Binary * @52:20
+                      Lhs
+                        Name v @52:20
+                      Rhs
+                        IntLit 100 @52:24
+              Return @54:9
+                IntLit 0 @54:16
+      ExprStmt @56:5
+        Call @56:5
+          Callee
+            Name println @56:5
+          Arg
+            Call @56:13
+              Callee
+                Name big @56:13
+              Arg
+                IntLit 3 @56:17
+      Return @58:5
+        IntLit 0 @58:12

@@ -1,0 +1,697 @@
+Module @1:1
+  Function attr @8:1
+    Param name: Str
+    Param value: Str
+    Return Attribute
+    Body
+      Return @9:5
+        Call @9:12
+          Callee
+            Name Attribute @9:12
+          Arg
+            Name name @9:22
+          Arg
+            Name value @9:28
+  Function attrs3 @12:1
+    Param a: Attribute
+    Param b: Attribute
+    Param c: Attribute
+    Return List<Attribute>
+    Body
+      VarDecl var list: List<Attribute> @13:5
+        Init
+          Call @13:33
+            Callee
+              GenericName List<Attribute> @13:33
+      ExprStmt @14:5
+        Call @14:5
+          Callee
+            Member .append @14:5
+              Receiver
+                Name list @14:5
+          Arg
+            Name a @14:17
+      ExprStmt @15:5
+        Call @15:5
+          Callee
+            Member .append @15:5
+              Receiver
+                Name list @15:5
+          Arg
+            Name b @15:17
+      ExprStmt @16:5
+        Call @16:5
+          Callee
+            Member .append @16:5
+              Receiver
+                Name list @16:5
+          Arg
+            Name c @16:17
+      Return @17:5
+        Name list @17:12
+  Function attrs4 @20:1
+    Param a: Attribute
+    Param b: Attribute
+    Param c: Attribute
+    Param d: Attribute
+    Return List<Attribute>
+    Body
+      VarDecl var list: List<Attribute> @21:5
+        Init
+          Call @21:33
+            Callee
+              GenericName List<Attribute> @21:33
+      ExprStmt @22:5
+        Call @22:5
+          Callee
+            Member .append @22:5
+              Receiver
+                Name list @22:5
+          Arg
+            Name a @22:17
+      ExprStmt @23:5
+        Call @23:5
+          Callee
+            Member .append @23:5
+              Receiver
+                Name list @23:5
+          Arg
+            Name b @23:17
+      ExprStmt @24:5
+        Call @24:5
+          Callee
+            Member .append @24:5
+              Receiver
+                Name list @24:5
+          Arg
+            Name c @24:17
+      ExprStmt @25:5
+        Call @25:5
+          Callee
+            Member .append @25:5
+              Receiver
+                Name list @25:5
+          Arg
+            Name d @25:17
+      Return @26:5
+        Name list @26:12
+  Function noChildren @29:1
+    Return &List<XmlNode>
+    Body
+      Return @30:5
+        Ref @30:12
+          Operand
+            Call @30:13
+              Callee
+                GenericName List<XmlNode> @30:13
+  Function oneChild @33:1
+    Param child: XmlNode
+    Return &List<XmlNode>
+    Body
+      VarDecl var children: &List<XmlNode> @34:5
+        Init
+          Ref @34:36
+            Operand
+              Call @34:37
+                Callee
+                  GenericName List<XmlNode> @34:37
+      ExprStmt @35:5
+        Call @35:5
+          Callee
+            Member .append @35:5
+              Receiver
+                Name children @35:5
+          Arg
+            Name child @35:21
+      Return @36:5
+        Name children @36:12
+  Function escapeText @39:1
+    Param text: Str
+    Return Str
+    Body
+      VarDecl var out: Str @40:5
+        Init
+          Call @40:20
+            Callee
+              Name Str @40:20
+      VarDecl var i: Int @41:5
+        Init
+          IntLit 0 @41:18
+      While @42:5
+        Cond
+          Binary < @42:12
+            Lhs
+              Name i @42:12
+            Rhs
+              Call @42:16
+                Callee
+                  Member .size @42:16
+                    Receiver
+                      Name text @42:16
+        Body
+          VarDecl val ch: Char @43:9
+            Init
+              Index @43:24
+                Receiver
+                  Name text @43:24
+                Index
+                  Name i @43:29
+          If @44:9
+            Cond
+              Binary == @44:13
+                Lhs
+                  Name ch @44:13
+                Rhs
+                  CharLit '\\\\' @44:19
+            Then
+              ExprStmt @45:13
+                Call @45:13
+                  Callee
+                    Member .append @45:13
+                      Receiver
+                        Name out @45:13
+                  Arg
+                    CharLit '\\\\' @45:24
+              ExprStmt @46:13
+                Call @46:13
+                  Callee
+                    Member .append @46:13
+                      Receiver
+                        Name out @46:13
+                  Arg
+                    CharLit '\\\\' @46:24
+            Else
+              If @47:16
+                Cond
+                  Binary == @47:20
+                    Lhs
+                      Name ch @47:20
+                    Rhs
+                      CharLit '\\n' @47:26
+                Then
+                  ExprStmt @48:13
+                    Call @48:13
+                      Callee
+                        Member .append @48:13
+                          Receiver
+                            Name out @48:13
+                      Arg
+                        CharLit '\\\\' @48:24
+                  ExprStmt @49:13
+                    Call @49:13
+                      Callee
+                        Member .append @49:13
+                          Receiver
+                            Name out @49:13
+                      Arg
+                        CharLit 'n' @49:24
+                Else
+                  If @50:16
+                    Cond
+                      Binary == @50:20
+                        Lhs
+                          Name ch @50:20
+                        Rhs
+                          CharLit '\\r' @50:26
+                    Then
+                      ExprStmt @51:13
+                        Call @51:13
+                          Callee
+                            Member .append @51:13
+                              Receiver
+                                Name out @51:13
+                          Arg
+                            CharLit '\\\\' @51:24
+                      ExprStmt @52:13
+                        Call @52:13
+                          Callee
+                            Member .append @52:13
+                              Receiver
+                                Name out @52:13
+                          Arg
+                            CharLit 'r' @52:24
+                    Else
+                      If @53:16
+                        Cond
+                          Binary == @53:20
+                            Lhs
+                              Name ch @53:20
+                            Rhs
+                              CharLit '\\t' @53:26
+                        Then
+                          ExprStmt @54:13
+                            Call @54:13
+                              Callee
+                                Member .append @54:13
+                                  Receiver
+                                    Name out @54:13
+                              Arg
+                                CharLit '\\\\' @54:24
+                          ExprStmt @55:13
+                            Call @55:13
+                              Callee
+                                Member .append @55:13
+                                  Receiver
+                                    Name out @55:13
+                              Arg
+                                CharLit 't' @55:24
+                        Else
+                          If @56:16
+                            Cond
+                              Binary == @56:20
+                                Lhs
+                                  Name ch @56:20
+                                Rhs
+                                  CharLit '\\'' @56:26
+                            Then
+                              ExprStmt @57:13
+                                Call @57:13
+                                  Callee
+                                    Member .append @57:13
+                                      Receiver
+                                        Name out @57:13
+                                  Arg
+                                    CharLit '\\\\' @57:24
+                              ExprStmt @58:13
+                                Call @58:13
+                                  Callee
+                                    Member .append @58:13
+                                      Receiver
+                                        Name out @58:13
+                                  Arg
+                                    CharLit '\\'' @58:24
+                            Else
+                              ExprStmt @60:13
+                                Call @60:13
+                                  Callee
+                                    Member .append @60:13
+                                      Receiver
+                                        Name out @60:13
+                                  Arg
+                                    Name ch @60:24
+          Assign = @62:9
+            Target
+              Name i @62:9
+            Value
+              Binary + @62:13
+                Lhs
+                  Name i @62:13
+                Rhs
+                  IntLit 1 @62:17
+      Return @64:5
+        Name out @64:12
+  Function indentation @67:1
+    Param depth: Int
+    Return Str
+    Body
+      VarDecl var out: Str @68:5
+        Init
+          Call @68:20
+            Callee
+              Name Str @68:20
+      VarDecl var i: Int @69:5
+        Init
+          IntLit 0 @69:18
+      While @70:5
+        Cond
+          Binary < @70:12
+            Lhs
+              Name i @70:12
+            Rhs
+              Binary * @70:16
+                Lhs
+                  Name depth @70:16
+                Rhs
+                  IntLit 2 @70:24
+        Body
+          ExprStmt @71:9
+            Call @71:9
+              Callee
+                Member .append @71:9
+                  Receiver
+                    Name out @71:9
+              Arg
+                CharLit ' ' @71:20
+          Assign = @72:9
+            Target
+              Name i @72:9
+            Value
+              Binary + @72:13
+                Lhs
+                  Name i @72:13
+                Rhs
+                  IntLit 1 @72:17
+      Return @74:5
+        Name out @74:12
+  Function dumpNode @77:1
+    Param node: XmlNode
+    Param depth: Int
+    Return Str
+    Body
+      VarDecl var out: Str @78:5
+        Init
+          Binary + @78:20
+            Lhs
+              Call @78:20
+                Callee
+                  Name indentation @78:20
+                Arg
+                  Name depth @78:32
+            Rhs
+              Member .name @78:41
+                Receiver
+                  Name node @78:41
+      VarDecl var i: Int @79:5
+        Init
+          IntLit 0 @79:18
+      While @80:5
+        Cond
+          Binary < @80:12
+            Lhs
+              Name i @80:12
+            Rhs
+              Call @80:16
+                Callee
+                  Member .size @80:16
+                    Receiver
+                      Member .attributes @80:16
+                        Receiver
+                          Name node @80:16
+        Body
+          VarDecl val attribute: Attribute @81:9
+            Init
+              Index @81:36
+                Receiver
+                  Member .attributes @81:36
+                    Receiver
+                      Name node @81:36
+                Index
+                  Name i @81:52
+          Assign = @82:9
+            Target
+              Name out @82:9
+            Value
+              Binary + @82:15
+                Lhs
+                  Binary + @82:15
+                    Lhs
+                      Binary + @82:15
+                        Lhs
+                          Binary + @82:15
+                            Lhs
+                              Binary + @82:15
+                                Lhs
+                                  Name out @82:15
+                                Rhs
+                                  StrLit " " @82:21
+                            Rhs
+                              Member .name @82:27
+                                Receiver
+                                  Name attribute @82:27
+                        Rhs
+                          StrLit "='" @82:44
+                    Rhs
+                      Call @82:51
+                        Callee
+                          Name escapeText @82:51
+                        Arg
+                          Member .value @82:62
+                            Receiver
+                              Name attribute @82:62
+                Rhs
+                  StrLit "'" @82:81
+          Assign = @83:9
+            Target
+              Name i @83:9
+            Value
+              Binary + @83:13
+                Lhs
+                  Name i @83:13
+                Rhs
+                  IntLit 1 @83:17
+      Assign = @85:5
+        Target
+          Name out @85:5
+        Value
+          Binary + @85:11
+            Lhs
+              Name out @85:11
+            Rhs
+              StrLit "\\n" @85:17
+      VarDecl val children: &List<XmlNode> @87:5
+        Init
+          Member .Children @87:36
+            Receiver
+              Name node @87:36
+      VarDecl var j: Int @88:5
+        Init
+          IntLit 0 @88:18
+      While @89:5
+        Cond
+          Binary < @89:12
+            Lhs
+              Name j @89:12
+            Rhs
+              Call @89:16
+                Callee
+                  Member .size @89:16
+                    Receiver
+                      Name children @89:16
+        Body
+          Assign = @90:9
+            Target
+              Name out @90:9
+            Value
+              Binary + @90:15
+                Lhs
+                  Name out @90:15
+                Rhs
+                  Call @90:21
+                    Callee
+                      Name dumpNode @90:21
+                    Arg
+                      Index @90:30
+                        Receiver
+                          Name children @90:30
+                        Index
+                          Name j @90:39
+                    Arg
+                      Binary + @90:43
+                        Lhs
+                          Name depth @90:43
+                        Rhs
+                          IntLit 1 @90:51
+          Assign = @91:9
+            Target
+              Name j @91:9
+            Value
+              Binary + @91:13
+                Lhs
+                  Name j @91:13
+                Rhs
+                  IntLit 1 @91:17
+      Return @93:5
+        Name out @93:12
+  Function main @96:1
+    Return Int
+    Body
+      VarDecl val typeNode: XmlNode @97:5
+        Init
+          Call @97:29
+            Callee
+              Name XmlNode @97:29
+            Arg
+              StrLit "Type" @97:37
+            Arg
+              Call @97:45
+                Callee
+                  Name attrs4 @97:45
+                Arg
+                  Call @97:52
+                    Callee
+                      Name attr @97:52
+                    Arg
+                      StrLit "kind" @97:57
+                    Arg
+                      StrLit "Type.Named" @97:65
+                Arg
+                  Call @97:80
+                    Callee
+                      Name attr @97:80
+                    Arg
+                      StrLit "line" @97:85
+                    Arg
+                      StrLit "1" @97:93
+                Arg
+                  Call @97:99
+                    Callee
+                      Name attr @97:99
+                    Arg
+                      StrLit "column" @97:104
+                    Arg
+                      StrLit "24" @97:114
+                Arg
+                  Call @97:121
+                    Callee
+                      Name attr @97:121
+                    Arg
+                      StrLit "name" @97:126
+                    Arg
+                      StrLit "Int" @97:134
+            Arg
+              Call @97:143
+                Callee
+                  Name noChildren @97:143
+      VarDecl val fieldNode: XmlNode @98:5
+        Init
+          Call @98:30
+            Callee
+              Name XmlNode @98:30
+            Arg
+              StrLit "Field" @98:38
+            Arg
+              Call @98:47
+                Callee
+                  Name attrs4 @98:47
+                Arg
+                  Call @98:54
+                    Callee
+                      Name attr @98:54
+                    Arg
+                      StrLit "name" @98:59
+                    Arg
+                      StrLit "n" @98:67
+                Arg
+                  Call @98:73
+                    Callee
+                      Name attr @98:73
+                    Arg
+                      StrLit "isVar" @98:78
+                    Arg
+                      StrLit "true" @98:87
+                Arg
+                  Call @98:96
+                    Callee
+                      Name attr @98:96
+                    Arg
+                      StrLit "line" @98:101
+                    Arg
+                      StrLit "1" @98:109
+                Arg
+                  Call @98:115
+                    Callee
+                      Name attr @98:115
+                    Arg
+                      StrLit "column" @98:120
+                    Arg
+                      StrLit "17" @98:130
+            Arg
+              Call @98:138
+                Callee
+                  Name oneChild @98:138
+                Arg
+                  Name typeNode @98:147
+      VarDecl val dataClassNode: XmlNode @99:5
+        Init
+          Call @99:34
+            Callee
+              Name XmlNode @99:34
+            Arg
+              StrLit "DataClass" @99:42
+            Arg
+              Call @99:55
+                Callee
+                  Name attrs4 @99:55
+                Arg
+                  Call @99:62
+                    Callee
+                      Name attr @99:62
+                    Arg
+                      StrLit "kind" @99:67
+                    Arg
+                      StrLit "DataClass" @99:75
+                Arg
+                  Call @99:89
+                    Callee
+                      Name attr @99:89
+                    Arg
+                      StrLit "line" @99:94
+                    Arg
+                      StrLit "1" @99:102
+                Arg
+                  Call @99:108
+                    Callee
+                      Name attr @99:108
+                    Arg
+                      StrLit "column" @99:113
+                    Arg
+                      StrLit "1" @99:123
+                Arg
+                  Call @99:129
+                    Callee
+                      Name attr @99:129
+                    Arg
+                      StrLit "name" @99:134
+                    Arg
+                      StrLit "Tile" @99:142
+            Arg
+              Call @99:152
+                Callee
+                  Name oneChild @99:152
+                Arg
+                  Name fieldNode @99:161
+      VarDecl val moduleNode: XmlNode @100:5
+        Init
+          Call @100:31
+            Callee
+              Name XmlNode @100:31
+            Arg
+              StrLit "Module" @100:39
+            Arg
+              Call @100:49
+                Callee
+                  Name attrs3 @100:49
+                Arg
+                  Call @100:56
+                    Callee
+                      Name attr @100:56
+                    Arg
+                      StrLit "kind" @100:61
+                    Arg
+                      StrLit "Module" @100:69
+                Arg
+                  Call @100:80
+                    Callee
+                      Name attr @100:80
+                    Arg
+                      StrLit "line" @100:85
+                    Arg
+                      StrLit "1" @100:93
+                Arg
+                  Call @100:99
+                    Callee
+                      Name attr @100:99
+                    Arg
+                      StrLit "column" @100:104
+                    Arg
+                      StrLit "1" @100:114
+            Arg
+              Call @100:121
+                Callee
+                  Name oneChild @100:121
+                Arg
+                  Name dataClassNode @100:130
+      ExprStmt @102:5
+        Call @102:5
+          Callee
+            Name print @102:5
+          Arg
+            Call @102:11
+              Callee
+                Name dumpNode @102:11
+              Arg
+                Name moduleNode @102:20
+              Arg
+                IntLit 0 @102:32
+      Return @103:5
+        IntLit 0 @103:12

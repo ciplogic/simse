@@ -1,0 +1,178 @@
+Module @1:1
+  Function sum @3:1
+    Param items: &List<Int>
+    Return Int
+    Body
+      VarDecl var total: Int @4:5
+        Init
+          IntLit 0 @4:22
+      VarDecl var c: Cursor<Int> @5:5
+        Init
+          Call @5:26
+            Callee
+              Name cursorOf @5:26
+            Arg
+              Name items @5:35
+      While @6:5
+        Cond
+          Call @6:12
+            Callee
+              Member .hasValue @6:12
+                Receiver
+                  Name c @6:12
+        Body
+          Assign = @7:9
+            Target
+              Name total @7:9
+            Value
+              Binary + @7:17
+                Lhs
+                  Name total @7:17
+                Rhs
+                  Call @7:25
+                    Callee
+                      Member .value @7:25
+                        Receiver
+                          Name c @7:25
+          Assign = @8:9
+            Target
+              Name c @8:9
+            Value
+              Call @8:13
+                Callee
+                  Member .next @8:13
+                    Receiver
+                      Name c @8:13
+      Return @10:5
+        Name total @10:12
+  Function headSum @13:1
+    Param items: &List<Int>
+    Return Int
+    Body
+      VarDecl val full: Cursor<Int> @14:5
+        Init
+          Call @14:29
+            Callee
+              Name cursorOf @14:29
+            Arg
+              Name items @14:38
+      VarDecl var head: Cursor<Int> @15:5
+        Init
+          Call @15:29
+            Callee
+              Member .slice @15:29
+                Receiver
+                  Name full @15:29
+            Arg
+              IntLit 2 @15:40
+      VarDecl var total: Int @16:5
+        Init
+          IntLit 0 @16:22
+      While @17:5
+        Cond
+          Call @17:12
+            Callee
+              Member .hasValue @17:12
+                Receiver
+                  Name head @17:12
+        Body
+          Assign = @18:9
+            Target
+              Name total @18:9
+            Value
+              Binary + @18:17
+                Lhs
+                  Name total @18:17
+                Rhs
+                  Call @18:25
+                    Callee
+                      Member .value @18:25
+                        Receiver
+                          Name head @18:25
+          Assign = @19:9
+            Target
+              Name head @19:9
+            Value
+              Call @19:16
+                Callee
+                  Member .next @19:16
+                    Receiver
+                      Name head @19:16
+      Return @21:5
+        Name total @21:12
+  Function main @24:1
+    Return Int
+    Body
+      VarDecl var items: List<Int> @25:5
+        Init
+          Call @25:28
+            Callee
+              GenericName List<Int> @25:28
+      ExprStmt @26:5
+        Call @26:5
+          Callee
+            Member .append @26:5
+              Receiver
+                Name items @26:5
+          Arg
+            IntLit 4 @26:18
+      ExprStmt @27:5
+        Call @27:5
+          Callee
+            Member .append @27:5
+              Receiver
+                Name items @27:5
+          Arg
+            IntLit 7 @27:18
+      ExprStmt @28:5
+        Call @28:5
+          Callee
+            Member .append @28:5
+              Receiver
+                Name items @28:5
+          Arg
+            IntLit 9 @28:18
+      VarDecl val view: &List<Int> @30:5
+        Init
+          Ref @30:28
+            Operand
+              Name items @30:29
+      ExprStmt @31:5
+        Call @31:5
+          Callee
+            Name println @31:5
+          Arg
+            Call @31:13
+              Callee
+                Name sum @31:13
+              Arg
+                Name view @31:17
+      VarDecl val all: Cursor<Int> @33:5
+        Init
+          Call @33:28
+            Callee
+              Name cursorOf @33:28
+            Arg
+              Name view @33:37
+      ExprStmt @34:5
+        Call @34:5
+          Callee
+            Name println @34:5
+          Arg
+            Call @34:13
+              Callee
+                Member .size @34:13
+                  Receiver
+                    Name all @34:13
+      ExprStmt @36:5
+        Call @36:5
+          Callee
+            Name println @36:5
+          Arg
+            Call @36:13
+              Callee
+                Name headSum @36:13
+              Arg
+                Name view @36:21
+      Return @37:5
+        IntLit 0 @37:12

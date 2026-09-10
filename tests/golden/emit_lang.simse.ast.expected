@@ -1,0 +1,554 @@
+Module @1:1
+  Enum Color @4:1
+    Member Red @5:5
+    Member Green = 4 @6:5
+    Member Blue @7:5
+  DataClass Box @10:1
+    Field var value: Int @10:16
+  Function label @12:1
+    Param c: Color
+    Return Str
+    Body
+      Switch @13:5
+        Cond
+          Name c @13:13
+        Case @14:9
+          Member .Red @14:14
+            Receiver
+              Name Color @14:14
+          Return @15:13
+            StrLit "red" @15:20
+        Case @16:9
+          Member .Green @16:14
+            Receiver
+              Name Color @16:14
+          Return @17:13
+            StrLit "green" @17:20
+        Default @18:9
+          Return @19:13
+            StrLit "other" @19:20
+  Function describe @23:1
+    Param n: Int
+    Return Str
+    Body
+      Switch @24:5
+        Cond
+          Name n @24:13
+        Case @25:9
+          IntLit 0 @25:14
+          Return @26:13
+            StrLit "zero" @26:20
+        Case @27:9
+          IntLit 1 @27:14
+          Return @28:13
+            StrLit "one" @28:20
+        Default @29:9
+          Return @30:13
+            StrLit "many" @30:20
+  Function maybeRef @34:1
+    Param flag: Bool
+    Return &Box
+    Body
+      If @35:5
+        Cond
+          Name flag @35:9
+        Then
+          Return @36:9
+            Ref @36:16
+              Operand
+                Call @36:17
+                  Callee
+                    Name Box @36:17
+                  Arg
+                    IntLit 7 @36:21
+      Return @38:5
+        NullLit @38:12
+  Function maybePointer @41:1
+    Param box: &Box
+    Param flag: Bool
+    Return *Box
+    Body
+      If @42:5
+        Cond
+          Name flag @42:9
+        Then
+          Return @43:9
+            Deref @43:16
+              Operand
+                Name box @43:17
+      Return @45:5
+        NullLit @45:12
+  Function main @48:1
+    Return Int
+    Body
+      ExprStmt @49:5
+        Call @49:5
+          Callee
+            Name println @49:5
+          Arg
+            Call @49:13
+              Callee
+                Name label @49:13
+              Arg
+                Member .Red @49:19
+                  Receiver
+                    Name Color @49:19
+      ExprStmt @50:5
+        Call @50:5
+          Callee
+            Name println @50:5
+          Arg
+            Call @50:13
+              Callee
+                Name label @50:13
+              Arg
+                Member .Green @50:19
+                  Receiver
+                    Name Color @50:19
+      ExprStmt @51:5
+        Call @51:5
+          Callee
+            Name println @51:5
+          Arg
+            Call @51:13
+              Callee
+                Name label @51:13
+              Arg
+                Member .Blue @51:19
+                  Receiver
+                    Name Color @51:19
+      ExprStmt @52:5
+        Call @52:5
+          Callee
+            Name println @52:5
+          Arg
+            Call @52:13
+              Callee
+                Name describe @52:13
+              Arg
+                IntLit 0 @52:22
+      ExprStmt @53:5
+        Call @53:5
+          Callee
+            Name println @53:5
+          Arg
+            Call @53:13
+              Callee
+                Name describe @53:13
+              Arg
+                IntLit 5 @53:22
+      ExprStmt @55:5
+        Call @55:5
+          Callee
+            Name println @55:5
+          Arg
+            Call @55:13
+              Callee
+                Member .toInt @55:13
+                  Receiver
+                    Member .Green @55:13
+                      Receiver
+                        Name Color @55:13
+      VarDecl val parsed: Opt<Color> @56:5
+        Init
+          Call @56:30
+            Callee
+              Member .fromInt @56:30
+                Receiver
+                  Name Color @56:30
+            Arg
+              IntLit 4 @56:44
+      If @57:5
+        Cond
+          Call @57:9
+            Callee
+              Member .hasValue @57:9
+                Receiver
+                  Name parsed @57:9
+        Then
+          ExprStmt @58:9
+            Call @58:9
+              Callee
+                Name println @58:9
+              Arg
+                StrLit "parsed" @58:17
+      VarDecl val missingColor: Opt<Color> @60:5
+        Init
+          Call @60:36
+            Callee
+              Member .fromInt @60:36
+                Receiver
+                  Name Color @60:36
+            Arg
+              IntLit 9 @60:50
+      If @61:5
+        Cond
+          Unary ! @61:9
+            Operand
+              Call @61:10
+                Callee
+                  Member .hasValue @61:10
+                    Receiver
+                      Name missingColor @61:10
+        Then
+          ExprStmt @62:9
+            Call @62:9
+              Callee
+                Name println @62:9
+              Arg
+                StrLit "missing color" @62:17
+      VarDecl val present: &Box @65:5
+        Init
+          Call @65:25
+            Callee
+              Name maybeRef @65:25
+            Arg
+              BoolLit true @65:34
+      If @66:5
+        Cond
+          Binary != @66:9
+            Lhs
+              Name present @66:9
+            Rhs
+              NullLit @66:20
+        Then
+          ExprStmt @67:9
+            Call @67:9
+              Callee
+                Name println @67:9
+              Arg
+                Member .value @67:17
+                  Receiver
+                    Name present @67:17
+      VarDecl val absent: &Box @69:5
+        Init
+          Call @69:24
+            Callee
+              Name maybeRef @69:24
+            Arg
+              BoolLit false @69:33
+      If @70:5
+        Cond
+          Binary == @70:9
+            Lhs
+              Name absent @70:9
+            Rhs
+              NullLit @70:19
+        Then
+          ExprStmt @71:9
+            Call @71:9
+              Callee
+                Name println @71:9
+              Arg
+                StrLit "absent" @71:17
+      VarDecl val boxed: &Box @73:5
+        Init
+          Ref @73:23
+            Operand
+              Call @73:24
+                Callee
+                  Name Box @73:24
+                Arg
+                  IntLit 3 @73:28
+      VarDecl val rawPresent: *Box @74:5
+        Init
+          Call @74:28
+            Callee
+              Name maybePointer @74:28
+            Arg
+              Name boxed @74:41
+            Arg
+              BoolLit true @74:48
+      If @75:5
+        Cond
+          Binary != @75:9
+            Lhs
+              Name rawPresent @75:9
+            Rhs
+              NullLit @75:23
+        Then
+          ExprStmt @76:9
+            Call @76:9
+              Callee
+                Name println @76:9
+              Arg
+                Member .value @76:17
+                  Receiver
+                    Name rawPresent @76:17
+      VarDecl val rawAbsent: *Box @78:5
+        Init
+          Call @78:27
+            Callee
+              Name maybePointer @78:27
+            Arg
+              Name boxed @78:40
+            Arg
+              BoolLit false @78:47
+      If @79:5
+        Cond
+          Binary == @79:9
+            Lhs
+              Name rawAbsent @79:9
+            Rhs
+              NullLit @79:22
+        Then
+          ExprStmt @80:9
+            Call @80:9
+              Callee
+                Name println @80:9
+              Arg
+                StrLit "null raw" @80:17
+      VarDecl val text: Str @83:5
+        Init
+          StrLit "hello world" @83:21
+      ExprStmt @84:5
+        Call @84:5
+          Callee
+            Name println @84:5
+          Arg
+            Call @84:13
+              Callee
+                Member .find @84:13
+                  Receiver
+                    Name text @84:13
+              Arg
+                StrLit "world" @84:23
+      ExprStmt @85:5
+        Call @85:5
+          Callee
+            Name println @85:5
+          Arg
+            Call @85:13
+              Callee
+                Member .find @85:13
+                  Receiver
+                    Name text @85:13
+              Arg
+                StrLit "zzz" @85:23
+      ExprStmt @86:5
+        Call @86:5
+          Callee
+            Name println @86:5
+          Arg
+            Call @86:13
+              Callee
+                Member .substr @86:13
+                  Receiver
+                    Name text @86:13
+              Arg
+                IntLit 0 @86:25
+              Arg
+                IntLit 5 @86:28
+      ExprStmt @87:5
+        Call @87:5
+          Callee
+            Name println @87:5
+          Arg
+            Call @87:13
+              Callee
+                Member .startsWith @87:13
+                  Receiver
+                    Name text @87:13
+              Arg
+                StrLit "hello" @87:29
+      ExprStmt @88:5
+        Call @88:5
+          Callee
+            Name println @88:5
+          Arg
+            Call @88:13
+              Callee
+                Member .endsWith @88:13
+                  Receiver
+                    Name text @88:13
+              Arg
+                StrLit "world" @88:27
+      ExprStmt @89:5
+        Call @89:5
+          Callee
+            Name println @89:5
+          Arg
+            Call @89:13
+              Callee
+                Member .replace @89:13
+                  Receiver
+                    Name text @89:13
+              Arg
+                StrLit "world" @89:26
+              Arg
+                StrLit "simse" @89:35
+      VarDecl val number: Opt<Int> @90:5
+        Init
+          Call @90:28
+            Callee
+              Member .toInt @90:28
+                Receiver
+                  StrLit "42" @90:28
+      If @91:5
+        Cond
+          Call @91:9
+            Callee
+              Member .hasValue @91:9
+                Receiver
+                  Name number @91:9
+        Then
+          ExprStmt @92:9
+            Call @92:9
+              Callee
+                Name println @92:9
+              Arg
+                Call @92:17
+                  Callee
+                    Member .value @92:17
+                      Receiver
+                        Name number @92:17
+      VarDecl val badNumber: Opt<Int> @94:5
+        Init
+          Call @94:31
+            Callee
+              Member .toInt @94:31
+                Receiver
+                  StrLit "nope" @94:31
+      If @95:5
+        Cond
+          Unary ! @95:9
+            Operand
+              Call @95:10
+                Callee
+                  Member .hasValue @95:10
+                    Receiver
+                      Name badNumber @95:10
+        Then
+          ExprStmt @96:9
+            Call @96:9
+              Callee
+                Name println @96:9
+              Arg
+                StrLit "bad int" @96:17
+      VarDecl val fraction: Opt<Float64> @98:5
+        Init
+          Call @98:34
+            Callee
+              Member .toFloat @98:34
+                Receiver
+                  StrLit "2.5" @98:34
+      If @99:5
+        Cond
+          Call @99:9
+            Callee
+              Member .hasValue @99:9
+                Receiver
+                  Name fraction @99:9
+        Then
+          ExprStmt @100:9
+            Call @100:9
+              Callee
+                Name println @100:9
+              Arg
+                Call @100:17
+                  Callee
+                    Member .value @100:17
+                      Receiver
+                        Name fraction @100:17
+      VarDecl val letter: Char @103:5
+        Init
+          CharLit 'a' @103:24
+      ExprStmt @104:5
+        Call @104:5
+          Callee
+            Name println @104:5
+          Arg
+            Call @104:13
+              Callee
+                Member .isAlpha @104:13
+                  Receiver
+                    Name letter @104:13
+      ExprStmt @105:5
+        Call @105:5
+          Callee
+            Name println @105:5
+          Arg
+            Call @105:13
+              Callee
+                Member .isDigit @105:13
+                  Receiver
+                    Name letter @105:13
+      ExprStmt @106:5
+        Call @106:5
+          Callee
+            Name println @106:5
+          Arg
+            Call @106:13
+              Callee
+                Member .isDigit @106:13
+                  Receiver
+                    CharLit '7' @106:13
+      ExprStmt @107:5
+        Call @107:5
+          Callee
+            Name println @107:5
+          Arg
+            Call @107:13
+              Callee
+                Member .isSpace @107:13
+                  Receiver
+                    CharLit ' ' @107:13
+      VarDecl val small: Int8 @109:5
+        Init
+          IntLit 5 @109:23
+      ExprStmt @110:5
+        Call @110:5
+          Callee
+            Name println @110:5
+          Arg
+            Call @110:13
+              Callee
+                Member .toString @110:13
+                  Receiver
+                    Name small @110:13
+      ExprStmt @111:5
+        Call @111:5
+          Callee
+            Name println @111:5
+          Arg
+            Call @111:13
+              Callee
+                Member .toString @111:13
+                  Receiver
+                    BoolLit true @111:13
+      ExprStmt @112:5
+        Call @112:5
+          Callee
+            Name println @112:5
+          Arg
+            Call @112:13
+              Callee
+                Member .toString @112:13
+                  Receiver
+                    FloatLit 2.5 @112:13
+      ExprStmt @114:5
+        Call @114:5
+          Callee
+            Name println @114:5
+          Arg
+            Call @114:13
+              Callee
+                Name min @114:13
+              Arg
+                IntLit 3 @114:17
+              Arg
+                IntLit 9 @114:20
+      ExprStmt @115:5
+        Call @115:5
+          Callee
+            Name println @115:5
+          Arg
+            Call @115:13
+              Callee
+                Name max @115:13
+              Arg
+                IntLit 3 @115:17
+              Arg
+                IntLit 9 @115:20
+      Return @117:5
+        IntLit 0 @117:12

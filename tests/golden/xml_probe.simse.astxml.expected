@@ -1,0 +1,4 @@
+Module kind='Module' line='1' column='1'
+  DataClass kind='DataClass' line='1' column='1' name='Tile'
+    Field name='n' isVar='true' line='1' column='17'
+      Type kind='Type.Named' line='1' column='24' name='Int'

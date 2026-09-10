@@ -1,0 +1,14 @@
+ReservedWord	1:1	data
+Space	1:5	 
+ReservedWord	1:6	class
+Space	1:11	 
+Identifier	1:12	Tile
+Operator	1:16	(
+ReservedWord	1:17	var
+Space	1:20	 
+Identifier	1:21	n
+Operator	1:22	:
+Space	1:23	 
+Identifier	1:24	Int
+Operator	1:27	)
+EndOfLine	1:28	\n
