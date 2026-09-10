@@ -188,6 +188,9 @@ int main(int argc, char **argv) {
         bool ok = true;
         ok &= compareGolden(name, tokensText, goldenPathFor(goldenDir, name, "tokens"), update);
         ok &= compareGolden(name, astSema.ast, goldenPathFor(goldenDir, name, "ast"), update);
+        if (astSema.parsed) {
+            ok &= compareGolden(name, astSema.astXml, goldenPathFor(goldenDir, name, "astxml"), update);
+        }
         ok &= compareGolden(name, astSema.sema, goldenPathFor(goldenDir, name, "sema"), update);
         if (astSema.hasCpp) {
             ok &= compareGolden(name, astSema.cpp, goldenPathFor(goldenDir, name, "cpp"), update);
@@ -239,6 +242,61 @@ int main(int argc, char **argv) {
         } else {
             failed++;
             printf("FAIL negative sema_unknown_type.simse: expected an unknown-type diagnostic\n");
+        }
+    }
+
+    // Negative fixture: a data-class constructor called with the wrong number of
+    // arguments must be diagnosed with a clear positioned message.
+    {
+        Str path = (std::filesystem::path(fixturesDir) / "ctor_arity.simse").string();
+        ScanResult scan = scanFile(&scanner, path);
+        List<Token> tokens = scan.tokens;
+        Res<ast::Module> parsed = scan.ok
+                                      ? parser::parseModule(tokens, "ctor_arity.simse")
+                                      : resError<ast::Module>("scan failed");
+        bool reported = false;
+        if (parsed.isOk()) {
+            List<Str> diagnostics = sema::analyze(parsed.Value, "ctor_arity.simse");
+            for (const Str &diagnostic: diagnostics) {
+                if (diagnostic.find("data class 'Widget' expects 2 field(s) but got 1")
+                    != Str::npos) {
+                    reported = true;
+                }
+            }
+        }
+        if (reported) {
+            passed++;
+            printf("PASS negative ctor_arity.simse (constructor arity diagnostic reported)\n");
+        } else {
+            failed++;
+            printf("FAIL negative ctor_arity.simse: expected a constructor arity diagnostic\n");
+        }
+    }
+
+    // Negative fixture: a `case` label that is not a constant expression must be
+    // diagnosed.
+    {
+        Str path = (std::filesystem::path(fixturesDir) / "sema_switch_label.simse").string();
+        ScanResult scan = scanFile(&scanner, path);
+        List<Token> tokens = scan.tokens;
+        Res<ast::Module> parsed = scan.ok
+                                      ? parser::parseModule(tokens, "sema_switch_label.simse")
+                                      : resError<ast::Module>("scan failed");
+        bool reported = false;
+        if (parsed.isOk()) {
+            List<Str> diagnostics = sema::analyze(parsed.Value, "sema_switch_label.simse");
+            for (const Str &diagnostic: diagnostics) {
+                if (diagnostic.find("case label must be a constant expression") != Str::npos) {
+                    reported = true;
+                }
+            }
+        }
+        if (reported) {
+            passed++;
+            printf("PASS negative sema_switch_label.simse (case-label diagnostic reported)\n");
+        } else {
+            failed++;
+            printf("FAIL negative sema_switch_label.simse: expected a case-label diagnostic\n");
         }
     }
 

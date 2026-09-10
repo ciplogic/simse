@@ -9,8 +9,10 @@
 // dependencies, and the higher-level headers build on them.
 #include "types.hpp"        // scalar aliases and Str
 #include "containers.hpp"   // SmallVector, List, PList, Dictionary, Array, RawArray
-#include "listops.hpp"      // simse_list_* native List operations (prelude)
+#include "cursor.hpp"       // Cursor<T> (immutable list view; iteration idiom)
 #include "optional.hpp"     // Opt<T>
+#include "listops.hpp"      // simse_list_* native List operations (prelude)
+#include "strops.hpp"       // simse_str_*/simse_char_*/min/max native ops (prelude)
 #include "functional.hpp"   // Func, Action, AutoDefer
 #include "result.hpp"       // Result/Res, ok, resError, err
 #include "xml.hpp"          // Attribute, XmlNode

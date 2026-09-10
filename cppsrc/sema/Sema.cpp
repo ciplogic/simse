@@ -70,6 +70,8 @@ namespace sema {
             List<Dictionary<Str, ValueBinding>> scopes;
             List<List<Str>> typeScopes;
             int loopDepth = 0;
+            // `break` is valid in a loop or a switch; `continue` only in a loop.
+            int breakDepth = 0;
 
             void diag(const common::SourcePos &pos, const Str &message) {
                 diags.push_back(file + ":" + std::to_string(pos.line) + ":" + std::to_string(pos.column)
@@ -299,17 +301,39 @@ namespace sema {
                         if (stmt.cond) analyzeExpr(*stmt.cond);
                         pushScope();
                         loopDepth++;
+                        breakDepth++;
                         for (const ast::StmtPtr &child: stmt.body) {
                             analyzeStmt(*child);
                         }
+                        breakDepth--;
                         loopDepth--;
                         popScope();
                         return;
+                    case StmtKind::Switch: {
+                        if (stmt.cond) analyzeExpr(*stmt.cond);
+                        breakDepth++;
+                        for (const ast::SwitchCase &switchCase: stmt.cases) {
+                            if (!switchCase.isDefault && switchCase.label) {
+                                analyzeExpr(*switchCase.label);
+                                if (!isConstantExpr(*switchCase.label)) {
+                                    diag(switchCase.label->pos,
+                                         "case label must be a constant expression");
+                                }
+                            }
+                            pushScope();
+                            for (const ast::StmtPtr &child: switchCase.body) {
+                                analyzeStmt(*child);
+                            }
+                            popScope();
+                        }
+                        breakDepth--;
+                        return;
+                    }
                     case StmtKind::Return:
                         if (stmt.returnValue) analyzeExpr(*stmt.returnValue);
                         return;
                     case StmtKind::Break:
-                        if (loopDepth == 0) diag(stmt.pos, "'break' outside a loop");
+                        if (breakDepth == 0) diag(stmt.pos, "'break' outside a loop or switch");
                         return;
                     case StmtKind::Continue:
                         if (loopDepth == 0) diag(stmt.pos, "'continue' outside a loop");
@@ -317,6 +341,26 @@ namespace sema {
                     case StmtKind::ExprStmt:
                         if (stmt.expr) analyzeExpr(*stmt.expr);
                         return;
+                }
+            }
+
+            // A `case` label must be a compile-time constant. We accept literals,
+            // names, enum-qualified members, and unary negation of those; anything
+            // clearly dynamic (a call, index, or the like) is rejected.
+            bool isConstantExpr(const ast::Expr &expr) const {
+                switch (expr.kind) {
+                    case ExprKind::IntLit:
+                    case ExprKind::FloatLit:
+                    case ExprKind::StrLit:
+                    case ExprKind::CharLit:
+                    case ExprKind::BoolLit:
+                    case ExprKind::Name:
+                    case ExprKind::Member:
+                        return true;
+                    case ExprKind::Unary:
+                        return expr.lhs && isConstantExpr(*expr.lhs);
+                    default:
+                        return false;
                 }
             }
 
@@ -405,9 +449,24 @@ namespace sema {
                 if (call.lhs->kind != ExprKind::Name && !generic) return;
                 const Str &name = call.lhs->text;
                 if (lookupValue(name) != nullptr) return; // shadowed by a local/param
+                int argCount = (int) call.args.size();
+
+                // A call to a known data class is a constructor call: the argument
+                // count must match the declared field count exactly (constructors
+                // take one argument per field, in order).
+                auto typeIt = types.find(name);
+                if (typeIt != types.end() && typeIt->second->kind == DeclKind::DataClass) {
+                    int fieldCount = (int) typeIt->second->fields.size();
+                    if (fieldCount != argCount) {
+                        diag(call.pos, "data class '" + name + "' expects "
+                                       + std::to_string(fieldCount) + " field(s) but got "
+                                       + std::to_string(argCount));
+                    }
+                    return;
+                }
+
                 auto it = functions.find(name);
                 if (it == functions.end()) return;
-                int argCount = (int) call.args.size();
                 int typeArgCount = generic ? (int) call.lhs->typeArgs.size() : 0;
                 for (const ast::Decl *function: it->second) {
                     if ((int) function->params.size() != argCount) continue;

@@ -157,8 +157,9 @@ namespace tests {
     }
 
     namespace {
-        // The RTL prelude is parsed once and reused. It participates in
-        // resolution but is never emitted (impl_specs/native-interop.md).
+        // The prelude set (cppsrc/rtl) is parsed once and reused: every `*.simse`
+        // in the directory contributes declarations that participate in
+        // resolution but are never emitted (impl_specs/native-interop.md).
         const ast::Module *defaultPrelude(bool &loaded) {
             static bool tried = false;
             static bool ok = false;
@@ -167,11 +168,25 @@ namespace tests {
                 tried = true;
 #ifdef SIMSE_DEFAULT_PRELUDE
                 Str path = SIMSE_DEFAULT_PRELUDE;
-                if (std::filesystem::exists(path)) {
-                    Res<ast::Module> parsed = parser::parseFile(path);
-                    if (parsed.isOk()) {
-                        module = parsed.Value;
-                        ok = true;
+                List<Str> files;
+                if (std::filesystem::is_directory(path)) {
+                    files = common::filesInDir(path, ".simse");
+                } else if (std::filesystem::exists(path)) {
+                    files.push_back(path);
+                }
+                module.pos = common::SourcePos{0, 1, 1};
+                ok = !files.empty();
+                for (const Str &file: files) {
+                    Res<ast::Module> parsed = parser::parseFile(file);
+                    if (!parsed.isOk()) {
+                        ok = false;
+                        break;
+                    }
+                    for (const ast::Import &import: parsed.Value.imports) {
+                        module.imports.push_back(import);
+                    }
+                    for (const ast::DeclPtr &decl: parsed.Value.declarations) {
+                        module.declarations.push_back(decl);
                     }
                 }
 #endif
@@ -217,6 +232,7 @@ namespace tests {
 
         result.parsed = true;
         result.ast = ast::dumpModule(parsed.Value);
+        result.astXml = ast::dumpXmlNode(ast::toXmlNode(parsed.Value));
 
         bool hasPrelude = false;
         const ast::Module *prelude = defaultPrelude(hasPrelude);

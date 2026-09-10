@@ -19,6 +19,7 @@ For the first end-to-end slice, generated C++ targets the **current
 - `Opt<T>` and `Res<T>` = the shim structs (over `std::optional` / a value plus
   error `Str`)
 - `&T` lowers to `std::shared_ptr<T>`; `*T` lowers to `T*`
+- `Cursor<T>` = the immutable list-view shim (`cppsrc/rtl/cursor.hpp`)
 
 The spec layouts — `SmallVector` small-buffer optimization and the ref-counted
 `[refcount][typeId][value]` header — are **not** implemented in this slice. This
@@ -49,6 +50,7 @@ language subset needs it (no virtual dispatch, no dynamic casts).
 | `Res<T>` | `Res<T>` (shim: `Value`, `Error`) | failure = non-empty `Error` |
 | `Dictionary<K, V>` | `Dictionary<K, V>` (`std::unordered_map`) | |
 | `PList<T>` | `PList<T>` (`std::shared_ptr<List<T>>`) | the `&List<T>` spelling |
+| `Cursor<T>` | `Cursor<T>` (shim struct) | immutable list view; `next`/`slice` return new cursors |
 | `SmallVector<N, T>` | `SmallVector<T, N>` shim | unused by the v1 subset |
 | user `data class C` | `struct C` with a field-order constructor | |
 | user `enum E` | `enum class E` | explicit values when given |
@@ -101,6 +103,40 @@ No new RTL operations were required for the v1 subset. Specifically:
 - `&List<T>()` construction would use the existing `makeList<T>()`, but the v1
   subset does not emit it (see gaps below).
 
+### `Cursor<T>`
+
+`Cursor<T>` is an immutable, `Span`-like view over a `List<T>`, the language's
+iteration idiom (`for`/range-for is deferred). It has a single field-order
+constructor and by-value helpers, and codegen maps member calls to the C++
+members:
+
+| Member | C++ | Semantics |
+| --- | --- | --- |
+| `hasValue(): Bool` | `len > 0` | more elements remain |
+| `value(): T` | `(*source)[start]` | first remaining element (unchecked) |
+| `next(): Cursor<T>` | `slice(1)` | advanced cursor (a new value) |
+| `slice(count): Cursor<T>` | `{source, start+count, len-count}` | advanced by `count` (unchecked) |
+| `size(): Int` | `len` | remaining count |
+
+The `cursorOf(items: &List<T>): Cursor<T>` helper (RTL `simse_cursorOf`) covers
+all of `items` from index 0. The struct is immutable: nothing mutates the
+receiver.
+
+### Lambdas
+
+A lambda lowers to a C++ lambda with by-value captures, assignable to
+`Func<Ret(Params)>`:
+
+```text
+(v: Int) -> v * 2      =>  [=](Int v) -> Int { return v * 2; }
+(v: Int) -> { ... }    =>  [=](Int v) -> Ret { ... }
+```
+
+Parameter types come from the explicit annotations or from the expected callable
+type (a `typealias` is expanded for this). The return type comes from the
+expected callable type, else from a single trailing expression or a `return`.
+Reference captures and explicit capture syntax are deferred.
+
 ### `print` / `println`
 
 `print(x)` and `println(x)` are predeclared builtins lowered directly to the
@@ -118,14 +154,16 @@ print(x)    ->  std::cout << std::boolalpha << (x);
 ## v1 subset gaps (emit a positioned "unsupported" error)
 
 Now lowered: generic declarations, uses, and calls (via C++ templates; see
-`impl_specs/reification.md`), generic `typealias`, and `native fun` (see
-`impl_specs/native-interop.md`).
+`impl_specs/reification.md`), generic `typealias`, `native fun` (see
+`impl_specs/native-interop.md`), `switch`, `null`, generic-qualified static calls
+(`Res<T>.ok(x)`, `Opt<T>.some(x)`), `Cursor<T>`, and lambdas with by-value
+captures.
 
 Still unsupported (each produces `<file>:<line>:<col>: unsupported: ...` rather
-than a crash): generic-qualified **static** calls (`Res<T>.ok(x)`,
-`Opt<T>.some(x)`), lambdas, `null`, namespaced native symbols, untyped
-parameters/fields, and compound assignment operators. `List<T>.append`,
-`removeAt`, and `removeRange` lower to the native extension symbols
-`simse_list_append` / `simse_list_removeAt` / `simse_list_removeRange` declared in
-the RTL prelude; `insert`, `clear`, and the remaining container methods are still
-emitted as written and are not yet mapped (T12).
+than a crash): namespaced native symbols, untyped parameters/fields, compound
+assignment operators (`+=` etc.), lambda reference captures, and `for`/range-for
+(use `Cursor<T>` and `while`). `List<T>.append`, `removeAt`, and `removeRange`
+lower to the native extension symbols `simse_list_append` /
+`simse_list_removeAt` / `simse_list_removeRange` declared in the RTL prelude;
+`insert`, `clear`, and the remaining container methods are still emitted as
+written and are not yet mapped (T12).

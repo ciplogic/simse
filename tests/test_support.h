@@ -56,6 +56,7 @@ namespace tests {
     struct AstSemaResult {
         bool parsed = false;
         Str ast;
+        Str astXml; // dumpXmlNode of toXmlNode(AST); empty when the file did not parse
         Str sema;
         bool hasCpp = false;
         Str cpp;

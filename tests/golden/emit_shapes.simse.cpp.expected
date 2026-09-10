@@ -8,6 +8,11 @@ enum class Shape {
     Circle,
     Square = 4,
 };
+inline Opt<Shape> simse_Shape_fromInt(Int value) {
+    if (value == 0) return Opt<Shape>::some(Shape::Circle);
+    if (value == 4) return Opt<Shape>::some(Shape::Square);
+    return Opt<Shape>::none();
+}
 Str describe(Str& self);
 Int area(Int width, Int height);
 // emit_shapes.simse:6

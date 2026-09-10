@@ -107,6 +107,24 @@ Enum member access is qualified as `EnumType.Member`. An enum remains a distinct
 type whose runtime representation is `Int`; unqualified member names are not
 introduced into scope.
 
+### Enum conversions
+
+Status: required for the first implementation.
+
+Every declared enum has two conversions, emitted by the compiler for that enum:
+
+- `value.toInt(): Int` - the member's integer value (always valid); and
+- `EnumType.fromInt(n: Int): Opt<EnumType>` - checked: an integer that is not one
+  of the declared values yields `Opt<EnumType>.none()` rather than an invalid
+  enum. Duplicate member values are allowed, so `fromInt` may report a value that
+  several names share; it does not promise which alias name is preferred.
+
+```text
+var code: Int = Color.Green.toInt()          // 4
+var other: Opt<Color> = Color.fromInt(4)    // some(Color.Green)
+var bad: Opt<Color> = Color.fromInt(9)      // none
+```
+
 ## Hoisting
 
 Status: required for the first implementation.

@@ -185,8 +185,22 @@ printPoint(Point(1, 2))
 
 Lambda parameters are typed in the lambda when the expected callable type is
 not enough to infer them. A lambda expression captures referenced local values
-by value by default; explicit capture/reference syntax is deferred until the
-closure implementation is specified.
+**by value** (the backend uses `[=]`); the closure gets its own copy of each
+captured value, so mutating the original afterwards does not change the closure.
+A captured counted reference (`&T`) is copied by value, which copies the handle
+and therefore **shares** the same box. Explicit capture lists and capture by
+reference are deferred.
+
+A lambda's parameter types come from the explicit annotations, or from the
+expected callable type when the lambda is assigned to a callable-typed variable
+or passed to a callable-typed parameter. Its return type comes from the expected
+callable type, or is inferred from a single trailing expression or a `return`.
+
+```text
+typealias Mapper = (Int) -> Int
+val doubler: Mapper = (v: Int) -> v * 2
+val add10: Mapper = makeAdder(10)   // a closure capturing `10` by value
+```
 
 Type aliases are transparent: they do not create a new runtime type, ownership
 mode, or layout. Generic aliases are permitted when all referenced type

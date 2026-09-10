@@ -106,6 +106,9 @@ fun reservedWords(): List<Str> {
     words.append("this")
     words.append("break")
     words.append("continue")
+    words.append("switch")
+    words.append("case")
+    words.append("default")
     return words
 }
 

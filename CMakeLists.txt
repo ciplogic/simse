@@ -13,8 +13,12 @@ add_library(simse_lib STATIC
         cppsrc/rtl/simse.hpp
         cppsrc/rtl/types.hpp
         cppsrc/rtl/containers.hpp
+        cppsrc/rtl/cursor.hpp
         cppsrc/rtl/listops.hpp
+        cppsrc/rtl/strops.hpp
         cppsrc/rtl/rtl.simse
+        cppsrc/rtl/xml.simse
+        cppsrc/rtl/Cursor.simse
         cppsrc/rtl/optional.hpp
         cppsrc/rtl/functional.hpp
         cppsrc/rtl/result.hpp
@@ -35,11 +39,12 @@ add_library(simse_lib STATIC
         tests/test_support.h)
 
 # The RTL surface the transpiler loads as a prelude (no import required) and the
-# repository root used to resolve `import a.b.c` directories. The paths are baked
-# in so the CLI, the build, and the in-process test harness agree regardless of
-# the working directory.
+# repository root used to resolve `import a.b.c` directories. The prelude is a
+# *directory*: every `*.simse` in it (rtl.simse, xml.simse) is loaded into the
+# shared module scope. The paths are baked in so the CLI, the build, and the
+# in-process test harness agree regardless of the working directory.
 target_compile_definitions(simse_lib PUBLIC
-        SIMSE_DEFAULT_PRELUDE="${CMAKE_CURRENT_SOURCE_DIR}/cppsrc/rtl/rtl.simse"
+        SIMSE_DEFAULT_PRELUDE="${CMAKE_CURRENT_SOURCE_DIR}/cppsrc/rtl"
         SIMSE_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
 
 add_executable(simse cppsrc/main.cpp)
@@ -68,8 +73,13 @@ target_compile_definitions(simse_tests PRIVATE
 set(SIMSE_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 set(SIMSE_E2E_DIR "${CMAKE_CURRENT_BINARY_DIR}/e2e")
 
-foreach(e2e_name IN ITEMS emit_hello emit_shapes emit_generics native_readfile emit_containers)
-    set(e2e_fixture "${SIMSE_REPO_ROOT}/tests/fixtures/${e2e_name}.simse")
+foreach(e2e_name IN ITEMS emit_hello emit_shapes emit_generics native_readfile emit_containers emit_lang emit_xmlnode emit_cursor emit_str emit_lambda main_program)
+    if(e2e_name STREQUAL "main_program")
+        # The runnable sample driver lives at cppsrc/main.simse, not under tests/.
+        set(e2e_fixture "${SIMSE_REPO_ROOT}/cppsrc/main.simse")
+    else()
+        set(e2e_fixture "${SIMSE_REPO_ROOT}/tests/fixtures/${e2e_name}.simse")
+    endif()
     set(e2e_generated "${SIMSE_E2E_DIR}/${e2e_name}.cpp")
     set(e2e_expected "${SIMSE_REPO_ROOT}/tests/golden/${e2e_name}.stdout.expected")
     set(e2e_actual "${SIMSE_E2E_DIR}/${e2e_name}.stdout.actual")
@@ -84,7 +94,7 @@ foreach(e2e_name IN ITEMS emit_hello emit_shapes emit_generics native_readfile e
 
     add_executable(e2e_${e2e_name} "${e2e_generated}")
     target_include_directories(e2e_${e2e_name} PRIVATE "${SIMSE_REPO_ROOT}")
-    if(e2e_name STREQUAL "native_readfile")
+    if(e2e_name STREQUAL "native_readfile" OR e2e_name STREQUAL "main_program")
         target_link_libraries(e2e_${e2e_name} PRIVATE simse_native)
     endif()
     set_target_properties(e2e_${e2e_name} PROPERTIES
@@ -152,4 +162,51 @@ add_custom_target(scanner_diff ALL
                 "${SIMSE_SELFHOST_DIR}/scanner.simse.out"
         DEPENDS scanner_ref scanner_simse
         COMMENT "T11: diffing hand-written and transpiled scanner token dumps"
+        VERBATIM)
+
+# --- T11: differential skeleton parser (hand-written vs transpiled) ----------
+# SkeletonParser.simse is transpiled together with its transitive `import
+# cppsrc.lex` (which pulls in Scanner.simse and common). Both drivers parse the
+# same fixtures and print the shared tree dump; the build diffs them.
+set(SIMSE_SKEL_GENERATED "${SIMSE_SELFHOST_DIR}/SkeletonParser.simse.cpp")
+
+add_custom_command(
+        OUTPUT "${SIMSE_SKEL_GENERATED}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${SIMSE_SELFHOST_DIR}"
+        COMMAND $<TARGET_FILE:simse_transpile>
+                "${SIMSE_REPO_ROOT}/cppsrc/skelparser/SkeletonParser.simse"
+                -o "${SIMSE_SKEL_GENERATED}"
+        DEPENDS "${SIMSE_REPO_ROOT}/cppsrc/skelparser/SkeletonParser.simse" simse_transpile
+        COMMENT "T11: transpiling SkeletonParser.simse"
+        VERBATIM)
+
+add_executable(skel_ref tests/skel_ref_main.cpp)
+target_link_libraries(skel_ref PRIVATE simse_lib)
+
+add_executable(skel_simse tests/skel_simse_main.cpp "${SIMSE_SKEL_GENERATED}")
+set_source_files_properties("${SIMSE_SKEL_GENERATED}" PROPERTIES HEADER_FILE_ONLY TRUE)
+target_include_directories(skel_simse PRIVATE "${SIMSE_SELFHOST_DIR}" "${SIMSE_REPO_ROOT}")
+target_link_libraries(skel_simse PRIVATE simse_native)
+
+set_target_properties(skel_ref skel_simse PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${SIMSE_SELFHOST_DIR}")
+
+add_custom_target(skel_diff ALL
+        COMMAND "${CMAKE_COMMAND}"
+                -DEXE=$<TARGET_FILE:skel_ref>
+                -DEXE_ARGS=${SIMSE_SCANNER_FIXTURES}
+                -DOUT=${SIMSE_SELFHOST_DIR}/skel.ref.out
+                -DWORKDIR=${SIMSE_REPO_ROOT}
+                -P "${SIMSE_REPO_ROOT}/tests/run_capture.cmake"
+        COMMAND "${CMAKE_COMMAND}"
+                -DEXE=$<TARGET_FILE:skel_simse>
+                -DEXE_ARGS=${SIMSE_SCANNER_FIXTURES}
+                -DOUT=${SIMSE_SELFHOST_DIR}/skel.simse.out
+                -DWORKDIR=${SIMSE_REPO_ROOT}
+                -P "${SIMSE_REPO_ROOT}/tests/run_capture.cmake"
+        COMMAND "${CMAKE_COMMAND}" -E compare_files --ignore-eol
+                "${SIMSE_SELFHOST_DIR}/skel.ref.out"
+                "${SIMSE_SELFHOST_DIR}/skel.simse.out"
+        DEPENDS skel_ref skel_simse
+        COMMENT "T11: diffing hand-written and transpiled skeleton-parser dumps"
         VERBATIM)

@@ -1,0 +1,16 @@
+Module @1:1
+  DataClass Widget @3:1
+    Field var a: Int @3:19
+    Field var b: Int @3:31
+  Function make @5:1
+    Return Int
+    Body
+      VarDecl val w: Widget @6:5
+        Init
+          Call @6:21
+            Callee
+              Name Widget @6:21
+            Arg
+              IntLit 1 @6:28
+      Return @7:5
+        IntLit 0 @7:12

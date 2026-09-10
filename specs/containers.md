@@ -84,6 +84,34 @@ Indexing and member calls are permitted directly on a `&List<T>` and on a
 `removeAt`, and `removeRange` operations are exposed to the compiler as native
 extensions (`impl_specs/tasks/12-container-methods-as-native.md`).
 
+### Iteration: `Cursor<T>`
+
+Status: required for the first implementation.
+
+There is no `for`/range-for; iteration uses an immutable, `Span`-like cursor and
+`while`:
+
+```text
+var c: Cursor<Int> = cursorOf(items)
+while (c.hasValue()) {
+    process(c.value())
+    c = c.next()
+}
+```
+
+`Cursor<T>` covers a contiguous range of a `&List<T>`. It is a value, so `next`
+and `slice` return NEW cursors and the receiver is never mutated:
+
+- `hasValue(): Bool`; `value(): T`; `size(): Int`;
+- `next(): Cursor<T>` (advance one); and
+- `slice(count: Int): Cursor<T>` (advance `count`).
+
+`cursorOf(items: &List<T>): Cursor<T>` covers all of a list from index 0. Reading
+`value` past the end and slicing beyond the remaining length are unchecked, like
+other container indexing. The cursor holds a counted reference to the list, so it
+keeps the list alive without copying its elements. See `impl_specs/tasks/16-cursor.md`
+and `impl_specs/rtl-abi.md`.
+
 ## `Str`
 
 `Str` is the inline string type. It is the reified `SmallVector<24, Char>`

@@ -95,6 +95,59 @@ Status: required for the first implementation.
 Indexing and member calls are permitted directly on a `&Str` and on a `*Str`,
 with automatic dereference (see `memory-model.md`).
 
+### Search and substring operations
+
+Status: required for the first implementation.
+
+The bootstrap RTL also provides these `Str` operations (native extensions):
+
+- `find(sub: Str): Int` / `indexOf(sub: Str): Int` - the index of the first
+  occurrence of `sub`, or `-1` when absent (the language's spelling of C++
+  `npos`);
+- `lastIndexOf(sub: Str): Int` - the index of the last occurrence, or `-1`;
+- `substr(start: Int, len: Int): Str` - a substring; `start` is clamped to
+  `[0, size]` and `len` may run to the end;
+- `charAt(index: Int): Char` - the byte at `index` (unchecked);
+- `startsWith(prefix: Str): Bool`;
+- `endsWith(suffix: Str): Bool`;
+- `replace(from: Str, to: Str): Str` - replaces every occurrence of `from`;
+- `trim(): Str` - strips leading and trailing whitespace (space, tab, newline,
+  carriage return);
+- `split(separator: Str): List<Str>` - splits on every occurrence; an empty
+  separator yields the whole string as a single element;
+- `toUpper(): Str` / `toLower(): Str` - ASCII/byte case folding; and
+- `isEmpty(): Bool`.
+
+### String parsing
+
+Status: required for the first implementation.
+
+Parsing an entire string returns `Opt` and never throws:
+
+- `toInt(): Opt<Int>`; and
+- `toFloat(): Opt<Float64>`.
+
+A string that is empty, malformed, or has trailing characters yields
+`Opt.none()`.
+
+## Character predicates and numeric conversions
+
+Status: required for the first implementation.
+
+`Char` is a signed 8-bit integer. It provides the predicates `isDigit()`,
+`isAlpha()`, `isAlphaOrDigit()`, and `isSpace()` (space, tab, newline, or
+carriage return).
+
+Every scalar has a `toString(): Str`:
+
+- `Int`, `Int8`, `Int16`, `Int32`, `Int64`, `Float32`, `Float64`, and `Char` use
+  the corresponding `std::to_string` conversion (`Char` stringifies as its integer
+  value); and
+- `Bool.toString()` yields `"true"` or `"false"`.
+
+The numeric builtins `min(a, b)` and `max(a, b)` return the smaller/larger of two
+numeric values of the same type.
+
 ## `RawArray<T>`
 
 `RawArray<T>` is a spelling alias for `*T`:

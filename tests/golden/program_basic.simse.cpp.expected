@@ -9,6 +9,12 @@ enum class Color {
     Green = 4,
     Blue,
 };
+inline Opt<Color> simse_Color_fromInt(Int value) {
+    if (value == 0) return Opt<Color>::some(Color::Red);
+    if (value == 4) return Opt<Color>::some(Color::Green);
+    if (value == 5) return Opt<Color>::some(Color::Blue);
+    return Opt<Color>::none();
+}
 // program_basic.simse:8
 struct Point {
     Int x;

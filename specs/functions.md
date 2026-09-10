@@ -247,8 +247,41 @@ The exact symbol naming, linkage, and build integration are deferred; see
 
 Status: required for the first implementation.
 
-`break` and `continue` are reserved keywords and are valid inside `while` and
-`for` loops. Using either outside a loop is an error.
+`break` and `continue` are reserved keywords. `break` is valid inside a `while`
+loop or a `switch` and leaves the innermost of those; `continue` is valid only
+inside a loop and skips to the next iteration. Using either where it is not
+allowed is an error.
+
+## `switch`
+
+Status: required for the first implementation.
+
+The language has a C-like `switch` statement. It selects one arm by comparing the
+switch expression against constant case labels, with an optional `default` arm:
+
+```text
+switch (kind) {
+    case TokenKind.Eof:
+        return "eof"
+    case TokenKind.Space:
+        return "space"
+    default:
+        return "other"
+}
+```
+
+- `switch`, `case`, and `default` are reserved keywords.
+- A `case` label must be a **constant expression**: a literal, a name, an
+  enum-qualified member (`EnumType.Member`), or a unary negation of one. A call or
+  any other dynamic expression is an error.
+- Each arm holds the statements up to the next `case`/`default` label or the
+  closing brace. As in C, control falls through to the following arm unless the
+  arm ends in `break` or `return`. `break` inside a `switch` leaves the switch.
+- `default` is optional and may appear anywhere among the arms; at most one is
+  meaningful.
+
+Like every other control-flow construct, an arm body is a statement sequence and
+line endings or `;` separate its statements.
 
 ## Default parameter values
 

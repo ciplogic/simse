@@ -64,6 +64,7 @@ namespace codegen {
                 "Float32", "Float64", "Char", "Bool", "Str",
                 "List", "Array", "RawArray", "Opt", "Res",
                 "Dictionary", "SmallVector", "PList",
+                "Attribute", "XmlNode", "Cursor",
             };
             for (const Str &candidate: names) {
                 if (candidate == name) return true;
@@ -115,6 +116,9 @@ namespace codegen {
             Dictionary<Str, ast::TypePtr> localTypes;
             NameKind selfKind = NameKind::Value;
             ast::TypePtr selfType;
+            // The enclosing function's declared return type, used to lower a bare
+            // `return null`.
+            ast::TypePtr curReturnType;
 
             // ---- diagnostics ----------------------------------------------
 
@@ -208,6 +212,13 @@ namespace codegen {
                             enumNames[decl->name] = true;
                         }
                         if (decl->kind == DeclKind::DataClass) {
+                            // Prelude data classes (XmlNode, Attribute, Cursor) map
+                            // onto RTL C++ types whose methods are C++ members, so
+                            // their mirror methods must NOT be lowered to free
+                            // functions: a member call falls through to
+                            // `recv.method()`. Non-prelude data classes (the
+                            // mirrors) keep the free-function-with-receiver shape.
+                            if (input.prelude) continue;
                             ast::TypePtr receiver = classReceiver(*decl);
                             for (const ast::DeclPtr &method: decl->methods) {
                                 List<Str> methodParams = decl->typeParams;
@@ -293,6 +304,9 @@ namespace codegen {
             NameKind kindOf(const ast::TypeExpr &typeExpr) {
                 if (typeExpr.kind == TypeKind::Reference) return NameKind::Shared;
                 if (typeExpr.kind == TypeKind::Pointer) return NameKind::Pointer;
+                if (typeExpr.kind == TypeKind::Generic && typeExpr.name == "PList") {
+                    return NameKind::Shared;
+                }
                 return NameKind::Value;
             }
 
@@ -307,6 +321,7 @@ namespace codegen {
                             emitDataClass(*decl);
                         } else if (decl->kind == DeclKind::Enum) {
                             emitEnum(*decl);
+                            emitEnumConversion(*decl);
                         } else if (decl->kind == DeclKind::TypeAlias) {
                             emitTypeAlias(*decl);
                         }
@@ -357,6 +372,29 @@ namespace codegen {
                     line(1, text + ",");
                 }
                 line(0, "};");
+            }
+
+            // A checked `Enum.fromInt(Int): Opt<Enum>` helper. Duplicate member
+            // values are allowed, so the value test is an if-chain, not a switch.
+            void emitEnumConversion(const ast::Decl &decl) {
+                if (!decl.typeParams.empty()) return; // generic enums are unusual
+                List<Int> values;
+                List<Str> names;
+                int next = 0;
+                for (const ast::EnumMember &member: decl.members) {
+                    if (member.hasValue) next = member.value;
+                    values.push_back(next);
+                    names.push_back(member.name);
+                    next += 1;
+                }
+                line(0, "inline Opt<" + decl.name + "> simse_" + decl.name
+                       + "_fromInt(Int value) {");
+                for (int i = 0; i < (int) names.size(); i++) {
+                    line(1, "if (value == " + std::to_string(values[i]) + ") return Opt<" + decl.name
+                           + ">::some(" + decl.name + "::" + names[i] + ");");
+                }
+                line(1, "return Opt<" + decl.name + ">::none();");
+                line(0, "}");
             }
 
             void emitTypeAlias(const ast::Decl &decl) {
@@ -516,6 +554,7 @@ namespace codegen {
                 if (!tmpl.empty()) line(0, tmpl);
                 line(0, signature + " {");
                 beginScope(fn, selfK, selfTypePtr);
+                curReturnType = decl.returnType;
                 emitStmts(decl.body, 1);
                 if (failed) return;
                 line(0, "}");
@@ -545,7 +584,7 @@ namespace codegen {
                         }
                         if (failed) return;
                         Str text = typeText + " " + stmt.name;
-                        if (stmt.init) text += " = " + expr(*stmt.init, 0);
+                        if (stmt.init) text += " = " + expr(*stmt.init, 0, stmt.type);
                         line(level, text + ";");
 
                         if (stmt.type) {
@@ -567,7 +606,8 @@ namespace codegen {
                             fail(stmt.pos, "unsupported: assignment operator '" + stmt.op + "'");
                             return;
                         }
-                        line(level, expr(*stmt.target, 0) + " = " + expr(*stmt.value, 0) + ";");
+                        line(level, expr(*stmt.target, 0) + " = "
+                                     + expr(*stmt.value, 0, inferType(*stmt.target)) + ";");
                         return;
                     case StmtKind::If:
                         line(level, "if (" + expr(*stmt.cond, 0) + ") {");
@@ -586,9 +626,28 @@ namespace codegen {
                         if (failed) return;
                         line(level, "}");
                         return;
+                    case StmtKind::Switch: {
+                        line(level, "switch (" + expr(*stmt.cond, 0) + ") {");
+                        for (const ast::SwitchCase &switchCase: stmt.cases) {
+                            if (switchCase.isDefault) {
+                                line(level + 1, "default:");
+                            } else {
+                                line(level + 1, "case " + expr(*switchCase.label, 0) + ":");
+                            }
+                            // Each arm is emitted as a block so declarations stay
+                            // scoped to it; control still falls through to the next
+                            // label unless the arm ends in `break`.
+                            line(level + 1, "{");
+                            emitStmts(switchCase.body, level + 2);
+                            if (failed) return;
+                            line(level + 1, "}");
+                        }
+                        line(level, "}");
+                        return;
+                    }
                     case StmtKind::Return:
                         if (stmt.returnValue) {
-                            line(level, "return " + expr(*stmt.returnValue, 0) + ";");
+                            line(level, "return " + expr(*stmt.returnValue, 0, curReturnType) + ";");
                         } else {
                             line(level, "return;");
                         }
@@ -633,11 +692,13 @@ namespace codegen {
                 }
             }
 
-            Str expr(const ast::Expr &e, int minPrecedence) {
+            // `expected` is the contextual type used to lower a bare `null`: an
+            // `Opt<T>` context becomes `Opt<T>()`, a `*T`/`&T` context `nullptr`.
+            Str expr(const ast::Expr &e, int minPrecedence, const ast::TypePtr &expected = nullptr) {
                 int p = precedence(e);
                 Str s;
                 if (p < minPrecedence) s += "(";
-                s += exprInner(e);
+                s += exprInner(e, expected);
                 if (p < minPrecedence) s += ")";
                 return s;
             }
@@ -687,6 +748,31 @@ namespace codegen {
                 return current;
             }
 
+            // Whether a type is reached through a handle (`&T`, `*T`, or the
+            // `PList<T>` alias of `&List<T>`), so member access uses `->`, indexing
+            // dereferences, and call receivers deref for value extension patterns.
+            bool isHandleType(const ast::TypeExpr *type) {
+                if (!type) return false;
+                if (type->kind == TypeKind::Reference || type->kind == TypeKind::Pointer) {
+                    return true;
+                }
+                return type->kind == TypeKind::Generic && type->name == "PList";
+            }
+
+            // Whether a pointee is a container with `operator[]` element access.
+            // Indexing through a raw pointer auto-dereferences only for these;
+            // pointer arithmetic (`p[i]`) is kept for raw arrays of scalars.
+            bool isIndexableContainer(const ast::TypeExpr *type) {
+                if (!type) return false;
+                if (type->kind == TypeKind::Named) return type->name == "Str";
+                if (type->kind == TypeKind::Generic) {
+                    const Str &name = type->name;
+                    return name == "List" || name == "Array" || name == "Dictionary"
+                           || name == "SmallVector";
+                }
+                return false;
+            }
+
             bool isTypeParamName(const Str &name, const List<Str> &typeParams) {
                 for (const Str &param: typeParams) {
                     if (param == name) return true;
@@ -715,7 +801,14 @@ namespace codegen {
                         return a.kind == TypeKind::Named && a.name == pattern.name;
                     case TypeKind::Generic:
                         if (isTypeParamName(pattern.name, typeParams)) return true;
-                        if (a.kind != TypeKind::Generic || a.name != pattern.name) return false;
+                        if (a.kind != TypeKind::Generic) return false;
+                        // `PList<T>` is the alias of `&List<T>`; match it against a
+                        // `List<T>` receiver pattern (the call dereferences).
+                        if (a.name != pattern.name
+                            && !(pattern.name == "List" && a.name == "PList")
+                            && !(pattern.name == "PList" && a.name == "List")) {
+                            return false;
+                        }
                         if (a.typeArgs.size() != pattern.typeArgs.size()) return false;
                         for (int i = 0; i < (int) a.typeArgs.size(); i++) {
                             if (!unifyType(*pattern.typeArgs[i], *a.typeArgs[i], typeParams)) {
@@ -801,11 +894,19 @@ namespace codegen {
                         if (e.text == "this") return selfType;
                         auto it = localTypes.find(e.text);
                         if (it != localTypes.end()) return it->second;
+                        // A bare enum type name used as the receiver of a static
+                        // conversion, e.g. `Color.Red` / `Color.fromInt(x)`.
+                        if (enumNames.count(e.text) > 0) return namedType(e.text);
                         return nullptr;
                     }
                     case ExprKind::GenericName:
                         return genericType(e.text, e.typeArgs);
                     case ExprKind::Member: {
+                        if (e.lhs && e.lhs->kind == ExprKind::Name
+                            && enumNames.count(e.lhs->text) > 0) {
+                            // An enum member expression has the enum's type.
+                            return namedType(e.lhs->text);
+                        }
                         ast::TypePtr baseType = inferType(*e.lhs);
                         const ast::TypeExpr *base = pointee(baseType);
                         if (!base) return nullptr;
@@ -843,7 +944,8 @@ namespace codegen {
                         return nullptr;
                     }
                     case ExprKind::Index: {
-                        const ast::TypeExpr *base = pointee(inferType(*e.lhs));
+                        ast::TypePtr baseType = inferType(*e.lhs);
+                        const ast::TypeExpr *base = pointee(baseType);
                         if (!base) return nullptr;
                         if (base->kind == TypeKind::Named && base->name == "Str") return namedType("Char");
                         if (base->kind != TypeKind::Generic || base->typeArgs.empty()) return nullptr;
@@ -877,8 +979,16 @@ namespace codegen {
                         }
                         return inferType(*e.lhs);
                     }
-                    case ExprKind::Lambda:
-                        return nullptr;
+                    case ExprKind::Lambda: {
+                        // Best-effort callable type; return type is left unknown
+                        // here (the lambda lowering fills it in).
+                        auto fnType = std::make_shared<ast::TypeExpr>();
+                        fnType->kind = TypeKind::Function;
+                        for (const ast::TypePtr &paramType: e.paramTypes) {
+                            fnType->paramTypes.push_back(paramType);
+                        }
+                        return fnType;
+                    }
                 }
                 return nullptr;
             }
@@ -886,13 +996,11 @@ namespace codegen {
             // The receiver argument for a lowered call, dereferencing a counted
             // reference or raw pointer when the callee's receiver is a value.
             Str receiverArg(const ast::TypePtr &pattern, const ast::Expr &recv) {
-                if (pattern && (pattern->kind == TypeKind::Reference
-                                || pattern->kind == TypeKind::Pointer)) {
+                if (isHandleType(pattern.get())) {
                     return expr(recv, 9);
                 }
                 ast::TypePtr recvType = inferType(recv);
-                if (recvType && (recvType->kind == TypeKind::Reference
-                                 || recvType->kind == TypeKind::Pointer)) {
+                if (isHandleType(recvType.get())) {
                     return "(*" + expr(recv, 9) + ")";
                 }
                 return expr(recv, 9);
@@ -901,7 +1009,8 @@ namespace codegen {
             // Finds a Simse-declared extension/method whose receiver matches the
             // given receiver expression's type. Returns null when unknown.
             const Fn *findExtensionFn(const Str &name, const ast::Expr &recvExpr) {
-                const ast::TypeExpr *recv = pointee(inferType(recvExpr));
+                ast::TypePtr recvType = inferType(recvExpr);
+                const ast::TypeExpr *recv = pointee(recvType);
                 if (!recv) return nullptr;
                 for (const Fn &fn: functions) {
                     if (fn.decl->isNative || !fn.receiver) continue;
@@ -914,7 +1023,8 @@ namespace codegen {
             const NativeExt *findNativeExt(const Str &name, const ast::Expr &recvExpr) {
                 auto it = nativeExtensions.find(name);
                 if (it == nativeExtensions.end()) return nullptr;
-                const ast::TypeExpr *recv = pointee(inferType(recvExpr));
+                ast::TypePtr recvType = inferType(recvExpr);
+                const ast::TypeExpr *recv = pointee(recvType);
                 if (!recv) return nullptr;
                 for (const NativeExt &ext: it->second) {
                     if (ext.receiver && unifyType(*ext.receiver, *recv, ext.typeParams)) return &ext;
@@ -926,8 +1036,7 @@ namespace codegen {
                 bool arrow = false;
                 ast::TypePtr baseType = inferType(base);
                 if (baseType) {
-                    arrow = baseType->kind == TypeKind::Reference
-                            || baseType->kind == TypeKind::Pointer;
+                    arrow = isHandleType(baseType.get());
                 } else if (base.kind == ExprKind::Name) {
                     // Fallback for a receiver whose type we could not infer.
                     if (base.text == "this") {
@@ -950,7 +1059,139 @@ namespace codegen {
                 return expr(base, 9) + (arrow ? "->" : ".") + field;
             }
 
-            Str exprInner(const ast::Expr &e) {
+            // Lowers a bare `null` given the surrounding expected type.
+            Str nullTo(const ast::TypePtr &expected) {
+                const ast::TypeExpr *target = expected.get();
+                if (target && target->kind == TypeKind::Generic && target->name == "Opt") {
+                    return "Opt<" + typeArgsString("Opt", target->typeArgs) + ">()";
+                }
+                // Both `*T` and `&T` (std::shared_ptr) accept nullptr.
+                return "nullptr";
+            }
+
+            // Expands a non-generic typealias to its target, so a callable alias
+            // (`Mapper`) can be inspected structurally.
+            ast::TypePtr resolveAlias(ast::TypePtr type) {
+                int guard = 0;
+                while (type && type->kind == TypeKind::Named && ++guard < 100) {
+                    auto it = types.find(type->name);
+                    if (it == types.end()) break;
+                    const ast::Decl *decl = it->second;
+                    if (decl->kind != DeclKind::TypeAlias || !decl->targetType) break;
+                    if (!decl->typeParams.empty()) break; // generic alias: not expanded
+                    type = decl->targetType;
+                }
+                return type;
+            }
+
+            // The callable (Function) type behind an expected type, expanding
+            // aliases; null when the expected type is not a callable.
+            const ast::TypeExpr *expectedCallable(const ast::TypePtr &expected) {
+                ast::TypePtr resolved = resolveAlias(expected);
+                if (resolved && resolved->kind == TypeKind::Function) return resolved.get();
+                return nullptr;
+            }
+
+            // A non-native function with the given name and parameter count.
+            const ast::Decl *findFunction(const Str &name, int argCount) {
+                for (const Fn &fn: functions) {
+                    if (fn.decl->isNative || fn.decl->name != name) continue;
+                    if ((int) fn.decl->params.size() == argCount) return fn.decl;
+                }
+                return nullptr;
+            }
+
+            bool isUnitType(const ast::TypeExpr *type) {
+                return !type || (type->kind == TypeKind::Named && type->name == "Unit");
+            }
+
+            // Best-effort return type of a lambda body: a single trailing
+            // expression is the result, otherwise the first `return` value.
+            ast::TypePtr inferLambdaReturn(const ast::Expr &e) {
+                if (e.body.size() == 1 && e.body[0]->kind == StmtKind::ExprStmt
+                    && e.body[0]->expr) {
+                    return inferType(*e.body[0]->expr);
+                }
+                for (const ast::StmtPtr &stmt: e.body) {
+                    if (stmt->kind == StmtKind::Return && stmt->returnValue) {
+                        return inferType(*stmt->returnValue);
+                    }
+                }
+                return nullptr;
+            }
+
+            // Lowers a lambda to a C++ lambda with by-value captures, assignable
+            // to the RTL `Func<Ret(Params)>`. Parameter types come from the
+            // explicit annotations or from the expected callable type; the return
+            // type from the expected callable type or the body.
+            Str lambda(const ast::Expr &e, const ast::TypePtr &expected) {
+                const ast::TypeExpr *callable = expectedCallable(expected);
+
+                Dictionary<Str, NameKind> savedKinds = nameKinds;
+                Dictionary<Str, ast::TypePtr> savedTypes = localTypes;
+
+                List<Str> params;
+                for (int i = 0; i < (int) e.paramNames.size(); i++) {
+                    ast::TypePtr paramType;
+                    if (i < (int) e.paramTypes.size()) paramType = e.paramTypes[i];
+                    if (!paramType && callable && i < (int) callable->paramTypes.size()) {
+                        paramType = callable->paramTypes[i];
+                    }
+                    if (!paramType) {
+                        nameKinds = savedKinds;
+                        localTypes = savedTypes;
+                        fail(e.pos, "unsupported: lambda parameter '" + e.paramNames[i]
+                                    + "' has no type and no expected callable type");
+                        return "/*unsupported*/";
+                    }
+                    params.push_back(type(*paramType) + " " + e.paramNames[i]);
+                    nameKinds[e.paramNames[i]] = kindOf(*paramType);
+                    localTypes[e.paramNames[i]] = paramType;
+                    if (failed) {
+                        nameKinds = savedKinds;
+                        localTypes = savedTypes;
+                        return "/*unsupported*/";
+                    }
+                }
+
+                ast::TypePtr returnType = (callable && callable->returnType)
+                                              ? callable->returnType
+                                              : inferLambdaReturn(e);
+                bool unitReturn = isUnitType(returnType.get());
+
+                Str head = "[=](" + join(params, ", ") + ")";
+                if (!unitReturn) head += " -> " + type(*returnType);
+                if (failed) {
+                    nameKinds = savedKinds;
+                    localTypes = savedTypes;
+                    return "/*unsupported*/";
+                }
+
+                Str body;
+                bool singleExpression = e.body.size() == 1
+                                        && e.body[0]->kind == StmtKind::ExprStmt
+                                        && e.body[0]->expr;
+                if (singleExpression && !unitReturn) {
+                    body = "return " + expr(*e.body[0]->expr, 0, returnType) + ";";
+                } else {
+                    Str saved = out;
+                    out.clear();
+                    emitStmts(e.body, 1);
+                    body = out;
+                    out = saved;
+                }
+
+                nameKinds = savedKinds;
+                localTypes = savedTypes;
+                if (failed) return "/*unsupported*/";
+
+                if (body.find('\n') == Str::npos) {
+                    return head + " { " + body + " }";
+                }
+                return head + " {\n" + body + "}";
+            }
+
+            Str exprInner(const ast::Expr &e, const ast::TypePtr &expected) {
                 switch (e.kind) {
                     case ExprKind::IntLit:
                     case ExprKind::FloatLit:
@@ -960,8 +1201,7 @@ namespace codegen {
                     case ExprKind::BoolLit:
                         return e.boolValue ? "true" : "false";
                     case ExprKind::NullLit:
-                        fail(e.pos, "unsupported: null literal");
-                        return "/*unsupported*/";
+                        return nullTo(expected);
                     case ExprKind::Name:
                         return e.text == "this" ? Str("self") : e.text;
                     case ExprKind::GenericName:
@@ -977,8 +1217,20 @@ namespace codegen {
                     case ExprKind::Index: {
                         Str baseExpr = expr(*e.lhs, 9);
                         ast::TypePtr baseType = inferType(*e.lhs);
-                        if (baseType && baseType->kind == TypeKind::Reference) {
-                            // Auto-dereference a counted reference: `(*handle)[i]`.
+                        // A counted reference always auto-dereferences when indexed.
+                        // A raw pointer does too when it points at a container
+                        // (`*List<T>`, `*Str`, ...); indexing a raw array of
+                        // scalars stays plain pointer arithmetic.
+                        bool deref = false;
+                        if (baseType) {
+                            if (isHandleType(baseType.get())
+                                && baseType->kind != TypeKind::Pointer) {
+                                deref = true;
+                            } else if (baseType->kind == TypeKind::Pointer) {
+                                deref = isIndexableContainer(baseType->inner.get());
+                            }
+                        }
+                        if (deref) {
                             return "(*" + baseExpr + ")[" + expr(*e.rhs, 0) + "]";
                         }
                         return baseExpr + "[" + expr(*e.rhs, 0) + "]";
@@ -986,12 +1238,33 @@ namespace codegen {
                     case ExprKind::Unary:
                         return e.text + expr(*e.lhs, 7);
                     case ExprKind::Binary: {
+                        // `x == null` / `x != null`: an Opt has no operator==, so
+                        // use hasValue(); pointers and shared_ptr compare against
+                        // nullptr directly.
+                        if (e.lhs && e.rhs
+                            && (e.lhs->kind == ExprKind::NullLit || e.rhs->kind == ExprKind::NullLit)) {
+                            const ast::Expr &other = e.lhs->kind == ExprKind::NullLit ? *e.rhs : *e.lhs;
+                            ast::TypePtr otherTypePtr = inferType(other);
+                            const ast::TypeExpr *otherType = pointee(otherTypePtr);
+                            if (otherType && otherType->kind == TypeKind::Generic
+                                && otherType->name == "Opt") {
+                                Str hasValue = expr(other, 9) + ".hasValue()";
+                                if (e.text == "==") return "!(" + hasValue + ")";
+                                if (e.text == "!=") return "(" + hasValue + ")";
+                                fail(e.pos, "unsupported: Opt-vs-null comparison '" + e.text + "'");
+                                return "/*unsupported*/";
+                            }
+                        }
                         int p = precedence(e);
-                        return expr(*e.lhs, p) + " " + e.text + " " + expr(*e.rhs, p + 1);
+                        ast::TypePtr lhsExpected =
+                            (e.lhs->kind == ExprKind::NullLit) ? inferType(*e.rhs) : nullptr;
+                        ast::TypePtr rhsExpected =
+                            (e.rhs->kind == ExprKind::NullLit) ? inferType(*e.lhs) : nullptr;
+                        return expr(*e.lhs, p, lhsExpected) + " " + e.text + " "
+                               + expr(*e.rhs, p + 1, rhsExpected);
                     }
                     case ExprKind::Lambda:
-                        fail(e.pos, "unsupported: lambda expression");
-                        return "/*unsupported*/";
+                        return lambda(e, expected);
                     case ExprKind::Ref: {
                         // `&List<T>()` is the counted empty-list construction.
                         if (e.lhs && e.lhs->kind == ExprKind::Call && e.lhs->lhs
@@ -1044,18 +1317,49 @@ namespace codegen {
                         if (callee.text == "println") s += " << std::endl";
                         return s;
                     }
+                    const ast::Decl *target = findFunction(callee.text, (int) e.args.size());
                     List<Str> args;
-                    for (const ast::ExprPtr &arg: e.args) {
-                        args.push_back(expr(*arg, 0));
+                    for (int i = 0; i < (int) e.args.size(); i++) {
+                        ast::TypePtr expectedArg =
+                            (target && i < (int) target->params.size()) ? target->params[i].type
+                                                                        : nullptr;
+                        args.push_back(expr(*e.args[i], 0, expectedArg));
                     }
                     auto native = nativeSymbols.find(callee.text);
-                    Str calleeName = native != nativeSymbols.end() ? native->second : callee.text;
+                    // A user-declared plain function of the same name wins over a
+                    // prelude native (e.g. the scanner's own `isDigit(Char)` must
+                    // not be redirected to the `Char.isDigit()` extension).
+                    bool hasPlainFunction = false;
+                    for (const Fn &candidate: functions) {
+                        if (!candidate.decl->isNative && candidate.decl->name == callee.text) {
+                            hasPlainFunction = true;
+                            break;
+                        }
+                    }
+                    Str calleeName = callee.text;
+                    if (!hasPlainFunction && native != nativeSymbols.end()) {
+                        calleeName = native->second;
+                    }
                     return calleeName + "(" + join(args, ", ") + ")";
                 }
                 if (callee.kind == ExprKind::Member) {
                     List<Str> args;
                     for (const ast::ExprPtr &arg: e.args) {
                         args.push_back(expr(*arg, 0));
+                    }
+                    // Enum conversions: `x.toInt()` and `Enum.fromInt(v)`.
+                    if (callee.text == "toInt") {
+                        ast::TypePtr enumReceiverType = inferType(*callee.lhs);
+                        const ast::TypeExpr *enumReceiver = pointee(enumReceiverType);
+                        if (enumReceiver && enumReceiver->kind == TypeKind::Named
+                            && enumNames.count(enumReceiver->name) > 0) {
+                            return "static_cast<Int>(" + expr(*callee.lhs, 9) + ")";
+                        }
+                    }
+                    if (callee.text == "fromInt" && callee.lhs
+                        && callee.lhs->kind == ExprKind::Name
+                        && enumNames.count(callee.lhs->text) > 0) {
+                        return "simse_" + callee.lhs->text + "_fromInt(" + join(args, ", ") + ")";
                     }
                     // Generic-qualified static call: `Res<T>.ok(x)` lowers to
                     // `Res<T>::ok(x)` (RTL Opt/Res provide static constructors).
@@ -1065,7 +1369,8 @@ namespace codegen {
                                + ">::" + callee.text + "(" + join(args, ", ") + ")";
                     }
 
-                    const ast::TypeExpr *receiver = pointee(inferType(*callee.lhs));
+                    ast::TypePtr receiverType = inferType(*callee.lhs);
+                    const ast::TypeExpr *receiver = pointee(receiverType);
                     if (receiver) {
                         // Receiver type is known: pick the extension (or native
                         // extension) overload whose receiver unifies with it.

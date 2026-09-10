@@ -127,24 +127,42 @@ int main(int argc, char **argv) {
         inputs = filtered;
     }
 
-    // Load the prelude (missing default is silently skipped; an explicit path
-    // that is missing is an error).
+    // Load the prelude set: a directory contributes every `*.simse` in it, a file
+    // contributes itself. Missing defaults are skipped silently; an explicit path
+    // that is missing is an error.
     codegen::Input preludeInput;
     bool hasPrelude = false;
     if (!resolvedPrelude.empty()) {
-        if (std::filesystem::exists(resolvedPrelude)) {
-            Res<ast::Module> parsedPrelude = parser::parseFile(resolvedPrelude);
+        List<Str> preludeFiles;
+        if (std::filesystem::is_directory(resolvedPrelude)) {
+            preludeFiles = filesInDir(resolvedPrelude, ".simse");
+        } else if (std::filesystem::exists(resolvedPrelude)) {
+            preludeFiles.push_back(resolvedPrelude);
+        } else if (preludeExplicit) {
+            fprintf(stderr, "simse_transpile: prelude not found: %s\n", resolvedPrelude.c_str());
+            return 2;
+        }
+
+        ast::Module mergedPrelude;
+        mergedPrelude.pos = ast::SourcePos{0, 1, 1};
+        for (const Str &preludeFile: preludeFiles) {
+            Res<ast::Module> parsedPrelude = parser::parseFile(preludeFile);
             if (!parsedPrelude.isOk()) {
                 fprintf(stderr, "%s\n", parsedPrelude.Error.c_str());
                 return 1;
             }
+            for (const ast::Import &import: parsedPrelude.Value.imports) {
+                mergedPrelude.imports.push_back(import);
+            }
+            for (const ast::DeclPtr &decl: parsedPrelude.Value.declarations) {
+                mergedPrelude.declarations.push_back(decl);
+            }
+        }
+        if (!preludeFiles.empty()) {
             preludeInput.fileName = resolvedPrelude;
-            preludeInput.module = parsedPrelude.Value;
+            preludeInput.module = mergedPrelude;
             preludeInput.prelude = true;
             hasPrelude = true;
-        } else if (preludeExplicit) {
-            fprintf(stderr, "simse_transpile: prelude not found: %s\n", resolvedPrelude.c_str());
-            return 2;
         }
     }
 

@@ -103,7 +103,9 @@ fun foldBack(nodes: &List<SkeletonNode>, openingToken: Str): Bool {
 }
 
 fun parseSkeleton(tokens: *List<Token>): Res<SkeletonNode> {
-    var program: SkeletonNode = SkeletonNode(&List<SkeletonNode>(), SkeletonType.None, Token("", TokenKind.None))
+    // The program node carries a zero token (None kind, position 0:0), matching
+    // the hand-written C++ parser's default-constructed SkeletonNode.
+    var program: SkeletonNode = SkeletonNode(&List<SkeletonNode>(), SkeletonType.None, Token("", TokenKind.None, SourcePos(0, 0, 0)))
     program.setNodeType(SkeletonType.Program)
 
     var i: Int = 0

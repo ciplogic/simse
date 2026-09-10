@@ -16,6 +16,23 @@ invalid reference is unchecked and has undefined behavior, typically a
 segmentation fault. Safe language code should use `Opt<&T>` or `Opt<*T>` when
 absence is expected and must test the option before use.
 
+### The `null` literal
+
+Status: required for the first implementation.
+
+`null` is a reserved keyword denoting the absence of a value in a nullable
+context. Its meaning is fixed by the expected type:
+
+- in a `*T` (raw pointer) context it lowers to a null pointer (`nullptr`);
+- in a `&T` (counted reference) context it lowers to an empty reference (a null
+  `shared_ptr`, which owns no box); and
+- in an `Opt<T>` context it lowers to `Opt<T>()` (the empty optional).
+
+Comparisons `x == null` and `x != null` test the reference directly for `*T` and
+`&T`, and test `hasValue()` for `Opt<T>`. Because the meaning is context-driven, a
+bare `null` with no expected type (for example `val x = null`) is not useful and
+should be avoided; give the binding an explicit type.
+
 ## `Opt<T>`
 
 `Opt<T>` models an optional value, following `std::optional<T>`. It either

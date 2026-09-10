@@ -1,0 +1,15 @@
+// xml.simse
+//
+// The XmlNode surface (specs/xml-node.md). Declarations only: the concrete types
+// and their constructors live in cppsrc/rtl/xml.hpp. This file is loaded as part
+// of the prelude set, so programs can build XmlNode trees without an import and
+// the transpiler maps `Attribute`, `XmlNode`, and `PList<XmlNode>` onto the RTL
+// types.
+
+// Attribute pairs an attribute/element name with a Str value.
+data class Attribute(var name: Str; var value: Str)
+
+// XmlNode is the recursive parse/debug tree node. `Children` is a PList
+// (&List<XmlNode>): a counted reference to a shared child list, so the type stays
+// finite and copying a node shares its children rather than deep-copying them.
+data class XmlNode(var name: Str; var attributes: List<Attribute>; var Children: PList<XmlNode>)

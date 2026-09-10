@@ -18,8 +18,10 @@ enum class SkeletonType : int {
 
 struct SkeletonNode {
     PList<SkeletonNode> _children {};
-    SkeletonType _type;
-    Token _token;
+    SkeletonType _type = SkeletonType::None;
+    // A zeroed token: kind None, position 0:0, empty text. The Simse mirror
+    // constructs the same zero token explicitly.
+    Token _token {};
 
     void setNodeType(SkeletonType type) {
         _type = type;

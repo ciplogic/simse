@@ -496,6 +496,7 @@ namespace parser {
                 if (checkText("val") || checkText("var")) return parseVarDecl();
                 if (checkText("if")) return parseIf();
                 if (checkText("while")) return parseWhile();
+                if (checkText("switch")) return parseSwitch();
                 if (checkText("return")) return parseReturn();
                 if (checkText("break")) {
                     auto stmt = std::make_shared<ast::Stmt>();
@@ -589,6 +590,47 @@ namespace parser {
                 if (!expectText(")")) return nullptr;
                 stmt->body = parseBlock();
                 if (failed) return nullptr;
+                return stmt;
+            }
+
+            ast::StmtPtr parseSwitch() {
+                auto stmt = std::make_shared<ast::Stmt>();
+                stmt->kind = ast::StmtKind::Switch;
+                stmt->pos = peek().pos;
+                advance(); // switch
+                if (!expectText("(")) return nullptr;
+                stmt->cond = parseExpr(0);
+                if (!stmt->cond) return nullptr;
+                if (!expectText(")")) return nullptr;
+                if (!expectText("{")) return nullptr;
+                skipSeparators();
+                while (!checkText("}") && !atEnd()) {
+                    ast::SwitchCase switchCase;
+                    switchCase.pos = peek().pos;
+                    if (matchText("case")) {
+                        skipNewlines();
+                        switchCase.label = parseExpr(0);
+                        if (!switchCase.label) return nullptr;
+                        if (!expectText(":")) return nullptr;
+                    } else if (matchText("default")) {
+                        switchCase.isDefault = true;
+                        if (!expectText(":")) return nullptr;
+                    } else {
+                        fail("expected 'case' or 'default'");
+                        return nullptr;
+                    }
+                    skipSeparators();
+                    // The arm body runs until the next label or the closing brace.
+                    while (!checkText("case") && !checkText("default")
+                           && !checkText("}") && !atEnd()) {
+                        ast::StmtPtr child = parseStmt();
+                        if (!child) return nullptr;
+                        switchCase.body.push_back(child);
+                        skipSeparators();
+                    }
+                    stmt->cases.push_back(switchCase);
+                }
+                if (!expectText("}")) return nullptr;
                 return stmt;
             }
 

@@ -61,6 +61,15 @@ namespace ast {
     struct Stmt;
     using StmtPtr = std::shared_ptr<Stmt>;
 
+    // One arm of a `switch`: a `case CONST:` or `default:` label plus the
+    // statements that follow it (up to the next label or the closing brace).
+    struct SwitchCase {
+        SourcePos pos{};
+        bool isDefault = false;
+        ExprPtr label; // null for `default`
+        List<StmtPtr> body;
+    };
+
     struct Expr {
         ExprKind kind = ExprKind::Name;
         SourcePos pos{};
@@ -80,6 +89,7 @@ namespace ast {
         Assign,
         If,
         While,
+        Switch,
         Return,
         Break,
         Continue,
@@ -107,6 +117,9 @@ namespace ast {
         List<StmtPtr> elseBody; // If
         bool hasElse = false;
         List<StmtPtr> body; // While
+
+        // Switch
+        List<SwitchCase> cases;
 
         // Return
         ExprPtr returnValue;
@@ -192,4 +205,11 @@ namespace ast {
     // Deterministic, indented, line-per-node dump for golden files. Contains no
     // file paths or addresses, so it is stable across machines.
     Str dumpModule(const Module& module);
+
+    // Converts the AST into an `XmlNode` tree using the schema in
+    // impl_specs/ast-xmlnode.md: each node carries its AST kind as an attribute
+    // and uses its structural role as the element name; scalars are string
+    // attributes. `dumpXmlNode` renders that tree deterministically.
+    XmlNode toXmlNode(const Module& module);
+    Str dumpXmlNode(const XmlNode& node);
 }
