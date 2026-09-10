@@ -25,6 +25,8 @@ add_library(simse_lib STATIC
         cppsrc/parser/Parser.h
         cppsrc/sema/Sema.cpp
         cppsrc/sema/Sema.h
+        cppsrc/codegen/Codegen.cpp
+        cppsrc/codegen/Codegen.h
         cppsrc/skelparser/SkeletonParser.cpp
         cppsrc/skelparser/SkeletonParser.h
         tests/test_support.cpp
@@ -33,8 +35,51 @@ add_library(simse_lib STATIC
 add_executable(simse cppsrc/main.cpp)
 target_link_libraries(simse PRIVATE simse_lib)
 
+add_executable(simse_transpile cppsrc/codegen/TranspileMain.cpp)
+target_link_libraries(simse_transpile PRIVATE simse_lib)
+
 add_executable(simse_tests tests/test_main.cpp)
 target_link_libraries(simse_tests PRIVATE simse_lib)
 target_compile_definitions(simse_tests PRIVATE
         SIMSE_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures"
         SIMSE_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
+
+# --- T8: end-to-end slice (transpile -> compile -> run -> compare) -----------
+# Each fixture below is transpiled by simse_transpile, compiled as a normal
+# executable, run, and its stdout compared to a golden. The generated file
+# `#include`s "cppsrc/rtl/simse.hpp", so the repo root is added as an include
+# directory. Everything is part of ALL so a default build exercises the round
+# trip and it cannot silently rot.
+set(SIMSE_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
+set(SIMSE_E2E_DIR "${CMAKE_CURRENT_BINARY_DIR}/e2e")
+
+foreach(e2e_name IN ITEMS emit_hello emit_shapes)
+    set(e2e_fixture "${SIMSE_REPO_ROOT}/tests/fixtures/${e2e_name}.simse")
+    set(e2e_generated "${SIMSE_E2E_DIR}/${e2e_name}.cpp")
+    set(e2e_expected "${SIMSE_REPO_ROOT}/tests/golden/${e2e_name}.stdout.expected")
+    set(e2e_actual "${SIMSE_E2E_DIR}/${e2e_name}.stdout.actual")
+
+    add_custom_command(
+            OUTPUT "${e2e_generated}"
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${SIMSE_E2E_DIR}"
+            COMMAND $<TARGET_FILE:simse_transpile> "${e2e_fixture}" -o "${e2e_generated}"
+            DEPENDS "${e2e_fixture}"
+            COMMENT "T8: transpiling ${e2e_name}.simse"
+            VERBATIM)
+
+    add_executable(e2e_${e2e_name} "${e2e_generated}")
+    target_include_directories(e2e_${e2e_name} PRIVATE "${SIMSE_REPO_ROOT}")
+    set_target_properties(e2e_${e2e_name} PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY "${SIMSE_E2E_DIR}")
+
+    add_custom_target(e2e_${e2e_name}_check ALL
+            COMMAND "${CMAKE_COMMAND}"
+                    -DEXE=$<TARGET_FILE:e2e_${e2e_name}>
+                    -DOUT=${e2e_actual}
+                    -P "${SIMSE_REPO_ROOT}/tests/run_capture.cmake"
+            COMMAND "${CMAKE_COMMAND}" -E compare_files --ignore-eol
+                    "${e2e_actual}" "${e2e_expected}"
+            DEPENDS e2e_${e2e_name}
+            COMMENT "T8: running e2e_${e2e_name} and comparing stdout"
+            VERBATIM)
+endforeach()

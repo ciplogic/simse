@@ -1,8 +1,10 @@
 #include "test_support.h"
 
+#include "../cppsrc/codegen/Codegen.h"
 #include "../cppsrc/parser/Parser.h"
 #include "../cppsrc/sema/Sema.h"
 
+#include <filesystem>
 #include <string>
 
 using namespace tests;
@@ -40,11 +42,20 @@ namespace tests {
     }
 
     ScanResult scanFile(Scanner *scanner, const Str &fileName) {
+        ScanResult scan;
+        scan.ok = true;
+        scan.errorPos = SourcePos{0, 1, 1};
+        if (!std::filesystem::exists(fileName)) {
+            // Report a clean failure instead of letting readFile fault on a
+            // missing path.
+            scan.ok = false;
+            scan.errorMessage = "cannot read file: " + fileName;
+            return scan;
+        }
+
         Str content = common::readFile(fileName);
         scanner->setSource(content);
 
-        ScanResult scan;
-        scan.ok = true;
         while (true) {
             Res<Token> result = scanner->nextToken();
             if (!result.isOk()) {
@@ -167,6 +178,15 @@ namespace tests {
         for (const Str &diagnostic: diagnostics) {
             result.sema += diagnostic + "\n";
         }
+
+        List<codegen::Input> inputs;
+        codegen::Input input;
+        input.fileName = displayName;
+        input.module = parsed.Value;
+        inputs.push_back(input);
+        Res<Str> emitted = codegen::emitProgram(inputs);
+        result.hasCpp = true;
+        result.cpp = emitted.isOk() ? emitted.Value : ("CodegenError " + emitted.Error + "\n");
         return result;
     }
 }

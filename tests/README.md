@@ -1,8 +1,9 @@
 # Golden tests
 
-Golden tests for the front end. Each fixture in `tests/fixtures/` is run through
-the scanner, the parser, and the name/type resolver, and three deterministic dumps
-are compared against checked-in goldens in `tests/golden/`.
+Golden tests for the front end and the C++ emitter. Each fixture in
+`tests/fixtures/` is run through the scanner, the parser, name/type resolution,
+and (when it parses) code generation, and deterministic dumps are compared
+against checked-in goldens in `tests/golden/`.
 
 ## Build
 
@@ -12,7 +13,7 @@ The tests build with the project. From `simse/cmake-build-debug`:
 cmd //c _msvc_build.bat
 ```
 
-This builds `simse_lib`, `simse`, and `simse_tests`.
+This builds `simse_lib`, `simse`, `simse_tests`, and `simse_transpile`.
 
 ## Run
 
@@ -23,10 +24,13 @@ simse_tests.exe
 The runner:
 
 - scans, parses, and analyzes each `tests/fixtures/*.simse` fixture in sorted
-  filename order, comparing the token, AST, and sema goldens;
-- checks the two negative fixtures (`parse_error.simse` must fail to parse,
+  filename order, comparing the token, AST, and sema goldens (and the `cpp`
+  golden when the fixture parses);
+- checks the negative fixtures (`parse_error.simse` must fail to parse,
   `sema_unknown_type.simse` must report an unknown-type diagnostic);
-- parses and analyzes every real `.simse` file under `cppsrc/` plus `main.simse`
+- checks the hoisting fixture (`hoisting.simse` parses and resolves cleanly with
+  use-before-declaration);
+- parses and analyzes every real `.simse` file under `cppsrc/` plus `../cppsrc/main.simse`
   and asserts the parse succeeds and sema is clean.
 
 It prints `PASS`/`FAIL` per case, a line diff for each failure, and a final
@@ -54,7 +58,7 @@ set SIMSE_UPDATE_GOLDENS=1
 simse_tests.exe
 ```
 
-Update mode rewrites every `tests/golden/<fixture>.{tokens,ast,sema}.expected`
+Update mode rewrites every `tests/golden/<fixture>.{tokens,ast,sema,cpp}.expected`
 and reports `UPDATED` per fixture. Review the diff of the regenerated goldens
 before committing. After updating, run once more in check mode to confirm 0
 failures.
@@ -65,7 +69,13 @@ For a fixture `foo.simse` the harness writes:
 
 - `foo.simse.tokens.expected` - the scanner token dump;
 - `foo.simse.ast.expected` - the AST dump (or an error marker, see below);
-- `foo.simse.sema.expected` - the sema diagnostics, one per line (empty if clean).
+- `foo.simse.sema.expected` - the sema diagnostics, one per line (empty if clean);
+- `foo.simse.cpp.expected` - the emitted C++ (or a `CodegenError` marker). Only
+  written for fixtures that parse, since codegen runs on the AST.
+
+Separately, `tests/golden/<fixture>.stdout.expected` files hold the expected
+stdout of the end-to-end programs (below); they are not part of the per-fixture
+harness.
 
 ### Token dump format
 
@@ -82,13 +92,14 @@ One line per token, TAB-separated, deterministic:
   backslash sequences. Empty text is an empty final field.
 - The Eof token is not printed.
 
-A scan error appends a final line:
+A scan error replaces the position column with the full scanner message:
 
 ```
-Error\t<line>:<column>\t<escaped error message>
+Error\t<escaped full message>
 ```
 
-where the position is where the scanner stopped, i.e. the offending character.
+e.g. `Error\t1:3: Unexpected character: '@ b\\n'` (the scanner message already
+carries `<line>:<column>` and the escaped snippet).
 
 ### AST dump format
 
@@ -118,15 +129,16 @@ Types are rendered inline in source-like form (`List<TokenMatcher>`,
 `(*Float64) -> Unit`, `&List<SkeletonNode>`). Literals keep their scanned text
 (with `\`, `\n`, `\r`, `\t` escaped).
 
-Because the scanner fixtures and the negative fixtures are not complete programs,
-their `.ast.expected` holds a one-line marker instead of a tree:
+Because the scanner fixtures are not complete programs, their `.ast.expected`
+holds a one-line marker instead of a tree:
 
 ```
-ScanError @<line>:<column> <message>   // the fixture did not scan
-ParseError <file>:<line>:<column>: <message>   // the fixture did not parse
+ScanError <message>                          // the fixture did not scan
+ParseError <file>:<line>:<column>: <message> // the fixture did not parse
 ```
 
-Their `.sema.expected` is empty (sema only runs on a successfully parsed module).
+Their `.sema.expected` and `.cpp.expected` are empty/absent (sema and codegen
+only run on a successfully parsed module).
 
 ### Sema dump format
 
@@ -137,3 +149,38 @@ One diagnostic per line, in walk order:
 ```
 
 An empty file means no diagnostics.
+
+### C++ emission dump format
+
+The amalgamated translation unit from `codegen::emitProgram`. For a fixture that
+parses, the golden is either the emitted C++ or a single marker line:
+
+```
+CodegenError <file>:<line>:<column>: <message>
+```
+
+The emitted file starts with a fixed prelude (`#include "cppsrc/rtl/simse.hpp"`,
+`<iostream>`, `<type_traits>`), then type declarations, forward declarations, and
+definitions, each preceded by a `// <file>:<line>` source comment. See
+`impl_specs/rtl-abi.md` for the type mapping and the supported subset.
+
+## End-to-end round trip (T8)
+
+The default build (`cmd //c _msvc_build.bat`) also transpiles
+`tests/fixtures/emit_hello.simse` and `tests/fixtures/emit_shapes.simse`,
+compiles the generated C++ (`e2e_emit_hello` / `e2e_emit_shapes`), runs them, and
+diffs their stdout against `tests/golden/<name>.stdout.expected` with
+`cmake -E compare_files --ignore-eol`. The generated sources and captured stdout
+live under `cmake-build-debug/e2e/`. These steps are part of `ALL`, so an
+ordinary (and clean) build exercises the round trip and it cannot rot.
+
+## Transpiler CLI
+
+```
+simse_transpile <input.simse>... -o <output.cpp>
+```
+
+With no input arguments it discovers every `.simse` under the current directory
+(recursively, sorted). Errors are written to stderr as
+`<file>:<line>:<col>: <message>` and the process exits nonzero. Run it from the
+repository root so the generated `#include "cppsrc/rtl/simse.hpp"` resolves.

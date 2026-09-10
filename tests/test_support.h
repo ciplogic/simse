@@ -48,14 +48,17 @@ namespace tests {
     // description of the mismatch.
     Str checkWrappers(Scanner* scanner, const Str& fileName, const ScanResult& scan);
 
-    // The parse + sema results for one fixture, already rendered in the golden
-    // text formats. `ast` is the dumpModule output on success, or a one-line
-    // ScanError/ParseError marker; `sema` is one diagnostic per line (empty when
-    // the file did not parse).
+    // The parse + sema + codegen results for one fixture, already rendered in the
+    // golden text formats. `ast` is the dumpModule output on success, or a
+    // one-line ScanError/ParseError marker; `sema` is one diagnostic per line
+    // (empty when the file did not parse). When the file parses, `hasCpp` is set
+    // and `cpp` holds the emitted C++ (or a one-line CodegenError marker).
     struct AstSemaResult {
-        bool parsed;
+        bool parsed = false;
         Str ast;
         Str sema;
+        bool hasCpp = false;
+        Str cpp;
     };
 
     // Runs parse and sema over a scan result. `displayName` is used in

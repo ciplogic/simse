@@ -161,6 +161,9 @@ int main(int argc, char **argv) {
         ok &= compareGolden(name, tokensText, goldenPathFor(goldenDir, name, "tokens"), update);
         ok &= compareGolden(name, astSema.ast, goldenPathFor(goldenDir, name, "ast"), update);
         ok &= compareGolden(name, astSema.sema, goldenPathFor(goldenDir, name, "sema"), update);
+        if (astSema.hasCpp) {
+            ok &= compareGolden(name, astSema.cpp, goldenPathFor(goldenDir, name, "cpp"), update);
+        }
 
         if (ok) {
             passed++;
@@ -211,9 +214,35 @@ int main(int argc, char **argv) {
         }
     }
 
-    // Real sources: every mirror plus main.simse must parse and analyze cleanly.
+    // Positive fixture: hoisted declarations are usable before their textual
+    // definition, and resolution stays clean.
+    {
+        Str path = (std::filesystem::path(fixturesDir) / "hoisting.simse").string();
+        ScanResult scan = scanFile(&scanner, path);
+        List<Token> tokens = scan.tokens;
+        Res<ast::Module> parsed = scan.ok
+                                      ? parser::parseModule(tokens, "hoisting.simse")
+                                      : resError<ast::Module>("scan failed");
+        bool clean = false;
+        if (parsed.isOk()) {
+            clean = sema::analyze(parsed.Value, "hoisting.simse").empty();
+        }
+        if (clean) {
+            passed++;
+            printf("PASS hoisting.simse (use before declaration is clean)\n");
+        } else {
+            failed++;
+            printf("FAIL hoisting.simse: expected parse ok and zero sema diagnostics\n");
+        }
+    }
+
+    // Real sources: every mirror under cppsrc, plus a root main.simse when one
+    // is present, must parse and analyze cleanly.
     List<Str> sources = filesInDir(Str(SIMSE_SOURCE_ROOT) + "/cppsrc", ".simse");
-    sources.push_back(Str(SIMSE_SOURCE_ROOT) + "/main.simse");
+    Str rootMain = Str(SIMSE_SOURCE_ROOT) + "/main.simse";
+    if (std::filesystem::exists(rootMain)) {
+        sources.push_back(rootMain);
+    }
     for (const Str &source: sources) {
         Str name = baseName(source);
         ScanResult scan = scanFile(&scanner, source);

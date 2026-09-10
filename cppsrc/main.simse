@@ -4,5 +4,4 @@ fun main(): Int {
     val rules : List<TokenMatcher>  = getTokenRules();
     val scanner = Scanner(&rules)
 
-    return 0;
 }

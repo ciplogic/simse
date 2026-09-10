@@ -120,6 +120,19 @@ distinct type whose runtime representation is `Int`.
 
 Belongs to `declarations.md`.
 
+### Declaration hoisting
+
+Decision: module-level declarations (functions, `data class`, `enum`, and
+`typealias`) are **hoisted**. They are visible throughout the module regardless
+of textual order, like Kotlin, Java, or C#. Declarations may be referenced before
+their textual definition, and mutually recursive functions need no source-level
+forward declaration. Methods within a class body are likewise order-independent
+relative to one another and to the class's fields. Local variables are **not**
+hoisted: a local is visible only from its declaration onward, so a local
+use-before-declaration is an error.
+
+Belongs to `declarations.md`.
+
 ## Control flow
 
 ### `break` and `continue`
