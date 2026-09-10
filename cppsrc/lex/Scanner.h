@@ -1,32 +1,21 @@
 #pragma once
-#include "../rtl/simse.hpp"
+#include "../common/common.h"
 
 namespace lex {
+    using common::StrView;
+
     enum TokenKind : int {
         None,
         Space,
+        Comment,
         Identifier,
         ReservedWord,
         Number,
         String,
+        Character,
         Operator,
         Eof
     };
-
-    struct StrView {
-        Str* str{};
-        int start;
-        int len;
-        char at(int index);
-
-        bool startsWith(const Str & str);
-
-        StrView slice(int matchLength);
-
-        Str toString();
-    };
-
-    StrView viewOf(Str* str);
 
     using MatchLenFunc = Func<int(StrView)>;
 

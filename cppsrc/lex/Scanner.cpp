@@ -21,15 +21,17 @@ namespace lex {
                 return i;
             }
         }
-        return strView.len;
+        return len;
     }
 
     int matchAllOfRules(StrView strView, CharMatcher matchFirst, CharMatcher matchFunc) {
-        int len = strView.len;
+        if (strView.len == 0) {
+            return 0;
+        }
         if (!matchFirst(strView.at(0))) {
             return 0;
         }
-        for (int i = 0; i < len; i++) {
+        for (int i = 1; i < strView.len; i++) {
             if (!matchFunc(strView.at(i))) {
                 return i;
             }
@@ -39,18 +41,17 @@ namespace lex {
     }
 
     List<Str> ReservedWords = {
-        {
-            "class", "data", "val", "var", "fun", "return",
-            "while", "for",
-            "if", "else", "true", "false", "null"
-        }
+        "class", "data", "val", "var", "fun", "return",
+        "while", "for",
+        "if", "else", "true", "false", "null",
+        "enum", "typealias", "native", "import", "this"
     };
 
     bool isReservedWord(StrView strView) {
-        for (Str reservedWord : ReservedWords) {
-            if (reservedWord.at(0) != strView.at(0)) {
+        for (Str &reservedWord: ReservedWords) {
+            if (strView.len != (int) reservedWord.length()) {
                 continue;
-            }\
+            }
 
             if (strView.startsWith(reservedWord)) {
                 return true;
@@ -60,7 +61,7 @@ namespace lex {
     }
 
     bool isSpace(char ch) {
-        return ch == ' ' || ch == '\t';
+        return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n';
     }
 
     bool isDigit(char ch) {
@@ -75,6 +76,25 @@ namespace lex {
         return isAlpha(ch) || isDigit(ch);
     }
 
+    bool isOperatorChar(char ch) {
+        switch (ch) {
+            case '+': case '-': case '*': case '/': case '%':
+            case '=': case '<': case '>': case '!':
+            case '&': case '|': case '^': case '~':
+            case '?': case ':': case ';': case ',': case '.':
+            case '(': case ')': case '[': case ']':
+            case '{': case '}':
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    // Longest-match-first is not needed: no entry is a prefix of another.
+    List<Str> MultiCharOperators = {
+        "->", "==", "!=", "<=", ">=", "&&", "||",
+        "+=", "-=", "*=", "/=", "%="
+    };
 
     int matchSpaces(StrView Source) {
         return matchAllOfRule(Source, isSpace);
@@ -84,42 +104,112 @@ namespace lex {
         return matchAllOfRules(Source, isAlpha, isAlphaOrDigit);
     }
 
-    char StrView::at(int index) {
-        return str->at(start + index);
+    int matchReservedWord(StrView Source) {
+        int length = matchIdentifier(Source);
+        if (length == 0) {
+            return 0;
+        }
+        if (isReservedWord(Source.slice(length))) {
+            return length;
+        }
+        return 0;
     }
 
-    bool StrView::startsWith(const Str &str) {
-        if (str.length() > len) {
-            return false;
+    int matchNumber(StrView Source) {
+        int len = Source.len;
+        int i = 0;
+        while (i < len && isDigit(Source.at(i))) {
+            i++;
         }
-        for (int i = 0; i < str.length(); i++) {
-            if (at(i) != str.at(i)) {
-                return false;
+        if (i == 0) {
+            return 0;
+        }
+
+        // Optional fractional part: a '.' must be followed by a digit to belong
+        // to the number, otherwise it is member/range punctuation.
+        if (i + 1 < len && Source.at(i) == '.' && isDigit(Source.at(i + 1))) {
+            i++;
+            while (i < len && isDigit(Source.at(i))) {
+                i++;
             }
         }
-        return true;
+        return i;
     }
 
-    StrView StrView::slice(int matchLength) {
-        return {str, start, start + matchLength};
-    }
-
-    Str StrView::toString() {
-        Str result;
-        result.resize(len);
-        for (int i = 0; i < len; i++) {
-            result.at(i) = at(i);
+    int matchComment(StrView Source) {
+        if (Source.len < 2 || Source.at(0) != '/') {
+            return 0;
         }
-        return result;
+        if (Source.at(1) == '/') {
+            int i = 2;
+            while (i < Source.len && Source.at(i) != '\n' && Source.at(i) != '\r') {
+                i++;
+            }
+            return i;
+        }
+        if (Source.at(1) == '*') {
+            int i = 2;
+            while (i + 1 < Source.len) {
+                if (Source.at(i) == '*' && Source.at(i + 1) == '/') {
+                    return i + 2;
+                }
+                i++;
+            }
+        }
+        return 0;
     }
 
-    StrView viewOf(Str *str) {
-        return {str, 0, (int) str->length()};
+    int matchStringLiteral(StrView Source) {
+        if (Source.len == 0 || Source.at(0) != '"') {
+            return 0;
+        }
+        int i = 1;
+        while (i < Source.len) {
+            char ch = Source.at(i);
+            if (ch == '\\') {
+                i += 2;
+                continue;
+            }
+            if (ch == '"') {
+                return i + 1;
+            }
+            i++;
+        }
+        return 0;
     }
 
+    int matchCharLiteral(StrView Source) {
+        if (Source.len == 0 || Source.at(0) != '\'') {
+            return 0;
+        }
+        int i = 1;
+        while (i < Source.len) {
+            char ch = Source.at(i);
+            if (ch == '\\') {
+                i += 2;
+                continue;
+            }
+            if (ch == '\'') {
+                return i + 1;
+            }
+            if (ch == '\n') {
+                return 0;
+            }
+            i++;
+        }
+        return 0;
+    }
 
-    StrView viewOfAtPos(Str *str, int pos) {
-        return {str, pos, (int) str->length() - pos};
+    int matchOperator(StrView Source) {
+        for (Str &op: MultiCharOperators) {
+            if (Source.len >= (int) op.length() && Source.startsWith(op)) {
+                return (int) op.length();
+            }
+        }
+        if (Source.len > 0 && isOperatorChar(Source.at(0))) {
+            return 1;
+        }
+        return 0;
     }
 
     Scanner::Scanner(List<TokenMatcher> *rules) {
@@ -128,25 +218,30 @@ namespace lex {
     }
 
     Result<Token> Scanner::nextToken() {
-        StrView sourceView = viewOfAtPos(&this->Source, this->Pos);
-        if (sourceView.len == 0) {
-            Token eofToken ("", TokenKind::Eof);
-            return ok(eofToken);
-        }
-        for (TokenMatcher &rule: *_rules) {
-            int matchLength = rule.match(sourceView);
-            if (matchLength == 0) {
-                continue;
+        while (this->Pos < (int) this->Source.length()) {
+            StrView sourceView = common::viewOfAtPos(&this->Source, this->Pos);
+            for (TokenMatcher &rule: *_rules) {
+                int matchLength = rule.match(sourceView);
+                if (matchLength <= 0) {
+                    continue;
+                }
+                if (matchLength > sourceView.len) {
+                    matchLength = sourceView.len;
+                }
+                auto tokenSlice = sourceView.slice(matchLength);
+
+                Token token;
+                token.text = tokenSlice.toString();
+                token.kind = rule.tokenKind;
+
+                this->Pos += matchLength;
+                return ok(token);
             }
-            auto tokenSlice = sourceView.slice(matchLength);
-
-            Token token;
-            token.text = tokenSlice.toString();
-            token.kind = rule.tokenKind;
-
-            return ok(token);
+            return resError<Token>("Unexpected character");
         }
-        return resError<Token>("Unexpected character");
+
+        Token eofToken{"", TokenKind::Eof};
+        return ok(eofToken);
     }
 
     void Scanner::setSource(const Str &str) {
@@ -156,8 +251,16 @@ namespace lex {
 
     List<TokenMatcher> getTokenRules() {
         List<TokenMatcher> Rules;
+        // Order matters: comments before operators (so `//` is not two `/`),
+        // reserved words before identifiers, and operators last.
+        addRule(&Rules, Comment, matchComment);
         addRule(&Rules, Space, matchSpaces);
+        addRule(&Rules, String, matchStringLiteral);
+        addRule(&Rules, Character, matchCharLiteral);
+        addRule(&Rules, Number, matchNumber);
+        addRule(&Rules, ReservedWord, matchReservedWord);
         addRule(&Rules, Identifier, matchIdentifier);
+        addRule(&Rules, Operator, matchOperator);
         return Rules;
     }
 }

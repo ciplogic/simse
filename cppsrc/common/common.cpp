@@ -29,8 +29,8 @@ namespace common {
             return matchingFiles;
         }
 
-        // Iterate through the files in the directory
-        for (const auto& entry : std::filesystem::directory_iterator(dirPath)) {
+        // Iterate through the files in the directory tree
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(dirPath)) {
             // Check if it's a regular file and has the matching extension
             if (entry.is_regular_file() && entry.path().extension() == ext) {
                 matchingFiles.push_back(entry.path().string());
@@ -39,5 +39,42 @@ namespace common {
 
         return matchingFiles;
 
+    }
+
+    char StrView::at(int index) {
+        return str->at(start + index);
+    }
+
+    bool StrView::startsWith(const Str &str) {
+        if (str.length() > len) {
+            return false;
+        }
+        for (int i = 0; i < str.length(); i++) {
+            if (at(i) != str.at(i)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    StrView StrView::slice(int matchLength) {
+        return {str, start, matchLength};
+    }
+
+    Str StrView::toString() {
+        Str result;
+        result.resize(len);
+        for (int i = 0; i < len; i++) {
+            result.at(i) = at(i);
+        }
+        return result;
+    }
+
+    StrView viewOf(Str *str) {
+        return {str, 0, (int) str->length()};
+    }
+
+    StrView viewOfAtPos(Str *str, int pos) {
+        return {str, pos, (int) str->length() - pos};
     }
 }
