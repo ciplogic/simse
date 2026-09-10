@@ -1,11 +1,14 @@
 //
-// Golden test runner for the scanner. For every fixture in the fixtures
-// directory it scans the file with the real scanner and compares a deterministic
-// token dump against a checked-in golden. See tests/README.md.
+// Golden test runner. For every fixture in the fixtures directory it runs the
+// scan -> parse -> sema pipeline and compares deterministic token, AST, and sema
+// dumps against checked-in goldens. It also parses and analyzes every real source
+// mirror and asserts they are clean. See tests/README.md.
 //
 
 #include "test_support.h"
 #include "../cppsrc/common/common.h"
+#include "../cppsrc/parser/Parser.h"
+#include "../cppsrc/sema/Sema.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -14,6 +17,9 @@
 
 #ifndef SIMSE_FIXTURES_DIR
 #define SIMSE_FIXTURES_DIR "tests/fixtures"
+#endif
+#ifndef SIMSE_SOURCE_ROOT
+#define SIMSE_SOURCE_ROOT "."
 #endif
 
 using namespace common;
@@ -80,6 +86,34 @@ namespace {
             }
         }
     }
+
+    Str goldenPathFor(const Str &goldenDir, const Str &name, const Str &category) {
+        return (std::filesystem::path(goldenDir) / (name + "." + category + ".expected")).string();
+    }
+
+    // Compares (or, in update mode, rewrites) one golden. Returns false and
+    // prints a diff or an explanatory message on mismatch. Does not count.
+    bool compareGolden(const Str &label, const Str &actual, const Str &goldenPath, bool update) {
+        if (update) {
+            if (!writeFileText(goldenPath, actual)) {
+                printf("FAIL %s: cannot write golden %s\n", label.c_str(), goldenPath.c_str());
+                return false;
+            }
+            return true;
+        }
+        if (!std::filesystem::exists(goldenPath)) {
+            printf("FAIL %s: missing golden %s (run with --update)\n",
+                   label.c_str(), goldenPath.c_str());
+            return false;
+        }
+        Str expected = readFileText(goldenPath);
+        if (expected == actual) {
+            return true;
+        }
+        printf("FAIL %s\n", label.c_str());
+        printDiff(expected, actual);
+        return false;
+    }
 }
 
 int main(int argc, char **argv) {
@@ -104,16 +138,17 @@ int main(int argc, char **argv) {
     List<TokenMatcher> rules = getTokenRules();
     Scanner scanner(&rules);
 
-    List<Str> fixtures = filesInDir(fixturesDir, ".simse");
-
     int passed = 0;
     int failed = 0;
+
+    // Fixtures: tokens + AST + sema goldens.
+    List<Str> fixtures = filesInDir(fixturesDir, ".simse");
     for (const Str &fixture: fixtures) {
         Str name = baseName(fixture);
-        Str goldenPath = (std::filesystem::path(goldenDir) / (name + ".tokens.expected")).string();
 
         ScanResult scan = scanFile(&scanner, fixture);
-        Str dumpText = dump(scan);
+        Str tokensText = dump(scan);
+        AstSemaResult astSema = runAstSema(scan, name);
 
         Str wrapperIssue = checkWrappers(&scanner, fixture, scan);
         if (!wrapperIssue.empty()) {
@@ -122,33 +157,90 @@ int main(int argc, char **argv) {
             continue;
         }
 
-        if (update) {
-            if (!writeFileText(goldenPath, dumpText)) {
-                failed++;
-                printf("FAIL %s: cannot write golden %s\n", name.c_str(), goldenPath.c_str());
-                continue;
-            }
-            passed++;
-            printf("UPDATED %s\n", name.c_str());
-            continue;
-        }
+        bool ok = true;
+        ok &= compareGolden(name, tokensText, goldenPathFor(goldenDir, name, "tokens"), update);
+        ok &= compareGolden(name, astSema.ast, goldenPathFor(goldenDir, name, "ast"), update);
+        ok &= compareGolden(name, astSema.sema, goldenPathFor(goldenDir, name, "sema"), update);
 
-        if (!std::filesystem::exists(goldenPath)) {
-            failed++;
-            printf("FAIL %s: missing golden %s (run with --update)\n",
-                   name.c_str(), goldenPath.c_str());
-            continue;
-        }
-
-        Str expected = readFileText(goldenPath);
-        if (expected == dumpText) {
+        if (ok) {
             passed++;
-            printf("PASS %s\n", name.c_str());
+            printf(update ? "UPDATED %s\n" : "PASS %s\n", name.c_str());
         } else {
             failed++;
-            printf("FAIL %s\n", name.c_str());
-            printDiff(expected, dumpText);
         }
+    }
+
+    // Negative fixtures: explicit assertions beyond the stored goldens.
+    {
+        Str path = (std::filesystem::path(fixturesDir) / "parse_error.simse").string();
+        ScanResult scan = scanFile(&scanner, path);
+        List<Token> tokens = scan.tokens;
+        Res<ast::Module> parsed = scan.ok
+                                      ? parser::parseModule(tokens, "parse_error.simse")
+                                      : resError<ast::Module>("scan failed");
+        if (scan.ok && !parsed.isOk()) {
+            passed++;
+            printf("PASS negative parse_error.simse (parse rejected)\n");
+        } else {
+            failed++;
+            printf("FAIL negative parse_error.simse: expected a parse error\n");
+        }
+    }
+    {
+        Str path = (std::filesystem::path(fixturesDir) / "sema_unknown_type.simse").string();
+        ScanResult scan = scanFile(&scanner, path);
+        List<Token> tokens = scan.tokens;
+        Res<ast::Module> parsed = scan.ok
+                                      ? parser::parseModule(tokens, "sema_unknown_type.simse")
+                                      : resError<ast::Module>("scan failed");
+        bool reported = false;
+        if (parsed.isOk()) {
+            List<Str> diagnostics = sema::analyze(parsed.Value, "sema_unknown_type.simse");
+            for (const Str &diagnostic: diagnostics) {
+                if (diagnostic.find("Nope") != Str::npos) {
+                    reported = true;
+                }
+            }
+        }
+        if (reported) {
+            passed++;
+            printf("PASS negative sema_unknown_type.simse (diagnostic reported)\n");
+        } else {
+            failed++;
+            printf("FAIL negative sema_unknown_type.simse: expected an unknown-type diagnostic\n");
+        }
+    }
+
+    // Real sources: every mirror plus main.simse must parse and analyze cleanly.
+    List<Str> sources = filesInDir(Str(SIMSE_SOURCE_ROOT) + "/cppsrc", ".simse");
+    sources.push_back(Str(SIMSE_SOURCE_ROOT) + "/main.simse");
+    for (const Str &source: sources) {
+        Str name = baseName(source);
+        ScanResult scan = scanFile(&scanner, source);
+        if (!scan.ok) {
+            failed++;
+            printf("FAIL source %s: scan error: %s\n", name.c_str(), scan.errorMessage.c_str());
+            continue;
+        }
+        List<Token> tokens = scan.tokens;
+        Res<ast::Module> parsed = parser::parseModule(tokens, name);
+        if (!parsed.isOk()) {
+            failed++;
+            printf("FAIL source %s: %s\n", name.c_str(), parsed.Error.c_str());
+            continue;
+        }
+        List<Str> diagnostics = sema::analyze(parsed.Value, name);
+        if (!diagnostics.empty()) {
+            failed++;
+            printf("FAIL source %s: sema reported %d diagnostic(s)\n",
+                   name.c_str(), (int) diagnostics.size());
+            for (const Str &diagnostic: diagnostics) {
+                printf("    %s\n", diagnostic.c_str());
+            }
+            continue;
+        }
+        passed++;
+        printf("PASS source %s\n", name.c_str());
     }
 
     printf("%d passed, %d failed\n", passed, failed);

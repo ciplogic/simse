@@ -1,0 +1,78 @@
+Module @1:1
+  Function compute @1:1
+    Param n: Int
+    Return Int
+    Body
+      VarDecl var total: Int @2:5
+        Init
+          IntLit 0 @2:22
+      VarDecl var i: Int @3:5
+        Init
+          IntLit 0 @3:18
+      While @4:5
+        Cond
+          Binary < @4:12
+            Lhs
+              Name i @4:12
+            Rhs
+              Name n @4:16
+        Body
+          If @5:9
+            Cond
+              Binary == @5:13
+                Lhs
+                  Name i @5:13
+                Rhs
+                  IntLit 3 @5:18
+            Then
+              Assign = @6:13
+                Target
+                  Name i @6:13
+                Value
+                  Binary + @6:17
+                    Lhs
+                      Name i @6:17
+                    Rhs
+                      IntLit 1 @6:21
+              Continue @7:13
+          Assign = @9:9
+            Target
+              Name total @9:9
+            Value
+              Binary + @9:17
+                Lhs
+                  Name total @9:17
+                Rhs
+                  Name i @9:25
+          Assign = @10:9
+            Target
+              Name i @10:9
+            Value
+              Binary + @10:13
+                Lhs
+                  Name i @10:13
+                Rhs
+                  IntLit 1 @10:17
+      If @12:5
+        Cond
+          Binary > @12:9
+            Lhs
+              Name total @12:9
+            Rhs
+              IntLit 10 @12:17
+        Then
+          Return @13:9
+            Name total @13:16
+        Else
+          Return @15:9
+            Unary - @15:16
+              Operand
+                Name total @15:17
+  Function loopForever @19:1
+    Return Unit
+    Body
+      While @20:5
+        Cond
+          BoolLit true @20:12
+        Body
+          Break @21:9

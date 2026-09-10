@@ -1,0 +1,22 @@
+ReservedWord	1:1	fun
+Space	1:4	 
+Identifier	1:5	f
+Operator	1:6	(
+Identifier	1:7	x
+Operator	1:8	:
+Space	1:9	 
+Identifier	1:10	Nope
+Operator	1:14	)
+Operator	1:15	:
+Space	1:16	 
+Identifier	1:17	Int
+Space	1:20	 
+Operator	1:21	{
+EndOfLine	1:22	\n
+Space	2:1	    
+ReservedWord	2:5	return
+Space	2:11	 
+Number	2:12	0
+EndOfLine	2:13	\n
+Operator	3:1	}
+EndOfLine	3:2	\n

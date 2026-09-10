@@ -1,0 +1,27 @@
+Module @1:1
+  Function firstByte @1:1
+    Receiver Str
+    Return Char
+    Body
+      Return @2:5
+        Index @2:12
+          Receiver
+            Name this @2:12
+          Index
+            IntLit 0 @2:17
+  Function valueAt @5:1
+    Receiver *Int
+    Return Int
+    Body
+      Return @6:5
+        Deref @6:12
+          Operand
+            Name this @6:13
+  Function firstOrNone @9:1
+    Param this: List<Int>
+    Return Opt<Int>
+    Body
+      Return @10:5
+        Call @10:12
+          Callee
+            GenericName Opt<Int> @10:12

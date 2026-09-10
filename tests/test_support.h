@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../cppsrc/ast/Ast.h"
 #include "../cppsrc/common/common.h"
 #include "../cppsrc/lex/Scanner.h"
 
@@ -46,4 +47,18 @@ namespace tests {
     // manual scan. Returns an empty string when they agree, otherwise a
     // description of the mismatch.
     Str checkWrappers(Scanner* scanner, const Str& fileName, const ScanResult& scan);
+
+    // The parse + sema results for one fixture, already rendered in the golden
+    // text formats. `ast` is the dumpModule output on success, or a one-line
+    // ScanError/ParseError marker; `sema` is one diagnostic per line (empty when
+    // the file did not parse).
+    struct AstSemaResult {
+        bool parsed;
+        Str ast;
+        Str sema;
+    };
+
+    // Runs parse and sema over a scan result. `displayName` is used in
+    // diagnostics so goldens do not embed machine-specific paths.
+    AstSemaResult runAstSema(const ScanResult& scan, const Str& displayName);
 }

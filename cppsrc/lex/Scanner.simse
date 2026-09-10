@@ -291,6 +291,53 @@ fun getTokenRules(): &List<TokenMatcher> {
     return rules
 }
 
+// Escapes the first `maxLen` bytes of `view` for a single-line diagnostic:
+// backslash, newline, carriage return, and tab get backslash escapes; printable
+// ASCII (32..126) is kept; every other byte (including >= 127) becomes \xNN with
+// two uppercase hex digits. Bytes are treated as unsigned.
+fun escapedSnippet(view: StrView, maxLen: Int): Str {
+    val hexDigits: Str = "0123456789ABCDEF"
+    var snippet: Str = Str()
+    var count: Int = view.len
+    if (count > maxLen) {
+        count = maxLen
+    }
+    var i = 0
+    while (i < count) {
+        var byte: Int = view.at(i)
+        if (byte < 0) {
+            byte = byte + 256
+        }
+        if (byte == 92) {
+            snippet.append('\\')
+            snippet.append('\\')
+        } else if (byte == 10) {
+            snippet.append('\\')
+            snippet.append('n')
+        } else if (byte == 13) {
+            snippet.append('\\')
+            snippet.append('r')
+        } else if (byte == 9) {
+            snippet.append('\\')
+            snippet.append('t')
+        } else if (byte >= 32 && byte <= 126) {
+            snippet.append(view.at(i))
+        } else {
+            snippet.append('\\')
+            snippet.append('x')
+            snippet.append(hexDigits[byte / 16])
+            snippet.append(hexDigits[byte % 16])
+        }
+        i = i + 1
+    }
+    return snippet
+}
+
+// Mirrors the C++ scanner's std::to_string concatenation.
+fun unexpectedCharacterMessage(line: Int, column: Int, snippet: Str): Str {
+    return line.toString() + ":" + column.toString() + ": Unexpected character: '" + snippet + "'"
+}
+
 data class Scanner(var rules: &List<TokenMatcher>; var pos: Int; var line: Int; var column: Int; var source: Str) {
     fun setSource(text: Str): Unit {
         this.source = text
@@ -334,7 +381,7 @@ data class Scanner(var rules: &List<TokenMatcher>; var pos: Int; var line: Int; 
                 }
                 i = i + 1
             }
-            return Res<Token>.err("Unexpected character")
+            return Res<Token>.err(unexpectedCharacterMessage(this.line, this.column, escapedSnippet(view, 10)))
         }
         return Res<Token>.ok(Token("", TokenKind.Eof, SourcePos(this.pos, this.line, this.column)))
     }
@@ -350,7 +397,7 @@ fun readFileAsTokens(scanner: *Scanner, fileName: Str): Res<List<Token>> {
     while (true) {
         val result: Res<Token> = scanner.nextToken()
         if (!result.isOk()) {
-            return Res<List<Token>>.err(result.error)
+            return Res<List<Token>>.err(fileName + ": " + result.error)
         }
         if (result.value.kind == TokenKind.Eof) {
             return Res<List<Token>>.ok(tokens)

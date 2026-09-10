@@ -1,0 +1,7 @@
+Module @1:1
+  Function f @1:1
+    Param x: Nope
+    Return Int
+    Body
+      Return @2:5
+        IntLit 0 @2:12

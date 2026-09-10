@@ -259,6 +259,35 @@ namespace lex {
         }
     }
 
+    // Escapes the first `maxLen` bytes of `view` so a diagnostic stays on one
+    // line: backslash, newline, carriage return, and tab get backslash escapes;
+    // printable ASCII (32..126) is kept; every other byte (including >= 127)
+    // becomes \xNN with two uppercase hex digits. Bytes are treated as unsigned.
+    Str escapedSnippet(StrView view, int maxLen) {
+        static const char *hexDigits = "0123456789ABCDEF";
+        Str snippet;
+        int count = view.len < maxLen ? view.len : maxLen;
+        for (int i = 0; i < count; i++) {
+            unsigned char byte = (unsigned char) view.at(i);
+            switch (byte) {
+                case '\\': snippet += "\\\\"; break;
+                case '\n': snippet += "\\n"; break;
+                case '\r': snippet += "\\r"; break;
+                case '\t': snippet += "\\t"; break;
+                default:
+                    if (byte >= 32 && byte <= 126) {
+                        snippet += (char) byte;
+                    } else {
+                        snippet += "\\x";
+                        snippet += hexDigits[(byte >> 4) & 0xF];
+                        snippet += hexDigits[byte & 0xF];
+                    }
+                    break;
+            }
+        }
+        return snippet;
+    }
+
     Res<Token> Scanner::nextToken() {
         while (this->Pos < (int) this->Source.length()) {
             StrView sourceView = common::viewOfAtPos(&this->Source, this->Pos);
@@ -280,7 +309,10 @@ namespace lex {
                 advancePosition(this->Source, this->Pos, this->Line, this->Column, matchLength);
                 return ok(token);
             }
-            return resError<Token>("Unexpected character");
+            SourcePos startPos{this->Pos, this->Line, this->Column};
+            Str message = std::to_string(startPos.line) + ":" + std::to_string(startPos.column)
+                          + ": Unexpected character: '" + escapedSnippet(sourceView, 10) + "'";
+            return resError<Token>(message);
         }
 
         Token eofToken{"", TokenKind::Eof, SourcePos{this->Pos, this->Line, this->Column}};
@@ -318,7 +350,7 @@ namespace lex {
         while (true) {
             Res<Token> result = scanner->nextToken();
             if (!result.isOk()) {
-                return resError<List<Token>>(result.Error);
+                return resError<List<Token>>(fileName + ": " + result.Error);
             }
             if (result.Value.kind == TokenKind::Eof) {
                 return ok(tokens);

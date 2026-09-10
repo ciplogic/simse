@@ -2,16 +2,16 @@
 // Created by cipri on 9/4/2026.
 //
 
-#include "cppsrc/lex/Scanner.h"
-#include "cppsrc/common/common.h"
-#include "cppsrc/skelparser/SkeletonParser.h"
+#include "lex/Scanner.h"
+#include "common/common.h"
+#include "skelparser/SkeletonParser.h"
 
 using namespace lex;
 using namespace common;
 
 int main() {
     List<TokenMatcher> rules = getTokenRules();
-    List<Str> files = filesInDir(".", ".simse");
+    List<Str> files = filesInDir("cppsrc", ".simse");
     Scanner scanner(&rules);
     for (auto file: files) {
         Res<List<Token>> tokensResult = readFileAndSkipSpacesTokens(&scanner, file);

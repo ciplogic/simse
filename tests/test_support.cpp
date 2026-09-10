@@ -1,5 +1,10 @@
 #include "test_support.h"
 
+#include "../cppsrc/parser/Parser.h"
+#include "../cppsrc/sema/Sema.h"
+
+#include <string>
+
 using namespace tests;
 
 namespace tests {
@@ -70,10 +75,6 @@ namespace tests {
         if (!scan.ok) {
             out += "Error";
             out += '\t';
-            out += std::to_string(scan.errorPos.line);
-            out += ':';
-            out += std::to_string(scan.errorPos.column);
-            out += '\t';
             out += escapeText(scan.errorMessage);
             out += '\n';
         }
@@ -101,6 +102,13 @@ namespace tests {
         if (!scan.ok) {
             if (all.isOk() || skipped.isOk()) {
                 return "expected readFileAsTokens/readFileAndSkipSpacesTokens to fail";
+            }
+            Str prefix = fileName + ": ";
+            if (all.Error.rfind(prefix, 0) != 0) {
+                return "readFileAsTokens error is missing the file prefix: " + all.Error;
+            }
+            if (skipped.Error.rfind(prefix, 0) != 0) {
+                return "readFileAndSkipSpacesTokens error is missing the file prefix: " + skipped.Error;
             }
             return "";
         }
@@ -135,5 +143,30 @@ namespace tests {
             }
         }
         return "";
+    }
+
+    AstSemaResult runAstSema(const ScanResult &scan, const Str &displayName) {
+        AstSemaResult result;
+        if (!scan.ok) {
+            result.parsed = false;
+            result.ast = "ScanError " + escapeText(scan.errorMessage) + "\n";
+            return result;
+        }
+
+        List<Token> tokens = scan.tokens;
+        Res<ast::Module> parsed = parser::parseModule(tokens, displayName);
+        if (!parsed.isOk()) {
+            result.parsed = false;
+            result.ast = "ParseError " + parsed.Error + "\n";
+            return result;
+        }
+
+        result.parsed = true;
+        result.ast = ast::dumpModule(parsed.Value);
+        List<Str> diagnostics = sema::analyze(parsed.Value, displayName);
+        for (const Str &diagnostic: diagnostics) {
+            result.sema += diagnostic + "\n";
+        }
+        return result;
     }
 }

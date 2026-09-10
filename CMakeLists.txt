@@ -19,15 +19,22 @@ add_library(simse_lib STATIC
         cppsrc/rtl/xml.hpp
         cppsrc/common/common.cpp
         cppsrc/common/common.h
+        cppsrc/ast/Ast.cpp
+        cppsrc/ast/Ast.h
+        cppsrc/parser/Parser.cpp
+        cppsrc/parser/Parser.h
+        cppsrc/sema/Sema.cpp
+        cppsrc/sema/Sema.h
         cppsrc/skelparser/SkeletonParser.cpp
         cppsrc/skelparser/SkeletonParser.h
         tests/test_support.cpp
         tests/test_support.h)
 
-add_executable(simse main.cpp)
+add_executable(simse cppsrc/main.cpp)
 target_link_libraries(simse PRIVATE simse_lib)
 
 add_executable(simse_tests tests/test_main.cpp)
 target_link_libraries(simse_tests PRIVATE simse_lib)
 target_compile_definitions(simse_tests PRIVATE
-        SIMSE_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
+        SIMSE_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures"
+        SIMSE_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")

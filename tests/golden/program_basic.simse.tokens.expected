@@ -1,0 +1,144 @@
+Comment	1:1	// Declarations, statements, and expressions.
+EndOfLine	1:46	\n
+ReservedWord	2:1	enum
+Space	2:5	 
+Identifier	2:6	Color
+Space	2:11	 
+Operator	2:12	{
+EndOfLine	2:13	\n
+Space	3:1	    
+Identifier	3:5	Red
+Operator	3:8	,
+EndOfLine	3:9	\n
+Space	4:1	    
+Identifier	4:5	Green
+Space	4:10	 
+Operator	4:11	=
+Space	4:12	 
+Number	4:13	4
+Operator	4:14	,
+EndOfLine	4:15	\n
+Space	5:1	    
+Identifier	5:5	Blue
+EndOfLine	5:9	\n
+Operator	6:1	}
+EndOfLine	6:2	\n
+EndOfLine	7:1	\n
+ReservedWord	8:1	data
+Space	8:5	 
+ReservedWord	8:6	class
+Space	8:11	 
+Identifier	8:12	Point
+Operator	8:17	(
+ReservedWord	8:18	var
+Space	8:21	 
+Identifier	8:22	x
+Operator	8:23	:
+Space	8:24	 
+Identifier	8:25	Int
+Operator	8:28	;
+Space	8:29	 
+ReservedWord	8:30	var
+Space	8:33	 
+Identifier	8:34	y
+Operator	8:35	:
+Space	8:36	 
+Identifier	8:37	Int
+Operator	8:40	)
+Space	8:41	 
+Operator	8:42	{
+EndOfLine	8:43	\n
+Space	9:1	    
+ReservedWord	9:5	fun
+Space	9:8	 
+Identifier	9:9	sum
+Operator	9:12	(
+Operator	9:13	)
+Operator	9:14	:
+Space	9:15	 
+Identifier	9:16	Int
+Space	9:19	 
+Operator	9:20	{
+EndOfLine	9:21	\n
+Space	10:1	        
+ReservedWord	10:9	return
+Space	10:15	 
+ReservedWord	10:16	this
+Operator	10:20	.
+Identifier	10:21	x
+Space	10:22	 
+Operator	10:23	+
+Space	10:24	 
+ReservedWord	10:25	this
+Operator	10:29	.
+Identifier	10:30	y
+EndOfLine	10:31	\n
+Space	11:1	    
+Operator	11:5	}
+EndOfLine	11:6	\n
+Operator	12:1	}
+EndOfLine	12:2	\n
+EndOfLine	13:1	\n
+ReservedWord	14:1	typealias
+Space	14:10	 
+Identifier	14:11	IntPredicate
+Space	14:23	 
+Operator	14:24	=
+Space	14:25	 
+Operator	14:26	(
+Identifier	14:27	Int
+Operator	14:30	)
+Space	14:31	 
+Operator	14:32	->
+Space	14:34	 
+Identifier	14:35	Bool
+EndOfLine	14:39	\n
+EndOfLine	15:1	\n
+ReservedWord	16:1	typealias
+Space	16:10	 
+Identifier	16:11	FloatHandler
+Space	16:23	 
+Operator	16:24	=
+Space	16:25	 
+Operator	16:26	(
+Operator	16:27	*
+Identifier	16:28	Float64
+Operator	16:35	)
+Space	16:36	 
+Operator	16:37	->
+Space	16:39	 
+Identifier	16:40	Unit
+EndOfLine	16:44	\n
+EndOfLine	17:1	\n
+ReservedWord	18:1	fun
+Space	18:4	 
+Identifier	18:5	add
+Operator	18:8	(
+Identifier	18:9	a
+Operator	18:10	:
+Space	18:11	 
+Identifier	18:12	Int
+Operator	18:15	,
+Space	18:16	 
+Identifier	18:17	b
+Operator	18:18	:
+Space	18:19	 
+Identifier	18:20	Int
+Operator	18:23	)
+Operator	18:24	:
+Space	18:25	 
+Identifier	18:26	Int
+Space	18:29	 
+Operator	18:30	{
+EndOfLine	18:31	\n
+Space	19:1	    
+ReservedWord	19:5	return
+Space	19:11	 
+Identifier	19:12	a
+Space	19:13	 
+Operator	19:14	+
+Space	19:15	 
+Identifier	19:16	b
+EndOfLine	19:17	\n
+Operator	20:1	}
+EndOfLine	20:2	\n
