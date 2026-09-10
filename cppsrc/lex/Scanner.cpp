@@ -44,7 +44,8 @@ namespace lex {
         "class", "data", "val", "var", "fun", "return",
         "while", "for",
         "if", "else", "true", "false", "null",
-        "enum", "typealias", "native", "import", "this"
+        "enum", "typealias", "native", "import", "this",
+        "break", "continue"
     };
 
     bool isReservedWord(StrView strView) {

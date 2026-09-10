@@ -104,6 +104,8 @@ fun reservedWords(): List<Str> {
     words.append("native")
     words.append("import")
     words.append("this")
+    words.append("break")
+    words.append("continue")
     return words
 }
 
