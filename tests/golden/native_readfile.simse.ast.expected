@@ -1,0 +1,27 @@
+Module @1:1
+  NativeFunction readFile @1:1
+    Param path: Str
+    Return Str
+    NativeSymbol "simse_native_readFile"
+  Function main @3:1
+    Return Int
+    Body
+      VarDecl val text: Str @4:5
+        Init
+          Call @4:21
+            Callee
+              Name readFile @4:21
+            Arg
+              StrLit "tests/fixtures/native_data.txt" @4:30
+      ExprStmt @5:5
+        Call @5:5
+          Callee
+            Name println @5:5
+          Arg
+            Call @5:13
+              Callee
+                Member .size @5:13
+                  Receiver
+                    Name text @5:13
+      Return @6:5
+        IntLit 0 @6:12

@@ -1,0 +1,14 @@
+// rtl.simse
+//
+// The bootstrap RTL surface: declarations the transpiler loads as a prelude into
+// every program's module scope, so programs can call these operations without an
+// explicit import. The bodies are hand-written C++ (cppsrc/rtl/listops.hpp),
+// linked into the generated program; prelude declarations are resolved but never
+// emitted (impl_specs/native-interop.md).
+//
+// The explicit `this` parameter makes each declaration an extension on its
+// receiver's type; the explicit symbol names the C++ implementation.
+
+native("simse_list_append") fun append<T>(this: List<T>, value: T): Unit
+native("simse_list_removeAt") fun removeAt<T>(this: List<T>, index: Int): Unit
+native("simse_list_removeRange") fun removeRange<T>(this: List<T>, start: Int, end: Int): Unit

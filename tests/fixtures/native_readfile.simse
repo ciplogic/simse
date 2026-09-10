@@ -1,0 +1,7 @@
+native("simse_native_readFile") fun readFile(path: Str): Str
+
+fun main(): Int {
+    val text: Str = readFile("tests/fixtures/native_data.txt")
+    println(text.size())
+    return 0
+}

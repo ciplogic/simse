@@ -1,0 +1,62 @@
+ReservedWord	1:1	native
+Operator	1:7	(
+String	1:8	"simse_native_readFile"
+Operator	1:31	)
+Space	1:32	 
+ReservedWord	1:33	fun
+Space	1:36	 
+Identifier	1:37	readFile
+Operator	1:45	(
+Identifier	1:46	path
+Operator	1:50	:
+Space	1:51	 
+Identifier	1:52	Str
+Operator	1:55	)
+Operator	1:56	:
+Space	1:57	 
+Identifier	1:58	Str
+EndOfLine	1:61	\n
+EndOfLine	2:1	\n
+ReservedWord	3:1	fun
+Space	3:4	 
+Identifier	3:5	main
+Operator	3:9	(
+Operator	3:10	)
+Operator	3:11	:
+Space	3:12	 
+Identifier	3:13	Int
+Space	3:16	 
+Operator	3:17	{
+EndOfLine	3:18	\n
+Space	4:1	    
+ReservedWord	4:5	val
+Space	4:8	 
+Identifier	4:9	text
+Operator	4:13	:
+Space	4:14	 
+Identifier	4:15	Str
+Space	4:18	 
+Operator	4:19	=
+Space	4:20	 
+Identifier	4:21	readFile
+Operator	4:29	(
+String	4:30	"tests/fixtures/native_data.txt"
+Operator	4:62	)
+EndOfLine	4:63	\n
+Space	5:1	    
+Identifier	5:5	println
+Operator	5:12	(
+Identifier	5:13	text
+Operator	5:17	.
+Identifier	5:18	size
+Operator	5:22	(
+Operator	5:23	)
+Operator	5:24	)
+EndOfLine	5:25	\n
+Space	6:1	    
+ReservedWord	6:5	return
+Space	6:11	 
+Number	6:12	0
+EndOfLine	6:13	\n
+Operator	7:1	}
+EndOfLine	7:2	\n

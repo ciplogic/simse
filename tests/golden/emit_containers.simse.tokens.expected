@@ -1,0 +1,120 @@
+ReservedWord	1:1	fun
+Space	1:4	 
+Identifier	1:5	main
+Operator	1:9	(
+Operator	1:10	)
+Operator	1:11	:
+Space	1:12	 
+Identifier	1:13	Int
+Space	1:16	 
+Operator	1:17	{
+EndOfLine	1:18	\n
+Space	2:1	    
+ReservedWord	2:5	val
+Space	2:8	 
+Identifier	2:9	xs
+Operator	2:11	:
+Space	2:12	 
+Identifier	2:13	List
+Operator	2:17	<
+Identifier	2:18	Int
+Operator	2:21	>
+Space	2:22	 
+Operator	2:23	=
+Space	2:24	 
+Identifier	2:25	List
+Operator	2:29	<
+Identifier	2:30	Int
+Operator	2:33	>
+Operator	2:34	(
+Operator	2:35	)
+EndOfLine	2:36	\n
+Space	3:1	    
+Identifier	3:5	xs
+Operator	3:7	.
+Identifier	3:8	append
+Operator	3:14	(
+Number	3:15	10
+Operator	3:17	)
+EndOfLine	3:18	\n
+Space	4:1	    
+Identifier	4:5	xs
+Operator	4:7	.
+Identifier	4:8	append
+Operator	4:14	(
+Number	4:15	20
+Operator	4:17	)
+EndOfLine	4:18	\n
+Space	5:1	    
+Identifier	5:5	xs
+Operator	5:7	.
+Identifier	5:8	append
+Operator	5:14	(
+Number	5:15	30
+Operator	5:17	)
+EndOfLine	5:18	\n
+Space	6:1	    
+Identifier	6:5	println
+Operator	6:12	(
+Identifier	6:13	xs
+Operator	6:15	.
+Identifier	6:16	size
+Operator	6:20	(
+Operator	6:21	)
+Operator	6:22	)
+EndOfLine	6:23	\n
+Space	7:1	    
+Identifier	7:5	xs
+Operator	7:7	.
+Identifier	7:8	removeAt
+Operator	7:16	(
+Number	7:17	1
+Operator	7:18	)
+EndOfLine	7:19	\n
+Space	8:1	    
+Identifier	8:5	println
+Operator	8:12	(
+Identifier	8:13	xs
+Operator	8:15	.
+Identifier	8:16	size
+Operator	8:20	(
+Operator	8:21	)
+Operator	8:22	)
+EndOfLine	8:23	\n
+Space	9:1	    
+Identifier	9:5	println
+Operator	9:12	(
+Identifier	9:13	xs
+Operator	9:15	[
+Number	9:16	1
+Operator	9:17	]
+Operator	9:18	)
+EndOfLine	9:19	\n
+Space	10:1	    
+Identifier	10:5	xs
+Operator	10:7	.
+Identifier	10:8	removeRange
+Operator	10:19	(
+Number	10:20	0
+Operator	10:21	,
+Space	10:22	 
+Number	10:23	1
+Operator	10:24	)
+EndOfLine	10:25	\n
+Space	11:1	    
+Identifier	11:5	println
+Operator	11:12	(
+Identifier	11:13	xs
+Operator	11:15	.
+Identifier	11:16	size
+Operator	11:20	(
+Operator	11:21	)
+Operator	11:22	)
+EndOfLine	11:23	\n
+Space	12:1	    
+ReservedWord	12:5	return
+Space	12:11	 
+Number	12:12	0
+EndOfLine	12:13	\n
+Operator	13:1	}
+EndOfLine	13:2	\n

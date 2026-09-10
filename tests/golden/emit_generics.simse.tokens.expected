@@ -1,0 +1,217 @@
+ReservedWord	1:1	data
+Space	1:5	 
+ReservedWord	1:6	class
+Space	1:11	 
+Identifier	1:12	Pair
+Operator	1:16	<
+Identifier	1:17	A
+Operator	1:18	,
+Space	1:19	 
+Identifier	1:20	B
+Operator	1:21	>
+Operator	1:22	(
+ReservedWord	1:23	var
+Space	1:26	 
+Identifier	1:27	first
+Operator	1:32	:
+Space	1:33	 
+Identifier	1:34	A
+Operator	1:35	;
+Space	1:36	 
+ReservedWord	1:37	var
+Space	1:40	 
+Identifier	1:41	second
+Operator	1:47	:
+Space	1:48	 
+Identifier	1:49	B
+Operator	1:50	)
+EndOfLine	1:51	\n
+EndOfLine	2:1	\n
+ReservedWord	3:1	fun
+Space	3:4	 
+Identifier	3:5	identity
+Operator	3:13	<
+Identifier	3:14	T
+Operator	3:15	>
+Operator	3:16	(
+Identifier	3:17	value
+Operator	3:22	:
+Space	3:23	 
+Identifier	3:24	T
+Operator	3:25	)
+Operator	3:26	:
+Space	3:27	 
+Identifier	3:28	T
+Space	3:29	 
+Operator	3:30	{
+EndOfLine	3:31	\n
+Space	4:1	    
+ReservedWord	4:5	return
+Space	4:11	 
+Identifier	4:12	value
+EndOfLine	4:17	\n
+Operator	5:1	}
+EndOfLine	5:2	\n
+EndOfLine	6:1	\n
+ReservedWord	7:1	fun
+Space	7:4	 
+Identifier	7:5	main
+Operator	7:9	(
+Operator	7:10	)
+Operator	7:11	:
+Space	7:12	 
+Identifier	7:13	Int
+Space	7:16	 
+Operator	7:17	{
+EndOfLine	7:18	\n
+Space	8:1	    
+ReservedWord	8:5	val
+Space	8:8	 
+Identifier	8:9	numbers
+Operator	8:16	:
+Space	8:17	 
+Identifier	8:18	List
+Operator	8:22	<
+Identifier	8:23	Int
+Operator	8:26	>
+Space	8:27	 
+Operator	8:28	=
+Space	8:29	 
+Identifier	8:30	List
+Operator	8:34	<
+Identifier	8:35	Int
+Operator	8:38	>
+Operator	8:39	(
+Operator	8:40	)
+EndOfLine	8:41	\n
+Space	9:1	    
+ReservedWord	9:5	val
+Space	9:8	 
+Identifier	9:9	vector
+Operator	9:15	:
+Space	9:16	 
+Identifier	9:17	SmallVector
+Operator	9:28	<
+Number	9:29	4
+Operator	9:30	,
+Space	9:31	 
+Identifier	9:32	Int
+Operator	9:35	>
+Space	9:36	 
+Operator	9:37	=
+Space	9:38	 
+Identifier	9:39	SmallVector
+Operator	9:50	<
+Number	9:51	4
+Operator	9:52	,
+Space	9:53	 
+Identifier	9:54	Int
+Operator	9:57	>
+Operator	9:58	(
+Operator	9:59	)
+EndOfLine	9:60	\n
+Space	10:1	    
+ReservedWord	10:5	val
+Space	10:8	 
+Identifier	10:9	a
+Operator	10:10	:
+Space	10:11	 
+Identifier	10:12	Pair
+Operator	10:16	<
+Identifier	10:17	Int
+Operator	10:20	,
+Space	10:21	 
+Identifier	10:22	Bool
+Operator	10:26	>
+Space	10:27	 
+Operator	10:28	=
+Space	10:29	 
+Identifier	10:30	Pair
+Operator	10:34	<
+Identifier	10:35	Int
+Operator	10:38	,
+Space	10:39	 
+Identifier	10:40	Bool
+Operator	10:44	>
+Operator	10:45	(
+Number	10:46	1
+Operator	10:47	,
+Space	10:48	 
+ReservedWord	10:49	true
+Operator	10:53	)
+EndOfLine	10:54	\n
+Space	11:1	    
+ReservedWord	11:5	val
+Space	11:8	 
+Identifier	11:9	b
+Operator	11:10	:
+Space	11:11	 
+Identifier	11:12	Pair
+Operator	11:16	<
+Identifier	11:17	Str
+Operator	11:20	,
+Space	11:21	 
+Identifier	11:22	Int
+Operator	11:25	>
+Space	11:26	 
+Operator	11:27	=
+Space	11:28	 
+Identifier	11:29	Pair
+Operator	11:33	<
+Identifier	11:34	Str
+Operator	11:37	,
+Space	11:38	 
+Identifier	11:39	Int
+Operator	11:42	>
+Operator	11:43	(
+String	11:44	"two"
+Operator	11:49	,
+Space	11:50	 
+Number	11:51	2
+Operator	11:52	)
+EndOfLine	11:53	\n
+Space	12:1	    
+Identifier	12:5	println
+Operator	12:12	(
+Identifier	12:13	identity
+Operator	12:21	<
+Identifier	12:22	Int
+Operator	12:25	>
+Operator	12:26	(
+Number	12:27	7
+Operator	12:28	)
+Operator	12:29	)
+EndOfLine	12:30	\n
+Space	13:1	    
+Identifier	13:5	println
+Operator	13:12	(
+Identifier	13:13	a
+Operator	13:14	.
+Identifier	13:15	first
+Operator	13:20	)
+EndOfLine	13:21	\n
+Space	14:1	    
+Identifier	14:5	println
+Operator	14:12	(
+Identifier	14:13	b
+Operator	14:14	.
+Identifier	14:15	second
+Operator	14:21	)
+EndOfLine	14:22	\n
+Space	15:1	    
+Identifier	15:5	println
+Operator	15:12	(
+Identifier	15:13	numbers
+Operator	15:20	.
+Identifier	15:21	size
+Operator	15:25	(
+Operator	15:26	)
+Operator	15:27	)
+EndOfLine	15:28	\n
+Space	16:1	    
+ReservedWord	16:5	return
+Space	16:11	 
+Number	16:12	0
+EndOfLine	16:13	\n
+Operator	17:1	}
+EndOfLine	17:2	\n
