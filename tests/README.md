@@ -164,23 +164,27 @@ The emitted file starts with a fixed prelude (`#include "cppsrc/rtl/simse.hpp"`,
 definitions, each preceded by a `// <file>:<line>` source comment. See
 `impl_specs/rtl-abi.md` for the type mapping and the supported subset.
 
-## End-to-end round trip (T8)
+## End-to-end round trip (T8/T9/T10/T12)
 
 The default build (`cmd //c _msvc_build.bat`) also transpiles
-`tests/fixtures/emit_hello.simse` and `tests/fixtures/emit_shapes.simse`,
-compiles the generated C++ (`e2e_emit_hello` / `e2e_emit_shapes`), runs them, and
-diffs their stdout against `tests/golden/<name>.stdout.expected` with
-`cmake -E compare_files --ignore-eol`. The generated sources and captured stdout
-live under `cmake-build-debug/e2e/`. These steps are part of `ALL`, so an
-ordinary (and clean) build exercises the round trip and it cannot rot.
+`tests/fixtures/{emit_hello, emit_shapes, emit_generics, native_readfile,
+emit_containers}.simse`, compiles the generated C++ (`e2e_<name>`), runs each with
+the repository root as the working directory, and diffs its stdout against
+`tests/golden/<name>.stdout.expected` with `cmake -E compare_files --ignore-eol`.
+The generated sources and captured stdout live under `cmake-build-debug/e2e/`.
+`native_readfile` links the `simse_native` library; the RTL prelude
+(`cppsrc/rtl/rtl.simse`) is loaded automatically. These steps are part of `ALL`,
+so an ordinary (and clean) build exercises the round trip and it cannot rot.
 
 ## Transpiler CLI
 
 ```
-simse_transpile <input.simse>... -o <output.cpp>
+simse_transpile <input.simse>... -o <output.cpp> [--prelude <file>]
 ```
 
 With no input arguments it discovers every `.simse` under the current directory
-(recursively, sorted). Errors are written to stderr as
-`<file>:<line>:<col>: <message>` and the process exits nonzero. Run it from the
-repository root so the generated `#include "cppsrc/rtl/simse.hpp"` resolves.
+(recursively, sorted). `--prelude` overrides the default RTL prelude
+(`cppsrc/rtl/rtl.simse`); a missing default is skipped silently. Errors are
+written to stderr as `<file>:<line>:<col>: <message>` and the process exits
+nonzero. Run it from the repository root so the generated
+`#include "cppsrc/rtl/simse.hpp"` resolves.

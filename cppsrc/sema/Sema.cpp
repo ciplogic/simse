@@ -12,6 +12,8 @@ namespace sema {
         struct ValueBinding {
             bool isMutable = true;
             bool checkAssign = false;
+            // Declared or inferred type, when known; null otherwise.
+            ast::TypePtr type;
         };
 
         bool isBuiltinType(const Str &name) {
@@ -25,6 +27,19 @@ namespace sema {
                 if (builtin == name) return true;
             }
             return false;
+        }
+
+        // Number of type parameters a built-in generic expects, or -1 when the
+        // name is not a built-in generic.
+        int builtinGenericArity(const Str &name) {
+            if (name == "List" || name == "Array" || name == "RawArray"
+                || name == "Opt" || name == "Res" || name == "PList") {
+                return 1;
+            }
+            if (name == "Dictionary" || name == "SmallVector") {
+                return 2;
+            }
+            return -1;
         }
 
         class Analyzer {
@@ -88,9 +103,10 @@ namespace sema {
             void pushScope() { scopes.emplace_back(); }
             void popScope() { scopes.pop_back(); }
 
-            void declareValue(const Str &name, bool isMutable, bool checkAssign) {
+            void declareValue(const Str &name, bool isMutable, bool checkAssign,
+                              const ast::TypePtr &type = nullptr) {
                 if (scopes.empty()) return;
-                scopes.back()[name] = ValueBinding{isMutable, checkAssign};
+                scopes.back()[name] = ValueBinding{isMutable, checkAssign, type};
             }
 
             const ValueBinding *lookupValue(const Str &name) {
@@ -130,6 +146,23 @@ namespace sema {
                 diag(pos, "unknown type '" + name + "'");
             }
 
+            // Reports a mismatch between the number of type arguments written at
+            // an instantiation and the declaration's type-parameter count. Unknown
+            // names are skipped (conservative).
+            void checkInstantiationArity(const Str &name, int argCount, const common::SourcePos &pos) {
+                int expected = -1;
+                auto it = types.find(name);
+                if (it != types.end()) {
+                    expected = (int) it->second->typeParams.size();
+                } else {
+                    expected = builtinGenericArity(name);
+                }
+                if (expected >= 0 && argCount != expected) {
+                    diag(pos, "'" + name + "' expects " + std::to_string(expected)
+                              + " type argument(s) but got " + std::to_string(argCount));
+                }
+            }
+
             void resolveType(const ast::TypeExpr &type) {
                 switch (type.kind) {
                     case TypeKind::IntLit:
@@ -139,6 +172,7 @@ namespace sema {
                         return;
                     case TypeKind::Generic:
                         checkTypeName(type.name, type.pos);
+                        checkInstantiationArity(type.name, (int) type.typeArgs.size(), type.pos);
                         for (const ast::TypePtr &arg: type.typeArgs) {
                             resolveType(*arg);
                         }
@@ -162,6 +196,9 @@ namespace sema {
                 switch (decl.kind) {
                     case DeclKind::DataClass:
                         pushTypeScope();
+                        for (const Str &param: decl.typeParams) {
+                            declareType(param);
+                        }
                         pushScope();
                         declareValue("this", true, false);
                         for (const ast::Field &field: decl.fields) {
@@ -203,7 +240,7 @@ namespace sema {
                     if (param.type) resolveType(*param.type);
                     // Parameters are not `val` declarations, so reassigning one is
                     // never reported (under-report rather than risk a false hit).
-                    declareValue(param.name, true, false);
+                    declareValue(param.name, true, false, param.type);
                 }
                 if (decl.returnType) {
                     resolveType(*decl.returnType);
@@ -224,11 +261,14 @@ namespace sema {
 
             void analyzeStmt(const ast::Stmt &stmt) {
                 switch (stmt.kind) {
-                    case StmtKind::VarDecl:
+                    case StmtKind::VarDecl: {
                         if (stmt.init) analyzeExpr(*stmt.init);
                         if (stmt.type) resolveType(*stmt.type);
-                        declareValue(stmt.name, stmt.isVar, true);
+                        ast::TypePtr type = stmt.type;
+                        if (!type && stmt.init) type = exprType(*stmt.init);
+                        declareValue(stmt.name, stmt.isVar, true, type);
                         return;
+                    }
                     case StmtKind::Assign: {
                         if (stmt.target) analyzeExpr(*stmt.target);
                         if (stmt.value) analyzeExpr(*stmt.value);
@@ -293,6 +333,7 @@ namespace sema {
                     case ExprKind::Name:
                         return;
                     case ExprKind::GenericName:
+                        checkGenericNameArity(expr);
                         for (const ast::TypePtr &arg: expr.typeArgs) {
                             resolveType(*arg);
                         }
@@ -306,6 +347,7 @@ namespace sema {
                             analyzeExpr(*arg);
                         }
                         checkCallArity(expr);
+                        checkExtensionCallArity(expr);
                         return;
                     case ExprKind::Index:
                         if (expr.lhs) analyzeExpr(*expr.lhs);
@@ -324,10 +366,12 @@ namespace sema {
                     case ExprKind::Lambda: {
                         pushScope();
                         for (int i = 0; i < (int) expr.paramNames.size(); i++) {
+                            ast::TypePtr type;
                             if (i < (int) expr.paramTypes.size() && expr.paramTypes[i]) {
-                                resolveType(*expr.paramTypes[i]);
+                                type = expr.paramTypes[i];
+                                resolveType(*type);
                             }
-                            declareValue(expr.paramNames[i], true, false);
+                            declareValue(expr.paramNames[i], true, false, type);
                         }
                         int savedLoopDepth = loopDepth;
                         loopDepth = 0;
@@ -341,18 +385,141 @@ namespace sema {
                 }
             }
 
+            void checkGenericNameArity(const ast::Expr &expr) {
+                int argCount = (int) expr.typeArgs.size();
+                auto it = functions.find(expr.text);
+                if (it != functions.end()) {
+                    for (const ast::Decl *function: it->second) {
+                        if ((int) function->functionTypeParams.size() == argCount) return;
+                    }
+                    diag(expr.pos, "no overload of '" + expr.text + "' takes "
+                                   + std::to_string(argCount) + " type argument(s)");
+                    return;
+                }
+                checkInstantiationArity(expr.text, argCount, expr.pos);
+            }
+
             void checkCallArity(const ast::Expr &call) {
-                if (!call.lhs || call.lhs->kind != ExprKind::Name) return;
+                if (!call.lhs) return;
+                bool generic = call.lhs->kind == ExprKind::GenericName;
+                if (call.lhs->kind != ExprKind::Name && !generic) return;
                 const Str &name = call.lhs->text;
                 if (lookupValue(name) != nullptr) return; // shadowed by a local/param
                 auto it = functions.find(name);
                 if (it == functions.end()) return;
                 int argCount = (int) call.args.size();
+                int typeArgCount = generic ? (int) call.lhs->typeArgs.size() : 0;
                 for (const ast::Decl *function: it->second) {
-                    if ((int) function->params.size() == argCount) return;
+                    if ((int) function->params.size() != argCount) continue;
+                    if (generic && (int) function->functionTypeParams.size() != typeArgCount) continue;
+                    return;
                 }
                 diag(call.pos, "no overload of '" + name + "' takes "
                                + std::to_string(argCount) + " argument(s)");
+            }
+
+            // ---- extension (receiver) call resolution ----------------------
+
+            bool isTypeParam(const Str &name, const List<Str> &typeParams) const {
+                for (const Str &param: typeParams) {
+                    if (param == name) return true;
+                }
+                return false;
+            }
+
+            // Simple structural unification of an extension receiver pattern
+            // (which may mention the extension's type parameters) against the
+            // actual receiver type. References/pointers on the receiver side are
+            // auto-dereferenced, matching the List<T> member-call decision.
+            bool unifyReceiver(const ast::TypeExpr &pattern, const ast::TypeExpr &actual,
+                               const List<Str> &typeParams) {
+                const ast::TypeExpr *actualPtr = &actual;
+                if (pattern.kind != TypeKind::Reference && pattern.kind != TypeKind::Pointer) {
+                    while ((actualPtr->kind == TypeKind::Reference
+                            || actualPtr->kind == TypeKind::Pointer) && actualPtr->inner) {
+                        actualPtr = actualPtr->inner.get();
+                    }
+                }
+                const ast::TypeExpr &a = *actualPtr;
+                switch (pattern.kind) {
+                    case TypeKind::IntLit:
+                        return a.kind == TypeKind::IntLit && a.text == pattern.text;
+                    case TypeKind::Named:
+                        if (isTypeParam(pattern.name, typeParams)) return true;
+                        return a.kind == TypeKind::Named && a.name == pattern.name;
+                    case TypeKind::Generic:
+                        if (isTypeParam(pattern.name, typeParams)) return true;
+                        if (a.kind != TypeKind::Generic || a.name != pattern.name) return false;
+                        if (a.typeArgs.size() != pattern.typeArgs.size()) return false;
+                        for (int i = 0; i < (int) a.typeArgs.size(); i++) {
+                            if (!unifyReceiver(*pattern.typeArgs[i], *a.typeArgs[i], typeParams)) {
+                                return false;
+                            }
+                        }
+                        return true;
+                    case TypeKind::Reference:
+                        return a.kind == TypeKind::Reference && a.inner && pattern.inner
+                               && unifyReceiver(*pattern.inner, *a.inner, typeParams);
+                    case TypeKind::Pointer:
+                        return a.kind == TypeKind::Pointer && a.inner && pattern.inner
+                               && unifyReceiver(*pattern.inner, *a.inner, typeParams);
+                    case TypeKind::Function:
+                        return false;
+                }
+                return false;
+            }
+
+            // The receiver's type, when the checker tracks it (a local/parameter
+            // name or a generic construction). Null when unknown.
+            ast::TypePtr exprType(const ast::Expr &expr) {
+                if (expr.kind == ExprKind::Name) {
+                    const ValueBinding *binding = lookupValue(expr.text);
+                    return binding ? binding->type : nullptr;
+                }
+                if (expr.kind == ExprKind::Call && expr.lhs
+                    && expr.lhs->kind == ExprKind::GenericName) {
+                    auto type = std::make_shared<ast::TypeExpr>();
+                    type->kind = TypeKind::Generic;
+                    type->name = expr.lhs->text;
+                    type->typeArgs = expr.lhs->typeArgs;
+                    return type;
+                }
+                return nullptr;
+            }
+
+            // Reports an arity mismatch only when a receiver-compatible extension
+            // method exists but no overload takes the given value-argument count.
+            // Unknown receiver types stay silent (conservative).
+            void checkExtensionCallArity(const ast::Expr &call) {
+                if (!call.lhs || call.lhs->kind != ExprKind::Member) return;
+                const ast::Expr &callee = *call.lhs;
+                auto it = functions.find(callee.text);
+                if (it == functions.end()) return;
+                ast::TypePtr actual = exprType(*callee.lhs);
+                if (!actual) return;
+                int argCount = (int) call.args.size();
+                bool compatible = false;
+                for (const ast::Decl *function: it->second) {
+                    const ast::TypeExpr *receiver = nullptr;
+                    int valueParamCount = 0;
+                    if (function->hasReceiver && function->receiverType) {
+                        receiver = function->receiverType.get();
+                        valueParamCount = (int) function->params.size();
+                    } else if (!function->params.empty() && function->params[0].name == "this"
+                               && function->params[0].type) {
+                        receiver = function->params[0].type.get();
+                        valueParamCount = (int) function->params.size() - 1;
+                    } else {
+                        continue;
+                    }
+                    if (!unifyReceiver(*receiver, *actual, function->functionTypeParams)) continue;
+                    compatible = true;
+                    if (valueParamCount == argCount) return;
+                }
+                if (compatible) {
+                    diag(call.pos, "no overload of '" + callee.text + "' takes "
+                                   + std::to_string(argCount) + " argument(s)");
+                }
             }
         };
     }

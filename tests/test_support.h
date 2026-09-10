@@ -64,4 +64,8 @@ namespace tests {
     // Runs parse and sema over a scan result. `displayName` is used in
     // diagnostics so goldens do not embed machine-specific paths.
     AstSemaResult runAstSema(const ScanResult& scan, const Str& displayName);
+
+    // Parses `name` under `fixturesDir` and emits it in-process (loading the RTL
+    // prelude), returning the C++ or an empty string on failure.
+    Str emitFixtureCpp(Scanner* scanner, const Str& fixturesDir, const Str& name);
 }

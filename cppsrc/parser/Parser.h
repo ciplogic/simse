@@ -12,4 +12,8 @@ namespace parser {
     // Parses a whole module. On failure the returned error is formatted as
     // "<fileName>:<line>:<col>: <message>".
     Res<ast::Module> parseModule(List<lex::Token>& tokens, const Str& fileName);
+
+    // Reads, scans, and parses `fileName`. Convenience for callers that do not
+    // already hold a token stream (for example loading a prelude).
+    Res<ast::Module> parseFile(const Str& fileName);
 }

@@ -156,6 +156,49 @@ namespace tests {
         return "";
     }
 
+    namespace {
+        // The RTL prelude is parsed once and reused. It participates in
+        // resolution but is never emitted (impl_specs/native-interop.md).
+        const ast::Module *defaultPrelude(bool &loaded) {
+            static bool tried = false;
+            static bool ok = false;
+            static ast::Module module;
+            if (!tried) {
+                tried = true;
+#ifdef SIMSE_DEFAULT_PRELUDE
+                Str path = SIMSE_DEFAULT_PRELUDE;
+                if (std::filesystem::exists(path)) {
+                    Res<ast::Module> parsed = parser::parseFile(path);
+                    if (parsed.isOk()) {
+                        module = parsed.Value;
+                        ok = true;
+                    }
+                }
+#endif
+            }
+            loaded = ok;
+            return ok ? &module : nullptr;
+        }
+
+        ast::Module combineWithPrelude(const ast::Module &prelude, const ast::Module &input) {
+            ast::Module combined;
+            combined.pos = input.pos;
+            for (const ast::Import &import: prelude.imports) {
+                combined.imports.push_back(import);
+            }
+            for (const ast::Import &import: input.imports) {
+                combined.imports.push_back(import);
+            }
+            for (const ast::DeclPtr &decl: prelude.declarations) {
+                combined.declarations.push_back(decl);
+            }
+            for (const ast::DeclPtr &decl: input.declarations) {
+                combined.declarations.push_back(decl);
+            }
+            return combined;
+        }
+    }
+
     AstSemaResult runAstSema(const ScanResult &scan, const Str &displayName) {
         AstSemaResult result;
         if (!scan.ok) {
@@ -174,12 +217,26 @@ namespace tests {
 
         result.parsed = true;
         result.ast = ast::dumpModule(parsed.Value);
-        List<Str> diagnostics = sema::analyze(parsed.Value, displayName);
+
+        bool hasPrelude = false;
+        const ast::Module *prelude = defaultPrelude(hasPrelude);
+        ast::Module toAnalyze =
+            hasPrelude ? combineWithPrelude(*prelude, parsed.Value) : parsed.Value;
+        List<Str> diagnostics = sema::analyze(toAnalyze, displayName);
         for (const Str &diagnostic: diagnostics) {
             result.sema += diagnostic + "\n";
         }
 
         List<codegen::Input> inputs;
+        if (hasPrelude) {
+            codegen::Input preludeInput;
+#ifdef SIMSE_DEFAULT_PRELUDE
+            preludeInput.fileName = SIMSE_DEFAULT_PRELUDE;
+#endif
+            preludeInput.module = *prelude;
+            preludeInput.prelude = true;
+            inputs.push_back(preludeInput);
+        }
         codegen::Input input;
         input.fileName = displayName;
         input.module = parsed.Value;
@@ -188,5 +245,33 @@ namespace tests {
         result.hasCpp = true;
         result.cpp = emitted.isOk() ? emitted.Value : ("CodegenError " + emitted.Error + "\n");
         return result;
+    }
+
+    Str emitFixtureCpp(Scanner *scanner, const Str &fixturesDir, const Str &name) {
+        Str path = (std::filesystem::path(fixturesDir) / name).string();
+        ScanResult scan = scanFile(scanner, path);
+        if (!scan.ok) return "";
+        List<Token> tokens = scan.tokens;
+        Res<ast::Module> parsed = parser::parseModule(tokens, name);
+        if (!parsed.isOk()) return "";
+
+        bool hasPrelude = false;
+        const ast::Module *prelude = defaultPrelude(hasPrelude);
+        List<codegen::Input> inputs;
+        if (hasPrelude) {
+            codegen::Input preludeInput;
+#ifdef SIMSE_DEFAULT_PRELUDE
+            preludeInput.fileName = SIMSE_DEFAULT_PRELUDE;
+#endif
+            preludeInput.module = *prelude;
+            preludeInput.prelude = true;
+            inputs.push_back(preludeInput);
+        }
+        codegen::Input input;
+        input.fileName = name;
+        input.module = parsed.Value;
+        inputs.push_back(input);
+        Res<Str> emitted = codegen::emitProgram(inputs);
+        return emitted.isOk() ? emitted.Value : Str("");
     }
 }

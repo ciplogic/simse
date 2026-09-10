@@ -27,7 +27,26 @@ namespace codegen {
             const ast::Decl *decl = nullptr;
             ast::TypePtr receiver; // null for plain top-level functions
             Str file;
+            List<Str> templateParams; // C++ template type parameters
+            bool prelude = false;    // resolved but never emitted
         };
+
+        // A native function declaration to emit at the top of the amalgamated
+        // file (and to call by symbol).
+        struct NativeDecl {
+            const ast::Decl *decl = nullptr;
+            Str file;
+            Str symbol;
+            bool prelude = false; // comes from the RTL; not emitted
+        };
+
+        // Strips the surrounding quotes from a string token's raw text.
+        Str unquote(const Str &text) {
+            if (text.length() >= 2 && text.front() == '"' && text.back() == '"') {
+                return text.substr(1, text.length() - 2);
+            }
+            return text;
+        }
 
         bool isRtlTypeName(const Str &name) {
             static const List<Str> names = {
@@ -50,6 +69,8 @@ namespace codegen {
             Res<Str> run() {
                 collect();
                 prelude();
+                emitNativeDeclarations();
+                if (failed) return resError<Str>(error);
                 emitTypes();
                 if (failed) return resError<Str>(error);
                 emitFunctions(true);
@@ -71,6 +92,13 @@ namespace codegen {
             Dictionary<Str, bool> enumNames;
             List<Fn> functions;
             Dictionary<Str, bool> receiverFnNames;
+            List<NativeDecl> nativeDecls;
+            Dictionary<Str, Str> nativeSymbols; // Simse name -> C++ symbol
+            // Explicit-`this` native extensions: method name -> C++ symbol.
+            Dictionary<Str, Str> nativeExtensions;
+
+            // C++ type parameters currently in scope (for generic declarations).
+            Dictionary<Str, bool> activeTypeParams;
 
             // Per-function name kinds.
             Dictionary<Str, NameKind> nameKinds;
@@ -104,11 +132,29 @@ namespace codegen {
                 return type;
             }
 
-            void addFunction(const ast::Decl *decl, ast::TypePtr receiver, const Str &file) {
+            // The receiver type of a class method: `Name<A, B>` for a generic
+            // class, `Name` otherwise.
+            ast::TypePtr classReceiver(const ast::Decl &decl) {
+                if (decl.typeParams.empty()) {
+                    return namedTypeExpr(decl.name);
+                }
+                auto type = std::make_shared<ast::TypeExpr>();
+                type->kind = TypeKind::Generic;
+                type->name = decl.name;
+                for (const Str &param: decl.typeParams) {
+                    type->typeArgs.push_back(namedTypeExpr(param));
+                }
+                return type;
+            }
+
+            void addFunction(const ast::Decl *decl, ast::TypePtr receiver, const Str &file,
+                             const List<Str> &templateParams, bool prelude) {
                 Fn fn;
                 fn.decl = decl;
                 fn.receiver = receiver;
                 fn.file = file;
+                fn.templateParams = templateParams;
+                fn.prelude = prelude;
                 functions.push_back(fn);
                 if (receiver) {
                     receiverFnNames[decl->name] = true;
@@ -119,9 +165,25 @@ namespace codegen {
                 for (const Input &input: inputs) {
                     for (const ast::DeclPtr &decl: input.module.declarations) {
                         if (decl->kind == DeclKind::Function) {
+                            if (decl->isNative) {
+                                NativeDecl native;
+                                native.decl = decl.get();
+                                native.file = input.fileName;
+                                native.prelude = input.prelude;
+                                native.symbol = decl->hasNativeSymbol
+                                                    ? unquote(decl->nativeSymbol)
+                                                    : decl->name;
+                                nativeDecls.push_back(native);
+                                nativeSymbols[decl->name] = native.symbol;
+                                // A native with an explicit `this` first parameter is an
+                                // extension method; member calls lower to symbol(receiver, ...).
+                                if (!decl->params.empty() && decl->params[0].name == "this") {
+                                    nativeExtensions[decl->name] = native.symbol;
+                                }
+                            }
                             addFunction(decl.get(),
                                         decl->hasReceiver ? decl->receiverType : nullptr,
-                                        input.fileName);
+                                        input.fileName, decl->functionTypeParams, input.prelude);
                             continue;
                         }
                         types[decl->name] = decl.get();
@@ -129,9 +191,14 @@ namespace codegen {
                             enumNames[decl->name] = true;
                         }
                         if (decl->kind == DeclKind::DataClass) {
-                            ast::TypePtr receiver = namedTypeExpr(decl->name);
+                            ast::TypePtr receiver = classReceiver(*decl);
                             for (const ast::DeclPtr &method: decl->methods) {
-                                addFunction(method.get(), receiver, input.fileName);
+                                List<Str> methodParams = decl->typeParams;
+                                for (const Str &param: method->functionTypeParams) {
+                                    methodParams.push_back(param);
+                                }
+                                addFunction(method.get(), receiver, input.fileName, methodParams,
+                                            input.prelude);
                             }
                         }
                     }
@@ -140,8 +207,40 @@ namespace codegen {
 
             // ---- type mapping ---------------------------------------------
 
+            void setActiveTypeParams(const List<Str> &params) {
+                activeTypeParams.clear();
+                for (const Str &param: params) {
+                    activeTypeParams[param] = true;
+                }
+            }
+
+            Str templateClause(const List<Str> &params) {
+                if (params.empty()) return "";
+                List<Str> parts;
+                for (const Str &param: params) {
+                    parts.push_back("class " + param);
+                }
+                return "template <" + join(parts, ", ") + ">";
+            }
+
+            // Renders the template argument list for a generic name, applying the
+            // built-in parameter reorder (SmallVector<N, T> -> SmallVector<T, N>).
+            Str typeArgsString(const Str &baseName, const List<ast::TypePtr> &args) {
+                List<Str> rendered;
+                for (const ast::TypePtr &arg: args) {
+                    rendered.push_back(type(*arg));
+                }
+                if (baseName == "SmallVector" && rendered.size() == 2) {
+                    Str first = rendered[0];
+                    rendered[0] = rendered[1];
+                    rendered[1] = first;
+                }
+                return join(rendered, ", ");
+            }
+
             Str typeName(const Str &name, const common::SourcePos &pos) {
                 if (name == "Unit") return "void";
+                if (activeTypeParams.count(name) > 0) return name;
                 if (isRtlTypeName(name)) return name;
                 if (types.count(name) > 0) return name;
                 fail(pos, "unsupported type '" + name + "'");
@@ -154,14 +253,9 @@ namespace codegen {
                         return typeExpr.text;
                     case TypeKind::Named:
                         return typeName(typeExpr.name, typeExpr.pos);
-                    case TypeKind::Generic: {
-                        Str base = typeName(typeExpr.name, typeExpr.pos);
-                        List<Str> args;
-                        for (const ast::TypePtr &arg: typeExpr.typeArgs) {
-                            args.push_back(type(*arg));
-                        }
-                        return base + "<" + join(args, ", ") + ">";
-                    }
+                    case TypeKind::Generic:
+                        return typeName(typeExpr.name, typeExpr.pos)
+                               + "<" + typeArgsString(typeExpr.name, typeExpr.typeArgs) + ">";
                     case TypeKind::Reference:
                         return "std::shared_ptr<"
                                + (typeExpr.inner ? type(*typeExpr.inner) : Str("void")) + ">";
@@ -189,6 +283,7 @@ namespace codegen {
 
             void emitTypes() {
                 for (const Input &input: inputs) {
+                    if (input.prelude) continue;
                     curFile = input.fileName;
                     for (const ast::DeclPtr &decl: input.module.declarations) {
                         if (decl->kind == DeclKind::DataClass) {
@@ -204,6 +299,7 @@ namespace codegen {
             }
 
             void emitDataClass(const ast::Decl &decl) {
+                setActiveTypeParams(decl.typeParams);
                 List<Str> params;
                 List<Str> inits;
                 for (const ast::Field &field: decl.fields) {
@@ -217,6 +313,8 @@ namespace codegen {
                 if (failed) return;
 
                 sourceComment(decl.pos);
+                Str tmpl = templateClause(decl.typeParams);
+                if (!tmpl.empty()) line(0, tmpl);
                 line(0, "struct " + decl.name + " {");
                 for (const ast::Field &field: decl.fields) {
                     line(1, type(*field.type) + " " + field.name + ";");
@@ -229,6 +327,8 @@ namespace codegen {
 
             void emitEnum(const ast::Decl &decl) {
                 sourceComment(decl.pos);
+                Str tmpl = templateClause(decl.typeParams);
+                if (!tmpl.empty()) line(0, tmpl);
                 line(0, "enum class " + decl.name + " {");
                 for (const ast::EnumMember &member: decl.members) {
                     Str text = member.name;
@@ -239,22 +339,64 @@ namespace codegen {
             }
 
             void emitTypeAlias(const ast::Decl &decl) {
-                if (!decl.typeParams.empty()) {
-                    fail(decl.pos, "unsupported: generic typealias '" + decl.name + "'");
-                    return;
-                }
                 if (!decl.targetType) {
                     fail(decl.pos, "unsupported: typealias '" + decl.name + "' without a target type");
                     return;
                 }
+                setActiveTypeParams(decl.typeParams);
                 Str target = type(*decl.targetType);
                 if (failed) return;
                 sourceComment(decl.pos);
+                Str tmpl = templateClause(decl.typeParams);
+                if (!tmpl.empty()) line(0, tmpl);
                 line(0, "using " + decl.name + " = " + target + ";");
+            }
+
+            // Native functions are declared once at the top of the file; their
+            // symbols are hand-written C++ (impl_specs/native-interop.md).
+            void emitNativeDeclarations() {
+                setActiveTypeParams({});
+                for (const NativeDecl &native: nativeDecls) {
+                    if (native.prelude) continue; // provided by the RTL header
+                    curFile = native.file;
+                    const ast::Decl &decl = *native.decl;
+                    setActiveTypeParams(decl.functionTypeParams);
+                    if (native.symbol.find("::") != Str::npos) {
+                        fail(decl.pos, "unsupported: namespaced native symbol '" + native.symbol
+                                       + "' needs a global wrapper");
+                        return;
+                    }
+                    Str ret = decl.returnType ? type(*decl.returnType) : Str("void");
+                    if (failed) return;
+                    List<Str> params;
+                    for (const ast::Param &param: decl.params) {
+                        if (!param.type) {
+                            fail(param.pos, "unsupported: native parameter '" + param.name
+                                            + "' without a type");
+                            return;
+                        }
+                        Str mapped = type(*param.type);
+                        if (failed) return;
+                        // An explicit `this` receiver is emitted as `self` so the
+                        // declaration is valid C++ and matches the call lowering.
+                        Str name = param.name == "this" ? Str("self") : param.name;
+                        if (param.type->kind == TypeKind::Pointer
+                            || param.type->kind == TypeKind::Reference) {
+                            params.push_back(mapped + " " + name);
+                        } else {
+                            params.push_back("const " + mapped + "& " + name);
+                        }
+                    }
+                    sourceComment(decl.pos);
+                    Str tmpl = templateClause(decl.functionTypeParams);
+                    if (!tmpl.empty()) line(0, tmpl);
+                    line(0, ret + " " + native.symbol + "(" + join(params, ", ") + ");");
+                }
             }
 
             void emitFunctions(bool prototypeOnly) {
                 for (const Fn &fn: functions) {
+                    if (fn.prelude) continue;
                     curFile = fn.file;
                     emitFunction(fn, prototypeOnly);
                     if (failed) return;
@@ -276,10 +418,8 @@ namespace codegen {
 
             void emitFunction(const Fn &fn, bool prototypeOnly) {
                 const ast::Decl &decl = *fn.decl;
-                if (decl.isNative) {
-                    fail(decl.pos, "unsupported: native function '" + decl.name + "'");
-                    return;
-                }
+                // Native functions are declared by emitNativeDeclarations, not here.
+                if (decl.isNative) return;
 
                 bool isMain = !fn.receiver && decl.name == "main";
                 if (isMain && prototypeOnly) return;
@@ -288,6 +428,7 @@ namespace codegen {
                     return;
                 }
 
+                setActiveTypeParams(fn.templateParams);
                 Str ret = isMain ? "int" : (decl.returnType ? type(*decl.returnType) : Str("void"));
                 if (failed) return;
 
@@ -321,7 +462,9 @@ namespace codegen {
                 }
 
                 Str signature = ret + " " + decl.name + "(" + join(params, ", ") + ")";
+                Str tmpl = templateClause(fn.templateParams);
                 if (prototypeOnly) {
+                    if (!tmpl.empty()) line(0, tmpl);
                     line(0, signature + ";");
                     return;
                 }
@@ -330,6 +473,7 @@ namespace codegen {
                 }
 
                 sourceComment(decl.pos);
+                if (!tmpl.empty()) line(0, tmpl);
                 line(0, signature + " {");
                 beginScope(fn, hasSelf, selfK);
                 emitStmts(decl.body, 1);
@@ -541,8 +685,14 @@ namespace codegen {
             Str call(const ast::Expr &e) {
                 const ast::Expr &callee = *e.lhs;
                 if (callee.kind == ExprKind::GenericName) {
-                    fail(e.pos, "unsupported: generic-qualified call '" + callee.text + "<...>'");
-                    return "/*unsupported*/";
+                    // A generic type construction (`List<Int>()`) or a generic
+                    // function call (`identity<Int>(x)`); both lower directly.
+                    List<Str> args;
+                    for (const ast::ExprPtr &arg: e.args) {
+                        args.push_back(expr(*arg, 0));
+                    }
+                    return callee.text + "<" + typeArgsString(callee.text, callee.typeArgs)
+                           + ">(" + join(args, ", ") + ")";
                 }
                 if (callee.kind == ExprKind::Name) {
                     if (callee.text == "println" || callee.text == "print") {
@@ -555,9 +705,16 @@ namespace codegen {
                     for (const ast::ExprPtr &arg: e.args) {
                         args.push_back(expr(*arg, 0));
                     }
-                    return callee.text + "(" + join(args, ", ") + ")";
+                    auto native = nativeSymbols.find(callee.text);
+                    Str calleeName = native != nativeSymbols.end() ? native->second : callee.text;
+                    return calleeName + "(" + join(args, ", ") + ")";
                 }
                 if (callee.kind == ExprKind::Member) {
+                    if (callee.lhs && callee.lhs->kind == ExprKind::GenericName) {
+                        fail(e.pos, "unsupported: generic-qualified static call '"
+                                       + callee.lhs->text + "<...>." + callee.text + "'");
+                        return "/*unsupported*/";
+                    }
                     List<Str> args;
                     for (const ast::ExprPtr &arg: e.args) {
                         args.push_back(expr(*arg, 0));
@@ -571,6 +728,16 @@ namespace codegen {
                             all += ", " + arg;
                         }
                         return callee.text + "(" + all + ")";
+                    }
+                    auto extension = nativeExtensions.find(callee.text);
+                    if (extension != nativeExtensions.end()) {
+                        // A native extension: receiver first, then the arguments.
+                        Str receiver = expr(*callee.lhs, 9);
+                        Str all = receiver;
+                        for (const Str &arg: args) {
+                            all += ", " + arg;
+                        }
+                        return extension->second + "(" + all + ")";
                     }
                     return memberAccess(*callee.lhs, callee.text)
                            + "(" + join(args, ", ") + ")";

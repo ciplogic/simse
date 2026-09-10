@@ -9,6 +9,7 @@
 // dependencies, and the higher-level headers build on them.
 #include "types.hpp"        // scalar aliases and Str
 #include "containers.hpp"   // SmallVector, List, PList, Dictionary, Array, RawArray
+#include "listops.hpp"      // simse_list_* native List operations (prelude)
 #include "optional.hpp"     // Opt<T>
 #include "functional.hpp"   // Func, Action, AutoDefer
 #include "result.hpp"       // Result/Res, ok, resError, err

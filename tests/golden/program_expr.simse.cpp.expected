@@ -1,1 +1,1 @@
-CodegenError program_expr.simse:3:27: unsupported: generic-qualified call 'List<...>'
+CodegenError program_expr.simse:5:29: unsupported: generic-qualified static call 'Res<...>.ok'

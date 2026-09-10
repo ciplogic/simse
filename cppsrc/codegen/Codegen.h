@@ -12,10 +12,13 @@
 
 namespace codegen {
     // One parsed input file. The file name is used in source-map comments and
-    // diagnostics.
+    // diagnostics. A `prelude` input participates in symbol collection (so its
+    // declarations resolve) but is never emitted; this is how the RTL surface is
+    // made available without an import (impl_specs/native-interop.md).
     struct Input {
         Str fileName;
         ast::Module module;
+        bool prelude = false;
     };
 
     // Amalgamates every input into one C++ translation unit. Deterministic: the

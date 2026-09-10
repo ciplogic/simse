@@ -182,6 +182,9 @@ namespace parser {
                 advance(); // data
                 if (!expectText("class")) return decl;
                 if (!expectIdentifier(decl->name)) return decl;
+                if (checkText("<")) {
+                    if (!parseTypeParams(decl->typeParams)) return decl;
+                }
 
                 if (matchText("(")) {
                     skipSeparators();
@@ -231,6 +234,9 @@ namespace parser {
                 decl->pos = peek().pos;
                 advance(); // enum
                 if (!expectIdentifier(decl->name)) return decl;
+                if (checkText("<")) {
+                    if (!parseTypeParams(decl->typeParams)) return decl;
+                }
                 if (!expectText("{")) return decl;
                 skipSeparators();
                 while (!checkText("}") && !atEnd()) {
@@ -885,5 +891,16 @@ namespace parser {
             return resError<ast::Module>(parser.error);
         }
         return ok(module);
+    }
+
+    Res<ast::Module> parseFile(const Str &fileName) {
+        List<lex::TokenMatcher> rules = lex::getTokenRules();
+        lex::Scanner scanner(&rules);
+        Res<List<lex::Token>> tokens = lex::readFileAndSkipSpacesTokens(&scanner, fileName);
+        if (!tokens.isOk()) {
+            return resError<ast::Module>(tokens.Error);
+        }
+        List<lex::Token> tokenList = tokens.Value;
+        return parseModule(tokenList, fileName);
     }
 }

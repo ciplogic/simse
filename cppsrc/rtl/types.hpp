@@ -13,6 +13,7 @@ using Float32 = float;
 using Float64 = double;
 using Char    = std::int8_t;
 using Int     = Int32; // default integer type; alias of Int32
+using Bool    = bool;  // two-valued built-in (specs/built-in-types.md)
 
 // Str is the mutable inline byte-string type. The runtime representation uses
 // std::string, which satisfies the deep-copy value semantics the specs require.

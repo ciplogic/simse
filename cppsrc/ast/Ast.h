@@ -157,7 +157,7 @@ namespace ast {
         // Enum
         List<EnumMember> members;
 
-        // TypeAlias
+        // DataClass / Enum / TypeAlias type parameters
         List<Str> typeParams;
         TypePtr targetType;
 

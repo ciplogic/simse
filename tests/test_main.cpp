@@ -6,6 +6,7 @@
 //
 
 #include "test_support.h"
+#include "../cppsrc/codegen/Codegen.h"
 #include "../cppsrc/common/common.h"
 #include "../cppsrc/parser/Parser.h"
 #include "../cppsrc/sema/Sema.h"
@@ -89,6 +90,33 @@ namespace {
 
     Str goldenPathFor(const Str &goldenDir, const Str &name, const Str &category) {
         return (std::filesystem::path(goldenDir) / (name + "." + category + ".expected")).string();
+    }
+
+    // Distinct `Prefix<...>` forms occurring in `text` (in first-seen order).
+    List<Str> distinctForms(const Str &text, const Str &prefix) {
+        List<Str> forms;
+        size_t pos = text.find(prefix, 0);
+        while (pos != Str::npos) {
+            size_t end = text.find('>', pos);
+            if (end == Str::npos) break;
+            Str form = text.substr(pos, end - pos + 1);
+            bool seen = false;
+            for (const Str &existing: forms) {
+                if (existing == form) {
+                    seen = true;
+                    break;
+                }
+            }
+            if (!seen) forms.push_back(form);
+            pos = text.find(prefix, end + 1);
+        }
+        return forms;
+    }
+
+    // Parses and emits a single fixture in-process (with the RTL prelude),
+    // returning the C++ or an empty string on failure.
+    Str emitFixture(Scanner *scanner, const Str &fixturesDir, const Str &name) {
+        return emitFixtureCpp(scanner, fixturesDir, name);
     }
 
     // Compares (or, in update mode, rewrites) one golden. Returns false and
@@ -233,6 +261,64 @@ int main(int argc, char **argv) {
         } else {
             failed++;
             printf("FAIL hoisting.simse: expected parse ok and zero sema diagnostics\n");
+        }
+    }
+
+    // T9: the generic fixture must emit both distinct instantiations and no
+    // unused one, and lower generic functions and built-in containers.
+    {
+        Str cpp = emitFixture(&scanner, fixturesDir, "emit_generics.simse");
+        List<Str> pairs = distinctForms(cpp, "Pair<");
+        bool ok = !cpp.empty()
+                  && pairs.size() == 2
+                  && pairs[0] != pairs[1]
+                  && cpp.find("Pair<Int, Bool>") != Str::npos
+                  && cpp.find("Pair<Str, Int>") != Str::npos
+                  && cpp.find("identity<Int>") != Str::npos
+                  && cpp.find("List<Int>") != Str::npos
+                  && cpp.find("SmallVector<Int, 4>") != Str::npos;
+        if (ok) {
+            passed++;
+            printf("PASS emit_generics.simse (templates: two instantiations, no unused)\n");
+        } else {
+            failed++;
+            printf("FAIL emit_generics.simse: generic instantiation assertions failed\n");
+        }
+    }
+
+    // T10: the native fixture must declare the symbol once, emit no body, and
+    // call the symbol directly.
+    {
+        Str cpp = emitFixture(&scanner, fixturesDir, "native_readfile.simse");
+        bool ok = !cpp.empty()
+                  && cpp.find("Str simse_native_readFile(const Str& path);") != Str::npos
+                  && cpp.find("simse_native_readFile(\"tests/fixtures/native_data.txt\")") != Str::npos;
+        if (ok) {
+            passed++;
+            printf("PASS native_readfile.simse (native symbol declared and called)\n");
+        } else {
+            failed++;
+            printf("FAIL native_readfile.simse: native emission assertions failed\n");
+        }
+    }
+
+    // T12: container methods lower to the native extension symbols, receiver
+    // first, and are not emitted as written.
+    {
+        Str cpp = emitFixture(&scanner, fixturesDir, "emit_containers.simse");
+        bool ok = !cpp.empty()
+                  && cpp.find("simse_list_append(") != Str::npos
+                  && cpp.find("simse_list_removeAt(") != Str::npos
+                  && cpp.find("simse_list_removeRange(") != Str::npos
+                  && cpp.find(".append(") == Str::npos
+                  && cpp.find(".removeAt(") == Str::npos
+                  && cpp.find(".removeRange(") == Str::npos;
+        if (ok) {
+            passed++;
+            printf("PASS emit_containers.simse (List methods lower to simse_list_*)\n");
+        } else {
+            failed++;
+            printf("FAIL emit_containers.simse: container method emission assertions failed\n");
         }
     }
 

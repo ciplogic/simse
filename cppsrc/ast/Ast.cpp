@@ -202,6 +202,9 @@ namespace ast {
                 switch (d.kind) {
                     case DeclKind::DataClass:
                         line(indent, "DataClass " + d.name + " @" + posStr(d.pos));
+                        if (!d.typeParams.empty()) {
+                            line(indent + 1, "TypeParams " + joinNames(d.typeParams));
+                        }
                         for (const Field &field: d.fields) {
                             Str text = Str("Field ") + (field.isVar ? "var " : "val ") + field.name;
                             if (field.type) text += ": " + typeToString(*field.type);
@@ -214,6 +217,9 @@ namespace ast {
                         break;
                     case DeclKind::Enum:
                         line(indent, "Enum " + d.name + " @" + posStr(d.pos));
+                        if (!d.typeParams.empty()) {
+                            line(indent + 1, "TypeParams " + joinNames(d.typeParams));
+                        }
                         for (const EnumMember &member: d.members) {
                             Str text = "Member " + member.name;
                             if (member.hasValue) text += " = " + std::to_string(member.value);
