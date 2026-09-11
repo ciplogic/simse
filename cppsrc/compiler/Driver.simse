@@ -12,6 +12,8 @@
 //
 // The filesystem/IO helpers are the T23 prelude natives (cppsrc/rtl/fs.simse).
 
+package cppsrc.compiler
+
 import cppsrc.lex
 import cppsrc.parser
 import cppsrc.sema
@@ -70,6 +72,71 @@ fun driverDottedPath(dotted: Str): Str {
     return out
 }
 
+// `[cppsrc, lex]` -> `cppsrc.lex` (the inverse of driverDottedPath).
+fun driverJoinDotted(parts: List<Str>): Str {
+    var out: Str = ""
+    var i: Int = 0
+    while (i < parts.size()) {
+        if (i > 0) {
+            out = out + "."
+        }
+        out = out + parts[i]
+        i = i + 1
+    }
+    return out
+}
+
+// A light token scan of a file's leading `package a.b.c` header, mirroring
+// parser::readPackageHeader. A file with no package (or a scan error) returns an
+// empty list; only the header is read.
+fun driverReadPackageHeader(fileName: Str): List<Str> {
+    var scanner: Scanner = Scanner(getTokenRules(), 0, 1, 1, Str())
+    scanner.setSource(readFile(fileName))
+    var toks: List<Token> = List<Token>()
+    while (true) {
+        val result: Res<Token> = scanner.nextToken()
+        if (!result.isOk()) {
+            return List<Str>()
+        }
+        if (result.Value.kind == TokenKind.Eof) {
+            break
+        }
+        if (result.Value.kind != TokenKind.Space && result.Value.kind != TokenKind.Comment) {
+            toks.append(result.Value)
+        }
+    }
+
+    var i: Int = 0
+    while (i < toks.size() && toks[i].kind == TokenKind.EndOfLine) {
+        i = i + 1
+    }
+    if (i >= toks.size() || toks[i].text != "package") {
+        return List<Str>()
+    }
+    i = i + 1
+    var parts: List<Str> = List<Str>()
+    var expectName: Bool = true
+    while (i < toks.size()) {
+        if (toks[i].kind == TokenKind.EndOfLine) {
+            break
+        }
+        if (expectName) {
+            if (toks[i].kind != TokenKind.Identifier) {
+                break
+            }
+            parts.append(toks[i].text)
+            expectName = false
+        } else {
+            if (toks[i].text != ".") {
+                break
+            }
+            expectName = true
+        }
+        i = i + 1
+    }
+    return parts
+}
+
 // ---- scanning / parsing ---------------------------------------------------
 
 // Reads, scans, and parses one file. Matches parser::parseFile: the scanner error
@@ -105,7 +172,9 @@ data class ImportLoader(
     var loading: List<Str>;
     var loaded: List<Str>;
     var error: Str;
-    var merged: XmlNode
+    var merged: XmlNode;
+    var indexBuilt: Bool;
+    var byPackage: Dictionary<Str, List<Str>>
 ) {
 
     fun isActive(canon: Str): Bool {
@@ -130,6 +199,49 @@ data class ImportLoader(
         return false
     }
 
+    // Package index: dotted package -> files declaring it (sorted). Built lazily
+    // by scanning every `*.simse` under the resolution root; mirrors
+    // parser::ImportLoader::buildIndex so both stages resolve identically.
+    fun buildIndex(): Unit {
+        if (this.indexBuilt) {
+            return
+        }
+        this.indexBuilt = true
+        var root: Str = this.rootDir
+        if (root == "") {
+            root = "."
+        }
+        val files: List<Str> = listFiles(root, ".simse")
+        var i: Int = 0
+        while (i < files.size()) {
+            val pkg: List<Str> = driverReadPackageHeader(files[i])
+            if (pkg.size() > 0) {
+                val key: Str = driverJoinDotted(pkg)
+                var entries: List<Str> = List<Str>()
+                val existing: Opt<List<Str>> = this.byPackage.get(key)
+                if (existing.hasValue()) {
+                    entries = existing.value()
+                }
+                entries.append(files[i])
+                this.byPackage.insert(key, entries)
+            }
+            i = i + 1
+        }
+    }
+
+    // `import p` selects every file whose declared package is exactly `p`. If no
+    // package matches, fall back silently to directory resolution
+    // (`<root>/p/as/dir`).
+    fun resolveImport(dotted: Str): List<Str> {
+        this.buildIndex()
+        val match: Opt<List<Str>> = this.byPackage.get(dotted)
+        if (match.hasValue() && match.value().size() > 0) {
+            return match.value()
+        }
+        val dir: Str = this.rootDir + "/" + driverDottedPath(dotted)
+        return listFilesDirect(dir, ".simse")
+    }
+
     fun load(path: Str): Bool {
         val canon: Str = pathCanonical(path)
         if (this.isActive(canon)) {
@@ -152,12 +264,11 @@ data class ImportLoader(
         while (i < imports.size()) {
             val importNode: XmlNode = imports[i]
             val dotted: Str = xmlAttr(importNode, "path")
-            val dir: Str = this.rootDir + "/" + driverDottedPath(dotted)
-            val files: List<Str> = listFilesDirect(dir, ".simse")
+            val files: List<Str> = this.resolveImport(dotted)
             if (files.size() == 0) {
                 this.error = path + ":" + xmlLine(importNode).toString() + ":"
                              + xmlColumn(importNode).toString()
-                             + ": cannot resolve import '" + dotted + "': no .simse files under " + dir
+                             + ": cannot resolve import '" + dotted + "': no file declares package '" + dotted + "'"
                 return false
             }
             var f: Int = 0
@@ -195,7 +306,7 @@ data class ImportLoader(
 }
 
 fun driverLoadWithImports(fileName: Str, rootDir: Str): Res<XmlNode> {
-    var loader: ImportLoader = ImportLoader(rootDir, List<Str>(), List<Str>(), "", driverNewModule())
+    var loader: ImportLoader = ImportLoader(rootDir, List<Str>(), List<Str>(), "", driverNewModule(), false, dictionaryOf<Str, List<Str>>())
     if (!loader.load(fileName)) {
         return Res<XmlNode>.err(loader.error)
     }

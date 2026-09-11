@@ -9,6 +9,8 @@
 // are available through the `cppsrc.common` import that the parser already pulls
 // in. The concrete XmlNode/Attribute types come from the RTL prelude.
 
+package cppsrc.common
+
 // An empty node is the "absent" sentinel: the schema has no null, so a missing
 // optional child (an untyped field, a missing return type, ...) is an empty node.
 fun xmlEmptyNode(): XmlNode {

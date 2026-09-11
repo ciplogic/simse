@@ -125,6 +125,16 @@ var other: Opt<Color> = Color.fromInt(4)    // some(Color.Green)
 var bad: Opt<Color> = Color.fromInt(9)      // none
 ```
 
+## Package declarations
+
+Status: required for the first implementation.
+
+A file may carry one optional, file-level `package a.b.c` declaration before its
+imports and other declarations; a file without one is in the root package.
+`package` is a reserved keyword. It is namespacing/grouping only and gives no
+visibility semantics; `import a.b.c` selects the declarations of every file that
+declares package `a.b.c`. See `functions.md` for the full rules.
+
 ## Hoisting
 
 Status: required for the first implementation.

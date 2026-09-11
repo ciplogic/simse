@@ -6,6 +6,8 @@
 //
 // StrView lives in cppsrc/common/StrView.simse.
 
+package cppsrc.lex
+
 import cppsrc.common
 
 enum TokenKind {

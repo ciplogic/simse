@@ -12,8 +12,8 @@
 //
 // Prelude loading and import merging follow the compiler's existing rules
 // (impl_specs/native-interop.md, specs/functions.md): the prelude participates in
-// symbol collection but is never emitted, and `import a.b.c` names the directory
-// `<root>/a/b/c`.
+// symbol collection but is never emitted, and `import a.b.c` selects every file
+// that declares `package a.b.c` under the resolution root.
 
 namespace compiler {
     struct Request {

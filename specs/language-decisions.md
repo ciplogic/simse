@@ -16,6 +16,7 @@ Nothing here overrides the topic specs; where a topic spec speaks, it wins.
 | `List<T>` minimal API (`append`, `insert`, `removeAt`, `removeRange`, `clear`) and indexing through `&List<T>`/`*List<T>` | `containers.md` |
 | `Res<T>`/`Opt<T>` inspection (`isOk`, `value`, `error`, `hasValue`) | `core-types.md` |
 | `import a.b.c` imports a module's top-level declarations | `functions.md` |
+| `package a.b.c` groups a file's declarations for import | `functions.md`, `declarations.md` |
 | `native fun` declaration form and explicit `native("Symbol")` | `functions.md` |
 | `break`/`continue` are reserved and loop-only | `functions.md` |
 | Default parameter values are deferred | `functions.md` |
@@ -30,8 +31,8 @@ These are explicitly deferred and must not be depended on by the parser or the
 mirrors:
 
 - default parameter values;
-- file-versus-package resolution for `import` beyond the bootstrap directory
-  rule;
+- the directory fallback for `import` (used only when no file declares the named
+  package); new code should declare packages;
 - the final `native` symbol-naming, linkage, and build integration (see
   `impl_specs/native-interop.md`);
 - the precise syntax for declaring and entering an `unsafe` block.

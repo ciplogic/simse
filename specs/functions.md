@@ -212,16 +212,41 @@ Implementations should either skip unsupported body constructs as balanced token
 regions or report a clear unsupported-body diagnostic. They must not partially
 compile unsupported non-method code.
 
-## Imports
+## Packages and imports
 
 Status: required for the first implementation.
 
-`import a.b.c` imports all top-level declarations of the module identified by
-the dotted path. The exact file-versus-package resolution remains **provisional**:
-for the bootstrap implementation, a dotted path names a directory relative to the
-repository root and the import merges every `*.simse` file directly under that
-directory into the importer's module scope. Import cycles must be detected and
-reported rather than followed indefinitely.
+A file may begin with an optional, single, file-level package declaration:
+
+```text
+package a.b.c
+```
+
+It must appear after any leading blank lines and before imports and every other
+declaration. A file with no `package` is in the unnamed (root) package.
+`package` is a reserved keyword.
+
+`package` is namespacing and grouping only: it does not introduce visibility or
+access-control semantics, and it does not change how names resolve inside the
+declaring file. Its sole effect is to let `import` select a set of files.
+
+`import a.b.c` imports every top-level declaration of every file whose declared
+package is exactly `a.b.c`. Imports are transitive and diamond-deduplicated
+(importing the same package through several paths merges it once); import cycles
+are detected and reported rather than followed indefinitely. Resolution is by
+package name, decoupled from folder layout, so it does not depend on the working
+directory:
+
+```text
+package cppsrc.lex
+
+import cppsrc.common
+```
+
+As a silent fallback, when no file declares the imported package, the dotted path
+is treated as a directory relative to the resolution root and every `*.simse` file
+directly under it is merged. The fallback exists only for the bootstrap and
+reports nothing extra; new code should declare packages.
 
 ## Native functions
 

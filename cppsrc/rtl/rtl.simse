@@ -9,6 +9,8 @@
 // The explicit `this` parameter makes each declaration an extension on its
 // receiver's type; the explicit symbol names the C++ implementation.
 
+package cppsrc.rtl
+
 // ---- List<T> --------------------------------------------------------------
 
 native("simse_list_append") fun append<T>(this: List<T>, value: T): Unit

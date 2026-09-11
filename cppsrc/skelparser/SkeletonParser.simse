@@ -8,6 +8,8 @@
 // token the parser folds back to the nearest unmatched opening token of the
 // same kind, then deletes the folded range from where the block was opened.
 
+package cppsrc.skelparser
+
 import cppsrc.lex
 
 enum SkeletonType {

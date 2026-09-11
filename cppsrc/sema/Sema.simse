@@ -11,6 +11,8 @@
 // is an if-chain, not a `switch`, because the emitted C++ `switch` cannot switch
 // on a `Str`.
 
+package cppsrc.sema
+
 import cppsrc.parser
 
 // The read-only XmlNode accessors (xmlAttr, xmlChild, xmlChildren, ...) live in

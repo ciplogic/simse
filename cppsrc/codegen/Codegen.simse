@@ -17,6 +17,8 @@
 // cannot switch on a `Str`. Method overloading is avoided (method dispatch is by
 // name and receiver, not arity).
 
+package cppsrc.codegen
+
 import cppsrc.sema
 
 // One parsed input. `prelude` inputs participate in symbol collection but are

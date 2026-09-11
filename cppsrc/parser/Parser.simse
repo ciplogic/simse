@@ -8,6 +8,8 @@
 // Iteration uses Cursor<T> (there is no range-for). Errors are recorded in
 // `failed`/`error`; the entry points return Res.err with a positioned message.
 
+package cppsrc.parser
+
 import cppsrc.lex
 
 // An expression node plus the source position where the expression started. The
@@ -155,16 +157,40 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
     // ---- module -----------------------------------------------------------
 
     fun parseRoot(): XmlNode {
+        this.skipSeparators()
+        // An optional, single, file-level `package a.b.c` before imports and
+        // declarations. A file with no package is in the root package. It is
+        // namespacing only (specs/functions.md); sema ignores it.
+        var packageName: Str = ""
+        if (this.checkText("package")) {
+            this.advance() // package
+            packageName = this.expectName()
+            if (!this.failed) {
+                while (this.matchText(".")) {
+                    val next: Str = this.expectName()
+                    if (this.failed) {
+                        break
+                    }
+                    packageName = packageName + "." + next
+                }
+            }
+            this.skipSeparators()
+        }
+
         var attrs: List<Attribute> = List<Attribute>()
         attrs.append(Attribute("kind", "Module"))
         attrs.append(Attribute("line", "1"))
         attrs.append(Attribute("column", "1"))
+        // Present only when a package is declared, so package-less files keep
+        // their previous AST (and goldens). Matches ast::toXmlNode.
+        if (packageName != "") {
+            attrs.append(Attribute("package", packageName))
+        }
         var root: XmlNode = XmlNode("Module", attrs, &List<XmlNode>())
 
         var imports: List<XmlNode> = List<XmlNode>()
         var decls: List<XmlNode> = List<XmlNode>()
 
-        this.skipSeparators()
         while (!this.atEnd() && !this.failed) {
             if (this.checkText("import")) {
                 imports.append(this.parseImport())
