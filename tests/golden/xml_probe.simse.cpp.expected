@@ -6,6 +6,7 @@
 // xml_probe.simse:2
 struct Tile {
     Int n;
-    Tile() = default;
-    Tile(Int n) : n(n) {}
 };
+Tile _make_Tile(Int n) {
+    return Tile{n};
+}

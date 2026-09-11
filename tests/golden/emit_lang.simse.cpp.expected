@@ -18,9 +18,10 @@ inline Opt<Color> simse_Color_fromInt(Int value) {
 // emit_lang.simse:11
 struct Box {
     Int value;
-    Box() = default;
-    Box(Int value) : value(value) {}
 };
+Box _make_Box(Int value) {
+    return Box{value};
+}
 Str label(Color c);
 Str describe(Int n);
 std::shared_ptr<Box> maybeRef(Bool flag);
@@ -62,7 +63,7 @@ Str describe(Int n) {
 // emit_lang.simse:35
 std::shared_ptr<Box> maybeRef(Bool flag) {
     if (flag) {
-        return std::make_shared<std::remove_cvref_t<decltype((Box(7)))>>(Box(7));
+        return std::make_shared<std::remove_cvref_t<decltype((_make_Box(7)))>>(_make_Box(7));
     }
     return nullptr;
 }
@@ -97,7 +98,7 @@ int main() {
     if (absent == nullptr) {
         std::cout << std::boolalpha << ("absent") << std::endl;
     }
-    std::shared_ptr<Box> boxed = std::make_shared<std::remove_cvref_t<decltype((Box(3)))>>(Box(3));
+    std::shared_ptr<Box> boxed = std::make_shared<std::remove_cvref_t<decltype((_make_Box(3)))>>(_make_Box(3));
     Box* rawPresent = maybePointer(boxed, true);
     if (rawPresent != nullptr) {
         std::cout << std::boolalpha << (rawPresent->value) << std::endl;

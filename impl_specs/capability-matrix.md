@@ -89,7 +89,7 @@ Progress of the incremental port (see `impl_specs/roadmap.md`):
 | parser | `cppsrc/parser/Parser.simse` | yes | yes | yes (2136-line XmlNode dump) | `parser_diff` |
 | sema | `cppsrc/sema/Sema.simse` | yes | yes | yes (40-line diagnostic dump) | `sema_diff` |
 | codegen | `cppsrc/codegen/Codegen.simse` | yes | yes | yes (804-line emission dump) | `codegen_diff` |
-| driver / CLI | `cppsrc/compiler/Driver.simse` | yes | yes | fixed point: `compiler_stage1.cpp` == `compiler_stage1b.cpp` | `stage1_check` |
+| driver / CLI | `cppsrc/compiler/Driver.simse` | yes | yes | two-step fixed point (`simse_out1.cpp` == `simse_out.cpp`) | `stage1_check` |
 
 ## Feature status changes (last port)
 
@@ -313,3 +313,24 @@ component-specific):
   byte-for-byte. The T1-T24 task files under `impl_specs/tasks/` were pruned once
   their work was verified; this matrix and git history retain the detail, and
   `impl_specs/tasks/25-modules-and-packages.md` carries the outstanding work.
+- **Data classes emit as aggregates with `_make_<Name>` factories.** The emitter
+  no longer writes per-class constructors (`C() = default;` and
+  `C(fields...) : ...`); `struct C` is a plain aggregate and construction is
+  routed through a generated `_make_C(fields...)` factory that brace-initializes
+  it. Call sites (`C(args...)`, `C<T>(args...)`) lower to the factory in both
+  rings; prelude data classes (RTL types with hand-written constructors) are
+  unaffected. The aggregate is still default-constructible where C++ needs it
+  (e.g. the payload of a failed `Res<T>`), so the earlier default constructor is
+  no longer required. Goldens regenerated; all five differentials and the
+  stage-1 fixed point hold.
+- **Two-step bootstrap naming fixed.** The `simse` directory compiler and
+  `simse_transpile` (C++ and the transpiled `Driver.simse`) default to
+  `simse_out.cpp` when `-o` is omitted. `stage1_check` now makes the two-step
+  flow explicit: `stage1/gen/simse_out.cpp` (C++ transpiler) is kept as
+  `stage1/gen/simse_out1.cpp`, which is compiled into `simse_stage1`; running it
+  writes `stage1/run/simse_out.cpp`, compared **byte-for-byte** (no `--ignore-eol`)
+  with `simse_out1.cpp`. The `emit_lang` fixture check is byte-exact too. The
+  compilation order is now canonical (kept files sorted by normalized path; scan
+  results use generic `/` separators), so `simse <dir>` and
+  `simse_transpile <driver.simse>` over the same file set emit identical C++.
+  Stray `cppsrc.cpp` verification outputs were removed.

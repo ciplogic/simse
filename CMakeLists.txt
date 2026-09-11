@@ -408,11 +408,15 @@ add_custom_target(codegen_diff ALL
 # --- T23: stage-1 self-hosted compiler ---------------------------------------
 # The whole compiler source set is rooted at cppsrc/compiler/Driver.simse (its
 # imports pull in the scanner, parser, sema, codegen, and common/xmlutil). The
-# C++ simse_transpile emits compiler_stage1.cpp, which is compiled into
-# simse_stage1; running simse_stage1 over the same source set must reproduce
-# compiler_stage1.cpp byte-for-byte (the fixed point). Everything runs with the
-# repository root as the working directory so import/prelude paths and the
-# source-map comments are identical in both invocations.
+# two-step bootstrap uses fixed names:
+#   1. the C++ simse_transpile emits the compiler's C++ as `simse_out.cpp`;
+#   2. that file is kept as `simse_out1.cpp` and compiled into simse_stage1;
+#   3. simse_stage1 transpiles the same source set into `simse_out.cpp` again;
+#   4. the kept `simse_out1.cpp` and the regenerated `simse_out.cpp` must be
+#      byte-identical (the fixed point).
+# Everything runs with the repository root as the working directory so
+# import/prelude paths and the source-map comments are identical in both
+# invocations.
 set(SIMSE_ALL_MIRRORS
         "${SIMSE_REPO_ROOT}/cppsrc/compiler/Driver.simse"
         "${SIMSE_REPO_ROOT}/cppsrc/codegen/Codegen.simse"
@@ -428,9 +432,12 @@ set(SIMSE_ALL_MIRRORS
         "${SIMSE_REPO_ROOT}/cppsrc/rtl/xml.simse"
         "${SIMSE_REPO_ROOT}/cppsrc/rtl/fs.simse")
 set(SIMSE_STAGE1_DIR "${CMAKE_BINARY_DIR}/stage1")
+set(SIMSE_STAGE1_GEN_DIR "${SIMSE_STAGE1_DIR}/gen")
+set(SIMSE_STAGE1_RUN_DIR "${SIMSE_STAGE1_DIR}/run")
 set(SIMSE_STAGE1_INPUT "cppsrc/compiler/Driver.simse")
-set(SIMSE_STAGE1_GENERATED "${SIMSE_STAGE1_DIR}/compiler_stage1.cpp")
-set(SIMSE_STAGE1_REGEN "${SIMSE_STAGE1_DIR}/compiler_stage1b.cpp")
+set(SIMSE_STAGE1_GENERATED "${SIMSE_STAGE1_GEN_DIR}/simse_out.cpp")
+set(SIMSE_STAGE1_KEPT "${SIMSE_STAGE1_GEN_DIR}/simse_out1.cpp")
+set(SIMSE_STAGE1_REGEN "${SIMSE_STAGE1_RUN_DIR}/simse_out.cpp")
 set(SIMSE_STAGE1_FIXTURE "tests/fixtures/emit_lang.simse")
 set(SIMSE_STAGE1_FIXTURE_REF "${SIMSE_STAGE1_DIR}/fixture_ref.cpp")
 set(SIMSE_STAGE1_FIXTURE_B "${SIMSE_STAGE1_DIR}/fixture_b.cpp")
@@ -449,36 +456,47 @@ set(SIMSE_COMPILER_ROOTS
 
 add_custom_command(
         OUTPUT "${SIMSE_STAGE1_GENERATED}"
-        COMMAND "${CMAKE_COMMAND}" -E make_directory "${SIMSE_STAGE1_DIR}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${SIMSE_STAGE1_GEN_DIR}"
         COMMAND $<TARGET_FILE:simse_transpile> "${SIMSE_STAGE1_INPUT}"
                 ${SIMSE_COMPILER_ROOTS}
                 -o "${SIMSE_STAGE1_GENERATED}" --prelude cppsrc/rtl
         WORKING_DIRECTORY "${SIMSE_REPO_ROOT}"
         DEPENDS ${SIMSE_ALL_MIRRORS} simse_transpile
-        COMMENT "T23: transpiling the compiler source set with the C++ transpiler"
+        COMMENT "Step 1: transpiling the compiler source set into simse_out.cpp"
         VERBATIM)
 
-add_executable(simse_stage1 "${SIMSE_STAGE1_GENERATED}")
+# Keep the step-1 output under the comparison name; the stage-1 binary is
+# compiled from this kept copy, exactly like "rename it, compile it".
+add_custom_command(
+        OUTPUT "${SIMSE_STAGE1_KEPT}"
+        COMMAND "${CMAKE_COMMAND}" -E copy
+                "${SIMSE_STAGE1_GENERATED}" "${SIMSE_STAGE1_KEPT}"
+        DEPENDS "${SIMSE_STAGE1_GENERATED}"
+        COMMENT "Step 2: keeping simse_out.cpp as simse_out1.cpp"
+        VERBATIM)
+
+add_executable(simse_stage1 "${SIMSE_STAGE1_KEPT}")
 target_include_directories(simse_stage1 PRIVATE "${SIMSE_REPO_ROOT}")
 target_link_libraries(simse_stage1 PRIVATE simse_native)
 set_target_properties(simse_stage1 PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${SIMSE_STAGE1_DIR}")
 
 add_custom_target(stage1_check ALL
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${SIMSE_STAGE1_RUN_DIR}"
         COMMAND $<TARGET_FILE:simse_stage1> "${SIMSE_STAGE1_INPUT}"
                 ${SIMSE_COMPILER_ROOTS}
                 -o "${SIMSE_STAGE1_REGEN}" --prelude cppsrc/rtl
-        COMMAND "${CMAKE_COMMAND}" -E compare_files --ignore-eol
-                "${SIMSE_STAGE1_GENERATED}" "${SIMSE_STAGE1_REGEN}"
+        COMMAND "${CMAKE_COMMAND}" -E compare_files
+                "${SIMSE_STAGE1_KEPT}" "${SIMSE_STAGE1_REGEN}"
         # Also check the stage-1 driver on a real program fixture against the
         # C++ transpiler's output for the same input.
         COMMAND $<TARGET_FILE:simse_transpile> "${SIMSE_STAGE1_FIXTURE}"
                 -o "${SIMSE_STAGE1_FIXTURE_REF}" --prelude cppsrc/rtl
         COMMAND $<TARGET_FILE:simse_stage1> "${SIMSE_STAGE1_FIXTURE}"
                 -o "${SIMSE_STAGE1_FIXTURE_B}" --prelude cppsrc/rtl
-        COMMAND "${CMAKE_COMMAND}" -E compare_files --ignore-eol
+        COMMAND "${CMAKE_COMMAND}" -E compare_files
                 "${SIMSE_STAGE1_FIXTURE_REF}" "${SIMSE_STAGE1_FIXTURE_B}"
         WORKING_DIRECTORY "${SIMSE_REPO_ROOT}"
         DEPENDS simse_stage1
-        COMMENT "T23: checking the stage-1 fixed point"
+        COMMENT "T23: checking the two-step bootstrap (simse_out1.cpp == simse_out.cpp)"
         VERBATIM)

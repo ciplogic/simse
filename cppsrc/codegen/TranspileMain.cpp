@@ -18,6 +18,8 @@
 // Usage: simse_transpile <input.simse>... [-o <output.cpp>] [--prelude <file>]
 //                       [--root <dir>] [--module-root <dir>]...
 //
+// The output file defaults to `simse_out.cpp` in the current folder.
+//
 // The parse -> sema -> codegen -> write pipeline lives in compiler::transpile
 // (cppsrc/Compiler.cpp), shared with the `simse` directory compiler.
 //
@@ -66,7 +68,7 @@ int main(int argc, char **argv) {
             }
             extraRoots.push_back(argv[++i]);
         } else if (arg == "-h" || arg == "--help") {
-            printf("usage: simse_transpile <input.simse>... -o <output.cpp>"
+            printf("usage: simse_transpile <input.simse>... [-o <output.cpp>]"
                    " [--prelude <file>] [--root <dir>] [--module-root <dir>]...\n");
             return 0;
         } else {
@@ -79,8 +81,7 @@ int main(int argc, char **argv) {
         haveRoot = true;
     }
     if (output.empty()) {
-        fprintf(stderr, "simse_transpile: missing -o <output.cpp>\n");
-        return 2;
+        output = "simse_out.cpp";
     }
 
     compiler::Request request;

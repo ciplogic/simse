@@ -14,7 +14,7 @@ that detail.
 ## Current state
 
 The compiler is ported to `.simse` and self-hosts. The C++ `simse_transpile`
-emits `compiler_stage1.cpp` from the `.simse` compiler sources, and the resulting
+emits `simse_out.cpp` from the `.simse` compiler sources, and the resulting
 stage-1 compiler reproduces that output byte-for-byte (a fixed point). The
 scanner, parser, sema, codegen, and driver each have a `.simse` mirror
 differentially verified against its C++ reference, and `simse` compiles a

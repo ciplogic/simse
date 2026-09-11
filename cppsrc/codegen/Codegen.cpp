@@ -101,6 +101,9 @@ namespace codegen {
 
             Dictionary<Str, const ast::Decl *> types;
             Dictionary<Str, bool> enumNames;
+            // Non-prelude data classes we emitted; their construction lowers to
+            // the `_make_<Name>` factory instead of an emitted constructor.
+            Dictionary<Str, bool> dataClassNames;
             List<Fn> functions;
             Dictionary<Str, bool> receiverFnNames;
             List<NativeDecl> nativeDecls;
@@ -219,6 +222,7 @@ namespace codegen {
                             // `recv.method()`. Non-prelude data classes (the
                             // mirrors) keep the free-function-with-receiver shape.
                             if (input.prelude) continue;
+                            dataClassNames[decl->name] = true;
                             ast::TypePtr receiver = classReceiver(*decl);
                             for (const ast::DeclPtr &method: decl->methods) {
                                 List<Str> methodParams = decl->typeParams;
@@ -333,14 +337,14 @@ namespace codegen {
             void emitDataClass(const ast::Decl &decl) {
                 setActiveTypeParams(decl.typeParams);
                 List<Str> params;
-                List<Str> inits;
+                List<Str> values;
                 for (const ast::Field &field: decl.fields) {
                     if (!field.type) {
                         fail(field.pos, "unsupported: field '" + field.name + "' without a type");
                         return;
                     }
                     params.push_back(type(*field.type) + " " + field.name);
-                    inits.push_back(field.name + "(" + field.name + ")");
+                    values.push_back(field.name);
                 }
                 if (failed) return;
 
@@ -351,14 +355,18 @@ namespace codegen {
                 for (const ast::Field &field: decl.fields) {
                     line(1, type(*field.type) + " " + field.name + ";");
                 }
-                // A default constructor is emitted alongside the field constructor
-                // so the type can be default-initialized where C++ needs it (for
-                // example the payload of a failed Res<T>).
-                line(1, decl.name + "() = default;");
-                if (!decl.fields.empty()) {
-                    line(1, decl.name + "(" + join(params, ", ") + ") : " + join(inits, ", ") + " {}");
-                }
                 line(0, "};");
+
+                // The struct stays an aggregate (so it is default-constructible
+                // where C++ needs it, e.g. the payload of a failed Res<T>);
+                // construction goes through a `_make_<Name>` factory so callers
+                // keep the `Name(args)` shape without an emitted constructor.
+                Str target = decl.name;
+                if (!decl.typeParams.empty()) target += "<" + join(decl.typeParams, ", ") + ">";
+                if (!tmpl.empty()) line(0, tmpl);
+                line(0, target + " _make_" + decl.name + "(" + join(params, ", ") + ") {");
+                line(1, "return " + target + "{" + join(values, ", ") + "};");
+                line(0, "}");
             }
 
             void emitEnum(const ast::Decl &decl) {
@@ -1345,7 +1353,9 @@ namespace codegen {
                             break;
                         }
                     }
-                    if (!hasPlainFunction && native != nativeSymbols.end()) {
+                    if (dataClassNames.count(callee.text) > 0) {
+                        calleeName = "_make_" + callee.text;
+                    } else if (!hasPlainFunction && native != nativeSymbols.end()) {
                         calleeName = native->second;
                     }
                     return calleeName + "<" + typeArgsString(callee.text, callee.typeArgs)
@@ -1378,7 +1388,9 @@ namespace codegen {
                         }
                     }
                     Str calleeName = callee.text;
-                    if (!hasPlainFunction && native != nativeSymbols.end()) {
+                    if (dataClassNames.count(callee.text) > 0) {
+                        calleeName = "_make_" + callee.text;
+                    } else if (!hasPlainFunction && native != nativeSymbols.end()) {
                         calleeName = native->second;
                     }
                     return calleeName + "(" + join(args, ", ") + ")";

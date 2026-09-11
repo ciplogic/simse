@@ -19,9 +19,10 @@ inline Opt<Color> simse_Color_fromInt(Int value) {
 struct Point {
     Int x;
     Int y;
-    Point() = default;
-    Point(Int x, Int y) : x(x), y(y) {}
 };
+Point _make_Point(Int x, Int y) {
+    return Point{x, y};
+}
 // program_basic.simse:15
 using IntPredicate = Func<Bool(Int)>;
 // program_basic.simse:17

@@ -7,12 +7,13 @@
 struct Widget {
     Int a;
     Int b;
-    Widget() = default;
-    Widget(Int a, Int b) : a(a), b(b) {}
 };
+Widget _make_Widget(Int a, Int b) {
+    return Widget{a, b};
+}
 Int make();
 // ctor_arity.simse:6
 Int make() {
-    Widget w = Widget(1);
+    Widget w = _make_Widget(1);
     return 0;
 }

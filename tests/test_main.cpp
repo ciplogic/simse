@@ -401,7 +401,12 @@ int main(int argc, char **argv) {
     // unused one, and lower generic functions and built-in containers.
     {
         Str cpp = emitFixture(&scanner, fixturesDir, "emit_generics.simse");
-        List<Str> pairs = distinctForms(cpp, "Pair<");
+        // The generic definition and its `_make_` factory emit the parameterized
+        // form `Pair<A, B>`; exclude it so only actual instantiations remain.
+        List<Str> pairs;
+        for (const Str &form: distinctForms(cpp, "Pair<")) {
+            if (form != "Pair<A, B>") pairs.push_back(form);
+        }
         bool ok = !cpp.empty()
                   && pairs.size() == 2
                   && pairs[0] != pairs[1]

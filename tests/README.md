@@ -208,19 +208,22 @@ Each compares the hand-written C++ component against the transpiled Simse one ov
 `tests/fixtures/*.simse`; the parser, sema, and codegen drivers additionally check
 the reference output against the checked-in goldens.
 
-The `stage1_check` step is the endgame: the C++ transpiler emits
-`stage1/compiler_stage1.cpp` from `cppsrc/compiler/Driver.simse` (the whole
-compiler source set, through its imports); it compiles into
-`stage1/simse_stage1.exe`; and running that stage-1 compiler over the same source
-set must reproduce `compiler_stage1.cpp` byte-for-byte (the fixed point). It also
-checks `simse_stage1` against the C++ transpiler on the `emit_lang` fixture.
+The `stage1_check` step is the two-step bootstrap: the C++ transpiler emits
+`stage1/gen/simse_out.cpp` from `cppsrc/compiler/Driver.simse` (the whole
+compiler source set, through its imports); that file is kept as
+`stage1/gen/simse_out1.cpp` and compiled into `stage1/simse_stage1.exe`; and
+running that stage-1 compiler over the same source set regenerates
+`stage1/run/simse_out.cpp`, which must be byte-identical to `simse_out1.cpp`
+(the fixed point). It also checks `simse_stage1` against the C++ transpiler on
+the `emit_lang` fixture.
 
 ## Transpiler CLI
 
 ```
-simse_transpile <input.simse>... -o <output.cpp> [--prelude <file>]
+simse_transpile <input.simse>... [-o <output.cpp>] [--prelude <file>]
 ```
 
+With no `-o` the output is written to `simse_out.cpp` in the current folder.
 With no input arguments it discovers every `.simse` under the current directory
 (recursively, sorted). `--prelude` overrides the default RTL prelude **set**
 (`cppsrc/rtl/`, a directory whose `*.simse` files are all loaded); a missing

@@ -7,14 +7,15 @@
 struct Point {
     Int x;
     Int y;
-    Point() = default;
-    Point(Int x, Int y) : x(x), y(y) {}
 };
+Point _make_Point(Int x, Int y) {
+    return Point{x, y};
+}
 Int useLater();
 Int helper(Int value);
 // hoisting.simse:2
 Int useLater() {
-    Point p = Point(1, 2);
+    Point p = _make_Point(1, 2);
     return helper(p.x);
 }
 // hoisting.simse:9

@@ -14,8 +14,10 @@
 // makes package `a.b.c` visible unqualified, so resolution is by package name and
 // never depends on the working directory.
 //
-// Usage: <program> <input.simse>... -o <output.cpp> [--prelude <file>]
+// Usage: <program> <input.simse>... [-o <output.cpp>] [--prelude <file>]
 //                  [--root <dir>] [--module-root <dir>]...
+//
+// The output file defaults to `simse_out.cpp` in the current folder.
 //
 // The filesystem/IO helpers are the T23 prelude natives (cppsrc/rtl/fs.simse).
 
@@ -84,7 +86,9 @@ fun driverParseFile(fileName: Str): Res<XmlNode> {
 // The compilation set: every `*.simse` under each module root (in the given
 // order, each root scanned recursively and sorted), then the explicit inputs.
 // Files already loaded as prelude are excluded and each canonical path is kept
-// once, so discovery order matches compiler::transpile byte for byte.
+// once; the kept files are sorted by canonical path so the order depends only on
+// the file set, matching compiler::transpile byte for byte no matter how the
+// files were specified (a scanned root vs an explicit input).
 fun driverGatherFiles(moduleRoots: List<Str>, inputs: List<Str>, preludeCanon: List<Str>): List<Str> {
     var candidates: List<Str> = List<Str>()
     var r: Int = 0
@@ -115,6 +119,9 @@ fun driverGatherFiles(moduleRoots: List<Str>, inputs: List<Str>, preludeCanon: L
         }
         c = c + 1
     }
+    // After dedup the canonical keys are unique, so this sort is total and both
+    // compiler rings produce the same sequence.
+    chosen.sort((left: Str, right: Str) -> pathCanonical(left) < pathCanonical(right))
     return chosen
 }
 
@@ -163,7 +170,7 @@ fun main(args: List<Str>): Int {
             i = i + 1
             extraRoots.append(args[i])
         } else if (arg == "-h" || arg == "--help") {
-            println("usage: simse_transpile <input.simse>... -o <output.cpp> [--prelude <file>] [--root <dir>] [--module-root <dir>]...")
+            println("usage: simse_transpile <input.simse>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module-root <dir>]...")
             return 0
         } else {
             inputs.append(arg)
@@ -176,8 +183,7 @@ fun main(args: List<Str>): Int {
         haveRoot = true
     }
     if (output == "") {
-        eprintln("simse_transpile: missing -o <output.cpp>")
-        return 2
+        output = "simse_out.cpp"
     }
 
     var moduleRoots: List<Str> = List<Str>()

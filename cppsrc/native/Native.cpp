@@ -26,7 +26,7 @@ List<Str> simse_listFilesDirect(const Str& dir, const Str& ext) {
     }
     for (const auto& entry: std::filesystem::directory_iterator(dir, ec)) {
         if (entry.is_regular_file() && entry.path().extension() == ext) {
-            files.push_back(entry.path().string());
+            files.push_back(entry.path().generic_string());
         }
     }
     std::sort(files.begin(), files.end());

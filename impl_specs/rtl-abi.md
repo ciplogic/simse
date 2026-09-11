@@ -52,7 +52,7 @@ language subset needs it (no virtual dispatch, no dynamic casts).
 | `PList<T>` | `PList<T>` (`std::shared_ptr<List<T>>`) | the `&List<T>` spelling |
 | `Cursor<T>` | `Cursor<T>` (shim struct) | immutable list view; `next`/`slice` return new cursors |
 | `SmallVector<N, T>` | `SmallVector<T, N>` shim | unused by the v1 subset |
-| user `data class C` | `struct C` with a field-order constructor | |
+| user `data class C` | `struct C` (aggregate) + `_make_C` factory | construction lowers to the factory; no emitted constructors |
 | user `enum E` | `enum class E` | explicit values when given |
 | callable `(A, B) -> R` | `Func<R(A, B)>` (`std::function`) | `Unit` return -> `void` |
 

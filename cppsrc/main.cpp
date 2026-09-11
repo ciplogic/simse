@@ -15,10 +15,9 @@
 // working directory.
 //
 // The amalgamated file is written into the current folder; the default name is
-// the scanned directory's base name plus `.cpp` (`simse cppsrc` -> `./cppsrc.cpp`,
-// `simse` -> `<cwd-base-name>.cpp`). `-o` overrides it. On any parse or sema
-// error the positioned diagnostics are printed (one per line, deterministically
-// ordered) and nothing is written.
+// `simse_out.cpp` (`simse cppsrc` -> `./simse_out.cpp`). `-o` overrides it. On
+// any parse or sema error the positioned diagnostics are printed (one per line,
+// deterministically ordered) and nothing is written.
 //
 // The pipeline is shared with `simse_transpile` through compiler::transpile
 // (cppsrc/Compiler.cpp).
@@ -28,31 +27,8 @@
 #include "common/common.h"
 
 #include <cstdio>
-#include <filesystem>
-#include <system_error>
 
 using namespace common;
-
-namespace {
-    // The default output base name: the scanned directory's own name. For `.`
-    // this is the current folder's name.
-    Str dirBaseName(const Str &dir) {
-        std::error_code ec;
-        std::filesystem::path path = std::filesystem::weakly_canonical(std::filesystem::path(dir), ec);
-        if (ec) {
-            path = std::filesystem::path(dir);
-        }
-        Str name = path.filename().string();
-        if (name.empty() || name == "." || name == "..") {
-            std::error_code cwdError;
-            name = std::filesystem::current_path(cwdError).filename().string();
-        }
-        if (name.empty()) {
-            name = "out";
-        }
-        return name;
-    }
-}
 
 int main(int argc, char **argv) {
     Str dir = ".";
@@ -116,7 +92,7 @@ int main(int argc, char **argv) {
     }
     request.preludePath = preludePath;
     request.preludeExplicit = preludeExplicit;
-    request.output = output.empty() ? (dirBaseName(projectRoot) + ".cpp") : output;
+    request.output = output.empty() ? Str("simse_out.cpp") : output;
     request.collectAllErrors = true;
 
     int status = compiler::transpile(request);

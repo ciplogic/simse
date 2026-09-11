@@ -34,7 +34,9 @@ namespace common {
         for (const auto& entry : std::filesystem::recursive_directory_iterator(dirPath)) {
             // Check if it's a regular file and has the matching extension
             if (entry.is_regular_file() && entry.path().extension() == ext) {
-                matchingFiles.push_back(entry.path().string());
+                // Generic separators so a scanned path matches the same path given
+                // explicitly (e.g. `simse <dir>` vs the stage-1 driver's input).
+                matchingFiles.push_back(entry.path().generic_string());
             }
         }
 

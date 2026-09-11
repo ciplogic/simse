@@ -26,8 +26,9 @@ expressible in the language.
 - Ported components: `common`/`StrView`/`xmlutil`, scanner, skeleton parser,
   parser, sema, codegen, compiler driver.
 - Planned tasks: none outstanding (`T25 Modules and packages` is Done).
-- **Nothing has been committed yet.** Two stray verification outputs may exist:
-  `./cppsrc.cpp` and `./cppsrc/cppsrc.cpp` (safe to delete).
+- The directory compiler's default output is `simse_out.cpp`; the two-step
+  bootstrap artifacts live under `cmake-build-debug/stage1/` (`gen/simse_out.cpp`,
+  `gen/simse_out1.cpp`, `run/simse_out.cpp`).
 
 ## 3. Build / test / run
 
@@ -46,17 +47,30 @@ cmd //c "_msvc_build.bat --clean-first" # clean rebuild
 ./simse_tests.exe --update              # regenerate goldens deliberately
 
 # compile a whole directory into one amalgamated file in the CURRENT folder
-./cmake-build-debug/simse.exe cppsrc        # -> ./cppsrc.cpp
+./cmake-build-debug/simse.exe cppsrc        # -> ./simse_out.cpp
 ./cmake-build-debug/simse.exe               # -> scans "." (hits tests/fixtures: errors by design)
-./cmake-build-debug/simse.exe <dir> -o out.cpp [--prelude <path>] [--root <dir>] [--module-root <dir>...]
+./cmake-build-debug/simse.exe <dir> [-o out.cpp] [--prelude <path>] [--root <dir>] [--module-root <dir>...]
 
-# explicit-input variant (used by the build/tests)
-./cmake-build-debug/simse_transpile.exe <files...> -o out.cpp [--prelude <path>] [--root <dir>] [--module-root <dir>...]
+# explicit-input variant (used by the build/tests); -o defaults to simse_out.cpp
+./cmake-build-debug/simse_transpile.exe <files...> [-o out.cpp] [--prelude <path>] [--root <dir>] [--module-root <dir>...]
 ```
 
 The default build runs, as part of `ALL`: every e2e program (transpile ->
 compile -> run -> stdout diff) and the five differentials plus `stage1_check`.
 **If `simse*.exe` is running, linking fails with `LNK1168` — kill it first.**
+
+`stage1_check` *is* the two-step transpiling check: it transpiles the compiler
+source set (`cppsrc/compiler/Driver.simse` plus the module roots) into
+`stage1/gen/simse_out.cpp`, keeps that as `stage1/gen/simse_out1.cpp`, compiles
+that copy into `stage1/simse_stage1.exe`, runs it over the same source set to
+regenerate `stage1/run/simse_out.cpp`, and requires the two files to be
+**byte-identical**. Re-run just this step from the build dir with
+`cmake --build . --target stage1_check`.
+
+Source set note: `simse cppsrc` also pulls in the sample `cppsrc/main.simse`
+(a second `main`), so the amalgamation is not a single program. Use the
+compiler root (`simse cppsrc/compiler --module-root ...`) or the build's
+explicit `cppsrc/compiler/Driver.simse` input.
 
 ## 4. Repo map
 
@@ -95,8 +109,9 @@ Two "rings" that must stay in lockstep:
 2. **Self-host ring (`.simse`)**: the same compiler, ported, in `cppsrc/**/*.simse`.
 
 `simse_transpile` (C++, bootstrap) transpiles the self-host ring into one
-`compiler_stage1.cpp`; compiled, it becomes `simse_stage1`, which transpiles the
-same sources and must reproduce the bootstrap's output exactly (the fixed point).
+`simse_out.cpp`; that file (kept as `simse_out1.cpp`) is compiled into
+`simse_stage1`, which transpiles the same sources into a fresh `simse_out.cpp`
+that must be byte-identical (the fixed point).
 
 Pipeline (per `impl_specs/transpilation.md`): discover sources -> scan -> parse
 (AST) -> resolve names/types -> reify generics -> lower to C++ -> amalgamate.
@@ -130,8 +145,9 @@ Key design points:
 - **FIVE differentials byte-identical**: `scanner_diff`, `skel_diff`,
   `parser_diff`, `sema_diff`, `codegen_diff` (hand-written C++ vs transpiled
   Simse, over the fixture set). Run automatically by the build.
-- **Stage-1 fixed point**: `compiler_stage1.cpp` == `compiler_stage1b.cpp`
-  (`stage1_check`).
+- **Two-step bootstrap fixed point**: `simse_out1.cpp` (the C++ transpiler's
+  output, kept) == `run/simse_out.cpp` (the stage-1 compiler's regeneration),
+  byte for byte (`stage1_check`).
 - **Determinism**: transpiling the same inputs twice is byte-identical.
 - **Goldens**: `simse_tests.exe` compares against `tests/golden/*.expected`
   (regenerate with `--update` only when behavior intentionally changes).
@@ -176,21 +192,20 @@ Do these only when asked; roughly prioritized:
 
 1. **Commit the work.** Nothing is committed; large amounts of source and docs
    are uncommitted or untracked.
-2. Delete stray verification outputs `./cppsrc.cpp`, `./cppsrc/cppsrc.cpp`.
-3. **Stage-2 self-host**: have `simse_stage1` compile itself a second time and
+2. **Stage-2 self-host**: have `simse_stage1` compile itself a second time and
    verify the fixed point again (stronger bootstrap proof). Also broaden
    `stage1_check` to sweep more fixtures.
-4. **Deferred language features** (spec'd or implied, not implemented):
+3. **Deferred language features** (spec'd or implied, not implemented):
    multiple `package` declarations per file (file-split shape); external-module
    manifests/versions/transitive resolution; `for`/range-for; reference captures
    and explicit capture lists; `when`/pattern matching; string interpolation;
    interfaces/virtual dispatch; method overriding; default parameter values;
    `unsafe` blocks / raw-pointer escape rules.
-5. **RTL spec convergence**: the RTL is a shim (`Str`=`std::string`,
+4. **RTL spec convergence**: the RTL is a shim (`Str`=`std::string`,
    `List`=`std::vector`, `SmallVector` has no SBO operations, no
    `[refcount][typeId]` header). Divergences are documented in
    `impl_specs/rtl-abi.md`; the eventual target must match `specs/`.
-6. **Ergonomics/robustness**: lambda typing is conservative (a body/return
+5. **Ergonomics/robustness**: lambda typing is conservative (a body/return
    mismatch surfaces as a C++ compile error, not a Simse diagnostic); generic
    type aliases aren't expanded when resolving an expected callable type; `Str`
    is byte-oriented (ASCII case mapping); the single ~190 KB amalgamated TU may

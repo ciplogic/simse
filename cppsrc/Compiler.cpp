@@ -4,6 +4,7 @@
 #include "parser/Parser.h"
 #include "sema/Sema.h"
 
+#include <algorithm>
 #include <cstdio>
 #include <filesystem>
 #include <system_error>
@@ -73,9 +74,12 @@ namespace compiler {
 
         // Gather the compilation: every `*.simse` under each module root, then the
         // explicit inputs. Files already loaded as prelude are excluded, and each
-        // canonical path is included once. Discovery order is deterministic: the
-        // module roots in the given order, each scanned recursively and sorted,
-        // then the explicit inputs in order.
+        // canonical path is included once. The kept files are then sorted by
+        // canonical path so the compilation order depends only on the file set,
+        // not on how it was specified: scanning a directory and listing the same
+        // files explicitly (`simse <dir>` vs the stage-1 driver's explicit input)
+        // emit identical C++. After dedup the canonical keys are unique, so the
+        // sort is total and both compiler rings agree.
         List<Str> candidates;
         for (const Str &root: request.moduleRoots) {
             for (const Str &file: filesInDir(root, ".simse")) {
@@ -86,16 +90,22 @@ namespace compiler {
             candidates.push_back(file);
         }
 
-        List<Str> fileNames;
-        List<ast::Module> modules;
+        List<Str> chosen;
         Dictionary<Str, bool> seen;
-        List<Str> errors;
         for (const Str &display: candidates) {
             Str canon = normalizePath(display);
             if (preludeCanon.count(canon) > 0) continue;
             if (seen.count(canon) > 0) continue;
             seen[canon] = true;
+            chosen.push_back(display);
+        }
+        std::sort(chosen.begin(), chosen.end(),
+                  [](const Str &a, const Str &b) { return normalizePath(a) < normalizePath(b); });
 
+        List<Str> fileNames;
+        List<ast::Module> modules;
+        List<Str> errors;
+        for (const Str &display: chosen) {
             Res<ast::Module> parsed = parser::parseFile(display);
             if (!parsed.isOk()) {
                 if (request.collectAllErrors) {

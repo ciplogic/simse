@@ -8,9 +8,11 @@ template <class A, class B>
 struct Pair {
     A first;
     B second;
-    Pair() = default;
-    Pair(A first, B second) : first(first), second(second) {}
 };
+template <class A, class B>
+Pair<A, B> _make_Pair(A first, B second) {
+    return Pair<A, B>{first, second};
+}
 template <class T>
 T identity(T value);
 // emit_generics.simse:4
@@ -22,8 +24,8 @@ T identity(T value) {
 int main() {
     List<Int> numbers = List<Int>();
     SmallVector<Int, 4> vector = SmallVector<Int, 4>();
-    Pair<Int, Bool> a = Pair<Int, Bool>(1, true);
-    Pair<Str, Int> b = Pair<Str, Int>("two", 2);
+    Pair<Int, Bool> a = _make_Pair<Int, Bool>(1, true);
+    Pair<Str, Int> b = _make_Pair<Str, Int>("two", 2);
     std::cout << std::boolalpha << (identity<Int>(7)) << std::endl;
     std::cout << std::boolalpha << (a.first) << std::endl;
     std::cout << std::boolalpha << (b.second) << std::endl;

@@ -137,6 +137,7 @@ data class Emitter(
     var curFile: Str;
     var types: Dictionary<Str, XmlNode>;
     var enumNames: Dictionary<Str, Bool>;
+    var dataClassNames: Dictionary<Str, Bool>;
     var functions: List<CgFn>;
     var receiverFnNames: Dictionary<Str, Bool>;
     var nativeDecls: List<CgNativeDecl>;
@@ -265,6 +266,7 @@ data class Emitter(
                     if (input.prelude) {
                         continue
                     }
+                    this.dataClassNames.insert(declName, true)
                     val receiver: XmlNode = this.classReceiver(decl)
                     val methods: List<XmlNode> = xmlChildren(decl, "Function")
                     val classParams: List<Str> = xmlTypeParamNames(decl)
@@ -441,7 +443,7 @@ data class Emitter(
         this.setActiveTypeParams(xmlTypeParamNames(decl))
         val fields: List<XmlNode> = xmlChildren(decl, "Field")
         var params: List<Str> = List<Str>()
-        var inits: List<Str> = List<Str>()
+        var values: List<Str> = List<Str>()
         var i: Int = 0
         while (i < fields.size()) {
             val field: XmlNode = fields[i]
@@ -451,31 +453,42 @@ data class Emitter(
                 return
             }
             params.append(this.type(fieldType) + " " + xmlAttr(field, "name"))
-            inits.append(xmlAttr(field, "name") + "(" + xmlAttr(field, "name") + ")")
+            values.append(xmlAttr(field, "name"))
             i = i + 1
         }
         if (this.failed) {
             return
         }
 
+        val name: Str = xmlAttr(decl, "name")
+        val typeParams: List<Str> = xmlTypeParamNames(decl)
         this.sourceComment(decl)
-        val tmpl: Str = this.templateClause(xmlTypeParamNames(decl))
+        val tmpl: Str = this.templateClause(typeParams)
         if (tmpl != "") {
             this.line(0, tmpl)
         }
-        this.line(0, "struct " + xmlAttr(decl, "name") + " {")
+        this.line(0, "struct " + name + " {")
         var f: Int = 0
         while (f < fields.size()) {
             val field: XmlNode = fields[f]
             this.line(1, this.type(xmlChild(field, "Type")) + " " + xmlAttr(field, "name") + ";")
             f = f + 1
         }
-        this.line(1, xmlAttr(decl, "name") + "() = default;")
-        if (fields.size() > 0) {
-            this.line(1, xmlAttr(decl, "name") + "(" + cgJoin(params, ", ") + ") : "
-                         + cgJoin(inits, ", ") + " {}")
-        }
         this.line(0, "};")
+
+        // The struct stays an aggregate; construction goes through a
+        // `_make_<Name>` factory so callers keep the `Name(args)` shape without
+        // an emitted constructor.
+        var target: Str = name
+        if (typeParams.size() > 0) {
+            target = name + "<" + cgJoin(typeParams, ", ") + ">"
+        }
+        if (tmpl != "") {
+            this.line(0, tmpl)
+        }
+        this.line(0, target + " _make_" + name + "(" + cgJoin(params, ", ") + ") {")
+        this.line(1, "return " + target + "{" + cgJoin(values, ", ") + "};")
+        this.line(0, "}")
     }
 
     fun emitEnum(decl: XmlNode): Unit {
@@ -1706,6 +1719,9 @@ data class Emitter(
             if (!hasPlainFunction && nativeOpt.hasValue()) {
                 calleeName = nativeOpt.value()
             }
+            if (this.dataClassNames.has(name)) {
+                calleeName = "_make_" + name
+            }
             return calleeName + "<" + this.typeArgsString(name, xmlChildren(callee, "TypeArg"))
                    + ">(" + cgJoin(args, ", ") + ")"
         }
@@ -1748,6 +1764,9 @@ data class Emitter(
             var calleeName: Str = name
             if (!hasPlainFunction && nativeOpt.hasValue()) {
                 calleeName = nativeOpt.value()
+            }
+            if (this.dataClassNames.has(name)) {
+                calleeName = "_make_" + name
             }
             return calleeName + "(" + cgJoin(args, ", ") + ")"
         }
@@ -1879,6 +1898,7 @@ fun newEmitter(inputs: List<CgInput>): Emitter {
         "",
         "",
         Dictionary<Str, XmlNode>(),
+        Dictionary<Str, Bool>(),
         Dictionary<Str, Bool>(),
         List<CgFn>(),
         Dictionary<Str, Bool>(),
