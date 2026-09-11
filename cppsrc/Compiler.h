@@ -4,11 +4,12 @@
 
 // The shared core of the transpiler drivers.
 //
-// `simse_transpile` (cppsrc/codegen/TranspileMain.cpp) is the low-level CLI: it
-// takes explicit input files and an output path. `simse` (cppsrc/main.cpp) is the
-// directory compiler: it scans a folder and compiles the whole module. Keeping
-// the parse -> sema -> codegen -> write pipeline here means both drivers agree on
-// prelude loading, module scanning, and diagnostics.
+// `simse_transpile` (cppsrc/codegen/TranspileMain.cpp) is the C++ CLI: explicit
+// input files plus the module roots (`--root` / `--module-root`) scanned for
+// `.simse` files, and an output path. The self-hosted driver
+// (cppsrc/compiler/Driver.simse) is a Simse port of it. Keeping the
+// parse -> sema -> codegen -> write pipeline here means both agree on prelude
+// loading, module scanning, and diagnostics.
 //
 // Modules and packages (specs/modules.md): a module is a directory, scanned from
 // the project root and any extra module roots; every `.simse` file found is part
@@ -22,7 +23,7 @@
 namespace compiler {
     struct Request {
         // Prefix for CLI-level diagnostics, e.g. "simse_transpile: cannot write X".
-        Str programName = "simse";
+        Str programName = "simse_transpile";
 
         // Explicit input files. Always part of the compilation.
         List<Str> inputs;

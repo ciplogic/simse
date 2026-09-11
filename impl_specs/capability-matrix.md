@@ -14,7 +14,7 @@ Status values:
 
 The matrix is derived from the real sources (`cppsrc/lex/Scanner.simse`,
 `cppsrc/common/StrView.simse`, `cppsrc/common/common.simse`,
-`cppsrc/skelparser/SkeletonParser.simse`, `cppsrc/main.simse`) and the current
+`cppsrc/skelparser/SkeletonParser.simse`) and the current
 `cppsrc/{parser,sema,codegen,rtl}` implementations.
 
 ## Intended port order
@@ -331,6 +331,14 @@ component-specific):
   writes `stage1/run/simse_out.cpp`, compared **byte-for-byte** (no `--ignore-eol`)
   with `simse_out1.cpp`. The `emit_lang` fixture check is byte-exact too. The
   compilation order is now canonical (kept files sorted by normalized path; scan
-  results use generic `/` separators), so `simse <dir>` and
-  `simse_transpile <driver.simse>` over the same file set emit identical C++.
-  Stray `cppsrc.cpp` verification outputs were removed.
+  results use generic `/` separators), so `--root cppsrc` and
+  `simse_transpile cppsrc/compiler/Driver.simse` over the same file set emit
+  identical C++. Stray `cppsrc.cpp` verification outputs were removed.
+- **The sample `cppsrc/main.simse` and its hand-written CLI `cppsrc/main.cpp`
+  were deleted.** `main.simse` was the second `main` in a `simse cppsrc`
+  amalgamation, so the whole tree could not be compiled; `main.cpp` was the
+  directory-compiler CLI, superseded by `simse_transpile`. `cppsrc` now scans to
+  exactly one program (the `Driver.simse` compiler), and
+  `simse_transpile --root cppsrc` (output `simse_out.cpp`, compiled by
+  `build.bat`) is the whole-compiler command. The `simse` target and the
+  `main_program` e2e case were removed with them.

@@ -13,7 +13,7 @@ The tests build with the project. From `simse/cmake-build-debug`:
 cmd //c _msvc_build.bat
 ```
 
-This builds `simse_lib`, `simse`, `simse_tests`, and `simse_transpile`.
+This builds `simse_lib`, `simse_tests`, and `simse_transpile`.
 
 ## Run
 
@@ -33,8 +33,8 @@ The runner:
   `sema_extension_arity.simse` a prelude-extension arity diagnostic);
 - checks the hoisting fixture (`hoisting.simse` parses and resolves cleanly with
   use-before-declaration);
-- parses and analyzes every real `.simse` file under `cppsrc/` plus `../cppsrc/main.simse`
-  and asserts the parse succeeds and sema is clean.
+- parses and analyzes every real `.simse` file under `cppsrc/` and asserts the
+  parse succeeds and sema is clean.
 
 It prints `PASS`/`FAIL` per case, a line diff for each failure, and a final
 `N passed, M failed` summary, exiting nonzero if any case fails.
@@ -188,17 +188,17 @@ in Simse.
 The default build (`cmd //c _msvc_build.bat`) also transpiles
 `tests/fixtures/{emit_hello, emit_shapes, emit_generics, native_readfile,
 emit_containers, emit_lang, emit_xmlnode, emit_cursor, emit_str,
-emit_lambda, emit_dict, emit_main_args}.simse` and `cppsrc/main.simse`
-(`main_program`), compiles the generated C++ (`e2e_<name>`), runs each with the
-repository root as the working directory, and diffs its stdout against
-`tests/golden/<name>.stdout.expected` with `cmake -E compare_files --ignore-eol`.
+emit_lambda, emit_dict, emit_main_args}.simse`, compiles the generated C++
+(`e2e_<name>`), runs each with the repository root as the working directory, and
+diffs its stdout against `tests/golden/<name>.stdout.expected` with
+`cmake -E compare_files --ignore-eol`.
 `emit_xmlnode`'s expected stdout is the C++ `XmlNode` dump for
 `tests/fixtures/xml_probe.simse`, so it cross-checks the Simse carrier against the
 converter. The generated sources and captured stdout live under
-`cmake-build-debug/e2e/`. `native_readfile` and `main_program` link the
-`simse_native` library; the RTL prelude **set** (`cppsrc/rtl/*.simse`) is loaded
-automatically. These steps are part of `ALL`, so an ordinary (and clean) build
-exercises the round trip and it cannot rot.
+`cmake-build-debug/e2e/`. `native_readfile` links the `simse_native` library; the
+RTL prelude **set** (`cppsrc/rtl/*.simse`) is loaded automatically. These steps
+are part of `ALL`, so an ordinary (and clean) build exercises the round trip and
+it cannot rot.
 
 The build also runs the differential ports of the scanner (`scanner_diff`), the
 skeleton parser (`skel_diff`), the parser (`parser_diff`), the sema pass

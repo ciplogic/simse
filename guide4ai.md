@@ -46,13 +46,16 @@ cmd //c "_msvc_build.bat --clean-first" # clean rebuild
 ./simse_tests.exe                       # check mode
 ./simse_tests.exe --update              # regenerate goldens deliberately
 
-# compile a whole directory into one amalgamated file in the CURRENT folder
-./cmake-build-debug/simse.exe cppsrc        # -> ./simse_out.cpp
-./cmake-build-debug/simse.exe               # -> scans "." (hits tests/fixtures: errors by design)
-./cmake-build-debug/simse.exe <dir> [-o out.cpp] [--prelude <path>] [--root <dir>] [--module-root <dir>...]
+# compile the whole compiler tree into one amalgamated file in the CURRENT folder
+./cmake-build-debug/simse_transpile.exe --root cppsrc   # -> ./simse_out.cpp (one main)
+./cmake-build-debug/simse_transpile.exe                 # -> scans "." (hits tests/fixtures: errors by design)
 
-# explicit-input variant (used by the build/tests); -o defaults to simse_out.cpp
+# explicit-input form (used by the build/tests); -o defaults to simse_out.cpp
 ./cmake-build-debug/simse_transpile.exe <files...> [-o out.cpp] [--prelude <path>] [--root <dir>] [--module-root <dir>...]
+
+# compile an amalgamated output with cl.exe (loads the VS environment itself)
+./build.bat                             # ./simse_out.cpp -> ./simse_out.exe
+./build.bat <input.cpp> [<out.exe>]     # defaults: simse_out.cpp / <name>.exe
 ```
 
 The default build runs, as part of `ALL`: every e2e program (transpile ->
@@ -67,9 +70,9 @@ regenerate `stage1/run/simse_out.cpp`, and requires the two files to be
 **byte-identical**. Re-run just this step from the build dir with
 `cmake --build . --target stage1_check`.
 
-Source set note: `simse cppsrc` also pulls in the sample `cppsrc/main.simse`
-(a second `main`), so the amalgamation is not a single program. Use the
-compiler root (`simse cppsrc/compiler --module-root ...`) or the build's
+`--root cppsrc` scans the whole source tree (the prelude under `cppsrc/rtl` is
+excluded as prelude), so the amalgamation contains exactly one `main` — the
+driver's — and `build.bat` can compile it. `stage1_check` uses the equivalent
 explicit `cppsrc/compiler/Driver.simse` input.
 
 ## 4. Repo map
@@ -91,9 +94,9 @@ explicit `cppsrc/compiler/Driver.simse` input.
 - `cppsrc/lex/`, `cppsrc/skelparser/`, `cppsrc/parser/`, `cppsrc/sema/`,
   `cppsrc/codegen/`, `cppsrc/compiler/` — the compiler stages; each has a C++
   implementation AND a `.simse` mirror.
-- `cppsrc/main.cpp` — the `simse` directory compiler; `Compiler.{h,cpp}` — the
-  shared transpile core; `cppsrc/codegen/TranspileMain.cpp` — the
-  `simse_transpile` CLI.
+- `Compiler.{h,cpp}` — the shared transpile core; `cppsrc/codegen/TranspileMain.cpp`
+  — the `simse_transpile` CLI, the C++ compiler driver (the Simse mirror of it
+  is `cppsrc/compiler/Driver.simse`).
 - `cppsrc/native/` — hand-written C++ for `native(...)` symbols
   (e.g. `simse_native_readFile`).
 - `tests/` — fixtures, goldens (`*.tokens/ast/astxml/sema/cpp/stdout.expected`),
@@ -168,7 +171,6 @@ Key design points:
 - Every `.simse` file must start with a mandatory `package`; update `import`
   lines to package names when adding files.
 - **Do not commit** unless the user explicitly asks.
-- The user's own `main.cpp`/root files: don't rewrite beyond what a task says.
 
 ## 8. Language features currently implemented
 
@@ -215,11 +217,10 @@ Do these only when asked; roughly prioritized:
 
 - `LNK1168` on build = a running `simse*.exe` holds the output; kill it.
 - Scanning `.` (no args) walks `tests/fixtures/*`, which intentionally contain
-  bad input and will make `simse` exit non-zero. Point it at `cppsrc`.
-- `simse cppsrc` includes two `main`s (the compiler `Driver.simse` and the
-  sample `cppsrc/main.simse`) so that amalgamation isn't a single program.
+  bad input and will make `simse_transpile` exit non-zero. Pass `--root cppsrc`
+  (or another clean module root) instead.
 - Prelude `.simse` bodies are not emitted; put behavior in the RTL C++ headers.
-- Source-map comments embed the path as given, so absolute vs relative runs
-  differ (mix of `/` and `\` on Windows) — cosmetic.
+- Source-map comments embed the path as given, so absolute and relative runs
+  differ — cosmetic.
 - Goldens are sensitive to line-number shifts; regenerate with `--update` when
   intentionally changing sources, then confirm check-mode passes.

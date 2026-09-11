@@ -49,9 +49,6 @@ target_compile_definitions(simse_lib PUBLIC
         SIMSE_DEFAULT_PRELUDE="${CMAKE_CURRENT_SOURCE_DIR}/cppsrc/rtl"
         SIMSE_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
 
-add_executable(simse cppsrc/main.cpp)
-target_link_libraries(simse PRIVATE simse_lib)
-
 add_executable(simse_transpile cppsrc/codegen/TranspileMain.cpp)
 target_link_libraries(simse_transpile PRIVATE simse_lib)
 
@@ -75,26 +72,16 @@ target_compile_definitions(simse_tests PRIVATE
 set(SIMSE_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 set(SIMSE_E2E_DIR "${CMAKE_CURRENT_BINARY_DIR}/e2e")
 
-foreach(e2e_name IN ITEMS emit_hello emit_shapes emit_generics native_readfile emit_containers emit_lang emit_xmlnode emit_cursor emit_str emit_lambda emit_dict emit_main_args main_program)
-    if(e2e_name STREQUAL "main_program")
-        # The runnable sample driver lives at cppsrc/main.simse, not under tests/.
-        set(e2e_fixture "${SIMSE_REPO_ROOT}/cppsrc/main.simse")
-    else()
-        set(e2e_fixture "${SIMSE_REPO_ROOT}/tests/fixtures/${e2e_name}.simse")
-    endif()
+foreach(e2e_name IN ITEMS emit_hello emit_shapes emit_generics native_readfile emit_containers emit_lang emit_xmlnode emit_cursor emit_str emit_lambda emit_dict emit_main_args)
+    set(e2e_fixture "${SIMSE_REPO_ROOT}/tests/fixtures/${e2e_name}.simse")
     # `emit_main_args` exercises the argv form of `main`; pass it one argument.
     set(e2e_extra_args)
     if(e2e_name STREQUAL "emit_main_args")
         set(e2e_extra_args -DEXE_ARGS=alpha)
     endif()
-    # `main_program` is cppsrc/main.simse: it imports the `lex` and `common`
-    # packages, so those module roots are scanned. The fixtures declare
-    # `package fixtures` and import nothing.
+    # The fixtures declare `package fixtures` and import nothing, so no extra
+    # module roots are needed.
     set(e2e_roots)
-    if(e2e_name STREQUAL "main_program")
-        set(e2e_roots --module-root "${SIMSE_REPO_ROOT}/cppsrc/common"
-                --module-root "${SIMSE_REPO_ROOT}/cppsrc/lex")
-    endif()
     set(e2e_generated "${SIMSE_E2E_DIR}/${e2e_name}.cpp")
     set(e2e_expected "${SIMSE_REPO_ROOT}/tests/golden/${e2e_name}.stdout.expected")
     set(e2e_actual "${SIMSE_E2E_DIR}/${e2e_name}.stdout.actual")
@@ -109,7 +96,7 @@ foreach(e2e_name IN ITEMS emit_hello emit_shapes emit_generics native_readfile e
 
     add_executable(e2e_${e2e_name} "${e2e_generated}")
     target_include_directories(e2e_${e2e_name} PRIVATE "${SIMSE_REPO_ROOT}")
-    if(e2e_name STREQUAL "native_readfile" OR e2e_name STREQUAL "main_program")
+    if(e2e_name STREQUAL "native_readfile")
         target_link_libraries(e2e_${e2e_name} PRIVATE simse_native)
     endif()
     set_target_properties(e2e_${e2e_name} PROPERTIES

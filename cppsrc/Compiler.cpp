@@ -75,11 +75,12 @@ namespace compiler {
         // Gather the compilation: every `*.simse` under each module root, then the
         // explicit inputs. Files already loaded as prelude are excluded, and each
         // canonical path is included once. The kept files are then sorted by
+        // The kept files are then sorted by
         // canonical path so the compilation order depends only on the file set,
-        // not on how it was specified: scanning a directory and listing the same
-        // files explicitly (`simse <dir>` vs the stage-1 driver's explicit input)
-        // emit identical C++. After dedup the canonical keys are unique, so the
-        // sort is total and both compiler rings agree.
+        // not on how it was specified: `--root cppsrc` and the explicit
+        // `cppsrc/compiler/Driver.simse` input emit identical C++. After dedup
+        // the canonical keys are unique, so the sort is total and both compiler
+        // rings agree.
         List<Str> candidates;
         for (const Str &root: request.moduleRoots) {
             for (const Str &file: filesInDir(root, ".simse")) {

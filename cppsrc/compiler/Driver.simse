@@ -5,9 +5,8 @@
 // the RTL prelude set, scans the module roots, parses and analyzes the whole
 // compilation, and amalgamates the result into one C++ translation unit. It is
 // the single root of the compiler source set: its imports pull in the scanner,
-// parser, sema, code generator, and the skeleton-parser mirror (so the stage-1
-// fixed point covers every mirror except the sample `cppsrc/main.simse`, which
-// defines its own `main`).
+// parser, sema, code generator, and the skeleton-parser mirror, so the stage-1
+// fixed point covers every mirror.
 //
 // Modules and packages (specs/modules.md): a module is a directory scanned from
 // the module roots; every `.simse` file found participates. `import a.b.c` only

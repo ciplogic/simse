@@ -22,7 +22,7 @@ reference while self-hosting is developed.
 
 Implement the scanner, parser, semantic stages, reifier, C++ lowering, and
 amalgamator in C++. Keep the generated C++ readable and debuggable. Use the
-existing `.simse` examples, especially `../cppsrc/main.simse`, as input fixtures and
+`.simse` sources and the `tests/fixtures/` programs as input fixtures and
 comparison cases.
 
 The initial compiler may call hand-written C++ runtime code under `cppsrc/rtl`.

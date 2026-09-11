@@ -15,8 +15,9 @@ main.simse
 cppsrc/lex/Scanner.simse
 ```
 
-The existing `../cppsrc/main.simse` file is the sample source used to compare Simse
-syntax with its current hand-written C++ counterpart, `../cppsrc/main.cpp`.
+The former `../cppsrc/main.simse` / `../cppsrc/main.cpp` sample pair has been
+removed; the comparison cases are now the compiler's own `.simse` sources and
+the fixtures under `tests/`.
 
 ## Generated C++ output
 
@@ -78,9 +79,9 @@ This gives the project two useful comparison points:
 - `.simse`: intended source program;
 - final amalgamated `.cpp`: concrete emitted/reference implementation.
 
-The current `../cppsrc/main.simse` and `../cppsrc/main.cpp` pair is an example of this comparison
-workflow, not a requirement that every generated file remain manually edited
-side by side forever.
+The former `../cppsrc/main.simse` / `../cppsrc/main.cpp` pair was an example of
+this comparison workflow, not a requirement that every generated file remain
+manually edited side by side forever.
 
 ## Runtime and RTL boundary
 

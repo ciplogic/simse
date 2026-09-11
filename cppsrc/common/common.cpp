@@ -35,7 +35,7 @@ namespace common {
             // Check if it's a regular file and has the matching extension
             if (entry.is_regular_file() && entry.path().extension() == ext) {
                 // Generic separators so a scanned path matches the same path given
-                // explicitly (e.g. `simse <dir>` vs the stage-1 driver's input).
+                // explicitly (e.g. `--root cppsrc` vs an explicit input file).
                 matchingFiles.push_back(entry.path().generic_string());
             }
         }
