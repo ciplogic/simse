@@ -1318,6 +1318,14 @@ namespace codegen {
                         if (kind == NameKind::Shared) {
                             return "(" + operand + ").get()";
                         }
+                        if (kind == NameKind::Value) {
+                            // `*value` is the raw-pointer form: the address of the
+                            // value, no copy (specs/memory-model.md). A plain name
+                            // is an lvalue, so `&name`; anything else may be a
+                            // temporary, which simse_addressOf binds for the call.
+                            if (e.lhs && e.lhs->kind == ExprKind::Name) return "&" + operand;
+                            return "simse_addressOf(" + operand + ")";
+                        }
                         return "*" + operand;
                     }
                     case ExprKind::Copy: {

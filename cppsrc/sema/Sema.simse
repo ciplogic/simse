@@ -75,7 +75,7 @@ fun semaIsConstantExpr(expr: XmlNode): Bool {
 // mention the extension's type parameters) against the actual receiver type.
 // References/pointers on the actual side are auto-dereferenced, matching the
 // member-call decision.
-fun semaUnifyReceiver(pattern: XmlNode, actual: XmlNode, typeParams: List<Str>): Bool {
+fun semaUnifyReceiver(pattern: XmlNode, actual: XmlNode, typeParams: *List<Str>): Bool {
     var actualPtr: XmlNode = actual
     val pk: Str = xmlKind(pattern)
     if (pk != "Type.Reference" && pk != "Type.Pointer") {
@@ -934,7 +934,8 @@ data class Analyzer(
                 }
             }
             if (hasRecv) {
-                if (semaUnifyReceiver(receiver, actual, xmlTypeParamNames(fn))) {
+                val typeParams: List<Str> = xmlTypeParamNames(fn)
+                if (semaUnifyReceiver(receiver, actual, *typeParams)) {
                     compatible = true
                     if (valueParamCount == argCount) {
                         return

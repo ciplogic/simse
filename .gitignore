@@ -45,3 +45,8 @@ Release
 ### Simse build outputs ###
 /simse_out.cpp
 /simse.exe
+
+### Simse profiling project (simse.sln) ###
+/profile/
+/.vs/
+/simse.vcxproj.user

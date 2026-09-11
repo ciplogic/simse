@@ -145,7 +145,8 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         return box
     }
 
-    fun appendTypeParams(node: XmlNode, names: List<Str>): Unit {
+    // The names are read only; a `*List<Str>` avoids copying the caller's list.
+    fun appendTypeParams(node: XmlNode, names: *List<Str>): Unit {
         var i: Int = 0
         while (i < names.size()) {
             var attrs: List<Attribute> = List<Attribute>()
@@ -336,7 +337,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         var attrs: List<Attribute> = this.posAttrs("DataClass", pos.line, pos.column)
         attrs.append(Attribute("name", name))
         var node: XmlNode = XmlNode("DataClass", attrs, &List<XmlNode>())
-        this.appendTypeParams(node, typeParams)
+        this.appendTypeParams(node, *typeParams)
         var fi: Int = 0
         while (fi < fields.size()) {
             node.Children.append(fields[fi])
@@ -412,7 +413,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         var attrs: List<Attribute> = this.posAttrs("Enum", pos.line, pos.column)
         attrs.append(Attribute("name", name))
         var node: XmlNode = XmlNode("Enum", attrs, &List<XmlNode>())
-        this.appendTypeParams(node, typeParams)
+        this.appendTypeParams(node, *typeParams)
         var i: Int = 0
         while (i < members.size()) {
             node.Children.append(members[i])
@@ -446,7 +447,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         var attrs: List<Attribute> = this.posAttrs("TypeAlias", pos.line, pos.column)
         attrs.append(Attribute("name", name))
         var node: XmlNode = XmlNode("TypeAlias", attrs, &List<XmlNode>())
-        this.appendTypeParams(node, typeParams)
+        this.appendTypeParams(node, *typeParams)
         node.Children.append(target)
         return node
     }
@@ -618,7 +619,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         if (hasReceiver) {
             node.Children.append(receiverNode)
         }
-        this.appendTypeParams(node, functionTypeParams)
+        this.appendTypeParams(node, *functionTypeParams)
         var pi: Int = 0
         while (pi < params.size()) {
             node.Children.append(params[pi])
@@ -1366,7 +1367,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         }
 
         var attrs: List<Attribute> = this.posAttrs("Expr.Lambda", pos.line, pos.column)
-        attrs.append(Attribute("params", joinNames(names)))
+        attrs.append(Attribute("params", joinNames(*names)))
         var node: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
         var i: Int = 0
         while (i < paramTypes.size()) {
@@ -1387,7 +1388,8 @@ fun boolText(value: Bool): Str {
     return "false"
 }
 
-fun joinNames(names: List<Str>): Str {
+// The names are read only; a `*List<Str>` avoids copying the caller's list.
+fun joinNames(names: *List<Str>): Str {
     var out: Str = Str()
     var i: Int = 0
     while (i < names.size()) {

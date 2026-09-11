@@ -42,7 +42,8 @@ enum NameKind { Value, Shared, Pointer }
 
 // ---- helpers --------------------------------------------------------------
 
-fun cgJoin(parts: List<Str>, separator: Str): Str {
+// Reads the parts only; a `*List<Str>` avoids copying the caller's list.
+fun cgJoin(parts: *List<Str>, separator: Str): Str {
     var out: Str = ""
     var i: Int = 0
     while (i < parts.size()) {
@@ -179,7 +180,7 @@ data class Emitter(
         return node
     }
 
-    fun genericTypeExpr(name: Str, args: List<XmlNode>): XmlNode {
+    fun genericTypeExpr(name: Str, args: *List<XmlNode>): XmlNode {
         var node: XmlNode = XmlNode("Type", List<Attribute>(), &List<XmlNode>())
         node.attributes.append(Attribute("kind", "Type.Generic"))
         node.attributes.append(Attribute("name", name))
@@ -203,7 +204,7 @@ data class Emitter(
             args.append(this.namedTypeExpr(typeParams[i]))
             i = i + 1
         }
-        return this.genericTypeExpr(xmlAttr(decl, "name"), args)
+        return this.genericTypeExpr(xmlAttr(decl, "name"), *args)
     }
 
     fun addFunction(decl: XmlNode, receiver: XmlNode, file: Str, templateParams: List<Str>, prelude: Bool): Unit {
@@ -315,7 +316,7 @@ data class Emitter(
             parts.append("class " + params[i])
             i = i + 1
         }
-        return "template <" + cgJoin(parts, ", ") + ">"
+        return "template <" + cgJoin(*parts, ", ") + ">"
     }
 
     fun typeArgsString(baseName: Str, args: List<XmlNode>): Str {
@@ -330,7 +331,7 @@ data class Emitter(
             rendered[0] = rendered[1]
             rendered[1] = first
         }
-        return cgJoin(rendered, ", ")
+        return cgJoin(*rendered, ", ")
     }
 
     fun typeName(name: Str, posNode: XmlNode): Str {
@@ -389,7 +390,7 @@ data class Emitter(
                 params.append(this.type(paramNodes[i]))
                 i = i + 1
             }
-            return "Func<" + ret + "(" + cgJoin(params, ", ") + ")>"
+            return "Func<" + ret + "(" + cgJoin(*params, ", ") + ")>"
         }
         return "/*unsupported*/"
     }
@@ -481,13 +482,13 @@ data class Emitter(
         // an emitted constructor.
         var target: Str = name
         if (typeParams.size() > 0) {
-            target = name + "<" + cgJoin(typeParams, ", ") + ">"
+            target = name + "<" + cgJoin(*typeParams, ", ") + ">"
         }
         if (tmpl != "") {
             this.line(0, tmpl)
         }
-        this.line(0, target + " _make_" + name + "(" + cgJoin(params, ", ") + ") {")
-        this.line(1, "return " + target + "{" + cgJoin(values, ", ") + "};")
+        this.line(0, target + " _make_" + name + "(" + cgJoin(*params, ", ") + ") {")
+        this.line(1, "return " + target + "{" + cgJoin(*values, ", ") + "};")
         this.line(0, "}")
     }
 
@@ -622,7 +623,7 @@ data class Emitter(
             if (tmpl != "") {
                 this.line(0, tmpl)
             }
-            this.line(0, ret + " " + nativeInfo.symbol + "(" + cgJoin(paramTexts, ", ") + ");")
+            this.line(0, ret + " " + nativeInfo.symbol + "(" + cgJoin(*paramTexts, ", ") + ");")
         }
     }
 
@@ -741,7 +742,7 @@ data class Emitter(
             selfK = NameKind.Value
         }
 
-        var signature: Str = ret + " " + xmlAttr(decl, "name") + "(" + cgJoin(params, ", ") + ")"
+        var signature: Str = ret + " " + xmlAttr(decl, "name") + "(" + cgJoin(*params, ", ") + ")"
         if (mainArgs) {
             signature = "int main(int argc, char** argv)"
         }
@@ -954,7 +955,7 @@ data class Emitter(
     }
 
     fun genericType(name: Str, args: List<XmlNode>): XmlNode {
-        return this.genericTypeExpr(name, args)
+        return this.genericTypeExpr(name, *args)
     }
 
     fun pointee(typeNode: XmlNode): XmlNode {
@@ -1003,7 +1004,7 @@ data class Emitter(
         return false
     }
 
-    fun unifyType(pattern: XmlNode, actual: XmlNode, typeParams: List<Str>): Bool {
+    fun unifyType(pattern: XmlNode, actual: XmlNode, typeParams: *List<Str>): Bool {
         var actualPtr: XmlNode = actual
         val pk: Str = xmlKind(pattern)
         if (pk != "Type.Reference" && pk != "Type.Pointer") {
@@ -1105,7 +1106,7 @@ data class Emitter(
                 continue
             }
             val ret: XmlNode = xmlChild(fn.decl, "ReturnType")
-            if (!xmlIsEmpty(recv) && this.unifyType(fn.receiver, recv, fn.templateParams)
+            if (!xmlIsEmpty(recv) && this.unifyType(fn.receiver, recv, *fn.templateParams)
                 && !xmlIsEmpty(ret)) {
                 return ret
             }
@@ -1116,7 +1117,7 @@ data class Emitter(
             while (e < extensions.size()) {
                 val ext: CgNativeExt = extensions[e]
                 if (!xmlIsEmpty(recv) && !xmlIsEmpty(ext.receiver)
-                    && this.unifyType(ext.receiver, recv, ext.typeParams)
+                    && this.unifyType(ext.receiver, recv, *ext.typeParams)
                     && !xmlIsEmpty(ext.returnType)) {
                     return ext.returnType
                 }
@@ -1334,7 +1335,7 @@ data class Emitter(
                 i = i + 1
                 continue
             }
-            if (xmlAttr(fn.decl, "name") == name && this.unifyType(fn.receiver, recv, fn.templateParams)) {
+            if (xmlAttr(fn.decl, "name") == name && this.unifyType(fn.receiver, recv, *fn.templateParams)) {
                 return i
             }
             i = i + 1
@@ -1356,7 +1357,7 @@ data class Emitter(
         var i: Int = 0
         while (i < extensions.size()) {
             val ext: CgNativeExt = extensions[i]
-            if (!xmlIsEmpty(ext.receiver) && this.unifyType(ext.receiver, recv, ext.typeParams)) {
+            if (!xmlIsEmpty(ext.receiver) && this.unifyType(ext.receiver, recv, *ext.typeParams)) {
                 return i
             }
             i = i + 1
@@ -1518,7 +1519,7 @@ data class Emitter(
         }
         val unitReturn: Bool = this.isUnitType(returnType)
 
-        var head: Str = "[=](" + cgJoin(params, ", ") + ")"
+        var head: Str = "[=](" + cgJoin(*params, ", ") + ")"
         if (!unitReturn) {
             head = head + " -> " + this.type(returnType)
         }
@@ -1671,6 +1672,16 @@ data class Emitter(
             if (nameKind == NameKind.Shared) {
                 return "(" + operand + ").get()"
             }
+            if (nameKind == NameKind.Value) {
+                // `*value` is the raw-pointer form: the address of the value, no
+                // copy (specs/memory-model.md). A plain name is an lvalue, so
+                // `&name`; anything else may be a temporary, which
+                // simse_addressOf binds for the call.
+                if (xmlKind(operandNode) == "Expr.Name") {
+                    return "&" + operand
+                }
+                return "simse_addressOf(" + operand + ")"
+            }
             return "*" + operand
         }
         if (kind == "Expr.Copy") {
@@ -1723,7 +1734,7 @@ data class Emitter(
                 calleeName = "_make_" + name
             }
             return calleeName + "<" + this.typeArgsString(name, xmlChildren(callee, "TypeArg"))
-                   + ">(" + cgJoin(args, ", ") + ")"
+                   + ">(" + cgJoin(*args, ", ") + ")"
         }
         if (calleeKind == "Expr.Name") {
             val name: Str = xmlAttr(callee, "name")
@@ -1768,7 +1779,7 @@ data class Emitter(
             if (this.dataClassNames.has(name)) {
                 calleeName = "_make_" + name
             }
-            return calleeName + "(" + cgJoin(args, ", ") + ")"
+            return calleeName + "(" + cgJoin(*args, ", ") + ")"
         }
         if (calleeKind == "Expr.Member") {
             var args: List<Str> = List<Str>()
@@ -1790,12 +1801,12 @@ data class Emitter(
             }
             if (calleeText == "fromInt" && xmlKind(receiverExpr) == "Expr.Name"
                 && this.enumNames.has(xmlAttr(receiverExpr, "name"))) {
-                return "simse_" + xmlAttr(receiverExpr, "name") + "_fromInt(" + cgJoin(args, ", ") + ")"
+                return "simse_" + xmlAttr(receiverExpr, "name") + "_fromInt(" + cgJoin(*args, ", ") + ")"
             }
             if (xmlKind(receiverExpr) == "Expr.GenericName") {
                 return xmlAttr(receiverExpr, "name") + "<"
                        + this.typeArgsString(xmlAttr(receiverExpr, "name"), xmlChildren(receiverExpr, "TypeArg"))
-                       + ">::" + calleeText + "(" + cgJoin(args, ", ") + ")"
+                       + ">::" + calleeText + "(" + cgJoin(*args, ", ") + ")"
             }
 
             val receiverType: XmlNode = this.inferType(receiverExpr)
@@ -1824,7 +1835,7 @@ data class Emitter(
                     }
                     return ext.symbol + "(" + all + ")"
                 }
-                return this.memberAccess(receiverExpr, calleeText) + "(" + cgJoin(args, ", ") + ")"
+                return this.memberAccess(receiverExpr, calleeText) + "(" + cgJoin(*args, ", ") + ")"
             }
 
             if (this.receiverFnNames.has(calleeText)) {
@@ -1848,7 +1859,7 @@ data class Emitter(
                     return extensions[0].symbol + "(" + all + ")"
                 }
             }
-            return this.memberAccess(receiverExpr, calleeText) + "(" + cgJoin(args, ", ") + ")"
+            return this.memberAccess(receiverExpr, calleeText) + "(" + cgJoin(*args, ", ") + ")"
         }
         this.fail(e, "unsupported: call target")
         return "/*unsupported*/"

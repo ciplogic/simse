@@ -12,8 +12,9 @@
 //   --out <file>    generated C++ name/path (default: simse_out.cpp)
 //   --root <dir>    source root to transpile, relative to the repo (default: cppsrc)
 //   --no-gen        skip transpiling; compile the existing/--cpp file
-//   --release       link the release CMake build (cmake-build-release, /MD)
-//   --debug         link the debug CMake build (default: cmake-build-debug, /MDd)
+//   --release       release build: /O2 /DNDEBUG and the release CMake libs
+//                    (cmake-build-release, /MD)
+//   --debug         debug build (default: cmake-build-debug, /MDd)
 //   --arch <arch>   vcvarsall target architecture (default: the CMake build's
 //                    compiler architecture, else arm64)
 //   -h, --help      show this help
@@ -27,7 +28,7 @@
 // release).
 
 import { $ } from "bun";
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 
@@ -46,8 +47,9 @@ function usage() {
   --out <file>    generated C++ name/path (default: simse_out.cpp)
   --root <dir>    source root to transpile, relative to the repo (default: cppsrc)
   --no-gen        skip transpiling; compile the existing/--cpp file
-  --release       link the release CMake build (cmake-build-release, /MD)
-  --debug         link the debug CMake build (default: cmake-build-debug, /MDd)
+  --release       release build: /O2 /DNDEBUG and the release CMake libs
+                  (cmake-build-release, /MD)
+  --debug         debug build (default: cmake-build-debug, /MDd)
   --arch <arch>   vcvarsall target architecture (default: from CMakeCache.txt,
                   else arm64)
   -h, --help      show this help`);
@@ -60,6 +62,7 @@ function parseArgs(argv) {
     exe: "simse.exe",
     gen: true,
     release: false,
+    configSet: false,
     arch: null,
   };
   const value = (i) => {
@@ -74,8 +77,8 @@ function parseArgs(argv) {
       case "--out": opts.out = value(i); i++; break;
       case "--root": opts.root = value(i); i++; break;
       case "--no-gen": opts.gen = false; break;
-      case "--release": opts.release = true; break;
-      case "--debug": opts.release = false; break;
+      case "--release": opts.release = true; opts.configSet = true; break;
+      case "--debug": opts.release = false; opts.configSet = true; break;
       case "--arch": opts.arch = value(i); i++; break;
       case "-h": case "--help": opts.help = true; break;
       default:
@@ -121,6 +124,16 @@ function normalizeArch(value) {
   return lower === "amd64" ? "x64" : lower;
 }
 
+// The CMake build type recorded in CMakeCache.txt (Debug/Release/...), or null.
+function cachedBuildType(buildDir) {
+  const cache = path.join(buildDir, "CMakeCache.txt");
+  if (!existsSync(cache)) return null;
+  const match = readFileSync(cache, "utf8").match(/^CMAKE_BUILD_TYPE:[^=\r\n]*=(.*)$/m);
+  if (!match) return null;
+  const value = match[1].trim();
+  return value || null;
+}
+
 // The architecture the compiler targets, from its banner ("... for ARM64").
 function compilerTarget(cl, env) {
   const probe = Bun.spawnSync([cl], { env, stdout: "pipe", stderr: "pipe" });
@@ -158,6 +171,22 @@ function developerEnv(arch) {
   }
 }
 
+// The newest mtime among the C++ sources the hand-written transpiler is built
+// from (the `.simse` sources are runtime inputs, not build inputs).
+function newestCompiledSource(dir) {
+  let newest = 0;
+  const stack = [dir];
+  while (stack.length > 0) {
+    const current = stack.pop();
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      const full = path.join(current, entry.name);
+      if (entry.isDirectory()) stack.push(full);
+      else if (/\.(cpp|h|hpp)$/.test(entry.name)) newest = Math.max(newest, statSync(full).mtimeMs);
+    }
+  }
+  return newest;
+}
+
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
   if (opts.help) {
@@ -167,20 +196,25 @@ async function main() {
   const cwd = process.cwd();
 
   // --- the CMake build folder that holds the RTL/native libraries ------------
-  let release = opts.release;
   let buildDir = process.env.SIMSE_BUILD_DIR
       ? path.resolve(process.env.SIMSE_BUILD_DIR)
-      : path.join(REPO, release ? "cmake-build-release" : "cmake-build-debug");
+      : path.join(REPO, opts.release ? "cmake-build-release" : "cmake-build-debug");
   if (!existsSync(path.join(buildDir, "simse_native.lib"))) {
-    const other = path.join(REPO, release ? "cmake-build-debug" : "cmake-build-release");
-    if (existsSync(path.join(other, "simse_native.lib"))) {
+    const other = process.env.SIMSE_BUILD_DIR
+        ? null
+        : path.join(REPO, opts.release ? "cmake-build-debug" : "cmake-build-release");
+    if (!opts.configSet && other && existsSync(path.join(other, "simse_native.lib"))) {
       buildDir = other;
-      release = !release;
     } else {
-      fail(`missing ${path.join(buildDir, "simse_native.lib")}; build the project first (` +
-           `cd cmake-build-debug && _msvc_build.bat)`);
+      fail(`missing ${path.join(buildDir, "simse_native.lib")}; build that CMake folder first ` +
+           `(from it: vcvarsall arm64 && cmake --build . --target simse_transpile simse_native)`);
     }
   }
+  // The build type comes from the CMake cache; --release/--debug only choose the
+  // folder and are the fallback when the cache does not say.
+  const buildType = cachedBuildType(buildDir);
+  const isRelease = buildType ? /^(Rel|MinSizeRel)/i.test(buildType) : opts.release;
+  console.log(`build: using ${buildDir} (${buildType || (isRelease ? "Release" : "Debug")})`);
 
   // --- step 1: transpile the compiler source tree ----------------------------
   const outCpp = path.resolve(cwd, opts.out);
@@ -188,6 +222,11 @@ async function main() {
     const transpileExe = path.join(buildDir, "simse_transpile.exe");
     if (!existsSync(transpileExe)) {
       fail(`missing ${transpileExe}; build the project first (cd cmake-build-debug && _msvc_build.bat)`);
+    }
+    if (statSync(transpileExe).mtimeMs < newestCompiledSource(path.join(REPO, "cppsrc"))) {
+      console.warn(`build: warning: the CMake build in ${path.basename(buildDir)} is older than the ` +
+          `compiler sources, so ${path.basename(transpileExe)} may be stale; rebuild it first ` +
+          `(from that folder: vcvarsall arm64 && cmake --build . --target simse_transpile)`);
     }
     console.log(`build: transpiling ${opts.root} -> ${outCpp}`);
     // Run from the repository root so the source-map comments use the same
@@ -201,18 +240,19 @@ async function main() {
   if (!existsSync(cpp)) fail(`C++ source not found: ${cpp} (pass --cpp or drop --no-gen)`);
 
   // --- step 2: load the Visual Studio environment and compile ----------------
-  const arch = normalizeArch(opts.arch || cachedArch(buildDir) || "arm64");
+  const libArch = cachedArch(buildDir);
+  const arch = normalizeArch(opts.arch || libArch || "arm64");
   const env = developerEnv(arch);
   const cl = Bun.which("cl", { PATH: env.PATH });
   if (!cl) fail(`cl.exe not found on the Visual Studio PATH (arch ${arch})`);
 
-  // Guard against an ambient developer prompt for another architecture: the
-  // CMake libraries cannot link into a different machine type (LNK4272, then a
-  // wall of LNK2019 unresolved externals).
+  // Guard against a different machine type than the CMake libraries: linking an
+  // x86/x64 object against them fails with LNK4272 plus a wall of LNK2019
+  // unresolved externals that hides the real cause.
   const target = compilerTarget(cl, env);
-  if (target && target !== arch) {
-    fail(`cl.exe targets ${target} but the CMake build is ${arch}; ` +
-         `use a ${arch} Visual Studio environment (vcvarsall ${arch})`);
+  if (target && libArch && target !== normalizeArch(libArch)) {
+    fail(`cl.exe targets ${target} but the CMake libraries in ${path.basename(buildDir)} are ${libArch}; ` +
+         `use an ${libArch} Visual Studio environment (vcvarsall ${libArch})`);
   }
 
   const objDir = path.join(buildDir, "manual");
@@ -221,8 +261,11 @@ async function main() {
 
   console.log(`build: compiling ${cpp}`);
   console.log(`build:            -> ${exe}`);
+  // Match the CMake build's runtime and optimization (Release uses /MD + /O2 +
+  // /DNDEBUG; Debug uses /MDd).
+  const flags = isRelease ? ["/MD", "/O2", "/DNDEBUG"] : ["/MDd"];
   const args = [
-    cl, "/nologo", "/std:c++20", "/EHsc", "/W3", release ? "/MD" : "/MDd",
+    cl, "/nologo", "/std:c++20", "/EHsc", "/W3", ...flags,
     `/I${REPO}`, `/Fo${obj}`, `/Fe${exe}`,
     cpp,
     path.join(buildDir, "simse_native.lib"),

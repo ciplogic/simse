@@ -151,7 +151,8 @@ fun xmlLambdaParams(expr: XmlNode): List<Str> {
     return raw.split(",")
 }
 
-fun xmlIsTypeParam(name: Str, typeParams: List<Str>): Bool {
+// Reads the list only; a `*List<Str>` avoids copying the caller's list.
+fun xmlIsTypeParam(name: Str, typeParams: *List<Str>): Bool {
     var i: Int = 0
     while (i < typeParams.size()) {
         if (typeParams[i] == name) {

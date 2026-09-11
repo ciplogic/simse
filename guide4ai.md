@@ -54,10 +54,16 @@ cmd //c "_msvc_build.bat --clean-first" # clean rebuild
 ./cmake-build-debug/simse_transpile.exe <files...> [-o out.cpp] [--prelude <path>] [--root <dir>] [--module-root <dir>...]
 
 # transpile the compiler and compile it (bun + cl.exe, loads the VS environment)
-./build.bat                             # cppsrc -> ./simse_out.cpp -> ./simse.exe
+# compile an amalgamated output with cl.exe (loads the VS environment itself)
+./build.bat                             # cppsrc -> ./simse_out.cpp -> ./simse.exe (debug)
+./build.bat --release                   # release: /O2 /DNDEBUG, cmake-build-release libs (/MD)
 ./build.bat my_simse.exe                # same, different executable name
 ./build.bat --cpp other.cpp --exe x.exe # compile an existing amalgamation
 ./build.bat --help                      # all options (see build.js)
+
+# profiling: open simse.sln (ARM64; Release is the default configuration and
+# carries /Zi + /DEBUG). It compiles ONLY simse_out.cpp, refreshes that file
+# from cppsrc when a source is newer, and writes profile\<config>\simse.exe.
 ```
 
 The default build runs, as part of `ALL`: every e2e program (transpile ->
@@ -217,7 +223,11 @@ Do these only when asked; roughly prioritized:
 
 ## 10. Gotchas
 
-- `LNK1168` on build = a running `simse*.exe` holds the output; kill it.
+- `LNK1168` on build = a running `simse*.exe` holds the output; kill it first.
+- `build.bat` defaults to a debug build (`/MDd`), so the MSVC debug STL asserts are
+  live: bad input such as a directory passed where a `.simse` file is expected can
+  pop an assert dialog instead of a diagnostic. Use `build.bat --release`
+  (`/O2 /DNDEBUG`, release libs) for a build with the asserts compiled out.
 - Scanning `.` (no args) walks `tests/fixtures/*`, which intentionally contain
   bad input and will make `simse_transpile` exit non-zero. Pass `--root cppsrc`
   (or another clean module root) instead.

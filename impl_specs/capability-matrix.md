@@ -342,3 +342,16 @@ component-specific):
   `simse_transpile --root cppsrc` (output `simse_out.cpp`, compiled by
   `build.bat`) is the whole-compiler command. The `simse` target and the
   `main_program` e2e case were removed with them.
+- **Raw-pointer (`*T`) read-only parameters replace by-value lists.** `*value`
+  now lowers to `&value` (address of an lvalue, no copy) in both rings, so the
+  language's raw-pointer form is usable from Simse code. The mirrors' obvious
+  read-only list parameters were migrated: `cgJoin`, `joinNames`, `unifyType`,
+  `semaUnifyReceiver`, `xmlIsTypeParam`, `appendTypeParams`, `genericTypeExpr`;
+  their call sites pass `*local` / `*field`. Parameters whose call sites all pass
+  temporaries (`emitStmts`, `typeArgsString`, `templateClause`'s fresh lists) were
+  deliberately left alone: those arguments are move-initialized, so there is no
+  copy to remove — same for `binaryBindingPower(op: Str)`
+  (`this.peek(...).text` is an xvalue, i.e. a move). All five differentials, the
+  goldens, and the two-step bootstrap stay green; transpiling the compiler showed
+  no measurable wall-clock change (~340 ms either way), since the removed copies
+  were small lists.
