@@ -53,9 +53,11 @@ cmd //c "_msvc_build.bat --clean-first" # clean rebuild
 # explicit-input form (used by the build/tests); -o defaults to simse_out.cpp
 ./cmake-build-debug/simse_transpile.exe <files...> [-o out.cpp] [--prelude <path>] [--root <dir>] [--module-root <dir>...]
 
-# compile an amalgamated output with cl.exe (loads the VS environment itself)
-./build.bat                             # ./simse_out.cpp -> ./simse_out.exe
-./build.bat <input.cpp> [<out.exe>]     # defaults: simse_out.cpp / <name>.exe
+# transpile the compiler and compile it (bun + cl.exe, loads the VS environment)
+./build.bat                             # cppsrc -> ./simse_out.cpp -> ./simse.exe
+./build.bat my_simse.exe                # same, different executable name
+./build.bat --cpp other.cpp --exe x.exe # compile an existing amalgamation
+./build.bat --help                      # all options (see build.js)
 ```
 
 The default build runs, as part of `ALL`: every e2e program (transpile ->

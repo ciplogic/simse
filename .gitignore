@@ -38,3 +38,10 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+Debug
+Release
+
+### Simse build outputs ###
+/simse_out.cpp
+/simse.exe
