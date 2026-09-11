@@ -3,6 +3,7 @@
 #include "../cppsrc/ast/Ast.h"
 #include "../cppsrc/common/common.h"
 #include "../cppsrc/lex/Scanner.h"
+#include "../cppsrc/sema/Sema.h"
 
 // Support code for the golden test harness. Lives in simse_lib so both the test
 // executable and any future tooling can use it. It deliberately depends only on
@@ -66,10 +67,15 @@ namespace tests {
     // diagnostics so goldens do not embed machine-specific paths.
     AstSemaResult runAstSema(const ScanResult& scan, const Str& displayName);
 
-    // Analyzes a parsed module with the default RTL prelude merged in, exactly as
-    // real compilation does. The real-source check uses this so a mirror that uses
-    // prelude types (for example XmlNode) resolves without an import.
+    // Analyzes a parsed module with the default RTL prelude and the rest of the
+    // compilation. Kept for callers that already hold per-file modules; the
+    // golden harness assembles the whole set itself.
     List<Str> analyzeWithPrelude(const ast::Module& module, const Str& displayName);
+
+    // Sema inputs for the default RTL prelude: one per file, so each keeps its
+    // declared package (`rtl`). Shared by the golden harness and the real-source
+    // compilation check.
+    List<sema::Input> preludeInputs();
 
     // Parses `name` under `fixturesDir` and emits it in-process (loading the RTL
     // prelude), returning the C++ or an empty string on failure.

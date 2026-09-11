@@ -129,11 +129,11 @@ var bad: Opt<Color> = Color.fromInt(9)      // none
 
 Status: required for the first implementation.
 
-A file may carry one optional, file-level `package a.b.c` declaration before its
-imports and other declarations; a file without one is in the root package.
-`package` is a reserved keyword. It is namespacing/grouping only and gives no
-visibility semantics; `import a.b.c` selects the declarations of every file that
-declares package `a.b.c`. See `functions.md` for the full rules.
+A file declares exactly one package as the first declaration: `package a.b.c`,
+before its imports and other declarations. `package` is a reserved keyword. It is
+namespacing/grouping only and gives no visibility semantics; `import a.b.c`
+brings package `a.b.c` into unqualified scope. See `specs/modules.md` for the
+full rules.
 
 ## Hoisting
 

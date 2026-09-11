@@ -24,67 +24,19 @@ namespace compiler {
                 std::filesystem::weakly_canonical(std::filesystem::path(path), ec);
             return ec ? path : canonical.string();
         }
-
-        // The prelude declarations first, then the input's, so prelude names
-        // resolve for the input while the input's own declarations win on
-        // redefinition.
-        ast::Module combinedModule(const ast::Module &prelude, const ast::Module &input) {
-            ast::Module combined;
-            combined.pos = input.pos;
-            for (const ast::Import &import: prelude.imports) {
-                combined.imports.push_back(import);
-            }
-            for (const ast::Import &import: input.imports) {
-                combined.imports.push_back(import);
-            }
-            for (const ast::DeclPtr &decl: prelude.declarations) {
-                combined.declarations.push_back(decl);
-            }
-            for (const ast::DeclPtr &decl: input.declarations) {
-                combined.declarations.push_back(decl);
-            }
-            return combined;
-        }
     }
 
     int transpile(const Request &request) {
         const Str &programName = request.programName;
-        List<Str> inputs = request.inputs;
-
-        Str resolvedPrelude = request.preludeExplicit ? request.preludePath : Str(kDefaultPrelude);
-        if (!resolvedPrelude.empty()) {
-            Str preludeKey = normalizePath(resolvedPrelude);
-            List<Str> filtered;
-            for (const Str &input: inputs) {
-                if (normalizePath(input) != preludeKey) {
-                    filtered.push_back(input);
-                }
-            }
-            inputs = filtered;
-        }
-
-        // Directory mode: expand the raw scan to the ordered, de-duplicated import
-        // set, so a file reached through more than one import (or also present in
-        // the scan) is compiled exactly once. If expansion fails (a file does not
-        // parse, or an import does not resolve), fall through to per-file
-        // processing so every error is reported; nothing is emitted in that case.
-        bool expandedSet = false;
-        if (request.directoryMode) {
-            Res<List<Str>> importSet = parser::collectImportSet(inputs, request.root);
-            if (importSet.isOk()) {
-                inputs = importSet.Value;
-                expandedSet = true;
-            }
-        }
 
         // Load the prelude set: a directory contributes every `*.simse` in it, a
         // file contributes itself. Missing defaults are skipped silently; an
-        // explicit path that is missing is an error.
-        codegen::Input preludeInput;
-        bool hasPrelude = false;
-        List<Str> preludeCanonicals;
+        // explicit path that is missing is an error. Each file is kept separate so
+        // sema sees its declared package (`rtl`); the merged module is what codegen
+        // consumes as the single never-emitted prelude input.
+        Str resolvedPrelude = request.preludeExplicit ? request.preludePath : Str(kDefaultPrelude);
+        List<Str> preludeFiles;
         if (!resolvedPrelude.empty()) {
-            List<Str> preludeFiles;
             if (std::filesystem::is_directory(resolvedPrelude)) {
                 preludeFiles = filesInDir(resolvedPrelude, ".simse");
             } else if (std::filesystem::exists(resolvedPrelude)) {
@@ -94,68 +46,57 @@ namespace compiler {
                         resolvedPrelude.c_str());
                 return 2;
             }
-
-            ast::Module mergedPrelude;
-            mergedPrelude.pos = ast::SourcePos{0, 1, 1};
-            for (const Str &preludeFile: preludeFiles) {
-                Res<ast::Module> parsedPrelude = parser::parseFile(preludeFile);
-                if (!parsedPrelude.isOk()) {
-                    fprintf(stderr, "%s\n", parsedPrelude.Error.c_str());
-                    return 1;
-                }
-                preludeCanonicals.push_back(normalizePath(preludeFile));
-                for (const ast::Import &import: parsedPrelude.Value.imports) {
-                    mergedPrelude.imports.push_back(import);
-                }
-                for (const ast::DeclPtr &decl: parsedPrelude.Value.declarations) {
-                    mergedPrelude.declarations.push_back(decl);
-                }
-            }
-            if (!preludeFiles.empty()) {
-                preludeInput.fileName = resolvedPrelude;
-                preludeInput.module = mergedPrelude;
-                preludeInput.prelude = true;
-                hasPrelude = true;
-            }
         }
 
-        // Directory mode: a prelude file discovered by the scan must not also be
-        // compiled as an input (it would collide with the prelude's declarations).
-        if (request.excludePreludeFiles && !preludeCanonicals.empty()) {
-            List<Str> filtered;
-            for (const Str &input: inputs) {
-                Str key = normalizePath(input);
-                bool isPrelude = false;
-                for (const Str &preludeCanonical: preludeCanonicals) {
-                    if (key == preludeCanonical) {
-                        isPrelude = true;
-                        break;
-                    }
-                }
-                if (!isPrelude) {
-                    filtered.push_back(input);
-                }
+        List<Str> preludeNames;
+        List<ast::Module> preludeModules;
+        ast::Module mergedPrelude;
+        mergedPrelude.pos = ast::SourcePos{0, 1, 1};
+        Dictionary<Str, bool> preludeCanon;
+        for (const Str &preludeFile: preludeFiles) {
+            Res<ast::Module> parsedPrelude = parser::parseFile(preludeFile);
+            if (!parsedPrelude.isOk()) {
+                fprintf(stderr, "%s\n", parsedPrelude.Error.c_str());
+                return 1;
             }
-            inputs = filtered;
+            preludeCanon[normalizePath(preludeFile)] = true;
+            preludeNames.push_back(preludeFile);
+            preludeModules.push_back(parsedPrelude.Value);
+            for (const ast::Import &import: parsedPrelude.Value.imports) {
+                mergedPrelude.imports.push_back(import);
+            }
+            for (const ast::DeclPtr &decl: parsedPrelude.Value.declarations) {
+                mergedPrelude.declarations.push_back(decl);
+            }
+        }
+        bool hasPrelude = !preludeFiles.empty();
+
+        // Gather the compilation: every `*.simse` under each module root, then the
+        // explicit inputs. Files already loaded as prelude are excluded, and each
+        // canonical path is included once. Discovery order is deterministic: the
+        // module roots in the given order, each scanned recursively and sorted,
+        // then the explicit inputs in order.
+        List<Str> candidates;
+        for (const Str &root: request.moduleRoots) {
+            for (const Str &file: filesInDir(root, ".simse")) {
+                candidates.push_back(file);
+            }
+        }
+        for (const Str &file: request.inputs) {
+            candidates.push_back(file);
         }
 
-        List<codegen::Input> modules;
-        if (hasPrelude) {
-            modules.push_back(preludeInput);
-        }
-
+        List<Str> fileNames;
+        List<ast::Module> modules;
+        Dictionary<Str, bool> seen;
         List<Str> errors;
-        for (const Str &file: inputs) {
-            // Resolve the file's imports (each `import a.b.c` is a directory
-            // under the root) and merge their declarations into this module
-            // before analysis and emission (specs/functions.md). In directory
-            // mode the import set was already expanded, so each file is parsed on
-            // its own and emitted once; if expansion failed we still resolve
-            // imports per file so resolution errors are reported.
-            bool parseOwnModule = request.directoryMode && expandedSet;
-            Res<ast::Module> parsed = parseOwnModule
-                                          ? parser::parseFile(file)
-                                          : parser::parseFileWithImports(file, request.root);
+        for (const Str &display: candidates) {
+            Str canon = normalizePath(display);
+            if (preludeCanon.count(canon) > 0) continue;
+            if (seen.count(canon) > 0) continue;
+            seen[canon] = true;
+
+            Res<ast::Module> parsed = parser::parseFile(display);
             if (!parsed.isOk()) {
                 if (request.collectAllErrors) {
                     errors.push_back(parsed.Error);
@@ -164,29 +105,9 @@ namespace compiler {
                 fprintf(stderr, "%s\n", parsed.Error.c_str());
                 return 1;
             }
-
-            ast::Module toAnalyze =
-                hasPrelude ? combinedModule(preludeInput.module, parsed.Value) : parsed.Value;
-            List<Str> diagnostics = sema::analyze(toAnalyze, file);
-            if (!diagnostics.empty()) {
-                if (request.collectAllErrors) {
-                    for (const Str &diagnostic: diagnostics) {
-                        errors.push_back(diagnostic);
-                    }
-                    continue;
-                }
-                for (const Str &diagnostic: diagnostics) {
-                    fprintf(stderr, "%s\n", diagnostic.c_str());
-                }
-                return 1;
-            }
-
-            codegen::Input input;
-            input.fileName = file;
-            input.module = parsed.Value;
-            modules.push_back(input);
+            fileNames.push_back(display);
+            modules.push_back(parsed.Value);
         }
-
         if (!errors.empty()) {
             for (const Str &error: errors) {
                 fprintf(stderr, "%s\n", error.c_str());
@@ -194,7 +115,46 @@ namespace compiler {
             return 1;
         }
 
-        Res<Str> emitted = codegen::emitProgram(modules);
+        // Compilation-wide name/type resolution over the prelude and every module
+        // (specs/modules.md): declarations are grouped by package, imports are
+        // validated against the scanned packages, and `rtl` is implicitly in scope.
+        List<sema::Input> semaInputs;
+        for (int i = 0; i < (int) preludeModules.size(); i++) {
+            sema::Input input;
+            input.fileName = preludeNames[i];
+            input.module = &preludeModules[i];
+            semaInputs.push_back(input);
+        }
+        for (int i = 0; i < (int) modules.size(); i++) {
+            sema::Input input;
+            input.fileName = fileNames[i];
+            input.module = &modules[i];
+            semaInputs.push_back(input);
+        }
+        List<Str> diagnostics = sema::analyze(semaInputs);
+        if (!diagnostics.empty()) {
+            for (const Str &diagnostic: diagnostics) {
+                fprintf(stderr, "%s\n", diagnostic.c_str());
+            }
+            return 1;
+        }
+
+        List<codegen::Input> cgInputs;
+        if (hasPrelude) {
+            codegen::Input preludeInput;
+            preludeInput.fileName = resolvedPrelude;
+            preludeInput.module = mergedPrelude;
+            preludeInput.prelude = true;
+            cgInputs.push_back(preludeInput);
+        }
+        for (int i = 0; i < (int) modules.size(); i++) {
+            codegen::Input input;
+            input.fileName = fileNames[i];
+            input.module = modules[i];
+            cgInputs.push_back(input);
+        }
+
+        Res<Str> emitted = codegen::emitProgram(cgInputs);
         if (!emitted.isOk()) {
             fprintf(stderr, "%s\n", emitted.Error.c_str());
             return 1;

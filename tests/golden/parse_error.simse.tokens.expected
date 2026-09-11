@@ -1,21 +1,25 @@
-ReservedWord	1:1	fun
-Space	1:4	 
-Identifier	1:5	broken
-Operator	1:11	(
-Identifier	1:12	x
-Operator	1:13	:
-Space	1:14	 
-Operator	1:15	)
-Operator	1:16	:
-Space	1:17	 
-Identifier	1:18	Int
-Space	1:21	 
-Operator	1:22	{
-EndOfLine	1:23	\n
-Space	2:1	    
-ReservedWord	2:5	return
-Space	2:11	 
-Number	2:12	0
-EndOfLine	2:13	\n
-Operator	3:1	}
-EndOfLine	3:2	\n
+ReservedWord	1:1	package
+Space	1:8	 
+Identifier	1:9	fixtures
+EndOfLine	1:17	\n
+ReservedWord	2:1	fun
+Space	2:4	 
+Identifier	2:5	broken
+Operator	2:11	(
+Identifier	2:12	x
+Operator	2:13	:
+Space	2:14	 
+Operator	2:15	)
+Operator	2:16	:
+Space	2:17	 
+Identifier	2:18	Int
+Space	2:21	 
+Operator	2:22	{
+EndOfLine	2:23	\n
+Space	3:1	    
+ReservedWord	3:5	return
+Space	3:11	 
+Number	3:12	0
+EndOfLine	3:13	\n
+Operator	4:1	}
+EndOfLine	4:2	\n

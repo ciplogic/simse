@@ -3,7 +3,7 @@
 #include <iostream>
 #include <type_traits>
 
-// emit_containers.simse:1
+// emit_containers.simse:2
 int main() {
     List<Int> xs = List<Int>();
     simse_list_append(xs, 10);

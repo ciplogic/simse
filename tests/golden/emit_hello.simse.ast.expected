@@ -1,89 +1,90 @@
 Module @1:1
-  DataClass Counter @1:1
-    Field var value: Int @1:20
-    Function bump @2:5
+  Package fixtures @1:1
+  DataClass Counter @2:1
+    Field var value: Int @2:20
+    Function bump @3:5
       Return Int
       Body
-        Return @3:9
-          Binary + @3:16
+        Return @4:9
+          Binary + @4:16
             Lhs
-              Member .value @3:16
+              Member .value @4:16
                 Receiver
-                  Name this @3:16
+                  Name this @4:16
             Rhs
-              IntLit 1 @3:29
-  Function main @7:1
+              IntLit 1 @4:29
+  Function main @8:1
     Return Int
     Body
-      VarDecl var i: Int @8:5
+      VarDecl var i: Int @9:5
         Init
-          IntLit 0 @8:18
-      VarDecl var total: Int @9:5
+          IntLit 0 @9:18
+      VarDecl var total: Int @10:5
         Init
-          IntLit 0 @9:22
-      While @10:5
+          IntLit 0 @10:22
+      While @11:5
         Cond
-          Binary < @10:12
+          Binary < @11:12
             Lhs
-              Name i @10:12
+              Name i @11:12
             Rhs
-              IntLit 5 @10:16
+              IntLit 5 @11:16
         Body
-          Assign = @11:9
-            Target
-              Name total @11:9
-            Value
-              Binary + @11:17
-                Lhs
-                  Name total @11:17
-                Rhs
-                  Name i @11:25
           Assign = @12:9
             Target
-              Name i @12:9
+              Name total @12:9
             Value
-              Binary + @12:13
+              Binary + @12:17
                 Lhs
-                  Name i @12:13
+                  Name total @12:17
                 Rhs
-                  IntLit 1 @12:17
-      VarDecl val c: Counter @14:5
+                  Name i @12:25
+          Assign = @13:9
+            Target
+              Name i @13:9
+            Value
+              Binary + @13:13
+                Lhs
+                  Name i @13:13
+                Rhs
+                  IntLit 1 @13:17
+      VarDecl val c: Counter @15:5
         Init
-          Call @14:22
+          Call @15:22
             Callee
-              Name Counter @14:22
+              Name Counter @15:22
             Arg
-              IntLit 10 @14:30
-      If @15:5
+              IntLit 10 @15:30
+      If @16:5
         Cond
-          Binary > @15:9
+          Binary > @16:9
             Lhs
-              Name total @15:9
+              Name total @16:9
             Rhs
-              IntLit 5 @15:17
+              IntLit 5 @16:17
         Then
-          ExprStmt @16:9
-            Call @16:9
+          ExprStmt @17:9
+            Call @17:9
               Callee
-                Name println @16:9
+                Name println @17:9
               Arg
-                Name total @16:17
+                Name total @17:17
         Else
-          ExprStmt @18:9
-            Call @18:9
+          ExprStmt @19:9
+            Call @19:9
               Callee
-                Name println @18:9
+                Name println @19:9
               Arg
-                Call @18:17
+                Call @19:17
                   Callee
-                    Member .bump @18:17
+                    Member .bump @19:17
                       Receiver
-                        Name c @18:17
-      ExprStmt @20:5
-        Call @20:5
+                        Name c @19:17
+      ExprStmt @21:5
+        Call @21:5
           Callee
-            Name println @20:5
+            Name println @21:5
           Arg
-            BoolLit true @20:13
-      Return @21:5
-        IntLit 0 @21:12
+            BoolLit true @21:13
+      Return @22:5
+        IntLit 0 @22:12

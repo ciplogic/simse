@@ -5,7 +5,7 @@
 // cppsrc/rtl/fs.hpp (included by simse.hpp). This file is loaded as part of the
 // prelude set, so the driver can use these without an import.
 
-package cppsrc.rtl
+package rtl
 
 // Every `ext`-suffixed file under `dir`, recursively, sorted; empty when `dir` is
 // not a directory. Matches `common::filesInDir`.

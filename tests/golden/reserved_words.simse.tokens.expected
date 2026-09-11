@@ -1,40 +1,44 @@
-ReservedWord	1:1	class
-Space	1:6	 
-ReservedWord	1:7	data
-Space	1:11	 
-ReservedWord	1:12	val
-Space	1:15	 
-ReservedWord	1:16	var
-Space	1:19	 
-ReservedWord	1:20	fun
-Space	1:23	 
-ReservedWord	1:24	return
-Space	1:30	 
-ReservedWord	1:31	while
-Space	1:36	 
-ReservedWord	1:37	for
-Space	1:40	 
-ReservedWord	1:41	if
-Space	1:43	 
-ReservedWord	1:44	else
-Space	1:48	 
-ReservedWord	1:49	true
-Space	1:53	 
-ReservedWord	1:54	false
-Space	1:59	 
-ReservedWord	1:60	null
-Space	1:64	 
-ReservedWord	1:65	enum
-Space	1:69	 
-ReservedWord	1:70	typealias
-Space	1:79	 
-ReservedWord	1:80	native
-Space	1:86	 
-ReservedWord	1:87	import
-Space	1:93	 
-ReservedWord	1:94	this
-Space	1:98	 
-ReservedWord	1:99	break
-Space	1:104	 
-ReservedWord	1:105	continue
-EndOfLine	1:113	\n
+ReservedWord	1:1	package
+Space	1:8	 
+Identifier	1:9	fixtures
+EndOfLine	1:17	\n
+ReservedWord	2:1	class
+Space	2:6	 
+ReservedWord	2:7	data
+Space	2:11	 
+ReservedWord	2:12	val
+Space	2:15	 
+ReservedWord	2:16	var
+Space	2:19	 
+ReservedWord	2:20	fun
+Space	2:23	 
+ReservedWord	2:24	return
+Space	2:30	 
+ReservedWord	2:31	while
+Space	2:36	 
+ReservedWord	2:37	for
+Space	2:40	 
+ReservedWord	2:41	if
+Space	2:43	 
+ReservedWord	2:44	else
+Space	2:48	 
+ReservedWord	2:49	true
+Space	2:53	 
+ReservedWord	2:54	false
+Space	2:59	 
+ReservedWord	2:60	null
+Space	2:64	 
+ReservedWord	2:65	enum
+Space	2:69	 
+ReservedWord	2:70	typealias
+Space	2:79	 
+ReservedWord	2:80	native
+Space	2:86	 
+ReservedWord	2:87	import
+Space	2:93	 
+ReservedWord	2:94	this
+Space	2:98	 
+ReservedWord	2:99	break
+Space	2:104	 
+ReservedWord	2:105	continue
+EndOfLine	2:113	\n

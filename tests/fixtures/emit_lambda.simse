@@ -1,3 +1,4 @@
+package fixtures
 // T18: lambdas assigned to callable values and passed as arguments.
 
 typealias Mapper = (Int) -> Int

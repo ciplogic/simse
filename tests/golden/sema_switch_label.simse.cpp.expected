@@ -5,11 +5,11 @@
 
 Int f();
 Int pick(Int n);
-// sema_switch_label.simse:2
+// sema_switch_label.simse:3
 Int f() {
     return 1;
 }
-// sema_switch_label.simse:6
+// sema_switch_label.simse:7
 Int pick(Int n) {
     switch (n) {
         case f():

@@ -1,172 +1,176 @@
-ReservedWord	1:1	fun
-Space	1:4	 
-Identifier	1:5	compute
-Operator	1:12	(
-Identifier	1:13	n
-Operator	1:14	:
-Space	1:15	 
-Identifier	1:16	Int
-Operator	1:19	)
-Operator	1:20	:
-Space	1:21	 
-Identifier	1:22	Int
-Space	1:25	 
-Operator	1:26	{
-EndOfLine	1:27	\n
-Space	2:1	    
-ReservedWord	2:5	var
-Space	2:8	 
-Identifier	2:9	total
+ReservedWord	1:1	package
+Space	1:8	 
+Identifier	1:9	fixtures
+EndOfLine	1:17	\n
+ReservedWord	2:1	fun
+Space	2:4	 
+Identifier	2:5	compute
+Operator	2:12	(
+Identifier	2:13	n
 Operator	2:14	:
 Space	2:15	 
 Identifier	2:16	Int
-Space	2:19	 
-Operator	2:20	=
+Operator	2:19	)
+Operator	2:20	:
 Space	2:21	 
-Number	2:22	0
-EndOfLine	2:23	\n
+Identifier	2:22	Int
+Space	2:25	 
+Operator	2:26	{
+EndOfLine	2:27	\n
 Space	3:1	    
 ReservedWord	3:5	var
 Space	3:8	 
-Identifier	3:9	i
-Operator	3:10	:
-Space	3:11	 
-Identifier	3:12	Int
+Identifier	3:9	total
+Operator	3:14	:
 Space	3:15	 
-Operator	3:16	=
-Space	3:17	 
-Number	3:18	0
-EndOfLine	3:19	\n
+Identifier	3:16	Int
+Space	3:19	 
+Operator	3:20	=
+Space	3:21	 
+Number	3:22	0
+EndOfLine	3:23	\n
 Space	4:1	    
-ReservedWord	4:5	while
-Space	4:10	 
-Operator	4:11	(
-Identifier	4:12	i
-Space	4:13	 
-Operator	4:14	<
+ReservedWord	4:5	var
+Space	4:8	 
+Identifier	4:9	i
+Operator	4:10	:
+Space	4:11	 
+Identifier	4:12	Int
 Space	4:15	 
-Identifier	4:16	n
-Operator	4:17	)
-Space	4:18	 
-Operator	4:19	{
-EndOfLine	4:20	\n
-Space	5:1	        
-ReservedWord	5:9	if
-Space	5:11	 
-Operator	5:12	(
-Identifier	5:13	i
-Space	5:14	 
-Operator	5:15	==
-Space	5:17	 
-Number	5:18	3
-Operator	5:19	)
-Space	5:20	 
-Operator	5:21	{
-EndOfLine	5:22	\n
-Space	6:1	            
+Operator	4:16	=
+Space	4:17	 
+Number	4:18	0
+EndOfLine	4:19	\n
+Space	5:1	    
+ReservedWord	5:5	while
+Space	5:10	 
+Operator	5:11	(
+Identifier	5:12	i
+Space	5:13	 
+Operator	5:14	<
+Space	5:15	 
+Identifier	5:16	n
+Operator	5:17	)
+Space	5:18	 
+Operator	5:19	{
+EndOfLine	5:20	\n
+Space	6:1	        
+ReservedWord	6:9	if
+Space	6:11	 
+Operator	6:12	(
 Identifier	6:13	i
 Space	6:14	 
-Operator	6:15	=
-Space	6:16	 
-Identifier	6:17	i
-Space	6:18	 
-Operator	6:19	+
+Operator	6:15	==
+Space	6:17	 
+Number	6:18	3
+Operator	6:19	)
 Space	6:20	 
-Number	6:21	1
+Operator	6:21	{
 EndOfLine	6:22	\n
 Space	7:1	            
-ReservedWord	7:13	continue
-EndOfLine	7:21	\n
-Space	8:1	        
-Operator	8:9	}
-EndOfLine	8:10	\n
+Identifier	7:13	i
+Space	7:14	 
+Operator	7:15	=
+Space	7:16	 
+Identifier	7:17	i
+Space	7:18	 
+Operator	7:19	+
+Space	7:20	 
+Number	7:21	1
+EndOfLine	7:22	\n
+Space	8:1	            
+ReservedWord	8:13	continue
+EndOfLine	8:21	\n
 Space	9:1	        
-Identifier	9:9	total
-Space	9:14	 
-Operator	9:15	=
-Space	9:16	 
-Identifier	9:17	total
-Space	9:22	 
-Operator	9:23	+
-Space	9:24	 
-Identifier	9:25	i
-EndOfLine	9:26	\n
+Operator	9:9	}
+EndOfLine	9:10	\n
 Space	10:1	        
-Identifier	10:9	i
-Space	10:10	 
-Operator	10:11	=
-Space	10:12	 
-Identifier	10:13	i
+Identifier	10:9	total
 Space	10:14	 
-Operator	10:15	+
+Operator	10:15	=
 Space	10:16	 
-Number	10:17	1
-EndOfLine	10:18	\n
-Space	11:1	    
-Operator	11:5	}
-EndOfLine	11:6	\n
+Identifier	10:17	total
+Space	10:22	 
+Operator	10:23	+
+Space	10:24	 
+Identifier	10:25	i
+EndOfLine	10:26	\n
+Space	11:1	        
+Identifier	11:9	i
+Space	11:10	 
+Operator	11:11	=
+Space	11:12	 
+Identifier	11:13	i
+Space	11:14	 
+Operator	11:15	+
+Space	11:16	 
+Number	11:17	1
+EndOfLine	11:18	\n
 Space	12:1	    
-ReservedWord	12:5	if
-Space	12:7	 
-Operator	12:8	(
-Identifier	12:9	total
-Space	12:14	 
-Operator	12:15	>
-Space	12:16	 
-Number	12:17	10
-Operator	12:19	)
-Space	12:20	 
-Operator	12:21	{
-EndOfLine	12:22	\n
-Space	13:1	        
-ReservedWord	13:9	return
-Space	13:15	 
-Identifier	13:16	total
-EndOfLine	13:21	\n
-Space	14:1	    
-Operator	14:5	}
-Space	14:6	 
-ReservedWord	14:7	else
-Space	14:11	 
-Operator	14:12	{
-EndOfLine	14:13	\n
-Space	15:1	        
-ReservedWord	15:9	return
-Space	15:15	 
-Operator	15:16	-
-Identifier	15:17	total
-EndOfLine	15:22	\n
-Space	16:1	    
-Operator	16:5	}
-EndOfLine	16:6	\n
-Operator	17:1	}
-EndOfLine	17:2	\n
-EndOfLine	18:1	\n
-ReservedWord	19:1	fun
-Space	19:4	 
-Identifier	19:5	loopForever
-Operator	19:16	(
-Operator	19:17	)
-Operator	19:18	:
-Space	19:19	 
-Identifier	19:20	Unit
-Space	19:24	 
-Operator	19:25	{
-EndOfLine	19:26	\n
-Space	20:1	    
-ReservedWord	20:5	while
-Space	20:10	 
-Operator	20:11	(
-ReservedWord	20:12	true
-Operator	20:16	)
-Space	20:17	 
-Operator	20:18	{
-EndOfLine	20:19	\n
-Space	21:1	        
-ReservedWord	21:9	break
-EndOfLine	21:14	\n
-Space	22:1	    
-Operator	22:5	}
-EndOfLine	22:6	\n
-Operator	23:1	}
-EndOfLine	23:2	\n
+Operator	12:5	}
+EndOfLine	12:6	\n
+Space	13:1	    
+ReservedWord	13:5	if
+Space	13:7	 
+Operator	13:8	(
+Identifier	13:9	total
+Space	13:14	 
+Operator	13:15	>
+Space	13:16	 
+Number	13:17	10
+Operator	13:19	)
+Space	13:20	 
+Operator	13:21	{
+EndOfLine	13:22	\n
+Space	14:1	        
+ReservedWord	14:9	return
+Space	14:15	 
+Identifier	14:16	total
+EndOfLine	14:21	\n
+Space	15:1	    
+Operator	15:5	}
+Space	15:6	 
+ReservedWord	15:7	else
+Space	15:11	 
+Operator	15:12	{
+EndOfLine	15:13	\n
+Space	16:1	        
+ReservedWord	16:9	return
+Space	16:15	 
+Operator	16:16	-
+Identifier	16:17	total
+EndOfLine	16:22	\n
+Space	17:1	    
+Operator	17:5	}
+EndOfLine	17:6	\n
+Operator	18:1	}
+EndOfLine	18:2	\n
+EndOfLine	19:1	\n
+ReservedWord	20:1	fun
+Space	20:4	 
+Identifier	20:5	loopForever
+Operator	20:16	(
+Operator	20:17	)
+Operator	20:18	:
+Space	20:19	 
+Identifier	20:20	Unit
+Space	20:24	 
+Operator	20:25	{
+EndOfLine	20:26	\n
+Space	21:1	    
+ReservedWord	21:5	while
+Space	21:10	 
+Operator	21:11	(
+ReservedWord	21:12	true
+Operator	21:16	)
+Space	21:17	 
+Operator	21:18	{
+EndOfLine	21:19	\n
+Space	22:1	        
+ReservedWord	22:9	break
+EndOfLine	22:14	\n
+Space	23:1	    
+Operator	23:5	}
+EndOfLine	23:6	\n
+Operator	24:1	}
+EndOfLine	24:2	\n

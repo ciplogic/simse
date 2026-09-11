@@ -1,3 +1,4 @@
+package fixtures
 fun main(): Int {
     val xs: List<Int> = List<Int>()
     xs.append(10)

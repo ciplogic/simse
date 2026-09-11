@@ -1,3 +1,4 @@
+package fixtures
 // Exercises the Dictionary surface and the List extras (T20): insert, get, has,
 // size, keys/values (sorted for determinism), contains, sort, remove, clear.
 

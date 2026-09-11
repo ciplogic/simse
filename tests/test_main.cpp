@@ -128,6 +128,17 @@ namespace {
         return emitFixtureCpp(scanner, fixturesDir, name);
     }
 
+    // Analyzes one module with no prelude and no imports (used by the negative
+    // fixture checks, which only assert on the fixture's own diagnostics).
+    List<Str> analyzeOne(const ast::Module &module, const Str &name) {
+        List<sema::Input> inputs;
+        sema::Input input;
+        input.fileName = name;
+        input.module = &module;
+        inputs.push_back(input);
+        return sema::analyze(inputs);
+    }
+
     // Compares (or, in update mode, rewrites) one golden. Returns false and
     // prints a diff or an explanatory message on mismatch. Does not count.
     bool compareGolden(const Str &label, const Str &actual, const Str &goldenPath, bool update) {
@@ -238,7 +249,7 @@ int main(int argc, char **argv) {
                                       : resError<ast::Module>("scan failed");
         bool reported = false;
         if (parsed.isOk()) {
-            List<Str> diagnostics = sema::analyze(parsed.Value, "sema_unknown_type.simse");
+            List<Str> diagnostics = analyzeOne(parsed.Value, "sema_unknown_type.simse");
             for (const Str &diagnostic: diagnostics) {
                 if (diagnostic.find("Nope") != Str::npos) {
                     reported = true;
@@ -265,7 +276,7 @@ int main(int argc, char **argv) {
                                       : resError<ast::Module>("scan failed");
         bool reported = false;
         if (parsed.isOk()) {
-            List<Str> diagnostics = sema::analyze(parsed.Value, "ctor_arity.simse");
+            List<Str> diagnostics = analyzeOne(parsed.Value, "ctor_arity.simse");
             for (const Str &diagnostic: diagnostics) {
                 if (diagnostic.find("data class 'Widget' expects 2 field(s) but got 1")
                     != Str::npos) {
@@ -293,7 +304,7 @@ int main(int argc, char **argv) {
                                       : resError<ast::Module>("scan failed");
         bool reported = false;
         if (parsed.isOk()) {
-            List<Str> diagnostics = sema::analyze(parsed.Value, "sema_switch_label.simse");
+            List<Str> diagnostics = analyzeOne(parsed.Value, "sema_switch_label.simse");
             for (const Str &diagnostic: diagnostics) {
                 if (diagnostic.find("case label must be a constant expression") != Str::npos) {
                     reported = true;
@@ -320,7 +331,7 @@ int main(int argc, char **argv) {
                                       : resError<ast::Module>("scan failed");
         bool clean = false;
         if (parsed.isOk()) {
-            clean = sema::analyze(parsed.Value, "hoisting.simse").empty();
+            clean = analyzeOne(parsed.Value, "hoisting.simse").empty();
         }
         if (clean) {
             passed++;
@@ -328,6 +339,61 @@ int main(int argc, char **argv) {
         } else {
             failed++;
             printf("FAIL hoisting.simse: expected parse ok and zero sema diagnostics\n");
+        }
+    }
+
+    // Modules and packages: two files that declare the same package and define
+    // the same top-level name are a duplicate-definition error, and an import of
+    // a package no participating file declares is an error. The per-file fixture
+    // harness cannot exercise cross-file behavior, so this builds the two modules
+    // directly.
+    {
+        ast::Module first;
+        first.pos = SourcePos{0, 1, 1};
+        first.package.push_back("shared");
+        auto widget = std::make_shared<ast::Decl>();
+        widget->kind = ast::DeclKind::DataClass;
+        widget->name = "Widget";
+        widget->pos = SourcePos{0, 1, 1};
+        first.declarations.push_back(widget);
+
+        ast::Module second;
+        second.pos = SourcePos{0, 1, 1};
+        second.package.push_back("shared");
+        auto widgetAgain = std::make_shared<ast::Decl>();
+        widgetAgain->kind = ast::DeclKind::DataClass;
+        widgetAgain->name = "Widget";
+        widgetAgain->pos = SourcePos{0, 3, 1};
+        second.declarations.push_back(widgetAgain);
+        ast::Import missing;
+        missing.pos = SourcePos{0, 2, 1};
+        missing.path.push_back("missing");
+        second.imports.push_back(missing);
+
+        List<sema::Input> inputs;
+        sema::Input firstInput;
+        firstInput.fileName = "first.simse";
+        firstInput.module = &first;
+        inputs.push_back(firstInput);
+        sema::Input secondInput;
+        secondInput.fileName = "second.simse";
+        secondInput.module = &second;
+        inputs.push_back(secondInput);
+
+        List<Str> diagnostics = sema::analyze(inputs);
+        bool duplicate = false;
+        bool unresolved = false;
+        for (const Str &diagnostic: diagnostics) {
+            if (diagnostic.find("duplicate declaration 'Widget'") != Str::npos) duplicate = true;
+            if (diagnostic.find("cannot resolve import 'missing'") != Str::npos) unresolved = true;
+        }
+        if (duplicate && unresolved) {
+            passed++;
+            printf("PASS packages (cross-file duplicate and unresolved import reported)\n");
+        } else {
+            failed++;
+            printf("FAIL packages: duplicate=%d unresolved=%d\n",
+                   duplicate ? 1 : 0, unresolved ? 1 : 0);
         }
     }
 
@@ -390,10 +456,10 @@ int main(int argc, char **argv) {
     }
 
     // Real sources: every mirror under cppsrc, plus a root main.simse when one
-    // is present, must parse and analyze cleanly. Files that are part of the RTL
-    // prelude are checked standalone (they declare the prelude types); every
-    // other mirror is analyzed with the prelude merged, exactly as compilation
-    // does, so prelude types resolve without an import.
+    // is present, must parse and analyze cleanly. The analysis is the real
+    // compilation-wide one: the prelude plus every source file, so cross-package
+    // imports resolve by package and duplicate definitions across files of one
+    // package are caught.
     List<Str> sources = filesInDir(Str(SIMSE_SOURCE_ROOT) + "/cppsrc", ".simse");
     Str rootMain = Str(SIMSE_SOURCE_ROOT) + "/main.simse";
     if (std::filesystem::exists(rootMain)) {
@@ -401,6 +467,10 @@ int main(int argc, char **argv) {
     }
     List<Str> preludeFiles = filesInDir(Str(SIMSE_DEFAULT_PRELUDE), ".simse");
     Str preludeDirKey = pathKey(Str(SIMSE_DEFAULT_PRELUDE));
+
+    List<Str> sourceNames;
+    List<Str> compiledNames;
+    List<ast::Module> sourceModules;
     for (const Str &source: sources) {
         Str name = baseName(source);
         ScanResult scan = scanFile(&scanner, source);
@@ -416,6 +486,11 @@ int main(int argc, char **argv) {
             printf("FAIL source %s: %s\n", name.c_str(), parsed.Error.c_str());
             continue;
         }
+        sourceNames.push_back(name);
+
+        // Prelude files are already part of the compilation as prelude inputs (so
+        // their declared package `rtl` is implicit); do not add them again, or
+        // every prelude declaration would look like a duplicate.
         bool isPreludeFile = false;
         for (const Str &preludeFile: preludeFiles) {
             if (pathKey(preludeFile) == pathKey(source)) {
@@ -426,20 +501,32 @@ int main(int argc, char **argv) {
             && pathKey(std::filesystem::path(source).parent_path().string()) == preludeDirKey) {
             isPreludeFile = true;
         }
-        List<Str> diagnostics = isPreludeFile
-                                    ? sema::analyze(parsed.Value, name)
-                                    : analyzeWithPrelude(parsed.Value, name);
-        if (!diagnostics.empty()) {
-            failed++;
-            printf("FAIL source %s: sema reported %d diagnostic(s)\n",
-                   name.c_str(), (int) diagnostics.size());
-            for (const Str &diagnostic: diagnostics) {
-                printf("    %s\n", diagnostic.c_str());
-            }
-            continue;
+        if (!isPreludeFile) {
+            compiledNames.push_back(name);
+            sourceModules.push_back(parsed.Value);
         }
-        passed++;
-        printf("PASS source %s\n", name.c_str());
+    }
+
+    List<sema::Input> compilation = preludeInputs();
+    for (int i = 0; i < (int) sourceModules.size(); i++) {
+        sema::Input input;
+        input.fileName = compiledNames[i];
+        input.module = &sourceModules[i];
+        compilation.push_back(input);
+    }
+    List<Str> sourceDiagnostics = sema::analyze(compilation);
+    if (!sourceDiagnostics.empty()) {
+        failed += (int) sourceNames.size();
+        printf("FAIL source compilation: sema reported %d diagnostic(s)\n",
+               (int) sourceDiagnostics.size());
+        for (const Str &diagnostic: sourceDiagnostics) {
+            printf("    %s\n", diagnostic.c_str());
+        }
+    } else {
+        for (const Str &name: sourceNames) {
+            passed++;
+            printf("PASS source %s\n", name.c_str());
+        }
     }
 
     printf("%d passed, %d failed\n", passed, failed);

@@ -11,11 +11,11 @@ std::shared_ptr<List<XmlNode>> oneChild(XmlNode child);
 Str escapeText(Str text);
 Str indentation(Int depth);
 Str dumpNode(XmlNode node, Int depth);
-// emit_xmlnode.simse:8
+// emit_xmlnode.simse:9
 Attribute attr(Str name, Str value) {
     return Attribute(name, value);
 }
-// emit_xmlnode.simse:12
+// emit_xmlnode.simse:13
 List<Attribute> attrs3(Attribute a, Attribute b, Attribute c) {
     List<Attribute> list = List<Attribute>();
     simse_list_append(list, a);
@@ -23,7 +23,7 @@ List<Attribute> attrs3(Attribute a, Attribute b, Attribute c) {
     simse_list_append(list, c);
     return list;
 }
-// emit_xmlnode.simse:20
+// emit_xmlnode.simse:21
 List<Attribute> attrs4(Attribute a, Attribute b, Attribute c, Attribute d) {
     List<Attribute> list = List<Attribute>();
     simse_list_append(list, a);
@@ -32,17 +32,17 @@ List<Attribute> attrs4(Attribute a, Attribute b, Attribute c, Attribute d) {
     simse_list_append(list, d);
     return list;
 }
-// emit_xmlnode.simse:29
+// emit_xmlnode.simse:30
 std::shared_ptr<List<XmlNode>> noChildren() {
     return makeList<XmlNode>();
 }
-// emit_xmlnode.simse:33
+// emit_xmlnode.simse:34
 std::shared_ptr<List<XmlNode>> oneChild(XmlNode child) {
     std::shared_ptr<List<XmlNode>> children = makeList<XmlNode>();
     simse_list_append((*children), child);
     return children;
 }
-// emit_xmlnode.simse:39
+// emit_xmlnode.simse:40
 Str escapeText(Str text) {
     Str out = Str();
     Int i = 0;
@@ -78,7 +78,7 @@ Str escapeText(Str text) {
     }
     return out;
 }
-// emit_xmlnode.simse:67
+// emit_xmlnode.simse:68
 Str indentation(Int depth) {
     Str out = Str();
     Int i = 0;
@@ -88,7 +88,7 @@ Str indentation(Int depth) {
     }
     return out;
 }
-// emit_xmlnode.simse:77
+// emit_xmlnode.simse:78
 Str dumpNode(XmlNode node, Int depth) {
     Str out = indentation(depth) + node.name;
     Int i = 0;
@@ -106,7 +106,7 @@ Str dumpNode(XmlNode node, Int depth) {
     }
     return out;
 }
-// emit_xmlnode.simse:96
+// emit_xmlnode.simse:97
 int main() {
     XmlNode typeNode = XmlNode("Type", attrs4(attr("kind", "Type.Named"), attr("line", "1"), attr("column", "24"), attr("name", "Int")), noChildren());
     XmlNode fieldNode = XmlNode("Field", attrs4(attr("name", "n"), attr("isVar", "true"), attr("line", "1"), attr("column", "17")), oneChild(typeNode));

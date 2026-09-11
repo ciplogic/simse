@@ -1,3 +1,4 @@
+package fixtures
 // The argv form of `main`: the parameter is a `List<Str>` built from argv (the
 // program name is excluded). Run with one argument, e.g. `alpha`.
 

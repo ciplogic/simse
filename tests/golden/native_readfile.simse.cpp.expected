@@ -3,9 +3,9 @@
 #include <iostream>
 #include <type_traits>
 
-// native_readfile.simse:1
+// native_readfile.simse:2
 Str simse_native_readFile(const Str& path);
-// native_readfile.simse:3
+// native_readfile.simse:4
 int main() {
     Str text = simse_native_readFile("tests/fixtures/native_data.txt");
     std::cout << std::boolalpha << (text.size()) << std::endl;

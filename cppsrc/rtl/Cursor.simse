@@ -9,7 +9,7 @@
 // Iteration is `while (c.hasValue()) { ... c = c.next() }`. `for`/range-for
 // remain deferred; the cursor is the replacement idiom.
 
-package cppsrc.rtl
+package rtl
 
 data class Cursor<T>(var source: &List<T>; var start: Int; var len: Int) {
     // True while at least one element remains.

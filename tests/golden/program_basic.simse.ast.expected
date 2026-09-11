@@ -1,36 +1,37 @@
 Module @1:1
-  Enum Color @2:1
-    Member Red @3:5
-    Member Green = 4 @4:5
-    Member Blue @5:5
-  DataClass Point @8:1
-    Field var x: Int @8:18
-    Field var y: Int @8:30
-    Function sum @9:5
+  Package fixtures @1:1
+  Enum Color @3:1
+    Member Red @4:5
+    Member Green = 4 @5:5
+    Member Blue @6:5
+  DataClass Point @9:1
+    Field var x: Int @9:18
+    Field var y: Int @9:30
+    Function sum @10:5
       Return Int
       Body
-        Return @10:9
-          Binary + @10:16
+        Return @11:9
+          Binary + @11:16
             Lhs
-              Member .x @10:16
+              Member .x @11:16
                 Receiver
-                  Name this @10:16
+                  Name this @11:16
             Rhs
-              Member .y @10:25
+              Member .y @11:25
                 Receiver
-                  Name this @10:25
-  TypeAlias IntPredicate @14:1
+                  Name this @11:25
+  TypeAlias IntPredicate @15:1
     Target (Int) -> Bool
-  TypeAlias FloatHandler @16:1
+  TypeAlias FloatHandler @17:1
     Target (*Float64) -> Unit
-  Function add @18:1
+  Function add @19:1
     Param a: Int
     Param b: Int
     Return Int
     Body
-      Return @19:5
-        Binary + @19:12
+      Return @20:5
+        Binary + @20:12
           Lhs
-            Name a @19:12
+            Name a @20:12
           Rhs
-            Name b @19:16
+            Name b @20:16

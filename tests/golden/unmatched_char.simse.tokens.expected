@@ -1,3 +1,7 @@
-Identifier	1:1	a
-Space	1:2	 
-Error	1:3: Unexpected character: '@ b\\n'
+ReservedWord	1:1	package
+Space	1:8	 
+Identifier	1:9	fixtures
+EndOfLine	1:17	\n
+Identifier	2:1	a
+Space	2:2	 
+Error	2:3: Unexpected character: '@ b\\n'

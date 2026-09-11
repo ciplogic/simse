@@ -212,41 +212,11 @@ Implementations should either skip unsupported body constructs as balanced token
 regions or report a clear unsupported-body diagnostic. They must not partially
 compile unsupported non-method code.
 
-## Packages and imports
+## Modules and imports
 
-Status: required for the first implementation.
-
-A file may begin with an optional, single, file-level package declaration:
-
-```text
-package a.b.c
-```
-
-It must appear after any leading blank lines and before imports and every other
-declaration. A file with no `package` is in the unnamed (root) package.
-`package` is a reserved keyword.
-
-`package` is namespacing and grouping only: it does not introduce visibility or
-access-control semantics, and it does not change how names resolve inside the
-declaring file. Its sole effect is to let `import` select a set of files.
-
-`import a.b.c` imports every top-level declaration of every file whose declared
-package is exactly `a.b.c`. Imports are transitive and diamond-deduplicated
-(importing the same package through several paths merges it once); import cycles
-are detected and reported rather than followed indefinitely. Resolution is by
-package name, decoupled from folder layout, so it does not depend on the working
-directory:
-
-```text
-package cppsrc.lex
-
-import cppsrc.common
-```
-
-As a silent fallback, when no file declares the imported package, the dotted path
-is treated as a directory relative to the resolution root and every `*.simse` file
-directly under it is merged. The fallback exists only for the bootstrap and
-reports nothing extra; new code should declare packages.
+A module is a directory and a package is a namespace declared per file. Imports
+are by package name and affect name resolution only. The full rules for modules,
+packages, imports, and resolution are specified in `specs/modules.md`.
 
 ## Native functions
 

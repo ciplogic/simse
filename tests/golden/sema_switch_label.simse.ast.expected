@@ -1,22 +1,23 @@
 Module @1:1
-  Function f @2:1
+  Package fixtures @1:1
+  Function f @3:1
     Return Int
     Body
-      Return @3:5
-        IntLit 1 @3:12
-  Function pick @6:1
+      Return @4:5
+        IntLit 1 @4:12
+  Function pick @7:1
     Param n: Int
     Return Int
     Body
-      Switch @7:5
+      Switch @8:5
         Cond
-          Name n @7:13
-        Case @8:9
-          Call @8:14
+          Name n @8:13
+        Case @9:9
+          Call @9:14
             Callee
-              Name f @8:14
-          Return @9:13
-            IntLit 1 @9:20
-        Default @10:9
-          Return @11:13
-            IntLit 0 @11:20
+              Name f @9:14
+          Return @10:13
+            IntLit 1 @10:20
+        Default @11:9
+          Return @12:13
+            IntLit 0 @12:20

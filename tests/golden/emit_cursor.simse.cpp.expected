@@ -5,7 +5,7 @@
 
 Int sum(std::shared_ptr<List<Int>> items);
 Int headSum(std::shared_ptr<List<Int>> items);
-// emit_cursor.simse:3
+// emit_cursor.simse:4
 Int sum(std::shared_ptr<List<Int>> items) {
     Int total = 0;
     Cursor<Int> c = simse_cursorOf(items);
@@ -15,7 +15,7 @@ Int sum(std::shared_ptr<List<Int>> items) {
     }
     return total;
 }
-// emit_cursor.simse:13
+// emit_cursor.simse:14
 Int headSum(std::shared_ptr<List<Int>> items) {
     Cursor<Int> full = simse_cursorOf(items);
     Cursor<Int> head = full.slice(2);
@@ -26,7 +26,7 @@ Int headSum(std::shared_ptr<List<Int>> items) {
     }
     return total;
 }
-// emit_cursor.simse:24
+// emit_cursor.simse:25
 int main() {
     List<Int> items = List<Int>();
     simse_list_append(items, 4);

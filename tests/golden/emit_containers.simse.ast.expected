@@ -1,20 +1,13 @@
 Module @1:1
-  Function main @1:1
+  Package fixtures @1:1
+  Function main @2:1
     Return Int
     Body
-      VarDecl val xs: List<Int> @2:5
+      VarDecl val xs: List<Int> @3:5
         Init
-          Call @2:25
+          Call @3:25
             Callee
-              GenericName List<Int> @2:25
-      ExprStmt @3:5
-        Call @3:5
-          Callee
-            Member .append @3:5
-              Receiver
-                Name xs @3:5
-          Arg
-            IntLit 10 @3:15
+              GenericName List<Int> @3:25
       ExprStmt @4:5
         Call @4:5
           Callee
@@ -22,7 +15,7 @@ Module @1:1
               Receiver
                 Name xs @4:5
           Arg
-            IntLit 20 @4:15
+            IntLit 10 @4:15
       ExprStmt @5:5
         Call @5:5
           Callee
@@ -30,64 +23,72 @@ Module @1:1
               Receiver
                 Name xs @5:5
           Arg
-            IntLit 30 @5:15
+            IntLit 20 @5:15
       ExprStmt @6:5
         Call @6:5
           Callee
-            Name println @6:5
+            Member .append @6:5
+              Receiver
+                Name xs @6:5
           Arg
-            Call @6:13
-              Callee
-                Member .size @6:13
-                  Receiver
-                    Name xs @6:13
+            IntLit 30 @6:15
       ExprStmt @7:5
         Call @7:5
           Callee
-            Member .removeAt @7:5
-              Receiver
-                Name xs @7:5
+            Name println @7:5
           Arg
-            IntLit 1 @7:17
+            Call @7:13
+              Callee
+                Member .size @7:13
+                  Receiver
+                    Name xs @7:13
       ExprStmt @8:5
         Call @8:5
           Callee
-            Name println @8:5
+            Member .removeAt @8:5
+              Receiver
+                Name xs @8:5
           Arg
-            Call @8:13
-              Callee
-                Member .size @8:13
-                  Receiver
-                    Name xs @8:13
+            IntLit 1 @8:17
       ExprStmt @9:5
         Call @9:5
           Callee
             Name println @9:5
           Arg
-            Index @9:13
-              Receiver
-                Name xs @9:13
-              Index
-                IntLit 1 @9:16
+            Call @9:13
+              Callee
+                Member .size @9:13
+                  Receiver
+                    Name xs @9:13
       ExprStmt @10:5
         Call @10:5
           Callee
-            Member .removeRange @10:5
+            Name println @10:5
+          Arg
+            Index @10:13
               Receiver
-                Name xs @10:5
-          Arg
-            IntLit 0 @10:20
-          Arg
-            IntLit 1 @10:23
+                Name xs @10:13
+              Index
+                IntLit 1 @10:16
       ExprStmt @11:5
         Call @11:5
           Callee
-            Name println @11:5
+            Member .removeRange @11:5
+              Receiver
+                Name xs @11:5
           Arg
-            Call @11:13
+            IntLit 0 @11:20
+          Arg
+            IntLit 1 @11:23
+      ExprStmt @12:5
+        Call @12:5
+          Callee
+            Name println @12:5
+          Arg
+            Call @12:13
               Callee
-                Member .size @11:13
+                Member .size @12:13
                   Receiver
-                    Name xs @11:13
-      Return @12:5
-        IntLit 0 @12:12
+                    Name xs @12:13
+      Return @13:5
+        IntLit 0 @13:12

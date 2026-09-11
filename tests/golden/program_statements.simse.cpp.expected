@@ -5,7 +5,7 @@
 
 Int compute(Int n);
 void loopForever();
-// program_statements.simse:1
+// program_statements.simse:2
 Int compute(Int n) {
     Int total = 0;
     Int i = 0;
@@ -23,7 +23,7 @@ Int compute(Int n) {
         return -total;
     }
 }
-// program_statements.simse:19
+// program_statements.simse:20
 void loopForever() {
     while (true) {
         break;

@@ -1,92 +1,96 @@
-Comment	1:1	// The argv form of `main`: the parameter is a `List<Str>` built from argv (the
-EndOfLine	1:80	\r\n
-Comment	2:1	// program name is excluded). Run with one argument, e.g. `alpha`.
-EndOfLine	2:67	\r\n
-EndOfLine	3:1	\r\n
-ReservedWord	4:1	fun
-Space	4:4	 
-Identifier	4:5	main
-Operator	4:9	(
-Identifier	4:10	args
-Operator	4:14	:
-Space	4:15	 
-Identifier	4:16	List
-Operator	4:20	<
-Identifier	4:21	Str
-Operator	4:24	>
-Operator	4:25	)
-Operator	4:26	:
-Space	4:27	 
-Identifier	4:28	Int
-Space	4:31	 
-Operator	4:32	{
-EndOfLine	4:33	\r\n
-Space	5:1	    
-Identifier	5:5	println
-Operator	5:12	(
-Identifier	5:13	args
-Operator	5:17	.
-Identifier	5:18	size
-Operator	5:22	(
-Operator	5:23	)
-Operator	5:24	)
-EndOfLine	5:25	\r\n
+ReservedWord	1:1	package
+Space	1:8	 
+Identifier	1:9	fixtures
+EndOfLine	1:17	\n
+Comment	2:1	// The argv form of `main`: the parameter is a `List<Str>` built from argv (the
+EndOfLine	2:80	\n
+Comment	3:1	// program name is excluded). Run with one argument, e.g. `alpha`.
+EndOfLine	3:67	\n
+EndOfLine	4:1	\n
+ReservedWord	5:1	fun
+Space	5:4	 
+Identifier	5:5	main
+Operator	5:9	(
+Identifier	5:10	args
+Operator	5:14	:
+Space	5:15	 
+Identifier	5:16	List
+Operator	5:20	<
+Identifier	5:21	Str
+Operator	5:24	>
+Operator	5:25	)
+Operator	5:26	:
+Space	5:27	 
+Identifier	5:28	Int
+Space	5:31	 
+Operator	5:32	{
+EndOfLine	5:33	\n
 Space	6:1	    
-ReservedWord	6:5	var
-Space	6:8	 
-Identifier	6:9	i
-Operator	6:10	:
-Space	6:11	 
-Identifier	6:12	Int
-Space	6:15	 
-Operator	6:16	=
-Space	6:17	 
-Number	6:18	0
-EndOfLine	6:19	\r\n
+Identifier	6:5	println
+Operator	6:12	(
+Identifier	6:13	args
+Operator	6:17	.
+Identifier	6:18	size
+Operator	6:22	(
+Operator	6:23	)
+Operator	6:24	)
+EndOfLine	6:25	\n
 Space	7:1	    
-ReservedWord	7:5	while
-Space	7:10	 
-Operator	7:11	(
-Identifier	7:12	i
-Space	7:13	 
-Operator	7:14	<
+ReservedWord	7:5	var
+Space	7:8	 
+Identifier	7:9	i
+Operator	7:10	:
+Space	7:11	 
+Identifier	7:12	Int
 Space	7:15	 
-Identifier	7:16	args
-Operator	7:20	.
-Identifier	7:21	size
-Operator	7:25	(
-Operator	7:26	)
-Operator	7:27	)
-Space	7:28	 
-Operator	7:29	{
-EndOfLine	7:30	\r\n
-Space	8:1	        
-Identifier	8:9	println
-Operator	8:16	(
-Identifier	8:17	args
-Operator	8:21	[
-Identifier	8:22	i
-Operator	8:23	]
-Operator	8:24	)
-EndOfLine	8:25	\r\n
+Operator	7:16	=
+Space	7:17	 
+Number	7:18	0
+EndOfLine	7:19	\n
+Space	8:1	    
+ReservedWord	8:5	while
+Space	8:10	 
+Operator	8:11	(
+Identifier	8:12	i
+Space	8:13	 
+Operator	8:14	<
+Space	8:15	 
+Identifier	8:16	args
+Operator	8:20	.
+Identifier	8:21	size
+Operator	8:25	(
+Operator	8:26	)
+Operator	8:27	)
+Space	8:28	 
+Operator	8:29	{
+EndOfLine	8:30	\n
 Space	9:1	        
-Identifier	9:9	i
-Space	9:10	 
-Operator	9:11	=
-Space	9:12	 
-Identifier	9:13	i
-Space	9:14	 
-Operator	9:15	+
-Space	9:16	 
-Number	9:17	1
-EndOfLine	9:18	\r\n
-Space	10:1	    
-Operator	10:5	}
-EndOfLine	10:6	\r\n
+Identifier	9:9	println
+Operator	9:16	(
+Identifier	9:17	args
+Operator	9:21	[
+Identifier	9:22	i
+Operator	9:23	]
+Operator	9:24	)
+EndOfLine	9:25	\n
+Space	10:1	        
+Identifier	10:9	i
+Space	10:10	 
+Operator	10:11	=
+Space	10:12	 
+Identifier	10:13	i
+Space	10:14	 
+Operator	10:15	+
+Space	10:16	 
+Number	10:17	1
+EndOfLine	10:18	\n
 Space	11:1	    
-ReservedWord	11:5	return
-Space	11:11	 
-Number	11:12	0
-EndOfLine	11:13	\r\n
-Operator	12:1	}
-EndOfLine	12:2	\r\n
+Operator	11:5	}
+EndOfLine	11:6	\n
+Space	12:1	    
+ReservedWord	12:5	return
+Space	12:11	 
+Number	12:12	0
+EndOfLine	12:13	\n
+Operator	13:1	}
+EndOfLine	13:2	\n

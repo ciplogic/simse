@@ -6,15 +6,15 @@
 Char firstByte(Str& self);
 Int valueAt(Int* self);
 Opt<Int> firstOrNone(List<Int>& self);
-// program_extension.simse:1
+// program_extension.simse:2
 Char firstByte(Str& self) {
     return self[0];
 }
-// program_extension.simse:5
+// program_extension.simse:6
 Int valueAt(Int* self) {
     return *self;
 }
-// program_extension.simse:9
+// program_extension.simse:10
 Opt<Int> firstOrNone(List<Int>& self) {
     return Opt<Int>();
 }

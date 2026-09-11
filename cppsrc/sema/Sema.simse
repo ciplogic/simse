@@ -11,13 +11,15 @@
 // is an if-chain, not a `switch`, because the emitted C++ `switch` cannot switch
 // on a `Str`.
 
-package cppsrc.sema
+package sema
 
-import cppsrc.parser
+import parser
+import common
 
 // The read-only XmlNode accessors (xmlAttr, xmlChild, xmlChildren, ...) live in
-// cppsrc/common/xmlutil.simse; they arrive through the parser's `import
-// cppsrc.lex` -> `cppsrc.common`. Only the sema-specific logic stays here.
+// cppsrc/common/xmlutil.simse and arrive through `import common`. The XmlNode and
+// Attribute types come from the implicit RTL prelude. Only the sema-specific
+// logic stays here.
 
 // A value binding in scope: mutability, whether assignment is checked, and the
 // declared/inferred type (an empty XmlNode when unknown).
@@ -132,12 +134,19 @@ fun semaUnifyReceiver(pattern: XmlNode, actual: XmlNode, typeParams: List<Str>):
 
 // ---- the analyzer ---------------------------------------------------------
 
+// One participating file: its name (for diagnostics) and its parsed Module node.
+// The Module carries the declared package, which namespaces its declarations.
+data class SemaInput(var fileName: Str; var module: XmlNode)
+
 data class Analyzer(
-    var module: XmlNode;
+    var inputs: List<SemaInput>;
     var file: Str;
-    var hasImports: Bool;
     var types: Dictionary<Str, XmlNode>;
     var functions: Dictionary<Str, List<XmlNode>>;
+    var globalTypes: Dictionary<Str, XmlNode>;
+    var globalFunctions: Dictionary<Str, List<XmlNode>>;
+    var packageDecls: Dictionary<Str, List<XmlNode>>;
+    var declaredPackages: List<Str>;
     var scopes: List<Dictionary<Str, ValueBinding>>;
     var typeScopes: List<List<Str>>;
     var loopDepth: Int;
@@ -148,12 +157,20 @@ data class Analyzer(
     // ---- entry ------------------------------------------------------------
 
     fun run(): Unit {
-        this.collect()
-        val decls: List<XmlNode> = xmlDecls(this.module)
-        var i: Int = 0
-        while (i < decls.size()) {
-            this.analyzeDecl(decls[i])
-            i = i + 1
+        this.collectGlobal()
+        var n: Int = 0
+        while (n < this.inputs.size()) {
+            val input: SemaInput = this.inputs[n]
+            this.file = input.fileName
+            this.validateImports(input.module)
+            this.buildVisible(input.module)
+            val decls: List<XmlNode> = xmlDecls(input.module)
+            var i: Int = 0
+            while (i < decls.size()) {
+                this.analyzeDecl(decls[i])
+                i = i + 1
+            }
+            n = n + 1
         }
     }
 
@@ -164,7 +181,39 @@ data class Analyzer(
 
     // ---- symbol collection ------------------------------------------------
 
-    fun addFunction(name: Str, decl: XmlNode): Unit {
+    // "<a>.<b>" for the module's package; the empty string is the root package.
+    fun packageOf(module: XmlNode): Str {
+        return xmlAttr(module, "package")
+    }
+
+    // Appends `decl` under `key` in `map`, which is keyed by "pkg|name" (global)
+    // or by bare name (visible). Operators are direct field mutations because
+    // List/Dictionary are value types.
+    fun appendGlobalFunction(key: Str, decl: XmlNode): Unit {
+        if (this.globalFunctions.has(key)) {
+            var existing: List<XmlNode> = this.globalFunctions.get(key).value()
+            existing.append(decl)
+            this.globalFunctions.insert(key, existing)
+        } else {
+            var fresh: List<XmlNode> = List<XmlNode>()
+            fresh.append(decl)
+            this.globalFunctions.insert(key, fresh)
+        }
+    }
+
+    fun appendPackageDecl(pkg: Str, decl: XmlNode): Unit {
+        if (this.packageDecls.has(pkg)) {
+            var existing: List<XmlNode> = this.packageDecls.get(pkg).value()
+            existing.append(decl)
+            this.packageDecls.insert(pkg, existing)
+        } else {
+            var fresh: List<XmlNode> = List<XmlNode>()
+            fresh.append(decl)
+            this.packageDecls.insert(pkg, fresh)
+        }
+    }
+
+    fun appendVisibleFunction(name: Str, decl: XmlNode): Unit {
         if (this.functions.has(name)) {
             var existing: List<XmlNode> = this.functions.get(name).value()
             existing.append(decl)
@@ -176,28 +225,97 @@ data class Analyzer(
         }
     }
 
-    fun collect(): Unit {
-        val decls: List<XmlNode> = xmlDecls(this.module)
+    // Collects every declaration into its package scope, reporting a duplicate
+    // top-level name within one package, including across two files that declare
+    // the same package.
+    fun collectGlobal(): Unit {
+        var n: Int = 0
+        while (n < this.inputs.size()) {
+            val input: SemaInput = this.inputs[n]
+            this.file = input.fileName
+            val pkg: Str = this.packageOf(input.module)
+            if (!this.declaredPackages.contains(pkg)) {
+                this.declaredPackages.append(pkg)
+            }
+            val decls: List<XmlNode> = xmlDecls(input.module)
+            var i: Int = 0
+            while (i < decls.size()) {
+                val decl: XmlNode = decls[i]
+                val name: Str = xmlAttr(decl, "name")
+                val key: Str = pkg + "|" + name
+                val isFunction: Bool = xmlKind(decl) == "Function"
+                val nameTaken: Bool = this.globalTypes.has(key) || this.globalFunctions.has(key)
+                if (isFunction) {
+                    if (this.globalTypes.has(key)) {
+                        this.diag(xmlLine(decl), xmlColumn(decl), "duplicate declaration '" + name + "'")
+                    } else {
+                        this.appendGlobalFunction(key, decl)
+                    }
+                } else {
+                    if (nameTaken) {
+                        this.diag(xmlLine(decl), xmlColumn(decl), "duplicate declaration '" + name + "'")
+                    } else {
+                        this.globalTypes.insert(key, decl)
+                    }
+                }
+                this.appendPackageDecl(pkg, decl)
+                i = i + 1
+            }
+            n = n + 1
+        }
+    }
+
+    // Reports an import whose package no participating file declares.
+    fun validateImports(module: XmlNode): Unit {
+        val imports: List<XmlNode> = xmlChildren(module, "Import")
         var i: Int = 0
-        while (i < decls.size()) {
-            val decl: XmlNode = decls[i]
-            val name: Str = xmlAttr(decl, "name")
-            val isFunction: Bool = xmlKind(decl) == "Function"
-            val nameTaken: Bool = this.types.has(name) || this.functions.has(name)
-            if (isFunction) {
-                if (this.types.has(name)) {
-                    this.diag(xmlLine(decl), xmlColumn(decl), "duplicate declaration '" + name + "'")
-                } else {
-                    this.addFunction(name, decl)
-                }
-            } else {
-                if (nameTaken) {
-                    this.diag(xmlLine(decl), xmlColumn(decl), "duplicate declaration '" + name + "'")
-                } else {
-                    this.types.insert(name, decl)
-                }
+        while (i < imports.size()) {
+            val dotted: Str = xmlAttr(imports[i], "path")
+            if (!this.declaredPackages.contains(dotted)) {
+                this.diag(xmlLine(imports[i]), xmlColumn(imports[i]),
+                          "cannot resolve import '" + dotted + "': no file declares package '" + dotted + "'")
             }
             i = i + 1
+        }
+    }
+
+    // Builds the unqualified scope of one file: its own package, then each
+    // imported package, then the implicit `rtl` prelude.
+    fun buildVisible(module: XmlNode): Unit {
+        this.types = Dictionary<Str, XmlNode>()
+        this.functions = Dictionary<Str, List<XmlNode>>()
+        var packages: List<Str> = List<Str>()
+        packages.append(this.packageOf(module))
+        val imports: List<XmlNode> = xmlChildren(module, "Import")
+        var i: Int = 0
+        while (i < imports.size()) {
+            packages.append(xmlAttr(imports[i], "path"))
+            i = i + 1
+        }
+        packages.append("rtl")
+
+        var seen: List<Str> = List<Str>()
+        var p: Int = 0
+        while (p < packages.size()) {
+            val pkg: Str = packages[p]
+            if (!seen.contains(pkg)) {
+                seen.append(pkg)
+                if (this.packageDecls.has(pkg)) {
+                    val decls: List<XmlNode> = this.packageDecls.get(pkg).value()
+                    var d: Int = 0
+                    while (d < decls.size()) {
+                        val decl: XmlNode = decls[d]
+                        val name: Str = xmlAttr(decl, "name")
+                        if (xmlKind(decl) == "Function") {
+                            this.appendVisibleFunction(name, decl)
+                        } else if (!this.types.has(name)) {
+                            this.types.insert(name, decl)
+                        }
+                        d = d + 1
+                    }
+                }
+            }
+            p = p + 1
         }
     }
 
@@ -263,11 +381,6 @@ data class Analyzer(
 
     fun checkTypeName(name: Str, line: Int, column: Int): Unit {
         if (semaIsBuiltinType(name) || this.types.has(name) || this.typeParamVisible(name)) {
-            return
-        }
-        // Import contents are not modeled, so a name that might come from an
-        // import is not reported (imports are conservative by design).
-        if (this.hasImports) {
             return
         }
         this.diag(line, column, "unknown type '" + name + "'")
@@ -839,13 +952,16 @@ data class Analyzer(
 
 // ---- entry point ----------------------------------------------------------
 
-fun newAnalyzer(module: XmlNode, fileName: Str): Analyzer {
+fun newAnalyzer(inputs: List<SemaInput>): Analyzer {
     return Analyzer(
-        module,
-        fileName,
-        xmlHasImports(module),
+        inputs,
+        "",
         Dictionary<Str, XmlNode>(),
         Dictionary<Str, List<XmlNode>>(),
+        Dictionary<Str, XmlNode>(),
+        Dictionary<Str, List<XmlNode>>(),
+        Dictionary<Str, List<XmlNode>>(),
+        List<Str>(),
         List<Dictionary<Str, ValueBinding>>(),
         List<List<Str>>(),
         0,
@@ -854,10 +970,11 @@ fun newAnalyzer(module: XmlNode, fileName: Str): Analyzer {
     )
 }
 
-// Returns diagnostics of the form "<fileName>:<line>:<col>: <message>". An empty
-// list means the module is clean.
-fun analyze(module: XmlNode, fileName: Str): List<Str> {
-    var analyzer: Analyzer = newAnalyzer(module, fileName)
+// Analyzes the whole compilation (every participating file plus the implicit
+// prelude). Returns diagnostics of the form "<fileName>:<line>:<col>: <message>".
+// An empty list means the compilation is clean.
+fun analyze(inputs: List<SemaInput>): List<Str> {
+    var analyzer: Analyzer = newAnalyzer(inputs)
     analyzer.run()
     return analyzer.diags
 }

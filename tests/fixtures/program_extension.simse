@@ -1,3 +1,4 @@
+package fixtures
 fun Str.firstByte(): Char {
     return this[0]
 }

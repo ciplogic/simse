@@ -1,3 +1,4 @@
+package fixtures
 // T16: iteration with Cursor<T> instead of range-for.
 
 fun sum(items: &List<Int>): Int {

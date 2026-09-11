@@ -3,7 +3,7 @@
 #include <iostream>
 #include <type_traits>
 
-// xml_probe.simse:1
+// xml_probe.simse:2
 struct Tile {
     Int n;
     Tile() = default;

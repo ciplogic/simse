@@ -3,7 +3,7 @@
 #include <iostream>
 #include <type_traits>
 
-// sema_extension_arity.simse:5
+// sema_extension_arity.simse:6
 int main() {
     List<Int> xs = List<Int>();
     simse_list_append(xs);

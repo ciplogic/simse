@@ -306,9 +306,7 @@ namespace ast {
     Str dumpModule(const Module &module) {
         Dumper dumper;
         dumper.line(0, "Module @" + posStr(module.pos));
-        if (!module.package.empty()) {
-            dumper.line(1, "Package " + joinPath(module.package) + " @" + posStr(module.packagePos));
-        }
+        dumper.line(1, "Package " + joinPath(module.package) + " @" + posStr(module.packagePos));
         for (const Import &import: module.imports) {
             dumper.line(1, "Import " + joinPath(import.path) + " @" + posStr(import.pos));
         }
@@ -686,11 +684,10 @@ namespace ast {
         List<Attribute> attrs;
         attrs.push_back(Attribute("kind", "Module"));
         addPos(attrs, module.pos);
-        // The `package` attribute is present only when one is declared, so
-        // package-less files keep their previous AST (and goldens).
-        if (!module.package.empty()) {
-            attrs.push_back(Attribute("package", joinPath(module.package)));
-        }
+        // Every file declares exactly one package; the attribute is always
+        // present. A programmatically built module with no package emits an
+        // empty value.
+        attrs.push_back(Attribute("package", joinPath(module.package)));
         XmlNode root = makeNode("Module", attrs);
         for (const Import &import: module.imports) {
             List<Attribute> importAttrs;

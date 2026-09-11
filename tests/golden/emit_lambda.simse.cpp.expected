@@ -3,18 +3,18 @@
 #include <iostream>
 #include <type_traits>
 
-// emit_lambda.simse:3
-using Mapper = Func<Int(Int)>;
 // emit_lambda.simse:4
+using Mapper = Func<Int(Int)>;
+// emit_lambda.simse:5
 using Predicate = Func<Bool(Int)>;
 Int apply(Mapper f, Int value);
 Int countIf(std::shared_ptr<List<Int>> items, Predicate predicate);
 Mapper makeAdder(Int factor);
-// emit_lambda.simse:6
+// emit_lambda.simse:7
 Int apply(Mapper f, Int value) {
     return f(value);
 }
-// emit_lambda.simse:10
+// emit_lambda.simse:11
 Int countIf(std::shared_ptr<List<Int>> items, Predicate predicate) {
     Int count = 0;
     Cursor<Int> c = simse_cursorOf(items);
@@ -26,11 +26,11 @@ Int countIf(std::shared_ptr<List<Int>> items, Predicate predicate) {
     }
     return count;
 }
-// emit_lambda.simse:22
+// emit_lambda.simse:23
 Mapper makeAdder(Int factor) {
     return [=](Int v) -> Int { return v + factor; };
 }
-// emit_lambda.simse:26
+// emit_lambda.simse:27
 int main() {
     Mapper doubler = [=](Int v) -> Int { return v * 2; };
     std::cout << std::boolalpha << (doubler(21)) << std::endl;

@@ -1,27 +1,28 @@
 Module @1:1
-  Function firstByte @1:1
+  Package fixtures @1:1
+  Function firstByte @2:1
     Receiver Str
     Return Char
     Body
-      Return @2:5
-        Index @2:12
+      Return @3:5
+        Index @3:12
           Receiver
-            Name this @2:12
+            Name this @3:12
           Index
-            IntLit 0 @2:17
-  Function valueAt @5:1
+            IntLit 0 @3:17
+  Function valueAt @6:1
     Receiver *Int
     Return Int
     Body
-      Return @6:5
-        Deref @6:12
+      Return @7:5
+        Deref @7:12
           Operand
-            Name this @6:13
-  Function firstOrNone @9:1
+            Name this @7:13
+  Function firstOrNone @10:1
     Param this: List<Int>
     Return Opt<Int>
     Body
-      Return @10:5
-        Call @10:12
+      Return @11:5
+        Call @11:12
           Callee
-            GenericName Opt<Int> @10:12
+            GenericName Opt<Int> @11:12

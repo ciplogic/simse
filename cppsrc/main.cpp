@@ -1,13 +1,18 @@
 //
-// simse: compile a directory of .simse files into ONE amalgamated C++ file.
+// simse: compile a module (a directory of .simse files) into ONE amalgamated
+// C++ file.
 //
-//   simse [<dir>] [-o <output.cpp>] [--prelude <path>] [--root <dir>]
+//   simse [<dir>] [-o <output.cpp>] [--prelude <path>]
+//         [--root <dir>] [--module-root <dir>]...
 //
-// With no positional argument it scans the current folder (`.`). Discovery is
-// recursive over `*.simse`, deterministic (sorted). The RTL prelude is loaded the
-// same way the compiler does, and a prelude file discovered by the scan is not
-// compiled twice. Imports are merged exactly as `parser::parseFileWithImports`
-// does, relative to `--root` (default `.`).
+// The scan directory is the project root: every `.simse` file under it (and
+// under each extra `--module-root`) is part of the compilation. With no
+// positional argument and no `--root` it scans the current folder (`.`).
+// Discovery is recursive over `*.simse`, deterministic (sorted). The RTL prelude
+// is loaded the same way the compiler does, and a prelude file discovered by the
+// scan is not compiled twice. `import a.b.c` makes package `a.b.c` visible
+// unqualified and never adds files, so resolution does not depend on the current
+// working directory.
 //
 // The amalgamated file is written into the current folder; the default name is
 // the scanned directory's base name plus `.cpp` (`simse cppsrc` -> `./cppsrc.cpp`,
@@ -52,10 +57,12 @@ namespace {
 int main(int argc, char **argv) {
     Str dir = ".";
     bool haveDir = false;
+    Str rootDir;
+    bool haveRoot = false;
+    List<Str> extraRoots;
     Str output;
     Str preludePath;
     bool preludeExplicit = false;
-    Str rootDir = ".";
 
     for (int i = 1; i < argc; i++) {
         Str arg = argv[i];
@@ -78,8 +85,16 @@ int main(int argc, char **argv) {
                 return 2;
             }
             rootDir = argv[++i];
+            haveRoot = true;
+        } else if (arg == "--module-root") {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "simse: --module-root requires a path\n");
+                return 2;
+            }
+            extraRoots.push_back(argv[++i]);
         } else if (arg == "-h" || arg == "--help") {
-            printf("usage: simse [<dir>] [-o <output.cpp>] [--prelude <path>] [--root <dir>]\n");
+            printf("usage: simse [<dir>] [-o <output.cpp>] [--prelude <path>]"
+                   " [--root <dir>] [--module-root <dir>]...\n");
             return 0;
         } else {
             if (haveDir) {
@@ -91,31 +106,22 @@ int main(int argc, char **argv) {
         }
     }
 
-    List<Str> inputs = filesInDir(dir, ".simse");
-    if (inputs.empty()) {
-        printf("simse: no .simse files found under %s\n", dir.c_str());
-        return 0;
-    }
-    if (output.empty()) {
-        output = dirBaseName(dir) + ".cpp";
-    }
+    Str projectRoot = haveRoot ? rootDir : dir;
 
     compiler::Request request;
     request.programName = "simse";
-    request.inputs = inputs;
+    request.moduleRoots.push_back(projectRoot);
+    for (const Str &extraRoot: extraRoots) {
+        request.moduleRoots.push_back(extraRoot);
+    }
     request.preludePath = preludePath;
     request.preludeExplicit = preludeExplicit;
-    request.root = rootDir;
-    request.output = output;
-    // Directory mode: expand the scan to the de-duplicated import set, drop
-    // prelude files found by the scan, and report every failing file.
-    request.directoryMode = true;
-    request.excludePreludeFiles = true;
+    request.output = output.empty() ? (dirBaseName(projectRoot) + ".cpp") : output;
     request.collectAllErrors = true;
 
     int status = compiler::transpile(request);
     if (status == 0) {
-        printf("%s\n", output.c_str());
+        printf("%s\n", request.output.c_str());
     }
     return status;
 }

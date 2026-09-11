@@ -1,3 +1,4 @@
+package fixtures
 fun useGenerics(): Res<Int> {
     val value: Int = 3
     val list: List<Int> = List<Int>()

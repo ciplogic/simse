@@ -3,7 +3,7 @@
 #include <iostream>
 #include <type_traits>
 
-// emit_str.simse:3
+// emit_str.simse:4
 int main() {
     Str raw = "  Hello,World  ";
     Str text = simse_str_trim(raw);

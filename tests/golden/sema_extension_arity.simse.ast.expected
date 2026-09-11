@@ -1,17 +1,18 @@
 Module @1:1
-  Function main @5:1
+  Package fixtures @1:1
+  Function main @6:1
     Return Int
     Body
-      VarDecl var xs: List<Int> @6:5
+      VarDecl var xs: List<Int> @7:5
         Init
-          Call @6:25
+          Call @7:25
             Callee
-              GenericName List<Int> @6:25
-      ExprStmt @7:5
-        Call @7:5
+              GenericName List<Int> @7:25
+      ExprStmt @8:5
+        Call @8:5
           Callee
-            Member .append @7:5
+            Member .append @8:5
               Receiver
-                Name xs @7:5
-      Return @8:5
-        IntLit 0 @8:12
+                Name xs @8:5
+      Return @9:5
+        IntLit 0 @9:12

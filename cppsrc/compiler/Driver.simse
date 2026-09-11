@@ -1,25 +1,32 @@
 // Driver.simse
 //
 // The self-hosted compiler driver: a Simse port of cppsrc/codegen/TranspileMain.cpp
-// plus parser::parseFileWithImports. It loads the RTL prelude set, resolves
-// `import a.b.c` directories, parses and analyzes each input, and amalgamates the
-// result into one C++ translation unit. It is the single root of the compiler
-// source set: its imports pull in the scanner, parser, sema, code generator, and
-// the skeleton-parser mirror (so the stage-1 fixed point covers every mirror
-// except the sample `cppsrc/main.simse`, which defines its own `main`).
+// plus the module scanning in compiler::transpile (cppsrc/Compiler.cpp). It loads
+// the RTL prelude set, scans the module roots, parses and analyzes the whole
+// compilation, and amalgamates the result into one C++ translation unit. It is
+// the single root of the compiler source set: its imports pull in the scanner,
+// parser, sema, code generator, and the skeleton-parser mirror (so the stage-1
+// fixed point covers every mirror except the sample `cppsrc/main.simse`, which
+// defines its own `main`).
 //
-// Usage: <program> <input.simse>... -o <output.cpp> [--prelude <file>] [--root <dir>]
+// Modules and packages (specs/modules.md): a module is a directory scanned from
+// the module roots; every `.simse` file found participates. `import a.b.c` only
+// makes package `a.b.c` visible unqualified, so resolution is by package name and
+// never depends on the working directory.
+//
+// Usage: <program> <input.simse>... -o <output.cpp> [--prelude <file>]
+//                  [--root <dir>] [--module-root <dir>]...
 //
 // The filesystem/IO helpers are the T23 prelude natives (cppsrc/rtl/fs.simse).
 
-package cppsrc.compiler
+package compiler
 
-import cppsrc.lex
-import cppsrc.parser
-import cppsrc.sema
-import cppsrc.codegen
-import cppsrc.skelparser
-import cppsrc.common
+import lex
+import parser
+import sema
+import codegen
+import skelparser
+import common
 
 // ---- module helpers -------------------------------------------------------
 
@@ -44,97 +51,6 @@ fun driverAppendDecls(target: XmlNode, source: XmlNode): Unit {
         target.Children.append(decls[i])
         i = i + 1
     }
-}
-
-// Prelude-imports, input-imports, prelude-decls, input-decls; the shape
-// TranspileMain feeds to sema after merging the prelude.
-fun driverCombine(prelude: XmlNode, input: XmlNode): XmlNode {
-    var combined: XmlNode = driverNewModule()
-    driverAppendNamed(combined, prelude, "Import")
-    driverAppendNamed(combined, input, "Import")
-    driverAppendDecls(combined, prelude)
-    driverAppendDecls(combined, input)
-    return combined
-}
-
-// `cppsrc.lex` -> `cppsrc/lex` for import-directory resolution.
-fun driverDottedPath(dotted: Str): Str {
-    var out: Str = ""
-    var i: Int = 0
-    val parts: List<Str> = dotted.split(".")
-    while (i < parts.size()) {
-        if (i > 0) {
-            out = out + "/"
-        }
-        out = out + parts[i]
-        i = i + 1
-    }
-    return out
-}
-
-// `[cppsrc, lex]` -> `cppsrc.lex` (the inverse of driverDottedPath).
-fun driverJoinDotted(parts: List<Str>): Str {
-    var out: Str = ""
-    var i: Int = 0
-    while (i < parts.size()) {
-        if (i > 0) {
-            out = out + "."
-        }
-        out = out + parts[i]
-        i = i + 1
-    }
-    return out
-}
-
-// A light token scan of a file's leading `package a.b.c` header, mirroring
-// parser::readPackageHeader. A file with no package (or a scan error) returns an
-// empty list; only the header is read.
-fun driverReadPackageHeader(fileName: Str): List<Str> {
-    var scanner: Scanner = Scanner(getTokenRules(), 0, 1, 1, Str())
-    scanner.setSource(readFile(fileName))
-    var toks: List<Token> = List<Token>()
-    while (true) {
-        val result: Res<Token> = scanner.nextToken()
-        if (!result.isOk()) {
-            return List<Str>()
-        }
-        if (result.Value.kind == TokenKind.Eof) {
-            break
-        }
-        if (result.Value.kind != TokenKind.Space && result.Value.kind != TokenKind.Comment) {
-            toks.append(result.Value)
-        }
-    }
-
-    var i: Int = 0
-    while (i < toks.size() && toks[i].kind == TokenKind.EndOfLine) {
-        i = i + 1
-    }
-    if (i >= toks.size() || toks[i].text != "package") {
-        return List<Str>()
-    }
-    i = i + 1
-    var parts: List<Str> = List<Str>()
-    var expectName: Bool = true
-    while (i < toks.size()) {
-        if (toks[i].kind == TokenKind.EndOfLine) {
-            break
-        }
-        if (expectName) {
-            if (toks[i].kind != TokenKind.Identifier) {
-                break
-            }
-            parts.append(toks[i].text)
-            expectName = false
-        } else {
-            if (toks[i].text != ".") {
-                break
-            }
-            expectName = true
-        }
-        i = i + 1
-    }
-    return parts
 }
 
 // ---- scanning / parsing ---------------------------------------------------
@@ -165,152 +81,41 @@ fun driverParseFile(fileName: Str): Res<XmlNode> {
     return parseModule(cursorOf(&tokens), fileName)
 }
 
-// Depth-first import loader (parser::parseFileWithImports). `loading` is the
-// active stack (cycle detection); `loaded` records merged files (diamond dedup).
-data class ImportLoader(
-    var rootDir: Str;
-    var loading: List<Str>;
-    var loaded: List<Str>;
-    var error: Str;
-    var merged: XmlNode;
-    var indexBuilt: Bool;
-    var byPackage: Dictionary<Str, List<Str>>
-) {
-
-    fun isActive(canon: Str): Bool {
-        var i: Int = 0
-        while (i < this.loading.size()) {
-            if (this.loading[i] == canon) {
-                return true
-            }
-            i = i + 1
+// The compilation set: every `*.simse` under each module root (in the given
+// order, each root scanned recursively and sorted), then the explicit inputs.
+// Files already loaded as prelude are excluded and each canonical path is kept
+// once, so discovery order matches compiler::transpile byte for byte.
+fun driverGatherFiles(moduleRoots: List<Str>, inputs: List<Str>, preludeCanon: List<Str>): List<Str> {
+    var candidates: List<Str> = List<Str>()
+    var r: Int = 0
+    while (r < moduleRoots.size()) {
+        val rootFiles: List<Str> = listFiles(moduleRoots[r], ".simse")
+        var f: Int = 0
+        while (f < rootFiles.size()) {
+            candidates.append(rootFiles[f])
+            f = f + 1
         }
-        return false
+        r = r + 1
+    }
+    var i: Int = 0
+    while (i < inputs.size()) {
+        candidates.append(inputs[i])
+        i = i + 1
     }
 
-    fun isLoaded(canon: Str): Bool {
-        var i: Int = 0
-        while (i < this.loaded.size()) {
-            if (this.loaded[i] == canon) {
-                return true
-            }
-            i = i + 1
+    var chosen: List<Str> = List<Str>()
+    var seen: List<Str> = List<Str>()
+    var c: Int = 0
+    while (c < candidates.size()) {
+        val display: Str = candidates[c]
+        val canon: Str = pathCanonical(display)
+        if (!preludeCanon.contains(canon) && !seen.contains(canon)) {
+            seen.append(canon)
+            chosen.append(display)
         }
-        return false
+        c = c + 1
     }
-
-    // Package index: dotted package -> files declaring it (sorted). Built lazily
-    // by scanning every `*.simse` under the resolution root; mirrors
-    // parser::ImportLoader::buildIndex so both stages resolve identically.
-    fun buildIndex(): Unit {
-        if (this.indexBuilt) {
-            return
-        }
-        this.indexBuilt = true
-        var root: Str = this.rootDir
-        if (root == "") {
-            root = "."
-        }
-        val files: List<Str> = listFiles(root, ".simse")
-        var i: Int = 0
-        while (i < files.size()) {
-            val pkg: List<Str> = driverReadPackageHeader(files[i])
-            if (pkg.size() > 0) {
-                val key: Str = driverJoinDotted(pkg)
-                var entries: List<Str> = List<Str>()
-                val existing: Opt<List<Str>> = this.byPackage.get(key)
-                if (existing.hasValue()) {
-                    entries = existing.value()
-                }
-                entries.append(files[i])
-                this.byPackage.insert(key, entries)
-            }
-            i = i + 1
-        }
-    }
-
-    // `import p` selects every file whose declared package is exactly `p`. If no
-    // package matches, fall back silently to directory resolution
-    // (`<root>/p/as/dir`).
-    fun resolveImport(dotted: Str): List<Str> {
-        this.buildIndex()
-        val match: Opt<List<Str>> = this.byPackage.get(dotted)
-        if (match.hasValue() && match.value().size() > 0) {
-            return match.value()
-        }
-        val dir: Str = this.rootDir + "/" + driverDottedPath(dotted)
-        return listFilesDirect(dir, ".simse")
-    }
-
-    fun load(path: Str): Bool {
-        val canon: Str = pathCanonical(path)
-        if (this.isActive(canon)) {
-            this.error = path + ": import cycle detected"
-            return false
-        }
-        if (this.isLoaded(canon)) {
-            return true
-        }
-
-        val parsed: Res<XmlNode> = driverParseFile(path)
-        if (!parsed.isOk()) {
-            this.error = parsed.Error
-            return false
-        }
-
-        this.loading.append(canon)
-        val imports: List<XmlNode> = xmlChildren(parsed.Value, "Import")
-        var i: Int = 0
-        while (i < imports.size()) {
-            val importNode: XmlNode = imports[i]
-            val dotted: Str = xmlAttr(importNode, "path")
-            val files: List<Str> = this.resolveImport(dotted)
-            if (files.size() == 0) {
-                this.error = path + ":" + xmlLine(importNode).toString() + ":"
-                             + xmlColumn(importNode).toString()
-                             + ": cannot resolve import '" + dotted + "': no file declares package '" + dotted + "'"
-                return false
-            }
-            var f: Int = 0
-            while (f < files.size()) {
-                val fileCanon: Str = pathCanonical(files[f])
-                if (this.isActive(fileCanon)) {
-                    this.error = path + ":" + xmlLine(importNode).toString() + ":"
-                                 + xmlColumn(importNode).toString()
-                                 + ": import cycle via '" + dotted + "'"
-                    return false
-                }
-                if (!this.load(files[f])) {
-                    return false
-                }
-                f = f + 1
-            }
-            i = i + 1
-        }
-
-        var k: Int = 0
-        while (k < imports.size()) {
-            this.merged.Children.append(imports[k])
-            k = k + 1
-        }
-        val decls: List<XmlNode> = xmlDecls(parsed.Value)
-        var d: Int = 0
-        while (d < decls.size()) {
-            this.merged.Children.append(decls[d])
-            d = d + 1
-        }
-        this.loading.removeAt(this.loading.size() - 1)
-        this.loaded.append(canon)
-        return true
-    }
-}
-
-fun driverLoadWithImports(fileName: Str, rootDir: Str): Res<XmlNode> {
-    var loader: ImportLoader = ImportLoader(rootDir, List<Str>(), List<Str>(), "", driverNewModule(), false, dictionaryOf<Str, List<Str>>())
-    if (!loader.load(fileName)) {
-        return Res<XmlNode>.err(loader.error)
-    }
-    return Res<XmlNode>.ok(loader.merged)
+    return chosen
 }
 
 // ---- entry point ----------------------------------------------------------
@@ -319,7 +124,9 @@ fun main(args: List<Str>): Int {
     var inputs: List<Str> = List<Str>()
     var output: Str = ""
     var preludePath: Str = ""
-    var rootDir: Str = "."
+    var rootDir: Str = ""
+    var haveRoot: Bool = false
+    var extraRoots: List<Str> = List<Str>()
     var preludeExplicit: Bool = false
 
     var i: Int = 0
@@ -347,8 +154,16 @@ fun main(args: List<Str>): Int {
             }
             i = i + 1
             rootDir = args[i]
+            haveRoot = true
+        } else if (arg == "--module-root") {
+            if (i + 1 >= args.size()) {
+                eprintln("simse_transpile: --module-root requires a path")
+                return 2
+            }
+            i = i + 1
+            extraRoots.append(args[i])
         } else if (arg == "-h" || arg == "--help") {
-            println("usage: simse_transpile <input.simse>... -o <output.cpp> [--prelude <file>] [--root <dir>]")
+            println("usage: simse_transpile <input.simse>... -o <output.cpp> [--prelude <file>] [--root <dir>] [--module-root <dir>]...")
             return 0
         } else {
             inputs.append(arg)
@@ -356,40 +171,32 @@ fun main(args: List<Str>): Int {
         i = i + 1
     }
 
-    if (inputs.size() == 0) {
-        inputs = listFiles(".", ".simse")
-    }
-    if (inputs.size() == 0) {
-        eprintln("simse_transpile: no .simse inputs found")
-        return 2
+    if (inputs.size() == 0 && !haveRoot && extraRoots.size() == 0) {
+        rootDir = "."
+        haveRoot = true
     }
     if (output == "") {
         eprintln("simse_transpile: missing -o <output.cpp>")
         return 2
     }
 
+    var moduleRoots: List<Str> = List<Str>()
+    if (haveRoot) {
+        moduleRoots.append(rootDir)
+    }
+    var e: Int = 0
+    while (e < extraRoots.size()) {
+        moduleRoots.append(extraRoots[e])
+        e = e + 1
+    }
+
+    // Prelude set: a directory contributes every `*.simse` in it, a file itself.
     var resolvedPrelude: Str = "cppsrc/rtl"
     if (preludeExplicit) {
         resolvedPrelude = preludePath
     }
+    var preludeFiles: List<Str> = List<Str>()
     if (resolvedPrelude != "") {
-        val preludeKey: Str = pathCanonical(resolvedPrelude)
-        var filtered: List<Str> = List<Str>()
-        var j: Int = 0
-        while (j < inputs.size()) {
-            if (pathCanonical(inputs[j]) != preludeKey) {
-                filtered.append(inputs[j])
-            }
-            j = j + 1
-        }
-        inputs = filtered
-    }
-
-    var modules: List<CgInput> = List<CgInput>()
-    var hasPrelude: Bool = false
-    var preludeModule: XmlNode = driverNewModule()
-    if (resolvedPrelude != "") {
-        var preludeFiles: List<Str> = List<Str>()
         if (pathIsDirectory(resolvedPrelude)) {
             preludeFiles = listFiles(resolvedPrelude, ".simse")
         } else if (pathExists(resolvedPrelude)) {
@@ -398,52 +205,77 @@ fun main(args: List<Str>): Int {
             eprintln("simse_transpile: prelude not found: " + resolvedPrelude)
             return 2
         }
-
-        var p: Int = 0
-        while (p < preludeFiles.size()) {
-            val parsedPrelude: Res<XmlNode> = driverParseFile(preludeFiles[p])
-            if (!parsedPrelude.isOk()) {
-                eprintln(parsedPrelude.Error)
-                return 1
-            }
-            driverAppendNamed(preludeModule, parsedPrelude.Value, "Import")
-            driverAppendDecls(preludeModule, parsedPrelude.Value)
-            p = p + 1
-        }
-        if (preludeFiles.size() > 0) {
-            modules.append(CgInput(resolvedPrelude, preludeModule, true))
-            hasPrelude = true
-        }
     }
 
-    var n: Int = 0
-    while (n < inputs.size()) {
-        val file: Str = inputs[n]
-        val parsed: Res<XmlNode> = driverLoadWithImports(file, rootDir)
+    var preludeModules: List<XmlNode> = List<XmlNode>()
+    var preludeNames: List<Str> = List<Str>()
+    var preludeCanon: List<Str> = List<Str>()
+    var mergedPrelude: XmlNode = driverNewModule()
+    var p: Int = 0
+    while (p < preludeFiles.size()) {
+        val parsedPrelude: Res<XmlNode> = driverParseFile(preludeFiles[p])
+        if (!parsedPrelude.isOk()) {
+            eprintln(parsedPrelude.Error)
+            return 1
+        }
+        preludeCanon.append(pathCanonical(preludeFiles[p]))
+        preludeNames.append(preludeFiles[p])
+        preludeModules.append(parsedPrelude.Value)
+        driverAppendNamed(mergedPrelude, parsedPrelude.Value, "Import")
+        driverAppendDecls(mergedPrelude, parsedPrelude.Value)
+        p = p + 1
+    }
+    val hasPrelude: Bool = preludeFiles.size() > 0
+
+    val files: List<Str> = driverGatherFiles(moduleRoots, inputs, preludeCanon)
+
+    var fileNames: List<Str> = List<Str>()
+    var modules: List<XmlNode> = List<XmlNode>()
+    var f: Int = 0
+    while (f < files.size()) {
+        val parsed: Res<XmlNode> = driverParseFile(files[f])
         if (!parsed.isOk()) {
             eprintln(parsed.Error)
             return 1
         }
-
-        var toAnalyze: XmlNode = parsed.Value
-        if (hasPrelude) {
-            toAnalyze = driverCombine(preludeModule, parsed.Value)
-        }
-        val diagnostics: List<Str> = analyze(toAnalyze, file)
-        if (diagnostics.size() > 0) {
-            var d: Int = 0
-            while (d < diagnostics.size()) {
-                eprintln(diagnostics[d])
-                d = d + 1
-            }
-            return 1
-        }
-
-        modules.append(CgInput(file, parsed.Value, false))
-        n = n + 1
+        fileNames.append(files[f])
+        modules.append(parsed.Value)
+        f = f + 1
     }
 
-    val emitted: Res<Str> = emitProgram(modules)
+    // Compilation-wide name/type resolution over the prelude and every module.
+    var semaInputs: List<SemaInput> = List<SemaInput>()
+    var s: Int = 0
+    while (s < preludeModules.size()) {
+        semaInputs.append(SemaInput(preludeNames[s], preludeModules[s]))
+        s = s + 1
+    }
+    var m: Int = 0
+    while (m < modules.size()) {
+        semaInputs.append(SemaInput(fileNames[m], modules[m]))
+        m = m + 1
+    }
+    val diagnostics: List<Str> = analyze(semaInputs)
+    if (diagnostics.size() > 0) {
+        var d: Int = 0
+        while (d < diagnostics.size()) {
+            eprintln(diagnostics[d])
+            d = d + 1
+        }
+        return 1
+    }
+
+    var cgInputs: List<CgInput> = List<CgInput>()
+    if (hasPrelude) {
+        cgInputs.append(CgInput(resolvedPrelude, mergedPrelude, true))
+    }
+    var g: Int = 0
+    while (g < modules.size()) {
+        cgInputs.append(CgInput(fileNames[g], modules[g], false))
+        g = g + 1
+    }
+
+    val emitted: Res<Str> = emitProgram(cgInputs)
     if (!emitted.isOk()) {
         eprintln(emitted.Error)
         return 1

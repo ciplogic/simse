@@ -1,3 +1,4 @@
+package fixtures
 // T14: exercises switch, null nullability, the Str/Char library, numeric
 // conversions, min/max, and enum toInt/fromInt.
 

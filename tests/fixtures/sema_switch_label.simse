@@ -1,3 +1,4 @@
+package fixtures
 // Negative fixture: a case label that is not a constant expression.
 fun f(): Int {
     return 1

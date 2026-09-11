@@ -1,14 +1,22 @@
 //
 // simse_transpile: the low-level transpiler CLI. Parses the given .simse inputs
 // (or every .simse under the current directory when none are given), runs
-// name/type resolution, and writes one amalgamated C++ translation unit.
+// name/type resolution over the whole compilation, and writes one amalgamated
+// C++ translation unit.
+//
+// The module roots (`--root`, and each repeatable `--module-root`) are scanned
+// recursively; every `.simse` file found is part of the compilation, and the
+// explicit inputs are added on top. `import a.b.c` makes package `a.b.c` visible
+// unqualified and never adds files (specs/modules.md), so pass the module roots
+// that hold the imported packages.
 //
 // A prelude file (default cppsrc/rtl, overridable with --prelude) is parsed into
-// the same module scope as the inputs so programs can call the RTL surface
+// the same compilation as the inputs so programs can call the RTL surface
 // without an import. Prelude declarations resolve but are never emitted
 // (impl_specs/native-interop.md).
 //
 // Usage: simse_transpile <input.simse>... [-o <output.cpp>] [--prelude <file>]
+//                       [--root <dir>] [--module-root <dir>]...
 //
 // The parse -> sema -> codegen -> write pipeline lives in compiler::transpile
 // (cppsrc/Compiler.cpp), shared with the `simse` directory compiler.
@@ -19,21 +27,15 @@
 
 #include <cstdio>
 
-// The repository root used to resolve `import a.b.c` directories. Baked in at
-// configure time so the CLI works from any working directory; --root overrides.
-#ifdef SIMSE_SOURCE_ROOT
-static const char *kSourceRoot = SIMSE_SOURCE_ROOT;
-#else
-static const char *kSourceRoot = ".";
-#endif
-
 using namespace common;
 
 int main(int argc, char **argv) {
     List<Str> inputs;
     Str output;
     Str preludePath;
-    Str rootDir = kSourceRoot;
+    Str rootDir;
+    bool haveRoot = false;
+    List<Str> extraRoots;
     bool preludeExplicit = false;
     for (int i = 1; i < argc; i++) {
         Str arg = argv[i];
@@ -56,21 +58,25 @@ int main(int argc, char **argv) {
                 return 2;
             }
             rootDir = argv[++i];
+            haveRoot = true;
+        } else if (arg == "--module-root") {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "simse_transpile: --module-root requires a path\n");
+                return 2;
+            }
+            extraRoots.push_back(argv[++i]);
         } else if (arg == "-h" || arg == "--help") {
             printf("usage: simse_transpile <input.simse>... -o <output.cpp>"
-                   " [--prelude <file>] [--root <dir>]\n");
+                   " [--prelude <file>] [--root <dir>] [--module-root <dir>]...\n");
             return 0;
         } else {
             inputs.push_back(arg);
         }
     }
 
-    if (inputs.empty()) {
-        inputs = filesInDir(".", ".simse");
-    }
-    if (inputs.empty()) {
-        fprintf(stderr, "simse_transpile: no .simse inputs found\n");
-        return 2;
+    if (inputs.empty() && !haveRoot && extraRoots.empty()) {
+        rootDir = ".";
+        haveRoot = true;
     }
     if (output.empty()) {
         fprintf(stderr, "simse_transpile: missing -o <output.cpp>\n");
@@ -80,9 +86,14 @@ int main(int argc, char **argv) {
     compiler::Request request;
     request.programName = "simse_transpile";
     request.inputs = inputs;
+    if (haveRoot) {
+        request.moduleRoots.push_back(rootDir);
+    }
+    for (const Str &extraRoot: extraRoots) {
+        request.moduleRoots.push_back(extraRoot);
+    }
     request.preludePath = preludePath;
     request.preludeExplicit = preludeExplicit;
-    request.root = rootDir;
     request.output = output;
     return compiler::transpile(request);
 }

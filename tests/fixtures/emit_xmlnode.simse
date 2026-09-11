@@ -1,3 +1,4 @@
+package fixtures
 // T15: builds, by hand, the XmlNode AST that the C++ converter
 // (ast::toXmlNode) produces for `data class Tile(var n: Int)`
 // (tests/fixtures/xml_probe.simse), then dumps it in the canonical XmlNode

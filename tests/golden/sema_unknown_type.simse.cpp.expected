@@ -1,1 +1,1 @@
-CodegenError sema_unknown_type.simse:1:10: unsupported type 'Nope'
+CodegenError sema_unknown_type.simse:2:10: unsupported type 'Nope'

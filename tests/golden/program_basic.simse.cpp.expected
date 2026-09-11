@@ -3,7 +3,7 @@
 #include <iostream>
 #include <type_traits>
 
-// program_basic.simse:2
+// program_basic.simse:3
 enum class Color {
     Red,
     Green = 4,
@@ -15,24 +15,24 @@ inline Opt<Color> simse_Color_fromInt(Int value) {
     if (value == 5) return Opt<Color>::some(Color::Blue);
     return Opt<Color>::none();
 }
-// program_basic.simse:8
+// program_basic.simse:9
 struct Point {
     Int x;
     Int y;
     Point() = default;
     Point(Int x, Int y) : x(x), y(y) {}
 };
-// program_basic.simse:14
+// program_basic.simse:15
 using IntPredicate = Func<Bool(Int)>;
-// program_basic.simse:16
+// program_basic.simse:17
 using FloatHandler = Func<void(Float64*)>;
 Int sum(Point& self);
 Int add(Int a, Int b);
-// program_basic.simse:9
+// program_basic.simse:10
 Int sum(Point& self) {
     return self.x + self.y;
 }
-// program_basic.simse:18
+// program_basic.simse:19
 Int add(Int a, Int b) {
     return a + b;
 }

@@ -3,7 +3,7 @@
 #include <iostream>
 #include <type_traits>
 
-// emit_lang.simse:4
+// emit_lang.simse:5
 enum class Color {
     Red,
     Green = 4,
@@ -15,7 +15,7 @@ inline Opt<Color> simse_Color_fromInt(Int value) {
     if (value == 5) return Opt<Color>::some(Color::Blue);
     return Opt<Color>::none();
 }
-// emit_lang.simse:10
+// emit_lang.simse:11
 struct Box {
     Int value;
     Box() = default;
@@ -25,7 +25,7 @@ Str label(Color c);
 Str describe(Int n);
 std::shared_ptr<Box> maybeRef(Bool flag);
 Box* maybePointer(std::shared_ptr<Box> box, Bool flag);
-// emit_lang.simse:12
+// emit_lang.simse:13
 Str label(Color c) {
     switch (c) {
         case Color::Red:
@@ -42,7 +42,7 @@ Str label(Color c) {
         }
     }
 }
-// emit_lang.simse:23
+// emit_lang.simse:24
 Str describe(Int n) {
     switch (n) {
         case 0:
@@ -59,21 +59,21 @@ Str describe(Int n) {
         }
     }
 }
-// emit_lang.simse:34
+// emit_lang.simse:35
 std::shared_ptr<Box> maybeRef(Bool flag) {
     if (flag) {
         return std::make_shared<std::remove_cvref_t<decltype((Box(7)))>>(Box(7));
     }
     return nullptr;
 }
-// emit_lang.simse:41
+// emit_lang.simse:42
 Box* maybePointer(std::shared_ptr<Box> box, Bool flag) {
     if (flag) {
         return (box).get();
     }
     return nullptr;
 }
-// emit_lang.simse:48
+// emit_lang.simse:49
 int main() {
     std::cout << std::boolalpha << (label(Color::Red)) << std::endl;
     std::cout << std::boolalpha << (label(Color::Green)) << std::endl;

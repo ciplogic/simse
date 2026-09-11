@@ -1,146 +1,132 @@
-Comment	1:1	// T16: iteration with Cursor<T> instead of range-for.
-EndOfLine	1:55	\n
-EndOfLine	2:1	\n
-ReservedWord	3:1	fun
-Space	3:4	 
-Identifier	3:5	sum
-Operator	3:8	(
-Identifier	3:9	items
-Operator	3:14	:
-Space	3:15	 
-Operator	3:16	&
-Identifier	3:17	List
-Operator	3:21	<
-Identifier	3:22	Int
-Operator	3:25	>
-Operator	3:26	)
-Operator	3:27	:
-Space	3:28	 
-Identifier	3:29	Int
-Space	3:32	 
-Operator	3:33	{
-EndOfLine	3:34	\n
-Space	4:1	    
-ReservedWord	4:5	var
-Space	4:8	 
-Identifier	4:9	total
+ReservedWord	1:1	package
+Space	1:8	 
+Identifier	1:9	fixtures
+EndOfLine	1:17	\n
+Comment	2:1	// T16: iteration with Cursor<T> instead of range-for.
+EndOfLine	2:55	\n
+EndOfLine	3:1	\n
+ReservedWord	4:1	fun
+Space	4:4	 
+Identifier	4:5	sum
+Operator	4:8	(
+Identifier	4:9	items
 Operator	4:14	:
 Space	4:15	 
-Identifier	4:16	Int
-Space	4:19	 
-Operator	4:20	=
-Space	4:21	 
-Number	4:22	0
-EndOfLine	4:23	\n
+Operator	4:16	&
+Identifier	4:17	List
+Operator	4:21	<
+Identifier	4:22	Int
+Operator	4:25	>
+Operator	4:26	)
+Operator	4:27	:
+Space	4:28	 
+Identifier	4:29	Int
+Space	4:32	 
+Operator	4:33	{
+EndOfLine	4:34	\n
 Space	5:1	    
 ReservedWord	5:5	var
 Space	5:8	 
-Identifier	5:9	c
-Operator	5:10	:
-Space	5:11	 
-Identifier	5:12	Cursor
-Operator	5:18	<
-Identifier	5:19	Int
-Operator	5:22	>
-Space	5:23	 
-Operator	5:24	=
-Space	5:25	 
-Identifier	5:26	cursorOf
-Operator	5:34	(
-Identifier	5:35	items
-Operator	5:40	)
-EndOfLine	5:41	\n
+Identifier	5:9	total
+Operator	5:14	:
+Space	5:15	 
+Identifier	5:16	Int
+Space	5:19	 
+Operator	5:20	=
+Space	5:21	 
+Number	5:22	0
+EndOfLine	5:23	\n
 Space	6:1	    
-ReservedWord	6:5	while
-Space	6:10	 
-Operator	6:11	(
-Identifier	6:12	c
-Operator	6:13	.
-Identifier	6:14	hasValue
-Operator	6:22	(
-Operator	6:23	)
-Operator	6:24	)
+ReservedWord	6:5	var
+Space	6:8	 
+Identifier	6:9	c
+Operator	6:10	:
+Space	6:11	 
+Identifier	6:12	Cursor
+Operator	6:18	<
+Identifier	6:19	Int
+Operator	6:22	>
+Space	6:23	 
+Operator	6:24	=
 Space	6:25	 
-Operator	6:26	{
-EndOfLine	6:27	\n
-Space	7:1	        
-Identifier	7:9	total
-Space	7:14	 
-Operator	7:15	=
-Space	7:16	 
-Identifier	7:17	total
-Space	7:22	 
-Operator	7:23	+
-Space	7:24	 
-Identifier	7:25	c
-Operator	7:26	.
-Identifier	7:27	value
-Operator	7:32	(
-Operator	7:33	)
-EndOfLine	7:34	\n
+Identifier	6:26	cursorOf
+Operator	6:34	(
+Identifier	6:35	items
+Operator	6:40	)
+EndOfLine	6:41	\n
+Space	7:1	    
+ReservedWord	7:5	while
+Space	7:10	 
+Operator	7:11	(
+Identifier	7:12	c
+Operator	7:13	.
+Identifier	7:14	hasValue
+Operator	7:22	(
+Operator	7:23	)
+Operator	7:24	)
+Space	7:25	 
+Operator	7:26	{
+EndOfLine	7:27	\n
 Space	8:1	        
-Identifier	8:9	c
-Space	8:10	 
-Operator	8:11	=
-Space	8:12	 
-Identifier	8:13	c
-Operator	8:14	.
-Identifier	8:15	next
-Operator	8:19	(
-Operator	8:20	)
-EndOfLine	8:21	\n
-Space	9:1	    
-Operator	9:5	}
-EndOfLine	9:6	\n
+Identifier	8:9	total
+Space	8:14	 
+Operator	8:15	=
+Space	8:16	 
+Identifier	8:17	total
+Space	8:22	 
+Operator	8:23	+
+Space	8:24	 
+Identifier	8:25	c
+Operator	8:26	.
+Identifier	8:27	value
+Operator	8:32	(
+Operator	8:33	)
+EndOfLine	8:34	\n
+Space	9:1	        
+Identifier	9:9	c
+Space	9:10	 
+Operator	9:11	=
+Space	9:12	 
+Identifier	9:13	c
+Operator	9:14	.
+Identifier	9:15	next
+Operator	9:19	(
+Operator	9:20	)
+EndOfLine	9:21	\n
 Space	10:1	    
-ReservedWord	10:5	return
-Space	10:11	 
-Identifier	10:12	total
-EndOfLine	10:17	\n
-Operator	11:1	}
-EndOfLine	11:2	\n
-EndOfLine	12:1	\n
-ReservedWord	13:1	fun
-Space	13:4	 
-Identifier	13:5	headSum
-Operator	13:12	(
-Identifier	13:13	items
-Operator	13:18	:
-Space	13:19	 
-Operator	13:20	&
-Identifier	13:21	List
-Operator	13:25	<
-Identifier	13:26	Int
-Operator	13:29	>
-Operator	13:30	)
-Operator	13:31	:
-Space	13:32	 
-Identifier	13:33	Int
-Space	13:36	 
-Operator	13:37	{
-EndOfLine	13:38	\n
-Space	14:1	    
-ReservedWord	14:5	val
-Space	14:8	 
-Identifier	14:9	full
-Operator	14:13	:
-Space	14:14	 
-Identifier	14:15	Cursor
-Operator	14:21	<
-Identifier	14:22	Int
-Operator	14:25	>
-Space	14:26	 
-Operator	14:27	=
-Space	14:28	 
-Identifier	14:29	cursorOf
-Operator	14:37	(
-Identifier	14:38	items
-Operator	14:43	)
-EndOfLine	14:44	\n
+Operator	10:5	}
+EndOfLine	10:6	\n
+Space	11:1	    
+ReservedWord	11:5	return
+Space	11:11	 
+Identifier	11:12	total
+EndOfLine	11:17	\n
+Operator	12:1	}
+EndOfLine	12:2	\n
+EndOfLine	13:1	\n
+ReservedWord	14:1	fun
+Space	14:4	 
+Identifier	14:5	headSum
+Operator	14:12	(
+Identifier	14:13	items
+Operator	14:18	:
+Space	14:19	 
+Operator	14:20	&
+Identifier	14:21	List
+Operator	14:25	<
+Identifier	14:26	Int
+Operator	14:29	>
+Operator	14:30	)
+Operator	14:31	:
+Space	14:32	 
+Identifier	14:33	Int
+Space	14:36	 
+Operator	14:37	{
+EndOfLine	14:38	\n
 Space	15:1	    
-ReservedWord	15:5	var
+ReservedWord	15:5	val
 Space	15:8	 
-Identifier	15:9	head
+Identifier	15:9	full
 Operator	15:13	:
 Space	15:14	 
 Identifier	15:15	Cursor
@@ -150,120 +136,130 @@ Operator	15:25	>
 Space	15:26	 
 Operator	15:27	=
 Space	15:28	 
-Identifier	15:29	full
-Operator	15:33	.
-Identifier	15:34	slice
-Operator	15:39	(
-Number	15:40	2
-Operator	15:41	)
-EndOfLine	15:42	\n
+Identifier	15:29	cursorOf
+Operator	15:37	(
+Identifier	15:38	items
+Operator	15:43	)
+EndOfLine	15:44	\n
 Space	16:1	    
 ReservedWord	16:5	var
 Space	16:8	 
-Identifier	16:9	total
-Operator	16:14	:
-Space	16:15	 
-Identifier	16:16	Int
-Space	16:19	 
-Operator	16:20	=
-Space	16:21	 
-Number	16:22	0
-EndOfLine	16:23	\n
+Identifier	16:9	head
+Operator	16:13	:
+Space	16:14	 
+Identifier	16:15	Cursor
+Operator	16:21	<
+Identifier	16:22	Int
+Operator	16:25	>
+Space	16:26	 
+Operator	16:27	=
+Space	16:28	 
+Identifier	16:29	full
+Operator	16:33	.
+Identifier	16:34	slice
+Operator	16:39	(
+Number	16:40	2
+Operator	16:41	)
+EndOfLine	16:42	\n
 Space	17:1	    
-ReservedWord	17:5	while
-Space	17:10	 
-Operator	17:11	(
-Identifier	17:12	head
-Operator	17:16	.
-Identifier	17:17	hasValue
-Operator	17:25	(
-Operator	17:26	)
-Operator	17:27	)
-Space	17:28	 
-Operator	17:29	{
-EndOfLine	17:30	\n
-Space	18:1	        
-Identifier	18:9	total
-Space	18:14	 
-Operator	18:15	=
-Space	18:16	 
-Identifier	18:17	total
-Space	18:22	 
-Operator	18:23	+
-Space	18:24	 
-Identifier	18:25	head
-Operator	18:29	.
-Identifier	18:30	value
-Operator	18:35	(
-Operator	18:36	)
-EndOfLine	18:37	\n
+ReservedWord	17:5	var
+Space	17:8	 
+Identifier	17:9	total
+Operator	17:14	:
+Space	17:15	 
+Identifier	17:16	Int
+Space	17:19	 
+Operator	17:20	=
+Space	17:21	 
+Number	17:22	0
+EndOfLine	17:23	\n
+Space	18:1	    
+ReservedWord	18:5	while
+Space	18:10	 
+Operator	18:11	(
+Identifier	18:12	head
+Operator	18:16	.
+Identifier	18:17	hasValue
+Operator	18:25	(
+Operator	18:26	)
+Operator	18:27	)
+Space	18:28	 
+Operator	18:29	{
+EndOfLine	18:30	\n
 Space	19:1	        
-Identifier	19:9	head
-Space	19:13	 
-Operator	19:14	=
-Space	19:15	 
-Identifier	19:16	head
-Operator	19:20	.
-Identifier	19:21	next
-Operator	19:25	(
-Operator	19:26	)
-EndOfLine	19:27	\n
-Space	20:1	    
-Operator	20:5	}
-EndOfLine	20:6	\n
+Identifier	19:9	total
+Space	19:14	 
+Operator	19:15	=
+Space	19:16	 
+Identifier	19:17	total
+Space	19:22	 
+Operator	19:23	+
+Space	19:24	 
+Identifier	19:25	head
+Operator	19:29	.
+Identifier	19:30	value
+Operator	19:35	(
+Operator	19:36	)
+EndOfLine	19:37	\n
+Space	20:1	        
+Identifier	20:9	head
+Space	20:13	 
+Operator	20:14	=
+Space	20:15	 
+Identifier	20:16	head
+Operator	20:20	.
+Identifier	20:21	next
+Operator	20:25	(
+Operator	20:26	)
+EndOfLine	20:27	\n
 Space	21:1	    
-ReservedWord	21:5	return
-Space	21:11	 
-Identifier	21:12	total
-EndOfLine	21:17	\n
-Operator	22:1	}
-EndOfLine	22:2	\n
-EndOfLine	23:1	\n
-ReservedWord	24:1	fun
-Space	24:4	 
-Identifier	24:5	main
-Operator	24:9	(
-Operator	24:10	)
-Operator	24:11	:
-Space	24:12	 
-Identifier	24:13	Int
-Space	24:16	 
-Operator	24:17	{
-EndOfLine	24:18	\n
-Space	25:1	    
-ReservedWord	25:5	var
-Space	25:8	 
-Identifier	25:9	items
-Operator	25:14	:
-Space	25:15	 
-Identifier	25:16	List
-Operator	25:20	<
-Identifier	25:21	Int
-Operator	25:24	>
-Space	25:25	 
-Operator	25:26	=
-Space	25:27	 
-Identifier	25:28	List
-Operator	25:32	<
-Identifier	25:33	Int
-Operator	25:36	>
-Operator	25:37	(
-Operator	25:38	)
-EndOfLine	25:39	\n
+Operator	21:5	}
+EndOfLine	21:6	\n
+Space	22:1	    
+ReservedWord	22:5	return
+Space	22:11	 
+Identifier	22:12	total
+EndOfLine	22:17	\n
+Operator	23:1	}
+EndOfLine	23:2	\n
+EndOfLine	24:1	\n
+ReservedWord	25:1	fun
+Space	25:4	 
+Identifier	25:5	main
+Operator	25:9	(
+Operator	25:10	)
+Operator	25:11	:
+Space	25:12	 
+Identifier	25:13	Int
+Space	25:16	 
+Operator	25:17	{
+EndOfLine	25:18	\n
 Space	26:1	    
-Identifier	26:5	items
-Operator	26:10	.
-Identifier	26:11	append
-Operator	26:17	(
-Number	26:18	4
-Operator	26:19	)
-EndOfLine	26:20	\n
+ReservedWord	26:5	var
+Space	26:8	 
+Identifier	26:9	items
+Operator	26:14	:
+Space	26:15	 
+Identifier	26:16	List
+Operator	26:20	<
+Identifier	26:21	Int
+Operator	26:24	>
+Space	26:25	 
+Operator	26:26	=
+Space	26:27	 
+Identifier	26:28	List
+Operator	26:32	<
+Identifier	26:33	Int
+Operator	26:36	>
+Operator	26:37	(
+Operator	26:38	)
+EndOfLine	26:39	\n
 Space	27:1	    
 Identifier	27:5	items
 Operator	27:10	.
 Identifier	27:11	append
 Operator	27:17	(
-Number	27:18	7
+Number	27:18	4
 Operator	27:19	)
 EndOfLine	27:20	\n
 Space	28:1	    
@@ -271,79 +267,87 @@ Identifier	28:5	items
 Operator	28:10	.
 Identifier	28:11	append
 Operator	28:17	(
-Number	28:18	9
+Number	28:18	7
 Operator	28:19	)
 EndOfLine	28:20	\n
-EndOfLine	29:1	\n
-Space	30:1	    
-ReservedWord	30:5	val
-Space	30:8	 
-Identifier	30:9	view
-Operator	30:13	:
-Space	30:14	 
-Operator	30:15	&
-Identifier	30:16	List
-Operator	30:20	<
-Identifier	30:21	Int
-Operator	30:24	>
-Space	30:25	 
-Operator	30:26	=
-Space	30:27	 
-Operator	30:28	&
-Identifier	30:29	items
-EndOfLine	30:34	\n
+Space	29:1	    
+Identifier	29:5	items
+Operator	29:10	.
+Identifier	29:11	append
+Operator	29:17	(
+Number	29:18	9
+Operator	29:19	)
+EndOfLine	29:20	\n
+EndOfLine	30:1	\n
 Space	31:1	    
-Identifier	31:5	println
-Operator	31:12	(
-Identifier	31:13	sum
-Operator	31:16	(
-Identifier	31:17	view
-Operator	31:21	)
-Operator	31:22	)
-EndOfLine	31:23	\n
-EndOfLine	32:1	\n
-Space	33:1	    
-ReservedWord	33:5	val
-Space	33:8	 
-Identifier	33:9	all
-Operator	33:12	:
-Space	33:13	 
-Identifier	33:14	Cursor
-Operator	33:20	<
-Identifier	33:21	Int
-Operator	33:24	>
-Space	33:25	 
-Operator	33:26	=
-Space	33:27	 
-Identifier	33:28	cursorOf
-Operator	33:36	(
-Identifier	33:37	view
-Operator	33:41	)
-EndOfLine	33:42	\n
+ReservedWord	31:5	val
+Space	31:8	 
+Identifier	31:9	view
+Operator	31:13	:
+Space	31:14	 
+Operator	31:15	&
+Identifier	31:16	List
+Operator	31:20	<
+Identifier	31:21	Int
+Operator	31:24	>
+Space	31:25	 
+Operator	31:26	=
+Space	31:27	 
+Operator	31:28	&
+Identifier	31:29	items
+EndOfLine	31:34	\n
+Space	32:1	    
+Identifier	32:5	println
+Operator	32:12	(
+Identifier	32:13	sum
+Operator	32:16	(
+Identifier	32:17	view
+Operator	32:21	)
+Operator	32:22	)
+EndOfLine	32:23	\n
+EndOfLine	33:1	\n
 Space	34:1	    
-Identifier	34:5	println
-Operator	34:12	(
-Identifier	34:13	all
-Operator	34:16	.
-Identifier	34:17	size
-Operator	34:21	(
-Operator	34:22	)
-Operator	34:23	)
-EndOfLine	34:24	\n
-EndOfLine	35:1	\n
-Space	36:1	    
-Identifier	36:5	println
-Operator	36:12	(
-Identifier	36:13	headSum
-Operator	36:20	(
-Identifier	36:21	view
-Operator	36:25	)
-Operator	36:26	)
-EndOfLine	36:27	\n
+ReservedWord	34:5	val
+Space	34:8	 
+Identifier	34:9	all
+Operator	34:12	:
+Space	34:13	 
+Identifier	34:14	Cursor
+Operator	34:20	<
+Identifier	34:21	Int
+Operator	34:24	>
+Space	34:25	 
+Operator	34:26	=
+Space	34:27	 
+Identifier	34:28	cursorOf
+Operator	34:36	(
+Identifier	34:37	view
+Operator	34:41	)
+EndOfLine	34:42	\n
+Space	35:1	    
+Identifier	35:5	println
+Operator	35:12	(
+Identifier	35:13	all
+Operator	35:16	.
+Identifier	35:17	size
+Operator	35:21	(
+Operator	35:22	)
+Operator	35:23	)
+EndOfLine	35:24	\n
+EndOfLine	36:1	\n
 Space	37:1	    
-ReservedWord	37:5	return
-Space	37:11	 
-Number	37:12	0
-EndOfLine	37:13	\n
-Operator	38:1	}
-EndOfLine	38:2	\n
+Identifier	37:5	println
+Operator	37:12	(
+Identifier	37:13	headSum
+Operator	37:20	(
+Identifier	37:21	view
+Operator	37:25	)
+Operator	37:26	)
+EndOfLine	37:27	\n
+Space	38:1	    
+ReservedWord	38:5	return
+Space	38:11	 
+Number	38:12	0
+EndOfLine	38:13	\n
+Operator	39:1	}
+EndOfLine	39:2	\n

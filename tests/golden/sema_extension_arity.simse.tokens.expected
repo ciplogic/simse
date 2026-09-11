@@ -1,52 +1,56 @@
-Comment	1:1	// Negative sema fixture: `List<T>.append` is a prelude extension taking one
-EndOfLine	1:77	\r\n
-Comment	2:1	// value argument, so calling it with none is an extension-arity error. This
-EndOfLine	2:77	\r\n
-Comment	3:1	// exercises the path that requires the RTL prelude to be in scope.
-EndOfLine	3:68	\r\n
-EndOfLine	4:1	\r\n
-ReservedWord	5:1	fun
-Space	5:4	 
-Identifier	5:5	main
-Operator	5:9	(
-Operator	5:10	)
-Operator	5:11	:
-Space	5:12	 
-Identifier	5:13	Int
-Space	5:16	 
-Operator	5:17	{
-EndOfLine	5:18	\r\n
-Space	6:1	    
-ReservedWord	6:5	var
-Space	6:8	 
-Identifier	6:9	xs
+ReservedWord	1:1	package
+Space	1:8	 
+Identifier	1:9	fixtures
+EndOfLine	1:17	\n
+Comment	2:1	// Negative sema fixture: `List<T>.append` is a prelude extension taking one
+EndOfLine	2:77	\n
+Comment	3:1	// value argument, so calling it with none is an extension-arity error. This
+EndOfLine	3:77	\n
+Comment	4:1	// exercises the path that requires the RTL prelude to be in scope.
+EndOfLine	4:68	\n
+EndOfLine	5:1	\n
+ReservedWord	6:1	fun
+Space	6:4	 
+Identifier	6:5	main
+Operator	6:9	(
+Operator	6:10	)
 Operator	6:11	:
 Space	6:12	 
-Identifier	6:13	List
-Operator	6:17	<
-Identifier	6:18	Int
-Operator	6:21	>
-Space	6:22	 
-Operator	6:23	=
-Space	6:24	 
-Identifier	6:25	List
-Operator	6:29	<
-Identifier	6:30	Int
-Operator	6:33	>
-Operator	6:34	(
-Operator	6:35	)
-EndOfLine	6:36	\r\n
+Identifier	6:13	Int
+Space	6:16	 
+Operator	6:17	{
+EndOfLine	6:18	\n
 Space	7:1	    
-Identifier	7:5	xs
-Operator	7:7	.
-Identifier	7:8	append
-Operator	7:14	(
-Operator	7:15	)
-EndOfLine	7:16	\r\n
+ReservedWord	7:5	var
+Space	7:8	 
+Identifier	7:9	xs
+Operator	7:11	:
+Space	7:12	 
+Identifier	7:13	List
+Operator	7:17	<
+Identifier	7:18	Int
+Operator	7:21	>
+Space	7:22	 
+Operator	7:23	=
+Space	7:24	 
+Identifier	7:25	List
+Operator	7:29	<
+Identifier	7:30	Int
+Operator	7:33	>
+Operator	7:34	(
+Operator	7:35	)
+EndOfLine	7:36	\n
 Space	8:1	    
-ReservedWord	8:5	return
-Space	8:11	 
-Number	8:12	0
-EndOfLine	8:13	\r\n
-Operator	9:1	}
-EndOfLine	9:2	\r\n
+Identifier	8:5	xs
+Operator	8:7	.
+Identifier	8:8	append
+Operator	8:14	(
+Operator	8:15	)
+EndOfLine	8:16	\n
+Space	9:1	    
+ReservedWord	9:5	return
+Space	9:11	 
+Number	9:12	0
+EndOfLine	9:13	\n
+Operator	10:1	}
+EndOfLine	10:2	\n

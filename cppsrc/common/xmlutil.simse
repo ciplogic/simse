@@ -6,10 +6,10 @@
 // positions, counts, and the type-parameter list.
 //
 // These are ordinary emitted Simse functions (NOT prelude declarations), so they
-// are available through the `cppsrc.common` import that the parser already pulls
-// in. The concrete XmlNode/Attribute types come from the RTL prelude.
+// are available through the `common` import that a file using them declares. The
+// concrete XmlNode/Attribute types come from the RTL prelude.
 
-package cppsrc.common
+package common
 
 // An empty node is the "absent" sentinel: the schema has no null, so a missing
 // optional child (an untyped field, a missing return type, ...) is an empty node.

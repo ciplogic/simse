@@ -3,9 +3,10 @@
 // together with the C++ emitted by `simse_transpile cppsrc/sema/Sema.simse`
 // (included directly, because the generated file has no header; it also carries
 // the transpiled parser and scanner through its imports). It scans and parses
-// each fixture with the generated front end, merges the RTL prelude the same way
-// the reference does, and prints the generated `analyze` diagnostics, so the
-// build can diff them against tests/sema_ref_main.cpp.
+// each fixture with the generated front end, passes the RTL prelude and the
+// fixture to the generated compilation-wide `analyze` (one input per file, so
+// each keeps its declared package), and prints the diagnostics, so the build can
+// diff them against tests/sema_ref_main.cpp.
 //
 // Usage: sema_simse <fixtures-dir> <prelude-dir>
 //
@@ -69,40 +70,6 @@ namespace {
         out = parsed.Value;
         return true;
     }
-
-    // Merges prelude modules and the input into one Module node, mirroring
-    // tests::combineWithPrelude (prelude imports, input imports, prelude decls,
-    // input decls).
-    XmlNode combine(const std::vector<XmlNode> &prelude, const XmlNode &input) {
-        XmlNode combined;
-        combined.name = "Module";
-        combined.Children = makeList<XmlNode>();
-        for (const XmlNode &module: prelude) {
-            for (int i = 0; i < (int) module.Children->size(); i++) {
-                if ((*module.Children)[i].name == "Import") {
-                    combined.Children->push_back((*module.Children)[i]);
-                }
-            }
-        }
-        for (int i = 0; i < (int) input.Children->size(); i++) {
-            if ((*input.Children)[i].name == "Import") {
-                combined.Children->push_back((*input.Children)[i]);
-            }
-        }
-        for (const XmlNode &module: prelude) {
-            for (int i = 0; i < (int) module.Children->size(); i++) {
-                if ((*module.Children)[i].name != "Import") {
-                    combined.Children->push_back((*module.Children)[i]);
-                }
-            }
-        }
-        for (int i = 0; i < (int) input.Children->size(); i++) {
-            if ((*input.Children)[i].name != "Import") {
-                combined.Children->push_back((*input.Children)[i]);
-            }
-        }
-        return combined;
-    }
 }
 
 int main(int argc, char **argv) {
@@ -111,13 +78,17 @@ int main(int argc, char **argv) {
 
     std::vector<std::string> files = simseFiles(fixturesDir);
 
+    // One prelude input per file, so each keeps its declared package (`rtl`),
+    // exactly as tests::preludeInputs does for the reference driver.
     std::vector<XmlNode> prelude;
+    std::vector<std::string> preludeNames;
     if (!preludeDir.empty()) {
         for (const std::string &path: simseFiles(preludeDir)) {
             XmlNode module;
             std::string name = std::filesystem::path(path).filename().string();
             if (parseFile(path, name, module)) {
                 prelude.push_back(module);
+                preludeNames.push_back(name);
             }
         }
     }
@@ -130,8 +101,13 @@ int main(int argc, char **argv) {
         if (!parseFile(file, name, input)) {
             continue;
         }
-        XmlNode combined = prelude.empty() ? input : combine(prelude, input);
-        List<Str> diags = analyze(combined, name);
+        List<SemaInput> inputs = List<SemaInput>();
+        for (int i = 0; i < (int) prelude.size(); i++) {
+            inputs.push_back(SemaInput(preludeNames[i], prelude[i]));
+        }
+        inputs.push_back(SemaInput(name, input));
+
+        List<Str> diags = analyze(inputs);
         for (int i = 0; i < (int) diags.size(); i++) {
             printf("%s\n", diags[i].c_str());
         }

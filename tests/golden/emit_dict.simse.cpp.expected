@@ -3,7 +3,7 @@
 #include <iostream>
 #include <type_traits>
 
-// emit_dict.simse:4
+// emit_dict.simse:5
 int main() {
     Dictionary<Str, Int> counts = simse_dictionaryOf<Str, Int>();
     simse_dict_insert(counts, "b", 2);

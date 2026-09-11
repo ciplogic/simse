@@ -1,3 +1,4 @@
+package fixtures
 // T17: the Str library (charAt, trim, split, case folding, search).
 
 fun main(): Int {

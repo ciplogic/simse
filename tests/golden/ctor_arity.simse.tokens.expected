@@ -1,60 +1,64 @@
-Comment	1:1	// Negative fixture: a data-class constructor called with the wrong number of
-EndOfLine	1:78	\n
-Comment	2:1	// arguments. sema must report a positioned diagnostic.
-EndOfLine	2:56	\n
-ReservedWord	3:1	data
-Space	3:5	 
-ReservedWord	3:6	class
-Space	3:11	 
-Identifier	3:12	Widget
-Operator	3:18	(
-ReservedWord	3:19	var
-Space	3:22	 
-Identifier	3:23	a
-Operator	3:24	:
-Space	3:25	 
-Identifier	3:26	Int
-Operator	3:29	;
-Space	3:30	 
-ReservedWord	3:31	var
-Space	3:34	 
-Identifier	3:35	b
-Operator	3:36	:
-Space	3:37	 
-Identifier	3:38	Int
-Operator	3:41	)
-EndOfLine	3:42	\n
-EndOfLine	4:1	\n
-ReservedWord	5:1	fun
-Space	5:4	 
-Identifier	5:5	make
-Operator	5:9	(
-Operator	5:10	)
-Operator	5:11	:
-Space	5:12	 
-Identifier	5:13	Int
-Space	5:16	 
-Operator	5:17	{
-EndOfLine	5:18	\n
-Space	6:1	    
-ReservedWord	6:5	val
-Space	6:8	 
-Identifier	6:9	w
-Operator	6:10	:
-Space	6:11	 
-Identifier	6:12	Widget
-Space	6:18	 
-Operator	6:19	=
-Space	6:20	 
-Identifier	6:21	Widget
-Operator	6:27	(
-Number	6:28	1
-Operator	6:29	)
-EndOfLine	6:30	\n
+ReservedWord	1:1	package
+Space	1:8	 
+Identifier	1:9	fixtures
+EndOfLine	1:17	\n
+Comment	2:1	// Negative fixture: a data-class constructor called with the wrong number of
+EndOfLine	2:78	\n
+Comment	3:1	// arguments. sema must report a positioned diagnostic.
+EndOfLine	3:56	\n
+ReservedWord	4:1	data
+Space	4:5	 
+ReservedWord	4:6	class
+Space	4:11	 
+Identifier	4:12	Widget
+Operator	4:18	(
+ReservedWord	4:19	var
+Space	4:22	 
+Identifier	4:23	a
+Operator	4:24	:
+Space	4:25	 
+Identifier	4:26	Int
+Operator	4:29	;
+Space	4:30	 
+ReservedWord	4:31	var
+Space	4:34	 
+Identifier	4:35	b
+Operator	4:36	:
+Space	4:37	 
+Identifier	4:38	Int
+Operator	4:41	)
+EndOfLine	4:42	\n
+EndOfLine	5:1	\n
+ReservedWord	6:1	fun
+Space	6:4	 
+Identifier	6:5	make
+Operator	6:9	(
+Operator	6:10	)
+Operator	6:11	:
+Space	6:12	 
+Identifier	6:13	Int
+Space	6:16	 
+Operator	6:17	{
+EndOfLine	6:18	\n
 Space	7:1	    
-ReservedWord	7:5	return
+ReservedWord	7:5	val
+Space	7:8	 
+Identifier	7:9	w
+Operator	7:10	:
 Space	7:11	 
-Number	7:12	0
-EndOfLine	7:13	\n
-Operator	8:1	}
-EndOfLine	8:2	\n
+Identifier	7:12	Widget
+Space	7:18	 
+Operator	7:19	=
+Space	7:20	 
+Identifier	7:21	Widget
+Operator	7:27	(
+Number	7:28	1
+Operator	7:29	)
+EndOfLine	7:30	\n
+Space	8:1	    
+ReservedWord	8:5	return
+Space	8:11	 
+Number	8:12	0
+EndOfLine	8:13	\n
+Operator	9:1	}
+EndOfLine	9:2	\n

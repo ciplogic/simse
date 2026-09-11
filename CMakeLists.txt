@@ -87,6 +87,14 @@ foreach(e2e_name IN ITEMS emit_hello emit_shapes emit_generics native_readfile e
     if(e2e_name STREQUAL "emit_main_args")
         set(e2e_extra_args -DEXE_ARGS=alpha)
     endif()
+    # `main_program` is cppsrc/main.simse: it imports the `lex` and `common`
+    # packages, so those module roots are scanned. The fixtures declare
+    # `package fixtures` and import nothing.
+    set(e2e_roots)
+    if(e2e_name STREQUAL "main_program")
+        set(e2e_roots --module-root "${SIMSE_REPO_ROOT}/cppsrc/common"
+                --module-root "${SIMSE_REPO_ROOT}/cppsrc/lex")
+    endif()
     set(e2e_generated "${SIMSE_E2E_DIR}/${e2e_name}.cpp")
     set(e2e_expected "${SIMSE_REPO_ROOT}/tests/golden/${e2e_name}.stdout.expected")
     set(e2e_actual "${SIMSE_E2E_DIR}/${e2e_name}.stdout.actual")
@@ -94,7 +102,7 @@ foreach(e2e_name IN ITEMS emit_hello emit_shapes emit_generics native_readfile e
     add_custom_command(
             OUTPUT "${e2e_generated}"
             COMMAND "${CMAKE_COMMAND}" -E make_directory "${SIMSE_E2E_DIR}"
-            COMMAND $<TARGET_FILE:simse_transpile> "${e2e_fixture}" -o "${e2e_generated}"
+            COMMAND $<TARGET_FILE:simse_transpile> "${e2e_fixture}" ${e2e_roots} -o "${e2e_generated}"
             DEPENDS "${e2e_fixture}" simse_transpile
             COMMENT "T8: transpiling ${e2e_name}.simse"
             VERBATIM)
@@ -134,8 +142,13 @@ add_custom_command(
         OUTPUT "${SIMSE_SCANNER_GENERATED}"
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${SIMSE_SELFHOST_DIR}"
         COMMAND $<TARGET_FILE:simse_transpile>
-                "${SIMSE_REPO_ROOT}/cppsrc/lex/Scanner.simse" -o "${SIMSE_SCANNER_GENERATED}"
-        DEPENDS "${SIMSE_REPO_ROOT}/cppsrc/lex/Scanner.simse" simse_transpile
+                "${SIMSE_REPO_ROOT}/cppsrc/lex/Scanner.simse"
+                --module-root "${SIMSE_REPO_ROOT}/cppsrc/common"
+                -o "${SIMSE_SCANNER_GENERATED}"
+        DEPENDS "${SIMSE_REPO_ROOT}/cppsrc/lex/Scanner.simse"
+                "${SIMSE_REPO_ROOT}/cppsrc/common/common.simse"
+                "${SIMSE_REPO_ROOT}/cppsrc/common/StrView.simse"
+                simse_transpile
         COMMENT "T11: transpiling Scanner.simse"
         VERBATIM)
 
@@ -183,6 +196,8 @@ add_custom_command(
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${SIMSE_SELFHOST_DIR}"
         COMMAND $<TARGET_FILE:simse_transpile>
                 "${SIMSE_REPO_ROOT}/cppsrc/skelparser/SkeletonParser.simse"
+                --module-root "${SIMSE_REPO_ROOT}/cppsrc/common"
+                --module-root "${SIMSE_REPO_ROOT}/cppsrc/lex"
                 -o "${SIMSE_SKEL_GENERATED}"
         DEPENDS "${SIMSE_REPO_ROOT}/cppsrc/skelparser/SkeletonParser.simse" simse_transpile
         COMMENT "T11: transpiling SkeletonParser.simse"
@@ -231,6 +246,8 @@ add_custom_command(
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${SIMSE_SELFHOST_DIR}"
         COMMAND $<TARGET_FILE:simse_transpile>
                 "${SIMSE_REPO_ROOT}/cppsrc/parser/Parser.simse"
+                --module-root "${SIMSE_REPO_ROOT}/cppsrc/common"
+                --module-root "${SIMSE_REPO_ROOT}/cppsrc/lex"
                 -o "${SIMSE_PARSER_GENERATED}"
         DEPENDS "${SIMSE_REPO_ROOT}/cppsrc/parser/Parser.simse" simse_transpile
         COMMENT "T19: transpiling Parser.simse"
@@ -279,6 +296,9 @@ add_custom_command(
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${SIMSE_SELFHOST_DIR}"
         COMMAND $<TARGET_FILE:simse_transpile>
                 "${SIMSE_REPO_ROOT}/cppsrc/sema/Sema.simse"
+                --module-root "${SIMSE_REPO_ROOT}/cppsrc/common"
+                --module-root "${SIMSE_REPO_ROOT}/cppsrc/lex"
+                --module-root "${SIMSE_REPO_ROOT}/cppsrc/parser"
                 -o "${SIMSE_SEMA_GENERATED}"
         DEPENDS
                 "${SIMSE_REPO_ROOT}/cppsrc/sema/Sema.simse"
@@ -335,6 +355,10 @@ add_custom_command(
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${SIMSE_SELFHOST_DIR}"
         COMMAND $<TARGET_FILE:simse_transpile>
                 "${SIMSE_REPO_ROOT}/cppsrc/codegen/Codegen.simse"
+                --module-root "${SIMSE_REPO_ROOT}/cppsrc/common"
+                --module-root "${SIMSE_REPO_ROOT}/cppsrc/lex"
+                --module-root "${SIMSE_REPO_ROOT}/cppsrc/parser"
+                --module-root "${SIMSE_REPO_ROOT}/cppsrc/sema"
                 -o "${SIMSE_CODEGEN_GENERATED}"
         DEPENDS
                 "${SIMSE_REPO_ROOT}/cppsrc/codegen/Codegen.simse"
@@ -411,11 +435,24 @@ set(SIMSE_STAGE1_FIXTURE "tests/fixtures/emit_lang.simse")
 set(SIMSE_STAGE1_FIXTURE_REF "${SIMSE_STAGE1_DIR}/fixture_ref.cpp")
 set(SIMSE_STAGE1_FIXTURE_B "${SIMSE_STAGE1_DIR}/fixture_b.cpp")
 
+# The module roots that hold the compiler source set, in dependency order so the
+# amalgamated translation unit compiles. `import` never adds files; the scanner
+# includes every `.simse` under these roots (and the explicit Driver.simse).
+set(SIMSE_COMPILER_ROOTS
+        --module-root cppsrc/common
+        --module-root cppsrc/lex
+        --module-root cppsrc/skelparser
+        --module-root cppsrc/parser
+        --module-root cppsrc/sema
+        --module-root cppsrc/codegen
+        --module-root cppsrc/compiler)
+
 add_custom_command(
         OUTPUT "${SIMSE_STAGE1_GENERATED}"
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${SIMSE_STAGE1_DIR}"
         COMMAND $<TARGET_FILE:simse_transpile> "${SIMSE_STAGE1_INPUT}"
-                -o "${SIMSE_STAGE1_GENERATED}" --root . --prelude cppsrc/rtl
+                ${SIMSE_COMPILER_ROOTS}
+                -o "${SIMSE_STAGE1_GENERATED}" --prelude cppsrc/rtl
         WORKING_DIRECTORY "${SIMSE_REPO_ROOT}"
         DEPENDS ${SIMSE_ALL_MIRRORS} simse_transpile
         COMMENT "T23: transpiling the compiler source set with the C++ transpiler"
@@ -429,15 +466,16 @@ set_target_properties(simse_stage1 PROPERTIES
 
 add_custom_target(stage1_check ALL
         COMMAND $<TARGET_FILE:simse_stage1> "${SIMSE_STAGE1_INPUT}"
-                -o "${SIMSE_STAGE1_REGEN}" --root . --prelude cppsrc/rtl
+                ${SIMSE_COMPILER_ROOTS}
+                -o "${SIMSE_STAGE1_REGEN}" --prelude cppsrc/rtl
         COMMAND "${CMAKE_COMMAND}" -E compare_files --ignore-eol
                 "${SIMSE_STAGE1_GENERATED}" "${SIMSE_STAGE1_REGEN}"
         # Also check the stage-1 driver on a real program fixture against the
         # C++ transpiler's output for the same input.
         COMMAND $<TARGET_FILE:simse_transpile> "${SIMSE_STAGE1_FIXTURE}"
-                -o "${SIMSE_STAGE1_FIXTURE_REF}" --root . --prelude cppsrc/rtl
+                -o "${SIMSE_STAGE1_FIXTURE_REF}" --prelude cppsrc/rtl
         COMMAND $<TARGET_FILE:simse_stage1> "${SIMSE_STAGE1_FIXTURE}"
-                -o "${SIMSE_STAGE1_FIXTURE_B}" --root . --prelude cppsrc/rtl
+                -o "${SIMSE_STAGE1_FIXTURE_B}" --prelude cppsrc/rtl
         COMMAND "${CMAKE_COMMAND}" -E compare_files --ignore-eol
                 "${SIMSE_STAGE1_FIXTURE_REF}" "${SIMSE_STAGE1_FIXTURE_B}"
         WORKING_DIRECTORY "${SIMSE_REPO_ROOT}"

@@ -3,18 +3,18 @@
 #include <iostream>
 #include <type_traits>
 
-// emit_hello.simse:1
+// emit_hello.simse:2
 struct Counter {
     Int value;
     Counter() = default;
     Counter(Int value) : value(value) {}
 };
 Int bump(Counter& self);
-// emit_hello.simse:2
+// emit_hello.simse:3
 Int bump(Counter& self) {
     return self.value + 1;
 }
-// emit_hello.simse:7
+// emit_hello.simse:8
 int main() {
     Int i = 0;
     Int total = 0;

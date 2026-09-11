@@ -1,1 +1,1 @@
-ctor_arity.simse:6:21: data class 'Widget' expects 2 field(s) but got 1
+ctor_arity.simse:7:21: data class 'Widget' expects 2 field(s) but got 1

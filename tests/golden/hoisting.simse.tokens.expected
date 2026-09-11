@@ -1,91 +1,95 @@
-ReservedWord	1:1	fun
-Space	1:4	 
-Identifier	1:5	useLater
-Operator	1:13	(
-Operator	1:14	)
-Operator	1:15	:
-Space	1:16	 
-Identifier	1:17	Int
-Space	1:20	 
-Operator	1:21	{
-EndOfLine	1:22	\n
-Space	2:1	    
-ReservedWord	2:5	val
-Space	2:8	 
-Identifier	2:9	p
-Operator	2:10	:
-Space	2:11	 
-Identifier	2:12	Point
-Space	2:17	 
-Operator	2:18	=
-Space	2:19	 
-Identifier	2:20	Point
-Operator	2:25	(
-Number	2:26	1
-Operator	2:27	,
-Space	2:28	 
-Number	2:29	2
-Operator	2:30	)
-EndOfLine	2:31	\n
+ReservedWord	1:1	package
+Space	1:8	 
+Identifier	1:9	fixtures
+EndOfLine	1:17	\n
+ReservedWord	2:1	fun
+Space	2:4	 
+Identifier	2:5	useLater
+Operator	2:13	(
+Operator	2:14	)
+Operator	2:15	:
+Space	2:16	 
+Identifier	2:17	Int
+Space	2:20	 
+Operator	2:21	{
+EndOfLine	2:22	\n
 Space	3:1	    
-ReservedWord	3:5	return
+ReservedWord	3:5	val
+Space	3:8	 
+Identifier	3:9	p
+Operator	3:10	:
 Space	3:11	 
-Identifier	3:12	helper
-Operator	3:18	(
-Identifier	3:19	p
-Operator	3:20	.
-Identifier	3:21	x
-Operator	3:22	)
-EndOfLine	3:23	\n
-Operator	4:1	}
-EndOfLine	4:2	\n
-EndOfLine	5:1	\n
-ReservedWord	6:1	data
-Space	6:5	 
-ReservedWord	6:6	class
-Space	6:11	 
-Identifier	6:12	Point
-Operator	6:17	(
-ReservedWord	6:18	var
-Space	6:21	 
-Identifier	6:22	x
-Operator	6:23	:
-Space	6:24	 
-Identifier	6:25	Int
-Operator	6:28	;
-Space	6:29	 
-ReservedWord	6:30	var
-Space	6:33	 
-Identifier	6:34	y
-Operator	6:35	:
-Space	6:36	 
-Identifier	6:37	Int
-Operator	6:40	)
-EndOfLine	6:41	\n
-EndOfLine	7:1	\n
-ReservedWord	8:1	fun
-Space	8:4	 
-Identifier	8:5	helper
-Operator	8:11	(
-Identifier	8:12	value
-Operator	8:17	:
-Space	8:18	 
-Identifier	8:19	Int
-Operator	8:22	)
-Operator	8:23	:
-Space	8:24	 
-Identifier	8:25	Int
-Space	8:28	 
-Operator	8:29	{
-EndOfLine	8:30	\n
-Space	9:1	    
-ReservedWord	9:5	return
-Space	9:11	 
+Identifier	3:12	Point
+Space	3:17	 
+Operator	3:18	=
+Space	3:19	 
+Identifier	3:20	Point
+Operator	3:25	(
+Number	3:26	1
+Operator	3:27	,
+Space	3:28	 
+Number	3:29	2
+Operator	3:30	)
+EndOfLine	3:31	\n
+Space	4:1	    
+ReservedWord	4:5	return
+Space	4:11	 
+Identifier	4:12	helper
+Operator	4:18	(
+Identifier	4:19	p
+Operator	4:20	.
+Identifier	4:21	x
+Operator	4:22	)
+EndOfLine	4:23	\n
+Operator	5:1	}
+EndOfLine	5:2	\n
+EndOfLine	6:1	\n
+ReservedWord	7:1	data
+Space	7:5	 
+ReservedWord	7:6	class
+Space	7:11	 
+Identifier	7:12	Point
+Operator	7:17	(
+ReservedWord	7:18	var
+Space	7:21	 
+Identifier	7:22	x
+Operator	7:23	:
+Space	7:24	 
+Identifier	7:25	Int
+Operator	7:28	;
+Space	7:29	 
+ReservedWord	7:30	var
+Space	7:33	 
+Identifier	7:34	y
+Operator	7:35	:
+Space	7:36	 
+Identifier	7:37	Int
+Operator	7:40	)
+EndOfLine	7:41	\n
+EndOfLine	8:1	\n
+ReservedWord	9:1	fun
+Space	9:4	 
+Identifier	9:5	helper
+Operator	9:11	(
 Identifier	9:12	value
-Space	9:17	 
-Operator	9:18	+
-Space	9:19	 
-Number	9:20	1
-EndOfLine	9:21	\n
-Operator	10:1	}
-EndOfLine	10:2	\n
+Operator	9:17	:
+Space	9:18	 
+Identifier	9:19	Int
+Operator	9:22	)
+Operator	9:23	:
+Space	9:24	 
+Identifier	9:25	Int
+Space	9:28	 
+Operator	9:29	{
+EndOfLine	9:30	\n
+Space	10:1	    
+ReservedWord	10:5	return
+Space	10:11	 
+Identifier	10:12	value
+Space	10:17	 
+Operator	10:18	+
+Space	10:19	 
+Number	10:20	1
+EndOfLine	10:21	\n
+Operator	11:1	}
+EndOfLine	11:2	\n

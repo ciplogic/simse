@@ -1,16 +1,17 @@
 Module @1:1
-  DataClass Widget @3:1
-    Field var a: Int @3:19
-    Field var b: Int @3:31
-  Function make @5:1
+  Package fixtures @1:1
+  DataClass Widget @4:1
+    Field var a: Int @4:19
+    Field var b: Int @4:31
+  Function make @6:1
     Return Int
     Body
-      VarDecl val w: Widget @6:5
+      VarDecl val w: Widget @7:5
         Init
-          Call @6:21
+          Call @7:21
             Callee
-              Name Widget @6:21
+              Name Widget @7:21
             Arg
-              IntLit 1 @6:28
-      Return @7:5
-        IntLit 0 @7:12
+              IntLit 1 @7:28
+      Return @8:5
+        IntLit 0 @8:12

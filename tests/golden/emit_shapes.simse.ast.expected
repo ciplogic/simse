@@ -1,40 +1,31 @@
 Module @1:1
-  Enum Shape @1:1
-    Member Circle @2:5
-    Member Square = 4 @3:5
-  Function describe @6:1
+  Package fixtures @1:1
+  Enum Shape @2:1
+    Member Circle @3:5
+    Member Square = 4 @4:5
+  Function describe @7:1
     Receiver Str
     Return Str
     Body
-      Return @7:5
-        Name this @7:12
-  Function area @10:1
+      Return @8:5
+        Name this @8:12
+  Function area @11:1
     Param width: Int
     Param height: Int
     Return Int
     Body
-      Return @11:5
-        Binary * @11:12
+      Return @12:5
+        Binary * @12:12
           Lhs
-            Name width @11:12
+            Name width @12:12
           Rhs
-            Name height @11:20
-  Function main @14:1
+            Name height @12:20
+  Function main @15:1
     Return Int
     Body
-      VarDecl val name: Str @15:5
+      VarDecl val name: Str @16:5
         Init
-          StrLit "box" @15:21
-      ExprStmt @16:5
-        Call @16:5
-          Callee
-            Name println @16:5
-          Arg
-            Call @16:13
-              Callee
-                Member .describe @16:13
-                  Receiver
-                    Name name @16:13
+          StrLit "box" @16:21
       ExprStmt @17:5
         Call @17:5
           Callee
@@ -42,30 +33,40 @@ Module @1:1
           Arg
             Call @17:13
               Callee
-                Name area @17:13
-              Arg
-                IntLit 3 @17:18
-              Arg
-                IntLit 4 @17:21
+                Member .describe @17:13
+                  Receiver
+                    Name name @17:13
       ExprStmt @18:5
         Call @18:5
           Callee
             Name println @18:5
           Arg
-            Binary == @18:13
-              Lhs
-                Member .Circle @18:13
-                  Receiver
-                    Name Shape @18:13
-              Rhs
-                Member .Circle @18:29
-                  Receiver
-                    Name Shape @18:29
+            Call @18:13
+              Callee
+                Name area @18:13
+              Arg
+                IntLit 3 @18:18
+              Arg
+                IntLit 4 @18:21
       ExprStmt @19:5
         Call @19:5
           Callee
             Name println @19:5
           Arg
-            CharLit 'a' @19:13
-      Return @20:5
-        IntLit 0 @20:12
+            Binary == @19:13
+              Lhs
+                Member .Circle @19:13
+                  Receiver
+                    Name Shape @19:13
+              Rhs
+                Member .Circle @19:29
+                  Receiver
+                    Name Shape @19:29
+      ExprStmt @20:5
+        Call @20:5
+          Callee
+            Name println @20:5
+          Arg
+            CharLit 'a' @20:13
+      Return @21:5
+        IntLit 0 @21:12

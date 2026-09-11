@@ -3,7 +3,7 @@
 #include <iostream>
 #include <type_traits>
 
-// emit_shapes.simse:1
+// emit_shapes.simse:2
 enum class Shape {
     Circle,
     Square = 4,
@@ -15,15 +15,15 @@ inline Opt<Shape> simse_Shape_fromInt(Int value) {
 }
 Str describe(Str& self);
 Int area(Int width, Int height);
-// emit_shapes.simse:6
+// emit_shapes.simse:7
 Str describe(Str& self) {
     return self;
 }
-// emit_shapes.simse:10
+// emit_shapes.simse:11
 Int area(Int width, Int height) {
     return width * height;
 }
-// emit_shapes.simse:14
+// emit_shapes.simse:15
 int main() {
     Str name = "box";
     std::cout << std::boolalpha << (describe(name)) << std::endl;

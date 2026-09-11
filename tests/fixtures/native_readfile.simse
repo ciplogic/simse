@@ -1,3 +1,4 @@
+package fixtures
 native("simse_native_readFile") fun readFile(path: Str): Str
 
 fun main(): Int {

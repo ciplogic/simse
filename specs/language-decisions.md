@@ -15,8 +15,8 @@ Nothing here overrides the topic specs; where a topic spec speaks, it wins.
 | `Str()` construction and the minimal `Str` API | `built-in-types.md` |
 | `List<T>` minimal API (`append`, `insert`, `removeAt`, `removeRange`, `clear`) and indexing through `&List<T>`/`*List<T>` | `containers.md` |
 | `Res<T>`/`Opt<T>` inspection (`isOk`, `value`, `error`, `hasValue`) | `core-types.md` |
-| `import a.b.c` imports a module's top-level declarations | `functions.md` |
-| `package a.b.c` groups a file's declarations for import | `functions.md`, `declarations.md` |
+| `import a.b.c` brings a package into unqualified scope by name; there is no `a.b.c.Name` access form | `specs/modules.md` |
+| `package a.b.c` declares a file's package namespace as an opaque dotted identifier | `specs/modules.md` |
 | `native fun` declaration form and explicit `native("Symbol")` | `functions.md` |
 | `break`/`continue` are reserved and loop-only | `functions.md` |
 | Default parameter values are deferred | `functions.md` |
@@ -31,8 +31,8 @@ These are explicitly deferred and must not be depended on by the parser or the
 mirrors:
 
 - default parameter values;
-- the directory fallback for `import` (used only when no file declares the named
-  package); new code should declare packages;
+- multiple packages per file, and external-module manifests/versions (see
+  `specs/modules.md`);
 - the final `native` symbol-naming, linkage, and build integration (see
   `impl_specs/native-interop.md`);
 - the precise syntax for declaring and entering an `unsafe` block.

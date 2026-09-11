@@ -1,147 +1,151 @@
-ReservedWord	1:1	fun
-Space	1:4	 
-Identifier	1:5	useGenerics
-Operator	1:16	(
-Operator	1:17	)
-Operator	1:18	:
-Space	1:19	 
-Identifier	1:20	Res
-Operator	1:23	<
-Identifier	1:24	Int
-Operator	1:27	>
-Space	1:28	 
-Operator	1:29	{
-EndOfLine	1:30	\n
-Space	2:1	    
-ReservedWord	2:5	val
-Space	2:8	 
-Identifier	2:9	value
-Operator	2:14	:
-Space	2:15	 
-Identifier	2:16	Int
+ReservedWord	1:1	package
+Space	1:8	 
+Identifier	1:9	fixtures
+EndOfLine	1:17	\n
+ReservedWord	2:1	fun
+Space	2:4	 
+Identifier	2:5	useGenerics
+Operator	2:16	(
+Operator	2:17	)
+Operator	2:18	:
 Space	2:19	 
-Operator	2:20	=
-Space	2:21	 
-Number	2:22	3
-EndOfLine	2:23	\n
+Identifier	2:20	Res
+Operator	2:23	<
+Identifier	2:24	Int
+Operator	2:27	>
+Space	2:28	 
+Operator	2:29	{
+EndOfLine	2:30	\n
 Space	3:1	    
 ReservedWord	3:5	val
 Space	3:8	 
-Identifier	3:9	list
-Operator	3:13	:
-Space	3:14	 
-Identifier	3:15	List
-Operator	3:19	<
-Identifier	3:20	Int
-Operator	3:23	>
-Space	3:24	 
-Operator	3:25	=
-Space	3:26	 
-Identifier	3:27	List
-Operator	3:31	<
-Identifier	3:32	Int
-Operator	3:35	>
-Operator	3:36	(
-Operator	3:37	)
-EndOfLine	3:38	\n
+Identifier	3:9	value
+Operator	3:14	:
+Space	3:15	 
+Identifier	3:16	Int
+Space	3:19	 
+Operator	3:20	=
+Space	3:21	 
+Number	3:22	3
+EndOfLine	3:23	\n
 Space	4:1	    
 ReservedWord	4:5	val
 Space	4:8	 
-Identifier	4:9	opt
-Operator	4:12	:
-Space	4:13	 
-Identifier	4:14	Opt
-Operator	4:17	<
-Identifier	4:18	Int
-Operator	4:21	>
-Space	4:22	 
-Operator	4:23	=
+Identifier	4:9	list
+Operator	4:13	:
+Space	4:14	 
+Identifier	4:15	List
+Operator	4:19	<
+Identifier	4:20	Int
+Operator	4:23	>
 Space	4:24	 
-Identifier	4:25	Opt
-Operator	4:28	<
-Identifier	4:29	Int
-Operator	4:32	>
-Operator	4:33	(
-Operator	4:34	)
-EndOfLine	4:35	\n
+Operator	4:25	=
+Space	4:26	 
+Identifier	4:27	List
+Operator	4:31	<
+Identifier	4:32	Int
+Operator	4:35	>
+Operator	4:36	(
+Operator	4:37	)
+EndOfLine	4:38	\n
 Space	5:1	    
 ReservedWord	5:5	val
 Space	5:8	 
-Identifier	5:9	okValue
-Operator	5:16	:
-Space	5:17	 
-Identifier	5:18	Res
-Operator	5:21	<
-Identifier	5:22	Int
-Operator	5:25	>
-Space	5:26	 
-Operator	5:27	=
-Space	5:28	 
-Identifier	5:29	Res
-Operator	5:32	<
-Identifier	5:33	Int
-Operator	5:36	>
-Operator	5:37	.
-Identifier	5:38	ok
-Operator	5:40	(
-Identifier	5:41	value
-Operator	5:46	)
-EndOfLine	5:47	\n
+Identifier	5:9	opt
+Operator	5:12	:
+Space	5:13	 
+Identifier	5:14	Opt
+Operator	5:17	<
+Identifier	5:18	Int
+Operator	5:21	>
+Space	5:22	 
+Operator	5:23	=
+Space	5:24	 
+Identifier	5:25	Opt
+Operator	5:28	<
+Identifier	5:29	Int
+Operator	5:32	>
+Operator	5:33	(
+Operator	5:34	)
+EndOfLine	5:35	\n
 Space	6:1	    
 ReservedWord	6:5	val
 Space	6:8	 
-Identifier	6:9	errValue
-Operator	6:17	:
-Space	6:18	 
-Identifier	6:19	Res
-Operator	6:22	<
-Identifier	6:23	Int
-Operator	6:26	>
-Space	6:27	 
-Operator	6:28	=
-Space	6:29	 
-Identifier	6:30	Res
-Operator	6:33	<
-Identifier	6:34	Int
-Operator	6:37	>
-Operator	6:38	.
-Identifier	6:39	err
-Operator	6:42	(
-String	6:43	"nope"
-Operator	6:49	)
-EndOfLine	6:50	\n
+Identifier	6:9	okValue
+Operator	6:16	:
+Space	6:17	 
+Identifier	6:18	Res
+Operator	6:21	<
+Identifier	6:22	Int
+Operator	6:25	>
+Space	6:26	 
+Operator	6:27	=
+Space	6:28	 
+Identifier	6:29	Res
+Operator	6:32	<
+Identifier	6:33	Int
+Operator	6:36	>
+Operator	6:37	.
+Identifier	6:38	ok
+Operator	6:40	(
+Identifier	6:41	value
+Operator	6:46	)
+EndOfLine	6:47	\n
 Space	7:1	    
 ReservedWord	7:5	val
 Space	7:8	 
-Identifier	7:9	reference
+Identifier	7:9	errValue
+Operator	7:17	:
 Space	7:18	 
-Operator	7:19	=
-Space	7:20	 
-Operator	7:21	&
-Identifier	7:22	value
-EndOfLine	7:27	\n
+Identifier	7:19	Res
+Operator	7:22	<
+Identifier	7:23	Int
+Operator	7:26	>
+Space	7:27	 
+Operator	7:28	=
+Space	7:29	 
+Identifier	7:30	Res
+Operator	7:33	<
+Identifier	7:34	Int
+Operator	7:37	>
+Operator	7:38	.
+Identifier	7:39	err
+Operator	7:42	(
+String	7:43	"nope"
+Operator	7:49	)
+EndOfLine	7:50	\n
 Space	8:1	    
 ReservedWord	8:5	val
 Space	8:8	 
-Identifier	8:9	dereferenced
-Space	8:21	 
-Operator	8:22	=
-Space	8:23	 
-Operator	8:24	*
-Identifier	8:25	reference
-EndOfLine	8:34	\n
+Identifier	8:9	reference
+Space	8:18	 
+Operator	8:19	=
+Space	8:20	 
+Operator	8:21	&
+Identifier	8:22	value
+EndOfLine	8:27	\n
 Space	9:1	    
-ReservedWord	9:5	return
-Space	9:11	 
-Identifier	9:12	Res
-Operator	9:15	<
-Identifier	9:16	Int
-Operator	9:19	>
-Operator	9:20	.
-Identifier	9:21	ok
-Operator	9:23	(
-Identifier	9:24	value
-Operator	9:29	)
-EndOfLine	9:30	\n
-Operator	10:1	}
-EndOfLine	10:2	\n
+ReservedWord	9:5	val
+Space	9:8	 
+Identifier	9:9	dereferenced
+Space	9:21	 
+Operator	9:22	=
+Space	9:23	 
+Operator	9:24	*
+Identifier	9:25	reference
+EndOfLine	9:34	\n
+Space	10:1	    
+ReservedWord	10:5	return
+Space	10:11	 
+Identifier	10:12	Res
+Operator	10:15	<
+Identifier	10:16	Int
+Operator	10:19	>
+Operator	10:20	.
+Identifier	10:21	ok
+Operator	10:23	(
+Identifier	10:24	value
+Operator	10:29	)
+EndOfLine	10:30	\n
+Operator	11:1	}
+EndOfLine	11:2	\n

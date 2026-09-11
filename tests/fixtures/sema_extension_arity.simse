@@ -1,3 +1,4 @@
+package fixtures
 // Negative sema fixture: `List<T>.append` is a prelude extension taking one
 // value argument, so calling it with none is an extension-arity error. This
 // exercises the path that requires the RTL prelude to be in scope.

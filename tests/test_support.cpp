@@ -157,13 +157,20 @@ namespace tests {
     }
 
     namespace {
-        // The prelude set (cppsrc/rtl) is parsed once and reused: every `*.simse`
-        // in the directory contributes declarations that participate in
-        // resolution but are never emitted (impl_specs/native-interop.md).
-        const ast::Module *defaultPrelude(bool &loaded) {
+        // The prelude set (cppsrc/rtl) is parsed once and reused. Each file keeps
+        // its own package (the `rtl` namespace) for sema; the merged module is used
+        // by codegen, where the prelude participates as one non-emitted input
+        // (impl_specs/native-interop.md).
+        struct PreludeSet {
+            bool ok = false;
+            List<Str> fileNames;
+            List<ast::Module> modules;
+            ast::Module merged;
+        };
+
+        const PreludeSet &preludeSet() {
             static bool tried = false;
-            static bool ok = false;
-            static ast::Module module;
+            static PreludeSet set;
             if (!tried) {
                 tried = true;
 #ifdef SIMSE_DEFAULT_PRELUDE
@@ -174,44 +181,45 @@ namespace tests {
                 } else if (std::filesystem::exists(path)) {
                     files.push_back(path);
                 }
-                module.pos = common::SourcePos{0, 1, 1};
-                ok = !files.empty();
+                set.merged.pos = common::SourcePos{0, 1, 1};
+                set.ok = !files.empty();
                 for (const Str &file: files) {
                     Res<ast::Module> parsed = parser::parseFile(file);
                     if (!parsed.isOk()) {
-                        ok = false;
+                        set.ok = false;
                         break;
                     }
+                    set.fileNames.push_back(std::filesystem::path(file).filename().string());
+                    set.modules.push_back(parsed.Value);
                     for (const ast::Import &import: parsed.Value.imports) {
-                        module.imports.push_back(import);
+                        set.merged.imports.push_back(import);
                     }
                     for (const ast::DeclPtr &decl: parsed.Value.declarations) {
-                        module.declarations.push_back(decl);
+                        set.merged.declarations.push_back(decl);
                     }
+                }
+                if (!set.ok) {
+                    set.modules.clear();
+                    set.fileNames.clear();
                 }
 #endif
             }
-            loaded = ok;
-            return ok ? &module : nullptr;
+            return set;
         }
 
-        ast::Module combineWithPrelude(const ast::Module &prelude, const ast::Module &input) {
-            ast::Module combined;
-            combined.pos = input.pos;
-            for (const ast::Import &import: prelude.imports) {
-                combined.imports.push_back(import);
-            }
-            for (const ast::Import &import: input.imports) {
-                combined.imports.push_back(import);
-            }
-            for (const ast::DeclPtr &decl: prelude.declarations) {
-                combined.declarations.push_back(decl);
-            }
-            for (const ast::DeclPtr &decl: input.declarations) {
-                combined.declarations.push_back(decl);
-            }
-            return combined;
+        // Sema inputs for the prelude: one per file, so each keeps its package.
+    }
+
+    List<sema::Input> preludeInputs() {
+        List<sema::Input> inputs;
+        const PreludeSet &set = preludeSet();
+        for (int i = 0; i < (int) set.modules.size(); i++) {
+            sema::Input input;
+            input.fileName = set.fileNames[i];
+            input.module = &set.modules[i];
+            inputs.push_back(input);
         }
+        return inputs;
     }
 
     AstSemaResult runAstSema(const ScanResult &scan, const Str &displayName) {
@@ -234,22 +242,24 @@ namespace tests {
         result.ast = ast::dumpModule(parsed.Value);
         result.astXml = ast::dumpXmlNode(ast::toXmlNode(parsed.Value));
 
-        bool hasPrelude = false;
-        const ast::Module *prelude = defaultPrelude(hasPrelude);
-        ast::Module toAnalyze =
-            hasPrelude ? combineWithPrelude(*prelude, parsed.Value) : parsed.Value;
-        List<Str> diagnostics = sema::analyze(toAnalyze, displayName);
+        List<sema::Input> semaInputs = preludeInputs();
+        sema::Input self;
+        self.fileName = displayName;
+        self.module = &parsed.Value;
+        semaInputs.push_back(self);
+        List<Str> diagnostics = sema::analyze(semaInputs);
         for (const Str &diagnostic: diagnostics) {
             result.sema += diagnostic + "\n";
         }
 
+        bool hasPrelude = preludeSet().ok;
         List<codegen::Input> inputs;
         if (hasPrelude) {
             codegen::Input preludeInput;
 #ifdef SIMSE_DEFAULT_PRELUDE
             preludeInput.fileName = SIMSE_DEFAULT_PRELUDE;
 #endif
-            preludeInput.module = *prelude;
+            preludeInput.module = preludeSet().merged;
             preludeInput.prelude = true;
             inputs.push_back(preludeInput);
         }
@@ -271,15 +281,14 @@ namespace tests {
         Res<ast::Module> parsed = parser::parseModule(tokens, name);
         if (!parsed.isOk()) return "";
 
-        bool hasPrelude = false;
-        const ast::Module *prelude = defaultPrelude(hasPrelude);
+        bool hasPrelude = preludeSet().ok;
         List<codegen::Input> inputs;
         if (hasPrelude) {
             codegen::Input preludeInput;
 #ifdef SIMSE_DEFAULT_PRELUDE
             preludeInput.fileName = SIMSE_DEFAULT_PRELUDE;
 #endif
-            preludeInput.module = *prelude;
+            preludeInput.module = preludeSet().merged;
             preludeInput.prelude = true;
             inputs.push_back(preludeInput);
         }
@@ -292,12 +301,11 @@ namespace tests {
     }
 
     List<Str> analyzeWithPrelude(const ast::Module& module, const Str& displayName) {
-        bool hasPrelude = false;
-        const ast::Module *prelude = defaultPrelude(hasPrelude);
-        if (!hasPrelude) {
-            return sema::analyze(module, displayName);
-        }
-        ast::Module combined = combineWithPrelude(*prelude, module);
-        return sema::analyze(combined, displayName);
+        List<sema::Input> inputs = preludeInputs();
+        sema::Input self;
+        self.fileName = displayName;
+        self.module = &module;
+        inputs.push_back(self);
+        return sema::analyze(inputs);
     }
 }

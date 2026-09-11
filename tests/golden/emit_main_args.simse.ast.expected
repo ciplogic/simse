@@ -1,51 +1,52 @@
 Module @1:1
-  Function main @4:1
+  Package fixtures @1:1
+  Function main @5:1
     Param args: List<Str>
     Return Int
     Body
-      ExprStmt @5:5
-        Call @5:5
+      ExprStmt @6:5
+        Call @6:5
           Callee
-            Name println @5:5
+            Name println @6:5
           Arg
-            Call @5:13
+            Call @6:13
               Callee
-                Member .size @5:13
+                Member .size @6:13
                   Receiver
-                    Name args @5:13
-      VarDecl var i: Int @6:5
+                    Name args @6:13
+      VarDecl var i: Int @7:5
         Init
-          IntLit 0 @6:18
-      While @7:5
+          IntLit 0 @7:18
+      While @8:5
         Cond
-          Binary < @7:12
+          Binary < @8:12
             Lhs
-              Name i @7:12
+              Name i @8:12
             Rhs
-              Call @7:16
+              Call @8:16
                 Callee
-                  Member .size @7:16
+                  Member .size @8:16
                     Receiver
-                      Name args @7:16
+                      Name args @8:16
         Body
-          ExprStmt @8:9
-            Call @8:9
+          ExprStmt @9:9
+            Call @9:9
               Callee
-                Name println @8:9
+                Name println @9:9
               Arg
-                Index @8:17
+                Index @9:17
                   Receiver
-                    Name args @8:17
+                    Name args @9:17
                   Index
-                    Name i @8:22
-          Assign = @9:9
+                    Name i @9:22
+          Assign = @10:9
             Target
-              Name i @9:9
+              Name i @10:9
             Value
-              Binary + @9:13
+              Binary + @10:13
                 Lhs
-                  Name i @9:13
+                  Name i @10:13
                 Rhs
-                  IntLit 1 @9:17
-      Return @11:5
-        IntLit 0 @11:12
+                  IntLit 1 @10:17
+      Return @12:5
+        IntLit 0 @12:12

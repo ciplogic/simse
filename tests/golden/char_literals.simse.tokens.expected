@@ -1,8 +1,12 @@
-Character	1:1	'a'
-Space	1:4	 
-Character	1:5	'\\n'
-Space	1:9	 
-Character	1:10	'\\''
-Space	1:14	 
-Character	1:15	'\\\\'
-EndOfLine	1:19	\n
+ReservedWord	1:1	package
+Space	1:8	 
+Identifier	1:9	fixtures
+EndOfLine	1:17	\n
+Character	2:1	'a'
+Space	2:4	 
+Character	2:5	'\\n'
+Space	2:9	 
+Character	2:10	'\\''
+Space	2:14	 
+Character	2:15	'\\\\'
+EndOfLine	2:19	\n

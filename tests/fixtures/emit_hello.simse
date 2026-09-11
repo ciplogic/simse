@@ -1,3 +1,4 @@
+package fixtures
 data class Counter(var value: Int) {
     fun bump(): Int {
         return this.value + 1

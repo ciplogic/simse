@@ -3,7 +3,7 @@
 #include <iostream>
 #include <type_traits>
 
-// emit_generics.simse:1
+// emit_generics.simse:2
 template <class A, class B>
 struct Pair {
     A first;
@@ -13,12 +13,12 @@ struct Pair {
 };
 template <class T>
 T identity(T value);
-// emit_generics.simse:3
+// emit_generics.simse:4
 template <class T>
 T identity(T value) {
     return value;
 }
-// emit_generics.simse:7
+// emit_generics.simse:8
 int main() {
     List<Int> numbers = List<Int>();
     SmallVector<Int, 4> vector = SmallVector<Int, 4>();

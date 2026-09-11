@@ -9,7 +9,7 @@
 // The explicit `this` parameter makes each declaration an extension on its
 // receiver's type; the explicit symbol names the C++ implementation.
 
-package cppsrc.rtl
+package rtl
 
 // ---- List<T> --------------------------------------------------------------
 

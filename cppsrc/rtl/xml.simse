@@ -6,7 +6,7 @@
 // the transpiler maps `Attribute`, `XmlNode`, and `PList<XmlNode>` onto the RTL
 // types.
 
-package cppsrc.rtl
+package rtl
 
 // Attribute pairs an attribute/element name with a Str value.
 data class Attribute(var name: Str; var value: Str)

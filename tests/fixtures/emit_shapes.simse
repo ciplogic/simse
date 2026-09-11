@@ -1,3 +1,4 @@
+package fixtures
 enum Shape {
     Circle,
     Square = 4

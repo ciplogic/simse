@@ -9,17 +9,20 @@
 // isHandleType and the per-function localTypes/nameKinds tables) is re-expressed
 // over the XmlNode type nodes; an empty node means "no/unknown type".
 //
-// `import cppsrc.sema` bundles the parser and scanner (through sema -> parser ->
-// lex -> common -> xmlutil) so the generated file is a self-contained front end
-// for the differential harness. Emission itself does not call sema.
+// `import sema` and `import common` bring the packages the emitted file uses
+// (the xml accessors) into unqualified scope. Under the modules-and-packages
+// model an import never adds files; the driver scans the module roots, so the
+// generated file is a self-contained front end for the differential harness.
+// Emission itself does not call sema.
 //
 // Kind dispatch is an if-chain, not a `switch`, because the emitted C++ `switch`
 // cannot switch on a `Str`. Method overloading is avoided (method dispatch is by
 // name and receiver, not arity).
 
-package cppsrc.codegen
+package codegen
 
-import cppsrc.sema
+import sema
+import common
 
 // One parsed input. `prelude` inputs participate in symbol collection but are
 // never emitted (impl_specs/native-interop.md).

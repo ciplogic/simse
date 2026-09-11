@@ -44,25 +44,37 @@ namespace sema {
 
         class Analyzer {
         public:
-            Analyzer(const ast::Module &module, const Str &fileName)
-                : module(module), file(fileName), hasImports(!module.imports.empty()) {
+            explicit Analyzer(const List<Input> &inputs) : inputs(inputs) {
             }
 
             List<Str> diags;
 
             void run() {
-                collect();
-                for (const ast::DeclPtr &decl: module.declarations) {
-                    analyzeDecl(*decl);
+                collectGlobal();
+                for (const Input &input: inputs) {
+                    file = input.fileName;
+                    validateImports(*input.module);
+                    buildVisible(*input.module);
+                    for (const ast::DeclPtr &decl: input.module->declarations) {
+                        analyzeDecl(*decl);
+                    }
                 }
             }
 
         private:
-            const ast::Module &module;
+            const List<Input> &inputs;
             Str file;
-            bool hasImports;
 
-            // Top-level symbol tables.
+            // Global (whole-compilation) tables, keyed by "<package>|<name>".
+            // Declarations are grouped by their file's package, so two files that
+            // declare the same package share one scope.
+            Dictionary<Str, const ast::Decl *> globalTypes;
+            Dictionary<Str, List<const ast::Decl *>> globalFunctions;
+            Dictionary<Str, List<const ast::Decl *>> packageDecls;
+            Dictionary<Str, bool> declaredPackages;
+
+            // The declarations visible (unqualified) in the current file: its own
+            // package, every imported package, and the implicit `rtl` prelude.
             Dictionary<Str, const ast::Decl *> types;
             Dictionary<Str, List<const ast::Decl *>> functions;
 
@@ -80,21 +92,81 @@ namespace sema {
 
             // ---- symbol collection ----------------------------------------
 
-            void collect() {
-                for (const ast::DeclPtr &decl: module.declarations) {
-                    bool isFunction = decl->kind == DeclKind::Function;
-                    bool nameTaken = types.count(decl->name) > 0 || functions.count(decl->name) > 0;
-                    if (isFunction) {
-                        if (types.count(decl->name) > 0) {
-                            diag(decl->pos, "duplicate declaration '" + decl->name + "'");
+            // "<a>.<b>" for a dotted path; empty for the root package.
+            static Str packageName(const List<Str> &parts) {
+                Str out;
+                for (int i = 0; i < (int) parts.size(); i++) {
+                    if (i > 0) out += ".";
+                    out += parts[i];
+                }
+                return out;
+            }
+
+            // Collects every declaration into its package scope, reporting a
+            // duplicate top-level name within one package (including across two
+            // files that declare it).
+            void collectGlobal() {
+                for (const Input &input: inputs) {
+                    file = input.fileName;
+                    Str pkg = packageName(input.module->package);
+                    declaredPackages[pkg] = true;
+                    for (const ast::DeclPtr &decl: input.module->declarations) {
+                        Str key = pkg + "|" + decl->name;
+                        bool isFunction = decl->kind == DeclKind::Function;
+                        bool nameTaken = globalTypes.count(key) > 0
+                                         || globalFunctions.count(key) > 0;
+                        if (isFunction) {
+                            if (globalTypes.count(key) > 0) {
+                                diag(decl->pos, "duplicate declaration '" + decl->name + "'");
+                            } else {
+                                globalFunctions[key].push_back(decl.get());
+                            }
                         } else {
-                            functions[decl->name].push_back(decl.get());
+                            if (nameTaken) {
+                                diag(decl->pos, "duplicate declaration '" + decl->name + "'");
+                            } else {
+                                globalTypes[key] = decl.get();
+                            }
                         }
-                    } else {
-                        if (nameTaken) {
-                            diag(decl->pos, "duplicate declaration '" + decl->name + "'");
-                        } else {
-                            types[decl->name] = decl.get();
+                        packageDecls[pkg].push_back(decl.get());
+                    }
+                }
+            }
+
+            // Reports an import whose package no participating file declares.
+            void validateImports(const ast::Module &module) {
+                for (const ast::Import &import: module.imports) {
+                    Str dotted = packageName(import.path);
+                    if (declaredPackages.count(dotted) == 0) {
+                        diag(import.pos, "cannot resolve import '" + dotted
+                                         + "': no file declares package '" + dotted + "'");
+                    }
+                }
+            }
+
+            // Builds the unqualified scope of one file: its own package, then
+            // each imported package, then the implicit `rtl` prelude.
+            void buildVisible(const ast::Module &module) {
+                types.clear();
+                functions.clear();
+                List<Str> packages;
+                packages.push_back(packageName(module.package));
+                for (const ast::Import &import: module.imports) {
+                    packages.push_back(packageName(import.path));
+                }
+                packages.push_back("rtl");
+
+                Dictionary<Str, bool> seen;
+                for (const Str &pkg: packages) {
+                    if (seen.count(pkg) > 0) continue;
+                    seen[pkg] = true;
+                    auto it = packageDecls.find(pkg);
+                    if (it == packageDecls.end()) continue;
+                    for (const ast::Decl *decl: it->second) {
+                        if (decl->kind == DeclKind::Function) {
+                            functions[decl->name].push_back(decl);
+                        } else if (types.count(decl->name) == 0) {
+                            types[decl->name] = decl;
                         }
                     }
                 }
@@ -142,9 +214,6 @@ namespace sema {
                 if (isBuiltinType(name) || types.count(name) > 0 || typeParamVisible(name)) {
                     return;
                 }
-                // Import contents are not modeled, so a name that might come from
-                // an import is not reported (imports are conservative by design).
-                if (hasImports) return;
                 diag(pos, "unknown type '" + name + "'");
             }
 
@@ -583,8 +652,8 @@ namespace sema {
         };
     }
 
-    List<Str> analyze(const ast::Module &module, const Str &fileName) {
-        Analyzer analyzer(module, fileName);
+    List<Str> analyze(const List<Input> &inputs) {
+        Analyzer analyzer(inputs);
         analyzer.run();
         return analyzer.diags;
     }

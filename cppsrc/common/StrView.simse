@@ -4,7 +4,7 @@
 // source through a counted reference so a view can outlive the expression that
 // produced it without copying the text.
 
-package cppsrc.common
+package common
 
 data class StrView(var source: &Str; var start: Int; var len: Int) {
     fun at(index: Int): Char {
