@@ -109,6 +109,7 @@ fun reservedWords(): List<Str> {
     words.append("switch")
     words.append("case")
     words.append("default")
+    words.append("package")
     return words
 }
 

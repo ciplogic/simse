@@ -24,4 +24,12 @@ namespace parser {
     // rather than followed. Declarations are hoisted, so merge order is
     // irrelevant; files are visited in sorted order for determinism.
     Res<ast::Module> parseFileWithImports(const Str& fileName, const Str& rootDir);
+
+    // Parses the given files and returns the ordered, de-duplicated list of every
+    // file that participates: each input and its transitive imports, in the order
+    // `parseFileWithImports` would merge them (imports before their importer). Each
+    // `import a.b.c` names the directory `<rootDir>/a/b/c`. Import cycles and
+    // unresolvable imports are reported the same way. Used by the directory
+    // compiler so every file is compiled exactly once.
+    Res<List<Str>> collectImportSet(const List<Str>& files, const Str& rootDir);
 }

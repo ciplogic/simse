@@ -51,6 +51,21 @@ namespace parser {
                 ast::Module module;
                 module.pos = common::SourcePos{0, 1, 1};
                 skipSeparators();
+                // An optional, single, file-level `package a.b.c` before imports
+                // and declarations. A file with no package is in the root package.
+                if (checkText("package")) {
+                    module.packagePos = peek().pos;
+                    advance(); // package
+                    Str first;
+                    if (!expectIdentifier(first)) return module;
+                    module.package.push_back(first);
+                    while (matchText(".")) {
+                        Str next;
+                        if (!expectIdentifier(next)) return module;
+                        module.package.push_back(next);
+                    }
+                    skipSeparators();
+                }
                 while (!atEnd() && !failed) {
                     if (checkText("import")) {
                         module.imports.push_back(parseImport());
@@ -957,6 +972,38 @@ namespace parser {
             return ec ? path : canonical.string();
         }
 
+        // A light token scan of a file's leading `package a.b.c` header. A file
+        // with no package (or a scan error) returns an empty list. Only the
+        // header is read; the rest of the file is ignored.
+        List<Str> readPackageHeader(const Str &fileName) {
+            List<lex::TokenMatcher> rules = lex::getTokenRules();
+            lex::Scanner scanner(&rules);
+            Res<List<lex::Token>> tokens =
+                lex::readFileAndSkipSpacesTokens(&scanner, fileName);
+            if (!tokens.isOk()) return {};
+            const List<lex::Token> &toks = tokens.Value;
+            int i = 0;
+            while (i < (int) toks.size() && toks[i].kind == TokenKind::EndOfLine) i++;
+            if (i >= (int) toks.size() || toks[i].text != "package") return {};
+            i++;
+            List<Str> parts;
+            bool expectName = true;
+            while (i < (int) toks.size()) {
+                const lex::Token &token = toks[i];
+                if (token.kind == TokenKind::EndOfLine) break;
+                if (expectName) {
+                    if (token.kind != TokenKind::Identifier) break;
+                    parts.push_back(token.text);
+                    expectName = false;
+                } else {
+                    if (token.text != ".") break;
+                    expectName = true;
+                }
+                i++;
+            }
+            return parts;
+        }
+
         // The `*.simse` files directly under `dir` (non-recursive), sorted.
         List<Str> simseFilesInDir(const Str &dir) {
             List<Str> files;
@@ -997,7 +1044,13 @@ namespace parser {
             Str rootDir;
             List<Str> loading;
             List<Str> loaded;
+            // Paths of successfully loaded files, in merge (post) order.
+            List<Str> order;
             Str error;
+            // Package index: dotted package -> files declaring it (sorted). It is
+            // built lazily, by scanning every `*.simse` under the resolution root.
+            bool indexBuilt = false;
+            Dictionary<Str, List<Str>> byPackage;
 
             bool isActive(const Str &canon) const {
                 for (const Str &active: loading) {
@@ -1011,6 +1064,31 @@ namespace parser {
                     if (done == canon) return true;
                 }
                 return false;
+            }
+
+            void buildIndex() {
+                if (indexBuilt) return;
+                indexBuilt = true;
+                Str root = rootDir.empty() ? Str(".") : rootDir;
+                for (const Str &file: common::filesInDir(root, ".simse")) {
+                    List<Str> package = readPackageHeader(file);
+                    if (package.empty()) continue;
+                    byPackage[dottedPath(package)].push_back(file);
+                }
+            }
+
+            // `import p` selects every file whose declared package is exactly
+            // `p`. If no package matches, fall back silently to directory
+            // resolution (`<root>/p/as/dir`).
+            List<Str> resolveImport(const ast::Import &import) {
+                buildIndex();
+                auto it = byPackage.find(dottedPath(import.path));
+                if (it != byPackage.end() && !it->second.empty()) {
+                    return it->second;
+                }
+                Str dir = rootDir.empty() ? joinedPath(import.path)
+                                          : (rootDir + "/" + joinedPath(import.path));
+                return simseFilesInDir(dir);
             }
 
             bool load(const Str &path, ast::Module &merged) {
@@ -1031,14 +1109,12 @@ namespace parser {
 
                 loading.push_back(canon);
                 for (const ast::Import &import: parsed.Value.imports) {
-                    Str dir = rootDir.empty() ? joinedPath(import.path)
-                                              : (rootDir + "/" + joinedPath(import.path));
-                    List<Str> files = simseFilesInDir(dir);
+                    List<Str> files = resolveImport(import);
                     if (files.empty()) {
                         error = path + ":" + std::to_string(import.pos.line) + ":"
                                 + std::to_string(import.pos.column)
                                 + ": cannot resolve import '" + dottedPath(import.path)
-                                + "': no .simse files under " + dir;
+                                + "': no file declares package '" + dottedPath(import.path) + "'";
                         return false;
                     }
                     for (const Str &file: files) {
@@ -1061,6 +1137,7 @@ namespace parser {
                 }
                 loading.pop_back();
                 loaded.push_back(canon);
+                order.push_back(path);
                 return true;
             }
         };
@@ -1075,5 +1152,18 @@ namespace parser {
             return resError<ast::Module>(loader.error);
         }
         return ok(merged);
+    }
+
+    Res<List<Str>> collectImportSet(const List<Str> &files, const Str &rootDir) {
+        ImportLoader loader;
+        loader.rootDir = rootDir;
+        ast::Module merged;
+        merged.pos = common::SourcePos{0, 1, 1};
+        for (const Str &file: files) {
+            if (!loader.load(file, merged)) {
+                return resError<List<Str>>(loader.error);
+            }
+        }
+        return ok(loader.order);
     }
 }

@@ -194,6 +194,11 @@ namespace ast {
 
     struct Module {
         SourcePos pos{};
+        // The declared package (`package a.b.c`), empty for the root package. It
+        // is namespacing only: imports select declarations by package, and there
+        // is no visibility/access-control meaning.
+        List<Str> package;
+        SourcePos packagePos{};
         List<Import> imports;
         List<DeclPtr> declarations;
     };

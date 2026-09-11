@@ -1,31 +1,23 @@
 //
-// simse_transpile: the transpiler CLI. Parses the given .simse inputs (or every
-// .simse under the current directory when none are given), runs name/type
-// resolution, and writes one amalgamated C++ translation unit.
+// simse_transpile: the low-level transpiler CLI. Parses the given .simse inputs
+// (or every .simse under the current directory when none are given), runs
+// name/type resolution, and writes one amalgamated C++ translation unit.
 //
-// A prelude file (default cppsrc/rtl/rtl.simse, overridable with --prelude) is
-// parsed into the same module scope as the inputs so programs can call the RTL
-// surface without an import. Prelude declarations resolve but are never emitted
+// A prelude file (default cppsrc/rtl, overridable with --prelude) is parsed into
+// the same module scope as the inputs so programs can call the RTL surface
+// without an import. Prelude declarations resolve but are never emitted
 // (impl_specs/native-interop.md).
 //
 // Usage: simse_transpile <input.simse>... [-o <output.cpp>] [--prelude <file>]
 //
+// The parse -> sema -> codegen -> write pipeline lives in compiler::transpile
+// (cppsrc/Compiler.cpp), shared with the `simse` directory compiler.
+//
 
-#include "Codegen.h"
+#include "../Compiler.h"
 #include "../common/common.h"
-#include "../lex/Scanner.h"
-#include "../parser/Parser.h"
-#include "../sema/Sema.h"
 
 #include <cstdio>
-#include <filesystem>
-#include <system_error>
-
-#ifdef SIMSE_DEFAULT_PRELUDE
-static const char *kDefaultPrelude = SIMSE_DEFAULT_PRELUDE;
-#else
-static const char *kDefaultPrelude = "";
-#endif
 
 // The repository root used to resolve `import a.b.c` directories. Baked in at
 // configure time so the CLI works from any working directory; --root overrides.
@@ -36,36 +28,6 @@ static const char *kSourceRoot = ".";
 #endif
 
 using namespace common;
-using namespace lex;
-
-namespace {
-    Str normalizePath(const Str &path) {
-        std::error_code ec;
-        std::filesystem::path canonical =
-            std::filesystem::weakly_canonical(std::filesystem::path(path), ec);
-        return ec ? path : canonical.string();
-    }
-
-    // The prelude declarations first, then the input's, so prelude names resolve
-    // for the input while the input's own declarations win on redefinition.
-    ast::Module combinedModule(const ast::Module &prelude, const ast::Module &input) {
-        ast::Module combined;
-        combined.pos = input.pos;
-        for (const ast::Import &import: prelude.imports) {
-            combined.imports.push_back(import);
-        }
-        for (const ast::Import &import: input.imports) {
-            combined.imports.push_back(import);
-        }
-        for (const ast::DeclPtr &decl: prelude.declarations) {
-            combined.declarations.push_back(decl);
-        }
-        for (const ast::DeclPtr &decl: input.declarations) {
-            combined.declarations.push_back(decl);
-        }
-        return combined;
-    }
-}
 
 int main(int argc, char **argv) {
     List<Str> inputs;
@@ -115,100 +77,12 @@ int main(int argc, char **argv) {
         return 2;
     }
 
-    Str resolvedPrelude = preludeExplicit ? preludePath : Str(kDefaultPrelude);
-    if (!resolvedPrelude.empty()) {
-        Str preludeKey = normalizePath(resolvedPrelude);
-        List<Str> filtered;
-        for (const Str &input: inputs) {
-            if (normalizePath(input) != preludeKey) {
-                filtered.push_back(input);
-            }
-        }
-        inputs = filtered;
-    }
-
-    // Load the prelude set: a directory contributes every `*.simse` in it, a file
-    // contributes itself. Missing defaults are skipped silently; an explicit path
-    // that is missing is an error.
-    codegen::Input preludeInput;
-    bool hasPrelude = false;
-    if (!resolvedPrelude.empty()) {
-        List<Str> preludeFiles;
-        if (std::filesystem::is_directory(resolvedPrelude)) {
-            preludeFiles = filesInDir(resolvedPrelude, ".simse");
-        } else if (std::filesystem::exists(resolvedPrelude)) {
-            preludeFiles.push_back(resolvedPrelude);
-        } else if (preludeExplicit) {
-            fprintf(stderr, "simse_transpile: prelude not found: %s\n", resolvedPrelude.c_str());
-            return 2;
-        }
-
-        ast::Module mergedPrelude;
-        mergedPrelude.pos = ast::SourcePos{0, 1, 1};
-        for (const Str &preludeFile: preludeFiles) {
-            Res<ast::Module> parsedPrelude = parser::parseFile(preludeFile);
-            if (!parsedPrelude.isOk()) {
-                fprintf(stderr, "%s\n", parsedPrelude.Error.c_str());
-                return 1;
-            }
-            for (const ast::Import &import: parsedPrelude.Value.imports) {
-                mergedPrelude.imports.push_back(import);
-            }
-            for (const ast::DeclPtr &decl: parsedPrelude.Value.declarations) {
-                mergedPrelude.declarations.push_back(decl);
-            }
-        }
-        if (!preludeFiles.empty()) {
-            preludeInput.fileName = resolvedPrelude;
-            preludeInput.module = mergedPrelude;
-            preludeInput.prelude = true;
-            hasPrelude = true;
-        }
-    }
-
-    List<codegen::Input> modules;
-    if (hasPrelude) {
-        modules.push_back(preludeInput);
-    }
-
-    for (const Str &file: inputs) {
-        // Resolve the file's imports (each `import a.b.c` is a directory under
-        // the repository root) and merge their declarations into this module
-        // before analysis and emission (specs/functions.md).
-        Res<ast::Module> parsed = parser::parseFileWithImports(file, rootDir);
-        if (!parsed.isOk()) {
-            fprintf(stderr, "%s\n", parsed.Error.c_str());
-            return 1;
-        }
-
-        ast::Module toAnalyze =
-            hasPrelude ? combinedModule(preludeInput.module, parsed.Value) : parsed.Value;
-        List<Str> diagnostics = sema::analyze(toAnalyze, file);
-        if (!diagnostics.empty()) {
-            for (const Str &diagnostic: diagnostics) {
-                fprintf(stderr, "%s\n", diagnostic.c_str());
-            }
-            return 1;
-        }
-
-        codegen::Input input;
-        input.fileName = file;
-        input.module = parsed.Value;
-        modules.push_back(input);
-    }
-
-    Res<Str> emitted = codegen::emitProgram(modules);
-    if (!emitted.isOk()) {
-        fprintf(stderr, "%s\n", emitted.Error.c_str());
-        return 1;
-    }
-
-    FILE *out = fopen(output.c_str(), "wb");
-    if (out == nullptr) {
-        fprintf(stderr, "simse_transpile: cannot write %s\n", output.c_str());
-        return 1;
-    }
-    fwrite(emitted.Value.data(), 1, emitted.Value.length(), out);
-    fclose(out);
-    return 0;
+    compiler::Request request;
+    request.programName = "simse_transpile";
+    request.inputs = inputs;
+    request.preludePath = preludePath;
+    request.preludeExplicit = preludeExplicit;
+    request.root = rootDir;
+    request.output = output;
+    return compiler::transpile(request);
 }
