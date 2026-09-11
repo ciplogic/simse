@@ -73,3 +73,29 @@ Str simse_native_readFile(const Str& path); // forwards to common::readFile
 
 They build into the `simse_native` static library. Generated executables that
 use native functions link `simse_native` (which links the rest of the RTL).
+
+## Filesystem / IO natives (T23)
+
+The self-hosted driver needs a small filesystem surface. Declared in the prelude
+(`cppsrc/rtl/fs.simse`), prototyped in `cppsrc/rtl/fs.hpp` (included by
+`simse.hpp`), and defined in `cppsrc/native/Native.cpp`:
+
+| Simse | C++ symbol | Semantics |
+| --- | --- | --- |
+| `listFiles(dir, ext)` | `simse_listFiles` | recursive, `ext`-filtered, sorted; empty if not a directory (`common::filesInDir`) |
+| `listFilesDirect(dir, ext)` | `simse_listFilesDirect` | non-recursive, sorted; used for `import a.b.c` |
+| `writeFile(path, content)` | `simse_writeFile` | binary write; `false` on failure |
+| `pathCanonical(path)` | `simse_pathCanonical` | `std::filesystem::weakly_canonical` |
+| `pathIsDirectory(path)` | `simse_pathIsDirectory` | |
+| `pathExists(path)` | `simse_pathExists` | |
+| `eprintln(text)` | `simse_eprintln` | one line to stderr |
+
+These are prelude declarations (available without an import) whose prototypes ship
+with the RTL header; programs that use them link `simse_native`.
+
+## The argv entry point
+
+A top-level `fun main(args: List<Str>): Int` lowers to C++
+`int main(int argc, char** argv)`, with `args` built from `argv[1..]` (the program
+name is excluded). The zero-argument `fun main(): Int` form is unchanged. Both
+forms are lowered identically by the hand-written and transpiled emitters.

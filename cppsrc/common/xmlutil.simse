@@ -1,0 +1,161 @@
+// xmlutil.simse
+//
+// Shared read-only accessors over the XmlNode AST schema
+// (impl_specs/ast-xmlnode.md). Used by the ported sema and code generator so the
+// two agree on how nodes are read: attribute lookup, children by structural role,
+// positions, counts, and the type-parameter list.
+//
+// These are ordinary emitted Simse functions (NOT prelude declarations), so they
+// are available through the `cppsrc.common` import that the parser already pulls
+// in. The concrete XmlNode/Attribute types come from the RTL prelude.
+
+// An empty node is the "absent" sentinel: the schema has no null, so a missing
+// optional child (an untyped field, a missing return type, ...) is an empty node.
+fun xmlEmptyNode(): XmlNode {
+    return XmlNode("", List<Attribute>(), &List<XmlNode>())
+}
+
+fun xmlIsEmpty(node: XmlNode): Bool {
+    return node.name == ""
+}
+
+fun xmlAttr(node: XmlNode, name: Str): Str {
+    var i: Int = 0
+    while (i < node.attributes.size()) {
+        if (node.attributes[i].name == name) {
+            return node.attributes[i].value
+        }
+        i = i + 1
+    }
+    return ""
+}
+
+fun xmlKind(node: XmlNode): Str {
+    return xmlAttr(node, "kind")
+}
+
+fun xmlIntAttr(node: XmlNode, name: Str, fallback: Int): Int {
+    val parsed: Opt<Int> = xmlAttr(node, name).toInt()
+    if (parsed.hasValue()) {
+        return parsed.value()
+    }
+    return fallback
+}
+
+fun xmlLine(node: XmlNode): Int {
+    return xmlIntAttr(node, "line", 0)
+}
+
+fun xmlColumn(node: XmlNode): Int {
+    return xmlIntAttr(node, "column", 0)
+}
+
+// The first child whose element role is `role`, or an empty node.
+fun xmlChild(node: XmlNode, role: Str): XmlNode {
+    var i: Int = 0
+    while (i < node.Children.size()) {
+        if (node.Children[i].name == role) {
+            return node.Children[i]
+        }
+        i = i + 1
+    }
+    return xmlEmptyNode()
+}
+
+// Every child whose element role is `role`, in order.
+fun xmlChildren(node: XmlNode, role: Str): List<XmlNode> {
+    var out: List<XmlNode> = List<XmlNode>()
+    var i: Int = 0
+    while (i < node.Children.size()) {
+        if (node.Children[i].name == role) {
+            out.append(node.Children[i])
+        }
+        i = i + 1
+    }
+    return out
+}
+
+fun xmlCount(node: XmlNode, role: Str): Int {
+    var count: Int = 0
+    var i: Int = 0
+    while (i < node.Children.size()) {
+        if (node.Children[i].name == role) {
+            count = count + 1
+        }
+        i = i + 1
+    }
+    return count
+}
+
+fun xmlHasChild(node: XmlNode, role: Str): Bool {
+    var i: Int = 0
+    while (i < node.Children.size()) {
+        if (node.Children[i].name == role) {
+            return true
+        }
+        i = i + 1
+    }
+    return false
+}
+
+// The `name` attributes of a declaration's `TypeParam` children, in order.
+fun xmlTypeParamNames(node: XmlNode): List<Str> {
+    val params: List<XmlNode> = xmlChildren(node, "TypeParam")
+    var names: List<Str> = List<Str>()
+    var i: Int = 0
+    while (i < params.size()) {
+        names.append(xmlAttr(params[i], "name"))
+        i = i + 1
+    }
+    return names
+}
+
+fun xmlIsDecl(node: XmlNode): Bool {
+    val name: Str = node.name
+    return name == "DataClass" || name == "Enum" || name == "TypeAlias" || name == "Function"
+}
+
+// The declaration children of a Module (imports excluded), in source order.
+fun xmlDecls(module: XmlNode): List<XmlNode> {
+    var out: List<XmlNode> = List<XmlNode>()
+    var i: Int = 0
+    while (i < module.Children.size()) {
+        if (xmlIsDecl(module.Children[i])) {
+            out.append(module.Children[i])
+        }
+        i = i + 1
+    }
+    return out
+}
+
+fun xmlHasImports(module: XmlNode): Bool {
+    var i: Int = 0
+    while (i < module.Children.size()) {
+        if (module.Children[i].name == "Import") {
+            return true
+        }
+        i = i + 1
+    }
+    return false
+}
+
+// The comma-joined `params` attribute of a lambda, split back into names. An
+// empty attribute means no parameters (not one empty name).
+fun xmlLambdaParams(expr: XmlNode): List<Str> {
+    val raw: Str = xmlAttr(expr, "params")
+    if (raw == "") {
+        return List<Str>()
+    }
+    return raw.split(",")
+}
+
+fun xmlIsTypeParam(name: Str, typeParams: List<Str>): Bool {
+    var i: Int = 0
+    while (i < typeParams.size()) {
+        if (typeParams[i] == name) {
+            return true
+        }
+        i = i + 1
+    }
+    return false
+}

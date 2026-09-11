@@ -491,6 +491,18 @@ namespace codegen {
                 return mapped + "& self";
             }
 
+            // Whether a top-level `main` takes the argv form: a single
+            // `List<Str>` parameter. The emitter lowers it to
+            // `int main(int argc, char** argv)` and builds the Simse list.
+            static bool isMainArgs(const ast::Decl &decl) {
+                if (decl.params.size() != 1) return false;
+                const ast::TypeExpr *type = decl.params[0].type.get();
+                return type && type->kind == TypeKind::Generic && type->name == "List"
+                       && type->typeArgs.size() == 1 && type->typeArgs[0]
+                       && type->typeArgs[0]->kind == TypeKind::Named
+                       && type->typeArgs[0]->name == "Str";
+            }
+
             void emitFunction(const Fn &fn, bool prototypeOnly) {
                 const ast::Decl &decl = *fn.decl;
                 // Native functions are declared by emitNativeDeclarations, not here.
@@ -498,7 +510,8 @@ namespace codegen {
 
                 bool isMain = !fn.receiver && decl.name == "main";
                 if (isMain && prototypeOnly) return;
-                if (isMain && !decl.params.empty()) {
+                bool mainArgs = isMain && isMainArgs(decl);
+                if (isMain && !decl.params.empty() && !mainArgs) {
                     fail(decl.pos, "unsupported: main with parameters");
                     return;
                 }
@@ -518,20 +531,23 @@ namespace codegen {
                     selfTypePtr = fn.receiver;
                     if (failed) return;
                 }
-                for (const ast::Param &param: decl.params) {
-                    if (!param.type) {
-                        fail(param.pos, "unsupported: parameter '" + param.name + "' without a type");
-                        return;
+                // The argv form's parameter is built from argc/argv, not passed.
+                if (!mainArgs) {
+                    for (const ast::Param &param: decl.params) {
+                        if (!param.type) {
+                            fail(param.pos, "unsupported: parameter '" + param.name + "' without a type");
+                            return;
+                        }
+                        if (param.name == "this" && !hasSelf) {
+                            params.push_back(receiverParam(param.type));
+                            hasSelf = true;
+                            selfK = kindOf(*param.type);
+                            selfTypePtr = param.type;
+                        } else {
+                            params.push_back(type(*param.type) + " " + param.name);
+                        }
+                        if (failed) return;
                     }
-                    if (param.name == "this" && !hasSelf) {
-                        params.push_back(receiverParam(param.type));
-                        hasSelf = true;
-                        selfK = kindOf(*param.type);
-                        selfTypePtr = param.type;
-                    } else {
-                        params.push_back(type(*param.type) + " " + param.name);
-                    }
-                    if (failed) return;
                 }
                 // A bare `this` uses `self`; make sure it resolves even without an
                 // explicit receiver declaration.
@@ -539,7 +555,9 @@ namespace codegen {
                     selfK = NameKind::Value;
                 }
 
-                Str signature = ret + " " + decl.name + "(" + join(params, ", ") + ")";
+                Str signature = mainArgs
+                                    ? Str("int main(int argc, char** argv)")
+                                    : (ret + " " + decl.name + "(" + join(params, ", ") + ")");
                 Str tmpl = templateClause(fn.templateParams);
                 if (prototypeOnly) {
                     if (!tmpl.empty()) line(0, tmpl);
@@ -554,6 +572,15 @@ namespace codegen {
                 if (!tmpl.empty()) line(0, tmpl);
                 line(0, signature + " {");
                 beginScope(fn, selfK, selfTypePtr);
+                if (mainArgs) {
+                    Str argName = decl.params[0].name;
+                    line(1, "List<Str> " + argName + " = List<Str>();");
+                    line(1, "int simse_argIndex = 1;");
+                    line(1, "while (simse_argIndex < argc) {");
+                    line(2, "simse_list_append(" + argName + ", Str(argv[simse_argIndex]));");
+                    line(2, "simse_argIndex = simse_argIndex + 1;");
+                    line(1, "}");
+                }
                 curReturnType = decl.returnType;
                 emitStmts(decl.body, 1);
                 if (failed) return;
@@ -1302,12 +1329,26 @@ namespace codegen {
                 const ast::Expr &callee = *e.lhs;
                 if (callee.kind == ExprKind::GenericName) {
                     // A generic type construction (`List<Int>()`) or a generic
-                    // function call (`identity<Int>(x)`); both lower directly.
+                    // function call (`identity<Int>(x)`); both lower directly. A
+                    // generic *native* function (e.g. `dictionaryOf<K, V>()`) lowers
+                    // to its explicit symbol instead.
                     List<Str> args;
                     for (const ast::ExprPtr &arg: e.args) {
                         args.push_back(expr(*arg, 0));
                     }
-                    return callee.text + "<" + typeArgsString(callee.text, callee.typeArgs)
+                    Str calleeName = callee.text;
+                    auto native = nativeSymbols.find(callee.text);
+                    bool hasPlainFunction = false;
+                    for (const Fn &candidate: functions) {
+                        if (!candidate.decl->isNative && candidate.decl->name == callee.text) {
+                            hasPlainFunction = true;
+                            break;
+                        }
+                    }
+                    if (!hasPlainFunction && native != nativeSymbols.end()) {
+                        calleeName = native->second;
+                    }
+                    return calleeName + "<" + typeArgsString(callee.text, callee.typeArgs)
                            + ">(" + join(args, ", ") + ")";
                 }
                 if (callee.kind == ExprKind::Name) {

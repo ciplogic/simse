@@ -1,0 +1,261 @@
+Module @1:1
+  Function main @4:1
+    Return Int
+    Body
+      VarDecl var counts: Dictionary<Str, Int> @5:5
+        Init
+          Call @5:40
+            Callee
+              GenericName dictionaryOf<Str, Int> @5:40
+      ExprStmt @6:5
+        Call @6:5
+          Callee
+            Member .insert @6:5
+              Receiver
+                Name counts @6:5
+          Arg
+            StrLit "b" @6:19
+          Arg
+            IntLit 2 @6:24
+      ExprStmt @7:5
+        Call @7:5
+          Callee
+            Member .insert @7:5
+              Receiver
+                Name counts @7:5
+          Arg
+            StrLit "a" @7:19
+          Arg
+            IntLit 1 @7:24
+      ExprStmt @8:5
+        Call @8:5
+          Callee
+            Member .insert @8:5
+              Receiver
+                Name counts @8:5
+          Arg
+            StrLit "c" @8:19
+          Arg
+            IntLit 3 @8:24
+      ExprStmt @9:5
+        Call @9:5
+          Callee
+            Member .insert @9:5
+              Receiver
+                Name counts @9:5
+          Arg
+            StrLit "b" @9:19
+          Arg
+            IntLit 20 @9:24
+      ExprStmt @11:5
+        Call @11:5
+          Callee
+            Name println @11:5
+          Arg
+            Call @11:13
+              Callee
+                Member .size @11:13
+                  Receiver
+                    Name counts @11:13
+      ExprStmt @12:5
+        Call @12:5
+          Callee
+            Name println @12:5
+          Arg
+            Call @12:13
+              Callee
+                Member .value @12:13
+                  Receiver
+                    Call @12:13
+                      Callee
+                        Member .get @12:13
+                          Receiver
+                            Name counts @12:13
+                      Arg
+                        StrLit "a" @12:24
+      ExprStmt @13:5
+        Call @13:5
+          Callee
+            Name println @13:5
+          Arg
+            Call @13:13
+              Callee
+                Member .has @13:13
+                  Receiver
+                    Name counts @13:13
+              Arg
+                StrLit "z" @13:24
+      VarDecl var names: List<Str> @15:5
+        Init
+          Call @15:28
+            Callee
+              Member .keys @15:28
+                Receiver
+                  Name counts @15:28
+      ExprStmt @16:5
+        Call @16:5
+          Callee
+            Member .sort @16:5
+              Receiver
+                Name names @16:5
+          Arg
+            Lambda @16:17
+              Params left, right
+              Body
+                ExprStmt @16:43
+                  Binary < @16:43
+                    Lhs
+                      Name left @16:43
+                    Rhs
+                      Name right @16:50
+      VarDecl var i: Int @17:5
+        Init
+          IntLit 0 @17:18
+      While @18:5
+        Cond
+          Binary < @18:12
+            Lhs
+              Name i @18:12
+            Rhs
+              Call @18:16
+                Callee
+                  Member .size @18:16
+                    Receiver
+                      Name names @18:16
+        Body
+          ExprStmt @19:9
+            Call @19:9
+              Callee
+                Name println @19:9
+              Arg
+                Index @19:17
+                  Receiver
+                    Name names @19:17
+                  Index
+                    Name i @19:23
+          Assign = @20:9
+            Target
+              Name i @20:9
+            Value
+              Binary + @20:13
+                Lhs
+                  Name i @20:13
+                Rhs
+                  IntLit 1 @20:17
+      ExprStmt @22:5
+        Call @22:5
+          Callee
+            Name println @22:5
+          Arg
+            Call @22:13
+              Callee
+                Member .contains @22:13
+                  Receiver
+                    Name names @22:13
+              Arg
+                StrLit "c" @22:28
+      ExprStmt @23:5
+        Call @23:5
+          Callee
+            Name println @23:5
+          Arg
+            Call @23:13
+              Callee
+                Member .contains @23:13
+                  Receiver
+                    Name names @23:13
+              Arg
+                StrLit "z" @23:28
+      VarDecl var values: List<Int> @25:5
+        Init
+          Call @25:29
+            Callee
+              Member .values @25:29
+                Receiver
+                  Name counts @25:29
+      ExprStmt @26:5
+        Call @26:5
+          Callee
+            Member .sort @26:5
+              Receiver
+                Name values @26:5
+          Arg
+            Lambda @26:18
+              Params left, right
+              Body
+                ExprStmt @26:44
+                  Binary < @26:44
+                    Lhs
+                      Name left @26:44
+                    Rhs
+                      Name right @26:51
+      VarDecl var j: Int @27:5
+        Init
+          IntLit 0 @27:18
+      While @28:5
+        Cond
+          Binary < @28:12
+            Lhs
+              Name j @28:12
+            Rhs
+              Call @28:16
+                Callee
+                  Member .size @28:16
+                    Receiver
+                      Name values @28:16
+        Body
+          ExprStmt @29:9
+            Call @29:9
+              Callee
+                Name println @29:9
+              Arg
+                Index @29:17
+                  Receiver
+                    Name values @29:17
+                  Index
+                    Name j @29:24
+          Assign = @30:9
+            Target
+              Name j @30:9
+            Value
+              Binary + @30:13
+                Lhs
+                  Name j @30:13
+                Rhs
+                  IntLit 1 @30:17
+      ExprStmt @33:5
+        Call @33:5
+          Callee
+            Member .remove @33:5
+              Receiver
+                Name counts @33:5
+          Arg
+            StrLit "a" @33:19
+      ExprStmt @34:5
+        Call @34:5
+          Callee
+            Name println @34:5
+          Arg
+            Call @34:13
+              Callee
+                Member .size @34:13
+                  Receiver
+                    Name counts @34:13
+      ExprStmt @35:5
+        Call @35:5
+          Callee
+            Member .clear @35:5
+              Receiver
+                Name counts @35:5
+      ExprStmt @36:5
+        Call @36:5
+          Callee
+            Name println @36:5
+          Arg
+            Call @36:13
+              Callee
+                Member .size @36:13
+                  Receiver
+                    Name counts @36:13
+      Return @37:5
+        IntLit 0 @37:12

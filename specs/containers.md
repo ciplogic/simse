@@ -76,13 +76,40 @@ The minimally supported `List<T>` operations are:
 - `insert(index: Int, value: T)`;
 - `removeAt(index: Int)`;
 - `removeRange(start: Int, end: Int)`, which removes the half-open range
-  `[start, end)`; and
-- `clear()`.
+  `[start, end)`;
+- `clear()`;
+- `contains(value: T): Bool`, a linear membership test; and
+- `sort(less: (T, T) -> Bool)`, an in-place sort using the comparator lambda.
 
 Indexing and member calls are permitted directly on a `&List<T>` and on a
 `*List<T>`, with automatic dereference (see `memory-model.md`). The `append`,
-`removeAt`, and `removeRange` operations are exposed to the compiler as native
-extensions (`impl_specs/tasks/12-container-methods-as-native.md`).
+`removeAt`, `removeRange`, `contains`, and `sort` operations are exposed to the
+compiler as native extensions (`impl_specs/tasks/12-container-methods-as-native.md`,
+`impl_specs/tasks/20-dictionary-and-sort.md`). `insert` and `clear` are specified
+but not yet mapped by the bootstrap emitter.
+
+## `Dictionary<K, V>`
+
+Status: required for the first implementation (the front end is written against
+it).
+
+`Dictionary<K, V>` is the built-in value dictionary (`dictionary.md`): a mutable
+mapping from keys to values with value semantics. The bootstrap compiler exposes
+it to Simse programs as native extensions (`impl_specs/rtl-abi.md`,
+`impl_specs/tasks/20-dictionary-and-sort.md`):
+
+- `dictionaryOf<K, V>(): Dictionary<K, V>` - the empty construction;
+- `get(key: K): Opt<V>` - the value for `key`, or an empty `Opt` when absent;
+- `has(key: K): Bool`; `size(): Int`;
+- `insert(key: K, value: V)` - insert or replace;
+- `remove(key: K)` - erase when present (a no-op otherwise);
+- `keys(): List<K>` and `values(): List<V>`; and
+- `clear()`.
+
+`keys()`/`values()` return entries in the dictionary's iteration order, which is
+**unspecified** (it follows the runtime hash table); sort the result for a
+deterministic order. `get` is the safe accessor: there is no indexing operation
+that manufactures a default value, matching the language's no-null policy.
 
 ### Iteration: `Cursor<T>`
 

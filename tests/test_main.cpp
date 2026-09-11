@@ -92,6 +92,15 @@ namespace {
         return (std::filesystem::path(goldenDir) / (name + "." + category + ".expected")).string();
     }
 
+    // A separator-normalized key for a path, so paths built with mixed `/` and `\`
+    // compare equal on Windows.
+    Str pathKey(const Str &path) {
+        std::error_code ec;
+        std::filesystem::path canonical =
+            std::filesystem::weakly_canonical(std::filesystem::path(path), ec);
+        return ec ? path : canonical.string();
+    }
+
     // Distinct `Prefix<...>` forms occurring in `text` (in first-seen order).
     List<Str> distinctForms(const Str &text, const Str &prefix) {
         List<Str> forms;
@@ -381,12 +390,17 @@ int main(int argc, char **argv) {
     }
 
     // Real sources: every mirror under cppsrc, plus a root main.simse when one
-    // is present, must parse and analyze cleanly.
+    // is present, must parse and analyze cleanly. Files that are part of the RTL
+    // prelude are checked standalone (they declare the prelude types); every
+    // other mirror is analyzed with the prelude merged, exactly as compilation
+    // does, so prelude types resolve without an import.
     List<Str> sources = filesInDir(Str(SIMSE_SOURCE_ROOT) + "/cppsrc", ".simse");
     Str rootMain = Str(SIMSE_SOURCE_ROOT) + "/main.simse";
     if (std::filesystem::exists(rootMain)) {
         sources.push_back(rootMain);
     }
+    List<Str> preludeFiles = filesInDir(Str(SIMSE_DEFAULT_PRELUDE), ".simse");
+    Str preludeDirKey = pathKey(Str(SIMSE_DEFAULT_PRELUDE));
     for (const Str &source: sources) {
         Str name = baseName(source);
         ScanResult scan = scanFile(&scanner, source);
@@ -402,7 +416,19 @@ int main(int argc, char **argv) {
             printf("FAIL source %s: %s\n", name.c_str(), parsed.Error.c_str());
             continue;
         }
-        List<Str> diagnostics = sema::analyze(parsed.Value, name);
+        bool isPreludeFile = false;
+        for (const Str &preludeFile: preludeFiles) {
+            if (pathKey(preludeFile) == pathKey(source)) {
+                isPreludeFile = true;
+            }
+        }
+        if (!isPreludeFile
+            && pathKey(std::filesystem::path(source).parent_path().string()) == preludeDirKey) {
+            isPreludeFile = true;
+        }
+        List<Str> diagnostics = isPreludeFile
+                                    ? sema::analyze(parsed.Value, name)
+                                    : analyzeWithPrelude(parsed.Value, name);
         if (!diagnostics.empty()) {
             failed++;
             printf("FAIL source %s: sema reported %d diagnostic(s)\n",

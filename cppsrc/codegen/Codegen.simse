@@ -1,0 +1,1898 @@
+// Codegen.simse
+//
+// The C++ emitter, ported from cppsrc/codegen/Codegen.cpp. It consumes the
+// XmlNode AST (schema in impl_specs/ast-xmlnode.md) and amalgamates one or more
+// modules into a single translation unit, byte-for-byte identical to the C++
+// `codegen::emitProgram`.
+//
+// The C++ emitter's `ast::TypePtr` layer (inferType/unifyType/pointee/
+// isHandleType and the per-function localTypes/nameKinds tables) is re-expressed
+// over the XmlNode type nodes; an empty node means "no/unknown type".
+//
+// `import cppsrc.sema` bundles the parser and scanner (through sema -> parser ->
+// lex -> common -> xmlutil) so the generated file is a self-contained front end
+// for the differential harness. Emission itself does not call sema.
+//
+// Kind dispatch is an if-chain, not a `switch`, because the emitted C++ `switch`
+// cannot switch on a `Str`. Method overloading is avoided (method dispatch is by
+// name and receiver, not arity).
+
+import cppsrc.sema
+
+// One parsed input. `prelude` inputs participate in symbol collection but are
+// never emitted (impl_specs/native-interop.md).
+data class CgInput(var fileName: Str; var module: XmlNode; var prelude: Bool)
+
+// A function/method to emit, with its receiver type (empty for plain functions).
+data class CgFn(var decl: XmlNode; var receiver: XmlNode; var file: Str; var templateParams: List<Str>; var prelude: Bool)
+
+// A `native fun` declaration to emit once at the top (and call by symbol).
+data class CgNativeDecl(var decl: XmlNode; var file: Str; var symbol: Str; var prelude: Bool)
+
+// An explicit-`this` native extension; the receiver pattern selects the overload.
+data class CgNativeExt(var symbol: Str; var receiver: XmlNode; var returnType: XmlNode; var typeParams: List<Str>)
+
+// How a name's storage is reached, for `.` vs `->`, `*x` vs `x.get()`, `copy`.
+enum NameKind { Value, Shared, Pointer }
+
+// ---- helpers --------------------------------------------------------------
+
+fun cgJoin(parts: List<Str>, separator: Str): Str {
+    var out: Str = ""
+    var i: Int = 0
+    while (i < parts.size()) {
+        if (i > 0) {
+            out = out + separator
+        }
+        out = out + parts[i]
+        i = i + 1
+    }
+    return out
+}
+
+fun cgIndent(level: Int): Str {
+    var out: Str = ""
+    var i: Int = 0
+    while (i < level * 4) {
+        out = out + " "
+        i = i + 1
+    }
+    return out
+}
+
+fun cgIsRtlTypeName(name: Str): Bool {
+    if (name == "Int" || name == "Int8" || name == "Int16" || name == "Int32"
+        || name == "Int64" || name == "Float32" || name == "Float64" || name == "Char"
+        || name == "Bool" || name == "Str" || name == "List" || name == "Array"
+        || name == "RawArray" || name == "Opt" || name == "Res" || name == "Dictionary"
+        || name == "SmallVector" || name == "PList" || name == "Attribute"
+        || name == "XmlNode" || name == "Cursor") {
+        return true
+    }
+    return false
+}
+
+fun cgUnquote(text: Str): Str {
+    if (text.size() >= 2 && text.substr(0, 1) == "\"" && text.substr(text.size() - 1, 1) == "\"") {
+        return text.substr(1, text.size() - 2)
+    }
+    return text
+}
+
+// Binary operator precedence for wrapping; see Codegen.cpp precedence().
+fun cgPrecedence(e: XmlNode): Int {
+    if (xmlKind(e) == "Expr.Binary") {
+        val op: Str = xmlAttr(e, "op")
+        if (op == "||") { return 1 }
+        if (op == "&&") { return 2 }
+        if (op == "==" || op == "!=") { return 3 }
+        if (op == "<" || op == ">" || op == "<=" || op == ">=") { return 4 }
+        if (op == "+" || op == "-") { return 5 }
+        if (op == "*" || op == "/" || op == "%") { return 6 }
+        return 1
+    }
+    val kind: Str = xmlKind(e)
+    if (kind == "Expr.Unary" || kind == "Expr.Deref" || kind == "Expr.Copy") {
+        return 7
+    }
+    if (kind == "Expr.Ref" || kind == "Expr.Call" || kind == "Expr.Index"
+        || kind == "Expr.Member") {
+        return 9
+    }
+    return 10
+}
+
+// Whether a top-level `main` takes the argv form: a single `List<Str>` parameter.
+fun cgIsMainArgs(decl: XmlNode): Bool {
+    val params: List<XmlNode> = xmlChildren(decl, "Param")
+    if (params.size() != 1) {
+        return false
+    }
+    val paramType: XmlNode = xmlChild(params[0], "Type")
+    if (xmlIsEmpty(paramType)) {
+        return false
+    }
+    if (xmlKind(paramType) != "Type.Generic" || xmlAttr(paramType, "name") != "List") {
+        return false
+    }
+    val args: List<XmlNode> = xmlChildren(paramType, "TypeArg")
+    if (args.size() != 1) {
+        return false
+    }
+    return xmlKind(args[0]) == "Type.Named" && xmlAttr(args[0], "name") == "Str"
+}
+
+// ---- the emitter ----------------------------------------------------------
+
+data class Emitter(
+    var inputs: List<CgInput>;
+    var out: Str;
+    var failed: Bool;
+    var error: Str;
+    var curFile: Str;
+    var types: Dictionary<Str, XmlNode>;
+    var enumNames: Dictionary<Str, Bool>;
+    var functions: List<CgFn>;
+    var receiverFnNames: Dictionary<Str, Bool>;
+    var nativeDecls: List<CgNativeDecl>;
+    var nativeSymbols: Dictionary<Str, Str>;
+    var nativeExtensions: Dictionary<Str, List<CgNativeExt>>;
+    var activeTypeParams: Dictionary<Str, Bool>;
+    var nameKinds: Dictionary<Str, NameKind>;
+    var localTypes: Dictionary<Str, XmlNode>;
+    var selfKind: NameKind;
+    var selfType: XmlNode;
+    var curReturnType: XmlNode
+) {
+
+    // ---- diagnostics and output -------------------------------------------
+
+    fun fail(posNode: XmlNode, message: Str): Unit {
+        if (this.failed) {
+            return
+        }
+        this.failed = true
+        this.error = this.curFile + ":" + xmlLine(posNode).toString() + ":"
+                     + xmlColumn(posNode).toString() + ": " + message
+    }
+
+    fun line(level: Int, text: Str): Unit {
+        this.out = this.out + cgIndent(level) + text + "\n"
+    }
+
+    fun sourceComment(posNode: XmlNode): Unit {
+        this.line(0, "// " + this.curFile + ":" + xmlLine(posNode).toString())
+    }
+
+    // ---- symbol collection ------------------------------------------------
+
+    fun namedTypeExpr(name: Str): XmlNode {
+        var node: XmlNode = XmlNode("Type", List<Attribute>(), &List<XmlNode>())
+        node.attributes.append(Attribute("kind", "Type.Named"))
+        node.attributes.append(Attribute("name", name))
+        return node
+    }
+
+    fun genericTypeExpr(name: Str, args: List<XmlNode>): XmlNode {
+        var node: XmlNode = XmlNode("Type", List<Attribute>(), &List<XmlNode>())
+        node.attributes.append(Attribute("kind", "Type.Generic"))
+        node.attributes.append(Attribute("name", name))
+        var i: Int = 0
+        while (i < args.size()) {
+            node.Children.append(args[i])
+            i = i + 1
+        }
+        return node
+    }
+
+    // The receiver type of a class method: `Name<A, B>` for a generic class.
+    fun classReceiver(decl: XmlNode): XmlNode {
+        val typeParams: List<Str> = xmlTypeParamNames(decl)
+        if (typeParams.size() == 0) {
+            return this.namedTypeExpr(xmlAttr(decl, "name"))
+        }
+        var args: List<XmlNode> = List<XmlNode>()
+        var i: Int = 0
+        while (i < typeParams.size()) {
+            args.append(this.namedTypeExpr(typeParams[i]))
+            i = i + 1
+        }
+        return this.genericTypeExpr(xmlAttr(decl, "name"), args)
+    }
+
+    fun addFunction(decl: XmlNode, receiver: XmlNode, file: Str, templateParams: List<Str>, prelude: Bool): Unit {
+        this.functions.append(CgFn(decl, receiver, file, templateParams, prelude))
+        if (!xmlIsEmpty(receiver)) {
+            this.receiverFnNames.insert(xmlAttr(decl, "name"), true)
+        }
+    }
+
+    fun addNativeExt(name: Str, ext: CgNativeExt): Unit {
+        if (this.nativeExtensions.has(name)) {
+            var existing: List<CgNativeExt> = this.nativeExtensions.get(name).value()
+            existing.append(ext)
+            this.nativeExtensions.insert(name, existing)
+        } else {
+            var fresh: List<CgNativeExt> = List<CgNativeExt>()
+            fresh.append(ext)
+            this.nativeExtensions.insert(name, fresh)
+        }
+    }
+
+    fun collect(): Unit {
+        var i: Int = 0
+        while (i < this.inputs.size()) {
+            val input: CgInput = this.inputs[i]
+            val decls: List<XmlNode> = xmlDecls(input.module)
+            var d: Int = 0
+            while (d < decls.size()) {
+                val decl: XmlNode = decls[d]
+                d = d + 1
+                val declName: Str = xmlAttr(decl, "name")
+                if (decl.name == "Function") {
+                    if (xmlAttr(decl, "isNative") == "true") {
+                        var symbol: Str = declName
+                        if (xmlAttr(decl, "hasNativeSymbol") == "true") {
+                            symbol = cgUnquote(xmlAttr(decl, "nativeSymbol"))
+                        }
+                        this.nativeDecls.append(CgNativeDecl(decl, input.fileName, symbol, input.prelude))
+                        this.nativeSymbols.insert(declName, symbol)
+                        val params: List<XmlNode> = xmlChildren(decl, "Param")
+                        if (params.size() > 0 && xmlAttr(params[0], "name") == "this") {
+                            val ext: CgNativeExt = CgNativeExt(symbol, xmlChild(params[0], "Type"),
+                                                               xmlChild(decl, "ReturnType"),
+                                                               xmlTypeParamNames(decl))
+                            this.addNativeExt(declName, ext)
+                        }
+                    }
+                    var recv: XmlNode = xmlEmptyNode()
+                    if (xmlAttr(decl, "hasReceiver") == "true") {
+                        recv = xmlChild(decl, "Receiver")
+                    }
+                    this.addFunction(decl, recv, input.fileName, xmlTypeParamNames(decl), input.prelude)
+                    continue
+                }
+                this.types.insert(declName, decl)
+                if (decl.name == "Enum") {
+                    this.enumNames.insert(declName, true)
+                }
+                if (decl.name == "DataClass") {
+                    if (input.prelude) {
+                        continue
+                    }
+                    val receiver: XmlNode = this.classReceiver(decl)
+                    val methods: List<XmlNode> = xmlChildren(decl, "Function")
+                    val classParams: List<Str> = xmlTypeParamNames(decl)
+                    var m: Int = 0
+                    while (m < methods.size()) {
+                        val method: XmlNode = methods[m]
+                        var methodParams: List<Str> = List<Str>()
+                        var p: Int = 0
+                        while (p < classParams.size()) {
+                            methodParams.append(classParams[p])
+                            p = p + 1
+                        }
+                        val methodTypeParams: List<Str> = xmlTypeParamNames(method)
+                        var q: Int = 0
+                        while (q < methodTypeParams.size()) {
+                            methodParams.append(methodTypeParams[q])
+                            q = q + 1
+                        }
+                        this.addFunction(method, receiver, input.fileName, methodParams, input.prelude)
+                        m = m + 1
+                    }
+                }
+            }
+            i = i + 1
+        }
+    }
+
+    // ---- type mapping -----------------------------------------------------
+
+    fun setActiveTypeParams(params: List<Str>): Unit {
+        this.activeTypeParams.clear()
+        var i: Int = 0
+        while (i < params.size()) {
+            this.activeTypeParams.insert(params[i], true)
+            i = i + 1
+        }
+    }
+
+    fun templateClause(params: List<Str>): Str {
+        if (params.size() == 0) {
+            return ""
+        }
+        var parts: List<Str> = List<Str>()
+        var i: Int = 0
+        while (i < params.size()) {
+            parts.append("class " + params[i])
+            i = i + 1
+        }
+        return "template <" + cgJoin(parts, ", ") + ">"
+    }
+
+    fun typeArgsString(baseName: Str, args: List<XmlNode>): Str {
+        var rendered: List<Str> = List<Str>()
+        var i: Int = 0
+        while (i < args.size()) {
+            rendered.append(this.type(args[i]))
+            i = i + 1
+        }
+        if (baseName == "SmallVector" && rendered.size() == 2) {
+            val first: Str = rendered[0]
+            rendered[0] = rendered[1]
+            rendered[1] = first
+        }
+        return cgJoin(rendered, ", ")
+    }
+
+    fun typeName(name: Str, posNode: XmlNode): Str {
+        if (name == "Unit") {
+            return "void"
+        }
+        if (this.activeTypeParams.has(name)) {
+            return name
+        }
+        if (cgIsRtlTypeName(name)) {
+            return name
+        }
+        if (this.types.has(name)) {
+            return name
+        }
+        this.fail(posNode, "unsupported type '" + name + "'")
+        return "/*unsupported*/"
+    }
+
+    fun type(typeExpr: XmlNode): Str {
+        val kind: Str = xmlKind(typeExpr)
+        if (kind == "Type.IntLit") {
+            return xmlAttr(typeExpr, "text")
+        }
+        if (kind == "Type.Named") {
+            return this.typeName(xmlAttr(typeExpr, "name"), typeExpr)
+        }
+        if (kind == "Type.Generic") {
+            return this.typeName(xmlAttr(typeExpr, "name"), typeExpr)
+                   + "<" + this.typeArgsString(xmlAttr(typeExpr, "name"), xmlChildren(typeExpr, "TypeArg")) + ">"
+        }
+        if (kind == "Type.Reference") {
+            val inner: XmlNode = xmlChild(typeExpr, "Inner")
+            if (xmlIsEmpty(inner)) {
+                return "std::shared_ptr<void>"
+            }
+            return "std::shared_ptr<" + this.type(inner) + ">"
+        }
+        if (kind == "Type.Pointer") {
+            val inner: XmlNode = xmlChild(typeExpr, "Inner")
+            if (xmlIsEmpty(inner)) {
+                return "void*"
+            }
+            return this.type(inner) + "*"
+        }
+        if (kind == "Type.Function") {
+            val retNode: XmlNode = xmlChild(typeExpr, "ReturnType")
+            var ret: Str = "void"
+            if (!xmlIsEmpty(retNode)) {
+                ret = this.type(retNode)
+            }
+            val paramNodes: List<XmlNode> = xmlChildren(typeExpr, "ParamType")
+            var params: List<Str> = List<Str>()
+            var i: Int = 0
+            while (i < paramNodes.size()) {
+                params.append(this.type(paramNodes[i]))
+                i = i + 1
+            }
+            return "Func<" + ret + "(" + cgJoin(params, ", ") + ")>"
+        }
+        return "/*unsupported*/"
+    }
+
+    fun kindOf(typeExpr: XmlNode): NameKind {
+        val kind: Str = xmlKind(typeExpr)
+        if (kind == "Type.Reference") {
+            return NameKind.Shared
+        }
+        if (kind == "Type.Pointer") {
+            return NameKind.Pointer
+        }
+        if (kind == "Type.Generic" && xmlAttr(typeExpr, "name") == "PList") {
+            return NameKind.Shared
+        }
+        return NameKind.Value
+    }
+
+    // ---- declarations -----------------------------------------------------
+
+    fun emitTypes(): Unit {
+        var i: Int = 0
+        while (i < this.inputs.size()) {
+            val input: CgInput = this.inputs[i]
+            i = i + 1
+            if (input.prelude) {
+                continue
+            }
+            this.curFile = input.fileName
+            val decls: List<XmlNode> = xmlDecls(input.module)
+            var d: Int = 0
+            while (d < decls.size()) {
+                val decl: XmlNode = decls[d]
+                d = d + 1
+                if (decl.name == "DataClass") {
+                    this.emitDataClass(decl)
+                } else if (decl.name == "Enum") {
+                    this.emitEnum(decl)
+                    this.emitEnumConversion(decl)
+                } else if (decl.name == "TypeAlias") {
+                    this.emitTypeAlias(decl)
+                }
+                if (this.failed) {
+                    return
+                }
+            }
+        }
+    }
+
+    fun emitDataClass(decl: XmlNode): Unit {
+        this.setActiveTypeParams(xmlTypeParamNames(decl))
+        val fields: List<XmlNode> = xmlChildren(decl, "Field")
+        var params: List<Str> = List<Str>()
+        var inits: List<Str> = List<Str>()
+        var i: Int = 0
+        while (i < fields.size()) {
+            val field: XmlNode = fields[i]
+            val fieldType: XmlNode = xmlChild(field, "Type")
+            if (xmlIsEmpty(fieldType)) {
+                this.fail(field, "unsupported: field '" + xmlAttr(field, "name") + "' without a type")
+                return
+            }
+            params.append(this.type(fieldType) + " " + xmlAttr(field, "name"))
+            inits.append(xmlAttr(field, "name") + "(" + xmlAttr(field, "name") + ")")
+            i = i + 1
+        }
+        if (this.failed) {
+            return
+        }
+
+        this.sourceComment(decl)
+        val tmpl: Str = this.templateClause(xmlTypeParamNames(decl))
+        if (tmpl != "") {
+            this.line(0, tmpl)
+        }
+        this.line(0, "struct " + xmlAttr(decl, "name") + " {")
+        var f: Int = 0
+        while (f < fields.size()) {
+            val field: XmlNode = fields[f]
+            this.line(1, this.type(xmlChild(field, "Type")) + " " + xmlAttr(field, "name") + ";")
+            f = f + 1
+        }
+        this.line(1, xmlAttr(decl, "name") + "() = default;")
+        if (fields.size() > 0) {
+            this.line(1, xmlAttr(decl, "name") + "(" + cgJoin(params, ", ") + ") : "
+                         + cgJoin(inits, ", ") + " {}")
+        }
+        this.line(0, "};")
+    }
+
+    fun emitEnum(decl: XmlNode): Unit {
+        this.sourceComment(decl)
+        val tmpl: Str = this.templateClause(xmlTypeParamNames(decl))
+        if (tmpl != "") {
+            this.line(0, tmpl)
+        }
+        this.line(0, "enum class " + xmlAttr(decl, "name") + " {")
+        val members: List<XmlNode> = xmlChildren(decl, "EnumMember")
+        var i: Int = 0
+        while (i < members.size()) {
+            val member: XmlNode = members[i]
+            var text: Str = xmlAttr(member, "name")
+            if (xmlAttr(member, "hasValue") == "true") {
+                text = text + " = " + xmlAttr(member, "value")
+            }
+            this.line(1, text + ",")
+            i = i + 1
+        }
+        this.line(0, "};")
+    }
+
+    // A checked `Enum.fromInt(Int): Opt<Enum>` helper (an if-chain, not a switch).
+    fun emitEnumConversion(decl: XmlNode): Unit {
+        val typeParams: List<Str> = xmlTypeParamNames(decl)
+        if (typeParams.size() > 0) {
+            return
+        }
+        val members: List<XmlNode> = xmlChildren(decl, "EnumMember")
+        var values: List<Int> = List<Int>()
+        var names: List<Str> = List<Str>()
+        var next: Int = 0
+        var i: Int = 0
+        while (i < members.size()) {
+            val member: XmlNode = members[i]
+            if (xmlAttr(member, "hasValue") == "true") {
+                next = xmlIntAttr(member, "value", 0)
+            }
+            values.append(next)
+            names.append(xmlAttr(member, "name"))
+            next = next + 1
+            i = i + 1
+        }
+        this.line(0, "inline Opt<" + xmlAttr(decl, "name") + "> simse_" + xmlAttr(decl, "name")
+                     + "_fromInt(Int value) {")
+        var k: Int = 0
+        while (k < names.size()) {
+            this.line(1, "if (value == " + values[k].toString() + ") return Opt<"
+                         + xmlAttr(decl, "name") + ">::some(" + xmlAttr(decl, "name") + "::"
+                         + names[k] + ");")
+            k = k + 1
+        }
+        this.line(1, "return Opt<" + xmlAttr(decl, "name") + ">::none();")
+        this.line(0, "}")
+    }
+
+    fun emitTypeAlias(decl: XmlNode): Unit {
+        val target: XmlNode = xmlChild(decl, "TargetType")
+        if (xmlIsEmpty(target)) {
+            this.fail(decl, "unsupported: typealias '" + xmlAttr(decl, "name") + "' without a target type")
+            return
+        }
+        this.setActiveTypeParams(xmlTypeParamNames(decl))
+        val targetText: Str = this.type(target)
+        if (this.failed) {
+            return
+        }
+        this.sourceComment(decl)
+        val tmpl: Str = this.templateClause(xmlTypeParamNames(decl))
+        if (tmpl != "") {
+            this.line(0, tmpl)
+        }
+        this.line(0, "using " + xmlAttr(decl, "name") + " = " + targetText + ";")
+    }
+
+    fun emitNativeDeclarations(): Unit {
+        this.setActiveTypeParams(List<Str>())
+        var i: Int = 0
+        while (i < this.nativeDecls.size()) {
+            val nativeInfo: CgNativeDecl = this.nativeDecls[i]
+            i = i + 1
+            if (nativeInfo.prelude) {
+                continue
+            }
+            this.curFile = nativeInfo.file
+            val decl: XmlNode = nativeInfo.decl
+            this.setActiveTypeParams(xmlTypeParamNames(decl))
+            if (nativeInfo.symbol.find("::") != -1) {
+                this.fail(decl, "unsupported: namespaced native symbol '" + nativeInfo.symbol
+                                + "' needs a global wrapper")
+                return
+            }
+            val returnNode: XmlNode = xmlChild(decl, "ReturnType")
+            var ret: Str = "void"
+            if (!xmlIsEmpty(returnNode)) {
+                ret = this.type(returnNode)
+            }
+            if (this.failed) {
+                return
+            }
+            val params: List<XmlNode> = xmlChildren(decl, "Param")
+            var paramTexts: List<Str> = List<Str>()
+            var p: Int = 0
+            while (p < params.size()) {
+                val param: XmlNode = params[p]
+                val paramType: XmlNode = xmlChild(param, "Type")
+                if (xmlIsEmpty(paramType)) {
+                    this.fail(param, "unsupported: native parameter '" + xmlAttr(param, "name")
+                                     + "' without a type")
+                    return
+                }
+                val mapped: Str = this.type(paramType)
+                if (this.failed) {
+                    return
+                }
+                var name: Str = xmlAttr(param, "name")
+                if (name == "this") {
+                    name = "self"
+                }
+                val pk: Str = xmlKind(paramType)
+                if (pk == "Type.Pointer" || pk == "Type.Reference") {
+                    paramTexts.append(mapped + " " + name)
+                } else {
+                    paramTexts.append("const " + mapped + "& " + name)
+                }
+                p = p + 1
+            }
+            this.sourceComment(decl)
+            val tmpl: Str = this.templateClause(xmlTypeParamNames(decl))
+            if (tmpl != "") {
+                this.line(0, tmpl)
+            }
+            this.line(0, ret + " " + nativeInfo.symbol + "(" + cgJoin(paramTexts, ", ") + ");")
+        }
+    }
+
+    fun emitFunctions(prototypeOnly: Bool): Unit {
+        var i: Int = 0
+        while (i < this.functions.size()) {
+            val fn: CgFn = this.functions[i]
+            i = i + 1
+            if (fn.prelude) {
+                continue
+            }
+            this.curFile = fn.file
+            this.emitFunction(fn, prototypeOnly)
+            if (this.failed) {
+                return
+            }
+        }
+    }
+
+    fun beginScope(fn: CgFn, selfK: NameKind, selfTypePtr: XmlNode): Unit {
+        this.nameKinds.clear()
+        this.localTypes.clear()
+        this.selfKind = selfK
+        this.selfType = selfTypePtr
+        if (!xmlIsEmpty(fn.receiver)) {
+            this.nameKinds.insert("self", selfK)
+        }
+        val params: List<XmlNode> = xmlChildren(fn.decl, "Param")
+        var i: Int = 0
+        while (i < params.size()) {
+            val param: XmlNode = params[i]
+            val paramType: XmlNode = xmlChild(param, "Type")
+            if (!xmlIsEmpty(paramType)) {
+                this.nameKinds.insert(xmlAttr(param, "name"), this.kindOf(paramType))
+                this.localTypes.insert(xmlAttr(param, "name"), paramType)
+            }
+            i = i + 1
+        }
+    }
+
+    fun receiverParam(receiverType: XmlNode): Str {
+        val mapped: Str = this.type(receiverType)
+        val kind: Str = xmlKind(receiverType)
+        if (kind == "Type.Reference" || kind == "Type.Pointer") {
+            return mapped + " self"
+        }
+        return mapped + "& self"
+    }
+
+    fun emitFunction(fn: CgFn, prototypeOnly: Bool): Unit {
+        val decl: XmlNode = fn.decl
+        if (xmlAttr(decl, "isNative") == "true") {
+            return
+        }
+        val isMain: Bool = xmlIsEmpty(fn.receiver) && xmlAttr(decl, "name") == "main"
+        if (isMain && prototypeOnly) {
+            return
+        }
+        val mainArgs: Bool = isMain && cgIsMainArgs(decl)
+        val params0: List<XmlNode> = xmlChildren(decl, "Param")
+        if (isMain && params0.size() > 0 && !mainArgs) {
+            this.fail(decl, "unsupported: main with parameters")
+            return
+        }
+
+        this.setActiveTypeParams(fn.templateParams)
+        val returnNode: XmlNode = xmlChild(decl, "ReturnType")
+        var ret: Str = "void"
+        if (isMain) {
+            ret = "int"
+        } else if (!xmlIsEmpty(returnNode)) {
+            ret = this.type(returnNode)
+        }
+        if (this.failed) {
+            return
+        }
+
+        var params: List<Str> = List<Str>()
+        var hasSelf: Bool = false
+        var selfK: NameKind = NameKind.Value
+        var selfTypePtr: XmlNode = xmlEmptyNode()
+        if (!xmlIsEmpty(fn.receiver)) {
+            params.append(this.receiverParam(fn.receiver))
+            hasSelf = true
+            selfK = this.kindOf(fn.receiver)
+            selfTypePtr = fn.receiver
+            if (this.failed) {
+                return
+            }
+        }
+        // The argv form's parameter is built from argc/argv, not passed.
+        if (!mainArgs) {
+            var i: Int = 0
+            while (i < params0.size()) {
+                val param: XmlNode = params0[i]
+                val paramType: XmlNode = xmlChild(param, "Type")
+                if (xmlIsEmpty(paramType)) {
+                    this.fail(param, "unsupported: parameter '" + xmlAttr(param, "name") + "' without a type")
+                    return
+                }
+                if (xmlAttr(param, "name") == "this" && !hasSelf) {
+                    params.append(this.receiverParam(paramType))
+                    hasSelf = true
+                    selfK = this.kindOf(paramType)
+                    selfTypePtr = paramType
+                } else {
+                    params.append(this.type(paramType) + " " + xmlAttr(param, "name"))
+                }
+                if (this.failed) {
+                    return
+                }
+                i = i + 1
+            }
+        }
+        if (!hasSelf) {
+            selfK = NameKind.Value
+        }
+
+        var signature: Str = ret + " " + xmlAttr(decl, "name") + "(" + cgJoin(params, ", ") + ")"
+        if (mainArgs) {
+            signature = "int main(int argc, char** argv)"
+        }
+        val tmpl: Str = this.templateClause(fn.templateParams)
+        if (prototypeOnly) {
+            if (tmpl != "") {
+                this.line(0, tmpl)
+            }
+            this.line(0, signature + ";")
+            return
+        }
+        if (xmlAttr(decl, "hasBody") != "true") {
+            return
+        }
+
+        this.sourceComment(decl)
+        if (tmpl != "") {
+            this.line(0, tmpl)
+        }
+        this.line(0, signature + " {")
+        this.beginScope(fn, selfK, selfTypePtr)
+        if (mainArgs) {
+            val argName: Str = xmlAttr(params0[0], "name")
+            this.line(1, "List<Str> " + argName + " = List<Str>();")
+            this.line(1, "int simse_argIndex = 1;")
+            this.line(1, "while (simse_argIndex < argc) {")
+            this.line(2, "simse_list_append(" + argName + ", Str(argv[simse_argIndex]));")
+            this.line(2, "simse_argIndex = simse_argIndex + 1;")
+            this.line(1, "}")
+        }
+        this.curReturnType = returnNode
+        this.emitStmts(xmlChildren(xmlChild(decl, "Body"), "Stmt"), 1)
+        if (this.failed) {
+            return
+        }
+        this.line(0, "}")
+    }
+
+    // ---- statements -------------------------------------------------------
+
+    fun emitStmts(stmts: List<XmlNode>, level: Int): Unit {
+        var i: Int = 0
+        while (i < stmts.size()) {
+            this.emitStmt(stmts[i], level)
+            if (this.failed) {
+                return
+            }
+            i = i + 1
+        }
+    }
+
+    fun emitStmt(stmt: XmlNode, level: Int): Unit {
+        val kind: Str = xmlKind(stmt)
+        if (kind == "Stmt.VarDecl") {
+            val declaredType: XmlNode = xmlChild(stmt, "Type")
+            val init: XmlNode = xmlChild(stmt, "Init")
+            var typeText: Str = ""
+            if (!xmlIsEmpty(declaredType)) {
+                typeText = this.type(declaredType)
+            } else if (!xmlIsEmpty(init)) {
+                typeText = "auto"
+            } else {
+                this.fail(stmt, "unsupported: '" + xmlAttr(stmt, "name")
+                                + "' has neither a type nor an initializer")
+                return
+            }
+            if (this.failed) {
+                return
+            }
+            var text: Str = typeText + " " + xmlAttr(stmt, "name")
+            if (!xmlIsEmpty(init)) {
+                text = text + " = " + this.expr(init, 0, declaredType)
+            }
+            this.line(level, text + ";")
+
+            if (!xmlIsEmpty(declaredType)) {
+                this.nameKinds.insert(xmlAttr(stmt, "name"), this.kindOf(declaredType))
+                this.localTypes.insert(xmlAttr(stmt, "name"), declaredType)
+            } else if (!xmlIsEmpty(init)) {
+                val initKind: Str = xmlKind(init)
+                var nameKind: NameKind = NameKind.Value
+                if (initKind == "Expr.Ref") {
+                    nameKind = NameKind.Shared
+                } else if (initKind == "Expr.Deref") {
+                    nameKind = NameKind.Pointer
+                }
+                this.nameKinds.insert(xmlAttr(stmt, "name"), nameKind)
+                val inferred: XmlNode = this.inferType(init)
+                if (!xmlIsEmpty(inferred)) {
+                    this.localTypes.insert(xmlAttr(stmt, "name"), inferred)
+                }
+            }
+            return
+        }
+        if (kind == "Stmt.Assign") {
+            val op: Str = xmlAttr(stmt, "op")
+            if (op != "=") {
+                this.fail(stmt, "unsupported: assignment operator '" + op + "'")
+                return
+            }
+            val target: XmlNode = xmlChild(stmt, "Target")
+            val value: XmlNode = xmlChild(stmt, "Value")
+            this.line(level, this.expr(target, 0, xmlEmptyNode()) + " = "
+                         + this.expr(value, 0, this.inferType(target)) + ";")
+            return
+        }
+        if (kind == "Stmt.If") {
+            val cond: XmlNode = xmlChild(stmt, "Cond")
+            this.line(level, "if (" + this.expr(cond, 0, xmlEmptyNode()) + ") {")
+            this.emitStmts(xmlChildren(xmlChild(stmt, "Then"), "Stmt"), level + 1)
+            if (this.failed) {
+                return
+            }
+            if (xmlHasChild(stmt, "Else")) {
+                this.line(level, "} else {")
+                this.emitStmts(xmlChildren(xmlChild(stmt, "Else"), "Stmt"), level + 1)
+                if (this.failed) {
+                    return
+                }
+            }
+            this.line(level, "}")
+            return
+        }
+        if (kind == "Stmt.While") {
+            this.line(level, "while (" + this.expr(xmlChild(stmt, "Cond"), 0, xmlEmptyNode()) + ") {")
+            this.emitStmts(xmlChildren(xmlChild(stmt, "Body"), "Stmt"), level + 1)
+            if (this.failed) {
+                return
+            }
+            this.line(level, "}")
+            return
+        }
+        if (kind == "Stmt.Switch") {
+            this.line(level, "switch (" + this.expr(xmlChild(stmt, "Cond"), 0, xmlEmptyNode()) + ") {")
+            val cases: List<XmlNode> = xmlChildren(stmt, "Case")
+            var i: Int = 0
+            while (i < cases.size()) {
+                val switchCase: XmlNode = cases[i]
+                if (xmlAttr(switchCase, "isDefault") == "true") {
+                    this.line(level + 1, "default:")
+                } else {
+                    this.line(level + 1, "case " + this.expr(xmlChild(switchCase, "Label"), 0, xmlEmptyNode()) + ":")
+                }
+                this.line(level + 1, "{")
+                this.emitStmts(xmlChildren(switchCase, "Stmt"), level + 2)
+                if (this.failed) {
+                    return
+                }
+                this.line(level + 1, "}")
+                i = i + 1
+            }
+            this.line(level, "}")
+            return
+        }
+        if (kind == "Stmt.Return") {
+            val value: XmlNode = xmlChild(stmt, "Value")
+            if (!xmlIsEmpty(value)) {
+                this.line(level, "return " + this.expr(value, 0, this.curReturnType) + ";")
+            } else {
+                this.line(level, "return;")
+            }
+            return
+        }
+        if (kind == "Stmt.Break") {
+            this.line(level, "break;")
+            return
+        }
+        if (kind == "Stmt.Continue") {
+            this.line(level, "continue;")
+            return
+        }
+        if (kind == "Stmt.ExprStmt") {
+            this.line(level, this.expr(xmlChild(stmt, "Expr"), 0, xmlEmptyNode()) + ";")
+            return
+        }
+    }
+
+    // ---- expressions ------------------------------------------------------
+
+    fun expr(e: XmlNode, minPrec: Int, expected: XmlNode): Str {
+        val p: Int = cgPrecedence(e)
+        var s: Str = ""
+        if (p < minPrec) {
+            s = s + "("
+        }
+        s = s + this.exprInner(e, expected)
+        if (p < minPrec) {
+            s = s + ")"
+        }
+        return s
+    }
+
+    fun operandKind(e: XmlNode): NameKind {
+        if (xmlKind(e) == "Expr.Name") {
+            val name: Str = xmlAttr(e, "name")
+            if (name == "this") {
+                return this.selfKind
+            }
+            if (this.nameKinds.has(name)) {
+                return this.nameKinds.get(name).value()
+            }
+        }
+        return NameKind.Value
+    }
+
+    // ---- lightweight type inference ---------------------------------------
+
+    fun namedType(name: Str): XmlNode {
+        return this.namedTypeExpr(name)
+    }
+
+    fun genericType(name: Str, args: List<XmlNode>): XmlNode {
+        return this.genericTypeExpr(name, args)
+    }
+
+    fun pointee(typeNode: XmlNode): XmlNode {
+        var current: XmlNode = typeNode
+        while (!xmlIsEmpty(current)) {
+            val kind: Str = xmlKind(current)
+            if ((kind == "Type.Reference" || kind == "Type.Pointer")) {
+                val inner: XmlNode = xmlChild(current, "Inner")
+                if (xmlIsEmpty(inner)) {
+                    return current
+                }
+                current = inner
+            } else {
+                return current
+            }
+        }
+        return current
+    }
+
+    fun isHandleType(typeNode: XmlNode): Bool {
+        if (xmlIsEmpty(typeNode)) {
+            return false
+        }
+        val kind: Str = xmlKind(typeNode)
+        if (kind == "Type.Reference" || kind == "Type.Pointer") {
+            return true
+        }
+        if (kind == "Type.Generic" && xmlAttr(typeNode, "name") == "PList") {
+            return true
+        }
+        return false
+    }
+
+    fun isIndexableContainer(typeNode: XmlNode): Bool {
+        if (xmlIsEmpty(typeNode)) {
+            return false
+        }
+        val kind: Str = xmlKind(typeNode)
+        if (kind == "Type.Named") {
+            return xmlAttr(typeNode, "name") == "Str"
+        }
+        if (kind == "Type.Generic") {
+            val name: Str = xmlAttr(typeNode, "name")
+            return name == "List" || name == "Array" || name == "Dictionary" || name == "SmallVector"
+        }
+        return false
+    }
+
+    fun unifyType(pattern: XmlNode, actual: XmlNode, typeParams: List<Str>): Bool {
+        var actualPtr: XmlNode = actual
+        val pk: Str = xmlKind(pattern)
+        if (pk != "Type.Reference" && pk != "Type.Pointer") {
+            while (true) {
+                val ak0: Str = xmlKind(actualPtr)
+                if ((ak0 == "Type.Reference" || ak0 == "Type.Pointer")) {
+                    val inner: XmlNode = xmlChild(actualPtr, "Inner")
+                    if (xmlIsEmpty(inner)) {
+                        break
+                    }
+                    actualPtr = inner
+                } else {
+                    break
+                }
+            }
+        }
+        val ak: Str = xmlKind(actualPtr)
+        if (pk == "Type.IntLit") {
+            return ak == "Type.IntLit" && xmlAttr(actualPtr, "text") == xmlAttr(pattern, "text")
+        }
+        if (pk == "Type.Named") {
+            if (xmlIsTypeParam(xmlAttr(pattern, "name"), typeParams)) {
+                return true
+            }
+            return ak == "Type.Named" && xmlAttr(actualPtr, "name") == xmlAttr(pattern, "name")
+        }
+        if (pk == "Type.Generic") {
+            if (xmlIsTypeParam(xmlAttr(pattern, "name"), typeParams)) {
+                return true
+            }
+            if (ak != "Type.Generic") {
+                return false
+            }
+            val patternName: Str = xmlAttr(pattern, "name")
+            val actualName: Str = xmlAttr(actualPtr, "name")
+            if (actualName != patternName
+                && !(patternName == "List" && actualName == "PList")
+                && !(patternName == "PList" && actualName == "List")) {
+                return false
+            }
+            val patternArgs: List<XmlNode> = xmlChildren(pattern, "TypeArg")
+            val actualArgs: List<XmlNode> = xmlChildren(actualPtr, "TypeArg")
+            if (patternArgs.size() != actualArgs.size()) {
+                return false
+            }
+            var i: Int = 0
+            while (i < patternArgs.size()) {
+                if (!this.unifyType(patternArgs[i], actualArgs[i], typeParams)) {
+                    return false
+                }
+                i = i + 1
+            }
+            return true
+        }
+        if (pk == "Type.Reference") {
+            if (ak == "Type.Reference" && !xmlIsEmpty(xmlChild(actualPtr, "Inner"))
+                && !xmlIsEmpty(xmlChild(pattern, "Inner"))) {
+                return this.unifyType(xmlChild(pattern, "Inner"), xmlChild(actualPtr, "Inner"), typeParams)
+            }
+            return false
+        }
+        if (pk == "Type.Pointer") {
+            if (ak == "Type.Pointer" && !xmlIsEmpty(xmlChild(actualPtr, "Inner"))
+                && !xmlIsEmpty(xmlChild(pattern, "Inner"))) {
+                return this.unifyType(xmlChild(pattern, "Inner"), xmlChild(actualPtr, "Inner"), typeParams)
+            }
+            return false
+        }
+        return false
+    }
+
+    fun functionReturn(name: Str): XmlNode {
+        var i: Int = 0
+        while (i < this.functions.size()) {
+            val fn: CgFn = this.functions[i]
+            if (xmlAttr(fn.decl, "name") == name) {
+                val ret: XmlNode = xmlChild(fn.decl, "ReturnType")
+                if (!xmlIsEmpty(ret)) {
+                    return ret
+                }
+            }
+            i = i + 1
+        }
+        return xmlEmptyNode()
+    }
+
+    fun memberCallReturn(callee: XmlNode): XmlNode {
+        val receiverType: XmlNode = this.inferType(xmlChild(callee, "Receiver"))
+        val recv: XmlNode = this.pointee(receiverType)
+        val calleeText: Str = xmlAttr(callee, "name")
+        var i: Int = 0
+        while (i < this.functions.size()) {
+            val fn: CgFn = this.functions[i]
+            i = i + 1
+            if (xmlAttr(fn.decl, "isNative") == "true" || xmlIsEmpty(fn.receiver)) {
+                continue
+            }
+            if (xmlAttr(fn.decl, "name") != calleeText) {
+                continue
+            }
+            val ret: XmlNode = xmlChild(fn.decl, "ReturnType")
+            if (!xmlIsEmpty(recv) && this.unifyType(fn.receiver, recv, fn.templateParams)
+                && !xmlIsEmpty(ret)) {
+                return ret
+            }
+        }
+        if (this.nativeExtensions.has(calleeText)) {
+            val extensions: List<CgNativeExt> = this.nativeExtensions.get(calleeText).value()
+            var e: Int = 0
+            while (e < extensions.size()) {
+                val ext: CgNativeExt = extensions[e]
+                if (!xmlIsEmpty(recv) && !xmlIsEmpty(ext.receiver)
+                    && this.unifyType(ext.receiver, recv, ext.typeParams)
+                    && !xmlIsEmpty(ext.returnType)) {
+                    return ext.returnType
+                }
+                e = e + 1
+            }
+        }
+        if (!xmlIsEmpty(recv) && xmlKind(recv) == "Type.Generic") {
+            val typeArgs: List<XmlNode> = xmlChildren(recv, "TypeArg")
+            if (calleeText == "value" && xmlAttr(recv, "name") == "Opt" && typeArgs.size() > 0) {
+                return typeArgs[0]
+            }
+        }
+        if (!xmlIsEmpty(recv) && (calleeText == "size" || calleeText == "count")) {
+            val recvName: Str = xmlAttr(recv, "name")
+            if (recvName == "List" || recvName == "Str" || recvName == "Array"
+                || recvName == "Dictionary" || recvName == "SmallVector") {
+                return this.namedType("Int")
+            }
+        }
+        if (calleeText == "isOk" || calleeText == "hasValue") {
+            return this.namedType("Bool")
+        }
+        return xmlEmptyNode()
+    }
+
+    fun inferType(e: XmlNode): XmlNode {
+        val kind: Str = xmlKind(e)
+        if (kind == "Expr.IntLit") {
+            return this.namedType("Int")
+        }
+        if (kind == "Expr.FloatLit") {
+            return this.namedType("Float64")
+        }
+        if (kind == "Expr.StrLit") {
+            return this.namedType("Str")
+        }
+        if (kind == "Expr.CharLit") {
+            return this.namedType("Char")
+        }
+        if (kind == "Expr.BoolLit") {
+            return this.namedType("Bool")
+        }
+        if (kind == "Expr.NullLit") {
+            return xmlEmptyNode()
+        }
+        if (kind == "Expr.Name") {
+            val name: Str = xmlAttr(e, "name")
+            if (name == "this") {
+                return this.selfType
+            }
+            if (this.localTypes.has(name)) {
+                return this.localTypes.get(name).value()
+            }
+            if (this.enumNames.has(name)) {
+                return this.namedType(name)
+            }
+            return xmlEmptyNode()
+        }
+        if (kind == "Expr.GenericName") {
+            return this.genericType(xmlAttr(e, "name"), xmlChildren(e, "TypeArg"))
+        }
+        if (kind == "Expr.Member") {
+            val lhs: XmlNode = xmlChild(e, "Receiver")
+            if (xmlKind(lhs) == "Expr.Name" && this.enumNames.has(xmlAttr(lhs, "name"))) {
+                return this.namedType(xmlAttr(lhs, "name"))
+            }
+            val baseType: XmlNode = this.inferType(lhs)
+            val base: XmlNode = this.pointee(baseType)
+            if (xmlIsEmpty(base)) {
+                return xmlEmptyNode()
+            }
+            val memberText: Str = xmlAttr(e, "name")
+            if (xmlKind(base) == "Type.Generic" && xmlAttr(base, "name") == "Res") {
+                val typeArgs: List<XmlNode> = xmlChildren(base, "TypeArg")
+                if (memberText == "value" && typeArgs.size() > 0) {
+                    return typeArgs[0]
+                }
+                if (memberText == "error") {
+                    return this.namedType("Str")
+                }
+            }
+            val baseKind: Str = xmlKind(base)
+            if (baseKind == "Type.Named" || baseKind == "Type.Generic") {
+                val baseName: Str = xmlAttr(base, "name")
+                if (this.types.has(baseName)) {
+                    val decl: XmlNode = this.types.get(baseName).value()
+                    if (decl.name == "DataClass") {
+                        val fields: List<XmlNode> = xmlChildren(decl, "Field")
+                        var i: Int = 0
+                        while (i < fields.size()) {
+                            if (xmlAttr(fields[i], "name") == memberText) {
+                                return xmlChild(fields[i], "Type")
+                            }
+                            i = i + 1
+                        }
+                    }
+                }
+            }
+            return xmlEmptyNode()
+        }
+        if (kind == "Expr.Call") {
+            val callee: XmlNode = xmlChild(e, "Callee")
+            val calleeKind: Str = xmlKind(callee)
+            if (calleeKind == "Expr.GenericName") {
+                val name: Str = xmlAttr(callee, "name")
+                if (this.types.has(name) || cgIsRtlTypeName(name)) {
+                    return this.genericType(name, xmlChildren(callee, "TypeArg"))
+                }
+                return this.functionReturn(name)
+            }
+            if (calleeKind == "Expr.Name") {
+                val name: Str = xmlAttr(callee, "name")
+                if (this.types.has(name) || cgIsRtlTypeName(name)) {
+                    return this.namedType(name)
+                }
+                return this.functionReturn(name)
+            }
+            if (calleeKind == "Expr.Member") {
+                return this.memberCallReturn(callee)
+            }
+            return xmlEmptyNode()
+        }
+        if (kind == "Expr.Index") {
+            val baseType: XmlNode = this.inferType(xmlChild(e, "Receiver"))
+            val base: XmlNode = this.pointee(baseType)
+            if (xmlIsEmpty(base)) {
+                return xmlEmptyNode()
+            }
+            if (xmlKind(base) == "Type.Named" && xmlAttr(base, "name") == "Str") {
+                return this.namedType("Char")
+            }
+            if (xmlKind(base) != "Type.Generic") {
+                return xmlEmptyNode()
+            }
+            val typeArgs: List<XmlNode> = xmlChildren(base, "TypeArg")
+            if (typeArgs.size() == 0) {
+                return xmlEmptyNode()
+            }
+            val baseName: Str = xmlAttr(base, "name")
+            if (baseName == "SmallVector" && typeArgs.size() == 2) {
+                return typeArgs[1]
+            }
+            if (baseName == "Dictionary" && typeArgs.size() == 2) {
+                return typeArgs[1]
+            }
+            return typeArgs[0]
+        }
+        if (kind == "Expr.Ref") {
+            var node: XmlNode = XmlNode("Type", List<Attribute>(), &List<XmlNode>())
+            node.attributes.append(Attribute("kind", "Type.Reference"))
+            node.Children.append(this.renameRole(this.inferType(xmlChild(e, "Operand")), "Inner"))
+            return node
+        }
+        if (kind == "Expr.Deref") {
+            var node: XmlNode = XmlNode("Type", List<Attribute>(), &List<XmlNode>())
+            node.attributes.append(Attribute("kind", "Type.Pointer"))
+            node.Children.append(this.renameRole(this.inferType(xmlChild(e, "Operand")), "Inner"))
+            return node
+        }
+        if (kind == "Expr.Copy" || kind == "Expr.Unary") {
+            return this.inferType(xmlChild(e, "Operand"))
+        }
+        if (kind == "Expr.Binary") {
+            val op: Str = xmlAttr(e, "op")
+            if (op == "==" || op == "!=" || op == "<" || op == ">" || op == "<=" || op == ">="
+                || op == "&&" || op == "||") {
+                return this.namedType("Bool")
+            }
+            return this.inferType(xmlChild(e, "Lhs"))
+        }
+        if (kind == "Expr.Lambda") {
+            var fnType: XmlNode = XmlNode("Type", List<Attribute>(), &List<XmlNode>())
+            fnType.attributes.append(Attribute("kind", "Type.Function"))
+            val paramTypes: List<XmlNode> = xmlChildren(e, "ParamType")
+            var i: Int = 0
+            while (i < paramTypes.size()) {
+                fnType.Children.append(paramTypes[i])
+                i = i + 1
+            }
+            return fnType
+        }
+        return xmlEmptyNode()
+    }
+
+    // Re-roots `child` under `role` (a shallow copy whose element name changes).
+    fun renameRole(child: XmlNode, role: Str): XmlNode {
+        var renamed: XmlNode = child
+        renamed.name = role
+        return renamed
+    }
+
+    // The receiver argument for a lowered call, dereferencing a handle.
+    fun receiverArg(pattern: XmlNode, recv: XmlNode): Str {
+        if (this.isHandleType(pattern)) {
+            return this.expr(recv, 9, xmlEmptyNode())
+        }
+        val recvType: XmlNode = this.inferType(recv)
+        if (this.isHandleType(recvType)) {
+            return "(*" + this.expr(recv, 9, xmlEmptyNode()) + ")"
+        }
+        return this.expr(recv, 9, xmlEmptyNode())
+    }
+
+    // Index into `functions` of a Simse extension matching the receiver, or -1.
+    fun findExtensionFn(name: Str, recvExpr: XmlNode): Int {
+        val recvType: XmlNode = this.inferType(recvExpr)
+        val recv: XmlNode = this.pointee(recvType)
+        if (xmlIsEmpty(recv)) {
+            return -1
+        }
+        var i: Int = 0
+        while (i < this.functions.size()) {
+            val fn: CgFn = this.functions[i]
+            if (xmlAttr(fn.decl, "isNative") == "true" || xmlIsEmpty(fn.receiver)) {
+                i = i + 1
+                continue
+            }
+            if (xmlAttr(fn.decl, "name") == name && this.unifyType(fn.receiver, recv, fn.templateParams)) {
+                return i
+            }
+            i = i + 1
+        }
+        return -1
+    }
+
+    // Index into `nativeExtensions[name]` of a matching receiver, or -1.
+    fun findNativeExt(name: Str, recvExpr: XmlNode): Int {
+        if (!this.nativeExtensions.has(name)) {
+            return -1
+        }
+        val recvType: XmlNode = this.inferType(recvExpr)
+        val recv: XmlNode = this.pointee(recvType)
+        if (xmlIsEmpty(recv)) {
+            return -1
+        }
+        val extensions: List<CgNativeExt> = this.nativeExtensions.get(name).value()
+        var i: Int = 0
+        while (i < extensions.size()) {
+            val ext: CgNativeExt = extensions[i]
+            if (!xmlIsEmpty(ext.receiver) && this.unifyType(ext.receiver, recv, ext.typeParams)) {
+                return i
+            }
+            i = i + 1
+        }
+        return -1
+    }
+
+    fun memberAccess(base: XmlNode, name: Str): Str {
+        var arrow: Bool = false
+        val baseType: XmlNode = this.inferType(base)
+        if (!xmlIsEmpty(baseType)) {
+            arrow = this.isHandleType(baseType)
+        } else if (xmlKind(base) == "Expr.Name") {
+            val baseName: Str = xmlAttr(base, "name")
+            if (baseName == "this") {
+                arrow = this.selfKind != NameKind.Value
+            } else if (this.nameKinds.has(baseName) && this.nameKinds.get(baseName).value() == NameKind.Shared) {
+                arrow = true
+            }
+        }
+        var field: Str = name
+        val recv: XmlNode = this.pointee(baseType)
+        if (!xmlIsEmpty(recv) && xmlKind(recv) == "Type.Generic" && xmlAttr(recv, "name") == "Res") {
+            if (name == "value") {
+                field = "Value"
+            } else if (name == "error") {
+                field = "Error"
+            }
+        }
+        var op: Str = "."
+        if (arrow) {
+            op = "->"
+        }
+        return this.expr(base, 9, xmlEmptyNode()) + op + field
+    }
+
+    fun nullTo(expected: XmlNode): Str {
+        if (!xmlIsEmpty(expected) && xmlKind(expected) == "Type.Generic" && xmlAttr(expected, "name") == "Opt") {
+            return "Opt<" + this.typeArgsString("Opt", xmlChildren(expected, "TypeArg")) + ">()"
+        }
+        return "nullptr"
+    }
+
+    fun resolveAlias(typeNode: XmlNode): XmlNode {
+        var current: XmlNode = typeNode
+        var guard: Int = 0
+        while (!xmlIsEmpty(current) && xmlKind(current) == "Type.Named") {
+            guard = guard + 1
+            if (guard >= 100) {
+                break
+            }
+            val name: Str = xmlAttr(current, "name")
+            if (!this.types.has(name)) {
+                break
+            }
+            val decl: XmlNode = this.types.get(name).value()
+            if (decl.name != "TypeAlias") {
+                break
+            }
+            val target: XmlNode = xmlChild(decl, "TargetType")
+            if (xmlIsEmpty(target)) {
+                break
+            }
+            current = target
+        }
+        return current
+    }
+
+    fun expectedCallable(expected: XmlNode): XmlNode {
+        val resolved: XmlNode = this.resolveAlias(expected)
+        if (!xmlIsEmpty(resolved) && xmlKind(resolved) == "Type.Function") {
+            return resolved
+        }
+        return xmlEmptyNode()
+    }
+
+    fun findFunction(name: Str, argCount: Int): XmlNode {
+        var i: Int = 0
+        while (i < this.functions.size()) {
+            val fn: CgFn = this.functions[i]
+            i = i + 1
+            if (xmlAttr(fn.decl, "isNative") == "true" || xmlAttr(fn.decl, "name") != name) {
+                continue
+            }
+            if (xmlCount(fn.decl, "Param") == argCount) {
+                return fn.decl
+            }
+        }
+        return xmlEmptyNode()
+    }
+
+    fun isUnitType(typeNode: XmlNode): Bool {
+        if (xmlIsEmpty(typeNode)) {
+            return true
+        }
+        return xmlKind(typeNode) == "Type.Named" && xmlAttr(typeNode, "name") == "Unit"
+    }
+
+    fun inferLambdaReturn(e: XmlNode): XmlNode {
+        val body: List<XmlNode> = xmlChildren(xmlChild(e, "Body"), "Stmt")
+        if (body.size() == 1 && xmlKind(body[0]) == "Stmt.ExprStmt"
+            && !xmlIsEmpty(xmlChild(body[0], "Expr"))) {
+            return this.inferType(xmlChild(body[0], "Expr"))
+        }
+        var i: Int = 0
+        while (i < body.size()) {
+            if (xmlKind(body[i]) == "Stmt.Return" && !xmlIsEmpty(xmlChild(body[i], "Value"))) {
+                return this.inferType(xmlChild(body[i], "Value"))
+            }
+            i = i + 1
+        }
+        return xmlEmptyNode()
+    }
+
+    fun lambda(e: XmlNode, expected: XmlNode): Str {
+        val callable: XmlNode = this.expectedCallable(expected)
+        val savedKinds: Dictionary<Str, NameKind> = this.nameKinds
+        val savedTypes: Dictionary<Str, XmlNode> = this.localTypes
+
+        val names: List<Str> = xmlLambdaParams(e)
+        val typeNodes: List<XmlNode> = xmlChildren(e, "ParamType")
+        var params: List<Str> = List<Str>()
+        var i: Int = 0
+        while (i < names.size()) {
+            var paramType: XmlNode = xmlEmptyNode()
+            if (typeNodes.size() == names.size()) {
+                paramType = typeNodes[i]
+            }
+            if (xmlIsEmpty(paramType) && !xmlIsEmpty(callable)) {
+                val callableParams: List<XmlNode> = xmlChildren(callable, "ParamType")
+                if (i < callableParams.size()) {
+                    paramType = callableParams[i]
+                }
+            }
+            if (xmlIsEmpty(paramType)) {
+                this.nameKinds = savedKinds
+                this.localTypes = savedTypes
+                this.fail(e, "unsupported: lambda parameter '" + names[i]
+                              + "' has no type and no expected callable type")
+                return "/*unsupported*/"
+            }
+            params.append(this.type(paramType) + " " + names[i])
+            this.nameKinds.insert(names[i], this.kindOf(paramType))
+            this.localTypes.insert(names[i], paramType)
+            if (this.failed) {
+                this.nameKinds = savedKinds
+                this.localTypes = savedTypes
+                return "/*unsupported*/"
+            }
+            i = i + 1
+        }
+
+        var returnType: XmlNode = xmlEmptyNode()
+        if (!xmlIsEmpty(callable)) {
+            returnType = xmlChild(callable, "ReturnType")
+        }
+        if (xmlIsEmpty(returnType)) {
+            returnType = this.inferLambdaReturn(e)
+        }
+        val unitReturn: Bool = this.isUnitType(returnType)
+
+        var head: Str = "[=](" + cgJoin(params, ", ") + ")"
+        if (!unitReturn) {
+            head = head + " -> " + this.type(returnType)
+        }
+        if (this.failed) {
+            this.nameKinds = savedKinds
+            this.localTypes = savedTypes
+            return "/*unsupported*/"
+        }
+
+        var body: Str = ""
+        val bodyStmts: List<XmlNode> = xmlChildren(xmlChild(e, "Body"), "Stmt")
+        var singleExpression: Bool = false
+        if (bodyStmts.size() == 1 && xmlKind(bodyStmts[0]) == "Stmt.ExprStmt"
+            && !xmlIsEmpty(xmlChild(bodyStmts[0], "Expr"))) {
+            singleExpression = true
+        }
+        if (singleExpression && !unitReturn) {
+            body = "return " + this.expr(xmlChild(bodyStmts[0], "Expr"), 0, returnType) + ";"
+        } else {
+            val savedOut: Str = this.out
+            this.out = ""
+            this.emitStmts(bodyStmts, 1)
+            body = this.out
+            this.out = savedOut
+        }
+
+        this.nameKinds = savedKinds
+        this.localTypes = savedTypes
+        if (this.failed) {
+            return "/*unsupported*/"
+        }
+
+        if (body.find("\n") == -1) {
+            return head + " { " + body + " }"
+        }
+        return head + " {\n" + body + "}"
+    }
+
+    fun exprInner(e: XmlNode, expected: XmlNode): Str {
+        val kind: Str = xmlKind(e)
+        if (kind == "Expr.IntLit" || kind == "Expr.FloatLit" || kind == "Expr.StrLit"
+            || kind == "Expr.CharLit") {
+            return xmlAttr(e, "text")
+        }
+        if (kind == "Expr.BoolLit") {
+            return xmlAttr(e, "value")
+        }
+        if (kind == "Expr.NullLit") {
+            return this.nullTo(expected)
+        }
+        if (kind == "Expr.Name") {
+            if (xmlAttr(e, "name") == "this") {
+                return "self"
+            }
+            return xmlAttr(e, "name")
+        }
+        if (kind == "Expr.GenericName") {
+            this.fail(e, "unsupported: generic-qualified expression '" + xmlAttr(e, "name") + "<...>'")
+            return "/*unsupported*/"
+        }
+        if (kind == "Expr.Member") {
+            val lhs: XmlNode = xmlChild(e, "Receiver")
+            if (xmlKind(lhs) == "Expr.Name" && this.enumNames.has(xmlAttr(lhs, "name"))) {
+                return xmlAttr(lhs, "name") + "::" + xmlAttr(e, "name")
+            }
+            return this.memberAccess(lhs, xmlAttr(e, "name"))
+        }
+        if (kind == "Expr.Call") {
+            return this.call(e)
+        }
+        if (kind == "Expr.Index") {
+            val lhs: XmlNode = xmlChild(e, "Receiver")
+            val baseExpr: Str = this.expr(lhs, 9, xmlEmptyNode())
+            val baseType: XmlNode = this.inferType(lhs)
+            var deref: Bool = false
+            if (!xmlIsEmpty(baseType)) {
+                if (this.isHandleType(baseType) && xmlKind(baseType) != "Type.Pointer") {
+                    deref = true
+                } else if (xmlKind(baseType) == "Type.Pointer") {
+                    deref = this.isIndexableContainer(xmlChild(baseType, "Inner"))
+                }
+            }
+            if (deref) {
+                return "(*" + baseExpr + ")[" + this.expr(xmlChild(e, "Index"), 0, xmlEmptyNode()) + "]"
+            }
+            return baseExpr + "[" + this.expr(xmlChild(e, "Index"), 0, xmlEmptyNode()) + "]"
+        }
+        if (kind == "Expr.Unary") {
+            return xmlAttr(e, "op") + this.expr(xmlChild(e, "Operand"), 7, xmlEmptyNode())
+        }
+        if (kind == "Expr.Binary") {
+            val lhs: XmlNode = xmlChild(e, "Lhs")
+            val rhs: XmlNode = xmlChild(e, "Rhs")
+            val op: Str = xmlAttr(e, "op")
+            if (xmlKind(lhs) == "Expr.NullLit" || xmlKind(rhs) == "Expr.NullLit") {
+                var other: XmlNode = lhs
+                if (xmlKind(lhs) == "Expr.NullLit") {
+                    other = rhs
+                }
+                val otherType: XmlNode = this.pointee(this.inferType(other))
+                if (!xmlIsEmpty(otherType) && xmlKind(otherType) == "Type.Generic"
+                    && xmlAttr(otherType, "name") == "Opt") {
+                    val hasValue: Str = this.expr(other, 9, xmlEmptyNode()) + ".hasValue()"
+                    if (op == "==") {
+                        return "!(" + hasValue + ")"
+                    }
+                    if (op == "!=") {
+                        return "(" + hasValue + ")"
+                    }
+                    this.fail(e, "unsupported: Opt-vs-null comparison '" + op + "'")
+                    return "/*unsupported*/"
+                }
+            }
+            val p: Int = cgPrecedence(e)
+            var lhsExpected: XmlNode = xmlEmptyNode()
+            if (xmlKind(lhs) == "Expr.NullLit") {
+                lhsExpected = this.inferType(rhs)
+            }
+            var rhsExpected: XmlNode = xmlEmptyNode()
+            if (xmlKind(rhs) == "Expr.NullLit") {
+                rhsExpected = this.inferType(lhs)
+            }
+            return this.expr(lhs, p, lhsExpected) + " " + op + " " + this.expr(rhs, p + 1, rhsExpected)
+        }
+        if (kind == "Expr.Lambda") {
+            return this.lambda(e, expected)
+        }
+        if (kind == "Expr.Ref") {
+            val operandNode: XmlNode = xmlChild(e, "Operand")
+            if (xmlKind(operandNode) == "Expr.Call") {
+                val callee: XmlNode = xmlChild(operandNode, "Callee")
+                if (xmlKind(callee) == "Expr.GenericName" && xmlAttr(callee, "name") == "List"
+                    && xmlCount(operandNode, "Arg") == 0) {
+                    return "makeList<" + this.typeArgsString("List", xmlChildren(callee, "TypeArg")) + ">()"
+                }
+            }
+            val operand: Str = this.expr(operandNode, 0, xmlEmptyNode())
+            return "std::make_shared<std::remove_cvref_t<decltype((" + operand + "))>>(" + operand + ")"
+        }
+        if (kind == "Expr.Deref") {
+            val operandNode: XmlNode = xmlChild(e, "Operand")
+            val operand: Str = this.expr(operandNode, 7, xmlEmptyNode())
+            val operandType: XmlNode = this.inferType(operandNode)
+            var nameKind: NameKind = NameKind.Value
+            if (!xmlIsEmpty(operandType)) {
+                nameKind = this.kindOf(operandType)
+            } else {
+                nameKind = this.operandKind(operandNode)
+            }
+            if (nameKind == NameKind.Shared) {
+                return "(" + operand + ").get()"
+            }
+            return "*" + operand
+        }
+        if (kind == "Expr.Copy") {
+            val operandNode: XmlNode = xmlChild(e, "Operand")
+            val operand: Str = this.expr(operandNode, 0, xmlEmptyNode())
+            val operandType: XmlNode = this.inferType(operandNode)
+            var nameKind: NameKind = NameKind.Value
+            if (!xmlIsEmpty(operandType)) {
+                nameKind = this.kindOf(operandType)
+            } else {
+                nameKind = this.operandKind(operandNode)
+            }
+            if (nameKind == NameKind.Shared || nameKind == NameKind.Pointer) {
+                return "*(" + operand + ")"
+            }
+            return "(" + operand + ")"
+        }
+        return "/*unsupported*/"
+    }
+
+    fun call(e: XmlNode): Str {
+        val callee: XmlNode = xmlChild(e, "Callee")
+        val calleeKind: Str = xmlKind(callee)
+        val argNodes: List<XmlNode> = xmlChildren(e, "Arg")
+
+        if (calleeKind == "Expr.GenericName") {
+            var args: List<Str> = List<Str>()
+            var i: Int = 0
+            while (i < argNodes.size()) {
+                args.append(this.expr(argNodes[i], 0, xmlEmptyNode()))
+                i = i + 1
+            }
+            val name: Str = xmlAttr(callee, "name")
+            var calleeName: Str = name
+            val nativeOpt: Opt<Str> = this.nativeSymbols.get(name)
+            var hasPlainFunction: Bool = false
+            var f: Int = 0
+            while (f < this.functions.size()) {
+                val candidate: CgFn = this.functions[f]
+                if (xmlAttr(candidate.decl, "isNative") != "true"
+                    && xmlAttr(candidate.decl, "name") == name) {
+                    hasPlainFunction = true
+                }
+                f = f + 1
+            }
+            if (!hasPlainFunction && nativeOpt.hasValue()) {
+                calleeName = nativeOpt.value()
+            }
+            return calleeName + "<" + this.typeArgsString(name, xmlChildren(callee, "TypeArg"))
+                   + ">(" + cgJoin(args, ", ") + ")"
+        }
+        if (calleeKind == "Expr.Name") {
+            val name: Str = xmlAttr(callee, "name")
+            if (name == "println" || name == "print") {
+                var arg: Str = ""
+                if (argNodes.size() > 0) {
+                    arg = this.expr(argNodes[0], 0, xmlEmptyNode())
+                }
+                var s: Str = "std::cout << std::boolalpha << (" + arg + ")"
+                if (name == "println") {
+                    s = s + " << std::endl"
+                }
+                return s
+            }
+            val target: XmlNode = this.findFunction(name, argNodes.size())
+            var args: List<Str> = List<Str>()
+            val targetParams: List<XmlNode> = xmlChildren(target, "Param")
+            var i: Int = 0
+            while (i < argNodes.size()) {
+                var expectedArg: XmlNode = xmlEmptyNode()
+                if (!xmlIsEmpty(target) && i < targetParams.size()) {
+                    expectedArg = xmlChild(targetParams[i], "Type")
+                }
+                args.append(this.expr(argNodes[i], 0, expectedArg))
+                i = i + 1
+            }
+            val nativeOpt: Opt<Str> = this.nativeSymbols.get(name)
+            var hasPlainFunction: Bool = false
+            var f: Int = 0
+            while (f < this.functions.size()) {
+                val candidate: CgFn = this.functions[f]
+                if (xmlAttr(candidate.decl, "isNative") != "true"
+                    && xmlAttr(candidate.decl, "name") == name) {
+                    hasPlainFunction = true
+                }
+                f = f + 1
+            }
+            var calleeName: Str = name
+            if (!hasPlainFunction && nativeOpt.hasValue()) {
+                calleeName = nativeOpt.value()
+            }
+            return calleeName + "(" + cgJoin(args, ", ") + ")"
+        }
+        if (calleeKind == "Expr.Member") {
+            var args: List<Str> = List<Str>()
+            var i: Int = 0
+            while (i < argNodes.size()) {
+                args.append(this.expr(argNodes[i], 0, xmlEmptyNode()))
+                i = i + 1
+            }
+            val calleeText: Str = xmlAttr(callee, "name")
+            val receiverExpr: XmlNode = xmlChild(callee, "Receiver")
+
+            // Enum conversions: `x.toInt()` and `Enum.fromInt(v)`.
+            if (calleeText == "toInt") {
+                val enumReceiver: XmlNode = this.pointee(this.inferType(receiverExpr))
+                if (!xmlIsEmpty(enumReceiver) && xmlKind(enumReceiver) == "Type.Named"
+                    && this.enumNames.has(xmlAttr(enumReceiver, "name"))) {
+                    return "static_cast<Int>(" + this.expr(receiverExpr, 9, xmlEmptyNode()) + ")"
+                }
+            }
+            if (calleeText == "fromInt" && xmlKind(receiverExpr) == "Expr.Name"
+                && this.enumNames.has(xmlAttr(receiverExpr, "name"))) {
+                return "simse_" + xmlAttr(receiverExpr, "name") + "_fromInt(" + cgJoin(args, ", ") + ")"
+            }
+            if (xmlKind(receiverExpr) == "Expr.GenericName") {
+                return xmlAttr(receiverExpr, "name") + "<"
+                       + this.typeArgsString(xmlAttr(receiverExpr, "name"), xmlChildren(receiverExpr, "TypeArg"))
+                       + ">::" + calleeText + "(" + cgJoin(args, ", ") + ")"
+            }
+
+            val receiverType: XmlNode = this.inferType(receiverExpr)
+            val receiver: XmlNode = this.pointee(receiverType)
+            if (!xmlIsEmpty(receiver)) {
+                val fnIndex: Int = this.findExtensionFn(calleeText, receiverExpr)
+                if (fnIndex >= 0) {
+                    val fn: CgFn = this.functions[fnIndex]
+                    var all: Str = this.receiverArg(fn.receiver, receiverExpr)
+                    var a: Int = 0
+                    while (a < args.size()) {
+                        all = all + ", " + args[a]
+                        a = a + 1
+                    }
+                    return xmlAttr(fn.decl, "name") + "(" + all + ")"
+                }
+                val extIndex: Int = this.findNativeExt(calleeText, receiverExpr)
+                if (extIndex >= 0) {
+                    val extensions: List<CgNativeExt> = this.nativeExtensions.get(calleeText).value()
+                    val ext: CgNativeExt = extensions[extIndex]
+                    var all: Str = this.receiverArg(ext.receiver, receiverExpr)
+                    var a: Int = 0
+                    while (a < args.size()) {
+                        all = all + ", " + args[a]
+                        a = a + 1
+                    }
+                    return ext.symbol + "(" + all + ")"
+                }
+                return this.memberAccess(receiverExpr, calleeText) + "(" + cgJoin(args, ", ") + ")"
+            }
+
+            if (this.receiverFnNames.has(calleeText)) {
+                var all: Str = this.expr(receiverExpr, 9, xmlEmptyNode())
+                var a: Int = 0
+                while (a < args.size()) {
+                    all = all + ", " + args[a]
+                    a = a + 1
+                }
+                return calleeText + "(" + all + ")"
+            }
+            if (this.nativeExtensions.has(calleeText)) {
+                val extensions: List<CgNativeExt> = this.nativeExtensions.get(calleeText).value()
+                if (extensions.size() > 0) {
+                    var all: Str = this.expr(receiverExpr, 9, xmlEmptyNode())
+                    var a: Int = 0
+                    while (a < args.size()) {
+                        all = all + ", " + args[a]
+                        a = a + 1
+                    }
+                    return extensions[0].symbol + "(" + all + ")"
+                }
+            }
+            return this.memberAccess(receiverExpr, calleeText) + "(" + cgJoin(args, ", ") + ")"
+        }
+        this.fail(e, "unsupported: call target")
+        return "/*unsupported*/"
+    }
+
+    // ---- prelude ----------------------------------------------------------
+
+    fun preludeText(): Unit {
+        var text: Str = "// Generated by simse_transpile. Do not edit.\n"
+        text = text + "#include \"cppsrc/rtl/simse.hpp\"\n"
+        text = text + "#include <iostream>\n"
+        text = text + "#include <type_traits>\n"
+        text = text + "\n"
+        this.out = text
+    }
+
+    fun run(): Res<Str> {
+        this.collect()
+        this.preludeText()
+        this.emitNativeDeclarations()
+        if (this.failed) {
+            return Res<Str>.err(this.error)
+        }
+        this.emitTypes()
+        if (this.failed) {
+            return Res<Str>.err(this.error)
+        }
+        this.emitFunctions(true)
+        if (this.failed) {
+            return Res<Str>.err(this.error)
+        }
+        this.emitFunctions(false)
+        if (this.failed) {
+            return Res<Str>.err(this.error)
+        }
+        return Res<Str>.ok(this.out)
+    }
+}
+
+// ---- entry point ----------------------------------------------------------
+
+fun newEmitter(inputs: List<CgInput>): Emitter {
+    return Emitter(
+        inputs,
+        "",
+        false,
+        "",
+        "",
+        Dictionary<Str, XmlNode>(),
+        Dictionary<Str, Bool>(),
+        List<CgFn>(),
+        Dictionary<Str, Bool>(),
+        List<CgNativeDecl>(),
+        Dictionary<Str, Str>(),
+        Dictionary<Str, List<CgNativeExt>>(),
+        Dictionary<Str, Bool>(),
+        Dictionary<Str, NameKind>(),
+        Dictionary<Str, XmlNode>(),
+        NameKind.Value,
+        xmlEmptyNode(),
+        xmlEmptyNode()
+    )
+}
+
+// Amalgamates every input into one C++ translation unit. Deterministic: the same
+// inputs always produce byte-identical output. On failure the error is formatted
+// as "<file>:<line>:<col>: <message>".
+fun emitProgram(inputs: List<CgInput>): Res<Str> {
+    var emitter: Emitter = newEmitter(inputs)
+    return emitter.run()
+}

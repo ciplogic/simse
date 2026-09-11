@@ -290,4 +290,14 @@ namespace tests {
         Res<Str> emitted = codegen::emitProgram(inputs);
         return emitted.isOk() ? emitted.Value : Str("");
     }
+
+    List<Str> analyzeWithPrelude(const ast::Module& module, const Str& displayName) {
+        bool hasPrelude = false;
+        const ast::Module *prelude = defaultPrelude(hasPrelude);
+        if (!hasPrelude) {
+            return sema::analyze(module, displayName);
+        }
+        ast::Module combined = combineWithPrelude(*prelude, module);
+        return sema::analyze(combined, displayName);
+    }
 }

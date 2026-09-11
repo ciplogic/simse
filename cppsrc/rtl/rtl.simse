@@ -14,6 +14,24 @@
 native("simse_list_append") fun append<T>(this: List<T>, value: T): Unit
 native("simse_list_removeAt") fun removeAt<T>(this: List<T>, index: Int): Unit
 native("simse_list_removeRange") fun removeRange<T>(this: List<T>, start: Int, end: Int): Unit
+native("simse_list_contains") fun contains<T>(this: List<T>, value: T): Bool
+// In-place sort; the comparator is a `(T, T) -> Bool` lambda (std::sort).
+native("simse_list_sort") fun sort<T>(this: List<T>, less: (T, T) -> Bool): Unit
+
+// ---- Dictionary<K, V> -----------------------------------------------------
+
+// `Dictionary<K, V>` is a value type (`std::unordered_map`); these are the
+// operations the language exposes on it. Keys/values are returned in the
+// dictionary's iteration order, which is unspecified: sort for determinism.
+native("simse_dictionaryOf") fun dictionaryOf<K, V>(): Dictionary<K, V>
+native("simse_dict_get") fun get<K, V>(this: Dictionary<K, V>, key: K): Opt<V>
+native("simse_dict_has") fun has<K, V>(this: Dictionary<K, V>, key: K): Bool
+native("simse_dict_insert") fun insert<K, V>(this: Dictionary<K, V>, key: K, value: V): Unit
+native("simse_dict_remove") fun remove<K, V>(this: Dictionary<K, V>, key: K): Unit
+native("simse_dict_size") fun size<K, V>(this: Dictionary<K, V>): Int
+native("simse_dict_keys") fun keys<K, V>(this: Dictionary<K, V>): List<K>
+native("simse_dict_values") fun values<K, V>(this: Dictionary<K, V>): List<V>
+native("simse_dict_clear") fun clear<K, V>(this: Dictionary<K, V>): Unit
 
 // ---- Str ------------------------------------------------------------------
 

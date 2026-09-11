@@ -1,0 +1,386 @@
+Comment	1:1	// Exercises the Dictionary surface and the List extras (T20): insert, get, has,
+EndOfLine	1:81	\r\n
+Comment	2:1	// size, keys/values (sorted for determinism), contains, sort, remove, clear.
+EndOfLine	2:78	\r\n
+EndOfLine	3:1	\r\n
+ReservedWord	4:1	fun
+Space	4:4	 
+Identifier	4:5	main
+Operator	4:9	(
+Operator	4:10	)
+Operator	4:11	:
+Space	4:12	 
+Identifier	4:13	Int
+Space	4:16	 
+Operator	4:17	{
+EndOfLine	4:18	\r\n
+Space	5:1	    
+ReservedWord	5:5	var
+Space	5:8	 
+Identifier	5:9	counts
+Operator	5:15	:
+Space	5:16	 
+Identifier	5:17	Dictionary
+Operator	5:27	<
+Identifier	5:28	Str
+Operator	5:31	,
+Space	5:32	 
+Identifier	5:33	Int
+Operator	5:36	>
+Space	5:37	 
+Operator	5:38	=
+Space	5:39	 
+Identifier	5:40	dictionaryOf
+Operator	5:52	<
+Identifier	5:53	Str
+Operator	5:56	,
+Space	5:57	 
+Identifier	5:58	Int
+Operator	5:61	>
+Operator	5:62	(
+Operator	5:63	)
+EndOfLine	5:64	\r\n
+Space	6:1	    
+Identifier	6:5	counts
+Operator	6:11	.
+Identifier	6:12	insert
+Operator	6:18	(
+String	6:19	"b"
+Operator	6:22	,
+Space	6:23	 
+Number	6:24	2
+Operator	6:25	)
+EndOfLine	6:26	\r\n
+Space	7:1	    
+Identifier	7:5	counts
+Operator	7:11	.
+Identifier	7:12	insert
+Operator	7:18	(
+String	7:19	"a"
+Operator	7:22	,
+Space	7:23	 
+Number	7:24	1
+Operator	7:25	)
+EndOfLine	7:26	\r\n
+Space	8:1	    
+Identifier	8:5	counts
+Operator	8:11	.
+Identifier	8:12	insert
+Operator	8:18	(
+String	8:19	"c"
+Operator	8:22	,
+Space	8:23	 
+Number	8:24	3
+Operator	8:25	)
+EndOfLine	8:26	\r\n
+Space	9:1	    
+Identifier	9:5	counts
+Operator	9:11	.
+Identifier	9:12	insert
+Operator	9:18	(
+String	9:19	"b"
+Operator	9:22	,
+Space	9:23	 
+Number	9:24	20
+Operator	9:26	)
+EndOfLine	9:27	\r\n
+EndOfLine	10:1	\r\n
+Space	11:1	    
+Identifier	11:5	println
+Operator	11:12	(
+Identifier	11:13	counts
+Operator	11:19	.
+Identifier	11:20	size
+Operator	11:24	(
+Operator	11:25	)
+Operator	11:26	)
+EndOfLine	11:27	\r\n
+Space	12:1	    
+Identifier	12:5	println
+Operator	12:12	(
+Identifier	12:13	counts
+Operator	12:19	.
+Identifier	12:20	get
+Operator	12:23	(
+String	12:24	"a"
+Operator	12:27	)
+Operator	12:28	.
+Identifier	12:29	value
+Operator	12:34	(
+Operator	12:35	)
+Operator	12:36	)
+EndOfLine	12:37	\r\n
+Space	13:1	    
+Identifier	13:5	println
+Operator	13:12	(
+Identifier	13:13	counts
+Operator	13:19	.
+Identifier	13:20	has
+Operator	13:23	(
+String	13:24	"z"
+Operator	13:27	)
+Operator	13:28	)
+EndOfLine	13:29	\r\n
+EndOfLine	14:1	\r\n
+Space	15:1	    
+ReservedWord	15:5	var
+Space	15:8	 
+Identifier	15:9	names
+Operator	15:14	:
+Space	15:15	 
+Identifier	15:16	List
+Operator	15:20	<
+Identifier	15:21	Str
+Operator	15:24	>
+Space	15:25	 
+Operator	15:26	=
+Space	15:27	 
+Identifier	15:28	counts
+Operator	15:34	.
+Identifier	15:35	keys
+Operator	15:39	(
+Operator	15:40	)
+EndOfLine	15:41	\r\n
+Space	16:1	    
+Identifier	16:5	names
+Operator	16:10	.
+Identifier	16:11	sort
+Operator	16:15	(
+Operator	16:16	(
+Identifier	16:17	left
+Operator	16:21	:
+Space	16:22	 
+Identifier	16:23	Str
+Operator	16:26	,
+Space	16:27	 
+Identifier	16:28	right
+Operator	16:33	:
+Space	16:34	 
+Identifier	16:35	Str
+Operator	16:38	)
+Space	16:39	 
+Operator	16:40	->
+Space	16:42	 
+Identifier	16:43	left
+Space	16:47	 
+Operator	16:48	<
+Space	16:49	 
+Identifier	16:50	right
+Operator	16:55	)
+EndOfLine	16:56	\r\n
+Space	17:1	    
+ReservedWord	17:5	var
+Space	17:8	 
+Identifier	17:9	i
+Operator	17:10	:
+Space	17:11	 
+Identifier	17:12	Int
+Space	17:15	 
+Operator	17:16	=
+Space	17:17	 
+Number	17:18	0
+EndOfLine	17:19	\r\n
+Space	18:1	    
+ReservedWord	18:5	while
+Space	18:10	 
+Operator	18:11	(
+Identifier	18:12	i
+Space	18:13	 
+Operator	18:14	<
+Space	18:15	 
+Identifier	18:16	names
+Operator	18:21	.
+Identifier	18:22	size
+Operator	18:26	(
+Operator	18:27	)
+Operator	18:28	)
+Space	18:29	 
+Operator	18:30	{
+EndOfLine	18:31	\r\n
+Space	19:1	        
+Identifier	19:9	println
+Operator	19:16	(
+Identifier	19:17	names
+Operator	19:22	[
+Identifier	19:23	i
+Operator	19:24	]
+Operator	19:25	)
+EndOfLine	19:26	\r\n
+Space	20:1	        
+Identifier	20:9	i
+Space	20:10	 
+Operator	20:11	=
+Space	20:12	 
+Identifier	20:13	i
+Space	20:14	 
+Operator	20:15	+
+Space	20:16	 
+Number	20:17	1
+EndOfLine	20:18	\r\n
+Space	21:1	    
+Operator	21:5	}
+EndOfLine	21:6	\r\n
+Space	22:1	    
+Identifier	22:5	println
+Operator	22:12	(
+Identifier	22:13	names
+Operator	22:18	.
+Identifier	22:19	contains
+Operator	22:27	(
+String	22:28	"c"
+Operator	22:31	)
+Operator	22:32	)
+EndOfLine	22:33	\r\n
+Space	23:1	    
+Identifier	23:5	println
+Operator	23:12	(
+Identifier	23:13	names
+Operator	23:18	.
+Identifier	23:19	contains
+Operator	23:27	(
+String	23:28	"z"
+Operator	23:31	)
+Operator	23:32	)
+EndOfLine	23:33	\r\n
+EndOfLine	24:1	\r\n
+Space	25:1	    
+ReservedWord	25:5	var
+Space	25:8	 
+Identifier	25:9	values
+Operator	25:15	:
+Space	25:16	 
+Identifier	25:17	List
+Operator	25:21	<
+Identifier	25:22	Int
+Operator	25:25	>
+Space	25:26	 
+Operator	25:27	=
+Space	25:28	 
+Identifier	25:29	counts
+Operator	25:35	.
+Identifier	25:36	values
+Operator	25:42	(
+Operator	25:43	)
+EndOfLine	25:44	\r\n
+Space	26:1	    
+Identifier	26:5	values
+Operator	26:11	.
+Identifier	26:12	sort
+Operator	26:16	(
+Operator	26:17	(
+Identifier	26:18	left
+Operator	26:22	:
+Space	26:23	 
+Identifier	26:24	Int
+Operator	26:27	,
+Space	26:28	 
+Identifier	26:29	right
+Operator	26:34	:
+Space	26:35	 
+Identifier	26:36	Int
+Operator	26:39	)
+Space	26:40	 
+Operator	26:41	->
+Space	26:43	 
+Identifier	26:44	left
+Space	26:48	 
+Operator	26:49	<
+Space	26:50	 
+Identifier	26:51	right
+Operator	26:56	)
+EndOfLine	26:57	\r\n
+Space	27:1	    
+ReservedWord	27:5	var
+Space	27:8	 
+Identifier	27:9	j
+Operator	27:10	:
+Space	27:11	 
+Identifier	27:12	Int
+Space	27:15	 
+Operator	27:16	=
+Space	27:17	 
+Number	27:18	0
+EndOfLine	27:19	\r\n
+Space	28:1	    
+ReservedWord	28:5	while
+Space	28:10	 
+Operator	28:11	(
+Identifier	28:12	j
+Space	28:13	 
+Operator	28:14	<
+Space	28:15	 
+Identifier	28:16	values
+Operator	28:22	.
+Identifier	28:23	size
+Operator	28:27	(
+Operator	28:28	)
+Operator	28:29	)
+Space	28:30	 
+Operator	28:31	{
+EndOfLine	28:32	\r\n
+Space	29:1	        
+Identifier	29:9	println
+Operator	29:16	(
+Identifier	29:17	values
+Operator	29:23	[
+Identifier	29:24	j
+Operator	29:25	]
+Operator	29:26	)
+EndOfLine	29:27	\r\n
+Space	30:1	        
+Identifier	30:9	j
+Space	30:10	 
+Operator	30:11	=
+Space	30:12	 
+Identifier	30:13	j
+Space	30:14	 
+Operator	30:15	+
+Space	30:16	 
+Number	30:17	1
+EndOfLine	30:18	\r\n
+Space	31:1	    
+Operator	31:5	}
+EndOfLine	31:6	\r\n
+EndOfLine	32:1	\r\n
+Space	33:1	    
+Identifier	33:5	counts
+Operator	33:11	.
+Identifier	33:12	remove
+Operator	33:18	(
+String	33:19	"a"
+Operator	33:22	)
+EndOfLine	33:23	\r\n
+Space	34:1	    
+Identifier	34:5	println
+Operator	34:12	(
+Identifier	34:13	counts
+Operator	34:19	.
+Identifier	34:20	size
+Operator	34:24	(
+Operator	34:25	)
+Operator	34:26	)
+EndOfLine	34:27	\r\n
+Space	35:1	    
+Identifier	35:5	counts
+Operator	35:11	.
+Identifier	35:12	clear
+Operator	35:17	(
+Operator	35:18	)
+EndOfLine	35:19	\r\n
+Space	36:1	    
+Identifier	36:5	println
+Operator	36:12	(
+Identifier	36:13	counts
+Operator	36:19	.
+Identifier	36:20	size
+Operator	36:24	(
+Operator	36:25	)
+Operator	36:26	)
+EndOfLine	36:27	\r\n
+Space	37:1	    
+ReservedWord	37:5	return
+Space	37:11	 
+Number	37:12	0
+EndOfLine	37:13	\r\n
+Operator	38:1	}
+EndOfLine	38:2	\r\n

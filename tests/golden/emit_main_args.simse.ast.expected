@@ -1,0 +1,51 @@
+Module @1:1
+  Function main @4:1
+    Param args: List<Str>
+    Return Int
+    Body
+      ExprStmt @5:5
+        Call @5:5
+          Callee
+            Name println @5:5
+          Arg
+            Call @5:13
+              Callee
+                Member .size @5:13
+                  Receiver
+                    Name args @5:13
+      VarDecl var i: Int @6:5
+        Init
+          IntLit 0 @6:18
+      While @7:5
+        Cond
+          Binary < @7:12
+            Lhs
+              Name i @7:12
+            Rhs
+              Call @7:16
+                Callee
+                  Member .size @7:16
+                    Receiver
+                      Name args @7:16
+        Body
+          ExprStmt @8:9
+            Call @8:9
+              Callee
+                Name println @8:9
+              Arg
+                Index @8:17
+                  Receiver
+                    Name args @8:17
+                  Index
+                    Name i @8:22
+          Assign = @9:9
+            Target
+              Name i @9:9
+            Value
+              Binary + @9:13
+                Lhs
+                  Name i @9:13
+                Rhs
+                  IntLit 1 @9:17
+      Return @11:5
+        IntLit 0 @11:12

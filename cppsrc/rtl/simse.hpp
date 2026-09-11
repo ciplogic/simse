@@ -13,6 +13,8 @@
 #include "optional.hpp"     // Opt<T>
 #include "listops.hpp"      // simse_list_* native List operations (prelude)
 #include "strops.hpp"       // simse_str_*/simse_char_*/min/max native ops (prelude)
+#include "dictops.hpp"      // simse_dict_*/simse_list_contains/sort native ops (prelude)
+#include "fs.hpp"           // simse_listFiles/simse_writeFile/... native ops (prelude)
 #include "functional.hpp"   // Func, Action, AutoDefer
 #include "result.hpp"       // Result/Res, ok, resError, err
 #include "xml.hpp"          // Attribute, XmlNode

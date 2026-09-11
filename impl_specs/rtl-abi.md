@@ -103,6 +103,39 @@ No new RTL operations were required for the v1 subset. Specifically:
 - `&List<T>()` construction would use the existing `makeList<T>()`, but the v1
   subset does not emit it (see gaps below).
 
+### `Dictionary<K, V>` and the `List` extras (T20)
+
+The front end (the Simse sema port) needs maps, so `Dictionary<K, V>`
+(`std::unordered_map`) gained a native surface in `cppsrc/rtl/dictops.hpp`, and
+`List<T>` gained two helpers. All are prelude natives with explicit symbols
+(`cppsrc/rtl/rtl.simse`):
+
+| Simse | C++ symbol | Notes |
+| --- | --- | --- |
+| `dictionaryOf<K, V>()` | `simse_dictionaryOf` | empty `Dictionary<K, V>` |
+| `d.get(key)` | `simse_dict_get` | `Opt<V>`; empty when absent |
+| `d.has(key)` | `simse_dict_has` | `Bool` |
+| `d.insert(key, value)` | `simse_dict_insert` | insert or replace |
+| `d.remove(key)` | `simse_dict_remove` | erase; a no-op when absent |
+| `d.size()` | `simse_dict_size` | `Int` |
+| `d.keys()` | `simse_dict_keys` | `List<K>`, unspecified order |
+| `d.values()` | `simse_dict_values` | `List<V>`, unspecified order |
+| `d.clear()` | `simse_dict_clear` | remove every entry |
+| `items.contains(value)` | `simse_list_contains` | linear `operator==` scan |
+| `items.sort(less)` | `simse_list_sort` | in-place `std::sort` with the `(T, T) -> Bool` lambda |
+
+`get`/`has`/`insert`/`remove` take their key (and value) as a non-deduced
+`std::type_identity_t` so a literal argument converts to the element type. A
+generic *native* call lowers to its symbol with the type arguments, e.g.
+`dictionaryOf<Str, Int>()` -> `simse_dictionaryOf<Str, Int>()`; a `(T, T) -> Bool`
+comparator lowers to a C++ lambda, so `sort` is a template over the comparator
+type. `keys()`/`values()` are ordered by the hash table and are therefore not
+deterministic across implementations; sort for determinism.
+
+Identity comparison on handles: `==`/`!=` on `&T` (`std::shared_ptr`) and `*T`
+compare the handle/pointer itself (C++ `operator==`), which is what the sema port
+uses to compare declaration handles for identity.
+
 ### `Cursor<T>`
 
 `Cursor<T>` is an immutable, `Span`-like view over a `List<T>`, the language's
@@ -162,8 +195,8 @@ captures.
 Still unsupported (each produces `<file>:<line>:<col>: unsupported: ...` rather
 than a crash): namespaced native symbols, untyped parameters/fields, compound
 assignment operators (`+=` etc.), lambda reference captures, and `for`/range-for
-(use `Cursor<T>` and `while`). `List<T>.append`, `removeAt`, and `removeRange`
-lower to the native extension symbols `simse_list_append` /
-`simse_list_removeAt` / `simse_list_removeRange` declared in the RTL prelude;
-`insert`, `clear`, and the remaining container methods are still emitted as
-written and are not yet mapped (T12).
+(use `Cursor<T>` and `while`). `List<T>.append`, `removeAt`, `removeRange`,
+`contains`, and `sort` lower to the native extension symbols in
+`cppsrc/rtl/{listops,dictops}.hpp` declared in the RTL prelude; the remaining
+`List` methods (`insert`, `clear`) are still emitted as
+written and are not yet mapped.

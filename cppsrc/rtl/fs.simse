@@ -1,0 +1,19 @@
+// fs.simse
+//
+// Filesystem/IO natives for the self-hosted compiler driver (T23). Declarations
+// only: the C++ bodies are in cppsrc/native/Native.cpp and the prototypes are in
+// cppsrc/rtl/fs.hpp (included by simse.hpp). This file is loaded as part of the
+// prelude set, so the driver can use these without an import.
+
+// Every `ext`-suffixed file under `dir`, recursively, sorted; empty when `dir` is
+// not a directory. Matches `common::filesInDir`.
+native("simse_listFiles") fun listFiles(dir: Str, ext: Str): List<Str>
+
+// Every `ext`-suffixed file directly under `dir`, sorted (import resolution).
+native("simse_listFilesDirect") fun listFilesDirect(dir: Str, ext: Str): List<Str>
+
+native("simse_writeFile") fun writeFile(path: Str, content: Str): Bool
+native("simse_pathCanonical") fun pathCanonical(path: Str): Str
+native("simse_pathIsDirectory") fun pathIsDirectory(path: Str): Bool
+native("simse_pathExists") fun pathExists(path: Str): Bool
+native("simse_eprintln") fun eprintln(text: Str): Unit

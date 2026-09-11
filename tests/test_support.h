@@ -66,6 +66,11 @@ namespace tests {
     // diagnostics so goldens do not embed machine-specific paths.
     AstSemaResult runAstSema(const ScanResult& scan, const Str& displayName);
 
+    // Analyzes a parsed module with the default RTL prelude merged in, exactly as
+    // real compilation does. The real-source check uses this so a mirror that uses
+    // prelude types (for example XmlNode) resolves without an import.
+    List<Str> analyzeWithPrelude(const ast::Module& module, const Str& displayName);
+
     // Parses `name` under `fixturesDir` and emits it in-process (loading the RTL
     // prelude), returning the C++ or an empty string on failure.
     Str emitFixtureCpp(Scanner* scanner, const Str& fixturesDir, const Str& name);

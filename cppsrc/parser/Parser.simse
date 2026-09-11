@@ -1,0 +1,1436 @@
+// Parser.simse
+//
+// The grammar parser, ported from cppsrc/parser/Parser.cpp. It consumes tokens
+// from the scanner and builds an XmlNode tree using the schema in
+// impl_specs/ast-xmlnode.md, byte-for-byte compatible with ast::toXmlNode in
+// cppsrc/ast/Ast.cpp.
+//
+// Iteration uses Cursor<T> (there is no range-for). Errors are recorded in
+// `failed`/`error`; the entry points return Res.err with a positioned message.
+
+import cppsrc.lex
+
+// An expression node plus the source position where the expression started. The
+// position is needed by parents (a Call/Index/Member/Binary node takes its
+// position from its callee/receiver/left operand).
+data class ExprNode(var node: XmlNode; var line: Int; var column: Int)
+
+data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; var file: Str) {
+
+    // ---- token cursor helpers ---------------------------------------------
+
+    fun peek(offset: Int): Token {
+        if (offset <= 0) {
+            return this.cursor.value()
+        }
+        val rest: Cursor<Token> = this.cursor.slice(offset)
+        if (rest.hasValue()) {
+            return rest.value()
+        }
+        return this.cursor.slice(this.cursor.size() - 1).value()
+    }
+
+    fun advance(): Token {
+        val token: Token = this.cursor.value()
+        if (this.cursor.size() > 1) {
+            this.cursor = this.cursor.next()
+        }
+        return token
+    }
+
+    fun atEnd(): Bool {
+        return this.peek(0).kind == TokenKind.Eof
+    }
+
+    fun checkText(text: Str): Bool {
+        return this.peek(0).text == text
+    }
+
+    fun checkKind(kind: TokenKind): Bool {
+        return this.peek(0).kind == kind
+    }
+
+    fun matchText(text: Str): Bool {
+        if (this.checkText(text)) {
+            this.advance()
+            return true
+        }
+        return false
+    }
+
+    fun setError(pos: SourcePos, message: Str): Unit {
+        if (this.failed) {
+            return
+        }
+        this.failed = true
+        this.error = this.file + ":" + pos.line.toString() + ":" + pos.column.toString()
+                     + ": " + message
+    }
+
+    fun fail(message: Str): Bool {
+        this.setError(this.peek(0).pos, message)
+        return false
+    }
+
+    fun expectText(text: Str): Bool {
+        if (this.matchText(text)) {
+            return true
+        }
+        return this.fail("expected '" + text + "'")
+    }
+
+    fun expectName(): Str {
+        if (this.checkKind(TokenKind.Identifier)) {
+            return this.advance().text
+        }
+        this.fail("expected name")
+        return ""
+    }
+
+    fun skipSeparators(): Unit {
+        while (this.checkKind(TokenKind.EndOfLine) || this.checkText(";")) {
+            this.advance()
+        }
+    }
+
+    fun skipNewlines(): Unit {
+        while (this.checkKind(TokenKind.EndOfLine)) {
+            this.advance()
+        }
+    }
+
+    fun atStmtEnd(): Bool {
+        return this.checkKind(TokenKind.EndOfLine) || this.atEnd()
+               || this.checkText(";") || this.checkText("}")
+    }
+
+    // ---- XmlNode builders -------------------------------------------------
+
+    fun emptyNode(): XmlNode {
+        return XmlNode("", List<Attribute>(), &List<XmlNode>())
+    }
+
+    fun emptyExpr(): ExprNode {
+        return ExprNode(this.emptyNode(), 0, 0)
+    }
+
+    // kind, line, column - the common prefix of most node attribute lists.
+    fun posAttrs(kind: Str, line: Int, column: Int): List<Attribute> {
+        var attrs: List<Attribute> = List<Attribute>()
+        attrs.append(Attribute("kind", kind))
+        attrs.append(Attribute("line", line.toString()))
+        attrs.append(Attribute("column", column.toString()))
+        return attrs
+    }
+
+    // Appends `child` under `parent` with the child's element role set to `role`.
+    // `parent.Children` is a shared list, so this works even though `parent` is a
+    // value parameter.
+    fun attach(parent: XmlNode, role: Str, child: XmlNode): Unit {
+        var renamed: XmlNode = child
+        renamed.name = role
+        parent.Children.append(renamed)
+    }
+
+    fun container(name: Str, children: List<XmlNode>): XmlNode {
+        var box: XmlNode = XmlNode(name, List<Attribute>(), &List<XmlNode>())
+        var i: Int = 0
+        while (i < children.size()) {
+            box.Children.append(children[i])
+            i = i + 1
+        }
+        return box
+    }
+
+    fun appendTypeParams(node: XmlNode, names: List<Str>): Unit {
+        var i: Int = 0
+        while (i < names.size()) {
+            var attrs: List<Attribute> = List<Attribute>()
+            attrs.append(Attribute("name", names[i]))
+            node.Children.append(XmlNode("TypeParam", attrs, &List<XmlNode>()))
+            i = i + 1
+        }
+    }
+
+    // ---- module -----------------------------------------------------------
+
+    fun parseRoot(): XmlNode {
+        var attrs: List<Attribute> = List<Attribute>()
+        attrs.append(Attribute("kind", "Module"))
+        attrs.append(Attribute("line", "1"))
+        attrs.append(Attribute("column", "1"))
+        var root: XmlNode = XmlNode("Module", attrs, &List<XmlNode>())
+
+        var imports: List<XmlNode> = List<XmlNode>()
+        var decls: List<XmlNode> = List<XmlNode>()
+
+        this.skipSeparators()
+        while (!this.atEnd() && !this.failed) {
+            if (this.checkText("import")) {
+                imports.append(this.parseImport())
+            } else {
+                decls.append(this.parseDecl())
+            }
+            this.skipSeparators()
+        }
+
+        var i: Int = 0
+        while (i < imports.size()) {
+            root.Children.append(imports[i])
+            i = i + 1
+        }
+        var j: Int = 0
+        while (j < decls.size()) {
+            root.Children.append(decls[j])
+            j = j + 1
+        }
+        return root
+    }
+
+    // ---- declarations -----------------------------------------------------
+
+    fun parseImport(): XmlNode {
+        val pos: SourcePos = this.peek(0).pos
+        this.advance() // import
+        var path: Str = this.expectName()
+        if (this.failed) {
+            return this.emptyNode()
+        }
+        while (this.matchText(".")) {
+            val next: Str = this.expectName()
+            if (this.failed) {
+                return this.emptyNode()
+            }
+            path = path + "." + next
+        }
+        var attrs: List<Attribute> = List<Attribute>()
+        attrs.append(Attribute("path", path))
+        attrs.append(Attribute("line", pos.line.toString()))
+        attrs.append(Attribute("column", pos.column.toString()))
+        return XmlNode("Import", attrs, &List<XmlNode>())
+    }
+
+    fun parseDecl(): XmlNode {
+        if (this.checkText("data")) {
+            return this.parseDataClass()
+        }
+        if (this.checkText("enum")) {
+            return this.parseEnum()
+        }
+        if (this.checkText("typealias")) {
+            return this.parseTypeAlias()
+        }
+        if (this.checkText("native")) {
+            return this.parseFunction(true)
+        }
+        if (this.checkText("fun")) {
+            return this.parseFunction(false)
+        }
+        this.fail("expected declaration")
+        return this.emptyNode()
+    }
+
+    fun parseDataClass(): XmlNode {
+        val pos: SourcePos = this.peek(0).pos
+        this.advance() // data
+        if (!this.expectText("class")) {
+            return this.emptyNode()
+        }
+        val name: Str = this.expectName()
+        if (this.failed) {
+            return this.emptyNode()
+        }
+        var typeParams: List<Str> = List<Str>()
+        if (this.checkText("<")) {
+            typeParams = this.parseTypeParams()
+            if (this.failed) {
+                return this.emptyNode()
+            }
+        }
+
+        var fields: List<XmlNode> = List<XmlNode>()
+        if (this.matchText("(")) {
+            this.skipSeparators()
+            while (!this.checkText(")") && !this.atEnd() && !this.failed) {
+                val fieldPos: SourcePos = this.peek(0).pos
+                var isVar: Bool = false
+                if (this.matchText("var")) {
+                    isVar = true
+                } else if (this.matchText("val")) {
+                    isVar = false
+                } else {
+                    this.fail("expected 'val' or 'var'")
+                    return this.emptyNode()
+                }
+                val fieldName: Str = this.expectName()
+                if (this.failed) {
+                    return this.emptyNode()
+                }
+                var fieldType: XmlNode = this.emptyNode()
+                if (this.matchText(":")) {
+                    fieldType = this.parseType("Type")
+                    if (this.failed) {
+                        return this.emptyNode()
+                    }
+                }
+                var fattrs: List<Attribute> = List<Attribute>()
+                fattrs.append(Attribute("name", fieldName))
+                fattrs.append(Attribute("isVar", boolText(isVar)))
+                fattrs.append(Attribute("line", fieldPos.line.toString()))
+                fattrs.append(Attribute("column", fieldPos.column.toString()))
+                var fnode: XmlNode = XmlNode("Field", fattrs, &List<XmlNode>())
+                if (fieldType.name != "") {
+                    fnode.Children.append(fieldType)
+                }
+                fields.append(fnode)
+                this.skipSeparators()
+            }
+            if (!this.expectText(")")) {
+                return this.emptyNode()
+            }
+        }
+
+        var methods: List<XmlNode> = List<XmlNode>()
+        if (this.checkText("{")) {
+            this.advance()
+            this.skipSeparators()
+            while (!this.checkText("}") && !this.atEnd() && !this.failed) {
+                if (!this.checkText("fun")) {
+                    this.fail("expected method declaration")
+                    return this.emptyNode()
+                }
+                methods.append(this.parseFunction(false))
+                this.skipSeparators()
+            }
+            if (!this.expectText("}")) {
+                return this.emptyNode()
+            }
+        }
+
+        var attrs: List<Attribute> = this.posAttrs("DataClass", pos.line, pos.column)
+        attrs.append(Attribute("name", name))
+        var node: XmlNode = XmlNode("DataClass", attrs, &List<XmlNode>())
+        this.appendTypeParams(node, typeParams)
+        var fi: Int = 0
+        while (fi < fields.size()) {
+            node.Children.append(fields[fi])
+            fi = fi + 1
+        }
+        var mi: Int = 0
+        while (mi < methods.size()) {
+            node.Children.append(methods[mi])
+            mi = mi + 1
+        }
+        return node
+    }
+
+    fun parseEnum(): XmlNode {
+        val pos: SourcePos = this.peek(0).pos
+        this.advance() // enum
+        val name: Str = this.expectName()
+        if (this.failed) {
+            return this.emptyNode()
+        }
+        var typeParams: List<Str> = List<Str>()
+        if (this.checkText("<")) {
+            typeParams = this.parseTypeParams()
+            if (this.failed) {
+                return this.emptyNode()
+            }
+        }
+        if (!this.expectText("{")) {
+            return this.emptyNode()
+        }
+        this.skipSeparators()
+
+        var members: List<XmlNode> = List<XmlNode>()
+        while (!this.checkText("}") && !this.atEnd() && !this.failed) {
+            val memberPos: SourcePos = this.peek(0).pos
+            val memberName: Str = this.expectName()
+            if (this.failed) {
+                return this.emptyNode()
+            }
+            var hasValue: Bool = false
+            var memberValue: Int = 0
+            if (this.matchText("=")) {
+                if (!this.checkKind(TokenKind.Number)) {
+                    this.fail("expected enum value")
+                    return this.emptyNode()
+                }
+                val valueText: Str = this.advance().text
+                if (valueText.find(".") != -1) {
+                    this.fail("enum value must be an integer")
+                    return this.emptyNode()
+                }
+                val parsed: Opt<Int> = valueText.toInt()
+                if (parsed.hasValue()) {
+                    memberValue = parsed.value()
+                }
+                hasValue = true
+            }
+            var mattrs: List<Attribute> = List<Attribute>()
+            mattrs.append(Attribute("name", memberName))
+            mattrs.append(Attribute("hasValue", boolText(hasValue)))
+            mattrs.append(Attribute("value", memberValue.toString()))
+            mattrs.append(Attribute("line", memberPos.line.toString()))
+            mattrs.append(Attribute("column", memberPos.column.toString()))
+            members.append(XmlNode("EnumMember", mattrs, &List<XmlNode>()))
+            this.skipSeparators()
+            this.matchText(",")
+            this.skipSeparators()
+        }
+        if (!this.expectText("}")) {
+            return this.emptyNode()
+        }
+
+        var attrs: List<Attribute> = this.posAttrs("Enum", pos.line, pos.column)
+        attrs.append(Attribute("name", name))
+        var node: XmlNode = XmlNode("Enum", attrs, &List<XmlNode>())
+        this.appendTypeParams(node, typeParams)
+        var i: Int = 0
+        while (i < members.size()) {
+            node.Children.append(members[i])
+            i = i + 1
+        }
+        return node
+    }
+
+    fun parseTypeAlias(): XmlNode {
+        val pos: SourcePos = this.peek(0).pos
+        this.advance() // typealias
+        val name: Str = this.expectName()
+        if (this.failed) {
+            return this.emptyNode()
+        }
+        var typeParams: List<Str> = List<Str>()
+        if (this.checkText("<")) {
+            typeParams = this.parseTypeParams()
+            if (this.failed) {
+                return this.emptyNode()
+            }
+        }
+        if (!this.expectText("=")) {
+            return this.emptyNode()
+        }
+        val target: XmlNode = this.parseType("TargetType")
+        if (this.failed) {
+            return this.emptyNode()
+        }
+
+        var attrs: List<Attribute> = this.posAttrs("TypeAlias", pos.line, pos.column)
+        attrs.append(Attribute("name", name))
+        var node: XmlNode = XmlNode("TypeAlias", attrs, &List<XmlNode>())
+        this.appendTypeParams(node, typeParams)
+        node.Children.append(target)
+        return node
+    }
+
+    fun parseTypeParams(): List<Str> {
+        var out: List<Str> = List<Str>()
+        if (!this.expectText("<")) {
+            return out
+        }
+        this.skipNewlines()
+        while (!this.checkText(">") && !this.atEnd()) {
+            val name: Str = this.expectName()
+            if (this.failed) {
+                return out
+            }
+            out.append(name)
+            this.skipNewlines()
+            if (!this.matchText(",")) {
+                break
+            }
+            this.skipNewlines()
+        }
+        this.expectText(">")
+        return out
+    }
+
+    fun looksLikeTypeStart(): Bool {
+        return this.checkKind(TokenKind.Identifier)
+               || this.checkText("(") || this.checkText("&") || this.checkText("*")
+    }
+
+    fun parseParamName(): Str {
+        if (this.checkKind(TokenKind.Identifier) || this.checkText("this")) {
+            return this.advance().text
+        }
+        this.fail("expected parameter name")
+        return ""
+    }
+
+    fun parseFunction(isNative: Bool): XmlNode {
+        val pos: SourcePos = this.peek(0).pos
+        var nativeSymbol: Str = ""
+        var hasNativeSymbol: Bool = false
+
+        if (isNative) {
+            this.advance() // native
+            if (this.matchText("(")) {
+                if (this.checkKind(TokenKind.String)) {
+                    nativeSymbol = this.advance().text
+                    hasNativeSymbol = true
+                }
+                if (!this.expectText(")")) {
+                    return this.emptyNode()
+                }
+            }
+            if (!this.expectText("fun")) {
+                return this.emptyNode()
+            }
+        } else {
+            if (!this.expectText("fun")) {
+                return this.emptyNode()
+            }
+        }
+
+        var hasReceiver: Bool = false
+        var receiverNode: XmlNode = this.emptyNode()
+        var declName: Str = ""
+
+        if (!isNative && this.looksLikeTypeStart()) {
+            val savedCursor: Cursor<Token> = this.cursor
+            val savedFailed: Bool = this.failed
+            val savedError: Str = this.error
+            val receiver: XmlNode = this.parseType("Receiver")
+            if (!this.failed && this.checkText(".")) {
+                this.advance() // .
+                val name: Str = this.expectName()
+                if (this.failed) {
+                    return this.emptyNode()
+                }
+                hasReceiver = true
+                receiverNode = receiver
+                declName = name
+            } else {
+                this.cursor = savedCursor
+                this.failed = savedFailed
+                this.error = savedError
+            }
+        }
+        if (!hasReceiver) {
+            declName = this.expectName()
+            if (this.failed) {
+                return this.emptyNode()
+            }
+        }
+
+        var functionTypeParams: List<Str> = List<Str>()
+        if (this.checkText("<")) {
+            functionTypeParams = this.parseTypeParams()
+            if (this.failed) {
+                return this.emptyNode()
+            }
+        }
+
+        if (!this.expectText("(")) {
+            return this.emptyNode()
+        }
+        this.skipNewlines()
+        var params: List<XmlNode> = List<XmlNode>()
+        while (!this.checkText(")") && !this.atEnd() && !this.failed) {
+            val paramPos: SourcePos = this.peek(0).pos
+            val paramName: Str = this.parseParamName()
+            if (this.failed) {
+                return this.emptyNode()
+            }
+            var paramType: XmlNode = this.emptyNode()
+            if (this.matchText(":")) {
+                paramType = this.parseType("Type")
+                if (this.failed) {
+                    return this.emptyNode()
+                }
+            }
+            var pattrs: List<Attribute> = List<Attribute>()
+            pattrs.append(Attribute("name", paramName))
+            pattrs.append(Attribute("line", paramPos.line.toString()))
+            pattrs.append(Attribute("column", paramPos.column.toString()))
+            var pnode: XmlNode = XmlNode("Param", pattrs, &List<XmlNode>())
+            if (paramType.name != "") {
+                pnode.Children.append(paramType)
+            }
+            params.append(pnode)
+            this.skipNewlines()
+            if (!this.matchText(",")) {
+                break
+            }
+            this.skipNewlines()
+        }
+        if (!this.expectText(")")) {
+            return this.emptyNode()
+        }
+
+        var returnType: XmlNode = this.emptyNode()
+        if (this.matchText(":")) {
+            returnType = this.parseType("ReturnType")
+            if (this.failed) {
+                return this.emptyNode()
+            }
+        }
+
+        var body: List<XmlNode> = List<XmlNode>()
+        var hasBody: Bool = false
+        if (this.checkText("{")) {
+            body = this.parseBlock()
+            if (this.failed) {
+                return this.emptyNode()
+            }
+            hasBody = true
+        }
+
+        var attrs: List<Attribute> = this.posAttrs("Function", pos.line, pos.column)
+        attrs.append(Attribute("name", declName))
+        attrs.append(Attribute("isNative", boolText(isNative)))
+        attrs.append(Attribute("hasBody", boolText(hasBody)))
+        attrs.append(Attribute("hasReceiver", boolText(hasReceiver)))
+        attrs.append(Attribute("hasNativeSymbol", boolText(hasNativeSymbol)))
+        if (hasNativeSymbol) {
+            attrs.append(Attribute("nativeSymbol", nativeSymbol))
+        }
+        var node: XmlNode = XmlNode("Function", attrs, &List<XmlNode>())
+        if (hasReceiver) {
+            node.Children.append(receiverNode)
+        }
+        this.appendTypeParams(node, functionTypeParams)
+        var pi: Int = 0
+        while (pi < params.size()) {
+            node.Children.append(params[pi])
+            pi = pi + 1
+        }
+        if (returnType.name != "") {
+            node.Children.append(returnType)
+        }
+        if (hasBody) {
+            node.Children.append(this.container("Body", body))
+        }
+        return node
+    }
+
+    // ---- types ------------------------------------------------------------
+
+    fun parseType(role: Str): XmlNode {
+        val pos: SourcePos = this.peek(0).pos
+
+        if (this.matchText("&")) {
+            val inner: XmlNode = this.parseType("Inner")
+            if (this.failed) {
+                return this.emptyNode()
+            }
+            var attrs: List<Attribute> = this.posAttrs("Type.Reference", pos.line, pos.column)
+            var node: XmlNode = XmlNode(role, attrs, &List<XmlNode>())
+            node.Children.append(inner)
+            return node
+        }
+        if (this.matchText("*")) {
+            val inner: XmlNode = this.parseType("Inner")
+            if (this.failed) {
+                return this.emptyNode()
+            }
+            var attrs: List<Attribute> = this.posAttrs("Type.Pointer", pos.line, pos.column)
+            var node: XmlNode = XmlNode(role, attrs, &List<XmlNode>())
+            node.Children.append(inner)
+            return node
+        }
+        if (this.checkText("(")) {
+            this.advance() // (
+            var params: List<XmlNode> = List<XmlNode>()
+            this.skipNewlines()
+            if (!this.checkText(")")) {
+                val first: XmlNode = this.parseType("Type")
+                if (this.failed) {
+                    return this.emptyNode()
+                }
+                params.append(first)
+                this.skipNewlines()
+                while (this.matchText(",")) {
+                    this.skipNewlines()
+                    val next: XmlNode = this.parseType("Type")
+                    if (this.failed) {
+                        return this.emptyNode()
+                    }
+                    params.append(next)
+                    this.skipNewlines()
+                }
+            }
+            if (!this.expectText(")")) {
+                return this.emptyNode()
+            }
+            if (this.matchText("->")) {
+                var attrs: List<Attribute> = this.posAttrs("Type.Function", pos.line, pos.column)
+                var node: XmlNode = XmlNode(role, attrs, &List<XmlNode>())
+                var i: Int = 0
+                while (i < params.size()) {
+                    var param: XmlNode = params[i]
+                    param.name = "ParamType"
+                    node.Children.append(param)
+                    i = i + 1
+                }
+                val ret: XmlNode = this.parseType("ReturnType")
+                if (this.failed) {
+                    return this.emptyNode()
+                }
+                node.Children.append(ret)
+                return node
+            }
+            if (params.size() == 1) {
+                var only: XmlNode = params[0]
+                only.name = role
+                return only
+            }
+            this.fail("expected '->' in function type")
+            return this.emptyNode()
+        }
+        if (this.checkKind(TokenKind.Identifier)) {
+            val name: Str = this.advance().text
+            if (this.checkText("<")) {
+                val typeArgs: List<XmlNode> = this.parseGenericArgs()
+                if (this.failed) {
+                    return this.emptyNode()
+                }
+                var attrs: List<Attribute> = this.posAttrs("Type.Generic", pos.line, pos.column)
+                attrs.append(Attribute("name", name))
+                var node: XmlNode = XmlNode(role, attrs, &List<XmlNode>())
+                var i: Int = 0
+                while (i < typeArgs.size()) {
+                    node.Children.append(typeArgs[i])
+                    i = i + 1
+                }
+                return node
+            }
+            var attrs: List<Attribute> = this.posAttrs("Type.Named", pos.line, pos.column)
+            attrs.append(Attribute("name", name))
+            return XmlNode(role, attrs, &List<XmlNode>())
+        }
+        this.fail("expected type")
+        return this.emptyNode()
+    }
+
+    fun parseGenericArgs(): List<XmlNode> {
+        var out: List<XmlNode> = List<XmlNode>()
+        if (!this.expectText("<")) {
+            return out
+        }
+        this.skipNewlines()
+        while (!this.checkText(">") && !this.atEnd() && !this.failed) {
+            var arg: XmlNode = this.emptyNode()
+            if (this.checkKind(TokenKind.Number)) {
+                val argPos: SourcePos = this.peek(0).pos
+                var attrs: List<Attribute> = this.posAttrs("Type.IntLit", argPos.line, argPos.column)
+                attrs.append(Attribute("text", this.advance().text))
+                arg = XmlNode("TypeArg", attrs, &List<XmlNode>())
+            } else {
+                arg = this.parseType("TypeArg")
+                if (this.failed) {
+                    return out
+                }
+            }
+            out.append(arg)
+            this.skipNewlines()
+            if (!this.matchText(",")) {
+                break
+            }
+            this.skipNewlines()
+        }
+        this.expectText(">")
+        return out
+    }
+
+    // ---- statements -------------------------------------------------------
+
+    fun parseBlock(): List<XmlNode> {
+        var body: List<XmlNode> = List<XmlNode>()
+        if (!this.expectText("{")) {
+            return body
+        }
+        this.skipSeparators()
+        while (!this.checkText("}") && !this.atEnd() && !this.failed) {
+            val stmt: XmlNode = this.parseStmt()
+            if (this.failed) {
+                return body
+            }
+            body.append(stmt)
+            this.skipSeparators()
+        }
+        this.expectText("}")
+        return body
+    }
+
+    fun parseStmt(): XmlNode {
+        if (this.checkText("val") || this.checkText("var")) {
+            return this.parseVarDecl()
+        }
+        if (this.checkText("if")) {
+            return this.parseIf()
+        }
+        if (this.checkText("while")) {
+            return this.parseWhile()
+        }
+        if (this.checkText("switch")) {
+            return this.parseSwitch()
+        }
+        if (this.checkText("return")) {
+            return this.parseReturn()
+        }
+        if (this.checkText("break")) {
+            val pos: SourcePos = this.peek(0).pos
+            this.advance()
+            return XmlNode("Stmt", this.posAttrs("Stmt.Break", pos.line, pos.column), &List<XmlNode>())
+        }
+        if (this.checkText("continue")) {
+            val pos: SourcePos = this.peek(0).pos
+            this.advance()
+            return XmlNode("Stmt", this.posAttrs("Stmt.Continue", pos.line, pos.column), &List<XmlNode>())
+        }
+
+        val pos: SourcePos = this.peek(0).pos
+        val expr: ExprNode = this.parseExpr(0)
+        if (this.failed) {
+            return this.emptyNode()
+        }
+        if (isAssignOp(this.peek(0).text)) {
+            val op: Str = this.advance().text
+            this.skipNewlines()
+            val value: ExprNode = this.parseExpr(0)
+            if (this.failed) {
+                return this.emptyNode()
+            }
+            var attrs: List<Attribute> = this.posAttrs("Stmt.Assign", pos.line, pos.column)
+            attrs.append(Attribute("op", op))
+            var node: XmlNode = XmlNode("Stmt", attrs, &List<XmlNode>())
+            this.attach(node, "Target", expr.node)
+            this.attach(node, "Value", value.node)
+            return node
+        }
+        var attrs: List<Attribute> = this.posAttrs("Stmt.ExprStmt", pos.line, pos.column)
+        var node: XmlNode = XmlNode("Stmt", attrs, &List<XmlNode>())
+        this.attach(node, "Expr", expr.node)
+        return node
+    }
+
+    fun parseVarDecl(): XmlNode {
+        val pos: SourcePos = this.peek(0).pos
+        val isVar: Bool = this.matchText("var")
+        if (!isVar) {
+            if (!this.expectText("val")) {
+                return this.emptyNode()
+            }
+        }
+        val name: Str = this.expectName()
+        if (this.failed) {
+            return this.emptyNode()
+        }
+        var typeNode: XmlNode = this.emptyNode()
+        if (this.matchText(":")) {
+            typeNode = this.parseType("Type")
+            if (this.failed) {
+                return this.emptyNode()
+            }
+        }
+        var init: ExprNode = this.emptyExpr()
+        if (this.matchText("=")) {
+            this.skipNewlines()
+            init = this.parseExpr(0)
+            if (this.failed) {
+                return this.emptyNode()
+            }
+        }
+        var attrs: List<Attribute> = this.posAttrs("Stmt.VarDecl", pos.line, pos.column)
+        attrs.append(Attribute("name", name))
+        attrs.append(Attribute("isVar", boolText(isVar)))
+        var node: XmlNode = XmlNode("Stmt", attrs, &List<XmlNode>())
+        if (typeNode.name != "") {
+            node.Children.append(typeNode)
+        }
+        if (init.node.name != "") {
+            this.attach(node, "Init", init.node)
+        }
+        return node
+    }
+
+    fun parseIf(): XmlNode {
+        val pos: SourcePos = this.peek(0).pos
+        this.advance() // if
+        if (!this.expectText("(")) {
+            return this.emptyNode()
+        }
+        val cond: ExprNode = this.parseExpr(0)
+        if (this.failed) {
+            return this.emptyNode()
+        }
+        if (!this.expectText(")")) {
+            return this.emptyNode()
+        }
+        val thenBody: List<XmlNode> = this.parseBlock()
+        if (this.failed) {
+            return this.emptyNode()
+        }
+        var hasElse: Bool = false
+        var elseBody: List<XmlNode> = List<XmlNode>()
+        if (this.matchText("else")) {
+            hasElse = true
+            if (this.checkText("if")) {
+                val nested: XmlNode = this.parseIf()
+                if (this.failed) {
+                    return this.emptyNode()
+                }
+                elseBody.append(nested)
+            } else {
+                elseBody = this.parseBlock()
+                if (this.failed) {
+                    return this.emptyNode()
+                }
+            }
+        }
+        var attrs: List<Attribute> = this.posAttrs("Stmt.If", pos.line, pos.column)
+        var node: XmlNode = XmlNode("Stmt", attrs, &List<XmlNode>())
+        this.attach(node, "Cond", cond.node)
+        node.Children.append(this.container("Then", thenBody))
+        if (hasElse) {
+            node.Children.append(this.container("Else", elseBody))
+        }
+        return node
+    }
+
+    fun parseWhile(): XmlNode {
+        val pos: SourcePos = this.peek(0).pos
+        this.advance() // while
+        if (!this.expectText("(")) {
+            return this.emptyNode()
+        }
+        val cond: ExprNode = this.parseExpr(0)
+        if (this.failed) {
+            return this.emptyNode()
+        }
+        if (!this.expectText(")")) {
+            return this.emptyNode()
+        }
+        val body: List<XmlNode> = this.parseBlock()
+        if (this.failed) {
+            return this.emptyNode()
+        }
+        var attrs: List<Attribute> = this.posAttrs("Stmt.While", pos.line, pos.column)
+        var node: XmlNode = XmlNode("Stmt", attrs, &List<XmlNode>())
+        this.attach(node, "Cond", cond.node)
+        node.Children.append(this.container("Body", body))
+        return node
+    }
+
+    fun parseSwitch(): XmlNode {
+        val pos: SourcePos = this.peek(0).pos
+        this.advance() // switch
+        if (!this.expectText("(")) {
+            return this.emptyNode()
+        }
+        val cond: ExprNode = this.parseExpr(0)
+        if (this.failed) {
+            return this.emptyNode()
+        }
+        if (!this.expectText(")")) {
+            return this.emptyNode()
+        }
+        if (!this.expectText("{")) {
+            return this.emptyNode()
+        }
+        this.skipSeparators()
+
+        var cases: List<XmlNode> = List<XmlNode>()
+        while (!this.checkText("}") && !this.atEnd() && !this.failed) {
+            val casePos: SourcePos = this.peek(0).pos
+            var isDefault: Bool = false
+            var label: XmlNode = this.emptyNode()
+            if (this.matchText("case")) {
+                this.skipNewlines()
+                val labelExpr: ExprNode = this.parseExpr(0)
+                if (this.failed) {
+                    return this.emptyNode()
+                }
+                label = labelExpr.node
+                if (!this.expectText(":")) {
+                    return this.emptyNode()
+                }
+            } else if (this.matchText("default")) {
+                isDefault = true
+                if (!this.expectText(":")) {
+                    return this.emptyNode()
+                }
+            } else {
+                this.fail("expected 'case' or 'default'")
+                return this.emptyNode()
+            }
+            this.skipSeparators()
+            var arm: List<XmlNode> = List<XmlNode>()
+            while (!this.checkText("case") && !this.checkText("default")
+                   && !this.checkText("}") && !this.atEnd() && !this.failed) {
+                val child: XmlNode = this.parseStmt()
+                if (this.failed) {
+                    return this.emptyNode()
+                }
+                arm.append(child)
+                this.skipSeparators()
+            }
+            var cattrs: List<Attribute> = List<Attribute>()
+            cattrs.append(Attribute("isDefault", boolText(isDefault)))
+            cattrs.append(Attribute("line", casePos.line.toString()))
+            cattrs.append(Attribute("column", casePos.column.toString()))
+            var cnode: XmlNode = XmlNode("Case", cattrs, &List<XmlNode>())
+            if (!isDefault) {
+                this.attach(cnode, "Label", label)
+            }
+            var ai: Int = 0
+            while (ai < arm.size()) {
+                cnode.Children.append(arm[ai])
+                ai = ai + 1
+            }
+            cases.append(cnode)
+        }
+        if (!this.expectText("}")) {
+            return this.emptyNode()
+        }
+        var attrs: List<Attribute> = this.posAttrs("Stmt.Switch", pos.line, pos.column)
+        var node: XmlNode = XmlNode("Stmt", attrs, &List<XmlNode>())
+        this.attach(node, "Cond", cond.node)
+        var ci: Int = 0
+        while (ci < cases.size()) {
+            node.Children.append(cases[ci])
+            ci = ci + 1
+        }
+        return node
+    }
+
+    fun parseReturn(): XmlNode {
+        val pos: SourcePos = this.peek(0).pos
+        this.advance() // return
+        var value: ExprNode = this.emptyExpr()
+        if (!this.atStmtEnd()) {
+            value = this.parseExpr(0)
+            if (this.failed) {
+                return this.emptyNode()
+            }
+        }
+        var attrs: List<Attribute> = this.posAttrs("Stmt.Return", pos.line, pos.column)
+        var node: XmlNode = XmlNode("Stmt", attrs, &List<XmlNode>())
+        if (value.node.name != "") {
+            this.attach(node, "Value", value.node)
+        }
+        return node
+    }
+
+    // ---- expressions (Pratt) ----------------------------------------------
+
+    fun parseExpr(minBindingPower: Int): ExprNode {
+        var left: ExprNode = this.parseUnary()
+        if (this.failed) {
+            return this.emptyExpr()
+        }
+        while (true) {
+            var newlines: Int = 0
+            while (this.peek(newlines).kind == TokenKind.EndOfLine) {
+                newlines = newlines + 1
+            }
+            if (newlines > 0) {
+                val lookaheadBP: Int = binaryBindingPower(this.peek(newlines).text)
+                if (lookaheadBP < 0 || lookaheadBP < minBindingPower) {
+                    break
+                }
+                var k: Int = 0
+                while (k < newlines) {
+                    this.advance()
+                    k = k + 1
+                }
+            }
+            val bp: Int = binaryBindingPower(this.peek(0).text)
+            if (bp < 0 || bp < minBindingPower) {
+                break
+            }
+            val op: Str = this.advance().text
+            this.skipNewlines()
+            val right: ExprNode = this.parseExpr(bp + 1)
+            if (this.failed) {
+                return this.emptyExpr()
+            }
+            var attrs: List<Attribute> = this.posAttrs("Expr.Binary", left.line, left.column)
+            attrs.append(Attribute("op", op))
+            var node: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
+            this.attach(node, "Lhs", left.node)
+            this.attach(node, "Rhs", right.node)
+            left = ExprNode(node, left.line, left.column)
+        }
+        return left
+    }
+
+    fun parseUnary(): ExprNode {
+        val pos: SourcePos = this.peek(0).pos
+        if (this.checkText("!") || this.checkText("-")) {
+            val op: Str = this.advance().text
+            val operand: ExprNode = this.parseUnary()
+            if (this.failed) {
+                return this.emptyExpr()
+            }
+            var attrs: List<Attribute> = this.posAttrs("Expr.Unary", pos.line, pos.column)
+            attrs.append(Attribute("op", op))
+            var node: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
+            this.attach(node, "Operand", operand.node)
+            return ExprNode(node, pos.line, pos.column)
+        }
+        if (this.checkText("&")) {
+            this.advance()
+            val operand: ExprNode = this.parseUnary()
+            if (this.failed) {
+                return this.emptyExpr()
+            }
+            var attrs: List<Attribute> = this.posAttrs("Expr.Ref", pos.line, pos.column)
+            var node: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
+            this.attach(node, "Operand", operand.node)
+            return ExprNode(node, pos.line, pos.column)
+        }
+        if (this.checkText("*")) {
+            this.advance()
+            val operand: ExprNode = this.parseUnary()
+            if (this.failed) {
+                return this.emptyExpr()
+            }
+            var attrs: List<Attribute> = this.posAttrs("Expr.Deref", pos.line, pos.column)
+            var node: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
+            this.attach(node, "Operand", operand.node)
+            return ExprNode(node, pos.line, pos.column)
+        }
+        return this.parsePostfix()
+    }
+
+    fun parsePostfix(): ExprNode {
+        var expr: ExprNode = this.parsePrimary()
+        if (this.failed) {
+            return this.emptyExpr()
+        }
+        while (true) {
+            if (this.matchText("(")) {
+                var args: List<XmlNode> = List<XmlNode>()
+                this.skipNewlines()
+                if (!this.checkText(")")) {
+                    val first: ExprNode = this.parseExpr(0)
+                    if (this.failed) {
+                        return this.emptyExpr()
+                    }
+                    args.append(first.node)
+                    this.skipNewlines()
+                    while (this.matchText(",")) {
+                        this.skipNewlines()
+                        val next: ExprNode = this.parseExpr(0)
+                        if (this.failed) {
+                            return this.emptyExpr()
+                        }
+                        args.append(next.node)
+                        this.skipNewlines()
+                    }
+                }
+                if (!this.expectText(")")) {
+                    return this.emptyExpr()
+                }
+                var attrs: List<Attribute> = this.posAttrs("Expr.Call", expr.line, expr.column)
+                var node: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
+                this.attach(node, "Callee", expr.node)
+                var ai: Int = 0
+                while (ai < args.size()) {
+                    this.attach(node, "Arg", args[ai])
+                    ai = ai + 1
+                }
+                expr = ExprNode(node, expr.line, expr.column)
+            } else if (this.matchText("[")) {
+                this.skipNewlines()
+                val index: ExprNode = this.parseExpr(0)
+                if (this.failed) {
+                    return this.emptyExpr()
+                }
+                if (!this.expectText("]")) {
+                    return this.emptyExpr()
+                }
+                var attrs: List<Attribute> = this.posAttrs("Expr.Index", expr.line, expr.column)
+                var node: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
+                this.attach(node, "Receiver", expr.node)
+                this.attach(node, "Index", index.node)
+                expr = ExprNode(node, expr.line, expr.column)
+            } else if (this.matchText(".")) {
+                val name: Str = this.expectName()
+                if (this.failed) {
+                    return this.emptyExpr()
+                }
+                var attrs: List<Attribute> = this.posAttrs("Expr.Member", expr.line, expr.column)
+                attrs.append(Attribute("name", name))
+                var node: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
+                this.attach(node, "Receiver", expr.node)
+                expr = ExprNode(node, expr.line, expr.column)
+            } else {
+                break
+            }
+        }
+        return expr
+    }
+
+    fun parsePrimary(): ExprNode {
+        val pos: SourcePos = this.peek(0).pos
+        if (this.checkKind(TokenKind.Number)) {
+            val text: Str = this.advance().text
+            var kind: Str = "Expr.IntLit"
+            if (text.find(".") != -1) {
+                kind = "Expr.FloatLit"
+            }
+            var attrs: List<Attribute> = this.posAttrs(kind, pos.line, pos.column)
+            attrs.append(Attribute("text", text))
+            return ExprNode(XmlNode("Expr", attrs, &List<XmlNode>()), pos.line, pos.column)
+        }
+        if (this.checkKind(TokenKind.String)) {
+            val text: Str = this.advance().text
+            var attrs: List<Attribute> = this.posAttrs("Expr.StrLit", pos.line, pos.column)
+            attrs.append(Attribute("text", text))
+            return ExprNode(XmlNode("Expr", attrs, &List<XmlNode>()), pos.line, pos.column)
+        }
+        if (this.checkKind(TokenKind.Character)) {
+            val text: Str = this.advance().text
+            var attrs: List<Attribute> = this.posAttrs("Expr.CharLit", pos.line, pos.column)
+            attrs.append(Attribute("text", text))
+            return ExprNode(XmlNode("Expr", attrs, &List<XmlNode>()), pos.line, pos.column)
+        }
+        if (this.checkText("true") || this.checkText("false")) {
+            val text: Str = this.advance().text
+            var attrs: List<Attribute> = this.posAttrs("Expr.BoolLit", pos.line, pos.column)
+            if (text == "true") {
+                attrs.append(Attribute("value", "true"))
+            } else {
+                attrs.append(Attribute("value", "false"))
+            }
+            return ExprNode(XmlNode("Expr", attrs, &List<XmlNode>()), pos.line, pos.column)
+        }
+        if (this.checkText("null")) {
+            this.advance()
+            val attrs: List<Attribute> = this.posAttrs("Expr.NullLit", pos.line, pos.column)
+            return ExprNode(XmlNode("Expr", attrs, &List<XmlNode>()), pos.line, pos.column)
+        }
+        if (this.checkText("this")) {
+            this.advance()
+            var attrs: List<Attribute> = this.posAttrs("Expr.Name", pos.line, pos.column)
+            attrs.append(Attribute("name", "this"))
+            return ExprNode(XmlNode("Expr", attrs, &List<XmlNode>()), pos.line, pos.column)
+        }
+        if (this.checkKind(TokenKind.Identifier)) {
+            val name: Str = this.peek(0).text
+            if (name == "copy" && this.peek(1).text == "(") {
+                this.advance() // copy
+                this.advance() // (
+                val inner: ExprNode = this.parseExpr(0)
+                if (this.failed) {
+                    return this.emptyExpr()
+                }
+                if (!this.expectText(")")) {
+                    return this.emptyExpr()
+                }
+                var attrs: List<Attribute> = this.posAttrs("Expr.Copy", pos.line, pos.column)
+                var node: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
+                this.attach(node, "Operand", inner.node)
+                return ExprNode(node, pos.line, pos.column)
+            }
+            if (this.peek(1).text == "<") {
+                val savedCursor: Cursor<Token> = this.cursor
+                val savedFailed: Bool = this.failed
+                val savedError: Str = this.error
+                this.advance() // name
+                val typeArgs: List<XmlNode> = this.parseGenericArgs()
+                if (!this.failed && (this.checkText(".") || this.checkText("("))) {
+                    var attrs: List<Attribute> = this.posAttrs("Expr.GenericName", pos.line, pos.column)
+                    attrs.append(Attribute("name", name))
+                    var gnode: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
+                    var gi: Int = 0
+                    while (gi < typeArgs.size()) {
+                        gnode.Children.append(typeArgs[gi])
+                        gi = gi + 1
+                    }
+                    return ExprNode(gnode, pos.line, pos.column)
+                }
+                this.cursor = savedCursor
+                this.failed = savedFailed
+                this.error = savedError
+            }
+            this.advance()
+            var attrs: List<Attribute> = this.posAttrs("Expr.Name", pos.line, pos.column)
+            attrs.append(Attribute("name", name))
+            return ExprNode(XmlNode("Expr", attrs, &List<XmlNode>()), pos.line, pos.column)
+        }
+        if (this.checkText("(")) {
+            val savedCursor: Cursor<Token> = this.cursor
+            val savedFailed: Bool = this.failed
+            val savedError: Str = this.error
+            val lambda: ExprNode = this.tryParseLambda()
+            if (!this.failed) {
+                return lambda
+            }
+            this.cursor = savedCursor
+            this.failed = savedFailed
+            this.error = savedError
+            this.advance() // (
+            this.skipNewlines()
+            val inner: ExprNode = this.parseExpr(0)
+            if (this.failed) {
+                return this.emptyExpr()
+            }
+            if (!this.expectText(")")) {
+                return this.emptyExpr()
+            }
+            return inner
+        }
+        this.fail("expected expression")
+        return this.emptyExpr()
+    }
+
+    fun tryParseLambda(): ExprNode {
+        if (!this.matchText("(")) {
+            this.fail("expected '('")
+            return this.emptyExpr()
+        }
+        val pos: SourcePos = this.peek(0).pos
+        var names: List<Str> = List<Str>()
+        var paramTypes: List<XmlNode> = List<XmlNode>()
+        this.skipNewlines()
+        if (!this.checkText(")")) {
+            while (true) {
+                if (!this.checkKind(TokenKind.Identifier)) {
+                    this.fail("expected lambda parameter")
+                    return this.emptyExpr()
+                }
+                names.append(this.advance().text)
+                if (this.matchText(":")) {
+                    val paramType: XmlNode = this.parseType("ParamType")
+                    if (this.failed) {
+                        return this.emptyExpr()
+                    }
+                    paramTypes.append(paramType)
+                }
+                this.skipNewlines()
+                if (!this.matchText(",")) {
+                    break
+                }
+                this.skipNewlines()
+            }
+        }
+        if (!this.checkText(")")) {
+            this.fail("expected ')'")
+            return this.emptyExpr()
+        }
+        if (this.peek(1).text != "->") {
+            this.fail("expected '->'")
+            return this.emptyExpr()
+        }
+        this.advance() // )
+        this.advance() // ->
+
+        var body: List<XmlNode> = List<XmlNode>()
+        if (this.checkText("{")) {
+            body = this.parseBlock()
+            if (this.failed) {
+                return this.emptyExpr()
+            }
+        } else {
+            val value: ExprNode = this.parseExpr(0)
+            if (this.failed) {
+                return this.emptyExpr()
+            }
+            var sattrs: List<Attribute> = this.posAttrs("Stmt.ExprStmt", value.line, value.column)
+            var snode: XmlNode = XmlNode("Stmt", sattrs, &List<XmlNode>())
+            this.attach(snode, "Expr", value.node)
+            body.append(snode)
+        }
+
+        var attrs: List<Attribute> = this.posAttrs("Expr.Lambda", pos.line, pos.column)
+        attrs.append(Attribute("params", joinNames(names)))
+        var node: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
+        var i: Int = 0
+        while (i < paramTypes.size()) {
+            node.Children.append(paramTypes[i])
+            i = i + 1
+        }
+        node.Children.append(this.container("Body", body))
+        return ExprNode(node, pos.line, pos.column)
+    }
+}
+
+// ---- helpers --------------------------------------------------------------
+
+fun boolText(value: Bool): Str {
+    if (value) {
+        return "true"
+    }
+    return "false"
+}
+
+fun joinNames(names: List<Str>): Str {
+    var out: Str = Str()
+    var i: Int = 0
+    while (i < names.size()) {
+        if (i > 0) {
+            out = out + ","
+        }
+        out = out + names[i]
+        i = i + 1
+    }
+    return out
+}
+
+// Binding powers for the Pratt expression parser. Left-associative (the
+// recursive call uses bp + 1).
+fun binaryBindingPower(op: Str): Int {
+    if (op == "||") {
+        return 10
+    }
+    if (op == "&&") {
+        return 20
+    }
+    if (op == "==" || op == "!=") {
+        return 30
+    }
+    if (op == "<" || op == ">" || op == "<=" || op == ">=") {
+        return 40
+    }
+    if (op == "+" || op == "-") {
+        return 50
+    }
+    if (op == "*" || op == "/" || op == "%") {
+        return 60
+    }
+    return -1
+}
+
+fun isAssignOp(op: Str): Bool {
+    return op == "=" || op == "+=" || op == "-="
+           || op == "*=" || op == "/=" || op == "%="
+}
+
+// ---- entry points ---------------------------------------------------------
+
+// Parses a pre-filtered token cursor (with a synthetic Eof already appended).
+fun parseModule(cursor: Cursor<Token>, fileName: Str): Res<XmlNode> {
+    var parser: Parser = Parser(cursor, false, "", fileName)
+    val root: XmlNode = parser.parseRoot()
+    if (parser.failed) {
+        return Res<XmlNode>.err(parser.error)
+    }
+    return Res<XmlNode>.ok(root)
+}
+
+// Parses a raw token list: drops Space/Comment tokens and appends a synthetic
+// Eof, matching the C++ parser's constructor.
+fun parseModule(tokens: *List<Token>, fileName: Str): Res<XmlNode> {
+    var toks: List<Token> = List<Token>()
+    var i: Int = 0
+    while (i < tokens.size()) {
+        val token: Token = tokens[i]
+        if (token.kind != TokenKind.Space && token.kind != TokenKind.Comment) {
+            toks.append(token)
+        }
+        i = i + 1
+    }
+    var eofPos: SourcePos = SourcePos(0, 1, 1)
+    if (toks.size() > 0) {
+        eofPos = toks[toks.size() - 1].pos
+    }
+    toks.append(Token("", TokenKind.Eof, eofPos))
+    return parseModule(cursorOf(&toks), fileName)
+}

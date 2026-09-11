@@ -28,8 +28,9 @@ The runner:
   the `cpp` golden when the fixture parses);
 - checks the negative fixtures (`parse_error.simse` must fail to parse,
   `sema_unknown_type.simse` must report an unknown-type diagnostic,
-  `ctor_arity.simse` a constructor-arity diagnostic, and
-  `sema_switch_label.simse` a non-constant case-label diagnostic);
+  `ctor_arity.simse` a constructor-arity diagnostic,
+  `sema_switch_label.simse` a non-constant case-label diagnostic, and
+  `sema_extension_arity.simse` a prelude-extension arity diagnostic);
 - checks the hoisting fixture (`hoisting.simse` parses and resolves cleanly with
   use-before-declaration);
 - parses and analyzes every real `.simse` file under `cppsrc/` plus `../cppsrc/main.simse`
@@ -187,7 +188,7 @@ in Simse.
 The default build (`cmd //c _msvc_build.bat`) also transpiles
 `tests/fixtures/{emit_hello, emit_shapes, emit_generics, native_readfile,
 emit_containers, emit_lang, emit_xmlnode, emit_cursor, emit_str,
-emit_lambda}.simse` and `cppsrc/main.simse`
+emit_lambda, emit_dict, emit_main_args}.simse` and `cppsrc/main.simse`
 (`main_program`), compiles the generated C++ (`e2e_<name>`), runs each with the
 repository root as the working directory, and diffs its stdout against
 `tests/golden/<name>.stdout.expected` with `cmake -E compare_files --ignore-eol`.
@@ -199,8 +200,20 @@ converter. The generated sources and captured stdout live under
 automatically. These steps are part of `ALL`, so an ordinary (and clean) build
 exercises the round trip and it cannot rot.
 
-The build also runs the differential ports of the scanner (`scanner_diff`) and
-the skeleton parser (`skel_diff`); see `impl_specs/tasks/11-...` and `13-...`.
+The build also runs the differential ports of the scanner (`scanner_diff`), the
+skeleton parser (`skel_diff`), the parser (`parser_diff`), the sema pass
+(`sema_diff`), and the C++ emitter (`codegen_diff`); see
+`impl_specs/tasks/11-...`, `13-...`, `19-...`, `21-...`, and `22-...`.
+Each compares the hand-written C++ component against the transpiled Simse one over
+`tests/fixtures/*.simse`; the parser, sema, and codegen drivers additionally check
+the reference output against the checked-in goldens.
+
+The `stage1_check` step is the endgame: the C++ transpiler emits
+`stage1/compiler_stage1.cpp` from `cppsrc/compiler/Driver.simse` (the whole
+compiler source set, through its imports); it compiles into
+`stage1/simse_stage1.exe`; and running that stage-1 compiler over the same source
+set must reproduce `compiler_stage1.cpp` byte-for-byte (the fixed point). It also
+checks `simse_stage1` against the C++ transpiler on the `emit_lang` fixture.
 
 ## Transpiler CLI
 
