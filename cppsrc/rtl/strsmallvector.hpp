@@ -8,10 +8,25 @@
 
 #include "types.hpp"
 
+// kStrInlineCapacity is the inline capacity of `Str`, in bytes, and the reserved
+// terminating NUL is one of them (specs/containers.md): a `Str` holds up to
+// `kStrInlineCapacity - 1` characters before its buffer spills to the heap. It is
+// defined once, here, and both `SmString` (smstring.hpp) and its buffer
+// (`StrSmallVector` below) read it, so the layout has a single source of truth.
+//
+// `SIMSE_STR_INLINE_CAPACITY` overrides it, which is how the size/speed trade-off
+// (object bytes and cache footprint against heap spills) is measured
+// (impl_specs/rtl-abi.md).
+#ifndef SIMSE_STR_INLINE_CAPACITY
+#define SIMSE_STR_INLINE_CAPACITY 16
+#endif
+inline constexpr Int kStrInlineCapacity = SIMSE_STR_INLINE_CAPACITY;
+
 // StrSmallVector is the buffer behind `Str` (specs/containers.md): the same
-// layout as `SmallVector<char, 24>` — `Int _len`, `Int _cap`, then the 24-byte
-// inline buffer unioned with the heap pointer, 32 bytes in total — specialized
-// for the single element type it ever holds.
+// layout as `SmallVector<char, kStrInlineCapacity>` — `Int _len`, `Int _cap`,
+// then the inline buffer unioned with the heap pointer, `8 + inlineCapacity`
+// bytes in total (32 at the spec capacity of 24, 24 at 16) — specialized for the
+// single element type it ever holds.
 //
 // **`_len` counts the terminating NUL.** The buffer always keeps a NUL at
 // `data()[size()]`, and that byte is part of `_len`, so:
@@ -41,7 +56,7 @@ public:
     using iterator = char*;
     using const_iterator = const char*;
 
-    static constexpr Int inlineCapacity = 24;   // bytes, NUL included
+    static constexpr Int inlineCapacity = kStrInlineCapacity;   // bytes, NUL included
     static constexpr Int maxInlineSize = inlineCapacity - 1;
 
     // The inline buffer starts out holding the empty string (its NUL). Writing

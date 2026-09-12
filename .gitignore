@@ -46,6 +46,9 @@ Release
 /simse_out.cpp
 /simse.exe
 
+### Out-of-tree build folders (cmake-build-debug/-release carry their own) ###
+cmake-build-*/
+
 ### Simse profiling project (simse.sln) ###
 /profile/
 /.vs/

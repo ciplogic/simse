@@ -9,11 +9,12 @@
 #include "strsmallvector.hpp"
 
 // SmString is the language's inline byte string (specs/built-in-types.md,
-// specs/containers.md): a NUL-terminated `SmallVector<24, Char>`. The inline
-// buffer holds at most 23 characters plus the terminating NUL; longer strings
-// spill to the heap, and `data()` is always a valid C string (the reserved NUL
-// is not part of `size()`). The buffer itself is `StrSmallVector`, the
-// char-specialized form of that vector (strsmallvector.hpp).
+// specs/containers.md): a NUL-terminated `SmallVector<kStrInlineCapacity, Char>`.
+// The inline buffer holds at most `kStrInlineCapacity - 1` characters plus the
+// terminating NUL; longer strings spill to the heap, and `data()` is always a
+// valid C string (the reserved NUL is not part of `size()`). The buffer itself is
+// `StrSmallVector`, the char-specialized form of that vector, which owns the
+// capacity constant (strsmallvector.hpp).
 //
 // `Str` is SmString unless SIMSE_STR_STD_STRING is defined, in which case `Str`
 // is `std::string` exactly as before (impl_specs/rtl-abi.md). The
@@ -35,8 +36,10 @@ public:
     using const_reference = const char&;
 
     static constexpr size_type npos = size_type(-1);
-    static constexpr size_type inlineCapacity = 24;
-    static constexpr size_type maxInlineLen = 23;
+    // The layout lives in StrSmallVector (strsmallvector.hpp); these only spell it
+    // in `size_type`s for the std::string-shaped surface.
+    static constexpr size_type inlineCapacity = (size_type) StrSmallVector::inlineCapacity;
+    static constexpr size_type maxInlineLen = inlineCapacity - 1;
 
     // ---- construction -----------------------------------------------------
 

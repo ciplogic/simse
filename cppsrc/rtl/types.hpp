@@ -16,7 +16,8 @@ using Int     = Int32; // default integer type; alias of Int32
 using Bool    = bool;  // two-valued built-in (specs/built-in-types.md)
 
 // Str is the mutable inline byte-string type. `smstring.hpp` defines SmString
-// (a NUL-terminated SmallVector<24, Char>) and picks the backing for `Str`:
+// (a NUL-terminated SmallVector<kStrInlineCapacity, Char>, the capacity defined in
+// strsmallvector.hpp) and picks the backing for `Str`:
 // SmString by default, std::string when SIMSE_STR_STD_STRING is defined
 // (impl_specs/rtl-abi.md). This header deliberately does not define `Str`
 // itself; containers.hpp pulls smstring.hpp in once SmallVector exists.
