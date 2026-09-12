@@ -1,0 +1,240 @@
+#include "Linear.h"
+
+#include <string>
+#include <utility>
+
+namespace linear {
+    using ast::ExprKind;
+    using ast::ExprPtr;
+    using ast::Stmt;
+    using ast::StmtKind;
+    using ast::StmtPtr;
+
+    namespace {
+        // Where `break` / `continue` go in the current lowering context; empty
+        // means the construct is not enclosing (sema already rejected those).
+        struct Ctx {
+            Str breakTo;
+            Str continueTo;
+        };
+
+        class Lowerer {
+        public:
+            List<StmtPtr> run(const List<StmtPtr> &stmts) {
+                List<StmtPtr> out;
+                Ctx ctx;
+                lowerStmts(stmts, ctx, out);
+                return out;
+            }
+
+        private:
+            // Label numbering is per body (L1, L2, ...): labels are function
+            // scoped in C++, so a per-body counter cannot collide, and each
+            // body gets the same numbering no matter where it is emitted.
+            int next = 1;
+
+            int nextId() { return next++; }
+            static Str labelName(int id) { return Str("L") + std::to_string(id); }
+            Str freshLabel() { return labelName(nextId()); }
+
+            static StmtPtr make(StmtKind kind, const ast::SourcePos &pos) {
+                auto stmt = std::make_shared<Stmt>();
+                stmt->kind = kind;
+                stmt->pos = pos;
+                return stmt;
+            }
+
+            static StmtPtr labelStmt(const Str &name, const ast::SourcePos &pos) {
+                StmtPtr stmt = make(StmtKind::Label, pos);
+                stmt->name = name;
+                return stmt;
+            }
+
+            static StmtPtr gotoStmt(const Str &name, const ast::SourcePos &pos) {
+                StmtPtr stmt = make(StmtKind::Goto, pos);
+                stmt->name = name;
+                return stmt;
+            }
+
+            static StmtPtr condGotoStmt(StmtKind kind, const ExprPtr &cond, const Str &name,
+                                        const ast::SourcePos &pos) {
+                StmtPtr stmt = make(kind, pos);
+                stmt->name = name;
+                stmt->cond = cond;
+                return stmt;
+            }
+
+            static StmtPtr blockStmt(List<StmtPtr> body, const ast::SourcePos &pos) {
+                StmtPtr stmt = make(StmtKind::Block, pos);
+                stmt->body = std::move(body);
+                return stmt;
+            }
+
+            // A name expression, used as the hoisted switch subject.
+            static ExprPtr nameExpr(const Str &name, const ast::SourcePos &pos) {
+                auto expr = std::make_shared<ast::Expr>();
+                expr->kind = ExprKind::Name;
+                expr->pos = pos;
+                expr->text = name;
+                return expr;
+            }
+
+            static ExprPtr equalsExpr(const ExprPtr &left, const ExprPtr &right,
+                                      const ast::SourcePos &pos) {
+                auto expr = std::make_shared<ast::Expr>();
+                expr->kind = ExprKind::Binary;
+                expr->pos = pos;
+                expr->text = "==";
+                expr->lhs = left;
+                expr->rhs = right;
+                return expr;
+            }
+
+            void lowerStmts(const List<StmtPtr> &stmts, const Ctx &ctx, List<StmtPtr> &out) {
+                for (const StmtPtr &stmt: stmts) {
+                    if (!stmt) continue;
+                    lowerStmt(*stmt, ctx, out);
+                }
+            }
+
+            // A region needs its own C++ scope only when it declares a variable
+            // at its own level: a jump may not bypass an initialization that is
+            // still in scope at the target. Everything else is spliced flat into
+            // the enclosing sequence, which keeps the emitted code compact.
+            static bool declares(const List<StmtPtr> &stmts) {
+                for (const StmtPtr &stmt: stmts) {
+                    if (stmt && stmt->kind == StmtKind::VarDecl) return true;
+                }
+                return false;
+            }
+
+            void appendBody(List<StmtPtr> body, const ast::SourcePos &pos, List<StmtPtr> &out) {
+                if (declares(body)) {
+                    out.push_back(blockStmt(std::move(body), pos));
+                    return;
+                }
+                for (StmtPtr &stmt: body) out.push_back(std::move(stmt));
+            }
+
+            void lowerStmt(const Stmt &stmt, const Ctx &ctx, List<StmtPtr> &out) {
+                switch (stmt.kind) {
+                    case StmtKind::If:
+                        lowerIf(stmt, ctx, out);
+                        return;
+                    case StmtKind::While:
+                        lowerWhile(stmt, ctx, out);
+                        return;
+                    case StmtKind::Switch:
+                        lowerSwitch(stmt, ctx, out);
+                        return;
+                    case StmtKind::Break:
+                        // Invalid outside a loop/switch; sema reports it before
+                        // this pass runs, so keep the node for the emitter.
+                        if (!ctx.breakTo.empty()) {
+                            out.push_back(gotoStmt(ctx.breakTo, stmt.pos));
+                            return;
+                        }
+                        break;
+                    case StmtKind::Continue:
+                        if (!ctx.continueTo.empty()) {
+                            out.push_back(gotoStmt(ctx.continueTo, stmt.pos));
+                            return;
+                        }
+                        break;
+                    default:
+                        break;
+                }
+                out.push_back(std::make_shared<Stmt>(stmt));
+            }
+
+            void lowerIf(const Stmt &stmt, const Ctx &ctx, List<StmtPtr> &out) {
+                const Str thenLabel = freshLabel();
+                const Str elseLabel = freshLabel();
+                out.push_back(condGotoStmt(StmtKind::IfTrue, stmt.cond, thenLabel, stmt.pos));
+                out.push_back(gotoStmt(elseLabel, stmt.pos));
+                out.push_back(labelStmt(thenLabel, stmt.pos));
+                List<StmtPtr> thenOut;
+                lowerStmts(stmt.thenBody, ctx, thenOut);
+                appendBody(std::move(thenOut), stmt.pos, out);
+                if (stmt.hasElse) {
+                    const Str endLabel = freshLabel();
+                    out.push_back(gotoStmt(endLabel, stmt.pos));
+                    out.push_back(labelStmt(elseLabel, stmt.pos));
+                    List<StmtPtr> elseOut;
+                    lowerStmts(stmt.elseBody, ctx, elseOut);
+                    appendBody(std::move(elseOut), stmt.pos, out);
+                    out.push_back(labelStmt(endLabel, stmt.pos));
+                } else {
+                    out.push_back(labelStmt(elseLabel, stmt.pos));
+                }
+            }
+
+            void lowerWhile(const Stmt &stmt, const Ctx &ctx, List<StmtPtr> &out) {
+                const Str condLabel = freshLabel();
+                const Str endLabel = freshLabel();
+                Ctx bodyCtx;
+                bodyCtx.breakTo = endLabel;
+                bodyCtx.continueTo = condLabel;
+                List<StmtPtr> bodyOut;
+                lowerStmts(stmt.body, bodyCtx, bodyOut);
+                out.push_back(labelStmt(condLabel, stmt.pos));
+                out.push_back(condGotoStmt(StmtKind::IfFalse, stmt.cond, endLabel, stmt.pos));
+                appendBody(std::move(bodyOut), stmt.pos, out);
+                out.push_back(gotoStmt(condLabel, stmt.pos));
+                out.push_back(labelStmt(endLabel, stmt.pos));
+                (void) ctx;
+            }
+
+            void lowerSwitch(const Stmt &stmt, const Ctx &ctx, List<StmtPtr> &out) {
+                // The subject is hoisted so it is evaluated exactly once, as a
+                // C++ `switch` subject would be.
+                const int subjectId = nextId();
+                const Str subject = Str("simse_sw_") + std::to_string(subjectId);
+                const Str endLabel = labelName(nextId());
+                List<Str> armLabels;
+                for (const ast::SwitchCase &switchCase: stmt.cases) {
+                    armLabels.push_back(labelName(nextId()));
+                }
+
+                StmtPtr subjectDecl = make(StmtKind::VarDecl, stmt.pos);
+                subjectDecl->name = subject;
+                subjectDecl->init = stmt.cond;
+                out.push_back(subjectDecl);
+
+                for (int i = 0; i < (int) stmt.cases.size(); i++) {
+                    const ast::SwitchCase &switchCase = stmt.cases[i];
+                    if (switchCase.isDefault || !switchCase.label) continue;
+                    out.push_back(condGotoStmt(StmtKind::IfTrue,
+                                               equalsExpr(nameExpr(subject, stmt.pos),
+                                                          switchCase.label, switchCase.pos),
+                                               armLabels[i], stmt.pos));
+                }
+                // No case matched: fall through to the default arm, or leave the
+                // switch. The default arm keeps its source position, so an arm
+                // before it still falls into it.
+                Str fallback = endLabel;
+                for (int i = 0; i < (int) stmt.cases.size(); i++) {
+                    if (stmt.cases[i].isDefault) fallback = armLabels[i];
+                }
+                out.push_back(gotoStmt(fallback, stmt.pos));
+
+                for (int i = 0; i < (int) stmt.cases.size(); i++) {
+                    const ast::SwitchCase &switchCase = stmt.cases[i];
+                    out.push_back(labelStmt(armLabels[i], switchCase.pos));
+                    Ctx armCtx;
+                    armCtx.breakTo = endLabel;
+                    armCtx.continueTo = ctx.continueTo;
+                    List<StmtPtr> armOut;
+                    lowerStmts(switchCase.body, armCtx, armOut);
+                    appendBody(std::move(armOut), switchCase.pos, out);
+                }
+                out.push_back(labelStmt(endLabel, stmt.pos));
+            }
+        };
+    }
+
+    List<ast::StmtPtr> lowerBody(const List<ast::StmtPtr> &body) {
+        Lowerer lowerer;
+        return lowerer.run(body);
+    }
+}

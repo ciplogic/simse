@@ -1,0 +1,296 @@
+// Linear.simse
+//
+// Post-sema lowering of structured control flow into labels and gotos, ported
+// from cppsrc/linear/Linear.cpp (impl_specs/linear-lowering.md). The emitter
+// consumes only the linear forms, so it no longer knows If/While/Switch/
+// Break/Continue:
+//
+//   label L;            -> Stmt.Label
+//   goto L;             -> Stmt.Goto
+//   if (c) goto L;      -> Stmt.IfTrue
+//   if (!(c)) goto L;   -> Stmt.IfFalse
+//   { ... }             -> Stmt.Block
+//
+// Bodies are wrapped in blocks because a C++ jump may not bypass a declaration
+// that is still in scope at the target; the language already scopes each
+// branch/loop body separately, so the wrapper preserves semantics.
+//
+// Label numbering restarts at L1 for every body (function/method or lambda):
+// labels are function scoped in C++, so per-body numbering cannot collide, and
+// re-emitting a body (generic instantiation) always produces the same names.
+// The hoisted `switch` subject is named `simse_sw_<n>` from the same counter.
+package linear
+
+import common
+
+// ---- node construction -----------------------------------------------------
+
+fun linStmt(kind: Str, line: Int, column: Int): XmlNode {
+    var attrs: List<Attribute> = List<Attribute>()
+    attrs.append(Attribute("kind", kind))
+    attrs.append(Attribute("line", line.toString()))
+    attrs.append(Attribute("column", column.toString()))
+    return XmlNode("Stmt", attrs, &List<XmlNode>())
+}
+
+// The same node under a new structural role; the AST carries roles in the
+// element name (impl_specs/ast-xmlnode.md), so a reused expression has to be
+// re-rooted for its new position.
+fun linRole(child: *XmlNode, role: Str): XmlNode {
+    var renamed: XmlNode = copy(child)
+    renamed.name = role
+    return renamed
+}
+
+fun linLabel(name: Str, line: Int, column: Int): XmlNode {
+    var node: XmlNode = linStmt("Stmt.Label", line, column)
+    node.attributes.append(Attribute("name", name))
+    return node
+}
+
+fun linGoto(name: Str, line: Int, column: Int): XmlNode {
+    var node: XmlNode = linStmt("Stmt.Goto", line, column)
+    node.attributes.append(Attribute("name", name))
+    return node
+}
+
+// `kind` is Stmt.IfTrue or Stmt.IfFalse; `cond` must already carry the `Cond`
+// role (a source condition node already does).
+fun linCondJump(kind: Str, cond: *XmlNode, name: Str, line: Int, column: Int): XmlNode {
+    var node: XmlNode = linStmt(kind, line, column)
+    node.attributes.append(Attribute("name", name))
+    node.Children.append(*cond)
+    return node
+}
+
+fun linBlock(body: *List<XmlNode>, line: Int, column: Int): XmlNode {
+    var box: XmlNode = XmlNode("Body", List<Attribute>(), &List<XmlNode>())
+    var i: Int = 0
+    while (i < body.size()) {
+        box.Children.append(body[i])
+        i = i + 1
+    }
+    var node: XmlNode = linStmt("Stmt.Block", line, column)
+    node.Children.append(box)
+    return node
+}
+
+// The hoisted `switch` subject: an untyped VarDecl, so the emitter emits `auto`.
+fun linSubjectDecl(name: Str, init: *XmlNode, line: Int, column: Int): XmlNode {
+    var node: XmlNode = linStmt("Stmt.VarDecl", line, column)
+    node.attributes.append(Attribute("name", name))
+    node.attributes.append(Attribute("isVar", "false"))
+    node.Children.append(linRole(init, "Init"))
+    return node
+}
+
+fun linName(role: Str, name: Str, line: Int, column: Int): XmlNode {
+    var attrs: List<Attribute> = List<Attribute>()
+    attrs.append(Attribute("kind", "Expr.Name"))
+    attrs.append(Attribute("line", line.toString()))
+    attrs.append(Attribute("column", column.toString()))
+    attrs.append(Attribute("name", name))
+    return XmlNode(role, attrs, &List<XmlNode>())
+}
+
+fun linEquals(role: Str, lhs: *XmlNode, rhs: *XmlNode, line: Int, column: Int): XmlNode {
+    var attrs: List<Attribute> = List<Attribute>()
+    attrs.append(Attribute("kind", "Expr.Binary"))
+    attrs.append(Attribute("line", line.toString()))
+    attrs.append(Attribute("column", column.toString()))
+    attrs.append(Attribute("op", "=="))
+    var node: XmlNode = XmlNode(role, attrs, &List<XmlNode>())
+    node.Children.append(*lhs)
+    node.Children.append(*rhs)
+    return node
+}
+
+// ---- the lowering ----------------------------------------------------------
+
+data class LinLowerer(
+    var next: Int
+) {
+    fun nextId(): Int {
+        val id: Int = this.next
+        this.next = this.next + 1
+        return id
+    }
+
+    fun freshLabel(): Str {
+        return "L" + this.nextId().toString()
+    }
+
+    // One body in, one linear body out. Pure: the input statements are not
+    // modified (only copied or re-rooted).
+    fun lowerBody(stmts: List<XmlNode>): List<XmlNode> {
+        var out: List<XmlNode> = List<XmlNode>()
+        this.lowerStmts(*stmts, "", "", *out)
+        return out
+    }
+
+    // breakTo/continueTo are empty when no enclosing construct accepts them.
+    fun lowerStmts(stmts: *List<XmlNode>, breakTo: Str, continueTo: Str, out: *List<XmlNode>): Unit {
+        var i: Int = 0
+        while (i < stmts.size()) {
+            this.lowerStmt(*stmts[i], breakTo, continueTo, out)
+            i = i + 1
+        }
+    }
+
+    fun lowerStmt(stmt: *XmlNode, breakTo: Str, continueTo: Str, out: *List<XmlNode>): Unit {
+        val kind: Str = xmlKind(stmt)
+        if (kind == "Stmt.If") {
+            this.lowerIf(stmt, breakTo, continueTo, out)
+            return
+        }
+        if (kind == "Stmt.While") {
+            this.lowerWhile(stmt, breakTo, continueTo, out)
+            return
+        }
+        if (kind == "Stmt.Switch") {
+            this.lowerSwitch(stmt, breakTo, continueTo, out)
+            return
+        }
+        if (kind == "Stmt.Break") {
+            if (breakTo != "") {
+                out.append(linGoto(breakTo, xmlLine(stmt), xmlColumn(stmt)))
+                return
+            }
+            out.append(copy(stmt))
+            return
+        }
+        if (kind == "Stmt.Continue") {
+            if (continueTo != "") {
+                out.append(linGoto(continueTo, xmlLine(stmt), xmlColumn(stmt)))
+                return
+            }
+            out.append(copy(stmt))
+            return
+        }
+        out.append(copy(stmt))
+    }
+
+    // A region needs its own C++ scope only when it declares a variable at its
+    // own level: a jump may not bypass an initialization that is still in scope
+    // at the target. Everything else is spliced flat into the enclosing
+    // sequence, which keeps the emitted code compact.
+    fun appendBody(body: *List<XmlNode>, line: Int, column: Int, out: *List<XmlNode>): Unit {
+        if (this.declares(body)) {
+            out.append(linBlock(body, line, column))
+            return
+        }
+        var i: Int = 0
+        while (i < body.size()) {
+            out.append(body[i])
+            i = i + 1
+        }
+    }
+
+    fun declares(body: *List<XmlNode>): Bool {
+        var i: Int = 0
+        while (i < body.size()) {
+            if (xmlKind(*body[i]) == "Stmt.VarDecl") {
+                return true
+            }
+            i = i + 1
+        }
+        return false
+    }
+
+    fun lowerIf(stmt: *XmlNode, breakTo: Str, continueTo: Str, out: *List<XmlNode>): Unit {
+        val thenLabel: Str = this.freshLabel()
+        val elseLabel: Str = this.freshLabel()
+        val line: Int = xmlLine(stmt)
+        val column: Int = xmlColumn(stmt)
+        out.append(linCondJump("Stmt.IfTrue", *xmlChild(stmt, "Cond"), thenLabel, line, column))
+        out.append(linGoto(elseLabel, line, column))
+        out.append(linLabel(thenLabel, line, column))
+        var thenOut: List<XmlNode> = List<XmlNode>()
+        this.lowerStmts(*xmlChildren(*xmlChild(stmt, "Then"), "Stmt"), breakTo, continueTo, *thenOut)
+        this.appendBody(*thenOut, line, column, out)
+        if (xmlHasChild(stmt, "Else")) {
+            val endLabel: Str = this.freshLabel()
+            out.append(linGoto(endLabel, line, column))
+            out.append(linLabel(elseLabel, line, column))
+            var elseOut: List<XmlNode> = List<XmlNode>()
+            this.lowerStmts(*xmlChildren(*xmlChild(stmt, "Else"), "Stmt"), breakTo, continueTo, *elseOut)
+            this.appendBody(*elseOut, line, column, out)
+            out.append(linLabel(endLabel, line, column))
+        } else {
+            out.append(linLabel(elseLabel, line, column))
+        }
+    }
+
+    fun lowerWhile(stmt: *XmlNode, breakTo: Str, continueTo: Str, out: *List<XmlNode>): Unit {
+        val condLabel: Str = this.freshLabel()
+        val endLabel: Str = this.freshLabel()
+        val line: Int = xmlLine(stmt)
+        val column: Int = xmlColumn(stmt)
+        var bodyOut: List<XmlNode> = List<XmlNode>()
+        this.lowerStmts(*xmlChildren(*xmlChild(stmt, "Body"), "Stmt"), endLabel, condLabel, *bodyOut)
+        out.append(linLabel(condLabel, line, column))
+        out.append(linCondJump("Stmt.IfFalse", *xmlChild(stmt, "Cond"), endLabel, line, column))
+        this.appendBody(*bodyOut, line, column, out)
+        out.append(linGoto(condLabel, line, column))
+        out.append(linLabel(endLabel, line, column))
+    }
+
+    fun lowerSwitch(stmt: *XmlNode, breakTo: Str, continueTo: Str, out: *List<XmlNode>): Unit {
+        // The subject is hoisted so it is evaluated exactly once, as a C++
+        // `switch` subject would be.
+        val subjectId: Int = this.nextId()
+        val subject: Str = "simse_sw_" + subjectId.toString()
+        val endLabel: Str = this.freshLabel()
+        val line: Int = xmlLine(stmt)
+        val column: Int = xmlColumn(stmt)
+        val cases: List<XmlNode> = xmlChildren(stmt, "Case")
+        var armLabels: List<Str> = List<Str>()
+        var i: Int = 0
+        while (i < cases.size()) {
+            armLabels.append(this.freshLabel())
+            i = i + 1
+        }
+        // No case matched: fall through to the default arm, or leave the
+        // switch. The default arm keeps its source position, so an arm before
+        // it still falls into it.
+        var fallback: Str = endLabel
+        i = 0
+        while (i < cases.size()) {
+            if (xmlAttr(*cases[i], "isDefault") == "true") {
+                fallback = armLabels[i]
+            }
+            i = i + 1
+        }
+
+        out.append(linSubjectDecl(subject, *xmlChild(stmt, "Cond"), line, column))
+        i = 0
+        while (i < cases.size()) {
+            if (xmlAttr(*cases[i], "isDefault") != "true") {
+                val eq: XmlNode = linEquals("Cond", *linName("Lhs", subject, line, column),
+                                            *linRole(*xmlChild(*cases[i], "Label"), "Rhs"),
+                                            line, column)
+                out.append(linCondJump("Stmt.IfTrue", *eq, armLabels[i], line, column))
+            }
+            i = i + 1
+        }
+        out.append(linGoto(fallback, line, column))
+
+        i = 0
+        while (i < cases.size()) {
+            val caseLine: Int = xmlLine(*cases[i])
+            val caseColumn: Int = xmlColumn(*cases[i])
+            out.append(linLabel(armLabels[i], caseLine, caseColumn))
+            var armOut: List<XmlNode> = List<XmlNode>()
+            this.lowerStmts(*xmlChildren(*cases[i], "Stmt"), endLabel, continueTo, *armOut)
+            this.appendBody(*armOut, caseLine, caseColumn, out)
+            i = i + 1
+        }
+        out.append(linLabel(endLabel, line, column))
+    }
+}
+
+// Lowers one function-like body; the counter restarts per body.
+fun linLowerBody(stmts: List<XmlNode>): List<XmlNode> {
+    var lowerer: LinLowerer = LinLowerer(1)
+    return lowerer.lowerBody(stmts)
+}

@@ -1,0 +1,137 @@
+// Simplify.simse
+//
+// Peephole simplification of the linear form produced by `linLowerBody`, ported
+// from cppsrc/linear/Simplify.cpp (impl_specs/linear-lowering.md). The rules are
+// semantics-preserving and deliberately simple; they exist so the emitted code
+// stays close to the structured code it came from.
+//
+//   goto L; L:;                    -> L:;
+//   if (c) goto L; L:;             -> L:;
+//   ifTrue (c) goto A; goto B; A:; -> ifFalse (c) goto B;
+//   goto L; <unreachable> L:;      -> goto L; L:;
+//   L:; (nothing jumps to it)      -> (removed)
+//
+// Runs to a fixed point (dropping a jump can make a label unused, and dropping
+// statements can expose another jump-to-next or an unreachable run).
+package linear
+
+import common
+
+fun linIsLabel(stmt: *XmlNode): Bool {
+    return xmlKind(stmt) == "Stmt.Label"
+}
+
+fun linIsGoto(stmt: *XmlNode): Bool {
+    return xmlKind(stmt) == "Stmt.Goto"
+}
+
+fun linIsCondJump(stmt: *XmlNode): Bool {
+    val kind: Str = xmlKind(stmt)
+    return kind == "Stmt.IfTrue" || kind == "Stmt.IfFalse"
+}
+
+fun linIsTerminator(stmt: *XmlNode): Bool {
+    val kind: Str = xmlKind(stmt)
+    return kind == "Stmt.Goto" || kind == "Stmt.Return"
+}
+
+fun linJumpsTo(stmts: *List<XmlNode>, name: Str): Bool {
+    var i: Int = 0
+    while (i < stmts.size()) {
+        if ((linIsGoto(*stmts[i]) || linIsCondJump(*stmts[i]))
+            && xmlAttr(*stmts[i], "name") == name) {
+            return true
+        }
+        i = i + 1
+    }
+    return false
+}
+
+// A copy of a conditional jump with a negated condition (IfTrue <-> IfFalse)
+// and a new target.
+fun linInvertedJump(jump: *XmlNode, target: Str): XmlNode {
+    var kind: Str = "Stmt.IfTrue"
+    if (xmlKind(jump) == "Stmt.IfTrue") {
+        kind = "Stmt.IfFalse"
+    }
+    var attrs: List<Attribute> = List<Attribute>()
+    attrs.append(Attribute("kind", kind))
+    attrs.append(Attribute("line", xmlLine(jump).toString()))
+    attrs.append(Attribute("column", xmlColumn(jump).toString()))
+    attrs.append(Attribute("name", target))
+    var node: XmlNode = XmlNode("Stmt", attrs, &List<XmlNode>())
+    node.Children.append(xmlChild(jump, "Cond"))
+    return node
+}
+
+data class LinSimplifier(
+    var changed: Bool
+) {
+    fun prunePass(stmts: *List<XmlNode>): List<XmlNode> {
+        var out: List<XmlNode> = List<XmlNode>()
+        var i: Int = 0
+        while (i < stmts.size()) {
+            val stmt: XmlNode = stmts[i]
+            if ((linIsGoto(*stmt) || linIsCondJump(*stmt)) && i + 1 < stmts.size()
+                && linIsLabel(*stmts[i + 1])
+                && xmlAttr(*stmts[i + 1], "name") == xmlAttr(*stmt, "name")) {
+                // A jump to the statement right after it does nothing.
+                this.changed = true
+                i = i + 1
+            } else if (linIsCondJump(*stmt) && i + 2 < stmts.size() && linIsGoto(*stmts[i + 1])
+                       && linIsLabel(*stmts[i + 2])
+                       && xmlAttr(*stmts[i + 2], "name") == xmlAttr(*stmt, "name")) {
+                // `ifTrue (c) goto A; goto B; A:` is `ifFalse (c) goto B;`. The
+                // label A stays in the stream and is dropped below if nothing
+                // else jumps to it.
+                out.append(linInvertedJump(*stmt, xmlAttr(*stmts[i + 1], "name")))
+                this.changed = true
+                i = i + 2
+            } else {
+                out.append(copy(stmt))
+                // Nothing before the next label can be reached.
+                if (linIsTerminator(*stmt)) {
+                    while (i + 1 < stmts.size() && !linIsLabel(*stmts[i + 1])) {
+                        this.changed = true
+                        i = i + 1
+                    }
+                }
+                i = i + 1
+            }
+        }
+        return out
+    }
+
+    fun labelPass(stmts: *List<XmlNode>): List<XmlNode> {
+        var out: List<XmlNode> = List<XmlNode>()
+        var i: Int = 0
+        while (i < stmts.size()) {
+            val stmt: XmlNode = stmts[i]
+            if (linIsLabel(*stmt) && !linJumpsTo(stmts, xmlAttr(*stmt, "name"))) {
+                this.changed = true
+            } else {
+                out.append(copy(stmt))
+            }
+            i = i + 1
+        }
+        return out
+    }
+
+    fun run(stmts: List<XmlNode>): List<XmlNode> {
+        var current: List<XmlNode> = stmts
+        this.changed = true
+        var guard: Int = 0
+        while (this.changed && guard < 16) {
+            guard = guard + 1
+            this.changed = false
+            current = this.prunePass(*current)
+            current = this.labelPass(*current)
+        }
+        return current
+    }
+}
+
+fun linSimplifyBody(body: List<XmlNode>): List<XmlNode> {
+    var simplifier: LinSimplifier = LinSimplifier(false)
+    return simplifier.run(body)
+}
