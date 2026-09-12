@@ -21,9 +21,9 @@ namespace compiler {
     namespace {
         Str normalizePath(const Str &path) {
             std::error_code ec;
-            std::filesystem::path canonical =
-                std::filesystem::weakly_canonical(std::filesystem::path(path), ec);
-            return ec ? path : canonical.string();
+            std::filesystem::path canonical = std::filesystem::weakly_canonical(
+                    std::filesystem::path(simse_toStdString(path)), ec);
+            return ec ? path : simse_fromStdString(canonical.string());
         }
     }
 
@@ -38,9 +38,9 @@ namespace compiler {
         Str resolvedPrelude = request.preludeExplicit ? request.preludePath : Str(kDefaultPrelude);
         List<Str> preludeFiles;
         if (!resolvedPrelude.empty()) {
-            if (std::filesystem::is_directory(resolvedPrelude)) {
+            if (std::filesystem::is_directory(simse_toStdString(resolvedPrelude))) {
                 preludeFiles = filesInDir(resolvedPrelude, ".simse");
-            } else if (std::filesystem::exists(resolvedPrelude)) {
+            } else if (std::filesystem::exists(simse_toStdString(resolvedPrelude))) {
                 preludeFiles.push_back(resolvedPrelude);
             } else if (request.preludeExplicit) {
                 fprintf(stderr, "%s: prelude not found: %s\n", programName.c_str(),

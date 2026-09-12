@@ -4,10 +4,12 @@
 #include <type_traits>
 
 // ctor_arity.simse:4
+SIMSE_PACK_PUSH
 struct Widget {
     Int a;
     Int b;
 };
+SIMSE_PACK_POP
 Widget _make_Widget(Int a, Int b) {
     return Widget{a, b};
 }

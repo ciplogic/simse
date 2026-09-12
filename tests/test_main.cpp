@@ -29,7 +29,7 @@ using namespace tests;
 
 namespace {
     Str baseName(const Str &path) {
-        return std::filesystem::path(path).filename().string();
+        return common::toPath(path).filename().string();
     }
 
     Str readFileText(const Str &path) {
@@ -37,7 +37,7 @@ namespace {
     }
 
     bool writeFileText(const Str &path, const Str &text) {
-        std::filesystem::path p(path);
+        std::filesystem::path p(common::toPath(path));
         std::filesystem::create_directories(p.parent_path());
         FILE *file = fopen(path.c_str(), "wb");
         if (file == nullptr) {
@@ -89,7 +89,7 @@ namespace {
     }
 
     Str goldenPathFor(const Str &goldenDir, const Str &name, const Str &category) {
-        return (std::filesystem::path(goldenDir) / (name + "." + category + ".expected")).string();
+        return (common::toPath(goldenDir) / common::toPath(name + "." + category + ".expected")).string();
     }
 
     // A separator-normalized key for a path, so paths built with mixed `/` and `\`
@@ -97,7 +97,7 @@ namespace {
     Str pathKey(const Str &path) {
         std::error_code ec;
         std::filesystem::path canonical =
-            std::filesystem::weakly_canonical(std::filesystem::path(path), ec);
+            std::filesystem::weakly_canonical(common::toPath(path), ec);
         return ec ? path : canonical.string();
     }
 
@@ -149,7 +149,7 @@ namespace {
             }
             return true;
         }
-        if (!std::filesystem::exists(goldenPath)) {
+        if (!std::filesystem::exists(common::toPath(goldenPath))) {
             printf("FAIL %s: missing golden %s (run with --update)\n",
                    label.c_str(), goldenPath.c_str());
             return false;
@@ -181,7 +181,7 @@ int main(int argc, char **argv) {
         }
     }
 
-    Str goldenDir = (std::filesystem::path(fixturesDir).parent_path() / "golden").string();
+    Str goldenDir = (common::toPath(fixturesDir).parent_path() / "golden").string();
 
     List<TokenMatcher> rules = getTokenRules();
     Scanner scanner(&rules);
@@ -226,7 +226,7 @@ int main(int argc, char **argv) {
 
     // Negative fixtures: explicit assertions beyond the stored goldens.
     {
-        Str path = (std::filesystem::path(fixturesDir) / "parse_error.simse").string();
+        Str path = (common::toPath(fixturesDir) / "parse_error.simse").string();
         ScanResult scan = scanFile(&scanner, path);
         List<Token> tokens = scan.tokens;
         Res<ast::Module> parsed = scan.ok
@@ -241,7 +241,7 @@ int main(int argc, char **argv) {
         }
     }
     {
-        Str path = (std::filesystem::path(fixturesDir) / "sema_unknown_type.simse").string();
+        Str path = (common::toPath(fixturesDir) / "sema_unknown_type.simse").string();
         ScanResult scan = scanFile(&scanner, path);
         List<Token> tokens = scan.tokens;
         Res<ast::Module> parsed = scan.ok
@@ -268,7 +268,7 @@ int main(int argc, char **argv) {
     // Negative fixture: a data-class constructor called with the wrong number of
     // arguments must be diagnosed with a clear positioned message.
     {
-        Str path = (std::filesystem::path(fixturesDir) / "ctor_arity.simse").string();
+        Str path = (common::toPath(fixturesDir) / "ctor_arity.simse").string();
         ScanResult scan = scanFile(&scanner, path);
         List<Token> tokens = scan.tokens;
         Res<ast::Module> parsed = scan.ok
@@ -296,7 +296,7 @@ int main(int argc, char **argv) {
     // Negative fixture: a `case` label that is not a constant expression must be
     // diagnosed.
     {
-        Str path = (std::filesystem::path(fixturesDir) / "sema_switch_label.simse").string();
+        Str path = (common::toPath(fixturesDir) / "sema_switch_label.simse").string();
         ScanResult scan = scanFile(&scanner, path);
         List<Token> tokens = scan.tokens;
         Res<ast::Module> parsed = scan.ok
@@ -323,7 +323,7 @@ int main(int argc, char **argv) {
     // Positive fixture: hoisted declarations are usable before their textual
     // definition, and resolution stays clean.
     {
-        Str path = (std::filesystem::path(fixturesDir) / "hoisting.simse").string();
+        Str path = (common::toPath(fixturesDir) / "hoisting.simse").string();
         ScanResult scan = scanFile(&scanner, path);
         List<Token> tokens = scan.tokens;
         Res<ast::Module> parsed = scan.ok
@@ -467,7 +467,7 @@ int main(int argc, char **argv) {
     // package are caught.
     List<Str> sources = filesInDir(Str(SIMSE_SOURCE_ROOT) + "/cppsrc", ".simse");
     Str rootMain = Str(SIMSE_SOURCE_ROOT) + "/main.simse";
-    if (std::filesystem::exists(rootMain)) {
+    if (std::filesystem::exists(common::toPath(rootMain))) {
         sources.push_back(rootMain);
     }
     List<Str> preludeFiles = filesInDir(Str(SIMSE_DEFAULT_PRELUDE), ".simse");
@@ -503,7 +503,7 @@ int main(int argc, char **argv) {
             }
         }
         if (!isPreludeFile
-            && pathKey(std::filesystem::path(source).parent_path().string()) == preludeDirKey) {
+            && pathKey(common::toPath(source).parent_path().string()) == preludeDirKey) {
             isPreludeFile = true;
         }
         if (!isPreludeFile) {

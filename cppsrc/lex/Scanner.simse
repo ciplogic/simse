@@ -373,7 +373,9 @@ data class Scanner(var rules: &List<TokenMatcher>; var pos: Int; var line: Int; 
 
     fun nextToken(): Res<Token> {
         while (this.pos < this.source.size()) {
-            val view: StrView = StrView(&this.source, this.pos, this.source.size() - this.pos)
+            // A raw pointer to the scanner's own `source`; the view must not
+            // copy or count the text (see StrView.simse).
+            val view: StrView = StrView(*this.source, this.pos, this.source.size() - this.pos)
             var i = 0
             while (i < this.rules.size()) {
                 val rule: TokenMatcher = this.rules[i]

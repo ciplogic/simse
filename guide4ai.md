@@ -97,7 +97,14 @@ explicit `cppsrc/compiler/Driver.simse` input.
   `containers.hpp`, `optional.hpp`, `functional.hpp`, `result.hpp`, `xml.hpp`,
   `cursor.hpp`, `listops.hpp`, `strops.hpp`, `dictops.hpp`, `fs.hpp`,
   `simse.hpp`) AND the **prelude** `.simse` files (`rtl.simse`, `Cursor.simse`,
-  `xml.simse`, `fs.simse`) declaring the RTL surface.
+  `xml.simse`, `fs.simse`) declaring the RTL surface. `List<T>` is
+  `SmallVector<T, 4>` by default; the CMake option `SIMSE_LIST_STD_VECTOR` (or
+  `build.bat --define SIMSE_LIST_STD_VECTOR`) switches it to `std::vector<T>`,
+  and the choice has to match between the compiler and the amalgamated output it
+  is linked with (`impl_specs/rtl-abi.md`). The language's layout model is
+  **4-byte packing** (`specs/memory-model.md`): the emitter brackets every
+  generated aggregate in `SIMSE_PACK_PUSH`/`SIMSE_PACK_POP`, and `SIMSE_NO_PACK4`
+  reverts to the host's default alignment.
 - `cppsrc/common/` — `readFile`/`filesInDir`, `StrView`, `xmlutil` (C++ + Simse).
 - `cppsrc/lex/`, `cppsrc/skelparser/`, `cppsrc/parser/`, `cppsrc/sema/`,
   `cppsrc/linear/`, `cppsrc/codegen/`, `cppsrc/compiler/` — the compiler stages;
@@ -215,10 +222,11 @@ Do these only when asked; roughly prioritized:
    and explicit capture lists; `when`/pattern matching; string interpolation;
    interfaces/virtual dispatch; method overriding; default parameter values;
    `unsafe` blocks / raw-pointer escape rules.
-4. **RTL spec convergence**: the RTL is a shim (`Str`=`std::string`,
-   `List`=`std::vector`, `SmallVector` has no SBO operations, no
-   `[refcount][typeId]` header). Divergences are documented in
-   `impl_specs/rtl-abi.md`; the eventual target must match `specs/`.
+4. **RTL spec convergence**: the RTL is a shim (`Str`=`std::string`; `List` is
+   `SmallVector<T, 4>` per the spec, with `std::vector` only behind
+   `SIMSE_LIST_STD_VECTOR`; no `[refcount][typeId]` header). Divergences are
+   documented in `impl_specs/rtl-abi.md`; the eventual target must match
+   `specs/`.
 5. **Ergonomics/robustness**: lambda typing is conservative (a body/return
    mismatch surfaces as a C++ compile error, not a Simse diagnostic); generic
    type aliases aren't expanded when resolving an expected callable type; `Str`

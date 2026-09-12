@@ -4,11 +4,13 @@
 #include <type_traits>
 
 // emit_generics.simse:2
+SIMSE_PACK_PUSH
 template <class A, class B>
 struct Pair {
     A first;
     B second;
 };
+SIMSE_PACK_POP
 template <class A, class B>
 Pair<A, B> _make_Pair(A first, B second) {
     return Pair<A, B>{first, second};

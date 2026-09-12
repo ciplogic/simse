@@ -15,9 +15,11 @@ using Char    = std::int8_t;
 using Int     = Int32; // default integer type; alias of Int32
 using Bool    = bool;  // two-valued built-in (specs/built-in-types.md)
 
-// Str is the mutable inline byte-string type. The runtime representation uses
-// std::string, which satisfies the deep-copy value semantics the specs require.
-using Str = std::string;
+// Str is the mutable inline byte-string type. `smstring.hpp` defines SmString
+// (a NUL-terminated SmallVector<24, Char>) and picks the backing for `Str`:
+// SmString by default, std::string when SIMSE_STR_STD_STRING is defined
+// (impl_specs/rtl-abi.md). This header deliberately does not define `Str`
+// itself; containers.hpp pulls smstring.hpp in once SmallVector exists.
 
 // `*value` in Simse is the raw-pointer (address-of) form (specs/memory-model.md).
 // The lvalue overload covers ordinary expressions; the forwarding overload binds
@@ -32,3 +34,24 @@ template <class T>
 T* simse_addressOf(T&& value) {
     return &value;
 }
+
+// The language's layout model is 4-byte packing (specs/memory-model.md): every
+// type is aligned to at most 4 bytes. Definitions that follow the rule are
+// bracketed with SIMSE_PACK_PUSH / SIMSE_PACK_POP; the C++ emitter wraps every
+// generated aggregate in them, and the RTL wraps its own value containers.
+//
+// This under-aligns host-library members (`Str` is std::string, `PList` is
+// std::shared_ptr, `Func` is std::function, ...) which the host declares with
+// 8-byte alignment. That is deliberate for the bootstrap shim and recorded in
+// impl_specs/rtl-abi.md; `SIMSE_NO_PACK4` falls back to the host's default
+// alignment for builds that need it.
+#if defined(SIMSE_NO_PACK4)
+#define SIMSE_PACK_PUSH
+#define SIMSE_PACK_POP
+#elif defined(_MSC_VER)
+#define SIMSE_PACK_PUSH __pragma(pack(push, 4))
+#define SIMSE_PACK_POP __pragma(pack(pop))
+#else
+#define SIMSE_PACK_PUSH _Pragma("pack(push, 4)")
+#define SIMSE_PACK_POP _Pragma("pack(pop)")
+#endif

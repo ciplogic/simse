@@ -353,12 +353,16 @@ namespace codegen {
 
                 sourceComment(decl.pos);
                 Str tmpl = templateClause(decl.typeParams);
+                // Generated aggregates follow the language's 4-byte packing rule
+                // (specs/memory-model.md); the macros come from rtl/types.hpp.
+                line(0, "SIMSE_PACK_PUSH");
                 if (!tmpl.empty()) line(0, tmpl);
                 line(0, "struct " + decl.name + " {");
                 for (const ast::Field &field: decl.fields) {
                     line(1, type(*field.type) + " " + field.name + ";");
                 }
                 line(0, "};");
+                line(0, "SIMSE_PACK_POP");
 
                 // The struct stays an aggregate (so it is default-constructible
                 // where C++ needs it, e.g. the payload of a failed Res<T>);

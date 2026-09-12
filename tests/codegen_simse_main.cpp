@@ -36,8 +36,8 @@ namespace {
     std::vector<std::string> simseFiles(const std::string &dir) {
         std::vector<std::string> files;
         std::error_code ec;
-        if (!std::filesystem::is_directory(dir, ec)) return files;
-        for (const auto &entry: std::filesystem::recursive_directory_iterator(dir, ec)) {
+        if (!std::filesystem::is_directory(std::filesystem::path(simse_toStdString(dir)), ec)) return files;
+        for (const auto &entry: std::filesystem::recursive_directory_iterator(std::filesystem::path(simse_toStdString(dir)), ec)) {
             if (entry.is_regular_file() && entry.path().extension() == ".simse") {
                 files.push_back(entry.path().string());
             }
@@ -76,7 +76,7 @@ namespace {
         merged.Children = makeList<XmlNode>();
         for (const std::string &path: files) {
             XmlNode module;
-            std::string name = std::filesystem::path(path).filename().string();
+            std::string name = std::filesystem::path(simse_toStdString(path)).filename().string();
             if (!parseFile(path, name, module)) continue;
             for (int i = 0; i < (int) module.Children->size(); i++) {
                 if ((*module.Children)[i].name == "Import") {
@@ -86,7 +86,7 @@ namespace {
         }
         for (const std::string &path: files) {
             XmlNode module;
-            std::string name = std::filesystem::path(path).filename().string();
+            std::string name = std::filesystem::path(simse_toStdString(path)).filename().string();
             if (!parseFile(path, name, module)) continue;
             for (int i = 0; i < (int) module.Children->size(); i++) {
                 if ((*module.Children)[i].name != "Import") {
@@ -113,7 +113,7 @@ int main(int argc, char **argv) {
     }
 
     for (const std::string &file: files) {
-        const std::string name = std::filesystem::path(file).filename().string();
+        const std::string name = std::filesystem::path(simse_toStdString(file)).filename().string();
         printf("=== %s ===\n", name.c_str());
 
         XmlNode input;

@@ -411,3 +411,40 @@ component-specific):
   compile time ~+2.5%, and the hand-written transpiler stays at ~36 ms. Nine
   `.cpp` goldens were regenerated; all e2e programs, the five differentials and
   the two-step bootstrap stay green.
+- **`List<T>` is backed by the inline `SmallVector` by default (T27).**
+  `SmallVector<T, N>` is no longer a layout shell: it implements the
+  std::vector-compatible surface the compiler uses, with the documented
+  `_len`/`_cap`/union layout, explicit element lifetimes and 4 inline slots
+  (`cppsrc/rtl/containers.hpp`). `List<T>` is `SmallVector<T, 4>` unless
+  `SIMSE_LIST_STD_VECTOR` is defined (CMake option of the same name;
+  `build.bat --define SIMSE_LIST_STD_VECTOR`); `build.js` mirrors the CMake cache
+  so an amalgamation always matches the RTL libraries it links against. Both
+  configurations build and pass the full suite (60 tests, e2e, five
+  differentials, two-step bootstrap); `tools/smallvector_stress.cpp` covers the
+  inline/heap transitions under AddressSanitizer. Cost: `sizeof(XmlNode)` grows
+  72 -> 312 bytes (four inline `Attribute`s), while the self-hosted compiler is
+  ~2% faster on `--root cppsrc` (278 ms vs 283 ms median, interleaved) because
+  most nodes avoid a heap allocation for their attributes. `tests/
+  skel_simse_main.cpp` had to use `List<Token>` instead of `std::vector<Token>`
+  for the parseSkeleton boundary. `specs/containers.md` now states the same
+  thing: `List<T>` *is* `SmallVector<4, T>` (the two were kept apart during the
+  bootstrap only because `SmallVector` was still an unimplemented shell), so the
+  only remaining divergence is the optional `SIMSE_LIST_STD_VECTOR` mode and the
+  reversed template parameters.
+- **4-byte packing is the language's layout rule (T28).** `specs/memory-model.md`
+  gained an "Alignment and packing" section: no type is aligned to more than 4
+  bytes, aggregate fields sit on 4-byte boundaries, and the ABI promises no
+  8-byte alignment for `Int64`/`Float64`/pointer fields. `cppsrc/rtl/types.hpp`
+  defines `SIMSE_PACK_PUSH`/`SIMSE_PACK_POP` (`__pragma(pack(push,4))` under
+  MSVC, `_Pragma("pack(push,4)")` elsewhere; `SIMSE_NO_PACK4` reverts to host
+  layout). The C++ emitter wraps every generated aggregate in them and
+  `SmallVector`/`Array` are defined under the same rule. Measured: an
+  `{Int, Int64, Int}` data class drops 24 -> 16 bytes, `Array<Int>` 24 -> 20,
+  `alignof(List<T>)` 8 -> 4; `Token` (48), `Attribute` (64) and `XmlNode` (312)
+  are unchanged because their fields already fall on 8-byte offsets. The
+  compiler's own runtime is neutral (289 ms packed vs 280 ms host alignment,
+  interleaved medians) and the transpiled output is byte-identical either way.
+  Caveat recorded in `impl_specs/rtl-abi.md`: the shim types are host library
+  types declared 8-aligned (`std::string`, `std::shared_ptr`, `std::function`),
+  so packed aggregates under-align them — `tools/packed_alignment_probe.cpp`
+  exercises that case at 4-mod-8 addresses on the ARM64 target and is clean.

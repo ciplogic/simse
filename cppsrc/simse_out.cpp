@@ -3,18 +3,21 @@
 #include <iostream>
 #include <type_traits>
 
-// ./common/common.simse:8
+// cppsrc/common/common.simse:8
 Str simse_native_readFile(const Str& filePath);
-// ./codegen/Codegen.simse:29
+// cppsrc/codegen/Codegen.simse:31
+SIMSE_PACK_PUSH
 struct CgInput {
     Str fileName;
     XmlNode module;
     Bool prelude;
 };
+SIMSE_PACK_POP
 CgInput _make_CgInput(Str fileName, XmlNode module, Bool prelude) {
     return CgInput{fileName, module, prelude};
 }
-// ./codegen/Codegen.simse:32
+// cppsrc/codegen/Codegen.simse:34
+SIMSE_PACK_PUSH
 struct CgFn {
     XmlNode decl;
     XmlNode receiver;
@@ -22,30 +25,35 @@ struct CgFn {
     List<Str> templateParams;
     Bool prelude;
 };
+SIMSE_PACK_POP
 CgFn _make_CgFn(XmlNode decl, XmlNode receiver, Str file, List<Str> templateParams, Bool prelude) {
     return CgFn{decl, receiver, file, templateParams, prelude};
 }
-// ./codegen/Codegen.simse:35
+// cppsrc/codegen/Codegen.simse:37
+SIMSE_PACK_PUSH
 struct CgNativeDecl {
     XmlNode decl;
     Str file;
     Str symbol;
     Bool prelude;
 };
+SIMSE_PACK_POP
 CgNativeDecl _make_CgNativeDecl(XmlNode decl, Str file, Str symbol, Bool prelude) {
     return CgNativeDecl{decl, file, symbol, prelude};
 }
-// ./codegen/Codegen.simse:38
+// cppsrc/codegen/Codegen.simse:40
+SIMSE_PACK_PUSH
 struct CgNativeExt {
     Str symbol;
     XmlNode receiver;
     XmlNode returnType;
     List<Str> typeParams;
 };
+SIMSE_PACK_POP
 CgNativeExt _make_CgNativeExt(Str symbol, XmlNode receiver, XmlNode returnType, List<Str> typeParams) {
     return CgNativeExt{symbol, receiver, returnType, typeParams};
 }
-// ./codegen/Codegen.simse:41
+// cppsrc/codegen/Codegen.simse:43
 enum class NameKind {
     Value,
     Shared,
@@ -57,7 +65,8 @@ inline Opt<NameKind> simse_NameKind_fromInt(Int value) {
     if (value == 2) return Opt<NameKind>::some(NameKind::Pointer);
     return Opt<NameKind>::none();
 }
-// ./codegen/Codegen.simse:132
+// cppsrc/codegen/Codegen.simse:135
+SIMSE_PACK_PUSH
 struct Emitter {
     List<CgInput> inputs;
     Str out;
@@ -79,28 +88,33 @@ struct Emitter {
     XmlNode selfType;
     XmlNode curReturnType;
 };
+SIMSE_PACK_POP
 Emitter _make_Emitter(List<CgInput> inputs, Str out, Bool failed, Str error, Str curFile, Dictionary<Str, XmlNode> types, Dictionary<Str, Bool> enumNames, Dictionary<Str, Bool> dataClassNames, List<CgFn> functions, Dictionary<Str, Bool> receiverFnNames, List<CgNativeDecl> nativeDecls, Dictionary<Str, Str> nativeSymbols, Dictionary<Str, List<CgNativeExt>> nativeExtensions, Dictionary<Str, Bool> activeTypeParams, Dictionary<Str, NameKind> nameKinds, Dictionary<Str, XmlNode> localTypes, NameKind selfKind, XmlNode selfType, XmlNode curReturnType) {
     return Emitter{inputs, out, failed, error, curFile, types, enumNames, dataClassNames, functions, receiverFnNames, nativeDecls, nativeSymbols, nativeExtensions, activeTypeParams, nameKinds, localTypes, selfKind, selfType, curReturnType};
 }
-// ./common/StrView.simse:9
+// cppsrc/common/StrView.simse:13
+SIMSE_PACK_PUSH
 struct StrView {
-    std::shared_ptr<Str> source;
+    Str* source;
     Int start;
     Int len;
 };
-StrView _make_StrView(std::shared_ptr<Str> source, Int start, Int len) {
+SIMSE_PACK_POP
+StrView _make_StrView(Str* source, Int start, Int len) {
     return StrView{source, start, len};
 }
-// ./common/common.simse:14
+// cppsrc/common/common.simse:14
+SIMSE_PACK_PUSH
 struct SourcePos {
     Int offset;
     Int line;
     Int column;
 };
+SIMSE_PACK_POP
 SourcePos _make_SourcePos(Int offset, Int line, Int column) {
     return SourcePos{offset, line, column};
 }
-// ./lex/Scanner.simse:13
+// cppsrc/lex/Scanner.simse:13
 enum class TokenKind {
     None,
     Space,
@@ -128,28 +142,33 @@ inline Opt<TokenKind> simse_TokenKind_fromInt(Int value) {
     if (value == 10) return Opt<TokenKind>::some(TokenKind::Eof);
     return Opt<TokenKind>::none();
 }
-// ./lex/Scanner.simse:27
+// cppsrc/lex/Scanner.simse:27
 using MatchLenFunc = Func<Int(StrView)>;
-// ./lex/Scanner.simse:28
+// cppsrc/lex/Scanner.simse:28
 using CharPredicate = Func<Bool(Char)>;
-// ./lex/Scanner.simse:30
+// cppsrc/lex/Scanner.simse:30
+SIMSE_PACK_PUSH
 struct Token {
     Str text;
     TokenKind kind;
     SourcePos pos;
 };
+SIMSE_PACK_POP
 Token _make_Token(Str text, TokenKind kind, SourcePos pos) {
     return Token{text, kind, pos};
 }
-// ./lex/Scanner.simse:33
+// cppsrc/lex/Scanner.simse:33
+SIMSE_PACK_PUSH
 struct TokenMatcher {
     TokenKind tokenKind;
     MatchLenFunc match;
 };
+SIMSE_PACK_POP
 TokenMatcher _make_TokenMatcher(TokenKind tokenKind, MatchLenFunc match) {
     return TokenMatcher{tokenKind, match};
 }
-// ./lex/Scanner.simse:347
+// cppsrc/lex/Scanner.simse:347
+SIMSE_PACK_PUSH
 struct Scanner {
     std::shared_ptr<List<TokenMatcher>> rules;
     Int pos;
@@ -157,46 +176,74 @@ struct Scanner {
     Int column;
     Str source;
 };
+SIMSE_PACK_POP
 Scanner _make_Scanner(std::shared_ptr<List<TokenMatcher>> rules, Int pos, Int line, Int column, Str source) {
     return Scanner{rules, pos, line, column, source};
 }
-// ./parser/Parser.simse:19
+// cppsrc/linear/Linear.simse:110
+SIMSE_PACK_PUSH
+struct LinLowerer {
+    Int next;
+};
+SIMSE_PACK_POP
+LinLowerer _make_LinLowerer(Int next) {
+    return LinLowerer{next};
+}
+// cppsrc/linear/Simplify.simse:67
+SIMSE_PACK_PUSH
+struct LinSimplifier {
+    Bool changed;
+};
+SIMSE_PACK_POP
+LinSimplifier _make_LinSimplifier(Bool changed) {
+    return LinSimplifier{changed};
+}
+// cppsrc/parser/Parser.simse:19
+SIMSE_PACK_PUSH
 struct ExprNode {
     XmlNode node;
     Int line;
     Int column;
 };
+SIMSE_PACK_POP
 ExprNode _make_ExprNode(XmlNode node, Int line, Int column) {
     return ExprNode{node, line, column};
 }
-// ./parser/Parser.simse:21
+// cppsrc/parser/Parser.simse:21
+SIMSE_PACK_PUSH
 struct Parser {
     Cursor<Token> cursor;
     Bool failed;
     Str error;
     Str file;
 };
+SIMSE_PACK_POP
 Parser _make_Parser(Cursor<Token> cursor, Bool failed, Str error, Str file) {
     return Parser{cursor, failed, error, file};
 }
-// ./sema/Sema.simse:26
+// cppsrc/sema/Sema.simse:26
+SIMSE_PACK_PUSH
 struct ValueBinding {
     Bool isMutable;
     Bool checkAssign;
     XmlNode type;
 };
+SIMSE_PACK_POP
 ValueBinding _make_ValueBinding(Bool isMutable, Bool checkAssign, XmlNode type) {
     return ValueBinding{isMutable, checkAssign, type};
 }
-// ./sema/Sema.simse:139
+// cppsrc/sema/Sema.simse:139
+SIMSE_PACK_PUSH
 struct SemaInput {
     Str fileName;
     XmlNode module;
 };
+SIMSE_PACK_POP
 SemaInput _make_SemaInput(Str fileName, XmlNode module) {
     return SemaInput{fileName, module};
 }
-// ./sema/Sema.simse:141
+// cppsrc/sema/Sema.simse:141
+SIMSE_PACK_PUSH
 struct Analyzer {
     List<SemaInput> inputs;
     Str file;
@@ -212,10 +259,11 @@ struct Analyzer {
     Int breakDepth;
     List<Str> diags;
 };
+SIMSE_PACK_POP
 Analyzer _make_Analyzer(List<SemaInput> inputs, Str file, Dictionary<Str, XmlNode> types, Dictionary<Str, List<XmlNode>> functions, Dictionary<Str, XmlNode> globalTypes, Dictionary<Str, List<XmlNode>> globalFunctions, Dictionary<Str, List<XmlNode>> packageDecls, List<Str> declaredPackages, List<Dictionary<Str, ValueBinding>> scopes, List<List<Str>> typeScopes, Int loopDepth, Int breakDepth, List<Str> diags) {
     return Analyzer{inputs, file, types, functions, globalTypes, globalFunctions, packageDecls, declaredPackages, scopes, typeScopes, loopDepth, breakDepth, diags};
 }
-// ./skelparser/SkeletonParser.simse:16
+// cppsrc/skelparser/SkeletonParser.simse:16
 enum class SkeletonType {
     None,
     Program,
@@ -235,73 +283,74 @@ inline Opt<SkeletonType> simse_SkeletonType_fromInt(Int value) {
     if (value == 6) return Opt<SkeletonType>::some(SkeletonType::Block);
     return Opt<SkeletonType>::none();
 }
-// ./skelparser/SkeletonParser.simse:28
+// cppsrc/skelparser/SkeletonParser.simse:28
+SIMSE_PACK_PUSH
 struct SkeletonNode {
     std::shared_ptr<List<SkeletonNode>> children;
     SkeletonType type;
     Token token;
 };
+SIMSE_PACK_POP
 SkeletonNode _make_SkeletonNode(std::shared_ptr<List<SkeletonNode>> children, SkeletonType type, Token token) {
     return SkeletonNode{children, type, token};
 }
-Str cgJoin(List<Str> parts, Str separator);
+Str cgJoin(List<Str>* parts, Str separator);
 Str cgIndent(Int level);
 Bool cgIsRtlTypeName(Str name);
 Str cgUnquote(Str text);
-Int cgPrecedence(XmlNode e);
-Bool cgIsMainArgs(XmlNode decl);
-void fail(Emitter& self, XmlNode posNode, Str message);
+Int cgPrecedence(XmlNode* e);
+Bool cgIsMainArgs(XmlNode* decl);
+void fail(Emitter& self, XmlNode* posNode, Str message);
 void line(Emitter& self, Int level, Str text);
-void sourceComment(Emitter& self, XmlNode posNode);
+void sourceComment(Emitter& self, XmlNode* posNode);
 XmlNode namedTypeExpr(Emitter& self, Str name);
-XmlNode genericTypeExpr(Emitter& self, Str name, List<XmlNode> args);
-XmlNode classReceiver(Emitter& self, XmlNode decl);
-void addFunction(Emitter& self, XmlNode decl, XmlNode receiver, Str file, List<Str> templateParams, Bool prelude);
+XmlNode genericTypeExpr(Emitter& self, Str name, List<XmlNode>* args);
+XmlNode classReceiver(Emitter& self, XmlNode* decl);
+void addFunction(Emitter& self, XmlNode* decl, XmlNode* receiver, Str file, List<Str> templateParams, Bool prelude);
 void addNativeExt(Emitter& self, Str name, CgNativeExt ext);
 void collect(Emitter& self);
 void setActiveTypeParams(Emitter& self, List<Str> params);
 Str templateClause(Emitter& self, List<Str> params);
-Str typeArgsString(Emitter& self, Str baseName, List<XmlNode> args);
-Str typeName(Emitter& self, Str name, XmlNode posNode);
-Str type(Emitter& self, XmlNode typeExpr);
-NameKind kindOf(Emitter& self, XmlNode typeExpr);
+Str typeArgsString(Emitter& self, Str baseName, List<XmlNode>* args);
+Str typeName(Emitter& self, Str name, XmlNode* posNode);
+Str type(Emitter& self, XmlNode* typeExpr);
+NameKind kindOf(Emitter& self, XmlNode* typeExpr);
 void emitTypes(Emitter& self);
-void emitDataClass(Emitter& self, XmlNode decl);
-void emitEnum(Emitter& self, XmlNode decl);
-void emitEnumConversion(Emitter& self, XmlNode decl);
-void emitTypeAlias(Emitter& self, XmlNode decl);
+void emitDataClass(Emitter& self, XmlNode* decl);
+void emitEnum(Emitter& self, XmlNode* decl);
+void emitEnumConversion(Emitter& self, XmlNode* decl);
+void emitTypeAlias(Emitter& self, XmlNode* decl);
 void emitNativeDeclarations(Emitter& self);
 void emitFunctions(Emitter& self, Bool prototypeOnly);
-void beginScope(Emitter& self, CgFn fn, NameKind selfK, XmlNode selfTypePtr);
-Str receiverParam(Emitter& self, XmlNode receiverType);
+void beginScope(Emitter& self, CgFn fn, NameKind selfK, XmlNode* selfTypePtr);
+Str receiverParam(Emitter& self, XmlNode* receiverType);
 void emitFunction(Emitter& self, CgFn fn, Bool prototypeOnly);
-void emitStmts(Emitter& self, List<XmlNode> stmts, Int level);
-void emitStmt(Emitter& self, XmlNode stmt, Int level);
-Str expr(Emitter& self, XmlNode e, Int minPrec, XmlNode expected);
-NameKind operandKind(Emitter& self, XmlNode e);
+void emitStmts(Emitter& self, List<XmlNode>* stmts, Int level);
+void emitStmt(Emitter& self, XmlNode* stmt, Int level);
+Str expr(Emitter& self, XmlNode* e, Int minPrec, XmlNode* expected);
+NameKind operandKind(Emitter& self, XmlNode* e);
 XmlNode namedType(Emitter& self, Str name);
-XmlNode genericType(Emitter& self, Str name, List<XmlNode> args);
-XmlNode pointee(Emitter& self, XmlNode typeNode);
-Bool isHandleType(Emitter& self, XmlNode typeNode);
-Bool isIndexableContainer(Emitter& self, XmlNode typeNode);
-Bool unifyType(Emitter& self, XmlNode pattern, XmlNode actual, List<Str> typeParams);
+XmlNode pointee(Emitter& self, XmlNode* typeNode);
+Bool isHandleType(Emitter& self, XmlNode* typeNode);
+Bool isIndexableContainer(Emitter& self, XmlNode* typeNode);
+Bool unifyType(Emitter& self, XmlNode* pattern, XmlNode* actual, List<Str>* typeParams);
 XmlNode functionReturn(Emitter& self, Str name);
-XmlNode memberCallReturn(Emitter& self, XmlNode callee);
-XmlNode inferType(Emitter& self, XmlNode e);
-XmlNode renameRole(Emitter& self, XmlNode child, Str role);
-Str receiverArg(Emitter& self, XmlNode pattern, XmlNode recv);
-Int findExtensionFn(Emitter& self, Str name, XmlNode recvExpr);
-Int findNativeExt(Emitter& self, Str name, XmlNode recvExpr);
-Str memberAccess(Emitter& self, XmlNode base, Str name);
-Str nullTo(Emitter& self, XmlNode expected);
-XmlNode resolveAlias(Emitter& self, XmlNode typeNode);
-XmlNode expectedCallable(Emitter& self, XmlNode expected);
+XmlNode memberCallReturn(Emitter& self, XmlNode* callee);
+XmlNode inferType(Emitter& self, XmlNode* e);
+XmlNode renameRole(Emitter& self, XmlNode* child, Str role);
+Str receiverArg(Emitter& self, XmlNode* pattern, XmlNode* recv);
+Int findExtensionFn(Emitter& self, Str name, XmlNode* recvExpr);
+Int findNativeExt(Emitter& self, Str name, XmlNode* recvExpr);
+Str memberAccess(Emitter& self, XmlNode* base, Str name);
+Str nullTo(Emitter& self, XmlNode* expected);
+XmlNode resolveAlias(Emitter& self, XmlNode* typeNode);
+XmlNode expectedCallable(Emitter& self, XmlNode* expected);
 XmlNode findFunction(Emitter& self, Str name, Int argCount);
-Bool isUnitType(Emitter& self, XmlNode typeNode);
-XmlNode inferLambdaReturn(Emitter& self, XmlNode e);
-Str lambda(Emitter& self, XmlNode e, XmlNode expected);
-Str exprInner(Emitter& self, XmlNode e, XmlNode expected);
-Str call(Emitter& self, XmlNode e);
+Bool isUnitType(Emitter& self, XmlNode* typeNode);
+XmlNode inferLambdaReturn(Emitter& self, XmlNode* e);
+Str lambda(Emitter& self, XmlNode* e, XmlNode* expected);
+Str exprInner(Emitter& self, XmlNode* e, XmlNode* expected);
+Str call(Emitter& self, XmlNode* e);
 void preludeText(Emitter& self);
 Res<Str> run(Emitter& self);
 Emitter newEmitter(List<CgInput> inputs);
@@ -311,25 +360,25 @@ Bool startsWith(StrView& self, Str text);
 StrView slice(StrView& self, Int matchLength);
 Str toString(StrView& self);
 XmlNode xmlEmptyNode();
-Bool xmlIsEmpty(XmlNode node);
-Str xmlAttr(XmlNode node, Str name);
-Str xmlKind(XmlNode node);
-Int xmlIntAttr(XmlNode node, Str name, Int fallback);
-Int xmlLine(XmlNode node);
-Int xmlColumn(XmlNode node);
-XmlNode xmlChild(XmlNode node, Str role);
-List<XmlNode> xmlChildren(XmlNode node, Str role);
-Int xmlCount(XmlNode node, Str role);
-Bool xmlHasChild(XmlNode node, Str role);
-List<Str> xmlTypeParamNames(XmlNode node);
-Bool xmlIsDecl(XmlNode node);
-List<XmlNode> xmlDecls(XmlNode module);
-Bool xmlHasImports(XmlNode module);
-List<Str> xmlLambdaParams(XmlNode expr);
-Bool xmlIsTypeParam(Str name, List<Str> typeParams);
+Bool xmlIsEmpty(XmlNode* node);
+Str xmlAttr(XmlNode* node, Str name);
+Str xmlKind(XmlNode* node);
+Int xmlIntAttr(XmlNode* node, Str name, Int fallback);
+Int xmlLine(XmlNode* node);
+Int xmlColumn(XmlNode* node);
+XmlNode xmlChild(XmlNode* node, Str role);
+List<XmlNode> xmlChildren(XmlNode* node, Str role);
+Int xmlCount(XmlNode* node, Str role);
+Bool xmlHasChild(XmlNode* node, Str role);
+List<Str> xmlTypeParamNames(XmlNode* node);
+Bool xmlIsDecl(XmlNode* node);
+List<XmlNode> xmlDecls(XmlNode* module);
+Bool xmlHasImports(XmlNode* module);
+List<Str> xmlLambdaParams(XmlNode* expr);
+Bool xmlIsTypeParam(Str name, List<Str>* typeParams);
 XmlNode driverNewModule();
-void driverAppendNamed(XmlNode target, XmlNode source, Str role);
-void driverAppendDecls(XmlNode target, XmlNode source);
+void driverAppendNamed(XmlNode* target, XmlNode* source, Str role);
+void driverAppendDecls(XmlNode* target, XmlNode* source);
 Res<XmlNode> driverParseFile(Str fileName);
 List<Str> driverGatherFiles(List<Str> moduleRoots, List<Str> inputs, List<Str> preludeCanon);
 Bool isSpace(Char ch);
@@ -361,6 +410,36 @@ Res<Token> nextToken(Scanner& self);
 Res<List<Token>> readFileAsTokens(Scanner* scanner, Str fileName);
 Bool isSpaceBasedToken(TokenKind kind);
 Res<List<Token>> readFileAndSkipSpacesTokens(Scanner* scanner, Str fileName);
+XmlNode linStmt(Str kind, Int line, Int column);
+XmlNode linRole(XmlNode* child, Str role);
+XmlNode linLabel(Str name, Int line, Int column);
+XmlNode linGoto(Str name, Int line, Int column);
+XmlNode linCondJump(Str kind, XmlNode* cond, Str name, Int line, Int column);
+XmlNode linBlock(List<XmlNode>* body, Int line, Int column);
+XmlNode linSubjectDecl(Str name, XmlNode* init, Int line, Int column);
+XmlNode linName(Str role, Str name, Int line, Int column);
+XmlNode linEquals(Str role, XmlNode* lhs, XmlNode* rhs, Int line, Int column);
+Int nextId(LinLowerer& self);
+Str freshLabel(LinLowerer& self);
+List<XmlNode> lowerBody(LinLowerer& self, List<XmlNode> stmts);
+void lowerStmts(LinLowerer& self, List<XmlNode>* stmts, Str breakTo, Str continueTo, List<XmlNode>* out);
+void lowerStmt(LinLowerer& self, XmlNode* stmt, Str breakTo, Str continueTo, List<XmlNode>* out);
+void appendBody(LinLowerer& self, List<XmlNode>* body, Int line, Int column, List<XmlNode>* out);
+Bool declares(LinLowerer& self, List<XmlNode>* body);
+void lowerIf(LinLowerer& self, XmlNode* stmt, Str breakTo, Str continueTo, List<XmlNode>* out);
+void lowerWhile(LinLowerer& self, XmlNode* stmt, Str breakTo, Str continueTo, List<XmlNode>* out);
+void lowerSwitch(LinLowerer& self, XmlNode* stmt, Str breakTo, Str continueTo, List<XmlNode>* out);
+List<XmlNode> linLowerBody(List<XmlNode> stmts);
+Bool linIsLabel(XmlNode* stmt);
+Bool linIsGoto(XmlNode* stmt);
+Bool linIsCondJump(XmlNode* stmt);
+Bool linIsTerminator(XmlNode* stmt);
+Bool linJumpsTo(List<XmlNode>* stmts, Str name);
+XmlNode linInvertedJump(XmlNode* jump, Str target);
+List<XmlNode> prunePass(LinSimplifier& self, List<XmlNode>* stmts);
+List<XmlNode> labelPass(LinSimplifier& self, List<XmlNode>* stmts);
+List<XmlNode> run(LinSimplifier& self, List<XmlNode> stmts);
+List<XmlNode> linSimplifyBody(List<XmlNode> body);
 Token peek(Parser& self, Int offset);
 Token advance(Parser& self);
 Bool atEnd(Parser& self);
@@ -377,9 +456,9 @@ Bool atStmtEnd(Parser& self);
 XmlNode emptyNode(Parser& self);
 ExprNode emptyExpr(Parser& self);
 List<Attribute> posAttrs(Parser& self, Str kind, Int line, Int column);
-void attach(Parser& self, XmlNode parent, Str role, XmlNode child);
-XmlNode container(Parser& self, Str name, List<XmlNode> children);
-void appendTypeParams(Parser& self, XmlNode node, List<Str> names);
+void attach(Parser& self, XmlNode* parent, Str role, XmlNode* child);
+XmlNode container(Parser& self, Str name, List<XmlNode>* children);
+void appendTypeParams(Parser& self, XmlNode* node, List<Str>* names);
 XmlNode parseRoot(Parser& self);
 XmlNode parseImport(Parser& self);
 XmlNode parseDecl(Parser& self);
@@ -405,43 +484,43 @@ ExprNode parsePostfix(Parser& self);
 ExprNode parsePrimary(Parser& self);
 ExprNode tryParseLambda(Parser& self);
 Str boolText(Bool value);
-Str joinNames(List<Str> names);
+Str joinNames(List<Str>* names);
 Int binaryBindingPower(Str op);
 Bool isAssignOp(Str op);
 Res<XmlNode> parseModule(Cursor<Token> cursor, Str fileName);
 Res<XmlNode> parseModule(List<Token>* tokens, Str fileName);
 Bool semaIsBuiltinType(Str name);
 Int semaBuiltinGenericArity(Str name);
-Bool semaIsConstantExpr(XmlNode expr);
-Bool semaUnifyReceiver(XmlNode pattern, XmlNode actual, List<Str> typeParams);
+Bool semaIsConstantExpr(XmlNode* expr);
+Bool semaUnifyReceiver(XmlNode* pattern, XmlNode* actual, List<Str>* typeParams);
 void run(Analyzer& self);
 void diag(Analyzer& self, Int line, Int column, Str message);
-Str packageOf(Analyzer& self, XmlNode module);
-void appendGlobalFunction(Analyzer& self, Str key, XmlNode decl);
-void appendPackageDecl(Analyzer& self, Str pkg, XmlNode decl);
-void appendVisibleFunction(Analyzer& self, Str name, XmlNode decl);
+Str packageOf(Analyzer& self, XmlNode* module);
+void appendGlobalFunction(Analyzer& self, Str key, XmlNode* decl);
+void appendPackageDecl(Analyzer& self, Str pkg, XmlNode* decl);
+void appendVisibleFunction(Analyzer& self, Str name, XmlNode* decl);
 void collectGlobal(Analyzer& self);
-void validateImports(Analyzer& self, XmlNode module);
-void buildVisible(Analyzer& self, XmlNode module);
+void validateImports(Analyzer& self, XmlNode* module);
+void buildVisible(Analyzer& self, XmlNode* module);
 void pushScope(Analyzer& self);
 void popScope(Analyzer& self);
 void pushTypeScope(Analyzer& self);
 void popTypeScope(Analyzer& self);
 void declareType(Analyzer& self, Str name);
-void declareValue(Analyzer& self, Str name, Bool isMutable, Bool checkAssign, XmlNode type);
+void declareValue(Analyzer& self, Str name, Bool isMutable, Bool checkAssign, XmlNode* type);
 Opt<ValueBinding> lookupValue(Analyzer& self, Str name);
 Bool typeParamVisible(Analyzer& self, Str name);
 void checkTypeName(Analyzer& self, Str name, Int line, Int column);
 void checkInstantiationArity(Analyzer& self, Str name, Int argCount, Int line, Int column);
-void resolveType(Analyzer& self, XmlNode type);
-void analyzeDecl(Analyzer& self, XmlNode decl);
-void analyzeFunction(Analyzer& self, XmlNode decl);
-void analyzeStmt(Analyzer& self, XmlNode stmt);
-void analyzeExpr(Analyzer& self, XmlNode expr);
-void checkGenericNameArity(Analyzer& self, XmlNode expr);
-void checkCallArity(Analyzer& self, XmlNode call);
-XmlNode exprType(Analyzer& self, XmlNode expr);
-void checkExtensionCallArity(Analyzer& self, XmlNode call);
+void resolveType(Analyzer& self, XmlNode* type);
+void analyzeDecl(Analyzer& self, XmlNode* decl);
+void analyzeFunction(Analyzer& self, XmlNode* decl);
+void analyzeStmt(Analyzer& self, XmlNode* stmt);
+void analyzeExpr(Analyzer& self, XmlNode* expr);
+void checkGenericNameArity(Analyzer& self, XmlNode* expr);
+void checkCallArity(Analyzer& self, XmlNode* call);
+XmlNode exprType(Analyzer& self, XmlNode* expr);
+void checkExtensionCallArity(Analyzer& self, XmlNode* call);
 Analyzer newAnalyzer(List<SemaInput> inputs);
 List<Str> analyze(List<SemaInput> inputs);
 void setNodeType(SkeletonNode& self, SkeletonType skeletonType);
@@ -451,687 +530,878 @@ SkeletonType blockTypeForOpenToken(Str openingToken);
 Bool isClosingToken(Str token);
 Bool foldBack(std::shared_ptr<List<SkeletonNode>> nodes, Str openingToken);
 Res<SkeletonNode> parseSkeleton(List<Token>* tokens);
-// ./codegen/Codegen.simse:45
-Str cgJoin(List<Str> parts, Str separator) {
+// cppsrc/codegen/Codegen.simse:48
+Str cgJoin(List<Str>* parts, Str separator) {
     Str out = "";
     Int i = 0;
-    while (i < parts.size()) {
-        if (i > 0) {
-            out = out + separator;
-        }
-        out = out + parts[i];
-        i = i + 1;
-    }
+    L1:;
+    if (!(i < parts->size())) goto L2;
+    if (!(i > 0)) goto L4;
+    out = out + separator;
+    L4:;
+    out = out + (*parts)[i];
+    i = i + 1;
+    goto L1;
+    L2:;
     return out;
 }
-// ./codegen/Codegen.simse:58
+// cppsrc/codegen/Codegen.simse:61
 Str cgIndent(Int level) {
     Str out = "";
     Int i = 0;
-    while (i < level * 4) {
-        out = out + " ";
-        i = i + 1;
-    }
+    L1:;
+    if (!(i < level * 4)) goto L2;
+    out = out + " ";
+    i = i + 1;
+    goto L1;
+    L2:;
     return out;
 }
-// ./codegen/Codegen.simse:68
+// cppsrc/codegen/Codegen.simse:71
 Bool cgIsRtlTypeName(Str name) {
-    if (name == "Int" || name == "Int8" || name == "Int16" || name == "Int32" || name == "Int64" || name == "Float32" || name == "Float64" || name == "Char" || name == "Bool" || name == "Str" || name == "List" || name == "Array" || name == "RawArray" || name == "Opt" || name == "Res" || name == "Dictionary" || name == "SmallVector" || name == "PList" || name == "Attribute" || name == "XmlNode" || name == "Cursor") {
-        return true;
-    }
+    if (!(name == "Int" || name == "Int8" || name == "Int16" || name == "Int32" || name == "Int64" || name == "Float32" || name == "Float64" || name == "Char" || name == "Bool" || name == "Str" || name == "List" || name == "Array" || name == "RawArray" || name == "Opt" || name == "Res" || name == "Dictionary" || name == "SmallVector" || name == "PList" || name == "Attribute" || name == "XmlNode" || name == "Cursor")) goto L2;
+    return true;
+    L2:;
     return false;
 }
-// ./codegen/Codegen.simse:80
+// cppsrc/codegen/Codegen.simse:83
 Str cgUnquote(Str text) {
-    if (text.size() >= 2 && simse_str_substr(text, 0, 1) == "\"" && simse_str_substr(text, text.size() - 1, 1) == "\"") {
-        return simse_str_substr(text, 1, text.size() - 2);
-    }
+    if (!(text.size() >= 2 && simse_str_substr(text, 0, 1) == "\"" && simse_str_substr(text, text.size() - 1, 1) == "\"")) goto L2;
+    return simse_str_substr(text, 1, text.size() - 2);
+    L2:;
     return text;
 }
-// ./codegen/Codegen.simse:88
-Int cgPrecedence(XmlNode e) {
-    if (xmlKind(e) == "Expr.Binary") {
+// cppsrc/codegen/Codegen.simse:91
+Int cgPrecedence(XmlNode* e) {
+    if (!(xmlKind(e) == "Expr.Binary")) goto L2;
+    {
         Str op = xmlAttr(e, "op");
-        if (op == "||") {
-            return 1;
-        }
-        if (op == "&&") {
-            return 2;
-        }
-        if (op == "==" || op == "!=") {
-            return 3;
-        }
-        if (op == "<" || op == ">" || op == "<=" || op == ">=") {
-            return 4;
-        }
-        if (op == "+" || op == "-") {
-            return 5;
-        }
-        if (op == "*" || op == "/" || op == "%") {
-            return 6;
-        }
+        if (op == "||") goto L3;
+        goto L4;
+        L3:;
+        return 1;
+        L4:;
+        if (op == "&&") goto L5;
+        goto L6;
+        L5:;
+        return 2;
+        L6:;
+        if (op == "==" || op == "!=") goto L7;
+        goto L8;
+        L7:;
+        return 3;
+        L8:;
+        if (op == "<" || op == ">" || op == "<=" || op == ">=") goto L9;
+        goto L10;
+        L9:;
+        return 4;
+        L10:;
+        if (op == "+" || op == "-") goto L11;
+        goto L12;
+        L11:;
+        return 5;
+        L12:;
+        if (op == "*" || op == "/" || op == "%") goto L13;
+        goto L14;
+        L13:;
+        return 6;
+        L14:;
         return 1;
     }
+    L2:;
     Str kind = xmlKind(e);
-    if (kind == "Expr.Unary" || kind == "Expr.Deref" || kind == "Expr.Copy") {
-        return 7;
-    }
-    if (kind == "Expr.Ref" || kind == "Expr.Call" || kind == "Expr.Index" || kind == "Expr.Member") {
-        return 9;
-    }
+    if (!(kind == "Expr.Unary" || kind == "Expr.Deref" || kind == "Expr.Copy")) goto L16;
+    return 7;
+    L16:;
+    if (!(kind == "Expr.Ref" || kind == "Expr.Call" || kind == "Expr.Index" || kind == "Expr.Member")) goto L18;
+    return 9;
+    L18:;
     return 10;
 }
-// ./codegen/Codegen.simse:111
-Bool cgIsMainArgs(XmlNode decl) {
+// cppsrc/codegen/Codegen.simse:114
+Bool cgIsMainArgs(XmlNode* decl) {
     List<XmlNode> params = xmlChildren(decl, "Param");
-    if (params.size() != 1) {
-        return false;
-    }
-    XmlNode paramType = xmlChild(params[0], "Type");
-    if (xmlIsEmpty(paramType)) {
-        return false;
-    }
-    if (xmlKind(paramType) != "Type.Generic" || xmlAttr(paramType, "name") != "List") {
-        return false;
-    }
-    List<XmlNode> args = xmlChildren(paramType, "TypeArg");
-    if (args.size() != 1) {
-        return false;
-    }
-    return xmlKind(args[0]) == "Type.Named" && xmlAttr(args[0], "name") == "Str";
+    if (!(params.size() != 1)) goto L2;
+    return false;
+    L2:;
+    XmlNode paramType = xmlChild(simse_addressOf(params[0]), "Type");
+    if (!(xmlIsEmpty(&paramType))) goto L4;
+    return false;
+    L4:;
+    if (!(xmlKind(&paramType) != "Type.Generic" || xmlAttr(&paramType, "name") != "List")) goto L6;
+    return false;
+    L6:;
+    List<XmlNode> args = xmlChildren(&paramType, "TypeArg");
+    if (!(args.size() != 1)) goto L8;
+    return false;
+    L8:;
+    return xmlKind(simse_addressOf(args[0])) == "Type.Named" && xmlAttr(simse_addressOf(args[0]), "name") == "Str";
 }
-// ./codegen/Codegen.simse:156
-void fail(Emitter& self, XmlNode posNode, Str message) {
-    if (self.failed) {
-        return;
-    }
+// cppsrc/codegen/Codegen.simse:159
+void fail(Emitter& self, XmlNode* posNode, Str message) {
+    if (!(self.failed)) goto L2;
+    return;
+    L2:;
     self.failed = true;
     self.error = self.curFile + ":" + simse_int_toString(xmlLine(posNode)) + ":" + simse_int_toString(xmlColumn(posNode)) + ": " + message;
 }
-// ./codegen/Codegen.simse:165
+// cppsrc/codegen/Codegen.simse:168
 void line(Emitter& self, Int level, Str text) {
     self.out = self.out + cgIndent(level) + text + "\n";
 }
-// ./codegen/Codegen.simse:169
-void sourceComment(Emitter& self, XmlNode posNode) {
+// cppsrc/codegen/Codegen.simse:172
+void sourceComment(Emitter& self, XmlNode* posNode) {
     line(self, 0, "// " + self.curFile + ":" + simse_int_toString(xmlLine(posNode)));
 }
-// ./codegen/Codegen.simse:175
+// cppsrc/codegen/Codegen.simse:178
 XmlNode namedTypeExpr(Emitter& self, Str name) {
     XmlNode node = XmlNode("Type", List<Attribute>(), makeList<XmlNode>());
     simse_list_append(node.attributes, Attribute("kind", "Type.Named"));
     simse_list_append(node.attributes, Attribute("name", name));
     return node;
 }
-// ./codegen/Codegen.simse:182
-XmlNode genericTypeExpr(Emitter& self, Str name, List<XmlNode> args) {
+// cppsrc/codegen/Codegen.simse:185
+XmlNode genericTypeExpr(Emitter& self, Str name, List<XmlNode>* args) {
     XmlNode node = XmlNode("Type", List<Attribute>(), makeList<XmlNode>());
     simse_list_append(node.attributes, Attribute("kind", "Type.Generic"));
     simse_list_append(node.attributes, Attribute("name", name));
     Int i = 0;
-    while (i < args.size()) {
-        simse_list_append((*node.Children), args[i]);
-        i = i + 1;
-    }
+    L1:;
+    if (!(i < args->size())) goto L2;
+    simse_list_append((*node.Children), (*args)[i]);
+    i = i + 1;
+    goto L1;
+    L2:;
     return node;
 }
-// ./codegen/Codegen.simse:195
-XmlNode classReceiver(Emitter& self, XmlNode decl) {
+// cppsrc/codegen/Codegen.simse:198
+XmlNode classReceiver(Emitter& self, XmlNode* decl) {
     List<Str> typeParams = xmlTypeParamNames(decl);
-    if (typeParams.size() == 0) {
-        return namedTypeExpr(self, xmlAttr(decl, "name"));
-    }
+    if (!(typeParams.size() == 0)) goto L2;
+    return namedTypeExpr(self, xmlAttr(decl, "name"));
+    L2:;
     List<XmlNode> args = List<XmlNode>();
     Int i = 0;
-    while (i < typeParams.size()) {
-        simse_list_append(args, namedTypeExpr(self, typeParams[i]));
-        i = i + 1;
-    }
-    return genericTypeExpr(self, xmlAttr(decl, "name"), args);
+    L3:;
+    if (!(i < typeParams.size())) goto L4;
+    simse_list_append(args, namedTypeExpr(self, typeParams[i]));
+    i = i + 1;
+    goto L3;
+    L4:;
+    return genericTypeExpr(self, xmlAttr(decl, "name"), &args);
 }
-// ./codegen/Codegen.simse:209
-void addFunction(Emitter& self, XmlNode decl, XmlNode receiver, Str file, List<Str> templateParams, Bool prelude) {
-    simse_list_append(self.functions, _make_CgFn(decl, receiver, file, templateParams, prelude));
-    if (!xmlIsEmpty(receiver)) {
-        simse_dict_insert(self.receiverFnNames, xmlAttr(decl, "name"), true);
-    }
+// cppsrc/codegen/Codegen.simse:212
+void addFunction(Emitter& self, XmlNode* decl, XmlNode* receiver, Str file, List<Str> templateParams, Bool prelude) {
+    simse_list_append(self.functions, _make_CgFn(*(decl), *(receiver), file, templateParams, prelude));
+    if (!(!xmlIsEmpty(receiver))) goto L2;
+    simse_dict_insert(self.receiverFnNames, xmlAttr(decl, "name"), true);
+    L2:;
 }
-// ./codegen/Codegen.simse:216
+// cppsrc/codegen/Codegen.simse:219
 void addNativeExt(Emitter& self, Str name, CgNativeExt ext) {
-    if (simse_dict_has(self.nativeExtensions, name)) {
+    if (!(simse_dict_has(self.nativeExtensions, name))) goto L2;
+    {
         List<CgNativeExt> existing = simse_dict_get(self.nativeExtensions, name).value();
         simse_list_append(existing, ext);
         simse_dict_insert(self.nativeExtensions, name, existing);
-    } else {
+    }
+    goto L3;
+    L2:;
+    {
         List<CgNativeExt> fresh = List<CgNativeExt>();
         simse_list_append(fresh, ext);
         simse_dict_insert(self.nativeExtensions, name, fresh);
     }
+    L3:;
 }
-// ./codegen/Codegen.simse:228
+// cppsrc/codegen/Codegen.simse:231
 void collect(Emitter& self) {
     Int i = 0;
-    while (i < self.inputs.size()) {
+    L1:;
+    if (!(i < self.inputs.size())) goto L2;
+    {
         CgInput input = self.inputs[i];
-        List<XmlNode> decls = xmlDecls(input.module);
+        List<XmlNode> decls = xmlDecls(simse_addressOf(input.module));
         Int d = 0;
-        while (d < decls.size()) {
+        L3:;
+        if (!(d < decls.size())) goto L4;
+        {
             XmlNode decl = decls[d];
             d = d + 1;
-            Str declName = xmlAttr(decl, "name");
-            if (decl.name == "Function") {
-                if (xmlAttr(decl, "isNative") == "true") {
+            Str declName = xmlAttr(&decl, "name");
+            if (decl.name == "Function") goto L5;
+            goto L6;
+            L5:;
+            {
+                if (xmlAttr(&decl, "isNative") == "true") goto L7;
+                goto L8;
+                L7:;
+                {
                     Str symbol = declName;
-                    if (xmlAttr(decl, "hasNativeSymbol") == "true") {
-                        symbol = cgUnquote(xmlAttr(decl, "nativeSymbol"));
-                    }
+                    if (xmlAttr(&decl, "hasNativeSymbol") == "true") goto L9;
+                    goto L10;
+                    L9:;
+                    symbol = cgUnquote(xmlAttr(&decl, "nativeSymbol"));
+                    L10:;
                     simse_list_append(self.nativeDecls, _make_CgNativeDecl(decl, input.fileName, symbol, input.prelude));
                     simse_dict_insert(self.nativeSymbols, declName, symbol);
-                    List<XmlNode> params = xmlChildren(decl, "Param");
-                    if (params.size() > 0 && xmlAttr(params[0], "name") == "this") {
-                        CgNativeExt ext = _make_CgNativeExt(symbol, xmlChild(params[0], "Type"), xmlChild(decl, "ReturnType"), xmlTypeParamNames(decl));
+                    List<XmlNode> params = xmlChildren(&decl, "Param");
+                    if (params.size() > 0 && xmlAttr(simse_addressOf(params[0]), "name") == "this") goto L11;
+                    goto L12;
+                    L11:;
+                    {
+                        CgNativeExt ext = _make_CgNativeExt(symbol, xmlChild(simse_addressOf(params[0]), "Type"), xmlChild(&decl, "ReturnType"), xmlTypeParamNames(&decl));
                         addNativeExt(self, declName, ext);
                     }
+                    L12:;
                 }
+                L8:;
                 XmlNode recv = xmlEmptyNode();
-                if (xmlAttr(decl, "hasReceiver") == "true") {
-                    recv = xmlChild(decl, "Receiver");
-                }
-                addFunction(self, decl, recv, input.fileName, xmlTypeParamNames(decl), input.prelude);
-                continue;
+                if (xmlAttr(&decl, "hasReceiver") == "true") goto L13;
+                goto L14;
+                L13:;
+                recv = xmlChild(&decl, "Receiver");
+                L14:;
+                addFunction(self, &decl, &recv, input.fileName, xmlTypeParamNames(&decl), input.prelude);
+                goto L3;
             }
+            L6:;
             simse_dict_insert(self.types, declName, decl);
-            if (decl.name == "Enum") {
-                simse_dict_insert(self.enumNames, declName, true);
-            }
-            if (decl.name == "DataClass") {
-                if (input.prelude) {
-                    continue;
-                }
+            if (decl.name == "Enum") goto L15;
+            goto L16;
+            L15:;
+            simse_dict_insert(self.enumNames, declName, true);
+            L16:;
+            if (decl.name == "DataClass") goto L17;
+            goto L18;
+            L17:;
+            {
+                if (input.prelude) goto L19;
+                goto L20;
+                L19:;
+                goto L3;
+                L20:;
                 simse_dict_insert(self.dataClassNames, declName, true);
-                XmlNode receiver = classReceiver(self, decl);
-                List<XmlNode> methods = xmlChildren(decl, "Function");
-                List<Str> classParams = xmlTypeParamNames(decl);
+                XmlNode receiver = classReceiver(self, &decl);
+                List<XmlNode> methods = xmlChildren(&decl, "Function");
+                List<Str> classParams = xmlTypeParamNames(&decl);
                 Int m = 0;
-                while (m < methods.size()) {
+                L21:;
+                if (!(m < methods.size())) goto L22;
+                {
                     XmlNode method = methods[m];
                     List<Str> methodParams = List<Str>();
                     Int p = 0;
-                    while (p < classParams.size()) {
-                        simse_list_append(methodParams, classParams[p]);
-                        p = p + 1;
-                    }
-                    List<Str> methodTypeParams = xmlTypeParamNames(method);
+                    L23:;
+                    if (!(p < classParams.size())) goto L24;
+                    simse_list_append(methodParams, classParams[p]);
+                    p = p + 1;
+                    goto L23;
+                    L24:;
+                    List<Str> methodTypeParams = xmlTypeParamNames(&method);
                     Int q = 0;
-                    while (q < methodTypeParams.size()) {
-                        simse_list_append(methodParams, methodTypeParams[q]);
-                        q = q + 1;
-                    }
-                    addFunction(self, method, receiver, input.fileName, methodParams, input.prelude);
+                    L25:;
+                    if (!(q < methodTypeParams.size())) goto L26;
+                    simse_list_append(methodParams, methodTypeParams[q]);
+                    q = q + 1;
+                    goto L25;
+                    L26:;
+                    addFunction(self, &method, &receiver, input.fileName, methodParams, input.prelude);
                     m = m + 1;
                 }
+                goto L21;
+                L22:;
             }
+            L18:;
         }
+        goto L3;
+        L4:;
         i = i + 1;
     }
+    goto L1;
+    L2:;
 }
-// ./codegen/Codegen.simse:299
+// cppsrc/codegen/Codegen.simse:302
 void setActiveTypeParams(Emitter& self, List<Str> params) {
     simse_dict_clear(self.activeTypeParams);
     Int i = 0;
-    while (i < params.size()) {
-        simse_dict_insert(self.activeTypeParams, params[i], true);
-        i = i + 1;
-    }
+    L1:;
+    if (!(i < params.size())) goto L2;
+    simse_dict_insert(self.activeTypeParams, params[i], true);
+    i = i + 1;
+    goto L1;
+    L2:;
 }
-// ./codegen/Codegen.simse:308
+// cppsrc/codegen/Codegen.simse:311
 Str templateClause(Emitter& self, List<Str> params) {
-    if (params.size() == 0) {
-        return "";
-    }
+    if (!(params.size() == 0)) goto L2;
+    return "";
+    L2:;
     List<Str> parts = List<Str>();
     Int i = 0;
-    while (i < params.size()) {
-        simse_list_append(parts, "class " + params[i]);
-        i = i + 1;
-    }
-    return "template <" + cgJoin(parts, ", ") + ">";
+    L3:;
+    if (!(i < params.size())) goto L4;
+    simse_list_append(parts, "class " + params[i]);
+    i = i + 1;
+    goto L3;
+    L4:;
+    return "template <" + cgJoin(&parts, ", ") + ">";
 }
-// ./codegen/Codegen.simse:321
-Str typeArgsString(Emitter& self, Str baseName, List<XmlNode> args) {
+// cppsrc/codegen/Codegen.simse:324
+Str typeArgsString(Emitter& self, Str baseName, List<XmlNode>* args) {
     List<Str> rendered = List<Str>();
     Int i = 0;
-    while (i < args.size()) {
-        simse_list_append(rendered, type(self, args[i]));
-        i = i + 1;
-    }
-    if (baseName == "SmallVector" && rendered.size() == 2) {
+    L1:;
+    if (!(i < args->size())) goto L2;
+    simse_list_append(rendered, type(self, simse_addressOf((*args)[i])));
+    i = i + 1;
+    goto L1;
+    L2:;
+    if (!(baseName == "SmallVector" && rendered.size() == 2)) goto L4;
+    {
         Str first = rendered[0];
         rendered[0] = rendered[1];
         rendered[1] = first;
     }
-    return cgJoin(rendered, ", ");
+    L4:;
+    return cgJoin(&rendered, ", ");
 }
-// ./codegen/Codegen.simse:336
-Str typeName(Emitter& self, Str name, XmlNode posNode) {
-    if (name == "Unit") {
-        return "void";
-    }
-    if (simse_dict_has(self.activeTypeParams, name)) {
-        return name;
-    }
-    if (cgIsRtlTypeName(name)) {
-        return name;
-    }
-    if (simse_dict_has(self.types, name)) {
-        return name;
-    }
+// cppsrc/codegen/Codegen.simse:339
+Str typeName(Emitter& self, Str name, XmlNode* posNode) {
+    if (!(name == "Unit")) goto L2;
+    return "void";
+    L2:;
+    if (!(simse_dict_has(self.activeTypeParams, name))) goto L4;
+    return name;
+    L4:;
+    if (!(cgIsRtlTypeName(name))) goto L6;
+    return name;
+    L6:;
+    if (!(simse_dict_has(self.types, name))) goto L8;
+    return name;
+    L8:;
     fail(self, posNode, "unsupported type '" + name + "'");
     return "/*unsupported*/";
 }
-// ./codegen/Codegen.simse:353
-Str type(Emitter& self, XmlNode typeExpr) {
+// cppsrc/codegen/Codegen.simse:356
+Str type(Emitter& self, XmlNode* typeExpr) {
     Str kind = xmlKind(typeExpr);
-    if (kind == "Type.IntLit") {
-        return xmlAttr(typeExpr, "text");
-    }
-    if (kind == "Type.Named") {
-        return typeName(self, xmlAttr(typeExpr, "name"), typeExpr);
-    }
-    if (kind == "Type.Generic") {
-        return typeName(self, xmlAttr(typeExpr, "name"), typeExpr) + "<" + typeArgsString(self, xmlAttr(typeExpr, "name"), xmlChildren(typeExpr, "TypeArg")) + ">";
-    }
-    if (kind == "Type.Reference") {
+    if (!(kind == "Type.IntLit")) goto L2;
+    return xmlAttr(typeExpr, "text");
+    L2:;
+    if (!(kind == "Type.Named")) goto L4;
+    return typeName(self, xmlAttr(typeExpr, "name"), typeExpr);
+    L4:;
+    if (!(kind == "Type.Generic")) goto L6;
+    return typeName(self, xmlAttr(typeExpr, "name"), typeExpr) + "<" + typeArgsString(self, xmlAttr(typeExpr, "name"), simse_addressOf(xmlChildren(typeExpr, "TypeArg"))) + ">";
+    L6:;
+    if (!(kind == "Type.Reference")) goto L8;
+    {
         XmlNode inner = xmlChild(typeExpr, "Inner");
-        if (xmlIsEmpty(inner)) {
-            return "std::shared_ptr<void>";
-        }
-        return "std::shared_ptr<" + type(self, inner) + ">";
+        if (xmlIsEmpty(&inner)) goto L9;
+        goto L10;
+        L9:;
+        return "std::shared_ptr<void>";
+        L10:;
+        return "std::shared_ptr<" + type(self, &inner) + ">";
     }
-    if (kind == "Type.Pointer") {
+    L8:;
+    if (!(kind == "Type.Pointer")) goto L12;
+    {
         XmlNode inner = xmlChild(typeExpr, "Inner");
-        if (xmlIsEmpty(inner)) {
-            return "void*";
-        }
-        return type(self, inner) + "*";
+        if (xmlIsEmpty(&inner)) goto L13;
+        goto L14;
+        L13:;
+        return "void*";
+        L14:;
+        return type(self, &inner) + "*";
     }
-    if (kind == "Type.Function") {
+    L12:;
+    if (!(kind == "Type.Function")) goto L16;
+    {
         XmlNode retNode = xmlChild(typeExpr, "ReturnType");
         Str ret = "void";
-        if (!xmlIsEmpty(retNode)) {
-            ret = type(self, retNode);
-        }
+        if (!xmlIsEmpty(&retNode)) goto L17;
+        goto L18;
+        L17:;
+        ret = type(self, &retNode);
+        L18:;
         List<XmlNode> paramNodes = xmlChildren(typeExpr, "ParamType");
         List<Str> params = List<Str>();
         Int i = 0;
-        while (i < paramNodes.size()) {
-            simse_list_append(params, type(self, paramNodes[i]));
-            i = i + 1;
-        }
-        return "Func<" + ret + "(" + cgJoin(params, ", ") + ")>";
+        L19:;
+        if (!(i < paramNodes.size())) goto L20;
+        simse_list_append(params, type(self, simse_addressOf(paramNodes[i])));
+        i = i + 1;
+        goto L19;
+        L20:;
+        return "Func<" + ret + "(" + cgJoin(&params, ", ") + ")>";
     }
+    L16:;
     return "/*unsupported*/";
 }
-// ./codegen/Codegen.simse:397
-NameKind kindOf(Emitter& self, XmlNode typeExpr) {
+// cppsrc/codegen/Codegen.simse:400
+NameKind kindOf(Emitter& self, XmlNode* typeExpr) {
     Str kind = xmlKind(typeExpr);
-    if (kind == "Type.Reference") {
-        return NameKind::Shared;
-    }
-    if (kind == "Type.Pointer") {
-        return NameKind::Pointer;
-    }
-    if (kind == "Type.Generic" && xmlAttr(typeExpr, "name") == "PList") {
-        return NameKind::Shared;
-    }
+    if (!(kind == "Type.Reference")) goto L2;
+    return NameKind::Shared;
+    L2:;
+    if (!(kind == "Type.Pointer")) goto L4;
+    return NameKind::Pointer;
+    L4:;
+    if (!(kind == "Type.Generic" && xmlAttr(typeExpr, "name") == "PList")) goto L6;
+    return NameKind::Shared;
+    L6:;
     return NameKind::Value;
 }
-// ./codegen/Codegen.simse:413
+// cppsrc/codegen/Codegen.simse:416
 void emitTypes(Emitter& self) {
     Int i = 0;
-    while (i < self.inputs.size()) {
+    L1:;
+    if (!(i < self.inputs.size())) goto L2;
+    {
         CgInput input = self.inputs[i];
         i = i + 1;
-        if (input.prelude) {
-            continue;
-        }
+        if (input.prelude) goto L3;
+        goto L4;
+        L3:;
+        goto L1;
+        L4:;
         self.curFile = input.fileName;
-        List<XmlNode> decls = xmlDecls(input.module);
+        List<XmlNode> decls = xmlDecls(simse_addressOf(input.module));
         Int d = 0;
-        while (d < decls.size()) {
+        L5:;
+        if (!(d < decls.size())) goto L6;
+        {
             XmlNode decl = decls[d];
             d = d + 1;
-            if (decl.name == "DataClass") {
-                emitDataClass(self, decl);
-            } else {
-                if (decl.name == "Enum") {
-                    emitEnum(self, decl);
-                    emitEnumConversion(self, decl);
-                } else {
-                    if (decl.name == "TypeAlias") {
-                        emitTypeAlias(self, decl);
-                    }
-                }
-            }
-            if (self.failed) {
-                return;
-            }
+            if (decl.name == "DataClass") goto L7;
+            goto L8;
+            L7:;
+            emitDataClass(self, &decl);
+            goto L9;
+            L8:;
+            if (decl.name == "Enum") goto L10;
+            goto L11;
+            L10:;
+            emitEnum(self, &decl);
+            emitEnumConversion(self, &decl);
+            goto L12;
+            L11:;
+            if (decl.name == "TypeAlias") goto L13;
+            goto L14;
+            L13:;
+            emitTypeAlias(self, &decl);
+            L14:;
+            L12:;
+            L9:;
+            if (self.failed) goto L15;
+            goto L16;
+            L15:;
+            return;
+            L16:;
         }
+        goto L5;
+        L6:;
     }
+    goto L1;
+    L2:;
 }
-// ./codegen/Codegen.simse:442
-void emitDataClass(Emitter& self, XmlNode decl) {
+// cppsrc/codegen/Codegen.simse:445
+void emitDataClass(Emitter& self, XmlNode* decl) {
     setActiveTypeParams(self, xmlTypeParamNames(decl));
     List<XmlNode> fields = xmlChildren(decl, "Field");
     List<Str> params = List<Str>();
     List<Str> values = List<Str>();
     Int i = 0;
-    while (i < fields.size()) {
+    L1:;
+    if (!(i < fields.size())) goto L2;
+    {
         XmlNode field = fields[i];
-        XmlNode fieldType = xmlChild(field, "Type");
-        if (xmlIsEmpty(fieldType)) {
-            fail(self, field, "unsupported: field '" + xmlAttr(field, "name") + "' without a type");
-            return;
-        }
-        simse_list_append(params, type(self, fieldType) + " " + xmlAttr(field, "name"));
-        simse_list_append(values, xmlAttr(field, "name"));
+        XmlNode fieldType = xmlChild(&field, "Type");
+        if (xmlIsEmpty(&fieldType)) goto L3;
+        goto L4;
+        L3:;
+        fail(self, &field, "unsupported: field '" + xmlAttr(&field, "name") + "' without a type");
+        return;
+        L4:;
+        simse_list_append(params, type(self, &fieldType) + " " + xmlAttr(&field, "name"));
+        simse_list_append(values, xmlAttr(&field, "name"));
         i = i + 1;
     }
-    if (self.failed) {
-        return;
-    }
+    goto L1;
+    L2:;
+    if (!(self.failed)) goto L6;
+    return;
+    L6:;
     Str name = xmlAttr(decl, "name");
     List<Str> typeParams = xmlTypeParamNames(decl);
     sourceComment(self, decl);
     Str tmpl = templateClause(self, typeParams);
-    if (tmpl != "") {
-        line(self, 0, tmpl);
-    }
+    line(self, 0, "SIMSE_PACK_PUSH");
+    if (!(tmpl != "")) goto L8;
+    line(self, 0, tmpl);
+    L8:;
     line(self, 0, "struct " + name + " {");
     Int f = 0;
-    while (f < fields.size()) {
+    L9:;
+    if (!(f < fields.size())) goto L10;
+    {
         XmlNode field = fields[f];
-        line(self, 1, type(self, xmlChild(field, "Type")) + " " + xmlAttr(field, "name") + ";");
+        line(self, 1, type(self, simse_addressOf(xmlChild(&field, "Type"))) + " " + xmlAttr(&field, "name") + ";");
         f = f + 1;
     }
+    goto L9;
+    L10:;
     line(self, 0, "};");
+    line(self, 0, "SIMSE_PACK_POP");
     Str target = name;
-    if (typeParams.size() > 0) {
-        target = name + "<" + cgJoin(typeParams, ", ") + ">";
-    }
-    if (tmpl != "") {
-        line(self, 0, tmpl);
-    }
-    line(self, 0, target + " _make_" + name + "(" + cgJoin(params, ", ") + ") {");
-    line(self, 1, "return " + target + "{" + cgJoin(values, ", ") + "};");
+    if (!(typeParams.size() > 0)) goto L12;
+    target = name + "<" + cgJoin(&typeParams, ", ") + ">";
+    L12:;
+    if (!(tmpl != "")) goto L14;
+    line(self, 0, tmpl);
+    L14:;
+    line(self, 0, target + " _make_" + name + "(" + cgJoin(&params, ", ") + ") {");
+    line(self, 1, "return " + target + "{" + cgJoin(&values, ", ") + "};");
     line(self, 0, "}");
 }
-// ./codegen/Codegen.simse:494
-void emitEnum(Emitter& self, XmlNode decl) {
+// cppsrc/codegen/Codegen.simse:501
+void emitEnum(Emitter& self, XmlNode* decl) {
     sourceComment(self, decl);
     Str tmpl = templateClause(self, xmlTypeParamNames(decl));
-    if (tmpl != "") {
-        line(self, 0, tmpl);
-    }
+    if (!(tmpl != "")) goto L2;
+    line(self, 0, tmpl);
+    L2:;
     line(self, 0, "enum class " + xmlAttr(decl, "name") + " {");
     List<XmlNode> members = xmlChildren(decl, "EnumMember");
     Int i = 0;
-    while (i < members.size()) {
+    L3:;
+    if (!(i < members.size())) goto L4;
+    {
         XmlNode member = members[i];
-        Str text = xmlAttr(member, "name");
-        if (xmlAttr(member, "hasValue") == "true") {
-            text = text + " = " + xmlAttr(member, "value");
-        }
+        Str text = xmlAttr(&member, "name");
+        if (xmlAttr(&member, "hasValue") == "true") goto L5;
+        goto L6;
+        L5:;
+        text = text + " = " + xmlAttr(&member, "value");
+        L6:;
         line(self, 1, text + ",");
         i = i + 1;
     }
+    goto L3;
+    L4:;
     line(self, 0, "};");
 }
-// ./codegen/Codegen.simse:516
-void emitEnumConversion(Emitter& self, XmlNode decl) {
+// cppsrc/codegen/Codegen.simse:523
+void emitEnumConversion(Emitter& self, XmlNode* decl) {
     List<Str> typeParams = xmlTypeParamNames(decl);
-    if (typeParams.size() > 0) {
-        return;
-    }
+    if (!(typeParams.size() > 0)) goto L2;
+    return;
+    L2:;
     List<XmlNode> members = xmlChildren(decl, "EnumMember");
     List<Int> values = List<Int>();
     List<Str> names = List<Str>();
     Int next = 0;
     Int i = 0;
-    while (i < members.size()) {
+    L3:;
+    if (!(i < members.size())) goto L4;
+    {
         XmlNode member = members[i];
-        if (xmlAttr(member, "hasValue") == "true") {
-            next = xmlIntAttr(member, "value", 0);
-        }
+        if (xmlAttr(&member, "hasValue") == "true") goto L5;
+        goto L6;
+        L5:;
+        next = xmlIntAttr(&member, "value", 0);
+        L6:;
         simse_list_append(values, next);
-        simse_list_append(names, xmlAttr(member, "name"));
+        simse_list_append(names, xmlAttr(&member, "name"));
         next = next + 1;
         i = i + 1;
     }
+    goto L3;
+    L4:;
     line(self, 0, "inline Opt<" + xmlAttr(decl, "name") + "> simse_" + xmlAttr(decl, "name") + "_fromInt(Int value) {");
     Int k = 0;
-    while (k < names.size()) {
-        line(self, 1, "if (value == " + simse_int_toString(values[k]) + ") return Opt<" + xmlAttr(decl, "name") + ">::some(" + xmlAttr(decl, "name") + "::" + names[k] + ");");
-        k = k + 1;
-    }
+    L7:;
+    if (!(k < names.size())) goto L8;
+    line(self, 1, "if (value == " + simse_int_toString(values[k]) + ") return Opt<" + xmlAttr(decl, "name") + ">::some(" + xmlAttr(decl, "name") + "::" + names[k] + ");");
+    k = k + 1;
+    goto L7;
+    L8:;
     line(self, 1, "return Opt<" + xmlAttr(decl, "name") + ">::none();");
     line(self, 0, "}");
 }
-// ./codegen/Codegen.simse:549
-void emitTypeAlias(Emitter& self, XmlNode decl) {
+// cppsrc/codegen/Codegen.simse:556
+void emitTypeAlias(Emitter& self, XmlNode* decl) {
     XmlNode target = xmlChild(decl, "TargetType");
-    if (xmlIsEmpty(target)) {
-        fail(self, decl, "unsupported: typealias '" + xmlAttr(decl, "name") + "' without a target type");
-        return;
-    }
+    if (!(xmlIsEmpty(&target))) goto L2;
+    fail(self, decl, "unsupported: typealias '" + xmlAttr(decl, "name") + "' without a target type");
+    return;
+    L2:;
     setActiveTypeParams(self, xmlTypeParamNames(decl));
-    Str targetText = type(self, target);
-    if (self.failed) {
-        return;
-    }
+    Str targetText = type(self, &target);
+    if (!(self.failed)) goto L4;
+    return;
+    L4:;
     sourceComment(self, decl);
     Str tmpl = templateClause(self, xmlTypeParamNames(decl));
-    if (tmpl != "") {
-        line(self, 0, tmpl);
-    }
+    if (!(tmpl != "")) goto L6;
+    line(self, 0, tmpl);
+    L6:;
     line(self, 0, "using " + xmlAttr(decl, "name") + " = " + targetText + ";");
 }
-// ./codegen/Codegen.simse:568
+// cppsrc/codegen/Codegen.simse:575
 void emitNativeDeclarations(Emitter& self) {
     setActiveTypeParams(self, List<Str>());
     Int i = 0;
-    while (i < self.nativeDecls.size()) {
+    L1:;
+    if (!(i < self.nativeDecls.size())) goto L2;
+    {
         CgNativeDecl nativeInfo = self.nativeDecls[i];
         i = i + 1;
-        if (nativeInfo.prelude) {
-            continue;
-        }
+        if (nativeInfo.prelude) goto L3;
+        goto L4;
+        L3:;
+        goto L1;
+        L4:;
         self.curFile = nativeInfo.file;
         XmlNode decl = nativeInfo.decl;
-        setActiveTypeParams(self, xmlTypeParamNames(decl));
-        if (simse_str_find(nativeInfo.symbol, "::") != -1) {
-            fail(self, decl, "unsupported: namespaced native symbol '" + nativeInfo.symbol + "' needs a global wrapper");
-            return;
-        }
-        XmlNode returnNode = xmlChild(decl, "ReturnType");
+        setActiveTypeParams(self, xmlTypeParamNames(&decl));
+        if (simse_str_find(nativeInfo.symbol, "::") != -1) goto L5;
+        goto L6;
+        L5:;
+        fail(self, &decl, "unsupported: namespaced native symbol '" + nativeInfo.symbol + "' needs a global wrapper");
+        return;
+        L6:;
+        XmlNode returnNode = xmlChild(&decl, "ReturnType");
         Str ret = "void";
-        if (!xmlIsEmpty(returnNode)) {
-            ret = type(self, returnNode);
-        }
-        if (self.failed) {
-            return;
-        }
-        List<XmlNode> params = xmlChildren(decl, "Param");
+        if (!xmlIsEmpty(&returnNode)) goto L7;
+        goto L8;
+        L7:;
+        ret = type(self, &returnNode);
+        L8:;
+        if (self.failed) goto L9;
+        goto L10;
+        L9:;
+        return;
+        L10:;
+        List<XmlNode> params = xmlChildren(&decl, "Param");
         List<Str> paramTexts = List<Str>();
         Int p = 0;
-        while (p < params.size()) {
+        L11:;
+        if (!(p < params.size())) goto L12;
+        {
             XmlNode param = params[p];
-            XmlNode paramType = xmlChild(param, "Type");
-            if (xmlIsEmpty(paramType)) {
-                fail(self, param, "unsupported: native parameter '" + xmlAttr(param, "name") + "' without a type");
-                return;
-            }
-            Str mapped = type(self, paramType);
-            if (self.failed) {
-                return;
-            }
-            Str name = xmlAttr(param, "name");
-            if (name == "this") {
-                name = "self";
-            }
-            Str pk = xmlKind(paramType);
-            if (pk == "Type.Pointer" || pk == "Type.Reference") {
-                simse_list_append(paramTexts, mapped + " " + name);
-            } else {
-                simse_list_append(paramTexts, "const " + mapped + "& " + name);
-            }
+            XmlNode paramType = xmlChild(&param, "Type");
+            if (xmlIsEmpty(&paramType)) goto L13;
+            goto L14;
+            L13:;
+            fail(self, &param, "unsupported: native parameter '" + xmlAttr(&param, "name") + "' without a type");
+            return;
+            L14:;
+            Str mapped = type(self, &paramType);
+            if (self.failed) goto L15;
+            goto L16;
+            L15:;
+            return;
+            L16:;
+            Str name = xmlAttr(&param, "name");
+            if (name == "this") goto L17;
+            goto L18;
+            L17:;
+            name = "self";
+            L18:;
+            Str pk = xmlKind(&paramType);
+            if (pk == "Type.Pointer" || pk == "Type.Reference") goto L19;
+            goto L20;
+            L19:;
+            simse_list_append(paramTexts, mapped + " " + name);
+            goto L21;
+            L20:;
+            simse_list_append(paramTexts, "const " + mapped + "& " + name);
+            L21:;
             p = p + 1;
         }
-        sourceComment(self, decl);
-        Str tmpl = templateClause(self, xmlTypeParamNames(decl));
-        if (tmpl != "") {
-            line(self, 0, tmpl);
-        }
-        line(self, 0, ret + " " + nativeInfo.symbol + "(" + cgJoin(paramTexts, ", ") + ");");
+        goto L11;
+        L12:;
+        sourceComment(self, &decl);
+        Str tmpl = templateClause(self, xmlTypeParamNames(&decl));
+        if (tmpl != "") goto L22;
+        goto L23;
+        L22:;
+        line(self, 0, tmpl);
+        L23:;
+        line(self, 0, ret + " " + nativeInfo.symbol + "(" + cgJoin(&paramTexts, ", ") + ");");
     }
+    goto L1;
+    L2:;
 }
-// ./codegen/Codegen.simse:629
+// cppsrc/codegen/Codegen.simse:636
 void emitFunctions(Emitter& self, Bool prototypeOnly) {
     Int i = 0;
-    while (i < self.functions.size()) {
+    L1:;
+    if (!(i < self.functions.size())) goto L2;
+    {
         CgFn fn = self.functions[i];
         i = i + 1;
-        if (fn.prelude) {
-            continue;
-        }
+        if (fn.prelude) goto L3;
+        goto L4;
+        L3:;
+        goto L1;
+        L4:;
         self.curFile = fn.file;
         emitFunction(self, fn, prototypeOnly);
-        if (self.failed) {
-            return;
-        }
+        if (self.failed) goto L5;
+        goto L6;
+        L5:;
+        return;
+        L6:;
     }
+    goto L1;
+    L2:;
 }
-// ./codegen/Codegen.simse:645
-void beginScope(Emitter& self, CgFn fn, NameKind selfK, XmlNode selfTypePtr) {
+// cppsrc/codegen/Codegen.simse:652
+void beginScope(Emitter& self, CgFn fn, NameKind selfK, XmlNode* selfTypePtr) {
     simse_dict_clear(self.nameKinds);
     simse_dict_clear(self.localTypes);
     self.selfKind = selfK;
-    self.selfType = selfTypePtr;
-    if (!xmlIsEmpty(fn.receiver)) {
-        simse_dict_insert(self.nameKinds, "self", selfK);
-    }
-    List<XmlNode> params = xmlChildren(fn.decl, "Param");
+    self.selfType = *(selfTypePtr);
+    if (!(!xmlIsEmpty(simse_addressOf(fn.receiver)))) goto L2;
+    simse_dict_insert(self.nameKinds, "self", selfK);
+    L2:;
+    List<XmlNode> params = xmlChildren(simse_addressOf(fn.decl), "Param");
     Int i = 0;
-    while (i < params.size()) {
+    L3:;
+    if (!(i < params.size())) goto L4;
+    {
         XmlNode param = params[i];
-        XmlNode paramType = xmlChild(param, "Type");
-        if (!xmlIsEmpty(paramType)) {
-            simse_dict_insert(self.nameKinds, xmlAttr(param, "name"), kindOf(self, paramType));
-            simse_dict_insert(self.localTypes, xmlAttr(param, "name"), paramType);
-        }
+        XmlNode paramType = xmlChild(&param, "Type");
+        if (!xmlIsEmpty(&paramType)) goto L5;
+        goto L6;
+        L5:;
+        simse_dict_insert(self.nameKinds, xmlAttr(&param, "name"), kindOf(self, &paramType));
+        simse_dict_insert(self.localTypes, xmlAttr(&param, "name"), paramType);
+        L6:;
         i = i + 1;
     }
+    goto L3;
+    L4:;
 }
-// ./codegen/Codegen.simse:666
-Str receiverParam(Emitter& self, XmlNode receiverType) {
+// cppsrc/codegen/Codegen.simse:673
+Str receiverParam(Emitter& self, XmlNode* receiverType) {
     Str mapped = type(self, receiverType);
     Str kind = xmlKind(receiverType);
-    if (kind == "Type.Reference" || kind == "Type.Pointer") {
-        return mapped + " self";
-    }
+    if (!(kind == "Type.Reference" || kind == "Type.Pointer")) goto L2;
+    return mapped + " self";
+    L2:;
     return mapped + "& self";
 }
-// ./codegen/Codegen.simse:675
+// cppsrc/codegen/Codegen.simse:682
 void emitFunction(Emitter& self, CgFn fn, Bool prototypeOnly) {
     XmlNode decl = fn.decl;
-    if (xmlAttr(decl, "isNative") == "true") {
-        return;
-    }
-    Bool isMain = xmlIsEmpty(fn.receiver) && xmlAttr(decl, "name") == "main";
-    if (isMain && prototypeOnly) {
-        return;
-    }
-    Bool mainArgs = isMain && cgIsMainArgs(decl);
-    List<XmlNode> params0 = xmlChildren(decl, "Param");
-    if (isMain && params0.size() > 0 && !mainArgs) {
-        fail(self, decl, "unsupported: main with parameters");
-        return;
-    }
+    if (!(xmlAttr(&decl, "isNative") == "true")) goto L2;
+    return;
+    L2:;
+    Bool isMain = xmlIsEmpty(simse_addressOf(fn.receiver)) && xmlAttr(&decl, "name") == "main";
+    if (!(isMain && prototypeOnly)) goto L4;
+    return;
+    L4:;
+    Bool mainArgs = isMain && cgIsMainArgs(&decl);
+    List<XmlNode> params0 = xmlChildren(&decl, "Param");
+    if (!(isMain && params0.size() > 0 && !mainArgs)) goto L6;
+    fail(self, &decl, "unsupported: main with parameters");
+    return;
+    L6:;
     setActiveTypeParams(self, fn.templateParams);
-    XmlNode returnNode = xmlChild(decl, "ReturnType");
+    XmlNode returnNode = xmlChild(&decl, "ReturnType");
     Str ret = "void";
-    if (isMain) {
-        ret = "int";
-    } else {
-        if (!xmlIsEmpty(returnNode)) {
-            ret = type(self, returnNode);
-        }
-    }
-    if (self.failed) {
-        return;
-    }
+    if (!(isMain)) goto L8;
+    ret = "int";
+    goto L9;
+    L8:;
+    if (!(!xmlIsEmpty(&returnNode))) goto L11;
+    ret = type(self, &returnNode);
+    L11:;
+    L9:;
+    if (!(self.failed)) goto L13;
+    return;
+    L13:;
     List<Str> params = List<Str>();
     Bool hasSelf = false;
     NameKind selfK = NameKind::Value;
     XmlNode selfTypePtr = xmlEmptyNode();
-    if (!xmlIsEmpty(fn.receiver)) {
-        simse_list_append(params, receiverParam(self, fn.receiver));
-        hasSelf = true;
-        selfK = kindOf(self, fn.receiver);
-        selfTypePtr = fn.receiver;
-        if (self.failed) {
-            return;
-        }
-    }
-    if (!mainArgs) {
+    if (!(!xmlIsEmpty(simse_addressOf(fn.receiver)))) goto L15;
+    simse_list_append(params, receiverParam(self, simse_addressOf(fn.receiver)));
+    hasSelf = true;
+    selfK = kindOf(self, simse_addressOf(fn.receiver));
+    selfTypePtr = fn.receiver;
+    if (!(self.failed)) goto L17;
+    return;
+    L17:;
+    L15:;
+    if (!(!mainArgs)) goto L19;
+    {
         Int i = 0;
-        while (i < params0.size()) {
+        L20:;
+        if (!(i < params0.size())) goto L21;
+        {
             XmlNode param = params0[i];
-            XmlNode paramType = xmlChild(param, "Type");
-            if (xmlIsEmpty(paramType)) {
-                fail(self, param, "unsupported: parameter '" + xmlAttr(param, "name") + "' without a type");
-                return;
-            }
-            if (xmlAttr(param, "name") == "this" && !hasSelf) {
-                simse_list_append(params, receiverParam(self, paramType));
-                hasSelf = true;
-                selfK = kindOf(self, paramType);
-                selfTypePtr = paramType;
-            } else {
-                simse_list_append(params, type(self, paramType) + " " + xmlAttr(param, "name"));
-            }
-            if (self.failed) {
-                return;
-            }
+            XmlNode paramType = xmlChild(&param, "Type");
+            if (xmlIsEmpty(&paramType)) goto L22;
+            goto L23;
+            L22:;
+            fail(self, &param, "unsupported: parameter '" + xmlAttr(&param, "name") + "' without a type");
+            return;
+            L23:;
+            if (xmlAttr(&param, "name") == "this" && !hasSelf) goto L24;
+            goto L25;
+            L24:;
+            simse_list_append(params, receiverParam(self, &paramType));
+            hasSelf = true;
+            selfK = kindOf(self, &paramType);
+            selfTypePtr = paramType;
+            goto L26;
+            L25:;
+            simse_list_append(params, type(self, &paramType) + " " + xmlAttr(&param, "name"));
+            L26:;
+            if (self.failed) goto L27;
+            goto L28;
+            L27:;
+            return;
+            L28:;
             i = i + 1;
         }
+        goto L20;
+        L21:;
     }
-    if (!hasSelf) {
-        selfK = NameKind::Value;
-    }
-    Str signature = ret + " " + xmlAttr(decl, "name") + "(" + cgJoin(params, ", ") + ")";
-    if (mainArgs) {
-        signature = "int main(int argc, char** argv)";
-    }
+    L19:;
+    if (!(!hasSelf)) goto L30;
+    selfK = NameKind::Value;
+    L30:;
+    Str signature = ret + " " + xmlAttr(&decl, "name") + "(" + cgJoin(&params, ", ") + ")";
+    if (!(mainArgs)) goto L32;
+    signature = "int main(int argc, char** argv)";
+    L32:;
     Str tmpl = templateClause(self, fn.templateParams);
-    if (prototypeOnly) {
-        if (tmpl != "") {
-            line(self, 0, tmpl);
-        }
-        line(self, 0, signature + ";");
-        return;
-    }
-    if (xmlAttr(decl, "hasBody") != "true") {
-        return;
-    }
-    sourceComment(self, decl);
-    if (tmpl != "") {
-        line(self, 0, tmpl);
-    }
+    if (!(prototypeOnly)) goto L34;
+    if (!(tmpl != "")) goto L36;
+    line(self, 0, tmpl);
+    L36:;
+    line(self, 0, signature + ";");
+    return;
+    L34:;
+    if (!(xmlAttr(&decl, "hasBody") != "true")) goto L38;
+    return;
+    L38:;
+    sourceComment(self, &decl);
+    if (!(tmpl != "")) goto L40;
+    line(self, 0, tmpl);
+    L40:;
     line(self, 0, signature + " {");
-    beginScope(self, fn, selfK, selfTypePtr);
-    if (mainArgs) {
-        Str argName = xmlAttr(params0[0], "name");
+    beginScope(self, fn, selfK, &selfTypePtr);
+    if (!(mainArgs)) goto L42;
+    {
+        Str argName = xmlAttr(simse_addressOf(params0[0]), "name");
         line(self, 1, "List<Str> " + argName + " = List<Str>();");
         line(self, 1, "int simse_argIndex = 1;");
         line(self, 1, "while (simse_argIndex < argc) {");
@@ -1139,695 +1409,933 @@ void emitFunction(Emitter& self, CgFn fn, Bool prototypeOnly) {
         line(self, 2, "simse_argIndex = simse_argIndex + 1;");
         line(self, 1, "}");
     }
+    L42:;
     self.curReturnType = returnNode;
-    emitStmts(self, xmlChildren(xmlChild(decl, "Body"), "Stmt"), 1);
-    if (self.failed) {
-        return;
-    }
+    emitStmts(self, simse_addressOf(linSimplifyBody(linLowerBody(xmlChildren(simse_addressOf(xmlChild(&decl, "Body")), "Stmt")))), 1);
+    if (!(self.failed)) goto L44;
+    return;
+    L44:;
     line(self, 0, "}");
 }
-// ./codegen/Codegen.simse:785
-void emitStmts(Emitter& self, List<XmlNode> stmts, Int level) {
+// cppsrc/codegen/Codegen.simse:795
+void emitStmts(Emitter& self, List<XmlNode>* stmts, Int level) {
     Int i = 0;
-    while (i < stmts.size()) {
-        emitStmt(self, stmts[i], level);
-        if (self.failed) {
-            return;
-        }
-        i = i + 1;
-    }
+    L1:;
+    if (!(i < stmts->size())) goto L2;
+    emitStmt(self, simse_addressOf((*stmts)[i]), level);
+    if (!(self.failed)) goto L4;
+    return;
+    L4:;
+    i = i + 1;
+    goto L1;
+    L2:;
 }
-// ./codegen/Codegen.simse:796
-void emitStmt(Emitter& self, XmlNode stmt, Int level) {
+// cppsrc/codegen/Codegen.simse:806
+void emitStmt(Emitter& self, XmlNode* stmt, Int level) {
     Str kind = xmlKind(stmt);
-    if (kind == "Stmt.VarDecl") {
+    if (!(kind == "Stmt.VarDecl")) goto L2;
+    {
         XmlNode declaredType = xmlChild(stmt, "Type");
         XmlNode init = xmlChild(stmt, "Init");
         Str typeText = "";
-        if (!xmlIsEmpty(declaredType)) {
-            typeText = type(self, declaredType);
-        } else {
-            if (!xmlIsEmpty(init)) {
-                typeText = "auto";
-            } else {
-                fail(self, stmt, "unsupported: '" + xmlAttr(stmt, "name") + "' has neither a type nor an initializer");
-                return;
-            }
-        }
-        if (self.failed) {
-            return;
-        }
+        if (!xmlIsEmpty(&declaredType)) goto L3;
+        goto L4;
+        L3:;
+        typeText = type(self, &declaredType);
+        goto L5;
+        L4:;
+        if (!xmlIsEmpty(&init)) goto L6;
+        goto L7;
+        L6:;
+        typeText = "auto";
+        goto L8;
+        L7:;
+        fail(self, stmt, "unsupported: '" + xmlAttr(stmt, "name") + "' has neither a type nor an initializer");
+        return;
+        L8:;
+        L5:;
+        if (self.failed) goto L9;
+        goto L10;
+        L9:;
+        return;
+        L10:;
         Str text = typeText + " " + xmlAttr(stmt, "name");
-        if (!xmlIsEmpty(init)) {
-            text = text + " = " + expr(self, init, 0, declaredType);
-        }
+        if (!xmlIsEmpty(&init)) goto L11;
+        goto L12;
+        L11:;
+        text = text + " = " + expr(self, &init, 0, &declaredType);
+        L12:;
         line(self, level, text + ";");
-        if (!xmlIsEmpty(declaredType)) {
-            simse_dict_insert(self.nameKinds, xmlAttr(stmt, "name"), kindOf(self, declaredType));
-            simse_dict_insert(self.localTypes, xmlAttr(stmt, "name"), declaredType);
-        } else {
-            if (!xmlIsEmpty(init)) {
-                Str initKind = xmlKind(init);
-                NameKind nameKind = NameKind::Value;
-                if (initKind == "Expr.Ref") {
-                    nameKind = NameKind::Shared;
-                } else {
-                    if (initKind == "Expr.Deref") {
-                        nameKind = NameKind::Pointer;
-                    }
-                }
-                simse_dict_insert(self.nameKinds, xmlAttr(stmt, "name"), nameKind);
-                XmlNode inferred = inferType(self, init);
-                if (!xmlIsEmpty(inferred)) {
-                    simse_dict_insert(self.localTypes, xmlAttr(stmt, "name"), inferred);
-                }
-            }
+        if (!xmlIsEmpty(&declaredType)) goto L13;
+        goto L14;
+        L13:;
+        simse_dict_insert(self.nameKinds, xmlAttr(stmt, "name"), kindOf(self, &declaredType));
+        simse_dict_insert(self.localTypes, xmlAttr(stmt, "name"), declaredType);
+        goto L15;
+        L14:;
+        if (!xmlIsEmpty(&init)) goto L16;
+        goto L17;
+        L16:;
+        {
+            Str initKind = xmlKind(&init);
+            NameKind nameKind = NameKind::Value;
+            if (initKind == "Expr.Ref") goto L18;
+            goto L19;
+            L18:;
+            nameKind = NameKind::Shared;
+            goto L20;
+            L19:;
+            if (initKind == "Expr.Deref") goto L21;
+            goto L22;
+            L21:;
+            nameKind = NameKind::Pointer;
+            L22:;
+            L20:;
+            simse_dict_insert(self.nameKinds, xmlAttr(stmt, "name"), nameKind);
+            XmlNode inferred = inferType(self, &init);
+            if (!xmlIsEmpty(&inferred)) goto L23;
+            goto L24;
+            L23:;
+            simse_dict_insert(self.localTypes, xmlAttr(stmt, "name"), inferred);
+            L24:;
         }
+        L17:;
+        L15:;
         return;
     }
-    if (kind == "Stmt.Assign") {
+    L2:;
+    if (!(kind == "Stmt.Assign")) goto L26;
+    {
         Str op = xmlAttr(stmt, "op");
-        if (op != "=") {
-            fail(self, stmt, "unsupported: assignment operator '" + op + "'");
-            return;
-        }
+        if (op != "=") goto L27;
+        goto L28;
+        L27:;
+        fail(self, stmt, "unsupported: assignment operator '" + op + "'");
+        return;
+        L28:;
         XmlNode target = xmlChild(stmt, "Target");
         XmlNode value = xmlChild(stmt, "Value");
-        line(self, level, expr(self, target, 0, xmlEmptyNode()) + " = " + expr(self, value, 0, inferType(self, target)) + ";");
+        line(self, level, expr(self, &target, 0, simse_addressOf(xmlEmptyNode())) + " = " + expr(self, &value, 0, simse_addressOf(inferType(self, &target))) + ";");
         return;
     }
-    if (kind == "Stmt.If") {
+    L26:;
+    if (!(kind == "Stmt.If")) goto L30;
+    {
         XmlNode cond = xmlChild(stmt, "Cond");
-        line(self, level, "if (" + expr(self, cond, 0, xmlEmptyNode()) + ") {");
-        emitStmts(self, xmlChildren(xmlChild(stmt, "Then"), "Stmt"), level + 1);
-        if (self.failed) {
-            return;
-        }
-        if (xmlHasChild(stmt, "Else")) {
-            line(self, level, "} else {");
-            emitStmts(self, xmlChildren(xmlChild(stmt, "Else"), "Stmt"), level + 1);
-            if (self.failed) {
-                return;
-            }
-        }
+        line(self, level, "if (" + expr(self, &cond, 0, simse_addressOf(xmlEmptyNode())) + ") {");
+        emitStmts(self, simse_addressOf(xmlChildren(simse_addressOf(xmlChild(stmt, "Then")), "Stmt")), level + 1);
+        if (self.failed) goto L31;
+        goto L32;
+        L31:;
+        return;
+        L32:;
+        if (xmlHasChild(stmt, "Else")) goto L33;
+        goto L34;
+        L33:;
+        line(self, level, "} else {");
+        emitStmts(self, simse_addressOf(xmlChildren(simse_addressOf(xmlChild(stmt, "Else")), "Stmt")), level + 1);
+        if (self.failed) goto L35;
+        goto L36;
+        L35:;
+        return;
+        L36:;
+        L34:;
         line(self, level, "}");
         return;
     }
-    if (kind == "Stmt.While") {
-        line(self, level, "while (" + expr(self, xmlChild(stmt, "Cond"), 0, xmlEmptyNode()) + ") {");
-        emitStmts(self, xmlChildren(xmlChild(stmt, "Body"), "Stmt"), level + 1);
-        if (self.failed) {
-            return;
-        }
-        line(self, level, "}");
-        return;
-    }
-    if (kind == "Stmt.Switch") {
-        line(self, level, "switch (" + expr(self, xmlChild(stmt, "Cond"), 0, xmlEmptyNode()) + ") {");
-        List<XmlNode> cases = xmlChildren(stmt, "Case");
-        Int i = 0;
-        while (i < cases.size()) {
-            XmlNode switchCase = cases[i];
-            if (xmlAttr(switchCase, "isDefault") == "true") {
-                line(self, level + 1, "default:");
-            } else {
-                line(self, level + 1, "case " + expr(self, xmlChild(switchCase, "Label"), 0, xmlEmptyNode()) + ":");
-            }
-            line(self, level + 1, "{");
-            emitStmts(self, xmlChildren(switchCase, "Stmt"), level + 2);
-            if (self.failed) {
-                return;
-            }
-            line(self, level + 1, "}");
-            i = i + 1;
-        }
-        line(self, level, "}");
-        return;
-    }
-    if (kind == "Stmt.Return") {
+    L30:;
+    if (!(kind == "Stmt.Return")) goto L38;
+    {
         XmlNode value = xmlChild(stmt, "Value");
-        if (!xmlIsEmpty(value)) {
-            line(self, level, "return " + expr(self, value, 0, self.curReturnType) + ";");
-        } else {
-            line(self, level, "return;");
-        }
+        if (!xmlIsEmpty(&value)) goto L39;
+        goto L40;
+        L39:;
+        line(self, level, "return " + expr(self, &value, 0, simse_addressOf(self.curReturnType)) + ";");
+        goto L41;
+        L40:;
+        line(self, level, "return;");
+        L41:;
         return;
     }
-    if (kind == "Stmt.Break") {
-        line(self, level, "break;");
-        return;
-    }
-    if (kind == "Stmt.Continue") {
-        line(self, level, "continue;");
-        return;
-    }
-    if (kind == "Stmt.ExprStmt") {
-        line(self, level, expr(self, xmlChild(stmt, "Expr"), 0, xmlEmptyNode()) + ";");
-        return;
-    }
+    L38:;
+    if (!(kind == "Stmt.Label")) goto L43;
+    line(self, level, xmlAttr(stmt, "name") + ":;");
+    return;
+    L43:;
+    if (!(kind == "Stmt.Goto")) goto L45;
+    line(self, level, "goto " + xmlAttr(stmt, "name") + ";");
+    return;
+    L45:;
+    if (!(kind == "Stmt.IfTrue")) goto L47;
+    line(self, level, "if (" + expr(self, simse_addressOf(xmlChild(stmt, "Cond")), 0, simse_addressOf(xmlEmptyNode())) + ") goto " + xmlAttr(stmt, "name") + ";");
+    return;
+    L47:;
+    if (!(kind == "Stmt.IfFalse")) goto L49;
+    line(self, level, "if (!(" + expr(self, simse_addressOf(xmlChild(stmt, "Cond")), 0, simse_addressOf(xmlEmptyNode())) + ")) goto " + xmlAttr(stmt, "name") + ";");
+    return;
+    L49:;
+    if (!(kind == "Stmt.Block")) goto L51;
+    line(self, level, "{");
+    emitStmts(self, simse_addressOf(xmlChildren(simse_addressOf(xmlChild(stmt, "Body")), "Stmt")), level + 1);
+    if (!(self.failed)) goto L53;
+    return;
+    L53:;
+    line(self, level, "}");
+    return;
+    L51:;
+    if (!(kind == "Stmt.ExprStmt")) goto L55;
+    line(self, level, expr(self, simse_addressOf(xmlChild(stmt, "Expr")), 0, simse_addressOf(xmlEmptyNode())) + ";");
+    return;
+    L55:;
+    if (!(kind == "Stmt.If" || kind == "Stmt.While" || kind == "Stmt.Switch" || kind == "Stmt.Break" || kind == "Stmt.Continue")) goto L57;
+    fail(self, stmt, "internal: structured statement reached the emitter (linear lowering did not run)");
+    return;
+    L57:;
+    fail(self, stmt, "unsupported: statement kind '" + kind + "'");
 }
-// ./codegen/Codegen.simse:924
-Str expr(Emitter& self, XmlNode e, Int minPrec, XmlNode expected) {
+// cppsrc/codegen/Codegen.simse:928
+Str expr(Emitter& self, XmlNode* e, Int minPrec, XmlNode* expected) {
     Int p = cgPrecedence(e);
     Str s = "";
-    if (p < minPrec) {
-        s = s + "(";
-    }
+    if (!(p < minPrec)) goto L2;
+    s = s + "(";
+    L2:;
     s = s + exprInner(self, e, expected);
-    if (p < minPrec) {
-        s = s + ")";
-    }
+    if (!(p < minPrec)) goto L4;
+    s = s + ")";
+    L4:;
     return s;
 }
-// ./codegen/Codegen.simse:937
-NameKind operandKind(Emitter& self, XmlNode e) {
-    if (xmlKind(e) == "Expr.Name") {
+// cppsrc/codegen/Codegen.simse:941
+NameKind operandKind(Emitter& self, XmlNode* e) {
+    if (!(xmlKind(e) == "Expr.Name")) goto L2;
+    {
         Str name = xmlAttr(e, "name");
-        if (name == "this") {
-            return self.selfKind;
-        }
-        if (simse_dict_has(self.nameKinds, name)) {
-            return simse_dict_get(self.nameKinds, name).value();
-        }
+        if (name == "this") goto L3;
+        goto L4;
+        L3:;
+        return self.selfKind;
+        L4:;
+        if (simse_dict_has(self.nameKinds, name)) goto L5;
+        goto L6;
+        L5:;
+        return simse_dict_get(self.nameKinds, name).value();
+        L6:;
     }
+    L2:;
     return NameKind::Value;
 }
-// ./codegen/Codegen.simse:952
+// cppsrc/codegen/Codegen.simse:956
 XmlNode namedType(Emitter& self, Str name) {
     return namedTypeExpr(self, name);
 }
-// ./codegen/Codegen.simse:956
-XmlNode genericType(Emitter& self, Str name, List<XmlNode> args) {
-    return genericTypeExpr(self, name, args);
-}
-// ./codegen/Codegen.simse:960
-XmlNode pointee(Emitter& self, XmlNode typeNode) {
-    XmlNode current = typeNode;
-    while (!xmlIsEmpty(current)) {
-        Str kind = xmlKind(current);
-        if (kind == "Type.Reference" || kind == "Type.Pointer") {
-            XmlNode inner = xmlChild(current, "Inner");
-            if (xmlIsEmpty(inner)) {
-                return current;
-            }
-            current = inner;
-        } else {
+// cppsrc/codegen/Codegen.simse:960
+XmlNode pointee(Emitter& self, XmlNode* typeNode) {
+    XmlNode current = *(typeNode);
+    L1:;
+    if (!(!xmlIsEmpty(&current))) goto L2;
+    {
+        Str kind = xmlKind(&current);
+        if (kind == "Type.Reference" || kind == "Type.Pointer") goto L3;
+        goto L4;
+        L3:;
+        {
+            XmlNode inner = xmlChild(&current, "Inner");
+            if (xmlIsEmpty(&inner)) goto L5;
+            goto L6;
+            L5:;
             return current;
+            L6:;
+            current = inner;
         }
+        goto L7;
+        L4:;
+        return current;
+        L7:;
     }
+    goto L1;
+    L2:;
     return current;
 }
-// ./codegen/Codegen.simse:977
-Bool isHandleType(Emitter& self, XmlNode typeNode) {
-    if (xmlIsEmpty(typeNode)) {
-        return false;
-    }
+// cppsrc/codegen/Codegen.simse:977
+Bool isHandleType(Emitter& self, XmlNode* typeNode) {
+    if (!(xmlIsEmpty(typeNode))) goto L2;
+    return false;
+    L2:;
     Str kind = xmlKind(typeNode);
-    if (kind == "Type.Reference" || kind == "Type.Pointer") {
-        return true;
-    }
-    if (kind == "Type.Generic" && xmlAttr(typeNode, "name") == "PList") {
-        return true;
-    }
+    if (!(kind == "Type.Reference" || kind == "Type.Pointer")) goto L4;
+    return true;
+    L4:;
+    if (!(kind == "Type.Generic" && xmlAttr(typeNode, "name") == "PList")) goto L6;
+    return true;
+    L6:;
     return false;
 }
-// ./codegen/Codegen.simse:991
-Bool isIndexableContainer(Emitter& self, XmlNode typeNode) {
-    if (xmlIsEmpty(typeNode)) {
-        return false;
-    }
+// cppsrc/codegen/Codegen.simse:991
+Bool isIndexableContainer(Emitter& self, XmlNode* typeNode) {
+    if (!(xmlIsEmpty(typeNode))) goto L2;
+    return false;
+    L2:;
     Str kind = xmlKind(typeNode);
-    if (kind == "Type.Named") {
-        return xmlAttr(typeNode, "name") == "Str";
-    }
-    if (kind == "Type.Generic") {
+    if (!(kind == "Type.Named")) goto L4;
+    return xmlAttr(typeNode, "name") == "Str";
+    L4:;
+    if (!(kind == "Type.Generic")) goto L6;
+    {
         Str name = xmlAttr(typeNode, "name");
         return name == "List" || name == "Array" || name == "Dictionary" || name == "SmallVector";
     }
+    L6:;
     return false;
 }
-// ./codegen/Codegen.simse:1006
-Bool unifyType(Emitter& self, XmlNode pattern, XmlNode actual, List<Str> typeParams) {
-    XmlNode actualPtr = actual;
+// cppsrc/codegen/Codegen.simse:1006
+Bool unifyType(Emitter& self, XmlNode* pattern, XmlNode* actual, List<Str>* typeParams) {
+    XmlNode actualPtr = *(actual);
     Str pk = xmlKind(pattern);
-    if (pk != "Type.Reference" && pk != "Type.Pointer") {
-        while (true) {
-            Str ak0 = xmlKind(actualPtr);
-            if (ak0 == "Type.Reference" || ak0 == "Type.Pointer") {
-                XmlNode inner = xmlChild(actualPtr, "Inner");
-                if (xmlIsEmpty(inner)) {
-                    break;
-                }
-                actualPtr = inner;
-            } else {
-                break;
-            }
+    if (!(pk != "Type.Reference" && pk != "Type.Pointer")) goto L2;
+    L3:;
+    if (!(true)) goto L4;
+    {
+        Str ak0 = xmlKind(&actualPtr);
+        if (ak0 == "Type.Reference" || ak0 == "Type.Pointer") goto L5;
+        goto L6;
+        L5:;
+        {
+            XmlNode inner = xmlChild(&actualPtr, "Inner");
+            if (xmlIsEmpty(&inner)) goto L7;
+            goto L8;
+            L7:;
+            goto L4;
+            L8:;
+            actualPtr = inner;
         }
+        goto L9;
+        L6:;
+        goto L4;
+        L9:;
     }
-    Str ak = xmlKind(actualPtr);
-    if (pk == "Type.IntLit") {
-        return ak == "Type.IntLit" && xmlAttr(actualPtr, "text") == xmlAttr(pattern, "text");
-    }
-    if (pk == "Type.Named") {
-        if (xmlIsTypeParam(xmlAttr(pattern, "name"), typeParams)) {
-            return true;
-        }
-        return ak == "Type.Named" && xmlAttr(actualPtr, "name") == xmlAttr(pattern, "name");
-    }
-    if (pk == "Type.Generic") {
-        if (xmlIsTypeParam(xmlAttr(pattern, "name"), typeParams)) {
-            return true;
-        }
-        if (ak != "Type.Generic") {
-            return false;
-        }
+    goto L3;
+    L4:;
+    L2:;
+    Str ak = xmlKind(&actualPtr);
+    if (!(pk == "Type.IntLit")) goto L11;
+    return ak == "Type.IntLit" && xmlAttr(&actualPtr, "text") == xmlAttr(pattern, "text");
+    L11:;
+    if (!(pk == "Type.Named")) goto L13;
+    if (!(xmlIsTypeParam(xmlAttr(pattern, "name"), typeParams))) goto L15;
+    return true;
+    L15:;
+    return ak == "Type.Named" && xmlAttr(&actualPtr, "name") == xmlAttr(pattern, "name");
+    L13:;
+    if (!(pk == "Type.Generic")) goto L17;
+    {
+        if (xmlIsTypeParam(xmlAttr(pattern, "name"), typeParams)) goto L18;
+        goto L19;
+        L18:;
+        return true;
+        L19:;
+        if (ak != "Type.Generic") goto L20;
+        goto L21;
+        L20:;
+        return false;
+        L21:;
         Str patternName = xmlAttr(pattern, "name");
-        Str actualName = xmlAttr(actualPtr, "name");
-        if (actualName != patternName && !(patternName == "List" && actualName == "PList") && !(patternName == "PList" && actualName == "List")) {
-            return false;
-        }
+        Str actualName = xmlAttr(&actualPtr, "name");
+        if (actualName != patternName && !(patternName == "List" && actualName == "PList") && !(patternName == "PList" && actualName == "List")) goto L22;
+        goto L23;
+        L22:;
+        return false;
+        L23:;
         List<XmlNode> patternArgs = xmlChildren(pattern, "TypeArg");
-        List<XmlNode> actualArgs = xmlChildren(actualPtr, "TypeArg");
-        if (patternArgs.size() != actualArgs.size()) {
-            return false;
-        }
+        List<XmlNode> actualArgs = xmlChildren(&actualPtr, "TypeArg");
+        if (patternArgs.size() != actualArgs.size()) goto L24;
+        goto L25;
+        L24:;
+        return false;
+        L25:;
         Int i = 0;
-        while (i < patternArgs.size()) {
-            if (!unifyType(self, patternArgs[i], actualArgs[i], typeParams)) {
-                return false;
-            }
-            i = i + 1;
-        }
+        L26:;
+        if (!(i < patternArgs.size())) goto L27;
+        if (!unifyType(self, simse_addressOf(patternArgs[i]), simse_addressOf(actualArgs[i]), typeParams)) goto L28;
+        goto L29;
+        L28:;
+        return false;
+        L29:;
+        i = i + 1;
+        goto L26;
+        L27:;
         return true;
     }
-    if (pk == "Type.Reference") {
-        if (ak == "Type.Reference" && !xmlIsEmpty(xmlChild(actualPtr, "Inner")) && !xmlIsEmpty(xmlChild(pattern, "Inner"))) {
-            return unifyType(self, xmlChild(pattern, "Inner"), xmlChild(actualPtr, "Inner"), typeParams);
-        }
-        return false;
-    }
-    if (pk == "Type.Pointer") {
-        if (ak == "Type.Pointer" && !xmlIsEmpty(xmlChild(actualPtr, "Inner")) && !xmlIsEmpty(xmlChild(pattern, "Inner"))) {
-            return unifyType(self, xmlChild(pattern, "Inner"), xmlChild(actualPtr, "Inner"), typeParams);
-        }
-        return false;
-    }
+    L17:;
+    if (!(pk == "Type.Reference")) goto L31;
+    if (!(ak == "Type.Reference" && !xmlIsEmpty(simse_addressOf(xmlChild(&actualPtr, "Inner"))) && !xmlIsEmpty(simse_addressOf(xmlChild(pattern, "Inner"))))) goto L33;
+    return unifyType(self, simse_addressOf(xmlChild(pattern, "Inner")), simse_addressOf(xmlChild(&actualPtr, "Inner")), typeParams);
+    L33:;
+    return false;
+    L31:;
+    if (!(pk == "Type.Pointer")) goto L35;
+    if (!(ak == "Type.Pointer" && !xmlIsEmpty(simse_addressOf(xmlChild(&actualPtr, "Inner"))) && !xmlIsEmpty(simse_addressOf(xmlChild(pattern, "Inner"))))) goto L37;
+    return unifyType(self, simse_addressOf(xmlChild(pattern, "Inner")), simse_addressOf(xmlChild(&actualPtr, "Inner")), typeParams);
+    L37:;
+    return false;
+    L35:;
     return false;
 }
-// ./codegen/Codegen.simse:1078
+// cppsrc/codegen/Codegen.simse:1078
 XmlNode functionReturn(Emitter& self, Str name) {
     Int i = 0;
-    while (i < self.functions.size()) {
+    L1:;
+    if (!(i < self.functions.size())) goto L2;
+    {
         CgFn fn = self.functions[i];
-        if (xmlAttr(fn.decl, "name") == name) {
-            XmlNode ret = xmlChild(fn.decl, "ReturnType");
-            if (!xmlIsEmpty(ret)) {
-                return ret;
-            }
+        if (xmlAttr(simse_addressOf(fn.decl), "name") == name) goto L3;
+        goto L4;
+        L3:;
+        {
+            XmlNode ret = xmlChild(simse_addressOf(fn.decl), "ReturnType");
+            if (!xmlIsEmpty(&ret)) goto L5;
+            goto L6;
+            L5:;
+            return ret;
+            L6:;
         }
+        L4:;
         i = i + 1;
     }
+    goto L1;
+    L2:;
     return xmlEmptyNode();
 }
-// ./codegen/Codegen.simse:1093
-XmlNode memberCallReturn(Emitter& self, XmlNode callee) {
-    XmlNode receiverType = inferType(self, xmlChild(callee, "Receiver"));
-    XmlNode recv = pointee(self, receiverType);
+// cppsrc/codegen/Codegen.simse:1093
+XmlNode memberCallReturn(Emitter& self, XmlNode* callee) {
+    XmlNode receiverType = inferType(self, simse_addressOf(xmlChild(callee, "Receiver")));
+    XmlNode recv = pointee(self, &receiverType);
     Str calleeText = xmlAttr(callee, "name");
     Int i = 0;
-    while (i < self.functions.size()) {
+    L1:;
+    if (!(i < self.functions.size())) goto L2;
+    {
         CgFn fn = self.functions[i];
         i = i + 1;
-        if (xmlAttr(fn.decl, "isNative") == "true" || xmlIsEmpty(fn.receiver)) {
-            continue;
-        }
-        if (xmlAttr(fn.decl, "name") != calleeText) {
-            continue;
-        }
-        XmlNode ret = xmlChild(fn.decl, "ReturnType");
-        if (!xmlIsEmpty(recv) && unifyType(self, fn.receiver, recv, fn.templateParams) && !xmlIsEmpty(ret)) {
-            return ret;
-        }
+        if (xmlAttr(simse_addressOf(fn.decl), "isNative") == "true" || xmlIsEmpty(simse_addressOf(fn.receiver))) goto L3;
+        goto L4;
+        L3:;
+        goto L1;
+        L4:;
+        if (xmlAttr(simse_addressOf(fn.decl), "name") != calleeText) goto L5;
+        goto L6;
+        L5:;
+        goto L1;
+        L6:;
+        XmlNode ret = xmlChild(simse_addressOf(fn.decl), "ReturnType");
+        if (!xmlIsEmpty(&recv) && unifyType(self, simse_addressOf(fn.receiver), &recv, simse_addressOf(fn.templateParams)) && !xmlIsEmpty(&ret)) goto L7;
+        goto L8;
+        L7:;
+        return ret;
+        L8:;
     }
-    if (simse_dict_has(self.nativeExtensions, calleeText)) {
+    goto L1;
+    L2:;
+    if (!(simse_dict_has(self.nativeExtensions, calleeText))) goto L10;
+    {
         List<CgNativeExt> extensions = simse_dict_get(self.nativeExtensions, calleeText).value();
         Int e = 0;
-        while (e < extensions.size()) {
+        L11:;
+        if (!(e < extensions.size())) goto L12;
+        {
             CgNativeExt ext = extensions[e];
-            if (!xmlIsEmpty(recv) && !xmlIsEmpty(ext.receiver) && unifyType(self, ext.receiver, recv, ext.typeParams) && !xmlIsEmpty(ext.returnType)) {
-                return ext.returnType;
-            }
+            if (!xmlIsEmpty(&recv) && !xmlIsEmpty(simse_addressOf(ext.receiver)) && unifyType(self, simse_addressOf(ext.receiver), &recv, simse_addressOf(ext.typeParams)) && !xmlIsEmpty(simse_addressOf(ext.returnType))) goto L13;
+            goto L14;
+            L13:;
+            return ext.returnType;
+            L14:;
             e = e + 1;
         }
+        goto L11;
+        L12:;
     }
-    if (!xmlIsEmpty(recv) && xmlKind(recv) == "Type.Generic") {
-        List<XmlNode> typeArgs = xmlChildren(recv, "TypeArg");
-        if (calleeText == "value" && xmlAttr(recv, "name") == "Opt" && typeArgs.size() > 0) {
-            return typeArgs[0];
-        }
+    L10:;
+    if (!(!xmlIsEmpty(&recv) && xmlKind(&recv) == "Type.Generic")) goto L16;
+    {
+        List<XmlNode> typeArgs = xmlChildren(&recv, "TypeArg");
+        if (calleeText == "value" && xmlAttr(&recv, "name") == "Opt" && typeArgs.size() > 0) goto L17;
+        goto L18;
+        L17:;
+        return typeArgs[0];
+        L18:;
     }
-    if (!xmlIsEmpty(recv) && (calleeText == "size" || calleeText == "count")) {
-        Str recvName = xmlAttr(recv, "name");
-        if (recvName == "List" || recvName == "Str" || recvName == "Array" || recvName == "Dictionary" || recvName == "SmallVector") {
-            return namedType(self, "Int");
-        }
+    L16:;
+    if (!(!xmlIsEmpty(&recv) && (calleeText == "size" || calleeText == "count"))) goto L20;
+    {
+        Str recvName = xmlAttr(&recv, "name");
+        if (recvName == "List" || recvName == "Str" || recvName == "Array" || recvName == "Dictionary" || recvName == "SmallVector") goto L21;
+        goto L22;
+        L21:;
+        return namedType(self, "Int");
+        L22:;
     }
-    if (calleeText == "isOk" || calleeText == "hasValue") {
-        return namedType(self, "Bool");
-    }
+    L20:;
+    if (!(calleeText == "isOk" || calleeText == "hasValue")) goto L24;
+    return namedType(self, "Bool");
+    L24:;
     return xmlEmptyNode();
 }
-// ./codegen/Codegen.simse:1145
-XmlNode inferType(Emitter& self, XmlNode e) {
+// cppsrc/codegen/Codegen.simse:1145
+XmlNode inferType(Emitter& self, XmlNode* e) {
     Str kind = xmlKind(e);
-    if (kind == "Expr.IntLit") {
-        return namedType(self, "Int");
-    }
-    if (kind == "Expr.FloatLit") {
-        return namedType(self, "Float64");
-    }
-    if (kind == "Expr.StrLit") {
-        return namedType(self, "Str");
-    }
-    if (kind == "Expr.CharLit") {
-        return namedType(self, "Char");
-    }
-    if (kind == "Expr.BoolLit") {
-        return namedType(self, "Bool");
-    }
-    if (kind == "Expr.NullLit") {
-        return xmlEmptyNode();
-    }
-    if (kind == "Expr.Name") {
+    if (!(kind == "Expr.IntLit")) goto L2;
+    return namedType(self, "Int");
+    L2:;
+    if (!(kind == "Expr.FloatLit")) goto L4;
+    return namedType(self, "Float64");
+    L4:;
+    if (!(kind == "Expr.StrLit")) goto L6;
+    return namedType(self, "Str");
+    L6:;
+    if (!(kind == "Expr.CharLit")) goto L8;
+    return namedType(self, "Char");
+    L8:;
+    if (!(kind == "Expr.BoolLit")) goto L10;
+    return namedType(self, "Bool");
+    L10:;
+    if (!(kind == "Expr.NullLit")) goto L12;
+    return xmlEmptyNode();
+    L12:;
+    if (!(kind == "Expr.Name")) goto L14;
+    {
         Str name = xmlAttr(e, "name");
-        if (name == "this") {
-            return self.selfType;
-        }
-        if (simse_dict_has(self.localTypes, name)) {
-            return simse_dict_get(self.localTypes, name).value();
-        }
-        if (simse_dict_has(self.enumNames, name)) {
-            return namedType(self, name);
-        }
+        if (name == "this") goto L15;
+        goto L16;
+        L15:;
+        return self.selfType;
+        L16:;
+        if (simse_dict_has(self.localTypes, name)) goto L17;
+        goto L18;
+        L17:;
+        return simse_dict_get(self.localTypes, name).value();
+        L18:;
+        if (simse_dict_has(self.enumNames, name)) goto L19;
+        goto L20;
+        L19:;
+        return namedType(self, name);
+        L20:;
         return xmlEmptyNode();
     }
-    if (kind == "Expr.GenericName") {
-        return genericType(self, xmlAttr(e, "name"), xmlChildren(e, "TypeArg"));
-    }
-    if (kind == "Expr.Member") {
+    L14:;
+    if (!(kind == "Expr.GenericName")) goto L22;
+    return genericTypeExpr(self, xmlAttr(e, "name"), simse_addressOf(xmlChildren(e, "TypeArg")));
+    L22:;
+    if (!(kind == "Expr.Member")) goto L24;
+    {
         XmlNode lhs = xmlChild(e, "Receiver");
-        if (xmlKind(lhs) == "Expr.Name" && simse_dict_has(self.enumNames, xmlAttr(lhs, "name"))) {
-            return namedType(self, xmlAttr(lhs, "name"));
-        }
-        XmlNode baseType = inferType(self, lhs);
-        XmlNode base = pointee(self, baseType);
-        if (xmlIsEmpty(base)) {
-            return xmlEmptyNode();
-        }
+        if (xmlKind(&lhs) == "Expr.Name" && simse_dict_has(self.enumNames, xmlAttr(&lhs, "name"))) goto L25;
+        goto L26;
+        L25:;
+        return namedType(self, xmlAttr(&lhs, "name"));
+        L26:;
+        XmlNode baseType = inferType(self, &lhs);
+        XmlNode base = pointee(self, &baseType);
+        if (xmlIsEmpty(&base)) goto L27;
+        goto L28;
+        L27:;
+        return xmlEmptyNode();
+        L28:;
         Str memberText = xmlAttr(e, "name");
-        if (xmlKind(base) == "Type.Generic" && xmlAttr(base, "name") == "Res") {
-            List<XmlNode> typeArgs = xmlChildren(base, "TypeArg");
-            if (memberText == "value" && typeArgs.size() > 0) {
-                return typeArgs[0];
-            }
-            if (memberText == "error") {
-                return namedType(self, "Str");
-            }
+        if (xmlKind(&base) == "Type.Generic" && xmlAttr(&base, "name") == "Res") goto L29;
+        goto L30;
+        L29:;
+        {
+            List<XmlNode> typeArgs = xmlChildren(&base, "TypeArg");
+            if (memberText == "value" && typeArgs.size() > 0) goto L31;
+            goto L32;
+            L31:;
+            return typeArgs[0];
+            L32:;
+            if (memberText == "error") goto L33;
+            goto L34;
+            L33:;
+            return namedType(self, "Str");
+            L34:;
         }
-        Str baseKind = xmlKind(base);
-        if (baseKind == "Type.Named" || baseKind == "Type.Generic") {
-            Str baseName = xmlAttr(base, "name");
-            if (simse_dict_has(self.types, baseName)) {
+        L30:;
+        Str baseKind = xmlKind(&base);
+        if (baseKind == "Type.Named" || baseKind == "Type.Generic") goto L35;
+        goto L36;
+        L35:;
+        {
+            Str baseName = xmlAttr(&base, "name");
+            if (simse_dict_has(self.types, baseName)) goto L37;
+            goto L38;
+            L37:;
+            {
                 XmlNode decl = simse_dict_get(self.types, baseName).value();
-                if (decl.name == "DataClass") {
-                    List<XmlNode> fields = xmlChildren(decl, "Field");
+                if (decl.name == "DataClass") goto L39;
+                goto L40;
+                L39:;
+                {
+                    List<XmlNode> fields = xmlChildren(&decl, "Field");
                     Int i = 0;
-                    while (i < fields.size()) {
-                        if (xmlAttr(fields[i], "name") == memberText) {
-                            return xmlChild(fields[i], "Type");
-                        }
-                        i = i + 1;
-                    }
+                    L41:;
+                    if (!(i < fields.size())) goto L42;
+                    if (xmlAttr(simse_addressOf(fields[i]), "name") == memberText) goto L43;
+                    goto L44;
+                    L43:;
+                    return xmlChild(simse_addressOf(fields[i]), "Type");
+                    L44:;
+                    i = i + 1;
+                    goto L41;
+                    L42:;
                 }
+                L40:;
             }
+            L38:;
         }
+        L36:;
         return xmlEmptyNode();
     }
-    if (kind == "Expr.Call") {
+    L24:;
+    if (!(kind == "Expr.Call")) goto L46;
+    {
         XmlNode callee = xmlChild(e, "Callee");
-        Str calleeKind = xmlKind(callee);
-        if (calleeKind == "Expr.GenericName") {
-            Str name = xmlAttr(callee, "name");
-            if (simse_dict_has(self.types, name) || cgIsRtlTypeName(name)) {
-                return genericType(self, name, xmlChildren(callee, "TypeArg"));
-            }
+        Str calleeKind = xmlKind(&callee);
+        if (calleeKind == "Expr.GenericName") goto L47;
+        goto L48;
+        L47:;
+        {
+            Str name = xmlAttr(&callee, "name");
+            if (simse_dict_has(self.types, name) || cgIsRtlTypeName(name)) goto L49;
+            goto L50;
+            L49:;
+            return genericTypeExpr(self, name, simse_addressOf(xmlChildren(&callee, "TypeArg")));
+            L50:;
             return functionReturn(self, name);
         }
-        if (calleeKind == "Expr.Name") {
-            Str name = xmlAttr(callee, "name");
-            if (simse_dict_has(self.types, name) || cgIsRtlTypeName(name)) {
-                return namedType(self, name);
-            }
+        L48:;
+        if (calleeKind == "Expr.Name") goto L51;
+        goto L52;
+        L51:;
+        {
+            Str name = xmlAttr(&callee, "name");
+            if (simse_dict_has(self.types, name) || cgIsRtlTypeName(name)) goto L53;
+            goto L54;
+            L53:;
+            return namedType(self, name);
+            L54:;
             return functionReturn(self, name);
         }
-        if (calleeKind == "Expr.Member") {
-            return memberCallReturn(self, callee);
-        }
+        L52:;
+        if (calleeKind == "Expr.Member") goto L55;
+        goto L56;
+        L55:;
+        return memberCallReturn(self, &callee);
+        L56:;
         return xmlEmptyNode();
     }
-    if (kind == "Expr.Index") {
-        XmlNode baseType = inferType(self, xmlChild(e, "Receiver"));
-        XmlNode base = pointee(self, baseType);
-        if (xmlIsEmpty(base)) {
-            return xmlEmptyNode();
-        }
-        if (xmlKind(base) == "Type.Named" && xmlAttr(base, "name") == "Str") {
-            return namedType(self, "Char");
-        }
-        if (xmlKind(base) != "Type.Generic") {
-            return xmlEmptyNode();
-        }
-        List<XmlNode> typeArgs = xmlChildren(base, "TypeArg");
-        if (typeArgs.size() == 0) {
-            return xmlEmptyNode();
-        }
-        Str baseName = xmlAttr(base, "name");
-        if (baseName == "SmallVector" && typeArgs.size() == 2) {
-            return typeArgs[1];
-        }
-        if (baseName == "Dictionary" && typeArgs.size() == 2) {
-            return typeArgs[1];
-        }
+    L46:;
+    if (!(kind == "Expr.Index")) goto L58;
+    {
+        XmlNode baseType = inferType(self, simse_addressOf(xmlChild(e, "Receiver")));
+        XmlNode base = pointee(self, &baseType);
+        if (xmlIsEmpty(&base)) goto L59;
+        goto L60;
+        L59:;
+        return xmlEmptyNode();
+        L60:;
+        if (xmlKind(&base) == "Type.Named" && xmlAttr(&base, "name") == "Str") goto L61;
+        goto L62;
+        L61:;
+        return namedType(self, "Char");
+        L62:;
+        if (xmlKind(&base) != "Type.Generic") goto L63;
+        goto L64;
+        L63:;
+        return xmlEmptyNode();
+        L64:;
+        List<XmlNode> typeArgs = xmlChildren(&base, "TypeArg");
+        if (typeArgs.size() == 0) goto L65;
+        goto L66;
+        L65:;
+        return xmlEmptyNode();
+        L66:;
+        Str baseName = xmlAttr(&base, "name");
+        if (baseName == "SmallVector" && typeArgs.size() == 2) goto L67;
+        goto L68;
+        L67:;
+        return typeArgs[1];
+        L68:;
+        if (baseName == "Dictionary" && typeArgs.size() == 2) goto L69;
+        goto L70;
+        L69:;
+        return typeArgs[1];
+        L70:;
         return typeArgs[0];
     }
-    if (kind == "Expr.Ref") {
+    L58:;
+    if (!(kind == "Expr.Ref")) goto L72;
+    {
         XmlNode node = XmlNode("Type", List<Attribute>(), makeList<XmlNode>());
         simse_list_append(node.attributes, Attribute("kind", "Type.Reference"));
-        simse_list_append((*node.Children), renameRole(self, inferType(self, xmlChild(e, "Operand")), "Inner"));
+        simse_list_append((*node.Children), renameRole(self, simse_addressOf(inferType(self, simse_addressOf(xmlChild(e, "Operand")))), "Inner"));
         return node;
     }
-    if (kind == "Expr.Deref") {
+    L72:;
+    if (!(kind == "Expr.Deref")) goto L74;
+    {
         XmlNode node = XmlNode("Type", List<Attribute>(), makeList<XmlNode>());
         simse_list_append(node.attributes, Attribute("kind", "Type.Pointer"));
-        simse_list_append((*node.Children), renameRole(self, inferType(self, xmlChild(e, "Operand")), "Inner"));
+        simse_list_append((*node.Children), renameRole(self, simse_addressOf(inferType(self, simse_addressOf(xmlChild(e, "Operand")))), "Inner"));
         return node;
     }
-    if (kind == "Expr.Copy" || kind == "Expr.Unary") {
-        return inferType(self, xmlChild(e, "Operand"));
-    }
-    if (kind == "Expr.Binary") {
+    L74:;
+    if (!(kind == "Expr.Copy" || kind == "Expr.Unary")) goto L76;
+    return inferType(self, simse_addressOf(xmlChild(e, "Operand")));
+    L76:;
+    if (!(kind == "Expr.Binary")) goto L78;
+    {
         Str op = xmlAttr(e, "op");
-        if (op == "==" || op == "!=" || op == "<" || op == ">" || op == "<=" || op == ">=" || op == "&&" || op == "||") {
-            return namedType(self, "Bool");
-        }
-        return inferType(self, xmlChild(e, "Lhs"));
+        if (op == "==" || op == "!=" || op == "<" || op == ">" || op == "<=" || op == ">=" || op == "&&" || op == "||") goto L79;
+        goto L80;
+        L79:;
+        return namedType(self, "Bool");
+        L80:;
+        return inferType(self, simse_addressOf(xmlChild(e, "Lhs")));
     }
-    if (kind == "Expr.Lambda") {
+    L78:;
+    if (!(kind == "Expr.Lambda")) goto L82;
+    {
         XmlNode fnType = XmlNode("Type", List<Attribute>(), makeList<XmlNode>());
         simse_list_append(fnType.attributes, Attribute("kind", "Type.Function"));
         List<XmlNode> paramTypes = xmlChildren(e, "ParamType");
         Int i = 0;
-        while (i < paramTypes.size()) {
-            simse_list_append((*fnType.Children), paramTypes[i]);
-            i = i + 1;
-        }
+        L83:;
+        if (!(i < paramTypes.size())) goto L84;
+        simse_list_append((*fnType.Children), paramTypes[i]);
+        i = i + 1;
+        goto L83;
+        L84:;
         return fnType;
     }
+    L82:;
     return xmlEmptyNode();
 }
-// ./codegen/Codegen.simse:1305
-XmlNode renameRole(Emitter& self, XmlNode child, Str role) {
-    XmlNode renamed = child;
+// cppsrc/codegen/Codegen.simse:1305
+XmlNode renameRole(Emitter& self, XmlNode* child, Str role) {
+    XmlNode renamed = *(child);
     renamed.name = role;
     return renamed;
 }
-// ./codegen/Codegen.simse:1312
-Str receiverArg(Emitter& self, XmlNode pattern, XmlNode recv) {
-    if (isHandleType(self, pattern)) {
-        return expr(self, recv, 9, xmlEmptyNode());
-    }
+// cppsrc/codegen/Codegen.simse:1312
+Str receiverArg(Emitter& self, XmlNode* pattern, XmlNode* recv) {
+    if (!(isHandleType(self, pattern))) goto L2;
+    return expr(self, recv, 9, simse_addressOf(xmlEmptyNode()));
+    L2:;
     XmlNode recvType = inferType(self, recv);
-    if (isHandleType(self, recvType)) {
-        return "(*" + expr(self, recv, 9, xmlEmptyNode()) + ")";
-    }
-    return expr(self, recv, 9, xmlEmptyNode());
+    if (!(isHandleType(self, &recvType))) goto L4;
+    return "(*" + expr(self, recv, 9, simse_addressOf(xmlEmptyNode())) + ")";
+    L4:;
+    return expr(self, recv, 9, simse_addressOf(xmlEmptyNode()));
 }
-// ./codegen/Codegen.simse:1324
-Int findExtensionFn(Emitter& self, Str name, XmlNode recvExpr) {
+// cppsrc/codegen/Codegen.simse:1324
+Int findExtensionFn(Emitter& self, Str name, XmlNode* recvExpr) {
     XmlNode recvType = inferType(self, recvExpr);
-    XmlNode recv = pointee(self, recvType);
-    if (xmlIsEmpty(recv)) {
-        return -1;
-    }
+    XmlNode recv = pointee(self, &recvType);
+    if (!(xmlIsEmpty(&recv))) goto L2;
+    return -1;
+    L2:;
     Int i = 0;
-    while (i < self.functions.size()) {
+    L3:;
+    if (!(i < self.functions.size())) goto L4;
+    {
         CgFn fn = self.functions[i];
-        if (xmlAttr(fn.decl, "isNative") == "true" || xmlIsEmpty(fn.receiver)) {
-            i = i + 1;
-            continue;
-        }
-        if (xmlAttr(fn.decl, "name") == name && unifyType(self, fn.receiver, recv, fn.templateParams)) {
-            return i;
-        }
+        if (xmlAttr(simse_addressOf(fn.decl), "isNative") == "true" || xmlIsEmpty(simse_addressOf(fn.receiver))) goto L5;
+        goto L6;
+        L5:;
+        i = i + 1;
+        goto L3;
+        L6:;
+        if (xmlAttr(simse_addressOf(fn.decl), "name") == name && unifyType(self, simse_addressOf(fn.receiver), &recv, simse_addressOf(fn.templateParams))) goto L7;
+        goto L8;
+        L7:;
+        return i;
+        L8:;
         i = i + 1;
     }
+    goto L3;
+    L4:;
     return -1;
 }
-// ./codegen/Codegen.simse:1346
-Int findNativeExt(Emitter& self, Str name, XmlNode recvExpr) {
-    if (!simse_dict_has(self.nativeExtensions, name)) {
-        return -1;
-    }
+// cppsrc/codegen/Codegen.simse:1346
+Int findNativeExt(Emitter& self, Str name, XmlNode* recvExpr) {
+    if (!(!simse_dict_has(self.nativeExtensions, name))) goto L2;
+    return -1;
+    L2:;
     XmlNode recvType = inferType(self, recvExpr);
-    XmlNode recv = pointee(self, recvType);
-    if (xmlIsEmpty(recv)) {
-        return -1;
-    }
+    XmlNode recv = pointee(self, &recvType);
+    if (!(xmlIsEmpty(&recv))) goto L4;
+    return -1;
+    L4:;
     List<CgNativeExt> extensions = simse_dict_get(self.nativeExtensions, name).value();
     Int i = 0;
-    while (i < extensions.size()) {
+    L5:;
+    if (!(i < extensions.size())) goto L6;
+    {
         CgNativeExt ext = extensions[i];
-        if (!xmlIsEmpty(ext.receiver) && unifyType(self, ext.receiver, recv, ext.typeParams)) {
-            return i;
-        }
+        if (!xmlIsEmpty(simse_addressOf(ext.receiver)) && unifyType(self, simse_addressOf(ext.receiver), &recv, simse_addressOf(ext.typeParams))) goto L7;
+        goto L8;
+        L7:;
+        return i;
+        L8:;
         i = i + 1;
     }
+    goto L5;
+    L6:;
     return -1;
 }
-// ./codegen/Codegen.simse:1367
-Str memberAccess(Emitter& self, XmlNode base, Str name) {
+// cppsrc/codegen/Codegen.simse:1367
+Str memberAccess(Emitter& self, XmlNode* base, Str name) {
     Bool arrow = false;
     XmlNode baseType = inferType(self, base);
-    if (!xmlIsEmpty(baseType)) {
-        arrow = isHandleType(self, baseType);
-    } else {
-        if (xmlKind(base) == "Expr.Name") {
-            Str baseName = xmlAttr(base, "name");
-            if (baseName == "this") {
-                arrow = self.selfKind != NameKind::Value;
-            } else {
-                if (simse_dict_has(self.nameKinds, baseName) && simse_dict_get(self.nameKinds, baseName).value() == NameKind::Shared) {
-                    arrow = true;
-                }
-            }
-        }
+    if (!(!xmlIsEmpty(&baseType))) goto L2;
+    arrow = isHandleType(self, &baseType);
+    goto L3;
+    L2:;
+    if (!(xmlKind(base) == "Expr.Name")) goto L5;
+    {
+        Str baseName = xmlAttr(base, "name");
+        if (baseName == "this") goto L6;
+        goto L7;
+        L6:;
+        arrow = self.selfKind != NameKind::Value;
+        goto L8;
+        L7:;
+        if (simse_dict_has(self.nameKinds, baseName) && simse_dict_get(self.nameKinds, baseName).value() == NameKind::Shared) goto L9;
+        goto L10;
+        L9:;
+        arrow = true;
+        L10:;
+        L8:;
     }
+    L5:;
+    L3:;
     Str field = name;
-    XmlNode recv = pointee(self, baseType);
-    if (!xmlIsEmpty(recv) && xmlKind(recv) == "Type.Generic" && xmlAttr(recv, "name") == "Res") {
-        if (name == "value") {
-            field = "Value";
-        } else {
-            if (name == "error") {
-                field = "Error";
-            }
-        }
-    }
+    XmlNode recv = pointee(self, &baseType);
+    if (!(!xmlIsEmpty(&recv) && xmlKind(&recv) == "Type.Generic" && xmlAttr(&recv, "name") == "Res")) goto L12;
+    if (!(name == "value")) goto L14;
+    field = "Value";
+    goto L15;
+    L14:;
+    if (!(name == "error")) goto L17;
+    field = "Error";
+    L17:;
+    L15:;
+    L12:;
     Str op = ".";
-    if (arrow) {
-        op = "->";
-    }
-    return expr(self, base, 9, xmlEmptyNode()) + op + field;
+    if (!(arrow)) goto L19;
+    op = "->";
+    L19:;
+    return expr(self, base, 9, simse_addressOf(xmlEmptyNode())) + op + field;
 }
-// ./codegen/Codegen.simse:1396
-Str nullTo(Emitter& self, XmlNode expected) {
-    if (!xmlIsEmpty(expected) && xmlKind(expected) == "Type.Generic" && xmlAttr(expected, "name") == "Opt") {
-        return "Opt<" + typeArgsString(self, "Opt", xmlChildren(expected, "TypeArg")) + ">()";
-    }
+// cppsrc/codegen/Codegen.simse:1396
+Str nullTo(Emitter& self, XmlNode* expected) {
+    if (!(!xmlIsEmpty(expected) && xmlKind(expected) == "Type.Generic" && xmlAttr(expected, "name") == "Opt")) goto L2;
+    return "Opt<" + typeArgsString(self, "Opt", simse_addressOf(xmlChildren(expected, "TypeArg"))) + ">()";
+    L2:;
     return "nullptr";
 }
-// ./codegen/Codegen.simse:1403
-XmlNode resolveAlias(Emitter& self, XmlNode typeNode) {
-    XmlNode current = typeNode;
+// cppsrc/codegen/Codegen.simse:1403
+XmlNode resolveAlias(Emitter& self, XmlNode* typeNode) {
+    XmlNode current = *(typeNode);
     Int guard = 0;
-    while (!xmlIsEmpty(current) && xmlKind(current) == "Type.Named") {
+    L1:;
+    if (!(!xmlIsEmpty(&current) && xmlKind(&current) == "Type.Named")) goto L2;
+    {
         guard = guard + 1;
-        if (guard >= 100) {
-            break;
-        }
-        Str name = xmlAttr(current, "name");
-        if (!simse_dict_has(self.types, name)) {
-            break;
-        }
+        if (guard >= 100) goto L3;
+        goto L4;
+        L3:;
+        goto L2;
+        L4:;
+        Str name = xmlAttr(&current, "name");
+        if (!simse_dict_has(self.types, name)) goto L5;
+        goto L6;
+        L5:;
+        goto L2;
+        L6:;
         XmlNode decl = simse_dict_get(self.types, name).value();
-        if (decl.name != "TypeAlias") {
-            break;
-        }
-        XmlNode target = xmlChild(decl, "TargetType");
-        if (xmlIsEmpty(target)) {
-            break;
-        }
+        if (decl.name != "TypeAlias") goto L7;
+        goto L8;
+        L7:;
+        goto L2;
+        L8:;
+        XmlNode target = xmlChild(&decl, "TargetType");
+        if (xmlIsEmpty(&target)) goto L9;
+        goto L10;
+        L9:;
+        goto L2;
+        L10:;
         current = target;
     }
+    goto L1;
+    L2:;
     return current;
 }
-// ./codegen/Codegen.simse:1428
-XmlNode expectedCallable(Emitter& self, XmlNode expected) {
+// cppsrc/codegen/Codegen.simse:1428
+XmlNode expectedCallable(Emitter& self, XmlNode* expected) {
     XmlNode resolved = resolveAlias(self, expected);
-    if (!xmlIsEmpty(resolved) && xmlKind(resolved) == "Type.Function") {
-        return resolved;
-    }
+    if (!(!xmlIsEmpty(&resolved) && xmlKind(&resolved) == "Type.Function")) goto L2;
+    return resolved;
+    L2:;
     return xmlEmptyNode();
 }
-// ./codegen/Codegen.simse:1436
+// cppsrc/codegen/Codegen.simse:1436
 XmlNode findFunction(Emitter& self, Str name, Int argCount) {
     Int i = 0;
-    while (i < self.functions.size()) {
+    L1:;
+    if (!(i < self.functions.size())) goto L2;
+    {
         CgFn fn = self.functions[i];
         i = i + 1;
-        if (xmlAttr(fn.decl, "isNative") == "true" || xmlAttr(fn.decl, "name") != name) {
-            continue;
-        }
-        if (xmlCount(fn.decl, "Param") == argCount) {
-            return fn.decl;
-        }
+        if (xmlAttr(simse_addressOf(fn.decl), "isNative") == "true" || xmlAttr(simse_addressOf(fn.decl), "name") != name) goto L3;
+        goto L4;
+        L3:;
+        goto L1;
+        L4:;
+        if (xmlCount(simse_addressOf(fn.decl), "Param") == argCount) goto L5;
+        goto L6;
+        L5:;
+        return fn.decl;
+        L6:;
     }
+    goto L1;
+    L2:;
     return xmlEmptyNode();
 }
-// ./codegen/Codegen.simse:1451
-Bool isUnitType(Emitter& self, XmlNode typeNode) {
-    if (xmlIsEmpty(typeNode)) {
-        return true;
-    }
+// cppsrc/codegen/Codegen.simse:1451
+Bool isUnitType(Emitter& self, XmlNode* typeNode) {
+    if (!(xmlIsEmpty(typeNode))) goto L2;
+    return true;
+    L2:;
     return xmlKind(typeNode) == "Type.Named" && xmlAttr(typeNode, "name") == "Unit";
 }
-// ./codegen/Codegen.simse:1458
-XmlNode inferLambdaReturn(Emitter& self, XmlNode e) {
-    List<XmlNode> body = xmlChildren(xmlChild(e, "Body"), "Stmt");
-    if (body.size() == 1 && xmlKind(body[0]) == "Stmt.ExprStmt" && !xmlIsEmpty(xmlChild(body[0], "Expr"))) {
-        return inferType(self, xmlChild(body[0], "Expr"));
-    }
+// cppsrc/codegen/Codegen.simse:1458
+XmlNode inferLambdaReturn(Emitter& self, XmlNode* e) {
+    List<XmlNode> body = xmlChildren(simse_addressOf(xmlChild(e, "Body")), "Stmt");
+    if (!(body.size() == 1 && xmlKind(simse_addressOf(body[0])) == "Stmt.ExprStmt" && !xmlIsEmpty(simse_addressOf(xmlChild(simse_addressOf(body[0]), "Expr"))))) goto L2;
+    return inferType(self, simse_addressOf(xmlChild(simse_addressOf(body[0]), "Expr")));
+    L2:;
     Int i = 0;
-    while (i < body.size()) {
-        if (xmlKind(body[i]) == "Stmt.Return" && !xmlIsEmpty(xmlChild(body[i], "Value"))) {
-            return inferType(self, xmlChild(body[i], "Value"));
-        }
-        i = i + 1;
-    }
+    L3:;
+    if (!(i < body.size())) goto L4;
+    if (!(xmlKind(simse_addressOf(body[i])) == "Stmt.Return" && !xmlIsEmpty(simse_addressOf(xmlChild(simse_addressOf(body[i]), "Value"))))) goto L6;
+    return inferType(self, simse_addressOf(xmlChild(simse_addressOf(body[i]), "Value")));
+    L6:;
+    i = i + 1;
+    goto L3;
+    L4:;
     return xmlEmptyNode();
 }
-// ./codegen/Codegen.simse:1474
-Str lambda(Emitter& self, XmlNode e, XmlNode expected) {
+// cppsrc/codegen/Codegen.simse:1474
+Str lambda(Emitter& self, XmlNode* e, XmlNode* expected) {
     XmlNode callable = expectedCallable(self, expected);
     Dictionary<Str, NameKind> savedKinds = self.nameKinds;
     Dictionary<Str, XmlNode> savedTypes = self.localTypes;
@@ -1835,360 +2343,532 @@ Str lambda(Emitter& self, XmlNode e, XmlNode expected) {
     List<XmlNode> typeNodes = xmlChildren(e, "ParamType");
     List<Str> params = List<Str>();
     Int i = 0;
-    while (i < names.size()) {
+    L1:;
+    if (!(i < names.size())) goto L2;
+    {
         XmlNode paramType = xmlEmptyNode();
-        if (typeNodes.size() == names.size()) {
-            paramType = typeNodes[i];
+        if (typeNodes.size() == names.size()) goto L3;
+        goto L4;
+        L3:;
+        paramType = typeNodes[i];
+        L4:;
+        if (xmlIsEmpty(&paramType) && !xmlIsEmpty(&callable)) goto L5;
+        goto L6;
+        L5:;
+        {
+            List<XmlNode> callableParams = xmlChildren(&callable, "ParamType");
+            if (i < callableParams.size()) goto L7;
+            goto L8;
+            L7:;
+            paramType = callableParams[i];
+            L8:;
         }
-        if (xmlIsEmpty(paramType) && !xmlIsEmpty(callable)) {
-            List<XmlNode> callableParams = xmlChildren(callable, "ParamType");
-            if (i < callableParams.size()) {
-                paramType = callableParams[i];
-            }
-        }
-        if (xmlIsEmpty(paramType)) {
-            self.nameKinds = savedKinds;
-            self.localTypes = savedTypes;
-            fail(self, e, "unsupported: lambda parameter '" + names[i] + "' has no type and no expected callable type");
-            return "/*unsupported*/";
-        }
-        simse_list_append(params, type(self, paramType) + " " + names[i]);
-        simse_dict_insert(self.nameKinds, names[i], kindOf(self, paramType));
+        L6:;
+        if (xmlIsEmpty(&paramType)) goto L9;
+        goto L10;
+        L9:;
+        self.nameKinds = savedKinds;
+        self.localTypes = savedTypes;
+        fail(self, e, "unsupported: lambda parameter '" + names[i] + "' has no type and no expected callable type");
+        return "/*unsupported*/";
+        L10:;
+        simse_list_append(params, type(self, &paramType) + " " + names[i]);
+        simse_dict_insert(self.nameKinds, names[i], kindOf(self, &paramType));
         simse_dict_insert(self.localTypes, names[i], paramType);
-        if (self.failed) {
-            self.nameKinds = savedKinds;
-            self.localTypes = savedTypes;
-            return "/*unsupported*/";
-        }
-        i = i + 1;
-    }
-    XmlNode returnType = xmlEmptyNode();
-    if (!xmlIsEmpty(callable)) {
-        returnType = xmlChild(callable, "ReturnType");
-    }
-    if (xmlIsEmpty(returnType)) {
-        returnType = inferLambdaReturn(self, e);
-    }
-    Bool unitReturn = isUnitType(self, returnType);
-    Str head = "[=](" + cgJoin(params, ", ") + ")";
-    if (!unitReturn) {
-        head = head + " -> " + type(self, returnType);
-    }
-    if (self.failed) {
+        if (self.failed) goto L11;
+        goto L12;
+        L11:;
         self.nameKinds = savedKinds;
         self.localTypes = savedTypes;
         return "/*unsupported*/";
+        L12:;
+        i = i + 1;
     }
+    goto L1;
+    L2:;
+    XmlNode returnType = xmlEmptyNode();
+    if (!(!xmlIsEmpty(&callable))) goto L14;
+    returnType = xmlChild(&callable, "ReturnType");
+    L14:;
+    if (!(xmlIsEmpty(&returnType))) goto L16;
+    returnType = inferLambdaReturn(self, e);
+    L16:;
+    Bool unitReturn = isUnitType(self, &returnType);
+    Str head = "[=](" + cgJoin(&params, ", ") + ")";
+    if (!(!unitReturn)) goto L18;
+    head = head + " -> " + type(self, &returnType);
+    L18:;
+    if (!(self.failed)) goto L20;
+    self.nameKinds = savedKinds;
+    self.localTypes = savedTypes;
+    return "/*unsupported*/";
+    L20:;
     Str body = "";
-    List<XmlNode> bodyStmts = xmlChildren(xmlChild(e, "Body"), "Stmt");
+    List<XmlNode> bodyStmts = xmlChildren(simse_addressOf(xmlChild(e, "Body")), "Stmt");
     Bool singleExpression = false;
-    if (bodyStmts.size() == 1 && xmlKind(bodyStmts[0]) == "Stmt.ExprStmt" && !xmlIsEmpty(xmlChild(bodyStmts[0], "Expr"))) {
-        singleExpression = true;
-    }
-    if (singleExpression && !unitReturn) {
-        body = "return " + expr(self, xmlChild(bodyStmts[0], "Expr"), 0, returnType) + ";";
-    } else {
+    if (!(bodyStmts.size() == 1 && xmlKind(simse_addressOf(bodyStmts[0])) == "Stmt.ExprStmt" && !xmlIsEmpty(simse_addressOf(xmlChild(simse_addressOf(bodyStmts[0]), "Expr"))))) goto L22;
+    singleExpression = true;
+    L22:;
+    if (!(singleExpression && !unitReturn)) goto L24;
+    body = "return " + expr(self, simse_addressOf(xmlChild(simse_addressOf(bodyStmts[0]), "Expr")), 0, &returnType) + ";";
+    goto L25;
+    L24:;
+    {
         Str savedOut = self.out;
         self.out = "";
-        emitStmts(self, bodyStmts, 1);
+        emitStmts(self, simse_addressOf(linSimplifyBody(linLowerBody(bodyStmts))), 1);
         body = self.out;
         self.out = savedOut;
     }
+    L25:;
     self.nameKinds = savedKinds;
     self.localTypes = savedTypes;
-    if (self.failed) {
-        return "/*unsupported*/";
-    }
-    if (simse_str_find(body, "\n") == -1) {
-        return head + " { " + body + " }";
-    }
+    if (!(self.failed)) goto L27;
+    return "/*unsupported*/";
+    L27:;
+    if (!(simse_str_find(body, "\n") == -1)) goto L29;
+    return head + " { " + body + " }";
+    L29:;
     return head + " {\n" + body + "}";
 }
-// ./codegen/Codegen.simse:1560
-Str exprInner(Emitter& self, XmlNode e, XmlNode expected) {
+// cppsrc/codegen/Codegen.simse:1560
+Str exprInner(Emitter& self, XmlNode* e, XmlNode* expected) {
     Str kind = xmlKind(e);
-    if (kind == "Expr.IntLit" || kind == "Expr.FloatLit" || kind == "Expr.StrLit" || kind == "Expr.CharLit") {
-        return xmlAttr(e, "text");
-    }
-    if (kind == "Expr.BoolLit") {
-        return xmlAttr(e, "value");
-    }
-    if (kind == "Expr.NullLit") {
-        return nullTo(self, expected);
-    }
-    if (kind == "Expr.Name") {
-        if (xmlAttr(e, "name") == "this") {
-            return "self";
-        }
-        return xmlAttr(e, "name");
-    }
-    if (kind == "Expr.GenericName") {
-        fail(self, e, "unsupported: generic-qualified expression '" + xmlAttr(e, "name") + "<...>'");
-        return "/*unsupported*/";
-    }
-    if (kind == "Expr.Member") {
+    if (!(kind == "Expr.IntLit" || kind == "Expr.FloatLit" || kind == "Expr.StrLit" || kind == "Expr.CharLit")) goto L2;
+    return xmlAttr(e, "text");
+    L2:;
+    if (!(kind == "Expr.BoolLit")) goto L4;
+    return xmlAttr(e, "value");
+    L4:;
+    if (!(kind == "Expr.NullLit")) goto L6;
+    return nullTo(self, expected);
+    L6:;
+    if (!(kind == "Expr.Name")) goto L8;
+    if (!(xmlAttr(e, "name") == "this")) goto L10;
+    return "self";
+    L10:;
+    return xmlAttr(e, "name");
+    L8:;
+    if (!(kind == "Expr.GenericName")) goto L12;
+    fail(self, e, "unsupported: generic-qualified expression '" + xmlAttr(e, "name") + "<...>'");
+    return "/*unsupported*/";
+    L12:;
+    if (!(kind == "Expr.Member")) goto L14;
+    {
         XmlNode lhs = xmlChild(e, "Receiver");
-        if (xmlKind(lhs) == "Expr.Name" && simse_dict_has(self.enumNames, xmlAttr(lhs, "name"))) {
-            return xmlAttr(lhs, "name") + "::" + xmlAttr(e, "name");
-        }
-        return memberAccess(self, lhs, xmlAttr(e, "name"));
+        if (xmlKind(&lhs) == "Expr.Name" && simse_dict_has(self.enumNames, xmlAttr(&lhs, "name"))) goto L15;
+        goto L16;
+        L15:;
+        return xmlAttr(&lhs, "name") + "::" + xmlAttr(e, "name");
+        L16:;
+        return memberAccess(self, &lhs, xmlAttr(e, "name"));
     }
-    if (kind == "Expr.Call") {
-        return call(self, e);
-    }
-    if (kind == "Expr.Index") {
+    L14:;
+    if (!(kind == "Expr.Call")) goto L18;
+    return call(self, e);
+    L18:;
+    if (!(kind == "Expr.Index")) goto L20;
+    {
         XmlNode lhs = xmlChild(e, "Receiver");
-        Str baseExpr = expr(self, lhs, 9, xmlEmptyNode());
-        XmlNode baseType = inferType(self, lhs);
+        Str baseExpr = expr(self, &lhs, 9, simse_addressOf(xmlEmptyNode()));
+        XmlNode baseType = inferType(self, &lhs);
         Bool deref = false;
-        if (!xmlIsEmpty(baseType)) {
-            if (isHandleType(self, baseType) && xmlKind(baseType) != "Type.Pointer") {
-                deref = true;
-            } else {
-                if (xmlKind(baseType) == "Type.Pointer") {
-                    deref = isIndexableContainer(self, xmlChild(baseType, "Inner"));
-                }
-            }
-        }
-        if (deref) {
-            return "(*" + baseExpr + ")[" + expr(self, xmlChild(e, "Index"), 0, xmlEmptyNode()) + "]";
-        }
-        return baseExpr + "[" + expr(self, xmlChild(e, "Index"), 0, xmlEmptyNode()) + "]";
+        if (!xmlIsEmpty(&baseType)) goto L21;
+        goto L22;
+        L21:;
+        if (isHandleType(self, &baseType) && xmlKind(&baseType) != "Type.Pointer") goto L23;
+        goto L24;
+        L23:;
+        deref = true;
+        goto L25;
+        L24:;
+        if (xmlKind(&baseType) == "Type.Pointer") goto L26;
+        goto L27;
+        L26:;
+        deref = isIndexableContainer(self, simse_addressOf(xmlChild(&baseType, "Inner")));
+        L27:;
+        L25:;
+        L22:;
+        if (deref) goto L28;
+        goto L29;
+        L28:;
+        return "(*" + baseExpr + ")[" + expr(self, simse_addressOf(xmlChild(e, "Index")), 0, simse_addressOf(xmlEmptyNode())) + "]";
+        L29:;
+        return baseExpr + "[" + expr(self, simse_addressOf(xmlChild(e, "Index")), 0, simse_addressOf(xmlEmptyNode())) + "]";
     }
-    if (kind == "Expr.Unary") {
-        return xmlAttr(e, "op") + expr(self, xmlChild(e, "Operand"), 7, xmlEmptyNode());
-    }
-    if (kind == "Expr.Binary") {
+    L20:;
+    if (!(kind == "Expr.Unary")) goto L31;
+    return xmlAttr(e, "op") + expr(self, simse_addressOf(xmlChild(e, "Operand")), 7, simse_addressOf(xmlEmptyNode()));
+    L31:;
+    if (!(kind == "Expr.Binary")) goto L33;
+    {
         XmlNode lhs = xmlChild(e, "Lhs");
         XmlNode rhs = xmlChild(e, "Rhs");
         Str op = xmlAttr(e, "op");
-        if (xmlKind(lhs) == "Expr.NullLit" || xmlKind(rhs) == "Expr.NullLit") {
+        if (xmlKind(&lhs) == "Expr.NullLit" || xmlKind(&rhs) == "Expr.NullLit") goto L34;
+        goto L35;
+        L34:;
+        {
             XmlNode other = lhs;
-            if (xmlKind(lhs) == "Expr.NullLit") {
-                other = rhs;
-            }
-            XmlNode otherType = pointee(self, inferType(self, other));
-            if (!xmlIsEmpty(otherType) && xmlKind(otherType) == "Type.Generic" && xmlAttr(otherType, "name") == "Opt") {
-                Str hasValue = expr(self, other, 9, xmlEmptyNode()) + ".hasValue()";
-                if (op == "==") {
-                    return "!(" + hasValue + ")";
-                }
-                if (op == "!=") {
-                    return "(" + hasValue + ")";
-                }
+            if (xmlKind(&lhs) == "Expr.NullLit") goto L36;
+            goto L37;
+            L36:;
+            other = rhs;
+            L37:;
+            XmlNode otherType = pointee(self, simse_addressOf(inferType(self, &other)));
+            if (!xmlIsEmpty(&otherType) && xmlKind(&otherType) == "Type.Generic" && xmlAttr(&otherType, "name") == "Opt") goto L38;
+            goto L39;
+            L38:;
+            {
+                Str hasValue = expr(self, &other, 9, simse_addressOf(xmlEmptyNode())) + ".hasValue()";
+                if (op == "==") goto L40;
+                goto L41;
+                L40:;
+                return "!(" + hasValue + ")";
+                L41:;
+                if (op == "!=") goto L42;
+                goto L43;
+                L42:;
+                return "(" + hasValue + ")";
+                L43:;
                 fail(self, e, "unsupported: Opt-vs-null comparison '" + op + "'");
                 return "/*unsupported*/";
             }
+            L39:;
         }
+        L35:;
         Int p = cgPrecedence(e);
         XmlNode lhsExpected = xmlEmptyNode();
-        if (xmlKind(lhs) == "Expr.NullLit") {
-            lhsExpected = inferType(self, rhs);
-        }
+        if (xmlKind(&lhs) == "Expr.NullLit") goto L44;
+        goto L45;
+        L44:;
+        lhsExpected = inferType(self, &rhs);
+        L45:;
         XmlNode rhsExpected = xmlEmptyNode();
-        if (xmlKind(rhs) == "Expr.NullLit") {
-            rhsExpected = inferType(self, lhs);
-        }
-        return expr(self, lhs, p, lhsExpected) + " " + op + " " + expr(self, rhs, p + 1, rhsExpected);
+        if (xmlKind(&rhs) == "Expr.NullLit") goto L46;
+        goto L47;
+        L46:;
+        rhsExpected = inferType(self, &lhs);
+        L47:;
+        return expr(self, &lhs, p, &lhsExpected) + " " + op + " " + expr(self, &rhs, p + 1, &rhsExpected);
     }
-    if (kind == "Expr.Lambda") {
-        return lambda(self, e, expected);
-    }
-    if (kind == "Expr.Ref") {
+    L33:;
+    if (!(kind == "Expr.Lambda")) goto L49;
+    return lambda(self, e, expected);
+    L49:;
+    if (!(kind == "Expr.Ref")) goto L51;
+    {
         XmlNode operandNode = xmlChild(e, "Operand");
-        if (xmlKind(operandNode) == "Expr.Call") {
-            XmlNode callee = xmlChild(operandNode, "Callee");
-            if (xmlKind(callee) == "Expr.GenericName" && xmlAttr(callee, "name") == "List" && xmlCount(operandNode, "Arg") == 0) {
-                return "makeList<" + typeArgsString(self, "List", xmlChildren(callee, "TypeArg")) + ">()";
-            }
+        if (xmlKind(&operandNode) == "Expr.Call") goto L52;
+        goto L53;
+        L52:;
+        {
+            XmlNode callee = xmlChild(&operandNode, "Callee");
+            if (xmlKind(&callee) == "Expr.GenericName" && xmlAttr(&callee, "name") == "List" && xmlCount(&operandNode, "Arg") == 0) goto L54;
+            goto L55;
+            L54:;
+            return "makeList<" + typeArgsString(self, "List", simse_addressOf(xmlChildren(&callee, "TypeArg"))) + ">()";
+            L55:;
         }
-        Str operand = expr(self, operandNode, 0, xmlEmptyNode());
+        L53:;
+        Str operand = expr(self, &operandNode, 0, simse_addressOf(xmlEmptyNode()));
         return "std::make_shared<std::remove_cvref_t<decltype((" + operand + "))>>(" + operand + ")";
     }
-    if (kind == "Expr.Deref") {
+    L51:;
+    if (!(kind == "Expr.Deref")) goto L57;
+    {
         XmlNode operandNode = xmlChild(e, "Operand");
-        Str operand = expr(self, operandNode, 7, xmlEmptyNode());
-        XmlNode operandType = inferType(self, operandNode);
+        Str operand = expr(self, &operandNode, 7, simse_addressOf(xmlEmptyNode()));
+        XmlNode operandType = inferType(self, &operandNode);
         NameKind nameKind = NameKind::Value;
-        if (!xmlIsEmpty(operandType)) {
-            nameKind = kindOf(self, operandType);
-        } else {
-            nameKind = operandKind(self, operandNode);
-        }
-        if (nameKind == NameKind::Shared) {
-            return "(" + operand + ").get()";
-        }
+        if (!xmlIsEmpty(&operandType)) goto L58;
+        goto L59;
+        L58:;
+        nameKind = kindOf(self, &operandType);
+        goto L60;
+        L59:;
+        nameKind = operandKind(self, &operandNode);
+        L60:;
+        if (nameKind == NameKind::Shared) goto L61;
+        goto L62;
+        L61:;
+        return "(" + operand + ").get()";
+        L62:;
+        if (nameKind == NameKind::Value) goto L63;
+        goto L64;
+        L63:;
+        if (xmlKind(&operandNode) == "Expr.Name") goto L65;
+        goto L66;
+        L65:;
+        return "&" + operand;
+        L66:;
+        return "simse_addressOf(" + operand + ")";
+        L64:;
         return "*" + operand;
     }
-    if (kind == "Expr.Copy") {
+    L57:;
+    if (!(kind == "Expr.Copy")) goto L68;
+    {
         XmlNode operandNode = xmlChild(e, "Operand");
-        Str operand = expr(self, operandNode, 0, xmlEmptyNode());
-        XmlNode operandType = inferType(self, operandNode);
+        Str operand = expr(self, &operandNode, 0, simse_addressOf(xmlEmptyNode()));
+        XmlNode operandType = inferType(self, &operandNode);
         NameKind nameKind = NameKind::Value;
-        if (!xmlIsEmpty(operandType)) {
-            nameKind = kindOf(self, operandType);
-        } else {
-            nameKind = operandKind(self, operandNode);
-        }
-        if (nameKind == NameKind::Shared || nameKind == NameKind::Pointer) {
-            return "*(" + operand + ")";
-        }
+        if (!xmlIsEmpty(&operandType)) goto L69;
+        goto L70;
+        L69:;
+        nameKind = kindOf(self, &operandType);
+        goto L71;
+        L70:;
+        nameKind = operandKind(self, &operandNode);
+        L71:;
+        if (nameKind == NameKind::Shared || nameKind == NameKind::Pointer) goto L72;
+        goto L73;
+        L72:;
+        return "*(" + operand + ")";
+        L73:;
         return "(" + operand + ")";
     }
+    L68:;
     return "/*unsupported*/";
 }
-// ./codegen/Codegen.simse:1694
-Str call(Emitter& self, XmlNode e) {
+// cppsrc/codegen/Codegen.simse:1704
+Str call(Emitter& self, XmlNode* e) {
     XmlNode callee = xmlChild(e, "Callee");
-    Str calleeKind = xmlKind(callee);
+    Str calleeKind = xmlKind(&callee);
     List<XmlNode> argNodes = xmlChildren(e, "Arg");
-    if (calleeKind == "Expr.GenericName") {
+    if (!(calleeKind == "Expr.GenericName")) goto L2;
+    {
         List<Str> args = List<Str>();
         Int i = 0;
-        while (i < argNodes.size()) {
-            simse_list_append(args, expr(self, argNodes[i], 0, xmlEmptyNode()));
-            i = i + 1;
-        }
-        Str name = xmlAttr(callee, "name");
+        L3:;
+        if (!(i < argNodes.size())) goto L4;
+        simse_list_append(args, expr(self, simse_addressOf(argNodes[i]), 0, simse_addressOf(xmlEmptyNode())));
+        i = i + 1;
+        goto L3;
+        L4:;
+        Str name = xmlAttr(&callee, "name");
         Str calleeName = name;
         Opt<Str> nativeOpt = simse_dict_get(self.nativeSymbols, name);
         Bool hasPlainFunction = false;
         Int f = 0;
-        while (f < self.functions.size()) {
+        L5:;
+        if (!(f < self.functions.size())) goto L6;
+        {
             CgFn candidate = self.functions[f];
-            if (xmlAttr(candidate.decl, "isNative") != "true" && xmlAttr(candidate.decl, "name") == name) {
-                hasPlainFunction = true;
-            }
+            if (xmlAttr(simse_addressOf(candidate.decl), "isNative") != "true" && xmlAttr(simse_addressOf(candidate.decl), "name") == name) goto L7;
+            goto L8;
+            L7:;
+            hasPlainFunction = true;
+            L8:;
             f = f + 1;
         }
-        if (!hasPlainFunction && nativeOpt.hasValue()) {
-            calleeName = nativeOpt.value();
-        }
-        if (simse_dict_has(self.dataClassNames, name)) {
-            calleeName = "_make_" + name;
-        }
-        return calleeName + "<" + typeArgsString(self, name, xmlChildren(callee, "TypeArg")) + ">(" + cgJoin(args, ", ") + ")";
+        goto L5;
+        L6:;
+        if (!hasPlainFunction && nativeOpt.hasValue()) goto L9;
+        goto L10;
+        L9:;
+        calleeName = nativeOpt.value();
+        L10:;
+        if (simse_dict_has(self.dataClassNames, name)) goto L11;
+        goto L12;
+        L11:;
+        calleeName = "_make_" + name;
+        L12:;
+        return calleeName + "<" + typeArgsString(self, name, simse_addressOf(xmlChildren(&callee, "TypeArg"))) + ">(" + cgJoin(&args, ", ") + ")";
     }
-    if (calleeKind == "Expr.Name") {
-        Str name = xmlAttr(callee, "name");
-        if (name == "println" || name == "print") {
+    L2:;
+    if (!(calleeKind == "Expr.Name")) goto L14;
+    {
+        Str name = xmlAttr(&callee, "name");
+        if (name == "println" || name == "print") goto L15;
+        goto L16;
+        L15:;
+        {
             Str arg = "";
-            if (argNodes.size() > 0) {
-                arg = expr(self, argNodes[0], 0, xmlEmptyNode());
-            }
+            if (argNodes.size() > 0) goto L17;
+            goto L18;
+            L17:;
+            arg = expr(self, simse_addressOf(argNodes[0]), 0, simse_addressOf(xmlEmptyNode()));
+            L18:;
             Str s = "std::cout << std::boolalpha << (" + arg + ")";
-            if (name == "println") {
-                s = s + " << std::endl";
-            }
+            if (name == "println") goto L19;
+            goto L20;
+            L19:;
+            s = s + " << std::endl";
+            L20:;
             return s;
         }
+        L16:;
         XmlNode target = findFunction(self, name, argNodes.size());
         List<Str> args = List<Str>();
-        List<XmlNode> targetParams = xmlChildren(target, "Param");
+        List<XmlNode> targetParams = xmlChildren(&target, "Param");
         Int i = 0;
-        while (i < argNodes.size()) {
+        L21:;
+        if (!(i < argNodes.size())) goto L22;
+        {
             XmlNode expectedArg = xmlEmptyNode();
-            if (!xmlIsEmpty(target) && i < targetParams.size()) {
-                expectedArg = xmlChild(targetParams[i], "Type");
-            }
-            simse_list_append(args, expr(self, argNodes[i], 0, expectedArg));
+            if (!xmlIsEmpty(&target) && i < targetParams.size()) goto L23;
+            goto L24;
+            L23:;
+            expectedArg = xmlChild(simse_addressOf(targetParams[i]), "Type");
+            L24:;
+            simse_list_append(args, expr(self, simse_addressOf(argNodes[i]), 0, &expectedArg));
             i = i + 1;
         }
+        goto L21;
+        L22:;
         Opt<Str> nativeOpt = simse_dict_get(self.nativeSymbols, name);
         Bool hasPlainFunction = false;
         Int f = 0;
-        while (f < self.functions.size()) {
+        L25:;
+        if (!(f < self.functions.size())) goto L26;
+        {
             CgFn candidate = self.functions[f];
-            if (xmlAttr(candidate.decl, "isNative") != "true" && xmlAttr(candidate.decl, "name") == name) {
-                hasPlainFunction = true;
-            }
+            if (xmlAttr(simse_addressOf(candidate.decl), "isNative") != "true" && xmlAttr(simse_addressOf(candidate.decl), "name") == name) goto L27;
+            goto L28;
+            L27:;
+            hasPlainFunction = true;
+            L28:;
             f = f + 1;
         }
+        goto L25;
+        L26:;
         Str calleeName = name;
-        if (!hasPlainFunction && nativeOpt.hasValue()) {
-            calleeName = nativeOpt.value();
-        }
-        if (simse_dict_has(self.dataClassNames, name)) {
-            calleeName = "_make_" + name;
-        }
-        return calleeName + "(" + cgJoin(args, ", ") + ")";
+        if (!hasPlainFunction && nativeOpt.hasValue()) goto L29;
+        goto L30;
+        L29:;
+        calleeName = nativeOpt.value();
+        L30:;
+        if (simse_dict_has(self.dataClassNames, name)) goto L31;
+        goto L32;
+        L31:;
+        calleeName = "_make_" + name;
+        L32:;
+        return calleeName + "(" + cgJoin(&args, ", ") + ")";
     }
-    if (calleeKind == "Expr.Member") {
+    L14:;
+    if (!(calleeKind == "Expr.Member")) goto L34;
+    {
         List<Str> args = List<Str>();
         Int i = 0;
-        while (i < argNodes.size()) {
-            simse_list_append(args, expr(self, argNodes[i], 0, xmlEmptyNode()));
-            i = i + 1;
+        L35:;
+        if (!(i < argNodes.size())) goto L36;
+        simse_list_append(args, expr(self, simse_addressOf(argNodes[i]), 0, simse_addressOf(xmlEmptyNode())));
+        i = i + 1;
+        goto L35;
+        L36:;
+        Str calleeText = xmlAttr(&callee, "name");
+        XmlNode receiverExpr = xmlChild(&callee, "Receiver");
+        if (calleeText == "toInt") goto L37;
+        goto L38;
+        L37:;
+        {
+            XmlNode enumReceiver = pointee(self, simse_addressOf(inferType(self, &receiverExpr)));
+            if (!xmlIsEmpty(&enumReceiver) && xmlKind(&enumReceiver) == "Type.Named" && simse_dict_has(self.enumNames, xmlAttr(&enumReceiver, "name"))) goto L39;
+            goto L40;
+            L39:;
+            return "static_cast<Int>(" + expr(self, &receiverExpr, 9, simse_addressOf(xmlEmptyNode())) + ")";
+            L40:;
         }
-        Str calleeText = xmlAttr(callee, "name");
-        XmlNode receiverExpr = xmlChild(callee, "Receiver");
-        if (calleeText == "toInt") {
-            XmlNode enumReceiver = pointee(self, inferType(self, receiverExpr));
-            if (!xmlIsEmpty(enumReceiver) && xmlKind(enumReceiver) == "Type.Named" && simse_dict_has(self.enumNames, xmlAttr(enumReceiver, "name"))) {
-                return "static_cast<Int>(" + expr(self, receiverExpr, 9, xmlEmptyNode()) + ")";
-            }
-        }
-        if (calleeText == "fromInt" && xmlKind(receiverExpr) == "Expr.Name" && simse_dict_has(self.enumNames, xmlAttr(receiverExpr, "name"))) {
-            return "simse_" + xmlAttr(receiverExpr, "name") + "_fromInt(" + cgJoin(args, ", ") + ")";
-        }
-        if (xmlKind(receiverExpr) == "Expr.GenericName") {
-            return xmlAttr(receiverExpr, "name") + "<" + typeArgsString(self, xmlAttr(receiverExpr, "name"), xmlChildren(receiverExpr, "TypeArg")) + ">::" + calleeText + "(" + cgJoin(args, ", ") + ")";
-        }
-        XmlNode receiverType = inferType(self, receiverExpr);
-        XmlNode receiver = pointee(self, receiverType);
-        if (!xmlIsEmpty(receiver)) {
-            Int fnIndex = findExtensionFn(self, calleeText, receiverExpr);
-            if (fnIndex >= 0) {
+        L38:;
+        if (calleeText == "fromInt" && xmlKind(&receiverExpr) == "Expr.Name" && simse_dict_has(self.enumNames, xmlAttr(&receiverExpr, "name"))) goto L41;
+        goto L42;
+        L41:;
+        return "simse_" + xmlAttr(&receiverExpr, "name") + "_fromInt(" + cgJoin(&args, ", ") + ")";
+        L42:;
+        if (xmlKind(&receiverExpr) == "Expr.GenericName") goto L43;
+        goto L44;
+        L43:;
+        return xmlAttr(&receiverExpr, "name") + "<" + typeArgsString(self, xmlAttr(&receiverExpr, "name"), simse_addressOf(xmlChildren(&receiverExpr, "TypeArg"))) + ">::" + calleeText + "(" + cgJoin(&args, ", ") + ")";
+        L44:;
+        XmlNode receiverType = inferType(self, &receiverExpr);
+        XmlNode receiver = pointee(self, &receiverType);
+        if (!xmlIsEmpty(&receiver)) goto L45;
+        goto L46;
+        L45:;
+        {
+            Int fnIndex = findExtensionFn(self, calleeText, &receiverExpr);
+            if (fnIndex >= 0) goto L47;
+            goto L48;
+            L47:;
+            {
                 CgFn fn = self.functions[fnIndex];
-                Str all = receiverArg(self, fn.receiver, receiverExpr);
+                Str all = receiverArg(self, simse_addressOf(fn.receiver), &receiverExpr);
                 Int a = 0;
-                while (a < args.size()) {
-                    all = all + ", " + args[a];
-                    a = a + 1;
-                }
-                return xmlAttr(fn.decl, "name") + "(" + all + ")";
-            }
-            Int extIndex = findNativeExt(self, calleeText, receiverExpr);
-            if (extIndex >= 0) {
-                List<CgNativeExt> extensions = simse_dict_get(self.nativeExtensions, calleeText).value();
-                CgNativeExt ext = extensions[extIndex];
-                Str all = receiverArg(self, ext.receiver, receiverExpr);
-                Int a = 0;
-                while (a < args.size()) {
-                    all = all + ", " + args[a];
-                    a = a + 1;
-                }
-                return ext.symbol + "(" + all + ")";
-            }
-            return memberAccess(self, receiverExpr, calleeText) + "(" + cgJoin(args, ", ") + ")";
-        }
-        if (simse_dict_has(self.receiverFnNames, calleeText)) {
-            Str all = expr(self, receiverExpr, 9, xmlEmptyNode());
-            Int a = 0;
-            while (a < args.size()) {
+                L49:;
+                if (!(a < args.size())) goto L50;
                 all = all + ", " + args[a];
                 a = a + 1;
+                goto L49;
+                L50:;
+                return xmlAttr(simse_addressOf(fn.decl), "name") + "(" + all + ")";
             }
+            L48:;
+            Int extIndex = findNativeExt(self, calleeText, &receiverExpr);
+            if (extIndex >= 0) goto L51;
+            goto L52;
+            L51:;
+            {
+                List<CgNativeExt> extensions = simse_dict_get(self.nativeExtensions, calleeText).value();
+                CgNativeExt ext = extensions[extIndex];
+                Str all = receiverArg(self, simse_addressOf(ext.receiver), &receiverExpr);
+                Int a = 0;
+                L53:;
+                if (!(a < args.size())) goto L54;
+                all = all + ", " + args[a];
+                a = a + 1;
+                goto L53;
+                L54:;
+                return ext.symbol + "(" + all + ")";
+            }
+            L52:;
+            return memberAccess(self, &receiverExpr, calleeText) + "(" + cgJoin(&args, ", ") + ")";
+        }
+        L46:;
+        if (simse_dict_has(self.receiverFnNames, calleeText)) goto L55;
+        goto L56;
+        L55:;
+        {
+            Str all = expr(self, &receiverExpr, 9, simse_addressOf(xmlEmptyNode()));
+            Int a = 0;
+            L57:;
+            if (!(a < args.size())) goto L58;
+            all = all + ", " + args[a];
+            a = a + 1;
+            goto L57;
+            L58:;
             return calleeText + "(" + all + ")";
         }
-        if (simse_dict_has(self.nativeExtensions, calleeText)) {
+        L56:;
+        if (simse_dict_has(self.nativeExtensions, calleeText)) goto L59;
+        goto L60;
+        L59:;
+        {
             List<CgNativeExt> extensions = simse_dict_get(self.nativeExtensions, calleeText).value();
-            if (extensions.size() > 0) {
-                Str all = expr(self, receiverExpr, 9, xmlEmptyNode());
+            if (extensions.size() > 0) goto L61;
+            goto L62;
+            L61:;
+            {
+                Str all = expr(self, &receiverExpr, 9, simse_addressOf(xmlEmptyNode()));
                 Int a = 0;
-                while (a < args.size()) {
-                    all = all + ", " + args[a];
-                    a = a + 1;
-                }
+                L63:;
+                if (!(a < args.size())) goto L64;
+                all = all + ", " + args[a];
+                a = a + 1;
+                goto L63;
+                L64:;
                 return extensions[0].symbol + "(" + all + ")";
             }
+            L62:;
         }
-        return memberAccess(self, receiverExpr, calleeText) + "(" + cgJoin(args, ", ") + ")";
+        L60:;
+        return memberAccess(self, &receiverExpr, calleeText) + "(" + cgJoin(&args, ", ") + ")";
     }
+    L34:;
     fail(self, e, "unsupported: call target");
     return "/*unsupported*/";
 }
-// ./codegen/Codegen.simse:1859
+// cppsrc/codegen/Codegen.simse:1869
 void preludeText(Emitter& self) {
     Str text = "// Generated by simse_transpile. Do not edit.\n";
     text = text + "#include \"cppsrc/rtl/simse.hpp\"\n";
@@ -2197,293 +2877,343 @@ void preludeText(Emitter& self) {
     text = text + "\n";
     self.out = text;
 }
-// ./codegen/Codegen.simse:1868
+// cppsrc/codegen/Codegen.simse:1878
 Res<Str> run(Emitter& self) {
     collect(self);
     preludeText(self);
     emitNativeDeclarations(self);
-    if (self.failed) {
-        return Res<Str>::err(self.error);
-    }
+    if (!(self.failed)) goto L2;
+    return Res<Str>::err(self.error);
+    L2:;
     emitTypes(self);
-    if (self.failed) {
-        return Res<Str>::err(self.error);
-    }
+    if (!(self.failed)) goto L4;
+    return Res<Str>::err(self.error);
+    L4:;
     emitFunctions(self, true);
-    if (self.failed) {
-        return Res<Str>::err(self.error);
-    }
+    if (!(self.failed)) goto L6;
+    return Res<Str>::err(self.error);
+    L6:;
     emitFunctions(self, false);
-    if (self.failed) {
-        return Res<Str>::err(self.error);
-    }
+    if (!(self.failed)) goto L8;
+    return Res<Str>::err(self.error);
+    L8:;
     return Res<Str>::ok(self.out);
 }
-// ./codegen/Codegen.simse:1893
+// cppsrc/codegen/Codegen.simse:1903
 Emitter newEmitter(List<CgInput> inputs) {
     return _make_Emitter(inputs, "", false, "", "", Dictionary<Str, XmlNode>(), Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), List<CgFn>(), Dictionary<Str, Bool>(), List<CgNativeDecl>(), Dictionary<Str, Str>(), Dictionary<Str, List<CgNativeExt>>(), Dictionary<Str, Bool>(), Dictionary<Str, NameKind>(), Dictionary<Str, XmlNode>(), NameKind::Value, xmlEmptyNode(), xmlEmptyNode());
 }
-// ./codegen/Codegen.simse:1920
+// cppsrc/codegen/Codegen.simse:1930
 Res<Str> emitProgram(List<CgInput> inputs) {
     Emitter emitter = newEmitter(inputs);
     return run(emitter);
 }
-// ./common/StrView.simse:10
+// cppsrc/common/StrView.simse:14
 Char at(StrView& self, Int index) {
     return (*self.source)[self.start + index];
 }
-// ./common/StrView.simse:14
+// cppsrc/common/StrView.simse:18
 Bool startsWith(StrView& self, Str text) {
-    if (text.size() > self.len) {
-        return false;
-    }
+    if (!(text.size() > self.len)) goto L2;
+    return false;
+    L2:;
     auto i = 0;
-    while (i < text.size()) {
-        if (at(self, i) != text[i]) {
-            return false;
-        }
-        i = i + 1;
-    }
+    L3:;
+    if (!(i < text.size())) goto L4;
+    if (!(at(self, i) != text[i])) goto L6;
+    return false;
+    L6:;
+    i = i + 1;
+    goto L3;
+    L4:;
     return true;
 }
-// ./common/StrView.simse:28
+// cppsrc/common/StrView.simse:32
 StrView slice(StrView& self, Int matchLength) {
     return _make_StrView(self.source, self.start, matchLength);
 }
-// ./common/StrView.simse:32
+// cppsrc/common/StrView.simse:36
 Str toString(StrView& self) {
     Str result = Str();
     auto i = 0;
-    while (i < self.len) {
-        simse_str_append(result, at(self, i));
-        i = i + 1;
-    }
+    L1:;
+    if (!(i < self.len)) goto L2;
+    simse_str_append(result, at(self, i));
+    i = i + 1;
+    goto L1;
+    L2:;
     return result;
 }
-// ./common/xmlutil.simse:16
+// cppsrc/common/xmlutil.simse:16
 XmlNode xmlEmptyNode() {
     return XmlNode("", List<Attribute>(), makeList<XmlNode>());
 }
-// ./common/xmlutil.simse:20
-Bool xmlIsEmpty(XmlNode node) {
-    return node.name == "";
+// cppsrc/common/xmlutil.simse:20
+Bool xmlIsEmpty(XmlNode* node) {
+    return node->name == "";
 }
-// ./common/xmlutil.simse:24
-Str xmlAttr(XmlNode node, Str name) {
+// cppsrc/common/xmlutil.simse:24
+Str xmlAttr(XmlNode* node, Str name) {
     Int i = 0;
-    while (i < node.attributes.size()) {
-        if (node.attributes[i].name == name) {
-            return node.attributes[i].value;
-        }
-        i = i + 1;
-    }
+    L1:;
+    if (!(i < node->attributes.size())) goto L2;
+    if (!(node->attributes[i].name == name)) goto L4;
+    return node->attributes[i].value;
+    L4:;
+    i = i + 1;
+    goto L1;
+    L2:;
     return "";
 }
-// ./common/xmlutil.simse:35
-Str xmlKind(XmlNode node) {
+// cppsrc/common/xmlutil.simse:35
+Str xmlKind(XmlNode* node) {
     return xmlAttr(node, "kind");
 }
-// ./common/xmlutil.simse:39
-Int xmlIntAttr(XmlNode node, Str name, Int fallback) {
+// cppsrc/common/xmlutil.simse:39
+Int xmlIntAttr(XmlNode* node, Str name, Int fallback) {
     Opt<Int> parsed = simse_str_toInt(xmlAttr(node, name));
-    if (parsed.hasValue()) {
-        return parsed.value();
-    }
+    if (!(parsed.hasValue())) goto L2;
+    return parsed.value();
+    L2:;
     return fallback;
 }
-// ./common/xmlutil.simse:47
-Int xmlLine(XmlNode node) {
+// cppsrc/common/xmlutil.simse:47
+Int xmlLine(XmlNode* node) {
     return xmlIntAttr(node, "line", 0);
 }
-// ./common/xmlutil.simse:51
-Int xmlColumn(XmlNode node) {
+// cppsrc/common/xmlutil.simse:51
+Int xmlColumn(XmlNode* node) {
     return xmlIntAttr(node, "column", 0);
 }
-// ./common/xmlutil.simse:56
-XmlNode xmlChild(XmlNode node, Str role) {
+// cppsrc/common/xmlutil.simse:56
+XmlNode xmlChild(XmlNode* node, Str role) {
     Int i = 0;
-    while (i < node.Children->size()) {
-        if ((*node.Children)[i].name == role) {
-            return (*node.Children)[i];
-        }
-        i = i + 1;
-    }
+    L1:;
+    if (!(i < node->Children->size())) goto L2;
+    if (!((*node->Children)[i].name == role)) goto L4;
+    return (*node->Children)[i];
+    L4:;
+    i = i + 1;
+    goto L1;
+    L2:;
     return xmlEmptyNode();
 }
-// ./common/xmlutil.simse:68
-List<XmlNode> xmlChildren(XmlNode node, Str role) {
+// cppsrc/common/xmlutil.simse:68
+List<XmlNode> xmlChildren(XmlNode* node, Str role) {
     List<XmlNode> out = List<XmlNode>();
     Int i = 0;
-    while (i < node.Children->size()) {
-        if ((*node.Children)[i].name == role) {
-            simse_list_append(out, (*node.Children)[i]);
-        }
-        i = i + 1;
-    }
+    L1:;
+    if (!(i < node->Children->size())) goto L2;
+    if (!((*node->Children)[i].name == role)) goto L4;
+    simse_list_append(out, (*node->Children)[i]);
+    L4:;
+    i = i + 1;
+    goto L1;
+    L2:;
     return out;
 }
-// ./common/xmlutil.simse:80
-Int xmlCount(XmlNode node, Str role) {
+// cppsrc/common/xmlutil.simse:80
+Int xmlCount(XmlNode* node, Str role) {
     Int count = 0;
     Int i = 0;
-    while (i < node.Children->size()) {
-        if ((*node.Children)[i].name == role) {
-            count = count + 1;
-        }
-        i = i + 1;
-    }
+    L1:;
+    if (!(i < node->Children->size())) goto L2;
+    if (!((*node->Children)[i].name == role)) goto L4;
+    count = count + 1;
+    L4:;
+    i = i + 1;
+    goto L1;
+    L2:;
     return count;
 }
-// ./common/xmlutil.simse:92
-Bool xmlHasChild(XmlNode node, Str role) {
+// cppsrc/common/xmlutil.simse:92
+Bool xmlHasChild(XmlNode* node, Str role) {
     Int i = 0;
-    while (i < node.Children->size()) {
-        if ((*node.Children)[i].name == role) {
-            return true;
-        }
-        i = i + 1;
-    }
+    L1:;
+    if (!(i < node->Children->size())) goto L2;
+    if (!((*node->Children)[i].name == role)) goto L4;
+    return true;
+    L4:;
+    i = i + 1;
+    goto L1;
+    L2:;
     return false;
 }
-// ./common/xmlutil.simse:104
-List<Str> xmlTypeParamNames(XmlNode node) {
+// cppsrc/common/xmlutil.simse:104
+List<Str> xmlTypeParamNames(XmlNode* node) {
     List<XmlNode> params = xmlChildren(node, "TypeParam");
     List<Str> names = List<Str>();
     Int i = 0;
-    while (i < params.size()) {
-        simse_list_append(names, xmlAttr(params[i], "name"));
-        i = i + 1;
-    }
+    L1:;
+    if (!(i < params.size())) goto L2;
+    simse_list_append(names, xmlAttr(simse_addressOf(params[i]), "name"));
+    i = i + 1;
+    goto L1;
+    L2:;
     return names;
 }
-// ./common/xmlutil.simse:115
-Bool xmlIsDecl(XmlNode node) {
-    Str name = node.name;
+// cppsrc/common/xmlutil.simse:115
+Bool xmlIsDecl(XmlNode* node) {
+    Str name = node->name;
     return name == "DataClass" || name == "Enum" || name == "TypeAlias" || name == "Function";
 }
-// ./common/xmlutil.simse:121
-List<XmlNode> xmlDecls(XmlNode module) {
+// cppsrc/common/xmlutil.simse:121
+List<XmlNode> xmlDecls(XmlNode* module) {
     List<XmlNode> out = List<XmlNode>();
     Int i = 0;
-    while (i < module.Children->size()) {
-        if (xmlIsDecl((*module.Children)[i])) {
-            simse_list_append(out, (*module.Children)[i]);
-        }
-        i = i + 1;
-    }
+    L1:;
+    if (!(i < module->Children->size())) goto L2;
+    if (!(xmlIsDecl(simse_addressOf((*module->Children)[i])))) goto L4;
+    simse_list_append(out, (*module->Children)[i]);
+    L4:;
+    i = i + 1;
+    goto L1;
+    L2:;
     return out;
 }
-// ./common/xmlutil.simse:133
-Bool xmlHasImports(XmlNode module) {
+// cppsrc/common/xmlutil.simse:133
+Bool xmlHasImports(XmlNode* module) {
     Int i = 0;
-    while (i < module.Children->size()) {
-        if ((*module.Children)[i].name == "Import") {
-            return true;
-        }
-        i = i + 1;
-    }
+    L1:;
+    if (!(i < module->Children->size())) goto L2;
+    if (!((*module->Children)[i].name == "Import")) goto L4;
+    return true;
+    L4:;
+    i = i + 1;
+    goto L1;
+    L2:;
     return false;
 }
-// ./common/xmlutil.simse:146
-List<Str> xmlLambdaParams(XmlNode expr) {
+// cppsrc/common/xmlutil.simse:146
+List<Str> xmlLambdaParams(XmlNode* expr) {
     Str raw = xmlAttr(expr, "params");
-    if (raw == "") {
-        return List<Str>();
-    }
+    if (!(raw == "")) goto L2;
+    return List<Str>();
+    L2:;
     return simse_str_split(raw, ",");
 }
-// ./common/xmlutil.simse:154
-Bool xmlIsTypeParam(Str name, List<Str> typeParams) {
+// cppsrc/common/xmlutil.simse:155
+Bool xmlIsTypeParam(Str name, List<Str>* typeParams) {
     Int i = 0;
-    while (i < typeParams.size()) {
-        if (typeParams[i] == name) {
-            return true;
-        }
-        i = i + 1;
-    }
+    L1:;
+    if (!(i < typeParams->size())) goto L2;
+    if (!((*typeParams)[i] == name)) goto L4;
+    return true;
+    L4:;
+    i = i + 1;
+    goto L1;
+    L2:;
     return false;
 }
-// ./compiler/Driver.simse:34
+// cppsrc/compiler/Driver.simse:34
 XmlNode driverNewModule() {
     return XmlNode("Module", List<Attribute>(), makeList<XmlNode>());
 }
-// ./compiler/Driver.simse:38
-void driverAppendNamed(XmlNode target, XmlNode source, Str role) {
+// cppsrc/compiler/Driver.simse:38
+void driverAppendNamed(XmlNode* target, XmlNode* source, Str role) {
     Int i = 0;
-    while (i < source.Children->size()) {
-        if ((*source.Children)[i].name == role) {
-            simse_list_append((*target.Children), (*source.Children)[i]);
-        }
-        i = i + 1;
-    }
+    L1:;
+    if (!(i < source->Children->size())) goto L2;
+    if (!((*source->Children)[i].name == role)) goto L4;
+    simse_list_append((*target->Children), (*source->Children)[i]);
+    L4:;
+    i = i + 1;
+    goto L1;
+    L2:;
 }
-// ./compiler/Driver.simse:48
-void driverAppendDecls(XmlNode target, XmlNode source) {
+// cppsrc/compiler/Driver.simse:48
+void driverAppendDecls(XmlNode* target, XmlNode* source) {
     List<XmlNode> decls = xmlDecls(source);
     Int i = 0;
-    while (i < decls.size()) {
-        simse_list_append((*target.Children), decls[i]);
-        i = i + 1;
-    }
+    L1:;
+    if (!(i < decls.size())) goto L2;
+    simse_list_append((*target->Children), decls[i]);
+    i = i + 1;
+    goto L1;
+    L2:;
 }
-// ./compiler/Driver.simse:61
+// cppsrc/compiler/Driver.simse:61
 Res<XmlNode> driverParseFile(Str fileName) {
     Scanner scanner = _make_Scanner(getTokenRules(), 0, 1, 1, Str());
     setSource(scanner, simse_native_readFile(fileName));
     List<Token> tokens = List<Token>();
-    while (true) {
+    L1:;
+    if (!(true)) goto L2;
+    {
         Res<Token> result = nextToken(scanner);
-        if (!result.isOk()) {
-            return Res<XmlNode>::err(fileName + ": " + result.Error);
-        }
-        if (result.Value.kind == TokenKind::Eof) {
-            break;
-        }
-        if (result.Value.kind != TokenKind::Space && result.Value.kind != TokenKind::Comment) {
-            simse_list_append(tokens, result.Value);
-        }
+        if (!result.isOk()) goto L3;
+        goto L4;
+        L3:;
+        return Res<XmlNode>::err(fileName + ": " + result.Error);
+        L4:;
+        if (result.Value.kind == TokenKind::Eof) goto L5;
+        goto L6;
+        L5:;
+        goto L2;
+        L6:;
+        if (result.Value.kind != TokenKind::Space && result.Value.kind != TokenKind::Comment) goto L7;
+        goto L8;
+        L7:;
+        simse_list_append(tokens, result.Value);
+        L8:;
     }
+    goto L1;
+    L2:;
     SourcePos eofPos = _make_SourcePos(0, 1, 1);
-    if (tokens.size() > 0) {
-        eofPos = tokens[tokens.size() - 1].pos;
-    }
+    if (!(tokens.size() > 0)) goto L10;
+    eofPos = tokens[tokens.size() - 1].pos;
+    L10:;
     simse_list_append(tokens, _make_Token("", TokenKind::Eof, eofPos));
     return parseModule(simse_cursorOf(std::make_shared<std::remove_cvref_t<decltype((tokens))>>(tokens)), fileName);
 }
-// ./compiler/Driver.simse:91
+// cppsrc/compiler/Driver.simse:91
 List<Str> driverGatherFiles(List<Str> moduleRoots, List<Str> inputs, List<Str> preludeCanon) {
     List<Str> candidates = List<Str>();
     Int r = 0;
-    while (r < moduleRoots.size()) {
+    L1:;
+    if (!(r < moduleRoots.size())) goto L2;
+    {
         List<Str> rootFiles = simse_listFiles(moduleRoots[r], ".simse");
         Int f = 0;
-        while (f < rootFiles.size()) {
-            simse_list_append(candidates, rootFiles[f]);
-            f = f + 1;
-        }
+        L3:;
+        if (!(f < rootFiles.size())) goto L4;
+        simse_list_append(candidates, rootFiles[f]);
+        f = f + 1;
+        goto L3;
+        L4:;
         r = r + 1;
     }
+    goto L1;
+    L2:;
     Int i = 0;
-    while (i < inputs.size()) {
-        simse_list_append(candidates, inputs[i]);
-        i = i + 1;
-    }
+    L5:;
+    if (!(i < inputs.size())) goto L6;
+    simse_list_append(candidates, inputs[i]);
+    i = i + 1;
+    goto L5;
+    L6:;
     List<Str> chosen = List<Str>();
     List<Str> seen = List<Str>();
     Int c = 0;
-    while (c < candidates.size()) {
+    L7:;
+    if (!(c < candidates.size())) goto L8;
+    {
         Str display = candidates[c];
         Str canon = simse_pathCanonical(display);
-        if (!simse_list_contains(preludeCanon, canon) && !simse_list_contains(seen, canon)) {
-            simse_list_append(seen, canon);
-            simse_list_append(chosen, display);
-        }
+        if (!simse_list_contains(preludeCanon, canon) && !simse_list_contains(seen, canon)) goto L9;
+        goto L10;
+        L9:;
+        simse_list_append(seen, canon);
+        simse_list_append(chosen, display);
+        L10:;
         c = c + 1;
     }
+    goto L7;
+    L8:;
     simse_list_sort(chosen, [=](Str left, Str right) -> Bool { return simse_pathCanonical(left) < simse_pathCanonical(right); });
     return chosen;
 }
-// ./compiler/Driver.simse:129
+// cppsrc/compiler/Driver.simse:129
 int main(int argc, char** argv) {
     List<Str> args = List<Str>();
     int simse_argIndex = 1;
@@ -2499,211 +3229,268 @@ int main(int argc, char** argv) {
     List<Str> extraRoots = List<Str>();
     Bool preludeExplicit = false;
     Int i = 0;
-    while (i < args.size()) {
+    L1:;
+    if (!(i < args.size())) goto L2;
+    {
         Str arg = args[i];
-        if (arg == "-o") {
-            if (i + 1 >= args.size()) {
-                simse_eprintln("simse_transpile: -o requires a path");
-                return 2;
-            }
-            i = i + 1;
-            output = args[i];
-        } else {
-            if (arg == "--prelude") {
-                if (i + 1 >= args.size()) {
-                    simse_eprintln("simse_transpile: --prelude requires a path");
-                    return 2;
-                }
-                i = i + 1;
-                preludePath = args[i];
-                preludeExplicit = true;
-            } else {
-                if (arg == "--root") {
-                    if (i + 1 >= args.size()) {
-                        simse_eprintln("simse_transpile: --root requires a path");
-                        return 2;
-                    }
-                    i = i + 1;
-                    rootDir = args[i];
-                    haveRoot = true;
-                } else {
-                    if (arg == "--module-root") {
-                        if (i + 1 >= args.size()) {
-                            simse_eprintln("simse_transpile: --module-root requires a path");
-                            return 2;
-                        }
-                        i = i + 1;
-                        simse_list_append(extraRoots, args[i]);
-                    } else {
-                        if (arg == "-h" || arg == "--help") {
-                            std::cout << std::boolalpha << ("usage: simse_transpile <input.simse>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module-root <dir>]...") << std::endl;
-                            return 0;
-                        } else {
-                            simse_list_append(inputs, arg);
-                        }
-                    }
-                }
-            }
-        }
+        if (arg == "-o") goto L3;
+        goto L4;
+        L3:;
+        if (i + 1 >= args.size()) goto L5;
+        goto L6;
+        L5:;
+        simse_eprintln("simse_transpile: -o requires a path");
+        return 2;
+        L6:;
+        i = i + 1;
+        output = args[i];
+        goto L7;
+        L4:;
+        if (arg == "--prelude") goto L8;
+        goto L9;
+        L8:;
+        if (i + 1 >= args.size()) goto L10;
+        goto L11;
+        L10:;
+        simse_eprintln("simse_transpile: --prelude requires a path");
+        return 2;
+        L11:;
+        i = i + 1;
+        preludePath = args[i];
+        preludeExplicit = true;
+        goto L12;
+        L9:;
+        if (arg == "--root") goto L13;
+        goto L14;
+        L13:;
+        if (i + 1 >= args.size()) goto L15;
+        goto L16;
+        L15:;
+        simse_eprintln("simse_transpile: --root requires a path");
+        return 2;
+        L16:;
+        i = i + 1;
+        rootDir = args[i];
+        haveRoot = true;
+        goto L17;
+        L14:;
+        if (arg == "--module-root") goto L18;
+        goto L19;
+        L18:;
+        if (i + 1 >= args.size()) goto L20;
+        goto L21;
+        L20:;
+        simse_eprintln("simse_transpile: --module-root requires a path");
+        return 2;
+        L21:;
+        i = i + 1;
+        simse_list_append(extraRoots, args[i]);
+        goto L22;
+        L19:;
+        if (arg == "-h" || arg == "--help") goto L23;
+        goto L24;
+        L23:;
+        std::cout << std::boolalpha << ("usage: simse_transpile <input.simse>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module-root <dir>]...") << std::endl;
+        return 0;
+        goto L25;
+        L24:;
+        simse_list_append(inputs, arg);
+        L25:;
+        L22:;
+        L17:;
+        L12:;
+        L7:;
         i = i + 1;
     }
-    if (inputs.size() == 0 && !haveRoot && extraRoots.size() == 0) {
-        rootDir = ".";
-        haveRoot = true;
-    }
-    if (output == "") {
-        output = "simse_out.cpp";
-    }
+    goto L1;
+    L2:;
+    if (!(inputs.size() == 0 && !haveRoot && extraRoots.size() == 0)) goto L27;
+    rootDir = ".";
+    haveRoot = true;
+    L27:;
+    if (!(output == "")) goto L29;
+    output = "simse_out.cpp";
+    L29:;
     List<Str> moduleRoots = List<Str>();
-    if (haveRoot) {
-        simse_list_append(moduleRoots, rootDir);
-    }
+    if (!(haveRoot)) goto L31;
+    simse_list_append(moduleRoots, rootDir);
+    L31:;
     Int e = 0;
-    while (e < extraRoots.size()) {
-        simse_list_append(moduleRoots, extraRoots[e]);
-        e = e + 1;
-    }
+    L32:;
+    if (!(e < extraRoots.size())) goto L33;
+    simse_list_append(moduleRoots, extraRoots[e]);
+    e = e + 1;
+    goto L32;
+    L33:;
     Str resolvedPrelude = "cppsrc/rtl";
-    if (preludeExplicit) {
-        resolvedPrelude = preludePath;
-    }
+    if (!(preludeExplicit)) goto L35;
+    resolvedPrelude = preludePath;
+    L35:;
     List<Str> preludeFiles = List<Str>();
-    if (resolvedPrelude != "") {
-        if (simse_pathIsDirectory(resolvedPrelude)) {
-            preludeFiles = simse_listFiles(resolvedPrelude, ".simse");
-        } else {
-            if (simse_pathExists(resolvedPrelude)) {
-                simse_list_append(preludeFiles, resolvedPrelude);
-            } else {
-                if (preludeExplicit) {
-                    simse_eprintln("simse_transpile: prelude not found: " + resolvedPrelude);
-                    return 2;
-                }
-            }
-        }
-    }
+    if (!(resolvedPrelude != "")) goto L37;
+    if (!(simse_pathIsDirectory(resolvedPrelude))) goto L39;
+    preludeFiles = simse_listFiles(resolvedPrelude, ".simse");
+    goto L40;
+    L39:;
+    if (!(simse_pathExists(resolvedPrelude))) goto L42;
+    simse_list_append(preludeFiles, resolvedPrelude);
+    goto L43;
+    L42:;
+    if (!(preludeExplicit)) goto L45;
+    simse_eprintln("simse_transpile: prelude not found: " + resolvedPrelude);
+    return 2;
+    L45:;
+    L43:;
+    L40:;
+    L37:;
     List<XmlNode> preludeModules = List<XmlNode>();
     List<Str> preludeNames = List<Str>();
     List<Str> preludeCanon = List<Str>();
     XmlNode mergedPrelude = driverNewModule();
     Int p = 0;
-    while (p < preludeFiles.size()) {
+    L46:;
+    if (!(p < preludeFiles.size())) goto L47;
+    {
         Res<XmlNode> parsedPrelude = driverParseFile(preludeFiles[p]);
-        if (!parsedPrelude.isOk()) {
-            simse_eprintln(parsedPrelude.Error);
-            return 1;
-        }
+        if (!parsedPrelude.isOk()) goto L48;
+        goto L49;
+        L48:;
+        simse_eprintln(parsedPrelude.Error);
+        return 1;
+        L49:;
         simse_list_append(preludeCanon, simse_pathCanonical(preludeFiles[p]));
         simse_list_append(preludeNames, preludeFiles[p]);
         simse_list_append(preludeModules, parsedPrelude.Value);
-        driverAppendNamed(mergedPrelude, parsedPrelude.Value, "Import");
-        driverAppendDecls(mergedPrelude, parsedPrelude.Value);
+        driverAppendNamed(&mergedPrelude, simse_addressOf(parsedPrelude.Value), "Import");
+        driverAppendDecls(&mergedPrelude, simse_addressOf(parsedPrelude.Value));
         p = p + 1;
     }
+    goto L46;
+    L47:;
     Bool hasPrelude = preludeFiles.size() > 0;
     List<Str> files = driverGatherFiles(moduleRoots, inputs, preludeCanon);
     List<Str> fileNames = List<Str>();
     List<XmlNode> modules = List<XmlNode>();
     Int f = 0;
-    while (f < files.size()) {
+    L50:;
+    if (!(f < files.size())) goto L51;
+    {
         Res<XmlNode> parsed = driverParseFile(files[f]);
-        if (!parsed.isOk()) {
-            simse_eprintln(parsed.Error);
-            return 1;
-        }
+        if (!parsed.isOk()) goto L52;
+        goto L53;
+        L52:;
+        simse_eprintln(parsed.Error);
+        return 1;
+        L53:;
         simse_list_append(fileNames, files[f]);
         simse_list_append(modules, parsed.Value);
         f = f + 1;
     }
+    goto L50;
+    L51:;
     List<SemaInput> semaInputs = List<SemaInput>();
     Int s = 0;
-    while (s < preludeModules.size()) {
-        simse_list_append(semaInputs, _make_SemaInput(preludeNames[s], preludeModules[s]));
-        s = s + 1;
-    }
+    L54:;
+    if (!(s < preludeModules.size())) goto L55;
+    simse_list_append(semaInputs, _make_SemaInput(preludeNames[s], preludeModules[s]));
+    s = s + 1;
+    goto L54;
+    L55:;
     Int m = 0;
-    while (m < modules.size()) {
-        simse_list_append(semaInputs, _make_SemaInput(fileNames[m], modules[m]));
-        m = m + 1;
-    }
+    L56:;
+    if (!(m < modules.size())) goto L57;
+    simse_list_append(semaInputs, _make_SemaInput(fileNames[m], modules[m]));
+    m = m + 1;
+    goto L56;
+    L57:;
     List<Str> diagnostics = analyze(semaInputs);
-    if (diagnostics.size() > 0) {
+    if (!(diagnostics.size() > 0)) goto L59;
+    {
         Int d = 0;
-        while (d < diagnostics.size()) {
-            simse_eprintln(diagnostics[d]);
-            d = d + 1;
-        }
+        L60:;
+        if (!(d < diagnostics.size())) goto L61;
+        simse_eprintln(diagnostics[d]);
+        d = d + 1;
+        goto L60;
+        L61:;
         return 1;
     }
+    L59:;
     List<CgInput> cgInputs = List<CgInput>();
-    if (hasPrelude) {
-        simse_list_append(cgInputs, _make_CgInput(resolvedPrelude, mergedPrelude, true));
-    }
+    if (!(hasPrelude)) goto L63;
+    simse_list_append(cgInputs, _make_CgInput(resolvedPrelude, mergedPrelude, true));
+    L63:;
     Int g = 0;
-    while (g < modules.size()) {
-        simse_list_append(cgInputs, _make_CgInput(fileNames[g], modules[g], false));
-        g = g + 1;
-    }
+    L64:;
+    if (!(g < modules.size())) goto L65;
+    simse_list_append(cgInputs, _make_CgInput(fileNames[g], modules[g], false));
+    g = g + 1;
+    goto L64;
+    L65:;
     Res<Str> emitted = emitProgram(cgInputs);
-    if (!emitted.isOk()) {
-        simse_eprintln(emitted.Error);
-        return 1;
-    }
-    if (!simse_writeFile(output, emitted.Value)) {
-        simse_eprintln("simse_transpile: cannot write " + output);
-        return 1;
-    }
+    if (!(!emitted.isOk())) goto L67;
+    simse_eprintln(emitted.Error);
+    return 1;
+    L67:;
+    if (!(!simse_writeFile(output, emitted.Value))) goto L69;
+    simse_eprintln("simse_transpile: cannot write " + output);
+    return 1;
+    L69:;
     return 0;
 }
-// ./lex/Scanner.simse:36
+// cppsrc/lex/Scanner.simse:36
 Bool isSpace(Char ch) {
     return ch == ' ' || ch == '\t';
 }
-// ./lex/Scanner.simse:40
+// cppsrc/lex/Scanner.simse:40
 Bool isDigit(Char ch) {
     return ch >= '0' && ch <= '9';
 }
-// ./lex/Scanner.simse:44
+// cppsrc/lex/Scanner.simse:44
 Bool isAlpha(Char ch) {
     return ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch == '_';
 }
-// ./lex/Scanner.simse:48
+// cppsrc/lex/Scanner.simse:48
 Bool isAlphaOrDigit(Char ch) {
     return isAlpha(ch) || isDigit(ch);
 }
-// ./lex/Scanner.simse:52
+// cppsrc/lex/Scanner.simse:52
 Bool isOperatorChar(Char ch) {
     return ch == '+' || ch == '-' || ch == '*' || ch == '/' || ch == '%' || ch == '=' || ch == '<' || ch == '>' || ch == '!' || ch == '&' || ch == '|' || ch == '^' || ch == '~' || ch == '?' || ch == ':' || ch == ';' || ch == ',' || ch == '.' || ch == '(' || ch == ')' || ch == '[' || ch == ']' || ch == '{' || ch == '}';
 }
-// ./lex/Scanner.simse:61
+// cppsrc/lex/Scanner.simse:61
 Int matchAllOfRule(StrView view, CharPredicate predicate) {
     auto i = 0;
-    while (i < view.len) {
-        if (!predicate(at(view, i))) {
-            return i;
-        }
-        i = i + 1;
-    }
+    L1:;
+    if (!(i < view.len)) goto L2;
+    if (!(!predicate(at(view, i)))) goto L4;
+    return i;
+    L4:;
+    i = i + 1;
+    goto L1;
+    L2:;
     return view.len;
 }
-// ./lex/Scanner.simse:72
+// cppsrc/lex/Scanner.simse:72
 Int matchAllOfRules(StrView view, CharPredicate first, CharPredicate rest) {
-    if (view.len == 0) {
-        return 0;
-    }
-    if (!first(at(view, 0))) {
-        return 0;
-    }
+    if (!(view.len == 0)) goto L2;
+    return 0;
+    L2:;
+    if (!(!first(at(view, 0)))) goto L4;
+    return 0;
+    L4:;
     auto i = 1;
-    while (i < view.len) {
-        if (!rest(at(view, i))) {
-            return i;
-        }
-        i = i + 1;
-    }
+    L5:;
+    if (!(i < view.len)) goto L6;
+    if (!(!rest(at(view, i)))) goto L8;
+    return i;
+    L8:;
+    i = i + 1;
+    goto L5;
+    L6:;
     return view.len;
 }
-// ./lex/Scanner.simse:89
+// cppsrc/lex/Scanner.simse:89
 List<Str> reservedWords() {
     List<Str> words = List<Str>();
     simse_list_append(words, "class");
@@ -2732,7 +3519,7 @@ List<Str> reservedWords() {
     simse_list_append(words, "package");
     return words;
 }
-// ./lex/Scanner.simse:118
+// cppsrc/lex/Scanner.simse:118
 List<Str> multiCharOperators() {
     List<Str> operators = List<Str>();
     simse_list_append(operators, "->");
@@ -2749,157 +3536,201 @@ List<Str> multiCharOperators() {
     simse_list_append(operators, "%=");
     return operators;
 }
-// ./lex/Scanner.simse:135
+// cppsrc/lex/Scanner.simse:135
 Bool isReservedWord(StrView view) {
     List<Str> words = reservedWords();
     auto i = 0;
-    while (i < words.size()) {
+    L1:;
+    if (!(i < words.size())) goto L2;
+    {
         Str word = words[i];
-        if (view.len == word.size() && startsWith(view, word)) {
-            return true;
-        }
+        if (view.len == word.size() && startsWith(view, word)) goto L3;
+        goto L4;
+        L3:;
+        return true;
+        L4:;
         i = i + 1;
     }
+    goto L1;
+    L2:;
     return false;
 }
-// ./lex/Scanner.simse:148
+// cppsrc/lex/Scanner.simse:148
 Int matchSpaces(StrView view) {
     return matchAllOfRule(view, isSpace);
 }
-// ./lex/Scanner.simse:153
+// cppsrc/lex/Scanner.simse:153
 Int matchEndOfLine(StrView view) {
-    if (view.len == 0) {
-        return 0;
-    }
+    if (!(view.len == 0)) goto L2;
+    return 0;
+    L2:;
     Char ch = at(view, 0);
-    if (ch == '\n') {
-        return 1;
-    }
-    if (ch == '\r') {
-        if (view.len >= 2 && at(view, 1) == '\n') {
-            return 2;
-        }
-        return 1;
-    }
+    if (!(ch == '\n')) goto L4;
+    return 1;
+    L4:;
+    if (!(ch == '\r')) goto L6;
+    if (!(view.len >= 2 && at(view, 1) == '\n')) goto L8;
+    return 2;
+    L8:;
+    return 1;
+    L6:;
     return 0;
 }
-// ./lex/Scanner.simse:170
+// cppsrc/lex/Scanner.simse:170
 Int matchIdentifier(StrView view) {
     return matchAllOfRules(view, isAlpha, isAlphaOrDigit);
 }
-// ./lex/Scanner.simse:174
+// cppsrc/lex/Scanner.simse:174
 Int matchReservedWord(StrView view) {
     Int length = matchIdentifier(view);
-    if (length == 0) {
-        return 0;
-    }
-    if (isReservedWord(slice(view, length))) {
-        return length;
-    }
+    if (!(length == 0)) goto L2;
+    return 0;
+    L2:;
+    if (!(isReservedWord(slice(view, length)))) goto L4;
+    return length;
+    L4:;
     return 0;
 }
-// ./lex/Scanner.simse:185
+// cppsrc/lex/Scanner.simse:185
 Int matchNumber(StrView view) {
     auto i = 0;
-    while (i < view.len && isDigit(at(view, i))) {
-        i = i + 1;
-    }
-    if (i == 0) {
-        return 0;
-    }
-    if (i + 1 < view.len && at(view, i) == '.' && isDigit(at(view, i + 1))) {
-        i = i + 1;
-        while (i < view.len && isDigit(at(view, i))) {
-            i = i + 1;
-        }
-    }
+    L1:;
+    if (!(i < view.len && isDigit(at(view, i)))) goto L2;
+    i = i + 1;
+    goto L1;
+    L2:;
+    if (!(i == 0)) goto L4;
+    return 0;
+    L4:;
+    if (!(i + 1 < view.len && at(view, i) == '.' && isDigit(at(view, i + 1)))) goto L6;
+    i = i + 1;
+    L7:;
+    if (!(i < view.len && isDigit(at(view, i)))) goto L8;
+    i = i + 1;
+    goto L7;
+    L8:;
+    L6:;
     return i;
 }
-// ./lex/Scanner.simse:202
+// cppsrc/lex/Scanner.simse:202
 Int matchComment(StrView view) {
-    if (view.len < 2 || at(view, 0) != '/') {
-        return 0;
-    }
-    if (at(view, 1) == '/') {
+    if (!(view.len < 2 || at(view, 0) != '/')) goto L2;
+    return 0;
+    L2:;
+    if (!(at(view, 1) == '/')) goto L4;
+    {
         auto i = 2;
-        while (i < view.len && at(view, i) != '\n' && at(view, i) != '\r') {
-            i = i + 1;
-        }
+        L5:;
+        if (!(i < view.len && at(view, i) != '\n' && at(view, i) != '\r')) goto L6;
+        i = i + 1;
+        goto L5;
+        L6:;
         return i;
     }
-    if (at(view, 1) == '*') {
+    L4:;
+    if (!(at(view, 1) == '*')) goto L8;
+    {
         auto i = 2;
-        while (i + 1 < view.len) {
-            if (at(view, i) == '*' && at(view, i + 1) == '/') {
-                return i + 2;
-            }
-            i = i + 1;
-        }
+        L9:;
+        if (!(i + 1 < view.len)) goto L10;
+        if (at(view, i) == '*' && at(view, i + 1) == '/') goto L11;
+        goto L12;
+        L11:;
+        return i + 2;
+        L12:;
+        i = i + 1;
+        goto L9;
+        L10:;
     }
+    L8:;
     return 0;
 }
-// ./lex/Scanner.simse:225
+// cppsrc/lex/Scanner.simse:225
 Int matchStringLiteral(StrView view) {
-    if (view.len == 0 || at(view, 0) != '"') {
-        return 0;
-    }
+    if (!(view.len == 0 || at(view, 0) != '"')) goto L2;
+    return 0;
+    L2:;
     auto i = 1;
-    while (i < view.len) {
+    L3:;
+    if (!(i < view.len)) goto L4;
+    {
         Char ch = at(view, i);
-        if (ch == '\\') {
-            i = i + 2;
-            continue;
-        }
-        if (ch == '"') {
-            return i + 1;
-        }
+        if (ch == '\\') goto L5;
+        goto L6;
+        L5:;
+        i = i + 2;
+        goto L3;
+        L6:;
+        if (ch == '"') goto L7;
+        goto L8;
+        L7:;
+        return i + 1;
+        L8:;
         i = i + 1;
     }
+    goto L3;
+    L4:;
     return 0;
 }
-// ./lex/Scanner.simse:244
+// cppsrc/lex/Scanner.simse:244
 Int matchCharLiteral(StrView view) {
-    if (view.len == 0 || at(view, 0) != '\'') {
-        return 0;
-    }
+    if (!(view.len == 0 || at(view, 0) != '\'')) goto L2;
+    return 0;
+    L2:;
     auto i = 1;
-    while (i < view.len) {
+    L3:;
+    if (!(i < view.len)) goto L4;
+    {
         Char ch = at(view, i);
-        if (ch == '\\') {
-            i = i + 2;
-            continue;
-        }
-        if (ch == '\'') {
-            return i + 1;
-        }
-        if (ch == '\n') {
-            return 0;
-        }
+        if (ch == '\\') goto L5;
+        goto L6;
+        L5:;
+        i = i + 2;
+        goto L3;
+        L6:;
+        if (ch == '\'') goto L7;
+        goto L8;
+        L7:;
+        return i + 1;
+        L8:;
+        if (ch == '\n') goto L9;
+        goto L10;
+        L9:;
+        return 0;
+        L10:;
         i = i + 1;
     }
+    goto L3;
+    L4:;
     return 0;
 }
-// ./lex/Scanner.simse:266
+// cppsrc/lex/Scanner.simse:266
 Int matchOperator(StrView view) {
     List<Str> operators = multiCharOperators();
     auto i = 0;
-    while (i < operators.size()) {
+    L1:;
+    if (!(i < operators.size())) goto L2;
+    {
         Str op = operators[i];
-        if (view.len >= op.size() && startsWith(view, op)) {
-            return op.size();
-        }
+        if (view.len >= op.size() && startsWith(view, op)) goto L3;
+        goto L4;
+        L3:;
+        return op.size();
+        L4:;
         i = i + 1;
     }
-    if (view.len > 0 && isOperatorChar(at(view, 0))) {
-        return 1;
-    }
+    goto L1;
+    L2:;
+    if (!(view.len > 0 && isOperatorChar(at(view, 0)))) goto L6;
+    return 1;
+    L6:;
     return 0;
 }
-// ./lex/Scanner.simse:282
+// cppsrc/lex/Scanner.simse:282
 void addRule(std::shared_ptr<List<TokenMatcher>> rules, TokenKind tokenKind, MatchLenFunc match) {
     simse_list_append((*rules), _make_TokenMatcher(tokenKind, match));
 }
-// ./lex/Scanner.simse:286
+// cppsrc/lex/Scanner.simse:286
 std::shared_ptr<List<TokenMatcher>> getTokenRules() {
     std::shared_ptr<List<TokenMatcher>> rules = makeList<TokenMatcher>();
     addRule(rules, TokenKind::Comment, matchComment);
@@ -2913,230 +3744,682 @@ std::shared_ptr<List<TokenMatcher>> getTokenRules() {
     addRule(rules, TokenKind::Operator, matchOperator);
     return rules;
 }
-// ./lex/Scanner.simse:304
+// cppsrc/lex/Scanner.simse:304
 Str escapedSnippet(StrView view, Int maxLen) {
     Str hexDigits = "0123456789ABCDEF";
     Str snippet = Str();
     Int count = view.len;
-    if (count > maxLen) {
-        count = maxLen;
-    }
+    if (!(count > maxLen)) goto L2;
+    count = maxLen;
+    L2:;
     auto i = 0;
-    while (i < count) {
+    L3:;
+    if (!(i < count)) goto L4;
+    {
         Int byte = at(view, i);
-        if (byte < 0) {
-            byte = byte + 256;
-        }
-        if (byte == 92) {
-            simse_str_append(snippet, '\\');
-            simse_str_append(snippet, '\\');
-        } else {
-            if (byte == 10) {
-                simse_str_append(snippet, '\\');
-                simse_str_append(snippet, 'n');
-            } else {
-                if (byte == 13) {
-                    simse_str_append(snippet, '\\');
-                    simse_str_append(snippet, 'r');
-                } else {
-                    if (byte == 9) {
-                        simse_str_append(snippet, '\\');
-                        simse_str_append(snippet, 't');
-                    } else {
-                        if (byte >= 32 && byte <= 126) {
-                            simse_str_append(snippet, at(view, i));
-                        } else {
-                            simse_str_append(snippet, '\\');
-                            simse_str_append(snippet, 'x');
-                            simse_str_append(snippet, hexDigits[byte / 16]);
-                            simse_str_append(snippet, hexDigits[byte % 16]);
-                        }
-                    }
-                }
-            }
-        }
+        if (byte < 0) goto L5;
+        goto L6;
+        L5:;
+        byte = byte + 256;
+        L6:;
+        if (byte == 92) goto L7;
+        goto L8;
+        L7:;
+        simse_str_append(snippet, '\\');
+        simse_str_append(snippet, '\\');
+        goto L9;
+        L8:;
+        if (byte == 10) goto L10;
+        goto L11;
+        L10:;
+        simse_str_append(snippet, '\\');
+        simse_str_append(snippet, 'n');
+        goto L12;
+        L11:;
+        if (byte == 13) goto L13;
+        goto L14;
+        L13:;
+        simse_str_append(snippet, '\\');
+        simse_str_append(snippet, 'r');
+        goto L15;
+        L14:;
+        if (byte == 9) goto L16;
+        goto L17;
+        L16:;
+        simse_str_append(snippet, '\\');
+        simse_str_append(snippet, 't');
+        goto L18;
+        L17:;
+        if (byte >= 32 && byte <= 126) goto L19;
+        goto L20;
+        L19:;
+        simse_str_append(snippet, at(view, i));
+        goto L21;
+        L20:;
+        simse_str_append(snippet, '\\');
+        simse_str_append(snippet, 'x');
+        simse_str_append(snippet, hexDigits[byte / 16]);
+        simse_str_append(snippet, hexDigits[byte % 16]);
+        L21:;
+        L18:;
+        L15:;
+        L12:;
+        L9:;
         i = i + 1;
     }
+    goto L3;
+    L4:;
     return snippet;
 }
-// ./lex/Scanner.simse:343
+// cppsrc/lex/Scanner.simse:343
 Str unexpectedCharacterMessage(Int line, Int column, Str snippet) {
     return simse_int_toString(line) + ":" + simse_int_toString(column) + ": Unexpected character: '" + snippet + "'";
 }
-// ./lex/Scanner.simse:348
+// cppsrc/lex/Scanner.simse:348
 void setSource(Scanner& self, Str text) {
     self.source = text;
     self.pos = 0;
     self.line = 1;
     self.column = 1;
 }
-// ./lex/Scanner.simse:358
+// cppsrc/lex/Scanner.simse:358
 void advance(Scanner& self, Int count) {
     auto i = 0;
-    while (i < count) {
+    L1:;
+    if (!(i < count)) goto L2;
+    {
         Char ch = self.source[self.pos];
         Bool followedByLf = self.pos + 1 < self.source.size() && self.source[self.pos + 1] == '\n';
-        if (ch == '\n' || ch == '\r' && !followedByLf) {
-            self.line = self.line + 1;
-            self.column = 1;
-        } else {
-            self.column = self.column + 1;
-        }
+        if (ch == '\n' || ch == '\r' && !followedByLf) goto L3;
+        goto L4;
+        L3:;
+        self.line = self.line + 1;
+        self.column = 1;
+        goto L5;
+        L4:;
+        self.column = self.column + 1;
+        L5:;
         self.pos = self.pos + 1;
         i = i + 1;
     }
+    goto L1;
+    L2:;
 }
-// ./lex/Scanner.simse:374
+// cppsrc/lex/Scanner.simse:374
 Res<Token> nextToken(Scanner& self) {
-    while (self.pos < self.source.size()) {
-        StrView view = _make_StrView(std::make_shared<std::remove_cvref_t<decltype((self.source))>>(self.source), self.pos, self.source.size() - self.pos);
+    L1:;
+    if (!(self.pos < self.source.size())) goto L2;
+    {
+        StrView view = _make_StrView(simse_addressOf(self.source), self.pos, self.source.size() - self.pos);
         auto i = 0;
-        while (i < self.rules->size()) {
+        L3:;
+        if (!(i < self.rules->size())) goto L4;
+        {
             TokenMatcher rule = (*self.rules)[i];
             Int matchLength = rule.match(view);
-            if (matchLength > 0) {
+            if (matchLength > 0) goto L5;
+            goto L6;
+            L5:;
+            {
                 SourcePos startPos = _make_SourcePos(self.pos, self.line, self.column);
                 StrView matched = slice(view, matchLength);
                 Token token = _make_Token(toString(matched), rule.tokenKind, startPos);
                 advance(self, matchLength);
                 return Res<Token>::ok(token);
             }
+            L6:;
             i = i + 1;
         }
+        goto L3;
+        L4:;
         return Res<Token>::err(unexpectedCharacterMessage(self.line, self.column, escapedSnippet(view, 10)));
     }
+    goto L1;
+    L2:;
     return Res<Token>::ok(_make_Token("", TokenKind::Eof, _make_SourcePos(self.pos, self.line, self.column)));
 }
-// ./lex/Scanner.simse:398
+// cppsrc/lex/Scanner.simse:400
 Res<List<Token>> readFileAsTokens(Scanner* scanner, Str fileName) {
     Str content = simse_native_readFile(fileName);
     setSource((*scanner), content);
     List<Token> tokens = List<Token>();
-    while (true) {
+    L1:;
+    if (!(true)) goto L2;
+    {
         Res<Token> result = nextToken((*scanner));
-        if (!result.isOk()) {
-            return Res<List<Token>>::err(fileName + ": " + result.Error);
-        }
-        if (result.Value.kind == TokenKind::Eof) {
-            return Res<List<Token>>::ok(tokens);
-        }
+        if (!result.isOk()) goto L3;
+        goto L4;
+        L3:;
+        return Res<List<Token>>::err(fileName + ": " + result.Error);
+        L4:;
+        if (result.Value.kind == TokenKind::Eof) goto L5;
+        goto L6;
+        L5:;
+        return Res<List<Token>>::ok(tokens);
+        L6:;
         simse_list_append(tokens, result.Value);
     }
+    goto L1;
+    L2:;
 }
-// ./lex/Scanner.simse:415
+// cppsrc/lex/Scanner.simse:417
 Bool isSpaceBasedToken(TokenKind kind) {
     return kind == TokenKind::Space || kind == TokenKind::Comment;
 }
-// ./lex/Scanner.simse:420
+// cppsrc/lex/Scanner.simse:422
 Res<List<Token>> readFileAndSkipSpacesTokens(Scanner* scanner, Str fileName) {
     Res<List<Token>> allResult = readFileAsTokens(scanner, fileName);
-    if (!allResult.isOk()) {
-        return Res<List<Token>>::err(allResult.Error);
-    }
+    if (!(!allResult.isOk())) goto L2;
+    return Res<List<Token>>::err(allResult.Error);
+    L2:;
     List<Token> tokens = List<Token>();
     List<Token> all = allResult.Value;
     auto i = 0;
-    while (i < all.size()) {
+    L3:;
+    if (!(i < all.size())) goto L4;
+    {
         Token token = all[i];
-        if (!isSpaceBasedToken(token.kind)) {
-            simse_list_append(tokens, token);
-        }
+        if (!isSpaceBasedToken(token.kind)) goto L5;
+        goto L6;
+        L5:;
+        simse_list_append(tokens, token);
+        L6:;
         i = i + 1;
     }
+    goto L3;
+    L4:;
     return Res<List<Token>>::ok(tokens);
 }
-// ./parser/Parser.simse:25
+// cppsrc/linear/Linear.simse:28
+XmlNode linStmt(Str kind, Int line, Int column) {
+    List<Attribute> attrs = List<Attribute>();
+    simse_list_append(attrs, Attribute("kind", kind));
+    simse_list_append(attrs, Attribute("line", simse_int_toString(line)));
+    simse_list_append(attrs, Attribute("column", simse_int_toString(column)));
+    return XmlNode("Stmt", attrs, makeList<XmlNode>());
+}
+// cppsrc/linear/Linear.simse:39
+XmlNode linRole(XmlNode* child, Str role) {
+    XmlNode renamed = *(child);
+    renamed.name = role;
+    return renamed;
+}
+// cppsrc/linear/Linear.simse:45
+XmlNode linLabel(Str name, Int line, Int column) {
+    XmlNode node = linStmt("Stmt.Label", line, column);
+    simse_list_append(node.attributes, Attribute("name", name));
+    return node;
+}
+// cppsrc/linear/Linear.simse:51
+XmlNode linGoto(Str name, Int line, Int column) {
+    XmlNode node = linStmt("Stmt.Goto", line, column);
+    simse_list_append(node.attributes, Attribute("name", name));
+    return node;
+}
+// cppsrc/linear/Linear.simse:59
+XmlNode linCondJump(Str kind, XmlNode* cond, Str name, Int line, Int column) {
+    XmlNode node = linStmt(kind, line, column);
+    simse_list_append(node.attributes, Attribute("name", name));
+    simse_list_append((*node.Children), *cond);
+    return node;
+}
+// cppsrc/linear/Linear.simse:66
+XmlNode linBlock(List<XmlNode>* body, Int line, Int column) {
+    XmlNode box = XmlNode("Body", List<Attribute>(), makeList<XmlNode>());
+    Int i = 0;
+    L1:;
+    if (!(i < body->size())) goto L2;
+    simse_list_append((*box.Children), (*body)[i]);
+    i = i + 1;
+    goto L1;
+    L2:;
+    XmlNode node = linStmt("Stmt.Block", line, column);
+    simse_list_append((*node.Children), box);
+    return node;
+}
+// cppsrc/linear/Linear.simse:79
+XmlNode linSubjectDecl(Str name, XmlNode* init, Int line, Int column) {
+    XmlNode node = linStmt("Stmt.VarDecl", line, column);
+    simse_list_append(node.attributes, Attribute("name", name));
+    simse_list_append(node.attributes, Attribute("isVar", "false"));
+    simse_list_append((*node.Children), linRole(init, "Init"));
+    return node;
+}
+// cppsrc/linear/Linear.simse:87
+XmlNode linName(Str role, Str name, Int line, Int column) {
+    List<Attribute> attrs = List<Attribute>();
+    simse_list_append(attrs, Attribute("kind", "Expr.Name"));
+    simse_list_append(attrs, Attribute("line", simse_int_toString(line)));
+    simse_list_append(attrs, Attribute("column", simse_int_toString(column)));
+    simse_list_append(attrs, Attribute("name", name));
+    return XmlNode(role, attrs, makeList<XmlNode>());
+}
+// cppsrc/linear/Linear.simse:96
+XmlNode linEquals(Str role, XmlNode* lhs, XmlNode* rhs, Int line, Int column) {
+    List<Attribute> attrs = List<Attribute>();
+    simse_list_append(attrs, Attribute("kind", "Expr.Binary"));
+    simse_list_append(attrs, Attribute("line", simse_int_toString(line)));
+    simse_list_append(attrs, Attribute("column", simse_int_toString(column)));
+    simse_list_append(attrs, Attribute("op", "=="));
+    XmlNode node = XmlNode(role, attrs, makeList<XmlNode>());
+    simse_list_append((*node.Children), *lhs);
+    simse_list_append((*node.Children), *rhs);
+    return node;
+}
+// cppsrc/linear/Linear.simse:113
+Int nextId(LinLowerer& self) {
+    Int id = self.next;
+    self.next = self.next + 1;
+    return id;
+}
+// cppsrc/linear/Linear.simse:119
+Str freshLabel(LinLowerer& self) {
+    return "L" + simse_int_toString(nextId(self));
+}
+// cppsrc/linear/Linear.simse:125
+List<XmlNode> lowerBody(LinLowerer& self, List<XmlNode> stmts) {
+    List<XmlNode> out = List<XmlNode>();
+    lowerStmts(self, &stmts, "", "", &out);
+    return out;
+}
+// cppsrc/linear/Linear.simse:132
+void lowerStmts(LinLowerer& self, List<XmlNode>* stmts, Str breakTo, Str continueTo, List<XmlNode>* out) {
+    Int i = 0;
+    L1:;
+    if (!(i < stmts->size())) goto L2;
+    lowerStmt(self, simse_addressOf((*stmts)[i]), breakTo, continueTo, out);
+    i = i + 1;
+    goto L1;
+    L2:;
+}
+// cppsrc/linear/Linear.simse:140
+void lowerStmt(LinLowerer& self, XmlNode* stmt, Str breakTo, Str continueTo, List<XmlNode>* out) {
+    Str kind = xmlKind(stmt);
+    if (!(kind == "Stmt.If")) goto L2;
+    lowerIf(self, stmt, breakTo, continueTo, out);
+    return;
+    L2:;
+    if (!(kind == "Stmt.While")) goto L4;
+    lowerWhile(self, stmt, breakTo, continueTo, out);
+    return;
+    L4:;
+    if (!(kind == "Stmt.Switch")) goto L6;
+    lowerSwitch(self, stmt, breakTo, continueTo, out);
+    return;
+    L6:;
+    if (!(kind == "Stmt.Break")) goto L8;
+    if (!(breakTo != "")) goto L10;
+    simse_list_append((*out), linGoto(breakTo, xmlLine(stmt), xmlColumn(stmt)));
+    return;
+    L10:;
+    simse_list_append((*out), *(stmt));
+    return;
+    L8:;
+    if (!(kind == "Stmt.Continue")) goto L12;
+    if (!(continueTo != "")) goto L14;
+    simse_list_append((*out), linGoto(continueTo, xmlLine(stmt), xmlColumn(stmt)));
+    return;
+    L14:;
+    simse_list_append((*out), *(stmt));
+    return;
+    L12:;
+    simse_list_append((*out), *(stmt));
+}
+// cppsrc/linear/Linear.simse:177
+void appendBody(LinLowerer& self, List<XmlNode>* body, Int line, Int column, List<XmlNode>* out) {
+    if (!(declares(self, body))) goto L2;
+    simse_list_append((*out), linBlock(body, line, column));
+    return;
+    L2:;
+    Int i = 0;
+    L3:;
+    if (!(i < body->size())) goto L4;
+    simse_list_append((*out), (*body)[i]);
+    i = i + 1;
+    goto L3;
+    L4:;
+}
+// cppsrc/linear/Linear.simse:189
+Bool declares(LinLowerer& self, List<XmlNode>* body) {
+    Int i = 0;
+    L1:;
+    if (!(i < body->size())) goto L2;
+    if (!(xmlKind(simse_addressOf((*body)[i])) == "Stmt.VarDecl")) goto L4;
+    return true;
+    L4:;
+    i = i + 1;
+    goto L1;
+    L2:;
+    return false;
+}
+// cppsrc/linear/Linear.simse:200
+void lowerIf(LinLowerer& self, XmlNode* stmt, Str breakTo, Str continueTo, List<XmlNode>* out) {
+    Str thenLabel = freshLabel(self);
+    Str elseLabel = freshLabel(self);
+    Int line = xmlLine(stmt);
+    Int column = xmlColumn(stmt);
+    simse_list_append((*out), linCondJump("Stmt.IfTrue", simse_addressOf(xmlChild(stmt, "Cond")), thenLabel, line, column));
+    simse_list_append((*out), linGoto(elseLabel, line, column));
+    simse_list_append((*out), linLabel(thenLabel, line, column));
+    List<XmlNode> thenOut = List<XmlNode>();
+    lowerStmts(self, simse_addressOf(xmlChildren(simse_addressOf(xmlChild(stmt, "Then")), "Stmt")), breakTo, continueTo, &thenOut);
+    appendBody(self, &thenOut, line, column, out);
+    if (!(xmlHasChild(stmt, "Else"))) goto L2;
+    {
+        Str endLabel = freshLabel(self);
+        simse_list_append((*out), linGoto(endLabel, line, column));
+        simse_list_append((*out), linLabel(elseLabel, line, column));
+        List<XmlNode> elseOut = List<XmlNode>();
+        lowerStmts(self, simse_addressOf(xmlChildren(simse_addressOf(xmlChild(stmt, "Else")), "Stmt")), breakTo, continueTo, &elseOut);
+        appendBody(self, &elseOut, line, column, out);
+        simse_list_append((*out), linLabel(endLabel, line, column));
+    }
+    goto L3;
+    L2:;
+    simse_list_append((*out), linLabel(elseLabel, line, column));
+    L3:;
+}
+// cppsrc/linear/Linear.simse:224
+void lowerWhile(LinLowerer& self, XmlNode* stmt, Str breakTo, Str continueTo, List<XmlNode>* out) {
+    Str condLabel = freshLabel(self);
+    Str endLabel = freshLabel(self);
+    Int line = xmlLine(stmt);
+    Int column = xmlColumn(stmt);
+    List<XmlNode> bodyOut = List<XmlNode>();
+    lowerStmts(self, simse_addressOf(xmlChildren(simse_addressOf(xmlChild(stmt, "Body")), "Stmt")), endLabel, condLabel, &bodyOut);
+    simse_list_append((*out), linLabel(condLabel, line, column));
+    simse_list_append((*out), linCondJump("Stmt.IfFalse", simse_addressOf(xmlChild(stmt, "Cond")), endLabel, line, column));
+    appendBody(self, &bodyOut, line, column, out);
+    simse_list_append((*out), linGoto(condLabel, line, column));
+    simse_list_append((*out), linLabel(endLabel, line, column));
+}
+// cppsrc/linear/Linear.simse:238
+void lowerSwitch(LinLowerer& self, XmlNode* stmt, Str breakTo, Str continueTo, List<XmlNode>* out) {
+    Int subjectId = nextId(self);
+    Str subject = "simse_sw_" + simse_int_toString(subjectId);
+    Str endLabel = freshLabel(self);
+    Int line = xmlLine(stmt);
+    Int column = xmlColumn(stmt);
+    List<XmlNode> cases = xmlChildren(stmt, "Case");
+    List<Str> armLabels = List<Str>();
+    Int i = 0;
+    L1:;
+    if (!(i < cases.size())) goto L2;
+    simse_list_append(armLabels, freshLabel(self));
+    i = i + 1;
+    goto L1;
+    L2:;
+    Str fallback = endLabel;
+    i = 0;
+    L3:;
+    if (!(i < cases.size())) goto L4;
+    if (!(xmlAttr(simse_addressOf(cases[i]), "isDefault") == "true")) goto L6;
+    fallback = armLabels[i];
+    L6:;
+    i = i + 1;
+    goto L3;
+    L4:;
+    simse_list_append((*out), linSubjectDecl(subject, simse_addressOf(xmlChild(stmt, "Cond")), line, column));
+    i = 0;
+    L7:;
+    if (!(i < cases.size())) goto L8;
+    if (!(xmlAttr(simse_addressOf(cases[i]), "isDefault") != "true")) goto L10;
+    {
+        XmlNode eq = linEquals("Cond", simse_addressOf(linName("Lhs", subject, line, column)), simse_addressOf(linRole(simse_addressOf(xmlChild(simse_addressOf(cases[i]), "Label")), "Rhs")), line, column);
+        simse_list_append((*out), linCondJump("Stmt.IfTrue", &eq, armLabels[i], line, column));
+    }
+    L10:;
+    i = i + 1;
+    goto L7;
+    L8:;
+    simse_list_append((*out), linGoto(fallback, line, column));
+    i = 0;
+    L11:;
+    if (!(i < cases.size())) goto L12;
+    {
+        Int caseLine = xmlLine(simse_addressOf(cases[i]));
+        Int caseColumn = xmlColumn(simse_addressOf(cases[i]));
+        simse_list_append((*out), linLabel(armLabels[i], caseLine, caseColumn));
+        List<XmlNode> armOut = List<XmlNode>();
+        lowerStmts(self, simse_addressOf(xmlChildren(simse_addressOf(cases[i]), "Stmt")), endLabel, continueTo, &armOut);
+        appendBody(self, &armOut, caseLine, caseColumn, out);
+        i = i + 1;
+    }
+    goto L11;
+    L12:;
+    simse_list_append((*out), linLabel(endLabel, line, column));
+}
+// cppsrc/linear/Linear.simse:293
+List<XmlNode> linLowerBody(List<XmlNode> stmts) {
+    LinLowerer lowerer = _make_LinLowerer(1);
+    return lowerBody(lowerer, stmts);
+}
+// cppsrc/linear/Simplify.simse:20
+Bool linIsLabel(XmlNode* stmt) {
+    return xmlKind(stmt) == "Stmt.Label";
+}
+// cppsrc/linear/Simplify.simse:24
+Bool linIsGoto(XmlNode* stmt) {
+    return xmlKind(stmt) == "Stmt.Goto";
+}
+// cppsrc/linear/Simplify.simse:28
+Bool linIsCondJump(XmlNode* stmt) {
+    Str kind = xmlKind(stmt);
+    return kind == "Stmt.IfTrue" || kind == "Stmt.IfFalse";
+}
+// cppsrc/linear/Simplify.simse:33
+Bool linIsTerminator(XmlNode* stmt) {
+    Str kind = xmlKind(stmt);
+    return kind == "Stmt.Goto" || kind == "Stmt.Return";
+}
+// cppsrc/linear/Simplify.simse:38
+Bool linJumpsTo(List<XmlNode>* stmts, Str name) {
+    Int i = 0;
+    L1:;
+    if (!(i < stmts->size())) goto L2;
+    if (!((linIsGoto(simse_addressOf((*stmts)[i])) || linIsCondJump(simse_addressOf((*stmts)[i]))) && xmlAttr(simse_addressOf((*stmts)[i]), "name") == name)) goto L4;
+    return true;
+    L4:;
+    i = i + 1;
+    goto L1;
+    L2:;
+    return false;
+}
+// cppsrc/linear/Simplify.simse:52
+XmlNode linInvertedJump(XmlNode* jump, Str target) {
+    Str kind = "Stmt.IfTrue";
+    if (!(xmlKind(jump) == "Stmt.IfTrue")) goto L2;
+    kind = "Stmt.IfFalse";
+    L2:;
+    List<Attribute> attrs = List<Attribute>();
+    simse_list_append(attrs, Attribute("kind", kind));
+    simse_list_append(attrs, Attribute("line", simse_int_toString(xmlLine(jump))));
+    simse_list_append(attrs, Attribute("column", simse_int_toString(xmlColumn(jump))));
+    simse_list_append(attrs, Attribute("name", target));
+    XmlNode node = XmlNode("Stmt", attrs, makeList<XmlNode>());
+    simse_list_append((*node.Children), xmlChild(jump, "Cond"));
+    return node;
+}
+// cppsrc/linear/Simplify.simse:70
+List<XmlNode> prunePass(LinSimplifier& self, List<XmlNode>* stmts) {
+    List<XmlNode> out = List<XmlNode>();
+    Int i = 0;
+    L1:;
+    if (!(i < stmts->size())) goto L2;
+    {
+        XmlNode stmt = (*stmts)[i];
+        if ((linIsGoto(&stmt) || linIsCondJump(&stmt)) && i + 1 < stmts->size() && linIsLabel(simse_addressOf((*stmts)[i + 1])) && xmlAttr(simse_addressOf((*stmts)[i + 1]), "name") == xmlAttr(&stmt, "name")) goto L3;
+        goto L4;
+        L3:;
+        self.changed = true;
+        i = i + 1;
+        goto L5;
+        L4:;
+        if (linIsCondJump(&stmt) && i + 2 < stmts->size() && linIsGoto(simse_addressOf((*stmts)[i + 1])) && linIsLabel(simse_addressOf((*stmts)[i + 2])) && xmlAttr(simse_addressOf((*stmts)[i + 2]), "name") == xmlAttr(&stmt, "name")) goto L6;
+        goto L7;
+        L6:;
+        simse_list_append(out, linInvertedJump(&stmt, xmlAttr(simse_addressOf((*stmts)[i + 1]), "name")));
+        self.changed = true;
+        i = i + 2;
+        goto L8;
+        L7:;
+        simse_list_append(out, (stmt));
+        if (linIsTerminator(&stmt)) goto L9;
+        goto L10;
+        L9:;
+        L11:;
+        if (!(i + 1 < stmts->size() && !linIsLabel(simse_addressOf((*stmts)[i + 1])))) goto L12;
+        self.changed = true;
+        i = i + 1;
+        goto L11;
+        L12:;
+        L10:;
+        i = i + 1;
+        L8:;
+        L5:;
+    }
+    goto L1;
+    L2:;
+    return out;
+}
+// cppsrc/linear/Simplify.simse:105
+List<XmlNode> labelPass(LinSimplifier& self, List<XmlNode>* stmts) {
+    List<XmlNode> out = List<XmlNode>();
+    Int i = 0;
+    L1:;
+    if (!(i < stmts->size())) goto L2;
+    {
+        XmlNode stmt = (*stmts)[i];
+        if (linIsLabel(&stmt) && !linJumpsTo(stmts, xmlAttr(&stmt, "name"))) goto L3;
+        goto L4;
+        L3:;
+        self.changed = true;
+        goto L5;
+        L4:;
+        simse_list_append(out, (stmt));
+        L5:;
+        i = i + 1;
+    }
+    goto L1;
+    L2:;
+    return out;
+}
+// cppsrc/linear/Simplify.simse:120
+List<XmlNode> run(LinSimplifier& self, List<XmlNode> stmts) {
+    List<XmlNode> current = stmts;
+    self.changed = true;
+    Int guard = 0;
+    L1:;
+    if (!(self.changed && guard < 16)) goto L2;
+    guard = guard + 1;
+    self.changed = false;
+    current = prunePass(self, &current);
+    current = labelPass(self, &current);
+    goto L1;
+    L2:;
+    return current;
+}
+// cppsrc/linear/Simplify.simse:134
+List<XmlNode> linSimplifyBody(List<XmlNode> body) {
+    LinSimplifier simplifier = _make_LinSimplifier(false);
+    return run(simplifier, body);
+}
+// cppsrc/parser/Parser.simse:25
 Token peek(Parser& self, Int offset) {
-    if (offset <= 0) {
-        return self.cursor.value();
-    }
+    if (!(offset <= 0)) goto L2;
+    return self.cursor.value();
+    L2:;
     Cursor<Token> rest = self.cursor.slice(offset);
-    if (rest.hasValue()) {
-        return rest.value();
-    }
+    if (!(rest.hasValue())) goto L4;
+    return rest.value();
+    L4:;
     return self.cursor.slice(self.cursor.size() - 1).value();
 }
-// ./parser/Parser.simse:36
+// cppsrc/parser/Parser.simse:36
 Token advance(Parser& self) {
     Token token = self.cursor.value();
-    if (self.cursor.size() > 1) {
-        self.cursor = self.cursor.next();
-    }
+    if (!(self.cursor.size() > 1)) goto L2;
+    self.cursor = self.cursor.next();
+    L2:;
     return token;
 }
-// ./parser/Parser.simse:44
+// cppsrc/parser/Parser.simse:44
 Bool atEnd(Parser& self) {
     return peek(self, 0).kind == TokenKind::Eof;
 }
-// ./parser/Parser.simse:48
+// cppsrc/parser/Parser.simse:48
 Bool checkText(Parser& self, Str text) {
     return peek(self, 0).text == text;
 }
-// ./parser/Parser.simse:52
+// cppsrc/parser/Parser.simse:52
 Bool checkKind(Parser& self, TokenKind kind) {
     return peek(self, 0).kind == kind;
 }
-// ./parser/Parser.simse:56
+// cppsrc/parser/Parser.simse:56
 Bool matchText(Parser& self, Str text) {
-    if (checkText(self, text)) {
-        advance(self);
-        return true;
-    }
+    if (!(checkText(self, text))) goto L2;
+    advance(self);
+    return true;
+    L2:;
     return false;
 }
-// ./parser/Parser.simse:64
+// cppsrc/parser/Parser.simse:64
 void setError(Parser& self, SourcePos pos, Str message) {
-    if (self.failed) {
-        return;
-    }
+    if (!(self.failed)) goto L2;
+    return;
+    L2:;
     self.failed = true;
     self.error = self.file + ":" + simse_int_toString(pos.line) + ":" + simse_int_toString(pos.column) + ": " + message;
 }
-// ./parser/Parser.simse:73
+// cppsrc/parser/Parser.simse:73
 Bool fail(Parser& self, Str message) {
     setError(self, peek(self, 0).pos, message);
     return false;
 }
-// ./parser/Parser.simse:78
+// cppsrc/parser/Parser.simse:78
 Bool expectText(Parser& self, Str text) {
-    if (matchText(self, text)) {
-        return true;
-    }
+    if (!(matchText(self, text))) goto L2;
+    return true;
+    L2:;
     return fail(self, "expected '" + text + "'");
 }
-// ./parser/Parser.simse:85
+// cppsrc/parser/Parser.simse:85
 Str expectName(Parser& self) {
-    if (checkKind(self, TokenKind::Identifier)) {
-        return advance(self).text;
-    }
+    if (!(checkKind(self, TokenKind::Identifier))) goto L2;
+    return advance(self).text;
+    L2:;
     fail(self, "expected name");
     return "";
 }
-// ./parser/Parser.simse:93
+// cppsrc/parser/Parser.simse:93
 void skipSeparators(Parser& self) {
-    while (checkKind(self, TokenKind::EndOfLine) || checkText(self, ";")) {
-        advance(self);
-    }
+    L1:;
+    if (!(checkKind(self, TokenKind::EndOfLine) || checkText(self, ";"))) goto L2;
+    advance(self);
+    goto L1;
+    L2:;
 }
-// ./parser/Parser.simse:99
+// cppsrc/parser/Parser.simse:99
 void skipNewlines(Parser& self) {
-    while (checkKind(self, TokenKind::EndOfLine)) {
-        advance(self);
-    }
+    L1:;
+    if (!(checkKind(self, TokenKind::EndOfLine))) goto L2;
+    advance(self);
+    goto L1;
+    L2:;
 }
-// ./parser/Parser.simse:105
+// cppsrc/parser/Parser.simse:105
 Bool atStmtEnd(Parser& self) {
     return checkKind(self, TokenKind::EndOfLine) || atEnd(self) || checkText(self, ";") || checkText(self, "}");
 }
-// ./parser/Parser.simse:112
+// cppsrc/parser/Parser.simse:112
 XmlNode emptyNode(Parser& self) {
     return XmlNode("", List<Attribute>(), makeList<XmlNode>());
 }
-// ./parser/Parser.simse:116
+// cppsrc/parser/Parser.simse:116
 ExprNode emptyExpr(Parser& self) {
     return _make_ExprNode(emptyNode(self), 0, 0);
 }
-// ./parser/Parser.simse:121
+// cppsrc/parser/Parser.simse:121
 List<Attribute> posAttrs(Parser& self, Str kind, Int line, Int column) {
     List<Attribute> attrs = List<Attribute>();
     simse_list_append(attrs, Attribute("kind", kind));
@@ -3144,51 +4427,63 @@ List<Attribute> posAttrs(Parser& self, Str kind, Int line, Int column) {
     simse_list_append(attrs, Attribute("column", simse_int_toString(column)));
     return attrs;
 }
-// ./parser/Parser.simse:132
-void attach(Parser& self, XmlNode parent, Str role, XmlNode child) {
-    XmlNode renamed = child;
+// cppsrc/parser/Parser.simse:132
+void attach(Parser& self, XmlNode* parent, Str role, XmlNode* child) {
+    XmlNode renamed = *(child);
     renamed.name = role;
-    simse_list_append((*parent.Children), renamed);
+    simse_list_append((*parent->Children), renamed);
 }
-// ./parser/Parser.simse:138
-XmlNode container(Parser& self, Str name, List<XmlNode> children) {
+// cppsrc/parser/Parser.simse:138
+XmlNode container(Parser& self, Str name, List<XmlNode>* children) {
     XmlNode box = XmlNode(name, List<Attribute>(), makeList<XmlNode>());
     Int i = 0;
-    while (i < children.size()) {
-        simse_list_append((*box.Children), children[i]);
-        i = i + 1;
-    }
+    L1:;
+    if (!(i < children->size())) goto L2;
+    simse_list_append((*box.Children), (*children)[i]);
+    i = i + 1;
+    goto L1;
+    L2:;
     return box;
 }
-// ./parser/Parser.simse:148
-void appendTypeParams(Parser& self, XmlNode node, List<Str> names) {
+// cppsrc/parser/Parser.simse:149
+void appendTypeParams(Parser& self, XmlNode* node, List<Str>* names) {
     Int i = 0;
-    while (i < names.size()) {
+    L1:;
+    if (!(i < names->size())) goto L2;
+    {
         List<Attribute> attrs = List<Attribute>();
-        simse_list_append(attrs, Attribute("name", names[i]));
-        simse_list_append((*node.Children), XmlNode("TypeParam", attrs, makeList<XmlNode>()));
+        simse_list_append(attrs, Attribute("name", (*names)[i]));
+        simse_list_append((*node->Children), XmlNode("TypeParam", attrs, makeList<XmlNode>()));
         i = i + 1;
     }
+    goto L1;
+    L2:;
 }
-// ./parser/Parser.simse:160
+// cppsrc/parser/Parser.simse:161
 XmlNode parseRoot(Parser& self) {
     skipSeparators(self);
     Str packageName = "";
-    if (!checkText(self, "package")) {
-        fail(self, "expected 'package' declaration");
-        return emptyNode(self);
-    }
+    if (!(!checkText(self, "package"))) goto L2;
+    fail(self, "expected 'package' declaration");
+    return emptyNode(self);
+    L2:;
     advance(self);
     packageName = expectName(self);
-    if (!self.failed) {
-        while (matchText(self, ".")) {
-            Str next = expectName(self);
-            if (self.failed) {
-                break;
-            }
-            packageName = packageName + "." + next;
-        }
+    if (!(!self.failed)) goto L4;
+    L5:;
+    if (!(matchText(self, "."))) goto L6;
+    {
+        Str next = expectName(self);
+        if (self.failed) goto L7;
+        goto L8;
+        L7:;
+        goto L6;
+        L8:;
+        packageName = packageName + "." + next;
     }
+    goto L5;
+    L6:;
+    L4:;
     skipSeparators(self);
     List<Attribute> attrs = List<Attribute>();
     simse_list_append(attrs, Attribute("kind", "Module"));
@@ -3198,204 +4493,255 @@ XmlNode parseRoot(Parser& self) {
     XmlNode root = XmlNode("Module", attrs, makeList<XmlNode>());
     List<XmlNode> imports = List<XmlNode>();
     List<XmlNode> decls = List<XmlNode>();
-    while (!atEnd(self) && !self.failed) {
-        if (checkText(self, "import")) {
-            simse_list_append(imports, parseImport(self));
-        } else {
-            simse_list_append(decls, parseDecl(self));
-        }
-        skipSeparators(self);
-    }
+    L9:;
+    if (!(!atEnd(self) && !self.failed)) goto L10;
+    if (!(checkText(self, "import"))) goto L12;
+    simse_list_append(imports, parseImport(self));
+    goto L13;
+    L12:;
+    simse_list_append(decls, parseDecl(self));
+    L13:;
+    skipSeparators(self);
+    goto L9;
+    L10:;
     Int i = 0;
-    while (i < imports.size()) {
-        simse_list_append((*root.Children), imports[i]);
-        i = i + 1;
-    }
+    L14:;
+    if (!(i < imports.size())) goto L15;
+    simse_list_append((*root.Children), imports[i]);
+    i = i + 1;
+    goto L14;
+    L15:;
     Int j = 0;
-    while (j < decls.size()) {
-        simse_list_append((*root.Children), decls[j]);
-        j = j + 1;
-    }
+    L16:;
+    if (!(j < decls.size())) goto L17;
+    simse_list_append((*root.Children), decls[j]);
+    j = j + 1;
+    goto L16;
+    L17:;
     return root;
 }
-// ./parser/Parser.simse:218
+// cppsrc/parser/Parser.simse:219
 XmlNode parseImport(Parser& self) {
     SourcePos pos = peek(self, 0).pos;
     advance(self);
     Str path = expectName(self);
-    if (self.failed) {
-        return emptyNode(self);
-    }
-    while (matchText(self, ".")) {
+    if (!(self.failed)) goto L2;
+    return emptyNode(self);
+    L2:;
+    L3:;
+    if (!(matchText(self, "."))) goto L4;
+    {
         Str next = expectName(self);
-        if (self.failed) {
-            return emptyNode(self);
-        }
+        if (self.failed) goto L5;
+        goto L6;
+        L5:;
+        return emptyNode(self);
+        L6:;
         path = path + "." + next;
     }
+    goto L3;
+    L4:;
     List<Attribute> attrs = List<Attribute>();
     simse_list_append(attrs, Attribute("path", path));
     simse_list_append(attrs, Attribute("line", simse_int_toString(pos.line)));
     simse_list_append(attrs, Attribute("column", simse_int_toString(pos.column)));
     return XmlNode("Import", attrs, makeList<XmlNode>());
 }
-// ./parser/Parser.simse:239
+// cppsrc/parser/Parser.simse:240
 XmlNode parseDecl(Parser& self) {
-    if (checkText(self, "data")) {
-        return parseDataClass(self);
-    }
-    if (checkText(self, "enum")) {
-        return parseEnum(self);
-    }
-    if (checkText(self, "typealias")) {
-        return parseTypeAlias(self);
-    }
-    if (checkText(self, "native")) {
-        return parseFunction(self, true);
-    }
-    if (checkText(self, "fun")) {
-        return parseFunction(self, false);
-    }
+    if (!(checkText(self, "data"))) goto L2;
+    return parseDataClass(self);
+    L2:;
+    if (!(checkText(self, "enum"))) goto L4;
+    return parseEnum(self);
+    L4:;
+    if (!(checkText(self, "typealias"))) goto L6;
+    return parseTypeAlias(self);
+    L6:;
+    if (!(checkText(self, "native"))) goto L8;
+    return parseFunction(self, true);
+    L8:;
+    if (!(checkText(self, "fun"))) goto L10;
+    return parseFunction(self, false);
+    L10:;
     fail(self, "expected declaration");
     return emptyNode(self);
 }
-// ./parser/Parser.simse:259
+// cppsrc/parser/Parser.simse:260
 XmlNode parseDataClass(Parser& self) {
     SourcePos pos = peek(self, 0).pos;
     advance(self);
-    if (!expectText(self, "class")) {
-        return emptyNode(self);
-    }
+    if (!(!expectText(self, "class"))) goto L2;
+    return emptyNode(self);
+    L2:;
     Str name = expectName(self);
-    if (self.failed) {
-        return emptyNode(self);
-    }
+    if (!(self.failed)) goto L4;
+    return emptyNode(self);
+    L4:;
     List<Str> typeParams = List<Str>();
-    if (checkText(self, "<")) {
-        typeParams = parseTypeParams(self);
-        if (self.failed) {
-            return emptyNode(self);
-        }
-    }
+    if (!(checkText(self, "<"))) goto L6;
+    typeParams = parseTypeParams(self);
+    if (!(self.failed)) goto L8;
+    return emptyNode(self);
+    L8:;
+    L6:;
     List<XmlNode> fields = List<XmlNode>();
-    if (matchText(self, "(")) {
+    if (!(matchText(self, "("))) goto L10;
+    skipSeparators(self);
+    L11:;
+    if (!(!checkText(self, ")") && !atEnd(self) && !self.failed)) goto L12;
+    {
+        SourcePos fieldPos = peek(self, 0).pos;
+        Bool isVar = false;
+        if (matchText(self, "var")) goto L13;
+        goto L14;
+        L13:;
+        isVar = true;
+        goto L15;
+        L14:;
+        if (matchText(self, "val")) goto L16;
+        goto L17;
+        L16:;
+        isVar = false;
+        goto L18;
+        L17:;
+        fail(self, "expected 'val' or 'var'");
+        return emptyNode(self);
+        L18:;
+        L15:;
+        Str fieldName = expectName(self);
+        if (self.failed) goto L19;
+        goto L20;
+        L19:;
+        return emptyNode(self);
+        L20:;
+        XmlNode fieldType = emptyNode(self);
+        if (matchText(self, ":")) goto L21;
+        goto L22;
+        L21:;
+        fieldType = parseType(self, "Type");
+        if (self.failed) goto L23;
+        goto L24;
+        L23:;
+        return emptyNode(self);
+        L24:;
+        L22:;
+        List<Attribute> fattrs = List<Attribute>();
+        simse_list_append(fattrs, Attribute("name", fieldName));
+        simse_list_append(fattrs, Attribute("isVar", boolText(isVar)));
+        simse_list_append(fattrs, Attribute("line", simse_int_toString(fieldPos.line)));
+        simse_list_append(fattrs, Attribute("column", simse_int_toString(fieldPos.column)));
+        XmlNode fnode = XmlNode("Field", fattrs, makeList<XmlNode>());
+        if (fieldType.name != "") goto L25;
+        goto L26;
+        L25:;
+        simse_list_append((*fnode.Children), fieldType);
+        L26:;
+        simse_list_append(fields, fnode);
         skipSeparators(self);
-        while (!checkText(self, ")") && !atEnd(self) && !self.failed) {
-            SourcePos fieldPos = peek(self, 0).pos;
-            Bool isVar = false;
-            if (matchText(self, "var")) {
-                isVar = true;
-            } else {
-                if (matchText(self, "val")) {
-                    isVar = false;
-                } else {
-                    fail(self, "expected 'val' or 'var'");
-                    return emptyNode(self);
-                }
-            }
-            Str fieldName = expectName(self);
-            if (self.failed) {
-                return emptyNode(self);
-            }
-            XmlNode fieldType = emptyNode(self);
-            if (matchText(self, ":")) {
-                fieldType = parseType(self, "Type");
-                if (self.failed) {
-                    return emptyNode(self);
-                }
-            }
-            List<Attribute> fattrs = List<Attribute>();
-            simse_list_append(fattrs, Attribute("name", fieldName));
-            simse_list_append(fattrs, Attribute("isVar", boolText(isVar)));
-            simse_list_append(fattrs, Attribute("line", simse_int_toString(fieldPos.line)));
-            simse_list_append(fattrs, Attribute("column", simse_int_toString(fieldPos.column)));
-            XmlNode fnode = XmlNode("Field", fattrs, makeList<XmlNode>());
-            if (fieldType.name != "") {
-                simse_list_append((*fnode.Children), fieldType);
-            }
-            simse_list_append(fields, fnode);
-            skipSeparators(self);
-        }
-        if (!expectText(self, ")")) {
-            return emptyNode(self);
-        }
     }
+    goto L11;
+    L12:;
+    if (!(!expectText(self, ")"))) goto L28;
+    return emptyNode(self);
+    L28:;
+    L10:;
     List<XmlNode> methods = List<XmlNode>();
-    if (checkText(self, "{")) {
-        advance(self);
-        skipSeparators(self);
-        while (!checkText(self, "}") && !atEnd(self) && !self.failed) {
-            if (!checkText(self, "fun")) {
-                fail(self, "expected method declaration");
-                return emptyNode(self);
-            }
-            simse_list_append(methods, parseFunction(self, false));
-            skipSeparators(self);
-        }
-        if (!expectText(self, "}")) {
-            return emptyNode(self);
-        }
-    }
+    if (!(checkText(self, "{"))) goto L30;
+    advance(self);
+    skipSeparators(self);
+    L31:;
+    if (!(!checkText(self, "}") && !atEnd(self) && !self.failed)) goto L32;
+    if (!(!checkText(self, "fun"))) goto L34;
+    fail(self, "expected method declaration");
+    return emptyNode(self);
+    L34:;
+    simse_list_append(methods, parseFunction(self, false));
+    skipSeparators(self);
+    goto L31;
+    L32:;
+    if (!(!expectText(self, "}"))) goto L36;
+    return emptyNode(self);
+    L36:;
+    L30:;
     List<Attribute> attrs = posAttrs(self, "DataClass", pos.line, pos.column);
     simse_list_append(attrs, Attribute("name", name));
     XmlNode node = XmlNode("DataClass", attrs, makeList<XmlNode>());
-    appendTypeParams(self, node, typeParams);
+    appendTypeParams(self, &node, &typeParams);
     Int fi = 0;
-    while (fi < fields.size()) {
-        simse_list_append((*node.Children), fields[fi]);
-        fi = fi + 1;
-    }
+    L37:;
+    if (!(fi < fields.size())) goto L38;
+    simse_list_append((*node.Children), fields[fi]);
+    fi = fi + 1;
+    goto L37;
+    L38:;
     Int mi = 0;
-    while (mi < methods.size()) {
-        simse_list_append((*node.Children), methods[mi]);
-        mi = mi + 1;
-    }
+    L39:;
+    if (!(mi < methods.size())) goto L40;
+    simse_list_append((*node.Children), methods[mi]);
+    mi = mi + 1;
+    goto L39;
+    L40:;
     return node;
 }
-// ./parser/Parser.simse:353
+// cppsrc/parser/Parser.simse:354
 XmlNode parseEnum(Parser& self) {
     SourcePos pos = peek(self, 0).pos;
     advance(self);
     Str name = expectName(self);
-    if (self.failed) {
-        return emptyNode(self);
-    }
+    if (!(self.failed)) goto L2;
+    return emptyNode(self);
+    L2:;
     List<Str> typeParams = List<Str>();
-    if (checkText(self, "<")) {
-        typeParams = parseTypeParams(self);
-        if (self.failed) {
-            return emptyNode(self);
-        }
-    }
-    if (!expectText(self, "{")) {
-        return emptyNode(self);
-    }
+    if (!(checkText(self, "<"))) goto L4;
+    typeParams = parseTypeParams(self);
+    if (!(self.failed)) goto L6;
+    return emptyNode(self);
+    L6:;
+    L4:;
+    if (!(!expectText(self, "{"))) goto L8;
+    return emptyNode(self);
+    L8:;
     skipSeparators(self);
     List<XmlNode> members = List<XmlNode>();
-    while (!checkText(self, "}") && !atEnd(self) && !self.failed) {
+    L9:;
+    if (!(!checkText(self, "}") && !atEnd(self) && !self.failed)) goto L10;
+    {
         SourcePos memberPos = peek(self, 0).pos;
         Str memberName = expectName(self);
-        if (self.failed) {
-            return emptyNode(self);
-        }
+        if (self.failed) goto L11;
+        goto L12;
+        L11:;
+        return emptyNode(self);
+        L12:;
         Bool hasValue = false;
         Int memberValue = 0;
-        if (matchText(self, "=")) {
-            if (!checkKind(self, TokenKind::Number)) {
-                fail(self, "expected enum value");
-                return emptyNode(self);
-            }
+        if (matchText(self, "=")) goto L13;
+        goto L14;
+        L13:;
+        {
+            if (!checkKind(self, TokenKind::Number)) goto L15;
+            goto L16;
+            L15:;
+            fail(self, "expected enum value");
+            return emptyNode(self);
+            L16:;
             Str valueText = advance(self).text;
-            if (simse_str_find(valueText, ".") != -1) {
-                fail(self, "enum value must be an integer");
-                return emptyNode(self);
-            }
+            if (simse_str_find(valueText, ".") != -1) goto L17;
+            goto L18;
+            L17:;
+            fail(self, "enum value must be an integer");
+            return emptyNode(self);
+            L18:;
             Opt<Int> parsed = simse_str_toInt(valueText);
-            if (parsed.hasValue()) {
-                memberValue = parsed.value();
-            }
+            if (parsed.hasValue()) goto L19;
+            goto L20;
+            L19:;
+            memberValue = parsed.value();
+            L20:;
             hasValue = true;
         }
+        L14:;
         List<Attribute> mattrs = List<Attribute>();
         simse_list_append(mattrs, Attribute("name", memberName));
         simse_list_append(mattrs, Attribute("hasValue", boolText(hasValue)));
@@ -3407,1960 +4753,2551 @@ XmlNode parseEnum(Parser& self) {
         matchText(self, ",");
         skipSeparators(self);
     }
-    if (!expectText(self, "}")) {
-        return emptyNode(self);
-    }
+    goto L9;
+    L10:;
+    if (!(!expectText(self, "}"))) goto L22;
+    return emptyNode(self);
+    L22:;
     List<Attribute> attrs = posAttrs(self, "Enum", pos.line, pos.column);
     simse_list_append(attrs, Attribute("name", name));
     XmlNode node = XmlNode("Enum", attrs, makeList<XmlNode>());
-    appendTypeParams(self, node, typeParams);
+    appendTypeParams(self, &node, &typeParams);
     Int i = 0;
-    while (i < members.size()) {
-        simse_list_append((*node.Children), members[i]);
-        i = i + 1;
-    }
+    L23:;
+    if (!(i < members.size())) goto L24;
+    simse_list_append((*node.Children), members[i]);
+    i = i + 1;
+    goto L23;
+    L24:;
     return node;
 }
-// ./parser/Parser.simse:424
+// cppsrc/parser/Parser.simse:425
 XmlNode parseTypeAlias(Parser& self) {
     SourcePos pos = peek(self, 0).pos;
     advance(self);
     Str name = expectName(self);
-    if (self.failed) {
-        return emptyNode(self);
-    }
+    if (!(self.failed)) goto L2;
+    return emptyNode(self);
+    L2:;
     List<Str> typeParams = List<Str>();
-    if (checkText(self, "<")) {
-        typeParams = parseTypeParams(self);
-        if (self.failed) {
-            return emptyNode(self);
-        }
-    }
-    if (!expectText(self, "=")) {
-        return emptyNode(self);
-    }
+    if (!(checkText(self, "<"))) goto L4;
+    typeParams = parseTypeParams(self);
+    if (!(self.failed)) goto L6;
+    return emptyNode(self);
+    L6:;
+    L4:;
+    if (!(!expectText(self, "="))) goto L8;
+    return emptyNode(self);
+    L8:;
     XmlNode target = parseType(self, "TargetType");
-    if (self.failed) {
-        return emptyNode(self);
-    }
+    if (!(self.failed)) goto L10;
+    return emptyNode(self);
+    L10:;
     List<Attribute> attrs = posAttrs(self, "TypeAlias", pos.line, pos.column);
     simse_list_append(attrs, Attribute("name", name));
     XmlNode node = XmlNode("TypeAlias", attrs, makeList<XmlNode>());
-    appendTypeParams(self, node, typeParams);
+    appendTypeParams(self, &node, &typeParams);
     simse_list_append((*node.Children), target);
     return node;
 }
-// ./parser/Parser.simse:454
+// cppsrc/parser/Parser.simse:455
 List<Str> parseTypeParams(Parser& self) {
     List<Str> out = List<Str>();
-    if (!expectText(self, "<")) {
-        return out;
-    }
+    if (!(!expectText(self, "<"))) goto L2;
+    return out;
+    L2:;
     skipNewlines(self);
-    while (!checkText(self, ">") && !atEnd(self)) {
+    L3:;
+    if (!(!checkText(self, ">") && !atEnd(self))) goto L4;
+    {
         Str name = expectName(self);
-        if (self.failed) {
-            return out;
-        }
+        if (self.failed) goto L5;
+        goto L6;
+        L5:;
+        return out;
+        L6:;
         simse_list_append(out, name);
         skipNewlines(self);
-        if (!matchText(self, ",")) {
-            break;
-        }
+        if (!matchText(self, ",")) goto L7;
+        goto L8;
+        L7:;
+        goto L4;
+        L8:;
         skipNewlines(self);
     }
+    goto L3;
+    L4:;
     expectText(self, ">");
     return out;
 }
-// ./parser/Parser.simse:476
+// cppsrc/parser/Parser.simse:477
 Bool looksLikeTypeStart(Parser& self) {
     return checkKind(self, TokenKind::Identifier) || checkText(self, "(") || checkText(self, "&") || checkText(self, "*");
 }
-// ./parser/Parser.simse:481
+// cppsrc/parser/Parser.simse:482
 Str parseParamName(Parser& self) {
-    if (checkKind(self, TokenKind::Identifier) || checkText(self, "this")) {
-        return advance(self).text;
-    }
+    if (!(checkKind(self, TokenKind::Identifier) || checkText(self, "this"))) goto L2;
+    return advance(self).text;
+    L2:;
     fail(self, "expected parameter name");
     return "";
 }
-// ./parser/Parser.simse:489
+// cppsrc/parser/Parser.simse:490
 XmlNode parseFunction(Parser& self, Bool isNative) {
     SourcePos pos = peek(self, 0).pos;
     Str nativeSymbol = "";
     Bool hasNativeSymbol = false;
-    if (isNative) {
-        advance(self);
-        if (matchText(self, "(")) {
-            if (checkKind(self, TokenKind::String)) {
-                nativeSymbol = advance(self).text;
-                hasNativeSymbol = true;
-            }
-            if (!expectText(self, ")")) {
-                return emptyNode(self);
-            }
-        }
-        if (!expectText(self, "fun")) {
-            return emptyNode(self);
-        }
-    } else {
-        if (!expectText(self, "fun")) {
-            return emptyNode(self);
-        }
-    }
+    if (!(isNative)) goto L2;
+    advance(self);
+    if (!(matchText(self, "("))) goto L4;
+    if (!(checkKind(self, TokenKind::String))) goto L6;
+    nativeSymbol = advance(self).text;
+    hasNativeSymbol = true;
+    L6:;
+    if (!(!expectText(self, ")"))) goto L8;
+    return emptyNode(self);
+    L8:;
+    L4:;
+    if (!(!expectText(self, "fun"))) goto L10;
+    return emptyNode(self);
+    L10:;
+    goto L11;
+    L2:;
+    if (!(!expectText(self, "fun"))) goto L13;
+    return emptyNode(self);
+    L13:;
+    L11:;
     Bool hasReceiver = false;
     XmlNode receiverNode = emptyNode(self);
     Str declName = "";
-    if (!isNative && looksLikeTypeStart(self)) {
+    if (!(!isNative && looksLikeTypeStart(self))) goto L15;
+    {
         Cursor<Token> savedCursor = self.cursor;
         Bool savedFailed = self.failed;
         Str savedError = self.error;
         XmlNode receiver = parseType(self, "Receiver");
-        if (!self.failed && checkText(self, ".")) {
+        if (!self.failed && checkText(self, ".")) goto L16;
+        goto L17;
+        L16:;
+        {
             advance(self);
             Str name = expectName(self);
-            if (self.failed) {
-                return emptyNode(self);
-            }
+            if (self.failed) goto L18;
+            goto L19;
+            L18:;
+            return emptyNode(self);
+            L19:;
             hasReceiver = true;
             receiverNode = receiver;
             declName = name;
-        } else {
-            self.cursor = savedCursor;
-            self.failed = savedFailed;
-            self.error = savedError;
         }
+        goto L20;
+        L17:;
+        self.cursor = savedCursor;
+        self.failed = savedFailed;
+        self.error = savedError;
+        L20:;
     }
-    if (!hasReceiver) {
-        declName = expectName(self);
-        if (self.failed) {
-            return emptyNode(self);
-        }
-    }
+    L15:;
+    if (!(!hasReceiver)) goto L22;
+    declName = expectName(self);
+    if (!(self.failed)) goto L24;
+    return emptyNode(self);
+    L24:;
+    L22:;
     List<Str> functionTypeParams = List<Str>();
-    if (checkText(self, "<")) {
-        functionTypeParams = parseTypeParams(self);
-        if (self.failed) {
-            return emptyNode(self);
-        }
-    }
-    if (!expectText(self, "(")) {
-        return emptyNode(self);
-    }
+    if (!(checkText(self, "<"))) goto L26;
+    functionTypeParams = parseTypeParams(self);
+    if (!(self.failed)) goto L28;
+    return emptyNode(self);
+    L28:;
+    L26:;
+    if (!(!expectText(self, "("))) goto L30;
+    return emptyNode(self);
+    L30:;
     skipNewlines(self);
     List<XmlNode> params = List<XmlNode>();
-    while (!checkText(self, ")") && !atEnd(self) && !self.failed) {
+    L31:;
+    if (!(!checkText(self, ")") && !atEnd(self) && !self.failed)) goto L32;
+    {
         SourcePos paramPos = peek(self, 0).pos;
         Str paramName = parseParamName(self);
-        if (self.failed) {
-            return emptyNode(self);
-        }
+        if (self.failed) goto L33;
+        goto L34;
+        L33:;
+        return emptyNode(self);
+        L34:;
         XmlNode paramType = emptyNode(self);
-        if (matchText(self, ":")) {
-            paramType = parseType(self, "Type");
-            if (self.failed) {
-                return emptyNode(self);
-            }
-        }
+        if (matchText(self, ":")) goto L35;
+        goto L36;
+        L35:;
+        paramType = parseType(self, "Type");
+        if (self.failed) goto L37;
+        goto L38;
+        L37:;
+        return emptyNode(self);
+        L38:;
+        L36:;
         List<Attribute> pattrs = List<Attribute>();
         simse_list_append(pattrs, Attribute("name", paramName));
         simse_list_append(pattrs, Attribute("line", simse_int_toString(paramPos.line)));
         simse_list_append(pattrs, Attribute("column", simse_int_toString(paramPos.column)));
         XmlNode pnode = XmlNode("Param", pattrs, makeList<XmlNode>());
-        if (paramType.name != "") {
-            simse_list_append((*pnode.Children), paramType);
-        }
+        if (paramType.name != "") goto L39;
+        goto L40;
+        L39:;
+        simse_list_append((*pnode.Children), paramType);
+        L40:;
         simse_list_append(params, pnode);
         skipNewlines(self);
-        if (!matchText(self, ",")) {
-            break;
-        }
+        if (!matchText(self, ",")) goto L41;
+        goto L42;
+        L41:;
+        goto L32;
+        L42:;
         skipNewlines(self);
     }
-    if (!expectText(self, ")")) {
-        return emptyNode(self);
-    }
+    goto L31;
+    L32:;
+    if (!(!expectText(self, ")"))) goto L44;
+    return emptyNode(self);
+    L44:;
     XmlNode returnType = emptyNode(self);
-    if (matchText(self, ":")) {
-        returnType = parseType(self, "ReturnType");
-        if (self.failed) {
-            return emptyNode(self);
-        }
-    }
+    if (!(matchText(self, ":"))) goto L46;
+    returnType = parseType(self, "ReturnType");
+    if (!(self.failed)) goto L48;
+    return emptyNode(self);
+    L48:;
+    L46:;
     List<XmlNode> body = List<XmlNode>();
     Bool hasBody = false;
-    if (checkText(self, "{")) {
-        body = parseBlock(self);
-        if (self.failed) {
-            return emptyNode(self);
-        }
-        hasBody = true;
-    }
+    if (!(checkText(self, "{"))) goto L50;
+    body = parseBlock(self);
+    if (!(self.failed)) goto L52;
+    return emptyNode(self);
+    L52:;
+    hasBody = true;
+    L50:;
     List<Attribute> attrs = posAttrs(self, "Function", pos.line, pos.column);
     simse_list_append(attrs, Attribute("name", declName));
     simse_list_append(attrs, Attribute("isNative", boolText(isNative)));
     simse_list_append(attrs, Attribute("hasBody", boolText(hasBody)));
     simse_list_append(attrs, Attribute("hasReceiver", boolText(hasReceiver)));
     simse_list_append(attrs, Attribute("hasNativeSymbol", boolText(hasNativeSymbol)));
-    if (hasNativeSymbol) {
-        simse_list_append(attrs, Attribute("nativeSymbol", nativeSymbol));
-    }
+    if (!(hasNativeSymbol)) goto L54;
+    simse_list_append(attrs, Attribute("nativeSymbol", nativeSymbol));
+    L54:;
     XmlNode node = XmlNode("Function", attrs, makeList<XmlNode>());
-    if (hasReceiver) {
-        simse_list_append((*node.Children), receiverNode);
-    }
-    appendTypeParams(self, node, functionTypeParams);
+    if (!(hasReceiver)) goto L56;
+    simse_list_append((*node.Children), receiverNode);
+    L56:;
+    appendTypeParams(self, &node, &functionTypeParams);
     Int pi = 0;
-    while (pi < params.size()) {
-        simse_list_append((*node.Children), params[pi]);
-        pi = pi + 1;
-    }
-    if (returnType.name != "") {
-        simse_list_append((*node.Children), returnType);
-    }
-    if (hasBody) {
-        simse_list_append((*node.Children), container(self, "Body", body));
-    }
+    L57:;
+    if (!(pi < params.size())) goto L58;
+    simse_list_append((*node.Children), params[pi]);
+    pi = pi + 1;
+    goto L57;
+    L58:;
+    if (!(returnType.name != "")) goto L60;
+    simse_list_append((*node.Children), returnType);
+    L60:;
+    if (!(hasBody)) goto L62;
+    simse_list_append((*node.Children), container(self, "Body", &body));
+    L62:;
     return node;
 }
-// ./parser/Parser.simse:638
+// cppsrc/parser/Parser.simse:639
 XmlNode parseType(Parser& self, Str role) {
     SourcePos pos = peek(self, 0).pos;
-    if (matchText(self, "&")) {
+    if (!(matchText(self, "&"))) goto L2;
+    {
         XmlNode inner = parseType(self, "Inner");
-        if (self.failed) {
-            return emptyNode(self);
-        }
+        if (self.failed) goto L3;
+        goto L4;
+        L3:;
+        return emptyNode(self);
+        L4:;
         List<Attribute> attrs = posAttrs(self, "Type.Reference", pos.line, pos.column);
         XmlNode node = XmlNode(role, attrs, makeList<XmlNode>());
         simse_list_append((*node.Children), inner);
         return node;
     }
-    if (matchText(self, "*")) {
+    L2:;
+    if (!(matchText(self, "*"))) goto L6;
+    {
         XmlNode inner = parseType(self, "Inner");
-        if (self.failed) {
-            return emptyNode(self);
-        }
+        if (self.failed) goto L7;
+        goto L8;
+        L7:;
+        return emptyNode(self);
+        L8:;
         List<Attribute> attrs = posAttrs(self, "Type.Pointer", pos.line, pos.column);
         XmlNode node = XmlNode(role, attrs, makeList<XmlNode>());
         simse_list_append((*node.Children), inner);
         return node;
     }
-    if (checkText(self, "(")) {
+    L6:;
+    if (!(checkText(self, "("))) goto L10;
+    {
         advance(self);
         List<XmlNode> params = List<XmlNode>();
         skipNewlines(self);
-        if (!checkText(self, ")")) {
+        if (!checkText(self, ")")) goto L11;
+        goto L12;
+        L11:;
+        {
             XmlNode first = parseType(self, "Type");
-            if (self.failed) {
-                return emptyNode(self);
-            }
+            if (self.failed) goto L13;
+            goto L14;
+            L13:;
+            return emptyNode(self);
+            L14:;
             simse_list_append(params, first);
             skipNewlines(self);
-            while (matchText(self, ",")) {
+            L15:;
+            if (!(matchText(self, ","))) goto L16;
+            {
                 skipNewlines(self);
                 XmlNode next = parseType(self, "Type");
-                if (self.failed) {
-                    return emptyNode(self);
-                }
+                if (self.failed) goto L17;
+                goto L18;
+                L17:;
+                return emptyNode(self);
+                L18:;
                 simse_list_append(params, next);
                 skipNewlines(self);
             }
+            goto L15;
+            L16:;
         }
-        if (!expectText(self, ")")) {
-            return emptyNode(self);
-        }
-        if (matchText(self, "->")) {
+        L12:;
+        if (!expectText(self, ")")) goto L19;
+        goto L20;
+        L19:;
+        return emptyNode(self);
+        L20:;
+        if (matchText(self, "->")) goto L21;
+        goto L22;
+        L21:;
+        {
             List<Attribute> attrs = posAttrs(self, "Type.Function", pos.line, pos.column);
             XmlNode node = XmlNode(role, attrs, makeList<XmlNode>());
             Int i = 0;
-            while (i < params.size()) {
+            L23:;
+            if (!(i < params.size())) goto L24;
+            {
                 XmlNode param = params[i];
                 param.name = "ParamType";
                 simse_list_append((*node.Children), param);
                 i = i + 1;
             }
+            goto L23;
+            L24:;
             XmlNode ret = parseType(self, "ReturnType");
-            if (self.failed) {
-                return emptyNode(self);
-            }
+            if (self.failed) goto L25;
+            goto L26;
+            L25:;
+            return emptyNode(self);
+            L26:;
             simse_list_append((*node.Children), ret);
             return node;
         }
-        if (params.size() == 1) {
+        L22:;
+        if (params.size() == 1) goto L27;
+        goto L28;
+        L27:;
+        {
             XmlNode only = params[0];
             only.name = role;
             return only;
         }
+        L28:;
         fail(self, "expected '->' in function type");
         return emptyNode(self);
     }
-    if (checkKind(self, TokenKind::Identifier)) {
+    L10:;
+    if (!(checkKind(self, TokenKind::Identifier))) goto L30;
+    {
         Str name = advance(self).text;
-        if (checkText(self, "<")) {
+        if (checkText(self, "<")) goto L31;
+        goto L32;
+        L31:;
+        {
             List<XmlNode> typeArgs = parseGenericArgs(self);
-            if (self.failed) {
-                return emptyNode(self);
-            }
+            if (self.failed) goto L33;
+            goto L34;
+            L33:;
+            return emptyNode(self);
+            L34:;
             List<Attribute> attrs = posAttrs(self, "Type.Generic", pos.line, pos.column);
             simse_list_append(attrs, Attribute("name", name));
             XmlNode node = XmlNode(role, attrs, makeList<XmlNode>());
             Int i = 0;
-            while (i < typeArgs.size()) {
-                simse_list_append((*node.Children), typeArgs[i]);
-                i = i + 1;
-            }
+            L35:;
+            if (!(i < typeArgs.size())) goto L36;
+            simse_list_append((*node.Children), typeArgs[i]);
+            i = i + 1;
+            goto L35;
+            L36:;
             return node;
         }
+        L32:;
         List<Attribute> attrs = posAttrs(self, "Type.Named", pos.line, pos.column);
         simse_list_append(attrs, Attribute("name", name));
         return XmlNode(role, attrs, makeList<XmlNode>());
     }
+    L30:;
     fail(self, "expected type");
     return emptyNode(self);
 }
-// ./parser/Parser.simse:735
+// cppsrc/parser/Parser.simse:736
 List<XmlNode> parseGenericArgs(Parser& self) {
     List<XmlNode> out = List<XmlNode>();
-    if (!expectText(self, "<")) {
-        return out;
-    }
+    if (!(!expectText(self, "<"))) goto L2;
+    return out;
+    L2:;
     skipNewlines(self);
-    while (!checkText(self, ">") && !atEnd(self) && !self.failed) {
+    L3:;
+    if (!(!checkText(self, ">") && !atEnd(self) && !self.failed)) goto L4;
+    {
         XmlNode arg = emptyNode(self);
-        if (checkKind(self, TokenKind::Number)) {
+        if (checkKind(self, TokenKind::Number)) goto L5;
+        goto L6;
+        L5:;
+        {
             SourcePos argPos = peek(self, 0).pos;
             List<Attribute> attrs = posAttrs(self, "Type.IntLit", argPos.line, argPos.column);
             simse_list_append(attrs, Attribute("text", advance(self).text));
             arg = XmlNode("TypeArg", attrs, makeList<XmlNode>());
-        } else {
-            arg = parseType(self, "TypeArg");
-            if (self.failed) {
-                return out;
-            }
         }
+        goto L7;
+        L6:;
+        arg = parseType(self, "TypeArg");
+        if (self.failed) goto L8;
+        goto L9;
+        L8:;
+        return out;
+        L9:;
+        L7:;
         simse_list_append(out, arg);
         skipNewlines(self);
-        if (!matchText(self, ",")) {
-            break;
-        }
+        if (!matchText(self, ",")) goto L10;
+        goto L11;
+        L10:;
+        goto L4;
+        L11:;
         skipNewlines(self);
     }
+    goto L3;
+    L4:;
     expectText(self, ">");
     return out;
 }
-// ./parser/Parser.simse:767
+// cppsrc/parser/Parser.simse:768
 List<XmlNode> parseBlock(Parser& self) {
     List<XmlNode> body = List<XmlNode>();
-    if (!expectText(self, "{")) {
-        return body;
-    }
+    if (!(!expectText(self, "{"))) goto L2;
+    return body;
+    L2:;
     skipSeparators(self);
-    while (!checkText(self, "}") && !atEnd(self) && !self.failed) {
+    L3:;
+    if (!(!checkText(self, "}") && !atEnd(self) && !self.failed)) goto L4;
+    {
         XmlNode stmt = parseStmt(self);
-        if (self.failed) {
-            return body;
-        }
+        if (self.failed) goto L5;
+        goto L6;
+        L5:;
+        return body;
+        L6:;
         simse_list_append(body, stmt);
         skipSeparators(self);
     }
+    goto L3;
+    L4:;
     expectText(self, "}");
     return body;
 }
-// ./parser/Parser.simse:785
+// cppsrc/parser/Parser.simse:786
 XmlNode parseStmt(Parser& self) {
-    if (checkText(self, "val") || checkText(self, "var")) {
-        return parseVarDecl(self);
-    }
-    if (checkText(self, "if")) {
-        return parseIf(self);
-    }
-    if (checkText(self, "while")) {
-        return parseWhile(self);
-    }
-    if (checkText(self, "switch")) {
-        return parseSwitch(self);
-    }
-    if (checkText(self, "return")) {
-        return parseReturn(self);
-    }
-    if (checkText(self, "break")) {
+    if (!(checkText(self, "val") || checkText(self, "var"))) goto L2;
+    return parseVarDecl(self);
+    L2:;
+    if (!(checkText(self, "if"))) goto L4;
+    return parseIf(self);
+    L4:;
+    if (!(checkText(self, "while"))) goto L6;
+    return parseWhile(self);
+    L6:;
+    if (!(checkText(self, "switch"))) goto L8;
+    return parseSwitch(self);
+    L8:;
+    if (!(checkText(self, "return"))) goto L10;
+    return parseReturn(self);
+    L10:;
+    if (!(checkText(self, "break"))) goto L12;
+    {
         SourcePos pos = peek(self, 0).pos;
         advance(self);
         return XmlNode("Stmt", posAttrs(self, "Stmt.Break", pos.line, pos.column), makeList<XmlNode>());
     }
-    if (checkText(self, "continue")) {
+    L12:;
+    if (!(checkText(self, "continue"))) goto L14;
+    {
         SourcePos pos = peek(self, 0).pos;
         advance(self);
         return XmlNode("Stmt", posAttrs(self, "Stmt.Continue", pos.line, pos.column), makeList<XmlNode>());
     }
+    L14:;
     SourcePos pos = peek(self, 0).pos;
     ExprNode expr = parseExpr(self, 0);
-    if (self.failed) {
-        return emptyNode(self);
-    }
-    if (isAssignOp(peek(self, 0).text)) {
+    if (!(self.failed)) goto L16;
+    return emptyNode(self);
+    L16:;
+    if (!(isAssignOp(peek(self, 0).text))) goto L18;
+    {
         Str op = advance(self).text;
         skipNewlines(self);
         ExprNode value = parseExpr(self, 0);
-        if (self.failed) {
-            return emptyNode(self);
-        }
+        if (self.failed) goto L19;
+        goto L20;
+        L19:;
+        return emptyNode(self);
+        L20:;
         List<Attribute> attrs = posAttrs(self, "Stmt.Assign", pos.line, pos.column);
         simse_list_append(attrs, Attribute("op", op));
         XmlNode node = XmlNode("Stmt", attrs, makeList<XmlNode>());
-        attach(self, node, "Target", expr.node);
-        attach(self, node, "Value", value.node);
+        attach(self, &node, "Target", simse_addressOf(expr.node));
+        attach(self, &node, "Value", simse_addressOf(value.node));
         return node;
     }
+    L18:;
     List<Attribute> attrs = posAttrs(self, "Stmt.ExprStmt", pos.line, pos.column);
     XmlNode node = XmlNode("Stmt", attrs, makeList<XmlNode>());
-    attach(self, node, "Expr", expr.node);
+    attach(self, &node, "Expr", simse_addressOf(expr.node));
     return node;
 }
-// ./parser/Parser.simse:837
+// cppsrc/parser/Parser.simse:838
 XmlNode parseVarDecl(Parser& self) {
     SourcePos pos = peek(self, 0).pos;
     Bool isVar = matchText(self, "var");
-    if (!isVar) {
-        if (!expectText(self, "val")) {
-            return emptyNode(self);
-        }
-    }
+    if (!(!isVar)) goto L2;
+    if (!(!expectText(self, "val"))) goto L4;
+    return emptyNode(self);
+    L4:;
+    L2:;
     Str name = expectName(self);
-    if (self.failed) {
-        return emptyNode(self);
-    }
+    if (!(self.failed)) goto L6;
+    return emptyNode(self);
+    L6:;
     XmlNode typeNode = emptyNode(self);
-    if (matchText(self, ":")) {
-        typeNode = parseType(self, "Type");
-        if (self.failed) {
-            return emptyNode(self);
-        }
-    }
+    if (!(matchText(self, ":"))) goto L8;
+    typeNode = parseType(self, "Type");
+    if (!(self.failed)) goto L10;
+    return emptyNode(self);
+    L10:;
+    L8:;
     ExprNode init = emptyExpr(self);
-    if (matchText(self, "=")) {
-        skipNewlines(self);
-        init = parseExpr(self, 0);
-        if (self.failed) {
-            return emptyNode(self);
-        }
-    }
+    if (!(matchText(self, "="))) goto L12;
+    skipNewlines(self);
+    init = parseExpr(self, 0);
+    if (!(self.failed)) goto L14;
+    return emptyNode(self);
+    L14:;
+    L12:;
     List<Attribute> attrs = posAttrs(self, "Stmt.VarDecl", pos.line, pos.column);
     simse_list_append(attrs, Attribute("name", name));
     simse_list_append(attrs, Attribute("isVar", boolText(isVar)));
     XmlNode node = XmlNode("Stmt", attrs, makeList<XmlNode>());
-    if (typeNode.name != "") {
-        simse_list_append((*node.Children), typeNode);
-    }
-    if (init.node.name != "") {
-        attach(self, node, "Init", init.node);
-    }
+    if (!(typeNode.name != "")) goto L16;
+    simse_list_append((*node.Children), typeNode);
+    L16:;
+    if (!(init.node.name != "")) goto L18;
+    attach(self, &node, "Init", simse_addressOf(init.node));
+    L18:;
     return node;
 }
-// ./parser/Parser.simse:877
+// cppsrc/parser/Parser.simse:878
 XmlNode parseIf(Parser& self) {
     SourcePos pos = peek(self, 0).pos;
     advance(self);
-    if (!expectText(self, "(")) {
-        return emptyNode(self);
-    }
+    if (!(!expectText(self, "("))) goto L2;
+    return emptyNode(self);
+    L2:;
     ExprNode cond = parseExpr(self, 0);
-    if (self.failed) {
-        return emptyNode(self);
-    }
-    if (!expectText(self, ")")) {
-        return emptyNode(self);
-    }
+    if (!(self.failed)) goto L4;
+    return emptyNode(self);
+    L4:;
+    if (!(!expectText(self, ")"))) goto L6;
+    return emptyNode(self);
+    L6:;
     List<XmlNode> thenBody = parseBlock(self);
-    if (self.failed) {
-        return emptyNode(self);
-    }
+    if (!(self.failed)) goto L8;
+    return emptyNode(self);
+    L8:;
     Bool hasElse = false;
     List<XmlNode> elseBody = List<XmlNode>();
-    if (matchText(self, "else")) {
-        hasElse = true;
-        if (checkText(self, "if")) {
-            XmlNode nested = parseIf(self);
-            if (self.failed) {
-                return emptyNode(self);
-            }
-            simse_list_append(elseBody, nested);
-        } else {
-            elseBody = parseBlock(self);
-            if (self.failed) {
-                return emptyNode(self);
-            }
-        }
+    if (!(matchText(self, "else"))) goto L10;
+    hasElse = true;
+    if (!(checkText(self, "if"))) goto L12;
+    {
+        XmlNode nested = parseIf(self);
+        if (self.failed) goto L13;
+        goto L14;
+        L13:;
+        return emptyNode(self);
+        L14:;
+        simse_list_append(elseBody, nested);
     }
+    goto L15;
+    L12:;
+    elseBody = parseBlock(self);
+    if (!(self.failed)) goto L17;
+    return emptyNode(self);
+    L17:;
+    L15:;
+    L10:;
     List<Attribute> attrs = posAttrs(self, "Stmt.If", pos.line, pos.column);
     XmlNode node = XmlNode("Stmt", attrs, makeList<XmlNode>());
-    attach(self, node, "Cond", cond.node);
-    simse_list_append((*node.Children), container(self, "Then", thenBody));
-    if (hasElse) {
-        simse_list_append((*node.Children), container(self, "Else", elseBody));
-    }
+    attach(self, &node, "Cond", simse_addressOf(cond.node));
+    simse_list_append((*node.Children), container(self, "Then", &thenBody));
+    if (!(hasElse)) goto L19;
+    simse_list_append((*node.Children), container(self, "Else", &elseBody));
+    L19:;
     return node;
 }
-// ./parser/Parser.simse:921
+// cppsrc/parser/Parser.simse:922
 XmlNode parseWhile(Parser& self) {
     SourcePos pos = peek(self, 0).pos;
     advance(self);
-    if (!expectText(self, "(")) {
-        return emptyNode(self);
-    }
+    if (!(!expectText(self, "("))) goto L2;
+    return emptyNode(self);
+    L2:;
     ExprNode cond = parseExpr(self, 0);
-    if (self.failed) {
-        return emptyNode(self);
-    }
-    if (!expectText(self, ")")) {
-        return emptyNode(self);
-    }
+    if (!(self.failed)) goto L4;
+    return emptyNode(self);
+    L4:;
+    if (!(!expectText(self, ")"))) goto L6;
+    return emptyNode(self);
+    L6:;
     List<XmlNode> body = parseBlock(self);
-    if (self.failed) {
-        return emptyNode(self);
-    }
+    if (!(self.failed)) goto L8;
+    return emptyNode(self);
+    L8:;
     List<Attribute> attrs = posAttrs(self, "Stmt.While", pos.line, pos.column);
     XmlNode node = XmlNode("Stmt", attrs, makeList<XmlNode>());
-    attach(self, node, "Cond", cond.node);
-    simse_list_append((*node.Children), container(self, "Body", body));
+    attach(self, &node, "Cond", simse_addressOf(cond.node));
+    simse_list_append((*node.Children), container(self, "Body", &body));
     return node;
 }
-// ./parser/Parser.simse:945
+// cppsrc/parser/Parser.simse:946
 XmlNode parseSwitch(Parser& self) {
     SourcePos pos = peek(self, 0).pos;
     advance(self);
-    if (!expectText(self, "(")) {
-        return emptyNode(self);
-    }
+    if (!(!expectText(self, "("))) goto L2;
+    return emptyNode(self);
+    L2:;
     ExprNode cond = parseExpr(self, 0);
-    if (self.failed) {
-        return emptyNode(self);
-    }
-    if (!expectText(self, ")")) {
-        return emptyNode(self);
-    }
-    if (!expectText(self, "{")) {
-        return emptyNode(self);
-    }
+    if (!(self.failed)) goto L4;
+    return emptyNode(self);
+    L4:;
+    if (!(!expectText(self, ")"))) goto L6;
+    return emptyNode(self);
+    L6:;
+    if (!(!expectText(self, "{"))) goto L8;
+    return emptyNode(self);
+    L8:;
     skipSeparators(self);
     List<XmlNode> cases = List<XmlNode>();
-    while (!checkText(self, "}") && !atEnd(self) && !self.failed) {
+    L9:;
+    if (!(!checkText(self, "}") && !atEnd(self) && !self.failed)) goto L10;
+    {
         SourcePos casePos = peek(self, 0).pos;
         Bool isDefault = false;
         XmlNode label = emptyNode(self);
-        if (matchText(self, "case")) {
+        if (matchText(self, "case")) goto L11;
+        goto L12;
+        L11:;
+        {
             skipNewlines(self);
             ExprNode labelExpr = parseExpr(self, 0);
-            if (self.failed) {
-                return emptyNode(self);
-            }
+            if (self.failed) goto L13;
+            goto L14;
+            L13:;
+            return emptyNode(self);
+            L14:;
             label = labelExpr.node;
-            if (!expectText(self, ":")) {
-                return emptyNode(self);
-            }
-        } else {
-            if (matchText(self, "default")) {
-                isDefault = true;
-                if (!expectText(self, ":")) {
-                    return emptyNode(self);
-                }
-            } else {
-                fail(self, "expected 'case' or 'default'");
-                return emptyNode(self);
-            }
+            if (!expectText(self, ":")) goto L15;
+            goto L16;
+            L15:;
+            return emptyNode(self);
+            L16:;
         }
+        goto L17;
+        L12:;
+        if (matchText(self, "default")) goto L18;
+        goto L19;
+        L18:;
+        isDefault = true;
+        if (!expectText(self, ":")) goto L20;
+        goto L21;
+        L20:;
+        return emptyNode(self);
+        L21:;
+        goto L22;
+        L19:;
+        fail(self, "expected 'case' or 'default'");
+        return emptyNode(self);
+        L22:;
+        L17:;
         skipSeparators(self);
         List<XmlNode> arm = List<XmlNode>();
-        while (!checkText(self, "case") && !checkText(self, "default") && !checkText(self, "}") && !atEnd(self) && !self.failed) {
+        L23:;
+        if (!(!checkText(self, "case") && !checkText(self, "default") && !checkText(self, "}") && !atEnd(self) && !self.failed)) goto L24;
+        {
             XmlNode child = parseStmt(self);
-            if (self.failed) {
-                return emptyNode(self);
-            }
+            if (self.failed) goto L25;
+            goto L26;
+            L25:;
+            return emptyNode(self);
+            L26:;
             simse_list_append(arm, child);
             skipSeparators(self);
         }
+        goto L23;
+        L24:;
         List<Attribute> cattrs = List<Attribute>();
         simse_list_append(cattrs, Attribute("isDefault", boolText(isDefault)));
         simse_list_append(cattrs, Attribute("line", simse_int_toString(casePos.line)));
         simse_list_append(cattrs, Attribute("column", simse_int_toString(casePos.column)));
         XmlNode cnode = XmlNode("Case", cattrs, makeList<XmlNode>());
-        if (!isDefault) {
-            attach(self, cnode, "Label", label);
-        }
+        if (!isDefault) goto L27;
+        goto L28;
+        L27:;
+        attach(self, &cnode, "Label", &label);
+        L28:;
         Int ai = 0;
-        while (ai < arm.size()) {
-            simse_list_append((*cnode.Children), arm[ai]);
-            ai = ai + 1;
-        }
+        L29:;
+        if (!(ai < arm.size())) goto L30;
+        simse_list_append((*cnode.Children), arm[ai]);
+        ai = ai + 1;
+        goto L29;
+        L30:;
         simse_list_append(cases, cnode);
     }
-    if (!expectText(self, "}")) {
-        return emptyNode(self);
-    }
+    goto L9;
+    L10:;
+    if (!(!expectText(self, "}"))) goto L32;
+    return emptyNode(self);
+    L32:;
     List<Attribute> attrs = posAttrs(self, "Stmt.Switch", pos.line, pos.column);
     XmlNode node = XmlNode("Stmt", attrs, makeList<XmlNode>());
-    attach(self, node, "Cond", cond.node);
+    attach(self, &node, "Cond", simse_addressOf(cond.node));
     Int ci = 0;
-    while (ci < cases.size()) {
-        simse_list_append((*node.Children), cases[ci]);
-        ci = ci + 1;
-    }
+    L33:;
+    if (!(ci < cases.size())) goto L34;
+    simse_list_append((*node.Children), cases[ci]);
+    ci = ci + 1;
+    goto L33;
+    L34:;
     return node;
 }
-// ./parser/Parser.simse:1027
+// cppsrc/parser/Parser.simse:1028
 XmlNode parseReturn(Parser& self) {
     SourcePos pos = peek(self, 0).pos;
     advance(self);
     ExprNode value = emptyExpr(self);
-    if (!atStmtEnd(self)) {
-        value = parseExpr(self, 0);
-        if (self.failed) {
-            return emptyNode(self);
-        }
-    }
+    if (!(!atStmtEnd(self))) goto L2;
+    value = parseExpr(self, 0);
+    if (!(self.failed)) goto L4;
+    return emptyNode(self);
+    L4:;
+    L2:;
     List<Attribute> attrs = posAttrs(self, "Stmt.Return", pos.line, pos.column);
     XmlNode node = XmlNode("Stmt", attrs, makeList<XmlNode>());
-    if (value.node.name != "") {
-        attach(self, node, "Value", value.node);
-    }
+    if (!(value.node.name != "")) goto L6;
+    attach(self, &node, "Value", simse_addressOf(value.node));
+    L6:;
     return node;
 }
-// ./parser/Parser.simse:1047
+// cppsrc/parser/Parser.simse:1048
 ExprNode parseExpr(Parser& self, Int minBindingPower) {
     ExprNode left = parseUnary(self);
-    if (self.failed) {
-        return emptyExpr(self);
-    }
-    while (true) {
+    if (!(self.failed)) goto L2;
+    return emptyExpr(self);
+    L2:;
+    L3:;
+    if (!(true)) goto L4;
+    {
         Int newlines = 0;
-        while (peek(self, newlines).kind == TokenKind::EndOfLine) {
-            newlines = newlines + 1;
-        }
-        if (newlines > 0) {
+        L5:;
+        if (!(peek(self, newlines).kind == TokenKind::EndOfLine)) goto L6;
+        newlines = newlines + 1;
+        goto L5;
+        L6:;
+        if (newlines > 0) goto L7;
+        goto L8;
+        L7:;
+        {
             Int lookaheadBP = binaryBindingPower(peek(self, newlines).text);
-            if (lookaheadBP < 0 || lookaheadBP < minBindingPower) {
-                break;
-            }
+            if (lookaheadBP < 0 || lookaheadBP < minBindingPower) goto L9;
+            goto L10;
+            L9:;
+            goto L4;
+            L10:;
             Int k = 0;
-            while (k < newlines) {
-                advance(self);
-                k = k + 1;
-            }
+            L11:;
+            if (!(k < newlines)) goto L12;
+            advance(self);
+            k = k + 1;
+            goto L11;
+            L12:;
         }
+        L8:;
         Int bp = binaryBindingPower(peek(self, 0).text);
-        if (bp < 0 || bp < minBindingPower) {
-            break;
-        }
+        if (bp < 0 || bp < minBindingPower) goto L13;
+        goto L14;
+        L13:;
+        goto L4;
+        L14:;
         Str op = advance(self).text;
         skipNewlines(self);
         ExprNode right = parseExpr(self, bp + 1);
-        if (self.failed) {
-            return emptyExpr(self);
-        }
+        if (self.failed) goto L15;
+        goto L16;
+        L15:;
+        return emptyExpr(self);
+        L16:;
         List<Attribute> attrs = posAttrs(self, "Expr.Binary", left.line, left.column);
         simse_list_append(attrs, Attribute("op", op));
         XmlNode node = XmlNode("Expr", attrs, makeList<XmlNode>());
-        attach(self, node, "Lhs", left.node);
-        attach(self, node, "Rhs", right.node);
+        attach(self, &node, "Lhs", simse_addressOf(left.node));
+        attach(self, &node, "Rhs", simse_addressOf(right.node));
         left = _make_ExprNode(node, left.line, left.column);
     }
+    goto L3;
+    L4:;
     return left;
 }
-// ./parser/Parser.simse:1088
+// cppsrc/parser/Parser.simse:1089
 ExprNode parseUnary(Parser& self) {
     SourcePos pos = peek(self, 0).pos;
-    if (checkText(self, "!") || checkText(self, "-")) {
+    if (!(checkText(self, "!") || checkText(self, "-"))) goto L2;
+    {
         Str op = advance(self).text;
         ExprNode operand = parseUnary(self);
-        if (self.failed) {
-            return emptyExpr(self);
-        }
+        if (self.failed) goto L3;
+        goto L4;
+        L3:;
+        return emptyExpr(self);
+        L4:;
         List<Attribute> attrs = posAttrs(self, "Expr.Unary", pos.line, pos.column);
         simse_list_append(attrs, Attribute("op", op));
         XmlNode node = XmlNode("Expr", attrs, makeList<XmlNode>());
-        attach(self, node, "Operand", operand.node);
+        attach(self, &node, "Operand", simse_addressOf(operand.node));
         return _make_ExprNode(node, pos.line, pos.column);
     }
-    if (checkText(self, "&")) {
+    L2:;
+    if (!(checkText(self, "&"))) goto L6;
+    {
         advance(self);
         ExprNode operand = parseUnary(self);
-        if (self.failed) {
-            return emptyExpr(self);
-        }
+        if (self.failed) goto L7;
+        goto L8;
+        L7:;
+        return emptyExpr(self);
+        L8:;
         List<Attribute> attrs = posAttrs(self, "Expr.Ref", pos.line, pos.column);
         XmlNode node = XmlNode("Expr", attrs, makeList<XmlNode>());
-        attach(self, node, "Operand", operand.node);
+        attach(self, &node, "Operand", simse_addressOf(operand.node));
         return _make_ExprNode(node, pos.line, pos.column);
     }
-    if (checkText(self, "*")) {
+    L6:;
+    if (!(checkText(self, "*"))) goto L10;
+    {
         advance(self);
         ExprNode operand = parseUnary(self);
-        if (self.failed) {
-            return emptyExpr(self);
-        }
+        if (self.failed) goto L11;
+        goto L12;
+        L11:;
+        return emptyExpr(self);
+        L12:;
         List<Attribute> attrs = posAttrs(self, "Expr.Deref", pos.line, pos.column);
         XmlNode node = XmlNode("Expr", attrs, makeList<XmlNode>());
-        attach(self, node, "Operand", operand.node);
+        attach(self, &node, "Operand", simse_addressOf(operand.node));
         return _make_ExprNode(node, pos.line, pos.column);
     }
+    L10:;
     return parsePostfix(self);
 }
-// ./parser/Parser.simse:1127
+// cppsrc/parser/Parser.simse:1128
 ExprNode parsePostfix(Parser& self) {
     ExprNode expr = parsePrimary(self);
-    if (self.failed) {
-        return emptyExpr(self);
-    }
-    while (true) {
-        if (matchText(self, "(")) {
-            List<XmlNode> args = List<XmlNode>();
+    if (!(self.failed)) goto L2;
+    return emptyExpr(self);
+    L2:;
+    L3:;
+    if (!(true)) goto L4;
+    if (!(matchText(self, "("))) goto L6;
+    {
+        List<XmlNode> args = List<XmlNode>();
+        skipNewlines(self);
+        if (!checkText(self, ")")) goto L7;
+        goto L8;
+        L7:;
+        {
+            ExprNode first = parseExpr(self, 0);
+            if (self.failed) goto L9;
+            goto L10;
+            L9:;
+            return emptyExpr(self);
+            L10:;
+            simse_list_append(args, first.node);
             skipNewlines(self);
-            if (!checkText(self, ")")) {
-                ExprNode first = parseExpr(self, 0);
-                if (self.failed) {
-                    return emptyExpr(self);
-                }
-                simse_list_append(args, first.node);
+            L11:;
+            if (!(matchText(self, ","))) goto L12;
+            {
                 skipNewlines(self);
-                while (matchText(self, ",")) {
-                    skipNewlines(self);
-                    ExprNode next = parseExpr(self, 0);
-                    if (self.failed) {
-                        return emptyExpr(self);
-                    }
-                    simse_list_append(args, next.node);
-                    skipNewlines(self);
-                }
-            }
-            if (!expectText(self, ")")) {
+                ExprNode next = parseExpr(self, 0);
+                if (self.failed) goto L13;
+                goto L14;
+                L13:;
                 return emptyExpr(self);
-            }
-            List<Attribute> attrs = posAttrs(self, "Expr.Call", expr.line, expr.column);
-            XmlNode node = XmlNode("Expr", attrs, makeList<XmlNode>());
-            attach(self, node, "Callee", expr.node);
-            Int ai = 0;
-            while (ai < args.size()) {
-                attach(self, node, "Arg", args[ai]);
-                ai = ai + 1;
-            }
-            expr = _make_ExprNode(node, expr.line, expr.column);
-        } else {
-            if (matchText(self, "[")) {
+                L14:;
+                simse_list_append(args, next.node);
                 skipNewlines(self);
-                ExprNode index = parseExpr(self, 0);
-                if (self.failed) {
-                    return emptyExpr(self);
-                }
-                if (!expectText(self, "]")) {
-                    return emptyExpr(self);
-                }
-                List<Attribute> attrs = posAttrs(self, "Expr.Index", expr.line, expr.column);
-                XmlNode node = XmlNode("Expr", attrs, makeList<XmlNode>());
-                attach(self, node, "Receiver", expr.node);
-                attach(self, node, "Index", index.node);
-                expr = _make_ExprNode(node, expr.line, expr.column);
-            } else {
-                if (matchText(self, ".")) {
-                    Str name = expectName(self);
-                    if (self.failed) {
-                        return emptyExpr(self);
-                    }
-                    List<Attribute> attrs = posAttrs(self, "Expr.Member", expr.line, expr.column);
-                    simse_list_append(attrs, Attribute("name", name));
-                    XmlNode node = XmlNode("Expr", attrs, makeList<XmlNode>());
-                    attach(self, node, "Receiver", expr.node);
-                    expr = _make_ExprNode(node, expr.line, expr.column);
-                } else {
-                    break;
-                }
             }
+            goto L11;
+            L12:;
         }
+        L8:;
+        if (!expectText(self, ")")) goto L15;
+        goto L16;
+        L15:;
+        return emptyExpr(self);
+        L16:;
+        List<Attribute> attrs = posAttrs(self, "Expr.Call", expr.line, expr.column);
+        XmlNode node = XmlNode("Expr", attrs, makeList<XmlNode>());
+        attach(self, &node, "Callee", simse_addressOf(expr.node));
+        Int ai = 0;
+        L17:;
+        if (!(ai < args.size())) goto L18;
+        attach(self, &node, "Arg", simse_addressOf(args[ai]));
+        ai = ai + 1;
+        goto L17;
+        L18:;
+        expr = _make_ExprNode(node, expr.line, expr.column);
     }
+    goto L19;
+    L6:;
+    if (!(matchText(self, "["))) goto L21;
+    {
+        skipNewlines(self);
+        ExprNode index = parseExpr(self, 0);
+        if (self.failed) goto L22;
+        goto L23;
+        L22:;
+        return emptyExpr(self);
+        L23:;
+        if (!expectText(self, "]")) goto L24;
+        goto L25;
+        L24:;
+        return emptyExpr(self);
+        L25:;
+        List<Attribute> attrs = posAttrs(self, "Expr.Index", expr.line, expr.column);
+        XmlNode node = XmlNode("Expr", attrs, makeList<XmlNode>());
+        attach(self, &node, "Receiver", simse_addressOf(expr.node));
+        attach(self, &node, "Index", simse_addressOf(index.node));
+        expr = _make_ExprNode(node, expr.line, expr.column);
+    }
+    goto L26;
+    L21:;
+    if (!(matchText(self, "."))) goto L28;
+    {
+        Str name = expectName(self);
+        if (self.failed) goto L29;
+        goto L30;
+        L29:;
+        return emptyExpr(self);
+        L30:;
+        List<Attribute> attrs = posAttrs(self, "Expr.Member", expr.line, expr.column);
+        simse_list_append(attrs, Attribute("name", name));
+        XmlNode node = XmlNode("Expr", attrs, makeList<XmlNode>());
+        attach(self, &node, "Receiver", simse_addressOf(expr.node));
+        expr = _make_ExprNode(node, expr.line, expr.column);
+    }
+    goto L31;
+    L28:;
+    goto L4;
+    L31:;
+    L26:;
+    L19:;
+    goto L3;
+    L4:;
     return expr;
 }
-// ./parser/Parser.simse:1196
+// cppsrc/parser/Parser.simse:1197
 ExprNode parsePrimary(Parser& self) {
     SourcePos pos = peek(self, 0).pos;
-    if (checkKind(self, TokenKind::Number)) {
+    if (!(checkKind(self, TokenKind::Number))) goto L2;
+    {
         Str text = advance(self).text;
         Str kind = "Expr.IntLit";
-        if (simse_str_find(text, ".") != -1) {
-            kind = "Expr.FloatLit";
-        }
+        if (simse_str_find(text, ".") != -1) goto L3;
+        goto L4;
+        L3:;
+        kind = "Expr.FloatLit";
+        L4:;
         List<Attribute> attrs = posAttrs(self, kind, pos.line, pos.column);
         simse_list_append(attrs, Attribute("text", text));
         return _make_ExprNode(XmlNode("Expr", attrs, makeList<XmlNode>()), pos.line, pos.column);
     }
-    if (checkKind(self, TokenKind::String)) {
+    L2:;
+    if (!(checkKind(self, TokenKind::String))) goto L6;
+    {
         Str text = advance(self).text;
         List<Attribute> attrs = posAttrs(self, "Expr.StrLit", pos.line, pos.column);
         simse_list_append(attrs, Attribute("text", text));
         return _make_ExprNode(XmlNode("Expr", attrs, makeList<XmlNode>()), pos.line, pos.column);
     }
-    if (checkKind(self, TokenKind::Character)) {
+    L6:;
+    if (!(checkKind(self, TokenKind::Character))) goto L8;
+    {
         Str text = advance(self).text;
         List<Attribute> attrs = posAttrs(self, "Expr.CharLit", pos.line, pos.column);
         simse_list_append(attrs, Attribute("text", text));
         return _make_ExprNode(XmlNode("Expr", attrs, makeList<XmlNode>()), pos.line, pos.column);
     }
-    if (checkText(self, "true") || checkText(self, "false")) {
+    L8:;
+    if (!(checkText(self, "true") || checkText(self, "false"))) goto L10;
+    {
         Str text = advance(self).text;
         List<Attribute> attrs = posAttrs(self, "Expr.BoolLit", pos.line, pos.column);
-        if (text == "true") {
-            simse_list_append(attrs, Attribute("value", "true"));
-        } else {
-            simse_list_append(attrs, Attribute("value", "false"));
-        }
+        if (text == "true") goto L11;
+        goto L12;
+        L11:;
+        simse_list_append(attrs, Attribute("value", "true"));
+        goto L13;
+        L12:;
+        simse_list_append(attrs, Attribute("value", "false"));
+        L13:;
         return _make_ExprNode(XmlNode("Expr", attrs, makeList<XmlNode>()), pos.line, pos.column);
     }
-    if (checkText(self, "null")) {
+    L10:;
+    if (!(checkText(self, "null"))) goto L15;
+    {
         advance(self);
         List<Attribute> attrs = posAttrs(self, "Expr.NullLit", pos.line, pos.column);
         return _make_ExprNode(XmlNode("Expr", attrs, makeList<XmlNode>()), pos.line, pos.column);
     }
-    if (checkText(self, "this")) {
+    L15:;
+    if (!(checkText(self, "this"))) goto L17;
+    {
         advance(self);
         List<Attribute> attrs = posAttrs(self, "Expr.Name", pos.line, pos.column);
         simse_list_append(attrs, Attribute("name", "this"));
         return _make_ExprNode(XmlNode("Expr", attrs, makeList<XmlNode>()), pos.line, pos.column);
     }
-    if (checkKind(self, TokenKind::Identifier)) {
+    L17:;
+    if (!(checkKind(self, TokenKind::Identifier))) goto L19;
+    {
         Str name = peek(self, 0).text;
-        if (name == "copy" && peek(self, 1).text == "(") {
+        if (name == "copy" && peek(self, 1).text == "(") goto L20;
+        goto L21;
+        L20:;
+        {
             advance(self);
             advance(self);
             ExprNode inner = parseExpr(self, 0);
-            if (self.failed) {
-                return emptyExpr(self);
-            }
-            if (!expectText(self, ")")) {
-                return emptyExpr(self);
-            }
+            if (self.failed) goto L22;
+            goto L23;
+            L22:;
+            return emptyExpr(self);
+            L23:;
+            if (!expectText(self, ")")) goto L24;
+            goto L25;
+            L24:;
+            return emptyExpr(self);
+            L25:;
             List<Attribute> attrs = posAttrs(self, "Expr.Copy", pos.line, pos.column);
             XmlNode node = XmlNode("Expr", attrs, makeList<XmlNode>());
-            attach(self, node, "Operand", inner.node);
+            attach(self, &node, "Operand", simse_addressOf(inner.node));
             return _make_ExprNode(node, pos.line, pos.column);
         }
-        if (peek(self, 1).text == "<") {
+        L21:;
+        if (peek(self, 1).text == "<") goto L26;
+        goto L27;
+        L26:;
+        {
             Cursor<Token> savedCursor = self.cursor;
             Bool savedFailed = self.failed;
             Str savedError = self.error;
             advance(self);
             List<XmlNode> typeArgs = parseGenericArgs(self);
-            if (!self.failed && (checkText(self, ".") || checkText(self, "("))) {
+            if (!self.failed && (checkText(self, ".") || checkText(self, "("))) goto L28;
+            goto L29;
+            L28:;
+            {
                 List<Attribute> attrs = posAttrs(self, "Expr.GenericName", pos.line, pos.column);
                 simse_list_append(attrs, Attribute("name", name));
                 XmlNode gnode = XmlNode("Expr", attrs, makeList<XmlNode>());
                 Int gi = 0;
-                while (gi < typeArgs.size()) {
-                    simse_list_append((*gnode.Children), typeArgs[gi]);
-                    gi = gi + 1;
-                }
+                L30:;
+                if (!(gi < typeArgs.size())) goto L31;
+                simse_list_append((*gnode.Children), typeArgs[gi]);
+                gi = gi + 1;
+                goto L30;
+                L31:;
                 return _make_ExprNode(gnode, pos.line, pos.column);
             }
+            L29:;
             self.cursor = savedCursor;
             self.failed = savedFailed;
             self.error = savedError;
         }
+        L27:;
         advance(self);
         List<Attribute> attrs = posAttrs(self, "Expr.Name", pos.line, pos.column);
         simse_list_append(attrs, Attribute("name", name));
         return _make_ExprNode(XmlNode("Expr", attrs, makeList<XmlNode>()), pos.line, pos.column);
     }
-    if (checkText(self, "(")) {
+    L19:;
+    if (!(checkText(self, "("))) goto L33;
+    {
         Cursor<Token> savedCursor = self.cursor;
         Bool savedFailed = self.failed;
         Str savedError = self.error;
         ExprNode lambda = tryParseLambda(self);
-        if (!self.failed) {
-            return lambda;
-        }
+        if (!self.failed) goto L34;
+        goto L35;
+        L34:;
+        return lambda;
+        L35:;
         self.cursor = savedCursor;
         self.failed = savedFailed;
         self.error = savedError;
         advance(self);
         skipNewlines(self);
         ExprNode inner = parseExpr(self, 0);
-        if (self.failed) {
-            return emptyExpr(self);
-        }
-        if (!expectText(self, ")")) {
-            return emptyExpr(self);
-        }
+        if (self.failed) goto L36;
+        goto L37;
+        L36:;
+        return emptyExpr(self);
+        L37:;
+        if (!expectText(self, ")")) goto L38;
+        goto L39;
+        L38:;
+        return emptyExpr(self);
+        L39:;
         return inner;
     }
+    L33:;
     fail(self, "expected expression");
     return emptyExpr(self);
 }
-// ./parser/Parser.simse:1310
+// cppsrc/parser/Parser.simse:1311
 ExprNode tryParseLambda(Parser& self) {
-    if (!matchText(self, "(")) {
-        fail(self, "expected '('");
-        return emptyExpr(self);
-    }
+    if (!(!matchText(self, "("))) goto L2;
+    fail(self, "expected '('");
+    return emptyExpr(self);
+    L2:;
     SourcePos pos = peek(self, 0).pos;
     List<Str> names = List<Str>();
     List<XmlNode> paramTypes = List<XmlNode>();
     skipNewlines(self);
-    if (!checkText(self, ")")) {
-        while (true) {
-            if (!checkKind(self, TokenKind::Identifier)) {
-                fail(self, "expected lambda parameter");
-                return emptyExpr(self);
-            }
-            simse_list_append(names, advance(self).text);
-            if (matchText(self, ":")) {
-                XmlNode paramType = parseType(self, "ParamType");
-                if (self.failed) {
-                    return emptyExpr(self);
-                }
-                simse_list_append(paramTypes, paramType);
-            }
-            skipNewlines(self);
-            if (!matchText(self, ",")) {
-                break;
-            }
-            skipNewlines(self);
-        }
-    }
-    if (!checkText(self, ")")) {
-        fail(self, "expected ')'");
+    if (!(!checkText(self, ")"))) goto L4;
+    L5:;
+    if (!(true)) goto L6;
+    if (!(!checkKind(self, TokenKind::Identifier))) goto L8;
+    fail(self, "expected lambda parameter");
+    return emptyExpr(self);
+    L8:;
+    simse_list_append(names, advance(self).text);
+    if (!(matchText(self, ":"))) goto L10;
+    {
+        XmlNode paramType = parseType(self, "ParamType");
+        if (self.failed) goto L11;
+        goto L12;
+        L11:;
         return emptyExpr(self);
+        L12:;
+        simse_list_append(paramTypes, paramType);
     }
-    if (peek(self, 1).text != "->") {
-        fail(self, "expected '->'");
-        return emptyExpr(self);
-    }
+    L10:;
+    skipNewlines(self);
+    if (!matchText(self, ",")) goto L6;
+    skipNewlines(self);
+    goto L5;
+    L6:;
+    L4:;
+    if (!(!checkText(self, ")"))) goto L16;
+    fail(self, "expected ')'");
+    return emptyExpr(self);
+    L16:;
+    if (!(peek(self, 1).text != "->")) goto L18;
+    fail(self, "expected '->'");
+    return emptyExpr(self);
+    L18:;
     advance(self);
     advance(self);
     List<XmlNode> body = List<XmlNode>();
-    if (checkText(self, "{")) {
-        body = parseBlock(self);
-        if (self.failed) {
-            return emptyExpr(self);
-        }
-    } else {
+    if (!(checkText(self, "{"))) goto L20;
+    body = parseBlock(self);
+    if (!(self.failed)) goto L22;
+    return emptyExpr(self);
+    L22:;
+    goto L23;
+    L20:;
+    {
         ExprNode value = parseExpr(self, 0);
-        if (self.failed) {
-            return emptyExpr(self);
-        }
+        if (self.failed) goto L24;
+        goto L25;
+        L24:;
+        return emptyExpr(self);
+        L25:;
         List<Attribute> sattrs = posAttrs(self, "Stmt.ExprStmt", value.line, value.column);
         XmlNode snode = XmlNode("Stmt", sattrs, makeList<XmlNode>());
-        attach(self, snode, "Expr", value.node);
+        attach(self, &snode, "Expr", simse_addressOf(value.node));
         simse_list_append(body, snode);
     }
+    L23:;
     List<Attribute> attrs = posAttrs(self, "Expr.Lambda", pos.line, pos.column);
-    simse_list_append(attrs, Attribute("params", joinNames(names)));
+    simse_list_append(attrs, Attribute("params", joinNames(&names)));
     XmlNode node = XmlNode("Expr", attrs, makeList<XmlNode>());
     Int i = 0;
-    while (i < paramTypes.size()) {
-        simse_list_append((*node.Children), paramTypes[i]);
-        i = i + 1;
-    }
-    simse_list_append((*node.Children), container(self, "Body", body));
+    L26:;
+    if (!(i < paramTypes.size())) goto L27;
+    simse_list_append((*node.Children), paramTypes[i]);
+    i = i + 1;
+    goto L26;
+    L27:;
+    simse_list_append((*node.Children), container(self, "Body", &body));
     return _make_ExprNode(node, pos.line, pos.column);
 }
-// ./parser/Parser.simse:1383
+// cppsrc/parser/Parser.simse:1384
 Str boolText(Bool value) {
-    if (value) {
-        return "true";
-    }
+    if (!(value)) goto L2;
+    return "true";
+    L2:;
     return "false";
 }
-// ./parser/Parser.simse:1390
-Str joinNames(List<Str> names) {
+// cppsrc/parser/Parser.simse:1392
+Str joinNames(List<Str>* names) {
     Str out = Str();
     Int i = 0;
-    while (i < names.size()) {
-        if (i > 0) {
-            out = out + ",";
-        }
-        out = out + names[i];
-        i = i + 1;
-    }
+    L1:;
+    if (!(i < names->size())) goto L2;
+    if (!(i > 0)) goto L4;
+    out = out + ",";
+    L4:;
+    out = out + (*names)[i];
+    i = i + 1;
+    goto L1;
+    L2:;
     return out;
 }
-// ./parser/Parser.simse:1405
+// cppsrc/parser/Parser.simse:1407
 Int binaryBindingPower(Str op) {
-    if (op == "||") {
-        return 10;
-    }
-    if (op == "&&") {
-        return 20;
-    }
-    if (op == "==" || op == "!=") {
-        return 30;
-    }
-    if (op == "<" || op == ">" || op == "<=" || op == ">=") {
-        return 40;
-    }
-    if (op == "+" || op == "-") {
-        return 50;
-    }
-    if (op == "*" || op == "/" || op == "%") {
-        return 60;
-    }
+    if (!(op == "||")) goto L2;
+    return 10;
+    L2:;
+    if (!(op == "&&")) goto L4;
+    return 20;
+    L4:;
+    if (!(op == "==" || op == "!=")) goto L6;
+    return 30;
+    L6:;
+    if (!(op == "<" || op == ">" || op == "<=" || op == ">=")) goto L8;
+    return 40;
+    L8:;
+    if (!(op == "+" || op == "-")) goto L10;
+    return 50;
+    L10:;
+    if (!(op == "*" || op == "/" || op == "%")) goto L12;
+    return 60;
+    L12:;
     return -1;
 }
-// ./parser/Parser.simse:1427
+// cppsrc/parser/Parser.simse:1429
 Bool isAssignOp(Str op) {
     return op == "=" || op == "+=" || op == "-=" || op == "*=" || op == "/=" || op == "%=";
 }
-// ./parser/Parser.simse:1435
+// cppsrc/parser/Parser.simse:1437
 Res<XmlNode> parseModule(Cursor<Token> cursor, Str fileName) {
     Parser parser = _make_Parser(cursor, false, "", fileName);
     XmlNode root = parseRoot(parser);
-    if (parser.failed) {
-        return Res<XmlNode>::err(parser.error);
-    }
+    if (!(parser.failed)) goto L2;
+    return Res<XmlNode>::err(parser.error);
+    L2:;
     return Res<XmlNode>::ok(root);
 }
-// ./parser/Parser.simse:1446
+// cppsrc/parser/Parser.simse:1448
 Res<XmlNode> parseModule(List<Token>* tokens, Str fileName) {
     List<Token> toks = List<Token>();
     Int i = 0;
-    while (i < tokens->size()) {
+    L1:;
+    if (!(i < tokens->size())) goto L2;
+    {
         Token token = (*tokens)[i];
-        if (token.kind != TokenKind::Space && token.kind != TokenKind::Comment) {
-            simse_list_append(toks, token);
-        }
+        if (token.kind != TokenKind::Space && token.kind != TokenKind::Comment) goto L3;
+        goto L4;
+        L3:;
+        simse_list_append(toks, token);
+        L4:;
         i = i + 1;
     }
+    goto L1;
+    L2:;
     SourcePos eofPos = _make_SourcePos(0, 1, 1);
-    if (toks.size() > 0) {
-        eofPos = toks[toks.size() - 1].pos;
-    }
+    if (!(toks.size() > 0)) goto L6;
+    eofPos = toks[toks.size() - 1].pos;
+    L6:;
     simse_list_append(toks, _make_Token("", TokenKind::Eof, eofPos));
     return parseModule(simse_cursorOf(std::make_shared<std::remove_cvref_t<decltype((toks))>>(toks)), fileName);
 }
-// ./sema/Sema.simse:30
+// cppsrc/sema/Sema.simse:30
 Bool semaIsBuiltinType(Str name) {
-    if (name == "Int" || name == "Int8" || name == "Int16" || name == "Int32" || name == "Int64" || name == "Float32" || name == "Float64" || name == "Char" || name == "Str" || name == "Bool" || name == "Unit" || name == "List" || name == "Array" || name == "RawArray" || name == "Opt" || name == "Res" || name == "Dictionary" || name == "SmallVector" || name == "PList") {
-        return true;
-    }
+    if (!(name == "Int" || name == "Int8" || name == "Int16" || name == "Int32" || name == "Int64" || name == "Float32" || name == "Float64" || name == "Char" || name == "Str" || name == "Bool" || name == "Unit" || name == "List" || name == "Array" || name == "RawArray" || name == "Opt" || name == "Res" || name == "Dictionary" || name == "SmallVector" || name == "PList")) goto L2;
+    return true;
+    L2:;
     return false;
 }
-// ./sema/Sema.simse:43
+// cppsrc/sema/Sema.simse:43
 Int semaBuiltinGenericArity(Str name) {
-    if (name == "List" || name == "Array" || name == "RawArray" || name == "Opt" || name == "Res" || name == "PList") {
-        return 1;
-    }
-    if (name == "Dictionary" || name == "SmallVector") {
-        return 2;
-    }
+    if (!(name == "List" || name == "Array" || name == "RawArray" || name == "Opt" || name == "Res" || name == "PList")) goto L2;
+    return 1;
+    L2:;
+    if (!(name == "Dictionary" || name == "SmallVector")) goto L4;
+    return 2;
+    L4:;
     return -1;
 }
-// ./sema/Sema.simse:56
-Bool semaIsConstantExpr(XmlNode expr) {
+// cppsrc/sema/Sema.simse:56
+Bool semaIsConstantExpr(XmlNode* expr) {
     Str kind = xmlKind(expr);
-    if (kind == "Expr.IntLit" || kind == "Expr.FloatLit" || kind == "Expr.StrLit" || kind == "Expr.CharLit" || kind == "Expr.BoolLit" || kind == "Expr.Name" || kind == "Expr.Member") {
-        return true;
-    }
-    if (kind == "Expr.Unary") {
+    if (!(kind == "Expr.IntLit" || kind == "Expr.FloatLit" || kind == "Expr.StrLit" || kind == "Expr.CharLit" || kind == "Expr.BoolLit" || kind == "Expr.Name" || kind == "Expr.Member")) goto L2;
+    return true;
+    L2:;
+    if (!(kind == "Expr.Unary")) goto L4;
+    {
         XmlNode operand = xmlChild(expr, "Operand");
-        if (!xmlIsEmpty(operand)) {
-            return semaIsConstantExpr(operand);
-        }
+        if (!xmlIsEmpty(&operand)) goto L5;
+        goto L6;
+        L5:;
+        return semaIsConstantExpr(&operand);
+        L6:;
     }
+    L4:;
     return false;
 }
-// ./sema/Sema.simse:78
-Bool semaUnifyReceiver(XmlNode pattern, XmlNode actual, List<Str> typeParams) {
-    XmlNode actualPtr = actual;
+// cppsrc/sema/Sema.simse:78
+Bool semaUnifyReceiver(XmlNode* pattern, XmlNode* actual, List<Str>* typeParams) {
+    XmlNode actualPtr = *(actual);
     Str pk = xmlKind(pattern);
-    if (pk != "Type.Reference" && pk != "Type.Pointer") {
-        while ((xmlKind(actualPtr) == "Type.Reference" || xmlKind(actualPtr) == "Type.Pointer") && !xmlIsEmpty(xmlChild(actualPtr, "Inner"))) {
-            actualPtr = xmlChild(actualPtr, "Inner");
-        }
-    }
-    Str ak = xmlKind(actualPtr);
-    if (pk == "Type.IntLit") {
-        return ak == "Type.IntLit" && xmlAttr(actualPtr, "text") == xmlAttr(pattern, "text");
-    }
-    if (pk == "Type.Named") {
-        if (xmlIsTypeParam(xmlAttr(pattern, "name"), typeParams)) {
-            return true;
-        }
-        return ak == "Type.Named" && xmlAttr(actualPtr, "name") == xmlAttr(pattern, "name");
-    }
-    if (pk == "Type.Generic") {
-        if (xmlIsTypeParam(xmlAttr(pattern, "name"), typeParams)) {
-            return true;
-        }
-        if (ak != "Type.Generic" || xmlAttr(actualPtr, "name") != xmlAttr(pattern, "name")) {
-            return false;
-        }
+    if (!(pk != "Type.Reference" && pk != "Type.Pointer")) goto L2;
+    L3:;
+    if (!((xmlKind(&actualPtr) == "Type.Reference" || xmlKind(&actualPtr) == "Type.Pointer") && !xmlIsEmpty(simse_addressOf(xmlChild(&actualPtr, "Inner"))))) goto L4;
+    actualPtr = xmlChild(&actualPtr, "Inner");
+    goto L3;
+    L4:;
+    L2:;
+    Str ak = xmlKind(&actualPtr);
+    if (!(pk == "Type.IntLit")) goto L6;
+    return ak == "Type.IntLit" && xmlAttr(&actualPtr, "text") == xmlAttr(pattern, "text");
+    L6:;
+    if (!(pk == "Type.Named")) goto L8;
+    if (!(xmlIsTypeParam(xmlAttr(pattern, "name"), typeParams))) goto L10;
+    return true;
+    L10:;
+    return ak == "Type.Named" && xmlAttr(&actualPtr, "name") == xmlAttr(pattern, "name");
+    L8:;
+    if (!(pk == "Type.Generic")) goto L12;
+    {
+        if (xmlIsTypeParam(xmlAttr(pattern, "name"), typeParams)) goto L13;
+        goto L14;
+        L13:;
+        return true;
+        L14:;
+        if (ak != "Type.Generic" || xmlAttr(&actualPtr, "name") != xmlAttr(pattern, "name")) goto L15;
+        goto L16;
+        L15:;
+        return false;
+        L16:;
         List<XmlNode> patternArgs = xmlChildren(pattern, "TypeArg");
-        List<XmlNode> actualArgs = xmlChildren(actualPtr, "TypeArg");
-        if (patternArgs.size() != actualArgs.size()) {
-            return false;
-        }
+        List<XmlNode> actualArgs = xmlChildren(&actualPtr, "TypeArg");
+        if (patternArgs.size() != actualArgs.size()) goto L17;
+        goto L18;
+        L17:;
+        return false;
+        L18:;
         Int i = 0;
-        while (i < patternArgs.size()) {
-            if (!semaUnifyReceiver(patternArgs[i], actualArgs[i], typeParams)) {
-                return false;
-            }
-            i = i + 1;
-        }
+        L19:;
+        if (!(i < patternArgs.size())) goto L20;
+        if (!semaUnifyReceiver(simse_addressOf(patternArgs[i]), simse_addressOf(actualArgs[i]), typeParams)) goto L21;
+        goto L22;
+        L21:;
+        return false;
+        L22:;
+        i = i + 1;
+        goto L19;
+        L20:;
         return true;
     }
-    if (pk == "Type.Reference") {
-        if (ak == "Type.Reference" && !xmlIsEmpty(xmlChild(actualPtr, "Inner")) && !xmlIsEmpty(xmlChild(pattern, "Inner"))) {
-            return semaUnifyReceiver(xmlChild(pattern, "Inner"), xmlChild(actualPtr, "Inner"), typeParams);
-        }
-        return false;
-    }
-    if (pk == "Type.Pointer") {
-        if (ak == "Type.Pointer" && !xmlIsEmpty(xmlChild(actualPtr, "Inner")) && !xmlIsEmpty(xmlChild(pattern, "Inner"))) {
-            return semaUnifyReceiver(xmlChild(pattern, "Inner"), xmlChild(actualPtr, "Inner"), typeParams);
-        }
-        return false;
-    }
+    L12:;
+    if (!(pk == "Type.Reference")) goto L24;
+    if (!(ak == "Type.Reference" && !xmlIsEmpty(simse_addressOf(xmlChild(&actualPtr, "Inner"))) && !xmlIsEmpty(simse_addressOf(xmlChild(pattern, "Inner"))))) goto L26;
+    return semaUnifyReceiver(simse_addressOf(xmlChild(pattern, "Inner")), simse_addressOf(xmlChild(&actualPtr, "Inner")), typeParams);
+    L26:;
+    return false;
+    L24:;
+    if (!(pk == "Type.Pointer")) goto L28;
+    if (!(ak == "Type.Pointer" && !xmlIsEmpty(simse_addressOf(xmlChild(&actualPtr, "Inner"))) && !xmlIsEmpty(simse_addressOf(xmlChild(pattern, "Inner"))))) goto L30;
+    return semaUnifyReceiver(simse_addressOf(xmlChild(pattern, "Inner")), simse_addressOf(xmlChild(&actualPtr, "Inner")), typeParams);
+    L30:;
+    return false;
+    L28:;
     return false;
 }
-// ./sema/Sema.simse:159
+// cppsrc/sema/Sema.simse:159
 void run(Analyzer& self) {
     collectGlobal(self);
     Int n = 0;
-    while (n < self.inputs.size()) {
+    L1:;
+    if (!(n < self.inputs.size())) goto L2;
+    {
         SemaInput input = self.inputs[n];
         self.file = input.fileName;
-        validateImports(self, input.module);
-        buildVisible(self, input.module);
-        List<XmlNode> decls = xmlDecls(input.module);
+        validateImports(self, simse_addressOf(input.module));
+        buildVisible(self, simse_addressOf(input.module));
+        List<XmlNode> decls = xmlDecls(simse_addressOf(input.module));
         Int i = 0;
-        while (i < decls.size()) {
-            analyzeDecl(self, decls[i]);
-            i = i + 1;
-        }
+        L3:;
+        if (!(i < decls.size())) goto L4;
+        analyzeDecl(self, simse_addressOf(decls[i]));
+        i = i + 1;
+        goto L3;
+        L4:;
         n = n + 1;
     }
+    goto L1;
+    L2:;
 }
-// ./sema/Sema.simse:177
+// cppsrc/sema/Sema.simse:177
 void diag(Analyzer& self, Int line, Int column, Str message) {
     simse_list_append(self.diags, self.file + ":" + simse_int_toString(line) + ":" + simse_int_toString(column) + ": " + message);
 }
-// ./sema/Sema.simse:185
-Str packageOf(Analyzer& self, XmlNode module) {
+// cppsrc/sema/Sema.simse:185
+Str packageOf(Analyzer& self, XmlNode* module) {
     return xmlAttr(module, "package");
 }
-// ./sema/Sema.simse:192
-void appendGlobalFunction(Analyzer& self, Str key, XmlNode decl) {
-    if (simse_dict_has(self.globalFunctions, key)) {
+// cppsrc/sema/Sema.simse:192
+void appendGlobalFunction(Analyzer& self, Str key, XmlNode* decl) {
+    if (!(simse_dict_has(self.globalFunctions, key))) goto L2;
+    {
         List<XmlNode> existing = simse_dict_get(self.globalFunctions, key).value();
-        simse_list_append(existing, decl);
+        simse_list_append(existing, *(decl));
         simse_dict_insert(self.globalFunctions, key, existing);
-    } else {
+    }
+    goto L3;
+    L2:;
+    {
         List<XmlNode> fresh = List<XmlNode>();
-        simse_list_append(fresh, decl);
+        simse_list_append(fresh, *(decl));
         simse_dict_insert(self.globalFunctions, key, fresh);
     }
+    L3:;
 }
-// ./sema/Sema.simse:204
-void appendPackageDecl(Analyzer& self, Str pkg, XmlNode decl) {
-    if (simse_dict_has(self.packageDecls, pkg)) {
+// cppsrc/sema/Sema.simse:204
+void appendPackageDecl(Analyzer& self, Str pkg, XmlNode* decl) {
+    if (!(simse_dict_has(self.packageDecls, pkg))) goto L2;
+    {
         List<XmlNode> existing = simse_dict_get(self.packageDecls, pkg).value();
-        simse_list_append(existing, decl);
+        simse_list_append(existing, *(decl));
         simse_dict_insert(self.packageDecls, pkg, existing);
-    } else {
+    }
+    goto L3;
+    L2:;
+    {
         List<XmlNode> fresh = List<XmlNode>();
-        simse_list_append(fresh, decl);
+        simse_list_append(fresh, *(decl));
         simse_dict_insert(self.packageDecls, pkg, fresh);
     }
+    L3:;
 }
-// ./sema/Sema.simse:216
-void appendVisibleFunction(Analyzer& self, Str name, XmlNode decl) {
-    if (simse_dict_has(self.functions, name)) {
+// cppsrc/sema/Sema.simse:216
+void appendVisibleFunction(Analyzer& self, Str name, XmlNode* decl) {
+    if (!(simse_dict_has(self.functions, name))) goto L2;
+    {
         List<XmlNode> existing = simse_dict_get(self.functions, name).value();
-        simse_list_append(existing, decl);
+        simse_list_append(existing, *(decl));
         simse_dict_insert(self.functions, name, existing);
-    } else {
+    }
+    goto L3;
+    L2:;
+    {
         List<XmlNode> fresh = List<XmlNode>();
-        simse_list_append(fresh, decl);
+        simse_list_append(fresh, *(decl));
         simse_dict_insert(self.functions, name, fresh);
     }
+    L3:;
 }
-// ./sema/Sema.simse:231
+// cppsrc/sema/Sema.simse:231
 void collectGlobal(Analyzer& self) {
     Int n = 0;
-    while (n < self.inputs.size()) {
+    L1:;
+    if (!(n < self.inputs.size())) goto L2;
+    {
         SemaInput input = self.inputs[n];
         self.file = input.fileName;
-        Str pkg = packageOf(self, input.module);
-        if (!simse_list_contains(self.declaredPackages, pkg)) {
-            simse_list_append(self.declaredPackages, pkg);
-        }
-        List<XmlNode> decls = xmlDecls(input.module);
+        Str pkg = packageOf(self, simse_addressOf(input.module));
+        if (!simse_list_contains(self.declaredPackages, pkg)) goto L3;
+        goto L4;
+        L3:;
+        simse_list_append(self.declaredPackages, pkg);
+        L4:;
+        List<XmlNode> decls = xmlDecls(simse_addressOf(input.module));
         Int i = 0;
-        while (i < decls.size()) {
+        L5:;
+        if (!(i < decls.size())) goto L6;
+        {
             XmlNode decl = decls[i];
-            Str name = xmlAttr(decl, "name");
+            Str name = xmlAttr(&decl, "name");
             Str key = pkg + "|" + name;
-            Bool isFunction = xmlKind(decl) == "Function";
+            Bool isFunction = xmlKind(&decl) == "Function";
             Bool nameTaken = simse_dict_has(self.globalTypes, key) || simse_dict_has(self.globalFunctions, key);
-            if (isFunction) {
-                if (simse_dict_has(self.globalTypes, key)) {
-                    diag(self, xmlLine(decl), xmlColumn(decl), "duplicate declaration '" + name + "'");
-                } else {
-                    appendGlobalFunction(self, key, decl);
-                }
-            } else {
-                if (nameTaken) {
-                    diag(self, xmlLine(decl), xmlColumn(decl), "duplicate declaration '" + name + "'");
-                } else {
-                    simse_dict_insert(self.globalTypes, key, decl);
-                }
-            }
-            appendPackageDecl(self, pkg, decl);
+            if (isFunction) goto L7;
+            goto L8;
+            L7:;
+            if (simse_dict_has(self.globalTypes, key)) goto L9;
+            goto L10;
+            L9:;
+            diag(self, xmlLine(&decl), xmlColumn(&decl), "duplicate declaration '" + name + "'");
+            goto L11;
+            L10:;
+            appendGlobalFunction(self, key, &decl);
+            L11:;
+            goto L12;
+            L8:;
+            if (nameTaken) goto L13;
+            goto L14;
+            L13:;
+            diag(self, xmlLine(&decl), xmlColumn(&decl), "duplicate declaration '" + name + "'");
+            goto L15;
+            L14:;
+            simse_dict_insert(self.globalTypes, key, decl);
+            L15:;
+            L12:;
+            appendPackageDecl(self, pkg, &decl);
             i = i + 1;
         }
+        goto L5;
+        L6:;
         n = n + 1;
     }
+    goto L1;
+    L2:;
 }
-// ./sema/Sema.simse:269
-void validateImports(Analyzer& self, XmlNode module) {
+// cppsrc/sema/Sema.simse:269
+void validateImports(Analyzer& self, XmlNode* module) {
     List<XmlNode> imports = xmlChildren(module, "Import");
     Int i = 0;
-    while (i < imports.size()) {
-        Str dotted = xmlAttr(imports[i], "path");
-        if (!simse_list_contains(self.declaredPackages, dotted)) {
-            diag(self, xmlLine(imports[i]), xmlColumn(imports[i]), "cannot resolve import '" + dotted + "': no file declares package '" + dotted + "'");
-        }
+    L1:;
+    if (!(i < imports.size())) goto L2;
+    {
+        Str dotted = xmlAttr(simse_addressOf(imports[i]), "path");
+        if (!simse_list_contains(self.declaredPackages, dotted)) goto L3;
+        goto L4;
+        L3:;
+        diag(self, xmlLine(simse_addressOf(imports[i])), xmlColumn(simse_addressOf(imports[i])), "cannot resolve import '" + dotted + "': no file declares package '" + dotted + "'");
+        L4:;
         i = i + 1;
     }
+    goto L1;
+    L2:;
 }
-// ./sema/Sema.simse:284
-void buildVisible(Analyzer& self, XmlNode module) {
+// cppsrc/sema/Sema.simse:284
+void buildVisible(Analyzer& self, XmlNode* module) {
     self.types = Dictionary<Str, XmlNode>();
     self.functions = Dictionary<Str, List<XmlNode>>();
     List<Str> packages = List<Str>();
     simse_list_append(packages, packageOf(self, module));
     List<XmlNode> imports = xmlChildren(module, "Import");
     Int i = 0;
-    while (i < imports.size()) {
-        simse_list_append(packages, xmlAttr(imports[i], "path"));
-        i = i + 1;
-    }
+    L1:;
+    if (!(i < imports.size())) goto L2;
+    simse_list_append(packages, xmlAttr(simse_addressOf(imports[i]), "path"));
+    i = i + 1;
+    goto L1;
+    L2:;
     simse_list_append(packages, "rtl");
     List<Str> seen = List<Str>();
     Int p = 0;
-    while (p < packages.size()) {
+    L3:;
+    if (!(p < packages.size())) goto L4;
+    {
         Str pkg = packages[p];
-        if (!simse_list_contains(seen, pkg)) {
-            simse_list_append(seen, pkg);
-            if (simse_dict_has(self.packageDecls, pkg)) {
-                List<XmlNode> decls = simse_dict_get(self.packageDecls, pkg).value();
-                Int d = 0;
-                while (d < decls.size()) {
-                    XmlNode decl = decls[d];
-                    Str name = xmlAttr(decl, "name");
-                    if (xmlKind(decl) == "Function") {
-                        appendVisibleFunction(self, name, decl);
-                    } else {
-                        if (!simse_dict_has(self.types, name)) {
-                            simse_dict_insert(self.types, name, decl);
-                        }
-                    }
-                    d = d + 1;
-                }
+        if (!simse_list_contains(seen, pkg)) goto L5;
+        goto L6;
+        L5:;
+        simse_list_append(seen, pkg);
+        if (simse_dict_has(self.packageDecls, pkg)) goto L7;
+        goto L8;
+        L7:;
+        {
+            List<XmlNode> decls = simse_dict_get(self.packageDecls, pkg).value();
+            Int d = 0;
+            L9:;
+            if (!(d < decls.size())) goto L10;
+            {
+                XmlNode decl = decls[d];
+                Str name = xmlAttr(&decl, "name");
+                if (xmlKind(&decl) == "Function") goto L11;
+                goto L12;
+                L11:;
+                appendVisibleFunction(self, name, &decl);
+                goto L13;
+                L12:;
+                if (!simse_dict_has(self.types, name)) goto L14;
+                goto L15;
+                L14:;
+                simse_dict_insert(self.types, name, decl);
+                L15:;
+                L13:;
+                d = d + 1;
             }
+            goto L9;
+            L10:;
         }
+        L8:;
+        L6:;
         p = p + 1;
     }
+    goto L3;
+    L4:;
 }
-// ./sema/Sema.simse:324
+// cppsrc/sema/Sema.simse:324
 void pushScope(Analyzer& self) {
     simse_list_append(self.scopes, Dictionary<Str, ValueBinding>());
 }
-// ./sema/Sema.simse:328
+// cppsrc/sema/Sema.simse:328
 void popScope(Analyzer& self) {
     simse_list_removeAt(self.scopes, self.scopes.size() - 1);
 }
-// ./sema/Sema.simse:332
+// cppsrc/sema/Sema.simse:332
 void pushTypeScope(Analyzer& self) {
     simse_list_append(self.typeScopes, List<Str>());
 }
-// ./sema/Sema.simse:336
+// cppsrc/sema/Sema.simse:336
 void popTypeScope(Analyzer& self) {
     simse_list_removeAt(self.typeScopes, self.typeScopes.size() - 1);
 }
-// ./sema/Sema.simse:340
+// cppsrc/sema/Sema.simse:340
 void declareType(Analyzer& self, Str name) {
-    if (self.typeScopes.size() == 0) {
-        return;
-    }
+    if (!(self.typeScopes.size() == 0)) goto L2;
+    return;
+    L2:;
     simse_list_append(self.typeScopes[self.typeScopes.size() - 1], name);
 }
-// ./sema/Sema.simse:347
-void declareValue(Analyzer& self, Str name, Bool isMutable, Bool checkAssign, XmlNode type) {
-    if (self.scopes.size() == 0) {
-        return;
-    }
-    simse_dict_insert(self.scopes[self.scopes.size() - 1], name, _make_ValueBinding(isMutable, checkAssign, type));
+// cppsrc/sema/Sema.simse:347
+void declareValue(Analyzer& self, Str name, Bool isMutable, Bool checkAssign, XmlNode* type) {
+    if (!(self.scopes.size() == 0)) goto L2;
+    return;
+    L2:;
+    simse_dict_insert(self.scopes[self.scopes.size() - 1], name, _make_ValueBinding(isMutable, checkAssign, *(type)));
 }
-// ./sema/Sema.simse:354
+// cppsrc/sema/Sema.simse:354
 Opt<ValueBinding> lookupValue(Analyzer& self, Str name) {
     Int i = self.scopes.size() - 1;
-    while (i >= 0) {
-        if (simse_dict_has(self.scopes[i], name)) {
-            return simse_dict_get(self.scopes[i], name);
-        }
-        i = i - 1;
-    }
+    L1:;
+    if (!(i >= 0)) goto L2;
+    if (!(simse_dict_has(self.scopes[i], name))) goto L4;
+    return simse_dict_get(self.scopes[i], name);
+    L4:;
+    i = i - 1;
+    goto L1;
+    L2:;
     return Opt<ValueBinding>::none();
 }
-// ./sema/Sema.simse:365
+// cppsrc/sema/Sema.simse:365
 Bool typeParamVisible(Analyzer& self, Str name) {
     Int i = 0;
-    while (i < self.typeScopes.size()) {
+    L1:;
+    if (!(i < self.typeScopes.size())) goto L2;
+    {
         Int j = 0;
-        while (j < self.typeScopes[i].size()) {
-            if (self.typeScopes[i][j] == name) {
-                return true;
-            }
-            j = j + 1;
-        }
+        L3:;
+        if (!(j < self.typeScopes[i].size())) goto L4;
+        if (self.typeScopes[i][j] == name) goto L5;
+        goto L6;
+        L5:;
+        return true;
+        L6:;
+        j = j + 1;
+        goto L3;
+        L4:;
         i = i + 1;
     }
+    goto L1;
+    L2:;
     return false;
 }
-// ./sema/Sema.simse:382
+// cppsrc/sema/Sema.simse:382
 void checkTypeName(Analyzer& self, Str name, Int line, Int column) {
-    if (semaIsBuiltinType(name) || simse_dict_has(self.types, name) || typeParamVisible(self, name)) {
-        return;
-    }
+    if (!(semaIsBuiltinType(name) || simse_dict_has(self.types, name) || typeParamVisible(self, name))) goto L2;
+    return;
+    L2:;
     diag(self, line, column, "unknown type '" + name + "'");
 }
-// ./sema/Sema.simse:389
+// cppsrc/sema/Sema.simse:389
 void checkInstantiationArity(Analyzer& self, Str name, Int argCount, Int line, Int column) {
     Int expected = -1;
-    if (simse_dict_has(self.types, name)) {
-        expected = xmlCount(simse_dict_get(self.types, name).value(), "TypeParam");
-    } else {
-        expected = semaBuiltinGenericArity(name);
-    }
-    if (expected >= 0 && argCount != expected) {
-        diag(self, line, column, "'" + name + "' expects " + simse_int_toString(expected) + " type argument(s) but got " + simse_int_toString(argCount));
-    }
+    if (!(simse_dict_has(self.types, name))) goto L2;
+    expected = xmlCount(simse_addressOf(simse_dict_get(self.types, name).value()), "TypeParam");
+    goto L3;
+    L2:;
+    expected = semaBuiltinGenericArity(name);
+    L3:;
+    if (!(expected >= 0 && argCount != expected)) goto L5;
+    diag(self, line, column, "'" + name + "' expects " + simse_int_toString(expected) + " type argument(s) but got " + simse_int_toString(argCount));
+    L5:;
 }
-// ./sema/Sema.simse:402
-void resolveType(Analyzer& self, XmlNode type) {
+// cppsrc/sema/Sema.simse:402
+void resolveType(Analyzer& self, XmlNode* type) {
     Str kind = xmlKind(type);
-    if (kind == "Type.IntLit") {
-        return;
-    }
-    if (kind == "Type.Named") {
-        checkTypeName(self, xmlAttr(type, "name"), xmlLine(type), xmlColumn(type));
-        return;
-    }
-    if (kind == "Type.Generic") {
+    if (!(kind == "Type.IntLit")) goto L2;
+    return;
+    L2:;
+    if (!(kind == "Type.Named")) goto L4;
+    checkTypeName(self, xmlAttr(type, "name"), xmlLine(type), xmlColumn(type));
+    return;
+    L4:;
+    if (!(kind == "Type.Generic")) goto L6;
+    {
         checkTypeName(self, xmlAttr(type, "name"), xmlLine(type), xmlColumn(type));
         checkInstantiationArity(self, xmlAttr(type, "name"), xmlCount(type, "TypeArg"), xmlLine(type), xmlColumn(type));
         List<XmlNode> args = xmlChildren(type, "TypeArg");
         Int i = 0;
-        while (i < args.size()) {
-            resolveType(self, args[i]);
-            i = i + 1;
-        }
+        L7:;
+        if (!(i < args.size())) goto L8;
+        resolveType(self, simse_addressOf(args[i]));
+        i = i + 1;
+        goto L7;
+        L8:;
         return;
     }
-    if (kind == "Type.Reference" || kind == "Type.Pointer") {
+    L6:;
+    if (!(kind == "Type.Reference" || kind == "Type.Pointer")) goto L10;
+    {
         XmlNode inner = xmlChild(type, "Inner");
-        if (!xmlIsEmpty(inner)) {
-            resolveType(self, inner);
-        }
+        if (!xmlIsEmpty(&inner)) goto L11;
+        goto L12;
+        L11:;
+        resolveType(self, &inner);
+        L12:;
         return;
     }
-    if (kind == "Type.Function") {
+    L10:;
+    if (!(kind == "Type.Function")) goto L14;
+    {
         List<XmlNode> params = xmlChildren(type, "ParamType");
         Int i = 0;
-        while (i < params.size()) {
-            resolveType(self, params[i]);
-            i = i + 1;
-        }
+        L15:;
+        if (!(i < params.size())) goto L16;
+        resolveType(self, simse_addressOf(params[i]));
+        i = i + 1;
+        goto L15;
+        L16:;
         XmlNode ret = xmlChild(type, "ReturnType");
-        if (!xmlIsEmpty(ret)) {
-            resolveType(self, ret);
-        }
+        if (!xmlIsEmpty(&ret)) goto L17;
+        goto L18;
+        L17:;
+        resolveType(self, &ret);
+        L18:;
         return;
     }
+    L14:;
 }
-// ./sema/Sema.simse:447
-void analyzeDecl(Analyzer& self, XmlNode decl) {
+// cppsrc/sema/Sema.simse:447
+void analyzeDecl(Analyzer& self, XmlNode* decl) {
     Str kind = xmlKind(decl);
-    if (kind == "DataClass") {
+    if (!(kind == "DataClass")) goto L2;
+    {
         pushTypeScope(self);
         List<Str> typeParams = xmlTypeParamNames(decl);
         Int i = 0;
-        while (i < typeParams.size()) {
-            declareType(self, typeParams[i]);
-            i = i + 1;
-        }
+        L3:;
+        if (!(i < typeParams.size())) goto L4;
+        declareType(self, typeParams[i]);
+        i = i + 1;
+        goto L3;
+        L4:;
         pushScope(self);
-        declareValue(self, "this", true, false, xmlEmptyNode());
+        declareValue(self, "this", true, false, simse_addressOf(xmlEmptyNode()));
         List<XmlNode> fields = xmlChildren(decl, "Field");
         Int f = 0;
-        while (f < fields.size()) {
-            XmlNode fieldType = xmlChild(fields[f], "Type");
-            if (!xmlIsEmpty(fieldType)) {
-                resolveType(self, fieldType);
-            }
+        L5:;
+        if (!(f < fields.size())) goto L6;
+        {
+            XmlNode fieldType = xmlChild(simse_addressOf(fields[f]), "Type");
+            if (!xmlIsEmpty(&fieldType)) goto L7;
+            goto L8;
+            L7:;
+            resolveType(self, &fieldType);
+            L8:;
             f = f + 1;
         }
+        goto L5;
+        L6:;
         List<XmlNode> methods = xmlChildren(decl, "Function");
         Int m = 0;
-        while (m < methods.size()) {
-            analyzeFunction(self, methods[m]);
-            m = m + 1;
-        }
+        L9:;
+        if (!(m < methods.size())) goto L10;
+        analyzeFunction(self, simse_addressOf(methods[m]));
+        m = m + 1;
+        goto L9;
+        L10:;
         popScope(self);
         popTypeScope(self);
         return;
     }
-    if (kind == "Enum") {
-        return;
-    }
-    if (kind == "TypeAlias") {
+    L2:;
+    if (!(kind == "Enum")) goto L12;
+    return;
+    L12:;
+    if (!(kind == "TypeAlias")) goto L14;
+    {
         pushTypeScope(self);
         List<Str> typeParams = xmlTypeParamNames(decl);
         Int i = 0;
-        while (i < typeParams.size()) {
-            declareType(self, typeParams[i]);
-            i = i + 1;
-        }
+        L15:;
+        if (!(i < typeParams.size())) goto L16;
+        declareType(self, typeParams[i]);
+        i = i + 1;
+        goto L15;
+        L16:;
         XmlNode target = xmlChild(decl, "TargetType");
-        if (!xmlIsEmpty(target)) {
-            resolveType(self, target);
-        }
+        if (!xmlIsEmpty(&target)) goto L17;
+        goto L18;
+        L17:;
+        resolveType(self, &target);
+        L18:;
         popTypeScope(self);
         return;
     }
-    if (kind == "Function") {
-        analyzeFunction(self, decl);
-        return;
-    }
+    L14:;
+    if (!(kind == "Function")) goto L20;
+    analyzeFunction(self, decl);
+    return;
+    L20:;
 }
-// ./sema/Sema.simse:502
-void analyzeFunction(Analyzer& self, XmlNode decl) {
+// cppsrc/sema/Sema.simse:502
+void analyzeFunction(Analyzer& self, XmlNode* decl) {
     pushTypeScope(self);
     List<Str> typeParams = xmlTypeParamNames(decl);
     Int i = 0;
-    while (i < typeParams.size()) {
-        declareType(self, typeParams[i]);
-        i = i + 1;
-    }
+    L1:;
+    if (!(i < typeParams.size())) goto L2;
+    declareType(self, typeParams[i]);
+    i = i + 1;
+    goto L1;
+    L2:;
     pushScope(self);
-    declareValue(self, "this", true, false, xmlEmptyNode());
-    if (xmlAttr(decl, "hasReceiver") == "true") {
+    declareValue(self, "this", true, false, simse_addressOf(xmlEmptyNode()));
+    if (!(xmlAttr(decl, "hasReceiver") == "true")) goto L4;
+    {
         XmlNode receiver = xmlChild(decl, "Receiver");
-        if (!xmlIsEmpty(receiver)) {
-            resolveType(self, receiver);
-        }
+        if (!xmlIsEmpty(&receiver)) goto L5;
+        goto L6;
+        L5:;
+        resolveType(self, &receiver);
+        L6:;
     }
+    L4:;
     List<XmlNode> params = xmlChildren(decl, "Param");
     Int p = 0;
-    while (p < params.size()) {
-        XmlNode paramType = xmlChild(params[p], "Type");
-        if (!xmlIsEmpty(paramType)) {
-            resolveType(self, paramType);
-        }
-        declareValue(self, xmlAttr(params[p], "name"), true, false, paramType);
+    L7:;
+    if (!(p < params.size())) goto L8;
+    {
+        XmlNode paramType = xmlChild(simse_addressOf(params[p]), "Type");
+        if (!xmlIsEmpty(&paramType)) goto L9;
+        goto L10;
+        L9:;
+        resolveType(self, &paramType);
+        L10:;
+        declareValue(self, xmlAttr(simse_addressOf(params[p]), "name"), true, false, &paramType);
         p = p + 1;
     }
+    goto L7;
+    L8:;
     XmlNode returnType = xmlChild(decl, "ReturnType");
-    if (!xmlIsEmpty(returnType)) {
-        resolveType(self, returnType);
-    }
+    if (!(!xmlIsEmpty(&returnType))) goto L12;
+    resolveType(self, &returnType);
+    L12:;
     Int savedLoopDepth = self.loopDepth;
     self.loopDepth = 0;
-    List<XmlNode> body = xmlChildren(xmlChild(decl, "Body"), "Stmt");
+    List<XmlNode> body = xmlChildren(simse_addressOf(xmlChild(decl, "Body")), "Stmt");
     Int s = 0;
-    while (s < body.size()) {
-        analyzeStmt(self, body[s]);
-        s = s + 1;
-    }
+    L13:;
+    if (!(s < body.size())) goto L14;
+    analyzeStmt(self, simse_addressOf(body[s]));
+    s = s + 1;
+    goto L13;
+    L14:;
     self.loopDepth = savedLoopDepth;
     popScope(self);
     popTypeScope(self);
 }
-// ./sema/Sema.simse:551
-void analyzeStmt(Analyzer& self, XmlNode stmt) {
+// cppsrc/sema/Sema.simse:551
+void analyzeStmt(Analyzer& self, XmlNode* stmt) {
     Str kind = xmlKind(stmt);
-    if (kind == "Stmt.VarDecl") {
+    if (!(kind == "Stmt.VarDecl")) goto L2;
+    {
         XmlNode init = xmlChild(stmt, "Init");
-        if (!xmlIsEmpty(init)) {
-            analyzeExpr(self, init);
-        }
+        if (!xmlIsEmpty(&init)) goto L3;
+        goto L4;
+        L3:;
+        analyzeExpr(self, &init);
+        L4:;
         XmlNode declaredType = xmlChild(stmt, "Type");
-        if (!xmlIsEmpty(declaredType)) {
-            resolveType(self, declaredType);
-        }
+        if (!xmlIsEmpty(&declaredType)) goto L5;
+        goto L6;
+        L5:;
+        resolveType(self, &declaredType);
+        L6:;
         XmlNode type = declaredType;
-        if (xmlIsEmpty(type) && !xmlIsEmpty(init)) {
-            type = exprType(self, init);
-        }
-        declareValue(self, xmlAttr(stmt, "name"), xmlAttr(stmt, "isVar") == "true", true, type);
+        if (xmlIsEmpty(&type) && !xmlIsEmpty(&init)) goto L7;
+        goto L8;
+        L7:;
+        type = exprType(self, &init);
+        L8:;
+        declareValue(self, xmlAttr(stmt, "name"), xmlAttr(stmt, "isVar") == "true", true, &type);
         return;
     }
-    if (kind == "Stmt.Assign") {
+    L2:;
+    if (!(kind == "Stmt.Assign")) goto L10;
+    {
         XmlNode target = xmlChild(stmt, "Target");
-        if (!xmlIsEmpty(target)) {
-            analyzeExpr(self, target);
-        }
+        if (!xmlIsEmpty(&target)) goto L11;
+        goto L12;
+        L11:;
+        analyzeExpr(self, &target);
+        L12:;
         XmlNode value = xmlChild(stmt, "Value");
-        if (!xmlIsEmpty(value)) {
-            analyzeExpr(self, value);
+        if (!xmlIsEmpty(&value)) goto L13;
+        goto L14;
+        L13:;
+        analyzeExpr(self, &value);
+        L14:;
+        if (!xmlIsEmpty(&target) && xmlKind(&target) == "Expr.Name") goto L15;
+        goto L16;
+        L15:;
+        {
+            Opt<ValueBinding> binding = lookupValue(self, xmlAttr(&target, "name"));
+            if (binding.hasValue() && binding.value().checkAssign && !binding.value().isMutable) goto L17;
+            goto L18;
+            L17:;
+            diag(self, xmlLine(&target), xmlColumn(&target), "cannot assign to val '" + xmlAttr(&target, "name") + "'");
+            L18:;
         }
-        if (!xmlIsEmpty(target) && xmlKind(target) == "Expr.Name") {
-            Opt<ValueBinding> binding = lookupValue(self, xmlAttr(target, "name"));
-            if (binding.hasValue() && binding.value().checkAssign && !binding.value().isMutable) {
-                diag(self, xmlLine(target), xmlColumn(target), "cannot assign to val '" + xmlAttr(target, "name") + "'");
-            }
-        }
+        L16:;
         return;
     }
-    if (kind == "Stmt.If") {
+    L10:;
+    if (!(kind == "Stmt.If")) goto L20;
+    {
         XmlNode cond = xmlChild(stmt, "Cond");
-        if (!xmlIsEmpty(cond)) {
-            analyzeExpr(self, cond);
-        }
+        if (!xmlIsEmpty(&cond)) goto L21;
+        goto L22;
+        L21:;
+        analyzeExpr(self, &cond);
+        L22:;
         pushScope(self);
-        List<XmlNode> thenBody = xmlChildren(xmlChild(stmt, "Then"), "Stmt");
+        List<XmlNode> thenBody = xmlChildren(simse_addressOf(xmlChild(stmt, "Then")), "Stmt");
         Int t = 0;
-        while (t < thenBody.size()) {
-            analyzeStmt(self, thenBody[t]);
-            t = t + 1;
-        }
+        L23:;
+        if (!(t < thenBody.size())) goto L24;
+        analyzeStmt(self, simse_addressOf(thenBody[t]));
+        t = t + 1;
+        goto L23;
+        L24:;
         popScope(self);
         XmlNode elseBlock = xmlChild(stmt, "Else");
-        if (!xmlIsEmpty(elseBlock)) {
+        if (!xmlIsEmpty(&elseBlock)) goto L25;
+        goto L26;
+        L25:;
+        {
             pushScope(self);
-            List<XmlNode> elseBody = xmlChildren(elseBlock, "Stmt");
+            List<XmlNode> elseBody = xmlChildren(&elseBlock, "Stmt");
             Int e = 0;
-            while (e < elseBody.size()) {
-                analyzeStmt(self, elseBody[e]);
-                e = e + 1;
-            }
+            L27:;
+            if (!(e < elseBody.size())) goto L28;
+            analyzeStmt(self, simse_addressOf(elseBody[e]));
+            e = e + 1;
+            goto L27;
+            L28:;
             popScope(self);
         }
+        L26:;
         return;
     }
-    if (kind == "Stmt.While") {
+    L20:;
+    if (!(kind == "Stmt.While")) goto L30;
+    {
         XmlNode cond = xmlChild(stmt, "Cond");
-        if (!xmlIsEmpty(cond)) {
-            analyzeExpr(self, cond);
-        }
+        if (!xmlIsEmpty(&cond)) goto L31;
+        goto L32;
+        L31:;
+        analyzeExpr(self, &cond);
+        L32:;
         pushScope(self);
         self.loopDepth = self.loopDepth + 1;
         self.breakDepth = self.breakDepth + 1;
-        List<XmlNode> body = xmlChildren(xmlChild(stmt, "Body"), "Stmt");
+        List<XmlNode> body = xmlChildren(simse_addressOf(xmlChild(stmt, "Body")), "Stmt");
         Int b = 0;
-        while (b < body.size()) {
-            analyzeStmt(self, body[b]);
-            b = b + 1;
-        }
+        L33:;
+        if (!(b < body.size())) goto L34;
+        analyzeStmt(self, simse_addressOf(body[b]));
+        b = b + 1;
+        goto L33;
+        L34:;
         self.breakDepth = self.breakDepth - 1;
         self.loopDepth = self.loopDepth - 1;
         popScope(self);
         return;
     }
-    if (kind == "Stmt.Switch") {
+    L30:;
+    if (!(kind == "Stmt.Switch")) goto L36;
+    {
         XmlNode cond = xmlChild(stmt, "Cond");
-        if (!xmlIsEmpty(cond)) {
-            analyzeExpr(self, cond);
-        }
+        if (!xmlIsEmpty(&cond)) goto L37;
+        goto L38;
+        L37:;
+        analyzeExpr(self, &cond);
+        L38:;
         self.breakDepth = self.breakDepth + 1;
         List<XmlNode> cases = xmlChildren(stmt, "Case");
         Int c = 0;
-        while (c < cases.size()) {
+        L39:;
+        if (!(c < cases.size())) goto L40;
+        {
             XmlNode switchCase = cases[c];
-            XmlNode label = xmlChild(switchCase, "Label");
-            if (xmlAttr(switchCase, "isDefault") != "true" && !xmlIsEmpty(label)) {
-                analyzeExpr(self, label);
-                if (!semaIsConstantExpr(label)) {
-                    diag(self, xmlLine(label), xmlColumn(label), "case label must be a constant expression");
-                }
-            }
+            XmlNode label = xmlChild(&switchCase, "Label");
+            if (xmlAttr(&switchCase, "isDefault") != "true" && !xmlIsEmpty(&label)) goto L41;
+            goto L42;
+            L41:;
+            analyzeExpr(self, &label);
+            if (!semaIsConstantExpr(&label)) goto L43;
+            goto L44;
+            L43:;
+            diag(self, xmlLine(&label), xmlColumn(&label), "case label must be a constant expression");
+            L44:;
+            L42:;
             pushScope(self);
-            List<XmlNode> arm = xmlChildren(switchCase, "Stmt");
+            List<XmlNode> arm = xmlChildren(&switchCase, "Stmt");
             Int a = 0;
-            while (a < arm.size()) {
-                analyzeStmt(self, arm[a]);
-                a = a + 1;
-            }
+            L45:;
+            if (!(a < arm.size())) goto L46;
+            analyzeStmt(self, simse_addressOf(arm[a]));
+            a = a + 1;
+            goto L45;
+            L46:;
             popScope(self);
             c = c + 1;
         }
+        goto L39;
+        L40:;
         self.breakDepth = self.breakDepth - 1;
         return;
     }
-    if (kind == "Stmt.Return") {
+    L36:;
+    if (!(kind == "Stmt.Return")) goto L48;
+    {
         XmlNode value = xmlChild(stmt, "Value");
-        if (!xmlIsEmpty(value)) {
-            analyzeExpr(self, value);
-        }
+        if (!xmlIsEmpty(&value)) goto L49;
+        goto L50;
+        L49:;
+        analyzeExpr(self, &value);
+        L50:;
         return;
     }
-    if (kind == "Stmt.Break") {
-        if (self.breakDepth == 0) {
-            diag(self, xmlLine(stmt), xmlColumn(stmt), "'break' outside a loop or switch");
-        }
-        return;
-    }
-    if (kind == "Stmt.Continue") {
-        if (self.loopDepth == 0) {
-            diag(self, xmlLine(stmt), xmlColumn(stmt), "'continue' outside a loop");
-        }
-        return;
-    }
-    if (kind == "Stmt.ExprStmt") {
+    L48:;
+    if (!(kind == "Stmt.Break")) goto L52;
+    if (!(self.breakDepth == 0)) goto L54;
+    diag(self, xmlLine(stmt), xmlColumn(stmt), "'break' outside a loop or switch");
+    L54:;
+    return;
+    L52:;
+    if (!(kind == "Stmt.Continue")) goto L56;
+    if (!(self.loopDepth == 0)) goto L58;
+    diag(self, xmlLine(stmt), xmlColumn(stmt), "'continue' outside a loop");
+    L58:;
+    return;
+    L56:;
+    if (!(kind == "Stmt.ExprStmt")) goto L60;
+    {
         XmlNode expr = xmlChild(stmt, "Expr");
-        if (!xmlIsEmpty(expr)) {
-            analyzeExpr(self, expr);
-        }
+        if (!xmlIsEmpty(&expr)) goto L61;
+        goto L62;
+        L61:;
+        analyzeExpr(self, &expr);
+        L62:;
         return;
     }
+    L60:;
 }
-// ./sema/Sema.simse:693
-void analyzeExpr(Analyzer& self, XmlNode expr) {
+// cppsrc/sema/Sema.simse:693
+void analyzeExpr(Analyzer& self, XmlNode* expr) {
     Str kind = xmlKind(expr);
-    if (kind == "Expr.IntLit" || kind == "Expr.FloatLit" || kind == "Expr.StrLit" || kind == "Expr.CharLit" || kind == "Expr.BoolLit" || kind == "Expr.NullLit" || kind == "Expr.Name") {
-        return;
-    }
-    if (kind == "Expr.GenericName") {
+    if (!(kind == "Expr.IntLit" || kind == "Expr.FloatLit" || kind == "Expr.StrLit" || kind == "Expr.CharLit" || kind == "Expr.BoolLit" || kind == "Expr.NullLit" || kind == "Expr.Name")) goto L2;
+    return;
+    L2:;
+    if (!(kind == "Expr.GenericName")) goto L4;
+    {
         checkGenericNameArity(self, expr);
         List<XmlNode> args = xmlChildren(expr, "TypeArg");
         Int i = 0;
-        while (i < args.size()) {
-            resolveType(self, args[i]);
-            i = i + 1;
-        }
+        L5:;
+        if (!(i < args.size())) goto L6;
+        resolveType(self, simse_addressOf(args[i]));
+        i = i + 1;
+        goto L5;
+        L6:;
         return;
     }
-    if (kind == "Expr.Member") {
+    L4:;
+    if (!(kind == "Expr.Member")) goto L8;
+    {
         XmlNode receiver = xmlChild(expr, "Receiver");
-        if (!xmlIsEmpty(receiver)) {
-            analyzeExpr(self, receiver);
-        }
+        if (!xmlIsEmpty(&receiver)) goto L9;
+        goto L10;
+        L9:;
+        analyzeExpr(self, &receiver);
+        L10:;
         return;
     }
-    if (kind == "Expr.Call") {
+    L8:;
+    if (!(kind == "Expr.Call")) goto L12;
+    {
         XmlNode callee = xmlChild(expr, "Callee");
-        if (!xmlIsEmpty(callee)) {
-            analyzeExpr(self, callee);
-        }
+        if (!xmlIsEmpty(&callee)) goto L13;
+        goto L14;
+        L13:;
+        analyzeExpr(self, &callee);
+        L14:;
         List<XmlNode> args = xmlChildren(expr, "Arg");
         Int i = 0;
-        while (i < args.size()) {
-            analyzeExpr(self, args[i]);
-            i = i + 1;
-        }
+        L15:;
+        if (!(i < args.size())) goto L16;
+        analyzeExpr(self, simse_addressOf(args[i]));
+        i = i + 1;
+        goto L15;
+        L16:;
         checkCallArity(self, expr);
         checkExtensionCallArity(self, expr);
         return;
     }
-    if (kind == "Expr.Index") {
+    L12:;
+    if (!(kind == "Expr.Index")) goto L18;
+    {
         XmlNode receiver = xmlChild(expr, "Receiver");
-        if (!xmlIsEmpty(receiver)) {
-            analyzeExpr(self, receiver);
-        }
+        if (!xmlIsEmpty(&receiver)) goto L19;
+        goto L20;
+        L19:;
+        analyzeExpr(self, &receiver);
+        L20:;
         XmlNode index = xmlChild(expr, "Index");
-        if (!xmlIsEmpty(index)) {
-            analyzeExpr(self, index);
-        }
+        if (!xmlIsEmpty(&index)) goto L21;
+        goto L22;
+        L21:;
+        analyzeExpr(self, &index);
+        L22:;
         return;
     }
-    if (kind == "Expr.Unary" || kind == "Expr.Ref" || kind == "Expr.Deref" || kind == "Expr.Copy") {
+    L18:;
+    if (!(kind == "Expr.Unary" || kind == "Expr.Ref" || kind == "Expr.Deref" || kind == "Expr.Copy")) goto L24;
+    {
         XmlNode operand = xmlChild(expr, "Operand");
-        if (!xmlIsEmpty(operand)) {
-            analyzeExpr(self, operand);
-        }
+        if (!xmlIsEmpty(&operand)) goto L25;
+        goto L26;
+        L25:;
+        analyzeExpr(self, &operand);
+        L26:;
         return;
     }
-    if (kind == "Expr.Binary") {
+    L24:;
+    if (!(kind == "Expr.Binary")) goto L28;
+    {
         XmlNode lhs = xmlChild(expr, "Lhs");
-        if (!xmlIsEmpty(lhs)) {
-            analyzeExpr(self, lhs);
-        }
+        if (!xmlIsEmpty(&lhs)) goto L29;
+        goto L30;
+        L29:;
+        analyzeExpr(self, &lhs);
+        L30:;
         XmlNode rhs = xmlChild(expr, "Rhs");
-        if (!xmlIsEmpty(rhs)) {
-            analyzeExpr(self, rhs);
-        }
+        if (!xmlIsEmpty(&rhs)) goto L31;
+        goto L32;
+        L31:;
+        analyzeExpr(self, &rhs);
+        L32:;
         return;
     }
-    if (kind == "Expr.Lambda") {
+    L28:;
+    if (!(kind == "Expr.Lambda")) goto L34;
+    {
         pushScope(self);
         List<Str> names = xmlLambdaParams(expr);
         List<XmlNode> paramTypes = xmlChildren(expr, "ParamType");
         Int i = 0;
-        while (i < names.size()) {
+        L35:;
+        if (!(i < names.size())) goto L36;
+        {
             XmlNode type = xmlEmptyNode();
-            if (paramTypes.size() == names.size()) {
-                type = paramTypes[i];
-            }
-            if (!xmlIsEmpty(type)) {
-                resolveType(self, type);
-            }
-            declareValue(self, names[i], true, false, type);
+            if (paramTypes.size() == names.size()) goto L37;
+            goto L38;
+            L37:;
+            type = paramTypes[i];
+            L38:;
+            if (!xmlIsEmpty(&type)) goto L39;
+            goto L40;
+            L39:;
+            resolveType(self, &type);
+            L40:;
+            declareValue(self, names[i], true, false, &type);
             i = i + 1;
         }
-        if (paramTypes.size() != names.size()) {
+        goto L35;
+        L36:;
+        if (paramTypes.size() != names.size()) goto L41;
+        goto L42;
+        L41:;
+        {
             Int k = 0;
-            while (k < paramTypes.size()) {
-                resolveType(self, paramTypes[k]);
-                k = k + 1;
-            }
+            L43:;
+            if (!(k < paramTypes.size())) goto L44;
+            resolveType(self, simse_addressOf(paramTypes[k]));
+            k = k + 1;
+            goto L43;
+            L44:;
         }
+        L42:;
         Int savedLoopDepth = self.loopDepth;
         self.loopDepth = 0;
-        List<XmlNode> body = xmlChildren(xmlChild(expr, "Body"), "Stmt");
+        List<XmlNode> body = xmlChildren(simse_addressOf(xmlChild(expr, "Body")), "Stmt");
         Int s = 0;
-        while (s < body.size()) {
-            analyzeStmt(self, body[s]);
-            s = s + 1;
-        }
+        L45:;
+        if (!(s < body.size())) goto L46;
+        analyzeStmt(self, simse_addressOf(body[s]));
+        s = s + 1;
+        goto L45;
+        L46:;
         self.loopDepth = savedLoopDepth;
         popScope(self);
         return;
     }
+    L34:;
 }
-// ./sema/Sema.simse:799
-void checkGenericNameArity(Analyzer& self, XmlNode expr) {
+// cppsrc/sema/Sema.simse:799
+void checkGenericNameArity(Analyzer& self, XmlNode* expr) {
     Int argCount = xmlCount(expr, "TypeArg");
     Str name = xmlAttr(expr, "name");
-    if (simse_dict_has(self.functions, name)) {
+    if (!(simse_dict_has(self.functions, name))) goto L2;
+    {
         List<XmlNode> overloads = simse_dict_get(self.functions, name).value();
         Int i = 0;
-        while (i < overloads.size()) {
-            if (xmlCount(overloads[i], "TypeParam") == argCount) {
-                return;
-            }
-            i = i + 1;
-        }
+        L3:;
+        if (!(i < overloads.size())) goto L4;
+        if (xmlCount(simse_addressOf(overloads[i]), "TypeParam") == argCount) goto L5;
+        goto L6;
+        L5:;
+        return;
+        L6:;
+        i = i + 1;
+        goto L3;
+        L4:;
         diag(self, xmlLine(expr), xmlColumn(expr), "no overload of '" + name + "' takes " + simse_int_toString(argCount) + " type argument(s)");
         return;
     }
+    L2:;
     checkInstantiationArity(self, name, argCount, xmlLine(expr), xmlColumn(expr));
 }
-// ./sema/Sema.simse:818
-void checkCallArity(Analyzer& self, XmlNode call) {
+// cppsrc/sema/Sema.simse:818
+void checkCallArity(Analyzer& self, XmlNode* call) {
     XmlNode callee = xmlChild(call, "Callee");
-    if (xmlIsEmpty(callee)) {
-        return;
-    }
-    Str kind = xmlKind(callee);
+    if (!(xmlIsEmpty(&callee))) goto L2;
+    return;
+    L2:;
+    Str kind = xmlKind(&callee);
     Bool generic = kind == "Expr.GenericName";
-    if (kind != "Expr.Name" && !generic) {
-        return;
-    }
-    Str name = xmlAttr(callee, "name");
-    if (lookupValue(self, name).hasValue()) {
-        return;
-    }
+    if (!(kind != "Expr.Name" && !generic)) goto L4;
+    return;
+    L4:;
+    Str name = xmlAttr(&callee, "name");
+    if (!(lookupValue(self, name).hasValue())) goto L6;
+    return;
+    L6:;
     Int argCount = xmlCount(call, "Arg");
-    if (simse_dict_has(self.types, name)) {
+    if (!(simse_dict_has(self.types, name))) goto L8;
+    {
         XmlNode decl = simse_dict_get(self.types, name).value();
-        if (xmlKind(decl) == "DataClass") {
-            Int fieldCount = xmlCount(decl, "Field");
-            if (fieldCount != argCount) {
-                diag(self, xmlLine(call), xmlColumn(call), "data class '" + name + "' expects " + simse_int_toString(fieldCount) + " field(s) but got " + simse_int_toString(argCount));
-            }
+        if (xmlKind(&decl) == "DataClass") goto L9;
+        goto L10;
+        L9:;
+        {
+            Int fieldCount = xmlCount(&decl, "Field");
+            if (fieldCount != argCount) goto L11;
+            goto L12;
+            L11:;
+            diag(self, xmlLine(call), xmlColumn(call), "data class '" + name + "' expects " + simse_int_toString(fieldCount) + " field(s) but got " + simse_int_toString(argCount));
+            L12:;
             return;
         }
+        L10:;
     }
-    if (!simse_dict_has(self.functions, name)) {
-        return;
-    }
+    L8:;
+    if (!(!simse_dict_has(self.functions, name))) goto L14;
+    return;
+    L14:;
     Int typeArgCount = 0;
-    if (generic) {
-        typeArgCount = xmlCount(callee, "TypeArg");
-    }
+    if (!(generic)) goto L16;
+    typeArgCount = xmlCount(&callee, "TypeArg");
+    L16:;
     List<XmlNode> overloads = simse_dict_get(self.functions, name).value();
     Int i = 0;
-    while (i < overloads.size()) {
-        if (xmlCount(overloads[i], "Param") == argCount) {
-            if (!generic || xmlCount(overloads[i], "TypeParam") == typeArgCount) {
-                return;
-            }
-        }
-        i = i + 1;
-    }
+    L17:;
+    if (!(i < overloads.size())) goto L18;
+    if (!(xmlCount(simse_addressOf(overloads[i]), "Param") == argCount)) goto L20;
+    if (!(!generic || xmlCount(simse_addressOf(overloads[i]), "TypeParam") == typeArgCount)) goto L22;
+    return;
+    L22:;
+    L20:;
+    i = i + 1;
+    goto L17;
+    L18:;
     diag(self, xmlLine(call), xmlColumn(call), "no overload of '" + name + "' takes " + simse_int_toString(argCount) + " argument(s)");
 }
-// ./sema/Sema.simse:872
-XmlNode exprType(Analyzer& self, XmlNode expr) {
-    if (xmlKind(expr) == "Expr.Name") {
+// cppsrc/sema/Sema.simse:872
+XmlNode exprType(Analyzer& self, XmlNode* expr) {
+    if (!(xmlKind(expr) == "Expr.Name")) goto L2;
+    {
         Opt<ValueBinding> binding = lookupValue(self, xmlAttr(expr, "name"));
-        if (binding.hasValue()) {
-            return binding.value().type;
-        }
+        if (binding.hasValue()) goto L3;
+        goto L4;
+        L3:;
+        return binding.value().type;
+        L4:;
         return xmlEmptyNode();
     }
-    if (xmlKind(expr) == "Expr.Call") {
+    L2:;
+    if (!(xmlKind(expr) == "Expr.Call")) goto L6;
+    {
         XmlNode callee = xmlChild(expr, "Callee");
-        if (xmlKind(callee) == "Expr.GenericName") {
+        if (xmlKind(&callee) == "Expr.GenericName") goto L7;
+        goto L8;
+        L7:;
+        {
             XmlNode built = XmlNode("Type", List<Attribute>(), makeList<XmlNode>());
             simse_list_append(built.attributes, Attribute("kind", "Type.Generic"));
-            simse_list_append(built.attributes, Attribute("name", xmlAttr(callee, "name")));
-            List<XmlNode> args = xmlChildren(callee, "TypeArg");
+            simse_list_append(built.attributes, Attribute("name", xmlAttr(&callee, "name")));
+            List<XmlNode> args = xmlChildren(&callee, "TypeArg");
             Int i = 0;
-            while (i < args.size()) {
-                simse_list_append((*built.Children), args[i]);
-                i = i + 1;
-            }
+            L9:;
+            if (!(i < args.size())) goto L10;
+            simse_list_append((*built.Children), args[i]);
+            i = i + 1;
+            goto L9;
+            L10:;
             return built;
         }
+        L8:;
     }
+    L6:;
     return xmlEmptyNode();
 }
-// ./sema/Sema.simse:901
-void checkExtensionCallArity(Analyzer& self, XmlNode call) {
+// cppsrc/sema/Sema.simse:901
+void checkExtensionCallArity(Analyzer& self, XmlNode* call) {
     XmlNode callee = xmlChild(call, "Callee");
-    if (xmlKind(callee) != "Expr.Member") {
-        return;
-    }
-    Str name = xmlAttr(callee, "name");
-    if (!simse_dict_has(self.functions, name)) {
-        return;
-    }
-    XmlNode actual = exprType(self, xmlChild(callee, "Receiver"));
-    if (xmlIsEmpty(actual)) {
-        return;
-    }
+    if (!(xmlKind(&callee) != "Expr.Member")) goto L2;
+    return;
+    L2:;
+    Str name = xmlAttr(&callee, "name");
+    if (!(!simse_dict_has(self.functions, name))) goto L4;
+    return;
+    L4:;
+    XmlNode actual = exprType(self, simse_addressOf(xmlChild(&callee, "Receiver")));
+    if (!(xmlIsEmpty(&actual))) goto L6;
+    return;
+    L6:;
     Int argCount = xmlCount(call, "Arg");
     Bool compatible = false;
     List<XmlNode> overloads = simse_dict_get(self.functions, name).value();
     Int i = 0;
-    while (i < overloads.size()) {
+    L7:;
+    if (!(i < overloads.size())) goto L8;
+    {
         XmlNode fn = overloads[i];
         XmlNode receiver = xmlEmptyNode();
         Int valueParamCount = 0;
         Bool hasRecv = false;
-        List<XmlNode> params = xmlChildren(fn, "Param");
-        if (xmlAttr(fn, "hasReceiver") == "true" && !xmlIsEmpty(xmlChild(fn, "Receiver"))) {
-            receiver = xmlChild(fn, "Receiver");
-            valueParamCount = params.size();
+        List<XmlNode> params = xmlChildren(&fn, "Param");
+        if (xmlAttr(&fn, "hasReceiver") == "true" && !xmlIsEmpty(simse_addressOf(xmlChild(&fn, "Receiver")))) goto L9;
+        goto L10;
+        L9:;
+        receiver = xmlChild(&fn, "Receiver");
+        valueParamCount = params.size();
+        hasRecv = true;
+        goto L11;
+        L10:;
+        if (params.size() > 0) goto L12;
+        goto L13;
+        L12:;
+        {
+            XmlNode first = params[0];
+            if (xmlAttr(&first, "name") == "this" && !xmlIsEmpty(simse_addressOf(xmlChild(&first, "Type")))) goto L14;
+            goto L15;
+            L14:;
+            receiver = xmlChild(&first, "Type");
+            valueParamCount = params.size() - 1;
             hasRecv = true;
-        } else {
-            if (params.size() > 0) {
-                XmlNode first = params[0];
-                if (xmlAttr(first, "name") == "this" && !xmlIsEmpty(xmlChild(first, "Type"))) {
-                    receiver = xmlChild(first, "Type");
-                    valueParamCount = params.size() - 1;
-                    hasRecv = true;
-                }
-            }
+            L15:;
         }
-        if (hasRecv) {
-            if (semaUnifyReceiver(receiver, actual, xmlTypeParamNames(fn))) {
-                compatible = true;
-                if (valueParamCount == argCount) {
-                    return;
-                }
-            }
+        L13:;
+        L11:;
+        if (hasRecv) goto L16;
+        goto L17;
+        L16:;
+        {
+            List<Str> typeParams = xmlTypeParamNames(&fn);
+            if (semaUnifyReceiver(&receiver, &actual, &typeParams)) goto L18;
+            goto L19;
+            L18:;
+            compatible = true;
+            if (valueParamCount == argCount) goto L20;
+            goto L21;
+            L20:;
+            return;
+            L21:;
+            L19:;
         }
+        L17:;
         i = i + 1;
     }
-    if (compatible) {
-        diag(self, xmlLine(call), xmlColumn(call), "no overload of '" + name + "' takes " + simse_int_toString(argCount) + " argument(s)");
-    }
+    goto L7;
+    L8:;
+    if (!(compatible)) goto L23;
+    diag(self, xmlLine(call), xmlColumn(call), "no overload of '" + name + "' takes " + simse_int_toString(argCount) + " argument(s)");
+    L23:;
 }
-// ./sema/Sema.simse:955
+// cppsrc/sema/Sema.simse:956
 Analyzer newAnalyzer(List<SemaInput> inputs) {
     return _make_Analyzer(inputs, "", Dictionary<Str, XmlNode>(), Dictionary<Str, List<XmlNode>>(), Dictionary<Str, XmlNode>(), Dictionary<Str, List<XmlNode>>(), Dictionary<Str, List<XmlNode>>(), List<Str>(), List<Dictionary<Str, ValueBinding>>(), List<List<Str>>(), 0, 0, List<Str>());
 }
-// ./sema/Sema.simse:976
+// cppsrc/sema/Sema.simse:977
 List<Str> analyze(List<SemaInput> inputs) {
     Analyzer analyzer = newAnalyzer(inputs);
     run(analyzer);
     return analyzer.diags;
 }
-// ./skelparser/SkeletonParser.simse:29
+// cppsrc/skelparser/SkeletonParser.simse:29
 void setNodeType(SkeletonNode& self, SkeletonType skeletonType) {
     self.type = skeletonType;
     self.children = makeList<SkeletonNode>();
 }
-// ./skelparser/SkeletonParser.simse:34
+// cppsrc/skelparser/SkeletonParser.simse:34
 void addTerminalChild(SkeletonNode& self, Token token) {
     simse_list_append((*self.children), _make_SkeletonNode(makeList<SkeletonNode>(), SkeletonType::Terminal, token));
 }
-// ./skelparser/SkeletonParser.simse:40
+// cppsrc/skelparser/SkeletonParser.simse:40
 Str matchingOpenToken(Str closingToken) {
-    if (closingToken == ">") {
-        return "<";
-    }
-    if (closingToken == "}") {
-        return "{";
-    }
-    if (closingToken == "]") {
-        return "[";
-    }
-    if (closingToken == ")") {
-        return "(";
-    }
+    if (!(closingToken == ">")) goto L2;
+    return "<";
+    L2:;
+    if (!(closingToken == "}")) goto L4;
+    return "{";
+    L4:;
+    if (!(closingToken == "]")) goto L6;
+    return "[";
+    L6:;
+    if (!(closingToken == ")")) goto L8;
+    return "(";
+    L8:;
     return "";
 }
-// ./skelparser/SkeletonParser.simse:56
+// cppsrc/skelparser/SkeletonParser.simse:56
 SkeletonType blockTypeForOpenToken(Str openingToken) {
-    if (openingToken == "(") {
-        return SkeletonType::Paren;
-    }
-    if (openingToken == "[") {
-        return SkeletonType::Square;
-    }
-    if (openingToken == "{") {
-        return SkeletonType::Block;
-    }
-    if (openingToken == "<") {
-        return SkeletonType::Generics;
-    }
+    if (!(openingToken == "(")) goto L2;
+    return SkeletonType::Paren;
+    L2:;
+    if (!(openingToken == "[")) goto L4;
+    return SkeletonType::Square;
+    L4:;
+    if (!(openingToken == "{")) goto L6;
+    return SkeletonType::Block;
+    L6:;
+    if (!(openingToken == "<")) goto L8;
+    return SkeletonType::Generics;
+    L8:;
     return SkeletonType::None;
 }
-// ./skelparser/SkeletonParser.simse:72
+// cppsrc/skelparser/SkeletonParser.simse:72
 Bool isClosingToken(Str token) {
     return token == ">" || token == "}" || token == "]" || token == ")";
 }
-// ./skelparser/SkeletonParser.simse:79
+// cppsrc/skelparser/SkeletonParser.simse:79
 Bool foldBack(std::shared_ptr<List<SkeletonNode>> nodes, Str openingToken) {
     Int openIndex = -1;
     Int i = nodes->size() - 1;
-    while (i >= 0 && openIndex < 0) {
+    L1:;
+    if (!(i >= 0 && openIndex < 0)) goto L2;
+    {
         SkeletonNode node = (*nodes)[i];
-        if (node.type == SkeletonType::Terminal && node.token.text == openingToken) {
-            openIndex = i;
-        }
+        if (node.type == SkeletonType::Terminal && node.token.text == openingToken) goto L3;
+        goto L4;
+        L3:;
+        openIndex = i;
+        L4:;
         i = i - 1;
     }
-    if (openIndex < 0) {
-        return false;
-    }
+    goto L1;
+    L2:;
+    if (!(openIndex < 0)) goto L6;
+    return false;
+    L6:;
     SkeletonNode block = _make_SkeletonNode(makeList<SkeletonNode>(), blockTypeForOpenToken(openingToken), (*nodes)[openIndex].token);
     Int j = openIndex + 1;
-    while (j < nodes->size()) {
-        simse_list_append((*block.children), (*nodes)[j]);
-        j = j + 1;
-    }
+    L7:;
+    if (!(j < nodes->size())) goto L8;
+    simse_list_append((*block.children), (*nodes)[j]);
+    j = j + 1;
+    goto L7;
+    L8:;
     simse_list_removeRange((*nodes), openIndex, nodes->size());
     simse_list_append((*nodes), block);
     return true;
 }
-// ./skelparser/SkeletonParser.simse:108
+// cppsrc/skelparser/SkeletonParser.simse:108
 Res<SkeletonNode> parseSkeleton(List<Token>* tokens) {
     SkeletonNode program = _make_SkeletonNode(makeList<SkeletonNode>(), SkeletonType::None, _make_Token("", TokenKind::None, _make_SourcePos(0, 0, 0)));
     setNodeType(program, SkeletonType::Program);
     Int i = 0;
-    while (i < tokens->size()) {
+    L1:;
+    if (!(i < tokens->size())) goto L2;
+    {
         Token token = (*tokens)[i];
         Str tokenText = token.text;
         Bool folded = false;
-        if (isClosingToken(tokenText)) {
-            folded = foldBack(program.children, matchingOpenToken(tokenText));
-        }
-        if (!folded) {
-            addTerminalChild(program, token);
-        }
+        if (isClosingToken(tokenText)) goto L3;
+        goto L4;
+        L3:;
+        folded = foldBack(program.children, matchingOpenToken(tokenText));
+        L4:;
+        if (!folded) goto L5;
+        goto L6;
+        L5:;
+        addTerminalChild(program, token);
+        L6:;
         i = i + 1;
     }
+    goto L1;
+    L2:;
     return Res<SkeletonNode>::ok(program);
 }

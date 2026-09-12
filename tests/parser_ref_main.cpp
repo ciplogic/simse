@@ -26,7 +26,7 @@ using namespace lex;
 
 int main(int argc, char **argv) {
     Str fixturesDir = argc > 1 ? argv[1] : ".";
-    Str goldenDir = (std::filesystem::path(fixturesDir).parent_path() / "golden").string();
+    Str goldenDir = (common::toPath(fixturesDir).parent_path() / "golden").string();
 
     List<Str> files = filesInDir(fixturesDir, ".simse");
     std::sort(files.begin(), files.end());
@@ -36,7 +36,7 @@ int main(int argc, char **argv) {
     int goldenFailures = 0;
 
     for (const Str &file: files) {
-        Str name = std::filesystem::path(file).filename().string();
+        Str name = common::toPath(file).filename().string();
         printf("%s", parserdump::header(name).c_str());
 
         tests::ScanResult scan = tests::scanFile(&scanner, file);
@@ -55,8 +55,8 @@ int main(int argc, char **argv) {
         Str dump = ast::dumpXmlNode(ast::toXmlNode(parsed.Value));
         printf("%s", dump.c_str());
 
-        Str goldenPath = (std::filesystem::path(goldenDir) / (name + ".astxml.expected")).string();
-        if (std::filesystem::exists(goldenPath)) {
+        Str goldenPath = (common::toPath(goldenDir) / common::toPath(name + ".astxml.expected")).string();
+        if (std::filesystem::exists(common::toPath(goldenPath))) {
             Str expected = common::readFile(goldenPath);
             if (expected != dump) {
                 goldenFailures++;

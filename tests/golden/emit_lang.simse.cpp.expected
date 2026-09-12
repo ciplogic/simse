@@ -16,9 +16,11 @@ inline Opt<Color> simse_Color_fromInt(Int value) {
     return Opt<Color>::none();
 }
 // emit_lang.simse:11
+SIMSE_PACK_PUSH
 struct Box {
     Int value;
 };
+SIMSE_PACK_POP
 Box _make_Box(Int value) {
     return Box{value};
 }

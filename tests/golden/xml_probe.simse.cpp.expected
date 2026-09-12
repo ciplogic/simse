@@ -4,9 +4,11 @@
 #include <type_traits>
 
 // xml_probe.simse:2
+SIMSE_PACK_PUSH
 struct Tile {
     Int n;
 };
+SIMSE_PACK_POP
 Tile _make_Tile(Int n) {
     return Tile{n};
 }

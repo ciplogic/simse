@@ -3,7 +3,8 @@
 Status: design baseline — suitable for the first self-hosted implementation.
 
 Generic types are reified; see `generics.md`. In particular, every distinct
-`SmallVector<N, T>` instantiation is a distinct concrete type in generated C++.
+`SmallVector<N, T>` instantiation is a distinct concrete type in generated C++,
+and `List<T>` is the `N = 4` instantiation.
 
 Value types store their storage inline where the variable lives and deep-copy
 on copy. This document collects the container families built on that idea.
@@ -11,9 +12,11 @@ on copy. This document collects the container families built on that idea.
 ## Layout: packing and index width
 
 - The language and its types are **4-byte packed**: values are laid out on
-  4-byte boundaries.
-- `SmallVector` and `List` use **32-bit indices/sizes**, so a single list can
-  hold at most `2^32`-ish (~4.3 billion) elements.
+  4-byte boundaries and no type is aligned to more than 4 bytes
+  (`specs/memory-model.md`, "Alignment and packing").
+- `SmallVector` (and therefore `List`, which is `SmallVector<4, T>`) uses
+  **32-bit indices/sizes**, so a single list can hold at most `2^32`-ish
+  (~4.3 billion) elements.
 
 ## `SmallVector<N, T>`
 
@@ -45,15 +48,14 @@ Worked example — `Str = SV24<u8>`:
 
 ## `List<T>`
 
-`List<T>` is a separate type, **not** a type alias of `SmallVector<T, 4>`. It
-owns a field that stores the buffer and *forwards* its operations to that
-field:
+`List<T>` **is** `SmallVector<4, T>`: it is not a distinct type. The two were kept
+separate during the bootstrap (`List` stayed on `std::vector` while
+`SmallVector` was still a layout shell with no operations, where unifying them
+would have been a distraction); now that `SmallVector` is a full inline vector
+they are one type, so a list gets the inline buffer for free.
 
 ```text
-class List<T> {
-    values: SmallVector<T, 4>   // inline up to 4 elements, heap beyond
-    // pushes, indexing, size, ... are forwarded to `values`
-}
+List<T> = SmallVector<4, T>   // inline up to 4 elements, heap beyond
 ```
 
 Consequence: lists up to 4 elements are stored inline with no heap allocation;

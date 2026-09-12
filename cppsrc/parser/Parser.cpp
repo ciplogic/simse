@@ -275,7 +275,7 @@ namespace parser {
                             return decl;
                         }
                         member.hasValue = true;
-                        member.value = std::stoi(value);
+                        member.value = std::stoi(simse_toStdString(value));
                     }
                     decl->members.push_back(member);
                     skipSeparators();

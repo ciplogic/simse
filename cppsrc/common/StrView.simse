@@ -1,12 +1,16 @@
 // StrView.simse
 //
 // Shared helpers. StrView is a view over a range of a Str; it borrows the
-// source through a counted reference so a view can outlive the expression that
-// produced it without copying the text.
+// source through a raw pointer so a view can outlive the expression that
+// produced it without copying the text. The raw pointer is deliberate: views
+// are copied per character and per matcher call, so a counted reference would
+// make every copy an atomic increment. `Scanner.simse` passes the address of
+// the scanner's own `source`, exactly like the hand-written `Scanner.cpp` does
+// with `common::viewOfAtPos`.
 
 package common
 
-data class StrView(var source: &Str; var start: Int; var len: Int) {
+data class StrView(var source: *Str; var start: Int; var len: Int) {
     fun at(index: Int): Char {
         return this.source[this.start + index]
     }

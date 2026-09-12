@@ -28,7 +28,7 @@ namespace {
         out.typeOrdinal = (int) node.type;
         out.line = node.token.pos.line;
         out.column = node.token.pos.column;
-        out.text = node.token.text;
+        out.text = simse_toStdString(node.token.text);
         if (node.children) {
             for (const SkeletonNode &child: *node.children) {
                 out.children.push_back(toNode(child));
@@ -50,7 +50,7 @@ int main(int argc, char **argv) {
 
     std::vector<std::string> files;
     std::error_code ec;
-    for (const auto &entry: std::filesystem::directory_iterator(fixturesDir, ec)) {
+    for (const auto &entry: std::filesystem::directory_iterator(std::filesystem::path(simse_toStdString(fixturesDir)), ec)) {
         if (entry.is_regular_file() && entry.path().extension() == ".simse") {
             files.push_back(entry.path().string());
         }
@@ -58,7 +58,7 @@ int main(int argc, char **argv) {
     std::sort(files.begin(), files.end());
 
     for (const std::string &file: files) {
-        printf("=== %s ===\n", std::filesystem::path(file).filename().string().c_str());
+        printf("=== %s ===\n", std::filesystem::path(simse_toStdString(file)).filename().string().c_str());
 
         std::string content;
         if (!readAllBytes(file, content)) {
@@ -69,14 +69,14 @@ int main(int argc, char **argv) {
         Scanner scanner(getTokenRules(), 0, 1, 1, Str());
         setSource(scanner, content);
 
-        std::vector<Token> tokens;
+        List<Token> tokens;
         std::string error;
         bool ok = true;
         while (true) {
             Res<Token> result = nextToken(scanner);
             if (!result.isOk()) {
                 ok = false;
-                error = result.Error;
+                error = simse_toStdString(result.Error);
                 break;
             }
             if (result.Value.kind == TokenKind::Eof) {

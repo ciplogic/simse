@@ -25,18 +25,23 @@ namespace common {
     List<Str> filesInDir(const Str &dirPath, Str ext) {
         List<Str> matchingFiles;
 
+        // The standard filesystem API works in std::string; the language works in
+        // Str (`simse_toStdString` is a no-op copy when Str is std::string).
+        const std::string dir = simse_toStdString(dirPath);
+        const std::string wantedExt = simse_toStdString(ext);
+
         // Ensure the directory exists and is actually a directory
-        if (!std::filesystem::exists(dirPath) || !std::filesystem::is_directory(dirPath)) {
+        if (!std::filesystem::exists(dir) || !std::filesystem::is_directory(dir)) {
             return matchingFiles;
         }
 
         // Iterate through the files in the directory tree
-        for (const auto& entry : std::filesystem::recursive_directory_iterator(dirPath)) {
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(dir)) {
             // Check if it's a regular file and has the matching extension
-            if (entry.is_regular_file() && entry.path().extension() == ext) {
+            if (entry.is_regular_file() && entry.path().extension() == wantedExt) {
                 // Generic separators so a scanned path matches the same path given
                 // explicitly (e.g. `--root cppsrc` vs an explicit input file).
-                matchingFiles.push_back(entry.path().generic_string());
+                matchingFiles.push_back(simse_fromStdString(entry.path().generic_string()));
             }
         }
 

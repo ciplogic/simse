@@ -31,7 +31,7 @@ int main(int argc, char **argv) {
     Scanner scanner(&rules);
 
     for (const Str &file: files) {
-        printf("=== %s ===\n", std::filesystem::path(file).filename().string().c_str());
+        printf("=== %s ===\n", common::toPath(file).filename().string().c_str());
         ScanResult scan = scanFile(&scanner, file);
         printf("%s", dump(scan).c_str());
     }

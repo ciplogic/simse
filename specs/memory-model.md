@@ -18,6 +18,32 @@ compiler and runtime-defined types.
   buffer, analogous to C++ `std::vector<T>`. Copying a `List<T>` deep-copies
   its elements and buffer.
 
+### Alignment and packing
+
+The language's layout model is **4-byte packing**: values are laid out on
+4-byte boundaries and no type is aligned to more than 4 bytes.
+
+- Scalar alignment: `Bool`, `Char`, `Int8` 1; `Int16` 2; `Int32`, `Int64`,
+  `Float32`, `Float64` 4.
+- `*T` (raw pointer) and `&T` (counted reference) 4.
+- An aggregate (`data class`, `List<T>`, `SmallVector<N, T>`, `Array<T>`, ...)
+  is aligned to the widest alignment of its fields, capped at 4, and its size is
+  rounded up to a multiple of that alignment. No padding is inserted to give a
+  field more than 4-byte alignment.
+- Arrays and container buffers use the packed element size as the stride.
+
+This is normative: the ABI does not promise 8-byte alignment for `Int64` or
+`Float64` fields, pointer fields, or any aggregate member, and code that relies
+on the host's default (8-byte) alignment is outside the specification. `Str`
+and `&T` are themselves built from 4-aligned pieces (`Str` is a `SmallVector`
+of `Char`, `&T` is a counted box), so the rule is uniform across the language.
+
+Status: the bootstrap shims still spell `Str` as `std::string`, `&T` as
+`std::shared_ptr` and callables as `std::function`. Those host types are
+declared with 8-byte alignment, so 4-byte packing under-aligns them; that is
+accepted for now and recorded in `impl_specs/rtl-abi.md` (`SIMSE_NO_PACK4`
+reverts to the host layout).
+
 ### Arrays
 
 `Array<T>` lives on the heap and behaves like a reference-counted Java/C#-style

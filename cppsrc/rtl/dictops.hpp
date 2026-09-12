@@ -66,7 +66,7 @@ Int simse_dict_size(const Dictionary<K, V>& self) {
 template <class K, class V>
 List<K> simse_dict_keys(const Dictionary<K, V>& self) {
     List<K> out;
-    out.reserve(self.size());
+    out.reserve((Int) self.size());
     for (const auto& entry: self) out.push_back(entry.first);
     return out;
 }
@@ -75,7 +75,7 @@ List<K> simse_dict_keys(const Dictionary<K, V>& self) {
 template <class K, class V>
 List<V> simse_dict_values(const Dictionary<K, V>& self) {
     List<V> out;
-    out.reserve(self.size());
+    out.reserve((Int) self.size());
     for (const auto& entry: self) out.push_back(entry.second);
     return out;
 }

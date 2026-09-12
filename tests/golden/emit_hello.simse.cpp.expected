@@ -4,9 +4,11 @@
 #include <type_traits>
 
 // emit_hello.simse:2
+SIMSE_PACK_PUSH
 struct Counter {
     Int value;
 };
+SIMSE_PACK_POP
 Counter _make_Counter(Int value) {
     return Counter{value};
 }

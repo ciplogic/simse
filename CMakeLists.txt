@@ -3,6 +3,16 @@ project(simse)
 
 set(CMAKE_CXX_STANDARD 20)
 
+# List<T> is backed by SmallVector<T, 4> by default; turn this on to build the
+# whole project with std::vector<T> instead (impl_specs/rtl-abi.md). The choice
+# must match between the compiler and any amalgamated output it is linked with.
+option(SIMSE_LIST_STD_VECTOR "Back List<T> with std::vector<T> instead of SmallVector<T, 4>" OFF)
+
+# The RTL and generated aggregates are 4-byte packed by default
+# (specs/memory-model.md); turn this on to build with the host's default
+# alignment instead (impl_specs/rtl-abi.md).
+option(SIMSE_NO_PACK4 "Do not 4-byte-pack the RTL and generated aggregates" OFF)
+
 # All project code builds once into a static library; the driver and the test
 # runner are thin executables that link it.
 add_library(simse_lib STATIC
@@ -52,6 +62,14 @@ add_library(simse_lib STATIC
 target_compile_definitions(simse_lib PUBLIC
         SIMSE_DEFAULT_PRELUDE="${CMAKE_CURRENT_SOURCE_DIR}/cppsrc/rtl"
         SIMSE_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
+
+if(SIMSE_LIST_STD_VECTOR)
+    add_compile_definitions(SIMSE_LIST_STD_VECTOR)
+endif()
+
+if(SIMSE_NO_PACK4)
+    add_compile_definitions(SIMSE_NO_PACK4)
+endif()
 
 add_executable(simse_transpile cppsrc/codegen/TranspileMain.cpp)
 target_link_libraries(simse_transpile PRIVATE simse_lib)

@@ -12,7 +12,8 @@ For the first end-to-end slice, generated C++ targets the **current
 `cppsrc/rtl` shims** as-is:
 
 - `Str = std::string`
-- `List<T> = std::vector<T>`
+- `List<T> = SmallVector<T, 4>` (the spec layout; `std::vector<T>` behind
+  `SIMSE_LIST_STD_VECTOR`)
 - `PList<T> = std::shared_ptr<List<T>>`
 - `Array<T>` = the shim struct holding `int _count` and `std::shared_ptr<T[]>`
 - `Dictionary<K, V> = std::unordered_map<K, V>`
@@ -41,7 +42,7 @@ language subset needs it (no virtual dispatch, no dynamic casts).
 | `Bool` | `Bool` (`bool`) | printed as `true`/`false` (see below) |
 | `Str` | `Str` (`std::string`) | mutable byte string |
 | `Unit` | `void` | only valid as a function return type |
-| `List<T>` | `List<T>` (`std::vector<T>`) | value type, deep copies |
+| `List<T>` | `List<T>` (`SmallVector<T, 4>` by default, `std::vector<T>` with `SIMSE_LIST_STD_VECTOR`) | value type, deep copies |
 | `Array<T>` | `Array<T>` (shim struct) | shared allocation, fixed length |
 | `RawArray<T>` | `RawArray<T>` (`T*`) | unmanaged pointer |
 | `&T` | `std::shared_ptr<T>` | counted reference |
@@ -51,7 +52,7 @@ language subset needs it (no virtual dispatch, no dynamic casts).
 | `Dictionary<K, V>` | `Dictionary<K, V>` (`std::unordered_map`) | |
 | `PList<T>` | `PList<T>` (`std::shared_ptr<List<T>>`) | the `&List<T>` spelling |
 | `Cursor<T>` | `Cursor<T>` (shim struct) | immutable list view; `next`/`slice` return new cursors |
-| `SmallVector<N, T>` | `SmallVector<T, N>` shim | unused by the v1 subset |
+| `SmallVector<N, T>` | `SmallVector<T, N>` (`List<T>` is the `N = 4` instantiation) | inline vector |
 | user `data class C` | `struct C` (aggregate) + `_make_C` factory | construction lowers to the factory; no emitted constructors |
 | user `enum E` | `enum class E` | explicit values when given |
 | callable `(A, B) -> R` | `Func<R(A, B)>` (`std::function`) | `Unit` return -> `void` |
@@ -65,9 +66,14 @@ normative layout.
 1. **`Str` layout.** Spec: inline `SmallVector<24, Char>` with a reserved NUL and
    a 23-byte inline capacity (`specs/containers.md`, `specs/built-in-types.md`).
    Shim: `std::string` (small-string optimization only, unspecified capacity).
-2. **`List<T>` layout.** Spec: a value type forwarding to a `SmallVector<4, T>`
-   with an inline capacity of 4 (`specs/containers.md`). Shim: `std::vector<T>`,
-   with no inline-element guarantee.
+2. **`List<T>` backing.** Spec: `List<T>` *is* `SmallVector<4, T>`
+   (`specs/containers.md`). Shim: matches by default — `List<T>` is
+   `SmallVector<T, kListInlineCapacity>` (4) — with the documented layout. The
+   `SIMSE_LIST_STD_VECTOR` define (CMake option of the same name;
+   `build.bat --define SIMSE_LIST_STD_VECTOR`) is a bootstrap escape hatch that
+   backs `List<T>` with `std::vector<T>` instead, and is not the target layout;
+   `build.js` mirrors the CMake cache so an amalgamation always matches the
+   libraries it links.
 3. **Index width / packing.** Spec: 32-bit indices and sizes, 4-byte packing
    (`specs/containers.md`). Shim: `std::vector` uses `size_t`; no packing rule is
    enforced.
@@ -87,10 +93,27 @@ normative layout.
 8. **`Res<T>` failure sentinel.** Not spelled out in `specs/`; the shim defines
    `isOk()` as "`Error` is empty". Generated code does not depend on this beyond
    calling `isOk()`.
-9. **`SmallVector` operations.** The shim is a layout shell with no operations and
-   reversed template parameters (`SmallVector<T, N>` vs the Simse spelling
-   `SmallVector<N, T>`). The emitter maps `SmallVector<N, T>` to `SmallVector<T, N>`
-   (`impl_specs/reification.md`) but the v1 subset does not exercise its operations.
+9. **`SmallVector` operations.** The shim implements the std::vector-compatible
+   surface the compiler uses: construction (default/copy/move/init-list/range/,
+   `(count, value)`), assignment, `size`/`capacity`/`empty`/`reserve`,
+   `resize`/`assign`, `operator[]`/`at`/`front`/`back`/`data`, raw-pointer
+   iterators (so range-for and `std::sort` work), `push_back`/`emplace_back`/
+   `pop_back`, `insert`/`erase`/`clear`/`swap`, and `==`/`!=`, with the
+   documented `_len`/`_cap`/union layout and explicit element lifetimes
+   (`tools/smallvector_stress.cpp` exercises the inline/heap transitions).
+   Template parameters stay reversed (`SmallVector<T, N>` vs the Simse spelling
+   `SmallVector<N, T>`): the emitter maps `SmallVector<N, T>` to `SmallVector<T, N>`
+   (`impl_specs/reification.md`).
+10. **Alignment.** Spec: every type is 4-byte packed (`specs/memory-model.md`,
+    "Alignment and packing"). Shim: generated aggregates are emitted between
+    `SIMSE_PACK_PUSH` / `SIMSE_PACK_POP` (`cppsrc/rtl/types.hpp`), and
+    `SmallVector` and `Array` follow the same rule. The hand-written RTL structs
+    (`XmlNode`, `Attribute`, `Cursor`, ...) keep the host alignment because their
+    fields already sit on 4-byte boundaries, so packing them would not change a
+    single size. The host types the shims are built on (`std::string`,
+    `std::shared_ptr`, `std::function`) are declared 8-aligned and are therefore
+    under-aligned by the packed definitions; that is accepted while the shims
+    exist. `SIMSE_NO_PACK4` turns the packing off and reverts to host layout.
 
 ## Operations the emitter needs
 

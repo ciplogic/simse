@@ -21,12 +21,12 @@ List<Str> simse_listFiles(const Str& dir, const Str& ext) {
 List<Str> simse_listFilesDirect(const Str& dir, const Str& ext) {
     List<Str> files;
     std::error_code ec;
-    if (!std::filesystem::is_directory(dir, ec)) {
+    if (!std::filesystem::is_directory(simse_toStdString(dir), ec)) {
         return files;
     }
-    for (const auto& entry: std::filesystem::directory_iterator(dir, ec)) {
-        if (entry.is_regular_file() && entry.path().extension() == ext) {
-            files.push_back(entry.path().generic_string());
+    for (const auto& entry: std::filesystem::directory_iterator(simse_toStdString(dir), ec)) {
+        if (entry.is_regular_file() && entry.path().extension() == simse_toStdString(ext)) {
+            files.push_back(simse_fromStdString(entry.path().generic_string()));
         }
     }
     std::sort(files.begin(), files.end());
@@ -45,19 +45,19 @@ Bool simse_writeFile(const Str& path, const Str& content) {
 
 Str simse_pathCanonical(const Str& path) {
     std::error_code ec;
-    std::filesystem::path canonical =
-        std::filesystem::weakly_canonical(std::filesystem::path(path), ec);
-    return ec ? path : canonical.string();
+    std::filesystem::path canonical = std::filesystem::weakly_canonical(
+            std::filesystem::path(simse_toStdString(path)), ec);
+    return ec ? path : simse_fromStdString(canonical.string());
 }
 
 Bool simse_pathIsDirectory(const Str& path) {
     std::error_code ec;
-    return std::filesystem::is_directory(path, ec);
+    return std::filesystem::is_directory(simse_toStdString(path), ec);
 }
 
 Bool simse_pathExists(const Str& path) {
     std::error_code ec;
-    return std::filesystem::exists(path, ec);
+    return std::filesystem::exists(simse_toStdString(path), ec);
 }
 
 void simse_eprintln(const Str& text) {

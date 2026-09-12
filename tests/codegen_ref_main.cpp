@@ -23,7 +23,7 @@ using namespace lex;
 
 int main(int argc, char **argv) {
     Str fixturesDir = argc > 1 ? argv[1] : ".";
-    Str goldenDir = (std::filesystem::path(fixturesDir).parent_path() / "golden").string();
+    Str goldenDir = (common::toPath(fixturesDir).parent_path() / "golden").string();
 
     List<Str> files = filesInDir(fixturesDir, ".simse");
     std::sort(files.begin(), files.end());
@@ -33,15 +33,15 @@ int main(int argc, char **argv) {
     int goldenFailures = 0;
 
     for (const Str &file: files) {
-        Str name = std::filesystem::path(file).filename().string();
+        Str name = common::toPath(file).filename().string();
         printf("=== %s ===\n", name.c_str());
 
         tests::ScanResult scan = tests::scanFile(&scanner, file);
         tests::AstSemaResult result = tests::runAstSema(scan, name);
         printf("%s", result.cpp.c_str());
 
-        Str goldenPath = (std::filesystem::path(goldenDir) / (name + ".cpp.expected")).string();
-        if (std::filesystem::exists(goldenPath)) {
+        Str goldenPath = (common::toPath(goldenDir) / common::toPath(name + ".cpp.expected")).string();
+        if (std::filesystem::exists(common::toPath(goldenPath))) {
             Str expected = common::readFile(goldenPath);
             if (expected != result.cpp) {
                 goldenFailures++;

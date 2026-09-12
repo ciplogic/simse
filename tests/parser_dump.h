@@ -21,7 +21,7 @@
 #include <string>
 
 namespace parserdump {
-    inline std::string escapeText(const std::string &text) {
+    inline std::string escapeText(const Str &text) {
         std::string escaped;
         for (char ch: text) {
             switch (ch) {
@@ -35,15 +35,15 @@ namespace parserdump {
         return escaped;
     }
 
-    inline std::string header(const std::string &name) {
-        return "=== " + name + " ===\n";
+    inline std::string header(const Str &name) {
+        return simse_toStdString("=== " + name + " ===\n");
     }
 
-    inline std::string scanErrorLine(const std::string &message) {
+    inline std::string scanErrorLine(const Str &message) {
         return "ScanError " + escapeText(message) + "\n";
     }
 
-    inline std::string parseErrorLine(const std::string &message) {
+    inline std::string parseErrorLine(const Str &message) {
         return "ParseError " + escapeText(message) + "\n";
     }
 }

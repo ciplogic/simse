@@ -28,7 +28,7 @@ namespace skeldump {
         std::vector<Node> children;
     };
 
-    inline std::string escapeText(const std::string &text) {
+    inline std::string escapeText(const Str &text) {
         std::string escaped;
         for (char ch: text) {
             switch (ch) {
@@ -72,7 +72,7 @@ namespace skeldump {
     }
 
     // The single-line marker both drivers emit when scanning fails.
-    inline std::string errorLine(const std::string &message) {
+    inline std::string errorLine(const Str &message) {
         return "Error " + escapeText(message) + "\n";
     }
 }

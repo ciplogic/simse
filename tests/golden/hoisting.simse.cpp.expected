@@ -4,10 +4,12 @@
 #include <type_traits>
 
 // hoisting.simse:7
+SIMSE_PACK_PUSH
 struct Point {
     Int x;
     Int y;
 };
+SIMSE_PACK_POP
 Point _make_Point(Int x, Int y) {
     return Point{x, y};
 }

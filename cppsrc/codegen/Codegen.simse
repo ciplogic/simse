@@ -467,6 +467,9 @@ data class Emitter(
         val typeParams: List<Str> = xmlTypeParamNames(decl)
         this.sourceComment(decl)
         val tmpl: Str = this.templateClause(typeParams)
+        // Generated aggregates follow the language's 4-byte packing rule
+        // (specs/memory-model.md); the macros come from rtl/types.hpp.
+        this.line(0, "SIMSE_PACK_PUSH")
         if (tmpl != "") {
             this.line(0, tmpl)
         }
@@ -478,6 +481,7 @@ data class Emitter(
             f = f + 1
         }
         this.line(0, "};")
+        this.line(0, "SIMSE_PACK_POP")
 
         // The struct stays an aggregate; construction goes through a
         // `_make_<Name>` factory so callers keep the `Name(args)` shape without

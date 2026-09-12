@@ -45,7 +45,7 @@ namespace tests {
         ScanResult scan;
         scan.ok = true;
         scan.errorPos = SourcePos{0, 1, 1};
-        if (!std::filesystem::exists(fileName)) {
+        if (!std::filesystem::exists(simse_toStdString(fileName))) {
             // Report a clean failure instead of letting readFile fault on a
             // missing path.
             scan.ok = false;
@@ -176,9 +176,9 @@ namespace tests {
 #ifdef SIMSE_DEFAULT_PRELUDE
                 Str path = SIMSE_DEFAULT_PRELUDE;
                 List<Str> files;
-                if (std::filesystem::is_directory(path)) {
+                if (std::filesystem::is_directory(simse_toStdString(path))) {
                     files = common::filesInDir(path, ".simse");
-                } else if (std::filesystem::exists(path)) {
+                } else if (std::filesystem::exists(simse_toStdString(path))) {
                     files.push_back(path);
                 }
                 set.merged.pos = common::SourcePos{0, 1, 1};
@@ -189,7 +189,8 @@ namespace tests {
                         set.ok = false;
                         break;
                     }
-                    set.fileNames.push_back(std::filesystem::path(file).filename().string());
+                    set.fileNames.push_back(simse_fromStdString(
+                            std::filesystem::path(simse_toStdString(file)).filename().string()));
                     set.modules.push_back(parsed.Value);
                     for (const ast::Import &import: parsed.Value.imports) {
                         set.merged.imports.push_back(import);
@@ -274,7 +275,8 @@ namespace tests {
     }
 
     Str emitFixtureCpp(Scanner *scanner, const Str &fixturesDir, const Str &name) {
-        Str path = (std::filesystem::path(fixturesDir) / name).string();
+        Str path = simse_fromStdString(
+                (std::filesystem::path(simse_toStdString(fixturesDir)) / simse_toStdString(name)).string());
         ScanResult scan = scanFile(scanner, path);
         if (!scan.ok) return "";
         List<Token> tokens = scan.tokens;

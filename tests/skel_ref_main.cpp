@@ -25,7 +25,7 @@ namespace {
         out.typeOrdinal = (int) node._type;
         out.line = node._token.pos.line;
         out.column = node._token.pos.column;
-        out.text = node._token.text;
+        out.text = simse_toStdString(node._token.text);
         if (node._children) {
             for (const SkeletonNode &child: *node._children) {
                 out.children.push_back(toNode(child));
@@ -44,7 +44,7 @@ int main(int argc, char **argv) {
     Scanner scanner(&rules);
 
     for (const Str &file: files) {
-        printf("=== %s ===\n", std::filesystem::path(file).filename().string().c_str());
+        printf("=== %s ===\n", common::toPath(file).filename().string().c_str());
 
         tests::ScanResult scan = tests::scanFile(&scanner, file);
         if (!scan.ok) {

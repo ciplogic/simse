@@ -1,9 +1,23 @@
 #pragma once
 #include "../rtl/simse.hpp"
 
+#include <filesystem>
+
 namespace common {
     Str readFile(const Str& filePath);
     List<Str> filesInDir(const Str& dirPath, Str ext = ".simse");
+
+    // The Str <-> std::filesystem boundary (impl_specs/rtl-abi.md): the language
+    // works in `Str`, the standard library in `std::string`/`path`. With
+    // `Str = std::string` these are cheap copies, so the same code compiles in
+    // either configuration.
+    inline std::filesystem::path toPath(const Str& value) {
+        return std::filesystem::path(simse_toStdString(value));
+    }
+
+    inline Str fromPath(const std::filesystem::path& value) {
+        return simse_fromStdString(value.string());
+    }
 
     // A position in a source file. `offset` is the 0-based byte offset of the
     // token's first character; `line` and `column` are 1-based. Tabs count as a

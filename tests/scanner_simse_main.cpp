@@ -63,7 +63,7 @@ int main(int argc, char **argv) {
 
     std::vector<std::string> files;
     std::error_code ec;
-    for (const auto &entry: std::filesystem::directory_iterator(fixturesDir, ec)) {
+    for (const auto &entry: std::filesystem::directory_iterator(std::filesystem::path(simse_toStdString(fixturesDir)), ec)) {
         if (entry.is_regular_file() && entry.path().extension() == ".simse") {
             files.push_back(entry.path().string());
         }
@@ -71,7 +71,7 @@ int main(int argc, char **argv) {
     std::sort(files.begin(), files.end());
 
     for (const std::string &file: files) {
-        printf("=== %s ===\n", std::filesystem::path(file).filename().string().c_str());
+        printf("=== %s ===\n", std::filesystem::path(simse_toStdString(file)).filename().string().c_str());
 
         std::string content;
         if (!readAllBytes(file, content)) {
@@ -85,7 +85,7 @@ int main(int argc, char **argv) {
         while (true) {
             Res<Token> result = nextToken(scanner);
             if (!result.isOk()) {
-                printf("Error\t%s\n", escapeText(result.Error).c_str());
+                printf("Error\t%s\n", escapeText(simse_toStdString(result.Error)).c_str());
                 break;
             }
             if (result.Value.kind == TokenKind::Eof) {
@@ -95,7 +95,7 @@ int main(int argc, char **argv) {
                    kindName(result.Value.kind).c_str(),
                    result.Value.pos.line,
                    result.Value.pos.column,
-                   escapeText(result.Value.text).c_str());
+                   escapeText(simse_toStdString(result.Value.text)).c_str());
         }
     }
     return 0;

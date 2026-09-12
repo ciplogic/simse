@@ -17,6 +17,8 @@
 //   --debug         debug build (default: cmake-build-debug, /MDd)
 //   --arch <arch>   vcvarsall target architecture (default: the CMake build's
 //                    compiler architecture, else arm64)
+//   --define <m[=v]> add a preprocessor define to the compile (repeatable),
+//                    e.g. --define SIMSE_LIST_STD_VECTOR
 //   -h, --help      show this help
 //
 // Environment:
@@ -52,6 +54,7 @@ function usage() {
   --debug         debug build (default: cmake-build-debug, /MDd)
   --arch <arch>   vcvarsall target architecture (default: from CMakeCache.txt,
                   else arm64)
+  --define <m[=v]> add a preprocessor define to the compile (repeatable)
   -h, --help      show this help`);
 }
 
@@ -64,6 +67,7 @@ function parseArgs(argv) {
     release: false,
     configSet: false,
     arch: null,
+    defines: [],
   };
   const value = (i) => {
     if (i + 1 >= argv.length) fail(`missing value for ${argv[i]}`);
@@ -80,6 +84,7 @@ function parseArgs(argv) {
       case "--release": opts.release = true; opts.configSet = true; break;
       case "--debug": opts.release = false; opts.configSet = true; break;
       case "--arch": opts.arch = value(i); i++; break;
+      case "--define": opts.defines.push(value(i)); i++; break;
       case "-h": case "--help": opts.help = true; break;
       default:
         if (arg.startsWith("-")) fail(`unknown option '${arg}' (try --help)`);
@@ -132,6 +137,16 @@ function cachedBuildType(buildDir) {
   if (!match) return null;
   const value = match[1].trim();
   return value || null;
+}
+
+// Whether the CMake build was configured with SIMSE_LIST_STD_VECTOR. The RTL
+// libraries the amalgamation links against bake in the List<T> backing, so the
+// compile of the amalgamation has to match them or linking fails with unresolved
+// `simse_listFiles`-style symbols over SmallVector/std::vector.
+function cachedStdVectorList(buildDir) {
+  const cache = path.join(buildDir, "CMakeCache.txt");
+  if (!existsSync(cache)) return false;
+  return /^SIMSE_LIST_STD_VECTOR:BOOL=(ON|TRUE|1)$/im.test(readFileSync(cache, "utf8"));
 }
 
 // The architecture the compiler targets, from its banner ("... for ARM64").
@@ -264,8 +279,19 @@ async function main() {
   // Match the CMake build's runtime and optimization (Release uses /MD + /O2 +
   // /DNDEBUG; Debug uses /MDd).
   const flags = isRelease ? ["/MD", "/O2", "/DNDEBUG"] : ["/MDd"];
+  // Mirror the RTL's List<T> backing choice so the amalgamation links against
+  // the CMake libraries built in this folder.
+  const defines = [...opts.defines];
+  const stdVectorList = cachedStdVectorList(buildDir);
+  if (stdVectorList && !defines.includes("SIMSE_LIST_STD_VECTOR")) {
+    defines.push("SIMSE_LIST_STD_VECTOR");
+  } else if (!stdVectorList && defines.includes("SIMSE_LIST_STD_VECTOR")) {
+    console.warn(`build: warning: --define SIMSE_LIST_STD_VECTOR does not match ${path.basename(buildDir)}, ` +
+        `whose RTL libraries use SmallVector; linking may fail`);
+  }
   const args = [
     cl, "/nologo", "/std:c++20", "/EHsc", "/W3", ...flags,
+    ...defines.map((define) => `/D${define}`),
     `/I${REPO}`, `/Fo${obj}`, `/Fe${exe}`,
     cpp,
     path.join(buildDir, "simse_native.lib"),
