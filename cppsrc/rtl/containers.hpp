@@ -24,6 +24,12 @@
 // managed explicitly (placement new / std::destroy_at), so T needs neither a
 // default constructor nor a live inline buffer of default-constructed values.
 //
+// The inline buffer is a real `T[N]` member of the storage union, so the inline
+// path is addressable without type punning and can be built in a constant
+// expression: `SmallVector(InlineInit{})` activates it, and the value-
+// initialized elements may then be assigned in a `constexpr` context (see
+// SmString, whose literal constructors are constexpr).
+//
 // The operations mirror the std::vector surface the compiler uses, so the
 // `List<T>` alias below can switch between the two. The class follows the
 // language's 4-byte packing rule (`SIMSE_PACK_PUSH`/`SIMSE_PACK_POP` in
@@ -41,6 +47,12 @@ public:
     using const_reference = const T&;
 
     SmallVector() = default;
+
+    // Constexpr construction: the inline buffer is active and its elements are
+    // value-initialized, so a `constexpr` container can be filled by assignment.
+    // Only instantiated for trivially copyable T (SmString's char buffer).
+    struct InlineInit {};
+    constexpr explicit SmallVector(InlineInit) : _len(0), _cap(N), _buf(InlineInit{}) {}
 
     explicit SmallVector(Int count) {
         resize(count);
@@ -68,7 +80,7 @@ public:
         takeFrom(other);
     }
 
-    ~SmallVector() {
+    constexpr ~SmallVector() {
         destroyElements();
         releaseHeap();
     }
@@ -99,8 +111,8 @@ public:
 
     // ---- element access ---------------------------------------------------
 
-    T& operator[](Int index) { return raw()[index]; }
-    const T& operator[](Int index) const { return raw()[index]; }
+    constexpr T& operator[](Int index) { return raw()[index]; }
+    constexpr const T& operator[](Int index) const { return raw()[index]; }
 
     // Unchecked in the v1 subset (no exceptions); an out-of-range `at` aborts
     // rather than silently reading past the end.
@@ -113,12 +125,12 @@ public:
         return raw()[index];
     }
 
-    T& front() { return raw()[0]; }
-    const T& front() const { return raw()[0]; }
-    T& back() { return raw()[_len - 1]; }
-    const T& back() const { return raw()[_len - 1]; }
-    T* data() { return raw(); }
-    const T* data() const { return raw(); }
+    constexpr T& front() { return raw()[0]; }
+    constexpr const T& front() const { return raw()[0]; }
+    constexpr T& back() { return raw()[_len - 1]; }
+    constexpr const T& back() const { return raw()[_len - 1]; }
+    constexpr T* data() { return raw(); }
+    constexpr const T* data() const { return raw(); }
 
     iterator begin() { return raw(); }
     iterator end() { return raw() + _len; }
@@ -130,10 +142,10 @@ public:
     // ---- capacity ---------------------------------------------------------
 
     Bool empty() const { return _len == 0; }
-    Int size() const { return _len; }
+    constexpr Int size() const { return _len; }
     Int capacity() const { return _cap; }
 
-    void reserve(Int count) {
+    constexpr void reserve(Int count) {
         if (count <= _cap) return;
         Int next = _cap < N ? N : _cap * 2;
         if (next < count) next = count;
@@ -156,16 +168,16 @@ public:
 
     // ---- modifiers --------------------------------------------------------
 
-    void clear() {
+    constexpr void clear() {
         destroyElements();
         _len = 0;
     }
 
-    void push_back(const T& value) { emplace_back(value); }
-    void push_back(T&& value) { emplace_back(std::move(value)); }
+    constexpr void push_back(const T& value) { emplace_back(value); }
+    constexpr void push_back(T&& value) { emplace_back(std::move(value)); }
 
     template <class... Args>
-    T& emplace_back(Args&&... args) {
+    constexpr T& emplace_back(Args&&... args) {
         if (_len == _cap) reserve(_cap + 1);
         T* slot = raw() + _len;
         std::construct_at(slot, std::forward<Args>(args)...);
@@ -173,12 +185,12 @@ public:
         return *slot;
     }
 
-    void pop_back() {
+    constexpr void pop_back() {
         _len--;
         std::destroy_at(raw() + _len);
     }
 
-    void resize(Int count) {
+    constexpr void resize(Int count) {
         if (count < _len) {
             for (Int i = count; i < _len; i++) std::destroy_at(raw() + i);
             _len = count;
@@ -267,23 +279,38 @@ private:
     // and the heap pointer overlap, so heap storage costs no extra bytes.
     union Storage {
         T* _heap;
-        alignas(4) unsigned char _inlineStore[sizeof(T) * N];
+        T _inlineStore[N];
         Storage() : _heap(nullptr) {}
-        ~Storage() {}
+        // Activates the inline buffer for constant evaluation; its elements are
+        // value-initialized there so they are live and assignable. At runtime the
+        // buffer stays raw (the elements are started by construct_at, exactly as
+        // for the heap buffer), so this costs nothing outside a constant
+        // expression. Only instantiated for trivially copyable T.
+        constexpr explicit Storage(InlineInit) {
+            if constexpr (std::is_trivially_copyable_v<T>) {
+                if (std::is_constant_evaluated()) {
+                    for (int i = 0; i < N; i++) _inlineStore[i] = T{};
+                }
+            } else {
+                static_assert(std::is_trivially_copyable_v<T>,
+                              "SmallVector(InlineInit) needs a trivially copyable element type");
+            }
+        }
+        constexpr ~Storage() {}
     };
 
     Int _len = 0;
     Int _cap = N;
     Storage _buf;
 
-    Bool isInline() const { return _cap <= N; }
+    constexpr Bool isInline() const { return _cap <= N; }
 
-    T* raw() { return isInline() ? reinterpret_cast<T*>(_buf._inlineStore) : _buf._heap; }
-    const T* raw() const {
-        return isInline() ? reinterpret_cast<const T*>(_buf._inlineStore) : _buf._heap;
+    constexpr T* raw() { return isInline() ? _buf._inlineStore : _buf._heap; }
+    constexpr const T* raw() const {
+        return isInline() ? _buf._inlineStore : _buf._heap;
     }
 
-    void destroyElements() {
+    constexpr void destroyElements() {
         if constexpr (std::is_trivially_copyable_v<T>) {
             return;                              // nothing to destroy
         } else {
@@ -292,7 +319,7 @@ private:
         }
     }
 
-    void releaseHeap() {
+    constexpr void releaseHeap() {
         if (!isInline()) std::allocator<T>().deallocate(_buf._heap, (std::size_t) _cap);
         _cap = N;
     }

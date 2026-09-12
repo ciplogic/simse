@@ -65,7 +65,7 @@ inline Opt<NameKind> simse_NameKind_fromInt(Int value) {
     if (value == 2) return Opt<NameKind>::some(NameKind::Pointer);
     return Opt<NameKind>::none();
 }
-// cppsrc/codegen/Codegen.simse:135
+// cppsrc/codegen/Codegen.simse:136
 SIMSE_PACK_PUSH
 struct Emitter {
     List<CgInput> inputs;
@@ -322,9 +322,9 @@ void emitEnumConversion(Emitter& self, XmlNode* decl);
 void emitTypeAlias(Emitter& self, XmlNode* decl);
 void emitNativeDeclarations(Emitter& self);
 void emitFunctions(Emitter& self, Bool prototypeOnly);
-void beginScope(Emitter& self, CgFn fn, NameKind selfK, XmlNode* selfTypePtr);
+void beginScope(Emitter& self, CgFn* fn, NameKind selfK, XmlNode* selfTypePtr);
 Str receiverParam(Emitter& self, XmlNode* receiverType);
-void emitFunction(Emitter& self, CgFn fn, Bool prototypeOnly);
+void emitFunction(Emitter& self, CgFn* fn, Bool prototypeOnly);
 void emitStmts(Emitter& self, List<XmlNode>* stmts, Int level);
 void emitStmt(Emitter& self, XmlNode* stmt, Int level);
 Str expr(Emitter& self, XmlNode* e, Int minPrec, XmlNode* expected);
@@ -530,48 +530,48 @@ SkeletonType blockTypeForOpenToken(Str openingToken);
 Bool isClosingToken(Str token);
 Bool foldBack(std::shared_ptr<List<SkeletonNode>> nodes, Str openingToken);
 Res<SkeletonNode> parseSkeleton(List<Token>* tokens);
-// cppsrc/codegen/Codegen.simse:48
+// cppsrc/codegen/Codegen.simse:49
 Str cgJoin(List<Str>* parts, Str separator) {
     Str out = "";
     Int i = 0;
     L1:;
     if (!(i < parts->size())) goto L2;
     if (!(i > 0)) goto L4;
-    out = out + separator;
+    simse_str_appendStr(out, separator);
     L4:;
-    out = out + (*parts)[i];
+    simse_str_appendStr(out, (*parts)[i]);
     i = i + 1;
     goto L1;
     L2:;
     return out;
 }
-// cppsrc/codegen/Codegen.simse:61
+// cppsrc/codegen/Codegen.simse:62
 Str cgIndent(Int level) {
     Str out = "";
     Int i = 0;
     L1:;
     if (!(i < level * 4)) goto L2;
-    out = out + " ";
+    simse_str_append(out, ' ');
     i = i + 1;
     goto L1;
     L2:;
     return out;
 }
-// cppsrc/codegen/Codegen.simse:71
+// cppsrc/codegen/Codegen.simse:72
 Bool cgIsRtlTypeName(Str name) {
     if (!(name == "Int" || name == "Int8" || name == "Int16" || name == "Int32" || name == "Int64" || name == "Float32" || name == "Float64" || name == "Char" || name == "Bool" || name == "Str" || name == "List" || name == "Array" || name == "RawArray" || name == "Opt" || name == "Res" || name == "Dictionary" || name == "SmallVector" || name == "PList" || name == "Attribute" || name == "XmlNode" || name == "Cursor")) goto L2;
     return true;
     L2:;
     return false;
 }
-// cppsrc/codegen/Codegen.simse:83
+// cppsrc/codegen/Codegen.simse:84
 Str cgUnquote(Str text) {
     if (!(text.size() >= 2 && simse_str_substr(text, 0, 1) == "\"" && simse_str_substr(text, text.size() - 1, 1) == "\"")) goto L2;
     return simse_str_substr(text, 1, text.size() - 2);
     L2:;
     return text;
 }
-// cppsrc/codegen/Codegen.simse:91
+// cppsrc/codegen/Codegen.simse:92
 Int cgPrecedence(XmlNode* e) {
     if (!(xmlKind(e) == "Expr.Binary")) goto L2;
     {
@@ -618,7 +618,7 @@ Int cgPrecedence(XmlNode* e) {
     L18:;
     return 10;
 }
-// cppsrc/codegen/Codegen.simse:114
+// cppsrc/codegen/Codegen.simse:115
 Bool cgIsMainArgs(XmlNode* decl) {
     List<XmlNode> params = xmlChildren(decl, "Param");
     if (!(params.size() != 1)) goto L2;
@@ -637,7 +637,7 @@ Bool cgIsMainArgs(XmlNode* decl) {
     L8:;
     return xmlKind(simse_addressOf(args[0])) == "Type.Named" && xmlAttr(simse_addressOf(args[0]), "name") == "Str";
 }
-// cppsrc/codegen/Codegen.simse:159
+// cppsrc/codegen/Codegen.simse:160
 void fail(Emitter& self, XmlNode* posNode, Str message) {
     if (!(self.failed)) goto L2;
     return;
@@ -645,22 +645,24 @@ void fail(Emitter& self, XmlNode* posNode, Str message) {
     self.failed = true;
     self.error = self.curFile + ":" + simse_int_toString(xmlLine(posNode)) + ":" + simse_int_toString(xmlColumn(posNode)) + ": " + message;
 }
-// cppsrc/codegen/Codegen.simse:168
+// cppsrc/codegen/Codegen.simse:169
 void line(Emitter& self, Int level, Str text) {
-    self.out = self.out + cgIndent(level) + text + "\n";
+    simse_str_appendStr(self.out, cgIndent(level));
+    simse_str_appendStr(self.out, text);
+    simse_str_append(self.out, '\n');
 }
-// cppsrc/codegen/Codegen.simse:172
+// cppsrc/codegen/Codegen.simse:177
 void sourceComment(Emitter& self, XmlNode* posNode) {
     line(self, 0, "// " + self.curFile + ":" + simse_int_toString(xmlLine(posNode)));
 }
-// cppsrc/codegen/Codegen.simse:178
+// cppsrc/codegen/Codegen.simse:183
 XmlNode namedTypeExpr(Emitter& self, Str name) {
     XmlNode node = XmlNode("Type", List<Attribute>(), makeList<XmlNode>());
     simse_list_append(node.attributes, Attribute("kind", "Type.Named"));
     simse_list_append(node.attributes, Attribute("name", name));
     return node;
 }
-// cppsrc/codegen/Codegen.simse:185
+// cppsrc/codegen/Codegen.simse:190
 XmlNode genericTypeExpr(Emitter& self, Str name, List<XmlNode>* args) {
     XmlNode node = XmlNode("Type", List<Attribute>(), makeList<XmlNode>());
     simse_list_append(node.attributes, Attribute("kind", "Type.Generic"));
@@ -674,7 +676,7 @@ XmlNode genericTypeExpr(Emitter& self, Str name, List<XmlNode>* args) {
     L2:;
     return node;
 }
-// cppsrc/codegen/Codegen.simse:198
+// cppsrc/codegen/Codegen.simse:203
 XmlNode classReceiver(Emitter& self, XmlNode* decl) {
     List<Str> typeParams = xmlTypeParamNames(decl);
     if (!(typeParams.size() == 0)) goto L2;
@@ -690,14 +692,14 @@ XmlNode classReceiver(Emitter& self, XmlNode* decl) {
     L4:;
     return genericTypeExpr(self, xmlAttr(decl, "name"), &args);
 }
-// cppsrc/codegen/Codegen.simse:212
+// cppsrc/codegen/Codegen.simse:217
 void addFunction(Emitter& self, XmlNode* decl, XmlNode* receiver, Str file, List<Str> templateParams, Bool prelude) {
     simse_list_append(self.functions, _make_CgFn(*(decl), *(receiver), file, templateParams, prelude));
     if (!(!xmlIsEmpty(receiver))) goto L2;
     simse_dict_insert(self.receiverFnNames, xmlAttr(decl, "name"), true);
     L2:;
 }
-// cppsrc/codegen/Codegen.simse:219
+// cppsrc/codegen/Codegen.simse:224
 void addNativeExt(Emitter& self, Str name, CgNativeExt ext) {
     if (!(simse_dict_has(self.nativeExtensions, name))) goto L2;
     {
@@ -714,7 +716,7 @@ void addNativeExt(Emitter& self, Str name, CgNativeExt ext) {
     }
     L3:;
 }
-// cppsrc/codegen/Codegen.simse:231
+// cppsrc/codegen/Codegen.simse:236
 void collect(Emitter& self) {
     Int i = 0;
     L1:;
@@ -821,7 +823,7 @@ void collect(Emitter& self) {
     goto L1;
     L2:;
 }
-// cppsrc/codegen/Codegen.simse:302
+// cppsrc/codegen/Codegen.simse:307
 void setActiveTypeParams(Emitter& self, List<Str> params) {
     simse_dict_clear(self.activeTypeParams);
     Int i = 0;
@@ -832,7 +834,7 @@ void setActiveTypeParams(Emitter& self, List<Str> params) {
     goto L1;
     L2:;
 }
-// cppsrc/codegen/Codegen.simse:311
+// cppsrc/codegen/Codegen.simse:316
 Str templateClause(Emitter& self, List<Str> params) {
     if (!(params.size() == 0)) goto L2;
     return "";
@@ -847,7 +849,7 @@ Str templateClause(Emitter& self, List<Str> params) {
     L4:;
     return "template <" + cgJoin(&parts, ", ") + ">";
 }
-// cppsrc/codegen/Codegen.simse:324
+// cppsrc/codegen/Codegen.simse:329
 Str typeArgsString(Emitter& self, Str baseName, List<XmlNode>* args) {
     List<Str> rendered = List<Str>();
     Int i = 0;
@@ -866,7 +868,7 @@ Str typeArgsString(Emitter& self, Str baseName, List<XmlNode>* args) {
     L4:;
     return cgJoin(&rendered, ", ");
 }
-// cppsrc/codegen/Codegen.simse:339
+// cppsrc/codegen/Codegen.simse:344
 Str typeName(Emitter& self, Str name, XmlNode* posNode) {
     if (!(name == "Unit")) goto L2;
     return "void";
@@ -883,7 +885,7 @@ Str typeName(Emitter& self, Str name, XmlNode* posNode) {
     fail(self, posNode, "unsupported type '" + name + "'");
     return "/*unsupported*/";
 }
-// cppsrc/codegen/Codegen.simse:356
+// cppsrc/codegen/Codegen.simse:361
 Str type(Emitter& self, XmlNode* typeExpr) {
     Str kind = xmlKind(typeExpr);
     if (!(kind == "Type.IntLit")) goto L2;
@@ -940,7 +942,7 @@ Str type(Emitter& self, XmlNode* typeExpr) {
     L16:;
     return "/*unsupported*/";
 }
-// cppsrc/codegen/Codegen.simse:400
+// cppsrc/codegen/Codegen.simse:405
 NameKind kindOf(Emitter& self, XmlNode* typeExpr) {
     Str kind = xmlKind(typeExpr);
     if (!(kind == "Type.Reference")) goto L2;
@@ -954,7 +956,7 @@ NameKind kindOf(Emitter& self, XmlNode* typeExpr) {
     L6:;
     return NameKind::Value;
 }
-// cppsrc/codegen/Codegen.simse:416
+// cppsrc/codegen/Codegen.simse:421
 void emitTypes(Emitter& self) {
     Int i = 0;
     L1:;
@@ -1007,7 +1009,7 @@ void emitTypes(Emitter& self) {
     goto L1;
     L2:;
 }
-// cppsrc/codegen/Codegen.simse:445
+// cppsrc/codegen/Codegen.simse:450
 void emitDataClass(Emitter& self, XmlNode* decl) {
     setActiveTypeParams(self, xmlTypeParamNames(decl));
     List<XmlNode> fields = xmlChildren(decl, "Field");
@@ -1066,7 +1068,7 @@ void emitDataClass(Emitter& self, XmlNode* decl) {
     line(self, 1, "return " + target + "{" + cgJoin(&values, ", ") + "};");
     line(self, 0, "}");
 }
-// cppsrc/codegen/Codegen.simse:501
+// cppsrc/codegen/Codegen.simse:506
 void emitEnum(Emitter& self, XmlNode* decl) {
     sourceComment(self, decl);
     Str tmpl = templateClause(self, xmlTypeParamNames(decl));
@@ -1093,7 +1095,7 @@ void emitEnum(Emitter& self, XmlNode* decl) {
     L4:;
     line(self, 0, "};");
 }
-// cppsrc/codegen/Codegen.simse:523
+// cppsrc/codegen/Codegen.simse:528
 void emitEnumConversion(Emitter& self, XmlNode* decl) {
     List<Str> typeParams = xmlTypeParamNames(decl);
     if (!(typeParams.size() > 0)) goto L2;
@@ -1131,7 +1133,7 @@ void emitEnumConversion(Emitter& self, XmlNode* decl) {
     line(self, 1, "return Opt<" + xmlAttr(decl, "name") + ">::none();");
     line(self, 0, "}");
 }
-// cppsrc/codegen/Codegen.simse:556
+// cppsrc/codegen/Codegen.simse:561
 void emitTypeAlias(Emitter& self, XmlNode* decl) {
     XmlNode target = xmlChild(decl, "TargetType");
     if (!(xmlIsEmpty(&target))) goto L2;
@@ -1150,7 +1152,7 @@ void emitTypeAlias(Emitter& self, XmlNode* decl) {
     L6:;
     line(self, 0, "using " + xmlAttr(decl, "name") + " = " + targetText + ";");
 }
-// cppsrc/codegen/Codegen.simse:575
+// cppsrc/codegen/Codegen.simse:580
 void emitNativeDeclarations(Emitter& self) {
     setActiveTypeParams(self, List<Str>());
     Int i = 0;
@@ -1236,20 +1238,20 @@ void emitNativeDeclarations(Emitter& self) {
     goto L1;
     L2:;
 }
-// cppsrc/codegen/Codegen.simse:636
+// cppsrc/codegen/Codegen.simse:641
 void emitFunctions(Emitter& self, Bool prototypeOnly) {
     Int i = 0;
     L1:;
     if (!(i < self.functions.size())) goto L2;
     {
-        CgFn fn = self.functions[i];
+        CgFn* fn = simse_addressOf(self.functions[i]);
         i = i + 1;
-        if (fn.prelude) goto L3;
+        if (fn->prelude) goto L3;
         goto L4;
         L3:;
         goto L1;
         L4:;
-        self.curFile = fn.file;
+        self.curFile = fn->file;
         emitFunction(self, fn, prototypeOnly);
         if (self.failed) goto L5;
         goto L6;
@@ -1260,16 +1262,16 @@ void emitFunctions(Emitter& self, Bool prototypeOnly) {
     goto L1;
     L2:;
 }
-// cppsrc/codegen/Codegen.simse:652
-void beginScope(Emitter& self, CgFn fn, NameKind selfK, XmlNode* selfTypePtr) {
+// cppsrc/codegen/Codegen.simse:659
+void beginScope(Emitter& self, CgFn* fn, NameKind selfK, XmlNode* selfTypePtr) {
     simse_dict_clear(self.nameKinds);
     simse_dict_clear(self.localTypes);
     self.selfKind = selfK;
     self.selfType = *(selfTypePtr);
-    if (!(!xmlIsEmpty(simse_addressOf(fn.receiver)))) goto L2;
+    if (!(!xmlIsEmpty(simse_addressOf(fn->receiver)))) goto L2;
     simse_dict_insert(self.nameKinds, "self", selfK);
     L2:;
-    List<XmlNode> params = xmlChildren(simse_addressOf(fn.decl), "Param");
+    List<XmlNode> params = xmlChildren(simse_addressOf(fn->decl), "Param");
     Int i = 0;
     L3:;
     if (!(i < params.size())) goto L4;
@@ -1287,7 +1289,7 @@ void beginScope(Emitter& self, CgFn fn, NameKind selfK, XmlNode* selfTypePtr) {
     goto L3;
     L4:;
 }
-// cppsrc/codegen/Codegen.simse:673
+// cppsrc/codegen/Codegen.simse:680
 Str receiverParam(Emitter& self, XmlNode* receiverType) {
     Str mapped = type(self, receiverType);
     Str kind = xmlKind(receiverType);
@@ -1296,24 +1298,24 @@ Str receiverParam(Emitter& self, XmlNode* receiverType) {
     L2:;
     return mapped + "& self";
 }
-// cppsrc/codegen/Codegen.simse:682
-void emitFunction(Emitter& self, CgFn fn, Bool prototypeOnly) {
-    XmlNode decl = fn.decl;
-    if (!(xmlAttr(&decl, "isNative") == "true")) goto L2;
+// cppsrc/codegen/Codegen.simse:689
+void emitFunction(Emitter& self, CgFn* fn, Bool prototypeOnly) {
+    XmlNode* decl = simse_addressOf(fn->decl);
+    if (!(xmlAttr(decl, "isNative") == "true")) goto L2;
     return;
     L2:;
-    Bool isMain = xmlIsEmpty(simse_addressOf(fn.receiver)) && xmlAttr(&decl, "name") == "main";
+    Bool isMain = xmlIsEmpty(simse_addressOf(fn->receiver)) && xmlAttr(decl, "name") == "main";
     if (!(isMain && prototypeOnly)) goto L4;
     return;
     L4:;
-    Bool mainArgs = isMain && cgIsMainArgs(&decl);
-    List<XmlNode> params0 = xmlChildren(&decl, "Param");
+    Bool mainArgs = isMain && cgIsMainArgs(decl);
+    List<XmlNode> params0 = xmlChildren(decl, "Param");
     if (!(isMain && params0.size() > 0 && !mainArgs)) goto L6;
-    fail(self, &decl, "unsupported: main with parameters");
+    fail(self, decl, "unsupported: main with parameters");
     return;
     L6:;
-    setActiveTypeParams(self, fn.templateParams);
-    XmlNode returnNode = xmlChild(&decl, "ReturnType");
+    setActiveTypeParams(self, fn->templateParams);
+    XmlNode returnNode = xmlChild(decl, "ReturnType");
     Str ret = "void";
     if (!(isMain)) goto L8;
     ret = "int";
@@ -1330,11 +1332,11 @@ void emitFunction(Emitter& self, CgFn fn, Bool prototypeOnly) {
     Bool hasSelf = false;
     NameKind selfK = NameKind::Value;
     XmlNode selfTypePtr = xmlEmptyNode();
-    if (!(!xmlIsEmpty(simse_addressOf(fn.receiver)))) goto L15;
-    simse_list_append(params, receiverParam(self, simse_addressOf(fn.receiver)));
+    if (!(!xmlIsEmpty(simse_addressOf(fn->receiver)))) goto L15;
+    simse_list_append(params, receiverParam(self, simse_addressOf(fn->receiver)));
     hasSelf = true;
-    selfK = kindOf(self, simse_addressOf(fn.receiver));
-    selfTypePtr = fn.receiver;
+    selfK = kindOf(self, simse_addressOf(fn->receiver));
+    selfTypePtr = fn->receiver;
     if (!(self.failed)) goto L17;
     return;
     L17:;
@@ -1378,11 +1380,11 @@ void emitFunction(Emitter& self, CgFn fn, Bool prototypeOnly) {
     if (!(!hasSelf)) goto L30;
     selfK = NameKind::Value;
     L30:;
-    Str signature = ret + " " + xmlAttr(&decl, "name") + "(" + cgJoin(&params, ", ") + ")";
+    Str signature = ret + " " + xmlAttr(decl, "name") + "(" + cgJoin(&params, ", ") + ")";
     if (!(mainArgs)) goto L32;
     signature = "int main(int argc, char** argv)";
     L32:;
-    Str tmpl = templateClause(self, fn.templateParams);
+    Str tmpl = templateClause(self, fn->templateParams);
     if (!(prototypeOnly)) goto L34;
     if (!(tmpl != "")) goto L36;
     line(self, 0, tmpl);
@@ -1390,10 +1392,10 @@ void emitFunction(Emitter& self, CgFn fn, Bool prototypeOnly) {
     line(self, 0, signature + ";");
     return;
     L34:;
-    if (!(xmlAttr(&decl, "hasBody") != "true")) goto L38;
+    if (!(xmlAttr(decl, "hasBody") != "true")) goto L38;
     return;
     L38:;
-    sourceComment(self, &decl);
+    sourceComment(self, decl);
     if (!(tmpl != "")) goto L40;
     line(self, 0, tmpl);
     L40:;
@@ -1411,13 +1413,13 @@ void emitFunction(Emitter& self, CgFn fn, Bool prototypeOnly) {
     }
     L42:;
     self.curReturnType = returnNode;
-    emitStmts(self, simse_addressOf(linSimplifyBody(linLowerBody(xmlChildren(simse_addressOf(xmlChild(&decl, "Body")), "Stmt")))), 1);
+    emitStmts(self, simse_addressOf(linSimplifyBody(linLowerBody(xmlChildren(simse_addressOf(xmlChild(decl, "Body")), "Stmt")))), 1);
     if (!(self.failed)) goto L44;
     return;
     L44:;
     line(self, 0, "}");
 }
-// cppsrc/codegen/Codegen.simse:795
+// cppsrc/codegen/Codegen.simse:804
 void emitStmts(Emitter& self, List<XmlNode>* stmts, Int level) {
     Int i = 0;
     L1:;
@@ -1430,7 +1432,7 @@ void emitStmts(Emitter& self, List<XmlNode>* stmts, Int level) {
     goto L1;
     L2:;
 }
-// cppsrc/codegen/Codegen.simse:806
+// cppsrc/codegen/Codegen.simse:815
 void emitStmt(Emitter& self, XmlNode* stmt, Int level) {
     Str kind = xmlKind(stmt);
     if (!(kind == "Stmt.VarDecl")) goto L2;
@@ -1593,7 +1595,7 @@ void emitStmt(Emitter& self, XmlNode* stmt, Int level) {
     L57:;
     fail(self, stmt, "unsupported: statement kind '" + kind + "'");
 }
-// cppsrc/codegen/Codegen.simse:928
+// cppsrc/codegen/Codegen.simse:937
 Str expr(Emitter& self, XmlNode* e, Int minPrec, XmlNode* expected) {
     Int p = cgPrecedence(e);
     Str s = "";
@@ -1606,7 +1608,7 @@ Str expr(Emitter& self, XmlNode* e, Int minPrec, XmlNode* expected) {
     L4:;
     return s;
 }
-// cppsrc/codegen/Codegen.simse:941
+// cppsrc/codegen/Codegen.simse:950
 NameKind operandKind(Emitter& self, XmlNode* e) {
     if (!(xmlKind(e) == "Expr.Name")) goto L2;
     {
@@ -1625,11 +1627,11 @@ NameKind operandKind(Emitter& self, XmlNode* e) {
     L2:;
     return NameKind::Value;
 }
-// cppsrc/codegen/Codegen.simse:956
+// cppsrc/codegen/Codegen.simse:965
 XmlNode namedType(Emitter& self, Str name) {
     return namedTypeExpr(self, name);
 }
-// cppsrc/codegen/Codegen.simse:960
+// cppsrc/codegen/Codegen.simse:969
 XmlNode pointee(Emitter& self, XmlNode* typeNode) {
     XmlNode current = *(typeNode);
     L1:;
@@ -1657,7 +1659,7 @@ XmlNode pointee(Emitter& self, XmlNode* typeNode) {
     L2:;
     return current;
 }
-// cppsrc/codegen/Codegen.simse:977
+// cppsrc/codegen/Codegen.simse:986
 Bool isHandleType(Emitter& self, XmlNode* typeNode) {
     if (!(xmlIsEmpty(typeNode))) goto L2;
     return false;
@@ -1671,7 +1673,7 @@ Bool isHandleType(Emitter& self, XmlNode* typeNode) {
     L6:;
     return false;
 }
-// cppsrc/codegen/Codegen.simse:991
+// cppsrc/codegen/Codegen.simse:1000
 Bool isIndexableContainer(Emitter& self, XmlNode* typeNode) {
     if (!(xmlIsEmpty(typeNode))) goto L2;
     return false;
@@ -1688,7 +1690,7 @@ Bool isIndexableContainer(Emitter& self, XmlNode* typeNode) {
     L6:;
     return false;
 }
-// cppsrc/codegen/Codegen.simse:1006
+// cppsrc/codegen/Codegen.simse:1015
 Bool unifyType(Emitter& self, XmlNode* pattern, XmlNode* actual, List<Str>* typeParams) {
     XmlNode actualPtr = *(actual);
     Str pk = xmlKind(pattern);
@@ -1781,18 +1783,18 @@ Bool unifyType(Emitter& self, XmlNode* pattern, XmlNode* actual, List<Str>* type
     L35:;
     return false;
 }
-// cppsrc/codegen/Codegen.simse:1078
+// cppsrc/codegen/Codegen.simse:1087
 XmlNode functionReturn(Emitter& self, Str name) {
     Int i = 0;
     L1:;
     if (!(i < self.functions.size())) goto L2;
     {
-        CgFn fn = self.functions[i];
-        if (xmlAttr(simse_addressOf(fn.decl), "name") == name) goto L3;
+        CgFn* fn = simse_addressOf(self.functions[i]);
+        if (xmlAttr(simse_addressOf(fn->decl), "name") == name) goto L3;
         goto L4;
         L3:;
         {
-            XmlNode ret = xmlChild(simse_addressOf(fn.decl), "ReturnType");
+            XmlNode ret = xmlChild(simse_addressOf(fn->decl), "ReturnType");
             if (!xmlIsEmpty(&ret)) goto L5;
             goto L6;
             L5:;
@@ -1806,7 +1808,7 @@ XmlNode functionReturn(Emitter& self, Str name) {
     L2:;
     return xmlEmptyNode();
 }
-// cppsrc/codegen/Codegen.simse:1093
+// cppsrc/codegen/Codegen.simse:1102
 XmlNode memberCallReturn(Emitter& self, XmlNode* callee) {
     XmlNode receiverType = inferType(self, simse_addressOf(xmlChild(callee, "Receiver")));
     XmlNode recv = pointee(self, &receiverType);
@@ -1815,20 +1817,20 @@ XmlNode memberCallReturn(Emitter& self, XmlNode* callee) {
     L1:;
     if (!(i < self.functions.size())) goto L2;
     {
-        CgFn fn = self.functions[i];
+        CgFn* fn = simse_addressOf(self.functions[i]);
         i = i + 1;
-        if (xmlAttr(simse_addressOf(fn.decl), "isNative") == "true" || xmlIsEmpty(simse_addressOf(fn.receiver))) goto L3;
+        if (xmlAttr(simse_addressOf(fn->decl), "isNative") == "true" || xmlIsEmpty(simse_addressOf(fn->receiver))) goto L3;
         goto L4;
         L3:;
         goto L1;
         L4:;
-        if (xmlAttr(simse_addressOf(fn.decl), "name") != calleeText) goto L5;
+        if (xmlAttr(simse_addressOf(fn->decl), "name") != calleeText) goto L5;
         goto L6;
         L5:;
         goto L1;
         L6:;
-        XmlNode ret = xmlChild(simse_addressOf(fn.decl), "ReturnType");
-        if (!xmlIsEmpty(&recv) && unifyType(self, simse_addressOf(fn.receiver), &recv, simse_addressOf(fn.templateParams)) && !xmlIsEmpty(&ret)) goto L7;
+        XmlNode ret = xmlChild(simse_addressOf(fn->decl), "ReturnType");
+        if (!xmlIsEmpty(&recv) && unifyType(self, simse_addressOf(fn->receiver), &recv, simse_addressOf(fn->templateParams)) && !xmlIsEmpty(&ret)) goto L7;
         goto L8;
         L7:;
         return ret;
@@ -1843,11 +1845,11 @@ XmlNode memberCallReturn(Emitter& self, XmlNode* callee) {
         L11:;
         if (!(e < extensions.size())) goto L12;
         {
-            CgNativeExt ext = extensions[e];
-            if (!xmlIsEmpty(&recv) && !xmlIsEmpty(simse_addressOf(ext.receiver)) && unifyType(self, simse_addressOf(ext.receiver), &recv, simse_addressOf(ext.typeParams)) && !xmlIsEmpty(simse_addressOf(ext.returnType))) goto L13;
+            CgNativeExt* ext = simse_addressOf(extensions[e]);
+            if (!xmlIsEmpty(&recv) && !xmlIsEmpty(simse_addressOf(ext->receiver)) && unifyType(self, simse_addressOf(ext->receiver), &recv, simse_addressOf(ext->typeParams)) && !xmlIsEmpty(simse_addressOf(ext->returnType))) goto L13;
             goto L14;
             L13:;
-            return ext.returnType;
+            return ext->returnType;
             L14:;
             e = e + 1;
         }
@@ -1880,7 +1882,7 @@ XmlNode memberCallReturn(Emitter& self, XmlNode* callee) {
     L24:;
     return xmlEmptyNode();
 }
-// cppsrc/codegen/Codegen.simse:1145
+// cppsrc/codegen/Codegen.simse:1154
 XmlNode inferType(Emitter& self, XmlNode* e) {
     Str kind = xmlKind(e);
     if (!(kind == "Expr.IntLit")) goto L2;
@@ -2118,13 +2120,13 @@ XmlNode inferType(Emitter& self, XmlNode* e) {
     L82:;
     return xmlEmptyNode();
 }
-// cppsrc/codegen/Codegen.simse:1305
+// cppsrc/codegen/Codegen.simse:1314
 XmlNode renameRole(Emitter& self, XmlNode* child, Str role) {
     XmlNode renamed = *(child);
     renamed.name = role;
     return renamed;
 }
-// cppsrc/codegen/Codegen.simse:1312
+// cppsrc/codegen/Codegen.simse:1321
 Str receiverArg(Emitter& self, XmlNode* pattern, XmlNode* recv) {
     if (!(isHandleType(self, pattern))) goto L2;
     return expr(self, recv, 9, simse_addressOf(xmlEmptyNode()));
@@ -2135,7 +2137,7 @@ Str receiverArg(Emitter& self, XmlNode* pattern, XmlNode* recv) {
     L4:;
     return expr(self, recv, 9, simse_addressOf(xmlEmptyNode()));
 }
-// cppsrc/codegen/Codegen.simse:1324
+// cppsrc/codegen/Codegen.simse:1333
 Int findExtensionFn(Emitter& self, Str name, XmlNode* recvExpr) {
     XmlNode recvType = inferType(self, recvExpr);
     XmlNode recv = pointee(self, &recvType);
@@ -2146,14 +2148,14 @@ Int findExtensionFn(Emitter& self, Str name, XmlNode* recvExpr) {
     L3:;
     if (!(i < self.functions.size())) goto L4;
     {
-        CgFn fn = self.functions[i];
-        if (xmlAttr(simse_addressOf(fn.decl), "isNative") == "true" || xmlIsEmpty(simse_addressOf(fn.receiver))) goto L5;
+        CgFn* fn = simse_addressOf(self.functions[i]);
+        if (xmlAttr(simse_addressOf(fn->decl), "isNative") == "true" || xmlIsEmpty(simse_addressOf(fn->receiver))) goto L5;
         goto L6;
         L5:;
         i = i + 1;
         goto L3;
         L6:;
-        if (xmlAttr(simse_addressOf(fn.decl), "name") == name && unifyType(self, simse_addressOf(fn.receiver), &recv, simse_addressOf(fn.templateParams))) goto L7;
+        if (xmlAttr(simse_addressOf(fn->decl), "name") == name && unifyType(self, simse_addressOf(fn->receiver), &recv, simse_addressOf(fn->templateParams))) goto L7;
         goto L8;
         L7:;
         return i;
@@ -2164,7 +2166,7 @@ Int findExtensionFn(Emitter& self, Str name, XmlNode* recvExpr) {
     L4:;
     return -1;
 }
-// cppsrc/codegen/Codegen.simse:1346
+// cppsrc/codegen/Codegen.simse:1355
 Int findNativeExt(Emitter& self, Str name, XmlNode* recvExpr) {
     if (!(!simse_dict_has(self.nativeExtensions, name))) goto L2;
     return -1;
@@ -2179,8 +2181,8 @@ Int findNativeExt(Emitter& self, Str name, XmlNode* recvExpr) {
     L5:;
     if (!(i < extensions.size())) goto L6;
     {
-        CgNativeExt ext = extensions[i];
-        if (!xmlIsEmpty(simse_addressOf(ext.receiver)) && unifyType(self, simse_addressOf(ext.receiver), &recv, simse_addressOf(ext.typeParams))) goto L7;
+        CgNativeExt* ext = simse_addressOf(extensions[i]);
+        if (!xmlIsEmpty(simse_addressOf(ext->receiver)) && unifyType(self, simse_addressOf(ext->receiver), &recv, simse_addressOf(ext->typeParams))) goto L7;
         goto L8;
         L7:;
         return i;
@@ -2191,7 +2193,7 @@ Int findNativeExt(Emitter& self, Str name, XmlNode* recvExpr) {
     L6:;
     return -1;
 }
-// cppsrc/codegen/Codegen.simse:1367
+// cppsrc/codegen/Codegen.simse:1376
 Str memberAccess(Emitter& self, XmlNode* base, Str name) {
     Bool arrow = false;
     XmlNode baseType = inferType(self, base);
@@ -2235,14 +2237,14 @@ Str memberAccess(Emitter& self, XmlNode* base, Str name) {
     L19:;
     return expr(self, base, 9, simse_addressOf(xmlEmptyNode())) + op + field;
 }
-// cppsrc/codegen/Codegen.simse:1396
+// cppsrc/codegen/Codegen.simse:1405
 Str nullTo(Emitter& self, XmlNode* expected) {
     if (!(!xmlIsEmpty(expected) && xmlKind(expected) == "Type.Generic" && xmlAttr(expected, "name") == "Opt")) goto L2;
     return "Opt<" + typeArgsString(self, "Opt", simse_addressOf(xmlChildren(expected, "TypeArg"))) + ">()";
     L2:;
     return "nullptr";
 }
-// cppsrc/codegen/Codegen.simse:1403
+// cppsrc/codegen/Codegen.simse:1412
 XmlNode resolveAlias(Emitter& self, XmlNode* typeNode) {
     XmlNode current = *(typeNode);
     Int guard = 0;
@@ -2279,7 +2281,7 @@ XmlNode resolveAlias(Emitter& self, XmlNode* typeNode) {
     L2:;
     return current;
 }
-// cppsrc/codegen/Codegen.simse:1428
+// cppsrc/codegen/Codegen.simse:1437
 XmlNode expectedCallable(Emitter& self, XmlNode* expected) {
     XmlNode resolved = resolveAlias(self, expected);
     if (!(!xmlIsEmpty(&resolved) && xmlKind(&resolved) == "Type.Function")) goto L2;
@@ -2287,37 +2289,37 @@ XmlNode expectedCallable(Emitter& self, XmlNode* expected) {
     L2:;
     return xmlEmptyNode();
 }
-// cppsrc/codegen/Codegen.simse:1436
+// cppsrc/codegen/Codegen.simse:1445
 XmlNode findFunction(Emitter& self, Str name, Int argCount) {
     Int i = 0;
     L1:;
     if (!(i < self.functions.size())) goto L2;
     {
-        CgFn fn = self.functions[i];
+        CgFn* fn = simse_addressOf(self.functions[i]);
         i = i + 1;
-        if (xmlAttr(simse_addressOf(fn.decl), "isNative") == "true" || xmlAttr(simse_addressOf(fn.decl), "name") != name) goto L3;
+        if (xmlAttr(simse_addressOf(fn->decl), "isNative") == "true" || xmlAttr(simse_addressOf(fn->decl), "name") != name) goto L3;
         goto L4;
         L3:;
         goto L1;
         L4:;
-        if (xmlCount(simse_addressOf(fn.decl), "Param") == argCount) goto L5;
+        if (xmlCount(simse_addressOf(fn->decl), "Param") == argCount) goto L5;
         goto L6;
         L5:;
-        return fn.decl;
+        return fn->decl;
         L6:;
     }
     goto L1;
     L2:;
     return xmlEmptyNode();
 }
-// cppsrc/codegen/Codegen.simse:1451
+// cppsrc/codegen/Codegen.simse:1460
 Bool isUnitType(Emitter& self, XmlNode* typeNode) {
     if (!(xmlIsEmpty(typeNode))) goto L2;
     return true;
     L2:;
     return xmlKind(typeNode) == "Type.Named" && xmlAttr(typeNode, "name") == "Unit";
 }
-// cppsrc/codegen/Codegen.simse:1458
+// cppsrc/codegen/Codegen.simse:1467
 XmlNode inferLambdaReturn(Emitter& self, XmlNode* e) {
     List<XmlNode> body = xmlChildren(simse_addressOf(xmlChild(e, "Body")), "Stmt");
     if (!(body.size() == 1 && xmlKind(simse_addressOf(body[0])) == "Stmt.ExprStmt" && !xmlIsEmpty(simse_addressOf(xmlChild(simse_addressOf(body[0]), "Expr"))))) goto L2;
@@ -2334,7 +2336,7 @@ XmlNode inferLambdaReturn(Emitter& self, XmlNode* e) {
     L4:;
     return xmlEmptyNode();
 }
-// cppsrc/codegen/Codegen.simse:1474
+// cppsrc/codegen/Codegen.simse:1483
 Str lambda(Emitter& self, XmlNode* e, XmlNode* expected) {
     XmlNode callable = expectedCallable(self, expected);
     Dictionary<Str, NameKind> savedKinds = self.nameKinds;
@@ -2431,7 +2433,7 @@ Str lambda(Emitter& self, XmlNode* e, XmlNode* expected) {
     L29:;
     return head + " {\n" + body + "}";
 }
-// cppsrc/codegen/Codegen.simse:1560
+// cppsrc/codegen/Codegen.simse:1569
 Str exprInner(Emitter& self, XmlNode* e, XmlNode* expected) {
     Str kind = xmlKind(e);
     if (!(kind == "Expr.IntLit" || kind == "Expr.FloatLit" || kind == "Expr.StrLit" || kind == "Expr.CharLit")) goto L2;
@@ -2631,7 +2633,7 @@ Str exprInner(Emitter& self, XmlNode* e, XmlNode* expected) {
     L68:;
     return "/*unsupported*/";
 }
-// cppsrc/codegen/Codegen.simse:1704
+// cppsrc/codegen/Codegen.simse:1713
 Str call(Emitter& self, XmlNode* e) {
     XmlNode callee = xmlChild(e, "Callee");
     Str calleeKind = xmlKind(&callee);
@@ -2654,8 +2656,8 @@ Str call(Emitter& self, XmlNode* e) {
         L5:;
         if (!(f < self.functions.size())) goto L6;
         {
-            CgFn candidate = self.functions[f];
-            if (xmlAttr(simse_addressOf(candidate.decl), "isNative") != "true" && xmlAttr(simse_addressOf(candidate.decl), "name") == name) goto L7;
+            CgFn* candidate = simse_addressOf(self.functions[f]);
+            if (xmlAttr(simse_addressOf(candidate->decl), "isNative") != "true" && xmlAttr(simse_addressOf(candidate->decl), "name") == name) goto L7;
             goto L8;
             L7:;
             hasPlainFunction = true;
@@ -2723,8 +2725,8 @@ Str call(Emitter& self, XmlNode* e) {
         L25:;
         if (!(f < self.functions.size())) goto L26;
         {
-            CgFn candidate = self.functions[f];
-            if (xmlAttr(simse_addressOf(candidate.decl), "isNative") != "true" && xmlAttr(simse_addressOf(candidate.decl), "name") == name) goto L27;
+            CgFn* candidate = simse_addressOf(self.functions[f]);
+            if (xmlAttr(simse_addressOf(candidate->decl), "isNative") != "true" && xmlAttr(simse_addressOf(candidate->decl), "name") == name) goto L27;
             goto L28;
             L27:;
             hasPlainFunction = true;
@@ -2792,8 +2794,8 @@ Str call(Emitter& self, XmlNode* e) {
             goto L48;
             L47:;
             {
-                CgFn fn = self.functions[fnIndex];
-                Str all = receiverArg(self, simse_addressOf(fn.receiver), &receiverExpr);
+                CgFn* fn = simse_addressOf(self.functions[fnIndex]);
+                Str all = receiverArg(self, simse_addressOf(fn->receiver), &receiverExpr);
                 Int a = 0;
                 L49:;
                 if (!(a < args.size())) goto L50;
@@ -2801,7 +2803,7 @@ Str call(Emitter& self, XmlNode* e) {
                 a = a + 1;
                 goto L49;
                 L50:;
-                return xmlAttr(simse_addressOf(fn.decl), "name") + "(" + all + ")";
+                return xmlAttr(simse_addressOf(fn->decl), "name") + "(" + all + ")";
             }
             L48:;
             Int extIndex = findNativeExt(self, calleeText, &receiverExpr);
@@ -2810,8 +2812,8 @@ Str call(Emitter& self, XmlNode* e) {
             L51:;
             {
                 List<CgNativeExt> extensions = simse_dict_get(self.nativeExtensions, calleeText).value();
-                CgNativeExt ext = extensions[extIndex];
-                Str all = receiverArg(self, simse_addressOf(ext.receiver), &receiverExpr);
+                CgNativeExt* ext = simse_addressOf(extensions[extIndex]);
+                Str all = receiverArg(self, simse_addressOf(ext->receiver), &receiverExpr);
                 Int a = 0;
                 L53:;
                 if (!(a < args.size())) goto L54;
@@ -2819,7 +2821,7 @@ Str call(Emitter& self, XmlNode* e) {
                 a = a + 1;
                 goto L53;
                 L54:;
-                return ext.symbol + "(" + all + ")";
+                return ext->symbol + "(" + all + ")";
             }
             L52:;
             return memberAccess(self, &receiverExpr, calleeText) + "(" + cgJoin(&args, ", ") + ")";
@@ -2868,7 +2870,7 @@ Str call(Emitter& self, XmlNode* e) {
     fail(self, e, "unsupported: call target");
     return "/*unsupported*/";
 }
-// cppsrc/codegen/Codegen.simse:1869
+// cppsrc/codegen/Codegen.simse:1878
 void preludeText(Emitter& self) {
     Str text = "// Generated by simse_transpile. Do not edit.\n";
     text = text + "#include \"cppsrc/rtl/simse.hpp\"\n";
@@ -2877,7 +2879,7 @@ void preludeText(Emitter& self) {
     text = text + "\n";
     self.out = text;
 }
-// cppsrc/codegen/Codegen.simse:1878
+// cppsrc/codegen/Codegen.simse:1887
 Res<Str> run(Emitter& self) {
     collect(self);
     preludeText(self);
@@ -2899,11 +2901,11 @@ Res<Str> run(Emitter& self) {
     L8:;
     return Res<Str>::ok(self.out);
 }
-// cppsrc/codegen/Codegen.simse:1903
+// cppsrc/codegen/Codegen.simse:1912
 Emitter newEmitter(List<CgInput> inputs) {
     return _make_Emitter(inputs, "", false, "", "", Dictionary<Str, XmlNode>(), Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), List<CgFn>(), Dictionary<Str, Bool>(), List<CgNativeDecl>(), Dictionary<Str, Str>(), Dictionary<Str, List<CgNativeExt>>(), Dictionary<Str, Bool>(), Dictionary<Str, NameKind>(), Dictionary<Str, XmlNode>(), NameKind::Value, xmlEmptyNode(), xmlEmptyNode());
 }
-// cppsrc/codegen/Codegen.simse:1930
+// cppsrc/codegen/Codegen.simse:1939
 Res<Str> emitProgram(List<CgInput> inputs) {
     Emitter emitter = newEmitter(inputs);
     return run(emitter);

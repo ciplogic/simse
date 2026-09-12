@@ -448,3 +448,104 @@ component-specific):
   types declared 8-aligned (`std::string`, `std::shared_ptr`, `std::function`),
   so packed aggregates under-align them — `tools/packed_alignment_probe.cpp`
   exercises that case at 4-mod-8 addresses on the ARM64 target and is clean.
+- **`Str` is the inline `SmString` by default (T29).** `cppsrc/rtl/smstring.hpp`
+  defines `SmString`: a `SmallVector<char, 24>` of the bytes plus the terminating
+  NUL kept at `data()[size()]`, i.e. the `specs/containers.md` layout (inline up
+  to 23 bytes, `size()` excluding the NUL), with the std::string-like surface the
+  compiler uses (ctors, assignment, `size`/`capacity`/`reserve`/`clear`,
+  indexing/`at`/`data`, pointer iterators, `push_back`/`append`/`+=`/`resize`/
+  `insert`/`erase`/`replace`/`swap`/`substr`/`find`/`rfind`/`compare`,
+  `toStdString`, `==`/`<`/`+`/`<<`/`getline`, `std::hash`). `Str` is `SmString`
+  unless `SIMSE_STR_STD_STRING` is defined (CMake option of the same name;
+  `build.bat --define SIMSE_STR_STD_STRING`), in which case it is `std::string`
+  exactly as before; `build.js` mirrors the CMake cache so an amalgamation
+  always matches the RTL libraries it links against. Native code that must talk
+  to the standard library goes through `simse_toStdString` /
+  `simse_fromStdString`, which are trivial copies in the `std::string`
+  configuration, so `cppsrc/common`, `cppsrc/native`, the driver and the test
+  harness compile against either backing. Both configurations build and pass
+  the full suite (60 tests, e2e, five differentials, two-step bootstrap), and a
+  `SmString`-backed `simse_transpile` and a `std::string`-backed one produce
+  **byte-identical** output over the compiler source set (checked with `cmp`).
+  Cost in the Debug bootstrap (ARM64, `/Od`), measured before the `CgFn`
+  borrowing in the next entry: the two-step `stage1_check` ran the same source set
+  in ~7-9 s with `SmString` against ~32 s with `std::string`, because the Debug
+  STL's checked iterators tax every `std::string` element access while
+  `SmallVector` has no such checks; the
+  Release `/O2` micro-benchmarks in `tools/str_bench.cpp` show the expected
+  reverse on the bulk operations (e.g. long-string construction 90 -> 249 ms,
+  dictionary insert/lookup 162 -> 299 ms, `find` 95 -> 146 ms) with `SmString`
+  *faster* on copy construction (76 -> 54 ms). Two implementation details
+  landed with it: `common::StrView` and its Simse mirror now hold a raw `*Str`
+  (the Simse declaration was `&Str`, which made every view copy an atomic
+  refcount) and a `simse_str_appendStr` prelude native gives in-place `Str`
+  append, since the language has no `+=` and `out = out + text` rebuilds the
+  accumulator (`StrView.simse`, `Scanner.simse`, `Codegen.simse`,
+  `listops.hpp`, `rtl.simse`).
+- **`CgFn`/`CgNativeExt` are borrowed, not copied (T30).** `CgFn` carries two
+  `XmlNode`s (`decl`, `receiver`), so `val fn: CgFn = this.functions[i]`
+  deep-copied the whole function declaration — and the several read-only scans
+  (`functionReturn`, `memberCallReturn`, `findExtensionFn`, `findFunction`, the
+  `CgNativeExt` probe in `memberCallReturn`, and the two `hasPlainFunction`
+  probes in `call()`) run per expression, so emission paid a copy of every
+  function per lookup. Those sites now hold `*CgFn`/`*CgNativeExt` pointers into
+  the emitter's own lists (`emitFunctions`, `beginScope` and `emitFunction` take
+  `*CgFn`) and `emitFunction` borrows the declaration as `*XmlNode` instead of
+  copying it. The C++ ring already iterates `const Fn &` over `ast::Decl*`, so no
+  mirror change was needed. Effect on the Debug two-step `stage1_check` (ARM64,
+  `/Od`) for the compiler source set: **~6.6-8.7 s -> 2.1 s** with `SmString` and
+  **~32 s -> 3.6 s** with `std::string`; goldens, the five differentials and the
+  bootstrap fixed point are unchanged, and the two `Str` backings still produce
+  byte-identical output.
+- **`Str` comparisons against raw C strings stopped building a temporary (T31).**
+  `SmString::compare(const char*)` constructed an `SmString` from the C string
+  before comparing it, so every `kind == "Expr.Binary"` paid a construction, a
+  `strlen` and a `terminate` before the actual byte compare; `<=`/`>=` against a
+  `const char*` had no overload at all and silently escalated to the
+  `SmString`-vs-`SmString` operator the same way. `compare(const char*)` now runs
+  the C string in place (`std::char_traits<char>::length` +
+  `char_traits::compare`, i.e. `strlen` + `memcmp`, both `constexpr` in C++17)
+  and the missing `<=`/`>=` overloads were added for both operand orders. The
+  comparison *semantics* are unchanged — a raw C string is still a valid operand
+  of all six operators — only the temporary is gone. Measured (/O2):
+  `str == "literal"` 16.0 -> 7.9 ns per comparison; the Debug two-step bootstrap
+  drops 2.1 s -> 1.9 s and the hand-written `simse_transpile` 313 -> 299 ms.
+- **`Str` got a char-specialized buffer, and it is `constexpr` (T32).**
+  `SmString` no longer wraps `SmallVector<char, 24>`:
+  `cppsrc/rtl/strsmallvector.hpp` implements the same 32-byte layout (`Int _len`,
+  `Int _cap`, a 24-byte inline buffer unioned with the heap pointer, 4-byte
+  packed) without the per-element lifetime machinery, because `Char` is trivial —
+  growing is a length bump, clearing/shrinking/destruction are length updates,
+  and assigning or appending a whole string is one `memmove` plus the terminator,
+  with the buffer dropping back inline when the text fits. `SmString::assign` /
+  `append` call those one-shot methods instead of `clear` + `reserve` + `resize` +
+  copy + `terminate`, so constructing a `Str` from a literal no longer walks the
+  characters. **`constexpr Str` now works** on the default backing too: the
+  inline buffer is activated and zeroed only while constant evaluating
+  (`std::is_constant_evaluated()`), so the same constructors write through live
+  elements in a constant expression and stay raw storage at runtime, and
+  `SmString`'s size/data/indexing/compare/`find`/`rfind` surface is `constexpr`
+  (the `memcmp`/`strlen`/`memcpy`/`memchr` primitives were swapped for their
+  `std::char_traits` spellings, which are constexpr and compile to the same
+  intrinsics). `tools/constexpr_probe.cpp` compiles and `static_assert`s on both
+  backings (MSVC's C++20 `std::string` is constexpr as well), and
+  `tools/compare_probe.cpp` checks all six operators with a raw C string on
+  either side, for inline and heap strings. The generic `SmallVector` also
+  stopped type-punning: its inline buffer is a real `T _inlineStore[N]` union
+  member instead of a `reinterpret_cast`-ed byte array, and its inline path is
+  constexpr-annotated. Measured as an interleaved A/B against the committed
+  (generic-`SmallVector`) headers in the same time window (`/O2`, 4M iterations,
+  `tools/str_bench.cpp`): construct from `const char*` 140 -> 58 ms, construct a
+  long (76-byte) string 803 -> 346 ms, copy 132 -> 51 ms, copy assign
+  114 -> 51 ms, `Str` from a literal 109 -> 34 ms, `substr` 101 -> 56 ms, concat
+  195 -> 88 ms, `str == "literal"` 212 -> 85 ms, dictionary insert/lookup
+  669 -> 474 ms, `find` in a long string unchanged (412 -> 376 ms), and
+  `Str == Str` on two inline strings ~1 ns slower (25 -> 29 ms) because the
+  comparison now goes through `char_traits::compare`; `sizeof(Str)` stays 32 and
+  `alignof(Str)` 4 (`tools/size_probe.cpp`), and `tools/str_stress.cpp` soaks
+  20k inline/heap transitions and the "NUL at `size()`" invariant. End to end in
+  the Debug bootstrap (ARM64, `/Od`): `stage1_check` 1.9 s -> **1.2 s** and the
+  hand-written `simse_transpile` 299 -> **228 ms** (both measured with the same
+  invocation, on a quiet machine; the machine throttles up to ~3x, so compare
+  ratios within one window); goldens, the five differentials, the bootstrap
+  fixed point and the cross-backing byte-identity all still hold.

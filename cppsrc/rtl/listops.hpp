@@ -39,6 +39,13 @@ inline void simse_str_append(Str& self, Char value) {
     self.push_back(static_cast<char>(value));
 }
 
+// `Str.appendStr(text)`: appends in place. The language has no `+=`, so this is
+// how an emitter accumulates output without `out = out + text` rebuilding the
+// whole buffer on every line (which is quadratic).
+inline void simse_str_appendStr(Str& self, const Str& value) {
+    self.append(value);
+}
+
 // `Int.toString()`: the scalar-to-inline-string conversion (specs/memory-model.md).
 inline Str simse_int_toString(Int self) {
     return std::to_string(self);

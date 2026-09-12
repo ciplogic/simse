@@ -44,15 +44,16 @@ enum NameKind { Value, Shared, Pointer }
 
 // ---- helpers --------------------------------------------------------------
 
-// Reads the parts only; a `*List<Str>` avoids copying the caller's list.
+// Reads the parts only; a `*List<Str>` avoids copying the caller's list. Builds
+// the result in place: `out = out + part` would copy the whole buffer per part.
 fun cgJoin(parts: *List<Str>, separator: Str): Str {
     var out: Str = ""
     var i: Int = 0
     while (i < parts.size()) {
         if (i > 0) {
-            out = out + separator
+            out.appendStr(separator)
         }
-        out = out + parts[i]
+        out.appendStr(parts[i])
         i = i + 1
     }
     return out
@@ -62,7 +63,7 @@ fun cgIndent(level: Int): Str {
     var out: Str = ""
     var i: Int = 0
     while (i < level * 4) {
-        out = out + " "
+        out.append(' ')
         i = i + 1
     }
     return out
@@ -166,7 +167,11 @@ data class Emitter(
     }
 
     fun line(level: Int, text: Str): Unit {
-        this.out = this.out + cgIndent(level) + text + "\n"
+        // In place: `this.out = this.out + ...` copies the whole accumulated
+        // output on every line (quadratic in the size of the generated file).
+        this.out.appendStr(cgIndent(level))
+        this.out.appendStr(text)
+        this.out.append('\n')
     }
 
     fun sourceComment(posNode: *XmlNode): Unit {
@@ -636,7 +641,9 @@ data class Emitter(
     fun emitFunctions(prototypeOnly: Bool): Unit {
         var i: Int = 0
         while (i < this.functions.size()) {
-            val fn: CgFn = this.functions[i]
+            // A pointer into `functions`: `CgFn` carries two XmlNodes, so a copy
+            // here would deep-copy the whole declaration per function.
+            val fn: *CgFn = *this.functions[i]
             i = i + 1
             if (fn.prelude) {
                 continue
@@ -649,7 +656,7 @@ data class Emitter(
         }
     }
 
-    fun beginScope(fn: CgFn, selfK: NameKind, selfTypePtr: *XmlNode): Unit {
+    fun beginScope(fn: *CgFn, selfK: NameKind, selfTypePtr: *XmlNode): Unit {
         this.nameKinds.clear()
         this.localTypes.clear()
         this.selfKind = selfK
@@ -679,24 +686,26 @@ data class Emitter(
         return mapped + "& self"
     }
 
-    fun emitFunction(fn: CgFn, prototypeOnly: Bool): Unit {
-        val decl: XmlNode = fn.decl
-        if (xmlAttr(*decl, "isNative") == "true") {
+    fun emitFunction(fn: *CgFn, prototypeOnly: Bool): Unit {
+        // The declaration is read-only here, so borrow it instead of copying the
+        // whole function AST (params, body, ...) out of the CgFn.
+        val decl: *XmlNode = *fn.decl
+        if (xmlAttr(decl, "isNative") == "true") {
             return
         }
-        val isMain: Bool = xmlIsEmpty(*fn.receiver) && xmlAttr(*decl, "name") == "main"
+        val isMain: Bool = xmlIsEmpty(*fn.receiver) && xmlAttr(decl, "name") == "main"
         if (isMain && prototypeOnly) {
             return
         }
-        val mainArgs: Bool = isMain && cgIsMainArgs(*decl)
-        val params0: List<XmlNode> = xmlChildren(*decl, "Param")
+        val mainArgs: Bool = isMain && cgIsMainArgs(decl)
+        val params0: List<XmlNode> = xmlChildren(decl, "Param")
         if (isMain && params0.size() > 0 && !mainArgs) {
-            this.fail(*decl, "unsupported: main with parameters")
+            this.fail(decl, "unsupported: main with parameters")
             return
         }
 
         this.setActiveTypeParams(fn.templateParams)
-        val returnNode: XmlNode = xmlChild(*decl, "ReturnType")
+        val returnNode: XmlNode = xmlChild(decl, "ReturnType")
         var ret: Str = "void"
         if (isMain) {
             ret = "int"
@@ -748,7 +757,7 @@ data class Emitter(
             selfK = NameKind.Value
         }
 
-        var signature: Str = ret + " " + xmlAttr(*decl, "name") + "(" + cgJoin(*params, ", ") + ")"
+        var signature: Str = ret + " " + xmlAttr(decl, "name") + "(" + cgJoin(*params, ", ") + ")"
         if (mainArgs) {
             signature = "int main(int argc, char** argv)"
         }
@@ -760,11 +769,11 @@ data class Emitter(
             this.line(0, signature + ";")
             return
         }
-        if (xmlAttr(*decl, "hasBody") != "true") {
+        if (xmlAttr(decl, "hasBody") != "true") {
             return
         }
 
-        this.sourceComment(*decl)
+        this.sourceComment(decl)
         if (tmpl != "") {
             this.line(0, tmpl)
         }
@@ -783,7 +792,7 @@ data class Emitter(
         // Structured control flow is lowered to labels/gotos and then
         // simplified before emission (impl_specs/linear-lowering.md); the
         // emitter below only knows the linear forms.
-        this.emitStmts(*linSimplifyBody(linLowerBody(xmlChildren(*xmlChild(*decl, "Body"), "Stmt"))), 1)
+        this.emitStmts(*linSimplifyBody(linLowerBody(xmlChildren(*xmlChild(decl, "Body"), "Stmt"))), 1)
         if (this.failed) {
             return
         }
@@ -1078,7 +1087,7 @@ data class Emitter(
     fun functionReturn(name: Str): XmlNode {
         var i: Int = 0
         while (i < this.functions.size()) {
-            val fn: CgFn = this.functions[i]
+            val fn: *CgFn = *this.functions[i]
             if (xmlAttr(*fn.decl, "name") == name) {
                 val ret: XmlNode = xmlChild(*fn.decl, "ReturnType")
                 if (!xmlIsEmpty(*ret)) {
@@ -1096,7 +1105,7 @@ data class Emitter(
         val calleeText: Str = xmlAttr(callee, "name")
         var i: Int = 0
         while (i < this.functions.size()) {
-            val fn: CgFn = this.functions[i]
+            val fn: *CgFn = *this.functions[i]
             i = i + 1
             if (xmlAttr(*fn.decl, "isNative") == "true" || xmlIsEmpty(*fn.receiver)) {
                 continue
@@ -1114,7 +1123,7 @@ data class Emitter(
             val extensions: List<CgNativeExt> = this.nativeExtensions.get(calleeText).value()
             var e: Int = 0
             while (e < extensions.size()) {
-                val ext: CgNativeExt = extensions[e]
+                val ext: *CgNativeExt = *extensions[e]
                 if (!xmlIsEmpty(*recv) && !xmlIsEmpty(*ext.receiver)
                     && this.unifyType(*ext.receiver, *recv, *ext.typeParams)
                     && !xmlIsEmpty(*ext.returnType)) {
@@ -1329,7 +1338,7 @@ data class Emitter(
         }
         var i: Int = 0
         while (i < this.functions.size()) {
-            val fn: CgFn = this.functions[i]
+            val fn: *CgFn = *this.functions[i]
             if (xmlAttr(*fn.decl, "isNative") == "true" || xmlIsEmpty(*fn.receiver)) {
                 i = i + 1
                 continue
@@ -1355,7 +1364,7 @@ data class Emitter(
         val extensions: List<CgNativeExt> = this.nativeExtensions.get(name).value()
         var i: Int = 0
         while (i < extensions.size()) {
-            val ext: CgNativeExt = extensions[i]
+            val ext: *CgNativeExt = *extensions[i]
             if (!xmlIsEmpty(*ext.receiver) && this.unifyType(*ext.receiver, *recv, *ext.typeParams)) {
                 return i
             }
@@ -1436,7 +1445,7 @@ data class Emitter(
     fun findFunction(name: Str, argCount: Int): XmlNode {
         var i: Int = 0
         while (i < this.functions.size()) {
-            val fn: CgFn = this.functions[i]
+            val fn: *CgFn = *this.functions[i]
             i = i + 1
             if (xmlAttr(*fn.decl, "isNative") == "true" || xmlAttr(*fn.decl, "name") != name) {
                 continue
@@ -1719,7 +1728,7 @@ data class Emitter(
             var hasPlainFunction: Bool = false
             var f: Int = 0
             while (f < this.functions.size()) {
-                val candidate: CgFn = this.functions[f]
+                val candidate: *CgFn = *this.functions[f]
                 if (xmlAttr(*candidate.decl, "isNative") != "true"
                     && xmlAttr(*candidate.decl, "name") == name) {
                     hasPlainFunction = true
@@ -1764,7 +1773,7 @@ data class Emitter(
             var hasPlainFunction: Bool = false
             var f: Int = 0
             while (f < this.functions.size()) {
-                val candidate: CgFn = this.functions[f]
+                val candidate: *CgFn = *this.functions[f]
                 if (xmlAttr(*candidate.decl, "isNative") != "true"
                     && xmlAttr(*candidate.decl, "name") == name) {
                     hasPlainFunction = true
@@ -1813,7 +1822,7 @@ data class Emitter(
             if (!xmlIsEmpty(*receiver)) {
                 val fnIndex: Int = this.findExtensionFn(calleeText, *receiverExpr)
                 if (fnIndex >= 0) {
-                    val fn: CgFn = this.functions[fnIndex]
+                    val fn: *CgFn = *this.functions[fnIndex]
                     var all: Str = this.receiverArg(*fn.receiver, *receiverExpr)
                     var a: Int = 0
                     while (a < args.size()) {
@@ -1825,7 +1834,7 @@ data class Emitter(
                 val extIndex: Int = this.findNativeExt(calleeText, *receiverExpr)
                 if (extIndex >= 0) {
                     val extensions: List<CgNativeExt> = this.nativeExtensions.get(calleeText).value()
-                    val ext: CgNativeExt = extensions[extIndex]
+                    val ext: *CgNativeExt = *extensions[extIndex]
                     var all: Str = this.receiverArg(*ext.receiver, *receiverExpr)
                     var a: Int = 0
                     while (a < args.size()) {

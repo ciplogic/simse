@@ -25,6 +25,11 @@ expressible in the language.
   e2e programs and the differentials, run automatically by the build.
 - Ported components: `common`/`StrView`/`xmlutil`, scanner, skeleton parser,
   parser, sema, codegen, compiler driver.
+- Runtime alignment: `Str` is the inline `SmString` (`SmallVector<char, 24>` +
+  terminating NUL, the `specs/containers.md` layout) and `List<T>` is
+  `SmallVector<T, 4>`, with `std::string` / `std::vector` as escape hatches
+  (`SIMSE_STR_STD_STRING` / `SIMSE_LIST_STD_VECTOR`). Both `Str` backings are
+  green on the full build and produce **byte-identical** compiler output.
 - Planned tasks: none outstanding (`T25 Modules and packages` is Done).
 - The directory compiler's default output is `simse_out.cpp`; the two-step
   bootstrap artifacts live under `cmake-build-debug/stage1/` (`gen/simse_out.cpp`,
@@ -45,6 +50,10 @@ cmd //c "_msvc_build.bat --clean-first" # clean rebuild
 # tests / goldens
 ./simse_tests.exe                       # check mode
 ./simse_tests.exe --update              # regenerate goldens deliberately
+
+# the alternative runtime backing (Str = std::string): a separate build folder,
+# so the compiler and the amalgamations it is linked with agree on the define
+cd cmake-build-strstd && cmd //c _msvc_build.bat
 
 # compile the whole compiler tree into one amalgamated file in the CURRENT folder
 ./cmake-build-debug/simse_transpile.exe --root cppsrc   # -> ./simse_out.cpp (one main)
@@ -94,14 +103,20 @@ explicit `cppsrc/compiler/Driver.simse` input.
   `transpilation.md`, `roadmap.md`, `capability-matrix.md`, `rtl-abi.md`,
   `reification.md`, `native-interop.md`, `ast-xmlnode.md`, `tasks/`.
 - `cppsrc/rtl/` — hand-written runtime: C++ headers (`types.hpp`,
-  `containers.hpp`, `optional.hpp`, `functional.hpp`, `result.hpp`, `xml.hpp`,
-  `cursor.hpp`, `listops.hpp`, `strops.hpp`, `dictops.hpp`, `fs.hpp`,
-  `simse.hpp`) AND the **prelude** `.simse` files (`rtl.simse`, `Cursor.simse`,
-  `xml.simse`, `fs.simse`) declaring the RTL surface. `List<T>` is
-  `SmallVector<T, 4>` by default; the CMake option `SIMSE_LIST_STD_VECTOR` (or
-  `build.bat --define SIMSE_LIST_STD_VECTOR`) switches it to `std::vector<T>`,
-  and the choice has to match between the compiler and the amalgamated output it
-  is linked with (`impl_specs/rtl-abi.md`). The language's layout model is
+  `containers.hpp`, `smstring.hpp`, `strsmallvector.hpp`, `optional.hpp`,
+  `functional.hpp`, `result.hpp`, `xml.hpp`, `cursor.hpp`, `listops.hpp`,
+  `strops.hpp`, `dictops.hpp`, `fs.hpp`, `simse.hpp`) AND the **prelude** `.simse`
+  files (`rtl.simse`, `Cursor.simse`, `xml.simse`, `fs.simse`) declaring the RTL
+  surface. `List<T>` is `SmallVector<T, 4>` and `Str` is the inline `SmString`
+  (`smstring.hpp`), whose buffer is `strsmallvector.hpp`'s `StrSmallVector`, the
+  char-specialized form of the `SmallVector<char, 24>` layout — `Int _len`,
+  `Int _cap`, a 24-byte inline buffer unioned with the heap pointer, terminating
+  NUL, `constexpr` while inline — by default.
+  The CMake options `SIMSE_LIST_STD_VECTOR` / `SIMSE_STR_STD_STRING` (or
+  `build.bat --define ...`) switch them to `std::vector<T>` / `std::string`;
+  the choice has to match between the compiler and the amalgamated output it
+  is linked with, and `build.js` mirrors the CMake cache automatically
+  (`impl_specs/rtl-abi.md`). The language's layout model is
   **4-byte packing** (`specs/memory-model.md`): the emitter brackets every
   generated aggregate in `SIMSE_PACK_PUSH`/`SIMSE_PACK_POP`, and `SIMSE_NO_PACK4`
   reverts to the host's default alignment.
@@ -187,6 +202,13 @@ Key design points:
   specific file.
 - Prefer `while` + `Cursor<T>` over `for`/range-for in Simse code (no range-for
   yet). Use `switch` for kind dispatch; lambdas are supported (by-value capture).
+- **Borrow AST-carrying structs; don't copy them.** A `val x: T = list[i]` where
+  `T` holds an `XmlNode` (`CgFn`, `CgNativeExt`, `CgInput`, `SemaInput`, ...)
+  deep-copies the subtree. In read-only loops use a pointer into the owner
+  (`val fn: *CgFn = *this.functions[i]`, `val decl: *XmlNode = *fn.decl`) and let
+  every function that only reads take `*T`; a by-value copy *per lookup* makes
+  emission quadratic in the function/AST count (the `CgFn` copies did: the Debug
+  `stage1_check` cost 6.6-8.7 s before they were removed, 2.1 s after).
 - Every `.simse` file must start with a mandatory `package`; update `import`
   lines to package names when adding files.
 - **Do not commit** unless the user explicitly asks.
@@ -222,8 +244,9 @@ Do these only when asked; roughly prioritized:
    and explicit capture lists; `when`/pattern matching; string interpolation;
    interfaces/virtual dispatch; method overriding; default parameter values;
    `unsafe` blocks / raw-pointer escape rules.
-4. **RTL spec convergence**: the RTL is a shim (`Str`=`std::string`; `List` is
-   `SmallVector<T, 4>` per the spec, with `std::vector` only behind
+4. **RTL spec convergence**: the RTL is a shim (`Str` is the spec-shaped inline
+   `SmString`, `List` is `SmallVector<T, 4>`, both with a
+   `std::string`/`std::vector` escape hatch behind `SIMSE_STR_STD_STRING` /
    `SIMSE_LIST_STD_VECTOR`; no `[refcount][typeId]` header). Divergences are
    documented in `impl_specs/rtl-abi.md`; the eventual target must match
    `specs/`.

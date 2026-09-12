@@ -14,6 +14,17 @@ namespace {
         double ms = std::chrono::duration<double, std::milli>(end - begin).count();
         std::printf("%-22s %9.1f ms   (sum %lld)\n", name, ms, checksum);
     }
+
+    inline Str benchTakeName(Str name) { return name; }
+
+    // Consumes the bytes, so the copies below cannot be eliminated as dead
+    // stores: a benchmark that only reads `size()` measures the optimizer, not
+    // the container.
+    inline long long digest(const Str& value) {
+        if (value.size() == 0) return 0;
+        return (long long) value.size() + (unsigned char) value[0]
+               + (unsigned char) value[value.size() - 1];
+    }
 }
 
 int main() {
@@ -25,7 +36,7 @@ int main() {
         long long sum = 0;
         for (int i = 0; i < n; i++) {
             Str value(shortText);
-            sum += (long long) value.size();
+            sum += digest(value);
         }
         return sum;
     });
@@ -34,7 +45,7 @@ int main() {
         long long sum = 0;
         for (int i = 0; i < n; i++) {
             Str value(longText);
-            sum += (long long) value.size();
+            sum += digest(value);
         }
         return sum;
     });
@@ -44,7 +55,7 @@ int main() {
         long long sum = 0;
         for (int i = 0; i < n; i++) {
             Str value(source);
-            sum += (long long) value.size();
+            sum += digest(value);
         }
         return sum;
     });
@@ -55,7 +66,7 @@ int main() {
         long long sum = 0;
         for (int i = 0; i < n; i++) {
             value = source;
-            sum += (long long) value.size();
+            sum += digest(value);
         }
         return sum;
     });
@@ -66,6 +77,52 @@ int main() {
         long long sum = 0;
         for (int i = 0; i < n; i++) {
             if (left == right) sum++;
+        }
+        return sum;
+    });
+
+    bench("compare vs literal", [&] {
+        Str value("Expr.GenericName");
+        long long sum = 0;
+        for (int i = 0; i < n; i++) {
+            if (value == "Expr.GenericName") sum++;
+        }
+        return sum;
+    });
+
+    bench("ctor vs literal", [&] {
+        long long sum = 0;
+        for (int i = 0; i < n; i++) {
+            Str value = "Expr.GenericName";
+            sum += digest(value);
+        }
+        return sum;
+    });
+
+    bench("default ctor", [&] {
+        long long sum = 0;
+        for (int i = 0; i < n; i++) {
+            Str value;
+            sum += digest(value);
+        }
+        return sum;
+    });
+
+    bench("ctor ptr+count", [&] {
+        long long sum = 0;
+        for (int i = 0; i < n; i++) {
+            Str value(shortText, 16);
+            sum += digest(value);
+        }
+        return sum;
+    });
+
+    // The `xmlAttr(node, "name")` shape: a literal crossing a by-value Str
+    // parameter.
+    bench("arg vs literal", [&] {
+        long long sum = 0;
+        for (int i = 0; i < n; i++) {
+            sum += digest(benchTakeName("Expr.GenericName"));
         }
         return sum;
     });

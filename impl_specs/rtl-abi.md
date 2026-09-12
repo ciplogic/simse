@@ -11,7 +11,8 @@ bootstrap shims do not silently become the de-facto specification.
 For the first end-to-end slice, generated C++ targets the **current
 `cppsrc/rtl` shims** as-is:
 
-- `Str = std::string`
+- `Str = SmString` (the spec layout: inline `SmallVector<char, 24>` plus the
+  terminating NUL; `std::string` behind `SIMSE_STR_STD_STRING`)
 - `List<T> = SmallVector<T, 4>` (the spec layout; `std::vector<T>` behind
   `SIMSE_LIST_STD_VECTOR`)
 - `PList<T> = std::shared_ptr<List<T>>`
@@ -22,11 +23,12 @@ For the first end-to-end slice, generated C++ targets the **current
 - `&T` lowers to `std::shared_ptr<T>`; `*T` lowers to `T*`
 - `Cursor<T>` = the immutable list-view shim (`cppsrc/rtl/cursor.hpp`)
 
-The spec layouts — `SmallVector` small-buffer optimization and the ref-counted
-`[refcount][typeId][value]` header — are **not** implemented in this slice. This
-is deliberate: the goal is one compiling, debugger-friendly translation unit, not
-the final memory layout. Every divergence is listed below and is deferred, not
-resolved.
+The ref-counted `[refcount][typeId][value]` header is **not** implemented in this
+slice, and nothing in the runtime allocates one. The `SmallVector`
+small-buffer optimization *is* implemented and is the default backing for both
+`List<T>` and `Str`. The goal remains one compiling, debugger-friendly
+translation unit, not the final memory layout; every remaining divergence is
+listed below and is deferred, not resolved.
 
 `typeId` is currently unused by the runtime and is not stored. Nothing in the
 language subset needs it (no virtual dispatch, no dynamic casts).
@@ -40,7 +42,7 @@ language subset needs it (no virtual dispatch, no dynamic casts).
 | `Float32` / `Float64` | `Float32` / `Float64` | `float` / `double` |
 | `Char` | `Char` (`std::int8_t`) | byte value; streams print it as a character |
 | `Bool` | `Bool` (`bool`) | printed as `true`/`false` (see below) |
-| `Str` | `Str` (`std::string`) | mutable byte string |
+| `Str` | `Str` (`SmString` by default, `std::string` with `SIMSE_STR_STD_STRING`) | mutable byte string; inline up to 23 bytes plus NUL |
 | `Unit` | `void` | only valid as a function return type |
 | `List<T>` | `List<T>` (`SmallVector<T, 4>` by default, `std::vector<T>` with `SIMSE_LIST_STD_VECTOR`) | value type, deep copies |
 | `Array<T>` | `Array<T>` (shim struct) | shared allocation, fixed length |
@@ -65,7 +67,21 @@ normative layout.
 
 1. **`Str` layout.** Spec: inline `SmallVector<24, Char>` with a reserved NUL and
    a 23-byte inline capacity (`specs/containers.md`, `specs/built-in-types.md`).
-   Shim: `std::string` (small-string optimization only, unspecified capacity).
+   Shim: matches — `Str` is `SmString` (`cppsrc/rtl/smstring.hpp`) over
+   `StrSmallVector` (`cppsrc/rtl/strsmallvector.hpp`), the char-specialized form
+   of that vector: the same 32-byte layout (`Int _len`, `Int _cap`, a 24-byte
+   inline buffer unioned with the heap pointer, 4-byte packed), without the
+   per-element lifetime machinery the generic `SmallVector` needs. The buffer
+   holds the characters plus the terminating NUL kept at `data()[size()]`, and
+   `size()` excludes the NUL. The inline path is `constexpr`-constructible, so
+   `constexpr Str` works while the text fits inline. Native code that has to talk
+   to the standard library goes through `simse_toStdString` /
+   `simse_fromStdString` so the same code compiles with either backing.
+   `SIMSE_STR_STD_STRING` (CMake option of the same name;
+   `build.bat --define SIMSE_STR_STD_STRING`) is the bootstrap escape hatch that
+   backs `Str` with `std::string` instead; as with `List`, `build.js` mirrors the
+   CMake cache so an amalgamation always matches the libraries it links, and the
+   two backings produce byte-identical compiler output.
 2. **`List<T>` backing.** Spec: `List<T>` *is* `SmallVector<4, T>`
    (`specs/containers.md`). Shim: matches by default — `List<T>` is
    `SmallVector<T, kListInlineCapacity>` (4) — with the documented layout. The
@@ -110,8 +126,9 @@ normative layout.
     `SmallVector` and `Array` follow the same rule. The hand-written RTL structs
     (`XmlNode`, `Attribute`, `Cursor`, ...) keep the host alignment because their
     fields already sit on 4-byte boundaries, so packing them would not change a
-    single size. The host types the shims are built on (`std::string`,
-    `std::shared_ptr`, `std::function`) are declared 8-aligned and are therefore
+    single size. The host types the shims are built on (`std::shared_ptr`,
+    `std::function`, `std::unordered_map`, and `std::string` under the
+    `SIMSE_STR_STD_STRING` escape hatch) are declared 8-aligned and are therefore
     under-aligned by the packed definitions; that is accepted while the shims
     exist. `SIMSE_NO_PACK4` turns the packing off and reverts to host layout.
 

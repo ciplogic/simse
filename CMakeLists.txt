@@ -8,6 +8,12 @@ set(CMAKE_CXX_STANDARD 20)
 # must match between the compiler and any amalgamated output it is linked with.
 option(SIMSE_LIST_STD_VECTOR "Back List<T> with std::vector<T> instead of SmallVector<T, 4>" OFF)
 
+# Str is the inline SmString (SmallVector<char, 24> plus a terminating NUL) by
+# default; turn this on to back it with std::string instead
+# (impl_specs/rtl-abi.md). As with List, the choice must match between the
+# compiler and any amalgamated output it is linked with.
+option(SIMSE_STR_STD_STRING "Back Str with std::string instead of SmString" OFF)
+
 # The RTL and generated aggregates are 4-byte packed by default
 # (specs/memory-model.md); turn this on to build with the host's default
 # alignment instead (impl_specs/rtl-abi.md).
@@ -65,6 +71,10 @@ target_compile_definitions(simse_lib PUBLIC
 
 if(SIMSE_LIST_STD_VECTOR)
     add_compile_definitions(SIMSE_LIST_STD_VECTOR)
+endif()
+
+if(SIMSE_STR_STD_STRING)
+    add_compile_definitions(SIMSE_STR_STD_STRING)
 endif()
 
 if(SIMSE_NO_PACK4)

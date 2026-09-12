@@ -139,7 +139,7 @@ function cachedBuildType(buildDir) {
   return value || null;
 }
 
-// Whether the CMake build was configured with SIMSE_LIST_STD_VECTOR. The RTL
+// Whether the CMake build was configured with SIMSE_LIST_STD_VECTOR: the RTL
 // libraries the amalgamation links against bake in the List<T> backing, so the
 // compile of the amalgamation has to match them or linking fails with unresolved
 // `simse_listFiles`-style symbols over SmallVector/std::vector.
@@ -147,6 +147,15 @@ function cachedStdVectorList(buildDir) {
   const cache = path.join(buildDir, "CMakeCache.txt");
   if (!existsSync(cache)) return false;
   return /^SIMSE_LIST_STD_VECTOR:BOOL=(ON|TRUE|1)$/im.test(readFileSync(cache, "utf8"));
+}
+
+// The same for SIMSE_STR_STD_STRING: the RTL libraries bake in the Str backing
+// (SmString or std::string), so the amalgamation must be compiled alike or the
+// native symbols (simse_str_*, file I/O) fail to resolve at link time.
+function cachedStdStringStr(buildDir) {
+  const cache = path.join(buildDir, "CMakeCache.txt");
+  if (!existsSync(cache)) return false;
+  return /^SIMSE_STR_STD_STRING:BOOL=(ON|TRUE|1)$/im.test(readFileSync(cache, "utf8"));
 }
 
 // The architecture the compiler targets, from its banner ("... for ARM64").
@@ -279,8 +288,8 @@ async function main() {
   // Match the CMake build's runtime and optimization (Release uses /MD + /O2 +
   // /DNDEBUG; Debug uses /MDd).
   const flags = isRelease ? ["/MD", "/O2", "/DNDEBUG"] : ["/MDd"];
-  // Mirror the RTL's List<T> backing choice so the amalgamation links against
-  // the CMake libraries built in this folder.
+  // Mirror the RTL's List<T>/Str backing choices so the amalgamation links
+  // against the CMake libraries built in this folder.
   const defines = [...opts.defines];
   const stdVectorList = cachedStdVectorList(buildDir);
   if (stdVectorList && !defines.includes("SIMSE_LIST_STD_VECTOR")) {
@@ -288,6 +297,13 @@ async function main() {
   } else if (!stdVectorList && defines.includes("SIMSE_LIST_STD_VECTOR")) {
     console.warn(`build: warning: --define SIMSE_LIST_STD_VECTOR does not match ${path.basename(buildDir)}, ` +
         `whose RTL libraries use SmallVector; linking may fail`);
+  }
+  const stdStringStr = cachedStdStringStr(buildDir);
+  if (stdStringStr && !defines.includes("SIMSE_STR_STD_STRING")) {
+    defines.push("SIMSE_STR_STD_STRING");
+  } else if (!stdStringStr && defines.includes("SIMSE_STR_STD_STRING")) {
+    console.warn(`build: warning: --define SIMSE_STR_STD_STRING does not match ${path.basename(buildDir)}, ` +
+        `whose RTL libraries use SmString; linking may fail`);
   }
   const args = [
     cl, "/nologo", "/std:c++20", "/EHsc", "/W3", ...flags,

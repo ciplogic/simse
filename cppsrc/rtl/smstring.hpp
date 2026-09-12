@@ -6,13 +6,14 @@
 #include <ostream>
 #include <string>
 
-#include "containers.hpp"
+#include "strsmallvector.hpp"
 
 // SmString is the language's inline byte string (specs/built-in-types.md,
 // specs/containers.md): a NUL-terminated `SmallVector<24, Char>`. The inline
 // buffer holds at most 23 characters plus the terminating NUL; longer strings
 // spill to the heap, and `data()` is always a valid C string (the reserved NUL
-// is not part of `size()`).
+// is not part of `size()`). The buffer itself is `StrSmallVector`, the
+// char-specialized form of that vector (strsmallvector.hpp).
 //
 // `Str` is SmString unless SIMSE_STR_STD_STRING is defined, in which case `Str`
 // is `std::string` exactly as before (impl_specs/rtl-abi.md). The
@@ -35,28 +36,38 @@ public:
 
     static constexpr size_type npos = size_type(-1);
     static constexpr size_type inlineCapacity = 24;
+    static constexpr size_type maxInlineLen = 23;
 
     // ---- construction -----------------------------------------------------
 
-    SmString() { terminate(); }
-
-    SmString(const char* text) {
-        assign(text == nullptr ? "" : text, text == nullptr ? 0 : std::strlen(text));
+    constexpr SmString() { 
+        _data._len = 1;
+        _data._storage._inlineStore[0] = 0;
     }
 
-    SmString(const char* text, size_type count) { assign(text, count); }
+    constexpr SmString(const char* text) {
+        assign(text == nullptr ? "" : text, text == nullptr ? 0 : std::char_traits<char>::length(text));
+    }
 
-    SmString(const std::string& text) { assign(text.data(), text.size()); }
+    constexpr SmString(const char* text, size_type count) { 
+        if (count < inlineCapacity) {
+            _data._len = count;
+            std::memcpy(_data._storage._inlineStore, text, count + 1);
+            return;
+        }
+        assign(text, count); }
+
+    constexpr SmString(const std::string& text) { assign(text.data(), text.size()); }
 
     // `Str(count, value)`: a repeated byte (and the std::string-style fill ctor).
-    SmString(size_type count, char value) {
+    constexpr SmString(size_type count, char value) {
         ensure(count);
         _data.resize((Int) count);
-        if (count > 0) std::memset(_data.data(), (unsigned char) value, count);
+        if (count > 0) std::char_traits<char>::assign(_data.data(), count, value);
         terminate();
     }
 
-    SmString(const SmString& other) { assign(other.data(), other.size()); }
+    constexpr SmString(const SmString& other) { assign(other.data(), other.size()); }
 
     SmString(SmString&& other) noexcept {
         _data = std::move(other._data);
@@ -80,8 +91,8 @@ public:
         return *this;
     }
 
-    SmString& operator=(const char* text) {
-        assign(text == nullptr ? "" : text, text == nullptr ? 0 : std::strlen(text));
+    constexpr SmString& operator=(const char* text) {
+        assign(text == nullptr ? "" : text, text == nullptr ? 0 : std::char_traits<char>::length(text));
         return *this;
     }
 
@@ -99,21 +110,21 @@ public:
 
     // ---- size and capacity ------------------------------------------------
 
-    size_type size() const { return (size_type) _data.size(); }
-    size_type length() const { return (size_type) _data.size(); }
-    Bool empty() const { return _data.size() == 0; }
+    constexpr size_type size() const { return (size_type) _data.size(); }
+    constexpr size_type length() const { return (size_type) _data.size(); }
+    constexpr Bool empty() const { return _data.size() == 0; }
     size_type capacity() const { return (size_type) _data.capacity(); }
 
-    void reserve(size_type count) { _data.reserve((Int) count + 1); }
-    void clear() {
+    constexpr void reserve(size_type count) { _data.reserve((Int) count + 1); }
+    constexpr void clear() {
         _data.clear();
         terminate();
     }
 
     // ---- element access ---------------------------------------------------
 
-    char& operator[](size_type index) { return _data[(Int) index]; }
-    const char& operator[](size_type index) const { return _data[(Int) index]; }
+    constexpr char& operator[](size_type index) { return _data[(Int) index]; }
+    constexpr const char& operator[](size_type index) const { return _data[(Int) index]; }
 
     // `at` checks the bound (std::string throws; the runtime has no exceptions,
     // so an out-of-range `at` aborts instead of reading past the end).
@@ -126,9 +137,9 @@ public:
     const char& back() const { return _data.back(); }
 
     // Mutable, NUL-terminated buffer (std::string::data in C++17).
-    char* data() { return _data.data(); }
-    const char* data() const { return _data.data(); }
-    const char* c_str() const { return _data.data(); }
+    constexpr char* data() { return _data.data(); }
+    constexpr const char* data() const { return _data.data(); }
+    constexpr const char* c_str() const { return _data.data(); }
 
     iterator begin() { return _data.begin(); }
     iterator end() { return _data.end(); }
@@ -139,12 +150,12 @@ public:
 
     // ---- modifiers --------------------------------------------------------
 
-    void push_back(char value) {
+    constexpr void push_back(char value) {
         _data.push_back(value);
         terminate();
     }
 
-    void pop_back() {
+    constexpr void pop_back() {
         _data.pop_back();
         terminate();
     }
@@ -154,16 +165,10 @@ public:
         return append(text.data() + clampPos(text.size(), pos), fitted(text.size() - pos, count));
     }
     SmString& append(const char* text) {
-        return append(text, text == nullptr ? 0 : std::strlen(text));
+        return append(text, text == nullptr ? 0 : std::char_traits<char>::length(text));
     }
     SmString& append(const char* text, size_type count) {
-        if (text != nullptr && count > 0) {
-            size_type from = size();
-            ensure(from + count);
-            _data.resize((Int) (from + count));
-            std::memcpy(_data.data() + from, text, count);
-            terminate();
-        }
+        if (text != nullptr && count > 0) _data.append(text, (Int) count);
         return *this;
     }
     SmString& append(size_type count, char value) {
@@ -171,7 +176,7 @@ public:
             size_type from = size();
             ensure(from + count);
             _data.resize((Int) (from + count));
-            std::memset(_data.data() + from, (unsigned char) value, count);
+            std::char_traits<char>::assign(_data.data() + from, count, value);
             terminate();
         }
         return *this;
@@ -186,14 +191,14 @@ public:
     }
 
     // `resize` pads with `value` (default NUL), like std::string.
-    void resize(size_type count, char value = '\0') {
+    constexpr void resize(size_type count, char value = '\0') {
         if (count < size()) {
             _data.resize((Int) count);
         } else if (count > size()) {
             size_type from = size();
             ensure(count);
             _data.resize((Int) count);
-            std::memset(_data.data() + from, (unsigned char) value, count - from);
+            std::char_traits<char>::assign(_data.data() + from, count - from, value);
         }
         terminate();
     }
@@ -244,23 +249,23 @@ public:
         return result;
     }
 
-    size_type find(const SmString& text, size_type pos = 0) const {
+    constexpr size_type find(const SmString& text, size_type pos = 0) const {
         return find(text.data(), pos, text.size());
     }
-    size_type find(const char* text, size_type pos = 0) const {
-        return find(text, pos, text == nullptr ? 0 : std::strlen(text));
+    constexpr size_type find(const char* text, size_type pos = 0) const {
+        return find(text, pos, text == nullptr ? 0 : std::char_traits<char>::length(text));
     }
-    size_type find(char value, size_type pos = 0) const {
+    constexpr size_type find(char value, size_type pos = 0) const {
         if (pos > size()) return npos;
-        const char* found = (const char*) std::memchr(data() + pos, value, size() - pos);
+        const char* found = std::char_traits<char>::find(data() + pos, size() - pos, value);
         return found == nullptr ? npos : (size_type) (found - data());
     }
 
-    size_type rfind(const SmString& text, size_type pos = npos) const {
+    constexpr size_type rfind(const SmString& text, size_type pos = npos) const {
         return rfind(text.data(), pos, text.size());
     }
-    size_type rfind(const char* text, size_type pos = npos) const {
-        return rfind(text, pos, text == nullptr ? 0 : std::strlen(text));
+    constexpr size_type rfind(const char* text, size_type pos = npos) const {
+        return rfind(text, pos, text == nullptr ? 0 : std::char_traits<char>::length(text));
     }
     size_type rfind(char value, size_type pos = npos) const {
         if (size() == 0) return npos;
@@ -272,18 +277,25 @@ public:
     }
 
     // std::string-compatible three-way compare of a substring against `text`.
-    int compare(size_type pos, size_type count, const SmString& text) const {
+    constexpr int compare(size_type pos, size_type count, const SmString& text) const {
         size_type from = clampPos(size(), pos);
         size_type len = fitted(size() - from, count);
         size_type common = len < text.size() ? len : text.size();
-        int diff = common == 0 ? 0 : std::memcmp(data() + from, text.data(), common);
+        int diff = common == 0 ? 0 : std::char_traits<char>::compare(data() + from, text.data(), common);
         if (diff != 0) return diff < 0 ? -1 : 1;
         if (len == text.size()) return 0;
         return len < text.size() ? -1 : 1;
     }
 
-    int compare(const SmString& text) const { return compare(0, npos, text); }
-    int compare(const char* text) const { return compare(0, npos, SmString(text)); }
+    constexpr int compare(const SmString& text) const { return compare(0, npos, text); }
+
+    // A raw C string is compared in place: routing it through a temporary
+    // SmString made every `str == "literal"` build and scan a whole string
+    // before the comparison (see compareBytes).
+    constexpr int compare(const char* text) const {
+        if (text == nullptr) return size() == 0 ? 0 : 1;
+        return compareBytes(text, std::char_traits<char>::length(text));
+    }
 
     // ---- conversions ------------------------------------------------------
 
@@ -295,84 +307,106 @@ public:
     void writeTo(std::ostream& out) const { out.write(data(), (std::streamsize) size()); }
 
 private:
+    using Data = StrSmallVector;
+
     // Characters only; the terminating NUL lives at data()[size()].
-    SmallVector<char, inlineCapacity> _data;
+    Data _data;
 
-    void ensure(size_type wanted) { _data.reserve((Int) wanted + 1); }
+    constexpr void ensure(size_type wanted) { _data.reserve((Int) wanted + 1); }
 
-    void terminate() {
+    constexpr void terminate() {
         ensure(size());
         _data.data()[size()] = '\0';
     }
 
-    static size_type clampPos(size_type length, size_type pos) {
+    static constexpr size_type clampPos(size_type length, size_type pos) {
         return pos > length ? length : pos;
     }
 
-    static size_type fitted(size_type available, size_type count) {
+    // Three-way compare of the whole string against `count` bytes at `text`.
+    // `std::char_traits` is the standard library's own primitive (constexpr, and
+    // `memcmp` for char), so there is nothing to gain from a temporary.
+    constexpr int compareBytes(const char* text, size_type count) const {
+        size_type mine = size();
+        size_type common = mine < count ? mine : count;
+        int diff = common == 0 ? 0 : std::char_traits<char>::compare(data(), text, common);
+        if (diff != 0) return diff < 0 ? -1 : 1;
+        if (mine == count) return 0;
+        return mine < count ? -1 : 1;
+    }
+
+    static constexpr size_type fitted(size_type available, size_type count) {
         return count == npos || count > available ? available : count;
     }
 
-    void assign(const char* text, size_type count) {
-        _data.clear();
-        ensure(count);
-        _data.resize((Int) count);
-        if (count > 0) std::memcpy(_data.data(), text, count);
-        terminate();
+    constexpr void assign(const char* text, size_type count) {
+        // One move plus the terminator: `StrSmallVector::assign` writes both and
+        // drops back to the inline buffer when the text fits.
+        _data.assign(text, (Int) count);
     }
 
-    size_type find(const char* text, size_type pos, size_type length) const {
+    // `memcmp` spelled through char_traits, which is constexpr (and compiles to
+    // the same intrinsic), so a comparison can be constant-evaluated.
+    constexpr size_type find(const char* text, size_type pos, size_type length) const {
         if (length == 0) return pos <= size() ? pos : npos;
         if (text == nullptr || pos > size() || length > size() - pos) return npos;
         const char* self = data();
         for (size_type i = pos; i + length <= size(); i++) {
-            if (self[i] == text[0] && std::memcmp(self + i, text, length) == 0) return i;
+            if (self[i] == text[0] && std::char_traits<char>::compare(self + i, text, length) == 0) {
+                return i;
+            }
         }
         return npos;
     }
 
-    size_type rfind(const char* text, size_type pos, size_type length) const {
+    constexpr size_type rfind(const char* text, size_type pos, size_type length) const {
         if (length == 0) return pos <= size() ? pos : size();
         if (text == nullptr || length > size()) return npos;
         size_type last = size() - length;
         size_type from = pos >= last ? last : pos;
         for (size_type i = from + 1; i > 0; i--) {
-            if (std::memcmp(data() + (i - 1), text, length) == 0) return i - 1;
+            if (std::char_traits<char>::compare(data() + (i - 1), text, length) == 0) return i - 1;
         }
         return npos;
     }
 };
 SIMSE_PACK_POP
 
-inline Bool operator==(const SmString& left, const SmString& right) {
+inline constexpr Bool operator==(const SmString& left, const SmString& right) {
     return left.size() == right.size() && left.compare(right) == 0;
 }
-inline Bool operator!=(const SmString& left, const SmString& right) { return !(left == right); }
-inline Bool operator<(const SmString& left, const SmString& right) {
+inline constexpr Bool operator!=(const SmString& left, const SmString& right) { return !(left == right); }
+inline constexpr Bool operator<(const SmString& left, const SmString& right) {
     return left.compare(right) < 0;
 }
-inline Bool operator>(const SmString& left, const SmString& right) { return right < left; }
-inline Bool operator<=(const SmString& left, const SmString& right) { return !(right < left); }
-inline Bool operator>=(const SmString& left, const SmString& right) { return !(left < right); }
+inline constexpr Bool operator>(const SmString& left, const SmString& right) { return right < left; }
+inline constexpr Bool operator<=(const SmString& left, const SmString& right) { return !(right < left); }
+inline constexpr Bool operator>=(const SmString& left, const SmString& right) { return !(left < right); }
 
-inline Bool operator==(const SmString& left, const char* right) { return left.compare(right) == 0; }
-inline Bool operator==(const char* left, const SmString& right) { return right.compare(left) == 0; }
-inline Bool operator!=(const SmString& left, const char* right) { return !(left == right); }
-inline Bool operator!=(const char* left, const SmString& right) { return !(left == right); }
-inline Bool operator<(const SmString& left, const char* right) { return left.compare(right) < 0; }
-inline Bool operator<(const char* left, const SmString& right) {
+inline constexpr Bool operator==(const SmString& left, const char* right) { return left.compare(right) == 0; }
+inline constexpr Bool operator==(const char* left, const SmString& right) { return right.compare(left) == 0; }
+inline constexpr Bool operator!=(const SmString& left, const char* right) { return !(left == right); }
+inline constexpr Bool operator!=(const char* left, const SmString& right) { return !(left == right); }
+inline constexpr Bool operator<(const SmString& left, const char* right) { return left.compare(right) < 0; }
+inline constexpr Bool operator<(const char* left, const SmString& right) {
     return right.compare(left) > 0;
 }
-inline Bool operator>(const SmString& left, const char* right) { return left.compare(right) > 0; }
-inline Bool operator>(const char* left, const SmString& right) { return right.compare(left) < 0; }
+inline constexpr Bool operator>(const SmString& left, const char* right) { return left.compare(right) > 0; }
+inline constexpr Bool operator>(const char* left, const SmString& right) { return right.compare(left) < 0; }
+// Without these two, `str <= "literal"` fell back to the SmString-vs-SmString
+// operator with a converting temporary.
+inline constexpr Bool operator<=(const SmString& left, const char* right) { return left.compare(right) <= 0; }
+inline constexpr Bool operator<=(const char* left, const SmString& right) { return right.compare(left) >= 0; }
+inline constexpr Bool operator>=(const SmString& left, const char* right) { return left.compare(right) >= 0; }
+inline constexpr Bool operator>=(const char* left, const SmString& right) { return right.compare(left) <= 0; }
 
-inline Bool operator==(const SmString& left, const std::string& right) {
+inline constexpr Bool operator==(const SmString& left, const std::string& right) {
     return left.size() == right.size()
-           && std::memcmp(left.data(), right.data(), left.size()) == 0;
+           && std::char_traits<char>::compare(left.data(), right.data(), left.size()) == 0;
 }
-inline Bool operator==(const std::string& left, const SmString& right) { return right == left; }
-inline Bool operator!=(const SmString& left, const std::string& right) { return !(left == right); }
-inline Bool operator!=(const std::string& left, const SmString& right) { return !(right == left); }
+inline constexpr Bool operator==(const std::string& left, const SmString& right) { return right == left; }
+inline constexpr Bool operator!=(const SmString& left, const std::string& right) { return !(left == right); }
+inline constexpr Bool operator!=(const std::string& left, const SmString& right) { return !(right == left); }
 
 inline SmString operator+(const SmString& left, const SmString& right) {
     SmString result;

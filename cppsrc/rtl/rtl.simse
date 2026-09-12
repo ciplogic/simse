@@ -40,6 +40,10 @@ native("simse_dict_clear") fun clear<K, V>(this: Dictionary<K, V>): Unit
 // Scalar/string conversions. `Str` is a byte string, so `append` takes a Char.
 native("simse_str_append") fun append(this: Str, value: Char): Unit
 
+// In-place append of a whole Str. `out = out + text` copies the accumulated
+// buffer every time, so emitters use this instead.
+native("simse_str_appendStr") fun appendStr(this: Str, value: Str): Unit
+
 // `find` returns -1 when `sub` is absent (the language's spelling of npos).
 native("simse_str_find") fun find(this: Str, sub: Str): Int
 native("simse_str_find") fun indexOf(this: Str, sub: Str): Int
