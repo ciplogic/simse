@@ -569,3 +569,60 @@ component-specific):
   the hand-written ring on the same input; goldens, the five differentials, the
   bootstrap fixed point (both `Str` backings) and the cross-backing
   byte-identity all still hold.
+- **`Str`'s inline capacity is one constant, at the spec's 24 (T33).** The 24 was
+  written in two places (`StrSmallVector::inlineCapacity` and the unused
+  `SmString::inlineCapacity`/`maxInlineLen` pair); it is now defined once as
+  `kStrInlineCapacity` in `cppsrc/rtl/strsmallvector.hpp`, read by both the buffer
+  and `SmString`, and overridable per build with `-DSIMSE_STR_INLINE_CAPACITY=<n>`
+  (CMake cache variable; `build.js` mirrors it into the amalgamation compile and
+  warns on a mismatch, because the capacity is part of the ABI — see
+  `impl_specs/rtl-abi.md`). The default stays at the spec's 24: the alternative
+  was measured and rejected. Release `/O2 /MD`, ARM64, two legs interleaved
+  run-for-run in one time window (`tools/_bench_ab.mjs`) and rebuilt per capacity
+  (`tools/_hoist_ab.bat` for the self-hosted binary, the `simse_transpile` target
+  for the hand-written ring).
+  Layout (`tools/_cap_ab.bat <n> size_probe`): `Str` 32 B at 24, 28 at 20, 24 at
+  16; `Attribute` 64 / — / 48; `List<Str>` 136 / — / 104; `List<Attribute>` 264 /
+  — / 200; **`XmlNode` 312 / — / 240**. Peak working set, measured exactly
+  (`tools/memrun.cpp`): the self-hosted compiler 45.6 MB at 24 against 42.4 MB at
+  20 and **37.4 MB at 16** (private bytes 40.1 / 36.8 / 31.9 MB); the hand-written
+  ring 24.9 MB at 24 against 23.3 MB at 16. Time: no difference anywhere inside
+  the run-to-run spread — the self-hosted compiler over the full source set is
+  119.8/128.2 ms min/median at 24 against 117.4/126.6 at 16 and 114.2/124.0 at 20,
+  the hand-written ring 30.4/35.8 against 31.0/35.5.
+  The micro-benchmark shows why 16 was rejected anyway: its inline limit is 15
+  characters, and the benchmark's "short" string is `"Expr.GenericName"` — 16
+  characters, one too many — so the short-string rows allocate on every
+  operation: construct 28.5 -> 124.1 ms, copy 24.1 -> 77.7 ms, literal
+  construction 18.0 -> 77.1 ms (4M iterations), `concat short+short` 48.6 ->
+  74.1 ms, while rows that fit at both capacities are unchanged (`construct
+  long`, `find` in a long string, every `List` row). Capacity 20 (19 characters
+  inline, `Str` 28 B) keeps all of those fast at 25.7/17.0 ms and costs 4.2 MB
+  over 16, but the compiler's own vocabulary is full of identifiers and messages
+  past 19 characters (`simse_list_removeRange`, `binaryBindingPower`,
+  `driverGatherFiles`), so the heap would come back for longer text; the tail of
+  the distribution is not measurable in a synthetic row, and the default stays
+  at the spec's 23-character capacity. The full workload never showed a timing
+  difference either way, because the bulk of its strings are either short enough
+  for any of these capacities or long enough to spill at all of them. Emitted
+  output is byte-identical at every capacity tested (checked with `cmp`).
+- **Release tuning: `/Ob3` pays, LTO does not (T34).** `build.bat --release`
+  compiles the amalgamation with `/O2 /Ob3 /MD /DNDEBUG`. `/O2` is MSVC's highest
+  optimization level (`/O3` is a GCC/Clang spelling; `/Ox` is a subset of `/O2`),
+  and `/Ob3` is the only dial beyond it — it lets the inliner go further than
+  `/O2`'s `/Ob2`. Measured on the self-hosted compiler transpiling the full
+  source set, interleaved run-for-run (`tools/_bench_ab.mjs`) over six windows of
+  20-30 pairs: medians 127.2 ms with plain `/O2` against 122.6 ms with `/Ob3`,
+  i.e. **~3.6% faster in every window** (mins 117.2 against 113.7; the minima are
+  noisy on this machine, the medians are not), for **586 KB -> 653 KB** of code
+  (+11%). Peak working set is unchanged (45.6 MB), and the emitted output is
+  byte-identical. MSVC's whole-program optimization (`/GL` + `/LTCG`, `build.bat
+  --lto`) measured **neutral**: medians 126.7 ms against 127.2 ms, identical
+  memory — expected, since the amalgamation already is one translation unit and
+  the only calls crossing a module boundary are the handful of `native`
+  functions, so there is nothing left for LTO to inline across. `--lto` stays
+  available as a flag and is off by default because it costs link time (a full
+  `/GL` link, seconds rather than milliseconds) for nothing measurable here;
+  `/Ob3` is in `--release` because it is the cheapest few percent the compiler
+  has left. The hand-written ring's CMake release build is unchanged (`/O2`), so
+  its numbers above stay comparable to earlier records.

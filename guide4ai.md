@@ -51,6 +51,13 @@ cmd //c "_msvc_build.bat --clean-first" # clean rebuild
 ./simse_tests.exe                       # check mode
 ./simse_tests.exe --update              # regenerate goldens deliberately
 
+# the end-to-end stress corpus: one folder per program under stress/, each with
+# its expected output; the harness transpiles, compiles and runs every one of
+# them with the compiler under test (./simse.exe by default)
+bun tools/stress.js                     # or ./stress.bat; see stress/README.md
+bun tools/stress.js --list              # what the corpus contains
+bun tools/stress.js --filter modules --jobs 4
+
 # the alternative runtime backing (Str = std::string): a separate build folder,
 # so the compiler and the amalgamations it is linked with agree on the define
 cd cmake-build-strstd && cmd //c _msvc_build.bat
@@ -65,7 +72,8 @@ cd cmake-build-strstd && cmd //c _msvc_build.bat
 # transpile the compiler and compile it (bun + cl.exe, loads the VS environment)
 # compile an amalgamated output with cl.exe (loads the VS environment itself)
 ./build.bat                             # cppsrc -> ./simse_out.cpp -> ./simse.exe (debug)
-./build.bat --release                   # release: /O2 /DNDEBUG, cmake-build-release libs (/MD)
+./build.bat --release                   # release: /O2 /Ob3 /DNDEBUG, cmake-build-release libs (/MD)
+./build.bat --release --lto             # + whole-program optimization (/GL + /LTCG; measured neutral)
 ./build.bat my_simse.exe                # same, different executable name
 ./build.bat --cpp other.cpp --exe x.exe # compile an existing amalgamation
 ./build.bat --help                      # all options (see build.js)
@@ -75,9 +83,11 @@ cd cmake-build-strstd && cmd //c _msvc_build.bat
 # from cppsrc when a source is newer, and writes profile\<config>\simse.exe.
 ```
 
-The default build runs, as part of `ALL`: every e2e program (transpile ->
-compile -> run -> stdout diff) and the five differentials plus `stage1_check`.
-**If `simse*.exe` is running, linking fails with `LNK1168` — kill it first.**
+The default build runs, as part of `ALL`: the five differentials plus
+`stage1_check` (the end-to-end programs are no longer CMake targets - they run
+under `bun tools/stress.js`, which is not part of the build because it tests the
+built compiler rather than the C++ ring).
+**If `simse*.exe` is running, linking fails with `LNK1168` - kill it first.**
 
 `stage1_check` *is* the two-step transpiling check: it transpiles the compiler
 source set (`cppsrc/compiler/Driver.simse` plus the module roots) into
@@ -111,7 +121,10 @@ explicit `cppsrc/compiler/Driver.simse` input.
   (`smstring.hpp`), whose buffer is `strsmallvector.hpp`'s `StrSmallVector`, the
   char-specialized form of the `SmallVector<char, 24>` layout — `Int _len`,
   `Int _cap`, a 24-byte inline buffer unioned with the heap pointer, terminating
-  NUL, `constexpr` while inline — by default.
+  NUL, `constexpr` while inline — by default. That 24 is the single constant
+  `kStrInlineCapacity` (`SIMSE_STR_INLINE_CAPACITY` overrides it per build; 16
+  saves ~18% of the peak working set but spills 16-character strings, so 24
+  stays the default — `impl_specs/capability-matrix.md` T33).
   The CMake options `SIMSE_LIST_STD_VECTOR` / `SIMSE_STR_STD_STRING` (or
   `build.bat --define ...`) switch them to `std::vector<T>` / `std::string`;
   the choice has to match between the compiler and the amalgamated output it
@@ -130,9 +143,17 @@ explicit `cppsrc/compiler/Driver.simse` input.
   is `cppsrc/compiler/Driver.simse`).
 - `cppsrc/native/` — hand-written C++ for `native(...)` symbols
   (e.g. `simse_native_readFile`).
-- `tests/` — fixtures, goldens (`*.tokens/ast/astxml/sema/cpp/stdout.expected`),
+- `tests/` - fixtures, goldens (`<fixture>.simse.{tokens,ast,astxml,sema,cpp}.expected`),
   the test runner, and the differential drivers (`*_ref_main.cpp` /
   `*_simse_main.cpp`).
+- `stress/` - the end-to-end stress corpus: one folder per Simse project
+  (`src/` + `expected.stdout` + optional `args`/`stdin`/`expected.cpp`/
+  `expected.transpile-error`), run by `tools/stress.js` against the compiler under
+  test (`stress/README.md`).
+- `tools/` - the JavaScript harness: `stress.js` (the corpus above), `msvc.mjs`
+  (the Visual Studio environment shared with `build.js`), the A/B helpers
+  (`_bench_ab.mjs`, `_hoist_ab.bat`, `_cap_ab.bat`, `_probe.bat`, `memrun.cpp`,
+  `str_bench.cpp`, ...) and the probe programs.
 
 ## 5. Architecture
 
@@ -188,6 +209,11 @@ Key design points:
 - **Determinism**: transpiling the same inputs twice is byte-identical.
 - **Goldens**: `simse_tests.exe` compares against `tests/golden/*.expected`
   (regenerate with `--update` only when behavior intentionally changes).
+- **The stress corpus stays green**: `bun tools/stress.js` transpiles, compiles
+  and runs every program under `stress/` with the self-hosted compiler and
+  compares its output (one folder per program, `stress/README.md`). Both rings
+  must pass it: `--simse cmake-build-debug/simse_transpile.exe` checks the other
+  side of the port on the same corpus.
 
 ## 7. Change protocol (read before editing)
 
@@ -197,6 +223,10 @@ Key design points:
 - After a change: rebuild (`_msvc_build.bat`), run `simse_tests.exe`
   (`--update` then check mode), confirm the five differentials are still
   byte-identical, and re-run `stage1_check` (the fixed point must still hold).
+  For anything visible to a program - the runtime, codegen, the driver - also
+  rebuild the self-hosted compiler (`bun build.js` or `build.bat`) and run
+  `bun tools/stress.js`; add a case under `stress/` for behavior that is not yet
+  covered there.
 - **Never** weaken the C++ reference or the XmlNode schema to make a mirror
   pass; fix the transpiler or the mirror generically. Do not special-case a
   specific file.

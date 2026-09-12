@@ -42,7 +42,7 @@ language subset needs it (no virtual dispatch, no dynamic casts).
 | `Float32` / `Float64` | `Float32` / `Float64` | `float` / `double` |
 | `Char` | `Char` (`std::int8_t`) | byte value; streams print it as a character |
 | `Bool` | `Bool` (`bool`) | printed as `true`/`false` (see below) |
-| `Str` | `Str` (`SmString` by default, `std::string` with `SIMSE_STR_STD_STRING`) | mutable byte string; inline up to 23 bytes plus NUL |
+| `Str` | `Str` (`SmString` by default, `std::string` with `SIMSE_STR_STD_STRING`) | mutable byte string; inline up to `SIMSE_STR_INLINE_CAPACITY - 1` bytes plus NUL (16 by default; 23 with the spec's 24) |
 | `Unit` | `void` | only valid as a function return type |
 | `List<T>` | `List<T>` (`SmallVector<T, 4>` by default, `std::vector<T>` with `SIMSE_LIST_STD_VECTOR`) | value type, deep copies |
 | `Array<T>` | `Array<T>` (shim struct) | shared allocation, fixed length |
@@ -67,11 +67,27 @@ normative layout.
 
 1. **`Str` layout.** Spec: inline `SmallVector<24, Char>` with a reserved NUL and
    a 23-byte inline capacity (`specs/containers.md`, `specs/built-in-types.md`).
-   Shim: matches — `Str` is `SmString` (`cppsrc/rtl/smstring.hpp`) over
-   `StrSmallVector` (`cppsrc/rtl/strsmallvector.hpp`), the char-specialized form
-   of that vector: the same 32-byte layout (`Int _len`, `Int _cap`, a 24-byte
-   inline buffer unioned with the heap pointer, 4-byte packed), without the
-   per-element lifetime machinery the generic `SmallVector` needs. The buffer
+   Shim: the same shape, but the capacity is a build knob — `Str` is `SmString`
+   (`cppsrc/rtl/smstring.hpp`) over `StrSmallVector`
+   (`cppsrc/rtl/strsmallvector.hpp`), the char-specialized form of that vector:
+   `Int _len`, `Int _cap`, an inline byte buffer unioned with the heap pointer,
+   4-byte packed, without the per-element lifetime machinery the generic
+   `SmallVector` needs. The inline capacity is defined once, in
+   `strsmallvector.hpp` (`kStrInlineCapacity`), and read from there by both the
+   buffer and `SmString`; its default is the spec's **24 bytes** (23 characters
+   inline). It is overridable with `-DSIMSE_STR_INLINE_CAPACITY=<n>` so the
+   size/speed trade-off can be measured without editing sources; T33 in
+   `impl_specs/capability-matrix.md` records those measurements (16 bytes saves
+   ~18% of the peak working set but sends 16-character strings — `"Name: John
+   Smith"`, `"Expr.GenericName"` — to the heap, which the default avoids). The
+   capacity
+   is **part of the ABI**: every translation unit in a binary has to agree on it,
+   or the two sides disagree about where a `Str`'s bytes live — which corrupts
+   memory rather than failing to link. `build.js` therefore mirrors the cache
+   value into the amalgamation compile (with a warning when a `--define`
+   disagrees), exactly as it does for the `List`/`Str` backings above;
+   `impl_specs/capability-matrix.md` (T33) records the measurements behind the
+   default. The buffer
    keeps the terminating NUL in its own stored length (`data()[size()]` is always
    `'\0'`; the empty string is one stored byte), so it is written as part of every
    growing operation; `Str.size()` excludes it, as the spec requires. The inline

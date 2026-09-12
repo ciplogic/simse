@@ -14,11 +14,13 @@
 // defined once, here, and both `SmString` (smstring.hpp) and its buffer
 // (`StrSmallVector` below) read it, so the layout has a single source of truth.
 //
-// `SIMSE_STR_INLINE_CAPACITY` overrides it, which is how the size/speed trade-off
-// (object bytes and cache footprint against heap spills) is measured
-// (impl_specs/rtl-abi.md).
+// The default is the specification's 24 bytes (23 characters inline); names,
+// messages and attribute text in the compiler's own vocabulary routinely run
+// past 15 characters, and at 16 bytes `"Expr.GenericName"` — a typical AST kind
+// — would allocate. `SIMSE_STR_INLINE_CAPACITY` overrides it for size/speed
+// measurements (impl_specs/rtl-abi.md, T33 in impl_specs/capability-matrix.md).
 #ifndef SIMSE_STR_INLINE_CAPACITY
-#define SIMSE_STR_INLINE_CAPACITY 16
+#define SIMSE_STR_INLINE_CAPACITY 24
 #endif
 inline constexpr Int kStrInlineCapacity = SIMSE_STR_INLINE_CAPACITY;
 

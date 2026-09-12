@@ -12,13 +12,17 @@
 //   --out <file>    generated C++ name/path (default: simse_out.cpp)
 //   --root <dir>    source root to transpile, relative to the repo (default: cppsrc)
 //   --no-gen        skip transpiling; compile the existing/--cpp file
-//   --release       release build: /O2 /DNDEBUG and the release CMake libs
+//   --release       release build: /O2 /Ob3 /DNDEBUG and the release CMake libs
 //                    (cmake-build-release, /MD)
+//   --lto           whole-program optimization: /GL + /LTCG (with --release)
 //   --debug         debug build (default: cmake-build-debug, /MDd)
 //   --arch <arch>   vcvarsall target architecture (default: the CMake build's
 //                    compiler architecture, else arm64)
 //   --define <m[=v]> add a preprocessor define to the compile (repeatable),
-//                    e.g. --define SIMSE_LIST_STD_VECTOR
+//                    e.g. --define SIMSE_LIST_STD_VECTOR. The RTL's List/Str
+//                    backing and Str's inline capacity are mirrored from the
+//                    CMake build's cache, because the libraries it links bake
+//                    those choices in.
 //   -h, --help      show this help
 //
 // Environment:
@@ -30,16 +34,22 @@
 // release).
 
 import { $ } from "bun";
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from "node:fs";
 import * as path from "node:path";
 
-const REPO = import.meta.dir;
+import {
+  cachedArch,
+  cachedBuildType,
+  compilerTarget,
+  developerEnv,
+  fail as failTool,
+  normalizeArch,
+  REPO,
+  runCl,
+  whichCl,
+} from "./tools/msvc.mjs";
 
-function fail(message) {
-  console.error(`build: ${message}`);
-  process.exit(1);
-}
+const fail = (message) => failTool("build", message);
 
 function usage() {
   console.log(`usage: bun build.js [options] [<output.exe>]
@@ -49,8 +59,9 @@ function usage() {
   --out <file>    generated C++ name/path (default: simse_out.cpp)
   --root <dir>    source root to transpile, relative to the repo (default: cppsrc)
   --no-gen        skip transpiling; compile the existing/--cpp file
-  --release       release build: /O2 /DNDEBUG and the release CMake libs
+  --release       release build: /O2 /Ob3 /DNDEBUG and the release CMake libs
                   (cmake-build-release, /MD)
+  --lto           whole-program optimization: /GL + /LTCG (with --release)
   --debug         debug build (default: cmake-build-debug, /MDd)
   --arch <arch>   vcvarsall target architecture (default: from CMakeCache.txt,
                   else arm64)
@@ -65,6 +76,7 @@ function parseArgs(argv) {
     exe: "simse.exe",
     gen: true,
     release: false,
+    lto: false,
     configSet: false,
     arch: null,
     defines: [],
@@ -82,6 +94,7 @@ function parseArgs(argv) {
       case "--root": opts.root = value(i); i++; break;
       case "--no-gen": opts.gen = false; break;
       case "--release": opts.release = true; opts.configSet = true; break;
+      case "--lto": opts.lto = true; break;
       case "--debug": opts.release = false; opts.configSet = true; break;
       case "--arch": opts.arch = value(i); i++; break;
       case "--define": opts.defines.push(value(i)); i++; break;
@@ -92,51 +105,6 @@ function parseArgs(argv) {
     }
   }
   return opts;
-}
-
-// The target architecture the CMake build compiles for, read from the compiler
-// path in CMakeCache.txt (`.../bin/Host<host>/<target>/cl.exe`).
-function cachedArch(buildDir) {
-  const cache = path.join(buildDir, "CMakeCache.txt");
-  if (!existsSync(cache)) return null;
-  const match = readFileSync(cache, "utf8").match(
-      /^CMAKE_CXX_COMPILER:[^=\r\n]*=.*[\\/]bin[\\/]Host[^\\/]+[\\/]([^\\/]+)[\\/]cl\.exe\s*$/im);
-  if (!match) return null;
-  const target = match[1].toLowerCase();
-  return target === "amd64" ? "x64" : target;
-}
-
-// The vcvarsall.bat of the newest Visual Studio install, or null when none is
-// found (vswhere first, then the known VS 18 default path).
-function findVcvars() {
-  const programFilesX86 = process.env["ProgramFiles(x86)"] || "C:\\Program Files (x86)";
-  const vswhere = path.join(programFilesX86, "Microsoft Visual Studio", "Installer", "vswhere.exe");
-  if (existsSync(vswhere)) {
-    const query = Bun.spawnSync([vswhere, "-latest", "-products", "*", "-property", "installationPath"],
-        { stdout: "pipe", stderr: "pipe" });
-    const vsPath = query.stdout.toString().trim();
-    if (query.exitCode === 0 && vsPath) {
-      const candidate = path.join(vsPath, "VC", "Auxiliary", "Build", "vcvarsall.bat");
-      if (existsSync(candidate)) return candidate;
-    }
-  }
-  const fallback = "C:\\Program Files\\Microsoft Visual Studio\\18\\Community\\VC\\Auxiliary\\Build\\vcvarsall.bat";
-  return existsSync(fallback) ? fallback : null;
-}
-
-function normalizeArch(value) {
-  const lower = String(value).toLowerCase();
-  return lower === "amd64" ? "x64" : lower;
-}
-
-// The CMake build type recorded in CMakeCache.txt (Debug/Release/...), or null.
-function cachedBuildType(buildDir) {
-  const cache = path.join(buildDir, "CMakeCache.txt");
-  if (!existsSync(cache)) return null;
-  const match = readFileSync(cache, "utf8").match(/^CMAKE_BUILD_TYPE:[^=\r\n]*=(.*)$/m);
-  if (!match) return null;
-  const value = match[1].trim();
-  return value || null;
 }
 
 // Whether the CMake build was configured with SIMSE_LIST_STD_VECTOR: the RTL
@@ -158,41 +126,17 @@ function cachedStdStringStr(buildDir) {
   return /^SIMSE_STR_STD_STRING:BOOL=(ON|TRUE|1)$/im.test(readFileSync(cache, "utf8"));
 }
 
-// The architecture the compiler targets, from its banner ("... for ARM64").
-function compilerTarget(cl, env) {
-  const probe = Bun.spawnSync([cl], { env, stdout: "pipe", stderr: "pipe" });
-  const banner = probe.stdout.toString() + probe.stderr.toString();
-  const match = banner.match(/ for (ARM64EC|ARM64|ARM|x64|x86)\b/i);
-  return match ? match[1].toLowerCase() : null;
-}
-
-// The Visual Studio developer environment for `arch`. A `cl` already on PATH is
-// only trusted when Visual Studio cannot be located: the ambient prompt may
-// target another architecture than the CMake libraries (LNK4272/LNK2019).
-function developerEnv(arch) {
-  const vcvars = findVcvars();
-  if (!vcvars) {
-    if (Bun.which("cl")) {
-      console.warn("build: warning: Visual Studio not found; using the cl.exe already on PATH");
-      return process.env;
-    }
-    fail("cannot locate Visual Studio and no cl.exe on PATH");
-  }
-
-  const script = path.join(tmpdir(), `simse-vcenv-${process.pid}.bat`);
-  writeFileSync(script, `@echo off\r\ncall "${vcvars}" ${arch} >nul\r\nset\r\n`);
-  try {
-    const sourced = Bun.spawnSync(["cmd.exe", "/d", "/c", script], { stdout: "pipe", stderr: "pipe" });
-    if (sourced.exitCode !== 0) fail(`vcvarsall ${arch} failed:\n${sourced.stderr.toString()}`);
-    const env = { ...process.env };
-    for (const line of sourced.stdout.toString().split(/\r?\n/)) {
-      const eq = line.indexOf("=");
-      if (eq > 0) env[line.slice(0, eq)] = line.slice(eq + 1);
-    }
-    return env;
-  } finally {
-    rmSync(script, { force: true });
-  }
+// And for SIMSE_STR_INLINE_CAPACITY: the RTL libraries were compiled with a
+// particular Str layout, which the amalgamation has to share — a mismatch is not
+// a link error but silent memory corruption. An empty cache value means the
+// libraries use the header's own default, so nothing is passed and both sides
+// read the same number from strsmallvector.hpp.
+function cachedStrInlineCapacity(buildDir) {
+  const cache = path.join(buildDir, "CMakeCache.txt");
+  if (!existsSync(cache)) return null;
+  const match = readFileSync(cache, "utf8").match(/^SIMSE_STR_INLINE_CAPACITY:[^=\r\n]*=(.*)$/m);
+  const value = match ? match[1].trim() : "";
+  return value || null;
 }
 
 // The newest mtime among the C++ sources the hand-written transpiler is built
@@ -266,8 +210,8 @@ async function main() {
   // --- step 2: load the Visual Studio environment and compile ----------------
   const libArch = cachedArch(buildDir);
   const arch = normalizeArch(opts.arch || libArch || "arm64");
-  const env = developerEnv(arch);
-  const cl = Bun.which("cl", { PATH: env.PATH });
+  const env = developerEnv(arch, "build");
+  const cl = whichCl(env);
   if (!cl) fail(`cl.exe not found on the Visual Studio PATH (arch ${arch})`);
 
   // Guard against a different machine type than the CMake libraries: linking an
@@ -286,8 +230,16 @@ async function main() {
   console.log(`build: compiling ${cpp}`);
   console.log(`build:            -> ${exe}`);
   // Match the CMake build's runtime and optimization (Release uses /MD + /O2 +
-  // /DNDEBUG; Debug uses /MDd).
-  const flags = isRelease ? ["/MD", "/O2", "/DNDEBUG"] : ["/MDd"];
+  // /DNDEBUG; Debug uses /MDd). /O2 is MSVC's maximum optimization level (/O3 is
+  // a GCC/Clang spelling), and /Ob3 lets it inline as far as it wants on top of
+  // /O2's /Ob2: on the amalgamated compiler that is worth ~4% of runtime for
+  // ~10% more code (impl_specs/capability-matrix.md, T34). `--lto` adds MSVC's
+  // whole-program optimization (/GL compiles to an intermediate form that /LTCG
+  // optimizes together with the linked libraries at link time), which measures
+  // neutral here — the amalgamation already is one translation unit — and makes
+  // the link slower.
+  const flags = isRelease ? ["/MD", "/O2", "/Ob3", "/DNDEBUG"] : ["/MDd"];
+  if (opts.lto) flags.push("/GL", "/LTCG");
   // Mirror the RTL's List<T>/Str backing choices so the amalgamation links
   // against the CMake libraries built in this folder.
   const defines = [...opts.defines];
@@ -305,6 +257,17 @@ async function main() {
     console.warn(`build: warning: --define SIMSE_STR_STD_STRING does not match ${path.basename(buildDir)}, ` +
         `whose RTL libraries use SmString; linking may fail`);
   }
+  const strCapacity = cachedStrInlineCapacity(buildDir);
+  const passedCapacities = defines.filter((define) => define.startsWith("SIMSE_STR_INLINE_CAPACITY"));
+  if (strCapacity && passedCapacities.length === 0) {
+    defines.push(`SIMSE_STR_INLINE_CAPACITY=${strCapacity}`);
+  } else if (!strCapacity && passedCapacities.length > 0) {
+    console.warn(`build: warning: --define SIMSE_STR_INLINE_CAPACITY does not match ${path.basename(buildDir)}, ` +
+        `whose RTL libraries use the header default; mixing layouts corrupts memory`);
+  } else if (strCapacity && passedCapacities.some((define) => !define.endsWith(`=${strCapacity}`))) {
+    console.warn(`build: warning: --define SIMSE_STR_INLINE_CAPACITY does not match ${path.basename(buildDir)} ` +
+        `(${strCapacity}); mixing layouts corrupts memory`);
+  }
   const args = [
     cl, "/nologo", "/std:c++20", "/EHsc", "/W3", ...flags,
     ...defines.map((define) => `/D${define}`),
@@ -313,8 +276,8 @@ async function main() {
     path.join(buildDir, "simse_native.lib"),
     path.join(buildDir, "simse_lib.lib"),
   ];
-  const compile = Bun.spawnSync(args, { cwd: REPO, env, stdout: "inherit", stderr: "inherit" });
-  if (compile.exitCode !== 0) fail("cl.exe failed");
+  const compile = runCl(env, args);
+  if (compile !== 0) fail("cl.exe failed");
   console.log(`build: wrote ${exe}`);
 }
 

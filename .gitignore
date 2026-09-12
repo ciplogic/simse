@@ -53,3 +53,6 @@ cmake-build-*/
 /profile/
 /.vs/
 /simse.vcxproj.user
+
+### Stress harness work directories (tools/stress.js) ###
+/stress/.work/

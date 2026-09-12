@@ -78,9 +78,11 @@ For a fixture `foo.simse` the harness writes:
 - `foo.simse.cpp.expected` - the emitted C++ (or a `CodegenError` marker). Only
   written for fixtures that parse, since codegen runs on the AST.
 
-Separately, `tests/golden/<fixture>.stdout.expected` files hold the expected
-stdout of the end-to-end programs (below); they are not part of the per-fixture
-harness.
+Separately, the end-to-end programs and their expected stdout moved to the
+`stress/` corpus and its `bun tools/stress.js` harness (`stress/README.md`): a
+folder per program, the harness transpiles it with the compiler under test,
+compiles the generated C++, runs it and diffs the output. This runner no longer
+knows about stdout goldens.
 
 ### Token dump format
 
@@ -183,22 +185,21 @@ see `impl_specs/ast-xmlnode.md` for the full schema. The Simse proof-of-carrier
 program `emit_xmlnode.simse` prints this format from an `XmlNode` tree it builds
 in Simse.
 
-## End-to-end round trip (T8/T9/T10/T12/T14/T15/T16/T17/T18)
+## End-to-end stress corpus
 
-The default build (`cmd //c _msvc_build.bat`) also transpiles
-`tests/fixtures/{emit_hello, emit_shapes, emit_generics, native_readfile,
-emit_containers, emit_lang, emit_xmlnode, emit_cursor, emit_str,
-emit_lambda, emit_dict, emit_main_args}.simse`, compiles the generated C++
-(`e2e_<name>`), runs each with the repository root as the working directory, and
-diffs its stdout against `tests/golden/<name>.stdout.expected` with
-`cmake -E compare_files --ignore-eol`.
-`emit_xmlnode`'s expected stdout is the C++ `XmlNode` dump for
-`tests/fixtures/xml_probe.simse`, so it cross-checks the Simse carrier against the
-converter. The generated sources and captured stdout live under
-`cmake-build-debug/e2e/`. `native_readfile` links the `simse_native` library; the
-RTL prelude **set** (`cppsrc/rtl/*.simse`) is loaded automatically. These steps
-are part of `ALL`, so an ordinary (and clean) build exercises the round trip and
-it cannot rot.
+The transpile -> compile -> run -> compare round trip is no longer a set of CMake
+targets here. Every end-to-end program lives in its own folder under `stress/`
+(`stress/<name>/src/` plus its expectations), and `bun tools/stress.js` runs the
+whole corpus against the compiler under test - by default the self-hosted
+`./simse.exe`, so the artifact that ships is the one being exercised. See
+`stress/README.md` for the folder format and the options; `--filter`, `--list`
+and `--jobs` are the ones used most. The programs that exercise the language
+(`stress/{hello,shapes,generics,containers,language-tour,strings,dictionary,
+lambdas,xml-tree,cursor,main-args,native-read-file}`) plus the newer stress cases
+(modules, control-flow, text-processing, recursion, bulk-list, and the two
+diagnostic cases) all live there.
+
+## Differential ports and the bootstrap
 
 The build also runs the differential ports of the scanner (`scanner_diff`), the
 skeleton parser (`skel_diff`), the parser (`parser_diff`), the sema pass

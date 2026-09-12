@@ -128,6 +128,14 @@ namespace {
         return emitFixtureCpp(scanner, fixturesDir, name);
     }
 
+    // The `src` directory of one stress project (`stress/<study>/src`), which is
+    // where the end-to-end programs live since the stress harness took over the
+    // round trip (stress/README.md). A few assertions below still pin what those
+    // programs compile to; what they print is the harness's job.
+    Str stressSource(const Str &fixturesDir, const Str &study) {
+        return (common::toPath(fixturesDir).parent_path().parent_path() / "stress" / common::toPath(study) / "src").string();
+    }
+
     // Analyzes one module with no prelude and no imports (used by the negative
     // fixture checks, which only assert on the fixture's own diagnostics).
     List<Str> analyzeOne(const ast::Module &module, const Str &name) {
@@ -397,10 +405,10 @@ int main(int argc, char **argv) {
         }
     }
 
-    // T9: the generic fixture must emit both distinct instantiations and no
+    // T9: the generic program must emit both distinct instantiations and no
     // unused one, and lower generic functions and built-in containers.
     {
-        Str cpp = emitFixture(&scanner, fixturesDir, "emit_generics.simse");
+        Str cpp = emitFixture(&scanner, stressSource(fixturesDir, "generics"), "main.simse");
         // The generic definition and its `_make_` factory emit the parameterized
         // form `Pair<A, B>`; exclude it so only actual instantiations remain.
         List<Str> pairs;
@@ -417,33 +425,33 @@ int main(int argc, char **argv) {
                   && cpp.find("SmallVector<Int, 4>") != Str::npos;
         if (ok) {
             passed++;
-            printf("PASS emit_generics.simse (templates: two instantiations, no unused)\n");
+            printf("PASS stress/generics (templates: two instantiations, no unused)\n");
         } else {
             failed++;
-            printf("FAIL emit_generics.simse: generic instantiation assertions failed\n");
+            printf("FAIL stress/generics: generic instantiation assertions failed\n");
         }
     }
 
-    // T10: the native fixture must declare the symbol once, emit no body, and
+    // T10: the native program must declare the symbol once, emit no body, and
     // call the symbol directly.
     {
-        Str cpp = emitFixture(&scanner, fixturesDir, "native_readfile.simse");
+        Str cpp = emitFixture(&scanner, stressSource(fixturesDir, "native-read-file"), "main.simse");
         bool ok = !cpp.empty()
                   && cpp.find("Str simse_native_readFile(const Str& path);") != Str::npos
-                  && cpp.find("simse_native_readFile(\"tests/fixtures/native_data.txt\")") != Str::npos;
+                  && cpp.find("simse_native_readFile(\"stress/native-read-file/native_data.txt\")") != Str::npos;
         if (ok) {
             passed++;
-            printf("PASS native_readfile.simse (native symbol declared and called)\n");
+            printf("PASS stress/native-read-file (native symbol declared and called)\n");
         } else {
             failed++;
-            printf("FAIL native_readfile.simse: native emission assertions failed\n");
+            printf("FAIL stress/native-read-file: native emission assertions failed\n");
         }
     }
 
     // T12: container methods lower to the native extension symbols, receiver
     // first, and are not emitted as written.
     {
-        Str cpp = emitFixture(&scanner, fixturesDir, "emit_containers.simse");
+        Str cpp = emitFixture(&scanner, stressSource(fixturesDir, "containers"), "main.simse");
         bool ok = !cpp.empty()
                   && cpp.find("simse_list_append(") != Str::npos
                   && cpp.find("simse_list_removeAt(") != Str::npos
@@ -453,10 +461,10 @@ int main(int argc, char **argv) {
                   && cpp.find(".removeRange(") == Str::npos;
         if (ok) {
             passed++;
-            printf("PASS emit_containers.simse (List methods lower to simse_list_*)\n");
+            printf("PASS stress/containers (List methods lower to simse_list_*)\n");
         } else {
             failed++;
-            printf("FAIL emit_containers.simse: container method emission assertions failed\n");
+            printf("FAIL stress/containers: container method emission assertions failed\n");
         }
     }
 

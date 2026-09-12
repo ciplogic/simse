@@ -8,11 +8,22 @@ set(CMAKE_CXX_STANDARD 20)
 # must match between the compiler and any amalgamated output it is linked with.
 option(SIMSE_LIST_STD_VECTOR "Back List<T> with std::vector<T> instead of SmallVector<T, 4>" OFF)
 
-# Str is the inline SmString (SmallVector<char, 24> plus a terminating NUL) by
-# default; turn this on to back it with std::string instead
-# (impl_specs/rtl-abi.md). As with List, the choice must match between the
-# compiler and any amalgamated output it is linked with.
+# Str is the inline SmString (SmallVector<char, N> plus a terminating NUL, N
+# defaulting to 24 in cppsrc/rtl/strsmallvector.hpp) by default; turn this on to
+# back it with std::string instead (impl_specs/rtl-abi.md). As with List, the
+# choice must match between the compiler and any amalgamated output it is linked
+# with.
 option(SIMSE_STR_STD_STRING "Back Str with std::string instead of SmString" OFF)
+
+# Str's inline capacity in bytes, NUL included (the RTL default is in
+# cppsrc/rtl/strsmallvector.hpp). Lowering it shrinks every Str — and every
+# aggregate holding one — at the cost of spilling more (shorter) strings to the
+# heap; the value is part of the ABI, so it has to match between the compiler
+# and any amalgamated output it is linked with (impl_specs/rtl-abi.md).
+set(SIMSE_STR_INLINE_CAPACITY "" CACHE STRING "Override Str's inline byte capacity")
+if(SIMSE_STR_INLINE_CAPACITY)
+    add_compile_definitions(SIMSE_STR_INLINE_CAPACITY=${SIMSE_STR_INLINE_CAPACITY})
+endif()
 
 # The RTL and generated aggregates are 4-byte packed by default
 # (specs/memory-model.md); turn this on to build with the host's default
@@ -95,58 +106,13 @@ target_link_libraries(simse_tests PRIVATE simse_lib)
 target_compile_definitions(simse_tests PRIVATE
         SIMSE_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures")
 
-# --- T8: end-to-end slice (transpile -> compile -> run -> compare) -----------
-# Each fixture below is transpiled by simse_transpile, compiled as a normal
-# executable, run, and its stdout compared to a golden. The generated file
-# `#include`s "cppsrc/rtl/simse.hpp", so the repo root is added as an include
-# directory. Everything is part of ALL so a default build exercises the round
-# trip and it cannot silently rot.
+# The end-to-end slice (transpile -> compile -> run -> compare stdout) is no
+# longer built here: it lives in the `stress/` folders and runs under
+# `bun tools/stress.js` (see stress/README.md), so the round trip is exercised by
+# the compiler under test rather than by a CMake target. The remaining targets
+# below are the port's own invariants (hand-written ring vs transpiled Simse, and
+# the bootstrap fixed point).
 set(SIMSE_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
-set(SIMSE_E2E_DIR "${CMAKE_CURRENT_BINARY_DIR}/e2e")
-
-foreach(e2e_name IN ITEMS emit_hello emit_shapes emit_generics native_readfile emit_containers emit_lang emit_xmlnode emit_cursor emit_str emit_lambda emit_dict emit_main_args)
-    set(e2e_fixture "${SIMSE_REPO_ROOT}/tests/fixtures/${e2e_name}.simse")
-    # `emit_main_args` exercises the argv form of `main`; pass it one argument.
-    set(e2e_extra_args)
-    if(e2e_name STREQUAL "emit_main_args")
-        set(e2e_extra_args -DEXE_ARGS=alpha)
-    endif()
-    # The fixtures declare `package fixtures` and import nothing, so no extra
-    # module roots are needed.
-    set(e2e_roots)
-    set(e2e_generated "${SIMSE_E2E_DIR}/${e2e_name}.cpp")
-    set(e2e_expected "${SIMSE_REPO_ROOT}/tests/golden/${e2e_name}.stdout.expected")
-    set(e2e_actual "${SIMSE_E2E_DIR}/${e2e_name}.stdout.actual")
-
-    add_custom_command(
-            OUTPUT "${e2e_generated}"
-            COMMAND "${CMAKE_COMMAND}" -E make_directory "${SIMSE_E2E_DIR}"
-            COMMAND $<TARGET_FILE:simse_transpile> "${e2e_fixture}" ${e2e_roots} -o "${e2e_generated}"
-            DEPENDS "${e2e_fixture}" simse_transpile
-            COMMENT "T8: transpiling ${e2e_name}.simse"
-            VERBATIM)
-
-    add_executable(e2e_${e2e_name} "${e2e_generated}")
-    target_include_directories(e2e_${e2e_name} PRIVATE "${SIMSE_REPO_ROOT}")
-    if(e2e_name STREQUAL "native_readfile")
-        target_link_libraries(e2e_${e2e_name} PRIVATE simse_native)
-    endif()
-    set_target_properties(e2e_${e2e_name} PROPERTIES
-            RUNTIME_OUTPUT_DIRECTORY "${SIMSE_E2E_DIR}")
-
-    add_custom_target(e2e_${e2e_name}_check ALL
-            COMMAND "${CMAKE_COMMAND}"
-                    -DEXE=$<TARGET_FILE:e2e_${e2e_name}>
-                    ${e2e_extra_args}
-                    -DOUT=${e2e_actual}
-                    -DWORKDIR=${SIMSE_REPO_ROOT}
-                    -P "${SIMSE_REPO_ROOT}/tests/run_capture.cmake"
-            COMMAND "${CMAKE_COMMAND}" -E compare_files --ignore-eol
-                    "${e2e_actual}" "${e2e_expected}"
-            DEPENDS e2e_${e2e_name}
-            COMMENT "T8: running e2e_${e2e_name} and comparing stdout"
-            VERBATIM)
-endforeach()
 
 # --- T11: differential scanner (hand-written C++ vs transpiled Simse) --------
 # Scanner.simse is transpiled and compiled with a small hand-written driver. The
@@ -462,7 +428,7 @@ set(SIMSE_STAGE1_INPUT "cppsrc/compiler/Driver.simse")
 set(SIMSE_STAGE1_GENERATED "${SIMSE_STAGE1_GEN_DIR}/simse_out.cpp")
 set(SIMSE_STAGE1_KEPT "${SIMSE_STAGE1_GEN_DIR}/simse_out1.cpp")
 set(SIMSE_STAGE1_REGEN "${SIMSE_STAGE1_RUN_DIR}/simse_out.cpp")
-set(SIMSE_STAGE1_FIXTURE "tests/fixtures/emit_lang.simse")
+set(SIMSE_STAGE1_FIXTURE "stress/language-tour/src/main.simse")
 set(SIMSE_STAGE1_FIXTURE_REF "${SIMSE_STAGE1_DIR}/fixture_ref.cpp")
 set(SIMSE_STAGE1_FIXTURE_B "${SIMSE_STAGE1_DIR}/fixture_b.cpp")
 
