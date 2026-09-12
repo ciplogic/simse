@@ -33,6 +33,10 @@ add_library(simse_lib STATIC
         cppsrc/parser/Parser.h
         cppsrc/sema/Sema.cpp
         cppsrc/sema/Sema.h
+        cppsrc/linear/Linear.cpp
+        cppsrc/linear/Linear.h
+        cppsrc/linear/Simplify.cpp
+        cppsrc/linear/Simplify.h
         cppsrc/codegen/Codegen.cpp
         cppsrc/codegen/Codegen.h
         cppsrc/skelparser/SkeletonParser.cpp
@@ -346,10 +350,13 @@ add_custom_command(
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/lex"
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/parser"
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/sema"
+                --module-root "${SIMSE_REPO_ROOT}/cppsrc/linear"
                 -o "${SIMSE_CODEGEN_GENERATED}"
         DEPENDS
                 "${SIMSE_REPO_ROOT}/cppsrc/codegen/Codegen.simse"
                 "${SIMSE_REPO_ROOT}/cppsrc/sema/Sema.simse"
+                "${SIMSE_REPO_ROOT}/cppsrc/linear/Linear.simse"
+                "${SIMSE_REPO_ROOT}/cppsrc/linear/Simplify.simse"
                 "${SIMSE_REPO_ROOT}/cppsrc/parser/Parser.simse"
                 "${SIMSE_REPO_ROOT}/cppsrc/lex/Scanner.simse"
                 "${SIMSE_REPO_ROOT}/cppsrc/common/common.simse"
@@ -408,6 +415,8 @@ set(SIMSE_ALL_MIRRORS
         "${SIMSE_REPO_ROOT}/cppsrc/compiler/Driver.simse"
         "${SIMSE_REPO_ROOT}/cppsrc/codegen/Codegen.simse"
         "${SIMSE_REPO_ROOT}/cppsrc/sema/Sema.simse"
+        "${SIMSE_REPO_ROOT}/cppsrc/linear/Linear.simse"
+        "${SIMSE_REPO_ROOT}/cppsrc/linear/Simplify.simse"
         "${SIMSE_REPO_ROOT}/cppsrc/parser/Parser.simse"
         "${SIMSE_REPO_ROOT}/cppsrc/lex/Scanner.simse"
         "${SIMSE_REPO_ROOT}/cppsrc/skelparser/SkeletonParser.simse"
@@ -438,6 +447,7 @@ set(SIMSE_COMPILER_ROOTS
         --module-root cppsrc/skelparser
         --module-root cppsrc/parser
         --module-root cppsrc/sema
+        --module-root cppsrc/linear
         --module-root cppsrc/codegen
         --module-root cppsrc/compiler)
 

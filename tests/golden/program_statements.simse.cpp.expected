@@ -9,23 +9,21 @@ void loopForever();
 Int compute(Int n) {
     Int total = 0;
     Int i = 0;
-    while (i < n) {
-        if (i == 3) {
-            i = i + 1;
-            continue;
-        }
-        total = total + i;
-        i = i + 1;
-    }
-    if (total > 10) {
-        return total;
-    } else {
-        return -total;
-    }
+    L1:;
+    if (!(i < n)) goto L2;
+    if (!(i == 3)) goto L4;
+    i = i + 1;
+    goto L1;
+    L4:;
+    total = total + i;
+    i = i + 1;
+    goto L1;
+    L2:;
+    if (!(total > 10)) goto L6;
+    return total;
+    L6:;
+    return -total;
 }
 // program_statements.simse:20
 void loopForever() {
-    while (true) {
-        break;
-    }
 }

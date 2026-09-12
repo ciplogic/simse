@@ -94,6 +94,14 @@ namespace ast {
         Break,
         Continue,
         ExprStmt,
+        // Post-lowering forms (impl_specs/linear-lowering.md). The parser never
+        // produces them: the linear pass replaces If/While/Switch/Break/Continue
+        // with labels, jumps and blocks before the C++ emitter runs.
+        Label,   // name: label definition
+        Goto,    // name: unconditional jump target
+        IfTrue,  // name + cond: jump when cond is true
+        IfFalse, // name + cond: jump when cond is false
+        Block,   // body: `{ ... }` scope wrapper
     };
 
     struct Stmt {

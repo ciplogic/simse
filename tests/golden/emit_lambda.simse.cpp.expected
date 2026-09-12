@@ -18,12 +18,14 @@ Int apply(Mapper f, Int value) {
 Int countIf(std::shared_ptr<List<Int>> items, Predicate predicate) {
     Int count = 0;
     Cursor<Int> c = simse_cursorOf(items);
-    while (c.hasValue()) {
-        if (predicate(c.value())) {
-            count = count + 1;
-        }
-        c = c.next();
-    }
+    L1:;
+    if (!(c.hasValue())) goto L2;
+    if (!(predicate(c.value()))) goto L4;
+    count = count + 1;
+    L4:;
+    c = c.next();
+    goto L1;
+    L2:;
     return count;
 }
 // emit_lambda.simse:23
@@ -48,9 +50,9 @@ int main() {
     std::cout << std::boolalpha << (countIf(view, isEven)) << std::endl;
     std::cout << std::boolalpha << (countIf(view, [=](Int v) -> Bool { return v > 2; })) << std::endl;
     Mapper big = [=](Int v) -> Int {
-    if (v > 0) {
-        return v * 100;
-    }
+    if (!(v > 0)) goto L2;
+    return v * 100;
+    L2:;
     return 0;
 };
     std::cout << std::boolalpha << (big(3)) << std::endl;

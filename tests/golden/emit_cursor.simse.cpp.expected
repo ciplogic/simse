@@ -9,10 +9,12 @@ Int headSum(std::shared_ptr<List<Int>> items);
 Int sum(std::shared_ptr<List<Int>> items) {
     Int total = 0;
     Cursor<Int> c = simse_cursorOf(items);
-    while (c.hasValue()) {
-        total = total + c.value();
-        c = c.next();
-    }
+    L1:;
+    if (!(c.hasValue())) goto L2;
+    total = total + c.value();
+    c = c.next();
+    goto L1;
+    L2:;
     return total;
 }
 // emit_cursor.simse:14
@@ -20,10 +22,12 @@ Int headSum(std::shared_ptr<List<Int>> items) {
     Cursor<Int> full = simse_cursorOf(items);
     Cursor<Int> head = full.slice(2);
     Int total = 0;
-    while (head.hasValue()) {
-        total = total + head.value();
-        head = head.next();
-    }
+    L1:;
+    if (!(head.hasValue())) goto L2;
+    total = total + head.value();
+    head = head.next();
+    goto L1;
+    L2:;
     return total;
 }
 // emit_cursor.simse:25

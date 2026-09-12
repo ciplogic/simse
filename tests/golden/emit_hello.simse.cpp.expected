@@ -19,16 +19,19 @@ Int bump(Counter& self) {
 int main() {
     Int i = 0;
     Int total = 0;
-    while (i < 5) {
-        total = total + i;
-        i = i + 1;
-    }
+    L1:;
+    if (!(i < 5)) goto L2;
+    total = total + i;
+    i = i + 1;
+    goto L1;
+    L2:;
     Counter c = _make_Counter(10);
-    if (total > 5) {
-        std::cout << std::boolalpha << (total) << std::endl;
-    } else {
-        std::cout << std::boolalpha << (bump(c)) << std::endl;
-    }
+    if (!(total > 5)) goto L4;
+    std::cout << std::boolalpha << (total) << std::endl;
+    goto L5;
+    L4:;
+    std::cout << std::boolalpha << (bump(c)) << std::endl;
+    L5:;
     std::cout << std::boolalpha << (true) << std::endl;
     return 0;
 }

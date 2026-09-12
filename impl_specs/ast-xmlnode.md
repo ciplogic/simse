@@ -30,6 +30,9 @@ that corresponds to a source construct with a position carries `line` and
 - declarations: `Module`, `Import`, `DataClass`, `Enum`, `TypeAlias`, `Function`;
 - statements: `Stmt.VarDecl`, `Stmt.Assign`, `Stmt.If`, `Stmt.While`,
   `Stmt.Switch`, `Stmt.Return`, `Stmt.Break`, `Stmt.Continue`, `Stmt.ExprStmt`;
+- linear forms (produced only by the lowering pass, `impl_specs/linear-lowering.md`,
+  never by the parser): `Stmt.Label`, `Stmt.Goto`, `Stmt.IfTrue`, `Stmt.IfFalse`,
+  `Stmt.Block`;
 - expressions: `Expr.` plus `IntLit`, `FloatLit`, `StrLit`, `CharLit`, `BoolLit`,
   `NullLit`, `Name`, `GenericName`, `Member`, `Call`, `Index`, `Unary`, `Binary`,
   `Lambda`, `Ref`, `Deref`, `Copy`;
@@ -81,6 +84,15 @@ use role names:
 - `Stmt.Return` - child `Value` (when a value is returned).
 - `Stmt.Break`, `Stmt.Continue` - no children.
 - `Stmt.ExprStmt` - child `Expr`.
+
+After the linear lowering pass (`impl_specs/linear-lowering.md`) a body contains
+only these statement forms:
+
+- `Stmt.Label` - attribute `name` (the label text).
+- `Stmt.Goto` - attribute `name` (the jump target).
+- `Stmt.IfTrue`/`Stmt.IfFalse` - attribute `name` (the jump target), child `Cond`.
+- `Stmt.Block` - child `Body` (a container of statements), emitted as `{ ... }`.
+- the plain statements above (VarDecl, Assign, Return, ExprStmt).
 
 ## Expressions
 

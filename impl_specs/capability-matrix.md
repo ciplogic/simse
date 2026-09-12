@@ -355,3 +355,59 @@ component-specific):
   goldens, and the two-step bootstrap stay green; transpiling the compiler showed
   no measurable wall-clock change (~340 ms either way), since the removed copies
   were small lists.
+- **XmlNode is passed by raw pointer through the read-only mirrors.** `*value`
+  now lowers to `&name` / `simse_addressOf(expr)` (`rtl/types.hpp`), so a
+  temporary can be addressed for the duration of the call (the earlier form
+  emitted `&prvalue` and did not compile). Migrated to `*XmlNode`: the `common`
+  accessors (`xmlAttr`, `xmlKind`, `xmlIsEmpty`, `xmlChild`/`xmlChildren`,
+  `xmlCount`, `xmlHasChild`, `xmlLine`/`xmlColumn`, `xmlTypeParamNames`,
+  `xmlDecls`, `xmlLambdaParams`, ...; ~590 call sites) and the codegen emitter's
+  node parameters (`expr`, `exprInner`, `lambda`, `inferType`, `type`, `kindOf`,
+  `pointee`, `unifyType`, `emitStmt`, `emitDataClass`, `emitEnum`, ...; 37
+  functions, 205 call-site arguments). Six value contexts keep value semantics
+  with `copy(...)` (`CgFn` construction, the emitter's `selfType`, and the
+  `current`/`actualPtr`/`renamed` locals). Measured on `--root cppsrc` (release):
+  **~340 ms before, ~234 ms with the accessors migrated, ~229 ms with the
+  emitter too** — the emitter parameters add no measurable win at this size, so
+  the remaining cost is elsewhere (scanner/parser and the linear attribute
+  scans). All five differentials, the goldens, and the two-step bootstrap hold.
+- **The remaining by-value node parameters are gone.** Same treatment for the
+  mirror's other stages: codegen (`typeArgsString`, `emitStmts`), parser
+  (`attach`, `container`, `appendTypeParams`), driver (`driverAppendNamed`,
+  `driverAppendDecls`), and sema (18 functions: `resolveType`, `analyzeDecl`,
+  `analyzeFunction`, `analyzeStmt`, `analyzeExpr`, `exprType`, `declareValue`,
+  `checkCallArity`, ...). The dead `genericType(name, List<XmlNode>)` wrapper was
+  deleted in favour of `genericTypeExpr(name, *List<XmlNode>)`. Value contexts
+  keep a copy with `copy(...)`: `attach`'s renamed child, `declareValue`'s
+  `ValueBinding`, and the three `append*` symbol tables. `tools/xmlnode-migrate.mjs`
+  grew `List<XmlNode>` support, CRLF-tolerant brace matching, and no longer strips
+  the address-of star in `*param[i]` / `*param.field` (only a bare `*param`).
+  The regenerated amalgamation has **zero** by-value `XmlNode` / `List<XmlNode>`
+  parameters. Measured on `--root cppsrc` (release, hand-written transpiler):
+  ~36 ms warm (~88 ms cold); the earlier ~229 ms figure could not be reproduced
+  on this machine — the number to profile is the generated compiler
+  (`simse.exe` from `simse_out.cpp`), which is what `simse.sln` builds.
+- **Control flow is lowered to labels and gotos before emission (T26).** A new
+  post-sema pass (`cppsrc/linear/Linear.{h,cpp}` and the `linear` package in
+  `cppsrc/linear/Linear.simse`, `impl_specs/linear-lowering.md`) rewrites every
+  function/method/lambda body into `Stmt.Label`, `Stmt.Goto`, `Stmt.IfTrue`,
+  `Stmt.IfFalse` and `Stmt.Block`; the emitters no longer have If/While/Switch/
+  `Stmt.Block` only when the region declares a variable at its own level (a C++
+  jump may not bypass an initialization still in scope), so most bodies splice
+  flat; a second pass (`cppsrc/linear/Simplify.{h,cpp}` / `Simplify.simse`,
+  `linear::simplifyBody`) then prunes the linear form to a fixed point: jumps to
+  the next statement, the `ifTrue (c) goto A; goto B; A:` -> `ifFalse (c) goto B:`
+  fold, dead statements after a `goto`/`return`, and labels nothing targets.
+  `switch` keeps source-order fallthrough and hoists its subject into an untyped
+  `VarDecl` (evaluated once, as a C++ `switch` subject would be); `for` is not a
+  language feature yet, and the pass is where a future `for` -> `while`
+  desugaring belongs. Labels are `L1..Ln` per body. The two rings agree by
+  construction and the differentials prove it; the compiler's own amalgamation
+  now contains no structured control flow from Simse sources (the only `while`
+  left is the emitter's hand-written argv loop for `main`). Cost, release on
+  `--root cppsrc`, interleaved runs: self-hosted compiler ~+5% (the machine
+  throttled mid-session, so the ratio is the comparable number), amalgamation
+  5368 -> 9445 lines before the simplification pass and 7265 after it, `cl.exe`
+  compile time ~+2.5%, and the hand-written transpiler stays at ~36 ms. Nine
+  `.cpp` goldens were regenerated; all e2e programs, the five differentials and
+  the two-step bootstrap stay green.

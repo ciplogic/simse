@@ -16,19 +16,23 @@ int main() {
     List<Str> names = simse_dict_keys(counts);
     simse_list_sort(names, [=](Str left, Str right) -> Bool { return left < right; });
     Int i = 0;
-    while (i < names.size()) {
-        std::cout << std::boolalpha << (names[i]) << std::endl;
-        i = i + 1;
-    }
+    L1:;
+    if (!(i < names.size())) goto L2;
+    std::cout << std::boolalpha << (names[i]) << std::endl;
+    i = i + 1;
+    goto L1;
+    L2:;
     std::cout << std::boolalpha << (simse_list_contains(names, "c")) << std::endl;
     std::cout << std::boolalpha << (simse_list_contains(names, "z")) << std::endl;
     List<Int> values = simse_dict_values(counts);
     simse_list_sort(values, [=](Int left, Int right) -> Bool { return left < right; });
     Int j = 0;
-    while (j < values.size()) {
-        std::cout << std::boolalpha << (values[j]) << std::endl;
-        j = j + 1;
-    }
+    L3:;
+    if (!(j < values.size())) goto L4;
+    std::cout << std::boolalpha << (values[j]) << std::endl;
+    j = j + 1;
+    goto L3;
+    L4:;
     simse_dict_remove(counts, "a");
     std::cout << std::boolalpha << (simse_dict_size(counts)) << std::endl;
     simse_dict_clear(counts);

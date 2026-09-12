@@ -210,6 +210,24 @@ namespace ast {
                         line(indent, "ExprStmt @" + posStr(s.pos));
                         dumpExpr(*s.expr, indent + 1);
                         break;
+                    case StmtKind::Label:
+                        line(indent, "Label " + s.name + " @" + posStr(s.pos));
+                        break;
+                    case StmtKind::Goto:
+                        line(indent, "Goto " + s.name + " @" + posStr(s.pos));
+                        break;
+                    case StmtKind::IfTrue:
+                    case StmtKind::IfFalse:
+                        line(indent, (s.kind == StmtKind::IfTrue ? "IfTrue " : "IfFalse ") + s.name
+                                      + " @" + posStr(s.pos));
+                        dumpChild(indent + 1, "Cond", s.cond);
+                        break;
+                    case StmtKind::Block:
+                        line(indent, "Block @" + posStr(s.pos));
+                        for (const StmtPtr &child: s.body) {
+                            dumpStmt(*child, indent + 1);
+                        }
+                        break;
                 }
             }
 
@@ -401,6 +419,11 @@ namespace ast {
                 case StmtKind::Break: return "Break";
                 case StmtKind::Continue: return "Continue";
                 case StmtKind::ExprStmt: return "ExprStmt";
+                case StmtKind::Label: return "Label";
+                case StmtKind::Goto: return "Goto";
+                case StmtKind::IfTrue: return "IfTrue";
+                case StmtKind::IfFalse: return "IfFalse";
+                case StmtKind::Block: return "Block";
             }
             return "?";
         }
@@ -528,6 +551,9 @@ namespace ast {
                 attrs.push_back(Attribute("isVar", boolStr(stmt.isVar)));
             } else if (stmt.kind == StmtKind::Assign) {
                 attrs.push_back(Attribute("op", stmt.op));
+            } else if (stmt.kind == StmtKind::Label || stmt.kind == StmtKind::Goto
+                       || stmt.kind == StmtKind::IfTrue || stmt.kind == StmtKind::IfFalse) {
+                attrs.push_back(Attribute("name", stmt.name));
             }
             XmlNode node = makeNode("Stmt", attrs);
             switch (stmt.kind) {
@@ -579,6 +605,16 @@ namespace ast {
                 case StmtKind::ExprStmt:
                     if (stmt.expr) addChild(node, exprToXml("Expr", *stmt.expr));
                     break;
+                case StmtKind::IfTrue:
+                case StmtKind::IfFalse:
+                    if (stmt.cond) addChild(node, exprToXml("Cond", *stmt.cond));
+                    break;
+                case StmtKind::Block: {
+                    XmlNode body = makeNode("Body", List<Attribute>());
+                    for (const StmtPtr &s: stmt.body) addChild(body, stmtToXml(*s));
+                    addChild(node, body);
+                    break;
+                }
                 default:
                     break;
             }

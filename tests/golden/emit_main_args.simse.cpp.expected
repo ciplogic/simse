@@ -13,9 +13,11 @@ int main(int argc, char** argv) {
     }
     std::cout << std::boolalpha << (args.size()) << std::endl;
     Int i = 0;
-    while (i < args.size()) {
-        std::cout << std::boolalpha << (args[i]) << std::endl;
-        i = i + 1;
-    }
+    L1:;
+    if (!(i < args.size())) goto L2;
+    std::cout << std::boolalpha << (args[i]) << std::endl;
+    i = i + 1;
+    goto L1;
+    L2:;
     return 0;
 }

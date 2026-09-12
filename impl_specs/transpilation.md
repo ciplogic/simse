@@ -46,7 +46,9 @@ stage. At minimum, the implementation is expected to separate:
 2. lexing/parsing;
 3. name and type resolution;
 4. generic reification and specialization;
-5. lowering of Simse constructs to C++ constructs; and
+5. lowering of Simse constructs to C++ constructs (`impl_specs/linear-lowering.md`
+   rewrites every body into labels and gotos, then prunes them, before emission,
+   so the emitter only handles the linear statement forms); and
 6. C++ amalgamation and final file emission.
 
 The exact internal data structures and number of stages are implementation

@@ -35,7 +35,7 @@ fun driverNewModule(): XmlNode {
     return XmlNode("Module", List<Attribute>(), &List<XmlNode>())
 }
 
-fun driverAppendNamed(target: XmlNode, source: XmlNode, role: Str): Unit {
+fun driverAppendNamed(target: *XmlNode, source: *XmlNode, role: Str): Unit {
     var i: Int = 0
     while (i < source.Children.size()) {
         if (source.Children[i].name == role) {
@@ -45,7 +45,7 @@ fun driverAppendNamed(target: XmlNode, source: XmlNode, role: Str): Unit {
     }
 }
 
-fun driverAppendDecls(target: XmlNode, source: XmlNode): Unit {
+fun driverAppendDecls(target: *XmlNode, source: *XmlNode): Unit {
     val decls: List<XmlNode> = xmlDecls(source)
     var i: Int = 0
     while (i < decls.size()) {
@@ -226,8 +226,8 @@ fun main(args: List<Str>): Int {
         preludeCanon.append(pathCanonical(preludeFiles[p]))
         preludeNames.append(preludeFiles[p])
         preludeModules.append(parsedPrelude.Value)
-        driverAppendNamed(mergedPrelude, parsedPrelude.Value, "Import")
-        driverAppendDecls(mergedPrelude, parsedPrelude.Value)
+        driverAppendNamed(*mergedPrelude, *parsedPrelude.Value, "Import")
+        driverAppendDecls(*mergedPrelude, *parsedPrelude.Value)
         p = p + 1
     }
     val hasPrelude: Bool = preludeFiles.size() > 0

@@ -17,11 +17,11 @@ fun xmlEmptyNode(): XmlNode {
     return XmlNode("", List<Attribute>(), &List<XmlNode>())
 }
 
-fun xmlIsEmpty(node: XmlNode): Bool {
+fun xmlIsEmpty(node: *XmlNode): Bool {
     return node.name == ""
 }
 
-fun xmlAttr(node: XmlNode, name: Str): Str {
+fun xmlAttr(node: *XmlNode, name: Str): Str {
     var i: Int = 0
     while (i < node.attributes.size()) {
         if (node.attributes[i].name == name) {
@@ -32,11 +32,11 @@ fun xmlAttr(node: XmlNode, name: Str): Str {
     return ""
 }
 
-fun xmlKind(node: XmlNode): Str {
+fun xmlKind(node: *XmlNode): Str {
     return xmlAttr(node, "kind")
 }
 
-fun xmlIntAttr(node: XmlNode, name: Str, fallback: Int): Int {
+fun xmlIntAttr(node: *XmlNode, name: Str, fallback: Int): Int {
     val parsed: Opt<Int> = xmlAttr(node, name).toInt()
     if (parsed.hasValue()) {
         return parsed.value()
@@ -44,16 +44,16 @@ fun xmlIntAttr(node: XmlNode, name: Str, fallback: Int): Int {
     return fallback
 }
 
-fun xmlLine(node: XmlNode): Int {
+fun xmlLine(node: *XmlNode): Int {
     return xmlIntAttr(node, "line", 0)
 }
 
-fun xmlColumn(node: XmlNode): Int {
+fun xmlColumn(node: *XmlNode): Int {
     return xmlIntAttr(node, "column", 0)
 }
 
 // The first child whose element role is `role`, or an empty node.
-fun xmlChild(node: XmlNode, role: Str): XmlNode {
+fun xmlChild(node: *XmlNode, role: Str): XmlNode {
     var i: Int = 0
     while (i < node.Children.size()) {
         if (node.Children[i].name == role) {
@@ -65,7 +65,7 @@ fun xmlChild(node: XmlNode, role: Str): XmlNode {
 }
 
 // Every child whose element role is `role`, in order.
-fun xmlChildren(node: XmlNode, role: Str): List<XmlNode> {
+fun xmlChildren(node: *XmlNode, role: Str): List<XmlNode> {
     var out: List<XmlNode> = List<XmlNode>()
     var i: Int = 0
     while (i < node.Children.size()) {
@@ -77,7 +77,7 @@ fun xmlChildren(node: XmlNode, role: Str): List<XmlNode> {
     return out
 }
 
-fun xmlCount(node: XmlNode, role: Str): Int {
+fun xmlCount(node: *XmlNode, role: Str): Int {
     var count: Int = 0
     var i: Int = 0
     while (i < node.Children.size()) {
@@ -89,7 +89,7 @@ fun xmlCount(node: XmlNode, role: Str): Int {
     return count
 }
 
-fun xmlHasChild(node: XmlNode, role: Str): Bool {
+fun xmlHasChild(node: *XmlNode, role: Str): Bool {
     var i: Int = 0
     while (i < node.Children.size()) {
         if (node.Children[i].name == role) {
@@ -101,28 +101,28 @@ fun xmlHasChild(node: XmlNode, role: Str): Bool {
 }
 
 // The `name` attributes of a declaration's `TypeParam` children, in order.
-fun xmlTypeParamNames(node: XmlNode): List<Str> {
+fun xmlTypeParamNames(node: *XmlNode): List<Str> {
     val params: List<XmlNode> = xmlChildren(node, "TypeParam")
     var names: List<Str> = List<Str>()
     var i: Int = 0
     while (i < params.size()) {
-        names.append(xmlAttr(params[i], "name"))
+        names.append(xmlAttr(*params[i], "name"))
         i = i + 1
     }
     return names
 }
 
-fun xmlIsDecl(node: XmlNode): Bool {
+fun xmlIsDecl(node: *XmlNode): Bool {
     val name: Str = node.name
     return name == "DataClass" || name == "Enum" || name == "TypeAlias" || name == "Function"
 }
 
 // The declaration children of a Module (imports excluded), in source order.
-fun xmlDecls(module: XmlNode): List<XmlNode> {
+fun xmlDecls(module: *XmlNode): List<XmlNode> {
     var out: List<XmlNode> = List<XmlNode>()
     var i: Int = 0
     while (i < module.Children.size()) {
-        if (xmlIsDecl(module.Children[i])) {
+        if (xmlIsDecl(*module.Children[i])) {
             out.append(module.Children[i])
         }
         i = i + 1
@@ -130,7 +130,7 @@ fun xmlDecls(module: XmlNode): List<XmlNode> {
     return out
 }
 
-fun xmlHasImports(module: XmlNode): Bool {
+fun xmlHasImports(module: *XmlNode): Bool {
     var i: Int = 0
     while (i < module.Children.size()) {
         if (module.Children[i].name == "Import") {
@@ -143,7 +143,7 @@ fun xmlHasImports(module: XmlNode): Bool {
 
 // The comma-joined `params` attribute of a lambda, split back into names. An
 // empty attribute means no parameters (not one empty name).
-fun xmlLambdaParams(expr: XmlNode): List<Str> {
+fun xmlLambdaParams(expr: *XmlNode): List<Str> {
     val raw: Str = xmlAttr(expr, "params")
     if (raw == "") {
         return List<Str>()

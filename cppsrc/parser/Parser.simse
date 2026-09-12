@@ -127,15 +127,15 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
     }
 
     // Appends `child` under `parent` with the child's element role set to `role`.
-    // `parent.Children` is a shared list, so this works even though `parent` is a
-    // value parameter.
-    fun attach(parent: XmlNode, role: Str, child: XmlNode): Unit {
-        var renamed: XmlNode = child
+    // `parent.Children` is a shared list handle, so the append reaches the caller's
+    // node even though `parent` is a non-owning pointer.
+    fun attach(parent: *XmlNode, role: Str, child: *XmlNode): Unit {
+        var renamed: XmlNode = copy(child)
         renamed.name = role
         parent.Children.append(renamed)
     }
 
-    fun container(name: Str, children: List<XmlNode>): XmlNode {
+    fun container(name: Str, children: *List<XmlNode>): XmlNode {
         var box: XmlNode = XmlNode(name, List<Attribute>(), &List<XmlNode>())
         var i: Int = 0
         while (i < children.size()) {
@@ -146,7 +146,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
     }
 
     // The names are read only; a `*List<Str>` avoids copying the caller's list.
-    fun appendTypeParams(node: XmlNode, names: *List<Str>): Unit {
+    fun appendTypeParams(node: *XmlNode, names: *List<Str>): Unit {
         var i: Int = 0
         while (i < names.size()) {
             var attrs: List<Attribute> = List<Attribute>()
@@ -337,7 +337,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         var attrs: List<Attribute> = this.posAttrs("DataClass", pos.line, pos.column)
         attrs.append(Attribute("name", name))
         var node: XmlNode = XmlNode("DataClass", attrs, &List<XmlNode>())
-        this.appendTypeParams(node, *typeParams)
+        this.appendTypeParams(*node, *typeParams)
         var fi: Int = 0
         while (fi < fields.size()) {
             node.Children.append(fields[fi])
@@ -413,7 +413,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         var attrs: List<Attribute> = this.posAttrs("Enum", pos.line, pos.column)
         attrs.append(Attribute("name", name))
         var node: XmlNode = XmlNode("Enum", attrs, &List<XmlNode>())
-        this.appendTypeParams(node, *typeParams)
+        this.appendTypeParams(*node, *typeParams)
         var i: Int = 0
         while (i < members.size()) {
             node.Children.append(members[i])
@@ -447,7 +447,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         var attrs: List<Attribute> = this.posAttrs("TypeAlias", pos.line, pos.column)
         attrs.append(Attribute("name", name))
         var node: XmlNode = XmlNode("TypeAlias", attrs, &List<XmlNode>())
-        this.appendTypeParams(node, *typeParams)
+        this.appendTypeParams(*node, *typeParams)
         node.Children.append(target)
         return node
     }
@@ -619,7 +619,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         if (hasReceiver) {
             node.Children.append(receiverNode)
         }
-        this.appendTypeParams(node, *functionTypeParams)
+        this.appendTypeParams(*node, *functionTypeParams)
         var pi: Int = 0
         while (pi < params.size()) {
             node.Children.append(params[pi])
@@ -629,7 +629,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
             node.Children.append(returnType)
         }
         if (hasBody) {
-            node.Children.append(this.container("Body", body))
+            node.Children.append(this.container("Body", *body))
         }
         return node
     }
@@ -825,13 +825,13 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
             var attrs: List<Attribute> = this.posAttrs("Stmt.Assign", pos.line, pos.column)
             attrs.append(Attribute("op", op))
             var node: XmlNode = XmlNode("Stmt", attrs, &List<XmlNode>())
-            this.attach(node, "Target", expr.node)
-            this.attach(node, "Value", value.node)
+            this.attach(*node, "Target", *expr.node)
+            this.attach(*node, "Value", *value.node)
             return node
         }
         var attrs: List<Attribute> = this.posAttrs("Stmt.ExprStmt", pos.line, pos.column)
         var node: XmlNode = XmlNode("Stmt", attrs, &List<XmlNode>())
-        this.attach(node, "Expr", expr.node)
+        this.attach(*node, "Expr", *expr.node)
         return node
     }
 
@@ -870,7 +870,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
             node.Children.append(typeNode)
         }
         if (init.node.name != "") {
-            this.attach(node, "Init", init.node)
+            this.attach(*node, "Init", *init.node)
         }
         return node
     }
@@ -911,10 +911,10 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         }
         var attrs: List<Attribute> = this.posAttrs("Stmt.If", pos.line, pos.column)
         var node: XmlNode = XmlNode("Stmt", attrs, &List<XmlNode>())
-        this.attach(node, "Cond", cond.node)
-        node.Children.append(this.container("Then", thenBody))
+        this.attach(*node, "Cond", *cond.node)
+        node.Children.append(this.container("Then", *thenBody))
         if (hasElse) {
-            node.Children.append(this.container("Else", elseBody))
+            node.Children.append(this.container("Else", *elseBody))
         }
         return node
     }
@@ -938,8 +938,8 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         }
         var attrs: List<Attribute> = this.posAttrs("Stmt.While", pos.line, pos.column)
         var node: XmlNode = XmlNode("Stmt", attrs, &List<XmlNode>())
-        this.attach(node, "Cond", cond.node)
-        node.Children.append(this.container("Body", body))
+        this.attach(*node, "Cond", *cond.node)
+        node.Children.append(this.container("Body", *body))
         return node
     }
 
@@ -1002,7 +1002,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
             cattrs.append(Attribute("column", casePos.column.toString()))
             var cnode: XmlNode = XmlNode("Case", cattrs, &List<XmlNode>())
             if (!isDefault) {
-                this.attach(cnode, "Label", label)
+                this.attach(*cnode, "Label", *label)
             }
             var ai: Int = 0
             while (ai < arm.size()) {
@@ -1016,7 +1016,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         }
         var attrs: List<Attribute> = this.posAttrs("Stmt.Switch", pos.line, pos.column)
         var node: XmlNode = XmlNode("Stmt", attrs, &List<XmlNode>())
-        this.attach(node, "Cond", cond.node)
+        this.attach(*node, "Cond", *cond.node)
         var ci: Int = 0
         while (ci < cases.size()) {
             node.Children.append(cases[ci])
@@ -1038,7 +1038,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         var attrs: List<Attribute> = this.posAttrs("Stmt.Return", pos.line, pos.column)
         var node: XmlNode = XmlNode("Stmt", attrs, &List<XmlNode>())
         if (value.node.name != "") {
-            this.attach(node, "Value", value.node)
+            this.attach(*node, "Value", *value.node)
         }
         return node
     }
@@ -1079,8 +1079,8 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
             var attrs: List<Attribute> = this.posAttrs("Expr.Binary", left.line, left.column)
             attrs.append(Attribute("op", op))
             var node: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
-            this.attach(node, "Lhs", left.node)
-            this.attach(node, "Rhs", right.node)
+            this.attach(*node, "Lhs", *left.node)
+            this.attach(*node, "Rhs", *right.node)
             left = ExprNode(node, left.line, left.column)
         }
         return left
@@ -1097,7 +1097,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
             var attrs: List<Attribute> = this.posAttrs("Expr.Unary", pos.line, pos.column)
             attrs.append(Attribute("op", op))
             var node: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
-            this.attach(node, "Operand", operand.node)
+            this.attach(*node, "Operand", *operand.node)
             return ExprNode(node, pos.line, pos.column)
         }
         if (this.checkText("&")) {
@@ -1108,7 +1108,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
             }
             var attrs: List<Attribute> = this.posAttrs("Expr.Ref", pos.line, pos.column)
             var node: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
-            this.attach(node, "Operand", operand.node)
+            this.attach(*node, "Operand", *operand.node)
             return ExprNode(node, pos.line, pos.column)
         }
         if (this.checkText("*")) {
@@ -1119,7 +1119,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
             }
             var attrs: List<Attribute> = this.posAttrs("Expr.Deref", pos.line, pos.column)
             var node: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
-            this.attach(node, "Operand", operand.node)
+            this.attach(*node, "Operand", *operand.node)
             return ExprNode(node, pos.line, pos.column)
         }
         return this.parsePostfix()
@@ -1156,10 +1156,10 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
                 }
                 var attrs: List<Attribute> = this.posAttrs("Expr.Call", expr.line, expr.column)
                 var node: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
-                this.attach(node, "Callee", expr.node)
+                this.attach(*node, "Callee", *expr.node)
                 var ai: Int = 0
                 while (ai < args.size()) {
-                    this.attach(node, "Arg", args[ai])
+                    this.attach(*node, "Arg", *args[ai])
                     ai = ai + 1
                 }
                 expr = ExprNode(node, expr.line, expr.column)
@@ -1174,8 +1174,8 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
                 }
                 var attrs: List<Attribute> = this.posAttrs("Expr.Index", expr.line, expr.column)
                 var node: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
-                this.attach(node, "Receiver", expr.node)
-                this.attach(node, "Index", index.node)
+                this.attach(*node, "Receiver", *expr.node)
+                this.attach(*node, "Index", *index.node)
                 expr = ExprNode(node, expr.line, expr.column)
             } else if (this.matchText(".")) {
                 val name: Str = this.expectName()
@@ -1185,7 +1185,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
                 var attrs: List<Attribute> = this.posAttrs("Expr.Member", expr.line, expr.column)
                 attrs.append(Attribute("name", name))
                 var node: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
-                this.attach(node, "Receiver", expr.node)
+                this.attach(*node, "Receiver", *expr.node)
                 expr = ExprNode(node, expr.line, expr.column)
             } else {
                 break
@@ -1253,7 +1253,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
                 }
                 var attrs: List<Attribute> = this.posAttrs("Expr.Copy", pos.line, pos.column)
                 var node: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
-                this.attach(node, "Operand", inner.node)
+                this.attach(*node, "Operand", *inner.node)
                 return ExprNode(node, pos.line, pos.column)
             }
             if (this.peek(1).text == "<") {
@@ -1362,7 +1362,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
             }
             var sattrs: List<Attribute> = this.posAttrs("Stmt.ExprStmt", value.line, value.column)
             var snode: XmlNode = XmlNode("Stmt", sattrs, &List<XmlNode>())
-            this.attach(snode, "Expr", value.node)
+            this.attach(*snode, "Expr", *value.node)
             body.append(snode)
         }
 
@@ -1374,7 +1374,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
             node.Children.append(paramTypes[i])
             i = i + 1
         }
-        node.Children.append(this.container("Body", body))
+        node.Children.append(this.container("Body", *body))
         return ExprNode(node, pos.line, pos.column)
     }
 }

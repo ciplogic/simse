@@ -1,5 +1,8 @@
 #include "Codegen.h"
 
+#include "../linear/Linear.h"
+#include "../linear/Simplify.h"
+
 #include <string>
 
 using ast::DeclKind;
@@ -590,7 +593,10 @@ namespace codegen {
                     line(1, "}");
                 }
                 curReturnType = decl.returnType;
-                emitStmts(decl.body, 1);
+                // Structured control flow is lowered to labels/gotos and then
+                // simplified before emission (impl_specs/linear-lowering.md);
+                // the emitter below only knows the linear forms.
+                emitStmts(linear::simplifyBody(linear::lowerBody(decl.body)), 1);
                 if (failed) return;
                 line(0, "}");
             }
@@ -644,42 +650,6 @@ namespace codegen {
                         line(level, expr(*stmt.target, 0) + " = "
                                      + expr(*stmt.value, 0, inferType(*stmt.target)) + ";");
                         return;
-                    case StmtKind::If:
-                        line(level, "if (" + expr(*stmt.cond, 0) + ") {");
-                        emitStmts(stmt.thenBody, level + 1);
-                        if (failed) return;
-                        if (stmt.hasElse) {
-                            line(level, "} else {");
-                            emitStmts(stmt.elseBody, level + 1);
-                            if (failed) return;
-                        }
-                        line(level, "}");
-                        return;
-                    case StmtKind::While:
-                        line(level, "while (" + expr(*stmt.cond, 0) + ") {");
-                        emitStmts(stmt.body, level + 1);
-                        if (failed) return;
-                        line(level, "}");
-                        return;
-                    case StmtKind::Switch: {
-                        line(level, "switch (" + expr(*stmt.cond, 0) + ") {");
-                        for (const ast::SwitchCase &switchCase: stmt.cases) {
-                            if (switchCase.isDefault) {
-                                line(level + 1, "default:");
-                            } else {
-                                line(level + 1, "case " + expr(*switchCase.label, 0) + ":");
-                            }
-                            // Each arm is emitted as a block so declarations stay
-                            // scoped to it; control still falls through to the next
-                            // label unless the arm ends in `break`.
-                            line(level + 1, "{");
-                            emitStmts(switchCase.body, level + 2);
-                            if (failed) return;
-                            line(level + 1, "}");
-                        }
-                        line(level, "}");
-                        return;
-                    }
                     case StmtKind::Return:
                         if (stmt.returnValue) {
                             line(level, "return " + expr(*stmt.returnValue, 0, curReturnType) + ";");
@@ -687,14 +657,34 @@ namespace codegen {
                             line(level, "return;");
                         }
                         return;
-                    case StmtKind::Break:
-                        line(level, "break;");
+                    case StmtKind::Label:
+                        line(level, stmt.name + ":;");
                         return;
-                    case StmtKind::Continue:
-                        line(level, "continue;");
+                    case StmtKind::Goto:
+                        line(level, "goto " + stmt.name + ";");
+                        return;
+                    case StmtKind::IfTrue:
+                        line(level, "if (" + expr(*stmt.cond, 0) + ") goto " + stmt.name + ";");
+                        return;
+                    case StmtKind::IfFalse:
+                        line(level, "if (!(" + expr(*stmt.cond, 0) + ")) goto " + stmt.name + ";");
+                        return;
+                    case StmtKind::Block:
+                        line(level, "{");
+                        emitStmts(stmt.body, level + 1);
+                        if (failed) return;
+                        line(level, "}");
                         return;
                     case StmtKind::ExprStmt:
                         line(level, expr(*stmt.expr, 0) + ";");
+                        return;
+                    case StmtKind::If:
+                    case StmtKind::While:
+                    case StmtKind::Switch:
+                    case StmtKind::Break:
+                    case StmtKind::Continue:
+                        fail(stmt.pos, "internal: structured statement reached the emitter "
+                                       "(linear lowering did not run)");
                         return;
                 }
             }
@@ -1211,7 +1201,7 @@ namespace codegen {
                 } else {
                     Str saved = out;
                     out.clear();
-                    emitStmts(e.body, 1);
+                    emitStmts(linear::simplifyBody(linear::lowerBody(e.body)), 1);
                     body = out;
                     out = saved;
                 }

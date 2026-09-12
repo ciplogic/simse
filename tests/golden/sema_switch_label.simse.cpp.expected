@@ -11,14 +11,9 @@ Int f() {
 }
 // sema_switch_label.simse:7
 Int pick(Int n) {
-    switch (n) {
-        case f():
-        {
-            return 1;
-        }
-        default:
-        {
-            return 0;
-        }
-    }
+    auto simse_sw_1 = n;
+    if (!(simse_sw_1 == f())) goto L4;
+    return 1;
+    L4:;
+    return 0;
 }

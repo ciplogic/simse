@@ -98,10 +98,13 @@ No new RTL operations were required for the v1 subset. Specifically:
 
 - Boxing (`&value`) lowers to `std::make_shared<std::remove_cvref_t<decltype(...)>>(value)`,
   which comes from `<memory>` via `cppsrc/rtl/simse.hpp`.
-- `*value` (address of an lvalue) lowers to `&value` — a raw pointer, no copy;
-  this is what read-only `*List<T>` parameters use at their call sites.
-  `*ref` lowers to `.get()` on a `std::shared_ptr`; `*ptr` lowers to `*ptr`;
-  `copy(x)` lowers to `*(x)` for references/pointers and a plain copy otherwise.
+- `*value` (address of a value) lowers to `&name` for a plain name and to
+  `simse_addressOf(expr)` otherwise. `simse_addressOf` (`rtl/types.hpp`) binds
+  lvalues and temporaries, so a call result can be passed as a pointer for the
+  duration of the call without copying; read-only `*XmlNode` / `*List<T>`
+  parameters use this form at their call sites. `*ref` lowers to `.get()` on a
+  `std::shared_ptr`; `*ptr` lowers to `*ptr`; `copy(x)` lowers to `*(x)` for
+  references/pointers and a plain copy otherwise.
 - `&List<T>()` construction would use the existing `makeList<T>()`, but the v1
   subset does not emit it (see gaps below).
 

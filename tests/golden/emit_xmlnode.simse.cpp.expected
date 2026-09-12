@@ -46,64 +46,91 @@ std::shared_ptr<List<XmlNode>> oneChild(XmlNode child) {
 Str escapeText(Str text) {
     Str out = Str();
     Int i = 0;
-    while (i < text.size()) {
+    L1:;
+    if (!(i < text.size())) goto L2;
+    {
         Char ch = text[i];
-        if (ch == '\\') {
-            simse_str_append(out, '\\');
-            simse_str_append(out, '\\');
-        } else {
-            if (ch == '\n') {
-                simse_str_append(out, '\\');
-                simse_str_append(out, 'n');
-            } else {
-                if (ch == '\r') {
-                    simse_str_append(out, '\\');
-                    simse_str_append(out, 'r');
-                } else {
-                    if (ch == '\t') {
-                        simse_str_append(out, '\\');
-                        simse_str_append(out, 't');
-                    } else {
-                        if (ch == '\'') {
-                            simse_str_append(out, '\\');
-                            simse_str_append(out, '\'');
-                        } else {
-                            simse_str_append(out, ch);
-                        }
-                    }
-                }
-            }
-        }
+        if (ch == '\\') goto L3;
+        goto L4;
+        L3:;
+        simse_str_append(out, '\\');
+        simse_str_append(out, '\\');
+        goto L5;
+        L4:;
+        if (ch == '\n') goto L6;
+        goto L7;
+        L6:;
+        simse_str_append(out, '\\');
+        simse_str_append(out, 'n');
+        goto L8;
+        L7:;
+        if (ch == '\r') goto L9;
+        goto L10;
+        L9:;
+        simse_str_append(out, '\\');
+        simse_str_append(out, 'r');
+        goto L11;
+        L10:;
+        if (ch == '\t') goto L12;
+        goto L13;
+        L12:;
+        simse_str_append(out, '\\');
+        simse_str_append(out, 't');
+        goto L14;
+        L13:;
+        if (ch == '\'') goto L15;
+        goto L16;
+        L15:;
+        simse_str_append(out, '\\');
+        simse_str_append(out, '\'');
+        goto L17;
+        L16:;
+        simse_str_append(out, ch);
+        L17:;
+        L14:;
+        L11:;
+        L8:;
+        L5:;
         i = i + 1;
     }
+    goto L1;
+    L2:;
     return out;
 }
 // emit_xmlnode.simse:68
 Str indentation(Int depth) {
     Str out = Str();
     Int i = 0;
-    while (i < depth * 2) {
-        simse_str_append(out, ' ');
-        i = i + 1;
-    }
+    L1:;
+    if (!(i < depth * 2)) goto L2;
+    simse_str_append(out, ' ');
+    i = i + 1;
+    goto L1;
+    L2:;
     return out;
 }
 // emit_xmlnode.simse:78
 Str dumpNode(XmlNode node, Int depth) {
     Str out = indentation(depth) + node.name;
     Int i = 0;
-    while (i < node.attributes.size()) {
+    L1:;
+    if (!(i < node.attributes.size())) goto L2;
+    {
         Attribute attribute = node.attributes[i];
         out = out + " " + attribute.name + "='" + escapeText(attribute.value) + "'";
         i = i + 1;
     }
+    goto L1;
+    L2:;
     out = out + "\n";
     std::shared_ptr<List<XmlNode>> children = node.Children;
     Int j = 0;
-    while (j < children->size()) {
-        out = out + dumpNode((*children)[j], depth + 1);
-        j = j + 1;
-    }
+    L3:;
+    if (!(j < children->size())) goto L4;
+    out = out + dumpNode((*children)[j], depth + 1);
+    j = j + 1;
+    goto L3;
+    L4:;
     return out;
 }
 // emit_xmlnode.simse:97

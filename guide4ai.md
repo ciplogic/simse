@@ -100,8 +100,9 @@ explicit `cppsrc/compiler/Driver.simse` input.
   `xml.simse`, `fs.simse`) declaring the RTL surface.
 - `cppsrc/common/` — `readFile`/`filesInDir`, `StrView`, `xmlutil` (C++ + Simse).
 - `cppsrc/lex/`, `cppsrc/skelparser/`, `cppsrc/parser/`, `cppsrc/sema/`,
-  `cppsrc/codegen/`, `cppsrc/compiler/` — the compiler stages; each has a C++
-  implementation AND a `.simse` mirror.
+  `cppsrc/linear/`, `cppsrc/codegen/`, `cppsrc/compiler/` — the compiler stages;
+  each has a C++ implementation AND a `.simse` mirror. `linear` is the post-sema
+  lowering of control flow to labels/gotos (`impl_specs/linear-lowering.md`).
 - `Compiler.{h,cpp}` — the shared transpile core; `cppsrc/codegen/TranspileMain.cpp`
   — the `simse_transpile` CLI, the C++ compiler driver (the Simse mirror of it
   is `cppsrc/compiler/Driver.simse`).
@@ -125,7 +126,10 @@ Two "rings" that must stay in lockstep:
 that must be byte-identical (the fixed point).
 
 Pipeline (per `impl_specs/transpilation.md`): discover sources -> scan -> parse
-(AST) -> resolve names/types -> reify generics -> lower to C++ -> amalgamate.
+(AST) -> resolve names/types -> reify generics -> lower control flow to
+labels/gotos -> simplify the linear form -> lower to C++ -> amalgamate. The
+emitters only know the linear statement forms (`Stmt.Label`/`Goto`/`IfTrue`/
+`IfFalse`/`Block`); structured `if`/`while`/`switch` never reach emission.
 
 Key design points:
 
