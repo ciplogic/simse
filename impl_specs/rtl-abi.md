@@ -72,8 +72,10 @@ normative layout.
    of that vector: the same 32-byte layout (`Int _len`, `Int _cap`, a 24-byte
    inline buffer unioned with the heap pointer, 4-byte packed), without the
    per-element lifetime machinery the generic `SmallVector` needs. The buffer
-   holds the characters plus the terminating NUL kept at `data()[size()]`, and
-   `size()` excludes the NUL. The inline path is `constexpr`-constructible, so
+   keeps the terminating NUL in its own stored length (`data()[size()]` is always
+   `'\0'`; the empty string is one stored byte), so it is written as part of every
+   growing operation; `Str.size()` excludes it, as the spec requires. The inline
+   path is `constexpr`-constructible, so
    `constexpr Str` works while the text fits inline. Native code that has to talk
    to the standard library goes through `simse_toStdString` /
    `simse_fromStdString` so the same code compiles with either backing.

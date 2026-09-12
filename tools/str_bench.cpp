@@ -117,6 +117,26 @@ int main() {
         return sum;
     });
 
+    bench("build by push_back", [&] {
+        long long sum = 0;
+        for (int i = 0; i < n; i++) {
+            Str value;
+            for (int j = 0; j < 8; j++) value.push_back((char) ('a' + j));
+            sum += digest(value);
+        }
+        return sum;
+    });
+
+    bench("append string", [&] {
+        long long sum = 0;
+        for (int i = 0; i < n; i++) {
+            Str value;
+            value.append("abcd");
+            sum += digest(value);
+        }
+        return sum;
+    });
+
     // The `xmlAttr(node, "name")` shape: a literal crossing a by-value Str
     // parameter.
     bench("arg vs literal", [&] {
@@ -166,6 +186,55 @@ int main() {
             table[key] = (Int) i;
             Opt<Int> found = simse_dict_get(table, key);
             if (found.hasValue()) sum += found.value();
+        }
+        return sum;
+    });
+
+    // ---- List<T> backing (SmallVector vs SIMSE_LIST_STD_VECTOR) -----------
+    bench("List<int> push 4", [&] {
+        long long sum = 0;
+        for (int i = 0; i < n; i++) {
+            List<int> values;
+            for (int j = 0; j < 4; j++) values.push_back(j);
+            sum += values[3];
+        }
+        return sum;
+    });
+
+    bench("List<int> push 64", [&] {
+        long long sum = 0;
+        for (int i = 0; i < n / 10; i++) {
+            List<int> values;
+            for (int j = 0; j < 64; j++) values.push_back(j);
+            sum += values[63];
+        }
+        return sum;
+    });
+
+    bench("List<int> copy 4", [&] {
+        List<int> source;
+        for (int j = 0; j < 4; j++) source.push_back(j);
+        long long sum = 0;
+        for (int i = 0; i < n; i++) {
+            List<int> values(source);
+            sum += values[0] + values[3];
+        }
+        return sum;
+    });
+
+    bench("List<Str> push 8", [&] {
+        long long sum = 0;
+        for (int i = 0; i < n / 10; i++) {
+            List<Str> names;
+            names.push_back("alpha");
+            names.push_back("beta");
+            names.push_back("gamma");
+            names.push_back("delta");
+            names.push_back("epsilon");
+            names.push_back("zeta");
+            names.push_back("eta");
+            names.push_back("theta");
+            sum += (long long) names[7].size() + names[0][0];
         }
         return sum;
     });

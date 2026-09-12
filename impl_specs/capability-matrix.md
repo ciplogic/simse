@@ -516,23 +516,35 @@ component-specific):
   `Int _cap`, a 24-byte inline buffer unioned with the heap pointer, 4-byte
   packed) without the per-element lifetime machinery, because `Char` is trivial —
   growing is a length bump, clearing/shrinking/destruction are length updates,
-  and assigning or appending a whole string is one `memmove` plus the terminator,
-  with the buffer dropping back inline when the text fits. `SmString::assign` /
-  `append` call those one-shot methods instead of `clear` + `reserve` + `resize` +
-  copy + `terminate`, so constructing a `Str` from a literal no longer walks the
-  characters. **`constexpr Str` now works** on the default backing too: the
-  inline buffer is activated and zeroed only while constant evaluating
-  (`std::is_constant_evaluated()`), so the same constructors write through live
-  elements in a constant expression and stay raw storage at runtime, and
-  `SmString`'s size/data/indexing/compare/`find`/`rfind` surface is `constexpr`
-  (the `memcmp`/`strlen`/`memcpy`/`memchr` primitives were swapped for their
+  and assigning or appending a whole string is one move, with the buffer dropping
+  back inline when the text fits. The buffer's **stored length counts the
+  terminating NUL** (`size()` is `_len - 1`, the empty string is `_len == 1`), so
+  `data()[size()]` is `'\0'` by construction: growing writes the new NUL as part
+  of the same operation and `SmString::terminate()` disappeared, along with the
+  `clear` + `reserve` + `resize` + copy + terminate sequences. Two methods per
+  whole-text write: `assign`/`append` take text laid out as a string — a literal,
+  `std::string::data()`, another `Str` — where `[count]` is the terminating NUL,
+  and copy the whole `count + 1` bytes in one move; `assignSubstring` /
+  `appendSubstring` take a window inside a longer string (`substr`, a
+  `(ptr, count)` source that is not terminated at `count`) and copy `count` bytes
+  plus a written NUL. The two cases share the capacity/heap logic through a
+  compile-time parameter, so each method is straight-line code with no flag to
+  fold. **`constexpr
+  Str` works** on the default backing too: the inline buffer is activated and
+  zeroed only while constant evaluating (`std::is_constant_evaluated()`), so the
+  same constructors write through live elements in a constant expression and stay
+  raw storage at runtime, and `SmString`'s
+  size/data/indexing/compare/`find`/`rfind` surface is `constexpr` (the
+  `memcmp`/`strlen`/`memcpy`/`memchr` primitives were swapped for their
   `std::char_traits` spellings, which are constexpr and compile to the same
   intrinsics). `tools/constexpr_probe.cpp` compiles and `static_assert`s on both
-  backings (MSVC's C++20 `std::string` is constexpr as well), and
+  backings (MSVC's C++20 `std::string` is constexpr as well),
   `tools/compare_probe.cpp` checks all six operators with a raw C string on
-  either side, for inline and heap strings. The generic `SmallVector` also
-  stopped type-punning: its inline buffer is a real `T _inlineStore[N]` union
-  member instead of a `reinterpret_cast`-ed byte array, and its inline path is
+  either side for inline and heap strings, and `tools/str_diag.cpp` pins the
+  empty string, the `(ptr, count)` constructor on a non-terminated buffer, and
+  the `data()[size()] == '\0'` invariant. The generic `SmallVector` also stopped
+  type-punning: its inline buffer is a real `T _inlineStore[N]` union member
+  instead of a `reinterpret_cast`-ed byte array, and its inline path is
   constexpr-annotated. Measured as an interleaved A/B against the committed
   (generic-`SmallVector`) headers in the same time window (`/O2`, 4M iterations,
   `tools/str_bench.cpp`): construct from `const char*` 140 -> 58 ms, construct a
@@ -541,11 +553,19 @@ component-specific):
   195 -> 88 ms, `str == "literal"` 212 -> 85 ms, dictionary insert/lookup
   669 -> 474 ms, `find` in a long string unchanged (412 -> 376 ms), and
   `Str == Str` on two inline strings ~1 ns slower (25 -> 29 ms) because the
-  comparison now goes through `char_traits::compare`; `sizeof(Str)` stays 32 and
-  `alignof(Str)` 4 (`tools/size_probe.cpp`), and `tools/str_stress.cpp` soaks
-  20k inline/heap transitions and the "NUL at `size()`" invariant. End to end in
-  the Debug bootstrap (ARM64, `/Od`): `stage1_check` 1.9 s -> **1.2 s** and the
-  hand-written `simse_transpile` 299 -> **228 ms** (both measured with the same
-  invocation, on a quiet machine; the machine throttles up to ~3x, so compare
-  ratios within one window); goldens, the five differentials, the bootstrap
-  fixed point and the cross-backing byte-identity all still hold.
+  comparison now goes through `char_traits::compare`; against the intermediate
+  "explicit NUL after every write" buffer the NUL-in-`_len` convention is neutral
+  on construction/copy/compare and **2.5x faster on `append`** (39 -> 15 ms) and
+  `push_back` runs — and `substr` (the `assignSubstring` path) is unchanged.
+  `sizeof(Str)` stays 32 and `alignof(Str)` 4
+  (`tools/size_probe.cpp`), and `tools/str_stress.cpp` soaks 20k inline/heap
+  transitions and the "NUL at `size()`" invariant. End to end in the Debug
+  bootstrap (ARM64, `/Od`, interleaved on a quiet machine): `stage1_check`
+  1.9 s -> **1.27 s** and the hand-written `simse_transpile` 299 -> **210 ms**;
+  the whole two-step `stage1_check` target (recompile the amalgamation, fixture
+  differential, fixed-point compare) is **3.9 s**, and the self-hoist run alone —
+  the stage-1 compiler transpiling the full compiler source set — is **127 ms**
+  in Release (`/O2 /MD`) and 0.73 s in Debug without `/RTC1`, against 41 ms for
+  the hand-written ring on the same input; goldens, the five differentials, the
+  bootstrap fixed point (both `Str` backings) and the cross-backing
+  byte-identity all still hold.

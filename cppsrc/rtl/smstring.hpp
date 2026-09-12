@@ -40,69 +40,63 @@ public:
 
     // ---- construction -----------------------------------------------------
 
-    constexpr SmString() { 
-        _data._len = 1;
-        _data._storage._inlineStore[0] = 0;
-    }
+    // The buffer starts out as the empty string (its NUL is part of the stored
+    // length), so there is nothing to do here.
+    constexpr SmString() = default;
 
+    // The literal/`const char*` case, which is the hot one (`Str s = "..."`,
+    // `f(x, "literal")`): `strlen` proves the source carries its NUL.
     constexpr SmString(const char* text) {
-        assign(text == nullptr ? "" : text, text == nullptr ? 0 : std::char_traits<char>::length(text));
+        size_type count = text == nullptr ? 0 : std::char_traits<char>::length(text);
+        _data.assign(text == nullptr ? "" : text, (Int) count);
     }
 
-    constexpr SmString(const char* text, size_type count) { 
-        if (count < inlineCapacity) {
-            _data._len = count;
-            std::memcpy(_data._storage._inlineStore, text, count + 1);
-            return;
-        }
-        assign(text, count); }
+    // A window that is not necessarily terminated at `count`.
+    constexpr SmString(const char* text, size_type count) {
+        _data.assignSubstring(text, (Int) count);
+    }
 
-    constexpr SmString(const std::string& text) { assign(text.data(), text.size()); }
+    constexpr SmString(const std::string& text) { _data.assign(text.data(), (Int) text.size()); }
 
     // `Str(count, value)`: a repeated byte (and the std::string-style fill ctor).
     constexpr SmString(size_type count, char value) {
-        ensure(count);
         _data.resize((Int) count);
         if (count > 0) std::char_traits<char>::assign(_data.data(), count, value);
-        terminate();
     }
 
-    constexpr SmString(const SmString& other) { assign(other.data(), other.size()); }
+    constexpr SmString(const SmString& other) { _data.assign(other.data(), (Int) other.size()); }
 
     SmString(SmString&& other) noexcept {
         _data = std::move(other._data);
-        terminate();                 // an inline move copies only the characters
         other._data.clear();
-        other.terminate();
     }
 
     SmString& operator=(const SmString& other) {
-        if (this != &other) assign(other.data(), other.size());
+        if (this != &other) _data.assign(other.data(), (Int) other.size());
         return *this;
     }
 
     SmString& operator=(SmString&& other) noexcept {
         if (this != &other) {
             _data = std::move(other._data);
-            terminate();
             other._data.clear();
-            other.terminate();
         }
         return *this;
     }
 
     constexpr SmString& operator=(const char* text) {
-        assign(text == nullptr ? "" : text, text == nullptr ? 0 : std::char_traits<char>::length(text));
+        size_type count = text == nullptr ? 0 : std::char_traits<char>::length(text);
+        _data.assign(text == nullptr ? "" : text, (Int) count);
         return *this;
     }
 
     SmString& operator=(const std::string& text) {
-        assign(text.data(), text.size());
+        _data.assign(text.data(), (Int) text.size());
         return *this;
     }
 
     SmString& operator=(char value) {
-        assign(&value, 1);
+        _data.assignSubstring(&value, 1);
         return *this;
     }
 
@@ -116,10 +110,7 @@ public:
     size_type capacity() const { return (size_type) _data.capacity(); }
 
     constexpr void reserve(size_type count) { _data.reserve((Int) count + 1); }
-    constexpr void clear() {
-        _data.clear();
-        terminate();
-    }
+    constexpr void clear() { _data.clear(); }
 
     // ---- element access ---------------------------------------------------
 
@@ -150,34 +141,28 @@ public:
 
     // ---- modifiers --------------------------------------------------------
 
-    constexpr void push_back(char value) {
-        _data.push_back(value);
-        terminate();
-    }
+    constexpr void push_back(char value) { _data.push_back(value); }
 
-    constexpr void pop_back() {
-        _data.pop_back();
-        terminate();
-    }
+    constexpr void pop_back() { _data.pop_back(); }
 
     SmString& append(const SmString& text) { return append(text.data(), text.size()); }
     SmString& append(const SmString& text, size_type pos, size_type count) {
         return append(text.data() + clampPos(text.size(), pos), fitted(text.size() - pos, count));
     }
     SmString& append(const char* text) {
-        return append(text, text == nullptr ? 0 : std::char_traits<char>::length(text));
+        size_type count = text == nullptr ? 0 : std::char_traits<char>::length(text);
+        if (count > 0) _data.append(text == nullptr ? "" : text, (Int) count);
+        return *this;
     }
     SmString& append(const char* text, size_type count) {
-        if (text != nullptr && count > 0) _data.append(text, (Int) count);
+        if (text != nullptr && count > 0) _data.appendSubstring(text, (Int) count);
         return *this;
     }
     SmString& append(size_type count, char value) {
         if (count > 0) {
             size_type from = size();
-            ensure(from + count);
             _data.resize((Int) (from + count));
             std::char_traits<char>::assign(_data.data() + from, count, value);
-            terminate();
         }
         return *this;
     }
@@ -189,18 +174,16 @@ public:
         push_back(value);
         return *this;
     }
-
-    // `resize` pads with `value` (default NUL), like std::string.
+    // `resize` pads with `value` (default NUL), like std::string. The NUL after
+    // the text is written by the buffer's `resize`.
     constexpr void resize(size_type count, char value = '\0') {
         if (count < size()) {
             _data.resize((Int) count);
         } else if (count > size()) {
             size_type from = size();
-            ensure(count);
             _data.resize((Int) count);
             std::char_traits<char>::assign(_data.data() + from, count - from, value);
         }
-        terminate();
     }
 
     SmString& insert(size_type pos, const SmString& text) {
@@ -219,7 +202,6 @@ public:
         size_type tail = size() - (from + removed);
         if (tail > 0) std::memmove(_data.data() + from, _data.data() + from + removed, tail);
         _data.resize((Int) (from + tail));
-        terminate();
         return *this;
     }
 
@@ -229,7 +211,6 @@ public:
         size_type removed = fitted(size() - from, count);
         SmString tail(substr(from + removed));
         _data.resize((Int) from);
-        terminate();
         append(text);
         append(tail);
         return *this;
@@ -245,7 +226,7 @@ public:
         size_type from = clampPos(size(), pos);
         size_type len = fitted(size() - from, count);
         SmString result;
-        result.assign(data() + from, len);
+        result._data.assignSubstring(data() + from, (Int) len);
         return result;
     }
 
@@ -309,15 +290,11 @@ public:
 private:
     using Data = StrSmallVector;
 
-    // Characters only; the terminating NUL lives at data()[size()].
+    // The buffer tracks the terminating NUL as part of its stored length, so
+    // `data()[size()]` is always '\0' and no separate terminate pass is needed.
     Data _data;
 
     constexpr void ensure(size_type wanted) { _data.reserve((Int) wanted + 1); }
-
-    constexpr void terminate() {
-        ensure(size());
-        _data.data()[size()] = '\0';
-    }
 
     static constexpr size_type clampPos(size_type length, size_type pos) {
         return pos > length ? length : pos;
@@ -337,12 +314,6 @@ private:
 
     static constexpr size_type fitted(size_type available, size_type count) {
         return count == npos || count > available ? available : count;
-    }
-
-    constexpr void assign(const char* text, size_type count) {
-        // One move plus the terminator: `StrSmallVector::assign` writes both and
-        // drops back to the inline buffer when the text fits.
-        _data.assign(text, (Int) count);
     }
 
     // `memcmp` spelled through char_traits, which is constexpr (and compiles to

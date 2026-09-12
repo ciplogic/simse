@@ -23,6 +23,7 @@ int main() {
     std::printf("SmallVector<Attribute,4>    %zu (align %zu)\n", sizeof(SmallVector<Attribute, 4>),
                 alignof(SmallVector<Attribute, 4>));
     std::printf("List<int>                   %zu\n", sizeof(List<int>));
+    std::printf("List<Str>                   %zu\n", sizeof(List<Str>));
     std::printf("List<Attribute>             %zu\n", sizeof(List<Attribute>));
     std::printf("Array<Int>                  %zu (align %zu)\n", sizeof(Array<Int>), alignof(Array<Int>));
     std::printf("Attribute                   %zu\n", sizeof(Attribute));
