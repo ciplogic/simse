@@ -20,4 +20,30 @@ readLine: 9 lines
 [8] len=24 <last line has no newline>
 after eof the buffer keeps its last line <last line has no newline>
 readLineInto: 9 lines
-both readers agree on every line
+view[0] len=11 <line1 short>
+    first word=<line1>, rest=<short>
+view[1] len=55 <line2 is long enough to spill the inline 23-byte buffer>
+    first word=<line2>, rest=<is long enough to spill the inline 23-byte buffer>
+view[2] len=0 <>
+view[3] len=5 <line4>
+view[4] len=28 <line5 has trailing spaces   >
+    first word=<line5>, rest=<has trailing spaces   >
+view[5] len=0 <>
+view[6] len=23 <01234567890123456789012>
+view[7] len=24 <012345678901234567890123>
+view[8] len=24 <last line has no newline>
+    first word=<last>, rest=<line has no newline>
+readLineView: 9 lines
+all three readers agree on every line
+long fixture: 300012 bytes, one line of 300000
+  into long line starts <0123456789> ends <0123456789>
+readLineInto: 3 lines, lengths
+  [0] 5
+  [1] 300000
+  [2] 4
+  view long line starts <0123456789> ends <0123456789>
+readLineView: 3 lines, lengths
+  [0] 5
+  [1] 300000
+  [2] 4
+both readers agree on the long line too

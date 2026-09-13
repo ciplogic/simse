@@ -77,7 +77,7 @@ inline Opt<ns1_NameKind> ns1_simse_NameKind_fromInt(Int value) {
     if (value == 2) return Opt<ns1_NameKind>::some(ns1_NameKind::Pointer);
     return Opt<ns1_NameKind>::none();
 }
-// cppsrc/codegen/Codegen.simse:141
+// cppsrc/codegen/Codegen.simse:142
 SIMSE_PACK_PUSH
 struct ns1_Emitter {
     List<ns1_CgInput> inputs;
@@ -607,19 +607,19 @@ Str ns1_cgIndent(Int level) {
 }
 // cppsrc/codegen/Codegen.simse:77
 Bool ns1_cgIsRtlTypeName(Str name) {
-    if (!(name == "Int" || name == "Int8" || name == "Int16" || name == "Int32" || name == "Int64" || name == "Float32" || name == "Float64" || name == "Char" || name == "Bool" || name == "Str" || name == "List" || name == "Array" || name == "RawArray" || name == "Opt" || name == "Res" || name == "Dictionary" || name == "SmallVector" || name == "PList" || name == "AstNodeAttribute" || name == "AstXmlNode" || name == "Cursor" || name == "FileStream")) goto L2;
+    if (!(name == "Int" || name == "Int8" || name == "Int16" || name == "Int32" || name == "Int64" || name == "Float32" || name == "Float64" || name == "Char" || name == "Bool" || name == "Str" || name == "List" || name == "Array" || name == "RawArray" || name == "Opt" || name == "Res" || name == "Dictionary" || name == "SmallVector" || name == "PList" || name == "AstNodeAttribute" || name == "AstXmlNode" || name == "Cursor" || name == "FileStream" || name == "StrView")) goto L2;
     return true;
     L2:;
     return false;
 }
-// cppsrc/codegen/Codegen.simse:89
+// cppsrc/codegen/Codegen.simse:90
 Str ns1_cgUnquote(Str text) {
     if (!(text.size() >= 2 && simse_str_substr(text, 0, 1) == "\"" && simse_str_substr(text, text.size() - 1, 1) == "\"")) goto L2;
     return simse_str_substr(text, 1, text.size() - 2);
     L2:;
     return text;
 }
-// cppsrc/codegen/Codegen.simse:97
+// cppsrc/codegen/Codegen.simse:98
 Int ns1_cgPrecedence(AstXmlNode* e) {
     if (!(ns2_xmlKind(e) == AstNodeCategory::ExprBinary)) goto L2;
     {
@@ -666,7 +666,7 @@ Int ns1_cgPrecedence(AstXmlNode* e) {
     L18:;
     return 10;
 }
-// cppsrc/codegen/Codegen.simse:120
+// cppsrc/codegen/Codegen.simse:121
 Bool ns1_cgIsMainArgs(AstXmlNode* decl) {
     List<AstXmlNode> params = ns2_xmlChildren(decl, AstNodeKind::Param);
     if (!(params.size() != 1)) goto L2;
@@ -685,7 +685,7 @@ Bool ns1_cgIsMainArgs(AstXmlNode* decl) {
     L8:;
     return ns2_xmlKind(simse_addressOf(args[0])) == AstNodeCategory::TypeNamed && ns2_xmlAttr(simse_addressOf(args[0]), AstNodeAttributeKind::Name) == "Str";
 }
-// cppsrc/codegen/Codegen.simse:169
+// cppsrc/codegen/Codegen.simse:170
 void ns1_fail(ns1_Emitter& self, AstXmlNode* posNode, Str message) {
     if (!(self.failed)) goto L2;
     return;
@@ -693,29 +693,29 @@ void ns1_fail(ns1_Emitter& self, AstXmlNode* posNode, Str message) {
     self.failed = true;
     self.error = self.curFile + ":" + simse_int_toString(ns2_xmlLine(posNode)) + ":" + simse_int_toString(ns2_xmlColumn(posNode)) + ": " + message;
 }
-// cppsrc/codegen/Codegen.simse:178
+// cppsrc/codegen/Codegen.simse:179
 void ns1_line(ns1_Emitter& self, Int level, Str text) {
     simse_str_appendStr(self.out, ns1_cgIndent(level));
     simse_str_appendStr(self.out, text);
     simse_str_append(self.out, '\n');
 }
-// cppsrc/codegen/Codegen.simse:186
+// cppsrc/codegen/Codegen.simse:187
 void ns1_sourceComment(ns1_Emitter& self, AstXmlNode* posNode) {
     ns1_line(self, 0, "// " + self.curFile + ":" + simse_int_toString(ns2_xmlLine(posNode)));
 }
-// cppsrc/codegen/Codegen.simse:192
+// cppsrc/codegen/Codegen.simse:193
 AstXmlNode ns1_namedTypeExpr(ns1_Emitter& self, Str name) {
     AstXmlNode node = AstXmlNode(AstNodeKind::Type, AstNodeCategory::TypeNamed, List<AstNodeAttribute>(), Array<AstXmlNode>());
     simse_list_append(node.attributes, AstNodeAttribute(AstNodeAttributeKind::Name, name));
     return node;
 }
-// cppsrc/codegen/Codegen.simse:198
+// cppsrc/codegen/Codegen.simse:199
 AstXmlNode ns1_genericTypeExpr(ns1_Emitter& self, Str name, List<AstXmlNode>* args) {
     AstXmlNode node = AstXmlNode(AstNodeKind::Type, AstNodeCategory::TypeGeneric, List<AstNodeAttribute>(), simse_list_toArray((*args)));
     simse_list_append(node.attributes, AstNodeAttribute(AstNodeAttributeKind::Name, name));
     return node;
 }
-// cppsrc/codegen/Codegen.simse:205
+// cppsrc/codegen/Codegen.simse:206
 AstXmlNode ns1_classReceiver(ns1_Emitter& self, AstXmlNode* decl) {
     List<Str> typeParams = ns2_xmlTypeParamNames(decl);
     if (!(typeParams.size() == 0)) goto L2;
@@ -731,14 +731,14 @@ AstXmlNode ns1_classReceiver(ns1_Emitter& self, AstXmlNode* decl) {
     L4:;
     return ns1_genericTypeExpr(self, ns2_xmlAttr(decl, AstNodeAttributeKind::Name), &args);
 }
-// cppsrc/codegen/Codegen.simse:219
+// cppsrc/codegen/Codegen.simse:220
 void ns1_addFunction(ns1_Emitter& self, AstXmlNode* decl, AstXmlNode* receiver, Str file, List<Str> templateParams, Bool prelude, Str packageName) {
     simse_list_append(self.functions, ns1__make_CgFn(*(decl), *(receiver), file, templateParams, prelude, packageName));
     if (!(!ns2_xmlIsEmpty(receiver))) goto L2;
     simse_dict_insert(self.receiverFnNames, ns2_xmlAttr(decl, AstNodeAttributeKind::Name), true);
     L2:;
 }
-// cppsrc/codegen/Codegen.simse:226
+// cppsrc/codegen/Codegen.simse:227
 void ns1_addNativeExt(ns1_Emitter& self, Str name, ns1_CgNativeExt ext) {
     if (!(simse_dict_has(self.nativeExtensions, name))) goto L2;
     {
@@ -755,11 +755,11 @@ void ns1_addNativeExt(ns1_Emitter& self, Str name, ns1_CgNativeExt ext) {
     }
     L3:;
 }
-// cppsrc/codegen/Codegen.simse:249
+// cppsrc/codegen/Codegen.simse:250
 Str ns1_inputPackage(ns1_Emitter& self, ns1_CgInput* input) {
     return ns2_xmlAttr(simse_addressOf(input->module), AstNodeAttributeKind::Package);
 }
-// cppsrc/codegen/Codegen.simse:253
+// cppsrc/codegen/Codegen.simse:254
 void ns1_collectPackages(ns1_Emitter& self) {
     List<Str> names = List<Str>();
     Int i = 0;
@@ -787,25 +787,25 @@ void ns1_collectPackages(ns1_Emitter& self) {
     goto L5;
     L6:;
 }
-// cppsrc/codegen/Codegen.simse:279
+// cppsrc/codegen/Codegen.simse:280
 Str ns1_nsPrefix(ns1_Emitter& self, Str packageName) {
     if (!(simse_dict_has(self.nsPrefixes, packageName))) goto L2;
     return simse_dict_get(self.nsPrefixes, packageName).value();
     L2:;
     return "";
 }
-// cppsrc/codegen/Codegen.simse:286
+// cppsrc/codegen/Codegen.simse:287
 Str ns1_qualify(ns1_Emitter& self, Str packageName, Str name) {
     return ns1_nsPrefix(self, packageName) + name;
 }
-// cppsrc/codegen/Codegen.simse:291
+// cppsrc/codegen/Codegen.simse:292
 Str ns1_typePackage(ns1_Emitter& self, Str name) {
     if (!(simse_dict_has(self.typePackages, name))) goto L2;
     return simse_dict_get(self.typePackages, name).value();
     L2:;
     return "";
 }
-// cppsrc/codegen/Codegen.simse:300
+// cppsrc/codegen/Codegen.simse:301
 Str ns1_functionPackage(ns1_Emitter& self, Str name) {
     Int i = 0;
     L1:;
@@ -824,14 +824,14 @@ Str ns1_functionPackage(ns1_Emitter& self, Str name) {
     L2:;
     return "";
 }
-// cppsrc/codegen/Codegen.simse:314
+// cppsrc/codegen/Codegen.simse:315
 AstXmlNode ns1_staticType(ns1_Emitter& self, Str name) {
     if (!(simse_dict_has(self.staticsByName, name))) goto L2;
     return ns2_xmlChild(simse_addressOf(simse_dict_get(self.staticsByName, name).value().decl), AstNodeKind::Type);
     L2:;
     return ns2_xmlEmptyNode();
 }
-// cppsrc/codegen/Codegen.simse:321
+// cppsrc/codegen/Codegen.simse:322
 void ns1_collect(ns1_Emitter& self) {
     ns1_collectPackages(self);
     Int i = 0;
@@ -955,7 +955,7 @@ void ns1_collect(ns1_Emitter& self) {
     goto L1;
     L2:;
 }
-// cppsrc/codegen/Codegen.simse:406
+// cppsrc/codegen/Codegen.simse:407
 void ns1_setActiveTypeParams(ns1_Emitter& self, List<Str> params) {
     simse_dict_clear(self.activeTypeParams);
     Int i = 0;
@@ -966,7 +966,7 @@ void ns1_setActiveTypeParams(ns1_Emitter& self, List<Str> params) {
     goto L1;
     L2:;
 }
-// cppsrc/codegen/Codegen.simse:415
+// cppsrc/codegen/Codegen.simse:416
 Str ns1_templateClause(ns1_Emitter& self, List<Str> params) {
     if (!(params.size() == 0)) goto L2;
     return "";
@@ -981,7 +981,7 @@ Str ns1_templateClause(ns1_Emitter& self, List<Str> params) {
     L4:;
     return "template <" + ns1_cgJoin(&parts, ", ") + ">";
 }
-// cppsrc/codegen/Codegen.simse:428
+// cppsrc/codegen/Codegen.simse:429
 Str ns1_typeArgsString(ns1_Emitter& self, Str baseName, List<AstXmlNode>* args) {
     List<Str> rendered = List<Str>();
     Int i = 0;
@@ -1000,7 +1000,7 @@ Str ns1_typeArgsString(ns1_Emitter& self, Str baseName, List<AstXmlNode>* args) 
     L4:;
     return ns1_cgJoin(&rendered, ", ");
 }
-// cppsrc/codegen/Codegen.simse:443
+// cppsrc/codegen/Codegen.simse:444
 Str ns1_typeName(ns1_Emitter& self, Str name, AstXmlNode* posNode) {
     if (!(name == "Unit")) goto L2;
     return "void";
@@ -1008,16 +1008,24 @@ Str ns1_typeName(ns1_Emitter& self, Str name, AstXmlNode* posNode) {
     if (!(simse_dict_has(self.activeTypeParams, name))) goto L4;
     return name;
     L4:;
-    if (!(ns1_cgIsRtlTypeName(name))) goto L6;
-    return name;
+    if (!(simse_dict_has(self.types, name))) goto L6;
+    {
+        Str packageName = ns1_typePackage(self, name);
+        if (packageName == "rtl") goto L7;
+        goto L8;
+        L7:;
+        return name;
+        L8:;
+        return ns1_qualify(self, packageName, name);
+    }
     L6:;
-    if (!(simse_dict_has(self.types, name))) goto L8;
-    return ns1_qualify(self, ns1_typePackage(self, name), name);
-    L8:;
+    if (!(ns1_cgIsRtlTypeName(name))) goto L10;
+    return name;
+    L10:;
     ns1_fail(self, posNode, "unsupported type '" + name + "'");
     return "/*unsupported*/";
 }
-// cppsrc/codegen/Codegen.simse:460
+// cppsrc/codegen/Codegen.simse:468
 Str ns1_type(ns1_Emitter& self, AstXmlNode* typeExpr) {
     AstNodeCategory kind = ns2_xmlKind(typeExpr);
     if (!(kind == AstNodeCategory::TypeIntLit)) goto L2;
@@ -1074,7 +1082,7 @@ Str ns1_type(ns1_Emitter& self, AstXmlNode* typeExpr) {
     L16:;
     return "/*unsupported*/";
 }
-// cppsrc/codegen/Codegen.simse:504
+// cppsrc/codegen/Codegen.simse:512
 ns1_NameKind ns1_kindOf(ns1_Emitter& self, AstXmlNode* typeExpr) {
     AstNodeCategory kind = ns2_xmlKind(typeExpr);
     if (!(kind == AstNodeCategory::TypeReference)) goto L2;
@@ -1088,7 +1096,7 @@ ns1_NameKind ns1_kindOf(ns1_Emitter& self, AstXmlNode* typeExpr) {
     L6:;
     return ns1_NameKind::Value;
 }
-// cppsrc/codegen/Codegen.simse:524
+// cppsrc/codegen/Codegen.simse:532
 void ns1_emitStatics(ns1_Emitter& self) {
     Int i = 0;
     L1:;
@@ -1115,7 +1123,7 @@ void ns1_emitStatics(ns1_Emitter& self) {
     goto L1;
     L2:;
 }
-// cppsrc/codegen/Codegen.simse:544
+// cppsrc/codegen/Codegen.simse:552
 Bool ns1_hasStaticInit(ns1_Emitter& self) {
     Int i = 0;
     L1:;
@@ -1128,7 +1136,7 @@ Bool ns1_hasStaticInit(ns1_Emitter& self) {
     L2:;
     return false;
 }
-// cppsrc/codegen/Codegen.simse:560
+// cppsrc/codegen/Codegen.simse:568
 void ns1_emitStaticInit(ns1_Emitter& self) {
     if (!(!ns1_hasStaticInit(self))) goto L2;
     return;
@@ -1160,7 +1168,7 @@ void ns1_emitStaticInit(ns1_Emitter& self) {
     L4:;
     ns1_line(self, 0, "}");
 }
-// cppsrc/codegen/Codegen.simse:584
+// cppsrc/codegen/Codegen.simse:592
 void ns1_emitTypes(ns1_Emitter& self) {
     Int i = 0;
     L1:;
@@ -1213,7 +1221,7 @@ void ns1_emitTypes(ns1_Emitter& self) {
     goto L1;
     L2:;
 }
-// cppsrc/codegen/Codegen.simse:613
+// cppsrc/codegen/Codegen.simse:621
 void ns1_emitDataClass(ns1_Emitter& self, AstXmlNode* decl) {
     ns1_setActiveTypeParams(self, ns2_xmlTypeParamNames(decl));
     List<AstXmlNode> fields = ns2_xmlChildren(decl, AstNodeKind::Field);
@@ -1273,7 +1281,7 @@ void ns1_emitDataClass(ns1_Emitter& self, AstXmlNode* decl) {
     ns1_line(self, 1, "return " + target + "{" + ns1_cgJoin(&values, ", ") + "};");
     ns1_line(self, 0, "}");
 }
-// cppsrc/codegen/Codegen.simse:671
+// cppsrc/codegen/Codegen.simse:679
 void ns1_emitEnum(ns1_Emitter& self, AstXmlNode* decl) {
     ns1_sourceComment(self, decl);
     Str name = ns2_xmlAttr(decl, AstNodeAttributeKind::Name);
@@ -1301,7 +1309,7 @@ void ns1_emitEnum(ns1_Emitter& self, AstXmlNode* decl) {
     L4:;
     ns1_line(self, 0, "};");
 }
-// cppsrc/codegen/Codegen.simse:694
+// cppsrc/codegen/Codegen.simse:702
 void ns1_emitEnumConversion(ns1_Emitter& self, AstXmlNode* decl) {
     List<Str> typeParams = ns2_xmlTypeParamNames(decl);
     if (!(typeParams.size() > 0)) goto L2;
@@ -1341,7 +1349,7 @@ void ns1_emitEnumConversion(ns1_Emitter& self, AstXmlNode* decl) {
     ns1_line(self, 1, "return Opt<" + emittedName + ">::none();");
     ns1_line(self, 0, "}");
 }
-// cppsrc/codegen/Codegen.simse:730
+// cppsrc/codegen/Codegen.simse:738
 void ns1_emitTypeAlias(ns1_Emitter& self, AstXmlNode* decl) {
     AstXmlNode target = ns2_xmlChild(decl, AstNodeKind::TargetType);
     if (!(ns2_xmlIsEmpty(&target))) goto L2;
@@ -1360,7 +1368,7 @@ void ns1_emitTypeAlias(ns1_Emitter& self, AstXmlNode* decl) {
     L6:;
     ns1_line(self, 0, "using " + ns1_qualify(self, ns1_typePackage(self, ns2_xmlAttr(decl, AstNodeAttributeKind::Name)), ns2_xmlAttr(decl, AstNodeAttributeKind::Name)) + " = " + targetText + ";");
 }
-// cppsrc/codegen/Codegen.simse:750
+// cppsrc/codegen/Codegen.simse:758
 void ns1_emitNativeDeclarations(ns1_Emitter& self) {
     ns1_setActiveTypeParams(self, List<Str>());
     Int i = 0;
@@ -1446,7 +1454,7 @@ void ns1_emitNativeDeclarations(ns1_Emitter& self) {
     goto L1;
     L2:;
 }
-// cppsrc/codegen/Codegen.simse:811
+// cppsrc/codegen/Codegen.simse:819
 void ns1_emitFunctions(ns1_Emitter& self, Bool prototypeOnly) {
     Int i = 0;
     L1:;
@@ -1470,7 +1478,7 @@ void ns1_emitFunctions(ns1_Emitter& self, Bool prototypeOnly) {
     goto L1;
     L2:;
 }
-// cppsrc/codegen/Codegen.simse:829
+// cppsrc/codegen/Codegen.simse:837
 void ns1_beginScope(ns1_Emitter& self, ns1_CgFn* fn, ns1_NameKind selfK, AstXmlNode* selfTypePtr) {
     simse_dict_clear(self.nameKinds);
     simse_dict_clear(self.localTypes);
@@ -1497,7 +1505,7 @@ void ns1_beginScope(ns1_Emitter& self, ns1_CgFn* fn, ns1_NameKind selfK, AstXmlN
     goto L3;
     L4:;
 }
-// cppsrc/codegen/Codegen.simse:850
+// cppsrc/codegen/Codegen.simse:858
 Str ns1_receiverParam(ns1_Emitter& self, AstXmlNode* receiverType) {
     Str mapped = ns1_type(self, receiverType);
     AstNodeCategory kind = ns2_xmlKind(receiverType);
@@ -1506,7 +1514,7 @@ Str ns1_receiverParam(ns1_Emitter& self, AstXmlNode* receiverType) {
     L2:;
     return mapped + "& self";
 }
-// cppsrc/codegen/Codegen.simse:859
+// cppsrc/codegen/Codegen.simse:867
 void ns1_emitFunction(ns1_Emitter& self, ns1_CgFn* fn, Bool prototypeOnly) {
     AstXmlNode* decl = simse_addressOf(fn->decl);
     if (!(ns2_xmlAttr(decl, AstNodeAttributeKind::IsNative) == "true")) goto L2;
@@ -1634,7 +1642,7 @@ void ns1_emitFunction(ns1_Emitter& self, ns1_CgFn* fn, Bool prototypeOnly) {
     L48:;
     ns1_line(self, 0, "}");
 }
-// cppsrc/codegen/Codegen.simse:984
+// cppsrc/codegen/Codegen.simse:992
 void ns1_emitStmts(ns1_Emitter& self, List<AstXmlNode>* stmts, Int level) {
     Int i = 0;
     L1:;
@@ -1647,7 +1655,7 @@ void ns1_emitStmts(ns1_Emitter& self, List<AstXmlNode>* stmts, Int level) {
     goto L1;
     L2:;
 }
-// cppsrc/codegen/Codegen.simse:995
+// cppsrc/codegen/Codegen.simse:1003
 void ns1_emitStmt(ns1_Emitter& self, AstXmlNode* stmt, Int level) {
     AstNodeCategory kind = ns2_xmlKind(stmt);
     if (!(kind == AstNodeCategory::StmtVarDecl)) goto L2;
@@ -1810,7 +1818,7 @@ void ns1_emitStmt(ns1_Emitter& self, AstXmlNode* stmt, Int level) {
     L57:;
     ns1_fail(self, stmt, "unsupported: statement kind '" + ns2_xmlKindText(kind) + "'");
 }
-// cppsrc/codegen/Codegen.simse:1117
+// cppsrc/codegen/Codegen.simse:1125
 Str ns1_expr(ns1_Emitter& self, AstXmlNode* e, Int minPrec, AstXmlNode* expected) {
     Int p = ns1_cgPrecedence(e);
     Str s = "";
@@ -1823,7 +1831,7 @@ Str ns1_expr(ns1_Emitter& self, AstXmlNode* e, Int minPrec, AstXmlNode* expected
     L4:;
     return s;
 }
-// cppsrc/codegen/Codegen.simse:1130
+// cppsrc/codegen/Codegen.simse:1138
 ns1_NameKind ns1_operandKind(ns1_Emitter& self, AstXmlNode* e) {
     if (!(ns2_xmlKind(e) == AstNodeCategory::ExprName)) goto L2;
     {
@@ -1842,11 +1850,11 @@ ns1_NameKind ns1_operandKind(ns1_Emitter& self, AstXmlNode* e) {
     L2:;
     return ns1_NameKind::Value;
 }
-// cppsrc/codegen/Codegen.simse:1145
+// cppsrc/codegen/Codegen.simse:1153
 AstXmlNode ns1_namedType(ns1_Emitter& self, Str name) {
     return ns1_namedTypeExpr(self, name);
 }
-// cppsrc/codegen/Codegen.simse:1149
+// cppsrc/codegen/Codegen.simse:1157
 AstXmlNode ns1_pointee(ns1_Emitter& self, AstXmlNode* typeNode) {
     AstXmlNode current = *(typeNode);
     L1:;
@@ -1874,7 +1882,7 @@ AstXmlNode ns1_pointee(ns1_Emitter& self, AstXmlNode* typeNode) {
     L2:;
     return current;
 }
-// cppsrc/codegen/Codegen.simse:1166
+// cppsrc/codegen/Codegen.simse:1174
 Bool ns1_isHandleType(ns1_Emitter& self, AstXmlNode* typeNode) {
     if (!(ns2_xmlIsEmpty(typeNode))) goto L2;
     return false;
@@ -1888,7 +1896,7 @@ Bool ns1_isHandleType(ns1_Emitter& self, AstXmlNode* typeNode) {
     L6:;
     return false;
 }
-// cppsrc/codegen/Codegen.simse:1180
+// cppsrc/codegen/Codegen.simse:1188
 Bool ns1_isIndexableContainer(ns1_Emitter& self, AstXmlNode* typeNode) {
     if (!(ns2_xmlIsEmpty(typeNode))) goto L2;
     return false;
@@ -1905,7 +1913,7 @@ Bool ns1_isIndexableContainer(ns1_Emitter& self, AstXmlNode* typeNode) {
     L6:;
     return false;
 }
-// cppsrc/codegen/Codegen.simse:1195
+// cppsrc/codegen/Codegen.simse:1203
 Bool ns1_unifyType(ns1_Emitter& self, AstXmlNode* pattern, AstXmlNode* actual, List<Str>* typeParams) {
     AstXmlNode actualPtr = *(actual);
     AstNodeCategory pk = ns2_xmlKind(pattern);
@@ -1998,7 +2006,7 @@ Bool ns1_unifyType(ns1_Emitter& self, AstXmlNode* pattern, AstXmlNode* actual, L
     L35:;
     return false;
 }
-// cppsrc/codegen/Codegen.simse:1267
+// cppsrc/codegen/Codegen.simse:1275
 AstXmlNode ns1_functionReturn(ns1_Emitter& self, Str name) {
     Int i = 0;
     L1:;
@@ -2023,7 +2031,7 @@ AstXmlNode ns1_functionReturn(ns1_Emitter& self, Str name) {
     L2:;
     return ns2_xmlEmptyNode();
 }
-// cppsrc/codegen/Codegen.simse:1282
+// cppsrc/codegen/Codegen.simse:1290
 AstXmlNode ns1_memberCallReturn(ns1_Emitter& self, AstXmlNode* callee) {
     AstXmlNode receiverType = ns1_inferType(self, simse_addressOf(ns2_xmlChild(callee, AstNodeKind::Receiver)));
     AstXmlNode recv = ns1_pointee(self, &receiverType);
@@ -2097,7 +2105,7 @@ AstXmlNode ns1_memberCallReturn(ns1_Emitter& self, AstXmlNode* callee) {
     L24:;
     return ns2_xmlEmptyNode();
 }
-// cppsrc/codegen/Codegen.simse:1334
+// cppsrc/codegen/Codegen.simse:1342
 AstXmlNode ns1_inferType(ns1_Emitter& self, AstXmlNode* e) {
     AstNodeCategory kind = ns2_xmlKind(e);
     if (!(kind == AstNodeCategory::ExprIntLit)) goto L2;
@@ -2332,13 +2340,13 @@ AstXmlNode ns1_inferType(ns1_Emitter& self, AstXmlNode* e) {
     L84:;
     return ns2_xmlEmptyNode();
 }
-// cppsrc/codegen/Codegen.simse:1491
+// cppsrc/codegen/Codegen.simse:1499
 AstXmlNode ns1_renameRole(ns1_Emitter& self, AstXmlNode* child, AstNodeKind role) {
     AstXmlNode renamed = *(child);
     renamed.name = role;
     return renamed;
 }
-// cppsrc/codegen/Codegen.simse:1498
+// cppsrc/codegen/Codegen.simse:1506
 Str ns1_receiverArg(ns1_Emitter& self, AstXmlNode* pattern, AstXmlNode* recv) {
     if (!(ns1_isHandleType(self, pattern))) goto L2;
     return ns1_expr(self, recv, 9, simse_addressOf(ns2_xmlEmptyNode()));
@@ -2349,7 +2357,7 @@ Str ns1_receiverArg(ns1_Emitter& self, AstXmlNode* pattern, AstXmlNode* recv) {
     L4:;
     return ns1_expr(self, recv, 9, simse_addressOf(ns2_xmlEmptyNode()));
 }
-// cppsrc/codegen/Codegen.simse:1510
+// cppsrc/codegen/Codegen.simse:1518
 Int ns1_findExtensionFn(ns1_Emitter& self, Str name, AstXmlNode* recvExpr) {
     AstXmlNode recvType = ns1_inferType(self, recvExpr);
     AstXmlNode recv = ns1_pointee(self, &recvType);
@@ -2378,7 +2386,7 @@ Int ns1_findExtensionFn(ns1_Emitter& self, Str name, AstXmlNode* recvExpr) {
     L4:;
     return -1;
 }
-// cppsrc/codegen/Codegen.simse:1532
+// cppsrc/codegen/Codegen.simse:1540
 Int ns1_findNativeExt(ns1_Emitter& self, Str name, AstXmlNode* recvExpr) {
     if (!(!simse_dict_has(self.nativeExtensions, name))) goto L2;
     return -1;
@@ -2405,7 +2413,7 @@ Int ns1_findNativeExt(ns1_Emitter& self, Str name, AstXmlNode* recvExpr) {
     L6:;
     return -1;
 }
-// cppsrc/codegen/Codegen.simse:1553
+// cppsrc/codegen/Codegen.simse:1561
 Str ns1_memberAccess(ns1_Emitter& self, AstXmlNode* base, Str name) {
     Bool arrow = false;
     AstXmlNode baseType = ns1_inferType(self, base);
@@ -2449,14 +2457,14 @@ Str ns1_memberAccess(ns1_Emitter& self, AstXmlNode* base, Str name) {
     L19:;
     return ns1_expr(self, base, 9, simse_addressOf(ns2_xmlEmptyNode())) + op + field;
 }
-// cppsrc/codegen/Codegen.simse:1582
+// cppsrc/codegen/Codegen.simse:1590
 Str ns1_nullTo(ns1_Emitter& self, AstXmlNode* expected) {
     if (!(!ns2_xmlIsEmpty(expected) && ns2_xmlKind(expected) == AstNodeCategory::TypeGeneric && ns2_xmlAttr(expected, AstNodeAttributeKind::Name) == "Opt")) goto L2;
     return "Opt<" + ns1_typeArgsString(self, "Opt", simse_addressOf(ns2_xmlChildren(expected, AstNodeKind::TypeArg))) + ">()";
     L2:;
     return "nullptr";
 }
-// cppsrc/codegen/Codegen.simse:1589
+// cppsrc/codegen/Codegen.simse:1597
 AstXmlNode ns1_resolveAlias(ns1_Emitter& self, AstXmlNode* typeNode) {
     AstXmlNode current = *(typeNode);
     Int guard = 0;
@@ -2493,7 +2501,7 @@ AstXmlNode ns1_resolveAlias(ns1_Emitter& self, AstXmlNode* typeNode) {
     L2:;
     return current;
 }
-// cppsrc/codegen/Codegen.simse:1614
+// cppsrc/codegen/Codegen.simse:1622
 AstXmlNode ns1_expectedCallable(ns1_Emitter& self, AstXmlNode* expected) {
     AstXmlNode resolved = ns1_resolveAlias(self, expected);
     if (!(!ns2_xmlIsEmpty(&resolved) && ns2_xmlKind(&resolved) == AstNodeCategory::TypeFunction)) goto L2;
@@ -2501,7 +2509,7 @@ AstXmlNode ns1_expectedCallable(ns1_Emitter& self, AstXmlNode* expected) {
     L2:;
     return ns2_xmlEmptyNode();
 }
-// cppsrc/codegen/Codegen.simse:1622
+// cppsrc/codegen/Codegen.simse:1630
 AstXmlNode ns1_findFunction(ns1_Emitter& self, Str name, Int argCount) {
     Int i = 0;
     L1:;
@@ -2524,14 +2532,14 @@ AstXmlNode ns1_findFunction(ns1_Emitter& self, Str name, Int argCount) {
     L2:;
     return ns2_xmlEmptyNode();
 }
-// cppsrc/codegen/Codegen.simse:1637
+// cppsrc/codegen/Codegen.simse:1645
 Bool ns1_isUnitType(ns1_Emitter& self, AstXmlNode* typeNode) {
     if (!(ns2_xmlIsEmpty(typeNode))) goto L2;
     return true;
     L2:;
     return ns2_xmlKind(typeNode) == AstNodeCategory::TypeNamed && ns2_xmlAttr(typeNode, AstNodeAttributeKind::Name) == "Unit";
 }
-// cppsrc/codegen/Codegen.simse:1644
+// cppsrc/codegen/Codegen.simse:1652
 AstXmlNode ns1_inferLambdaReturn(ns1_Emitter& self, AstXmlNode* e) {
     List<AstXmlNode> body = ns2_xmlChildren(simse_addressOf(ns2_xmlChild(e, AstNodeKind::Body)), AstNodeKind::Stmt);
     if (!(body.size() == 1 && ns2_xmlKind(simse_addressOf(body[0])) == AstNodeCategory::StmtExprStmt && !ns2_xmlIsEmpty(simse_addressOf(ns2_xmlChild(simse_addressOf(body[0]), AstNodeKind::Expr))))) goto L2;
@@ -2548,7 +2556,7 @@ AstXmlNode ns1_inferLambdaReturn(ns1_Emitter& self, AstXmlNode* e) {
     L4:;
     return ns2_xmlEmptyNode();
 }
-// cppsrc/codegen/Codegen.simse:1660
+// cppsrc/codegen/Codegen.simse:1668
 Str ns1_lambda(ns1_Emitter& self, AstXmlNode* e, AstXmlNode* expected) {
     AstXmlNode callable = ns1_expectedCallable(self, expected);
     Dictionary<Str, ns1_NameKind> savedKinds = self.nameKinds;
@@ -2645,7 +2653,7 @@ Str ns1_lambda(ns1_Emitter& self, AstXmlNode* e, AstXmlNode* expected) {
     L29:;
     return head + " {\n" + body + "}";
 }
-// cppsrc/codegen/Codegen.simse:1746
+// cppsrc/codegen/Codegen.simse:1754
 Str ns1_exprInner(ns1_Emitter& self, AstXmlNode* e, AstXmlNode* expected) {
     AstNodeCategory kind = ns2_xmlKind(e);
     if (!(kind == AstNodeCategory::ExprIntLit || kind == AstNodeCategory::ExprFloatLit || kind == AstNodeCategory::ExprStrLit || kind == AstNodeCategory::ExprCharLit)) goto L2;
@@ -2875,7 +2883,7 @@ Str ns1_exprInner(ns1_Emitter& self, AstXmlNode* e, AstXmlNode* expected) {
     L76:;
     return "/*unsupported*/";
 }
-// cppsrc/codegen/Codegen.simse:1911
+// cppsrc/codegen/Codegen.simse:1919
 Str ns1_call(ns1_Emitter& self, AstXmlNode* e) {
     AstXmlNode callee = ns2_xmlChild(e, AstNodeKind::Callee);
     AstNodeCategory calleeKind = ns2_xmlKind(&callee);
@@ -3118,7 +3126,7 @@ Str ns1_call(ns1_Emitter& self, AstXmlNode* e) {
     ns1_fail(self, e, "unsupported: call target");
     return "/*unsupported*/";
 }
-// cppsrc/codegen/Codegen.simse:2079
+// cppsrc/codegen/Codegen.simse:2087
 void ns1_preludeText(ns1_Emitter& self) {
     Str text = "// Generated by simse_transpile. Do not edit.\n";
     text = text + "#include \"cppsrc/rtl/simse.hpp\"\n";
@@ -3127,7 +3135,7 @@ void ns1_preludeText(ns1_Emitter& self) {
     text = text + "\n";
     self.out = text;
 }
-// cppsrc/codegen/Codegen.simse:2088
+// cppsrc/codegen/Codegen.simse:2096
 Res<Str> ns1_run(ns1_Emitter& self) {
     ns1_collect(self);
     ns1_preludeText(self);
@@ -3157,11 +3165,11 @@ Res<Str> ns1_run(ns1_Emitter& self) {
     L12:;
     return Res<Str>::ok(self.out);
 }
-// cppsrc/codegen/Codegen.simse:2121
+// cppsrc/codegen/Codegen.simse:2129
 ns1_Emitter ns1_newEmitter(List<ns1_CgInput> inputs) {
     return ns1__make_Emitter(inputs, "", false, "", "", Dictionary<Str, AstXmlNode>(), Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), List<ns1_CgFn>(), Dictionary<Str, Bool>(), List<ns1_CgNativeDecl>(), Dictionary<Str, Str>(), Dictionary<Str, List<ns1_CgNativeExt>>(), Dictionary<Str, Bool>(), Dictionary<Str, ns1_NameKind>(), Dictionary<Str, AstXmlNode>(), ns1_NameKind::Value, ns2_xmlEmptyNode(), ns2_xmlEmptyNode(), Dictionary<Str, Str>(), Dictionary<Str, Str>(), List<ns1_CgStatic>(), Dictionary<Str, ns1_CgStatic>());
 }
-// cppsrc/codegen/Codegen.simse:2152
+// cppsrc/codegen/Codegen.simse:2160
 Res<Str> ns1_emitProgram(List<ns1_CgInput> inputs) {
     ns1_Emitter emitter = ns1_newEmitter(inputs);
     return ns1_run(emitter);

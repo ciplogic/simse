@@ -33,25 +33,28 @@ comparable: the RTL's own dictionary (`SIMSE_DICT_SM`) is ~6% faster end to end
 than `std::unordered_map` on this workload, with iteration ~8x and deep copies
 ~5x faster.
 
-**A straight-line program, measured.** `benchmarks/onebrc` has the naive 1 Billion
-Row Challenge - read 10M `station;temperature` lines (127.7 MiB), aggregate per
-station, print the report - written three times: in Simse, in C++ with the STL, and
-in JavaScript as the reference. All three reports are byte-identical, and the
-spread is instructive:
+- **A straight-line program, measured.** `benchmarks/onebrc` has the naive 1 Billion
+  Row Challenge - read 10M `station;temperature` lines (127.7 MiB), aggregate per
+  station, print the report - written twice for the comparison: in Simse, parsing
+  each line in place through `readLineView()`/`StrView`, and in C++ with the STL
+  (`getline` + `stod`). A JavaScript aggregate validates both reports, which come
+  out byte-identical:
 
 | Implementation | Time | Throughput |
 | --- | --- | --- |
-| Simse, `readLine(): Opt<Str>` per line | 2075 / 2127 ms | 60 MB/s |
-| Simse, reading into one recycled `Str` | **1156 / 1211 ms** | **104 MB/s** |
-| C++ STL baseline (`getline` + `stod`) | 1550 / 1570 ms | ~85 MB/s |
-| Bun reference aggregate | 732 ms | 183 MB/s |
+| **Simse, parsing each line in place (`readLineView()`)** | **1056 / 1085 ms** | **127 / 123 MB/s** |
+| C++ STL baseline (`getline` + `stod`) | 1480 / 1500 ms | 90 MB/s |
+| Bun reference aggregate | 727 ms | 184 MB/s |
 
-So a naive Simse program is in the same league as the naive C++ one - 1.34x
-behind with the convenient per-line `Str`, 1.34x *ahead* with a recycled buffer -
-while the reference is faster than both because it never builds a per-line object.
+So the naive Simse program is **1.40x faster** than the naive C++ one on the same
+data, and 1.45x behind the JS reference. Reading the line into a fresh `Str` per
+line (`readLine()`) or into a recycled one (`readLineInto`) costs 116-66 MB/s on
+the same program, which is why the in-place reader is the one the benchmark keeps.
 The remaining gap to close is in the *library*, not the language: the dictionary
 has no in-place access to a stored value, so the Simse program does two lookups per
-line where the C++ one does one.
+line where the C++ one does one, and the station name and the temperature still
+become `Str` values. `benchmarks/onebrc/benchmark.md` has the method, the numbers
+per reader and how to reproduce them.
 
 **The deployment story.** One amalgamated `.cpp` per program, no runtime to ship,
 no garbage collector, no reflection metadata. Programs are native binaries built

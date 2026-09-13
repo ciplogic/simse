@@ -10,6 +10,7 @@
 #include "types.hpp"        // scalar aliases and Str
 #include "containers.hpp"   // SmallVector, List, PList, Dictionary, Array, RawArray
 #include "cursor.hpp"       // Cursor<T> (immutable list view; iteration idiom)
+#include "strview.hpp"      // StrView (borrowed view over a Str)
 #include "optional.hpp"     // Opt<T>
 #include "listops.hpp"      // simse_list_* native List operations (prelude)
 #include "strops.hpp"       // simse_str_*/simse_char_*/min/max native ops (prelude)

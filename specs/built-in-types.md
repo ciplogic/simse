@@ -118,6 +118,35 @@ The bootstrap RTL also provides these `Str` operations (native extensions):
 - `toUpper(): Str` / `toLower(): Str` - ASCII/byte case folding; and
 - `isEmpty(): Bool`.
 
+### Views: `StrView`
+
+Status: implemented in the bootstrap RTL (`cppsrc/rtl/StrView.simse`,
+`cppsrc/rtl/strview.hpp`).
+
+A `StrView` is a borrowed view over a range of a `Str`:
+`StrView(source: *Str, start: Int, len: Int)`. It copies nothing and owns
+nothing, so it is valid only while its source is alive and unchanged; a view over
+a buffer a stream owns is valid until that stream is read again. Views are the
+idiom for parsing one buffer (tokenize, split, scan) without allocating per
+token: `slice` stays a view, `substr` and `toStr` are the owned copies.
+
+- `size(): Int`;
+- `isEmpty(): Bool`;
+- `at(index: Int): Char` / `charAt(index: Int): Char` - the byte at `index`
+  (unchecked);
+- `find(sub: Str): Int` / `indexOf(sub: Str): Int` - the index of the first
+  occurrence of `sub`, or `-1` (compared in place, nothing copied);
+- `startsWith(prefix: Str): Bool`;
+- `slice(from: Int, count: Int): StrView` - a view of a range of this view
+  (unchecked);
+- `substr(from: Int, count: Int): Str` - the owned copy, with `from` clamped to
+  `[0, size]` and `count` allowed to run to the end, like `Str.substr`; and
+- `toStr(): Str` - the owned copy of the whole view.
+
+Indexing and member calls are permitted directly on a `*Str`, with automatic
+dereference, so a view's body can read through its source without an explicit
+dereference.
+
 ### String parsing
 
 Status: required for the first implementation.

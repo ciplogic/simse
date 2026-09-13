@@ -24,8 +24,12 @@ native("simse_eprintln") fun eprintln(text: Str): Unit
 
 // `FileStream` is an open file read one line at a time. The handle is a raw
 // pointer: `openFileStream` creates it (and returns null when the file cannot be
-// opened), `closeFileStream` releases it. The layout is the native's business
+// opened), `close` releases it. The layout is the native's business
 // (cppsrc/rtl/filestream.hpp); Simse code only holds the handle.
+//
+// A stream should be read with ONE of the three reads below: `readLine` leaves the
+// file position after what it read, and the other two share a readahead buffer, so
+// mixing them skips bytes.
 data class FileStream()
 
 // The convenient read: the next line without its line ending, or an empty `Opt` at
@@ -36,6 +40,12 @@ native("simse_fileStream_readLine") fun readLine(this: *FileStream): Opt<Str>
 // The fast read: the next line into `buffer` (reused across calls), `false` at end
 // of file. No line copy beyond one `memcpy` into the caller's own `Str`.
 native("simse_fileStream_readLineInto") fun readLineInto(this: *FileStream, buffer: *Str): Bool
+
+// The in-place read: the next line as a `StrView` into the stream's readahead
+// buffer, or an empty `Opt` at end of file. Nothing is copied, so the view is valid
+// only until the next read on this stream (a refill moves the bytes) - keep a copy
+// with `view.toStr()` when the line must outlive it.
+native("simse_fileStream_readLineView") fun readLineView(this: *FileStream): Opt<StrView>
 
 native("simse_fileStream_open") fun openFileStream(path: Str): *FileStream
 native("simse_fileStream_close") fun close(this: *FileStream): Unit

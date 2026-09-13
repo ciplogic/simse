@@ -6,8 +6,12 @@ package onebrc
 // version a first attempt is written as, which is what the C++ baseline in this
 // folder (`brc_naive.cpp`) does too.
 //
-//   onebrc <measurements.txt>           read each line with `readLine(): Opt<Str>`
-//   onebrc <measurements.txt> into      read into one recycled `Str` instead
+//   onebrc <measurements.txt>
+//
+// Each line is parsed **in place**: `readLineView()` hands back a `StrView` into the
+// stream's readahead buffer, so the line is never copied - only the station name
+// (the dictionary's key type) and the temperature (`tenths` takes a `Str`) cross
+// into owned strings. `benchmark.md` has the measured result.
 //
 // "Borrowing" the dictionary matters: `Dictionary` is a value type. A raw pointer
 // (`*counts` at the call site) borrows the local without copying it; a `&counts`
@@ -72,14 +76,20 @@ fun formatTenths(value: Int): Str {
 
 // One line of `station;temperature` folded into the running aggregates. `counts` is
 // a raw pointer so the aggregates go into the caller's dictionary in place.
-fun tally(line: Str, counts: *Dictionary<Str, Stats>): Unit {
+// `line` is a view into the stream's readahead buffer, so nothing about the line
+// itself is copied. The name still becomes a `Str` - it is the dictionary's key type
+// - and `tenths` still takes one; those two copies are the next thing a tuned
+// version would remove.
+fun tallyView(line: StrView, counts: *Dictionary<Str, Stats>): Unit {
     val semi: Int = line.find(";")
     if (semi <= 0) {
         return
     }
-    val name: Str = line.substr(0, semi)
-    val value: Int = tenths(line.substr(semi + 1, line.size() - semi - 1))
+    fold(line.substr(0, semi), tenths(line.substr(semi + 1, line.size() - semi - 1)), counts)
+}
 
+// One station's tenths folded into `counts`.
+fun fold(name: Str, value: Int, counts: *Dictionary<Str, Stats>): Unit {
     val existing: Opt<Stats> = counts.get(name)
     if (existing.hasValue()) {
         val stats: Stats = existing.value()
@@ -99,14 +109,10 @@ fun tally(line: Str, counts: *Dictionary<Str, Stats>): Unit {
 
 fun main(args: List<Str>): Int {
     if (args.size() < 1) {
-        eprintln("usage: onebrc <measurements.txt> [into]")
+        eprintln("usage: onebrc <measurements.txt>")
         return 2
     }
     val path: Str = args[0]
-    var into: Bool = false
-    if (args.size() > 1) {
-        into = args[1] == "into"
-    }
 
     val stream: *FileStream = openFileStream(path)
     if (stream == null) {
@@ -119,21 +125,13 @@ fun main(args: List<Str>): Int {
     var lines: Int = 0
     val started: Int64 = nowMillis()
 
-    if (into) {
-        // The fast read: one `Str` for the whole run, its heap block reused.
-        var line: Str = ""
-        while (stream.readLineInto(*line)) {
-            tally(line, *counts)
-            lines = lines + 1
-        }
-    } else {
-        // The convenient read: a fresh `Opt<Str>` per line.
-        var line: Opt<Str> = stream.readLine()
-        while (line.hasValue()) {
-            tally(line.value(), *counts)
-            lines = lines + 1
-            line = stream.readLine()
-        }
+    // The in-place read: a view into the stream's readahead buffer per line, valid
+    // until the next read - which is exactly this loop's shape.
+    var line: Opt<StrView> = stream.readLineView()
+    while (line.hasValue()) {
+        tallyView(line.value(), *counts)
+        lines = lines + 1
+        line = stream.readLineView()
     }
 
     val elapsed: Int64 = nowMillis() - started

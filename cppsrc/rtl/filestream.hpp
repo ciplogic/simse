@@ -6,6 +6,7 @@
 
 #include "containers.hpp"
 #include "optional.hpp"
+#include "strview.hpp"
 #include "types.hpp"
 
 // Reading a file line by line. The Simse surface is the prelude file
@@ -18,7 +19,9 @@
 // cannot be opened), `close` releases it - there is no destructor to run for a handle
 // in a language without exceptions.
 //
-// Two read paths, same lines:
+// Three read paths, the same lines (a stream should be read with *one* of them: the
+// first leaves the file position after what it read, and the other two share the
+// readahead buffer, so mixing them skips bytes):
 //
 //   readLine()              the convenient one. `std::getline` fills the stream's own
 //                           recycled `std::string`, and the caller gets a fresh
@@ -31,13 +34,20 @@
 //                           calls: after the longest line seen so far there is no
 //                           allocation at all, and the per-line cost is one `memcpy`.
 //
-// Both strip a trailing `\r` (files written on Windows) and treat a final line
-// without a newline as a line. Neither decodes anything: the bytes come back as they
+//   readLineView()          the in-place one. The line is not copied at all: the
+//                           result is a `StrView` into the same readahead buffer, so
+//                           it is valid only until the next read on this stream (a
+//                           refill moves the bytes). Parsing straight from it is what
+//                           a scanner wants; keep a copy when the line must outlive
+//                           the next read.
+//
+// All three strip a trailing `\r` (files written on Windows) and treat a final line
+// without a newline as a line. None decodes anything: the bytes come back as they
 // are.
 struct FileStream {
     std::ifstream file;      // opened in binary mode; text translation is not wanted
     std::string line;        // recycled by `readLine`
-    std::string chunk;       // the readahead buffer for `readLineInto`
+    Str chunk;               // the readahead buffer for `readLineInto`/`readLineView`
     Int chunkLen = 0;        // bytes of `chunk` that hold data
     Int chunkAt = 0;         // next unread byte of `chunk`
     Int64 size = 0;          // the file's size in bytes, for throughput reporting
@@ -57,47 +67,20 @@ struct FileStream {
     // file.
     Bool readLineInto(Str* buffer) {
         if (buffer == nullptr) return false;
-        Int at = chunkAt;
-        while (true) {
-            if (at < chunkLen) {
-                const char* base = chunk.data();
-                const void* found = std::memchr(base + at, '\n', (std::size_t) (chunkLen - at));
-                if (found != nullptr) {
-                    const Int end = (Int) ((const char*) found - base);
-                    Int count = end - at;
-                    if (count > 0 && base[end - 1] == '\r') count--;
-                    take(buffer, base + at, count);
-                    chunkAt = end + 1;
-                    return true;
-                }
-            }
-            // No newline in what is left of the chunk: keep the tail, refill, retry.
-            // When the tail alone fills the buffer, the line does not fit in it yet,
-            // so the buffer grows (once per new longest line).
-            Int tail = chunkLen - at;
-            if (tail > 0 && at > 0) {
-                std::memmove(chunk.data(), chunk.data() + at, (std::size_t) tail);
-            }
-            if (tail == (Int) chunk.size()) {
-                chunk.resize(chunk.size() * 2);
-            }
-            file.read(chunk.data() + tail, (std::streamsize) (chunk.size() - (std::size_t) tail));
-            const std::streamsize got = file.gcount();
-            if (got <= 0) {
-                // End of file: whatever the tail holds is the last line (the file did
-                // not end with a newline), and the next call reports the end.
-                chunkLen = 0;
-                chunkAt = 0;
-                if (tail == 0) return false;
-                Int count = tail;
-                if (count > 0 && chunk[(std::size_t) (count - 1)] == '\r') count--;
-                take(buffer, chunk.data(), count);
-                return true;
-            }
-            chunkLen = tail + (Int) got;
-            chunkAt = 0;
-            at = 0;
-        }
+        Int from = 0;
+        Int count = 0;
+        if (!nextLineSpan(&from, &count)) return false;
+        take(buffer, chunk.data() + from, count);
+        return true;
+    }
+
+    // The next line as a view into the readahead buffer, or an empty `Opt` at end of
+    // file. Nothing is copied; the view is valid until the next read on this stream.
+    Opt<StrView> readLineView() {
+        Int from = 0;
+        Int count = 0;
+        if (!nextLineSpan(&from, &count)) return Opt<StrView>::none();
+        return Opt<StrView>::some(StrView(&chunk, from, count));
     }
 
     // The file's size in bytes (0 when it is unknown).
@@ -110,6 +93,57 @@ struct FileStream {
     }
 
 private:
+    // Advances the readahead buffer to the next line's bytes: `*from`/`*count` are the
+    // indexes of the line's first byte and its length (the line ending is not part of
+    // it), already stripped of a trailing `\r`. `false` at end of file - and then the
+    // chunk is left empty, so a view handed out before it stays the last line.
+    Bool nextLineSpan(Int* from, Int* count) {
+        Int at = chunkAt;
+        while (true) {
+            const Int limit = chunkLen;
+            if (at < limit) {
+                const char* base = chunk.data();
+                const void* found = std::memchr(base + at, '\n', (std::size_t) (limit - at));
+                if (found != nullptr) {
+                    const Int end = (Int) ((const char*) found - base);
+                    Int len = end - at;
+                    if (len > 0 && base[end - 1] == '\r') len--;
+                    *from = at;
+                    *count = len;
+                    chunkAt = end + 1;
+                    return true;
+                }
+            }
+            // No newline in what is left of the chunk: keep the tail, refill, retry.
+            // When the tail alone fills the buffer, the line does not fit in it yet,
+            // so the buffer grows (once per new longest line).
+            Int tail = limit - at;
+            if (tail > 0 && at > 0) {
+                std::memmove(chunk.data(), chunk.data() + at, (std::size_t) tail);
+            }
+            if (tail == (Int) chunk.size()) {
+                chunk.resize((std::size_t) (tail * 2));
+            }
+            file.read(chunk.data() + tail, (std::streamsize) ((Int) chunk.size() - tail));
+            const std::streamsize got = file.gcount();
+            if (got <= 0) {
+                // End of file: whatever the tail holds is the last line (the file did
+                // not end with a newline), and the next call reports the end.
+                chunkLen = 0;
+                chunkAt = 0;
+                if (tail == 0) return false;
+                Int len = tail;
+                if (len > 0 && chunk[(std::size_t) (len - 1)] == '\r') len--;
+                *from = 0;
+                *count = len;
+                return true;
+            }
+            chunkLen = tail + (Int) got;
+            chunkAt = 0;
+            at = 0;
+        }
+    }
+
     static void take(Str* buffer, const char* text, Int count) {
         buffer->resize((std::size_t) count);
         if (count > 0) std::memcpy(buffer->data(), text, (std::size_t) count);

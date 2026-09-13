@@ -80,7 +80,8 @@ fun cgIsRtlTypeName(name: Str): Bool {
         || name == "Bool" || name == "Str" || name == "List" || name == "Array"
         || name == "RawArray" || name == "Opt" || name == "Res" || name == "Dictionary"
         || name == "SmallVector" || name == "PList" || name == "AstNodeAttribute"
-        || name == "AstXmlNode" || name == "Cursor" || name == "FileStream") {
+        || name == "AstXmlNode" || name == "Cursor" || name == "FileStream"
+        || name == "StrView") {
         return true
     }
     return false
@@ -447,11 +448,18 @@ data class Emitter(
         if (this.activeTypeParams.has(name)) {
             return name
         }
+        // A declared type shadows an RTL type *name*: the compiler's own
+        // `common.StrView` is a different type from the RTL's `StrView`. The RTL's
+        // own prelude types keep their C++ spelling unprefixed.
+        if (this.types.has(name)) {
+            val packageName: Str = this.typePackage(name)
+            if (packageName == "rtl") {
+                return name
+            }
+            return this.qualify(packageName, name)
+        }
         if (cgIsRtlTypeName(name)) {
             return name
-        }
-        if (this.types.has(name)) {
-            return this.qualify(this.typePackage(name), name)
         }
         this.fail(posNode, "unsupported type '" + name + "'")
         return "/*unsupported*/"

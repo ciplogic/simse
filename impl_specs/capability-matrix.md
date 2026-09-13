@@ -794,25 +794,61 @@ component-specific):
   Measured on `benchmarks/onebrc` (the challenge, naive: no mmap, no chunked
   parsing, no per-station arrays, no threads; 10,000,000 rows, 133,931,538 B =
   127.7 MiB, 100 stations, one ARM64 laptop, release, min/median, interleaved):
-  Simse `readLine` **2075/2127 ms** (64 MB/s, 6.6 MB peak WS), Simse
-  `readLineInto(*line)` **1156/1211 ms** (**116 MB/s**, 6.5 MB), the naive C++
+  Simse `readLine` **2040/2048 ms** (66 MB/s, 6.6 MB peak WS), Simse
+  `readLineInto(*line)` **1156/1161 ms** (**116 MB/s**, 6.5 MB), the naive C++
   baseline (`getline` + `find(';')` + `stod` + `unordered_map<std::string, Stats>`)
-  **1550/1570 ms** (~86 MB/s, 5.9 MB), and the Bun generator/reference `check`
-  **732 ms** (183 MB/s). All four reports are byte-identical (the Simse and C++
+  **1480/1490 ms** (~90 MB/s, 5.9 MB), and the Bun generator/reference `check`
+  **727 ms** (184 MB/s). All the reports are byte-identical (the Simse and C++
   writers are compared after stripping the `\r` Windows text-mode stdout adds;
-  the baseline switches stdout to binary mode). So the convenient form is 1.34x
-  behind the C++ baseline and the recycled form is 1.34x ahead - the reader, an
-  **1.8x** swing, dominates the parsing. Two findings are recorded here because
-  they cost cycles: `*x` **borrows** (the aggregation takes
+  the baseline switches stdout to binary mode). So the reader is a **1.8x** swing
+  on this workload, and it dominates the parsing. The benchmark itself was later
+  narrowed to the in-place reader (T43, `benchmarks/onebrc/benchmark.md`); these
+  three-mode numbers stand as the reader comparison, and all three reads remain
+  in the RTL (`stress/read-lines` covers them). Two findings are recorded here
+  because they cost cycles: `*x` **borrows** (the aggregation takes
   `*Dictionary<Str, Stats>`) while `&x` **boxes a copy** of the local, so
   mutations through the box are silently lost (the earlier `&List<Int>`/
   `*List<Int>` probe: `val h: &List<Int> = &items; h.append(1)` leaves
   `items.size() == 0`, `val p: *List<Int> = *items; items.append(3)` leaves
   `p.size() == 1`); and the two lookups per line (`get` then `insert`, since no
   API exposes a stored value in place) are a library gap, which is the remaining
-  distance to the 732 ms reference - see `guide4ai.md` section 9 item 8.
-  `benchmarks/onebrc/README.md` has the run commands and the notes (tenths as
-  `Int`, the half-toward-positive-infinity rounding rule, CRLF vs LF).
+  distance to the 727 ms reference - see `guide4ai.md` section 9 item 8.
+  `benchmarks/onebrc/benchmark.md` has the method, the notes (tenths as `Int`, the
+  half-toward-positive-infinity rounding rule, CRLF vs LF) and the run commands.
+- **`StrView` and the in-place line reader (T43).** `cppsrc/rtl/strview.hpp`
+  (prelude `cppsrc/rtl/StrView.simse`, spec `specs/built-in-types.md` "Views") is
+  a borrowed view over a range of a `Str`: a `*Str` source plus `start`/`len`,
+  with `size`/`isEmpty`/`at`/`charAt`/`find`/`indexOf`/`startsWith`/`slice` for
+  reading in place and `substr`/`toStr` for the owned copies. The RTL's prelude
+  types keep their C++ spelling, so `StrView` joined the RTL type-name list in
+  both rings - which exposed a name-resolution bug: the emitter consulted the RTL
+  *name* list before the program's own declarations, so the RTL's `StrView`
+  shadowed the compiler's own `common.StrView` and every emitted signature
+  mismatched. `typeName` (both rings) now checks the declared types first and lets
+  any package other than `rtl` win; the compiler's `StrView` is `ns1_StrView`
+  again, T23 and the five differentials stay byte-identical, and the tracked
+  `cppsrc/simse_out.cpp` was regenerated (its embedded source-map line numbers
+  shifted with the emitter edit - the only other change in it).
+  `FileStream` gained `readLineView(): Opt<StrView>` (T42's reader) on the same
+  readahead buffer and the same `nextLineSpan` code path as `readLineInto`, so the
+  two are the same lines by construction; the view is valid until the next read.
+  `stress/read-lines` covers all three readers over CRLF, empty lines, a missing
+  final newline, the 23-byte inline boundary, and - generated into the git-ignored
+  harness work directory - a 300 KB line behind a short one, so the buffer's tail
+  shift, growth and refill are exercised (24/24 with the self-hosted compiler and
+  with the C++ ring, `simse_tests.exe` 50/50).
+  Measured on the 1BRC (10M rows, 127.7 MiB, release, 3 interleaved pairs,
+  min/median, all reports byte-identical, 6.5 MB peak working set):
+  **view 1087/1088 ms** against **into 1156/1161 ms** - the in-place reader is
+  **6%** faster than the recycled buffer and **1.43x** ahead of the naive C++
+  baseline (1550/1570 ms), against 1.88x across the three Simse readers. What
+  remains is two `Str`s per line (`tenths` takes a `Str` and the dictionary is
+  keyed by `Str`) and the dictionary's two lookups per line (section 9 item 8).
+  The benchmark was then narrowed to this variant alone - C++ STL baseline against
+  the in-place Simse program, 7 interleaved pairs: **1056/1085 ms against
+  1480/1500 ms, i.e. 1.40x faster than the naive C++**, at a 6.5 MB peak working
+  set against the baseline's 5.9 MB, and byte-identical reports.
+  `benchmarks/onebrc/benchmark.md` is the write-up.
 
 ### Note: the shape of a lookup like this
 

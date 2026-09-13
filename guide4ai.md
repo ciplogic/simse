@@ -102,6 +102,25 @@ expressible in the language.
   `*x` **borrows** (the aggregation must take `*Dictionary`) where `&x` **boxes a
   copy** - mutations through the box are lost; and the two-lookups-per-line
   (`get` then `insert`) is a *library* gap, not a language one (section 9).
+- **There is a `StrView`, and the reader can parse in place (T43).**
+  `cppsrc/rtl/strview.hpp` (prelude `cppsrc/rtl/StrView.simse`) is a borrowed view
+  over a range of a `Str` (`size`, `at`, `find`, `startsWith`, `slice` stay in the
+  buffer; `substr`/`toStr` copy), and `FileStream.readLineView(): Opt<StrView>`
+  returns a line without copying, on the same 256 KiB readahead buffer and the same
+  `nextLineSpan` code path as `readLineInto` - valid until the next read on that
+  stream. 1BRC (10M rows, release, interleaved min/median): **view 1087/1088 ms**
+  against **into 1156/1161 ms** (**6%**) and **readLine 2040/2048 ms** - the reader
+  alone is a 1.88x spread. The benchmark now ships only the in-place variant, so
+  its headline comparison is against the naive C++ STL baseline: **1056/1085 ms
+  against 1480/1500 ms, i.e. 1.40x faster**, byte-identical reports, 6.5 MB peak
+  working set (`benchmarks/onebrc/benchmark.md` is the write-up; the other two
+  reads stay in the RTL and in `stress/read-lines`). Adding an
+  RTL type name ("StrView") exposed a name-resolution bug that is now fixed: the
+  emitter's list of RTL type names was consulted *before* the program's own
+  declarations, so the RTL's `StrView` shadowed the compiler's own
+  `common.StrView`; `typeName` now lets a declared type from any package other
+  than `rtl` win, in both rings. `stress/read-lines` covers all three readers,
+  including a generated 300 KB line (the buffer's tail shift and growth).
 
 ## 3. Build / test / run
 
@@ -193,10 +212,11 @@ explicit `cppsrc/compiler/Driver.simse` input.
   `ast-xmlnode.md`, `tasks/`.
 - `cppsrc/rtl/` — hand-written runtime: C++ headers (`types.hpp`,
   `containers.hpp`, `smstring.hpp`, `strsmallvector.hpp`, `optional.hpp`,
-  `functional.hpp`, `result.hpp`, `xml.hpp`, `cursor.hpp`, `listops.hpp`,
-  `strops.hpp`, `dictops.hpp`, `fs.hpp`, `filestream.hpp`, `timeops.hpp`,
-  `simse.hpp`) AND the **prelude** `.simse`
-  files (`rtl.simse`, `Cursor.simse`, `xml.simse`, `fs.simse`) declaring the RTL
+  `functional.hpp`, `result.hpp`, `xml.hpp`, `cursor.hpp`, `strview.hpp`,
+  `listops.hpp`, `strops.hpp`, `dictops.hpp`, `fs.hpp`, `filestream.hpp`,
+  `timeops.hpp`, `simse.hpp`) AND the **prelude** `.simse`
+  files (`rtl.simse`, `Cursor.simse`, `StrView.simse`, `xml.simse`, `fs.simse`)
+  declaring the RTL surface.
   surface. `List<T>` is `SmallVector<T, 4>` and `Str` is the inline `SmString`
   (`smstring.hpp`), whose buffer is `strsmallvector.hpp`'s `StrSmallVector`, the
   char-specialized form of the `SmallVector<char, 24>` layout — `Int _len`
@@ -239,9 +259,10 @@ explicit `cppsrc/compiler/Driver.simse` input.
   (`_bench_ab.mjs`, `_hoist_ab.bat`, `_cap_ab.bat`, `_probe.bat`, `memrun.cpp`,
   `str_bench.cpp`, ...) and the probe programs.
 - `benchmarks/` - published measurements; `benchmarks/onebrc/` is the naive 1BRC
-  in Simse (`src/main.simse`) with the C++ STL baseline, the Bun generator/
-  reference (`onebrc.mjs`) and the results (`README.md`; data and binaries are
-  git-ignored).
+  in Simse (`src/main.simse`, each line parsed in place through `StrView`) with the
+  C++ STL baseline, the Bun generator/reference (`onebrc.mjs`), the measured
+  write-up (`benchmark.md`) and the run commands (`README.md`; data and binaries
+  are git-ignored).
 
 ## 5. Architecture
 
@@ -445,3 +466,14 @@ Do these only when asked; roughly prioritized:
 - A handle's native operations must be **struct methods**, not free natives: the
   emitter calls `stream.readLine()` on a `*FileStream` as `(*stream).readLine()`.
   Same for `Cursor`/`XmlNode`.
+- After changing **any RTL header**, rebuild the CMake folder you are about to
+  build against (`cmake-build-<config>/_msvc_build.bat`) *before* `bun build.js`:
+  `build.js` links the prebuilt `simse_lib`/`simse_native`, and a stale library
+  built against an older header is not a link error but a silent *layout* mismatch
+  (a `std::string` field against a `Str`) - the program then reads zero rows or
+  crashes. `build.js --release` needs the release libs, the stress harness the
+  debug ones.
+- `bun tools/stress.js` prefers `./simse.exe` (the self-hosted ring) and falls
+  back to `cmake-build-*/simse_transpile.exe`; `--simse <path>` with the CMake
+  `simse.exe` is not the same CLI (it takes file arguments, not `--root`) and will
+  fail the corpus.

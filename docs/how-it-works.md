@@ -147,7 +147,8 @@ headers:
 | `xml.hpp` | `Attribute`, `XmlNode`: the general tree a program can build |
 | `cursor.hpp` | `Cursor<T>`, a view over a list |
 | `strops.hpp`, `listops.hpp`, `dictops.hpp`, `fs.hpp` | the native operations behind the prelude |
-| `filestream.hpp` | `FileStream`: reading a file line by line (`readLine(): Opt<Str>`, and `readLineInto(*Str)` with a recycled buffer) |
+| `filestream.hpp` | `FileStream`: reading a file line by line (`readLine(): Opt<Str>`, `readLineInto(*Str)` with a recycled buffer, and `readLineView(): Opt<StrView>` in place) |
+| `strview.hpp` | `StrView`: a borrowed view over a range of a `Str` (`at`, `find`, `slice`, `substr`, `toStr`) |
 | `timeops.hpp` | `simse_nowMillis`, a monotonic clock for logging and for measuring runs |
 | `astxml.hpp` | the compiler's AST node (roles/keys as enums) |
 

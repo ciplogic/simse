@@ -48,6 +48,7 @@ add_library(simse_lib STATIC
         cppsrc/rtl/types.hpp
         cppsrc/rtl/containers.hpp
         cppsrc/rtl/cursor.hpp
+        cppsrc/rtl/strview.hpp
         cppsrc/rtl/listops.hpp
         cppsrc/rtl/strops.hpp
         cppsrc/rtl/dictops.hpp
@@ -55,6 +56,7 @@ add_library(simse_lib STATIC
         cppsrc/rtl/rtl.simse
         cppsrc/rtl/xml.simse
         cppsrc/rtl/Cursor.simse
+        cppsrc/rtl/StrView.simse
         cppsrc/rtl/optional.hpp
         cppsrc/rtl/functional.hpp
         cppsrc/rtl/result.hpp
@@ -429,6 +431,7 @@ set(SIMSE_ALL_MIRRORS
         "${SIMSE_REPO_ROOT}/cppsrc/common/StrView.simse"
         "${SIMSE_REPO_ROOT}/cppsrc/common/xmlutil.simse"
         "${SIMSE_REPO_ROOT}/cppsrc/rtl/Cursor.simse"
+        "${SIMSE_REPO_ROOT}/cppsrc/rtl/StrView.simse"
         "${SIMSE_REPO_ROOT}/cppsrc/rtl/rtl.simse"
         "${SIMSE_REPO_ROOT}/cppsrc/rtl/xml.simse"
         "${SIMSE_REPO_ROOT}/cppsrc/rtl/fs.simse")

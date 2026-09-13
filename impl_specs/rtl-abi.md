@@ -237,18 +237,45 @@ normative layout.
 `FileStream` (`cppsrc/rtl/filestream.hpp`, prelude `cppsrc/rtl/fs.simse`) is the
 RTL's line reader. `openFileStream(path): *FileStream` is a free native (null when
 the file cannot be opened); the operations are **methods of the struct** -
-`readLine(): Opt<Str>`, `readLineInto(buffer: *Str): Bool`, `fileSize(): Int64`,
-`close()` - because the emitter calls a handle's methods as members
-(`stream.readLine()` on a `*FileStream` emits `(*stream).readLine()`).
-`readLine` goes through `std::getline` into a `std::string` the stream recycles and
-hands back a fresh `Str` (one allocation per line longer than `Str`'s inline
-capacity); `readLineInto` reads ahead in a 256 KiB chunk, finds the newline with
-`memchr`, and copies into the caller's `Str`, whose heap block is reused - no
-allocation after the longest line seen. Both strip a trailing `\r` and treat a
-final line without a newline as a line. Measured on
-`benchmarks/onebrc` (10M rows, 127.7 MiB): 2075 ms with `readLine` against 1156 ms
-with `readLineInto`, i.e. the reader choice is worth 1.8x on a straight-line
-program.
+`readLine(): Opt<Str>`, `readLineInto(buffer: *Str): Bool`,
+`readLineView(): Opt<StrView>`, `fileSize(): Int64`, `close()` - because the
+emitter calls a handle's methods as members (`stream.readLine()` on a
+`*FileStream` emits `(*stream).readLine()`).
+
+All three readers share one 256 KiB readahead buffer and one code path
+(`nextLineSpan`, which `memchr`s for the newline, shifts a partial line to the
+front of the buffer to keep it contiguous, and grows the buffer when a single
+line does not fit), and all three strip a trailing `\r` and treat a final line
+without a newline as a line. They differ in what the caller gets:
+
+- `readLine` goes through `std::getline` into a `std::string` the stream recycles
+  and hands back a fresh `Str` (one allocation per line longer than `Str`'s inline
+  capacity). It reads the file directly, so a stream must be read with *one* of
+  the three - mixing `readLine` with the other two skips bytes.
+- `readLineInto` copies the line into the caller's `Str`, whose heap block is
+  reused - no allocation after the longest line seen.
+- `readLineView` copies nothing: it returns a `StrView` (`cppsrc/rtl/strview.hpp`,
+  prelude `cppsrc/rtl/StrView.simse`) into the readahead buffer, valid until the
+  next read on that stream, which is the shape a parse loop wants
+  (`find`/`slice`/`at` stay in the buffer; `toStr` is the owned copy).
+
+Measured on `benchmarks/onebrc` (10M rows, 127.7 MiB, release, interleaved
+min/median, all reports byte-identical, all at a 6.5 MB peak working set):
+`readLine` **2040/2048 ms**, `readLineInto` **1156/1161 ms**, `readLineView`
+**1087/1088 ms** - the reader choice is worth 1.88x, and the in-place path is 1.43x
+*ahead* of the naive C++ `getline`+`stod` baseline's 1550/1570 ms. The in-place
+path still builds two `Str`s per line (the station name, which is the dictionary's
+key type, and the temperature, which `tenths` takes as a `Str`); removing those is
+the next step, together with in-place dictionary access (item 11's remaining gap).
+
+A type-name subtlety this cost a cycle to learn: the emitter resolves a type name
+by consulting the RTL list *before* the program's own declarations, so declaring a
+prelude type named `StrView` shadowed the compiler's own `common.StrView` in every
+emitted signature. `typeName` now checks `types` first and lets a declared type
+from any package other than `rtl` win (`cppsrc/codegen/Codegen.cpp` and the
+`cgIsRtlTypeName`/`typeName` mirror in `Codegen.simse`); the compiler's own
+`StrView` goes back to being `ns1_StrView` and nothing else changed - T23 and the
+five differentials stay byte-identical.
 
 `simse_nowMillis` (`cppsrc/rtl/timeops.hpp`) is a monotonic millisecond clock for
 logging and for measuring a run; it exists because the benchmark needed to report
@@ -262,6 +289,7 @@ The Simse surface, with the C++ symbol each one reaches (`cppsrc/rtl/fs.simse`,
 | `openFileStream(path)` | `simse_fileStream_open` | `*FileStream`; null when the file cannot be opened |
 | `stream.readLine()` | `FileStream::readLine` (member) | the next line, an empty `Opt` at end of file |
 | `stream.readLineInto(*buffer)` | `FileStream::readLineInto` (member) | the next line into a recycled `Str`, `false` at end of file |
+| `stream.readLineView()` | `FileStream::readLineView` (member) | the next line as a `StrView` into the readahead buffer; empty `Opt` at end of file, valid until the next read |
 | `stream.fileSize()` | `FileStream::fileSize` (member) | the file's size in bytes, for throughput reporting |
 | `stream.close()` | `FileStream::close` (member) | releases the handle |
 | `nowMillis()` | `simse_nowMillis` | monotonic milliseconds since an arbitrary fixed point |

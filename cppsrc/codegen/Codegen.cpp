@@ -78,7 +78,7 @@ namespace codegen {
                 "Float32", "Float64", "Char", "Bool", "Str",
                 "List", "Array", "RawArray", "Opt", "Res",
                 "Dictionary", "SmallVector", "PList",
-                "Attribute", "XmlNode", "Cursor", "FileStream",
+                "Attribute", "XmlNode", "Cursor", "FileStream", "StrView",
             };
             for (const Str &candidate: names) {
                 if (candidate == name) return true;
@@ -390,8 +390,15 @@ namespace codegen {
             Str typeName(const Str &name, const common::SourcePos &pos) {
                 if (name == "Unit") return "void";
                 if (activeTypeParams.count(name) > 0) return name;
+                // A declared type shadows an RTL type *name*: the compiler's own
+                // `common.StrView` is a different type from the RTL's `StrView`. The
+                // RTL's own prelude types keep their C++ spelling unprefixed.
+                if (types.count(name) > 0) {
+                    const Str packageName = typePackage(name);
+                    if (packageName == "rtl") return name;
+                    return qualify(packageName, name);
+                }
                 if (isRtlTypeName(name)) return name;
-                if (types.count(name) > 0) return qualify(typePackage(name), name);
                 fail(pos, "unsupported type '" + name + "'");
                 return "/*unsupported*/";
             }

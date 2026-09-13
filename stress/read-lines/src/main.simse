@@ -1,13 +1,32 @@
 package readlines
 
-// `FileStream`'s two readers over one awkward little file: short and long lines
+// `FileStream`'s three readers over one awkward little file: short and long lines
 // (one of each straddles `Str`'s 23-byte inline capacity), a CRLF line, empty
 // lines, trailing spaces, and a final line with no newline. `data.txt` is read
-// twice - once with `readLine(): Opt<Str>`, once into one recycled `Str` with
-// `readLineInto(*buffer)` - and the two passes must agree line for line.
+// three times - with `readLine(): Opt<Str>`, into one recycled `Str` with
+// `readLineInto(*buffer)`, and in place with `readLineView(): Opt<StrView>` - and
+// the passes must agree line for line.
+//
+// Then a line longer than the 256 KiB readahead buffer, after a line that leaves a
+// partial tail behind, so the buffer has to shift its tail, grow and refill. That
+// fixture is written into the harness work directory (git-ignored) instead of the
+// repository carrying 300 KB of test text, so this program is meant to be run by
+// `bun tools/stress.js`.
 
 fun describe(index: Int, text: Str): Unit {
     println("[" + index.toString() + "] len=" + text.size().toString() + " <" + text + ">")
+}
+
+// One pass over a generated file with the long line in it: prints each line's length
+// and, for the long one, its first and last ten bytes (which is what proves the tail
+// shift moved the bytes rather than losing or duplicating them).
+fun describeLong(reader: Str, lines: List<Int>): Unit {
+    println(reader + ": " + lines.size().toString() + " lines, lengths")
+    var i: Int = 0
+    while (i < lines.size()) {
+        println("  [" + i.toString() + "] " + lines[i].toString())
+        i = i + 1
+    }
 }
 
 fun main(): Int {
@@ -47,10 +66,102 @@ fun main(): Int {
     println("readLineInto: " + copied.toString() + " lines")
     again.close()
 
-    if (count == copied) {
-        println("both readers agree on every line")
+    // The in-place form: a view into the readahead buffer, nothing copied. Each
+    // view is used before the next read, which is what its one-read lifetime asks
+    // for; `find` and `slice` stay views, `toStr` is the owned copy.
+    val inPlace: *FileStream = openFileStream(path)
+    if (inPlace == null) {
+        eprintln("read-lines: cannot reopen " + path)
+        return 2
+    }
+    var viewed: Int = 0
+    var view: Opt<StrView> = inPlace.readLineView()
+    while (view.hasValue()) {
+        val text: StrView = view.value()
+        println("view[" + viewed.toString() + "] len=" + text.size().toString()
+                + " <" + text.toStr() + ">")
+        val space: Int = text.find(" ")
+        if (space >= 0) {
+            println("    first word=<" + text.slice(0, space).toStr() + ">, rest=<"
+                    + text.slice(space + 1, text.size() - space - 1).toStr() + ">")
+        }
+        viewed = viewed + 1
+        view = inPlace.readLineView()
+    }
+    println("readLineView: " + viewed.toString() + " lines")
+    inPlace.close()
+
+    if (count == copied && count == viewed) {
+        println("all three readers agree on every line")
     } else {
-        println("MISMATCH: " + count.toString() + " vs " + copied.toString())
+        println("MISMATCH: " + count.toString() + " vs " + copied.toString()
+                + " vs " + viewed.toString())
+    }
+
+    return longLines();
+}
+
+// A 300 KB line, longer than the readahead buffer, behind a short line so the
+// buffer's tail has to be shifted before it grows.
+fun longLines(): Int {
+    var big: Str = ""
+    var i: Int = 0
+    while (i < 30000) {
+        big.appendStr("0123456789")
+        i = i + 1
+    }
+    var content: Str = "short\n"
+    content.appendStr(big)
+    content.appendStr("\ntail\n")
+    val longPath: Str = "stress/.work/read-lines/long-line.txt"
+    if (!writeFile(longPath, content)) {
+        eprintln("read-lines: cannot write " + longPath + " (run this under tools/stress.js)")
+        return 2
+    }
+    println("long fixture: " + content.size().toString() + " bytes, one line of "
+            + big.size().toString())
+
+    val into: *FileStream = openFileStream(longPath)
+    if (into == null) {
+        eprintln("read-lines: cannot reopen " + longPath)
+        return 2
+    }
+    var lengths: List<Int> = List<Int>()
+    var buffer: Str = ""
+    while (into.readLineInto(*buffer)) {
+        lengths.append(buffer.size())
+        if (buffer.size() > 100) {
+            println("  into long line starts <" + buffer.substr(0, 10) + "> ends <"
+                    + buffer.substr(buffer.size() - 10, 10) + ">")
+        }
+    }
+    into.close()
+    describeLong("readLineInto", lengths)
+
+    val views: *FileStream = openFileStream(longPath)
+    if (views == null) {
+        eprintln("read-lines: cannot reopen " + longPath)
+        return 2
+    }
+    var fromViews: List<Int> = List<Int>()
+    var view: Opt<StrView> = views.readLineView()
+    while (view.hasValue()) {
+        val text: StrView = view.value()
+        fromViews.append(text.size())
+        if (text.size() > 100) {
+            println("  view long line starts <" + text.substr(0, 10) + "> ends <"
+                    + text.substr(text.size() - 10, 10) + ">")
+        }
+        view = views.readLineView()
+    }
+    views.close()
+    describeLong("readLineView", fromViews)
+
+    if (lengths.size() == fromViews.size()) {
+        println("both readers agree on the long line too")
+    } else {
+        println("MISMATCH on the long fixture: " + lengths.size().toString() + " vs "
+                + fromViews.size().toString())
     }
     return 0
 }
