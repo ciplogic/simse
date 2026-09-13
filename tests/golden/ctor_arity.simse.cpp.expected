@@ -5,17 +5,17 @@
 
 // ctor_arity.simse:4
 SIMSE_PACK_PUSH
-struct Widget {
+struct ns1_Widget {
     Int a;
     Int b;
 };
 SIMSE_PACK_POP
-Widget _make_Widget(Int a, Int b) {
-    return Widget{a, b};
+ns1_Widget ns1__make_Widget(Int a, Int b) {
+    return ns1_Widget{a, b};
 }
-Int make();
+Int ns1_make();
 // ctor_arity.simse:6
-Int make() {
-    Widget w = _make_Widget(1);
+Int ns1_make() {
+    ns1_Widget w = ns1__make_Widget(1);
     return 0;
 }

@@ -626,3 +626,108 @@ component-specific):
   `/Ob3` is in `--release` because it is the cheapest few percent the compiler
   has left. The hand-written ring's CMake release build is unchanged (`/O2`), so
   its numbers above stay comparable to earlier records.
+- **`Str`'s buffer counts characters, zero-based (T35).** `StrSmallVector::_len`
+  used to be the *stored byte count* — the terminating NUL was part of it — so
+  every read paid for the terminator: `size()` was `_len - 1`, `empty()` was
+  `_len <= 1`, `end()` was `raw() + (_len - 1)`. It is now the **character
+  count**, the same zero-based convention the generic `SmallVector` uses for its
+  elements, with the NUL one byte past the text in the allocation `_cap`
+  measures in bytes. Reads became arithmetic-free and the `+1` moved into the
+  write paths (`push_back`, `resize`, `assign`, `append`), which run once per
+  mutation rather than once per read. Layout, capacity knob, `constexpr`
+  construction, `Str` semantics and emitted output are unchanged (checked with
+  `tools/constexpr_probe.cpp` under both backings, the five differentials, the
+  bootstrap fixed point and a `cmp` of the two compilers' output). Measured on
+  the self-hosted compiler transpiling the full source set, release `/O2 /Ob3`,
+  interleaved run-for-run (`tools/_bench_ab.mjs`), two windows of 15 and 20
+  pairs: before 122.7/131.8 and 126.5/136.2 ms (min/median), after **118.0/126.4
+  and 120.7/131.3 ms** — **~4% faster in both windows**. Peak working set is
+  unchanged (the layout is identical: `_len`/`_cap` are still two `Int`s). The
+  change is header-only, which is why `tools/stress.js` now invalidates its
+  cached `Native.obj`/`common.obj` on a newer `cppsrc/**` header: a cached object
+  built under the old convention linked into a program compiled under the new one
+  is an ODR violation, and it showed up as a 6-byte file reported as 7 bytes.
+- **The AST's roles and attribute keys are enums (`AstXmlNode`, T36).** Profiling
+  the two rings showed the self-hosted compiler's cost centre: 2,522,264
+  `xmlAttr` calls, 68,148 child scans and 16,823 temporary child lists for a
+  6,357-line self-transpile — every one of them a `Str` key comparison or a list
+  allocation, where the hand-written ring reads typed fields. The AST carrier is
+  now `AstXmlNode` (`cppsrc/rtl/astxml.simse` + `.hpp`): the node's role is an
+  `AstNodeKind` and an attribute's key an `AstNodeAttributeKind`, so lookups are
+  integer compares; attribute *values* stay `Str`, and `ast::astNodeKindText` /
+  `ast::astNodeAttributeText` turn an enum back into the schema's spelling for the
+  dump (the `.astxml` goldens are unchanged, byte for byte). The enums are
+  prelude/RTL types so both rings share one definition; the language-level
+  `XmlNode` stays the general tree a program builds. Two effects, same release
+  setup and interleaved A/B over the full source set: the node shrank from 312 to
+  **172 bytes** (`List<AstNodeAttribute>` 264 -> 152), and min/median runtime fell
+  from **120.6/128.1 ms to 81.4/84.3 ms (~33%)** with peak working set 21.3 ->
+  **16.1 MB** — the self-hosted ring is now *smaller* than the hand-written one
+  (22.8 MB) and its slowdown against it narrowed from 3.5-3.7x to **2.4x**
+  (34.6/39.8 ms). Emitted output is byte-identical; the five differentials and the
+  bootstrap fixed point stay green.
+- **Table lookups do not rebuild their tables (T37).** The scanner's accessors -
+  `reservedWords()`, `multiCharOperators()`, `getTokenRules()` - built their table
+  and returned it **by value**, so every call copied it: `matchOperator` runs for
+  every token, which made a 24-entry keyword list and a 12-entry operator list per
+  token. The tables are now file-level `var` statics (`specs/statics.md`, the
+  feature's first use inside the compiler): the generated pass builds each once
+  before `main`, the accessors hand out a raw `*List<T>` into them, and both
+  lookups share one comparison function (`tableMatch(view, table, exact)` - exact
+  for a reserved word, first-prefix for an operator) instead of each editing its
+  own loop. The C++ ring mirrors it (`lex::tableMatch`, `getTokenRules()` returns a
+  pointer to a function-local static), and the differential drivers call
+  `simse_initStatics()` first because they host a generated component that has no
+  `main`. Measured on the self-hosted compiler over the full source set, release,
+  interleaved pairs in one window: **88.4/93.1 -> 72.3/77.3 ms** (15 pairs),
+  **85.5/90.6 -> 71.0/76.6 ms** and **86.8/93.1 -> 69.8/75.0 ms** (20 pairs each) -
+  **15-20% less time**, with one short window measuring 6% (this machine
+  throttles; the direction is the same in every window). Emitted output is
+  byte-identical, peak working set unchanged at 16.4 MB (the tables are small; the
+  win is the allocation churn). Against the hand-written ring the gap is now
+  **~2.0x** (36.4/42.7 ms), from 3.5-3.7x before T35-T37.
+- **The node's category is an enum too (T38).** The last text comparisons in the
+  pipeline are gone: the category (`kind` - "Stmt.If", "Type.Generic", ...) is now
+  a field of type `AstNodeCategory`, so `xmlKind(node)` returns an enum and sites
+  like `if (xmlKind(expr) == "Expr.IntLit" || ...)` are integer compares all the
+  way down. It stays a *separate* enum from the role because the two are
+  independent in this schema - `attach`/`renameRole` re-root a node (new role)
+  while its category travels with it - and `AstNodeAttributeKind.Kind` is gone
+  with it (the category is not an attribute any more). The dump still prints
+  `kind='...'` first, from the enum (`ast::astNodeCategoryText`, with the Simse twin
+  `common.xmlKindText` for diagnostics), so the `.astxml` goldens and the five
+  differentials are byte-identical. Effects: `AstXmlNode` is 176 bytes and carries
+  one fewer attribute per node, and the runtime win is small - **2-16%** across
+  three interleaved windows of 20/25 pairs (min 73.7->71.9, 93.6->86.7, 82.6->69.6
+  ms; this machine throttles hard, so the honest summary is "a few percent, always
+  in the same direction"). The point is uniformity: every test on a node is an
+  integer compare.
+- **The scanner's table match got cheap pre-tests (T39).** `tableMatch` used to
+  build each entry's `Str` and compare character by character; it now (a) tests the
+  view's **first character** against the entry's, (b) tests the **length**, and only
+  then compares the rest, (c) reaches the entry through a **raw pointer** into the
+  table instead of copying the `Str` out of it, and (d) compares through the new
+  `StrView.startsWithPtr(text: *Str, length: Int)`, which takes a pointer and a
+  known length, so nothing in the lookup copies text. The C++ ring mirrors it
+  (entries by reference, the same three tests in the same order). Effects, all with
+  byte-identical output (compiler emission, tokens, AST dumps) and the full gate
+  green: the self-transpile is **73.1/78.5 -> 64.9/69.8 ms** (-11%, 20 pairs), the
+  scanner stage alone over the same 6,357 lines is **317.9/333.0 -> 261.1/271.3 ms**
+  (-18/-19%, 20 pairs), the parser stage **415.2/427.8 -> 357.1/368.2 ms** (-14%),
+  and against the hand-written ring the scanner is now **1.49x** (180.6/191.5 vs
+  268.6/278.9 ms on that stage) where the same stage measured ~1.8x before. The
+  first cut of this change did not compile and had an infinite loop - see the note
+  below.
+
+### Note: the shape of a lookup like this
+
+Worth recording because the first attempt at T39 got it wrong in four ways the
+compiler *did* catch and one it could not:
+
+- `view[0]` - a data class has no indexing; `StrView` reads through `at(0)`.
+- `entry[0]` is fine when `entry: *Str` (`Str` has indexing; `*Str` derefs), but
+  `entry.len` is not: `len` is `StrView`'s field. Use `size()`.
+- passing a `*Str` to `startsWith(text: Str)` is a type error *and* the copy the
+  change was meant to remove; hence `startsWithPtr`.
+- `continue` before the loop's `i = i + 1`: the compiler cannot see it, and the
+  lookup spins forever. Increment first, then `continue`.

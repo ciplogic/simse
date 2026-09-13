@@ -1,7 +1,7 @@
 // Parser.simse
 //
 // The grammar parser, ported from cppsrc/parser/Parser.cpp. It consumes tokens
-// from the scanner and builds an XmlNode tree using the schema in
+// from the scanner and builds an AstXmlNode tree using the schema in
 // impl_specs/ast-xmlnode.md, byte-for-byte compatible with ast::toXmlNode in
 // cppsrc/ast/Ast.cpp.
 //
@@ -16,7 +16,7 @@ import common
 // An expression node plus the source position where the expression started. The
 // position is needed by parents (a Call/Index/Member/Binary node takes its
 // position from its callee/receiver/left operand).
-data class ExprNode(var node: XmlNode; var line: Int; var column: Int)
+data class ExprNode(var node: AstXmlNode; var line: Int; var column: Int)
 
 data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; var file: Str) {
 
@@ -107,58 +107,56 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
                || this.checkText(";") || this.checkText("}")
     }
 
-    // ---- XmlNode builders -------------------------------------------------
+    // ---- AstXmlNode builders -------------------------------------------------
 
-    fun emptyNode(): XmlNode {
-        return XmlNode("", List<Attribute>(), &List<XmlNode>())
+    fun emptyNode(): AstXmlNode {
+        return AstXmlNode(AstNodeKind.None, AstNodeCategory.None, List<AstNodeAttribute>(), Array<AstXmlNode>())
     }
 
     fun emptyExpr(): ExprNode {
         return ExprNode(this.emptyNode(), 0, 0)
     }
 
-    // kind, line, column - the common prefix of most node attribute lists.
-    fun posAttrs(kind: Str, line: Int, column: Int): List<Attribute> {
-        var attrs: List<Attribute> = List<Attribute>()
-        attrs.append(Attribute("kind", kind))
-        attrs.append(Attribute("line", line.toString()))
-        attrs.append(Attribute("column", column.toString()))
+    // kind, line, column - the common prefix of most node attribute lists. The
+    // node's kind is a field (`AstNodeCategory`), so only the position is here.
+    fun posAttrs(line: Int, column: Int): List<AstNodeAttribute> {
+        var attrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, line.toString()))
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, column.toString()))
         return attrs
     }
 
     // Appends `child` under `parent` with the child's element role set to `role`.
-    // `parent.Children` is a shared list handle, so the append reaches the caller's
-    // node even though `parent` is a non-owning pointer.
-    fun attach(parent: *XmlNode, role: Str, child: *XmlNode): Unit {
-        var renamed: XmlNode = copy(child)
+    // `parent` is a non-owning pointer, so the append replaces the caller's
+    // `Children` handle even though the node itself is not passed by value.
+    fun attach(parent: *AstXmlNode, role: AstNodeKind, child: *AstXmlNode): Unit {
+        var renamed: AstXmlNode = copy(child)
         renamed.name = role
-        parent.Children.append(renamed)
+        xmlAddChild(parent, renamed)
     }
 
-    fun container(name: Str, children: *List<XmlNode>): XmlNode {
-        var box: XmlNode = XmlNode(name, List<Attribute>(), &List<XmlNode>())
-        var i: Int = 0
-        while (i < children.size()) {
-            box.Children.append(children[i])
-            i = i + 1
-        }
-        return box
+    // A container node is one whose children are just `children`: the array is
+    // built once from the list rather than appended to per child.
+    fun container(name: AstNodeKind, children: *List<AstXmlNode>): AstXmlNode {
+        return AstXmlNode(name, AstNodeCategory.None, List<AstNodeAttribute>(), children.toArray())
     }
 
     // The names are read only; a `*List<Str>` avoids copying the caller's list.
-    fun appendTypeParams(node: *XmlNode, names: *List<Str>): Unit {
+    fun appendTypeParams(node: *AstXmlNode, names: *List<Str>): Unit {
+        var params: List<AstXmlNode> = List<AstXmlNode>()
         var i: Int = 0
         while (i < names.size()) {
-            var attrs: List<Attribute> = List<Attribute>()
-            attrs.append(Attribute("name", names[i]))
-            node.Children.append(XmlNode("TypeParam", attrs, &List<XmlNode>()))
+            var attrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
+            attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, names[i]))
+            params.append(AstXmlNode(AstNodeKind.TypeParam, AstNodeCategory.None, attrs, Array<AstXmlNode>()))
             i = i + 1
         }
+        xmlAddChildren(node, *params)
     }
 
     // ---- module -----------------------------------------------------------
 
-    fun parseRoot(): XmlNode {
+    fun parseRoot(): AstXmlNode {
         this.skipSeparators()
         // A mandatory, single, file-level `package a.b.c` as the first
         // declaration. A second `package` is rejected by parseDecl.
@@ -180,17 +178,16 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         }
         this.skipSeparators()
 
-        var attrs: List<Attribute> = List<Attribute>()
-        attrs.append(Attribute("kind", "Module"))
-        attrs.append(Attribute("line", "1"))
-        attrs.append(Attribute("column", "1"))
+        var attrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, "1"))
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, "1"))
         // Every file declares exactly one package; the attribute is always
         // present. Matches ast::toXmlNode.
-        attrs.append(Attribute("package", packageName))
-        var root: XmlNode = XmlNode("Module", attrs, &List<XmlNode>())
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Package, packageName))
+        var root: AstXmlNode = AstXmlNode(AstNodeKind.Module, AstNodeCategory.Module, attrs, Array<AstXmlNode>())
 
-        var imports: List<XmlNode> = List<XmlNode>()
-        var decls: List<XmlNode> = List<XmlNode>()
+        var imports: List<AstXmlNode> = List<AstXmlNode>()
+        var decls: List<AstXmlNode> = List<AstXmlNode>()
 
         while (!this.atEnd() && !this.failed) {
             if (this.checkText("import")) {
@@ -201,22 +198,14 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
             this.skipSeparators()
         }
 
-        var i: Int = 0
-        while (i < imports.size()) {
-            root.Children.append(imports[i])
-            i = i + 1
-        }
-        var j: Int = 0
-        while (j < decls.size()) {
-            root.Children.append(decls[j])
-            j = j + 1
-        }
+        xmlAddChildren(*root, *imports)
+        xmlAddChildren(*root, *decls)
         return root
     }
 
     // ---- declarations -----------------------------------------------------
 
-    fun parseImport(): XmlNode {
+    fun parseImport(): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
         this.advance() // import
         var path: Str = this.expectName()
@@ -230,14 +219,17 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
             }
             path = path + "." + next
         }
-        var attrs: List<Attribute> = List<Attribute>()
-        attrs.append(Attribute("path", path))
-        attrs.append(Attribute("line", pos.line.toString()))
-        attrs.append(Attribute("column", pos.column.toString()))
-        return XmlNode("Import", attrs, &List<XmlNode>())
+        var attrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Path, path))
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, pos.line.toString()))
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, pos.column.toString()))
+        return AstXmlNode(AstNodeKind.Import, AstNodeCategory.None, attrs, Array<AstXmlNode>())
     }
 
-    fun parseDecl(): XmlNode {
+    fun parseDecl(): AstXmlNode {
+        if (this.checkText("var") || this.checkText("val")) {
+            return this.parseStaticVar()
+        }
         if (this.checkText("data")) {
             return this.parseDataClass()
         }
@@ -257,7 +249,49 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         return this.emptyNode()
     }
 
-    fun parseDataClass(): XmlNode {
+    // A file-level `var`/`val`: static storage (specs/statics.md). The type is
+    // required (no inference) and the initializer is optional. The children are
+    // the same shape as a `Stmt.VarDecl`, so the emitters have one variable form;
+    // the role is `Var` because this is a declaration, not a statement.
+    fun parseStaticVar(): AstXmlNode {
+        val pos: SourcePos = this.peek(0).pos
+        val isVar: Bool = this.matchText("var")
+        if (!isVar) {
+            if (!this.expectText("val")) {
+                return this.emptyNode()
+            }
+        }
+        val name: Str = this.expectName()
+        if (this.failed) {
+            return this.emptyNode()
+        }
+        if (!this.expectText(":")) {
+            return this.emptyNode()
+        }
+        val typeNode: AstXmlNode = this.parseType(AstNodeKind.Type)
+        if (this.failed) {
+            return this.emptyNode()
+        }
+        var init: ExprNode = this.emptyExpr()
+        if (this.matchText("=")) {
+            this.skipNewlines()
+            init = this.parseExpr(0)
+            if (this.failed) {
+                return this.emptyNode()
+            }
+        }
+        var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsVar, boolText(isVar)))
+        var node: AstXmlNode = AstXmlNode(AstNodeKind.Var, AstNodeCategory.Var, attrs, Array<AstXmlNode>())
+        xmlAddChild(*node, typeNode)
+        if (init.node.name != AstNodeKind.None) {
+            this.attach(*node, AstNodeKind.Init, *init.node)
+        }
+        return node
+    }
+
+    fun parseDataClass(): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
         this.advance() // data
         if (!this.expectText("class")) {
@@ -275,7 +309,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
             }
         }
 
-        var fields: List<XmlNode> = List<XmlNode>()
+        var fields: List<AstXmlNode> = List<AstXmlNode>()
         if (this.matchText("(")) {
             this.skipSeparators()
             while (!this.checkText(")") && !this.atEnd() && !this.failed) {
@@ -293,21 +327,21 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
                 if (this.failed) {
                     return this.emptyNode()
                 }
-                var fieldType: XmlNode = this.emptyNode()
+                var fieldType: AstXmlNode = this.emptyNode()
                 if (this.matchText(":")) {
-                    fieldType = this.parseType("Type")
+                    fieldType = this.parseType(AstNodeKind.Type)
                     if (this.failed) {
                         return this.emptyNode()
                     }
                 }
-                var fattrs: List<Attribute> = List<Attribute>()
-                fattrs.append(Attribute("name", fieldName))
-                fattrs.append(Attribute("isVar", boolText(isVar)))
-                fattrs.append(Attribute("line", fieldPos.line.toString()))
-                fattrs.append(Attribute("column", fieldPos.column.toString()))
-                var fnode: XmlNode = XmlNode("Field", fattrs, &List<XmlNode>())
-                if (fieldType.name != "") {
-                    fnode.Children.append(fieldType)
+                var fattrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
+                fattrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, fieldName))
+                fattrs.append(AstNodeAttribute(AstNodeAttributeKind.IsVar, boolText(isVar)))
+                fattrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, fieldPos.line.toString()))
+                fattrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, fieldPos.column.toString()))
+                var fnode: AstXmlNode = AstXmlNode(AstNodeKind.Field, AstNodeCategory.None, fattrs, Array<AstXmlNode>())
+                if (fieldType.name != AstNodeKind.None) {
+                    xmlAddChild(*fnode, fieldType)
                 }
                 fields.append(fnode)
                 this.skipSeparators()
@@ -317,7 +351,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
             }
         }
 
-        var methods: List<XmlNode> = List<XmlNode>()
+        var methods: List<AstXmlNode> = List<AstXmlNode>()
         if (this.checkText("{")) {
             this.advance()
             this.skipSeparators()
@@ -334,24 +368,16 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
             }
         }
 
-        var attrs: List<Attribute> = this.posAttrs("DataClass", pos.line, pos.column)
-        attrs.append(Attribute("name", name))
-        var node: XmlNode = XmlNode("DataClass", attrs, &List<XmlNode>())
+        var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
+        var node: AstXmlNode = AstXmlNode(AstNodeKind.DataClass, AstNodeCategory.DataClass, attrs, Array<AstXmlNode>())
         this.appendTypeParams(*node, *typeParams)
-        var fi: Int = 0
-        while (fi < fields.size()) {
-            node.Children.append(fields[fi])
-            fi = fi + 1
-        }
-        var mi: Int = 0
-        while (mi < methods.size()) {
-            node.Children.append(methods[mi])
-            mi = mi + 1
-        }
+        xmlAddChildren(*node, *fields)
+        xmlAddChildren(*node, *methods)
         return node
     }
 
-    fun parseEnum(): XmlNode {
+    fun parseEnum(): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
         this.advance() // enum
         val name: Str = this.expectName()
@@ -370,7 +396,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         }
         this.skipSeparators()
 
-        var members: List<XmlNode> = List<XmlNode>()
+        var members: List<AstXmlNode> = List<AstXmlNode>()
         while (!this.checkText("}") && !this.atEnd() && !this.failed) {
             val memberPos: SourcePos = this.peek(0).pos
             val memberName: Str = this.expectName()
@@ -395,13 +421,13 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
                 }
                 hasValue = true
             }
-            var mattrs: List<Attribute> = List<Attribute>()
-            mattrs.append(Attribute("name", memberName))
-            mattrs.append(Attribute("hasValue", boolText(hasValue)))
-            mattrs.append(Attribute("value", memberValue.toString()))
-            mattrs.append(Attribute("line", memberPos.line.toString()))
-            mattrs.append(Attribute("column", memberPos.column.toString()))
-            members.append(XmlNode("EnumMember", mattrs, &List<XmlNode>()))
+            var mattrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
+            mattrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, memberName))
+            mattrs.append(AstNodeAttribute(AstNodeAttributeKind.HasValue, boolText(hasValue)))
+            mattrs.append(AstNodeAttribute(AstNodeAttributeKind.Value, memberValue.toString()))
+            mattrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, memberPos.line.toString()))
+            mattrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, memberPos.column.toString()))
+            members.append(AstXmlNode(AstNodeKind.EnumMember, AstNodeCategory.None, mattrs, Array<AstXmlNode>()))
             this.skipSeparators()
             this.matchText(",")
             this.skipSeparators()
@@ -410,19 +436,15 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
             return this.emptyNode()
         }
 
-        var attrs: List<Attribute> = this.posAttrs("Enum", pos.line, pos.column)
-        attrs.append(Attribute("name", name))
-        var node: XmlNode = XmlNode("Enum", attrs, &List<XmlNode>())
+        var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
+        var node: AstXmlNode = AstXmlNode(AstNodeKind.Enum, AstNodeCategory.Enum, attrs, Array<AstXmlNode>())
         this.appendTypeParams(*node, *typeParams)
-        var i: Int = 0
-        while (i < members.size()) {
-            node.Children.append(members[i])
-            i = i + 1
-        }
+        xmlAddChildren(*node, *members)
         return node
     }
 
-    fun parseTypeAlias(): XmlNode {
+    fun parseTypeAlias(): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
         this.advance() // typealias
         val name: Str = this.expectName()
@@ -439,16 +461,16 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         if (!this.expectText("=")) {
             return this.emptyNode()
         }
-        val target: XmlNode = this.parseType("TargetType")
+        val target: AstXmlNode = this.parseType(AstNodeKind.TargetType)
         if (this.failed) {
             return this.emptyNode()
         }
 
-        var attrs: List<Attribute> = this.posAttrs("TypeAlias", pos.line, pos.column)
-        attrs.append(Attribute("name", name))
-        var node: XmlNode = XmlNode("TypeAlias", attrs, &List<XmlNode>())
+        var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
+        var node: AstXmlNode = AstXmlNode(AstNodeKind.TypeAlias, AstNodeCategory.TypeAlias, attrs, Array<AstXmlNode>())
         this.appendTypeParams(*node, *typeParams)
-        node.Children.append(target)
+        xmlAddChild(*node, target)
         return node
     }
 
@@ -487,7 +509,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         return ""
     }
 
-    fun parseFunction(isNative: Bool): XmlNode {
+    fun parseFunction(isNative: Bool): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
         var nativeSymbol: Str = ""
         var hasNativeSymbol: Bool = false
@@ -513,14 +535,14 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         }
 
         var hasReceiver: Bool = false
-        var receiverNode: XmlNode = this.emptyNode()
+        var receiverNode: AstXmlNode = this.emptyNode()
         var declName: Str = ""
 
         if (!isNative && this.looksLikeTypeStart()) {
             val savedCursor: Cursor<Token> = this.cursor
             val savedFailed: Bool = this.failed
             val savedError: Str = this.error
-            val receiver: XmlNode = this.parseType("Receiver")
+            val receiver: AstXmlNode = this.parseType(AstNodeKind.Receiver)
             if (!this.failed && this.checkText(".")) {
                 this.advance() // .
                 val name: Str = this.expectName()
@@ -555,27 +577,27 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
             return this.emptyNode()
         }
         this.skipNewlines()
-        var params: List<XmlNode> = List<XmlNode>()
+        var params: List<AstXmlNode> = List<AstXmlNode>()
         while (!this.checkText(")") && !this.atEnd() && !this.failed) {
             val paramPos: SourcePos = this.peek(0).pos
             val paramName: Str = this.parseParamName()
             if (this.failed) {
                 return this.emptyNode()
             }
-            var paramType: XmlNode = this.emptyNode()
+            var paramType: AstXmlNode = this.emptyNode()
             if (this.matchText(":")) {
-                paramType = this.parseType("Type")
+                paramType = this.parseType(AstNodeKind.Type)
                 if (this.failed) {
                     return this.emptyNode()
                 }
             }
-            var pattrs: List<Attribute> = List<Attribute>()
-            pattrs.append(Attribute("name", paramName))
-            pattrs.append(Attribute("line", paramPos.line.toString()))
-            pattrs.append(Attribute("column", paramPos.column.toString()))
-            var pnode: XmlNode = XmlNode("Param", pattrs, &List<XmlNode>())
-            if (paramType.name != "") {
-                pnode.Children.append(paramType)
+            var pattrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
+            pattrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, paramName))
+            pattrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, paramPos.line.toString()))
+            pattrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, paramPos.column.toString()))
+            var pnode: AstXmlNode = AstXmlNode(AstNodeKind.Param, AstNodeCategory.None, pattrs, Array<AstXmlNode>())
+            if (paramType.name != AstNodeKind.None) {
+                xmlAddChild(*pnode, paramType)
             }
             params.append(pnode)
             this.skipNewlines()
@@ -588,15 +610,15 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
             return this.emptyNode()
         }
 
-        var returnType: XmlNode = this.emptyNode()
+        var returnType: AstXmlNode = this.emptyNode()
         if (this.matchText(":")) {
-            returnType = this.parseType("ReturnType")
+            returnType = this.parseType(AstNodeKind.ReturnType)
             if (this.failed) {
                 return this.emptyNode()
             }
         }
 
-        var body: List<XmlNode> = List<XmlNode>()
+        var body: List<AstXmlNode> = List<AstXmlNode>()
         var hasBody: Bool = false
         if (this.checkText("{")) {
             body = this.parseBlock()
@@ -606,65 +628,61 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
             hasBody = true
         }
 
-        var attrs: List<Attribute> = this.posAttrs("Function", pos.line, pos.column)
-        attrs.append(Attribute("name", declName))
-        attrs.append(Attribute("isNative", boolText(isNative)))
-        attrs.append(Attribute("hasBody", boolText(hasBody)))
-        attrs.append(Attribute("hasReceiver", boolText(hasReceiver)))
-        attrs.append(Attribute("hasNativeSymbol", boolText(hasNativeSymbol)))
+        var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, declName))
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsNative, boolText(isNative)))
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.HasBody, boolText(hasBody)))
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.HasReceiver, boolText(hasReceiver)))
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.HasNativeSymbol, boolText(hasNativeSymbol)))
         if (hasNativeSymbol) {
-            attrs.append(Attribute("nativeSymbol", nativeSymbol))
+            attrs.append(AstNodeAttribute(AstNodeAttributeKind.NativeSymbol, nativeSymbol))
         }
-        var node: XmlNode = XmlNode("Function", attrs, &List<XmlNode>())
+        var node: AstXmlNode = AstXmlNode(AstNodeKind.Function, AstNodeCategory.Function, attrs, Array<AstXmlNode>())
         if (hasReceiver) {
-            node.Children.append(receiverNode)
+            xmlAddChild(*node, receiverNode)
         }
         this.appendTypeParams(*node, *functionTypeParams)
-        var pi: Int = 0
-        while (pi < params.size()) {
-            node.Children.append(params[pi])
-            pi = pi + 1
-        }
-        if (returnType.name != "") {
-            node.Children.append(returnType)
+        xmlAddChildren(*node, *params)
+        if (returnType.name != AstNodeKind.None) {
+            xmlAddChild(*node, returnType)
         }
         if (hasBody) {
-            node.Children.append(this.container("Body", *body))
+            xmlAddChild(*node, this.container(AstNodeKind.Body, *body))
         }
         return node
     }
 
     // ---- types ------------------------------------------------------------
 
-    fun parseType(role: Str): XmlNode {
+    fun parseType(role: AstNodeKind): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
 
         if (this.matchText("&")) {
-            val inner: XmlNode = this.parseType("Inner")
+            val inner: AstXmlNode = this.parseType(AstNodeKind.Inner)
             if (this.failed) {
                 return this.emptyNode()
             }
-            var attrs: List<Attribute> = this.posAttrs("Type.Reference", pos.line, pos.column)
-            var node: XmlNode = XmlNode(role, attrs, &List<XmlNode>())
-            node.Children.append(inner)
+            var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+            var node: AstXmlNode = AstXmlNode(role, AstNodeCategory.TypeReference, attrs, Array<AstXmlNode>())
+            xmlAddChild(*node, inner)
             return node
         }
         if (this.matchText("*")) {
-            val inner: XmlNode = this.parseType("Inner")
+            val inner: AstXmlNode = this.parseType(AstNodeKind.Inner)
             if (this.failed) {
                 return this.emptyNode()
             }
-            var attrs: List<Attribute> = this.posAttrs("Type.Pointer", pos.line, pos.column)
-            var node: XmlNode = XmlNode(role, attrs, &List<XmlNode>())
-            node.Children.append(inner)
+            var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+            var node: AstXmlNode = AstXmlNode(role, AstNodeCategory.TypePointer, attrs, Array<AstXmlNode>())
+            xmlAddChild(*node, inner)
             return node
         }
         if (this.checkText("(")) {
             this.advance() // (
-            var params: List<XmlNode> = List<XmlNode>()
+            var params: List<AstXmlNode> = List<AstXmlNode>()
             this.skipNewlines()
             if (!this.checkText(")")) {
-                val first: XmlNode = this.parseType("Type")
+                val first: AstXmlNode = this.parseType(AstNodeKind.Type)
                 if (this.failed) {
                     return this.emptyNode()
                 }
@@ -672,7 +690,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
                 this.skipNewlines()
                 while (this.matchText(",")) {
                     this.skipNewlines()
-                    val next: XmlNode = this.parseType("Type")
+                    val next: AstXmlNode = this.parseType(AstNodeKind.Type)
                     if (this.failed) {
                         return this.emptyNode()
                     }
@@ -684,24 +702,26 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
                 return this.emptyNode()
             }
             if (this.matchText("->")) {
-                var attrs: List<Attribute> = this.posAttrs("Type.Function", pos.line, pos.column)
-                var node: XmlNode = XmlNode(role, attrs, &List<XmlNode>())
+                var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+                var node: AstXmlNode = AstXmlNode(role, AstNodeCategory.TypeFunction, attrs, Array<AstXmlNode>())
+                var renamed: List<AstXmlNode> = List<AstXmlNode>()
                 var i: Int = 0
                 while (i < params.size()) {
-                    var param: XmlNode = params[i]
-                    param.name = "ParamType"
-                    node.Children.append(param)
+                    var param: AstXmlNode = params[i]
+                    param.name = AstNodeKind.ParamType
+                    renamed.append(param)
                     i = i + 1
                 }
-                val ret: XmlNode = this.parseType("ReturnType")
+                xmlAddChildren(*node, *renamed)
+                val ret: AstXmlNode = this.parseType(AstNodeKind.ReturnType)
                 if (this.failed) {
                     return this.emptyNode()
                 }
-                node.Children.append(ret)
+                xmlAddChild(*node, ret)
                 return node
             }
             if (params.size() == 1) {
-                var only: XmlNode = params[0]
+                var only: AstXmlNode = params[0]
                 only.name = role
                 return only
             }
@@ -711,43 +731,39 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         if (this.checkKind(TokenKind.Identifier)) {
             val name: Str = this.advance().text
             if (this.checkText("<")) {
-                val typeArgs: List<XmlNode> = this.parseGenericArgs()
+                val typeArgs: List<AstXmlNode> = this.parseGenericArgs()
                 if (this.failed) {
                     return this.emptyNode()
                 }
-                var attrs: List<Attribute> = this.posAttrs("Type.Generic", pos.line, pos.column)
-                attrs.append(Attribute("name", name))
-                var node: XmlNode = XmlNode(role, attrs, &List<XmlNode>())
-                var i: Int = 0
-                while (i < typeArgs.size()) {
-                    node.Children.append(typeArgs[i])
-                    i = i + 1
-                }
+                var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+                attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
+                var node: AstXmlNode = AstXmlNode(role, AstNodeCategory.TypeGeneric, attrs, Array<AstXmlNode>())
+                xmlAddChildren(*node, *typeArgs)
                 return node
             }
-            var attrs: List<Attribute> = this.posAttrs("Type.Named", pos.line, pos.column)
-            attrs.append(Attribute("name", name))
-            return XmlNode(role, attrs, &List<XmlNode>())
+            var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+            attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
+            return AstXmlNode(role, AstNodeCategory.TypeNamed, attrs, Array<AstXmlNode>())
         }
         this.fail("expected type")
         return this.emptyNode()
     }
 
-    fun parseGenericArgs(): List<XmlNode> {
-        var out: List<XmlNode> = List<XmlNode>()
+    fun parseGenericArgs(): List<AstXmlNode> {
+        var out: List<AstXmlNode> = List<AstXmlNode>()
         if (!this.expectText("<")) {
             return out
         }
         this.skipNewlines()
         while (!this.checkText(">") && !this.atEnd() && !this.failed) {
-            var arg: XmlNode = this.emptyNode()
+            var arg: AstXmlNode = this.emptyNode()
             if (this.checkKind(TokenKind.Number)) {
                 val argPos: SourcePos = this.peek(0).pos
-                var attrs: List<Attribute> = this.posAttrs("Type.IntLit", argPos.line, argPos.column)
-                attrs.append(Attribute("text", this.advance().text))
-                arg = XmlNode("TypeArg", attrs, &List<XmlNode>())
+                var attrs: List<AstNodeAttribute> = this.posAttrs(argPos.line, argPos.column)
+                attrs.append(AstNodeAttribute(AstNodeAttributeKind.Text, this.advance().text))
+                arg = AstXmlNode(AstNodeKind.TypeArg, AstNodeCategory.TypeIntLit, attrs, Array<AstXmlNode>())
             } else {
-                arg = this.parseType("TypeArg")
+                arg = this.parseType(AstNodeKind.TypeArg)
                 if (this.failed) {
                     return out
                 }
@@ -765,14 +781,14 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
 
     // ---- statements -------------------------------------------------------
 
-    fun parseBlock(): List<XmlNode> {
-        var body: List<XmlNode> = List<XmlNode>()
+    fun parseBlock(): List<AstXmlNode> {
+        var body: List<AstXmlNode> = List<AstXmlNode>()
         if (!this.expectText("{")) {
             return body
         }
         this.skipSeparators()
         while (!this.checkText("}") && !this.atEnd() && !this.failed) {
-            val stmt: XmlNode = this.parseStmt()
+            val stmt: AstXmlNode = this.parseStmt()
             if (this.failed) {
                 return body
             }
@@ -783,7 +799,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         return body
     }
 
-    fun parseStmt(): XmlNode {
+    fun parseStmt(): AstXmlNode {
         if (this.checkText("val") || this.checkText("var")) {
             return this.parseVarDecl()
         }
@@ -802,12 +818,12 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         if (this.checkText("break")) {
             val pos: SourcePos = this.peek(0).pos
             this.advance()
-            return XmlNode("Stmt", this.posAttrs("Stmt.Break", pos.line, pos.column), &List<XmlNode>())
+            return AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtBreak, this.posAttrs(pos.line, pos.column), Array<AstXmlNode>())
         }
         if (this.checkText("continue")) {
             val pos: SourcePos = this.peek(0).pos
             this.advance()
-            return XmlNode("Stmt", this.posAttrs("Stmt.Continue", pos.line, pos.column), &List<XmlNode>())
+            return AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtContinue, this.posAttrs(pos.line, pos.column), Array<AstXmlNode>())
         }
 
         val pos: SourcePos = this.peek(0).pos
@@ -822,20 +838,20 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
             if (this.failed) {
                 return this.emptyNode()
             }
-            var attrs: List<Attribute> = this.posAttrs("Stmt.Assign", pos.line, pos.column)
-            attrs.append(Attribute("op", op))
-            var node: XmlNode = XmlNode("Stmt", attrs, &List<XmlNode>())
-            this.attach(*node, "Target", *expr.node)
-            this.attach(*node, "Value", *value.node)
+            var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+            attrs.append(AstNodeAttribute(AstNodeAttributeKind.Op, op))
+            var node: AstXmlNode = AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtAssign, attrs, Array<AstXmlNode>())
+            this.attach(*node, AstNodeKind.Target, *expr.node)
+            this.attach(*node, AstNodeKind.Value, *value.node)
             return node
         }
-        var attrs: List<Attribute> = this.posAttrs("Stmt.ExprStmt", pos.line, pos.column)
-        var node: XmlNode = XmlNode("Stmt", attrs, &List<XmlNode>())
-        this.attach(*node, "Expr", *expr.node)
+        var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        var node: AstXmlNode = AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtExprStmt, attrs, Array<AstXmlNode>())
+        this.attach(*node, AstNodeKind.Expr, *expr.node)
         return node
     }
 
-    fun parseVarDecl(): XmlNode {
+    fun parseVarDecl(): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
         val isVar: Bool = this.matchText("var")
         if (!isVar) {
@@ -847,9 +863,9 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         if (this.failed) {
             return this.emptyNode()
         }
-        var typeNode: XmlNode = this.emptyNode()
+        var typeNode: AstXmlNode = this.emptyNode()
         if (this.matchText(":")) {
-            typeNode = this.parseType("Type")
+            typeNode = this.parseType(AstNodeKind.Type)
             if (this.failed) {
                 return this.emptyNode()
             }
@@ -862,20 +878,20 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
                 return this.emptyNode()
             }
         }
-        var attrs: List<Attribute> = this.posAttrs("Stmt.VarDecl", pos.line, pos.column)
-        attrs.append(Attribute("name", name))
-        attrs.append(Attribute("isVar", boolText(isVar)))
-        var node: XmlNode = XmlNode("Stmt", attrs, &List<XmlNode>())
-        if (typeNode.name != "") {
-            node.Children.append(typeNode)
+        var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsVar, boolText(isVar)))
+        var node: AstXmlNode = AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtVarDecl, attrs, Array<AstXmlNode>())
+        if (typeNode.name != AstNodeKind.None) {
+            xmlAddChild(*node, typeNode)
         }
-        if (init.node.name != "") {
-            this.attach(*node, "Init", *init.node)
+        if (init.node.name != AstNodeKind.None) {
+            this.attach(*node, AstNodeKind.Init, *init.node)
         }
         return node
     }
 
-    fun parseIf(): XmlNode {
+    fun parseIf(): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
         this.advance() // if
         if (!this.expectText("(")) {
@@ -888,16 +904,16 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         if (!this.expectText(")")) {
             return this.emptyNode()
         }
-        val thenBody: List<XmlNode> = this.parseBlock()
+        val thenBody: List<AstXmlNode> = this.parseBlock()
         if (this.failed) {
             return this.emptyNode()
         }
         var hasElse: Bool = false
-        var elseBody: List<XmlNode> = List<XmlNode>()
+        var elseBody: List<AstXmlNode> = List<AstXmlNode>()
         if (this.matchText("else")) {
             hasElse = true
             if (this.checkText("if")) {
-                val nested: XmlNode = this.parseIf()
+                val nested: AstXmlNode = this.parseIf()
                 if (this.failed) {
                     return this.emptyNode()
                 }
@@ -909,17 +925,17 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
                 }
             }
         }
-        var attrs: List<Attribute> = this.posAttrs("Stmt.If", pos.line, pos.column)
-        var node: XmlNode = XmlNode("Stmt", attrs, &List<XmlNode>())
-        this.attach(*node, "Cond", *cond.node)
-        node.Children.append(this.container("Then", *thenBody))
+        var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        var node: AstXmlNode = AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtIf, attrs, Array<AstXmlNode>())
+        this.attach(*node, AstNodeKind.Cond, *cond.node)
+        xmlAddChild(*node, this.container(AstNodeKind.Then, *thenBody))
         if (hasElse) {
-            node.Children.append(this.container("Else", *elseBody))
+            xmlAddChild(*node, this.container(AstNodeKind.Else, *elseBody))
         }
         return node
     }
 
-    fun parseWhile(): XmlNode {
+    fun parseWhile(): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
         this.advance() // while
         if (!this.expectText("(")) {
@@ -932,18 +948,18 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         if (!this.expectText(")")) {
             return this.emptyNode()
         }
-        val body: List<XmlNode> = this.parseBlock()
+        val body: List<AstXmlNode> = this.parseBlock()
         if (this.failed) {
             return this.emptyNode()
         }
-        var attrs: List<Attribute> = this.posAttrs("Stmt.While", pos.line, pos.column)
-        var node: XmlNode = XmlNode("Stmt", attrs, &List<XmlNode>())
-        this.attach(*node, "Cond", *cond.node)
-        node.Children.append(this.container("Body", *body))
+        var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        var node: AstXmlNode = AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtWhile, attrs, Array<AstXmlNode>())
+        this.attach(*node, AstNodeKind.Cond, *cond.node)
+        xmlAddChild(*node, this.container(AstNodeKind.Body, *body))
         return node
     }
 
-    fun parseSwitch(): XmlNode {
+    fun parseSwitch(): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
         this.advance() // switch
         if (!this.expectText("(")) {
@@ -961,11 +977,11 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         }
         this.skipSeparators()
 
-        var cases: List<XmlNode> = List<XmlNode>()
+        var cases: List<AstXmlNode> = List<AstXmlNode>()
         while (!this.checkText("}") && !this.atEnd() && !this.failed) {
             val casePos: SourcePos = this.peek(0).pos
             var isDefault: Bool = false
-            var label: XmlNode = this.emptyNode()
+            var label: AstXmlNode = this.emptyNode()
             if (this.matchText("case")) {
                 this.skipNewlines()
                 val labelExpr: ExprNode = this.parseExpr(0)
@@ -986,46 +1002,38 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
                 return this.emptyNode()
             }
             this.skipSeparators()
-            var arm: List<XmlNode> = List<XmlNode>()
+            var arm: List<AstXmlNode> = List<AstXmlNode>()
             while (!this.checkText("case") && !this.checkText("default")
                    && !this.checkText("}") && !this.atEnd() && !this.failed) {
-                val child: XmlNode = this.parseStmt()
+                val child: AstXmlNode = this.parseStmt()
                 if (this.failed) {
                     return this.emptyNode()
                 }
                 arm.append(child)
                 this.skipSeparators()
             }
-            var cattrs: List<Attribute> = List<Attribute>()
-            cattrs.append(Attribute("isDefault", boolText(isDefault)))
-            cattrs.append(Attribute("line", casePos.line.toString()))
-            cattrs.append(Attribute("column", casePos.column.toString()))
-            var cnode: XmlNode = XmlNode("Case", cattrs, &List<XmlNode>())
+            var cattrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
+            cattrs.append(AstNodeAttribute(AstNodeAttributeKind.IsDefault, boolText(isDefault)))
+            cattrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, casePos.line.toString()))
+            cattrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, casePos.column.toString()))
+            var cnode: AstXmlNode = AstXmlNode(AstNodeKind.Case, AstNodeCategory.None, cattrs, Array<AstXmlNode>())
             if (!isDefault) {
-                this.attach(*cnode, "Label", *label)
+                this.attach(*cnode, AstNodeKind.Label, *label)
             }
-            var ai: Int = 0
-            while (ai < arm.size()) {
-                cnode.Children.append(arm[ai])
-                ai = ai + 1
-            }
+            xmlAddChildren(*cnode, *arm)
             cases.append(cnode)
         }
         if (!this.expectText("}")) {
             return this.emptyNode()
         }
-        var attrs: List<Attribute> = this.posAttrs("Stmt.Switch", pos.line, pos.column)
-        var node: XmlNode = XmlNode("Stmt", attrs, &List<XmlNode>())
-        this.attach(*node, "Cond", *cond.node)
-        var ci: Int = 0
-        while (ci < cases.size()) {
-            node.Children.append(cases[ci])
-            ci = ci + 1
-        }
+        var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        var node: AstXmlNode = AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtSwitch, attrs, Array<AstXmlNode>())
+        this.attach(*node, AstNodeKind.Cond, *cond.node)
+        xmlAddChildren(*node, *cases)
         return node
     }
 
-    fun parseReturn(): XmlNode {
+    fun parseReturn(): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
         this.advance() // return
         var value: ExprNode = this.emptyExpr()
@@ -1035,10 +1043,10 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
                 return this.emptyNode()
             }
         }
-        var attrs: List<Attribute> = this.posAttrs("Stmt.Return", pos.line, pos.column)
-        var node: XmlNode = XmlNode("Stmt", attrs, &List<XmlNode>())
-        if (value.node.name != "") {
-            this.attach(*node, "Value", *value.node)
+        var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        var node: AstXmlNode = AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtReturn, attrs, Array<AstXmlNode>())
+        if (value.node.name != AstNodeKind.None) {
+            this.attach(*node, AstNodeKind.Value, *value.node)
         }
         return node
     }
@@ -1076,11 +1084,11 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
             if (this.failed) {
                 return this.emptyExpr()
             }
-            var attrs: List<Attribute> = this.posAttrs("Expr.Binary", left.line, left.column)
-            attrs.append(Attribute("op", op))
-            var node: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
-            this.attach(*node, "Lhs", *left.node)
-            this.attach(*node, "Rhs", *right.node)
+            var attrs: List<AstNodeAttribute> = this.posAttrs(left.line, left.column)
+            attrs.append(AstNodeAttribute(AstNodeAttributeKind.Op, op))
+            var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprBinary, attrs, Array<AstXmlNode>())
+            this.attach(*node, AstNodeKind.Lhs, *left.node)
+            this.attach(*node, AstNodeKind.Rhs, *right.node)
             left = ExprNode(node, left.line, left.column)
         }
         return left
@@ -1094,10 +1102,10 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
             if (this.failed) {
                 return this.emptyExpr()
             }
-            var attrs: List<Attribute> = this.posAttrs("Expr.Unary", pos.line, pos.column)
-            attrs.append(Attribute("op", op))
-            var node: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
-            this.attach(*node, "Operand", *operand.node)
+            var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+            attrs.append(AstNodeAttribute(AstNodeAttributeKind.Op, op))
+            var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprUnary, attrs, Array<AstXmlNode>())
+            this.attach(*node, AstNodeKind.Operand, *operand.node)
             return ExprNode(node, pos.line, pos.column)
         }
         if (this.checkText("&")) {
@@ -1106,9 +1114,9 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
             if (this.failed) {
                 return this.emptyExpr()
             }
-            var attrs: List<Attribute> = this.posAttrs("Expr.Ref", pos.line, pos.column)
-            var node: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
-            this.attach(*node, "Operand", *operand.node)
+            var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+            var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprRef, attrs, Array<AstXmlNode>())
+            this.attach(*node, AstNodeKind.Operand, *operand.node)
             return ExprNode(node, pos.line, pos.column)
         }
         if (this.checkText("*")) {
@@ -1117,9 +1125,9 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
             if (this.failed) {
                 return this.emptyExpr()
             }
-            var attrs: List<Attribute> = this.posAttrs("Expr.Deref", pos.line, pos.column)
-            var node: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
-            this.attach(*node, "Operand", *operand.node)
+            var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+            var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprDeref, attrs, Array<AstXmlNode>())
+            this.attach(*node, AstNodeKind.Operand, *operand.node)
             return ExprNode(node, pos.line, pos.column)
         }
         return this.parsePostfix()
@@ -1132,7 +1140,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         }
         while (true) {
             if (this.matchText("(")) {
-                var args: List<XmlNode> = List<XmlNode>()
+                var args: List<AstXmlNode> = List<AstXmlNode>()
                 this.skipNewlines()
                 if (!this.checkText(")")) {
                     val first: ExprNode = this.parseExpr(0)
@@ -1154,12 +1162,12 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
                 if (!this.expectText(")")) {
                     return this.emptyExpr()
                 }
-                var attrs: List<Attribute> = this.posAttrs("Expr.Call", expr.line, expr.column)
-                var node: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
-                this.attach(*node, "Callee", *expr.node)
+                var attrs: List<AstNodeAttribute> = this.posAttrs(expr.line, expr.column)
+                var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCall, attrs, Array<AstXmlNode>())
+                this.attach(*node, AstNodeKind.Callee, *expr.node)
                 var ai: Int = 0
                 while (ai < args.size()) {
-                    this.attach(*node, "Arg", *args[ai])
+                    this.attach(*node, AstNodeKind.Arg, *args[ai])
                     ai = ai + 1
                 }
                 expr = ExprNode(node, expr.line, expr.column)
@@ -1172,20 +1180,20 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
                 if (!this.expectText("]")) {
                     return this.emptyExpr()
                 }
-                var attrs: List<Attribute> = this.posAttrs("Expr.Index", expr.line, expr.column)
-                var node: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
-                this.attach(*node, "Receiver", *expr.node)
-                this.attach(*node, "Index", *index.node)
+                var attrs: List<AstNodeAttribute> = this.posAttrs(expr.line, expr.column)
+                var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprIndex, attrs, Array<AstXmlNode>())
+                this.attach(*node, AstNodeKind.Receiver, *expr.node)
+                this.attach(*node, AstNodeKind.Index, *index.node)
                 expr = ExprNode(node, expr.line, expr.column)
             } else if (this.matchText(".")) {
                 val name: Str = this.expectName()
                 if (this.failed) {
                     return this.emptyExpr()
                 }
-                var attrs: List<Attribute> = this.posAttrs("Expr.Member", expr.line, expr.column)
-                attrs.append(Attribute("name", name))
-                var node: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
-                this.attach(*node, "Receiver", *expr.node)
+                var attrs: List<AstNodeAttribute> = this.posAttrs(expr.line, expr.column)
+                attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
+                var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprMember, attrs, Array<AstXmlNode>())
+                this.attach(*node, AstNodeKind.Receiver, *expr.node)
                 expr = ExprNode(node, expr.line, expr.column)
             } else {
                 break
@@ -1198,46 +1206,46 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         val pos: SourcePos = this.peek(0).pos
         if (this.checkKind(TokenKind.Number)) {
             val text: Str = this.advance().text
-            var kind: Str = "Expr.IntLit"
+            var kind: AstNodeCategory = AstNodeCategory.ExprIntLit
             if (text.find(".") != -1) {
-                kind = "Expr.FloatLit"
+                kind = AstNodeCategory.ExprFloatLit
             }
-            var attrs: List<Attribute> = this.posAttrs(kind, pos.line, pos.column)
-            attrs.append(Attribute("text", text))
-            return ExprNode(XmlNode("Expr", attrs, &List<XmlNode>()), pos.line, pos.column)
+            var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+            attrs.append(AstNodeAttribute(AstNodeAttributeKind.Text, text))
+            return ExprNode(AstXmlNode(AstNodeKind.Expr, kind, attrs, Array<AstXmlNode>()), pos.line, pos.column)
         }
         if (this.checkKind(TokenKind.String)) {
             val text: Str = this.advance().text
-            var attrs: List<Attribute> = this.posAttrs("Expr.StrLit", pos.line, pos.column)
-            attrs.append(Attribute("text", text))
-            return ExprNode(XmlNode("Expr", attrs, &List<XmlNode>()), pos.line, pos.column)
+            var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+            attrs.append(AstNodeAttribute(AstNodeAttributeKind.Text, text))
+            return ExprNode(AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprStrLit, attrs, Array<AstXmlNode>()), pos.line, pos.column)
         }
         if (this.checkKind(TokenKind.Character)) {
             val text: Str = this.advance().text
-            var attrs: List<Attribute> = this.posAttrs("Expr.CharLit", pos.line, pos.column)
-            attrs.append(Attribute("text", text))
-            return ExprNode(XmlNode("Expr", attrs, &List<XmlNode>()), pos.line, pos.column)
+            var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+            attrs.append(AstNodeAttribute(AstNodeAttributeKind.Text, text))
+            return ExprNode(AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCharLit, attrs, Array<AstXmlNode>()), pos.line, pos.column)
         }
         if (this.checkText("true") || this.checkText("false")) {
             val text: Str = this.advance().text
-            var attrs: List<Attribute> = this.posAttrs("Expr.BoolLit", pos.line, pos.column)
+            var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
             if (text == "true") {
-                attrs.append(Attribute("value", "true"))
+                attrs.append(AstNodeAttribute(AstNodeAttributeKind.Value, "true"))
             } else {
-                attrs.append(Attribute("value", "false"))
+                attrs.append(AstNodeAttribute(AstNodeAttributeKind.Value, "false"))
             }
-            return ExprNode(XmlNode("Expr", attrs, &List<XmlNode>()), pos.line, pos.column)
+            return ExprNode(AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprBoolLit, attrs, Array<AstXmlNode>()), pos.line, pos.column)
         }
         if (this.checkText("null")) {
             this.advance()
-            val attrs: List<Attribute> = this.posAttrs("Expr.NullLit", pos.line, pos.column)
-            return ExprNode(XmlNode("Expr", attrs, &List<XmlNode>()), pos.line, pos.column)
+            val attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+            return ExprNode(AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprNullLit, attrs, Array<AstXmlNode>()), pos.line, pos.column)
         }
         if (this.checkText("this")) {
             this.advance()
-            var attrs: List<Attribute> = this.posAttrs("Expr.Name", pos.line, pos.column)
-            attrs.append(Attribute("name", "this"))
-            return ExprNode(XmlNode("Expr", attrs, &List<XmlNode>()), pos.line, pos.column)
+            var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+            attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, "this"))
+            return ExprNode(AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprName, attrs, Array<AstXmlNode>()), pos.line, pos.column)
         }
         if (this.checkKind(TokenKind.Identifier)) {
             val name: Str = this.peek(0).text
@@ -1251,9 +1259,9 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
                 if (!this.expectText(")")) {
                     return this.emptyExpr()
                 }
-                var attrs: List<Attribute> = this.posAttrs("Expr.Copy", pos.line, pos.column)
-                var node: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
-                this.attach(*node, "Operand", *inner.node)
+                var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+                var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCopy, attrs, Array<AstXmlNode>())
+                this.attach(*node, AstNodeKind.Operand, *inner.node)
                 return ExprNode(node, pos.line, pos.column)
             }
             if (this.peek(1).text == "<") {
@@ -1261,16 +1269,12 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
                 val savedFailed: Bool = this.failed
                 val savedError: Str = this.error
                 this.advance() // name
-                val typeArgs: List<XmlNode> = this.parseGenericArgs()
+                val typeArgs: List<AstXmlNode> = this.parseGenericArgs()
                 if (!this.failed && (this.checkText(".") || this.checkText("("))) {
-                    var attrs: List<Attribute> = this.posAttrs("Expr.GenericName", pos.line, pos.column)
-                    attrs.append(Attribute("name", name))
-                    var gnode: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
-                    var gi: Int = 0
-                    while (gi < typeArgs.size()) {
-                        gnode.Children.append(typeArgs[gi])
-                        gi = gi + 1
-                    }
+                    var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+                    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
+                    var gnode: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprGenericName, attrs, Array<AstXmlNode>())
+                    xmlAddChildren(*gnode, *typeArgs)
                     return ExprNode(gnode, pos.line, pos.column)
                 }
                 this.cursor = savedCursor
@@ -1278,9 +1282,9 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
                 this.error = savedError
             }
             this.advance()
-            var attrs: List<Attribute> = this.posAttrs("Expr.Name", pos.line, pos.column)
-            attrs.append(Attribute("name", name))
-            return ExprNode(XmlNode("Expr", attrs, &List<XmlNode>()), pos.line, pos.column)
+            var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+            attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
+            return ExprNode(AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprName, attrs, Array<AstXmlNode>()), pos.line, pos.column)
         }
         if (this.checkText("(")) {
             val savedCursor: Cursor<Token> = this.cursor
@@ -1315,7 +1319,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         }
         val pos: SourcePos = this.peek(0).pos
         var names: List<Str> = List<Str>()
-        var paramTypes: List<XmlNode> = List<XmlNode>()
+        var paramTypes: List<AstXmlNode> = List<AstXmlNode>()
         this.skipNewlines()
         if (!this.checkText(")")) {
             while (true) {
@@ -1325,7 +1329,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
                 }
                 names.append(this.advance().text)
                 if (this.matchText(":")) {
-                    val paramType: XmlNode = this.parseType("ParamType")
+                    val paramType: AstXmlNode = this.parseType(AstNodeKind.ParamType)
                     if (this.failed) {
                         return this.emptyExpr()
                     }
@@ -1349,7 +1353,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         this.advance() // )
         this.advance() // ->
 
-        var body: List<XmlNode> = List<XmlNode>()
+        var body: List<AstXmlNode> = List<AstXmlNode>()
         if (this.checkText("{")) {
             body = this.parseBlock()
             if (this.failed) {
@@ -1360,21 +1364,17 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
             if (this.failed) {
                 return this.emptyExpr()
             }
-            var sattrs: List<Attribute> = this.posAttrs("Stmt.ExprStmt", value.line, value.column)
-            var snode: XmlNode = XmlNode("Stmt", sattrs, &List<XmlNode>())
-            this.attach(*snode, "Expr", *value.node)
+            var sattrs: List<AstNodeAttribute> = this.posAttrs(value.line, value.column)
+            var snode: AstXmlNode = AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtExprStmt, sattrs, Array<AstXmlNode>())
+            this.attach(*snode, AstNodeKind.Expr, *value.node)
             body.append(snode)
         }
 
-        var attrs: List<Attribute> = this.posAttrs("Expr.Lambda", pos.line, pos.column)
-        attrs.append(Attribute("params", joinNames(*names)))
-        var node: XmlNode = XmlNode("Expr", attrs, &List<XmlNode>())
-        var i: Int = 0
-        while (i < paramTypes.size()) {
-            node.Children.append(paramTypes[i])
-            i = i + 1
-        }
-        node.Children.append(this.container("Body", *body))
+        var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Params, joinNames(*names)))
+        var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprLambda, attrs, Array<AstXmlNode>())
+        xmlAddChildren(*node, *paramTypes)
+        xmlAddChild(*node, this.container(AstNodeKind.Body, *body))
         return ExprNode(node, pos.line, pos.column)
     }
 }
@@ -1434,18 +1434,18 @@ fun isAssignOp(op: Str): Bool {
 // ---- entry points ---------------------------------------------------------
 
 // Parses a pre-filtered token cursor (with a synthetic Eof already appended).
-fun parseModule(cursor: Cursor<Token>, fileName: Str): Res<XmlNode> {
+fun parseModule(cursor: Cursor<Token>, fileName: Str): Res<AstXmlNode> {
     var parser: Parser = Parser(cursor, false, "", fileName)
-    val root: XmlNode = parser.parseRoot()
+    val root: AstXmlNode = parser.parseRoot()
     if (parser.failed) {
-        return Res<XmlNode>.err(parser.error)
+        return Res<AstXmlNode>.err(parser.error)
     }
-    return Res<XmlNode>.ok(root)
+    return Res<AstXmlNode>.ok(root)
 }
 
 // Parses a raw token list: drops Space/Comment tokens and appends a synthetic
 // Eof, matching the C++ parser's constructor.
-fun parseModule(tokens: *List<Token>, fileName: Str): Res<XmlNode> {
+fun parseModule(tokens: *List<Token>, fileName: Str): Res<AstXmlNode> {
     var toks: List<Token> = List<Token>()
     var i: Int = 0
     while (i < tokens.size()) {

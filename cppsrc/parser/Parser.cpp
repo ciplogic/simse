@@ -187,6 +187,7 @@ namespace parser {
             }
 
             ast::DeclPtr parseDecl() {
+                if (checkText("var") || checkText("val")) return parseStaticVar();
                 if (checkText("data")) return parseDataClass();
                 if (checkText("enum")) return parseEnum();
                 if (checkText("typealias")) return parseTypeAlias();
@@ -194,6 +195,30 @@ namespace parser {
                 if (checkText("fun")) return parseFunction(false);
                 fail("expected declaration");
                 return nullptr;
+            }
+
+            // A file-level `var`/`val`: static storage (specs/statics.md). The type is
+            // required (no inference) and the initializer is optional. The children are
+            // the same shape as a `Stmt.VarDecl`, so the emitters have one variable form;
+            // the role is `Var` because this is a declaration, not a statement.
+            ast::DeclPtr parseStaticVar() {
+                auto decl = std::make_shared<ast::Decl>();
+                decl->kind = ast::DeclKind::Var;
+                decl->pos = peek().pos;
+                decl->isVar = matchText("var");
+                if (!decl->isVar) {
+                    if (!expectText("val")) return decl;
+                }
+                if (!expectIdentifier(decl->name)) return decl;
+                if (!expectText(":")) return decl;
+                decl->type = parseType();
+                if (!decl->type) return decl;
+                if (matchText("=")) {
+                    skipNewlines();
+                    decl->init = parseExpr(0);
+                    if (!decl->init) return decl;
+                }
+                return decl;
             }
 
             ast::DeclPtr parseDataClass() {
@@ -957,8 +982,8 @@ namespace parser {
     }
 
     Res<ast::Module> parseFile(const Str &fileName) {
-        List<lex::TokenMatcher> rules = lex::getTokenRules();
-        lex::Scanner scanner(&rules);
+        List<lex::TokenMatcher> *rules = lex::getTokenRules();
+        lex::Scanner scanner(rules);
         Res<List<lex::Token>> tokens = lex::readFileAndSkipSpacesTokens(&scanner, fileName);
         if (!tokens.isOk()) {
             return resError<ast::Module>(tokens.Error);

@@ -293,8 +293,9 @@ public:
 private:
     using Data = StrSmallVector;
 
-    // The buffer tracks the terminating NUL as part of its stored length, so
-    // `data()[size()]` is always '\0' and no separate terminate pass is needed.
+    // The buffer keeps a NUL one byte past the text (`data()[size()]`), and `_len`
+    // in the buffer is the character count, so no separate terminate pass is
+    // needed and no read has to adjust for the terminator.
     Data _data;
 
     constexpr void ensure(size_type wanted) { _data.reserve((Int) wanted + 1); }

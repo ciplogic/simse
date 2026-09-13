@@ -80,8 +80,10 @@ The minimally supported `List<T>` operations are:
 - `removeRange(start: Int, end: Int)`, which removes the half-open range
   `[start, end)`;
 - `clear()`;
-- `contains(value: T): Bool`, a linear membership test; and
-- `sort(less: (T, T) -> Bool)`, an in-place sort using the comparator lambda.
+- `contains(value: T): Bool`, a linear membership test;
+- `sort(less: (T, T) -> Bool)`, an in-place sort using the comparator lambda; and
+- `toArray(): Array<T>`, the fixed-length copy (specs/built-in-types.md), the
+  counterpart of `Array<T>.toList()`.
 
 Indexing and member calls are permitted directly on a `&List<T>` and on a
 `*List<T>`, with automatic dereference (see `memory-model.md`). The `append`,

@@ -16,7 +16,8 @@ For the first end-to-end slice, generated C++ targets the **current
 - `List<T> = SmallVector<T, 4>` (the spec layout; `std::vector<T>` behind
   `SIMSE_LIST_STD_VECTOR`)
 - `PList<T> = std::shared_ptr<List<T>>`
-- `Array<T>` = the shim struct holding `int _count` and `std::shared_ptr<T[]>`
+- `Array<T>` = the shim struct: one `std::shared_ptr` handle to a count-first block
+  (`cppsrc/rtl/containers.hpp`)
 - `Dictionary<K, V> = std::unordered_map<K, V>`
 - `Opt<T>` and `Res<T>` = the shim structs (over `std::optional` / a value plus
   error `Str`)
@@ -32,6 +33,42 @@ listed below and is deferred, not resolved.
 
 `typeId` is currently unused by the runtime and is not stored. Nothing in the
 language subset needs it (no virtual dispatch, no dynamic casts).
+
+## Emitted symbol names (package qualification)
+
+Every emitted top-level declaration carries its package's prefix, so that two
+packages can both declare `Point` or `bump` without colliding in the amalgamated
+translation unit - the generated code never spells a package name out:
+
+- **`rtl` is emitted bare.** The built-in types and runtime operations live in
+  the built-in namespace (`specs/modules.md`), which is also why they map onto
+  the hand-written RTL C++ types and `simse_*` natives with no prefix of their
+  own.
+- **Every other package gets `ns<index>_`**, where the index comes from a global
+  dictionary the emitter fills once per compilation: the input packages are
+  sorted by name and numbered from 1, so the numbering never depends on
+  discovery order and the output stays reproducible. For the compiler's own
+  source set the assignment is `codegen` `ns1_`, `common` `ns2_`, `compiler`
+  `ns3_`, `lex` `ns4_`, `linear` `ns5_`, `parser` `ns6_`, `sema` `ns7_`,
+  `skelparser` `ns8_`.
+- The rule applies to declarations *and* to every reference: data classes and
+  their `_make_` factories, enums, their `simse_<Name>_fromInt` helpers and their
+  members, typealiases, generic templates and their instantiations, plain
+  functions, methods lowered to free functions, and a function used as a value
+  (a callable argument).
+- **`main` keeps its name** - it is the C++ entry point, not a package member -
+  and `native` symbols are hand-written C++ (`simse_native_readFile`), so they
+  are never prefixed. Fields, locals, parameters, labels and template parameters
+  are emitted as written.
+- A programmatically built module with no package declaration (the prelude sets
+  are merged into one such module by the drivers) is treated like `rtl`.
+
+Known limitation, unchanged by this: name *resolution* is still by simple name
+across the whole compilation, so if two packages declare the same top-level name
+the program resolves to one of them rather than choosing by import. The prefix
+keeps such a program well-formed - each name is emitted consistently with the
+declaration it resolved to - and making resolution package-aware (imports
+selecting between same-named declarations) is a separate language change.
 
 ## Simse type -> C++ representation
 
@@ -88,9 +125,15 @@ normative layout.
    disagrees), exactly as it does for the `List`/`Str` backings above;
    `impl_specs/capability-matrix.md` (T33) records the measurements behind the
    default. The buffer
-   keeps the terminating NUL in its own stored length (`data()[size()]` is always
-   `'\0'`; the empty string is one stored byte), so it is written as part of every
-   growing operation; `Str.size()` excludes it, as the spec requires. The inline
+   counts **characters** in `_len` (zero-based: the empty string is `_len == 0`,
+   the same convention the generic `SmallVector` uses for its elements) and keeps
+   the terminating NUL one byte past the text, in the allocation that `_cap`
+   measures in bytes (`data()[size()]` is always `'\0'`), so reads — `size()`,
+   `empty()`, `end()` — need no adjustment for the terminator and the `+1` lives
+   only in the write paths, which run once per mutation. The NUL is written as
+   part of every growing operation (`push_back`, `resize`, `assign`, `append`),
+   so there is no separate terminate pass. `Str.size()` is the character count,
+   as the spec requires. The inline
    path is `constexpr`-constructible, so
    `constexpr Str` works while the text fits inline. Native code that has to talk
    to the standard library goes through `simse_toStdString` /
@@ -118,9 +161,17 @@ normative layout.
 5. **`typeId`.** Spec: part of every ref-counted allocation header, currently
    unused for dispatch. Shim: not stored at all.
 6. **`Array<T>` layout.** Spec: one allocation holding the header, element count,
-   and elements contiguously (`specs/built-in-types.md`). Shim: `_count` plus a
-   separate `std::shared_ptr<T[]>`. Assignment still shares the allocation, which
-   matches the observable spec behavior.
+   and elements contiguously (`specs/built-in-types.md`). Shim: one allocation
+   holding the **element count first and the elements immediately after it**
+   (`Int _len` at offset 0, elements at offset 4 under the packing rule, single
+   `::operator new` for count + elements - `ArrayBlock<T>`); the handle is a
+   `std::shared_ptr<ArrayBlock<T>>` (16 bytes, using the shared pointer's count
+   instead of a materialized `[refcount][typeId]` header), and every empty array
+   refers to the one shared zero-length block per element type, so an empty array
+   allocates nothing. Assignment shares the block, which matches the observable
+   spec behavior; `count()`, indexing, `arrayEmpty<T>()`, `List.toArray()` and
+   `Array.toList()` are the surface (`tools/array_layout_probe.cpp` pins the
+   offsets).
 7. **`Opt<T>` representation.** Spec: the core-types representation. Shim: a
    struct wrapping `std::optional<T>` (an extra layer). Behavior (`hasValue`,
    `value`) matches the documented API.

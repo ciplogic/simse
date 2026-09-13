@@ -86,7 +86,19 @@ fun matchAllOfRules(view: StrView, first: CharPredicate, rest: CharPredicate): I
     return view.len
 }
 
-fun reservedWords(): List<Str> {
+// ---- the scanner's tables -------------------------------------------------
+//
+// The tables are static storage (specs/statics.md): the generated pass builds each
+// one once, before `main`'s body, and the hot paths read them through a raw
+// pointer (`*List<T>`) - not a value, not a counted `&` reference - so matching a
+// keyword or an operator copies nothing. A `List<Str>`-returning accessor rebuilt
+// the table per call, and `matchOperator` runs for every token.
+
+var reservedWordTable: List<Str> = makeReservedWords()
+var multiCharOperatorTable: List<Str> = makeMultiCharOperators()
+var tokenRuleTable: List<TokenMatcher> = makeTokenRules()
+
+fun makeReservedWords(): List<Str> {
     var words: List<Str> = List<Str>()
     words.append("class")
     words.append("data")
@@ -115,7 +127,7 @@ fun reservedWords(): List<Str> {
     return words
 }
 
-fun multiCharOperators(): List<Str> {
+fun makeMultiCharOperators(): List<Str> {
     var operators: List<Str> = List<Str>()
     operators.append("->")
     operators.append("==")
@@ -132,17 +144,50 @@ fun multiCharOperators(): List<Str> {
     return operators
 }
 
-fun isReservedWord(view: StrView): Bool {
-    val words: List<Str> = reservedWords()
-    var i = 0
-    while (i < words.size()) {
-        val word: Str = words[i]
-        if (view.len == word.size() && view.startsWith(word)) {
-            return true
-        }
-        i = i + 1
+// The scanner's one table comparison: how much of `view` the table matches, or 0.
+// `exact` requires the whole view to be an entry (a reserved word); without it the
+// first entry `view` starts with wins (a multi-character operator).
+//
+// The cheap tests come first - the view's first character, then the entry's
+// length, then (for a reserved word) the exact length - and only a surviving
+// entry is compared character by character. The entry is reached through a raw
+// pointer into the table (`table[i]` would copy the `Str`), and the comparison
+// takes that pointer too (`StrView.startsWithPtr`), so no call here copies text.
+// Both lookups share this function and the tables above.
+fun tableMatch(view: StrView, table: *List<Str>, exact: Bool): Int {
+    if (view.len == 0) {
+        return 0
     }
-    return false
+    val first: Char = view.at(0)
+    var i: Int = 0
+    while (i < table.size()) {
+        val entry: *Str = *table[i]
+        val length: Int = entry.size()
+        i = i + 1
+        if (length == 0 || entry[0] != first) {
+            continue
+        }
+        if (view.len < length || (exact && view.len != length)) {
+            continue
+        }
+        if (view.startsWithPtr(entry, length)) {
+            return length
+        }
+    }
+    return 0
+}
+
+// Pointers into the tables, so a caller can look without copying.
+fun reservedWords(): *List<Str> {
+    return *reservedWordTable
+}
+
+fun multiCharOperators(): *List<Str> {
+    return *multiCharOperatorTable
+}
+
+fun isReservedWord(view: StrView): Bool {
+    return tableMatch(view, *reservedWordTable, true) > 0
 }
 
 fun matchSpaces(view: StrView): Int {
@@ -264,14 +309,9 @@ fun matchCharLiteral(view: StrView): Int {
 }
 
 fun matchOperator(view: StrView): Int {
-    val operators: List<Str> = multiCharOperators()
-    var i = 0
-    while (i < operators.size()) {
-        val op: Str = operators[i]
-        if (view.len >= op.size() && view.startsWith(op)) {
-            return op.size()
-        }
-        i = i + 1
+    val matched: Int = tableMatch(view, *multiCharOperatorTable, false)
+    if (matched > 0) {
+        return matched
     }
     if (view.len > 0 && isOperatorChar(view.at(0))) {
         return 1
@@ -279,22 +319,28 @@ fun matchOperator(view: StrView): Int {
     return 0
 }
 
-fun addRule(rules: &List<TokenMatcher>, tokenKind: TokenKind, match: MatchLenFunc): Unit {
+// The parameters are read and written only; pointers avoid copying the caller's
+// list (a `TokenMatcher` holds a `Func`, which is not free to copy).
+fun addRule(rules: *List<TokenMatcher>, tokenKind: TokenKind, match: MatchLenFunc): Unit {
     rules.append(TokenMatcher(tokenKind, match))
 }
 
-fun getTokenRules(): &List<TokenMatcher> {
-    var rules: &List<TokenMatcher> = &List<TokenMatcher>()
-    addRule(rules, TokenKind.Comment, matchComment)
-    addRule(rules, TokenKind.Space, matchSpaces)
-    addRule(rules, TokenKind.EndOfLine, matchEndOfLine)
-    addRule(rules, TokenKind.String, matchStringLiteral)
-    addRule(rules, TokenKind.Character, matchCharLiteral)
-    addRule(rules, TokenKind.Number, matchNumber)
-    addRule(rules, TokenKind.ReservedWord, matchReservedWord)
-    addRule(rules, TokenKind.Identifier, matchIdentifier)
-    addRule(rules, TokenKind.Operator, matchOperator)
+fun makeTokenRules(): List<TokenMatcher> {
+    var rules: List<TokenMatcher> = List<TokenMatcher>()
+    addRule(*rules, TokenKind.Comment, matchComment)
+    addRule(*rules, TokenKind.Space, matchSpaces)
+    addRule(*rules, TokenKind.EndOfLine, matchEndOfLine)
+    addRule(*rules, TokenKind.String, matchStringLiteral)
+    addRule(*rules, TokenKind.Character, matchCharLiteral)
+    addRule(*rules, TokenKind.Number, matchNumber)
+    addRule(*rules, TokenKind.ReservedWord, matchReservedWord)
+    addRule(*rules, TokenKind.Identifier, matchIdentifier)
+    addRule(*rules, TokenKind.Operator, matchOperator)
     return rules
+}
+
+fun getTokenRules(): *List<TokenMatcher> {
+    return *tokenRuleTable
 }
 
 // Escapes the first `maxLen` bytes of `view` for a single-line diagnostic:
@@ -344,7 +390,7 @@ fun unexpectedCharacterMessage(line: Int, column: Int, snippet: Str): Str {
     return line.toString() + ":" + column.toString() + ": Unexpected character: '" + snippet + "'"
 }
 
-data class Scanner(var rules: &List<TokenMatcher>; var pos: Int; var line: Int; var column: Int; var source: Str) {
+data class Scanner(var rules: *List<TokenMatcher>; var pos: Int; var line: Int; var column: Int; var source: Str) {
     fun setSource(text: Str): Unit {
         this.source = text
         this.pos = 0

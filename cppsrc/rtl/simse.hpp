@@ -17,4 +17,5 @@
 #include "fs.hpp"           // simse_listFiles/simse_writeFile/... native ops (prelude)
 #include "functional.hpp"   // Func, Action, AutoDefer
 #include "result.hpp"       // Result/Res, ok, resError, err
-#include "xml.hpp"          // Attribute, XmlNode
+#include "xml.hpp"          // Attribute, XmlNode (the general tree a program builds)
+#include "astxml.hpp"       // AstNodeKind, AstNodeAttributeKind, AstXmlNode (the compiler's AST)

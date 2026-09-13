@@ -1,6 +1,6 @@
 //
 // Differential Simse driver. This translation unit is compiled together with
-// the C++ emitted by `simse_transpile cppsrc/lex/Scanner.simse` (included
+// the C++ emitted by `simse_transpile cppsrc/lex/ns2_Scanner.simse` (included
 // directly, because the generated file has no header) plus this hand-written
 // driver. It prints the SAME canonical dump as tests/scanner_ref_main.cpp so the
 // build can diff the two implementations:
@@ -9,7 +9,7 @@
 //
 // Eof is omitted; a rejected character yields a final `Error\t<escaped message>`
 // line. Kind names are indexed by enum ordinal, which is identical between the
-// hand-written and generated TokenKind.
+// hand-written and generated ns2_TokenKind.
 //
 // Usage: scanner_simse <fixtures-dir>
 //
@@ -25,8 +25,14 @@
 
 #include "Scanner.simse.cpp"
 
+// The generated translation unit qualifies every package's declarations with
+// `ns<index>_`, numbered in sorted package order (impl_specs/rtl-abi.md). This
+// transpile has `common` at 1 and `lex` at 2, so the scanner surface below is
+// `ns2_*`. The `rtl` prelude is emitted bare, so `Str`, `TokenKind::Eof`'s
+// container types and the `simse_*` natives keep their names.
+
 namespace {
-    std::string kindName(TokenKind kind) {
+    std::string kindName(ns2_TokenKind kind) {
         static const char *names[] = {
             "None", "Space", "Comment", "EndOfLine", "Identifier", "ReservedWord",
             "Number", "String", "Character", "Operator", "Eof",
@@ -59,6 +65,10 @@ namespace {
 }
 
 int main(int argc, char **argv) {
+    // The generated component's static storage (the scanner's tables, specs/statics.md)
+    // is filled by the pass the emitted file defines; a host that links a component
+    // without a `main` of its own has to run it first.
+    simse_initStatics();
     std::string fixturesDir = argc > 1 ? argv[1] : ".";
 
     std::vector<std::string> files;
@@ -79,16 +89,16 @@ int main(int argc, char **argv) {
             continue;
         }
 
-        Scanner scanner(getTokenRules(), 0, 1, 1, Str());
-        setSource(scanner, content);
+        ns2_Scanner scanner(ns2_getTokenRules(), 0, 1, 1, Str());
+        ns2_setSource(scanner, content);
 
         while (true) {
-            Res<Token> result = nextToken(scanner);
+            Res<ns2_Token> result = ns2_nextToken(scanner);
             if (!result.isOk()) {
                 printf("Error\t%s\n", escapeText(simse_toStdString(result.Error)).c_str());
                 break;
             }
-            if (result.Value.kind == TokenKind::Eof) {
+            if (result.Value.kind == ns2_TokenKind::Eof) {
                 break;
             }
             printf("%s\t%d:%d\t%s\n",

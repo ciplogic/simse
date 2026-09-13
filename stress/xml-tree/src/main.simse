@@ -27,14 +27,17 @@ fun attrs4(a: Attribute, b: Attribute, c: Attribute, d: Attribute): List<Attribu
     return list
 }
 
-fun noChildren(): &List<XmlNode> {
-    return &List<XmlNode>()
+// `Children` is an `Array<XmlNode>` (specs/xml-node.md): the two builders below
+// are the language-level way to make one - an empty array is the shared
+// zero-length block, and an array with elements is frozen from a list.
+fun noChildren(): Array<XmlNode> {
+    return Array<XmlNode>()
 }
 
-fun oneChild(child: XmlNode): &List<XmlNode> {
-    var children: &List<XmlNode> = &List<XmlNode>()
+fun oneChild(child: XmlNode): Array<XmlNode> {
+    var children: List<XmlNode> = List<XmlNode>()
     children.append(child)
-    return children
+    return children.toArray()
 }
 
 fun escapeText(text: Str): Str {
@@ -85,9 +88,9 @@ fun dumpNode(node: XmlNode, depth: Int): Str {
     }
     out = out + "\n"
 
-    val children: &List<XmlNode> = node.Children
+    val children: Array<XmlNode> = node.Children
     var j: Int = 0
-    while (j < children.size()) {
+    while (j < children.count()) {
         out = out + dumpNode(children[j], depth + 1)
         j = j + 1
     }

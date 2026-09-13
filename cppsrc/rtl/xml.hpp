@@ -16,17 +16,18 @@ struct Attribute {
 };
 
 // XmlNode is a recursive tree node used for parse trees and debug output
-// (specs/xml-node.md). Children is a PList<XmlNode> (a counted reference to a
-// List<XmlNode>): the node holds a handle to a shared child list instead of
-// embedding children inline. Copying an XmlNode shares the Children list and
-// deep-copies name/attributes. There is no inheritance in the language subset,
-// so one composed node type serves every parse-tree kind.
+// (specs/xml-node.md). Children is an Array<XmlNode> (specs/built-in-types.md):
+// one ref-counted block holding the child count first and the children after it,
+// so a node with no children points at the shared empty array and allocates
+// nothing. Copying an XmlNode shares the Children block and deep-copies
+// name/attributes. There is no inheritance in the language subset, so one
+// composed node type serves every parse-tree kind.
 struct XmlNode {
     Str name;
     List<Attribute> attributes;
-    PList<XmlNode> Children;
+    Array<XmlNode> Children;
 
     XmlNode() = default;
-    XmlNode(Str n, List<Attribute> attrs, PList<XmlNode> children)
+    XmlNode(Str n, List<Attribute> attrs, Array<XmlNode> children)
         : name(std::move(n)), attributes(std::move(attrs)), Children(std::move(children)) {}
 };

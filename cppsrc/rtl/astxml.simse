@@ -1,0 +1,140 @@
+// astxml.simse
+//
+// The compiler's AST node type (impl_specs/ast-xmlnode.md): the `XmlNode` schema
+// with the two stringly-typed parts - the node's role and an attribute's key -
+// replaced by enums. Declarations only: the concrete types and their constructors
+// live in cppsrc/rtl/astxml.hpp, and the text of each enum member (the role and
+// attribute names of the schema) belongs to the dump, `ast::astNodeKindText` /
+// `ast::astNodeAttributeText` in cppsrc/ast/Ast.cpp.
+//
+// It is a prelude type rather than a compiler-package one so both rings share one
+// definition: the Simse pipeline passes `AstXmlNode` trees around exactly like the
+// hand-written ring's `ast::toXmlNode` builds them for the differentials, and a
+// data class declared in a program package would be emitted instead of mapped.
+//
+// `AstNodeKind.None` is the absent sentinel (the schema has no null): a missing
+// optional child is a node whose role is `None`.
+
+package rtl
+
+// The structural role of a node - the schema's fixed set.
+enum AstNodeKind {
+    None,
+    Module,
+    Import,
+    DataClass,
+    Enum,
+    TypeAlias,
+    Function,
+    Var,
+    TypeParam,
+    Field,
+    Param,
+    EnumMember,
+    Type,
+    Inner,
+    TypeArg,
+    ParamType,
+    ReturnType,
+    TargetType,
+    Receiver,
+    Stmt,
+    Expr,
+    Cond,
+    Then,
+    Else,
+    Body,
+    Case,
+    Label,
+    Init,
+    Value,
+    Target,
+    Operand,
+    Lhs,
+    Rhs,
+    Index,
+    Callee,
+    Arg
+}
+
+// An attribute's key: the schema's attribute names. The category (`kind`) is not
+// here: it is a field of the node, not an attribute.
+enum AstNodeAttributeKind {
+    Line,
+    Column,
+    Name,
+    IsVar,
+    IsNative,
+    HasBody,
+    HasReceiver,
+    HasNativeSymbol,
+    NativeSymbol,
+    Package,
+    Path,
+    Params,
+    Op,
+    Value,
+    Text,
+    HasValue,
+    IsDefault
+}
+
+// What a node is - the schema's `kind` - as opposed to its role (`AstNodeKind`,
+// where it sits). The two are independent: re-rooting a node under a new role
+// keeps its category, so a node carries both, and the category is a field rather
+// than an attribute so every test on it is an integer compare. `None` means the
+// node has no `kind` (a `Field`, a `Param`, a container, ...).
+enum AstNodeCategory {
+    None,
+    Module,
+    DataClass,
+    Enum,
+    TypeAlias,
+    Function,
+    Var,
+    StmtVarDecl,
+    StmtAssign,
+    StmtIf,
+    StmtWhile,
+    StmtSwitch,
+    StmtReturn,
+    StmtBreak,
+    StmtContinue,
+    StmtExprStmt,
+    StmtLabel,
+    StmtGoto,
+    StmtIfTrue,
+    StmtIfFalse,
+    StmtBlock,
+    ExprIntLit,
+    ExprFloatLit,
+    ExprStrLit,
+    ExprCharLit,
+    ExprBoolLit,
+    ExprNullLit,
+    ExprName,
+    ExprGenericName,
+    ExprMember,
+    ExprCall,
+    ExprIndex,
+    ExprUnary,
+    ExprBinary,
+    ExprLambda,
+    ExprRef,
+    ExprDeref,
+    ExprCopy,
+    TypeIntLit,
+    TypeNamed,
+    TypeGeneric,
+    TypeReference,
+    TypePointer,
+    TypeFunction
+}
+
+// One attribute: a key from the schema and its text value (numbers as decimal
+// text, booleans as "true"/"false"), so a node's scalars stay stringly typed.
+data class AstNodeAttribute(var name: AstNodeAttributeKind; var value: Str)
+
+// One AST node: its role, its category, its attributes, and its children - one
+// ref-counted `Array<AstXmlNode>` whose shared empty array is what a leaf holds.
+data class AstXmlNode(var name: AstNodeKind; var kind: AstNodeCategory; var attributes: List<AstNodeAttribute>; var Children: Array<AstXmlNode>)

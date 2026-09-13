@@ -33,6 +33,48 @@ void simse_list_removeRange(List<T>& self, Int start, Int end) {
     self.erase(self.begin() + start, self.begin() + end);
 }
 
+// `Array<T>.count()`: the element count stored at the front of the block.
+template <class T>
+Int simse_array_count(const Array<T>& self) {
+    return self.count();
+}
+
+// `List<T>.toArray()` (specs/built-in-types.md): copies the elements into one
+// count-first block. Element copies are value copies, like every other copy in
+// the language - a `List<Str>` copy shares no bytes, a `List<&T>` copy shares the
+// referenced objects.
+template <class T>
+Array<T> simse_list_toArray(const List<T>& self) {
+    const Int count = self.size();
+    if (count <= 0) {
+        return Array<T>();
+    }
+    Array<T> result(count);
+    for (Int i = 0; i < count; i++) {
+        result[i] = self[i];
+    }
+    return result;
+}
+
+// `Array<T>.toList()`: the growable copy, which is how an element is added to an
+// array (arrays are fixed length: `arr.toList().append(x).toArray()`).
+template <class T>
+List<T> simse_array_toList(const Array<T>& self) {
+    List<T> result;
+    const Int count = self.count();
+    result.reserve(count);
+    for (Int i = 0; i < count; i++) {
+        result.push_back(self[i]);
+    }
+    return result;
+}
+
+// `arrayEmpty<T>()`: the shared, zero-length array of `T` (no allocation).
+template <class T>
+Array<T> simse_arrayEmpty() {
+    return Array<T>();
+}
+
 // `Str.append(ch)` on a byte string. Str is std::string, which has no
 // single-character append(), so route through push_back.
 inline void simse_str_append(Str& self, Char value) {

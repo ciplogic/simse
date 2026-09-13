@@ -161,6 +161,7 @@ namespace ast {
         Enum,
         TypeAlias,
         Function,
+        Var,
     };
 
     struct Decl;
@@ -181,6 +182,13 @@ namespace ast {
         // DataClass / Enum / TypeAlias type parameters
         List<Str> typeParams;
         TypePtr targetType;
+
+        // Var: a file-level `var`/`val` (static storage, specs/statics.md). The
+        // shape mirrors a `Stmt` VarDecl so emitters have one variable form; the
+        // initializer is optional.
+        bool isVar = false;
+        TypePtr type;
+        ExprPtr init;
 
         // Function
         List<Str> functionTypeParams;
@@ -219,10 +227,15 @@ namespace ast {
     // file paths or addresses, so it is stable across machines.
     Str dumpModule(const Module& module);
 
-    // Converts the AST into an `XmlNode` tree using the schema in
-    // impl_specs/ast-xmlnode.md: each node carries its AST kind as an attribute
-    // and uses its structural role as the element name; scalars are string
-    // attributes. `dumpXmlNode` renders that tree deterministically.
-    XmlNode toXmlNode(const Module& module);
-    Str dumpXmlNode(const XmlNode& node);
+    // Converts the AST into an `AstXmlNode` tree using the schema in
+    // impl_specs/ast-xmlnode.md: each node carries its AST kind as its category
+    // and its structural role as the node's `name`; scalars are string
+    // attributes. `dumpXmlNode` renders that tree deterministically, and
+    // `astNodeKindText`/`astNodeCategoryText`/`astNodeAttributeText` are the
+    // schema's spelling of a role, a kind and an attribute key.
+    AstXmlNode toXmlNode(const Module& module);
+    Str dumpXmlNode(const AstXmlNode& node);
+    const char* astNodeKindText(AstNodeKind kind);
+    const char* astNodeCategoryText(AstNodeCategory kind);
+    const char* astNodeAttributeText(AstNodeAttributeKind name);
 }

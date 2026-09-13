@@ -3,6 +3,7 @@
 #include "../linear/Linear.h"
 #include "../linear/Simplify.h"
 
+#include <algorithm>
 #include <string>
 
 using ast::DeclKind;
@@ -32,6 +33,7 @@ namespace codegen {
             Str file;
             List<Str> templateParams; // C++ template type parameters
             bool prelude = false;    // resolved but never emitted
+            Str packageName;         // picks the emitted-symbol prefix ("" for rtl)
         };
 
         // A native function declaration to emit at the top of the amalgamated
@@ -41,6 +43,15 @@ namespace codegen {
             Str file;
             Str symbol;
             bool prelude = false; // comes from the RTL; not emitted
+        };
+
+        // A file-level static (`Var`, specs/statics.md): storage plus an optional
+        // initializer, emitted under its package's prefix like any other
+        // declaration.
+        struct Static {
+            const ast::Decl *decl = nullptr;
+            Str packageName;
+            Str file;
         };
 
         // A native extension method, e.g. `native("sym") fun append<T>(this:
@@ -87,7 +98,11 @@ namespace codegen {
                 if (failed) return resError<Str>(error);
                 emitTypes();
                 if (failed) return resError<Str>(error);
+                emitStatics();
+                if (failed) return resError<Str>(error);
                 emitFunctions(true);
+                if (failed) return resError<Str>(error);
+                emitStaticInit();
                 if (failed) return resError<Str>(error);
                 emitFunctions(false);
                 if (failed) return resError<Str>(error);
@@ -120,6 +135,15 @@ namespace codegen {
             // Per-function name kinds and declared/inferred types.
             Dictionary<Str, NameKind> nameKinds;
             Dictionary<Str, ast::TypePtr> localTypes;
+            // Emitted-symbol prefixes per package (`ns<index>_`; `rtl` and
+            // unattributed names have none), and the package each declared type
+            // came from.
+            Dictionary<Str, Str> nsPrefixes;
+            Dictionary<Str, Str> typePackages;
+            // File-level statics in declaration order: storage, then the pass that
+            // assigns their initializers before `main` (specs/statics.md).
+            List<Static> statics;
+            Dictionary<Str, Static> staticsByName;
             NameKind selfKind = NameKind::Value;
             ast::TypePtr selfType;
             // The enclosing function's declared return type, used to lower a bare
@@ -170,22 +194,111 @@ namespace codegen {
             }
 
             void addFunction(const ast::Decl *decl, ast::TypePtr receiver, const Str &file,
-                             const List<Str> &templateParams, bool prelude) {
+                             const List<Str> &templateParams, bool prelude, const Str &package) {
                 Fn fn;
                 fn.decl = decl;
                 fn.receiver = receiver;
                 fn.file = file;
                 fn.templateParams = templateParams;
                 fn.prelude = prelude;
+                fn.packageName = package;
                 functions.push_back(fn);
                 if (receiver) {
                     receiverFnNames[decl->name] = true;
                 }
             }
 
-            void collect() {
+            // ---- package qualification -------------------------------------
+            //
+            // Every declaration is emitted under its package's prefix: `rtl` - the
+            // namespace the built-in types live in (specs/modules.md, the implicit
+            // import) - is emitted bare, and every other package gets `ns<index>_`
+            // from the global dictionary below. The dictionary assigns indices in
+            // sorted package order, so the numbering never depends on discovery
+            // order and the output stays reproducible. This is what keeps two
+            // packages' same-named declarations apart in the amalgamated
+            // translation unit without spelling a package name out.
+
+            Str inputPackage(const Input &input) {
+                return join(input.module.package, ".");
+            }
+
+            void collectPackages() {
+                List<Str> names;
                 for (const Input &input: inputs) {
+                    Str pkg = inputPackage(input);
+                    // `rtl` is the built-in namespace, and an empty package is a
+                    // programmatically built module (the merged prelude); neither
+                    // is indexed, so neither is ever prefixed.
+                    if (pkg == "rtl" || pkg.empty()) continue;
+                    bool seen = false;
+                    for (const Str &existing: names) {
+                        if (existing == pkg) {
+                            seen = true;
+                            break;
+                        }
+                    }
+                    if (!seen) names.push_back(pkg);
+                }
+                std::sort(names.begin(), names.end());
+                for (int i = 0; i < (int) names.size(); i++) {
+                    nsPrefixes[names[i]] = "ns" + std::to_string(i + 1) + "_";
+                }
+            }
+
+            // The prefix of a package: empty for `rtl`, and for a name the emitter
+            // cannot attribute to any package (leaving it alone beats mangling it
+            // into a symbol that does not exist).
+            Str nsPrefix(const Str &package) {
+                auto found = nsPrefixes.find(package);
+                return found == nsPrefixes.end() ? Str() : found->second;
+            }
+
+            Str qualify(const Str &package, const Str &name) {
+                return nsPrefix(package) + name;
+            }
+
+            // The package a declared type (data class, enum, typealias) came from.
+            Str typePackage(const Str &name) {
+                auto found = typePackages.find(name);
+                return found == typePackages.end() ? Str() : found->second;
+            }
+
+            // The package of the plain (non-native) function `name`, or "". Matches
+            // by name only, like the `hasPlainFunction` probes at the call sites.
+            Str functionPackage(const Str &name) {
+                for (const Fn &fn: functions) {
+                    if (fn.decl->isNative || fn.decl->name != name) continue;
+                    return fn.packageName;
+                }
+                return Str();
+            }
+
+            // The declared type of a file-level static, for expression inference.
+            ast::TypePtr staticType(const Str &name) {
+                auto found = staticsByName.find(name);
+                return found == staticsByName.end() ? nullptr : found->second.decl->type;
+            }
+
+            void collect() {
+                collectPackages();
+                for (const Input &input: inputs) {
+                    Str pkg = inputPackage(input);
                     for (const ast::DeclPtr &decl: input.module.declarations) {
+                        if (decl->kind == DeclKind::Var) {
+                            // A file-level static: storage and an initializer for the
+                            // generated pass (specs/statics.md). Prelude inputs declare the
+                            // runtime surface, not program statics, so they are skipped.
+                            if (!input.prelude) {
+                                Static entry;
+                                entry.decl = decl.get();
+                                entry.packageName = pkg;
+                                entry.file = input.fileName;
+                                statics.push_back(entry);
+                                staticsByName[decl->name] = entry;
+                            }
+                            continue;
+                        }
                         if (decl->kind == DeclKind::Function) {
                             if (decl->isNative) {
                                 NativeDecl native;
@@ -210,10 +323,11 @@ namespace codegen {
                             }
                             addFunction(decl.get(),
                                         decl->hasReceiver ? decl->receiverType : nullptr,
-                                        input.fileName, decl->functionTypeParams, input.prelude);
+                                        input.fileName, decl->functionTypeParams, input.prelude, pkg);
                             continue;
                         }
                         types[decl->name] = decl.get();
+                        typePackages[decl->name] = pkg;
                         if (decl->kind == DeclKind::Enum) {
                             enumNames[decl->name] = true;
                         }
@@ -233,7 +347,7 @@ namespace codegen {
                                     methodParams.push_back(param);
                                 }
                                 addFunction(method.get(), receiver, input.fileName, methodParams,
-                                            input.prelude);
+                                            input.prelude, pkg);
                             }
                         }
                     }
@@ -277,7 +391,7 @@ namespace codegen {
                 if (name == "Unit") return "void";
                 if (activeTypeParams.count(name) > 0) return name;
                 if (isRtlTypeName(name)) return name;
-                if (types.count(name) > 0) return name;
+                if (types.count(name) > 0) return qualify(typePackage(name), name);
                 fail(pos, "unsupported type '" + name + "'");
                 return "/*unsupported*/";
             }
@@ -319,6 +433,48 @@ namespace codegen {
 
             // ---- declarations ---------------------------------------------
 
+            // Storage for every file-level static, value-initialized so it starts empty:
+            // the generated pass below fills in the initializers, and a read that happens
+            // first yields the empty value rather than indeterminate data
+            // (specs/statics.md).
+            void emitStatics() {
+                for (const Static &entry: statics) {
+                    curFile = entry.file;
+                    Str storage = qualify(entry.packageName, entry.decl->name);
+                    if (failed) return;
+                    sourceComment(entry.decl->pos);
+                    line(0, type(*entry.decl->type) + " " + storage + "{};");
+                    if (failed) return;
+                }
+            }
+
+            // Whether any static has an initializer, i.e. whether the pass is needed.
+            bool hasStaticInit() {
+                for (const Static &entry: statics) {
+                    if (entry.decl->init) return true;
+                }
+                return false;
+            }
+
+            // The generated initialization pass (specs/statics.md): the initializers of the
+            // file-level statics, run before the body of `main`. It is emitted here rather
+            // than as C++ static initialization so that the language owns the order, and it
+            // is emitted in declaration order - which the language does not guarantee, so a
+            // program must not depend on one static being initialized before another.
+            void emitStaticInit() {
+                if (!hasStaticInit()) return;
+                line(0, "// File-level static storage (specs/statics.md): initialized before main's body.");
+                line(0, "void simse_initStatics() {");
+                for (const Static &entry: statics) {
+                    if (!entry.decl->init) continue;
+                    curFile = entry.file;
+                    Str storage = qualify(entry.packageName, entry.decl->name);
+                    line(1, storage + " = " + expr(*entry.decl->init, 0, entry.decl->type) + ";");
+                    if (failed) return;
+                }
+                line(0, "}");
+            }
+
             void emitTypes() {
                 for (const Input &input: inputs) {
                     if (input.prelude) continue;
@@ -352,12 +508,13 @@ namespace codegen {
                 if (failed) return;
 
                 sourceComment(decl.pos);
+                Str emittedName = qualify(typePackage(decl.name), decl.name);
                 Str tmpl = templateClause(decl.typeParams);
                 // Generated aggregates follow the language's 4-byte packing rule
                 // (specs/memory-model.md); the macros come from rtl/types.hpp.
                 line(0, "SIMSE_PACK_PUSH");
                 if (!tmpl.empty()) line(0, tmpl);
-                line(0, "struct " + decl.name + " {");
+                line(0, "struct " + emittedName + " {");
                 for (const ast::Field &field: decl.fields) {
                     line(1, type(*field.type) + " " + field.name + ";");
                 }
@@ -368,10 +525,11 @@ namespace codegen {
                 // where C++ needs it, e.g. the payload of a failed Res<T>);
                 // construction goes through a `_make_<Name>` factory so callers
                 // keep the `Name(args)` shape without an emitted constructor.
-                Str target = decl.name;
+                Str target = emittedName;
                 if (!decl.typeParams.empty()) target += "<" + join(decl.typeParams, ", ") + ">";
                 if (!tmpl.empty()) line(0, tmpl);
-                line(0, target + " _make_" + decl.name + "(" + join(params, ", ") + ") {");
+                line(0, target + " " + qualify(typePackage(decl.name), "_make_" + decl.name)
+                       + "(" + join(params, ", ") + ") {");
                 line(1, "return " + target + "{" + join(values, ", ") + "};");
                 line(0, "}");
             }
@@ -380,7 +538,7 @@ namespace codegen {
                 sourceComment(decl.pos);
                 Str tmpl = templateClause(decl.typeParams);
                 if (!tmpl.empty()) line(0, tmpl);
-                line(0, "enum class " + decl.name + " {");
+                line(0, "enum class " + qualify(typePackage(decl.name), decl.name) + " {");
                 for (const ast::EnumMember &member: decl.members) {
                     Str text = member.name;
                     if (member.hasValue) text += " = " + std::to_string(member.value);
@@ -402,13 +560,15 @@ namespace codegen {
                     names.push_back(member.name);
                     next += 1;
                 }
-                line(0, "inline Opt<" + decl.name + "> simse_" + decl.name
-                       + "_fromInt(Int value) {");
+                Str emittedName = qualify(typePackage(decl.name), decl.name);
+                line(0, "inline Opt<" + emittedName + "> "
+                       + qualify(typePackage(decl.name), "simse_" + decl.name + "_fromInt")
+                       + "(Int value) {");
                 for (int i = 0; i < (int) names.size(); i++) {
-                    line(1, "if (value == " + std::to_string(values[i]) + ") return Opt<" + decl.name
-                           + ">::some(" + decl.name + "::" + names[i] + ");");
+                    line(1, "if (value == " + std::to_string(values[i]) + ") return Opt<" + emittedName
+                           + ">::some(" + emittedName + "::" + names[i] + ");");
                 }
-                line(1, "return Opt<" + decl.name + ">::none();");
+                line(1, "return Opt<" + emittedName + ">::none();");
                 line(0, "}");
             }
 
@@ -423,7 +583,7 @@ namespace codegen {
                 sourceComment(decl.pos);
                 Str tmpl = templateClause(decl.typeParams);
                 if (!tmpl.empty()) line(0, tmpl);
-                line(0, "using " + decl.name + " = " + target + ";");
+                line(0, "using " + qualify(typePackage(decl.name), decl.name) + " = " + target + ";");
             }
 
             // Native functions are declared once at the top of the file; their
@@ -572,7 +732,8 @@ namespace codegen {
 
                 Str signature = mainArgs
                                     ? Str("int main(int argc, char** argv)")
-                                    : (ret + " " + decl.name + "(" + join(params, ", ") + ")");
+                                    : (ret + " " + (isMain ? Str("main") : qualify(fn.packageName, decl.name))
+                                       + "(" + join(params, ", ") + ")");
                 Str tmpl = templateClause(fn.templateParams);
                 if (prototypeOnly) {
                     if (!tmpl.empty()) line(0, tmpl);
@@ -587,6 +748,10 @@ namespace codegen {
                 if (!tmpl.empty()) line(0, tmpl);
                 line(0, signature + " {");
                 beginScope(fn, selfK, selfTypePtr);
+                if (isMain && hasStaticInit()) {
+                    // Static storage is initialized before the body runs (specs/statics.md).
+                    line(1, "simse_initStatics();");
+                }
                 if (mainArgs) {
                     Str argName = decl.params[0].name;
                     line(1, "List<Str> " + argName + " = List<Str>();");
@@ -923,6 +1088,9 @@ namespace codegen {
                         if (e.text == "this") return selfType;
                         auto it = localTypes.find(e.text);
                         if (it != localTypes.end()) return it->second;
+                        // File-level static storage (specs/statics.md).
+                        ast::TypePtr staticNode = staticType(e.text);
+                        if (staticNode) return staticNode;
                         // A bare enum type name used as the receiver of a static
                         // conversion, e.g. `Color.Red` / `Color.fromInt(x)`.
                         if (enumNames.count(e.text) > 0) return namedType(e.text);
@@ -1232,13 +1400,27 @@ namespace codegen {
                     case ExprKind::NullLit:
                         return nullTo(expected);
                     case ExprKind::Name:
-                        return e.text == "this" ? Str("self") : e.text;
+                        if (e.text == "this") return "self";
+                        if (localTypes.count(e.text) > 0) return e.text;
+                        // A file-level static is emitted under its package's prefix; a bare
+                        // name that is not a local is otherwise a reference to a top-level
+                        // function used as a value (e.g. a callable argument), so it carries
+                        // that function's prefix, and a known prelude native resolves to its
+                        // symbol instead.
+                        if (staticsByName.count(e.text) > 0) {
+                            return qualify(staticsByName[e.text].packageName, e.text);
+                        }
+                        if (!functionPackage(e.text).empty()) {
+                            return qualify(functionPackage(e.text), e.text);
+                        }
+                        if (nativeSymbols.count(e.text) > 0) return nativeSymbols[e.text];
+                        return e.text;
                     case ExprKind::GenericName:
                         fail(e.pos, "unsupported: generic-qualified expression '" + e.text + "<...>'");
                         return "/*unsupported*/";
                     case ExprKind::Member:
                         if (e.lhs && e.lhs->kind == ExprKind::Name && enumNames.count(e.lhs->text) > 0) {
-                            return e.lhs->text + "::" + e.text;
+                            return qualify(typePackage(e.lhs->text), e.lhs->text) + "::" + e.text;
                         }
                         return memberAccess(*e.lhs, e.text);
                     case ExprKind::Call:
@@ -1346,7 +1528,7 @@ namespace codegen {
                     for (const ast::ExprPtr &arg: e.args) {
                         args.push_back(expr(*arg, 0));
                     }
-                    Str calleeName = callee.text;
+                    Str calleeName = qualify(functionPackage(callee.text), callee.text);
                     auto native = nativeSymbols.find(callee.text);
                     bool hasPlainFunction = false;
                     for (const Fn &candidate: functions) {
@@ -1356,7 +1538,7 @@ namespace codegen {
                         }
                     }
                     if (dataClassNames.count(callee.text) > 0) {
-                        calleeName = "_make_" + callee.text;
+                        calleeName = qualify(typePackage(callee.text), "_make_" + callee.text);
                     } else if (!hasPlainFunction && native != nativeSymbols.end()) {
                         calleeName = native->second;
                     }
@@ -1389,9 +1571,9 @@ namespace codegen {
                             break;
                         }
                     }
-                    Str calleeName = callee.text;
+                    Str calleeName = qualify(functionPackage(callee.text), callee.text);
                     if (dataClassNames.count(callee.text) > 0) {
-                        calleeName = "_make_" + callee.text;
+                        calleeName = qualify(typePackage(callee.text), "_make_" + callee.text);
                     } else if (!hasPlainFunction && native != nativeSymbols.end()) {
                         calleeName = native->second;
                     }
@@ -1414,12 +1596,14 @@ namespace codegen {
                     if (callee.text == "fromInt" && callee.lhs
                         && callee.lhs->kind == ExprKind::Name
                         && enumNames.count(callee.lhs->text) > 0) {
-                        return "simse_" + callee.lhs->text + "_fromInt(" + join(args, ", ") + ")";
+                        return qualify(typePackage(callee.lhs->text),
+                                       "simse_" + callee.lhs->text + "_fromInt")
+                               + "(" + join(args, ", ") + ")";
                     }
                     // Generic-qualified static call: `Res<T>.ok(x)` lowers to
                     // `Res<T>::ok(x)` (RTL Opt/Res provide static constructors).
                     if (callee.lhs && callee.lhs->kind == ExprKind::GenericName) {
-                        return callee.lhs->text + "<"
+                        return qualify(typePackage(callee.lhs->text), callee.lhs->text) + "<"
                                + typeArgsString(callee.lhs->text, callee.lhs->typeArgs)
                                + ">::" + callee.text + "(" + join(args, ", ") + ")";
                     }
@@ -1433,7 +1617,7 @@ namespace codegen {
                         if (fn) {
                             Str all = receiverArg(fn->receiver, *callee.lhs);
                             for (const Str &arg: args) all += ", " + arg;
-                            return fn->decl->name + "(" + all + ")";
+                            return qualify(fn->packageName, fn->decl->name) + "(" + all + ")";
                         }
                         const NativeExt *ext = findNativeExt(callee.text, *callee.lhs);
                         if (ext) {
@@ -1451,7 +1635,7 @@ namespace codegen {
                     if (receiverFnNames.count(callee.text) > 0) {
                         Str all = expr(*callee.lhs, 9);
                         for (const Str &arg: args) all += ", " + arg;
-                        return callee.text + "(" + all + ")";
+                        return qualify(functionPackage(callee.text), callee.text) + "(" + all + ")";
                     }
                     auto extension = nativeExtensions.find(callee.text);
                     if (extension != nativeExtensions.end() && !extension->second.empty()) {

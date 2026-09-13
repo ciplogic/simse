@@ -5,10 +5,10 @@
 
 // xml_probe.simse:2
 SIMSE_PACK_PUSH
-struct Tile {
+struct ns1_Tile {
     Int n;
 };
 SIMSE_PACK_POP
-Tile _make_Tile(Int n) {
-    return Tile{n};
+ns1_Tile ns1__make_Tile(Int n) {
+    return ns1_Tile{n};
 }

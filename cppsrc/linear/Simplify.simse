@@ -17,29 +17,29 @@ package linear
 
 import common
 
-fun linIsLabel(stmt: *XmlNode): Bool {
-    return xmlKind(stmt) == "Stmt.Label"
+fun linIsLabel(stmt: *AstXmlNode): Bool {
+    return xmlKind(stmt) == AstNodeCategory.StmtLabel
 }
 
-fun linIsGoto(stmt: *XmlNode): Bool {
-    return xmlKind(stmt) == "Stmt.Goto"
+fun linIsGoto(stmt: *AstXmlNode): Bool {
+    return xmlKind(stmt) == AstNodeCategory.StmtGoto
 }
 
-fun linIsCondJump(stmt: *XmlNode): Bool {
-    val kind: Str = xmlKind(stmt)
-    return kind == "Stmt.IfTrue" || kind == "Stmt.IfFalse"
+fun linIsCondJump(stmt: *AstXmlNode): Bool {
+    val kind: AstNodeCategory = xmlKind(stmt)
+    return kind == AstNodeCategory.StmtIfTrue || kind == AstNodeCategory.StmtIfFalse
 }
 
-fun linIsTerminator(stmt: *XmlNode): Bool {
-    val kind: Str = xmlKind(stmt)
-    return kind == "Stmt.Goto" || kind == "Stmt.Return"
+fun linIsTerminator(stmt: *AstXmlNode): Bool {
+    val kind: AstNodeCategory = xmlKind(stmt)
+    return kind == AstNodeCategory.StmtGoto || kind == AstNodeCategory.StmtReturn
 }
 
-fun linJumpsTo(stmts: *List<XmlNode>, name: Str): Bool {
+fun linJumpsTo(stmts: *List<AstXmlNode>, name: Str): Bool {
     var i: Int = 0
     while (i < stmts.size()) {
         if ((linIsGoto(*stmts[i]) || linIsCondJump(*stmts[i]))
-            && xmlAttr(*stmts[i], "name") == name) {
+            && xmlAttr(*stmts[i], AstNodeAttributeKind.Name) == name) {
             return true
         }
         i = i + 1
@@ -49,42 +49,41 @@ fun linJumpsTo(stmts: *List<XmlNode>, name: Str): Bool {
 
 // A copy of a conditional jump with a negated condition (IfTrue <-> IfFalse)
 // and a new target.
-fun linInvertedJump(jump: *XmlNode, target: Str): XmlNode {
-    var kind: Str = "Stmt.IfTrue"
-    if (xmlKind(jump) == "Stmt.IfTrue") {
-        kind = "Stmt.IfFalse"
+fun linInvertedJump(jump: *AstXmlNode, target: Str): AstXmlNode {
+    var kind: AstNodeCategory = AstNodeCategory.StmtIfTrue
+    if (xmlKind(jump) == AstNodeCategory.StmtIfTrue) {
+        kind = AstNodeCategory.StmtIfFalse
     }
-    var attrs: List<Attribute> = List<Attribute>()
-    attrs.append(Attribute("kind", kind))
-    attrs.append(Attribute("line", xmlLine(jump).toString()))
-    attrs.append(Attribute("column", xmlColumn(jump).toString()))
-    attrs.append(Attribute("name", target))
-    var node: XmlNode = XmlNode("Stmt", attrs, &List<XmlNode>())
-    node.Children.append(xmlChild(jump, "Cond"))
+    var attrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, xmlLine(jump).toString()))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, xmlColumn(jump).toString()))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, target))
+    var node: AstXmlNode = AstXmlNode(AstNodeKind.Stmt, kind, attrs, Array<AstXmlNode>())
+    xmlAddChild(*node, xmlChild(jump, AstNodeKind.Cond))
     return node
 }
 
 data class LinSimplifier(
     var changed: Bool
 ) {
-    fun prunePass(stmts: *List<XmlNode>): List<XmlNode> {
-        var out: List<XmlNode> = List<XmlNode>()
+    fun prunePass(stmts: *List<AstXmlNode>): List<AstXmlNode> {
+        var out: List<AstXmlNode> = List<AstXmlNode>()
         var i: Int = 0
         while (i < stmts.size()) {
-            val stmt: XmlNode = stmts[i]
+            val stmt: AstXmlNode = stmts[i]
             if ((linIsGoto(*stmt) || linIsCondJump(*stmt)) && i + 1 < stmts.size()
                 && linIsLabel(*stmts[i + 1])
-                && xmlAttr(*stmts[i + 1], "name") == xmlAttr(*stmt, "name")) {
+                && xmlAttr(*stmts[i + 1], AstNodeAttributeKind.Name) == xmlAttr(*stmt, AstNodeAttributeKind.Name)) {
                 // A jump to the statement right after it does nothing.
                 this.changed = true
                 i = i + 1
             } else if (linIsCondJump(*stmt) && i + 2 < stmts.size() && linIsGoto(*stmts[i + 1])
                        && linIsLabel(*stmts[i + 2])
-                       && xmlAttr(*stmts[i + 2], "name") == xmlAttr(*stmt, "name")) {
+                       && xmlAttr(*stmts[i + 2], AstNodeAttributeKind.Name) == xmlAttr(*stmt, AstNodeAttributeKind.Name)) {
                 // `ifTrue (c) goto A; goto B; A:` is `ifFalse (c) goto B;`. The
                 // label A stays in the stream and is dropped below if nothing
                 // else jumps to it.
-                out.append(linInvertedJump(*stmt, xmlAttr(*stmts[i + 1], "name")))
+                out.append(linInvertedJump(*stmt, xmlAttr(*stmts[i + 1], AstNodeAttributeKind.Name)))
                 this.changed = true
                 i = i + 2
             } else {
@@ -102,12 +101,12 @@ data class LinSimplifier(
         return out
     }
 
-    fun labelPass(stmts: *List<XmlNode>): List<XmlNode> {
-        var out: List<XmlNode> = List<XmlNode>()
+    fun labelPass(stmts: *List<AstXmlNode>): List<AstXmlNode> {
+        var out: List<AstXmlNode> = List<AstXmlNode>()
         var i: Int = 0
         while (i < stmts.size()) {
-            val stmt: XmlNode = stmts[i]
-            if (linIsLabel(*stmt) && !linJumpsTo(stmts, xmlAttr(*stmt, "name"))) {
+            val stmt: AstXmlNode = stmts[i]
+            if (linIsLabel(*stmt) && !linJumpsTo(stmts, xmlAttr(*stmt, AstNodeAttributeKind.Name))) {
                 this.changed = true
             } else {
                 out.append(copy(stmt))
@@ -117,8 +116,8 @@ data class LinSimplifier(
         return out
     }
 
-    fun run(stmts: List<XmlNode>): List<XmlNode> {
-        var current: List<XmlNode> = stmts
+    fun run(stmts: List<AstXmlNode>): List<AstXmlNode> {
+        var current: List<AstXmlNode> = stmts
         this.changed = true
         var guard: Int = 0
         while (this.changed && guard < 16) {
@@ -131,7 +130,7 @@ data class LinSimplifier(
     }
 }
 
-fun linSimplifyBody(body: List<XmlNode>): List<XmlNode> {
+fun linSimplifyBody(body: List<AstXmlNode>): List<AstXmlNode> {
     var simplifier: LinSimplifier = LinSimplifier(false)
     return simplifier.run(body)
 }

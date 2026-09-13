@@ -3,16 +3,16 @@
 #include <iostream>
 #include <type_traits>
 
-Int f();
-Int pick(Int n);
+Int ns1_f();
+Int ns1_pick(Int n);
 // sema_switch_label.simse:3
-Int f() {
+Int ns1_f() {
     return 1;
 }
 // sema_switch_label.simse:7
-Int pick(Int n) {
+Int ns1_pick(Int n) {
     auto simse_sw_1 = n;
-    if (!(simse_sw_1 == f())) goto L4;
+    if (!(simse_sw_1 == ns1_f())) goto L4;
     return 1;
     L4:;
     return 0;

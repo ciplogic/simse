@@ -30,19 +30,23 @@ inline constexpr Int kStrInlineCapacity = SIMSE_STR_INLINE_CAPACITY;
 // bytes in total (32 at the spec capacity of 24, 24 at 16) — specialized for the
 // single element type it ever holds.
 //
-// **`_len` counts the terminating NUL.** The buffer always keeps a NUL at
-// `data()[size()]`, and that byte is part of `_len`, so:
+// **`_len` is the character count** — zero-based, so the empty string is
+// `_len == 0`, the same convention `SmallVector` uses for elements. The buffer
+// always keeps a NUL at `data()[_len]`, one byte past the text: the terminator is
+// an invariant of the storage, not something each caller has to remember to
+// write, and the allocation (`_cap`, in bytes) is what carries it.
 //
-//   * `size()` is the character count (`_len - 1`) and `data()` is always a
-//     valid C string — the NUL is an invariant of the storage, not something
-//     each caller has to remember to write;
+//   * the read path is arithmetic-free: `size()` is `_len`, `empty()` is
+//     `_len == 0`, `end()` is `raw() + _len`, `data()` is always a valid C
+//     string;
+//   * the `+1` for the terminator lives in the write paths, which run once per
+//     mutation rather than once per read;
 //   * growing operations write the new NUL as part of the same write
 //     (`push_back`, `resize`, `assign`, `append`), so there is no separate
 //     "terminate" pass after them;
-//   * a text that fits is copied in one move — `assignTerminated` copies
-//     `count + 1` bytes because the source's NUL is part of the text, which is
-//     what literals, `std::string::data()` and other `Str`s provide;
-//   * the empty string is `_len == 1` (the NUL alone).
+//   * a text that fits is copied in one move — `assign` copies `count + 1` bytes
+//     because the source's NUL is part of the text, which is what literals,
+//     `std::string::data()` and other `Str`s provide.
 //
 // The specialization exists because the generic SmallVector manages element
 // lifetimes one element at a time, and for `Char` that walk is pure overhead.
@@ -59,19 +63,19 @@ public:
     using const_iterator = const char*;
 
     static constexpr Int inlineCapacity = kStrInlineCapacity;   // bytes, NUL included
-    static constexpr Int maxInlineSize = inlineCapacity - 1;
+    static constexpr Int maxInlineSize = inlineCapacity - 1;    // characters
 
     // The inline buffer starts out holding the empty string (its NUL). Writing
     // it also selects the inline union member.
-    constexpr StrSmallVector() : _len(1), _cap(inlineCapacity) {
+    constexpr StrSmallVector() : _len(0), _cap(inlineCapacity) {
         _storage._inlineStore[0] = '\0';
     }
 
-    StrSmallVector(const StrSmallVector& other) : _len(1), _cap(inlineCapacity) {
+    StrSmallVector(const StrSmallVector& other) : _len(0), _cap(inlineCapacity) {
         assign(other.data(), other.size());
     }
 
-    StrSmallVector(StrSmallVector&& other) noexcept : _len(1), _cap(inlineCapacity) {
+    StrSmallVector(StrSmallVector&& other) noexcept : _len(0), _cap(inlineCapacity) {
         takeFrom(other);
     }
 
@@ -122,21 +126,23 @@ public:
 
     // ---- capacity ---------------------------------------------------------
 
-    constexpr Bool empty() const { return _len <= 1; }
-    constexpr Int size() const { return _len - 1; }
+    constexpr Bool empty() const { return _len == 0; }
+    constexpr Int size() const { return _len; }
     constexpr Int capacity() const { return _cap - 1; }   // characters
 
-    // `count` is a *stored* byte count (NUL included), like `_cap`.
+    // `count` is a *stored* byte count (NUL included), like `_cap`: it is the
+    // allocation's unit, and the only place that has to think in bytes.
     constexpr void reserve(Int count) {
         if (count <= _cap) return;
         Int next = _cap < inlineCapacity ? inlineCapacity : _cap * 2;
         if (next < count) next = count;
         char* fresh = std::allocator<char>().allocate((std::size_t) next);
         char* old = raw();
+        const Int stored = _len + 1;
         if (std::is_constant_evaluated()) {
-            for (Int i = 0; i < _len; i++) fresh[i] = old[i];
+            for (Int i = 0; i < stored; i++) fresh[i] = old[i];
         } else {
-            std::memcpy(fresh, old, (std::size_t) _len);   // includes the NUL
+            std::memcpy(fresh, old, (std::size_t) stored);   // includes the NUL
         }
         if (!isInline()) std::allocator<char>().deallocate(old, (std::size_t) _cap);
         _cap = next;
@@ -147,30 +153,30 @@ public:
 
     // Back to the empty string; the NUL is written as part of it.
     constexpr void clear() {
-        _len = 1;
+        _len = 0;
         raw()[0] = '\0';
     }
 
     // Growing leaves the new characters uninitialized; the NUL after them is
     // written here, and every caller (`SmString`) fills the characters in.
     constexpr void resize(Int count) {
-        Int stored = count + 1;
-        if (stored > _cap) reserve(stored);
-        _len = stored;
+        Int needed = count + 1;
+        if (needed > _cap) reserve(needed);
+        _len = count;
         raw()[count] = '\0';
     }
 
     constexpr void push_back(char value) {
-        if (_len + 1 > _cap) reserve(_len + 1);
-        raw()[_len - 1] = value;
-        raw()[_len] = '\0';
+        if (_len + 2 > _cap) reserve(_len + 2);
+        raw()[_len] = value;
+        raw()[_len + 1] = '\0';
         _len++;
     }
 
     constexpr void pop_back() {
-        if (_len > 1) {
+        if (_len > 0) {
             _len--;
-            raw()[_len - 1] = '\0';
+            raw()[_len] = '\0';
         }
     }
 
@@ -198,8 +204,9 @@ public:
     }
 
 public:
-    // The stored byte count (`size() + 1`) and the capacity in the same units.
-    Int _len = 1;
+    // The character count (zero-based) and the allocated capacity in bytes
+    // (NUL included); `isInline` distinguishes the two storage modes.
+    Int _len = 0;
     Int _cap = inlineCapacity;
 
     union Storage {
@@ -246,11 +253,11 @@ public:
 
     template <Bool TextHasNul>
     constexpr void assignImpl(const char* text, Int count) {
-        Int stored = count + 1;
-        if (stored > _cap) {
-            reserve(stored);
+        Int needed = count + 1;
+        if (needed > _cap) {
+            reserve(needed);
             writeInto<TextHasNul>(raw(), text, count);
-        } else if (stored <= inlineCapacity && !isInline()) {
+        } else if (needed <= inlineCapacity && !isInline()) {
             // Shorter text: move back into the inline buffer, then free the heap
             // block (the copy happens first: `text` may point into it).
             char* old = _storage._heap;
@@ -261,24 +268,24 @@ public:
         } else {
             writeInto<TextHasNul>(raw(), text, count);
         }
-        _len = stored;
+        _len = count;
     }
 
     template <Bool TextHasNul>
     constexpr void appendImpl(const char* text, Int count) {
         if (count <= 0) return;
-        Int from = _len - 1;                    // the current NUL's index
-        Int stored = _len + count;              // NUL moves right by `count`
-        if (stored > _cap) reserve(stored);
+        Int from = _len;                        // the current NUL's index
+        Int needed = _len + count + 1;          // NUL moves right by `count`
+        if (needed > _cap) reserve(needed);
         writeInto<TextHasNul>(raw() + from, text, count);
-        _len = stored;
+        _len = from + count;
     }
 
     constexpr void releaseHeap() {
         if (!isInline()) {
             std::allocator<char>().deallocate(_storage._heap, (std::size_t) _cap);
             _cap = inlineCapacity;
-            _len = 1;
+            _len = 0;
             _storage._inlineStore[0] = '\0';
         }
     }
@@ -289,7 +296,7 @@ public:
             _len = other._len;
             _cap = other._cap;
             _storage._heap = other._storage._heap;
-            other._len = 1;
+            other._len = 0;
             other._cap = inlineCapacity;
             other._storage._heap = nullptr;
             other._storage._inlineStore[0] = '\0';
@@ -297,7 +304,7 @@ public:
         }
         _len = other._len;
         writeInto<true>(_storage._inlineStore, other._storage._inlineStore, other.size());
-        other._len = 1;
+        other._len = 0;
         other._storage._inlineStore[0] = '\0';
     }
 };

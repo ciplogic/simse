@@ -59,3 +59,9 @@ as `SmallVector<4, T>` participate in the C++ type itself
   operations.
 - Generic static-member dispatch (`Res<T>.ok(...)`) is not lowered yet; it
   reports a positioned `unsupported` diagnostic.
+- Generic `object` statics (`specs/statics.md`) reuse this tracking: the emitter
+  collects the instantiations it reifies - concrete mentions, plus the
+  substitutions that reifying a generic body produces - and the generated
+  initialization pass initializes each collected instantiation
+  (`impl_specs/statics.md`). A mention that never gets a concrete reification is
+  initialized on first use instead, exactly once either way.

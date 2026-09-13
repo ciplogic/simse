@@ -3,9 +3,9 @@
 #include <iostream>
 #include <type_traits>
 
-Res<Int> useGenerics();
+Res<Int> ns1_useGenerics();
 // program_expr.simse:2
-Res<Int> useGenerics() {
+Res<Int> ns1_useGenerics() {
     Int value = 3;
     List<Int> list = List<Int>();
     Opt<Int> opt = Opt<Int>();

@@ -60,6 +60,10 @@ reference, but the pointed-to `Point` may still be changed through another
 mutable handle. A `val` data-class field likewise prevents assigning that field;
 it does not recursively freeze a referenced value.
 
+Declared outside any class, function or object, the same keywords declare
+**static storage**: a `var`/`val` at file level outlives every call. See
+`specs/statics.md` for the storage/initialization rules.
+
 For the initial implementation, constructors must receive one argument for
 each declared field, in declaration order. Default field values, named
 arguments, inheritance, and generated methods beyond construction/copying are
@@ -139,8 +143,9 @@ full rules.
 
 Status: required for the first implementation.
 
-Module-level declarations (functions, `data class`, `enum`, and `typealias`) are
-**hoisted**. They are visible throughout the module regardless of textual order,
+Module-level declarations (functions, `data class`, `enum`, `typealias`, and the
+file-level `var`/`val` of `specs/statics.md`) are **hoisted**. They are visible
+throughout the module regardless of textual order,
 like Kotlin, Java, or C#. Declarations may be referenced before their textual
 definition, and mutually recursive functions need no source-level forward
 declaration. Methods within a class body are likewise order-independent relative

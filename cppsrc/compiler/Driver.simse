@@ -31,41 +31,39 @@ import common
 
 // ---- module helpers -------------------------------------------------------
 
-fun driverNewModule(): XmlNode {
-    return XmlNode("Module", List<Attribute>(), &List<XmlNode>())
+fun driverNewModule(): AstXmlNode {
+    return AstXmlNode(AstNodeKind.Module, AstNodeCategory.None, List<AstNodeAttribute>(), Array<AstXmlNode>())
 }
 
-fun driverAppendNamed(target: *XmlNode, source: *XmlNode, role: Str): Unit {
+fun driverAppendNamed(target: *AstXmlNode, source: *AstXmlNode, role: AstNodeKind): Unit {
+    var picked: List<AstXmlNode> = List<AstXmlNode>()
     var i: Int = 0
-    while (i < source.Children.size()) {
+    while (i < source.Children.count()) {
         if (source.Children[i].name == role) {
-            target.Children.append(source.Children[i])
+            picked.append(source.Children[i])
         }
         i = i + 1
     }
+    xmlAddChildren(target, *picked)
 }
 
-fun driverAppendDecls(target: *XmlNode, source: *XmlNode): Unit {
-    val decls: List<XmlNode> = xmlDecls(source)
-    var i: Int = 0
-    while (i < decls.size()) {
-        target.Children.append(decls[i])
-        i = i + 1
-    }
+fun driverAppendDecls(target: *AstXmlNode, source: *AstXmlNode): Unit {
+    val decls: List<AstXmlNode> = xmlDecls(source)
+    xmlAddChildren(target, *decls)
 }
 
 // ---- scanning / parsing ---------------------------------------------------
 
 // Reads, scans, and parses one file. Matches parser::parseFile: the scanner error
 // is prefixed with the file name, and the token stream carries a synthetic Eof.
-fun driverParseFile(fileName: Str): Res<XmlNode> {
+fun driverParseFile(fileName: Str): Res<AstXmlNode> {
     var scanner: Scanner = Scanner(getTokenRules(), 0, 1, 1, Str())
     scanner.setSource(readFile(fileName))
     var tokens: List<Token> = List<Token>()
     while (true) {
         val result: Res<Token> = scanner.nextToken()
         if (!result.isOk()) {
-            return Res<XmlNode>.err(fileName + ": " + result.Error)
+            return Res<AstXmlNode>.err(fileName + ": " + result.Error)
         }
         if (result.Value.kind == TokenKind.Eof) {
             break
@@ -212,13 +210,13 @@ fun main(args: List<Str>): Int {
         }
     }
 
-    var preludeModules: List<XmlNode> = List<XmlNode>()
+    var preludeModules: List<AstXmlNode> = List<AstXmlNode>()
     var preludeNames: List<Str> = List<Str>()
     var preludeCanon: List<Str> = List<Str>()
-    var mergedPrelude: XmlNode = driverNewModule()
+    var mergedPrelude: AstXmlNode = driverNewModule()
     var p: Int = 0
     while (p < preludeFiles.size()) {
-        val parsedPrelude: Res<XmlNode> = driverParseFile(preludeFiles[p])
+        val parsedPrelude: Res<AstXmlNode> = driverParseFile(preludeFiles[p])
         if (!parsedPrelude.isOk()) {
             eprintln(parsedPrelude.Error)
             return 1
@@ -226,7 +224,7 @@ fun main(args: List<Str>): Int {
         preludeCanon.append(pathCanonical(preludeFiles[p]))
         preludeNames.append(preludeFiles[p])
         preludeModules.append(parsedPrelude.Value)
-        driverAppendNamed(*mergedPrelude, *parsedPrelude.Value, "Import")
+        driverAppendNamed(*mergedPrelude, *parsedPrelude.Value, AstNodeKind.Import)
         driverAppendDecls(*mergedPrelude, *parsedPrelude.Value)
         p = p + 1
     }
@@ -235,10 +233,10 @@ fun main(args: List<Str>): Int {
     val files: List<Str> = driverGatherFiles(moduleRoots, inputs, preludeCanon)
 
     var fileNames: List<Str> = List<Str>()
-    var modules: List<XmlNode> = List<XmlNode>()
+    var modules: List<AstXmlNode> = List<AstXmlNode>()
     var f: Int = 0
     while (f < files.size()) {
-        val parsed: Res<XmlNode> = driverParseFile(files[f])
+        val parsed: Res<AstXmlNode> = driverParseFile(files[f])
         if (!parsed.isOk()) {
             eprintln(parsed.Error)
             return 1

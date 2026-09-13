@@ -246,7 +246,7 @@ int main() {
             attributes.push_back(Attribute("kind", "Expr.GenericName"));
             attributes.push_back(Attribute("line", "42"));
             attributes.push_back(Attribute("column", "7"));
-            XmlNode node("Expr", attributes, makeList<XmlNode>());
+            XmlNode node("Expr", attributes, Array<XmlNode>());
             XmlNode copy = node;
             sum += (long long) copy.attributes.size() + (long long) copy.name.size();
         }

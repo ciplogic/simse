@@ -40,6 +40,9 @@ namespace lex {
         return strView.len;
     }
 
+    // The scanner's tables are built once (static storage), and the comparisons
+    // below read them through a pointer: a `List<Str>`-returning accessor rebuilt a
+    // table per call, and `matchOperator` runs for every token.
     List<Str> ReservedWords = {
         "class", "data", "val", "var", "fun", "return",
         "while", "for",
@@ -50,17 +53,36 @@ namespace lex {
         "package"
     };
 
-    bool isReservedWord(StrView strView) {
-        for (Str &reservedWord: ReservedWords) {
-            if (strView.len != (int) reservedWord.length()) {
-                continue;
-            }
+    // Longest-match-first is not needed: no entry is a prefix of another.
+    List<Str> MultiCharOperators = {
+        "->", "==", "!=", "<=", ">=", "&&", "||",
+        "+=", "-=", "*=", "/=", "%="
+    };
 
-            if (strView.startsWith(reservedWord)) {
-                return true;
-            }
+    // The scanner's one table comparison: how much of `view` the table matches, or
+    // 0. `exact` requires the whole view to be an entry (a reserved word); without
+    // it the first entry `view` starts with wins (a multi-character operator).
+    //
+    // The cheap tests come first - the view's first character, then the entry's
+    // length, then (for a reserved word) the exact length - so the character-bycharacter
+    // comparison only runs for entries that survived them. Entries are read by
+    // reference, so nothing is copied. Both lookups share this function.
+    int tableMatch(StrView view, const List<Str> &table, bool exact) {
+        if (view.len == 0) {
+            return 0;
         }
-        return false;
+        const char first = view.at(0);
+        for (const Str &entry: table) {
+            const int length = (int) entry.length();
+            if (length == 0 || entry[0] != first) continue;
+            if (view.len < length || (exact && view.len != length)) continue;
+            if (view.startsWith(entry)) return length;
+        }
+        return 0;
+    }
+
+    bool isReservedWord(StrView strView) {
+        return tableMatch(strView, ReservedWords, true) > 0;
     }
 
     // Horizontal whitespace only. Line endings are their own token kind.
@@ -95,11 +117,6 @@ namespace lex {
     }
 
     // Longest-match-first is not needed: no entry is a prefix of another.
-    List<Str> MultiCharOperators = {
-        "->", "==", "!=", "<=", ">=", "&&", "||",
-        "+=", "-=", "*=", "/=", "%="
-    };
-
     int matchSpaces(StrView Source) {
         return matchAllOfRule(Source, isSpace);
     }
@@ -222,11 +239,11 @@ namespace lex {
         return 0;
     }
 
+    // Longest-match-first is not needed: no entry is a prefix of another.
     int matchOperator(StrView Source) {
-        for (Str &op: MultiCharOperators) {
-            if (Source.len >= (int) op.length() && Source.startsWith(op)) {
-                return (int) op.length();
-            }
+        const int matched = tableMatch(Source, MultiCharOperators, false);
+        if (matched > 0) {
+            return matched;
         }
         if (Source.len > 0 && isOperatorChar(Source.at(0))) {
             return 1;
@@ -328,20 +345,26 @@ namespace lex {
         this->Column = 1;
     }
 
-    List<TokenMatcher> getTokenRules() {
-        List<TokenMatcher> Rules;
-        // Order matters: comments before operators (so `//` is not two `/`),
-        // reserved words before identifiers, and operators last.
-        addRule(&Rules, TokenKind::Comment, matchComment);
-        addRule(&Rules, TokenKind::Space, matchSpaces);
-        addRule(&Rules, TokenKind::EndOfLine, matchEndOfLine);
-        addRule(&Rules, TokenKind::String, matchStringLiteral);
-        addRule(&Rules, TokenKind::Character, matchCharLiteral);
-        addRule(&Rules, TokenKind::Number, matchNumber);
-        addRule(&Rules, TokenKind::ReservedWord, matchReservedWord);
-        addRule(&Rules, TokenKind::Identifier, matchIdentifier);
-        addRule(&Rules, TokenKind::Operator, matchOperator);
-        return Rules;
+    // The rules are built once and handed out by pointer: ordering matters
+    // (comments before operators, so `//` is not two `/`; reserved words before
+    // identifiers; operators last).
+    List<TokenMatcher> makeTokenRules() {
+        List<TokenMatcher> rules;
+        addRule(&rules, TokenKind::Comment, matchComment);
+        addRule(&rules, TokenKind::Space, matchSpaces);
+        addRule(&rules, TokenKind::EndOfLine, matchEndOfLine);
+        addRule(&rules, TokenKind::String, matchStringLiteral);
+        addRule(&rules, TokenKind::Character, matchCharLiteral);
+        addRule(&rules, TokenKind::Number, matchNumber);
+        addRule(&rules, TokenKind::ReservedWord, matchReservedWord);
+        addRule(&rules, TokenKind::Identifier, matchIdentifier);
+        addRule(&rules, TokenKind::Operator, matchOperator);
+        return rules;
+    }
+
+    List<TokenMatcher> *getTokenRules() {
+        static List<TokenMatcher> rules = makeTokenRules();
+        return &rules;
     }
 
     Res<List<Token>> readFileAsTokens(Scanner *scanner, const Str &fileName) {

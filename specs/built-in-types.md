@@ -217,6 +217,26 @@ The elements themselves are mutable through indexing or other element-update
 operations. An array cannot be grown or shrunk; `List<T>` is the resizable
 sequence type.
 
+### Minimal `Array<T>` API
+
+The minimally supported `Array<T>` operations are:
+
+- `count(): Int`, the element count stored at the front of the allocation;
+- indexing `array[i]`, for reading and for element assignment, with unchecked
+  bounds (indexing a `List<T>` or an `Array<T>` is the same operation);
+- `arrayEmpty<T>(): Array<T>`, the **shared** empty array of `T`: every call
+  returns the same zero-length array, so an empty array never allocates, and a
+  defaulted `Array<T>` is that array rather than a null handle;
+- `Array<T>.toList(): List<T>`, the growable copy - an array is fixed length, so
+  adding an element goes through a list (`array.toList()` + `append` +
+  `toArray()`), and
+- `List<T>.toArray(): Array<T>`, the fixed-length copy of a list
+  (`specs/containers.md`).
+
+Both conversions copy the elements; only the *allocation* is shared (assignment
+of an array copies the handle, not the elements).
+
+```text
 ## Relationship between containers
 
 | Type | Storage | Copy/assignment behavior | Owns lifetime? |

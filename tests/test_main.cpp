@@ -191,8 +191,8 @@ int main(int argc, char **argv) {
 
     Str goldenDir = (common::toPath(fixturesDir).parent_path() / "golden").string();
 
-    List<TokenMatcher> rules = getTokenRules();
-    Scanner scanner(&rules);
+    List<TokenMatcher> *rules = getTokenRules();
+    Scanner scanner(rules);
 
     int passed = 0;
     int failed = 0;

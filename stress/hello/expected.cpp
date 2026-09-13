@@ -5,16 +5,16 @@
 
 // stress/hello/src/main.simse:2
 SIMSE_PACK_PUSH
-struct Counter {
+struct ns1_Counter {
     Int value;
 };
 SIMSE_PACK_POP
-Counter _make_Counter(Int value) {
-    return Counter{value};
+ns1_Counter ns1__make_Counter(Int value) {
+    return ns1_Counter{value};
 }
-Int bump(Counter& self);
+Int ns1_bump(ns1_Counter& self);
 // stress/hello/src/main.simse:3
-Int bump(Counter& self) {
+Int ns1_bump(ns1_Counter& self) {
     return self.value + 1;
 }
 // stress/hello/src/main.simse:8
@@ -27,12 +27,12 @@ int main() {
     i = i + 1;
     goto L1;
     L2:;
-    Counter c = _make_Counter(10);
+    ns1_Counter c = ns1__make_Counter(10);
     if (!(total > 5)) goto L4;
     std::cout << std::boolalpha << (total) << std::endl;
     goto L5;
     L4:;
-    std::cout << std::boolalpha << (bump(c)) << std::endl;
+    std::cout << std::boolalpha << (ns1_bump(c)) << std::endl;
     L5:;
     std::cout << std::boolalpha << (true) << std::endl;
     return 0;

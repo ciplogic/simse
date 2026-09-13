@@ -3,10 +3,10 @@
 #include <iostream>
 #include <type_traits>
 
-Int compute(Int n);
-void loopForever();
+Int ns1_compute(Int n);
+void ns1_loopForever();
 // program_statements.simse:2
-Int compute(Int n) {
+Int ns1_compute(Int n) {
     Int total = 0;
     Int i = 0;
     L1:;
@@ -25,5 +25,5 @@ Int compute(Int n) {
     return -total;
 }
 // program_statements.simse:20
-void loopForever() {
+void ns1_loopForever() {
 }

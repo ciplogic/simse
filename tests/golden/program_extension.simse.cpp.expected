@@ -3,18 +3,18 @@
 #include <iostream>
 #include <type_traits>
 
-Char firstByte(Str& self);
-Int valueAt(Int* self);
-Opt<Int> firstOrNone(List<Int>& self);
+Char ns1_firstByte(Str& self);
+Int ns1_valueAt(Int* self);
+Opt<Int> ns1_firstOrNone(List<Int>& self);
 // program_extension.simse:2
-Char firstByte(Str& self) {
+Char ns1_firstByte(Str& self) {
     return self[0];
 }
 // program_extension.simse:6
-Int valueAt(Int* self) {
+Int ns1_valueAt(Int* self) {
     return *self;
 }
 // program_extension.simse:10
-Opt<Int> firstOrNone(List<Int>& self) {
+Opt<Int> ns1_firstOrNone(List<Int>& self) {
     return Opt<Int>();
 }

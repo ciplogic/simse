@@ -58,6 +58,9 @@ namespace sema {
                     for (const ast::DeclPtr &decl: input.module->declarations) {
                         analyzeDecl(*decl);
                     }
+                    // `buildVisible` pushed the module scope the file's declarations -
+                    // including its file-level statics - were analyzed in.
+                    popScope();
                 }
             }
 
@@ -70,6 +73,9 @@ namespace sema {
             // declare the same package share one scope.
             Dictionary<Str, const ast::Decl *> globalTypes;
             Dictionary<Str, List<const ast::Decl *>> globalFunctions;
+            // File-level statics (`DeclKind::Var`, specs/statics.md): collected apart
+            // from the types because they are values, not types.
+            Dictionary<Str, const ast::Decl *> globalStatics;
             Dictionary<Str, List<const ast::Decl *>> packageDecls;
             Dictionary<Str, bool> declaredPackages;
 
@@ -104,7 +110,9 @@ namespace sema {
 
             // Collects every declaration into its package scope, reporting a
             // duplicate top-level name within one package (including across two
-            // files that declare it).
+            // files that declare it). File-level statics (`Var`, specs/statics.md)
+            // share the namespace with the other declarations but are collected
+            // separately: they are values, not types.
             void collectGlobal() {
                 for (const Input &input: inputs) {
                     file = input.fileName;
@@ -113,13 +121,21 @@ namespace sema {
                     for (const ast::DeclPtr &decl: input.module->declarations) {
                         Str key = pkg + "|" + decl->name;
                         bool isFunction = decl->kind == DeclKind::Function;
+                        bool isStatic = decl->kind == DeclKind::Var;
                         bool nameTaken = globalTypes.count(key) > 0
-                                         || globalFunctions.count(key) > 0;
+                                         || globalFunctions.count(key) > 0
+                                         || globalStatics.count(key) > 0;
                         if (isFunction) {
-                            if (globalTypes.count(key) > 0) {
+                            if (globalTypes.count(key) > 0 || globalStatics.count(key) > 0) {
                                 diag(decl->pos, "duplicate declaration '" + decl->name + "'");
                             } else {
                                 globalFunctions[key].push_back(decl.get());
+                            }
+                        } else if (isStatic) {
+                            if (nameTaken) {
+                                diag(decl->pos, "duplicate declaration '" + decl->name + "'");
+                            } else {
+                                globalStatics[key] = decl.get();
                             }
                         } else {
                             if (nameTaken) {
@@ -145,7 +161,10 @@ namespace sema {
             }
 
             // Builds the unqualified scope of one file: its own package, then
-            // each imported package, then the implicit `rtl` prelude.
+            // each imported package, then the implicit `rtl` prelude. It also pushes
+            // the module scope the file's declarations are analyzed in, where the
+            // visible file-level statics live as values (specs/statics.md); `run`
+            // pops it.
             void buildVisible(const ast::Module &module) {
                 types.clear();
                 functions.clear();
@@ -156,6 +175,7 @@ namespace sema {
                 }
                 packages.push_back("rtl");
 
+                pushScope();
                 Dictionary<Str, bool> seen;
                 for (const Str &pkg: packages) {
                     if (seen.count(pkg) > 0) continue;
@@ -165,6 +185,8 @@ namespace sema {
                     for (const ast::Decl *decl: it->second) {
                         if (decl->kind == DeclKind::Function) {
                             functions[decl->name].push_back(decl);
+                        } else if (decl->kind == DeclKind::Var) {
+                            declareValue(decl->name, decl->isVar, true, decl->type);
                         } else if (types.count(decl->name) == 0) {
                             types[decl->name] = decl;
                         }
@@ -265,6 +287,15 @@ namespace sema {
 
             void analyzeDecl(const ast::Decl &decl) {
                 switch (decl.kind) {
+                    case DeclKind::Var:
+                        // Static storage: the type in the file's module scope, and the
+                        // initializer as an ordinary expression. The initializer may name
+                        // any hoisted declaration, including another static
+                        // (specs/statics.md: the name is visible everywhere, the
+                        // initialization order is not specified).
+                        if (decl.type) resolveType(*decl.type);
+                        if (decl.init) analyzeExpr(*decl.init);
+                        return;
                     case DeclKind::DataClass:
                         pushTypeScope();
                         for (const Str &param: decl.typeParams) {

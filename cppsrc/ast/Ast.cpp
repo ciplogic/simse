@@ -1,5 +1,7 @@
 #include "Ast.h"
 
+#include "../rtl/simse.hpp"
+
 #include <string>
 
 namespace ast {
@@ -295,6 +297,17 @@ namespace ast {
                             }
                         }
                         break;
+                    case DeclKind::Var: {
+                        Str text = Str("Var ") + (d.isVar ? "var " : "val ") + d.name;
+                        if (d.type) text += ": " + typeToString(*d.type);
+                        text += " @" + posStr(d.pos);
+                        line(indent, text);
+                        if (d.init) {
+                            line(indent + 1, "Init");
+                            dumpExpr(*d.init, indent + 2);
+                        }
+                        break;
+                    }
                 }
             }
         };
@@ -334,7 +347,7 @@ namespace ast {
         return dumper.out;
     }
 
-    // ---- AST -> XmlNode (impl_specs/ast-xmlnode.md) ------------------------
+    // ---- AST -> AstXmlNode (impl_specs/ast-xmlnode.md) ------------------------
 
     namespace {
         Str xmlEscape(const Str &text) {
@@ -356,21 +369,30 @@ namespace ast {
             return value ? "true" : "false";
         }
 
-        XmlNode makeNode(const Str &name, const List<Attribute> &attrs) {
-            XmlNode node;
+        AstXmlNode makeNode(const AstNodeKind name, const AstNodeCategory kind,
+                            const List<AstNodeAttribute> &attrs) {
+            AstXmlNode node;
             node.name = name;
+            node.kind = kind;
             node.attributes = attrs;
-            node.Children = makeList<XmlNode>();
+            // No children yet: the shared empty array, so a leaf node allocates
+            // nothing (specs/xml-node.md).
+            node.Children = Array<AstXmlNode>();
             return node;
         }
 
-        void addChild(XmlNode &parent, const XmlNode &child) {
-            parent.Children->push_back(child);
+        // Appends one child: `Children` is an `Array<AstXmlNode>` (fixed length), so
+        // this replaces the node's handle with a block one element longer through
+        // the list round trip the array API specifies.
+        void addChild(AstXmlNode &parent, const AstXmlNode &child) {
+            List<AstXmlNode> children = simse_array_toList(parent.Children);
+            children.push_back(child);
+            parent.Children = simse_list_toArray(children);
         }
 
-        void addPos(List<Attribute> &attrs, const SourcePos &pos) {
-            attrs.push_back(Attribute("line", std::to_string(pos.line)));
-            attrs.push_back(Attribute("column", std::to_string(pos.column)));
+        void addPos(List<AstNodeAttribute> &attrs, const SourcePos &pos) {
+            attrs.push_back(AstNodeAttribute(AstNodeAttributeKind::Line, std::to_string(pos.line)));
+            attrs.push_back(AstNodeAttribute(AstNodeAttributeKind::Column, std::to_string(pos.column)));
         }
 
         Str typeKindName(TypeKind kind) {
@@ -428,66 +450,151 @@ namespace ast {
             return "?";
         }
 
+        // The node category an expression/statement/type kind maps to. The text
+        // helpers above spell the same values with the `Expr.`/`Stmt.`/`Type.`
+        // prefix the schema uses for the `kind` attribute's *text*; the dump prints
+        // that through `astNodeCategoryText`.
+        AstNodeCategory exprCategory(ExprKind kind) {
+            switch (kind) {
+                case ExprKind::IntLit: return AstNodeCategory::ExprIntLit;
+                case ExprKind::FloatLit: return AstNodeCategory::ExprFloatLit;
+                case ExprKind::StrLit: return AstNodeCategory::ExprStrLit;
+                case ExprKind::CharLit: return AstNodeCategory::ExprCharLit;
+                case ExprKind::BoolLit: return AstNodeCategory::ExprBoolLit;
+                case ExprKind::NullLit: return AstNodeCategory::ExprNullLit;
+                case ExprKind::Name: return AstNodeCategory::ExprName;
+                case ExprKind::GenericName: return AstNodeCategory::ExprGenericName;
+                case ExprKind::Member: return AstNodeCategory::ExprMember;
+                case ExprKind::Call: return AstNodeCategory::ExprCall;
+                case ExprKind::Index: return AstNodeCategory::ExprIndex;
+                case ExprKind::Unary: return AstNodeCategory::ExprUnary;
+                case ExprKind::Binary: return AstNodeCategory::ExprBinary;
+                case ExprKind::Lambda: return AstNodeCategory::ExprLambda;
+                case ExprKind::Ref: return AstNodeCategory::ExprRef;
+                case ExprKind::Deref: return AstNodeCategory::ExprDeref;
+                case ExprKind::Copy: return AstNodeCategory::ExprCopy;
+            }
+            return AstNodeCategory::None;
+        }
+
+        AstNodeCategory stmtCategory(StmtKind kind) {
+            switch (kind) {
+                case StmtKind::VarDecl: return AstNodeCategory::StmtVarDecl;
+                case StmtKind::Assign: return AstNodeCategory::StmtAssign;
+                case StmtKind::If: return AstNodeCategory::StmtIf;
+                case StmtKind::While: return AstNodeCategory::StmtWhile;
+                case StmtKind::Switch: return AstNodeCategory::StmtSwitch;
+                case StmtKind::Return: return AstNodeCategory::StmtReturn;
+                case StmtKind::Break: return AstNodeCategory::StmtBreak;
+                case StmtKind::Continue: return AstNodeCategory::StmtContinue;
+                case StmtKind::ExprStmt: return AstNodeCategory::StmtExprStmt;
+                case StmtKind::Label: return AstNodeCategory::StmtLabel;
+                case StmtKind::Goto: return AstNodeCategory::StmtGoto;
+                case StmtKind::IfTrue: return AstNodeCategory::StmtIfTrue;
+                case StmtKind::IfFalse: return AstNodeCategory::StmtIfFalse;
+                case StmtKind::Block: return AstNodeCategory::StmtBlock;
+            }
+            return AstNodeCategory::None;
+        }
+
+        AstNodeCategory typeCategory(TypeKind kind) {
+            switch (kind) {
+                case TypeKind::IntLit: return AstNodeCategory::TypeIntLit;
+                case TypeKind::Named: return AstNodeCategory::TypeNamed;
+                case TypeKind::Generic: return AstNodeCategory::TypeGeneric;
+                case TypeKind::Reference: return AstNodeCategory::TypeReference;
+                case TypeKind::Pointer: return AstNodeCategory::TypePointer;
+                case TypeKind::Function: return AstNodeCategory::TypeFunction;
+            }
+            return AstNodeCategory::None;
+        }
+
         Str declKindName(DeclKind kind) {
             switch (kind) {
                 case DeclKind::DataClass: return "DataClass";
                 case DeclKind::Enum: return "Enum";
                 case DeclKind::TypeAlias: return "TypeAlias";
                 case DeclKind::Function: return "Function";
+                case DeclKind::Var: return "Var";
             }
             return "?";
         }
 
-        XmlNode typeToXml(const Str &role, const TypeExpr &type);
-        XmlNode exprToXml(const Str &role, const Expr &expr);
-        XmlNode stmtToXml(const Stmt &stmt);
-        XmlNode declToXml(const Decl &decl);
+        // The same mapping for the node's category: the schema's `kind` value. The
+        // text (`*KindName`) is what the dump prints, the enum is what the tree
+        // carries and what every test compares.
+        AstNodeCategory declCategory(DeclKind kind) {
+            switch (kind) {
+                case DeclKind::DataClass: return AstNodeCategory::DataClass;
+                case DeclKind::Enum: return AstNodeCategory::Enum;
+                case DeclKind::TypeAlias: return AstNodeCategory::TypeAlias;
+                case DeclKind::Function: return AstNodeCategory::Function;
+                case DeclKind::Var: return AstNodeCategory::Var;
+            }
+            return AstNodeCategory::None;
+        }
 
-        XmlNode typeToXml(const Str &role, const TypeExpr &type) {
-            List<Attribute> attrs;
-            attrs.push_back(Attribute("kind", Str("Type.") + typeKindName(type.kind)));
+        // The same mapping into the AST's role enum (the node's `name`): the text
+        // is what the schema's `kind` attribute carries, the enum is the role.
+        AstNodeKind declNodeKind(DeclKind kind) {
+            switch (kind) {
+                case DeclKind::DataClass: return AstNodeKind::DataClass;
+                case DeclKind::Enum: return AstNodeKind::Enum;
+                case DeclKind::TypeAlias: return AstNodeKind::TypeAlias;
+                case DeclKind::Function: return AstNodeKind::Function;
+                case DeclKind::Var: return AstNodeKind::Var;
+            }
+            return AstNodeKind::None;
+        }
+
+        AstXmlNode typeToXml(const AstNodeKind role, const TypeExpr &type);
+        AstXmlNode exprToXml(const AstNodeKind role, const Expr &expr);
+        AstXmlNode stmtToXml(const Stmt &stmt);
+        AstXmlNode declToXml(const Decl &decl);
+
+        AstXmlNode typeToXml(const AstNodeKind role, const TypeExpr &type) {
+            List<AstNodeAttribute> attrs;
             addPos(attrs, type.pos);
             if (type.kind == TypeKind::Named || type.kind == TypeKind::Generic) {
-                attrs.push_back(Attribute("name", type.name));
+                attrs.push_back(AstNodeAttribute(AstNodeAttributeKind::Name, type.name));
             } else if (type.kind == TypeKind::IntLit) {
-                attrs.push_back(Attribute("text", type.text));
+                attrs.push_back(AstNodeAttribute(AstNodeAttributeKind::Text, type.text));
             }
-            XmlNode node = makeNode(role, attrs);
+            AstXmlNode node = makeNode(role, typeCategory(type.kind), attrs);
             if (type.kind == TypeKind::Reference || type.kind == TypeKind::Pointer) {
-                if (type.inner) addChild(node, typeToXml("Inner", *type.inner));
+                if (type.inner) addChild(node, typeToXml(AstNodeKind::Inner, *type.inner));
             } else if (type.kind == TypeKind::Generic) {
-                for (const TypePtr &arg: type.typeArgs) addChild(node, typeToXml("TypeArg", *arg));
+                for (const TypePtr &arg: type.typeArgs) addChild(node, typeToXml(AstNodeKind::TypeArg, *arg));
             } else if (type.kind == TypeKind::Function) {
                 for (const TypePtr &param: type.paramTypes) {
-                    addChild(node, typeToXml("ParamType", *param));
+                    addChild(node, typeToXml(AstNodeKind::ParamType, *param));
                 }
-                if (type.returnType) addChild(node, typeToXml("ReturnType", *type.returnType));
+                if (type.returnType) addChild(node, typeToXml(AstNodeKind::ReturnType, *type.returnType));
             }
             return node;
         }
 
-        XmlNode exprToXml(const Str &role, const Expr &expr) {
-            List<Attribute> attrs;
-            attrs.push_back(Attribute("kind", Str("Expr.") + exprKindName(expr.kind)));
+        AstXmlNode exprToXml(const AstNodeKind role, const Expr &expr) {
+            List<AstNodeAttribute> attrs;
             addPos(attrs, expr.pos);
             switch (expr.kind) {
                 case ExprKind::IntLit:
                 case ExprKind::FloatLit:
                 case ExprKind::StrLit:
                 case ExprKind::CharLit:
-                    attrs.push_back(Attribute("text", expr.text));
+                    attrs.push_back(AstNodeAttribute(AstNodeAttributeKind::Text, expr.text));
                     break;
                 case ExprKind::BoolLit:
-                    attrs.push_back(Attribute("value", boolStr(expr.boolValue)));
+                    attrs.push_back(AstNodeAttribute(AstNodeAttributeKind::Value, boolStr(expr.boolValue)));
                     break;
                 case ExprKind::Name:
                 case ExprKind::GenericName:
                 case ExprKind::Member:
-                    attrs.push_back(Attribute("name", expr.text));
+                    attrs.push_back(AstNodeAttribute(AstNodeAttributeKind::Name, expr.text));
                     break;
                 case ExprKind::Unary:
                 case ExprKind::Binary:
-                    attrs.push_back(Attribute("op", expr.text));
+                    attrs.push_back(AstNodeAttribute(AstNodeAttributeKind::Op, expr.text));
                     break;
                 case ExprKind::Lambda: {
                     Str names;
@@ -495,43 +602,43 @@ namespace ast {
                         if (i > 0) names += ",";
                         names += expr.paramNames[i];
                     }
-                    attrs.push_back(Attribute("params", names));
+                    attrs.push_back(AstNodeAttribute(AstNodeAttributeKind::Params, names));
                     break;
                 }
                 default:
                     break;
             }
-            XmlNode node = makeNode(role, attrs);
+            AstXmlNode node = makeNode(role, exprCategory(expr.kind), attrs);
             switch (expr.kind) {
                 case ExprKind::GenericName:
-                    for (const TypePtr &arg: expr.typeArgs) addChild(node, typeToXml("TypeArg", *arg));
+                    for (const TypePtr &arg: expr.typeArgs) addChild(node, typeToXml(AstNodeKind::TypeArg, *arg));
                     break;
                 case ExprKind::Member:
-                    if (expr.lhs) addChild(node, exprToXml("Receiver", *expr.lhs));
+                    if (expr.lhs) addChild(node, exprToXml(AstNodeKind::Receiver, *expr.lhs));
                     break;
                 case ExprKind::Call:
-                    if (expr.lhs) addChild(node, exprToXml("Callee", *expr.lhs));
-                    for (const ExprPtr &arg: expr.args) addChild(node, exprToXml("Arg", *arg));
+                    if (expr.lhs) addChild(node, exprToXml(AstNodeKind::Callee, *expr.lhs));
+                    for (const ExprPtr &arg: expr.args) addChild(node, exprToXml(AstNodeKind::Arg, *arg));
                     break;
                 case ExprKind::Index:
-                    if (expr.lhs) addChild(node, exprToXml("Receiver", *expr.lhs));
-                    if (expr.rhs) addChild(node, exprToXml("Index", *expr.rhs));
+                    if (expr.lhs) addChild(node, exprToXml(AstNodeKind::Receiver, *expr.lhs));
+                    if (expr.rhs) addChild(node, exprToXml(AstNodeKind::Index, *expr.rhs));
                     break;
                 case ExprKind::Unary:
                 case ExprKind::Ref:
                 case ExprKind::Deref:
                 case ExprKind::Copy:
-                    if (expr.lhs) addChild(node, exprToXml("Operand", *expr.lhs));
+                    if (expr.lhs) addChild(node, exprToXml(AstNodeKind::Operand, *expr.lhs));
                     break;
                 case ExprKind::Binary:
-                    if (expr.lhs) addChild(node, exprToXml("Lhs", *expr.lhs));
-                    if (expr.rhs) addChild(node, exprToXml("Rhs", *expr.rhs));
+                    if (expr.lhs) addChild(node, exprToXml(AstNodeKind::Lhs, *expr.lhs));
+                    if (expr.rhs) addChild(node, exprToXml(AstNodeKind::Rhs, *expr.rhs));
                     break;
                 case ExprKind::Lambda: {
                     for (const TypePtr &paramType: expr.paramTypes) {
-                        if (paramType) addChild(node, typeToXml("ParamType", *paramType));
+                        if (paramType) addChild(node, typeToXml(AstNodeKind::ParamType, *paramType));
                     }
-                    XmlNode body = makeNode("Body", List<Attribute>());
+                    AstXmlNode body = makeNode(AstNodeKind::Body, AstNodeCategory::None, List<AstNodeAttribute>());
                     for (const StmtPtr &s: expr.body) addChild(body, stmtToXml(*s));
                     addChild(node, body);
                     break;
@@ -542,57 +649,56 @@ namespace ast {
             return node;
         }
 
-        XmlNode stmtToXml(const Stmt &stmt) {
-            List<Attribute> attrs;
-            attrs.push_back(Attribute("kind", Str("Stmt.") + stmtKindName(stmt.kind)));
+        AstXmlNode stmtToXml(const Stmt &stmt) {
+            List<AstNodeAttribute> attrs;
             addPos(attrs, stmt.pos);
             if (stmt.kind == StmtKind::VarDecl) {
-                attrs.push_back(Attribute("name", stmt.name));
-                attrs.push_back(Attribute("isVar", boolStr(stmt.isVar)));
+                attrs.push_back(AstNodeAttribute(AstNodeAttributeKind::Name, stmt.name));
+                attrs.push_back(AstNodeAttribute(AstNodeAttributeKind::IsVar, boolStr(stmt.isVar)));
             } else if (stmt.kind == StmtKind::Assign) {
-                attrs.push_back(Attribute("op", stmt.op));
+                attrs.push_back(AstNodeAttribute(AstNodeAttributeKind::Op, stmt.op));
             } else if (stmt.kind == StmtKind::Label || stmt.kind == StmtKind::Goto
                        || stmt.kind == StmtKind::IfTrue || stmt.kind == StmtKind::IfFalse) {
-                attrs.push_back(Attribute("name", stmt.name));
+                attrs.push_back(AstNodeAttribute(AstNodeAttributeKind::Name, stmt.name));
             }
-            XmlNode node = makeNode("Stmt", attrs);
+            AstXmlNode node = makeNode(AstNodeKind::Stmt, stmtCategory(stmt.kind), attrs);
             switch (stmt.kind) {
                 case StmtKind::VarDecl:
-                    if (stmt.type) addChild(node, typeToXml("Type", *stmt.type));
-                    if (stmt.init) addChild(node, exprToXml("Init", *stmt.init));
+                    if (stmt.type) addChild(node, typeToXml(AstNodeKind::Type, *stmt.type));
+                    if (stmt.init) addChild(node, exprToXml(AstNodeKind::Init, *stmt.init));
                     break;
                 case StmtKind::Assign:
-                    if (stmt.target) addChild(node, exprToXml("Target", *stmt.target));
-                    if (stmt.value) addChild(node, exprToXml("Value", *stmt.value));
+                    if (stmt.target) addChild(node, exprToXml(AstNodeKind::Target, *stmt.target));
+                    if (stmt.value) addChild(node, exprToXml(AstNodeKind::Value, *stmt.value));
                     break;
                 case StmtKind::If: {
-                    if (stmt.cond) addChild(node, exprToXml("Cond", *stmt.cond));
-                    XmlNode thenBlock = makeNode("Then", List<Attribute>());
+                    if (stmt.cond) addChild(node, exprToXml(AstNodeKind::Cond, *stmt.cond));
+                    AstXmlNode thenBlock = makeNode(AstNodeKind::Then, AstNodeCategory::None, List<AstNodeAttribute>());
                     for (const StmtPtr &s: stmt.thenBody) addChild(thenBlock, stmtToXml(*s));
                     addChild(node, thenBlock);
                     if (stmt.hasElse) {
-                        XmlNode elseBlock = makeNode("Else", List<Attribute>());
+                        AstXmlNode elseBlock = makeNode(AstNodeKind::Else, AstNodeCategory::None, List<AstNodeAttribute>());
                         for (const StmtPtr &s: stmt.elseBody) addChild(elseBlock, stmtToXml(*s));
                         addChild(node, elseBlock);
                     }
                     break;
                 }
                 case StmtKind::While: {
-                    if (stmt.cond) addChild(node, exprToXml("Cond", *stmt.cond));
-                    XmlNode body = makeNode("Body", List<Attribute>());
+                    if (stmt.cond) addChild(node, exprToXml(AstNodeKind::Cond, *stmt.cond));
+                    AstXmlNode body = makeNode(AstNodeKind::Body, AstNodeCategory::None, List<AstNodeAttribute>());
                     for (const StmtPtr &s: stmt.body) addChild(body, stmtToXml(*s));
                     addChild(node, body);
                     break;
                 }
                 case StmtKind::Switch: {
-                    if (stmt.cond) addChild(node, exprToXml("Cond", *stmt.cond));
+                    if (stmt.cond) addChild(node, exprToXml(AstNodeKind::Cond, *stmt.cond));
                     for (const SwitchCase &switchCase: stmt.cases) {
-                        List<Attribute> caseAttrs;
-                        caseAttrs.push_back(Attribute("isDefault", boolStr(switchCase.isDefault)));
+                        List<AstNodeAttribute> caseAttrs;
+                        caseAttrs.push_back(AstNodeAttribute(AstNodeAttributeKind::IsDefault, boolStr(switchCase.isDefault)));
                         addPos(caseAttrs, switchCase.pos);
-                        XmlNode caseNode = makeNode("Case", caseAttrs);
+                        AstXmlNode caseNode = makeNode(AstNodeKind::Case, AstNodeCategory::None, caseAttrs);
                         if (!switchCase.isDefault && switchCase.label) {
-                            addChild(caseNode, exprToXml("Label", *switchCase.label));
+                            addChild(caseNode, exprToXml(AstNodeKind::Label, *switchCase.label));
                         }
                         for (const StmtPtr &s: switchCase.body) addChild(caseNode, stmtToXml(*s));
                         addChild(node, caseNode);
@@ -600,17 +706,17 @@ namespace ast {
                     break;
                 }
                 case StmtKind::Return:
-                    if (stmt.returnValue) addChild(node, exprToXml("Value", *stmt.returnValue));
+                    if (stmt.returnValue) addChild(node, exprToXml(AstNodeKind::Value, *stmt.returnValue));
                     break;
                 case StmtKind::ExprStmt:
-                    if (stmt.expr) addChild(node, exprToXml("Expr", *stmt.expr));
+                    if (stmt.expr) addChild(node, exprToXml(AstNodeKind::Expr, *stmt.expr));
                     break;
                 case StmtKind::IfTrue:
                 case StmtKind::IfFalse:
-                    if (stmt.cond) addChild(node, exprToXml("Cond", *stmt.cond));
+                    if (stmt.cond) addChild(node, exprToXml(AstNodeKind::Cond, *stmt.cond));
                     break;
                 case StmtKind::Block: {
-                    XmlNode body = makeNode("Body", List<Attribute>());
+                    AstXmlNode body = makeNode(AstNodeKind::Body, AstNodeCategory::None, List<AstNodeAttribute>());
                     for (const StmtPtr &s: stmt.body) addChild(body, stmtToXml(*s));
                     addChild(node, body);
                     break;
@@ -621,121 +727,254 @@ namespace ast {
             return node;
         }
 
-        XmlNode declToXml(const Decl &decl) {
-            List<Attribute> attrs;
-            attrs.push_back(Attribute("kind", declKindName(decl.kind)));
+        AstXmlNode declToXml(const Decl &decl) {
+            List<AstNodeAttribute> attrs;
             addPos(attrs, decl.pos);
-            attrs.push_back(Attribute("name", decl.name));
+            attrs.push_back(AstNodeAttribute(AstNodeAttributeKind::Name, decl.name));
             if (decl.kind == DeclKind::Function) {
-                attrs.push_back(Attribute("isNative", boolStr(decl.isNative)));
-                attrs.push_back(Attribute("hasBody", boolStr(decl.hasBody)));
-                attrs.push_back(Attribute("hasReceiver", boolStr(decl.hasReceiver)));
-                attrs.push_back(Attribute("hasNativeSymbol", boolStr(decl.hasNativeSymbol)));
+                attrs.push_back(AstNodeAttribute(AstNodeAttributeKind::IsNative, boolStr(decl.isNative)));
+                attrs.push_back(AstNodeAttribute(AstNodeAttributeKind::HasBody, boolStr(decl.hasBody)));
+                attrs.push_back(AstNodeAttribute(AstNodeAttributeKind::HasReceiver, boolStr(decl.hasReceiver)));
+                attrs.push_back(AstNodeAttribute(AstNodeAttributeKind::HasNativeSymbol, boolStr(decl.hasNativeSymbol)));
                 if (decl.hasNativeSymbol) {
-                    attrs.push_back(Attribute("nativeSymbol", decl.nativeSymbol));
+                    attrs.push_back(AstNodeAttribute(AstNodeAttributeKind::NativeSymbol, decl.nativeSymbol));
                 }
+            } else if (decl.kind == DeclKind::Var) {
+                attrs.push_back(AstNodeAttribute(AstNodeAttributeKind::IsVar, boolStr(decl.isVar)));
             }
-            XmlNode node = makeNode(declKindName(decl.kind), attrs);
+            AstXmlNode node = makeNode(declNodeKind(decl.kind), declCategory(decl.kind), attrs);
             switch (decl.kind) {
                 case DeclKind::DataClass:
                     for (const Str &param: decl.typeParams) {
-                        addChild(node, makeNode("TypeParam", List<Attribute>{Attribute("name", param)}));
+                        addChild(node, makeNode(AstNodeKind::TypeParam, AstNodeCategory::None, List<AstNodeAttribute>{AstNodeAttribute(AstNodeAttributeKind::Name, param)}));
                     }
                     for (const Field &field: decl.fields) {
-                        List<Attribute> fieldAttrs;
-                        fieldAttrs.push_back(Attribute("name", field.name));
-                        fieldAttrs.push_back(Attribute("isVar", boolStr(field.isVar)));
+                        List<AstNodeAttribute> fieldAttrs;
+                        fieldAttrs.push_back(AstNodeAttribute(AstNodeAttributeKind::Name, field.name));
+                        fieldAttrs.push_back(AstNodeAttribute(AstNodeAttributeKind::IsVar, boolStr(field.isVar)));
                         addPos(fieldAttrs, field.pos);
-                        XmlNode fieldNode = makeNode("Field", fieldAttrs);
-                        if (field.type) addChild(fieldNode, typeToXml("Type", *field.type));
+                        AstXmlNode fieldNode = makeNode(AstNodeKind::Field, AstNodeCategory::None, fieldAttrs);
+                        if (field.type) addChild(fieldNode, typeToXml(AstNodeKind::Type, *field.type));
                         addChild(node, fieldNode);
                     }
                     for (const DeclPtr &method: decl.methods) addChild(node, declToXml(*method));
                     break;
                 case DeclKind::Enum:
                     for (const Str &param: decl.typeParams) {
-                        addChild(node, makeNode("TypeParam", List<Attribute>{Attribute("name", param)}));
+                        addChild(node, makeNode(AstNodeKind::TypeParam, AstNodeCategory::None, List<AstNodeAttribute>{AstNodeAttribute(AstNodeAttributeKind::Name, param)}));
                     }
                     for (const EnumMember &member: decl.members) {
-                        List<Attribute> memberAttrs;
-                        memberAttrs.push_back(Attribute("name", member.name));
-                        memberAttrs.push_back(Attribute("hasValue", boolStr(member.hasValue)));
-                        memberAttrs.push_back(Attribute("value", std::to_string(member.value)));
+                        List<AstNodeAttribute> memberAttrs;
+                        memberAttrs.push_back(AstNodeAttribute(AstNodeAttributeKind::Name, member.name));
+                        memberAttrs.push_back(AstNodeAttribute(AstNodeAttributeKind::HasValue, boolStr(member.hasValue)));
+                        memberAttrs.push_back(AstNodeAttribute(AstNodeAttributeKind::Value, std::to_string(member.value)));
                         addPos(memberAttrs, member.pos);
-                        addChild(node, makeNode("EnumMember", memberAttrs));
+                        addChild(node, makeNode(AstNodeKind::EnumMember, AstNodeCategory::None, memberAttrs));
                     }
                     break;
                 case DeclKind::TypeAlias:
                     for (const Str &param: decl.typeParams) {
-                        addChild(node, makeNode("TypeParam", List<Attribute>{Attribute("name", param)}));
+                        addChild(node, makeNode(AstNodeKind::TypeParam, AstNodeCategory::None, List<AstNodeAttribute>{AstNodeAttribute(AstNodeAttributeKind::Name, param)}));
                     }
-                    if (decl.targetType) addChild(node, typeToXml("TargetType", *decl.targetType));
+                    if (decl.targetType) addChild(node, typeToXml(AstNodeKind::TargetType, *decl.targetType));
                     break;
                 case DeclKind::Function:
                     if (decl.hasReceiver && decl.receiverType) {
-                        addChild(node, typeToXml("Receiver", *decl.receiverType));
+                        addChild(node, typeToXml(AstNodeKind::Receiver, *decl.receiverType));
                     }
                     for (const Str &param: decl.functionTypeParams) {
-                        addChild(node, makeNode("TypeParam", List<Attribute>{Attribute("name", param)}));
+                        addChild(node, makeNode(AstNodeKind::TypeParam, AstNodeCategory::None, List<AstNodeAttribute>{AstNodeAttribute(AstNodeAttributeKind::Name, param)}));
                     }
                     for (const Param &param: decl.params) {
-                        List<Attribute> paramAttrs;
-                        paramAttrs.push_back(Attribute("name", param.name));
+                        List<AstNodeAttribute> paramAttrs;
+                        paramAttrs.push_back(AstNodeAttribute(AstNodeAttributeKind::Name, param.name));
                         addPos(paramAttrs, param.pos);
-                        XmlNode paramNode = makeNode("Param", paramAttrs);
-                        if (param.type) addChild(paramNode, typeToXml("Type", *param.type));
+                        AstXmlNode paramNode = makeNode(AstNodeKind::Param, AstNodeCategory::None, paramAttrs);
+                        if (param.type) addChild(paramNode, typeToXml(AstNodeKind::Type, *param.type));
                         addChild(node, paramNode);
                     }
-                    if (decl.returnType) addChild(node, typeToXml("ReturnType", *decl.returnType));
+                    if (decl.returnType) addChild(node, typeToXml(AstNodeKind::ReturnType, *decl.returnType));
                     if (decl.hasBody) {
-                        XmlNode body = makeNode("Body", List<Attribute>());
+                        AstXmlNode body = makeNode(AstNodeKind::Body, AstNodeCategory::None, List<AstNodeAttribute>());
                         for (const StmtPtr &s: decl.body) addChild(body, stmtToXml(*s));
                         addChild(node, body);
                     }
+                    break;
+                case DeclKind::Var:
+                    if (decl.type) addChild(node, typeToXml(AstNodeKind::Type, *decl.type));
+                    if (decl.init) addChild(node, exprToXml(AstNodeKind::Init, *decl.init));
                     break;
             }
             return node;
         }
 
-        void dumpXmlRec(const XmlNode &node, int depth, Str &out) {
+        void dumpXmlRec(const AstXmlNode &node, int depth, Str &out) {
             out.append((size_t) depth * 2, ' ');
-            out += node.name;
-            for (const Attribute &attribute: node.attributes) {
+            out += astNodeKindText(node.name);
+            // The category is a field, not an attribute, but the dump prints it in
+            // its schema position: first, as `kind='...'`.
+            if (node.kind != AstNodeCategory::None) {
+                out += " kind='";
+                out += astNodeCategoryText(node.kind);
+                out += "'";
+            }
+            for (const AstNodeAttribute &attribute: node.attributes) {
                 out += " ";
-                out += attribute.name;
+                out += astNodeAttributeText(attribute.name);
                 out += "='";
                 out += xmlEscape(attribute.value);
                 out += "'";
             }
             out += '\n';
-            if (node.Children) {
-                for (const XmlNode &child: *node.Children) {
-                    dumpXmlRec(child, depth + 1, out);
-                }
+            for (int i = 0; i < node.Children.count(); i++) {
+                dumpXmlRec(node.Children[i], depth + 1, out);
             }
         }
     }
 
-    XmlNode toXmlNode(const Module &module) {
-        List<Attribute> attrs;
-        attrs.push_back(Attribute("kind", "Module"));
+    // The schema's spelling of a role and of an attribute key: what the dump
+    // prints, and the only place the enums turn back into text
+    // (impl_specs/ast-xmlnode.md).
+    const char *astNodeKindText(AstNodeKind kind) {
+        switch (kind) {
+            case AstNodeKind::None: return "";
+            case AstNodeKind::Module: return "Module";
+            case AstNodeKind::Import: return "Import";
+            case AstNodeKind::DataClass: return "DataClass";
+            case AstNodeKind::Enum: return "Enum";
+            case AstNodeKind::TypeAlias: return "TypeAlias";
+            case AstNodeKind::Function: return "Function";
+            case AstNodeKind::Var: return "Var";
+            case AstNodeKind::TypeParam: return "TypeParam";
+            case AstNodeKind::Field: return "Field";
+            case AstNodeKind::Param: return "Param";
+            case AstNodeKind::EnumMember: return "EnumMember";
+            case AstNodeKind::Type: return "Type";
+            case AstNodeKind::Inner: return "Inner";
+            case AstNodeKind::TypeArg: return "TypeArg";
+            case AstNodeKind::ParamType: return "ParamType";
+            case AstNodeKind::ReturnType: return "ReturnType";
+            case AstNodeKind::TargetType: return "TargetType";
+            case AstNodeKind::Receiver: return "Receiver";
+            case AstNodeKind::Stmt: return "Stmt";
+            case AstNodeKind::Expr: return "Expr";
+            case AstNodeKind::Cond: return "Cond";
+            case AstNodeKind::Then: return "Then";
+            case AstNodeKind::Else: return "Else";
+            case AstNodeKind::Body: return "Body";
+            case AstNodeKind::Case: return "Case";
+            case AstNodeKind::Label: return "Label";
+            case AstNodeKind::Init: return "Init";
+            case AstNodeKind::Value: return "Value";
+            case AstNodeKind::Target: return "Target";
+            case AstNodeKind::Operand: return "Operand";
+            case AstNodeKind::Lhs: return "Lhs";
+            case AstNodeKind::Rhs: return "Rhs";
+            case AstNodeKind::Index: return "Index";
+            case AstNodeKind::Callee: return "Callee";
+            case AstNodeKind::Arg: return "Arg";
+        }
+        return "";
+    }
+
+    const char *astNodeAttributeText(AstNodeAttributeKind name) {
+        switch (name) {
+            case AstNodeAttributeKind::Line: return "line";
+            case AstNodeAttributeKind::Column: return "column";
+            case AstNodeAttributeKind::Name: return "name";
+            case AstNodeAttributeKind::IsVar: return "isVar";
+            case AstNodeAttributeKind::IsNative: return "isNative";
+            case AstNodeAttributeKind::HasBody: return "hasBody";
+            case AstNodeAttributeKind::HasReceiver: return "hasReceiver";
+            case AstNodeAttributeKind::HasNativeSymbol: return "hasNativeSymbol";
+            case AstNodeAttributeKind::NativeSymbol: return "nativeSymbol";
+            case AstNodeAttributeKind::Package: return "package";
+            case AstNodeAttributeKind::Path: return "path";
+            case AstNodeAttributeKind::Params: return "params";
+            case AstNodeAttributeKind::Op: return "op";
+            case AstNodeAttributeKind::Value: return "value";
+            case AstNodeAttributeKind::Text: return "text";
+            case AstNodeAttributeKind::HasValue: return "hasValue";
+            case AstNodeAttributeKind::IsDefault: return "isDefault";
+        }
+        return "";
+    }
+
+    // The schema's `kind` text for a category ("Stmt.If", "Type.Generic", ...):
+    // the same strings the old kind *attribute* carried, so the dump is unchanged.
+    const char *astNodeCategoryText(AstNodeCategory kind) {
+        switch (kind) {
+            case AstNodeCategory::None: return "";
+            case AstNodeCategory::Module: return "Module";
+            case AstNodeCategory::DataClass: return "DataClass";
+            case AstNodeCategory::Enum: return "Enum";
+            case AstNodeCategory::TypeAlias: return "TypeAlias";
+            case AstNodeCategory::Function: return "Function";
+            case AstNodeCategory::Var: return "Var";
+            case AstNodeCategory::StmtVarDecl: return "Stmt.VarDecl";
+            case AstNodeCategory::StmtAssign: return "Stmt.Assign";
+            case AstNodeCategory::StmtIf: return "Stmt.If";
+            case AstNodeCategory::StmtWhile: return "Stmt.While";
+            case AstNodeCategory::StmtSwitch: return "Stmt.Switch";
+            case AstNodeCategory::StmtReturn: return "Stmt.Return";
+            case AstNodeCategory::StmtBreak: return "Stmt.Break";
+            case AstNodeCategory::StmtContinue: return "Stmt.Continue";
+            case AstNodeCategory::StmtExprStmt: return "Stmt.ExprStmt";
+            case AstNodeCategory::StmtLabel: return "Stmt.Label";
+            case AstNodeCategory::StmtGoto: return "Stmt.Goto";
+            case AstNodeCategory::StmtIfTrue: return "Stmt.IfTrue";
+            case AstNodeCategory::StmtIfFalse: return "Stmt.IfFalse";
+            case AstNodeCategory::StmtBlock: return "Stmt.Block";
+            case AstNodeCategory::ExprIntLit: return "Expr.IntLit";
+            case AstNodeCategory::ExprFloatLit: return "Expr.FloatLit";
+            case AstNodeCategory::ExprStrLit: return "Expr.StrLit";
+            case AstNodeCategory::ExprCharLit: return "Expr.CharLit";
+            case AstNodeCategory::ExprBoolLit: return "Expr.BoolLit";
+            case AstNodeCategory::ExprNullLit: return "Expr.NullLit";
+            case AstNodeCategory::ExprName: return "Expr.Name";
+            case AstNodeCategory::ExprGenericName: return "Expr.GenericName";
+            case AstNodeCategory::ExprMember: return "Expr.Member";
+            case AstNodeCategory::ExprCall: return "Expr.Call";
+            case AstNodeCategory::ExprIndex: return "Expr.Index";
+            case AstNodeCategory::ExprUnary: return "Expr.Unary";
+            case AstNodeCategory::ExprBinary: return "Expr.Binary";
+            case AstNodeCategory::ExprLambda: return "Expr.Lambda";
+            case AstNodeCategory::ExprRef: return "Expr.Ref";
+            case AstNodeCategory::ExprDeref: return "Expr.Deref";
+            case AstNodeCategory::ExprCopy: return "Expr.Copy";
+            case AstNodeCategory::TypeIntLit: return "Type.IntLit";
+            case AstNodeCategory::TypeNamed: return "Type.Named";
+            case AstNodeCategory::TypeGeneric: return "Type.Generic";
+            case AstNodeCategory::TypeReference: return "Type.Reference";
+            case AstNodeCategory::TypePointer: return "Type.Pointer";
+            case AstNodeCategory::TypeFunction: return "Type.Function";
+        }
+        return "";
+    }
+
+    AstXmlNode toXmlNode(const Module &module) {
+        List<AstNodeAttribute> attrs;
         addPos(attrs, module.pos);
         // Every file declares exactly one package; the attribute is always
         // present. A programmatically built module with no package emits an
         // empty value.
-        attrs.push_back(Attribute("package", joinPath(module.package)));
-        XmlNode root = makeNode("Module", attrs);
+        attrs.push_back(AstNodeAttribute(AstNodeAttributeKind::Package, joinPath(module.package)));
+        // The children are built in one list and frozen into the node's array in
+        // one allocation, rather than appended to the node one by one.
+        List<AstXmlNode> children;
         for (const Import &import: module.imports) {
-            List<Attribute> importAttrs;
-            importAttrs.push_back(Attribute("path", joinPath(import.path)));
+            List<AstNodeAttribute> importAttrs;
+            importAttrs.push_back(AstNodeAttribute(AstNodeAttributeKind::Path, joinPath(import.path)));
             addPos(importAttrs, import.pos);
-            addChild(root, makeNode("Import", importAttrs));
+            children.push_back(makeNode(AstNodeKind::Import, AstNodeCategory::None, importAttrs));
         }
-        for (const DeclPtr &decl: module.declarations) addChild(root, declToXml(*decl));
+        for (const DeclPtr &decl: module.declarations) children.push_back(declToXml(*decl));
+        AstXmlNode root = makeNode(AstNodeKind::Module, AstNodeCategory::Module, attrs);
+        root.Children = simse_list_toArray(children);
         return root;
     }
 
-    Str dumpXmlNode(const XmlNode &node) {
+    Str dumpXmlNode(const AstXmlNode &node) {
         Str out;
         dumpXmlRec(node, 0, out);
         return out;

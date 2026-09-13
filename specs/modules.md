@@ -31,6 +31,27 @@ layout.
 - Packages change no visibility rules: every top-level declaration is public and
   hoisted across the whole compilation (see `declarations.md`).
 
+### Built-in types live in `rtl`
+
+The language's built-in types are declared in the package **`rtl`**, together
+with the operations that come with them:
+
+- the scalars `Int`, `Int8`, `Int16`, `Int32`, `Int64`, `Float32`, `Float64`,
+  `Char`, `Bool`, and `Unit`;
+- `Str` and its character/string operations (`append`, `find`, `substr`,
+  `toInt`, `split`, the case predicates, ...);
+- the containers `List<T>`, `Array<T>`, `RawArray<T>`, `SmallVector<N, T>`,
+  `Dictionary<K, V>`, `PList<T>`, `Opt<T>`, `Res<T>`, `Cursor<T>`;
+- the callable type form `(A, B) -> R`;
+- the runtime's tree types `XmlNode` and `Attribute`.
+
+`rtl` is the **implicit import**: every file is compiled as if it began with
+`import rtl`, so these names need no import and no qualifier. It is the same
+mechanism as an explicit `import` (below) - the only difference is that no file
+writes it. Nothing else about `rtl` is special: it is an ordinary package that
+several modules may contribute to, which is exactly how the runtime's surface is
+assembled from the prelude files.
+
 ### Deferred: multiple packages per file
 
 A file may later declare `package` more than once. Each declaration sets the
@@ -50,8 +71,8 @@ initially: the first implementation supports exactly one package per file.
   declarations are visible by their simple names: a declaration is referenced by
   its simple name, never as `a.b.c.Name`.
 - Importing a package that no scanned file declares is an error.
-- The runtime prelude's packages (`rtl`) are implicitly in scope in every file:
-  the language runtime surface never needs an explicit import.
+- `rtl` is implicitly imported into every file (see "Built-in types live in
+  `rtl`"), so the runtime surface never needs an explicit import.
 
 ## Resolution
 

@@ -4,38 +4,38 @@
 #include <type_traits>
 
 // program_basic.simse:3
-enum class Color {
+enum class ns1_Color {
     Red,
     Green = 4,
     Blue,
 };
-inline Opt<Color> simse_Color_fromInt(Int value) {
-    if (value == 0) return Opt<Color>::some(Color::Red);
-    if (value == 4) return Opt<Color>::some(Color::Green);
-    if (value == 5) return Opt<Color>::some(Color::Blue);
-    return Opt<Color>::none();
+inline Opt<ns1_Color> ns1_simse_Color_fromInt(Int value) {
+    if (value == 0) return Opt<ns1_Color>::some(ns1_Color::Red);
+    if (value == 4) return Opt<ns1_Color>::some(ns1_Color::Green);
+    if (value == 5) return Opt<ns1_Color>::some(ns1_Color::Blue);
+    return Opt<ns1_Color>::none();
 }
 // program_basic.simse:9
 SIMSE_PACK_PUSH
-struct Point {
+struct ns1_Point {
     Int x;
     Int y;
 };
 SIMSE_PACK_POP
-Point _make_Point(Int x, Int y) {
-    return Point{x, y};
+ns1_Point ns1__make_Point(Int x, Int y) {
+    return ns1_Point{x, y};
 }
 // program_basic.simse:15
-using IntPredicate = Func<Bool(Int)>;
+using ns1_IntPredicate = Func<Bool(Int)>;
 // program_basic.simse:17
-using FloatHandler = Func<void(Float64*)>;
-Int sum(Point& self);
-Int add(Int a, Int b);
+using ns1_FloatHandler = Func<void(Float64*)>;
+Int ns1_sum(ns1_Point& self);
+Int ns1_add(Int a, Int b);
 // program_basic.simse:10
-Int sum(Point& self) {
+Int ns1_sum(ns1_Point& self) {
     return self.x + self.y;
 }
 // program_basic.simse:19
-Int add(Int a, Int b) {
+Int ns1_add(Int a, Int b) {
     return a + b;
 }

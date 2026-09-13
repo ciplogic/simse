@@ -151,6 +151,28 @@ function pickCompiler(explicit) {
 // boundary (file I/O, diagnostics) and the few `common` helpers it calls. They
 // are the part of the RTL that is not header-only, and compiling them once per
 // flag set keeps a full stress run to one compile per case.
+//
+// The cache key is the flag set, and an object is reused only when it is newer
+// than its source *and* than every RTL header it can pull in: `Str`/`List`/`Array`
+// are header-defined, so a header-only change must rebuild them (a cached object
+// built under different `Str` internals links into a program compiled against the
+// new ones, which is an ODR violation with confusing symptoms).
+function newestHeaderMtime() {
+  let newest = 0;
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full);
+      } else if (entry.name.endsWith(".h") || entry.name.endsWith(".hpp")) {
+        newest = Math.max(newest, statSync(full).mtimeMs);
+      }
+    }
+  };
+  walk(path.join(REPO, "cppsrc"));
+  return newest;
+}
+
 function sharedObjects(env, flags) {
   const key = Bun.hash(`${flags.join(" ")} ${process.platform} ${process.arch}`).toString(36);
   const dir = path.join(WORK, `native-${key}`);
@@ -158,7 +180,11 @@ function sharedObjects(env, flags) {
     { source: path.join(REPO, "cppsrc", "native", "Native.cpp"), object: path.join(dir, "Native.obj") },
     { source: path.join(REPO, "cppsrc", "common", "common.cpp"), object: path.join(dir, "common.obj") },
   ];
-  if (objects.every((entry) => existsSync(entry.object) && statSync(entry.object).mtimeMs > statSync(entry.source).mtimeMs)) {
+  const headerMtime = newestHeaderMtime();
+  const fresh = (entry) => existsSync(entry.object)
+    && statSync(entry.object).mtimeMs > statSync(entry.source).mtimeMs
+    && statSync(entry.object).mtimeMs > headerMtime;
+  if (objects.every(fresh)) {
     return objects.map((entry) => entry.object);
   }
   mkdirSync(dir, { recursive: true });

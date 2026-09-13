@@ -40,8 +40,8 @@ int main(int argc, char **argv) {
     List<Str> files = filesInDir(fixturesDir, ".simse");
     std::sort(files.begin(), files.end());
 
-    List<TokenMatcher> rules = getTokenRules();
-    Scanner scanner(&rules);
+    List<TokenMatcher> *rules = getTokenRules();
+    Scanner scanner(rules);
 
     for (const Str &file: files) {
         printf("=== %s ===\n", common::toPath(file).filename().string().c_str());

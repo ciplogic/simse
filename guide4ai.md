@@ -13,7 +13,7 @@ transpiles to a single amalgamated C++20 file. The long-term goal is a
 sources, with a small hand-written C++ foundation (the RTL) for things not yet
 expressible in the language.
 
-## 2. Current state (2026-09-11)
+## 2. Current state (2026-09-13)
 
 - The compiler is **fully ported to `.simse` and self-hosts to a fixed point**:
   the hand-written C++ compiler transpiles the Simse compiler sources; the
@@ -21,8 +21,8 @@ expressible in the language.
   output.
 - **Five differentials are byte-identical**: scanner, skeleton parser, parser,
   sema, codegen (hand-written vs transpiled Simse).
-- `simse_tests.exe`: ~59 tests, all passing. Clean build green, including all
-  e2e programs and the differentials, run automatically by the build.
+- `simse_tests.exe`: 48 tests, all passing. Clean build green, including all the
+  differentials and `stage1_check`, run automatically by the build.
 - Ported components: `common`/`StrView`/`xmlutil`, scanner, skeleton parser,
   parser, sema, codegen, compiler driver.
 - Runtime alignment: `Str` is the inline `SmString` (`SmallVector<char, 24>` +
@@ -30,10 +30,43 @@ expressible in the language.
   `SmallVector<T, 4>`, with `std::string` / `std::vector` as escape hatches
   (`SIMSE_STR_STD_STRING` / `SIMSE_LIST_STD_VECTOR`). Both `Str` backings are
   green on the full build and produce **byte-identical** compiler output.
-- Planned tasks: none outstanding (`T25 Modules and packages` is Done).
+- Planned tasks: **static storage** slice 1 (file-level `var`/`val`,
+  `specs/statics.md` / `impl_specs/statics.md`) is implemented in both rings;
+  slices 2-5 (`object`, generic `object`, `arrayEmpty` in Simse, object methods)
+  are next.
 - The directory compiler's default output is `simse_out.cpp`; the two-step
   bootstrap artifacts live under `cmake-build-debug/stage1/` (`gen/simse_out.cpp`,
   `gen/simse_out1.cpp`, `run/simse_out.cpp`).
+- **Tree nodes hold their children in an `Array`** (`specs/xml-node.md`):
+  `XmlNode.Children` is `Array<XmlNode>`, built as a `List` and frozen with
+  `toArray()` (`xmlAddChild`/`xmlAddChildren` in `cppsrc/common/xmlutil.simse`),
+  and a leaf node points at the shared empty array instead of allocating. Peak
+  working set of a self-transpile (release, self-hosted) fell from 48.8 MB to
+  21.0 MB and the min/median runtime from 128/141 ms to 121/131 ms over 6,357
+  lines of Simse (both binaries emit byte-identical C++).
+- **The AST's roles, categories and attribute keys are enums** (`AstXmlNode`,
+  `cppsrc/rtl/astxml.simse`): `AstNodeKind` is the role, `AstNodeCategory` the
+  schema's `kind`, `AstNodeAttributeKind` an attribute's key, so every test on a
+  node - role, kind, attribute lookup - is an integer compare; the only text left
+  in a tree is an attribute value. The category change alone was a few percent
+  (2-16% across windows), the attribute-key change was the big one: min/median
+  **121/131 ms -> 81/84 ms** (~33%) and peak working set 21.3 -> **16.1 MB**, below
+  the hand-written ring's 22.8 MB.
+- **Table lookups share their tables** (statics, the `statics.md` feature's first
+  use in the compiler): the scanner's keyword, operator and token-rule tables are
+  file-level `var`s built once by the pass and read through raw pointers
+  (`tableMatch(view, table, exact)` is the one comparison both lookups use), where
+  returning a `List<Str>` rebuilt them per call - a copy per token. Min/median
+  **86-88/91-93 ms -> 70-72/75-77 ms** (**15-20%**) over three windows. Cumulative
+  on the self-transpile over 6,357 lines: **128/121 ms at the start of the run ->
+  ~71/76 ms**, and the gap to the hand-written ring closed from 3.5-3.7x to
+  **~2.0x** (its 36.4/42.7 ms).
+- **The scanner's table match runs cheap pre-tests** (first character, then length,
+  then the rest) and reads its entries through raw pointers, so no lookup copies
+  text (`StrView.startsWithPtr` is the pointer-taking comparison). Self-transpile
+  **73.1/78.5 -> 64.9/69.8 ms** (-11%); the scanner stage alone over the same source
+  set **317.9/333.0 -> 261.1/271.3 ms** (-18/-19%), which is **1.49x** the
+  hand-written scanner where it was ~1.8x.
 
 ## 3. Build / test / run
 
@@ -104,11 +137,14 @@ explicit `cppsrc/compiler/Driver.simse` input.
 
 ## 4. Repo map
 
-- `specs/` — the language specification (normative). Start with
+- `specs/` - the language specification (normative). Start with
   `specs/modules.md` (modules/packages), `specs/declarations.md`,
   `specs/functions.md`, `specs/memory-model.md`, `specs/generics.md`,
   `specs/core-types.md`, `specs/built-in-types.md`, `specs/containers.md`,
   `specs/dictionary.md`, `specs/xml-node.md`, `specs/ref-counted-layout.md`.
+  `specs/statics.md` (file-level `var`/`val` and `object`): the file-level half is
+  implemented, the `object` half is specified only; the plan is
+  `impl_specs/statics.md`.
 - `impl_specs/` — implementation plans/records: `plan-to-selfhost.md`,
   `transpilation.md`, `roadmap.md`, `capability-matrix.md`, `rtl-abi.md`,
   `reification.md`, `native-interop.md`, `ast-xmlnode.md`, `tasks/`.
@@ -119,9 +155,10 @@ explicit `cppsrc/compiler/Driver.simse` input.
   files (`rtl.simse`, `Cursor.simse`, `xml.simse`, `fs.simse`) declaring the RTL
   surface. `List<T>` is `SmallVector<T, 4>` and `Str` is the inline `SmString`
   (`smstring.hpp`), whose buffer is `strsmallvector.hpp`'s `StrSmallVector`, the
-  char-specialized form of the `SmallVector<char, 24>` layout — `Int _len`,
-  `Int _cap`, a 24-byte inline buffer unioned with the heap pointer, terminating
-  NUL, `constexpr` while inline — by default. That 24 is the single constant
+  char-specialized form of the `SmallVector<char, 24>` layout — `Int _len`
+  (character count, zero-based), `Int _cap` (allocated bytes), a 24-byte inline
+  buffer unioned with the heap pointer, the terminating NUL one byte past the
+  text, `constexpr` while inline — by default. That 24 is the single constant
   `kStrInlineCapacity` (`SIMSE_STR_INLINE_CAPACITY` overrides it per build; 16
   saves ~18% of the peak working set but spills 16-character strings, so 24
   stays the default — `impl_specs/capability-matrix.md` T33).
@@ -176,11 +213,15 @@ emitters only know the linear statement forms (`Stmt.Label`/`Goto`/`IfTrue`/
 
 Key design points:
 
-- **AST carrier is `XmlNode`** (see `impl_specs/ast-xmlnode.md`): one uniform
-  node; `name` = structural role, a `kind` attribute distinguishes categories,
-  scalars are string attributes, children are `PList<XmlNode>`. This keeps the
-  AST expressible in Simse today; the cost is that attributes are
-  stringly-typed. The C++ side has `ast::toXmlNode`/`dumpXmlNode`.
+- **AST carrier is `AstXmlNode`** (see `impl_specs/ast-xmlnode.md`): one uniform
+  node; `name` is an `AstNodeKind` (the structural role), `kind` an
+  `AstNodeCategory` (the schema's category), an attribute key an
+  `AstNodeAttributeKind` - all enums, in `cppsrc/rtl/astxml.simse` - so every test
+  on a node is an integer compare. Attribute *values* are text, children are an
+  `Array<AstXmlNode>` (one counted block, count first, the shared empty array for a
+  leaf). The C++ side has `ast::toXmlNode`/`dumpXmlNode` and the enum→text
+  spellings; the language-level `XmlNode` (`specs/xml-node.md`) stays the general
+  tree a program builds.
 - **Generics are reified via emitted C++ templates** (see
   `impl_specs/reification.md`): distinct Simse instantiations become distinct
   C++ types; `SmallVector<N,T>` maps to `SmallVector<T,N>`.
@@ -196,7 +237,16 @@ Key design points:
   roots and includes every `.simse`; `import pkg` only makes `pkg` visible
   unqualified (never adds files); `rtl` is implicit; import of a package no
   scanned file declares is an error. Package names are opaque dotted
-  identifiers; there is no qualified-name access form.
+  identifiers; there is no qualified-name access form. The built-in types
+  (`Str`, `List<T>`, ... `XmlNode`) are declared in `rtl`, which is the implicit
+  import.
+- **Emitted symbols are package-qualified** (`impl_specs/rtl-abi.md`): `rtl` is
+  emitted bare, and every other package gets `ns<index>_` from a global
+  dictionary the emitter fills in sorted package order (`codegen` `ns1_`,
+  `common` `ns2_`, `compiler` `ns3_`, ... for the compiler's own source set).
+  Declarations and every reference to them carry the prefix, so two packages can
+  both declare `Point` or `bump` without colliding in the amalgamated translation
+  unit. `main` keeps its name and `native` symbols are never prefixed.
 
 ## 6. Invariants and how they are verified
 
@@ -254,7 +304,8 @@ Scalars (`Int8..64`, `Float32/64`, `Char`, `Bool`), `Str` (with a method library
 `Opt<T>.some/.none`); `Cursor<T>` (immutable span-like); `XmlNode`/`Attribute`;
 `data class` (with methods), `enum` (with `toInt`/`fromInt`), `typealias`
 (incl. generic and function types); functions incl. extension functions and
-`native fun`; `val`/`var`; `if`/`else`, `while`, `switch`/`case`/`default`,
+`native fun`; `val`/`var` (locals, and at file level **static storage** -
+`specs/statics.md`); `if`/`else`, `while`, `switch`/`case`/`default`,
 `break`/`continue`, `return`; `null`; memory operators `&T`/`*T`/`copy`;
 lambdas with by-value capture; generics reified via C++ templates; modules and
 packages.
@@ -273,7 +324,11 @@ Do these only when asked; roughly prioritized:
    manifests/versions/transitive resolution; `for`/range-for; reference captures
    and explicit capture lists; `when`/pattern matching; string interpolation;
    interfaces/virtual dispatch; method overriding; default parameter values;
-   `unsafe` blocks / raw-pointer escape rules.
+   `unsafe` blocks / raw-pointer escape rules; **static storage** - file-level
+   `var`/`val` (done, `impl_specs/statics.md` slice 1) and `object` declarations
+   (generic-capable, slices 2-5), specified in `specs/statics.md`; the `object`
+   slices are the piece the RTL needs to move per-type statics such as
+   `arrayEmpty<T>()`'s empty block out of hand-written C++.
 4. **RTL spec convergence**: the RTL is a shim (`Str` is the spec-shaped inline
    `SmString`, `List` is `SmallVector<T, 4>`, both with a
    `std::string`/`std::vector` escape hatch behind `SIMSE_STR_STD_STRING` /

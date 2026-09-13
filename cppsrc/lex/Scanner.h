@@ -47,7 +47,8 @@ namespace lex {
         void setSource(const Str & str);
     };
 
-    List<TokenMatcher> getTokenRules();
+    // A pointer into the rules table, which is built once (and copied by nobody).
+    List<TokenMatcher> *getTokenRules();
 
     // Reads `fileName`, scans it to end of input, and collects every token up to
     // (but not including) the Eof token. Returns the scanning error, if any.

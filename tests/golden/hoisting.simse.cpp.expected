@@ -5,22 +5,22 @@
 
 // hoisting.simse:7
 SIMSE_PACK_PUSH
-struct Point {
+struct ns1_Point {
     Int x;
     Int y;
 };
 SIMSE_PACK_POP
-Point _make_Point(Int x, Int y) {
-    return Point{x, y};
+ns1_Point ns1__make_Point(Int x, Int y) {
+    return ns1_Point{x, y};
 }
-Int useLater();
-Int helper(Int value);
+Int ns1_useLater();
+Int ns1_helper(Int value);
 // hoisting.simse:2
-Int useLater() {
-    Point p = _make_Point(1, 2);
-    return helper(p.x);
+Int ns1_useLater() {
+    ns1_Point p = ns1__make_Point(1, 2);
+    return ns1_helper(p.x);
 }
 // hoisting.simse:9
-Int helper(Int value) {
+Int ns1_helper(Int value) {
     return value + 1;
 }

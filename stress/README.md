@@ -64,4 +64,6 @@ after the case passes.
 `stress/.work/<name>/` holds `out.cpp`, `prog.exe`, and the run's `actual.*`
 files. It is ignored by git and rebuilt on every run (the shared objects for the
 native translation units are cached per flag set, which is what makes repeated
-runs fast).
+runs fast; the cache is invalidated by a newer `cppsrc/**` header too, because
+`Str`/`List`/`Array` are header-defined and mixing two versions of them in one
+binary is an ODR violation).

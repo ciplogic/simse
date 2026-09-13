@@ -20,6 +20,19 @@ native("simse_list_contains") fun contains<T>(this: List<T>, value: T): Bool
 // In-place sort; the comparator is a `(T, T) -> Bool` lambda (std::sort).
 native("simse_list_sort") fun sort<T>(this: List<T>, less: (T, T) -> Bool): Unit
 
+// ---- Array<T> -------------------------------------------------------------
+
+// `Array<T>` is a fixed-length, reference-counted block of elements: one
+// allocation holds the element count first, then the elements
+// (specs/built-in-types.md). `arrayEmpty<T>()` is the shared empty array of `T`,
+// so an empty array allocates nothing; `toArray`/`toList` convert between the
+// fixed and the growable sequence, which is also how an array "grows": an array
+// cannot be appended to, a list can.
+native("simse_arrayEmpty") fun arrayEmpty<T>(): Array<T>
+native("simse_array_count") fun count<T>(this: Array<T>): Int
+native("simse_list_toArray") fun toArray<T>(this: List<T>): Array<T>
+native("simse_array_toList") fun toList<T>(this: Array<T>): List<T>
+
 // ---- Dictionary<K, V> -----------------------------------------------------
 
 // `Dictionary<K, V>` is a value type (`std::unordered_map`); these are the

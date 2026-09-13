@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <initializer_list>
+#include <new>
 #include <memory>
 #include <type_traits>
 #include <unordered_map>
@@ -416,29 +417,110 @@ using Dictionary = std::unordered_map<TKey, TValue>;
 template <class T>
 using RawArray = T*;
 
-// Array<T> is a ref-counted contiguous array (specs/built-in-types.md):
-// assignment shares the same allocation, the length is fixed at construction,
-// and elements are mutable through indexing. The reference count is provided
-// by std::shared_ptr; the typeId described by the runtime header is currently
-// unused by the runtime and therefore not stored.
-// A count plus a shared block. Both are 4-byte packed with the rest of the
-// language (specs/memory-model.md); the shared_ptr member is under-aligned by
-// the host's standards, as recorded in impl_specs/rtl-abi.md.
+// Array<T> is a fixed-length, reference-counted block of elements
+// (specs/built-in-types.md): ONE allocation holds the element count first and
+// the elements end to end after it.
+//
+//     +------------------+  offset 0
+//     | Int _len         |  number of T elements
+//     +------------------+  offset sizeof(Int) = 4 under the packing rule
+//     | T[0] | T[1] | .. |  `_len` elements, constructed in place
+//     +------------------+
+//
+// Assignment shares the block and the length is fixed at construction. The
+// reference count is the `shared_ptr`'s; the spec's `[reference count][typeId]`
+// header is not materialized in this shim (impl_specs/rtl-abi.md), and neither is
+// a separate element buffer - the elements live in the same allocation as their
+// count, which is the point of the type.
+//
+// An empty array refers to the one shared empty block per element type, so
+// `Array<T>()` (and `arrayEmpty<T>()`) never allocate.
+SIMSE_PACK_PUSH
+template <class T>
+struct ArrayBlock {
+    Int _len;
+
+    // Elements start immediately after the count. Under the language's 4-byte
+    // packing rule that offset is `sizeof(Int)`; with SIMSE_NO_PACK4 the host's
+    // alignment is honored instead, so a host type declared 8-aligned (`Str` as
+    // std::string) is not under-aligned in its own buffer.
+    static constexpr std::size_t itemsOffset() {
+#if defined(SIMSE_NO_PACK4)
+        constexpr std::size_t alignment = alignof(T) < sizeof(Int) ? sizeof(Int) : alignof(T);
+        return (sizeof(Int) + alignment - 1) / alignment * alignment;
+#else
+        return sizeof(Int);
+#endif
+    }
+
+    static constexpr std::size_t blockBytes(Int count) {
+        return itemsOffset() + (std::size_t) count * sizeof(T);
+    }
+
+    T* items() { return reinterpret_cast<T*>(reinterpret_cast<char*>(this) + itemsOffset()); }
+    const T* items() const {
+        return reinterpret_cast<const T*>(reinterpret_cast<const char*>(this) + itemsOffset());
+    }
+};
+SIMSE_PACK_POP
+
+// The block's element lifetimes are managed by hand: the count leads the block,
+// so the elements cannot be a C++ array member, and `T` may need construction and
+// destruction (`Str`, aggregates holding one, ...).
+namespace simse_array_detail {
+    template <class T>
+    void destroyBlock(ArrayBlock<T>* block) {
+        T* elements = block->items();
+        for (Int i = 0; i < block->_len; i++) {
+            std::destroy_at(elements + i);
+        }
+        ::operator delete(static_cast<void*>(block));
+    }
+
+    template <class T>
+    std::shared_ptr<ArrayBlock<T>> makeBlock(Int count) {
+        auto* block = static_cast<ArrayBlock<T>*>(::operator new(ArrayBlock<T>::blockBytes(count)));
+        block->_len = count;
+        T* elements = block->items();
+        for (Int i = 0; i < count; i++) {
+            std::construct_at(elements + i);
+        }
+        return std::shared_ptr<ArrayBlock<T>>(block, &destroyBlock<T>);
+    }
+
+    // The one shared empty block per element type. This is the per-type static
+    // storage `arrayEmpty<T>()` hands out; a language-level spelling of it is the
+    // planned `object` declaration, which the RTL needs once the runtime surface
+    // moves out of hand-written C++ (the deferred list in guide4ai.md).
+    template <class T>
+    std::shared_ptr<ArrayBlock<T>> emptyBlock() {
+        static std::shared_ptr<ArrayBlock<T>> empty = makeBlock<T>(0);
+        return empty;
+    }
+}
+
 SIMSE_PACK_PUSH
 template <class T>
 struct Array {
-    Int _count{};
-    std::shared_ptr<T> _data{};
+    std::shared_ptr<ArrayBlock<T>> _block{};
 
-    Array() = default;
-    explicit Array(Int count) {
-        _count = count;
-        _data.reset(new T[count], std::default_delete<T[]>());
-    }
+    Array() : _block(simse_array_detail::emptyBlock<T>()) {}
 
-    Int count() const { return _count; }
+    explicit Array(Int count)
+        : _block(count <= 0 ? simse_array_detail::emptyBlock<T>()
+                            : simse_array_detail::makeBlock<T>(count)) {}
 
-    T& operator[](Int i) { return _data.get()[i]; }
-    const T& operator[](Int i) const { return _data.get()[i]; }
+    Int count() const { return _block ? _block->_len : 0; }
+
+    T& operator[](Int index) { return _block->items()[index]; }
+    const T& operator[](Int index) const { return _block->items()[index]; }
 };
 SIMSE_PACK_POP
+
+// `arrayEmpty<T>()` (specs/built-in-types.md): the shared empty array of `T`. Every
+// call returns a handle to the same zero-length block, so empty arrays cost no
+// allocation - the point of pointing a defaulted `Array<T>` at it.
+template <class T>
+Array<T> arrayEmpty() {
+    return Array<T>();
+}

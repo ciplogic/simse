@@ -29,6 +29,24 @@ data class StrView(var source: *Str; var start: Int; var len: Int) {
         return true
     }
 
+    // The same comparison against text this view does not own, reached by raw
+    // pointer and with its length already known: `startsWith` would copy the
+    // `Str` first, which is what a table lookup cannot afford. The first character
+    // is the caller's cheap test; this does the rest.
+    fun startsWithPtr(text: *Str, length: Int): Bool {
+        if (length > this.len) {
+            return false
+        }
+        var i = 1
+        while (i < length) {
+            if (this.at(i) != text[i]) {
+                return false
+            }
+            i = i + 1
+        }
+        return true
+    }
+
     fun slice(matchLength: Int): StrView {
         return StrView(this.source, this.start, matchLength)
     }

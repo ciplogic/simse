@@ -25,83 +25,74 @@ import common
 
 // ---- node construction -----------------------------------------------------
 
-fun linStmt(kind: Str, line: Int, column: Int): XmlNode {
-    var attrs: List<Attribute> = List<Attribute>()
-    attrs.append(Attribute("kind", kind))
-    attrs.append(Attribute("line", line.toString()))
-    attrs.append(Attribute("column", column.toString()))
-    return XmlNode("Stmt", attrs, &List<XmlNode>())
+fun linStmt(kind: AstNodeCategory, line: Int, column: Int): AstXmlNode {
+    var attrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, line.toString()))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, column.toString()))
+    return AstXmlNode(AstNodeKind.Stmt, kind, attrs, Array<AstXmlNode>())
 }
 
 // The same node under a new structural role; the AST carries roles in the
 // element name (impl_specs/ast-xmlnode.md), so a reused expression has to be
 // re-rooted for its new position.
-fun linRole(child: *XmlNode, role: Str): XmlNode {
-    var renamed: XmlNode = copy(child)
+fun linRole(child: *AstXmlNode, role: AstNodeKind): AstXmlNode {
+    var renamed: AstXmlNode = copy(child)
     renamed.name = role
     return renamed
 }
 
-fun linLabel(name: Str, line: Int, column: Int): XmlNode {
-    var node: XmlNode = linStmt("Stmt.Label", line, column)
-    node.attributes.append(Attribute("name", name))
+fun linLabel(name: Str, line: Int, column: Int): AstXmlNode {
+    var node: AstXmlNode = linStmt(AstNodeCategory.StmtLabel, line, column)
+    node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
     return node
 }
 
-fun linGoto(name: Str, line: Int, column: Int): XmlNode {
-    var node: XmlNode = linStmt("Stmt.Goto", line, column)
-    node.attributes.append(Attribute("name", name))
+fun linGoto(name: Str, line: Int, column: Int): AstXmlNode {
+    var node: AstXmlNode = linStmt(AstNodeCategory.StmtGoto, line, column)
+    node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
     return node
 }
 
-// `kind` is Stmt.IfTrue or Stmt.IfFalse; `cond` must already carry the `Cond`
+// `kind` is StmtIfTrue or StmtIfFalse; `cond` must already carry the `Cond`
 // role (a source condition node already does).
-fun linCondJump(kind: Str, cond: *XmlNode, name: Str, line: Int, column: Int): XmlNode {
-    var node: XmlNode = linStmt(kind, line, column)
-    node.attributes.append(Attribute("name", name))
-    node.Children.append(*cond)
+fun linCondJump(kind: AstNodeCategory, cond: *AstXmlNode, name: Str, line: Int, column: Int): AstXmlNode {
+    var node: AstXmlNode = linStmt(kind, line, column)
+    node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
+    xmlAddChild(*node, *cond)
     return node
 }
 
-fun linBlock(body: *List<XmlNode>, line: Int, column: Int): XmlNode {
-    var box: XmlNode = XmlNode("Body", List<Attribute>(), &List<XmlNode>())
-    var i: Int = 0
-    while (i < body.size()) {
-        box.Children.append(body[i])
-        i = i + 1
-    }
-    var node: XmlNode = linStmt("Stmt.Block", line, column)
-    node.Children.append(box)
+fun linBlock(body: *List<AstXmlNode>, line: Int, column: Int): AstXmlNode {
+    var node: AstXmlNode = linStmt(AstNodeCategory.StmtBlock, line, column)
+    xmlAddChild(*node, AstXmlNode(AstNodeKind.Body, AstNodeCategory.None, List<AstNodeAttribute>(), body.toArray()))
     return node
 }
 
 // The hoisted `switch` subject: an untyped VarDecl, so the emitter emits `auto`.
-fun linSubjectDecl(name: Str, init: *XmlNode, line: Int, column: Int): XmlNode {
-    var node: XmlNode = linStmt("Stmt.VarDecl", line, column)
-    node.attributes.append(Attribute("name", name))
-    node.attributes.append(Attribute("isVar", "false"))
-    node.Children.append(linRole(init, "Init"))
+fun linSubjectDecl(name: Str, init: *AstXmlNode, line: Int, column: Int): AstXmlNode {
+    var node: AstXmlNode = linStmt(AstNodeCategory.StmtVarDecl, line, column)
+    node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
+    node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.IsVar, "false"))
+    xmlAddChild(*node, linRole(init, AstNodeKind.Init))
     return node
 }
 
-fun linName(role: Str, name: Str, line: Int, column: Int): XmlNode {
-    var attrs: List<Attribute> = List<Attribute>()
-    attrs.append(Attribute("kind", "Expr.Name"))
-    attrs.append(Attribute("line", line.toString()))
-    attrs.append(Attribute("column", column.toString()))
-    attrs.append(Attribute("name", name))
-    return XmlNode(role, attrs, &List<XmlNode>())
+fun linName(role: AstNodeKind, name: Str, line: Int, column: Int): AstXmlNode {
+    var attrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, line.toString()))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, column.toString()))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
+    return AstXmlNode(role, AstNodeCategory.ExprName, attrs, Array<AstXmlNode>())
 }
 
-fun linEquals(role: Str, lhs: *XmlNode, rhs: *XmlNode, line: Int, column: Int): XmlNode {
-    var attrs: List<Attribute> = List<Attribute>()
-    attrs.append(Attribute("kind", "Expr.Binary"))
-    attrs.append(Attribute("line", line.toString()))
-    attrs.append(Attribute("column", column.toString()))
-    attrs.append(Attribute("op", "=="))
-    var node: XmlNode = XmlNode(role, attrs, &List<XmlNode>())
-    node.Children.append(*lhs)
-    node.Children.append(*rhs)
+fun linEquals(role: AstNodeKind, lhs: *AstXmlNode, rhs: *AstXmlNode, line: Int, column: Int): AstXmlNode {
+    var attrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, line.toString()))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, column.toString()))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Op, "=="))
+    var node: AstXmlNode = AstXmlNode(role, AstNodeCategory.ExprBinary, attrs, Array<AstXmlNode>())
+    xmlAddChild(*node, *lhs)
+    xmlAddChild(*node, *rhs)
     return node
 }
 
@@ -122,14 +113,14 @@ data class LinLowerer(
 
     // One body in, one linear body out. Pure: the input statements are not
     // modified (only copied or re-rooted).
-    fun lowerBody(stmts: List<XmlNode>): List<XmlNode> {
-        var out: List<XmlNode> = List<XmlNode>()
+    fun lowerBody(stmts: List<AstXmlNode>): List<AstXmlNode> {
+        var out: List<AstXmlNode> = List<AstXmlNode>()
         this.lowerStmts(*stmts, "", "", *out)
         return out
     }
 
     // breakTo/continueTo are empty when no enclosing construct accepts them.
-    fun lowerStmts(stmts: *List<XmlNode>, breakTo: Str, continueTo: Str, out: *List<XmlNode>): Unit {
+    fun lowerStmts(stmts: *List<AstXmlNode>, breakTo: Str, continueTo: Str, out: *List<AstXmlNode>): Unit {
         var i: Int = 0
         while (i < stmts.size()) {
             this.lowerStmt(*stmts[i], breakTo, continueTo, out)
@@ -137,21 +128,21 @@ data class LinLowerer(
         }
     }
 
-    fun lowerStmt(stmt: *XmlNode, breakTo: Str, continueTo: Str, out: *List<XmlNode>): Unit {
-        val kind: Str = xmlKind(stmt)
-        if (kind == "Stmt.If") {
+    fun lowerStmt(stmt: *AstXmlNode, breakTo: Str, continueTo: Str, out: *List<AstXmlNode>): Unit {
+        val kind: AstNodeCategory = xmlKind(stmt)
+        if (kind == AstNodeCategory.StmtIf) {
             this.lowerIf(stmt, breakTo, continueTo, out)
             return
         }
-        if (kind == "Stmt.While") {
+        if (kind == AstNodeCategory.StmtWhile) {
             this.lowerWhile(stmt, breakTo, continueTo, out)
             return
         }
-        if (kind == "Stmt.Switch") {
+        if (kind == AstNodeCategory.StmtSwitch) {
             this.lowerSwitch(stmt, breakTo, continueTo, out)
             return
         }
-        if (kind == "Stmt.Break") {
+        if (kind == AstNodeCategory.StmtBreak) {
             if (breakTo != "") {
                 out.append(linGoto(breakTo, xmlLine(stmt), xmlColumn(stmt)))
                 return
@@ -159,7 +150,7 @@ data class LinLowerer(
             out.append(copy(stmt))
             return
         }
-        if (kind == "Stmt.Continue") {
+        if (kind == AstNodeCategory.StmtContinue) {
             if (continueTo != "") {
                 out.append(linGoto(continueTo, xmlLine(stmt), xmlColumn(stmt)))
                 return
@@ -174,7 +165,7 @@ data class LinLowerer(
     // own level: a jump may not bypass an initialization that is still in scope
     // at the target. Everything else is spliced flat into the enclosing
     // sequence, which keeps the emitted code compact.
-    fun appendBody(body: *List<XmlNode>, line: Int, column: Int, out: *List<XmlNode>): Unit {
+    fun appendBody(body: *List<AstXmlNode>, line: Int, column: Int, out: *List<AstXmlNode>): Unit {
         if (this.declares(body)) {
             out.append(linBlock(body, line, column))
             return
@@ -186,10 +177,10 @@ data class LinLowerer(
         }
     }
 
-    fun declares(body: *List<XmlNode>): Bool {
+    fun declares(body: *List<AstXmlNode>): Bool {
         var i: Int = 0
         while (i < body.size()) {
-            if (xmlKind(*body[i]) == "Stmt.VarDecl") {
+            if (xmlKind(*body[i]) == AstNodeCategory.StmtVarDecl) {
                 return true
             }
             i = i + 1
@@ -197,23 +188,23 @@ data class LinLowerer(
         return false
     }
 
-    fun lowerIf(stmt: *XmlNode, breakTo: Str, continueTo: Str, out: *List<XmlNode>): Unit {
+    fun lowerIf(stmt: *AstXmlNode, breakTo: Str, continueTo: Str, out: *List<AstXmlNode>): Unit {
         val thenLabel: Str = this.freshLabel()
         val elseLabel: Str = this.freshLabel()
         val line: Int = xmlLine(stmt)
         val column: Int = xmlColumn(stmt)
-        out.append(linCondJump("Stmt.IfTrue", *xmlChild(stmt, "Cond"), thenLabel, line, column))
+        out.append(linCondJump(AstNodeCategory.StmtIfTrue, *xmlChild(stmt, AstNodeKind.Cond), thenLabel, line, column))
         out.append(linGoto(elseLabel, line, column))
         out.append(linLabel(thenLabel, line, column))
-        var thenOut: List<XmlNode> = List<XmlNode>()
-        this.lowerStmts(*xmlChildren(*xmlChild(stmt, "Then"), "Stmt"), breakTo, continueTo, *thenOut)
+        var thenOut: List<AstXmlNode> = List<AstXmlNode>()
+        this.lowerStmts(*xmlChildren(*xmlChild(stmt, AstNodeKind.Then), AstNodeKind.Stmt), breakTo, continueTo, *thenOut)
         this.appendBody(*thenOut, line, column, out)
-        if (xmlHasChild(stmt, "Else")) {
+        if (xmlHasChild(stmt, AstNodeKind.Else)) {
             val endLabel: Str = this.freshLabel()
             out.append(linGoto(endLabel, line, column))
             out.append(linLabel(elseLabel, line, column))
-            var elseOut: List<XmlNode> = List<XmlNode>()
-            this.lowerStmts(*xmlChildren(*xmlChild(stmt, "Else"), "Stmt"), breakTo, continueTo, *elseOut)
+            var elseOut: List<AstXmlNode> = List<AstXmlNode>()
+            this.lowerStmts(*xmlChildren(*xmlChild(stmt, AstNodeKind.Else), AstNodeKind.Stmt), breakTo, continueTo, *elseOut)
             this.appendBody(*elseOut, line, column, out)
             out.append(linLabel(endLabel, line, column))
         } else {
@@ -221,21 +212,21 @@ data class LinLowerer(
         }
     }
 
-    fun lowerWhile(stmt: *XmlNode, breakTo: Str, continueTo: Str, out: *List<XmlNode>): Unit {
+    fun lowerWhile(stmt: *AstXmlNode, breakTo: Str, continueTo: Str, out: *List<AstXmlNode>): Unit {
         val condLabel: Str = this.freshLabel()
         val endLabel: Str = this.freshLabel()
         val line: Int = xmlLine(stmt)
         val column: Int = xmlColumn(stmt)
-        var bodyOut: List<XmlNode> = List<XmlNode>()
-        this.lowerStmts(*xmlChildren(*xmlChild(stmt, "Body"), "Stmt"), endLabel, condLabel, *bodyOut)
+        var bodyOut: List<AstXmlNode> = List<AstXmlNode>()
+        this.lowerStmts(*xmlChildren(*xmlChild(stmt, AstNodeKind.Body), AstNodeKind.Stmt), endLabel, condLabel, *bodyOut)
         out.append(linLabel(condLabel, line, column))
-        out.append(linCondJump("Stmt.IfFalse", *xmlChild(stmt, "Cond"), endLabel, line, column))
+        out.append(linCondJump(AstNodeCategory.StmtIfFalse, *xmlChild(stmt, AstNodeKind.Cond), endLabel, line, column))
         this.appendBody(*bodyOut, line, column, out)
         out.append(linGoto(condLabel, line, column))
         out.append(linLabel(endLabel, line, column))
     }
 
-    fun lowerSwitch(stmt: *XmlNode, breakTo: Str, continueTo: Str, out: *List<XmlNode>): Unit {
+    fun lowerSwitch(stmt: *AstXmlNode, breakTo: Str, continueTo: Str, out: *List<AstXmlNode>): Unit {
         // The subject is hoisted so it is evaluated exactly once, as a C++
         // `switch` subject would be.
         val subjectId: Int = this.nextId()
@@ -243,7 +234,7 @@ data class LinLowerer(
         val endLabel: Str = this.freshLabel()
         val line: Int = xmlLine(stmt)
         val column: Int = xmlColumn(stmt)
-        val cases: List<XmlNode> = xmlChildren(stmt, "Case")
+        val cases: List<AstXmlNode> = xmlChildren(stmt, AstNodeKind.Case)
         var armLabels: List<Str> = List<Str>()
         var i: Int = 0
         while (i < cases.size()) {
@@ -256,20 +247,20 @@ data class LinLowerer(
         var fallback: Str = endLabel
         i = 0
         while (i < cases.size()) {
-            if (xmlAttr(*cases[i], "isDefault") == "true") {
+            if (xmlAttr(*cases[i], AstNodeAttributeKind.IsDefault) == "true") {
                 fallback = armLabels[i]
             }
             i = i + 1
         }
 
-        out.append(linSubjectDecl(subject, *xmlChild(stmt, "Cond"), line, column))
+        out.append(linSubjectDecl(subject, *xmlChild(stmt, AstNodeKind.Cond), line, column))
         i = 0
         while (i < cases.size()) {
-            if (xmlAttr(*cases[i], "isDefault") != "true") {
-                val eq: XmlNode = linEquals("Cond", *linName("Lhs", subject, line, column),
-                                            *linRole(*xmlChild(*cases[i], "Label"), "Rhs"),
+            if (xmlAttr(*cases[i], AstNodeAttributeKind.IsDefault) != "true") {
+                val eq: AstXmlNode = linEquals(AstNodeKind.Cond, *linName(AstNodeKind.Lhs, subject, line, column),
+                                            *linRole(*xmlChild(*cases[i], AstNodeKind.Label), AstNodeKind.Rhs),
                                             line, column)
-                out.append(linCondJump("Stmt.IfTrue", *eq, armLabels[i], line, column))
+                out.append(linCondJump(AstNodeCategory.StmtIfTrue, *eq, armLabels[i], line, column))
             }
             i = i + 1
         }
@@ -280,8 +271,8 @@ data class LinLowerer(
             val caseLine: Int = xmlLine(*cases[i])
             val caseColumn: Int = xmlColumn(*cases[i])
             out.append(linLabel(armLabels[i], caseLine, caseColumn))
-            var armOut: List<XmlNode> = List<XmlNode>()
-            this.lowerStmts(*xmlChildren(*cases[i], "Stmt"), endLabel, continueTo, *armOut)
+            var armOut: List<AstXmlNode> = List<AstXmlNode>()
+            this.lowerStmts(*xmlChildren(*cases[i], AstNodeKind.Stmt), endLabel, continueTo, *armOut)
             this.appendBody(*armOut, caseLine, caseColumn, out)
             i = i + 1
         }
@@ -290,7 +281,7 @@ data class LinLowerer(
 }
 
 // Lowers one function-like body; the counter restarts per body.
-fun linLowerBody(stmts: List<XmlNode>): List<XmlNode> {
+fun linLowerBody(stmts: List<AstXmlNode>): List<AstXmlNode> {
     var lowerer: LinLowerer = LinLowerer(1)
     return lowerer.lowerBody(stmts)
 }
