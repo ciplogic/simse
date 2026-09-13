@@ -19,10 +19,10 @@
 //   --arch <arch>   vcvarsall target architecture (default: the CMake build's
 //                    compiler architecture, else arm64)
 //   --define <m[=v]> add a preprocessor define to the compile (repeatable),
-//                    e.g. --define SIMSE_LIST_STD_VECTOR. The RTL's List/Str
-//                    backing and Str's inline capacity are mirrored from the
-//                    CMake build's cache, because the libraries it links bake
-//                    those choices in.
+//                    e.g. --define SIMSE_DICT_SM. The RTL's List/Str/Dictionary
+//                    backing and Str's inline capacity are mirrored from the CMake
+//                    build's cache, because the libraries it links bake those
+//                    choices in.
 //   -h, --help      show this help
 //
 // Environment:
@@ -124,6 +124,15 @@ function cachedStdStringStr(buildDir) {
   const cache = path.join(buildDir, "CMakeCache.txt");
   if (!existsSync(cache)) return false;
   return /^SIMSE_STR_STD_STRING:BOOL=(ON|TRUE|1)$/im.test(readFileSync(cache, "utf8"));
+}
+
+// And for SIMSE_DICT_SM: the Dictionary<K, V> backing appears in symbols the
+// libraries and the amalgamation share (simse_dict_get<K, V> and friends), so both
+// sides have to agree or linking fails with unresolved externals.
+function cachedSmDictionary(buildDir) {
+  const cache = path.join(buildDir, "CMakeCache.txt");
+  if (!existsSync(cache)) return false;
+  return /^SIMSE_DICT_SM:BOOL=(ON|TRUE|1)$/im.test(readFileSync(cache, "utf8"));
 }
 
 // And for SIMSE_STR_INLINE_CAPACITY: the RTL libraries were compiled with a
@@ -256,6 +265,13 @@ async function main() {
   } else if (!stdStringStr && defines.includes("SIMSE_STR_STD_STRING")) {
     console.warn(`build: warning: --define SIMSE_STR_STD_STRING does not match ${path.basename(buildDir)}, ` +
         `whose RTL libraries use SmString; linking may fail`);
+  }
+  const smDictionary = cachedSmDictionary(buildDir);
+  if (smDictionary && !defines.includes("SIMSE_DICT_SM")) {
+    defines.push("SIMSE_DICT_SM");
+  } else if (!smDictionary && defines.includes("SIMSE_DICT_SM")) {
+    console.warn(`build: warning: --define SIMSE_DICT_SM does not match ${path.basename(buildDir)}, ` +
+        `whose RTL libraries use std::unordered_map; linking may fail`);
   }
   const strCapacity = cachedStrInlineCapacity(buildDir);
   const passedCapacities = defines.filter((define) => define.startsWith("SIMSE_STR_INLINE_CAPACITY"));

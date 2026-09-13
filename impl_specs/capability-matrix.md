@@ -718,6 +718,66 @@ component-specific):
   268.6/278.9 ms on that stage) where the same stage measured ~1.8x before. The
   first cut of this change did not compile and had an infinite loop - see the note
   below.
+- **Throughput baseline, and the one phase that is superlinear (T40).** At this
+  commit the self-hosted compiler over its own source set (`cppsrc`, 6,357 lines,
+  release) runs in **65.1/68.2 ms** (min/median, 7 interleaved pairs,
+  `tools/_bench_ab.mjs`) against the hand-written ring's **35.6/42.6 ms** -
+  **1.6-1.8x**, where this run started at 3.5-3.7x (T35-T39), or roughly **95k
+  lines/s**. That is a small fraction of what the emitted C++ costs to compile
+  (`cl.exe` over the ~190 KB amalgamation), so the transpiler is not what makes a
+  build slow. One known edge: cost is quadratic in a *single* file's declaration
+  count. Measured with one file of N trivial 8-line functions (regenerate: a
+  `package big` plus N copies of `fun fN(a: Int): Int { var b = a + N; if (b > 10)
+  { b = b - 1 }; return b }`), `./simse.exe --root ...` takes **396.7 ms for
+  16,005 lines (~25 us/line)** and **6,339.8 ms for 64,005 lines (~99 us/line)** -
+  4x the input for 16x the time. Per stage on the same inputs the parser is linear
+  (54.8 -> 200.5 ms, 3.7x) and codegen linear (62.8 -> 223.3 ms, 3.6x) while
+  **sema is 408.3 -> 6,155.4 ms (15x)** - the quadratic phase. Decision (agreed
+  with the user): accept the current speed and stop optimizing; the compiler's own
+  workload is many small files, where the cost is linear. Fixing sema's scaling is
+  deferred, not forgotten - the suspects are the get-append-insert copies into
+  `globalFunctions`/`packageDecls` in `collectGlobal`, `buildVisible` re-running
+  per file, the per-call overload scans in `analyzeCall`/`markExtensionUsed`, and
+  `lookupValue`'s scope walk, all in `cppsrc/sema/Sema.simse` (`guide4ai.md`
+  section 9).
+- **A custom `Dictionary` exists, and is measured faster (T41).**
+  `cppsrc/rtl/smdictionary.hpp` implements `SmDictionary<TKey, TValue>` - the .NET
+  shape: one `Entry` per row (`hash`, `next`, key, value), chains by row index, a
+  power-of-two bucket table whose **mask** is a field (`hash & _mask`; 16 buckets
+  growing 4x), the `Str` hash reading **8 bytes at a time** with a shift-xor fold
+  and the scalar keys left as-is (a `>> 16` xor at most), and removal by tombstone
+  (`hash = -1`). Rows are **append-only** (no free list, no `_freeCount`): a removed
+  row stays a hole, and both the iterator-producing calls and a **growth** pack the
+  live rows together - `growBuckets()` compacts in the same pass because it already
+  walks every row to rebuild the chains, which is what took the compiler-shaped
+  workloads from behind to parity and the end-to-end from parity to a win. An insert
+  into an **empty bucket** skips the chain walk and the key compare altogether. It
+  is selected by `SIMSE_DICT_SM` (CMake option + `build.js` mirroring, like the
+  `List`/`Str` backings) and verified like them: both backings emit
+  **byte-identical** C++, and both pass the differentials, the bootstrap fixed
+  point, `simse_tests.exe` and stress 23/23 on both rings.
+  Measured with `tools/smdict_stress.cpp` (`/O2 /DNDEBUG`, keys prebuilt so the
+  benchmark does not time `to_string`, min of three rounds, ms sm/std): at 200k
+  entries 2M **hit** lookups 94-101/50-57 (the one remaining deficit), 2M **miss**
+  lookups 23.5-24.8/38.6-44.6 (**~1.6x faster**), fill 16.6-18.2/15.6-16.4 (parity),
+  erase half the table 7.4-7.7/9.2-9.9 (~1.2x faster); at 2,200 entries 400k hit
+  lookups 20-24/6-7 (the same deficit); iteration over 200k rows 1.5-1.6/12-13.5
+  (**~8x faster**), 20k deep copies of a 150-entry dictionary 12-15/65-81
+  (**~5x faster**); the compiler's own shapes - 30k rounds of 24 inserts/72
+  lookups/8 erases 56.7-58.3/55.6-58.1 and the emitter's clear-and-refill
+  50.2-54.6/50.9-52.4 - now at **parity** (they were ~1.3-1.4x behind before
+  `growBuckets` started packing). End to end on the 6,357-line self-transpile (37
+  interleaved pairs over two windows) it is **~6% faster**: 62.6/68.2 and 61.5/69.5
+  ms against the std backing's 67.2/72.7 and 65.2/73.8 ms, both statistics; peak
+  working set is equal (16.2-16.5 vs 16.4-16.5 MB). The earlier sketch's two
+  separate lists (entries in one, cached hash + link in another) were replaced by
+  the single row because splitting measured ~1.7x slower on hit-heavy lookups. What
+  remains before it could be the default is the ~1.8x hit-lookup deficit on
+  cache-resident tables - the open suspects are the bucket holding a *row index*
+  (a second dependent load per hit) where MSVC's bucket holds a *node pointer*,
+  `SmallVector::operator[]`'s inline/heap branch on every access, and the cached-hash
+  pre-test paying an extra compare on hits where MSVC compares the key directly.
+  Nothing else in the tree depends on either backing.
 
 ### Note: the shape of a lookup like this
 

@@ -15,6 +15,13 @@ option(SIMSE_LIST_STD_VECTOR "Back List<T> with std::vector<T> instead of SmallV
 # with.
 option(SIMSE_STR_STD_STRING "Back Str with std::string instead of SmString" OFF)
 
+# Dictionary<K, V> is std::unordered_map by default; turn this on to back it with
+# the RTL's own SmDictionary (rows of key/value pairs plus a power-of-two bucket
+# table, cppsrc/rtl/smdictionary.hpp) instead (impl_specs/rtl-abi.md). Header-only,
+# but the type still names symbols the libraries and an amalgamation share, so the
+# choice has to match between them.
+option(SIMSE_DICT_SM "Back Dictionary<K, V> with the RTL's SmDictionary instead of std::unordered_map" OFF)
+
 # Str's inline capacity in bytes, NUL included (the RTL default is in
 # cppsrc/rtl/strsmallvector.hpp). Lowering it shrinks every Str — and every
 # aggregate holding one — at the cost of spilling more (shorter) strings to the
@@ -86,6 +93,10 @@ endif()
 
 if(SIMSE_STR_STD_STRING)
     add_compile_definitions(SIMSE_STR_STD_STRING)
+endif()
+
+if(SIMSE_DICT_SM)
+    add_compile_definitions(SIMSE_DICT_SM)
 endif()
 
 if(SIMSE_NO_PACK4)

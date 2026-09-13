@@ -2,8 +2,10 @@
 
 Purpose: re-orient a new agent/session fast. Read this first, then
 `impl_specs/capability-matrix.md`, `specs/modules.md`, and
-`impl_specs/roadmap.md`. Status snapshot below is as of 2026-09-11; counts and
-byte sizes drift — trust the build, not these numbers.
+`impl_specs/roadmap.md`. `impl_specs/user-language-roadmap.md` is the companion
+roadmap for what a *user* of the language is blocked on (protocols, JSON, tooling,
+the single-threaded server story). Status snapshot below is as of 2026-09-11;
+counts and byte sizes drift — trust the build, not these numbers.
 
 ## 1. What this is
 
@@ -67,6 +69,26 @@ expressible in the language.
   **73.1/78.5 -> 64.9/69.8 ms** (-11%); the scanner stage alone over the same source
   set **317.9/333.0 -> 261.1/271.3 ms** (-18/-19%), which is **1.49x** the
   hand-written scanner where it was ~1.8x.
+- **Throughput is accepted as-is (T40).** Self-transpile over the 6,357 lines of
+  `cppsrc`: **65/68 ms** self-hosted against the hand-written ring's **36/43 ms**
+  (**1.6-1.8x**, where this run started at 3.5-3.7x; ~95k lines/s). The C++ compile
+  of the emitted TU is the real cost of a build, not the transpile. One known
+  edge: a *single* file's cost grows quadratically beyond ~16k lines (25 us/line at
+  16k, ~99 us/line at 64k) and the quadratic phase is **sema** - measured, accepted
+  and deferred, see section 9 and `impl_specs/capability-matrix.md` T40.
+- **A custom dictionary exists behind a define (T41).** `cppsrc/rtl/smdictionary.hpp`
+  (`SmDictionary<TKey, TValue>`, the .NET shape: one row per entry holding hash +
+  chain link + key + value, power-of-two buckets with the mask in a field, 16
+  buckets growing 4x, append-only rows with tombstone removal, holes packed by the
+  iterator calls *and* by a growth, since growing already walks every row) is
+  selectable with `SIMSE_DICT_SM` and emits byte-identical C++ to the
+  `std::unordered_map` default. Measured: **~6% faster end to end** on the
+  self-transpile (62.6/68.2 and 61.5/69.5 vs 67.2/72.7 and 65.2/73.8 ms over 37
+  interleaved pairs), iteration ~8x, deep copies ~5x, miss lookups ~1.6x, `fill`,
+  `erase` and the compiler's small-dictionary shapes at parity; the one remaining
+  deficit is hit lookups on cache-resident tables (~1.8x in the micro-benchmark),
+  which is why it is still opt-in. Numbers and the suspects are in
+  `impl_specs/capability-matrix.md` T41 and `impl_specs/rtl-abi.md` item 11.
 
 ## 3. Build / test / run
 
@@ -146,8 +168,10 @@ explicit `cppsrc/compiler/Driver.simse` input.
   implemented, the `object` half is specified only; the plan is
   `impl_specs/statics.md`.
 - `impl_specs/` — implementation plans/records: `plan-to-selfhost.md`,
-  `transpilation.md`, `roadmap.md`, `capability-matrix.md`, `rtl-abi.md`,
-  `reification.md`, `native-interop.md`, `ast-xmlnode.md`, `tasks/`.
+  `transpilation.md`, `roadmap.md`, `user-language-roadmap.md` (the user-facing
+  feature roadmap: static protocols, JSON codegen, sockets/HTTP, toolchain),
+  `capability-matrix.md`, `rtl-abi.md`, `reification.md`, `native-interop.md`,
+  `ast-xmlnode.md`, `tasks/`.
 - `cppsrc/rtl/` — hand-written runtime: C++ headers (`types.hpp`,
   `containers.hpp`, `smstring.hpp`, `strsmallvector.hpp`, `optional.hpp`,
   `functional.hpp`, `result.hpp`, `xml.hpp`, `cursor.hpp`, `listops.hpp`,
@@ -164,9 +188,12 @@ explicit `cppsrc/compiler/Driver.simse` input.
   stays the default — `impl_specs/capability-matrix.md` T33).
   The CMake options `SIMSE_LIST_STD_VECTOR` / `SIMSE_STR_STD_STRING` (or
   `build.bat --define ...`) switch them to `std::vector<T>` / `std::string`;
-  the choice has to match between the compiler and the amalgamated output it
-  is linked with, and `build.js` mirrors the CMake cache automatically
-  (`impl_specs/rtl-abi.md`). The language's layout model is
+  `smdictionary.hpp` is the RTL's own value dictionary (`SmDictionary`, the .NET
+  row/bucket shape) and `SIMSE_DICT_SM` selects it over the default
+  `std::unordered_map` - it is opt-in because it is not yet faster end to end
+  (`impl_specs/capability-matrix.md` T41). The choice has to match between the
+  compiler and the amalgamated output it is linked with, and `build.js` mirrors
+  the CMake cache automatically (`impl_specs/rtl-abi.md`). The language's layout model is
   **4-byte packing** (`specs/memory-model.md`): the emitter brackets every
   generated aggregate in `SIMSE_PACK_PUSH`/`SIMSE_PACK_POP`, and `SIMSE_NO_PACK4`
   reverts to the host's default alignment.
@@ -314,8 +341,9 @@ packages.
 
 Do these only when asked; roughly prioritized:
 
-1. **Commit the work.** Nothing is committed; large amounts of source and docs
-   are uncommitted or untracked.
+1. **Commit the work when asked.** The T35-T40 performance work is committed
+   (`d5de0f8`); anything after it is uncommitted as usual - never commit unless the
+   user asks.
 2. **Stage-2 self-host**: have `simse_stage1` compile itself a second time and
    verify the fixed point again (stronger bootstrap proof). Also broaden
    `stage1_check` to sweep more fixtures.
@@ -329,17 +357,39 @@ Do these only when asked; roughly prioritized:
    (generic-capable, slices 2-5), specified in `specs/statics.md`; the `object`
    slices are the piece the RTL needs to move per-type statics such as
    `arrayEmpty<T>()`'s empty block out of hand-written C++.
+   The user-facing ordering of these gaps - what a program author is blocked on,
+   what gates each phase, and the features not in this list yet (`for`,
+   interpolation, closed unions + `when`, static protocols, `Set`, byte buffers,
+   JSON codegen, sockets/HTTP, Linux/macOS, user FFI) - is
+   `impl_specs/user-language-roadmap.md`, with its own non-goals and open
+   questions.
 4. **RTL spec convergence**: the RTL is a shim (`Str` is the spec-shaped inline
    `SmString`, `List` is `SmallVector<T, 4>`, both with a
    `std::string`/`std::vector` escape hatch behind `SIMSE_STR_STD_STRING` /
    `SIMSE_LIST_STD_VECTOR`; no `[refcount][typeId]` header). Divergences are
    documented in `impl_specs/rtl-abi.md`; the eventual target must match
    `specs/`.
-5. **Ergonomics/robustness**: lambda typing is conservative (a body/return
+5. **Sema is quadratic in a single file's declaration count** (T40,
+   `impl_specs/capability-matrix.md`): every per-file stage is linear except sema
+   (408 -> 6,155 ms when a one-file input grows 3-4x), so a single 30k+ line file
+   would take seconds while many small files stay linear. Suspects in
+   `cppsrc/sema/Sema.simse`: `collectGlobal`'s get-append-insert copies into
+   `globalFunctions`/`packageDecls`, `buildVisible` re-running per file, per-call
+   overload scans (`analyzeCall`, `markExtensionUsed`), `lookupValue`'s scope walk.
+   Fix in both rings when a real workload needs it.
+6. **Ergonomics/robustness**: lambda typing is conservative (a body/return
    mismatch surfaces as a C++ compile error, not a Simse diagnostic); generic
    type aliases aren't expanded when resolving an expected callable type; `Str`
    is byte-oriented (ASCII case mapping); the single ~190 KB amalgamated TU may
    need attention as the compiler grows.
+7. **SmDictionary is ahead except on hit lookups** (T41,
+   `impl_specs/capability-matrix.md`): the opt-in RTL dictionary is ~6% faster on the
+   self-transpile and wins iteration (~8x), deep copies (~5x) and miss lookups
+   (~1.6x) outright, but loses ~1.8x on hit lookups in cache-resident tables, which
+   is what keeps it opt-in. Suspects: bucket-as-row-index (a second dependent load)
+   vs MSVC's bucket-as-node-pointer, `SmallVector::operator[]`'s inline/heap branch
+   per access, and the cached-hash pre-test on hits. Flipping the default is a
+   one-line CMake change once that is fixed or judged not to matter.
 
 ## 10. Gotchas
 

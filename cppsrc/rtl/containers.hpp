@@ -406,10 +406,20 @@ PList<T> makeList() {
     return std::make_shared<List<T>>();
 }
 
-// Dictionary<K, V> is a built-in generic value dictionary
-// (specs/dictionary.md), equivalent in purpose to std::unordered_map.
+// Dictionary<K, V> is a built-in generic value dictionary (specs/dictionary.md).
+// The backing is selectable at compile time, like List and Str: std::unordered_map
+// by default, the RTL's own SmDictionary when SIMSE_DICT_SM is defined. The choice
+// must match between the compiler and any amalgamated output it is linked with
+// (impl_specs/rtl-abi.md). smdictionary.hpp is pulled in here - after
+// SmallVector/List/Str exist - so it is not meant to be included directly.
+#if defined(SIMSE_DICT_SM)
+#include "smdictionary.hpp"
+template <class TKey, class TValue>
+using Dictionary = SmDictionary<TKey, TValue>;
+#else
 template <class TKey, class TValue>
 using Dictionary = std::unordered_map<TKey, TValue>;
+#endif
 
 // RawArray<T> is the unmanaged `*T` spelling of a contiguous element block
 // (specs/built-in-types.md). It carries no count, is not ref-counted, and

@@ -200,6 +200,35 @@ normative layout.
     `SIMSE_STR_STD_STRING` escape hatch) are declared 8-aligned and are therefore
     under-aligned by the packed definitions; that is accepted while the shims
     exist. `SIMSE_NO_PACK4` turns the packing off and reverts to host layout.
+11. **`Dictionary<K, V>` backing.** Spec: a value dictionary whose hashing,
+    buckets and iteration order are deliberately unspecified
+    (`specs/dictionary.md`). Shim: `std::unordered_map` by default, and
+    `cppsrc/rtl/smdictionary.hpp`'s `SmDictionary<TKey, TValue>` behind
+    `SIMSE_DICT_SM` (CMake option of the same name; `build.js` mirrors the cache).
+    `SmDictionary` is the .NET shape: one `Entry` per row (`hash`, `next`, key,
+    value), chains by row index, a bucket table whose length is a power of two with
+    the mask kept in a field (`hash & _mask`), a first table of 16 buckets growing
+    4x, and removal by tombstone (`hash = -1`). Rows are append-only - a removed row
+    stays a hole - and both iteration and a growth pack the live rows together:
+    `compact()` runs from the iterator-producing calls when `_count !=
+    _rows.size()` (so iteration is a pointer walk over `_rows`), and `growBuckets()`
+    packs in the same pass because it already walks every row to rebuild the chains.
+    An insert into an empty bucket skips the chain walk and the key compare
+    altogether (no row hashes there, so the key cannot be present). The two backings
+    emit byte-identical compiler output, and both pass the differentials, the
+    bootstrap fixed point and the stress corpus. It is **opt-in, and measured ~6%
+    faster** end to end on the 6,357-line self-transpile (37 interleaved pairs over
+    two windows: 62.6/68.2 and 61.5/69.5 ms against the std backing's 67.2/72.7 and
+    65.2/73.8 ms), with iteration ~8x, deep copies ~5x and miss lookups ~1.6x
+    faster, `fill`/`erase` and the compiler's small-dictionary churn at parity, and
+    one remaining deficit: hit lookups on cache-resident tables are ~1.8x slower in
+    the micro-benchmark (`tools/smdict_stress.cpp`).
+    `impl_specs/capability-matrix.md` (T41) has the full table and the suspects.
+    Two semantic differences from `std::unordered_map` are worth recording: the
+    backing keeps no reference/iterator stability across an insert (rows live in a
+    `SmallVector`), and `keys()`/`values()` order is row order (insertion order,
+    holes packed away on demand) rather than bucket order - both are unspecified in
+    the spec, and nothing in the tree depends on either.
 
 ## Operations the emitter needs
 
