@@ -1,10 +1,13 @@
 #include "Native.h"
 
 #include "../common/common.h"
+#include "../rtl/filestream.hpp"
 #include "../rtl/fs.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
+#include <cstring>
 #include <filesystem>
 #include <system_error>
 
@@ -62,4 +65,31 @@ Bool simse_pathExists(const Str& path) {
 
 void simse_eprintln(const Str& text) {
     fprintf(stderr, "%s\n", text.c_str());
+}
+
+// ---- reading a file line by line -------------------------------------------
+//
+// The stream's own operations (`readLine`, `readLineInto`, `fileSize`, `close`) are
+// methods of `FileStream` in cppsrc/rtl/filestream.hpp: the emitter calls a handle's
+// methods as members. Only the constructor-like `open` lives here, as a free function.
+
+FileStream* simse_fileStream_open(const Str& path) {
+    auto* stream = new FileStream();
+    stream->file.open(simse_toStdString(path), std::ios::binary);
+    if (!stream->file.is_open()) {
+        delete stream;
+        return nullptr;
+    }
+    stream->chunk.resize(256 * 1024);
+    std::error_code ec;
+    const std::uintmax_t size = std::filesystem::file_size(simse_toStdString(path), ec);
+    stream->size = ec ? 0 : (Int64) size;
+    return stream;
+}
+
+// ---- time ------------------------------------------------------------------
+
+Int64 simse_nowMillis() {
+    const auto now = std::chrono::steady_clock::now().time_since_epoch();
+    return (Int64) std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
 }

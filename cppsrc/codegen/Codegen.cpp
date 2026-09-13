@@ -78,7 +78,7 @@ namespace codegen {
                 "Float32", "Float64", "Char", "Bool", "Str",
                 "List", "Array", "RawArray", "Opt", "Res",
                 "Dictionary", "SmallVector", "PList",
-                "Attribute", "XmlNode", "Cursor",
+                "Attribute", "XmlNode", "Cursor", "FileStream",
             };
             for (const Str &candidate: names) {
                 if (candidate == name) return true;

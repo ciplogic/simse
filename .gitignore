@@ -64,3 +64,10 @@ cmake-build-*/
 /docs/examples/**/*.exe
 /docs/examples/**/*.pdb
 /docs/examples/**/*.ilk
+
+### 1BRC benchmark: generated data and the C++ baseline build ###
+/benchmarks/onebrc/data/
+/benchmarks/onebrc/onebrc.cpp
+/benchmarks/onebrc/*.exe
+/benchmarks/onebrc/*.obj
+/benchmarks/onebrc/*.pdb

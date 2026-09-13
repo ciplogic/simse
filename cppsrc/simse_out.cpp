@@ -607,7 +607,7 @@ Str ns1_cgIndent(Int level) {
 }
 // cppsrc/codegen/Codegen.simse:77
 Bool ns1_cgIsRtlTypeName(Str name) {
-    if (!(name == "Int" || name == "Int8" || name == "Int16" || name == "Int32" || name == "Int64" || name == "Float32" || name == "Float64" || name == "Char" || name == "Bool" || name == "Str" || name == "List" || name == "Array" || name == "RawArray" || name == "Opt" || name == "Res" || name == "Dictionary" || name == "SmallVector" || name == "PList" || name == "AstNodeAttribute" || name == "AstXmlNode" || name == "Cursor")) goto L2;
+    if (!(name == "Int" || name == "Int8" || name == "Int16" || name == "Int32" || name == "Int64" || name == "Float32" || name == "Float64" || name == "Char" || name == "Bool" || name == "Str" || name == "List" || name == "Array" || name == "RawArray" || name == "Opt" || name == "Res" || name == "Dictionary" || name == "SmallVector" || name == "PList" || name == "AstNodeAttribute" || name == "AstXmlNode" || name == "Cursor" || name == "FileStream")) goto L2;
     return true;
     L2:;
     return false;

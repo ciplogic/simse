@@ -778,6 +778,41 @@ component-specific):
   `SmallVector::operator[]`'s inline/heap branch on every access, and the cached-hash
   pre-test paying an extra compare on hits where MSVC compares the key directly.
   Nothing else in the tree depends on either backing.
+- **The RTL reads files line by line, and a naive 1BRC measures it (T42).**
+  `FileStream` (`cppsrc/rtl/filestream.hpp`, prelude `cppsrc/rtl/fs.simse`) is
+  `openFileStream(path): *FileStream` plus the **struct methods**
+  `readLine(): Opt<Str>`, `readLineInto(buffer: *Str): Bool`, `fileSize(): Int64`,
+  `close()`; `nowMillis()` (`cppsrc/rtl/timeops.hpp`) is the monotonic ms clock
+  the benchmark reports its own time with. The methods have to be members, not
+  free natives, because the emitter calls a handle's operations as members
+  (`stream.readLine()` on a `*FileStream` emits `(*stream).readLine()`), exactly
+  like `Cursor`/`XmlNode`. `readLine` `std::getline`s into a `std::string` the
+  stream recycles and returns a fresh `Str`; `readLineInto` reads ahead in a
+  256 KiB chunk, finds the newline with `memchr` and copies into the caller's
+  `Str`, whose heap block is reused, so there is no allocation after the longest
+  line seen. Both strip a trailing `\r` and accept a missing final newline.
+  Measured on `benchmarks/onebrc` (the challenge, naive: no mmap, no chunked
+  parsing, no per-station arrays, no threads; 10,000,000 rows, 133,931,538 B =
+  127.7 MiB, 100 stations, one ARM64 laptop, release, min/median, interleaved):
+  Simse `readLine` **2075/2127 ms** (64 MB/s, 6.6 MB peak WS), Simse
+  `readLineInto(*line)` **1156/1211 ms** (**116 MB/s**, 6.5 MB), the naive C++
+  baseline (`getline` + `find(';')` + `stod` + `unordered_map<std::string, Stats>`)
+  **1550/1570 ms** (~86 MB/s, 5.9 MB), and the Bun generator/reference `check`
+  **732 ms** (183 MB/s). All four reports are byte-identical (the Simse and C++
+  writers are compared after stripping the `\r` Windows text-mode stdout adds;
+  the baseline switches stdout to binary mode). So the convenient form is 1.34x
+  behind the C++ baseline and the recycled form is 1.34x ahead - the reader, an
+  **1.8x** swing, dominates the parsing. Two findings are recorded here because
+  they cost cycles: `*x` **borrows** (the aggregation takes
+  `*Dictionary<Str, Stats>`) while `&x` **boxes a copy** of the local, so
+  mutations through the box are silently lost (the earlier `&List<Int>`/
+  `*List<Int>` probe: `val h: &List<Int> = &items; h.append(1)` leaves
+  `items.size() == 0`, `val p: *List<Int> = *items; items.append(3)` leaves
+  `p.size() == 1`); and the two lookups per line (`get` then `insert`, since no
+  API exposes a stored value in place) are a library gap, which is the remaining
+  distance to the 732 ms reference - see `guide4ai.md` section 9 item 8.
+  `benchmarks/onebrc/README.md` has the run commands and the notes (tenths as
+  `Int`, the half-toward-positive-infinity rounding rule, CRLF vs LF).
 
 ### Note: the shape of a lookup like this
 

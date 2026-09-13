@@ -33,6 +33,26 @@ comparable: the RTL's own dictionary (`SIMSE_DICT_SM`) is ~6% faster end to end
 than `std::unordered_map` on this workload, with iteration ~8x and deep copies
 ~5x faster.
 
+**A straight-line program, measured.** `benchmarks/onebrc` has the naive 1 Billion
+Row Challenge - read 10M `station;temperature` lines (127.7 MiB), aggregate per
+station, print the report - written three times: in Simse, in C++ with the STL, and
+in JavaScript as the reference. All three reports are byte-identical, and the
+spread is instructive:
+
+| Implementation | Time | Throughput |
+| --- | --- | --- |
+| Simse, `readLine(): Opt<Str>` per line | 2075 / 2127 ms | 60 MB/s |
+| Simse, reading into one recycled `Str` | **1156 / 1211 ms** | **104 MB/s** |
+| C++ STL baseline (`getline` + `stod`) | 1550 / 1570 ms | ~85 MB/s |
+| Bun reference aggregate | 732 ms | 183 MB/s |
+
+So a naive Simse program is in the same league as the naive C++ one - 1.34x
+behind with the convenient per-line `Str`, 1.34x *ahead* with a recycled buffer -
+while the reference is faster than both because it never builds a per-line object.
+The remaining gap to close is in the *library*, not the language: the dictionary
+has no in-place access to a stored value, so the Simse program does two lookups per
+line where the C++ one does one.
+
 **The deployment story.** One amalgamated `.cpp` per program, no runtime to ship,
 no garbage collector, no reflection metadata. Programs are native binaries built
 by a normal C++ toolchain.
@@ -51,7 +71,7 @@ program a user would try to write:
 | Float printing | `println` goes through C++'s default formatting | format manually; a defined shortest-round-trip rule is on the roadmap |
 | Error messages | position and message, no source excerpt or caret | read the generated C++ next to it |
 | Vocabulary | no `for`, no `when`, no interpolation, no default parameter values, no capture-by-reference, no `Set`, no `map`/`filter` | `while` + `Cursor`, explicit code, `List` helpers |
-| Ownership | `&T` is a reference count; cycles are not collected | use values or `Array` blocks, or null the handle out |
+| Ownership and borrowing | `&x` on a local boxes a *copy*, so a handle does not alias the local; `&T` cycles are not collected | borrow with `*x` (a raw pointer) when you mean "the original"; break cycles by nulling a handle |
 
 ## What is missing
 

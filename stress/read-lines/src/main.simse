@@ -1,0 +1,56 @@
+package readlines
+
+// `FileStream`'s two readers over one awkward little file: short and long lines
+// (one of each straddles `Str`'s 23-byte inline capacity), a CRLF line, empty
+// lines, trailing spaces, and a final line with no newline. `data.txt` is read
+// twice - once with `readLine(): Opt<Str>`, once into one recycled `Str` with
+// `readLineInto(*buffer)` - and the two passes must agree line for line.
+
+fun describe(index: Int, text: Str): Unit {
+    println("[" + index.toString() + "] len=" + text.size().toString() + " <" + text + ">")
+}
+
+fun main(): Int {
+    val path: Str = "stress/read-lines/data.txt"
+
+    val stream: *FileStream = openFileStream(path)
+    if (stream == null) {
+        eprintln("read-lines: cannot open " + path)
+        return 2
+    }
+    println("size=" + stream.fileSize().toString())
+
+    // The convenient form: a fresh `Opt<Str>` per line.
+    var line: Opt<Str> = stream.readLine()
+    var count: Int = 0
+    while (line.hasValue()) {
+        describe(count, line.value())
+        count = count + 1
+        line = stream.readLine()
+    }
+    println("readLine: " + count.toString() + " lines")
+    stream.close()
+
+    // The recycled form: one `Str` whose heap block is reused.
+    val again: *FileStream = openFileStream(path)
+    if (again == null) {
+        eprintln("read-lines: cannot reopen " + path)
+        return 2
+    }
+    var buffer: Str = ""
+    var copied: Int = 0
+    while (again.readLineInto(*buffer)) {
+        describe(copied, buffer)
+        copied = copied + 1
+    }
+    println("after eof the buffer keeps its last line <" + buffer + ">")
+    println("readLineInto: " + copied.toString() + " lines")
+    again.close()
+
+    if (count == copied) {
+        println("both readers agree on every line")
+    } else {
+        println("MISMATCH: " + count.toString() + " vs " + copied.toString())
+    }
+    return 0
+}

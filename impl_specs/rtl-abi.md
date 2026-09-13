@@ -232,6 +232,42 @@ normative layout.
 
 ## Operations the emitter needs
 
+### Reading files line by line, and the clock
+
+`FileStream` (`cppsrc/rtl/filestream.hpp`, prelude `cppsrc/rtl/fs.simse`) is the
+RTL's line reader. `openFileStream(path): *FileStream` is a free native (null when
+the file cannot be opened); the operations are **methods of the struct** -
+`readLine(): Opt<Str>`, `readLineInto(buffer: *Str): Bool`, `fileSize(): Int64`,
+`close()` - because the emitter calls a handle's methods as members
+(`stream.readLine()` on a `*FileStream` emits `(*stream).readLine()`).
+`readLine` goes through `std::getline` into a `std::string` the stream recycles and
+hands back a fresh `Str` (one allocation per line longer than `Str`'s inline
+capacity); `readLineInto` reads ahead in a 256 KiB chunk, finds the newline with
+`memchr`, and copies into the caller's `Str`, whose heap block is reused - no
+allocation after the longest line seen. Both strip a trailing `\r` and treat a
+final line without a newline as a line. Measured on
+`benchmarks/onebrc` (10M rows, 127.7 MiB): 2075 ms with `readLine` against 1156 ms
+with `readLineInto`, i.e. the reader choice is worth 1.8x on a straight-line
+program.
+
+`simse_nowMillis` (`cppsrc/rtl/timeops.hpp`) is a monotonic millisecond clock for
+logging and for measuring a run; it exists because the benchmark needed to report
+its own time the way the C++ baseline does.
+
+The Simse surface, with the C++ symbol each one reaches (`cppsrc/rtl/fs.simse`,
+`cppsrc/rtl/rtl.simse`):
+
+| Simse | C++ symbol | Notes |
+| --- | --- | --- |
+| `openFileStream(path)` | `simse_fileStream_open` | `*FileStream`; null when the file cannot be opened |
+| `stream.readLine()` | `FileStream::readLine` (member) | the next line, an empty `Opt` at end of file |
+| `stream.readLineInto(*buffer)` | `FileStream::readLineInto` (member) | the next line into a recycled `Str`, `false` at end of file |
+| `stream.fileSize()` | `FileStream::fileSize` (member) | the file's size in bytes, for throughput reporting |
+| `stream.close()` | `FileStream::close` (member) | releases the handle |
+| `nowMillis()` | `simse_nowMillis` | monotonic milliseconds since an arbitrary fixed point |
+
+### Boxing, addresses, and `copy`
+
 No new RTL operations were required for the v1 subset. Specifically:
 
 - Boxing (`&value`) lowers to `std::make_shared<std::remove_cvref_t<decltype(...)>>(value)`,

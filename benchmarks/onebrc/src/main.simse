@@ -1,0 +1,159 @@
+package onebrc
+
+// The 1 Billion Row Challenge, written the naive way: a line at a time, a `Str` key
+// per station, a `Dictionary` of aggregates, and a sorted report at the end. No
+// mmap, no chunked parsing, no per-station arrays, no threads - the straight-line
+// version a first attempt is written as, which is what the C++ baseline in this
+// folder (`brc_naive.cpp`) does too.
+//
+//   onebrc <measurements.txt>           read each line with `readLine(): Opt<Str>`
+//   onebrc <measurements.txt> into      read into one recycled `Str` instead
+//
+// "Borrowing" the dictionary matters: `Dictionary` is a value type. A raw pointer
+// (`*counts` at the call site) borrows the local without copying it; a `&counts`
+// *handle* would box a copy and the aggregates would be written into the box, not
+// into the local.
+
+data class Stats(var min: Int; var max: Int; var sum: Int; var count: Int)
+
+// "-12.3" -> -123, "12.3" -> 123, "12" -> 120. The sign is handled here rather than
+// trusted to `toInt`, since the digits are concatenated around the point.
+fun tenths(text: Str): Int {
+    var body: Str = text
+    var negative: Bool = false
+    if (body.size() > 0) {
+        if (body.charAt(0) == '-') {
+            negative = true
+            body = body.substr(1, body.size() - 1)
+        }
+    }
+
+    val dot: Int = body.find(".")
+    var digits: Str = body
+    var scale: Int = 10
+    if (dot >= 0) {
+        digits = body.substr(0, dot) + body.substr(dot + 1, body.size() - dot - 1)
+        scale = 1
+    }
+
+    val value: Opt<Int> = digits.toInt()
+    if (!value.hasValue()) {
+        return 0
+    }
+    var result: Int = value.value() * scale
+    if (negative) {
+        result = 0 - result
+    }
+    return result
+}
+
+// `sum / count` tenths, rounded half toward positive infinity: the challenge's
+// reference rule (Java's `Math.round(mean * 10) / 10`), computed exactly.
+fun meanOf(sum: Int, count: Int): Int {
+    if (count <= 0) {
+        return 0
+    }
+    if (sum >= 0) {
+        return (2 * sum + count) / (2 * count)
+    }
+    return 0 - ((0 - 2 * sum + count) / (2 * count))
+}
+
+// 123 -> "12.3", -5 -> "-0.5"
+fun formatTenths(value: Int): Str {
+    var sign: Str = ""
+    var magnitude: Int = value
+    if (magnitude < 0) {
+        sign = "-"
+        magnitude = 0 - magnitude
+    }
+    return sign + (magnitude / 10).toString() + "." + (magnitude % 10).toString()
+}
+
+// One line of `station;temperature` folded into the running aggregates. `counts` is
+// a raw pointer so the aggregates go into the caller's dictionary in place.
+fun tally(line: Str, counts: *Dictionary<Str, Stats>): Unit {
+    val semi: Int = line.find(";")
+    if (semi <= 0) {
+        return
+    }
+    val name: Str = line.substr(0, semi)
+    val value: Int = tenths(line.substr(semi + 1, line.size() - semi - 1))
+
+    val existing: Opt<Stats> = counts.get(name)
+    if (existing.hasValue()) {
+        val stats: Stats = existing.value()
+        if (value < stats.min) {
+            stats.min = value
+        }
+        if (value > stats.max) {
+            stats.max = value
+        }
+        stats.sum = stats.sum + value
+        stats.count = stats.count + 1
+        counts.insert(name, stats)
+    } else {
+        counts.insert(name, Stats(value, value, value, 1))
+    }
+}
+
+fun main(args: List<Str>): Int {
+    if (args.size() < 1) {
+        eprintln("usage: onebrc <measurements.txt> [into]")
+        return 2
+    }
+    val path: Str = args[0]
+    var into: Bool = false
+    if (args.size() > 1) {
+        into = args[1] == "into"
+    }
+
+    val stream: *FileStream = openFileStream(path)
+    if (stream == null) {
+        eprintln("onebrc: cannot open " + path)
+        return 2
+    }
+    val size: Int64 = stream.fileSize()
+
+    val counts: Dictionary<Str, Stats> = dictionaryOf<Str, Stats>()
+    var lines: Int = 0
+    val started: Int64 = nowMillis()
+
+    if (into) {
+        // The fast read: one `Str` for the whole run, its heap block reused.
+        var line: Str = ""
+        while (stream.readLineInto(*line)) {
+            tally(line, *counts)
+            lines = lines + 1
+        }
+    } else {
+        // The convenient read: a fresh `Opt<Str>` per line.
+        var line: Opt<Str> = stream.readLine()
+        while (line.hasValue()) {
+            tally(line.value(), *counts)
+            lines = lines + 1
+            line = stream.readLine()
+        }
+    }
+
+    val elapsed: Int64 = nowMillis() - started
+    stream.close()
+
+    var names: List<Str> = counts.keys()
+    names.sort((left: Str, right: Str) -> left < right)
+    var i: Int = 0
+    while (i < names.size()) {
+        val stats: Stats = counts.get(names[i]).value()
+        println("{" + names[i] + "=" + formatTenths(stats.min) + "/"
+                + formatTenths(meanOf(stats.sum, stats.count)) + "/" + formatTenths(stats.max) + "}")
+        i = i + 1
+    }
+
+    var rate: Int64 = 0
+    if (elapsed > 0) {
+        rate = (size / 1048576) * 1000 / elapsed
+    }
+    eprintln(lines.toString() + " rows, " + counts.size().toString() + " stations, "
+             + elapsed.toString() + " ms, " + rate.toString() + " MB/s")
+    return 0
+}

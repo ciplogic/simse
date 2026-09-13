@@ -54,9 +54,10 @@ Details worth knowing:
   implicit `rtl` package is emitted unprefixed.
 - **Native operations are RTL calls.** Predule operations that are not written in
   Simse lower to free functions over the RTL headers (`simse_str_split`,
-  `simse_dict_get`, `simse_list_sort`, ...). A user can declare their own with
-  `native fun` / `native("symbol") fun`, which is how the file I/O in
-  `stress/native-read-file` works.
+  `simse_dict_get`, `simse_list_sort`, ...), except that a *handle's* methods are
+  emitted as members (which is why `FileStream`'s `readLine`/`close` are methods of
+  its struct). A user can declare their own with `native fun` / `native("symbol") fun`,
+  which is how the file I/O in `stress/native-read-file` works.
 
 ## What the output looks like
 
@@ -146,6 +147,8 @@ headers:
 | `xml.hpp` | `Attribute`, `XmlNode`: the general tree a program can build |
 | `cursor.hpp` | `Cursor<T>`, a view over a list |
 | `strops.hpp`, `listops.hpp`, `dictops.hpp`, `fs.hpp` | the native operations behind the prelude |
+| `filestream.hpp` | `FileStream`: reading a file line by line (`readLine(): Opt<Str>`, and `readLineInto(*Str)` with a recycled buffer) |
+| `timeops.hpp` | `simse_nowMillis`, a monotonic clock for logging and for measuring runs |
 | `astxml.hpp` | the compiler's AST node (roles/keys as enums) |
 
 The prelude (`cppsrc/rtl/*.simse`) declares the surface; its bodies are *not*

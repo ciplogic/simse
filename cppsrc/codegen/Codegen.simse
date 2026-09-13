@@ -80,7 +80,7 @@ fun cgIsRtlTypeName(name: Str): Bool {
         || name == "Bool" || name == "Str" || name == "List" || name == "Array"
         || name == "RawArray" || name == "Opt" || name == "Res" || name == "Dictionary"
         || name == "SmallVector" || name == "PList" || name == "AstNodeAttribute"
-        || name == "AstXmlNode" || name == "Cursor") {
+        || name == "AstXmlNode" || name == "Cursor" || name == "FileStream") {
         return true
     }
     return false

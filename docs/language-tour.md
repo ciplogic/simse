@@ -286,16 +286,18 @@ fun main(): Int {
 
 ## Memory: values, handles, pointers
 
-Assignment copies values. `&T` is a reference-counted handle (the language
-spelling of a shared reference), `*T` is a raw pointer, and `&x`/`*x` take an
-address or dereference; member access, indexing and calls auto-dereference.
+Assignment copies values. `&value` boxes a value in a reference-counted handle
+(copying the value *into* the box), and copies of one handle share that box;
+`*value` is a raw pointer, which is the *borrowing* form: it points at the
+original, so a write through it is visible there. Member access, indexing and
+calls auto-dereference both.
 
 ```simse
 data class Box(var value: Int)
 
 fun maybeRef(flag: Bool): &Box {
     if (flag) {
-        return &Box(7)                   // allocates a handle
+        return &Box(7)                   // boxes a fresh value
     }
     return null                          // a null handle, tested with == null
 }
@@ -303,18 +305,30 @@ fun maybeRef(flag: Bool): &Box {
 fun main(): Int {
     val boxed: &Box = &Box(3)
     println(boxed.value)                 // 3, auto-dereferenced
-    val raw: *Box = *boxed               // raw pointer to the boxed value
-    println(raw.value)                   // 3
-    val items: List<Int> = List<Int>()
-    val view: &List<Int> = &items        // a handle to the list, no copy
-    view.append(1)
-    println(items.size())                // 1
+    val raw: *Box = *boxed               // a raw pointer to the boxed value
+    raw.value = 4
+    println(boxed.value)                 // 4: the pointer borrows, it does not copy
+
+    var items: List<Int> = List<Int>()
+    val handle: &List<Int> = &items      // boxes a *copy* of the list
+    handle.append(1)
+    println(items.size())                // 0: the handle owns its own copy
+    val shared: &List<Int> = handle      // handles copy the box, not the contents
+    shared.append(2)
+    println(handle.size())               // 2: `handle` and `shared` are the same box
+
+    val borrow: *List<Int> = *items      // borrows the local, no copy
+    items.append(3)
+    println(borrow.size())               // 1: the pointer sees the original
     return 0
 }
 ```
 
-Handles are reference counts, so a cycle of `&T` values is not collected - use
-values, `Array` blocks, or an explicit `null`-out when you need to break one.
+So `&T` is for *shared identity* (a value several handles point at, allocated
+once) and `*T` is for *borrowing* (passing a big value to a function without
+copying it - that is what the compiler's own code does with the AST). Handles are
+reference counts, so a cycle of `&T` values is not collected: use values, `Array`
+blocks, or an explicit `null`-out to break one.
 
 ## Modules and statics
 
@@ -367,6 +381,9 @@ println(min(3, 9))
 These are known rough edges, not design decisions to admire
 ([state-of-the-field.md](state-of-the-field.md) has the full list):
 
+- **`&local` boxes a *copy*, `*local` borrows.** `val h: &List<Int> = &items`
+  copies the list into a box; `h.append(1)` leaves `items` empty. Use
+  `val p: *List<Int> = *items` to pass or mutate the original without copying.
 - **A method call on a literal or a temporary does not compile.** The receiver is
   emitted as a non-const reference, so `"a b".words()` fails; bind it first:
   `val text: Str = "a b"` then `text.words()`.

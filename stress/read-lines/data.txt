@@ -1,0 +1,9 @@
+line1 short
+line2 is long enough to spill the inline 23-byte buffer
+
+line4
+line5 has trailing spaces   
+
+01234567890123456789012
+012345678901234567890123
+last line has no newline

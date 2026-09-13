@@ -99,3 +99,9 @@ native("simse_bool_toString") fun toString(this: Bool): Str
 
 native("simse_min") fun min(a: Int, b: Int): Int
 native("simse_max") fun max(a: Int, b: Int): Int
+
+// ---- time -----------------------------------------------------------------
+
+// Milliseconds since an arbitrary fixed point, monotonic (it never goes backwards),
+// for logging and for measuring a run. `Int64` because the value is large.
+native("simse_nowMillis") fun nowMillis(): Int64

@@ -1,0 +1,5 @@
+# Byte-exact test fixtures. The stress harness feeds these files to a program that
+# reads them as bytes (stress/read-lines/data.txt carries a deliberate CRLF line, a
+# line with trailing spaces and a final line with no newline, and the program
+# prints the file's size), so git must not rewrite their line endings.
+stress/**/data.txt -text

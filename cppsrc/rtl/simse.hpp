@@ -15,6 +15,8 @@
 #include "strops.hpp"       // simse_str_*/simse_char_*/min/max native ops (prelude)
 #include "dictops.hpp"      // simse_dict_*/simse_list_contains/sort native ops (prelude)
 #include "fs.hpp"           // simse_listFiles/simse_writeFile/... native ops (prelude)
+#include "filestream.hpp"   // FileStream: simse_fileStream_* native ops (prelude)
+#include "timeops.hpp"      // simse_nowMillis (prelude)
 #include "functional.hpp"   // Func, Action, AutoDefer
 #include "result.hpp"       // Result/Res, ok, resError, err
 #include "xml.hpp"          // Attribute, XmlNode (the general tree a program builds)

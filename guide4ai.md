@@ -23,7 +23,7 @@ expressible in the language.
   output.
 - **Five differentials are byte-identical**: scanner, skeleton parser, parser,
   sema, codegen (hand-written vs transpiled Simse).
-- `simse_tests.exe`: 48 tests, all passing. Clean build green, including all the
+- `simse_tests.exe`: 49 tests, all passing. Clean build green, including all the
   differentials and `stage1_check`, run automatically by the build.
 - Ported components: `common`/`StrView`/`xmlutil`, scanner, skeleton parser,
   parser, sema, codegen, compiler driver.
@@ -89,6 +89,19 @@ expressible in the language.
   deficit is hit lookups on cache-resident tables (~1.8x in the micro-benchmark),
   which is why it is still opt-in. Numbers and the suspects are in
   `impl_specs/capability-matrix.md` T41 and `impl_specs/rtl-abi.md` item 11.
+- **The RTL reads files line by line, and there is a clock (T42).**
+  `FileStream` (`cppsrc/rtl/filestream.hpp`, prelude `cppsrc/rtl/fs.simse`) has
+  `openFileStream(path): *FileStream` plus the **struct methods**
+  `readLine(): Opt<Str>`, `readLineInto(buffer: *Str): Bool`, `fileSize(): Int64`
+  and `close()`; `nowMillis()` (`timeops.hpp`) is a monotonic ms clock. On the
+  1BRC (`benchmarks/onebrc`, 10M rows, 127.7 MiB) the reader choice alone is worth
+  **1.8x**: 2075/2127 ms with `readLine` against 1156/1211 ms with
+  `readLineInto`, i.e. 1.34x *behind* a naive C++ `getline`+`stod` baseline
+  (1550/1570 ms) with the convenient form and 1.34x *ahead* with the recycled
+  buffer. All four reports are byte-identical. Two findings worth keeping:
+  `*x` **borrows** (the aggregation must take `*Dictionary`) where `&x` **boxes a
+  copy** - mutations through the box are lost; and the two-lookups-per-line
+  (`get` then `insert`) is a *library* gap, not a language one (section 9).
 
 ## 3. Build / test / run
 
@@ -181,7 +194,8 @@ explicit `cppsrc/compiler/Driver.simse` input.
 - `cppsrc/rtl/` — hand-written runtime: C++ headers (`types.hpp`,
   `containers.hpp`, `smstring.hpp`, `strsmallvector.hpp`, `optional.hpp`,
   `functional.hpp`, `result.hpp`, `xml.hpp`, `cursor.hpp`, `listops.hpp`,
-  `strops.hpp`, `dictops.hpp`, `fs.hpp`, `simse.hpp`) AND the **prelude** `.simse`
+  `strops.hpp`, `dictops.hpp`, `fs.hpp`, `filestream.hpp`, `timeops.hpp`,
+  `simse.hpp`) AND the **prelude** `.simse`
   files (`rtl.simse`, `Cursor.simse`, `xml.simse`, `fs.simse`) declaring the RTL
   surface. `List<T>` is `SmallVector<T, 4>` and `Str` is the inline `SmString`
   (`smstring.hpp`), whose buffer is `strsmallvector.hpp`'s `StrSmallVector`, the
@@ -224,6 +238,10 @@ explicit `cppsrc/compiler/Driver.simse` input.
   (the Visual Studio environment shared with `build.js`), the A/B helpers
   (`_bench_ab.mjs`, `_hoist_ab.bat`, `_cap_ab.bat`, `_probe.bat`, `memrun.cpp`,
   `str_bench.cpp`, ...) and the probe programs.
+- `benchmarks/` - published measurements; `benchmarks/onebrc/` is the naive 1BRC
+  in Simse (`src/main.simse`) with the C++ STL baseline, the Bun generator/
+  reference (`onebrc.mjs`) and the results (`README.md`; data and binaries are
+  git-ignored).
 
 ## 5. Architecture
 
@@ -400,6 +418,11 @@ Do these only when asked; roughly prioritized:
    vs MSVC's bucket-as-node-pointer, `SmallVector::operator[]`'s inline/heap branch
    per access, and the cached-hash pre-test on hits. Flipping the default is a
    one-line CMake change once that is fixed or judged not to matter.
+8. **`Dictionary` has no in-place access to a stored value** (T42): `get` copies
+   the value out and `insert` writes it back, so the 1BRC aggregation pays two
+   lookups per line where the C++ baseline pays one - the last gap to the Bun
+   reference (1.6x). A `getPtr`/`withValue`-style native (both backings) is the
+   next library change; it is a library gap, not a language one.
 
 ## 10. Gotchas
 
@@ -416,3 +439,9 @@ Do these only when asked; roughly prioritized:
   differ — cosmetic.
 - Goldens are sensitive to line-number shifts; regenerate with `--update` when
   intentionally changing sources, then confirm check-mode passes.
+- `&x` on a local **boxes a copy** (mutations through the box are lost); `*x`
+  **borrows** and aliases the original. Take `*T` for out/aggregate parameters
+  (the 1BRC's `tally` takes `*Dictionary<Str, Stats>`), never `&x`.
+- A handle's native operations must be **struct methods**, not free natives: the
+  emitter calls `stream.readLine()` on a `*FileStream` as `(*stream).readLine()`.
+  Same for `Cursor`/`XmlNode`.

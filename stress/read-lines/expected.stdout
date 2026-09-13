@@ -1,0 +1,23 @@
+size=179
+[0] len=11 <line1 short>
+[1] len=55 <line2 is long enough to spill the inline 23-byte buffer>
+[2] len=0 <>
+[3] len=5 <line4>
+[4] len=28 <line5 has trailing spaces   >
+[5] len=0 <>
+[6] len=23 <01234567890123456789012>
+[7] len=24 <012345678901234567890123>
+[8] len=24 <last line has no newline>
+readLine: 9 lines
+[0] len=11 <line1 short>
+[1] len=55 <line2 is long enough to spill the inline 23-byte buffer>
+[2] len=0 <>
+[3] len=5 <line4>
+[4] len=28 <line5 has trailing spaces   >
+[5] len=0 <>
+[6] len=23 <01234567890123456789012>
+[7] len=24 <012345678901234567890123>
+[8] len=24 <last line has no newline>
+after eof the buffer keeps its last line <last line has no newline>
+readLineInto: 9 lines
+both readers agree on every line

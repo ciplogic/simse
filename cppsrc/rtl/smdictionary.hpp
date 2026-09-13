@@ -7,6 +7,7 @@
 #include <type_traits>
 #include <utility>
 
+#include "containers.hpp"
 #include "types.hpp"
 
 // SmDictionary<TKey, TValue> is the RTL's own value dictionary
