@@ -159,6 +159,12 @@ explicit `cppsrc/compiler/Driver.simse` input.
 
 ## 4. Repo map
 
+- `README.md` and `docs/` - the published documentation: what the language is
+  (`README.md`), the tutorial (`docs/language-tour.md`), the pipeline and emitted
+  C++ (`docs/how-it-works.md`), honest status and comparisons
+  (`docs/state-of-the-field.md`), and the runnable examples under
+  `docs/examples/<name>/src/` (built with the commands in
+  `docs/getting-started.md`). Keep these true when behavior changes.
 - `specs/` - the language specification (normative). Start with
   `specs/modules.md` (modules/packages), `specs/declarations.md`,
   `specs/functions.md`, `specs/memory-model.md`, `specs/generics.md`,
@@ -318,6 +324,10 @@ Key design points:
   `stage1_check` cost 6.6-8.7 s before they were removed, 2.1 s after).
 - Every `.simse` file must start with a mandatory `package`; update `import`
   lines to package names when adding files.
+- **User-visible changes update the docs.** `README.md` (the status paragraph),
+  `docs/state-of-the-field.md` (what works, what is rough, the numbers) and
+  `docs/language-tour.md` (syntax) carry claims a reader will check; a change that
+  makes one of them false is not finished until it is updated.
 - **Do not commit** unless the user explicitly asks.
 
 ## 8. Language features currently implemented

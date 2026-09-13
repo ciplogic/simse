@@ -1,0 +1,382 @@
+# A tour of Simse
+
+Every fragment below is real syntax: the runnable versions are the programs under
+[examples/](examples/) and [`stress/`](../stress/) (each stress folder is a
+complete program with its expected output). Nothing here is aspirational - the
+[roadmap](../impl_specs/user-language-roadmap.md) lists what does not exist yet.
+
+## A program
+
+A file declares a package, then declarations. `main` is the entry point; its
+`return` value becomes the process exit code.
+
+```simse
+package hello
+
+fun main(): Int {
+    println("hello, simse")
+    return 0
+}
+```
+
+The other `main` form takes the command-line arguments (`stress/main-args`):
+
+```simse
+package app
+
+fun main(args: List<Str>): Int {
+    println(args.size())
+    return 0
+}
+```
+
+## Values and types
+
+Scalars are `Int8`, `Int16`, `Int32`, `Int64`, `Float32`, `Float64`, `Char`
+(one byte) and `Bool`; `Int` is the default integer (`Int32`) and `Str` is the
+mutable, inline byte-string type. `val` binds once, `var` is reassignable;
+locals are inferred from the initializer or declared explicitly.
+
+```simse
+val name: Str = "box"
+var count: Int = 0
+count = count + 1
+val ratio: Float64 = 0.5
+val letter: Char = 'a'
+val truth: Bool = true
+```
+
+Strings carry the usual library: `find`/`indexOf`, `substr`, `startsWith`,
+`endsWith`, `replace`, `trim`, `split`, `toUpper`, `toLower`, `charAt`,
+`isEmpty`, `size`, `+`, and the `Opt`-returning parses `toInt()`/`toFloat()`.
+
+```simse
+val text: Str = "the quick brown fox"
+println(text.startsWith("the"))          // true
+println(text.replace("fox", "cat"))
+println(text.split(" ").size())          // 4
+val n: Opt<Int> = "42".toInt()
+if (n.hasValue()) {
+    println(n.value() + 1)               // 43
+}
+```
+
+## Control flow
+
+`if`/`else`, `while`, `switch`/`case`/`default`, `break` and `continue`;
+conditions are `Bool` expressions (`&&`, `||`, `!`).
+
+```simse
+fun classify(n: Int): Str {
+    switch (n) {
+        case 0:
+            return "zero"
+        case 1:
+            return "one"
+        default:
+            return "many"
+    }
+}
+
+fun main(): Int {
+    var row: Int = 0
+    while (row < 4) {
+        row = row + 1
+        if (row == 2) {
+            continue
+        }
+        if (row == 3) {
+            break
+        }
+        println(row)
+    }
+    println(classify(9))                 // many
+    return 0
+}
+```
+
+There is no `for` loop yet: iteration is `while` plus (`stress/cursor`)
+`Cursor<T>`, a copyable view with `hasValue()`, `value()`, `next()`, `size()` and
+`slice(n)`.
+
+```simse
+fun sum(items: &List<Int>): Int {
+    var total: Int = 0
+    var c: Cursor<Int> = cursorOf(items)
+    while (c.hasValue()) {
+        total = total + c.value()
+        c = c.next()
+    }
+    return total
+}
+```
+
+## Functions, extensions, lambdas
+
+Functions are top-level or methods; the receiver may be declared as an
+extension, which is how the standard library is written. Generics are reified:
+`identity<Int>(7)` calls a function specialized for `Int`.
+
+```simse
+fun identity<T>(value: T): T {
+    return value
+}
+
+fun Str.words(): List<Str> {
+    return this.split(" ")
+}
+
+typealias Mapper = (Int) -> Int
+
+fun apply(f: Mapper, value: Int): Int {
+    return f(value)
+}
+
+fun makeAdder(factor: Int): Mapper {
+    return (v: Int) -> v + factor        // captures `factor` by value
+}
+
+fun main(): Int {
+    println(identity<Int>(7))
+    val text: Str = "a b c"
+    println(text.words().size())         // 3  (a literal receiver does not compile, see the gotchas)
+    println(apply((v: Int) -> v * 2, 21))// 42
+    val add10: Mapper = makeAdder(10)
+    println(add10(5))                    // 15
+    return 0
+}
+```
+
+A lambda body may also be a block, written on the same line as the arrow:
+
+```simse
+val big: Mapper = (v: Int) -> {
+    if (v > 0) {
+        return v * 100
+    }
+    return 0
+}
+```
+
+## Data classes and enums
+
+A `data class` is a value type with named fields (separated by `;`), an implicit
+constructor, value semantics, and methods that may use `this`. Fields are
+accessed with `.`.
+
+```simse
+data class Point(var x: Int; var y: Int) {
+    fun manhattan(): Int {
+        var total: Int = this.x
+        if (total < 0) {
+            total = 0 - total
+        }
+        if (this.y < 0) {
+            total = total - this.y
+        } else {
+            total = total + this.y
+        }
+        return total
+    }
+}
+
+fun main(): Int {
+    val p: Point = Point(3, 4)
+    println(p.manhattan())               // 7
+    p.x = 10                             // fields may be reassigned when declared `var`
+    return 0
+}
+```
+
+Enums are integer-valued; members may carry explicit values, and `toInt()` /
+`fromInt()` convert. There is no automatic member *name* yet, so a `switch`
+function is the way to print one (`stress/language-tour`).
+
+```simse
+enum Color {
+    Red,
+    Green = 4,
+    Blue
+}
+
+fun label(c: Color): Str {
+    switch (c) {
+        case Color.Red:
+            return "red"
+        case Color.Green:
+            return "green"
+        default:
+            return "other"
+    }
+}
+```
+
+## Generics and collections
+
+`List<T>` is a growable, deep-copying sequence; `Array<T>` is a fixed-length
+reference-counted block (one allocation, count first) that supports `count()`,
+indexing, `toArray()`/`toList()` and the shared `arrayEmpty<T>()`;
+`SmallVector<4, T>` keeps up to four elements inline.
+
+```simse
+val values: List<Int> = List<Int>()
+values.append(10)
+values.append(20)
+values.removeAt(0)
+println(values.size())                   // 1
+
+val arr: Array<Int> = values.toArray()
+println(arr[0])                          // 20
+var again: List<Int> = arr.toList()
+again.append(30)
+```
+
+`Dictionary<K, V>` is the hash dictionary (`get`/`has`/`insert`/`remove`/`size`/
+`keys`/`values`/`clear`); `get` returns an `Opt<V>`. Iteration order is an
+implementation detail, so sort the keys when order matters.
+
+```simse
+val counts: Dictionary<Str, Int> = dictionaryOf<Str, Int>()
+counts.insert("b", 2)
+counts.insert("a", 1)
+println(counts.get("a").value())         // 1
+println(counts.has("z"))                 // false
+
+val keys: List<Str> = counts.keys()
+keys.sort((left: Str, right: Str) -> left < right)
+println(keys[0] + " " + keys[1])         // a b
+```
+
+## Absence and failure
+
+`Opt<T>` is an optional value (`hasValue()`, `value()`); `Res<T>` is a result
+whose `Value` or `Error` hold the outcome (`isOk()`), used throughout the
+compiler for parsing and file work. `null` is a literal for `&T` and `*T` in a
+nullable context, so `x == null` tests a handle.
+
+```simse
+fun describe(n: Int): Opt<Str> {
+    if (n < 0) {
+        return Opt<Str>.none()
+    }
+    return Opt<Str>.some("ok")
+}
+```
+
+```simse
+// The failure half is a value too: `ok` carries the payload, `err` a message.
+fun parse(text: Str): Res<Int> {
+    val n: Opt<Int> = text.toInt()
+    if (!n.hasValue()) {
+        return Res<Int>.err("not a number")
+    }
+    return Res<Int>.ok(n.value())
+}
+
+fun main(): Int {
+    val good: Res<Int> = parse("42")
+    println(good.isOk())                 // true
+    println(good.Value)                  // 42
+    val bad: Res<Int> = parse("nope")
+    println(bad.isOk())                  // false
+    println(bad.Error)                   // not a number
+    return 0
+}
+```
+
+## Memory: values, handles, pointers
+
+Assignment copies values. `&T` is a reference-counted handle (the language
+spelling of a shared reference), `*T` is a raw pointer, and `&x`/`*x` take an
+address or dereference; member access, indexing and calls auto-dereference.
+
+```simse
+data class Box(var value: Int)
+
+fun maybeRef(flag: Bool): &Box {
+    if (flag) {
+        return &Box(7)                   // allocates a handle
+    }
+    return null                          // a null handle, tested with == null
+}
+
+fun main(): Int {
+    val boxed: &Box = &Box(3)
+    println(boxed.value)                 // 3, auto-dereferenced
+    val raw: *Box = *boxed               // raw pointer to the boxed value
+    println(raw.value)                   // 3
+    val items: List<Int> = List<Int>()
+    val view: &List<Int> = &items        // a handle to the list, no copy
+    view.append(1)
+    println(items.size())                // 1
+    return 0
+}
+```
+
+Handles are reference counts, so a cycle of `&T` values is not collected - use
+values, `Array` blocks, or an explicit `null`-out when you need to break one.
+
+## Modules and statics
+
+A module is a directory; a package is the `package` name declared at the top of
+each file. The compiler scans a module root and links every file it finds;
+`import` only brings a package's names into unqualified scope. File-level `var`
+declarations are statics, initialized before `main` runs.
+
+```simse
+// src/util/util.simse
+package util
+
+data class Point(var x: Int; var y: Int)
+
+fun twice(value: Int): Int {
+    return value + value
+}
+```
+
+```simse
+// src/app/main.simse
+package app
+
+import util
+
+var hits: Int = 7
+
+fun main(): Int {
+    val p: Point = Point(3, 4)
+    println(twice(p.x) + hits)           // 13
+    return 0
+}
+```
+
+## Printing
+
+`print` and `println` take a value and print it, with `Bool` as `true`/`false`;
+scalars have `toString()`, and `Str + Str` concatenates. There is no string
+interpolation or formatting function yet, and `println` of your own types is not
+supported (a `Printable` protocol is planned), so build strings explicitly.
+
+```simse
+println("count = " + count.toString())
+println(2.5.toString())
+println(min(3, 9))
+```
+
+## Gotchas worth knowing on day one
+
+These are known rough edges, not design decisions to admire
+([state-of-the-field.md](state-of-the-field.md) has the full list):
+
+- **A method call on a literal or a temporary does not compile.** The receiver is
+  emitted as a non-const reference, so `"a b".words()` fails; bind it first:
+  `val text: Str = "a b"` then `text.words()`.
+- **A method call chained onto a generic call loses its type.**
+  `counts.get(k).value().toString()` does not compile; assign the middle step to a
+  typed `val` first.
+- **A lambda body must start on the arrow's line.** `(x: Int) ->` followed by a
+  newline and the expression is a syntax error; keep the body on the same line or
+  open a block there.
+- `println` of a float uses the C++ default formatting, and `println` of an enum
+  prints its integer value.
+- There is no `for`, no `when`/pattern matching, no string interpolation, no
+  default parameter values, no capture-by-reference, and no `Set`.
