@@ -3,18 +3,27 @@
 #include <iostream>
 #include <type_traits>
 
-Char ns1_firstByte(Str& self);
+Char ns1_firstByte(Str* self);
 Int ns1_valueAt(Int* self);
-Opt<Int> ns1_firstOrNone(List<Int>& self);
+Opt<Int> ns1_firstOrNone(List<Int>* self);
 // program_extension.simse:2
-Char ns1_firstByte(Str& self) {
-    return self[0];
+Char ns1_firstByte(Str* self) {
+    {
+        Char _sm_expr1 = (*self)[0];
+        return _sm_expr1;
+    }
 }
 // program_extension.simse:6
 Int ns1_valueAt(Int* self) {
-    return *self;
+    {
+        auto _sm_expr1 = *self;
+        return _sm_expr1;
+    }
 }
 // program_extension.simse:10
-Opt<Int> ns1_firstOrNone(List<Int>& self) {
-    return Opt<Int>();
+Opt<Int> ns1_firstOrNone(List<Int>* self) {
+    {
+        Opt<Int> _sm_expr1 = Opt<Int>();
+        return _sm_expr1;
+    }
 }

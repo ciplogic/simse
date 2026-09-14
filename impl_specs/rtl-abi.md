@@ -415,3 +415,31 @@ assignment operators (`+=` etc.), lambda reference captures, and `for`/range-for
 `cppsrc/rtl/{listops,dictops}.hpp` declared in the RTL prelude; the remaining
 `List` methods (`insert`, `clear`) are still emitted as
 written and are not yet mapped.
+
+12. **`Str::size()` is unsigned.** The language spells every `size` accessor `Int`
+    (the `Dictionary`/`Span`/`StrView` natives all return `Int`), but the shim's
+    `SmString` mirrors `std::string`, whose `size()`/`length()` return `size_type`
+    (`std::size_t`, unsigned 64). Since the lowering-time inference (`T45`,
+    `impl_specs/linear-lowering.md`) now types `str.size()` as `Int`, the emitted
+    code narrows with a `C4267` warning on the compiler's own build (4 sites, no
+    errors, no behavior change). Fixing it means giving `SmString` its own
+    `size_type` (`Int`), which touches a deliberately `std::string`-shaped surface;
+    until then the warning is the honest record of the mismatch.
+
+13. **A value receiver is a raw pointer (`T* self`).** A method whose receiver is a
+    *value* (`fun advance(...)` inside a data class, `fun f(this: Point, ...)`,
+    `fun Str.firstByte()`) is emitted as `T* self`, not `T& self`: the receiver is
+    then the language's own borrow form (`specs/memory-model.md`'s `*T`), member
+    access is `self->field`, a bare `this` reads as the object (`(*self)`), and a call
+    site passes the receiver's **address** (`ns_f(simse_addressOf(x))`, which covers a
+    place and a temporary alike - the latter is valid for the call, per
+    `simse_addressOf`'s contract). A receiver declared as a handle keeps it, which is
+    what keeps refcounting available to the body: `this: &T` stays
+    `std::shared_ptr<T> self` (so `self` can be stored in a list and keeps its
+    refcount), and `this: *T` stays `T* self` (where `this` *is* the pointer, so
+    `*this` is the pointee and a method body is unchanged from before). *Native*
+    extensions are the one exception: their host signature decides, so the emitter
+    passes the receiver expression as it always did (`nativeReceiverArg`) and the
+    RTL's `T&`-taking helpers did not have to change. The hand-written differential
+    drivers (`tests/*_simse_main.cpp`) call emitted receiver functions directly and
+    were updated to pass `&scanner`.

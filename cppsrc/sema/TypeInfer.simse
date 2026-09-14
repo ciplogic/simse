@@ -62,6 +62,20 @@ fun semIsRtlTypeName(name: Str): Bool {
     return false
 }
 
+// The node re-rooted under `role`. A type read out of a declaration carries the
+// role it was read from (`ReturnType` in a signature, `TypeArg` in an argument
+// list, `Type` in a field) while the place it is put back into expects its own -
+// the emitter looks children up by role, so a type that is re-used must be
+// re-rooted, exactly like the emitter's own `renameRole` does for `Inner`.
+fun semReRole(node: AstXmlNode, role: AstNodeKind): AstXmlNode {
+    if (node.name == role) {
+        return node
+    }
+    var renamed: AstXmlNode = copy(node)
+    renamed.name = role
+    return renamed
+}
+
 // A one-element list, for `semReplaceRole`.
 fun semOne(node: AstXmlNode): List<AstXmlNode> {
     var out: List<AstXmlNode> = List<AstXmlNode>()
@@ -261,24 +275,26 @@ fun semBindTypes(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *List<St
 }
 
 // Replaces every type parameter of `typeNode` from `bindings`. An empty result means
-// one of them was unbound and there is nothing to spell.
+// one of them was unbound and there is nothing to spell. The result is re-rooted as
+// a standalone type (`AstNodeKind.Type`); the caller re-roots it for the place it
+// puts it in.
 fun semSubstitute(typeNode: *AstXmlNode, bindings: *Dictionary<Str, AstXmlNode>, typeParams: *List<Str>): AstXmlNode {
     if (xmlIsEmpty(typeNode)) {
         return xmlEmptyNode()
     }
     val kind: AstNodeCategory = xmlKind(typeNode)
     if (kind == AstNodeCategory.TypeIntLit) {
-        return copy(typeNode)
+        return semReRole(copy(typeNode), AstNodeKind.Type)
     }
     if (kind == AstNodeCategory.TypeNamed) {
         val name: Str = xmlAttr(typeNode, AstNodeAttributeKind.Name)
         if (!xmlIsTypeParam(name, typeParams)) {
-            return copy(typeNode)
+            return semReRole(copy(typeNode), AstNodeKind.Type)
         }
         if (!bindings.has(name)) {
             return xmlEmptyNode()
         }
-        return bindings.get(name).value()
+        return semReRole(bindings.get(name).value(), AstNodeKind.Type)
     }
     if (kind == AstNodeCategory.TypeGeneric) {
         var args: List<AstXmlNode> = List<AstXmlNode>()
@@ -289,17 +305,18 @@ fun semSubstitute(typeNode: *AstXmlNode, bindings: *Dictionary<Str, AstXmlNode>,
             if (xmlIsEmpty(*mapped)) {
                 return xmlEmptyNode()
             }
-            args.append(mapped)
+            args.append(semReRole(mapped, AstNodeKind.TypeArg))
             i = i + 1
         }
-        return semReplaceRole(typeNode, AstNodeKind.TypeArg, args)
+        return semReRole(semReplaceRole(typeNode, AstNodeKind.TypeArg, args), AstNodeKind.Type)
     }
     if (kind == AstNodeCategory.TypeReference || kind == AstNodeCategory.TypePointer) {
         val inner: AstXmlNode = semSubstitute(*xmlChild(typeNode, AstNodeKind.Inner), bindings, typeParams)
         if (xmlIsEmpty(*inner)) {
             return xmlEmptyNode()
         }
-        return semReplaceRole(typeNode, AstNodeKind.Inner, semOne(inner))
+        return semReRole(semReplaceRole(typeNode, AstNodeKind.Inner, semOne(semReRole(inner, AstNodeKind.Inner))),
+                         AstNodeKind.Type)
     }
     if (kind == AstNodeCategory.TypeFunction) {
         var params: List<AstXmlNode> = List<AstXmlNode>()
@@ -310,7 +327,7 @@ fun semSubstitute(typeNode: *AstXmlNode, bindings: *Dictionary<Str, AstXmlNode>,
             if (xmlIsEmpty(*mapped)) {
                 return xmlEmptyNode()
             }
-            params.append(mapped)
+            params.append(semReRole(mapped, AstNodeKind.ParamType))
             i = i + 1
         }
         val ret: AstXmlNode = semSubstitute(*xmlChild(typeNode, AstNodeKind.ReturnType), bindings, typeParams)
@@ -318,7 +335,8 @@ fun semSubstitute(typeNode: *AstXmlNode, bindings: *Dictionary<Str, AstXmlNode>,
             return xmlEmptyNode()
         }
         val withParams: AstXmlNode = semReplaceRole(typeNode, AstNodeKind.ParamType, params)
-        return semReplaceRole(*withParams, AstNodeKind.ReturnType, semOne(ret))
+        return semReRole(semReplaceRole(*withParams, AstNodeKind.ReturnType, semOne(semReRole(ret, AstNodeKind.ReturnType))),
+                         AstNodeKind.Type)
     }
     return xmlEmptyNode()
 }
@@ -355,9 +373,12 @@ data class SemBody(var decl: AstXmlNode; var typeParams: List<Str>; var selfType
 
 // ---- the pass -------------------------------------------------------------
 
+// Both the facts and the body are **borrowed**, not copied: the pass only reads
+// them, and a body is annotated once per function, so copying the program tables
+// (hundreds of functions, three dictionaries) per body would dominate the run.
 data class SemInfer(
-    var facts: SemFacts;
-    var body: SemBody;
+    var facts: *SemFacts;
+    var body: *SemBody;
     var scopes: List<Dictionary<Str, AstXmlNode>>
 ) {
     fun pushScope(): Unit {
@@ -488,16 +509,15 @@ data class SemInfer(
             if (xmlIsEmpty(*typeNode) && !xmlIsEmpty(*init)) {
                 typeNode = this.infer(*init)
             }
-            // The name is recorded even when it stays untyped: the next declaration
-            // still resolves against it the way the emitter's own inference would.
+            val name: Str = xmlAttr(*stmtNode, AstNodeAttributeKind.Name)
             if (!xmlIsEmpty(*typeNode)) {
-                this.mark(xmlAttr(*stmtNode, AstNodeAttributeKind.Name), typeNode)
+                this.mark(name, typeNode)
             }
             if (!xmlIsEmpty(*declared) || xmlIsEmpty(*typeNode) || xmlIsEmpty(*init)
                 || !this.declarable(*init) || !this.spellable(*typeNode)) {
                 return copy(stmtNode)
             }
-            return semWithType(*stmtNode, typeNode)
+            return semWithType(*stmtNode, semReRole(typeNode, AstNodeKind.Type))
         }
         if (kind == AstNodeCategory.StmtBlock) {
             this.pushScope()
@@ -516,8 +536,8 @@ data class SemInfer(
         if (xmlIsEmpty(*inner)) {
             return xmlEmptyNode()
         }
-        var node: AstXmlNode = AstXmlNode(AstNodeKind.Type, kind, List<AstNodeAttribute>(), semOne(inner).toArray())
-        return node
+        return AstXmlNode(AstNodeKind.Type, kind, List<AstNodeAttribute>(),
+                          semOne(semReRole(inner, AstNodeKind.Inner)).toArray())
     }
 
     // A data class member type with the class's type parameters bound to the
@@ -654,7 +674,7 @@ data class SemInfer(
             val typeArgs: List<AstXmlNode> = xmlChildren(*recv, AstNodeKind.TypeArg)
             val recvName: Str = xmlAttr(*recv, AstNodeAttributeKind.Name)
             if (calleeText == "value" && recvName == "Opt" && typeArgs.size() > 0) {
-                return typeArgs[0]
+                return semReRole(typeArgs[0], AstNodeKind.Type)
             }
             if ((calleeText == "size" || calleeText == "count")
                 && (recvName == "List" || recvName == "Array" || recvName == "Dictionary" || recvName == "SmallVector")) {
@@ -716,7 +736,7 @@ data class SemInfer(
         if (kind == AstNodeCategory.ExprName) {
             val name: Str = xmlAttr(e, AstNodeAttributeKind.Name)
             if (name == "this") {
-                return copy(this.body.selfType)
+                return semReRole(copy(this.body.selfType), AstNodeKind.Type)
             }
             val local: AstXmlNode = this.lookup(name)
             if (!xmlIsEmpty(*local)) {
@@ -724,7 +744,7 @@ data class SemInfer(
             }
             // File-level static storage (specs/statics.md).
             if (this.facts.statics.has(name)) {
-                return this.facts.statics.get(name).value()
+                return semReRole(this.facts.statics.get(name).value(), AstNodeKind.Type)
             }
             // A bare enum type name used as the receiver of a static conversion.
             if (this.facts.enumNames.has(name)) {
@@ -755,7 +775,7 @@ data class SemInfer(
             if (xmlKind(*base) == AstNodeCategory.TypeGeneric && xmlAttr(*base, AstNodeAttributeKind.Name) == "Res") {
                 val typeArgs: List<AstXmlNode> = xmlChildren(*base, AstNodeKind.TypeArg)
                 if (memberText == "value" && typeArgs.size() > 0) {
-                    return typeArgs[0]
+                    return semReRole(typeArgs[0], AstNodeKind.Type)
                 }
                 if (memberText == "error") {
                     return semNamedType("Str")
@@ -801,12 +821,12 @@ data class SemInfer(
             }
             val baseName: Str = xmlAttr(*base, AstNodeAttributeKind.Name)
             if (baseName == "SmallVector" && typeArgs.size() == 2) {
-                return typeArgs[1] // <N, T>
+                return semReRole(typeArgs[1], AstNodeKind.Type) // <N, T>
             }
             if (baseName == "Dictionary" && typeArgs.size() == 2) {
-                return typeArgs[1]
+                return semReRole(typeArgs[1], AstNodeKind.Type)
             }
-            return typeArgs[0]
+            return semReRole(typeArgs[0], AstNodeKind.Type)
         }
         if (kind == AstNodeCategory.ExprRef) {
             return this.handle(AstNodeCategory.TypeReference, this.infer(*xmlChild(e, AstNodeKind.Operand)))
@@ -834,7 +854,7 @@ data class SemInfer(
 // Fills in the type of every untyped `VarDecl` in `body` the pass can prove; the
 // statements that gain nothing come back as they are.
 fun semInferTypes(body: *List<AstXmlNode>, facts: *SemFacts, ctx: *SemBody): List<AstXmlNode> {
-    val infer: SemInfer = SemInfer(copy(facts), copy(ctx), List<Dictionary<Str, AstXmlNode>>())
+    val infer: SemInfer = SemInfer(facts, ctx, List<Dictionary<Str, AstXmlNode>>())
     infer.pushScope()
     val params: List<AstXmlNode> = xmlChildren(*ctx.decl, AstNodeKind.Param)
     var i: Int = 0

@@ -59,9 +59,9 @@ namespace {
         std::string content;
         if (!readAllBytes(path, content)) return false;
         ns2_Scanner scanner(ns2_getTokenRules(), 0, 1, 1, Str());
-        ns2_setSource(scanner, content);
+        ns2_setSource(&scanner, content);
         while (true) {
-            Res<ns2_Token> result = ns2_nextToken(scanner);
+            Res<ns2_Token> result = ns2_nextToken(&scanner);
             if (!result.isOk()) return false;
             if (result.Value.kind == ns2_TokenKind::Eof) return true;
             simse_list_append(out, result.Value);

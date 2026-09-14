@@ -13,5 +13,8 @@ Res<Int> ns1_useGenerics() {
     Res<Int> errValue = Res<Int>::err("nope");
     auto reference = std::make_shared<std::remove_cvref_t<decltype((value))>>(value);
     auto dereferenced = (reference).get();
-    return Res<Int>::ok(value);
+    {
+        auto _sm_expr1 = Res<Int>::ok(value);
+        return _sm_expr1;
+    }
 }

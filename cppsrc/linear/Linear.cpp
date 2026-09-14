@@ -116,6 +116,72 @@ namespace linear {
                 for (StmtPtr &stmt: body) out.push_back(std::move(stmt));
             }
 
+            // Whether an expression contains `&&` or `||` anywhere - including inside
+            // a call's arguments, where the *value* form applies and nothing here can
+            // decompose it.
+            static bool containsShortCircuit(const ExprPtr &e) {
+                if (!e) return false;
+                if (e->kind == ExprKind::Binary && (e->text == "&&" || e->text == "||")) {
+                    return true;
+                }
+                if (containsShortCircuit(e->lhs) || containsShortCircuit(e->rhs)) return true;
+                for (const ExprPtr &arg: e->args) {
+                    if (containsShortCircuit(arg)) return true;
+                }
+                return false;
+            }
+
+            // A condition that is nothing but boolean operators (`&&`, `||`, `!`) and
+            // leaves with no short-circuit inside them: the conditions this pass can
+            // decompose into jumps.
+            static bool isDecomposable(const ExprPtr &e) {
+                if (!e) return false;
+                if (e->kind == ExprKind::Binary && (e->text == "&&" || e->text == "||")) {
+                    return isDecomposable(e->lhs) && isDecomposable(e->rhs);
+                }
+                if (e->kind == ExprKind::Unary && e->text == "!") return isDecomposable(e->lhs);
+                return !containsShortCircuit(e);
+            }
+
+            // Lowers a boolean condition into conditional jumps, one per leaf, with
+            // `&&`/`||` evaluating short-circuit exactly as the `if`/`while` they came
+            // from (impl_specs/linear-lowering.md, "Short-circuit operators").
+            //
+            // A leaf (`pkg != "rtl"`, `list.contains(x)`) is tested with whichever of
+            // `IfTrue`/`IfFalse` matches its value, so no negation is spelled out and
+            // an `if` that tested a whole `&&` chain keeps the label it would have
+            // had. A leaf emits *both* jumps; `simplifyBody` then folds each pair into
+            // the single conditional jump the emitter wants, and drops the labels the
+            // chain no longer needs.
+            void lowerCondition(const ExprPtr &cond, const Str &trueTarget, const Str &falseTarget,
+                                const ast::SourcePos &pos, List<StmtPtr> &out) {
+                if (cond->kind == ExprKind::Binary && (cond->text == "&&" || cond->text == "||")
+                    && cond->lhs && cond->rhs) {
+                    const Str mid = freshLabel();
+                    if (cond->text == "&&") {
+                        // Both operands must hold: the first one that does not jumps
+                        // straight past the rest.
+                        lowerCondition(cond->lhs, mid, falseTarget, pos, out);
+                        out.push_back(labelStmt(mid, pos));
+                        lowerCondition(cond->rhs, trueTarget, falseTarget, pos, out);
+                    } else {
+                        // The first operand that holds jumps straight to the target.
+                        lowerCondition(cond->lhs, trueTarget, mid, pos, out);
+                        out.push_back(labelStmt(mid, pos));
+                        lowerCondition(cond->rhs, trueTarget, falseTarget, pos, out);
+                    }
+                    return;
+                }
+                if (cond->kind == ExprKind::Unary && cond->text == "!") {
+                    // `!x` is `x` with its outcomes swapped: the test itself is never
+                    // negated here, `IfTrue`/`IfFalse` covers both polarities.
+                    lowerCondition(cond->lhs, falseTarget, trueTarget, pos, out);
+                    return;
+                }
+                out.push_back(condGotoStmt(StmtKind::IfTrue, cond, trueTarget, pos));
+                out.push_back(gotoStmt(falseTarget, pos));
+            }
+
             void lowerStmt(const Stmt &stmt, const Ctx &ctx, List<StmtPtr> &out) {
                 switch (stmt.kind) {
                     case StmtKind::If:
@@ -150,8 +216,12 @@ namespace linear {
             void lowerIf(const Stmt &stmt, const Ctx &ctx, List<StmtPtr> &out) {
                 const Str thenLabel = freshLabel();
                 const Str elseLabel = freshLabel();
-                out.push_back(condGotoStmt(StmtKind::IfTrue, stmt.cond, thenLabel, stmt.pos));
-                out.push_back(gotoStmt(elseLabel, stmt.pos));
+                if (containsShortCircuit(stmt.cond) && isDecomposable(stmt.cond)) {
+                    lowerCondition(stmt.cond, thenLabel, elseLabel, stmt.pos, out);
+                } else {
+                    out.push_back(condGotoStmt(StmtKind::IfTrue, stmt.cond, thenLabel, stmt.pos));
+                    out.push_back(gotoStmt(elseLabel, stmt.pos));
+                }
                 out.push_back(labelStmt(thenLabel, stmt.pos));
                 List<StmtPtr> thenOut;
                 lowerStmts(stmt.thenBody, ctx, thenOut);
@@ -178,7 +248,15 @@ namespace linear {
                 List<StmtPtr> bodyOut;
                 lowerStmts(stmt.body, bodyCtx, bodyOut);
                 out.push_back(labelStmt(condLabel, stmt.pos));
-                out.push_back(condGotoStmt(StmtKind::IfFalse, stmt.cond, endLabel, stmt.pos));
+                if (containsShortCircuit(stmt.cond) && isDecomposable(stmt.cond)) {
+                    // The body label is where a holding operand lands; the fold in
+                    // `simplifyBody` removes it again when only one jump remains.
+                    const Str bodyLabel = freshLabel();
+                    lowerCondition(stmt.cond, bodyLabel, endLabel, stmt.pos, out);
+                    out.push_back(labelStmt(bodyLabel, stmt.pos));
+                } else {
+                    out.push_back(condGotoStmt(StmtKind::IfFalse, stmt.cond, endLabel, stmt.pos));
+                }
                 appendBody(std::move(bodyOut), stmt.pos, out);
                 out.push_back(gotoStmt(condLabel, stmt.pos));
                 out.push_back(labelStmt(endLabel, stmt.pos));

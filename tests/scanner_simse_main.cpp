@@ -90,10 +90,10 @@ int main(int argc, char **argv) {
         }
 
         ns2_Scanner scanner(ns2_getTokenRules(), 0, 1, 1, Str());
-        ns2_setSource(scanner, content);
+        ns2_setSource(&scanner, content);
 
         while (true) {
-            Res<ns2_Token> result = ns2_nextToken(scanner);
+            Res<ns2_Token> result = ns2_nextToken(&scanner);
             if (!result.isOk()) {
                 printf("Error\t%s\n", escapeText(simse_toStdString(result.Error)).c_str());
                 break;

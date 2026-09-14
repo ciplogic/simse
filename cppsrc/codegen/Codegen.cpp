@@ -689,17 +689,20 @@ namespace codegen {
                 }
             }
 
-            // The C++ parameter form of a receiver. Value receivers are taken by
-            // reference so mutations through `this` reach the caller (data-class
-            // methods like `setSource`/`advance` rely on this). Counted
-            // references and raw pointers keep their handle form.
+            // The C++ parameter form of a receiver. A **value** receiver is passed as a
+            // raw pointer to the receiver object: that is the language's own borrow
+            // form (`*T`, specs/memory-model.md), it lets a method mutate the caller's
+            // object without a C++ reference, and it makes `self` one thing everywhere
+            // (`self->field`). A receiver already declared as a handle keeps it - a
+            // counted reference (`&T`) stays `std::shared_ptr<T>`, so `self` can still
+            // be stored in a list and keeps its refcount; a raw pointer stays `T*`.
             Str receiverParam(const ast::TypePtr &receiverType) {
                 Str mapped = type(*receiverType);
                 if (receiverType->kind == TypeKind::Reference
                     || receiverType->kind == TypeKind::Pointer) {
                     return mapped + " self";
                 }
-                return mapped + "& self";
+                return mapped + "* self";
             }
 
             // Whether a top-level `main` takes the argv form: a single
@@ -1136,9 +1139,36 @@ namespace codegen {
                 return nullptr;
             }
 
-            // The receiver argument for a lowered call, dereferencing a counted
-            // reference or raw pointer when the callee's receiver is a value.
+            // The receiver argument for a lowered *Simse* call: a value receiver is a
+            // raw pointer in the emitted code, so the argument is the receiver
+            // object's address. `simse_addressOf` covers both a place (`&x`) and a
+            // temporary, whose pointer is valid for the call it is passed to
+            // (cppsrc/rtl/types.hpp); a counted reference is unwrapped with `.get()`,
+            // and a raw pointer is already that address. A handle receiver keeps its
+            // form: a counted reference stays a counted reference, so a method that
+            // takes `this: &T` can store `self` and keep its refcount.
             Str receiverArg(const ast::TypePtr &pattern, const ast::Expr &recv) {
+                if (isHandleType(pattern.get())) {
+                    return expr(recv, 9);
+                }
+                ast::TypePtr recvType = inferType(recv);
+                if (recvType) {
+                    if (recvType->kind == TypeKind::Reference
+                        || (recvType->kind == TypeKind::Generic && recvType->name == "PList")) {
+                        return "(" + expr(recv, 9) + ").get()";
+                    }
+                    if (recvType->kind == TypeKind::Pointer) {
+                        return expr(recv, 9);
+                    }
+                }
+                return "simse_addressOf(" + expr(recv, 9) + ")";
+            }
+
+            // The receiver argument for a lowered *native* call: the host's own
+            // signature decides whether it wants a value, a reference or a pointer, so
+            // the receiver expression is passed as it is - dereferenced through a
+            // handle, because the RTL's value receivers are written `T&` there.
+            Str nativeReceiverArg(const ast::TypePtr &pattern, const ast::Expr &recv) {
                 if (isHandleType(pattern.get())) {
                     return expr(recv, 9);
                 }
@@ -1175,10 +1205,26 @@ namespace codegen {
                 return nullptr;
             }
 
+            // The first Simse-declared receiver function with this name: used when the
+            // receiver's own type could not be inferred but the callee is known.
+            const Fn *findReceiverFnByName(const Str &name) {
+                for (const Fn &fn: functions) {
+                    if (fn.decl->isNative || !fn.receiver) continue;
+                    if (fn.decl->name == name) return &fn;
+                }
+                return nullptr;
+            }
+
             Str memberAccess(const ast::Expr &base, const Str &name) {
                 bool arrow = false;
                 ast::TypePtr baseType = inferType(base);
-                if (baseType) {
+                if (base.kind == ExprKind::Name && base.text == "this"
+                    && selfKind == NameKind::Value) {
+                    // A value receiver is a raw pointer in the emitted code (`T* self`),
+                    // so its members are reached with `->` whatever the language type
+                    // of the receiver is.
+                    arrow = true;
+                } else if (baseType) {
                     arrow = isHandleType(baseType.get());
                 } else if (base.kind == ExprKind::Name) {
                     // Fallback for a receiver whose type we could not infer.
@@ -1198,6 +1244,14 @@ namespace codegen {
                 if (recv && recv->kind == TypeKind::Generic && recv->name == "Res") {
                     if (name == "value") field = "Value";
                     else if (name == "error") field = "Error";
+                }
+                // A value receiver's own member access reads through its pointer
+                // (`self->field`). The bare name `this` reads as the object
+                // (`(*self)`), which is what a *value* use of the receiver needs, so
+                // this one spot spells the pointer instead.
+                if (base.kind == ExprKind::Name && base.text == "this"
+                    && selfKind == NameKind::Value) {
+                    return "self->" + field;
                 }
                 return expr(base, 9) + (arrow ? "->" : ".") + field;
             }
@@ -1314,8 +1368,25 @@ namespace codegen {
                 bool singleExpression = e.body.size() == 1
                                         && e.body[0]->kind == StmtKind::ExprStmt
                                         && e.body[0]->expr;
+                // The lambda's own return type is the expectation for its returns - a
+                // multi-statement body's `return` and the single expression below.
+                ast::TypePtr savedReturn = curReturnType;
+                curReturnType = returnType;
                 if (singleExpression && !unitReturn) {
-                    body = "return " + expr(*e.body[0]->expr, 0, returnType) + ";";
+                    // The single expression *is* the result: lower it as the `return` it
+                    // stands for, so a nested operation becomes a temporary here too
+                    // (impl_specs/linear-lowering.md).
+                    auto ret = std::make_shared<ast::Stmt>();
+                    ret->kind = StmtKind::Return;
+                    ret->pos = e.body[0]->pos;
+                    ret->returnValue = e.body[0]->expr;
+                    List<ast::StmtPtr> lambdaBody;
+                    lambdaBody.push_back(ret);
+                    Str saved = out;
+                    out.clear();
+                    emitStmts(linear::lowerExprs(linear::simplifyBody(linear::lowerBody(lambdaBody))), 1);
+                    body = out;
+                    out = saved;
                 } else {
                     Str saved = out;
                     out.clear();
@@ -1323,6 +1394,7 @@ namespace codegen {
                     body = out;
                     out = saved;
                 }
+                curReturnType = savedReturn;
 
                 nameKinds = savedKinds;
                 localTypes = savedTypes;
@@ -1346,7 +1418,13 @@ namespace codegen {
                     case ExprKind::NullLit:
                         return nullTo(expected);
                     case ExprKind::Name:
-                        if (e.text == "this") return "self";
+                        if (e.text == "this") {
+                            // The receiver is the *object* in the language and a raw
+                            // pointer in the emitted code when it is a value receiver
+                            // (`T* self`), so reading it reads through the pointer; a
+                            // handle receiver is its handle, as before.
+                            return selfKind == NameKind::Value ? Str("(*self)") : Str("self");
+                        }
                         if (localTypes.count(e.text) > 0) return e.text;
                         // A file-level static is emitted under its package's prefix; a bare
                         // name that is not a local is otherwise a reference to a top-level
@@ -1501,6 +1579,14 @@ namespace codegen {
                     const ast::Decl *target = findFunction(callee.text, (int) e.args.size());
                     List<Str> args;
                     for (int i = 0; i < (int) e.args.size(); i++) {
+                        // A receiver function called by name takes the receiver first,
+                        // and a value receiver is a raw pointer in the emitted code
+                        // (`T* self`), so that argument is the object's address.
+                        if (i == 0 && target && target->hasReceiver && target->receiverType
+                            && !isHandleType(target->receiverType.get())) {
+                            args.push_back(receiverArg(target->receiverType, *e.args[0]));
+                            continue;
+                        }
                         ast::TypePtr expectedArg =
                             (target && i < (int) target->params.size()) ? target->params[i].type
                                                                         : nullptr;
@@ -1567,7 +1653,7 @@ namespace codegen {
                         }
                         const NativeExt *ext = findNativeExt(callee.text, *callee.lhs);
                         if (ext) {
-                            Str all = receiverArg(ext->receiver, *callee.lhs);
+                            Str all = nativeReceiverArg(ext->receiver, *callee.lhs);
                             for (const Str &arg: args) all += ", " + arg;
                             return ext->symbol + "(" + all + ")";
                         }
@@ -1579,7 +1665,9 @@ namespace codegen {
 
                     // Unknown receiver type: keep the name-based precedence.
                     if (receiverFnNames.count(callee.text) > 0) {
-                        Str all = expr(*callee.lhs, 9);
+                        const Fn *byName = findReceiverFnByName(callee.text);
+                        Str all = byName ? receiverArg(byName->receiver, *callee.lhs)
+                                         : expr(*callee.lhs, 9);
                         for (const Str &arg: args) all += ", " + arg;
                         return qualify(functionPackage(callee.text), callee.text) + "(" + all + ")";
                     }

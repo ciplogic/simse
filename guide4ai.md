@@ -23,7 +23,7 @@ expressible in the language.
   output.
 - **Five differentials are byte-identical**: scanner, skeleton parser, parser,
   sema, codegen (hand-written vs transpiled Simse).
-- `simse_tests.exe`: 50 tests, all passing. Clean build green, including all the
+- `simse_tests.exe`: 51 tests, all passing. Clean build green, including all the
   differentials and `stage1_check`, run automatically by the build.
 - Ported components: `common`/`xmlutil`, scanner, skeleton parser,
   parser, sema, codegen, compiler driver.
@@ -139,8 +139,42 @@ expressible in the language.
   initialization. The boundaries are deliberate: an lvalue path stays a path (so a
   mutating call on it is not a copy), and `&&`/`||` stay untouched - their
   `ifTrue`/`ifFalse` shapes are written down in `impl_specs/linear-lowering.md`,
-  not implemented. Because the temporaries are untyped, the emitter emits `auto`
-  for them; giving them real types is the sema-inference TODO below.
+  not implemented. The temporaries were untyped at first; the step below gives them
+  real types.
+- **The semantic step: the lowered declarations get types (T45).**
+  `sema::inferTypes` (`cppsrc/sema/TypeInfer.{h,cpp,simse}`) runs as the last step of
+  the lowering - `inferTypes(lowerExprs(simplifyBody(lowerBody(body))), facts, body)`
+  - and fills in the type of every untyped `VarDecl` it can prove, walking the
+  statements in scope order (shadowing included) rather than relying on emission
+  order. It reads the emitter's own collected tables (declared types, enums,
+  functions/methods with receivers, native extensions, statics), which are threaded
+  to the emitter as a parameter because a data-class *field* would name another
+  package's type in the Simse ring. **Generics stay symbolic**: a type parameter in
+  scope is a fine type to spell (reification is still the C++ template), an explicit
+  instantiation substitutes its type arguments, and a member call binds the
+  extension's parameters from its receiver. What it cannot type stays `auto` -
+  the shapes it declines to model (lambda, `null`, `&x`/`*x`/`copy(x)`, and anything
+  derived from them) plus a few recorded gaps - see the T46 bullet for the current
+  count.
+- **A value receiver is a raw pointer (T47).** A receiver that is a *value* - a
+  data-class method, `fun f(this: Point, ...)`, `fun Str.firstByte()` - is emitted
+  `T* self` (not `T& self`): `self` is the language's own borrow form (`*T`), member
+  access is `self->field`, and a bare `this` reads through the pointer. A handle
+  receiver keeps its handle, which is the point: `this: &T` stays
+  `std::shared_ptr<T> self`, so a body can store `self` in a list and the refcount
+  survives; `this: *T` stays `T* self`. Call sites pass the receiver's address
+  (`simse_addressOf(x)`, which covers a place and a temporary - valid for the call),
+  i.e. the same rule a `*x` borrow follows. *Native* extensions keep the host
+  convention, so the RTL surface did not change.
+- **A value position is one operation deep (T46).** Every value position - an
+  operand, an argument, a jump's condition, a `return`'s value - now gets its own
+  `_sm_expr<n>` unless it is a literal/name/qualified name/lambda, so a jump reads
+  one name and `self.x + self.y` is three temporaries. Only a call **receiver**, an
+  **assignment target** and the operand of `&`/`*` keep an alias
+  (`a[i].append(x)` still appends to the element), and a **borrow of a temporary**
+  (`*f()`) stays inline because its pointer only lasts the call it is passed to.
+  The compiler's own output is now 18.2k lines with 5,157 temporaries and 931
+  `auto`s (711 of them bound borrows the inference does not yet type).
 
 ## 3. Build / test / run
 
@@ -259,11 +293,13 @@ explicit `cppsrc/compiler/Driver.simse` input.
   reverts to the host's default alignment.
 - `cppsrc/common/` — `readFile`/`filesInDir`, `xmlutil` (C++ + Simse).
 - `cppsrc/lex/`, `cppsrc/skelparser/`, `cppsrc/parser/`, `cppsrc/sema/`,
-  `cppsrc/linear/`, `cppsrc/codegen/`, `cppsrc/compiler/` — the compiler stages;
+  `cppsrc/linear/`, `cppsrc/codegen/`, `cppsrc/compiler/` - the compiler stages;
   each has a C++ implementation AND a `.simse` mirror. `linear` is the post-sema
   lowering of control flow to labels/gotos (`Linear.{h,cpp}`/`Linear.simse`), the
-  peephole trim of that form (`Simplify.*`) and the lowering of nested expressions
-  into `_sm_expr<n>` temporaries (`ExpressionLowering.*`) - all in
+  peephole trim of that form (`Simplify.*`), and the lowering of nested expressions
+  into `_sm_expr<n>` temporaries (`ExpressionLowering.*`); `sema` also carries the
+  lowering-time type inference that types those temporaries
+  (`TypeInfer.{h,cpp,simse}`). All of it is specified in
   `impl_specs/linear-lowering.md`.
 - `Compiler.{h,cpp}` — the shared transpile core; `cppsrc/codegen/TranspileMain.cpp`
   — the `simse_transpile` CLI, the C++ compiler driver (the Simse mirror of it
@@ -302,9 +338,12 @@ that must be byte-identical (the fixed point).
 
 Pipeline (per `impl_specs/transpilation.md`): discover sources -> scan -> parse
 (AST) -> resolve names/types -> reify generics -> lower control flow to
-labels/gotos -> simplify the linear form -> lower to C++ -> amalgamate. The
-emitters only know the linear statement forms (`Stmt.Label`/`Goto`/`IfTrue`/
-`IfFalse`/`Block`); structured `if`/`while`/`switch` never reach emission.
+labels/gotos -> simplify the linear form -> lower nested expressions to
+temporaries -> infer the types of the lowered declarations -> lower to
+C++ -> amalgamate. The emitters only know the linear statement forms
+(`Stmt.Label`/`Goto`/`IfTrue`/`IfFalse`/`Block`), expressions no deeper than one
+operation, and declarations that carry a type; structured `if`/`while`/`switch`
+never reach emission.
 
 Key design points:
 
@@ -467,14 +506,31 @@ Do these only when asked; roughly prioritized:
    lookups per line where the C++ baseline pays one - the last gap to the Bun
    reference (1.6x). A `getPtr`/`withValue`-style native (both backings) is the
    next library change; it is a library gap, not a language one.
-9. **Sema type inference for the lowered temporaries** (the T44 follow-up, the
-   user asked for it): the `_sm_expr<n>` locals are untyped, so the emitter emits
-   `auto` and every type it feeds a chained call (a receiver, `f().toString()`) is
-   guessed rather than known. Sema should annotate expression types before
-   emission - that is also the structural fix for the chained-call class of bug
-   that `guide4ai.md` section 10 records. The machinery to build on is the
-   emitter's `inferType`/`unifyType`/`memberCallReturn`/`findNativeExt`; the work
-   is to move or share it so a type exists before the emitter runs.
+9. **Type inference for the lowered body is in (T45/T46); three gaps and two next
+   steps remain.** `sema::inferTypes` types every untyped declaration it can prove,
+   and since T46 every value position is one operation deep, so a jump and a return
+   read one name. What is still untyped in the compiler's own output (931 `auto`s of
+   5,157 temporaries) is recorded in `impl_specs/linear-lowering.md`:
+   - **711 bound borrows.** `*x` of an lvalue is now its own temporary, and the
+     inference declines to spell it. The rule is a few lines (the operand's kind
+     decides: a value is `Pointer(T)`, a handle's pointee is `T`), and it needs the
+     same kind-aware handling the emitter's `Deref`/`Copy` lowering uses.
+   - **A call-aware lowering step** (the user's suggestion, now smaller than it
+     looked). A value receiver is a raw pointer (T47) and receivers keep the `Path`
+     slot, so the case that made this urgent - a path argument whose mutations must
+     reach the caller's object - is already handled: the emitter takes the address
+     (`simse_addressOf(x)` / `.get()` for a counted reference) and the lowering never
+     binds a receiver. What a callee's *signature* could still add is spelling for
+     arguments the lowering cannot type on its own (a `null` argument, whose type
+     has to come from the parameter) and knowing which parameters are pointers, so
+     that a `*T` parameter decides place-vs-value instead of the argument's shape.
+     Not blocking anything today.
+   - The three smaller gaps from T45 (a prelude struct method such as `Span.size()`,
+     a native extension called as a plain function, a call through a function-typed
+     local).
+   The larger follow-up is still the emitter *consuming* expression-level types
+   instead of guessing them itself (`inferType`/`memberCallReturn`/`findNativeExt`
+   would shrink to lookups).
 
 ## 10. Gotchas
 
@@ -508,3 +564,34 @@ Do these only when asked; roughly prioritized:
   back to `cmake-build-*/simse_transpile.exe`; `--simse <path>` with the CMake
   `simse.exe` is not the same CLI (it takes file arguments, not `--root`) and will
   fail the corpus.
+- **The Simse ring's nodes carry roles**, and a lookup is by role: a type read out
+  of a declaration (`xmlChild(decl, ReturnType)`) comes back rooted as
+  `ReturnType`, so putting it where a `Type` child belongs needs a re-root
+  (`semReRole`, the counterpart of the emitter's `renameRole`). Symptom when it is
+  missing: the pass annotates correctly and the emitter emits `auto` anyway, because
+  `xmlChild(stmt, AstNodeKind.Type)` does not see a `ReturnType`-rooted child.
+- **A data-class field cannot name another package's type** in the Simse ring: the
+  amalgamated file emits the packages in its own order, so the field's type may not
+  be declared yet (`'facts': unknown override specifier`). Program-level tables
+  passed between stages go as **parameters** (that is why the emitter threads
+  `SemFacts` through `emitFunctions`/`emitFunction`).
+- `Str.size()` is `size_type` (unsigned 64) in the RTL while the language spells
+  every `size` accessor `Int`, so typing it emits C4267 (`size_t` to `Int`)
+  warnings on the compiler's own build. Cosmetic, recorded in
+  `impl_specs/rtl-abi.md`; fixing it means changing `SmString::size_type`, which is
+  a deliberate `std::string`-shaped surface.
+- `stress/<case>/expected.cpp` is compared byte for byte but **`--update` never
+  rewrites it**: copy `stress/.work/<case>/out.cpp` over it by hand.
+- **A value receiver is `T* self`** (T47): method signatures, call sites
+  (`ns_f(simse_addressOf(x))`) and bodies (`self->field`, a bare `this` reading as
+  `(*self)`) all follow it, while `this: &T` stays `std::shared_ptr<T> self` and
+  `this: *T` stays `T* self`. The hand-written differential drivers
+  (`tests/*_simse_main.cpp`) call emitted receiver functions directly, so they pass
+  `&scanner` - and a *native* extension is the one call the emitter passes the
+  receiver expression to unchanged, because the host's C++ signature decides.
+- **A borrow of a temporary lasts only for its call.** `*f()` lowers to
+  `simse_addressOf(f())`, whose contract is exactly that
+  (`cppsrc/rtl/types.hpp`) - so it must stay inline in the expression it is passed
+  to. Hoisting it into a variable (which the expression lowering would otherwise do,
+  since a value position is one operation deep) leaves a pointer to a dead
+  temporary; `exprIsBindable` is the guard that keeps it where it is.

@@ -188,13 +188,92 @@ data class LinLowerer(
         return false
     }
 
+    // Whether an expression contains `&&` or `||` anywhere - including inside a call's
+    // arguments, where the *value* form applies and nothing here can decompose it.
+    fun containsShortCircuit(e: *AstXmlNode): Bool {
+        if (xmlKind(e) == AstNodeCategory.ExprBinary) {
+            val op: Str = xmlAttr(e, AstNodeAttributeKind.Op)
+            if (op == "&&" || op == "||") {
+                return true
+            }
+        }
+        val kids: List<AstXmlNode> = e.Children.toList()
+        var i: Int = 0
+        while (i < kids.size()) {
+            if (this.containsShortCircuit(*kids[i])) {
+                return true
+            }
+            i = i + 1
+        }
+        return false
+    }
+
+    // A condition that is nothing but boolean operators (`&&`, `||`, `!`) and leaves
+    // with no short-circuit inside them: the conditions this pass can decompose into
+    // jumps.
+    fun isDecomposable(e: *AstXmlNode): Bool {
+        if (xmlKind(e) == AstNodeCategory.ExprBinary) {
+            val op: Str = xmlAttr(e, AstNodeAttributeKind.Op)
+            if (op == "&&" || op == "||") {
+                return this.isDecomposable(*xmlChild(e, AstNodeKind.Lhs))
+                       && this.isDecomposable(*xmlChild(e, AstNodeKind.Rhs))
+            }
+        }
+        if (xmlKind(e) == AstNodeCategory.ExprUnary && xmlAttr(e, AstNodeAttributeKind.Op) == "!") {
+            return this.isDecomposable(*xmlChild(e, AstNodeKind.Operand))
+        }
+        return !this.containsShortCircuit(e)
+    }
+
+    // Lowers a boolean condition into conditional jumps, one per leaf, with `&&`/`||`
+    // evaluating short-circuit exactly as the `if`/`while` they came from
+    // (impl_specs/linear-lowering.md, "Short-circuit operators"). A leaf is tested with
+    // whichever of `IfTrue`/`IfFalse` matches its value, so no negation is spelled out
+    // here; `simplify`, which runs next, folds each leaf's jump pair into one
+    // conditional jump and drops the labels the chain no longer needs.
+    fun lowerCondition(cond: *AstXmlNode, trueTarget: Str, falseTarget: Str, line: Int, column: Int, out: *List<AstXmlNode>): Unit {
+        if (xmlKind(cond) == AstNodeCategory.ExprBinary) {
+            val op: Str = xmlAttr(cond, AstNodeAttributeKind.Op)
+            if (op == "&&" || op == "||") {
+                val mid: Str = this.freshLabel()
+                if (op == "&&") {
+                    // Both operands must hold: the first one that does not jumps
+                    // straight past the rest.
+                    this.lowerCondition(*xmlChild(cond, AstNodeKind.Lhs), mid, falseTarget, line, column, out)
+                    out.append(linLabel(mid, line, column))
+                    this.lowerCondition(*xmlChild(cond, AstNodeKind.Rhs), trueTarget, falseTarget, line, column, out)
+                } else {
+                    // The first operand that holds jumps straight to the target.
+                    this.lowerCondition(*xmlChild(cond, AstNodeKind.Lhs), trueTarget, mid, line, column, out)
+                    out.append(linLabel(mid, line, column))
+                    this.lowerCondition(*xmlChild(cond, AstNodeKind.Rhs), trueTarget, falseTarget, line, column, out)
+                }
+                return
+            }
+        }
+        if (xmlKind(cond) == AstNodeCategory.ExprUnary && xmlAttr(cond, AstNodeAttributeKind.Op) == "!") {
+            // `!x` is `x` with its outcomes swapped: the test itself is never negated
+            // here, `IfTrue`/`IfFalse` covers both polarities.
+            this.lowerCondition(*xmlChild(cond, AstNodeKind.Operand), falseTarget, trueTarget, line, column, out)
+            return
+        }
+        val leaf: AstXmlNode = linRole(cond, AstNodeKind.Cond)
+        out.append(linCondJump(AstNodeCategory.StmtIfTrue, *leaf, trueTarget, line, column))
+        out.append(linGoto(falseTarget, line, column))
+    }
+
     fun lowerIf(stmt: *AstXmlNode, breakTo: Str, continueTo: Str, out: *List<AstXmlNode>): Unit {
         val thenLabel: Str = this.freshLabel()
         val elseLabel: Str = this.freshLabel()
         val line: Int = xmlLine(stmt)
         val column: Int = xmlColumn(stmt)
-        out.append(linCondJump(AstNodeCategory.StmtIfTrue, *xmlChild(stmt, AstNodeKind.Cond), thenLabel, line, column))
-        out.append(linGoto(elseLabel, line, column))
+        val cond: AstXmlNode = xmlChild(stmt, AstNodeKind.Cond)
+        if (this.containsShortCircuit(*cond) && this.isDecomposable(*cond)) {
+            this.lowerCondition(*cond, thenLabel, elseLabel, line, column, out)
+        } else {
+            out.append(linCondJump(AstNodeCategory.StmtIfTrue, *cond, thenLabel, line, column))
+            out.append(linGoto(elseLabel, line, column))
+        }
         out.append(linLabel(thenLabel, line, column))
         var thenOut: List<AstXmlNode> = List<AstXmlNode>()
         this.lowerStmts(*xmlChildren(*xmlChild(stmt, AstNodeKind.Then), AstNodeKind.Stmt), breakTo, continueTo, *thenOut)
@@ -220,7 +299,16 @@ data class LinLowerer(
         var bodyOut: List<AstXmlNode> = List<AstXmlNode>()
         this.lowerStmts(*xmlChildren(*xmlChild(stmt, AstNodeKind.Body), AstNodeKind.Stmt), endLabel, condLabel, *bodyOut)
         out.append(linLabel(condLabel, line, column))
-        out.append(linCondJump(AstNodeCategory.StmtIfFalse, *xmlChild(stmt, AstNodeKind.Cond), endLabel, line, column))
+        val cond: AstXmlNode = xmlChild(stmt, AstNodeKind.Cond)
+        if (this.containsShortCircuit(*cond) && this.isDecomposable(*cond)) {
+            // The body label is where a holding operand lands; the fold in `simplify`
+            // removes it again when only one jump remains.
+            val bodyLabel: Str = this.freshLabel()
+            this.lowerCondition(*cond, bodyLabel, endLabel, line, column, out)
+            out.append(linLabel(bodyLabel, line, column))
+        } else {
+            out.append(linCondJump(AstNodeCategory.StmtIfFalse, *cond, endLabel, line, column))
+        }
         this.appendBody(*bodyOut, line, column, out)
         out.append(linGoto(condLabel, line, column))
         out.append(linLabel(endLabel, line, column))

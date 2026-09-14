@@ -56,9 +56,9 @@ namespace {
         std::string content;
         if (!readAllBytes(path, content)) return false;
         ns3_Scanner scanner(ns3_getTokenRules(), 0, 1, 1, Str());
-        ns3_setSource(scanner, content);
+        ns3_setSource(&scanner, content);
         while (true) {
-            Res<ns3_Token> result = ns3_nextToken(scanner);
+            Res<ns3_Token> result = ns3_nextToken(&scanner);
             if (!result.isOk()) return false;
             if (result.Value.kind == ns3_TokenKind::Eof) return true;
             simse_list_append(out, result.Value);

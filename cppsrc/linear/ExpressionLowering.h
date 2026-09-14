@@ -22,6 +22,16 @@
 // the peephole pass never sees the temporaries and nothing can fold them back.
 // Temporaries are named from a per-body counter (`_sm_expr1`, ...), like the labels.
 //
+// A *value* position - an operand, a call argument, a conditional jump's condition,
+// a `return` value - never holds more than one operation: anything deeper is its own
+// temporary, so a jump and a `return` end up reading one name:
+//
+//   if (i < 5) { ... }        ->  Bool _sm_expr1 = i < 5;
+//                                 ifTrue (_sm_expr1) -> ...
+//
+//   return i < 2;             ->  Bool _sm_expr1 = i < 2;
+//                                 return _sm_expr1;
+//
 // Two boundaries are deliberate:
 //
 //   - an **lvalue path** (a name, or a member/index/deref chain rooted at one) is

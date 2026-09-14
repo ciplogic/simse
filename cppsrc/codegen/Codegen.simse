@@ -904,7 +904,7 @@ data class Emitter(
         if (kind == AstNodeCategory.TypeReference || kind == AstNodeCategory.TypePointer) {
             return mapped + " self"
         }
-        return mapped + "& self"
+        return mapped + "* self"
     }
 
     fun emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit {
@@ -1551,8 +1551,36 @@ data class Emitter(
         return renamed
     }
 
-    // The receiver argument for a lowered call, dereferencing a handle.
+    // The receiver argument for a lowered *Simse* call: a value receiver is a raw
+    // pointer in the emitted code, so the argument is the receiver object's address.
+    // `simse_addressOf` covers both a place (`&x`) and a temporary, whose pointer is
+    // valid for the call it is passed to (cppsrc/rtl/types.hpp); a counted reference
+    // is unwrapped with `.get()`, and a raw pointer is already that address. A handle
+    // receiver keeps its form: a counted reference stays a counted reference, so a
+    // method that takes `this: &T` can store `self` and keep its refcount.
     fun receiverArg(pattern: *AstXmlNode, recv: *AstXmlNode): Str {
+        if (this.isHandleType(pattern)) {
+            return this.expr(recv, 9, *xmlEmptyNode())
+        }
+        val recvType: AstXmlNode = this.inferType(recv)
+        if (!xmlIsEmpty(*recvType)) {
+            val kind: AstNodeCategory = xmlKind(*recvType)
+            if (kind == AstNodeCategory.TypeReference
+                || (kind == AstNodeCategory.TypeGeneric && xmlAttr(*recvType, AstNodeAttributeKind.Name) == "PList")) {
+                return "(" + this.expr(recv, 9, *xmlEmptyNode()) + ").get()"
+            }
+            if (kind == AstNodeCategory.TypePointer) {
+                return this.expr(recv, 9, *xmlEmptyNode())
+            }
+        }
+        return "simse_addressOf(" + this.expr(recv, 9, *xmlEmptyNode()) + ")"
+    }
+
+    // The receiver argument for a lowered *native* call: the host's own signature
+    // decides whether it wants a value, a reference or a pointer, so the receiver
+    // expression is passed as it is - dereferenced through a handle, because the
+    // RTL's value receivers are written `T&` there.
+    fun nativeReceiverArg(pattern: *AstXmlNode, recv: *AstXmlNode): Str {
         if (this.isHandleType(pattern)) {
             return this.expr(recv, 9, *xmlEmptyNode())
         }
@@ -1561,6 +1589,24 @@ data class Emitter(
             return "(*" + this.expr(recv, 9, *xmlEmptyNode()) + ")"
         }
         return this.expr(recv, 9, *xmlEmptyNode())
+    }
+
+    // Index into `functions` of the first Simse-declared receiver function with this
+    // name, or -1: used when the receiver's own type could not be inferred but the
+    // callee is known.
+    fun findReceiverFnByName(name: Str): Int {
+        var i: Int = 0
+        while (i < this.functions.size()) {
+            val fn: *CgFn = *this.functions[i]
+            i = i + 1
+            if (xmlAttr(*fn.decl, AstNodeAttributeKind.IsNative) == "true" || xmlIsEmpty(*fn.receiver)) {
+                continue
+            }
+            if (xmlAttr(*fn.decl, AstNodeAttributeKind.Name) == name) {
+                return i - 1
+            }
+        }
+        return -1
     }
 
     // Index into `functions` of a Simse extension matching the receiver, or -1.
@@ -1610,7 +1656,13 @@ data class Emitter(
     fun memberAccess(base: *AstXmlNode, name: Str): Str {
         var arrow: Bool = false
         val baseType: AstXmlNode = this.inferType(base)
-        if (!xmlIsEmpty(*baseType)) {
+        if (xmlKind(base) == AstNodeCategory.ExprName
+            && xmlAttr(base, AstNodeAttributeKind.Name) == "this" && this.selfKind == NameKind.Value) {
+            // A value receiver is a raw pointer in the emitted code (`T* self`), so its
+            // members are reached with `->` whatever the language type of the receiver
+            // is.
+            arrow = true
+        } else if (!xmlIsEmpty(*baseType)) {
             arrow = this.isHandleType(*baseType)
         } else if (xmlKind(base) == AstNodeCategory.ExprName) {
             val baseName: Str = xmlAttr(base, AstNodeAttributeKind.Name)
@@ -1632,6 +1684,14 @@ data class Emitter(
         var op: Str = "."
         if (arrow) {
             op = "->"
+        }
+        // A value receiver's own member access reads through its pointer
+        // (`self->field`). The bare name `this` reads as the object (`(*self)`),
+        // which is what a *value* use of the receiver needs, so this one spot spells
+        // the pointer instead.
+        if (xmlKind(base) == AstNodeCategory.ExprName && xmlAttr(base, AstNodeAttributeKind.Name) == "this"
+            && this.selfKind == NameKind.Value) {
+            return "self->" + field
         }
         return this.expr(base, 9, *xmlEmptyNode()) + op + field
     }
@@ -1778,8 +1838,23 @@ data class Emitter(
             && !xmlIsEmpty(*xmlChild(*bodyStmts[0], AstNodeKind.Expr))) {
             singleExpression = true
         }
+        // The lambda's own return type is the expectation for its returns - a
+        // multi-statement body's `return` and the single expression below.
+        val savedReturnType: AstXmlNode = this.curReturnType
+        this.curReturnType = copy(returnType)
         if (singleExpression && !unitReturn) {
-            body = "return " + this.expr(*xmlChild(*bodyStmts[0], AstNodeKind.Expr), 0, *returnType) + ";"
+            // The single expression *is* the result: lower it as the `return` it stands
+            // for, so a nested operation becomes a temporary here too
+            // (impl_specs/linear-lowering.md).
+            var ret: AstXmlNode = linStmt(AstNodeCategory.StmtReturn, xmlLine(e), xmlColumn(e))
+            xmlAddChild(*ret, linRole(*xmlChild(*bodyStmts[0], AstNodeKind.Expr), AstNodeKind.Value))
+            var lambdaBody: List<AstXmlNode> = List<AstXmlNode>()
+            lambdaBody.append(ret)
+            val savedOut: Str = this.out
+            this.out = ""
+            this.emitStmts(*linLowerExprs(linSimplifyBody(linLowerBody(lambdaBody))), 1)
+            body = this.out
+            this.out = savedOut
         } else {
             val savedOut: Str = this.out
             this.out = ""
@@ -1787,6 +1862,7 @@ data class Emitter(
             body = this.out
             this.out = savedOut
         }
+        this.curReturnType = savedReturnType
 
         this.nameKinds = savedKinds
         this.localTypes = savedTypes
@@ -1815,6 +1891,12 @@ data class Emitter(
         if (kind == AstNodeCategory.ExprName) {
             val name: Str = xmlAttr(e, AstNodeAttributeKind.Name)
             if (name == "this") {
+                // The receiver is the *object* in the language and a raw pointer in the
+                // emitted code when it is a value receiver (`T* self`), so reading it
+                // reads through the pointer; a handle receiver is its handle.
+                if (this.selfKind == NameKind.Value) {
+                    return "(*self)"
+                }
                 return "self"
             }
             if (this.localTypes.has(name)) {
@@ -2015,13 +2097,23 @@ data class Emitter(
             val target: AstXmlNode = this.findFunction(name, argNodes.size())
             var args: List<Str> = List<Str>()
             val targetParams: List<AstXmlNode> = xmlChildren(*target, AstNodeKind.Param)
+            val targetReceiver: AstXmlNode = xmlChild(*target, AstNodeKind.Receiver)
             var i: Int = 0
             while (i < argNodes.size()) {
                 var expectedArg: AstXmlNode = xmlEmptyNode()
                 if (!xmlIsEmpty(*target) && i < targetParams.size()) {
                     expectedArg = xmlChild(*targetParams[i], AstNodeKind.Type)
                 }
-                args.append(this.expr(*argNodes[i], 0, *expectedArg))
+                // A receiver function called by name takes the receiver first, and a
+                // value receiver is a raw pointer in the emitted code (`T* self`), so
+                // that argument is the object's address.
+                if (i == 0 && !xmlIsEmpty(*targetReceiver)
+                    && xmlAttr(*target, AstNodeAttributeKind.HasReceiver) == "true"
+                    && !this.isHandleType(*targetReceiver)) {
+                    args.append(this.receiverArg(*targetReceiver, *argNodes[0]))
+                } else {
+                    args.append(this.expr(*argNodes[i], 0, *expectedArg))
+                }
                 i = i + 1
             }
             val nativeOpt: Opt<Str> = this.nativeSymbols.get(name)
@@ -2093,7 +2185,7 @@ data class Emitter(
                 if (extIndex >= 0) {
                     val extensions: List<CgNativeExt> = this.nativeExtensions.get(calleeText).value()
                     val ext: *CgNativeExt = *extensions[extIndex]
-                    var all: Str = this.receiverArg(*ext.receiver, *receiverExpr)
+                    var all: Str = this.nativeReceiverArg(*ext.receiver, *receiverExpr)
                     var a: Int = 0
                     while (a < args.size()) {
                         all = all + ", " + args[a]
@@ -2105,7 +2197,14 @@ data class Emitter(
             }
 
             if (this.receiverFnNames.has(calleeText)) {
-                var all: Str = this.expr(*receiverExpr, 9, *xmlEmptyNode())
+                val byName: Int = this.findReceiverFnByName(calleeText)
+                var all: Str = ""
+                if (byName >= 0) {
+                    val caller: *CgFn = *this.functions[byName]
+                    all = this.receiverArg(*caller.receiver, *receiverExpr)
+                } else {
+                    all = this.expr(*receiverExpr, 9, *xmlEmptyNode())
+                }
                 var a: Int = 0
                 while (a < args.size()) {
                     all = all + ", " + args[a]

@@ -898,6 +898,103 @@ numbers shifted with the parser/scanner edits).
   sources too), `bun tools/stress.js` **24/24** with the self-hosted compiler and
   **24/24** with the C++ ring.
 
+- **The lowered declarations get real types from a semantic step (T45).** The pass
+  above bound nested expressions to `_sm_expr<n>` locals and left them *untyped*, so
+  the emitter emitted `auto` for them and guessed the type whenever it needed one
+  (the receiver of a chained call, `Res<T>.value`, a native extension's return).
+  `sema::inferTypes` (`cppsrc/sema/TypeInfer.{h,cpp}`, `semInferTypes` in
+  `TypeInfer.simse`) now runs as the last step of the lowering
+  (`inferTypes(lowerExprs(simplifyBody(lowerBody(body))), facts, body)`) and fills
+  in the type of every untyped `VarDecl` it can prove, walking the statements in
+  scope order (shadowing included) instead of relying on emission order.
+  The program-level facts it reads - declared types, enum names, functions and
+  methods with their receiver patterns, native extensions, file-level statics - are
+  the emitter's own collected tables, threaded to the emitter as a parameter rather
+  than stored in a field: in the Simse ring a data-class *field* would have to name
+  another package's type, and the amalgamated file emits the packages in its own
+  order, so the first version failed to compile with `'facts': unknown override
+  specifier`. **Generics stay symbolic**: a type parameter in scope is a fine type
+  to spell (the emitted C++ is a template, so reification is still the C++
+  compiler's job), an explicit instantiation substitutes its type arguments into the
+  call's result, and a member call binds the extension's parameters from its
+  receiver (`Box<Int>.get()` with `get(): T` is `Int`). A type the emitter cannot
+  spell in that body - a parameter out of scope, an unknown name - is *not* written:
+  the declaration keeps its `auto`. Four initializer shapes are deliberately left
+  alone (a lambda, `null`, `&x`/`*x`/`copy(x)` - they change representation in ways
+  the pass does not model), and so is anything whose operand was one of them; in the
+  compiler's own 12.4k-line output that leaves **42** `auto`s out of ~1,400 (1,402
+  before the pass), all of them those shapes plus three small gaps recorded in
+  `impl_specs/linear-lowering.md` (a prelude struct method like `Span.size()`, a
+  native extension called as a plain function, a call through a function-typed
+  local). Two costs are recorded too: the type helpers the emitter shared with the
+  inference moved to `sema/TypeInfer.h` (one list of RTL type names, now the union
+  of what both rings needed - they had drifted apart), and the Simse ring needs its
+  nodes **re-rooted** (`semReRole`) because a type read out of a declaration carries
+  the role it was read from (`ReturnType`) and the emitter looks children up by
+  role; without it the pass annotated and the emitter saw nothing. Verified: both
+  configurations green (five differentials byte-identical, T23's two-step bootstrap
+  byte-identical in both), `simse_tests.exe` **51/51** in both (the new file is one
+  more source test), `bun tools/stress.js` **24/24** with the self-hosted compiler
+  and **24/24** with the C++ ring, and the 1BRC report unchanged. Two goldens moved
+  again, deliberately: `tests/golden/sema_switch_label.simse.cpp.expected` and
+  `stress/hello/expected.cpp` (hand-copied from `stress/.work/hello/out.cpp`, as
+  `--update` never rewrites an `expected.cpp`).
+
+- **A value position is one operation deep (T46).** After T45 the pass still let a
+  *path* sit in a value position (`Int _sm_expr1 = self.x + self.y;`), which left two
+  operations inside one temporary. The rule now is that *every* value position - an
+  operand, a call argument, a conditional jump's condition, a `return`'s value -
+  binds anything that is not a literal/name/qualified name/lambda:
+  `Int _sm_expr1 = self.x; Int _sm_expr2 = self.y; Int _sm_expr3 = _sm_expr1 +
+  _sm_expr2;`, `Bool _sm_expr1 = i < 5; ifTrue (_sm_expr1)`, and
+  `Int _sm_expr1 = p.x; Int _sm_expr2 = _sm_expr1 + 1; return _sm_expr2;`. Aliases
+  survive only in the three positions where they are load-bearing - a call
+  **receiver** (`a[i].append(x)` stays a call on `a[i]` with the index flattened),
+  an **assignment target**, and the operand of `&`/`*` - which the pass calls
+  `Path`. One case is excluded from binding because it is not a copy: a **borrow of
+  a temporary**. `*f()` is `simse_addressOf(f())`, and the RTL's contract is that
+  such a pointer lasts for the call it is passed to (`cppsrc/rtl/types.hpp`), so
+  hoisting it into a variable would outlive the pointee; a borrow whose operand is
+  an lvalue (`*p`, `*self.field`, `*(list[i])`) is a place and *is* bound. Two more
+  things the change had to get right: the Simse ring's `exprIsSimple` now treats the
+  *absent* sentinel as simple (a bare `return;` has an empty value node, and the new
+  rule promptly bound it, which the emitter printed as `/*unsupported*/`), and the
+  ring asymmetry is explicit in the spec (`impl_specs/linear-lowering.md`). The
+  output grows, which is the point: `cppsrc/simse_out.cpp` went from 12.4k lines and
+  1,402 `auto`s at T44 to **18.2k lines, 5,157 temporaries and 931 `auto`s**, of
+  which 711 are borrows whose type the inference still declines to spell (that is
+  the next increment, and it is a `Pointer`/pointee rule away). Verified: both
+  configurations green (the five differentials and T23's two-step bootstrap
+  byte-identical), `simse_tests.exe` **51/51** in both, `bun tools/stress.js`
+  **24/24** with the self-hosted compiler and **24/24** with the C++ ring, and the
+  1BRC report byte-identical after rebuilding it with the new compiler.
+
+- **A value receiver is a raw pointer in the emitted code (T47).** A receiver that is
+  a *value* - a data-class method (`fun advance(...)`), `fun f(this: Point, ...)`,
+  `fun Str.firstByte()` - is now emitted `T* self` instead of `T& self`, which makes
+  `self` the language's own borrow form (`*T`) and one thing everywhere:
+  `self->field`, a bare `this` reading as the object (`(*self)`), and a call site
+  passing the receiver's **address** (`ns_f(simse_addressOf(x))` - the one form that
+  covers a place and a temporary alike, the latter valid for the call per
+  `simse_addressOf`'s contract). Since a value position is one operation deep (T46),
+  that address is also the rule the *expression* lowering already speaks for a
+  borrow, so the receiver stops being a special case there. What the user asked to
+  keep, and it is kept: a receiver declared as a handle stays a handle - `this: &T`
+  is still `std::shared_ptr<T> self`, so a body can store `self` in a list and the
+  refcount survives; `this: *T` is still `T* self` (where `this` *is* the pointer, so
+  `*this` is the pointee and such bodies do not change). *Native* extensions remain
+  the host's business (their `T&`-taking helpers in the RTL did not change): the
+  emitter passes the receiver expression for them exactly as before
+  (`nativeReceiverArg`), which is why this landed without touching the runtime
+  surface. Two extra pieces: the hand-written differential drivers
+  (`tests/*_simse_main.cpp` call emitted receiver functions directly) now pass
+  `&scanner`, and a receiver whose *type* could not be inferred is resolved by name
+  (`findReceiverFnByName`) so it still gets the address form. Verified: both
+  configurations green (five differentials byte-identical, T23's two-step bootstrap
+  byte-identical), `simse_tests.exe` **51/51** in both, `bun tools/stress.js`
+  **24/24** with the self-hosted compiler and **24/24** with the C++ ring, and the
+  1BRC rebuilt with the new compiler reports byte-identically (1144 ms).
+
 ### Note: the shape of a lookup like this
 
 Worth recording because the first attempt at T39 got it wrong in four ways the

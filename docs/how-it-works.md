@@ -26,6 +26,12 @@ happens in between.
    [ simplify ]     the linear form, trimmed
         |
         v
+   [ expressions ]  nested expressions -> simple operands + `_sm_expr<n>` locals
+        |
+        v
+   [ infer ]        a type for every declaration the emitter would have to guess
+        |
+        v
    [ codegen ]      C++ for every declaration, plus a source map
         |
         v

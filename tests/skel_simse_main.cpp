@@ -76,13 +76,13 @@ int main(int argc, char **argv) {
         }
 
         ns2_Scanner scanner(ns2_getTokenRules(), 0, 1, 1, Str());
-        ns2_setSource(scanner, content);
+        ns2_setSource(&scanner, content);
 
         List<ns2_Token> tokens;
         std::string error;
         bool ok = true;
         while (true) {
-            Res<ns2_Token> result = ns2_nextToken(scanner);
+            Res<ns2_Token> result = ns2_nextToken(&scanner);
             if (!result.isOk()) {
                 ok = false;
                 error = simse_toStdString(result.Error);

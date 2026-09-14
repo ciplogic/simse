@@ -54,10 +54,21 @@ namespace linear {
         }
 
         // Where an expression sits, which decides how much of it survives:
-        // `Root` is the statement's own expression, `Value` is an operand, and
-        // `Path` is a position that must stay a place (an assignment target, the
-        // operand of `&`/`*`).
+        // `Root` is the statement's own expression (a declaration's initializer, an
+        // assignment's value), `Value` is a position whose *value* is read, and
+        // `Path` is a position that must stay an alias (a call receiver, an
+        // assignment target, the operand of `&`/`*`).
         enum class Slot { Root, Value, Path };
+
+        // Whether binding this expression to a temporary is *safe*. Everything is,
+        // except a borrow whose operand is not an lvalue: `*f()` names a temporary,
+        // and `simse_addressOf`'s contract is that the pointer lasts for the call it
+        // is passed to (cppsrc/rtl/types.hpp) - hoisting it into a variable would
+        // outlive it. Such a borrow stays inline.
+        bool isBindable(const ExprPtr &e) {
+            if (e->kind != ExprKind::Deref) return true;
+            return e->lhs && isPlace(e->lhs);
+        }
 
         class Flattener {
         public:
@@ -172,7 +183,12 @@ namespace linear {
                 if (isSimple(e) || isShortCircuit(e)) return e;
                 const ExprPtr built = rebuild(e);
                 if (slot != Slot::Value) return built;
-                if (isSimple(built) || isPlace(built)) return built;
+                // A *value* position is one operation deep: `self.x` is a member
+                // access like any other, so it becomes its own temporary and
+                // `self.x + self.y` is three temporaries. Only the positions that
+                // must stay aliases - a call receiver, an assignment target, the
+                // operand of `&`/`*` - keep a path unbound (`Slot::Path` below).
+                if (isSimple(built) || !isBindable(built)) return built;
                 return bind(built);
             }
 
@@ -213,8 +229,12 @@ namespace linear {
                     }
                     case StmtKind::IfTrue:
                     case StmtKind::IfFalse: {
+                        // The condition is a *value* position like any operand: a
+                        // comparison or a call that is not a single name becomes its
+                        // own temporary, so a jump is the only thing the statement
+                        // does (`ifTrue(cond)` stays the last expression).
                         temps.clear();
-                        const ExprPtr cond = flat(stmt->cond, Slot::Root);
+                        const ExprPtr cond = flat(stmt->cond, Slot::Value);
                         auto fresh = std::make_shared<Stmt>(*stmt);
                         fresh->cond = cond;
                         out.push_back(withTemps(fresh));
@@ -229,9 +249,11 @@ namespace linear {
                         return;
                     }
                     case StmtKind::Return: {
+                        // Same for the returned value: `return i < 2;` is a temporary
+                        // and then a `return` of one name.
                         temps.clear();
                         auto fresh = std::make_shared<Stmt>(*stmt);
-                        fresh->returnValue = flat(stmt->returnValue, Slot::Root);
+                        fresh->returnValue = flat(stmt->returnValue, Slot::Value);
                         out.push_back(withTemps(fresh));
                         return;
                     }

@@ -30,9 +30,15 @@
 package linear
 
 // A literal, a name, a qualified name (`Res<T>`), or a lambda. A lambda's own body
-// is a separate body: the same passes lower it when it is emitted.
+// is a separate body: the same passes lower it when it is emitted. The schema's
+// *absent* sentinel (an empty node, `kind` `None`) counts as simple: it is where a
+// child that does not exist sits - a bare `return;` has no value - and treating it
+// as an expression is how a missing child would end up bound to a temporary.
 fun exprIsSimple(e: *AstXmlNode): Bool {
     val kind: AstNodeCategory = xmlKind(e)
+    if (kind == AstNodeCategory.None) {
+        return true
+    }
     if (kind == AstNodeCategory.ExprIntLit || kind == AstNodeCategory.ExprFloatLit
         || kind == AstNodeCategory.ExprStrLit || kind == AstNodeCategory.ExprCharLit
         || kind == AstNodeCategory.ExprBoolLit || kind == AstNodeCategory.ExprNullLit
@@ -56,6 +62,18 @@ fun exprIsPlace(e: *AstXmlNode): Bool {
         return exprIsPlace(*xmlChild(e, AstNodeKind.Receiver))
     }
     return false
+}
+
+// Whether binding this expression to a temporary is *safe*. Everything is, except a
+// borrow whose operand is not an lvalue: `*f()` names a temporary, and
+// `simse_addressOf`'s contract is that the pointer lasts for the call it is passed
+// to (cppsrc/rtl/types.hpp) - hoisting it into a variable would outlive it. Such a
+// borrow stays inline.
+fun exprIsBindable(e: *AstXmlNode): Bool {
+    if (xmlKind(e) != AstNodeCategory.ExprDeref) {
+        return true
+    }
+    return exprIsPlace(*xmlChild(e, AstNodeKind.Operand))
 }
 
 // `&&`, `||` (and a future `?:`): operands that may not even be evaluated.
@@ -99,9 +117,10 @@ fun exprReplaceRole(like: *AstXmlNode, role: AstNodeKind, replacements: *List<As
     return exprLike(like, *kids)
 }
 
-// Where an expression sits. `Root` is the statement's own expression, `Value` is an
-// operand, and `Path` is a position that must stay a place (an assignment target, the
-// operand of `&`/`*`).
+// Where an expression sits. `Root` is the statement's own expression (a declaration's
+// initializer, an assignment's value), `Value` is a position whose *value* is read,
+// and `Path` is a position that must stay an alias (a call receiver, an assignment
+// target, the operand of `&`/`*`).
 enum ExprSlot {
     Root,
     Value,
@@ -216,7 +235,11 @@ data class ExprFlattener(
         if (slot != ExprSlot.Value) {
             return built
         }
-        if (exprIsSimple(*built) || exprIsPlace(*built)) {
+        // A *value* position is one operation deep: `self.x` is a member access like
+        // any other, so it becomes its own temporary and `self.x + self.y` is three
+        // temporaries. Only the positions that must stay aliases - a call receiver,
+        // an assignment target, the operand of `&`/`*` - keep a path unbound.
+        if (exprIsSimple(*built) || !exprIsBindable(*built)) {
             return built
         }
         return this.bind(*built, temps)
@@ -264,8 +287,11 @@ data class ExprFlattener(
             return
         }
         if (kind == AstNodeCategory.StmtIfTrue || kind == AstNodeCategory.StmtIfFalse) {
+            // The condition is a *value* position like any operand: a comparison or a
+            // call that is not a single name becomes its own temporary, so a jump is
+            // the only thing the statement does.
             var cond: List<AstXmlNode> = List<AstXmlNode>()
-            cond.append(this.flat(*xmlChild(stmt, AstNodeKind.Cond), ExprSlot.Root, *temps))
+            cond.append(this.flat(*xmlChild(stmt, AstNodeKind.Cond), ExprSlot.Value, *temps))
             out.append(this.withTemps(exprReplaceRole(stmt, AstNodeKind.Cond, *cond), *temps))
             return
         }
@@ -279,8 +305,10 @@ data class ExprFlattener(
             return
         }
         if (kind == AstNodeCategory.StmtReturn) {
+            // Same for the returned value: `return i < 2;` is a temporary and then a
+            // `return` of one name.
             var value: List<AstXmlNode> = List<AstXmlNode>()
-            value.append(this.flat(*xmlChild(stmt, AstNodeKind.Value), ExprSlot.Root, *temps))
+            value.append(this.flat(*xmlChild(stmt, AstNodeKind.Value), ExprSlot.Value, *temps))
             out.append(this.withTemps(exprReplaceRole(stmt, AstNodeKind.Value, *value), *temps))
             return
         }

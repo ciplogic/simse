@@ -276,17 +276,13 @@ namespace sema {
 
             // A declaration is annotated only when its initializer is an expression
             // whose *value* the C++ type of the declaration can name. A lambda needs
-            // its expected callable type, `null` has no type of its own, and
-            // `&x`/`*x`/`copy(x)` change representation (a shared handle, a raw
-            // pointer, a copy) in ways this pass does not model: all of them keep the
-            // emitter's `auto`, which is what they had before this pass existed.
+            // its expected callable type and `null` has no type of its own; everything
+            // else - including `&x`, `*x` and `copy(x)` - is typed below, so the
+            // emitter never has to fall back to `auto` for it.
             static bool declarable(const ast::Expr &init) {
                 switch (init.kind) {
                     case ExprKind::Lambda:
                     case ExprKind::NullLit:
-                    case ExprKind::Ref:
-                    case ExprKind::Deref:
-                    case ExprKind::Copy:
                         return false;
                     default:
                         return true;
@@ -447,10 +443,31 @@ namespace sema {
                         return base->typeArgs[0];
                     }
                     case ExprKind::Ref:
+                        // `&x` boxes a copy for the call (`std::make_shared<T>(x)`),
+                        // so the C++ type is a counted reference to whatever `x` is.
                         return handle(TypeKind::Reference, e.lhs ? infer(*e.lhs) : nullptr);
-                    case ExprKind::Deref:
-                        return handle(TypeKind::Pointer, e.lhs ? infer(*e.lhs) : nullptr);
-                    case ExprKind::Copy:
+                    case ExprKind::Deref: {
+                        // `*x` is the *address* of what `x` denotes: of a value's own
+                        // storage (`&x`), of a counted reference's pointee (`x.get()`),
+                        // or the pointer itself when `x` already is one - in which case
+                        // the emitter reads through it, so the type is the pointee.
+                        if (!e.lhs) return nullptr;
+                        ast::TypePtr operand = infer(*e.lhs);
+                        if (!operand) return nullptr;
+                        if (operand->kind == TypeKind::Pointer) return operand->inner;
+                        if (operand->kind == TypeKind::Reference) {
+                            return handle(TypeKind::Pointer, operand->inner);
+                        }
+                        return handle(TypeKind::Pointer, operand);
+                    }
+                    case ExprKind::Copy: {
+                        // `copy(x)` is the *value*: a plain read of a value, or the
+                        // pointee of a handle (`*(x)`).
+                        if (!e.lhs) return nullptr;
+                        ast::TypePtr operand = infer(*e.lhs);
+                        const ast::TypeExpr *value = operand ? pointee(operand) : nullptr;
+                        return value ? std::make_shared<ast::TypeExpr>(*value) : nullptr;
+                    }
                     case ExprKind::Unary:
                         return e.lhs ? infer(*e.lhs) : nullptr;
                     case ExprKind::Binary:
