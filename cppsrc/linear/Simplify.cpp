@@ -33,9 +33,15 @@ namespace linear {
             return stmt;
         }
 
+        // A label belongs to the sequence it sits in, but a jump to it may sit in
+        // any scope inside that sequence: the expression lowering wraps a jump in
+        // the block that carries its temporaries, and `break`/`continue` jump out of
+        // the body they are written in. The scan therefore looks through blocks.
         bool jumpsTo(const List<StmtPtr> &stmts, const Str &name) {
             for (const StmtPtr &stmt: stmts) {
-                if (stmt && (isGoto(stmt) || isCondJump(stmt)) && stmt->name == name) return true;
+                if (!stmt) continue;
+                if ((isGoto(stmt) || isCondJump(stmt)) && stmt->name == name) return true;
+                if (stmt->kind == StmtKind::Block && jumpsTo(stmt->body, name)) return true;
             }
             return false;
         }
@@ -83,10 +89,175 @@ namespace linear {
             }
             return out;
         }
+
+        // ---- block flattening ------------------------------------------
+
+        // A region of the linear form is a statement sequence; the blocks left in
+        // it exist only where a declaration needs a C++ scope, which is why this
+        // pass folds every other block into its parent. A block *is* needed when
+        // splicing it would move one of its declarations across a jump: C++
+        // rejects a jump that skips the initialization of a variable in scope at
+        // the label ([stmt.dcl]/3, MSVC C2362), and the linear form is full of
+        // jumps.
+
+        // Whether a jump to `jumpName` taken at index `at` would skip the
+        // initialization of a declaration the splice brings into the parent's scope
+        // and land past it - the one thing C++ rejects about the splice.
+        bool jumpCrosses(const Str &jumpName, int at, const List<int> &decls,
+                         const List<Str> &labelNames, const List<int> &labelAt) {
+            for (int l = 0; l < (int) labelNames.size(); l++) {
+                if (labelNames[l] != jumpName) continue;
+                for (int d: decls) {
+                    if (at < d && d <= labelAt[l]) return true;
+                }
+            }
+            return false;
+        }
+
+        // Every jump inside `stmt` (each of them running after everything before the
+        // top-level statement it sits in) tested against the spliced declarations.
+        bool stmtCrosses(const StmtPtr &stmt, int at, const List<int> &decls,
+                         const List<Str> &labelNames, const List<int> &labelAt) {
+            if (!stmt) return false;
+            if (isGoto(stmt) || isCondJump(stmt)) {
+                return jumpCrosses(stmt->name, at, decls, labelNames, labelAt);
+            }
+            if (stmt->kind != StmtKind::Block) return false;
+            for (const StmtPtr &inner: stmt->body) {
+                if (stmtCrosses(inner, at, decls, labelNames, labelAt)) return true;
+            }
+            return false;
+        }
+
+        // Whether the block at `i` can be spliced into `stmts`: after the splice the
+        // block's own declarations are in the parent's scope, so the splice is
+        // legal exactly when no jump `J` and label `L` satisfy
+        // `pos (J) < pos (D) <= pos (L)` for a declaration `D` it brings up.
+        bool spliceIsSafe(const List<StmtPtr> &stmts, int i) {
+            const StmtPtr &block = stmts[i];
+            const int len = (int) block->body.size();
+            if (len == 0) return true;
+
+            List<int> decls;
+            for (int k = 0; k < len; k++) {
+                const StmtPtr &inner = block->body[k];
+                if (inner && inner->kind == StmtKind::VarDecl) decls.push_back(i + k);
+            }
+            if (decls.empty()) return true;
+
+            // Where a statement lands once the block's body takes its place.
+            auto mergedIndex = [&](int p) { return p < i ? p : p + len - 1; };
+
+            // Every label the sequence has at this level after the splice.
+            List<Str> labelNames;
+            List<int> labelAt;
+            for (int p = 0; p < (int) stmts.size(); p++) {
+                if (p == i) continue;
+                if (isLabel(stmts[p])) {
+                    labelNames.push_back(stmts[p]->name);
+                    labelAt.push_back(mergedIndex(p));
+                }
+            }
+            for (int k = 0; k < len; k++) {
+                if (isLabel(block->body[k])) {
+                    labelNames.push_back(block->body[k]->name);
+                    labelAt.push_back(i + k);
+                }
+            }
+
+            // ... and every jump that stays in it.
+            for (int p = 0; p < (int) stmts.size(); p++) {
+                if (p != i && stmtCrosses(stmts[p], mergedIndex(p), decls, labelNames, labelAt)) {
+                    return false;
+                }
+            }
+            for (int k = 0; k < len; k++) {
+                if (stmtCrosses(block->body[k], i + k, decls, labelNames, labelAt)) return false;
+            }
+            return true;
+        }
+
+        List<StmtPtr> flattenPass(const List<StmtPtr> &stmts, bool &changed);
+
+        // The same statement with its own nesting flattened. A copy keeps the tree
+        // the caller handed in untouched.
+        StmtPtr flattenInner(const StmtPtr &stmt, bool &changed) {
+            if (!stmt || stmt->kind != StmtKind::Block) return stmt;
+            auto flattened = std::make_shared<Stmt>(*stmt);
+            flattened->body = flattenPass(stmt->body, changed);
+            return flattened;
+        }
+
+        // Folds nested blocks into the parent sequence. Children come first: a
+        // spliced child is what makes its parent's declarations cross jumps, so
+        // the parent is judged on the body its children leave behind.
+        List<StmtPtr> flattenPass(const List<StmtPtr> &stmts, bool &changed) {
+            List<StmtPtr> flattened;
+            for (const StmtPtr &stmt: stmts) flattened.push_back(flattenInner(stmt, changed));
+
+            List<StmtPtr> out;
+            for (int i = 0; i < (int) flattened.size(); i++) {
+                const StmtPtr &stmt = flattened[i];
+                if (!stmt) continue;
+                if (stmt->kind == StmtKind::Block && spliceIsSafe(flattened, i)) {
+                    for (const StmtPtr &inner: stmt->body) out.push_back(inner);
+                    changed = true;
+                    continue;
+                }
+                out.push_back(stmt);
+            }
+            return out;
+        }
+
+        // ---- slot hoisting ---------------------------------------------
+
+        ast::ExprPtr nameExpr(const Str &name, const ast::SourcePos &pos) {
+            auto expr = std::make_shared<ast::Expr>();
+            expr->kind = ast::ExprKind::Name;
+            expr->pos = pos;
+            expr->text = name;
+            return expr;
+        }
+
+        // One statement list rewritten: every slot declaration becomes an assignment
+        // and its declaration is collected for the top of the body - so the caller
+        // learns whether anything moved from `decls` alone. Blocks keep their place
+        // (the folding is what deals with them); a lambda is a body of its own, so
+        // the walk does not enter one.
+        List<StmtPtr> hoistInList(const List<StmtPtr> &stmts, List<StmtPtr> &decls) {
+            List<StmtPtr> out;
+            for (const StmtPtr &stmt: stmts) {
+                if (!stmt) continue;
+                if (stmt->kind == StmtKind::VarDecl && stmt->type && stmt->init
+                    && isSlotName(stmt->name)) {
+                    auto assignment = std::make_shared<Stmt>();
+                    assignment->kind = StmtKind::Assign;
+                    assignment->pos = stmt->pos;
+                    assignment->op = "=";
+                    assignment->target = nameExpr(stmt->name, stmt->pos);
+                    assignment->value = stmt->init;
+                    out.push_back(assignment);
+
+                    auto declaration = std::make_shared<Stmt>(*stmt);
+                    declaration->init = nullptr;
+                    decls.push_back(declaration);
+                    continue;
+                }
+                if (stmt->kind == StmtKind::Block) {
+                    auto block = std::make_shared<Stmt>(*stmt);
+                    block->body = hoistInList(stmt->body, decls);
+                    out.push_back(block);
+                    continue;
+                }
+                out.push_back(stmt);
+            }
+            return out;
+        }
     }
 
-    List<StmtPtr> simplifyBody(const List<StmtPtr> &body) {
+    Lowered simplifyBody(const List<StmtPtr> &body) {
         List<StmtPtr> current = body;
+        bool any = false;
         bool changed = true;
         int guard = 0;
         while (changed && guard < 16) {
@@ -94,6 +265,55 @@ namespace linear {
             changed = false;
             current = prunePass(current, changed);
             current = labelPass(current, changed);
+            any = any || changed;
+        }
+        Lowered result;
+        result.body = std::move(current);
+        result.changed = any;
+        return result;
+    }
+
+    Lowered flattenBlocks(const List<StmtPtr> &body) {
+        bool changed = false;
+        Lowered result;
+        result.body = flattenPass(body, changed);
+        result.changed = changed;
+        return result;
+    }
+
+    Lowered hoistSlots(const List<StmtPtr> &body) {
+        Lowered result;
+        List<StmtPtr> decls;
+        List<StmtPtr> rewritten = hoistInList(body, decls);
+        if (decls.empty()) {
+            result.body = std::move(rewritten);
+            result.changed = false;
+            return result;
+        }
+        List<StmtPtr> hoisted;
+        for (const StmtPtr &decl: decls) hoisted.push_back(decl);
+        for (StmtPtr &stmt: rewritten) hoisted.push_back(std::move(stmt));
+        result.body = std::move(hoisted);
+        result.changed = true;
+        return result;
+    }
+
+    List<StmtPtr> finishForEmission(const List<StmtPtr> &body) {
+        List<StmtPtr> current = body;
+        bool canChange = true;
+        int guard = 0;
+        while (canChange && guard < 256) {
+            guard++;
+            canChange = false;
+            Lowered hoisted = hoistSlots(current);
+            current = std::move(hoisted.body);
+            canChange = canChange || hoisted.changed;
+            Lowered simplified = simplifyBody(current);
+            current = std::move(simplified.body);
+            canChange = canChange || simplified.changed;
+            Lowered folded = flattenBlocks(current);
+            current = std::move(folded.body);
+            canChange = canChange || folded.changed;
         }
         return current;
     }

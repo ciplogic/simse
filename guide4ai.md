@@ -131,19 +131,18 @@ expressible in the language.
   (the buffer's tail shift and growth), and `stress/span` (renamed from `cursor`)
   plus `stress/lambdas`/`recursion` cover span iteration.
 - **Nested expressions are lowered to temporaries (T44).** `linear` gained a third
-  pass, `ExpressionLowering.{h,cpp}` (`linLowerExprs`), run as
-  `lowerExprs(simplifyBody(lowerBody(...)))`: every expression the emitter sees is
-  now a simple operand (literal, name, qualified name, lambda, lvalue path) or a
-  single operation over simple operands, and anything deeper is bound to an untyped
-  `_sm_expr<n>` local numbered by a per-body counter, scoped so no jump crosses its
-  initialization. The boundaries are deliberate: an lvalue path stays a path (so a
-  mutating call on it is not a copy), and `&&`/`||` stay untouched - their
-  `ifTrue`/`ifFalse` shapes are written down in `impl_specs/linear-lowering.md`,
-  not implemented. The temporaries were untyped at first; the step below gives them
-  real types.
+  pass, `ExpressionLowering.{h,cpp}` (`linLowerExprs`), so every expression the
+  emitter sees is a simple operand (literal, name, qualified name, lambda, lvalue
+  path) or a single operation over simple operands, and anything deeper is bound to
+  a `_sm_expr<n>` local numbered by a per-body counter, scoped so no jump crosses
+  its initialization. The boundaries are deliberate: an lvalue path stays a path (so
+  a mutating call on it is not a copy), and a `&&`/`||` in a *value* position stays
+  one node (the shape that would materialise it is written down in
+  `impl_specs/linear-lowering.md`, not implemented). The temporaries were untyped at
+  first; the step below gives them real types.
 - **The semantic step: the lowered declarations get types (T45).**
   `sema::inferTypes` (`cppsrc/sema/TypeInfer.{h,cpp,simse}`) runs as the last step of
-  the lowering - `inferTypes(lowerExprs(simplifyBody(lowerBody(body))), facts, body)`
+  the lowering - `inferTypes(lowerForEmission(body), facts, body)`
   - and fills in the type of every untyped `VarDecl` it can prove, walking the
   statements in scope order (shadowing included) rather than relying on emission
   order. It reads the emitter's own collected tables (declared types, enums,
@@ -152,10 +151,22 @@ expressible in the language.
   package's type in the Simse ring. **Generics stay symbolic**: a type parameter in
   scope is a fine type to spell (reification is still the C++ template), an explicit
   instantiation substitutes its type arguments, and a member call binds the
-  extension's parameters from its receiver. What it cannot type stays `auto` -
-  the shapes it declines to model (lambda, `null`, `&x`/`*x`/`copy(x)`, and anything
-  derived from them) plus a few recorded gaps - see the T46 bullet for the current
-  count.
+  extension's parameters from its receiver. What it cannot type stays `auto` - a
+  lambda (its callable type comes from the use site), `null` (no type of its own),
+  and the recorded gaps - see the T48/T49 bullets for the current count.
+- **Conditions are decomposed, lambda bodies run the pipeline, borrows are typed
+  (T48).** A `&&`/`||`/`!` *condition* no longer reaches the emitter as an
+  expression: `lowerCondition` tests one leaf at a time (`&&` jumping to the false
+  target, `||` to the true one, a leaf using whichever of `ifTrue`/`ifFalse` matches
+  its value so a source negation is never spelled as a negated expression), and the
+  peephole folds each leaf's jump pair into the one jump the emitter prints. A
+  condition the decomposition cannot cover (a `&&` inside a call argument) stays one
+  jump. A lambda body is no longer a special single-expression case: `lambda()`
+  builds the `return` that expression stands for and runs the whole lowering on it.
+  The inference also learned the three shapes it had been leaving to `auto`: `&x` is
+  a counted reference, `*x` the address of what `x` denotes, `copy(x)` the value
+  behind the handle - which is what turned the `program_expr` golden's
+  `auto reference`/`auto dereferenced` into `std::shared_ptr<Int>`/`Int*`.
 - **A value receiver is a raw pointer (T47).** A receiver that is a *value* - a
   data-class method, `fun f(this: Point, ...)`, `fun Str.firstByte()` - is emitted
   `T* self` (not `T& self`): `self` is the language's own borrow form (`*T`), member
@@ -173,8 +184,46 @@ expressible in the language.
   **assignment target** and the operand of `&`/`*` keep an alias
   (`a[i].append(x)` still appends to the element), and a **borrow of a temporary**
   (`*f()`) stays inline because its pointer only lasts the call it is passed to.
-  The compiler's own output is now 18.2k lines with 5,157 temporaries and 931
-  `auto`s (711 of them bound borrows the inference does not yet type).
+  At T46 the output was 18.2k lines with 5,157 temporaries and 931 `auto`s; T48 typed
+  the borrows and T49 folded the blocks, which is where the numbers below come from.
+- **The linear form is a loop of stages, ending in a block folding (T49).**
+  `linear::lowerForEmission` (`linLowerForEmission`) is the first phase of the
+  pipeline the emitter calls per body: `lowerBody` / `simplifyBody` / `lowerExprs` run
+  until none of them changes anything, then `flattenBlocks` folds nested blocks into
+  their parents, and while that changed something the round repeats (folding exposes a
+  jump the peephole can fold, and a folded jump frees a label). Each stage returns the
+  body *and* whether it changed (`linear::Lowered`/`LinLowered`); no stage adds a
+  statement, so the loop terminates on its own. A block survives only where splicing
+  it would move a declaration across a jump - C++ rejects that (C2362) - so what is
+  left is load-bearing. Effect on the compiler's own output: **21,965 lines and 2,895
+  blocks (1,260 of them nested in another block) become 18,925 lines and 1,339 blocks
+  (555 nested)**. Six `tests/golden/*.cpp.expected` and `stress/hello/expected.cpp`
+  moved with it (the brace collapse, nothing else).
+- **The lowering's slots move to the top of the body, so the folding can finish
+  (T50).** The blocks that stayed were the ones a temporary forced, and the fix is
+  the one the user described: after the types are resolved, hoist the variables to
+  the start of the function. `linear::hoistSlots` (`linHoistSlots`) moves every
+  `_sm_expr<n>` / `simse_sw_<n>` declaration to the top of the body and turns its
+  initializer into an assignment in place, so no jump can bypass a declaration and
+  every one of those blocks folds. The initializer keeps its position (evaluation
+  order and side effects do not move); the storage does not, which makes each slot
+  live for the whole body - a bytecode frame's slots, no liveness reuse, the price of
+  the flatness. It runs **after `sema::inferTypes`**, so the pipeline is two phases -
+  `lowerForEmission` -> `inferTypes` -> `linear::finishForEmission` (hoisting,
+  peephole and folding in the same loop shape) - and a slot with no type keeps its
+  declaration and its block (the 49 `auto`s, all in lambda bodies). A source-level
+  `val`/`var` never moves: its scope is the program's and two scopes may reuse a name.
+  Effect on the compiler's own output: **1,339 blocks (555 nested) and 18,925 lines
+  become 758 blocks (94 nested) and 23,604 lines** (the extra lines are one
+  declaration plus one assignment where a declaration-with-initializer was), and the
+  blocks left are the program's own scopes. Both configurations are green (five
+  differentials, T23's two-step bootstrap byte-identical), `simse_tests.exe` is 51/51
+  in both, `bun tools/stress.js` is 24/24 with the C++ ring and 24/24 with the
+  self-hosted `simse.exe` (its `hello` `expected.cpp` moved again), the user's own
+  two-step flow is byte-identical, and the 1BRC report is identical to the JavaScript
+  reference. The flatness costs on that benchmark: **1187 -> 1350 ms**, since its hot
+  loop's slots are now function-wide; the transpile is unaffected (~0.09 s for the
+  C++ ring, ~0.40 s self-hosted, over the same ~8.4k-line source set).
 
 ## 3. Build / test / run
 
@@ -337,13 +386,17 @@ Two "rings" that must stay in lockstep:
 that must be byte-identical (the fixed point).
 
 Pipeline (per `impl_specs/transpilation.md`): discover sources -> scan -> parse
-(AST) -> resolve names/types -> reify generics -> lower control flow to
-labels/gotos -> simplify the linear form -> lower nested expressions to
-temporaries -> infer the types of the lowered declarations -> lower to
-C++ -> amalgamate. The emitters only know the linear statement forms
-(`Stmt.Label`/`Goto`/`IfTrue`/`IfFalse`/`Block`), expressions no deeper than one
-operation, and declarations that carry a type; structured `if`/`while`/`switch`
-never reach emission.
+(AST) -> resolve names/types -> reify generics -> lower each body to linear form,
+in a loop: lower control flow to labels/gotos -> simplify the linear form -> lower
+nested expressions to temporaries -> (round repeats while anything changed) ->
+fold nested blocks into their parents -> give the lowered declarations their types
+-> move the lowering's own slots to the top of the body, which lets the folding
+fold the rest -> lower to C++ -> amalgamate. The emitters only know the linear
+statement forms (`Stmt.Label`/`Goto`/`IfTrue`/`IfFalse`/`Block`), expressions no
+deeper than one operation, and declarations that carry a type; structured
+`if`/`while`/`switch` never reach emission. The two phases are
+`linear::lowerForEmission` and `linear::finishForEmission`, with `sema::inferTypes`
+between them (`impl_specs/linear-lowering.md`, "The pipeline").
 
 Key design points:
 
@@ -506,15 +559,19 @@ Do these only when asked; roughly prioritized:
    lookups per line where the C++ baseline pays one - the last gap to the Bun
    reference (1.6x). A `getPtr`/`withValue`-style native (both backings) is the
    next library change; it is a library gap, not a language one.
-9. **Type inference for the lowered body is in (T45/T46); three gaps and two next
-   steps remain.** `sema::inferTypes` types every untyped declaration it can prove,
-   and since T46 every value position is one operation deep, so a jump and a return
-   read one name. What is still untyped in the compiler's own output (931 `auto`s of
-   5,157 temporaries) is recorded in `impl_specs/linear-lowering.md`:
-   - **711 bound borrows.** `*x` of an lvalue is now its own temporary, and the
-     inference declines to spell it. The rule is a few lines (the operand's kind
-     decides: a value is `Pointer(T)`, a handle's pointee is `T`), and it needs the
-     same kind-aware handling the emitter's `Deref`/`Copy` lowering uses.
+9. **Type inference for the lowered body is in (T45/T46/T48); the borrow shapes are
+   typed, lambda bodies are not.** `sema::inferTypes` types every untyped
+   declaration it can prove, and since T46 every value position is one operation
+   deep, so a jump and a return read one name. What is still `auto` in the
+   compiler's own output is down to **49** declarations of ~6,500, and they are all
+   inside lambda bodies: the emitter lowers a lambda body
+   (`emitStmts(linear::finishForEmission(linear::lowerForEmission(...)))`) but does not
+   run the inference on it, which a `sema::Body` built from the lambda's own
+   parameters and return type would fix - small, and it is also the last thing keeping
+   a lambda body from flattening (item 10). The rest:
+   - **The emitter could consume expression-level types** instead of guessing them
+     (`inferType`/`memberCallReturn`/`findNativeExt` shrink to lookups); the
+     inference already resolves more than the emitter asks it for.
    - **A call-aware lowering step** (the user's suggestion, now smaller than it
      looked). A value receiver is a raw pointer (T47) and receivers keep the `Path`
      slot, so the case that made this urgent - a path argument whose mutations must
@@ -528,9 +585,26 @@ Do these only when asked; roughly prioritized:
    - The three smaller gaps from T45 (a prelude struct method such as `Span.size()`,
      a native extension called as a plain function, a call through a function-typed
      local).
-   The larger follow-up is still the emitter *consuming* expression-level types
-   instead of guessing them itself (`inferType`/`memberCallReturn`/`findNativeExt`
-   would shrink to lookups).
+10. **Flat bodies are in (T50); two smaller things remain.** The slot hoisting moves
+   every lowering slot to the top of the body, so the folding folds everything the
+   lowering forced and the emitted body is one flat sequence of labels, jumps and
+   assignments - 758 blocks in the compiler's own output, 94 of them nested, all of
+   those the *program's* own scopes. What is left:
+   - **Run the inference on lambda bodies** (the 49 `auto`s above). Besides typing
+     them, it is what lets *their* slots hoist and fold: today a lambda body keeps its
+     blocks because its slots have no type to declare them with. Small: build the
+     `sema::Body` from the lambda's parameters and return type at the two
+     `lambda()` call sites.
+   - **Source-scope variables stay where they are**, by design: hoisting a `var` out
+     of the branch it was written in would need renaming (two scopes may reuse a
+     name) and would erase the program's own scoping. If fully block-free output is
+     wanted later, that is the step - rename, hoist, and let the folding flatten.
+   - **The flatness costs stack-frame-wise**: every slot is live for the whole body
+     (no liveness reuse), which on the 1BRC is 1187 -> 1350 ms. Placing a declaration
+     just before the earliest jump that would bypass it - instead of at the top of the
+     body - gives the same flatness with tight lifetimes, and the rule it needs is
+     the one `spliceIsSafe` already computes. Not done because the simple placement is
+     what the user asked for.
 
 ## 10. Gotchas
 
@@ -547,6 +621,27 @@ Do these only when asked; roughly prioritized:
   differ — cosmetic.
 - Goldens are sensitive to line-number shifts; regenerate with `--update` when
   intentionally changing sources, then confirm check-mode passes.
+- **A jump is not always a sibling of its label.** The expression lowering wraps a
+  jump in the block that carries its temporaries, and `break`/`continue` jump out of
+  the body they are written in, so any pass that asks "is this label used?" must look
+  *through* blocks (`jumpsTo`/`linJumpsTo`), and any pass that moves a declaration
+  across a level must ask whether a jump at *any* depth now bypasses it - that is what
+  `flattenBlocks`' rule and the `pos (J) < pos (D) <= pos (L)` condition are about.
+  The symptom of getting the first one wrong is MSVC `C2094: use of undefined label`
+  in the *generated* C++, which no differential catches (both rings agree on the
+  broken output) - the build's stage-1 compile is what catches it.
+- A pass that is `changed`-gated must report honestly: `linear::lowerForEmission`
+  loops until a whole round changes nothing, so a stage that always claims a change
+  never lets the round end (and one that never claims one stops the pipeline early).
+- **A declaration with no initializer is a legal statement now** (`hoistSlots` makes
+  one per slot), and the emitter prints it as `T name;`. Nothing else may assume a
+  `VarDecl` has an `init`.
+- The slot prefixes are `_sm_expr` (8 characters) and `simse_sw_` (9), and
+  `Str::compare(pos, count, prefix)` takes the *count*: a wrong count compares
+  different bytes and returns non-zero with no error anywhere, so a name test written
+  by hand can quietly match nothing. (That is exactly what happened once: the C++ ring
+  hoisted nothing while the Simse ring hoisted everything, and only T23's two-step
+  bootstrap showed it.)
 - `&x` on a local **boxes a copy** (mutations through the box are lost); `*x`
   **borrows** and aliases the original. Take `*T` for out/aggregate parameters
   (the 1BRC's `tally` takes `*Dictionary<Str, Stats>`), never `&x`.

@@ -17,17 +17,16 @@ Int ns1_useLater();
 Int ns1_helper(Int value);
 // hoisting.simse:2
 Int ns1_useLater() {
+    Int _sm_expr1;
+    Int _sm_expr2;
     ns1_Point p = ns1__make_Point(1, 2);
-    {
-        Int _sm_expr1 = p.x;
-        Int _sm_expr2 = ns1_helper(_sm_expr1);
-        return _sm_expr2;
-    }
+    _sm_expr1 = p.x;
+    _sm_expr2 = ns1_helper(_sm_expr1);
+    return _sm_expr2;
 }
 // hoisting.simse:9
 Int ns1_helper(Int value) {
-    {
-        Int _sm_expr1 = value + 1;
-        return _sm_expr1;
-    }
+    Int _sm_expr1;
+    _sm_expr1 = value + 1;
+    return _sm_expr1;
 }

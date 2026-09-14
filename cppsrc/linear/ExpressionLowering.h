@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../ast/Ast.h"
+#include "Linear.h"
 
 // Lowering of nested expressions into temporaries (impl_specs/linear-lowering.md,
 // "Expression lowering"). `linear::lowerBody` gives the emitter one statement
@@ -18,9 +19,14 @@
 //   auto _sm_expr1 = i + 2;
 //   x = a[_sm_expr1].toString();
 //
-// It runs on a lowered body, after `linear::simplifyBody` and before emission, so
-// the peephole pass never sees the temporaries and nothing can fold them back.
-// Temporaries are named from a per-body counter (`_sm_expr1`, ...), like the labels.
+// It runs on a lowered body, after `linear::simplifyBody` in the same round, and
+// the peephole runs again only after the block folding (`linear::flattenBlocks`),
+// so the temporaries this pass introduces are folded back only where the folding
+// exposed them. Temporaries are named from a per-body counter (`_sm_expr1`, ...),
+// like the labels.
+//
+// A body that is already lowered comes back unchanged and reports `changed` false:
+// every position that is not bound keeps the shape it read.
 //
 // A *value* position - an operand, a call argument, a conditional jump's condition,
 // a `return` value - never holds more than one operation: anything deeper is its own
@@ -45,5 +51,5 @@
 namespace linear {
     // Rewrites the expressions of one linear body. Pure: the input statements are
     // not modified.
-    List<ast::StmtPtr> lowerExprs(const List<ast::StmtPtr>& body);
+    Lowered lowerExprs(const List<ast::StmtPtr>& body);
 }

@@ -80,14 +80,17 @@ switch (e) { case A: ... default: ... }   # arms keep source order and
   scope. Splicing is safe because labels are never placed inside a nested block:
   a jump can enter a region but never a scope. The language already scopes each
   body separately (`sema` pushes a scope per body), so keeping the wrapper where
-  declarations exist preserves semantics rather than changing them.
+  declarations exist preserves semantics rather than changing them. The wrapper
+  is a first guess, not the last word: the expression lowering below adds
+  declarations of its own, and the block folding below re-decides every one of
+  them on the final statement sequence.
 - `return` is left as-is; expressions are not touched.
 
 ## Simplification stage
 
 `linear::simplifyBody` (`cppsrc/linear/Simplify.{h,cpp}`, `linSimplifyBody` in
-`cppsrc/linear/Simplify.simse`) runs on the lowered body, right after
-`lowerBody` and before emission. It is a small fixed-point peephole pass whose
+`cppsrc/linear/Simplify.simse`) runs on the lowered body, after `lowerBody` in every
+round of the pipeline below. It is a small fixed-point peephole pass whose
 only job is to keep the linear form close to the structured code it came from:
 
 ```
@@ -103,6 +106,14 @@ the dead-code rule removes the `goto` that follows a `return`/`goto` up to the
 next label (labels are kept: a `break`/`continue` may still target them).
 Dropping a jump can make a label unused and removing statements can expose
 another fold, so the pass repeats until nothing changes (bounded by a guard).
+
+A label is *used* when any jump in the sequence names it - at any depth: a jump
+inside a nested block can legally target a label of the enclosing sequence (the
+expression lowering wraps a jump in the block that carries its temporaries, and
+`break`/`continue` jump out of the body they are written in), so the scan looks
+through blocks. Scanning only the sequence's own statements used to delete a
+label whose only jump the lowering had just wrapped, which is what broke the
+first version of the folding pipeline: a `goto` to a missing label.
 
 Applied to the shapes above, `if (c) { T } else { E }` becomes:
 
@@ -125,9 +136,10 @@ verify against the un-simplified output.
 `linear::lowerExprs` (`cppsrc/linear/ExpressionLowering.{h,cpp}`, `linLowerExprs` in
 `cppsrc/linear/ExpressionLowering.simse`) is the second half of the same idea: after
 the linear pass the emitter has one *statement* vocabulary, and after this pass one
-*expression* vocabulary. It runs on the lowered body, **after**
-`linear::simplifyBody` (so the peephole pass never sees the temporaries) and before
-emission.
+*expression* vocabulary. It runs on the lowered body, after `linear::simplifyBody`
+in the same round - so the folds the structured form allows happen before the
+temporaries exist - and the peephole runs again only after the block folding, which
+is the only way it ever sees a temporary.
 
 Every **value position** the emitter sees is then one operation deep: a literal, a
 name, a qualified name, a lambda, or a single operation over those. Anything deeper
@@ -201,6 +213,135 @@ lowering step - the same program facts the inference already reads, but shaping 
 argument from the parameter it binds to - is the natural place for that, and the
 pass above would then leave call arguments to it instead of binding them blind.
 
+## Block folding
+
+`linear::flattenBlocks` (`cppsrc/linear/Simplify.{h,cpp}`, `linFlattenBlocks` in
+`cppsrc/linear/Simplify.simse`) folds a nested block into its parent sequence, so a
+block survives only where one is needed:
+
+```
+{                               Int _sm_expr1 = p.x;
+    {                           return _sm_expr1;
+        Int _sm_expr1 = p.x;
+        return _sm_expr1;
+    }
+}
+```
+
+It is the last stage of a round (below), which is why it sees the blocks the
+expression lowering wraps a statement and its temporaries in. In the compiler's own
+output that folding takes 2,895 blocks - 1,260 of them nested in another block - down
+to 1,339; the slot hoisting below then takes it to **758 blocks, 94 of them nested**
+(a 96% cut, and the ones left are the *program's* own scopes - a source-level `var`
+whose declaration a jump bypasses).
+
+A block is *not* folded when splicing it would move one of its declarations across a
+jump, because C++ rejects a jump that skips an initialization still in scope at the
+label ([stmt.dcl]/3, MSVC C2362). The rule is exact: with the block's own statements
+in the parent's place, a jump `J` and a label `L` at that level make the splice
+illegal exactly when
+
+```
+pos (J) < pos (D) <= pos (L)
+```
+
+for a declaration `D` the block brings up - a jump before `D` that lands past it. `J`
+may sit inside another block (it runs after everything before the block it is written
+in), so the check looks through blocks just like the label scan above. Children fold
+first, so a parent is judged on the body its children leave behind, and a sequence
+with no jumps at all - a straight line of statements - always folds.
+
+What is left after the folding alone is load-bearing. The temporaries of one arm are
+crossed by the jump to the next arm's label, so the arm keeps a scope:
+
+```
+{
+    Bool _sm_expr8 = op == "!=";
+    if (_sm_expr8) goto L7;
+}
+```
+
+That is what the slot hoisting below is for: move the declaration out of the way and
+the block has nothing left to hold.
+
+## Slot hoisting
+
+`linear::hoistSlots` (`cppsrc/linear/Simplify.{h,cpp}`, `linHoistSlots` in
+`cppsrc/linear/Simplify.simse`) moves the lowering's own declarations - the
+`_sm_expr<n>` temporaries and the `simse_sw_<n>` switch subjects - to the top of the
+body, and turns each initializer into an assignment where the declaration stood:
+
+```
+{ Bool _sm_expr2 = i == 3; if (_sm_expr2) goto L4; }
+    ->
+Bool _sm_expr2;                     # at the top of the body
+...
+_sm_expr2 = i == 3;
+if (_sm_expr2) goto L4;
+```
+
+A declaration at the top of the body is a declaration no jump can bypass, which is
+the one thing the folding needs (C2362), so this is what makes the linear form one
+flat sequence: after it, every block left is one the *program* asked for, not one a
+temporary forced. The initializer stays where it was, so **evaluation order and side
+effects do not move** - what moves is where the storage is declared. Every slot of
+the body is then live for the whole body: the slots of a bytecode frame, without
+liveness reuse. That is the cost of the flatness, and it is measurable (see
+`benchmarks/onebrc/benchmark.md`).
+
+It runs **after the type pass**, because a declaration has to keep the type that pass
+proved: `auto x;` is not a declaration. A slot whose type the inference could not
+spell keeps its declaration in place - and the block around it with it - and so does
+a source-level `val`/`var`: that scope is the program's, two scopes may reuse a name,
+and the emitter keeps a name where the program wrote it.
+
+The pass is pure and idempotent: a slot declaration without an initializer is not a
+slot to move, so a second run finds nothing (which is what the round's `changed` flag
+reports). One trap, recorded because it cost a debugging session: the prefixes are
+`_sm_expr` (8 characters) and `simse_sw_` (9), and `Str::compare(pos, count, ...)`
+takes the *count* - a wrong count silently compares different bytes and the pass just
+does nothing.
+
+## The pipeline
+
+The stages run in a loop, because each leaves work for the others: the linear pass
+feeds the peephole, the peephole exposes a jump the expression lowering no longer
+needs, and the folding hands the whole round a flatter body - a jump a block used to
+hide is a jump the peephole can fold, and a folded jump can free a label.
+
+```
+while (canChange) {
+    while (canExtractExpressionsOrLabels) {
+        canExtractExpressionsOrLabels =
+            lowerBody() || simplifyBody() || lowerExprs();
+    }
+    canChange = flattenBlocks();
+}
+```
+
+`linear::lowerForEmission` (`linLowerForEmission` in `cppsrc/linear/Linear.simse`) is
+that loop, and it is what the emitter calls per body. Every stage returns the body
+*and* whether it changed anything (`linear::Lowered`, `LinLowered`), which is what the
+loop tests: a stage that made no change has to say so, or the round would never end.
+Progress is monotone - no stage adds a statement - so the loop terminates on its own;
+the guard in the code bounds a bug, not the work.
+
+That is the first half. The declarations the lowering introduced have no type yet, and
+the folding cannot spell `auto x;`, so the pipeline has a second half, and
+`sema::inferTypes` sits between them:
+
+```
+lowered = lowerForEmission(body)       # rewrite rounds, folding as it goes
+typed   = inferTypes(lowered, facts, body)
+ready   = finishForEmission(typed)     # hoist the slots, fold what that frees
+```
+
+`linear::finishForEmission` (`linFinishForEmission`) runs the same shape again - the
+hoisting in the place of the rewriting stages (there is nothing left to rewrite), the
+peephole, and the folding - until a round changes nothing. From there the body is one
+flat sequence of labels, jumps and assignments, which is what the goldens record and
+what the emitter prints.
+
 ## Type inference on the lowered body
 
 `linear::lowerExprs` gives the emitter one *expression* vocabulary; the semantic
@@ -211,8 +352,11 @@ one while it emits nor falls back to `auto`. It is `sema::inferTypes`
 emit:
 
 ```
-inferTypes(lowerExprs(simplifyBody(lowerBody(body))), facts, body)
+inferTypes(lowerForEmission(body), facts, body)   # and then finishForEmission
 ```
+
+(`lowerForEmission` is the loop above: `lowerBody` / `simplifyBody` / `lowerExprs` to a
+fixed point, then `flattenBlocks`, until a round changes nothing.)
 
 The facts it reads - the declared types, enum names, functions and methods (with
 their receiver patterns), native extensions and file-level statics - are the ones
@@ -240,20 +384,24 @@ val n = identity<Int>(7);   ->  Int n = identity<Int>(7);
   name in the type is a type parameter in scope, a declared type, or an RTL type;
   anything else - a type parameter out of scope, an unknown name - stays `auto`
   rather than making the emitter fail later.
-- **Four initializer shapes are deliberately left alone**: a lambda (its type comes
-  from the callable type it is used against), `null` (no type of its own), and `&x`,
-  `*x`, `copy(x)` (they change representation - a shared handle, a raw pointer, a
-  copy - in ways this pass does not model). Those declarations keep the `auto` they
-  had before the pass existed, and so does anything whose operand was one of them.
+- **Three initializer shapes are deliberately left alone**: a lambda (its type comes
+  from the callable type it is used against) and `null` (no type of its own). `&x`,
+  `*x` and `copy(x)` *are* typed - a counted reference, the address of what the
+  operand denotes, the value behind a handle - which is what took the `program_expr`
+  golden's `auto reference`/`auto dereferenced` to `std::shared_ptr<Int>`/`Int*`.
 
-In the compiler's own 12.4k-line output this leaves **42** declarations untyped out
-of ~1,400 (it was 1,402 `auto`s before the pass), and they are exactly the four
-shapes above plus three smaller gaps: a prelude *struct method*
-(`Span.size()`, `Span.isEmpty()` - prelude data-class methods are not collected as
-facts, only their native extensions are), a native extension called as a plain
-function (`spanOf(list)`), and a call through a function-typed local (a lambda
-parameter). Closing those means teaching the pass about struct-method facts and
-about callable types; none of them needs a new idea.
+In the compiler's own output the pass types all but **49** declarations of ~6,500, and
+every one of the 49 sits in a **lambda body**: the emitter lowers those
+(`linear::lowerForEmission` / `finishForEmission`) but does not run the inference on
+them, which a `sema::Body` built from the lambda's own parameters and return type
+would fix - and that is also the last thing standing between a lambda body and the
+folding, because a slot with no type cannot move (see "Slot hoisting"). The recorded
+gaps are the same three: a prelude *struct method* (`Span.size()`, `Span.isEmpty()` -
+prelude data-class methods are not collected as facts, only their native extensions
+are), a native extension called as a plain function (`spanOf(list)`), and a call
+through a function-typed local (a lambda parameter). Closing those means teaching the
+pass about struct-method facts and about callable types; none of them needs a new
+idea.
 
 One Simse-ring wrinkle is worth recording, because it cost a debugging session: in
 that ring a type *is* a node, and a node carries the role it was read from
@@ -264,13 +412,39 @@ put back somewhere else has to be **re-rooted** - `semReRole` is this pass's
 not see the annotation: a `ReturnType`-rooted node placed as a statement's type
 child is invisible to `xmlChild(stmt, AstNodeKind.Type)`.
 
-## Short-circuit operators, ternary (not implemented)
+## Short-circuit operators, ternary
 
 The two-value operators `&&` and `||` (and a `?:` conditional expression, which the
-grammar does not have yet) are *not* expressions the emitter should ever see. Each
-one is a conditional whose branches are evaluated lazily, so it lowers to the
-control-flow primitives this pass already produces - with the result materialised in
-a temporary when the value is used:
+grammar does not have yet) are not *expressions*: each is a conditional whose
+operands are evaluated lazily, so it belongs to the control-flow primitives this pass
+produces.
+
+**In a condition** that is what happens, one leaf at a time. `if (a && b && !c)`
+becomes, for each operand, a test of that operand straight to the end of the `if`:
+
+```
+if (a != 1 && b != 2 && !names.contains(pkg)) { T }
+    ->
+Bool _sm_expr1 = a != 1;    if (!(_sm_expr1)) goto L2;   # false -> past T
+Bool _sm_expr2 = b != 2;    if (!(_sm_expr2)) goto L2;
+Bool _sm_expr3 = names.contains(pkg); if (_sm_expr3) goto L2;
+L2:;                                                     # T', when it is reached
+```
+
+`&&` jumps to the *false* target when an operand does not hold, `||` jumps to the
+*true* target when one does (and its last operand falls through to a `goto` of the
+false target). A leaf is spelled with whichever of `ifTrue`/`ifFalse` matches its
+value - the lowering emits *both* jumps and lets the peephole fold the pair into one
+- so a negation in the source is never turned into a negated expression, and a `!`
+just swaps the two outcomes. A condition the pass cannot decompose (a `&&` inside a
+call argument, say) stays one jump whose condition holds the operator, which the
+emitter spells as C++ `&&` - `containsShortCircuit`/`isDecomposable` are exactly that
+boundary.
+
+**In a value position** the shape is the one below and it is still open: the result
+has to be materialised in a temporary, and that means binding into a slot from two
+places, which the expression lowering does not do (it is why `exprIsShortCircuit`
+keeps the operators out of its reach).
 
 ```
 var x = a && b;
@@ -299,12 +473,6 @@ var z = p ? q : r;                  # the same shape with ifTrue/ifFalse swapped
     L3:;
     auto z = _sm_expr1;
 ```
-
-So `ifTrue`, `ifFalse`, `goto` and `label` cover the whole language, and a `&&` in a
-*condition* position needs no temporary at all: `if (a && b) { T }` becomes
-`if (!(a)) goto end; if (!(b)) goto end; T'` in the same pass that owns `if`.
-Until that lands, this pass is the one that must *not* flatten inside them - which
-is why `exprIsShortCircuit` exists.
 
 ## Label numbering
 

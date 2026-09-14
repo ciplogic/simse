@@ -11,10 +11,8 @@ Res<Int> ns1_useGenerics() {
     Opt<Int> opt = Opt<Int>();
     Res<Int> okValue = Res<Int>::ok(value);
     Res<Int> errValue = Res<Int>::err("nope");
-    auto reference = std::make_shared<std::remove_cvref_t<decltype((value))>>(value);
-    auto dereferenced = (reference).get();
-    {
-        auto _sm_expr1 = Res<Int>::ok(value);
-        return _sm_expr1;
-    }
+    std::shared_ptr<Int> reference = std::make_shared<std::remove_cvref_t<decltype((value))>>(value);
+    Int* dereferenced = (reference).get();
+    auto _sm_expr1 = Res<Int>::ok(value);
+    return _sm_expr1;
 }

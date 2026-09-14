@@ -995,6 +995,108 @@ numbers shifted with the parser/scanner edits).
   **24/24** with the self-hosted compiler and **24/24** with the C++ ring, and the
   1BRC rebuilt with the new compiler reports byte-identically (1144 ms).
 
+- **Conditions are decomposed into short-circuit jumps, lambda bodies run the whole
+  pipeline, and the borrow shapes are typed (T48).** `&&`/`||`/`!` in a *condition*
+  no longer reach the emitter as expressions: `lowerCondition` in
+  `Linear.{cpp,simse}` tests one leaf at a time, `&&` jumping to the false target and
+  `||` to the true one, a leaf spelled with whichever of `ifTrue`/`ifFalse` matches
+  its value and emitting *both* jumps so the peephole folds the pair into one - no
+  source negation ever becomes a negated expression, and a nested call argument
+  whose `&&` cannot be decomposed keeps the condition a single jump
+  (`containsShortCircuit`/`isDecomposable` draw that boundary). A lambda body is no
+  longer a special single-expression case: `lambda()` builds the `return` the single
+  expression stands for, runs the whole lowering on it (so a lambda's temporaries,
+  labels and blocks are the same shapes as any body's) and sets the return type the
+  bare `return null` needed. The type inference learned the three shapes it had been
+  leaving to `auto`: `&x` is a counted reference to `x`'s value, `*x` is the address
+  of what `x` denotes (`Pointer(T)` for a value, `Pointer` of the pointee for a
+  handle, the pointee when `x` already is a pointer) and `copy(x)` is the value
+  behind the handle - which is what took `tests/golden/program_expr.simse.cpp.expected`
+  from `auto reference`/`auto dereferenced` to `std::shared_ptr<Int>`/`Int*` and
+  `program_extension`'s `*self` to `Int`. Verified: both configurations green (five
+  differentials byte-identical, T23 byte-identical), `simse_tests.exe` **51/51** in
+  both, `bun tools/stress.js` **24/24**.
+
+- **The linear form is a loop of stages, and blocks are folded at the end of every
+  round (T49).** The emitter no longer spells the pipeline at each call site
+  (`flattenBlocks(lowerExprs(simplifyBody(lowerBody(body))))`); it calls
+  `linear::lowerForEmission` (`linLowerForEmission`), the loop the user specified:
+  `lowerBody` / `simplifyBody` / `lowerExprs` run until none of them changes
+  anything, then `flattenBlocks` runs, and while *that* changed something the round
+  starts over - folding a block exposes a jump the peephole can fold, and a folded
+  jump can free a label. Every stage now returns the body **and** whether it changed
+  (`linear::Lowered` / `LinLowered`), which is what the loop tests; the stages only
+  ever remove statements, so it terminates on its own (the guard bounds a bug).
+  `flattenBlocks` folds a nested block into its parent unless splicing it would move
+  one of its declarations across a jump, which C++ rejects (C2362): the rule is the
+  exact condition `pos (J) < pos (D) <= pos (L)` for a declaration `D` the block
+  brings up, a jump `J` (at any depth - it runs after everything before the block it
+  is written in) and a label `L` at that level. In the compiler's own output: 2,895
+  blocks (1,260 nested) and 21,965 lines become **1,339 blocks (555 nested) and
+  18,925 lines** - and ~8.4k lines of Simse now transpile into that 19k-line output
+  in ~0.25 s. One pre-existing bug had to be fixed on the way: `labelPass` scanned
+  only a sequence's *own* statements for jumps, so the moment the expression
+  lowering wrapped a jump in the block that carries its temporaries, a label whose
+  only jump was that one looked unused and was deleted - a `goto` to a missing
+  label, MSVC C2094. The scan (and the folding's own, which has the mirror-image
+  question) now looks through blocks. Six `tests/golden/*.cpp.expected` goldens and
+  `stress/hello/expected.cpp` moved (the latter hand-copied from
+  `stress/.work/hello/out.cpp`, which the harness never rewrites), all of them the
+  brace collapse and nothing else. Verified: both configurations green (five
+  differentials byte-identical, T23 byte-identical), `simse_tests.exe` **51/51** in
+  both, `bun tools/stress.js` **24/24** with the C++ ring and **24/24** with the
+  self-hosted `simse.exe` rebuilt from the new output, the user's own two-step flow
+  (`bun build.js --release`, rename to `simse_out1.cpp` + `simse_stage1.exe`,
+  transpile again) byte-identical, and the 1BRC rebuilt with the new compiler
+  reports byte-identically to the JavaScript reference (1187 ms, inside the
+  1056-1177 ms session range `benchmarks/onebrc/benchmark.md` records).
+
+- **The linear form's own slots move to the top of the body, and the folding can
+  finish (T50).** The user's reading of the block that stayed: *hoist the variables,
+  as a step after the types are resolved, to the start of the function.*
+  `linear::hoistSlots` (`linHoistSlots`) does exactly that for the lowering's own
+  storage - the `_sm_expr<n>` temporaries and the `simse_sw_<n>` switch subjects -
+  and turns each initializer into an assignment where the declaration stood:
+  `{ Bool _sm_expr2 = i == 3; if (_sm_expr2) goto L4; }` becomes `Bool _sm_expr2;`
+  among the body's first declarations plus `_sm_expr2 = i == 3;` in place. A slot at
+  the top of the body is a slot no jump can bypass, which was the *only* reason the
+  folding kept those blocks (C2362), so this is what turns a body into one flat
+  sequence of labels, jumps and assignments. The initializer keeps its position, so
+  evaluation order and side effects do not move; what moves is where the storage is
+  declared, which makes every slot live for the whole body (a bytecode frame's
+  slots, no liveness reuse). It runs **after `sema::inferTypes`** - a declaration has
+  to keep the type that pass proved, `auto x;` is not a declaration - so the
+  pipeline is two phases, `lowerForEmission` then `inferTypes` then
+  `linear::finishForEmission` (the hoisting, the peephole and the folding in the
+  same loop shape). A slot with no type keeps its declaration and its block, and a
+  source-level `val`/`var` never moves: its scope is the program's and two scopes may
+  reuse a name. Numbers on the compiler's own output: **1,339 blocks (555 nested)
+  and 18,925 lines become 758 blocks (94 nested) and 23,604 lines** - the extra
+  lines are one declaration plus one assignment where there was one
+  declaration-with-initializer, and the blocks that remain are the *program's* own
+  scopes (a source `var` whose declaration a jump bypasses), not the lowering's. The
+  flatness is not free: the 1BRC goes 1187 -> 1350 ms on the same machine (its hot
+  loop's slots are now function-wide), which is the trade the user chose over
+  carrying per-type handling in the placement rule; the transpile itself is
+  unaffected (~0.09 s for the C++ ring, ~0.40 s for the self-hosted one, both over
+  the same 8.4k-line source set). Verified: both configurations green (five
+  differentials byte-identical, T23 byte-identical), `simse_tests.exe` **51/51** in
+  both, `bun tools/stress.js` **24/24** with the C++ ring and **24/24** with the
+  self-hosted `simse.exe` rebuilt from the new output (the `hello` case's
+  `expected.cpp` moved again, hand-copied), the user's two-step flow byte-identical,
+  and the 1BRC report byte-identical to the JavaScript reference. The one bug on the
+  way was mine and the compiler caught it loudly: `isSlotName` compared
+  `_sm_expr` with `compare(0, 7, ...)` where the prefix is 8 characters, so the C++
+  ring hoisted nothing while the Simse ring (whose `startsWith` compiles to the RTL
+  native) hoisted everything - T23's two-step bootstrap is what surfaced it.
+
+- **What still keeps a block.** 94 blocks in the compiler's own output are nested in
+  another block, and they are the *source's* nesting: a `var` the program declared
+  inside a branch, whose initialization a jump to the sibling branch bypasses. The
+  same hoisting applied to source variables would need renaming (two scopes may reuse
+  a name) and would erase the program's own scopes; the lowering's slots are the part
+  that has to go, and it is gone.
+
 ### Note: the shape of a lookup like this
 
 Worth recording because the first attempt at T39 got it wrong in four ways the

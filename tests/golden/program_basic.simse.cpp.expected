@@ -33,17 +33,17 @@ Int ns1_sum(ns1_Point* self);
 Int ns1_add(Int a, Int b);
 // program_basic.simse:10
 Int ns1_sum(ns1_Point* self) {
-    {
-        Int _sm_expr1 = self->x;
-        Int _sm_expr2 = self->y;
-        Int _sm_expr3 = _sm_expr1 + _sm_expr2;
-        return _sm_expr3;
-    }
+    Int _sm_expr1;
+    Int _sm_expr2;
+    Int _sm_expr3;
+    _sm_expr1 = self->x;
+    _sm_expr2 = self->y;
+    _sm_expr3 = _sm_expr1 + _sm_expr2;
+    return _sm_expr3;
 }
 // program_basic.simse:19
 Int ns1_add(Int a, Int b) {
-    {
-        Int _sm_expr1 = a + b;
-        return _sm_expr1;
-    }
+    Int _sm_expr1;
+    _sm_expr1 = a + b;
+    return _sm_expr1;
 }

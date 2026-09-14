@@ -98,8 +98,16 @@ fun linEquals(role: AstNodeKind, lhs: *AstXmlNode, rhs: *AstXmlNode, line: Int, 
 
 // ---- the lowering ----------------------------------------------------------
 
+// What one stage of the linear form produced: the body, and whether the stage
+// changed anything. The stages run in a loop - each can leave work for the
+// others - and stop when a whole round changes nothing, so every stage has to
+// report the work it did and, just as important, the work it did not do.
+data class LinLowered(var body: List<AstXmlNode>; var changed: Bool)
+
 data class LinLowerer(
-    var next: Int
+    var next: Int;
+    // Whether this pass actually lowered anything.
+    var changed: Bool
 ) {
     fun nextId(): Int {
         val id: Int = this.next
@@ -113,10 +121,10 @@ data class LinLowerer(
 
     // One body in, one linear body out. Pure: the input statements are not
     // modified (only copied or re-rooted).
-    fun lowerBody(stmts: List<AstXmlNode>): List<AstXmlNode> {
+    fun lowerBody(stmts: List<AstXmlNode>): LinLowered {
         var out: List<AstXmlNode> = List<AstXmlNode>()
         this.lowerStmts(*stmts, "", "", *out)
-        return out
+        return LinLowered(out, this.changed)
     }
 
     // breakTo/continueTo are empty when no enclosing construct accepts them.
@@ -131,19 +139,23 @@ data class LinLowerer(
     fun lowerStmt(stmt: *AstXmlNode, breakTo: Str, continueTo: Str, out: *List<AstXmlNode>): Unit {
         val kind: AstNodeCategory = xmlKind(stmt)
         if (kind == AstNodeCategory.StmtIf) {
+            this.changed = true
             this.lowerIf(stmt, breakTo, continueTo, out)
             return
         }
         if (kind == AstNodeCategory.StmtWhile) {
+            this.changed = true
             this.lowerWhile(stmt, breakTo, continueTo, out)
             return
         }
         if (kind == AstNodeCategory.StmtSwitch) {
+            this.changed = true
             this.lowerSwitch(stmt, breakTo, continueTo, out)
             return
         }
         if (kind == AstNodeCategory.StmtBreak) {
             if (breakTo != "") {
+                this.changed = true
                 out.append(linGoto(breakTo, xmlLine(stmt), xmlColumn(stmt)))
                 return
             }
@@ -152,6 +164,7 @@ data class LinLowerer(
         }
         if (kind == AstNodeCategory.StmtContinue) {
             if (continueTo != "") {
+                this.changed = true
                 out.append(linGoto(continueTo, xmlLine(stmt), xmlColumn(stmt)))
                 return
             }
@@ -369,7 +382,51 @@ data class LinLowerer(
 }
 
 // Lowers one function-like body; the counter restarts per body.
-fun linLowerBody(stmts: List<AstXmlNode>): List<AstXmlNode> {
-    var lowerer: LinLowerer = LinLowerer(1)
+fun linLowerBody(stmts: List<AstXmlNode>): LinLowered {
+    var lowerer: LinLowerer = LinLowerer(1, false)
     return lowerer.lowerBody(stmts)
+}
+
+// The names the lowering generates for its own storage: the expression lowering's
+// temporaries (`_sm_expr<n>`) and the switch subjects `linLowerSwitch` hoists
+// (`simse_sw_<n>`). A name the program wrote can collide with one of these - the
+// switch subject's collision is an accepted, documented risk - but nothing the
+// lowering generates came from the source, which is what the slot hoisting asks
+// about.
+fun linIsSlotName(name: Str): Bool {
+    return name.startsWith("_sm_expr") || name.startsWith("simse_sw_")
+}
+
+// The whole linear form of one function-like body, ready to emit: the stages
+// (`linLowerBody`, `linSimplifyBody`, `linLowerExprs`) run in a loop until none of
+// them has work left, then the block folding (`linFlattenBlocks`) runs, and while
+// that changed something the loop starts over. Folding is what lets the next round
+// see a flatter body - and a jump a block used to hide is a jump the peephole can
+// fold.
+fun linLowerForEmission(body: List<AstXmlNode>): List<AstXmlNode> {
+    var current: List<AstXmlNode> = body
+    var canChange: Bool = true
+    var guard: Int = 0
+    // A round only removes statements (it never adds any), so the loop below always
+    // terminates; the guard is there to bound a bug, not the work.
+    while (canChange && guard < 256) {
+        guard = guard + 1
+        var canExtract: Bool = true
+        while (canExtract) {
+            canExtract = false
+            val lowered: LinLowered = linLowerBody(current)
+            current = lowered.body
+            canExtract = canExtract || lowered.changed
+            val simplified: LinLowered = linSimplifyBody(current)
+            current = simplified.body
+            canExtract = canExtract || simplified.changed
+            val extracted: LinLowered = linLowerExprs(current)
+            current = extracted.body
+            canExtract = canExtract || extracted.changed
+        }
+        val flattened: LinLowered = linFlattenBlocks(current)
+        current = flattened.body
+        canChange = flattened.changed
+    }
+    return current
 }

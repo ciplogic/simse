@@ -15,37 +15,34 @@ ns1_Counter ns1__make_Counter(Int value) {
 Int ns1_bump(ns1_Counter* self);
 // stress/hello/src/main.simse:3
 Int ns1_bump(ns1_Counter* self) {
-    {
-        Int _sm_expr1 = self->value;
-        Int _sm_expr2 = _sm_expr1 + 1;
-        return _sm_expr2;
-    }
+    Int _sm_expr1;
+    Int _sm_expr2;
+    _sm_expr1 = self->value;
+    _sm_expr2 = _sm_expr1 + 1;
+    return _sm_expr2;
 }
 // stress/hello/src/main.simse:8
 int main() {
+    Bool _sm_expr1;
+    Bool _sm_expr2;
+    Int _sm_expr3;
     Int i = 0;
     Int total = 0;
     L1:;
-    {
-        Bool _sm_expr1 = i < 5;
-        if (!(_sm_expr1)) goto L2;
-    }
+    _sm_expr1 = i < 5;
+    if (!(_sm_expr1)) goto L2;
     total = total + i;
     i = i + 1;
     goto L1;
     L2:;
     ns1_Counter c = ns1__make_Counter(10);
-    {
-        Bool _sm_expr2 = total > 5;
-        if (!(_sm_expr2)) goto L4;
-    }
+    _sm_expr2 = total > 5;
+    if (!(_sm_expr2)) goto L4;
     std::cout << std::boolalpha << (total) << std::endl;
     goto L5;
     L4:;
-    {
-        Int _sm_expr3 = ns1_bump(simse_addressOf(c));
-        std::cout << std::boolalpha << (_sm_expr3) << std::endl;
-    }
+    _sm_expr3 = ns1_bump(simse_addressOf(c));
+    std::cout << std::boolalpha << (_sm_expr3) << std::endl;
     L5:;
     std::cout << std::boolalpha << (true) << std::endl;
     return 0;

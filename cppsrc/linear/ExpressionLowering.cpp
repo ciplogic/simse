@@ -78,6 +78,11 @@ namespace linear {
                 return out;
             }
 
+            // Whether an expression was actually bound to a temporary. Everything
+            // else this pass does keeps the shape it read, so a body that is already
+            // lowered comes back with this false (`linear::lowerForEmission`).
+            bool changed = false;
+
         private:
             // Per body, like the label counter in the linear pass.
             int next = 1;
@@ -117,6 +122,7 @@ namespace linear {
             ExprPtr bind(const ExprPtr &e) {
                 const Str name = freshTemp();
                 temps.push_back(tempDecl(name, e, e->pos));
+                changed = true;
                 return nameExpr(name, e->pos);
             }
 
@@ -274,8 +280,11 @@ namespace linear {
         };
     }
 
-    List<StmtPtr> lowerExprs(const List<StmtPtr> &body) {
+    Lowered lowerExprs(const List<StmtPtr> &body) {
         Flattener flattener;
-        return flattener.run(body);
+        Lowered result;
+        result.body = flattener.run(body);
+        result.changed = flattener.changed;
+        return result;
     }
 }

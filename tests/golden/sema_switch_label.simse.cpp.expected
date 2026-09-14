@@ -11,12 +11,13 @@ Int ns1_f() {
 }
 // sema_switch_label.simse:7
 Int ns1_pick(Int n) {
-    Int simse_sw_1 = n;
-    {
-        Int _sm_expr1 = ns1_f();
-        Bool _sm_expr2 = simse_sw_1 == _sm_expr1;
-        if (!(_sm_expr2)) goto L4;
-    }
+    Int simse_sw_1;
+    Int _sm_expr1;
+    Bool _sm_expr2;
+    simse_sw_1 = n;
+    _sm_expr1 = ns1_f();
+    _sm_expr2 = simse_sw_1 == _sm_expr1;
+    if (!(_sm_expr2)) goto L4;
     return 1;
     L4:;
     return 0;

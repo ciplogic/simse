@@ -1020,16 +1020,17 @@ data class Emitter(
             this.line(1, "}")
         }
         this.curReturnType = returnNode
-        // Structured control flow is lowered to labels/gotos and then simplified
-        // before emission (impl_specs/linear-lowering.md); the emitter below only
-        // knows the linear forms. The semantic step that follows gives the
-        // declarations the lowering introduced - and any local the program left
-        // unannotated - the type the emitter would otherwise have to guess while
-        // emitting (sema/TypeInfer.simse).
-        var lowered: List<AstXmlNode> = linLowerExprs(linSimplifyBody(linLowerBody(xmlChildren(*xmlChild(decl, AstNodeKind.Body), AstNodeKind.Stmt))))
+        // Structured control flow is lowered to labels/gotos, its expressions are
+        // extracted into temporaries, and the blocks the lowering wrapped around a
+        // declaration are folded again - in a loop, because each stage can leave work
+        // for the others (impl_specs/linear-lowering.md). The type pass then spells
+        // the declarations, which is what lets their own storage move to the top of
+        // the body (`linFinishForEmission`) and the folding finish the job: the
+        // emitter below knows the linear forms only.
+        var lowered: List<AstXmlNode> = linLowerForEmission(xmlChildren(*xmlChild(decl, AstNodeKind.Body), AstNodeKind.Stmt))
         val semantics: SemBody = SemBody(copy(decl), fn.templateParams, copy(selfTypePtr))
         lowered = semInferTypes(*lowered, facts, *semantics)
-        this.emitStmts(*lowered, 1)
+        this.emitStmts(*linFinishForEmission(lowered), 1)
         if (this.failed) {
             return
         }
@@ -1852,13 +1853,13 @@ data class Emitter(
             lambdaBody.append(ret)
             val savedOut: Str = this.out
             this.out = ""
-            this.emitStmts(*linLowerExprs(linSimplifyBody(linLowerBody(lambdaBody))), 1)
+            this.emitStmts(*linFinishForEmission(linLowerForEmission(lambdaBody)), 1)
             body = this.out
             this.out = savedOut
         } else {
             val savedOut: Str = this.out
             this.out = ""
-            this.emitStmts(*linLowerExprs(linSimplifyBody(linLowerBody(bodyStmts))), 1)
+            this.emitStmts(*linFinishForEmission(linLowerForEmission(bodyStmts)), 1)
             body = this.out
             this.out = savedOut
         }

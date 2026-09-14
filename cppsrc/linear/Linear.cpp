@@ -1,5 +1,8 @@
 #include "Linear.h"
 
+#include "ExpressionLowering.h"
+#include "Simplify.h"
+
 #include <string>
 #include <utility>
 
@@ -20,6 +23,11 @@ namespace linear {
 
         class Lowerer {
         public:
+            // Whether this pass actually lowered anything: the stages of
+            // `lowerForEmission` run until a whole round changes nothing, so a pass
+            // has to report that it found no work just as much as the work it did.
+            bool changed = false;
+
             List<StmtPtr> run(const List<StmtPtr> &stmts) {
                 List<StmtPtr> out;
                 Ctx ctx;
@@ -185,24 +193,29 @@ namespace linear {
             void lowerStmt(const Stmt &stmt, const Ctx &ctx, List<StmtPtr> &out) {
                 switch (stmt.kind) {
                     case StmtKind::If:
+                        changed = true;
                         lowerIf(stmt, ctx, out);
                         return;
                     case StmtKind::While:
+                        changed = true;
                         lowerWhile(stmt, ctx, out);
                         return;
                     case StmtKind::Switch:
+                        changed = true;
                         lowerSwitch(stmt, ctx, out);
                         return;
                     case StmtKind::Break:
                         // Invalid outside a loop/switch; sema reports it before
                         // this pass runs, so keep the node for the emitter.
                         if (!ctx.breakTo.empty()) {
+                            changed = true;
                             out.push_back(gotoStmt(ctx.breakTo, stmt.pos));
                             return;
                         }
                         break;
                     case StmtKind::Continue:
                         if (!ctx.continueTo.empty()) {
+                            changed = true;
                             out.push_back(gotoStmt(ctx.continueTo, stmt.pos));
                             return;
                         }
@@ -311,8 +324,54 @@ namespace linear {
         };
     }
 
-    List<ast::StmtPtr> lowerBody(const List<ast::StmtPtr> &body) {
+    Lowered lowerBody(const List<StmtPtr> &body) {
         Lowerer lowerer;
-        return lowerer.run(body);
+        Lowered result;
+        result.body = lowerer.run(body);
+        result.changed = lowerer.changed;
+        return result;
+    }
+
+    bool isSlotName(const Str &name) {
+        // `compare` rather than a `startsWith` helper: the RTL's `Str` is either
+        // backing, and both have it. The lengths are the prefixes' own (8 and 9).
+        return name.compare(0, 8, "_sm_expr") == 0 || name.compare(0, 9, "simse_sw_") == 0;
+    }
+
+    List<StmtPtr> lowerForEmission(const List<StmtPtr> &body) {
+        List<StmtPtr> current = body;
+        bool canChange = true;
+        int guard = 0;
+        // A round only removes statements (it never adds any), so the loop below
+        // always terminates; the guard is there to bound a bug, not the work.
+        while (canChange && guard < 256) {
+            guard++;
+            // The rewriting stages feed each other (`=>` is one stage):
+            //
+            //   linearize => simplify => extract expressions => linearize => ...
+            //
+            // and the round is over when none of them has anything left to do.
+            bool canExtract = true;
+            while (canExtract) {
+                canExtract = false;
+                Lowered lowered = lowerBody(current);
+                current = std::move(lowered.body);
+                canExtract = canExtract || lowered.changed;
+                lowered = simplifyBody(current);
+                current = std::move(lowered.body);
+                canExtract = canExtract || lowered.changed;
+                lowered = lowerExprs(current);
+                current = std::move(lowered.body);
+                canExtract = canExtract || lowered.changed;
+            }
+            // Folding blocks is the last step of every round: it is what hands the
+            // next round a flatter body, which is the only way the stages above see
+            // work again (a jump a block used to hide is a jump the peephole can
+            // fold, and a folded jump can free a label).
+            Lowered flattened = flattenBlocks(current);
+            current = std::move(flattened.body);
+            canChange = flattened.changed;
+        }
+        return current;
     }
 }

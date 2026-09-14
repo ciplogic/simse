@@ -801,19 +801,21 @@ namespace codegen {
                     line(1, "}");
                 }
                 curReturnType = decl.returnType;
-                // Structured control flow is lowered to labels/gotos and then
-                // simplified before emission (impl_specs/linear-lowering.md);
-                // the emitter below only knows the linear forms. The semantic step
-                // that follows gives the declarations the lowering introduced - and
-                // any local the program left unannotated - the type the emitter
-                // would otherwise have to guess while emitting (sema/TypeInfer.h).
-                List<ast::StmtPtr> lowered =
-                        linear::lowerExprs(linear::simplifyBody(linear::lowerBody(decl.body)));
+                // Structured control flow is lowered to labels/gotos, its
+                // expressions are extracted into temporaries, and the blocks the
+                // lowering wrapped around a declaration are folded again - in a loop,
+                // because each stage can leave work for the others
+                // (impl_specs/linear-lowering.md). The type pass then spells the
+                // declarations, which is what lets their own storage move to the top
+                // of the body (`finishForEmission`) and the folding finish the job:
+                // the emitter below knows the linear forms only.
+                List<ast::StmtPtr> lowered = linear::lowerForEmission(decl.body);
                 sema::Body semantics;
                 semantics.decl = &decl;
                 semantics.selfType = selfTypePtr;
                 semantics.typeParams = fn.templateParams;
-                emitStmts(sema::inferTypes(lowered, facts, semantics), 1);
+                List<ast::StmtPtr> typed = sema::inferTypes(lowered, facts, semantics);
+                emitStmts(linear::finishForEmission(typed), 1);
                 if (failed) return;
                 line(0, "}");
             }
@@ -1384,13 +1386,13 @@ namespace codegen {
                     lambdaBody.push_back(ret);
                     Str saved = out;
                     out.clear();
-                    emitStmts(linear::lowerExprs(linear::simplifyBody(linear::lowerBody(lambdaBody))), 1);
+                    emitStmts(linear::finishForEmission(linear::lowerForEmission(lambdaBody)), 1);
                     body = out;
                     out = saved;
                 } else {
                     Str saved = out;
                     out.clear();
-                    emitStmts(linear::lowerExprs(linear::simplifyBody(linear::lowerBody(e.body))), 1);
+                    emitStmts(linear::finishForEmission(linear::lowerForEmission(e.body)), 1);
                     body = out;
                     out = saved;
                 }

@@ -129,7 +129,11 @@ enum ExprSlot {
 
 data class ExprFlattener(
     // Per body, like the label counter in the linear pass.
-    var next: Int
+    var next: Int;
+    // Whether an expression was actually bound to a temporary. Everything else
+    // this pass does keeps the shape it read, so a body that is already lowered
+    // comes back with this false (`linLowerForEmission`).
+    var changed: Bool
 ) {
     fun freshTemp(): Str {
         val id: Int = this.next
@@ -145,6 +149,7 @@ data class ExprFlattener(
     fun bind(e: *AstXmlNode, temps: *List<AstXmlNode>): AstXmlNode {
         val name: Str = this.freshTemp()
         temps.append(linSubjectDecl(name, e, xmlLine(e), xmlColumn(e)))
+        this.changed = true
         return this.roleName(e.name, name, xmlLine(e), xmlColumn(e))
     }
 
@@ -325,9 +330,9 @@ data class ExprFlattener(
 }
 
 // Lowers the expressions of one linear body; the counter restarts per body.
-fun linLowerExprs(body: List<AstXmlNode>): List<AstXmlNode> {
-    var flattener: ExprFlattener = ExprFlattener(1)
+fun linLowerExprs(body: List<AstXmlNode>): LinLowered {
+    var flattener: ExprFlattener = ExprFlattener(1, false)
     var out: List<AstXmlNode> = List<AstXmlNode>()
     flattener.walkStmts(body, *out)
-    return out
+    return LinLowered(out, flattener.changed)
 }
