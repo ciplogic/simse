@@ -738,7 +738,7 @@ component-specific):
   `globalFunctions`/`packageDecls` in `collectGlobal`, `buildVisible` re-running
   per file, the per-call overload scans in `analyzeCall`/`markExtensionUsed`, and
   `lookupValue`'s scope walk, all in `cppsrc/sema/Sema.simse` (`guide4ai.md`
-  section 9).
+  section 8).
 - **A custom `Dictionary` exists, and is measured faster (T41).**
   `cppsrc/rtl/smdictionary.hpp` implements `SmDictionary<TKey, TValue>` - the .NET
   shape: one `Entry` per row (`hash`, `next`, key, value), chains by row index, a
@@ -811,7 +811,7 @@ component-specific):
   `items.size() == 0`, `val p: *List<Int> = *items; items.append(3)` leaves
   `p.size() == 1`); and the two lookups per line (`get` then `insert`, since no
   API exposes a stored value in place) are a library gap, which is the remaining
-  distance to the 727 ms reference - see `guide4ai.md` section 9 item 8.
+  distance to the 727 ms reference - see `guide4ai.md` section 8 item 8.
   `benchmarks/onebrc/benchmark.md` has the method, the notes (tenths as `Int`, the
   half-toward-positive-infinity rounding rule, CRLF vs LF) and the run commands.
 - **`Span<T>`, `StrView`, and the in-place line reader (T43).** One borrowed view
@@ -832,7 +832,7 @@ symbols, which is what gives `view.slice(0, n).toString()` and `"x" +
 view.toString()` their types. (A third, pre-existing edge bit the test: a chained
 call on a handle method - `stream.fileSize().toString()` - has no inferred type and
 now picks the wrong `toString`; bind the middle step to a typed `val`, as
-`guide4ai.md` section 10 already says.)
+`guide4ai.md` section 9 already says.)
   Adding the RTL type name also exposed a name-resolution bug: the emitter consulted
 the RTL *name* list before the program's own declarations, so a declared type of
 the same name (the compiler had a `common.StrView`) was shadowed in every emitted
@@ -855,7 +855,7 @@ numbers shifted with the parser/scanner edits).
   **6%** faster than the recycled buffer and **1.43x** ahead of the naive C++
   baseline (1550/1570 ms), against 1.88x across the three Simse readers. What
   remains is two `Str`s per line (`tenths` takes a `Str` and the dictionary is
-  keyed by `Str`) and the dictionary's two lookups per line (section 9 item 8).
+  keyed by `Str`) and the dictionary's two lookups per line (section 8 item 8).
   The benchmark was then narrowed to this variant alone - C++ STL baseline against
   the in-place Simse program, 4 interleaved pairs: **1093/1106 ms against
   1390/1405 ms, i.e. 1.27x faster than the naive C++** (the ratio has run
@@ -880,7 +880,7 @@ numbers shifted with the parser/scanner edits).
   `Stmt.Block` for everything else, so no jump can cross an initialization.
   Temporaries stay *untyped*, so the emitter emits `auto` - the same path the
   hoisted `switch` subject already used, and the reason this pass is not where the
-  types come back (the sema-inference item in `guide4ai.md` section 9). Two
+  types come back (the sema-inference item in `guide4ai.md` section 8). Two
   boundaries are deliberate: an **lvalue path stays a path** (binding it would copy
   what is behind it, and a mutating call on the copy would be lost; only its indices
   and arguments are flattened, so `a[i + 2].append(x)` becomes

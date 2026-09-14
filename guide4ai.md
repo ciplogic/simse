@@ -4,8 +4,11 @@ Purpose: re-orient a new agent/session fast. Read this first, then
 `impl_specs/capability-matrix.md`, `specs/modules.md`, and
 `impl_specs/roadmap.md`. `impl_specs/user-language-roadmap.md` is the companion
 roadmap for what a *user* of the language is blocked on (protocols, JSON, tooling,
-the single-threaded server story). Status snapshot below is as of 2026-09-11;
-counts and byte sizes drift — trust the build, not these numbers.
+the single-threaded server story).
+
+The guide deliberately holds **no status**: what is implemented, what moved and what
+it cost lives in `impl_specs/` (`capability-matrix.md` is the update log) and in
+`benchmarks/`, and neither is worth copying here - it drifts by the hour.
 
 ## 1. What this is
 
@@ -15,217 +18,7 @@ transpiles to a single amalgamated C++20 file. The long-term goal is a
 sources, with a small hand-written C++ foundation (the RTL) for things not yet
 expressible in the language.
 
-## 2. Current state (2026-09-14)
-
-- The compiler is **fully ported to `.simse` and self-hosts to a fixed point**:
-  the hand-written C++ compiler transpiles the Simse compiler sources; the
-  resulting stage-1 binary transpiles the same sources to **byte-identical**
-  output.
-- **Five differentials are byte-identical**: scanner, skeleton parser, parser,
-  sema, codegen (hand-written vs transpiled Simse).
-- `simse_tests.exe`: 51 tests, all passing. Clean build green, including all the
-  differentials and `stage1_check`, run automatically by the build.
-- Ported components: `common`/`xmlutil`, scanner, skeleton parser,
-  parser, sema, codegen, compiler driver.
-- Runtime alignment: `Str` is the inline `SmString` (`SmallVector<char, 24>` +
-  terminating NUL, the `specs/containers.md` layout) and `List<T>` is
-  `SmallVector<T, 4>`, with `std::string` / `std::vector` as escape hatches
-  (`SIMSE_STR_STD_STRING` / `SIMSE_LIST_STD_VECTOR`). Both `Str` backings are
-  green on the full build and produce **byte-identical** compiler output.
-- Planned tasks: **static storage** slice 1 (file-level `var`/`val`,
-  `specs/statics.md` / `impl_specs/statics.md`) is implemented in both rings;
-  slices 2-5 (`object`, generic `object`, `arrayEmpty` in Simse, object methods)
-  are next.
-- The directory compiler's default output is `simse_out.cpp`; the two-step
-  bootstrap artifacts live under `cmake-build-debug/stage1/` (`gen/simse_out.cpp`,
-  `gen/simse_out1.cpp`, `run/simse_out.cpp`).
-- **Tree nodes hold their children in an `Array`** (`specs/xml-node.md`):
-  `XmlNode.Children` is `Array<XmlNode>`, built as a `List` and frozen with
-  `toArray()` (`xmlAddChild`/`xmlAddChildren` in `cppsrc/common/xmlutil.simse`),
-  and a leaf node points at the shared empty array instead of allocating. Peak
-  working set of a self-transpile (release, self-hosted) fell from 48.8 MB to
-  21.0 MB and the min/median runtime from 128/141 ms to 121/131 ms over 6,357
-  lines of Simse (both binaries emit byte-identical C++).
-- **The AST's roles, categories and attribute keys are enums** (`AstXmlNode`,
-  `cppsrc/rtl/astxml.simse`): `AstNodeKind` is the role, `AstNodeCategory` the
-  schema's `kind`, `AstNodeAttributeKind` an attribute's key, so every test on a
-  node - role, kind, attribute lookup - is an integer compare; the only text left
-  in a tree is an attribute value. The category change alone was a few percent
-  (2-16% across windows), the attribute-key change was the big one: min/median
-  **121/131 ms -> 81/84 ms** (~33%) and peak working set 21.3 -> **16.1 MB**, below
-  the hand-written ring's 22.8 MB.
-- **Table lookups share their tables** (statics, the `statics.md` feature's first
-  use in the compiler): the scanner's keyword, operator and token-rule tables are
-  file-level `var`s built once by the pass and read through raw pointers
-  (`tableMatch(view, table, exact)` is the one comparison both lookups use), where
-  returning a `List<Str>` rebuilt them per call - a copy per token. Min/median
-  **86-88/91-93 ms -> 70-72/75-77 ms** (**15-20%**) over three windows. Cumulative
-  on the self-transpile over 6,357 lines: **128/121 ms at the start of the run ->
-  ~71/76 ms**, and the gap to the hand-written ring closed from 3.5-3.7x to
-  **~2.0x** (its 36.4/42.7 ms).
-- **The scanner's table match runs cheap pre-tests** (first character, then length,
-  then the rest) and reads its entries through raw pointers, so no lookup copies
-  text (`StrView.startsWithPtr` is the pointer-taking comparison). Self-transpile
-  **73.1/78.5 -> 64.9/69.8 ms** (-11%); the scanner stage alone over the same source
-  set **317.9/333.0 -> 261.1/271.3 ms** (-18/-19%), which is **1.49x** the
-  hand-written scanner where it was ~1.8x.
-- **Throughput is accepted as-is (T40).** Self-transpile over the 6,357 lines of
-  `cppsrc`: **65/68 ms** self-hosted against the hand-written ring's **36/43 ms**
-  (**1.6-1.8x**, where this run started at 3.5-3.7x; ~95k lines/s). The C++ compile
-  of the emitted TU is the real cost of a build, not the transpile. One known
-  edge: a *single* file's cost grows quadratically beyond ~16k lines (25 us/line at
-  16k, ~99 us/line at 64k) and the quadratic phase is **sema** - measured, accepted
-  and deferred, see section 9 and `impl_specs/capability-matrix.md` T40.
-- **A custom dictionary exists behind a define (T41).** `cppsrc/rtl/smdictionary.hpp`
-  (`SmDictionary<TKey, TValue>`, the .NET shape: one row per entry holding hash +
-  chain link + key + value, power-of-two buckets with the mask in a field, 16
-  buckets growing 4x, append-only rows with tombstone removal, holes packed by the
-  iterator calls *and* by a growth, since growing already walks every row) is
-  selectable with `SIMSE_DICT_SM` and emits byte-identical C++ to the
-  `std::unordered_map` default. Measured: **~6% faster end to end** on the
-  self-transpile (62.6/68.2 and 61.5/69.5 vs 67.2/72.7 and 65.2/73.8 ms over 37
-  interleaved pairs), iteration ~8x, deep copies ~5x, miss lookups ~1.6x, `fill`,
-  `erase` and the compiler's small-dictionary shapes at parity; the one remaining
-  deficit is hit lookups on cache-resident tables (~1.8x in the micro-benchmark),
-  which is why it is still opt-in. Numbers and the suspects are in
-  `impl_specs/capability-matrix.md` T41 and `impl_specs/rtl-abi.md` item 11.
-- **The RTL reads files line by line, and there is a clock (T42).**
-  `FileStream` (`cppsrc/rtl/filestream.hpp`, prelude `cppsrc/rtl/fs.simse`) has
-  `openFileStream(path): *FileStream` plus the **struct methods**
-  `readLine(): Opt<Str>`, `readLineInto(buffer: *Str): Bool`, `fileSize(): Int64`
-  and `close()`; `nowMillis()` (`timeops.hpp`) is a monotonic ms clock. On the
-  1BRC (`benchmarks/onebrc`, 10M rows, 127.7 MiB) the reader choice alone is worth
-  **1.8x**: 2075/2127 ms with `readLine` against 1156/1211 ms with
-  `readLineInto`, i.e. 1.34x *behind* a naive C++ `getline`+`stod` baseline
-  (1550/1570 ms) with the convenient form and 1.34x *ahead* with the recycled
-  buffer. All four reports are byte-identical. Two findings worth keeping:
-  `*x` **borrows** (the aggregation must take `*Dictionary`) where `&x` **boxes a
-  copy** - mutations through the box are lost; and the two-lookups-per-line
-  (`get` then `insert`) is a *library* gap, not a language one (section 9).
-- **There is a `Span<T>` and a `StrView` (`Span<Char>` + the byte operations),
-  and the reader can parse in place (T43).** `cppsrc/rtl/span.hpp`
-  (prelude `cppsrc/rtl/Span.simse`) is a borrowed view: a `*T` pointer plus a
-  length, `size`/`isEmpty`/`at`/indexing, and `slice` in C#'s two forms - the
-  iteration idiom is `while (!span.isEmpty()) { ... span[0] ... span = span.slice(1) }`.
-  `cppsrc/rtl/strview.hpp` (prelude `cppsrc/rtl/StrView.simse`) *embeds* a
-  `Span<Char>` and adds `charAt`, `find`/`indexOf`, `startsWith`, `startsWithPtr`,
-  `substr`, `toString`; `spanOf(*items)` and `spanOfStr(*text)` borrow their source.
-  Two of those choices are forced by the emitter, not taste: an *alias*
-  (`typealias StrView = Span<Char>`) does not survive receiver-type lookup for
-  chained calls, and prelude *methods* are invisible to its inference - so the view
-  operations are natives with explicit symbols. `FileStream.readLineView(): Opt<StrView>`
-  returns a line without copying, on the same 256 KiB readahead buffer and the same
-  `nextLineSpan` code path as `readLineInto` - valid until the next read on that
-  stream. 1BRC (10M rows, release, interleaved min/median): **view 1087/1088 ms**
-  against **into 1156/1161 ms** (**6%**) and **readLine 2040/2048 ms** - the reader
-  alone is a 1.88x spread. The benchmark now ships only the in-place variant, so
-  its headline comparison is against the naive C++ STL baseline: **1093/1106 ms
-  against 1390/1405 ms, i.e. 1.27x faster**, byte-identical reports, 6.5 MB peak
-  working set (`benchmarks/onebrc/benchmark.md` is the write-up; the other two
-  reads stay in the RTL and in `stress/read-lines`). Adding a prelude type name
-  to the emitter's RTL list exposed a name-resolution bug that is now fixed: the
-  emitter consulted that list *before* the program's own declarations, so a prelude
-  type shadowed a program declaration of the same name; `typeName` now lets a
-  declared type from any package other than `rtl` win, in both rings.
-  `stress/read-lines` covers all three readers, including a generated 300 KB line
-  (the buffer's tail shift and growth), and `stress/span` (renamed from `cursor`)
-  plus `stress/lambdas`/`recursion` cover span iteration.
-- **Nested expressions are lowered to temporaries (T44).** `linear` gained a third
-  pass, `ExpressionLowering.{h,cpp}` (`linLowerExprs`), so every expression the
-  emitter sees is a simple operand (literal, name, qualified name, lambda, lvalue
-  path) or a single operation over simple operands, and anything deeper is bound to
-  a `_sm_expr<n>` local numbered by a per-body counter, scoped so no jump crosses
-  its initialization. The boundaries are deliberate: an lvalue path stays a path (so
-  a mutating call on it is not a copy), and a `&&`/`||` in a *value* position stays
-  one node (the shape that would materialise it is written down in
-  `impl_specs/linear-lowering.md`, not implemented). The temporaries were untyped at
-  first; the step below gives them real types.
-- **The semantic step: the lowered declarations get types (T45).**
-  `sema::inferTypes` (`cppsrc/sema/TypeInfer.{h,cpp,simse}`) runs as the last step of
-  the lowering - `inferTypes(lowerForEmission(body), facts, body)`
-  - and fills in the type of every untyped `VarDecl` it can prove, walking the
-  statements in scope order (shadowing included) rather than relying on emission
-  order. It reads the emitter's own collected tables (declared types, enums,
-  functions/methods with receivers, native extensions, statics), which are threaded
-  to the emitter as a parameter because a data-class *field* would name another
-  package's type in the Simse ring. **Generics stay symbolic**: a type parameter in
-  scope is a fine type to spell (reification is still the C++ template), an explicit
-  instantiation substitutes its type arguments, and a member call binds the
-  extension's parameters from its receiver. What it cannot type stays `auto` - a
-  lambda (its callable type comes from the use site), `null` (no type of its own),
-  and the recorded gaps - see the T48/T49 bullets for the current count.
-- **Conditions are decomposed, lambda bodies run the pipeline, borrows are typed
-  (T48).** A `&&`/`||`/`!` *condition* no longer reaches the emitter as an
-  expression: `lowerCondition` tests one leaf at a time (`&&` jumping to the false
-  target, `||` to the true one, a leaf using whichever of `ifTrue`/`ifFalse` matches
-  its value so a source negation is never spelled as a negated expression), and the
-  peephole folds each leaf's jump pair into the one jump the emitter prints. A
-  condition the decomposition cannot cover (a `&&` inside a call argument) stays one
-  jump. A lambda body is no longer a special single-expression case: `lambda()`
-  builds the `return` that expression stands for and runs the whole lowering on it.
-  The inference also learned the three shapes it had been leaving to `auto`: `&x` is
-  a counted reference, `*x` the address of what `x` denotes, `copy(x)` the value
-  behind the handle - which is what turned the `program_expr` golden's
-  `auto reference`/`auto dereferenced` into `std::shared_ptr<Int>`/`Int*`.
-- **A value receiver is a raw pointer (T47).** A receiver that is a *value* - a
-  data-class method, `fun f(this: Point, ...)`, `fun Str.firstByte()` - is emitted
-  `T* self` (not `T& self`): `self` is the language's own borrow form (`*T`), member
-  access is `self->field`, and a bare `this` reads through the pointer. A handle
-  receiver keeps its handle, which is the point: `this: &T` stays
-  `std::shared_ptr<T> self`, so a body can store `self` in a list and the refcount
-  survives; `this: *T` stays `T* self`. Call sites pass the receiver's address
-  (`simse_addressOf(x)`, which covers a place and a temporary - valid for the call),
-  i.e. the same rule a `*x` borrow follows. *Native* extensions keep the host
-  convention, so the RTL surface did not change.
-- **A value position is one operation deep (T46).** Every value position - an
-  operand, an argument, a jump's condition, a `return`'s value - now gets its own
-  `_sm_expr<n>` unless it is a literal/name/qualified name/lambda, so a jump reads
-  one name and `self.x + self.y` is three temporaries. Only a call **receiver**, an
-  **assignment target** and the operand of `&`/`*` keep an alias
-  (`a[i].append(x)` still appends to the element), and a **borrow of a temporary**
-  (`*f()`) stays inline because its pointer only lasts the call it is passed to.
-  At T46 the output was 18.2k lines with 5,157 temporaries and 931 `auto`s; T48 typed
-  the borrows and T49 folded the blocks, which is where the numbers below come from.
-- **The linear form is a loop of stages, ending in a block folding (T49).**
-  `linear::lowerForEmission` (`linLowerForEmission`) is the first phase of the
-  pipeline the emitter calls per body: `lowerBody` / `simplifyBody` / `lowerExprs` run
-  until none of them changes anything, then `flattenBlocks` folds nested blocks into
-  their parents, and while that changed something the round repeats (folding exposes a
-  jump the peephole can fold, and a folded jump frees a label). Each stage returns the
-  body *and* whether it changed (`linear::Lowered`/`LinLowered`); no stage adds a
-  statement, so the loop terminates on its own. A block survives only where splicing
-  it would move a declaration across a jump - C++ rejects that (C2362) - so what is
-  left is load-bearing. Effect on the compiler's own output: **21,965 lines and 2,895
-  blocks (1,260 of them nested in another block) become 18,925 lines and 1,339 blocks
-  (555 nested)**. Six `tests/golden/*.cpp.expected` and `stress/hello/expected.cpp`
-  moved with it (the brace collapse, nothing else).
-- **The lowering's slots move to the top of the body, so the folding can finish
-  (T50).** The blocks that stayed were the ones a temporary forced, and the fix is
-  the one the user described: after the types are resolved, hoist the variables to
-  the start of the function. `linear::hoistSlots` (`linHoistSlots`) moves every
-  `_sm_expr<n>` / `simse_sw_<n>` declaration to the top of the body and turns its
-  initializer into an assignment in place, so no jump can bypass a declaration and
-  every one of those blocks folds. The initializer keeps its position (evaluation
-  order and side effects do not move); the storage does not, which makes each slot
-  live for the whole body - a bytecode frame's slots, no liveness reuse, the price of
-  the flatness. It runs **after `sema::inferTypes`**, so the pipeline is two phases -
-  `lowerForEmission` -> `inferTypes` -> `linear::finishForEmission` (hoisting,
-  peephole and folding in the same loop shape) - and a slot with no type keeps its
-  declaration and its block (the 49 `auto`s, all in lambda bodies). A source-level
-  `val`/`var` never moves: its scope is the program's and two scopes may reuse a name.
-  Effect on the compiler's own output: **1,339 blocks (555 nested) and 18,925 lines
-  become 758 blocks (94 nested) and 23,604 lines** (the extra lines are one
-  declaration plus one assignment where a declaration-with-initializer was), and the
-  blocks left are the program's own scopes. Both configurations are green (five
-  differentials, T23's two-step bootstrap byte-identical), `simse_tests.exe` is 51/51
-  in both, `bun tools/stress.js` is 24/24 with the C++ ring and 24/24 with the
-  self-hosted `simse.exe` (its `hello` `expected.cpp` moved again), the user's own
-  two-step flow is byte-identical, and the 1BRC report is identical to the JavaScript
-  reference. The flatness costs on that benchmark: **1187 -> 1350 ms**, since its hot
-  loop's slots are now function-wide; the transpile is unaffected (~0.09 s for the
-  C++ ring, ~0.40 s self-hosted, over the same ~8.4k-line source set).
-
-## 3. Build / test / run
+## 2. Build / test / run
 
 Toolchain: CMake + Ninja + MSVC (arm64), C++20. CLion bundles cmake/ninja.
 From the build dir the wrapper sources `vcvarsall arm64` then runs
@@ -292,7 +85,7 @@ excluded as prelude), so the amalgamation contains exactly one `main` — the
 driver's — and `build.bat` can compile it. `stage1_check` uses the equivalent
 explicit `cppsrc/compiler/Driver.simse` input.
 
-## 4. Repo map
+## 3. Repo map
 
 - `README.md` and `docs/` - the published documentation: what the language is
   (`README.md`), the tutorial (`docs/language-tour.md`), the pipeline and emitted
@@ -372,7 +165,7 @@ explicit `cppsrc/compiler/Driver.simse` input.
   write-up (`benchmark.md`) and the run commands (`README.md`; data and binaries
   are git-ignored).
 
-## 5. Architecture
+## 4. Architecture
 
 Two "rings" that must stay in lockstep:
 
@@ -435,7 +228,7 @@ Key design points:
   both declare `Point` or `bump` without colliding in the amalgamated translation
   unit. `main` keeps its name and `native` symbols are never prefixed.
 
-## 6. Invariants and how they are verified
+## 5. Invariants and how they are verified
 
 - **FIVE differentials byte-identical**: `scanner_diff`, `skel_diff`,
   `parser_diff`, `sema_diff`, `codegen_diff` (hand-written C++ vs transpiled
@@ -452,7 +245,7 @@ Key design points:
   must pass it: `--simse cmake-build-debug/simse_transpile.exe` checks the other
   side of the port on the same corpus.
 
-## 7. Change protocol (read before editing)
+## 6. Change protocol (read before editing)
 
 - **Two rings**: any compiler behavior change must be made in BOTH the C++
   implementation and the matching `.simse` mirror (scanner, parser, sema,
@@ -484,7 +277,7 @@ Key design points:
   makes one of them false is not finished until it is updated.
 - **Do not commit** unless the user explicitly asks.
 
-## 8. Language features currently implemented
+## 7. Language features currently implemented
 
 Scalars (`Int8..64`, `Float32/64`, `Char`, `Bool`), `Str` (with a method library:
 `find`, `substr`, `startsWith`, `endsWith`, `replace`, `toInt`, `toFloat`,
@@ -501,7 +294,7 @@ Scalars (`Int8..64`, `Float32/64`, `Char`, `Bool`), `Str` (with a method library
 lambdas with by-value capture; generics reified via C++ templates; modules and
 packages.
 
-## 9. TODOs / deferred
+## 8. TODOs / deferred
 
 Do these only when asked; roughly prioritized:
 
@@ -559,16 +352,12 @@ Do these only when asked; roughly prioritized:
    lookups per line where the C++ baseline pays one - the last gap to the Bun
    reference (1.6x). A `getPtr`/`withValue`-style native (both backings) is the
    next library change; it is a library gap, not a language one.
-9. **Type inference for the lowered body is in (T45/T46/T48); the borrow shapes are
-   typed, lambda bodies are not.** `sema::inferTypes` types every untyped
-   declaration it can prove, and since T46 every value position is one operation
-   deep, so a jump and a return read one name. What is still `auto` in the
-   compiler's own output is down to **49** declarations of ~6,500, and they are all
-   inside lambda bodies: the emitter lowers a lambda body
-   (`emitStmts(linear::finishForEmission(linear::lowerForEmission(...)))`) but does not
-   run the inference on it, which a `sema::Body` built from the lambda's own
-   parameters and return type would fix - small, and it is also the last thing keeping
-   a lambda body from flattening (item 10). The rest:
+9. **Lambda bodies are the last declarations without a type.** (What the inference
+   proves, and why, is in `impl_specs/linear-lowering.md`, "Type inference on the
+   lowered body" - not repeated here.) To close it: run `sema::inferTypes` on a
+   lambda's body too, with a `sema::Body` built from the lambda's own parameters and
+   return type; small, at the two `lambda()` call sites, and it is also the last
+   thing keeping a lambda body from flattening (item 10). The rest of the item:
    - **The emitter could consume expression-level types** instead of guessing them
      (`inferType`/`memberCallReturn`/`findNativeExt` shrink to lookups); the
      inference already resolves more than the emitter asks it for.
@@ -582,31 +371,27 @@ Do these only when asked; roughly prioritized:
      has to come from the parameter) and knowing which parameters are pointers, so
      that a `*T` parameter decides place-vs-value instead of the argument's shape.
      Not blocking anything today.
-   - The three smaller gaps from T45 (a prelude struct method such as `Span.size()`,
-     a native extension called as a plain function, a call through a function-typed
-     local).
-10. **Flat bodies are in (T50); two smaller things remain.** The slot hoisting moves
-   every lowering slot to the top of the body, so the folding folds everything the
-   lowering forced and the emitted body is one flat sequence of labels, jumps and
-   assignments - 758 blocks in the compiler's own output, 94 of them nested, all of
-   those the *program's* own scopes. What is left:
-   - **Run the inference on lambda bodies** (the 49 `auto`s above). Besides typing
-     them, it is what lets *their* slots hoist and fold: today a lambda body keeps its
-     blocks because its slots have no type to declare them with. Small: build the
-     `sema::Body` from the lambda's parameters and return type at the two
-     `lambda()` call sites.
-   - **Source-scope variables stay where they are**, by design: hoisting a `var` out
-     of the branch it was written in would need renaming (two scopes may reuse a
-     name) and would erase the program's own scoping. If fully block-free output is
-     wanted later, that is the step - rename, hoist, and let the folding flatten.
-   - **The flatness costs stack-frame-wise**: every slot is live for the whole body
-     (no liveness reuse), which on the 1BRC is 1187 -> 1350 ms. Placing a declaration
-     just before the earliest jump that would bypass it - instead of at the top of the
-     body - gives the same flatness with tight lifetimes, and the rule it needs is
-     the one `spliceIsSafe` already computes. Not done because the simple placement is
-     what the user asked for.
+   - The three recorded gaps (a prelude struct method such as `Span.size()`, a native
+     extension called as a plain function, a call through a function-typed local).
+10. **A flat body still keeps the program's own scopes.** The emitted body is one
+   sequence of labels, jumps and assignments except where a *source-level* declaration
+   sits inside a branch that a jump bypasses; those blocks are the program's own
+   scoping, not the lowering's (the mechanics are in `impl_specs/linear-lowering.md`,
+   "Slot hoisting"). What is left, in the order it is worth doing:
+   - **Run the inference on lambda bodies** (item 9): besides typing them, that is
+     what lets a lambda's slots hoist and fold like any other body's.
+   - **Source variables would need renaming to go away**: hoisting a `var` out of the
+     branch it was written in collides with a sibling scope's name (the language
+     allows shadowing), so a block-free form would have to rename them first. Worth
+     it only if the IL is meant to be consumed by something that cannot read scopes -
+     today the C++ backend can.
+   - **The placement in the body is the cost knob**: every slot is live for the whole
+     body (no liveness reuse), which on the 1BRC is 1187 -> 1350 ms. Placing a
+     declaration just before the earliest jump that would bypass it - instead of at
+     the top of the body - gives the same flatness with tight lifetimes, and the rule
+     it needs is the one `spliceIsSafe` already computes.
 
-## 10. Gotchas
+## 9. Gotchas
 
 - `LNK1168` on build = a running `simse*.exe` holds the output; kill it first.
 - `build.bat` defaults to a debug build (`/MDd`), so the MSVC debug STL asserts are

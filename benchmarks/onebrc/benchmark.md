@@ -50,7 +50,7 @@ stable one.
   key type, so it has to become a `Str`) and the temperature (`tenths` takes a
   `Str`). Both are small enough to stay in `Str`'s inline buffer, but they are the
   obvious next thing to remove - `StrView.toInt()` and a `StrView`-keyed lookup
-  would do it. See `guide4ai.md` section 9.
+  would do it. See `guide4ai.md` section 8.
 - **The dictionary costs two lookups per line.** `get` then `insert`, because the
   API has no in-place access to a stored value. The C++ baseline does one. That is
   a library gap, not a language one, and is the single largest remaining item.
