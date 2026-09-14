@@ -118,30 +118,47 @@ The bootstrap RTL also provides these `Str` operations (native extensions):
 - `toUpper(): Str` / `toLower(): Str` - ASCII/byte case folding; and
 - `isEmpty(): Bool`.
 
-### Views: `StrView`
+### Views: `Span<T>` and `StrView`
 
-Status: implemented in the bootstrap RTL (`cppsrc/rtl/StrView.simse`,
-`cppsrc/rtl/strview.hpp`).
+Status: implemented in the bootstrap RTL (`cppsrc/rtl/Span.simse` and
+`cppsrc/rtl/StrView.simse`, `cppsrc/rtl/span.hpp` and `cppsrc/rtl/strview.hpp`).
 
-A `StrView` is a borrowed view over a range of a `Str`:
-`StrView(source: *Str, start: Int, len: Int)`. It copies nothing and owns
-nothing, so it is valid only while its source is alive and unchanged; a view over
-a buffer a stream owns is valid until that stream is read again. Views are the
-idiom for parsing one buffer (tokenize, split, scan) without allocating per
-token: `slice` stays a view, `substr` and `toStr` are the owned copies.
+A `Span<T>` is a borrowed view over a contiguous run of `T`: a `*T` pointer plus
+a length, nothing else. It copies nothing and owns nothing, so it is valid only
+while its source is alive and unchanged; a view over a buffer a stream owns is
+valid until that stream is read again. Views are the idiom for parsing one buffer
+(tokenize, split, scan) without allocating per token: `slice` stays a view,
+`substr` and `toString` are the owned copies. `spanOf(items: *List<T>)` spans a
+list's elements and borrows the list, which must outlive the span.
+
+`Span<T>` is uniform over `T`:
 
 - `size(): Int`;
 - `isEmpty(): Bool`;
-- `at(index: Int): Char` / `charAt(index: Int): Char` - the byte at `index`
-  (unchecked);
+- `at(index: Int): T` (also `span[index]`);
+- `slice(start: Int): Span<T>` - from `start` to the end (unchecked); and
+- `slice(start: Int, count: Int): Span<T>` - `count` elements from `start`
+  (unchecked).
+
+`StrView` is the view a string's bytes are read through: it embeds a
+`Span<Char>` and adds the byte surface. The span is embedded rather than aliased,
+because an alias does not survive the emitter's receiver-type lookup. It is what
+`FileStream.readLineView()` hands back and what `spanOfStr(text: *Str): StrView`
+builds (borrowing the string):
+
+- `size(): Int`; `isEmpty(): Bool`; `at(index: Int): Char` (also `view[index]`);
+- `slice(start: Int): StrView` / `slice(start: Int, count: Int): StrView` - the
+  same two forms, staying a view;
+- `charAt(index: Int): Char` - the byte at `index` (unchecked);
 - `find(sub: Str): Int` / `indexOf(sub: Str): Int` - the index of the first
   occurrence of `sub`, or `-1` (compared in place, nothing copied);
-- `startsWith(prefix: Str): Bool`;
-- `slice(from: Int, count: Int): StrView` - a view of a range of this view
-  (unchecked);
+- `startsWith(text: Str): Bool`;
+- `startsWithPtr(text: *Str, length: Int): Bool` - the same comparison against a
+  string this view does not own, by raw pointer and with its length already
+  known;
 - `substr(from: Int, count: Int): Str` - the owned copy, with `from` clamped to
   `[0, size]` and `count` allowed to run to the end, like `Str.substr`; and
-- `toStr(): Str` - the owned copy of the whole view.
+- `toString(): Str` - the owned copy of the whole view.
 
 Indexing and member calls are permitted directly on a `*Str`, with automatic
 dereference, so a view's body can read through its source without an explicit

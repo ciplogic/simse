@@ -77,7 +77,7 @@ fun driverParseFile(fileName: Str): Res<AstXmlNode> {
         eofPos = tokens[tokens.size() - 1].pos
     }
     tokens.append(Token("", TokenKind.Eof, eofPos))
-    return parseModule(cursorOf(&tokens), fileName)
+    return parseModule(spanOf(*tokens), fileName)
 }
 
 // The compilation set: every `*.simse` under each module root (in the given

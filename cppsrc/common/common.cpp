@@ -51,41 +51,4 @@ namespace common {
         return matchingFiles;
 
     }
-
-    char StrView::at(int index) {
-        return str->at(start + index);
-    }
-
-    bool StrView::startsWith(const Str &str) {
-        if (str.length() > len) {
-            return false;
-        }
-        for (int i = 0; i < str.length(); i++) {
-            if (at(i) != str.at(i)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    StrView StrView::slice(int matchLength) {
-        return {str, start, matchLength};
-    }
-
-    Str StrView::toString() {
-        Str result;
-        result.resize(len);
-        for (int i = 0; i < len; i++) {
-            result.at(i) = at(i);
-        }
-        return result;
-    }
-
-    StrView viewOf(Str *str) {
-        return {str, 0, (int) str->length()};
-    }
-
-    StrView viewOfAtPos(Str *str, int pos) {
-        return {str, pos, (int) str->length() - pos};
-    }
 }

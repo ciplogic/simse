@@ -13,28 +13,27 @@ Status values:
 - **missing** - not handled; a self-host attempt will fail until it is added.
 
 The matrix is derived from the real sources (`cppsrc/lex/Scanner.simse`,
-`cppsrc/common/StrView.simse`, `cppsrc/common/common.simse`,
-`cppsrc/skelparser/SkeletonParser.simse`) and the current
-`cppsrc/{parser,sema,codegen,rtl}` implementations.
+`cppsrc/common/common.simse`, `cppsrc/skelparser/SkeletonParser.simse`) and the
+current `cppsrc/{parser,sema,codegen,rtl}` implementations.
 
 ## Intended port order
 
-1. **common / StrView** - the smallest, no self-referential dependencies; needed
-   by every other mirror.
+1. **common** - the smallest, no self-referential dependencies; needed by every
+   other mirror.
 2. **scanner** (`Scanner.simse`) - the first real differential test; needs
    `common` via `import cppsrc.common`.
 3. **skeleton parser** - uses the scanner API and `List<SkeletonNode>`.
 4. **AST/parser/sema/codegen** - the largest, still C++-only; port last.
 
-## `common` / `StrView`
+## `common`
 
 | Feature | Needed by | Status | Notes |
 | --- | --- | --- | --- |
-| `data class` with fields and methods | `StrView` | supported | lowered to a C++ struct plus free functions. |
-| `var`/`val` locals, `while`, `if`, `return` | `StrView`, `common` | supported | |
-| `Str` value type, indexing, `size()`, literals | `StrView` | supported | `Str` is `std::string`. |
-| `&T` fields and `&value` construction | `StrView.source` | supported | `&T` -> `std::shared_ptr<T>`. |
-| `&T` member access / indexing auto-deref | `StrView.at` | supported | emits `(*handle)[i]`, `handle->m()`. |
+| `data class` with fields and methods | `common` | supported | lowered to a C++ struct plus free functions. |
+| `var`/`val` locals, `while`, `if`, `return` | `common` | supported | |
+| `Str` value type, indexing, `size()`, literals | `common` | supported | `Str` is `std::string`. |
+| `&T` fields and `&value` construction | `common` | supported | `&T` -> `std::shared_ptr<T>`. |
+| `&T` member access / indexing auto-deref | `common` | supported | emits `(*handle)[i]`, `handle->m()`. |
 | `native("Symbol") fun` without body | `common.readFile` | supported | `simse_native_readFile`. |
 | `import a.b.c` merging a directory | any importer | supported | resolved relative to the repo root. |
 | Generic data class | not used here | supported | C++ templates. |
@@ -83,7 +82,7 @@ Progress of the incremental port (see `impl_specs/roadmap.md`):
 
 | Component | Mirror | Emits | Compiles | Diff-identical | Harness |
 | --- | --- | --- | --- | --- | --- |
-| common / StrView / xmlutil | `cppsrc/common/*.simse` | yes (merged transitively) | yes | exercised through every port | part of each diff |
+| common / xmlutil | `cppsrc/common/*.simse` | yes (merged transitively) | yes | exercised through every port | part of each diff |
 | scanner | `cppsrc/lex/Scanner.simse` | yes | yes | yes (5532-line dump) | `scanner_diff` |
 | skeleton parser | `cppsrc/skelparser/SkeletonParser.simse` | yes | yes | yes (4992-line tree dump) | `skel_diff` |
 | parser | `cppsrc/parser/Parser.simse` | yes | yes | yes (2136-line XmlNode dump) | `parser_diff` |
@@ -154,14 +153,14 @@ returned a pointer into a temporary `TypePtr`; call sites now keep the
 | Dictionary operations | symbol tables, scopes | supported | `dictionaryOf`/`get`/`has`/`insert`/`remove`/`size`/`keys`/`values`/`clear` (`cppsrc/rtl/dictops.hpp`, T20). |
 | List `contains`/`sort` | dedup, deterministic order | supported | `simse_list_contains`; `sort` takes a `(T, T) -> Bool` lambda. |
 | XmlNode accessors | sema consumption | supported | emitted helper functions in `Sema.simse` (attribute lookup, children by role, positions). |
-| `Cursor<T>` | iteration instead of range-for | supported | `while (c.hasValue()) { ... c = c.next() }`. |
+| `Span<T>` | iteration instead of range-for | supported | `while (!span.isEmpty()) { ... span = span.slice(1) }`. |
 | lambdas/closures | visitors | supported | by-value captures; reference captures deferred. |
-| `for`/range-for | loop rewriting | missing | deferred; `Cursor<T>` is the replacement idiom. |
+| `for`/range-for | loop rewriting | missing | deferred; `Span<T>` is the replacement idiom. |
 | string interpolation | diagnostics | missing | deferred. |
 | `when`/pattern matching | dispatch | missing | deferred; use `switch`. |
 
 > **Note.** The C++ compiler's own loops have **not** been refactored to
-> `Cursor<T>`; that happens per component during the parser port. `Cursor` is the
+> `Span<T>`; that happens per component during the parser port. `Span` is the
 > language-level replacement for range-for, not a change to the C++ sources.
 
 ## Feature gaps seen by the compiler team
@@ -815,28 +814,41 @@ component-specific):
   distance to the 727 ms reference - see `guide4ai.md` section 9 item 8.
   `benchmarks/onebrc/benchmark.md` has the method, the notes (tenths as `Int`, the
   half-toward-positive-infinity rounding rule, CRLF vs LF) and the run commands.
-- **`StrView` and the in-place line reader (T43).** `cppsrc/rtl/strview.hpp`
-  (prelude `cppsrc/rtl/StrView.simse`, spec `specs/built-in-types.md` "Views") is
-  a borrowed view over a range of a `Str`: a `*Str` source plus `start`/`len`,
-  with `size`/`isEmpty`/`at`/`charAt`/`find`/`indexOf`/`startsWith`/`slice` for
-  reading in place and `substr`/`toStr` for the owned copies. The RTL's prelude
-  types keep their C++ spelling, so `StrView` joined the RTL type-name list in
-  both rings - which exposed a name-resolution bug: the emitter consulted the RTL
-  *name* list before the program's own declarations, so the RTL's `StrView`
-  shadowed the compiler's own `common.StrView` and every emitted signature
-  mismatched. `typeName` (both rings) now checks the declared types first and lets
-  any package other than `rtl` win; the compiler's `StrView` is `ns1_StrView`
-  again, T23 and the five differentials stay byte-identical, and the tracked
-  `cppsrc/simse_out.cpp` was regenerated (its embedded source-map line numbers
-  shifted with the emitter edit - the only other change in it).
+- **`Span<T>`, `StrView`, and the in-place line reader (T43).** One borrowed view
+era replaced two: `cppsrc/rtl/Span.simse` + `span.hpp` declare `Span<T>` (a `*T`
+pointer plus a length, `size`/`isEmpty`/`at`/indexing/`slice` in the C# two forms)
+and `cppsrc/rtl/StrView.simse` + `strview.hpp` declare `StrView` - *embeds* a
+`Span<Char>` and adds the byte surface (`charAt`, `find`/`indexOf`, `startsWith`,
+`startsWithPtr`, `substr`, `toString`), built by `spanOfStr(*text)`; `spanOf(*items)`
+borrows a list. The old `Cursor<T>` (a `&List<T>` + start + len), the RTL's
+`StrView` (a `*Str` + start + len) and the compiler's own `common.StrView` are gone,
+and `Parser.simse` iterates `Span<Token>` while both scanners use `StrView`. Two
+design points are load-bearing and measured, not stylistic: an **alias**
+(`typealias StrView = Span<Char>`) does not survive the emitter's receiver-type
+lookup - a chained call through one is emitted as the wrong conversion
+(`simse_int_toString` on a view) - and prelude **methods** are invisible to the
+emitter's inference, so the view's operations are declared as natives with explicit
+symbols, which is what gives `view.slice(0, n).toString()` and `"x" +
+view.toString()` their types. (A third, pre-existing edge bit the test: a chained
+call on a handle method - `stream.fileSize().toString()` - has no inferred type and
+now picks the wrong `toString`; bind the middle step to a typed `val`, as
+`guide4ai.md` section 10 already says.)
+  Adding the RTL type name also exposed a name-resolution bug: the emitter consulted
+the RTL *name* list before the program's own declarations, so a declared type of
+the same name (the compiler had a `common.StrView`) was shadowed in every emitted
+signature. `typeName` (both rings) now checks the declared types first and lets any
+package other than `rtl` win; T23 and the five differentials stay byte-identical,
+and the tracked `cppsrc/simse_out.cpp` was regenerated (its embedded source-map line
+numbers shifted with the parser/scanner edits).
   `FileStream` gained `readLineView(): Opt<StrView>` (T42's reader) on the same
   readahead buffer and the same `nextLineSpan` code path as `readLineInto`, so the
   two are the same lines by construction; the view is valid until the next read.
   `stress/read-lines` covers all three readers over CRLF, empty lines, a missing
   final newline, the 23-byte inline boundary, and - generated into the git-ignored
   harness work directory - a 300 KB line behind a short one, so the buffer's tail
-  shift, growth and refill are exercised (24/24 with the self-hosted compiler and
-  with the C++ ring, `simse_tests.exe` 50/50).
+  shift, growth and refill are exercised; `stress/span` (renamed from `cursor`) and
+  `stress/lambdas`/`recursion` cover span iteration (24/24 with the self-hosted
+  compiler and with the C++ ring, `simse_tests.exe` 48/48 at the time).
   Measured on the 1BRC (10M rows, 127.7 MiB, release, 3 interleaved pairs,
   min/median, all reports byte-identical, 6.5 MB peak working set):
   **view 1087/1088 ms** against **into 1156/1161 ms** - the in-place reader is
@@ -845,10 +857,46 @@ component-specific):
   remains is two `Str`s per line (`tenths` takes a `Str` and the dictionary is
   keyed by `Str`) and the dictionary's two lookups per line (section 9 item 8).
   The benchmark was then narrowed to this variant alone - C++ STL baseline against
-  the in-place Simse program, 7 interleaved pairs: **1056/1085 ms against
-  1480/1500 ms, i.e. 1.40x faster than the naive C++**, at a 6.5 MB peak working
+  the in-place Simse program, 4 interleaved pairs: **1093/1106 ms against
+  1390/1405 ms, i.e. 1.27x faster than the naive C++** (the ratio has run
+  1.26-1.40x across sessions), at a 6.5 MB peak working
   set against the baseline's 5.9 MB, and byte-identical reports.
   `benchmarks/onebrc/benchmark.md` is the write-up.
+
+- **Nested expressions are lowered to temporaries (T44).** The linear pass gave the
+  emitter one *statement* vocabulary; `cppsrc/linear/ExpressionLowering.{h,cpp}`
+  (`linLowerExprs` in `cppsrc/linear/ExpressionLowering.simse`) gives it one
+  *expression* vocabulary. Together with T26's control-flow lowering, the emitter
+  is left with a strictly structural job: no `if`/`while`/`switch`, and no
+  expression deeper than one operation, to understand. It runs as
+  `lowerExprs(simplifyBody(lowerBody(...)))` -
+  after the peephole trim, so nothing folds a temporary back - and leaves every
+  expression either a simple operand (a literal, a name, a qualified name, a lambda,
+  an lvalue path) or a single operation over simple operands; anything deeper is
+  bound to an untyped `_sm_expr<n>` `VarDecl` numbered by a per-body counter (like
+  the labels), inserted in front of the statement that needed it - inline for a
+  `var`, whose name must stay visible for the rest of its region (wrapping one in a
+  block narrowed the scope and produced "undeclared identifier"), and inside
+  `Stmt.Block` for everything else, so no jump can cross an initialization.
+  Temporaries stay *untyped*, so the emitter emits `auto` - the same path the
+  hoisted `switch` subject already used, and the reason this pass is not where the
+  types come back (the sema-inference item in `guide4ai.md` section 9). Two
+  boundaries are deliberate: an **lvalue path stays a path** (binding it would copy
+  what is behind it, and a mutating call on the copy would be lost; only its indices
+  and arguments are flattened, so `a[i + 2].append(x)` becomes
+  `a[_sm_expr1].append(x)`), and **`&&`/`||` are left alone** because their operands
+  are evaluated conditionally - those belong to the control-flow lowering, and their
+  `ifTrue`/`ifFalse` shapes (plus a `?:` the grammar does not have yet) are written
+  down in `impl_specs/linear-lowering.md` as the next step.
+  Two goldens moved, both deliberately: `tests/golden/sema_switch_label.simse.cpp.expected`
+  (the non-constant case label now hoists `f()` into `_sm_expr1`) and
+  `stress/hello/expected.cpp` - the harness compares that file byte for byte, but
+  `--update` only rewrites `expected.stdout`/`stderr`/`exit`, so it is copied out of
+  `stress/.work/hello/out.cpp` by hand. Verified: both configurations green (the
+  five differentials byte-identical, T23's two-step bootstrap byte-identical),
+  `simse_tests.exe` **50/50** in both (the new pass and `Span.simse` are checked as
+  sources too), `bun tools/stress.js` **24/24** with the self-hosted compiler and
+  **24/24** with the C++ ring.
 
 ### Note: the shape of a lookup like this
 

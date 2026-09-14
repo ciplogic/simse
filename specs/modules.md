@@ -41,7 +41,7 @@ with the operations that come with them:
 - `Str` and its character/string operations (`append`, `find`, `substr`,
   `toInt`, `split`, the case predicates, ...);
 - the containers `List<T>`, `Array<T>`, `RawArray<T>`, `SmallVector<N, T>`,
-  `Dictionary<K, V>`, `PList<T>`, `Opt<T>`, `Res<T>`, `Cursor<T>`;
+  `Dictionary<K, V>`, `PList<T>`, `Opt<T>`, `Res<T>`, `Span<T>`;
 - the callable type form `(A, B) -> R`;
 - the runtime's tree types `XmlNode` and `Attribute`.
 

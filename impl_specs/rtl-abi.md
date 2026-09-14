@@ -22,7 +22,8 @@ For the first end-to-end slice, generated C++ targets the **current
 - `Opt<T>` and `Res<T>` = the shim structs (over `std::optional` / a value plus
   error `Str`)
 - `&T` lowers to `std::shared_ptr<T>`; `*T` lowers to `T*`
-- `Cursor<T>` = the immutable list-view shim (`cppsrc/rtl/cursor.hpp`)
+- `Span<T>` = the borrowed view shim: a `*T` pointer plus a length
+  (`cppsrc/rtl/span.hpp`)
 
 The ref-counted `[refcount][typeId][value]` header is **not** implemented in this
 slice, and nothing in the runtime allocates one. The `SmallVector`
@@ -90,7 +91,7 @@ selecting between same-named declarations) is a separate language change.
 | `Res<T>` | `Res<T>` (shim: `Value`, `Error`) | failure = non-empty `Error` |
 | `Dictionary<K, V>` | `Dictionary<K, V>` (`std::unordered_map`) | |
 | `PList<T>` | `PList<T>` (`std::shared_ptr<List<T>>`) | the `&List<T>` spelling |
-| `Cursor<T>` | `Cursor<T>` (shim struct) | immutable list view; `next`/`slice` return new cursors |
+| `Span<T>` | `Span<T>` (shim struct) | borrowed view: `ptr` + `len`; `slice` returns a new span |
 | `SmallVector<N, T>` | `SmallVector<T, N>` (`List<T>` is the `N = 4` instantiation) | inline vector |
 | user `data class C` | `struct C` (aggregate) + `_make_C` factory | construction lowers to the factory; no emitted constructors |
 | user `enum E` | `enum class E` | explicit values when given |
@@ -193,7 +194,7 @@ normative layout.
     "Alignment and packing"). Shim: generated aggregates are emitted between
     `SIMSE_PACK_PUSH` / `SIMSE_PACK_POP` (`cppsrc/rtl/types.hpp`), and
     `SmallVector` and `Array` follow the same rule. The hand-written RTL structs
-    (`XmlNode`, `Attribute`, `Cursor`, ...) keep the host alignment because their
+    (`XmlNode`, `Attribute`, `Span`, ...) keep the host alignment because their
     fields already sit on 4-byte boundaries, so packing them would not change a
     single size. The host types the shims are built on (`std::shared_ptr`,
     `std::function`, `std::unordered_map`, and `std::string` under the
@@ -254,28 +255,32 @@ without a newline as a line. They differ in what the caller gets:
   the three - mixing `readLine` with the other two skips bytes.
 - `readLineInto` copies the line into the caller's `Str`, whose heap block is
   reused - no allocation after the longest line seen.
-- `readLineView` copies nothing: it returns a `StrView` (`cppsrc/rtl/strview.hpp`,
-  prelude `cppsrc/rtl/StrView.simse`) into the readahead buffer, valid until the
+- `readLineView` copies nothing: it returns a `StrView` (`cppsrc/rtl/span.hpp`,
+  prelude `cppsrc/rtl/Span.simse`) into the readahead buffer, valid until the
   next read on that stream, which is the shape a parse loop wants
-  (`find`/`slice`/`at` stay in the buffer; `toStr` is the owned copy).
+  (`find`/`slice`/`at` stay in the buffer; `toString` is the owned copy).
 
 Measured on `benchmarks/onebrc` (10M rows, 127.7 MiB, release, interleaved
 min/median, all reports byte-identical, all at a 6.5 MB peak working set):
 `readLine` **2040/2048 ms**, `readLineInto` **1156/1161 ms**, `readLineView`
 **1087/1088 ms** - the reader choice is worth 1.88x, and the in-place path is 1.43x
-*ahead* of the naive C++ `getline`+`stod` baseline's 1550/1570 ms. The in-place
-path still builds two `Str`s per line (the station name, which is the dictionary's
-key type, and the temperature, which `tenths` takes as a `Str`); removing those is
-the next step, together with in-place dictionary access (item 11's remaining gap).
+*ahead* of the naive C++ `getline`+`stod` baseline's 1550/1570 ms measured in the
+same session. (The benchmark's headline - the in-place variant alone against the
+same baseline - has run **1.26x-1.40x** across sessions, because the C++ leg varies
+more than the Simse one; `benchmarks/onebrc/benchmark.md` has the current set.) The
+in-place path still builds two `Str`s per line (the station name, which is the
+dictionary's key type, and the temperature, which `tenths` takes as a `Str`);
+removing those is the next step, together with in-place dictionary access (item
+11's remaining gap).
 
 A type-name subtlety this cost a cycle to learn: the emitter resolves a type name
-by consulting the RTL list *before* the program's own declarations, so declaring a
-prelude type named `StrView` shadowed the compiler's own `common.StrView` in every
-emitted signature. `typeName` now checks `types` first and lets a declared type
-from any package other than `rtl` win (`cppsrc/codegen/Codegen.cpp` and the
-`cgIsRtlTypeName`/`typeName` mirror in `Codegen.simse`); the compiler's own
-`StrView` goes back to being `ns1_StrView` and nothing else changed - T23 and the
-five differentials stay byte-identical.
+by consulting the RTL list *before* the program's own declarations, so a declared
+type that shares a prelude name was shadowed in every emitted signature (it happened
+when the RTL gained `StrView` while the compiler had a `common.StrView` of its own -
+a name that no longer exists, since both are `StrView` now). `typeName` now checks
+`types` first and lets a declared type from any package other than `rtl` win
+(`cppsrc/codegen/Codegen.cpp` and the `cgIsRtlTypeName`/`typeName` mirror in
+`Codegen.simse`); T23 and the five differentials stay byte-identical.
 
 `simse_nowMillis` (`cppsrc/rtl/timeops.hpp`) is a monotonic millisecond clock for
 logging and for measuring a run; it exists because the benchmark needed to report
@@ -343,24 +348,27 @@ Identity comparison on handles: `==`/`!=` on `&T` (`std::shared_ptr`) and `*T`
 compare the handle/pointer itself (C++ `operator==`), which is what the sema port
 uses to compare declaration handles for identity.
 
-### `Cursor<T>`
+### `Span<T>`
 
-`Cursor<T>` is an immutable, `Span`-like view over a `List<T>`, the language's
-iteration idiom (`for`/range-for is deferred). It has a single field-order
-constructor and by-value helpers, and codegen maps member calls to the C++
-members:
+`Span<T>` is a borrowed view over a contiguous run of `T`: a `*T` pointer and a
+length, the language's iteration and in-place parsing idiom (`for`/range-for is
+deferred). It has a single field-order constructor and by-value helpers, and
+codegen maps member calls to the C++ members:
 
 | Member | C++ | Semantics |
 | --- | --- | --- |
-| `hasValue(): Bool` | `len > 0` | more elements remain |
-| `value(): T` | `(*source)[start]` | first remaining element (unchecked) |
-| `next(): Cursor<T>` | `slice(1)` | advanced cursor (a new value) |
-| `slice(count): Cursor<T>` | `{source, start+count, len-count}` | advanced by `count` (unchecked) |
-| `size(): Int` | `len` | remaining count |
+| `size(): Int` | `len` | element count |
+| `isEmpty(): Bool` | `len <= 0` | true when nothing remains |
+| `at(index): T` | `ptr[index]` | the element at `index` (unchecked; `span[index]` is the same) |
+| `slice(start): Span<T>` | `{ptr + start, len - start}` | from `start` to the end (unchecked) |
+| `slice(start, count): Span<T>` | `{ptr + start, count}` | `count` elements from `start` (unchecked) |
 
-The `cursorOf(items: &List<T>): Cursor<T>` helper (RTL `simse_cursorOf`) covers
-all of `items` from index 0. The struct is immutable: nothing mutates the
-receiver.
+The `spanOf(items: *List<T>): Span<T>` helper (RTL `simse_spanOf`) covers all of
+`items` from index 0, and `spanOfStr(text: *Str): StrView` (RTL
+`simse_spanOfStr`) covers a string's bytes. Both **borrow** their source: the
+source must outlive the span, and `&items` would box a *copy*. On `StrView`,
+codegen also maps `charAt`, `find`/`indexOf`, `startsWith`, `startsWithPtr`,
+`substr`, and `toString`. The struct is immutable: nothing mutates the receiver.
 
 ### Lambdas
 
@@ -396,13 +404,13 @@ print(x)    ->  std::cout << std::boolalpha << (x);
 Now lowered: generic declarations, uses, and calls (via C++ templates; see
 `impl_specs/reification.md`), generic `typealias`, `native fun` (see
 `impl_specs/native-interop.md`), `switch`, `null`, generic-qualified static calls
-(`Res<T>.ok(x)`, `Opt<T>.some(x)`), `Cursor<T>`, and lambdas with by-value
+(`Res<T>.ok(x)`, `Opt<T>.some(x)`), `Span<T>`, and lambdas with by-value
 captures.
 
 Still unsupported (each produces `<file>:<line>:<col>: unsupported: ...` rather
 than a crash): namespaced native symbols, untyped parameters/fields, compound
 assignment operators (`+=` etc.), lambda reference captures, and `for`/range-for
-(use `Cursor<T>` and `while`). `List<T>.append`, `removeAt`, `removeRange`,
+(use `Span<T>` and `while`). `List<T>.append`, `removeAt`, `removeRange`,
 `contains`, and `sort` lower to the native extension symbols in
 `cppsrc/rtl/{listops,dictops}.hpp` declared in the RTL prelude; the remaining
 `List` methods (`insert`, `clear`) are still emitted as

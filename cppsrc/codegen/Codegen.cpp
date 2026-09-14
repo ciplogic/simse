@@ -2,6 +2,8 @@
 
 #include "../linear/Linear.h"
 #include "../linear/Simplify.h"
+#include "../linear/ExpressionLowering.h"
+#include "../sema/TypeInfer.h"
 
 #include <algorithm>
 #include <string>
@@ -10,6 +12,18 @@ using ast::DeclKind;
 using ast::ExprKind;
 using ast::StmtKind;
 using ast::TypeKind;
+
+// The type helpers live with the semantic step that shares them (sema/TypeInfer.h),
+// so the inference and the emitter agree on what a handle is, what a receiver
+// pattern matches, and when two types unify.
+using sema::genericType;
+using sema::isHandleType;
+using sema::isIndexableContainer;
+using sema::isRtlTypeName;
+using sema::isTypeParamName;
+using sema::namedType;
+using sema::pointee;
+using sema::unifyType;
 
 namespace codegen {
     namespace {
@@ -72,20 +86,6 @@ namespace codegen {
             return text;
         }
 
-        bool isRtlTypeName(const Str &name) {
-            static const List<Str> names = {
-                "Int", "Int8", "Int16", "Int32", "Int64",
-                "Float32", "Float64", "Char", "Bool", "Str",
-                "List", "Array", "RawArray", "Opt", "Res",
-                "Dictionary", "SmallVector", "PList",
-                "Attribute", "XmlNode", "Cursor", "FileStream", "StrView",
-            };
-            for (const Str &candidate: names) {
-                if (candidate == name) return true;
-            }
-            return false;
-        }
-
         class Emitter {
         public:
             explicit Emitter(const List<Input> &inputs) : inputs(inputs) {
@@ -93,6 +93,11 @@ namespace codegen {
 
             Res<Str> run() {
                 collect();
+                // The semantic step on the lowered body reads these
+                // (sema/TypeInfer.h). They are threaded to the emitters rather than
+                // stored on the emitter, like the Simse ring, whose generated data
+                // class cannot name another package's type.
+                const sema::Facts facts = collectFacts();
                 prelude();
                 emitNativeDeclarations();
                 if (failed) return resError<Str>(error);
@@ -100,11 +105,11 @@ namespace codegen {
                 if (failed) return resError<Str>(error);
                 emitStatics();
                 if (failed) return resError<Str>(error);
-                emitFunctions(true);
+                emitFunctions(true, facts);
                 if (failed) return resError<Str>(error);
                 emitStaticInit();
                 if (failed) return resError<Str>(error);
-                emitFunctions(false);
+                emitFunctions(false, facts);
                 if (failed) return resError<Str>(error);
                 return ok(out);
             }
@@ -171,24 +176,17 @@ namespace codegen {
 
             // ---- symbol collection ----------------------------------------
 
-            ast::TypePtr namedTypeExpr(const Str &name) {
-                auto type = std::make_shared<ast::TypeExpr>();
-                type->kind = TypeKind::Named;
-                type->name = name;
-                return type;
-            }
-
             // The receiver type of a class method: `Name<A, B>` for a generic
             // class, `Name` otherwise.
             ast::TypePtr classReceiver(const ast::Decl &decl) {
                 if (decl.typeParams.empty()) {
-                    return namedTypeExpr(decl.name);
+                    return namedType(decl.name);
                 }
                 auto type = std::make_shared<ast::TypeExpr>();
                 type->kind = TypeKind::Generic;
                 type->name = decl.name;
                 for (const Str &param: decl.typeParams) {
-                    type->typeArgs.push_back(namedTypeExpr(param));
+                    type->typeArgs.push_back(namedType(param));
                 }
                 return type;
             }
@@ -332,7 +330,7 @@ namespace codegen {
                             enumNames[decl->name] = true;
                         }
                         if (decl->kind == DeclKind::DataClass) {
-                            // Prelude data classes (XmlNode, Attribute, Cursor) map
+                            // Prelude data classes (XmlNode, Attribute, Span) map
                             // onto RTL C++ types whose methods are C++ members, so
                             // their mirror methods must NOT be lowered to free
                             // functions: a member call falls through to
@@ -352,6 +350,37 @@ namespace codegen {
                         }
                     }
                 }
+            }
+
+            // The program-level facts the semantic step on the lowered body reads
+            // (sema/TypeInfer.h), built from the tables `collect` filled. Filling them
+            // copies no declarations: the type nodes are shared.
+            sema::Facts collectFacts() {
+                sema::Facts facts;
+                for (const auto &entry: types) facts.types[entry.first] = entry.second;
+                for (const auto &entry: enumNames) facts.enumNames[entry.first] = entry.second;
+                for (const Fn &fn: functions) {
+                    sema::FnFact fact;
+                    fact.decl = fn.decl;
+                    fact.receiver = fn.receiver;
+                    fact.templateParams = fn.templateParams;
+                    facts.functions.push_back(fact);
+                }
+                for (const auto &entry: nativeExtensions) {
+                    List<sema::ExtFact> overloads;
+                    for (const NativeExt &ext: entry.second) {
+                        sema::ExtFact fact;
+                        fact.receiver = ext.receiver;
+                        fact.returnType = ext.returnType;
+                        fact.typeParams = ext.typeParams;
+                        overloads.push_back(fact);
+                    }
+                    facts.nativeExtensions[entry.first] = overloads;
+                }
+                for (const auto &entry: staticsByName) {
+                    facts.statics[entry.first] = entry.second.decl->type;
+                }
+                return facts;
             }
 
             // ---- type mapping ---------------------------------------------
@@ -390,8 +419,8 @@ namespace codegen {
             Str typeName(const Str &name, const common::SourcePos &pos) {
                 if (name == "Unit") return "void";
                 if (activeTypeParams.count(name) > 0) return name;
-                // A declared type shadows an RTL type *name*: the compiler's own
-                // `common.StrView` is a different type from the RTL's `StrView`. The
+                // A declared type shadows an RTL type *name*: a compiler-side view
+                // type of the same name is a different type from the RTL's. The
                 // RTL's own prelude types keep their C++ spelling unprefixed.
                 if (types.count(name) > 0) {
                     const Str packageName = typePackage(name);
@@ -635,11 +664,11 @@ namespace codegen {
                 }
             }
 
-            void emitFunctions(bool prototypeOnly) {
+            void emitFunctions(bool prototypeOnly, const sema::Facts &facts) {
                 for (const Fn &fn: functions) {
                     if (fn.prelude) continue;
                     curFile = fn.file;
-                    emitFunction(fn, prototypeOnly);
+                    emitFunction(fn, prototypeOnly, facts);
                     if (failed) return;
                 }
             }
@@ -685,7 +714,7 @@ namespace codegen {
                        && type->typeArgs[0]->name == "Str";
             }
 
-            void emitFunction(const Fn &fn, bool prototypeOnly) {
+            void emitFunction(const Fn &fn, bool prototypeOnly, const sema::Facts &facts) {
                 const ast::Decl &decl = *fn.decl;
                 // Native functions are declared by emitNativeDeclarations, not here.
                 if (decl.isNative) return;
@@ -771,8 +800,17 @@ namespace codegen {
                 curReturnType = decl.returnType;
                 // Structured control flow is lowered to labels/gotos and then
                 // simplified before emission (impl_specs/linear-lowering.md);
-                // the emitter below only knows the linear forms.
-                emitStmts(linear::simplifyBody(linear::lowerBody(decl.body)), 1);
+                // the emitter below only knows the linear forms. The semantic step
+                // that follows gives the declarations the lowering introduced - and
+                // any local the program left unannotated - the type the emitter
+                // would otherwise have to guess while emitting (sema/TypeInfer.h).
+                List<ast::StmtPtr> lowered =
+                        linear::lowerExprs(linear::simplifyBody(linear::lowerBody(decl.body)));
+                sema::Body semantics;
+                semantics.decl = &decl;
+                semantics.selfType = selfTypePtr;
+                semantics.typeParams = fn.templateParams;
+                emitStmts(sema::inferTypes(lowered, facts, semantics), 1);
                 if (failed) return;
                 line(0, "}");
             }
@@ -921,113 +959,14 @@ namespace codegen {
             // extension applies (`append` on `List<T>` vs on `Str`), and the
             // `Res<T>.value`/`.error` field spelling. It is deliberately best
             // effort: an unknown type yields null and the caller falls back to the
-            // syntactic name-kind tracking.
-
-            ast::TypePtr namedType(const Str &name) {
-                auto type = std::make_shared<ast::TypeExpr>();
-                type->kind = TypeKind::Named;
-                type->name = name;
-                return type;
-            }
-
-            ast::TypePtr genericType(const Str &name, const List<ast::TypePtr> &args) {
-                auto type = std::make_shared<ast::TypeExpr>();
-                type->kind = TypeKind::Generic;
-                type->name = name;
-                type->typeArgs = args;
-                return type;
-            }
-
-            // The pointee after stripping any number of `&`/`*` handles.
-            const ast::TypeExpr *pointee(const ast::TypePtr &type) {
-                const ast::TypeExpr *current = type.get();
-                while (current && (current->kind == TypeKind::Reference
-                                   || current->kind == TypeKind::Pointer)
-                       && current->inner) {
-                    current = current->inner.get();
-                }
-                return current;
-            }
-
-            // Whether a type is reached through a handle (`&T`, `*T`, or the
-            // `PList<T>` alias of `&List<T>`), so member access uses `->`, indexing
-            // dereferences, and call receivers deref for value extension patterns.
-            bool isHandleType(const ast::TypeExpr *type) {
-                if (!type) return false;
-                if (type->kind == TypeKind::Reference || type->kind == TypeKind::Pointer) {
-                    return true;
-                }
-                return type->kind == TypeKind::Generic && type->name == "PList";
-            }
-
-            // Whether a pointee is a container with `operator[]` element access.
-            // Indexing through a raw pointer auto-dereferences only for these;
-            // pointer arithmetic (`p[i]`) is kept for raw arrays of scalars.
-            bool isIndexableContainer(const ast::TypeExpr *type) {
-                if (!type) return false;
-                if (type->kind == TypeKind::Named) return type->name == "Str";
-                if (type->kind == TypeKind::Generic) {
-                    const Str &name = type->name;
-                    return name == "List" || name == "Array" || name == "Dictionary"
-                           || name == "SmallVector";
-                }
-                return false;
-            }
-
-            bool isTypeParamName(const Str &name, const List<Str> &typeParams) {
-                for (const Str &param: typeParams) {
-                    if (param == name) return true;
-                }
-                return false;
-            }
-
-            // Structural unification of an extension receiver pattern (which may
-            // mention the extension's type parameters) against an actual receiver
-            // type. Mirrors the sema checker's rule.
-            bool unifyType(const ast::TypeExpr &pattern, const ast::TypeExpr &actual,
-                           const List<Str> &typeParams) {
-                const ast::TypeExpr *actualPtr = &actual;
-                if (pattern.kind != TypeKind::Reference && pattern.kind != TypeKind::Pointer) {
-                    while ((actualPtr->kind == TypeKind::Reference
-                            || actualPtr->kind == TypeKind::Pointer) && actualPtr->inner) {
-                        actualPtr = actualPtr->inner.get();
-                    }
-                }
-                const ast::TypeExpr &a = *actualPtr;
-                switch (pattern.kind) {
-                    case TypeKind::IntLit:
-                        return a.kind == TypeKind::IntLit && a.text == pattern.text;
-                    case TypeKind::Named:
-                        if (isTypeParamName(pattern.name, typeParams)) return true;
-                        return a.kind == TypeKind::Named && a.name == pattern.name;
-                    case TypeKind::Generic:
-                        if (isTypeParamName(pattern.name, typeParams)) return true;
-                        if (a.kind != TypeKind::Generic) return false;
-                        // `PList<T>` is the alias of `&List<T>`; match it against a
-                        // `List<T>` receiver pattern (the call dereferences).
-                        if (a.name != pattern.name
-                            && !(pattern.name == "List" && a.name == "PList")
-                            && !(pattern.name == "PList" && a.name == "List")) {
-                            return false;
-                        }
-                        if (a.typeArgs.size() != pattern.typeArgs.size()) return false;
-                        for (int i = 0; i < (int) a.typeArgs.size(); i++) {
-                            if (!unifyType(*pattern.typeArgs[i], *a.typeArgs[i], typeParams)) {
-                                return false;
-                            }
-                        }
-                        return true;
-                    case TypeKind::Reference:
-                        return a.kind == TypeKind::Reference && a.inner && pattern.inner
-                               && unifyType(*pattern.inner, *a.inner, typeParams);
-                    case TypeKind::Pointer:
-                        return a.kind == TypeKind::Pointer && a.inner && pattern.inner
-                               && unifyType(*pattern.inner, *a.inner, typeParams);
-                    case TypeKind::Function:
-                        return false;
-                }
-                return false;
-            }
+            // syntactic name-kind tracking. The *proven* types come from the
+            // semantic step that runs on the lowered body (sema/TypeInfer.h), which
+            // annotates the declarations this pass could only guess at; the helpers
+            // both use (`namedType`, `pointee`, `unifyType`, ...) live there.
+            //
+            // A lookup here is asked about one call/member at a time, so it may
+            // return a type that still mentions a type parameter (`List<T>`): the
+            // emitted C++ is a template, and the C++ compiler specializes it later.
 
             ast::TypePtr functionReturn(const Str &name) {
                 for (const Fn &fn: functions) {
@@ -1380,7 +1319,7 @@ namespace codegen {
                 } else {
                     Str saved = out;
                     out.clear();
-                    emitStmts(linear::simplifyBody(linear::lowerBody(e.body)), 1);
+                    emitStmts(linear::lowerExprs(linear::simplifyBody(linear::lowerBody(e.body))), 1);
                     body = out;
                     out = saved;
                 }

@@ -115,33 +115,40 @@ it to Simse programs as native extensions (`impl_specs/rtl-abi.md`,
 deterministic order. `get` is the safe accessor: there is no indexing operation
 that manufactures a default value, matching the language's no-null policy.
 
-### Iteration: `Cursor<T>`
+### `Span<T>`
 
 Status: required for the first implementation.
 
-There is no `for`/range-for; iteration uses an immutable, `Span`-like cursor and
+`Span<T>` is a borrowed view over a contiguous run of `T`: a pointer and a
+length, nothing else. The language's spelling of C#'s `Span<T>`, it copies
+nothing and owns nothing, so it is valid only while the memory it points at is
+alive and unmodified. There is no `for`/range-for; iteration uses a span and
 `while`:
 
 ```text
-var c: Cursor<Int> = cursorOf(items)
-while (c.hasValue()) {
-    process(c.value())
-    c = c.next()
+var span: Span<Int> = spanOf(*items)
+while (!span.isEmpty()) {
+    x = span[0]
+    span = span.slice(1)
 }
 ```
 
-`Cursor<T>` covers a contiguous range of a `&List<T>`. It is a value, so `next`
-and `slice` return NEW cursors and the receiver is never mutated:
+A span is a value, so `slice` returns a NEW span and the receiver is never
+mutated:
 
-- `hasValue(): Bool`; `value(): T`; `size(): Int`;
-- `next(): Cursor<T>` (advance one); and
-- `slice(count: Int): Cursor<T>` (advance `count`).
+- `size(): Int`; `isEmpty(): Bool`; `at(index: Int): T` (also `span[index]`);
+- `slice(start: Int): Span<T>` (from `start` to the end); and
+- `slice(start: Int, count: Int): Span<T>` (`count` elements from `start`).
 
-`cursorOf(items: &List<T>): Cursor<T>` covers all of a list from index 0. Reading
-`value` past the end and slicing beyond the remaining length are unchecked, like
-other container indexing. The cursor holds a counted reference to the list, so it
-keeps the list alive without copying its elements. See `impl_specs/tasks/16-cursor.md`
-and `impl_specs/rtl-abi.md`.
+Both slice forms are unchecked, like other container indexing. `spanOf(items:
+*List<T>): Span<T>` covers all of a list from index 0, **borrowing** the list; the
+source must outlive the span (`&items` would box a *copy*).
+
+Text has its own view on top of a span: `StrView` embeds a `Span<Char>` and adds
+the byte operations `charAt`, `find`/`indexOf`, `startsWith`, `startsWithPtr`,
+`substr`, and `toString` (`substr`/`toString` are the owned copies), and
+`spanOfStr(text: *Str): StrView` builds one from a string. `specs/built-in-types.md`
+("Views") has the full surface; `impl_specs/rtl-abi.md` has how each one lowers.
 
 ## `Str`
 

@@ -1,103 +1,65 @@
 // StrView.simse
 //
-// The borrowed view over a range of a `Str` (specs/built-in-types.md, "Views").
-// Declarations only: the concrete type and its methods live in
-// cppsrc/rtl/strview.hpp, and codegen maps member calls onto the RTL type, so the
-// bodies here are documentation, not emitted code.
+// `StrView` is the view a string's bytes are read through: a `Span<Char>` plus the
+// operations text needs (specs/built-in-types.md, "Views"). It owns nothing and copies
+// nothing, so it is valid only while the bytes it points at are alive and unmodified -
+// what `FileStream.readLineView()` hands back is valid until the next read on that
+// stream.
 //
-// A view copies nothing and owns nothing: it stays valid only while the source
-// `Str` is alive and unchanged. `FileStream.readLineView()` hands back a window
-// into the stream's readahead buffer, which the next read on that stream moves;
-// a view over a local `Str` stays valid as long as that local is not resized.
+// The C++ type and every operation below live in cppsrc/rtl/strview.hpp; `StrView`
+// maps onto the RTL struct and each declaration here is a native with an explicit
+// symbol, which is also what gives the emitter their return types - so
+// `view.slice(0, n).toString()` and `"x" + view.toString()` emit correctly. The span is
+// embedded rather than aliased (`typealias StrView = Span<Char>`) for the same reason:
+// an alias does not survive the emitter's receiver-type lookup.
 //
 // `slice` stays a view (the parsing idiom: split a buffer without allocating),
-// `substr` and `toStr` are the owned copies.
+// `substr`/`toString` are the owned copies. A view **borrows** its source
+// (`spanOfStr(text)`): the source must outlive the view.
 
 package rtl
 
-data class StrView(var source: *Str; var start: Int; var len: Int) {
-    // The number of bytes in the view.
-    fun size(): Int {
-        return this.len
-    }
+data class StrView(var bytes: Span<Char>)
 
-    // True when the view covers no bytes.
-    fun isEmpty(): Bool {
-        return this.len <= 0
-    }
+// The number of bytes in the view.
+native("simse_strView_size") fun size(this: StrView): Int
 
-    // The byte at `index` (unchecked).
-    fun at(index: Int): Char {
-        return this.source[this.start + index]
-    }
+// True when the view covers no bytes.
+native("simse_strView_isEmpty") fun isEmpty(this: StrView): Bool
 
-    // The same byte, spelled like `Str.charAt` (unchecked).
-    fun charAt(index: Int): Char {
-        return this.at(index)
-    }
+// The byte at `index` (unchecked; `view[index]` is the same thing).
+native("simse_strView_at") fun at(this: StrView, index: Int): Char
 
-    // True when the view begins with `text`.
-    fun startsWith(text: Str): Bool {
-        if (text.size() > this.len) {
-            return false
-        }
-        var i = 0
-        while (i < text.size()) {
-            if (this.at(i) != text[i]) {
-                return false
-            }
-            i = i + 1
-        }
-        return true
-    }
+// From `start` to the end (C# `Slice(int)`; unchecked).
+native("simse_strView_slice") fun slice(this: StrView, start: Int): StrView
 
-    // The index of the first occurrence of `sub` inside the view, or -1.
-    fun find(sub: Str): Int {
-        if (sub.size() > this.len) {
-            return -1
-        }
-        var i = 0
-        while (i + sub.size() <= this.len) {
-            var j = 0
-            var same = true
-            while (j < sub.size()) {
-                if (this.at(i + j) != sub[j]) {
-                    same = false
-                    break
-                }
-                j = j + 1
-            }
-            if (same) {
-                return i
-            }
-            i = i + 1
-        }
-        return -1
-    }
+// `count` bytes from `start` (C# `Slice(int, int)`; unchecked).
+native("simse_strView_slice") fun slice(this: StrView, start: Int, count: Int): StrView
 
-    // `indexOf` is the other spelling of `find`.
-    fun indexOf(sub: Str): Int {
-        return this.find(sub)
-    }
+// The byte at `index`, spelled like `Str.charAt` (unchecked).
+native("simse_strView_charAt") fun charAt(this: StrView, index: Int): Char
 
-    // A view of `count` bytes starting `from` bytes into this view: no copy.
-    fun slice(from: Int, count: Int): StrView {
-        return StrView(this.source, this.start + from, count)
-    }
+// True when the view begins with `text`.
+native("simse_strView_startsWith") fun startsWith(this: StrView, text: Str): Bool
 
-    // The owned copy of `count` bytes starting `from` bytes in.
-    fun substr(from: Int, count: Int): Str {
-        return this.slice(from, count).toStr()
-    }
+// `startsWithPtr(text, length)`: the same comparison against text this view does not
+// own, by raw pointer and with its length already known. `startsWith` would copy the
+// `Str` first, which is what a table lookup cannot afford; the first byte is the
+// caller's cheap test, this does the rest.
+native("simse_strView_startsWithPtr") fun startsWithPtr(this: StrView, text: *Str, length: Int): Bool
 
-    // The owned copy of the whole view.
-    fun toStr(): Str {
-        var result: Str = Str()
-        var i = 0
-        while (i < this.len) {
-            result.append(this.at(i))
-            i = i + 1
-        }
-        return result
-    }
-}
+// The index of the first occurrence of `sub` in the bytes, or -1 (compared in place;
+// nothing is copied).
+native("simse_strView_find") fun find(this: StrView, sub: Str): Int
+
+// `indexOf` is the other spelling of `find`.
+native("simse_strView_indexOf") fun indexOf(this: StrView, sub: Str): Int
+
+// The owned copy of `count` bytes from `from` (clamped like `Str.substr`).
+native("simse_strView_substr") fun substr(this: StrView, from: Int, count: Int): Str
+
+// The owned copy of the whole view, as a `Str`.
+native("simse_strView_toString") fun toString(this: StrView): Str
+
+// A view over a string's bytes, borrowing the string (which must outlive the view).
+native("simse_spanOfStr") fun spanOfStr(text: *Str): StrView

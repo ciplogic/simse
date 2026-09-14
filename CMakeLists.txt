@@ -47,7 +47,7 @@ add_library(simse_lib STATIC
         cppsrc/rtl/simse.hpp
         cppsrc/rtl/types.hpp
         cppsrc/rtl/containers.hpp
-        cppsrc/rtl/cursor.hpp
+        cppsrc/rtl/span.hpp
         cppsrc/rtl/strview.hpp
         cppsrc/rtl/listops.hpp
         cppsrc/rtl/strops.hpp
@@ -55,7 +55,7 @@ add_library(simse_lib STATIC
         cppsrc/rtl/fs.hpp
         cppsrc/rtl/rtl.simse
         cppsrc/rtl/xml.simse
-        cppsrc/rtl/Cursor.simse
+        cppsrc/rtl/Span.simse
         cppsrc/rtl/StrView.simse
         cppsrc/rtl/optional.hpp
         cppsrc/rtl/functional.hpp
@@ -69,10 +69,14 @@ add_library(simse_lib STATIC
         cppsrc/parser/Parser.h
         cppsrc/sema/Sema.cpp
         cppsrc/sema/Sema.h
+        cppsrc/sema/TypeInfer.cpp
+        cppsrc/sema/TypeInfer.h
         cppsrc/linear/Linear.cpp
         cppsrc/linear/Linear.h
         cppsrc/linear/Simplify.cpp
         cppsrc/linear/Simplify.h
+        cppsrc/linear/ExpressionLowering.cpp
+        cppsrc/linear/ExpressionLowering.h
         cppsrc/codegen/Codegen.cpp
         cppsrc/codegen/Codegen.h
         cppsrc/skelparser/SkeletonParser.cpp
@@ -145,7 +149,6 @@ add_custom_command(
                 -o "${SIMSE_SCANNER_GENERATED}"
         DEPENDS "${SIMSE_REPO_ROOT}/cppsrc/lex/Scanner.simse"
                 "${SIMSE_REPO_ROOT}/cppsrc/common/common.simse"
-                "${SIMSE_REPO_ROOT}/cppsrc/common/StrView.simse"
                 simse_transpile
         COMMENT "T11: transpiling Scanner.simse"
         VERBATIM)
@@ -303,7 +306,6 @@ add_custom_command(
                 "${SIMSE_REPO_ROOT}/cppsrc/parser/Parser.simse"
                 "${SIMSE_REPO_ROOT}/cppsrc/lex/Scanner.simse"
                 "${SIMSE_REPO_ROOT}/cppsrc/common/common.simse"
-                "${SIMSE_REPO_ROOT}/cppsrc/common/StrView.simse"
                 simse_transpile
         COMMENT "T21: transpiling Sema.simse"
         VERBATIM)
@@ -362,12 +364,13 @@ add_custom_command(
         DEPENDS
                 "${SIMSE_REPO_ROOT}/cppsrc/codegen/Codegen.simse"
                 "${SIMSE_REPO_ROOT}/cppsrc/sema/Sema.simse"
+                "${SIMSE_REPO_ROOT}/cppsrc/sema/TypeInfer.simse"
+                "${SIMSE_REPO_ROOT}/cppsrc/linear/ExpressionLowering.simse"
                 "${SIMSE_REPO_ROOT}/cppsrc/linear/Linear.simse"
                 "${SIMSE_REPO_ROOT}/cppsrc/linear/Simplify.simse"
                 "${SIMSE_REPO_ROOT}/cppsrc/parser/Parser.simse"
                 "${SIMSE_REPO_ROOT}/cppsrc/lex/Scanner.simse"
                 "${SIMSE_REPO_ROOT}/cppsrc/common/common.simse"
-                "${SIMSE_REPO_ROOT}/cppsrc/common/StrView.simse"
                 "${SIMSE_REPO_ROOT}/cppsrc/common/xmlutil.simse"
                 simse_transpile
         COMMENT "T22: transpiling Codegen.simse"
@@ -422,15 +425,16 @@ set(SIMSE_ALL_MIRRORS
         "${SIMSE_REPO_ROOT}/cppsrc/compiler/Driver.simse"
         "${SIMSE_REPO_ROOT}/cppsrc/codegen/Codegen.simse"
         "${SIMSE_REPO_ROOT}/cppsrc/sema/Sema.simse"
+        "${SIMSE_REPO_ROOT}/cppsrc/sema/TypeInfer.simse"
+        "${SIMSE_REPO_ROOT}/cppsrc/linear/ExpressionLowering.simse"
         "${SIMSE_REPO_ROOT}/cppsrc/linear/Linear.simse"
         "${SIMSE_REPO_ROOT}/cppsrc/linear/Simplify.simse"
         "${SIMSE_REPO_ROOT}/cppsrc/parser/Parser.simse"
         "${SIMSE_REPO_ROOT}/cppsrc/lex/Scanner.simse"
         "${SIMSE_REPO_ROOT}/cppsrc/skelparser/SkeletonParser.simse"
         "${SIMSE_REPO_ROOT}/cppsrc/common/common.simse"
-        "${SIMSE_REPO_ROOT}/cppsrc/common/StrView.simse"
         "${SIMSE_REPO_ROOT}/cppsrc/common/xmlutil.simse"
-        "${SIMSE_REPO_ROOT}/cppsrc/rtl/Cursor.simse"
+        "${SIMSE_REPO_ROOT}/cppsrc/rtl/Span.simse"
         "${SIMSE_REPO_ROOT}/cppsrc/rtl/StrView.simse"
         "${SIMSE_REPO_ROOT}/cppsrc/rtl/rtl.simse"
         "${SIMSE_REPO_ROOT}/cppsrc/rtl/xml.simse"

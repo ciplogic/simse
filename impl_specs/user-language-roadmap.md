@@ -54,7 +54,7 @@ packages.
 | Printing | `println`/`print` are *emitter intrinsics* over `std::cout` | a real `Printable` protocol, float formatting with a defined shape |
 | Enums | `toInt`/`fromInt` | the member *name*; `println(Color.Red)` prints a number |
 | Functions | functions, methods, extensions, lambdas | default parameter values, capture by reference |
-| Collections | `List`, `Array`, `Dictionary`, `Cursor` | `Set`, `map`/`filter`/`reduce`/`join`, `reserve` |
+| Collections | `List`, `Array`, `Dictionary`, `Span` | `Set`, `map`/`filter`/`reduce`/`join`, `reserve` |
 | Errors | `Opt`, `Res`, `isOk`/`value`/`error` | propagation (`?`-like), combinators, `panic`/`assert` |
 | Numbers | `Int`..`Int64`, `Float32/64`, `min`/`max` | bit ops, `sqrt`/`pow`/`floor`/`abs`, defined overflow and division-by-zero, shortest-round-trip float printing |
 | Runtime services | files, paths, `eprintln`, `main(List<Str>)` | clock, randomness, env vars, stdin, exit codes, logging |
@@ -147,7 +147,7 @@ transfer, any binary format, and "read the file that isn't UTF-8".
 `sorted` containers or at least `sort` + binary search; functional helpers
 (`map`/`filter`/`reduce`/`join`/`slice`) implemented over the existing extension
 mechanism; `List.reserve` (performance code cannot preallocate today);
-`Cursor`-style slices as the safe way to pass a window of a list.
+`Span`-style slices as the safe way to pass a window of a list.
 
 ### 4.6 Numerics, time, randomness
 

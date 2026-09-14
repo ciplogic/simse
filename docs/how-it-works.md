@@ -127,7 +127,7 @@ They are kept in lockstep by machines, not by discipline. The build runs:
 4. **The stress corpus** - `stress/<name>/` is a complete program with its
    expected stdout (and optional args, stdin, expected `.cpp`, or an expected
    transpile error). The harness transpiles, compiles and runs each one with the
-   compiler under test; 23 cases today, run against both rings.
+   compiler under test; 24 cases today, run against both rings.
 
 Any change to compiler behavior has to land in both rings and keep all four
 green, which is why the project can move fast without breaking its own
@@ -145,10 +145,10 @@ headers:
 | `smdictionary.hpp` | the RTL's own dictionary (`SIMSE_DICT_SM`), an alternative to `std::unordered_map` |
 | `optional.hpp`, `result.hpp` | `Opt<T>`, `Res<T>` |
 | `xml.hpp` | `Attribute`, `XmlNode`: the general tree a program can build |
-| `cursor.hpp` | `Cursor<T>`, a view over a list |
+| `span.hpp` | `Span<T>`: a borrowed view over a contiguous run of `T` (`at`, `slice`) |
+| `strview.hpp` | `StrView`: the view over a string's bytes, a `Span<Char>` plus `charAt`, `find`/`indexOf`, `startsWith`, `startsWithPtr`, `substr`, `toString` |
 | `strops.hpp`, `listops.hpp`, `dictops.hpp`, `fs.hpp` | the native operations behind the prelude |
 | `filestream.hpp` | `FileStream`: reading a file line by line (`readLine(): Opt<Str>`, `readLineInto(*Str)` with a recycled buffer, and `readLineView(): Opt<StrView>` in place) |
-| `strview.hpp` | `StrView`: a borrowed view over a range of a `Str` (`at`, `find`, `slice`, `substr`, `toStr`) |
 | `timeops.hpp` | `simse_nowMillis`, a monotonic clock for logging and for measuring runs |
 | `astxml.hpp` | the compiler's AST node (roles/keys as enums) |
 

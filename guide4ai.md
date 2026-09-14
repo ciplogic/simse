@@ -15,7 +15,7 @@ transpiles to a single amalgamated C++20 file. The long-term goal is a
 sources, with a small hand-written C++ foundation (the RTL) for things not yet
 expressible in the language.
 
-## 2. Current state (2026-09-13)
+## 2. Current state (2026-09-14)
 
 - The compiler is **fully ported to `.simse` and self-hosts to a fixed point**:
   the hand-written C++ compiler transpiles the Simse compiler sources; the
@@ -23,9 +23,9 @@ expressible in the language.
   output.
 - **Five differentials are byte-identical**: scanner, skeleton parser, parser,
   sema, codegen (hand-written vs transpiled Simse).
-- `simse_tests.exe`: 49 tests, all passing. Clean build green, including all the
+- `simse_tests.exe`: 50 tests, all passing. Clean build green, including all the
   differentials and `stage1_check`, run automatically by the build.
-- Ported components: `common`/`StrView`/`xmlutil`, scanner, skeleton parser,
+- Ported components: `common`/`xmlutil`, scanner, skeleton parser,
   parser, sema, codegen, compiler driver.
 - Runtime alignment: `Str` is the inline `SmString` (`SmallVector<char, 24>` +
   terminating NUL, the `specs/containers.md` layout) and `List<T>` is
@@ -102,25 +102,45 @@ expressible in the language.
   `*x` **borrows** (the aggregation must take `*Dictionary`) where `&x` **boxes a
   copy** - mutations through the box are lost; and the two-lookups-per-line
   (`get` then `insert`) is a *library* gap, not a language one (section 9).
-- **There is a `StrView`, and the reader can parse in place (T43).**
-  `cppsrc/rtl/strview.hpp` (prelude `cppsrc/rtl/StrView.simse`) is a borrowed view
-  over a range of a `Str` (`size`, `at`, `find`, `startsWith`, `slice` stay in the
-  buffer; `substr`/`toStr` copy), and `FileStream.readLineView(): Opt<StrView>`
+- **There is a `Span<T>` and a `StrView` (`Span<Char>` + the byte operations),
+  and the reader can parse in place (T43).** `cppsrc/rtl/span.hpp`
+  (prelude `cppsrc/rtl/Span.simse`) is a borrowed view: a `*T` pointer plus a
+  length, `size`/`isEmpty`/`at`/indexing, and `slice` in C#'s two forms - the
+  iteration idiom is `while (!span.isEmpty()) { ... span[0] ... span = span.slice(1) }`.
+  `cppsrc/rtl/strview.hpp` (prelude `cppsrc/rtl/StrView.simse`) *embeds* a
+  `Span<Char>` and adds `charAt`, `find`/`indexOf`, `startsWith`, `startsWithPtr`,
+  `substr`, `toString`; `spanOf(*items)` and `spanOfStr(*text)` borrow their source.
+  Two of those choices are forced by the emitter, not taste: an *alias*
+  (`typealias StrView = Span<Char>`) does not survive receiver-type lookup for
+  chained calls, and prelude *methods* are invisible to its inference - so the view
+  operations are natives with explicit symbols. `FileStream.readLineView(): Opt<StrView>`
   returns a line without copying, on the same 256 KiB readahead buffer and the same
   `nextLineSpan` code path as `readLineInto` - valid until the next read on that
   stream. 1BRC (10M rows, release, interleaved min/median): **view 1087/1088 ms**
   against **into 1156/1161 ms** (**6%**) and **readLine 2040/2048 ms** - the reader
   alone is a 1.88x spread. The benchmark now ships only the in-place variant, so
-  its headline comparison is against the naive C++ STL baseline: **1056/1085 ms
-  against 1480/1500 ms, i.e. 1.40x faster**, byte-identical reports, 6.5 MB peak
+  its headline comparison is against the naive C++ STL baseline: **1093/1106 ms
+  against 1390/1405 ms, i.e. 1.27x faster**, byte-identical reports, 6.5 MB peak
   working set (`benchmarks/onebrc/benchmark.md` is the write-up; the other two
-  reads stay in the RTL and in `stress/read-lines`). Adding an
-  RTL type name ("StrView") exposed a name-resolution bug that is now fixed: the
-  emitter's list of RTL type names was consulted *before* the program's own
-  declarations, so the RTL's `StrView` shadowed the compiler's own
-  `common.StrView`; `typeName` now lets a declared type from any package other
-  than `rtl` win, in both rings. `stress/read-lines` covers all three readers,
-  including a generated 300 KB line (the buffer's tail shift and growth).
+  reads stay in the RTL and in `stress/read-lines`). Adding a prelude type name
+  to the emitter's RTL list exposed a name-resolution bug that is now fixed: the
+  emitter consulted that list *before* the program's own declarations, so a prelude
+  type shadowed a program declaration of the same name; `typeName` now lets a
+  declared type from any package other than `rtl` win, in both rings.
+  `stress/read-lines` covers all three readers, including a generated 300 KB line
+  (the buffer's tail shift and growth), and `stress/span` (renamed from `cursor`)
+  plus `stress/lambdas`/`recursion` cover span iteration.
+- **Nested expressions are lowered to temporaries (T44).** `linear` gained a third
+  pass, `ExpressionLowering.{h,cpp}` (`linLowerExprs`), run as
+  `lowerExprs(simplifyBody(lowerBody(...)))`: every expression the emitter sees is
+  now a simple operand (literal, name, qualified name, lambda, lvalue path) or a
+  single operation over simple operands, and anything deeper is bound to an untyped
+  `_sm_expr<n>` local numbered by a per-body counter, scoped so no jump crosses its
+  initialization. The boundaries are deliberate: an lvalue path stays a path (so a
+  mutating call on it is not a copy), and `&&`/`||` stay untouched - their
+  `ifTrue`/`ifFalse` shapes are written down in `impl_specs/linear-lowering.md`,
+  not implemented. Because the temporaries are untyped, the emitter emits `auto`
+  for them; giving them real types is the sema-inference TODO below.
 
 ## 3. Build / test / run
 
@@ -212,10 +232,10 @@ explicit `cppsrc/compiler/Driver.simse` input.
   `ast-xmlnode.md`, `tasks/`.
 - `cppsrc/rtl/` — hand-written runtime: C++ headers (`types.hpp`,
   `containers.hpp`, `smstring.hpp`, `strsmallvector.hpp`, `optional.hpp`,
-  `functional.hpp`, `result.hpp`, `xml.hpp`, `cursor.hpp`, `strview.hpp`,
+  `functional.hpp`, `result.hpp`, `xml.hpp`, `span.hpp`,
   `listops.hpp`, `strops.hpp`, `dictops.hpp`, `fs.hpp`, `filestream.hpp`,
   `timeops.hpp`, `simse.hpp`) AND the **prelude** `.simse`
-  files (`rtl.simse`, `Cursor.simse`, `StrView.simse`, `xml.simse`, `fs.simse`)
+  files (`rtl.simse`, `Span.simse`, `xml.simse`, `fs.simse`)
   declaring the RTL surface.
   surface. `List<T>` is `SmallVector<T, 4>` and `Str` is the inline `SmString`
   (`smstring.hpp`), whose buffer is `strsmallvector.hpp`'s `StrSmallVector`, the
@@ -237,11 +257,14 @@ explicit `cppsrc/compiler/Driver.simse` input.
   **4-byte packing** (`specs/memory-model.md`): the emitter brackets every
   generated aggregate in `SIMSE_PACK_PUSH`/`SIMSE_PACK_POP`, and `SIMSE_NO_PACK4`
   reverts to the host's default alignment.
-- `cppsrc/common/` — `readFile`/`filesInDir`, `StrView`, `xmlutil` (C++ + Simse).
+- `cppsrc/common/` — `readFile`/`filesInDir`, `xmlutil` (C++ + Simse).
 - `cppsrc/lex/`, `cppsrc/skelparser/`, `cppsrc/parser/`, `cppsrc/sema/`,
   `cppsrc/linear/`, `cppsrc/codegen/`, `cppsrc/compiler/` — the compiler stages;
   each has a C++ implementation AND a `.simse` mirror. `linear` is the post-sema
-  lowering of control flow to labels/gotos (`impl_specs/linear-lowering.md`).
+  lowering of control flow to labels/gotos (`Linear.{h,cpp}`/`Linear.simse`), the
+  peephole trim of that form (`Simplify.*`) and the lowering of nested expressions
+  into `_sm_expr<n>` temporaries (`ExpressionLowering.*`) - all in
+  `impl_specs/linear-lowering.md`.
 - `Compiler.{h,cpp}` — the shared transpile core; `cppsrc/codegen/TranspileMain.cpp`
   — the `simse_transpile` CLI, the C++ compiler driver (the Simse mirror of it
   is `cppsrc/compiler/Driver.simse`).
@@ -300,7 +323,7 @@ Key design points:
 - **Native boundary** (see `impl_specs/native-interop.md`): `native fun` /
   `native("Symbol") fun` declares a function whose body is hand-written C++.
   Container/string/dict/fs operations are prelude extensions over RTL C++
-  templates (`listops.hpp`, `strops.hpp`, `dictops.hpp`, `cursor.hpp`, `fs.hpp`).
+  templates (`listops.hpp`, `strops.hpp`, `dictops.hpp`, `span.hpp`, `fs.hpp`).
 - **Prelude**: `cppsrc/rtl/*.simse` is implicitly in scope everywhere; its
   method bodies are NOT emitted (behavior lives in the RTL C++ headers).
 - **Modules/packages** (see `specs/modules.md`): a **module is a directory**, a
@@ -352,7 +375,7 @@ Key design points:
 - **Never** weaken the C++ reference or the XmlNode schema to make a mirror
   pass; fix the transpiler or the mirror generically. Do not special-case a
   specific file.
-- Prefer `while` + `Cursor<T>` over `for`/range-for in Simse code (no range-for
+- Prefer `while` + `Span<T>` over `for`/range-for in Simse code (no range-for
   yet). Use `switch` for kind dispatch; lambdas are supported (by-value capture).
 - **Borrow AST-carrying structs; don't copy them.** A `val x: T = list[i]` where
   `T` holds an `XmlNode` (`CgFn`, `CgNativeExt`, `CgInput`, `SemaInput`, ...)
@@ -377,7 +400,7 @@ Scalars (`Int8..64`, `Float32/64`, `Char`, `Bool`), `Str` (with a method library
 `lastIndexOf`); `List<T>` (with `append`, `removeAt`, `removeRange`, `insert`,
 `clear`, `contains`, `sort`); `Dictionary<K,V>` (`get`/`has`/`insert`/`remove`/
 `keys`/`values`/`size`/`clear`); `Opt<T>`, `Res<T>` (with `Res<T>.ok/.err`,
-`Opt<T>.some/.none`); `Cursor<T>` (immutable span-like); `XmlNode`/`Attribute`;
+`Opt<T>.some/.none`); `Span<T>` (a borrowed view: pointer + length); `XmlNode`/`Attribute`;
 `data class` (with methods), `enum` (with `toInt`/`fromInt`), `typealias`
 (incl. generic and function types); functions incl. extension functions and
 `native fun`; `val`/`var` (locals, and at file level **static storage** -
@@ -444,6 +467,14 @@ Do these only when asked; roughly prioritized:
    lookups per line where the C++ baseline pays one - the last gap to the Bun
    reference (1.6x). A `getPtr`/`withValue`-style native (both backings) is the
    next library change; it is a library gap, not a language one.
+9. **Sema type inference for the lowered temporaries** (the T44 follow-up, the
+   user asked for it): the `_sm_expr<n>` locals are untyped, so the emitter emits
+   `auto` and every type it feeds a chained call (a receiver, `f().toString()`) is
+   guessed rather than known. Sema should annotate expression types before
+   emission - that is also the structural fix for the chained-call class of bug
+   that `guide4ai.md` section 10 records. The machinery to build on is the
+   emitter's `inferType`/`unifyType`/`memberCallReturn`/`findNativeExt`; the work
+   is to move or share it so a type exists before the emitter runs.
 
 ## 10. Gotchas
 
@@ -465,7 +496,7 @@ Do these only when asked; roughly prioritized:
   (the 1BRC's `tally` takes `*Dictionary<Str, Stats>`), never `&x`.
 - A handle's native operations must be **struct methods**, not free natives: the
   emitter calls `stream.readLine()` on a `*FileStream` as `(*stream).readLine()`.
-  Same for `Cursor`/`XmlNode`.
+  Same for `Span`/`XmlNode`.
 - After changing **any RTL header**, rebuild the CMake folder you are about to
   build against (`cmake-build-<config>/_msvc_build.bat`) *before* `bun build.js`:
   `build.js` links the prebuilt `simse_lib`/`simse_native`, and a stale library

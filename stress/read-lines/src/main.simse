@@ -37,7 +37,8 @@ fun main(): Int {
         eprintln("read-lines: cannot open " + path)
         return 2
     }
-    println("size=" + stream.fileSize().toString())
+    val bytes: Int64 = stream.fileSize()
+    println("size=" + bytes.toString())
 
     // The convenient form: a fresh `Opt<Str>` per line.
     var line: Opt<Str> = stream.readLine()
@@ -79,11 +80,11 @@ fun main(): Int {
     while (view.hasValue()) {
         val text: StrView = view.value()
         println("view[" + viewed.toString() + "] len=" + text.size().toString()
-                + " <" + text.toStr() + ">")
+                + " <" + text.toString() + ">")
         val space: Int = text.find(" ")
         if (space >= 0) {
-            println("    first word=<" + text.slice(0, space).toStr() + ">, rest=<"
-                    + text.slice(space + 1, text.size() - space - 1).toStr() + ">")
+            println("    first word=<" + text.slice(0, space).toString() + ">, rest=<"
+                    + text.slice(space + 1, text.size() - space - 1).toString() + ">")
         }
         viewed = viewed + 1
         view = inPlace.readLineView()

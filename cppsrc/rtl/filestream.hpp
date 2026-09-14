@@ -6,7 +6,7 @@
 
 #include "containers.hpp"
 #include "optional.hpp"
-#include "strview.hpp"
+#include "span.hpp"
 #include "types.hpp"
 
 // Reading a file line by line. The Simse surface is the prelude file
@@ -35,11 +35,11 @@
 //                           allocation at all, and the per-line cost is one `memcpy`.
 //
 //   readLineView()          the in-place one. The line is not copied at all: the
-//                           result is a `StrView` into the same readahead buffer, so
-//                           it is valid only until the next read on this stream (a
-//                           refill moves the bytes). Parsing straight from it is what
-//                           a scanner wants; keep a copy when the line must outlive
-//                           the next read.
+//                           result is a `StrView` (a span of bytes) into the same
+//                           readahead buffer, so it is valid only until the next read
+//                           on this stream (a refill moves the bytes). Parsing
+//                           straight from it is what a scanner wants; keep a copy when
+//                           the line must outlive the next read.
 //
 // All three strip a trailing `\r` (files written on Windows) and treat a final line
 // without a newline as a line. None decodes anything: the bytes come back as they
@@ -75,12 +75,12 @@ struct FileStream {
     }
 
     // The next line as a view into the readahead buffer, or an empty `Opt` at end of
-    // file. Nothing is copied; the view is valid until the next read on this stream.
+    // file. Nothing is copied; the span is valid until the next read on this stream.
     Opt<StrView> readLineView() {
         Int from = 0;
         Int count = 0;
         if (!nextLineSpan(&from, &count)) return Opt<StrView>::none();
-        return Opt<StrView>::some(StrView(&chunk, from, count));
+        return Opt<StrView>::some(simse_strView_slice(simse_spanOfStr(&chunk), from, count));
     }
 
     // The file's size in bytes (0 when it is unknown).

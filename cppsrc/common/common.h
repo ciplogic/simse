@@ -29,24 +29,7 @@ namespace common {
         int column;
     };
 
-    // StrView is a view over a range of a Str. It borrows the source without
-    // copying: `start` is the offset of the first character and `len` is the
-    // number of characters in the view.
-    struct StrView {
-        Str* str{};
-        int start;
-        int len;
-
-        char at(int index);
-
-        bool startsWith(const Str& str);
-
-        StrView slice(int matchLength);
-
-        Str toString();
-    };
-
-    StrView viewOf(Str* str);
-
-    StrView viewOfAtPos(Str* str, int pos);
+    // Views over the text a scanner is walking are the RTL's `Span<Char>`
+    // (cppsrc/rtl/span.hpp): a pointer and a length, borrowed, in place of the
+    // `StrView` this file used to define.
 }

@@ -74,18 +74,8 @@ fun cgIndent(level: Int): Str {
     return out
 }
 
-fun cgIsRtlTypeName(name: Str): Bool {
-    if (name == "Int" || name == "Int8" || name == "Int16" || name == "Int32"
-        || name == "Int64" || name == "Float32" || name == "Float64" || name == "Char"
-        || name == "Bool" || name == "Str" || name == "List" || name == "Array"
-        || name == "RawArray" || name == "Opt" || name == "Res" || name == "Dictionary"
-        || name == "SmallVector" || name == "PList" || name == "AstNodeAttribute"
-        || name == "AstXmlNode" || name == "Cursor" || name == "FileStream"
-        || name == "StrView") {
-        return true
-    }
-    return false
-}
+// The emitter no longer keeps its own copy of the RTL type names: the semantics that
+// share the list own it (`semIsRtlTypeName`, sema/TypeInfer.simse).
 
 fun cgUnquote(text: Str): Str {
     if (text.size() >= 2 && text.substr(0, 1) == "\"" && text.substr(text.size() - 1, 1) == "\"") {
@@ -402,6 +392,59 @@ data class Emitter(
         }
     }
 
+    // The program-level facts the semantic step on the lowered body reads
+    // (sema/TypeInfer.simse), built from the tables `collect` filled. Filling them
+    // copies no declarations: the nodes are shared.
+    fun collectFacts(): SemFacts {
+        val facts: SemFacts = semNewFacts()
+        this.fillFacts(*facts)
+        return facts
+    }
+
+    // Copies the collected tables into `facts` (a structural copy of the keys; the
+    // declarations and type nodes themselves are shared).
+    fun fillFacts(facts: *SemFacts): Unit {
+        val typeNames: List<Str> = this.types.keys()
+        var t: Int = 0
+        while (t < typeNames.size()) {
+            facts.types.insert(typeNames[t], this.types.get(typeNames[t]).value())
+            t = t + 1
+        }
+        val enumTypeNames: List<Str> = this.enumNames.keys()
+        var e: Int = 0
+        while (e < enumTypeNames.size()) {
+            facts.enumNames.insert(enumTypeNames[e], true)
+            e = e + 1
+        }
+        var f: Int = 0
+        while (f < this.functions.size()) {
+            val fn: *CgFn = *this.functions[f]
+            facts.functions.append(SemFnFact(copy(fn.decl), copy(fn.receiver), fn.templateParams))
+            f = f + 1
+        }
+        val extensionNames: List<Str> = this.nativeExtensions.keys()
+        var x: Int = 0
+        while (x < extensionNames.size()) {
+            val overloads: List<CgNativeExt> = this.nativeExtensions.get(extensionNames[x]).value()
+            var mapped: List<SemExtFact> = List<SemExtFact>()
+            var o: Int = 0
+            while (o < overloads.size()) {
+                val ext: *CgNativeExt = *overloads[o]
+                mapped.append(SemExtFact(copy(ext.receiver), copy(ext.returnType), ext.typeParams))
+                o = o + 1
+            }
+            facts.nativeExtensions.insert(extensionNames[x], mapped)
+            x = x + 1
+        }
+        val staticNames: List<Str> = this.staticsByName.keys()
+        var s: Int = 0
+        while (s < staticNames.size()) {
+            val entry: *CgStatic = *this.staticsByName.get(staticNames[s]).value()
+            facts.statics.insert(staticNames[s], xmlChild(*entry.decl, AstNodeKind.Type))
+            s = s + 1
+        }
+    }
+
     // ---- type mapping -----------------------------------------------------
 
     fun setActiveTypeParams(params: List<Str>): Unit {
@@ -448,9 +491,9 @@ data class Emitter(
         if (this.activeTypeParams.has(name)) {
             return name
         }
-        // A declared type shadows an RTL type *name*: the compiler's own
-        // `common.StrView` is a different type from the RTL's `StrView`. The RTL's
-        // own prelude types keep their C++ spelling unprefixed.
+        // A declared type shadows an RTL type *name*: a compiler-side view type of
+        // the same name is a different type from the RTL's. The RTL's own prelude
+        // types keep their C++ spelling unprefixed.
         if (this.types.has(name)) {
             val packageName: Str = this.typePackage(name)
             if (packageName == "rtl") {
@@ -458,7 +501,7 @@ data class Emitter(
             }
             return this.qualify(packageName, name)
         }
-        if (cgIsRtlTypeName(name)) {
+        if (semIsRtlTypeName(name)) {
             return name
         }
         this.fail(posNode, "unsupported type '" + name + "'")
@@ -816,7 +859,7 @@ data class Emitter(
         }
     }
 
-    fun emitFunctions(prototypeOnly: Bool): Unit {
+    fun emitFunctions(prototypeOnly: Bool, facts: *SemFacts): Unit {
         var i: Int = 0
         while (i < this.functions.size()) {
             // A pointer into `functions`: `CgFn` carries two XmlNodes, so a copy
@@ -827,7 +870,7 @@ data class Emitter(
                 continue
             }
             this.curFile = fn.file
-            this.emitFunction(fn, prototypeOnly)
+            this.emitFunction(fn, prototypeOnly, facts)
             if (this.failed) {
                 return
             }
@@ -864,7 +907,7 @@ data class Emitter(
         return mapped + "& self"
     }
 
-    fun emitFunction(fn: *CgFn, prototypeOnly: Bool): Unit {
+    fun emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit {
         // The declaration is read-only here, so borrow it instead of copying the
         // whole function AST (params, body, ...) out of the CgFn.
         val decl: *AstXmlNode = *fn.decl
@@ -977,10 +1020,16 @@ data class Emitter(
             this.line(1, "}")
         }
         this.curReturnType = returnNode
-        // Structured control flow is lowered to labels/gotos and then
-        // simplified before emission (impl_specs/linear-lowering.md); the
-        // emitter below only knows the linear forms.
-        this.emitStmts(*linSimplifyBody(linLowerBody(xmlChildren(*xmlChild(decl, AstNodeKind.Body), AstNodeKind.Stmt))), 1)
+        // Structured control flow is lowered to labels/gotos and then simplified
+        // before emission (impl_specs/linear-lowering.md); the emitter below only
+        // knows the linear forms. The semantic step that follows gives the
+        // declarations the lowering introduced - and any local the program left
+        // unannotated - the type the emitter would otherwise have to guess while
+        // emitting (sema/TypeInfer.simse).
+        var lowered: List<AstXmlNode> = linLowerExprs(linSimplifyBody(linLowerBody(xmlChildren(*xmlChild(decl, AstNodeKind.Body), AstNodeKind.Stmt))))
+        val semantics: SemBody = SemBody(copy(decl), fn.templateParams, copy(selfTypePtr))
+        lowered = semInferTypes(*lowered, facts, *semantics)
+        this.emitStmts(*lowered, 1)
         if (this.failed) {
             return
         }
@@ -1195,7 +1244,7 @@ data class Emitter(
         }
         if (kind == AstNodeCategory.TypeGeneric) {
             val name: Str = xmlAttr(typeNode, AstNodeAttributeKind.Name)
-            return name == "List" || name == "Array" || name == "Dictionary" || name == "SmallVector"
+            return name == "List" || name == "Array" || name == "Dictionary" || name == "SmallVector" || name == "Span"
         }
         return false
     }
@@ -1423,14 +1472,14 @@ data class Emitter(
             val calleeKind: AstNodeCategory = xmlKind(*callee)
             if (calleeKind == AstNodeCategory.ExprGenericName) {
                 val name: Str = xmlAttr(*callee, AstNodeAttributeKind.Name)
-                if (this.types.has(name) || cgIsRtlTypeName(name)) {
+                if (this.types.has(name) || semIsRtlTypeName(name)) {
                     return this.genericTypeExpr(name, *xmlChildren(*callee, AstNodeKind.TypeArg))
                 }
                 return this.functionReturn(name)
             }
             if (calleeKind == AstNodeCategory.ExprName) {
                 val name: Str = xmlAttr(*callee, AstNodeAttributeKind.Name)
-                if (this.types.has(name) || cgIsRtlTypeName(name)) {
+                if (this.types.has(name) || semIsRtlTypeName(name)) {
                     return this.namedType(name)
                 }
                 return this.functionReturn(name)
@@ -1734,7 +1783,7 @@ data class Emitter(
         } else {
             val savedOut: Str = this.out
             this.out = ""
-            this.emitStmts(*linSimplifyBody(linLowerBody(bodyStmts)), 1)
+            this.emitStmts(*linLowerExprs(linSimplifyBody(linLowerBody(bodyStmts))), 1)
             body = this.out
             this.out = savedOut
         }
@@ -2095,6 +2144,11 @@ data class Emitter(
 
     fun run(): Res<Str> {
         this.collect()
+        // The semantic step on the lowered body reads these (sema/TypeInfer.simse).
+        // They are built here and threaded to the emitters rather than stored on the
+        // emitter: a data-class *field* would have to name another package's type,
+        // and the amalgamated file emits the packages in its own order.
+        val facts: SemFacts = this.collectFacts()
         this.preludeText()
         this.emitNativeDeclarations()
         if (this.failed) {
@@ -2108,7 +2162,7 @@ data class Emitter(
         if (this.failed) {
             return Res<Str>.err(this.error)
         }
-        this.emitFunctions(true)
+        this.emitFunctions(true, *facts)
         if (this.failed) {
             return Res<Str>.err(this.error)
         }
@@ -2116,7 +2170,7 @@ data class Emitter(
         if (this.failed) {
             return Res<Str>.err(this.error)
         }
-        this.emitFunctions(false)
+        this.emitFunctions(false, *facts)
         if (this.failed) {
             return Res<Str>.err(this.error)
         }

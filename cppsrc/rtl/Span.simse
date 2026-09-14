@@ -1,0 +1,57 @@
+// Span.simse
+//
+// `Span<T>` is a borrowed view over a contiguous run of `T`: a pointer and a length,
+// nothing else (specs/containers.md, "Span<T>"). It owns nothing and copies nothing,
+// so it is valid only while the memory it points at is alive and unmodified - the
+// language's spelling of C#'s `Span<T>`, with the same indexing and `slice`.
+//
+// Declarations only: the concrete type and its members live in cppsrc/rtl/span.hpp,
+// and codegen maps `Span<T>` onto the RTL type, so the bodies here are documentation,
+// not emitted code. That is also why `slice` says only what the length becomes: the
+// RTL advances the data pointer, which the language has no expression for.
+//
+// `Span<T>` stays uniform over `T`; the text-specific operations live on `StrView`
+// (StrView.simse), which embeds a `Span<Char>`. Walk a list with a span:
+
+// ```text
+// var span: Span<Int> = spanOf(*items)
+// while (!span.isEmpty()) {
+//     process(span[0])
+//     span = span.slice(1)
+// }
+// ```
+//
+// A span **borrows** its source (`spanOf(items)`): the source must outlive the span,
+// and `&items` would box a *copy* instead of borrowing.
+
+package rtl
+
+data class Span<T>(var ptr: *T; var len: Int) {
+    // The number of elements.
+    fun size(): Int {
+        return this.len
+    }
+
+    // True when the span covers nothing.
+    fun isEmpty(): Bool {
+        return this.len <= 0
+    }
+
+    // The element at `index` (unchecked; `span[index]` is the same thing).
+    fun at(index: Int): T {
+        return this.ptr[index]
+    }
+
+    // From `start` to the end (C# `Slice(int)`; unchecked).
+    fun slice(start: Int): Span<T> {
+        return Span<T>(this.ptr, this.len - start)
+    }
+
+    // `count` elements from `start` (C# `Slice(int, int)`; unchecked).
+    fun slice(start: Int, count: Int): Span<T> {
+        return Span<T>(this.ptr, count)
+    }
+}
+
+// A span over a list's elements, borrowing the list (which must outlive the span).
+native("simse_spanOf") fun spanOf<T>(items: *List<T>): Span<T>

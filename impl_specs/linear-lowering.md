@@ -120,6 +120,92 @@ in front of the flat body. Nothing here is required for correctness: skipping
 the pass yields a correct (larger) program, which is what makes it easy to
 verify against the un-simplified output.
 
+## Expression lowering
+
+`linear::lowerExprs` (`cppsrc/linear/ExpressionLowering.{h,cpp}`, `linLowerExprs` in
+`cppsrc/linear/ExpressionLowering.simse`) is the second half of the same idea: after
+the linear pass the emitter has one *statement* vocabulary, and after this pass one
+*expression* vocabulary. It runs on the lowered body, **after**
+`linear::simplifyBody` (so the peephole pass never sees the temporaries) and before
+emission.
+
+Every expression the emitter sees is then either a simple operand - a literal, a
+name, a qualified name, a lambda, or an lvalue path - or a single operation whose
+operands are simple. Anything deeper is bound to a `_sm_expr<n>` local, numbered by
+a per-body counter that restarts for each body (like the labels):
+
+```
+var a = (b + c) * d;        ->  auto _sm_expr1 = b + c;
+                                auto a = _sm_expr1 * d;
+
+x = a[i + 2].toString();    ->  auto _sm_expr1 = i + 2;
+                                x = a[_sm_expr1].toString();
+```
+
+Temporaries are untyped `VarDecl`s, so the emitter emits `auto` for them (the same
+path the hoisted `switch` subject uses). They are inserted in front of the statement
+that needed them and - except for a `var` declaration, which must keep its name
+visible for the rest of its region - scoped with `Stmt.Block`, so no jump can cross
+their initialization.
+
+Two boundaries are deliberate:
+
+- **an lvalue path stays a path.** A name, or a member/index/deref chain rooted at
+  one, is already a simple operand, and binding it to a value temporary would copy
+  what is behind it - a mutating call on the copy would be lost. Its indices and
+  arguments are flattened, so `a[i + 2].append(x)` becomes `a[_sm_expr1].append(x)`
+  and still appends to the element. Making the *path itself* a temporary would need
+  a reference binding (`auto&&`), which re-binding on every iteration of a
+  goto-loop makes awkward; it is a possible follow-up, not a requirement.
+- **`&&` and `||` are left alone**, and so is the `?:` shorthand if it is ever
+  added: their operands are evaluated conditionally, so hoisting anything out of
+  them would change the program. They are the third statement shape this design will
+  need, not an expression one: the short-circuit forms belong to the control-flow
+  lowering, exactly like `if`/`while` - see "Short-circuit operators, ternary"
+  below.
+
+## Short-circuit operators, ternary (not implemented)
+
+The two-value operators `&&` and `||` (and a `?:` conditional expression, which the
+grammar does not have yet) are *not* expressions the emitter should ever see. Each
+one is a conditional whose branches are evaluated lazily, so it lowers to the
+control-flow primitives this pass already produces - with the result materialised in
+a temporary when the value is used:
+
+```
+var x = a && b;
+    L1:;
+    auto _sm_expr1 = a;
+    if (!(_sm_expr1)) goto L2;      # short-circuit: b is not evaluated
+    _sm_expr1 = b;
+    L2:;
+    auto x = _sm_expr1;
+
+var y = c || d;
+    L1:;
+    auto _sm_expr1 = c;
+    if (_sm_expr1) goto L2;         # short-circuit: d is not evaluated
+    _sm_expr1 = d;
+    L2:;
+    auto y = _sm_expr1;
+
+var z = p ? q : r;                  # the same shape with ifTrue/ifFalse swapped
+    L1:;
+    if (p) goto L2;
+    auto _sm_expr1 = r;
+    goto L3;
+    L2:;
+    _sm_expr1 = q;
+    L3:;
+    auto z = _sm_expr1;
+```
+
+So `ifTrue`, `ifFalse`, `goto` and `label` cover the whole language, and a `&&` in a
+*condition* position needs no temporary at all: `if (a && b) { T }` becomes
+`if (!(a)) goto end; if (!(b)) goto end; T'` in the same pass that owns `if`.
+Until that lands, this pass is the one that must *not* flatten inside them - which
+is why `exprIsShortCircuit` exists.
+
 ## Label numbering
 
 Labels are `L1`, `L2`, ... from a counter that restarts at 1 for every body.

@@ -77,7 +77,7 @@ int main() {
 
 There is no interpreter, no VM and no runtime library to ship: a Simse program
 is C++ with a small prelude of helper types (`Str`, `List`, `Dictionary`,
-`Opt`, `Res`, `Array`, `Cursor`) defined in headers.
+`Opt`, `Res`, `Array`, `Span`) defined in headers.
 
 ## What it is for
 
@@ -167,7 +167,7 @@ A full walkthrough, including the tests and the stress corpus, is in
 ## Status
 
 Working today: the language above (data classes, enums, generics, extensions,
-lambdas, `List`/`Array`/`Dictionary`/`Cursor`/`Opt`/`Res`/`Str`, file I/O, the
+lambdas, `List`/`Array`/`Dictionary`/`Span`/`Opt`/`Res`/`Str`, file I/O, the
 `main(args)` form), a self-hosted compiler that reproduces its own output byte
 for byte, 49 in-process tests, five differential stage tests and 23 end-to-end
 stress programs, and a transpile throughput of roughly **6,400 lines in ~65 ms**

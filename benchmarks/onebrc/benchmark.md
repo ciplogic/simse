@@ -18,18 +18,25 @@ bytes (127.7 MiB), 100 stations.
 
 Windows on ARM64, MSVC (C++20) with `/O2 /Ob3 /DNDEBUG`, single-threaded. Each
 binary reports its own time over the read-and-aggregate loop (printing excluded);
-7 interleaved pairs (baseline, Simse, baseline, Simse, ...) because this machine
-throttles under load; min/median of the seven:
+4 interleaved pairs (baseline, Simse, baseline, Simse, ...) because this machine
+throttles under load, with the Bun reference aggregate in the same loop as a canary
+for the machine's state; min/median of the four:
 
 | Implementation | Time (min/median) | Throughput | Peak working set |
 | --- | --- | --- | --- |
-| **Simse, parsing in place (`readLineView`)** | **1056 / 1085 ms** | **127 / 123 MB/s** | 6.5 MB |
-| C++ STL baseline | 1480 / 1500 ms | 90 / 89 MB/s | 5.9 MB |
-| Bun reference aggregate (`check`) | 727 ms | 184 MB/s | — |
+| **Simse, parsing in place (`readLineView`)** | **1093 / 1106 ms** | **123 / 121 MB/s** | 6.5 MB |
+| C++ STL baseline | 1390 / 1405 ms | 96 / 95 MB/s | 5.9 MB |
+| Bun reference aggregate (`check`) | 712 ms | 188 MB/s | — |
 
-**The Simse program is 1.40x faster than the naive C++ one** on the same data, and
-1.45x behind the JavaScript reference. Both programs' reports are byte-identical to
+**The Simse program is 1.27x faster than the naive C++ one** on the same data, and
+1.54x behind the JavaScript reference. Both programs' reports are byte-identical to
 the reference (100 stations, values in exact tenths).
+
+The ratio is one session's number, not a constant: measured in the same style on the
+same data it has run **1.26x-1.40x**, because the C++ baseline varies more than the
+Simse program does (1390-1580 ms against 1056-1177 ms across sessions, each with the
+reference leg as a canary - 705-727 ms in the cool sittings). The Simse side is the
+stable one.
 
 ## Where the time goes
 
@@ -58,7 +65,10 @@ readers all remain in the RTL, `impl_specs/rtl-abi.md`):
 | --- | --- | --- |
 | `readLine(): Opt<Str>` | 2040 / 2048 ms | `std::getline` + one `Str` per line |
 | `readLineInto(*line)` | 1156 / 1161 ms | one `memcpy` into a recycled `Str` |
-| `readLineView(): Opt<StrView>` | 1087 / 1088 ms | nothing - a view into the buffer |
+| `readLineView(): Opt<StrView>` | 1087 / 1088 ms | nothing - a span into the buffer |
+
+(The in-place row was measured before the view became a `StrView`: the same code
+path the table above runs, which re-measured at 1093/1106 ms as the whole program.)
 
 ## Reproducing it
 
@@ -97,7 +107,7 @@ bun benchmarks\onebrc\onebrc.mjs check benchmarks\onebrc\data\measurements.txt
 - **The view's lifetime.** A `StrView` from `readLineView()` is valid until the
   next read on that stream, because a refill moves the bytes. The 1BRC uses each
   view inside its loop iteration, which is the shape the rule asks for; a line that
-  must outlive the next read is `view.toStr()`.
+  must outlive the next read is `view.toString()`.
 - **Borrowing the dictionary.** `Dictionary` is a value type, so the aggregation
   takes a `*Dictionary` (a raw pointer) - `&counts` would box a *copy* and the
   aggregates would be written into the box instead of the local. This is the one

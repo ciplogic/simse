@@ -32,7 +32,10 @@ int main() {
     std::cout << std::boolalpha << (total) << std::endl;
     goto L5;
     L4:;
-    std::cout << std::boolalpha << (ns1_bump(c)) << std::endl;
+    {
+        auto _sm_expr1 = ns1_bump(c);
+        std::cout << std::boolalpha << (_sm_expr1) << std::endl;
+    }
     L5:;
     std::cout << std::boolalpha << (true) << std::endl;
     return 0;

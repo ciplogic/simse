@@ -1,8 +1,8 @@
 package recur
 
 // Recursion (including a call in tail position and one in both operands), a
-// pointer parameter that borrows the caller's list, list sorting, and Cursor
-// iteration.
+// pointer parameter that borrows the caller's list, list sorting, and `Span<T>`
+// iteration (there is no range-for).
 
 fun fib(n: Int): Int {
     if (n < 2) {
@@ -43,12 +43,11 @@ fun main(): Int {
     values.sort((left: Int, right: Int) -> left < right)
     println(sum(*values))
 
-    val view: &List<Int> = &values
-    var cursor: Cursor<Int> = cursorOf(view)
+    var span: Span<Int> = spanOf(*values)
     var count: Int = 0
-    while (cursor.hasValue()) {
+    while (!span.isEmpty()) {
         count = count + 1
-        cursor = cursor.next()
+        span = span.slice(1)
     }
     println(count)
     return 0

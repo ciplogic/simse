@@ -12,7 +12,10 @@ Int ns1_f() {
 // sema_switch_label.simse:7
 Int ns1_pick(Int n) {
     auto simse_sw_1 = n;
-    if (!(simse_sw_1 == ns1_f())) goto L4;
+    {
+        auto _sm_expr1 = ns1_f();
+        if (!(simse_sw_1 == _sm_expr1)) goto L4;
+    }
     return 1;
     L4:;
     return 0;

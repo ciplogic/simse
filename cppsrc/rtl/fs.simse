@@ -41,10 +41,10 @@ native("simse_fileStream_readLine") fun readLine(this: *FileStream): Opt<Str>
 // of file. No line copy beyond one `memcpy` into the caller's own `Str`.
 native("simse_fileStream_readLineInto") fun readLineInto(this: *FileStream, buffer: *Str): Bool
 
-// The in-place read: the next line as a `StrView` into the stream's readahead
-// buffer, or an empty `Opt` at end of file. Nothing is copied, so the view is valid
-// only until the next read on this stream (a refill moves the bytes) - keep a copy
-// with `view.toStr()` when the line must outlive it.
+// The in-place read: the next line as a `StrView` (`Span<Char>`) into the stream's
+// readahead buffer, or an empty `Opt` at end of file. Nothing is copied, so the span
+// is valid only until the next read on this stream (a refill moves the bytes) - keep a
+// copy with `line.toString()` when the line must outlive it.
 native("simse_fileStream_readLineView") fun readLineView(this: *FileStream): Opt<StrView>
 
 native("simse_fileStream_open") fun openFileStream(path: Str): *FileStream

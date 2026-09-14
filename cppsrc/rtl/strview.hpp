@@ -1,90 +1,132 @@
 #pragma once
 
+#include <cstddef>
+#include <cstring>
+
+#include "span.hpp"
 #include "types.hpp"
 
-// StrView is a borrowed view over a range of a `Str` (specs/built-in-types.md,
-// "Views"): a pointer to the source plus a start offset and a length. A view
-// copies nothing and owns nothing, so it is only valid while its source is alive
-// and unchanged - which is the trade the language makes for parsing a buffer
-// without allocating per token.
+// StrView is the view a string's bytes are read through: a `Span<Char>` plus the
+// operations text needs. It owns nothing and copies nothing, so it is valid only while
+// the bytes it points at are alive and unmodified - what `FileStream.readLineView()`
+// hands back is valid until the next read on that stream (a refill moves the buffer).
 //
-// It is what `FileStream.readLineView()` hands back (a window into the stream's
-// readahead buffer, moved by the next read on that stream) and what a parse over
-// one buffer wants instead of `substr`, which copies. `slice` stays a view,
-// `substr`/`toStr` are the owned copies.
+// The span is embedded rather than aliased (`typealias StrView = Span<Char>`) for two
+// reasons: an alias does not survive the emitter's receiver-type lookup, and with a
+// real name the operations can be declared as the prelude's natives - which is what
+// gives the emitter their *return types*, so `view.slice(0, n).toString()` and
+// `"x" + view.toString()` are emitted correctly.
 //
-// The Simse surface is the prelude file cppsrc/rtl/StrView.simse: the fields and
-// methods are the `data class` declared there, and codegen maps member calls to
-// the members below. Bounds are unchecked except where noted, matching the RTL's
-// no-exceptions policy.
+// The Simse surface is the prelude file cppsrc/rtl/StrView.simse: `StrView` maps onto
+// this struct and every operation is a native with the symbol below. Bounds are
+// unchecked, matching the RTL's no-exceptions policy.
 struct StrView {
-    // The source text (`*Str`). A default-constructed view has none.
-    Str* source = nullptr;
-    // Index of the view's first byte inside `source`.
-    Int start = 0;
-    // Number of bytes the view covers.
-    Int len = 0;
+    // The bytes this view covers.
+    Span<Char> bytes;
 
     StrView() = default;
-    StrView(Str* src, Int s, Int l) : source(src), start(s), len(l) {}
+    StrView(Span<Char> span) : bytes(span) {}
+    StrView(Char* data, Int count) : bytes(data, count) {}
 
-    // The number of bytes in the view.
-    Int size() const { return len; }
-
-    // True when the view covers no bytes.
-    Bool isEmpty() const { return len <= 0; }
-
-    // The byte at `index` (unchecked).
-    Char at(Int index) const { return (*source)[(std::size_t) (start + index)]; }
-
-    // The same byte, spelled like `Str.charAt` (unchecked).
-    Char charAt(Int index) const { return at(index); }
-
-    // True when the view begins with `text`.
-    Bool startsWith(const Str& text) const {
-        const Int count = (Int) text.size();
-        if (count > len) return false;
-        for (Int i = 0; i < count; i++) {
-            if (at(i) != text[(std::size_t) i]) return false;
-        }
-        return true;
-    }
-
-    // The index of the first occurrence of `sub` inside the view, or -1. The
-    // bytes are compared in place: nothing is copied.
-    Int find(const Str& sub) const {
-        const Int needle = (Int) sub.size();
-        if (needle == 0) return 0;
-        if (needle > len) return -1;
-        for (Int i = 0; i + needle <= len; i++) {
-            Int j = 0;
-            while (j < needle && at(i + j) == sub[(std::size_t) j]) j++;
-            if (j == needle) return i;
-        }
-        return -1;
-    }
-
-    // `indexOf` is the other spelling of `find` (both are in the spec).
-    Int indexOf(const Str& sub) const { return find(sub); }
-
-    // A view of `count` bytes starting `from` bytes into this view: no copy
-    // (unchecked, like the rest of the RTL).
-    StrView slice(Int from, Int count) const { return StrView(source, start + from, count); }
-
-    // The owned copy of `count` bytes starting `from` bytes in: `start` is clamped
-    // to [0, size] and `count` may run to the end, like `Str.substr`.
-    Str substr(Int from, Int count) const {
-        Int begin = from < 0 ? 0 : from;
-        if (begin > len) begin = len;
-        Int end = count < 0 ? begin : begin + count;
-        if (end > len) end = len;
-        Str result;
-        if (end > begin) {
-            result.append(source->data() + start + begin, (std::size_t) (end - begin));
-        }
-        return result;
-    }
-
-    // The owned copy of the whole view.
-    Str toStr() const { return substr(0, len); }
+    // `view[i]`: the byte at `index` (unchecked), so it is also assignable.
+    Char& operator[](std::size_t index) const { return bytes[index]; }
 };
+
+// ---- the operations the prelude declares (StrView.simse) -------------------
+
+inline Int simse_strView_size(StrView self) {
+    return self.bytes.len;
+}
+
+inline Bool simse_strView_isEmpty(StrView self) {
+    return self.bytes.len <= 0;
+}
+
+inline Char& simse_strView_at(StrView self, Int index) {
+    return self.bytes[(std::size_t) index];
+}
+
+// `view.slice(start)`: from `start` to the end (C# `Slice(int)`).
+inline StrView simse_strView_slice(StrView self, Int start) {
+    return StrView(self.bytes.slice(start));
+}
+
+// `view.slice(start, count)`: `count` bytes from `start` (C# `Slice(int, int)`).
+inline StrView simse_strView_slice(StrView self, Int start, Int count) {
+    return StrView(self.bytes.slice(start, count));
+}
+
+inline Char simse_strView_charAt(StrView self, Int index) {
+    return self.bytes[(std::size_t) index];
+}
+
+// True when the view begins with `text`.
+inline Bool simse_strView_startsWith(StrView self, const Str& text) {
+    const Int count = (Int) text.size();
+    if (count > self.bytes.len) return false;
+    for (Int i = 0; i < count; i++) {
+        if ((char) self.bytes[(std::size_t) i] != text[(std::size_t) i]) return false;
+    }
+    return true;
+}
+
+// `startsWithPtr(text, length)`: the same comparison against text this view does not
+// own, reached by raw pointer and with its length already known. `startsWith` would
+// copy the `Str` first, which is what a table lookup cannot afford; the first byte is
+// the caller's cheap test, this does the rest.
+inline Bool simse_strView_startsWithPtr(StrView self, const Str* text, Int length) {
+    if (length > self.bytes.len) return false;
+    for (Int i = 1; i < length; i++) {
+        if ((char) self.bytes[(std::size_t) i] != (*text)[(std::size_t) i]) return false;
+    }
+    return true;
+}
+
+// `find(sub)`: the index of the first occurrence of `sub` in the bytes, or -1. The
+// bytes are compared in place: nothing is copied.
+inline Int simse_strView_find(StrView self, const Str& sub) {
+    const Int needle = (Int) sub.size();
+    if (needle == 0) return 0;
+    if (needle > self.bytes.len) return -1;
+    for (Int i = 0; i + needle <= self.bytes.len; i++) {
+        Int j = 0;
+        while (j < needle && (char) self.bytes[(std::size_t) (i + j)] == sub[(std::size_t) j]) j++;
+        if (j == needle) return i;
+    }
+    return -1;
+}
+
+// `indexOf` is the other spelling of `find`.
+inline Int simse_strView_indexOf(StrView self, const Str& sub) {
+    return simse_strView_find(self, sub);
+}
+
+// The owned copy of `count` bytes from `from`, with `from` clamped to [0, size] and
+// `count` allowed to run to the end, like `Str.substr`.
+inline Str simse_strView_substr(StrView self, Int from, Int count) {
+    const Int len = self.bytes.len;
+    Int begin = from < 0 ? 0 : from;
+    if (begin > len) begin = len;
+    Int end = count < 0 ? begin : begin + count;
+    if (end > len) end = len;
+    Str result;
+    if (end > begin) {
+        result.resize((std::size_t) (end - begin));
+        std::memcpy(result.data(), self.bytes.ptr + begin, (std::size_t) (end - begin));
+    }
+    return result;
+}
+
+// The owned copy of the whole view, as a `Str` (the language's `toString()`
+// convention, like `Int.toString()`).
+inline Str simse_strView_toString(StrView self) {
+    return simse_strView_substr(self, 0, self.bytes.len);
+}
+
+// `spanOfStr(text)`: a view over a string's bytes. It borrows the string - the string
+// has to outlive the view - and does not copy it (`&text` would box a copy instead).
+// `Str` is a `char` buffer on the C++ side and the language's `Char` is a signed byte,
+// hence the cast.
+inline StrView simse_spanOfStr(Str* text) {
+    return StrView(reinterpret_cast<Char*>(text->data()), (Int) text->size());
+}

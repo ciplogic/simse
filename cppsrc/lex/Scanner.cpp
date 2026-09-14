@@ -15,9 +15,9 @@ namespace lex {
     using CharMatcher = Func<bool(char)>;
 
     int matchAllOfRule(StrView strView, CharMatcher matchFunc) {
-        int len = strView.len;
+        int len = simse_strView_size(strView);
         for (int i = 0; i < len; i++) {
-            if (!matchFunc(strView.at(i))) {
+            if (!matchFunc(simse_strView_at(strView, i))) {
                 return i;
             }
         }
@@ -25,19 +25,19 @@ namespace lex {
     }
 
     int matchAllOfRules(StrView strView, CharMatcher matchFirst, CharMatcher matchFunc) {
-        if (strView.len == 0) {
+        if (simse_strView_size(strView) == 0) {
             return 0;
         }
-        if (!matchFirst(strView.at(0))) {
+        if (!matchFirst(simse_strView_at(strView, 0))) {
             return 0;
         }
-        for (int i = 1; i < strView.len; i++) {
-            if (!matchFunc(strView.at(i))) {
+        for (int i = 1; i < simse_strView_size(strView); i++) {
+            if (!matchFunc(simse_strView_at(strView, i))) {
                 return i;
             }
         }
 
-        return strView.len;
+        return simse_strView_size(strView);
     }
 
     // The scanner's tables are built once (static storage), and the comparisons
@@ -68,15 +68,15 @@ namespace lex {
     // comparison only runs for entries that survived them. Entries are read by
     // reference, so nothing is copied. Both lookups share this function.
     int tableMatch(StrView view, const List<Str> &table, bool exact) {
-        if (view.len == 0) {
+        if (simse_strView_size(view) == 0) {
             return 0;
         }
-        const char first = view.at(0);
+        const char first = simse_strView_at(view, 0);
         for (const Str &entry: table) {
             const int length = (int) entry.length();
             if (length == 0 || entry[0] != first) continue;
-            if (view.len < length || (exact && view.len != length)) continue;
-            if (view.startsWith(entry)) return length;
+            if (simse_strView_size(view) < length || (exact && simse_strView_size(view) != length)) continue;
+            if (simse_strView_startsWith(view, entry)) return length;
         }
         return 0;
     }
@@ -123,15 +123,15 @@ namespace lex {
 
     // A line ending is CRLF, LF, or CR, matched as a whole.
     int matchEndOfLine(StrView Source) {
-        if (Source.len == 0) {
+        if (simse_strView_size(Source) == 0) {
             return 0;
         }
-        char ch = Source.at(0);
+        char ch = simse_strView_at(Source, 0);
         if (ch == '\n') {
             return 1;
         }
         if (ch == '\r') {
-            if (Source.len >= 2 && Source.at(1) == '\n') {
+            if (simse_strView_size(Source) >= 2 && simse_strView_at(Source, 1) == '\n') {
                 return 2;
             }
             return 1;
@@ -148,16 +148,16 @@ namespace lex {
         if (length == 0) {
             return 0;
         }
-        if (isReservedWord(Source.slice(length))) {
+        if (isReservedWord(simse_strView_slice(Source, 0, length))) {
             return length;
         }
         return 0;
     }
 
     int matchNumber(StrView Source) {
-        int len = Source.len;
+        int len = simse_strView_size(Source);
         int i = 0;
-        while (i < len && isDigit(Source.at(i))) {
+        while (i < len && isDigit(simse_strView_at(Source, i))) {
             i++;
         }
         if (i == 0) {
@@ -166,9 +166,9 @@ namespace lex {
 
         // Optional fractional part: a '.' must be followed by a digit to belong
         // to the number, otherwise it is member/range punctuation.
-        if (i + 1 < len && Source.at(i) == '.' && isDigit(Source.at(i + 1))) {
+        if (i + 1 < len && simse_strView_at(Source, i) == '.' && isDigit(simse_strView_at(Source, i + 1))) {
             i++;
-            while (i < len && isDigit(Source.at(i))) {
+            while (i < len && isDigit(simse_strView_at(Source, i))) {
                 i++;
             }
         }
@@ -176,20 +176,20 @@ namespace lex {
     }
 
     int matchComment(StrView Source) {
-        if (Source.len < 2 || Source.at(0) != '/') {
+        if (simse_strView_size(Source) < 2 || simse_strView_at(Source, 0) != '/') {
             return 0;
         }
-        if (Source.at(1) == '/') {
+        if (simse_strView_at(Source, 1) == '/') {
             int i = 2;
-            while (i < Source.len && Source.at(i) != '\n' && Source.at(i) != '\r') {
+            while (i < simse_strView_size(Source) && simse_strView_at(Source, i) != '\n' && simse_strView_at(Source, i) != '\r') {
                 i++;
             }
             return i;
         }
-        if (Source.at(1) == '*') {
+        if (simse_strView_at(Source, 1) == '*') {
             int i = 2;
-            while (i + 1 < Source.len) {
-                if (Source.at(i) == '*' && Source.at(i + 1) == '/') {
+            while (i + 1 < simse_strView_size(Source)) {
+                if (simse_strView_at(Source, i) == '*' && simse_strView_at(Source, i + 1) == '/') {
                     return i + 2;
                 }
                 i++;
@@ -199,12 +199,12 @@ namespace lex {
     }
 
     int matchStringLiteral(StrView Source) {
-        if (Source.len == 0 || Source.at(0) != '"') {
+        if (simse_strView_size(Source) == 0 || simse_strView_at(Source, 0) != '"') {
             return 0;
         }
         int i = 1;
-        while (i < Source.len) {
-            char ch = Source.at(i);
+        while (i < simse_strView_size(Source)) {
+            char ch = simse_strView_at(Source, i);
             if (ch == '\\') {
                 i += 2;
                 continue;
@@ -218,12 +218,12 @@ namespace lex {
     }
 
     int matchCharLiteral(StrView Source) {
-        if (Source.len == 0 || Source.at(0) != '\'') {
+        if (simse_strView_size(Source) == 0 || simse_strView_at(Source, 0) != '\'') {
             return 0;
         }
         int i = 1;
-        while (i < Source.len) {
-            char ch = Source.at(i);
+        while (i < simse_strView_size(Source)) {
+            char ch = simse_strView_at(Source, i);
             if (ch == '\\') {
                 i += 2;
                 continue;
@@ -245,7 +245,7 @@ namespace lex {
         if (matched > 0) {
             return matched;
         }
-        if (Source.len > 0 && isOperatorChar(Source.at(0))) {
+        if (simse_strView_size(Source) > 0 && isOperatorChar(simse_strView_at(Source, 0))) {
             return 1;
         }
         return 0;
@@ -285,9 +285,9 @@ namespace lex {
     Str escapedSnippet(StrView view, int maxLen) {
         static const char *hexDigits = "0123456789ABCDEF";
         Str snippet;
-        int count = view.len < maxLen ? view.len : maxLen;
+        int count = simse_strView_size(view) < maxLen ? simse_strView_size(view) : maxLen;
         for (int i = 0; i < count; i++) {
-            unsigned char byte = (unsigned char) view.at(i);
+            unsigned char byte = (unsigned char) simse_strView_at(view, i);
             switch (byte) {
                 case '\\': snippet += "\\\\"; break;
                 case '\n': snippet += "\\n"; break;
@@ -309,19 +309,19 @@ namespace lex {
 
     Res<Token> Scanner::nextToken() {
         while (this->Pos < (int) this->Source.length()) {
-            StrView sourceView = common::viewOfAtPos(&this->Source, this->Pos);
+            StrView sourceView = simse_strView_slice(simse_spanOfStr(&this->Source), this->Pos);
             for (TokenMatcher &rule: *_rules) {
                 int matchLength = rule.match(sourceView);
                 if (matchLength <= 0) {
                     continue;
                 }
-                if (matchLength > sourceView.len) {
-                    matchLength = sourceView.len;
+                if (matchLength > simse_strView_size(sourceView)) {
+                    matchLength = simse_strView_size(sourceView);
                 }
-                auto tokenSlice = sourceView.slice(matchLength);
+                auto tokenSlice = simse_strView_slice(sourceView, 0, matchLength);
 
                 Token token;
-                token.text = tokenSlice.toString();
+                token.text = simse_strView_toString(tokenSlice);
                 token.kind = rule.tokenKind;
                 token.pos = SourcePos{this->Pos, this->Line, this->Column};
 

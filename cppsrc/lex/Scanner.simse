@@ -4,7 +4,7 @@
 // type. It mirrors cppsrc/lex/Scanner.h and cppsrc/lex/Scanner.cpp so that the
 // C++ scanner can tokenize this file as a self-scan fixture.
 //
-// StrView lives in cppsrc/common/StrView.simse.
+// StrView lives in cppsrc/rtl/Span.simse (the RTL's borrowed view).
 
 package lex
 
@@ -60,30 +60,30 @@ fun isOperatorChar(ch: Char): Bool {
 
 fun matchAllOfRule(view: StrView, predicate: CharPredicate): Int {
     var i = 0
-    while (i < view.len) {
+    while (i < view.size()) {
         if (!predicate(view.at(i))) {
             return i
         }
         i = i + 1
     }
-    return view.len
+    return view.size()
 }
 
 fun matchAllOfRules(view: StrView, first: CharPredicate, rest: CharPredicate): Int {
-    if (view.len == 0) {
+    if (view.size() == 0) {
         return 0
     }
     if (!first(view.at(0))) {
         return 0
     }
     var i = 1
-    while (i < view.len) {
+    while (i < view.size()) {
         if (!rest(view.at(i))) {
             return i
         }
         i = i + 1
     }
-    return view.len
+    return view.size()
 }
 
 // ---- the scanner's tables -------------------------------------------------
@@ -155,7 +155,7 @@ fun makeMultiCharOperators(): List<Str> {
 // takes that pointer too (`StrView.startsWithPtr`), so no call here copies text.
 // Both lookups share this function and the tables above.
 fun tableMatch(view: StrView, table: *List<Str>, exact: Bool): Int {
-    if (view.len == 0) {
+    if (view.size() == 0) {
         return 0
     }
     val first: Char = view.at(0)
@@ -167,7 +167,7 @@ fun tableMatch(view: StrView, table: *List<Str>, exact: Bool): Int {
         if (length == 0 || entry[0] != first) {
             continue
         }
-        if (view.len < length || (exact && view.len != length)) {
+        if (view.size() < length || (exact && view.size() != length)) {
             continue
         }
         if (view.startsWithPtr(entry, length)) {
@@ -196,7 +196,7 @@ fun matchSpaces(view: StrView): Int {
 
 // A line ending is CRLF, LF, or CR, matched as a whole.
 fun matchEndOfLine(view: StrView): Int {
-    if (view.len == 0) {
+    if (view.size() == 0) {
         return 0
     }
     val ch: Char = view.at(0)
@@ -204,7 +204,7 @@ fun matchEndOfLine(view: StrView): Int {
         return 1
     }
     if (ch == '\r') {
-        if (view.len >= 2 && view.at(1) == '\n') {
+        if (view.size() >= 2 && view.at(1) == '\n') {
             return 2
         }
         return 1
@@ -221,7 +221,7 @@ fun matchReservedWord(view: StrView): Int {
     if (length == 0) {
         return 0
     }
-    if (isReservedWord(view.slice(length))) {
+    if (isReservedWord(view.slice(0, length))) {
         return length
     }
     return 0
@@ -229,15 +229,15 @@ fun matchReservedWord(view: StrView): Int {
 
 fun matchNumber(view: StrView): Int {
     var i = 0
-    while (i < view.len && isDigit(view.at(i))) {
+    while (i < view.size() && isDigit(view.at(i))) {
         i = i + 1
     }
     if (i == 0) {
         return 0
     }
-    if (i + 1 < view.len && view.at(i) == '.' && isDigit(view.at(i + 1))) {
+    if (i + 1 < view.size() && view.at(i) == '.' && isDigit(view.at(i + 1))) {
         i = i + 1
-        while (i < view.len && isDigit(view.at(i))) {
+        while (i < view.size() && isDigit(view.at(i))) {
             i = i + 1
         }
     }
@@ -245,19 +245,19 @@ fun matchNumber(view: StrView): Int {
 }
 
 fun matchComment(view: StrView): Int {
-    if (view.len < 2 || view.at(0) != '/') {
+    if (view.size() < 2 || view.at(0) != '/') {
         return 0
     }
     if (view.at(1) == '/') {
         var i = 2
-        while (i < view.len && view.at(i) != '\n' && view.at(i) != '\r') {
+        while (i < view.size() && view.at(i) != '\n' && view.at(i) != '\r') {
             i = i + 1
         }
         return i
     }
     if (view.at(1) == '*') {
         var i = 2
-        while (i + 1 < view.len) {
+        while (i + 1 < view.size()) {
             if (view.at(i) == '*' && view.at(i + 1) == '/') {
                 return i + 2
             }
@@ -268,11 +268,11 @@ fun matchComment(view: StrView): Int {
 }
 
 fun matchStringLiteral(view: StrView): Int {
-    if (view.len == 0 || view.at(0) != '"') {
+    if (view.size() == 0 || view.at(0) != '"') {
         return 0
     }
     var i = 1
-    while (i < view.len) {
+    while (i < view.size()) {
         val ch: Char = view.at(i)
         if (ch == '\\') {
             i = i + 2
@@ -287,11 +287,11 @@ fun matchStringLiteral(view: StrView): Int {
 }
 
 fun matchCharLiteral(view: StrView): Int {
-    if (view.len == 0 || view.at(0) != '\'') {
+    if (view.size() == 0 || view.at(0) != '\'') {
         return 0
     }
     var i = 1
-    while (i < view.len) {
+    while (i < view.size()) {
         val ch: Char = view.at(i)
         if (ch == '\\') {
             i = i + 2
@@ -313,7 +313,7 @@ fun matchOperator(view: StrView): Int {
     if (matched > 0) {
         return matched
     }
-    if (view.len > 0 && isOperatorChar(view.at(0))) {
+    if (view.size() > 0 && isOperatorChar(view.at(0))) {
         return 1
     }
     return 0
@@ -350,7 +350,7 @@ fun getTokenRules(): *List<TokenMatcher> {
 fun escapedSnippet(view: StrView, maxLen: Int): Str {
     val hexDigits: Str = "0123456789ABCDEF"
     var snippet: Str = Str()
-    var count: Int = view.len
+    var count: Int = view.size()
     if (count > maxLen) {
         count = maxLen
     }
@@ -420,15 +420,15 @@ data class Scanner(var rules: *List<TokenMatcher>; var pos: Int; var line: Int; 
     fun nextToken(): Res<Token> {
         while (this.pos < this.source.size()) {
             // A raw pointer to the scanner's own `source`; the view must not
-            // copy or count the text (see StrView.simse).
-            val view: StrView = StrView(*this.source, this.pos, this.source.size() - this.pos)
+            // copy or count the text (see cppsrc/rtl/span.hpp).
+            val view: StrView = spanOfStr(*this.source).slice(this.pos)
             var i = 0
             while (i < this.rules.size()) {
                 val rule: TokenMatcher = this.rules[i]
                 val matchLength: Int = rule.match(view)
                 if (matchLength > 0) {
                     val startPos: SourcePos = SourcePos(this.pos, this.line, this.column)
-                    val matched: StrView = view.slice(matchLength)
+                    val matched: StrView = view.slice(0, matchLength)
                     val token: Token = Token(matched.toString(), rule.tokenKind, startPos)
                     this.advance(matchLength)
                     return Res<Token>.ok(token)

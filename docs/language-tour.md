@@ -95,17 +95,17 @@ fun main(): Int {
 }
 ```
 
-There is no `for` loop yet: iteration is `while` plus (`stress/cursor`)
-`Cursor<T>`, a copyable view with `hasValue()`, `value()`, `next()`, `size()` and
-`slice(n)`.
+There is no `for` loop yet: iteration is `while` plus (`stress/span`)
+`Span<T>`, a borrowed view with `size()`, `isEmpty()`, `at(i)`/`span[i]` and
+`slice(start)`/`slice(start, count)`.
 
 ```simse
 fun sum(items: &List<Int>): Int {
     var total: Int = 0
-    var c: Cursor<Int> = cursorOf(items)
-    while (c.hasValue()) {
-        total = total + c.value()
-        c = c.next()
+    var span: Span<Int> = spanOf(*items)
+    while (!span.isEmpty()) {
+        total = total + span[0]
+        span = span.slice(1)
     }
     return total
 }

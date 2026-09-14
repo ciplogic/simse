@@ -3,7 +3,6 @@
 
 namespace lex {
     using common::SourcePos;
-    using common::StrView;
 
     enum class TokenKind : int {
         None,

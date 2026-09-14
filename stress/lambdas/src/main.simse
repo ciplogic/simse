@@ -8,14 +8,14 @@ fun apply(f: Mapper, value: Int): Int {
     return f(value)
 }
 
-fun countIf(items: &List<Int>, predicate: Predicate): Int {
+fun countIf(items: *List<Int>, predicate: Predicate): Int {
     var count: Int = 0
-    var c: Cursor<Int> = cursorOf(items)
-    while (c.hasValue()) {
-        if (predicate(c.value())) {
+    var c: Span<Int> = spanOf(items)
+    while (!c.isEmpty()) {
+        if (predicate(c[0])) {
             count = count + 1
         }
-        c = c.next()
+        c = c.slice(1)
     }
     return count
 }
@@ -41,11 +41,10 @@ fun main(): Int {
     items.append(2)
     items.append(3)
     items.append(4)
-    val view: &List<Int> = &items
 
     val isEven: Predicate = (v: Int) -> v % 2 == 0
-    println(countIf(view, isEven))
-    println(countIf(view, (v: Int) -> v > 2))
+    println(countIf(*items, isEven))
+    println(countIf(*items, (v: Int) -> v > 2))
 
     // A block-bodied lambda.
     val big: Mapper = (v: Int) -> {

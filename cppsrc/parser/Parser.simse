@@ -5,8 +5,10 @@
 // impl_specs/ast-xmlnode.md, byte-for-byte compatible with ast::toXmlNode in
 // cppsrc/ast/Ast.cpp.
 //
-// Iteration uses Cursor<T> (there is no range-for). Errors are recorded in
-// `failed`/`error`; the entry points return Res.err with a positioned message.
+// Iteration uses `Span<Token>` (there is no range-for, and the parser's token
+// window is a span over the scanner's list: `slice(1)` advances it). Errors are
+// recorded in `failed`/`error`; the entry points return Res.err with a positioned
+// message.
 
 package parser
 
@@ -18,25 +20,25 @@ import common
 // position from its callee/receiver/left operand).
 data class ExprNode(var node: AstXmlNode; var line: Int; var column: Int)
 
-data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; var file: Str) {
+data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var file: Str) {
 
     // ---- token cursor helpers ---------------------------------------------
 
     fun peek(offset: Int): Token {
         if (offset <= 0) {
-            return this.cursor.value()
+            return this.cursor[0]
         }
-        val rest: Cursor<Token> = this.cursor.slice(offset)
-        if (rest.hasValue()) {
-            return rest.value()
+        val rest: Span<Token> = this.cursor.slice(offset)
+        if (!rest.isEmpty()) {
+            return rest[0]
         }
-        return this.cursor.slice(this.cursor.size() - 1).value()
+        return this.cursor[this.cursor.size() - 1]
     }
 
     fun advance(): Token {
-        val token: Token = this.cursor.value()
+        val token: Token = this.cursor[0]
         if (this.cursor.size() > 1) {
-            this.cursor = this.cursor.next()
+            this.cursor = this.cursor.slice(1)
         }
         return token
     }
@@ -539,7 +541,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
         var declName: Str = ""
 
         if (!isNative && this.looksLikeTypeStart()) {
-            val savedCursor: Cursor<Token> = this.cursor
+            val savedCursor: Span<Token> = this.cursor
             val savedFailed: Bool = this.failed
             val savedError: Str = this.error
             val receiver: AstXmlNode = this.parseType(AstNodeKind.Receiver)
@@ -1265,7 +1267,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
                 return ExprNode(node, pos.line, pos.column)
             }
             if (this.peek(1).text == "<") {
-                val savedCursor: Cursor<Token> = this.cursor
+                val savedCursor: Span<Token> = this.cursor
                 val savedFailed: Bool = this.failed
                 val savedError: Str = this.error
                 this.advance() // name
@@ -1287,7 +1289,7 @@ data class Parser(var cursor: Cursor<Token>; var failed: Bool; var error: Str; v
             return ExprNode(AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprName, attrs, Array<AstXmlNode>()), pos.line, pos.column)
         }
         if (this.checkText("(")) {
-            val savedCursor: Cursor<Token> = this.cursor
+            val savedCursor: Span<Token> = this.cursor
             val savedFailed: Bool = this.failed
             val savedError: Str = this.error
             val lambda: ExprNode = this.tryParseLambda()
@@ -1434,7 +1436,7 @@ fun isAssignOp(op: Str): Bool {
 // ---- entry points ---------------------------------------------------------
 
 // Parses a pre-filtered token cursor (with a synthetic Eof already appended).
-fun parseModule(cursor: Cursor<Token>, fileName: Str): Res<AstXmlNode> {
+fun parseModule(cursor: Span<Token>, fileName: Str): Res<AstXmlNode> {
     var parser: Parser = Parser(cursor, false, "", fileName)
     val root: AstXmlNode = parser.parseRoot()
     if (parser.failed) {
@@ -1460,5 +1462,5 @@ fun parseModule(tokens: *List<Token>, fileName: Str): Res<AstXmlNode> {
         eofPos = toks[toks.size() - 1].pos
     }
     toks.append(Token("", TokenKind.Eof, eofPos))
-    return parseModule(cursorOf(&toks), fileName)
+    return parseModule(spanOf(*toks), fileName)
 }

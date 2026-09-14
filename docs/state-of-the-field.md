@@ -10,7 +10,7 @@ harnesses in `tools/`; the plan for the rest is
 
 **The language.** Scalars (`Int8`..`Int64`, `Float32/64`, `Char`, `Bool`), `Str`
 with a string library, `List<T>`, `Array<T>`, `SmallVector<N, T>`,
-`Dictionary<K, V>`, `Cursor<T>`, `Opt<T>`, `Res<T>`, `XmlNode`/`Attribute`,
+`Dictionary<K, V>`, `Span<T>`, `Opt<T>`, `Res<T>`, `XmlNode`/`Attribute`,
 `data class` (with methods), `enum` (with explicit values and `toInt`/`fromInt`),
 `typealias`, functions, methods, extension methods, lambdas (by-value capture),
 `val`/`var` locals, file-level `var`/`val` statics, `if`/`else`, `while`,
@@ -42,12 +42,13 @@ than `std::unordered_map` on this workload, with iteration ~8x and deep copies
 
 | Implementation | Time | Throughput |
 | --- | --- | --- |
-| **Simse, parsing each line in place (`readLineView()`)** | **1056 / 1085 ms** | **127 / 123 MB/s** |
-| C++ STL baseline (`getline` + `stod`) | 1480 / 1500 ms | 90 MB/s |
-| Bun reference aggregate | 727 ms | 184 MB/s |
+| **Simse, parsing each line in place (`readLineView()`)** | **1093 / 1106 ms** | **123 / 121 MB/s** |
+| C++ STL baseline (`getline` + `stod`) | 1390 / 1405 ms | 96 MB/s |
+| Bun reference aggregate | 712 ms | 188 MB/s |
 
-So the naive Simse program is **1.40x faster** than the naive C++ one on the same
-data, and 1.45x behind the JS reference. Reading the line into a fresh `Str` per
+So the naive Simse program is **1.27x faster** than the naive C++ one on the same
+data (the ratio has run 1.26-1.40x across sessions - the C++ baseline varies more
+than the Simse program), and 1.54x behind the JS reference. Reading the line into a fresh `Str` per
 line (`readLine()`) or into a recycled one (`readLineInto`) costs 116-66 MB/s on
 the same program, which is why the in-place reader is the one the benchmark keeps.
 The remaining gap to close is in the *library*, not the language: the dictionary
@@ -73,7 +74,7 @@ program a user would try to write:
 | Enum printing | `println(Color.Red)` prints an integer; there is no automatic member name | write a `switch`-based `label()` function |
 | Float printing | `println` goes through C++'s default formatting | format manually; a defined shortest-round-trip rule is on the roadmap |
 | Error messages | position and message, no source excerpt or caret | read the generated C++ next to it |
-| Vocabulary | no `for`, no `when`, no interpolation, no default parameter values, no capture-by-reference, no `Set`, no `map`/`filter` | `while` + `Cursor`, explicit code, `List` helpers |
+| Vocabulary | no `for`, no `when`, no interpolation, no default parameter values, no capture-by-reference, no `Set`, no `map`/`filter` | `while` + `Span`, explicit code, `List` helpers |
 | Ownership and borrowing | `&x` on a local boxes a *copy*, so a handle does not alias the local; `&T` cycles are not collected | borrow with `*x` (a raw pointer) when you mean "the original"; break cycles by nulling a handle |
 
 ## What is missing
