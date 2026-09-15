@@ -256,10 +256,21 @@ namespace sema {
         public:
             Infer(const Facts &facts, const Body &body) : facts(facts), body(body) {
                 scopes.emplace_back();
-                if (!body.decl) return;
-                for (const ast::Param &param: body.decl->params) {
-                    if (param.type) scopes.back()[param.name] = param.type;
+                if (body.decl) {
+                    for (const ast::Param &param: body.decl->params) {
+                        if (param.type) mark(param.name, param.type);
+                    }
                 }
+                // A lambda's frame: its own parameters (a type may be missing where the
+                // callable type it is used against supplies it), then the values it
+                // captures, which are fields of the closure instance and therefore
+                // simply have their type inside the body.
+                for (int i = 0; i < (int) body.paramNames.size(); i++) {
+                    if (i < (int) body.paramTypes.size() && body.paramTypes[i]) {
+                        mark(body.paramNames[i], body.paramTypes[i]);
+                    }
+                }
+                for (const auto &entry: body.captures) mark(entry.first, entry.second);
             }
 
             List<ast::StmtPtr> statements(const List<ast::StmtPtr> &stmts) {
@@ -275,10 +286,25 @@ namespace sema {
                 return out;
             }
 
+            // Every name the pass proved a type for, whatever a declaration can spell.
+            const Dictionary<Str, ast::TypePtr> &proven() const {
+                return allTypes;
+            }
+
         private:
             const Facts &facts;
             const Body &body;
             List<Dictionary<Str, ast::TypePtr>> scopes;
+            // The flat record of the same bindings, for the caller: a frame is keyed by
+            // *name* (the lowering has already given each scope its own variables), and
+            // it wants the machine-typed slots too, which `Stmt.type` never carries.
+            Dictionary<Str, ast::TypePtr> allTypes;
+
+            // Records a binding in the scope being built *and* in the flat record.
+            void mark(const Str &name, const ast::TypePtr &type) {
+                scopes.back()[name] = type;
+                allTypes[name] = type;
+            }
 
             // ---- scope ----------------------------------------------------
 
@@ -360,7 +386,7 @@ namespace sema {
                         // The name is recorded even when it stays untyped: the next
                         // declaration still resolves against it the way the emitter's
                         // own inference would.
-                        if (type) scopes.back()[stmt->name] = type;
+                        if (type) mark(stmt->name, type);
                         if (stmt->type || !type || !stmt->init || !declarable(*stmt->init)
                             || !spellable(*type)) {
                             return nullptr;
@@ -646,8 +672,10 @@ namespace sema {
     }
 
     List<ast::StmtPtr> inferTypes(const List<ast::StmtPtr> &body, const Facts &facts,
-                                  const Body &ctx) {
+                                  const Body &ctx, Dictionary<Str, ast::TypePtr> *inferred) {
         Infer infer(facts, ctx);
-        return infer.statements(body);
+        List<ast::StmtPtr> out = infer.statements(body);
+        if (inferred) *inferred = infer.proven();
+        return out;
     }
 }

@@ -104,31 +104,31 @@ compiler built from the published file must reproduce that file byte for byte:
 
 ```console
 $ bun tools/bootstrap.js
-bootstrap: release build, 3 run(s) for the transpiles
-  sources    13828 lines of Simse under cppsrc
-  bootstrap  cppsrc\simse_bootstrap.cpp: 36802 lines, 1.10 MB (checked in, do not edit)
+bootstrap: release build, 5 run(s) for the transpiles
+  sources    14159 lines of Simse under cppsrc
+  bootstrap  cppsrc\simse_bootstrap.cpp: 35715 lines, 1.07 MB (checked in, do not edit)
 
 1. transpile the compiler's own source tree
-  self-hosted compiler (simse.exe) --root cppsrc       best 1028 ms, median 1038 ms
-  hand-written C++ ring (simse_transpile.exe) ...      best 209 ms, median 211 ms
+  self-hosted compiler (simse.exe) --root cppsrc       best 824 ms, median 847 ms
+  hand-written C++ ring (simse_transpile.exe) ...      best 177 ms, median 182 ms
 
 2. compile the published bootstrap (cl.exe only, no CMake libraries)
-  bootstrap + Native.cpp + common.cpp -> simse_boot.exe best 14543 ms
+  bootstrap + Native.cpp + common.cpp -> simse_boot.exe best 14529 ms
 
 3. fixed point: the compiled bootstrap transpiles cppsrc again
-  simse_boot.exe --root cppsrc                         best 1027 ms, median 1033 ms
+  simse_boot.exe --root cppsrc                         best 822 ms, median 829 ms
   output == cppsrc/simse_bootstrap.cpp                 yes, byte for byte
 
-  from the published file to a working compiler: 14.54 s
-  and that compiler reproduces itself in:        1027 ms
-  full cycle (compile + self-transpile):         15.57 s
-  throughput: 13485 lines/s of Simse (35839 lines/s of C++ out)
+  from the published file to a working compiler: 14.53 s
+  and that compiler reproduces itself in:        822 ms
+  full cycle (compile + self-transpile):         15.35 s
+  throughput: 17219 lines/s of Simse (43433 lines/s of C++ out)
 ```
 
-So: **~15.6 s from the published file to a compiler that reproduces it**, of which
-14.5 s is `cl.exe` optimizing 37k lines of generated C++; the compiler's own share
-of that - transpiling its whole source tree - is **~1.03 s** (and the machine's load
-moves it between 1.0 s and 3.0 s). A debug build of the same file takes ~3.1 s to
+So: **~15.4 s from the published file to a compiler that reproduces it**, of which
+14.5 s is `cl.exe` optimizing 36k lines of generated C++; the compiler's own share
+of that - transpiling its whole source tree - is **~0.82 s** (and the machine's load
+moves it between 0.8 s and 3.0 s). A debug build of the same file takes ~3.1 s to
 compile and then runs the transpile in ~6.6 s.
 
 ## 4. Compile and run a program

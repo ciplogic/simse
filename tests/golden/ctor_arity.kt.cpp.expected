@@ -3,6 +3,7 @@
 #include <iostream>
 #include <type_traits>
 
+struct ns1_Widget;
 // ctor_arity.kt:4
 SIMSE_PACK_PUSH
 struct ns1_Widget {

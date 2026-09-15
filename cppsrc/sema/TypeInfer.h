@@ -96,12 +96,32 @@ namespace sema {
         const ast::Decl* decl = nullptr;
         ast::TypePtr selfType; // the type of `this`, when there is one
         List<Str> typeParams;
+
+        // A *lambda* body has no declaration. Its frame is its own parameters plus the
+        // values it captures, which the language models as fields of the closure
+        // instance (`specs/memory-model.md`): inside the body a captured name simply
+        // *has* that type, so the pass seeds it like a parameter. The two lists are
+        // parallel (`paramTypes` may be empty where a parameter's type is inferred
+        // from the callable type the lambda is used against).
+        List<Str> paramNames;
+        List<ast::TypePtr> paramTypes;
+        Dictionary<Str, ast::TypePtr> captures;
     };
 
     // Returns the same statements with the type of every untyped `VarDecl` the pass
     // can prove filled in (`Stmt.type`). Only the declarations that gain a type are
     // copied, so a body that is already fully annotated comes back unchanged and the
     // parsed AST is never modified.
+    //
+    // `inferred`, when given, receives every name the pass proved a type for - the
+    // parameters, the captures, and every declaration - **including** the ones a C++
+    // declaration cannot spell: a name holding a state machine is `..T`, which the
+    // emitted C++ types `auto`, and the frame still has to know it (a `for` wraps what
+    // it iterates in `smToYield()`, whose identity on a machine only the receiver's
+    // type can establish). `Stmt.type` keeps its other meaning - "a type a declaration
+    // can be written with" - so the machine stays out of it (`linear/Yield.cpp` relies
+    // on that to reject a `for` over a machine crossing a `yield`).
     List<ast::StmtPtr> inferTypes(const List<ast::StmtPtr>& body, const Facts& facts,
-                                  const Body& ctx);
+                                  const Body& ctx,
+                                  Dictionary<Str, ast::TypePtr>* inferred = nullptr);
 }

@@ -131,8 +131,24 @@ namespace parser {
         public:
             Parser(List<Token> &tokens, const Str &fileName) {
                 file = fileName;
+                // Space and comments never reach the grammar, and neither does a newline
+                // inside `(...)` or `[...]`: a condition or an argument list may be
+                // wrapped, and a formatter is free to do it (Kotlin's rule, and the reason
+                // a Kotlin-kind formatter can be pointed at these files,
+                // specs/declarations.md).
+                int bracketed = 0;
                 for (Token &token: tokens) {
+                    if (token.kind == TokenKind::Operator) {
+                        if (token.text == "(" || token.text == "[") {
+                            bracketed++;
+                        } else if (token.text == ")" || token.text == "]") {
+                            if (bracketed > 0) bracketed--;
+                        }
+                    }
                     if (token.kind == TokenKind::Space || token.kind == TokenKind::Comment) {
+                        continue;
+                    }
+                    if (token.kind == TokenKind::EndOfLine && bracketed > 0) {
                         continue;
                     }
                     toks.push_back(token);
@@ -360,6 +376,10 @@ namespace parser {
                     if (!expectText(")")) return decl;
                 }
 
+                // The body brace may stand on its own line (a formatter wraps the
+                // parameter list and leaves `{` behind it): a newline there is not a
+                // declaration boundary.
+                skipNewlines();
                 if (checkText("{")) {
                     advance();
                     skipSeparators();
@@ -387,6 +407,7 @@ namespace parser {
                 if (checkText("<")) {
                     if (!parseTypeParams(decl->typeParams)) return decl;
                 }
+                skipNewlines();
                 if (!expectText("{")) return decl;
                 skipSeparators();
                 while (!checkText("}") && !atEnd()) {
@@ -637,8 +658,13 @@ namespace parser {
 
             // ---- statements ------------------------------------------------
 
+            // A declaration's body brace may stand on its own line (`data class X(...)`
+            // then `{`): a newline before a `{` where a block is the only thing that can
+            // follow is not a statement boundary, so the parser skips it here. Kotlin's
+            // rule, and the reason a Kotlin-kind formatter can be pointed at these files.
             List<ast::StmtPtr> parseBlock() {
                 List<ast::StmtPtr> body;
+                skipNewlines();
                 if (!expectText("{")) return body;
                 skipSeparators();
                 while (!checkText("}") && !atEnd()) {
@@ -901,6 +927,7 @@ namespace parser {
                 stmt->cond = parseExpr(0);
                 if (!stmt->cond) return nullptr;
                 if (!expectText(")")) return nullptr;
+                skipNewlines();
                 if (!expectText("{")) return nullptr;
                 skipSeparators();
                 while (!checkText("}") && !atEnd()) {

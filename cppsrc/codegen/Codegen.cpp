@@ -30,23 +30,6 @@ using sema::unifyType;
 
 namespace codegen {
     namespace {
-        // `--linearCodegen`: the *report* - every body is put through both paths and the
-        // differences are listed on stderr (impl_specs/linear-il.md). Off by default: it
-        // is a debugging view, and the emitted file is the same either way.
-        bool &linearCodegenFlag() {
-            static bool value = false;
-            return value;
-        }
-
-        // Emit from the IL whenever it can express the body, and from the statement tree
-        // otherwise (`--statementsCodegen` turns it off). On by default: the instruction
-        // list is what codegen reads, and the statement path is the fallback for the
-        // shapes the IL cannot spell yet.
-        bool &linearCodegenEmitFlag() {
-            static bool value = true;
-            return value;
-        }
-
         // How a name's storage is reached, used to pick `.` vs `->`, `*x` vs
         // `x.get()`, and the `copy` lowering. We only track the cases the v1
         // subset needs; anything unknown is treated as a plain value.
@@ -120,11 +103,13 @@ namespace codegen {
                 collectProgramNames();
                 // The semantic step on the lowered body reads these
                 // (sema/TypeInfer.h). They are threaded to the emitters rather than
-                // stored on the emitter, like the Simse ring, whose generated data
-                // class cannot name another package's type.
+                // stored on the emitter: the facts are one value per program, and a
+                // body's emitter only borrows it.
                 const sema::Facts facts = collectFacts();
                 prelude();
                 emitNativeDeclarations();
+                if (failed) return resError<Str>(error);
+                emitForwardTypes();
                 if (failed) return resError<Str>(error);
                 emitTypes();
                 if (failed) return resError<Str>(error);
@@ -136,7 +121,6 @@ namespace codegen {
                 if (failed) return resError<Str>(error);
                 emitFunctions(false, facts);
                 if (failed) return resError<Str>(error);
-                if (linearCodegenFlag()) reportLinear();
                 return ok(out);
             }
 
@@ -560,6 +544,25 @@ namespace codegen {
                     if (failed) return;
                 }
                 line(0, "}");
+            }
+
+            // Every aggregate the program declares, named once *before* any of them is
+            // defined. A generated struct may hold a *pointer* to a type from another
+            // package (`linear::IlFunction`'s facts), and packages are emitted in scan
+            // order, so the definition would otherwise be used before it exists. A
+            // forward declaration is all a pointer, a reference or a parameter needs -
+            // and it is what lets a generated data class name another package's type at
+            // all, which is otherwise a constraint the emitters have to work around.
+            void emitForwardTypes() {
+                for (const Input &input: inputs) {
+                    if (input.prelude) continue;
+                    for (const ast::DeclPtr &decl: input.module.declarations) {
+                        if (decl->kind != DeclKind::DataClass) continue;
+                        Str tmpl = templateClause(decl->typeParams);
+                        if (!tmpl.empty()) line(0, tmpl);
+                        line(0, "struct " + qualify(typePackage(decl->name), decl->name) + ";");
+                    }
+                }
             }
 
             void emitTypes() {
@@ -1087,11 +1090,14 @@ namespace codegen {
                 semantics.decl = &decl;
                 semantics.selfType = selfTypePtr;
                 semantics.typeParams = fn.templateParams;
-                List<ast::StmtPtr> typed = sema::inferTypes(lowered, facts, semantics);
+                // The proof of the pass, kept: it is what tells the backend a slot holds
+                // a machine, which a declaration can never say (`..T` is not spellable).
+                Dictionary<Str, ast::TypePtr> inferred;
+                List<ast::StmtPtr> typed = sema::inferTypes(lowered, facts, semantics, &inferred);
                 List<ast::StmtPtr> finalBody = linear::finishForEmission(
                         typed, reservedNames(decl, fn.receiver != nullptr, mainArgs));
-                dumpIl(fn, decl, finalBody);
-                emitBodyChecked(fn, decl, finalBody);
+                dumpIl(fn, decl, finalBody, facts, inferred);
+                emitBody(fn, decl, finalBody, facts, inferred);
                 if (failed) return;
                 line(0, "}");
             }
@@ -1099,185 +1105,67 @@ namespace codegen {
             // `--showLinearRepresentation`: the IL of the body the emitter is about
             // to read, on stderr (impl_specs/linear-il.md). The extraction is pure,
             // so the emitted C++ is the same with and without it.
-            void dumpIl(const Fn &fn, const ast::Decl &decl, const List<ast::StmtPtr> &body) {
+            void dumpIl(const Fn &fn, const ast::Decl &decl, const List<ast::StmtPtr> &body,
+                        const sema::Facts &facts,
+                        const Dictionary<Str, ast::TypePtr> &inferred) {
                 if (!linear::showIl()) return;
                 fprintf(stderr, "%s",
-                        linear::printIlUnit(linear::extractIlUnit(ilFunction(fn, decl), body,
-                                                                 fn.file)).c_str());
+                        linear::printIlUnit(
+                                linear::extractIlUnit(ilFunction(fn, decl, &facts, &inferred),
+                                                      body, fn.file)).c_str());
             }
 
-            // ---- the two paths over one body ---------------------------------
-
-            int ilBodies = 0;
-            int ilSame = 0;      // byte-identical with the statement path
-            int ilFlat = 0;      // identical once the blocks are folded away
-            int ilDifferent = 0;
-            int ilFallback = 0;
-            List<Str> ilNotes; // the first differences, for the summary
-
-            void noteIl(const Str &text) {
-                if ((int) ilNotes.size() < 40) ilNotes.push_back(text);
-            }
-
-            static List<Str> ilSplitLines(const Str &text) {
-                List<Str> lines;
-                Str current;
-                for (int i = 0; i < (int) text.size(); i++) {
-                    if (text[i] == '\n') {
-                        lines.push_back(current);
-                        current = Str();
-                        continue;
-                    }
-                    current += text[i];
-                }
-                if (!current.empty()) lines.push_back(current);
-                return lines;
-            }
-
-            static Str ilTrimmed(const Str &text) {
-                int start = 0;
-                int end = (int) text.size();
-                while (start < end && (text[start] == ' ' || text[start] == '\t')) start++;
-                while (end > start && (text[end - 1] == ' ' || text[end - 1] == '\t')) end--;
-                return text.substr(start, end - start);
-            }
-
-            // The two texts without the blocks: a `{` line and a `}` line carry no
-            // value, and indentation follows the brace nesting. The IL has no blocks -
-            // that is what linear means - so this is the comparison that says whether
-            // the *code* is the same.
-            static List<Str> ilCodeLines(const Str &text) {
-                List<Str> lines;
-                for (const Str &line: ilSplitLines(text)) {
-                    const Str trimmed = ilTrimmed(line);
-                    if (trimmed.empty() || trimmed == "{" || trimmed == "}") continue;
-                    lines.push_back(trimmed);
-                }
-                return lines;
-            }
-
-            static bool ilFlatEqual(const Str &left, const Str &right) {
-                return ilCodeLines(left) == ilCodeLines(right);
-            }
-
-            // The first line the two texts disagree on, with both spellings: a diff
-            // would be nicer to read and worse to keep deterministic.
-            static Str ilFirstDifference(const Str &reference, const Str &fromIl) {
-                const List<Str> left = ilCodeLines(reference);
-                const List<Str> right = ilCodeLines(fromIl);
-                int common = (int) left.size() < (int) right.size() ? (int) left.size()
-                                                                   : (int) right.size();
-                for (int i = 0; i < common; i++) {
-                    if (left[i] != right[i]) {
-                        return Str("line ") + std::to_string(i + 1) + ": [" + left[i] + "] vs ["
-                               + right[i] + "]";
-                    }
-                }
-                if (left.size() != right.size()) {
-                    return left.size() > right.size()
-                               ? "the statement path has one more line: [" + left[common] + "]"
-                               : "the IL has one more line: [" + right[common] + "]";
-                }
-                return "byte-identical";
-            }
-
-            // One body through both paths: the statements (the reference) and the
-            // instruction list. When they agree, the IL's text is what stays in the
-            // output - so the flag is output-neutral - and when they disagree the
-            // reference is kept and the difference is reported.
-            void emitBodyChecked(const Fn &fn, const ast::Decl &decl, const List<ast::StmtPtr> &body) {
-                emitBodyCheckedAt(ilFunction(fn, decl), body, fn.file, 1);
+            // ---- emitting one body -------------------------------------------
+            // A body is emitted from its instruction list - the IL is the *only* codegen
+            // (impl_specs/linear-il.md). A body the IL cannot spell is a bug in the
+            // extractor, not something to fall back from: it fails with the reason.
+            void emitBody(const Fn &fn, const ast::Decl &decl, const List<ast::StmtPtr> &body,
+                          const sema::Facts &facts,
+                          const Dictionary<Str, ast::TypePtr> &inferred) {
+                emitBodyAt(ilFunction(fn, decl, &facts, &inferred), body, fn.file, 1);
             }
 
             // The same, for a body whose frame is not a declaration's: a lambda's, or a
             // state machine's method (both are "parameters plus a class whose fields the
             // body reads and writes").
-            void emitBodyCheckedAt(const linear::IlFunction &info, const List<ast::StmtPtr> &body,
-                                   const Str &file, int level) {
+            void emitBodyAt(const linear::IlFunction &info, const List<ast::StmtPtr> &body,
+                            const Str &file, int level) {
                 const int prefix = (int) out.size();
-                emitStmts(body, level);
-                if (failed) return;
-                // Nothing to do when the report is off and the statement path is in
-                // charge (`--statementsCodegen`).
-                if (!linearCodegenFlag() && !linearCodegenEmitFlag()) return;
-
-                const Str reference = out.substr(prefix);
-                if (linearCodegenFlag()) ilBodies++;
                 const linear::IlUnit il = linear::extractIlUnit(info, body, file);
                 Str text;
                 Str reason;
                 if (!emitIlBodyText(il, level, text, reason)) {
-                    if (linearCodegenFlag()) {
-                        ilFallback++;
-                        noteIl(il.body.symbol + ": not expressible yet (" + reason + ")");
-                    }
-                    return; // the statement text stays
-                }
-                const bool closureBody = !il.closures.empty();
-                if (!ilFlatEqual(reference, text)) {
-                    if (linearCodegenFlag()) {
-                        ilDifferent++;
-                        noteIl(il.body.symbol + ": " + ilFirstDifference(reference, text));
-                    }
-                    // The one difference the closure model owns: a lambda is a class
-                    // here, not a `[=]` capture list, so the body's text differs by
-                    // construction (the *code* is the same). Anything else keeps the
-                    // statement text.
-                    if (closureBody && linearCodegenEmitFlag()) {
-                        Str classes;
-                        if (!emitClosureClasses(il, classes, reason)) {
-                            if (linearCodegenFlag()) {
-                                ilFallback++;
-                                noteIl(il.body.symbol + ": a closure class could not be written ("
-                                       + reason + ")");
-                            }
-                            return;
-                        }
-                        out = out.substr(0, prefix) + classes + text;
-                    }
+                    fail(info.decl ? info.decl->pos : common::SourcePos{},
+                         "internal: the body of '" + info.symbol
+                                 + "' is not expressible in the IL (" + reason + ")");
                     return;
                 }
-                if (linearCodegenFlag()) {
-                    if (text == reference) {
-                        ilSame++;
-                    } else {
-                        ilFlat++; // the same code, with the blocks folded away
-                    }
+                // A lambda is a closure class, which the text above *constructs* but does
+                // not define: the class goes just above the body that builds it.
+                Str classes;
+                if (!il.closures.empty() && !emitClosureClasses(il, classes, reason)) {
+                    fail(info.decl ? info.decl->pos : common::SourcePos{},
+                         "internal: a closure class could not be written (" + reason + ")");
+                    return;
                 }
-                if (linearCodegenEmitFlag()) {
-                    Str classes;
-                    if (closureBody && !emitClosureClasses(il, classes, reason)) {
-                        if (linearCodegenFlag()) {
-                            ilFallback++;
-                            noteIl(il.body.symbol + ": a closure class could not be written ("
-                                   + reason + ")");
-                        }
-                        return;
-                    }
-                    out = out.substr(0, prefix) + classes + text;
-                }
-            }
-
-            void reportLinear() {
-                fprintf(stderr,
-                        "\nlinear codegen: %d bodies, %d byte-identical, %d identical without "
-                        "blocks, %d differing, %d not expressible\n",
-                        ilBodies, ilSame, ilFlat, ilDifferent, ilFallback);
-                for (const Str &note: ilNotes) {
-                    fprintf(stderr, "  %s\n", note.c_str());
-                }
+                out = out.substr(0, prefix) + classes + text;
             }
 
             // What the extractor needs to know about the body's function: the
             // declaration (name, parameters, return type), the receiver, the emitted
             // symbol, and the file-level statics the body may name.
-            linear::IlFunction ilFunction(const Fn &fn, const ast::Decl &decl) {
+            linear::IlFunction ilFunction(const Fn &fn, const ast::Decl &decl,
+                                          const sema::Facts *facts = nullptr,
+                                          const Dictionary<Str, ast::TypePtr> *inferred = nullptr) {
                 linear::IlFunction info;
                 info.decl = &decl;
                 info.receiver = fn.receiver;
                 info.symbol = (!fn.receiver && decl.name == "main")
                                   ? Str("main")
                                   : qualify(fn.packageName, decl.name);
+                info.facts = facts;
+                info.typeParams = fn.templateParams;
+                info.inferredTypes = inferred;
                 for (const Static &entry: statics) {
                     if (!entry.decl || !entry.decl->type) continue;
                     info.statics[entry.decl->name] = linear::ilTypeText(*entry.decl->type);
@@ -1293,10 +1181,14 @@ namespace codegen {
             // happens to share a field's name (`advance(value: *T)` against a field `value`)
             // must resolve to the parameter.
             linear::IlFunction ilMachineMethod(const Str &className,
-                                              const linear::YieldMethod &method) {
+                                              const linear::YieldMethod &method,
+                                              const sema::Facts *facts = nullptr,
+                                              const Dictionary<Str, ast::TypePtr> *inferred = nullptr) {
                 linear::IlFunction info;
                 info.symbol = className + "::" + method.name;
                 info.closureSymbol = className;
+                info.facts = facts;
+                info.inferredTypes = inferred;
                 for (const ast::Param &param: method.params) {
                     info.paramNames.push_back(param.name);
                     info.paramTypes.push_back(param.type);
@@ -1320,18 +1212,12 @@ namespace codegen {
             Dictionary<Str, bool> emittedClosures;  // ... of which these are written out
             Dictionary<Str, bool> emittedYieldables; // the state machines already written
             //
-            // `--linearCodegen`: the C++ of a body comes from its instruction list
-            // instead of its statement tree (impl_specs/linear-il.md). The IL is not a
-            // second language with a second spelling: an operand becomes a leaf
-            // `ast::Expr` - a slot is a name, a constant is its literal, a place is the
-            // path it came from, folded back out of the instruction that built it - and
-            // the helpers above write the text. Both paths spell the same way *by
-            // construction*, which is what makes comparing them meaningful.
-            //
-            // With the flag on, the statement path is emitted first and the IL's text
-            // is used only when it is identical; anything else is reported and the
-            // statement text is kept, so the flag can never change the output. The
-            // report is the work list.
+            // The C++ of a body comes from its instruction list - the IL is the *only*
+            // codegen (impl_specs/linear-il.md). The IL is not a second language with a
+            // second spelling: an operand becomes a leaf `ast::Expr` - a slot is a name,
+            // a constant is its literal, a place is the path it came from, folded back
+            // out of the instruction that built it - and the helpers above write the
+            // text.
             struct IlFrame {
                 // Keyed by *slot index*: two scopes may declare the same name, and the
                 // frame keeps them apart (the lowering gives each its own slot), so an
@@ -1364,6 +1250,28 @@ namespace codegen {
                 node->kind = ExprKind::Name;
                 node->text = text;
                 return node;
+            }
+
+            // The frame's types, from the body's own tables - no statement tree is read.
+            // First what the *type pass* proved for every name in the body, then the
+            // slots' declared types (which win: they are the spelled ones, and the map
+            // may still hold a name the shadowing pass renamed). The pass's record is
+            // what carries a machine: a slot holding one is `..T`, a declaration is
+            // never written with that (the emitted C++ uses `auto`), so the frame is
+            // the only place the type survives - and the emitter needs it, because
+            // `x.smToYield()` on a machine *is* `x`, an identity decided from the
+            // receiver's type (see `call`, impl_specs/for.md).
+            void ilSeedFrameTypes(const linear::IlBody &il) {
+                for (const auto &entry: il.inferredTypes) {
+                    localTypes[entry.first] = entry.second;
+                    nameKinds[entry.first] = kindOf(*entry.second);
+                }
+                for (int i = 0; i < (int) il.vars.size(); i++) {
+                    ast::TypePtr slotType = linear::ilVarType(il, i);
+                    if (!slotType) continue;
+                    localTypes[il.vars[i].name] = slotType;
+                    nameKinds[il.vars[i].name] = kindOf(*slotType);
+                }
             }
 
             // The destination slot of an instruction, or -1 when it writes memory or
@@ -1550,7 +1458,7 @@ namespace codegen {
 
             // A call instruction as the expression the emitter spells: the callee from
             // the method table, the arguments from the operands.
-            // Why an instruction could not be expressed, for the report: set where the
+            // Why an instruction could not be expressed: set where the
             // attempt gives up, read by the caller that turns it into a reason line.
             Str ilWhy;
 
@@ -2036,7 +1944,7 @@ namespace codegen {
 
             // The C++ of one function body, from its IL. The frame's types are installed
             // so the spelling helpers (`memberAccess`, the call resolution) see the same
-            // world the statement path gave them; nothing that survived a previous body
+            // world the type pass gave them; nothing that survived a previous body
             // is left behind.
             bool emitIlBodyText(const linear::IlUnit &unit, int level, Str &text, Str &reason) {
                 const linear::IlBody &il = unit.body;
@@ -2044,12 +1952,7 @@ namespace codegen {
                 const Dictionary<Str, ast::TypePtr> savedTypes = localTypes;
                 const linear::IlUnit *savedUnit = ilUnit;
                 const Dictionary<Str, bool> savedClosures = closureSymbols;
-                for (int i = 0; i < (int) il.vars.size(); i++) {
-                    ast::TypePtr slotType = linear::ilVarType(il, i);
-                    if (!slotType) continue;
-                    localTypes[il.vars[i].name] = slotType;
-                    nameKinds[il.vars[i].name] = kindOf(*slotType);
-                }
+                ilSeedFrameTypes(il);
                 ilUnit = &unit;
                 closureSymbols.clear();
                 for (const linear::IlClosure &closure: unit.closures) {
@@ -2079,12 +1982,7 @@ namespace codegen {
                 const bool savedClosure = inClosureMethod;
                 nameKinds.clear();
                 localTypes.clear();
-                for (int i = 0; i < (int) body.vars.size(); i++) {
-                    ast::TypePtr slotType = linear::ilVarType(body, i);
-                    if (!slotType) continue;
-                    localTypes[body.vars[i].name] = slotType;
-                    nameKinds[body.vars[i].name] = kindOf(*slotType);
-                }
+                ilSeedFrameTypes(body);
                 auto classType = std::make_shared<ast::TypeExpr>();
                 classType->kind = TypeKind::Named;
                 classType->name = closure.symbol;
@@ -2145,7 +2043,6 @@ namespace codegen {
             // functions are emitted in a fixed order, so "just before the body" is both
             // legal and reproducible.
             bool emitClosureClasses(const linear::IlUnit &unit, Str &text, Str &reason) {
-                if (!linearCodegenEmitFlag()) return true;
                 Str out2;
                 for (const linear::IlClosure &closure: unit.closures) {
                     if (emittedClosures.count(closure.symbol) > 0) continue;
@@ -2188,7 +2085,11 @@ namespace codegen {
                     semantics.decl = &decl;
                     semantics.selfType = selfTypePtr;
                     semantics.typeParams = fn.templateParams;
-                    List<ast::StmtPtr> typed = sema::inferTypes(lowered, facts, semantics);
+                    // The map is the machine's methods' frame too: the bodies are the
+                    // same statements (the lowering rewrites them in place), so the
+                    // names the pass proved are the names they carry.
+                    Dictionary<Str, ast::TypePtr> inferred;
+                    List<ast::StmtPtr> typed = sema::inferTypes(lowered, facts, semantics, &inferred);
                     // The machine's methods: the body's storage is the machine's fields
                     // (`this->`), and the names a method has of its own are the pointer
                     // `advance` writes through, the dispatcher's branch and the receiver
@@ -2204,7 +2105,7 @@ namespace codegen {
                         fail(decl.pos, machine.error);
                         return;
                     }
-                    emitMachine(fn, decl, className, elementType, machine);
+                    emitMachine(fn, decl, className, elementType, machine, facts, inferred);
                     if (failed) return;
                 }
 
@@ -2271,7 +2172,9 @@ namespace codegen {
 
             // The machine itself: the fields, then one method per way of advancing it.
             void emitMachine(const Fn &fn, const ast::Decl &decl, const Str &className,
-                             const ast::TypePtr &elementType, const linear::Yielded &machine) {
+                             const ast::TypePtr &elementType, const linear::Yielded &machine,
+                             const sema::Facts &facts,
+                             const Dictionary<Str, ast::TypePtr> &inferred) {
                 sourceComment(decl.pos);
                 registerMachineType(className, machine);
                 // A generic function's machine is a class template: its fields are typed
@@ -2321,13 +2224,12 @@ namespace codegen {
                         nameKinds[param.name] = kindOf(*param.type);
                         localTypes[param.name] = param.type;
                     }
-                    // The body goes through the same two paths as any other (the IL is
-                    // what a machine's methods must be expressible in, since the machine
-                    // *is* the lowering's output): the frame is the machine's, so its
+                    // The body is emitted from the IL like any other (the machine *is*
+                    // the lowering's output): the frame is the machine's, so its
                     // fields are read and written through `self`, exactly as a lambda
                     // body reads its captures.
-                    emitBodyCheckedAt(ilMachineMethod(className, method), method.body,
-                                      fn.file, 2);
+                    emitBodyAt(ilMachineMethod(className, method, &facts, &inferred), method.body,
+                               fn.file, 2);
                     inClosureMethod = savedClosure;
                     selfKind = savedSelfKind;
                     selfType = savedSelfType;
@@ -2339,94 +2241,6 @@ namespace codegen {
                 }
                 line(0, "};");
                 line(0, "");
-            }
-
-            // ---- statements -----------------------------------------------
-
-            void emitStmts(const List<ast::StmtPtr> &stmts, int level) {
-                for (const ast::StmtPtr &stmt: stmts) {
-                    emitStmt(*stmt, level);
-                    if (failed) return;
-                }
-            }
-
-            void emitStmt(const ast::Stmt &stmt, int level) {
-                switch (stmt.kind) {
-                    case StmtKind::VarDecl: {
-                        Str typeText;
-                        if (stmt.type) {
-                            typeText = type(*stmt.type);
-                        } else if (stmt.init) {
-                            typeText = "auto";
-                        } else {
-                            fail(stmt.pos, "unsupported: '" + stmt.name
-                                           + "' has neither a type nor an initializer");
-                            return;
-                        }
-                        if (failed) return;
-                        Str text = typeText + " " + stmt.name;
-                        if (stmt.init) text += " = " + expr(*stmt.init, 0, stmt.type);
-                        line(level, text + ";");
-
-                        if (stmt.type) {
-                            nameKinds[stmt.name] = kindOf(*stmt.type);
-                            localTypes[stmt.name] = stmt.type;
-                        } else if (stmt.init) {
-                            nameKinds[stmt.name] = stmt.init->kind == ExprKind::Ref
-                                                       ? NameKind::Shared
-                                                       : (stmt.init->kind == ExprKind::Deref
-                                                              ? NameKind::Pointer
-                                                              : NameKind::Value);
-                            ast::TypePtr inferred = inferType(*stmt.init);
-                            if (inferred) localTypes[stmt.name] = inferred;
-                        }
-                        return;
-                    }
-                    case StmtKind::Assign:
-                        if (stmt.op != "=") {
-                            fail(stmt.pos, "unsupported: assignment operator '" + stmt.op + "'");
-                            return;
-                        }
-                        line(level, expr(*stmt.target, 0) + " = "
-                                     + expr(*stmt.value, 0, inferType(*stmt.target)) + ";");
-                        return;
-                    case StmtKind::Return:
-                        if (stmt.returnValue) {
-                            line(level, "return " + expr(*stmt.returnValue, 0, curReturnType) + ";");
-                        } else {
-                            line(level, "return;");
-                        }
-                        return;
-                    case StmtKind::Label:
-                        line(level, stmt.name + ":;");
-                        return;
-                    case StmtKind::Goto:
-                        line(level, "goto " + stmt.name + ";");
-                        return;
-                    case StmtKind::IfTrue:
-                        line(level, "if (" + expr(*stmt.cond, 0) + ") goto " + stmt.name + ";");
-                        return;
-                    case StmtKind::IfFalse:
-                        line(level, "if (!(" + expr(*stmt.cond, 0) + ")) goto " + stmt.name + ";");
-                        return;
-                    case StmtKind::Block:
-                        line(level, "{");
-                        emitStmts(stmt.body, level + 1);
-                        if (failed) return;
-                        line(level, "}");
-                        return;
-                    case StmtKind::ExprStmt:
-                        line(level, expr(*stmt.expr, 0) + ";");
-                        return;
-                    case StmtKind::If:
-                    case StmtKind::While:
-                    case StmtKind::Switch:
-                    case StmtKind::Break:
-                    case StmtKind::Continue:
-                        fail(stmt.pos, "internal: structured statement reached the emitter "
-                                       "(linear lowering did not run)");
-                        return;
-                }
             }
 
             // ---- expressions ----------------------------------------------
@@ -2826,114 +2640,6 @@ namespace codegen {
                 return !type || (type->kind == TypeKind::Named && type->name == "Unit");
             }
 
-            // Best-effort return type of a lambda body: a single trailing
-            // expression is the result, otherwise the first `return` value.
-            ast::TypePtr inferLambdaReturn(const ast::Expr &e) {
-                if (e.body.size() == 1 && e.body[0]->kind == StmtKind::ExprStmt
-                    && e.body[0]->expr) {
-                    return inferType(*e.body[0]->expr);
-                }
-                for (const ast::StmtPtr &stmt: e.body) {
-                    if (stmt->kind == StmtKind::Return && stmt->returnValue) {
-                        return inferType(*stmt->returnValue);
-                    }
-                }
-                return nullptr;
-            }
-
-            // Lowers a lambda to a C++ lambda with by-value captures, assignable
-            // to the RTL `Func<Ret(Params)>`. Parameter types come from the
-            // explicit annotations or from the expected callable type; the return
-            // type from the expected callable type or the body.
-            Str lambda(const ast::Expr &e, const ast::TypePtr &expected) {
-                const ast::TypeExpr *callable = expectedCallable(expected);
-
-                Dictionary<Str, NameKind> savedKinds = nameKinds;
-                Dictionary<Str, ast::TypePtr> savedTypes = localTypes;
-
-                List<Str> params;
-                for (int i = 0; i < (int) e.paramNames.size(); i++) {
-                    ast::TypePtr paramType;
-                    if (i < (int) e.paramTypes.size()) paramType = e.paramTypes[i];
-                    if (!paramType && callable && i < (int) callable->paramTypes.size()) {
-                        paramType = callable->paramTypes[i];
-                    }
-                    if (!paramType) {
-                        nameKinds = savedKinds;
-                        localTypes = savedTypes;
-                        fail(e.pos, "unsupported: lambda parameter '" + e.paramNames[i]
-                                    + "' has no type and no expected callable type");
-                        return "/*unsupported*/";
-                    }
-                    params.push_back(type(*paramType) + " " + e.paramNames[i]);
-                    nameKinds[e.paramNames[i]] = kindOf(*paramType);
-                    localTypes[e.paramNames[i]] = paramType;
-                    if (failed) {
-                        nameKinds = savedKinds;
-                        localTypes = savedTypes;
-                        return "/*unsupported*/";
-                    }
-                }
-
-                ast::TypePtr returnType = (callable && callable->returnType)
-                                              ? callable->returnType
-                                              : inferLambdaReturn(e);
-                bool unitReturn = isUnitType(returnType.get());
-
-                Str head = "[=](" + join(params, ", ") + ")";
-                if (!unitReturn) head += " -> " + type(*returnType);
-                if (failed) {
-                    nameKinds = savedKinds;
-                    localTypes = savedTypes;
-                    return "/*unsupported*/";
-                }
-
-                Str body;
-                bool singleExpression = e.body.size() == 1
-                                        && e.body[0]->kind == StmtKind::ExprStmt
-                                        && e.body[0]->expr;
-                // The lambda's own return type is the expectation for its returns - a
-                // multi-statement body's `return` and the single expression below.
-                ast::TypePtr savedReturn = curReturnType;
-                curReturnType = returnType;
-                if (singleExpression && !unitReturn) {
-                    // The single expression *is* the result: lower it as the `return` it
-                    // stands for, so a nested operation becomes a temporary here too
-                    // (impl_specs/linear-lowering.md).
-                    auto ret = std::make_shared<ast::Stmt>();
-                    ret->kind = StmtKind::Return;
-                    ret->pos = e.body[0]->pos;
-                    ret->returnValue = e.body[0]->expr;
-                    List<ast::StmtPtr> lambdaBody;
-                    lambdaBody.push_back(ret);
-                    Str saved = out;
-                    out.clear();
-                    emitStmts(linear::finishForEmission(linear::lowerForEmission(lambdaBody),
-                                                       e.paramNames),
-                              1);
-                    body = out;
-                    out = saved;
-                } else {
-                    Str saved = out;
-                    out.clear();
-                    emitStmts(linear::finishForEmission(linear::lowerForEmission(e.body),
-                                                        e.paramNames),
-                              1);
-                    body = out;
-                    out = saved;
-                }
-                curReturnType = savedReturn;
-
-                nameKinds = savedKinds;
-                localTypes = savedTypes;
-                if (failed) return "/*unsupported*/";
-
-                if (body.find('\n') == Str::npos) {
-                    return head + " { " + body + " }";
-                }
-                return head + " {\n" + body + "}";
-            }
-
             Str exprInner(const ast::Expr &e, const ast::TypePtr &expected) {
                 switch (e.kind) {
                     case ExprKind::IntLit:
@@ -3031,7 +2737,11 @@ namespace codegen {
                                + expr(*e.rhs, p + 1, rhsExpected);
                     }
                     case ExprKind::Lambda:
-                        return lambda(e, expected);
+                        // A lambda is a closure *class* here, built by the instruction
+                        // list; an expression node reaching this point means the
+                        // lowering did not turn it into one (impl_specs/linear-il.md).
+                        fail(e.pos, "unsupported: a lambda outside a closure construction");
+                        return "/*unsupported*/";
                     case ExprKind::Ref: {
                         // `&List<T>()` is the counted empty-list construction.
                         if (e.lhs && e.lhs->kind == ExprKind::Call && e.lhs->lhs
@@ -3242,17 +2952,5 @@ namespace codegen {
     Res<Str> emitProgram(const List<Input> &inputs) {
         Emitter emitter(inputs);
         return emitter.run();
-    }
-
-    bool linearCodegen() {
-        return linearCodegenFlag();
-    }
-
-    void setLinearCodegen(bool value) {
-        linearCodegenFlag() = value;
-    }
-
-    void setLinearCodegenEmit(bool value) {
-        linearCodegenEmitFlag() = value;
     }
 }

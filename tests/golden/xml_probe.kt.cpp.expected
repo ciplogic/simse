@@ -3,6 +3,7 @@
 #include <iostream>
 #include <type_traits>
 
+struct ns1_Tile;
 // xml_probe.kt:2
 SIMSE_PACK_PUSH
 struct ns1_Tile {

@@ -1098,6 +1098,51 @@ numbers shifted with the parser/scanner edits).
   a name) and would erase the program's own scopes; the lowering's slots are the part
   that has to go, and it is gone.
 
+- **A lambda body is typed like any other body, and the IL carries what the pass
+  proved (T51).** Two things were wrong behind one symptom. `for` inside a lambda did
+  not compile: over a *machine* it emitted `smToYield(simse_addressOf(_sm_expr1))` for
+  a receiver that already was one (a C++ type error, and the wrap is the identity
+  there - `impl_specs/for.md`), and over a *container* the loop variable had no type,
+  so `v.toString()` picked the `StrView` overload.
+
+  Root cause: `LinearForm`'s `lambda()` ran `lowerForEmission` and `finishForEmission`
+  on a lambda's statements but never `sema::inferTypes`, so a closure frame knew no
+  inferred types at all - and even where the pass *had* run, a machine's `..T` never
+  reached the frame, because a declaration is deliberately never written with it
+  (`linear/Yield.cpp` relies on that to reject a `for` over a machine crossing a
+  `yield`, and the emitted C++ types such a slot `auto`).
+
+  So: `sema::Body` gained the lambda frame (`paramNames`/`paramTypes`/`captures`),
+  `inferTypes` gained an out-parameter with **every** binding it proved (spellable or
+  not), and that record travels into the IL body (`IlBody.inferred`). A backend seeds
+  its spelling frame from it (`Emitter::ilSeedFrameTypes`: the pass's record first,
+  then the declared slot types, which win) instead of walking statements, so the
+  frame is typed in a function body, a lambda body and a machine's method alike. The
+  `ilSeedBodyTypes` statement walk that used to do this for function bodies is gone.
+
+  The change also needed **forward declarations** in the emitted C++: `IlFunction`
+  now holds a pointer to `sema::Facts`, and packages are emitted in source order, so
+  an aggregate can name a type from a later package. Both rings emit `struct X;` for
+  every aggregate before any definition (four goldens gained exactly one line each;
+  `stress/hello/expected.cpp` too).
+
+  Verified: five differentials byte-identical, T23 byte-identical in both
+  configurations, `simse_tests.exe` **55/55**, `bun tools/stress.js` **30/30** with
+  the C++ ring, **30/30** with the self-hosted `simse.exe` and **30/30** with the
+  stage-1 binary, and `bun tools/bootstrap.js` fixed point byte for byte
+  (14,159 lines of Simse in 824 ms self-hosted, 177 ms for the C++ ring).
+
+  Two regression cases came out of it, one per half of the bug. `stress/lambda-for`
+  (both `for` forms and the indexed form, each inside a lambda) pins the *behavior*;
+  `tests/fixtures/lambda_scopes.kt` pins the *rings* - and writing it immediately
+  found a second, older divergence: the Simse ring let the enclosing body's rename
+  reach a lambda's own declarations, so with two lambdas in one body that each declare
+  a local `value`, the second came out `_sm_value_2` in one ring and `value` in the
+  other. The corpus never showed it: the program compiled and ran the same either way,
+  so only a fixture compared ring-to-ring (T22) catches it. The fix is the Simse
+  renamer's masked rewrite handing `false` to a lambda body's own lists, which is what
+  the C++ ring's `rewriteUses(..., false)` already did.
+
 ### Note: the shape of a lookup like this
 
 Worth recording because the first attempt at T39 got it wrong in four ways the

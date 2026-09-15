@@ -3,6 +3,7 @@
 #include <iostream>
 #include <type_traits>
 
+struct ns1_Point;
 // program_basic.kt:3
 enum class ns1_Color {
     Red,

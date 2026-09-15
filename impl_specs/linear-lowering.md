@@ -303,6 +303,16 @@ real bug, and it is why the underscore is not decoration). `finishForEmission` t
 the names the emitter has already declared in the body's own C++ scope - its
 parameters, `self` - as `reserved`.
 
+A **lambda is a body of its own for this pass too**: the enclosing body does not name
+the declarations inside a lambda body, it only follows the captures through it (a name
+the lambda does not bind is read from the enclosing frame, so the enclosing rename
+still decides it). Each lambda body is then named by its own `finishForEmission`, with
+its own parameters as `reserved`. That is what lets two lambdas in one body each
+declare a local of the same name and both keep it - and it is a *ring* rule, not a
+detail: the C++ ring's `rewriteUses(..., false)` and the Simse ring's masked rewrite
+both exist for it, and the two disagreed until `tests/fixtures/lambda_scopes.kt` (a
+name reused across two lambdas) pinned the shape.
+
 It runs **after the type pass**, because a declaration has to keep the type that pass
 proved: `auto x;` is not a declaration. A declaration the inference could not spell
 in full - an untyped slot, or a partly unknown type such as the `*?` of a synthesized
@@ -376,8 +386,19 @@ fixed point, then `flattenBlocks`, until a round changes nothing.)
 The facts it reads - the declared types, enum names, functions and methods (with
 their receiver patterns), native extensions and file-level statics - are the ones
 the emitter has already collected; they are threaded to the emitter as a parameter
-rather than stored on it, because a data-class *field* would have to name another
-package's type and the amalgamated file emits the packages in its own order.
+rather than stored on it, because one value serves the whole program and a body's
+emitter only borrows it.
+
+The pass runs on **every** function-like body, and a lambda body is one: it has no
+declaration, so its frame is its own parameters plus the values it captures, which
+the language models as fields of the closure instance (`specs/memory-model.md`).
+A `sema::Body` carries those (`paramNames`/`paramTypes`/`captures`), and the
+extractor runs the pass on the lambda's statements between lowering and finishing
+them (`LinearForm`: `ilLambdaLower` -> `inferTypes` -> `finishForEmission`), the
+same three steps a function body goes through. What the pass proves is returned
+alongside the statements (`inferTypes`'s `inferred`) and travels into the IL body
+(`linear-il.md`, `IlBody.inferred`), so a backend seeds its spelling frame from
+the body instead of a statement walk.
 
 The pass walks the statements in scope order (one type per name, shadowing
 included) and fills in the type of every untyped `VarDecl` it can *prove*:
@@ -399,24 +420,39 @@ val n = identity<Int>(7);   ->  Int n = identity<Int>(7);
   name in the type is a type parameter in scope, a declared type, or an RTL type;
   anything else - a type parameter out of scope, an unknown name - stays `auto`
   rather than making the emitter fail later.
-- **Three initializer shapes are deliberately left alone**: a lambda (its type comes
+- **Two initializer shapes are deliberately left alone**: a lambda (its type comes
   from the callable type it is used against) and `null` (no type of its own). `&x`,
   `*x` and `copy(x)` *are* typed - a counted reference, the address of what the
   operand denotes, the value behind a handle - which is what took the `program_expr`
   golden's `auto reference`/`auto dereferenced` to `std::shared_ptr<Int>`/`Int*`.
+- **A proven type is returned even when it cannot be spelled.** A name holding a
+  state machine is `..T`, which the emitted C++ writes `auto`; `Stmt.type` keeps its
+  other meaning ("a type a declaration can be written with"), so it stays out of the
+  declaration - `linear/Yield.cpp` relies on that to reject a `for` over a machine
+  crossing a `yield`. The frame still needs it, so the pass reports every binding it
+  proved and the IL carries them (`impl_specs/linear-il.md`).
 
-In the compiler's own output the pass types all but **49** declarations of ~6,500, and
-every one of the 49 sits in a **lambda body**: the emitter lowers those
-(`linear::lowerForEmission` / `finishForEmission`) but does not run the inference on
-them, which a `sema::Body` built from the lambda's own parameters and return type
-would fix - and that is also the last thing standing between a lambda body and the
-folding, because a slot with no type cannot move (see "Slot hoisting"). The recorded
-gaps are the same three: a prelude *struct method* (`Span.size()`, `Span.isEmpty()` -
-prelude data-class methods are not collected as facts, only their native extensions
-are), a native extension called as a plain function (`spanOf(list)`), and a call
-through a function-typed local (a lambda parameter). Closing those means teaching the
-pass about struct-method facts and about callable types; none of them needs a new
-idea.
+In the compiler's own output the pass types every declaration it can see except the
+gaps below - a lambda body has none of its own any more, since it goes through the
+pass like a function body. The recorded gaps are three: a prelude *struct method*
+(`Span.size()`, `Span.isEmpty()` - prelude data-class methods are not collected as
+facts, only their native extensions are), a native extension called as a plain
+function (`spanOf(list)`), and a call through a function-typed local (a lambda
+parameter). Closing those means teaching the pass about struct-method facts and
+about callable types; none of them needs a new idea.
+
+What the closure frame gained by being typed is worth naming, because it was silent
+before: a `for` inside a lambda over a machine used to emit
+`smToYield(simse_addressOf(_sm_expr1))` for a receiver that was already a machine -
+which is a C++ type error - and `v.toString()` on the loop variable picked the
+`StrView` overload, because the *type* decides which `toString` is meant.
+`stress/lambda-for` is the regression case (both `for` forms, over a container and
+over a machine, plus the indexed form), and `tests/fixtures/lambda_scopes.kt` pins the
+same shapes in the *ring* differential: two lambdas in one body that each declare a
+local of the same name. That fixture is what found the rename divergence - the Simse
+ring let the enclosing body name a lambda's declarations, so the second lambda's
+`value` came out `_sm_value_2` while the C++ ring kept `value` - which no corpus case
+showed, because they compiled and ran to the same output either way.
 
 One Simse-ring wrinkle is worth recording, because it cost a debugging session: in
 that ring a type *is* a node, and a node carries the role it was read from

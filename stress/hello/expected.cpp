@@ -3,6 +3,7 @@
 #include <iostream>
 #include <type_traits>
 
+struct ns1_Counter;
 // stress/hello/src/main.kt:2
 SIMSE_PACK_PUSH
 struct ns1_Counter {

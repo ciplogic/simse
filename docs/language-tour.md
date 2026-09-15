@@ -200,6 +200,37 @@ val big: Mapper = (v: Int) -> {
 }
 ```
 
+A block body is a body like any other: it has its own scope, its own locals, and its
+own control flow, so it can loop over what it captured. Two lambdas may even each
+declare a local of the same name, because neither is naming the other's:
+
+```simse
+typealias Taker = (Int) -> Unit
+
+fun main(): Int {
+    val items: List<Int> = List<Int>()
+    items.append(10)
+    items.append(20)
+
+    val addUp: Taker = (n: Int) -> {
+        for (value in items) {           // `value` is this lambda's own
+            println((value + n).toString())
+        }
+    }
+    addUp(1)
+
+    val onlyEvens: Taker = (n: Int) -> {
+        for ((value, index) in items) {  // a different `value`, at that
+            if (index % 2 == 0) {
+                println((value - n).toString())
+            }
+        }
+    }
+    onlyEvens(1)
+    return 0
+}
+```
+
 ## Data classes and enums
 
 A `data class` is a value type with named fields (separated by `;`), an implicit

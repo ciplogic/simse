@@ -34,8 +34,6 @@ namespace compiler {
         // The linear-form dump is a debug view of what the emitter is about to
         // read; it never reaches the emitted file (impl_specs/linear-il.md).
         linear::setShowIl(request.showLinearRepresentation);
-        codegen::setLinearCodegen(request.linearCodegen);
-        codegen::setLinearCodegenEmit(request.linearCodegenEmit);
 
         // Load the prelude set: a directory contributes every `*.kt` in it, a
         // file contributes itself. Missing defaults are skipped silently; an

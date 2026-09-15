@@ -15,13 +15,15 @@ model is Smali's (`.method` / `.registers` / `.local` / `const-string` next to t
 `invoke-*` family), which is a good fit because it is *designed* to be printed and
 read, not just executed.
 
-Status: **implemented in both rings, and the default.** `cppsrc/linear/LinearForm.{h,cpp}`
+Status: **implemented in both rings, and the only codegen.** `cppsrc/linear/LinearForm.{h,cpp}`
 (projection, printer, dump flag) and `LinearForm.kt` (the same, mirrored) hold the
 model; the backend lives in each emitter - `Emitter::emitIlBodyText` in `Codegen.cpp`
 and `emitIlBodyText`/`ilEmitOps`/`emitClosureClass` in `Codegen.kt`. The tables, the
 operand kinds and the instruction list below are what the code does.
-`--showLinearRepresentation` dumps the IL, `--linearCodegen` reports both paths,
-`--statementsCodegen` puts the statement tree back in charge.
+`--showLinearRepresentation` dumps the IL; nothing else is selectable, because the
+statement emitter and the two flags that used to reach it (`--linearCodegen`'s
+comparison report and `--statementsCodegen`'s escape hatch) have been deleted. What the
+IL cannot spell is now a hard error, not a fallback.
 "What the corpus says" is the measured state of the projection over the whole
 compiler.
 
@@ -33,6 +35,7 @@ IlBody {
     types:   List<Str>          # every type this body mentions
     vars:    List<IlVar>        # the frame
     pool:    List<Str>          # text: string literals, field names, operators
+    inferred: Map<Str, Type>    # what the *type pass* proved for every name
     methods: List<IlMethod>     # every callee this body calls
     labels:  List<Str>          # label names; an operand indexes this
     ops:     List<IlOp>         # the instructions
@@ -69,6 +72,16 @@ IlMethodKind = Function | Method | Native | Constructor
   inference. What the IL needs instead is a **verifier** - operand counts and kinds
   from the signature table, jump targets in range, a call's argument count against its
   `IlMethod`, a `BinaryOp` whose operand types make sense.
+- **`inferred` is the type pass's whole record, and it says more than `vars` does.** A
+  slot holding a state machine is `..T`: a *declaration* is never written with that
+  (the emitted C++ types it `auto`, and `linear/Yield.cpp` relies on the declaration
+  staying untyped to reject a `for` over a machine crossing a `yield`), so
+  `vars[i].typeIndex` is `?` for it. The frame still has to know, because a `for` wraps
+  what it iterates in `smToYield()` and on a machine that wrap is the *identity* - a
+  decision only the receiver's type can make (`impl_specs/for.md`). So the body carries
+  what the pass proved, and a backend seeds its spelling frame from it; the declared
+  slot types are seeded after and win, since they are the spelled ones
+  (`Emitter::ilSeedFrameTypes`).
 - **`Label` is an instruction**, so a label's position *is* its position in `ops`, and
   a jump carries a **label index**, not an op index:
 
@@ -258,10 +271,10 @@ Three consequences worth stating plainly:
 
 ## Codegen from the IL
 
-**Implemented, and the default.** The emitter reads the instruction list for every body
-it can express and the statement tree for the rest (`--statementsCodegen` puts the
-statement path back in charge; `--linearCodegen` adds the comparison report). Over the
-whole compiler source set (`--root cppsrc`, 502 bodies):
+**Implemented, and the only codegen.** The emitter reads the instruction list for every
+body; there is no statement emitter left to reach (the escape hatch and the comparison
+report were deleted once the port was done). Over the
+whole compiler source set (`--root cppsrc`, 502 bodies), the port's record was:
 
 | | |
 | --- | --- |
@@ -278,8 +291,8 @@ emitted files are byte-identical, which is what T23 pins.
 The backend does not re-spell anything: an operand becomes a leaf node - a slot
 is a name, a constant is its literal, a place is the path it came from, folded back
 out of the instruction that built it - and `expr`/`call`/`memberAccess` write the
-text. The two paths therefore agree *by construction*, which is what makes the
-comparison a check instead of an approximation.
+text. That is also why the port could be checked the way it was: both paths agreed *by
+construction*, so a diff between them was a check instead of an approximation.
 
 Four rules do the work the statement tree used to do implicitly:
 
@@ -290,10 +303,10 @@ Four rules do the work the statement tree used to do implicitly:
 - **`Declare`/`DeclareInit`**: one line with the instruction that follows
   (`Str out = "";`), or a bare one where the hoisting left it. The distinction is
   real because the hoisting turns a declaration's initializer into an assignment.
-- **The flags**: the IL is the default source of the output. `--statementsCodegen`
-  turns it off (the statement tree emits every body, exactly as before);
-  `--linearCodegen` adds the report - both paths per body, the differences on stderr -
-  and keeps the statement text where they disagree.
+- **The flags**: `--showLinearRepresentation` is the only one left, and it only
+  dumps. The statement emitter, its `--statementsCodegen` escape hatch and
+  `--linearCodegen`'s comparison report are gone: the IL is the source of the output,
+  full stop, and a body it cannot spell fails with the reason instead of falling back.
 - **The one block the flat form keeps**: where a jump crosses a declaration, C++
   wants a scope (a `goto` may not skip an initialization, MSVC C2362). The backend
   opens exactly that block - the one the statement path keeps - and closes it at the
@@ -303,18 +316,18 @@ Four rules do the work the statement tree used to do implicitly:
 What that buys, verified end to end:
 
 ```sh
-./cmake-build-debug/simse_transpile.exe --root cppsrc -o a.cpp   # from the IL already
+./cmake-build-debug/simse_transpile.exe --root cppsrc -o a.cpp   # from the IL
 bun build.js --cpp a.cpp --exe il_simse.exe     # the compiler, from the bytecode
 ./il_simse.exe --root cppsrc -o b.cpp           # it transpiles itself
 cmp b.cpp a.cpp                                 # byte-identical
-bun tools/stress.js --simse ./il_simse.exe      # 28/28
-bun tools/bootstrap.js --simse ./il_simse.exe   # and it does so in ~0.9 s
+bun tools/stress.js --simse ./il_simse.exe      # 30/30
+bun tools/bootstrap.js                          # and the fixed point holds (~0.8 s)
 ```
 
-And it cost no *runtime* speed: two builds of the same compiler - one emitted from the
-statement tree (`--statementsCodegen`), one from the IL - transpile the compiler's source
-tree in 0.93 s and 0.95 s (best of 3, release). The instruction list is what the emitter
-reads; the shape of the C++ it writes is not the bottleneck the way it was feared to be.
+The instruction list is what the emitter reads; the shape of the C++ it writes is not the
+bottleneck the way it was feared to be. (The port itself cost no runtime speed: comparing
+an IL-emitted compiler against a statement-emitted one measured 0.95 s against 0.93 s,
+best of 3, release.)
 
 The two bodies whose text differs are the two lambdas in the compiler
 (`ns1_collectPackages`, `ns3_driverGatherFiles` pass a lambda to `sort`): there the
@@ -434,8 +447,9 @@ The order that was followed:
 1. **`cppsrc/linear/LinearForm.kt`** - the extractor, the printer and the backend,
    over the Simse ring's statements (the same algorithms, one XML dialect: roles instead
    of struct fields). The oracle is the C++ ring's own two dumps: `--showLinearRepresentation`
-   over `cppsrc` must be byte-identical between the rings, and then
-   `--linearCodegen`'s report must read the same in both.
+   over `cppsrc` must be byte-identical between the rings, and then the port's comparison
+   report had to read the same in both (that report, with the flags that reached it, is
+   deleted now).
 
    **Landed and verified** (`LinearForm.kt`): the model (`IlVar`/`IlMethod`/`IlOp`/`IlBody`/
    `IlClosure`/`IlUnit`/`IlFunction` as data classes, the three enums), the signature
@@ -486,17 +500,16 @@ The order that was followed:
    self-hosts on the linear IL.** (Done: see "Codegen from the IL" above.)
 
 2. **Switch both rings to the IL** in one change: `Codegen.{cpp,simse}` keeps
-   `emitBodyCheckedAt` and the IL backend, `--statementsCodegen` keeps the statement
-   emitters reachable as the fallback, and both rings move together so T23 stays green.
-   (Done.)
+   the IL backend, and both rings move together so T23 stays green.
+   (Done. The statement emitters were deleted afterwards, once the corpus and T23 were
+   green on the IL alone.)
 3. **Then `yield` in the Simse ring** - which became `emitYieldable`/`emitMachine` plus
    the lowering of `Yield.kt`, with the machine's bodies already just another IL body.
    (Done: `stress/yield`.)
 4. Then `smToYield` (`impl_specs/for.md`) - still open.
 
-What is *not* a blocker: the statement path is reachable (`--statementsCodegen`) and
-each step has an oracle that fails loudly if a ring drifts (the stage drivers in
-`tools/_ring`, `--linearCodegen`'s report, T23, the corpus).
+What is *not* a blocker: each step has an oracle that fails loudly if a ring drifts (the
+stage drivers in `tools/_ring`, T23, the corpus).
 
 ## Open decisions
 

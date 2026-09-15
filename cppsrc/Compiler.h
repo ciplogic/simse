@@ -49,15 +49,6 @@ namespace compiler {
         // (impl_specs/linear-il.md). A debug view, so the emitted file stays
         // byte-identical with and without it.
         bool showLinearRepresentation = false;
-
-        // `--linearCodegen`: run every body through both codegen paths and report where
-        // they disagree (the work list for the rest of the port). The emitted file is
-        // unchanged while they disagree anywhere.
-        bool linearCodegen = false;
-
-        // Emit from the IL where it can express the body, and from the statement tree
-        // otherwise. On by default: the instruction list is what codegen reads.
-        bool linearCodegenEmit = true;
     };
 
     // Scans the module roots, parses every input, runs the compilation-wide

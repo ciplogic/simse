@@ -58,11 +58,13 @@ fun driverAppendDecls(target: *AstXmlNode, source: *AstXmlNode): Unit {
 // ---- scanning / parsing ---------------------------------------------------
 
 // Reads, scans, and parses one file. Matches parser::parseFile: the scanner error
-// is prefixed with the file name, and the token stream carries a synthetic Eof.
+// is prefixed with the file name, and the whole raw token list goes to `parseModule`,
+// which is where the trivia the grammar never sees is dropped (spaces, comments, and a
+// newline inside `(...)`).
 fun driverParseFile(fileName: Str): Res<AstXmlNode> {
     var scanner: Scanner = Scanner(getTokenRules(), 0, 1, 1, Str())
     scanner.setSource(readFile(fileName))
-    var tokens: List<Token> = List<Token>()
+    var raw: List<Token> = List<Token>()
     while (true) {
         val result: Res<Token> = scanner.nextToken()
         if (!result.isOk()) {
@@ -71,16 +73,9 @@ fun driverParseFile(fileName: Str): Res<AstXmlNode> {
         if (result.Value.kind == TokenKind.Eof) {
             break
         }
-        if (result.Value.kind != TokenKind.Space && result.Value.kind != TokenKind.Comment) {
-            tokens.append(result.Value)
-        }
+        raw.append(result.Value)
     }
-    var eofPos: SourcePos = SourcePos(0, 1, 1)
-    if (tokens.size() > 0) {
-        eofPos = tokens[tokens.size() - 1].pos
-    }
-    tokens.append(Token("", TokenKind.Eof, eofPos))
-    return parseModule(spanOf(*tokens), fileName)
+    return parseModule(*raw, fileName)
 }
 
 // The compilation set: every `*.kt` under each module root (in the given
@@ -171,19 +166,8 @@ fun main(args: List<Str>): Int {
             extraRoots.append(args[i])
         } else if (arg == "--showLinearRepresentation") {
             ilSetShow(true)
-        } else if (arg == "--linearCodegen") {
-            // The report: both paths, and the differences on stderr.
-            ilSetLinearCodegen(true)
-            ilSetLinearCodegenEmit(true)
-        } else if (arg == "--linearCodegenEmit") {
-            ilSetLinearCodegen(true)
-            ilSetLinearCodegenEmit(true)
-        } else if (arg == "--statementsCodegen") {
-            // The escape hatch: the statement tree emits every body, exactly as before
-            // the IL became the source of the output.
-            ilSetLinearCodegenEmit(false)
         } else if (arg == "-h" || arg == "--help") {
-            println("usage: simse_transpile <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module-root <dir>]... [--showLinearRepresentation] [--linearCodegen] [--statementsCodegen]")
+            println("usage: simse_transpile <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module-root <dir>]... [--showLinearRepresentation]")
             return 0
         } else {
             inputs.append(arg)

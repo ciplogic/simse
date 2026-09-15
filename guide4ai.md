@@ -56,16 +56,10 @@ cd cmake-build-strstd && cmd //c _msvc_build.bat
 # identical with and without it - impl_specs/linear-il.md)
 ./cmake-build-debug/simse_transpile.exe --root cppsrc -o a.cpp --showLinearRepresentation 2> il.txt
 
-# codegen: the C++ of every body comes from its instruction list, and the statement tree
-# is the fallback for what the IL cannot spell (0 bodies over cppsrc; the 2 lambda
-# bodies are spelled as closure classes, which is the one difference the model owns).
+# codegen: the C++ of every body comes from its instruction list - the IL is the only
+# codegen (a body it cannot spell is a hard error). The 2 lambda bodies are spelled as
+# closure classes, which is the one shape the model owns.
 ./cmake-build-debug/simse_transpile.exe --root cppsrc -o a.cpp           # the default
-
-# the report: both paths per body, and where they disagree on stderr
-./cmake-build-debug/simse_transpile.exe --root cppsrc -o a.cpp --linearCodegen
-
-# the escape hatch: emit every body from the statement tree, exactly as before
-./cmake-build-debug/simse_transpile.exe --root cppsrc -o a.cpp --statementsCodegen
 
 # transpile the compiler and compile it (bun + cl.exe, loads the VS environment)
 # compile an amalgamated output with cl.exe (loads the VS environment itself)
@@ -171,8 +165,8 @@ explicit `cppsrc/compiler/Driver.kt` input.
   (`TypeInfer.{h,cpp,simse}`). All of it is specified in
   `impl_specs/linear-lowering.md`. `LinearForm.{h,cpp}` projects the same body into
   the flat linear IL (one instruction list, no blocks), prints it for
-  `--showLinearRepresentation` and emits C++ **from** it - the default, with
-  `--statementsCodegen` as the escape hatch (`impl_specs/linear-il.md`).
+  `--showLinearRepresentation` and emits C++ **from** it - the only codegen
+  (`impl_specs/linear-il.md`).
   `LinearForm.kt` is the whole thing mirrored: the model, the signature table, the
   printer, the extractor, and the backend lives in `Codegen.kt`
   (`emitIlBodyText`/`ilEmitOps`/the closure classes), so **both rings emit from the IL**.
@@ -359,15 +353,14 @@ session):
 
 1. ~~**`linear/LinearForm.kt`**~~ **done** - the IL in the Simse ring (model,
    signature table, printer, extractor) plus the backend in `Codegen.kt`
-   (`emitIlBodyText`, `ilEmitOps`, the closure classes). The oracle holds:
-   `--showLinearRepresentation` and `--linearCodegen` over `cppsrc` report the same
-   counts in both rings (502 bodies, 0 not expressible), and their IL-emitted outputs
-   are byte-identical.
+   (`emitIlBodyText`, `ilEmitOps`, the closure classes). The oracle held:
+   `--showLinearRepresentation` over `cppsrc` reports the same counts in both rings
+   (502 bodies, 0 not expressible), and their IL-emitted outputs are byte-identical.
 2. ~~**IL codegen as the default in BOTH rings at once**~~ **done**: the IL's text is
-   what codegen emits (a lambda is a closure class now, not `[=]`), the statement tree
-   is the fallback for what the IL cannot spell, and `--statementsCodegen` restores the
-   old behaviour. The statement emitters are still there, to be deleted once the
-   fallback count stays 0 across the corpus.
+   what codegen emits (a lambda is a closure class now, not `[=]`). The statement
+   emitters and the two flags that reached them (`--statementsCodegen`,
+   `--linearCodegen`) have since been deleted - the IL is the only codegen, and a body
+   it cannot spell is a hard error.
 3. ~~**`yield` in the Simse ring**~~ **done**: `Codegen.kt`'s
    `emitYieldable`/`emitMachine`/`ilMachineMethod`, and the builder contract they needed
    (`linCondJump` re-roots a *synthesized* condition under `Cond` - the C++ ring holds it

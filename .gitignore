@@ -45,6 +45,10 @@ Release
 ### Simse build outputs ###
 /simse_out.cpp
 /simse.exe
+# Root-level object/pdb files from a manual cl.exe run (build.js writes into the
+# CMake build folder's `manual/` instead).
+/*.obj
+/*.pdb
 
 ### Out-of-tree build folders (cmake-build-debug/-release carry their own) ###
 cmake-build-*/

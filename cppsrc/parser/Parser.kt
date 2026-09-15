@@ -18,9 +18,18 @@ import common
 // An expression node plus the source position where the expression started. The
 // position is needed by parents (a Call/Index/Member/Binary node takes its
 // position from its callee/receiver/left operand).
-data class ExprNode(var node: AstXmlNode; var line: Int; var column: Int)
+data class ExprNode(var node: AstXmlNode;
 
-data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var file: Str; var nextForId: Int) {
+var line: Int;
+var column: Int)
+
+data class Parser(var cursor: Span<Token>;
+
+var failed: Bool;
+var error: Str;
+var file: Str;
+var nextForId: Int)
+{
 
     // ---- token cursor helpers ---------------------------------------------
 
@@ -69,7 +78,7 @@ data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var
         }
         this.failed = true
         this.error = this.file + ":" + pos.line.toString() + ":" + pos.column.toString()
-                     + ": " + message
+        +": " + message
     }
 
     fun fail(message: Str): Bool {
@@ -106,7 +115,7 @@ data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var
 
     fun atStmtEnd(): Bool {
         return this.checkKind(TokenKind.EndOfLine) || this.atEnd()
-               || this.checkText(";") || this.checkText("}")
+                || this.checkText(";") || this.checkText("}")
     }
 
     // ---- AstXmlNode builders -------------------------------------------------
@@ -354,6 +363,9 @@ data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var
         }
 
         var methods: List<AstXmlNode> = List<AstXmlNode>()
+        // The body brace may stand on its own line (a formatter wraps the parameter list
+        // and leaves `{` behind it): a newline there is not a declaration boundary.
+        this.skipNewlines()
         if (this.checkText("{")) {
             this.advance()
             this.skipSeparators()
@@ -502,8 +514,8 @@ data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var
         // `..` starts a `..T` receiver: `fun ..T.smToYield<T>()` is the wrap that makes a
         // machine iterable like any other source (impl_specs/for.md).
         return this.checkKind(TokenKind.Identifier)
-               || this.checkText("(") || this.checkText("&") || this.checkText("*")
-               || this.checkText("..")
+                || this.checkText("(") || this.checkText("&") || this.checkText("*")
+                || this.checkText("..")
     }
 
     fun parseParamName(): Str {
@@ -800,6 +812,11 @@ data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var
 
     fun parseBlock(): List<AstXmlNode> {
         var body: List<AstXmlNode> = List<AstXmlNode>()
+        // A declaration's body brace may stand on its own line (`data class X(...)` then
+        // `{`): a newline before a `{` where a block is the only thing that can follow is
+        // not a statement boundary. Kotlin's rule, and why a Kotlin-kind formatter can be
+        // pointed at these files.
+        this.skipNewlines()
         if (!this.expectText("{")) {
             return body
         }
@@ -851,12 +868,22 @@ data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var
         if (this.checkText("break")) {
             val pos: SourcePos = this.peek(0).pos
             this.advance()
-            return AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtBreak, this.posAttrs(pos.line, pos.column), Array<AstXmlNode>())
+            return AstXmlNode(
+                AstNodeKind.Stmt,
+                AstNodeCategory.StmtBreak,
+                this.posAttrs(pos.line, pos.column),
+                Array<AstXmlNode>()
+            )
         }
         if (this.checkText("continue")) {
             val pos: SourcePos = this.peek(0).pos
             this.advance()
-            return AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtContinue, this.posAttrs(pos.line, pos.column), Array<AstXmlNode>())
+            return AstXmlNode(
+                AstNodeKind.Stmt,
+                AstNodeCategory.StmtContinue,
+                this.posAttrs(pos.line, pos.column),
+                Array<AstXmlNode>()
+            )
         }
 
         val pos: SourcePos = this.peek(0).pos
@@ -1005,6 +1032,7 @@ data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var
         if (!this.expectText(")")) {
             return this.emptyNode()
         }
+        this.skipNewlines()
         if (!this.expectText("{")) {
             return this.emptyNode()
         }
@@ -1037,7 +1065,8 @@ data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var
             this.skipSeparators()
             var arm: List<AstXmlNode> = List<AstXmlNode>()
             while (!this.checkText("case") && !this.checkText("default")
-                   && !this.checkText("}") && !this.atEnd() && !this.failed) {
+                && !this.checkText("}") && !this.atEnd() && !this.failed
+            ) {
                 if (!this.parseStmtInto(*arm)) {
                     return this.emptyNode()
                 }
@@ -1134,7 +1163,12 @@ data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var
     }
 
     fun breakNode(pos: SourcePos): AstXmlNode {
-        return AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtBreak, this.posAttrs(pos.line, pos.column), Array<AstXmlNode>())
+        return AstXmlNode(
+            AstNodeKind.Stmt,
+            AstNodeCategory.StmtBreak,
+            this.posAttrs(pos.line, pos.column),
+            Array<AstXmlNode>()
+        )
     }
 
     fun ifNode(cond: ExprNode, thenBody: List<AstXmlNode>, pos: SourcePos): AstXmlNode {
@@ -1156,19 +1190,31 @@ data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var
     fun nameExprAt(text: Str, pos: SourcePos): ExprNode {
         var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
         attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, text))
-        return ExprNode(AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprName, attrs, Array<AstXmlNode>()), pos.line, pos.column)
+        return ExprNode(
+            AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprName, attrs, Array<AstXmlNode>()),
+            pos.line,
+            pos.column
+        )
     }
 
     fun intLiteralAt(value: Int, pos: SourcePos): ExprNode {
         var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
         attrs.append(AstNodeAttribute(AstNodeAttributeKind.Text, value.toString()))
-        return ExprNode(AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprIntLit, attrs, Array<AstXmlNode>()), pos.line, pos.column)
+        return ExprNode(
+            AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprIntLit, attrs, Array<AstXmlNode>()),
+            pos.line,
+            pos.column
+        )
     }
 
     fun boolLiteralAt(value: Bool, pos: SourcePos): ExprNode {
         var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
         attrs.append(AstNodeAttribute(AstNodeAttributeKind.Value, boolText(value)))
-        return ExprNode(AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprBoolLit, attrs, Array<AstXmlNode>()), pos.line, pos.column)
+        return ExprNode(
+            AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprBoolLit, attrs, Array<AstXmlNode>()),
+            pos.line,
+            pos.column
+        )
     }
 
     fun unaryExprAt(op: Str, operand: ExprNode, pos: SourcePos): ExprNode {
@@ -1192,7 +1238,8 @@ data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var
     fun smToYieldCall(target: ExprNode, pos: SourcePos): ExprNode {
         var memberAttrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
         memberAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, "smToYield"))
-        var member: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprMember, memberAttrs, Array<AstXmlNode>())
+        var member: AstXmlNode =
+            AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprMember, memberAttrs, Array<AstXmlNode>())
         this.attach(*member, AstNodeKind.Receiver, *target.node)
         var callAttrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
         var call: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCall, callAttrs, Array<AstXmlNode>())
@@ -1204,7 +1251,8 @@ data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var
     fun methodCallAt(target: Str, method: Str, pos: SourcePos): ExprNode {
         var memberAttrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
         memberAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, method))
-        var member: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprMember, memberAttrs, Array<AstXmlNode>())
+        var member: AstXmlNode =
+            AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprMember, memberAttrs, Array<AstXmlNode>())
         val receiver: ExprNode = this.nameExprAt(target, pos)
         this.attach(*member, AstNodeKind.Receiver, *receiver.node)
         var callAttrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
@@ -1444,7 +1492,8 @@ data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var
                     return this.emptyExpr()
                 }
                 var attrs: List<AstNodeAttribute> = this.posAttrs(expr.line, expr.column)
-                var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCall, attrs, Array<AstXmlNode>())
+                var node: AstXmlNode =
+                    AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCall, attrs, Array<AstXmlNode>())
                 this.attach(*node, AstNodeKind.Callee, *expr.node)
                 var ai: Int = 0
                 while (ai < args.size()) {
@@ -1462,7 +1511,8 @@ data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var
                     return this.emptyExpr()
                 }
                 var attrs: List<AstNodeAttribute> = this.posAttrs(expr.line, expr.column)
-                var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprIndex, attrs, Array<AstXmlNode>())
+                var node: AstXmlNode =
+                    AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprIndex, attrs, Array<AstXmlNode>())
                 this.attach(*node, AstNodeKind.Receiver, *expr.node)
                 this.attach(*node, AstNodeKind.Index, *index.node)
                 expr = ExprNode(node, expr.line, expr.column)
@@ -1473,7 +1523,8 @@ data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var
                 }
                 var attrs: List<AstNodeAttribute> = this.posAttrs(expr.line, expr.column)
                 attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
-                var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprMember, attrs, Array<AstXmlNode>())
+                var node: AstXmlNode =
+                    AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprMember, attrs, Array<AstXmlNode>())
                 this.attach(*node, AstNodeKind.Receiver, *expr.node)
                 expr = ExprNode(node, expr.line, expr.column)
             } else {
@@ -1499,13 +1550,21 @@ data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var
             val text: Str = this.advance().text
             var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
             attrs.append(AstNodeAttribute(AstNodeAttributeKind.Text, text))
-            return ExprNode(AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprStrLit, attrs, Array<AstXmlNode>()), pos.line, pos.column)
+            return ExprNode(
+                AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprStrLit, attrs, Array<AstXmlNode>()),
+                pos.line,
+                pos.column
+            )
         }
         if (this.checkKind(TokenKind.Character)) {
             val text: Str = this.advance().text
             var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
             attrs.append(AstNodeAttribute(AstNodeAttributeKind.Text, text))
-            return ExprNode(AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCharLit, attrs, Array<AstXmlNode>()), pos.line, pos.column)
+            return ExprNode(
+                AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCharLit, attrs, Array<AstXmlNode>()),
+                pos.line,
+                pos.column
+            )
         }
         if (this.checkText("true") || this.checkText("false")) {
             val text: Str = this.advance().text
@@ -1515,18 +1574,30 @@ data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var
             } else {
                 attrs.append(AstNodeAttribute(AstNodeAttributeKind.Value, "false"))
             }
-            return ExprNode(AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprBoolLit, attrs, Array<AstXmlNode>()), pos.line, pos.column)
+            return ExprNode(
+                AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprBoolLit, attrs, Array<AstXmlNode>()),
+                pos.line,
+                pos.column
+            )
         }
         if (this.checkText("null")) {
             this.advance()
             val attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
-            return ExprNode(AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprNullLit, attrs, Array<AstXmlNode>()), pos.line, pos.column)
+            return ExprNode(
+                AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprNullLit, attrs, Array<AstXmlNode>()),
+                pos.line,
+                pos.column
+            )
         }
         if (this.checkText("this")) {
             this.advance()
             var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
             attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, "this"))
-            return ExprNode(AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprName, attrs, Array<AstXmlNode>()), pos.line, pos.column)
+            return ExprNode(
+                AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprName, attrs, Array<AstXmlNode>()),
+                pos.line,
+                pos.column
+            )
         }
         if (this.checkKind(TokenKind.Identifier)) {
             val name: Str = this.peek(0).text
@@ -1541,7 +1612,8 @@ data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var
                     return this.emptyExpr()
                 }
                 var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
-                var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCopy, attrs, Array<AstXmlNode>())
+                var node: AstXmlNode =
+                    AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCopy, attrs, Array<AstXmlNode>())
                 this.attach(*node, AstNodeKind.Operand, *inner.node)
                 return ExprNode(node, pos.line, pos.column)
             }
@@ -1554,7 +1626,8 @@ data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var
                 if (!this.failed && (this.checkText(".") || this.checkText("("))) {
                     var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
                     attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
-                    var gnode: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprGenericName, attrs, Array<AstXmlNode>())
+                    var gnode: AstXmlNode =
+                        AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprGenericName, attrs, Array<AstXmlNode>())
                     xmlAddChildren(*gnode, *typeArgs)
                     return ExprNode(gnode, pos.line, pos.column)
                 }
@@ -1565,7 +1638,11 @@ data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var
             this.advance()
             var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
             attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
-            return ExprNode(AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprName, attrs, Array<AstXmlNode>()), pos.line, pos.column)
+            return ExprNode(
+                AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprName, attrs, Array<AstXmlNode>()),
+                pos.line,
+                pos.column
+            )
         }
         if (this.checkText("(")) {
             val savedCursor: Span<Token> = this.cursor
@@ -1646,7 +1723,8 @@ data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var
                 return this.emptyExpr()
             }
             var sattrs: List<AstNodeAttribute> = this.posAttrs(value.line, value.column)
-            var snode: AstXmlNode = AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtExprStmt, sattrs, Array<AstXmlNode>())
+            var snode: AstXmlNode =
+                AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtExprStmt, sattrs, Array<AstXmlNode>())
             this.attach(*snode, AstNodeKind.Expr, *value.node)
             body.append(snode)
         }
@@ -1709,7 +1787,7 @@ fun binaryBindingPower(op: Str): Int {
 
 fun isAssignOp(op: Str): Bool {
     return op == "=" || op == "+=" || op == "-="
-           || op == "*=" || op == "/=" || op == "%="
+            || op == "*=" || op == "/=" || op == "%="
 }
 
 // ---- entry points ---------------------------------------------------------
@@ -1725,14 +1803,29 @@ fun parseModule(cursor: Span<Token>, fileName: Str): Res<AstXmlNode> {
 }
 
 // Parses a raw token list: drops Space/Comment tokens and appends a synthetic
-// Eof, matching the C++ parser's constructor.
+// Eof, matching the C++ parser's constructor. A newline inside `(...)` or `[...]`
+// separates nothing either: a condition or an argument list may be wrapped, and a
+// formatter is free to do it (Kotlin's rule, and the reason a Kotlin-kind formatter can
+// be pointed at these files, specs/declarations.md).
 fun parseModule(tokens: *List<Token>, fileName: Str): Res<AstXmlNode> {
     var toks: List<Token> = List<Token>()
+    var bracketed: Int = 0
     var i: Int = 0
     while (i < tokens.size()) {
         val token: Token = tokens[i]
+        if (token.kind == TokenKind.Operator) {
+            if (token.text == "(" || token.text == "[") {
+                bracketed = bracketed + 1
+            } else if (token.text == ")" || token.text == "]") {
+                if (bracketed > 0) {
+                    bracketed = bracketed - 1
+                }
+            }
+        }
         if (token.kind != TokenKind.Space && token.kind != TokenKind.Comment) {
-            toks.append(token)
+            if (!(token.kind == TokenKind.EndOfLine && bracketed > 0)) {
+                toks.append(token)
+            }
         }
         i = i + 1
     }

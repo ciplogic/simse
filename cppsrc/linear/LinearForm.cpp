@@ -205,6 +205,10 @@ namespace linear {
                 out.file = file;
                 out.line = fn.decl ? fn.decl->pos.line : 0;
                 out.symbol = fn.symbol;
+                // The types the enclosing pass proved, so the frame carries the slots a
+                // declaration could not name (a `..T` machine). The extractor still adds
+                // each slot's own declared type as it goes; both are keys by name.
+                if (fn.inferredTypes) out.inferredTypes = *fn.inferredTypes;
                 captures = &fn.captures;
                 buildFrame();
                 out.signature = signatureText();
@@ -755,6 +759,11 @@ namespace linear {
                 info.paramTypes = e.paramTypes;
                 info.closureSymbol = symbol;
                 info.statics = fn.statics;
+                // A lambda body runs its *own* type pass here, so it needs the facts and
+                // the type parameters in scope - and it must not inherit the enclosing
+                // body's frame (its own map is set below, from its own pass).
+                info.facts = fn.facts;
+                info.typeParams = fn.typeParams;
                 for (const Str &name: captured) {
                     info.captures[name] = true;
                     // The field's type is the enclosing slot's: the class's field has it,
@@ -776,9 +785,25 @@ namespace linear {
                     body.clear();
                     body.push_back(ret);
                 }
+                // ... and it is *typed* here too, with a frame of its own: parameters and
+                // captures. Without this pass the body's own declarations stay untyped,
+                // and a slot the frame cannot name sends every spelling decision that
+                // needs a type the wrong way (`v.toString()` picks the `StrView`
+                // overload; a `..T` receiver hides the `smToYield` identity).
+                List<StmtPtr> lowered = lowerForEmission(body);
+                Dictionary<Str, ast::TypePtr> lambdaTypes;
+                if (fn.facts != nullptr) {
+                    sema::Body semantics;
+                    semantics.selfType = sema::namedType(symbol);
+                    semantics.typeParams = fn.typeParams;
+                    semantics.paramNames = info.paramNames;
+                    semantics.paramTypes = info.paramTypes;
+                    semantics.captures = info.captureTypes;
+                    lowered = sema::inferTypes(lowered, *fn.facts, semantics, &lambdaTypes);
+                }
                 Extractor inner(info, out.file, unit, closureCounter);
-                IlBody innerBody =
-                        inner.run(finishForEmission(lowerForEmission(body), info.paramNames));
+                IlBody innerBody = inner.run(finishForEmission(lowered, info.paramNames));
+                innerBody.inferredTypes = lambdaTypes;
 
                 IlClosure closure;
                 closure.symbol = symbol;
@@ -1351,9 +1376,5 @@ namespace linear {
 
     void setShowIl(bool value) {
         ilFlag() = value;
-    }
-
-    Str dumpIlBody(const IlBody &body) {
-        return Str("\n") + printIlBody(body);
     }
 }

@@ -74,8 +74,10 @@ fun linMergedIndex(p: Int, i: Int, len: Int): Int {
 // Whether a jump to `jumpName` taken at index `at` would skip the initialization
 // of a declaration the splice brings into the parent's scope and land past it -
 // the one thing C++ rejects about the splice.
-fun linJumpCrosses(jumpName: Str, at: Int, decls: *List<Int>, labelNames: *List<Str>,
-                   labelAt: *List<Int>): Bool {
+fun linJumpCrosses(
+    jumpName: Str, at: Int, decls: *List<Int>, labelNames: *List<Str>,
+    labelAt: *List<Int>
+): Bool {
     var l: Int = 0
     while (l < labelNames.size()) {
         if (labelNames[l] == jumpName) {
@@ -94,8 +96,10 @@ fun linJumpCrosses(jumpName: Str, at: Int, decls: *List<Int>, labelNames: *List<
 
 // Every jump inside `stmt` - each of them running after everything before the
 // top-level statement it sits in - tested against the spliced declarations.
-fun linStmtCrosses(stmt: *AstXmlNode, at: Int, decls: *List<Int>, labelNames: *List<Str>,
-                   labelAt: *List<Int>): Bool {
+fun linStmtCrosses(
+    stmt: *AstXmlNode, at: Int, decls: *List<Int>, labelNames: *List<Str>,
+    labelAt: *List<Int>
+): Bool {
     if (linIsGoto(stmt) || linIsCondJump(stmt)) {
         return linJumpCrosses(xmlAttr(stmt, AstNodeAttributeKind.Name), at, decls, labelNames, labelAt)
     }
@@ -160,7 +164,8 @@ fun linSpliceIsSafe(stmts: *List<AstXmlNode>, i: Int): Bool {
     p = 0
     while (p < stmts.size()) {
         if (p != i
-            && linStmtCrosses(*stmts[p], linMergedIndex(p, i, len), *decls, *labelNames, *labelAt)) {
+            && linStmtCrosses(*stmts[p], linMergedIndex(p, i, len), *decls, *labelNames, *labelAt)
+        ) {
             return false
         }
         p = p + 1
@@ -183,7 +188,8 @@ fun linJumpsTo(stmts: *List<AstXmlNode>, name: Str): Bool {
     var i: Int = 0
     while (i < stmts.size()) {
         if ((linIsGoto(*stmts[i]) || linIsCondJump(*stmts[i]))
-            && xmlAttr(*stmts[i], AstNodeAttributeKind.Name) == name) {
+            && xmlAttr(*stmts[i], AstNodeAttributeKind.Name) == name
+        ) {
             return true
         }
         if (linIsBlock(*stmts[i])) {
@@ -223,13 +229,15 @@ data class LinSimplifier(
             val stmt: AstXmlNode = stmts[i]
             if ((linIsGoto(*stmt) || linIsCondJump(*stmt)) && i + 1 < stmts.size()
                 && linIsLabel(*stmts[i + 1])
-                && xmlAttr(*stmts[i + 1], AstNodeAttributeKind.Name) == xmlAttr(*stmt, AstNodeAttributeKind.Name)) {
+                && xmlAttr(*stmts[i + 1], AstNodeAttributeKind.Name) == xmlAttr(*stmt, AstNodeAttributeKind.Name)
+            ) {
                 // A jump to the statement right after it does nothing.
                 this.changed = true
                 i = i + 1
             } else if (linIsCondJump(*stmt) && i + 2 < stmts.size() && linIsGoto(*stmts[i + 1])
-                       && linIsLabel(*stmts[i + 2])
-                       && xmlAttr(*stmts[i + 2], AstNodeAttributeKind.Name) == xmlAttr(*stmt, AstNodeAttributeKind.Name)) {
+                && linIsLabel(*stmts[i + 2])
+                && xmlAttr(*stmts[i + 2], AstNodeAttributeKind.Name) == xmlAttr(*stmt, AstNodeAttributeKind.Name)
+            ) {
                 // `ifTrue (c) goto A; goto B; A:` is `ifFalse (c) goto B;`. The
                 // label A stays in the stream and is dropped below if nothing
                 // else jumps to it.
@@ -406,7 +414,10 @@ fun simBoundNames(body: AstXmlNode, bound: List<Str>): List<Str> {
     return names
 }
 
-data class SimRenamer(var scopes: List<SimRenameScope>; var used: Dictionary<Str, Bool>) {
+data class SimRenamer(var scopes: List<SimRenameScope>;
+
+var used: Dictionary<Str, Bool>)
+{
     // The innermost scope that renames this name, if any: "" when none does.
     fun renamedTo(name: Str): Str {
         var i: Int = this.scopes.size() - 1
@@ -492,6 +503,16 @@ data class SimRenamer(var scopes: List<SimRenameScope>; var used: Dictionary<Str
     fun rewrite(node: AstXmlNode, nameNested: Bool): AstXmlNode {
         val kind: AstNodeCategory = xmlKind(*node)
         val masked: Bool = kind == AstNodeCategory.ExprLambda
+        // Inside a lambda body this body names *nothing*: the lambda is a body of its own,
+        // so its declarations are its own pass's to name (the same rule the C++ ring's
+        // `rewriteUses(..., false)` states). Without this, two lambdas in one body that
+        // each declare the same local would see the *second* one renamed - the enclosing
+        // `used` had already seen the first - and the two rings would emit different
+        // names for the same program.
+        var nested: Bool = nameNested
+        if (masked) {
+            nested = false
+        }
         if (masked) {
             // A lambda is a body of its own, so its own declarations are not this body's
             // to name - but a name it does not bind is captured from *this* body, and that
@@ -516,16 +537,21 @@ data class SimRenamer(var scopes: List<SimRenameScope>; var used: Dictionary<Str
         while (i < node.Children.count()) {
             val child: AstXmlNode = node.Children[i]
             if (child.name == AstNodeKind.Body || child.name == AstNodeKind.Then
-                || child.name == AstNodeKind.Else || child.name == AstNodeKind.Case) {
+                || child.name == AstNodeKind.Else || child.name == AstNodeKind.Case
+            ) {
                 val stmts: List<AstXmlNode> = xmlChildren(*child, AstNodeKind.Stmt)
                 if (stmts.size() > 0) {
-                    kids.append(exprReplaceRole(*child, AstNodeKind.Stmt,
-                                                *this.listOf(stmts, nameNested)))
+                    kids.append(
+                        exprReplaceRole(
+                            *child, AstNodeKind.Stmt,
+                            *this.listOf(stmts, nested)
+                        )
+                    )
                 } else {
-                    kids.append(this.rewrite(child, nameNested))
+                    kids.append(this.rewrite(child, nested))
                 }
             } else {
-                kids.append(this.rewrite(child, nameNested))
+                kids.append(this.rewrite(child, nested))
             }
             i = i + 1
         }

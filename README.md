@@ -181,18 +181,18 @@ Working today: the language above (data classes, enums, generics, extensions,
 lambdas, `List`/`Array`/`Dictionary`/`Span`/`Opt`/`Res`/`Str`, file I/O, the
 `main(args)` form, `yield`, and `for` over anything with a `smToYield` - a container,
 or a state machine itself),
-a self-hosted compiler that reproduces its own output byte for byte, 53 in-process
-tests, five differential stage tests and 29 end-to-end stress programs.
+a self-hosted compiler that reproduces its own output byte for byte, 55 in-process
+tests, five differential stage tests and 30 end-to-end stress programs.
 
 On speed (`bun tools/bootstrap.js`, release, this machine - the range is machine load,
 best of 5 runs idle):
 
 | | |
 | --- | --- |
-| the compiler transpiling its own source tree | **13,828 lines of Simse in 1.03 s** (36,802 lines of C++ out, ~13.5k lines/s) |
-| the same tree through the hand-written C++ ring | 0.21 s (the Simse ring is ~4.9x that; the flat-body work - every declaration at the top of its body - costs the Simse ring ~15% of the transpile, and the C++ ring nothing) |
+| the compiler transpiling its own source tree | **14,159 lines of Simse in 0.82 s** (35,715 lines of C++ out, ~17.2k lines/s) |
+| the same tree through the hand-written C++ ring | 0.18 s (the Simse ring is ~4.6x that; the flat-body work - every declaration at the top of its body - costs the Simse ring a share of the transpile, and the C++ ring nothing) |
 | compiling the published `cppsrc/simse_bootstrap.cpp` with `cl.exe` | ~14.5 s release (`/O2 /Ob3`), ~3.1 s debug |
-| **from the published file to a compiler that reproduces it** | **~15.6 s**, then ~1.03 s per self-transpile |
+| **from the published file to a compiler that reproduces it** | **~15.4 s**, then ~0.8 s per self-transpile |
 
 Not there yet, in rough order of how soon a user would miss it: `for` over a
 `Dictionary` and ranges, string interpolation, closed unions +
@@ -231,5 +231,5 @@ explicit about each of these and the roadmap phases them.
 
 ## License
 
-No license has been chosen yet; a `LICENSE` file will be added before the first
-public release.
+MIT - see [`LICENSE`](LICENSE). Simse is a Kotlin-flavored dialect of its own
+making; it is not affiliated with Kotlin or JetBrains.

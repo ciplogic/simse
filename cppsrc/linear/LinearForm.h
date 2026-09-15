@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../ast/Ast.h"
+#include "../sema/TypeInfer.h"
 
 // The linear IL: one flat instruction list per body (impl_specs/linear-il.md).
 //
@@ -86,6 +87,15 @@ namespace linear {
         // needs the text, but a backend spells C++ from these - `List<Str>` is
         // `List<Str>` to a reader and a node for its type arguments to the emitter.
         List<ast::TypePtr> typeNodes;
+        // What the *type pass* proved for every name in this body (`sema::inferTypes`),
+        // which is more than the frame's slots carry: a name holding a state machine
+        // is typed `..T`, and a declaration is never written with that (the emitted
+        // C++ uses `auto`, `linear/Yield.cpp` relies on the declaration staying
+        // untyped). The backend still needs it, because `for` wraps what it iterates
+        // in `smToYield()` and, on a machine, that wrap is the identity - a decision
+        // only the receiver's type can make (impl_specs/for.md). Seeding a frame from
+        // this is how a machine-typed slot stays typed without a statement tree.
+        Dictionary<Str, ast::TypePtr> inferredTypes;
         List<IlVar> vars;
         List<Str> pool;
         List<IlMethod> methods;
@@ -135,6 +145,14 @@ namespace linear {
         // neither a frame slot nor one of these is a `GetStatic` the extractor cannot
         // type (it stays `?` in the frame).
         Dictionary<Str, Str> statics;
+
+        // What a *lambda* body needs to run its own type pass: the program facts (the
+        // extractor types a lambda body itself, because a lambda's frame is not the
+        // enclosing function's), the type parameters in scope there, and the flat
+        // record the enclosing body's pass produced (the top-level body's frame).
+        const sema::Facts *facts = nullptr;
+        List<Str> typeParams;
+        const Dictionary<Str, ast::TypePtr> *inferredTypes = nullptr;
 
         // A *lambda* body has no declaration: its parameters, the class it is the
         // `invoke` of, and the names it captures (which are fields of that class, not
@@ -195,9 +213,4 @@ namespace linear {
     // for it, and it never touches the emitted C++.
     bool showIl();
     void setShowIl(bool value);
-
-    // The whole dump of one body, ready to write: the header, the tables, the
-    // instructions. `printIlBody` is the same text; this is the framed form a
-    // stderr dump uses (a blank line before, one after).
-    Str dumpIlBody(const IlBody& body);
 }

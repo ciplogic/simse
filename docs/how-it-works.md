@@ -184,6 +184,13 @@ language's layout model: **4-byte packing** (`SIMSE_PACK_PUSH`/`SIMSE_PACK_POP`)
 specification are listed in
 [`impl_specs/rtl-abi.md`](../impl_specs/rtl-abi.md).
 
+Every aggregate the program declares is also **forward-declared** once, before any
+of them is defined. Packages are emitted in source order, and a generated struct may
+hold a pointer to a type from a later one (the IL's function context points at the
+semantic pass's facts), so a forward declaration is what makes a data class able to
+name another package's type at all. It costs one line per aggregate and no packing
+change (the declarations are not layout).
+
 Runtime behavior can be swapped at compile time, which is how these decisions get
 measured instead of argued about:
 
@@ -214,15 +221,15 @@ corpus has `diagnostic-*` cases that assert on *rejected* programs.
 
 ## Performance, honestly
 
-Measured on the compiler's own 6,357-line source tree, release builds, on one
+Measured on the compiler's own 14,159-line source tree, release builds, on one
 machine (an ARM64 laptop; the numbers wobble ~8% between windows):
 
 | Measure | Value |
 | --- | --- |
-| self-hosted compiler transpiling `cppsrc/` | ~62-68 ms (~95k lines/s) |
-| hand-written C++ compiler, same input | ~36-43 ms (~1.6-1.8x faster) |
-| peak working set, self-hosted | ~16 MB |
-| emitted translation unit | ~1 MB for the whole compiler |
+| self-hosted compiler transpiling `cppsrc/` | ~0.82 s (~17.2k lines/s) |
+| hand-written C++ compiler, same input | ~0.18 s (~4.6x faster) |
+| peak working set, self-hosted | ~31 MB |
+| emitted translation unit | ~1.07 MB for the whole compiler |
 
 The remaining gap to the hand-written ring is the price of the abstractions the
 Simse ring uses (the AST as one uniform node type, strings and lists as values).
