@@ -7,9 +7,7 @@
 #include <new>
 #include <memory>
 #include <type_traits>
-#include <unordered_map>
 #include <utility>
-#include <vector>
 
 #include "types.hpp"
 
@@ -373,20 +371,15 @@ void swap(SmallVector<T, N>& left, SmallVector<T, N>& right) {
 }
 
 // List<T> is a mutable value sequence with deep-copy semantics
-// (specs/containers.md). The backing store is selectable at compile time:
-// SmallVector<T, 4> by default, or std::vector<T> when SIMSE_LIST_STD_VECTOR is
-// defined. `SmallVector<N, T>` in Simse source is the same C++ type as
-// `List<T>` when N is the inline capacity (impl_specs/rtl-abi.md records the
-// divergence from specs/containers.md, which keeps them distinct types).
+// (specs/containers.md), backed by SmallVector<T, 4>: a small inline buffer with a
+// heap fallback, so a list of a few elements allocates nothing. `SmallVector<N, T>`
+// in Simse source is the same C++ type as `List<T>` when N is the inline capacity
+// (impl_specs/rtl-abi.md records the divergence from specs/containers.md, which
+// keeps them distinct types).
 inline constexpr int kListInlineCapacity = 4;
 
-#if defined(SIMSE_LIST_STD_VECTOR)
-template <class T>
-using List = std::vector<T>;
-#else
 template <class T>
 using List = SmallVector<T, kListInlineCapacity>;
-#endif
 
 // `SmString` (and therefore `Str`) is defined in its own header, but it is built
 // on SmallVector, so it can only be pulled in once the containers above exist.
@@ -406,20 +399,15 @@ PList<T> makeList() {
     return std::make_shared<List<T>>();
 }
 
-// Dictionary<K, V> is a built-in generic value dictionary (specs/dictionary.md).
-// The backing is selectable at compile time, like List and Str: std::unordered_map
-// by default, the RTL's own SmDictionary when SIMSE_DICT_SM is defined. The choice
-// must match between the compiler and any amalgamated output it is linked with
-// (impl_specs/rtl-abi.md). smdictionary.hpp is pulled in here - after
-// SmallVector/List/Str exist - so it is not meant to be included directly.
-#if defined(SIMSE_DICT_SM)
+// Dictionary<K, V> is a built-in generic value dictionary (specs/dictionary.md),
+// backed by the RTL's own SmDictionary (the .NET row/bucket shape in
+// smdictionary.hpp): rows of key/value pairs a lookup jumps through a
+// power-of-two bucket table, so iteration and copying walk one contiguous
+// buffer. smdictionary.hpp is pulled in here - after SmallVector/List/Str exist -
+// so it is not meant to be included directly.
 #include "smdictionary.hpp"
 template <class TKey, class TValue>
 using Dictionary = SmDictionary<TKey, TValue>;
-#else
-template <class TKey, class TValue>
-using Dictionary = std::unordered_map<TKey, TValue>;
-#endif
 
 // RawArray<T> is the unmanaged `*T` spelling of a contiguous element block
 // (specs/built-in-types.md). It carries no count, is not ref-counted, and
@@ -452,8 +440,10 @@ struct ArrayBlock {
 
     // Elements start immediately after the count. Under the language's 4-byte
     // packing rule that offset is `sizeof(Int)`; with SIMSE_NO_PACK4 the host's
-    // alignment is honored instead, so a host type declared 8-aligned (`Str` as
-    // std::string) is not under-aligned in its own buffer.
+    // alignment is honored instead, so a host type declared 8-aligned is not
+    // under-aligned in its own buffer. An offset is what the allocator and `char*`
+    // arithmetic take, so this pair stays `std::size_t`: the language's sizes are
+    // `Int` (types.hpp), and these are the boundary `Int` is cast at.
     static constexpr std::size_t itemsOffset() {
 #if defined(SIMSE_NO_PACK4)
         constexpr std::size_t alignment = alignof(T) < sizeof(Int) ? sizeof(Int) : alignof(T);

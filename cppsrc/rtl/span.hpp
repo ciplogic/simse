@@ -28,7 +28,7 @@ struct Span {
     Span(T* data, Int count) : ptr(data), len(count) {}
 
     // `span[i]`: the element at `index` (unchecked), so it is also assignable.
-    T& operator[](std::size_t index) const { return ptr[index]; }
+    T& operator[](Int index) const { return ptr[index]; }
 
     // The number of elements.
     Int size() const { return len; }
@@ -37,7 +37,7 @@ struct Span {
     Bool isEmpty() const { return len <= 0; }
 
     // The element at `index` (unchecked; `span[index]` is the same thing).
-    T& at(Int index) const { return ptr[(std::size_t) index]; }
+    T& at(Int index) const { return ptr[index]; }
 
     // From `start` to the end (C# `Slice(int)`; unchecked).
     Span<T> slice(Int start) const { return Span<T>(ptr + start, len - start); }
@@ -50,5 +50,5 @@ struct Span {
 // to outlive the span - and does not copy it (`&items` would box a copy instead).
 template <class T>
 inline Span<T> simse_spanOf(List<T>* items) {
-    return Span<T>(items->data(), (Int) items->size());
+    return Span<T>(items->data(), items->size());
 }

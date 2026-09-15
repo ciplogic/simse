@@ -169,7 +169,7 @@ headers:
 | --- | --- |
 | `containers.hpp` | `SmallVector<T, N>` with a small-buffer optimization, `List<T>`, `Array<T>` (count-first block), `Dictionary<K, V>`, `PList<T>`, `RawArray<T>` |
 | `smstring.hpp`, `strsmallvector.hpp` | `Str`: an inline, NUL-terminated byte string with a 24-byte inline buffer |
-| `smdictionary.hpp` | the RTL's own dictionary (`SIMSE_DICT_SM`), an alternative to `std::unordered_map` |
+| `smdictionary.hpp` | `SmDictionary<TKey, TValue>`: the RTL's own dictionary (rows chained by index over a power-of-two bucket table), and the only implementation of `Dictionary<K, V>` |
 | `optional.hpp`, `result.hpp` | `Opt<T>`, `Res<T>` |
 | `xml.hpp` | `Attribute`, `XmlNode`: the general tree a program can build |
 | `span.hpp` | `Span<T>`: a borrowed view over a contiguous run of `T` (`at`, `slice`) |
@@ -201,20 +201,17 @@ the emitted code reads `__sm_stringTable[31]` where the source wrote `"Expr.IntL
 the table is built once, before `main`, and owned positions still copy what they copy
 today.
 
-Runtime behavior can be swapped at compile time, which is how these decisions get
-measured instead of argued about:
+The runtime's types are fixed (`List<T>` is `SmallVector<T, 4>`, `Str` is the
+inline `SmString`, `Dictionary<K, V>` is `SmDictionary`); two build knobs remain,
+and both are part of the ABI - the value has to match between the compiler's
+libraries and any amalgamation it is linked with, so `build.js` mirrors the CMake
+cache automatically, and `impl_specs/capability-matrix.md` records what each one
+measured:
 
 | Define | Effect |
 | --- | --- |
-| `SIMSE_LIST_STD_VECTOR` | `List<T>` is `std::vector<T>` instead of `SmallVector<T, 4>` |
-| `SIMSE_STR_STD_STRING` | `Str` is `std::string` instead of the inline `SmString` |
-| `SIMSE_DICT_SM` | `Dictionary<K, V>` is the RTL's `SmDictionary` instead of `std::unordered_map` |
 | `SIMSE_STR_INLINE_CAPACITY=<n>` | the inline byte capacity of `Str` (24 by default) |
 | `SIMSE_NO_PACK4` | use the host's default alignment instead of 4-byte packing |
-
-The choice has to match between the compiler's libraries and any amalgamation it
-is linked with, so `build.js` mirrors the CMake cache automatically;
-`impl_specs/capability-matrix.md` records what each one measured.
 
 ## Diagnostics
 

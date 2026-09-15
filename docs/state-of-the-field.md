@@ -30,10 +30,13 @@ end-to-end stress programs.
 takes ~0.81 s (release, ~17.6k lines/s) with ~31 MB peak working set; the
 hand-written C++ ring does the same work in ~0.18 s, so the self-hosted ring is
 **~4.6x slower** - the price of the uniform AST and value-semantics
-containers, not of the language's design. The runtime backings are measurably
-comparable: the RTL's own dictionary (`SIMSE_DICT_SM`) is ~6% faster end to end
-than `std::unordered_map` on this workload, with iteration ~8x and deep copies
-~5x faster.
+containers, not of the language's design. The runtime's dictionary is the RTL's
+own: `SmDictionary` keeps one row per entry, with the cached hash and chain link
+next to the key and value, so a probe touches one cache line and iteration is a
+pointer walk (measured ~8x and deep copies ~5x the `std::unordered_map` it
+replaced, and ~6% faster end to end on this workload); its weak spot is hit
+lookups in cache-resident tables, where the bucket-as-row-index indirection costs
+~1.8x.
 
 - **A straight-line program, measured.** `benchmarks/onebrc` has the naive 1 Billion
   Row Challenge - read 10M `station;temperature` lines (127.7 MiB), aggregate per

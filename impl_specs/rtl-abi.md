@@ -12,13 +12,13 @@ For the first end-to-end slice, generated C++ targets the **current
 `cppsrc/rtl` shims** as-is:
 
 - `Str = SmString` (the spec layout: inline `SmallVector<char, 24>` plus the
-  terminating NUL; `std::string` behind `SIMSE_STR_STD_STRING`)
-- `List<T> = SmallVector<T, 4>` (the spec layout; `std::vector<T>` behind
-  `SIMSE_LIST_STD_VECTOR`)
+  terminating NUL; `cppsrc/rtl/smstring.hpp`)
+- `List<T> = SmallVector<T, 4>` (the spec layout, `cppsrc/rtl/containers.hpp`)
 - `PList<T> = std::shared_ptr<List<T>>`
 - `Array<T>` = the shim struct: one `std::shared_ptr` handle to a count-first block
   (`cppsrc/rtl/containers.hpp`)
-- `Dictionary<K, V> = std::unordered_map<K, V>`
+- `Dictionary<K, V> = SmDictionary<K, V>` (the RTL's own row/bucket dictionary,
+  `cppsrc/rtl/smdictionary.hpp`)
 - `Opt<T>` and `Res<T>` = the shim structs (over `std::optional` / a value plus
   error `Str`)
 - `&T` lowers to `std::shared_ptr<T>`; `*T` lowers to `T*`
@@ -27,8 +27,8 @@ For the first end-to-end slice, generated C++ targets the **current
 
 The ref-counted `[refcount][typeId][value]` header is **not** implemented in this
 slice, and nothing in the runtime allocates one. The `SmallVector`
-small-buffer optimization *is* implemented and is the default backing for both
-`List<T>` and `Str`. The goal remains one compiling, debugger-friendly
+small-buffer optimization *is* implemented and is what both `List<T>` and `Str`
+are built on. The goal remains one compiling, debugger-friendly
 translation unit, not the final memory layout; every remaining divergence is
 listed below and is deferred, not resolved.
 
@@ -80,16 +80,16 @@ selecting between same-named declarations) is a separate language change.
 | `Float32` / `Float64` | `Float32` / `Float64` | `float` / `double` |
 | `Char` | `Char` (`std::int8_t`) | byte value; streams print it as a character |
 | `Bool` | `Bool` (`bool`) | printed as `true`/`false` (see below) |
-| `Str` | `Str` (`SmString` by default, `std::string` with `SIMSE_STR_STD_STRING`) | mutable byte string; inline up to `kStrInlineCapacity - 1` bytes plus NUL (24 by default, `SIMSE_STR_INLINE_CAPACITY` overrides) |
+| `Str` | `Str` (`SmString`) | mutable byte string; inline up to `kStrInlineCapacity - 1` bytes plus NUL (24 by default, `SIMSE_STR_INLINE_CAPACITY` overrides); `size_type` is `int32_t` and `npos` is `-1` |
 | `Unit` | `void` | only valid as a function return type |
-| `List<T>` | `List<T>` (`SmallVector<T, 4>` by default, `std::vector<T>` with `SIMSE_LIST_STD_VECTOR`) | value type, deep copies |
+| `List<T>` | `List<T>` (`SmallVector<T, 4>`) | value type, deep copies; `size_type` is `Int` |
 | `Array<T>` | `Array<T>` (shim struct) | shared allocation, fixed length |
 | `RawArray<T>` | `RawArray<T>` (`T*`) | unmanaged pointer |
 | `&T` | `std::shared_ptr<T>` | counted reference |
 | `*T` | `T*` | raw pointer |
 | `Opt<T>` | `Opt<T>` (shim over `std::optional<T>`) | |
 | `Res<T>` | `Res<T>` (shim: `Value`, `Error`) | failure = non-empty `Error` |
-| `Dictionary<K, V>` | `Dictionary<K, V>` (`std::unordered_map`) | |
+| `Dictionary<K, V>` | `Dictionary<K, V>` (`SmDictionary`) | the RTL's own rows + power-of-two bucket table; sizes are `Int` |
 | `PList<T>` | `PList<T>` (`std::shared_ptr<List<T>>`) | the `&List<T>` spelling |
 | `Span<T>` | `Span<T>` (shim struct) | borrowed view: `ptr` + `len`; `slice` returns a new span |
 | `SmallVector<N, T>` | `SmallVector<T, N>` (`List<T>` is the `N = 4` instantiation) | inline vector |
@@ -177,7 +177,7 @@ normative layout.
    or the two sides disagree about where a `Str`'s bytes live — which corrupts
    memory rather than failing to link. `build.js` therefore mirrors the cache
    value into the amalgamation compile (with a warning when a `--define`
-   disagrees), exactly as it does for the `List`/`Str` backings above;
+   disagrees), exactly as it does for `SIMSE_NO_PACK4` (item 10);
    `impl_specs/capability-matrix.md` (T33) records the measurements behind the
    default. The buffer
    counts **characters** in `_len` (zero-based: the empty string is `_len == 0`,
@@ -190,25 +190,30 @@ normative layout.
    so there is no separate terminate pass. `Str.size()` is the character count,
    as the spec requires. The inline
    path is `constexpr`-constructible, so
-   `constexpr Str` works while the text fits inline. Native code that has to talk
-   to the standard library goes through `simse_toStdString` /
-   `simse_fromStdString` so the same code compiles with either backing.
-   `SIMSE_STR_STD_STRING` (CMake option of the same name;
-   `build.bat --define SIMSE_STR_STD_STRING`) is the bootstrap escape hatch that
-   backs `Str` with `std::string` instead; as with `List`, `build.js` mirrors the
-   CMake cache so an amalgamation always matches the libraries it links, and the
-   two backings produce byte-identical compiler output.
-2. **`List<T>` backing.** Spec: `List<T>` *is* `SmallVector<4, T>`
-   (`specs/containers.md`). Shim: matches by default — `List<T>` is
-   `SmallVector<T, kListInlineCapacity>` (4) — with the documented layout. The
-   `SIMSE_LIST_STD_VECTOR` define (CMake option of the same name;
-   `build.bat --define SIMSE_LIST_STD_VECTOR`) is a bootstrap escape hatch that
-   backs `List<T>` with `std::vector<T>` instead, and is not the target layout;
-   `build.js` mirrors the CMake cache so an amalgamation always matches the
-   libraries it links.
+   `constexpr Str` works while the text fits inline. Every size, length and index
+   here is the language's `Int` (32-bit signed): `SmString::size_type` is
+   `int32_t` and `npos` is `-1`, not `std::size_t`'s `SIZE_MAX`. `std::size_t`
+   appears only where the standard library's own signature requires one
+   (allocation, `memcpy`/`memmove`/`memchr`,
+   `std::char_traits<char>::length`), always as an explicit widening cast, so
+   nothing converts a `size_t` down into an `Int` - which is what retired the
+   C4267 warnings. `std::string` is not a language backing any more; it survives
+   **only at the native boundary**, where code has to talk to the standard
+   library: `simse_toStdString` / `simse_fromStdString`, the
+   `std::getline(std::istream&, Str&)` helper, `FileStream`'s recycled line
+   buffer (`cppsrc/rtl/filestream.hpp`), and the `std::filesystem`/`<fstream>`
+   use in `cppsrc/native/Native.cpp` and `cppsrc/common/common.cpp`.
+2. **`List<T>` implementation.** Spec: `List<T>` *is* `SmallVector<4, T>`
+   (`specs/containers.md`). Shim: matches — `List<T>` is
+   `SmallVector<T, kListInlineCapacity>` (4) — with the documented layout, and
+   that is its only implementation: there is no `std::vector` mode to select.
 3. **Index width / packing.** Spec: 32-bit indices and sizes, 4-byte packing
-   (`specs/containers.md`). Shim: `std::vector` uses `size_t`; no packing rule is
-   enforced.
+   (`specs/containers.md`). Shim: matches on the width — every size, length and
+   index in the RTL is the language's `Int` (32-bit signed; `SmallVector`'s
+   `size_type` is `Int`, `SmString::size_type` is `int32_t`, `npos` is `-1`) —
+   and `std::size_t` appears only where the standard library's own signature
+   requires one, always as an explicit widening cast, so nothing converts a
+   `size_t` down into an `Int`. Packing is item 10.
 4. **`&T` representation.** Spec: a box with the common
    `[reference count][typeId][boxed value]` header
    (`specs/memory-model.md`, `specs/ref-counted-layout.md`). Shim:
@@ -251,36 +256,37 @@ normative layout.
     (`XmlNode`, `Attribute`, `Span`, ...) keep the host alignment because their
     fields already sit on 4-byte boundaries, so packing them would not change a
     single size. The host types the shims are built on (`std::shared_ptr`,
-    `std::function`, `std::unordered_map`, and `std::string` under the
-    `SIMSE_STR_STD_STRING` escape hatch) are declared 8-aligned and are therefore
-    under-aligned by the packed definitions; that is accepted while the shims
-    exist. `SIMSE_NO_PACK4` turns the packing off and reverts to host layout.
-11. **`Dictionary<K, V>` backing.** Spec: a value dictionary whose hashing,
+    `std::function`) are declared 8-aligned and are therefore under-aligned by
+    the packed definitions; that is accepted while the shims exist.
+    `SIMSE_NO_PACK4` turns the packing off and reverts to host layout.
+11. **`Dictionary<K, V>` implementation.** Spec: a value dictionary whose hashing,
     buckets and iteration order are deliberately unspecified
-    (`specs/dictionary.md`). Shim: `std::unordered_map` by default, and
-    `cppsrc/rtl/smdictionary.hpp`'s `SmDictionary<TKey, TValue>` behind
-    `SIMSE_DICT_SM` (CMake option of the same name; `build.js` mirrors the cache).
+    (`specs/dictionary.md`). Shim: `Dictionary<K, V>` is
+    `cppsrc/rtl/smdictionary.hpp`'s `SmDictionary<TKey, TValue>`, and that is its
+    only implementation - `std::unordered_map` is not used anywhere in the tree.
     `SmDictionary` is the .NET shape: one `Entry` per row (`hash`, `next`, key,
     value), chains by row index, a bucket table whose length is a power of two with
-    the mask kept in a field (`hash & _mask`), a first table of 16 buckets growing
-    4x, and removal by tombstone (`hash = -1`). Rows are append-only - a removed row
-    stays a hole - and both iteration and a growth pack the live rows together:
+    the mask kept in a field (`hash & _mask`), a first table of 4 buckets growing
+    4x (4 fits the `_buckets` list's inline buffer, so a small dictionary allocates
+    nothing for its table), and removal by tombstone (`hash = -1`). Rows are
+    append-only - a removed row stays a hole - and both iteration and a growth pack
+    the live rows together:
     `compact()` runs from the iterator-producing calls when `_count !=
     _rows.size()` (so iteration is a pointer walk over `_rows`), and `growBuckets()`
     packs in the same pass because it already walks every row to rebuild the chains.
     An insert into an empty bucket skips the chain walk and the key compare
-    altogether (no row hashes there, so the key cannot be present). The two backings
-    emit byte-identical compiler output, and both pass the differentials, the
-    bootstrap fixed point and the stress corpus. It is **opt-in, and measured ~6%
-    faster** end to end on the 6,357-line self-transpile (37 interleaved pairs over
-    two windows: 62.6/68.2 and 61.5/69.5 ms against the std backing's 67.2/72.7 and
-    65.2/73.8 ms), with iteration ~8x, deep copies ~5x and miss lookups ~1.6x
-    faster, `fill`/`erase` and the compiler's small-dictionary churn at parity, and
-    one remaining deficit: hit lookups on cache-resident tables are ~1.8x slower in
-    the micro-benchmark (`tools/smdict_stress.cpp`).
-    `impl_specs/capability-matrix.md` (T41) has the full table and the suspects.
-    Two semantic differences from `std::unordered_map` are worth recording: the
-    backing keeps no reference/iterator stability across an insert (rows live in a
+    altogether (no row hashes there, so the key cannot be present). That shape is
+    what it is good at: iteration is a pointer walk, deep copies of a packed row
+    vector are cheap, and a missing key falls out of the bucket walk early -
+    measured against the `std::unordered_map` it replaced, iteration ~8x, deep
+    copies ~5x and miss lookups ~1.6x, and ~6% faster end to end on the 6,357-line
+    self-transpile (37 interleaved pairs over two windows: 62.6/68.2 and 61.5/69.5
+    ms against 67.2/72.7 and 65.2/73.8 ms), with `fill`/`erase` and the compiler's
+    small-dictionary churn at parity. The one deficit is hit lookups on
+    cache-resident tables, ~1.8x slower, because the bucket is a row index (a
+    second dependent load); the `impl_specs/capability-matrix.md` (T41) entry has
+    the full table and the suspects. Two semantic properties worth recording: it
+    keeps no reference/iterator stability across an insert (rows live in a
     `SmallVector`), and `keys()`/`values()` order is row order (insertion order,
     holes packed away on demand) rather than bucket order - both are unspecified in
     the spec, and nothing in the tree depends on either.
@@ -372,7 +378,7 @@ No new RTL operations were required for the v1 subset. Specifically:
 ### `Dictionary<K, V>` and the `List` extras (T20)
 
 The front end (the Simse sema port) needs maps, so `Dictionary<K, V>`
-(`std::unordered_map`) gained a native surface in `cppsrc/rtl/dictops.hpp`, and
+(`SmDictionary`) gained a native surface in `cppsrc/rtl/dictops.hpp`, and
 `List<T>` gained two helpers. All are prelude natives with explicit symbols
 (`cppsrc/rtl/rtl.kt`):
 
@@ -395,8 +401,8 @@ The front end (the Simse sema port) needs maps, so `Dictionary<K, V>`
 generic *native* call lowers to its symbol with the type arguments, e.g.
 `dictionaryOf<Str, Int>()` -> `simse_dictionaryOf<Str, Int>()`; a `(T, T) -> Bool`
 comparator lowers to a C++ lambda, so `sort` is a template over the comparator
-type. `keys()`/`values()` are ordered by the hash table and are therefore not
-deterministic across implementations; sort for determinism.
+type. `keys()`/`values()` follow the dictionary's own iteration order, which the
+spec leaves unspecified; sort for determinism.
 
 Identity comparison on handles: `==`/`!=` on `&T` (`std::shared_ptr`) and `*T`
 compare the handle/pointer itself (C++ `operator==`), which is what the sema port
@@ -470,15 +476,13 @@ assignment operators (`+=` etc.), lambda reference captures, and `for`/range-for
 `List` methods (`insert`, `clear`) are still emitted as
 written and are not yet mapped.
 
-12. **`Str::size()` is unsigned.** The language spells every `size` accessor `Int`
-    (the `Dictionary`/`Span`/`StrView` natives all return `Int`), but the shim's
-    `SmString` mirrors `std::string`, whose `size()`/`length()` return `size_type`
-    (`std::size_t`, unsigned 64). Since the lowering-time inference (`T45`,
-    `impl_specs/linear-lowering.md`) now types `str.size()` as `Int`, the emitted
-    code narrows with a `C4267` warning on the compiler's own build (4 sites, no
-    errors, no behavior change). Fixing it means giving `SmString` its own
-    `size_type` (`Int`), which touches a deliberately `std::string`-shaped surface;
-    until then the warning is the honest record of the mismatch.
+12. **`Str::size()` is `Int`.** The language spells every `size` accessor `Int`
+    (the `Dictionary`/`Span`/`StrView` natives all return `Int`), and the shim
+    now matches: `SmString::size_type` is `int32_t`, so `size()`/`length()` are
+    the language's `Int` and `npos` is `-1`. `std::size_t` appears only where
+    the standard library's own signature requires one, always as an explicit
+    widening cast, so the emitted code no longer narrows a `size_t` into an
+    `Int`, and the `C4267` warning on the compiler's own build is gone.
 
 13. **A value receiver is a raw pointer (`T* self`).** A method whose receiver is a
     *value* (`fun advance(...)` inside a data class, `fun f(this: Point, ...)`,

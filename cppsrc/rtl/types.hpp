@@ -4,6 +4,9 @@
 #include <string>
 
 // Fixed-width scalar types (specs/built-in-types.md).
+// `Int` is the language's default integer type, and every size, length and index
+// the RTL exposes is one too: 32-bit, so nothing converts a `std::size_t` down into
+// one (impl_specs/rtl-abi.md).
 // Char is a signed 8-bit value, exactly equivalent to Int8.
 using Int8    = std::int8_t;
 using Int16   = std::int16_t;
@@ -17,9 +20,9 @@ using Bool    = bool;  // two-valued built-in (specs/built-in-types.md)
 
 // Str is the mutable inline byte-string type. `smstring.hpp` defines SmString
 // (a NUL-terminated SmallVector<kStrInlineCapacity, Char>, the capacity defined in
-// strsmallvector.hpp) and picks the backing for `Str`:
-// SmString by default, std::string when SIMSE_STR_STD_STRING is defined
-// (impl_specs/rtl-abi.md). This header deliberately does not define `Str`
+// strsmallvector.hpp) and names it `Str`; the `<string>` include above is for the
+// native boundary (std::filesystem, std::getline) that `simse_toStdString` /
+// `simse_fromStdString` convert at. This header deliberately does not define `Str`
 // itself; containers.hpp pulls smstring.hpp in once SmallVector exists.
 
 // `*value` in Simse is the raw-pointer (address-of) form (specs/memory-model.md).

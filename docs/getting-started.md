@@ -60,9 +60,10 @@ build.bat --cpp other.cpp --exe other.exe   :: compile an existing amalgamation
 ```
 
 `build.bat` is a one-line launcher for `bun build.js`, which also finds Visual
-Studio, mirrors the CMake configuration (the `List`/`Str`/`Dictionary` backing
-choices must match between the libraries and the amalgamation), and reports what
-it is doing. The same script can transpile any other module root:
+Studio, mirrors the CMake configuration (the `SIMSE_STR_INLINE_CAPACITY` /
+`SIMSE_NO_PACK4` knobs must match between the libraries and the amalgamation),
+and reports what it is doing. The same script can transpile any other module
+root:
 
 ```bat
 bun build.js --release --root my_project --out my_project.cpp --exe my_project.exe
@@ -179,8 +180,8 @@ stdout. The corpus is the end-to-end safety net: it is what catches a codegen
 change that "works" but prints the wrong thing.
 
 Both harnesses take `--define` to pass preprocessor defines through, which is how
-the alternative runtime backings are exercised (for example
-`--define SIMSE_STR_STD_STRING` or `--define SIMSE_DICT_SM`, see
+the runtime knobs are exercised (for example
+`--define SIMSE_STR_INLINE_CAPACITY=16` or `--define SIMSE_NO_PACK4`, see
 [how-it-works.md](how-it-works.md)).
 
 ## Troubleshooting

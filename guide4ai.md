@@ -41,10 +41,6 @@ bun tools/stress.js                     # or ./stress.bat; see stress/README.md
 bun tools/stress.js --list              # what the corpus contains
 bun tools/stress.js --filter modules --jobs 4
 
-# the alternative runtime backing (Str = std::string): a separate build folder,
-# so the compiler and the amalgamations it is linked with agree on the define
-cd cmake-build-strstd && cmd //c _msvc_build.bat
-
 # compile the whole compiler tree into one amalgamated file in the CURRENT folder
 ./cmake-build-debug/simse_transpile.exe --root cppsrc   # -> ./simse_out.cpp (one main)
 ./cmake-build-debug/simse_transpile.exe                 # -> scans "." (hits tests/fixtures: errors by design)
@@ -134,23 +130,26 @@ explicit `cppsrc/compiler/Driver.kt` input.
   `timeops.hpp`, `simse.hpp`) AND the **prelude** `.kt`
   files (`rtl.kt`, `Span.kt`, `xml.kt`, `fs.kt`)
   declaring the RTL surface.
-  surface. `List<T>` is `SmallVector<T, 4>` and `Str` is the inline `SmString`
+  surface. `List<T>` is `SmallVector<T, 4>`, `Str` is the inline `SmString`
   (`smstring.hpp`), whose buffer is `strsmallvector.hpp`'s `StrSmallVector`, the
   char-specialized form of the `SmallVector<char, 24>` layout — `Int _len`
   (character count, zero-based), `Int _cap` (allocated bytes), a 24-byte inline
   buffer unioned with the heap pointer, the terminating NUL one byte past the
-  text, `constexpr` while inline — by default. That 24 is the single constant
+  text, `constexpr` while inline — and `Dictionary<K, V>` is the RTL's own value
+  dictionary (`SmDictionary`, the .NET row/bucket shape, `smdictionary.hpp`).
+  Each is the type's only implementation; the old `SIMSE_LIST_STD_VECTOR` /
+  `SIMSE_STR_STD_STRING` / `SIMSE_DICT_SM` alternatives are gone. Sizes, lengths
+  and indexes are the language's `Int` (32-bit signed; `Str::size_type` is
+  `int32_t`, `Str::npos` is `-1`), with `std::size_t` only where the standard
+  library's own signature needs one, and `std::string` survives only at the
+  native boundary (`simse_toStdString`/`simse_fromStdString`, the `getline`
+  helper, `FileStream`'s line buffer). The 24 is the single constant
   `kStrInlineCapacity` (`SIMSE_STR_INLINE_CAPACITY` overrides it per build; 16
   saves ~18% of the peak working set but spills 16-character strings, so 24
-  stays the default — `impl_specs/capability-matrix.md` T33).
-  The CMake options `SIMSE_LIST_STD_VECTOR` / `SIMSE_STR_STD_STRING` (or
-  `build.bat --define ...`) switch them to `std::vector<T>` / `std::string`;
-  `smdictionary.hpp` is the RTL's own value dictionary (`SmDictionary`, the .NET
-  row/bucket shape) and `SIMSE_DICT_SM` selects it over the default
-  `std::unordered_map` - it is opt-in because it is not yet faster end to end
-  (`impl_specs/capability-matrix.md` T41). The choice has to match between the
-  compiler and the amalgamated output it is linked with, and `build.js` mirrors
-  the CMake cache automatically (`impl_specs/rtl-abi.md`). The language's layout model is
+  stays the default — `impl_specs/capability-matrix.md` T33). The knobs that
+  remain (`SIMSE_STR_INLINE_CAPACITY`, `SIMSE_NO_PACK4`) have to match between
+  the compiler and the amalgamated output it is linked with, and `build.js`
+  mirrors the CMake cache automatically (`impl_specs/rtl-abi.md`). The language's layout model is
   **4-byte packing** (`specs/memory-model.md`): the emitter brackets every
   generated aggregate in `SIMSE_PACK_PUSH`/`SIMSE_PACK_POP`, and `SIMSE_NO_PACK4`
   reverts to the host's default alignment.
@@ -412,9 +411,8 @@ Do these only when asked; roughly prioritized:
    `impl_specs/user-language-roadmap.md`, with its own non-goals and open
    questions.
 4. **RTL spec convergence**: the RTL is a shim (`Str` is the spec-shaped inline
-   `SmString`, `List` is `SmallVector<T, 4>`, both with a
-   `std::string`/`std::vector` escape hatch behind `SIMSE_STR_STD_STRING` /
-   `SIMSE_LIST_STD_VECTOR`; no `[refcount][typeId]` header). Divergences are
+   `SmString`, `List` is `SmallVector<T, 4>`, `Dictionary` is the RTL's own
+   `SmDictionary`; no `[refcount][typeId]` header). Divergences are
    documented in `impl_specs/rtl-abi.md`; the eventual target must match
    `specs/`.
 5. **Sema is quadratic in a single file's declaration count** (T40,
@@ -430,18 +428,18 @@ Do these only when asked; roughly prioritized:
    type aliases aren't expanded when resolving an expected callable type; `Str`
    is byte-oriented (ASCII case mapping); the single ~190 KB amalgamated TU may
    need attention as the compiler grows.
-7. **SmDictionary is ahead except on hit lookups** (T41,
-   `impl_specs/capability-matrix.md`): the opt-in RTL dictionary is ~6% faster on the
-   self-transpile and wins iteration (~8x), deep copies (~5x) and miss lookups
-   (~1.6x) outright, but loses ~1.8x on hit lookups in cache-resident tables, which
-   is what keeps it opt-in. Suspects: bucket-as-row-index (a second dependent load)
-   vs MSVC's bucket-as-node-pointer, `SmallVector::operator[]`'s inline/heap branch
-   per access, and the cached-hash pre-test on hits. Flipping the default is a
-   one-line CMake change once that is fixed or judged not to matter.
+7. **SmDictionary's hit lookups are its weak spot** (T41,
+   `impl_specs/capability-matrix.md`): the RTL's dictionary packs the cached hash
+   and chain link next to the key and value, so iteration is a pointer walk (~8x),
+   deep copies ~5x and miss lookups ~1.6x faster than the `std::unordered_map` it
+   replaced, and ~6% faster end to end on the self-transpile; the same indirection
+   (bucket-as-row-index, a second dependent load) leaves hit lookups on
+   cache-resident tables ~1.8x slower. `SmallVector::operator[]`'s inline/heap
+   branch per access and the cached-hash pre-test on hits are the other suspects.
 8. **`Dictionary` has no in-place access to a stored value** (T42): `get` copies
    the value out and `insert` writes it back, so the 1BRC aggregation pays two
    lookups per line where the C++ baseline pays one - the last gap to the Bun
-   reference (1.6x). A `getPtr`/`withValue`-style native (both backings) is the
+   reference (1.6x). A `getPtr`/`withValue`-style native is the
    next library change; it is a library gap, not a language one.
 9. **Lambda bodies are the last declarations without a type.** (What the inference
    proves, and why, is in `impl_specs/linear-lowering.md`, "Type inference on the
@@ -528,9 +526,9 @@ Do these only when asked; roughly prioritized:
   build against (`cmake-build-<config>/_msvc_build.bat`) *before* `bun build.js`:
   `build.js` links the prebuilt `simse_lib`/`simse_native`, and a stale library
   built against an older header is not a link error but a silent *layout* mismatch
-  (a `std::string` field against a `Str`) - the program then reads zero rows or
-  crashes. `build.js --release` needs the release libs, the stress harness the
-  debug ones.
+  (a `Str` laid out with another inline capacity, say) - the program then reads zero
+  rows or crashes. `build.js --release` needs the release libs, the stress harness
+  the debug ones.
 - `bun tools/stress.js` prefers `./simse.exe` (the self-hosted ring) and falls
   back to `cmake-build-*/simse_transpile.exe`; `--simse <path>` with the CMake
   `simse.exe` is not the same CLI (it takes file arguments, not `--root`) and will
@@ -546,11 +544,12 @@ Do these only when asked; roughly prioritized:
   be declared yet (`'facts': unknown override specifier`). Program-level tables
   passed between stages go as **parameters** (that is why the emitter threads
   `SemFacts` through `emitFunctions`/`emitFunction`).
-- `Str.size()` is `size_type` (unsigned 64) in the RTL while the language spells
-  every `size` accessor `Int`, so typing it emits C4267 (`size_t` to `Int`)
-  warnings on the compiler's own build. Cosmetic, recorded in
-  `impl_specs/rtl-abi.md`; fixing it means changing `SmString::size_type`, which is
-  a deliberate `std::string`-shaped surface.
+- **Every size, length and index in the RTL is the language's `Int`** (32-bit
+  signed) and `Str::npos` is `-1`; a `std::size_t` appears only where the standard
+  library's own signature needs one (allocation, `mem*`, `char_traits::length`), as
+  an explicit widening cast. That is what keeps the compiler's own build free of
+  C4267 (`size_t` to `Int`) warnings - do not reintroduce an unsigned size type to
+  satisfy a std API; cast at that one call instead (`impl_specs/rtl-abi.md`).
 - `stress/<case>/expected.cpp` is compared byte for byte but **`--update` never
   rewrites it**: copy `stress/.work/<case>/out.cpp` over it by hand.
 - **A value receiver is `T* self`** (T47): method signatures, call sites

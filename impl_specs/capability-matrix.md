@@ -1231,6 +1231,58 @@ numbers shifted with the parser/scanner edits).
   self-hosted `simse.exe` and the stage-1 binary (`stress/when`, `stress/for-pointer`
   new).
 
+- **One implementation per built-in, and 32-bit sizes everywhere (T54).** The RTL's
+  three `std::` backings and the defines that selected them are gone: `List<T>` is
+  `SmallVector<T, 4>`, `Str` is `SmString`, `Dictionary<K, V>` is the RTL's
+  `SmDictionary` (the .NET row/bucket shape), and `std::vector`, `std::string` and
+  `std::unordered_map` appear nowhere in the repo's own code. `std::string` survives
+  only at the *native boundary* - `simse_toStdString` / `simse_fromStdString`, the
+  `std::getline(std::istream&, Str&)` helper, `FileStream`'s recycled line buffer,
+  and the `std::filesystem`/`<fstream>` calls in `Native.cpp`/`common.cpp` - which is
+  what the helpers are named for.
+
+  Every size, length and index the RTL exposes is now the language's `Int`
+  (`int32_t`), `Str::npos` is `-1`, and `std::size_t` appears only where the standard
+  library's own signature demands one (allocation, `memcpy`/`memmove`/`memchr`,
+  `char_traits::length`), as an explicit widening cast. That closes the last C4267
+  (`size_t` → `Int`) warning group recorded in `impl_specs/rtl-abi.md`: a clean
+  rebuild of the whole debug configuration (101 targets, including the amalgamation's
+  own compile) reports **no warnings at all**.
+
+  A signed size type has one trap, and it bit immediately: with `npos = -1`,
+  `SmString::rfind`'s `pos = npos` default compares as `-1 >= last`, which is false,
+  so the backward scan never started and every `lastIndexOf` returned `-1`
+  (`stress/strings` caught it). Every `pos = npos` default has to *test* npos, not
+  compare it; `rfind`'s text and char overloads do now.
+
+  Removed with the backings: the `SIMSE_LIST_STD_VECTOR` / `SIMSE_STR_STD_STRING` /
+  `SIMSE_DICT_SM` CMake options, their `add_compile_definitions`, `build.js`'s cache
+  mirroring of them (its ABI agreement check is down to
+  `SIMSE_STR_INLINE_CAPACITY`, with `SIMSE_NO_PACK4` still a build-time choice),
+  `std::hash<SmString>` (only `std::unordered_map<Str, …>` ever needed it; `Str` keys
+  hash through the RTL's own 8-bytes-a-time `simse_dict_hashKey`), and the three
+  backing-comparison tools (`tools/str_bench.cpp`, `tools/_bench4.bat`,
+  `tools/smdict_stress.cpp`). `SmString` keeps its `std::string` interop members -
+  they *are* the native boundary - and gains a note saying so.
+
+  `SmDictionary`'s first bucket table is now **4** entries instead of 16
+  (`kDictInitialBuckets`): 4 `Int`s fit the `_buckets` list's own inline buffer, so a
+  dictionary that stays small never allocates for its table at all - which is most
+  of them (sema opens one per scope per file). It still grows 4x, so 4 -> 16 -> 64;
+  the only cost is one extra rehash for a dictionary that outgrows four entries.
+
+  Measured: `./simse.exe --root cppsrc` goes from 824.3/839.5 ms (min/median,
+  interleaved A/B, 11 pairs, the mixed set of `while`/`for` loop shapes) to
+  792.0/798.3 ms now (7 runs) - ~4-5%, which is the dictionary's own win (T41
+  measured ~6% end to end) plus the inline first table. `bun tools/bootstrap.js`
+  reports the fixed point byte for byte, 14.97 s to compile the published bootstrap
+  and 773-793 ms for it to reproduce itself.
+
+  Verified: clean rebuild of both configurations, five differentials byte-identical,
+  T23 byte-identical, `simse_tests.exe` **56/56**, `bun tools/stress.js` **32/32** on
+  the C++ ring, the self-hosted `simse.exe` and the stage-1 binary, and
+  `bun tools/bootstrap.js` fixed point byte for byte.
+
 ### Note: the shape of a lookup like this
 
 Worth recording because the first attempt at T39 got it wrong in four ways the

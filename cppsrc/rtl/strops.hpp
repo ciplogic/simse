@@ -13,15 +13,16 @@
 // character, numeric-conversion, and min/max operations the language exposes as
 // `native("symbol") fun name(...)` extensions.
 //
-// `Str` is a byte string (`std::string`). Index/range errors are unchecked where
-// the underlying operation is unchecked; the `Opt`-returning conversions never
-// throw.
+// `Str` is the inline `SmString` (smstring.hpp): every size, length and index in
+// this file is the language's `Int` (`int32_t`), including `Str::npos`, which is
+// `-1`. Index/range errors are unchecked where the underlying operation is
+// unchecked; the `Opt`-returning conversions never throw.
 
 // ---- `Str` library --------------------------------------------------------
 
 // `Str.charAt(index)` returns the byte at `index` (unchecked; no bounds test).
 inline Char simse_str_charAt(const Str& self, Int index) {
-    return (Char) self[(std::size_t) index];
+    return (Char) self[index];
 }
 
 inline Bool simse_str_isEmpty(const Str& self) {
@@ -34,8 +35,8 @@ inline Bool simse_str_isSpaceByte(Char ch) {
 
 // `Str.trim()` strips leading and trailing whitespace (space, tab, newline, CR).
 inline Str simse_str_trim(const Str& self) {
-    std::size_t begin = 0;
-    std::size_t end = self.size();
+    Int begin = 0;
+    Int end = self.size();
     while (begin < end && simse_str_isSpaceByte((Char) self[begin])) begin++;
     while (end > begin && simse_str_isSpaceByte((Char) self[end - 1])) end--;
     return self.substr(begin, end - begin);
@@ -49,9 +50,9 @@ inline List<Str> simse_str_split(const Str& self, const Str& separator) {
         parts.push_back(self);
         return parts;
     }
-    Int32 pos = 0;
+    Int pos = 0;
     while (true) {
-        Int32 found = self.find(separator, pos);
+        Int found = self.find(separator, pos);
         if (found == Str::npos) {
             parts.push_back(self.substr(pos));
             break;
@@ -82,23 +83,23 @@ inline Str simse_str_toLower(const Str& self) {
 // `Str.find(sub)` returns the first index of `sub`, or -1 when absent (the
 // language's spelling of C++ `npos`).
 inline Int simse_str_find(const Str& self, const Str& sub) {
-    std::size_t found = self.find(sub);
-    return found == Str::npos ? -1 : (Int) found;
+    Int found = self.find(sub);
+    return found == Str::npos ? -1 : found;
 }
 
 // `Str.lastIndexOf(sub)` returns the last index of `sub`, or -1 when absent.
 inline Int simse_str_lastIndexOf(const Str& self, const Str& sub) {
-    std::size_t found = self.rfind(sub);
-    return found == Str::npos ? -1 : (Int) found;
+    Int found = self.rfind(sub);
+    return found == Str::npos ? -1 : found;
 }
 
 // `Str.substr(start, len)` clamps `start` to [0, size]; `len` may run past the
 // end, matching `std::string::substr` with a fitted count.
 inline Str simse_str_substr(const Str& self, Int start, Int len) {
     if (start < 0) start = 0;
-    if (start > (Int) self.size()) start = (Int) self.size();
-    Str result = self.substr((std::size_t) start);
-    if (len >= 0 && len < (Int) result.size()) result.resize((std::size_t) len);
+    if (start > self.size()) start = self.size();
+    Str result = self.substr(start);
+    if (len >= 0 && len < result.size()) result.resize(len);
     return result;
 }
 
@@ -115,9 +116,9 @@ inline Bool simse_str_endsWith(const Str& self, const Str& suffix) {
 inline Str simse_str_replace(const Str& self, const Str& from, const Str& to) {
     if (from.empty()) return self;
     Str result;
-    std::size_t pos = 0;
+    Int pos = 0;
     while (true) {
-        std::size_t found = self.find(from, pos);
+        Int found = self.find(from, pos);
         if (found == Str::npos) {
             result.append(self, pos, Str::npos);
             break;

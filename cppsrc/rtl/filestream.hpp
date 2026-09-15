@@ -121,10 +121,10 @@ private:
             if (tail > 0 && at > 0) {
                 std::memmove(chunk.data(), chunk.data() + at, (std::size_t) tail);
             }
-            if (tail == (Int) chunk.size()) {
-                chunk.resize((std::size_t) (tail * 2));
+            if (tail == chunk.size()) {
+                chunk.resize(tail * 2);
             }
-            file.read(chunk.data() + tail, (std::streamsize) ((Int) chunk.size() - tail));
+            file.read(chunk.data() + tail, (std::streamsize) (chunk.size() - tail));
             const std::streamsize got = file.gcount();
             if (got <= 0) {
                 // End of file: whatever the tail holds is the last line (the file did
@@ -133,7 +133,7 @@ private:
                 chunkAt = 0;
                 if (tail == 0) return false;
                 Int len = tail;
-                if (len > 0 && chunk[(std::size_t) (len - 1)] == '\r') len--;
+                if (len > 0 && chunk[len - 1] == '\r') len--;
                 *from = 0;
                 *count = len;
                 return true;
@@ -145,7 +145,7 @@ private:
     }
 
     static void take(Str* buffer, const char* text, Int count) {
-        buffer->resize((std::size_t) count);
+        buffer->resize(count);
         if (count > 0) std::memcpy(buffer->data(), text, (std::size_t) count);
     }
 };

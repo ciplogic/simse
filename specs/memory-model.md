@@ -38,11 +38,11 @@ on the host's default (8-byte) alignment is outside the specification. `Str`
 and `&T` are themselves built from 4-aligned pieces (`Str` is a `SmallVector`
 of `Char`, `&T` is a counted box), so the rule is uniform across the language.
 
-Status: the bootstrap shims still spell `Str` as `std::string`, `&T` as
-`std::shared_ptr` and callables as `std::function`. Those host types are
-declared with 8-byte alignment, so 4-byte packing under-aligns them; that is
-accepted for now and recorded in `impl_specs/rtl-abi.md` (`SIMSE_NO_PACK4`
-reverts to the host layout).
+Status: the bootstrap shims spell `Str` as the inline `SmString` (not
+`std::string`), `&T` as `std::shared_ptr` and callables as `std::function`. The
+host types are declared with 8-byte alignment, so 4-byte packing under-aligns
+them; that is accepted for now and recorded in `impl_specs/rtl-abi.md`
+(`SIMSE_NO_PACK4` reverts to the host layout).
 
 ### Arrays
 

@@ -1,6 +1,5 @@
 #pragma once
 
-#include <cstddef>
 #include <cstring>
 
 #include "span.hpp"
@@ -29,7 +28,7 @@ struct StrView {
     StrView(Char* data, Int count) : bytes(data, count) {}
 
     // `view[i]`: the byte at `index` (unchecked), so it is also assignable.
-    Char& operator[](std::size_t index) const { return bytes[index]; }
+    Char& operator[](Int index) const { return bytes[index]; }
 };
 
 // ---- the operations the prelude declares (StrView.simse) -------------------
@@ -43,7 +42,7 @@ inline Bool simse_strView_isEmpty(StrView self) {
 }
 
 inline Char& simse_strView_at(StrView self, Int index) {
-    return self.bytes[(std::size_t) index];
+    return self.bytes[index];
 }
 
 // `view.slice(start)`: from `start` to the end (C# `Slice(int)`).
@@ -57,15 +56,15 @@ inline StrView simse_strView_slice(StrView self, Int start, Int count) {
 }
 
 inline Char simse_strView_charAt(StrView self, Int index) {
-    return self.bytes[(std::size_t) index];
+    return self.bytes[index];
 }
 
 // True when the view begins with `text`.
 inline Bool simse_strView_startsWith(StrView self, const Str& text) {
-    const Int count = (Int) text.size();
+    const Int count = text.size();
     if (count > self.bytes.len) return false;
     for (Int i = 0; i < count; i++) {
-        if ((char) self.bytes[(std::size_t) i] != text[(std::size_t) i]) return false;
+        if ((char) self.bytes[i] != text[i]) return false;
     }
     return true;
 }
@@ -77,7 +76,7 @@ inline Bool simse_strView_startsWith(StrView self, const Str& text) {
 inline Bool simse_strView_startsWithPtr(StrView self, const Str* text, Int length) {
     if (length > self.bytes.len) return false;
     for (Int i = 1; i < length; i++) {
-        if ((char) self.bytes[(std::size_t) i] != (*text)[(std::size_t) i]) return false;
+        if ((char) self.bytes[i] != (*text)[i]) return false;
     }
     return true;
 }
@@ -85,12 +84,12 @@ inline Bool simse_strView_startsWithPtr(StrView self, const Str* text, Int lengt
 // `find(sub)`: the index of the first occurrence of `sub` in the bytes, or -1. The
 // bytes are compared in place: nothing is copied.
 inline Int simse_strView_find(StrView self, const Str& sub) {
-    const Int needle = (Int) sub.size();
+    const Int needle = sub.size();
     if (needle == 0) return 0;
     if (needle > self.bytes.len) return -1;
     for (Int i = 0; i + needle <= self.bytes.len; i++) {
         Int j = 0;
-        while (j < needle && (char) self.bytes[(std::size_t) (i + j)] == sub[(std::size_t) j]) j++;
+        while (j < needle && (char) self.bytes[i + j] == sub[j]) j++;
         if (j == needle) return i;
     }
     return -1;
@@ -111,7 +110,7 @@ inline Str simse_strView_substr(StrView self, Int from, Int count) {
     if (end > len) end = len;
     Str result;
     if (end > begin) {
-        result.resize((std::size_t) (end - begin));
+        result.resize(end - begin);
         std::memcpy(result.data(), self.bytes.ptr + begin, (std::size_t) (end - begin));
     }
     return result;
@@ -128,5 +127,5 @@ inline Str simse_strView_toString(StrView self) {
 // `Str` is a `char` buffer on the C++ side and the language's `Char` is a signed byte,
 // hence the cast.
 inline StrView simse_spanOfStr(Str* text) {
-    return StrView(reinterpret_cast<Char*>(text->data()), (Int) text->size());
+    return StrView(reinterpret_cast<Char*>(text->data()), text->size());
 }

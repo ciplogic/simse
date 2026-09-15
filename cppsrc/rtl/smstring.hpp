@@ -16,15 +16,20 @@
 // `StrSmallVector`, the char-specialized form of that vector, which owns the
 // capacity constant (strsmallvector.hpp).
 //
-// `Str` is SmString unless SIMSE_STR_STD_STRING is defined, in which case `Str`
-// is `std::string` exactly as before (impl_specs/rtl-abi.md). The
-// `simse_toStdString` / `simse_fromStdString` helpers exist for native code
-// that has to talk to the standard library (fopen, std::filesystem, streams):
-// with `Str = std::string` they are trivial copies, so the same native code
-// compiles in both configurations.
+// `Str` is SmString, and that is the only language spelling of a string: there is
+// no `std::string` backing to select (impl_specs/rtl-abi.md). The
+// `simse_toStdString` / `simse_fromStdString` helpers at the end of this file exist
+// for native code that has to talk to the standard library (std::filesystem,
+// `<fstream>`, `std::getline`) and are the only sanctioned conversions.
+//
+// Every size, length and index here is `size_type` - 32-bit, signed - and `npos`
+// is `-1`, so nothing in the language has to convert a `std::size_t` down into an
+// `Int`. `std::size_t` appears only where the standard library's own signature
+// requires one (allocation, `memcpy`/`memmove`, `std::char_traits::length`), as an
+// explicit widening cast.
 //
 // The public surface mirrors std::string closely enough that the compiler's
-// existing string code compiles against either type.
+// existing string code compiles against it.
 SIMSE_PACK_PUSH
 class SmString {
 public:
@@ -50,7 +55,7 @@ public:
     // The literal/`const char*` case, which is the hot one (`Str s = "..."`,
     // `f(x, "literal")`): `strlen` proves the source carries its NUL.
     constexpr SmString(const char* text) {
-        size_type count = text == nullptr ? 0 : std::char_traits<char>::length(text);
+        size_type count = text == nullptr ? 0 : (size_type) std::char_traits<char>::length(text);
         _data.assign(text == nullptr ? "" : text, (Int) count);
     }
 
@@ -59,6 +64,7 @@ public:
         _data.assignSubstring(text, (Int) count);
     }
 
+    // From a `std::string`: the native boundary (`simse_fromStdString`).
     constexpr SmString(const std::string& text) { _data.assign(text.data(), (Int) text.size()); }
 
     // `Str(count, value)`: a repeated byte (and the std::string-style fill ctor).
@@ -88,7 +94,7 @@ public:
     }
 
     constexpr SmString& operator=(const char* text) {
-        size_type count = text == nullptr ? 0 : std::char_traits<char>::length(text);
+        size_type count = text == nullptr ? 0 : (size_type) std::char_traits<char>::length(text);
         _data.assign(text == nullptr ? "" : text, (Int) count);
         return *this;
     }
@@ -172,7 +178,7 @@ public:
 
     SmString& operator+=(const SmString& text) { return append(text); }
     SmString& operator+=(const char* text) { return append(text); }
-    SmString& operator+=(const std::string& text) { return append(text.data(), text.size()); }
+    SmString& operator+=(const std::string& text) { return append(text.data(), (Int) text.size()); }
     SmString& operator+=(char value) {
         push_back(value);
         return *this;
@@ -237,10 +243,10 @@ public:
         return find(text.data(), pos, text.size());
     }
     constexpr size_type find(const char* text, size_type pos = 0) const {
-        return find(text, pos, text == nullptr ? 0 : std::char_traits<char>::length(text));
+        return find(text, pos, text == nullptr ? 0 : (size_type) std::char_traits<char>::length(text));
     }
     constexpr size_type find(char value, size_type pos = 0) const {
-        if (pos > size()) return npos;
+        if (pos < 0 || pos > size()) return npos;
         const char* found = std::char_traits<char>::find(data() + pos, size() - pos, value);
         return found == nullptr ? npos : (size_type) (found - data());
     }
@@ -249,7 +255,7 @@ public:
         return rfind(text.data(), pos, text.size());
     }
     constexpr size_type rfind(const char* text, size_type pos = npos) const {
-        return rfind(text, pos, text == nullptr ? 0 : std::char_traits<char>::length(text));
+        return rfind(text, pos, text == nullptr ? 0 : (size_type) std::char_traits<char>::length(text));
     }
     size_type rfind(char value, size_type pos = npos) const {
         if (size() == 0) return npos;
@@ -278,7 +284,7 @@ public:
     // before the comparison (see compareBytes).
     constexpr int compare(const char* text) const {
         if (text == nullptr) return size() == 0 ? 0 : 1;
-        return compareBytes(text, std::char_traits<char>::length(text));
+        return compareBytes(text, (size_type) std::char_traits<char>::length(text));
     }
 
     // ---- conversions ------------------------------------------------------
@@ -286,7 +292,7 @@ public:
     // The standard-library spelling of the same bytes; native code that has to
     // call std::filesystem / std::ifstream / std::stoi goes through this (or the
     // `simse_toStdString` helper) so it compiles in either Str configuration.
-    std::string toStdString() const { return std::string(data(), size()); }
+    std::string toStdString() const { return std::string(data(), (std::size_t) size()); }
 
     void writeTo(std::ostream& out) const { out.write(data(), (std::streamsize) size()); }
 
@@ -300,8 +306,12 @@ private:
 
     constexpr void ensure(size_type wanted) { _data.reserve((Int) wanted + 1); }
 
+    // A `pos` at or past the end clamps to the end (the unchecked analogue of
+    // std::string's out-of-range result), and that includes a *negative* one: with a
+    // signed `size_type`, `npos` is `-1`, and it is the natural "whole string"
+    // argument, so it must not turn into a negative index.
     static constexpr size_type clampPos(size_type length, size_type pos) {
-        return pos > length ? length : pos;
+        return pos < 0 || pos > length ? length : pos;
     }
 
     // Three-way compare of the whole string against `count` bytes at `text`.
@@ -324,7 +334,7 @@ private:
     // the same intrinsic), so a comparison can be constant-evaluated.
     constexpr size_type find(const char* text, size_type pos, size_type length) const {
         if (length == 0) return pos <= size() ? pos : npos;
-        if (text == nullptr || pos > size() || length > size() - pos) return npos;
+        if (text == nullptr || pos < 0 || pos > size() || length > size() - pos) return npos;
         const char* self = data();
         for (size_type i = pos; i + length <= size(); i++) {
             if (self[i] == text[0] && std::char_traits<char>::compare(self + i, text, length) == 0) {
@@ -418,12 +428,12 @@ inline SmString operator+(char left, const SmString& right) {
 }
 inline SmString operator+(const SmString& left, const std::string& right) {
     SmString result(left);
-    result.append(right.data(), right.size());
+    result.append(right.data(), (Int) right.size());
     return result;
 }
 inline SmString operator+(const std::string& left, const SmString& right) {
     SmString result;
-    result.append(left.data(), left.size());
+    result.append(left.data(), (Int) left.size());
     result.append(right);
     return result;
 }
@@ -442,45 +452,18 @@ inline std::istream& getline(std::istream& in, SmString& line) {
     return in;
 }
 
-namespace std {
-    template <>
-    struct hash<SmString> {
-        std::size_t operator()(const SmString& value) const {
-            // FNV-1a over the bytes (the same hash shape for both Str spellings).
-            std::size_t hash = 1469598103934665603ull;
-            for (std::size_t i = 0; i < value.size(); i++) {
-                hash ^= (unsigned char) value[i];
-                hash *= 1099511628211ull;
-            }
-            return hash;
-        }
-    };
-}
-
-// The language's `Str` is SmString by default; defining SIMSE_STR_STD_STRING
-// backs it with std::string instead (impl_specs/rtl-abi.md).
-#if defined(SIMSE_STR_STD_STRING)
-using Str = std::string;
-#else
+// The language's `Str` is SmString: an inline SmallVector<char, N> with the
+// terminating NUL one past the text (smstring.hpp, strsmallvector.hpp).
 using Str = SmString;
-#endif
 
 // Native-code boundary helpers (impl_specs/rtl-abi.md): standard-library APIs
-// take/return `std::string`, while the language works in `Str`. With
-// `Str = std::string` both directions are trivial copies, so native code written
-// against these helpers compiles in either configuration.
+// take/return `std::string` - the filesystem, `<fstream>`, `std::getline` - while
+// the language works in `Str`. These are the only sanctioned conversions, and they
+// are the reason `<string>` is still on the RTL's include list at all.
 inline std::string simse_toStdString(const Str& value) {
-#if defined(SIMSE_STR_STD_STRING)
-    return value;
-#else
     return value.toStdString();
-#endif
 }
 
 inline Str simse_fromStdString(const std::string& value) {
-#if defined(SIMSE_STR_STD_STRING)
-    return value;
-#else
     return SmString(value);
-#endif
 }

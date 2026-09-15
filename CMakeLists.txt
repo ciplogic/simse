@@ -3,25 +3,6 @@ project(simse)
 
 set(CMAKE_CXX_STANDARD 20)
 
-# List<T> is backed by SmallVector<T, 4> by default; turn this on to build the
-# whole project with std::vector<T> instead (impl_specs/rtl-abi.md). The choice
-# must match between the compiler and any amalgamated output it is linked with.
-option(SIMSE_LIST_STD_VECTOR "Back List<T> with std::vector<T> instead of SmallVector<T, 4>" OFF)
-
-# Str is the inline SmString (SmallVector<char, N> plus a terminating NUL, N
-# defaulting to 24 in cppsrc/rtl/strsmallvector.hpp) by default; turn this on to
-# back it with std::string instead (impl_specs/rtl-abi.md). As with List, the
-# choice must match between the compiler and any amalgamated output it is linked
-# with.
-option(SIMSE_STR_STD_STRING "Back Str with std::string instead of SmString" OFF)
-
-# Dictionary<K, V> is std::unordered_map by default; turn this on to back it with
-# the RTL's own SmDictionary (rows of key/value pairs plus a power-of-two bucket
-# table, cppsrc/rtl/smdictionary.hpp) instead (impl_specs/rtl-abi.md). Header-only,
-# but the type still names symbols the libraries and an amalgamation share, so the
-# choice has to match between them.
-option(SIMSE_DICT_SM "Back Dictionary<K, V> with the RTL's SmDictionary instead of std::unordered_map" OFF)
-
 # Str's inline capacity in bytes, NUL included (the RTL default is in
 # cppsrc/rtl/strsmallvector.hpp). Lowering it shrinks every Str — and every
 # aggregate holding one — at the cost of spilling more (shorter) strings to the
@@ -96,18 +77,6 @@ add_library(simse_lib STATIC
 target_compile_definitions(simse_lib PUBLIC
         SIMSE_DEFAULT_PRELUDE="${CMAKE_CURRENT_SOURCE_DIR}/cppsrc/rtl"
         SIMSE_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
-
-if(SIMSE_LIST_STD_VECTOR)
-    add_compile_definitions(SIMSE_LIST_STD_VECTOR)
-endif()
-
-if(SIMSE_STR_STD_STRING)
-    add_compile_definitions(SIMSE_STR_STD_STRING)
-endif()
-
-if(SIMSE_DICT_SM)
-    add_compile_definitions(SIMSE_DICT_SM)
-endif()
 
 if(SIMSE_NO_PACK4)
     add_compile_definitions(SIMSE_NO_PACK4)

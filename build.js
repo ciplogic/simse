@@ -28,10 +28,9 @@
 //   --arch <arch>   vcvarsall target architecture (default: the CMake build's
 //                    compiler architecture, else arm64)
 //   --define <m[=v]> add a preprocessor define to the compile (repeatable),
-//                    e.g. --define SIMSE_DICT_SM. The RTL's List/Str/Dictionary
-//                    backing and Str's inline capacity are mirrored from the CMake
-//                    build's cache, because the libraries it links bake those
-//                    choices in.
+//                    e.g. --define SIMSE_NO_PACK4. Str's inline capacity and the
+//                    4-byte packing rule are mirrored from the CMake build's
+//                    cache, because the libraries it links bake those choices in.
 //   -h, --help      show this help
 //
 // Environment:
@@ -117,39 +116,11 @@ function parseArgs(argv) {
   return opts;
 }
 
-// Whether the CMake build was configured with SIMSE_LIST_STD_VECTOR: the RTL
-// libraries the amalgamation links against bake in the List<T> backing, so the
-// compile of the amalgamation has to match them or linking fails with unresolved
-// `simse_listFiles`-style symbols over SmallVector/std::vector.
-function cachedStdVectorList(buildDir) {
-  const cache = path.join(buildDir, "CMakeCache.txt");
-  if (!existsSync(cache)) return false;
-  return /^SIMSE_LIST_STD_VECTOR:BOOL=(ON|TRUE|1)$/im.test(readFileSync(cache, "utf8"));
-}
-
-// The same for SIMSE_STR_STD_STRING: the RTL libraries bake in the Str backing
-// (SmString or std::string), so the amalgamation must be compiled alike or the
-// native symbols (simse_str_*, file I/O) fail to resolve at link time.
-function cachedStdStringStr(buildDir) {
-  const cache = path.join(buildDir, "CMakeCache.txt");
-  if (!existsSync(cache)) return false;
-  return /^SIMSE_STR_STD_STRING:BOOL=(ON|TRUE|1)$/im.test(readFileSync(cache, "utf8"));
-}
-
-// And for SIMSE_DICT_SM: the Dictionary<K, V> backing appears in symbols the
-// libraries and the amalgamation share (simse_dict_get<K, V> and friends), so both
-// sides have to agree or linking fails with unresolved externals.
-function cachedSmDictionary(buildDir) {
-  const cache = path.join(buildDir, "CMakeCache.txt");
-  if (!existsSync(cache)) return false;
-  return /^SIMSE_DICT_SM:BOOL=(ON|TRUE|1)$/im.test(readFileSync(cache, "utf8"));
-}
-
-// And for SIMSE_STR_INLINE_CAPACITY: the RTL libraries were compiled with a
-// particular Str layout, which the amalgamation has to share — a mismatch is not
-// a link error but silent memory corruption. An empty cache value means the
-// libraries use the header's own default, so nothing is passed and both sides
-// read the same number from strsmallvector.hpp.
+// Whether the CMake build was configured with SIMSE_STR_INLINE_CAPACITY: the RTL
+// libraries were compiled with a particular Str layout, which the amalgamation has
+// to share - a mismatch is not a link error but silent memory corruption. An empty
+// cache value means the libraries use the header's own default, so nothing is
+// passed and both sides read the same number from strsmallvector.hpp.
 function cachedStrInlineCapacity(buildDir) {
   const cache = path.join(buildDir, "CMakeCache.txt");
   if (!existsSync(cache)) return null;
@@ -259,30 +230,10 @@ async function main() {
   // the link slower.
   const flags = isRelease ? ["/MD", "/O2", "/Ob3", "/DNDEBUG"] : ["/MDd"];
   if (opts.lto) flags.push("/GL", "/LTCG");
-  // Mirror the RTL's List<T>/Str backing choices so the amalgamation links
-  // against the CMake libraries built in this folder.
+  // Mirror the RTL's layout choices (Str's inline capacity, the packing rule) so the
+  // amalgamation links against the CMake libraries built in this folder with the
+  // same ABI.
   const defines = [...opts.defines];
-  const stdVectorList = cachedStdVectorList(buildDir);
-  if (stdVectorList && !defines.includes("SIMSE_LIST_STD_VECTOR")) {
-    defines.push("SIMSE_LIST_STD_VECTOR");
-  } else if (!stdVectorList && defines.includes("SIMSE_LIST_STD_VECTOR")) {
-    console.warn(`build: warning: --define SIMSE_LIST_STD_VECTOR does not match ${path.basename(buildDir)}, ` +
-        `whose RTL libraries use SmallVector; linking may fail`);
-  }
-  const stdStringStr = cachedStdStringStr(buildDir);
-  if (stdStringStr && !defines.includes("SIMSE_STR_STD_STRING")) {
-    defines.push("SIMSE_STR_STD_STRING");
-  } else if (!stdStringStr && defines.includes("SIMSE_STR_STD_STRING")) {
-    console.warn(`build: warning: --define SIMSE_STR_STD_STRING does not match ${path.basename(buildDir)}, ` +
-        `whose RTL libraries use SmString; linking may fail`);
-  }
-  const smDictionary = cachedSmDictionary(buildDir);
-  if (smDictionary && !defines.includes("SIMSE_DICT_SM")) {
-    defines.push("SIMSE_DICT_SM");
-  } else if (!smDictionary && defines.includes("SIMSE_DICT_SM")) {
-    console.warn(`build: warning: --define SIMSE_DICT_SM does not match ${path.basename(buildDir)}, ` +
-        `whose RTL libraries use std::unordered_map; linking may fail`);
-  }
   const strCapacity = cachedStrInlineCapacity(buildDir);
   const passedCapacities = defines.filter((define) => define.startsWith("SIMSE_STR_INLINE_CAPACITY"));
   if (strCapacity && passedCapacities.length === 0) {

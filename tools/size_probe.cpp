@@ -32,11 +32,6 @@ int main() {
                 alignof(MixedDefault));
     std::printf("MixedPacked   {Int,Int64,Int} %zu (align %zu)\n", sizeof(MixedPacked),
                 alignof(MixedPacked));
-#ifdef SIMSE_LIST_STD_VECTOR
-    std::printf("List backing: std::vector\n");
-#else
-    std::printf("List backing: SmallVector<T,4>\n");
-#endif
 #ifdef SIMSE_NO_PACK4
     std::printf("packing: host default\n");
 #else

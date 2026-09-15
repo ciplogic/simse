@@ -11,10 +11,9 @@
 #include "types.hpp"
 
 // SmDictionary<TKey, TValue> is the RTL's own value dictionary
-// (specs/dictionary.md), the backing `Dictionary<K, V>` selects when
-// SIMSE_DICT_SM is defined. containers.hpp owns that choice and pulls this header
-// in (after SmallVector/List/Str exist), so it is not meant to be included on its
-// own.
+// (specs/dictionary.md), and it is what `Dictionary<K, V>` is: containers.hpp
+// pulls this header in (after SmallVector/List/Str exist), so it is not meant to be
+// included on its own.
 //
 // The layout follows a .NET dictionary: one row per entry, chained by index, with
 // a power-of-two bucket table holding each chain's head.
@@ -44,7 +43,7 @@
 //
 // `_mask` is `_buckets.size() - 1`, kept as a field so a probe's bucket is one
 // AND: `hash & _mask`. It is `kDictNoTable` (-1) until the first insert, when the
-// table opens with 16 buckets.
+// table opens with `kDictInitialBuckets` buckets.
 //
 // Invariants:
 //   - `_mask` is -1 until the first insert (no bucket table at all), then
@@ -96,9 +95,8 @@ inline Int simse_dict_hashKey(Int64 value) {
     return (Int) ((value ^ (value >> 32)) & 0x7fffffffull);
 }
 
-// Any other key type keeps the std backing's contract: a key type that worked
-// with `std::unordered_map` (i.e. has `std::hash` and `==`) works here. Enums land
-// here, and MSVC's "hash" for them is the value itself.
+// Any other key type needs `std::hash` and `==` (that is the generic path's
+// contract, and it is what an enum has).
 template <class TKey>
 Int simse_dict_hashKey(const TKey& key) {
     const std::uint64_t hash = (std::uint64_t) std::hash<TKey>{}(key);
@@ -107,9 +105,11 @@ Int simse_dict_hashKey(const TKey& key) {
 
 // The first bucket-table size and the mask its hashes are ANDed with (the size is
 // a power of two, so its mask is size - 1 and the bucket index needs no modulo):
-// 16 entries, growing by 4x so re-bucketing happens log4(n) times instead of
-// log2(n). `kDictNoTable` is the `_mask` of a dictionary that has no table yet.
-inline constexpr Int kDictInitialBuckets = 16;
+// 4 entries - small enough to live in the `_buckets` list's own inline buffer, so a
+// dictionary that stays small allocates nothing for its table - growing by 4x so
+// re-bucketing happens log4(n) times instead of log2(n). `kDictNoTable` is the
+// `_mask` of a dictionary that has no table yet.
+inline constexpr Int kDictInitialBuckets = 4;
 inline constexpr Int kDictInitialMask = kDictInitialBuckets - 1;
 inline constexpr Int kDictNoTable = -1;
 
@@ -284,8 +284,8 @@ public:
     }
 
     // Remove every row and the bucket table: the full cleanup. Keys and values
-    // are released; the next insert opens a fresh 16-bucket table. The row list
-    // keeps its buffer (SmallVector), so a clear-and-refill loop reuses it.
+    // are released; the next insert opens a fresh table. The row list keeps its
+    // buffer (SmallVector), so a clear-and-refill loop reuses it.
     void clear() {
         _rows.clear();
         _buckets.clear();
