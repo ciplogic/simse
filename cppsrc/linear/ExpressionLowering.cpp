@@ -270,6 +270,16 @@ namespace linear {
                         out.push_back(withTemps(fresh));
                         return;
                     }
+                    case StmtKind::Yield: {
+                        // `yield e` hands a value out, so its expression is a value
+                        // position like a `return`'s: one operand, or a temporary.
+                        // (The state-machine pass replaces the statement afterwards.)
+                        temps.clear();
+                        auto fresh = std::make_shared<Stmt>(*stmt);
+                        fresh->expr = flat(stmt->expr, Slot::Value);
+                        out.push_back(withTemps(fresh));
+                        return;
+                    }
                     default:
                         // Label, Goto: no expressions. If/While/Switch/Break/Continue
                         // cannot appear here (linear::lowerBody removed them).

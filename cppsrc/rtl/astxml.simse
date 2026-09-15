@@ -106,6 +106,8 @@ enum AstNodeCategory {
     StmtIfTrue,
     StmtIfFalse,
     StmtBlock,
+    // `yield e` (impl_specs/yield.md): the value a state machine hands out.
+    StmtYield,
     ExprIntLit,
     ExprFloatLit,
     ExprStrLit,
@@ -128,7 +130,9 @@ enum AstNodeCategory {
     TypeGeneric,
     TypeReference,
     TypePointer,
-    TypeFunction
+    TypeFunction,
+    // `..T`: the body yields `T`, so the function builds a state machine.
+    TypeYield
 }
 
 // One attribute: a key from the schema and its text value (numbers as decimal

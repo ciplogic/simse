@@ -89,6 +89,7 @@ fun xmlKindText(kind: AstNodeCategory): Str {
     if (kind == AstNodeCategory.StmtIfTrue) { return "Stmt.IfTrue" }
     if (kind == AstNodeCategory.StmtIfFalse) { return "Stmt.IfFalse" }
     if (kind == AstNodeCategory.StmtBlock) { return "Stmt.Block" }
+    if (kind == AstNodeCategory.StmtYield) { return "Stmt.Yield" }
     if (kind == AstNodeCategory.ExprIntLit) { return "Expr.IntLit" }
     if (kind == AstNodeCategory.ExprFloatLit) { return "Expr.FloatLit" }
     if (kind == AstNodeCategory.ExprStrLit) { return "Expr.StrLit" }
@@ -112,6 +113,7 @@ fun xmlKindText(kind: AstNodeCategory): Str {
     if (kind == AstNodeCategory.TypeReference) { return "Type.Reference" }
     if (kind == AstNodeCategory.TypePointer) { return "Type.Pointer" }
     if (kind == AstNodeCategory.TypeFunction) { return "Type.Function" }
+    if (kind == AstNodeCategory.TypeYield) { return "Type.Yield" }
     return ""
 }
 

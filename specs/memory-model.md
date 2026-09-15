@@ -210,12 +210,27 @@ printPoint(Point(1, 2))
 ```
 
 Lambda parameters are typed in the lambda when the expected callable type is
-not enough to infer them. A lambda expression captures referenced local values
-**by value** (the backend uses `[=]`); the closure gets its own copy of each
-captured value, so mutating the original afterwards does not change the closure.
-A captured counted reference (`&T`) is copied by value, which copies the handle
-and therefore **shares** the same box. Explicit capture lists and capture by
-reference are deferred.
+not enough to infer them. A lambda expression captures the local values its body
+**references, by value**: the closure gets its own copy of each captured value, so
+mutating the original afterwards does not change the closure. A captured counted
+reference (`&T`) is copied by value, which copies the handle and therefore
+**shares** the same box. Explicit capture lists and capture by reference are
+deferred.
+
+The set of captured values is **computed**: it is the free variables of the body -
+the names it reads that are not its own parameters and not names it declares. That
+set is the closure, and a lambda is modelled as
+
+- a **class** with one field per captured value, and
+- one method, `invoke`, whose parameters are the lambda's and whose body is the
+  lambda's body; inside it a captured name is a field of the instance.
+
+The callable types of `rtl` (`Func<Ret(Params)>`, and `Unit`-returning ones -
+the `IInvocableFunc` / `IInvocableAction` of the conventional one-method
+interface) are exactly that one method, so a lambda value *is* an instance of its
+class and a call through a callable value is a call of `invoke`. A `&lambda` is a
+counted handle to that instance (`&T`), which is what lets a closure outlive the
+frame that built it.
 
 A lambda's parameter types come from the explicit annotations, or from the
 expected callable type when the lambda is assigned to a callable-typed variable

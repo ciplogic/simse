@@ -243,9 +243,9 @@ The exact symbol naming, linkage, and build integration are deferred; see
 Status: required for the first implementation.
 
 `break` and `continue` are reserved keywords. `break` is valid inside a `while`
-loop or a `switch` and leaves the innermost of those; `continue` is valid only
-inside a loop and skips to the next iteration. Using either where it is not
-allowed is an error.
+loop, a `for` loop or a `switch` and leaves the innermost of those; `continue` is
+valid only inside a loop (`while` or `for`) and skips to the next iteration. Using
+either where it is not allowed is an error.
 
 ## `switch`
 
@@ -277,6 +277,49 @@ switch (kind) {
 
 Like every other control-flow construct, an arm body is a statement sequence and
 line endings or `;` separate its statements.
+
+## `for`
+
+Status: implemented; lowered to `while` in the parser (`impl_specs/for.md`). Both
+rings parse it and report a `for` over a non-machine; the Simse ring cannot *emit* a
+machine yet (`yield` is still C++-ring only).
+
+`for` iterates a **state machine**: the value a function whose body `yield`s
+produces (`..T` in its signature, `impl_specs/yield.md`). There are exactly two
+forms, and the body is a block:
+
+```text
+for (value in machine) { ... }
+for ((value, index) in machine) { ... }
+```
+
+```simse
+for (v in everyOther(10)) {
+    println(v.toString())
+}
+
+for ((v, i) in everyOther(10)) {
+    println(i.toString() + ": " + v.toString())
+}
+```
+
+- `for` is a reserved keyword; `in` is only special in the header.
+- The machine is **created once**, before the loop starts, and advanced once per
+  iteration.
+- `value` is bound once per iteration, and so is `index`. Both are fresh `val`s
+  (as in Kotlin's `for`): the loop does not move along by assigning to them.
+- `index` is an `Int` counter the **compiler** declares and increments, starting at
+  `0`. It counts *iterations* of the loop, not steps of the machine, so an iteration
+  skipped with `continue` keeps its index and the next one is one higher.
+- `break` and `continue` behave exactly as in a `while` loop. `continue` still
+  advances the machine: it means "skip the rest of this body", never "re-read the
+  same value".
+- A **container is not iterable**: `for (x in someList)` is an error. Iteration over
+  storage is written out - an index and `while`, or a `Span<T>`
+  (`containers.md`) - because the order, the bounds and the copy semantics of a
+  container are things the reader should see.
+- A `for` inside a body that itself yields is not supported yet; the diagnosed
+  alternative is to collect the values into a `List` first (`impl_specs/yield.md`).
 
 ## Default parameter values
 

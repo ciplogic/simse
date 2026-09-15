@@ -77,6 +77,10 @@ add_library(simse_lib STATIC
         cppsrc/linear/Simplify.h
         cppsrc/linear/ExpressionLowering.cpp
         cppsrc/linear/ExpressionLowering.h
+        cppsrc/linear/LinearForm.cpp
+        cppsrc/linear/LinearForm.h
+        cppsrc/linear/Yield.cpp
+        cppsrc/linear/Yield.h
         cppsrc/codegen/Codegen.cpp
         cppsrc/codegen/Codegen.h
         cppsrc/skelparser/SkeletonParser.cpp

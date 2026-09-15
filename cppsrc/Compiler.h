@@ -43,6 +43,23 @@ namespace compiler {
         // When true, report every input's parse error before returning; when
         // false, stop at the first failing input.
         bool collectAllErrors = false;
+
+        // `--showLinearRepresentation`: write the linear IL of every emitted body
+        // to stderr, next to nothing else - the C++ output is untouched
+        // (impl_specs/linear-il.md). A debug view, so the emitted file stays
+        // byte-identical with and without it.
+        bool showLinearRepresentation = false;
+
+        // `--linearCodegen`: emit every body from its linear IL, next to the
+        // statement path, and report where the two disagree. The output is
+        // unchanged while they disagree anywhere (the report is the work list).
+        bool linearCodegen = false;
+
+        // `--linearCodegenEmit`: use the IL's text for every body it could express
+        // (byte-identical, or the same code with the blocks folded away), and the
+        // statement text for the rest. This is the step that makes the bytecode the
+        // source of the output.
+        bool linearCodegenEmit = false;
     };
 
     // Scans the module roots, parses every input, runs the compilation-wide

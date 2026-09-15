@@ -20,7 +20,7 @@ import common
 // position from its callee/receiver/left operand).
 data class ExprNode(var node: AstXmlNode; var line: Int; var column: Int)
 
-data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var file: Str) {
+data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var file: Str; var nextForId: Int) {
 
     // ---- token cursor helpers ---------------------------------------------
 
@@ -679,6 +679,18 @@ data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var
             xmlAddChild(*node, inner)
             return node
         }
+        // `..T`: the function's body yields `T`, so it is lowered to a state machine
+        // whose element type is `T` (impl_specs/yield.md).
+        if (this.matchText("..")) {
+            val inner: AstXmlNode = this.parseType(AstNodeKind.Inner)
+            if (this.failed) {
+                return this.emptyNode()
+            }
+            var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+            var node: AstXmlNode = AstXmlNode(role, AstNodeCategory.TypeYield, attrs, Array<AstXmlNode>())
+            xmlAddChild(*node, inner)
+            return node
+        }
         if (this.checkText("(")) {
             this.advance() // (
             var params: List<AstXmlNode> = List<AstXmlNode>()
@@ -790,15 +802,28 @@ data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var
         }
         this.skipSeparators()
         while (!this.checkText("}") && !this.atEnd() && !this.failed) {
-            val stmt: AstXmlNode = this.parseStmt()
-            if (this.failed) {
+            if (!this.parseStmtInto(*body)) {
                 return body
             }
-            body.append(stmt)
             this.skipSeparators()
         }
         this.expectText("}")
         return body
+    }
+
+    // One source statement, appended to `out`. A statement *may* expand to more than
+    // one: `for` is a declaration plus the loop it runs (`parseFor`), and the
+    // declaration has to sit outside the loop. Matches `Parser::parseStmtInto`.
+    fun parseStmtInto(out: *List<AstXmlNode>): Bool {
+        if (this.checkText("for")) {
+            return this.parseFor(out)
+        }
+        val stmt: AstXmlNode = this.parseStmt()
+        if (this.failed) {
+            return false
+        }
+        out.append(stmt)
+        return true
     }
 
     fun parseStmt(): AstXmlNode {
@@ -816,6 +841,9 @@ data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var
         }
         if (this.checkText("return")) {
             return this.parseReturn()
+        }
+        if (this.checkText("yield")) {
+            return this.parseYield()
         }
         if (this.checkText("break")) {
             val pos: SourcePos = this.peek(0).pos
@@ -1007,11 +1035,9 @@ data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var
             var arm: List<AstXmlNode> = List<AstXmlNode>()
             while (!this.checkText("case") && !this.checkText("default")
                    && !this.checkText("}") && !this.atEnd() && !this.failed) {
-                val child: AstXmlNode = this.parseStmt()
-                if (this.failed) {
+                if (!this.parseStmtInto(*arm)) {
                     return this.emptyNode()
                 }
-                arm.append(child)
                 this.skipSeparators()
             }
             var cattrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
@@ -1051,6 +1077,238 @@ data class Parser(var cursor: Span<Token>; var failed: Bool; var error: Str; var
             this.attach(*node, AstNodeKind.Value, *value.node)
         }
         return node
+    }
+
+    // `yield e`: the value the state machine hands out (impl_specs/yield.md). A
+    // statement like `return`, and the state-machine pass replaces it - nothing
+    // downstream has to know what a yield is. Matches `Parser::parseYield`.
+    fun parseYield(): AstXmlNode {
+        val pos: SourcePos = this.peek(0).pos
+        this.advance() // yield
+        val value: ExprNode = this.parseExpr(0)
+        if (this.failed) {
+            return this.emptyNode()
+        }
+        var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        var node: AstXmlNode = AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtYield, attrs, Array<AstXmlNode>())
+        this.attach(*node, AstNodeKind.Value, *value.node)
+        return node
+    }
+
+    // ---- the `for` desugaring ---------------------------------------------
+    //
+    // The builders below assemble the pieces the template needs. Every node they make
+    // carries the `for` token's position, so a diagnostic points at the line the user
+    // wrote; `Parser::parseFor` in the C++ ring builds the same shape the same way.
+
+    fun varDeclNode(name: Str, isVar: Bool, typeNode: AstXmlNode, init: ExprNode, pos: SourcePos): AstXmlNode {
+        var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsVar, boolText(isVar)))
+        var node: AstXmlNode = AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtVarDecl, attrs, Array<AstXmlNode>())
+        if (typeNode.name != AstNodeKind.None) {
+            xmlAddChild(*node, typeNode)
+        }
+        if (init.node.name != AstNodeKind.None) {
+            this.attach(*node, AstNodeKind.Init, *init.node)
+        }
+        return node
+    }
+
+    fun namedTypeNode(name: Str, pos: SourcePos): AstXmlNode {
+        var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
+        return AstXmlNode(AstNodeKind.Type, AstNodeCategory.TypeNamed, attrs, Array<AstXmlNode>())
+    }
+
+    fun assignNode(target: ExprNode, value: ExprNode, pos: SourcePos): AstXmlNode {
+        var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Op, "="))
+        var node: AstXmlNode = AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtAssign, attrs, Array<AstXmlNode>())
+        this.attach(*node, AstNodeKind.Target, *target.node)
+        this.attach(*node, AstNodeKind.Value, *value.node)
+        return node
+    }
+
+    fun breakNode(pos: SourcePos): AstXmlNode {
+        return AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtBreak, this.posAttrs(pos.line, pos.column), Array<AstXmlNode>())
+    }
+
+    fun ifNode(cond: ExprNode, thenBody: List<AstXmlNode>, pos: SourcePos): AstXmlNode {
+        var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        var node: AstXmlNode = AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtIf, attrs, Array<AstXmlNode>())
+        this.attach(*node, AstNodeKind.Cond, *cond.node)
+        xmlAddChild(*node, this.container(AstNodeKind.Then, *thenBody))
+        return node
+    }
+
+    fun whileNode(cond: ExprNode, body: List<AstXmlNode>, pos: SourcePos): AstXmlNode {
+        var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        var node: AstXmlNode = AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtWhile, attrs, Array<AstXmlNode>())
+        this.attach(*node, AstNodeKind.Cond, *cond.node)
+        xmlAddChild(*node, this.container(AstNodeKind.Body, *body))
+        return node
+    }
+
+    fun nameExprAt(text: Str, pos: SourcePos): ExprNode {
+        var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, text))
+        return ExprNode(AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprName, attrs, Array<AstXmlNode>()), pos.line, pos.column)
+    }
+
+    fun intLiteralAt(value: Int, pos: SourcePos): ExprNode {
+        var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Text, value.toString()))
+        return ExprNode(AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprIntLit, attrs, Array<AstXmlNode>()), pos.line, pos.column)
+    }
+
+    fun boolLiteralAt(value: Bool, pos: SourcePos): ExprNode {
+        var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Value, boolText(value)))
+        return ExprNode(AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprBoolLit, attrs, Array<AstXmlNode>()), pos.line, pos.column)
+    }
+
+    fun unaryExprAt(op: Str, operand: ExprNode, pos: SourcePos): ExprNode {
+        var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Op, op))
+        var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprUnary, attrs, Array<AstXmlNode>())
+        this.attach(*node, AstNodeKind.Operand, *operand.node)
+        return ExprNode(node, pos.line, pos.column)
+    }
+
+    fun binaryExprAt(op: Str, lhs: ExprNode, rhs: ExprNode, pos: SourcePos): ExprNode {
+        var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Op, op))
+        var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprBinary, attrs, Array<AstXmlNode>())
+        this.attach(*node, AstNodeKind.Lhs, *lhs.node)
+        this.attach(*node, AstNodeKind.Rhs, *rhs.node)
+        return ExprNode(node, pos.line, pos.column)
+    }
+
+    // `<target>.<method>()`: the machine's `next`, `value`, `hasValue`.
+    fun methodCallAt(target: Str, method: Str, pos: SourcePos): ExprNode {
+        var memberAttrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        memberAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, method))
+        var member: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprMember, memberAttrs, Array<AstXmlNode>())
+        val receiver: ExprNode = this.nameExprAt(target, pos)
+        this.attach(*member, AstNodeKind.Receiver, *receiver.node)
+        var callAttrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        var call: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCall, callAttrs, Array<AstXmlNode>())
+        this.attach(*call, AstNodeKind.Callee, *member)
+        return ExprNode(call, pos.line, pos.column)
+    }
+
+    // `for` (specs/functions.md). Two forms, both iterating a *state machine* (`..T`,
+    // what a `yield`ing function produces), and both are lowered right here to the
+    // `while` they mean - so no stage downstream sees a `for`, and `break`/`continue`
+    // inside one are the `while`'s own:
+    //
+    //   for (v in m) { body }          var _sm_for1 = m
+    //                                  while (true) {
+    //                                      var _sm_step1 = _sm_for1.next()
+    //                                      if (!_sm_step1.hasValue()) { break }
+    //                                      val v = _sm_step1.value()
+    //                                      body
+    //                                  }
+    //
+    //   for ((v, i) in m) { body }     the same, plus `var _sm_index1: Int = -1` before
+    //                                  the loop, the pre-increment as the body's first
+    //                                  statement, and `val i = _sm_index1` after `v`.
+    //
+    // The advance and the index are the *first* statements of the body rather than the
+    // loop's condition, and the index is pre-incremented there too, for the same
+    // reason: `continue` jumps to the condition, so a `next()` in the condition would
+    // not advance the machine on a `continue`, and an index incremented at the end of
+    // the body would miss that iteration. `-1` is what makes the pre-increment hand
+    // out 0 first. The names come from a per-file counter, so nested loops never
+    // collide and two runs produce the same output.
+    fun parseFor(out: *List<AstXmlNode>): Bool {
+        val pos: SourcePos = this.peek(0).pos
+        this.advance() // for
+        if (!this.expectText("(")) {
+            return false
+        }
+        var valueName: Str = ""
+        var indexName: Str = ""
+        var withIndex: Bool = false
+        if (this.matchText("(")) {
+            withIndex = true
+            valueName = this.expectName()
+            if (this.failed) {
+                return false
+            }
+            if (!this.expectText(",")) {
+                return false
+            }
+            indexName = this.expectName()
+            if (this.failed) {
+                return false
+            }
+            if (!this.expectText(")")) {
+                return false
+            }
+        } else {
+            valueName = this.expectName()
+            if (this.failed) {
+                return false
+            }
+        }
+        if (!this.matchText("in")) {
+            return this.fail("expected 'in'")
+        }
+        this.skipNewlines()
+        val machine: ExprNode = this.parseExpr(0)
+        if (this.failed) {
+            return false
+        }
+        if (!this.expectText(")")) {
+            return false
+        }
+        val body: List<AstXmlNode> = this.parseBlock()
+        if (this.failed) {
+            return false
+        }
+
+        val id: Int = this.nextForId
+        this.nextForId = this.nextForId + 1
+        val machineName: Str = "_sm_for" + id.toString()
+        val stepName: Str = "_sm_step" + id.toString()
+        val counterName: Str = "_sm_index" + id.toString()
+
+        out.append(this.varDeclNode(machineName, true, this.emptyNode(), machine, pos))
+        if (withIndex) {
+            val counterInit: ExprNode = this.intLiteralAt(-1, pos)
+            out.append(this.varDeclNode(counterName, true, this.namedTypeNode("Int", pos), counterInit, pos))
+        }
+
+        var loop: List<AstXmlNode> = List<AstXmlNode>()
+        if (withIndex) {
+            val target: ExprNode = this.nameExprAt(counterName, pos)
+            val one: ExprNode = this.intLiteralAt(1, pos)
+            val value: ExprNode = this.binaryExprAt("+", this.nameExprAt(counterName, pos), one, pos)
+            loop.append(this.assignNode(target, value, pos))
+        }
+        val nextStep: ExprNode = this.methodCallAt(machineName, "next", pos)
+        loop.append(this.varDeclNode(stepName, true, this.emptyNode(), nextStep, pos))
+        val hasValue: ExprNode = this.methodCallAt(stepName, "hasValue", pos)
+        var leave: List<AstXmlNode> = List<AstXmlNode>()
+        leave.append(this.breakNode(pos))
+        loop.append(this.ifNode(this.unaryExprAt("!", hasValue, pos), leave, pos))
+        // `val`: the loop variable is a fresh, per-iteration binding (as in Kotlin's
+        // `for`), so assigning to it cannot be mistaken for moving the machine along.
+        val stepValue: ExprNode = this.methodCallAt(stepName, "value", pos)
+        loop.append(this.varDeclNode(valueName, false, this.emptyNode(), stepValue, pos))
+        if (withIndex) {
+            val counterRef: ExprNode = this.nameExprAt(counterName, pos)
+            loop.append(this.varDeclNode(indexName, false, this.emptyNode(), counterRef, pos))
+        }
+        var bi: Int = 0
+        while (bi < body.size()) {
+            loop.append(body[bi])
+            bi = bi + 1
+        }
+        out.append(this.whileNode(this.boolLiteralAt(true, pos), loop, pos))
+        return true
     }
 
     // ---- expressions (Pratt) ----------------------------------------------
@@ -1437,7 +1695,7 @@ fun isAssignOp(op: Str): Bool {
 
 // Parses a pre-filtered token cursor (with a synthetic Eof already appended).
 fun parseModule(cursor: Span<Token>, fileName: Str): Res<AstXmlNode> {
-    var parser: Parser = Parser(cursor, false, "", fileName)
+    var parser: Parser = Parser(cursor, false, "", fileName, 1)
     val root: AstXmlNode = parser.parseRoot()
     if (parser.failed) {
         return Res<AstXmlNode>.err(parser.error)

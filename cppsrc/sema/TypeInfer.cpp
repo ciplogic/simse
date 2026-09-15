@@ -206,7 +206,12 @@ namespace sema {
                 return copied;
             }
             case TypeKind::Reference:
-            case TypeKind::Pointer: {
+            case TypeKind::Pointer:
+            case TypeKind::Yield: {
+                // `..T` (a machine yielding `T`, impl_specs/yield.md) carries its element
+                // type the same way a pointer carries its pointee, so it substitutes the
+                // same way: the type is unspellable either way, but its *element* type is
+                // what a `for`'s loop variable is typed from.
                 ast::TypePtr inner = substituteBindings(type->inner, bindings, typeParams);
                 if (!inner) return nullptr;
                 auto copied = std::make_shared<ast::TypeExpr>(*type);
@@ -309,6 +314,11 @@ namespace sema {
                     case TypeKind::Reference:
                     case TypeKind::Pointer:
                         return type.inner && spellable(*type.inner);
+                    case TypeKind::Yield:
+                        // `..T` is not a value type: the function whose body yields is
+                        // lowered to a state machine (impl_specs/yield.md), and a name
+                        // holding one is typed by the C++ compiler (`auto`).
+                        return false;
                     case TypeKind::Function: {
                         if (!type.returnType || !spellable(*type.returnType)) return false;
                         for (const ast::TypePtr &param: type.paramTypes) {
@@ -581,6 +591,21 @@ namespace sema {
                                 substituteBindings(ext.returnType, bindings, ext.typeParams);
                         if (result) return result;
                     }
+                }
+                if (recv->kind == TypeKind::Yield) {
+                    // `..T` is a state machine (impl_specs/yield.md), and its two
+                    // methods are part of the lowering's ABI: `next()` hands out the
+                    // optional, `advance(*v)` answers whether there was a value. Typing
+                    // them here is what makes a `for`'s loop variable a *typed* binding
+                    // rather than an `auto` the emitter would have to guess a symbol
+                    // for (which it cannot: `v.toString()` on an unknown receiver
+                    // picks the `StrView` native).
+                    if (callee.text == "next" && recv->inner) {
+                        List<ast::TypePtr> args;
+                        args.push_back(recv->inner);
+                        return genericType("Opt", args);
+                    }
+                    if (callee.text == "advance") return namedType("Bool");
                 }
                 if (recv->kind == TypeKind::Generic) {
                     if (callee.text == "value" && recv->name == "Opt" && !recv->typeArgs.empty()) {

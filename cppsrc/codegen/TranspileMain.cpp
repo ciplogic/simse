@@ -39,6 +39,9 @@ int main(int argc, char **argv) {
     bool haveRoot = false;
     List<Str> extraRoots;
     bool preludeExplicit = false;
+    bool showIl = false;
+    bool linearCodegen = false;
+    bool linearCodegenEmit = false;
     for (int i = 1; i < argc; i++) {
         Str arg = argv[i];
         if (arg == "-o") {
@@ -67,9 +70,17 @@ int main(int argc, char **argv) {
                 return 2;
             }
             extraRoots.push_back(argv[++i]);
+        } else if (arg == "--showLinearRepresentation") {
+            showIl = true;
+        } else if (arg == "--linearCodegen") {
+            linearCodegen = true;
+        } else if (arg == "--linearCodegenEmit") {
+            linearCodegen = true;
+            linearCodegenEmit = true;
         } else if (arg == "-h" || arg == "--help") {
             printf("usage: simse_transpile <input.simse>... [-o <output.cpp>]"
-                   " [--prelude <file>] [--root <dir>] [--module-root <dir>]...\n");
+                   " [--prelude <file>] [--root <dir>] [--module-root <dir>]..."
+                   " [--showLinearRepresentation] [--linearCodegen] [--linearCodegenEmit]\n");
             return 0;
         } else {
             inputs.push_back(arg);
@@ -96,5 +107,8 @@ int main(int argc, char **argv) {
     request.preludePath = preludePath;
     request.preludeExplicit = preludeExplicit;
     request.output = output;
+    request.showLinearRepresentation = showIl;
+    request.linearCodegen = linearCodegen;
+    request.linearCodegenEmit = linearCodegenEmit;
     return compiler::transpile(request);
 }

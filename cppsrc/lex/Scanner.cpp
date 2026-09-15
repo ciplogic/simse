@@ -50,13 +50,15 @@ namespace lex {
         "enum", "typealias", "native", "import", "this",
         "break", "continue",
         "switch", "case", "default",
+        "yield",
         "package"
     };
 
     // Longest-match-first is not needed: no entry is a prefix of another.
     List<Str> MultiCharOperators = {
         "->", "==", "!=", "<=", ">=", "&&", "||",
-        "+=", "-=", "*=", "/=", "%="
+        "+=", "-=", "*=", "/=", "%=",
+        ".."
     };
 
     // The scanner's one table comparison: how much of `view` the table matches, or

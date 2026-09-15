@@ -52,6 +52,16 @@ cd cmake-build-strstd && cmd //c _msvc_build.bat
 # explicit-input form (used by the build/tests); -o defaults to simse_out.cpp
 ./cmake-build-debug/simse_transpile.exe <files...> [-o out.cpp] [--prelude <path>] [--root <dir>] [--module-root <dir>...]
 
+# the linear IL of every emitted body, on stderr (debug view; the C++ output is
+# identical with and without it - impl_specs/linear-il.md)
+./cmake-build-debug/simse_transpile.exe --root cppsrc -o a.cpp --showLinearRepresentation 2> il.txt
+
+# codegen from the IL: --linearCodegen compares the two paths per body and reports
+# where they disagree (the output is unchanged); --linearCodegenEmit *uses* the IL's
+# text for every body it can express, which is how the compiler is transpiled from
+# its own bytecode (0 bodies differ; 2 lambda bodies still fall back)
+./cmake-build-debug/simse_transpile.exe --root cppsrc -o a.cpp --linearCodegen
+
 # transpile the compiler and compile it (bun + cl.exe, loads the VS environment)
 # compile an amalgamated output with cl.exe (loads the VS environment itself)
 ./build.bat                             # cppsrc -> ./simse_out.cpp -> ./simse.exe (debug)
@@ -105,7 +115,9 @@ explicit `cppsrc/compiler/Driver.simse` input.
   `transpilation.md`, `roadmap.md`, `user-language-roadmap.md` (the user-facing
   feature roadmap: static protocols, JSON codegen, sockets/HTTP, toolchain),
   `capability-matrix.md`, `rtl-abi.md`, `reification.md`, `native-interop.md`,
-  `ast-xmlnode.md`, `tasks/`.
+  `ast-xmlnode.md`, `linear-lowering.md`, `linear-il.md` (the flat instruction list
+  the backend is meant to consume, with its dump), `yield.md` (`yield` as a pure
+  lowering to a state machine), `tasks/.
 - `cppsrc/rtl/` — hand-written runtime: C++ headers (`types.hpp`,
   `containers.hpp`, `smstring.hpp`, `strsmallvector.hpp`, `optional.hpp`,
   `functional.hpp`, `result.hpp`, `xml.hpp`, `span.hpp`,
@@ -142,7 +154,16 @@ explicit `cppsrc/compiler/Driver.simse` input.
   into `_sm_expr<n>` temporaries (`ExpressionLowering.*`); `sema` also carries the
   lowering-time type inference that types those temporaries
   (`TypeInfer.{h,cpp,simse}`). All of it is specified in
-  `impl_specs/linear-lowering.md`.
+  `impl_specs/linear-lowering.md`. `LinearForm.{h,cpp}` projects the same body into
+  the flat linear IL (one instruction list, no blocks), prints it for
+  `--showLinearRepresentation` and emits C++ **from** it for `--linearCodegen` /
+  `--linearCodegenEmit` (`impl_specs/linear-il.md`). `Yield.{h,cpp}` is the one
+  language feature that is nothing but a lowering: `yield` becomes labels, a branch
+  field and a class (`impl_specs/yield.md`), and `for` (`Parser::parseFor`, which
+  desugars the two forms to a `while` before anything else sees them) is the second
+  (`impl_specs/for.md`). `for` is parsed by both rings now and its sema check is in
+  both (`Parser.simse`, `Sema.simse`); `yield`'s lowering and the emitter's
+  `emitYieldable` are still C++-only, and `tools/_ring/` is the two-ring probe.
 - `Compiler.{h,cpp}` — the shared transpile core; `cppsrc/codegen/TranspileMain.cpp`
   — the `simse_transpile` CLI, the C++ compiler driver (the Simse mirror of it
   is `cppsrc/compiler/Driver.simse`).
@@ -260,8 +281,9 @@ Key design points:
 - **Never** weaken the C++ reference or the XmlNode schema to make a mirror
   pass; fix the transpiler or the mirror generically. Do not special-case a
   specific file.
-- Prefer `while` + `Span<T>` over `for`/range-for in Simse code (no range-for
-  yet). Use `switch` for kind dispatch; lambdas are supported (by-value capture).
+- Prefer `while` + `Span<T>` over a range-`for` in Simse code (the language has no
+  `foreach` over containers; `for` iterates a `yield`ing machine only). Use `switch`
+  for kind dispatch; lambdas are supported (by-value capture).
 - **Borrow AST-carrying structs; don't copy them.** A `val x: T = list[i]` where
   `T` holds an `XmlNode` (`CgFn`, `CgNativeExt`, `CgInput`, `SemaInput`, ...)
   deep-copies the subtree. In read-only loops use a pointer into the owner
@@ -292,9 +314,37 @@ Scalars (`Int8..64`, `Float32/64`, `Char`, `Bool`), `Str` (with a method library
 `specs/statics.md`); `if`/`else`, `while`, `switch`/`case`/`default`,
 `break`/`continue`, `return`; `null`; memory operators `&T`/`*T`/`copy`;
 lambdas with by-value capture; generics reified via C++ templates; modules and
-packages.
+packages. `yield` and `for` are implemented in the **C++ ring**, and the Simse mirror
+has caught up with the *front* of them: both rings scan `..`/`yield`, parse `..T`,
+`yield e` and both `for` forms (desugared in the parser), and both report a `for`
+over a non-machine (`stress/diagnostic-for-not-a-machine`). Still C++-only: the
+state-machine lowering for `yield` (`linear/Yield.cpp`, with no `Yield.simse`), the
+emitter's machine support (`Codegen.cpp`'s `emitYieldable`) and the whole IL
+(`linear/LinearForm.cpp` has no `.simse` at all). Until they land, `for`/`yield` stay
+out of `cppsrc/**` and out of `tests/fixtures`; their vocabulary is `..T`, `yield e`,
+and `for (v in m)` / `for ((v, i) in m)` (`specs/functions.md`, `impl_specs/yield.md`,
+`impl_specs/for.md`); `tools/_ring/` is the probe a ring comparison runs on.
 
 ## 8. TODOs / deferred
+
+**The agreed order for the next work** (the user's plan, recorded here so it survives a
+session):
+
+1. **`linear/LinearForm.simse`** - the IL in the Simse ring (extractor, printer,
+   backend). Oracle: `--showLinearRepresentation` over `cppsrc` must be byte-identical
+   between the rings.
+2. **IL-only codegen in BOTH rings at once**: `Codegen.{cpp,simse}` keeps
+   `emitBodyCheckedAt` and the statement emitters are deleted; the IL's own text becomes
+   the output (flatter bodies, a lambda as a class instead of `[=]`), so goldens move.
+   One ring alone turns T23 red - `impl_specs/linear-il.md`, "Dropping the statement
+   emitter".
+3. **`yield` in the Simse ring** (`linear/Yield.simse` + `Codegen.simse`'s
+   `emitYieldable`) - the machine's bodies are already IL bodies
+   (`Emitter::emitMachine` -> `emitBodyCheckedAt`; the yield example reports 5/5 identical
+   without blocks, and its `--linearCodegenEmit` output runs).
+4. **`smToYield`** (`impl_specs/for.md`, "Where this is going"): `for (x in c)` becomes
+   `for (x in smToYield(c))`, with the prelude's `List<T>.smToYield(): ..T` written in
+   Simse and the identity wrap for a machine.
 
 Do these only when asked; roughly prioritized:
 
@@ -306,7 +356,9 @@ Do these only when asked; roughly prioritized:
    `stage1_check` to sweep more fixtures.
 3. **Deferred language features** (spec'd or implied, not implemented):
    multiple `package` declarations per file (file-split shape); external-module
-   manifests/versions/transitive resolution; `for`/range-for; reference captures
+   manifests/versions/transitive resolution; range/`foreach` iteration over
+   containers (`for` exists, but only over a machine - `impl_specs/for.md`);
+   reference captures
    and explicit capture lists; `when`/pattern matching; string interpolation;
    interfaces/virtual dispatch; method overriding; default parameter values;
    `unsafe` blocks / raw-pointer escape rules; **static storage** - file-level
@@ -475,3 +527,14 @@ Do these only when asked; roughly prioritized:
   to. Hoisting it into a variable (which the expression lowering would otherwise do,
   since a value position is one operation deep) leaves a pointer to a dead
   temporary; `exprIsBindable` is the guard that keeps it where it is.
+- **`for` and `yield` exist in the C++ ring only.** `for` is desugared in the
+  *parser* (`Parser::parseFor`, reached through `parseStmtInto`, the one statement
+  slot that expands to several), so no stage downstream has a `for` statement kind -
+  which is also why `sema`'s "a `for` iterates a machine" check keys on the template's
+  `_sm_for<n>` name: that prefix is the only marker left of the construct. Two
+  consequences bite: the template's machine is a *local*, so a machine can never be a
+  field, and a `for` inside a body that yields therefore has no field to live in
+  (reported, not silently miscompiled); and a machine's C++ class is the creating
+  function's, so `..T` stays unspellable - `sema::TypeInfer` carries the machine's two
+  methods (`next` -> `Opt<T>`, `advance` -> `Bool`) precisely so a loop variable is a
+  typed binding rather than an `auto` the emitter would resolve the wrong native for.

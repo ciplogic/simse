@@ -446,6 +446,7 @@ namespace ast {
                 case StmtKind::IfTrue: return "IfTrue";
                 case StmtKind::IfFalse: return "IfFalse";
                 case StmtKind::Block: return "Block";
+                case StmtKind::Yield: return "Yield";
             }
             return "?";
         }
@@ -493,6 +494,7 @@ namespace ast {
                 case StmtKind::IfTrue: return AstNodeCategory::StmtIfTrue;
                 case StmtKind::IfFalse: return AstNodeCategory::StmtIfFalse;
                 case StmtKind::Block: return AstNodeCategory::StmtBlock;
+                case StmtKind::Yield: return AstNodeCategory::StmtYield;
             }
             return AstNodeCategory::None;
         }
@@ -505,6 +507,7 @@ namespace ast {
                 case TypeKind::Reference: return AstNodeCategory::TypeReference;
                 case TypeKind::Pointer: return AstNodeCategory::TypePointer;
                 case TypeKind::Function: return AstNodeCategory::TypeFunction;
+                case TypeKind::Yield: return AstNodeCategory::TypeYield;
             }
             return AstNodeCategory::None;
         }
@@ -561,7 +564,8 @@ namespace ast {
                 attrs.push_back(AstNodeAttribute(AstNodeAttributeKind::Text, type.text));
             }
             AstXmlNode node = makeNode(role, typeCategory(type.kind), attrs);
-            if (type.kind == TypeKind::Reference || type.kind == TypeKind::Pointer) {
+            if (type.kind == TypeKind::Reference || type.kind == TypeKind::Pointer
+                || type.kind == TypeKind::Yield) {
                 if (type.inner) addChild(node, typeToXml(AstNodeKind::Inner, *type.inner));
             } else if (type.kind == TypeKind::Generic) {
                 for (const TypePtr &arg: type.typeArgs) addChild(node, typeToXml(AstNodeKind::TypeArg, *arg));
@@ -707,6 +711,11 @@ namespace ast {
                 }
                 case StmtKind::Return:
                     if (stmt.returnValue) addChild(node, exprToXml(AstNodeKind::Value, *stmt.returnValue));
+                    break;
+                case StmtKind::Yield:
+                    // The value the machine hands out, in the role `return` uses: only
+                    // the lowering knows what a yield *does* (impl_specs/yield.md).
+                    if (stmt.expr) addChild(node, exprToXml(AstNodeKind::Value, *stmt.expr));
                     break;
                 case StmtKind::ExprStmt:
                     if (stmt.expr) addChild(node, exprToXml(AstNodeKind::Expr, *stmt.expr));
@@ -925,6 +934,7 @@ namespace ast {
             case AstNodeCategory::StmtIfTrue: return "Stmt.IfTrue";
             case AstNodeCategory::StmtIfFalse: return "Stmt.IfFalse";
             case AstNodeCategory::StmtBlock: return "Stmt.Block";
+            case AstNodeCategory::StmtYield: return "Stmt.Yield";
             case AstNodeCategory::ExprIntLit: return "Expr.IntLit";
             case AstNodeCategory::ExprFloatLit: return "Expr.FloatLit";
             case AstNodeCategory::ExprStrLit: return "Expr.StrLit";
@@ -948,6 +958,7 @@ namespace ast {
             case AstNodeCategory::TypeReference: return "Type.Reference";
             case AstNodeCategory::TypePointer: return "Type.Pointer";
             case AstNodeCategory::TypeFunction: return "Type.Function";
+            case AstNodeCategory::TypeYield: return "Type.Yield";
         }
         return "";
     }

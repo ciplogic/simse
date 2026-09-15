@@ -107,8 +107,9 @@ The result is a language that reads like Kotlin/.NET and builds like C.
 2. **Sema** resolves names and types; **generics are reified** - each concrete
    instantiation becomes a distinct C++ type, so `List<Int>` and `List<Str>` are
    `List<Int>` and `List<Str>` in the output.
-3. Control flow is **lowered to labels and gotos** (`if`, `while` and `switch`
-   never reach the emitter), then optionally simplified.
+3. Control flow is **lowered to labels and gotos** (`if`, `while`, `switch` and
+   `for` never reach the emitter - `for` is desugared in the parser), then
+   optionally simplified.
 4. **Codegen** emits C++ for the whole program as one translation unit, with
    package-qualified names (`ns1_words`), source-map comments, and RTL calls
    (`simse_str_split`, `simse_dict_get`, ...) for library operations.
@@ -168,17 +169,18 @@ A full walkthrough, including the tests and the stress corpus, is in
 
 Working today: the language above (data classes, enums, generics, extensions,
 lambdas, `List`/`Array`/`Dictionary`/`Span`/`Opt`/`Res`/`Str`, file I/O, the
-`main(args)` form), a self-hosted compiler that reproduces its own output byte
-for byte, 49 in-process tests, five differential stage tests and 23 end-to-end
-stress programs, and a transpile throughput of roughly **6,400 lines in ~65 ms**
-(the compiler compiling its own source tree, release, ~16 MB peak working set).
+`main(args)` form, `yield` and the two `for` forms that iterate a state machine),
+a self-hosted compiler that reproduces its own output byte for byte, 51 in-process
+tests, five differential stage tests and 24 end-to-end stress programs, and a
+transpile throughput of roughly **6,400 lines in ~65 ms** (the compiler compiling
+its own source tree, release, ~16 MB peak working set).
 
-Not there yet, in rough order of how soon a user would miss it: `for` loops,
-string interpolation, closed unions + `when`, a `Printable` protocol (so
-`println` works for your own types instead of only the built-ins), `Set`,
-byte buffers, JSON encode/decode generated from data classes, sockets and
-HTTP, and a Linux/macOS toolchain. `docs/state-of-the-field.md` is explicit
-about each of these and the roadmap phases them.
+Not there yet, in rough order of how soon a user would miss it: a `foreach` over a
+container (only `for` over a machine exists), string interpolation, closed unions +
+`when`, a `Printable` protocol (so `println` works for your own types instead of only
+the built-ins), `Set`, byte buffers, JSON encode/decode generated from data classes,
+sockets and HTTP, and a Linux/macOS toolchain. `docs/state-of-the-field.md` is
+explicit about each of these and the roadmap phases them.
 
 ## Repository layout
 

@@ -126,6 +126,8 @@ enum class AstNodeCategory : Int {
     StmtIfTrue,
     StmtIfFalse,
     StmtBlock,
+    // `yield e` (impl_specs/yield.md): the value a state machine hands out.
+    StmtYield,
     // expressions
     ExprIntLit,
     ExprFloatLit,
@@ -151,6 +153,8 @@ enum class AstNodeCategory : Int {
     TypeReference,
     TypePointer,
     TypeFunction,
+    // `..T`: the body yields `T`, so the function builds a state machine.
+    TypeYield,
 };
 
 SIMSE_PACK_PUSH

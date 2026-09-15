@@ -155,7 +155,8 @@ returned a pointer into a temporary `TypePtr`; call sites now keep the
 | XmlNode accessors | sema consumption | supported | emitted helper functions in `Sema.simse` (attribute lookup, children by role, positions). |
 | `Span<T>` | iteration instead of range-for | supported | `while (!span.isEmpty()) { ... span = span.slice(1) }`. |
 | lambdas/closures | visitors | supported | by-value captures; reference captures deferred. |
-| `for`/range-for | loop rewriting | missing | deferred; `Span<T>` is the replacement idiom. |
+| `for` | loop rewriting | `for` over a machine only | two forms, desugared to `while` in the parser; a container is walked with an index or a `Span<T>` (`specs/functions.md`, `impl_specs/for.md`). |
+| range-for over a container | loop rewriting | missing | deferred; `Span<T>` is the replacement idiom. |
 | string interpolation | diagnostics | missing | deferred. |
 | `when`/pattern matching | dispatch | missing | deferred; use `switch`. |
 

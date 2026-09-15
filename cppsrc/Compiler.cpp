@@ -1,6 +1,7 @@
 #include "Compiler.h"
 
 #include "codegen/Codegen.h"
+#include "linear/LinearForm.h"
 #include "parser/Parser.h"
 #include "sema/Sema.h"
 
@@ -29,6 +30,12 @@ namespace compiler {
 
     int transpile(const Request &request) {
         const Str &programName = request.programName;
+
+        // The linear-form dump is a debug view of what the emitter is about to
+        // read; it never reaches the emitted file (impl_specs/linear-il.md).
+        linear::setShowIl(request.showLinearRepresentation);
+        codegen::setLinearCodegen(request.linearCodegen);
+        codegen::setLinearCodegenEmit(request.linearCodegenEmit);
 
         // Load the prelude set: a directory contributes every `*.simse` in it, a
         // file contributes itself. Missing defaults are skipped silently; an

@@ -63,8 +63,8 @@ if (n.hasValue()) {
 
 ## Control flow
 
-`if`/`else`, `while`, `switch`/`case`/`default`, `break` and `continue`;
-conditions are `Bool` expressions (`&&`, `||`, `!`).
+`if`/`else`, `while`, `for` (over a state machine, below), `switch`/`case`/`default`,
+`break` and `continue`; conditions are `Bool` expressions (`&&`, `||`, `!`).
 
 ```simse
 fun classify(n: Int): Str {
@@ -95,9 +95,9 @@ fun main(): Int {
 }
 ```
 
-There is no `for` loop yet: iteration is `while` plus (`stress/span`)
-`Span<T>`, a borrowed view with `size()`, `isEmpty()`, `at(i)`/`span[i]` and
-`slice(start)`/`slice(start, count)`.
+There is no `foreach` over containers: storage is walked with an index and `while`,
+or with `Span<T>` (`stress/span`) - a borrowed view (pointer plus length) with
+`size()`, `isEmpty()`, `at(i)`/`span[i]` and `slice(start)`/`slice(start, count)`:
 
 ```simse
 fun sum(items: &List<Int>): Int {
@@ -110,6 +110,35 @@ fun sum(items: &List<Int>): Int {
     return total
 }
 ```
+
+`for` instead iterates a **state machine** - the value a function whose body `yield`s
+produces - in one of exactly two forms:
+
+```simse
+fun everyOther(n: Int): ..Int {
+    var i: Int = 0
+    while (i < n) {
+        if (i % 2 == 0) {
+            yield i
+        }
+        i = i + 1
+    }
+}
+
+fun main(): Int {
+    for (v in everyOther(10)) {            // the value
+        println(v.toString())
+    }
+    for ((v, i) in everyOther(10)) {       // the value and its iteration index
+        println(i.toString() + ": " + v.toString())   // 0:0, 1:2, 2:4, ...
+    }
+    return 0
+}
+```
+
+The loop variable is a fresh `val` per iteration; `index` is a counter the compiler
+declares, starting at `0`, so a `continue` still counts the iteration it skipped.
+Both forms are two lines of `while` in the generated C++ (`impl_specs/for.md`).
 
 ## Functions, extensions, lambdas
 
@@ -395,5 +424,6 @@ These are known rough edges, not design decisions to admire
   open a block there.
 - `println` of a float uses the C++ default formatting, and `println` of an enum
   prints its integer value.
-- There is no `for`, no `when`/pattern matching, no string interpolation, no
-  default parameter values, no capture-by-reference, and no `Set`.
+- There is no `foreach` over a container (only `for`, which iterates a machine),
+  no `when`/pattern matching, no string interpolation, no default parameter values,
+  no capture-by-reference, and no `Set`.

@@ -132,6 +132,54 @@ fun semaUnifyReceiver(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *Li
     return false
 }
 
+// Whether a name is one the `for` desugaring made. The generated names are per-file
+// counters (`_sm_for1`, `_sm_step1`, `_sm_index1`), like the lowering's own slots:
+// recognizable, and documented as not a user's to take.
+fun semaIsForTemplateName(name: Str): Bool {
+    return name.startsWith("_sm_for")
+}
+
+// The schema's spelling of a type node ("List<Int>", "*Str", "(Int) -> Bool"), for
+// diagnostics that have to name one. The C++ ring's dump spells types through
+// `ast::typeToString`; this is the same function over `AstXmlNode`, and the two are
+// kept in step by hand - a divergence surfaces in the differentials.
+fun semaTypeText(node: *AstXmlNode): Str {
+    val kind: AstNodeCategory = xmlKind(node)
+    if (kind == AstNodeCategory.TypeIntLit) {
+        return xmlAttr(node, AstNodeAttributeKind.Text)
+    }
+    if (kind == AstNodeCategory.TypeNamed) {
+        return xmlAttr(node, AstNodeAttributeKind.Name)
+    }
+    if (kind == AstNodeCategory.TypeGeneric) {
+        return xmlAttr(node, AstNodeAttributeKind.Name) + "<" + semaTypeTextList(*xmlChildren(node, AstNodeKind.TypeArg)) + ">"
+    }
+    if (kind == AstNodeCategory.TypeReference) {
+        return "&" + semaTypeText(*xmlChild(node, AstNodeKind.Inner))
+    }
+    if (kind == AstNodeCategory.TypePointer) {
+        return "*" + semaTypeText(*xmlChild(node, AstNodeKind.Inner))
+    }
+    if (kind == AstNodeCategory.TypeFunction) {
+        return "(" + semaTypeTextList(*xmlChildren(node, AstNodeKind.ParamType)) + ") -> "
+               + semaTypeText(*xmlChild(node, AstNodeKind.ReturnType))
+    }
+    return "?"
+}
+
+fun semaTypeTextList(types: *List<AstXmlNode>): Str {
+    var out: Str = Str()
+    var i: Int = 0
+    while (i < types.size()) {
+        if (i > 0) {
+            out = out + ", "
+        }
+        out = out + semaTypeText(*types[i])
+        i = i + 1
+    }
+    return out
+}
+
 // ---- the analyzer ---------------------------------------------------------
 
 // One participating file: its name (for diagnostics) and its parsed Module node.
@@ -598,6 +646,7 @@ data class Analyzer(
             if (xmlIsEmpty(*type) && !xmlIsEmpty(*init)) {
                 type = this.exprType(*init)
             }
+            this.checkForIterable(stmt)
             this.declareValue(xmlAttr(stmt, AstNodeAttributeKind.Name), xmlAttr(stmt, AstNodeAttributeKind.IsVar) == "true", true, *type)
             return
         }
@@ -923,6 +972,74 @@ data class Analyzer(
             }
         }
         return xmlEmptyNode()
+    }
+
+    // `for` is lowered in the parser into the declaration of the machine it iterates
+    // (`_sm_for<n>`, impl_specs/for.md), so the checker sees the template rather than
+    // the construct, and the template's names are the one marker that says "this came
+    // from a `for`". The language iterates *machines* only (specs/functions.md), and a
+    // container is not one: say so here, where the `for` still has a position. The C++
+    // the template would otherwise emit does not compile, and its error would name a
+    // generated statement instead of the line the user wrote.
+    fun checkForIterable(stmt: *AstXmlNode): Unit {
+        val init: AstXmlNode = xmlChild(stmt, AstNodeKind.Init)
+        if (xmlIsEmpty(*init) || !semaIsForTemplateName(xmlAttr(stmt, AstNodeAttributeKind.Name))) {
+            return
+        }
+        val iterated: AstXmlNode = this.iteratedType(*init)
+        if (xmlIsEmpty(*iterated) || xmlKind(*iterated) == AstNodeCategory.TypeYield) {
+            return
+        }
+        this.diag(xmlLine(stmt), xmlColumn(stmt),
+                  "a `for` iterates a machine (`..T`), and " + semaTypeText(*iterated)
+                  + " is not one; iterate a container with `while` and an index")
+    }
+
+    // The type of the expression a `for` iterates, for the shapes the checker can name
+    // without walking anything: a binding it tracks, a type construction, or a call of
+    // a declared function. Anything else stays unknown, and unknown stays silent - the
+    // C++ compiler gets the last word there, as it does for any other member it
+    // resolves.
+    fun iteratedType(expr: *AstXmlNode): AstXmlNode {
+        if (xmlKind(expr) == AstNodeCategory.ExprName) {
+            return this.exprType(expr)
+        }
+        if (xmlKind(expr) != AstNodeCategory.ExprCall) {
+            return xmlEmptyNode()
+        }
+        val callee: AstXmlNode = xmlChild(expr, AstNodeKind.Callee)
+        var name: Str = ""
+        if (xmlKind(*callee) == AstNodeCategory.ExprGenericName) {
+            name = xmlAttr(*callee, AstNodeAttributeKind.Name)
+            // `List<Int>()` builds a value of the name it calls, so it is the type;
+            // `f<Int>(x)` calls the function, and its signature answers.
+            if (this.types.has(name)) {
+                return this.exprType(expr)
+            }
+        } else if (xmlKind(*callee) == AstNodeCategory.ExprName) {
+            name = xmlAttr(*callee, AstNodeAttributeKind.Name)
+        } else {
+            return xmlEmptyNode()
+        }
+        if (!this.functions.has(name)) {
+            return xmlEmptyNode()
+        }
+        val overloads: List<AstXmlNode> = this.functions.get(name).value()
+        var known: AstXmlNode = xmlEmptyNode()
+        var i: Int = 0
+        while (i < overloads.size()) {
+            val declared: AstXmlNode = xmlChild(*overloads[i], AstNodeKind.ReturnType)
+            if (!xmlIsEmpty(*declared)) {
+                if (xmlKind(*declared) == AstNodeCategory.TypeYield) {
+                    return declared
+                }
+                if (xmlIsEmpty(*known)) {
+                    known = declared
+                }
+            }
+            i = i + 1
+        }
+        return known
     }
 
     // Reports an arity mismatch only when a receiver-compatible extension method

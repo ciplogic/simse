@@ -27,6 +27,106 @@ namespace parser {
                    || op == "*=" || op == "/=" || op == "%=";
         }
 
+        // ---- node builders for the `for` desugaring ----------------------------
+        // A `for` is spelled out as the `while` it means (see `parseFor`), so these
+        // build the pieces that template needs. They carry the `for` token's position
+        // so every statement and expression the template generates points a diagnostic
+        // at the source line the user wrote. `linear/Yield.cpp` has the same builders
+        // for its own rewrite; the Simse ring builds the same shape as XmlNodes.
+
+        ast::ExprPtr nameExpr(const Str &name, const common::SourcePos &pos) {
+            auto node = std::make_shared<ast::Expr>();
+            node->kind = ast::ExprKind::Name;
+            node->pos = pos;
+            node->text = name;
+            return node;
+        }
+
+        ast::ExprPtr intLiteral(int value, const common::SourcePos &pos) {
+            auto node = std::make_shared<ast::Expr>();
+            node->kind = ast::ExprKind::IntLit;
+            node->pos = pos;
+            node->text = std::to_string(value);
+            return node;
+        }
+
+        ast::ExprPtr boolLiteral(bool value, const common::SourcePos &pos) {
+            auto node = std::make_shared<ast::Expr>();
+            node->kind = ast::ExprKind::BoolLit;
+            node->pos = pos;
+            node->boolValue = value;
+            node->text = value ? "true" : "false";
+            return node;
+        }
+
+        ast::ExprPtr unaryExpr(const Str &op, const ast::ExprPtr &operand,
+                               const common::SourcePos &pos) {
+            auto node = std::make_shared<ast::Expr>();
+            node->kind = ast::ExprKind::Unary;
+            node->pos = pos;
+            node->text = op;
+            node->lhs = operand;
+            return node;
+        }
+
+        ast::ExprPtr binaryExpr(const Str &op, const ast::ExprPtr &lhs,
+                                const ast::ExprPtr &rhs, const common::SourcePos &pos) {
+            auto node = std::make_shared<ast::Expr>();
+            node->kind = ast::ExprKind::Binary;
+            node->pos = pos;
+            node->text = op;
+            node->lhs = lhs;
+            node->rhs = rhs;
+            return node;
+        }
+
+        // `<target>.<method>()`: the machine's `next`/`value`/`hasValue`.
+        ast::ExprPtr methodCall(const Str &target, const Str &method,
+                                const common::SourcePos &pos) {
+            auto member = std::make_shared<ast::Expr>();
+            member->kind = ast::ExprKind::Member;
+            member->pos = pos;
+            member->text = method;
+            member->lhs = nameExpr(target, pos);
+
+            auto call = std::make_shared<ast::Expr>();
+            call->kind = ast::ExprKind::Call;
+            call->pos = pos;
+            call->lhs = member;
+            return call;
+        }
+
+        ast::TypePtr namedType(const Str &name, const common::SourcePos &pos) {
+            auto node = std::make_shared<ast::TypeExpr>();
+            node->kind = ast::TypeKind::Named;
+            node->pos = pos;
+            node->name = name;
+            return node;
+        }
+
+        ast::StmtPtr varDeclStmt(const Str &name, bool isVar, const ast::TypePtr &type,
+                                 const ast::ExprPtr &init, const common::SourcePos &pos) {
+            auto stmt = std::make_shared<ast::Stmt>();
+            stmt->kind = ast::StmtKind::VarDecl;
+            stmt->pos = pos;
+            stmt->isVar = isVar;
+            stmt->name = name;
+            stmt->type = type;
+            stmt->init = init;
+            return stmt;
+        }
+
+        ast::StmtPtr assignStmt(const Str &name, const ast::ExprPtr &value,
+                               const common::SourcePos &pos) {
+            auto stmt = std::make_shared<ast::Stmt>();
+            stmt->kind = ast::StmtKind::Assign;
+            stmt->pos = pos;
+            stmt->target = nameExpr(name, pos);
+            stmt->op = "=";
+            stmt->value = value;
+            return stmt;
+        }
+
         class Parser {
         public:
             Parser(List<Token> &tokens, const Str &fileName) {
@@ -87,6 +187,10 @@ namespace parser {
             List<Token> toks;
             int cursor = 0;
             Str file;
+            // The `for` desugaring's names (`_sm_for<n>`, `_sm_step<n>`, `_sm_index<n>`)
+            // come from this counter: per file, so nested loops never collide and two
+            // runs of the same source produce the same names.
+            int nextForId = 1;
 
             // ---- token cursor helpers -------------------------------------
 
@@ -449,6 +553,15 @@ namespace parser {
                     type->inner = parseType();
                     return type->inner ? type : nullptr;
                 }
+                // `..T`: the function's body yields `T`, so it is lowered to a state
+                // machine whose element type is `T` (impl_specs/yield.md).
+                if (matchText("..")) {
+                    auto type = std::make_shared<ast::TypeExpr>();
+                    type->kind = ast::TypeKind::Yield;
+                    type->pos = pos;
+                    type->inner = parseType();
+                    return type->inner ? type : nullptr;
+                }
                 if (checkText("(")) {
                     advance();
                     List<ast::TypePtr> params;
@@ -526,13 +639,22 @@ namespace parser {
                 if (!expectText("{")) return body;
                 skipSeparators();
                 while (!checkText("}") && !atEnd()) {
-                    ast::StmtPtr stmt = parseStmt();
-                    if (!stmt) return body;
-                    body.push_back(stmt);
+                    if (!parseStmtInto(body)) return body;
                     skipSeparators();
                 }
                 expectText("}");
                 return body;
+            }
+
+            // One source statement, appended to `out`. A statement *may* expand to
+            // more than one: `for` is a declaration plus the loop it runs (`parseFor`),
+            // and the declaration has to sit outside the loop.
+            bool parseStmtInto(List<ast::StmtPtr> &out) {
+                if (checkText("for")) return parseFor(out);
+                ast::StmtPtr stmt = parseStmt();
+                if (!stmt) return false;
+                out.push_back(stmt);
+                return true;
             }
 
             ast::StmtPtr parseStmt() {
@@ -541,6 +663,7 @@ namespace parser {
                 if (checkText("while")) return parseWhile();
                 if (checkText("switch")) return parseSwitch();
                 if (checkText("return")) return parseReturn();
+                if (checkText("yield")) return parseYield();
                 if (checkText("break")) {
                     auto stmt = std::make_shared<ast::Stmt>();
                     stmt->kind = ast::StmtKind::Break;
@@ -636,6 +759,113 @@ namespace parser {
                 return stmt;
             }
 
+            // `for` (specs/functions.md). Two forms, both iterating a *state machine*
+            // (`..T` from a `yield`), and both are lowered right here to the `while`
+            // they mean - so sema, the linear pass and the emitters never see a `for`,
+            // and `break`/`continue` inside one are the `while`'s own:
+            //
+            //   for (v in m) { body }
+            //       var _sm_for1 = m            // the machine, made once
+            //       while (true) {
+            //           var _sm_step1 = _sm_for1.next()
+            //           if (!_sm_step1.hasValue()) { break }
+            //           val v = _sm_step1.value()
+            //           body
+            //       }
+            //
+            //   for ((v, i) in m) { body }      // the same, plus the index
+            //       var _sm_index1: Int = -1     // -1 so the pre-increment counts from 0
+            //       while (true) {
+            //           _sm_index1 = _sm_index1 + 1
+            //           ...                      // then as above, plus `val i = _sm_index1`
+            //
+            // The advance and the exhaustion test are the *first* statements of the
+            // body rather than the loop's condition, and the index is pre-incremented
+            // there too, for the same reason: `continue` jumps to the condition, so a
+            // `next()` in the condition would not advance the machine on a `continue`,
+            // and an index incremented at the end of the body would miss an iteration.
+            // The `-1` start is what makes the pre-increment hand out 0 first.
+            //
+            // Everything the loop's body declares is fresh per iteration, and the
+            // index is a *copy* of the counter: the names the user wrote (`v`, `i`)
+            // belong to the loop body, while the counter itself is the template's.
+            bool parseFor(List<ast::StmtPtr> &out) {
+                const common::SourcePos pos = peek().pos;
+                advance(); // for
+                if (!expectText("(")) return false;
+
+                Str valueName;
+                Str indexName;
+                bool withIndex = false;
+                if (matchText("(")) {
+                    withIndex = true;
+                    if (!expectIdentifier(valueName)) return false;
+                    if (!expectText(",")) return false;
+                    if (!expectIdentifier(indexName)) return false;
+                    if (!expectText(")")) return false;
+                } else if (!expectIdentifier(valueName)) {
+                    return false;
+                }
+                if (!matchText("in")) return fail("expected 'in'");
+                skipNewlines();
+                ast::ExprPtr machine = parseExpr(0);
+                if (!machine) return false;
+                if (!expectText(")")) return false;
+                List<ast::StmtPtr> body = parseBlock();
+                if (failed) return false;
+
+                const Str machineName = Str("_sm_for") + std::to_string(nextForId);
+                const Str stepName = Str("_sm_step") + std::to_string(nextForId);
+                const Str counterName = Str("_sm_index") + std::to_string(nextForId);
+                nextForId++;
+
+                out.push_back(varDeclStmt(machineName, true, nullptr, machine, pos));
+                if (withIndex) {
+                    out.push_back(varDeclStmt(counterName, true, namedType("Int", pos),
+                                              intLiteral(-1, pos), pos));
+                }
+
+                List<ast::StmtPtr> loop;
+                if (withIndex) {
+                    loop.push_back(assignStmt(counterName,
+                                              binaryExpr("+", nameExpr(counterName, pos),
+                                                         intLiteral(1, pos), pos), pos));
+                }
+                loop.push_back(varDeclStmt(stepName, true, nullptr,
+                                           methodCall(machineName, "next", pos), pos));
+
+                auto exhausted = std::make_shared<ast::Stmt>();
+                exhausted->kind = ast::StmtKind::If;
+                exhausted->pos = pos;
+                exhausted->cond = unaryExpr("!", methodCall(stepName, "hasValue", pos), pos);
+                auto leave = std::make_shared<ast::Stmt>();
+                leave->kind = ast::StmtKind::Break;
+                leave->pos = pos;
+                exhausted->thenBody.push_back(leave);
+                loop.push_back(exhausted);
+
+                // `val`: the loop variable is a fresh, per-iteration binding (as in
+                // Kotlin's `for`), so assigning to it cannot be mistaken for a way to
+                // move the machine along.
+                loop.push_back(varDeclStmt(valueName, false, nullptr,
+                                           methodCall(stepName, "value", pos), pos));
+                if (withIndex) {
+                    loop.push_back(varDeclStmt(indexName, false, nullptr,
+                                               nameExpr(counterName, pos), pos));
+                }
+                for (const ast::StmtPtr &stmt: body) {
+                    loop.push_back(stmt);
+                }
+
+                auto loopStmt = std::make_shared<ast::Stmt>();
+                loopStmt->kind = ast::StmtKind::While;
+                loopStmt->pos = pos;
+                loopStmt->cond = boolLiteral(true, pos);
+                loopStmt->body = loop;
+                out.push_back(loopStmt);
+                return true;
+            }
+
             ast::StmtPtr parseSwitch() {
                 auto stmt = std::make_shared<ast::Stmt>();
                 stmt->kind = ast::StmtKind::Switch;
@@ -666,9 +896,7 @@ namespace parser {
                     // The arm body runs until the next label or the closing brace.
                     while (!checkText("case") && !checkText("default")
                            && !checkText("}") && !atEnd()) {
-                        ast::StmtPtr child = parseStmt();
-                        if (!child) return nullptr;
-                        switchCase.body.push_back(child);
+                        if (!parseStmtInto(switchCase.body)) return nullptr;
                         skipSeparators();
                     }
                     stmt->cases.push_back(switchCase);
@@ -686,6 +914,19 @@ namespace parser {
                     stmt->returnValue = parseExpr(0);
                     if (!stmt->returnValue) return nullptr;
                 }
+                return stmt;
+            }
+
+            // `yield e`: the value the state machine hands out. It is a statement like
+            // `return`, and the state-machine pass replaces it (impl_specs/yield.md) -
+            // nothing downstream has to know what a yield is.
+            ast::StmtPtr parseYield() {
+                auto stmt = std::make_shared<ast::Stmt>();
+                stmt->kind = ast::StmtKind::Yield;
+                stmt->pos = peek().pos;
+                advance(); // yield
+                stmt->expr = parseExpr(0);
+                if (!stmt->expr) return nullptr;
                 return stmt;
             }
 

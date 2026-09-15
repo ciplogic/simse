@@ -14,15 +14,16 @@ with a string library, `List<T>`, `Array<T>`, `SmallVector<N, T>`,
 `data class` (with methods), `enum` (with explicit values and `toInt`/`fromInt`),
 `typealias`, functions, methods, extension methods, lambdas (by-value capture),
 `val`/`var` locals, file-level `var`/`val` statics, `if`/`else`, `while`,
-`switch`/`case`/`default`, `break`/`continue`, `return`, `null` for handles,
-memory operators (`&T` handles, `*T` pointers, `copy`), reified generics,
-packages and imports, `main()` and `main(args)`, and a `native fun` escape hatch
-for C++ symbols.
+`switch`/`case`/`default`, `break`/`continue`, `return`, `yield` (a body that
+yields becomes a state machine) and `for` (the two forms that iterate one),
+`null` for handles, memory operators (`&T` handles, `*T` pointers, `copy`),
+reified generics, packages and imports, `main()` and `main(args)`, and a
+`native fun` escape hatch for C++ symbols.
 
 **The compiler.** Self-hosted to a fixed point: the transpiled compiler
 reproduces its own output byte for byte. Two implementations (hand-written C++
-and Simse) with five differential stage tests, 49 in-process tests and 23
-end-to-end stress programs, all run by the build.
+and Simse) with five differential stage tests, 51 in-process tests and 24
+end-to-end stress programs.
 
 **The performance story.** Transpiling the compiler's own 6,357-line source tree
 takes ~62-68 ms (release, ~95k lines/s) with ~16 MB peak working set; the
@@ -74,7 +75,7 @@ program a user would try to write:
 | Enum printing | `println(Color.Red)` prints an integer; there is no automatic member name | write a `switch`-based `label()` function |
 | Float printing | `println` goes through C++'s default formatting | format manually; a defined shortest-round-trip rule is on the roadmap |
 | Error messages | position and message, no source excerpt or caret | read the generated C++ next to it |
-| Vocabulary | no `for`, no `when`, no interpolation, no default parameter values, no capture-by-reference, no `Set`, no `map`/`filter` | `while` + `Span`, explicit code, `List` helpers |
+| Vocabulary | no `foreach` over a container (only `for` over a machine), no `when`, no interpolation, no default parameter values, no capture-by-reference, no `Set`, no `map`/`filter` | `while` + `Span`, explicit code, `List` helpers |
 | Ownership and borrowing | `&x` on a local boxes a *copy*, so a handle does not alias the local; `&T` cycles are not collected | borrow with `*x` (a raw pointer) when you mean "the original"; break cycles by nulling a handle |
 
 ## What is missing
@@ -82,7 +83,8 @@ program a user would try to write:
 In rough order of how soon a user of the language notices (the roadmap phases
 these):
 
-1. **`for` loops** - mechanically easy, the biggest daily annoyance.
+1. **Range/`foreach` iteration** - `for` iterates a state machine; walking a
+   container still means an index and `while`.
 2. **String interpolation and formatting** - building strings with `+` and
    `toString()` everywhere.
 3. **Closed unions + `when`** - the replacement for dynamic dispatch; needed for

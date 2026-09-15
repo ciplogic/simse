@@ -122,8 +122,8 @@ Status: required for the first implementation.
 `Span<T>` is a borrowed view over a contiguous run of `T`: a pointer and a
 length, nothing else. The language's spelling of C#'s `Span<T>`, it copies
 nothing and owns nothing, so it is valid only while the memory it points at is
-alive and unmodified. There is no `for`/range-for; iteration uses a span and
-`while`:
+alive and unmodified. Storage is iterated with a span and `while` - `for`
+iterates a state machine, not a container (`functions.md`):
 
 ```text
 var span: Span<Int> = spanOf(*items)

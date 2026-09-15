@@ -48,7 +48,7 @@ packages.
 
 | Area | Today | Gap a user feels immediately |
 | --- | --- | --- |
-| Loops | `while` only | `for` / range-for over `List`/`Str`/ranges |
+| Loops | `while`, and `for` over a `yield`ing machine | range/`foreach` over `List`/`Str`/ranges |
 | Branching | `if`/`else`, `switch`/`case` | `when` + closed unions (no dynamic dispatch) |
 | Strings | method library, `+`, `appendStr` | interpolation, `format`, a `toString` protocol for user types |
 | Printing | `println`/`print` are *emitter intrinsics* over `std::cout` | a real `Printable` protocol, float formatting with a defined shape |
@@ -143,7 +143,9 @@ transfer, any binary format, and "read the file that isn't UTF-8".
 
 ### 4.5 Collections for real programs
 
-`for`/range-for (pure ergonomics, cheap, biggest daily win); `Set<T: Hashable>`;
+`for` over a container (range/`foreach`; the `for` that exists iterates a `yield`ing
+machine, `impl_specs/for.md` - pure ergonomics, cheap, biggest daily win);
+`Set<T: Hashable>`;
 `sorted` containers or at least `sort` + binary search; functional helpers
 (`map`/`filter`/`reduce`/`join`/`slice`) implemented over the existing extension
 mechanism; `List.reserve` (performance code cannot preallocate today);

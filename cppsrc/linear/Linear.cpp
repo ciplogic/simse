@@ -220,6 +220,11 @@ namespace linear {
                             return;
                         }
                         break;
+                    case StmtKind::Yield:
+                        // The state-machine pass owns it, and that pass runs on the
+                        // *linear* body - so a yield is carried through here, with its
+                        // value already one operand (`lowerExprs`).
+                        break;
                     default:
                         break;
                 }

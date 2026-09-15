@@ -19,6 +19,7 @@ namespace ast {
         Reference, // &T
         Pointer,   // *T
         Function,  // (A, B) -> R
+        Yield,     // ..T: the body *yields* T, so it is lowered to a state machine
     };
 
     struct TypeExpr;
@@ -102,6 +103,10 @@ namespace ast {
         IfTrue,  // name + cond: jump when cond is true
         IfFalse, // name + cond: jump when cond is false
         Block,   // body: `{ ... }` scope wrapper
+        // `yield e` (impl_specs/yield.md). The parser produces it; the state-machine
+        // pass (which runs on the *linear* body, after the control flow is already
+        // labels and gotos) replaces it and it never reaches the emitter.
+        Yield,   // expr: the value to hand out
     };
 
     struct Stmt {

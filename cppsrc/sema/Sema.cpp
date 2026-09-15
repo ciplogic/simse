@@ -359,6 +359,57 @@ namespace sema {
                 popTypeScope();
             }
 
+            // `for` is lowered in the parser into the declaration of the machine it
+            // iterates (`_sm_for<n>`, impl_specs/for.md), so the checker sees the
+            // template rather than the construct, and the template's names are the one
+            // marker that says "this came from a `for`". The language iterates
+            // *machines* only (specs/functions.md), and a container is not one: say so
+            // here, where the `for` still has a position. The C++ the template would
+            // otherwise emit does not compile, and its error would name a generated
+            // statement instead of the line the user wrote.
+            void checkForIterable(const ast::Stmt &stmt) {
+                if (!stmt.init || !isForTemplateName(stmt.name)) return;
+                ast::TypePtr iterated = iteratedType(*stmt.init);
+                if (!iterated || iterated->kind == TypeKind::Yield) return;
+                diag(stmt.pos, "a `for` iterates a machine (`..T`), and "
+                               + ast::typeToString(*iterated)
+                               + " is not one; iterate a container with `while` and an index");
+            }
+
+            // Whether a name is one the `for` desugaring made. The generated names are
+            // per-file counters (`_sm_for1`, `_sm_step1`, `_sm_index1`), like the
+            // lowering's own slots: recognizable, and documented as not a user's to take.
+            static bool isForTemplateName(const Str &name) {
+                return name.compare(0, 7, "_sm_for") == 0;
+            }
+
+            // The type of the expression a `for` iterates, for the shapes the checker can
+            // name without walking anything: a binding it tracks, a type construction,
+            // or a call of a declared function. Anything else stays unknown, and unknown
+            // stays silent - the C++ compiler gets the last word there, as it does for
+            // any other member it resolves.
+            ast::TypePtr iteratedType(const ast::Expr &expr) {
+                if (expr.kind == ExprKind::Name) return exprType(expr);
+                if (expr.kind != ExprKind::Call || !expr.lhs) return nullptr;
+                if (expr.lhs->kind == ExprKind::GenericName) {
+                    // `List<Int>()` builds a value of the name it calls, so it is the
+                    // type; `f<Int>(x)` calls the function, and its signature answers.
+                    if (types.count(expr.lhs->text) > 0) return exprType(expr);
+                } else if (expr.lhs->kind != ExprKind::Name) {
+                    return nullptr;
+                }
+                auto it = functions.find(expr.lhs->text);
+                if (it == functions.end()) return nullptr;
+                ast::TypePtr known;
+                for (int i = 0; i < (int) it->second.size(); i++) {
+                    const ast::Decl *function = it->second[i];
+                    if (!function || !function->returnType) continue;
+                    if (function->returnType->kind == TypeKind::Yield) return function->returnType;
+                    if (!known) known = function->returnType;
+                }
+                return known;
+            }
+
             // ---- statement analysis ---------------------------------------
 
             void analyzeStmt(const ast::Stmt &stmt) {
@@ -368,6 +419,7 @@ namespace sema {
                         if (stmt.type) resolveType(*stmt.type);
                         ast::TypePtr type = stmt.type;
                         if (!type && stmt.init) type = exprType(*stmt.init);
+                        checkForIterable(stmt);
                         declareValue(stmt.name, stmt.isVar, true, type);
                         return;
                     }
