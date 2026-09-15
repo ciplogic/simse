@@ -49,6 +49,36 @@ fun Span<T>.smToYield<T>(): ..T {
     }
 }
 
+// The pointer form, `for (*x in c)`: the same walk, but it hands out the *place* of
+// each element - `*this[i]`, the element's address - instead of a copy. That is the
+// form for a container of aggregates: nothing is copied per iteration, and a mutation
+// through the loop variable reaches the element in the container (impl_specs/for.md).
+// It is a separate wrap rather than a parameter of `smToYield` because its element
+// type is `*T`, which is what the machine hands out.
+fun List<T>.smToYieldPtr<T>(): ..*T {
+    var i: Int = 0
+    while (i < this.size()) {
+        yield * this[i]
+        i = i + 1
+    }
+}
+
+fun Array<T>.smToYieldPtr<T>(): ..*T {
+    var i: Int = 0
+    while (i < this.count()) {
+        yield * this[i]
+        i = i + 1
+    }
+}
+
+fun Span<T>.smToYieldPtr<T>(): ..*T {
+    var i: Int = 0
+    while (i < this.size()) {
+        yield * this[i]
+        i = i + 1
+    }
+}
+
 // A machine is already iterable: `x.smToYield()` on one *is* `x`, so `for (x in m)` and
 // iterating `m` by hand in a `while` see exactly the same values, with no wrapper object
 // and no extra step. That identity is the compiler's (`TypeInfer.kt` types the call as

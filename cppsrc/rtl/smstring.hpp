@@ -29,7 +29,7 @@ SIMSE_PACK_PUSH
 class SmString {
 public:
     using value_type = char;
-    using size_type = std::size_t;
+    using size_type = int32_t;
     using iterator = char*;
     using const_iterator = const char*;
     using reference = char&;
@@ -153,7 +153,7 @@ public:
         return append(text.data() + clampPos(text.size(), pos), fitted(text.size() - pos, count));
     }
     SmString& append(const char* text) {
-        size_type count = text == nullptr ? 0 : std::char_traits<char>::length(text);
+        size_type count = text == nullptr ? 0 : (size_type) std::char_traits<char>::length(text);
         if (count > 0) _data.append(text == nullptr ? "" : text, (Int) count);
         return *this;
     }
@@ -253,7 +253,7 @@ public:
     }
     size_type rfind(char value, size_type pos = npos) const {
         if (size() == 0) return npos;
-        size_type from = pos >= size() ? size() - 1 : pos;
+        size_type from = pos == npos || pos >= size() ? size() - 1 : pos;
         for (size_type i = from + 1; i > 0; i--) {
             if (_data[(Int) (i - 1)] == value) return i - 1;
         }
@@ -335,10 +335,13 @@ private:
     }
 
     constexpr size_type rfind(const char* text, size_type pos, size_type length) const {
-        if (length == 0) return pos <= size() ? pos : size();
+        // `npos` is the "search the whole text" default, and it has to be tested for
+        // explicitly: `pos` is signed when `size_type` is (`int32_t`), so `pos >= last`
+        // is false for it and the scan below would never start.
+        if (length == 0) return pos == npos || pos > size() ? size() : pos;
         if (text == nullptr || length > size()) return npos;
         size_type last = size() - length;
-        size_type from = pos >= last ? last : pos;
+        size_type from = pos == npos || pos >= last ? last : pos;
         for (size_type i = from + 1; i > 0; i--) {
             if (std::char_traits<char>::compare(data() + (i - 1), text, length) == 0) return i - 1;
         }

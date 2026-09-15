@@ -40,7 +40,7 @@ Identifier	9:22	x
 Operator	9:23	:
 Space	9:24	 
 Identifier	9:25	Int
-Operator	9:28	;
+Operator	9:28	,
 Space	9:29	 
 ReservedWord	9:30	var
 Space	9:33	 

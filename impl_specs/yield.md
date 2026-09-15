@@ -40,7 +40,7 @@ fun everyOther(n: Int): ..Int {        struct ns1_everyOther_yieldable {
 ## Where the rewrite runs, and why there
 
 **On the linear body** - after `lowerForEmission` (so the control flow is already
-labels and gotos, `if`/`while`/`switch` are gone, and the yielded value is already one
+labels and gotos, `if`/`while` are gone, and the yielded value is already one
 operand) and after the type pass (so a local has the type its field needs), in
 `linear::lowerYield` (`cppsrc/linear/Yield.{h,cpp}`):
 
@@ -49,8 +49,8 @@ operand) and after the type pass (so a local has the type its field needs), in
    re-initialised on every entry, so it stays a local of the method.
 2. **The dispatcher** is a chain of conditional jumps: `if (branch == -1) goto LYend;`
    then `if (branch == n) goto LYn;` for every yield. Branch `0` falls through, so it
-   is the start. There is no `switch` anywhere - it would only be lowered to these
-   jumps anyway.
+   is the start. There is no `switch` anywhere - a `when` is already an `if`/`else`
+   chain by this stage, so the arms would only be lowered to these jumps anyway.
 3. **`yield e`** becomes `branch = n; return Opt<T>.some(e); LYn:;` - the label *is*
    the resumption point. In `advance` (see below) it is `*value = e; return true;`.
 4. **A `return`**, or the end of the body, finishes the machine:

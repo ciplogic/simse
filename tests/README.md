@@ -29,7 +29,7 @@ The runner:
 - checks the negative fixtures (`parse_error.kt` must fail to parse,
   `sema_unknown_type.kt` must report an unknown-type diagnostic,
   `ctor_arity.kt` a constructor-arity diagnostic,
-  `sema_switch_label.kt` a non-constant case-label diagnostic, and
+  `when_else_last.kt` an arm-after-`else` parse error, and
   `sema_extension_arity.kt` a prelude-extension arity diagnostic);
 - checks the hoisting fixture (`hoisting.kt` parses and resolves cleanly with
   use-before-declaration);

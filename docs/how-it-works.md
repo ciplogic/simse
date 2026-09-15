@@ -52,12 +52,14 @@ Details worth knowing:
   That is why the language can promise static dispatch and no runtime type
   information.
 - **Control flow is linearized before emission.** The emitters only know
-  `label`/`goto`/`if` statements, so `if`, `while` and `switch` are lowered to
-  labels and gotos (and blocks after a jump are dropped). One code path serves
-  all structured statements, and the optimization opportunities are local. `for`
-  is one step earlier still: it is desugared to the `while` it means while the
-  source is parsed (`impl_specs/for.md`), and `yield` is a lowering of its own on
-  the linear body (`impl_specs/yield.md`).
+  `label`/`goto`/`if` statements, so `if` and `while` are lowered to labels and
+  gotos (and blocks after a jump are dropped). One code path serves all
+  structured statements, and the optimization opportunities are local. `for` and
+  `when` are one step earlier still: both are desugared while the source is
+  parsed, `for` to the `while` it means (`impl_specs/for.md`) and `when` to the
+  `if`/`else` chain it means (`specs/functions.md`), so neither ever reaches the
+  lowering. `yield` is a lowering of its own on the linear body
+  (`impl_specs/yield.md`).
 - **Packages become name prefixes.** A `package a.b` gets `ns<index>_` from a
   global dictionary filled in sorted order, so two packages may both declare
   `Point` or `bump` without colliding in the single translation unit; the

@@ -229,9 +229,9 @@ fold nested blocks into their parents -> give the lowered declarations their typ
 fold the rest -> lower to C++ -> amalgamate. The emitters only know the linear
 statement forms (`Stmt.Label`/`Goto`/`IfTrue`/`IfFalse`/`Block`), expressions no
 deeper than one operation, and declarations that carry a type; structured
-`if`/`while`/`switch` never reach emission. The two phases are
-`linear::lowerForEmission` and `linear::finishForEmission`, with `sema::inferTypes`
-between them (`impl_specs/linear-lowering.md`, "The pipeline").
+`if`/`while` never reach emission (`for` and `when` were desugared while parsing).
+The two phases are `linear::lowerForEmission` and `linear::finishForEmission`, with
+`sema::inferTypes` between them (`impl_specs/linear-lowering.md`, "The pipeline").
 
 Key design points:
 
@@ -303,8 +303,14 @@ Key design points:
   pass; fix the transpiler or the mirror generically. Do not special-case a
   specific file.
 - Prefer `while` + `Span<T>` over a range-`for` in Simse code (the language has no
-  `foreach` over containers; `for` iterates a `yield`ing machine only). Use `switch`
+  `foreach` over containers; `for` iterates a `yield`ing machine only). Use `when`
   for kind dispatch; lambdas are supported (by-value capture).
+- **Iterate a container of aggregates with the pointer form** - `for (*x in xs)` /
+  `for ((*x, i) in xs)` - not `for (x in xs)`: the value form binds a *copy* of each
+  element, the pointer form binds its place (`*T`, through the container's prelude
+  `smToYieldPtr`) and costs what the hand-written `while` + `*xs[i]` costs, measured to
+  the millisecond (`impl_specs/for.md`). The compiler's own statement/child walks use
+  it.
 - **Borrow AST-carrying structs; don't copy them.** A `val x: T = list[i]` where
   `T` holds an `XmlNode` (`CgFn`, `CgNativeExt`, `CgInput`, `SemaInput`, ...)
   deep-copies the subtree. In read-only loops use a pointer into the owner
@@ -332,18 +338,20 @@ Scalars (`Int8..64`, `Float32/64`, `Char`, `Bool`), `Str` (with a method library
 `data class` (with methods), `enum` (with `toInt`/`fromInt`), `typealias`
 (incl. generic and function types); functions incl. extension functions and
 `native fun`; `val`/`var` (locals, and at file level **static storage** -
-`specs/statics.md`); `if`/`else`, `while`, `switch`/`case`/`default`,
+`specs/statics.md`); `if`/`else`, `when`, `while`,
 `break`/`continue`, `return`; `null`; memory operators `&T`/`*T`/`copy`;
 lambdas with by-value capture; generics reified via C++ templates; modules and
 packages. `yield` and `for` are implemented in **both rings**: both scan `..`/`yield`,
-parse `..T`, `yield e` and both `for` forms (desugared in the parser), both report a
+parse `..T`, `yield e` and every `for` form (all desugared in the parser), both report a
 `for` over a non-machine (`stress/diagnostic-for-not-a-machine`), both lower the
 machine (`linear/Yield.cpp` / `Yield.kt`) and both emit it
 (`emitYieldable`/`emitMachine` in `Codegen.cpp` and `Codegen.kt`); `stress/yield`
 runs the whole thing through the self-hosted compiler. Two things stay out of
 `cppsrc/**` and `tests/fixtures` on purpose: `yield` needs a machine whose body lives
-in a method, and the vocabulary is `..T`, `yield e`, and `for (v in m)` /
-`for ((v, i) in m)` (`specs/functions.md`, `impl_specs/yield.md`, `impl_specs/for.md`);
+in a method, and the vocabulary is `..T`, `yield e`, `for (v in m)` /
+`for ((v, i) in m)` and their pointer forms `for (*v in m)` / `for ((*v, i) in m)`
+(the second wrap, `smToYieldPtr`, hands out `*T` places - no copy per iteration;
+`specs/functions.md`, `impl_specs/yield.md`, `impl_specs/for.md`, `stress/for-pointer`);
 `tools/_ring/` is the probe a ring comparison runs on.
 
 ## 8. TODOs / deferred
@@ -389,7 +397,8 @@ Do these only when asked; roughly prioritized:
    manifests/versions/transitive resolution; range/`foreach` iteration over
    containers (`for` exists, but only over a machine - `impl_specs/for.md`);
    reference captures
-   and explicit capture lists; `when`/pattern matching; string interpolation;
+   and explicit capture lists; `when` pattern labels (`is Type`, `in 1..5`); string
+   interpolation;
    interfaces/virtual dispatch; method overriding; default parameter values;
    `unsafe` blocks / raw-pointer escape rules; **static storage** - file-level
    `var`/`val` (done, `impl_specs/statics.md` slice 1) and `object` declarations
@@ -398,7 +407,7 @@ Do these only when asked; roughly prioritized:
    `arrayEmpty<T>()`'s empty block out of hand-written C++.
    The user-facing ordering of these gaps - what a program author is blocked on,
    what gates each phase, and the features not in this list yet (`for`,
-   interpolation, closed unions + `when`, static protocols, `Set`, byte buffers,
+   interpolation, closed unions + exhaustive `when`, static protocols, `Set`, byte buffers,
    JSON codegen, sockets/HTTP, Linux/macOS, user FFI) - is
    `impl_specs/user-language-roadmap.md`, with its own non-goals and open
    questions.
@@ -503,7 +512,7 @@ Do these only when asked; roughly prioritized:
 - **A declaration with no initializer is a legal statement now** (`hoistSlots` makes
   one per slot), and the emitter prints it as `T name;`. Nothing else may assume a
   `VarDecl` has an `init`.
-- The slot prefixes are `_sm_expr` (8 characters) and `simse_sw_` (9), and
+- The slot prefix is `_sm_expr` (8 characters), and
   `Str::compare(pos, count, prefix)` takes the *count*: a wrong count compares
   different bytes and returns non-zero with no error anywhere, so a name test written
   by hand can quietly match nothing. (That is exactly what happened once: the C++ ring

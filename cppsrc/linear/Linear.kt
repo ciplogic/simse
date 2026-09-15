@@ -93,15 +93,17 @@ fun linName(role: AstNodeKind, name: Str, line: Int, column: Int): AstXmlNode {
 // changed anything. The stages run in a loop - each can leave work for the
 // others - and stop when a whole round changes nothing, so every stage has to
 // report the work it did and, just as important, the work it did not do.
-data class LinLowered(var body: List<AstXmlNode>,
+data class LinLowered(
+    var body: List<AstXmlNode>,
 
-var changed: Bool)
+    var changed: Bool
+)
 
 data class LinLowerer(
     var next: Int,
 
 // Whether this pass actually lowered anything.
-var changed: Bool
+    var changed: Bool
 ) {
     fun nextId(): Int {
         val id: Int = this.next
@@ -122,11 +124,13 @@ var changed: Bool
     }
 
     // breakTo/continueTo are empty when no enclosing construct accepts them.
+    //
+    // A statement is a value (`List<AstXmlNode>` holds them by value), so the pointer
+    // form is what keeps the pass from copying every statement it walks: `*stmt` is the
+    // element's place, and the passes it is handed to read through it.
     fun lowerStmts(stmts: *List<AstXmlNode>, breakTo: Str, continueTo: Str, out: *List<AstXmlNode>): Unit {
-        var i: Int = 0
-        while (i < stmts.size()) {
-            this.lowerStmt(*stmts[i], breakTo, continueTo, out)
-            i = i + 1
+        for (*stmt in stmts) {
+            this.lowerStmt(stmt, breakTo, continueTo, out)
         }
     }
 
@@ -172,20 +176,16 @@ var changed: Bool
             out.append(linBlock(body, line, column))
             return
         }
-        var i: Int = 0
-        while (i < body.size()) {
-            out.append(body[i])
-            i = i + 1
+        for (*stmt in body) {
+            out.append(*stmt)
         }
     }
 
     fun declares(body: *List<AstXmlNode>): Bool {
-        var i: Int = 0
-        while (i < body.size()) {
-            if (xmlKind(*body[i]) == AstNodeCategory.StmtVarDecl) {
+        for (*stmt in body) {
+            if (xmlKind(stmt) == AstNodeCategory.StmtVarDecl) {
                 return true
             }
-            i = i + 1
         }
         return false
     }
@@ -200,12 +200,10 @@ var changed: Bool
             }
         }
         val kids: List<AstXmlNode> = e.Children.toList()
-        var i: Int = 0
-        while (i < kids.size()) {
-            if (this.containsShortCircuit(*kids[i])) {
+        for (*kid in kids) {
+            if (this.containsShortCircuit(kid)) {
                 return true
             }
-            i = i + 1
         }
         return false
     }

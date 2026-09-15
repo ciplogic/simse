@@ -117,8 +117,8 @@ The result is a language that reads like Kotlin/.NET and builds like C.
 2. **Sema** resolves names and types; **generics are reified** - each concrete
    instantiation becomes a distinct C++ type, so `List<Int>` and `List<Str>` are
    `List<Int>` and `List<Str>` in the output.
-3. Control flow is **lowered to labels and gotos** (`if`, `while`, `switch` and
-   `for` never reach the emitter - `for` is desugared in the parser), then
+3. Control flow is **lowered to labels and gotos** (`if` and `while` never
+   reach the emitter - `for` and `when` are desugared in the parser), then
    optionally simplified.
 4. **Codegen** emits C++ for the whole program as one translation unit, with
    package-qualified names (`ns1_words`), source-map comments, and RTL calls
@@ -195,9 +195,9 @@ best of 5 runs idle):
 | **from the published file to a compiler that reproduces it** | **~16.1 s**, then ~0.81 s per self-transpile |
 
 Not there yet, in rough order of how soon a user would miss it: `for` over a
-`Dictionary` and ranges, string interpolation, closed unions +
-`when`, a `Printable` protocol (so `println` works for your own types instead of only
-the built-ins), `Set`, byte buffers, JSON encode/decode generated from data classes,
+`Dictionary` and ranges, string interpolation, closed unions + exhaustive `when`, a
+`Printable` protocol (so `println` works for your own types instead of only the
+built-ins), `Set`, byte buffers, JSON encode/decode generated from data classes,
 sockets and HTTP, and a Linux/macOS toolchain. `docs/state-of-the-field.md` is
 explicit about each of these and the roadmap phases them.
 

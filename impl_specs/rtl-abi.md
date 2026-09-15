@@ -457,7 +457,7 @@ print(x)    ->  std::cout << std::boolalpha << (x);
 
 Now lowered: generic declarations, uses, and calls (via C++ templates; see
 `impl_specs/reification.md`), generic `typealias`, `native fun` (see
-`impl_specs/native-interop.md`), `switch`, `null`, generic-qualified static calls
+`impl_specs/native-interop.md`), `when`, `null`, generic-qualified static calls
 (`Res<T>.ok(x)`, `Opt<T>.some(x)`), `Span<T>`, and lambdas with by-value
 captures.
 

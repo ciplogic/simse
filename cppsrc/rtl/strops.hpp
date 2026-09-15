@@ -49,9 +49,9 @@ inline List<Str> simse_str_split(const Str& self, const Str& separator) {
         parts.push_back(self);
         return parts;
     }
-    std::size_t pos = 0;
+    Int32 pos = 0;
     while (true) {
-        std::size_t found = self.find(separator, pos);
+        Int32 found = self.find(separator, pos);
         if (found == Str::npos) {
             parts.push_back(self.substr(pos));
             break;

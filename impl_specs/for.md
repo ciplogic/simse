@@ -5,7 +5,7 @@ sema's checker, the linear pass, the emitters, the IL - has a `for` statement ki
 know about, and `break`/`continue` are the `while`'s own machinery.
 
 ```text
-for (v in m) { body }              var _sm_for1 = m
+for (v in m) { body }              var _sm_for1 = m.smToYield()
                                    while (true) {
                                        var _sm_step1 = _sm_for1.next()
                                        if (!_sm_step1.hasValue()) { break }
@@ -13,7 +13,7 @@ for (v in m) { body }              var _sm_for1 = m
                                        body
                                    }
 
-for ((v, i) in m) { body }         var _sm_for1 = m
+for ((v, i) in m) { body }         var _sm_for1 = m.smToYield()
                                    var _sm_index1: Int = -1
                                    while (true) {
                                        _sm_index1 = _sm_index1 + 1
@@ -24,6 +24,10 @@ for ((v, i) in m) { body }         var _sm_for1 = m
                                        body
                                    }
 ```
+
+A `*` on the variable is the same template with the *pointer* wrap
+(`m.smToYieldPtr()`), whose element type is `*T` - so `v` is the element's place, not a
+copy of it ("`smToYieldPtr`" below).
 
 ## Where it runs, and why there
 
@@ -140,6 +144,66 @@ therefore carries the list machine only, not every container's.
 What remains: `smToYield` for `Dictionary<K, V>` (a `while` over `keys()` is how it is
 walked today; what a dictionary's element should be - its keys, or a key/value pair - is
 the open question), and the range above.
+
+## `smToYieldPtr`: iterating without copying
+
+`smToYield` hands out *values*, so `for (v in xs)` copies each element into `v` - for a
+container of aggregates that is a copy per iteration, while the hand-written
+`while (i < xs.size())` + `*xs[i]` loop the compiler used to write borrowed the element in
+place. The pointer form closes that gap and takes the index bookkeeping with it:
+
+```simse
+for (*cell in cells) {            // cells: List<Cell>
+    cell.value = cell.value + 1   // reads and writes the Cell in the list
+}
+for ((*cell, i) in cells) { ... }  // the same, plus the iteration index
+```
+
+It is one more *wrap*, not a second `for`: the parser's `parseFor` sees the `*` and wraps
+what is iterated in `smToYieldPtr()` instead of `smToYield()`. Everything downstream is
+the machinery that already existed, because the machine is generic over its element type
+and `..*T` is a `..T` whose element is `*T`:
+
+- the element type is the `..T`'s `Inner` (`Codegen`'s `emitYieldable`), so `..*T` gives
+  `Opt<T*>` for `next()` and `T**` for `advance(*value)` with no special case;
+- `TypeInfer` types `next()` as `Opt<T>` from the same `Inner`, so the loop variable is
+  typed `*T` - a pointer variable the emitter reads *through* (`cell.value` is
+  `cell->value`), which is exactly what a `*T` parameter does everywhere else;
+- a machine is still the identity for `smToYield`, and has none for `smToYieldPtr`: it
+  hands out values, not places, so `for (*v in someMachine)` is a diagnostic;
+- sema's gate (`checkForIterable`) takes the wrap *name* from the call the parser wrote,
+  so it reports the right one (`hasWrap`).
+
+The prelude writes one per container, next to its value twin:
+
+```simse
+fun List<T>.smToYieldPtr<T>(): ..*T {
+    var i: Int = 0
+    while (i < this.size()) {
+        yield *this[i]        // the element's place, not a copy
+        i = i + 1
+    }
+}
+```
+
+`yield *this[i]` is the language's borrow: `*place` is the place's address and it keeps
+the place in place (`ExpressionLowering` never binds a `Deref`'s operand to a value
+temporary), so the machine hands out `&(*self)[i]` - into the container's storage.
+
+**The measurement.** The three shapes, on the compiler's own hot loops
+(`Linear.kt`'s `declares`/`lowerStmts`/`containsShortCircuit`, release `./simse.exe`
+transpiling `--root cppsrc`, interleaved A/B, 11 pairs):
+
+| shape | min | median |
+| --- | --- | --- |
+| `while (i < xs.size())` + `*xs[i]` | 824.3 ms | 839.5 ms |
+| `for (*x in xs)` | 826.2 ms | 835.8 ms |
+| `for (x in xs)` (the value form) | 810.8 ms | 826.8 ms |
+
+The pointer form is the hand-written loop's cost, without its index - which is why the
+compiler's own statement/child walks use it (`stress/for-pointer` covers the semantics:
+a write through the loop variable reaches the container, and a scalar element is read
+with `*value`).
 
 ## Status
 

@@ -23,10 +23,12 @@ import common
 
 // A value binding in scope: mutability, whether assignment is checked, and the
 // declared/inferred type (an empty AstXmlNode when unknown).
-data class ValueBinding(var isMutable: Bool,
+data class ValueBinding(
+    var isMutable: Bool,
 
-var checkAssign: Bool,
-var type: AstXmlNode)
+    var checkAssign: Bool,
+    var type: AstXmlNode
+)
 
 // ---- built-in type knowledge ----------------------------------------------
 
@@ -197,25 +199,27 @@ fun semaTypeTextList(types: *List<AstXmlNode>): Str {
 
 // One participating file: its name (for diagnostics) and its parsed Module node.
 // The Module carries the declared package, which namespaces its declarations.
-data class SemaInput(var fileName: Str,
+data class SemaInput(
+    var fileName: Str,
 
-var module: AstXmlNode)
+    var module: AstXmlNode
+)
 
 data class Analyzer(
     var inputs: List<SemaInput>,
 
-var file: Str,
-var types: Dictionary<Str, AstXmlNode>,
-var functions: Dictionary<Str, List<AstXmlNode>>,
-var globalTypes: Dictionary<Str, AstXmlNode>,
-var globalFunctions: Dictionary<Str, List<AstXmlNode>>,
-var globalStatics: Dictionary<Str, AstXmlNode>,
-var packageDecls: Dictionary<Str, List<AstXmlNode>>,
-var declaredPackages: List<Str>,
-var scopes: List<Dictionary<Str, ValueBinding>>,
-var typeScopes: List<List<Str>>,
-var loopDepth: Int,
-var diags: List<Str>
+    var file: Str,
+    var types: Dictionary<Str, AstXmlNode>,
+    var functions: Dictionary<Str, List<AstXmlNode>>,
+    var globalTypes: Dictionary<Str, AstXmlNode>,
+    var globalFunctions: Dictionary<Str, List<AstXmlNode>>,
+    var globalStatics: Dictionary<Str, AstXmlNode>,
+    var packageDecls: Dictionary<Str, List<AstXmlNode>>,
+    var declaredPackages: List<Str>,
+    var scopes: List<Dictionary<Str, ValueBinding>>,
+    var typeScopes: List<List<Str>>,
+    var loopDepth: Int,
+    var diags: List<Str>
 ) {
 
     // ---- entry ------------------------------------------------------------
@@ -993,13 +997,13 @@ var diags: List<Str>
 
     // `for` is lowered in the parser into the declaration of the machine it iterates
     // (`_sm_for<n>`, impl_specs/for.md), whose initializer is the invisible `smToYield()`
-    // wrap, so the checker sees the template rather than the construct, and the template's
-    // names are the one marker that says "this came from a `for`". Something is iterable
-    // when that wrap resolves: a machine is (the identity), and anything else needs a
-    // `smToYield` in scope - the prelude has one for every container. Say so here, where
-    // the `for` still has a position: the C++ the template would otherwise emit does not
-    // compile, and its error would name a generated statement instead of the line the user
-    // wrote.
+    // / `smToYieldPtr()` wrap, so the checker sees the template rather than the construct,
+    // and the template's names are the one marker that says "this came from a `for`".
+    // Something is iterable when that wrap resolves: a machine is (the identity), and
+    // anything else needs the wrap in scope - the prelude has one per container, in both
+    // flavours. Say so here, where the `for` still has a position: the C++ the template
+    // would otherwise emit does not compile, and its error would name a generated
+    // statement instead of the line the user wrote.
     fun checkForIterable(stmt: *AstXmlNode): Unit {
         val init: AstXmlNode = xmlChild(stmt, AstNodeKind.Init)
         if (xmlIsEmpty(*init) || !semaIsForTemplateName(xmlAttr(stmt, AstNodeAttributeKind.Name))) {
@@ -1012,35 +1016,46 @@ var diags: List<Str>
         if (xmlKind(*callee) != AstNodeCategory.ExprMember) {
             return
         }
+        val wrap: Str = xmlAttr(*callee, AstNodeAttributeKind.Name)
         val receiver: AstXmlNode = xmlChild(*callee, AstNodeKind.Receiver)
         val receiverType: AstXmlNode = this.iteratedType(*receiver)
         if (xmlIsEmpty(*receiverType)) {
             return
         }
         if (xmlKind(*receiverType) == AstNodeCategory.TypeYield) {
+            // A machine *is* the identity for `smToYield` - it hands out values, not
+            // places, so it has no pointer form.
+            if (wrap == "smToYield") {
+                return
+            }
+            this.diag(
+                xmlLine(stmt), xmlColumn(stmt),
+                "a `for (*x in m)` needs a `smToYieldPtr`, and a machine yields values "
+                        + "rather than places: iterate it with `for (x in m)`"
+            )
             return
         }
-        if (this.hasSmToYield(*receiverType)) {
+        if (this.hasWrap(wrap, *receiverType)) {
             return
         }
         this.diag(
             xmlLine(stmt), xmlColumn(stmt),
-            "a `for` iterates a machine (`..T`) or a type with a `smToYield`, and "
+            "a `for` iterates a machine (`..T`) or a type with a `" + wrap + "`, and "
                     + semaTypeText(*receiverType)
                     + " has neither; iterate a container with `while` and an index"
         )
     }
 
-    // Whether a `smToYield` takes this receiver: the convention the parser's wrap calls
-    // through (`specs/functions.md`, impl_specs/for.md). The receiver's *name* is what is
-    // compared - `List<T>` takes any `List<...>`, and a pattern type parameter takes
-    // anything - which is all the gate needs; the emitted call is resolved with the full
-    // unification (in `codegen`), and a name this cannot decide stays silent.
-    fun hasSmToYield(receiverType: *AstXmlNode): Bool {
-        if (!this.functions.has("smToYield")) {
+    // Whether a wrap (`smToYield`, `smToYieldPtr`) takes this receiver: the convention the
+    // parser's wrap calls through (`specs/functions.md`, impl_specs/for.md). The receiver's
+    // *name* is what is compared - `List<T>` takes any `List<...>`, and a pattern type
+    // parameter takes anything - which is all the gate needs; the emitted call is resolved
+    // with the full unification (in `codegen`), and a name this cannot decide stays silent.
+    fun hasWrap(wrap: Str, receiverType: *AstXmlNode): Bool {
+        if (!this.functions.has(wrap)) {
             return false
         }
-        val overloads: List<AstXmlNode> = this.functions.get("smToYield").value()
+        val overloads: List<AstXmlNode> = this.functions.get(wrap).value()
         var i: Int = 0
         while (i < overloads.size()) {
             val candidate: *AstXmlNode = *overloads[i]

@@ -1179,6 +1179,58 @@ numbers shifted with the parser/scanner edits).
   C++ ring, the self-hosted `simse.exe` and the stage-1 binary, and
   `bun tools/bootstrap.js` fixed point byte for byte.
 
+- **`when` replaces `switch`; data-class fields take Kotlin's `,`; `for` gained its
+  pointer forms (T53).** Three source-level changes in one pass, plus one bug they
+  exposed.
+
+  `switch`/`case`/`default` are **gone** - Kotlin has no `switch`, so the language has
+  exactly one selection statement, `when`, and the *parser* desugars it to the
+  `if`/`else` chain it means (`Parser::parseWhen`), binding the subject to one generated
+  `_sm_when<n>` declaration. Nothing downstream has a `when`: `StmtKind::Switch`,
+  `SwitchCase`, `AstNodeCategory::StmtSwitch`, `AstNodeKind::Case`,
+  `AstNodeAttributeKind::IsDefault`, `linear::lowerSwitch`, sema's constant-case-label
+  rule and the `simse_sw_<n>` slot prefix are all deleted, in both rings and in the
+  schema. A label is an arbitrary expression (`subject == label`), several labels on one
+  arm share one body (`a, b ->` is one `||` condition), arms do not fall through, the
+  arm body is a block, `else` must be last, and `break`/`continue` in an arm belong to
+  the enclosing loop. `specs/functions.md` is the norm; `stress/when` pins the behavior
+  (subject evaluated once, label group shares a body, loop `break`/`continue`, a
+  no-`else` `when`, a nested `when`, an enum and a `Str` subject);
+  `tests/fixtures/when.kt` pins the rings, `when_else_last.kt` the one diagnostic.
+
+  A data class's field list is separated by `,` (`specs/declarations.md`), which is what
+  the `.kt` sources now use - 190 separators across the compiler sources, fixtures,
+  stress cases and doc snippets. The parser takes `;` there as well (it is what the
+  sources used before, and the statement separator means removing it would buy nothing),
+  so the change moved no golden but the three token dumps.
+
+  `for (*x in xs)` / `for ((*x, i) in xs)`: the second wrap, `smToYieldPtr`, hands out
+  each element's **place** (`..*T`), so a container of aggregates is walked without a
+  copy per iteration and a write through the loop variable reaches the element. It is
+  one more prelude function per container, not a second `for`: the machine is generic
+  over its element type, so `..*T` gives `Opt<T*>` and `T**` with no special case, and
+  sema's `for` gate now takes the wrap *name* from the call the parser wrote. Measured
+  on the compiler's own hot walks (`declares`/`lowerStmts`/`containsShortCircuit`,
+  release `./simse.exe` over `--root cppsrc`, interleaved A/B, 11 pairs): `while` +
+  `*xs[i]` 824.3/839.5 ms (min/median) against `for (*x in xs)` 826.2/835.8 ms - the
+  hand-written loop's cost without its index - and the *value* form 810.8/826.8 ms (a
+  copy per element is not visible either, which is why the pointer form is a shape
+  choice, not a rescue). The compiler's own statement/child walks now use it; the survey
+  tool (`tools/_for_candidates.mjs`) counts 272 `while` list-walks left, 151 of them with
+  no use of the index at all.
+
+  The bug they exposed is **not** one of the three changes: an experiment that made
+  `SmString::size_type` signed (`int32_t`, to silence the C4267 warnings) broke every
+  `rfind`, because its `pos = npos` default then compares as `-1 >= last` and the
+  backward scan never starts - `stress/strings`' `lastIndexOf` printed `-1`.
+  `SmString::rfind` now tests `npos` explicitly (both the text and the char overload)
+  instead of the type being reverted.
+
+  Verified: five differentials byte-identical in both configurations, T23 byte-identical,
+  `simse_tests.exe` **56/56**, `bun tools/stress.js` **32/32** on the C++ ring, the
+  self-hosted `simse.exe` and the stage-1 binary (`stress/when`, `stress/for-pointer`
+  new).
+
 ### Note: the shape of a lookup like this
 
 Worth recording because the first attempt at T39 got it wrong in four ways the

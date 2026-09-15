@@ -13,10 +13,10 @@ with a string library, `List<T>`, `Array<T>`, `SmallVector<N, T>`,
 `Dictionary<K, V>`, `Span<T>`, `Opt<T>`, `Res<T>`, `XmlNode`/`Attribute`,
 `data class` (with methods), `enum` (with explicit values and `toInt`/`fromInt`),
 `typealias`, functions, methods, extension methods, lambdas (by-value capture),
-`val`/`var` locals, file-level `var`/`val` statics, `if`/`else`, `while`,
-`switch`/`case`/`default`, `break`/`continue`, `return`, `yield` (a body that
-yields becomes a state machine) and `for` (two forms, over anything with a
-`smToYield` - a container, or a machine itself),
+`val`/`var` locals, file-level `var`/`val` statics, `if`/`else`, `when`, `while`,
+`break`/`continue`, `return`, `yield` (a body that yields becomes a state
+machine) and `for` (two forms, over anything with a `smToYield` - a container, or
+a machine itself),
 `null` for handles, memory operators (`&T` handles, `*T` pointers, `copy`),
 reified generics, packages and imports, `main()` and `main(args)`, and a
 `native fun` escape hatch for C++ symbols.
@@ -73,10 +73,10 @@ program a user would try to write:
 | Method on a temporary | `"a b".words()` fails to compile: the emitted receiver is a non-const reference | bind it to a `val` first |
 | Chained method on a generic call | `dict.get(k).value().toString()` does not resolve: the type is lost through the chain | assign the middle step to a typed `val` |
 | Lambda body placement | `(x: Int) ->` followed by a newline is a syntax error | keep the body on the arrow's line, or open a block there |
-| Enum printing | `println(Color.Red)` prints an integer; there is no automatic member name | write a `switch`-based `label()` function |
+| Enum printing | `println(Color.Red)` prints an integer; there is no automatic member name | write a `when`-based `label()` function |
 | Float printing | `println` goes through C++'s default formatting | format manually; a defined shortest-round-trip rule is on the roadmap |
 | Error messages | position and message, no source excerpt or caret | read the generated C++ next to it |
-| Vocabulary | no `foreach` over a container (only `for` over a machine), no `when`, no interpolation, no default parameter values, no capture-by-reference, no `Set`, no `map`/`filter` | `while` + `Span`, explicit code, `List` helpers |
+| Vocabulary | no `foreach` over a container (only `for` over a machine), no `when` pattern labels, no interpolation, no default parameter values, no capture-by-reference, no `Set`, no `map`/`filter` | `while` + `Span`, explicit code, `List` helpers |
 | Ownership and borrowing | `&x` on a local boxes a *copy*, so a handle does not alias the local; `&T` cycles are not collected | borrow with `*x` (a raw pointer) when you mean "the original"; break cycles by nulling a handle |
 
 ## What is missing
@@ -91,8 +91,8 @@ these):
    index.
 2. **String interpolation and formatting** - building strings with `+` and
    `toString()` everywhere.
-3. **Closed unions + `when`** - the replacement for dynamic dispatch; needed for
-   JSON, protocol messages and any "one of these shapes" modelling.
+3. **Closed unions + exhaustive `when`** - the replacement for dynamic dispatch;
+   needed for JSON, protocol messages and any "one of these shapes" modelling.
 4. **Static interfaces (protocols)** - `Hashable`, `Comparable`, `Printable`
    resolved at reification, so dictionaries, sorting, printing and JSON work for
    *your* types with no runtime support. `data class` should satisfy the first

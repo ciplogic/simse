@@ -49,7 +49,7 @@ packages.
 | Area | Today | Gap a user feels immediately |
 | --- | --- | --- |
 | Loops | `while`, and `for` over a `yield`ing machine | range/`foreach` over `List`/`Str`/ranges |
-| Branching | `if`/`else`, `switch`/`case` | `when` + closed unions (no dynamic dispatch) |
+| Branching | `if`/`else`, `when` | closed unions, exhaustive `when` (no dynamic dispatch) |
 | Strings | method library, `+`, `appendStr` | interpolation, `format`, a `toString` protocol for user types |
 | Printing | `println`/`print` are *emitter intrinsics* over `std::cout` | a real `Printable` protocol, float formatting with a defined shape |
 | Enums | `toInt`/`fromInt` | the member *name*; `println(Color.Red)` prints a number |
@@ -109,7 +109,7 @@ that is the trade we are buying the compiler's whole dispatch model with.
 
 ### 4.1 Data modelling: closed unions and `when`
 
-`switch` on an `Int` is not enough to model "one of these shapes". Needed: a
+`when` on an `Int` is not enough to model "one of these shapes". Needed: a
 closed union (`sealed`-like) plus `when` with exhaustive matching, so payloads can
 differ per case. Unblocks: `JsonValue`, protocol messages, ASTs, result types
 richer than `Res`, and the interface-as-value workaround above. It is also the

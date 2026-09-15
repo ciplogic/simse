@@ -802,10 +802,12 @@ namespace parser {
                 return stmt;
             }
 
-            // `for` (specs/functions.md). Two forms, both iterating a *state machine*
-            // (`..T` from a `yield`), and both are lowered right here to the `while`
-            // they mean - so sema, the linear pass and the emitters never see a `for`,
-            // and `break`/`continue` inside one are the `while`'s own:
+            // `for` (specs/functions.md). Two forms, and each of them in two
+            // flavours - binding each element, or binding a *pointer* to it
+            // (`for (*v in c)`, `for ((*v, i) in c)`) - all iterating a *state
+            // machine* (`..T` from a `yield`). Every form is lowered right here to the
+            // `while` it means, so sema, the linear pass and the emitters never see a
+            // `for`, and `break`/`continue` inside one are the `while`'s own:
             //
             //   for (v in m) { body }
             //       var _sm_for1 = m            // the machine, made once
@@ -822,6 +824,10 @@ namespace parser {
             //           _sm_index1 = _sm_index1 + 1
             //           ...                      // then as above, plus `val i = _sm_index1`
             //
+            // `*v` differs only in the wrap: the machine's element is then `*T`, so `v`
+            // is the element's *place* rather than a copy of it (the prelude's
+            // `smToYieldPtr`).
+            //
             // The advance and the exhaustion test are the *first* statements of the
             // body rather than the loop's condition, and the index is pre-incremented
             // there too, for the same reason: `continue` jumps to the condition, so a
@@ -832,14 +838,15 @@ namespace parser {
             // Everything the loop's body declares is fresh per iteration, and the
             // index is a *copy* of the counter: the names the user wrote (`v`, `i`)
             // belong to the loop body, while the counter itself is the template's.
-            // `<target>.smToYield()`: the wrap the two `for` forms put around what they
-            // iterate. The name is the language's convention (`impl_specs/for.md`), not a
-            // user's to take: a `for` never spells it in a diagnostic.
-            ast::ExprPtr smToYieldCall(const ast::ExprPtr &target, const common::SourcePos &pos) {
+            // `<target>.smToYield()`: the wrap the `for` forms put around what they
+            // iterate. The name is the language's convention (`impl_specs/for.md`), not
+            // a user's to take: a `for` never spells it in a diagnostic.
+            ast::ExprPtr smToYieldCall(const ast::ExprPtr &target, const common::SourcePos &pos,
+                                       const Str &wrap) {
                 auto member = std::make_shared<ast::Expr>();
                 member->kind = ast::ExprKind::Member;
                 member->pos = pos;
-                member->text = Str("smToYield");
+                member->text = wrap;
                 member->lhs = target;
 
                 auto call = std::make_shared<ast::Expr>();
@@ -857,14 +864,17 @@ namespace parser {
                 Str valueName;
                 Str indexName;
                 bool withIndex = false;
+                bool valueIsPointer = false;
                 if (matchText("(")) {
                     withIndex = true;
+                    valueIsPointer = matchText("*");
                     if (!expectIdentifier(valueName)) return false;
                     if (!expectText(",")) return false;
                     if (!expectIdentifier(indexName)) return false;
                     if (!expectText(")")) return false;
-                } else if (!expectIdentifier(valueName)) {
-                    return false;
+                } else {
+                    valueIsPointer = matchText("*");
+                    if (!expectIdentifier(valueName)) return false;
                 }
                 if (!matchText("in")) return fail("expected 'in'");
                 skipNewlines();
@@ -884,8 +894,9 @@ namespace parser {
                 // and a machine passes through (impl_specs/for.md). It is a *member* call,
                 // because that is what binds the function's type parameter from the
                 // receiver - a plain `smToYield(x)` would leave the loop variable untyped.
-                out.push_back(varDeclStmt(machineName, true, nullptr, smToYieldCall(machine, pos),
-                                          pos));
+                const Str wrap = valueIsPointer ? Str("smToYieldPtr") : Str("smToYield");
+                out.push_back(varDeclStmt(machineName, true, nullptr,
+                                          smToYieldCall(machine, pos, wrap), pos));
                 if (withIndex) {
                     out.push_back(varDeclStmt(counterName, true, namedType("Int", pos),
                                               intLiteral(-1, pos), pos));

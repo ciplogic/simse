@@ -1329,10 +1329,11 @@ data class Parser(
         return ExprNode(node, pos.line, pos.column)
     }
 
-    // `<target>.smToYield()`: the wrap the two `for` forms put around what they iterate.
-    fun smToYieldCall(target: ExprNode, pos: SourcePos): ExprNode {
+    // `<target>.<wrap>()`: the wrap the `for` forms put around what they iterate
+    // (`smToYield`, or `smToYieldPtr` for the `*v` form).
+    fun smToYieldCall(target: ExprNode, pos: SourcePos, wrap: Str): ExprNode {
         var memberAttrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
-        memberAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, "smToYield"))
+        memberAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, wrap))
         var member: AstXmlNode =
             AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprMember, memberAttrs, Array<AstXmlNode>())
         this.attach(*member, AstNodeKind.Receiver, *target.node)
@@ -1356,10 +1357,11 @@ data class Parser(
         return ExprNode(call, pos.line, pos.column)
     }
 
-    // `for` (specs/functions.md). Two forms, both iterating a *state machine* (`..T`,
-    // what a `yield`ing function produces), and both are lowered right here to the
-    // `while` they mean - so no stage downstream sees a `for`, and `break`/`continue`
-    // inside one are the `while`'s own:
+    // `for` (specs/functions.md). Two forms, and each of them in two flavours - binding
+    // each element, or binding a *pointer* to it (`for (*v in c)`, `for ((*v, i) in c)`) -
+    // all iterating a *state machine* (`..T`, what a `yield`ing function produces).
+    // Every form is lowered right here to the `while` it means - so no stage downstream
+    // sees a `for`, and `break`/`continue` inside one are the `while`'s own:
     //
     //   for (v in m) { body }          var _sm_for1 = m
     //                                  while (true) {
@@ -1380,6 +1382,9 @@ data class Parser(
     // the body would miss that iteration. `-1` is what makes the pre-increment hand
     // out 0 first. The names come from a per-file counter, so nested loops never
     // collide and two runs produce the same output.
+    //
+    // `*v` differs only in the wrap: the machine's element is then `*T`, so `v` is the
+    // element's *place* rather than a copy of it (the prelude's `smToYieldPtr`).
     fun parseFor(out: *List<AstXmlNode>): Bool {
         val pos: SourcePos = this.peek(0).pos
         this.advance() // for
@@ -1389,8 +1394,10 @@ data class Parser(
         var valueName: Str = ""
         var indexName: Str = ""
         var withIndex: Bool = false
+        var valueIsPointer: Bool = false
         if (this.matchText("(")) {
             withIndex = true
+            valueIsPointer = this.matchText("*")
             valueName = this.expectName()
             if (this.failed) {
                 return false
@@ -1406,6 +1413,7 @@ data class Parser(
                 return false
             }
         } else {
+            valueIsPointer = this.matchText("*")
             valueName = this.expectName()
             if (this.failed) {
                 return false
@@ -1438,7 +1446,11 @@ data class Parser(
         // machine passes through (impl_specs/for.md). It is a *member* call, because
         // that is what binds the function's type parameter from the receiver - a plain
         // `smToYield(x)` would leave the loop variable untyped.
-        val iterated: ExprNode = this.smToYieldCall(machine, pos)
+        var wrap: Str = "smToYield"
+        if (valueIsPointer) {
+            wrap = "smToYieldPtr"
+        }
+        val iterated: ExprNode = this.smToYieldCall(machine, pos, wrap)
         out.append(this.varDeclNode(machineName, true, this.emptyNode(), iterated, pos))
         if (withIndex) {
             val counterInit: ExprNode = this.intLiteralAt(-1, pos)

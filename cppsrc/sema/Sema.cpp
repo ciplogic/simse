@@ -359,39 +359,49 @@ namespace sema {
 
             // `for` is lowered in the parser into the declaration of the machine it
             // iterates (`_sm_for<n>`, impl_specs/for.md), whose initializer is the
-            // invisible `smToYield()` wrap, so the checker sees the template rather than
-            // the construct, and the template's names are the one marker that says "this
-            // came from a `for`". Something is iterable when that wrap resolves: a machine
-            // is (the identity, impl_specs/for.md), and anything else needs a `smToYield`
-            // in scope - the prelude has one for every container. Say so here, where the
-            // `for` still has a position: the C++ the template would otherwise emit does
-            // not compile, and its error would name a generated statement instead of the
-            // line the user wrote.
+            // invisible `smToYield()` / `smToYieldPtr()` wrap, so the checker sees the
+            // template rather than the construct, and the template's names are the one
+            // marker that says "this came from a `for`". Something is iterable when that
+            // wrap resolves: a machine is (the identity, impl_specs/for.md), and anything
+            // else needs the wrap in scope - the prelude has one per container, in both
+            // flavours. Say so here, where the `for` still has a position: the C++ the
+            // template would otherwise emit does not compile, and its error would name a
+            // generated statement instead of the line the user wrote.
             void checkForIterable(const ast::Stmt &stmt) {
                 if (!stmt.init || !isForTemplateName(stmt.name)) return;
                 if (stmt.init->kind != ExprKind::Call || !stmt.init->lhs
                     || stmt.init->lhs->kind != ExprKind::Member || !stmt.init->lhs->lhs) {
                     return;
                 }
+                const Str &wrap = stmt.init->lhs->text;
                 const ast::Expr &receiver = *stmt.init->lhs->lhs;
                 ast::TypePtr receiverType = iteratedType(receiver);
                 if (!receiverType) return; // unknown: the C++ compiler has the last word
-                if (receiverType->kind == TypeKind::Yield) return; // a machine: the identity
-                if (hasSmToYield(*receiverType)) return;
-                diag(stmt.pos, "a `for` iterates a machine (`..T`) or a type with a "
-                               "`smToYield`, and "
+                if (receiverType->kind == TypeKind::Yield) {
+                    // A machine *is* the identity for `smToYield` - it hands out values,
+                    // not places, so it has no pointer form.
+                    if (wrap == "smToYield") return;
+                    diag(stmt.pos, "a `for (*x in m)` needs a `smToYieldPtr`, and a machine "
+                                   "yields values rather than places: iterate it with "
+                                   "`for (x in m)`");
+                    return;
+                }
+                if (hasWrap(wrap, *receiverType)) return;
+                diag(stmt.pos, "a `for` iterates a machine (`..T`) or a type with a `" + wrap
+                               + "`, and "
                                + ast::typeToString(*receiverType)
                                + " has neither; iterate a container with `while` and an index");
             }
 
-            // Whether a `smToYield` takes this receiver: the convention the parser's wrap
-            // calls through (`specs/functions.md`, impl_specs/for.md). The receiver's
-            // *name* is what is compared - `List<T>` takes any `List<...>`, and a pattern
-            // type parameter takes anything - which is all the gate needs; the emitted call
-            // is resolved with the full unification (in `codegen`), and a name this cannot
-            // decide stays silent (the C++ compiler gets the last word, as everywhere else).
-            bool hasSmToYield(const ast::TypeExpr &receiverType) {
-                auto found = functions.find("smToYield");
+            // Whether a wrap (`smToYield`, `smToYieldPtr`) takes this receiver: the
+            // convention the parser's wrap calls through (`specs/functions.md`,
+            // impl_specs/for.md). The receiver's *name* is what is compared - `List<T>`
+            // takes any `List<...>`, and a pattern type parameter takes anything - which is
+            // all the gate needs; the emitted call is resolved with the full unification (in
+            // `codegen`), and a name this cannot decide stays silent (the C++ compiler gets
+            // the last word, as everywhere else).
+            bool hasWrap(const Str &wrap, const ast::TypeExpr &receiverType) {
+                auto found = functions.find(wrap);
                 if (found == functions.end()) return false;
                 for (const ast::Decl *function: found->second) {
                     if (!function || !function->receiverType) continue;

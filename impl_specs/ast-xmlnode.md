@@ -52,7 +52,7 @@ that corresponds to a source construct with a position carries `line` and
 
 - declarations: `Module`, `Import`, `DataClass`, `Enum`, `TypeAlias`, `Function`;
 - statements: `Stmt.VarDecl`, `Stmt.Assign`, `Stmt.If`, `Stmt.While`,
-  `Stmt.Switch`, `Stmt.Return`, `Stmt.Break`, `Stmt.Continue`, `Stmt.ExprStmt`;
+  `Stmt.Return`, `Stmt.Break`, `Stmt.Continue`, `Stmt.ExprStmt`;
 - linear forms (produced only by the lowering pass, `impl_specs/linear-lowering.md`,
   never by the parser): `Stmt.Label`, `Stmt.Goto`, `Stmt.IfTrue`, `Stmt.IfFalse`,
   `Stmt.Block`;
@@ -62,7 +62,7 @@ that corresponds to a source construct with a position carries `line` and
 - types: `Type.` plus `IntLit`, `Named`, `Generic`, `Reference`, `Pointer`,
   `Function`.
 
-Container nodes (`Then`, `Else`, `Body`, `Case`) have no `kind`; they exist only
+Container nodes (`Then`, `Else`, `Body`) have no `kind`; they exist only
 to group statements and to carry a role.
 
 ## `Module` and `Import`
@@ -101,9 +101,9 @@ use role names:
 - `Stmt.If` - children: `Cond`, `Then` (a container of `Stmt` nodes), `Else`
   (when present).
 - `Stmt.While` - children: `Cond`, `Body`.
-- `Stmt.Switch` - child `Cond`, then one `Case` node per arm. A `Case` has
-  attribute `isDefault`, an optional `Label` expression child, then its `Stmt`
-  children.
+- `when` has **no** node: the parser desugars it to the `if`/`else` chain it means,
+  binding the subject to a generated `_sm_when<n>` `Stmt.VarDecl`, so only
+  `Stmt.If` reaches the schema (`specs/functions.md`).
 - `Stmt.Return` - child `Value` (when a value is returned).
 - `Stmt.Break`, `Stmt.Continue` - no children.
 - `Stmt.ExprStmt` - child `Expr`.

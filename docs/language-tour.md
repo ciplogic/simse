@@ -65,18 +65,23 @@ if (n.hasValue()) {
 
 ## Control flow
 
-`if`/`else`, `while`, `for` (over a state machine, below), `switch`/`case`/`default`,
-`break` and `continue`; conditions are `Bool` expressions (`&&`, `||`, `!`).
+`if`/`else`, `when` (the only selection statement - Kotlin's), `while`, `for` (over
+a state machine, below), `break` and `continue`; conditions are `Bool` expressions
+(`&&`, `||`, `!`). A `when` arm tests `subject == label`, several labels on one arm
+run that body once, `else` must be last, and arms never fall through.
 
 ```simse
 fun classify(n: Int): Str {
-    switch (n) {
-        case 0:
+    when (n) {
+        0 -> {
             return "zero"
-        case 1:
+        }
+        1 -> {
             return "one"
-        default:
+        }
+        else -> {
             return "many"
+        }
     }
 }
 
@@ -152,6 +157,27 @@ The loop variable is a fresh `val` per iteration, typed by the element type (`v`
 `Int` above, `w` a `Str`); `index` is a counter the compiler declares, starting at `0`,
 so a `continue` still counts the iteration it skipped. Both forms are a `while` over a
 machine in the generated C++ (`impl_specs/for.md`).
+
+A `*` in front of the variable binds a **pointer to the element** instead of a copy of
+it - the form for a container of values, where a copy per iteration is waste and the loop
+may want to write through what it walks:
+
+```simse
+data class Cell(var value: Int)
+
+fun bumpAll(cells: *List<Cell>): Unit {
+    for (*cell in cells) {          // no copy: `cell` is a *Cell
+        cell.value = cell.value + 1 // the write reaches the element in the list
+    }
+    for ((*cell, i) in cells) {     // ... and the index is available too
+        println(i.toString() + ":" + cell.value.toString())
+    }
+}
+```
+
+An aggregate reads through itself (`cell.value`); a pointer to a scalar is read with
+`*value`. It costs what the same loop written with `while` and an index costs, so it is
+the shape to prefer in a hot loop (`specs/functions.md`).
 
 ## Functions, extensions, lambdas
 
@@ -262,7 +288,7 @@ fun main(): Int {
 ```
 
 Enums are integer-valued; members may carry explicit values, and `toInt()` /
-`fromInt()` convert. There is no automatic member *name* yet, so a `switch`
+`fromInt()` convert. There is no automatic member *name* yet, so a `when`
 function is the way to print one (`stress/language-tour`).
 
 ```simse
@@ -273,13 +299,16 @@ enum Color {
 }
 
 fun label(c: Color): Str {
-    switch (c) {
-        case Color.Red:
+    when (c) {
+        Color.Red -> {
             return "red"
-        case Color.Green:
+        }
+        Color.Green -> {
             return "green"
-        default:
+        }
+        else -> {
             return "other"
+        }
     }
 }
 ```
@@ -469,5 +498,6 @@ These are known rough edges, not design decisions to admire
 - `println` of a float uses the C++ default formatting, and `println` of an enum
   prints its integer value.
 - There is no `foreach` keyword (`for` is it, and a container has a `smToYield` so
-  `for (x in list)` works), no `when`/pattern matching, no string interpolation, no
-  default parameter values, no capture-by-reference, and no `Set`.
+  `for (x in list)` works), no `when` pattern labels (`is Type`, `in 1..5`) and no
+  subjectless `when`, no string interpolation, no default parameter values, no
+  capture-by-reference, and no `Set`.

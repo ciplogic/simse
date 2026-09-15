@@ -18,7 +18,7 @@ Identifier	4:23	a
 Operator	4:24	:
 Space	4:25	 
 Identifier	4:26	Int
-Operator	4:29	;
+Operator	4:29	,
 Space	4:30	 
 ReservedWord	4:31	var
 Space	4:34	 

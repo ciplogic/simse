@@ -319,6 +319,14 @@ for (value in source) { ... }
 for ((value, index) in source) { ... }
 ```
 
+A `*` in front of the variable binds a **pointer to the element** instead of a copy of
+it, through the container's `smToYieldPtr` (the same walk, yielding `*T`):
+
+```text
+for (*value in source) { ... }
+for ((*value, index) in source) { ... }
+```
+
 ```simse
 for (v in everyOther(10)) {              // a machine
     println(v.toString())
@@ -339,6 +347,10 @@ for (v in numbers.toArray()) {            // an Array<Int>, in order
 for (v in spanOf(*items)) {               // borrowed storage
     println(v.toString())
 }
+
+for (*cell in cells) {                    // a List<Cell>: no copy per iteration
+    cell.value = cell.value + 1           // ... and the write reaches the list
+}
 ```
 
 The construct is `source.smToYield()`, and the loop is the `while` the language
@@ -358,16 +370,27 @@ writes around it (`impl_specs/for.md`). So:
 - `break` and `continue` behave exactly as in a `while` loop. `continue` still
   advances the machine: it means "skip the rest of this body", never "re-read the
   same value".
-- **A type is iterable when it has a `smToYield`**: an extension returning `..T`, which
-  any type may add (`fun Point.walk(): ..Point` writes a machine like any other
-  `yield`ing function, so the *shape* is the interface, not a runtime one). A type with
-  none is an error, reported at the `for`:
+- **`*value` binds the element's *place*, not a copy.** The variable's type is `*T`,
+  so a container of aggregates is walked without copying them, and a write through the
+  variable reaches the element in the container. An aggregate reads through itself
+  (`cell.value` is the field of the pointed-to `Cell`); a scalar is read with `*value`.
+  This is the form for a hot loop over a container of values - it costs no more than
+  `while` with an index (`impl_specs/for.md`, the measurement there). `index` stays an
+  `Int` copy in the indexed form; only the *value* is a pointer.
+- **A type is iterable when it has a `smToYield`** (or a `smToYieldPtr`, for the `*v`
+  forms): an extension returning `..T` / `..*T`, which any type may add
+  (`fun Point.walk(): ..Point` writes a machine like any other `yield`ing function, so
+  the *shape* is the interface, not a runtime one). A type with none is an error,
+  reported at the `for`:
 
   ```text
   stress/diagnostic-not-iterable/src/main.kt:11:5: a `for` iterates a machine
   (`..T`) or a type with a `smToYield`, and Int has neither; iterate a container with
   `while` and an index
   ```
+
+  A machine has no pointer form - it hands out values, not places - so
+  `for (*v in someMachine)` is reported too.
 
 - A `for` inside a body that itself yields is not supported yet; the diagnosed
   alternative is to collect the values into a `List` first (`impl_specs/yield.md`).

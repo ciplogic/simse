@@ -2,17 +2,17 @@
 
 `linear::lowerBody` rewrites every function-like body (a function/method body or
 a lambda body) into a linear sequence of labels, jumps and blocks, so the C++
-emitter has no structured-control-flow cases at all. A future `for` would be
-desugared to `while` first; this pass owns `while` → `goto` and everything above
-it.
+emitter has no structured-control-flow cases at all. `for` and `when` are desugared
+while parsing (`impl_specs/for.md`, `specs/functions.md`), so this pass owns `while`
+→ `goto` and everything above it.
 
 - C++ ring: `cppsrc/linear/Linear.{h,cpp}` (`linear::lowerBody`).
 - Simse ring: `cppsrc/linear/Linear.kt` (`linLowerBody`), called by
   `cppsrc/codegen/Codegen.kt`.
 
 The pass runs **after sema and before emission**. Sema stays the only place that
-checks `break`/`continue` legality and case labels, and it still sees the
-structured AST. Emission calls the pass per body, so anything the emitter emits
+checks `break`/`continue` legality, and it still sees the structured AST.
+Emission calls the pass per body, so anything the emitter emits
 is already linear; if a structured statement ever reaches `emitStmt`, the
 emitter fails with an internal error instead of guessing.
 
@@ -49,35 +49,23 @@ while (c) { B }                       # the condition is evaluated once per
     B'
     goto L1;
     L2:;
-
-switch (e) { case A: ... default: ... }   # arms keep source order and
-    auto simse_sw_1 = e;                  # fall through exactly as in C
-    if (simse_sw_1 == A) goto L3;
-    ...
-    goto L5;                              # the default arm, or the end label
-    L3:;
-    arm0'
-    L4:;                                  # fallthrough target
-    arm1'
-    L5:;
-    default'
-    L2:;
 ```
 
-- `break` lowers to a jump to the innermost loop's or switch's end label;
-  `continue` to the innermost loop's condition label (a switch context does not
-  capture `continue`), matching `specs/functions.md`.
-- The switch subject is hoisted into an untyped `Stmt.VarDecl` so it is
-  evaluated exactly once, as a C++ `switch` subject would be. The name is
-  `simse_sw_<n>`; it is generated text and could in principle collide with a
-  source-level identifier of the same name (an accepted, documented risk).
+A `when` is not here at all: the parser has already turned it into the `if`/`else`
+chain it means, with the subject bound to one `_sm_when<n>` declaration
+(`specs/functions.md`), so the pass only ever lowers `if`, `while`, `break` and
+`continue`.
+
+- `break` lowers to a jump to the innermost loop's end label; `continue` to the
+  innermost loop's condition label. Both always target a loop: with no `switch`,
+  and a `when` already an `if`/`else` chain, no other construct captures them
+  (`specs/functions.md`).
 - **A region is wrapped in `Stmt.Block` only when it declares a variable at its
   own level.** A C++ jump may not bypass an initialization that is still in
   scope at the target, so a body whose lowered statements contain a `VarDecl`
   keeps its own `{ ... }`; a body that declares nothing is spliced flat into the
-  enclosing sequence. The check runs on the already-lowered statements, so a
-  `switch` subject (a synthesized `VarDecl`) also forces the surrounding region's
-  scope. Splicing is safe because labels are never placed inside a nested block:
+  enclosing sequence. The check runs on the already-lowered statements.
+  Splicing is safe because labels are never placed inside a nested block:
   a jump can enter a region but never a scope. The language already scopes each
   body separately (`sema` pushes a scope per body), so keeping the wrapper where
   declarations exist preserves semantics rather than changing them. The wrapper
@@ -268,9 +256,9 @@ the block has nothing left to hold.
 
 `linear::hoistSlots` (`cppsrc/linear/Simplify.{h,cpp}`, `linHoistSlots` in
 `cppsrc/linear/Simplify.kt`) moves **every** declaration of a body to the top of it -
-the lowering's own temporaries (`_sm_expr<n>`, `simse_sw_<n>`) and the program's
-`val`/`var` alike - and turns each initializer into an assignment where the
-declaration stood:
+the lowering's own temporaries (`_sm_expr<n>`) and the program's `val`/`var` alike
+(the parser's `_sm_when<n>` subject bindings move with them) - and turns each
+initializer into an assignment where the declaration stood:
 
 ```
 { Bool _sm_expr2 = i == 3; if (_sm_expr2) goto L4; }     var total = 0;
@@ -322,10 +310,9 @@ only reason the emitted C++ still has a block anywhere.
 The pass is pure and idempotent: a declaration without an initializer that already
 stands at the top is not a declaration to move, so a second run finds nothing (which
 is what the round's `changed` flag reports). One trap, recorded because it cost a
-debugging session: the prefixes are
-`_sm_expr` (8 characters) and `simse_sw_` (9), and `Str::compare(pos, count, ...)`
-takes the *count* - a wrong count silently compares different bytes and the pass just
-does nothing.
+debugging session: the slot prefix is `_sm_expr` (8 characters), and
+`Str::compare(pos, count, ...)` takes the *count* - a wrong count silently compares
+different bytes and the pass just does nothing.
 
 ## The pipeline
 
