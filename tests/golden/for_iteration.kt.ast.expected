@@ -1,0 +1,199 @@
+Module @1:1
+  Package fixtures @1:1
+  Function total @12:1
+    Param items: *List<Int>
+    Return Int
+    Body
+      VarDecl var sum: Int @13:5
+        Init
+          IntLit 0 @13:20
+      VarDecl var _sm_for1 @14:5
+        Init
+          Call @14:5
+            Callee
+              Member .smToYield @14:5
+                Receiver
+                  Name items @14:19
+      While @14:5
+        Cond
+          BoolLit true @14:5
+        Body
+          VarDecl var _sm_step1 @14:5
+            Init
+              Call @14:5
+                Callee
+                  Member .next @14:5
+                    Receiver
+                      Name _sm_for1 @14:5
+          If @14:5
+            Cond
+              Unary ! @14:5
+                Operand
+                  Call @14:5
+                    Callee
+                      Member .hasValue @14:5
+                        Receiver
+                          Name _sm_step1 @14:5
+            Then
+              Break @14:5
+          VarDecl val value @14:5
+            Init
+              Call @14:5
+                Callee
+                  Member .value @14:5
+                    Receiver
+                      Name _sm_step1 @14:5
+          Assign = @15:9
+            Target
+              Name sum @15:9
+            Value
+              Binary + @15:15
+                Lhs
+                  Name sum @15:15
+                Rhs
+                  Name value @15:21
+      Return @17:5
+        Name sum @17:12
+  Function arrayTotal @20:1
+    Param numbers: *List<Int>
+    Return Int
+    Body
+      VarDecl val arr: Array<Int> @21:5
+        Init
+          Call @21:27
+            Callee
+              Member .toArray @21:27
+                Receiver
+                  Name numbers @21:27
+      VarDecl var sum: Int @22:5
+        Init
+          IntLit 0 @22:20
+      VarDecl var _sm_for2 @23:5
+        Init
+          Call @23:5
+            Callee
+              Member .smToYield @23:5
+                Receiver
+                  Name arr @23:28
+      VarDecl var _sm_index2: Int @23:5
+        Init
+          IntLit -1 @23:5
+      While @23:5
+        Cond
+          BoolLit true @23:5
+        Body
+          Assign = @23:5
+            Target
+              Name _sm_index2 @23:5
+            Value
+              Binary + @23:5
+                Lhs
+                  Name _sm_index2 @23:5
+                Rhs
+                  IntLit 1 @23:5
+          VarDecl var _sm_step2 @23:5
+            Init
+              Call @23:5
+                Callee
+                  Member .next @23:5
+                    Receiver
+                      Name _sm_for2 @23:5
+          If @23:5
+            Cond
+              Unary ! @23:5
+                Operand
+                  Call @23:5
+                    Callee
+                      Member .hasValue @23:5
+                        Receiver
+                          Name _sm_step2 @23:5
+            Then
+              Break @23:5
+          VarDecl val value @23:5
+            Init
+              Call @23:5
+                Callee
+                  Member .value @23:5
+                    Receiver
+                      Name _sm_step2 @23:5
+          VarDecl val index @23:5
+            Init
+              Name _sm_index2 @23:5
+          If @24:9
+            Cond
+              Binary == @24:13
+                Lhs
+                  Name index @24:13
+                Rhs
+                  IntLit 0 @24:22
+            Then
+              Continue @25:13
+          Assign = @27:9
+            Target
+              Name sum @27:9
+            Value
+              Binary + @27:15
+                Lhs
+                  Name sum @27:15
+                Rhs
+                  Name value @27:21
+      Return @29:5
+        Name sum @29:12
+  Function main @32:1
+    Return Int
+    Body
+      VarDecl val numbers: List<Int> @33:5
+        Init
+          Call @33:30
+            Callee
+              GenericName List<Int> @33:30
+      ExprStmt @34:5
+        Call @34:5
+          Callee
+            Member .append @34:5
+              Receiver
+                Name numbers @34:5
+          Arg
+            IntLit 1 @34:20
+      ExprStmt @35:5
+        Call @35:5
+          Callee
+            Member .append @35:5
+              Receiver
+                Name numbers @35:5
+          Arg
+            IntLit 2 @35:20
+      ExprStmt @36:5
+        Call @36:5
+          Callee
+            Name println @36:5
+          Arg
+            Call @36:13
+              Callee
+                Member .toString @36:13
+                  Receiver
+                    Call @36:13
+                      Callee
+                        Name total @36:13
+                      Arg
+                        Deref @36:19
+                          Operand
+                            Name numbers @36:20
+      ExprStmt @37:5
+        Call @37:5
+          Callee
+            Name println @37:5
+          Arg
+            Call @37:13
+              Callee
+                Member .toString @37:13
+                  Receiver
+                    Call @37:13
+                      Callee
+                        Name arrayTotal @37:13
+                      Arg
+                        Deref @37:24
+                          Operand
+                            Name numbers @37:25
+      Return @38:5
+        IntLit 0 @38:12

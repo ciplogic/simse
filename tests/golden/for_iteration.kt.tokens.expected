@@ -1,0 +1,279 @@
+ReservedWord	1:1	package
+Space	1:8	 
+Identifier	1:9	fixtures
+EndOfLine	1:17	\n
+EndOfLine	2:1	\n
+Comment	3:1	// `for` over the containers the prelude gives a `smToYield` (impl_specs/for.md): a
+EndOfLine	3:84	\n
+Comment	4:1	// `List<T>` and an `Array<T>`.
+EndOfLine	4:32	\n
+Comment	5:1	//
+EndOfLine	5:3	\n
+Comment	6:1	// What this fixture pins is the *emission* around iteration. A machine's class is named
+EndOfLine	6:89	\n
+Comment	7:1	// after its receiver (`List_smToYield_yieldable`, `Array_smToYield_yieldable`), because
+EndOfLine	7:89	\n
+Comment	8:1	// the prelude writes one `smToYield` per container; and a prelude body is emitted for the
+EndOfLine	8:91	\n
+Comment	9:1	// receiver the program names, so the `Span` machine - the prelude has one - must not
+EndOfLine	9:86	\n
+Comment	10:1	// appear in the emitted C++ (tests/golden/for_iteration.kt.cpp.expected).
+EndOfLine	10:75	\n
+EndOfLine	11:1	\n
+ReservedWord	12:1	fun
+Space	12:4	 
+Identifier	12:5	total
+Operator	12:10	(
+Identifier	12:11	items
+Operator	12:16	:
+Space	12:17	 
+Operator	12:18	*
+Identifier	12:19	List
+Operator	12:23	<
+Identifier	12:24	Int
+Operator	12:27	>
+Operator	12:28	)
+Operator	12:29	:
+Space	12:30	 
+Identifier	12:31	Int
+Space	12:34	 
+Operator	12:35	{
+EndOfLine	12:36	\n
+Space	13:1	    
+ReservedWord	13:5	var
+Space	13:8	 
+Identifier	13:9	sum
+Operator	13:12	:
+Space	13:13	 
+Identifier	13:14	Int
+Space	13:17	 
+Operator	13:18	=
+Space	13:19	 
+Number	13:20	0
+EndOfLine	13:21	\n
+Space	14:1	    
+ReservedWord	14:5	for
+Space	14:8	 
+Operator	14:9	(
+Identifier	14:10	value
+Space	14:15	 
+Identifier	14:16	in
+Space	14:18	 
+Identifier	14:19	items
+Operator	14:24	)
+Space	14:25	 
+Operator	14:26	{
+EndOfLine	14:27	\n
+Space	15:1	        
+Identifier	15:9	sum
+Space	15:12	 
+Operator	15:13	=
+Space	15:14	 
+Identifier	15:15	sum
+Space	15:18	 
+Operator	15:19	+
+Space	15:20	 
+Identifier	15:21	value
+EndOfLine	15:26	\n
+Space	16:1	    
+Operator	16:5	}
+EndOfLine	16:6	\n
+Space	17:1	    
+ReservedWord	17:5	return
+Space	17:11	 
+Identifier	17:12	sum
+EndOfLine	17:15	\n
+Operator	18:1	}
+EndOfLine	18:2	\n
+EndOfLine	19:1	\n
+ReservedWord	20:1	fun
+Space	20:4	 
+Identifier	20:5	arrayTotal
+Operator	20:15	(
+Identifier	20:16	numbers
+Operator	20:23	:
+Space	20:24	 
+Operator	20:25	*
+Identifier	20:26	List
+Operator	20:30	<
+Identifier	20:31	Int
+Operator	20:34	>
+Operator	20:35	)
+Operator	20:36	:
+Space	20:37	 
+Identifier	20:38	Int
+Space	20:41	 
+Operator	20:42	{
+EndOfLine	20:43	\n
+Space	21:1	    
+ReservedWord	21:5	val
+Space	21:8	 
+Identifier	21:9	arr
+Operator	21:12	:
+Space	21:13	 
+Identifier	21:14	Array
+Operator	21:19	<
+Identifier	21:20	Int
+Operator	21:23	>
+Space	21:24	 
+Operator	21:25	=
+Space	21:26	 
+Identifier	21:27	numbers
+Operator	21:34	.
+Identifier	21:35	toArray
+Operator	21:42	(
+Operator	21:43	)
+EndOfLine	21:44	\n
+Space	22:1	    
+ReservedWord	22:5	var
+Space	22:8	 
+Identifier	22:9	sum
+Operator	22:12	:
+Space	22:13	 
+Identifier	22:14	Int
+Space	22:17	 
+Operator	22:18	=
+Space	22:19	 
+Number	22:20	0
+EndOfLine	22:21	\n
+Space	23:1	    
+ReservedWord	23:5	for
+Space	23:8	 
+Operator	23:9	(
+Operator	23:10	(
+Identifier	23:11	value
+Operator	23:16	,
+Space	23:17	 
+Identifier	23:18	index
+Operator	23:23	)
+Space	23:24	 
+Identifier	23:25	in
+Space	23:27	 
+Identifier	23:28	arr
+Operator	23:31	)
+Space	23:32	 
+Operator	23:33	{
+EndOfLine	23:34	\n
+Space	24:1	        
+ReservedWord	24:9	if
+Space	24:11	 
+Operator	24:12	(
+Identifier	24:13	index
+Space	24:18	 
+Operator	24:19	==
+Space	24:21	 
+Number	24:22	0
+Operator	24:23	)
+Space	24:24	 
+Operator	24:25	{
+EndOfLine	24:26	\n
+Space	25:1	            
+ReservedWord	25:13	continue
+EndOfLine	25:21	\n
+Space	26:1	        
+Operator	26:9	}
+EndOfLine	26:10	\n
+Space	27:1	        
+Identifier	27:9	sum
+Space	27:12	 
+Operator	27:13	=
+Space	27:14	 
+Identifier	27:15	sum
+Space	27:18	 
+Operator	27:19	+
+Space	27:20	 
+Identifier	27:21	value
+EndOfLine	27:26	\n
+Space	28:1	    
+Operator	28:5	}
+EndOfLine	28:6	\n
+Space	29:1	    
+ReservedWord	29:5	return
+Space	29:11	 
+Identifier	29:12	sum
+EndOfLine	29:15	\n
+Operator	30:1	}
+EndOfLine	30:2	\n
+EndOfLine	31:1	\n
+ReservedWord	32:1	fun
+Space	32:4	 
+Identifier	32:5	main
+Operator	32:9	(
+Operator	32:10	)
+Operator	32:11	:
+Space	32:12	 
+Identifier	32:13	Int
+Space	32:16	 
+Operator	32:17	{
+EndOfLine	32:18	\n
+Space	33:1	    
+ReservedWord	33:5	val
+Space	33:8	 
+Identifier	33:9	numbers
+Operator	33:16	:
+Space	33:17	 
+Identifier	33:18	List
+Operator	33:22	<
+Identifier	33:23	Int
+Operator	33:26	>
+Space	33:27	 
+Operator	33:28	=
+Space	33:29	 
+Identifier	33:30	List
+Operator	33:34	<
+Identifier	33:35	Int
+Operator	33:38	>
+Operator	33:39	(
+Operator	33:40	)
+EndOfLine	33:41	\n
+Space	34:1	    
+Identifier	34:5	numbers
+Operator	34:12	.
+Identifier	34:13	append
+Operator	34:19	(
+Number	34:20	1
+Operator	34:21	)
+EndOfLine	34:22	\n
+Space	35:1	    
+Identifier	35:5	numbers
+Operator	35:12	.
+Identifier	35:13	append
+Operator	35:19	(
+Number	35:20	2
+Operator	35:21	)
+EndOfLine	35:22	\n
+Space	36:1	    
+Identifier	36:5	println
+Operator	36:12	(
+Identifier	36:13	total
+Operator	36:18	(
+Operator	36:19	*
+Identifier	36:20	numbers
+Operator	36:27	)
+Operator	36:28	.
+Identifier	36:29	toString
+Operator	36:37	(
+Operator	36:38	)
+Operator	36:39	)
+EndOfLine	36:40	\n
+Space	37:1	    
+Identifier	37:5	println
+Operator	37:12	(
+Identifier	37:13	arrayTotal
+Operator	37:23	(
+Operator	37:24	*
+Identifier	37:25	numbers
+Operator	37:32	)
+Operator	37:33	.
+Identifier	37:34	toString
+Operator	37:42	(
+Operator	37:43	)
+Operator	37:44	)
+EndOfLine	37:45	\n
+Space	38:1	    
+ReservedWord	38:5	return
+Space	38:11	 
+Number	38:12	0
+EndOfLine	38:13	\n
+Operator	39:1	}
+EndOfLine	39:2	\n
