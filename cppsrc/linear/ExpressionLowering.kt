@@ -129,7 +129,7 @@ enum ExprSlot {
 
 data class ExprFlattener(
     // Per body, like the label counter in the linear pass.
-    var next: Int;
+    var next: Int,
     // Whether an expression was actually bound to a temporary. Everything else
     // this pass does keeps the shape it read, so a body that is already lowered
     // comes back with this false (`linLowerForEmission`).

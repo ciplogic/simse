@@ -80,7 +80,7 @@ selecting between same-named declarations) is a separate language change.
 | `Float32` / `Float64` | `Float32` / `Float64` | `float` / `double` |
 | `Char` | `Char` (`std::int8_t`) | byte value; streams print it as a character |
 | `Bool` | `Bool` (`bool`) | printed as `true`/`false` (see below) |
-| `Str` | `Str` (`SmString` by default, `std::string` with `SIMSE_STR_STD_STRING`) | mutable byte string; inline up to `SIMSE_STR_INLINE_CAPACITY - 1` bytes plus NUL (16 by default; 23 with the spec's 24) |
+| `Str` | `Str` (`SmString` by default, `std::string` with `SIMSE_STR_STD_STRING`) | mutable byte string; inline up to `kStrInlineCapacity - 1` bytes plus NUL (24 by default, `SIMSE_STR_INLINE_CAPACITY` overrides) |
 | `Unit` | `void` | only valid as a function return type |
 | `List<T>` | `List<T>` (`SmallVector<T, 4>` by default, `std::vector<T>` with `SIMSE_LIST_STD_VECTOR`) | value type, deep copies |
 | `Array<T>` | `Array<T>` (shim struct) | shared allocation, fixed length |
@@ -96,6 +96,60 @@ selecting between same-named declarations) is a separate language change.
 | user `data class C` | `struct C` (aggregate) + `_make_C` factory | construction lowers to the factory; no emitted constructors |
 | user `enum E` | `enum class E` | explicit values when given |
 | callable `(A, B) -> R` | `Func<R(A, B)>` (`std::function`) | `Unit` return -> `void` |
+
+## String literals: one table (T52)
+
+Every string literal in the program is emitted **once**, into a read-only table at
+the top of the file, and each site that mentions one reads the entry:
+
+```cpp
+// The program's string literals: one table, built once, read by every
+// site that mentions one (impl_specs/rtl-abi.md).
+static const Str __sm_stringTable[482] = {
+    "    ",
+    "Expr.IntLit",
+    ...
+};
+
+Str ns1_xmlKind(...) {
+    ...
+    return __sm_stringTable[31];      // was: return "Expr.IntLit";
+}
+```
+
+Three reasons, in order of how much they measured:
+
+- **A use that only *reads* the text stops constructing a `Str`.** Comparisons and
+  `const Str&` arguments (`simse_eprintln`, `simse_native_readFile`, every native in
+  `fs.hpp`) bind the entry with no conversion at all. A literal longer than the inline
+  capacity - 42% of the compiler's own are - used to build a heap-backed temporary at
+  each such site; now it cannot.
+- **The whole program shares one copy of each text.** A literal reused in a loop or in
+  five functions is built once instead of per use.
+- **An owned position still copies** (`x = "..."`, `return`, a by-value `Str`
+  parameter): the language's value semantics say so, and the copy of a heap-backed
+  entry allocates exactly as the literal did. That is why the win is ~2% on the
+  compiler's self-transpile and not more - comparisons were already construction-free
+  (below).
+
+The table is `static const`, **not `constexpr`**: the 42% of literals that exceed the
+inline capacity cannot keep a heap allocation inside a constant expression, so the
+entries are built by the program's dynamic initialization, before `main` runs. The
+indices are compile-time constants the emitter assigns, so there is no dictionary and
+no start-up lookup; the entries are sorted so the table is canonical and the two rings
+agree on every index (T22/T23).
+
+A literal the *lowering* invents is not in the parsed program and keeps its own
+spelling at the site, and the prelude's literals are not emitted (the prelude is
+included, not transpiled).
+
+**Why not wrap each literal in a `constexpr` helper instead.** That was measured and
+is *slower* (~3%): the RTL's `const char*` overloads (`operator==(const SmString&,
+const char*)` and friends) compare a literal **in place** - `compareBytes(text,
+length)` with the `strlen` folded to a constant - so they never built a temporary, and
+wrapping forces one. The conversion path was already `constexpr`
+(`SmString(const char*)` over the constexpr `assign`), so there was nothing left to
+fold there either.
 
 ## Divergences from `specs/`
 

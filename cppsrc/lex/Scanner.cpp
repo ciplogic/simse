@@ -49,7 +49,7 @@ namespace lex {
         "if", "else", "true", "false", "null",
         "enum", "typealias", "native", "import", "this",
         "break", "continue",
-        "switch", "case", "default",
+        "when",
         "yield",
         "package"
     };

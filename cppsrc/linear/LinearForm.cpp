@@ -191,10 +191,6 @@ namespace linear {
                 collectStmtNames(stmt.body, declared, order, seen);
                 collectStmtNames(stmt.thenBody, declared, order, seen);
                 collectStmtNames(stmt.elseBody, declared, order, seen);
-                for (const ast::SwitchCase &arm: stmt.cases) {
-                    if (arm.label) collectExprNames(*arm.label, order, seen);
-                    collectStmtNames(arm.body, declared, order, seen);
-                }
             }
         }
 
@@ -447,7 +443,6 @@ namespace linear {
                         return;
                     case StmtKind::If:
                     case StmtKind::While:
-                    case StmtKind::Switch:
                     case StmtKind::Break:
                     case StmtKind::Continue:
                         unsupported("structured statement reached the IL");

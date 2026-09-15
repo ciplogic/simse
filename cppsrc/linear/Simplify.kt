@@ -414,7 +414,7 @@ fun simBoundNames(body: AstXmlNode, bound: List<Str>): List<Str> {
     return names
 }
 
-data class SimRenamer(var scopes: List<SimRenameScope>;
+data class SimRenamer(var scopes: List<SimRenameScope>,
 
 var used: Dictionary<Str, Bool>)
 {
@@ -537,7 +537,7 @@ var used: Dictionary<Str, Bool>)
         while (i < node.Children.count()) {
             val child: AstXmlNode = node.Children[i]
             if (child.name == AstNodeKind.Body || child.name == AstNodeKind.Then
-                || child.name == AstNodeKind.Else || child.name == AstNodeKind.Case
+                || child.name == AstNodeKind.Else
             ) {
                 val stmts: List<AstXmlNode> = xmlChildren(*child, AstNodeKind.Stmt)
                 if (stmts.size() > 0) {

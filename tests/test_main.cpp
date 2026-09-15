@@ -301,30 +301,24 @@ int main(int argc, char **argv) {
         }
     }
 
-    // Negative fixture: a `case` label that is not a constant expression must be
-    // diagnosed.
+    // Negative fixture: an arm after `else` must be diagnosed - `else` becomes the
+    // chain's else body, so there is nowhere for a later arm to go.
     {
-        Str path = (common::toPath(fixturesDir) / "sema_switch_label.kt").string();
+        Str path = (common::toPath(fixturesDir) / "when_else_last.kt").string();
         ScanResult scan = scanFile(&scanner, path);
         List<Token> tokens = scan.tokens;
         Res<ast::Module> parsed = scan.ok
-                                      ? parser::parseModule(tokens, "sema_switch_label.kt")
+                                      ? parser::parseModule(tokens, "when_else_last.kt")
                                       : resError<ast::Module>("scan failed");
-        bool reported = false;
-        if (parsed.isOk()) {
-            List<Str> diagnostics = analyzeOne(parsed.Value, "sema_switch_label.kt");
-            for (const Str &diagnostic: diagnostics) {
-                if (diagnostic.find("case label must be a constant expression") != Str::npos) {
-                    reported = true;
-                }
-            }
-        }
+        bool reported = !parsed.isOk()
+                        && parsed.Error.find("'else' must be the last arm of a 'when'")
+                               != Str::npos;
         if (reported) {
             passed++;
-            printf("PASS negative sema_switch_label.kt (case-label diagnostic reported)\n");
+            printf("PASS negative when_else_last.kt (arm-after-else diagnostic reported)\n");
         } else {
             failed++;
-            printf("FAIL negative sema_switch_label.kt: expected a case-label diagnostic\n");
+            printf("FAIL negative when_else_last.kt: expected an arm-after-else diagnostic\n");
         }
     }
 
@@ -438,7 +432,8 @@ int main(int argc, char **argv) {
         Str cpp = emitFixture(&scanner, stressSource(fixturesDir, "native-read-file"), "main.kt");
         bool ok = !cpp.empty()
                   && cpp.find("Str simse_native_readFile(const Str& path);") != Str::npos
-                  && cpp.find("simse_native_readFile(\"stress/native-read-file/native_data.txt\")") != Str::npos;
+                  && cpp.find("simse_native_readFile(__sm_stringTable[") != Str::npos
+                  && cpp.find("\"stress/native-read-file/native_data.txt\"") != Str::npos;
         if (ok) {
             passed++;
             printf("PASS stress/native-read-file (native symbol declared and called)\n");

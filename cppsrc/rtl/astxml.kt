@@ -44,7 +44,6 @@ enum AstNodeKind {
     Then,
     Else,
     Body,
-    Case,
     Label,
     Init,
     Value,
@@ -75,8 +74,7 @@ enum AstNodeAttributeKind {
     Op,
     Value,
     Text,
-    HasValue,
-    IsDefault
+    HasValue
 }
 
 // What a node is - the schema's `kind` - as opposed to its role (`AstNodeKind`,
@@ -96,7 +94,6 @@ enum AstNodeCategory {
     StmtAssign,
     StmtIf,
     StmtWhile,
-    StmtSwitch,
     StmtReturn,
     StmtBreak,
     StmtContinue,
@@ -106,6 +103,7 @@ enum AstNodeCategory {
     StmtIfTrue,
     StmtIfFalse,
     StmtBlock,
+
     // `yield e` (impl_specs/yield.md): the value a state machine hands out.
     StmtYield,
     ExprIntLit,
@@ -131,14 +129,21 @@ enum AstNodeCategory {
     TypeReference,
     TypePointer,
     TypeFunction,
+
     // `..T`: the body yields `T`, so the function builds a state machine.
     TypeYield
 }
 
 // One attribute: a key from the schema and its text value (numbers as decimal
 // text, booleans as "true"/"false"), so a node's scalars stay stringly typed.
-data class AstNodeAttribute(var name: AstNodeAttributeKind; var value: Str)
+data class AstNodeAttribute(var name: AstNodeAttributeKind,
+
+var value: Str)
 
 // One AST node: its role, its category, its attributes, and its children - one
 // ref-counted `Array<AstXmlNode>` whose shared empty array is what a leaf holds.
-data class AstXmlNode(var name: AstNodeKind; var kind: AstNodeCategory; var attributes: List<AstNodeAttribute>; var Children: Array<AstXmlNode>)
+data class AstXmlNode(var name: AstNodeKind,
+
+var kind: AstNodeCategory,
+var attributes: List<AstNodeAttribute>,
+var Children: Array<AstXmlNode>)

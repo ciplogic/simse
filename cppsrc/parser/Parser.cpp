@@ -203,10 +203,11 @@ namespace parser {
             List<Token> toks;
             int cursor = 0;
             Str file;
-            // The `for` desugaring's names (`_sm_for<n>`, `_sm_step<n>`, `_sm_index<n>`)
-            // come from this counter: per file, so nested loops never collide and two
-            // runs of the same source produce the same names.
-            int nextForId = 1;
+            // The `for` and `when` desugarings' names (`_sm_for<n>`, `_sm_step<n>`,
+            // `_sm_index<n>`, `_sm_when<n>`) come from this counter: per file, so nested
+            // constructs never collide and two runs of the same source produce the same
+            // names.
+            int nextTemplateId = 1;
 
             // ---- token cursor helpers -------------------------------------
 
@@ -274,6 +275,18 @@ namespace parser {
 
             void skipSeparators() {
                 while (checkKind(TokenKind::EndOfLine) || checkText(";")) {
+                    advance();
+                }
+            }
+
+            // The separator between a data class's fields: Kotlin's `,`
+            // (specs/declarations.md, "data class"). A `;` is accepted there too - it is
+            // what the sources used before the spelling was aligned with Kotlin, and it
+            // costs nothing to keep. Only the *field* list takes a comma: between
+            // statements and methods it is not a separator, because there it would read
+            // as an expression part.
+            void skipFieldSeparators() {
+                while (checkKind(TokenKind::EndOfLine) || checkText(";") || checkText(",")) {
                     advance();
                 }
             }
@@ -353,7 +366,7 @@ namespace parser {
                 }
 
                 if (matchText("(")) {
-                    skipSeparators();
+                    skipFieldSeparators();
                     while (!checkText(")") && !atEnd()) {
                         ast::Field field;
                         field.pos = peek().pos;
@@ -371,7 +384,7 @@ namespace parser {
                             if (!field.type) return decl;
                         }
                         decl->fields.push_back(field);
-                        skipSeparators();
+                        skipFieldSeparators();
                     }
                     if (!expectText(")")) return decl;
                 }
@@ -676,10 +689,12 @@ namespace parser {
             }
 
             // One source statement, appended to `out`. A statement *may* expand to
-            // more than one: `for` is a declaration plus the loop it runs (`parseFor`),
-            // and the declaration has to sit outside the loop.
+            // more than one: `for` is a declaration plus the loop it runs (`parseFor`)
+            // and `when` is a binding plus the `if`/`else` chain it means (`parseWhen`),
+            // and in both cases the binding has to sit outside what reads it.
             bool parseStmtInto(List<ast::StmtPtr> &out) {
                 if (checkText("for")) return parseFor(out);
+                if (checkText("when")) return parseWhen(out);
                 ast::StmtPtr stmt = parseStmt();
                 if (!stmt) return false;
                 out.push_back(stmt);
@@ -690,7 +705,6 @@ namespace parser {
                 if (checkText("val") || checkText("var")) return parseVarDecl();
                 if (checkText("if")) return parseIf();
                 if (checkText("while")) return parseWhile();
-                if (checkText("switch")) return parseSwitch();
                 if (checkText("return")) return parseReturn();
                 if (checkText("yield")) return parseYield();
                 if (checkText("break")) {
@@ -860,10 +874,10 @@ namespace parser {
                 List<ast::StmtPtr> body = parseBlock();
                 if (failed) return false;
 
-                const Str machineName = Str("_sm_for") + std::to_string(nextForId);
-                const Str stepName = Str("_sm_step") + std::to_string(nextForId);
-                const Str counterName = Str("_sm_index") + std::to_string(nextForId);
-                nextForId++;
+                const Str machineName = Str("_sm_for") + std::to_string(nextTemplateId);
+                const Str stepName = Str("_sm_step") + std::to_string(nextTemplateId);
+                const Str counterName = Str("_sm_index") + std::to_string(nextTemplateId);
+                nextTemplateId++;
 
                 // The iterated expression is wrapped in the invisible `smToYield()` call:
                 // a `for` iterates whatever has one, so a container walks itself in order
@@ -918,44 +932,130 @@ namespace parser {
                 return true;
             }
 
-            ast::StmtPtr parseSwitch() {
-                auto stmt = std::make_shared<ast::Stmt>();
-                stmt->kind = ast::StmtKind::Switch;
-                stmt->pos = peek().pos;
-                advance(); // switch
-                if (!expectText("(")) return nullptr;
-                stmt->cond = parseExpr(0);
-                if (!stmt->cond) return nullptr;
-                if (!expectText(")")) return nullptr;
-                skipNewlines();
-                if (!expectText("{")) return nullptr;
-                skipSeparators();
-                while (!checkText("}") && !atEnd()) {
-                    ast::SwitchCase switchCase;
-                    switchCase.pos = peek().pos;
-                    if (matchText("case")) {
-                        skipNewlines();
-                        switchCase.label = parseExpr(0);
-                        if (!switchCase.label) return nullptr;
-                        if (!expectText(":")) return nullptr;
-                    } else if (matchText("default")) {
-                        switchCase.isDefault = true;
-                        if (!expectText(":")) return nullptr;
-                    } else {
-                        fail("expected 'case' or 'default'");
-                        return nullptr;
-                    }
-                    skipSeparators();
-                    // The arm body runs until the next label or the closing brace.
-                    while (!checkText("case") && !checkText("default")
-                           && !checkText("}") && !atEnd()) {
-                        if (!parseStmtInto(switchCase.body)) return nullptr;
-                        skipSeparators();
-                    }
-                    stmt->cases.push_back(switchCase);
+            // `subj == a || subj == b`: one condition for an arm, so an arm with several
+            // labels emits its body once and any expression is a legal label.
+            ast::ExprPtr whenCondition(const Str &subject, const List<ast::ExprPtr> &labels,
+                                      const common::SourcePos &pos) {
+                ast::ExprPtr cond;
+                for (const ast::ExprPtr &label: labels) {
+                    ast::ExprPtr equals = binaryExpr("==", nameExpr(subject, pos), label, pos);
+                    cond = cond ? binaryExpr("||", cond, equals, pos) : equals;
                 }
-                if (!expectText("}")) return nullptr;
-                return stmt;
+                return cond;
+            }
+
+            // `when` (specs/functions.md): the language's selection statement, in
+            // Kotlin's spelling and with Kotlin's semantics, desugared right here to the
+            // `if`/`else` chain it means - so nothing downstream knows what a `when` is:
+            //
+            //   when (kind) {
+            //       Kind.A, Kind.B -> { body1 }
+            //       Kind.C -> { body2 }
+            //       else -> { body3 }
+            //   }
+            //     ->
+            //   var _sm_when1 = kind
+            //   if (_sm_when1 == Kind.A || _sm_when1 == Kind.B) { body1 }
+            //   else if (_sm_when1 == Kind.C) { body2 }
+            //   else { body3 }
+            //
+            // The subject is bound to a name of the template's own (as `for` binds the
+            // machine): the source evaluates it once, so the chain must too. The arm
+            // bodies are blocks, `else` is the last arm, and arms do not fall through -
+            // which is what makes a `break`/`continue` inside an arm the enclosing
+            // loop's, as it is in Kotlin.
+            bool parseWhen(List<ast::StmtPtr> &out) {
+                const common::SourcePos pos = peek().pos;
+                advance(); // when
+                if (!expectText("(")) return false;
+                ast::ExprPtr subject = parseExpr(0);
+                if (!subject) return false;
+                if (!expectText(")")) return false;
+                skipNewlines();
+                if (!expectText("{")) return false;
+                skipSeparators();
+
+                // The template's own name for the subject, before the arms are parsed:
+                // a nested `for`/`when` in an arm body takes the next id (both rings
+                // number the same way).
+                const Str subjectName = Str("_sm_when") + std::to_string(nextTemplateId);
+                nextTemplateId++;
+
+                struct Arm {
+                    List<ast::ExprPtr> labels;
+                    common::SourcePos pos{};
+                    List<ast::StmtPtr> body;
+                    bool isElse = false;
+                };
+
+                bool sawElse = false;
+                List<Arm> arms;
+                while (!checkText("}") && !atEnd() && !failed) {
+                    Arm arm;
+                    arm.pos = peek().pos;
+                    if (matchText("else")) {
+                        if (sawElse) return fail("'when' can have only one 'else' arm");
+                        sawElse = true;
+                        arm.isElse = true;
+                    } else {
+                        if (sawElse) return fail("'else' must be the last arm of a 'when'");
+                        // `is`/`in`/a range are Kotlin's pattern labels; the language has
+                        // `==` against a value and that is all `when` matches on today.
+                        if (checkText("is") || checkText("in")) {
+                            return fail("'when' matches a value or 'else', not a pattern");
+                        }
+                        ast::ExprPtr label = parseExpr(0);
+                        if (!label) return false;
+                        arm.labels.push_back(label);
+                        while (matchText(",")) {
+                            skipNewlines();
+                            ast::ExprPtr next = parseExpr(0);
+                            if (!next) return false;
+                            arm.labels.push_back(next);
+                        }
+                    }
+                    skipNewlines();
+                    if (!expectText("->")) return false;
+                    arm.body = parseBlock();
+                    if (failed) return false;
+                    arms.push_back(arm);
+                    skipSeparators();
+                }
+                if (!expectText("}")) return false;
+
+                // The chain is built from the last arm back to the first, because
+                // `else if` is an `if` in the previous arm's else body. An `else` arm
+                // contributes its statements as the chain's tail instead of a node.
+                List<ast::StmtPtr> tail;
+                int last = (int) arms.size() - 1;
+                if (last >= 0 && arms[last].isElse) {
+                    tail = arms[last].body;
+                    last--;
+                }
+                ast::StmtPtr chain;
+                for (int i = last; i >= 0; i--) {
+                    auto node = std::make_shared<ast::Stmt>();
+                    node->kind = ast::StmtKind::If;
+                    node->pos = arms[i].pos;
+                    node->cond = whenCondition(subjectName, arms[i].labels, arms[i].pos);
+                    node->thenBody = arms[i].body;
+                    if (chain) {
+                        node->hasElse = true;
+                        node->elseBody.push_back(chain);
+                    } else if (!tail.empty()) {
+                        node->hasElse = true;
+                        node->elseBody = tail;
+                    }
+                    chain = node;
+                }
+                out.push_back(varDeclStmt(subjectName, true, nullptr, subject, pos));
+                if (chain) {
+                    out.push_back(chain);
+                } else {
+                    // `else` was the only arm: its statements are the whole construct.
+                    for (const ast::StmtPtr &stmt: tail) out.push_back(stmt);
+                }
+                return true;
             }
 
             ast::StmtPtr parseReturn() {

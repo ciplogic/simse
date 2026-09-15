@@ -27,10 +27,15 @@ enum TokenKind {
 typealias MatchLenFunc = (StrView) -> Int
 typealias CharPredicate = (Char) -> Bool
 
-data class Token(var text: Str; var kind: TokenKind; var pos: SourcePos)
+data class Token(var text: Str,
+
+var kind: TokenKind,
+var pos: SourcePos)
 
 // A matcher returns how many leading characters it accepts, or 0 for no match.
-data class TokenMatcher(var tokenKind: TokenKind; var match: MatchLenFunc)
+data class TokenMatcher(var tokenKind: TokenKind,
+
+var match: MatchLenFunc)
 
 // Horizontal whitespace only. Line endings are their own token kind.
 fun isSpace(ch: Char): Bool {
@@ -51,11 +56,11 @@ fun isAlphaOrDigit(ch: Char): Bool {
 
 fun isOperatorChar(ch: Char): Bool {
     return ch == '+' || ch == '-' || ch == '*' || ch == '/'
-        || ch == '%' || ch == '=' || ch == '<' || ch == '>'
-        || ch == '!' || ch == '&' || ch == '|' || ch == '^'
-        || ch == '~' || ch == '?' || ch == ':' || ch == ';'
-        || ch == ',' || ch == '.' || ch == '(' || ch == ')'
-        || ch == '[' || ch == ']' || ch == '{' || ch == '}'
+            || ch == '%' || ch == '=' || ch == '<' || ch == '>'
+            || ch == '!' || ch == '&' || ch == '|' || ch == '^'
+            || ch == '~' || ch == '?' || ch == ':' || ch == ';'
+            || ch == ',' || ch == '.' || ch == '(' || ch == ')'
+            || ch == '[' || ch == ']' || ch == '{' || ch == '}'
 }
 
 fun matchAllOfRule(view: StrView, predicate: CharPredicate): Int {
@@ -120,9 +125,7 @@ fun makeReservedWords(): List<Str> {
     words.append("this")
     words.append("break")
     words.append("continue")
-    words.append("switch")
-    words.append("case")
-    words.append("default")
+    words.append("when")
     words.append("yield")
     words.append("package")
     return words
@@ -181,11 +184,11 @@ fun tableMatch(view: StrView, table: *List<Str>, exact: Bool): Int {
 
 // Pointers into the tables, so a caller can look without copying.
 fun reservedWords(): *List<Str> {
-    return *reservedWordTable
+    return * reservedWordTable
 }
 
 fun multiCharOperators(): *List<Str> {
-    return *multiCharOperatorTable
+    return * multiCharOperatorTable
 }
 
 fun isReservedWord(view: StrView): Bool {
@@ -342,7 +345,7 @@ fun makeTokenRules(): List<TokenMatcher> {
 }
 
 fun getTokenRules(): *List<TokenMatcher> {
-    return *tokenRuleTable
+    return * tokenRuleTable
 }
 
 // Escapes the first `maxLen` bytes of `view` for a single-line diagnostic:
@@ -392,7 +395,13 @@ fun unexpectedCharacterMessage(line: Int, column: Int, snippet: Str): Str {
     return line.toString() + ":" + column.toString() + ": Unexpected character: '" + snippet + "'"
 }
 
-data class Scanner(var rules: *List<TokenMatcher>; var pos: Int; var line: Int; var column: Int; var source: Str) {
+data class Scanner(var rules: *List<TokenMatcher>,
+
+var pos: Int,
+var line: Int,
+var column: Int,
+var source: Str)
+{
     fun setSource(text: Str): Unit {
         this.source = text
         this.pos = 0

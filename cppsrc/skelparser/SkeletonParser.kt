@@ -25,7 +25,7 @@ enum SkeletonType {
 
 // The children list is a counted reference, so the node type can be recursive
 // without embedding SkeletonNode values inline.
-data class SkeletonNode(var children: &List<SkeletonNode>; var type: SkeletonType; var token: Token) {
+data class SkeletonNode(var children: &List<SkeletonNode>, var type: SkeletonType, var token: Token) {
     fun setNodeType(skeletonType: SkeletonType): Unit {
         this.type = skeletonType
         this.children = &List<SkeletonNode>()

@@ -11,4 +11,4 @@ native("simse_native_readFile") fun readFile(filePath: Str): Str
 // token's first character; `line` and `column` are 1-based. Tabs count as a
 // single column. A newline is '\n', or '\r' not immediately followed by
 // '\n', so CRLF advances the line exactly once.
-data class SourcePos(var offset: Int; var line: Int; var column: Int)
+data class SourcePos(var offset: Int, var line: Int, var column: Int)

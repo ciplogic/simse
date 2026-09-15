@@ -1143,6 +1143,42 @@ numbers shifted with the parser/scanner edits).
   renamer's masked rewrite handing `false` to a lambda body's own lists, which is what
   the C++ ring's `rewriteUses(..., false)` already did.
 
+- **String literals are emitted into one table, read by index (T52).** The user's
+  reading of the emitted output: *for large programs these optimizations add up*, so
+  readability is not a constraint on what the emitter may spell. Every literal in the
+  program now goes into a `static const Str __sm_stringTable[N] = { ... };` at the top
+  of the file, sorted (so the two rings agree on every index - T22/T23) and built once
+  before `main`, and each site reads its entry: `return __sm_stringTable[31];` where
+  the source wrote `return "Expr.IntLit";`.
+
+  What it buys, in the order it measured: a use that only **reads** the text -
+  a comparison, or a `const Str&` argument, which is how every native in `fs.hpp` and
+  the diagnostic printers take a string - binds the entry with no conversion at all,
+  where a literal over the inline capacity used to build a heap-backed temporary at
+  each such site (42% of the compiler's own literals are); and one copy of each text is
+  shared by the whole program. An *owned* position still copies - the language's value
+  semantics - which is why the win is ~2% and not more.
+
+  The table cannot be `constexpr`: 42% of the literals exceed the inline capacity, and
+  a heap allocation cannot escape a constant evaluation, so the entries are built by
+  dynamic initialization. It is also **not** a `List<Str>` built by a `setupTexts()`
+  with a dictionary: the emitter assigns the indices while compiling, so there is
+  nothing to look up, and a growing `List` would reallocate and *copy* every entry -
+  each copy of a heap-backed entry allocating again.
+
+  Measured (interleaved A/B, same machine state, two runs of 13 and 19 pairs): the
+  self-transpile of `cppsrc` goes 827/855 ms and 822/841 ms (best/median) **before** to
+  816/835 ms and 808/824 ms **after** - about 2% faster, and ~1470 sites now read the
+  table. A separate experiment that wrapped every literal in a `constexpr`
+  `_to_smString(...)` helper instead was **3% slower** and was reverted: the RTL's
+  `const char*` overloads already compare a literal in place, so wrapping only forced
+  a temporary into existence where there had been none.
+
+  Verified: five differentials byte-identical, T23 byte-identical in both
+  configurations, `simse_tests.exe` **55/55**, `bun tools/stress.js` **30/30** with the
+  C++ ring, the self-hosted `simse.exe` and the stage-1 binary, and
+  `bun tools/bootstrap.js` fixed point byte for byte.
+
 ### Note: the shape of a lookup like this
 
 Worth recording because the first attempt at T39 got it wrong in four ways the

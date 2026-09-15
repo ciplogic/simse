@@ -88,8 +88,6 @@ namespace sema {
             List<Dictionary<Str, ValueBinding>> scopes;
             List<List<Str>> typeScopes;
             int loopDepth = 0;
-            // `break` is valid in a loop or a switch; `continue` only in a loop.
-            int breakDepth = 0;
 
             void diag(const common::SourcePos &pos, const Str &message) {
                 diags.push_back(file + ":" + std::to_string(pos.line) + ":" + std::to_string(pos.column)
@@ -504,39 +502,17 @@ namespace sema {
                         if (stmt.cond) analyzeExpr(*stmt.cond);
                         pushScope();
                         loopDepth++;
-                        breakDepth++;
                         for (const ast::StmtPtr &child: stmt.body) {
                             analyzeStmt(*child);
                         }
-                        breakDepth--;
                         loopDepth--;
                         popScope();
                         return;
-                    case StmtKind::Switch: {
-                        if (stmt.cond) analyzeExpr(*stmt.cond);
-                        breakDepth++;
-                        for (const ast::SwitchCase &switchCase: stmt.cases) {
-                            if (!switchCase.isDefault && switchCase.label) {
-                                analyzeExpr(*switchCase.label);
-                                if (!isConstantExpr(*switchCase.label)) {
-                                    diag(switchCase.label->pos,
-                                         "case label must be a constant expression");
-                                }
-                            }
-                            pushScope();
-                            for (const ast::StmtPtr &child: switchCase.body) {
-                                analyzeStmt(*child);
-                            }
-                            popScope();
-                        }
-                        breakDepth--;
-                        return;
-                    }
                     case StmtKind::Return:
                         if (stmt.returnValue) analyzeExpr(*stmt.returnValue);
                         return;
                     case StmtKind::Break:
-                        if (breakDepth == 0) diag(stmt.pos, "'break' outside a loop or switch");
+                        if (loopDepth == 0) diag(stmt.pos, "'break' outside a loop");
                         return;
                     case StmtKind::Continue:
                         if (loopDepth == 0) diag(stmt.pos, "'continue' outside a loop");
@@ -544,26 +520,6 @@ namespace sema {
                     case StmtKind::ExprStmt:
                         if (stmt.expr) analyzeExpr(*stmt.expr);
                         return;
-                }
-            }
-
-            // A `case` label must be a compile-time constant. We accept literals,
-            // names, enum-qualified members, and unary negation of those; anything
-            // clearly dynamic (a call, index, or the like) is rejected.
-            bool isConstantExpr(const ast::Expr &expr) const {
-                switch (expr.kind) {
-                    case ExprKind::IntLit:
-                    case ExprKind::FloatLit:
-                    case ExprKind::StrLit:
-                    case ExprKind::CharLit:
-                    case ExprKind::BoolLit:
-                    case ExprKind::Name:
-                    case ExprKind::Member:
-                        return true;
-                    case ExprKind::Unary:
-                        return expr.lhs && isConstantExpr(*expr.lhs);
-                    default:
-                        return false;
                 }
             }
 

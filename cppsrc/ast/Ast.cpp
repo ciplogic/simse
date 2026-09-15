@@ -181,21 +181,6 @@ namespace ast {
                             dumpStmt(*child, indent + 2);
                         }
                         break;
-                    case StmtKind::Switch:
-                        line(indent, "Switch @" + posStr(s.pos));
-                        dumpChild(indent + 1, "Cond", s.cond);
-                        for (const SwitchCase &switchCase: s.cases) {
-                            if (switchCase.isDefault) {
-                                line(indent + 1, "Default @" + posStr(switchCase.pos));
-                            } else {
-                                line(indent + 1, "Case @" + posStr(switchCase.pos));
-                                if (switchCase.label) dumpExpr(*switchCase.label, indent + 2);
-                            }
-                            for (const StmtPtr &child: switchCase.body) {
-                                dumpStmt(*child, indent + 2);
-                            }
-                        }
-                        break;
                     case StmtKind::Return:
                         line(indent, "Return @" + posStr(s.pos));
                         if (s.returnValue) {
@@ -436,7 +421,6 @@ namespace ast {
                 case StmtKind::Assign: return "Assign";
                 case StmtKind::If: return "If";
                 case StmtKind::While: return "While";
-                case StmtKind::Switch: return "Switch";
                 case StmtKind::Return: return "Return";
                 case StmtKind::Break: return "Break";
                 case StmtKind::Continue: return "Continue";
@@ -484,7 +468,6 @@ namespace ast {
                 case StmtKind::Assign: return AstNodeCategory::StmtAssign;
                 case StmtKind::If: return AstNodeCategory::StmtIf;
                 case StmtKind::While: return AstNodeCategory::StmtWhile;
-                case StmtKind::Switch: return AstNodeCategory::StmtSwitch;
                 case StmtKind::Return: return AstNodeCategory::StmtReturn;
                 case StmtKind::Break: return AstNodeCategory::StmtBreak;
                 case StmtKind::Continue: return AstNodeCategory::StmtContinue;
@@ -694,21 +677,6 @@ namespace ast {
                     addChild(node, body);
                     break;
                 }
-                case StmtKind::Switch: {
-                    if (stmt.cond) addChild(node, exprToXml(AstNodeKind::Cond, *stmt.cond));
-                    for (const SwitchCase &switchCase: stmt.cases) {
-                        List<AstNodeAttribute> caseAttrs;
-                        caseAttrs.push_back(AstNodeAttribute(AstNodeAttributeKind::IsDefault, boolStr(switchCase.isDefault)));
-                        addPos(caseAttrs, switchCase.pos);
-                        AstXmlNode caseNode = makeNode(AstNodeKind::Case, AstNodeCategory::None, caseAttrs);
-                        if (!switchCase.isDefault && switchCase.label) {
-                            addChild(caseNode, exprToXml(AstNodeKind::Label, *switchCase.label));
-                        }
-                        for (const StmtPtr &s: switchCase.body) addChild(caseNode, stmtToXml(*s));
-                        addChild(node, caseNode);
-                    }
-                    break;
-                }
                 case StmtKind::Return:
                     if (stmt.returnValue) addChild(node, exprToXml(AstNodeKind::Value, *stmt.returnValue));
                     break;
@@ -871,7 +839,6 @@ namespace ast {
             case AstNodeKind::Then: return "Then";
             case AstNodeKind::Else: return "Else";
             case AstNodeKind::Body: return "Body";
-            case AstNodeKind::Case: return "Case";
             case AstNodeKind::Label: return "Label";
             case AstNodeKind::Init: return "Init";
             case AstNodeKind::Value: return "Value";
@@ -904,7 +871,6 @@ namespace ast {
             case AstNodeAttributeKind::Value: return "value";
             case AstNodeAttributeKind::Text: return "text";
             case AstNodeAttributeKind::HasValue: return "hasValue";
-            case AstNodeAttributeKind::IsDefault: return "isDefault";
         }
         return "";
     }
@@ -924,7 +890,6 @@ namespace ast {
             case AstNodeCategory::StmtAssign: return "Stmt.Assign";
             case AstNodeCategory::StmtIf: return "Stmt.If";
             case AstNodeCategory::StmtWhile: return "Stmt.While";
-            case AstNodeCategory::StmtSwitch: return "Stmt.Switch";
             case AstNodeCategory::StmtReturn: return "Stmt.Return";
             case AstNodeCategory::StmtBreak: return "Stmt.Break";
             case AstNodeCategory::StmtContinue: return "Stmt.Continue";

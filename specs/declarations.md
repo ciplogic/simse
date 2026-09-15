@@ -13,8 +13,12 @@ use `&T` when shared identity is required.
 The first supported user-defined type is `Point`:
 
 ```text
-data class Point(var x: Int; var y: Int)
+data class Point(var x: Int, var y: Int)
 ```
+
+Fields are separated by `,` (Kotlin's spelling; the list may be wrapped across lines,
+and a `;` is accepted there too). The declaration is otherwise line-oriented: a field
+list that runs over several lines continues until the `)`.
 
 The constructor has the same field order as the declaration:
 

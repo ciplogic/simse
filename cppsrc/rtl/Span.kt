@@ -26,7 +26,7 @@
 
 package rtl
 
-data class Span<T>(var ptr: *T; var len: Int) {
+data class Span<T>(var ptr: *T, var len: Int) {
     // The number of elements.
     fun size(): Int {
         return this.len

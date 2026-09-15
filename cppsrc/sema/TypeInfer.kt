@@ -501,27 +501,27 @@ fun semSubstitute(typeNode: *AstXmlNode, bindings: *Dictionary<Str, AstXmlNode>,
 // ---- the facts and the body context ---------------------------------------
 
 // A program-level function/method fact the inference resolves a call with.
-data class SemFnFact(var decl: AstXmlNode;
+data class SemFnFact(var decl: AstXmlNode,
 
-var receiver: AstXmlNode;
+var receiver: AstXmlNode,
 var templateParams: List<Str>)
 
 // A `native fun` extension (`this` first parameter): its receiver pattern picks the
 // overload and its return type answers the call.
-data class SemExtFact(var receiver: AstXmlNode;
+data class SemExtFact(var receiver: AstXmlNode,
 
-var returnType: AstXmlNode;
+var returnType: AstXmlNode,
 var typeParams: List<Str>)
 
 // Everything about the program the inference reads. The emitter fills this in from
 // its own symbol collection; it holds the same nodes, so filling it copies no
 // declarations.
 data class SemFacts(
-    var types: Dictionary<Str, AstXmlNode>;
+    var types: Dictionary<Str, AstXmlNode>,
 
-var enumNames: Dictionary<Str, Bool>;
-var functions: List<SemFnFact>;
-var nativeExtensions: Dictionary<Str, List<SemExtFact>>;
+var enumNames: Dictionary<Str, Bool>,
+var functions: List<SemFnFact>,
+var nativeExtensions: Dictionary<Str, List<SemExtFact>>,
 var statics: Dictionary<Str, AstXmlNode>
 )
 
@@ -543,12 +543,12 @@ fun semNewFacts(): SemFacts {
 // a parameter's type may be missing where the callable type the lambda is used
 // against supplies it.
 data class SemBody(
-    var decl: AstXmlNode;
+    var decl: AstXmlNode,
 
-var typeParams: List<Str>;
-var selfType: AstXmlNode;
-var paramNames: List<Str>;
-var paramTypes: List<AstXmlNode>;
+var typeParams: List<Str>,
+var selfType: AstXmlNode,
+var paramNames: List<Str>,
+var paramTypes: List<AstXmlNode>,
 var captures: Dictionary<Str, AstXmlNode>
 )
 
@@ -558,9 +558,9 @@ var captures: Dictionary<Str, AstXmlNode>
 // them, and a body is annotated once per function, so copying the program tables
 // (hundreds of functions, three dictionaries) per body would dominate the run.
 data class SemInfer(
-    var facts: *SemFacts;
-    var body: *SemBody;
-    var scopes: List<Dictionary<Str, AstXmlNode>>;
+    var facts: *SemFacts,
+    var body: *SemBody,
+    var scopes: List<Dictionary<Str, AstXmlNode>>,
 
 // The flat record of every binding the pass proved, whatever a declaration can
 // spell - a name holding a state machine is `..T`, and `Stmt.type` never carries

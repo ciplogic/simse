@@ -3,6 +3,12 @@
 #include <iostream>
 #include <type_traits>
 
+// The program's string literals: one table, built once, read by every
+// site that mentions one (impl_specs/rtl-abi.md).
+static const Str __sm_stringTable[1] = {
+    "nope",
+};
+
 Res<Int> ns1_useGenerics();
 // program_expr.kt:2
 Res<Int> ns1_useGenerics() {
@@ -17,7 +23,7 @@ Res<Int> ns1_useGenerics() {
     list = List<Int>();
     opt = Opt<Int>();
     okValue = Res<Int>::ok(value);
-    errValue = Res<Int>::err("nope");
+    errValue = Res<Int>::err(__sm_stringTable[0]);
     reference = std::make_shared<std::remove_cvref_t<decltype((value))>>(value);
     dereferenced = (reference).get();
     auto _sm_expr1 = Res<Int>::ok(value);

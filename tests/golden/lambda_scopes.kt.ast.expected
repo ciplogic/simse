@@ -1,0 +1,289 @@
+Module @1:1
+  Package fixtures @1:1
+  TypeAlias Taker @19:1
+    Target (Int) -> Unit
+  Function everyNth @21:1
+    Receiver List<Int>
+    Param step: Int
+    Return ?
+    Body
+      VarDecl var i: Int @22:5
+        Init
+          IntLit 0 @22:18
+      While @23:5
+        Cond
+          Binary < @23:12
+            Lhs
+              Name i @23:12
+            Rhs
+              Call @23:16
+                Callee
+                  Member .size @23:16
+                    Receiver
+                      Name this @23:16
+        Body
+          Assign = @25:9
+            Target
+              Name i @25:9
+            Value
+              Binary + @25:13
+                Lhs
+                  Name i @25:13
+                Rhs
+                  Name step @25:17
+  Function main @29:1
+    Return Int
+    Body
+      VarDecl val items: List<Int> @30:5
+        Init
+          Call @30:28
+            Callee
+              GenericName List<Int> @30:28
+      ExprStmt @31:5
+        Call @31:5
+          Callee
+            Member .append @31:5
+              Receiver
+                Name items @31:5
+          Arg
+            IntLit 10 @31:18
+      ExprStmt @32:5
+        Call @32:5
+          Callee
+            Member .append @32:5
+              Receiver
+                Name items @32:5
+          Arg
+            IntLit 20 @32:18
+      ExprStmt @33:5
+        Call @33:5
+          Callee
+            Member .append @33:5
+              Receiver
+                Name items @33:5
+          Arg
+            IntLit 30 @33:18
+      VarDecl val first: Taker @36:5
+        Init
+          Lambda @36:25
+            Params n
+            Body
+              VarDecl var _sm_for1 @37:9
+                Init
+                  Call @37:9
+                    Callee
+                      Member .smToYield @37:9
+                        Receiver
+                          Name items @37:23
+              While @37:9
+                Cond
+                  BoolLit true @37:9
+                Body
+                  VarDecl var _sm_step1 @37:9
+                    Init
+                      Call @37:9
+                        Callee
+                          Member .next @37:9
+                            Receiver
+                              Name _sm_for1 @37:9
+                  If @37:9
+                    Cond
+                      Unary ! @37:9
+                        Operand
+                          Call @37:9
+                            Callee
+                              Member .hasValue @37:9
+                                Receiver
+                                  Name _sm_step1 @37:9
+                    Then
+                      Break @37:9
+                  VarDecl val value @37:9
+                    Init
+                      Call @37:9
+                        Callee
+                          Member .value @37:9
+                            Receiver
+                              Name _sm_step1 @37:9
+                  ExprStmt @38:13
+                    Call @38:13
+                      Callee
+                        Name println @38:13
+                      Arg
+                        Call @38:22
+                          Callee
+                            Member .toString @38:22
+                              Receiver
+                                Binary + @38:22
+                                  Lhs
+                                    Name value @38:22
+                                  Rhs
+                                    Name n @38:30
+      ExprStmt @41:5
+        Call @41:5
+          Callee
+            Name first @41:5
+          Arg
+            IntLit 1 @41:11
+      VarDecl val second: Taker @44:5
+        Init
+          Lambda @44:26
+            Params n
+            Body
+              VarDecl var _sm_for2 @45:9
+                Init
+                  Call @45:9
+                    Callee
+                      Member .smToYield @45:9
+                        Receiver
+                          Call @45:23
+                            Callee
+                              Member .everyNth @45:23
+                                Receiver
+                                  Name items @45:23
+                            Arg
+                              IntLit 2 @45:38
+              While @45:9
+                Cond
+                  BoolLit true @45:9
+                Body
+                  VarDecl var _sm_step2 @45:9
+                    Init
+                      Call @45:9
+                        Callee
+                          Member .next @45:9
+                            Receiver
+                              Name _sm_for2 @45:9
+                  If @45:9
+                    Cond
+                      Unary ! @45:9
+                        Operand
+                          Call @45:9
+                            Callee
+                              Member .hasValue @45:9
+                                Receiver
+                                  Name _sm_step2 @45:9
+                    Then
+                      Break @45:9
+                  VarDecl val value @45:9
+                    Init
+                      Call @45:9
+                        Callee
+                          Member .value @45:9
+                            Receiver
+                              Name _sm_step2 @45:9
+                  ExprStmt @46:13
+                    Call @46:13
+                      Callee
+                        Name println @46:13
+                      Arg
+                        Call @46:22
+                          Callee
+                            Member .toString @46:22
+                              Receiver
+                                Binary - @46:22
+                                  Lhs
+                                    Name value @46:22
+                                  Rhs
+                                    Name n @46:30
+      ExprStmt @49:5
+        Call @49:5
+          Callee
+            Name second @49:5
+          Arg
+            IntLit 1 @49:12
+      VarDecl val third: Taker @52:5
+        Init
+          Lambda @52:25
+            Params n
+            Body
+              VarDecl var _sm_for3 @53:9
+                Init
+                  Call @53:9
+                    Callee
+                      Member .smToYield @53:9
+                        Receiver
+                          Call @53:32
+                            Callee
+                              Member .everyNth @53:32
+                                Receiver
+                                  Name items @53:32
+                            Arg
+                              IntLit 2 @53:47
+              VarDecl var _sm_index3: Int @53:9
+                Init
+                  IntLit -1 @53:9
+              While @53:9
+                Cond
+                  BoolLit true @53:9
+                Body
+                  Assign = @53:9
+                    Target
+                      Name _sm_index3 @53:9
+                    Value
+                      Binary + @53:9
+                        Lhs
+                          Name _sm_index3 @53:9
+                        Rhs
+                          IntLit 1 @53:9
+                  VarDecl var _sm_step3 @53:9
+                    Init
+                      Call @53:9
+                        Callee
+                          Member .next @53:9
+                            Receiver
+                              Name _sm_for3 @53:9
+                  If @53:9
+                    Cond
+                      Unary ! @53:9
+                        Operand
+                          Call @53:9
+                            Callee
+                              Member .hasValue @53:9
+                                Receiver
+                                  Name _sm_step3 @53:9
+                    Then
+                      Break @53:9
+                  VarDecl val value @53:9
+                    Init
+                      Call @53:9
+                        Callee
+                          Member .value @53:9
+                            Receiver
+                              Name _sm_step3 @53:9
+                  VarDecl val index @53:9
+                    Init
+                      Name _sm_index3 @53:9
+                  ExprStmt @54:13
+                    Call @54:13
+                      Callee
+                        Name println @54:13
+                      Arg
+                        Binary + @54:22
+                          Lhs
+                            Binary + @54:22
+                              Lhs
+                                Call @54:22
+                                  Callee
+                                    Member .toString @54:22
+                                      Receiver
+                                        Binary + @54:22
+                                          Lhs
+                                            Name index @54:22
+                                          Rhs
+                                            Name n @54:30
+                              Rhs
+                                StrLit ":" @54:46
+                          Rhs
+                            Call @54:52
+                              Callee
+                                Member .toString @54:52
+                                  Receiver
+                                    Name value @54:52
+      ExprStmt @57:5
+        Call @57:5
+          Callee
+            Name third @57:5
+          Arg
+            IntLit 7 @57:11
+      Return @58:5
+        IntLit 0 @58:12

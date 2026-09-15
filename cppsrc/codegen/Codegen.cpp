@@ -109,6 +109,8 @@ namespace codegen {
                 prelude();
                 emitNativeDeclarations();
                 if (failed) return resError<Str>(error);
+                sortLiterals();
+                emitStringTable();
                 emitForwardTypes();
                 if (failed) return resError<Str>(error);
                 emitTypes();
@@ -720,12 +722,50 @@ namespace codegen {
 
             // ---- prelude reachability ---------------------------------------
 
+            // The program's string literals, as the read-only table at the top of the
+            // file (`__sm_stringTable`). The walk above collects them in first-encounter
+            // order; they are then sorted, so the table is canonical and two rings that
+            // walk in different orders still agree on every index.
+            Dictionary<Str, int> literalAt;
+            List<Str> literals;
+
+            void sortLiterals() {
+                std::sort(literals.begin(), literals.end());
+                literalAt.clear();
+                for (int i = 0; i < (int) literals.size(); i++) literalAt[literals[i]] = i;
+            }
+
+            // One entry per distinct literal, built once before `main` runs. A literal
+            // site then *reads* an entry instead of building a `Str`, so a use that only
+            // reads the text - a comparison, or a `const Str&` argument - never constructs
+            // one, and a literal longer than the inline capacity never allocates at the
+            // site. An owned position (`x = "..."`, `return`, a by-value parameter) still
+            // copies, because that is what the language's value semantics say.
+            void emitStringTable() {
+                if (literals.empty()) return;
+                line(0, "// The program's string literals: one table, built once, read by every");
+                line(0, "// site that mentions one (impl_specs/rtl-abi.md).");
+                line(0, "static const Str __sm_stringTable[" + std::to_string(literals.size())
+                                + "] = {");
+                for (const Str &literal: literals) line(1, literal + ",");
+                line(0, "};");
+                line(0, "");
+            }
+
             // A prelude body costs a program only what it uses: `List<T>.smToYield` is
             // written in Simse (impl_specs/for.md), and a program that never iterates a
             // container should not carry its machine. The rule is a name reachability over
             // the *calls*: a callee is a name (`f(x)`), a generic name (`f<Int>(x)`) or a
             // member (`x.m(...)`), and in all three the call site spells it as `text`.
             void collectNames(const ast::Expr &expr, Dictionary<Str, bool> &names) {
+                // The string literals ride the same walk: this is the emitter's one pass
+                // over the whole program, so the table below covers every body it will
+                // emit. A literal the *lowering* invents is not in the parsed program and
+                // keeps its own spelling at the site.
+                if (expr.kind == ExprKind::StrLit && literalAt.count(expr.text) == 0) {
+                    literalAt[expr.text] = 0;
+                    literals.push_back(expr.text);
+                }
                 if (expr.kind == ExprKind::Call && expr.lhs) {
                     const ast::Expr &callee = *expr.lhs;
                     if ((callee.kind == ExprKind::Name || callee.kind == ExprKind::GenericName
@@ -766,12 +806,6 @@ namespace codegen {
                 }
                 for (const ast::StmtPtr &child: stmt.elseBody) {
                     if (child) collectNames(*child, names);
-                }
-                for (const ast::SwitchCase &arm: stmt.cases) {
-                    if (arm.label) collectNames(*arm.label, names);
-                    for (const ast::StmtPtr &child: arm.body) {
-                        if (child) collectNames(*child, names);
-                    }
                 }
             }
 
@@ -2644,9 +2678,18 @@ namespace codegen {
                 switch (e.kind) {
                     case ExprKind::IntLit:
                     case ExprKind::FloatLit:
-                    case ExprKind::StrLit:
                     case ExprKind::CharLit:
                         return e.text;
+                    case ExprKind::StrLit: {
+                        // A table entry is a `const Str` *glvalue*: a comparison or a
+                        // `const Str&` parameter binds it without building anything, while
+                        // an owned position copies it exactly as it copied the literal.
+                        auto found = literalAt.find(e.text);
+                        if (found != literalAt.end()) {
+                            return "__sm_stringTable[" + std::to_string(found->second) + "]";
+                        }
+                        return e.text;
+                    }
                     case ExprKind::BoolLit:
                         return e.boolValue ? "true" : "false";
                     case ExprKind::NullLit:

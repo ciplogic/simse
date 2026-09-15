@@ -1,19 +1,26 @@
 package flow
 
-// Nested loops with break/continue, an if/else chain, a switch and a loop whose
+// Nested loops with break/continue, an if/else chain, a `when` and a loop whose
 // condition is a literal: the shapes the linear lowering has to break into
 // labels, gotos and conditional jumps.
 
 fun classify(n: Int): Str {
-    switch (n) {
-        case 0:
+    when (n) {
+        0 -> {
             return "zero"
-        case 1:
+        }
+
+        1 -> {
             return "one"
-        case 2:
+        }
+
+        2 -> {
             return "two"
-        default:
+        }
+
+        else -> {
             return "many"
+        }
     }
 }
 

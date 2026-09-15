@@ -270,7 +270,6 @@ namespace linear {
                 collectBoundNames(stmt->body, bound);
                 collectBoundNames(stmt->thenBody, bound);
                 collectBoundNames(stmt->elseBody, bound);
-                for (const ast::SwitchCase &arm: stmt->cases) collectBoundNames(arm.body, bound);
             }
         }
 
@@ -283,11 +282,6 @@ namespace linear {
 
         void rewriteNestedLists(Stmt &stmt, List<RenameScope> &scopes,
                                 Dictionary<Str, bool> &used, bool nameNested) {
-            for (ast::SwitchCase &arm: stmt.cases) {
-                rewriteExpr(arm.label, scopes, used);
-                if (nameNested) renameInList(arm.body, scopes, used);
-                else rewriteUses(arm.body, scopes, used, false);
-            }
             List<StmtPtr> *nested[] = {&stmt.body, &stmt.thenBody, &stmt.elseBody};
             for (List<StmtPtr> *list: nested) {
                 if (nameNested) renameInList(*list, scopes, used);

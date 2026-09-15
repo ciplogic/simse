@@ -87,29 +87,21 @@ fun linName(role: AstNodeKind, name: Str, line: Int, column: Int): AstXmlNode {
     return AstXmlNode(role, AstNodeCategory.ExprName, attrs, Array<AstXmlNode>())
 }
 
-fun linEquals(role: AstNodeKind, lhs: *AstXmlNode, rhs: *AstXmlNode, line: Int, column: Int): AstXmlNode {
-    var attrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
-    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, line.toString()))
-    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, column.toString()))
-    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Op, "=="))
-    var node: AstXmlNode = AstXmlNode(role, AstNodeCategory.ExprBinary, attrs, Array<AstXmlNode>())
-    xmlAddChild(*node, *lhs)
-    xmlAddChild(*node, *rhs)
-    return node
-}
-
 // ---- the lowering ----------------------------------------------------------
 
 // What one stage of the linear form produced: the body, and whether the stage
 // changed anything. The stages run in a loop - each can leave work for the
 // others - and stop when a whole round changes nothing, so every stage has to
 // report the work it did and, just as important, the work it did not do.
-data class LinLowered(var body: List<AstXmlNode>; var changed: Bool)
+data class LinLowered(var body: List<AstXmlNode>,
+
+var changed: Bool)
 
 data class LinLowerer(
-    var next: Int;
-    // Whether this pass actually lowered anything.
-    var changed: Bool
+    var next: Int,
+
+// Whether this pass actually lowered anything.
+var changed: Bool
 ) {
     fun nextId(): Int {
         val id: Int = this.next
@@ -148,11 +140,6 @@ data class LinLowerer(
         if (kind == AstNodeCategory.StmtWhile) {
             this.changed = true
             this.lowerWhile(stmt, breakTo, continueTo, out)
-            return
-        }
-        if (kind == AstNodeCategory.StmtSwitch) {
-            this.changed = true
-            this.lowerSwitch(stmt, breakTo, continueTo, out)
             return
         }
         if (kind == AstNodeCategory.StmtBreak) {
@@ -231,7 +218,7 @@ data class LinLowerer(
             val op: Str = xmlAttr(e, AstNodeAttributeKind.Op)
             if (op == "&&" || op == "||") {
                 return this.isDecomposable(*xmlChild(e, AstNodeKind.Lhs))
-                       && this.isDecomposable(*xmlChild(e, AstNodeKind.Rhs))
+                        && this.isDecomposable(*xmlChild(e, AstNodeKind.Rhs))
             }
         }
         if (xmlKind(e) == AstNodeCategory.ExprUnary && xmlAttr(e, AstNodeAttributeKind.Op) == "!") {
@@ -246,7 +233,16 @@ data class LinLowerer(
     // whichever of `IfTrue`/`IfFalse` matches its value, so no negation is spelled out
     // here; `simplify`, which runs next, folds each leaf's jump pair into one
     // conditional jump and drops the labels the chain no longer needs.
-    fun lowerCondition(cond: *AstXmlNode, trueTarget: Str, falseTarget: Str, line: Int, column: Int, out: *List<AstXmlNode>): Unit {
+    fun lowerCondition(
+        cond: *
+        AstXmlNode,
+        trueTarget: Str,
+        falseTarget: Str,
+        line: Int,
+        column: Int,
+        out: *
+        List<AstXmlNode>
+    ): Unit {
         if (xmlKind(cond) == AstNodeCategory.ExprBinary) {
             val op: Str = xmlAttr(cond, AstNodeAttributeKind.Op)
             if (op == "&&" || op == "||") {
@@ -291,14 +287,24 @@ data class LinLowerer(
         }
         out.append(linLabel(thenLabel, line, column))
         var thenOut: List<AstXmlNode> = List<AstXmlNode>()
-        this.lowerStmts(*xmlChildren(*xmlChild(stmt, AstNodeKind.Then), AstNodeKind.Stmt), breakTo, continueTo, *thenOut)
+        this.lowerStmts(
+            *xmlChildren(*xmlChild(stmt, AstNodeKind.Then), AstNodeKind.Stmt),
+            breakTo,
+            continueTo,
+            *thenOut
+        )
         this.appendBody(*thenOut, line, column, out)
         if (xmlHasChild(stmt, AstNodeKind.Else)) {
             val endLabel: Str = this.freshLabel()
             out.append(linGoto(endLabel, line, column))
             out.append(linLabel(elseLabel, line, column))
             var elseOut: List<AstXmlNode> = List<AstXmlNode>()
-            this.lowerStmts(*xmlChildren(*xmlChild(stmt, AstNodeKind.Else), AstNodeKind.Stmt), breakTo, continueTo, *elseOut)
+            this.lowerStmts(
+                *xmlChildren(*xmlChild(stmt, AstNodeKind.Else), AstNodeKind.Stmt),
+                breakTo,
+                continueTo,
+                *elseOut
+            )
             this.appendBody(*elseOut, line, column, out)
             out.append(linLabel(endLabel, line, column))
         } else {
@@ -312,7 +318,12 @@ data class LinLowerer(
         val line: Int = xmlLine(stmt)
         val column: Int = xmlColumn(stmt)
         var bodyOut: List<AstXmlNode> = List<AstXmlNode>()
-        this.lowerStmts(*xmlChildren(*xmlChild(stmt, AstNodeKind.Body), AstNodeKind.Stmt), endLabel, condLabel, *bodyOut)
+        this.lowerStmts(
+            *xmlChildren(*xmlChild(stmt, AstNodeKind.Body), AstNodeKind.Stmt),
+            endLabel,
+            condLabel,
+            *bodyOut
+        )
         out.append(linLabel(condLabel, line, column))
         val cond: AstXmlNode = xmlChild(stmt, AstNodeKind.Cond)
         if (this.containsShortCircuit(*cond) && this.isDecomposable(*cond)) {
@@ -328,65 +339,6 @@ data class LinLowerer(
         out.append(linGoto(condLabel, line, column))
         out.append(linLabel(endLabel, line, column))
     }
-
-    fun lowerSwitch(stmt: *AstXmlNode, breakTo: Str, continueTo: Str, out: *List<AstXmlNode>): Unit {
-        // The subject is hoisted so it is evaluated exactly once, as a C++
-        // `switch` subject would be.
-        val subjectId: Int = this.nextId()
-        val subject: Str = "simse_sw_" + subjectId.toString()
-        val endLabel: Str = this.freshLabel()
-        val line: Int = xmlLine(stmt)
-        val column: Int = xmlColumn(stmt)
-        val cases: List<AstXmlNode> = xmlChildren(stmt, AstNodeKind.Case)
-        var armLabels: List<Str> = List<Str>()
-        var i: Int = 0
-        while (i < cases.size()) {
-            armLabels.append(this.freshLabel())
-            i = i + 1
-        }
-        // No case matched: fall through to the default arm, or leave the
-        // switch. The default arm keeps its source position, so an arm before
-        // it still falls into it.
-        var fallback: Str = endLabel
-        i = 0
-        while (i < cases.size()) {
-            if (xmlAttr(*cases[i], AstNodeAttributeKind.IsDefault) == "true") {
-                fallback = armLabels[i]
-            }
-            i = i + 1
-        }
-
-        out.append(linSubjectDecl(subject, *xmlChild(stmt, AstNodeKind.Cond), line, column))
-        i = 0
-        while (i < cases.size()) {
-            if (xmlAttr(*cases[i], AstNodeAttributeKind.IsDefault) != "true") {
-                // The *compare* carries the case's own position, the jump the switch's:
-                // that is what the C++ ring does (`equalsExpr(nameExpr(subject, stmt.pos),
-                // label, switchCase.pos)`), and a temporary the expression lowering binds
-                // for the compare inherits it.
-                val compareLine: Int = xmlLine(*cases[i])
-                val compareColumn: Int = xmlColumn(*cases[i])
-                val eq: AstXmlNode = linEquals(AstNodeKind.Cond, *linName(AstNodeKind.Lhs, subject, line, column),
-                                            *linRole(*xmlChild(*cases[i], AstNodeKind.Label), AstNodeKind.Rhs),
-                                            compareLine, compareColumn)
-                out.append(linCondJump(AstNodeCategory.StmtIfTrue, *eq, armLabels[i], line, column))
-            }
-            i = i + 1
-        }
-        out.append(linGoto(fallback, line, column))
-
-        i = 0
-        while (i < cases.size()) {
-            val caseLine: Int = xmlLine(*cases[i])
-            val caseColumn: Int = xmlColumn(*cases[i])
-            out.append(linLabel(armLabels[i], caseLine, caseColumn))
-            var armOut: List<AstXmlNode> = List<AstXmlNode>()
-            this.lowerStmts(*xmlChildren(*cases[i], AstNodeKind.Stmt), endLabel, continueTo, *armOut)
-            this.appendBody(*armOut, caseLine, caseColumn, out)
-            i = i + 1
-        }
-        out.append(linLabel(endLabel, line, column))
-    }
 }
 
 // Lowers one function-like body; the counter restarts per body.
@@ -396,13 +348,11 @@ fun linLowerBody(stmts: List<AstXmlNode>): LinLowered {
 }
 
 // The names the lowering generates for its own storage: the expression lowering's
-// temporaries (`_sm_expr<n>`) and the switch subjects `linLowerSwitch` hoists
-// (`simse_sw_<n>`). A name the program wrote can collide with one of these - the
-// switch subject's collision is an accepted, documented risk - but nothing the
-// lowering generates came from the source, which is what the slot hoisting asks
-// about.
+// temporaries (`_sm_expr<n>`). A name the program wrote can collide with one of
+// these - an accepted, documented risk - but nothing the lowering generates came
+// from the source, which is what the slot hoisting asks about (Linear.h).
 fun linIsSlotName(name: Str): Bool {
-    return name.startsWith("_sm_expr") || name.startsWith("simse_sw_")
+    return name.startsWith("_sm_expr")
 }
 
 // The whole linear form of one function-like body, ready to emit: the stages

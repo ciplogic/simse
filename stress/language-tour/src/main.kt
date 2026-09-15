@@ -1,5 +1,5 @@
 package fixtures
-// T14: exercises switch, null nullability, the Str/Char library, numeric
+// T14: exercises `when`, null nullability, the Str/Char library, numeric
 // conversions, min/max, and enum toInt/fromInt.
 
 enum Color {
@@ -11,24 +11,34 @@ enum Color {
 data class Box(var value: Int)
 
 fun label(c: Color): Str {
-    switch (c) {
-        case Color.Red:
+    when (c) {
+        Color.Red -> {
             return "red"
-        case Color.Green:
+        }
+
+        Color.Green -> {
             return "green"
-        default:
+        }
+
+        else -> {
             return "other"
+        }
     }
 }
 
 fun describe(n: Int): Str {
-    switch (n) {
-        case 0:
+    when (n) {
+        0 -> {
             return "zero"
-        case 1:
+        }
+
+        1 -> {
             return "one"
-        default:
+        }
+
+        else -> {
             return "many"
+        }
     }
 }
 
@@ -41,7 +51,7 @@ fun maybeRef(flag: Bool): &Box {
 
 fun maybePointer(box: &Box, flag: Bool): *Box {
     if (flag) {
-        return *box
+        return * box
     }
     return null
 }

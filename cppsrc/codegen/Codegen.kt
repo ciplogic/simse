@@ -29,41 +29,41 @@ import linear
 // One parsed input. `prelude` inputs participate in symbol collection and are emitted
 // only when they carry a body: the RTL's declarations are natives (whose C++ is the
 // header's), and a prelude `fun` with a body is a function the language itself provides.
-data class CgInput(var fileName: Str;
+data class CgInput(var fileName: Str,
 
-var module: AstXmlNode;
+var module: AstXmlNode,
 var prelude: Bool)
 
 // A function/method to emit, with its receiver type (empty for plain functions).
 // `package` picks the emitted-symbol prefix: `ns<index>_`, or none for `rtl`.
-data class CgFn(var decl: AstXmlNode;
+data class CgFn(var decl: AstXmlNode,
 
-var receiver: AstXmlNode;
-var file: Str;
-var templateParams: List<Str>;
-var prelude: Bool;
-var packageName: Str;
+var receiver: AstXmlNode,
+var file: Str,
+var templateParams: List<Str>,
+var prelude: Bool,
+var packageName: Str,
 var isMethod: Bool)
 
 // A `native fun` declaration to emit once at the top (and call by symbol).
-data class CgNativeDecl(var decl: AstXmlNode;
+data class CgNativeDecl(var decl: AstXmlNode,
 
-var file: Str;
-var symbol: Str;
+var file: Str,
+var symbol: Str,
 var prelude: Bool)
 
 // An explicit-`this` native extension; the receiver pattern selects the overload.
-data class CgNativeExt(var symbol: Str;
+data class CgNativeExt(var symbol: Str,
 
-var receiver: AstXmlNode;
-var returnType: AstXmlNode;
+var receiver: AstXmlNode,
+var returnType: AstXmlNode,
 var typeParams: List<Str>)
 
 // A file-level static (`Var`, specs/statics.md): storage plus an optional
 // initializer, emitted under its package's prefix like any other declaration.
-data class CgStatic(var decl: AstXmlNode;
+data class CgStatic(var decl: AstXmlNode,
 
-var packageName: Str;
+var packageName: Str,
 var file: Str)
 
 // One type-table entry's node, or an empty node when the extractor had none (a
@@ -73,28 +73,28 @@ data class IlFrame(
     // Keyed by *slot index*: two scopes may declare the same name, and the frame keeps
     // them apart (the lowering gives each its own slot), so an analysis keyed by name
     // would merge two different variables.
-    var defOp: Dictionary<Int, Int>;
+    var defOp: Dictionary<Int, Int>,
 
-var defineCount: Dictionary<Int, Int>;
+var defineCount: Dictionary<Int, Int>,
 var useCount: Dictionary<Int, Int>
 )
 
 // Where a jump crosses a declaration, C++ wants a scope: a `goto` may not skip an
 // initialization ([stmt.dcl]/3, MSVC C2362). `end` is the earliest label a crossing
 // jump lands on, `lastJump` the last jump that crosses.
-data class IlCrossing(var end: Int;
+data class IlCrossing(var end: Int,
 
 var lastJump: Int)
 
 // One open block of the flat form, and the label it ends before.
-data class IlScope(var start: Int;
+data class IlScope(var start: Int,
 
 var end: Int)
 
 // The text one body's instructions spell, or why they could not be spelled.
-data class IlText(var ok: Bool;
+data class IlText(var ok: Bool,
 
-var text: Str;
+var text: Str,
 var reason: Str)
 
 // How a name's storage is reached, for `.` vs `->`, `*x` vs `x.get()`, `copy`.
@@ -200,50 +200,57 @@ fun cgIsMainArgs(decl: *AstXmlNode): Bool {
 // ---- the emitter ----------------------------------------------------------
 
 data class Emitter(
-    var inputs: List<CgInput>;
+    var inputs: List<CgInput>,
 
-var out: Str;
-var failed: Bool;
-var error: Str;
-var curFile: Str;
-var curPrelude: Bool;
+var out: Str,
+var failed: Bool,
+var error: Str,
+var curFile: Str,
+var curPrelude: Bool,
 
 // The names the program calls, for the prelude rule in `emitFunctions`.
-var referencedNames: Dictionary<Str, Bool>;
+var referencedNames: Dictionary<Str, Bool>,
+
+// The program's string literals, as the read-only table the emitter puts at the top of
+// the file (`__sm_stringTable`): the walk that fills `referencedNames` collects them,
+// `literals` is sorted so the indices are canonical, and a literal site reads an entry
+// by index instead of building a `Str`.
+var literalAt: Dictionary<Str, Int>,
+var literals: List<Str>,
 
 // The types the program names, for the same rule's per-container part: the prelude has
 // a `smToYield` per container (`List`, `Array`, `Span`), and a program that iterates
 // one of them should not carry the others' machines.
-var referencedTypes: Dictionary<Str, Bool>;
-var types: Dictionary<Str, AstXmlNode>;
-var enumNames: Dictionary<Str, Bool>;
-var dataClassNames: Dictionary<Str, Bool>;
-var functions: List<CgFn>;
-var receiverFnNames: Dictionary<Str, Bool>;
-var nativeDecls: List<CgNativeDecl>;
-var nativeSymbols: Dictionary<Str, Str>;
-var nativeExtensions: Dictionary<Str, List<CgNativeExt>>;
-var activeTypeParams: Dictionary<Str, Bool>;
-var nameKinds: Dictionary<Str, NameKind>;
-var localTypes: Dictionary<Str, AstXmlNode>;
-var selfKind: NameKind;
-var selfType: AstXmlNode;
-var curReturnType: AstXmlNode;
-var nsPrefixes: Dictionary<Str, Str>;
-var typePackages: Dictionary<Str, Str>;
-var statics: List<CgStatic>;
-var staticsByName: Dictionary<Str, CgStatic>;
+var referencedTypes: Dictionary<Str, Bool>,
+var types: Dictionary<Str, AstXmlNode>,
+var enumNames: Dictionary<Str, Bool>,
+var dataClassNames: Dictionary<Str, Bool>,
+var functions: List<CgFn>,
+var receiverFnNames: Dictionary<Str, Bool>,
+var nativeDecls: List<CgNativeDecl>,
+var nativeSymbols: Dictionary<Str, Str>,
+var nativeExtensions: Dictionary<Str, List<CgNativeExt>>,
+var activeTypeParams: Dictionary<Str, Bool>,
+var nameKinds: Dictionary<Str, NameKind>,
+var localTypes: Dictionary<Str, AstXmlNode>,
+var selfKind: NameKind,
+var selfType: AstXmlNode,
+var curReturnType: AstXmlNode,
+var nsPrefixes: Dictionary<Str, Str>,
+var typePackages: Dictionary<Str, Str>,
+var statics: List<CgStatic>,
+var staticsByName: Dictionary<Str, CgStatic>,
 
 // ---- the IL path (impl_specs/linear-il.md) ----------------------------
 // The classes this unit constructs, and the ones already written out: a closure
 // class is emitted just above the body that builds it, once.
-var closureSymbols: Dictionary<Str, Bool>;
-var emittedClosures: Dictionary<Str, Bool>;
-var emittedYieldables: Dictionary<Str, Bool>;
+var closureSymbols: Dictionary<Str, Bool>,
+var emittedClosures: Dictionary<Str, Bool>,
+var emittedYieldables: Dictionary<Str, Bool>,
 
 // Why an instruction could not be expressed: set where the attempt gives up, read
 // by the caller that turns it into a reason line.
-var ilWhy: Str;
+var ilWhy: Str,
 
 // Inside a closure class's method (or a machine's): the receiver is C++'s `this`,
 // because a member function has no `self` parameter.
@@ -1044,6 +1051,16 @@ var inClosureMethod: Bool
     // (`f<Int>(x)`) or a member (`x.m(...)`), and in all three the call site spells it as
     // the `Name` attribute of the callee node.
     fun collectNames(node: AstXmlNode, names: *Dictionary<Str, Bool>): Unit {
+        // The string literals ride the same walk: this is the emitter's one pass over the
+        // whole program, so the table below covers every body it will emit. A literal the
+        // *lowering* invents is not in the parsed program and keeps its own spelling.
+        if (xmlKind(*node) == AstNodeCategory.ExprStrLit) {
+            val text: Str = xmlAttr(*node, AstNodeAttributeKind.Text)
+            if (!this.literalAt.has(text)) {
+                this.literalAt.insert(text, 0)
+                this.literals.append(text)
+            }
+        }
         if (xmlKind(*node) == AstNodeCategory.ExprCall) {
             val callee: AstXmlNode = xmlChild(*node, AstNodeKind.Callee)
             val name: Str = xmlAttr(*callee, AstNodeAttributeKind.Name)
@@ -1057,6 +1074,44 @@ var inClosureMethod: Bool
             this.collectNames(node.Children[i], names)
             i = i + 1
         }
+    }
+
+    // ---- the string table -------------------------------------------------
+
+    // The program's string literals, as the read-only table at the top of the file
+    // (`__sm_stringTable`). The walk above collects them in first-encounter order; they
+    // are then sorted, so the table is canonical and two rings that walk in different
+    // orders still agree on every index.
+    fun sortLiterals(): Unit {
+        this.literals.sort((left: Str, right: Str) -> left < right)
+        this.literalAt = Dictionary<Str, Int>()
+        var i: Int = 0
+        while (i < this.literals.size()) {
+            this.literalAt.insert(this.literals[i], i)
+            i = i + 1
+        }
+    }
+
+    // One entry per distinct literal, built once before `main` runs. A literal site then
+    // *reads* an entry instead of building a `Str`, so a use that only reads the text - a
+    // comparison, or a `const Str&` argument - never constructs one, and a literal longer
+    // than the inline capacity never allocates at the site. An owned position
+    // (`x = "..."`, `return`, a by-value parameter) still copies, because that is what the
+    // language's value semantics say.
+    fun emitStringTable(): Unit {
+        if (this.literals.size() == 0) {
+            return
+        }
+        this.line(0, "// The program's string literals: one table, built once, read by every")
+        this.line(0, "// site that mentions one (impl_specs/rtl-abi.md).")
+        this.line(0, "static const Str __sm_stringTable[" + this.literals.size().toString() + "] = {")
+        var i: Int = 0
+        while (i < this.literals.size()) {
+            this.line(1, this.literals[i] + ",")
+            i = i + 1
+        }
+        this.line(0, "};")
+        this.line(0, "")
     }
 
     // Whether a prelude body is one the program reaches: its name is called, and - for an
@@ -3465,10 +3520,20 @@ var inClosureMethod: Bool
 
     fun exprInner(e: *AstXmlNode, expected: *AstXmlNode): Str {
         val kind: AstNodeCategory = xmlKind(e)
-        if (kind == AstNodeCategory.ExprIntLit || kind == AstNodeCategory.ExprFloatLit || kind == AstNodeCategory.ExprStrLit
+        if (kind == AstNodeCategory.ExprIntLit || kind == AstNodeCategory.ExprFloatLit
             || kind == AstNodeCategory.ExprCharLit
         ) {
             return xmlAttr(e, AstNodeAttributeKind.Text)
+        }
+        if (kind == AstNodeCategory.ExprStrLit) {
+            // A table entry is a `const Str` *glvalue*: a comparison or a `const Str&`
+            // parameter binds it without building anything, while an owned position copies
+            // it exactly as it copied the literal.
+            val text: Str = xmlAttr(e, AstNodeAttributeKind.Text)
+            if (this.literalAt.has(text)) {
+                return "__sm_stringTable[" + this.literalAt.get(text).value().toString() + "]"
+            }
+            return text
         }
         if (kind == AstNodeCategory.ExprBoolLit) {
             return xmlAttr(e, AstNodeAttributeKind.Value)
@@ -3885,6 +3950,8 @@ var inClosureMethod: Bool
         if (this.failed) {
             return Res<Str>.err(this.error)
         }
+        this.sortLiterals()
+        this.emitStringTable()
         this.emitForwardTypes()
         if (this.failed) {
             return Res<Str>.err(this.error)
@@ -3924,6 +3991,8 @@ fun newEmitter(inputs: List<CgInput>): Emitter {
         "",
         false,
         Dictionary<Str, Bool>(),
+        Dictionary<Str, Int>(),
+        List<Str>(),
         Dictionary<Str, Bool>(),
         Dictionary<Str, AstXmlNode>(),
         Dictionary<Str, Bool>(),

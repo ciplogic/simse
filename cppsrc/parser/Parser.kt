@@ -18,18 +18,21 @@ import common
 // An expression node plus the source position where the expression started. The
 // position is needed by parents (a Call/Index/Member/Binary node takes its
 // position from its callee/receiver/left operand).
-data class ExprNode(var node: AstXmlNode;
+data class ExprNode(
+    var node: AstXmlNode,
 
-var line: Int;
-var column: Int)
+    var line: Int,
+    var column: Int
+)
 
-data class Parser(var cursor: Span<Token>;
+data class Parser(
+    var cursor: Span<Token>,
 
-var failed: Bool;
-var error: Str;
-var file: Str;
-var nextForId: Int)
-{
+    var failed: Bool,
+    var error: Str,
+    var file: Str,
+    var nextTemplateId: Int
+) {
 
     // ---- token cursor helpers ---------------------------------------------
 
@@ -103,6 +106,17 @@ var nextForId: Int)
 
     fun skipSeparators(): Unit {
         while (this.checkKind(TokenKind.EndOfLine) || this.checkText(";")) {
+            this.advance()
+        }
+    }
+
+    // The separator between a data class's fields: Kotlin's `,`
+    // (specs/declarations.md, "data class"). A `;` is accepted there too - it is what the
+    // sources used before the spelling was aligned with Kotlin, and it costs nothing to
+    // keep. Only the *field* list takes a comma: between statements and methods it is
+    // not a separator, because there it would read as an expression part.
+    fun skipFieldSeparators(): Unit {
+        while (this.checkKind(TokenKind.EndOfLine) || this.checkText(";") || this.checkText(",")) {
             this.advance()
         }
     }
@@ -322,7 +336,7 @@ var nextForId: Int)
 
         var fields: List<AstXmlNode> = List<AstXmlNode>()
         if (this.matchText("(")) {
-            this.skipSeparators()
+            this.skipFieldSeparators()
             while (!this.checkText(")") && !this.atEnd() && !this.failed) {
                 val fieldPos: SourcePos = this.peek(0).pos
                 var isVar: Bool = false
@@ -355,7 +369,7 @@ var nextForId: Int)
                     xmlAddChild(*fnode, fieldType)
                 }
                 fields.append(fnode)
-                this.skipSeparators()
+                this.skipFieldSeparators()
             }
             if (!this.expectText(")")) {
                 return this.emptyNode()
@@ -838,6 +852,9 @@ var nextForId: Int)
         if (this.checkText("for")) {
             return this.parseFor(out)
         }
+        if (this.checkText("when")) {
+            return this.parseWhen(out)
+        }
         val stmt: AstXmlNode = this.parseStmt()
         if (this.failed) {
             return false
@@ -855,9 +872,6 @@ var nextForId: Int)
         }
         if (this.checkText("while")) {
             return this.parseWhile()
-        }
-        if (this.checkText("switch")) {
-            return this.parseSwitch()
         }
         if (this.checkText("return")) {
             return this.parseReturn()
@@ -1019,78 +1033,159 @@ var nextForId: Int)
         return node
     }
 
-    fun parseSwitch(): AstXmlNode {
-        val pos: SourcePos = this.peek(0).pos
-        this.advance() // switch
-        if (!this.expectText("(")) {
-            return this.emptyNode()
+    // `subj == a || subj == b`: one condition for an arm, so an arm with several
+    // labels emits its body once and any expression is a legal label.
+    fun whenCondition(subject: Str, labels: *List<AstXmlNode>, pos: SourcePos): ExprNode {
+        var cond: ExprNode = this.binaryExprAt(
+            "==", this.nameExprAt(subject, pos),
+            ExprNode(labels[0], pos.line, pos.column), pos
+        )
+        var i: Int = 1
+        while (i < labels.size()) {
+            val equals: ExprNode = this.binaryExprAt(
+                "==", this.nameExprAt(subject, pos),
+                ExprNode(labels[i], pos.line, pos.column), pos
+            )
+            cond = this.binaryExprAt("||", cond, equals, pos)
+            i = i + 1
         }
-        val cond: ExprNode = this.parseExpr(0)
+        return cond
+    }
+
+    // `when` (specs/functions.md): the language's selection statement, in Kotlin's
+    // spelling and with Kotlin's semantics, desugared right here to the `if`/`else`
+    // chain it means - so nothing downstream knows what a `when` is:
+    //
+    //   when (kind) {
+    //       Kind.A, Kind.B -> { body1 }
+    //       Kind.C -> { body2 }
+    //       else -> { body3 }
+    //   }
+    //     ->
+    //   var _sm_when1 = kind
+    //   if (_sm_when1 == Kind.A || _sm_when1 == Kind.B) { body1 }
+    //   else if (_sm_when1 == Kind.C) { body2 }
+    //   else { body3 }
+    //
+    // The subject is bound to a name of the template's own (as `for` binds the
+    // machine): the source evaluates it once, so the chain must too. The arm bodies
+    // are blocks, `else` is the last arm, and arms do not fall through - which is what
+    // makes a `break`/`continue` inside an arm the enclosing loop's, as in Kotlin.
+    // Matches `Parser::parseWhen`.
+    fun parseWhen(out: *List<AstXmlNode>): Bool {
+        val pos: SourcePos = this.peek(0).pos
+        this.advance() // when
+        if (!this.expectText("(")) {
+            return false
+        }
+        val subject: ExprNode = this.parseExpr(0)
         if (this.failed) {
-            return this.emptyNode()
+            return false
         }
         if (!this.expectText(")")) {
-            return this.emptyNode()
+            return false
         }
         this.skipNewlines()
         if (!this.expectText("{")) {
-            return this.emptyNode()
+            return false
         }
         this.skipSeparators()
 
-        var cases: List<AstXmlNode> = List<AstXmlNode>()
+        // The template's own name for the subject, before the arms are parsed: a nested
+        // `for`/`when` in an arm body takes the next id (both rings number the same way).
+        val subjectName: Str = "_sm_when" + this.nextTemplateId.toString()
+        this.nextTemplateId = this.nextTemplateId + 1
+
+        // One `if` per arm, in source order, plus the `else` arm's statements as the
+        // chain's tail. The nodes are linked afterwards, because `else if` is an `if`
+        // in the previous arm's else body.
+        var arms: List<AstXmlNode> = List<AstXmlNode>()
+        var tail: List<AstXmlNode> = List<AstXmlNode>()
+        var seenElse: Bool = false
         while (!this.checkText("}") && !this.atEnd() && !this.failed) {
-            val casePos: SourcePos = this.peek(0).pos
-            var isDefault: Bool = false
-            var label: AstXmlNode = this.emptyNode()
-            if (this.matchText("case")) {
+            val armPos: SourcePos = this.peek(0).pos
+            if (this.matchText("else")) {
+                if (seenElse) {
+                    this.fail("'when' can have only one 'else' arm")
+                    return false
+                }
+                seenElse = true
                 this.skipNewlines()
-                val labelExpr: ExprNode = this.parseExpr(0)
+                if (!this.expectText("->")) {
+                    return false
+                }
+                tail = this.parseBlock()
                 if (this.failed) {
-                    return this.emptyNode()
-                }
-                label = labelExpr.node
-                if (!this.expectText(":")) {
-                    return this.emptyNode()
-                }
-            } else if (this.matchText("default")) {
-                isDefault = true
-                if (!this.expectText(":")) {
-                    return this.emptyNode()
-                }
-            } else {
-                this.fail("expected 'case' or 'default'")
-                return this.emptyNode()
-            }
-            this.skipSeparators()
-            var arm: List<AstXmlNode> = List<AstXmlNode>()
-            while (!this.checkText("case") && !this.checkText("default")
-                && !this.checkText("}") && !this.atEnd() && !this.failed
-            ) {
-                if (!this.parseStmtInto(*arm)) {
-                    return this.emptyNode()
+                    return false
                 }
                 this.skipSeparators()
+                continue
             }
-            var cattrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
-            cattrs.append(AstNodeAttribute(AstNodeAttributeKind.IsDefault, boolText(isDefault)))
-            cattrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, casePos.line.toString()))
-            cattrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, casePos.column.toString()))
-            var cnode: AstXmlNode = AstXmlNode(AstNodeKind.Case, AstNodeCategory.None, cattrs, Array<AstXmlNode>())
-            if (!isDefault) {
-                this.attach(*cnode, AstNodeKind.Label, *label)
+            if (seenElse) {
+                this.fail("'else' must be the last arm of a 'when'")
+                return false
             }
-            xmlAddChildren(*cnode, *arm)
-            cases.append(cnode)
+            // `is`/`in`/a range are Kotlin's pattern labels; the language has `==`
+            // against a value and that is all `when` matches on today.
+            if (this.checkText("is") || this.checkText("in")) {
+                this.fail("'when' matches a value or 'else', not a pattern")
+                return false
+            }
+            var labels: List<AstXmlNode> = List<AstXmlNode>()
+            val first: ExprNode = this.parseExpr(0)
+            if (this.failed) {
+                return false
+            }
+            labels.append(first.node)
+            while (this.matchText(",")) {
+                this.skipNewlines()
+                val next: ExprNode = this.parseExpr(0)
+                if (this.failed) {
+                    return false
+                }
+                labels.append(next.node)
+            }
+            this.skipNewlines()
+            if (!this.expectText("->")) {
+                return false
+            }
+            val body: List<AstXmlNode> = this.parseBlock()
+            if (this.failed) {
+                return false
+            }
+            arms.append(this.ifNode(this.whenCondition(subjectName, *labels, armPos), body, armPos))
+            this.skipSeparators()
         }
         if (!this.expectText("}")) {
-            return this.emptyNode()
+            return false
         }
-        var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
-        var node: AstXmlNode = AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtSwitch, attrs, Array<AstXmlNode>())
-        this.attach(*node, AstNodeKind.Cond, *cond.node)
-        xmlAddChildren(*node, *cases)
-        return node
+
+        // The chain is right-nested: each arm's else body holds the next `if`, and the
+        // `else` arm's statements are the last arm's else body. The tail goes on first:
+        // linking copies an arm into its predecessor's else body (nodes are values), so
+        // an arm has to be complete before it is copied.
+        if (seenElse && arms.size() > 0 && tail.size() > 0) {
+            xmlAddChild(*arms[arms.size() - 1], this.container(AstNodeKind.Else, *tail))
+        }
+        var i: Int = arms.size() - 1
+        while (i > 0) {
+            var next: List<AstXmlNode> = List<AstXmlNode>()
+            next.append(arms[i])
+            xmlAddChild(*arms[i - 1], this.container(AstNodeKind.Else, *next))
+            i = i - 1
+        }
+        out.append(this.varDeclNode(subjectName, true, this.emptyNode(), subject, pos))
+        if (arms.size() > 0) {
+            out.append(arms[0])
+        } else {
+            // `else` was the only arm: its statements are the whole construct.
+            var e: Int = 0
+            while (e < tail.size()) {
+                out.append(tail[e])
+                e = e + 1
+            }
+        }
+        return true
     }
 
     fun parseReturn(): AstXmlNode {
@@ -1332,8 +1427,8 @@ var nextForId: Int)
             return false
         }
 
-        val id: Int = this.nextForId
-        this.nextForId = this.nextForId + 1
+        val id: Int = this.nextTemplateId
+        this.nextTemplateId = this.nextTemplateId + 1
         val machineName: Str = "_sm_for" + id.toString()
         val stepName: Str = "_sm_step" + id.toString()
         val counterName: Str = "_sm_index" + id.toString()

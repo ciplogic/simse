@@ -191,6 +191,14 @@ semantic pass's facts), so a forward declaration is what makes a data class able
 name another package's type at all. It costs one line per aggregate and no packing
 change (the declarations are not layout).
 
+String literals are emitted into **one table** at the top of the file and read by
+index from every site that mentions one (`impl_specs/rtl-abi.md`, T52), so a literal
+that is only read - a comparison, a `const Str&` argument - never constructs a `Str`,
+and a literal longer than the inline capacity never allocates at the site. That is why
+the emitted code reads `__sm_stringTable[31]` where the source wrote `"Expr.IntLit"`;
+the table is built once, before `main`, and owned positions still copy what they copy
+today.
+
 Runtime behavior can be swapped at compile time, which is how these decisions get
 measured instead of argued about:
 
@@ -221,15 +229,15 @@ corpus has `diagnostic-*` cases that assert on *rejected* programs.
 
 ## Performance, honestly
 
-Measured on the compiler's own 14,159-line source tree, release builds, on one
+Measured on the compiler's own 14,228-line source tree, release builds, on one
 machine (an ARM64 laptop; the numbers wobble ~8% between windows):
 
 | Measure | Value |
 | --- | --- |
-| self-hosted compiler transpiling `cppsrc/` | ~0.82 s (~17.2k lines/s) |
+| self-hosted compiler transpiling `cppsrc/` | ~0.81 s (~17.6k lines/s) |
 | hand-written C++ compiler, same input | ~0.18 s (~4.6x faster) |
 | peak working set, self-hosted | ~31 MB |
-| emitted translation unit | ~1.07 MB for the whole compiler |
+| emitted translation unit | ~1.10 MB for the whole compiler |
 
 The remaining gap to the hand-written ring is the price of the abstractions the
 Simse ring uses (the AST as one uniform node type, strings and lists as values).

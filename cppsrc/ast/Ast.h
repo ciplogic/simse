@@ -62,15 +62,6 @@ namespace ast {
     struct Stmt;
     using StmtPtr = std::shared_ptr<Stmt>;
 
-    // One arm of a `switch`: a `case CONST:` or `default:` label plus the
-    // statements that follow it (up to the next label or the closing brace).
-    struct SwitchCase {
-        SourcePos pos{};
-        bool isDefault = false;
-        ExprPtr label; // null for `default`
-        List<StmtPtr> body;
-    };
-
     struct Expr {
         ExprKind kind = ExprKind::Name;
         SourcePos pos{};
@@ -90,13 +81,12 @@ namespace ast {
         Assign,
         If,
         While,
-        Switch,
         Return,
         Break,
         Continue,
         ExprStmt,
         // Post-lowering forms (impl_specs/linear-lowering.md). The parser never
-        // produces them: the linear pass replaces If/While/Switch/Break/Continue
+        // produces them: the linear pass replaces If/While/Break/Continue
         // with labels, jumps and blocks before the C++ emitter runs.
         Label,   // name: label definition
         Goto,    // name: unconditional jump target
@@ -130,9 +120,6 @@ namespace ast {
         List<StmtPtr> elseBody; // If
         bool hasElse = false;
         List<StmtPtr> body; // While
-
-        // Switch
-        List<SwitchCase> cases;
 
         // Return
         ExprPtr returnValue;

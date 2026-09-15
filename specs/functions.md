@@ -196,7 +196,7 @@ are compiled as static receiver functions, as described above. Other class-body
 content remains unsupported and must be ignored or rejected as a whole:
 
 ```text
-data class Point(var x: Int; var y: Int) {
+data class Point(var x: Int, var y: Int) {
     fun distance(): Int { return x * x + y * y }
     // Fields, initializers, nested types, and executable statements are
     // unsupported in the class body for now.
@@ -242,41 +242,65 @@ The exact symbol naming, linkage, and build integration are deferred; see
 
 Status: required for the first implementation.
 
-`break` and `continue` are reserved keywords. `break` is valid inside a `while`
-loop, a `for` loop or a `switch` and leaves the innermost of those; `continue` is
-valid only inside a loop (`while` or `for`) and skips to the next iteration. Using
-either where it is not allowed is an error.
+`break` and `continue` are reserved keywords. Both are valid inside a `while` loop or
+a `for` loop: `break` leaves the innermost loop and `continue` skips to its next
+iteration. Using either where it is not allowed is an error. There is no
+`break`-out-of-a-`when`: an arm is an `if`/`else` chain arm, so a `break` or
+`continue` written in one belongs to the enclosing loop.
 
-## `switch`
+## `when`
 
-Status: required for the first implementation.
+Status: implemented in both rings; lowered to `if`/`else` in the parser
+(`Parser::parseWhen`).
 
-The language has a C-like `switch` statement. It selects one arm by comparing the
-switch expression against constant case labels, with an optional `default` arm:
+`when` is the language's selection statement - Kotlin's, and the only one: the
+language has no `switch`. It compares a **subject** against a value per arm, and an
+ownerless `when` (the `switch` of other languages) is not a form of it:
 
 ```text
-switch (kind) {
-    case TokenKind.Eof:
+when (kind) {
+    TokenKind.Eof -> {
         return "eof"
-    case TokenKind.Space:
+    }
+    TokenKind.Space, TokenKind.Tab -> {
         return "space"
-    default:
+    }
+    else -> {
         return "other"
+    }
 }
 ```
 
-- `switch`, `case`, and `default` are reserved keywords.
-- A `case` label must be a **constant expression**: a literal, a name, an
-  enum-qualified member (`EnumType.Member`), or a unary negation of one. A call or
-  any other dynamic expression is an error.
-- Each arm holds the statements up to the next `case`/`default` label or the
-  closing brace. As in C, control falls through to the following arm unless the
-  arm ends in `break` or `return`. `break` inside a `switch` leaves the switch.
-- `default` is optional and may appear anywhere among the arms; at most one is
-  meaningful.
+- `when`, `else`, and `->` are reserved.
+- A `when` has a **subject** - always written, in parentheses - and its arms are
+  `label[, label]* -> { ... }`. `label1, label2 ->` matches either label and runs the
+  arm's body **once**; the labels are separate `==` operands of one condition.
+- A label is an arbitrary expression, not a constant: `subj == label` is what the arm
+  tests, so a variable or a call is as legal as an enum member or a literal (this is
+  where the language differs from C's `switch`).
+- The body is always a **block**. `else -> { ... }` is the fallback arm and must be
+  last; a `when` without one simply falls through to the statement after it.
+- **Arms do not fall through.** Exactly one body runs: the first arm whose label
+  matches or, failing every arm, the `else` body. Nothing is required to end an arm.
+- The subject is evaluated **once**, however many arms test it.
+- `when` is a statement, not an expression: it does not produce a value.
 
-Like every other control-flow construct, an arm body is a statement sequence and
-line endings or `;` separate its statements.
+Everything below the surface is an `if`/`else` chain, which is what the parser builds
+(`impl_specs/linear-lowering.md`):
+
+```text
+when (kind) {            var _sm_when1 = kind
+    A, B -> { body1 }    if (_sm_when1 == A || _sm_when1 == B) { body1 }
+    C -> { body2 }       else if (_sm_when1 == C) { body2 }
+    else -> { body3 }    else { body3 }
+}
+```
+
+The name is the parser's own (`_sm_when<n>` from the per-file template counter), as
+`for`'s machine name is, so a program cannot take it.
+
+Not implemented, and reported rather than misparsed: Kotlin's pattern labels
+(`is Type`, `in 1..5`), a subjectless `when { cond -> }`, and `when` as an expression.
 
 ## `for`
 

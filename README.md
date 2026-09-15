@@ -189,10 +189,10 @@ best of 5 runs idle):
 
 | | |
 | --- | --- |
-| the compiler transpiling its own source tree | **14,159 lines of Simse in 0.82 s** (35,715 lines of C++ out, ~17.2k lines/s) |
+| the compiler transpiling its own source tree | **14,228 lines of Simse in 0.81 s** (36,330 lines of C++ out, ~17.6k lines/s) |
 | the same tree through the hand-written C++ ring | 0.18 s (the Simse ring is ~4.6x that; the flat-body work - every declaration at the top of its body - costs the Simse ring a share of the transpile, and the C++ ring nothing) |
-| compiling the published `cppsrc/simse_bootstrap.cpp` with `cl.exe` | ~14.5 s release (`/O2 /Ob3`), ~3.1 s debug |
-| **from the published file to a compiler that reproduces it** | **~15.4 s**, then ~0.8 s per self-transpile |
+| compiling the published `cppsrc/simse_bootstrap.cpp` with `cl.exe` | ~15.3 s release (`/O2 /Ob3`), ~3.1 s debug |
+| **from the published file to a compiler that reproduces it** | **~16.1 s**, then ~0.81 s per self-transpile |
 
 Not there yet, in rough order of how soon a user would miss it: `for` over a
 `Dictionary` and ranges, string interpolation, closed unions +

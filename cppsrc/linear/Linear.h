@@ -4,7 +4,7 @@
 
 // Lowering of structured control flow into labels and gotos
 // (impl_specs/linear-lowering.md). The pass runs after sema and before C++
-// emission, so the emitter never has to handle If/While/Switch/Break/Continue:
+// emission, so the emitter never has to handle If/While/Break/Continue:
 //
 //   label L;            -> StmtKind::Label
 //   goto L;             -> StmtKind::Goto
@@ -26,11 +26,9 @@ namespace linear {
     };
 
     // The names the lowering generates for its own storage: the expression lowering's
-    // temporaries (`_sm_expr<n>`) and the switch subjects this pass hoists
-    // (`simse_sw_<n>`). A name the program wrote can collide with one of these - the
-    // switch subject's collision is an accepted, documented risk - but nothing the
-    // lowering generates came from the source, which is what the hoisting below asks
-    // about.
+    // temporaries (`_sm_expr<n>`). A name the program wrote can collide with one of
+    // these - an accepted, documented risk - but nothing the lowering generates came
+    // from the source, which is what the hoisting below asks about.
     bool isSlotName(const Str& name);
 
     // Rewrites one function-like body (a function/method body or a lambda body)

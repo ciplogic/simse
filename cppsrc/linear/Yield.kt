@@ -51,16 +51,27 @@ package linear
 import common
 
 // One field of the machine: the values that live across a yield.
-data class YldField(var name: Str; var typeNode: AstXmlNode)
+data class YldField(var name: Str,
+
+var typeNode: AstXmlNode)
 
 // One parameter of a machine method (`advance`'s `value: *T`).
-data class YldParam(var name: Str; var typeNode: AstXmlNode)
+data class YldParam(var name: Str,
+
+var typeNode: AstXmlNode)
 
 // One way of advancing the machine: `next()` (the optional form) or `advance(*T)` (the
 // same machine without the copy).
-data class YldMethod(var name: Str; var params: List<YldParam>; var body: List<AstXmlNode>; var yieldCount: Int)
+data class YldMethod(var name: Str,
 
-data class Yielded(var fields: List<YldField>; var methods: List<YldMethod>; var error: Str)
+var params: List<YldParam>,
+var body: List<AstXmlNode>,
+var yieldCount: Int)
+
+data class Yielded(var fields: List<YldField>,
+
+var methods: List<YldMethod>,
+var error: Str)
 
 // ---- node builders ---------------------------------------------------------
 
@@ -102,8 +113,10 @@ fun yldWithChildren(like: *AstXmlNode, children: *List<AstXmlNode>): AstXmlNode 
 }
 
 fun yldNamedType(name: Str): AstXmlNode {
-    var node: AstXmlNode = AstXmlNode(AstNodeKind.Type, AstNodeCategory.TypeNamed,
-                                      List<AstNodeAttribute>(), Array<AstXmlNode>())
+    var node: AstXmlNode = AstXmlNode(
+        AstNodeKind.Type, AstNodeCategory.TypeNamed,
+        List<AstNodeAttribute>(), Array<AstXmlNode>()
+    )
     node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
     return node
 }
@@ -248,14 +261,15 @@ fun yldBranchField(): Str {
 // ---- the machine -----------------------------------------------------------
 
 data class YldMachinery(
-    var decl: *AstXmlNode;
-    var elementType: AstXmlNode;
-    var valueTypeText: Str;
-    var fieldTypes: Dictionary<Str, AstXmlNode>;
-    var fieldOrder: List<Str>;
-    var yields: Int;
-    var error: Str;
-    var byReference: Bool
+    var decl: *AstXmlNode,
+    var elementType: AstXmlNode,
+
+var valueTypeText: Str,
+var fieldTypes: Dictionary<Str, AstXmlNode>,
+var fieldOrder: List<Str>,
+var yields: Int,
+var error: Str,
+var byReference: Bool
 ) {
 
     fun fail(message: Str): Unit {
@@ -369,22 +383,6 @@ data class YldMachinery(
             this.collectLocals(locals)
             this.collectLocals(xmlChildren(stmt, AstNodeKind.Then))
             this.collectLocals(xmlChildren(stmt, AstNodeKind.Else))
-            val cases: List<AstXmlNode> = xmlChildren(stmt, AstNodeKind.Case)
-            var c: Int = 0
-            while (c < cases.size()) {
-                var arm: List<AstXmlNode> = List<AstXmlNode>()
-                var k: Int = 0
-                val children: Array<AstXmlNode> = cases[c].Children
-                while (k < children.count()) {
-                    if (children[k].name != AstNodeKind.Label) {
-                        arm.append(children[k])
-                    }
-                    k = k + 1
-                }
-                var armList: List<AstXmlNode> = arm
-                this.collectLocals(armList)
-                c = c + 1
-            }
         }
     }
 
@@ -415,12 +413,24 @@ data class YldMachinery(
             methodBody.append(rewritten[first])
             first = first + 1
         }
-        methodBody.append(yldJumpWhen(yldBinary("==", yldThisMember(yldBranchField()),
-                                                yldIntLiteral(-1)), yldEndLabel()))
+        methodBody.append(
+            yldJumpWhen(
+                yldBinary(
+                    "==", yldThisMember(yldBranchField()),
+                    yldIntLiteral(-1)
+                ), yldEndLabel()
+            )
+        )
         var branch: Int = 1
         while (branch <= this.yields) {
-            methodBody.append(yldJumpWhen(yldBinary("==", yldThisMember(yldBranchField()),
-                                                    yldIntLiteral(branch)), yldLabel(branch)))
+            methodBody.append(
+                yldJumpWhen(
+                    yldBinary(
+                        "==", yldThisMember(yldBranchField()),
+                        yldIntLiteral(branch)
+                    ), yldLabel(branch)
+                )
+            )
             branch = branch + 1
         }
         i = first
@@ -529,8 +539,12 @@ data class YldMachinery(
         }
         if (kind == AstNodeCategory.StmtIfTrue || kind == AstNodeCategory.StmtIfFalse) {
             val cond: AstXmlNode = this.expr(xmlChild(stmt, AstNodeKind.Cond))
-            out.append(linCondJump(kind, *cond, xmlAttr(stmt, AstNodeAttributeKind.Name),
-                                   xmlLine(stmt), xmlColumn(stmt)))
+            out.append(
+                linCondJump(
+                    kind, *cond, xmlAttr(stmt, AstNodeAttributeKind.Name),
+                    xmlLine(stmt), xmlColumn(stmt)
+                )
+            )
             return
         }
         if (kind == AstNodeCategory.StmtBlock) {
@@ -582,8 +596,10 @@ data class YldMachinery(
         // Every child is rewritten in place, position included: the children keep the
         // roles they were read with, so the node's shape does not change.
         var copyNode: AstXmlNode = copy(node)
-        var rebuilt: AstXmlNode = AstXmlNode(copyNode.name, copyNode.kind, copyNode.attributes,
-                                             Array<AstXmlNode>())
+        var rebuilt: AstXmlNode = AstXmlNode(
+            copyNode.name, copyNode.kind, copyNode.attributes,
+            Array<AstXmlNode>()
+        )
         // A member's or an index's receiver is a *place*, not a value: `this` there stays
         // the field (see above).
         val bases: Bool = xmlKind(*node) == AstNodeCategory.ExprMember || xmlKind(*node) == AstNodeCategory.ExprIndex
@@ -621,31 +637,18 @@ fun linHasYield(body: List<AstXmlNode>): Bool {
         if (linHasYield(xmlChildren(stmt, AstNodeKind.Else))) {
             return true
         }
-        val cases: List<AstXmlNode> = xmlChildren(stmt, AstNodeKind.Case)
-        var c: Int = 0
-        while (c < cases.size()) {
-            var arm: List<AstXmlNode> = List<AstXmlNode>()
-            var k: Int = 0
-            val children: Array<AstXmlNode> = cases[c].Children
-            while (k < children.count()) {
-                if (children[k].name != AstNodeKind.Label) {
-                    arm.append(children[k])
-                }
-                k = k + 1
-            }
-            if (linHasYield(arm)) {
-                return true
-            }
-            c = c + 1
-        }
     }
     return false
 }
 
 // The rewrite: one function-like body into the machine that yields its values.
-fun linLowerYield(decl: *AstXmlNode, elementType: AstXmlNode, linearBody: List<AstXmlNode>,
-                  valueTypeText: Str): Yielded {
-    var machinery: YldMachinery = YldMachinery(decl, elementType, valueTypeText,
-                                               Dictionary<Str, AstXmlNode>(), List<Str>(), 0, "", false)
+fun linLowerYield(
+    decl: *AstXmlNode, elementType: AstXmlNode, linearBody: List<AstXmlNode>,
+    valueTypeText: Str
+): Yielded {
+    var machinery: YldMachinery = YldMachinery(
+        decl, elementType, valueTypeText,
+        Dictionary<Str, AstXmlNode>(), List<Str>(), 0, "", false
+    )
     return machinery.run(linearBody)
 }

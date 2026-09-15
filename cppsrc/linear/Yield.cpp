@@ -277,7 +277,6 @@ namespace linear {
                     collectLocals(stmt.body);
                     collectLocals(stmt.thenBody);
                     collectLocals(stmt.elseBody);
-                    for (const ast::SwitchCase &arm : stmt.cases) collectLocals(arm.body);
                 }
             }
 
@@ -479,9 +478,6 @@ namespace linear {
             if (stmt.kind == StmtKind::Yield) return true;
             if (hasYield(stmt.body) || hasYield(stmt.thenBody) || hasYield(stmt.elseBody)) {
                 return true;
-            }
-            for (const ast::SwitchCase &arm : stmt.cases) {
-                if (hasYield(arm.body)) return true;
             }
         }
         return false;

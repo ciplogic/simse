@@ -62,18 +62,18 @@ enum IlOperandKind {
     None
 }
 
-data class IlVar(var name: Str;
+data class IlVar(var name: Str,
 
-var typeIndex: Int;
+var typeIndex: Int,
 var kind: IlVarKind)
 
 data class IlMethod(
-    var name: Str;
+    var name: Str,
 
-var kind: IlMethodKind;
-var argCount: Int;
-var staticBase: Int;
-var returnType: Int;
+var kind: IlMethodKind,
+var argCount: Int,
+var staticBase: Int,
+var returnType: Int,
 var argTypes: List<Int>
 )
 
@@ -82,21 +82,21 @@ var argTypes: List<Int>
 // `Value` position is a literal: it names `pool[-1-n]`, whose text a backend prints
 // verbatim (`0`, `"abc"`, `true`) - which is what keeps a constant inside the
 // instruction that uses it instead of a slot that would have to be declared.
-data class IlOp(var name: Str;
+data class IlOp(var name: Str,
 
 var operands: List<Int>)
 
 data class IlBody(
-    var file: Str;
+    var file: Str,
 
-var line: Int;
-var symbol: Str;
-var signature: Str;
-var types: List<Str>;
+var line: Int,
+var symbol: Str,
+var signature: Str,
+var types: List<Str>,
 
 // The type node behind each `types` entry, when the extractor had one: the dump
 // only needs the text, but a backend spells C++ from these.
-var typeNodes: List<AstXmlNode>;
+var typeNodes: List<AstXmlNode>,
 
 // What the *type pass* proved for every name in this body (`sema::inferTypes`),
 // which is more than the frame's slots carry: a name holding a state machine is
@@ -106,12 +106,12 @@ var typeNodes: List<AstXmlNode>;
 // on a machine, that wrap is the identity - a decision only the receiver's type can
 // make (impl_specs/for.md). Seeding a frame from this is how a machine-typed slot
 // stays typed without a statement tree.
-var inferredTypes: Dictionary<Str, AstXmlNode>;
-var vars: List<IlVar>;
-var pool: List<Str>;
-var methods: List<IlMethod>;
-var labels: List<Str>;
-var ops: List<IlOp>;
+var inferredTypes: Dictionary<Str, AstXmlNode>,
+var vars: List<IlVar>,
+var pool: List<Str>,
+var methods: List<IlMethod>,
+var labels: List<Str>,
+var ops: List<IlOp>,
 var lines: List<Int>
 )
 
@@ -125,45 +125,45 @@ var lines: List<Int>
 // enclosing function's), the type parameters in scope there, and the flat record the
 // enclosing body's pass produced (the top-level body's frame).
 data class IlFunction(
-    var decl: AstXmlNode;
+    var decl: AstXmlNode,
 
-var receiver: AstXmlNode;
-var symbol: Str;
-var statics: Dictionary<Str, Str>;
-var paramNames: List<Str>;
-var paramTypes: List<AstXmlNode>;
-var closureSymbol: Str;
-var captures: Dictionary<Str, Bool>;
-var captureTypes: Dictionary<Str, AstXmlNode>;
-var facts: *SemFacts;
-var typeParams: List<Str>;
+var receiver: AstXmlNode,
+var symbol: Str,
+var statics: Dictionary<Str, Str>,
+var paramNames: List<Str>,
+var paramTypes: List<AstXmlNode>,
+var closureSymbol: Str,
+var captures: Dictionary<Str, Bool>,
+var captureTypes: Dictionary<Str, AstXmlNode>,
+var facts: *SemFacts,
+var typeParams: List<Str>,
 var inferredTypes: *Dictionary<Str, AstXmlNode>
 )
 
 // A lambda, as the language's model says it is: a class with one field per captured
 // variable and one method, so a callable value is an *instance* of it.
 data class IlClosure(
-    var symbol: Str;
+    var symbol: Str,
 
-var signature: Str;
-var captures: List<Str>;
-var captureTypes: List<AstXmlNode>;
-var params: List<IlVar>;
+var signature: Str,
+var captures: List<Str>,
+var captureTypes: List<AstXmlNode>,
+var params: List<IlVar>,
 var bodyIndex: Int
 )
 
 // One function-like body and the lambdas it constructs.
 data class IlUnit(
-    var body: IlBody;
+    var body: IlBody,
 
-var lambdas: List<IlBody>;
+var lambdas: List<IlBody>,
 var closures: List<IlClosure>
 )
 
 // One entry per opcode, with its operands' kinds in order (`"Var,Text,Var,Var"`; a
 // trailing `...` means "the kind before it repeats here"). The printer and the backend
 // read this table, so it is the one place the IL's shape is written down.
-data class IlSignature(var name: Str;
+data class IlSignature(var name: Str,
 
 var operands: Str)
 
@@ -919,25 +919,6 @@ fun ilCollectStmtNames(
         ilCollectStmtNamesIn(stmt, AstNodeKind.Body, declared, order, seen)
         ilCollectStmtNamesIn(stmt, AstNodeKind.Then, declared, order, seen)
         ilCollectStmtNamesIn(stmt, AstNodeKind.Else, declared, order, seen)
-        val cases: List<AstXmlNode> = xmlChildren(stmt, AstNodeKind.Case)
-        var c: Int = 0
-        while (c < cases.size()) {
-            val arm: List<AstXmlNode> = xmlChildren(*cases[c], AstNodeKind.Label)
-            if (arm.size() > 0) {
-                ilCollectExprNames(*arm[0], order, seen)
-            }
-            var body: List<AstXmlNode> = List<AstXmlNode>()
-            var k: Int = 0
-            val armChildren: Array<AstXmlNode> = cases[c].Children
-            while (k < armChildren.count()) {
-                if (armChildren[k].name != AstNodeKind.Label) {
-                    body.append(armChildren[k])
-                }
-                k = k + 1
-            }
-            ilCollectStmtNames(*body, declared, order, seen)
-            c = c + 1
-        }
         i = i + 1
     }
 }
@@ -1046,17 +1027,17 @@ fun ilReceiverTypeNode(typeNode: *AstXmlNode): AstXmlNode {
 // tables are filled in first-touch order, and every instruction carries the line of the
 // statement it came from.
 data class IlExtractor(
-    var fn: IlFunction;
+    var fn: IlFunction,
 
-var unit: *IlUnit;
-var closureCounter: *Int;
-var out: IlBody;
-var varAt: Dictionary<Str, Int>;
-var typeAt: Dictionary<Str, Int>;
-var poolAt: Dictionary<Str, Int>;
-var methodAt: Dictionary<Str, Int>;
-var labelAt: Dictionary<Str, Int>;
-var nextBase: Int;
+var unit: *IlUnit,
+var closureCounter: *Int,
+var out: IlBody,
+var varAt: Dictionary<Str, Int>,
+var typeAt: Dictionary<Str, Int>,
+var poolAt: Dictionary<Str, Int>,
+var methodAt: Dictionary<Str, Int>,
+var labelAt: Dictionary<Str, Int>,
+var nextBase: Int,
 var line: Int
 ) {
 
@@ -1367,7 +1348,7 @@ var line: Int
             return
         }
         if (kind == AstNodeCategory.StmtIf || kind == AstNodeCategory.StmtWhile
-            || kind == AstNodeCategory.StmtSwitch || kind == AstNodeCategory.StmtBreak
+            || kind == AstNodeCategory.StmtBreak
             || kind == AstNodeCategory.StmtContinue
         ) {
             this.unsupported("structured statement reached the IL")

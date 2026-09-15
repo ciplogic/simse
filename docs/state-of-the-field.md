@@ -26,8 +26,8 @@ reproduces its own output byte for byte. Two implementations (hand-written C++
 and Simse) with five differential stage tests, 55 in-process tests and 30
 end-to-end stress programs.
 
-**The performance story.** Transpiling the compiler's own 14,159-line source tree
-takes ~0.82 s (release, ~17k lines/s) with ~31 MB peak working set; the
+**The performance story.** Transpiling the compiler's own 14,228-line source tree
+takes ~0.81 s (release, ~17.6k lines/s) with ~31 MB peak working set; the
 hand-written C++ ring does the same work in ~0.18 s, so the self-hosted ring is
 **~4.6x slower** - the price of the uniform AST and value-semantics
 containers, not of the language's design. The runtime backings are measurably

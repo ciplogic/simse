@@ -59,7 +59,6 @@ enum class AstNodeKind : Int {
     Then,
     Else,
     Body,
-    Case,
     Label,
     Init,
     Value,
@@ -92,7 +91,6 @@ enum class AstNodeAttributeKind : Int {
     Value,
     Text,
     HasValue,
-    IsDefault,
 };
 
 // The schema's `kind` attribute: what a node **is** (its category), as opposed to
@@ -116,7 +114,6 @@ enum class AstNodeCategory : Int {
     StmtAssign,
     StmtIf,
     StmtWhile,
-    StmtSwitch,
     StmtReturn,
     StmtBreak,
     StmtContinue,

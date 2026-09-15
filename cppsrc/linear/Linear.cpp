@@ -78,26 +78,6 @@ namespace linear {
                 return stmt;
             }
 
-            // A name expression, used as the hoisted switch subject.
-            static ExprPtr nameExpr(const Str &name, const ast::SourcePos &pos) {
-                auto expr = std::make_shared<ast::Expr>();
-                expr->kind = ExprKind::Name;
-                expr->pos = pos;
-                expr->text = name;
-                return expr;
-            }
-
-            static ExprPtr equalsExpr(const ExprPtr &left, const ExprPtr &right,
-                                      const ast::SourcePos &pos) {
-                auto expr = std::make_shared<ast::Expr>();
-                expr->kind = ExprKind::Binary;
-                expr->pos = pos;
-                expr->text = "==";
-                expr->lhs = left;
-                expr->rhs = right;
-                return expr;
-            }
-
             void lowerStmts(const List<StmtPtr> &stmts, const Ctx &ctx, List<StmtPtr> &out) {
                 for (const StmtPtr &stmt: stmts) {
                     if (!stmt) continue;
@@ -200,13 +180,9 @@ namespace linear {
                         changed = true;
                         lowerWhile(stmt, ctx, out);
                         return;
-                    case StmtKind::Switch:
-                        changed = true;
-                        lowerSwitch(stmt, ctx, out);
-                        return;
                     case StmtKind::Break:
-                        // Invalid outside a loop/switch; sema reports it before
-                        // this pass runs, so keep the node for the emitter.
+                        // Invalid outside a loop; sema reports it before this pass
+                        // runs, so keep the node for the emitter.
                         if (!ctx.breakTo.empty()) {
                             changed = true;
                             out.push_back(gotoStmt(ctx.breakTo, stmt.pos));
@@ -281,51 +257,6 @@ namespace linear {
                 (void) ctx;
             }
 
-            void lowerSwitch(const Stmt &stmt, const Ctx &ctx, List<StmtPtr> &out) {
-                // The subject is hoisted so it is evaluated exactly once, as a
-                // C++ `switch` subject would be.
-                const int subjectId = nextId();
-                const Str subject = Str("simse_sw_") + std::to_string(subjectId);
-                const Str endLabel = labelName(nextId());
-                List<Str> armLabels;
-                for (const ast::SwitchCase &switchCase: stmt.cases) {
-                    armLabels.push_back(labelName(nextId()));
-                }
-
-                StmtPtr subjectDecl = make(StmtKind::VarDecl, stmt.pos);
-                subjectDecl->name = subject;
-                subjectDecl->init = stmt.cond;
-                out.push_back(subjectDecl);
-
-                for (int i = 0; i < (int) stmt.cases.size(); i++) {
-                    const ast::SwitchCase &switchCase = stmt.cases[i];
-                    if (switchCase.isDefault || !switchCase.label) continue;
-                    out.push_back(condGotoStmt(StmtKind::IfTrue,
-                                               equalsExpr(nameExpr(subject, stmt.pos),
-                                                          switchCase.label, switchCase.pos),
-                                               armLabels[i], stmt.pos));
-                }
-                // No case matched: fall through to the default arm, or leave the
-                // switch. The default arm keeps its source position, so an arm
-                // before it still falls into it.
-                Str fallback = endLabel;
-                for (int i = 0; i < (int) stmt.cases.size(); i++) {
-                    if (stmt.cases[i].isDefault) fallback = armLabels[i];
-                }
-                out.push_back(gotoStmt(fallback, stmt.pos));
-
-                for (int i = 0; i < (int) stmt.cases.size(); i++) {
-                    const ast::SwitchCase &switchCase = stmt.cases[i];
-                    out.push_back(labelStmt(armLabels[i], switchCase.pos));
-                    Ctx armCtx;
-                    armCtx.breakTo = endLabel;
-                    armCtx.continueTo = ctx.continueTo;
-                    List<StmtPtr> armOut;
-                    lowerStmts(switchCase.body, armCtx, armOut);
-                    appendBody(std::move(armOut), switchCase.pos, out);
-                }
-                out.push_back(labelStmt(endLabel, stmt.pos));
-            }
         };
     }
 
@@ -339,8 +270,8 @@ namespace linear {
 
     bool isSlotName(const Str &name) {
         // `compare` rather than a `startsWith` helper: the RTL's `Str` is either
-        // backing, and both have it. The lengths are the prefixes' own (8 and 9).
-        return name.compare(0, 8, "_sm_expr") == 0 || name.compare(0, 9, "simse_sw_") == 0;
+        // backing, and both have it. The length is the prefix's own (8).
+        return name.compare(0, 8, "_sm_expr") == 0;
     }
 
     List<StmtPtr> lowerForEmission(const List<StmtPtr> &body) {
