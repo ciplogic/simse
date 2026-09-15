@@ -117,12 +117,37 @@ fun linStmtCrosses(
     return false
 }
 
+// The same test for item `p` of a level. A block item's body is `bodies[p]` rather
+// than the body of `stmts[p]`: the wrapper node is built at the splice decision, so
+// `stmts[p]` still carries the tree it was parsed as, not the flattened one - the
+// scan has to see what the children left behind.
+fun linItemCrosses(
+    stmts: *List<AstXmlNode>, bodies: *List<List<AstXmlNode>>, p: Int, at: Int,
+    decls: *List<Int>, labelNames: *List<Str>, labelAt: *List<Int>
+): Bool {
+    if (!linIsBlock(*stmts[p])) {
+        return linStmtCrosses(*stmts[p], at, decls, labelNames, labelAt)
+    }
+    var i: Int = 0
+    while (i < bodies[p].size()) {
+        if (linStmtCrosses(*bodies[p][i], at, decls, labelNames, labelAt)) {
+            return true
+        }
+        i = i + 1
+    }
+    return false
+}
+
 // Whether the block at `i` can be spliced into `stmts`: after the splice the
 // block's own declarations are in the parent's scope, so the splice is legal
 // exactly when no jump `J` and label `L` satisfy `pos (J) < pos (D) <= pos (L)`
 // for a declaration `D` it brings up.
-fun linSpliceIsSafe(stmts: *List<AstXmlNode>, i: Int): Bool {
-    val body: List<AstXmlNode> = linBlockStmts(*stmts[i])
+//
+// The block's body comes from `bodies[i]`, not from `stmts[i]`: the wrapper node is
+// built only when the block *survives* (in `flattenPass`), so a spliced block never
+// pays for one.
+fun linSpliceIsSafe(stmts: *List<AstXmlNode>, bodies: *List<List<AstXmlNode>>, i: Int): Bool {
+    val body: *List<AstXmlNode> = *bodies[i]
     val len: Int = body.size()
     if (len == 0) {
         return true
@@ -164,7 +189,7 @@ fun linSpliceIsSafe(stmts: *List<AstXmlNode>, i: Int): Bool {
     p = 0
     while (p < stmts.size()) {
         if (p != i
-            && linStmtCrosses(*stmts[p], linMergedIndex(p, i, len), *decls, *labelNames, *labelAt)
+            && linItemCrosses(stmts, bodies, p, linMergedIndex(p, i, len), *decls, *labelNames, *labelAt)
         ) {
             return false
         }
@@ -274,42 +299,55 @@ data class LinSimplifier(
         return out
     }
 
-    // The same statement with its own nesting flattened. A fresh node keeps the
-    // tree the caller handed in untouched.
-    fun flattenInner(stmt: AstXmlNode): AstXmlNode {
-        if (!linIsBlock(*stmt)) {
-            return stmt
-        }
-        val flattened: List<AstXmlNode> = this.flattenPass(linBlockStmts(*stmt))
-        val bodyNode: AstXmlNode = exprLike(*xmlChild(*stmt, AstNodeKind.Body), *flattened)
-        return exprReplaceRole(*stmt, AstNodeKind.Body, *linOne(bodyNode))
-    }
-
     // Folds nested blocks into the parent sequence. Children come first: a spliced
     // child is what makes its parent's declarations cross jumps, so the parent is
     // judged on the body its children leave behind.
-    fun flattenPass(stmts: List<AstXmlNode>): List<AstXmlNode> {
-        var flattened: List<AstXmlNode> = List<AstXmlNode>()
+    //
+    // A block's flattened body is computed up front but its *node* is not: it is built
+    // in the one branch where the block survives the splice, so a spliced block never
+    // pays for a fresh node. That is also why the decisions are a batch below - each
+    // one reads the block bodies of the *other* items in this sequence, so all of them
+    // have to be in place before any is used.
+    fun flattenPass(stmts: *List<AstXmlNode>): List<AstXmlNode> {
+        val count: Int = stmts.size()
+        var bodies: List<List<AstXmlNode>> = List<List<AstXmlNode>>(count)
+        var bodyList: List<AstXmlNode> = List<AstXmlNode>()
         var i: Int = 0
-        while (i < stmts.size()) {
-            flattened.append(this.flattenInner(stmts[i]))
+        while (i < count) {
+            if (linIsBlock(*stmts[i])) {
+                bodyList = linBlockStmts(*stmts[i])
+                bodies[i] = this.flattenPass(*bodyList)
+            }
+            i = i + 1
+        }
+
+        var splicing: List<Bool> = List<Bool>(count, false)
+        i = 0
+        while (i < count) {
+            if (linIsBlock(*stmts[i]) && linSpliceIsSafe(stmts, *bodies, i)) {
+                splicing[i] = true
+                this.changed = true
+            }
             i = i + 1
         }
 
         var out: List<AstXmlNode> = List<AstXmlNode>()
         i = 0
-        while (i < flattened.size()) {
-            val stmt: AstXmlNode = flattened[i]
-            if (linIsBlock(*stmt) && linSpliceIsSafe(*flattened, i)) {
-                val body: List<AstXmlNode> = linBlockStmts(*stmt)
+        while (i < count) {
+            if (splicing[i]) {
                 var k: Int = 0
-                while (k < body.size()) {
-                    out.append(body[k])
+                while (k < bodies[i].size()) {
+                    out.append(bodies[i][k])
                     k = k + 1
                 }
-                this.changed = true
+            } else if (linIsBlock(*stmts[i])) {
+                // The block stays: it exists because a declaration must not be spliced
+                // across a jump. This is the only node this pass builds.
+                val bodyNode: AstXmlNode =
+                    exprLike(*xmlChild(*stmts[i], AstNodeKind.Body), *bodies[i])
+                out.append(exprReplaceRole(*stmts[i], AstNodeKind.Body, *linOne(bodyNode)))
             } else {
-                out.append(stmt)
+                out.append(copy(*stmts[i]))
             }
             i = i + 1
         }
@@ -377,16 +415,13 @@ data class SimRenameScope(var renamed: Dictionary<Str, Str>)
 fun simNameAttrs(like: *AstXmlNode, name: Str): List<AstNodeAttribute> {
     var attrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
     var found: Bool = false
-    var i: Int = 0
-    while (i < like.attributes.size()) {
-        val attr: AstNodeAttribute = like.attributes[i]
+    for (*attr in like.attributes) {
         if (attr.name == AstNodeAttributeKind.Name) {
             attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
             found = true
         } else {
-            attrs.append(attr)
+            attrs.append(copy(attr))
         }
-        i = i + 1
     }
     if (!found) {
         attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
@@ -414,10 +449,11 @@ fun simBoundNames(body: AstXmlNode, bound: List<Str>): List<Str> {
     return names
 }
 
-data class SimRenamer(var scopes: List<SimRenameScope>,
+data class SimRenamer(
+    var scopes: List<SimRenameScope>,
 
-var used: Dictionary<Str, Bool>)
-{
+    var used: Dictionary<Str, Bool>
+) {
     // The innermost scope that renames this name, if any: "" when none does.
     fun renamedTo(name: Str): Str {
         var i: Int = this.scopes.size() - 1
@@ -707,7 +743,7 @@ fun linFinishForEmission(body: List<AstXmlNode>, reserved: List<Str>): List<AstX
         val simplified: LinLowered = linSimplifyBody(current)
         current = simplified.body
         canChange = canChange || simplified.changed
-        val folded: LinLowered = linFlattenBlocks(current)
+        val folded: LinLowered = linFlattenBlocks(*current)
         current = folded.body
         canChange = canChange || folded.changed
     }
@@ -720,7 +756,7 @@ fun linSimplifyBody(body: List<AstXmlNode>): LinLowered {
 }
 
 // Folds nested blocks into their parent sequence.
-fun linFlattenBlocks(body: List<AstXmlNode>): LinLowered {
+fun linFlattenBlocks(body: *List<AstXmlNode>): LinLowered {
     var flattener: LinSimplifier = LinSimplifier(false)
     val flattened: List<AstXmlNode> = flattener.flattenPass(body)
     return LinLowered(flattened, flattener.changed)

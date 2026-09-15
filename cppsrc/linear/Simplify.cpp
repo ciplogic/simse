@@ -129,18 +129,39 @@ namespace linear {
             return false;
         }
 
+        // The same test for item `p` of a level. A block item's body is `bodies[p]`
+        // rather than `stmts[p]->body`: the wrapper is built at the splice decision,
+        // so `stmts[p]` still carries the tree it was parsed as, not the flattened
+        // one - the scan has to see what the children left behind.
+        bool itemCrosses(const List<StmtPtr> &stmts, const List<List<StmtPtr>> &bodies, int p,
+                         int at, const List<int> &decls, const List<Str> &labelNames,
+                         const List<int> &labelAt) {
+            const StmtPtr &stmt = stmts[p];
+            if (!stmt || stmt->kind != StmtKind::Block) {
+                return stmtCrosses(stmt, at, decls, labelNames, labelAt);
+            }
+            for (const StmtPtr &inner: bodies[p]) {
+                if (stmtCrosses(inner, at, decls, labelNames, labelAt)) return true;
+            }
+            return false;
+        }
+
         // Whether the block at `i` can be spliced into `stmts`: after the splice the
         // block's own declarations are in the parent's scope, so the splice is
         // legal exactly when no jump `J` and label `L` satisfy
         // `pos (J) < pos (D) <= pos (L)` for a declaration `D` it brings up.
-        bool spliceIsSafe(const List<StmtPtr> &stmts, int i) {
-            const StmtPtr &block = stmts[i];
-            const int len = (int) block->body.size();
+        //
+        // The block's body comes from `bodies[i]`, not from `stmts[i]`: the wrapper
+        // node is built only when the block *survives* (below), so a spliced block
+        // never pays for one.
+        bool spliceIsSafe(const List<StmtPtr> &stmts, const List<List<StmtPtr>> &bodies, int i) {
+            const List<StmtPtr> &body = bodies[i];
+            const int len = (int) body.size();
             if (len == 0) return true;
 
             List<int> decls;
             for (int k = 0; k < len; k++) {
-                const StmtPtr &inner = block->body[k];
+                const StmtPtr &inner = body[k];
                 if (inner && inner->kind == StmtKind::VarDecl) decls.push_back(i + k);
             }
             if (decls.empty()) return true;
@@ -159,52 +180,72 @@ namespace linear {
                 }
             }
             for (int k = 0; k < len; k++) {
-                if (isLabel(block->body[k])) {
-                    labelNames.push_back(block->body[k]->name);
+                if (isLabel(body[k])) {
+                    labelNames.push_back(body[k]->name);
                     labelAt.push_back(i + k);
                 }
             }
 
             // ... and every jump that stays in it.
             for (int p = 0; p < (int) stmts.size(); p++) {
-                if (p != i && stmtCrosses(stmts[p], mergedIndex(p), decls, labelNames, labelAt)) {
+                if (p != i && itemCrosses(stmts, bodies, p, mergedIndex(p), decls, labelNames, labelAt)) {
                     return false;
                 }
             }
             for (int k = 0; k < len; k++) {
-                if (stmtCrosses(block->body[k], i + k, decls, labelNames, labelAt)) return false;
+                if (stmtCrosses(body[k], i + k, decls, labelNames, labelAt)) return false;
             }
             return true;
         }
 
         List<StmtPtr> flattenPass(const List<StmtPtr> &stmts, bool &changed);
 
-        // The same statement with its own nesting flattened. A copy keeps the tree
-        // the caller handed in untouched.
-        StmtPtr flattenInner(const StmtPtr &stmt, bool &changed) {
-            if (!stmt || stmt->kind != StmtKind::Block) return stmt;
-            auto flattened = std::make_shared<Stmt>(*stmt);
-            flattened->body = flattenPass(stmt->body, changed);
-            return flattened;
-        }
-
         // Folds nested blocks into the parent sequence. Children come first: a
         // spliced child is what makes its parent's declarations cross jumps, so
         // the parent is judged on the body its children leave behind.
+        //
+        // A block's flattened body is computed up front but its *node* is not: it is
+        // built in the one branch where the block survives the splice. Copying a
+        // `Stmt` for every block of every round was this pass's cost - a `Stmt`
+        // carries four lists and two `Str`s, and most blocks are spliced away.
         List<StmtPtr> flattenPass(const List<StmtPtr> &stmts, bool &changed) {
-            List<StmtPtr> flattened;
-            for (const StmtPtr &stmt: stmts) flattened.push_back(flattenInner(stmt, changed));
+            const int count = (int) stmts.size();
+            List<List<StmtPtr>> bodies(count);
+            for (int i = 0; i < count; i++) {
+                const StmtPtr &stmt = stmts[i];
+                if (stmt && stmt->kind == StmtKind::Block) bodies[i] = flattenPass(stmt->body, changed);
+            }
+
+            // The decisions come first, as a batch: each one reads the block bodies of
+            // the *other* items in this sequence, so no body may be moved out until
+            // they are all in. (Deciding and emitting in one loop looks equivalent and
+            // is not - moving a body out takes a jump away from a later test.)
+            List<bool> splicing(count, false);
+            for (int i = 0; i < count; i++) {
+                const StmtPtr &stmt = stmts[i];
+                if (stmt && stmt->kind == StmtKind::Block && spliceIsSafe(stmts, bodies, i)) {
+                    splicing[i] = true;
+                    changed = true;
+                }
+            }
 
             List<StmtPtr> out;
-            for (int i = 0; i < (int) flattened.size(); i++) {
-                const StmtPtr &stmt = flattened[i];
+            for (int i = 0; i < count; i++) {
+                const StmtPtr &stmt = stmts[i];
                 if (!stmt) continue;
-                if (stmt->kind == StmtKind::Block && spliceIsSafe(flattened, i)) {
-                    for (const StmtPtr &inner: stmt->body) out.push_back(inner);
-                    changed = true;
+                if (splicing[i]) {
+                    for (const StmtPtr &inner: bodies[i]) out.push_back(inner);
                     continue;
                 }
-                out.push_back(stmt);
+                if (stmt->kind != StmtKind::Block) {
+                    out.push_back(stmt);
+                    continue;
+                }
+                // The block stays: it exists because a declaration must not be
+                // spliced across a jump. This is the only wrapper this pass builds.
+                auto kept = std::make_shared<Stmt>(*stmt);
+                kept->body = std::move(bodies[i]);
+                out.push_back(kept);
             }
             return out;
         }

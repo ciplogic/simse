@@ -1283,6 +1283,130 @@ numbers shifted with the parser/scanner edits).
   the C++ ring, the self-hosted `simse.exe` and the stage-1 binary, and
   `bun tools/bootstrap.js` fixed point byte for byte.
 
+- **The IL's opcode is an enum, not a string (T55).** `IlOp` carried `name: Str`,
+  so every instruction ever built allocated (or copy-on-wrote) a string for a value
+  that has exactly 32 possible spellings, every `op.name == "Call"`-style test in the
+  extractor and the backend compared text, and `ilSignature` found a row by *searching*
+  the table for that text - on the hottest path of codegen, once per operand read.
+  `IlOp` is now `{ IlOpKind kind; List<int> operands; }`.
+
+  `IlOpKind` has one member per signature-table row (same order, so `ilSignature(kind)`
+  is a direct index and no longer a search), plus `Unsupported` for the instruction the
+  extractor cannot build - a value in the enum rather than a missing string. The
+  spelling survives only where a human needs it: `ilOpKindText(kind)` feeds the dump's
+  opcode column (`--showLinearRepresentation`) and the two diagnostics that named an
+  opcode, and `ilWritesDestination(kind)` is a `switch` instead of a linear scan of an
+  eighteen-entry `List<Str>` per operand read.
+  The backend switches on the enum throughout. Both rings: the same enum, table,
+  `ilOpKindText`, extractor and backend live in `LinearForm.{h,cpp}`/`LinearForm.kt` and
+  `Codegen.{cpp,kt}`; `impl_specs/linear-il.md` states the rule.
+
+  Verified: both configurations rebuild with no warnings, the five differentials are
+  byte-identical, T23 is byte-identical, `simse_tests.exe` **56/56**,
+  `bun tools/stress.js` **32/32** on all three compilers; and, the decisive check, the
+  two rings' `--showLinearRepresentation` dumps of the whole compiler **diff identically**
+  (38,911 lines), which is what shows the change is the model's shape and not its
+  behavior.
+
+  Measured: interleaved A/B of two amalgamations built by `build.js --release` from the
+  same flags, pre-change (HEAD's published bootstrap) against post-change, 11 pairs then
+  15 pairs, each leg alternating run for run. Pre-change min 800.1 / 809.7 ms, median
+  857.0 / 833.6 ms; post-change min 775.9 / 783.2 ms, median 823.0 / 807.7 ms. So
+  `./simse.exe --root cppsrc` is **~3% faster at the minimum** (~4% at the median) - the
+  IL is on codegen's hot path, and removing a string from every instruction shows up.
+
+- **Block folding no longer copies a node per block per round (T56).** The fold
+  (`linear::flattenBlocks`, `linFlattenBlocks`) used to build a fresh node for *every*
+  block at every level of every round, before it knew whether the block would survive
+  its own splice: `make_shared<Stmt>(*stmt)` in the C++ ring, and in the Simse ring
+  `flattenInner(stmt: AstXmlNode)` - a node **by value** - plus `flattenPass(stmts:
+  List<AstXmlNode>)` - a whole **list by value** - at every recursion level, on top of
+  `xmlChildren` copying the block's statement list into a fresh `List` on every call.
+  A `Stmt` carries four lists and two `Str`s; an `AstXmlNode` carries an attribute list
+  that allocates. Most blocks are spliced away, so most of that was built to be thrown
+  out.
+
+  Now the flattened body of a block is computed up front and kept out of the item list,
+  and the node is built in the one branch where the block **survives** the splice. The
+  safety scan reads ``bodies[i]`` for a block item rather than the item's own body (a new
+  `itemCrosses`/`linItemCrosses`), which is what lets the wrapper node not exist yet.
+  The Simse mirror takes the level lists and items by pointer (`*List<AstXmlNode>`,
+  `*AstXmlNode`) instead of by value.
+
+  One rule the two rings have to state out loud, because it is not local: the splice
+  decisions are a **batch**, before any body is used. Each decision reads the block bodies
+  of the *other* items in the sequence, so emitting as you decide silently changes which
+  blocks survive (see `impl_specs/linear-lowering.md`, "Block folding").
+
+  Measured: `./simse.exe --root cppsrc` 792.0/794 ms -> **750/769 ms**
+  (`bun tools/bootstrap.js`), and interleaved A/B of two amalgamations built by
+  `build.js --release` from the same flags (13 pairs) 777.0/807.3 ms -> **729.3/742.8 ms**
+  - **~6% at the minimum, ~8% at the median** from the folding rewrite alone.
+
+  Verified: both configurations rebuild clean, the five differentials are byte-identical,
+  T23 is byte-identical, `simse_tests.exe` **56/56**, `bun tools/stress.js` **32/32** on all
+  three compilers, the two rings emit the compiler byte for byte, and
+  `bun tools/bootstrap.js` reports the fixed point byte for byte (36573 lines, 1.11 MB).
+
+  Also settled with a measurement: the fold is **not** a candidate for deletion. Stubbing
+  it to a no-op (return the body, report no change) makes the emitted compiler 4.6%
+  bigger - 38224 lines against 36527, and **3799 `goto`s against 2910** - because ~890
+  jumps can only be folded once the blocks are gone. It is worth keeping, and now cheap.
+
+  What it does *not* yet do: each level still builds its own `List<AstXmlNode>`, so a
+  leaf statement is copied once per level it passes through. The single-output-list form
+  the user proposed cannot be taken literally - the safety predicate is *level-relative*
+  (it needs the whole flattened sibling sequence and the positions in it), so a walk that
+  appends leaves downward loses exactly what the test reads. The form that works computes
+  the level's items as pointer lists and materialises only surviving blocks; the fully
+  flat form needs the leaf order plus block spans (splicing never moves a leaf, so the
+  `mergedIndex` arithmetic collapses to leaf indices) and is left for a later pass.
+
+- **No braces in the emitted C++: the inference now types the shapes it used to leave
+  open (T57).** The emitter's only source of a bare `{` in a body was the C2362
+  fallback - a declaration whose scope a jump would skip. It could not *hoist* such a
+  declaration because the type was not known (`auto x;` is not a declaration in C++),
+  so it declared in place (`auto x = value;`) and opened a block around it. **30**
+  declarations in the compiler's own output took that path, from exactly three shapes,
+  all of them gaps in the lowering-time inference rather than anything the emitter got
+  wrong:
+
+  - **a static constructor** - `Opt<T>.none()`, `Opt<T>.some(x)`, `Res<T>.ok(x)`,
+    `Res<T>.err(m)` (18 of the 30). Nothing *declares* these forms: `Type.name(...)`
+    lowers to `Type::name(...)` syntactically, so the result type has to be stated in
+    the inference, and it is now stated per name - the four the spec spells in
+    `specs/core-types.md`, each answering the type it is qualified by. Deliberately
+    *not* a blanket "a static form answers its own type": `EnumType.fromInt(n)` answers
+    `Opt<EnumType>` (`specs/declarations.md`).
+  - **a `Res<T>` field read** - `result.Value`, `parsed.Error` (11 of the 30). The
+    inference checked the spelling `specs/core-types.md` documents (`value`/`error`),
+    but the RTL's own fields are `Value`/`Error` and the emitter only *remaps* the
+    lowercase pair (`Codegen.kt:3442`) - a name it does not remap is emitted as written
+    - so the sources use the capitalized one and it never matched. Both spellings type
+    now. (The dual spelling is a wart; the spec and the sources disagree, and this
+    records the reality rather than changing the language.)
+  - **calling a value** - `predicate(c)`, `rest(c)` where the parameter is
+    `CharPredicate`, a `typealias` for `(Char) -> Bool` (2 of the 30). An indirect call
+    answers the callable type's return type, resolved through the alias exactly as the
+    emitter resolves it (`resolveAlias`).
+
+  Result: **30 blocks -> 0** in the emitted compiler, and the IL is cleaner for it -
+  `DeclareInit` ops **64 -> 7** (only the `for` lowering's own typed locals, none
+  crossed), every remaining declaration hoisted to the top of its body. Measured:
+  `./simse.exe --root cppsrc` **750/769 -> 731/738 ms** (`bun tools/bootstrap.js`), so
+  the hoisting costs nothing here.
+
+  Sample-first, as asked: `stress/flat-blocks` is the case that pins all three shapes
+  (two early returns of the same `Opt<Int>.none()` that the fold merges, a `Res<Str>`
+  field read, and a `size()` result), 0 blocks, run end to end by `bun tools/stress.js`.
+  One golden changes on purpose: `tests/golden/program_expr.kt.cpp.expected` (a
+  `Res<Int> _sm_expr1;` hoisted, its `auto` declaration becoming an assignment).
+
+  Verified: both configurations rebuild clean, the five differentials are byte-identical,
+  T23 is byte-identical, `simse_tests.exe` **56/56**, `bun tools/stress.js` **33/33** on
+  all three compilers, the two rings emit the compiler byte for byte, and
+  `bun tools/bootstrap.js` reports the fixed point byte for byte (36688 lines, 1.12 MB).
+
 ### Note: the shape of a lookup like this
 
 Worth recording because the first attempt at T39 got it wrong in four ways the

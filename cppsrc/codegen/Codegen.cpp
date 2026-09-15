@@ -11,6 +11,7 @@
 #include <cstdio>
 #include <string>
 
+using linear::IlOpKind;
 using ast::DeclKind;
 using ast::ExprKind;
 using ast::StmtKind;
@@ -1311,14 +1312,14 @@ namespace codegen {
             // The destination slot of an instruction, or -1 when it writes memory or
             // jumps instead (`ilWritesDestination` is the one place that is stated).
             static int ilDst(const linear::IlOp &op) {
-                if (!linear::ilWritesDestination(op.name) || op.operands.empty()) return -1;
+                if (!linear::ilWritesDestination(op.kind) || op.operands.empty()) return -1;
                 return op.operands[0];
             }
 
             void ilAnalyze(const linear::IlBody &il, IlFrame &frame) {
                 for (int i = 0; i < (int) il.ops.size(); i++) {
                     const linear::IlOp &op = il.ops[i];
-                    if (op.name == "Declare") continue; // a declaration reads nothing
+                    if (op.kind == IlOpKind::Declare) continue; // a declaration reads nothing
                     // An instruction that writes memory or jumps has no destination,
                     // but its operands are reads like any other - so the two are
                     // counted apart, and the first operand is only skipped when it is
@@ -1363,7 +1364,7 @@ namespace codegen {
             // *aggregate* and not an expression: it cannot stand inside another
             // expression, so its slot is never folded away.
             bool ilConstructsClosure(const linear::IlOp &op) const {
-                if (op.name != "CallCtor" || ilBody == nullptr) return false;
+                if (op.kind != IlOpKind::CallCtor || ilBody == nullptr) return false;
                 const int typeAt = ilOperandAt(op.operands, 1);
                 if (typeAt < 0 || typeAt >= (int) ilBody->types.size()) return false;
                 return closureSymbols.count(ilBody->types[typeAt]) > 0;
@@ -1547,16 +1548,16 @@ namespace codegen {
                                        int depth) {
                 if (opIndex < 0 || opIndex >= (int) il.ops.size() || depth > 24) return nullptr;
                 const linear::IlOp &op = il.ops[opIndex];
-                const Str &name = op.name;
-                if (name == "SetVar") {
+                const IlOpKind kind = op.kind;
+                if (kind == IlOpKind::SetVar) {
                     return ilOperandNode(il, frame, ilOperandAt(op.operands, 1), depth);
                 }
-                if (name == "SetVar_Null") {
+                if (kind == IlOpKind::SetVar_Null) {
                     auto node = std::make_shared<ast::Expr>();
                     node->kind = ExprKind::NullLit;
                     return node;
                 }
-                if (name == "BinaryOp") {
+                if (kind == IlOpKind::BinaryOp) {
                     const int opIndex2 = ilOperandAt(op.operands, 1);
                     if (opIndex2 < 0 || opIndex2 >= (int) il.pool.size()) return nullptr;
                     return ilBinaryNode(ilOperandNode(il, frame, ilOperandAt(op.operands, 2), depth),
@@ -1564,7 +1565,7 @@ namespace codegen {
                                         ilOperandNode(il, frame, ilOperandAt(op.operands, 3),
                                                       depth));
                 }
-                if (name == "UnaryOp") {
+                if (kind == IlOpKind::UnaryOp) {
                     const int opIndex2 = ilOperandAt(op.operands, 1);
                     ast::ExprPtr operand =
                             ilOperandNode(il, frame, ilOperandAt(op.operands, 2), depth);
@@ -1577,14 +1578,14 @@ namespace codegen {
                     node->lhs = operand;
                     return node;
                 }
-                if (name == "GetField" || name == "FieldAddr") {
+                if (kind == IlOpKind::GetField || kind == IlOpKind::FieldAddr) {
                     const int textIndex = ilOperandAt(op.operands, 2);
                     if (textIndex < 0 || textIndex >= (int) il.pool.size()) return nullptr;
                     return ilMemberNode(
                             ilSlotNode(il, frame, ilOperandAt(op.operands, 1), depth),
                             il.pool[textIndex]);
                 }
-                if (name == "IndexAddr") {
+                if (kind == IlOpKind::IndexAddr) {
                     ast::ExprPtr base = ilSlotNode(il, frame, ilOperandAt(op.operands, 1), depth);
                     ast::ExprPtr index = ilOperandNode(il, frame, ilOperandAt(op.operands, 2), depth);
                     if (!base || !index) return nullptr;
@@ -1594,7 +1595,7 @@ namespace codegen {
                     node->rhs = index;
                     return node;
                 }
-                if (name == "GetIndex") {
+                if (kind == IlOpKind::GetIndex) {
                     ast::ExprPtr base = ilSlotNode(il, frame, ilOperandAt(op.operands, 1), depth);
                     ast::ExprPtr index = ilOperandNode(il, frame, ilOperandAt(op.operands, 2), depth);
                     if (!base || !index) return nullptr;
@@ -1604,21 +1605,21 @@ namespace codegen {
                     node->rhs = index;
                     return node;
                 }
-                if (name == "Deref" || name == "CopyValue" || name == "Box") {
+                if (kind == IlOpKind::Deref || kind == IlOpKind::CopyValue || kind == IlOpKind::Box) {
                     ast::ExprPtr operand = ilSlotNode(il, frame, ilOperandAt(op.operands, 1), depth);
                     if (!operand) return nullptr;
                     auto node = std::make_shared<ast::Expr>();
-                    node->kind = name == "Deref" ? ExprKind::Deref
-                                                  : (name == "CopyValue" ? ExprKind::Copy
+                    node->kind = kind == IlOpKind::Deref ? ExprKind::Deref
+                                                  : (kind == IlOpKind::CopyValue ? ExprKind::Copy
                                                                           : ExprKind::Ref);
                     node->lhs = operand;
                     return node;
                 }
-                if (name == "GetStatic") return ilGetStaticNode(il, op);
-                if (name == "Call" || name == "CallVoid") {
+                if (kind == IlOpKind::GetStatic) return ilGetStaticNode(il, op);
+                if (kind == IlOpKind::Call || kind == IlOpKind::CallVoid) {
                     return ilCallNode(il, frame, op);
                 }
-                if (name == "CallCtor") {
+                if (kind == IlOpKind::CallCtor) {
                     ast::ExprPtr callee = ilTypeBaseNode(il, ilOperandAt(op.operands, 1), true);
                     if (!callee) return nullptr;
                     auto call = std::make_shared<ast::Expr>();
@@ -1655,13 +1656,13 @@ namespace codegen {
                 Dictionary<int, int> labelPos;
                 for (int i = 0; i < (int) il.ops.size(); i++) {
                     const linear::IlOp &op = il.ops[i];
-                    if (op.name != "Label" || op.operands.empty()) continue;
+                    if (op.kind != IlOpKind::Label || op.operands.empty()) continue;
                     labelPos[op.operands[0]] = i;
                 }
                 for (int i = 0; i < position; i++) {
                     const linear::IlOp &op = il.ops[i];
-                    const int labelAt = op.name == "Goto" ? 0
-                                        : (op.name == "IfTrue" || op.name == "IfFalse") ? 1
+                    const int labelAt = op.kind == IlOpKind::Goto ? 0
+                                        : (op.kind == IlOpKind::IfTrue || op.kind == IlOpKind::IfFalse) ? 1
                                                                                         : -1;
                     if (labelAt < 0) continue;
                     auto found = labelPos.find(ilOperandAt(op.operands, labelAt));
@@ -1680,7 +1681,7 @@ namespace codegen {
                              const ast::TypePtr &expected, Str &text) {
                 if (opIndex < 0 || opIndex >= (int) il.ops.size()) return false;
                 const linear::IlOp &op = il.ops[opIndex];
-                if (op.name == "CallCtor") {
+                if (op.kind == IlOpKind::CallCtor) {
                     const int typeAt = ilOperandAt(op.operands, 1);
                     if (typeAt >= 0 && typeAt < (int) il.types.size()
                         && closureSymbols.count(il.types[typeAt]) > 0) {
@@ -1717,7 +1718,7 @@ namespace codegen {
                 Dictionary<int, int> blockEnd; // declaration position -> the label it must end before
                 for (int i = 0; i < (int) il.ops.size(); i++) {
                     const linear::IlOp &op = il.ops[i];
-                    if (op.name != "Declare" && op.name != "DeclareInit") continue;
+                    if (op.kind != IlOpKind::Declare && op.kind != IlOpKind::DeclareInit) continue;
                     // A declaration that prints nothing - the folding inlines it at its use -
                     // keeps nothing legal, so it asks for no block either.
                     if (ilFolded(il, frame, ilOperandAt(op.operands, 0))) continue;
@@ -1740,7 +1741,7 @@ namespace codegen {
                     }
                     if (i == consumedByDeclare) continue;
                     const linear::IlOp &op = il.ops[i];
-                    const Str &name = op.name;
+                    const IlOpKind kind = op.kind;
                     const int dst = ilDst(op);
 
                     if (blockEnd.count(i) > 0) {
@@ -1760,7 +1761,7 @@ namespace codegen {
                         }
                     }
 
-                    if (name == "Declare" || name == "DeclareInit") {
+                    if (kind == IlOpKind::Declare || kind == IlOpKind::DeclareInit) {
                         const int slot = ilOperandAt(op.operands, 0);
                         if (slot < 0 || slot >= (int) il.vars.size()) {
                             return ilFail(reason, "a declare with no slot");
@@ -1770,7 +1771,7 @@ namespace codegen {
                         // A slot the type pass could not spell is still declarable when
                         // the declaration initialises it: `auto`, exactly as the
                         // statement path writes it.
-                        const bool initialized = name == "DeclareInit";
+                        const bool initialized = kind == IlOpKind::DeclareInit;
                         if (!slotType && !initialized) {
                             return ilFail(reason, "the slot '" + il.vars[slot].name
                                                  + "' has neither a type nor an initializer");
@@ -1784,7 +1785,7 @@ namespace codegen {
                         // down, with the initializer's own temporaries in between
                         // (which are folded away, so they print nothing). A bare one is
                         // the hoisting's `T x;`, with the assignment left where it was.
-                        if (name == "DeclareInit") {
+                        if (kind == IlOpKind::DeclareInit) {
                             // A jump may cross it: the block opened above keeps the
                             // initialization legal, so it stays one line.
                             const int def = ilIntAt(frame.defOp, slot, -1);
@@ -1803,7 +1804,7 @@ namespace codegen {
                         line(level, decl + ";");
                         continue;
                     }
-                    if (name == "Label") {
+                    if (kind == IlOpKind::Label) {
                         const int label = ilOperandAt(op.operands, 0);
                         if (label < 0 || label >= (int) il.labels.size()) {
                             return ilFail(reason, "a label with no name");
@@ -1811,13 +1812,13 @@ namespace codegen {
                         line(level, il.labels[label] + ":;");
                         continue;
                     }
-                    if (name == "Goto" || name == "IfTrue" || name == "IfFalse") {
-                        const int label = ilOperandAt(op.operands, name == "Goto" ? 0 : 1);
+                    if (kind == IlOpKind::Goto || kind == IlOpKind::IfTrue || kind == IlOpKind::IfFalse) {
+                        const int label = ilOperandAt(op.operands, kind == IlOpKind::Goto ? 0 : 1);
                         if (label < 0 || label >= (int) il.labels.size()) {
                             return ilFail(reason, "a jump with no label");
                         }
                         const Str target = il.labels[label];
-                        if (name == "Goto") {
+                        if (kind == IlOpKind::Goto) {
                             line(level, "goto " + target + ";");
                             continue;
                         }
@@ -1825,7 +1826,7 @@ namespace codegen {
                                                           ilOperandAt(op.operands, 0), 0);
                         if (!cond) return ilFail(reason, "a jump with no condition");
                         const Str test = expr(*cond, 0);
-                        line(level, name == "IfTrue" ? "if (" + test + ") goto " + target + ";"
+                        line(level, kind == IlOpKind::IfTrue ? "if (" + test + ") goto " + target + ";"
                                                       : "if (!(" + test + ")) goto " + target + ";");
                         continue;
                     }
@@ -1839,13 +1840,14 @@ namespace codegen {
                         Str valueText;
                         if (!ilValueText(il, frame, i, slotType, valueText)) {
                             return ilFail(reason, ilWhy.empty()
-                                                          ? Str("'" + name + "' cannot be expressed yet")
+                                                          ? Str("'") + ilOpKindText(kind)
+                                                                + Str("' cannot be expressed yet")
                                                           : "cannot express " + ilWhy);
                         }
                         line(level, il.vars[dst].name + " = " + valueText + ";");
                         continue;
                     }
-                    if (name == "Store") {
+                    if (kind == IlOpKind::Store) {
                         ast::ExprPtr ptr = ilSlotNode(il, frame, ilOperandAt(op.operands, 0), 0);
                         ast::ExprPtr value = ilOperandNode(il, frame,
                                                            ilOperandAt(op.operands, 1), 0);
@@ -1857,9 +1859,9 @@ namespace codegen {
                                      + ";");
                         continue;
                     }
-                    if (name == "SetField" || name == "SetIndex") {
+                    if (kind == IlOpKind::SetField || kind == IlOpKind::SetIndex) {
                         ast::ExprPtr target;
-                        if (name == "SetField") {
+                        if (kind == IlOpKind::SetField) {
                             const int textIndex = ilOperandAt(op.operands, 1);
                             if (textIndex < 0 || textIndex >= (int) il.pool.size()) {
                                 return ilFail(reason, "a field write with no name");
@@ -1886,7 +1888,7 @@ namespace codegen {
                                      + ";");
                         continue;
                     }
-                    if (name == "SetStatic") {
+                    if (kind == IlOpKind::SetStatic) {
                         const int textIndex = ilOperandAt(op.operands, 0);
                         ast::ExprPtr value = ilOperandNode(il, frame,
                                                            ilOperandAt(op.operands, 1), 0);
@@ -1906,7 +1908,7 @@ namespace codegen {
                                      + ";");
                         continue;
                     }
-                    if (name == "CallCtor" && dst >= 0 && ilUnit != nullptr) {
+                    if (kind == IlOpKind::CallCtor && dst >= 0 && ilUnit != nullptr) {
                         // A closure: a construction of the class the lambda is, which C++
                         // spells as an aggregate of its captured fields. (Handled by
                         // `ilValueText`, so this arm only keeps the instruction from
@@ -1922,7 +1924,7 @@ namespace codegen {
                             continue;
                         }
                     }
-                    if (name == "CallVoid" || name == "CallIndirectVoid") {
+                    if (kind == IlOpKind::CallVoid || kind == IlOpKind::CallIndirectVoid) {
                         ast::ExprPtr call = ilCallNode(il, frame, op);
                         if (!call) {
                             return ilFail(reason, ilWhy.empty() ? Str("a void call")
@@ -1931,8 +1933,8 @@ namespace codegen {
                         line(level, expr(*call, 0) + ";");
                         continue;
                     }
-                    if (name == "Return" || name == "ReturnVoid") {
-                        if (name == "ReturnVoid") {
+                    if (kind == IlOpKind::Return || kind == IlOpKind::ReturnVoid) {
+                        if (kind == IlOpKind::ReturnVoid) {
                             line(level, "return;");
                             continue;
                         }
@@ -1942,9 +1944,9 @@ namespace codegen {
                         line(level, "return " + expr(*value, 0, curReturnType) + ";");
                         continue;
                     }
-                    if (name == "Lambda") return ilFail(reason, "a lambda body");
-                    if (name == "Unsupported") return ilFail(reason, "an unsupported shape");
-                    return ilFail(reason, "the instruction '" + name + "'");
+                    if (kind == IlOpKind::Lambda) return ilFail(reason, "a lambda body");
+                    if (kind == IlOpKind::Unsupported) return ilFail(reason, "an unsupported shape");
+                    return ilFail(reason, Str("the instruction '") + ilOpKindText(kind) + "'");
                 }
                 while (!scopes.empty()) {
                     scopes.pop_back();

@@ -43,7 +43,8 @@ fun exprIsSimple(e: *AstXmlNode): Bool {
         || kind == AstNodeCategory.ExprStrLit || kind == AstNodeCategory.ExprCharLit
         || kind == AstNodeCategory.ExprBoolLit || kind == AstNodeCategory.ExprNullLit
         || kind == AstNodeCategory.ExprName || kind == AstNodeCategory.ExprGenericName
-        || kind == AstNodeCategory.ExprLambda) {
+        || kind == AstNodeCategory.ExprLambda
+    ) {
         return true
     }
     return false
@@ -55,7 +56,8 @@ fun exprIsSimple(e: *AstXmlNode): Bool {
 fun exprIsPlace(e: *AstXmlNode): Bool {
     val kind: AstNodeCategory = xmlKind(e)
     if (kind == AstNodeCategory.ExprName || kind == AstNodeCategory.ExprGenericName
-        || kind == AstNodeCategory.ExprDeref) {
+        || kind == AstNodeCategory.ExprDeref
+    ) {
         return true
     }
     if (kind == AstNodeCategory.ExprMember || kind == AstNodeCategory.ExprIndex) {
@@ -97,18 +99,15 @@ fun exprReplaceRole(like: *AstXmlNode, role: AstNodeKind, replacements: *List<As
     var kids: List<AstXmlNode> = List<AstXmlNode>()
     val existing: List<AstXmlNode> = like.Children.toList()
     var seen: Int = 0
-    var i: Int = 0
-    while (i < existing.size()) {
-        val child: AstXmlNode = existing[i]
+    for (*child in existing) {
         if (child.name == role) {
             if (seen < replacements.size()) {
                 kids.append(replacements[seen])
             }
             seen = seen + 1
         } else {
-            kids.append(child)
+            kids.append(copy(child))
         }
-        i = i + 1
     }
     while (seen < replacements.size()) {
         kids.append(replacements[seen])

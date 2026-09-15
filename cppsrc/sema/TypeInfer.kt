@@ -93,18 +93,15 @@ fun semReplaceRole(like: *AstXmlNode, role: AstNodeKind, replacements: List<AstX
     var kids: List<AstXmlNode> = List<AstXmlNode>()
     val existing: List<AstXmlNode> = like.Children.toList()
     var seen: Int = 0
-    var i: Int = 0
-    while (i < existing.size()) {
-        val child: AstXmlNode = existing[i]
+    for (*child in existing) {
         if (child.name == role) {
             if (seen < replacements.size()) {
                 kids.append(replacements[seen])
             }
             seen = seen + 1
         } else {
-            kids.append(child)
+            kids.append(copy(child))
         }
-        i = i + 1
     }
     while (seen < replacements.size()) {
         kids.append(replacements[seen])
@@ -501,17 +498,21 @@ fun semSubstitute(typeNode: *AstXmlNode, bindings: *Dictionary<Str, AstXmlNode>,
 // ---- the facts and the body context ---------------------------------------
 
 // A program-level function/method fact the inference resolves a call with.
-data class SemFnFact(var decl: AstXmlNode,
+data class SemFnFact(
+    var decl: AstXmlNode,
 
-var receiver: AstXmlNode,
-var templateParams: List<Str>)
+    var receiver: AstXmlNode,
+    var templateParams: List<Str>
+)
 
 // A `native fun` extension (`this` first parameter): its receiver pattern picks the
 // overload and its return type answers the call.
-data class SemExtFact(var receiver: AstXmlNode,
+data class SemExtFact(
+    var receiver: AstXmlNode,
 
-var returnType: AstXmlNode,
-var typeParams: List<Str>)
+    var returnType: AstXmlNode,
+    var typeParams: List<Str>
+)
 
 // Everything about the program the inference reads. The emitter fills this in from
 // its own symbol collection; it holds the same nodes, so filling it copies no
@@ -519,10 +520,10 @@ var typeParams: List<Str>)
 data class SemFacts(
     var types: Dictionary<Str, AstXmlNode>,
 
-var enumNames: Dictionary<Str, Bool>,
-var functions: List<SemFnFact>,
-var nativeExtensions: Dictionary<Str, List<SemExtFact>>,
-var statics: Dictionary<Str, AstXmlNode>
+    var enumNames: Dictionary<Str, Bool>,
+    var functions: List<SemFnFact>,
+    var nativeExtensions: Dictionary<Str, List<SemExtFact>>,
+    var statics: Dictionary<Str, AstXmlNode>
 )
 
 fun semNewFacts(): SemFacts {
@@ -545,11 +546,11 @@ fun semNewFacts(): SemFacts {
 data class SemBody(
     var decl: AstXmlNode,
 
-var typeParams: List<Str>,
-var selfType: AstXmlNode,
-var paramNames: List<Str>,
-var paramTypes: List<AstXmlNode>,
-var captures: Dictionary<Str, AstXmlNode>
+    var typeParams: List<Str>,
+    var selfType: AstXmlNode,
+    var paramNames: List<Str>,
+    var paramTypes: List<AstXmlNode>,
+    var captures: Dictionary<Str, AstXmlNode>
 )
 
 // ---- the pass -------------------------------------------------------------
@@ -566,7 +567,7 @@ data class SemInfer(
 // spell - a name holding a state machine is `..T`, and `Stmt.type` never carries
 // that. A frame is keyed by name (the lowering gives each scope its own
 // variables), so this is what the backend seeds a body's frame from.
-var types: Dictionary<Str, AstXmlNode>
+    var types: Dictionary<Str, AstXmlNode>
 ) {
     fun pushScope(): Unit {
         this.scopes.append(Dictionary<Str, AstXmlNode>())
@@ -887,11 +888,24 @@ var types: Dictionary<Str, AstXmlNode>
         if (xmlKind(*recv) == AstNodeCategory.TypeGeneric) {
             val typeArgs: List<AstXmlNode> = xmlChildren(*recv, AstNodeKind.TypeArg)
             val recvName: Str = xmlAttr(*recv, AstNodeAttributeKind.Name)
+            // The constructors the spec spells as static forms (`Opt<int>.none()`,
+            // `Opt<int>.some(42)`, `Res<int>.ok(42)`, `Res<int>.err(...)`,
+            // specs/core-types.md). Nothing declares them - `Type.name(...)` lowers to
+            // `Type::name(...)` syntactically - so their result type is stated here: the
+            // type they are qualified by. It is per *name*, not "a static form answers
+            // its own type": `EnumType.fromInt(n)` answers `Opt<EnumType>`
+            // (specs/declarations.md), and is deliberately not in this list.
+            if ((recvName == "Opt" && (calleeText == "none" || calleeText == "some"))
+                || (recvName == "Res" && (calleeText == "ok" || calleeText == "err"))
+            ) {
+                return semReRole(recv, AstNodeKind.Type)
+            }
             if (calleeText == "value" && recvName == "Opt" && typeArgs.size() > 0) {
                 return semReRole(typeArgs[0], AstNodeKind.Type)
             }
             if ((calleeText == "size" || calleeText == "count")
-                && (recvName == "List" || recvName == "Array" || recvName == "Dictionary" || recvName == "SmallVector")
+                && (recvName == "List" || recvName == "Array" || recvName == "Dictionary"
+                        || recvName == "SmallVector" || recvName == "Span")
             ) {
                 return semNamedType("Int")
             }
@@ -903,6 +917,34 @@ var types: Dictionary<Str, AstXmlNode>
         }
         if (calleeText == "isOk" || calleeText == "hasValue") {
             return semNamedType("Bool")
+        }
+        return xmlEmptyNode()
+    }
+
+    // A callable's own return type. Calling a *value* - a parameter or local of a
+    // function type (`predicate(x)` where `predicate: (Char) -> Bool`) - is an indirect
+    // call, and its result is that type's return type, resolved through a `typealias`
+    // (`CharPredicate`) exactly as the emitter resolves it.
+    fun callableReturn(typeNode: AstXmlNode): AstXmlNode {
+        var current: AstXmlNode = semPointee(*typeNode)
+        var guard: Int = 0
+        while (!xmlIsEmpty(*current) && guard < 16) {
+            guard = guard + 1
+            if (xmlKind(*current) == AstNodeCategory.TypeFunction) {
+                return xmlChild(*current, AstNodeKind.ReturnType)
+            }
+            if (xmlKind(*current) != AstNodeCategory.TypeNamed) {
+                return xmlEmptyNode()
+            }
+            val aliasName: Str = xmlAttr(*current, AstNodeAttributeKind.Name)
+            if (!this.facts.types.has(aliasName)) {
+                return xmlEmptyNode()
+            }
+            val decl: AstXmlNode = this.facts.types.get(aliasName).value()
+            if (decl.name != AstNodeKind.TypeAlias) {
+                return xmlEmptyNode()
+            }
+            current = xmlChild(*decl, AstNodeKind.TargetType)
         }
         return xmlEmptyNode()
     }
@@ -921,7 +963,11 @@ var types: Dictionary<Str, AstXmlNode>
             if (this.isTypeName(name)) {
                 return semNamedType(name)
             }
-            return this.functionReturn(name, List<AstXmlNode>(), xmlEmptyNode())
+            val direct: AstXmlNode = this.functionReturn(name, List<AstXmlNode>(), xmlEmptyNode())
+            if (!xmlIsEmpty(*direct)) {
+                return direct
+            }
+            return this.callableReturn(this.lookup(name))
         }
         if (kind == AstNodeCategory.ExprMember) {
             return this.memberReturn(callee)
@@ -991,10 +1037,13 @@ var types: Dictionary<Str, AstXmlNode>
             val memberText: Str = xmlAttr(e, AstNodeAttributeKind.Name)
             if (xmlKind(*base) == AstNodeCategory.TypeGeneric && xmlAttr(*base, AstNodeAttributeKind.Name) == "Res") {
                 val typeArgs: List<AstXmlNode> = xmlChildren(*base, AstNodeKind.TypeArg)
-                if (memberText == "value" && typeArgs.size() > 0) {
+                // The spec spells these `value`/`error` (specs/core-types.md); the RTL's
+                // own fields are `Value`/`Error`, and a name it does not remap is
+                // emitted as written - so both reach C++, and both have to type here.
+                if ((memberText == "value" || memberText == "Value") && typeArgs.size() > 0) {
                     return semReRole(typeArgs[0], AstNodeKind.Type)
                 }
-                if (memberText == "error") {
+                if (memberText == "error" || memberText == "Error") {
                     return semNamedType("Str")
                 }
             }

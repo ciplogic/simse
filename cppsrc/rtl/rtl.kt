@@ -57,7 +57,8 @@ fun Span<T>.smToYield<T>(): ..T {
 // type is `*T`, which is what the machine hands out.
 fun List<T>.smToYieldPtr<T>(): ..*T {
     var i: Int = 0
-    while (i < this.size()) {
+    val len = this.size();
+    while (i < len) {
         yield * this[i]
         i = i + 1
     }
@@ -65,7 +66,8 @@ fun List<T>.smToYieldPtr<T>(): ..*T {
 
 fun Array<T>.smToYieldPtr<T>(): ..*T {
     var i: Int = 0
-    while (i < this.count()) {
+    val len = this.count();
+    while (i < len) {
         yield * this[i]
         i = i + 1
     }
@@ -73,7 +75,8 @@ fun Array<T>.smToYieldPtr<T>(): ..*T {
 
 fun Span<T>.smToYieldPtr<T>(): ..*T {
     var i: Int = 0
-    while (i < this.size()) {
+    val len = this.size();
+    while (i < len) {
         yield * this[i]
         i = i + 1
     }

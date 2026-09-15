@@ -28,11 +28,11 @@ enum SkeletonType {
 data class SkeletonNode(var children: &List<SkeletonNode>, var type: SkeletonType, var token: Token) {
     fun setNodeType(skeletonType: SkeletonType): Unit {
         this.type = skeletonType
-        this.children = &List<SkeletonNode>()
+        this.children = & List < SkeletonNode >()
     }
 
     fun addTerminalChild(token: Token): Unit {
-        this.children.append(SkeletonNode(&List<SkeletonNode>(), SkeletonType.Terminal, token))
+        this.children.append(SkeletonNode(& List < SkeletonNode >(), SkeletonType.Terminal, token))
     }
 }
 
@@ -90,7 +90,8 @@ fun foldBack(nodes: &List<SkeletonNode>, openingToken: Str): Bool {
         return false
     }
 
-    var block: SkeletonNode = SkeletonNode(&List<SkeletonNode>(), blockTypeForOpenToken(openingToken), nodes[openIndex].token)
+    var block: SkeletonNode =
+        SkeletonNode(& List < SkeletonNode >(), blockTypeForOpenToken(openingToken), nodes[openIndex].token)
 
     var j: Int = openIndex + 1
     while (j < nodes.size()) {
@@ -108,12 +109,11 @@ fun foldBack(nodes: &List<SkeletonNode>, openingToken: Str): Bool {
 fun parseSkeleton(tokens: *List<Token>): Res<SkeletonNode> {
     // The program node carries a zero token (None kind, position 0:0), matching
     // the hand-written C++ parser's default-constructed SkeletonNode.
-    var program: SkeletonNode = SkeletonNode(&List<SkeletonNode>(), SkeletonType.None, Token("", TokenKind.None, SourcePos(0, 0, 0)))
+    var program: SkeletonNode =
+        SkeletonNode(& List < SkeletonNode >(), SkeletonType.None, Token("", TokenKind.None, SourcePos(0, 0, 0)))
     program.setNodeType(SkeletonType.Program)
 
-    var i: Int = 0
-    while (i < tokens.size()) {
-        val token: Token = tokens[i]
+    for (*token in tokens) {
         val tokenText: Str = token.text
 
         var folded: Bool = false
@@ -122,9 +122,8 @@ fun parseSkeleton(tokens: *List<Token>): Res<SkeletonNode> {
         }
         // No matching opening token: keep the closing token as a terminal.
         if (!folded) {
-            program.addTerminalChild(token)
+            program.addTerminalChild(copy(token))
         }
-        i = i + 1
     }
 
     return Res<SkeletonNode>.ok(program)

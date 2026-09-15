@@ -43,11 +43,13 @@ IlBody {
 }
 
 IlVar    { name: Str; typeIndex: Int; kind: IlVarKind }
-IlMethod { symbol: Str; argCount: Int; kind: IlMethodKind }
-IlOp     { name: Str; operands: List<Int> }
+IlMethod { name: Str; kind: IlMethodKind; argCount: Int; staticBase: Int;
+           returnType: Int; argTypes: List<Int> }
+IlOp     { kind: IlOpKind; operands: List<Int> }
 
 IlVarKind    = Argument | Local | Expression
 IlMethodKind = Function | Method | Native | Constructor
+IlOpKind     = Label | Goto | IfTrue | IfFalse | ...   # one per row of the table below
 ```
 
 - **Arguments come first**, `self`/`this` among them, so a callee's parameter *i* is
@@ -66,6 +68,14 @@ IlMethodKind = Function | Method | Native | Constructor
 - **Text is a pool index**: a string literal, a field name, an operator spelling
   (`"+"`), a native's symbol. A callee is **not** here - it has its own table (below) -
   so a call operand is never ambiguous with a string.
+- **An opcode is an enum, not a string** (`IlOpKind`), and the signature table is keyed
+  by it: a row *is* its `IlOpKind`, so `ilSignature(kind)` indexes the table and reading
+  a row's operand kinds is a lookup, not a search over spellings. The spelling
+  (`"CallIndirectVoid"`) exists only for the dump (`ilOpKindText`) and for diagnostics;
+  the backend switches on the enum and never compares text. An instruction the
+  extractor cannot build is `IlOpKind::Unsupported` - a value in the enum, not a
+  missing string - and the two rings' dumps are compared opcode for opcode, which is
+  what keeps the model honest.
 - **The IL infers nothing.** Every slot has the type the type pass gave it, and the
   backend decides spelling from those types (`+` on two `Str`s is an append,
   `simse_addressOf(x)` vs `x.get()` follows `*T` vs `&T`): that is a *lookup*, not an
@@ -102,7 +112,9 @@ IlMethodKind = Function | Method | Native | Constructor
 ## Operand kinds
 
 An operand is an `int`; *what it indexes* is the opcode's signature, stated once here
-and read by the verifier and the printer alike. **The first `Var` operand of an op that
+and read by the verifier and the printer alike. The table is keyed by the opcode itself
+(`ilSignature(op.kind)` is the row, one row per `IlOpKind`), so asking what an operand
+at a position indexes costs nothing. **The first `Var` operand of an op that
 produces a value is its destination** (Smali's convention), and the table says which
 ones produce a value.
 

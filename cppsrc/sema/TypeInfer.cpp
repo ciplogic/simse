@@ -457,8 +457,14 @@ namespace sema {
                         const ast::TypeExpr *base = pointee(baseType);
                         if (!base) return nullptr;
                         if (base->kind == TypeKind::Generic && base->name == "Res") {
-                            if (e.text == "value" && !base->typeArgs.empty()) return base->typeArgs[0];
-                            if (e.text == "error") return namedType("Str");
+                            // The spec spells these `value`/`error` (specs/core-types.md);
+                            // the RTL's own fields are `Value`/`Error`, and a name it does
+                            // not remap is emitted as written - so both reach C++, and both
+                            // have to type here.
+                            if ((e.text == "value" || e.text == "Value") && !base->typeArgs.empty()) {
+                                return base->typeArgs[0];
+                            }
+                            if (e.text == "error" || e.text == "Error") return namedType("Str");
                         }
                         if (base->kind == TypeKind::Named || base->kind == TypeKind::Generic) {
                             auto declared = facts.types.find(base->name);
@@ -556,6 +562,24 @@ namespace sema {
                 return substituteBindings(memberType, bindings, decl.typeParams);
             }
 
+            // A callable's own return type. Calling a *value* - a parameter or local of
+            // a function type (`predicate(x)` where `predicate: (Char) -> Bool`) - is an
+            // indirect call, and its result is that type's return type, resolved through
+            // a `typealias` (`CharPredicate`) exactly as the emitter resolves it.
+            ast::TypePtr callableReturn(ast::TypePtr type) {
+                const ast::TypeExpr *current = pointee(type);
+                for (int guard = 0; current && guard < 16; guard++) {
+                    if (current->kind == TypeKind::Function) return current->returnType;
+                    if (current->kind != TypeKind::Named) return nullptr;
+                    auto found = facts.types.find(current->name);
+                    if (found == facts.types.end()) return nullptr;
+                    const ast::Decl *decl = found->second;
+                    if (!decl || decl->kind != ast::DeclKind::TypeAlias) return nullptr;
+                    current = pointee(decl->targetType);
+                }
+                return nullptr;
+            }
+
             ast::TypePtr callReturn(const ast::Expr &callee) {
                 if (callee.kind == ExprKind::GenericName) {
                     if (isTypeName(callee.text)) return genericType(callee.text, callee.typeArgs);
@@ -563,7 +587,9 @@ namespace sema {
                 }
                 if (callee.kind == ExprKind::Name) {
                     if (isTypeName(callee.text)) return namedType(callee.text);
-                    return functionReturn(callee.text, List<ast::TypePtr>(), nullptr);
+                    ast::TypePtr direct = functionReturn(callee.text, List<ast::TypePtr>(), nullptr);
+                    if (direct) return direct;
+                    return callableReturn(lookup(callee.text));
                 }
                 if (callee.kind == ExprKind::Member) return memberReturn(callee);
                 return nullptr;
@@ -650,12 +676,24 @@ namespace sema {
                     if (callee.text == "smToYield") return receiverType;
                 }
                 if (recv->kind == TypeKind::Generic) {
+                    // The constructors the spec spells as static forms (`Opt<int>.none()`,
+                    // `Opt<int>.some(42)`, `Res<int>.ok(42)`, `Res<int>.err(...)`,
+                    // specs/core-types.md). Nothing declares them - `Type.name(...)` lowers
+                    // to `Type::name(...)` syntactically - so their result type is stated
+                    // here: the type they are qualified by. It is per *name*, not "a static
+                    // form answers its own type": `EnumType.fromInt(n)` answers
+                    // `Opt<EnumType>` (specs/declarations.md) and is not in this list.
+                    if ((recv->name == "Opt" && (callee.text == "none" || callee.text == "some"))
+                        || (recv->name == "Res" && (callee.text == "ok" || callee.text == "err"))) {
+                        return std::make_shared<ast::TypeExpr>(*recv);
+                    }
                     if (callee.text == "value" && recv->name == "Opt" && !recv->typeArgs.empty()) {
                         return recv->typeArgs[0];
                     }
                     if ((callee.text == "size" || callee.text == "count")
                         && (recv->name == "List" || recv->name == "Array"
-                            || recv->name == "Dictionary" || recv->name == "SmallVector")) {
+                            || recv->name == "Dictionary" || recv->name == "SmallVector"
+                            || recv->name == "Span")) {
                         return namedType("Int");
                     }
                 }

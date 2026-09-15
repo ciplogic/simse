@@ -43,6 +43,51 @@ namespace linear {
     // The opcodes say nothing about types: the frame does.
     enum class IlOperandKind { Var, Value, Text, Type, Method, Label, None };
 
+    // The instruction set: one opcode per IL instruction. An enum rather than the
+    // opcode's *name*, because every pass and the backend dispatch on it - an `int`
+    // compare instead of a string compare, and an instruction that carries four bytes
+    // of opcode instead of a `Str` (which is what `IlOp` used to be). The order
+    // matches `signatureTable()`'s, so the signature of an opcode is `table[kind]`
+    // (impl_specs/linear-il.md has the prose).
+    enum class IlOpKind {
+        Label,
+        Goto,
+        IfTrue,
+        IfFalse,
+        Declare,
+        DeclareInit,
+        SetVar,
+        SetVar_Null,
+        BinaryOp,
+        UnaryOp,
+        Cast,
+        Box,
+        Deref,
+        CopyValue,
+        Store,
+        GetField,
+        SetField,
+        GetIndex,
+        SetIndex,
+        FieldAddr,
+        IndexAddr,
+        GetStatic,
+        SetStatic,
+        Call,
+        CallVoid,
+        CallIndirect,
+        CallIndirectVoid,
+        CallCtor,
+        Return,
+        ReturnVoid,
+        Lambda,
+        Unsupported,
+    };
+
+    // The opcode's spelling, for the dump (`--showLinearRepresentation`). The
+    // backend never needs it: it switches on the enum.
+    const char* ilOpKindText(IlOpKind kind);
+
     struct IlVar {
         Str name;
         int typeIndex = 0;
@@ -65,7 +110,7 @@ namespace linear {
     };
 
     struct IlOp {
-        Str name;
+        IlOpKind kind = IlOpKind::Unsupported;
         // An operand is an `int` whose meaning is the opcode's operand kind at that
         // position: an index into a table, or a literal. A **negative** operand in a
         // `Value` position is a literal: it names `pool[-1-n]`, whose text the
@@ -107,13 +152,14 @@ namespace linear {
     // The instruction set: one entry per opcode, with its operands' kinds in order
     // (`"Var,Text,Var,Var"`; a trailing `...` means "the kind before it repeats here",
     // which is how a call's arguments are spelled). The printer and the verifier read
-    // this table, so it is the one place the IL's shape is written down.
+    // this table, so it is the one place the IL's shape is written down. The rows are
+    // in `IlOpKind` order.
     struct IlSignature {
-        const char* name;
+        IlOpKind kind;
         const char* operands;
     };
     const List<IlSignature>& ilSignatures();
-    const IlSignature* ilSignature(const Str& name);
+    const IlSignature* ilSignature(IlOpKind kind);
 
     // What operand `index` of `op` is, resolved from the signature table (including
     // a repeating trailing kind). A verifier, a printer and a backend all read the
@@ -134,7 +180,7 @@ namespace linear {
     // writes the slot it declared when this is true and the two are adjacent (which
     // is how a declaration with an initializer stays one line); `Store`, `Return` and
     // a void call read their first operand and are not fold candidates.
-    bool ilWritesDestination(const Str& name);
+    bool ilWritesDestination(IlOpKind kind);
 
     // What the extractor needs to know about the body's function.
     struct IlFunction {

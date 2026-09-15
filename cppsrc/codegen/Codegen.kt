@@ -29,42 +29,52 @@ import linear
 // One parsed input. `prelude` inputs participate in symbol collection and are emitted
 // only when they carry a body: the RTL's declarations are natives (whose C++ is the
 // header's), and a prelude `fun` with a body is a function the language itself provides.
-data class CgInput(var fileName: Str,
+data class CgInput(
+    var fileName: Str,
 
-var module: AstXmlNode,
-var prelude: Bool)
+    var module: AstXmlNode,
+    var prelude: Bool
+)
 
 // A function/method to emit, with its receiver type (empty for plain functions).
 // `package` picks the emitted-symbol prefix: `ns<index>_`, or none for `rtl`.
-data class CgFn(var decl: AstXmlNode,
+data class CgFn(
+    var decl: AstXmlNode,
 
-var receiver: AstXmlNode,
-var file: Str,
-var templateParams: List<Str>,
-var prelude: Bool,
-var packageName: Str,
-var isMethod: Bool)
+    var receiver: AstXmlNode,
+    var file: Str,
+    var templateParams: List<Str>,
+    var prelude: Bool,
+    var packageName: Str,
+    var isMethod: Bool
+)
 
 // A `native fun` declaration to emit once at the top (and call by symbol).
-data class CgNativeDecl(var decl: AstXmlNode,
+data class CgNativeDecl(
+    var decl: AstXmlNode,
 
-var file: Str,
-var symbol: Str,
-var prelude: Bool)
+    var file: Str,
+    var symbol: Str,
+    var prelude: Bool
+)
 
 // An explicit-`this` native extension; the receiver pattern selects the overload.
-data class CgNativeExt(var symbol: Str,
+data class CgNativeExt(
+    var symbol: Str,
 
-var receiver: AstXmlNode,
-var returnType: AstXmlNode,
-var typeParams: List<Str>)
+    var receiver: AstXmlNode,
+    var returnType: AstXmlNode,
+    var typeParams: List<Str>
+)
 
 // A file-level static (`Var`, specs/statics.md): storage plus an optional
 // initializer, emitted under its package's prefix like any other declaration.
-data class CgStatic(var decl: AstXmlNode,
+data class CgStatic(
+    var decl: AstXmlNode,
 
-var packageName: Str,
-var file: Str)
+    var packageName: Str,
+    var file: Str
+)
 
 // One type-table entry's node, or an empty node when the extractor had none (a
 // synthesised place: it can only be *folded* into the instruction that reads it, never
@@ -75,27 +85,33 @@ data class IlFrame(
     // would merge two different variables.
     var defOp: Dictionary<Int, Int>,
 
-var defineCount: Dictionary<Int, Int>,
-var useCount: Dictionary<Int, Int>
+    var defineCount: Dictionary<Int, Int>,
+    var useCount: Dictionary<Int, Int>
 )
 
 // Where a jump crosses a declaration, C++ wants a scope: a `goto` may not skip an
 // initialization ([stmt.dcl]/3, MSVC C2362). `end` is the earliest label a crossing
 // jump lands on, `lastJump` the last jump that crosses.
-data class IlCrossing(var end: Int,
+data class IlCrossing(
+    var end: Int,
 
-var lastJump: Int)
+    var lastJump: Int
+)
 
 // One open block of the flat form, and the label it ends before.
-data class IlScope(var start: Int,
+data class IlScope(
+    var start: Int,
 
-var end: Int)
+    var end: Int
+)
 
 // The text one body's instructions spell, or why they could not be spelled.
-data class IlText(var ok: Bool,
+data class IlText(
+    var ok: Bool,
 
-var text: Str,
-var reason: Str)
+    var text: Str,
+    var reason: Str
+)
 
 // How a name's storage is reached, for `.` vs `->`, `*x` vs `x.get()`, `copy`.
 enum NameKind { Value, Shared, Pointer }
@@ -202,59 +218,59 @@ fun cgIsMainArgs(decl: *AstXmlNode): Bool {
 data class Emitter(
     var inputs: List<CgInput>,
 
-var out: Str,
-var failed: Bool,
-var error: Str,
-var curFile: Str,
-var curPrelude: Bool,
+    var out: Str,
+    var failed: Bool,
+    var error: Str,
+    var curFile: Str,
+    var curPrelude: Bool,
 
 // The names the program calls, for the prelude rule in `emitFunctions`.
-var referencedNames: Dictionary<Str, Bool>,
+    var referencedNames: Dictionary<Str, Bool>,
 
 // The program's string literals, as the read-only table the emitter puts at the top of
 // the file (`__sm_stringTable`): the walk that fills `referencedNames` collects them,
 // `literals` is sorted so the indices are canonical, and a literal site reads an entry
 // by index instead of building a `Str`.
-var literalAt: Dictionary<Str, Int>,
-var literals: List<Str>,
+    var literalAt: Dictionary<Str, Int>,
+    var literals: List<Str>,
 
 // The types the program names, for the same rule's per-container part: the prelude has
 // a `smToYield` per container (`List`, `Array`, `Span`), and a program that iterates
 // one of them should not carry the others' machines.
-var referencedTypes: Dictionary<Str, Bool>,
-var types: Dictionary<Str, AstXmlNode>,
-var enumNames: Dictionary<Str, Bool>,
-var dataClassNames: Dictionary<Str, Bool>,
-var functions: List<CgFn>,
-var receiverFnNames: Dictionary<Str, Bool>,
-var nativeDecls: List<CgNativeDecl>,
-var nativeSymbols: Dictionary<Str, Str>,
-var nativeExtensions: Dictionary<Str, List<CgNativeExt>>,
-var activeTypeParams: Dictionary<Str, Bool>,
-var nameKinds: Dictionary<Str, NameKind>,
-var localTypes: Dictionary<Str, AstXmlNode>,
-var selfKind: NameKind,
-var selfType: AstXmlNode,
-var curReturnType: AstXmlNode,
-var nsPrefixes: Dictionary<Str, Str>,
-var typePackages: Dictionary<Str, Str>,
-var statics: List<CgStatic>,
-var staticsByName: Dictionary<Str, CgStatic>,
+    var referencedTypes: Dictionary<Str, Bool>,
+    var types: Dictionary<Str, AstXmlNode>,
+    var enumNames: Dictionary<Str, Bool>,
+    var dataClassNames: Dictionary<Str, Bool>,
+    var functions: List<CgFn>,
+    var receiverFnNames: Dictionary<Str, Bool>,
+    var nativeDecls: List<CgNativeDecl>,
+    var nativeSymbols: Dictionary<Str, Str>,
+    var nativeExtensions: Dictionary<Str, List<CgNativeExt>>,
+    var activeTypeParams: Dictionary<Str, Bool>,
+    var nameKinds: Dictionary<Str, NameKind>,
+    var localTypes: Dictionary<Str, AstXmlNode>,
+    var selfKind: NameKind,
+    var selfType: AstXmlNode,
+    var curReturnType: AstXmlNode,
+    var nsPrefixes: Dictionary<Str, Str>,
+    var typePackages: Dictionary<Str, Str>,
+    var statics: List<CgStatic>,
+    var staticsByName: Dictionary<Str, CgStatic>,
 
 // ---- the IL path (impl_specs/linear-il.md) ----------------------------
 // The classes this unit constructs, and the ones already written out: a closure
 // class is emitted just above the body that builds it, once.
-var closureSymbols: Dictionary<Str, Bool>,
-var emittedClosures: Dictionary<Str, Bool>,
-var emittedYieldables: Dictionary<Str, Bool>,
+    var closureSymbols: Dictionary<Str, Bool>,
+    var emittedClosures: Dictionary<Str, Bool>,
+    var emittedYieldables: Dictionary<Str, Bool>,
 
 // Why an instruction could not be expressed: set where the attempt gives up, read
 // by the caller that turns it into a reason line.
-var ilWhy: Str,
+    var ilWhy: Str,
 
 // Inside a closure class's method (or a machine's): the receiver is C++'s `this`,
 // because a member function has no `self` parameter.
-var inClosureMethod: Bool
+    var inClosureMethod: Bool
 ) {
 
     // ---- diagnostics and output -------------------------------------------
@@ -1584,7 +1600,7 @@ var inClosureMethod: Bool
     // The destination slot of an instruction, or -1 when it writes memory or jumps
     // instead (`ilWritesDestination` is the one place that is stated).
     fun ilDst(op: *IlOp): Int {
-        if (!ilWritesDestination(op.name) || op.operands.size() == 0) {
+        if (!ilWritesDestination(op.kind) || op.operands.size() == 0) {
             return -1
         }
         return op.operands[0]
@@ -1623,7 +1639,7 @@ var inClosureMethod: Bool
         while (i < il.ops.size()) {
             val op: *IlOp = *il.ops[i]
             // A declaration reads nothing.
-            if (op.name != "Declare") {
+            if (op.kind != IlOpKind.Declare) {
                 // An instruction that writes memory or jumps has no destination, but its
                 // operands are reads like any other - so the two are counted apart, and
                 // the first operand is only skipped when it is in fact the destination.
@@ -1686,7 +1702,7 @@ var inClosureMethod: Bool
     // not an expression: it cannot stand inside another expression, so its slot is never
     // folded away.
     fun ilConstructsClosure(op: *IlOp, il: *IlBody): Bool {
-        if (op.name != "CallCtor") {
+        if (op.kind != IlOpKind.CallCtor) {
             return false
         }
         val typeAt: Int = this.ilOperandAt(*op.operands, 1)
@@ -1924,11 +1940,11 @@ var inClosureMethod: Bool
             return xmlEmptyNode()
         }
         val op: *IlOp = *il.ops[opIndex]
-        val name: Str = op.name
-        if (name == "SetVar") {
+        val kind: IlOpKind = op.kind
+        if (kind == IlOpKind.SetVar) {
             return this.ilOperandNode(il, frame, this.ilOperandAt(*op.operands, 1), depth)
         }
-        if (name == "SetVar_Null") {
+        if (kind == IlOpKind.SetVar_Null) {
             return AstXmlNode(
                 AstNodeKind.Expr,
                 AstNodeCategory.ExprNullLit,
@@ -1936,7 +1952,7 @@ var inClosureMethod: Bool
                 Array<AstXmlNode>()
             )
         }
-        if (name == "BinaryOp") {
+        if (kind == IlOpKind.BinaryOp) {
             val opIndex2: Int = this.ilOperandAt(*op.operands, 1)
             if (opIndex2 < 0 || opIndex2 >= il.pool.size()) {
                 return xmlEmptyNode()
@@ -1945,7 +1961,7 @@ var inClosureMethod: Bool
             val rhs: AstXmlNode = this.ilOperandNode(il, frame, this.ilOperandAt(*op.operands, 3), depth)
             return this.ilBinaryNode(*lhs, il.pool[opIndex2], *rhs)
         }
-        if (name == "UnaryOp") {
+        if (kind == IlOpKind.UnaryOp) {
             val opIndex2: Int = this.ilOperandAt(*op.operands, 1)
             val operand: AstXmlNode = this.ilOperandNode(il, frame, this.ilOperandAt(*op.operands, 2), depth)
             if (opIndex2 < 0 || opIndex2 >= il.pool.size() || xmlIsEmpty(*operand)) {
@@ -1957,7 +1973,7 @@ var inClosureMethod: Bool
             xmlAddChild(*node, this.renameRole(*operand, AstNodeKind.Operand))
             return node
         }
-        if (name == "GetField" || name == "FieldAddr") {
+        if (kind == IlOpKind.GetField || kind == IlOpKind.FieldAddr) {
             val textIndex: Int = this.ilOperandAt(*op.operands, 2)
             if (textIndex < 0 || textIndex >= il.pool.size()) {
                 return xmlEmptyNode()
@@ -1965,7 +1981,7 @@ var inClosureMethod: Bool
             val base: AstXmlNode = this.ilSlotNode(il, frame, this.ilOperandAt(*op.operands, 1), depth)
             return this.ilMemberNode(*base, il.pool[textIndex])
         }
-        if (name == "IndexAddr" || name == "GetIndex") {
+        if (kind == IlOpKind.IndexAddr || kind == IlOpKind.GetIndex) {
             val base: AstXmlNode = this.ilSlotNode(il, frame, this.ilOperandAt(*op.operands, 1), depth)
             val index: AstXmlNode = this.ilOperandNode(il, frame, this.ilOperandAt(*op.operands, 2), depth)
             if (xmlIsEmpty(*base) || xmlIsEmpty(*index)) {
@@ -1977,28 +1993,28 @@ var inClosureMethod: Bool
             xmlAddChild(*node, this.renameRole(*index, AstNodeKind.Index))
             return node
         }
-        if (name == "Deref" || name == "CopyValue" || name == "Box") {
+        if (kind == IlOpKind.Deref || kind == IlOpKind.CopyValue || kind == IlOpKind.Box) {
             val operand: AstXmlNode = this.ilSlotNode(il, frame, this.ilOperandAt(*op.operands, 1), depth)
             if (xmlIsEmpty(*operand)) {
                 return xmlEmptyNode()
             }
             var category: AstNodeCategory = AstNodeCategory.ExprDeref
-            if (name == "CopyValue") {
+            if (kind == IlOpKind.CopyValue) {
                 category = AstNodeCategory.ExprCopy
-            } else if (name == "Box") {
+            } else if (kind == IlOpKind.Box) {
                 category = AstNodeCategory.ExprRef
             }
             var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, category, List<AstNodeAttribute>(), Array<AstXmlNode>())
             xmlAddChild(*node, this.renameRole(*operand, AstNodeKind.Operand))
             return node
         }
-        if (name == "GetStatic") {
+        if (kind == IlOpKind.GetStatic) {
             return this.ilGetStaticNode(il, op)
         }
-        if (name == "Call" || name == "CallVoid") {
+        if (kind == IlOpKind.Call || kind == IlOpKind.CallVoid) {
             return this.ilCallNode(il, frame, op)
         }
-        if (name == "CallCtor") {
+        if (kind == IlOpKind.CallCtor) {
             val callee: AstXmlNode = this.ilTypeBaseNode(il, this.ilOperandAt(*op.operands, 1), true)
             if (xmlIsEmpty(*callee)) {
                 return xmlEmptyNode()
@@ -2032,7 +2048,7 @@ var inClosureMethod: Bool
         var i: Int = 0
         while (i < il.ops.size()) {
             val op: *IlOp = *il.ops[i]
-            if (op.name == "Label" && op.operands.size() > 0) {
+            if (op.kind == IlOpKind.Label && op.operands.size() > 0) {
                 labelPos.insert(op.operands[0], i)
             }
             i = i + 1
@@ -2041,9 +2057,9 @@ var inClosureMethod: Bool
         while (i < position) {
             val op: *IlOp = *il.ops[i]
             var labelAt: Int = -1
-            if (op.name == "Goto") {
+            if (op.kind == IlOpKind.Goto) {
                 labelAt = 0
-            } else if (op.name == "IfTrue" || op.name == "IfFalse") {
+            } else if (op.kind == IlOpKind.IfTrue || op.kind == IlOpKind.IfFalse) {
                 labelAt = 1
             }
             if (labelAt >= 0) {
@@ -2071,7 +2087,7 @@ var inClosureMethod: Bool
             return Opt<Str>.none()
         }
         val op: *IlOp = *il.ops[opIndex]
-        if (op.name == "CallCtor") {
+        if (op.kind == IlOpKind.CallCtor) {
             val typeAt: Int = this.ilOperandAt(*op.operands, 1)
             if (typeAt >= 0 && typeAt < il.types.size() && this.closureSymbols.has(il.types[typeAt])) {
                 var captured: List<Str> = List<Str>()
@@ -2110,7 +2126,7 @@ var inClosureMethod: Bool
         var scan: Int = 0
         while (scan < il.ops.size()) {
             val op: *IlOp = *il.ops[scan]
-            if (op.name == "Declare" || op.name == "DeclareInit") {
+            if (op.kind == IlOpKind.Declare || op.kind == IlOpKind.DeclareInit) {
                 // A declaration that prints nothing - the folding inlines it at its use -
                 // keeps nothing legal, so it asks for no block either.
                 var folded: Bool = false
@@ -2144,7 +2160,7 @@ var inClosureMethod: Bool
                 continue
             }
             val op: *IlOp = *il.ops[i]
-            val name: Str = op.name
+            val kind: IlOpKind = op.kind
             val dst: Int = this.ilDst(op)
 
             if (blockEnd.has(i)) {
@@ -2165,7 +2181,7 @@ var inClosureMethod: Bool
                 }
             }
 
-            if (name == "Declare" || name == "DeclareInit") {
+            if (kind == IlOpKind.Declare || kind == IlOpKind.DeclareInit) {
                 val slot: Int = this.ilOperandAt(*op.operands, 0)
                 if (slot < 0 || slot >= il.vars.size()) {
                     return IlText(false, "", "a declare with no slot")
@@ -2178,7 +2194,7 @@ var inClosureMethod: Bool
                 // A slot the type pass could not spell is still declarable when the
                 // declaration initialises it: `auto`, exactly as the statement path
                 // writes it.
-                val initialized: Bool = name == "DeclareInit"
+                val initialized: Bool = kind == IlOpKind.DeclareInit
                 if (xmlIsEmpty(*slotType) && !initialized) {
                     return IlText(
                         false, "", "the slot '" + il.vars[slot].name
@@ -2214,7 +2230,7 @@ var inClosureMethod: Bool
                 i = i + 1
                 continue
             }
-            if (name == "Label") {
+            if (kind == IlOpKind.Label) {
                 val label: Int = this.ilOperandAt(*op.operands, 0)
                 if (label < 0 || label >= il.labels.size()) {
                     return IlText(false, "", "a label with no name")
@@ -2223,9 +2239,9 @@ var inClosureMethod: Bool
                 i = i + 1
                 continue
             }
-            if (name == "Goto" || name == "IfTrue" || name == "IfFalse") {
+            if (kind == IlOpKind.Goto || kind == IlOpKind.IfTrue || kind == IlOpKind.IfFalse) {
                 var labelAt: Int = 1
-                if (name == "Goto") {
+                if (kind == IlOpKind.Goto) {
                     labelAt = 0
                 }
                 val label: Int = this.ilOperandAt(*op.operands, labelAt)
@@ -2233,7 +2249,7 @@ var inClosureMethod: Bool
                     return IlText(false, "", "a jump with no label")
                 }
                 val target: Str = il.labels[label]
-                if (name == "Goto") {
+                if (kind == IlOpKind.Goto) {
                     this.ilLine(*text, lvl, "goto " + target + ";")
                     i = i + 1
                     continue
@@ -2244,7 +2260,7 @@ var inClosureMethod: Bool
                 }
                 val test: Str = this.expr(*cond, 0, *xmlEmptyNode())
                 var jumpLine: Str = "if (!(" + test + ")) goto " + target + ";"
-                if (name == "IfTrue") {
+                if (kind == IlOpKind.IfTrue) {
                     jumpLine = "if (" + test + ") goto " + target + ";"
                 }
                 this.ilLine(*text, lvl, jumpLine)
@@ -2266,7 +2282,7 @@ var inClosureMethod: Bool
                 val valueText: Opt<Str> = this.ilValueText(il, frame, i, *slotType)
                 if (!valueText.hasValue()) {
                     if (this.ilWhy.isEmpty()) {
-                        return IlText(false, "", "'" + name + "' cannot be expressed yet")
+                        return IlText(false, "", "'" + ilOpKindText(kind) + "' cannot be expressed yet")
                     }
                     return IlText(false, "", "cannot express " + this.ilWhy)
                 }
@@ -2274,7 +2290,7 @@ var inClosureMethod: Bool
                 i = i + 1
                 continue
             }
-            if (name == "Store") {
+            if (kind == IlOpKind.Store) {
                 val ptr: AstXmlNode = this.ilSlotNode(il, frame, this.ilOperandAt(*op.operands, 0), 0)
                 val value: AstXmlNode = this.ilOperandNode(il, frame, this.ilOperandAt(*op.operands, 1), 0)
                 if (xmlIsEmpty(*ptr) || xmlIsEmpty(*value)) {
@@ -2295,9 +2311,9 @@ var inClosureMethod: Bool
                 i = i + 1
                 continue
             }
-            if (name == "SetField" || name == "SetIndex") {
+            if (kind == IlOpKind.SetField || kind == IlOpKind.SetIndex) {
                 var target: AstXmlNode = xmlEmptyNode()
-                if (name == "SetField") {
+                if (kind == IlOpKind.SetField) {
                     val textIndex: Int = this.ilOperandAt(*op.operands, 1)
                     if (textIndex < 0 || textIndex >= il.pool.size()) {
                         return IlText(false, "", "a field write with no name")
@@ -2330,7 +2346,7 @@ var inClosureMethod: Bool
                 i = i + 1
                 continue
             }
-            if (name == "SetStatic") {
+            if (kind == IlOpKind.SetStatic) {
                 val textIndex: Int = this.ilOperandAt(*op.operands, 0)
                 val value: AstXmlNode = this.ilOperandNode(il, frame, this.ilOperandAt(*op.operands, 1), 0)
                 if (textIndex < 0 || textIndex >= il.pool.size() || xmlIsEmpty(*value)) {
@@ -2351,7 +2367,7 @@ var inClosureMethod: Bool
                 i = i + 1
                 continue
             }
-            if (name == "CallVoid" || name == "CallIndirectVoid") {
+            if (kind == IlOpKind.CallVoid || kind == IlOpKind.CallIndirectVoid) {
                 val call: AstXmlNode = this.ilCallNode(il, frame, op)
                 if (xmlIsEmpty(*call)) {
                     if (this.ilWhy.isEmpty()) {
@@ -2363,8 +2379,8 @@ var inClosureMethod: Bool
                 i = i + 1
                 continue
             }
-            if (name == "Return" || name == "ReturnVoid") {
-                if (name == "ReturnVoid") {
+            if (kind == IlOpKind.Return || kind == IlOpKind.ReturnVoid) {
+                if (kind == IlOpKind.ReturnVoid) {
                     this.ilLine(*text, lvl, "return;")
                     i = i + 1
                     continue
@@ -2377,13 +2393,13 @@ var inClosureMethod: Bool
                 i = i + 1
                 continue
             }
-            if (name == "Lambda") {
+            if (kind == IlOpKind.Lambda) {
                 return IlText(false, "", "a lambda body")
             }
-            if (name == "Unsupported") {
+            if (kind == IlOpKind.Unsupported) {
                 return IlText(false, "", "an unsupported shape")
             }
-            return IlText(false, "", "the instruction '" + name + "'")
+            return IlText(false, "", "the instruction '" + ilOpKindText(kind) + "'")
         }
         while (scopes.size() > 0) {
             scopes.removeAt(scopes.size() - 1)

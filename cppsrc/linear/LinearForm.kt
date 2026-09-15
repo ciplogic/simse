@@ -62,19 +62,55 @@ enum IlOperandKind {
     None
 }
 
-data class IlVar(var name: Str,
+// The instruction set: one opcode per IL instruction. An enum rather than the
+// opcode's *name*, because every pass and the backend dispatch on it - an `Int`
+// compare instead of a string compare, and an instruction carrying four bytes of
+// opcode instead of a `Str` (which is what `IlOp` used to be). The order matches
+// `makeIlSignatures()`'s, so an opcode's signature is the table row at `kind.toInt()`.
+enum IlOpKind {
+    Label,
+    Goto,
+    IfTrue,
+    IfFalse,
+    Declare,
+    DeclareInit,
+    SetVar,
+    SetVar_Null,
+    BinaryOp,
+    UnaryOp,
+    Cast,
+    Box,
+    Deref,
+    CopyValue,
+    Store,
+    GetField,
+    SetField,
+    GetIndex,
+    SetIndex,
+    FieldAddr,
+    IndexAddr,
+    GetStatic,
+    SetStatic,
+    Call,
+    CallVoid,
+    CallIndirect,
+    CallIndirectVoid,
+    CallCtor,
+    Return,
+    ReturnVoid,
+    Lambda,
+    Unsupported
+}
 
-var typeIndex: Int,
-var kind: IlVarKind)
+data class IlVar(var name: Str, var typeIndex: Int, var kind: IlVarKind)
 
 data class IlMethod(
     var name: Str,
-
-var kind: IlMethodKind,
-var argCount: Int,
-var staticBase: Int,
-var returnType: Int,
-var argTypes: List<Int>
+    var kind: IlMethodKind,
+    var argCount: Int,
+    var staticBase: Int,
+    var returnType: Int,
+    var argTypes: List<Int>
 )
 
 // One instruction. An operand is an `Int` whose meaning is the opcode's operand kind
@@ -82,21 +118,14 @@ var argTypes: List<Int>
 // `Value` position is a literal: it names `pool[-1-n]`, whose text a backend prints
 // verbatim (`0`, `"abc"`, `true`) - which is what keeps a constant inside the
 // instruction that uses it instead of a slot that would have to be declared.
-data class IlOp(var name: Str,
-
-var operands: List<Int>)
+data class IlOp(var kind: IlOpKind, var operands: List<Int>)
 
 data class IlBody(
-    var file: Str,
-
-var line: Int,
-var symbol: Str,
-var signature: Str,
-var types: List<Str>,
+    var file: Str, var line: Int, var symbol: Str, var signature: Str, var types: List<Str>,
 
 // The type node behind each `types` entry, when the extractor had one: the dump
 // only needs the text, but a backend spells C++ from these.
-var typeNodes: List<AstXmlNode>,
+    var typeNodes: List<AstXmlNode>,
 
 // What the *type pass* proved for every name in this body (`sema::inferTypes`),
 // which is more than the frame's slots carry: a name holding a state machine is
@@ -106,13 +135,13 @@ var typeNodes: List<AstXmlNode>,
 // on a machine, that wrap is the identity - a decision only the receiver's type can
 // make (impl_specs/for.md). Seeding a frame from this is how a machine-typed slot
 // stays typed without a statement tree.
-var inferredTypes: Dictionary<Str, AstXmlNode>,
-var vars: List<IlVar>,
-var pool: List<Str>,
-var methods: List<IlMethod>,
-var labels: List<Str>,
-var ops: List<IlOp>,
-var lines: List<Int>
+    var inferredTypes: Dictionary<Str, AstXmlNode>,
+    var vars: List<IlVar>,
+    var pool: List<Str>,
+    var methods: List<IlMethod>,
+    var labels: List<Str>,
+    var ops: List<IlOp>,
+    var lines: List<Int>
 )
 
 // What the extractor needs to know about the body's function. A *lambda* body (and a
@@ -127,17 +156,17 @@ var lines: List<Int>
 data class IlFunction(
     var decl: AstXmlNode,
 
-var receiver: AstXmlNode,
-var symbol: Str,
-var statics: Dictionary<Str, Str>,
-var paramNames: List<Str>,
-var paramTypes: List<AstXmlNode>,
-var closureSymbol: Str,
-var captures: Dictionary<Str, Bool>,
-var captureTypes: Dictionary<Str, AstXmlNode>,
-var facts: *SemFacts,
-var typeParams: List<Str>,
-var inferredTypes: *Dictionary<Str, AstXmlNode>
+    var receiver: AstXmlNode,
+    var symbol: Str,
+    var statics: Dictionary<Str, Str>,
+    var paramNames: List<Str>,
+    var paramTypes: List<AstXmlNode>,
+    var closureSymbol: Str,
+    var captures: Dictionary<Str, Bool>,
+    var captureTypes: Dictionary<Str, AstXmlNode>,
+    var facts: *SemFacts,
+    var typeParams: List<Str>,
+    var inferredTypes: *Dictionary<Str, AstXmlNode>
 )
 
 // A lambda, as the language's model says it is: a class with one field per captured
@@ -145,27 +174,30 @@ var inferredTypes: *Dictionary<Str, AstXmlNode>
 data class IlClosure(
     var symbol: Str,
 
-var signature: Str,
-var captures: List<Str>,
-var captureTypes: List<AstXmlNode>,
-var params: List<IlVar>,
-var bodyIndex: Int
+    var signature: Str,
+    var captures: List<Str>,
+    var captureTypes: List<AstXmlNode>,
+    var params: List<IlVar>,
+    var bodyIndex: Int
 )
 
 // One function-like body and the lambdas it constructs.
 data class IlUnit(
     var body: IlBody,
 
-var lambdas: List<IlBody>,
-var closures: List<IlClosure>
+    var lambdas: List<IlBody>,
+    var closures: List<IlClosure>
 )
 
 // One entry per opcode, with its operands' kinds in order (`"Var,Text,Var,Var"`; a
 // trailing `...` means "the kind before it repeats here"). The printer and the backend
-// read this table, so it is the one place the IL's shape is written down.
-data class IlSignature(var name: Str,
+// read this table, so it is the one place the IL's shape is written down. The rows are
+// in `IlOpKind` order.
+data class IlSignature(
+    var kind: IlOpKind,
 
-var operands: Str)
+    var operands: Str
+)
 
 // ---- the instruction set ---------------------------------------------------
 
@@ -173,60 +205,107 @@ var ilSignatureTable: List<IlSignature> = makeIlSignatures()
 
 fun makeIlSignatures(): List<IlSignature> {
     var table: List<IlSignature> = List<IlSignature>()
-    table.append(IlSignature("Label", "Label"))
-    table.append(IlSignature("Goto", "Label"))
-    table.append(IlSignature("IfTrue", "Value,Label"))
-    table.append(IlSignature("IfFalse", "Value,Label"))
-    table.append(IlSignature("Declare", "Var"))
+    table.append(IlSignature(IlOpKind.Label, "Label"))
+    table.append(IlSignature(IlOpKind.Goto, "Label"))
+    table.append(IlSignature(IlOpKind.IfTrue, "Value,Label"))
+    table.append(IlSignature(IlOpKind.IfFalse, "Value,Label"))
+    table.append(IlSignature(IlOpKind.Declare, "Var"))
     // A declaration the instruction *after* it initialises: the two are one line of
     // C++. The distinction is real because the hoisting turns a declaration's
     // initializer into a separate assignment, which is a bare `Declare`.
-    table.append(IlSignature("DeclareInit", "Var"))
+    table.append(IlSignature(IlOpKind.DeclareInit, "Var"))
     // One assignment op for every kind of value: the destination slot's type is what a
     // backend spells from, so the opcode says nothing about it - `SetVar x, y` copies a
     // slot, `SetVar x, 5` carries the constant in the operand.
-    table.append(IlSignature("SetVar", "Var,Value"))
+    table.append(IlSignature(IlOpKind.SetVar, "Var,Value"))
     // ... except `null`, whose spelling comes from the destination's type
     // (`Opt<T>()` vs `nullptr`) rather than from a literal.
-    table.append(IlSignature("SetVar_Null", "Var"))
-    table.append(IlSignature("BinaryOp", "Var,Text,Value,Value"))
-    table.append(IlSignature("UnaryOp", "Var,Text,Value"))
-    table.append(IlSignature("Cast", "Var,Value"))       // Enum.toInt(): the one cast
-    table.append(IlSignature("Box", "Var,Var"))          // &x -> a counted handle
-    table.append(IlSignature("Deref", "Var,Var"))        // *x -> a borrow, a `.get()`,
-    //                                                      or a load of a `*T`
-    table.append(IlSignature("CopyValue", "Var,Var"))    // copy(x)
-    table.append(IlSignature("Store", "Var,Value"))      // *p = v
-    table.append(IlSignature("GetField", "Var,Var,Text"))
-    table.append(IlSignature("SetField", "Var,Text,Value"))
-    table.append(IlSignature("GetIndex", "Var,Var,Value"))
-    table.append(IlSignature("SetIndex", "Var,Value,Value"))
-    table.append(IlSignature("FieldAddr", "Var,Var,Text"))
-    table.append(IlSignature("IndexAddr", "Var,Var,Value"))
-    table.append(IlSignature("GetStatic", "Var,Text"))
-    table.append(IlSignature("SetStatic", "Text,Value"))
-    table.append(IlSignature("Call", "Var,Method,Value..."))
-    table.append(IlSignature("CallVoid", "Method,Value..."))
-    table.append(IlSignature("CallIndirect", "Var,Var,Value..."))
-    table.append(IlSignature("CallIndirectVoid", "Var,Value..."))
-    table.append(IlSignature("CallCtor", "Var,Type,Value..."))
-    table.append(IlSignature("Return", "Value"))
-    table.append(IlSignature("ReturnVoid", ""))
-    table.append(IlSignature("Lambda", "Var"))
-    table.append(IlSignature("Unsupported", "Var,Text"))
+    table.append(IlSignature(IlOpKind.SetVar_Null, "Var"))
+    table.append(IlSignature(IlOpKind.BinaryOp, "Var,Text,Value,Value"))
+    table.append(IlSignature(IlOpKind.UnaryOp, "Var,Text,Value"))
+    table.append(IlSignature(IlOpKind.Cast, "Var,Value"))       // Enum.toInt(): the one cast
+    table.append(IlSignature(IlOpKind.Box, "Var,Var"))          // &x -> a counted handle
+    table.append(IlSignature(IlOpKind.Deref, "Var,Var"))        // *x -> a borrow, a `.get()`,
+    //                                                              or a load of a `*T`
+    table.append(IlSignature(IlOpKind.CopyValue, "Var,Var"))    // copy(x)
+    table.append(IlSignature(IlOpKind.Store, "Var,Value"))      // *p = v
+    table.append(IlSignature(IlOpKind.GetField, "Var,Var,Text"))
+    table.append(IlSignature(IlOpKind.SetField, "Var,Text,Value"))
+    table.append(IlSignature(IlOpKind.GetIndex, "Var,Var,Value"))
+    table.append(IlSignature(IlOpKind.SetIndex, "Var,Value,Value"))
+    table.append(IlSignature(IlOpKind.FieldAddr, "Var,Var,Text"))
+    table.append(IlSignature(IlOpKind.IndexAddr, "Var,Var,Value"))
+    table.append(IlSignature(IlOpKind.GetStatic, "Var,Text"))
+    table.append(IlSignature(IlOpKind.SetStatic, "Text,Value"))
+    table.append(IlSignature(IlOpKind.Call, "Var,Method,Value..."))
+    table.append(IlSignature(IlOpKind.CallVoid, "Method,Value..."))
+    table.append(IlSignature(IlOpKind.CallIndirect, "Var,Var,Value..."))
+    table.append(IlSignature(IlOpKind.CallIndirectVoid, "Var,Value..."))
+    table.append(IlSignature(IlOpKind.CallCtor, "Var,Type,Value..."))
+    table.append(IlSignature(IlOpKind.Return, "Value"))
+    table.append(IlSignature(IlOpKind.ReturnVoid, ""))
+    table.append(IlSignature(IlOpKind.Lambda, "Var"))
+    table.append(IlSignature(IlOpKind.Unsupported, "Var,Text"))
     return table
 }
 
-// The signature of an opcode, or an empty node-like `Opt` when the name is not one.
-fun ilSignature(name: Str): Opt<IlSignature> {
-    var i: Int = 0
-    while (i < ilSignatureTable.size()) {
-        if (ilSignatureTable[i].name == name) {
-            return Opt<IlSignature>.some(ilSignatureTable[i])
-        }
-        i = i + 1
+// The opcode's spelling, in `IlOpKind` order (the dump reads it; the backend switches
+// on the enum and never needs the text).
+var ilOpKindTexts: List<Str> = makeIlOpKindTexts()
+
+fun makeIlOpKindTexts(): List<Str> {
+    var texts: List<Str> = List<Str>()
+    texts.append("Label")
+    texts.append("Goto")
+    texts.append("IfTrue")
+    texts.append("IfFalse")
+    texts.append("Declare")
+    texts.append("DeclareInit")
+    texts.append("SetVar")
+    texts.append("SetVar_Null")
+    texts.append("BinaryOp")
+    texts.append("UnaryOp")
+    texts.append("Cast")
+    texts.append("Box")
+    texts.append("Deref")
+    texts.append("CopyValue")
+    texts.append("Store")
+    texts.append("GetField")
+    texts.append("SetField")
+    texts.append("GetIndex")
+    texts.append("SetIndex")
+    texts.append("FieldAddr")
+    texts.append("IndexAddr")
+    texts.append("GetStatic")
+    texts.append("SetStatic")
+    texts.append("Call")
+    texts.append("CallVoid")
+    texts.append("CallIndirect")
+    texts.append("CallIndirectVoid")
+    texts.append("CallCtor")
+    texts.append("Return")
+    texts.append("ReturnVoid")
+    texts.append("Lambda")
+    texts.append("Unsupported")
+    return texts
+}
+
+fun ilOpKindText(kind: IlOpKind): Str {
+    val index: Int = kind.toInt()
+    if (index < 0 || index >= ilOpKindTexts.size()) {
+        return "?"
     }
-    return Opt<IlSignature>.none()
+    return ilOpKindTexts[index]
+}
+
+// The signature of an opcode. The table is in `IlOpKind` order, so the row *is* the
+// opcode: no search, which matters because a backend asks for one per operand.
+fun ilSignature(kind: IlOpKind): Opt<IlSignature> {
+    val index: Int = kind.toInt()
+    if (index < 0 || index >= ilSignatureTable.size()) {
+        return Opt<IlSignature>.none()
+    }
+    return Opt<IlSignature>.some(ilSignatureTable[index])
 }
 
 fun ilVarKindText(kind: IlVarKind): Str {
@@ -343,61 +422,61 @@ fun ilReceiverTypeText(typeNode: *AstXmlNode): Str {
 // implicit: "the first `Var` operand of an op that produces a value is where the value
 // goes". A backend folds a `Declare` into the instruction that writes the slot it
 // declared when this is true and the two are adjacent.
-fun ilWritesDestination(name: Str): Bool {
+fun ilWritesDestination(kind: IlOpKind): Bool {
     // Written out rather than derived, because deriving it means reading the operands
     // *and* knowing which of them produce a value, which is the thing being stated.
-    if (name == "SetVar") {
+    if (kind == IlOpKind.SetVar) {
         return true
     }
-    if (name == "SetVar_Null") {
+    if (kind == IlOpKind.SetVar_Null) {
         return true
     }
-    if (name == "BinaryOp") {
+    if (kind == IlOpKind.BinaryOp) {
         return true
     }
-    if (name == "UnaryOp") {
+    if (kind == IlOpKind.UnaryOp) {
         return true
     }
-    if (name == "Cast") {
+    if (kind == IlOpKind.Cast) {
         return true
     }
-    if (name == "Box") {
+    if (kind == IlOpKind.Box) {
         return true
     }
-    if (name == "Deref") {
+    if (kind == IlOpKind.Deref) {
         return true
     }
-    if (name == "CopyValue") {
+    if (kind == IlOpKind.CopyValue) {
         return true
     }
-    if (name == "GetField") {
+    if (kind == IlOpKind.GetField) {
         return true
     }
-    if (name == "GetIndex") {
+    if (kind == IlOpKind.GetIndex) {
         return true
     }
-    if (name == "FieldAddr") {
+    if (kind == IlOpKind.FieldAddr) {
         return true
     }
-    if (name == "IndexAddr") {
+    if (kind == IlOpKind.IndexAddr) {
         return true
     }
-    if (name == "GetStatic") {
+    if (kind == IlOpKind.GetStatic) {
         return true
     }
-    if (name == "Call") {
+    if (kind == IlOpKind.Call) {
         return true
     }
-    if (name == "CallIndirect") {
+    if (kind == IlOpKind.CallIndirect) {
         return true
     }
-    if (name == "CallCtor") {
+    if (kind == IlOpKind.CallCtor) {
         return true
     }
-    if (name == "Lambda") {
+    if (kind == IlOpKind.Lambda) {
         return true
     }
-    if (name == "Unsupported") {
+    if (kind == IlOpKind.Unsupported) {
         return true
     }
     return false
@@ -477,7 +556,7 @@ fun ilOperandKindAt(tokens: *List<Str>, index: Int): IlOperandKind {
 // What operand `index` of `op` is, resolved from the signature table. A verifier, a
 // printer and a backend all read the operands through this rather than counting them.
 fun ilOperandKind(op: *IlOp, index: Int): IlOperandKind {
-    val signature: Opt<IlSignature> = ilSignature(op.name)
+    val signature: Opt<IlSignature> = ilSignature(op.kind)
     if (!signature.hasValue()) {
         return IlOperandKind.None
     }
@@ -605,105 +684,105 @@ fun ilPadRight(text: Str, width: Int): Str {
 // extractor built with the wrong arity (it then shows `?` markers instead of taking the
 // compiler down).
 fun ilOpComment(body: *IlBody, op: *IlOp): Str {
-    val name: Str = op.name
+    val kind: IlOpKind = op.kind
     val operands: *List<Int> = *op.operands
 
-    if (name == "Declare") {
+    if (kind == IlOpKind.Declare) {
         val slot: Int = ilOperandAt(operands, 0)
         return "var " + ilVarName(body, slot) + ": " + ilVarTypeName(body, slot)
     }
-    if (name == "Label") {
+    if (kind == IlOpKind.Label) {
         return ilLabelName(body, ilOperandAt(operands, 0)) + ":"
     }
-    if (name == "Goto") {
+    if (kind == IlOpKind.Goto) {
         return "goto " + ilLabelName(body, ilOperandAt(operands, 0))
     }
-    if (name == "IfTrue" || name == "IfFalse") {
+    if (kind == IlOpKind.IfTrue || kind == IlOpKind.IfFalse) {
         val condition: Str = ilVarName(body, ilOperandAt(operands, 0))
         val target: Str = ilLabelName(body, ilOperandAt(operands, 1))
-        if (name == "IfTrue") {
+        if (kind == IlOpKind.IfTrue) {
             return "if (" + condition + ") goto " + target
         }
         return "if (!" + condition + ") goto " + target
     }
-    if (name == "SetVar") {
+    if (kind == IlOpKind.SetVar) {
         return ilVarName(body, ilOperandAt(operands, 0)) + " = "
         +ilVarName(body, ilOperandAt(operands, 1))
     }
-    if (name == "SetVar_Null") {
+    if (kind == IlOpKind.SetVar_Null) {
         return ilVarName(body, ilOperandAt(operands, 0)) + " = null"
     }
-    if (name == "BinaryOp") {
+    if (kind == IlOpKind.BinaryOp) {
         return ilVarName(body, ilOperandAt(operands, 0)) + " = "
         +ilVarName(body, ilOperandAt(operands, 2)) + " "
         +ilPoolText(body, ilOperandAt(operands, 1)) + " "
         +ilVarName(body, ilOperandAt(operands, 3))
     }
-    if (name == "UnaryOp") {
+    if (kind == IlOpKind.UnaryOp) {
         return ilVarName(body, ilOperandAt(operands, 0)) + " = "
         +ilPoolText(body, ilOperandAt(operands, 1))
         +ilVarName(body, ilOperandAt(operands, 2))
     }
-    if (name == "Cast") {
+    if (kind == IlOpKind.Cast) {
         return ilVarName(body, ilOperandAt(operands, 0)) + " = cast "
         +ilVarName(body, ilOperandAt(operands, 1))
     }
-    if (name == "Box") {
+    if (kind == IlOpKind.Box) {
         return ilVarName(body, ilOperandAt(operands, 0)) + " = &"
         +ilVarName(body, ilOperandAt(operands, 1))
     }
-    if (name == "Deref") {
+    if (kind == IlOpKind.Deref) {
         return ilVarName(body, ilOperandAt(operands, 0)) + " = *"
         +ilVarName(body, ilOperandAt(operands, 1))
     }
-    if (name == "CopyValue") {
+    if (kind == IlOpKind.CopyValue) {
         return ilVarName(body, ilOperandAt(operands, 0)) + " = copy("
         +ilVarName(body, ilOperandAt(operands, 1)) + ")"
     }
-    if (name == "Store") {
+    if (kind == IlOpKind.Store) {
         return "*" + ilVarName(body, ilOperandAt(operands, 0)) + " = "
         +ilVarName(body, ilOperandAt(operands, 1))
     }
-    if (name == "GetField") {
+    if (kind == IlOpKind.GetField) {
         return ilVarName(body, ilOperandAt(operands, 0)) + " = "
         +ilVarName(body, ilOperandAt(operands, 1)) + "."
         +ilPoolText(body, ilOperandAt(operands, 2))
     }
-    if (name == "SetField") {
+    if (kind == IlOpKind.SetField) {
         return ilVarName(body, ilOperandAt(operands, 1)) + "."
         +ilPoolText(body, ilOperandAt(operands, 0)) + " = "
         +ilVarName(body, ilOperandAt(operands, 2))
     }
-    if (name == "GetIndex") {
+    if (kind == IlOpKind.GetIndex) {
         return ilVarName(body, ilOperandAt(operands, 0)) + " = "
         +ilVarName(body, ilOperandAt(operands, 1)) + "["
         +ilVarName(body, ilOperandAt(operands, 2)) + "]"
     }
-    if (name == "SetIndex") {
+    if (kind == IlOpKind.SetIndex) {
         return ilVarName(body, ilOperandAt(operands, 1)) + "["
         +ilVarName(body, ilOperandAt(operands, 2)) + "] = "
         +ilVarName(body, ilOperandAt(operands, 3))
     }
-    if (name == "FieldAddr") {
+    if (kind == IlOpKind.FieldAddr) {
         return ilVarName(body, ilOperandAt(operands, 0)) + " = &"
         +ilVarName(body, ilOperandAt(operands, 1)) + "."
         +ilPoolText(body, ilOperandAt(operands, 2))
     }
-    if (name == "IndexAddr") {
+    if (kind == IlOpKind.IndexAddr) {
         return ilVarName(body, ilOperandAt(operands, 0)) + " = &"
         +ilVarName(body, ilOperandAt(operands, 1)) + "["
         +ilVarName(body, ilOperandAt(operands, 2)) + "]"
     }
-    if (name == "GetStatic") {
+    if (kind == IlOpKind.GetStatic) {
         return ilVarName(body, ilOperandAt(operands, 0)) + " = "
         +ilPoolText(body, ilOperandAt(operands, 1))
     }
-    if (name == "SetStatic") {
+    if (kind == IlOpKind.SetStatic) {
         return ilPoolText(body, ilOperandAt(operands, 0)) + " = "
         +ilVarName(body, ilOperandAt(operands, 1))
     }
-    if (name == "Call" || name == "CallVoid") {
-        val hasDst: Bool = name == "Call"
+    if (kind == IlOpKind.Call || kind == IlOpKind.CallVoid) {
+        val hasDst: Bool = kind == IlOpKind.Call
         var dst: Str = Str()
         if (hasDst) {
             dst = ilVarName(body, ilOperandAt(operands, 0)) + " = "
@@ -724,8 +803,8 @@ fun ilOpComment(body: *IlBody, op: *IlOp): Str {
         }
         return dst + method.name + "(" + ilArgList(body, operands, first) + ")"
     }
-    if (name == "CallIndirect" || name == "CallIndirectVoid") {
-        val hasDst2: Bool = name == "CallIndirect"
+    if (kind == IlOpKind.CallIndirect || kind == IlOpKind.CallIndirectVoid) {
+        val hasDst2: Bool = kind == IlOpKind.CallIndirect
         var dst2: Str = Str()
         var calleeAt: Int = 0
         if (hasDst2) {
@@ -735,21 +814,21 @@ fun ilOpComment(body: *IlBody, op: *IlOp): Str {
         return dst2 + ilVarName(body, ilOperandAt(operands, calleeAt)) + "("
         +ilArgList(body, operands, calleeAt + 1) + ")"
     }
-    if (name == "CallCtor") {
+    if (kind == IlOpKind.CallCtor) {
         return ilVarName(body, ilOperandAt(operands, 0)) + " = new "
         +ilTypeName(body, ilOperandAt(operands, 1)) + "("
         +ilArgList(body, operands, 2) + ")"
     }
-    if (name == "Return") {
+    if (kind == IlOpKind.Return) {
         return "return " + ilVarName(body, ilOperandAt(operands, 0))
     }
-    if (name == "ReturnVoid") {
+    if (kind == IlOpKind.ReturnVoid) {
         return "return"
     }
-    if (name == "Lambda") {
+    if (kind == IlOpKind.Lambda) {
         return ilVarName(body, ilOperandAt(operands, 0)) + " = <lambda>"
     }
-    if (name == "Unsupported") {
+    if (kind == IlOpKind.Unsupported) {
         return "<unsupported: " + ilPoolText(body, ilOperandAt(operands, 1)) + ">"
     }
     return Str()
@@ -818,7 +897,7 @@ fun printIlBody(body: *IlBody): Str {
     i = 0
     while (i < body.ops.size()) {
         val op: IlOp = body.ops[i]
-        val signature: Opt<IlSignature> = ilSignature(op.name)
+        val signature: Opt<IlSignature> = ilSignature(op.kind)
         var tokens: List<Str> = List<Str>()
         if (signature.hasValue()) {
             val found: IlSignature = signature.value()
@@ -832,7 +911,7 @@ fun printIlBody(body: *IlBody): Str {
             j = j + 1
         }
 
-        var text: Str = ilPadRight(ilIntText(i), 4) + ",  " + ilPadRight(op.name, 16)
+        var text: Str = ilPadRight(ilIntText(i), 4) + ",  " + ilPadRight(ilOpKindText(op.kind), 16)
         +ilJoinList(*rendered, ", ")
         val comment: Str = ilOpComment(body, *op)
         if (!comment.isEmpty()) {
@@ -1029,16 +1108,16 @@ fun ilReceiverTypeNode(typeNode: *AstXmlNode): AstXmlNode {
 data class IlExtractor(
     var fn: IlFunction,
 
-var unit: *IlUnit,
-var closureCounter: *Int,
-var out: IlBody,
-var varAt: Dictionary<Str, Int>,
-var typeAt: Dictionary<Str, Int>,
-var poolAt: Dictionary<Str, Int>,
-var methodAt: Dictionary<Str, Int>,
-var labelAt: Dictionary<Str, Int>,
-var nextBase: Int,
-var line: Int
+    var unit: *IlUnit,
+    var closureCounter: *Int,
+    var out: IlBody,
+    var varAt: Dictionary<Str, Int>,
+    var typeAt: Dictionary<Str, Int>,
+    var poolAt: Dictionary<Str, Int>,
+    var methodAt: Dictionary<Str, Int>,
+    var labelAt: Dictionary<Str, Int>,
+    var nextBase: Int,
+    var line: Int
 ) {
 
     // ---- tables -----------------------------------------------------------
@@ -1131,7 +1210,7 @@ var line: Int
         // A slot the extractor synthesised exists nowhere in the statements, so the
         // instruction list has to say where it comes from: here, in front of the
         // instruction that first writes it.
-        this.emit("Declare", ilOps1(slot))
+        this.emit(IlOpKind.Declare, ilOps1(slot))
         return slot
     }
 
@@ -1139,13 +1218,13 @@ var line: Int
         return this.freshSlot(typeText, xmlEmptyNode())
     }
 
-    fun emit(name: Str, operands: List<Int>): Unit {
-        this.out.ops.append(IlOp(name, operands))
+    fun emit(kind: IlOpKind, operands: List<Int>): Unit {
+        this.out.ops.append(IlOp(kind, operands))
         this.out.lines.append(this.line)
     }
 
     fun unsupported(what: Str): Unit {
-        this.emit("Unsupported", ilOps2(this.freshSlotText("?"), this.poolIndex(what)))
+        this.emit(IlOpKind.Unsupported, ilOps2(this.freshSlotText("?"), this.poolIndex(what)))
     }
 
     fun literalOperand(text: Str): Int {
@@ -1274,11 +1353,11 @@ var line: Int
         this.line = xmlLine(stmt)
         val kind: AstNodeCategory = xmlKind(stmt)
         if (kind == AstNodeCategory.StmtLabel) {
-            this.emit("Label", ilOps1(this.labelIndex(xmlAttr(stmt, AstNodeAttributeKind.Name))))
+            this.emit(IlOpKind.Label, ilOps1(this.labelIndex(xmlAttr(stmt, AstNodeAttributeKind.Name))))
             return
         }
         if (kind == AstNodeCategory.StmtGoto) {
-            this.emit("Goto", ilOps1(this.labelIndex(xmlAttr(stmt, AstNodeAttributeKind.Name))))
+            this.emit(IlOpKind.Goto, ilOps1(this.labelIndex(xmlAttr(stmt, AstNodeAttributeKind.Name))))
             return
         }
         if (kind == AstNodeCategory.StmtIfTrue || kind == AstNodeCategory.StmtIfFalse) {
@@ -1305,9 +1384,9 @@ var line: Int
             val slot: Int = this.addVar(name, typeText, slotKind, typeNode)
             val init: AstXmlNode = xmlChild(stmt, AstNodeKind.Init)
             if (xmlIsEmpty(*init)) {
-                this.emit("Declare", ilOps1(slot))
+                this.emit(IlOpKind.Declare, ilOps1(slot))
             } else {
-                this.emit("DeclareInit", ilOps1(slot))
+                this.emit(IlOpKind.DeclareInit, ilOps1(slot))
                 this.into(slot, init)
             }
             return
@@ -1319,9 +1398,9 @@ var line: Int
         if (kind == AstNodeCategory.StmtReturn) {
             val value: AstXmlNode = xmlChild(stmt, AstNodeKind.Value)
             if (xmlIsEmpty(*value)) {
-                this.emit("ReturnVoid", List<Int>())
+                this.emit(IlOpKind.ReturnVoid, List<Int>())
             } else {
-                this.emit("Return", ilOps1(this.operandOf(*value)))
+                this.emit(IlOpKind.Return, ilOps1(this.operandOf(*value)))
             }
             return
         }
@@ -1364,7 +1443,7 @@ var line: Int
             // A write to a captured variable writes the closure's field.
             if (this.fn.captures.has(name)) {
                 this.emit(
-                    "SetField", ilOps3(
+                    IlOpKind.SetField, ilOps3(
                         this.varIndex("self"), this.poolIndex(name),
                         this.operandOf(value)
                     )
@@ -1376,7 +1455,7 @@ var line: Int
                 this.into(slot, *value)
                 return
             }
-            this.emit("SetStatic", ilOps2(this.poolIndex(name), this.operandOf(value)))
+            this.emit(IlOpKind.SetStatic, ilOps2(this.poolIndex(name), this.operandOf(value)))
             return
         }
         if (targetKind == AstNodeCategory.ExprMember) {
@@ -1384,7 +1463,7 @@ var line: Int
             val fieldName: Str = xmlAttr(target, AstNodeAttributeKind.Name)
             if (this.isTypeBase(lhs)) {
                 this.emit(
-                    "SetStatic", ilOps2(
+                    IlOpKind.SetStatic, ilOps2(
                         this.poolIndex(this.baseText(lhs) + "." + fieldName),
                         this.operandOf(value)
                     )
@@ -1392,7 +1471,7 @@ var line: Int
                 return
             }
             this.emit(
-                "SetField", ilOps3(
+                IlOpKind.SetField, ilOps3(
                     this.receiverOf(lhs), this.poolIndex(fieldName),
                     this.operandOf(value)
                 )
@@ -1401,7 +1480,7 @@ var line: Int
         }
         if (targetKind == AstNodeCategory.ExprIndex) {
             this.emit(
-                "SetIndex", ilOps3(
+                IlOpKind.SetIndex, ilOps3(
                     this.receiverOf(xmlChild(target, AstNodeKind.Receiver)),
                     this.operandOf(*xmlChild(target, AstNodeKind.Index)),
                     this.operandOf(value)
@@ -1412,7 +1491,7 @@ var line: Int
         if (targetKind == AstNodeCategory.ExprDeref) {
             // `*p = v`: the emitter writes through the pointer's type.
             this.emit(
-                "Store", ilOps2(
+                IlOpKind.Store, ilOps2(
                     this.operandOf(*xmlChild(target, AstNodeKind.Operand)),
                     this.operandOf(value)
                 )
@@ -1445,7 +1524,7 @@ var line: Int
             // which only the destination slot's type states for certain - so it is
             // materialised.
             val slot: Int = this.freshSlotText("?")
-            this.emit("SetVar_Null", ilOps1(slot))
+            this.emit(IlOpKind.SetVar_Null, ilOps1(slot))
             return slot
         }
         if (kind == AstNodeCategory.ExprName) {
@@ -1478,34 +1557,34 @@ var line: Int
         if (kind == AstNodeCategory.ExprIntLit || kind == AstNodeCategory.ExprFloatLit
             || kind == AstNodeCategory.ExprStrLit || kind == AstNodeCategory.ExprCharLit
         ) {
-            this.emit("SetVar", ilOps2(slot, this.literalOperand(xmlAttr(*e, AstNodeAttributeKind.Text))))
+            this.emit(IlOpKind.SetVar, ilOps2(slot, this.literalOperand(xmlAttr(*e, AstNodeAttributeKind.Text))))
             return
         }
         if (kind == AstNodeCategory.ExprBoolLit) {
-            this.emit("SetVar", ilOps2(slot, this.literalOperand(xmlAttr(*e, AstNodeAttributeKind.Value))))
+            this.emit(IlOpKind.SetVar, ilOps2(slot, this.literalOperand(xmlAttr(*e, AstNodeAttributeKind.Value))))
             return
         }
         if (kind == AstNodeCategory.ExprNullLit) {
-            this.emit("SetVar_Null", ilOps1(slot))
+            this.emit(IlOpKind.SetVar_Null, ilOps1(slot))
             return
         }
         if (kind == AstNodeCategory.ExprName) {
-            this.emit("SetVar", ilOps2(slot, this.nameOf(e)))
+            this.emit(IlOpKind.SetVar, ilOps2(slot, this.nameOf(e)))
             return
         }
         if (kind == AstNodeCategory.ExprMember) {
             val lhs: AstXmlNode = xmlChild(*e, AstNodeKind.Receiver)
             val fieldName: Str = xmlAttr(*e, AstNodeAttributeKind.Name)
             if (this.isTypeBase(lhs)) {
-                this.emit("GetStatic", ilOps2(slot, this.poolIndex(this.baseText(lhs) + "." + fieldName)))
+                this.emit(IlOpKind.GetStatic, ilOps2(slot, this.poolIndex(this.baseText(lhs) + "." + fieldName)))
                 return
             }
-            this.emit("GetField", ilOps3(slot, this.valueOf(lhs), this.poolIndex(fieldName)))
+            this.emit(IlOpKind.GetField, ilOps3(slot, this.valueOf(lhs), this.poolIndex(fieldName)))
             return
         }
         if (kind == AstNodeCategory.ExprIndex) {
             this.emit(
-                "GetIndex", ilOps3(
+                IlOpKind.GetIndex, ilOps3(
                     slot, this.valueOf(xmlChild(*e, AstNodeKind.Receiver)),
                     this.operandOf(*xmlChild(*e, AstNodeKind.Index))
                 )
@@ -1514,7 +1593,7 @@ var line: Int
         }
         if (kind == AstNodeCategory.ExprBinary) {
             this.emit(
-                "BinaryOp", ilOps4(
+                IlOpKind.BinaryOp, ilOps4(
                     slot, this.poolIndex(xmlAttr(*e, AstNodeAttributeKind.Op)),
                     this.operandOf(*xmlChild(*e, AstNodeKind.Lhs)),
                     this.operandOf(*xmlChild(*e, AstNodeKind.Rhs))
@@ -1524,7 +1603,7 @@ var line: Int
         }
         if (kind == AstNodeCategory.ExprUnary) {
             this.emit(
-                "UnaryOp", ilOps3(
+                IlOpKind.UnaryOp, ilOps3(
                     slot, this.poolIndex(xmlAttr(*e, AstNodeAttributeKind.Op)),
                     this.operandOf(*xmlChild(*e, AstNodeKind.Operand))
                 )
@@ -1532,17 +1611,17 @@ var line: Int
             return
         }
         if (kind == AstNodeCategory.ExprRef) {
-            this.emit("Box", ilOps2(slot, this.operandOf(*xmlChild(*e, AstNodeKind.Operand))))
+            this.emit(IlOpKind.Box, ilOps2(slot, this.operandOf(*xmlChild(*e, AstNodeKind.Operand))))
             return
         }
         if (kind == AstNodeCategory.ExprDeref) {
             // `*x` is a borrow, `.get()`, or a load depending on what `x` is - the
             // backend reads that from the operand's slot type.
-            this.emit("Deref", ilOps2(slot, this.operandOf(*xmlChild(*e, AstNodeKind.Operand))))
+            this.emit(IlOpKind.Deref, ilOps2(slot, this.operandOf(*xmlChild(*e, AstNodeKind.Operand))))
             return
         }
         if (kind == AstNodeCategory.ExprCopy) {
-            this.emit("CopyValue", ilOps2(slot, this.operandOf(*xmlChild(*e, AstNodeKind.Operand))))
+            this.emit(IlOpKind.CopyValue, ilOps2(slot, this.operandOf(*xmlChild(*e, AstNodeKind.Operand))))
             return
         }
         if (kind == AstNodeCategory.ExprCall) {
@@ -1587,7 +1666,7 @@ var line: Int
             }
             val slot: Int = this.freshSlotText("*?")
             this.emit(
-                "FieldAddr", ilOps3(
+                IlOpKind.FieldAddr, ilOps3(
                     slot, this.receiverOf(lhs),
                     this.poolIndex(xmlAttr(*e, AstNodeAttributeKind.Name))
                 )
@@ -1597,7 +1676,7 @@ var line: Int
         if (kind == AstNodeCategory.ExprIndex) {
             val slot: Int = this.freshSlotText("*?")
             this.emit(
-                "IndexAddr", ilOps3(
+                IlOpKind.IndexAddr, ilOps3(
                     slot, this.receiverOf(xmlChild(*e, AstNodeKind.Receiver)),
                     this.operandOf(*xmlChild(*e, AstNodeKind.Index))
                 )
@@ -1622,7 +1701,7 @@ var line: Int
                 text = ilTypeText(*this.fn.captureTypes.get(name).value())
             }
             val slot: Int = this.freshSlot(text, this.fn.captureTypes.get(name).value())
-            this.emit("GetField", ilOps3(slot, this.varIndex("self"), this.poolIndex(name)))
+            this.emit(IlOpKind.GetField, ilOps3(slot, this.varIndex("self"), this.poolIndex(name)))
             return slot
         }
         if (name == "this") {
@@ -1644,7 +1723,7 @@ var line: Int
             typeText = this.fn.statics.get(name).value()
         }
         val fresh: Int = this.freshSlotText(typeText)
-        this.emit("GetStatic", ilOps2(fresh, this.poolIndex(name)))
+        this.emit(IlOpKind.GetStatic, ilOps2(fresh, this.poolIndex(name)))
         return fresh
     }
 
@@ -1825,7 +1904,7 @@ var line: Int
                 operands.append(args[i])
                 i = i + 1
             }
-            this.emit("CallCtor", operands)
+            this.emit(IlOpKind.CallCtor, operands)
             return
         }
         // A plain function (or a native - the backend resolves the symbol).
@@ -1840,9 +1919,9 @@ var line: Int
 
     fun emitCall(hasDst: Bool, operands: List<Int>): Unit {
         if (hasDst) {
-            this.emit("Call", operands)
+            this.emit(IlOpKind.Call, operands)
         } else {
-            this.emit("CallVoid", operands)
+            this.emit(IlOpKind.CallVoid, operands)
         }
     }
 
@@ -1990,7 +2069,7 @@ var line: Int
             operands.append(this.varIndex(captured[ci]))
             ci = ci + 1
         }
-        this.emit("CallCtor", operands)
+        this.emit(IlOpKind.CallCtor, operands)
         return target
     }
 }
@@ -2068,11 +2147,13 @@ fun ilEmptyBody(): IlBody {
 
 // The names the schema gives a jump category, as the opcode's own name (`IfTrue`,
 // `IfFalse`): the instruction set spells them that way.
-fun ilCategoryName(kind: AstNodeCategory): Str {
+// The opcode for a `StmtIfTrue`/`StmtIfFalse` category (the lowering's two jump forms,
+// which the extractor sees as statements).
+fun ilCategoryName(kind: AstNodeCategory): IlOpKind {
     if (kind == AstNodeCategory.StmtIfTrue) {
-        return "IfTrue"
+        return IlOpKind.IfTrue
     }
-    return "IfFalse"
+    return IlOpKind.IfFalse
 }
 
 // Builds the IL of one body: the body itself plus the lambdas it constructs. The closure

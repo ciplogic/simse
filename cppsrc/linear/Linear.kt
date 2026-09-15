@@ -380,7 +380,7 @@ fun linLowerForEmission(body: List<AstXmlNode>): List<AstXmlNode> {
             current = extracted.body
             canExtract = canExtract || extracted.changed
         }
-        val flattened: LinLowered = linFlattenBlocks(current)
+        val flattened: LinLowered = linFlattenBlocks(*current)
         current = flattened.body
         canChange = flattened.changed
     }

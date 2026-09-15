@@ -19,6 +19,7 @@ Res<Int> ns1_useGenerics() {
     Res<Int> errValue;
     std::shared_ptr<Int> reference;
     Int* dereferenced;
+    Res<Int> _sm_expr1;
     value = 3;
     list = List<Int>();
     opt = Opt<Int>();
@@ -26,6 +27,6 @@ Res<Int> ns1_useGenerics() {
     errValue = Res<Int>::err(__sm_stringTable[0]);
     reference = std::make_shared<std::remove_cvref_t<decltype((value))>>(value);
     dereferenced = (reference).get();
-    auto _sm_expr1 = Res<Int>::ok(value);
+    _sm_expr1 = Res<Int>::ok(value);
     return _sm_expr1;
 }

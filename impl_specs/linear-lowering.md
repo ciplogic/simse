@@ -239,6 +239,18 @@ in), so the check looks through blocks just like the label scan above. Children 
 first, so a parent is judged on the body its children leave behind, and a sequence
 with no jumps at all - a straight line of statements - always folds.
 
+Both rings fold in the same shape, and that shape has one non-obvious rule: a block's
+flattened body is computed before any splice decision, kept *out* of the item list, and
+its node is built in the one branch where the block survives. Deciding and emitting in a
+single loop looks equivalent and is not - a test for block `i` reads the bodies of the
+*other* items in the sequence (every jump inside them, through nested blocks), so the
+decisions have to be a batch, and no body may be handed to a survivor before they are
+all in. The first version of this rewrite emitted as it decided and produced a
+byte-identical IL with *different shadowing renames*: emptying a body had taken a jump
+away from a later test, so a different set of blocks survived, and the renames follow
+the surviving scopes. (That the IL was identical is also why the corpus did not catch
+it - only the emitted text did.)
+
 What is left after the folding alone is load-bearing. The temporaries of one arm are
 crossed by the jump to the next arm's label, so the arm keeps a scope:
 

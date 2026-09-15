@@ -33,57 +33,69 @@ namespace linear {
         // `...` means the kind before it repeats (a call's arguments). The
         // printer and the verifier read this table, so it is the one place the
         // IL's shape is written down; `impl_specs/linear-il.md` keeps the prose.
+        // The rows are in `IlOpKind` order, and `ilSignature` relies on that.
         const List<IlSignature> &signatureTable() {
             static const List<IlSignature> table = {
-                    {"Label", "Label"},
-                    {"Goto", "Label"},
-                    {"IfTrue", "Value,Label"},
-                    {"IfFalse", "Value,Label"},
-                    {"Declare", "Var"},
+                    {IlOpKind::Label, "Label"},
+                    {IlOpKind::Goto, "Label"},
+                    {IlOpKind::IfTrue, "Value,Label"},
+                    {IlOpKind::IfFalse, "Value,Label"},
+                    {IlOpKind::Declare, "Var"},
                     // A declaration the instruction *after* it initialises: the two are
                     // one line of C++ (`Str out = "";`). The distinction is real
                     // because the hoisting turns a declaration's initializer into a
                     // separate assignment, which is a bare `Declare`.
-                    {"DeclareInit", "Var"},
+                    {IlOpKind::DeclareInit, "Var"},
                     // One assignment op for every kind of value: the destination
                     // slot's type is what a backend spells from, so the opcode says
                     // nothing about it - `SetVar x, y` copies a slot, `SetVar x, 5`
                     // and `SetVar x, "abc"` carry the constant in the operand.
-                    {"SetVar", "Var,Value"},
+                    {IlOpKind::SetVar, "Var,Value"},
                     // ... except `null`, whose spelling comes from the destination's
                     // type (`Opt<T>()` vs `nullptr`) rather than from a literal.
-                    {"SetVar_Null", "Var"},
-                    {"BinaryOp", "Var,Text,Value,Value"},
-                    {"UnaryOp", "Var,Text,Value"},
-                    {"Cast", "Var,Value"},       // Enum.toInt(): the language's one cast
-                    {"Box", "Var,Var"},          // &x       -> a counted handle
-                    {"Deref", "Var,Var"},        // *x       -> a borrow (`&x`), a
-                                                  //            `.get()`, or a load of
-                                                  //            a `*T`, by the operand's
-                                                  //            type - a lookup the
-                                                  //            backend makes
-                    {"CopyValue", "Var,Var"},    // copy(x)  -> the value behind a handle
-                    {"Store", "Var,Value"},      // *p = v
-                    {"GetField", "Var,Var,Text"},
-                    {"SetField", "Var,Text,Value"},
-                    {"GetIndex", "Var,Var,Value"},
-                    {"SetIndex", "Var,Value,Value"},
-                    {"FieldAddr", "Var,Var,Text"},
-                    {"IndexAddr", "Var,Var,Value"},
-                    {"GetStatic", "Var,Text"},
-                    {"SetStatic", "Text,Value"},
-                    {"Call", "Var,Method,Value..."},
-                    {"CallVoid", "Method,Value..."},
-                    {"CallIndirect", "Var,Var,Value..."},
-                    {"CallIndirectVoid", "Var,Value..."},
-                    {"CallCtor", "Var,Type,Value..."},
-                    {"Return", "Value"},
-                    {"ReturnVoid", ""},
-                    {"Lambda", "Var"},
-                    {"Unsupported", "Var,Text"},
+                    {IlOpKind::SetVar_Null, "Var"},
+                    {IlOpKind::BinaryOp, "Var,Text,Value,Value"},
+                    {IlOpKind::UnaryOp, "Var,Text,Value"},
+                    {IlOpKind::Cast, "Var,Value"},       // Enum.toInt(): the one cast
+                    {IlOpKind::Box, "Var,Var"},          // &x       -> a counted handle
+                    {IlOpKind::Deref, "Var,Var"},        // *x       -> a borrow (`&x`), a
+                                                         //            `.get()`, or a load
+                                                         //            of a `*T`, by the
+                                                         //            operand's type - a
+                                                         //            lookup the backend
+                                                         //            makes
+                    {IlOpKind::CopyValue, "Var,Var"},    // copy(x)  -> the value behind a handle
+                    {IlOpKind::Store, "Var,Value"},      // *p = v
+                    {IlOpKind::GetField, "Var,Var,Text"},
+                    {IlOpKind::SetField, "Var,Text,Value"},
+                    {IlOpKind::GetIndex, "Var,Var,Value"},
+                    {IlOpKind::SetIndex, "Var,Value,Value"},
+                    {IlOpKind::FieldAddr, "Var,Var,Text"},
+                    {IlOpKind::IndexAddr, "Var,Var,Value"},
+                    {IlOpKind::GetStatic, "Var,Text"},
+                    {IlOpKind::SetStatic, "Text,Value"},
+                    {IlOpKind::Call, "Var,Method,Value..."},
+                    {IlOpKind::CallVoid, "Method,Value..."},
+                    {IlOpKind::CallIndirect, "Var,Var,Value..."},
+                    {IlOpKind::CallIndirectVoid, "Var,Value..."},
+                    {IlOpKind::CallCtor, "Var,Type,Value..."},
+                    {IlOpKind::Return, "Value"},
+                    {IlOpKind::ReturnVoid, ""},
+                    {IlOpKind::Lambda, "Var"},
+                    {IlOpKind::Unsupported, "Var,Text"},
             };
             return table;
         }
+
+        // The opcode's spelling, in `IlOpKind` order (the dump reads it).
+        const char *const opKindTextTable[] = {
+                "Label", "Goto", "IfTrue", "IfFalse", "Declare", "DeclareInit", "SetVar",
+                "SetVar_Null", "BinaryOp", "UnaryOp", "Cast", "Box", "Deref", "CopyValue",
+                "Store", "GetField", "SetField", "GetIndex", "SetIndex", "FieldAddr",
+                "IndexAddr", "GetStatic", "SetStatic", "Call", "CallVoid", "CallIndirect",
+                "CallIndirectVoid", "CallCtor", "Return", "ReturnVoid", "Lambda",
+                "Unsupported",
+        };
 
         Str varKindText(IlVarKind kind) {
             switch (kind) {
@@ -316,20 +328,20 @@ namespace linear {
                 // A slot the extractor synthesised exists nowhere in the statements,
                 // so the instruction list has to say where it comes from: here, in
                 // front of the instruction that first writes it.
-                emit("Declare", {slot});
+                emit(IlOpKind::Declare, {slot});
                 return slot;
             }
 
-            void emit(const Str &name, const List<int> &operands) {
+            void emit(IlOpKind kind, const List<int> &operands) {
                 IlOp op;
-                op.name = name;
+                op.kind = kind;
                 op.operands = operands;
                 out.ops.push_back(op);
                 out.lines.push_back(line);
             }
 
             void unsupported(const Str &what) {
-                emit("Unsupported", {freshSlot(Str("?")), poolIndex(what)});
+                emit(IlOpKind::Unsupported, {freshSlot(Str("?")), poolIndex(what)});
             }
 
             // ---- the frame ------------------------------------------------------
@@ -399,23 +411,23 @@ namespace linear {
                 line = stmt.pos.line;
                 switch (stmt.kind) {
                     case StmtKind::Label:
-                        emit("Label", {labelIndex(stmt.name)});
+                        emit(IlOpKind::Label, {labelIndex(stmt.name)});
                         return;
                     case StmtKind::Goto:
-                        emit("Goto", {labelIndex(stmt.name)});
+                        emit(IlOpKind::Goto, {labelIndex(stmt.name)});
                         return;
                     case StmtKind::IfTrue:
-                        emit("IfTrue", {operand(stmt.cond), labelIndex(stmt.name)});
+                        emit(IlOpKind::IfTrue, {operand(stmt.cond), labelIndex(stmt.name)});
                         return;
                     case StmtKind::IfFalse:
-                        emit("IfFalse", {operand(stmt.cond), labelIndex(stmt.name)});
+                        emit(IlOpKind::IfFalse, {operand(stmt.cond), labelIndex(stmt.name)});
                         return;
                     case StmtKind::VarDecl: {
                         Str typeText = stmt.type ? ilTypeText(*stmt.type) : Str("?");
                         const IlVarKind kind = isSlotName(stmt.name) ? IlVarKind::Expression
                                                                     : IlVarKind::Local;
                         int slot = addVar(stmt.name, typeText, kind, stmt.type);
-                        emit(stmt.init ? "DeclareInit" : "Declare", {slot});
+                        emit(stmt.init ? IlOpKind::DeclareInit : IlOpKind::Declare, {slot});
                         if (stmt.init) into(slot, *stmt.init);
                         return;
                     }
@@ -424,9 +436,9 @@ namespace linear {
                         return;
                     case StmtKind::Return:
                         if (stmt.returnValue) {
-                            emit("Return", {operand(*stmt.returnValue)});
+                            emit(IlOpKind::Return, {operand(*stmt.returnValue)});
                         } else {
-                            emit("ReturnVoid", {});
+                            emit(IlOpKind::ReturnVoid, {});
                         }
                         return;
                     case StmtKind::ExprStmt:
@@ -458,7 +470,7 @@ namespace linear {
                     case ExprKind::Name: {
                         // A write to a captured variable writes the closure's field.
                         if (captures != nullptr && captures->count(target.text) > 0) {
-                            emit("SetField", {varIndex("self"), poolIndex(target.text),
+                            emit(IlOpKind::SetField, {varIndex("self"), poolIndex(target.text),
                                               operand(value)});
                             return;
                         }
@@ -467,26 +479,26 @@ namespace linear {
                             into(slot, value);
                             return;
                         }
-                        emit("SetStatic", {poolIndex(target.text), operand(value)});
+                        emit(IlOpKind::SetStatic, {poolIndex(target.text), operand(value)});
                         return;
                     }
                     case ExprKind::Member: {
                         if (isTypeBase(*target.lhs)) {
-                            emit("SetStatic", {poolIndex(baseText(*target.lhs) + "." + target.text),
+                            emit(IlOpKind::SetStatic, {poolIndex(baseText(*target.lhs) + "." + target.text),
                                                operand(value)});
                             return;
                         }
-                        emit("SetField", {receiver(*target.lhs), poolIndex(target.text),
+                        emit(IlOpKind::SetField, {receiver(*target.lhs), poolIndex(target.text),
                                           operand(value)});
                         return;
                     }
                     case ExprKind::Index:
-                        emit("SetIndex", {receiver(*target.lhs), operand(*target.rhs),
+                        emit(IlOpKind::SetIndex, {receiver(*target.lhs), operand(*target.rhs),
                                           operand(value)});
                         return;
                     case ExprKind::Deref:
                         // `*p = v`: the emitter writes through the pointer's type.
-                        emit("Store", {operand(*target.lhs), operand(value)});
+                        emit(IlOpKind::Store, {operand(*target.lhs), operand(value)});
                         return;
                     default:
                         unsupported("assignment target");
@@ -520,7 +532,7 @@ namespace linear {
                         // vs `nullptr`), which only the destination slot's type
                         // states for certain - so it is materialised.
                         int slot = freshSlot(Str("?"));
-                        emit("SetVar_Null", {slot});
+                        emit(IlOpKind::SetVar_Null, {slot});
                         return slot;
                     }
                     case ExprKind::Name: return name(e);
@@ -548,46 +560,46 @@ namespace linear {
                 switch (e.kind) {
                     case ExprKind::IntLit: case ExprKind::FloatLit: case ExprKind::StrLit:
                     case ExprKind::CharLit:
-                        emit("SetVar", {slot, literalOperand(e.text)});
+                        emit(IlOpKind::SetVar, {slot, literalOperand(e.text)});
                         return;
                     case ExprKind::BoolLit:
-                        emit("SetVar",
+                        emit(IlOpKind::SetVar,
                              {slot, literalOperand(e.boolValue ? Str("true") : Str("false"))});
                         return;
                     case ExprKind::NullLit:
-                        emit("SetVar_Null", {slot});
+                        emit(IlOpKind::SetVar_Null, {slot});
                         return;
                     case ExprKind::Name:
-                        emit("SetVar", {slot, name(e)});
+                        emit(IlOpKind::SetVar, {slot, name(e)});
                         return;
                     case ExprKind::Member:
                         if (isTypeBase(*e.lhs)) {
-                            emit("GetStatic",
+                            emit(IlOpKind::GetStatic,
                                  {slot, poolIndex(baseText(*e.lhs) + "." + e.text)});
                             return;
                         }
-                        emit("GetField", {slot, valueOf(*e.lhs), poolIndex(e.text)});
+                        emit(IlOpKind::GetField, {slot, valueOf(*e.lhs), poolIndex(e.text)});
                         return;
                     case ExprKind::Index:
-                        emit("GetIndex", {slot, valueOf(*e.lhs), operand(*e.rhs)});
+                        emit(IlOpKind::GetIndex, {slot, valueOf(*e.lhs), operand(*e.rhs)});
                         return;
                     case ExprKind::Binary:
-                        emit("BinaryOp",
+                        emit(IlOpKind::BinaryOp,
                              {slot, poolIndex(e.text), operand(*e.lhs), operand(*e.rhs)});
                         return;
                     case ExprKind::Unary:
-                        emit("UnaryOp", {slot, poolIndex(e.text), operand(*e.lhs)});
+                        emit(IlOpKind::UnaryOp, {slot, poolIndex(e.text), operand(*e.lhs)});
                         return;
                     case ExprKind::Ref:
-                        emit("Box", {slot, operand(*e.lhs)});
+                        emit(IlOpKind::Box, {slot, operand(*e.lhs)});
                         return;
                     case ExprKind::Deref:
                         // `*x` is a borrow, `.get()`, or a load depending on what `x`
                         // is - the backend reads that from the operand's slot type.
-                        emit("Deref", {slot, operand(*e.lhs)});
+                        emit(IlOpKind::Deref, {slot, operand(*e.lhs)});
                         return;
                     case ExprKind::Copy:
-                        emit("CopyValue", {slot, operand(*e.lhs)});
+                        emit(IlOpKind::CopyValue, {slot, operand(*e.lhs)});
                         return;
                     case ExprKind::Call:
                         call(slot, e);
@@ -622,12 +634,12 @@ namespace linear {
                     case ExprKind::Member: {
                         if (isTypeBase(*e.lhs)) return valueOf(e);
                         int slot = freshSlot(Str("*?"));
-                        emit("FieldAddr", {slot, receiver(*e.lhs), poolIndex(e.text)});
+                        emit(IlOpKind::FieldAddr, {slot, receiver(*e.lhs), poolIndex(e.text)});
                         return slot;
                     }
                     case ExprKind::Index: {
                         int slot = freshSlot(Str("*?"));
-                        emit("IndexAddr", {slot, receiver(*e.lhs), operand(*e.rhs)});
+                        emit(IlOpKind::IndexAddr, {slot, receiver(*e.lhs), operand(*e.rhs)});
                         return slot;
                     }
                     case ExprKind::Deref:
@@ -674,7 +686,7 @@ namespace linear {
                                                    returnType, fullTypes));
                     operands.push_back(recvSlot);
                     for (int arg: args) operands.push_back(arg);
-                    emit(hasDst ? "Call" : "CallVoid", operands);
+                    emit(hasDst ? IlOpKind::Call : IlOpKind::CallVoid, operands);
                     return;
                 }
                 if (staticCall) {
@@ -686,7 +698,7 @@ namespace linear {
                                                              calleeToTypePtr(*callee.lhs)),
                                                    returnType, argTypes));
                     for (int arg: args) operands.push_back(arg);
-                    emit(hasDst ? "Call" : "CallVoid", operands);
+                    emit(hasDst ? IlOpKind::Call : IlOpKind::CallVoid, operands);
                     return;
                 }
                 if (callee.kind == ExprKind::GenericName) {
@@ -699,14 +711,14 @@ namespace linear {
                     }
                     operands.push_back(typeIndex(baseText(callee), calleeToTypePtr(callee)));
                     for (int arg: args) operands.push_back(arg);
-                    emit("CallCtor", operands);
+                    emit(IlOpKind::CallCtor, operands);
                     return;
                 }
                 // A plain function (or a native - the backend resolves the symbol).
                 operands.push_back(methodIndex(callee.text, IlMethodKind::Function, -1,
                                                returnType, argTypes));
                 for (int arg: args) operands.push_back(arg);
-                emit(hasDst ? "Call" : "CallVoid", operands);
+                emit(hasDst ? IlOpKind::Call : IlOpKind::CallVoid, operands);
             }
 
             // ---- lambdas ---------------------------------------------------------
@@ -831,7 +843,7 @@ namespace linear {
                     // closure), so the construction passes its value by index.
                     operands.push_back(varIndex(capture));
                 }
-                emit("CallCtor", operands);
+                emit(IlOpKind::CallCtor, operands);
                 return target;
             }
 
@@ -844,7 +856,7 @@ namespace linear {
                     auto found = fn.captureTypes.find(e.text);
                     ast::TypePtr type = found == fn.captureTypes.end() ? nullptr : found->second;
                     int slot = freshSlot(type ? ilTypeText(*type) : Str("?"), type);
-                    emit("GetField", {slot, varIndex("self"), poolIndex(e.text)});
+                    emit(IlOpKind::GetField, {slot, varIndex("self"), poolIndex(e.text)});
                     return slot;
                 }
                 if (e.text == "this") {
@@ -858,7 +870,7 @@ namespace linear {
                 auto known = fn.statics.find(e.text);
                 Str typeText = known == fn.statics.end() ? Str("?") : known->second;
                 int fresh = freshSlot(typeText);
-                emit("GetStatic", {fresh, poolIndex(e.text)});
+                emit(IlOpKind::GetStatic, {fresh, poolIndex(e.text)});
                 return fresh;
             }
 
@@ -1059,97 +1071,97 @@ namespace linear {
         // instruction the extractor built with the wrong arity (it then shows the
         // `?` markers instead of taking the compiler down).
         Str opComment(const IlBody &body, const IlOp &op) {
-            const Str &name = op.name;
+            const IlOpKind kind = op.kind;
             const List<int> &operands = op.operands;
 
-            if (name == "Declare") {
+            if (kind == IlOpKind::Declare) {
                 const int slot = operandAt(operands, 0);
                 return "var " + varName(body, slot) + ": " + varTypeName(body, slot);
             }
-            if (name == "Label") return labelName(body, operandAt(operands, 0)) + ":";
-            if (name == "Goto") return "goto " + labelName(body, operandAt(operands, 0));
-            if (name == "IfTrue" || name == "IfFalse") {
+            if (kind == IlOpKind::Label) return labelName(body, operandAt(operands, 0)) + ":";
+            if (kind == IlOpKind::Goto) return "goto " + labelName(body, operandAt(operands, 0));
+            if (kind == IlOpKind::IfTrue || kind == IlOpKind::IfFalse) {
                 const Str condition = varName(body, operandAt(operands, 0));
                 const Str target = labelName(body, operandAt(operands, 1));
-                return name == "IfTrue" ? "if (" + condition + ") goto " + target
+                return kind == IlOpKind::IfTrue ? "if (" + condition + ") goto " + target
                                         : "if (!" + condition + ") goto " + target;
             }
-            if (name == "SetVar") {
+            if (kind == IlOpKind::SetVar) {
                 return varName(body, operandAt(operands, 0)) + " = "
                        + varName(body, operandAt(operands, 1));
             }
-            if (name == "SetVar_Null") return varName(body, operandAt(operands, 0)) + " = null";
-            if (name == "BinaryOp") {
+            if (kind == IlOpKind::SetVar_Null) return varName(body, operandAt(operands, 0)) + " = null";
+            if (kind == IlOpKind::BinaryOp) {
                 return varName(body, operandAt(operands, 0)) + " = "
                        + varName(body, operandAt(operands, 2)) + " "
                        + poolText(body, operandAt(operands, 1)) + " "
                        + varName(body, operandAt(operands, 3));
             }
-            if (name == "UnaryOp") {
+            if (kind == IlOpKind::UnaryOp) {
                 return varName(body, operandAt(operands, 0)) + " = "
                        + poolText(body, operandAt(operands, 1))
                        + varName(body, operandAt(operands, 2));
             }
-            if (name == "Cast") {
+            if (kind == IlOpKind::Cast) {
                 return varName(body, operandAt(operands, 0)) + " = cast "
                        + varName(body, operandAt(operands, 1));
             }
-            if (name == "Box") {
+            if (kind == IlOpKind::Box) {
                 return varName(body, operandAt(operands, 0)) + " = &"
                        + varName(body, operandAt(operands, 1));
             }
-            if (name == "Deref") {
+            if (kind == IlOpKind::Deref) {
                 return varName(body, operandAt(operands, 0)) + " = *"
                        + varName(body, operandAt(operands, 1));
             }
-            if (name == "CopyValue") {
+            if (kind == IlOpKind::CopyValue) {
                 return varName(body, operandAt(operands, 0)) + " = copy("
                        + varName(body, operandAt(operands, 1)) + ")";
             }
-            if (name == "Store") {
+            if (kind == IlOpKind::Store) {
                 return "*" + varName(body, operandAt(operands, 0)) + " = "
                        + varName(body, operandAt(operands, 1));
             }
-            if (name == "GetField") {
+            if (kind == IlOpKind::GetField) {
                 return varName(body, operandAt(operands, 0)) + " = "
                        + varName(body, operandAt(operands, 1)) + "."
                        + poolText(body, operandAt(operands, 2));
             }
-            if (name == "SetField") {
+            if (kind == IlOpKind::SetField) {
                 return varName(body, operandAt(operands, 1)) + "."
                        + poolText(body, operandAt(operands, 0)) + " = "
                        + varName(body, operandAt(operands, 2));
             }
-            if (name == "GetIndex") {
+            if (kind == IlOpKind::GetIndex) {
                 return varName(body, operandAt(operands, 0)) + " = "
                        + varName(body, operandAt(operands, 1)) + "["
                        + varName(body, operandAt(operands, 2)) + "]";
             }
-            if (name == "SetIndex") {
+            if (kind == IlOpKind::SetIndex) {
                 return varName(body, operandAt(operands, 1)) + "["
                        + varName(body, operandAt(operands, 2)) + "] = "
                        + varName(body, operandAt(operands, 3));
             }
-            if (name == "FieldAddr") {
+            if (kind == IlOpKind::FieldAddr) {
                 return varName(body, operandAt(operands, 0)) + " = &"
                        + varName(body, operandAt(operands, 1)) + "."
                        + poolText(body, operandAt(operands, 2));
             }
-            if (name == "IndexAddr") {
+            if (kind == IlOpKind::IndexAddr) {
                 return varName(body, operandAt(operands, 0)) + " = &"
                        + varName(body, operandAt(operands, 1)) + "["
                        + varName(body, operandAt(operands, 2)) + "]";
             }
-            if (name == "GetStatic") {
+            if (kind == IlOpKind::GetStatic) {
                 return varName(body, operandAt(operands, 0)) + " = "
                        + poolText(body, operandAt(operands, 1));
             }
-            if (name == "SetStatic") {
+            if (kind == IlOpKind::SetStatic) {
                 return poolText(body, operandAt(operands, 0)) + " = "
                        + varName(body, operandAt(operands, 1));
             }
-            if (name == "Call" || name == "CallVoid") {
-                const bool hasDst = name == "Call";
+            if (kind == IlOpKind::Call || kind == IlOpKind::CallVoid) {
+                const bool hasDst = kind == IlOpKind::Call;
                 const Str dst = hasDst
                                     ? varName(body, operandAt(operands, 0)) + " = "
                                     : Str();
@@ -1166,8 +1178,8 @@ namespace linear {
                 }
                 return dst + method->name + "(" + argList(body, operands, first) + ")";
             }
-            if (name == "CallIndirect" || name == "CallIndirectVoid") {
-                const bool hasDst = name == "CallIndirect";
+            if (kind == IlOpKind::CallIndirect || kind == IlOpKind::CallIndirectVoid) {
+                const bool hasDst = kind == IlOpKind::CallIndirect;
                 const Str dst = hasDst
                                     ? varName(body, operandAt(operands, 0)) + " = "
                                     : Str();
@@ -1175,15 +1187,15 @@ namespace linear {
                 return dst + varName(body, operandAt(operands, calleeAt)) + "("
                        + argList(body, operands, calleeAt + 1) + ")";
             }
-            if (name == "CallCtor") {
+            if (kind == IlOpKind::CallCtor) {
                 return varName(body, operandAt(operands, 0)) + " = new "
                        + typeName(body, operandAt(operands, 1)) + "("
                        + argList(body, operands, 2) + ")";
             }
-            if (name == "Return") return "return " + varName(body, operandAt(operands, 0));
-            if (name == "ReturnVoid") return "return";
-            if (name == "Lambda") return varName(body, operandAt(operands, 0)) + " = <lambda>";
-            if (name == "Unsupported") {
+            if (kind == IlOpKind::Return) return "return " + varName(body, operandAt(operands, 0));
+            if (kind == IlOpKind::ReturnVoid) return "return";
+            if (kind == IlOpKind::Lambda) return varName(body, operandAt(operands, 0)) + " = <lambda>";
+            if (kind == IlOpKind::Unsupported) {
                 return "<unsupported: " + poolText(body, operandAt(operands, 1)) + ">";
             }
             return Str();
@@ -1209,15 +1221,25 @@ namespace linear {
         return signatureTable();
     }
 
-    const IlSignature *ilSignature(const Str &name) {
-        for (const IlSignature &entry: signatureTable()) {
-            if (name == entry.name) return &entry;
+    const IlSignature *ilSignature(IlOpKind kind) {
+        // The table is in `IlOpKind` order, so the row *is* the opcode: no search,
+        // which matters because the backend asks for a signature per operand.
+        const List<IlSignature> &table = signatureTable();
+        const int index = (int) kind;
+        if (index < 0 || index >= (int) table.size()) return nullptr;
+        return &table[index];
+    }
+
+    const char *ilOpKindText(IlOpKind kind) {
+        const int index = (int) kind;
+        if (index < 0 || index >= (int) (sizeof(opKindTextTable) / sizeof(opKindTextTable[0]))) {
+            return "?";
         }
-        return nullptr;
+        return opKindTextTable[index];
     }
 
     IlOperandKind ilOperandKind(const IlOp &op, int index) {
-        const IlSignature *signature = ilSignature(op.name);
+        const IlSignature *signature = ilSignature(op.kind);
         if (signature == nullptr) return IlOperandKind::None;
         return operandKindAt(operandTokens(*signature), index);
     }
@@ -1232,20 +1254,33 @@ namespace linear {
         return body.typeNodes[index];
     }
 
-    bool ilWritesDestination(const Str &name) {
+    bool ilWritesDestination(IlOpKind kind) {
         // Every op whose first operand is written rather than read. Written out
         // rather than derived, because deriving it means reading the operands *and*
         // knowing which of them produce a value, which is the thing being stated.
-        static const List<Str> dst = {
-                "SetVar", "SetVar_Null", "BinaryOp", "UnaryOp", "Cast",
-                "Box", "Deref", "CopyValue", "GetField", "GetIndex", "FieldAddr",
-                "IndexAddr", "GetStatic", "Call", "CallIndirect", "CallCtor",
-                "Lambda", "Unsupported",
-        };
-        for (const Str &entry: dst) {
-            if (name == entry) return true;
+        switch (kind) {
+            case IlOpKind::SetVar:
+            case IlOpKind::SetVar_Null:
+            case IlOpKind::BinaryOp:
+            case IlOpKind::UnaryOp:
+            case IlOpKind::Cast:
+            case IlOpKind::Box:
+            case IlOpKind::Deref:
+            case IlOpKind::CopyValue:
+            case IlOpKind::GetField:
+            case IlOpKind::GetIndex:
+            case IlOpKind::FieldAddr:
+            case IlOpKind::IndexAddr:
+            case IlOpKind::GetStatic:
+            case IlOpKind::Call:
+            case IlOpKind::CallIndirect:
+            case IlOpKind::CallCtor:
+            case IlOpKind::Lambda:
+            case IlOpKind::Unsupported:
+                return true;
+            default:
+                return false;
         }
-        return false;
     }
 
     Str ilTypeText(const ast::TypeExpr &type) {
@@ -1343,7 +1378,7 @@ namespace linear {
 
         for (int i = 0; i < (int) body.ops.size(); i++) {
             const IlOp &op = body.ops[i];
-            const IlSignature *signature = ilSignature(op.name);
+            const IlSignature *signature = ilSignature(op.kind);
             List<Str> tokens;
             if (signature != nullptr) tokens = operandTokens(*signature);
 
@@ -1352,7 +1387,7 @@ namespace linear {
                 rendered.push_back(renderOperand(body, operandKindAt(tokens, j), op.operands[j]));
             }
 
-            Str text = padRight(intText(i), 4) + ",  " + padRight(op.name, 16)
+            Str text = padRight(intText(i), 4) + ",  " + padRight(ilOpKindText(op.kind), 16)
                        + joinList(rendered, ", ");
             Str comment = opComment(body, op);
             if (!comment.empty()) {

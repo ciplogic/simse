@@ -99,6 +99,12 @@ Status: required for the first implementation.
 - `value: T` (the success payload); and
 - `error: Str` (the failure message).
 
+The RTL's own fields are spelled `Value`/`Error` (the C++ `Res<T>` in `result.hpp`), and
+the emitter remaps only the lowercase pair, so a name it does not remap is emitted as
+written. Both spellings therefore compile and both are typed, but the sources use
+`Value`/`Error` throughout and the lowercase pair has no advantage - one of the two
+should go (`impl_specs/capability-matrix.md`, T57).
+
 `Opt<T>` exposes the state and payload as:
 
 - `hasValue(): Bool`; and
