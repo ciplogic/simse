@@ -233,12 +233,12 @@ fun main(): Int {
 
 ## Data classes and enums
 
-A `data class` is a value type with named fields (separated by `;`), an implicit
-constructor, value semantics, and methods that may use `this`. Fields are
+A `data class` is a value type with named fields (separated by `,`, as in Kotlin), an
+implicit constructor, value semantics, and methods that may use `this`. Fields are
 accessed with `.`.
 
 ```simse
-data class Point(var x: Int; var y: Int) {
+data class Point(var x: Int, var y: Int) {
     fun manhattan(): Int {
         var total: Int = this.x
         if (total < 0) {
@@ -414,7 +414,7 @@ declarations are statics, initialized before `main` runs.
 // src/util/util.kt
 package util
 
-data class Point(var x: Int; var y: Int)
+data class Point(var x: Int, var y: Int)
 
 fun twice(value: Int): Int {
     return value + value

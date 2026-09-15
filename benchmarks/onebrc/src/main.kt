@@ -18,7 +18,7 @@ package onebrc
 // *handle* would box a copy and the aggregates would be written into the box, not
 // into the local.
 
-data class Stats(var min: Int; var max: Int; var sum: Int; var count: Int)
+data class Stats(var min: Int, var max: Int, var sum: Int, var count: Int)
 
 // "-12.3" -> -123, "12.3" -> 123, "12" -> 120. The sign is handled here rather than
 // trusted to `toInt`, since the digits are concatenated around the point.

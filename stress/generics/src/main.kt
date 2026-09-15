@@ -1,5 +1,5 @@
 package fixtures
-data class Pair<A, B>(var first: A; var second: B)
+data class Pair<A, B>(var first: A, var second: B)
 
 fun identity<T>(value: T): T {
     return value

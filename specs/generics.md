@@ -43,7 +43,7 @@ arguments may themselves be generic instantiations, references, pointers, or
 callable types:
 
 ```text
-data class Pair<A, B>(var first: A; var second: B)
+data class Pair<A, B>(var first: A, var second: B)
 
 fun identity<T>(value: T): T {
     return value

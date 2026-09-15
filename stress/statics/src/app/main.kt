@@ -19,7 +19,7 @@ var computed: Int = seed() + 1
 // A static whose initializer builds an aggregate (through the emitted factory)
 // and one whose initializer allocates: both run in the pass, and both storage
 // shapes start empty first.
-data class Point(var x: Int; var y: Int) {
+data class Point(var x: Int, var y: Int) {
     fun describe(): Str {
         return this.x.toString() + "," + this.y.toString()
     }

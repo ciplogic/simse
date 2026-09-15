@@ -4,7 +4,7 @@ package util
 // program. Nothing here is special - the point is that the compiler scans a
 // module root, sees both packages, and links them into one program.
 
-data class Point(var x: Int; var y: Int) {
+data class Point(var x: Int, var y: Int) {
     fun manhattan(): Int {
         var total: Int = this.x
         if (total < 0) {

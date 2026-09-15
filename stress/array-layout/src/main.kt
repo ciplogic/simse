@@ -5,7 +5,7 @@ package arrayops
 // that layout: `count()`, indexing, `toArray`/`toList`, and `arrayEmpty<T>()`,
 // whose empty array is the shared one rather than a fresh allocation.
 
-data class Point(var x: Int; var y: Int)
+data class Point(var x: Int, var y: Int)
 
 fun texts(): List<Str> {
     var texts: List<Str> = List<Str>()

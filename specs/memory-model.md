@@ -121,7 +121,7 @@ The memory operators also appear as expressions.
     drops refcount management but points at the same storage.
 
 ```text
-data class Point(var x: Int; var y: Int)
+data class Point(var x: Int, var y: Int)
 
 var a: Point = Point(1, 2)
 var b: &Point = &a   // b is a counted reference to a copy of a

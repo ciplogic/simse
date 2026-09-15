@@ -13,7 +13,7 @@ and attributes carry the information that would otherwise live in a subtype.
 ## `Attribute`
 
 ```text
-data class Attribute(var name: Str; var value: Str)
+data class Attribute(var name: Str, var value: Str)
 ```
 
 `Attribute` pairs an attribute/element name with a `Str` value. Both fields are

@@ -4,7 +4,7 @@ package wordcount
 // data class to hold one tally, an extension method on Str, an Opt to look up a
 // count, and a sort with a tie-breaking comparator so the output is deterministic.
 
-data class Tally(var word: Str; var count: Int)
+data class Tally(var word: Str, var count: Int)
 
 fun Str.words(): List<Str> {
     return this.split(" ")
