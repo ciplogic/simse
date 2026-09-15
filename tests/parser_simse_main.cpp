@@ -1,8 +1,8 @@
 //
 // Differential Simse driver for the parser. This translation unit is compiled
 // together with the C++ emitted by
-// `simse_transpile cppsrc/parser/Parser.simse` (included directly, because the
-// generated file has no header). It tokenizes each `*.simse` fixture with the
+// `simse_transpile cppsrc/parser/Parser.kt` (included directly, because the
+// generated file has no header). It tokenizes each `*.kt` fixture with the
 // generated scanner and runs the generated global `ns3_parseModule`, then renders
 // the resulting RTL `AstXmlNode` with the same `ast::dumpXmlNode` the reference
 // driver uses, so the build can diff the two.
@@ -18,7 +18,7 @@
 #include <string>
 #include <vector>
 
-#include "Parser.simse.cpp"
+#include "Parser.kt.cpp"
 
 // The generated translation unit qualifies every package's declarations with
 // `ns<index>_`, numbered in sorted package order (impl_specs/rtl-abi.md):
@@ -46,7 +46,7 @@ int main(int argc, char **argv) {
     std::vector<std::string> files;
     std::error_code ec;
     for (const auto &entry: std::filesystem::directory_iterator(std::filesystem::path(simse_toStdString(fixturesDir)), ec)) {
-        if (entry.is_regular_file() && entry.path().extension() == ".simse") {
+        if (entry.is_regular_file() && entry.path().extension() == ".kt") {
             files.push_back(entry.path().string());
         }
     }

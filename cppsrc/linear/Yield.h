@@ -57,9 +57,15 @@ namespace linear {
         List<ast::Field> fields;         // `branch`, then the parameters and the locals
         List<YieldMethod> methods;       // `next`, and `advance` when asked for
         // Why the body could not be turned into a machine (the caller reports it): an
-        // untyped local, since a field needs a type, or a body that uses `this`.
+        // untyped local, since a field needs a type, or a receiver that has no field.
         Str error;
     };
+
+    // The machine's field for the receiver of an extension function (`_sm_self`). The
+    // receiver is an ordinary parameter (`specs/functions.md`), so it lives in the
+    // instance like every other value that crosses a yield; the emitter initialises the
+    // field from its own `self` parameter.
+    Str yieldReceiverField();
 
     // The state machine of one yielding body. `linearBody` is the lowered body (see
     // `Lowered`), `decl` the function it came from, and `elementType` the `..T` the

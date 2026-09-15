@@ -177,7 +177,7 @@ namespace tests {
                 Str path = SIMSE_DEFAULT_PRELUDE;
                 List<Str> files;
                 if (std::filesystem::is_directory(simse_toStdString(path))) {
-                    files = common::filesInDir(path, ".simse");
+                    files = common::filesInDir(path, ".kt");
                 } else if (std::filesystem::exists(simse_toStdString(path))) {
                     files.push_back(path);
                 }

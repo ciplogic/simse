@@ -30,17 +30,20 @@ using sema::unifyType;
 
 namespace codegen {
     namespace {
-        // `--linearCodegen`: see Codegen.h. A module-level switch because the emitter
-        // is built deep inside `emitProgram`, and the flag is a property of the run.
+        // `--linearCodegen`: the *report* - every body is put through both paths and the
+        // differences are listed on stderr (impl_specs/linear-il.md). Off by default: it
+        // is a debugging view, and the emitted file is the same either way.
         bool &linearCodegenFlag() {
             static bool value = false;
             return value;
         }
 
-        // `--linearCodegenEmit`: with the comparison in place, this is the step that
-        // *uses* the IL's text for every body it could express (impl_specs/linear-il.md).
+        // Emit from the IL whenever it can express the body, and from the statement tree
+        // otherwise (`--statementsCodegen` turns it off). On by default: the instruction
+        // list is what codegen reads, and the statement path is the fallback for the
+        // shapes the IL cannot spell yet.
         bool &linearCodegenEmitFlag() {
-            static bool value = false;
+            static bool value = true;
             return value;
         }
 
@@ -63,8 +66,12 @@ namespace codegen {
             ast::TypePtr receiver; // null for plain top-level functions
             Str file;
             List<Str> templateParams; // C++ template type parameters
-            bool prelude = false;    // resolved but never emitted
+            bool prelude = false;    // resolved; emitted only when it has a body
             Str packageName;         // picks the emitted-symbol prefix ("" for rtl)
+            // A data class's method: emitted like a receiver function, but *not* a
+            // plain function - a call by name never reaches it, so the lookups that
+            // resolve a plain call must not find it under that name.
+            bool isMethod = false;
         };
 
         // A native function declaration to emit at the top of the amalgamated
@@ -110,6 +117,7 @@ namespace codegen {
 
             Res<Str> run() {
                 collect();
+                collectProgramNames();
                 // The semantic step on the lowered body reads these
                 // (sema/TypeInfer.h). They are threaded to the emitters rather than
                 // stored on the emitter, like the Simse ring, whose generated data
@@ -139,8 +147,21 @@ namespace codegen {
             bool failed = false;
             Str error;
             Str curFile;
+            // Whether the file being emitted is a prelude one (see `sourceComment`).
+            bool curPrelude = false;
+            // The names the program calls, for the prelude rule in `emitFunctions`.
+            Dictionary<Str, bool> referencedNames;
+            // The types the program names, for the same rule's per-container part: the
+            // prelude has a `smToYield` per container (`List`, `Array`, `Span`), and a
+            // program that iterates one of them should not carry the others' machines.
+            Dictionary<Str, bool> referencedTypes;
 
             Dictionary<Str, const ast::Decl *> types;
+            // The state machines the emitter registered as data classes (one per yielding
+            // function): the type pass never saw them, so the spelling helpers would not
+            // know what `this.<field>` is without it. Owned here because `types` holds
+            // pointers into it.
+            List<std::shared_ptr<ast::Decl>> machineTypes;
             Dictionary<Str, bool> enumNames;
             // Non-prelude data classes we emitted; their construction lowers to
             // the `_make_<Name>` factory instead of an emitted constructor.
@@ -193,6 +214,10 @@ namespace codegen {
             }
 
             void sourceComment(const common::SourcePos &pos) {
+                // A prelude function *with a body* is emitted now (`List<T>.smToYield`), and
+                // where it came from is the compiler's own RTL, not the program the user is
+                // building: naming it would put a machine-specific path in their file.
+                if (curPrelude) return;
                 line(0, "// " + curFile + ":" + std::to_string(pos.line));
             }
 
@@ -214,7 +239,8 @@ namespace codegen {
             }
 
             void addFunction(const ast::Decl *decl, ast::TypePtr receiver, const Str &file,
-                             const List<Str> &templateParams, bool prelude, const Str &package) {
+                             const List<Str> &templateParams, bool prelude, const Str &package,
+                             bool isMethod = false) {
                 Fn fn;
                 fn.decl = decl;
                 fn.receiver = receiver;
@@ -222,6 +248,7 @@ namespace codegen {
                 fn.templateParams = templateParams;
                 fn.prelude = prelude;
                 fn.packageName = package;
+                fn.isMethod = isMethod;
                 functions.push_back(fn);
                 if (receiver) {
                     receiverFnNames[decl->name] = true;
@@ -285,10 +312,12 @@ namespace codegen {
             }
 
             // The package of the plain (non-native) function `name`, or "". Matches
-            // by name only, like the `hasPlainFunction` probes at the call sites.
+            // by name only, like the `hasPlainFunction` probes at the call sites - and
+            // a method is not a plain function, so a call by name cannot resolve to
+            // one (two packages may spell the same method name).
             Str functionPackage(const Str &name) {
                 for (const Fn &fn: functions) {
-                    if (fn.decl->isNative || fn.decl->name != name) continue;
+                    if (fn.decl->isNative || fn.isMethod || fn.decl->name != name) continue;
                     return fn.packageName;
                 }
                 return Str();
@@ -367,7 +396,7 @@ namespace codegen {
                                     methodParams.push_back(param);
                                 }
                                 addFunction(method.get(), receiver, input.fileName, methodParams,
-                                            input.prelude, pkg);
+                                            input.prelude, pkg, true);
                             }
                         }
                     }
@@ -686,10 +715,152 @@ namespace codegen {
                 }
             }
 
+            // ---- prelude reachability ---------------------------------------
+
+            // A prelude body costs a program only what it uses: `List<T>.smToYield` is
+            // written in Simse (impl_specs/for.md), and a program that never iterates a
+            // container should not carry its machine. The rule is a name reachability over
+            // the *calls*: a callee is a name (`f(x)`), a generic name (`f<Int>(x)`) or a
+            // member (`x.m(...)`), and in all three the call site spells it as `text`.
+            void collectNames(const ast::Expr &expr, Dictionary<Str, bool> &names) {
+                if (expr.kind == ExprKind::Call && expr.lhs) {
+                    const ast::Expr &callee = *expr.lhs;
+                    if ((callee.kind == ExprKind::Name || callee.kind == ExprKind::GenericName
+                         || callee.kind == ExprKind::Member)
+                        && !callee.text.empty()) {
+                        names[callee.text] = true;
+                    }
+                }
+                if (expr.lhs) collectNames(*expr.lhs, names);
+                if (expr.rhs) collectNames(*expr.rhs, names);
+                for (const ast::TypePtr &arg: expr.typeArgs) {
+                    collectTypeNames(arg);
+                }
+                for (const ast::TypePtr &param: expr.paramTypes) {
+                    collectTypeNames(param);
+                }
+                for (const ast::ExprPtr &arg: expr.args) {
+                    if (arg) collectNames(*arg, names);
+                }
+                for (const ast::StmtPtr &stmt: expr.body) {
+                    if (stmt) collectNames(*stmt, names);
+                }
+            }
+
+            void collectNames(const ast::Stmt &stmt, Dictionary<Str, bool> &names) {
+                collectTypeNames(stmt.type);
+                const ast::ExprPtr *expressions[] = {&stmt.init,   &stmt.cond, &stmt.target,
+                                                     &stmt.value,   &stmt.returnValue,
+                                                     &stmt.expr};
+                for (const ast::ExprPtr *expression: expressions) {
+                    if (*expression) collectNames(**expression, names);
+                }
+                for (const ast::StmtPtr &child: stmt.body) {
+                    if (child) collectNames(*child, names);
+                }
+                for (const ast::StmtPtr &child: stmt.thenBody) {
+                    if (child) collectNames(*child, names);
+                }
+                for (const ast::StmtPtr &child: stmt.elseBody) {
+                    if (child) collectNames(*child, names);
+                }
+                for (const ast::SwitchCase &arm: stmt.cases) {
+                    if (arm.label) collectNames(*arm.label, names);
+                    for (const ast::StmtPtr &child: arm.body) {
+                        if (child) collectNames(*child, names);
+                    }
+                }
+            }
+
+            void collectNames(const ast::Decl &decl, Dictionary<Str, bool> &names) {
+                collectTypeNames(decl.type);
+                collectTypeNames(decl.targetType);
+                collectTypeNames(decl.receiverType);
+                collectTypeNames(decl.returnType);
+                for (const ast::Field &field: decl.fields) {
+                    collectTypeNames(field.type);
+                }
+                for (const ast::Param &param: decl.params) {
+                    collectTypeNames(param.type);
+                }
+                if (decl.init) collectNames(*decl.init, names);
+                for (const ast::StmtPtr &stmt: decl.body) {
+                    if (stmt) collectNames(*stmt, names);
+                }
+                for (const ast::DeclPtr &method: decl.methods) {
+                    if (method) collectNames(*method, names);
+                }
+            }
+
+            void collectNames(const ast::Module &module, Dictionary<Str, bool> &names) {
+                for (const ast::DeclPtr &decl: module.declarations) {
+                    if (decl) collectNames(*decl, names);
+                }
+            }
+
+            // Whether a prelude body is one the program reaches: its name is called, and -
+            // for an extension - the program names the receiver's type as well. The
+            // prelude has one `smToYield` per container (`impl_specs/for.md`), each
+            // container's machine is that container's only, and the class name is the
+            // receiver's (`outerTypeName`).
+            bool reachesPreludeBody(const Fn &fn) {
+                if (!fn.decl->hasBody) return false;
+                if (referencedNames.count(fn.decl->name) == 0) return false;
+                const Str receiverName = outerTypeName(fn.receiver);
+                if (receiverName.empty()) return true;
+                // A receiver that is the function's own type parameter says nothing -
+                // any type can be one.
+                const bool isTypeParam =
+                    std::find(fn.decl->functionTypeParams.begin(),
+                              fn.decl->functionTypeParams.end(), receiverName)
+                    != fn.decl->functionTypeParams.end();
+                return isTypeParam || referencedTypes.count(receiverName) > 0;
+            }
+
+            // Fills `referencedNames` and `referencedTypes` from the program - never from
+            // the prelude's own unused bodies - and closes both over the prelude the
+            // program reaches: an emitted body may call another, and a native's signature
+            // is what says which types a call reaches (`xs.toArray()` reaches an `Array`).
+            void collectProgramNames() {
+                for (const Input &input: inputs) {
+                    if (input.prelude) continue;
+                    collectNames(input.module, referencedNames);
+                }
+                bool changed = true;
+                while (changed) {
+                    changed = false;
+                    const size_t namesBefore = referencedNames.size();
+                    const size_t typesBefore = referencedTypes.size();
+                    for (const Fn &fn: functions) {
+                        if (!fn.prelude) continue;
+                        if (fn.decl->hasBody) {
+                            if (!reachesPreludeBody(fn)) continue;
+                            collectNames(*fn.decl, referencedNames);
+                            continue;
+                        }
+                        if (referencedNames.count(fn.decl->name) == 0) continue;
+                        collectTypeNames(fn.receiver);
+                        collectTypeNames(fn.decl->returnType);
+                        for (const ast::Param &param: fn.decl->params) {
+                            collectTypeNames(param.type);
+                        }
+                    }
+                    if (referencedNames.size() != namesBefore
+                        || referencedTypes.size() != typesBefore) {
+                        changed = true;
+                    }
+                }
+            }
+
             void emitFunctions(bool prototypeOnly, const sema::Facts &facts) {
                 for (const Fn &fn: functions) {
-                    if (fn.prelude) continue;
+                    // A prelude input is declarations-only *unless it has a body*, and a
+                    // prelude `fun` with a body is a function the language itself
+                    // provides - `List<T>.smToYield(): ..T` (impl_specs/for.md), emitted
+                    // when the program reaches it (`reachesPreludeBody`).
+                    if (fn.prelude && !reachesPreludeBody(fn)) continue;
                     curFile = fn.file;
+                    curPrelude = fn.prelude;
                     emitFunction(fn, prototypeOnly, facts);
                     if (failed) return;
                 }
@@ -739,6 +910,61 @@ namespace codegen {
                        && type->typeArgs[0]->name == "Str";
             }
 
+            // The outer name of a type, ignoring handles and arguments: `*List<Int>` and
+            // `List<Str>` are both `List` - the name a receiver and a machine class are
+            // spelled with.
+            static Str outerTypeName(const ast::TypePtr &type) {
+                const ast::TypeExpr *t = type.get();
+                while (t && (t->kind == TypeKind::Reference || t->kind == TypeKind::Pointer)
+                       && t->inner) {
+                    t = t->inner.get();
+                }
+                if (!t || (t->kind != TypeKind::Named && t->kind != TypeKind::Generic)) {
+                    return "";
+                }
+                return t->name;
+            }
+
+            // Every type name in a type expression, nesting included: `List<Array<Int>>`
+            // names both. Fills `referencedTypes` (see its declaration).
+            void collectTypeNames(const ast::TypePtr &type) {
+                if (!type) return;
+                const Str outer = outerTypeName(type);
+                if (!outer.empty()) referencedTypes[outer] = true;
+                for (const ast::TypePtr &arg: type->typeArgs) {
+                    collectTypeNames(arg);
+                }
+                collectTypeNames(type->inner);
+                collectTypeNames(type->returnType);
+                for (const ast::TypePtr &param: type->paramTypes) {
+                    collectTypeNames(param);
+                }
+            }
+
+            // The name a machine's class is derived from: the function's own, prefixed
+            // with the receiver's outer type name when the function is an extension
+            // (`List<T>`'s `smToYield` is `List_smToYield`). The prelude provides a
+            // `smToYield` per container (`impl_specs/for.md`), so the function name alone
+            // would give every container's machine the same class name.
+            static Str machineName(const Fn &fn) {
+                if (!fn.receiver) return fn.decl->name;
+                const Str outer = outerTypeName(fn.receiver);
+                if (outer.empty()) return fn.decl->name;
+                return outer + "_" + fn.decl->name;
+            }
+
+            // The names the body's own C++ scope already has: the parameters (and `self`,
+            // and the two the argv form of `main` writes). A hoisted declaration may not
+            // collide with one of them, so the hoisting renames it away
+            // (`linear::finishForEmission`'s `reserved`).
+            static List<Str> reservedNames(const ast::Decl &decl, bool hasSelf, bool argv) {
+                List<Str> names;
+                if (hasSelf) names.push_back("self");
+                for (const ast::Param &param: decl.params) names.push_back(param.name);
+                if (argv) names.push_back("simse_argIndex");
+                return names;
+            }
+
             void emitFunction(const Fn &fn, bool prototypeOnly, const sema::Facts &facts) {
                 const ast::Decl &decl = *fn.decl;
                 // Native functions are declared by emitNativeDeclarations, not here.
@@ -759,18 +985,17 @@ namespace codegen {
                 // wrote.
                 const bool yielding = decl.returnType
                                       && decl.returnType->kind == ast::TypeKind::Yield;
+                // The class the machine is: its *name* is what the emitted function
+                // returns, and for a generic function the class is a template, so the
+                // name carries the function's type parameters wherever it is a type
+                // (inside the class the injected-class-name covers `self`).
+                const Str yieldClass = qualify(fn.packageName, machineName(fn)) + "_yieldable";
+                Str yieldType = yieldClass;
                 if (yielding && !decl.functionTypeParams.empty()) {
-                    // A machine is a class with one field per value that lives across a
-                    // yield, and those fields would have to be the type parameters
-                    // themselves (impl_specs/yield.md). Without that, the class is not a
-                    // template and the emitted C++ would name `T` outside any scope, so
-                    // say it here instead of letting the compiler complain.
-                    fail(decl.pos, "unsupported: a generic function cannot yield yet");
-                    return;
+                    yieldType = yieldClass + "<" + join(decl.functionTypeParams, ", ") + ">";
                 }
-                const Str yieldClass = qualify(fn.packageName, decl.name) + "_yieldable";
                 Str ret = isMain ? "int"
-                                 : (yielding ? yieldClass
+                                 : (yielding ? yieldType
                                              : (decl.returnType ? type(*decl.returnType)
                                                                 : Str("void")));
                 if (failed) return;
@@ -818,7 +1043,8 @@ namespace codegen {
                 if (yielding) {
                     // The machine + the factory, and nothing else: the body of the source
                     // function *is* the machine.
-                    emitYieldable(fn, decl, yieldClass, prototypeOnly, selfK, selfTypePtr, facts);
+                    emitYieldable(fn, decl, yieldClass, yieldType, prototypeOnly, selfK, selfTypePtr,
+                                  facts);
                     return;
                 }
                 if (prototypeOnly) {
@@ -862,7 +1088,8 @@ namespace codegen {
                 semantics.selfType = selfTypePtr;
                 semantics.typeParams = fn.templateParams;
                 List<ast::StmtPtr> typed = sema::inferTypes(lowered, facts, semantics);
-                List<ast::StmtPtr> finalBody = linear::finishForEmission(typed);
+                List<ast::StmtPtr> finalBody = linear::finishForEmission(
+                        typed, reservedNames(decl, fn.receiver != nullptr, mainArgs));
                 dumpIl(fn, decl, finalBody);
                 emitBodyChecked(fn, decl, finalBody);
                 if (failed) return;
@@ -970,48 +1197,61 @@ namespace codegen {
                 const int prefix = (int) out.size();
                 emitStmts(body, level);
                 if (failed) return;
-                if (!linearCodegenFlag()) return;
+                // Nothing to do when the report is off and the statement path is in
+                // charge (`--statementsCodegen`).
+                if (!linearCodegenFlag() && !linearCodegenEmitFlag()) return;
 
                 const Str reference = out.substr(prefix);
-                ilBodies++;
+                if (linearCodegenFlag()) ilBodies++;
                 const linear::IlUnit il = linear::extractIlUnit(info, body, file);
                 Str text;
                 Str reason;
                 if (!emitIlBodyText(il, level, text, reason)) {
-                    ilFallback++;
-                    noteIl(il.body.symbol + ": not expressible yet (" + reason + ")");
-                    return;
+                    if (linearCodegenFlag()) {
+                        ilFallback++;
+                        noteIl(il.body.symbol + ": not expressible yet (" + reason + ")");
+                    }
+                    return; // the statement text stays
                 }
                 const bool closureBody = !il.closures.empty();
                 if (!ilFlatEqual(reference, text)) {
-                    ilDifferent++;
-                    noteIl(il.body.symbol + ": " + ilFirstDifference(reference, text));
+                    if (linearCodegenFlag()) {
+                        ilDifferent++;
+                        noteIl(il.body.symbol + ": " + ilFirstDifference(reference, text));
+                    }
+                    // The one difference the closure model owns: a lambda is a class
+                    // here, not a `[=]` capture list, so the body's text differs by
+                    // construction (the *code* is the same). Anything else keeps the
+                    // statement text.
                     if (closureBody && linearCodegenEmitFlag()) {
-                        // The one difference the closure model owns: a lambda is a class
-                        // here, not a `[=]` capture list, so the body's text differs by
-                        // construction (the *code* is the same).
                         Str classes;
                         if (!emitClosureClasses(il, classes, reason)) {
-                            ilFallback++;
-                            noteIl(il.body.symbol + ": a closure class could not be written ("
-                                   + reason + ")");
+                            if (linearCodegenFlag()) {
+                                ilFallback++;
+                                noteIl(il.body.symbol + ": a closure class could not be written ("
+                                       + reason + ")");
+                            }
                             return;
                         }
                         out = out.substr(0, prefix) + classes + text;
                     }
                     return;
                 }
-                if (text == reference) {
-                    ilSame++;
-                } else {
-                    ilFlat++; // the same code, with the blocks folded away
+                if (linearCodegenFlag()) {
+                    if (text == reference) {
+                        ilSame++;
+                    } else {
+                        ilFlat++; // the same code, with the blocks folded away
+                    }
                 }
                 if (linearCodegenEmitFlag()) {
                     Str classes;
                     if (closureBody && !emitClosureClasses(il, classes, reason)) {
-                        ilFallback++;
-                        noteIl(il.body.symbol + ": a closure class could not be written ("
-                               + reason + ")");
+                        if (linearCodegenFlag()) {
+                            ilFallback++;
+                            noteIl(il.body.symbol + ": a closure class could not be written ("
+                                   + reason + ")");
+                        }
                         return;
                     }
                     out = out.substr(0, prefix) + classes + text;
@@ -1536,6 +1776,9 @@ namespace codegen {
                 for (int i = 0; i < (int) il.ops.size(); i++) {
                     const linear::IlOp &op = il.ops[i];
                     if (op.name != "Declare" && op.name != "DeclareInit") continue;
+                    // A declaration that prints nothing - the folding inlines it at its use -
+                    // keeps nothing legal, so it asks for no block either.
+                    if (ilFolded(il, frame, ilOperandAt(op.operands, 0))) continue;
                     const IlCrossing crossing = ilJumpCrossing(il, i);
                     if (crossing.end >= 0) blockEnd[i] = crossing.end;
                 }
@@ -1925,7 +2168,7 @@ namespace codegen {
             // local iterator is a local struct; `&evens(n)` boxes a copy for a life
             // that outlives the frame (the language's `&T`, as everywhere else).
             void emitYieldable(const Fn &fn, const ast::Decl &decl, const Str &className,
-                               bool prototypeOnly, NameKind selfK,
+                               const Str &classType, bool prototypeOnly, NameKind selfK,
                                const ast::TypePtr &selfTypePtr, const sema::Facts &facts) {
                 if (decl.returnType->inner == nullptr) {
                     fail(decl.pos, "unsupported: '..' without an element type");
@@ -1946,7 +2189,15 @@ namespace codegen {
                     semantics.selfType = selfTypePtr;
                     semantics.typeParams = fn.templateParams;
                     List<ast::StmtPtr> typed = sema::inferTypes(lowered, facts, semantics);
-                    List<ast::StmtPtr> finalBody = linear::finishForEmission(typed);
+                    // The machine's methods: the body's storage is the machine's fields
+                    // (`this->`), and the names a method has of its own are the pointer
+                    // `advance` writes through, the dispatcher's branch and the receiver
+                    // field - a local of any of those names would alias one of them.
+                    List<Str> machineReserved;
+                    machineReserved.push_back("value");
+                    machineReserved.push_back("branch");
+                    machineReserved.push_back("_sm_self");
+                    List<ast::StmtPtr> finalBody = linear::finishForEmission(typed, machineReserved);
                     const linear::Yielded machine =
                             linear::lowerYield(decl, elementType, finalBody, Str("advance"));
                     if (!machine.error.empty()) {
@@ -1957,26 +2208,41 @@ namespace codegen {
                     if (failed) return;
                 }
 
+                const Str factory = classType + " " + qualify(fn.packageName, decl.name);
+                const List<Str> factoryParams = parameterList(fn, decl);
+                const Str tmpl = templateClause(fn.templateParams);
                 if (prototypeOnly) {
-                    line(0, className + " " + qualify(fn.packageName, decl.name) + "("
-                                 + join(parameterList(decl), ", ") + ");");
+                    if (!tmpl.empty()) line(0, tmpl);
+                    line(0, factory + "(" + join(factoryParams, ", ") + ");");
                     return;
                 }
                 sourceComment(decl.pos);
-                line(0, className + " " + qualify(fn.packageName, decl.name) + "("
-                             + join(parameterList(decl), ", ") + ") {");
-                line(1, className + " machine{};");
+                if (!tmpl.empty()) line(0, tmpl);
+                line(0, factory + "(" + join(factoryParams, ", ") + ") {");
+                line(1, classType + " machine{};");
                 for (const ast::Param &param: decl.params) {
                     line(1, "machine." + param.name + " = " + param.name + ";");
+                }
+                if (decl.receiverType) {
+                    // The receiver of an extension function crosses a yield like any other
+                    // value, so it is a field and the factory fills it from its own `self`
+                    // parameter (linear::yieldReceiverField).
+                    line(1, "machine." + linear::yieldReceiverField() + " = self;");
                 }
                 line(1, "machine.branch = 0;");
                 line(1, "return machine;");
                 line(0, "}");
             }
 
-            // The parameters of a function, `T name`, as the emitted C++.
-            List<Str> parameterList(const ast::Decl &decl) {
+            // The parameters of the factory: the receiver first when the function has one
+            // (an extension function's receiver is an ordinary parameter in the emitted
+            // C++, `T* self` for a value receiver), then the declaration's own.
+            List<Str> parameterList(const Fn &fn, const ast::Decl &decl) {
                 List<Str> params;
+                if (fn.receiver) {
+                    params.push_back(receiverParam(fn.receiver));
+                    if (failed) return params;
+                }
                 for (const ast::Param &param: decl.params) {
                     if (!param.type) {
                         fail(param.pos, "unsupported: parameter '" + param.name + "' without a type");
@@ -1988,10 +2254,31 @@ namespace codegen {
                 return params;
             }
 
+            // The machine is a class the type pass never saw - it is the lowering's own
+            // output - so its fields are registered as a data class here. That is what
+            // tells the spelling helpers what `this.<field>` is: a receiver field is a
+            // *pointer* (`T* self`), so `this._sm_self.size()` reaches through it rather
+            // than taking its address, and a method's parameter that shares a field's name
+            // still resolves to the parameter (the frame, not this table, decides names).
+            void registerMachineType(const Str &className, const linear::Yielded &machine) {
+                auto decl = std::make_shared<ast::Decl>();
+                decl->kind = ast::DeclKind::DataClass;
+                decl->name = className;
+                decl->fields = machine.fields;
+                types[className] = decl.get();
+                machineTypes.push_back(decl);
+            }
+
             // The machine itself: the fields, then one method per way of advancing it.
             void emitMachine(const Fn &fn, const ast::Decl &decl, const Str &className,
                              const ast::TypePtr &elementType, const linear::Yielded &machine) {
                 sourceComment(decl.pos);
+                registerMachineType(className, machine);
+                // A generic function's machine is a class template: its fields are typed
+                // with the function's type parameters, so the emitted C++ has to declare
+                // them where it uses them (impl_specs/yield.md).
+                const Str tmpl = templateClause(fn.templateParams);
+                if (!tmpl.empty()) line(0, tmpl);
                 line(0, "struct " + className + " {");
                 for (const ast::Field &field: machine.fields) {
                     if (!field.type) {
@@ -2525,10 +2812,11 @@ namespace codegen {
                 return nullptr;
             }
 
-            // A non-native function with the given name and parameter count.
+            // A non-native function with the given name and parameter count. A method
+            // is not one: a plain call reaches only what the module declares.
             const ast::Decl *findFunction(const Str &name, int argCount) {
                 for (const Fn &fn: functions) {
-                    if (fn.decl->isNative || fn.decl->name != name) continue;
+                    if (fn.decl->isNative || fn.isMethod || fn.decl->name != name) continue;
                     if ((int) fn.decl->params.size() == argCount) return fn.decl;
                 }
                 return nullptr;
@@ -2620,13 +2908,17 @@ namespace codegen {
                     lambdaBody.push_back(ret);
                     Str saved = out;
                     out.clear();
-                    emitStmts(linear::finishForEmission(linear::lowerForEmission(lambdaBody)), 1);
+                    emitStmts(linear::finishForEmission(linear::lowerForEmission(lambdaBody),
+                                                       e.paramNames),
+                              1);
                     body = out;
                     out = saved;
                 } else {
                     Str saved = out;
                     out.clear();
-                    emitStmts(linear::finishForEmission(linear::lowerForEmission(e.body)), 1);
+                    emitStmts(linear::finishForEmission(linear::lowerForEmission(e.body),
+                                                        e.paramNames),
+                              1);
                     body = out;
                     out = saved;
                 }
@@ -2880,6 +3172,17 @@ namespace codegen {
                                + ">::" + callee.text + "(" + join(args, ", ") + ")";
                     }
 
+                    // Machine identity: `x.smToYield()` on a machine *is* `x`. That is the
+                    // wrap a `for` puts around what it iterates, and `..T` is not a
+                    // spellable type, so the identity is the backend's rather than a
+                    // function's (impl_specs/for.md).
+                    if (callee.text == "smToYield" && callee.lhs) {
+                        ast::TypePtr identityType = inferType(*callee.lhs);
+                        const ast::TypeExpr *identityRecv = pointee(identityType);
+                        if (identityRecv && identityRecv->kind == TypeKind::Yield) {
+                            return expr(*callee.lhs, 0);
+                        }
+                    }
                     ast::TypePtr receiverType = inferType(*callee.lhs);
                     const ast::TypeExpr *receiver = pointee(receiverType);
                     if (receiver) {

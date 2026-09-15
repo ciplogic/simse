@@ -1,7 +1,7 @@
 //
 // Differential Simse driver for the C++ emitter. This translation unit is
 // compiled together with the C++ emitted by
-// `simse_transpile cppsrc/codegen/Codegen.simse` (included directly, because the
+// `simse_transpile cppsrc/codegen/Codegen.kt` (included directly, because the
 // generated file has no header; it also carries the transpiled sema, parser, and
 // scanner through its imports). It scans and parses each fixture with the
 // generated front end and emits C++ with the generated `ns1_emitProgram`, matching
@@ -19,7 +19,7 @@
 #include <string>
 #include <vector>
 
-#include "Codegen.simse.cpp"
+#include "Codegen.kt.cpp"
 
 // The generated translation unit qualifies every package's declarations with
 // `ns<index>_`, numbered in sorted package order (impl_specs/rtl-abi.md):
@@ -44,7 +44,7 @@ namespace {
         std::error_code ec;
         if (!std::filesystem::is_directory(std::filesystem::path(simse_toStdString(dir)), ec)) return files;
         for (const auto &entry: std::filesystem::recursive_directory_iterator(std::filesystem::path(simse_toStdString(dir)), ec)) {
-            if (entry.is_regular_file() && entry.path().extension() == ".simse") {
+            if (entry.is_regular_file() && entry.path().extension() == ".kt") {
                 files.push_back(entry.path().string());
             }
         }
@@ -74,7 +74,7 @@ namespace {
         return true;
     }
 
-    // The default prelude is a directory: every `*.simse` in it is parsed and its
+    // The default prelude is a directory: every `*.kt` in it is parsed and its
     // declarations merged into one module, mirroring tests::defaultPrelude.
     AstXmlNode mergePrelude(const std::vector<std::string> &files) {
         AstXmlNode merged;

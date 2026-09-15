@@ -777,7 +777,8 @@ namespace linear {
                     body.push_back(ret);
                 }
                 Extractor inner(info, out.file, unit, closureCounter);
-                IlBody innerBody = inner.run(finishForEmission(lowerForEmission(body)));
+                IlBody innerBody =
+                        inner.run(finishForEmission(lowerForEmission(body), info.paramNames));
 
                 IlClosure closure;
                 closure.symbol = symbol;

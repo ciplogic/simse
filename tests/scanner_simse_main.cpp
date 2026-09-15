@@ -1,6 +1,6 @@
 //
 // Differential Simse driver. This translation unit is compiled together with
-// the C++ emitted by `simse_transpile cppsrc/lex/ns2_Scanner.simse` (included
+// the C++ emitted by `simse_transpile cppsrc/lex/ns2_Scanner.kt` (included
 // directly, because the generated file has no header) plus this hand-written
 // driver. It prints the SAME canonical dump as tests/scanner_ref_main.cpp so the
 // build can diff the two implementations:
@@ -23,7 +23,7 @@
 #include <system_error>
 #include <vector>
 
-#include "Scanner.simse.cpp"
+#include "Scanner.kt.cpp"
 
 // The generated translation unit qualifies every package's declarations with
 // `ns<index>_`, numbered in sorted package order (impl_specs/rtl-abi.md). This
@@ -74,7 +74,7 @@ int main(int argc, char **argv) {
     std::vector<std::string> files;
     std::error_code ec;
     for (const auto &entry: std::filesystem::directory_iterator(std::filesystem::path(simse_toStdString(fixturesDir)), ec)) {
-        if (entry.is_regular_file() && entry.path().extension() == ".simse") {
+        if (entry.is_regular_file() && entry.path().extension() == ".kt") {
             files.push_back(entry.path().string());
         }
     }

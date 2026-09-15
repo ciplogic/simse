@@ -53,10 +53,10 @@ add_library(simse_lib STATIC
         cppsrc/rtl/strops.hpp
         cppsrc/rtl/dictops.hpp
         cppsrc/rtl/fs.hpp
-        cppsrc/rtl/rtl.simse
-        cppsrc/rtl/xml.simse
-        cppsrc/rtl/Span.simse
-        cppsrc/rtl/StrView.simse
+        cppsrc/rtl/rtl.kt
+        cppsrc/rtl/xml.kt
+        cppsrc/rtl/Span.kt
+        cppsrc/rtl/StrView.kt
         cppsrc/rtl/optional.hpp
         cppsrc/rtl/functional.hpp
         cppsrc/rtl/result.hpp
@@ -90,7 +90,7 @@ add_library(simse_lib STATIC
 
 # The RTL surface the transpiler loads as a prelude (no import required) and the
 # repository root used to resolve `import a.b.c` directories. The prelude is a
-# *directory*: every `*.simse` in it (rtl.simse, xml.simse) is loaded into the
+# *directory*: every `*.kt` in it (rtl.kt, xml.kt) is loaded into the
 # shared module scope. The paths are baked in so the CLI, the build, and the
 # in-process test harness agree regardless of the working directory.
 target_compile_definitions(simse_lib PUBLIC
@@ -136,25 +136,25 @@ target_compile_definitions(simse_tests PRIVATE
 set(SIMSE_REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}")
 
 # --- T11: differential scanner (hand-written C++ vs transpiled Simse) --------
-# Scanner.simse is transpiled and compiled with a small hand-written driver. The
+# Scanner.kt is transpiled and compiled with a small hand-written driver. The
 # reference driver uses the hand-written lex::Scanner. Both print the same
-# canonical token dump over tests/fixtures/*.simse; the build diffs them. This is
+# canonical token dump over tests/fixtures/*.kt; the build diffs them. This is
 # part of ALL so a normal build exercises the port.
 set(SIMSE_SELFHOST_DIR "${CMAKE_BINARY_DIR}/selfhost")
-set(SIMSE_SCANNER_GENERATED "${SIMSE_SELFHOST_DIR}/Scanner.simse.cpp")
+set(SIMSE_SCANNER_GENERATED "${SIMSE_SELFHOST_DIR}/Scanner.kt.cpp")
 set(SIMSE_SCANNER_FIXTURES "${SIMSE_REPO_ROOT}/tests/fixtures")
 
 add_custom_command(
         OUTPUT "${SIMSE_SCANNER_GENERATED}"
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${SIMSE_SELFHOST_DIR}"
         COMMAND $<TARGET_FILE:simse_transpile>
-                "${SIMSE_REPO_ROOT}/cppsrc/lex/Scanner.simse"
+                "${SIMSE_REPO_ROOT}/cppsrc/lex/Scanner.kt"
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/common"
                 -o "${SIMSE_SCANNER_GENERATED}"
-        DEPENDS "${SIMSE_REPO_ROOT}/cppsrc/lex/Scanner.simse"
-                "${SIMSE_REPO_ROOT}/cppsrc/common/common.simse"
+        DEPENDS "${SIMSE_REPO_ROOT}/cppsrc/lex/Scanner.kt"
+                "${SIMSE_REPO_ROOT}/cppsrc/common/common.kt"
                 simse_transpile
-        COMMENT "T11: transpiling Scanner.simse"
+        COMMENT "T11: transpiling Scanner.kt"
         VERBATIM)
 
 add_executable(scanner_ref tests/scanner_ref_main.cpp)
@@ -180,32 +180,32 @@ add_custom_target(scanner_diff ALL
         COMMAND "${CMAKE_COMMAND}"
                 -DEXE=$<TARGET_FILE:scanner_simse>
                 -DEXE_ARGS=${SIMSE_SCANNER_FIXTURES}
-                -DOUT=${SIMSE_SELFHOST_DIR}/scanner.simse.out
+                -DOUT=${SIMSE_SELFHOST_DIR}/scanner.kt.out
                 -DWORKDIR=${SIMSE_REPO_ROOT}
                 -P "${SIMSE_REPO_ROOT}/tests/run_capture.cmake"
         COMMAND "${CMAKE_COMMAND}" -E compare_files --ignore-eol
                 "${SIMSE_SELFHOST_DIR}/scanner.ref.out"
-                "${SIMSE_SELFHOST_DIR}/scanner.simse.out"
+                "${SIMSE_SELFHOST_DIR}/scanner.kt.out"
         DEPENDS scanner_ref scanner_simse
         COMMENT "T11: diffing hand-written and transpiled scanner token dumps"
         VERBATIM)
 
 # --- T11: differential skeleton parser (hand-written vs transpiled) ----------
-# SkeletonParser.simse is transpiled together with its transitive `import
-# cppsrc.lex` (which pulls in Scanner.simse and common). Both drivers parse the
+# SkeletonParser.kt is transpiled together with its transitive `import
+# cppsrc.lex` (which pulls in Scanner.kt and common). Both drivers parse the
 # same fixtures and print the shared tree dump; the build diffs them.
-set(SIMSE_SKEL_GENERATED "${SIMSE_SELFHOST_DIR}/SkeletonParser.simse.cpp")
+set(SIMSE_SKEL_GENERATED "${SIMSE_SELFHOST_DIR}/SkeletonParser.kt.cpp")
 
 add_custom_command(
         OUTPUT "${SIMSE_SKEL_GENERATED}"
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${SIMSE_SELFHOST_DIR}"
         COMMAND $<TARGET_FILE:simse_transpile>
-                "${SIMSE_REPO_ROOT}/cppsrc/skelparser/SkeletonParser.simse"
+                "${SIMSE_REPO_ROOT}/cppsrc/skelparser/SkeletonParser.kt"
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/common"
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/lex"
                 -o "${SIMSE_SKEL_GENERATED}"
-        DEPENDS "${SIMSE_REPO_ROOT}/cppsrc/skelparser/SkeletonParser.simse" simse_transpile
-        COMMENT "T11: transpiling SkeletonParser.simse"
+        DEPENDS "${SIMSE_REPO_ROOT}/cppsrc/skelparser/SkeletonParser.kt" simse_transpile
+        COMMENT "T11: transpiling SkeletonParser.kt"
         VERBATIM)
 
 add_executable(skel_ref tests/skel_ref_main.cpp)
@@ -229,33 +229,33 @@ add_custom_target(skel_diff ALL
         COMMAND "${CMAKE_COMMAND}"
                 -DEXE=$<TARGET_FILE:skel_simse>
                 -DEXE_ARGS=${SIMSE_SCANNER_FIXTURES}
-                -DOUT=${SIMSE_SELFHOST_DIR}/skel.simse.out
+                -DOUT=${SIMSE_SELFHOST_DIR}/skel.kt.out
                 -DWORKDIR=${SIMSE_REPO_ROOT}
                 -P "${SIMSE_REPO_ROOT}/tests/run_capture.cmake"
         COMMAND "${CMAKE_COMMAND}" -E compare_files --ignore-eol
                 "${SIMSE_SELFHOST_DIR}/skel.ref.out"
-                "${SIMSE_SELFHOST_DIR}/skel.simse.out"
+                "${SIMSE_SELFHOST_DIR}/skel.kt.out"
         DEPENDS skel_ref skel_simse
         COMMENT "T11: diffing hand-written and transpiled skeleton-parser dumps"
         VERBATIM)
 
 # --- T19: differential parser (hand-written vs transpiled) -------------------
-# Parser.simse is transpiled together with its transitive `import cppsrc.lex`.
+# Parser.kt is transpiled together with its transitive `import cppsrc.lex`.
 # Both drivers parse the same fixtures and print the shared XmlNode dump. The
 # reference driver also checks itself against tests/golden/*.astxml.expected, so
 # this step proves `reference == golden` and `simse == reference`.
-set(SIMSE_PARSER_GENERATED "${SIMSE_SELFHOST_DIR}/Parser.simse.cpp")
+set(SIMSE_PARSER_GENERATED "${SIMSE_SELFHOST_DIR}/Parser.kt.cpp")
 
 add_custom_command(
         OUTPUT "${SIMSE_PARSER_GENERATED}"
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${SIMSE_SELFHOST_DIR}"
         COMMAND $<TARGET_FILE:simse_transpile>
-                "${SIMSE_REPO_ROOT}/cppsrc/parser/Parser.simse"
+                "${SIMSE_REPO_ROOT}/cppsrc/parser/Parser.kt"
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/common"
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/lex"
                 -o "${SIMSE_PARSER_GENERATED}"
-        DEPENDS "${SIMSE_REPO_ROOT}/cppsrc/parser/Parser.simse" simse_transpile
-        COMMENT "T19: transpiling Parser.simse"
+        DEPENDS "${SIMSE_REPO_ROOT}/cppsrc/parser/Parser.kt" simse_transpile
+        COMMENT "T19: transpiling Parser.kt"
         VERBATIM)
 
 add_executable(parser_ref tests/parser_ref_main.cpp)
@@ -279,39 +279,39 @@ add_custom_target(parser_diff ALL
         COMMAND "${CMAKE_COMMAND}"
                 -DEXE=$<TARGET_FILE:parser_simse>
                 -DEXE_ARGS=${SIMSE_SCANNER_FIXTURES}
-                -DOUT=${SIMSE_SELFHOST_DIR}/parser.simse.out
+                -DOUT=${SIMSE_SELFHOST_DIR}/parser.kt.out
                 -DWORKDIR=${SIMSE_REPO_ROOT}
                 -P "${SIMSE_REPO_ROOT}/tests/run_capture.cmake"
         COMMAND "${CMAKE_COMMAND}" -E compare_files --ignore-eol
                 "${SIMSE_SELFHOST_DIR}/parser.ref.out"
-                "${SIMSE_SELFHOST_DIR}/parser.simse.out"
+                "${SIMSE_SELFHOST_DIR}/parser.kt.out"
         DEPENDS parser_ref parser_simse
         COMMENT "T19: diffing hand-written and transpiled parser XmlNode dumps"
         VERBATIM)
 
 # --- T21: differential sema (hand-written vs transpiled) ---------------------
-# Sema.simse is transpiled together with its transitive `import cppsrc.parser`
-# (which pulls in Scanner.simse and common). Both drivers print the diagnostics
+# Sema.kt is transpiled together with its transitive `import cppsrc.parser`
+# (which pulls in Scanner.kt and common). Both drivers print the diagnostics
 # for the same fixtures; the reference driver also checks itself against
 # tests/golden/*.sema.expected, so this proves `reference == golden` and
 # `simse == reference`.
-set(SIMSE_SEMA_GENERATED "${SIMSE_SELFHOST_DIR}/Sema.simse.cpp")
+set(SIMSE_SEMA_GENERATED "${SIMSE_SELFHOST_DIR}/Sema.kt.cpp")
 add_custom_command(
         OUTPUT "${SIMSE_SEMA_GENERATED}"
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${SIMSE_SELFHOST_DIR}"
         COMMAND $<TARGET_FILE:simse_transpile>
-                "${SIMSE_REPO_ROOT}/cppsrc/sema/Sema.simse"
+                "${SIMSE_REPO_ROOT}/cppsrc/sema/Sema.kt"
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/common"
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/lex"
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/parser"
                 -o "${SIMSE_SEMA_GENERATED}"
         DEPENDS
-                "${SIMSE_REPO_ROOT}/cppsrc/sema/Sema.simse"
-                "${SIMSE_REPO_ROOT}/cppsrc/parser/Parser.simse"
-                "${SIMSE_REPO_ROOT}/cppsrc/lex/Scanner.simse"
-                "${SIMSE_REPO_ROOT}/cppsrc/common/common.simse"
+                "${SIMSE_REPO_ROOT}/cppsrc/sema/Sema.kt"
+                "${SIMSE_REPO_ROOT}/cppsrc/parser/Parser.kt"
+                "${SIMSE_REPO_ROOT}/cppsrc/lex/Scanner.kt"
+                "${SIMSE_REPO_ROOT}/cppsrc/common/common.kt"
                 simse_transpile
-        COMMENT "T21: transpiling Sema.simse"
+        COMMENT "T21: transpiling Sema.kt"
         VERBATIM)
 
 add_executable(sema_ref tests/sema_ref_main.cpp)
@@ -337,28 +337,28 @@ add_custom_target(sema_diff ALL
         COMMAND "${CMAKE_COMMAND}"
                 -DEXE=$<TARGET_FILE:sema_simse>
                 -DEXE_ARGS=${SIMSE_SCANNER_FIXTURES}
-                -DOUT=${SIMSE_SELFHOST_DIR}/sema.simse.out
+                -DOUT=${SIMSE_SELFHOST_DIR}/sema.kt.out
                 -DWORKDIR=${SIMSE_REPO_ROOT}
                 -P "${SIMSE_REPO_ROOT}/tests/run_capture.cmake"
         COMMAND "${CMAKE_COMMAND}" -E compare_files --ignore-eol
                 "${SIMSE_SELFHOST_DIR}/sema.ref.out"
-                "${SIMSE_SELFHOST_DIR}/sema.simse.out"
+                "${SIMSE_SELFHOST_DIR}/sema.kt.out"
         DEPENDS sema_ref sema_simse
         COMMENT "T21: diffing hand-written and transpiled sema diagnostics"
         VERBATIM)
 
 # --- T22: differential codegen (hand-written vs transpiled) ------------------
-# Codegen.simse is transpiled together with its transitive `import cppsrc.sema`
+# Codegen.kt is transpiled together with its transitive `import cppsrc.sema`
 # (which pulls in the parser, scanner, and common/xmlutil). Both drivers emit
 # C++ for the same fixtures; the reference driver also checks itself against
 # tests/golden/*.cpp.expected, so this proves `reference == golden` and
 # `simse == reference`.
-set(SIMSE_CODEGEN_GENERATED "${SIMSE_SELFHOST_DIR}/Codegen.simse.cpp")
+set(SIMSE_CODEGEN_GENERATED "${SIMSE_SELFHOST_DIR}/Codegen.kt.cpp")
 add_custom_command(
         OUTPUT "${SIMSE_CODEGEN_GENERATED}"
         COMMAND "${CMAKE_COMMAND}" -E make_directory "${SIMSE_SELFHOST_DIR}"
         COMMAND $<TARGET_FILE:simse_transpile>
-                "${SIMSE_REPO_ROOT}/cppsrc/codegen/Codegen.simse"
+                "${SIMSE_REPO_ROOT}/cppsrc/codegen/Codegen.kt"
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/common"
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/lex"
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/parser"
@@ -366,18 +366,18 @@ add_custom_command(
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/linear"
                 -o "${SIMSE_CODEGEN_GENERATED}"
         DEPENDS
-                "${SIMSE_REPO_ROOT}/cppsrc/codegen/Codegen.simse"
-                "${SIMSE_REPO_ROOT}/cppsrc/sema/Sema.simse"
-                "${SIMSE_REPO_ROOT}/cppsrc/sema/TypeInfer.simse"
-                "${SIMSE_REPO_ROOT}/cppsrc/linear/ExpressionLowering.simse"
-                "${SIMSE_REPO_ROOT}/cppsrc/linear/Linear.simse"
-                "${SIMSE_REPO_ROOT}/cppsrc/linear/Simplify.simse"
-                "${SIMSE_REPO_ROOT}/cppsrc/parser/Parser.simse"
-                "${SIMSE_REPO_ROOT}/cppsrc/lex/Scanner.simse"
-                "${SIMSE_REPO_ROOT}/cppsrc/common/common.simse"
-                "${SIMSE_REPO_ROOT}/cppsrc/common/xmlutil.simse"
+                "${SIMSE_REPO_ROOT}/cppsrc/codegen/Codegen.kt"
+                "${SIMSE_REPO_ROOT}/cppsrc/sema/Sema.kt"
+                "${SIMSE_REPO_ROOT}/cppsrc/sema/TypeInfer.kt"
+                "${SIMSE_REPO_ROOT}/cppsrc/linear/ExpressionLowering.kt"
+                "${SIMSE_REPO_ROOT}/cppsrc/linear/Linear.kt"
+                "${SIMSE_REPO_ROOT}/cppsrc/linear/Simplify.kt"
+                "${SIMSE_REPO_ROOT}/cppsrc/parser/Parser.kt"
+                "${SIMSE_REPO_ROOT}/cppsrc/lex/Scanner.kt"
+                "${SIMSE_REPO_ROOT}/cppsrc/common/common.kt"
+                "${SIMSE_REPO_ROOT}/cppsrc/common/xmlutil.kt"
                 simse_transpile
-        COMMENT "T22: transpiling Codegen.simse"
+        COMMENT "T22: transpiling Codegen.kt"
         VERBATIM)
 
 add_executable(codegen_ref tests/codegen_ref_main.cpp)
@@ -403,18 +403,18 @@ add_custom_target(codegen_diff ALL
         COMMAND "${CMAKE_COMMAND}"
                 -DEXE=$<TARGET_FILE:codegen_simse>
                 -DEXE_ARGS=${SIMSE_SCANNER_FIXTURES}
-                -DOUT=${SIMSE_SELFHOST_DIR}/codegen.simse.out
+                -DOUT=${SIMSE_SELFHOST_DIR}/codegen.kt.out
                 -DWORKDIR=${SIMSE_REPO_ROOT}
                 -P "${SIMSE_REPO_ROOT}/tests/run_capture.cmake"
         COMMAND "${CMAKE_COMMAND}" -E compare_files --ignore-eol
                 "${SIMSE_SELFHOST_DIR}/codegen.ref.out"
-                "${SIMSE_SELFHOST_DIR}/codegen.simse.out"
+                "${SIMSE_SELFHOST_DIR}/codegen.kt.out"
         DEPENDS codegen_ref codegen_simse
         COMMENT "T22: diffing hand-written and transpiled C++ emission"
         VERBATIM)
 
 # --- T23: stage-1 self-hosted compiler ---------------------------------------
-# The whole compiler source set is rooted at cppsrc/compiler/Driver.simse (its
+# The whole compiler source set is rooted at cppsrc/compiler/Driver.kt (its
 # imports pull in the scanner, parser, sema, codegen, and common/xmlutil). The
 # two-step bootstrap uses fixed names:
 #   1. the C++ simse_transpile emits the compiler's C++ as `simse_out.cpp`;
@@ -426,37 +426,40 @@ add_custom_target(codegen_diff ALL
 # import/prelude paths and the source-map comments are identical in both
 # invocations.
 set(SIMSE_ALL_MIRRORS
-        "${SIMSE_REPO_ROOT}/cppsrc/compiler/Driver.simse"
-        "${SIMSE_REPO_ROOT}/cppsrc/codegen/Codegen.simse"
-        "${SIMSE_REPO_ROOT}/cppsrc/sema/Sema.simse"
-        "${SIMSE_REPO_ROOT}/cppsrc/sema/TypeInfer.simse"
-        "${SIMSE_REPO_ROOT}/cppsrc/linear/ExpressionLowering.simse"
-        "${SIMSE_REPO_ROOT}/cppsrc/linear/Linear.simse"
-        "${SIMSE_REPO_ROOT}/cppsrc/linear/Simplify.simse"
-        "${SIMSE_REPO_ROOT}/cppsrc/parser/Parser.simse"
-        "${SIMSE_REPO_ROOT}/cppsrc/lex/Scanner.simse"
-        "${SIMSE_REPO_ROOT}/cppsrc/skelparser/SkeletonParser.simse"
-        "${SIMSE_REPO_ROOT}/cppsrc/common/common.simse"
-        "${SIMSE_REPO_ROOT}/cppsrc/common/xmlutil.simse"
-        "${SIMSE_REPO_ROOT}/cppsrc/rtl/Span.simse"
-        "${SIMSE_REPO_ROOT}/cppsrc/rtl/StrView.simse"
-        "${SIMSE_REPO_ROOT}/cppsrc/rtl/rtl.simse"
-        "${SIMSE_REPO_ROOT}/cppsrc/rtl/xml.simse"
-        "${SIMSE_REPO_ROOT}/cppsrc/rtl/fs.simse")
+        "${SIMSE_REPO_ROOT}/cppsrc/compiler/Driver.kt"
+        "${SIMSE_REPO_ROOT}/cppsrc/codegen/Codegen.kt"
+        "${SIMSE_REPO_ROOT}/cppsrc/sema/Sema.kt"
+        "${SIMSE_REPO_ROOT}/cppsrc/sema/TypeInfer.kt"
+        "${SIMSE_REPO_ROOT}/cppsrc/linear/ExpressionLowering.kt"
+        "${SIMSE_REPO_ROOT}/cppsrc/linear/Linear.kt"
+        "${SIMSE_REPO_ROOT}/cppsrc/linear/LinearForm.kt"
+        "${SIMSE_REPO_ROOT}/cppsrc/linear/Yield.kt"
+        "${SIMSE_REPO_ROOT}/cppsrc/linear/Simplify.kt"
+        "${SIMSE_REPO_ROOT}/cppsrc/parser/Parser.kt"
+        "${SIMSE_REPO_ROOT}/cppsrc/lex/Scanner.kt"
+        "${SIMSE_REPO_ROOT}/cppsrc/skelparser/SkeletonParser.kt"
+        "${SIMSE_REPO_ROOT}/cppsrc/common/common.kt"
+        "${SIMSE_REPO_ROOT}/cppsrc/common/xmlutil.kt"
+        "${SIMSE_REPO_ROOT}/cppsrc/rtl/Span.kt"
+        "${SIMSE_REPO_ROOT}/cppsrc/rtl/StrView.kt"
+        "${SIMSE_REPO_ROOT}/cppsrc/rtl/astxml.kt"
+        "${SIMSE_REPO_ROOT}/cppsrc/rtl/rtl.kt"
+        "${SIMSE_REPO_ROOT}/cppsrc/rtl/xml.kt"
+        "${SIMSE_REPO_ROOT}/cppsrc/rtl/fs.kt")
 set(SIMSE_STAGE1_DIR "${CMAKE_BINARY_DIR}/stage1")
 set(SIMSE_STAGE1_GEN_DIR "${SIMSE_STAGE1_DIR}/gen")
 set(SIMSE_STAGE1_RUN_DIR "${SIMSE_STAGE1_DIR}/run")
-set(SIMSE_STAGE1_INPUT "cppsrc/compiler/Driver.simse")
+set(SIMSE_STAGE1_INPUT "cppsrc/compiler/Driver.kt")
 set(SIMSE_STAGE1_GENERATED "${SIMSE_STAGE1_GEN_DIR}/simse_out.cpp")
 set(SIMSE_STAGE1_KEPT "${SIMSE_STAGE1_GEN_DIR}/simse_out1.cpp")
 set(SIMSE_STAGE1_REGEN "${SIMSE_STAGE1_RUN_DIR}/simse_out.cpp")
-set(SIMSE_STAGE1_FIXTURE "stress/language-tour/src/main.simse")
+set(SIMSE_STAGE1_FIXTURE "stress/language-tour/src/main.kt")
 set(SIMSE_STAGE1_FIXTURE_REF "${SIMSE_STAGE1_DIR}/fixture_ref.cpp")
 set(SIMSE_STAGE1_FIXTURE_B "${SIMSE_STAGE1_DIR}/fixture_b.cpp")
 
 # The module roots that hold the compiler source set, in dependency order so the
 # amalgamated translation unit compiles. `import` never adds files; the scanner
-# includes every `.simse` under these roots (and the explicit Driver.simse).
+# includes every `.kt` under these roots (and the explicit Driver.kt).
 set(SIMSE_COMPILER_ROOTS
         --module-root cppsrc/common
         --module-root cppsrc/lex

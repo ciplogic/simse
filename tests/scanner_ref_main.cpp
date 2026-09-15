@@ -1,5 +1,5 @@
 //
-// Differential reference driver. Tokenizes every `*.simse` fixture under the
+// Differential reference driver. Tokenizes every `*.kt` fixture under the
 // given directory with the hand-written C++ scanner (lex::Scanner) and prints
 // the canonical dump defined in tests/test_support.cpp:
 //
@@ -24,7 +24,7 @@ using namespace tests;
 
 int main(int argc, char **argv) {
     Str fixturesDir = argc > 1 ? argv[1] : ".";
-    List<Str> files = filesInDir(fixturesDir, ".simse");
+    List<Str> files = filesInDir(fixturesDir, ".kt");
     std::sort(files.begin(), files.end());
 
     List<TokenMatcher> *rules = getTokenRules();

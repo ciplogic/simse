@@ -70,102 +70,142 @@ made from them is typed too. `TypeKind::Yield` also had to start substituting li
 pointer does (`substituteBindings`), or a generic function's `..T` would have lost its
 element type before reaching that rule.
 
-## A container is not iterable, and the compiler says so
+## What the compiler says about a `for`
 
 The parser cannot tell what a `for` iterates, so the check lives in sema's checker
 (`Analyzer::checkForIterable`): the template's machine name is recognizable (`_sm_for<n>`,
-the same convention as the lowering's `_sm_expr<n>` slots), and when the iterated
-expression's type is *known* and is not a `..T`, that is the error - at the `for`, not at
-a generated statement:
+the same convention as the lowering's `_sm_expr<n>` slots), the initializer is the
+invisible `smToYield()` wrap, and when the *receiver's* type is known and is neither a
+machine nor a type with a `smToYield`, that is the error - at the `for`, naming the type
+the user wrote, not the generated call:
 
 ```text
-main.simse:7:5: a `for` iterates a machine (`..T`), and List<Int> is not one;
-                iterate a container with `while` and an index
+stress/diagnostic-not-iterable/src/main.kt:11:5: a `for` iterates a machine (`..T`)
+or a type with a `smToYield`, and Int has neither; iterate a container with `while` and
+an index
 ```
 
-An unknown type stays silent (the C++ compiler gets the last word, as it does for any
-other member), so the check never fires on something the checker cannot name.
+An unknown receiver type stays silent (the C++ compiler gets the last word, as it does
+for any other member), so the check never fires on something the checker cannot name.
 
-## Where this is going: `smToYield`
+## `smToYield`: what can be iterated
 
-The construct stays two forms - `for (v in x)` and `for ((v, i) in x)` - but *what can
-be iterated* becomes a convention instead of "a machine": the iterated expression is
-wrapped in a call to a function named **`smToYield`**, so
+**Landed** (see "Status" below for what it needed). The construct stays two forms -
+`for (v in x)` and `for ((v, i) in x)` - but *what can be iterated* is a convention
+instead of "a machine": the iterated expression is wrapped in an invisible call to a
+function named **`smToYield`**, so
 
 ```simse
 for (item in x) { ... }      // is the same program as
-for (item in smToYield(x)) { ... }
+for (item in x.smToYield()) { ... }
 ```
 
-and anything the language can find a `smToYield` for is iterable:
+and anything the language can find a `smToYield` for is iterable. The call is a
+*member* call (`x.smToYield()`, not `smToYield(x)`): the type pass binds a receiver
+function's type parameter from the receiver, which is what types the loop variable.
 
-- **`List<T>` (and the other containers), in the prelude**, written as the language's
-own `yield` - a classical in-order walk:
+The prelude's, as it is written, one per container - with `Array<T>` counting with
+`count()` and `Span<T>` with `size()`:
 
-  ```simse
-  fun List<T>.smToYield(): ..T {
-      var i: Int = 0
-      while (i < this.size()) {
-          yield this[i]
-          i = i + 1
-      }
-  }
-  ```
+```simse
+fun List<T>.smToYield<T>(): ..T {
+    var i: Int = 0
+    while (i < this.size()) {
+        yield this[i]
+        i = i + 1
+    }
+}
+```
+
+**A machine's class carries its receiver's name** (`List_smToYield_yieldable`,
+`Array_smToYield_yieldable`): the prelude has one `smToYield` per container, so the
+function name alone would name every container's machine the same way. And because the
+name is the receiver's, **a prelude body is emitted for the receiver the program names**:
+the reachability over the program's calls (by name) is closed over the types it spells,
+which includes the signatures of the prelude functions it calls - `xs.toArray()` reaches
+an `Array` because the prelude says `toArray` returns one. A program that iterates a list
+therefore carries the list machine only, not every container's.
 
 - **A user's own type**, by the same convention (an extension function returning `..T`),
   which is the static-interface idea: iteration is *satisfied* by a function the type's
-author writes, not by a runtime interface.
+  author writes (`fun Point.walk(): ..Point`), not by a runtime interface. The machine is
+  reified per element type like any other generic function, so the "interface" is the
+  *shape* and its witness is a concrete class.
+- **A machine**, which is already what `for` wants: `x.smToYield()` on a `..T` receiver is
+  the *identity* (no wrapper object, no extra step). `..T` is not a spellable type, so the
+  identity is the compiler's rather than a function's.
 - **A range, later**: `for (i in (2 .. 5))` becomes an iterator over the two bounds, i.e.
-one more `smToYield` whose machine holds `2` and `5` as its parameters.
-- **A machine**, which is already what `for` wants: `smToYield(m)` is the *identity* for
-  a `..T` argument (no wrapper object, no extra step).
+  one more `smToYield` whose machine holds `2` and `5` as its parameters.
 
-What has to change when this lands:
-
-- the parser's desugar wraps the iterated expression (`smToYield(<expr>)`) - and the
-  wrap has to be *invisible*: the diagnostic for a non-iterable type names the type, not
-  the generated call;
-- the sema check becomes "is there a `smToYield` for this receiver?" instead of "is this
-  a machine?", and `stress/diagnostic-for-not-a-machine` becomes
-  `diagnostic-not-iterable` (a `for` over an `Int`, or over a type with no `smToYield`);
-- the loop variable's type comes from `smToYield`'s bound `T`, so a `for` over a
-  `List<Str>` binds a `Str` without the machine-typing special cases the type pass
-  carries today;
-- `specs/functions.md` and `specs/containers.md` say a container *is* iterable, with the
-  order being the container's own (and `Span<T>`/index loops staying the way to iterate
-  *storage* without allocating an iterator).
-
-It is the last step of the IL work (`impl_specs/linear-il.md`, "Dropping the statement
-emitter"): a `smToYield` in the prelude is a `yield`ing function, so it needs `yield` to
-work in both rings first - otherwise the Simse ring cannot emit the prelude's own
-functions and every program that uses `for` stops transpiling there.
+What remains: `smToYield` for `Dictionary<K, V>` (a `while` over `keys()` is how it is
+walked today; what a dictionary's element should be - its keys, or a key/value pair - is
+the open question), and the range above.
 
 ## Status
 
-- Implemented in the **C++ ring**: `Parser::parseFor`/`parseStmtInto`, the two type rules
-  above, the sema check, and `docs/examples/yield/src/main.simse`, which runs both forms
-  plus `continue`/`break` (verified by transpiling, compiling and running).
-- Ported to the **Simse ring** so far: `Scanner.simse` (`..`), `Parser.simse`
-  (`parseFor`, `parseStmtInto`, the node builders), and `Sema.simse`
-  (`checkForIterable` + `semaTypeText`). Scanner, parser and sema are **byte-identical**
-  between the rings on `tools/_ring/probe.simse`, and
-  `stress/diagnostic-for-not-a-machine` passes in *both* rings (a rejected program needs
-  no codegen, which is why the diagnostic is the first half of this feature to be
-  end-to-end in the Simse ring). Codegen does not agree yet: the Simse ring has no
-  `yield` lowering, so a program that *runs* a machine is still C++-ring only.
-- Both rings of the *IL* agree: `--linearCodegen` reports the `for`-heavy example as
-  identical once blocks are folded, and `--linearCodegenEmit` compiles and runs it.
-- **Still to port** for the Simse ring, in this order:
-  1. `linear/Yield.simse` - the state-machine rewrite of `linear/Yield.cpp` (423 lines);
-  2. `Codegen.simse` - `emitYieldable`, the factory, and the `..T` return type (the C++
-     ring's `Codegen.cpp` has ~30 places that know about machines);
-  3. `TypeInfer.simse` - the two machine rules and the `Yield` case of `semSubstitute`;
-  4. then a `stress/` case that *runs* both forms, which is the proof that the port is
-     done - and the `tests/fixtures` entry that makes all five differentials cover it.
-  (Separately, `linear/LinearForm.cpp` - the IL, 1358 lines - has no Simse mirror at
-  all; it is behind `--linearCodegen*` flags, so it is a gap of its own.)
-- The template's names are recognizable, which is what makes the sema check possible;
-  they are documented as not a user's to take, like the lowering's `_sm_expr<n>` slots.
+**Implemented in both rings.** `for (x in source)` is `source.smToYield()` plus the
+`while` the parser writes (`parseFor`), the prelude provides `List<T>.smToYield()` - a
+`yield`ing function, written in Simse - and a *machine* is its own identity, so
+`for (x in m)` still iterates `m` itself. What that needed beyond the wrap, and where
+it lives:
+
+- **a generic function can yield**: the machine class is a template when the function has
+type parameters (`template <class T> struct <fn>_yieldable`), and its *name* carries the
+arguments wherever it is a type (the factory's return type and prototype, its
+`machine{}` local). Inside the class the injected-class-name covers `self`, and a call
+site's `_sm_for<n>` slot is `auto`, so nothing else names it.
+- **the receiver lives in the machine** (`_sm_self`, `linear::yieldReceiverField`): an
+extension function's `this` crosses a yield like any other value, so `this.x` reads the
+caller's object through a field that holds exactly what the emitted `self` parameter
+holds - a pointer for a value receiver. `this` in a *base* position stays that field
+(the spellings dereference where they have to: `this._sm_self->size()`,
+`(*this._sm_self)[i]`), and a bare `this` in a value position is read back out of it.
+The machining methods' bodies are typed against it: `emitMachine` registers the machine
+as a data class in the emitter's type table, which is what tells `memberAccess` and the
+index spelling what `this._sm_self` is.
+- **the wrap is a member call** (`source.smToYield()`): the type pass binds a receiver
+function's type parameter from the receiver (`memberReturn` -> `bindTypes`), so the loop
+variable is typed, while a plain `smToYield(source)` would leave it untyped. `Yield`
+patterns unify and bind like a pointer's pointee (`sema::unifyType`, `bindTypes`) for
+the same reason.
+- **the identity is the compiler's**: `..T` is not a spellable type, so no function can
+take a machine. `TypeInfer` types `x.smToYield()` on a `..T` receiver as the receiver,
+and the emitter emits the receiver itself - no wrapper object, no extra step.
+- **the gate is `Sema.kt`'s**: the wrap must resolve, so the check asks "is this a
+machine, or a type with a `smToYield`?" and names the receiver's type otherwise
+(`stress/diagnostic-not-iterable`). It compares receiver *names* (`List<T>` takes any
+`List<...>`), because that is all a diagnostic needs and the call itself is resolved
+with the full unification in `codegen`.
+- **a prelude body is emitted when the program reaches it by name**: prelude `fun`s were
+declarations-only, and `List<T>.smToYield` is the first one with a body. The rule is a
+name reachability over the calls (a callee is a `Name`, a `GenericName` or a `Member`),
+closed over the prelude bodies that are themselves emitted - so a program that never
+iterates carries none of it, and the goldens do not move.
+- **two rules the machine needed, found by the two rings disagreeing**: the dispatcher
+jumps go *after* the method's hoisted declarations (a jump that skips a `T` declaration
+is `C2362`, and `T` is non-trivial for `Str`); and `ExpressionLowering` hoists a
+`yield`'s value like a `return`'s (`ExpressionLowering.kt` was missing that case,
+which meant the Simse ring inlined where the C++ ring hoisted).
+
+Still open:
+
+- **other containers**: `Dictionary<K, V>` has no `smToYield` yet (a `while` over
+  `keys()` is the way to walk it today); `Array<T>` and `Span<T>` landed with it.
+- **ranges**: `for (i in (2 .. 5))` - one more `smToYield` whose machine holds the two
+  bounds.
+- **a `for` inside a yielding body**: the machine would have to be a *field*, and a
+  field needs a nameable type (`impl_specs/yield.md`).
+
+What the earlier plan listed, and what happened to it:
+
+- ~~the machine class must become a template~~ - done (above).
+- ~~the wrap must be a member call~~ - done.
+- ~~machine identity needs a `Yield` case in `unifyType`/`bindTypes`~~ - done (it is
+  what makes `m.smToYield()` resolve; the identity itself turned out to be the
+  compiler's, since `..T` cannot be a parameter type).
+- ~~the prelude needs both functions above~~ - one function, plus the reachability rule.
+- the wrap is invisible in diagnostics - it is: the gate reports the *receiver's* type.
+- `specs/functions.md` and `specs/containers.md` say a container *is* iterable - done.
 - **Not supported yet**, both reported as diagnostics rather than left to the C++ compiler:
   - a `for` (or any machine local) inside a body that yields - the machine would have to be
     a *field*, and a field needs a nameable type ("collect the values into a `List`

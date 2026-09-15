@@ -6,7 +6,7 @@ language and library work a *user* of Simse is blocked on, in the order the
 blockers stack.
 
 Written from the current sources: what exists is what the guide's feature list and
-`cppsrc/rtl/*.simse` say, not what is merely specified.
+`cppsrc/rtl/*.kt` say, not what is merely specified.
 
 ## 1. The niche
 

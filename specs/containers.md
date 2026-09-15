@@ -92,6 +92,22 @@ compiler as native extensions (`impl_specs/tasks/12-container-methods-as-native.
 `impl_specs/tasks/20-dictionary-and-sort.md`). `insert` and `clear` are specified
 but not yet mapped by the bootstrap emitter.
 
+### Iteration
+
+A container is iterable by `for`, in order and without an index of its own:
+
+```simse
+for (value in items) { ... }
+for ((value, index) in items) { ... }
+```
+
+The prelude writes `List<T>.smToYield(): ..T` in Simse, and one per container besides it
+(`Array<T>`, `Span<T>`): a state machine that walks the container in order
+(`specs/functions.md`, `impl_specs/for.md`). The loop is therefore the `while` the language
+writes around a machine, `continue` still moves it on, and the iteration is over the
+container's own order, reading each element once. `Dictionary<K, V>` has no `smToYield`
+yet, so it is walked with an index loop over `keys()`.
+
 ## `Dictionary<K, V>`
 
 Status: required for the first implementation (the front end is written against
@@ -122,8 +138,9 @@ Status: required for the first implementation.
 `Span<T>` is a borrowed view over a contiguous run of `T`: a pointer and a
 length, nothing else. The language's spelling of C#'s `Span<T>`, it copies
 nothing and owns nothing, so it is valid only while the memory it points at is
-alive and unmodified. Storage is iterated with a span and `while` - `for`
-iterates a state machine, not a container (`functions.md`):
+alive and unmodified. A span is iterable by `for` like any other container (the prelude
+has `Span<T>.smToYield`), and the state machine walks it with an index; a `while` that
+slices is the way to walk *storage* without building a machine (`functions.md`):
 
 ```text
 var span: Span<Int> = spanOf(*items)

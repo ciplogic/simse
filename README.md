@@ -1,7 +1,9 @@
 # Simse
 
 Simse is a small, statically typed language that compiles to **one readable C++
-file**.
+file**. Its sources use the **`.kt` extension** - Kotlin's - because Simse is a
+Kotlin-flavored dialect: your editor's Kotlin mode highlights it, and the language
+is still Simse (`specs/`, `guide4ai.md`).
 
 ```simse
 package tour
@@ -47,28 +49,36 @@ two = 2
 ```
 
 The whole program becomes a single `.cpp` you can read, step through in a
-debugger, and hand to any C++20 compiler:
+debugger, and hand to any C++20 compiler. A body is one scope: every declaration is
+at the top (the flat-IL hoisting), and control flow is labels and gotos.
 
 ```cpp
 int main() {
-    Str text = "one two two three three three";
-    Dictionary<Str, Int> counts = simse_dictionaryOf<Str, Int>();
-    List<Str> words = ns1_words(text);
-    Int i = 0;
+    Str text;
+    Dictionary<Str, Int> counts;
+    List<Str> words;
+    Int i;
+    Int _sm_expr1;
+    Bool _sm_expr2;
+    Str _sm_expr3;
+    Opt<Int> seen;
+    text = "one two two three three three";
+    counts = simse_dictionaryOf<Str, Int>();
+    words = ns1_words(simse_addressOf(text));
+    i = 0;
     L1:;
-    if (!(i < words.size())) goto L2;
-    {
-        Opt<Int> seen = simse_dict_get(counts, words[i]);
-        if (seen.hasValue()) goto L3;
-        goto L4;
-        L3:;
-        simse_dict_insert(counts, words[i], seen.value() + 1);
-        goto L5;
-        L4:;
-        simse_dict_insert(counts, words[i], 1);
-        L5:;
-        i = i + 1;
-    }
+    _sm_expr1 = words.size();
+    _sm_expr2 = i < _sm_expr1;
+    if (!(_sm_expr2)) goto L2;
+    _sm_expr3 = words[i];
+    seen = simse_dict_get(counts, _sm_expr3);
+    if (!(seen.hasValue())) goto L4;
+    simse_dict_insert(counts, words[i], seen.value() + 1);
+    goto L5;
+    L4:;
+    simse_dict_insert(counts, words[i], 1);
+    L5:;
+    i = i + 1;
     goto L1;
     L2:;
     // ...
@@ -102,7 +112,7 @@ The result is a language that reads like Kotlin/.NET and builds like C.
 
 ## How it works
 
-1. The compiler **scans** and **parses** a module root (a directory of `.simse`
+1. The compiler **scans** and **parses** a module root (a directory of `.kt`
    files, each with a `package` declaration) into an XML-shaped AST.
 2. **Sema** resolves names and types; **generics are reified** - each concrete
    instantiation becomes a distinct C++ type, so `List<Int>` and `List<Str>` are
@@ -115,7 +125,7 @@ The result is a language that reads like Kotlin/.NET and builds like C.
    (`simse_str_split`, `simse_dict_get`, ...) for library operations.
 5. The result is compiled by a normal C++ compiler.
 
-The compiler is **self-hosted**: it is written in Simse (`cppsrc/**/*.simse`),
+The compiler is **self-hosted**: it is written in Simse (`cppsrc/**/*.kt`),
 and a hand-written C++ implementation of the same compiler (`cppsrc/**/*.cpp`)
 exists alongside it as the bootstrap. The bootstrap compiles the Simse sources;
 the resulting binary compiles the same sources again, and the two outputs must be
@@ -169,14 +179,23 @@ A full walkthrough, including the tests and the stress corpus, is in
 
 Working today: the language above (data classes, enums, generics, extensions,
 lambdas, `List`/`Array`/`Dictionary`/`Span`/`Opt`/`Res`/`Str`, file I/O, the
-`main(args)` form, `yield` and the two `for` forms that iterate a state machine),
-a self-hosted compiler that reproduces its own output byte for byte, 51 in-process
-tests, five differential stage tests and 24 end-to-end stress programs, and a
-transpile throughput of roughly **6,400 lines in ~65 ms** (the compiler compiling
-its own source tree, release, ~16 MB peak working set).
+`main(args)` form, `yield`, and `for` over anything with a `smToYield` - a container,
+or a state machine itself),
+a self-hosted compiler that reproduces its own output byte for byte, 53 in-process
+tests, five differential stage tests and 29 end-to-end stress programs.
 
-Not there yet, in rough order of how soon a user would miss it: a `foreach` over a
-container (only `for` over a machine exists), string interpolation, closed unions +
+On speed (`bun tools/bootstrap.js`, release, this machine - the range is machine load,
+best of 5 runs idle):
+
+| | |
+| --- | --- |
+| the compiler transpiling its own source tree | **13,828 lines of Simse in 1.03 s** (36,802 lines of C++ out, ~13.5k lines/s) |
+| the same tree through the hand-written C++ ring | 0.21 s (the Simse ring is ~4.9x that; the flat-body work - every declaration at the top of its body - costs the Simse ring ~15% of the transpile, and the C++ ring nothing) |
+| compiling the published `cppsrc/simse_bootstrap.cpp` with `cl.exe` | ~14.5 s release (`/O2 /Ob3`), ~3.1 s debug |
+| **from the published file to a compiler that reproduces it** | **~15.6 s**, then ~1.03 s per self-transpile |
+
+Not there yet, in rough order of how soon a user would miss it: `for` over a
+`Dictionary` and ranges, string interpolation, closed unions +
 `when`, a `Printable` protocol (so `println` works for your own types instead of only
 the built-ins), `Set`, byte buffers, JSON encode/decode generated from data classes,
 sockets and HTTP, and a Linux/macOS toolchain. `docs/state-of-the-field.md` is
@@ -186,19 +205,19 @@ explicit about each of these and the roadmap phases them.
 
 | Path | Contents |
 | --- | --- |
-| `cppsrc/` | the compiler twice: hand-written C++ (`*.cpp`, `*.h`) and the Simse mirror (`*.simse`), plus `cppsrc/rtl/` (the runtime headers and the prelude) and `cppsrc/native/` (native symbols) |
+| `cppsrc/` | the compiler twice: hand-written C++ (`*.cpp`, `*.h`) and the Simse mirror (`*.kt`), plus `cppsrc/rtl/` (the runtime headers and the prelude), `cppsrc/native/` (native symbols), and `cppsrc/simse_bootstrap.cpp` - the amalgamated compiler, checked in so it can be built with a C++ compiler alone |
 | `specs/` | the language specification (normative): types, declarations, functions, memory model, generics, containers, modules, statics |
 | `impl_specs/` | implementation plans and records: self-hosting plan, capability matrix, RTL ABI, the user-facing roadmap |
 | `stress/` | one folder per end-to-end program: source, arguments, expected output |
 | `tests/` | fixtures, goldens, and the differential drivers |
-| `tools/` | the JavaScript harness: the stress runner, the A/B benchmarks, the probes |
+| `tools/` | the JavaScript harness: the stress runner (`stress.js`), the bootstrap measurement (`bootstrap.js`), the A/B benchmarks, the probes |
 | `docs/` | this documentation |
 
 ## Design principles
 
 - **The output is the artifact.** One `.cpp` file, readable, debuggable, no
   generated metadata to interpret; the source-map comments point back at the
-  `.simse` lines.
+  `.kt` lines.
 - **Static everything.** Types, dispatch, and generics are resolved at compile
   time; there is no reflection and no runtime type information.
 - **Deterministic.** The same inputs produce byte-identical output; nothing

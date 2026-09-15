@@ -1,5 +1,5 @@
 //
-// Differential reference driver for the C++ emitter. Scans every `*.simse`
+// Differential reference driver for the C++ emitter. Scans every `*.kt`
 // fixture, parses it, and emits C++ with the hand-written `codegen::emitProgram`
 // (the prelude is combined exactly as the golden harness does). The transpiled
 // emitter (tests/codegen_simse_main.cpp) prints the same, and the build diffs
@@ -25,7 +25,7 @@ int main(int argc, char **argv) {
     Str fixturesDir = argc > 1 ? argv[1] : ".";
     Str goldenDir = (common::toPath(fixturesDir).parent_path() / "golden").string();
 
-    List<Str> files = filesInDir(fixturesDir, ".simse");
+    List<Str> files = filesInDir(fixturesDir, ".kt");
     std::sort(files.begin(), files.end());
 
     List<TokenMatcher> *rules = getTokenRules();

@@ -134,7 +134,7 @@ Accesses: `requests` -> `ns1_requests`; `Defaults.retries` ->
 
 ## Slices
 
-Each slice lands in BOTH rings (`cppsrc/**/*.simse` and the C++ mirror), keeps the
+Each slice lands in BOTH rings (`cppsrc/**/*.kt` and the C++ mirror), keeps the
 five differentials byte-identical and the bootstrap fixed point intact, and adds
 its own `stress/<name>` case.
 
@@ -153,7 +153,7 @@ its own `stress/<name>` case.
    depends on.
 
    *First use in the compiler:* the scanner's three tables (`reservedWordTable`,
-   `multiCharOperatorTable`, `tokenRuleTable` in `cppsrc/lex/Scanner.simse`) are
+   `multiCharOperatorTable`, `tokenRuleTable` in `cppsrc/lex/Scanner.kt`) are
    file-level statics: the pass builds each one once and the hot comparisons read
    them through a raw pointer (`*List<T>`), where an accessor returning a
    `List<Str>` rebuilt the table per call - `matchOperator` runs for every token,
@@ -203,8 +203,9 @@ its own `stress/<name>` case.
 - `simse_tests.exe`: goldens regenerate only where the emission changed on
   purpose (`--update`, then review, then check mode).
 - `bun tools/stress.js` on both rings, including the slice's new case.
-- `cppsrc/simse_out.cpp` regenerated when the compiler's own emission changes
-  (the tracked amalgamation is the stage-1 output).
+- `cppsrc/simse_bootstrap.cpp` regenerated when the compiler's own emission changes
+  (the tracked amalgamation is the stage-1 output; `bun build.js --release --out
+  cppsrc/simse_bootstrap.cpp` writes it and compiles it).
 
 `tools/statics_probe.cpp` pins the runtime shape of the design - the empty
 storage, the pass, and the per-instantiation generic accessor - before the

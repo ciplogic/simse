@@ -4,6 +4,8 @@ Every fragment below is real syntax: the runnable versions are the programs unde
 [examples/](examples/) and [`stress/`](../stress/) (each stress folder is a
 complete program with its expected output). Nothing here is aspirational - the
 [roadmap](../impl_specs/user-language-roadmap.md) lists what does not exist yet.
+Simse sources carry the **`.kt` extension** (Kotlin's: Simse is a Kotlin-flavored
+dialect, so an editor's Kotlin mode highlights them - the language is Simse).
 
 ## A program
 
@@ -111,8 +113,11 @@ fun sum(items: &List<Int>): Int {
 }
 ```
 
-`for` instead iterates a **state machine** - the value a function whose body `yield`s
-produces - in one of exactly two forms:
+`for` iterates **whatever has a `smToYield`** in one of exactly two forms: a state
+machine - the value a function whose body `yield`s produces - or a container, which the
+prelude gives one per container (`List<T>`, `Array<T>`, `Span<T>`; a `Dictionary` and a
+range are not iterable yet). (A `smToYield` is an ordinary extension function returning
+`..T`, so your own type can have one too; see `specs/functions.md`.)
 
 ```simse
 fun everyOther(n: Int): ..Int {
@@ -132,13 +137,21 @@ fun main(): Int {
     for ((v, i) in everyOther(10)) {       // the value and its iteration index
         println(i.toString() + ": " + v.toString())   // 0:0, 1:2, 2:4, ...
     }
+
+    val words: List<Str> = List<Str>()
+    words.append("one")
+    words.append("two")
+    for (w in words) {                     // a container, in its own order
+        println(w)
+    }
     return 0
 }
 ```
 
-The loop variable is a fresh `val` per iteration; `index` is a counter the compiler
-declares, starting at `0`, so a `continue` still counts the iteration it skipped.
-Both forms are two lines of `while` in the generated C++ (`impl_specs/for.md`).
+The loop variable is a fresh `val` per iteration, typed by the element type (`v` is an
+`Int` above, `w` a `Str`); `index` is a counter the compiler declares, starting at `0`,
+so a `continue` still counts the iteration it skipped. Both forms are a `while` over a
+machine in the generated C++ (`impl_specs/for.md`).
 
 ## Functions, extensions, lambdas
 
@@ -367,7 +380,7 @@ each file. The compiler scans a module root and links every file it finds;
 declarations are statics, initialized before `main` runs.
 
 ```simse
-// src/util/util.simse
+// src/util/util.kt
 package util
 
 data class Point(var x: Int; var y: Int)
@@ -378,7 +391,7 @@ fun twice(value: Int): Int {
 ```
 
 ```simse
-// src/app/main.simse
+// src/app/main.kt
 package app
 
 import util
@@ -424,6 +437,6 @@ These are known rough edges, not design decisions to admire
   open a block there.
 - `println` of a float uses the C++ default formatting, and `println` of an enum
   prints its integer value.
-- There is no `foreach` over a container (only `for`, which iterates a machine),
-  no `when`/pattern matching, no string interpolation, no default parameter values,
-  no capture-by-reference, and no `Set`.
+- There is no `foreach` keyword (`for` is it, and a container has a `smToYield` so
+  `for (x in list)` works), no `when`/pattern matching, no string interpolation, no
+  default parameter values, no capture-by-reference, and no `Set`.

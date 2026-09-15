@@ -198,7 +198,7 @@ int main(int argc, char **argv) {
     int failed = 0;
 
     // Fixtures: tokens + AST + sema goldens.
-    List<Str> fixtures = filesInDir(fixturesDir, ".simse");
+    List<Str> fixtures = filesInDir(fixturesDir, ".kt");
     for (const Str &fixture: fixtures) {
         Str name = baseName(fixture);
 
@@ -234,30 +234,30 @@ int main(int argc, char **argv) {
 
     // Negative fixtures: explicit assertions beyond the stored goldens.
     {
-        Str path = (common::toPath(fixturesDir) / "parse_error.simse").string();
+        Str path = (common::toPath(fixturesDir) / "parse_error.kt").string();
         ScanResult scan = scanFile(&scanner, path);
         List<Token> tokens = scan.tokens;
         Res<ast::Module> parsed = scan.ok
-                                      ? parser::parseModule(tokens, "parse_error.simse")
+                                      ? parser::parseModule(tokens, "parse_error.kt")
                                       : resError<ast::Module>("scan failed");
         if (scan.ok && !parsed.isOk()) {
             passed++;
-            printf("PASS negative parse_error.simse (parse rejected)\n");
+            printf("PASS negative parse_error.kt (parse rejected)\n");
         } else {
             failed++;
-            printf("FAIL negative parse_error.simse: expected a parse error\n");
+            printf("FAIL negative parse_error.kt: expected a parse error\n");
         }
     }
     {
-        Str path = (common::toPath(fixturesDir) / "sema_unknown_type.simse").string();
+        Str path = (common::toPath(fixturesDir) / "sema_unknown_type.kt").string();
         ScanResult scan = scanFile(&scanner, path);
         List<Token> tokens = scan.tokens;
         Res<ast::Module> parsed = scan.ok
-                                      ? parser::parseModule(tokens, "sema_unknown_type.simse")
+                                      ? parser::parseModule(tokens, "sema_unknown_type.kt")
                                       : resError<ast::Module>("scan failed");
         bool reported = false;
         if (parsed.isOk()) {
-            List<Str> diagnostics = analyzeOne(parsed.Value, "sema_unknown_type.simse");
+            List<Str> diagnostics = analyzeOne(parsed.Value, "sema_unknown_type.kt");
             for (const Str &diagnostic: diagnostics) {
                 if (diagnostic.find("Nope") != Str::npos) {
                     reported = true;
@@ -266,25 +266,25 @@ int main(int argc, char **argv) {
         }
         if (reported) {
             passed++;
-            printf("PASS negative sema_unknown_type.simse (diagnostic reported)\n");
+            printf("PASS negative sema_unknown_type.kt (diagnostic reported)\n");
         } else {
             failed++;
-            printf("FAIL negative sema_unknown_type.simse: expected an unknown-type diagnostic\n");
+            printf("FAIL negative sema_unknown_type.kt: expected an unknown-type diagnostic\n");
         }
     }
 
     // Negative fixture: a data-class constructor called with the wrong number of
     // arguments must be diagnosed with a clear positioned message.
     {
-        Str path = (common::toPath(fixturesDir) / "ctor_arity.simse").string();
+        Str path = (common::toPath(fixturesDir) / "ctor_arity.kt").string();
         ScanResult scan = scanFile(&scanner, path);
         List<Token> tokens = scan.tokens;
         Res<ast::Module> parsed = scan.ok
-                                      ? parser::parseModule(tokens, "ctor_arity.simse")
+                                      ? parser::parseModule(tokens, "ctor_arity.kt")
                                       : resError<ast::Module>("scan failed");
         bool reported = false;
         if (parsed.isOk()) {
-            List<Str> diagnostics = analyzeOne(parsed.Value, "ctor_arity.simse");
+            List<Str> diagnostics = analyzeOne(parsed.Value, "ctor_arity.kt");
             for (const Str &diagnostic: diagnostics) {
                 if (diagnostic.find("data class 'Widget' expects 2 field(s) but got 1")
                     != Str::npos) {
@@ -294,25 +294,25 @@ int main(int argc, char **argv) {
         }
         if (reported) {
             passed++;
-            printf("PASS negative ctor_arity.simse (constructor arity diagnostic reported)\n");
+            printf("PASS negative ctor_arity.kt (constructor arity diagnostic reported)\n");
         } else {
             failed++;
-            printf("FAIL negative ctor_arity.simse: expected a constructor arity diagnostic\n");
+            printf("FAIL negative ctor_arity.kt: expected a constructor arity diagnostic\n");
         }
     }
 
     // Negative fixture: a `case` label that is not a constant expression must be
     // diagnosed.
     {
-        Str path = (common::toPath(fixturesDir) / "sema_switch_label.simse").string();
+        Str path = (common::toPath(fixturesDir) / "sema_switch_label.kt").string();
         ScanResult scan = scanFile(&scanner, path);
         List<Token> tokens = scan.tokens;
         Res<ast::Module> parsed = scan.ok
-                                      ? parser::parseModule(tokens, "sema_switch_label.simse")
+                                      ? parser::parseModule(tokens, "sema_switch_label.kt")
                                       : resError<ast::Module>("scan failed");
         bool reported = false;
         if (parsed.isOk()) {
-            List<Str> diagnostics = analyzeOne(parsed.Value, "sema_switch_label.simse");
+            List<Str> diagnostics = analyzeOne(parsed.Value, "sema_switch_label.kt");
             for (const Str &diagnostic: diagnostics) {
                 if (diagnostic.find("case label must be a constant expression") != Str::npos) {
                     reported = true;
@@ -321,32 +321,32 @@ int main(int argc, char **argv) {
         }
         if (reported) {
             passed++;
-            printf("PASS negative sema_switch_label.simse (case-label diagnostic reported)\n");
+            printf("PASS negative sema_switch_label.kt (case-label diagnostic reported)\n");
         } else {
             failed++;
-            printf("FAIL negative sema_switch_label.simse: expected a case-label diagnostic\n");
+            printf("FAIL negative sema_switch_label.kt: expected a case-label diagnostic\n");
         }
     }
 
     // Positive fixture: hoisted declarations are usable before their textual
     // definition, and resolution stays clean.
     {
-        Str path = (common::toPath(fixturesDir) / "hoisting.simse").string();
+        Str path = (common::toPath(fixturesDir) / "hoisting.kt").string();
         ScanResult scan = scanFile(&scanner, path);
         List<Token> tokens = scan.tokens;
         Res<ast::Module> parsed = scan.ok
-                                      ? parser::parseModule(tokens, "hoisting.simse")
+                                      ? parser::parseModule(tokens, "hoisting.kt")
                                       : resError<ast::Module>("scan failed");
         bool clean = false;
         if (parsed.isOk()) {
-            clean = analyzeOne(parsed.Value, "hoisting.simse").empty();
+            clean = analyzeOne(parsed.Value, "hoisting.kt").empty();
         }
         if (clean) {
             passed++;
-            printf("PASS hoisting.simse (use before declaration is clean)\n");
+            printf("PASS hoisting.kt (use before declaration is clean)\n");
         } else {
             failed++;
-            printf("FAIL hoisting.simse: expected parse ok and zero sema diagnostics\n");
+            printf("FAIL hoisting.kt: expected parse ok and zero sema diagnostics\n");
         }
     }
 
@@ -380,11 +380,11 @@ int main(int argc, char **argv) {
 
         List<sema::Input> inputs;
         sema::Input firstInput;
-        firstInput.fileName = "first.simse";
+        firstInput.fileName = "first.kt";
         firstInput.module = &first;
         inputs.push_back(firstInput);
         sema::Input secondInput;
-        secondInput.fileName = "second.simse";
+        secondInput.fileName = "second.kt";
         secondInput.module = &second;
         inputs.push_back(secondInput);
 
@@ -408,7 +408,7 @@ int main(int argc, char **argv) {
     // T9: the generic program must emit both distinct instantiations and no
     // unused one, and lower generic functions and built-in containers.
     {
-        Str cpp = emitFixture(&scanner, stressSource(fixturesDir, "generics"), "main.simse");
+        Str cpp = emitFixture(&scanner, stressSource(fixturesDir, "generics"), "main.kt");
         // The generic definition and its `_make_` factory emit the parameterized
         // form `Pair<A, B>`; exclude it so only actual instantiations remain.
         List<Str> pairs;
@@ -435,7 +435,7 @@ int main(int argc, char **argv) {
     // T10: the native program must declare the symbol once, emit no body, and
     // call the symbol directly.
     {
-        Str cpp = emitFixture(&scanner, stressSource(fixturesDir, "native-read-file"), "main.simse");
+        Str cpp = emitFixture(&scanner, stressSource(fixturesDir, "native-read-file"), "main.kt");
         bool ok = !cpp.empty()
                   && cpp.find("Str simse_native_readFile(const Str& path);") != Str::npos
                   && cpp.find("simse_native_readFile(\"stress/native-read-file/native_data.txt\")") != Str::npos;
@@ -451,7 +451,7 @@ int main(int argc, char **argv) {
     // T12: container methods lower to the native extension symbols, receiver
     // first, and are not emitted as written.
     {
-        Str cpp = emitFixture(&scanner, stressSource(fixturesDir, "containers"), "main.simse");
+        Str cpp = emitFixture(&scanner, stressSource(fixturesDir, "containers"), "main.kt");
         bool ok = !cpp.empty()
                   && cpp.find("simse_list_append(") != Str::npos
                   && cpp.find("simse_list_removeAt(") != Str::npos
@@ -468,17 +468,17 @@ int main(int argc, char **argv) {
         }
     }
 
-    // Real sources: every mirror under cppsrc, plus a root main.simse when one
+    // Real sources: every mirror under cppsrc, plus a root main.kt when one
     // is present, must parse and analyze cleanly. The analysis is the real
     // compilation-wide one: the prelude plus every source file, so cross-package
     // imports resolve by package and duplicate definitions across files of one
     // package are caught.
-    List<Str> sources = filesInDir(Str(SIMSE_SOURCE_ROOT) + "/cppsrc", ".simse");
-    Str rootMain = Str(SIMSE_SOURCE_ROOT) + "/main.simse";
+    List<Str> sources = filesInDir(Str(SIMSE_SOURCE_ROOT) + "/cppsrc", ".kt");
+    Str rootMain = Str(SIMSE_SOURCE_ROOT) + "/main.kt";
     if (std::filesystem::exists(common::toPath(rootMain))) {
         sources.push_back(rootMain);
     }
-    List<Str> preludeFiles = filesInDir(Str(SIMSE_DEFAULT_PRELUDE), ".simse");
+    List<Str> preludeFiles = filesInDir(Str(SIMSE_DEFAULT_PRELUDE), ".kt");
     Str preludeDirKey = pathKey(Str(SIMSE_DEFAULT_PRELUDE));
 
     List<Str> sourceNames;

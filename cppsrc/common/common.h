@@ -5,7 +5,7 @@
 
 namespace common {
     Str readFile(const Str& filePath);
-    List<Str> filesInDir(const Str& dirPath, Str ext = ".simse");
+    List<Str> filesInDir(const Str& dirPath, Str ext = ".kt");
 
     // The Str <-> std::filesystem boundary (impl_specs/rtl-abi.md): the language
     // works in `Str`, the standard library in `std::string`/`path`. With

@@ -235,7 +235,7 @@ normative layout.
 
 ### Reading files line by line, and the clock
 
-`FileStream` (`cppsrc/rtl/filestream.hpp`, prelude `cppsrc/rtl/fs.simse`) is the
+`FileStream` (`cppsrc/rtl/filestream.hpp`, prelude `cppsrc/rtl/fs.kt`) is the
 RTL's line reader. `openFileStream(path): *FileStream` is a free native (null when
 the file cannot be opened); the operations are **methods of the struct** -
 `readLine(): Opt<Str>`, `readLineInto(buffer: *Str): Bool`,
@@ -256,7 +256,7 @@ without a newline as a line. They differ in what the caller gets:
 - `readLineInto` copies the line into the caller's `Str`, whose heap block is
   reused - no allocation after the longest line seen.
 - `readLineView` copies nothing: it returns a `StrView` (`cppsrc/rtl/span.hpp`,
-  prelude `cppsrc/rtl/Span.simse`) into the readahead buffer, valid until the
+  prelude `cppsrc/rtl/Span.kt`) into the readahead buffer, valid until the
   next read on that stream, which is the shape a parse loop wants
   (`find`/`slice`/`at` stay in the buffer; `toString` is the owned copy).
 
@@ -280,14 +280,14 @@ when the RTL gained `StrView` while the compiler had a `common.StrView` of its o
 a name that no longer exists, since both are `StrView` now). `typeName` now checks
 `types` first and lets a declared type from any package other than `rtl` win
 (`cppsrc/codegen/Codegen.cpp` and the `cgIsRtlTypeName`/`typeName` mirror in
-`Codegen.simse`); T23 and the five differentials stay byte-identical.
+`Codegen.kt`); T23 and the five differentials stay byte-identical.
 
 `simse_nowMillis` (`cppsrc/rtl/timeops.hpp`) is a monotonic millisecond clock for
 logging and for measuring a run; it exists because the benchmark needed to report
 its own time the way the C++ baseline does.
 
-The Simse surface, with the C++ symbol each one reaches (`cppsrc/rtl/fs.simse`,
-`cppsrc/rtl/rtl.simse`):
+The Simse surface, with the C++ symbol each one reaches (`cppsrc/rtl/fs.kt`,
+`cppsrc/rtl/rtl.kt`):
 
 | Simse | C++ symbol | Notes |
 | --- | --- | --- |
@@ -320,7 +320,7 @@ No new RTL operations were required for the v1 subset. Specifically:
 The front end (the Simse sema port) needs maps, so `Dictionary<K, V>`
 (`std::unordered_map`) gained a native surface in `cppsrc/rtl/dictops.hpp`, and
 `List<T>` gained two helpers. All are prelude natives with explicit symbols
-(`cppsrc/rtl/rtl.simse`):
+(`cppsrc/rtl/rtl.kt`):
 
 | Simse | C++ symbol | Notes |
 | --- | --- | --- |

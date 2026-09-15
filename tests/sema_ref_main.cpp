@@ -1,5 +1,5 @@
 //
-// Differential reference driver for the sema pass. Scans every `*.simse` fixture
+// Differential reference driver for the sema pass. Scans every `*.kt` fixture
 // under the given directory, parses it with the hand-written parser, and prints
 // the hand-written `sema::analyze` diagnostics (the prelude is combined exactly
 // as the golden harness does). The transpiled sema (tests/sema_simse_main.cpp)
@@ -25,7 +25,7 @@ int main(int argc, char **argv) {
     Str fixturesDir = argc > 1 ? argv[1] : ".";
     Str goldenDir = (common::toPath(fixturesDir).parent_path() / "golden").string();
 
-    List<Str> files = filesInDir(fixturesDir, ".simse");
+    List<Str> files = filesInDir(fixturesDir, ".kt");
     std::sort(files.begin(), files.end());
 
     List<TokenMatcher> *rules = getTokenRules();

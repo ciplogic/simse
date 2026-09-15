@@ -219,33 +219,230 @@ namespace linear {
             return expr;
         }
 
-        // One statement list rewritten: every slot declaration becomes an assignment
-        // and its declaration is collected for the top of the body - so the caller
-        // learns whether anything moved from `decls` alone. Blocks keep their place
-        // (the folding is what deals with them); a lambda is a body of its own, so
-        // the walk does not enter one.
-        List<StmtPtr> hoistInList(const List<StmtPtr> &stmts, List<StmtPtr> &decls) {
+        // ---- one scope per body -----------------------------------------
+        //
+        // The hoisting below moves *every* declaration of a body to the top of it, so a
+        // body has one scope. That is what makes a name have to be unique *in the body*:
+        // the language lets two scopes reuse a name (shadowing), and one flat C++ scope
+        // cannot, so the second declaration of a name is renamed - and the uses that
+        // resolve to it move with it, so a name never changes what it means
+        // (impl_specs/linear-il.md, "the frame is flat"). A generated name carries the
+        // `_sm_` prefix the language reserves for the compiler (`_sm_expr1`, `_sm_for1`),
+        // so a rename is never mistaken for a name the program wrote.
+        //
+        // `reserved` is what the emitter has already put in the body's own C++ scope: the
+        // parameters (and `self`), which are declared next to the hoisted storage.
+        struct RenameScope {
+            Dictionary<Str, Str> renamed; // the name as written -> the name to emit
+        };
+
+        // The name a shadowed declaration gets: `_sm_` and the original name, then the
+        // counter *after an underscore* - so a rename can never collide with a name the
+        // compiler generates itself (`_sm_expr1`, `_sm_base1`, `simse_sw_1`), which is the
+        // one thing a reserved prefix alone does not buy: `base2` renamed to `_sm_base2`
+        // would be the lowering's own place slot.
+        static Str shadowName(const Str &name, const Dictionary<Str, bool> &used) {
+            int n = 2;
+            Str candidate = "_sm_" + name + "_" + std::to_string(n);
+            while (used.count(candidate) > 0) {
+                n++;
+                candidate = "_sm_" + name + "_" + std::to_string(n);
+            }
+            return candidate;
+        }
+
+        // The innermost scope that renames this name, if any.
+        static const Str *renamedTo(const List<RenameScope> &scopes, const Str &name) {
+            for (int i = (int) scopes.size() - 1; i >= 0; i--) {
+                auto found = scopes[i].renamed.find(name);
+                if (found != scopes[i].renamed.end()) return &found->second;
+            }
+            return nullptr;
+        }
+
+        // Every name a lambda body binds: its parameters and the declarations anywhere
+        // inside it. A use of one of those is the lambda's own wherever it stands, so the
+        // enclosing scopes must not rewrite it, and the lambda's own pass names them.
+        void collectBoundNames(const List<StmtPtr> &stmts, Dictionary<Str, bool> &bound) {
+            for (const StmtPtr &stmt: stmts) {
+                if (!stmt) continue;
+                if (stmt->kind == StmtKind::VarDecl) bound[stmt->name] = true;
+                collectBoundNames(stmt->body, bound);
+                collectBoundNames(stmt->thenBody, bound);
+                collectBoundNames(stmt->elseBody, bound);
+                for (const ast::SwitchCase &arm: stmt->cases) collectBoundNames(arm.body, bound);
+            }
+        }
+
+        void renameInList(List<StmtPtr> &stmts, List<RenameScope> &scopes,
+                          Dictionary<Str, bool> &used);
+        void rewriteUses(List<StmtPtr> &stmts, List<RenameScope> &scopes,
+                         Dictionary<Str, bool> &used, bool nameNested);
+        void rewriteExpr(ast::ExprPtr &expr, List<RenameScope> &scopes,
+                         Dictionary<Str, bool> &used);
+
+        void rewriteNestedLists(Stmt &stmt, List<RenameScope> &scopes,
+                                Dictionary<Str, bool> &used, bool nameNested) {
+            for (ast::SwitchCase &arm: stmt.cases) {
+                rewriteExpr(arm.label, scopes, used);
+                if (nameNested) renameInList(arm.body, scopes, used);
+                else rewriteUses(arm.body, scopes, used, false);
+            }
+            List<StmtPtr> *nested[] = {&stmt.body, &stmt.thenBody, &stmt.elseBody};
+            for (List<StmtPtr> *list: nested) {
+                if (nameNested) renameInList(*list, scopes, used);
+                else rewriteUses(*list, scopes, used, false);
+            }
+        }
+
+        void rewriteExpr(ast::ExprPtr &expr, List<RenameScope> &scopes,
+                         Dictionary<Str, bool> &used) {
+            if (!expr) return;
+            if (expr->kind == ast::ExprKind::Name) {
+                if (const Str *mapped = renamedTo(scopes, expr->text)) expr->text = *mapped;
+            }
+            if (expr->kind == ast::ExprKind::Lambda) {
+                // A lambda is a body of its own, so its own declarations are not this
+                // body's to name - but a name it does not bind is captured from *this*
+                // body, and that is the name the scopes decide.
+                RenameScope inner;
+                for (const Str &name: expr->paramNames) inner.renamed[name] = name;
+                Dictionary<Str, bool> bound;
+                collectBoundNames(expr->body, bound);
+                for (const auto &entry: bound) inner.renamed[entry.first] = entry.first;
+                scopes.push_back(inner);
+                rewriteUses(expr->body, scopes, used, false);
+                scopes.pop_back();
+            }
+            rewriteExpr(expr->lhs, scopes, used);
+            rewriteExpr(expr->rhs, scopes, used);
+            for (ast::ExprPtr &arg: expr->args) rewriteExpr(arg, scopes, used);
+        }
+
+        // One statement: its expressions rewritten, and the statement lists inside it
+        // named by `renameInList` (a block, a branch, an arm - each is a scope of its
+        // own) or, inside a lambda body, rewritten for uses only.
+        void rewriteStmt(Stmt &stmt, List<RenameScope> &scopes, Dictionary<Str, bool> &used,
+                         bool nameNested) {
+            rewriteExpr(stmt.init, scopes, used);
+            rewriteExpr(stmt.cond, scopes, used);
+            rewriteExpr(stmt.target, scopes, used);
+            rewriteExpr(stmt.value, scopes, used);
+            rewriteExpr(stmt.returnValue, scopes, used);
+            rewriteExpr(stmt.expr, scopes, used);
+            rewriteNestedLists(stmt, scopes, used, nameNested);
+        }
+
+        void rewriteUses(List<StmtPtr> &stmts, List<RenameScope> &scopes,
+                         Dictionary<Str, bool> &used, bool nameNested) {
+            for (StmtPtr &stmt: stmts) {
+                if (stmt) rewriteStmt(*stmt, scopes, used, nameNested);
+            }
+        }
+
+        // One statement list: name its own declarations first - a use may stand before
+        // the declaration it means (`hoisting.kt`), and the scope answers for the whole
+        // list either way - then rewrite the list with that scope pushed.
+        void renameInList(List<StmtPtr> &stmts, List<RenameScope> &scopes,
+                          Dictionary<Str, bool> &used) {
+            RenameScope scope;
+            for (const StmtPtr &stmt: stmts) {
+                if (!stmt || stmt->kind != StmtKind::VarDecl) continue;
+                const Str original = stmt->name;
+                Str emitted = original;
+                if (used.count(original) > 0) {
+                    emitted = shadowName(original, used);
+                    scope.renamed[original] = emitted;
+                }
+                used[emitted] = true;
+                stmt->name = emitted;
+            }
+            scopes.push_back(scope);
+            rewriteUses(stmts, scopes, used, true);
+            scopes.pop_back();
+        }
+
+        void renameShadowed(List<StmtPtr> &body, const List<Str> &reserved) {
+            Dictionary<Str, bool> used;
+            for (const Str &name: reserved) used[name] = true;
+            List<RenameScope> scopes;
+            renameInList(body, scopes, used);
+        }
+
+        // Whether a declaration is one the hoisting can move: a declaration has to be
+        // writable bare, and that needs its *whole* type - `auto x;` is not a declaration,
+        // a machine's `..T` has no spelling at all, and the inference leaves some slots
+        // partly unknown (`*?`: a pointer to nothing it could name).
+        static bool isSpellableType(const ast::TypeExpr *type) {
+            if (!type) return false;
+            switch (type->kind) {
+                case ast::TypeKind::Named:
+                case ast::TypeKind::Generic:
+                    return !type->name.empty();
+                case ast::TypeKind::IntLit:
+                    return true;
+                case ast::TypeKind::Reference:
+                case ast::TypeKind::Pointer:
+                    return isSpellableType(type->inner.get());
+                case ast::TypeKind::Function:
+                    if (!isSpellableType(type->returnType.get())) return false;
+                    for (const ast::TypePtr &param: type->paramTypes) {
+                        if (!isSpellableType(param.get())) return false;
+                    }
+                    return true;
+                case ast::TypeKind::Yield:
+                    return false;
+            }
+            return false;
+        }
+
+        static bool isHoistable(const Stmt &stmt) {
+            return stmt.kind == StmtKind::VarDecl && isSpellableType(stmt.type.get());
+        }
+
+        // One statement list rewritten: every declaration becomes an assignment (when it
+        // had an initializer) and its declaration is collected for the top of the body -
+        // so the caller learns whether anything moved from `decls` alone. Blocks keep
+        // their place (the folding is what deals with them); a lambda is a body of its
+        // own, so the walk does not enter one. A declaration *already* at the top of the
+        // list is not collected: it is where the hoisting puts one, so collecting it again
+        // would make the pass report work it did not do.
+        List<StmtPtr> hoistInList(const List<StmtPtr> &stmts, List<StmtPtr> &decls,
+                                  bool atTop) {
             List<StmtPtr> out;
             for (const StmtPtr &stmt: stmts) {
                 if (!stmt) continue;
-                if (stmt->kind == StmtKind::VarDecl && stmt->type && stmt->init
-                    && isSlotName(stmt->name)) {
-                    auto assignment = std::make_shared<Stmt>();
-                    assignment->kind = StmtKind::Assign;
-                    assignment->pos = stmt->pos;
-                    assignment->op = "=";
-                    assignment->target = nameExpr(stmt->name, stmt->pos);
-                    assignment->value = stmt->init;
-                    out.push_back(assignment);
+                if (isHoistable(*stmt)) {
+                    if (stmt->init) {
+                        auto assignment = std::make_shared<Stmt>();
+                        assignment->kind = StmtKind::Assign;
+                        assignment->pos = stmt->pos;
+                        assignment->op = "=";
+                        assignment->target = nameExpr(stmt->name, stmt->pos);
+                        assignment->value = stmt->init;
+                        out.push_back(assignment);
 
-                    auto declaration = std::make_shared<Stmt>(*stmt);
-                    declaration->init = nullptr;
-                    decls.push_back(declaration);
+                        auto declaration = std::make_shared<Stmt>(*stmt);
+                        declaration->init = nullptr;
+                        decls.push_back(declaration);
+                        continue;
+                    }
+                    if (!atTop) {
+                        // A declaration with nothing to initialize: it moves to the top
+                        // for the same reason as the rest (a jump may not skip it - the
+                        // default construction of a `Str` is an initialization too), and
+                        // nothing is left where it stood.
+                        decls.push_back(std::make_shared<Stmt>(*stmt));
+                        continue;
+                    }
+                    // Already at the top: it is where the hoisting puts one, and it has
+                    // nothing to move with it.
+                    out.push_back(stmt);
                     continue;
                 }
                 if (stmt->kind == StmtKind::Block) {
                     auto block = std::make_shared<Stmt>(*stmt);
-                    block->body = hoistInList(stmt->body, decls);
+                    block->body = hoistInList(stmt->body, decls, false);
                     out.push_back(block);
                     continue;
                 }
@@ -284,7 +481,7 @@ namespace linear {
     Lowered hoistSlots(const List<StmtPtr> &body) {
         Lowered result;
         List<StmtPtr> decls;
-        List<StmtPtr> rewritten = hoistInList(body, decls);
+        List<StmtPtr> rewritten = hoistInList(body, decls, true);
         if (decls.empty()) {
             result.body = std::move(rewritten);
             result.changed = false;
@@ -298,8 +495,19 @@ namespace linear {
         return result;
     }
 
+    Lowered hoistSlots(const List<StmtPtr> &body, const List<Str> &reserved) {
+        List<StmtPtr> renamed = body;
+        renameShadowed(renamed, reserved);
+        return hoistSlots(renamed);
+    }
+
     List<StmtPtr> finishForEmission(const List<StmtPtr> &body) {
+        return finishForEmission(body, List<Str>());
+    }
+
+    List<StmtPtr> finishForEmission(const List<StmtPtr> &body, const List<Str> &reserved) {
         List<StmtPtr> current = body;
+        renameShadowed(current, reserved);
         bool canChange = true;
         int guard = 0;
         while (canChange && guard < 256) {

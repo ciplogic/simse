@@ -29,9 +29,10 @@ namespace linear {
     // temporaries in a block.
     Lowered flattenBlocks(const List<ast::StmtPtr>& body);
 
-    // Moves the lowering's own declarations - the `_sm_expr<n>` temporaries and the
-    // `simse_sw_<n>` switch subjects - to the top of the body, and turns each
-    // initializer into an assignment where the declaration stood:
+    // Moves **every** declaration of a body to the top of it, so a body has one C++
+    // scope and one only - the lowering's own temporaries (`_sm_expr<n>`, `simse_sw_<n>`)
+    // and the program's `val`/`var` alike - and turns each initializer into an assignment
+    // where the declaration stood:
     //
     //     { Bool _sm_expr2 = i == 3; if (_sm_expr2) goto L4; }
     //       ->
@@ -40,28 +41,36 @@ namespace linear {
     //     _sm_expr2 = i == 3;
     //     if (_sm_expr2) goto L4;
     //
-    // A declaration at the top of the body is a declaration no jump can bypass,
-    // which is the one thing the folding above needs (C2362), so this is what turns
-    // the linear form into one flat sequence: after it, every block left is one the
-    // *program* asked for, not one a temporary forced. The initialization stays
-    // where it was, so evaluation order and side effects do not move; what moves is
-    // where the storage is declared, which makes every slot of the body live for the
-    // whole body (a bytecode frame's slots, without liveness reuse).
+    // A declaration at the top of the body is a declaration no jump can bypass, which is
+    // the one thing the folding above needs (C2362), so this is what turns the linear form
+    // into one flat sequence: after it, no block is left for a declaration's sake. The
+    // initialization stays where it was, so evaluation order and side effects do not move;
+    // what moves is where the storage is declared, which makes every slot of the body live
+    // for the whole body (a bytecode frame's slots, without liveness reuse).
     //
-    // It runs **after the type pass**, because a declaration has to keep the type
-    // that pass proved - `auto x;` is not a declaration - and a slot that stayed
-    // untyped keeps its declaration (and the block around it) exactly as it was.
+    // It runs **after the type pass**, because a declaration has to keep the type that
+    // pass proved - `auto x;` is not a declaration - so a declaration the inference could
+    // not spell, and a machine's `..T` (no type to write), keep their place.
     //
-    // A source-level `val`/`var` never moves: its scope is the program's, two scopes
-    // may reuse a name, and `val` is the program's own binding.
+    // One scope is also why a name has to be unique in the body: the language lets two
+    // scopes reuse a name, and `renameShadowed` resolves that before anything moves (a
+    // rename in the lowering, impl_specs/linear-il.md).
     Lowered hoistSlots(const List<ast::StmtPtr>& body);
 
+    // `hoistSlots` with the shadowing resolved first: the names the emitter has already
+    // declared in the body's own C++ scope (its parameters, `self`) are `reserved`, and a
+    // declaration that would collide with one of those - or with another declaration of
+    // the body - is renamed with its uses.
+    Lowered hoistSlots(const List<ast::StmtPtr>& body, const List<Str>& reserved);
+
     // The second half of the pipeline for one function-like body, run once
-    // `sema::inferTypes` has spelled the declarations: the slots move to the top of
-    // the body (`hoistSlots`), which is what lets the folding fold the blocks the
-    // temporaries forced, and the peephole gets another look at the flatter body
-    // (a jump a block hid is a jump it can fold, and a folded jump can free a label).
-    // The loop is the shape `lowerForEmission` runs, with the hoisting in the place
-    // of the rewriting stages - there is nothing left to rewrite.
+    // `sema::inferTypes` has spelled the declarations: the shadowing is resolved, the
+    // declarations move to the top of the body (`hoistSlots`), which is what lets the
+    // folding fold the blocks the declarations forced, and the peephole gets another look
+    // at the flatter body (a jump a block hid is a jump it can fold, and a folded jump can
+    // free a label). The loop is the shape `lowerForEmission` runs, with the hoisting in
+    // the place of the rewriting stages - there is nothing left to rewrite.
     List<ast::StmtPtr> finishForEmission(const List<ast::StmtPtr>& body);
+    List<ast::StmtPtr> finishForEmission(const List<ast::StmtPtr>& body,
+                                         const List<Str>& reserved);
 }

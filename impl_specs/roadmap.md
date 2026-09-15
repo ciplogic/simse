@@ -13,10 +13,10 @@ that detail.
 
 ## Current state
 
-The compiler is ported to `.simse` and self-hosts. The C++ `simse_transpile`
-emits `simse_out.cpp` from the `.simse` compiler sources, and the resulting
+The compiler is ported to `.kt` and self-hosts. The C++ `simse_transpile`
+emits `simse_out.cpp` from the `.kt` compiler sources, and the resulting
 stage-1 compiler reproduces that output byte-for-byte (a fixed point). The
-scanner, parser, sema, codegen, and driver each have a `.simse` mirror
+scanner, parser, sema, codegen, and driver each have a `.kt` mirror
 differentially verified against its C++ reference, and `simse` compiles a
 directory into one amalgamated `.cpp`. For the per-component and per-feature
 status, see `impl_specs/capability-matrix.md`.

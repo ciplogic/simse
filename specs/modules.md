@@ -5,10 +5,12 @@ Status: design baseline — modules, packages, and imports for the first impleme
 
 ## Modules (physical)
 
-A **module is a directory** containing Simse source files (`.simse`); any
+A **module is a directory** containing Simse source files (`.kt` - Kotlin's
+extension, because Simse is a Kotlin-flavored dialect, so an editor's Kotlin mode
+highlights it and the file name says what the file is); any
 subdirectory is a submodule. Modules are the physical unit of source
 organization: the compiler is given one or more **module roots** and scans them,
-including every `.simse` file it finds. An external module — a separately
+including every `.kt` file it finds. An external module — a separately
 supplied library, comparable to a .NET class library — is brought in by placing
 its directory on a module root.
 
@@ -65,7 +67,7 @@ initially: the first implementation supports exactly one package per file.
 `import a.b.c` brings the package `a.b.c` into unqualified scope, comparable to
 `using` in .NET. It does not add files to the compilation.
 
-- The compiler already includes every `.simse` file found under the scanned
+- The compiler already includes every `.kt` file found under the scanned
   module roots; `import` only affects how names are written.
 - There is no qualified-name access form. `import` only controls which packages'
   declarations are visible by their simple names: a declaration is referenced by

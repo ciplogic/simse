@@ -9,7 +9,7 @@ then use the compiler to transpile selected implementation files into Simse as
 a stress test of the language and transpiler.
 
 The long-term goal is to maintain as much of the compiler and supporting code
-as practical in `.simse`, while keeping a small native C++ foundation for
+as practical in `.kt`, while keeping a small native C++ foundation for
 operations that are not yet expressible or practical in Simse.
 
 This is a migration plan, not a requirement that every C++ line eventually be
@@ -22,7 +22,7 @@ reference while self-hosting is developed.
 
 Implement the scanner, parser, semantic stages, reifier, C++ lowering, and
 amalgamator in C++. Keep the generated C++ readable and debuggable. Use the
-`.simse` sources and the `tests/fixtures/` programs as input fixtures and
+`.kt` sources and the `tests/fixtures/` programs as input fixtures and
 comparison cases.
 
 The initial compiler may call hand-written C++ runtime code under `cppsrc/rtl`.
@@ -32,7 +32,7 @@ rewritten as part of the first self-hosting attempt.
 ### Phase 2: Simse implementation candidates
 
 Once the C++ compiler can transpile a useful subset, begin expressing selected
-compiler components in `.simse`. Good candidates are deterministic,
+compiler components in `.kt`. Good candidates are deterministic,
 allocation-light components whose required behavior is already represented by
 the language, such as:
 
@@ -43,7 +43,7 @@ the language, such as:
 - C++ text generation.
 
 Each candidate should first have a working C++ implementation or native test
-harness. Its `.simse` version is then transpiled and compared against that
+harness. Its `.kt` version is then transpiled and compared against that
 baseline.
 
 ### Phase 3: dual implementation and differential testing
@@ -67,7 +67,7 @@ remains available as a bootstrap compiler, recovery path, and reference for
 debugging regressions.
 
 The project is self-hosted when the compiler can regenerate its required C++
-implementation from its `.simse` sources without relying on a manually edited
+implementation from its `.kt` sources without relying on a manually edited
 implementation of the same compiler logic.
 
 ## Native fallback boundary
@@ -142,7 +142,7 @@ native fun readFile(path: Str): Str
 Simse code would use it normally:
 
 ```text
-val source: Str = readFile("main.simse")
+val source: Str = readFile("main.kt")
 ```
 
 The transpiler would emit a normal C++ call to the native implementation,
@@ -182,7 +182,7 @@ principles:
 This plan does not yet define:
 
 - the final `native` declaration syntax;
-- whether native functions are declared in `.simse` files or a separate manifest;
+- whether native functions are declared in `.kt` files or a separate manifest;
 - C++ symbol mangling and namespaces;
 - static versus dynamic native libraries;
 - ownership transfer rules for native pointers;

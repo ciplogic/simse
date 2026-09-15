@@ -7,7 +7,7 @@ thing one writes, in both languages.
 
 | | |
 | --- | --- |
-| Simse | `src/main.simse` - `readLineView(): Opt<StrView>` parses each line **in place** |
+| Simse | `src/main.kt` - `readLineView(): Opt<StrView>` parses each line **in place** |
 | C++ | `brc_naive.cpp` - `std::ifstream` + `std::getline` + `std::stod` + `std::unordered_map<std::string, Stats>` |
 | Reference | `onebrc.mjs check` - the aggregate in JavaScript, which both reports are compared against |
 
@@ -56,6 +56,13 @@ stable one.
   a library gap, not a language one, and is the single largest remaining item.
 - **Memory is a wash.** 6.5 MB against 5.9 MB peak working set: neither program
   holds the file, and the dictionary of 100 stations dominates both.
+- **The flat-IL hoisting costs nothing here.** Every declaration of a body now lives at
+  the top of it, one scope per body (`impl_specs/linear-lowering.md`, "Slot hoisting:
+  one scope per body"). The program below was A/B'd against the same program emitted by
+  the compiler from before that pass: **1323 ms against 1322 ms** (min of 3 interleaved
+  pairs, one session, both binaries on the same data). Longer lifetimes and no liveness
+  reuse are not free in general, but on this workload they are not visible - the
+  reader's advantage is unchanged.
 
 For context, the reader alone is worth **1.88x** on this workload. Measured the
 same way on the same data while the benchmark still had all three modes (the

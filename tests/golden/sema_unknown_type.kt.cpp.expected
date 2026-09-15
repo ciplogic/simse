@@ -1,0 +1,1 @@
+CodegenError sema_unknown_type.kt:2:10: unsupported type 'Nope'

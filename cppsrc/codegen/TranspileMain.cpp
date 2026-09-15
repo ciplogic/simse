@@ -1,11 +1,11 @@
 //
-// simse_transpile: the low-level transpiler CLI. Parses the given .simse inputs
-// (or every .simse under the current directory when none are given), runs
+// simse_transpile: the low-level transpiler CLI. Parses the given .kt inputs
+// (or every .kt under the current directory when none are given), runs
 // name/type resolution over the whole compilation, and writes one amalgamated
 // C++ translation unit.
 //
 // The module roots (`--root`, and each repeatable `--module-root`) are scanned
-// recursively; every `.simse` file found is part of the compilation, and the
+// recursively; every `.kt` file found is part of the compilation, and the
 // explicit inputs are added on top. `import a.b.c` makes package `a.b.c` visible
 // unqualified and never adds files (specs/modules.md), so pass the module roots
 // that hold the imported packages.
@@ -15,10 +15,13 @@
 // without an import. Prelude declarations resolve but are never emitted
 // (impl_specs/native-interop.md).
 //
-// Usage: simse_transpile <input.simse>... [-o <output.cpp>] [--prelude <file>]
+// Usage: simse_transpile <input.kt>... [-o <output.cpp>] [--prelude <file>]
 //                       [--root <dir>] [--module-root <dir>]...
 //
-// The output file defaults to `simse_out.cpp` in the current folder.
+// The output file defaults to `simse_out.cpp` in the current folder - the amalgamated
+// compiler, the same file the published `cppsrc/simse_bootstrap.cpp` is a copy of
+// (docs/getting-started.md, "Building the compiler without a compiler"). Pass `-o` to
+// write anywhere else.
 //
 // The parse -> sema -> codegen -> write pipeline lives in compiler::transpile
 // (cppsrc/Compiler.cpp), shared with the `simse` directory compiler.
@@ -41,7 +44,7 @@ int main(int argc, char **argv) {
     bool preludeExplicit = false;
     bool showIl = false;
     bool linearCodegen = false;
-    bool linearCodegenEmit = false;
+    bool linearCodegenEmit = true;
     for (int i = 1; i < argc; i++) {
         Str arg = argv[i];
         if (arg == "-o") {
@@ -74,13 +77,18 @@ int main(int argc, char **argv) {
             showIl = true;
         } else if (arg == "--linearCodegen") {
             linearCodegen = true;
+            linearCodegenEmit = true;
         } else if (arg == "--linearCodegenEmit") {
             linearCodegen = true;
             linearCodegenEmit = true;
+        } else if (arg == "--statementsCodegen") {
+            // The escape hatch: the statement tree emits every body, exactly as before
+            // the IL became the source of the output.
+            linearCodegenEmit = false;
         } else if (arg == "-h" || arg == "--help") {
-            printf("usage: simse_transpile <input.simse>... [-o <output.cpp>]"
+            printf("usage: simse_transpile <input.kt>... [-o <output.cpp>]"
                    " [--prelude <file>] [--root <dir>] [--module-root <dir>]..."
-                   " [--showLinearRepresentation] [--linearCodegen] [--linearCodegenEmit]\n");
+                   " [--showLinearRepresentation] [--linearCodegen] [--statementsCodegen]\n");
             return 0;
         } else {
             inputs.push_back(arg);

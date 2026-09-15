@@ -7,8 +7,8 @@ desugared to `while` first; this pass owns `while` → `goto` and everything abo
 it.
 
 - C++ ring: `cppsrc/linear/Linear.{h,cpp}` (`linear::lowerBody`).
-- Simse ring: `cppsrc/linear/Linear.simse` (`linLowerBody`), called by
-  `cppsrc/codegen/Codegen.simse`.
+- Simse ring: `cppsrc/linear/Linear.kt` (`linLowerBody`), called by
+  `cppsrc/codegen/Codegen.kt`.
 
 The pass runs **after sema and before emission**. Sema stays the only place that
 checks `break`/`continue` legality and case labels, and it still sees the
@@ -89,7 +89,7 @@ switch (e) { case A: ... default: ... }   # arms keep source order and
 ## Simplification stage
 
 `linear::simplifyBody` (`cppsrc/linear/Simplify.{h,cpp}`, `linSimplifyBody` in
-`cppsrc/linear/Simplify.simse`) runs on the lowered body, after `lowerBody` in every
+`cppsrc/linear/Simplify.kt`) runs on the lowered body, after `lowerBody` in every
 round of the pipeline below. It is a small fixed-point peephole pass whose
 only job is to keep the linear form close to the structured code it came from:
 
@@ -134,7 +134,7 @@ verify against the un-simplified output.
 ## Expression lowering
 
 `linear::lowerExprs` (`cppsrc/linear/ExpressionLowering.{h,cpp}`, `linLowerExprs` in
-`cppsrc/linear/ExpressionLowering.simse`) is the second half of the same idea: after
+`cppsrc/linear/ExpressionLowering.kt`) is the second half of the same idea: after
 the linear pass the emitter has one *statement* vocabulary, and after this pass one
 *expression* vocabulary. It runs on the lowered body, after `linear::simplifyBody`
 in the same round - so the folds the structured form allows happen before the
@@ -216,7 +216,7 @@ pass above would then leave call arguments to it instead of binding them blind.
 ## Block folding
 
 `linear::flattenBlocks` (`cppsrc/linear/Simplify.{h,cpp}`, `linFlattenBlocks` in
-`cppsrc/linear/Simplify.simse`) folds a nested block into its parent sequence, so a
+`cppsrc/linear/Simplify.kt`) folds a nested block into its parent sequence, so a
 block survives only where one is needed:
 
 ```
@@ -264,40 +264,55 @@ crossed by the jump to the next arm's label, so the arm keeps a scope:
 That is what the slot hoisting below is for: move the declaration out of the way and
 the block has nothing left to hold.
 
-## Slot hoisting
+## Slot hoisting: one scope per body
 
 `linear::hoistSlots` (`cppsrc/linear/Simplify.{h,cpp}`, `linHoistSlots` in
-`cppsrc/linear/Simplify.simse`) moves the lowering's own declarations - the
-`_sm_expr<n>` temporaries and the `simse_sw_<n>` switch subjects - to the top of the
-body, and turns each initializer into an assignment where the declaration stood:
+`cppsrc/linear/Simplify.kt`) moves **every** declaration of a body to the top of it -
+the lowering's own temporaries (`_sm_expr<n>`, `simse_sw_<n>`) and the program's
+`val`/`var` alike - and turns each initializer into an assignment where the
+declaration stood:
 
 ```
-{ Bool _sm_expr2 = i == 3; if (_sm_expr2) goto L4; }
-    ->
-Bool _sm_expr2;                     # at the top of the body
-...
-_sm_expr2 = i == 3;
+{ Bool _sm_expr2 = i == 3; if (_sm_expr2) goto L4; }     var total = 0;
+    ->                                                     ->
+Bool _sm_expr2;                     # at the top         Int total;          # at the top
+...                                                        ...
+_sm_expr2 = i == 3;                                        total = 0;
 if (_sm_expr2) goto L4;
 ```
 
 A declaration at the top of the body is a declaration no jump can bypass, which is
 the one thing the folding needs (C2362), so this is what makes the linear form one
-flat sequence: after it, every block left is one the *program* asked for, not one a
-temporary forced. The initializer stays where it was, so **evaluation order and side
+flat sequence: after it, a body has **one scope** and no block is left for a
+declaration's sake. The initializer stays where it was, so **evaluation order and side
 effects do not move** - what moves is where the storage is declared. Every slot of
 the body is then live for the whole body: the slots of a bytecode frame, without
-liveness reuse. That is the cost of the flatness, and it is measurable (see
-`benchmarks/onebrc/benchmark.md`).
+liveness reuse. That is the cost of the flatness, and on the 1BRC it measured at
+nothing (`benchmarks/onebrc/benchmark.md`: 1323 ms against 1322 ms for the same
+program emitted by the compiler before this pass).
+
+One scope is also what makes a name have to be unique **in the body**, and the
+language lets two scopes reuse a name (shadowing). `renameShadowed` resolves that
+before anything moves: the first declaration of a name keeps it, every later one is
+renamed, and the uses that resolve to the renamed declaration move with it, so a name
+never changes what it means. A generated name is `_sm_<name>_<n>` - the `_sm_`
+prefix the language reserves for the compiler, and the counter *after an underscore*
+so a rename can never collide with a name the compiler generates itself (`base2`
+renamed to `_sm_base2` would be the extractor's own place slot: that collision was a
+real bug, and it is why the underscore is not decoration). `finishForEmission` takes
+the names the emitter has already declared in the body's own C++ scope - its
+parameters, `self` - as `reserved`.
 
 It runs **after the type pass**, because a declaration has to keep the type that pass
-proved: `auto x;` is not a declaration. A slot whose type the inference could not
-spell keeps its declaration in place - and the block around it with it - and so does
-a source-level `val`/`var`: that scope is the program's, two scopes may reuse a name,
-and the emitter keeps a name where the program wrote it.
+proved: `auto x;` is not a declaration. A declaration the inference could not spell
+in full - an untyped slot, or a partly unknown type such as the `*?` of a synthesized
+place - keeps its declaration in place, and the block around it with it, which is the
+only reason the emitted C++ still has a block anywhere.
 
-The pass is pure and idempotent: a slot declaration without an initializer is not a
-slot to move, so a second run finds nothing (which is what the round's `changed` flag
-reports). One trap, recorded because it cost a debugging session: the prefixes are
+The pass is pure and idempotent: a declaration without an initializer that already
+stands at the top is not a declaration to move, so a second run finds nothing (which
+is what the round's `changed` flag reports). One trap, recorded because it cost a
+debugging session: the prefixes are
 `_sm_expr` (8 characters) and `simse_sw_` (9), and `Str::compare(pos, count, ...)`
 takes the *count* - a wrong count silently compares different bytes and the pass just
 does nothing.
@@ -319,7 +334,7 @@ while (canChange) {
 }
 ```
 
-`linear::lowerForEmission` (`linLowerForEmission` in `cppsrc/linear/Linear.simse`) is
+`linear::lowerForEmission` (`linLowerForEmission` in `cppsrc/linear/Linear.kt`) is
 that loop, and it is what the emitter calls per body. Every stage returns the body
 *and* whether it changed anything (`linear::Lowered`, `LinLowered`), which is what the
 loop tests: a stage that made no change has to say so, or the round would never end.
@@ -348,7 +363,7 @@ what the emitter prints.
 step that follows gives its declarations a *type*, so the emitter neither guesses
 one while it emits nor falls back to `auto`. It is `sema::inferTypes`
 (`cppsrc/sema/TypeInfer.{h,cpp}`, `semInferTypes` in
-`cppsrc/sema/TypeInfer.simse`) and it runs last, on the body the emitter is about to
+`cppsrc/sema/TypeInfer.kt`) and it runs last, on the body the emitter is about to
 emit:
 
 ```

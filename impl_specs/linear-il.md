@@ -2,12 +2,11 @@
 
 The form `impl_specs/linear-lowering.md` builds is already *almost* an instruction
 list: control flow is labels, gotos and conditional jumps, every value position is one
-operation deep, and the lowering's own storage is declared once at the top of the body
-(the slot hoisting). What is left that is not linear:
+operation deep, and **every** declaration sits once at the top of the body (the slot
+hoisting: one scope per body). What is left that is not linear:
 
 - a statement is still a small tree (`Assign` holds a target *path* and a value,
   `Call` holds a callee and N arguments, `IfTrue` holds a condition);
-- a body is still a tree of `Stmt.Block`;
 - a lambda is an expression **with a body inside it**.
 
 This is the shape that removes all three, so a later optimization can read one
@@ -16,12 +15,13 @@ model is Smali's (`.method` / `.registers` / `.local` / `const-string` next to t
 `invoke-*` family), which is a good fit because it is *designed* to be printed and
 read, not just executed.
 
-Status: **the projection, the printer, the dump flag and the backend are implemented in
-the C++ ring** (`cppsrc/linear/LinearForm.{h,cpp}`, `--showLinearRepresentation`,
-`--linearCodegen`, `--linearCodegenEmit`); the tables, the operand kinds and the
-instruction list below are what the code does. The **Simse ring has none of it yet** -
-`Codegen.simse` still reads statements, which is the one thing that keeps the
-statement emitter alive in both rings (see "Dropping the statement emitter").
+Status: **implemented in both rings, and the default.** `cppsrc/linear/LinearForm.{h,cpp}`
+(projection, printer, dump flag) and `LinearForm.kt` (the same, mirrored) hold the
+model; the backend lives in each emitter - `Emitter::emitIlBodyText` in `Codegen.cpp`
+and `emitIlBodyText`/`ilEmitOps`/`emitClosureClass` in `Codegen.kt`. The tables, the
+operand kinds and the instruction list below are what the code does.
+`--showLinearRepresentation` dumps the IL, `--linearCodegen` reports both paths,
+`--statementsCodegen` puts the statement tree back in charge.
 "What the corpus says" is the measured state of the projection over the whole
 compiler.
 
@@ -58,7 +58,8 @@ IlMethodKind = Function | Method | Native | Constructor
   `rtl_Str`, `ns1_Point`, `rtl_SmallVector<Int, 4>`, handles as `&T` / `*T`, type
   parameters symbolic (`Box<T>`). The backend reads the index, the dump reads the text.
 - **A name is unique in the table.** The frame is flat, so shadowing is resolved
-  before the IL (a rename in the lowering); the dump may keep the original name.
+  before the IL, by the lowering's rename (`renameShadowed`,
+  `impl_specs/linear-lowering.md`); the dump may keep the original name.
 - **Text is a pool index**: a string literal, a field name, an operator spelling
   (`"+"`), a native's symbol. A callee is **not** here - it has its own table (below) -
   so a call operand is never ambiguous with a string.
@@ -186,7 +187,7 @@ and signature, the tables, then one line per instruction with the operands resol
 for the reader and the source line appended. Real output, verbatim:
 
 ```
-# cppsrc/codegen/Codegen.simse:54  ns1_cgJoin (*List<Str> parts, Str separator) -> Str
+# cppsrc/codegen/Codegen.kt:54  ns1_cgJoin (*List<Str> parts, Str separator) -> Str
 types:   0 *List<Str>   1 Str   2 Int   3 Bool
 vars:    0 parts:0:Argument   1 separator:1:Argument   2 _sm_expr1:2:Expression   3 _sm_expr2:3:Expression   4 _sm_expr3:3:Expression   5 _sm_expr4:1:Expression   6 out:1:Local   7 i:2:Local
 pool:    0 ""   1 0   2 "<"   3 ">"   4 "+"   5 1
@@ -257,19 +258,24 @@ Three consequences worth stating plainly:
 
 ## Codegen from the IL
 
-**Implemented** (`--linearCodegen` / `--linearCodegenEmit`, `impl_specs/linear-il.md`),
-for every function body of the compiler:
+**Implemented, and the default.** The emitter reads the instruction list for every body
+it can express and the statement tree for the rest (`--statementsCodegen` puts the
+statement path back in charge; `--linearCodegen` adds the comparison report). Over the
+whole compiler source set (`--root cppsrc`, 502 bodies):
 
 | | |
 | --- | --- |
-| bodies | 321 |
-| byte-identical with the statement path | 165 |
-| the **same code**, with only the forced braces/indentation left | 154 |
-| differing | **0** |
-| not expressible | 2 (the two lambda bodies) |
+| byte-identical with the statement path | 276 |
+| the **same code**, with only the forced braces/indentation left | 224 |
+| differing (the closure model: a class here, `[=]` in the statement path) | 2 |
+| not expressible | **0** |
 
-The backend lives in the emitter (`Emitter::emitIlBodyText` and the helpers around
-it) and it does not re-spell anything: an operand becomes a leaf `ast::Expr` - a slot
+Both rings do this: the C++ backend (`Emitter::emitIlBodyText` and the helpers around
+it) and the Simse one (`Codegen.kt`'s `emitIlBodyText`/`ilEmitOps`/`emitClosureClass`,
+over `linear/LinearForm.kt`'s extractor). They report the same counts and their
+emitted files are byte-identical, which is what T23 pins.
+
+The backend does not re-spell anything: an operand becomes a leaf node - a slot
 is a name, a constant is its literal, a place is the path it came from, folded back
 out of the instruction that built it - and `expr`/`call`/`memberAccess` write the
 text. The two paths therefore agree *by construction*, which is what makes the
@@ -284,9 +290,10 @@ Four rules do the work the statement tree used to do implicitly:
 - **`Declare`/`DeclareInit`**: one line with the instruction that follows
   (`Str out = "";`), or a bare one where the hoisting left it. The distinction is
   real because the hoisting turns a declaration's initializer into an assignment.
-- **The flags**: `--linearCodegen` compares and reports (the output is unchanged -
-  the IL's text is used only where the two agree); `--linearCodegenEmit` *uses* the
-  IL's text for every body it could express and the statement text for the rest.
+- **The flags**: the IL is the default source of the output. `--statementsCodegen`
+  turns it off (the statement tree emits every body, exactly as before);
+  `--linearCodegen` adds the report - both paths per body, the differences on stderr -
+  and keeps the statement text where they disagree.
 - **The one block the flat form keeps**: where a jump crosses a declaration, C++
   wants a scope (a `goto` may not skip an initialization, MSVC C2362). The backend
   opens exactly that block - the one the statement path keeps - and closes it at the
@@ -296,17 +303,24 @@ Four rules do the work the statement tree used to do implicitly:
 What that buys, verified end to end:
 
 ```sh
-./cmake-build-debug/simse_transpile.exe --root cppsrc -o a.cpp --linearCodegenEmit
+./cmake-build-debug/simse_transpile.exe --root cppsrc -o a.cpp   # from the IL already
 bun build.js --cpp a.cpp --exe il_simse.exe     # the compiler, from the bytecode
 ./il_simse.exe --root cppsrc -o b.cpp           # it transpiles itself
-cmp b.cpp <the statement path's output>         # byte-identical
-bun tools/stress.js --simse ./il_simse.exe      # 24/24
+cmp b.cpp a.cpp                                 # byte-identical
+bun tools/stress.js --simse ./il_simse.exe      # 28/28
+bun tools/bootstrap.js --simse ./il_simse.exe   # and it does so in ~0.9 s
 ```
 
-The two bodies it cannot express yet are the two lambdas in the compiler
-(`ns1_collectPackages`, `ns3_driverGatherFiles` pass a lambda to `sort`): until the
-closure work lands (item 5), those fall back to the statement path, which is why the
-flat form can already be the default for everything else.
+And it cost no *runtime* speed: two builds of the same compiler - one emitted from the
+statement tree (`--statementsCodegen`), one from the IL - transpile the compiler's source
+tree in 0.93 s and 0.95 s (best of 3, release). The instruction list is what the emitter
+reads; the shape of the C++ it writes is not the bottleneck the way it was feared to be.
+
+The two bodies whose text differs are the two lambdas in the compiler
+(`ns1_collectPackages`, `ns3_driverGatherFiles` pass a lambda to `sort`): there the
+statement path's `[=]` becomes the closure class the language specifies, which is the
+one difference the model owns - and it is the text that is emitted, so a lambda *is*
+an instance of its class in the output too.
 
 ## Lambdas: the closure, and the class it is
 
@@ -345,7 +359,7 @@ The corpus, with the closure classes in the emitted code:
 | --- | --- |
 | compiler bodies: byte-identical / same code / differing / not expressible | 170 / 149 / **2** / **0** |
 | the 2 differing | `collectPackages` and `driverGatherFiles`: `[=](...)` in the statement path against the class here - the closure model, by construction |
-| `stress/lambdas` (capturing lambda, block-bodied lambda, lambdas as arguments) | builds and prints the golden output; the emitted compiler self-transpiles **byte-identically** (`cmp` against the statement path) and the corpus is 24/24 |
+| `stress/lambdas` (capturing lambda, block-bodied lambda, lambdas as arguments) | builds and prints the golden output; the emitted compiler self-transpiles **byte-identically** (`cmp` against the statement path) and the corpus is 28/28 |
 
 What is *not* projected yet, all outside the corpus: a nested lambda reading an
 enclosing lambda's capture (the capture is a field, so it would have to be read into
@@ -365,20 +379,21 @@ deferred). `&lambda` rides the existing `Box`, i.e. `std::make_shared<Class>(ins
 | 7 | Frame size: every slot is live for the whole body | deferred, by design | - |
 | 8 | Literals ride the pool as **operand literals** (a negative operand is `pool[-1-n]`) | **done**; 1,486 materialised constants gone | - |
 | 9 | Declarations are `Declare`/`DeclareInit` instructions | **done**; the placement is the lowering's, and the backend adds only the scope C++ forces | - |
-| 10 | The Simse mirror (`LinearForm.simse` + the IL backend in `Codegen.simse`) | **not started**; the ring cannot dump or emit from the IL yet | the other ring |
+| 10 | The Simse mirror (`LinearForm.kt` + the IL backend in `Codegen.kt`) | **done**: the extractor, the printer, the backend (`emitIlBodyText`/`ilEmitOps`/the closure classes) and the two flags; both rings report the same counts and emit identical files | - |
 
 ## Next
 
-1. Turn the flag into the default. The comparison has 0 bodies it cannot express and
-   the only differences left are the closure model (a lambda is a class here, `[=]`
-   in the statement path) and the blocks the flat form drops - both deliberate. So
-   `--linearCodegen` becomes the only path and the statement emitters retire (the
-   goldens are regenerated once, deliberately).
+1. Delete the statement emitters. The IL expresses every body of the compiler (0 not
+   expressible) and the only text differences left are the closure model and the blocks
+   the flat form drops - both deliberate. What is missing before the fallback can go is
+   *coverage evidence*: the corpus (`stress/`, `tests/fixtures`) has to keep reporting 0
+   fallbacks, and the shapes the IL cannot spell yet (`CallIndirect` - calling a value in
+   a variable - and `Cast`) have to be counted. Until then the statement path stays as a
+   silent fallback.
 2. `verifyIlBody` (operand counts and kinds from the signature table, jump targets in
    range, a call's argument count against its `IlMethod`, every label defined) - the
    check that is cheap once the IL is the source of truth.
-3. The Simse mirror (item 10), which is what makes the *self-hosted* compiler emit
-   from the IL too.
+3. The prelude-body rule, then `smToYield` (`impl_specs/for.md`, `impl_specs/yield.md`).
 
 ## Dropping the statement emitter
 
@@ -389,48 +404,99 @@ port gets one target instead of two.
 
 What is already true, measured:
 
-- **The IL expresses every body of the compiler**: `--linearCodegen` over `cppsrc`
-  reports `341 bodies, 187 byte-identical, 152 identical without blocks, 2 differing`.
-  The two are the closure model's (`[=]` capture list against the class the language
-  specifies), not gaps in the instruction set.
+- **The IL expresses every body of the compiler**: over `cppsrc` the report is
+  `502 bodies, 276 byte-identical, 224 identical without blocks, 2 differing, 0 not
+  expressible`. The two differences are the closure model's (`[=]` capture list against
+  the class the language specifies), not gaps in the instruction set - and the class is
+  what the output spells now.
 - **A machine is expressible too.** A state machine's method bodies go through the same
   two paths as any other body (`Emitter::emitMachine` -> `emitBodyCheckedAt`, with the
-  machine's class as the frame's `self`), and the yield example reports
-  `5 bodies, 5 identical without blocks, 0 differing, 0 not expressible`. The example
-  transpiled with `--linearCodegenEmit` compiles and prints exactly what the statement
-  path prints - both `for` forms, `continue` and `break` included.
-- **A compiler built from IL-emitted output works**: `simse_transpile --root cppsrc
-  --linearCodegenEmit` then compiling that file gives a compiler that passes the whole
-  stress corpus, so the backend is complete for everything the compiler's own source
-  needs.
+  machine's class as the frame's `self`), and `stress/yield` reports
+  `5 bodies, 5 identical without blocks, 0 differing, 0 not expressible`. The machine it
+  emits compiles and prints exactly what the statement path printed - both `for` forms,
+  `continue` and `break` included (`stress/yield` runs it through the self-hosted
+  compiler).
+- **A compiler built from IL-emitted output works**: transpiling `cppsrc` (the default
+  now) and compiling that file gives a compiler that passes the whole stress corpus, and
+  reproduces its own source byte-for-byte - so the backend is complete for everything the
+  compiler's own source needs.
 
-What blocks the switch: **T23 pins the two rings together.** The IL's text is *flatter*
-than the statement path's (blocks and the gotos that only they needed are gone: 152 of
-341 bodies differ that way) and it spells a lambda as the class the language specifies
+What the switch needed: **T23 pins the two rings together.** The IL's text is *flatter*
+than the statement path's (blocks and the gotos that only they needed are gone: 224 of
+502 bodies differ that way) and it spells a lambda as the class the language specifies
 (`specs/memory-model.md`) instead of a C++ `[=]`. The stage-1 fixed point compares the
-C++ ring's output with the Simse ring's own, so switching one ring alone turns T23 red -
-somewhere other than in the file that changed.
+C++ ring's output with the Simse ring's own, so switching one ring alone would turn T23
+red - somewhere other than in the file that changed. Both rings were moved in one
+change, which is why the port came first.
 
-So the order is:
+The order that was followed:
 
-1. **`cppsrc/linear/LinearForm.simse`** - the extractor, the printer and the backend,
+1. **`cppsrc/linear/LinearForm.kt`** - the extractor, the printer and the backend,
    over the Simse ring's statements (the same algorithms, one XML dialect: roles instead
    of struct fields). The oracle is the C++ ring's own two dumps: `--showLinearRepresentation`
    over `cppsrc` must be byte-identical between the rings, and then
    `--linearCodegen`'s report must read the same in both.
-2. **Switch both rings to the IL** in one change: `Codegen.{cpp,simse}` keeps
-   `emitBodyCheckedAt` only, the statement emitters (`emitStmts`/`emitStmt` and the
-   Simse equivalents) are deleted, and `--linearCodegenEmit` becomes the behavior with
-   no flag. T23 stays green because both rings move together, and the emitted text
-   changes deliberately (flatter bodies, closure classes) - the goldens are regenerated
-   with `--update` after being read.
-3. **Then `yield` in the Simse ring** - which becomes `emitYieldable` plus the lowering
-   of `Yield.simse`, with the machine's bodies already just another IL body.
-4. Then `smToYield` (`impl_specs/for.md`).
 
-What is *not* a blocker: the statement path is still the default, so every step above is
-additive until step 2, and each step has an oracle that fails loudly if a ring drifts
-(the stage drivers in `tools/_ring`, `--linearCodegen`'s report, T23, the corpus).
+   **Landed and verified** (`LinearForm.kt`): the model (`IlVar`/`IlMethod`/`IlOp`/`IlBody`/
+   `IlClosure`/`IlUnit`/`IlFunction` as data classes, the three enums), the signature
+   table, the operand readers, `ilTypeText`/`ilReceiverTypeText`/`ilWritesDestination`, the
+   whole printer, and the **extractor** (`IlExtractor`: the frame, statements, values,
+   calls, names, lambdas with their computed closure). The Simse ring's driver has
+   `--showLinearRepresentation` and `Codegen.kt` calls the extractor per body, so the
+   two rings' dumps can be compared, and they are **byte-identical**:
+
+   - every program under `stress/*/src` (25/25);
+   - `--root cppsrc` - the compiler's own 341 bodies, 32,964 lines of dump, 0 differing.
+
+   That is the IL's *front* end in both rings. Two divergences surfaced on the way and
+   were fixed: the `CallVoid` comment read operand 0 as the method index (the C++
+   `operandAt(operands, hasDst ? 1 : 0)` rule), and the Simse ring's switch lowering gave
+   a case's compare the *switch's* position instead of the case's - invisible in the
+   emitted C++ (which is byte-identical for that program) and only visible in the IL's
+   `(line N)` comments, which is exactly the kind of drift the dump comparison exists to
+   catch.
+
+   **Next: the emitter** - the last piece before the Simse ring can emit from the IL.
+   The port is smaller than it looks, because an op's operands become *leaf* nodes and the
+   spelling helpers are the ones `Codegen.kt` already has:
+
+   | C++ (`Codegen.cpp`) | Simse (`Codegen.kt`) |
+   | --- | --- |
+   | `IlFrame` + `ilAnalyze` (slot -> defining op, use counts) | the same over `Dictionary<Int, Int>` |
+   | `ilSlotNode`/`ilOperandNode`/`ilMemberNode` (`ast::Expr` leaves) | the same, building `AstXmlNode` leaves |
+   | `ilValueText`/`ilOpValueNode` (operand -> expression, folding a `Declare` into the op that writes it) | the same, then `this.expr(...)` |
+   | `emitIlOps` (241 lines, one branch per opcode) | the same branches, calling the existing `this.line`/`this.expr`/`this.type` helpers |
+   | `emitIlBodyText` (frame install/restore) | the same, saving `nameKinds`/`localTypes`/`ilUnit`/`closureSymbols` |
+   | `emitClosureClasses` + `emitClosureMethodText` (169 lines) | **new in the Simse ring** - it has no class model yet, only `[=]` |
+
+   Two things to know before writing it:
+
+   - **The IL's text is mostly the statement path's own spellings** (187 of 341 bodies
+     byte-identical, 152 identical once blocks are folded), so `emitIlOps` can rebuild the
+     linear *statement* vocabulary and hand it to the existing emitters wherever that is
+     simpler than building expressions - what it must add is the folding the statement
+     path does not do (`Declare` + the op that writes the slot = one `T x = v;` line,
+     which `ilWritesDestination` + adjacency decides).
+   - **The switch is all-or-nothing per ring**, and T23 is what enforces it: a lambda is a
+     *class* in the IL's model and a `[=]` in the statement model, so the Simse ring needs
+     closure classes before either ring can drop its statement emitter.
+
+   Then the driver flag became the behavior with no flag, and T23 proves the fixed
+   point in the new form - which is the state the user asked for: **the Simse ring
+   self-hosts on the linear IL.** (Done: see "Codegen from the IL" above.)
+
+2. **Switch both rings to the IL** in one change: `Codegen.{cpp,simse}` keeps
+   `emitBodyCheckedAt` and the IL backend, `--statementsCodegen` keeps the statement
+   emitters reachable as the fallback, and both rings move together so T23 stays green.
+   (Done.)
+3. **Then `yield` in the Simse ring** - which became `emitYieldable`/`emitMachine` plus
+   the lowering of `Yield.kt`, with the machine's bodies already just another IL body.
+   (Done: `stress/yield`.)
+4. Then `smToYield` (`impl_specs/for.md`) - still open.
+
+What is *not* a blocker: the statement path is reachable (`--statementsCodegen`) and
+each step has an oracle that fails loudly if a ring drifts (the stage drivers in
+`tools/_ring`, `--linearCodegen`'s report, T23, the corpus).
 
 ## Open decisions
 
@@ -466,14 +532,16 @@ additive until step 2, and each step has an oracle that fails loudly if a ring d
    because its spelling depends on the expected type (`Opt<T>()` vs `nullptr`) and the
    destination slot is where the IL has that type for certain.
 8. **Declarations: a prologue, or a `Declare` instruction?** *Decided and
-   implemented: a `Declare` instruction* (`Declare dst=Var`), emitted where the
-   lowering left the declaration, so the frame table only *describes* the slots and
-   the emitted code keeps the placement it has today. A prologue is simpler, but it
-   moves every program `var` to the top of the function - a visible change to the
-   emitted code, and one the hoisting deliberately avoids for source-level bindings.
-   A backend folds `Declare` + the next instruction when that instruction writes the
-   slot it declared (`ilWritesDestination`), which is how a declaration with an
-   initializer stays one line.
+   implemented: a `Declare` instruction* (`Declare dst=Var`), and - since the
+   flat-body round - the *prologue too*: `hoistSlots` moves every declaration to the
+   top of the body and turns its initializer into an assignment where it stood, so a
+   body has one scope and the emitted code is a prologue by construction
+   (`impl_specs/linear-lowering.md`, "Slot hoisting: one scope per body"). The
+   `Declare` op is what is left for the slots that *stay* in place - the ones the type
+   pass could not spell in full, where `auto x;` is not a declaration. A backend folds
+   `Declare` + the next instruction when that instruction writes the slot it declared
+   (`ilWritesDestination`), which is how a declaration with an initializer stays one
+   line.
 
 With 7 and 8 decided that way, codegen from the IL can aim at **byte-identical**
 output with the statement path, which is what makes the side-by-side comparison a
@@ -483,6 +551,6 @@ disagree. Anything that cannot be byte-identical (a lambda body) is a *reported*
 fallback to the statement path, never a silent difference.
 
 Both rings have to stay in step: `LinearForm.cpp` landed in the C++ ring first, and
-the Simse mirror (`LinearForm.simse`, `lin*`/`il*` naming, the AST as `AstXmlNode`)
+the Simse mirror (`LinearForm.kt`, `lin*`/`il*` naming, the AST as `AstXmlNode`)
 has to follow before a Simse build can print the same dump. T23 does not see the
 dump while the flag is off, which is why the C++ ring could land alone.

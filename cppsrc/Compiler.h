@@ -6,13 +6,13 @@
 //
 // `simse_transpile` (cppsrc/codegen/TranspileMain.cpp) is the C++ CLI: explicit
 // input files plus the module roots (`--root` / `--module-root`) scanned for
-// `.simse` files, and an output path. The self-hosted driver
-// (cppsrc/compiler/Driver.simse) is a Simse port of it. Keeping the
+// `.kt` files, and an output path. The self-hosted driver
+// (cppsrc/compiler/Driver.kt) is a Simse port of it. Keeping the
 // parse -> sema -> codegen -> write pipeline here means both agree on prelude
 // loading, module scanning, and diagnostics.
 //
 // Modules and packages (specs/modules.md): a module is a directory, scanned from
-// the project root and any extra module roots; every `.simse` file found is part
+// the project root and any extra module roots; every `.kt` file found is part
 // of the compilation. A package is a namespace declared per file; `import a.b.c`
 // makes package `a.b.c` visible unqualified and never adds files. The pass is
 // compilation-wide, so duplicate definitions across files of one package are
@@ -28,7 +28,7 @@ namespace compiler {
         // Explicit input files. Always part of the compilation.
         List<Str> inputs;
 
-        // Directories scanned recursively for `*.simse`; every file found is part
+        // Directories scanned recursively for `*.kt`; every file found is part
         // of the compilation. The project root and any external module roots.
         List<Str> moduleRoots;
 
@@ -50,16 +50,14 @@ namespace compiler {
         // byte-identical with and without it.
         bool showLinearRepresentation = false;
 
-        // `--linearCodegen`: emit every body from its linear IL, next to the
-        // statement path, and report where the two disagree. The output is
-        // unchanged while they disagree anywhere (the report is the work list).
+        // `--linearCodegen`: run every body through both codegen paths and report where
+        // they disagree (the work list for the rest of the port). The emitted file is
+        // unchanged while they disagree anywhere.
         bool linearCodegen = false;
 
-        // `--linearCodegenEmit`: use the IL's text for every body it could express
-        // (byte-identical, or the same code with the blocks folded away), and the
-        // statement text for the rest. This is the step that makes the bytecode the
-        // source of the output.
-        bool linearCodegenEmit = false;
+        // Emit from the IL where it can express the body, and from the statement tree
+        // otherwise. On by default: the instruction list is what codegen reads.
+        bool linearCodegenEmit = true;
     };
 
     // Scans the module roots, parses every input, runs the compilation-wide

@@ -7,7 +7,7 @@
 | Windows (10/11) | the toolchain and the checked-in build scripts are Windows/MSVC today; Linux and macOS are on the [roadmap](../impl_specs/user-language-roadmap.md) |
 | Visual Studio with the **Desktop development with C++** workload | `cl.exe`, the C++ standard library, and the linker the compiler's output is built with |
 | CMake and Ninja | they build the hand-written compiler, its tests, and the runtime libraries that generated programs link against |
-| [bun](https://bun.sh) | runs the build and test harness (`build.js`, `tools/stress.js`) |
+| [bun](https://bun.sh) | runs the build and test harness (`build.js`, `tools/stress.js`, `tools/bootstrap.js`) |
 
 `build.bat` and `stress.bat` check for `bun` themselves and print a hint if it is
 missing. Visual Studio is located through `vswhere`, so any recent installation
@@ -33,7 +33,7 @@ What you get in `cmake-build-debug/`:
 
 | Program | What it is |
 | --- | --- |
-| `simse_transpile.exe` | the C++ compiler: `.simse` sources in, one `.cpp` out |
+| `simse_transpile.exe` | the C++ compiler: `.kt` sources in, one `.cpp` out |
 | `simse_tests.exe` | the in-process test suite (fixtures, goldens, stage checks) |
 | `simse_lib.lib`, `simse_native.lib` | the runtime the generated programs link against |
 
@@ -48,7 +48,7 @@ bootstrap check; if any of them fails, the build fails.
 ## 2. Build the self-hosted compiler
 
 This is the interesting one: `build.js` asks `simse_transpile.exe` to transpile
-the compiler's own Simse sources (`cppsrc/**/*.simse`) into a single
+the compiler's own Simse sources (`cppsrc/**/*.kt`) into a single
 `simse_out.cpp`, then compiles that into `simse.exe`.
 
 ```bat
@@ -68,7 +68,70 @@ it is doing. The same script can transpile any other module root:
 bun build.js --release --root my_project --out my_project.cpp --exe my_project.exe
 ```
 
-## 3. Compile and run a program
+## 3. Build the compiler *without* a compiler
+
+The amalgamation is checked in as **`cppsrc/simse_bootstrap.cpp`**: it is the same
+file `simse.exe` writes by default (as `simse_out.cpp`), kept in the repository so
+that Simse can be built by someone who has a C++ compiler and nothing else - no
+`simse.exe`, no previous build, no CMake. That is what makes the language
+self-hosting rather than a claims file.
+
+```bat
+cl /nologo /std:c++20 /EHsc /O2 /Ob3 /DNDEBUG /MD /I. ^
+   /DSIMSE_DEFAULT_PRELUDE="%CD%\cppsrc\rtl" /DSIMSE_SOURCE_ROOT="%CD%" ^
+   cppsrc/simse_bootstrap.cpp cppsrc/native/Native.cpp cppsrc/common/common.cpp ^
+   /Fe:simse.exe
+```
+
+Three translation units - the amalgamated compiler, the `native(...)`
+implementations, and the shared common library - plus the RTL headers under
+`cppsrc/rtl/` that the amalgamation includes. All three are required: the
+amalgamation alone leaves the seven filesystem/`eprintln` natives unresolved
+(`simse_listFiles`, `simse_writeFile`, `simse_pathCanonical`, `simse_pathIsDirectory`,
+`simse_pathExists`, `simse_eprintln`, `simse_native_readFile`), and the natives alone
+leave the two helpers `common.cpp` provides. The result is a working compiler:
+`simse.exe --root my_project -o my_project.cpp`.
+
+To refresh the published file after changing the compiler (it is generated, never
+hand-edited):
+
+```bat
+bun build.js --release --out cppsrc/simse_bootstrap.cpp   :: also builds ./simse.exe
+```
+
+`bun tools/bootstrap.js` measures the whole story and checks the fixed point - the
+compiler built from the published file must reproduce that file byte for byte:
+
+```console
+$ bun tools/bootstrap.js
+bootstrap: release build, 3 run(s) for the transpiles
+  sources    13828 lines of Simse under cppsrc
+  bootstrap  cppsrc\simse_bootstrap.cpp: 36802 lines, 1.10 MB (checked in, do not edit)
+
+1. transpile the compiler's own source tree
+  self-hosted compiler (simse.exe) --root cppsrc       best 1028 ms, median 1038 ms
+  hand-written C++ ring (simse_transpile.exe) ...      best 209 ms, median 211 ms
+
+2. compile the published bootstrap (cl.exe only, no CMake libraries)
+  bootstrap + Native.cpp + common.cpp -> simse_boot.exe best 14543 ms
+
+3. fixed point: the compiled bootstrap transpiles cppsrc again
+  simse_boot.exe --root cppsrc                         best 1027 ms, median 1033 ms
+  output == cppsrc/simse_bootstrap.cpp                 yes, byte for byte
+
+  from the published file to a working compiler: 14.54 s
+  and that compiler reproduces itself in:        1027 ms
+  full cycle (compile + self-transpile):         15.57 s
+  throughput: 13485 lines/s of Simse (35839 lines/s of C++ out)
+```
+
+So: **~15.6 s from the published file to a compiler that reproduces it**, of which
+14.5 s is `cl.exe` optimizing 37k lines of generated C++; the compiler's own share
+of that - transpiling its whole source tree - is **~1.03 s** (and the machine's load
+moves it between 1.0 s and 3.0 s). A debug build of the same file takes ~3.1 s to
+compile and then runs the transpile in ~6.6 s.
+
+## 4. Compile and run a program
 
 Using the self-hosted compiler on one of the bundled examples:
 
@@ -79,7 +142,7 @@ hello.exe
 :: hello, simse
 ```
 
-The first command transpiles every `.simse` file under the given module root (the
+The first command transpiles every `.kt` file under the given module root (the
 `--root` directory) and writes one amalgamated C++ file; the second compiles and
 links it against the runtime libraries. `simse.exe` with no arguments scans the
 current directory, which is rarely what you want here: it also picks up
@@ -88,24 +151,25 @@ current directory, which is rarely what you want here: it also picks up
 The compiler's own CLI is documented by `simse.exe --help`:
 
 ```
-simse_transpile <input.simse>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module-root <dir>]...
+simse_transpile <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module-root <dir>]...
 ```
 
 - repeating `--module-root <dir>` adds module roots that are scanned for files
   but not built as inputs;
 - `--prelude <file>` overrides the implicit `rtl` prelude (normally
-  `cppsrc/rtl/*.simse`);
+  `cppsrc/rtl/*.kt`);
 - files can also be listed explicitly instead of scanning a root.
 
-## 4. Run the tests
+## 5. Run the tests
 
 ```bat
-cmake-build-debug\simse_tests.exe           :: 50 tests: fixtures, goldens, round-trips
+cmake-build-debug\simse_tests.exe           :: 53 tests: fixtures, goldens, round-trips
 cmake-build-debug\simse_tests.exe --update  :: regenerate the goldens (deliberate changes only)
-stress.bat                                  :: transpile, compile and run the 24 stress programs
+stress.bat                                  :: transpile, compile and run the 29 stress programs
 stress.bat --list                           :: what the corpus contains
 stress.bat --filter strings                 :: one case
 stress.bat --simse cmake-build-debug\simse_transpile.exe
+bun tools\bootstrap.js                      :: time the bootstrap and check its fixed point
 ```
 
 `simse_tests.exe` compares fixtures against `tests/golden/*.expected`; the stress
@@ -125,7 +189,7 @@ the alternative runtime backings are exercised (for example
 | --- | --- |
 | `LNK1168: cannot open ... for writing` | a `simse*.exe` you ran earlier is still alive; close it (or kill it) and link again |
 | `LNK4272: machine type 'ARM64' conflicts with target machine type 'x86'` followed by many `LNK2019` | your `cl.exe` targets a different architecture than the CMake libraries. Use a developer prompt with the matching architecture (`vcvarsall arm64` for the ARM64 builds) or reconfigure CMake |
-| a dialog box about `stream.valid()` or a debug-STL assert | the Debug build has the MSVC debug assertions live, so bad input (e.g. passing a directory where a `.simse` file is expected) trips them. Use `--release` for a build with the assertions compiled out |
+| a dialog box about `stream.valid()` or a debug-STL assert | the Debug build has the MSVC debug assertions live, so bad input (e.g. passing a directory where a `.kt` file is expected) trips them. Use `--release` for a build with the assertions compiled out |
 | `transpile failed` while scanning `.` | you are compiling the whole repository, including the intentionally-broken fixtures under `tests/`. Pass `--root <dir>` or explicit file names |
 | `build: warning: the CMake build ... is older than the compiler sources` | rebuild the CMake folder; `build.js` is telling you the bootstrap compiler is stale |
 | `bun: command not found` | install bun from <https://bun.sh> (the harnesses are JavaScript) |

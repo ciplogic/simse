@@ -23,17 +23,17 @@ simse_tests.exe
 
 The runner:
 
-- scans, parses, and analyzes each `tests/fixtures/*.simse` fixture in sorted
+- scans, parses, and analyzes each `tests/fixtures/*.kt` fixture in sorted
   filename order, comparing the token, AST, XmlNode-AST, and sema goldens (and
   the `cpp` golden when the fixture parses);
-- checks the negative fixtures (`parse_error.simse` must fail to parse,
-  `sema_unknown_type.simse` must report an unknown-type diagnostic,
-  `ctor_arity.simse` a constructor-arity diagnostic,
-  `sema_switch_label.simse` a non-constant case-label diagnostic, and
-  `sema_extension_arity.simse` a prelude-extension arity diagnostic);
-- checks the hoisting fixture (`hoisting.simse` parses and resolves cleanly with
+- checks the negative fixtures (`parse_error.kt` must fail to parse,
+  `sema_unknown_type.kt` must report an unknown-type diagnostic,
+  `ctor_arity.kt` a constructor-arity diagnostic,
+  `sema_switch_label.kt` a non-constant case-label diagnostic, and
+  `sema_extension_arity.kt` a prelude-extension arity diagnostic);
+- checks the hoisting fixture (`hoisting.kt` parses and resolves cleanly with
   use-before-declaration);
-- parses and analyzes every real `.simse` file under `cppsrc/` and asserts the
+- parses and analyzes every real `.kt` file under `cppsrc/` and asserts the
   parse succeeds and sema is clean.
 
 It prints `PASS`/`FAIL` per case, a line diff for each failure, and a final
@@ -68,14 +68,14 @@ failures.
 
 ## Golden categories
 
-For a fixture `foo.simse` the harness writes:
+For a fixture `foo.kt` the harness writes:
 
-- `foo.simse.tokens.expected` - the scanner token dump;
-- `foo.simse.ast.expected` - the AST dump (or an error marker, see below);
-- `foo.simse.astxml.expected` - the AST rendered as an `XmlNode` tree (only for
+- `foo.kt.tokens.expected` - the scanner token dump;
+- `foo.kt.ast.expected` - the AST dump (or an error marker, see below);
+- `foo.kt.astxml.expected` - the AST rendered as an `XmlNode` tree (only for
   fixtures that parse); see `impl_specs/ast-xmlnode.md`;
-- `foo.simse.sema.expected` - the sema diagnostics, one per line (empty if clean);
-- `foo.simse.cpp.expected` - the emitted C++ (or a `CodegenError` marker). Only
+- `foo.kt.sema.expected` - the sema diagnostics, one per line (empty if clean);
+- `foo.kt.cpp.expected` - the emitted C++ (or a `CodegenError` marker). Only
   written for fixtures that parse, since codegen runs on the AST.
 
 Separately, the end-to-end programs and their expected stdout moved to the
@@ -111,7 +111,7 @@ carries `<line>:<column>` and the escaped snippet).
 ### AST dump format
 
 An indented tree, two spaces per level, one node per line, ASCII only and free of
-paths or addresses. Example (`program_basic.simse`):
+paths or addresses. Example (`program_basic.kt`):
 
 ```
 Module @1:1
@@ -182,7 +182,7 @@ one line per node, two spaces of indent per depth:
 
 `name` is the structural role and a `kind` attribute distinguishes categories;
 see `impl_specs/ast-xmlnode.md` for the full schema. The Simse proof-of-carrier
-program `emit_xmlnode.simse` prints this format from an `XmlNode` tree it builds
+program `emit_xmlnode.kt` prints this format from an `XmlNode` tree it builds
 in Simse.
 
 ## End-to-end stress corpus
@@ -206,11 +206,11 @@ skeleton parser (`skel_diff`), the parser (`parser_diff`), the sema pass
 (`sema_diff`), and the C++ emitter (`codegen_diff`); see
 `impl_specs/tasks/11-...`, `13-...`, `19-...`, `21-...`, and `22-...`.
 Each compares the hand-written C++ component against the transpiled Simse one over
-`tests/fixtures/*.simse`; the parser, sema, and codegen drivers additionally check
+`tests/fixtures/*.kt`; the parser, sema, and codegen drivers additionally check
 the reference output against the checked-in goldens.
 
 The `stage1_check` step is the two-step bootstrap: the C++ transpiler emits
-`stage1/gen/simse_out.cpp` from `cppsrc/compiler/Driver.simse` (the whole
+`stage1/gen/simse_out.cpp` from `cppsrc/compiler/Driver.kt` (the whole
 compiler source set, through its imports); that file is kept as
 `stage1/gen/simse_out1.cpp` and compiled into `stage1/simse_stage1.exe`; and
 running that stage-1 compiler over the same source set regenerates
@@ -221,13 +221,13 @@ the `emit_lang` fixture.
 ## Transpiler CLI
 
 ```
-simse_transpile <input.simse>... [-o <output.cpp>] [--prelude <file>]
+simse_transpile <input.kt>... [-o <output.cpp>] [--prelude <file>]
 ```
 
 With no `-o` the output is written to `simse_out.cpp` in the current folder.
-With no input arguments it discovers every `.simse` under the current directory
+With no input arguments it discovers every `.kt` under the current directory
 (recursively, sorted). `--prelude` overrides the default RTL prelude **set**
-(`cppsrc/rtl/`, a directory whose `*.simse` files are all loaded); a missing
+(`cppsrc/rtl/`, a directory whose `*.kt` files are all loaded); a missing
 default is skipped silently. Errors are
 written to stderr as `<file>:<line>:<col>: <message>` and the process exits
 nonzero. Run it from the repository root so the generated

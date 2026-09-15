@@ -3,7 +3,7 @@
 #include <iostream>
 #include <type_traits>
 
-// stress/hello/src/main.simse:2
+// stress/hello/src/main.kt:2
 SIMSE_PACK_PUSH
 struct ns1_Counter {
     Int value;
@@ -13,7 +13,7 @@ ns1_Counter ns1__make_Counter(Int value) {
     return ns1_Counter{value};
 }
 Int ns1_bump(ns1_Counter* self);
-// stress/hello/src/main.simse:3
+// stress/hello/src/main.kt:3
 Int ns1_bump(ns1_Counter* self) {
     Int _sm_expr1;
     Int _sm_expr2;
@@ -21,13 +21,16 @@ Int ns1_bump(ns1_Counter* self) {
     _sm_expr2 = _sm_expr1 + 1;
     return _sm_expr2;
 }
-// stress/hello/src/main.simse:8
+// stress/hello/src/main.kt:8
 int main() {
+    Int i;
+    Int total;
     Bool _sm_expr1;
+    ns1_Counter c;
     Bool _sm_expr2;
     Int _sm_expr3;
-    Int i = 0;
-    Int total = 0;
+    i = 0;
+    total = 0;
     L1:;
     _sm_expr1 = i < 5;
     if (!(_sm_expr1)) goto L2;
@@ -35,7 +38,7 @@ int main() {
     i = i + 1;
     goto L1;
     L2:;
-    ns1_Counter c = ns1__make_Counter(10);
+    c = ns1__make_Counter(10);
     _sm_expr2 = total > 5;
     if (!(_sm_expr2)) goto L4;
     std::cout << std::boolalpha << (total) << std::endl;

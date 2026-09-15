@@ -25,16 +25,15 @@ namespace codegen {
     // same inputs always produce byte-identical output.
     Res<Str> emitProgram(const List<Input>& inputs);
 
-    // `--linearCodegen`: emit every body from its instruction list, comparing it
-    // against the statement path (impl_specs/linear-il.md). The IL's text is used
-    // only where the two agree, so the flag cannot change the output; where they
-    // disagree the statement text is kept and the difference - the first line that
-    // differs, with both spellings - is reported on stderr. The report is the work
-    // list for the rest of the port.
+    // `--linearCodegen`: the *report* - run every body through both codegen paths and
+    // list the differences on stderr, keeping the statement text where they disagree.
+    // The emitted file is unchanged, so this is the work list for the rest of the port
+    // (impl_specs/linear-il.md).
     bool linearCodegen();
     void setLinearCodegen(bool value);
 
-    // `--linearCodegenEmit`: emit the IL's text for every body it could express, and
-    // the statement text for the rest. With `linearCodegen` off, nothing changes.
+    // Emit from the IL for every body it can express and from the statement tree for
+    // the rest - the default. `setLinearCodegenEmit(false)` (`--statementsCodegen`) puts
+    // the statement path back in charge.
     void setLinearCodegenEmit(bool value);
 }

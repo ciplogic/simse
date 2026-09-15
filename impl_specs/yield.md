@@ -92,26 +92,40 @@ it.
 
 ## Status
 
-- Implemented in the **C++ ring**: `yield`/`..T` in the parser, the rewrite in
-  `linear::lowerYield`, the class and factory in `Emitter::emitYieldable`, and the
-  example `docs/examples/yield/src/main.simse` (a `while` loop around the yield, both
-  `next()` and `advance()`, a machine advanced after it finished, and both `for`
-  forms). Verified by transpiling, compiling and running it.
-- `for` (`impl_specs/for.md`) is this feature's consumer: it is desugared in the
-  parser to a `while` over `next()`. Because the machine's element type is what makes
-  a loop variable a typed binding rather than an `auto`, the lowering-time type pass
-  carries the machine's two methods (`..T.next()` -> `Opt<T>`, `..T.advance()` ->
-  `Bool`).
-- The example lives under `docs/examples/`, **not** in `tests/fixtures`, because the
-  Simse ring cannot lower a machine yet: a fixture is parsed *and* emitted by both rings,
-  and the mirror has to catch up first (`Parser.simse` and `Sema.simse` already have;
-  `linear/Yield.simse` and the emitter's `emitYieldable` are what is left).
-- The machine's method bodies are emitted by the statement path (like the closure
-  classes were before they moved onto the IL).
+- Implemented in **both rings**: `yield`/`..T` in the parser, the rewrite in
+  `linear::lowerYield` (`Yield.cpp` / `Yield.kt`), the class and factory in
+  `Emitter::emitYieldable` (`Codegen.cpp` / `Codegen.kt`), and the cases
+  `stress/yield` (a `while` loop around the yield, both `next()` and `advance()`, a
+  machine advanced after it finished, both `for` forms) and `stress/generic-yield` (a
+  generic yielding extension over `List<Int>` and `List<Str>`). Verified by transpiling,
+  compiling and running them through the **self-hosted** compiler, and by the two rings
+  emitting byte-identical C++ for them.
+- What the feature grew, in order:
+  - **a generic function can yield**: the machine is a class template, and its name
+    carries the function's type parameters wherever it is a *type*.
+  - **an extension function can yield**: the receiver is a field of the machine
+    (`_sm_self`, `linear::yieldReceiverField`) holding exactly what the emitted `self`
+    parameter holds (a pointer for a value receiver), so `this.x` in the body reads the
+    caller's object across a yield. In a *base* position `this` stays that field (the
+    spellings dereference it: `this._sm_self->size()`, `(*this._sm_self)[i]`); a bare
+    `this` in a value position is read back out of it. A receiver written as a parameter
+    (`fun f(this: T)`) cannot yield: `this` cannot name a C++ member.
+  - **the dispatcher goes after the hoisted declarations**: a jump that skips a
+    declaration is `C2362`, and for a generic machine a declaration *is* `T`, non-trivial
+    for `Str`.
+  - **the machine's fields are registered as a data class** in the emitter's type table
+    (`emitMachine`), which is what tells `memberAccess` and the index spelling what
+    `this.<field>` is - the type pass never saw the class the lowering synthesizes.
+- Two gaps the port surfaced, and their fixes: a condition a *lowering* builds carries the
+  `Expr` role, while the emitter finds a statement's condition under `Cond`
+  (`linCondJump` now re-roots it - invisible in the C++ ring, where a statement holds its
+  condition structurally); and `ExpressionLowering.kt` was missing the `StmtYield`
+  case, so the Simse ring inlined a yield's value where the C++ ring hoisted it into a
+  temporary - the two rings stopped emitting the same C++ until the case was added.
+- The examples live under `stress/` (`yield`, `generic-yield`), which runs both rings and
+the self-hosted compiler; `docs/examples/yield` was folded into `stress/yield`.
 - Not supported yet, and now reported rather than left to the C++ compiler:
-  - a yielding **method** (a body that uses `this` is reported);
   - a local that the type pass could not spell (a field needs a type, and the pass says
     so instead of guessing) - which is what a machine local is, so a machine **cannot
     live across a yield**, and a `for` inside a yielding body is diagnosed with that;
-  - `yield` in a **generic** function (the machine class is not a template, so its
-    fields could not be the type parameters).
+  - a receiver written as a `this:` parameter (a `this` cannot be a field).

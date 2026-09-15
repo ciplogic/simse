@@ -523,8 +523,11 @@ namespace parser {
             }
 
             bool looksLikeTypeStart() const {
+                // `..` starts a `..T` receiver: `fun ..T.smToYield<T>()` is the wrap that
+                // makes a machine iterable like any other source (impl_specs/for.md).
                 return checkKind(TokenKind::Identifier)
-                       || checkText("(") || checkText("&") || checkText("*");
+                       || checkText("(") || checkText("&") || checkText("*")
+                       || checkText("..");
             }
 
             bool parseParamName(Str &out) {
@@ -789,6 +792,23 @@ namespace parser {
             // Everything the loop's body declares is fresh per iteration, and the
             // index is a *copy* of the counter: the names the user wrote (`v`, `i`)
             // belong to the loop body, while the counter itself is the template's.
+            // `<target>.smToYield()`: the wrap the two `for` forms put around what they
+            // iterate. The name is the language's convention (`impl_specs/for.md`), not a
+            // user's to take: a `for` never spells it in a diagnostic.
+            ast::ExprPtr smToYieldCall(const ast::ExprPtr &target, const common::SourcePos &pos) {
+                auto member = std::make_shared<ast::Expr>();
+                member->kind = ast::ExprKind::Member;
+                member->pos = pos;
+                member->text = Str("smToYield");
+                member->lhs = target;
+
+                auto call = std::make_shared<ast::Expr>();
+                call->kind = ast::ExprKind::Call;
+                call->pos = pos;
+                call->lhs = member;
+                return call;
+            }
+
             bool parseFor(List<ast::StmtPtr> &out) {
                 const common::SourcePos pos = peek().pos;
                 advance(); // for
@@ -819,7 +839,13 @@ namespace parser {
                 const Str counterName = Str("_sm_index") + std::to_string(nextForId);
                 nextForId++;
 
-                out.push_back(varDeclStmt(machineName, true, nullptr, machine, pos));
+                // The iterated expression is wrapped in the invisible `smToYield()` call:
+                // a `for` iterates whatever has one, so a container walks itself in order
+                // and a machine passes through (impl_specs/for.md). It is a *member* call,
+                // because that is what binds the function's type parameter from the
+                // receiver - a plain `smToYield(x)` would leave the loop variable untyped.
+                out.push_back(varDeclStmt(machineName, true, nullptr, smToYieldCall(machine, pos),
+                                          pos));
                 if (withIndex) {
                     out.push_back(varDeclStmt(counterName, true, namedType("Int", pos),
                                               intLiteral(-1, pos), pos));

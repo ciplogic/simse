@@ -13,7 +13,7 @@ the same data.
 
 | File | What it is |
 | --- | --- |
-| `src/main.simse` | the Simse implementation (package `onebrc`): a line at a time, each line parsed in place as a `StrView` |
+| `src/main.kt` | the Simse implementation (package `onebrc`): a line at a time, each line parsed in place as a `StrView` |
 | `brc_naive.cpp` | the C++ baseline: `std::ifstream` + `std::getline` + `std::unordered_map<std::string, Stats>` + `std::stod` |
 | `build_naive.bat` | compiles the baseline with the release flags (`/O2 /Ob3 /DNDEBUG`) |
 | `onebrc.mjs` | `gen` writes a measurement file, `check` is the reference aggregate, `--selftest` covers its rounding/chunk logic |

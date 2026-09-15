@@ -31,7 +31,7 @@ native("simse_native_readFile") fun readFile(path: Str): Str
   use the same signature. Calls lower to a direct call of the symbol:
 
   ```text
-  // native_readfile.simse:1
+  // native_readfile.kt:1
   Str simse_native_readFile(const Str& path);
 
   ...
@@ -53,7 +53,7 @@ exceptions. A `native fun` that returns `Res<T>` maps its error message into the
 
 A prelude file is parsed into the same module scope as the program's inputs, so
 its declarations resolve without an `import`. The default is
-`cppsrc/rtl/rtl.simse` (relative to the repository root, baked into the binaries);
+`cppsrc/rtl/rtl.kt` (relative to the repository root, baked into the binaries);
 `simse_transpile --prelude <file>` overrides it, and a missing default is skipped
 silently. Prelude declarations are resolved but **never emitted**: their bodies
 are hand-written C++ pulled in transitively by `cppsrc/rtl/simse.hpp`. This is how
@@ -77,7 +77,7 @@ use native functions link `simse_native` (which links the rest of the RTL).
 ## Filesystem / IO natives (T23)
 
 The self-hosted driver needs a small filesystem surface. Declared in the prelude
-(`cppsrc/rtl/fs.simse`), prototyped in `cppsrc/rtl/fs.hpp` (included by
+(`cppsrc/rtl/fs.kt`), prototyped in `cppsrc/rtl/fs.hpp` (included by
 `simse.hpp`), and defined in `cppsrc/native/Native.cpp`:
 
 | Simse | C++ symbol | Semantics |

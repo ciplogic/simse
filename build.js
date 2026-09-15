@@ -6,6 +6,15 @@
 // `simse_out.cpp` and compiles that into `simse.exe`, both in the current
 // folder. `build.bat` is a thin launcher for this script.
 //
+// `cppsrc/simse_bootstrap.cpp` is the *published* copy of that same
+// amalgamation: it is checked in so that Simse can be built with nothing but a C++
+// compiler, and refreshed with
+//
+//   bun build.js --release --out cppsrc/simse_bootstrap.cpp
+//
+// (which also compiles it into `simse.exe`). See docs/getting-started.md,
+// "Building the compiler without a compiler".
+//
 // Options:
 //   --cpp <file>    compile this C++ file instead of regenerating (implies --no-gen)
 //   --exe <file>    executable name/path (default: simse.exe)
@@ -56,7 +65,8 @@ function usage() {
 
   --cpp <file>    compile this C++ file instead of regenerating (implies --no-gen)
   --exe <file>    executable name/path (default: simse.exe)
-  --out <file>    generated C++ name/path (default: simse_out.cpp)
+  --out <file>    generated C++ name/path (default: simse_out.cpp;
+                  --out cppsrc/simse_bootstrap.cpp refreshes the published bootstrap)
   --root <dir>    source root to transpile, relative to the repo (default: cppsrc)
   --no-gen        skip transpiling; compile the existing/--cpp file
   --release       release build: /O2 /Ob3 /DNDEBUG and the release CMake libs
@@ -149,7 +159,7 @@ function cachedStrInlineCapacity(buildDir) {
 }
 
 // The newest mtime among the C++ sources the hand-written transpiler is built
-// from (the `.simse` sources are runtime inputs, not build inputs).
+// from (the `.kt` sources are runtime inputs, not build inputs).
 function newestCompiledSource(dir) {
   let newest = 0;
   const stack = [dir];

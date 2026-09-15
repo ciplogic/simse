@@ -12,15 +12,15 @@ Status values:
 - **partial** - handled for some shapes, or only after a codegen fix; see notes.
 - **missing** - not handled; a self-host attempt will fail until it is added.
 
-The matrix is derived from the real sources (`cppsrc/lex/Scanner.simse`,
-`cppsrc/common/common.simse`, `cppsrc/skelparser/SkeletonParser.simse`) and the
+The matrix is derived from the real sources (`cppsrc/lex/Scanner.kt`,
+`cppsrc/common/common.kt`, `cppsrc/skelparser/SkeletonParser.kt`) and the
 current `cppsrc/{parser,sema,codegen,rtl}` implementations.
 
 ## Intended port order
 
 1. **common** - the smallest, no self-referential dependencies; needed by every
    other mirror.
-2. **scanner** (`Scanner.simse`) - the first real differential test; needs
+2. **scanner** (`Scanner.kt`) - the first real differential test; needs
    `common` via `import cppsrc.common`.
 3. **skeleton parser** - uses the scanner API and `List<SkeletonNode>`.
 4. **AST/parser/sema/codegen** - the largest, still C++-only; port last.
@@ -38,7 +38,7 @@ current `cppsrc/{parser,sema,codegen,rtl}` implementations.
 | `import a.b.c` merging a directory | any importer | supported | resolved relative to the repo root. |
 | Generic data class | not used here | supported | C++ templates. |
 
-## Scanner (`Scanner.simse`)
+## Scanner (`Scanner.kt`)
 
 | Feature | Where used | Status | Notes |
 | --- | --- | --- | --- |
@@ -57,7 +57,7 @@ current `cppsrc/{parser,sema,codegen,rtl}` implementations.
 | Method calls through `*T` | `readFileAsTokens(scanner: *Scanner)` | supported | `*scanner` auto-deref. |
 | Import cycles | `import cppsrc.common` | supported | reported, not followed. |
 
-## Skeleton parser (`SkeletonParser.simse`)
+## Skeleton parser (`SkeletonParser.kt`)
 
 | Feature | Where used | Status | Notes |
 | --- | --- | --- | --- |
@@ -73,8 +73,8 @@ current `cppsrc/{parser,sema,codegen,rtl}` implementations.
 
 The parser (T19), sema (T21), and code generator (T22) are ported, and the
 driver/CLI plumbing is ported too (T23): the compiler now self-hosts at stage 1.
-The XmlNode accessors are shared through `cppsrc/common/xmlutil.simse`, and the
-filesystem/IO surface is the prelude natives in `cppsrc/rtl/fs.simse`.
+The XmlNode accessors are shared through `cppsrc/common/xmlutil.kt`, and the
+filesystem/IO surface is the prelude natives in `cppsrc/rtl/fs.kt`.
 
 ## Ported components
 
@@ -82,13 +82,13 @@ Progress of the incremental port (see `impl_specs/roadmap.md`):
 
 | Component | Mirror | Emits | Compiles | Diff-identical | Harness |
 | --- | --- | --- | --- | --- | --- |
-| common / xmlutil | `cppsrc/common/*.simse` | yes (merged transitively) | yes | exercised through every port | part of each diff |
-| scanner | `cppsrc/lex/Scanner.simse` | yes | yes | yes (5532-line dump) | `scanner_diff` |
-| skeleton parser | `cppsrc/skelparser/SkeletonParser.simse` | yes | yes | yes (4992-line tree dump) | `skel_diff` |
-| parser | `cppsrc/parser/Parser.simse` | yes | yes | yes (2136-line XmlNode dump) | `parser_diff` |
-| sema | `cppsrc/sema/Sema.simse` | yes | yes | yes (40-line diagnostic dump) | `sema_diff` |
-| codegen | `cppsrc/codegen/Codegen.simse` | yes | yes | yes (804-line emission dump) | `codegen_diff` |
-| driver / CLI | `cppsrc/compiler/Driver.simse` | yes | yes | two-step fixed point (`simse_out1.cpp` == `simse_out.cpp`) | `stage1_check` |
+| common / xmlutil | `cppsrc/common/*.kt` | yes (merged transitively) | yes | exercised through every port | part of each diff |
+| scanner | `cppsrc/lex/Scanner.kt` | yes | yes | yes (5532-line dump) | `scanner_diff` |
+| skeleton parser | `cppsrc/skelparser/SkeletonParser.kt` | yes | yes | yes (4992-line tree dump) | `skel_diff` |
+| parser | `cppsrc/parser/Parser.kt` | yes | yes | yes (2136-line XmlNode dump) | `parser_diff` |
+| sema | `cppsrc/sema/Sema.kt` | yes | yes | yes (40-line diagnostic dump) | `sema_diff` |
+| codegen | `cppsrc/codegen/Codegen.kt` | yes | yes | yes (804-line emission dump) | `codegen_diff` |
+| driver / CLI | `cppsrc/compiler/Driver.kt` | yes | yes | two-step fixed point (`simse_out1.cpp` == `simse_out.cpp`, the published copy of which is `cppsrc/simse_bootstrap.cpp`) | `stage1_check` |
 
 ## Feature status changes (last port)
 
@@ -152,7 +152,7 @@ returned a pointer into a temporary `TypePtr`; call sites now keep the
 | XmlNode AST carrier | AST in Simse | supported (C++ converter + Simse carrier proof) | schema in `impl_specs/ast-xmlnode.md`. |
 | Dictionary operations | symbol tables, scopes | supported | `dictionaryOf`/`get`/`has`/`insert`/`remove`/`size`/`keys`/`values`/`clear` (`cppsrc/rtl/dictops.hpp`, T20). |
 | List `contains`/`sort` | dedup, deterministic order | supported | `simse_list_contains`; `sort` takes a `(T, T) -> Bool` lambda. |
-| XmlNode accessors | sema consumption | supported | emitted helper functions in `Sema.simse` (attribute lookup, children by role, positions). |
+| XmlNode accessors | sema consumption | supported | emitted helper functions in `Sema.kt` (attribute lookup, children by role, positions). |
 | `Span<T>` | iteration instead of range-for | supported | `while (!span.isEmpty()) { ... span = span.slice(1) }`. |
 | lambdas/closures | visitors | supported | by-value captures; reference captures deferred. |
 | `for` | loop rewriting | `for` over a machine only | two forms, desugared to `while` in the parser; a container is walked with an index or a `Span<T>` (`specs/functions.md`, `impl_specs/for.md`). |
@@ -170,7 +170,7 @@ These are the language/RTL features that were missing or wrong and had to be
 added or fixed across the self-host attempts (each fix is generic, not
 component-specific):
 
-1. **Import resolution.** `import a.b.c` now merges every `*.simse` directly
+1. **Import resolution.** `import a.b.c` now merges every `*.kt` directly
    under `a/b/c`, with cycle detection.
 2. **Enum-qualified access in expressions** now lowers generally to `Enum::Member`.
 3. **Generic-qualified static calls** (`Res<T>.ok(x)`) lower to `Type<T>::method(x)`;
@@ -190,10 +190,10 @@ component-specific):
 
 - Initial matrix created while starting the scanner self-transpile (T11). The
   scanner row is the live status; update it as differential results come in.
-- **Scanner self-transpile succeeded.** `simse_transpile cppsrc/lex/Scanner.simse`
-  emits `Scanner.simse.cpp` (about 500 lines); it compiles against the RTL and,
+- **Scanner self-transpile succeeded.** `simse_transpile cppsrc/lex/Scanner.kt`
+  emits `Scanner.kt.cpp` (about 500 lines); it compiles against the RTL and,
   driven by `tests/scanner_simse_main.cpp`, produces a token dump **byte-identical**
-  to the hand-written scanner over every `tests/fixtures/*.simse`. The diff is run
+  to the hand-written scanner over every `tests/fixtures/*.kt`. The diff is run
   by the default build (`scanner_diff`). The fixes that made this possible are the
   seven generic items above (import resolution, enum access, static generic calls,
   `&T`/`*T` auto-deref, receiver-typed method resolution, `Str.append`/
@@ -205,22 +205,22 @@ component-specific):
   translation unit, and the differential run exercises their methods (`at`,
   `startsWith`, `slice`, `toString`).
 - **Skeleton-parser self-transpile succeeded.** `simse_transpile
-  cppsrc/skelparser/SkeletonParser.simse` emits `SkeletonParser.simse.cpp`; it
-  compiles against the RTL (with `Scanner.simse` and `common` merged through
+  cppsrc/skelparser/SkeletonParser.kt` emits `SkeletonParser.kt.cpp`; it
+  compiles against the RTL (with `Scanner.kt` and `common` merged through
   `import cppsrc.lex`), and the `skel_diff` step shows the generated
   `parseSkeleton` produces a tree dump byte-identical to the C++ implementation
-  over every fixture (1508 lines). `cppsrc/main.simse` was repaired and is now a
+  over every fixture (1508 lines). `cppsrc/main.kt` was repaired and is now a
   runnable e2e program (`main_program`).
 - **T14 (language features) and T15 (XmlNode carrier) done.** Added `switch`,
   `null` lowering, the `Str`/`Char`/numeric library, `min`/`max`, and enum
-  conversions; the prelude is now a *set* (`cppsrc/rtl/{rtl,xml}.simse`). The AST
+  conversions; the prelude is now a *set* (`cppsrc/rtl/{rtl,xml}.kt`). The AST
   converts to `XmlNode` (`ast::toXmlNode`, `.astxml` goldens), and the
   `emit_xmlnode` e2e program builds the same tree in Simse and prints it
-  byte-identically to the C++ dump for `xml_probe.simse`. The scanner and
+  byte-identically to the C++ dump for `xml_probe.kt`. The scanner and
   skeleton-parser differentials still pass.
 - **T16 (Cursor), T17 (Str library), T18 (lambdas) done.** `Cursor<T>` is the
   iteration idiom (`while (c.hasValue()) { ... c = c.next() }`); the prelude set
-  gained `cppsrc/rtl/Cursor.simse` and the `simse_cursorOf` helper, and prelude
+  gained `cppsrc/rtl/Cursor.kt` and the `simse_cursorOf` helper, and prelude
   data-class methods now lower to C++ member calls. `Str` gained `charAt`,
   `trim`, `split`, `toUpper`, `toLower`, `isEmpty`, `indexOf`, `lastIndexOf`.
   Lambdas lower to by-value-capturing C++ lambdas assignable to
@@ -229,7 +229,7 @@ component-specific):
   range-for remains deferred (`Cursor<T>` is the replacement); the C++ compiler's
   own loops are not yet refactored to `Cursor`.
 - **Parser self-transpile succeeded (T19).** `simse_transpile
-  cppsrc/parser/Parser.simse` emits `Parser.simse.cpp` (with `Scanner.simse` and
+  cppsrc/parser/Parser.kt` emits `Parser.kt.cpp` (with `Scanner.kt` and
   `common` merged through `import cppsrc.lex`); it compiles against the RTL and
   the `parser_diff` step shows the generated `parseModule` produces an XmlNode
   tree **byte-identical** to `ast::toXmlNode` over all 33 fixtures (1908 lines),
@@ -240,25 +240,25 @@ component-specific):
 - **Dictionary/List surface added (T20).** `cppsrc/rtl/dictops.hpp` implements
   `simse_dictionaryOf` plus `simse_dict_{get,has,insert,remove,size,keys,values,
   clear}`, `simse_list_contains`, and `simse_list_sort`; the prelude
-  (`cppsrc/rtl/rtl.simse`) declares them as `native("simse_dict_*")` extensions.
+  (`cppsrc/rtl/rtl.kt`) declares them as `native("simse_dict_*")` extensions.
   Codegen learned to lower a generic *native* call to its symbol with type
   arguments (`dictionaryOf<Str, Int>()` -> `simse_dictionaryOf<Str, Int>()`). A
   new e2e program `emit_dict` exercises all of it and stdout-diffs clean.
 - **Sema self-transpile succeeded (T21).** `simse_transpile
-  cppsrc/sema/Sema.simse` emits `Sema.simse.cpp` (with the parser, scanner, and
+  cppsrc/sema/Sema.kt` emits `Sema.kt.cpp` (with the parser, scanner, and
   common merged through `import cppsrc.parser`); it compiles against the RTL and
   the `sema_diff` step shows the generated `analyze` produces diagnostics
   **byte-identical** to `sema::analyze` over every fixture (39 lines, 35
   fixtures), with the reference matching the `.sema.expected` goldens. The port
   added only emitted XmlNode accessor helpers; no new compiler/RTL features were
-  needed. A negative fixture (`sema_extension_arity.simse`) pins the prelude
+  needed. A negative fixture (`sema_extension_arity.kt`) pins the prelude
   merge on both sides. No mirror had to change.
-- **XmlNode accessors shared (T22).** The accessors moved from `Sema.simse` into
-  `cppsrc/common/xmlutil.simse` (emitted, non-prelude); the real-source check now
+- **XmlNode accessors shared (T22).** The accessors moved from `Sema.kt` into
+  `cppsrc/common/xmlutil.kt` (emitted, non-prelude); the real-source check now
   merges the RTL prelude for non-prelude mirrors so a helper module that uses
   prelude types resolves without an import. `sema_diff` stayed byte-identical.
 - **Codegen self-transpile succeeded (T22).** `simse_transpile
-  cppsrc/codegen/Codegen.simse` emits `Codegen.simse.cpp` (4789 lines; the parser,
+  cppsrc/codegen/Codegen.kt` emits `Codegen.kt.cpp` (4789 lines; the parser,
   scanner, sema, and common/xmlutil merged through `import cppsrc.sema`); it
   compiles against the RTL and the `codegen_diff` step shows the generated
   `emitProgram` produces C++ **byte-identical** to `codegen::emitProgram` over
@@ -266,13 +266,13 @@ component-specific):
   new compiler/RTL features were needed (one source-level note: chained string
   literals do not fold to `Str`, so the preamble is built with a `Str` variable).
 - **Stage-1 self-host succeeded (T23).** The compiler source set is rooted at
-  `cppsrc/compiler/Driver.simse` (a port of `TranspileMain.cpp` +
+  `cppsrc/compiler/Driver.kt` (a port of `TranspileMain.cpp` +
   `parseFileWithImports`); the C++ `simse_transpile` emits `compiler_stage1.cpp`
   (187048 bytes, covering the scanner, parser, sema, codegen, common/xmlutil,
   skeleton-parser mirror, and driver), it compiles into `simse_stage1`, and running
   `simse_stage1` over the same source set reproduces `compiler_stage1.cpp`
   **byte-for-byte** (the `stage1_check` fixed point). It also reproduces the C++
-  output for a real fixture. Added the filesystem/IO prelude natives (`cppsrc/rtl/fs.simse`,
+  output for a real fixture. Added the filesystem/IO prelude natives (`cppsrc/rtl/fs.kt`,
   `cppsrc/rtl/fs.hpp`, `cppsrc/native/Native.cpp`) and one generic transpiler fix:
   the argv form of `main` (`fun main(args: List<Str>): Int` ->
   `int main(int argc, char** argv)` with the list built from argv), implemented
@@ -294,7 +294,7 @@ component-specific):
   error, and the `Module` XmlNode always carries the `package` attribute. A
   compilation is the project module root (the `simse` positional directory, or
   `--root`) plus each repeatable `--module-root`, scanned recursively; every
-  `.simse` found participates, and `simse_transpile` also includes its explicit
+  `.kt` found participates, and `simse_transpile` also includes its explicit
   inputs. `import a.b.c` only makes package `a.b.c` visible unqualified and never
   adds files, so the directory-based `parser::ImportLoader` /
   `parseFileWithImports` / `collectImportSet` are gone. Sema is compilation-wide
@@ -308,7 +308,7 @@ component-specific):
   line and attribute) and the stage-1 fixed point still holds. Fully-qualified
   names are deferred (see `specs/modules.md` and the T25 task notes).
 - **Port complete; the compiler self-hosts (fixed point).** Every compiler
-  component has a `.simse` mirror, all five differentials and every e2e program
+  component has a `.kt` mirror, all five differentials and every e2e program
   stay byte-identical, and the stage-1 compiler reproduces its own C++ output
   byte-for-byte. The T1-T24 task files under `impl_specs/tasks/` were pruned once
   their work was verified; this matrix and git history retain the detail, and
@@ -324,7 +324,7 @@ component-specific):
   no longer required. Goldens regenerated; all five differentials and the
   stage-1 fixed point hold.
 - **Two-step bootstrap naming fixed.** The `simse` directory compiler and
-  `simse_transpile` (C++ and the transpiled `Driver.simse`) default to
+  `simse_transpile` (C++ and the transpiled `Driver.kt`) default to
   `simse_out.cpp` when `-o` is omitted. `stage1_check` now makes the two-step
   flow explicit: `stage1/gen/simse_out.cpp` (C++ transpiler) is kept as
   `stage1/gen/simse_out1.cpp`, which is compiled into `simse_stage1`; running it
@@ -332,13 +332,13 @@ component-specific):
   with `simse_out1.cpp`. The `emit_lang` fixture check is byte-exact too. The
   compilation order is now canonical (kept files sorted by normalized path; scan
   results use generic `/` separators), so `--root cppsrc` and
-  `simse_transpile cppsrc/compiler/Driver.simse` over the same file set emit
+  `simse_transpile cppsrc/compiler/Driver.kt` over the same file set emit
   identical C++. Stray `cppsrc.cpp` verification outputs were removed.
-- **The sample `cppsrc/main.simse` and its hand-written CLI `cppsrc/main.cpp`
-  were deleted.** `main.simse` was the second `main` in a `simse cppsrc`
+- **The sample `cppsrc/main.kt` and its hand-written CLI `cppsrc/main.cpp`
+  were deleted.** `main.kt` was the second `main` in a `simse cppsrc`
   amalgamation, so the whole tree could not be compiled; `main.cpp` was the
   directory-compiler CLI, superseded by `simse_transpile`. `cppsrc` now scans to
-  exactly one program (the `Driver.simse` compiler), and
+  exactly one program (the `Driver.kt` compiler), and
   `simse_transpile --root cppsrc` (output `simse_out.cpp`, compiled by
   `build.bat`) is the whole-compiler command. The `simse` target and the
   `main_program` e2e case were removed with them.
@@ -389,12 +389,12 @@ component-specific):
   (`simse.exe` from `simse_out.cpp`), which is what `simse.sln` builds.
 - **Control flow is lowered to labels and gotos before emission (T26).** A new
   post-sema pass (`cppsrc/linear/Linear.{h,cpp}` and the `linear` package in
-  `cppsrc/linear/Linear.simse`, `impl_specs/linear-lowering.md`) rewrites every
+  `cppsrc/linear/Linear.kt`, `impl_specs/linear-lowering.md`) rewrites every
   function/method/lambda body into `Stmt.Label`, `Stmt.Goto`, `Stmt.IfTrue`,
   `Stmt.IfFalse` and `Stmt.Block`; the emitters no longer have If/While/Switch/
   `Stmt.Block` only when the region declares a variable at its own level (a C++
   jump may not bypass an initialization still in scope), so most bodies splice
-  flat; a second pass (`cppsrc/linear/Simplify.{h,cpp}` / `Simplify.simse`,
+  flat; a second pass (`cppsrc/linear/Simplify.{h,cpp}` / `Simplify.kt`,
   `linear::simplifyBody`) then prunes the linear form to a fixed point: jumps to
   the next statement, the `ifTrue (c) goto A; goto B; A:` -> `ifFalse (c) goto B:`
   fold, dead statements after a `goto`/`return`, and labels nothing targets.
@@ -480,8 +480,8 @@ component-specific):
   (the Simse declaration was `&Str`, which made every view copy an atomic
   refcount) and a `simse_str_appendStr` prelude native gives in-place `Str`
   append, since the language has no `+=` and `out = out + text` rebuilds the
-  accumulator (`StrView.simse`, `Scanner.simse`, `Codegen.simse`,
-  `listops.hpp`, `rtl.simse`).
+  accumulator (`StrView.kt`, `Scanner.kt`, `Codegen.kt`,
+  `listops.hpp`, `rtl.kt`).
 - **`CgFn`/`CgNativeExt` are borrowed, not copied (T30).** `CgFn` carries two
   `XmlNode`s (`decl`, `receiver`), so `val fn: CgFn = this.functions[i]`
   deep-copied the whole function declaration — and the several read-only scans
@@ -652,7 +652,7 @@ component-specific):
   `xmlAttr` calls, 68,148 child scans and 16,823 temporary child lists for a
   6,357-line self-transpile — every one of them a `Str` key comparison or a list
   allocation, where the hand-written ring reads typed fields. The AST carrier is
-  now `AstXmlNode` (`cppsrc/rtl/astxml.simse` + `.hpp`): the node's role is an
+  now `AstXmlNode` (`cppsrc/rtl/astxml.kt` + `.hpp`): the node's role is an
   `AstNodeKind` and an attribute's key an `AstNodeAttributeKind`, so lookups are
   integer compares; attribute *values* stay `Str`, and `ast::astNodeKindText` /
   `ast::astNodeAttributeText` turn an enum back into the schema's spelling for the
@@ -738,7 +738,7 @@ component-specific):
   deferred, not forgotten - the suspects are the get-append-insert copies into
   `globalFunctions`/`packageDecls` in `collectGlobal`, `buildVisible` re-running
   per file, the per-call overload scans in `analyzeCall`/`markExtensionUsed`, and
-  `lookupValue`'s scope walk, all in `cppsrc/sema/Sema.simse` (`guide4ai.md`
+  `lookupValue`'s scope walk, all in `cppsrc/sema/Sema.kt` (`guide4ai.md`
   section 8).
 - **A custom `Dictionary` exists, and is measured faster (T41).**
   `cppsrc/rtl/smdictionary.hpp` implements `SmDictionary<TKey, TValue>` - the .NET
@@ -779,7 +779,7 @@ component-specific):
   pre-test paying an extra compare on hits where MSVC compares the key directly.
   Nothing else in the tree depends on either backing.
 - **The RTL reads files line by line, and a naive 1BRC measures it (T42).**
-  `FileStream` (`cppsrc/rtl/filestream.hpp`, prelude `cppsrc/rtl/fs.simse`) is
+  `FileStream` (`cppsrc/rtl/filestream.hpp`, prelude `cppsrc/rtl/fs.kt`) is
   `openFileStream(path): *FileStream` plus the **struct methods**
   `readLine(): Opt<Str>`, `readLineInto(buffer: *Str): Bool`, `fileSize(): Int64`,
   `close()`; `nowMillis()` (`cppsrc/rtl/timeops.hpp`) is the monotonic ms clock
@@ -816,14 +816,14 @@ component-specific):
   `benchmarks/onebrc/benchmark.md` has the method, the notes (tenths as `Int`, the
   half-toward-positive-infinity rounding rule, CRLF vs LF) and the run commands.
 - **`Span<T>`, `StrView`, and the in-place line reader (T43).** One borrowed view
-era replaced two: `cppsrc/rtl/Span.simse` + `span.hpp` declare `Span<T>` (a `*T`
+era replaced two: `cppsrc/rtl/Span.kt` + `span.hpp` declare `Span<T>` (a `*T`
 pointer plus a length, `size`/`isEmpty`/`at`/indexing/`slice` in the C# two forms)
-and `cppsrc/rtl/StrView.simse` + `strview.hpp` declare `StrView` - *embeds* a
+and `cppsrc/rtl/StrView.kt` + `strview.hpp` declare `StrView` - *embeds* a
 `Span<Char>` and adds the byte surface (`charAt`, `find`/`indexOf`, `startsWith`,
 `startsWithPtr`, `substr`, `toString`), built by `spanOfStr(*text)`; `spanOf(*items)`
 borrows a list. The old `Cursor<T>` (a `&List<T>` + start + len), the RTL's
 `StrView` (a `*Str` + start + len) and the compiler's own `common.StrView` are gone,
-and `Parser.simse` iterates `Span<Token>` while both scanners use `StrView`. Two
+and `Parser.kt` iterates `Span<Token>` while both scanners use `StrView`. Two
 design points are load-bearing and measured, not stylistic: an **alias**
 (`typealias StrView = Span<Char>`) does not survive the emitter's receiver-type
 lookup - a chained call through one is emitted as the wrong conversion
@@ -839,7 +839,7 @@ the RTL *name* list before the program's own declarations, so a declared type of
 the same name (the compiler had a `common.StrView`) was shadowed in every emitted
 signature. `typeName` (both rings) now checks the declared types first and lets any
 package other than `rtl` win; T23 and the five differentials stay byte-identical,
-and the tracked `cppsrc/simse_out.cpp` was regenerated (its embedded source-map line
+and the tracked `cppsrc/simse_bootstrap.cpp` was regenerated (its embedded source-map line
 numbers shifted with the parser/scanner edits).
   `FileStream` gained `readLineView(): Opt<StrView>` (T42's reader) on the same
   readahead buffer and the same `nextLineSpan` code path as `readLineInto`, so the
@@ -866,7 +866,7 @@ numbers shifted with the parser/scanner edits).
 
 - **Nested expressions are lowered to temporaries (T44).** The linear pass gave the
   emitter one *statement* vocabulary; `cppsrc/linear/ExpressionLowering.{h,cpp}`
-  (`linLowerExprs` in `cppsrc/linear/ExpressionLowering.simse`) gives it one
+  (`linLowerExprs` in `cppsrc/linear/ExpressionLowering.kt`) gives it one
   *expression* vocabulary. Together with T26's control-flow lowering, the emitter
   is left with a strictly structural job: no `if`/`while`/`switch`, and no
   expression deeper than one operation, to understand. It runs as
@@ -889,13 +889,13 @@ numbers shifted with the parser/scanner edits).
   are evaluated conditionally - those belong to the control-flow lowering, and their
   `ifTrue`/`ifFalse` shapes (plus a `?:` the grammar does not have yet) are written
   down in `impl_specs/linear-lowering.md` as the next step.
-  Two goldens moved, both deliberately: `tests/golden/sema_switch_label.simse.cpp.expected`
+  Two goldens moved, both deliberately: `tests/golden/sema_switch_label.kt.cpp.expected`
   (the non-constant case label now hoists `f()` into `_sm_expr1`) and
   `stress/hello/expected.cpp` - the harness compares that file byte for byte, but
   `--update` only rewrites `expected.stdout`/`stderr`/`exit`, so it is copied out of
   `stress/.work/hello/out.cpp` by hand. Verified: both configurations green (the
   five differentials byte-identical, T23's two-step bootstrap byte-identical),
-  `simse_tests.exe` **50/50** in both (the new pass and `Span.simse` are checked as
+  `simse_tests.exe` **50/50** in both (the new pass and `Span.kt` are checked as
   sources too), `bun tools/stress.js` **24/24** with the self-hosted compiler and
   **24/24** with the C++ ring.
 
@@ -904,7 +904,7 @@ numbers shifted with the parser/scanner edits).
   the emitter emitted `auto` for them and guessed the type whenever it needed one
   (the receiver of a chained call, `Res<T>.value`, a native extension's return).
   `sema::inferTypes` (`cppsrc/sema/TypeInfer.{h,cpp}`, `semInferTypes` in
-  `TypeInfer.simse`) now runs as the last step of the lowering
+  `TypeInfer.kt`) now runs as the last step of the lowering
   (`inferTypes(lowerExprs(simplifyBody(lowerBody(body))), facts, body)`) and fills
   in the type of every untyped `VarDecl` it can prove, walking the statements in
   scope order (shadowing included) instead of relying on emission order.
@@ -937,7 +937,7 @@ numbers shifted with the parser/scanner edits).
   byte-identical in both), `simse_tests.exe` **51/51** in both (the new file is one
   more source test), `bun tools/stress.js` **24/24** with the self-hosted compiler
   and **24/24** with the C++ ring, and the 1BRC report unchanged. Two goldens moved
-  again, deliberately: `tests/golden/sema_switch_label.simse.cpp.expected` and
+  again, deliberately: `tests/golden/sema_switch_label.kt.cpp.expected` and
   `stress/hello/expected.cpp` (hand-copied from `stress/.work/hello/out.cpp`, as
   `--update` never rewrites an `expected.cpp`).
 
@@ -961,7 +961,7 @@ numbers shifted with the parser/scanner edits).
   *absent* sentinel as simple (a bare `return;` has an empty value node, and the new
   rule promptly bound it, which the emitter printed as `/*unsupported*/`), and the
   ring asymmetry is explicit in the spec (`impl_specs/linear-lowering.md`). The
-  output grows, which is the point: `cppsrc/simse_out.cpp` went from 12.4k lines and
+  output grows, which is the point: `cppsrc/simse_bootstrap.cpp` went from 12.4k lines and
   1,402 `auto`s at T44 to **18.2k lines, 5,157 temporaries and 931 `auto`s**, of
   which 711 are borrows whose type the inference still declines to spell (that is
   the next increment, and it is a `Pointer`/pointee rule away). Verified: both
@@ -1012,7 +1012,7 @@ numbers shifted with the parser/scanner edits).
   leaving to `auto`: `&x` is a counted reference to `x`'s value, `*x` is the address
   of what `x` denotes (`Pointer(T)` for a value, `Pointer` of the pointee for a
   handle, the pointee when `x` already is a pointer) and `copy(x)` is the value
-  behind the handle - which is what took `tests/golden/program_expr.simse.cpp.expected`
+  behind the handle - which is what took `tests/golden/program_expr.kt.cpp.expected`
   from `auto reference`/`auto dereferenced` to `std::shared_ptr<Int>`/`Int*` and
   `program_extension`'s `*self` to `Int`. Verified: both configurations green (five
   differentials byte-identical, T23 byte-identical), `simse_tests.exe` **51/51** in

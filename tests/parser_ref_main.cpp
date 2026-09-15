@@ -1,5 +1,5 @@
 //
-// Differential reference driver for the parser. Scans every `*.simse` fixture
+// Differential reference driver for the parser. Scans every `*.kt` fixture
 // under the given directory with the hand-written lex::Scanner, runs the
 // hand-written `parser::parseModule`, then renders `ast::toXmlNode` with
 // `ast::dumpXmlNode`. The transpiled parser (tests/parser_simse_main.cpp) prints
@@ -28,7 +28,7 @@ int main(int argc, char **argv) {
     Str fixturesDir = argc > 1 ? argv[1] : ".";
     Str goldenDir = (common::toPath(fixturesDir).parent_path() / "golden").string();
 
-    List<Str> files = filesInDir(fixturesDir, ".simse");
+    List<Str> files = filesInDir(fixturesDir, ".kt");
     std::sort(files.begin(), files.end());
 
     List<TokenMatcher> *rules = getTokenRules();

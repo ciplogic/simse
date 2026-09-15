@@ -4,25 +4,25 @@ Status: implementation baseline.
 
 ## Source files
 
-Simse source files use the `.simse` extension. A project may contain one or
-more `.simse` files, and the transpiler discovers and processes those files as
+Simse source files use the `.kt` extension. A project may contain one or
+more `.kt` files, and the transpiler discovers and processes those files as
 the language source set.
 
 For example:
 
 ```text
-main.simse
-cppsrc/lex/Scanner.simse
+main.kt
+cppsrc/lex/Scanner.kt
 ```
 
-The former `../cppsrc/main.simse` / `../cppsrc/main.cpp` sample pair has been
-removed; the comparison cases are now the compiler's own `.simse` sources and
+The former `../cppsrc/main.kt` / `../cppsrc/main.cpp` sample pair has been
+removed; the comparison cases are now the compiler's own `.kt` sources and
 the fixtures under `tests/`.
 
 ## Generated C++ output
 
 The final transpilation result is one amalgamated `.cpp` file. It contains the
-generated C++ for all compiled `.simse` source files in the project, arranged so
+generated C++ for all compiled `.kt` source files in the project, arranged so
 that it can be opened, compiled, stepped through, and debugged as one ordinary
 C++ translation unit.
 
@@ -32,7 +32,7 @@ in a debugger such as Visual Studio and compare it with the intended Simse
 source and runtime behavior.
 
 The amalgamated file must preserve source mapping information where practical,
-for example with comments containing the originating `.simse` path and line
+for example with comments containing the originating `.kt` path and line
 range. Exact debugger mapping directives are an implementation detail, but the
 generated file must remain readable enough for manual comparison.
 
@@ -66,7 +66,7 @@ actual emitted behavior. The compiler may initially contain bugs, and the
 generated C++ exists specifically so those bugs can be inspected and compared
 in a native C++ debugger.
 
-The `.simse` source remains the language-level intent and the input to
+The `.kt` source remains the language-level intent and the input to
 transpilation. Generated C++ is not edited as a way to change the language
 program; fixes should be made in the transpiler or Simse source and then
 regenerated.
@@ -78,10 +78,10 @@ behavior, and generated C++ that contradicts it is a transpiler bug.
 
 This gives the project two useful comparison points:
 
-- `.simse`: intended source program;
+- `.kt`: intended source program;
 - final amalgamated `.cpp`: concrete emitted/reference implementation.
 
-The former `../cppsrc/main.simse` / `../cppsrc/main.cpp` pair was an example of
+The former `../cppsrc/main.kt` / `../cppsrc/main.cpp` pair was an example of
 this comparison workflow, not a requirement that every generated file remain
 manually edited side by side forever.
 
@@ -101,7 +101,7 @@ to generated Simse code.
 
 The transpiler must:
 
-- accept `.simse` source files;
+- accept `.kt` source files;
 - process them through the staged pipeline;
 - emit one final amalgamated `.cpp` file;
 - retain or include required RTL declarations/definitions through the normal

@@ -280,46 +280,75 @@ line endings or `;` separate its statements.
 
 ## `for`
 
-Status: implemented; lowered to `while` in the parser (`impl_specs/for.md`). Both
-rings parse it and report a `for` over a non-machine; the Simse ring cannot *emit* a
-machine yet (`yield` is still C++-ring only).
+Status: implemented in both rings; lowered to `while` in the parser (`impl_specs/for.md`).
+Both rings parse it, emit the machine (`yield` is implemented in both) and report a `for`
+over a non-machine.
 
-`for` iterates a **state machine**: the value a function whose body `yield`s
-produces (`..T` in its signature, `impl_specs/yield.md`). There are exactly two
-forms, and the body is a block:
+`for` iterates whatever has a **`smToYield`**: an `in`-scope extension function that
+returns a state machine (`..T` in its signature, `impl_specs/yield.md`). A **container
+is iterable** - the prelude writes one `smToYield` per container in Simse (`List<T>`,
+`Array<T>` and `Span<T>` today; `Dictionary<K, V>` and ranges are not iterable yet) - and
+a state machine is its own identity, so both of these work:
 
 ```text
-for (value in machine) { ... }
-for ((value, index) in machine) { ... }
+for (value in source) { ... }
+for ((value, index) in source) { ... }
 ```
 
 ```simse
-for (v in everyOther(10)) {
+for (v in everyOther(10)) {              // a machine
     println(v.toString())
 }
 
-for ((v, i) in everyOther(10)) {
-    println(i.toString() + ": " + v.toString())
+for (v in items) {                       // a List<Int>, in order
+    println(v.toString())
+}
+
+for ((v, i) in words) {                  // a List<Str>, indexed from 0
+    println(i.toString() + ": " + v)
+}
+
+for (v in numbers.toArray()) {            // an Array<Int>, in order
+    println(v.toString())
+}
+
+for (v in spanOf(*items)) {               // borrowed storage
+    println(v.toString())
 }
 ```
 
+The construct is `source.smToYield()`, and the loop is the `while` the language
+writes around it (`impl_specs/for.md`). So:
+
 - `for` is a reserved keyword; `in` is only special in the header.
-- The machine is **created once**, before the loop starts, and advanced once per
-  iteration.
+- What is iterated is the machine `source.smToYield()` produces - created **once**,
+  before the loop starts, and advanced once per iteration. For a machine argument that
+  call *is* the argument, so the machine is the one the source built.
 - `value` is bound once per iteration, and so is `index`. Both are fresh `val`s
-  (as in Kotlin's `for`): the loop does not move along by assigning to them.
+  (as in Kotlin's `for`): the loop does not move along by assigning to them. The
+  variable's type is the machine's element type: a `for` over a `List<Str>` binds a
+  `Str`.
 - `index` is an `Int` counter the **compiler** declares and increments, starting at
   `0`. It counts *iterations* of the loop, not steps of the machine, so an iteration
   skipped with `continue` keeps its index and the next one is one higher.
 - `break` and `continue` behave exactly as in a `while` loop. `continue` still
   advances the machine: it means "skip the rest of this body", never "re-read the
   same value".
-- A **container is not iterable**: `for (x in someList)` is an error. Iteration over
-  storage is written out - an index and `while`, or a `Span<T>`
-  (`containers.md`) - because the order, the bounds and the copy semantics of a
-  container are things the reader should see.
+- **A type is iterable when it has a `smToYield`**: an extension returning `..T`, which
+  any type may add (`fun Point.walk(): ..Point` writes a machine like any other
+  `yield`ing function, so the *shape* is the interface, not a runtime one). A type with
+  none is an error, reported at the `for`:
+
+  ```text
+  stress/diagnostic-not-iterable/src/main.kt:11:5: a `for` iterates a machine
+  (`..T`) or a type with a `smToYield`, and Int has neither; iterate a container with
+  `while` and an index
+  ```
+
 - A `for` inside a body that itself yields is not supported yet; the diagnosed
   alternative is to collect the values into a `List` first (`impl_specs/yield.md`).
+- Ranges are next: `for (i in (2 .. 5))` is one more `smToYield` whose machine holds the
+  two bounds (`impl_specs/for.md`).
 
 ## Default parameter values
 

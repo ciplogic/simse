@@ -1,6 +1,6 @@
 //
 // Differential Simse driver for the sema pass. This translation unit is compiled
-// together with the C++ emitted by `simse_transpile cppsrc/sema/Sema.simse`
+// together with the C++ emitted by `simse_transpile cppsrc/sema/Sema.kt`
 // (included directly, because the generated file has no header; it also carries
 // the transpiled parser and scanner through its imports). It scans and parses
 // each fixture with the generated front end, passes the RTL prelude and the
@@ -19,7 +19,7 @@
 #include <string>
 #include <vector>
 
-#include "Sema.simse.cpp"
+#include "Sema.kt.cpp"
 
 // The generated translation unit qualifies every package's declarations with
 // `ns<index>_`, numbered in sorted package order (impl_specs/rtl-abi.md):
@@ -39,14 +39,14 @@ namespace {
         return true;
     }
 
-    // Every `*.simse` directly or transitively under `dir`, sorted, matching
+    // Every `*.kt` directly or transitively under `dir`, sorted, matching
     // common::filesInDir so the prelude merge order agrees with the reference.
     std::vector<std::string> simseFiles(const std::string &dir) {
         std::vector<std::string> files;
         std::error_code ec;
         if (!std::filesystem::is_directory(std::filesystem::path(simse_toStdString(dir)), ec)) return files;
         for (const auto &entry: std::filesystem::recursive_directory_iterator(std::filesystem::path(simse_toStdString(dir)), ec)) {
-            if (entry.is_regular_file() && entry.path().extension() == ".simse") {
+            if (entry.is_regular_file() && entry.path().extension() == ".kt") {
                 files.push_back(entry.path().string());
             }
         }

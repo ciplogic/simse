@@ -56,11 +56,16 @@ cd cmake-build-strstd && cmd //c _msvc_build.bat
 # identical with and without it - impl_specs/linear-il.md)
 ./cmake-build-debug/simse_transpile.exe --root cppsrc -o a.cpp --showLinearRepresentation 2> il.txt
 
-# codegen from the IL: --linearCodegen compares the two paths per body and reports
-# where they disagree (the output is unchanged); --linearCodegenEmit *uses* the IL's
-# text for every body it can express, which is how the compiler is transpiled from
-# its own bytecode (0 bodies differ; 2 lambda bodies still fall back)
+# codegen: the C++ of every body comes from its instruction list, and the statement tree
+# is the fallback for what the IL cannot spell (0 bodies over cppsrc; the 2 lambda
+# bodies are spelled as closure classes, which is the one difference the model owns).
+./cmake-build-debug/simse_transpile.exe --root cppsrc -o a.cpp           # the default
+
+# the report: both paths per body, and where they disagree on stderr
 ./cmake-build-debug/simse_transpile.exe --root cppsrc -o a.cpp --linearCodegen
+
+# the escape hatch: emit every body from the statement tree, exactly as before
+./cmake-build-debug/simse_transpile.exe --root cppsrc -o a.cpp --statementsCodegen
 
 # transpile the compiler and compile it (bun + cl.exe, loads the VS environment)
 # compile an amalgamated output with cl.exe (loads the VS environment itself)
@@ -70,6 +75,16 @@ cd cmake-build-strstd && cmd //c _msvc_build.bat
 ./build.bat my_simse.exe                # same, different executable name
 ./build.bat --cpp other.cpp --exe x.exe # compile an existing amalgamation
 ./build.bat --help                      # all options (see build.js)
+
+# the published bootstrap: the same amalgamation, checked in at
+# cppsrc/simse_bootstrap.cpp so it can be built with a C++ compiler alone
+# (docs/getting-started.md, "Build the compiler without a compiler"). Refresh it
+# after compiler changes (the file is generated, never hand-edited):
+bun build.js --release --out cppsrc/simse_bootstrap.cpp   # also builds ./simse.exe
+
+# how fast does it bootstrap, and does the fixed point hold?
+bun tools/bootstrap.js                  # times: transpile, cl.exe, and the fixed point
+bun tools/bootstrap.js --debug          # the same with the debug toolchain
 
 # profiling: open simse.sln (ARM64; Release is the default configuration and
 # carries /Zi + /DEBUG). It compiles ONLY simse_out.cpp, refreshes that file
@@ -83,7 +98,7 @@ built compiler rather than the C++ ring).
 **If `simse*.exe` is running, linking fails with `LNK1168` - kill it first.**
 
 `stage1_check` *is* the two-step transpiling check: it transpiles the compiler
-source set (`cppsrc/compiler/Driver.simse` plus the module roots) into
+source set (`cppsrc/compiler/Driver.kt` plus the module roots) into
 `stage1/gen/simse_out.cpp`, keeps that as `stage1/gen/simse_out1.cpp`, compiles
 that copy into `stage1/simse_stage1.exe`, runs it over the same source set to
 regenerate `stage1/run/simse_out.cpp`, and requires the two files to be
@@ -93,7 +108,7 @@ regenerate `stage1/run/simse_out.cpp`, and requires the two files to be
 `--root cppsrc` scans the whole source tree (the prelude under `cppsrc/rtl` is
 excluded as prelude), so the amalgamation contains exactly one `main` — the
 driver's — and `build.bat` can compile it. `stage1_check` uses the equivalent
-explicit `cppsrc/compiler/Driver.simse` input.
+explicit `cppsrc/compiler/Driver.kt` input.
 
 ## 3. Repo map
 
@@ -122,8 +137,8 @@ explicit `cppsrc/compiler/Driver.simse` input.
   `containers.hpp`, `smstring.hpp`, `strsmallvector.hpp`, `optional.hpp`,
   `functional.hpp`, `result.hpp`, `xml.hpp`, `span.hpp`,
   `listops.hpp`, `strops.hpp`, `dictops.hpp`, `fs.hpp`, `filestream.hpp`,
-  `timeops.hpp`, `simse.hpp`) AND the **prelude** `.simse`
-  files (`rtl.simse`, `Span.simse`, `xml.simse`, `fs.simse`)
+  `timeops.hpp`, `simse.hpp`) AND the **prelude** `.kt`
+  files (`rtl.kt`, `Span.kt`, `xml.kt`, `fs.kt`)
   declaring the RTL surface.
   surface. `List<T>` is `SmallVector<T, 4>` and `Str` is the inline `SmString`
   (`smstring.hpp`), whose buffer is `strsmallvector.hpp`'s `StrSmallVector`, the
@@ -148,28 +163,40 @@ explicit `cppsrc/compiler/Driver.simse` input.
 - `cppsrc/common/` — `readFile`/`filesInDir`, `xmlutil` (C++ + Simse).
 - `cppsrc/lex/`, `cppsrc/skelparser/`, `cppsrc/parser/`, `cppsrc/sema/`,
   `cppsrc/linear/`, `cppsrc/codegen/`, `cppsrc/compiler/` - the compiler stages;
-  each has a C++ implementation AND a `.simse` mirror. `linear` is the post-sema
-  lowering of control flow to labels/gotos (`Linear.{h,cpp}`/`Linear.simse`), the
+  each has a C++ implementation AND a `.kt` mirror. `linear` is the post-sema
+  lowering of control flow to labels/gotos (`Linear.{h,cpp}`/`Linear.kt`), the
   peephole trim of that form (`Simplify.*`), and the lowering of nested expressions
   into `_sm_expr<n>` temporaries (`ExpressionLowering.*`); `sema` also carries the
   lowering-time type inference that types those temporaries
   (`TypeInfer.{h,cpp,simse}`). All of it is specified in
   `impl_specs/linear-lowering.md`. `LinearForm.{h,cpp}` projects the same body into
   the flat linear IL (one instruction list, no blocks), prints it for
-  `--showLinearRepresentation` and emits C++ **from** it for `--linearCodegen` /
-  `--linearCodegenEmit` (`impl_specs/linear-il.md`). `Yield.{h,cpp}` is the one
+  `--showLinearRepresentation` and emits C++ **from** it - the default, with
+  `--statementsCodegen` as the escape hatch (`impl_specs/linear-il.md`).
+  `LinearForm.kt` is the whole thing mirrored: the model, the signature table, the
+  printer, the extractor, and the backend lives in `Codegen.kt`
+  (`emitIlBodyText`/`ilEmitOps`/the closure classes), so **both rings emit from the IL**.
+  `Yield.{h,cpp,simse}` is the one
   language feature that is nothing but a lowering: `yield` becomes labels, a branch
   field and a class (`impl_specs/yield.md`), and `for` (`Parser::parseFor`, which
   desugars the two forms to a `while` before anything else sees them) is the second
-  (`impl_specs/for.md`). `for` is parsed by both rings now and its sema check is in
-  both (`Parser.simse`, `Sema.simse`); `yield`'s lowering and the emitter's
-  `emitYieldable` are still C++-only, and `tools/_ring/` is the two-ring probe.
+  (`impl_specs/for.md`). `for` and `yield` are in **both** rings now - parser, sema,
+  the machine lowering and the emitter's `emitYieldable`/`emitMachine`, with a
+  *generic* machine a class template and an extension function's receiver a field of it
+  (`stress/yield`, `stress/generic-yield`). Iteration is a convention: `for (x in c)` is
+  `c.smToYield()`, the prelude writes one per container in Simse (`List`, `Array`,
+  `Span`), a machine is
+  its own identity, and a prelude body is emitted only when the program reaches it -
+  by name *and* by the receiver's type, since a machine's class is named after its
+  receiver - so a program that iterates a list carries no array machine
+  (`stress/for-container`, `stress/for-array`, `stress/diagnostic-not-iterable`).
+  `tools/_ring/` is the two-ring probe.
 - `Compiler.{h,cpp}` — the shared transpile core; `cppsrc/codegen/TranspileMain.cpp`
   — the `simse_transpile` CLI, the C++ compiler driver (the Simse mirror of it
-  is `cppsrc/compiler/Driver.simse`).
+  is `cppsrc/compiler/Driver.kt`).
 - `cppsrc/native/` — hand-written C++ for `native(...)` symbols
   (e.g. `simse_native_readFile`).
-- `tests/` - fixtures, goldens (`<fixture>.simse.{tokens,ast,astxml,sema,cpp}.expected`),
+- `tests/` - fixtures, goldens (`<fixture>.kt.{tokens,ast,astxml,sema,cpp}.expected`),
   the test runner, and the differential drivers (`*_ref_main.cpp` /
   `*_simse_main.cpp`).
 - `stress/` - the end-to-end stress corpus: one folder per Simse project
@@ -181,7 +208,7 @@ explicit `cppsrc/compiler/Driver.simse` input.
   (`_bench_ab.mjs`, `_hoist_ab.bat`, `_cap_ab.bat`, `_probe.bat`, `memrun.cpp`,
   `str_bench.cpp`, ...) and the probe programs.
 - `benchmarks/` - published measurements; `benchmarks/onebrc/` is the naive 1BRC
-  in Simse (`src/main.simse`, each line parsed in place through `StrView`) with the
+  in Simse (`src/main.kt`, each line parsed in place through `StrView`) with the
   C++ STL baseline, the Bun generator/reference (`onebrc.mjs`), the measured
   write-up (`benchmark.md`) and the run commands (`README.md`; data and binaries
   are git-ignored).
@@ -192,7 +219,7 @@ Two "rings" that must stay in lockstep:
 
 1. **Bootstrap ring (C++)**: the hand-written compiler — scanner, parser, sema,
    codegen, driver — plus the RTL.
-2. **Self-host ring (`.simse`)**: the same compiler, ported, in `cppsrc/**/*.simse`.
+2. **Self-host ring (`.kt`)**: the same compiler, ported, in `cppsrc/**/*.kt`.
 
 `simse_transpile` (C++, bootstrap) transpiles the self-host ring into one
 `simse_out.cpp`; that file (kept as `simse_out1.cpp`) is compiled into
@@ -217,7 +244,7 @@ Key design points:
 - **AST carrier is `AstXmlNode`** (see `impl_specs/ast-xmlnode.md`): one uniform
   node; `name` is an `AstNodeKind` (the structural role), `kind` an
   `AstNodeCategory` (the schema's category), an attribute key an
-  `AstNodeAttributeKind` - all enums, in `cppsrc/rtl/astxml.simse` - so every test
+  `AstNodeAttributeKind` - all enums, in `cppsrc/rtl/astxml.kt` - so every test
   on a node is an integer compare. Attribute *values* are text, children are an
   `Array<AstXmlNode>` (one counted block, count first, the shared empty array for a
   leaf). The C++ side has `ast::toXmlNode`/`dumpXmlNode` and the enum→text
@@ -230,12 +257,12 @@ Key design points:
   `native("Symbol") fun` declares a function whose body is hand-written C++.
   Container/string/dict/fs operations are prelude extensions over RTL C++
   templates (`listops.hpp`, `strops.hpp`, `dictops.hpp`, `span.hpp`, `fs.hpp`).
-- **Prelude**: `cppsrc/rtl/*.simse` is implicitly in scope everywhere; its
+- **Prelude**: `cppsrc/rtl/*.kt` is implicitly in scope everywhere; its
   method bodies are NOT emitted (behavior lives in the RTL C++ headers).
 - **Modules/packages** (see `specs/modules.md`): a **module is a directory**, a
   **package is a namespace** declared by a mandatory `package a.b.c` as each
   file's first declaration. Imports are style (A): the compiler scans module
-  roots and includes every `.simse`; `import pkg` only makes `pkg` visible
+  roots and includes every `.kt`; `import pkg` only makes `pkg` visible
   unqualified (never adds files); `rtl` is implicit; import of a package no
   scanned file declares is an error. Package names are opaque dotted
   identifiers; there is no qualified-name access form. The built-in types
@@ -269,7 +296,7 @@ Key design points:
 ## 6. Change protocol (read before editing)
 
 - **Two rings**: any compiler behavior change must be made in BOTH the C++
-  implementation and the matching `.simse` mirror (scanner, parser, sema,
+  implementation and the matching `.kt` mirror (scanner, parser, sema,
   codegen, driver, xmlutil). Keep them behaviorally identical.
 - After a change: rebuild (`_msvc_build.bat`), run `simse_tests.exe`
   (`--update` then check mode), confirm the five differentials are still
@@ -291,7 +318,7 @@ Key design points:
   every function that only reads take `*T`; a by-value copy *per lookup* makes
   emission quadratic in the function/AST count (the `CgFn` copies did: the Debug
   `stage1_check` cost 6.6-8.7 s before they were removed, 2.1 s after).
-- Every `.simse` file must start with a mandatory `package`; update `import`
+- Every `.kt` file must start with a mandatory `package`; update `import`
   lines to package names when adding files.
 - **User-visible changes update the docs.** `README.md` (the status paragraph),
   `docs/state-of-the-field.md` (what works, what is rough, the numbers) and
@@ -314,37 +341,47 @@ Scalars (`Int8..64`, `Float32/64`, `Char`, `Bool`), `Str` (with a method library
 `specs/statics.md`); `if`/`else`, `while`, `switch`/`case`/`default`,
 `break`/`continue`, `return`; `null`; memory operators `&T`/`*T`/`copy`;
 lambdas with by-value capture; generics reified via C++ templates; modules and
-packages. `yield` and `for` are implemented in the **C++ ring**, and the Simse mirror
-has caught up with the *front* of them: both rings scan `..`/`yield`, parse `..T`,
-`yield e` and both `for` forms (desugared in the parser), and both report a `for`
-over a non-machine (`stress/diagnostic-for-not-a-machine`). Still C++-only: the
-state-machine lowering for `yield` (`linear/Yield.cpp`, with no `Yield.simse`), the
-emitter's machine support (`Codegen.cpp`'s `emitYieldable`) and the whole IL
-(`linear/LinearForm.cpp` has no `.simse` at all). Until they land, `for`/`yield` stay
-out of `cppsrc/**` and out of `tests/fixtures`; their vocabulary is `..T`, `yield e`,
-and `for (v in m)` / `for ((v, i) in m)` (`specs/functions.md`, `impl_specs/yield.md`,
-`impl_specs/for.md`); `tools/_ring/` is the probe a ring comparison runs on.
+packages. `yield` and `for` are implemented in **both rings**: both scan `..`/`yield`,
+parse `..T`, `yield e` and both `for` forms (desugared in the parser), both report a
+`for` over a non-machine (`stress/diagnostic-for-not-a-machine`), both lower the
+machine (`linear/Yield.cpp` / `Yield.kt`) and both emit it
+(`emitYieldable`/`emitMachine` in `Codegen.cpp` and `Codegen.kt`); `stress/yield`
+runs the whole thing through the self-hosted compiler. Two things stay out of
+`cppsrc/**` and `tests/fixtures` on purpose: `yield` needs a machine whose body lives
+in a method, and the vocabulary is `..T`, `yield e`, and `for (v in m)` /
+`for ((v, i) in m)` (`specs/functions.md`, `impl_specs/yield.md`, `impl_specs/for.md`);
+`tools/_ring/` is the probe a ring comparison runs on.
 
 ## 8. TODOs / deferred
 
 **The agreed order for the next work** (the user's plan, recorded here so it survives a
 session):
 
-1. **`linear/LinearForm.simse`** - the IL in the Simse ring (extractor, printer,
-   backend). Oracle: `--showLinearRepresentation` over `cppsrc` must be byte-identical
-   between the rings.
-2. **IL-only codegen in BOTH rings at once**: `Codegen.{cpp,simse}` keeps
-   `emitBodyCheckedAt` and the statement emitters are deleted; the IL's own text becomes
-   the output (flatter bodies, a lambda as a class instead of `[=]`), so goldens move.
-   One ring alone turns T23 red - `impl_specs/linear-il.md`, "Dropping the statement
-   emitter".
-3. **`yield` in the Simse ring** (`linear/Yield.simse` + `Codegen.simse`'s
-   `emitYieldable`) - the machine's bodies are already IL bodies
-   (`Emitter::emitMachine` -> `emitBodyCheckedAt`; the yield example reports 5/5 identical
-   without blocks, and its `--linearCodegenEmit` output runs).
-4. **`smToYield`** (`impl_specs/for.md`, "Where this is going"): `for (x in c)` becomes
-   `for (x in smToYield(c))`, with the prelude's `List<T>.smToYield(): ..T` written in
-   Simse and the identity wrap for a machine.
+1. ~~**`linear/LinearForm.kt`**~~ **done** - the IL in the Simse ring (model,
+   signature table, printer, extractor) plus the backend in `Codegen.kt`
+   (`emitIlBodyText`, `ilEmitOps`, the closure classes). The oracle holds:
+   `--showLinearRepresentation` and `--linearCodegen` over `cppsrc` report the same
+   counts in both rings (502 bodies, 0 not expressible), and their IL-emitted outputs
+   are byte-identical.
+2. ~~**IL codegen as the default in BOTH rings at once**~~ **done**: the IL's text is
+   what codegen emits (a lambda is a closure class now, not `[=]`), the statement tree
+   is the fallback for what the IL cannot spell, and `--statementsCodegen` restores the
+   old behaviour. The statement emitters are still there, to be deleted once the
+   fallback count stays 0 across the corpus.
+3. ~~**`yield` in the Simse ring**~~ **done**: `Codegen.kt`'s
+   `emitYieldable`/`emitMachine`/`ilMachineMethod`, and the builder contract they needed
+   (`linCondJump` re-roots a *synthesized* condition under `Cond` - the C++ ring holds it
+   structurally, so the gap was invisible there). `stress/yield` covers both `for`
+   forms, `continue`/`break`, `next()` and `advance(*T)`, through the self-hosted
+   compiler.
+4. ~~**`smToYield`**~~ **done** (`impl_specs/for.md`): `for (x in c)` becomes
+   `c.smToYield()`, the prelude's `List<T>.smToYield(): ..T` is written in Simse, a
+   machine is its own identity (the compiler's, since `..T` cannot be a parameter type),
+   and this is what made generic machines and the receiver-in-the-machine work land.
+   `Array<T>` and `Span<T>` landed the same way, which is where the machine class
+   started carrying its receiver's name (`List_smToYield_yieldable`) and the
+   prelude-body rule grew its per-receiver half. What is left of the feature is
+   `Dictionary` (its element type is the open question) and ranges, `for (i in (2 .. 5))`.
 
 Do these only when asked; roughly prioritized:
 
@@ -382,7 +419,7 @@ Do these only when asked; roughly prioritized:
    `impl_specs/capability-matrix.md`): every per-file stage is linear except sema
    (408 -> 6,155 ms when a one-file input grows 3-4x), so a single 30k+ line file
    would take seconds while many small files stay linear. Suspects in
-   `cppsrc/sema/Sema.simse`: `collectGlobal`'s get-append-insert copies into
+   `cppsrc/sema/Sema.kt`: `collectGlobal`'s get-append-insert copies into
    `globalFunctions`/`packageDecls`, `buildVisible` re-running per file, per-call
    overload scans (`analyzeCall`, `markExtensionUsed`), `lookupValue`'s scope walk.
    Fix in both rings when a real workload needs it.
@@ -425,35 +462,35 @@ Do these only when asked; roughly prioritized:
      Not blocking anything today.
    - The three recorded gaps (a prelude struct method such as `Span.size()`, a native
      extension called as a plain function, a call through a function-typed local).
-10. **A flat body still keeps the program's own scopes.** The emitted body is one
-   sequence of labels, jumps and assignments except where a *source-level* declaration
-   sits inside a branch that a jump bypasses; those blocks are the program's own
-   scoping, not the lowering's (the mechanics are in `impl_specs/linear-lowering.md`,
-   "Slot hoisting"). What is left, in the order it is worth doing:
+10. ~~**A flat body still keeps the program's own scopes**~~ **done**: every declaration
+   of a body moves to the top of it (`hoistSlots`), shadowed names are renamed first
+   (`renameShadowed`, `_sm_<name>_<n>`), and the body is one scope with no blocks - the
+   IL's own frame is flat, and the statement path agrees (515 of 528 bodies over
+   `cppsrc` are byte-identical between the two paths; 0 not expressible). What is left:
+   - **A declaration the inference cannot spell in full** (an untyped slot, a `*?`
+     place) stays where it is, and the block around it with it: that is the only
+     reason a body-level block survives (26 in the emitted compiler, against 21 before
+     the change - the rest is the statement path's own residue). Closing it means
+     typing the three recorded inference gaps (item 9).
+   - **The placement in the body is the cost knob**: every slot is live for the whole
+     body (no liveness reuse). On the 1BRC the measurement says it costs nothing
+     (1323 ms against 1322 ms for the same program emitted before this pass), so the
+     knob is not worth turning until a workload says otherwise; the rule for a tighter
+     placement is the one `spliceIsSafe` already computes.
    - **Run the inference on lambda bodies** (item 9): besides typing them, that is
      what lets a lambda's slots hoist and fold like any other body's.
-   - **Source variables would need renaming to go away**: hoisting a `var` out of the
-     branch it was written in collides with a sibling scope's name (the language
-     allows shadowing), so a block-free form would have to rename them first. Worth
-     it only if the IL is meant to be consumed by something that cannot read scopes -
-     today the C++ backend can.
-   - **The placement in the body is the cost knob**: every slot is live for the whole
-     body (no liveness reuse), which on the 1BRC is 1187 -> 1350 ms. Placing a
-     declaration just before the earliest jump that would bypass it - instead of at
-     the top of the body - gives the same flatness with tight lifetimes, and the rule
-     it needs is the one `spliceIsSafe` already computes.
 
 ## 9. Gotchas
 
 - `LNK1168` on build = a running `simse*.exe` holds the output; kill it first.
 - `build.bat` defaults to a debug build (`/MDd`), so the MSVC debug STL asserts are
-  live: bad input such as a directory passed where a `.simse` file is expected can
+  live: bad input such as a directory passed where a `.kt` file is expected can
   pop an assert dialog instead of a diagnostic. Use `build.bat --release`
   (`/O2 /DNDEBUG`, release libs) for a build with the asserts compiled out.
 - Scanning `.` (no args) walks `tests/fixtures/*`, which intentionally contain
   bad input and will make `simse_transpile` exit non-zero. Pass `--root cppsrc`
   (or another clean module root) instead.
-- Prelude `.simse` bodies are not emitted; put behavior in the RTL C++ headers.
+- Prelude `.kt` bodies are not emitted; put behavior in the RTL C++ headers.
 - Source-map comments embed the path as given, so absolute and relative runs
   differ — cosmetic.
 - Goldens are sensitive to line-number shifts; regenerate with `--update` when
@@ -527,11 +564,12 @@ Do these only when asked; roughly prioritized:
   to. Hoisting it into a variable (which the expression lowering would otherwise do,
   since a value position is one operation deep) leaves a pointer to a dead
   temporary; `exprIsBindable` is the guard that keeps it where it is.
-- **`for` and `yield` exist in the C++ ring only.** `for` is desugared in the
+- **`for` and `yield` are in both rings.** `for` is desugared in the
   *parser* (`Parser::parseFor`, reached through `parseStmtInto`, the one statement
   slot that expands to several), so no stage downstream has a `for` statement kind -
-  which is also why `sema`'s "a `for` iterates a machine" check keys on the template's
-  `_sm_for<n>` name: that prefix is the only marker left of the construct. Two
+  which is also why `sema`'s "a `for` needs a `smToYield`" check keys on the template's
+  `_sm_for<n>` name and reads the wrap call underneath it: that prefix is the only marker
+  left of the construct. Two
   consequences bite: the template's machine is a *local*, so a machine can never be a
   field, and a `for` inside a body that yields therefore has no field to live in
   (reported, not silently miscompiled); and a machine's C++ class is the creating

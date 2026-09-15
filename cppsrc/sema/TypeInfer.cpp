@@ -110,6 +110,13 @@ namespace sema {
             case TypeKind::Pointer:
                 return a.kind == TypeKind::Pointer && a.inner && pattern.inner
                        && unifyType(*pattern.inner, *a.inner, typeParams);
+            case TypeKind::Yield:
+                // `..T` is a state machine (impl_specs/yield.md) and carries its element
+                // type the way a pointer carries its pointee, so a pattern `..T` matches
+                // `..Int` element-wise - which is what lets the prelude's
+                // `fun ..T.smToYield(): ..T` be found for a machine.
+                return a.kind == TypeKind::Yield && a.inner && pattern.inner
+                       && unifyType(*pattern.inner, *a.inner, typeParams);
             case TypeKind::Function:
                 return false;
         }
@@ -175,6 +182,10 @@ namespace sema {
                        && bindTypes(*pattern.inner, *a.inner, typeParams, bindings);
             case TypeKind::Pointer:
                 return a.kind == TypeKind::Pointer && a.inner && pattern.inner
+                       && bindTypes(*pattern.inner, *a.inner, typeParams, bindings);
+            case TypeKind::Yield:
+                // The machine's element type, bound the way a pointer's pointee is.
+                return a.kind == TypeKind::Yield && a.inner && pattern.inner
                        && bindTypes(*pattern.inner, *a.inner, typeParams, bindings);
             case TypeKind::Function:
                 return false;
@@ -606,6 +617,11 @@ namespace sema {
                         return genericType("Opt", args);
                     }
                     if (callee.text == "advance") return namedType("Bool");
+                    // A machine is already iterable: `x.smToYield()` on one is `x`, so the
+                    // wrap a `for` puts around what it iterates is the identity there
+                    // (impl_specs/for.md). `..T` is not a spellable type, so no function
+                    // could take one.
+                    if (callee.text == "smToYield") return receiverType;
                 }
                 if (recv->kind == TypeKind::Generic) {
                     if (callee.text == "value" && recv->name == "Opt" && !recv->typeArgs.empty()) {

@@ -4,7 +4,7 @@ Status: implemented in both rings. The C++ AST (`cppsrc/ast/Ast.h`) is converted
 the schema by `ast::toXmlNode`, and the Simse parser builds it directly; both are
 rendered by `ast::dumpXmlNode`.
 
-The compiler's carrier is **`AstXmlNode`** (`cppsrc/rtl/astxml.simse` +
+The compiler's carrier is **`AstXmlNode`** (`cppsrc/rtl/astxml.kt` +
 `cppsrc/rtl/astxml.hpp`): the node model below with the stringly-typed parts
 replaced by enums - the node's structural role is an `AstNodeKind`, its category
 (the schema's `kind`) is an `AstNodeCategory`, and an attribute's key is an

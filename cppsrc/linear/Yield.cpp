@@ -135,6 +135,29 @@ namespace linear {
         }
         const char *kEndLabel = "LYend";
         const char *kBranchField = "branch";
+        // The receiver of an extension function lives in the instance under this name
+        // (`linear::yieldReceiverField` is how the emitter learns it).
+        const char *kReceiverField = "_sm_self";
+
+        // The type of the machine's receiver field: it holds exactly what the emitted
+        // function's `self` parameter holds - a *value* receiver arrives as a pointer
+        // (`T* self`), a handle as itself.
+        ast::TypePtr receiverFieldType(const ast::TypeExpr &type) {
+            if (type.kind == ast::TypeKind::Reference || type.kind == ast::TypeKind::Pointer) {
+                return std::make_shared<ast::TypeExpr>(type);
+            }
+            auto pointer = std::make_shared<ast::TypeExpr>();
+            pointer->kind = ast::TypeKind::Pointer;
+            pointer->inner = std::make_shared<ast::TypeExpr>(type);
+            return pointer;
+        }
+
+        // Whether a receiver is a *handle*: a bare `this` is then already the value the
+        // caller passed, while a value receiver's `this` has to be read back out of the
+        // pointer the machine holds.
+        bool receiverIsHandle(const ast::TypeExpr &type) {
+            return type.kind == ast::TypeKind::Reference || type.kind == ast::TypeKind::Pointer;
+        }
 
         // ---- the machine --------------------------------------------------------
 
@@ -175,9 +198,10 @@ namespace linear {
                 if (error.empty()) error = message;
             }
 
-            // The fields: `branch`, the parameters, and every local the body declares
-            // that is not the lowering's own storage (those are per-statement and are
-            // re-initialised on every entry, so they stay locals of the method).
+            // The fields: `branch`, the receiver (an extension function's `this` has to
+            // cross a yield like anything else), the parameters, and every local the body
+            // declares that is not the lowering's own storage (those are per-statement and
+            // are re-initialised on every entry, so they stay locals of the method).
             void collectFields(const List<StmtPtr> &body, Yielded &yielded) {
                 ast::Field branch;
                 branch.name = kBranchField;
@@ -186,7 +210,20 @@ namespace linear {
                 fieldTypes[branch.name] = branch.type;
                 fieldOrder.push_back(branch.name);
 
+                if (decl.receiverType) {
+                    fieldTypes[kReceiverField] = receiverFieldType(*decl.receiverType);
+                    fieldOrder.push_back(kReceiverField);
+                }
+
                 for (const ast::Param &param : decl.params) {
+                    if (param.name == "this") {
+                        // A receiver written as a parameter *is* the `this` of the body,
+                        // and `this` cannot name a C++ member: the receiver-form spelling
+                        // (`fun T.name`) is the one that can yield for now.
+                        fail("yield: a `this` parameter cannot be a field; write the "
+                             "receiver before the name (`fun T.name`) instead");
+                        return;
+                    }
                     if (fieldTypes.count(param.name) > 0) continue;
                     if (!param.type) {
                         fail("yield: the parameter '" + param.name + "' has no type");
@@ -262,6 +299,17 @@ namespace linear {
                 yields = 0;
                 List<StmtPtr> rewritten;
                 for (const StmtPtr &stmt : body) statements(stmt, rewritten);
+                // The hoisted storage first - the declarations the lowering moved to the top
+                // of the body, which stay locals of the method (they are per-statement, so
+                // they never have to survive a call). They have to precede the dispatcher:
+                // a jump that skips a declaration is what C++ refuses (C2362), and for a
+                // generic function a declaration is `T`, i.e. non-trivial for `Str` and
+                // friends. So the dispatcher goes *after* them.
+                int first = 0;
+                while (first < (int) rewritten.size() && isLocalDeclaration(rewritten[first])) {
+                    method.body.push_back(rewritten[first]);
+                    first++;
+                }
                 method.body.push_back(jumpWhen(binaryNode("==", thisMember(kBranchField),
                                                           intLiteral(-1)),
                                                kEndLabel));
@@ -270,12 +318,24 @@ namespace linear {
                             jumpWhen(binaryNode("==", thisMember(kBranchField), intLiteral(i)),
                                      yieldLabel(i)));
                 }
-                for (const StmtPtr &stmt : rewritten) method.body.push_back(stmt);
+                for (int i = first; i < (int) rewritten.size(); i++) {
+                    method.body.push_back(rewritten[i]);
+                }
                 method.body.push_back(labelStmt(kEndLabel));
                 method.body.push_back(assignStmt(thisMember(kBranchField), intLiteral(-1)));
                 method.body.push_back(returnStmt(finishValue()));
                 method.yieldCount = yields;
                 return method;
+            }
+
+            // Whether a statement is one of the method's own declarations: the lowering's
+            // storage (`_sm_expr<n>`), declared without an initializer at the top of the
+            // body (`isSlotName` is the one place that is stated). A user's local became a
+            // field, so this is exactly the set that stays with the method.
+            static bool isLocalDeclaration(const StmtPtr &stmt) {
+                if (!stmt || stmt->kind != StmtKind::VarDecl) return false;
+                if (!isSlotName(stmt->name)) return false;
+                return stmt->init == nullptr;
             }
 
             // What a finished machine answers: an empty optional, or `false` when the
@@ -375,12 +435,21 @@ namespace linear {
             // A name that is a field is read and written as a field of the machine, so
             // the values live in the instance across calls. Everything else (the
             // lowering's temporaries, statics, calls) is left as it was.
-            ExprPtr expr(const ExprPtr &node) {
+            //
+            // `base` says the node is the receiver of a member or an index (or a callee),
+            // where the *field* is what is wanted: the spelling helpers dereference a
+            // pointer field where they have to (`this._sm_self->size()`,
+            // `(*this._sm_self)[i]`). Anywhere else the language means the object behind
+            // the receiver, so a value receiver's `this` is read back out of it.
+            ExprPtr expr(const ExprPtr &node, bool base = false) {
                 if (!node || !error.empty()) return node;
                 if (node->kind == ExprKind::Name) {
                     if (node->text == "this") {
-                        fail("yield: a yielding body cannot use `this`");
-                        return node;
+                        ExprPtr self = thisMember(kReceiverField);
+                        if (!base && decl.receiverType && !receiverIsHandle(*decl.receiverType)) {
+                            return derefNode(self);
+                        }
+                        return self;
                     }
                     if (fieldTypes.count(node->text) > 0) {
                         return memberNode(nameNode("this"), node->text);
@@ -388,7 +457,10 @@ namespace linear {
                     return node;
                 }
                 auto copy = std::make_shared<Expr>(*node);
-                copy->lhs = expr(node->lhs);
+                // A member's or an index's receiver is a *place*, not a value: `this`
+                // there stays the field (see above).
+                const bool bases = node->kind == ExprKind::Member || node->kind == ExprKind::Index;
+                copy->lhs = expr(node->lhs, bases);
                 copy->rhs = expr(node->rhs);
                 for (int i = 0; i < (int) node->args.size(); i++) {
                     copy->args[i] = expr(node->args[i]);
@@ -419,5 +491,9 @@ namespace linear {
                        const List<ast::StmtPtr> &linearBody, const Str &valueTypeText) {
         Machinery machinery(decl, elementType, valueTypeText);
         return machinery.run(linearBody);
+    }
+
+    Str yieldReceiverField() {
+        return Str(kReceiverField);
     }
 }

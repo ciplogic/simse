@@ -29,7 +29,7 @@ and identical wherever the compiler is invoked.
 In:
 
 - A **module is a directory**; the compiler is given one or more **module roots**
-  and scans them, including every `.simse` file found.
+  and scans them, including every `.kt` file found.
 - A **package is a namespace**, declared once per file as the first declaration:
   `package a.b.c`, before imports and other declarations. The declaration is
   mandatory.
@@ -68,14 +68,14 @@ Out:
 - Compiler: module-root scanning; mandatory `package` as the first declaration;
   package-index resolution by name with the directory fallback removed; implicit
   `rtl` prelude scope; duplicate-definition and unresolved-import diagnostics.
-- Mirrors: package declarations on every `cppsrc/**/*.simse` file aligned with the
+- Mirrors: package declarations on every `cppsrc/**/*.kt` file aligned with the
   mandatory form.
 - Tests: fixtures/goldens covering mandatory packages, unresolved imports,
   and duplicate definitions across a package.
 
 ## Acceptance criteria
 
-- [x] Every `.simse` file declares exactly one `package a.b.c` as its first
+- [x] Every `.kt` file declares exactly one `package a.b.c` as its first
       declaration; a file with no package declaration is an error.
 - [x] `import a.b.c` resolves by package name against the scanned files,
       independent of the working directory and of directory layout, with no
@@ -92,11 +92,11 @@ Out:
 
 - **Loader (style A).** A compilation is the project module root (the `simse`
   positional directory, or `--root`) plus each repeatable `--module-root`,
-  scanned recursively; every `.simse` found is included, and `simse_transpile`
+  scanned recursively; every `.kt` found is included, and `simse_transpile`
   also includes its explicit inputs. `import` never adds files. `parser`
   `parseFileWithImports`/`collectImportSet` (and the Simse `ImportLoader`) were
   removed; module scanning is `common::filesInDir` driven by `compiler::transpile`
-  and mirrored in `cppsrc/compiler/Driver.simse`.
+  and mirrored in `cppsrc/compiler/Driver.kt`.
 - **Sema is compilation-wide.** `sema::analyze(List<Input>)` (C++) and
   `analyze(List<SemaInput>)` (Simse) collect declarations grouped by declared
   package, report duplicate top-level names within a package (across files),

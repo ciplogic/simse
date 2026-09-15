@@ -1,8 +1,8 @@
 //
 // Differential Simse driver for the skeleton parser. This translation unit is
 // compiled together with the C++ emitted by
-// `simse_transpile cppsrc/skelparser/SkeletonParser.simse` (included directly,
-// because the generated file has no header). It tokenizes each `*.simse` fixture
+// `simse_transpile cppsrc/skelparser/SkeletonParser.kt` (included directly,
+// because the generated file has no header). It tokenizes each `*.kt` fixture
 // with the generated scanner and runs the generated global `ns3_parseSkeleton`,
 // rendering the tree with the shared tests/skel_dump.h format so the build can
 // diff it against tests/skel_ref_main.cpp.
@@ -19,7 +19,7 @@
 #include <system_error>
 #include <vector>
 
-#include "SkeletonParser.simse.cpp"
+#include "SkeletonParser.kt.cpp"
 
 // The generated translation unit qualifies every package's declarations with
 // `ns<index>_`, numbered in sorted package order (impl_specs/rtl-abi.md):
@@ -60,7 +60,7 @@ int main(int argc, char **argv) {
     std::vector<std::string> files;
     std::error_code ec;
     for (const auto &entry: std::filesystem::directory_iterator(std::filesystem::path(simse_toStdString(fixturesDir)), ec)) {
-        if (entry.is_regular_file() && entry.path().extension() == ".simse") {
+        if (entry.is_regular_file() && entry.path().extension() == ".kt") {
             files.push_back(entry.path().string());
         }
     }

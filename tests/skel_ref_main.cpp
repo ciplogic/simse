@@ -1,5 +1,5 @@
 //
-// Differential reference driver for the skeleton parser. Scans every `*.simse`
+// Differential reference driver for the skeleton parser. Scans every `*.kt`
 // fixture under the given directory with the hand-written lex::Scanner and runs
 // the hand-written `parseSkeleton` (cppsrc/skelparser/SkeletonParser.h). The
 // tree is rendered with the shared tests/skel_dump.h format; the transpiled
@@ -37,7 +37,7 @@ namespace {
 
 int main(int argc, char **argv) {
     Str fixturesDir = argc > 1 ? argv[1] : ".";
-    List<Str> files = filesInDir(fixturesDir, ".simse");
+    List<Str> files = filesInDir(fixturesDir, ".kt");
     std::sort(files.begin(), files.end());
 
     List<TokenMatcher> *rules = getTokenRules();

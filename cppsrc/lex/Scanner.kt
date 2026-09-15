@@ -1,0 +1,487 @@
+// Scanner.kt
+//
+// The Simse-language scanner: token kinds, matcher functions, and the Scanner
+// type. It mirrors cppsrc/lex/Scanner.h and cppsrc/lex/Scanner.cpp so that the
+// C++ scanner can tokenize this file as a self-scan fixture.
+//
+// StrView lives in cppsrc/rtl/Span.kt (the RTL's borrowed view).
+
+package lex
+
+import common
+
+enum TokenKind {
+    None,
+    Space,
+    Comment,
+    EndOfLine,
+    Identifier,
+    ReservedWord,
+    Number,
+    String,
+    Character,
+    Operator,
+    Eof
+}
+
+typealias MatchLenFunc = (StrView) -> Int
+typealias CharPredicate = (Char) -> Bool
+
+data class Token(var text: Str; var kind: TokenKind; var pos: SourcePos)
+
+// A matcher returns how many leading characters it accepts, or 0 for no match.
+data class TokenMatcher(var tokenKind: TokenKind; var match: MatchLenFunc)
+
+// Horizontal whitespace only. Line endings are their own token kind.
+fun isSpace(ch: Char): Bool {
+    return ch == ' ' || ch == '\t'
+}
+
+fun isDigit(ch: Char): Bool {
+    return ch >= '0' && ch <= '9'
+}
+
+fun isAlpha(ch: Char): Bool {
+    return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_'
+}
+
+fun isAlphaOrDigit(ch: Char): Bool {
+    return isAlpha(ch) || isDigit(ch)
+}
+
+fun isOperatorChar(ch: Char): Bool {
+    return ch == '+' || ch == '-' || ch == '*' || ch == '/'
+        || ch == '%' || ch == '=' || ch == '<' || ch == '>'
+        || ch == '!' || ch == '&' || ch == '|' || ch == '^'
+        || ch == '~' || ch == '?' || ch == ':' || ch == ';'
+        || ch == ',' || ch == '.' || ch == '(' || ch == ')'
+        || ch == '[' || ch == ']' || ch == '{' || ch == '}'
+}
+
+fun matchAllOfRule(view: StrView, predicate: CharPredicate): Int {
+    var i = 0
+    while (i < view.size()) {
+        if (!predicate(view.at(i))) {
+            return i
+        }
+        i = i + 1
+    }
+    return view.size()
+}
+
+fun matchAllOfRules(view: StrView, first: CharPredicate, rest: CharPredicate): Int {
+    if (view.size() == 0) {
+        return 0
+    }
+    if (!first(view.at(0))) {
+        return 0
+    }
+    var i = 1
+    while (i < view.size()) {
+        if (!rest(view.at(i))) {
+            return i
+        }
+        i = i + 1
+    }
+    return view.size()
+}
+
+// ---- the scanner's tables -------------------------------------------------
+//
+// The tables are static storage (specs/statics.md): the generated pass builds each
+// one once, before `main`'s body, and the hot paths read them through a raw
+// pointer (`*List<T>`) - not a value, not a counted `&` reference - so matching a
+// keyword or an operator copies nothing. A `List<Str>`-returning accessor rebuilt
+// the table per call, and `matchOperator` runs for every token.
+
+var reservedWordTable: List<Str> = makeReservedWords()
+var multiCharOperatorTable: List<Str> = makeMultiCharOperators()
+var tokenRuleTable: List<TokenMatcher> = makeTokenRules()
+
+fun makeReservedWords(): List<Str> {
+    var words: List<Str> = List<Str>()
+    words.append("class")
+    words.append("data")
+    words.append("val")
+    words.append("var")
+    words.append("fun")
+    words.append("return")
+    words.append("while")
+    words.append("for")
+    words.append("if")
+    words.append("else")
+    words.append("true")
+    words.append("false")
+    words.append("null")
+    words.append("enum")
+    words.append("typealias")
+    words.append("native")
+    words.append("import")
+    words.append("this")
+    words.append("break")
+    words.append("continue")
+    words.append("switch")
+    words.append("case")
+    words.append("default")
+    words.append("yield")
+    words.append("package")
+    return words
+}
+
+fun makeMultiCharOperators(): List<Str> {
+    var operators: List<Str> = List<Str>()
+    operators.append("->")
+    operators.append("==")
+    operators.append("!=")
+    operators.append("<=")
+    operators.append(">=")
+    operators.append("&&")
+    operators.append("||")
+    operators.append("+=")
+    operators.append("-=")
+    operators.append("*=")
+    operators.append("/=")
+    operators.append("%=")
+    operators.append("..")
+    return operators
+}
+
+// The scanner's one table comparison: how much of `view` the table matches, or 0.
+// `exact` requires the whole view to be an entry (a reserved word); without it the
+// first entry `view` starts with wins (a multi-character operator).
+//
+// The cheap tests come first - the view's first character, then the entry's
+// length, then (for a reserved word) the exact length - and only a surviving
+// entry is compared character by character. The entry is reached through a raw
+// pointer into the table (`table[i]` would copy the `Str`), and the comparison
+// takes that pointer too (`StrView.startsWithPtr`), so no call here copies text.
+// Both lookups share this function and the tables above.
+fun tableMatch(view: StrView, table: *List<Str>, exact: Bool): Int {
+    if (view.size() == 0) {
+        return 0
+    }
+    val first: Char = view.at(0)
+    var i: Int = 0
+    while (i < table.size()) {
+        val entry: *Str = *table[i]
+        val length: Int = entry.size()
+        i = i + 1
+        if (length == 0 || entry[0] != first) {
+            continue
+        }
+        if (view.size() < length || (exact && view.size() != length)) {
+            continue
+        }
+        if (view.startsWithPtr(entry, length)) {
+            return length
+        }
+    }
+    return 0
+}
+
+// Pointers into the tables, so a caller can look without copying.
+fun reservedWords(): *List<Str> {
+    return *reservedWordTable
+}
+
+fun multiCharOperators(): *List<Str> {
+    return *multiCharOperatorTable
+}
+
+fun isReservedWord(view: StrView): Bool {
+    return tableMatch(view, *reservedWordTable, true) > 0
+}
+
+fun matchSpaces(view: StrView): Int {
+    return matchAllOfRule(view, isSpace)
+}
+
+// A line ending is CRLF, LF, or CR, matched as a whole.
+fun matchEndOfLine(view: StrView): Int {
+    if (view.size() == 0) {
+        return 0
+    }
+    val ch: Char = view.at(0)
+    if (ch == '\n') {
+        return 1
+    }
+    if (ch == '\r') {
+        if (view.size() >= 2 && view.at(1) == '\n') {
+            return 2
+        }
+        return 1
+    }
+    return 0
+}
+
+fun matchIdentifier(view: StrView): Int {
+    return matchAllOfRules(view, isAlpha, isAlphaOrDigit)
+}
+
+fun matchReservedWord(view: StrView): Int {
+    val length: Int = matchIdentifier(view)
+    if (length == 0) {
+        return 0
+    }
+    if (isReservedWord(view.slice(0, length))) {
+        return length
+    }
+    return 0
+}
+
+fun matchNumber(view: StrView): Int {
+    var i = 0
+    while (i < view.size() && isDigit(view.at(i))) {
+        i = i + 1
+    }
+    if (i == 0) {
+        return 0
+    }
+    if (i + 1 < view.size() && view.at(i) == '.' && isDigit(view.at(i + 1))) {
+        i = i + 1
+        while (i < view.size() && isDigit(view.at(i))) {
+            i = i + 1
+        }
+    }
+    return i
+}
+
+fun matchComment(view: StrView): Int {
+    if (view.size() < 2 || view.at(0) != '/') {
+        return 0
+    }
+    if (view.at(1) == '/') {
+        var i = 2
+        while (i < view.size() && view.at(i) != '\n' && view.at(i) != '\r') {
+            i = i + 1
+        }
+        return i
+    }
+    if (view.at(1) == '*') {
+        var i = 2
+        while (i + 1 < view.size()) {
+            if (view.at(i) == '*' && view.at(i + 1) == '/') {
+                return i + 2
+            }
+            i = i + 1
+        }
+    }
+    return 0
+}
+
+fun matchStringLiteral(view: StrView): Int {
+    if (view.size() == 0 || view.at(0) != '"') {
+        return 0
+    }
+    var i = 1
+    while (i < view.size()) {
+        val ch: Char = view.at(i)
+        if (ch == '\\') {
+            i = i + 2
+            continue
+        }
+        if (ch == '"') {
+            return i + 1
+        }
+        i = i + 1
+    }
+    return 0
+}
+
+fun matchCharLiteral(view: StrView): Int {
+    if (view.size() == 0 || view.at(0) != '\'') {
+        return 0
+    }
+    var i = 1
+    while (i < view.size()) {
+        val ch: Char = view.at(i)
+        if (ch == '\\') {
+            i = i + 2
+            continue
+        }
+        if (ch == '\'') {
+            return i + 1
+        }
+        if (ch == '\n') {
+            return 0
+        }
+        i = i + 1
+    }
+    return 0
+}
+
+fun matchOperator(view: StrView): Int {
+    val matched: Int = tableMatch(view, *multiCharOperatorTable, false)
+    if (matched > 0) {
+        return matched
+    }
+    if (view.size() > 0 && isOperatorChar(view.at(0))) {
+        return 1
+    }
+    return 0
+}
+
+// The parameters are read and written only; pointers avoid copying the caller's
+// list (a `TokenMatcher` holds a `Func`, which is not free to copy).
+fun addRule(rules: *List<TokenMatcher>, tokenKind: TokenKind, match: MatchLenFunc): Unit {
+    rules.append(TokenMatcher(tokenKind, match))
+}
+
+fun makeTokenRules(): List<TokenMatcher> {
+    var rules: List<TokenMatcher> = List<TokenMatcher>()
+    addRule(*rules, TokenKind.Comment, matchComment)
+    addRule(*rules, TokenKind.Space, matchSpaces)
+    addRule(*rules, TokenKind.EndOfLine, matchEndOfLine)
+    addRule(*rules, TokenKind.String, matchStringLiteral)
+    addRule(*rules, TokenKind.Character, matchCharLiteral)
+    addRule(*rules, TokenKind.Number, matchNumber)
+    addRule(*rules, TokenKind.ReservedWord, matchReservedWord)
+    addRule(*rules, TokenKind.Identifier, matchIdentifier)
+    addRule(*rules, TokenKind.Operator, matchOperator)
+    return rules
+}
+
+fun getTokenRules(): *List<TokenMatcher> {
+    return *tokenRuleTable
+}
+
+// Escapes the first `maxLen` bytes of `view` for a single-line diagnostic:
+// backslash, newline, carriage return, and tab get backslash escapes; printable
+// ASCII (32..126) is kept; every other byte (including >= 127) becomes \xNN with
+// two uppercase hex digits. Bytes are treated as unsigned.
+fun escapedSnippet(view: StrView, maxLen: Int): Str {
+    val hexDigits: Str = "0123456789ABCDEF"
+    var snippet: Str = Str()
+    var count: Int = view.size()
+    if (count > maxLen) {
+        count = maxLen
+    }
+    var i = 0
+    while (i < count) {
+        var byte: Int = view.at(i)
+        if (byte < 0) {
+            byte = byte + 256
+        }
+        if (byte == 92) {
+            snippet.append('\\')
+            snippet.append('\\')
+        } else if (byte == 10) {
+            snippet.append('\\')
+            snippet.append('n')
+        } else if (byte == 13) {
+            snippet.append('\\')
+            snippet.append('r')
+        } else if (byte == 9) {
+            snippet.append('\\')
+            snippet.append('t')
+        } else if (byte >= 32 && byte <= 126) {
+            snippet.append(view.at(i))
+        } else {
+            snippet.append('\\')
+            snippet.append('x')
+            snippet.append(hexDigits[byte / 16])
+            snippet.append(hexDigits[byte % 16])
+        }
+        i = i + 1
+    }
+    return snippet
+}
+
+// Mirrors the C++ scanner's std::to_string concatenation.
+fun unexpectedCharacterMessage(line: Int, column: Int, snippet: Str): Str {
+    return line.toString() + ":" + column.toString() + ": Unexpected character: '" + snippet + "'"
+}
+
+data class Scanner(var rules: *List<TokenMatcher>; var pos: Int; var line: Int; var column: Int; var source: Str) {
+    fun setSource(text: Str): Unit {
+        this.source = text
+        this.pos = 0
+        this.line = 1
+        this.column = 1
+    }
+
+    // Advances `pos` by `count` characters, updating line/column one character
+    // at a time. A newline is '\n', or '\r' not immediately followed by '\n'
+    // (so CRLF counts once). Tabs count as a single column.
+    fun advance(count: Int): Unit {
+        var i = 0
+        while (i < count) {
+            val ch: Char = this.source[this.pos]
+            val followedByLf: Bool = this.pos + 1 < this.source.size() && this.source[this.pos + 1] == '\n'
+            if (ch == '\n' || (ch == '\r' && !followedByLf)) {
+                this.line = this.line + 1
+                this.column = 1
+            } else {
+                this.column = this.column + 1
+            }
+            this.pos = this.pos + 1
+            i = i + 1
+        }
+    }
+
+    fun nextToken(): Res<Token> {
+        while (this.pos < this.source.size()) {
+            // A raw pointer to the scanner's own `source`; the view must not
+            // copy or count the text (see cppsrc/rtl/span.hpp).
+            val view: StrView = spanOfStr(*this.source).slice(this.pos)
+            var i = 0
+            while (i < this.rules.size()) {
+                val rule: TokenMatcher = this.rules[i]
+                val matchLength: Int = rule.match(view)
+                if (matchLength > 0) {
+                    val startPos: SourcePos = SourcePos(this.pos, this.line, this.column)
+                    val matched: StrView = view.slice(0, matchLength)
+                    val token: Token = Token(matched.toString(), rule.tokenKind, startPos)
+                    this.advance(matchLength)
+                    return Res<Token>.ok(token)
+                }
+                i = i + 1
+            }
+            return Res<Token>.err(unexpectedCharacterMessage(this.line, this.column, escapedSnippet(view, 10)))
+        }
+        return Res<Token>.ok(Token("", TokenKind.Eof, SourcePos(this.pos, this.line, this.column)))
+    }
+}
+
+// Reads `fileName`, scans it to end of input, and collects every token up to
+// (but not including) the Eof token. Returns the scanning error, if any.
+fun readFileAsTokens(scanner: *Scanner, fileName: Str): Res<List<Token>> {
+    val content: Str = readFile(fileName)
+    scanner.setSource(content)
+
+    var tokens: List<Token> = List<Token>()
+    while (true) {
+        val result: Res<Token> = scanner.nextToken()
+        if (!result.isOk()) {
+            return Res<List<Token>>.err(fileName + ": " + result.error)
+        }
+        if (result.value.kind == TokenKind.Eof) {
+            return Res<List<Token>>.ok(tokens)
+        }
+        tokens.append(result.value)
+    }
+}
+
+fun isSpaceBasedToken(kind: TokenKind): Bool {
+    return kind == TokenKind.Space || kind == TokenKind.Comment
+}
+
+// Like readFileAsTokens, but drops Space and Comment tokens.
+fun readFileAndSkipSpacesTokens(scanner: *Scanner, fileName: Str): Res<List<Token>> {
+    val allResult: Res<List<Token>> = readFileAsTokens(scanner, fileName)
+    if (!allResult.isOk()) {
+        return Res<List<Token>>.err(allResult.error)
+    }
+
+    var tokens: List<Token> = List<Token>()
+    val all: List<Token> = allResult.value
+    var i = 0
+    while (i < all.size()) {
+        val token: Token = all[i]
+        if (!isSpaceBasedToken(token.kind)) {
+            tokens.append(token)
+        }
+        i = i + 1
+    }
+    return Res<List<Token>>.ok(tokens)
+}
