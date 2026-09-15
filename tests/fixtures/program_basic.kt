@@ -6,7 +6,7 @@ enum Color {
     Blue
 }
 
-data class Point(var x: Int; var y: Int) {
+data class Point(var x: Int, var y: Int) {
     fun sum(): Int {
         return this.x + this.y
     }

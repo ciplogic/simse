@@ -118,7 +118,7 @@ explicit receiver parameter; the containing class only supplies the receiver
 type and the method's qualified name.
 
 ```text
-data class Point(var x: Int; var y: Int) {
+data class Point(var x: Int, var y: Int) {
     fun magnitudeSquared(): Int {
         return this.x * this.x + this.y * this.y
     }

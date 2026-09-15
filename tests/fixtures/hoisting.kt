@@ -4,7 +4,7 @@ fun useLater(): Int {
     return helper(p.x)
 }
 
-data class Point(var x: Int; var y: Int)
+data class Point(var x: Int, var y: Int)
 
 fun helper(value: Int): Int {
     return value + 1
