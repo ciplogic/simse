@@ -2682,45 +2682,50 @@ data class IlExtractor(
     // `*T` *binding* (`val p: *T = x`) is a different question - a pointer that outlives
     // the expression it points into has to be asked for, so the writer writes it.
     fun convertArgument(target: AstXmlNode, index: Int, arg: AstXmlNode): Int {
-        val slot: Int = this.operandOf(arg)
         if (xmlIsEmpty(target)) {
-            return slot
+            return this.operandOf(arg)
         }
         val params: List<AstXmlNode> = xmlChildren(target, AstNodeKind.Param)
         if (index >= params.size()) {
-            return slot
+            return this.operandOf(arg)
         }
         val param: AstXmlNode = xmlChild(params[index], AstNodeKind.Type)
         if (xmlIsEmpty(param)) {
-            return slot
+            return this.operandOf(arg)
         }
         val wantPointer: Bool = xmlKind(param) == AstNodeCategory.TypePointer
         val wantShared: Bool = !wantPointer && ilIsHandleType(param)
-        // The argument's type, cheaply: a place is a slot of this frame and already
-        // carries one, so the common argument costs a lookup. Anything else is read into a
-        // slot of its own - which is the value the call passes - and only an untyped slot
-        // (a `for` machine, a bare `null`) has to be asked of the type rules, the
-        // expensive question.
-        var actual: AstXmlNode = ilVarType(this.out, slot)
+        // The argument's type, cheaply where it can be: a local is a slot of this frame and
+        // already carries one, so the common argument costs a lookup. Everything else is
+        // asked of the type *rules* - never of a materialised value, which is what the
+        // pointer path below would leave behind: reading `this.out` to find its type copies
+        // the whole body, once per argument, and `frameTypes` does that per slot per rebuild.
+        var actual: AstXmlNode = xmlEmptyNode()
+        if (xmlKind(arg) == AstNodeCategory.ExprName) {
+            val named: Int = this.varIndex(xmlAttr(arg, AstNodeAttributeKind.Name))
+            if (named >= 0) {
+                actual = ilVarType(this.out, named)
+            }
+        }
         if (xmlIsEmpty(actual)) {
             actual = this.exprType(arg)
         }
         if (xmlIsEmpty(actual)) {
-            return slot
+            return this.operandOf(arg)
         }
         val wanted: AstXmlNode = semPointeeOf(param)
         val given: AstXmlNode = semPointeeOf(actual)
         if (xmlIsEmpty(wanted) || xmlIsEmpty(given)) {
-            return slot
+            return this.operandOf(arg)
         }
         if (ilTypeText(wanted) != ilTypeText(given)) {
-            return slot // not the same type
+            return this.operandOf(arg) // not the same type
         }
         val havePointer: Bool = xmlKind(actual) == AstNodeCategory.TypePointer
         val haveShared: Bool = !havePointer && ilIsHandleType(actual)
         val haveValue: Bool = !havePointer && !haveShared
         if ((wantPointer && havePointer) || (wantShared && haveShared)) {
-            return slot
+            return this.operandOf(arg)
         }
         if (wantPointer) {
             // The address, spelled exactly as an explicit `*` spells it (`into`'s `Deref`
@@ -2736,17 +2741,17 @@ data class IlExtractor(
         }
         if (wantShared) {
             if (!haveValue) {
-                return slot // `&T` from a pointer: the checker reports it
+                return this.operandOf(arg) // `&T` from a pointer: the checker reports it
             }
             val box: AstXmlNode = copy(param)
             val held: Int = this.freshSlot(ilTypeText(box), box)
-            this.emit(IlOpKind.Box, ilOps2(held, slot)) // `&x` boxes a copy
+            this.emit(IlOpKind.Box, ilOps2(held, this.operandOf(arg))) // `&x` boxes a copy
             return held
         }
         if (haveValue) {
-            return slot
+            return this.operandOf(arg)
         }
-        return this.readThrough(wanted, slot)
+        return this.readThrough(wanted, this.operandOf(arg))
     }
 
     // `dst < 0` means the result is dropped (`CallVoid`).

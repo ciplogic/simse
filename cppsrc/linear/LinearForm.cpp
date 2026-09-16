@@ -1200,23 +1200,29 @@ namespace linear {
                 if (param == nullptr) return operand(argPtr);
                 const bool wantPointer = param->kind == ast::TypeKind::Pointer;
                 const bool wantShared = !wantPointer && sema::isHandleType(param);
-                // The argument's type, cheaply: a place is a slot of this frame and
-                // already carries one, so the common argument costs a lookup. Anything
-                // else is read into a slot of its own - which is the value the call
-                // passes - and only an untyped slot (a `for` machine, a bare `null`) has
-                // to be asked of the type rules, the expensive question.
-                const int slot = operand(argPtr);
-                ast::TypePtr actual = ilVarType(out, slot);
+                // The argument's type, cheaply where it can be: a local is a slot of this
+                // frame and already carries one, so the common argument costs a lookup.
+                // Everything else is asked of the type *rules* - never of a materialised
+                // value, which is what the pointer path below would leave behind: reading
+                // `this.out` to find its type copies the whole body, once per argument, and
+                // `frameTypes` does that per slot per rebuild.
+                ast::TypePtr actual;
+                if (arg.kind == ExprKind::Name) {
+                    const int named = varIndex(arg.text);
+                    if (named >= 0) actual = ilVarType(out, named);
+                }
                 if (actual == nullptr) actual = exprType(arg);
-                if (actual == nullptr) return slot;
+                if (actual == nullptr) return operand(argPtr);
                 const ast::TypeExpr *wanted = sema::pointeeOf(param);
                 const ast::TypeExpr *given = sema::pointeeOf(actual.get());
-                if (wanted == nullptr || given == nullptr) return slot;
-                if (ilTypeText(*wanted) != ilTypeText(*given)) return slot; // not the same type
+                if (wanted == nullptr || given == nullptr) return operand(argPtr);
+                if (ilTypeText(*wanted) != ilTypeText(*given)) return operand(argPtr);
                 const bool havePointer = actual->kind == ast::TypeKind::Pointer;
                 const bool haveShared = !havePointer && sema::isHandleType(actual.get());
                 const bool haveValue = !havePointer && !haveShared;
-                if ((wantPointer && havePointer) || (wantShared && haveShared)) return slot;
+                if ((wantPointer && havePointer) || (wantShared && haveShared)) {
+                    return operand(argPtr);
+                }
                 if (wantPointer) {
                     // The address, spelled exactly as an explicit `*` spells it (`into`'s
                     // `Deref` arm is the definition): a member/index chain *is* its own
@@ -1234,14 +1240,14 @@ namespace linear {
                     return bound;
                 }
                 if (wantShared) {
-                    if (!haveValue) return slot; // `&T` from a pointer: the checker reports it
+                    if (!haveValue) return operand(argPtr); // `&T` from a pointer
                     const ast::TypePtr box = std::make_shared<ast::TypeExpr>(*param);
                     const int held = freshSlot(ilTypeText(*box), box);
-                    emit(IlOpKind::Box, {held, slot}); // `&x` boxes a copy
+                    emit(IlOpKind::Box, {held, operand(argPtr)}); // `&x` boxes a copy
                     return held;
                 }
-                if (haveValue) return slot;
-                return readThrough(wanted, slot);
+                if (haveValue) return operand(argPtr);
+                return readThrough(wanted, operand(argPtr));
             }
 
             // `dst < 0` means the result is dropped (`CallVoid`).
