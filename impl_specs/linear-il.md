@@ -212,7 +212,11 @@ Two things the unification must **not** blur, because they are per row:
 The table is also what the implicit copy becomes: wherever a `T` is required and the
 expression has type `*T`/`&T`, the same instruction is inserted - no new opcode, and no
 `copy` in the language. `copy(v)` on a value is the first row (the identity), which is why
-`copy` can disappear without the IL gaining anything to replace it.
+`copy` can disappear without the IL gaining anything to replace it. The positions that ask
+today are a call argument (`specs/functions.md`, "Handles at a call") and a **binary
+operand** whose fellow operand is a value (`specs/memory-model.md`): `out + separator` with
+`separator: *Str` is `CopyValue` into a slot and then `out + that` - the same row the
+explicit `*separator` would spell.
 
 The rest of the instruction list, unchanged:
 

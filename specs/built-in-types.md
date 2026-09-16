@@ -43,6 +43,46 @@ val quote: Char = '\''
 val letter: Char = 'a'
 ```
 
+## Operators
+
+Status: required for the first implementation.
+
+The binary operators, loosest first (each row binds tighter than the one above it):
+
+| Operators | Note |
+| --- | --- |
+| `\|\|` | logical or, short-circuit |
+| `&&` | logical and, short-circuit |
+| `==` `!=` | equality, on any comparable pair |
+| `<` `>` `<=` `>=` | ordering |
+| `\|` `^` `&` | bitwise or, xor, and - integers (and `Bool`, where they are the non-short-circuit forms) |
+| `<<` `>>` | shifts - integers |
+| `+` `-` | additive; `+` also concatenates `Str` |
+| `*` `/` `%` | multiplicative |
+
+All of them are left-associative and none of them is an assignment. `!` negates a
+`Bool`; `~` (bitwise not) and the unsigned shifts are **not** implemented.
+
+The bitwise pair binds *tighter* than a comparison, which is Python's and Rust's
+order and not C's. That is deliberate: in C's order `flags & mask == 0` silently
+means `flags & (mask == 0)`, and the mistake is the classic one in a bit test. Here
+
+```text
+flags & mask == 0      // (flags & mask) == 0   - what a reader expects
+flags << 2 + 1         // flags << 3            - the shift is looser than `+`
+```
+
+The shifts sit between `+` and `&`, so `1 << 2 + 1` is `1 << 3`, the same as in C
+and Rust - Rust moves only the bitwise pair, as this language does.
+
+### Compound assignment and the step operators
+
+`x op= v` for every binary operator whose operation is a value (`+=`, `-=`, `*=`, `/=`,
+`%=`, `&=`, `|=`, `^=`, `<<=`, `>>=`), plus the step forms `i++` and `i--`: the target's
+*place* is located once, read, folded and written back through it, so nothing is copied
+and a receiver or an index with an effect runs once. `specs/memory-model.md` owns the
+rule; there is no `&&=`, `||=`, or relational compound form.
+
 ## `List<T>`
 
 `List<T>` is a mutable value type with deep-copy semantics. It stores a

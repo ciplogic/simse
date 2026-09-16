@@ -31,7 +31,9 @@ data class Parser(
     var failed: Bool,
     var error: Str,
     var file: Str,
-    var nextTemplateId: Int
+    var nextTemplateId: Int,
+    // The `>`s a `>>` closer left over: see `matchGenericCloser`.
+    var pendingClosers: Int
 ) {
 
     // ---- token cursor helpers ---------------------------------------------
@@ -102,6 +104,38 @@ data class Parser(
         }
         this.fail("expected name")
         return ""
+    }
+
+    // One `>` of a type-argument list's closer. `>>` and `>>=` scan as single tokens (they
+    // are the shift operators), so a closer that finds one takes a single `>` out of it and
+    // remembers the rest: the closer of the list it is nested in takes that one without
+    // reading a token, which is what `List<List<Int>>` needs. What a `>>=` mostly is - the
+    // `>=` operator - is not something a closer can be asked for, so that one spelling is a
+    // diagnostic: write a space before the `=`.
+    fun checkGenericCloser(): Bool {
+        if (this.pendingClosers > 0) {
+            return true
+        }
+        val text: Str = this.peek(0).text
+        return text == ">" || text == ">>"
+    }
+
+    fun matchGenericCloser(): Bool {
+        if (this.pendingClosers > 0) {
+            this.pendingClosers = this.pendingClosers - 1
+            return true
+        }
+        if (this.matchText(">")) {
+            return true
+        }
+        if (this.matchText(">>")) {
+            this.pendingClosers = 1
+            return true
+        }
+        if (this.checkText(">>=")) {
+            return this.fail("a `>` closer ran into `=`: write a space before it")
+        }
+        return this.fail("expected '>'")
     }
 
     fun skipSeparators(): Unit {
@@ -525,19 +559,22 @@ data class Parser(
             return out
         }
         this.skipNewlines()
-        while (!this.checkText(">") && !this.atEnd()) {
+        while (!this.checkGenericCloser() && !this.atEnd()) {
             val name: Str = this.expectName()
             if (this.failed) {
                 return out
             }
             out.append(name)
             this.skipNewlines()
+            if (this.checkGenericCloser()) {
+                break
+            }
             if (!this.matchText(",")) {
                 break
             }
             this.skipNewlines()
         }
-        this.expectText(">")
+        this.matchGenericCloser()
         return out
     }
 
@@ -816,7 +853,7 @@ data class Parser(
             return out
         }
         this.skipNewlines()
-        while (!this.checkText(">") && !this.atEnd() && !this.failed) {
+        while (!this.checkGenericCloser() && !this.atEnd() && !this.failed) {
             var arg: AstXmlNode = this.emptyNode()
             if (this.checkKind(TokenKind.Number)) {
                 val argPos: SourcePos = this.peek(0).pos
@@ -831,12 +868,17 @@ data class Parser(
             }
             out.append(arg)
             this.skipNewlines()
+            // A `>>` the argument's own list left over ends *this* list too: the closer is
+            // pending, not a token, and what follows the type is the caller's again.
+            if (this.checkGenericCloser()) {
+                break
+            }
             if (!this.matchText(",")) {
                 break
             }
             this.skipNewlines()
         }
-        this.expectText(">")
+        this.matchGenericCloser()
         return out
     }
 
@@ -1944,6 +1986,26 @@ fun binaryBindingPower(op: Str): Int {
             return 40
         }
 
+        // The bitwise operators, in Python's and Rust's order: tighter than a comparison and
+        // looser than the shifts, so `a & b == c` is `(a & b) == c` and a bit test needs no
+        // parentheses. (C puts them the other way round, where it silently means
+        // `a & (b == c)` - the trap this order exists to avoid; Python's `&` beats `==` too.)
+        "|" -> {
+            return 43
+        }
+
+        "^" -> {
+            return 44
+        }
+
+        "&" -> {
+            return 45
+        }
+
+        "<<", ">>" -> {
+            return 47
+        }
+
         "+", "-" -> {
             return 50
         }
@@ -1958,6 +2020,8 @@ fun binaryBindingPower(op: Str): Int {
 fun isAssignOp(op: Str): Bool {
     return op == "=" || op == "+=" || op == "-="
             || op == "*=" || op == "/=" || op == "%="
+            || op == "&=" || op == "|=" || op == "^="
+            || op == "<<=" || op == ">>="
 }
 
 // The step operators: `i++` and `i--`, which are statements rather than values.
@@ -1977,7 +2041,7 @@ fun stepAssignOp(op: Str): Str {
 
 // Parses a pre-filtered token cursor (with a synthetic Eof already appended).
 fun parseModule(cursor: Span<Token>, fileName: Str): Res<AstXmlNode> {
-    var parser: Parser = Parser(cursor, false, "", fileName, 1)
+    var parser: Parser = Parser(cursor, false, "", fileName, 1, 0)
     val root: AstXmlNode = parser.parseRoot()
     if (parser.failed) {
         return Res<AstXmlNode>.err(parser.error)

@@ -25,8 +25,9 @@ Nothing here overrides the topic specs; where a topic spec speaks, it wins.
 | Line endings and `;` separate statements | `functions.md` |
 | Enum member qualification `EnumType.Member` | `declarations.md` |
 | Module-level declaration hoisting; locals are not hoisted | `declarations.md` |
-| Automatic dereference through `&T`/`*T` for member/index/call | `memory-model.md` |
+| Automatic dereference through `&T`/`*T` for member/index/call, and for a binary operand | `memory-model.md` |
 | Compound assignment (`+= -= *= /= %=`) and the step operators (`i++`, `i--`) update a place in place | `memory-model.md` |
+| The binary operators and their precedence (bitwise tighter than a comparison) | `built-in-types.md` |
 
 ## Still deferred
 

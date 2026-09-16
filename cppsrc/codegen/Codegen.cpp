@@ -2387,6 +2387,13 @@ namespace codegen {
 
             // ---- expressions ----------------------------------------------
 
+            // Binary operator precedence for wrapping; see cgPrecedence in Codegen.kt. The
+            // numbers are a scale, not a table of levels: what matters is their order (a
+            // parenthesised operand is one the operation binds looser than its own), and
+            // `12` is what the postfix positions are printed with - anything at or above
+            // `12` needs no parentheses. The bitwise operators sit where Python and Rust
+            // put them (tighter than a comparison, looser than a shift);
+            // `binaryBindingPower` in the parser has the same order.
             static int precedence(const ast::Expr &expr) {
                 if (expr.kind == ExprKind::Binary) {
                     const Str &op = expr.text;
@@ -2394,22 +2401,26 @@ namespace codegen {
                     if (op == "&&") return 2;
                     if (op == "==" || op == "!=") return 3;
                     if (op == "<" || op == ">" || op == "<=" || op == ">=") return 4;
-                    if (op == "+" || op == "-") return 5;
-                    if (op == "*" || op == "/" || op == "%") return 6;
+                    if (op == "|") return 5;
+                    if (op == "^") return 6;
+                    if (op == "&") return 7;
+                    if (op == "<<" || op == ">>") return 8;
+                    if (op == "+" || op == "-") return 9;
+                    if (op == "*" || op == "/" || op == "%") return 10;
                     return 1;
                 }
                 switch (expr.kind) {
                     case ExprKind::Unary:
                     case ExprKind::Deref:
                     case ExprKind::Copy:
-                        return 7;
+                        return 11;
                     case ExprKind::Ref:
                     case ExprKind::Call:
                     case ExprKind::Index:
                     case ExprKind::Member:
-                        return 9;
+                        return 12;
                     default:
-                        return 10;
+                        return 13;
                 }
             }
 
@@ -2628,19 +2639,19 @@ namespace codegen {
             // takes `this: &T` can store `self` and keep its refcount.
             Str receiverArg(const ast::TypePtr &pattern, const ast::Expr &recv) {
                 if (isHandleType(pattern.get())) {
-                    return expr(recv, 9);
+                    return expr(recv, 12);
                 }
                 ast::TypePtr recvType = inferType(recv);
                 if (recvType) {
                     if (recvType->kind == TypeKind::Reference
                         || (recvType->kind == TypeKind::Generic && recvType->name == "PList")) {
-                        return "(" + expr(recv, 9) + ").get()";
+                        return "(" + expr(recv, 12) + ").get()";
                     }
                     if (recvType->kind == TypeKind::Pointer) {
-                        return expr(recv, 9);
+                        return expr(recv, 12);
                     }
                 }
-                return "simse_addressOf(" + expr(recv, 9) + ")";
+                return "simse_addressOf(" + expr(recv, 12) + ")";
             }
 
             // The receiver argument for a lowered *native* call: the host's own
@@ -2649,13 +2660,13 @@ namespace codegen {
             // handle, because the RTL's value receivers are written `T&` there.
             Str nativeReceiverArg(const ast::TypePtr &pattern, const ast::Expr &recv) {
                 if (isHandleType(pattern.get())) {
-                    return expr(recv, 9);
+                    return expr(recv, 12);
                 }
                 ast::TypePtr recvType = inferType(recv);
                 if (isHandleType(recvType.get())) {
-                    return "(*" + expr(recv, 9) + ")";
+                    return "(*" + expr(recv, 12) + ")";
                 }
-                return expr(recv, 9);
+                return expr(recv, 12);
             }
 
             // Finds a Simse-declared extension/method whose receiver matches the
@@ -2732,7 +2743,7 @@ namespace codegen {
                     && selfKind == NameKind::Value) {
                     return (inClosureMethod ? Str("this->") : Str("self->")) + field;
                 }
-                return expr(base, 9) + (arrow ? "->" : ".") + field;
+                return expr(base, 12) + (arrow ? "->" : ".") + field;
             }
 
             // Lowers a bare `null` given the surrounding expected type.
@@ -2839,7 +2850,7 @@ namespace codegen {
                     case ExprKind::Call:
                         return call(e);
                     case ExprKind::Index: {
-                        Str baseExpr = expr(*e.lhs, 9);
+                        Str baseExpr = expr(*e.lhs, 12);
                         ast::TypePtr baseType = inferType(*e.lhs);
                         // A counted reference always auto-dereferences when indexed.
                         // A raw pointer does too when it points at a container
@@ -2872,7 +2883,7 @@ namespace codegen {
                             const ast::TypeExpr *otherType = pointee(otherTypePtr);
                             if (otherType && otherType->kind == TypeKind::Generic
                                 && otherType->name == "Opt") {
-                                Str hasValue = expr(other, 9) + ".hasValue()";
+                                Str hasValue = expr(other, 12) + ".hasValue()";
                                 if (e.text == "==") return "!(" + hasValue + ")";
                                 if (e.text == "!=") return "(" + hasValue + ")";
                                 fail(e.pos, "unsupported: Opt-vs-null comparison '" + e.text + "'");
@@ -3015,7 +3026,7 @@ namespace codegen {
                         const ast::TypeExpr *enumReceiver = pointee(enumReceiverType);
                         if (enumReceiver && enumReceiver->kind == TypeKind::Named
                             && enumNames.count(enumReceiver->name) > 0) {
-                            return "static_cast<Int>(" + expr(*callee.lhs, 9) + ")";
+                            return "static_cast<Int>(" + expr(*callee.lhs, 12) + ")";
                         }
                     }
                     if (callee.text == "fromInt" && callee.lhs
@@ -3071,13 +3082,13 @@ namespace codegen {
                     if (receiverFnNames.count(callee.text) > 0) {
                         const Fn *byName = findReceiverFnByName(callee.text);
                         Str all = byName ? receiverArg(byName->receiver, *callee.lhs)
-                                         : expr(*callee.lhs, 9);
+                                         : expr(*callee.lhs, 12);
                         for (const Str &arg: args) all += ", " + arg;
                         return qualify(functionPackage(callee.text), callee.text) + "(" + all + ")";
                     }
                     auto extension = nativeExtensions.find(callee.text);
                     if (extension != nativeExtensions.end() && !extension->second.empty()) {
-                        Str all = expr(*callee.lhs, 9);
+                        Str all = expr(*callee.lhs, 12);
                         for (const Str &arg: args) all += ", " + arg;
                         return extension->second[0].symbol + "(" + all + ")";
                     }

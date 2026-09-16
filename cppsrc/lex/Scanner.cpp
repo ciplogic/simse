@@ -54,10 +54,12 @@ namespace lex {
         "package"
     };
 
-    // Longest-match-first is not needed: no entry is a prefix of another.
+    // Longest first where one entry starts another (`>>=` before `>>`): the lookup
+    // returns the first entry the view starts with.
     List<Str> MultiCharOperators = {
         "->", "==", "!=", "<=", ">=", "&&", "||",
         "+=", "-=", "*=", "/=", "%=",
+        "&=", "|=", "^=", "<<=", ">>=", "<<", ">>",
         "++", "--",
         ".."
     };

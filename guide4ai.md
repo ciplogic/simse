@@ -371,7 +371,9 @@ its trailing arguments, `specs/functions.md`); `Dictionary<K,V>` (`get`/`has`/`i
 (incl. generic and function types); functions incl. extension functions and
 `native fun`; `val`/`var` (locals, and at file level **static storage** -
 `specs/statics.md`); `if`/`else`, `when`, `while`,
-`break`/`continue`, `return`; compound assignment (`+= -= *= /= %=`) and the step
+`break`/`continue`, `return`; the bitwise operators `& | ^ << >>` (precedence: bitwise
+binds *tighter* than a comparison, Python's order, `specs/built-in-types.md`);
+compound assignment (`+= -= *= /= %= &= |= ^= <<= >>=`) and the step
 statements (`i++`, `i--`), which update a place in place - the place is located
 once and nothing is copied (`specs/memory-model.md`); `null`; memory operators `&T`/`*T`/`copy`;
 lambdas with by-value capture; generics reified via C++ templates; modules and

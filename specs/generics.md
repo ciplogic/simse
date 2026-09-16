@@ -58,6 +58,19 @@ they do not prevent reification. For example, `Action<Point>` is the callable
 type `(Point) -> Unit`, while `PtrAction<List<Int32>>` is the callable type
 `(*List<Int32>) -> Unit`.
 
+### Closing a nested type-argument list
+
+A type-argument list is closed by `>`, and `>>` is a token of its own (the shift
+operator) - so the two lists of `List<List<Int>>` end in a single `>>`, which the
+parser takes apart: each closer consumes one `>` of it and the closer of the list
+that is nested in takes what is left, however deep the nesting goes. `<<` never
+closes anything, so `SmallVector<4, List<List<Int>>>` is the same rule twice.
+
+The tail of a `>>` that is not a closer has no meaning in that position - `>>=` is
+the shift-assignment - so a type-argument list written straight into `=` leaves a
+space: `var table: List<List<Int>> = ...`, not `...Int>>= ...`. That one spelling is
+a diagnostic rather than a silent misparse.
+
 ## Type identity
 
 Two generic instantiations are compatible only when their fully substituted

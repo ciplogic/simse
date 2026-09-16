@@ -366,7 +366,7 @@ fun ilMethodKindText(kind: IlMethodKind): Str {
     return "?"
 }
 
-fun ilJoinList(parts: *List<Str>, separator: Str): Str {
+fun ilJoinList(parts: *List<Str>, separator: *Str): Str {
     var out: Str = Str()
     var i: Int = 0
     while (i < parts.size()) {
@@ -1190,13 +1190,16 @@ fun ilDerefNode(operand: AstXmlNode): AstXmlNode {
 }
 
 // Whether an assignment's operator is one of the compound forms (`+=`, `-=`, `*=`, `/=`,
-// `%=`). The step forms (`i++`, `i--`) are the parser's `+= 1` and `-= 1`, so the
-// lowering sees one shape for all of them.
+// `%=`, `&=`, `|=`, `^=`, `<<=`, `>>=`). The step forms (`i++`, `i--`) are the parser's
+// `+= 1` and `-= 1`, so the lowering sees one shape for all of them.
 fun isCompoundAssignOp(op: Str): Bool {
     return op == "+=" || op == "-=" || op == "*=" || op == "/=" || op == "%="
+            || op == "&=" || op == "|=" || op == "^="
+            || op == "<<=" || op == ">>="
 }
 
-// The binary operation a compound assignment's operator names: `+=` is `x = x + v`.
+// The binary operation a compound assignment's operator names: `+=` is `x = x + v`. Every
+// operator the caller accepts has a row, so the last one is a fallback only `%=` reaches.
 fun compoundBinaryOp(op: Str): Str {
     when (op) {
         "+=" -> {
@@ -1213,6 +1216,26 @@ fun compoundBinaryOp(op: Str): Str {
 
         "/=" -> {
             return "/"
+        }
+
+        "&=" -> {
+            return "&"
+        }
+
+        "|=" -> {
+            return "|"
+        }
+
+        "^=" -> {
+            return "^"
+        }
+
+        "<<=" -> {
+            return "<<"
+        }
+
+        ">>=" -> {
+            return ">>"
         }
     }
     return "%"
@@ -1929,6 +1952,41 @@ data class IlExtractor(
         return this.freshSlot(this.slotTypeText(typeNode), typeNode)
     }
 
+    // The type of the value in `slot`, which came from `e`: a place is a slot of this frame
+    // and already carries one, so the common operand costs a lookup. Anything untyped (a
+    // `for` machine, a bare `null`) is the expensive question for the type rules.
+    fun operandValueType(slot: Int, e: AstXmlNode): AstXmlNode {
+        val carried: AstXmlNode = ilVarType(this.out, slot)
+        if (!xmlIsEmpty(carried)) {
+            return carried
+        }
+        return this.exprType(e)
+    }
+
+    // One operand of a binary operation: read through the handle it is when the *other*
+    // operand says the operation is on values. `out + separator` with `separator: *Str` is
+    // `out + *separator` - the `*T -> T` row of the conversion table
+    // (`impl_specs/linear-il.md`), which is "wherever a `T` is required" read at an operand,
+    // and the same rule that lets a parameter be a `*T` without every call spelling the `*`
+    // (`specs/functions.md`, "Handles at a call"). A handle whose pointee is not the other
+    // operand's type is left alone, and so is a pair of handles: two pointers compared are
+    // a meaning of its own. What is left is the type error it always was.
+    fun binaryOperand(me: AstXmlNode, other: AstXmlNode, slot: Int): Int {
+        val mine: AstXmlNode = this.operandValueType(slot, me)
+        if (xmlIsEmpty(mine) || !ilIsHandleType(mine)) {
+            return slot
+        }
+        val theirs: AstXmlNode = this.exprType(other)
+        if (xmlIsEmpty(theirs) || ilIsHandleType(theirs)) {
+            return slot
+        }
+        val pointee: AstXmlNode = semPointeeOf(mine)
+        if (xmlIsEmpty(pointee) || ilTypeText(pointee) != ilTypeText(theirs)) {
+            return slot
+        }
+        return this.readThrough(pointee, slot)
+    }
+
     // ---- values -----------------------------------------------------------
 
     // The value `expr` produces, as an operand: a frame slot, a literal (a negative
@@ -2046,11 +2104,13 @@ data class IlExtractor(
             }
 
             AstNodeCategory.ExprBinary -> {
+                val lhs: AstXmlNode = xmlChild(e, AstNodeKind.Lhs)
+                val rhs: AstXmlNode = xmlChild(e, AstNodeKind.Rhs)
                 this.emit(
                     IlOpKind.BinaryOp, ilOps4(
                         slot, this.poolIndex(xmlAttr(e, AstNodeAttributeKind.Op)),
-                        this.operandOf(xmlChild(e, AstNodeKind.Lhs)),
-                        this.operandOf(xmlChild(e, AstNodeKind.Rhs))
+                        this.binaryOperand(lhs, rhs, this.operandOf(lhs)),
+                        this.binaryOperand(rhs, lhs, this.operandOf(rhs))
                     )
                 )
                 return

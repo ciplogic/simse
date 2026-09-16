@@ -113,8 +113,11 @@ fun makeReservedWords(): List<Str> {
 }
 
 fun makeMultiCharOperators(): List<Str> {
+    // Longest first where one entry starts another (`>>=` before `>>`): the lookup returns
+    // the first entry the view starts with.
     var operators: List<Str> = listOf<Str>(
         "->", "==", "!=", "<=", ">=", "&&", "||", "+=", "-=", "*=", "/=", "%=",
+        "&=", "|=", "^=", "<<=", ">>=", "<<", ">>",
         "++", "--", ".."
     )
     return operators

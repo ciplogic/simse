@@ -153,7 +153,12 @@ fun cgUnquote(text: Str): Str {
     return text
 }
 
-// Binary operator precedence for wrapping; see Codegen.cpp precedence().
+// Binary operator precedence for wrapping; see Codegen.cpp precedence(). The numbers are
+// a scale, not a table of levels: what matters is their order (a parenthesised operand is
+// one the operation binds looser than its own), and `12` is what the postfix positions are
+// printed with - anything at or above `12` needs no parentheses. The bitwise operators sit
+// where Python and Rust put them (tighter than a comparison, looser than a shift);
+// `binaryBindingPower` in the parser has the same order.
 fun cgPrecedence(e: *AstXmlNode): Int {
     if (xmlKind(e) == AstNodeCategory.ExprBinary) {
         val op: Str = xmlAttr(e, AstNodeAttributeKind.Op)
@@ -174,12 +179,28 @@ fun cgPrecedence(e: *AstXmlNode): Int {
                 return 4
             }
 
-            "+", "-" -> {
+            "|" -> {
                 return 5
             }
 
-            "*", "/", "%" -> {
+            "^" -> {
                 return 6
+            }
+
+            "&" -> {
+                return 7
+            }
+
+            "<<", ">>" -> {
+                return 8
+            }
+
+            "+", "-" -> {
+                return 9
+            }
+
+            "*", "/", "%" -> {
+                return 10
             }
         }
         return 1
@@ -187,15 +208,15 @@ fun cgPrecedence(e: *AstXmlNode): Int {
     val kind: AstNodeCategory = xmlKind(e)
     when (kind) {
         AstNodeCategory.ExprUnary, AstNodeCategory.ExprDeref, AstNodeCategory.ExprCopy -> {
-            return 7
+            return 11
         }
 
         AstNodeCategory.ExprRef, AstNodeCategory.ExprCall, AstNodeCategory.ExprIndex,
         AstNodeCategory.ExprMember -> {
-            return 9
+            return 12
         }
     }
-    return 10
+    return 13
 }
 
 // Whether a top-level `main` takes the argv form: a single `List<Str>` parameter.
@@ -3514,7 +3535,7 @@ data class Emitter(
     // method that takes `this: &T` can store `self` and keep its refcount.
     fun receiverArg(pattern: *AstXmlNode, recv: *AstXmlNode): Str {
         if (this.isHandleType(pattern)) {
-            return this.expr(recv, 9, xmlEmptyNode())
+            return this.expr(recv, 12, xmlEmptyNode())
         }
         val recvType: AstXmlNode = this.inferType(recv)
         if (!xmlIsEmpty(recvType)) {
@@ -3522,13 +3543,13 @@ data class Emitter(
             if (kind == AstNodeCategory.TypeReference
                 || (kind == AstNodeCategory.TypeGeneric && xmlAttr(recvType, AstNodeAttributeKind.Name) == "PList")
             ) {
-                return "(" + this.expr(recv, 9, xmlEmptyNode()) + ").get()"
+                return "(" + this.expr(recv, 12, xmlEmptyNode()) + ").get()"
             }
             if (kind == AstNodeCategory.TypePointer) {
-                return this.expr(recv, 9, xmlEmptyNode())
+                return this.expr(recv, 12, xmlEmptyNode())
             }
         }
-        return "simse_addressOf(" + this.expr(recv, 9, xmlEmptyNode()) + ")"
+        return "simse_addressOf(" + this.expr(recv, 12, xmlEmptyNode()) + ")"
     }
 
     // The receiver argument for a lowered *native* call: the host's own signature
@@ -3537,13 +3558,13 @@ data class Emitter(
     // RTL's value receivers are written `T&` there.
     fun nativeReceiverArg(pattern: *AstXmlNode, recv: *AstXmlNode): Str {
         if (this.isHandleType(pattern)) {
-            return this.expr(recv, 9, xmlEmptyNode())
+            return this.expr(recv, 12, xmlEmptyNode())
         }
         val recvType: AstXmlNode = this.inferType(recv)
         if (this.isHandleType(recvType)) {
-            return "(*" + this.expr(recv, 9, xmlEmptyNode()) + ")"
+            return "(*" + this.expr(recv, 12, xmlEmptyNode()) + ")"
         }
-        return this.expr(recv, 9, xmlEmptyNode())
+        return this.expr(recv, 12, xmlEmptyNode())
     }
 
     // Index into `functions` of the first Simse-declared receiver function with this
@@ -3662,7 +3683,7 @@ data class Emitter(
             }
             return "self->" + field
         }
-        return this.expr(base, 9, xmlEmptyNode()) + op + field
+        return this.expr(base, 12, xmlEmptyNode()) + op + field
     }
 
     fun nullTo(expected: *AstXmlNode): Str {
@@ -3833,7 +3854,7 @@ data class Emitter(
 
             AstNodeCategory.ExprIndex -> {
                 val lhs: AstXmlNode = xmlChild(e, AstNodeKind.Receiver)
-                val baseExpr: Str = this.expr(lhs, 9, xmlEmptyNode())
+                val baseExpr: Str = this.expr(lhs, 12, xmlEmptyNode())
                 val baseType: AstXmlNode = this.inferType(lhs)
                 var deref: Bool = false
                 if (!xmlIsEmpty(baseType)) {
@@ -3870,7 +3891,7 @@ data class Emitter(
                     if (!xmlIsEmpty(otherType) && xmlKind(otherType) == AstNodeCategory.TypeGeneric
                         && xmlAttr(otherType, AstNodeAttributeKind.Name) == "Opt"
                     ) {
-                        val hasValue: Str = this.expr(other, 9, xmlEmptyNode()) + ".hasValue()"
+                        val hasValue: Str = this.expr(other, 12, xmlEmptyNode()) + ".hasValue()"
                         if (op == "==") {
                             return "!(" + hasValue + ")"
                         }
@@ -4077,7 +4098,7 @@ data class Emitter(
                     if (!xmlIsEmpty(enumReceiver) && xmlKind(enumReceiver) == AstNodeCategory.TypeNamed
                         && this.enumNames.has(xmlAttr(enumReceiver, AstNodeAttributeKind.Name))
                     ) {
-                        return "static_cast<Int>(" + this.expr(receiverExpr, 9, xmlEmptyNode()) + ")"
+                        return "static_cast<Int>(" + this.expr(receiverExpr, 12, xmlEmptyNode()) + ")"
                     }
                 }
                 if (calleeText == "fromInt" && xmlKind(receiverExpr) == AstNodeCategory.ExprName
@@ -4133,7 +4154,7 @@ data class Emitter(
                         val caller: *CgFn = *this.functions[byName]
                         all = this.receiverArg(caller.receiver, receiverExpr)
                     } else {
-                        all = this.expr(receiverExpr, 9, xmlEmptyNode())
+                        all = this.expr(receiverExpr, 12, xmlEmptyNode())
                     }
                     var a: Int = 0
                     while (a < args.size()) {
@@ -4145,7 +4166,7 @@ data class Emitter(
                 if (this.nativeExtensions.has(calleeText)) {
                     val extensions: List<CgNativeExt> = this.nativeExtensions.get(calleeText).value()
                     if (extensions.size() > 0) {
-                        var all: Str = this.expr(receiverExpr, 9, xmlEmptyNode())
+                        var all: Str = this.expr(receiverExpr, 12, xmlEmptyNode())
                         var a: Int = 0
                         while (a < args.size()) {
                             all = all + ", " + args[a]

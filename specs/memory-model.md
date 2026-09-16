@@ -138,6 +138,13 @@ through for a by-value parameter, and `&T` boxes a copy of what it is given. The
 writes the `*` for a *binding* (`val p: *T = x`), never for a call
 (`specs/functions.md`, "Handles at a call").
 
+A **binary operand** is converted the same way when the *other* operand is a value:
+`out + separator` with `separator: *Str` is `out + *separator`, so a function can take a
+`*T` without every use of it spelling the `*`. A handle whose pointee is not the other
+operand's type is left alone, and so is a pair of handles - two pointers compared are a
+meaning of its own - and what is left is the type error it always was
+(`impl_specs/linear-il.md`, "The conversion: one operation, spelled by its types").
+
 Member access, indexing, and method calls through a counted reference (`&T`) or
 a raw pointer (`*T`) automatically reach the pointee. For example, if `source`
 has type `&Str`, then `source[i]`, `source.size()`, and any member call on

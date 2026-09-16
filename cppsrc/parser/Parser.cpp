@@ -17,6 +17,15 @@ namespace parser {
             if (op == "&&") return 20;
             if (op == "==" || op == "!=") return 30;
             if (op == "<" || op == ">" || op == "<=" || op == ">=") return 40;
+            // The bitwise operators, in Python's and Rust's order: tighter than a
+            // comparison and looser than the shifts, so `a & b == c` is `(a & b) == c`
+            // and a bit test needs no parentheses. (C puts them the other way round,
+            // where it silently means `a & (b == c)` - the trap this order exists to
+            // avoid; Python's `&` beats `==` too.)
+            if (op == "|") return 43;
+            if (op == "^") return 44;
+            if (op == "&") return 45;
+            if (op == "<<" || op == ">>") return 47;
             if (op == "+" || op == "-") return 50;
             if (op == "*" || op == "/" || op == "%") return 60;
             return -1;
@@ -24,7 +33,9 @@ namespace parser {
 
         bool isAssignOp(const Str &op) {
             return op == "=" || op == "+=" || op == "-="
-                   || op == "*=" || op == "/=" || op == "%=";
+                   || op == "*=" || op == "/=" || op == "%="
+                   || op == "&=" || op == "|=" || op == "^="
+                   || op == "<<=" || op == ">>=";
         }
 
         // The step operators: `i++` and `i--`, which are statements rather than values.
@@ -219,6 +230,8 @@ namespace parser {
             // constructs never collide and two runs of the same source produce the same
             // names.
             int nextTemplateId = 1;
+            // The `>`s a `>>` closer left over: see `matchGenericCloser`.
+            int pendingClosers = 0;
 
             // ---- token cursor helpers -------------------------------------
 
@@ -274,6 +287,34 @@ namespace parser {
                     return true;
                 }
                 return fail(Str("expected '") + text + "'");
+            }
+
+            // One `>` of a type-argument list's closer. `>>` and `>>=` scan as single
+            // tokens (they are the shift operators), so a closer that finds one takes a
+            // single `>` out of it and remembers the rest: the closer of the list it is
+            // nested in takes that one without reading a token, which is what
+            // `List<List<Int>>` needs. What a `>>=` mostly is - the `>=` operator - is not
+            // something a closer can be asked for, so that one spelling is a diagnostic:
+            // write a space before the `=`.
+            bool checkGenericCloser() const {
+                if (pendingClosers > 0) return true;
+                return checkText(">") || checkText(">>");
+            }
+
+            bool matchGenericCloser() {
+                if (pendingClosers > 0) {
+                    pendingClosers--;
+                    return true;
+                }
+                if (matchText(">")) return true;
+                if (matchText(">>")) {
+                    pendingClosers = 1;
+                    return true;
+                }
+                if (checkText(">>=")) {
+                    return fail("a `>` closer ran into `=`: write a space before it");
+                }
+                return fail("expected '>'");
             }
 
             bool expectIdentifier(Str &out) {
@@ -480,15 +521,16 @@ namespace parser {
             bool parseTypeParams(List<Str> &out) {
                 if (!expectText("<")) return false;
                 skipNewlines();
-                while (!checkText(">") && !atEnd()) {
+                while (!checkGenericCloser() && !atEnd()) {
                     Str name;
                     if (!expectIdentifier(name)) return false;
                     out.push_back(name);
                     skipNewlines();
+                    if (checkGenericCloser()) break;
                     if (!matchText(",")) break;
                     skipNewlines();
                 }
-                return expectText(">");
+                return matchGenericCloser();
             }
 
             ast::DeclPtr parseFunction(bool isNative) {
@@ -663,7 +705,7 @@ namespace parser {
             bool parseGenericArgs(List<ast::TypePtr> &out) {
                 if (!expectText("<")) return false;
                 skipNewlines();
-                while (!checkText(">") && !atEnd()) {
+                while (!checkGenericCloser() && !atEnd()) {
                     ast::TypePtr arg;
                     if (checkKind(TokenKind::Number)) {
                         arg = std::make_shared<ast::TypeExpr>();
@@ -676,10 +718,14 @@ namespace parser {
                     }
                     out.push_back(arg);
                     skipNewlines();
+                    // A `>>` the argument's own list left over ends *this* list too: the
+                    // closer is pending, not a token, and what follows the type is the
+                    // caller's again.
+                    if (checkGenericCloser()) break;
                     if (!matchText(",")) break;
                     skipNewlines();
                 }
-                return expectText(">");
+                return matchGenericCloser();
             }
 
             // ---- statements ------------------------------------------------

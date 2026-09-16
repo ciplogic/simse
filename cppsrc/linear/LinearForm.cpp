@@ -637,16 +637,24 @@ namespace linear {
             }
 
             static bool isCompoundAssignOp(const Str &op) {
-                return op == "+=" || op == "-=" || op == "*=" || op == "/=" || op == "%=";
+                return op == "+=" || op == "-=" || op == "*=" || op == "/=" || op == "%="
+                       || op == "&=" || op == "|=" || op == "^="
+                       || op == "<<=" || op == ">>=";
             }
 
             // The binary operation a compound assignment's operator names: `+=` is
-            // `x = x + v`.
+            // `x = x + v`. Every operator the caller accepts has a row, so the last one is
+            // a fallback only `%=` reaches.
             static Str compoundBinaryOp(const Str &op) {
                 if (op == "+=") return Str("+");
                 if (op == "-=") return Str("-");
                 if (op == "*=") return Str("*");
                 if (op == "/=") return Str("/");
+                if (op == "&=") return Str("&");
+                if (op == "|=") return Str("|");
+                if (op == "^=") return Str("^");
+                if (op == "<<=") return Str("<<");
+                if (op == ">>=") return Str(">>");
                 return Str("%");
             }
 
@@ -751,6 +759,35 @@ namespace linear {
                 return freshSlot(slotTypeText(type), type);
             }
 
+            // The type of the value in `slot`, which came from `e`: a place is a slot of
+            // this frame and already carries one, so the common operand costs a lookup.
+            // Anything untyped (a `for` machine, a bare `null`) is the expensive question
+            // for the type rules.
+            ast::TypePtr operandValueType(int slot, const Expr &e) {
+                ast::TypePtr carried = ilVarType(out, slot);
+                if (carried) return carried;
+                return exprType(e);
+            }
+
+            // One operand of a binary operation: read through the handle it is when the
+            // *other* operand says the operation is on values. `out + separator` with
+            // `separator: *Str` is `out + *separator` - the `*T -> T` row of the conversion
+            // table (`impl_specs/linear-il.md`), which is "wherever a `T` is required"
+            // read at an operand, and the same rule that lets a parameter be a `*T`
+            // without every call spelling the `*` (`specs/functions.md`, "Handles at a
+            // call"). A handle whose pointee is not the other operand's type is left
+            // alone, and so is a pair of handles: two pointers compared are a meaning of
+            // its own. What is left is the type error it always was.
+            int binaryOperand(const Expr &me, const Expr &other, int slot) {
+                const ast::TypePtr mine = operandValueType(slot, me);
+                if (!mine || !sema::isHandleType(mine.get())) return slot;
+                const ast::TypePtr theirs = exprType(other);
+                if (!theirs || sema::isHandleType(theirs.get())) return slot;
+                const ast::TypeExpr *pointee = sema::pointeeOf(mine.get());
+                if (pointee == nullptr || ilTypeText(*pointee) != ilTypeText(*theirs)) return slot;
+                return readThrough(pointee, slot);
+            }
+
             // ---- values ---------------------------------------------------------
 
             // The value `expr` produces, as an operand: a frame slot, a literal (a
@@ -837,7 +874,8 @@ namespace linear {
                         return;
                     case ExprKind::Binary:
                         emit(IlOpKind::BinaryOp,
-                             {slot, poolIndex(e.text), operand(*e.lhs), operand(*e.rhs)});
+                             {slot, poolIndex(e.text), binaryOperand(*e.lhs, *e.rhs, operand(*e.lhs)),
+                              binaryOperand(*e.rhs, *e.lhs, operand(*e.rhs))});
                         return;
                     case ExprKind::Unary:
                         emit(IlOpKind::UnaryOp, {slot, poolIndex(e.text), operand(*e.lhs)});

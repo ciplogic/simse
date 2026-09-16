@@ -196,6 +196,22 @@ field of an element and a `*T` parameter both update what they name
 assignment has no value they stand on their own as a statement - the prefix form
 (`++i`) and a step inside an expression (`x = i++`) are diagnostics.
 
+The same places take the bitwise operators `& | ^ << >>` and their compound forms
+(`&= |= ^= <<= >>=`), on integers:
+
+```simse
+val high: Int = 2
+val low: Int = 5
+val packed: Int = (high << 4) | low     // 37
+val masked: Bool = packed & 0xF != 0    // the mask first: `&` binds tighter than `==`
+```
+
+The bitwise pair binds *tighter* than a comparison - Python's order, not C's, where
+`flags & mask == 0` silently means `flags & (mask == 0)` - and the shifts sit between
+`+` and `&`, so `1 << 2 + 1` is `1 << 3` (`specs/built-in-types.md`, "Operators").
+Because `>>` is a shift, a nested type written `List<List<Int>>` ends in a `>>` the
+parser splits, so `>>` closes any depth of nesting.
+
 ## Functions, extensions, lambdas
 
 Functions are top-level or methods; the receiver may be declared as an
