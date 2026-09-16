@@ -91,6 +91,11 @@ fun Span<T>.smToYieldPtr<T>(): ..*T {
 // ---- List<T> --------------------------------------------------------------
 
 native("simse_list_append") fun append<T>(this: List<T>, value: T): Unit
+// The count constructions: a list of `count` default elements, and a list of `count`
+// copies of `value`. `List<T>(a, b, c)` is the *element* list (one `Pack` instruction,
+// specs/containers.md), so a count written as an element list cannot be misread.
+native("simse_list_count") fun listOfCount<T>(count: Int): List<T>
+native("simse_list_filled") fun listOfFilled<T>(count: Int, value: T): List<T>
 native("simse_list_removeAt") fun removeAt<T>(this: List<T>, index: Int): Unit
 native("simse_list_removeRange") fun removeRange<T>(this: List<T>, start: Int, end: Int): Unit
 native("simse_list_contains") fun contains<T>(this: List<T>, value: T): Bool

@@ -100,6 +100,7 @@ enum IlOpKind {
     CallIndirect,
     CallIndirectVoid,
     CallCtor,
+    Pack,
     Return,
     ReturnVoid,
     Lambda,
@@ -251,6 +252,12 @@ fun makeIlSignatures(): List<IlSignature> {
     table.append(IlSignature(IlOpKind.CallIndirect, "Var,Var,Value..."))
     table.append(IlSignature(IlOpKind.CallIndirectVoid, "Var,Value..."))
     table.append(IlSignature(IlOpKind.CallCtor, "Var,Type,Value..."))
+    // A container built from values in one instruction - the IL's
+    // `newarr`/`fill-array-data`: `List<T>{v1, v2, ...}`. The destination's type says
+    // which container it is, and the values are elements (not fields), which is what
+    // lets a call to a function whose last parameter is a list pack its trailing
+    // arguments (`specs/functions.md`).
+    table.append(IlSignature(IlOpKind.Pack, "Var,Value..."))
     table.append(IlSignature(IlOpKind.Return, "Value"))
     table.append(IlSignature(IlOpKind.ReturnVoid, ""))
     table.append(IlSignature(IlOpKind.Lambda, "Var"))
@@ -293,6 +300,7 @@ fun makeIlOpKindTexts(): List<Str> {
     texts.append("CallIndirect")
     texts.append("CallIndirectVoid")
     texts.append("CallCtor")
+    texts.append("Pack")
     texts.append("Return")
     texts.append("ReturnVoid")
     texts.append("Lambda")
@@ -484,6 +492,9 @@ fun ilWritesDestination(kind: IlOpKind): Bool {
         return true
     }
     if (kind == IlOpKind.CallCtor) {
+        return true
+    }
+    if (kind == IlOpKind.Pack) {
         return true
     }
     if (kind == IlOpKind.Lambda) {
@@ -830,6 +841,10 @@ fun ilOpComment(body: *IlBody, op: *IlOp): Str {
         }
         return dst2 + ilVarName(body, ilOperandAt(operands, calleeAt)) + "("
         +ilArgList(body, operands, calleeAt + 1) + ")"
+    }
+    if (kind == IlOpKind.Pack) {
+        return ilVarName(body, ilOperandAt(operands, 0)) + " = ["
+        +ilArgList(body, operands, 1) + "]"
     }
     if (kind == IlOpKind.CallCtor) {
         return ilVarName(body, ilOperandAt(operands, 0)) + " = new "
@@ -2059,6 +2074,109 @@ data class IlExtractor(
 
     // ---- calls ------------------------------------------------------------
 
+    // Whether a construction's callee names a `List<...>` type.
+    fun isListConstruction(callee: AstXmlNode): Bool {
+        return xmlKind(*callee) == AstNodeCategory.ExprGenericName
+                && xmlAttr(*callee, AstNodeAttributeKind.Name) == "List"
+                && xmlCount(*callee, AstNodeKind.TypeArg) == 1
+    }
+
+    // The declaration a call resolves to, when the extractor can name it: the same rule
+    // the checker applies - an exact parameter count first, then a last parameter a call
+    // may pack into - so a stage that needs more than the name does not have to guess.
+    // Empty when the facts are not available (a body with no facts, or a callee that is a
+    // local).
+    fun callTarget(callee: AstXmlNode, argCount: Int, member: Bool): AstXmlNode {
+        if (this.fn.facts == null) {
+            return xmlEmptyNode()
+        }
+        val name: Str = xmlAttr(*callee, AstNodeAttributeKind.Name)
+        var pack: AstXmlNode = xmlEmptyNode()
+        var i: Int = 0
+        while (i < this.fn.facts.functions.size()) {
+            val fact: *SemFnFact = *this.fn.facts.functions[i]
+            i = i + 1
+            if (xmlIsEmpty(*fact.decl)
+                || xmlAttr(*fact.decl, AstNodeAttributeKind.Name) != name
+            ) {
+                continue
+            }
+            val factMember: Bool = !xmlIsEmpty(*fact.receiver)
+            if (factMember != member) {
+                continue
+            }
+            val params: List<AstXmlNode> = xmlChildren(*fact.decl, AstNodeKind.Param)
+            val paramCount: Int = params.size()
+            if (paramCount == argCount) {
+                return fact.decl
+            }
+            if (xmlIsEmpty(*pack) && paramCount > 0
+                && semIsPackTarget(*xmlChild(*params[paramCount - 1], AstNodeKind.Type))
+                && argCount >= paramCount - 1
+            ) {
+                pack = fact.decl
+            }
+        }
+        return pack
+    }
+
+    // Where the *pack* starts in an argument list, or -1 when the arguments are passed as
+    // they are. One argument per parameter is still the list itself when that argument
+    // *is* a list, whatever its handle form - which is what tells `addAll(*xs)` from
+    // `addAll(1)`, and `Format(template, items)` from `Format(template, "world")`. An
+    // argument whose type the rules cannot name leaves the call exactly as it was:
+    // nothing is inferred, nothing is packed.
+    fun packStart(target: AstXmlNode, args: List<AstXmlNode>): Int {
+        if (xmlIsEmpty(*target)) {
+            return -1
+        }
+        val params: List<AstXmlNode> = xmlChildren(*target, AstNodeKind.Param)
+        if (params.size() == 0) {
+            return -1
+        }
+        val wanted: AstXmlNode = xmlChild(*params[params.size() - 1], AstNodeKind.Type)
+        if (!semIsPackTarget(*wanted)) {
+            return -1
+        }
+        if (args.size() == params.size() && args.size() > 0) {
+            val last: AstXmlNode = this.exprType(*args[args.size() - 1])
+            if (xmlIsEmpty(*last) || !xmlIsEmpty(*semListTypeOf(*last))) {
+                return -1
+            }
+        }
+        return params.size() - 1
+    }
+
+    // The trailing arguments as one list, built by one `Pack` instruction: the list's
+    // type is the parameter's and the elements are the arguments as values. A
+    // `*List<T>` parameter gets the *address* of the fresh list - one element copy each,
+    // no copy of the list at all, and the slot outlives the call, since it is a slot of
+    // this body.
+    fun packArguments(target: AstXmlNode, args: List<AstXmlNode>, from: Int): Int {
+        val params: List<AstXmlNode> = xmlChildren(*target, AstNodeKind.Param)
+        var wanted: AstXmlNode = xmlEmptyNode()
+        if (params.size() > 0) {
+            wanted = xmlChild(*params[params.size() - 1], AstNodeKind.Type)
+        }
+        val list: AstXmlNode = semListTypeOf(*wanted)
+        val slot: Int = this.freshSlot(this.slotTypeText(list), list)
+        var operands: List<Int> = List<Int>()
+        operands.append(slot)
+        var i: Int = from
+        while (i < args.size()) {
+            operands.append(this.operandOf(*args[i]))
+            i = i + 1
+        }
+        this.emit(IlOpKind.Pack, operands)
+        if (xmlIsEmpty(*wanted) || xmlKind(*wanted) == AstNodeCategory.TypeGeneric) {
+            return slot // by value
+        }
+        val handle: AstXmlNode = copy(wanted)
+        val bound: Int = this.freshSlot(ilTypeText(*handle), handle)
+        this.emit(IlOpKind.Deref, ilOps2(bound, slot)) // `*List<T>`: the borrow of a fresh slot
+        return bound
+    }
+
     // `dst < 0` means the result is dropped (`CallVoid`).
     fun call(dst: Int, e: AstXmlNode): Unit {
         val callee: AstXmlNode = xmlChild(*e, AstNodeKind.Callee)
@@ -2083,15 +2201,32 @@ data class IlExtractor(
             recvSlot = this.receiverOf(lhs)
         }
 
+        val calleeName: Str = xmlAttr(*callee, AstNodeAttributeKind.Name)
+        val argNodes: List<AstXmlNode> = xmlChildren(*e, AstNodeKind.Arg)
+
+        // The trailing arguments may pack into a last parameter that is a list
+        // (`fun addAll(values: *List<Int>)` called as `addAll(1, 2, 3)`, or
+        // `"Hello {0}".Format("world")`).
+        val target: AstXmlNode = this.callTarget(callee, argNodes.size(), receiverCall)
+        val packFrom: Int = this.packStart(*target, argNodes)
+
         var args: List<Int> = List<Int>()
         var argTypes: List<Int> = List<Int>()
+        var plain: Int = argNodes.size()
+        if (packFrom >= 0) {
+            plain = packFrom
+        }
         var i: Int = 0
-        val argNodes: List<AstXmlNode> = xmlChildren(*e, AstNodeKind.Arg)
-        while (i < argNodes.size()) {
+        while (i < plain) {
             val slot: Int = this.operandOf(*argNodes[i])
             args.append(slot)
             argTypes.append(this.operandType(slot, argNodes[i]))
             i = i + 1
+        }
+        if (packFrom >= 0 && !xmlIsEmpty(*target)) {
+            val slot: Int = this.packArguments(*target, argNodes, packFrom)
+            args.append(slot)
+            argTypes.append(this.out.vars[slot].typeIndex)
         }
         var fullTypes: List<Int> = List<Int>()
         if (recvSlot >= 0) {
@@ -2107,7 +2242,6 @@ data class IlExtractor(
         if (hasDst) {
             operands.append(dst)
         }
-        val calleeName: Str = xmlAttr(*callee, AstNodeAttributeKind.Name)
 
         if (receiverCall) {
             operands.append(this.methodIndex(calleeName, IlMethodKind.Method, -1, returnType, fullTypes))
@@ -2145,6 +2279,22 @@ data class IlExtractor(
             // wrote them.
             if (!hasDst) {
                 this.unsupported("constructor call with no destination")
+                return
+            }
+            // A `List<T>` built *from* its elements: `List<Str>("a", "b", "c")` is one
+            // `Pack`, which is the cheapest way to write a literal list - the elements are
+            // copied into the fresh list and nothing else is, and up to four of them stay
+            // in its inline buffer. The count constructions are *not* this: they are the
+            // RTL's `listOfCount`/`listOfFilled` (`cppsrc/rtl/rtl.kt`), so a literal can
+            // never be mistaken for a size. `List<T>()` with no arguments stays the empty
+            // list, and `Array<T>(n)` stays the count construction it is specified to be.
+            if (argNodes.size() > 0 && this.isListConstruction(callee)) {
+                i = 0 // `dst` is already there
+                while (i < args.size()) {
+                    operands.append(args[i])
+                    i = i + 1
+                }
+                this.emit(IlOpKind.Pack, operands)
                 return
             }
             operands.append(this.typeIndex(this.baseText(callee), this.calleeToType(callee)))

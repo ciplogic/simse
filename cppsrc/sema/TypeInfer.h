@@ -41,6 +41,22 @@ namespace sema {
     // Whether a pointee is a container with `operator[]` element access.
     bool isIndexableContainer(const ast::TypeExpr* type);
 
+    // The `List<T>` a *type* names, looking through any handle (`*List<T>`, `&List<T>`)
+    // and the alias form `PList<T>` (= `&List<T>`). Null when the type is not a list.
+    // This is the *argument* side of the packing rule - what tells `addAll(*xs)` from
+    // `addAll(1)` when the two have the same argument count (`specs/functions.md`,
+    // "Packing the trailing arguments").
+    const ast::TypeExpr* listTypeOf(const ast::TypeExpr* type);
+
+    // Whether a *parameter*'s type is one a call may pack its trailing arguments into:
+    // a by-value `List<T>` or a borrowed `*List<T>`. Deliberately not the counted
+    // `&List<T>`/`PList<T>` - a packed list is a throwaway temporary, so a control block
+    // and a reference count it never needed would be the cost of the convenience - and
+    // not a type reached through a name the rule cannot see through, such as an alias.
+    // Both the checker (which accepts the arity) and the IL extractor (which builds the
+    // list) ask it, so the rule lives in one place.
+    bool isPackTarget(const ast::TypeExpr* type);
+
     bool isTypeParamName(const Str& name, const List<Str>& typeParams);
 
     // Structural unification of a pattern (an extension receiver, which may mention

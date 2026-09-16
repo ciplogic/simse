@@ -310,7 +310,7 @@ data class LinSimplifier(
     // have to be in place before any is used.
     fun flattenPass(stmts: *List<AstXmlNode>): List<AstXmlNode> {
         val count: Int = stmts.size()
-        var bodies: List<List<AstXmlNode>> = List<List<AstXmlNode>>(count)
+        var bodies: List<List<AstXmlNode>> = listOfCount<List<AstXmlNode>>(count)
         var bodyList: List<AstXmlNode> = List<AstXmlNode>()
         var i: Int = 0
         while (i < count) {
@@ -321,7 +321,7 @@ data class LinSimplifier(
             i = i + 1
         }
 
-        var splicing: List<Bool> = List<Bool>(count, false)
+        var splicing: List<Bool> = listOfFilled<Bool>(count, false)
         i = 0
         while (i < count) {
             if (linIsBlock(*stmts[i]) && linSpliceIsSafe(stmts, *bodies, i)) {

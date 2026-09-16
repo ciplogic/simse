@@ -64,6 +64,51 @@ namespace sema {
         return false;
     }
 
+    // The bare type a type is reached through: any number of `&`/`*` handles. `pointee`
+    // does the same for a `TypePtr`; the packing rule needs it for a node it was handed.
+    static const ast::TypeExpr *stripHandles(const ast::TypeExpr *type) {
+        const ast::TypeExpr *current = type;
+        while (current && (current->kind == TypeKind::Reference
+                           || current->kind == TypeKind::Pointer)
+               && current->inner) {
+            current = current->inner.get();
+        }
+        return current;
+    }
+
+    const ast::TypeExpr *listTypeOf(const ast::TypeExpr *type) {
+        const ast::TypeExpr *base = stripHandles(type);
+        // `PList<T>` *is* `&List<T>` spelled as one name (`cppsrc/rtl/containers.hpp`),
+        // so it is a list too - as an *argument's* type, which is what this answers.
+        if (base && base->kind == TypeKind::Generic && base->name == "PList"
+            && base->typeArgs.size() == 1) {
+            base = stripHandles(base->typeArgs[0].get());
+        }
+        if (base && base->kind == TypeKind::Generic && base->name == "List"
+            && base->typeArgs.size() == 1) {
+            return base;
+        }
+        return nullptr;
+    }
+
+    bool isPackTarget(const ast::TypeExpr *type) {
+        if (!type) return false;
+        // The counted forms are not pack targets: `&List<T>`/`PList<T>` is a
+        // `std::shared_ptr<List<T>>`, so a throwaway temporary would allocate a control
+        // block and take a count that drops at the end of the same statement - strictly
+        // more work than the one copy a by-value parameter costs. A borrow (`*List<T>`)
+        // and a by-value `List<T>` are what a pack feeds (specs/functions.md).
+        if (type->kind == TypeKind::Generic) {
+            return type->name == "List" && type->typeArgs.size() == 1;
+        }
+        if (type->kind == TypeKind::Pointer && type->inner) {
+            const ast::TypeExpr *inner = type->inner.get();
+            return inner->kind == TypeKind::Generic && inner->name == "List"
+                   && inner->typeArgs.size() == 1;
+        }
+        return false;
+    }
+
     bool isTypeParamName(const Str &name, const List<Str> &typeParams) {
         for (const Str &param: typeParams) {
             if (param == name) return true;

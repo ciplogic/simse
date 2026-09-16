@@ -2187,6 +2187,28 @@ data class Emitter(
             return Opt<Str>.none()
         }
         val op: *IlOp = *il.ops[opIndex]
+        if (op.kind == IlOpKind.Pack) {
+            // A list built from values: `List<T>{v1, v2, ...}`, the RTL's
+            // initializer-list construction. `List` is `SmallVector<T, 4>`, so the short
+            // list a packed call usually is stays inline and allocates nothing - which is
+            // why the pack builds a `List` and not an `Array`.
+            val slot: Int = this.ilOperandAt(*op.operands, 0)
+            val slotType: AstXmlNode = ilVarType(il, slot)
+            if (xmlIsEmpty(*slotType)) {
+                return Opt<Str>.none()
+            }
+            var values: List<Str> = List<Str>()
+            var j: Int = 1
+            while (j < op.operands.size()) {
+                val value: AstXmlNode = this.ilOperandNode(il, frame, op.operands[j], 0)
+                if (xmlIsEmpty(*value)) {
+                    return Opt<Str>.none()
+                }
+                values.append(this.expr(*value, 0, *xmlEmptyNode()))
+                j = j + 1
+            }
+            return Opt<Str>.some(this.type(*slotType) + "{" + cgJoin(*values, ", ") + "}")
+        }
         if (op.kind == IlOpKind.CallCtor) {
             val typeAt: Int = this.ilOperandAt(*op.operands, 1)
             if (typeAt >= 0 && typeAt < il.types.size() && this.closureSymbols.has(il.types[typeAt])) {

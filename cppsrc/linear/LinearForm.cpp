@@ -80,6 +80,13 @@ namespace linear {
                     {IlOpKind::CallIndirect, "Var,Var,Value..."},
                     {IlOpKind::CallIndirectVoid, "Var,Value..."},
                     {IlOpKind::CallCtor, "Var,Type,Value..."},
+                    // A container built from values in one instruction - the IL's
+                    // `newarr`/`fill-array-data`: `List<T>{v1, v2, ...}`. The
+                    // destination's type says which container it is, and the values
+                    // are elements (not fields), which is what lets a call to a
+                    // function whose last parameter is a list pack its trailing
+                    // arguments (`specs/functions.md`).
+                    {IlOpKind::Pack, "Var,Value..."},
                     {IlOpKind::Return, "Value"},
                     {IlOpKind::ReturnVoid, ""},
                     {IlOpKind::Lambda, "Var"},
@@ -94,8 +101,8 @@ namespace linear {
                 "SetVar_Null", "BinaryOp", "UnaryOp", "Cast", "Box", "Deref", "CopyValue",
                 "Store", "GetField", "SetField", "GetIndex", "SetIndex", "FieldAddr",
                 "IndexAddr", "GetStatic", "GetStaticAddr", "SetStatic", "Call", "CallVoid",
-                "CallIndirect", "CallIndirectVoid", "CallCtor", "Return", "ReturnVoid", "Lambda",
-                "Unsupported",
+                "CallIndirect", "CallIndirectVoid", "CallCtor", "Pack", "Return", "ReturnVoid",
+                "Lambda", "Unsupported",
         };
 
         Str varKindText(IlVarKind kind) {
@@ -826,6 +833,74 @@ namespace linear {
 
             // ---- calls -----------------------------------------------------------
 
+            // Whether a construction's callee names a `List<...>` type.
+            bool isListConstruction(const Expr &callee) {
+                return callee.kind == ExprKind::GenericName && callee.text == "List"
+                       && callee.typeArgs.size() == 1;
+            }
+
+            // The declaration a call resolves to, when the extractor can name it: the
+            // same rule the checker applies - an exact parameter count first, then a last
+            // parameter a call may pack into - so a stage that needs more than the name
+            // does not have to guess. Null when the facts are not available (a body with
+            // no facts, or a callee that is a local).
+            const ast::Decl *callTarget(const Expr &callee, int argCount, bool member) {
+                if (fn.facts == nullptr) return nullptr;
+                const ast::Decl *pack = nullptr;
+                for (const sema::FnFact &fact: fn.facts->functions) {
+                    if (fact.decl == nullptr || fact.decl->name != callee.text) continue;
+                    if ((fact.receiver != nullptr) != member) continue;
+                    const int paramCount = (int) fact.decl->params.size();
+                    if (paramCount == argCount) return fact.decl;
+                    if (pack == nullptr && paramCount > 0
+                        && sema::isPackTarget(fact.decl->params[paramCount - 1].type.get())
+                        && argCount >= paramCount - 1) {
+                        pack = fact.decl;
+                    }
+                }
+                return pack;
+            }
+
+            // Where the *pack* starts in an argument list, or -1 when the arguments are
+            // passed as they are. One argument per parameter is still the list itself
+            // when that argument *is* a list, whatever its handle form - which is what
+            // tells `addAll(*xs)` from `addAll(1)`, and `Format(template, items)` from
+            // `Format(template, "world")`. An argument whose type the rules cannot name
+            // leaves the call exactly as it was: nothing is inferred, nothing is packed.
+            int packStart(const ast::Decl *target, const List<ExprPtr> &args) {
+                if (target == nullptr || target->params.empty()) return -1;
+                const ast::TypeExpr *wanted = target->params[target->params.size() - 1].type.get();
+                if (!sema::isPackTarget(wanted)) return -1;
+                if ((int) args.size() == (int) target->params.size() && !args.empty()) {
+                    const ast::TypePtr last = exprType(*args[args.size() - 1]);
+                    if (!last || sema::listTypeOf(last.get()) != nullptr) return -1;
+                }
+                return (int) target->params.size() - 1;
+            }
+
+            // The trailing arguments as one list, built by one `Pack` instruction: the
+            // list's type is the parameter's and the elements are the arguments as
+            // values. A `*List<T>` parameter gets the *address* of the fresh list - one
+            // element copy each, no copy of the list at all, and the slot outlives the
+            // call, since it is a slot of this body.
+            int packArguments(const ast::Decl &target, const List<ExprPtr> &args, int from) {
+                const ast::TypeExpr *wanted = target.params[target.params.size() - 1].type.get();
+                const ast::TypeExpr *list = sema::listTypeOf(wanted);
+                const ast::TypePtr listType = list ? std::make_shared<ast::TypeExpr>(*list) : nullptr;
+                const int slot = freshSlot(listType ? ilTypeText(*listType) : Str("?"), listType);
+                List<int> operands;
+                operands.push_back(slot);
+                for (int i = from; i < (int) args.size(); i++) {
+                    operands.push_back(operand(args[i]));
+                }
+                emit(IlOpKind::Pack, operands);
+                if (!wanted || wanted->kind == ast::TypeKind::Generic) return slot; // by value
+                const ast::TypePtr handle = std::make_shared<ast::TypeExpr>(*wanted);
+                const int bound = freshSlot(ilTypeText(*handle), handle);
+                emit(IlOpKind::Deref, {bound, slot}); // `*List<T>`: the borrow of a fresh slot
+                return bound;
+            }
+
             // `dst < 0` means the result is dropped (`CallVoid`).
             void call(int dst, const Expr &e) {
                 const Expr &callee = *e.lhs;
@@ -842,12 +917,24 @@ namespace linear {
                 int recvSlot = -1;
                 if (receiverCall) recvSlot = receiver(*callee.lhs);
 
+                // The trailing arguments may pack into a last parameter that is a list
+                // (`fun addAll(values: *List<Int>)` called as `addAll(1, 2, 3)`, or
+                // `"Hello {0}".Format("world")`).
+                const ast::Decl *target = callTarget(callee, (int) e.args.size(), receiverCall);
+                const int packFrom = packStart(target, e.args);
+
                 List<int> args;
                 List<int> argTypes;
-                for (const ExprPtr &arg: e.args) {
-                    int slot = operand(arg);
+                const int plain = packFrom < 0 ? (int) e.args.size() : packFrom;
+                for (int i = 0; i < plain; i++) {
+                    int slot = operand(e.args[i]);
                     args.push_back(slot);
-                    argTypes.push_back(operandType(slot, arg));
+                    argTypes.push_back(operandType(slot, e.args[i]));
+                }
+                if (packFrom >= 0 && target != nullptr) {
+                    const int slot = packArguments(*target, e.args, packFrom);
+                    args.push_back(slot);
+                    argTypes.push_back(out.vars[slot].typeIndex);
                 }
                 List<int> fullTypes;
                 if (recvSlot >= 0) fullTypes.push_back(out.vars[recvSlot].typeIndex);
@@ -882,6 +969,20 @@ namespace linear {
                     // arguments the way the source wrote them.
                     if (!hasDst) {
                         unsupported("constructor call with no destination");
+                        return;
+                    }
+                    // A `List<T>` built *from* its elements: `List<Str>("a", "b", "c")`
+                    // is one `Pack`, which is the cheapest way to write a literal list -
+                    // the elements are copied into the fresh list and nothing else is, and
+                    // up to four of them stay in its inline buffer. The count
+                    // constructions are *not* this: they are the RTL's
+                    // `listOfCount`/`listOfFilled` (`cppsrc/rtl/rtl.kt`), so a literal can
+                    // never be mistaken for a size. `List<T>()` with no arguments stays
+                    // the empty list, and `Array<T>(n)` stays the count construction it
+                    // is specified to be.
+                    if (!e.args.empty() && isListConstruction(callee)) {
+                        for (int arg: args) operands.push_back(arg); // `dst` is already there
+                        emit(IlOpKind::Pack, operands);
                         return;
                     }
                     operands.push_back(typeIndex(baseText(callee), calleeToTypePtr(callee)));
@@ -1375,6 +1476,10 @@ namespace linear {
                 return dst + varName(body, operandAt(operands, calleeAt)) + "("
                        + argList(body, operands, calleeAt + 1) + ")";
             }
+            if (kind == IlOpKind::Pack) {
+                return varName(body, operandAt(operands, 0)) + " = ["
+                       + argList(body, operands, 1) + "]";
+            }
             if (kind == IlOpKind::CallCtor) {
                 return varName(body, operandAt(operands, 0)) + " = new "
                        + typeName(body, operandAt(operands, 1)) + "("
@@ -1464,6 +1569,7 @@ namespace linear {
             case IlOpKind::Call:
             case IlOpKind::CallIndirect:
             case IlOpKind::CallCtor:
+            case IlOpKind::Pack:
             case IlOpKind::Lambda:
             case IlOpKind::Unsupported:
                 return true;

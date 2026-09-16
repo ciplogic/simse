@@ -144,6 +144,59 @@ fun semPointee(typeNode: *AstXmlNode): AstXmlNode {
     return current
 }
 
+// The `List<T>` a *type* names, looking through any handle (`*List<T>`, `&List<T>`) and
+// the alias form `PList<T>` (= `&List<T>`). Empty when the type is not a list. This is
+// the *argument* side of the packing rule - what tells `addAll(*xs)` from `addAll(1)`
+// when the two have the same argument count (`specs/functions.md`, "Packing the trailing
+// arguments").
+fun semListTypeOf(typeNode: *AstXmlNode): AstXmlNode {
+    var base: AstXmlNode = semPointee(typeNode)
+    // `PList<T>` *is* `&List<T>` spelled as one name (`cppsrc/rtl/containers.hpp`), so it
+    // is a list too - as an *argument's* type, which is what this answers.
+    if (xmlKind(*base) == AstNodeCategory.TypeGeneric
+        && xmlAttr(*base, AstNodeAttributeKind.Name) == "PList"
+        && xmlCount(*base, AstNodeKind.TypeArg) == 1
+    ) {
+        base = semPointee(*xmlChild(*base, AstNodeKind.TypeArg))
+    }
+    if (xmlKind(*base) == AstNodeCategory.TypeGeneric
+        && xmlAttr(*base, AstNodeAttributeKind.Name) == "List"
+        && xmlCount(*base, AstNodeKind.TypeArg) == 1
+    ) {
+        return base
+    }
+    return xmlEmptyNode()
+}
+
+// Whether a *parameter*'s type is one a call may pack its trailing arguments into: a
+// by-value `List<T>` or a borrowed `*List<T>`. Deliberately not the counted
+// `&List<T>`/`PList<T>` - a packed list is a throwaway temporary, so a control block and
+// a reference count it never needed would be the cost of the convenience - and not a
+// type reached through a name the rule cannot see through, such as an alias. Both the
+// checker (which accepts the arity) and the IL extractor (which builds the list) ask it,
+// so the rule lives in one place.
+fun semIsPackTarget(typeNode: *AstXmlNode): Bool {
+    if (xmlIsEmpty(typeNode)) {
+        return false
+    }
+    // The counted forms are not pack targets: `&List<T>`/`PList<T>` is a
+    // `std::shared_ptr<List<T>>`, so a throwaway temporary would allocate a control
+    // block and take a count that drops at the end of the same statement - strictly more
+    // work than the one copy a by-value parameter costs. A borrow (`*List<T>`) and a
+    // by-value `List<T>` are what a pack feeds (specs/functions.md).
+    if (xmlKind(typeNode) == AstNodeCategory.TypeGeneric) {
+        return xmlAttr(typeNode, AstNodeAttributeKind.Name) == "List"
+                && xmlCount(typeNode, AstNodeKind.TypeArg) == 1
+    }
+    if (xmlKind(typeNode) == AstNodeCategory.TypePointer) {
+        val inner: AstXmlNode = xmlChild(typeNode, AstNodeKind.Inner)
+        return xmlKind(*inner) == AstNodeCategory.TypeGeneric
+                && xmlAttr(*inner, AstNodeAttributeKind.Name) == "List"
+                && xmlCount(*inner, AstNodeKind.TypeArg) == 1
+    }
+    return false
+}
+
 // Structural equality, used to refuse a second, different binding for a pattern
 // type parameter (`Map<K, K>` against `Map<Str, Int>` is not a match).
 fun semSameType(left: *AstXmlNode, right: *AstXmlNode): Bool {

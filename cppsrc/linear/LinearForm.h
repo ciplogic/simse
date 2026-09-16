@@ -82,6 +82,7 @@ namespace linear {
         CallIndirect,
         CallIndirectVoid,
         CallCtor,
+        Pack,
         Return,
         ReturnVoid,
         Lambda,

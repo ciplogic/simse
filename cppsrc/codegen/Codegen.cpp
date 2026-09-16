@@ -1756,6 +1756,23 @@ namespace codegen {
                              const ast::TypePtr &expected, Str &text) {
                 if (opIndex < 0 || opIndex >= (int) il.ops.size()) return false;
                 const linear::IlOp &op = il.ops[opIndex];
+                if (op.kind == IlOpKind::Pack) {
+                    // A list built from values: `List<T>{v1, v2, ...}`, the RTL's
+                    // initializer-list construction. `List` is `SmallVector<T, 4>`, so the
+                    // short list a packed call usually is stays inline and allocates
+                    // nothing - which is why the pack builds a `List` and not an `Array`.
+                    const int slot = ilOperandAt(op.operands, 0);
+                    ast::TypePtr slotType = linear::ilVarType(il, slot);
+                    if (!slotType) return false;
+                    List<Str> values;
+                    for (int j = 1; j < (int) op.operands.size(); j++) {
+                        ast::ExprPtr value = ilOperandNode(il, frame, op.operands[j], 0);
+                        if (!value) return false;
+                        values.push_back(expr(*value, 0));
+                    }
+                    text = type(*slotType) + "{" + join(values, ", ") + "}";
+                    return true;
+                }
                 if (op.kind == IlOpKind::CallCtor) {
                     const int typeAt = ilOperandAt(op.operands, 1);
                     if (typeAt >= 0 && typeAt < (int) il.types.size()

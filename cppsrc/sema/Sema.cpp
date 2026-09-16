@@ -1,4 +1,5 @@
 #include "Sema.h"
+#include "TypeInfer.h"
 
 #include <string>
 
@@ -638,9 +639,20 @@ namespace sema {
                 if (it == functions.end()) return;
                 int typeArgCount = generic ? (int) call.lhs->typeArgs.size() : 0;
                 for (const ast::Decl *function: it->second) {
-                    if ((int) function->params.size() != argCount) continue;
                     if (generic && (int) function->functionTypeParams.size() != typeArgCount) continue;
-                    return;
+                    const int paramCount = (int) function->params.size();
+                    if (paramCount == argCount) return;
+                    // The trailing arguments may *pack* into a last parameter that is a
+                    // list (`fun addAll(values: *List<Int>)` called as `addAll(1, 2, 3)`),
+                    // so a call with more arguments than parameters is legal when the
+                    // last parameter takes a pack - and one with fewer, which is the
+                    // same call with no elements (`specs/functions.md`). A construction is
+                    // not a call here: it takes one argument per field, always.
+                    if (paramCount > 0
+                        && sema::isPackTarget(function->params[paramCount - 1].type.get())
+                        && argCount >= paramCount - 1) {
+                        return;
+                    }
                 }
                 diag(call.pos, "no overload of '" + name + "' takes "
                                + std::to_string(argCount) + " argument(s)");

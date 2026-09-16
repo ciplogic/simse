@@ -949,8 +949,25 @@ data class Analyzer(
         val overloads: List<AstXmlNode> = this.functions.get(name).value()
         var i: Int = 0
         while (i < overloads.size()) {
-            if (xmlCount(*overloads[i], AstNodeKind.Param) == argCount) {
-                if (!generic || xmlCount(*overloads[i], AstNodeKind.TypeParam) == typeArgCount) {
+            val overload: AstXmlNode = overloads[i]
+            if (generic && xmlCount(*overload, AstNodeKind.TypeParam) != typeArgCount) {
+                i = i + 1
+                continue
+            }
+            val paramCount: Int = xmlCount(*overload, AstNodeKind.Param)
+            if (paramCount == argCount) {
+                return
+            }
+            // The trailing arguments may *pack* into a last parameter that is a list
+            // (`fun addAll(values: *List<Int>)` called as `addAll(1, 2, 3)`), so a call
+            // with more arguments than parameters is legal when the last parameter takes
+            // a pack - and one with fewer, which is the same call with no elements
+            // (`specs/functions.md`). A construction is not a call here: it takes one
+            // argument per field, always.
+            if (paramCount > 0) {
+                val params: List<AstXmlNode> = xmlChildren(*overload, AstNodeKind.Param)
+                val lastType: AstXmlNode = xmlChild(*params[paramCount - 1], AstNodeKind.Type)
+                if (semIsPackTarget(*lastType) && argCount >= paramCount - 1) {
                     return
                 }
             }
