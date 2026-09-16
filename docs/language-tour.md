@@ -373,12 +373,18 @@ is what lets a parameter move from a copy to a borrow without breaking its calle
 
 ```simse
 val xs: List<Int> = listOf(4, 5)
-addAll(xs)      // the compiler passes `*xs`: the list itself, borrowed, no copy
+addAll(xs)      // the compiler passes `*xs`: the list itself, borrowed
 addAll(*xs)     // the same call, written out
 sum(xs)         // a by-value parameter takes its copy
 sum(*xs)        // ... and reads through a pointer the same way
 boxed(xs)       // a `&List<Int>` parameter takes a copy *inside* the reference
+boxed(*xs)      // not this one: a raw pointer cannot become a reference in place
+                // (make one first: `var ref: &List<Int> = &xs`)
 ```
+
+That last line is the one conversion the compiler refuses, and it is the reason a `*T`
+*argument* still has to be spelled nowhere else: the type it is passed to (a copy, a
+borrow, a box) is the parameter's business, and only a box needs the writer's word.
 
 `Dictionary<K, V>` is the hash dictionary (`get`/`has`/`insert`/`remove`/`size`/
 `keys`/`values`/`clear`); `get` returns an `Opt<V>`. Iteration order is an

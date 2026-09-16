@@ -1021,7 +1021,9 @@ namespace linear {
             // | `*T`      | `T`      | the place's address (`&x`) |
             // | `*T`      | `&T`     | the handle's pointee (`x.get()`) |
             // | `T`       | `*T`/`&T`| a copy of the pointee |
-            // | `&T`      | `T`/`*T` | a *boxed copy* - `&x` means exactly that |
+            // | `&T`      | `T`      | a *boxed copy* - `&x` means exactly that |
+            // | `&T`      | `*T`     | **nothing**: the checker reports it (a pointer cannot
+            // |           |          | become a counted reference in place - `Sema.cpp`) |
             //
             // Nothing is converted when the two are not the same type to begin with: a
             // `List<Int>` argument is not a `*List<Str>`, and the call is the type error
@@ -1030,17 +1032,22 @@ namespace linear {
             // `*`, and why the reverse change still compiles. A `*T` *binding*
             // (`val p: *T = x`) is a different question - a pointer that outlives the
             // expression it points into has to be asked for, so the writer writes it.
-            int convertArgument(const ast::Decl *target, int index, const Expr &arg, int slot) {
-                if (target == nullptr || index >= (int) target->params.size()) return slot;
+            int convertArgument(const ast::Decl *target, int index, const ExprPtr &argPtr) {
+                if (target == nullptr || index >= (int) target->params.size() || !argPtr) {
+                    return operand(argPtr);
+                }
+                const Expr &arg = *argPtr;
+                const common::SourcePos argPos = arg.pos;
                 const ast::TypeExpr *param = target->params[index].type.get();
-                if (param == nullptr) return slot;
+                if (param == nullptr) return operand(argPtr);
                 const bool wantPointer = param->kind == ast::TypeKind::Pointer;
                 const bool wantShared = !wantPointer && sema::isHandleType(param);
-                // The argument's type: the slot it was extracted into already carries one
-                // - that is what makes an instruction one operation over typed slots - so
-                // this costs a lookup in the common case. Only an untyped slot (a `for`
-                // machine, a bare `null`) has to be asked of the type rules, which is the
-                // expensive question.
+                // The argument's type, cheaply: a place is a slot of this frame and
+                // already carries one, so the common argument costs a lookup. Anything
+                // else is read into a slot of its own - which is the value the call
+                // passes - and only an untyped slot (a `for` machine, a bare `null`) has
+                // to be asked of the type rules, the expensive question.
+                const int slot = operand(argPtr);
                 ast::TypePtr actual = ilVarType(out, slot);
                 if (actual == nullptr) actual = exprType(arg);
                 if (actual == nullptr) return slot;
@@ -1053,16 +1060,26 @@ namespace linear {
                 const bool haveValue = !havePointer && !haveShared;
                 if ((wantPointer && havePointer) || (wantShared && haveShared)) return slot;
                 if (wantPointer) {
+                    // The address, spelled exactly as an explicit `*` spells it (`into`'s
+                    // `Deref` arm is the definition): a member/index chain *is* its own
+                    // address (`&a.f`, never the address of a copy of `a.f` - a callee
+                    // that writes through the pointer has to write into the caller's
+                    // object), a static name is its `GetStaticAddr`, and a name or a
+                    // temporary is `&x` / the address taken at the call.
                     const ast::TypePtr handle = std::make_shared<ast::TypeExpr>(*param);
                     const int bound = freshSlot(ilTypeText(*handle), handle);
-                    emit(IlOpKind::Deref, {bound, slot}); // an address, never a copy
+                    auto deref = std::make_shared<ast::Expr>();
+                    deref->kind = ExprKind::Deref;
+                    deref->pos = argPos;
+                    deref->lhs = argPtr;
+                    into(bound, *deref);
                     return bound;
                 }
                 if (wantShared) {
-                    const int value = haveValue ? slot : readThrough(wanted, slot);
+                    if (!haveValue) return slot; // `&T` from a pointer: the checker reports it
                     const ast::TypePtr box = std::make_shared<ast::TypeExpr>(*param);
                     const int held = freshSlot(ilTypeText(*box), box);
-                    emit(IlOpKind::Box, {held, value}); // `&x` boxes a copy
+                    emit(IlOpKind::Box, {held, slot}); // `&x` boxes a copy
                     return held;
                 }
                 if (haveValue) return slot;
@@ -1120,7 +1137,7 @@ namespace linear {
                 List<int> argTypes;
                 const int plain = packFrom < 0 ? (int) e.args.size() : packFrom;
                 for (int i = 0; i < plain; i++) {
-                    int slot = convertArgument(target, i, *e.args[i], operand(e.args[i]));
+                    int slot = convertArgument(target, i, e.args[i]);
                     args.push_back(slot);
                     argTypes.push_back(operandType(slot, e.args[i]));
                 }

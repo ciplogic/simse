@@ -162,7 +162,7 @@ fun multiCharOperators(): *List<Str> {
 }
 
 fun isReservedWord(view: StrView): Bool {
-    return tableMatch(view, *reservedWordTable, true) > 0
+    return tableMatch(view, reservedWordTable, true) > 0
 }
 
 fun matchSpaces(view: StrView): Int {
@@ -294,7 +294,7 @@ fun matchCharLiteral(view: StrView): Int {
 }
 
 fun matchOperator(view: StrView): Int {
-    val matched: Int = tableMatch(view, *multiCharOperatorTable, false)
+    val matched: Int = tableMatch(view, multiCharOperatorTable, false)
     if (matched > 0) {
         return matched
     }
@@ -312,15 +312,15 @@ fun addRule(rules: *List<TokenMatcher>, tokenKind: TokenKind, match: MatchLenFun
 
 fun makeTokenRules(): List<TokenMatcher> {
     var rules: List<TokenMatcher> = List<TokenMatcher>()
-    addRule(*rules, TokenKind.Comment, matchComment)
-    addRule(*rules, TokenKind.Space, matchSpaces)
-    addRule(*rules, TokenKind.EndOfLine, matchEndOfLine)
-    addRule(*rules, TokenKind.String, matchStringLiteral)
-    addRule(*rules, TokenKind.Character, matchCharLiteral)
-    addRule(*rules, TokenKind.Number, matchNumber)
-    addRule(*rules, TokenKind.ReservedWord, matchReservedWord)
-    addRule(*rules, TokenKind.Identifier, matchIdentifier)
-    addRule(*rules, TokenKind.Operator, matchOperator)
+    addRule(rules, TokenKind.Comment, matchComment)
+    addRule(rules, TokenKind.Space, matchSpaces)
+    addRule(rules, TokenKind.EndOfLine, matchEndOfLine)
+    addRule(rules, TokenKind.String, matchStringLiteral)
+    addRule(rules, TokenKind.Character, matchCharLiteral)
+    addRule(rules, TokenKind.Number, matchNumber)
+    addRule(rules, TokenKind.ReservedWord, matchReservedWord)
+    addRule(rules, TokenKind.Identifier, matchIdentifier)
+    addRule(rules, TokenKind.Operator, matchOperator)
     return rules
 }
 
@@ -412,7 +412,7 @@ var source: Str)
         while (this.pos < this.source.size()) {
             // A raw pointer to the scanner's own `source`; the view must not
             // copy or count the text (see cppsrc/rtl/span.hpp).
-            val view: StrView = spanOfStr(*this.source).slice(this.pos)
+            val view: StrView = spanOfStr(this.source).slice(this.pos)
             var i = 0
             while (i < this.rules.size()) {
                 val rule: TokenMatcher = this.rules[i]

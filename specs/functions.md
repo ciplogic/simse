@@ -126,7 +126,8 @@ converts the argument at the call (`memory-model.md` owns what the handles mean)
 | `*T` | `T` | the argument's **address** - a borrow, no copy |
 | `*T` | `&T` | the reference's pointee |
 | `T` | `*T` or `&T` | a **copy of the pointee** |
-| `&T` | `T` or `*T` | a **copy in a box** - which is what `&x` means |
+| `&T` | `T` | a **copy in a box** - which is what `&x` means |
+| `&T` | `*T` | **nothing**: this is an error (below) |
 
 ```text
 fun addAll(values: *List<Int>): Int { ... }
@@ -140,6 +141,11 @@ sum(*xs)        // the same copy, read through the pointer
 boxed(xs)       // a copy inside the reference
 ```
 
+- **The address is the argument's own place.** `addAll(xs)` borrows `xs`, `f(a[0])`
+  borrows the element, `f(p.field)` the field - never the address of a temporary the
+  compiler made on the way (a callee that writes through the pointer writes into the
+  caller's object - `stress/pointer-place`). A temporary (`f(g())`) is the one case
+  where the address is taken at the call, and it is valid for that call.
 - **This is what lets a parameter change from a copy to a borrow.** An API that finds
   `fun addAll(values: List<Int>)` too expensive can become
   `fun addAll(values: *List<Int>)` and every existing `addAll(xs)` call still compiles
@@ -150,8 +156,23 @@ boxed(xs)       // a copy inside the reference
 - **A `*T` binding is not converted.** `val p: *List<Int> = xs` still writes the `*`:
   a pointer that outlives the expression it points into is asked for explicitly, and
   the convenience above is for a call, whose borrow ends with it.
-- **`&T` never shares what it is given**: it owns a box, so a value (or a pointee) is
-  copied into a fresh one. That is `&x`'s meaning everywhere else in the language.
+- **A raw pointer cannot become a counted reference in place.** `&T` counts a *box*,
+  and a `*T` argument is a pointer to somebody's storage, so there is nothing to count:
+  the call is reported rather than silently copied, because the two spellings differ
+  (a copy of that storage, or a share the language has no box for). The writer says
+  which one they mean, one line before the call:
+
+  ```text
+  fun printRef(v: &Int): Int { ... }
+
+  var v: Int = 1
+  var vptr: *Int = *v
+  printRef(vptr)                 // error: a pointer cannot become a reference in place
+
+  var boxed: &Int = &v           // a reference to a copy of `v`
+  printRef(boxed)                // accepted
+  printRef(v)                    // accepted: the compiler boxes the value
+  ```
 
 ## Extension functions
 

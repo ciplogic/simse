@@ -174,8 +174,11 @@ explicit `cppsrc/compiler/Driver.kt` input.
   instruction too (`Pack`: `listOf<Str>(a, b, c)`, and a call whose last parameter is a
   `List<T>`/`*List<T>` packs its trailing arguments into one - `specs/functions.md`),
   and a call argument whose handle is inferred (a `*T` parameter taking a value's
-  address, a `*T`/`&T` argument read through for a by-value parameter) is one more
-  instruction between the two, never a change of the callee.
+  address - the *place's* address, so a write through the pointer reaches the caller's
+  element or field; a `*T`/`&T` argument read through for a by-value parameter) is one
+  more instruction between the two, never a change of the callee. The one shape the
+  checker refuses is a raw pointer where a counted reference is wanted
+  (`specs/functions.md`, "Handles at a call").
   What a backend still folds is a slot whose
   type the rules cannot name (a `for`'s machine slot, mostly a bare `null`), which is the one
   shape that prints where it is read.

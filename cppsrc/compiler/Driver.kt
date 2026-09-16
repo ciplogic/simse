@@ -47,12 +47,12 @@ fun driverAppendNamed(target: *AstXmlNode, source: *AstXmlNode, role: AstNodeKin
         }
         i = i + 1
     }
-    xmlAddChildren(target, *picked)
+    xmlAddChildren(target, picked)
 }
 
 fun driverAppendDecls(target: *AstXmlNode, source: *AstXmlNode): Unit {
     val decls: List<AstXmlNode> = xmlDecls(source)
-    xmlAddChildren(target, *decls)
+    xmlAddChildren(target, decls)
 }
 
 // ---- scanning / parsing ---------------------------------------------------
@@ -238,8 +238,8 @@ fun main(args: List<Str>): Int {
         preludeCanon.append(pathCanonical(preludeFiles[p]))
         preludeNames.append(preludeFiles[p])
         preludeModules.append(parsedPrelude.Value)
-        driverAppendNamed(*mergedPrelude, *parsedPrelude.Value, AstNodeKind.Import)
-        driverAppendDecls(*mergedPrelude, *parsedPrelude.Value)
+        driverAppendNamed(mergedPrelude, parsedPrelude.Value, AstNodeKind.Import)
+        driverAppendDecls(mergedPrelude, parsedPrelude.Value)
         p = p + 1
     }
     val hasPrelude: Bool = preludeFiles.size() > 0

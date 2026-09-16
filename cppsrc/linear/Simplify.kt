@@ -43,7 +43,7 @@ fun linIsBlock(stmt: *AstXmlNode): Bool {
 
 // The statements of a `StmtBlock` (its `Body` child's `Stmt` children).
 fun linBlockStmts(stmt: *AstXmlNode): List<AstXmlNode> {
-    return xmlChildren(*xmlChild(stmt, AstNodeKind.Body), AstNodeKind.Stmt)
+    return xmlChildren(xmlChild(stmt, AstNodeKind.Body), AstNodeKind.Stmt)
 }
 
 // A one-element list, for `exprReplaceRole`.
@@ -121,8 +121,8 @@ fun linItemCrosses(
     stmts: *List<AstXmlNode>, bodies: *List<List<AstXmlNode>>, p: Int, at: Int,
     decls: *List<Int>, labelNames: *List<Str>, labelAt: *List<Int>
 ): Bool {
-    if (!linIsBlock(*stmts[p])) {
-        return linStmtCrosses(*stmts[p], at, decls, labelNames, labelAt)
+    if (!linIsBlock(stmts[p])) {
+        return linStmtCrosses(stmts[p], at, decls, labelNames, labelAt)
     }
     for (*item in bodies[p]) {
         if (linStmtCrosses(item, at, decls, labelNames, labelAt)) {
@@ -150,7 +150,7 @@ fun linSpliceIsSafe(stmts: *List<AstXmlNode>, bodies: *List<List<AstXmlNode>>, i
     var decls: List<Int> = List<Int>()
     var k: Int = 0
     while (k < len) {
-        if (xmlKind(*body[k]) == AstNodeCategory.StmtVarDecl) {
+        if (xmlKind(body[k]) == AstNodeCategory.StmtVarDecl) {
             decls.append(i + k)
         }
         k = k + 1
@@ -164,16 +164,16 @@ fun linSpliceIsSafe(stmts: *List<AstXmlNode>, bodies: *List<List<AstXmlNode>>, i
     var labelAt: List<Int> = List<Int>()
     var p: Int = 0
     while (p < stmts.size()) {
-        if (p != i && linIsLabel(*stmts[p])) {
-            labelNames.append(xmlAttr(*stmts[p], AstNodeAttributeKind.Name))
+        if (p != i && linIsLabel(stmts[p])) {
+            labelNames.append(xmlAttr(stmts[p], AstNodeAttributeKind.Name))
             labelAt.append(linMergedIndex(p, i, len))
         }
         p = p + 1
     }
     k = 0
     while (k < len) {
-        if (linIsLabel(*body[k])) {
-            labelNames.append(xmlAttr(*body[k], AstNodeAttributeKind.Name))
+        if (linIsLabel(body[k])) {
+            labelNames.append(xmlAttr(body[k], AstNodeAttributeKind.Name))
             labelAt.append(i + k)
         }
         k = k + 1
@@ -183,7 +183,7 @@ fun linSpliceIsSafe(stmts: *List<AstXmlNode>, bodies: *List<List<AstXmlNode>>, i
     p = 0
     while (p < stmts.size()) {
         if (p != i
-            && linItemCrosses(stmts, bodies, p, linMergedIndex(p, i, len), *decls, *labelNames, *labelAt)
+            && linItemCrosses(stmts, bodies, p, linMergedIndex(p, i, len), decls, labelNames, labelAt)
         ) {
             return false
         }
@@ -191,7 +191,7 @@ fun linSpliceIsSafe(stmts: *List<AstXmlNode>, bodies: *List<List<AstXmlNode>>, i
     }
     k = 0
     while (k < len) {
-        if (linStmtCrosses(*body[k], i + k, *decls, *labelNames, *labelAt)) {
+        if (linStmtCrosses(body[k], i + k, decls, labelNames, labelAt)) {
             return false
         }
         k = k + 1
@@ -212,7 +212,7 @@ fun linJumpsTo(stmts: *List<AstXmlNode>, name: Str): Bool {
         }
         if (linIsBlock(stmt)) {
             val body: List<AstXmlNode> = linBlockStmts(stmt)
-            if (linJumpsTo(*body, name)) {
+            if (linJumpsTo(body, name)) {
                 return true
             }
         }
@@ -233,7 +233,7 @@ fun linInvertedJump(jump: *AstXmlNode, target: Str): AstXmlNode {
         AstNodeAttribute(AstNodeAttributeKind.Name, target)
     )
     var node: AstXmlNode = AstXmlNode(AstNodeKind.Stmt, kind, attrs, Array<AstXmlNode>())
-    xmlAddChild(*node, xmlChild(jump, AstNodeKind.Cond))
+    xmlAddChild(node, xmlChild(jump, AstNodeKind.Cond))
     return node
 }
 
@@ -245,28 +245,28 @@ data class LinSimplifier(
         var i: Int = 0
         while (i < stmts.size()) {
             val stmt: AstXmlNode = stmts[i]
-            if ((linIsGoto(*stmt) || linIsCondJump(*stmt)) && i + 1 < stmts.size()
-                && linIsLabel(*stmts[i + 1])
-                && xmlAttr(*stmts[i + 1], AstNodeAttributeKind.Name) == xmlAttr(*stmt, AstNodeAttributeKind.Name)
+            if ((linIsGoto(stmt) || linIsCondJump(stmt)) && i + 1 < stmts.size()
+                && linIsLabel(stmts[i + 1])
+                && xmlAttr(stmts[i + 1], AstNodeAttributeKind.Name) == xmlAttr(stmt, AstNodeAttributeKind.Name)
             ) {
                 // A jump to the statement right after it does nothing.
                 this.changed = true
                 i = i + 1
-            } else if (linIsCondJump(*stmt) && i + 2 < stmts.size() && linIsGoto(*stmts[i + 1])
-                && linIsLabel(*stmts[i + 2])
-                && xmlAttr(*stmts[i + 2], AstNodeAttributeKind.Name) == xmlAttr(*stmt, AstNodeAttributeKind.Name)
+            } else if (linIsCondJump(stmt) && i + 2 < stmts.size() && linIsGoto(stmts[i + 1])
+                && linIsLabel(stmts[i + 2])
+                && xmlAttr(stmts[i + 2], AstNodeAttributeKind.Name) == xmlAttr(stmt, AstNodeAttributeKind.Name)
             ) {
                 // `ifTrue (c) goto A; goto B; A:` is `ifFalse (c) goto B;`. The
                 // label A stays in the stream and is dropped below if nothing
                 // else jumps to it.
-                out.append(linInvertedJump(*stmt, xmlAttr(*stmts[i + 1], AstNodeAttributeKind.Name)))
+                out.append(linInvertedJump(stmt, xmlAttr(stmts[i + 1], AstNodeAttributeKind.Name)))
                 this.changed = true
                 i = i + 2
             } else {
                 out.append(copy(stmt))
                 // Nothing before the next label can be reached.
-                if (linIsTerminator(*stmt)) {
-                    while (i + 1 < stmts.size() && !linIsLabel(*stmts[i + 1])) {
+                if (linIsTerminator(stmt)) {
+                    while (i + 1 < stmts.size() && !linIsLabel(stmts[i + 1])) {
                         this.changed = true
                         i = i + 1
                     }
@@ -282,7 +282,7 @@ data class LinSimplifier(
         var i: Int = 0
         while (i < stmts.size()) {
             val stmt: AstXmlNode = stmts[i]
-            if (linIsLabel(*stmt) && !linJumpsTo(stmts, xmlAttr(*stmt, AstNodeAttributeKind.Name))) {
+            if (linIsLabel(stmt) && !linJumpsTo(stmts, xmlAttr(stmt, AstNodeAttributeKind.Name))) {
                 this.changed = true
             } else {
                 out.append(copy(stmt))
@@ -307,9 +307,9 @@ data class LinSimplifier(
         var bodyList: List<AstXmlNode> = List<AstXmlNode>()
         var i: Int = 0
         while (i < count) {
-            if (linIsBlock(*stmts[i])) {
-                bodyList = linBlockStmts(*stmts[i])
-                bodies[i] = this.flattenPass(*bodyList)
+            if (linIsBlock(stmts[i])) {
+                bodyList = linBlockStmts(stmts[i])
+                bodies[i] = this.flattenPass(bodyList)
             }
             i = i + 1
         }
@@ -317,7 +317,7 @@ data class LinSimplifier(
         var splicing: List<Bool> = List<Bool>(count, false)
         i = 0
         while (i < count) {
-            if (linIsBlock(*stmts[i]) && linSpliceIsSafe(stmts, *bodies, i)) {
+            if (linIsBlock(stmts[i]) && linSpliceIsSafe(stmts, bodies, i)) {
                 splicing[i] = true
                 this.changed = true
             }
@@ -333,14 +333,14 @@ data class LinSimplifier(
                     out.append(bodies[i][k])
                     k = k + 1
                 }
-            } else if (linIsBlock(*stmts[i])) {
+            } else if (linIsBlock(stmts[i])) {
                 // The block stays: it exists because a declaration must not be spliced
                 // across a jump. This is the only node this pass builds.
                 val bodyNode: AstXmlNode =
-                    exprLike(*xmlChild(*stmts[i], AstNodeKind.Body), *bodies[i])
-                out.append(exprReplaceRole(*stmts[i], AstNodeKind.Body, *linOne(bodyNode)))
+                    exprLike(xmlChild(stmts[i], AstNodeKind.Body), bodies[i])
+                out.append(exprReplaceRole(stmts[i], AstNodeKind.Body, linOne(bodyNode)))
             } else {
-                out.append(copy(*stmts[i]))
+                out.append(copy(stmts[i]))
             }
             i = i + 1
         }
@@ -355,8 +355,8 @@ data class LinSimplifier(
         while (this.changed && guard < 16) {
             guard = guard + 1
             this.changed = false
-            current = this.prunePass(*current)
-            current = this.labelPass(*current)
+            current = this.prunePass(current)
+            current = this.labelPass(current)
             any = any || this.changed
         }
         return LinLowered(current, any)
@@ -427,16 +427,16 @@ fun simNameAttrs(like: *AstXmlNode, name: Str): List<AstNodeAttribute> {
 // must not rewrite it, and the lambda's own pass is what names it.
 fun simBoundNames(body: AstXmlNode, bound: List<Str>): List<Str> {
     var names: List<Str> = bound
-    val stmts: List<AstXmlNode> = xmlChildren(*body, AstNodeKind.Stmt)
+    val stmts: List<AstXmlNode> = xmlChildren(body, AstNodeKind.Stmt)
     var i: Int = 0
     while (i < stmts.size()) {
         val stmt: AstXmlNode = stmts[i]
-        if (xmlKind(*stmt) == AstNodeCategory.StmtVarDecl) {
-            names.append(xmlAttr(*stmt, AstNodeAttributeKind.Name))
+        if (xmlKind(stmt) == AstNodeCategory.StmtVarDecl) {
+            names.append(xmlAttr(stmt, AstNodeAttributeKind.Name))
         }
-        names = simBoundNames(xmlChild(*stmt, AstNodeKind.Body), names)
-        names = simBoundNames(xmlChild(*stmt, AstNodeKind.Then), names)
-        names = simBoundNames(xmlChild(*stmt, AstNodeKind.Else), names)
+        names = simBoundNames(xmlChild(stmt, AstNodeKind.Body), names)
+        names = simBoundNames(xmlChild(stmt, AstNodeKind.Then), names)
+        names = simBoundNames(xmlChild(stmt, AstNodeKind.Else), names)
         i = i + 1
     }
     return names
@@ -485,8 +485,8 @@ data class SimRenamer(
         while (i < stmts.size()) {
             val stmt: AstXmlNode = stmts[i]
             var name: Str = ""
-            if (xmlKind(*stmt) == AstNodeCategory.StmtVarDecl) {
-                val original: Str = xmlAttr(*stmt, AstNodeAttributeKind.Name)
+            if (xmlKind(stmt) == AstNodeCategory.StmtVarDecl) {
+                val original: Str = xmlAttr(stmt, AstNodeAttributeKind.Name)
                 name = original
                 if (this.used.has(original)) {
                     name = this.shadowName(original)
@@ -503,7 +503,7 @@ data class SimRenamer(
         while (i < stmts.size()) {
             var stmt: AstXmlNode = this.rewrite(stmts[i], true)
             if (emitted[i] != "") {
-                stmt.attributes = simNameAttrs(*stmt, emitted[i])
+                stmt.attributes = simNameAttrs(stmt, emitted[i])
             }
             out.append(stmt)
             i = i + 1
@@ -530,7 +530,7 @@ data class SimRenamer(
     // One node: its expressions rewritten, and the statement lists inside it named (or, in
     // a lambda body, rewritten for uses only).
     fun rewrite(node: AstXmlNode, nameNested: Bool): AstXmlNode {
-        val kind: AstNodeCategory = xmlKind(*node)
+        val kind: AstNodeCategory = xmlKind(node)
         val masked: Bool = kind == AstNodeCategory.ExprLambda
         // Inside a lambda body this body names *nothing*: the lambda is a body of its own,
         // so its declarations are its own pass's to name (the same rule the C++ ring's
@@ -547,13 +547,13 @@ data class SimRenamer(
             // to name - but a name it does not bind is captured from *this* body, and that
             // is the name the scopes decide.
             var inner: SimRenameScope = SimRenameScope(Dictionary<Str, Str>())
-            val params: List<Str> = xmlLambdaParams(*node)
+            val params: List<Str> = xmlLambdaParams(node)
             var p: Int = 0
             while (p < params.size()) {
                 inner.renamed.insert(params[p], params[p])
                 p = p + 1
             }
-            val names: List<Str> = simBoundNames(xmlChild(*node, AstNodeKind.Body), List<Str>())
+            val names: List<Str> = simBoundNames(xmlChild(node, AstNodeKind.Body), List<Str>())
             p = 0
             while (p < names.size()) {
                 inner.renamed.insert(names[p], names[p])
@@ -568,12 +568,12 @@ data class SimRenamer(
             if (child.name == AstNodeKind.Body || child.name == AstNodeKind.Then
                 || child.name == AstNodeKind.Else
             ) {
-                val stmts: List<AstXmlNode> = xmlChildren(*child, AstNodeKind.Stmt)
+                val stmts: List<AstXmlNode> = xmlChildren(child, AstNodeKind.Stmt)
                 if (stmts.size() > 0) {
                     kids.append(
                         exprReplaceRole(
-                            *child, AstNodeKind.Stmt,
-                            *this.listOf(stmts, nested)
+                            child, AstNodeKind.Stmt,
+                            this.listOf(stmts, nested)
                         )
                     )
                 } else {
@@ -584,11 +584,11 @@ data class SimRenamer(
             }
             i = i + 1
         }
-        var out: AstXmlNode = exprLike(*node, *kids)
+        var out: AstXmlNode = exprLike(node, kids)
         if (kind == AstNodeCategory.ExprName) {
-            val mapped: Str = this.renamedTo(xmlAttr(*node, AstNodeAttributeKind.Name))
+            val mapped: Str = this.renamedTo(xmlAttr(node, AstNodeAttributeKind.Name))
             if (mapped != "") {
-                out.attributes = simNameAttrs(*node, mapped)
+                out.attributes = simNameAttrs(node, mapped)
             }
         }
         if (masked) {
@@ -616,10 +616,10 @@ fun linRenameShadowed(body: List<AstXmlNode>, reserved: List<Str>): List<AstXmlN
 // `..T` has no spelling at all, and the inference leaves some slots partly unknown (`*?`:
 // a pointer to nothing it could name).
 fun linIsSpellableType(typeNode: AstXmlNode): Bool {
-    val kind: AstNodeCategory = xmlKind(*typeNode)
+    val kind: AstNodeCategory = xmlKind(typeNode)
     when (kind) {
         AstNodeCategory.TypeNamed, AstNodeCategory.TypeGeneric -> {
-            return xmlAttr(*typeNode, AstNodeAttributeKind.Name) != ""
+            return xmlAttr(typeNode, AstNodeAttributeKind.Name) != ""
         }
 
         AstNodeCategory.TypeIntLit -> {
@@ -627,14 +627,14 @@ fun linIsSpellableType(typeNode: AstXmlNode): Bool {
         }
 
         AstNodeCategory.TypeReference, AstNodeCategory.TypePointer -> {
-            return linIsSpellableType(xmlChild(*typeNode, AstNodeKind.Inner))
+            return linIsSpellableType(xmlChild(typeNode, AstNodeKind.Inner))
         }
 
         AstNodeCategory.TypeFunction -> {
-            if (!linIsSpellableType(xmlChild(*typeNode, AstNodeKind.ReturnType))) {
+            if (!linIsSpellableType(xmlChild(typeNode, AstNodeKind.ReturnType))) {
                 return false
             }
-            val params: List<AstXmlNode> = xmlChildren(*typeNode, AstNodeKind.ParamType)
+            val params: List<AstXmlNode> = xmlChildren(typeNode, AstNodeKind.ParamType)
             var i: Int = 0
             while (i < params.size()) {
                 if (!linIsSpellableType(params[i])) {
@@ -666,32 +666,32 @@ fun linHoistInList(stmts: *List<AstXmlNode>, decls: *List<AstXmlNode>, atTop: Bo
     var i: Int = 0
     while (i < stmts.size()) {
         val stmt: AstXmlNode = stmts[i]
-        if (linIsHoistable(*stmt)) {
-            val name: Str = xmlAttr(*stmt, AstNodeAttributeKind.Name)
-            val init: AstXmlNode = xmlChild(*stmt, AstNodeKind.Init)
-            if (!xmlIsEmpty(*init)) {
-                var assignment: AstXmlNode = linStmt(AstNodeCategory.StmtAssign, xmlLine(*stmt), xmlColumn(*stmt))
+        if (linIsHoistable(stmt)) {
+            val name: Str = xmlAttr(stmt, AstNodeAttributeKind.Name)
+            val init: AstXmlNode = xmlChild(stmt, AstNodeKind.Init)
+            if (!xmlIsEmpty(init)) {
+                var assignment: AstXmlNode = linStmt(AstNodeCategory.StmtAssign, xmlLine(stmt), xmlColumn(stmt))
                 assignment.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Op, "="))
-                xmlAddChild(*assignment, linName(AstNodeKind.Target, name, xmlLine(*stmt), xmlColumn(*stmt)))
-                xmlAddChild(*assignment, linRole(*init, AstNodeKind.Value))
+                xmlAddChild(assignment, linName(AstNodeKind.Target, name, xmlLine(stmt), xmlColumn(stmt)))
+                xmlAddChild(assignment, linRole(init, AstNodeKind.Value))
                 out.append(assignment)
 
                 val none: List<AstXmlNode> = List<AstXmlNode>()
-                decls.append(exprReplaceRole(*stmt, AstNodeKind.Init, *none))
+                decls.append(exprReplaceRole(stmt, AstNodeKind.Init, none))
             } else if (!atTop) {
                 // A declaration with nothing to initialize: it moves to the top for the
                 // same reason as the rest (a jump may not skip it - the default
                 // construction of a `Str` is an initialization too), and nothing is left
                 // where it stood.
                 val none: List<AstXmlNode> = List<AstXmlNode>()
-                decls.append(exprReplaceRole(*stmt, AstNodeKind.Init, *none))
+                decls.append(exprReplaceRole(stmt, AstNodeKind.Init, none))
             } else {
                 out.append(copy(stmt))
             }
-        } else if (linIsBlock(*stmt)) {
-            val inner: List<AstXmlNode> = linHoistInList(*linBlockStmts(*stmt), decls, false)
-            val bodyNode: AstXmlNode = exprLike(*xmlChild(*stmt, AstNodeKind.Body), *inner)
-            out.append(exprReplaceRole(*stmt, AstNodeKind.Body, *linOne(bodyNode)))
+        } else if (linIsBlock(stmt)) {
+            val inner: List<AstXmlNode> = linHoistInList(linBlockStmts(stmt), decls, false)
+            val bodyNode: AstXmlNode = exprLike(xmlChild(stmt, AstNodeKind.Body), inner)
+            out.append(exprReplaceRole(stmt, AstNodeKind.Body, linOne(bodyNode)))
         } else {
             out.append(copy(stmt))
         }
@@ -702,7 +702,7 @@ fun linHoistInList(stmts: *List<AstXmlNode>, decls: *List<AstXmlNode>, atTop: Bo
 
 fun linHoistSlots(body: List<AstXmlNode>): LinLowered {
     var decls: List<AstXmlNode> = List<AstXmlNode>()
-    val rewritten: List<AstXmlNode> = linHoistInList(*body, *decls, true)
+    val rewritten: List<AstXmlNode> = linHoistInList(body, decls, true)
     if (decls.size() == 0) {
         return LinLowered(rewritten, false)
     }
@@ -741,7 +741,7 @@ fun linFinishForEmission(body: List<AstXmlNode>, reserved: List<Str>): List<AstX
         val simplified: LinLowered = linSimplifyBody(current)
         current = simplified.body
         canChange = canChange || simplified.changed
-        val folded: LinLowered = linFlattenBlocks(*current)
+        val folded: LinLowered = linFlattenBlocks(current)
         current = folded.body
         canChange = canChange || folded.changed
     }

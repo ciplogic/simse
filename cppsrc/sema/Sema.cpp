@@ -613,6 +613,37 @@ namespace sema {
                 checkInstantiationArity(expr.text, argCount, expr.pos);
             }
 
+            // What the checker has to say about one argument of an accepted call. One rule
+            // so far: a **raw pointer cannot become a counted reference in place**. The
+            // language shares a *box* (`&x` is the counted reference to a copy of `x`),
+            // and a `*T` argument is a pointer to somebody's storage - the compiler would
+            // have to guess whether the call wants a copy of that storage or a share of a
+            // box that does not exist. So the writer says it, one line before the call:
+            //
+            //     var boxed: &Int = &v      // a reference to a copy of v
+            //     printRef(boxed)
+            //
+            // A report rather than a silent copy, because the two spellings mean
+            // different things. Every *other* handle conversion is inferred
+            // (`convertArgument` in the extractor, `specs/functions.md`).
+            void checkHandleArgument(const Str &callee, const ast::Decl &function, int index,
+                                     const ast::Expr &arg) {
+                if (index >= (int) function.params.size()) return;
+                const ast::TypeExpr *param = function.params[index].type.get();
+                if (param == nullptr) return;
+                if (param->kind == ast::TypeKind::Pointer) return; // a borrow takes anything
+                if (!sema::isHandleType(param)) return;            // a by-value parameter reads through
+                const ast::TypePtr actual = exprType(arg);
+                if (!actual || actual->kind != ast::TypeKind::Pointer) return;
+                const ast::TypeExpr *pointee = sema::pointeeOf(param);
+                diag(arg.pos, "'" + callee + "' takes a counted reference ('&"
+                              + (pointee ? ast::typeToString(*pointee) : Str("T"))
+                              + "') and the argument is a raw pointer: a pointer cannot become a"
+                                " reference in place - make a reference variable one line before"
+                                " the call (var ref: &"
+                              + (pointee ? ast::typeToString(*pointee) : Str("T")) + " = &value)");
+            }
+
             void checkCallArity(const ast::Expr &call) {
                 if (!call.lhs) return;
                 bool generic = call.lhs->kind == ExprKind::GenericName;
@@ -641,7 +672,12 @@ namespace sema {
                 for (const ast::Decl *function: it->second) {
                     if (generic && (int) function->functionTypeParams.size() != typeArgCount) continue;
                     const int paramCount = (int) function->params.size();
-                    if (paramCount == argCount) return;
+                    if (paramCount == argCount) {
+                        for (int i = 0; i < argCount; i++) {
+                            checkHandleArgument(name, *function, i, *call.args[i]);
+                        }
+                        return;
+                    }
                     // The trailing arguments may *pack* into a last parameter that is a
                     // list (`fun addAll(values: *List<Int>)` called as `addAll(1, 2, 3)`),
                     // so a call with more arguments than parameters is legal when the

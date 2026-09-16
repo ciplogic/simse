@@ -265,12 +265,14 @@ fun xmlColumn(node: *AstXmlNode): Int {
 
 // The first child whose role is `role`, or an empty node.
 fun xmlChild(node: *AstXmlNode, role: AstNodeKind): AstXmlNode {
-    var i: Int = 0
-    while (i < node.Children.count()) {
-        if (node.Children[i].name == role) {
-            return node.Children[i]
+    // The *pointer* form on purpose: `for (child in node.Children)` binds a copy of
+    // each element, and `Children` is a reference-counted `Array` - the count churn
+    // per element per lookup is the difference between a lookup and a copy, in the
+    // compiler's hottest helper. `copy(child)` reads the one element that matched.
+    for (*child in node.Children) {
+        if (child.name == role) {
+            return copy(child)
         }
-        i = i + 1
     }
     return xmlEmptyNode()
 }
@@ -278,12 +280,10 @@ fun xmlChild(node: *AstXmlNode, role: AstNodeKind): AstXmlNode {
 // Every child whose role is `role`, in order.
 fun xmlChildren(node: *AstXmlNode, role: AstNodeKind): List<AstXmlNode> {
     var out: List<AstXmlNode> = List<AstXmlNode>()
-    var i: Int = 0
-    while (i < node.Children.count()) {
-        if (node.Children[i].name == role) {
-            out.append(node.Children[i])
+    for (*child in node.Children) {
+        if (child.name == role) {
+            out.append(copy(child))
         }
-        i = i + 1
     }
     return out
 }
@@ -327,12 +327,10 @@ fun xmlIsDecl(node: *AstXmlNode): Bool {
 // `Var` is a file-level `var`/`val`: static storage (specs/statics.md).
 fun xmlDecls(module: *AstXmlNode): List<AstXmlNode> {
     var out: List<AstXmlNode> = List<AstXmlNode>()
-    var i: Int = 0
-    while (i < module.Children.count()) {
-        if (xmlIsDecl(*module.Children[i])) {
-            out.append(module.Children[i])
+    for (*child in module.Children) {
+        if (xmlIsDecl(child)) {
+            out.append(copy(child))
         }
-        i = i + 1
     }
     return out
 }

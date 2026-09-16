@@ -106,7 +106,7 @@ fun yldWithChildren(like: *AstXmlNode, children: *List<AstXmlNode>): AstXmlNode 
     var i: Int = 0
     while (i < children.size()) {
         var child: AstXmlNode = copy(children[i])
-        xmlAddChild(*node, child)
+        xmlAddChild(node, child)
         i = i + 1
     }
     return node
@@ -132,7 +132,7 @@ fun yldMember(base: AstXmlNode, field: Str): AstXmlNode {
     node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, field))
     var receiver: AstXmlNode = copy(base)
     receiver.name = AstNodeKind.Receiver
-    xmlAddChild(*node, receiver)
+    xmlAddChild(node, receiver)
     return node
 }
 
@@ -141,10 +141,10 @@ fun yldBinary(op: Str, lhs: AstXmlNode, rhs: AstXmlNode): AstXmlNode {
     node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Op, op))
     var left: AstXmlNode = copy(lhs)
     left.name = AstNodeKind.Lhs
-    xmlAddChild(*node, left)
+    xmlAddChild(node, left)
     var right: AstXmlNode = copy(rhs)
     right.name = AstNodeKind.Rhs
-    xmlAddChild(*node, right)
+    xmlAddChild(node, right)
     return node
 }
 
@@ -152,7 +152,7 @@ fun yldDeref(inner: AstXmlNode): AstXmlNode {
     var node: AstXmlNode = yldExpr(AstNodeCategory.ExprDeref)
     var operand: AstXmlNode = copy(inner)
     operand.name = AstNodeKind.Operand
-    xmlAddChild(*node, operand)
+    xmlAddChild(node, operand)
     return node
 }
 
@@ -160,12 +160,12 @@ fun yldCall(callee: AstXmlNode, args: *List<AstXmlNode>): AstXmlNode {
     var node: AstXmlNode = yldExpr(AstNodeCategory.ExprCall)
     var target: AstXmlNode = copy(callee)
     target.name = AstNodeKind.Callee
-    xmlAddChild(*node, target)
+    xmlAddChild(node, target)
     var i: Int = 0
     while (i < args.size()) {
         var arg: AstXmlNode = copy(args[i])
         arg.name = AstNodeKind.Arg
-        xmlAddChild(*node, arg)
+        xmlAddChild(node, arg)
         i = i + 1
     }
     return node
@@ -178,7 +178,7 @@ fun yldOptionalCall(elementType: AstXmlNode, method: Str, args: *List<AstXmlNode
     base.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, "Opt"))
     var typeArg: AstXmlNode = copy(elementType)
     typeArg.name = AstNodeKind.TypeArg
-    xmlAddChild(*base, typeArg)
+    xmlAddChild(base, typeArg)
     return yldCall(yldMember(base, method), args)
 }
 
@@ -187,10 +187,10 @@ fun yldAssign(target: AstXmlNode, value: AstXmlNode): AstXmlNode {
     node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Op, "="))
     var targetNode: AstXmlNode = copy(target)
     targetNode.name = AstNodeKind.Target
-    xmlAddChild(*node, targetNode)
+    xmlAddChild(node, targetNode)
     var valueNode: AstXmlNode = copy(value)
     valueNode.name = AstNodeKind.Value
-    xmlAddChild(*node, valueNode)
+    xmlAddChild(node, valueNode)
     return node
 }
 
@@ -198,7 +198,7 @@ fun yldReturn(value: AstXmlNode): AstXmlNode {
     var node: AstXmlNode = yldStmt(AstNodeCategory.StmtReturn)
     var valueNode: AstXmlNode = copy(value)
     valueNode.name = AstNodeKind.Value
-    xmlAddChild(*node, valueNode)
+    xmlAddChild(node, valueNode)
     return node
 }
 
@@ -206,7 +206,7 @@ fun yldExprStmt(expr: AstXmlNode): AstXmlNode {
     var node: AstXmlNode = yldStmt(AstNodeCategory.StmtExprStmt)
     var exprNode: AstXmlNode = copy(expr)
     exprNode.name = AstNodeKind.Expr
-    xmlAddChild(*node, exprNode)
+    xmlAddChild(node, exprNode)
     return node
 }
 
@@ -229,7 +229,7 @@ fun yldIsLocalDeclaration(stmt: *AstXmlNode): Bool {
     if (!linIsSlotName(xmlAttr(stmt, AstNodeAttributeKind.Name))) {
         return false
     }
-    return xmlIsEmpty(*xmlChild(stmt, AstNodeKind.Init))
+    return xmlIsEmpty(xmlChild(stmt, AstNodeKind.Init))
 }
 
 // The machine's field for the receiver of an extension function (`_sm_self`). The
@@ -242,7 +242,7 @@ fun yldReceiverField(): Str {
 
 // `if (cond) goto label;`
 fun yldJumpWhen(cond: AstXmlNode, label: Str): AstXmlNode {
-    return linCondJump(AstNodeCategory.StmtIfTrue, *cond, label, 0, 0)
+    return linCondJump(AstNodeCategory.StmtIfTrue, cond, label, 0, 0)
 }
 
 // The labels this pass makes, kept apart from the lowering's `L<n>`.
@@ -280,7 +280,7 @@ var byReference: Bool
 
     fun run(body: List<AstXmlNode>): Yielded {
         var yielded: Yielded = Yielded(List<YldField>(), List<YldMethod>(), "")
-        this.collectFields(body, *yielded)
+        this.collectFields(body, yielded)
         if (!this.error.isEmpty()) {
             yielded.error = this.error
             return yielded
@@ -306,8 +306,8 @@ var byReference: Bool
         this.fieldOrder.append(yldBranchField())
 
         val receiver: AstXmlNode = xmlChild(this.decl, AstNodeKind.Receiver)
-        if (!xmlIsEmpty(*receiver)) {
-            this.fieldTypes.insert(yldReceiverField(), ilReceiverTypeNode(*receiver))
+        if (!xmlIsEmpty(receiver)) {
+            this.fieldTypes.insert(yldReceiverField(), ilReceiverTypeNode(receiver))
             this.fieldOrder.append(yldReceiverField())
         }
 
@@ -328,7 +328,7 @@ var byReference: Bool
                 continue
             }
             val typeNode: AstXmlNode = xmlChild(param, AstNodeKind.Type)
-            if (xmlIsEmpty(*typeNode)) {
+            if (xmlIsEmpty(typeNode)) {
                 this.fail("yield: the parameter '" + name + "' has no type")
                 return
             }
@@ -358,7 +358,7 @@ var byReference: Bool
                 val name: Str = xmlAttr(stmt, AstNodeAttributeKind.Name)
                 if (!linIsSlotName(name) && !this.fieldTypes.has(name)) {
                     val typeNode: AstXmlNode = xmlChild(stmt, AstNodeKind.Type)
-                    if (xmlIsEmpty(*typeNode)) {
+                    if (xmlIsEmpty(typeNode)) {
                         // A local that lives across a yield must be a field, and a field
                         // needs a type - the type pass spells it, so an untyped one here is
                         // a gap in the body, not in this pass. One gap has a name of its own:
@@ -398,7 +398,7 @@ var byReference: Bool
         var rewritten: List<AstXmlNode> = List<AstXmlNode>()
         var i: Int = 0
         while (i < body.size()) {
-            this.statements(*body[i], *rewritten)
+            this.statements(body[i], rewritten)
             i = i + 1
         }
         var methodBody: List<AstXmlNode> = List<AstXmlNode>()
@@ -409,7 +409,7 @@ var byReference: Bool
         // is `T`, i.e. non-trivial for `Str` and friends. So the dispatcher goes *after*
         // them.
         var first: Int = 0
-        while (first < rewritten.size() && yldIsLocalDeclaration(*rewritten[first])) {
+        while (first < rewritten.size() && yldIsLocalDeclaration(rewritten[first])) {
             methodBody.append(rewritten[first])
             first = first + 1
         }
@@ -450,7 +450,7 @@ var byReference: Bool
         if (this.byReference) {
             return yldBoolLiteral(false)
         }
-        return yldOptionalCall(this.elementType, "none", *List<AstXmlNode>())
+        return yldOptionalCall(this.elementType, "none", List<AstXmlNode>())
     }
 
     fun statements(stmt: *AstXmlNode, out: *List<AstXmlNode>): Unit {
@@ -472,7 +472,7 @@ var byReference: Bool
                     var args: List<AstXmlNode> = List<AstXmlNode>()
                     args.append(value)
                     out.append(yldAssign(yldThisMember(yldBranchField()), yldIntLiteral(branch)))
-                    out.append(yldReturn(yldOptionalCall(this.elementType, "some", *args)))
+                    out.append(yldReturn(yldOptionalCall(this.elementType, "some", args)))
                 }
                 out.append(linLabel(yldLabel(branch), 0, 0))
                 return
@@ -483,7 +483,7 @@ var byReference: Bool
                 // value (which the `..T` signature does not allow) is still evaluated, so
                 // nothing silently disappears.
                 val returnValue: AstXmlNode = xmlChild(stmt, AstNodeKind.Value)
-                if (!xmlIsEmpty(*returnValue)) {
+                if (!xmlIsEmpty(returnValue)) {
                     out.append(yldExprStmt(this.expr(returnValue)))
                 }
                 out.append(yldAssign(yldThisMember(yldBranchField()), yldIntLiteral(-1)))
@@ -500,23 +500,23 @@ var byReference: Bool
                     // per-statement, so it is re-initialised on every entry and never has to
                     // survive a yield.
                     var children: List<AstXmlNode> = List<AstXmlNode>()
-                    if (!xmlIsEmpty(*declared)) {
+                    if (!xmlIsEmpty(declared)) {
                         var declaredChild: AstXmlNode = copy(declared)
                         declaredChild.name = AstNodeKind.Type
                         children.append(declaredChild)
                     }
-                    if (!xmlIsEmpty(*init)) {
+                    if (!xmlIsEmpty(init)) {
                         var initChild: AstXmlNode = this.expr(init)
                         initChild.name = AstNodeKind.Init
                         children.append(initChild)
                     }
-                    out.append(yldWithChildren(stmt, *children))
+                    out.append(yldWithChildren(stmt, children))
                     return
                 }
                 // Everything else is a field now; its initializer runs where it was, which is
                 // on the way to the first yield (a machine that resumes past it does not run it
                 // again).
-                if (!xmlIsEmpty(*init)) {
+                if (!xmlIsEmpty(init)) {
                     out.append(yldAssign(yldThisMember(name), this.expr(init)))
                 }
                 return
@@ -530,7 +530,7 @@ var byReference: Bool
                 var value: AstXmlNode = this.expr(xmlChild(stmt, AstNodeKind.Value))
                 value.name = AstNodeKind.Value
                 children.append(value)
-                out.append(yldWithChildren(stmt, *children))
+                out.append(yldWithChildren(stmt, children))
                 return
             }
 
@@ -539,7 +539,7 @@ var byReference: Bool
                 var inner: AstXmlNode = this.expr(xmlChild(stmt, AstNodeKind.Expr))
                 inner.name = AstNodeKind.Expr
                 children.append(inner)
-                out.append(yldWithChildren(stmt, *children))
+                out.append(yldWithChildren(stmt, children))
                 return
             }
 
@@ -547,7 +547,7 @@ var byReference: Bool
                 val cond: AstXmlNode = this.expr(xmlChild(stmt, AstNodeKind.Cond))
                 out.append(
                     linCondJump(
-                        kind, *cond, xmlAttr(stmt, AstNodeAttributeKind.Name),
+                        kind, cond, xmlAttr(stmt, AstNodeAttributeKind.Name),
                         xmlLine(stmt), xmlColumn(stmt)
                     )
                 )
@@ -558,9 +558,9 @@ var byReference: Bool
                 var inner: List<AstXmlNode> = List<AstXmlNode>()
                 val children: List<AstXmlNode> = xmlChildren(stmt, AstNodeKind.Body)
                 for (*child in children) {
-                    this.statements(child, *inner)
+                    this.statements(child, inner)
                 }
-                out.append(linBlock(*inner, xmlLine(stmt), xmlColumn(stmt)))
+                out.append(linBlock(inner, xmlLine(stmt), xmlColumn(stmt)))
                 return
             }
         }
@@ -584,12 +584,12 @@ var byReference: Bool
         if (!this.error.isEmpty()) {
             return node
         }
-        if (xmlKind(*node) == AstNodeCategory.ExprName) {
-            val name: Str = xmlAttr(*node, AstNodeAttributeKind.Name)
+        if (xmlKind(node) == AstNodeCategory.ExprName) {
+            val name: Str = xmlAttr(node, AstNodeAttributeKind.Name)
             if (name == "this") {
                 val receiver: AstXmlNode = xmlChild(this.decl, AstNodeKind.Receiver)
                 val selfField: AstXmlNode = yldThisMember(yldReceiverField())
-                if (!base && !xmlIsEmpty(*receiver) && !yldIsHandle(*receiver)) {
+                if (!base && !xmlIsEmpty(receiver) && !yldIsHandle(receiver)) {
                     return yldDeref(selfField)
                 }
                 return selfField
@@ -608,12 +608,12 @@ var byReference: Bool
         )
         // A member's or an index's receiver is a *place*, not a value: `this` there stays
         // the field (see above).
-        val bases: Bool = xmlKind(*node) == AstNodeCategory.ExprMember || xmlKind(*node) == AstNodeCategory.ExprIndex
+        val bases: Bool = xmlKind(node) == AstNodeCategory.ExprMember || xmlKind(node) == AstNodeCategory.ExprIndex
         var i: Int = 0
         while (i < copyNode.Children.count()) {
             var child: AstXmlNode = this.exprAt(copyNode.Children[i], bases)
             child.name = copyNode.Children[i].name
-            xmlAddChild(*rebuilt, child)
+            xmlAddChild(rebuilt, child)
             i = i + 1
         }
         return rebuilt
@@ -622,7 +622,7 @@ var byReference: Bool
 
 // A pointer type node around `inner` (`*T`), for `advance`'s value parameter.
 fun ilPointerOf(inner: AstXmlNode): AstXmlNode {
-    return ilPointerNode(*inner)
+    return ilPointerNode(inner)
 }
 
 // Whether a body yields anywhere: the one test the emitter needs to pick the machine path.

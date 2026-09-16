@@ -409,15 +409,15 @@ fun ilTypeText(typeNode: *AstXmlNode): Str {
             for (*typeArg in typeArgs) {
                 args.append(ilTypeText(typeArg))
             }
-            return xmlAttr(typeNode, AstNodeAttributeKind.Name) + "<" + ilJoinList(*args, ", ") + ">"
+            return xmlAttr(typeNode, AstNodeAttributeKind.Name) + "<" + ilJoinList(args, ", ") + ">"
         }
 
         AstNodeCategory.TypeReference -> {
-            return "&" + ilTypeText(*xmlChild(typeNode, AstNodeKind.Inner))
+            return "&" + ilTypeText(xmlChild(typeNode, AstNodeKind.Inner))
         }
 
         AstNodeCategory.TypePointer -> {
-            return "*" + ilTypeText(*xmlChild(typeNode, AstNodeKind.Inner))
+            return "*" + ilTypeText(xmlChild(typeNode, AstNodeKind.Inner))
         }
         // A `..T` (and anything else) spells `?`: the C++ ring's `ilTypeText` switches on
         // Named/IntLit/Generic/Reference/Pointer/Function only, and the two dumps have to
@@ -429,8 +429,8 @@ fun ilTypeText(typeNode: *AstXmlNode): Str {
             for (*paramType in paramTypes) {
                 params.append(ilTypeText(paramType))
             }
-            return "(" + ilJoinList(*params, ", ") + ") -> "
-            +ilTypeText(*xmlChild(typeNode, AstNodeKind.ReturnType))
+            return "(" + ilJoinList(params, ", ") + ") -> "
+            +ilTypeText(xmlChild(typeNode, AstNodeKind.ReturnType))
         }
     }
     return "?"
@@ -442,11 +442,11 @@ fun ilReceiverTypeText(typeNode: *AstXmlNode): Str {
     val kind: AstNodeCategory = xmlKind(typeNode)
     when (kind) {
         AstNodeCategory.TypeReference -> {
-            return "&" + ilTypeText(*xmlChild(typeNode, AstNodeKind.Inner))
+            return "&" + ilTypeText(xmlChild(typeNode, AstNodeKind.Inner))
         }
 
         AstNodeCategory.TypePointer -> {
-            return "*" + ilTypeText(*xmlChild(typeNode, AstNodeKind.Inner))
+            return "*" + ilTypeText(xmlChild(typeNode, AstNodeKind.Inner))
         }
     }
     return "*" + ilTypeText(typeNode)
@@ -629,8 +629,8 @@ fun ilOperandKind(op: *IlOp, index: Int): IlOperandKind {
         return IlOperandKind.None
     }
     val found: IlSignature = signature.value()
-    val tokens: List<Str> = ilOperandTokens(*found)
-    return ilOperandKindAt(*tokens, index)
+    val tokens: List<Str> = ilOperandTokens(found)
+    return ilOperandKindAt(tokens, index)
 }
 
 // An operand the dump reads without trusting the instruction's arity: an out-of-range
@@ -738,7 +738,7 @@ fun ilArgList(body: *IlBody, operands: *List<Int>, first: Int): Str {
         args.append(ilVarName(body, operands[i]))
         i = i + 1
     }
-    return ilJoinList(*args, ", ")
+    return ilJoinList(args, ", ")
 }
 
 fun ilPadRight(text: Str, width: Int): Str {
@@ -960,7 +960,7 @@ fun printIlBody(body: *IlBody): Str {
         types.append(ilIntText(i) + " " + body.types[i])
         i = i + 1
     }
-    ilAppendTable(*out, "types:   ", *types)
+    ilAppendTable(out, "types:   ", types)
 
     var vars: List<Str> = List<Str>()
     i = 0
@@ -972,7 +972,7 @@ fun printIlBody(body: *IlBody): Str {
         )
         i = i + 1
     }
-    ilAppendTable(*out, "vars:    ", *vars)
+    ilAppendTable(out, "vars:    ", vars)
 
     var pool: List<Str> = List<Str>()
     i = 0
@@ -980,7 +980,7 @@ fun printIlBody(body: *IlBody): Str {
         pool.append(ilIntText(i) + " " + ilPoolAsText(body.pool[i]))
         i = i + 1
     }
-    ilAppendTable(*out, "pool:    ", *pool)
+    ilAppendTable(out, "pool:    ", pool)
 
     var methods: List<Str> = List<Str>()
     i = 0
@@ -997,7 +997,7 @@ fun printIlBody(body: *IlBody): Str {
         methods.append(text)
         i = i + 1
     }
-    ilAppendTable(*out, "methods: ", *methods)
+    ilAppendTable(out, "methods: ", methods)
 
     var labels: List<Str> = List<Str>()
     i = 0
@@ -1005,7 +1005,7 @@ fun printIlBody(body: *IlBody): Str {
         labels.append(ilIntText(i) + " " + body.labels[i])
         i = i + 1
     }
-    ilAppendTable(*out, "labels:  ", *labels)
+    ilAppendTable(out, "labels:  ", labels)
 
     i = 0
     while (i < body.ops.size()) {
@@ -1014,19 +1014,19 @@ fun printIlBody(body: *IlBody): Str {
         var tokens: List<Str> = List<Str>()
         if (signature.hasValue()) {
             val found: IlSignature = signature.value()
-            tokens = ilOperandTokens(*found)
+            tokens = ilOperandTokens(found)
         }
 
         var rendered: List<Str> = List<Str>()
         var j: Int = 0
         while (j < op.operands.size()) {
-            rendered.append(ilRenderOperand(body, ilOperandKindAt(*tokens, j), op.operands[j]))
+            rendered.append(ilRenderOperand(body, ilOperandKindAt(tokens, j), op.operands[j]))
             j = j + 1
         }
 
         var text: Str = ilPadRight(ilIntText(i), 4) + ",  " + ilPadRight(ilOpKindText(op.kind), 16)
-        +ilJoinList(*rendered, ", ")
-        val comment: Str = ilOpComment(body, *op)
+        +ilJoinList(rendered, ", ")
+        val comment: Str = ilOpComment(body, op)
         if (!comment.isEmpty()) {
             text = ilPadRight(text, 74) + "# " + comment
         }
@@ -1045,14 +1045,14 @@ fun printIlBody(body: *IlBody): Str {
 
 // The dump of a whole unit: the body, then a section per lambda.
 fun printIlUnit(unit: *IlUnit): Str {
-    var out: Str = printIlBody(*unit.body)
+    var out: Str = printIlBody(unit.body)
     var i: Int = 0
     while (i < unit.closures.size()) {
         val closure: IlClosure = unit.closures[i]
         out = out + "\n## closure " + closure.symbol + "  captures ("
-        +ilJoinList(*closure.captures, ", ") + ")  " + closure.signature + "\n"
+        +ilJoinList(closure.captures, ", ") + ")  " + closure.signature + "\n"
         if (closure.bodyIndex >= 0 && closure.bodyIndex < unit.lambdas.size()) {
-            out = out + printIlBody(*unit.lambdas[closure.bodyIndex])
+            out = out + printIlBody(unit.lambdas[closure.bodyIndex])
         }
         i = i + 1
     }
@@ -1116,8 +1116,8 @@ fun ilCollectStmtExprs(
     seen: *Dictionary<Str, Bool>
 ): Unit {
     val child: AstXmlNode = xmlChild(stmt, role)
-    if (!xmlIsEmpty(*child)) {
-        ilCollectExprNames(*child, order, seen)
+    if (!xmlIsEmpty(child)) {
+        ilCollectExprNames(child, order, seen)
     }
 }
 
@@ -1127,7 +1127,7 @@ fun ilCollectStmtNamesIn(
     order: *List<Str>, seen: *Dictionary<Str, Bool>
 ): Unit {
     val container: AstXmlNode = xmlChild(stmt, role)
-    if (xmlIsEmpty(*container)) {
+    if (xmlIsEmpty(container)) {
         return
     }
     var i: Int = 0
@@ -1137,7 +1137,7 @@ fun ilCollectStmtNamesIn(
         body.append(children[i])
         i = i + 1
     }
-    ilCollectStmtNames(*body, declared, order, seen)
+    ilCollectStmtNames(body, declared, order, seen)
 }
 
 // ---- operand lists ---------------------------------------------------------
@@ -1170,7 +1170,22 @@ fun ilPointerNode(inner: *AstXmlNode): AstXmlNode {
     // The child's role is what the backend's `type()` looks up (`Inner`), so a synthesized
     // `*T` has to carry it like a parsed one does.
     renamed.name = AstNodeKind.Inner
-    xmlAddChild(*node, renamed)
+    xmlAddChild(node, renamed)
+    return node
+}
+
+// A `*x` node around an expression, the shape the parser builds (the operand under the
+// `Operand` role): the extractor makes one when a call argument's address is what a
+// `*T` parameter wants, so the address is spelled by the *same* code an explicit `*`
+// reaches (`into`).
+fun ilDerefNode(operand: AstXmlNode): AstXmlNode {
+    var node: AstXmlNode = AstXmlNode(
+        AstNodeKind.Expr, AstNodeCategory.ExprDeref,
+        List<AstNodeAttribute>(), Array<AstXmlNode>()
+    )
+    var renamed: AstXmlNode = copy(operand)
+    renamed.name = AstNodeKind.Operand
+    xmlAddChild(node, renamed)
     return node
 }
 
@@ -1258,10 +1273,10 @@ data class IlExtractor(
     // own slot, and the literal knows the type it is building even when the position it
     // stands in would only have inferred it.
     fun setSlotType(slot: Int, typeNode: AstXmlNode): Unit {
-        if (slot < 0 || slot >= this.out.vars.size() || xmlIsEmpty(*typeNode)) {
+        if (slot < 0 || slot >= this.out.vars.size() || xmlIsEmpty(typeNode)) {
             return
         }
-        this.out.vars[slot].typeIndex = this.typeIndex(ilTypeText(*typeNode), typeNode)
+        this.out.vars[slot].typeIndex = this.typeIndex(ilTypeText(typeNode), typeNode)
         this.frameChanged()
     }
 
@@ -1271,9 +1286,9 @@ data class IlExtractor(
     fun typeIndex(text: Str, node: AstXmlNode): Int {
         if (this.typeAt.has(text)) {
             val index: Int = this.typeAt.get(text).value()
-            if (!xmlIsEmpty(*node) && index < this.out.typeNodes.size()) {
+            if (!xmlIsEmpty(node) && index < this.out.typeNodes.size()) {
                 val existing: AstXmlNode = this.out.typeNodes[index]
-                if (xmlIsEmpty(*existing)) {
+                if (xmlIsEmpty(existing)) {
                     this.out.typeNodes[index] = node
                 }
             }
@@ -1344,7 +1359,7 @@ data class IlExtractor(
             IlVarKind.Temp, typeNode
         )
         this.nextBase = this.nextBase + 1
-        if (!xmlIsEmpty(*typeNode)) {
+        if (!xmlIsEmpty(typeNode)) {
             this.hoisted.append(slot)
             this.hoistedLines.append(this.line)
         } else {
@@ -1386,7 +1401,7 @@ data class IlExtractor(
         this.typeContext.paramNames = this.fn.paramNames
         this.typeContext.paramTypes = this.fn.paramTypes
         this.typeContext.captures = this.fn.captureTypes
-        if (xmlIsEmpty(*this.typeContext.selfType) && !this.fn.closureSymbol.isEmpty()) {
+        if (xmlIsEmpty(this.typeContext.selfType) && !this.fn.closureSymbol.isEmpty()) {
             // A machine method or a lambda body: `this` is the instance of the class the
             // lowering built (a value receiver reads through it).
             this.typeContext.selfType = ilNamedTypeNode(this.fn.closureSymbol)
@@ -1406,15 +1421,15 @@ data class IlExtractor(
             this.frameNames.clear()
             var i: Int = 0
             while (i < this.out.vars.size()) {
-                val typeNode: AstXmlNode = ilVarType(*this.out, i)
-                if (!xmlIsEmpty(*typeNode)) {
+                val typeNode: AstXmlNode = ilVarType(this.out, i)
+                if (!xmlIsEmpty(typeNode)) {
                     this.frameNames.insert(this.out.vars[i].name, typeNode)
                 }
                 i = i + 1
             }
             this.frameNamesStale = false
         }
-        return *this.frameNames
+        return * this.frameNames
     }
 
     // The type of an expression, from the rules the *type pass* applies to a whole body -
@@ -1425,7 +1440,7 @@ data class IlExtractor(
         if (this.fn.facts == null) {
             return xmlEmptyNode()
         }
-        return semTypeOfExpr(*e, this.fn.facts, this.bodyContext(), this.frameTypes())
+        return semTypeOfExpr(e, this.fn.facts, this.bodyContext(), this.frameTypes())
     }
 
     // The type of the *value* an instruction writes for this expression. It is the type
@@ -1438,10 +1453,10 @@ data class IlExtractor(
     // The type of a slot to synthesise for `e`: its own type, spelled the way the frame
     // spells types, or `?` when there is none.
     fun slotTypeText(typeNode: AstXmlNode): Str {
-        if (xmlIsEmpty(*typeNode)) {
+        if (xmlIsEmpty(typeNode)) {
             return "?"
         }
-        return ilTypeText(*typeNode)
+        return ilTypeText(typeNode)
     }
 
     fun emit(kind: IlOpKind, operands: List<Int>): Unit {
@@ -1461,10 +1476,10 @@ data class IlExtractor(
 
     fun begin(file: Str): Unit {
         this.out.file = file
-        if (xmlIsEmpty(*this.fn.decl)) {
+        if (xmlIsEmpty(this.fn.decl)) {
             this.out.line = 0
         } else {
-            this.out.line = xmlLine(*this.fn.decl)
+            this.out.line = xmlLine(this.fn.decl)
         }
         this.out.symbol = this.fn.symbol
         // The types the enclosing pass proved, so the frame carries the slots a
@@ -1483,7 +1498,7 @@ data class IlExtractor(
     }
 
     fun run(body: List<AstXmlNode>): IlBody {
-        this.stmts(*body)
+        this.stmts(body)
         // The extractor's own slots are the body's registers: a slot with a type is
         // declared once, at the top of the instruction list, exactly where `hoistSlots` put
         // the lowering's own slots - so the frame is flat, no jump can cross a declaration,
@@ -1521,7 +1536,7 @@ data class IlExtractor(
             // fields the captures are - and the parameter list is the body's own.
             this.addVar(
                 "self", "*" + this.fn.closureSymbol, IlVarKind.Argument,
-                ilPointerNode(*ilNamedTypeNode(this.fn.closureSymbol))
+                ilPointerNode(ilNamedTypeNode(this.fn.closureSymbol))
             )
             var i: Int = 0
             while (i < this.fn.paramNames.size()) {
@@ -1530,8 +1545,8 @@ data class IlExtractor(
                     paramType = this.fn.paramTypes[i]
                 }
                 var text: Str = "?"
-                if (!xmlIsEmpty(*paramType)) {
-                    text = ilTypeText(*paramType)
+                if (!xmlIsEmpty(paramType)) {
+                    text = ilTypeText(paramType)
                 }
                 this.addVar(this.fn.paramNames[i], text, IlVarKind.Argument, paramType)
                 i = i + 1
@@ -1539,14 +1554,14 @@ data class IlExtractor(
             return
         }
         var hasSelf: Bool = false
-        if (!xmlIsEmpty(*this.fn.receiver)) {
+        if (!xmlIsEmpty(this.fn.receiver)) {
             this.addVar(
-                "self", ilReceiverTypeText(*this.fn.receiver), IlVarKind.Argument,
-                ilReceiverTypeNode(*this.fn.receiver)
+                "self", ilReceiverTypeText(this.fn.receiver), IlVarKind.Argument,
+                ilReceiverTypeNode(this.fn.receiver)
             )
             hasSelf = true
         }
-        val params: List<AstXmlNode> = xmlChildren(*this.fn.decl, AstNodeKind.Param)
+        val params: List<AstXmlNode> = xmlChildren(this.fn.decl, AstNodeKind.Param)
         var i: Int = 0
         while (i < params.size()) {
             val param: *AstXmlNode = *params[i]
@@ -1554,17 +1569,17 @@ data class IlExtractor(
             val typeNode: AstXmlNode = xmlChild(param, AstNodeKind.Type)
             if (name == "this" && !hasSelf) {
                 var selfText: Str = "?"
-                if (!xmlIsEmpty(*typeNode)) {
-                    selfText = ilReceiverTypeText(*typeNode)
+                if (!xmlIsEmpty(typeNode)) {
+                    selfText = ilReceiverTypeText(typeNode)
                 }
-                this.addVar("self", selfText, IlVarKind.Argument, ilReceiverTypeNode(*typeNode))
+                this.addVar("self", selfText, IlVarKind.Argument, ilReceiverTypeNode(typeNode))
                 hasSelf = true
                 i = i + 1
                 continue
             }
             var text: Str = "?"
-            if (!xmlIsEmpty(*typeNode)) {
-                text = ilTypeText(*typeNode)
+            if (!xmlIsEmpty(typeNode)) {
+                text = ilTypeText(typeNode)
             }
             this.addVar(name, text, IlVarKind.Argument, typeNode)
             i = i + 1
@@ -1584,13 +1599,13 @@ data class IlExtractor(
         // A lambda's result is whatever its body returns, which C++ deduces; a function's
         // is its declared type.
         var retText: Str = "?"
-        if (!xmlIsEmpty(*this.fn.decl)) {
-            val declared: AstXmlNode = xmlChild(*this.fn.decl, AstNodeKind.ReturnType)
-            if (!xmlIsEmpty(*declared)) {
-                retText = ilTypeText(*declared)
+        if (!xmlIsEmpty(this.fn.decl)) {
+            val declared: AstXmlNode = xmlChild(this.fn.decl, AstNodeKind.ReturnType)
+            if (!xmlIsEmpty(declared)) {
+                retText = ilTypeText(declared)
             }
         }
-        return "(" + ilJoinList(*params, ", ") + ") -> " + retText
+        return "(" + ilJoinList(params, ", ") + ") -> " + retText
     }
 
     // ---- statements -------------------------------------------------------
@@ -1619,7 +1634,7 @@ data class IlExtractor(
                 val cond: AstXmlNode = xmlChild(stmt, AstNodeKind.Cond)
                 this.emit(
                     ilCategoryName(kind), ilOps2(
-                        this.operandOf(*cond),
+                        this.operandOf(cond),
                         this.labelIndex(xmlAttr(stmt, AstNodeAttributeKind.Name))
                     )
                 )
@@ -1629,8 +1644,8 @@ data class IlExtractor(
             AstNodeCategory.StmtVarDecl -> {
                 val typeNode: AstXmlNode = xmlChild(stmt, AstNodeKind.Type)
                 var typeText: Str = "?"
-                if (!xmlIsEmpty(*typeNode)) {
-                    typeText = ilTypeText(*typeNode)
+                if (!xmlIsEmpty(typeNode)) {
+                    typeText = ilTypeText(typeNode)
                 }
                 val name: Str = xmlAttr(stmt, AstNodeAttributeKind.Name)
                 var slotKind: IlVarKind = IlVarKind.Local
@@ -1639,7 +1654,7 @@ data class IlExtractor(
                 }
                 val slot: Int = this.addVar(name, typeText, slotKind, typeNode)
                 val init: AstXmlNode = xmlChild(stmt, AstNodeKind.Init)
-                if (xmlIsEmpty(*init)) {
+                if (xmlIsEmpty(init)) {
                     this.emit(IlOpKind.Declare, ilOps1(slot))
                 } else {
                     this.emit(IlOpKind.DeclareInit, ilOps1(slot))
@@ -1649,23 +1664,23 @@ data class IlExtractor(
             }
 
             AstNodeCategory.StmtAssign -> {
-                this.assign(*xmlChild(stmt, AstNodeKind.Target), *xmlChild(stmt, AstNodeKind.Value))
+                this.assign(xmlChild(stmt, AstNodeKind.Target), xmlChild(stmt, AstNodeKind.Value))
                 return
             }
 
             AstNodeCategory.StmtReturn -> {
                 val value: AstXmlNode = xmlChild(stmt, AstNodeKind.Value)
-                if (xmlIsEmpty(*value)) {
+                if (xmlIsEmpty(value)) {
                     this.emit(IlOpKind.ReturnVoid, List<Int>())
                 } else {
-                    this.emit(IlOpKind.Return, ilOps1(this.operandOf(*value)))
+                    this.emit(IlOpKind.Return, ilOps1(this.operandOf(value)))
                 }
                 return
             }
 
             AstNodeCategory.StmtExprStmt -> {
                 val expr: AstXmlNode = xmlChild(stmt, AstNodeKind.Expr)
-                if (xmlKind(*expr) == AstNodeCategory.ExprCall) {
+                if (xmlKind(expr) == AstNodeCategory.ExprCall) {
                     this.call(-1, expr)
                     return
                 }
@@ -1683,7 +1698,7 @@ data class IlExtractor(
                     body.append(children[i])
                     i = i + 1
                 }
-                this.stmts(*body)
+                this.stmts(body)
                 return
             }
 
@@ -1713,7 +1728,7 @@ data class IlExtractor(
                 }
                 val slot: Int = this.varIndex(name)
                 if (slot >= 0) {
-                    this.into(slot, *value)
+                    this.into(slot, value)
                     return
                 }
                 this.emit(IlOpKind.SetStatic, ilOps2(this.poolIndex(name), this.operandOf(value)))
@@ -1745,7 +1760,7 @@ data class IlExtractor(
                 this.emit(
                     IlOpKind.SetIndex, ilOps3(
                         this.receiverOf(xmlChild(target, AstNodeKind.Receiver)),
-                        this.operandOf(*xmlChild(target, AstNodeKind.Index)),
+                        this.operandOf(xmlChild(target, AstNodeKind.Index)),
                         this.operandOf(value)
                     )
                 )
@@ -1756,7 +1771,7 @@ data class IlExtractor(
                 // `*p = v`: the emitter writes through the pointer's type.
                 this.emit(
                     IlOpKind.Store, ilOps2(
-                        this.operandOf(*xmlChild(target, AstNodeKind.Operand)),
+                        this.operandOf(xmlChild(target, AstNodeKind.Operand)),
                         this.operandOf(value)
                     )
                 )
@@ -1797,7 +1812,7 @@ data class IlExtractor(
             }
 
             AstNodeCategory.ExprName -> {
-                return this.nameOf(*expr)
+                return this.nameOf(expr)
             }
 
             AstNodeCategory.ExprMember, AstNodeCategory.ExprIndex,
@@ -1807,9 +1822,9 @@ data class IlExtractor(
                 // A value the body does not hold in a slot: the extractor makes one, and the
                 // *type rules* type it - so the instruction that reads it names a declared slot
                 // instead of inlining the whole expression it stands for.
-                val typeNode: AstXmlNode = this.valueType(*expr)
+                val typeNode: AstXmlNode = this.valueType(expr)
                 val slot: Int = this.freshSlot(this.slotTypeText(typeNode), typeNode)
-                this.into(slot, *expr)
+                this.into(slot, expr)
                 return slot
             }
 
@@ -1829,16 +1844,22 @@ data class IlExtractor(
     // Writes `e` into `slot`, one instruction per operation: every value the lowering
     // produces is one operation deep, so one case here is one instruction.
     fun into(slot: Int, e: AstXmlNode): Unit {
-        val kind: AstNodeCategory = xmlKind(*e)
+        val kind: AstNodeCategory = xmlKind(e)
         when (kind) {
             AstNodeCategory.ExprIntLit, AstNodeCategory.ExprFloatLit,
             AstNodeCategory.ExprStrLit, AstNodeCategory.ExprCharLit -> {
-                this.emit(IlOpKind.SetVar, ilOps2(slot, this.literalOperand(xmlAttr(*e, AstNodeAttributeKind.Text))))
+                this.emit(
+                    IlOpKind.SetVar,
+                    ilOps2(slot, this.literalOperand(xmlAttr(e, AstNodeAttributeKind.Text)))
+                )
                 return
             }
 
             AstNodeCategory.ExprBoolLit -> {
-                this.emit(IlOpKind.SetVar, ilOps2(slot, this.literalOperand(xmlAttr(*e, AstNodeAttributeKind.Value))))
+                this.emit(
+                    IlOpKind.SetVar,
+                    ilOps2(slot, this.literalOperand(xmlAttr(e, AstNodeAttributeKind.Value)))
+                )
                 return
             }
 
@@ -1853,10 +1874,13 @@ data class IlExtractor(
             }
 
             AstNodeCategory.ExprMember -> {
-                val lhs: AstXmlNode = xmlChild(*e, AstNodeKind.Receiver)
-                val fieldName: Str = xmlAttr(*e, AstNodeAttributeKind.Name)
+                val lhs: AstXmlNode = xmlChild(e, AstNodeKind.Receiver)
+                val fieldName: Str = xmlAttr(e, AstNodeAttributeKind.Name)
                 if (this.isTypeBase(lhs)) {
-                    this.emit(IlOpKind.GetStatic, ilOps2(slot, this.poolIndex(this.baseText(lhs) + "." + fieldName)))
+                    this.emit(
+                        IlOpKind.GetStatic,
+                        ilOps2(slot, this.poolIndex(this.baseText(lhs) + "." + fieldName))
+                    )
                     return
                 }
                 this.emit(IlOpKind.GetField, ilOps3(slot, this.receiverOf(lhs), this.poolIndex(fieldName)))
@@ -1866,8 +1890,8 @@ data class IlExtractor(
             AstNodeCategory.ExprIndex -> {
                 this.emit(
                     IlOpKind.GetIndex, ilOps3(
-                        slot, this.receiverOf(xmlChild(*e, AstNodeKind.Receiver)),
-                        this.operandOf(*xmlChild(*e, AstNodeKind.Index))
+                        slot, this.receiverOf(xmlChild(e, AstNodeKind.Receiver)),
+                        this.operandOf(xmlChild(e, AstNodeKind.Index))
                     )
                 )
                 return
@@ -1876,9 +1900,9 @@ data class IlExtractor(
             AstNodeCategory.ExprBinary -> {
                 this.emit(
                     IlOpKind.BinaryOp, ilOps4(
-                        slot, this.poolIndex(xmlAttr(*e, AstNodeAttributeKind.Op)),
-                        this.operandOf(*xmlChild(*e, AstNodeKind.Lhs)),
-                        this.operandOf(*xmlChild(*e, AstNodeKind.Rhs))
+                        slot, this.poolIndex(xmlAttr(e, AstNodeAttributeKind.Op)),
+                        this.operandOf(xmlChild(e, AstNodeKind.Lhs)),
+                        this.operandOf(xmlChild(e, AstNodeKind.Rhs))
                     )
                 )
                 return
@@ -1887,15 +1911,15 @@ data class IlExtractor(
             AstNodeCategory.ExprUnary -> {
                 this.emit(
                     IlOpKind.UnaryOp, ilOps3(
-                        slot, this.poolIndex(xmlAttr(*e, AstNodeAttributeKind.Op)),
-                        this.operandOf(*xmlChild(*e, AstNodeKind.Operand))
+                        slot, this.poolIndex(xmlAttr(e, AstNodeAttributeKind.Op)),
+                        this.operandOf(xmlChild(e, AstNodeKind.Operand))
                     )
                 )
                 return
             }
 
             AstNodeCategory.ExprRef -> {
-                this.emit(IlOpKind.Box, ilOps2(slot, this.operandOf(*xmlChild(*e, AstNodeKind.Operand))))
+                this.emit(IlOpKind.Box, ilOps2(slot, this.operandOf(xmlChild(e, AstNodeKind.Operand))))
                 return
             }
 
@@ -1905,17 +1929,17 @@ data class IlExtractor(
                 // through a raw pointer - the backend reads which from the operand's slot type.
                 // A place that is a chain already *is* its address, so it is copied; a name, a
                 // handle and a call's result are read and the address is taken from the value.
-                val operand: AstXmlNode = xmlChild(*e, AstNodeKind.Operand)
-                val operandName: Str = xmlAttr(*operand, AstNodeAttributeKind.Name)
-                if (xmlKind(*operand) == AstNodeCategory.ExprName && this.isStaticName(operandName)) {
+                val operand: AstXmlNode = xmlChild(e, AstNodeKind.Operand)
+                val operandName: Str = xmlAttr(operand, AstNodeAttributeKind.Name)
+                if (xmlKind(operand) == AstNodeCategory.ExprName && this.isStaticName(operandName)) {
                     // A file-level static is not a slot of the frame, so its address is its own
                     // instruction (writing the value into a slot first would take the address of
                     // a copy).
                     this.emit(IlOpKind.GetStaticAddr, ilOps2(slot, this.poolIndex(operandName)))
                     return
                 }
-                if ((xmlKind(*operand) == AstNodeCategory.ExprMember
-                            || xmlKind(*operand) == AstNodeCategory.ExprIndex)
+                if ((xmlKind(operand) == AstNodeCategory.ExprMember
+                            || xmlKind(operand) == AstNodeCategory.ExprIndex)
                     && !this.isHandleExpr(operand)
                 ) {
                     // A chain that is a place: the address *is* the place slot. (A call's result
@@ -1929,7 +1953,7 @@ data class IlExtractor(
             }
 
             AstNodeCategory.ExprCopy -> {
-                this.emit(IlOpKind.CopyValue, ilOps2(slot, this.operandOf(*xmlChild(*e, AstNodeKind.Operand))))
+                this.emit(IlOpKind.CopyValue, ilOps2(slot, this.operandOf(xmlChild(e, AstNodeKind.Operand))))
                 return
             }
 
@@ -1940,7 +1964,7 @@ data class IlExtractor(
 
             AstNodeCategory.ExprLambda -> {
                 // A lambda whose value is dropped still constructs its class.
-                this.lambdaOf(*e, slot)
+                this.lambdaOf(e, slot)
                 return
             }
 
@@ -1956,7 +1980,7 @@ data class IlExtractor(
     // `receiverOf` - so reading `a[i].f` borrows the element rather than copying it into a
     // temporary of the extractor's own.
     fun valueOf(e: AstXmlNode): Int {
-        if (xmlKind(*e) == AstNodeCategory.ExprName) {
+        if (xmlKind(e) == AstNodeCategory.ExprName) {
             return this.nameOf(e)
         }
         val typeNode: AstXmlNode = this.valueType(e)
@@ -1970,10 +1994,10 @@ data class IlExtractor(
     // address of the pointer.
     fun isHandleExpr(e: AstXmlNode): Bool {
         val typeNode: AstXmlNode = this.exprType(e)
-        if (xmlIsEmpty(*typeNode)) {
+        if (xmlIsEmpty(typeNode)) {
             return false
         }
-        return ilIsHandleType(*typeNode)
+        return ilIsHandleType(typeNode)
     }
 
     // Whether a base needs an explicit address instruction: it is an *inline* value, of a
@@ -1982,10 +2006,10 @@ data class IlExtractor(
     // is not a thing the emitted C++ can spell.
     fun needsPlace(e: AstXmlNode): Bool {
         val typeNode: AstXmlNode = this.exprType(e)
-        if (xmlIsEmpty(*typeNode)) {
+        if (xmlIsEmpty(typeNode)) {
             return false
         }
-        return !ilIsHandleType(*typeNode)
+        return !ilIsHandleType(typeNode)
     }
 
     // The address of an inline value's storage, as one instruction: the slot holds the
@@ -1997,12 +2021,12 @@ data class IlExtractor(
     ): Int {
         val pointee: AstXmlNode = this.exprType(whole)
         var typeNode: AstXmlNode = xmlEmptyNode()
-        if (!xmlIsEmpty(*pointee)) {
-            typeNode = ilPointerNode(*pointee)
+        if (!xmlIsEmpty(pointee)) {
+            typeNode = ilPointerNode(pointee)
         }
         var typeText: Str = "*?"
-        if (!xmlIsEmpty(*typeNode)) {
-            typeText = ilTypeText(*typeNode)
+        if (!xmlIsEmpty(typeNode)) {
+            typeText = ilTypeText(typeNode)
         }
         val slot: Int = this.freshSlot(typeText, typeNode)
         val base: Int = this.receiverOf(baseExpr)
@@ -2010,7 +2034,7 @@ data class IlExtractor(
         if (kind == IlOpKind.FieldAddr) {
             operands.append(this.poolIndex(field))
         } else {
-            operands.append(this.operandOf(*indexExpr))
+            operands.append(this.operandOf(indexExpr))
         }
         this.emit(kind, operands)
         return slot
@@ -2021,15 +2045,15 @@ data class IlExtractor(
     fun staticAddr(e: AstXmlNode): Int {
         val pointee: AstXmlNode = this.exprType(e)
         var typeNode: AstXmlNode = xmlEmptyNode()
-        if (!xmlIsEmpty(*pointee)) {
-            typeNode = ilPointerNode(*pointee)
+        if (!xmlIsEmpty(pointee)) {
+            typeNode = ilPointerNode(pointee)
         }
         var typeText: Str = "*?"
-        if (!xmlIsEmpty(*typeNode)) {
-            typeText = ilTypeText(*typeNode)
+        if (!xmlIsEmpty(typeNode)) {
+            typeText = ilTypeText(typeNode)
         }
         val slot: Int = this.freshSlot(typeText, typeNode)
-        val name: Str = xmlAttr(*e, AstNodeAttributeKind.Name)
+        val name: Str = xmlAttr(e, AstNodeAttributeKind.Name)
         this.emit(IlOpKind.GetStaticAddr, ilOps2(slot, this.poolIndex(name)))
         return slot
     }
@@ -2041,20 +2065,20 @@ data class IlExtractor(
     // aggregate (the C++ of a field read is `p->f`, not a copy of a struct) and a write from
     // being lost in a copy.
     fun receiverOf(e: AstXmlNode): Int {
-        val kind: AstNodeCategory = xmlKind(*e)
+        val kind: AstNodeCategory = xmlKind(e)
         when (kind) {
             AstNodeCategory.ExprName -> {
                 // A file-level static is not a slot of the frame: as a base it is its own
                 // *address*, so a call that mutates it reaches the storage and not a copy of it
                 // (`names.append(x)` appends to `names`).
-                if (this.isStaticName(xmlAttr(*e, AstNodeAttributeKind.Name))) {
+                if (this.isStaticName(xmlAttr(e, AstNodeAttributeKind.Name))) {
                     return this.staticAddr(e)
                 }
                 return this.nameOf(e)
             }
 
             AstNodeCategory.ExprMember -> {
-                val lhs: AstXmlNode = xmlChild(*e, AstNodeKind.Receiver)
+                val lhs: AstXmlNode = xmlChild(e, AstNodeKind.Receiver)
                 if (this.isTypeBase(lhs)) {
                     return this.valueOf(e)
                 }
@@ -2063,7 +2087,7 @@ data class IlExtractor(
                 }
                 return this.place(
                     IlOpKind.FieldAddr, lhs, e,
-                    xmlAttr(*e, AstNodeAttributeKind.Name), xmlEmptyNode()
+                    xmlAttr(e, AstNodeAttributeKind.Name), xmlEmptyNode()
                 )
             }
 
@@ -2072,13 +2096,13 @@ data class IlExtractor(
                     return this.valueOf(e)
                 }
                 return this.place(
-                    IlOpKind.IndexAddr, xmlChild(*e, AstNodeKind.Receiver), e, Str(),
-                    xmlChild(*e, AstNodeKind.Index)
+                    IlOpKind.IndexAddr, xmlChild(e, AstNodeKind.Receiver), e, Str(),
+                    xmlChild(e, AstNodeKind.Index)
                 )
             }
 
             AstNodeCategory.ExprDeref -> {
-                return this.operandOf(*xmlChild(*e, AstNodeKind.Operand))
+                return this.operandOf(xmlChild(e, AstNodeKind.Operand))
             }
         }
         return this.valueOf(e)
@@ -2087,13 +2111,13 @@ data class IlExtractor(
     // ---- names and types --------------------------------------------------
 
     fun nameOf(e: AstXmlNode): Int {
-        val name: Str = xmlAttr(*e, AstNodeAttributeKind.Name)
+        val name: Str = xmlAttr(e, AstNodeAttributeKind.Name)
         // A captured variable is a *field* of the closure, not a slot of this frame:
         // reading it reads through `self`.
         if (this.fn.captures.has(name)) {
             var text: Str = "?"
             if (this.fn.captureTypes.has(name)) {
-                text = ilTypeText(*this.fn.captureTypes.get(name).value())
+                text = ilTypeText(this.fn.captureTypes.get(name).value())
             }
             val slot: Int = this.freshSlot(text, this.fn.captureTypes.get(name).value())
             this.emit(IlOpKind.GetField, ilOps3(slot, this.varIndex("self"), this.poolIndex(name)))
@@ -2117,12 +2141,12 @@ data class IlExtractor(
         // instead of inlining the read.
         val typeNode: AstXmlNode = this.exprType(e)
         var typeText: Str = "?"
-        if (xmlIsEmpty(*typeNode)) {
+        if (xmlIsEmpty(typeNode)) {
             if (this.fn.statics.has(name)) {
                 typeText = this.fn.statics.get(name).value()
             }
         } else {
-            typeText = ilTypeText(*typeNode)
+            typeText = ilTypeText(typeNode)
         }
         val fresh: Int = this.freshSlot(typeText, typeNode)
         this.emit(IlOpKind.GetStatic, ilOps2(fresh, this.poolIndex(name)))
@@ -2130,14 +2154,14 @@ data class IlExtractor(
     }
 
     fun isTypeBase(e: AstXmlNode): Bool {
-        val kind: AstNodeCategory = xmlKind(*e)
+        val kind: AstNodeCategory = xmlKind(e)
         if (kind == AstNodeCategory.ExprGenericName) {
             return true
         }
         if (kind != AstNodeCategory.ExprName) {
             return false
         }
-        val name: Str = xmlAttr(*e, AstNodeAttributeKind.Name)
+        val name: Str = xmlAttr(e, AstNodeAttributeKind.Name)
         if (name == "this" || this.hasVar(name)) {
             return false
         }
@@ -2156,27 +2180,27 @@ data class IlExtractor(
     }
 
     fun baseText(e: AstXmlNode): Str {
-        if (xmlKind(*e) == AstNodeCategory.ExprName) {
-            return xmlAttr(*e, AstNodeAttributeKind.Name)
+        if (xmlKind(e) == AstNodeCategory.ExprName) {
+            return xmlAttr(e, AstNodeAttributeKind.Name)
         }
-        return ilTypeText(*this.calleeToType(e))
+        return ilTypeText(this.calleeToType(e))
     }
 
     // The `GenericName` node carries its type arguments; the IL wants the type as a node,
     // so a fresh generic type node is built from the name and those arguments.
     fun calleeToType(e: AstXmlNode): AstXmlNode {
-        val name: Str = xmlAttr(*e, AstNodeAttributeKind.Name)
-        if (xmlKind(*e) == AstNodeCategory.ExprGenericName) {
+        val name: Str = xmlAttr(e, AstNodeAttributeKind.Name)
+        if (xmlKind(e) == AstNodeCategory.ExprGenericName) {
             var node: AstXmlNode = AstXmlNode(
                 AstNodeKind.Type, AstNodeCategory.TypeGeneric,
                 List<AstNodeAttribute>(), Array<AstXmlNode>()
             )
             node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
-            val args: List<AstXmlNode> = xmlChildren(*e, AstNodeKind.TypeArg)
+            val args: List<AstXmlNode> = xmlChildren(e, AstNodeKind.TypeArg)
             for (*typeArg in args) {
                 var arg: AstXmlNode = copy(typeArg)
                 arg.name = AstNodeKind.TypeArg
-                xmlAddChild(*node, arg)
+                xmlAddChild(node, arg)
             }
             return node
         }
@@ -2187,7 +2211,7 @@ data class IlExtractor(
     // with a type like any other, and the method table's `argTypes` should read the same
     // whether the argument was a slot or a constant.
     fun literalTypeText(e: AstXmlNode): Str {
-        val kind: AstNodeCategory = xmlKind(*e)
+        val kind: AstNodeCategory = xmlKind(e)
         when (kind) {
             AstNodeCategory.ExprIntLit -> {
                 return "Int"
@@ -2216,7 +2240,7 @@ data class IlExtractor(
         if (slot >= 0) {
             return this.out.vars[slot].typeIndex
         }
-        if (xmlIsEmpty(*expr)) {
+        if (xmlIsEmpty(expr)) {
             return this.typeIndexText("?")
         }
         return this.typeIndexText(this.literalTypeText(expr))
@@ -2226,7 +2250,7 @@ data class IlExtractor(
 
     // The symbol a `native("...")` declaration names, without its quotes.
     fun ilNativeSymbolOf(decl: AstXmlNode): Str {
-        val text: Str = xmlAttr(*decl, AstNodeAttributeKind.NativeSymbol)
+        val text: Str = xmlAttr(decl, AstNodeAttributeKind.NativeSymbol)
         if (text.size() >= 2 && text.substr(0, 1) == "\"" && text.substr(text.size() - 1, 1) == "\"") {
             return text.substr(1, text.size() - 2)
         }
@@ -2236,8 +2260,8 @@ data class IlExtractor(
     // Whether a call's target is the prelude's list literal (`rtl.kt`'s `listOf<T>`): the
     // one native whose *call* is not a call.
     fun ilIsListOf(target: AstXmlNode): Bool {
-        return xmlAttr(*target, AstNodeAttributeKind.IsNative) == "true"
-                && xmlAttr(*target, AstNodeAttributeKind.HasNativeSymbol) == "true"
+        return xmlAttr(target, AstNodeAttributeKind.IsNative) == "true"
+                && xmlAttr(target, AstNodeAttributeKind.HasNativeSymbol) == "true"
                 && this.ilNativeSymbolOf(target) == "simse_listOf"
     }
 
@@ -2245,14 +2269,14 @@ data class IlExtractor(
     // when it was written without one, which the language infers (`specs/functions.md`) -
     // the type of its first element.
     fun ilListOfType(callee: AstXmlNode, args: List<AstXmlNode>, from: Int): AstXmlNode {
-        if (xmlKind(*callee) == AstNodeCategory.ExprGenericName
-            && xmlCount(*callee, AstNodeKind.TypeArg) == 1
+        if (xmlKind(callee) == AstNodeCategory.ExprGenericName
+            && xmlCount(callee, AstNodeKind.TypeArg) == 1
         ) {
-            return semGenericType("List", xmlChildren(*callee, AstNodeKind.TypeArg))
+            return semGenericType("List", xmlChildren(callee, AstNodeKind.TypeArg))
         }
         if (from < args.size()) {
             val element: AstXmlNode = this.exprType(args[from])
-            if (!xmlIsEmpty(*element)) {
+            if (!xmlIsEmpty(element)) {
                 var typeArgs: List<AstXmlNode> = List<AstXmlNode>()
                 typeArgs.append(semReRole(element, AstNodeKind.TypeArg))
                 return semGenericType("List", typeArgs)
@@ -2275,7 +2299,7 @@ data class IlExtractor(
         if (this.fn.facts == null) {
             return xmlEmptyNode()
         }
-        val name: Str = xmlAttr(*callee, AstNodeAttributeKind.Name)
+        val name: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
         // The candidates are *indices* into the facts, not the facts themselves: a
         // `SemFnFact` carries its declaration node and its attribute list, so a copy per
         // candidate per call would be work the C++ ring - which holds `const FnFact*` -
@@ -2286,28 +2310,28 @@ data class IlExtractor(
             val index: Int = i
             i = i + 1
             val fact: *SemFnFact = *this.fn.facts.functions[index]
-            if (xmlIsEmpty(*fact.decl)
-                || xmlAttr(*fact.decl, AstNodeAttributeKind.Name) != name
+            if (xmlIsEmpty(fact.decl)
+                || xmlAttr(fact.decl, AstNodeAttributeKind.Name) != name
             ) {
                 continue
             }
-            val factMember: Bool = !xmlIsEmpty(*fact.receiver)
+            val factMember: Bool = !xmlIsEmpty(fact.receiver)
             if (factMember != member) {
                 continue
             }
             candidates.append(index)
         }
-        if (candidates.size() > 1 && member && !xmlIsEmpty(*receiver)) {
+        if (candidates.size() > 1 && member && !xmlIsEmpty(receiver)) {
             val receiverType: AstXmlNode = this.exprType(receiver)
-            val recv: AstXmlNode = semPointeeOf(*receiverType)
+            val recv: AstXmlNode = semPointeeOf(receiverType)
             var matching: List<Int> = List<Int>()
             var m: Int = 0
             while (m < candidates.size()) {
                 val index: Int = candidates[m]
                 m = m + 1
                 val fact: *SemFnFact = *this.fn.facts.functions[index]
-                if (!xmlIsEmpty(*recv) && !xmlIsEmpty(*fact.receiver)
-                    && !semUnifyType(*fact.receiver, *recv, *fact.templateParams)
+                if (!xmlIsEmpty(recv) && !xmlIsEmpty(fact.receiver)
+                    && !semUnifyType(fact.receiver, recv, fact.templateParams)
                 ) {
                     continue // another type's method of the same name
                 }
@@ -2323,7 +2347,7 @@ data class IlExtractor(
         while (k < candidates.size()) {
             val fact: *SemFnFact = *this.fn.facts.functions[candidates[k]]
             k = k + 1
-            val params: List<AstXmlNode> = xmlChildren(*fact.decl, AstNodeKind.Param)
+            val params: List<AstXmlNode> = xmlChildren(fact.decl, AstNodeKind.Param)
             val paramCount: Int = params.size()
             if (paramCount == argCount) {
                 exact = fact.decl
@@ -2331,7 +2355,7 @@ data class IlExtractor(
                 continue
             }
             if (paramCount > 0
-                && semIsPackTarget(*xmlChild(*params[paramCount - 1], AstNodeKind.Type))
+                && semIsPackTarget(xmlChild(params[paramCount - 1], AstNodeKind.Type))
                 && argCount >= paramCount - 1
             ) {
                 pack = fact.decl
@@ -2355,10 +2379,10 @@ data class IlExtractor(
     // dictionary lookup; anything else has to be asked of the type rules, which is the
     // expensive question and the reason it is asked as rarely as the rules allow.
     fun argumentType(e: AstXmlNode): AstXmlNode {
-        if (xmlKind(*e) == AstNodeCategory.ExprName) {
-            val name: Str = xmlAttr(*e, AstNodeAttributeKind.Name)
+        if (xmlKind(e) == AstNodeCategory.ExprName) {
+            val name: Str = xmlAttr(e, AstNodeAttributeKind.Name)
             if (this.varAt.has(name)) {
-                return ilVarType(*this.out, this.varAt.get(name).value())
+                return ilVarType(this.out, this.varAt.get(name).value())
             }
         }
         return this.exprType(e)
@@ -2371,20 +2395,20 @@ data class IlExtractor(
     // argument whose type the rules cannot name leaves the call exactly as it was:
     // nothing is inferred, nothing is packed.
     fun packStart(target: AstXmlNode, args: List<AstXmlNode>): Int {
-        if (xmlIsEmpty(*target)) {
+        if (xmlIsEmpty(target)) {
             return -1
         }
-        val params: List<AstXmlNode> = xmlChildren(*target, AstNodeKind.Param)
+        val params: List<AstXmlNode> = xmlChildren(target, AstNodeKind.Param)
         if (params.size() == 0) {
             return -1
         }
-        val wanted: AstXmlNode = xmlChild(*params[params.size() - 1], AstNodeKind.Type)
-        if (!semIsPackTarget(*wanted)) {
+        val wanted: AstXmlNode = xmlChild(params[params.size() - 1], AstNodeKind.Type)
+        if (!semIsPackTarget(wanted)) {
             return -1
         }
         if (args.size() == params.size() && args.size() > 0) {
             val last: AstXmlNode = this.argumentType(args[args.size() - 1])
-            if (xmlIsEmpty(*last) || !xmlIsEmpty(*semListTypeOf(*last))) {
+            if (xmlIsEmpty(last) || !xmlIsEmpty(semListTypeOf(last))) {
                 return -1
             }
         }
@@ -2397,26 +2421,26 @@ data class IlExtractor(
     // no copy of the list at all, and the slot outlives the call, since it is a slot of
     // this body.
     fun packArguments(target: AstXmlNode, args: List<AstXmlNode>, from: Int): Int {
-        val params: List<AstXmlNode> = xmlChildren(*target, AstNodeKind.Param)
+        val params: List<AstXmlNode> = xmlChildren(target, AstNodeKind.Param)
         var wanted: AstXmlNode = xmlEmptyNode()
         if (params.size() > 0) {
-            wanted = xmlChild(*params[params.size() - 1], AstNodeKind.Type)
+            wanted = xmlChild(params[params.size() - 1], AstNodeKind.Type)
         }
-        val list: AstXmlNode = semListTypeOf(*wanted)
+        val list: AstXmlNode = semListTypeOf(wanted)
         val slot: Int = this.freshSlot(this.slotTypeText(list), list)
         var operands: List<Int> = List<Int>()
         operands.append(slot)
         var i: Int = from
         while (i < args.size()) {
-            operands.append(this.operandOf(*args[i]))
+            operands.append(this.operandOf(args[i]))
             i = i + 1
         }
         this.emit(IlOpKind.Pack, operands)
-        if (xmlIsEmpty(*wanted) || xmlKind(*wanted) == AstNodeCategory.TypeGeneric) {
+        if (xmlIsEmpty(wanted) || xmlKind(wanted) == AstNodeCategory.TypeGeneric) {
             return slot // by value
         }
         val handle: AstXmlNode = copy(wanted)
-        val bound: Int = this.freshSlot(ilTypeText(*handle), handle)
+        val bound: Int = this.freshSlot(ilTypeText(handle), handle)
         this.emit(IlOpKind.Deref, ilOps2(bound, slot)) // `*List<T>`: the borrow of a fresh slot
         return bound
     }
@@ -2426,7 +2450,7 @@ data class IlExtractor(
     // the language's `copy`, which reads through a handle - the emitter spells it `*(x)`.)
     fun readThrough(pointeeType: *AstXmlNode, from: Int): Int {
         val typeNode: AstXmlNode = copy(pointeeType)
-        val slot: Int = this.freshSlot(ilTypeText(*typeNode), typeNode)
+        val slot: Int = this.freshSlot(ilTypeText(typeNode), typeNode)
         this.emit(IlOpKind.CopyValue, ilOps2(slot, from))
         return slot
     }
@@ -2439,7 +2463,9 @@ data class IlExtractor(
     // | `*T`      | `T`      | the place's address (`&x`) |
     // | `*T`      | `&T`     | the handle's pointee (`x.get()`) |
     // | `T`       | `*T`/`&T`| a copy of the pointee      |
-    // | `&T`      | `T`/`*T` | a *boxed copy* - `&x` means exactly that |
+    // | `&T`      | `T`      | a *boxed copy* - `&x` means exactly that |
+    // | `&T`      | `*T`     | **nothing**: the checker reports it (a pointer cannot
+    // |           |          | become a counted reference in place - `Sema.cpp`) |
     //
     // Nothing is converted when the two are not the same type to begin with: a `List<Int>`
     // argument is not a `*List<Str>`, and the call is the type error it always was. This is
@@ -2447,77 +2473,84 @@ data class IlExtractor(
     // every caller having to spell the `*`, and why the reverse change still compiles. A
     // `*T` *binding* (`val p: *T = x`) is a different question - a pointer that outlives
     // the expression it points into has to be asked for, so the writer writes it.
-    fun convertArgument(target: AstXmlNode, index: Int, arg: AstXmlNode, slot: Int): Int {
-        if (xmlIsEmpty(*target)) {
+    fun convertArgument(target: AstXmlNode, index: Int, arg: AstXmlNode): Int {
+        val slot: Int = this.operandOf(arg)
+        if (xmlIsEmpty(target)) {
             return slot
         }
-        val params: List<AstXmlNode> = xmlChildren(*target, AstNodeKind.Param)
+        val params: List<AstXmlNode> = xmlChildren(target, AstNodeKind.Param)
         if (index >= params.size()) {
             return slot
         }
-        val param: AstXmlNode = xmlChild(*params[index], AstNodeKind.Type)
-        if (xmlIsEmpty(*param)) {
+        val param: AstXmlNode = xmlChild(params[index], AstNodeKind.Type)
+        if (xmlIsEmpty(param)) {
             return slot
         }
-        val wantPointer: Bool = xmlKind(*param) == AstNodeCategory.TypePointer
-        val wantShared: Bool = !wantPointer && ilIsHandleType(*param)
-        // The argument's type: the slot it was extracted into already carries one - that is
-        // what makes an instruction one operation over typed slots - so this costs a lookup
-        // in the common case. Only an untyped slot (a `for` machine, a bare `null`) has to
-        // be asked of the type rules, which is the expensive question.
-        var actual: AstXmlNode = ilVarType(*this.out, slot)
-        if (xmlIsEmpty(*actual)) {
+        val wantPointer: Bool = xmlKind(param) == AstNodeCategory.TypePointer
+        val wantShared: Bool = !wantPointer && ilIsHandleType(param)
+        // The argument's type, cheaply: a place is a slot of this frame and already
+        // carries one, so the common argument costs a lookup. Anything else is read into a
+        // slot of its own - which is the value the call passes - and only an untyped slot
+        // (a `for` machine, a bare `null`) has to be asked of the type rules, the
+        // expensive question.
+        var actual: AstXmlNode = ilVarType(this.out, slot)
+        if (xmlIsEmpty(actual)) {
             actual = this.exprType(arg)
         }
-        if (xmlIsEmpty(*actual)) {
+        if (xmlIsEmpty(actual)) {
             return slot
         }
-        val wanted: AstXmlNode = semPointeeOf(*param)
-        val given: AstXmlNode = semPointeeOf(*actual)
-        if (xmlIsEmpty(*wanted) || xmlIsEmpty(*given)) {
+        val wanted: AstXmlNode = semPointeeOf(param)
+        val given: AstXmlNode = semPointeeOf(actual)
+        if (xmlIsEmpty(wanted) || xmlIsEmpty(given)) {
             return slot
         }
-        if (ilTypeText(*wanted) != ilTypeText(*given)) {
+        if (ilTypeText(wanted) != ilTypeText(given)) {
             return slot // not the same type
         }
-        val havePointer: Bool = xmlKind(*actual) == AstNodeCategory.TypePointer
-        val haveShared: Bool = !havePointer && ilIsHandleType(*actual)
+        val havePointer: Bool = xmlKind(actual) == AstNodeCategory.TypePointer
+        val haveShared: Bool = !havePointer && ilIsHandleType(actual)
         val haveValue: Bool = !havePointer && !haveShared
         if ((wantPointer && havePointer) || (wantShared && haveShared)) {
             return slot
         }
         if (wantPointer) {
+            // The address, spelled exactly as an explicit `*` spells it (`into`'s `Deref`
+            // arm is the definition): a member/index chain *is* its own address (`&a.f`,
+            // never the address of a copy of `a.f` - a callee that writes through the
+            // pointer has to write into the caller's object), a static name is its
+            // `GetStaticAddr`, and a name or a temporary is `&x` / the address taken at the
+            // call.
             val handle: AstXmlNode = copy(param)
-            val bound: Int = this.freshSlot(ilTypeText(*handle), handle)
-            this.emit(IlOpKind.Deref, ilOps2(bound, slot)) // an address, never a copy
+            val bound: Int = this.freshSlot(ilTypeText(handle), handle)
+            this.into(bound, ilDerefNode(arg))
             return bound
         }
         if (wantShared) {
-            var value: Int = slot
             if (!haveValue) {
-                value = this.readThrough(*wanted, slot)
+                return slot // `&T` from a pointer: the checker reports it
             }
             val box: AstXmlNode = copy(param)
-            val held: Int = this.freshSlot(ilTypeText(*box), box)
-            this.emit(IlOpKind.Box, ilOps2(held, value)) // `&x` boxes a copy
+            val held: Int = this.freshSlot(ilTypeText(box), box)
+            this.emit(IlOpKind.Box, ilOps2(held, slot)) // `&x` boxes a copy
             return held
         }
         if (haveValue) {
             return slot
         }
-        return this.readThrough(*wanted, slot)
+        return this.readThrough(wanted, slot)
     }
 
     // `dst < 0` means the result is dropped (`CallVoid`).
     fun call(dst: Int, e: AstXmlNode): Unit {
-        val callee: AstXmlNode = xmlChild(*e, AstNodeKind.Callee)
+        val callee: AstXmlNode = xmlChild(e, AstNodeKind.Callee)
         val hasDst: Bool = dst >= 0
         var returnType: Int = -1
         if (hasDst) {
             returnType = this.out.vars[dst].typeIndex
         }
-        val member: Bool = xmlKind(*callee) == AstNodeCategory.ExprMember
-        val lhs: AstXmlNode = xmlChild(*callee, AstNodeKind.Receiver)
+        val member: Bool = xmlKind(callee) == AstNodeCategory.ExprMember
+        val lhs: AstXmlNode = xmlChild(callee, AstNodeKind.Receiver)
         var staticCall: Bool = false
         if (member) {
             staticCall = this.isTypeBase(lhs)
@@ -2532,8 +2565,8 @@ data class IlExtractor(
             recvSlot = this.receiverOf(lhs)
         }
 
-        val calleeName: Str = xmlAttr(*callee, AstNodeAttributeKind.Name)
-        val argNodes: List<AstXmlNode> = xmlChildren(*e, AstNodeKind.Arg)
+        val calleeName: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
+        val argNodes: List<AstXmlNode> = xmlChildren(e, AstNodeKind.Arg)
 
         // The trailing arguments may pack into a last parameter that is a list
         // (`fun addAll(values: *List<Int>)` called as `addAll(1, 2, 3)`, or
@@ -2554,15 +2587,15 @@ data class IlExtractor(
         // a packed call builds, written out. It is not a call at all - the native it names
         // exists so the checker and the type rules have a signature to read - so a backend
         // that sees one of these writes the construction and never the function.
-        if (hasDst && packFrom >= 0 && !xmlIsEmpty(*target) && this.ilIsListOf(target)) {
+        if (hasDst && packFrom >= 0 && !xmlIsEmpty(target) && this.ilIsListOf(target)) {
             val listType: AstXmlNode = this.ilListOfType(callee, argNodes, packFrom)
-            if (!xmlIsEmpty(*listType)) {
+            if (!xmlIsEmpty(listType)) {
                 this.setSlotType(dst, listType)
                 var packing: List<Int> = List<Int>()
                 packing.append(dst)
                 var p: Int = packFrom
                 while (p < argNodes.size()) {
-                    packing.append(this.operandOf(*argNodes[p]))
+                    packing.append(this.operandOf(argNodes[p]))
                     p = p + 1
                 }
                 this.emit(IlOpKind.Pack, packing)
@@ -2578,12 +2611,12 @@ data class IlExtractor(
         }
         var i: Int = 0
         while (i < plain) {
-            val slot: Int = this.convertArgument(target, i, *argNodes[i], this.operandOf(*argNodes[i]))
+            val slot: Int = this.convertArgument(target, i, argNodes[i])
             args.append(slot)
             argTypes.append(this.operandType(slot, argNodes[i]))
             i = i + 1
         }
-        if (packFrom >= 0 && !xmlIsEmpty(*target)) {
+        if (packFrom >= 0 && !xmlIsEmpty(target)) {
             val slot: Int = this.packArguments(target, argNodes, packFrom)
             args.append(slot)
             argTypes.append(this.out.vars[slot].typeIndex)
@@ -2633,7 +2666,7 @@ data class IlExtractor(
             this.emitCall(hasDst, operands)
             return
         }
-        if (xmlKind(*callee) == AstNodeCategory.ExprGenericName) {
+        if (xmlKind(callee) == AstNodeCategory.ExprGenericName) {
             // A construction: `Point(1, 2)`, `List<Str>()`. The type operand is the *node*
             // the callee was, so a backend can spell the type arguments the way the source
             // wrote them.
@@ -2708,7 +2741,7 @@ data class IlExtractor(
             bodyList.append(bodyContainer.Children[bi])
             bi = bi + 1
         }
-        ilCollectStmtNames(*bodyList, *declared, *read, *readSeen)
+        ilCollectStmtNames(bodyList, declared, read, readSeen)
 
         // The closure: what the body reads that the *enclosing* frame holds. A name that is
         // neither (a static, a type, a function) is not captured - the enclosing `nameOf`
@@ -2744,8 +2777,8 @@ data class IlExtractor(
             info.captures.insert(name, true)
             // The field's type is the enclosing slot's: the class's field has it, so a read
             // of it in the body is typed without inference.
-            val slotType: AstXmlNode = ilVarTypeNode(*this.out, this.varIndex(name))
-            if (!xmlIsEmpty(*slotType)) {
+            val slotType: AstXmlNode = ilVarTypeNode(this.out, this.varIndex(name))
+            if (!xmlIsEmpty(slotType)) {
                 info.captureTypes.insert(name, slotType)
             }
             ci = ci + 1
@@ -2758,12 +2791,12 @@ data class IlExtractor(
         // slot the frame cannot name sends every spelling decision that needs a type the
         // wrong way (`v.toString()` picks the `StrView` overload; a `..T` receiver hides
         // the `smToYield` identity).
-        var lowered: List<AstXmlNode> = ilLambdaLower(*bodyList)
+        var lowered: List<AstXmlNode> = ilLambdaLower(bodyList)
         val lambdaSemantics: SemBody = SemBody(
             xmlEmptyNode(), this.fn.typeParams, ilNamedTypeNode(symbol), xmlEmptyNode(),
             paramNames, paramTypes, info.captureTypes
         )
-        lowered = semInferTypes(*lowered, this.fn.facts, *lambdaSemantics, *lambdaTypes)
+        lowered = semInferTypes(lowered, this.fn.facts, lambdaSemantics, lambdaTypes)
         lowered = linFinishForEmission(lowered, paramNames)
 
         // The extractor's type context: storage of this frame's, borrowed by the inner
@@ -2801,7 +2834,7 @@ data class IlExtractor(
             }
             vi = vi + 1
         }
-        closure.signature = "(" + ilJoinList(*captured, ", ") + ") " + innerBody.signature
+        closure.signature = "(" + ilJoinList(captured, ", ") + ") " + innerBody.signature
         this.unit.lambdas.append(innerBody)
         this.unit.closures.append(closure)
 
@@ -2853,16 +2886,16 @@ fun ilSplitParams(text: Str): List<Str> {
 // would collide with one is renamed.
 fun ilLambdaLower(body: *List<AstXmlNode>): List<AstXmlNode> {
     var out: List<AstXmlNode> = List<AstXmlNode>()
-    if (body.size() == 1 && xmlKind(*body[0]) == AstNodeCategory.StmtExprStmt) {
-        val expr: AstXmlNode = xmlChild(*body[0], AstNodeKind.Expr)
-        if (!xmlIsEmpty(*expr)) {
+    if (body.size() == 1 && xmlKind(body[0]) == AstNodeCategory.StmtExprStmt) {
+        val expr: AstXmlNode = xmlChild(body[0], AstNodeKind.Expr)
+        if (!xmlIsEmpty(expr)) {
             var ret: AstXmlNode = linStmt(
-                AstNodeCategory.StmtReturn, xmlLine(*body[0]),
-                xmlColumn(*body[0])
+                AstNodeCategory.StmtReturn, xmlLine(body[0]),
+                xmlColumn(body[0])
             )
-            var value: AstXmlNode = copy(*expr)
+            var value: AstXmlNode = copy(expr)
             value.name = AstNodeKind.Value
-            xmlAddChild(*ret, value)
+            xmlAddChild(ret, value)
             out.append(ret)
             return linLowerForEmission(out)
         }

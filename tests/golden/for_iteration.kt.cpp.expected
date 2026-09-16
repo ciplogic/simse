@@ -269,23 +269,23 @@ Int ns1_arrayTotal(List<Int>* numbers) {
 }
 // for_iteration.kt:32
 int main() {
+    List<Int>* _sm_base1;
+    List<Int>* _sm_base2;
     List<Int> numbers;
-    List<Int>* _sm_expr1;
-    Int _sm_expr2;
-    Str _sm_expr3;
-    List<Int>* _sm_expr4;
-    Int _sm_expr5;
-    Str _sm_expr6;
+    Int _sm_expr1;
+    Str _sm_expr2;
+    Int _sm_expr3;
+    Str _sm_expr4;
     numbers = List<Int>();
     simse_list_append(numbers, 1);
     simse_list_append(numbers, 2);
-    _sm_expr1 = &numbers;
-    _sm_expr2 = ns1_total(_sm_expr1);
-    _sm_expr3 = simse_int_toString(_sm_expr2);
-    std::cout << std::boolalpha << (_sm_expr3) << std::endl;
-    _sm_expr4 = &numbers;
-    _sm_expr5 = ns1_arrayTotal(_sm_expr4);
-    _sm_expr6 = simse_int_toString(_sm_expr5);
-    std::cout << std::boolalpha << (_sm_expr6) << std::endl;
+    _sm_base1 = &numbers;
+    _sm_expr1 = ns1_total(_sm_base1);
+    _sm_expr2 = simse_int_toString(_sm_expr1);
+    std::cout << std::boolalpha << (_sm_expr2) << std::endl;
+    _sm_base2 = &numbers;
+    _sm_expr3 = ns1_arrayTotal(_sm_base2);
+    _sm_expr4 = simse_int_toString(_sm_expr3);
+    std::cout << std::boolalpha << (_sm_expr4) << std::endl;
     return 0;
 }

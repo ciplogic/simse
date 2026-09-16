@@ -126,9 +126,19 @@ namespace linear {
                 return nameExpr(name, e->pos);
             }
 
+            // A call's arguments: a place stays a place, anything that produces a value
+            // is flattened as a value (and bound if it is deeper than one operation) -
+            // the same rule a place's own base follows.
+            //
+            // This matters beyond tidiness: a `*T` parameter takes the argument's
+            // address, and the address of an element or a field is the *place's*
+            // address. Binding `a[i]` to a temporary first would hand the callee the
+            // address of a copy - a write through the pointer would be lost, silently
+            // (the extractor's `convertArgument` and `into`'s `Deref` arm both spell the
+            // place, so the two agree only if the place survived the lowering).
             List<ExprPtr> flatList(const List<ExprPtr> &exprs) {
                 List<ExprPtr> out;
-                for (const ExprPtr &expr: exprs) out.push_back(flat(expr, Slot::Value));
+                for (const ExprPtr &expr: exprs) out.push_back(pathOrValue(expr));
                 return out;
             }
 
