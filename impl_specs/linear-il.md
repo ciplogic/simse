@@ -211,12 +211,40 @@ Two things the unification must **not** blur, because they are per row:
 
 The table is also what the implicit copy becomes: wherever a `T` is required and the
 expression has type `*T`/`&T`, the same instruction is inserted - no new opcode, and no
-`copy` in the language. `copy(v)` on a value is the first row (the identity), which is why
-`copy` can disappear without the IL gaining anything to replace it. The positions that ask
+`copy` in the language. `copy(v)` on a value is the first row (the identity), so `copy` can
+disappear without the IL gaining anything to replace it - and in the compiler's own ring it
+has: `cppsrc/**/*.kt` spells no `copy(...)` at all, and the amalgamation comes out with
+every conversion folded into the destination that asks for it. The positions that ask
 today are a call argument (`specs/functions.md`, "Handles at a call") and a **binary
 operand** whose fellow operand is a value (`specs/memory-model.md`): `out + separator` with
 `separator: *Str` is `CopyValue` into a slot and then `out + that` - the same row the
 explicit `*separator` would spell.
+
+**A parameter the call cannot type is read from the argument.** Three parameter shapes
+carry a type the callee's own signature does not fix, so the table above cannot be entered
+from `param` alone; the extraction resolves them from the *argument* instead:
+
+- **A `native fun` extension's receiver**, which the declaration spells as an explicit
+  `this` first parameter (`native fun has<K, V>(this: Dictionary<K, V>, key: K): Bool`).
+  Two consequences beyond the conversion: the fact's own `receiver` is *empty*, so
+  `callTarget` counts such a declaration as a member through
+  `extensionReceiver`/`receiverParams`/`isExtensionDecl` - which is also what tells two
+  same-named overloads apart (`append` on a `List<T>` and on a `Str`), and `functionReturn`
+  must *not* match a plain call to one, or `fun find(...)` picks up `Str.find`'s signature -
+  and the parameters an argument converts against start *after* the receiver, which is what
+  `packStart` and the pack-arity test count.
+- **A bare type parameter** (`key: K`, `value: T`), which the *receiver* binds and no
+  argument can be compared against - a slot typed `K` could not even be declared outside
+  the callee's template. Its form is a value, so a handle argument is read through to the
+  pointee the argument itself names (`isBareTypeParam`, then the `*T` -> `T` row): this is
+  what makes `names.append(xmlAttr(param, Name))` a copy of the string and not a complaint
+  about `Str *` against `const Str &`.
+- **A construction** the extractor sees as a plain call - a prelude data class, whose C++
+  is the struct's own constructor and whose arguments are its `Field` nodes - converts
+  against those fields by the same rule (`dataClassDecl`).
+
+What stays *out* of the conversion is the type itself: `List<Int>` against a `*List<Str>`
+parameter is the type error it always was. Only the handle is inferred, never the type.
 
 **The destination's type is what spells the conversion, and the emitter reads it there.**
 Every instruction whose operand is a value with a declared destination type already says

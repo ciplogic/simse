@@ -130,7 +130,7 @@ fun yldThisMember(field: Str): AstXmlNode {
 fun yldMember(base: AstXmlNode, field: Str): AstXmlNode {
     var node: AstXmlNode = yldExpr(AstNodeCategory.ExprMember)
     node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, field))
-    var receiver: AstXmlNode = copy(base)
+    var receiver: AstXmlNode = base
     receiver.name = AstNodeKind.Receiver
     xmlAddChild(node, receiver)
     return node
@@ -139,10 +139,10 @@ fun yldMember(base: AstXmlNode, field: Str): AstXmlNode {
 fun yldBinary(op: Str, lhs: AstXmlNode, rhs: AstXmlNode): AstXmlNode {
     var node: AstXmlNode = yldExpr(AstNodeCategory.ExprBinary)
     node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Op, op))
-    var left: AstXmlNode = copy(lhs)
+    var left: AstXmlNode = lhs
     left.name = AstNodeKind.Lhs
     xmlAddChild(node, left)
-    var right: AstXmlNode = copy(rhs)
+    var right: AstXmlNode = rhs
     right.name = AstNodeKind.Rhs
     xmlAddChild(node, right)
     return node
@@ -150,7 +150,7 @@ fun yldBinary(op: Str, lhs: AstXmlNode, rhs: AstXmlNode): AstXmlNode {
 
 fun yldDeref(inner: AstXmlNode): AstXmlNode {
     var node: AstXmlNode = yldExpr(AstNodeCategory.ExprDeref)
-    var operand: AstXmlNode = copy(inner)
+    var operand: AstXmlNode = inner
     operand.name = AstNodeKind.Operand
     xmlAddChild(node, operand)
     return node
@@ -158,7 +158,7 @@ fun yldDeref(inner: AstXmlNode): AstXmlNode {
 
 fun yldCall(callee: AstXmlNode, args: *List<AstXmlNode>): AstXmlNode {
     var node: AstXmlNode = yldExpr(AstNodeCategory.ExprCall)
-    var target: AstXmlNode = copy(callee)
+    var target: AstXmlNode = callee
     target.name = AstNodeKind.Callee
     xmlAddChild(node, target)
     var i: Int = 0
@@ -176,7 +176,7 @@ fun yldCall(callee: AstXmlNode, args: *List<AstXmlNode>): AstXmlNode {
 fun yldOptionalCall(elementType: AstXmlNode, method: Str, args: *List<AstXmlNode>): AstXmlNode {
     var base: AstXmlNode = yldExpr(AstNodeCategory.ExprGenericName)
     base.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, "Opt"))
-    var typeArg: AstXmlNode = copy(elementType)
+    var typeArg: AstXmlNode = elementType
     typeArg.name = AstNodeKind.TypeArg
     xmlAddChild(base, typeArg)
     return yldCall(yldMember(base, method), args)
@@ -185,10 +185,10 @@ fun yldOptionalCall(elementType: AstXmlNode, method: Str, args: *List<AstXmlNode
 fun yldAssign(target: AstXmlNode, value: AstXmlNode): AstXmlNode {
     var node: AstXmlNode = yldStmt(AstNodeCategory.StmtAssign)
     node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Op, "="))
-    var targetNode: AstXmlNode = copy(target)
+    var targetNode: AstXmlNode = target
     targetNode.name = AstNodeKind.Target
     xmlAddChild(node, targetNode)
-    var valueNode: AstXmlNode = copy(value)
+    var valueNode: AstXmlNode = value
     valueNode.name = AstNodeKind.Value
     xmlAddChild(node, valueNode)
     return node
@@ -196,7 +196,7 @@ fun yldAssign(target: AstXmlNode, value: AstXmlNode): AstXmlNode {
 
 fun yldReturn(value: AstXmlNode): AstXmlNode {
     var node: AstXmlNode = yldStmt(AstNodeCategory.StmtReturn)
-    var valueNode: AstXmlNode = copy(value)
+    var valueNode: AstXmlNode = value
     valueNode.name = AstNodeKind.Value
     xmlAddChild(node, valueNode)
     return node
@@ -204,7 +204,7 @@ fun yldReturn(value: AstXmlNode): AstXmlNode {
 
 fun yldExprStmt(expr: AstXmlNode): AstXmlNode {
     var node: AstXmlNode = yldStmt(AstNodeCategory.StmtExprStmt)
-    var exprNode: AstXmlNode = copy(expr)
+    var exprNode: AstXmlNode = expr
     exprNode.name = AstNodeKind.Expr
     xmlAddChild(node, exprNode)
     return node
@@ -501,7 +501,7 @@ var byReference: Bool
                     // survive a yield.
                     var children: List<AstXmlNode> = List<AstXmlNode>()
                     if (!xmlIsEmpty(declared)) {
-                        var declaredChild: AstXmlNode = copy(declared)
+                        var declaredChild: AstXmlNode = declared
                         declaredChild.name = AstNodeKind.Type
                         children.append(declaredChild)
                     }
@@ -565,7 +565,7 @@ var byReference: Bool
             }
         }
         // Labels and gotos are the control flow, and `break`/`continue` are gone by now.
-        out.append(copy(stmt))
+        out.append(stmt)
     }
 
     // A name that is a field is read and written as a field of the machine, so the values
@@ -601,7 +601,7 @@ var byReference: Bool
         }
         // Every child is rewritten in place, position included: the children keep the
         // roles they were read with, so the node's shape does not change.
-        var copyNode: AstXmlNode = copy(node)
+        var copyNode: AstXmlNode = node
         var rebuilt: AstXmlNode = AstXmlNode(
             copyNode.name, copyNode.kind, copyNode.attributes,
             Array<AstXmlNode>()

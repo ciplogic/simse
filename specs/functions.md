@@ -153,6 +153,12 @@ boxed(xs)       // a copy inside the reference
 - **The types still have to match.** `addAll(aListOfStr)` against `*List<Int>` is not
   converted: only the *handle* is inferred, never the type, so the call is the type
   error it always was.
+- **A construction converts the same way.** `Rect(w, h)` where a field is `Int` and `w`
+  came back as a `*Int` from an accessor reads it through like any call argument - the
+  constructor is a call boundary too. And where the callee's own signature cannot name the
+  parameter's type (a `native fun` extension's bare type parameter, `Dictionary<K, V>.has(key:
+  K)`), the argument's own type is what the conversion reads, which is what makes
+  `names.append(accessor(...))` an element copy rather than a complaint.
 - **A `*T` binding is not converted.** `val p: *List<Int> = xs` still writes the `*`:
   a pointer that outlives the expression it points into is asked for explicitly, and
   the convenience above is for a call, whose borrow ends with it.

@@ -71,6 +71,60 @@ fun semIsRtlTypeName(name: Str): Bool {
     return false
 }
 
+// The receiver type of a declaration that spells it as an explicit `this` first
+// parameter (`native fun has<K, V>(this: Dictionary<K, V>, key: K): Bool`) - empty for
+// everything else (a prefix receiver, `Type.name(...)`, is not a parameter at all).
+// Such a declaration is a *member*: `callTarget` takes it for a member call, and
+// `functionReturn` refuses it for a plain one (`fun find(...)` must not pick up
+// `Str.find`'s signature).
+fun semExtensionReceiver(decl: *AstXmlNode): AstXmlNode {
+    if (xmlIsEmpty(decl)) {
+        return xmlEmptyNode()
+    }
+    for (*child in decl.Children) {
+        if (child.name == AstNodeKind.Param) {
+            if (xmlAttr(child, AstNodeAttributeKind.Name) != "this") {
+                return xmlEmptyNode()
+            }
+            return xmlChild(child, AstNodeKind.Type)
+        }
+    }
+    return xmlEmptyNode()
+}
+
+// How many leading parameters of a declaration are that receiver: 1 or 0. The
+// parameters a call's arguments convert against start *after* it.
+fun semReceiverParams(decl: *AstXmlNode): Int {
+    if (xmlIsEmpty(semExtensionReceiver(decl))) {
+        return 0
+    }
+    return 1
+}
+
+// Whether a declaration spells its receiver that way.
+fun semIsExtensionDecl(decl: *AstXmlNode): Bool {
+    return !xmlIsEmpty(semExtensionReceiver(decl))
+}
+
+// Whether `param` is one of `decl`'s own type parameters, bare (`T`, not `List<T>`):
+// what an argument can only be compared against as a *form*, since the receiver - not
+// this call - binds it.
+fun semIsBareTypeParam(decl: *AstXmlNode, param: *AstXmlNode): Bool {
+    if (xmlIsEmpty(decl) || xmlIsEmpty(param)) {
+        return false
+    }
+    if (xmlKind(param) != AstNodeCategory.TypeNamed) {
+        return false
+    }
+    val name: Str = xmlAttr(param, AstNodeAttributeKind.Name)
+    for (*tp in decl.Children) {
+        if (tp.name == AstNodeKind.TypeParam && xmlAttr(tp, AstNodeAttributeKind.Name) == name) {
+            return true
+        }
+    }
+    return false
+}
+
 // The node re-rooted under `role`. A type read out of a declaration carries the
 // role it was read from (`ReturnType` in a signature, `TypeArg` in an argument
 // list, `Type` in a field) while the place it is put back into expects its own -
@@ -80,7 +134,7 @@ fun semReRole(node: AstXmlNode, role: AstNodeKind): AstXmlNode {
     if (node.name == role) {
         return node
     }
-    var renamed: AstXmlNode = copy(node)
+    var renamed: AstXmlNode = node
     renamed.name = role
     return renamed
 }
@@ -105,7 +159,7 @@ fun semReplaceRole(like: *AstXmlNode, role: AstNodeKind, replacements: List<AstX
             }
             seen = seen + 1
         } else {
-            kids.append(copy(child))
+            kids.append(child)
         }
     }
     while (seen < replacements.size()) {
@@ -133,7 +187,7 @@ fun semWithType(decl: *AstXmlNode, typeNode: AstXmlNode): AstXmlNode {
 
 // The pointee after stripping any number of `&`/`*` handles.
 fun semPointee(typeNode: *AstXmlNode): AstXmlNode {
-    var current: AstXmlNode = copy(typeNode)
+    var current: AstXmlNode = typeNode
     while (!xmlIsEmpty(current)) {
         val kind: AstNodeCategory = xmlKind(current)
         if (kind == AstNodeCategory.TypeReference || kind == AstNodeCategory.TypePointer) {
@@ -271,7 +325,7 @@ fun semBindOne(bindings: *Dictionary<Str, AstXmlNode>, name: Str, typeNode: AstX
 // matching anything (`sema::unifyType` in the C++ ring). It is what answers "does a
 // `smToYield` take this receiver?" for the `for` check (`Sema.kt`).
 fun semUnifyType(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *List<Str>): Bool {
-    var actualPtr: AstXmlNode = copy(actual)
+    var actualPtr: AstXmlNode = actual
     val patternKind: AstNodeCategory = xmlKind(pattern)
     if (patternKind != AstNodeCategory.TypeReference && patternKind != AstNodeCategory.TypePointer) {
         while (true) {
@@ -392,7 +446,7 @@ fun semBindTypes(
     bindings: *
     Dictionary<Str, AstXmlNode>
 ): Bool {
-    var actualPtr: AstXmlNode = copy(actual)
+    var actualPtr: AstXmlNode = actual
     val patternKind: AstNodeCategory = xmlKind(pattern)
     if (patternKind != AstNodeCategory.TypeReference && patternKind != AstNodeCategory.TypePointer) {
         while (true) {
@@ -513,13 +567,13 @@ fun semSubstitute(typeNode: *AstXmlNode, bindings: *Dictionary<Str, AstXmlNode>,
     val kind: AstNodeCategory = xmlKind(typeNode)
     when (kind) {
         AstNodeCategory.TypeIntLit -> {
-            return semReRole(copy(typeNode), AstNodeKind.Type)
+            return semReRole(typeNode, AstNodeKind.Type)
         }
 
         AstNodeCategory.TypeNamed -> {
             val name: Str = xmlAttr(typeNode, AstNodeAttributeKind.Name)
             if (!xmlIsTypeParam(name, typeParams)) {
-                return semReRole(copy(typeNode), AstNodeKind.Type)
+                return semReRole(typeNode, AstNodeKind.Type)
             }
             if (!bindings.has(name)) {
                 return xmlEmptyNode()
@@ -807,7 +861,7 @@ data class SemInfer(
             AstNodeCategory.StmtVarDecl -> {
                 val declared: AstXmlNode = xmlChild(stmtNode, AstNodeKind.Type)
                 val init: AstXmlNode = xmlChild(stmtNode, AstNodeKind.Init)
-                var typeNode: AstXmlNode = copy(declared)
+                var typeNode: AstXmlNode = declared
                 if (xmlIsEmpty(typeNode) && !xmlIsEmpty(init)) {
                     typeNode = this.infer(init)
                 }
@@ -818,7 +872,7 @@ data class SemInfer(
                 if (!xmlIsEmpty(declared) || xmlIsEmpty(typeNode) || xmlIsEmpty(init)
                     || !this.declarable(init) || !this.spellable(typeNode)
                 ) {
-                    return copy(stmtNode)
+                    return stmtNode
                 }
                 return semWithType(stmtNode, semReRole(typeNode, AstNodeKind.Type))
             }
@@ -833,7 +887,7 @@ data class SemInfer(
                 return semReplaceRole(stmtNode, AstNodeKind.Body, semOne(body))
             }
         }
-        return copy(stmtNode)
+        return stmtNode
     }
 
     // ---- expressions ------------------------------------------------------
@@ -894,6 +948,13 @@ data class SemInfer(
             }
             val hasReceiver: Bool = !xmlIsEmpty(fn.receiver)
             if (hasReceiver != !xmlIsEmpty(receiver)) {
+                continue
+            }
+            // A `native fun` extension spells its receiver as an explicit `this` first
+            // parameter, so no receiver type was recorded for it: it is still a *member* -
+            // a plain call does not reach it (`fun find(...)` must not pick up
+            // `Str.find`'s signature).
+            if (!hasReceiver && semIsExtensionDecl(fn.decl)) {
                 continue
             }
             var bindings: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
@@ -1155,7 +1216,7 @@ data class SemInfer(
                 val lhs: AstXmlNode = xmlChild(e, AstNodeKind.Receiver)
                 // An enum member expression has the enum's type.
                 if (xmlKind(lhs) == AstNodeCategory.ExprName
-                    && this.facts.enumNames.has(copy(xmlAttr(lhs, AstNodeAttributeKind.Name)))
+                    && this.facts.enumNames.has(xmlAttr(lhs, AstNodeAttributeKind.Name))
                 ) {
                     return semNamedType(xmlAttr(lhs, AstNodeAttributeKind.Name))
                 }

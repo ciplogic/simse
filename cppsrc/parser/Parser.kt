@@ -190,7 +190,7 @@ data class Parser(
     // `parent` is a non-owning pointer, so the append replaces the caller's
     // `Children` handle even though the node itself is not passed by value.
     fun attach(parent: *AstXmlNode, role: AstNodeKind, child: *AstXmlNode): Unit {
-        var renamed: AstXmlNode = copy(child)
+        var renamed: AstXmlNode = child
         renamed.name = role
         xmlAddChild(parent, renamed)
     }

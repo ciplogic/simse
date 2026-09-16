@@ -37,7 +37,7 @@ fun linStmt(kind: AstNodeCategory, line: Int, column: Int): AstXmlNode {
 // element name (impl_specs/ast-xmlnode.md), so a reused expression has to be
 // re-rooted for its new position.
 fun linRole(child: *AstXmlNode, role: AstNodeKind): AstXmlNode {
-    var renamed: AstXmlNode = copy(child)
+    var renamed: AstXmlNode = child
     renamed.name = role
     return renamed
 }
@@ -157,7 +157,7 @@ data class LinLowerer(
                     out.append(linGoto(breakTo, xmlLine(stmt), xmlColumn(stmt)))
                     return
                 }
-                out.append(copy(stmt))
+                out.append(stmt)
                 return
             }
 
@@ -167,11 +167,11 @@ data class LinLowerer(
                     out.append(linGoto(continueTo, xmlLine(stmt), xmlColumn(stmt)))
                     return
                 }
-                out.append(copy(stmt))
+                out.append(stmt)
                 return
             }
         }
-        out.append(copy(stmt))
+        out.append(stmt)
     }
 
     // A region needs its own C++ scope only when it declares a variable at its

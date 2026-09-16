@@ -1080,13 +1080,40 @@ namespace linear {
             // no packing, no conversion - which is exactly the call it was before either
             // existed. Null when the facts are not available (a body with no facts, a
             // callee that is a local, a static call's type).
+            // The receiver *pattern* of a fact: its recorded receiver, or - for a
+            // `native fun` extension, which spells the receiver as an explicit `this` first
+            // parameter - that parameter's type. What picks between two same-named
+            // overloads for different receivers (`append` on a `List<T>` and on a `Str`).
+            const ast::TypeExpr *receiverPattern(const sema::FnFact *fact) {
+                if (fact->receiver) return fact->receiver.get();
+                return sema::extensionReceiver(*fact->decl);
+            }
+
+            // The declaration of a data class the facts know, by name (null otherwise): a
+            // construction's arguments convert against its *fields*, the way a call's
+            // convert against its parameters (`AstNodeAttribute(kind, value)`, whose C++ is
+            // the struct's own constructor).
+            const ast::Decl *dataClassDecl(const Str &name) {
+                if (fn.facts == nullptr || name.empty()) return nullptr;
+                auto found = fn.facts->types.find(name);
+                if (found == fn.facts->types.end() || found->second == nullptr) return nullptr;
+                if (found->second->kind != ast::DeclKind::DataClass) return nullptr;
+                return found->second;
+            }
+
             const ast::Decl *callTarget(const Expr &callee, const Expr *receiver, int argCount,
                                         bool member) {
                 if (fn.facts == nullptr) return nullptr;
                 List<const sema::FnFact *> candidates;
                 for (const sema::FnFact &fact: fn.facts->functions) {
                     if (fact.decl == nullptr || fact.decl->name != callee.text) continue;
-                    if ((fact.receiver != nullptr) != member) continue;
+                    // A `native fun` extension spells its receiver as an explicit `this`
+                    // first parameter: the fact's receiver is empty, but the declaration *is*
+                    // a member - and the parameters a call's arguments convert against start
+                    // after it.
+                    const bool factMember = fact.receiver != nullptr
+                                            || (member && sema::isExtensionDecl(*fact.decl));
+                    if (factMember != member) continue;
                     candidates.push_back(&fact);
                 }
                 if (candidates.size() > 1 && member && receiver != nullptr) {
@@ -1096,8 +1123,9 @@ namespace linear {
                                                         : nullptr;
                     List<const sema::FnFact *> matching;
                     for (const sema::FnFact *fact: candidates) {
-                        if (recv != nullptr && fact->receiver != nullptr
-                            && !sema::unifyType(*fact->receiver, *recv, fact->templateParams)) {
+                        const ast::TypeExpr *pattern = receiverPattern(fact);
+                        if (recv != nullptr && pattern != nullptr
+                            && !sema::unifyType(*pattern, *recv, fact->templateParams)) {
                             continue; // another type's method of the same name
                         }
                         matching.push_back(fact);
@@ -1109,14 +1137,16 @@ namespace linear {
                 int exactCount = 0;
                 int packCount = 0;
                 for (const sema::FnFact *fact: candidates) {
-                    const int paramCount = (int) fact->decl->params.size();
+                    const int paramCount =
+                            (int) fact->decl->params.size() - sema::receiverParams(*fact->decl);
                     if (paramCount == argCount) {
                         exact = fact->decl;
                         exactCount++;
                         continue;
                     }
                     if (paramCount > 0
-                        && sema::isPackTarget(fact->decl->params[paramCount - 1].type.get())
+                        && sema::isPackTarget(
+                                fact->decl->params[fact->decl->params.size() - 1].type.get())
                         && argCount >= paramCount - 1) {
                         pack = fact->decl;
                         packCount++;
@@ -1147,13 +1177,14 @@ namespace linear {
             // leaves the call exactly as it was: nothing is inferred, nothing is packed.
             int packStart(const ast::Decl *target, const List<ExprPtr> &args) {
                 if (target == nullptr || target->params.empty()) return -1;
+                const int offset = sema::receiverParams(*target);
                 const ast::TypeExpr *wanted = target->params[target->params.size() - 1].type.get();
                 if (!sema::isPackTarget(wanted)) return -1;
-                if ((int) args.size() == (int) target->params.size() && !args.empty()) {
+                if ((int) args.size() == (int) target->params.size() - offset && !args.empty()) {
                     const ast::TypePtr last = argumentType(*args[args.size() - 1]);
                     if (!last || sema::listTypeOf(last.get()) != nullptr) return -1;
                 }
-                return (int) target->params.size() - 1;
+                return (int) target->params.size() - 1 - offset;
             }
 
             // The trailing arguments as one list, built by one `Pack` instruction: the
@@ -1209,13 +1240,11 @@ namespace linear {
             // `*`, and why the reverse change still compiles. A `*T` *binding*
             // (`val p: *T = x`) is a different question - a pointer that outlives the
             // expression it points into has to be asked for, so the writer writes it.
-            int convertArgument(const ast::Decl *target, int index, const ExprPtr &argPtr) {
-                if (target == nullptr || index >= (int) target->params.size() || !argPtr) {
-                    return operand(argPtr);
-                }
+            int convertArgument(const ast::Decl *callee, const ast::TypeExpr *param,
+                                const ExprPtr &argPtr) {
+                if (!argPtr) return operand(argPtr);
                 const Expr &arg = *argPtr;
                 const common::SourcePos argPos = arg.pos;
-                const ast::TypeExpr *param = target->params[index].type.get();
                 if (param == nullptr) return operand(argPtr);
                 const bool wantPointer = param->kind == ast::TypeKind::Pointer;
                 const bool wantShared = !wantPointer && sema::isHandleType(param);
@@ -1232,16 +1261,28 @@ namespace linear {
                 }
                 if (actual == nullptr) actual = exprType(arg);
                 if (actual == nullptr) return operand(argPtr);
-                const ast::TypeExpr *wanted = sema::pointeeOf(param);
                 const ast::TypeExpr *given = sema::pointeeOf(actual.get());
-                if (wanted == nullptr || given == nullptr) return operand(argPtr);
-                if (ilTypeText(*wanted) != ilTypeText(*given)) return operand(argPtr);
+                if (given == nullptr) return operand(argPtr);
                 const bool havePointer = actual->kind == ast::TypeKind::Pointer;
                 const bool haveShared = !havePointer && sema::isHandleType(actual.get());
                 const bool haveValue = !havePointer && !haveShared;
                 if ((wantPointer && havePointer) || (wantShared && haveShared)) {
                     return operand(argPtr);
                 }
+                // A parameter that is one of the callee's own type parameters, bare
+                // (`List<T>.append(value: T)`, `Dictionary<K, V>.has(key: K)`): the
+                // *receiver* binds it, so the two types cannot be compared here - what the
+                // conversion needs is the parameter's *form*, and a bare parameter is a
+                // value, so a handle argument is read through to the type the argument
+                // itself names. (A slot typed `T` could not even be declared outside the
+                // callee's own template.)
+                if (callee != nullptr && sema::isBareTypeParam(*callee, param)) {
+                    if (haveValue) return operand(argPtr);
+                    return readThrough(given, operand(argPtr));
+                }
+                const ast::TypeExpr *wanted = sema::pointeeOf(param);
+                if (wanted == nullptr) return operand(argPtr);
+                if (ilTypeText(*wanted) != ilTypeText(*given)) return operand(argPtr);
                 if (wantPointer) {
                     // The address, spelled exactly as an explicit `*` spells it (`into`'s
                     // `Deref` arm is the definition): a member/index chain *is* its own
@@ -1316,11 +1357,32 @@ namespace linear {
                     }
                 }
 
+                // The parameters the arguments convert against, and the declaration that
+                // owns them (which names its own type parameters): the callee's, or - for a
+                // construction the extractor sees as a plain call (`AstNodeAttribute(kind,
+                // value)`, a prelude data class whose C++ is the struct's own constructor) -
+                // the class's *fields*, which is the same rule a call's parameters are.
+                const ast::Decl *paramOwner = target;
+                List<ast::TypePtr> paramTypes;
+                int paramOffset = 0;
+                if (target != nullptr) {
+                    paramOffset = sema::receiverParams(*target);
+                    for (const ast::Param &param: target->params) paramTypes.push_back(param.type);
+                } else {
+                    const ast::Decl *ctor = dataClassDecl(callee.text);
+                    if (ctor != nullptr) {
+                        paramOwner = ctor;
+                        for (const ast::Field &field: ctor->fields) paramTypes.push_back(field.type);
+                    }
+                }
                 List<int> args;
                 List<int> argTypes;
                 const int plain = packFrom < 0 ? (int) e.args.size() : packFrom;
                 for (int i = 0; i < plain; i++) {
-                    int slot = convertArgument(target, i, e.args[i]);
+                    const int at = paramOffset + i;
+                    const ast::TypeExpr *param =
+                            at < (int) paramTypes.size() ? paramTypes[at].get() : nullptr;
+                    const int slot = convertArgument(paramOwner, param, e.args[i]);
                     args.push_back(slot);
                     argTypes.push_back(operandType(slot, e.args[i]));
                 }

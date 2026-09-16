@@ -104,6 +104,11 @@ prove the pointer is valid for the complete expression. The first
 self-hosted implementation may require an explicit `unsafe` block for all raw
 pointer creation, dereference, and `copy` operations through `*T`.
 
+The operation is rarely *written* any more. Every position whose type is known reads a
+handle through on its own ("Automatic dereference", below), so `copy` is what the
+extractor emits for such a position rather than what a program spells - the compiler's own
+ring spells no `copy(...)` at all.
+
 ## Expression semantics
 
 The memory operators also appear as expressions.
@@ -160,11 +165,15 @@ nothing at all.
 
 The **call argument** is where the conversion is inferred from the callee's parameter
 (`specs/functions.md`, "Handles at a call"), so it fires wherever that parameter's type is
-known. Two parameters it cannot read are a `native fun` extension's type parameter
-(`Dictionary<K, V>.has(key: K)` - the declaration's parameters are not in the facts) and a
-data class's field (a construction reads a constructor, not a `Param`); there the writer
-asks for the value with an explicit `copy(...)`, which is also what a container of `Str`
-needs for an element (`names.append(copy(xmlAttr(param, Name)))`).
+known. Two parameter shapes carry a type the *callee's own signature* does not fix, and
+they are read from the argument instead: a `native fun` extension spells its receiver as an
+explicit `this` first parameter, so `Dictionary<K, V>.has(key: K)`'s `key` is the second
+parameter, and its bare `K` is bound by the receiver - a handle argument is read through to
+the pointee the argument itself names - while a construction (`AstNodeAttribute(kind,
+value)`) converts its arguments against the data class's *fields*, which is the same rule.
+No call in the compiler's own ring spells a `copy` any more, for an element of a container
+(`names.append(copy(xmlAttr(param, Name)))`) or for anything else: what the destination
+decides, the extractor emits.
 
 Member access, indexing, and method calls through a counted reference (`&T`) or
 a raw pointer (`*T`) automatically reach the pointee. For example, if `source`

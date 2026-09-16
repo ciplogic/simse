@@ -113,6 +113,33 @@ namespace sema {
         return false;
     }
 
+    // The receiver type of a declaration that spells it as an explicit `this` first
+    // parameter ..., null for everything else.
+    const ast::TypeExpr *extensionReceiver(const ast::Decl &decl) {
+        if (decl.params.empty()) return nullptr;
+        if (decl.params[0].name != "this") return nullptr;
+        return decl.params[0].type.get();
+    }
+
+    // How many leading parameters are that receiver: 1 or 0.
+    int receiverParams(const ast::Decl &decl) {
+        return extensionReceiver(decl) != nullptr ? 1 : 0;
+    }
+
+    // Whether a declaration spells its receiver that way.
+    bool isExtensionDecl(const ast::Decl &decl) {
+        return extensionReceiver(decl) != nullptr;
+    }
+
+    // Whether `param` is one of `decl`'s own type parameters, bare (`T`, not `List<T>`):
+    // what an argument can only be compared against as a *form*, since the receiver -
+    // not this call - binds it.
+    bool isBareTypeParam(const ast::Decl &decl, const ast::TypeExpr *param) {
+        if (param == nullptr || param->kind != TypeKind::Named) return false;
+        return isTypeParamName(param->name, decl.functionTypeParams)
+               || isTypeParamName(param->name, decl.typeParams);
+    }
+
     bool isTypeParamName(const Str &name, const List<Str> &typeParams) {
         for (const Str &param: typeParams) {
             if (param == name) return true;

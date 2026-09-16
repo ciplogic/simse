@@ -107,7 +107,7 @@ fun exprReplaceRole(like: *AstXmlNode, role: AstNodeKind, replacements: *List<As
             }
             seen = seen + 1
         } else {
-            kids.append(copy(child))
+            kids.append(child)
         }
     }
     while (seen < replacements.size()) {
@@ -171,7 +171,7 @@ data class ExprFlattener(
             }
 
             AstNodeCategory.ExprName, AstNodeCategory.ExprGenericName -> {
-                return copy(e)
+                return e
             }
         }
         return this.flat(e, ExprSlot.Value, temps)
@@ -237,12 +237,12 @@ data class ExprFlattener(
                 return exprReplaceRole(e, AstNodeKind.Operand, operand)
             }
         }
-        return copy(e)
+        return e
     }
 
     fun flat(e: *AstXmlNode, slot: ExprSlot, temps: *List<AstXmlNode>): AstXmlNode {
         if (exprIsSimple(e) || exprIsShortCircuit(e)) {
-            return copy(e)
+            return e
         }
         val built: AstXmlNode = this.rebuild(e, temps)
         if (slot != ExprSlot.Value) {
@@ -349,7 +349,7 @@ data class ExprFlattener(
         }
         // Label and Goto hold no expressions; If/While/Switch/Break/Continue cannot
         // appear here (`linLowerBody` removed them).
-        out.append(copy(stmt))
+        out.append(stmt)
     }
 }
 

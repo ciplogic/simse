@@ -104,6 +104,47 @@ inline void simse_str_appendStrPtr(Str& self, const Str* value) {
     if (value != nullptr) self.append(*value);
 }
 
+// `fmtStr(fmt, items)`: the format text with each `|` replaced, in order, by one
+// item. The result's length is known before anything is written - the format minus
+// the points it fills, plus every item - so one buffer is reserved and written
+// once, and neither the literal runs nor the items are copied into a temporary on
+// the way.
+//
+// A `|` is a point wherever it appears, `||` included (an empty run between two
+// points), and what does not line up still loses nothing: with no point left the
+// remaining items are appended, and with no item left the rest of the format -
+// its `|`s too - is appended verbatim.
+inline Str simse_fmtStr(const Str* fmt, const List<Str>* items) {
+    Str out;
+    if (fmt == nullptr) return out;
+    const Int count = items == nullptr ? 0 : (Int) items->size();
+    const Int fmtLen = (Int) fmt->size();
+    Int points = 0;
+    for (Int i = 0; i < fmtLen; i++) {
+        if ((*fmt)[i] == '|') points++;
+    }
+    const Int filled = points < count ? points : count;
+    Int len = fmtLen - filled;
+    if (items != nullptr) {
+        for (const Str& item: *items) len += (Int) item.size();
+    }
+    out.reserve(len);
+    Int start = 0;
+    Int used = 0;
+    for (Int i = 0; i < fmtLen && used < filled; i++) {
+        if ((*fmt)[i] != '|') continue;
+        out.append(fmt->data() + start, (Str::size_type) (i - start));
+        out.append((*items)[used]);
+        used++;
+        start = i + 1;
+    }
+    out.append(fmt->data() + start, (Str::size_type) (fmtLen - start));
+    for (Int i = used; i < count; i++) {
+        out.append((*items)[i]);
+    }
+    return out;
+}
+
 // `Str.reserve(count)`: grows the buffer once, so a run of `append`/`appendStr`
 // writes the text once instead of copying the accumulated prefix at every growth
 // step. A *hint*, not a length: the string keeps its size, and an append past the

@@ -1199,7 +1199,7 @@ fun ilPointerNode(inner: *AstXmlNode): AstXmlNode {
         AstNodeKind.Type, AstNodeCategory.TypePointer,
         List<AstNodeAttribute>(), Array<AstXmlNode>()
     )
-    var renamed: AstXmlNode = copy(inner)
+    var renamed: AstXmlNode = inner
     // The child's role is what the backend's `type()` looks up (`Inner`), so a synthesized
     // `*T` has to carry it like a parsed one does.
     renamed.name = AstNodeKind.Inner
@@ -1216,7 +1216,7 @@ fun ilDerefNode(operand: AstXmlNode): AstXmlNode {
         AstNodeKind.Expr, AstNodeCategory.ExprDeref,
         List<AstNodeAttribute>(), Array<AstXmlNode>()
     )
-    var renamed: AstXmlNode = copy(operand)
+    var renamed: AstXmlNode = operand
     renamed.name = AstNodeKind.Operand
     xmlAddChild(node, renamed)
     return node
@@ -1288,7 +1288,7 @@ fun ilNamedTypeNode(name: Str): AstXmlNode {
 fun ilReceiverTypeNode(typeNode: *AstXmlNode): AstXmlNode {
     val kind: AstNodeCategory = xmlKind(typeNode)
     if (kind == AstNodeCategory.TypeReference || kind == AstNodeCategory.TypePointer) {
-        return copy(typeNode)
+        return typeNode
     }
     return ilPointerNode(typeNode)
 }
@@ -2449,7 +2449,7 @@ data class IlExtractor(
             node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
             val args: List<AstXmlNode> = xmlChildren(e, AstNodeKind.TypeArg)
             for (*typeArg in args) {
-                var arg: AstXmlNode = copy(typeArg)
+                var arg: AstXmlNode = typeArg
                 arg.name = AstNodeKind.TypeArg
                 xmlAddChild(node, arg)
             }
@@ -2567,6 +2567,7 @@ data class IlExtractor(
                 continue
             }
             val factMember: Bool = !xmlIsEmpty(fact.receiver)
+                    || (member && semIsExtensionDecl(fact.decl))
             if (factMember != member) {
                 continue
             }
@@ -2581,8 +2582,9 @@ data class IlExtractor(
                 val index: Int = candidates[m]
                 m = m + 1
                 val fact: *SemFnFact = *this.fn.facts.functions[index]
-                if (!xmlIsEmpty(recv) && !xmlIsEmpty(fact.receiver)
-                    && !semUnifyType(fact.receiver, recv, fact.templateParams)
+                val pattern: AstXmlNode = this.receiverPattern(fact)
+                if (!xmlIsEmpty(recv) && !xmlIsEmpty(pattern)
+                    && !semUnifyType(pattern, recv, fact.templateParams)
                 ) {
                     continue // another type's method of the same name
                 }
@@ -2599,14 +2601,14 @@ data class IlExtractor(
             val fact: *SemFnFact = *this.fn.facts.functions[candidates[k]]
             k = k + 1
             val params: List<AstXmlNode> = xmlChildren(fact.decl, AstNodeKind.Param)
-            val paramCount: Int = params.size()
+            val paramCount: Int = params.size() - semReceiverParams(fact.decl)
             if (paramCount == argCount) {
                 exact = fact.decl
                 exactCount = exactCount + 1
                 continue
             }
             if (paramCount > 0
-                && semIsPackTarget(xmlChild(params[paramCount - 1], AstNodeKind.Type))
+                && semIsPackTarget(xmlChild(params[params.size() - 1], AstNodeKind.Type))
                 && argCount >= paramCount - 1
             ) {
                 pack = fact.decl
@@ -2623,6 +2625,35 @@ data class IlExtractor(
             return pack
         }
         return xmlEmptyNode()
+    }
+
+    // The declaration of a data class the facts know, by name (empty otherwise): a
+    // construction's arguments convert against its *fields*, the way a call's convert
+    // against its parameters (`AstNodeAttribute(kind, value)`, whose C++ is the struct's
+    // own constructor).
+    fun dataClassDecl(name: Str): AstXmlNode {
+        if (this.fn.facts == null || name == "") {
+            return xmlEmptyNode()
+        }
+        if (!this.fn.facts.types.has(name)) {
+            return xmlEmptyNode()
+        }
+        val decl: AstXmlNode = this.fn.facts.types.get(name).value()
+        if (xmlKind(decl) != AstNodeCategory.DataClass) {
+            return xmlEmptyNode()
+        }
+        return decl
+    }
+
+    // The receiver *pattern* of a fact: its recorded receiver, or - for a `native fun`
+    // extension, which spells the receiver as an explicit `this` first parameter - that
+    // parameter's type. What picks between two same-named overloads for different
+    // receivers (`append` on a `List<T>` and on a `Str`).
+    fun receiverPattern(fact: *SemFnFact): AstXmlNode {
+        if (!xmlIsEmpty(fact.receiver)) {
+            return fact.receiver
+        }
+        return semExtensionReceiver(fact.decl)
     }
 
     // The type of an *argument*, which the pack and the handle conversions both ask for: a
@@ -2657,13 +2688,13 @@ data class IlExtractor(
         if (!semIsPackTarget(wanted)) {
             return -1
         }
-        if (args.size() == params.size() && args.size() > 0) {
+        if (args.size() == params.size() - semReceiverParams(target) && args.size() > 0) {
             val last: AstXmlNode = this.argumentType(args[args.size() - 1])
             if (xmlIsEmpty(last) || !xmlIsEmpty(semListTypeOf(last))) {
                 return -1
             }
         }
-        return params.size() - 1
+        return params.size() - 1 - semReceiverParams(target)
     }
 
     // The trailing arguments as one list, built by one `Pack` instruction: the list's
@@ -2690,7 +2721,7 @@ data class IlExtractor(
         if (xmlIsEmpty(wanted) || xmlKind(wanted) == AstNodeCategory.TypeGeneric) {
             return slot // by value
         }
-        val handle: AstXmlNode = copy(wanted)
+        val handle: AstXmlNode = wanted
         val bound: Int = this.freshSlot(ilTypeText(handle), handle)
         this.emit(IlOpKind.Deref, ilOps2(bound, slot)) // `*List<T>`: the borrow of a fresh slot
         return bound
@@ -2700,7 +2731,7 @@ data class IlExtractor(
     // parameter needs when the argument is a borrow or a counted reference. (`CopyValue` is
     // the language's `copy`, which reads through a handle - the emitter spells it `*(x)`.)
     fun readThrough(pointeeType: *AstXmlNode, from: Int): Int {
-        val typeNode: AstXmlNode = copy(pointeeType)
+        val typeNode: AstXmlNode = pointeeType
         val slot: Int = this.freshSlot(ilTypeText(typeNode), typeNode)
         this.emit(IlOpKind.CopyValue, ilOps2(slot, from))
         return slot
@@ -2724,15 +2755,7 @@ data class IlExtractor(
     // every caller having to spell the `*`, and why the reverse change still compiles. A
     // `*T` *binding* (`val p: *T = x`) is a different question - a pointer that outlives
     // the expression it points into has to be asked for, so the writer writes it.
-    fun convertArgument(target: AstXmlNode, index: Int, arg: AstXmlNode): Int {
-        if (xmlIsEmpty(target)) {
-            return this.operandOf(arg)
-        }
-        val params: List<AstXmlNode> = xmlChildren(target, AstNodeKind.Param)
-        if (index >= params.size()) {
-            return this.operandOf(arg)
-        }
-        val param: AstXmlNode = xmlChild(params[index], AstNodeKind.Type)
+    fun convertArgument(callee: AstXmlNode, param: AstXmlNode, arg: AstXmlNode): Int {
         if (xmlIsEmpty(param)) {
             return this.operandOf(arg)
         }
@@ -2756,19 +2779,34 @@ data class IlExtractor(
         if (xmlIsEmpty(actual)) {
             return this.operandOf(arg)
         }
-        val wanted: AstXmlNode = semPointeeOf(param)
         val given: AstXmlNode = semPointeeOf(actual)
-        if (xmlIsEmpty(wanted) || xmlIsEmpty(given)) {
+        if (xmlIsEmpty(given)) {
             return this.operandOf(arg)
-        }
-        if (ilTypeText(wanted) != ilTypeText(given)) {
-            return this.operandOf(arg) // not the same type
         }
         val havePointer: Bool = xmlKind(actual) == AstNodeCategory.TypePointer
         val haveShared: Bool = !havePointer && ilIsHandleType(actual)
         val haveValue: Bool = !havePointer && !haveShared
         if ((wantPointer && havePointer) || (wantShared && haveShared)) {
             return this.operandOf(arg)
+        }
+        // A parameter that is one of the callee's own type parameters, bare
+        // (`List<T>.append(value: T)`, `Dictionary<K, V>.has(key: K)`): the *receiver*
+        // binds it, so the two types cannot be compared here - what the conversion needs
+        // is the parameter's *form*, and a bare parameter is a value, so a handle argument
+        // is read through to the type the argument itself names. (A slot typed `T` could
+        // not even be declared outside the callee's own template.)
+        if (semIsBareTypeParam(callee, param)) {
+            if (haveValue) {
+                return this.operandOf(arg)
+            }
+            return this.readThrough(given, this.operandOf(arg))
+        }
+        val wanted: AstXmlNode = semPointeeOf(param)
+        if (xmlIsEmpty(wanted)) {
+            return this.operandOf(arg)
+        }
+        if (ilTypeText(wanted) != ilTypeText(given)) {
+            return this.operandOf(arg) // not the same type
         }
         if (wantPointer) {
             // The address, spelled exactly as an explicit `*` spells it (`into`'s `Deref`
@@ -2777,7 +2815,7 @@ data class IlExtractor(
             // pointer has to write into the caller's object), a static name is its
             // `GetStaticAddr`, and a name or a temporary is `&x` / the address taken at the
             // call.
-            val handle: AstXmlNode = copy(param)
+            val handle: AstXmlNode = param
             val bound: Int = this.freshSlot(ilTypeText(handle), handle)
             this.into(bound, ilDerefNode(arg))
             return bound
@@ -2786,7 +2824,7 @@ data class IlExtractor(
             if (!haveValue) {
                 return this.operandOf(arg) // `&T` from a pointer: the checker reports it
             }
-            val box: AstXmlNode = copy(param)
+            val box: AstXmlNode = param
             val held: Int = this.freshSlot(ilTypeText(box), box)
             this.emit(IlOpKind.Box, ilOps2(held, this.operandOf(arg))) // `&x` boxes a copy
             return held
@@ -2865,9 +2903,32 @@ data class IlExtractor(
         if (packFrom >= 0) {
             plain = packFrom
         }
+        // The parameters the arguments convert against, and the declaration that owns
+        // them (which names its own type parameters): the callee's, or - for a
+        // construction the extractor sees as a plain call (`AstNodeAttribute(kind,
+        // value)`, a prelude data class whose C++ is the struct's own constructor) - the
+        // class's *fields*, which is the same rule a call's parameters are.
+        var paramOwner: AstXmlNode = xmlEmptyNode()
+        var paramNodes: List<AstXmlNode> = List<AstXmlNode>()
+        var paramOffset: Int = 0
+        if (!xmlIsEmpty(target)) {
+            paramOwner = target
+            paramNodes = xmlChildren(target, AstNodeKind.Param)
+            paramOffset = semReceiverParams(target)
+        } else {
+            val decl: AstXmlNode = this.dataClassDecl(calleeName)
+            if (!xmlIsEmpty(decl)) {
+                paramOwner = decl
+                paramNodes = xmlChildren(decl, AstNodeKind.Field)
+            }
+        }
         var i: Int = 0
         while (i < plain) {
-            val slot: Int = this.convertArgument(target, i, argNodes[i])
+            var param: AstXmlNode = xmlEmptyNode()
+            if (paramOffset + i < paramNodes.size()) {
+                param = xmlChild(paramNodes[paramOffset + i], AstNodeKind.Type)
+            }
+            val slot: Int = this.convertArgument(paramOwner, param, argNodes[i])
             args.append(slot)
             argTypes.append(this.operandType(slot, argNodes[i]))
             i = i + 1
@@ -3149,7 +3210,7 @@ fun ilLambdaLower(body: *List<AstXmlNode>): List<AstXmlNode> {
                 AstNodeCategory.StmtReturn, xmlLine(body[0]),
                 xmlColumn(body[0])
             )
-            var value: AstXmlNode = copy(expr)
+            var value: AstXmlNode = expr
             value.name = AstNodeKind.Value
             xmlAddChild(ret, value)
             out.append(ret)

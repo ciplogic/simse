@@ -83,7 +83,7 @@ fun semaIsHandleType(typeNode: *AstXmlNode): Bool {
 // References/pointers on the actual side are auto-dereferenced, matching the
 // member-call decision.
 fun semaUnifyReceiver(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *List<Str>): Bool {
-    var actualPtr: AstXmlNode = copy(actual)
+    var actualPtr: AstXmlNode = actual
     val pk: AstNodeCategory = xmlKind(pattern)
     if (pk != AstNodeCategory.TypeReference && pk != AstNodeCategory.TypePointer) {
         while ((xmlKind(actualPtr) == AstNodeCategory.TypeReference || xmlKind(actualPtr) == AstNodeCategory.TypePointer)
@@ -308,11 +308,11 @@ data class Analyzer(
     fun appendGlobalFunction(key: Str, decl: *AstXmlNode): Unit {
         if (this.globalFunctions.has(key)) {
             var existing: List<AstXmlNode> = this.globalFunctions.get(key).value()
-            existing.append(copy(decl))
+            existing.append(decl)
             this.globalFunctions.insert(key, existing)
         } else {
             var fresh: List<AstXmlNode> = List<AstXmlNode>()
-            fresh.append(copy(decl))
+            fresh.append(decl)
             this.globalFunctions.insert(key, fresh)
         }
     }
@@ -320,11 +320,11 @@ data class Analyzer(
     fun appendPackageDecl(pkg: Str, decl: *AstXmlNode): Unit {
         if (this.packageDecls.has(pkg)) {
             var existing: List<AstXmlNode> = this.packageDecls.get(pkg).value()
-            existing.append(copy(decl))
+            existing.append(decl)
             this.packageDecls.insert(pkg, existing)
         } else {
             var fresh: List<AstXmlNode> = List<AstXmlNode>()
-            fresh.append(copy(decl))
+            fresh.append(decl)
             this.packageDecls.insert(pkg, fresh)
         }
     }
@@ -332,11 +332,11 @@ data class Analyzer(
     fun appendVisibleFunction(name: Str, decl: *AstXmlNode): Unit {
         if (this.functions.has(name)) {
             var existing: List<AstXmlNode> = this.functions.get(name).value()
-            existing.append(copy(decl))
+            existing.append(decl)
             this.functions.insert(name, existing)
         } else {
             var fresh: List<AstXmlNode> = List<AstXmlNode>()
-            fresh.append(copy(decl))
+            fresh.append(decl)
             this.functions.insert(name, fresh)
         }
     }
@@ -417,7 +417,7 @@ data class Analyzer(
         packages.append(this.packageOf(module))
         val imports: List<AstXmlNode> = xmlChildren(module, AstNodeKind.Import)
         for (*importDecl in imports) {
-            packages.append(copy(xmlAttr(importDecl, AstNodeAttributeKind.Path)))
+            packages.append(xmlAttr(importDecl, AstNodeAttributeKind.Path))
         }
         packages.append("rtl")
 
@@ -481,7 +481,7 @@ data class Analyzer(
         if (this.scopes.size() == 0) {
             return
         }
-        this.scopes[this.scopes.size() - 1].insert(name, ValueBinding(isMutable, checkAssign, copy(type)))
+        this.scopes[this.scopes.size() - 1].insert(name, ValueBinding(isMutable, checkAssign, type))
     }
 
     fun lookupValue(name: Str): Opt<ValueBinding> {
@@ -1089,7 +1089,7 @@ data class Analyzer(
                 built.attributes.append(
                     AstNodeAttribute(
                         AstNodeAttributeKind.Name,
-                        copy(xmlAttr(callee, AstNodeAttributeKind.Name))
+                        xmlAttr(callee, AstNodeAttributeKind.Name)
                     )
                 )
                 val args: List<AstXmlNode> = xmlChildren(callee, AstNodeKind.TypeArg)
@@ -1179,7 +1179,7 @@ data class Analyzer(
     // The receiver's outer type, ignoring handles and type arguments: `*List<Int>` and
     // `List<Str>` are the same receiver for this purpose.
     fun semaReceiverNameMatches(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *List<Str>): Bool {
-        var actualPtr: AstXmlNode = copy(actual)
+        var actualPtr: AstXmlNode = actual
         while (true) {
             val kind: AstNodeCategory = xmlKind(actualPtr)
             if (kind != AstNodeCategory.TypeReference && kind != AstNodeCategory.TypePointer) {

@@ -288,7 +288,7 @@ fun xmlChild(node: *AstXmlNode, role: AstNodeKind): AstXmlNode {
     // compiler's hottest helper. `copy(child)` reads the one element that matched.
     for (*child in node.Children) {
         if (child.name == role) {
-            return copy(child)
+            return child
         }
     }
     return xmlEmptyNode()
@@ -299,7 +299,7 @@ fun xmlChildren(node: *AstXmlNode, role: AstNodeKind): List<AstXmlNode> {
     var out: List<AstXmlNode> = List<AstXmlNode>()
     for (*child in node.Children) {
         if (child.name == role) {
-            out.append(copy(child))
+            out.append(child)
         }
     }
     return out
@@ -329,7 +329,7 @@ fun xmlTypeParamNames(node: *AstXmlNode): List<Str> {
     val params: List<AstXmlNode> = xmlChildren(node, AstNodeKind.TypeParam)
     var names: List<Str> = List<Str>()
     for (*param in params) {
-        names.append(copy(xmlAttr(param, AstNodeAttributeKind.Name)))
+        names.append(xmlAttr(param, AstNodeAttributeKind.Name))
     }
     return names
 }
@@ -346,7 +346,7 @@ fun xmlDecls(module: *AstXmlNode): List<AstXmlNode> {
     var out: List<AstXmlNode> = List<AstXmlNode>()
     for (*child in module.Children) {
         if (xmlIsDecl(child)) {
-            out.append(copy(child))
+            out.append(child)
         }
     }
     return out

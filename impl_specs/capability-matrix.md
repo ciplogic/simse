@@ -1684,7 +1684,8 @@ compiler *did* catch and one it could not:
   `copy(...)` is still spelled by hand where the destination's type cannot be read: a
   container of `Str` (`names.append(copy(xmlAttr(param, Name)))`) and a native extension's
   type parameter (`Dictionary<K, V>.has(key: K)` - the extension's parameters are not in
-  the facts, so the extractor cannot resolve `K`). Closing that gap is the follow-up.
+  the facts, so the extractor cannot resolve `K`). Closing that gap is the follow-up - and
+  T65 is that follow-up: both shapes convert now, and no `copy` is left in the ring.
 
   Measured (`tools/_bench_ab.mjs`, 7 interleaved runs, same input): self-transpile
   **1000.8/1026.9 ms** against the pre-change compiler's **1068.5/1090.3 ms** (min/median)
@@ -1750,4 +1751,68 @@ compiler *did* catch and one it could not:
   extension picks up the extension's return type - `fun find(parts: *List<Str>, index: Int):
   *Str` typed as `Int`, from `Str.find`'s signature - because the emitter records an
   explicit-`this` native's receiver as *empty*, so `functionReturn` treats it as a plain
-  function.
+  function. (The second one is fixed by T65, below; the `argv` one still stands.)
+
+- **`fmtStr`, and the conversion covers the parameters a call cannot type - so the
+  compiler's own ring spells no `copy` at all (T65).** Two changes that share one root: what
+  a *destination's* type decides, the extractor should emit, and nothing a program writes
+  should have to say it twice.
+
+  `fmtStr(fmt: *Str, items: *List<Str>): Str` is the fixed-shape joiner
+  (`simse_fmtStr` in `cppsrc/rtl/listops.hpp`): the format's `|` characters are replaced, in
+  order, by one item each, the length is known before anything is written (the format minus
+  the points it fills, plus every item), and the result is assembled in one `reserve`d
+  buffer. `Codegen.kt` writes **38** of its string chains as `fmtStr` now, the shape an
+  emitter has thousands of: `fail`'s `file:line:col: msg` is `fmtStr("|:|:|: |", ...)`, and
+  `exprInner`'s wrappers are `*(|)`, `(|).get()`, `simse_addressOf(|)`, `<|>`, `(*|)[|]`.
+  Because it takes its items the way any pack-taking call does, the trailing arguments pack
+  straight into the `*List<Str>` - `fmtStr("| |", "a", "b")`, no `listOf` to write, no `*`
+  on a literal - which is the *second* thing T61 bought and the first place it reads well.
+
+  The conversion half. T62 read the row off the callee's parameter, which left three shapes
+  whose type the parameter list cannot fix (`impl_specs/linear-il.md`, "A parameter the call
+  cannot type is read from the argument"): a `native fun` extension's receiver, which the
+  declaration spells as an explicit `this` first parameter, so the fact's own `receiver` was
+  **empty** and `callTarget` did not even see the call as a member; a bare type parameter
+  (`Dictionary<K, V>.has(key: K)`), which the *receiver* binds and no argument can be
+  compared against; and a construction (`AstNodeAttribute(kind, value)`), which the
+  extractor sees as a plain call with a `Name` callee and no facts entry, so its arguments
+  were never converted at all. The first is now `extensionReceiver`/`receiverParams`/
+  `isExtensionDecl` (and the parameters a call's arguments convert against start *after* the
+  receiver - what `packStart` and the pack-arity test count), the second is `isBareTypeParam`
+  (a bare parameter's *form* is a value, so a handle argument is read through to the pointee
+  it names itself), the third is `dataClassDecl` (the class's `Field` nodes are the "parameters"),
+  and all three are mirrored in both rings. That `isExtensionDecl` also fixes the `Str.find`
+  collision T64 reported: `functionReturn` skips an extension, so `fun find(parts:
+  *List<Str>, index: Int): *Str` types as `*Str` again.
+
+  With that, `copy(...)` left the ring's source entirely - **79 sites**, every one of them a
+  conversion (or, on a value, the identity row) that the destination already decides. What
+  the emitter produces is a strictly smaller compiler: the amalgamation goes from 45,293 to
+  45,265 lines and from 945 to **931** `AstXmlNode` scratch temporaries, because a conversion
+  now folds into the destination that asked for it (`self->selfType = *(selfTypePtr)` where
+  it used to be a slot assigned and then read) and a no-op `copy(v)` of a value drops out
+  (`receiver = (base)` becomes `receiver = base`).
+
+  Measured with `tools/_bench_ab.mjs` (9 interleaved runs, the pre-change amalgamation
+  compiled from the same sources so only the *compiler binary* differs):
+  **1087.5/1103.4 -> 1075.9/1085.1 ms** min/median, and `bun tools/bootstrap.js` reports
+  1080/1083 ms for the self-transpile against T64's 1131.3/1132.8. For once the win is where
+  the emitters are: the loops the compiler runs most, over AST nodes that no longer get
+  copied into a slot per argument.
+
+  Verified: both rings rebuild clean, T23's two-step bootstrap is byte-identical, T22's
+  emission differential is unchanged, `simse_tests.exe` **56/56**, `bun tools/stress.js`
+  **40/40** on the self-hosted ring and **40/40** on the hand-written one,
+  `cppsrc/simse_bootstrap.cpp` regenerated so `bun tools/bootstrap.js` reports the fixed
+  point byte for byte in *both* configurations (release 45,266 lines/1.38 MB, debug with
+  assertions on - which is what would have caught an aliasing mistake), and no golden
+  changed. A structural diff of the two amalgamations (slot names and string-table indices
+  erased, 632 functions on each side) shows 27 functions differing, every difference one of
+  three shapes: a dropped no-op `copy`, a folded temporary, and a read-through inlined at
+  its single use - no type, callee or operator moved.
+
+  Docs updated with it: `specs/built-in-types.md` (`fmtStr` beside `reserve`/`appendStrPtr`),
+  `specs/memory-model.md` ("Extraction": the operation is what the extractor emits, not what
+  a program writes) and `impl_specs/linear-il.md` ("The conversion": the three parameter
+  shapes, and the type itself is never inferred).

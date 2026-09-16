@@ -146,6 +146,19 @@ Two more are what a *joiner* wants, and both are on the emitted surface
   `out.appendStrPtr(part)` of a `for (*part in parts)` appends the element itself,
   with nothing copied on the way.
 
+`fmtStr(fmt: *Str, items: *List<Str>): Str` is the same idea for a *fixed shape*: the
+text is written as one template whose `|` characters are replaced, in order, by one item
+each. It is what an emitter writes instead of a `+` chain - `fmtStr("[|::|]", a, b)`
+where `a + "::" + b + "]"` would build three intermediate strings - and it is a member of
+the same family as a join, so it takes its items the way any pack-taking call does: the
+trailing arguments pack into the `*List<Str>` (`fmtStr("| |", "a", "b")`, no `listOf` to
+write). The length is known before anything is written - the format minus the points it
+fills, plus every item - so the result is assembled in one buffer, and nothing needs a
+`reserve` of its own.
+
+What does not line up loses nothing: with no `|` left the remaining items are appended
+(`||` is an empty run), and with no item left the rest of the format is appended verbatim.
+
 Indexing and member calls are permitted directly on a `&Str` and on a `*Str`,
 with automatic dereference (see `memory-model.md`).
 

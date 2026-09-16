@@ -147,6 +147,14 @@ native("simse_str_appendStr") fun appendStr(this: Str, value: Str): Unit
 // a join of a list's elements a run of appends with no element copied.
 native("simse_str_appendStrPtr") fun appendStrPtr(this: Str, value: *Str): Unit
 
+// The format text with each `|` replaced, in order, by one item: how an emitter
+// writes a fixed shape (`"(", ")"`, `"<|::|>"`) without building a temporary per
+// `+`. The length is known before anything is written - the format minus the
+// points it fills, plus every item - so the text is assembled in one buffer.
+// What does not line up loses nothing: with no `|` left the remaining items are
+// appended, and with no item left the rest of the format is appended verbatim.
+native("simse_fmtStr") fun fmtStr(fmt: *Str, items: *List<Str>): Str
+
 // Pre-allocates the buffer for a run of `append`/`appendStr` calls: the text is
 // then written once, instead of the accumulated prefix being copied at every
 // growth step. A *hint*, not a length - the string keeps its size, and a longer

@@ -132,7 +132,7 @@ fun parseSkeleton(tokens: *List<Token>): Res<SkeletonNode> {
         }
         // No matching opening token: keep the closing token as a terminal.
         if (!folded) {
-            program.addTerminalChild(copy(token))
+            program.addTerminalChild(token)
         }
     }
 

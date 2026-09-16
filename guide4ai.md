@@ -347,6 +347,19 @@ borrow parameter and a read-through for a by-value one.
   every function that only reads take `*T`; a by-value copy *per lookup* makes
   emission quadratic in the function/AST count (the `CgFn` copies did: the Debug
   `stage1_check` cost 6.6-8.7 s before they were removed, 2.1 s after).
+- **Don't spell `copy(...)`; the compiler converts where the destination says so.**
+  A `val x: Str = h` where `h: *Str` reads through by itself, a call argument converts
+  against its parameter, and a construction's arguments convert against the class's
+  fields - so a `copy` is at best the identity (`copy(v)` of a value, which the emitter
+  prints as `(v)`) and otherwise the conversion the extractor would have inserted. The
+  compiler's own ring spells none of them. The `*` is written for a *binding* that
+  outlives its expression (`val p: *T = x`) and for `for (*x in xs)`, and nowhere else.
+- **Build a fixed shape with `fmtStr`, a run of appends with `reserve`.**
+  `fmtStr("|::|", a, b)` writes one buffer where `a + "::" + b` builds three
+  (`specs/built-in-types.md`); its trailing arguments pack into the `*List<Str>` like any
+  pack-taking call, so there is no `listOf` to write. For a join, `out.reserve(len)` then
+  `out.appendStrPtr(part)` per part - `out = out + part` rebuilds the buffer per part
+  (measured 88x on a 200 KB result).
 - Every `.kt` file must start with a mandatory `package`; update `import`
   lines to package names when adding files.
 - **User-visible changes update the docs.** `README.md` (the status paragraph),

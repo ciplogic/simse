@@ -64,6 +64,26 @@ namespace sema {
 
     bool isTypeParamName(const Str& name, const List<Str>& typeParams);
 
+    // The receiver type of a declaration that spells it as an explicit `this` first
+    // parameter (`native fun has<K, V>(this: Dictionary<K, V>, key: K): Bool`) - null for
+    // everything else (a prefix receiver, `Type.name(...)`, is not a parameter at all).
+    // Such a declaration is a *member*: the extractor's `callTarget` takes it for a
+    // member call, and `functionReturn` refuses it for a plain one (`fun find(...)` must
+    // not pick up `Str.find`'s signature).
+    const ast::TypeExpr *extensionReceiver(const ast::Decl &decl);
+
+    // How many leading parameters of a declaration are that receiver: 1 or 0. The
+    // parameters a call's arguments convert against start *after* it.
+    int receiverParams(const ast::Decl &decl);
+
+    // Whether a declaration spells its receiver that way.
+    bool isExtensionDecl(const ast::Decl &decl);
+
+    // Whether `param` is one of `decl`'s own type parameters, bare (`T`, not
+    // `List<T>`): what an argument can only be compared against as a *form*, since
+    // the receiver - not this call - binds it.
+    bool isBareTypeParam(const ast::Decl& decl, const ast::TypeExpr* param);
+
     // Structural unification of a pattern (an extension receiver, which may mention
     // the extension's type parameters) against an actual type. A pattern that names
     // a type parameter matches anything.
