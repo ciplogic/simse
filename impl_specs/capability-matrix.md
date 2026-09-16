@@ -1701,3 +1701,19 @@ compiler *did* catch and one it could not:
   with two handles, and the value positions a destination's type spells) and
   `impl_specs/linear-il.md` ("The conversion": the destination-driven spelling, the
   borrowing accessor, and why the two operand sides had to agree).
+
+- **The parser's token-text helpers borrow the text they compare (T63).** `checkText`,
+  `matchText` and `expectText` take `*Str` instead of `Str`, the closest the `.kt` ring can
+  get to the hand-written ring's `const char *` (`Parser.cpp`): the token text is read, never
+  kept. Measured **neutral** (`tools/_bench_ab.mjs`, 7 interleaved runs: 1011.5/1033.4 ms
+  against 1023.1/1032.8 ms), because the copy is *conserved*, not removed: a name argument
+  no longer copies at the call (`&x`) but the comparison in the callee materializes the
+  pointee into a slot (`_sm_base1 = *(text)` - the `*T -> T` row), and a literal argument
+  now needs a `Str` slot built for its address (`_sm_base3 = __sm_stringTable[40];
+  _sm_base2 = &_sm_base3;`) where it used to ride the instruction as a pool operand.
+
+  What would make the pattern pay is **folding the read-through into its single use**: the
+  slot a conversion writes is written once and read once, next to each other
+  (`readThrough` then the operation that asked for it), so a backend could print `*(text)`
+  at that one use - `peek().text == *(text)`, no copy at all - the way it already folds an
+  untyped slot. That is the extension to the folding rule, not a new rule.

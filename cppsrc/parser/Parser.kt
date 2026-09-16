@@ -61,7 +61,7 @@ data class Parser(
         return this.peek(0).kind == TokenKind.Eof
     }
 
-    fun checkText(text: Str): Bool {
+    fun checkText(text: *Str): Bool {
         return this.peek(0).text == text
     }
 
@@ -69,7 +69,7 @@ data class Parser(
         return this.peek(0).kind == kind
     }
 
-    fun matchText(text: Str): Bool {
+    fun matchText(text: *Str): Bool {
         if (this.checkText(text)) {
             this.advance()
             return true
@@ -91,7 +91,7 @@ data class Parser(
         return false
     }
 
-    fun expectText(text: Str): Bool {
+    fun expectText(text: *Str): Bool {
         if (this.matchText(text)) {
             return true
         }
