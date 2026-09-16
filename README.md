@@ -178,21 +178,22 @@ A full walkthrough, including the tests and the stress corpus, is in
 ## Status
 
 Working today: the language above (data classes, enums, generics, extensions,
-lambdas, `List`/`Array`/`Dictionary`/`Span`/`Opt`/`Res`/`Str`, file I/O, the
+lambdas, `List`/`Array`/`Dictionary`/`Span`/`Opt`/`Res`/`Str`, list literals and calls
+that pack their trailing arguments into a last `List` parameter, file I/O, the
 `main(args)` form, `yield`, and `for` over anything with a `smToYield` - a container,
 or a state machine itself),
-a self-hosted compiler that reproduces its own output byte for byte, 55 in-process
-tests, five differential stage tests and 30 end-to-end stress programs.
+a self-hosted compiler that reproduces its own output byte for byte, 56 in-process
+tests, five differential stage tests and 35 end-to-end stress programs.
 
 On speed (`bun tools/bootstrap.js`, release, this machine - the range is machine load,
 best of 5 runs idle):
 
 | | |
 | --- | --- |
-| the compiler transpiling its own source tree | **14,228 lines of Simse in 0.81 s** (36,330 lines of C++ out, ~17.6k lines/s) |
-| the same tree through the hand-written C++ ring | 0.18 s (the Simse ring is ~4.6x that; the flat-body work - every declaration at the top of its body - costs the Simse ring a share of the transpile, and the C++ ring nothing) |
-| compiling the published `cppsrc/simse_bootstrap.cpp` with `cl.exe` | ~15.3 s release (`/O2 /Ob3`), ~3.1 s debug |
-| **from the published file to a compiler that reproduces it** | **~16.1 s**, then ~0.81 s per self-transpile |
+| the compiler transpiling its own source tree | **15,932 lines of Simse in 1.08 s** (42,633 lines of C++ out, ~14.7k lines/s) |
+| the same tree through the hand-written C++ ring | 0.24 s (the Simse ring is ~4.5x that; the flat-body work - every declaration at the top of its body - costs the Simse ring a share of the transpile, and the C++ ring nothing) |
+| compiling the published `cppsrc/simse_bootstrap.cpp` with `cl.exe` | ~17 s release (`/O2 /Ob3`), ~3.1 s debug |
+| **from the published file to a compiler that reproduces it** | **~18 s**, then ~1.1 s per self-transpile |
 
 Not there yet, in rough order of how soon a user would miss it: `for` over a
 `Dictionary` and ranges, string interpolation, closed unions + exhaustive `when`, a

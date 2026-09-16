@@ -26,9 +26,10 @@ import common
 // ---- node construction -----------------------------------------------------
 
 fun linStmt(kind: AstNodeCategory, line: Int, column: Int): AstXmlNode {
-    var attrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
-    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, line.toString()))
-    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, column.toString()))
+    var attrs: List<AstNodeAttribute> = listOf<AstNodeAttribute>(
+        AstNodeAttribute(AstNodeAttributeKind.Line, line.toString()),
+        AstNodeAttribute(AstNodeAttributeKind.Column, column.toString())
+    )
     return AstXmlNode(AstNodeKind.Stmt, kind, attrs, Array<AstXmlNode>())
 }
 
@@ -80,10 +81,11 @@ fun linSubjectDecl(name: Str, init: *AstXmlNode, line: Int, column: Int): AstXml
 }
 
 fun linName(role: AstNodeKind, name: Str, line: Int, column: Int): AstXmlNode {
-    var attrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
-    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, line.toString()))
-    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, column.toString()))
-    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
+    var attrs: List<AstNodeAttribute> = listOf<AstNodeAttribute>(
+        AstNodeAttribute(AstNodeAttributeKind.Line, line.toString()),
+        AstNodeAttribute(AstNodeAttributeKind.Column, column.toString()),
+        AstNodeAttribute(AstNodeAttributeKind.Name, name)
+    )
     return AstXmlNode(role, AstNodeCategory.ExprName, attrs, Array<AstXmlNode>())
 }
 
@@ -136,33 +138,38 @@ data class LinLowerer(
 
     fun lowerStmt(stmt: *AstXmlNode, breakTo: Str, continueTo: Str, out: *List<AstXmlNode>): Unit {
         val kind: AstNodeCategory = xmlKind(stmt)
-        if (kind == AstNodeCategory.StmtIf) {
-            this.changed = true
-            this.lowerIf(stmt, breakTo, continueTo, out)
-            return
-        }
-        if (kind == AstNodeCategory.StmtWhile) {
-            this.changed = true
-            this.lowerWhile(stmt, breakTo, continueTo, out)
-            return
-        }
-        if (kind == AstNodeCategory.StmtBreak) {
-            if (breakTo != "") {
+        when (kind) {
+            AstNodeCategory.StmtIf -> {
                 this.changed = true
-                out.append(linGoto(breakTo, xmlLine(stmt), xmlColumn(stmt)))
+                this.lowerIf(stmt, breakTo, continueTo, out)
                 return
             }
-            out.append(copy(stmt))
-            return
-        }
-        if (kind == AstNodeCategory.StmtContinue) {
-            if (continueTo != "") {
+
+            AstNodeCategory.StmtWhile -> {
                 this.changed = true
-                out.append(linGoto(continueTo, xmlLine(stmt), xmlColumn(stmt)))
+                this.lowerWhile(stmt, breakTo, continueTo, out)
                 return
             }
-            out.append(copy(stmt))
-            return
+
+            AstNodeCategory.StmtBreak -> {
+                if (breakTo != "") {
+                    this.changed = true
+                    out.append(linGoto(breakTo, xmlLine(stmt), xmlColumn(stmt)))
+                    return
+                }
+                out.append(copy(stmt))
+                return
+            }
+
+            AstNodeCategory.StmtContinue -> {
+                if (continueTo != "") {
+                    this.changed = true
+                    out.append(linGoto(continueTo, xmlLine(stmt), xmlColumn(stmt)))
+                    return
+                }
+                out.append(copy(stmt))
+                return
+            }
         }
         out.append(copy(stmt))
     }

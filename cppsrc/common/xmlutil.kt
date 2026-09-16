@@ -48,12 +48,10 @@ fun xmlAddChildren(node: *AstXmlNode, children: *List<AstXmlNode>): Unit {
 }
 
 fun xmlAttr(node: *AstXmlNode, name: AstNodeAttributeKind): Str {
-    var i: Int = 0
-    while (i < node.attributes.size()) {
-        if (node.attributes[i].name == name) {
-            return node.attributes[i].value
+    for (*attr in node.attributes) {
+        if (attr.name == name) {
+            return attr.value
         }
-        i = i + 1
     }
     return ""
 }
@@ -69,137 +67,182 @@ fun xmlKind(node: *AstXmlNode): AstNodeCategory {
 // C++ side (`ast::astNodeCategoryText`); the two are kept in step by hand, and a
 // divergence would surface in the differentials.
 fun xmlKindText(kind: AstNodeCategory): Str {
-    if (kind == AstNodeCategory.Module) {
-        return "Module"
-    }
-    if (kind == AstNodeCategory.DataClass) {
-        return "DataClass"
-    }
-    if (kind == AstNodeCategory.Enum) {
-        return "Enum"
-    }
-    if (kind == AstNodeCategory.TypeAlias) {
-        return "TypeAlias"
-    }
-    if (kind == AstNodeCategory.Function) {
-        return "Function"
-    }
-    if (kind == AstNodeCategory.Var) {
-        return "Var"
-    }
-    if (kind == AstNodeCategory.StmtVarDecl) {
-        return "Stmt.VarDecl"
-    }
-    if (kind == AstNodeCategory.StmtAssign) {
-        return "Stmt.Assign"
-    }
-    if (kind == AstNodeCategory.StmtIf) {
-        return "Stmt.If"
-    }
-    if (kind == AstNodeCategory.StmtWhile) {
-        return "Stmt.While"
-    }
-    if (kind == AstNodeCategory.StmtReturn) {
-        return "Stmt.Return"
-    }
-    if (kind == AstNodeCategory.StmtBreak) {
-        return "Stmt.Break"
-    }
-    if (kind == AstNodeCategory.StmtContinue) {
-        return "Stmt.Continue"
-    }
-    if (kind == AstNodeCategory.StmtExprStmt) {
-        return "Stmt.ExprStmt"
-    }
-    if (kind == AstNodeCategory.StmtLabel) {
-        return "Stmt.Label"
-    }
-    if (kind == AstNodeCategory.StmtGoto) {
-        return "Stmt.Goto"
-    }
-    if (kind == AstNodeCategory.StmtIfTrue) {
-        return "Stmt.IfTrue"
-    }
-    if (kind == AstNodeCategory.StmtIfFalse) {
-        return "Stmt.IfFalse"
-    }
-    if (kind == AstNodeCategory.StmtBlock) {
-        return "Stmt.Block"
-    }
-    if (kind == AstNodeCategory.StmtYield) {
-        return "Stmt.Yield"
-    }
-    if (kind == AstNodeCategory.ExprIntLit) {
-        return "Expr.IntLit"
-    }
-    if (kind == AstNodeCategory.ExprFloatLit) {
-        return "Expr.FloatLit"
-    }
-    if (kind == AstNodeCategory.ExprStrLit) {
-        return "Expr.StrLit"
-    }
-    if (kind == AstNodeCategory.ExprCharLit) {
-        return "Expr.CharLit"
-    }
-    if (kind == AstNodeCategory.ExprBoolLit) {
-        return "Expr.BoolLit"
-    }
-    if (kind == AstNodeCategory.ExprNullLit) {
-        return "Expr.NullLit"
-    }
-    if (kind == AstNodeCategory.ExprName) {
-        return "Expr.Name"
-    }
-    if (kind == AstNodeCategory.ExprGenericName) {
-        return "Expr.GenericName"
-    }
-    if (kind == AstNodeCategory.ExprMember) {
-        return "Expr.Member"
-    }
-    if (kind == AstNodeCategory.ExprCall) {
-        return "Expr.Call"
-    }
-    if (kind == AstNodeCategory.ExprIndex) {
-        return "Expr.Index"
-    }
-    if (kind == AstNodeCategory.ExprUnary) {
-        return "Expr.Unary"
-    }
-    if (kind == AstNodeCategory.ExprBinary) {
-        return "Expr.Binary"
-    }
-    if (kind == AstNodeCategory.ExprLambda) {
-        return "Expr.Lambda"
-    }
-    if (kind == AstNodeCategory.ExprRef) {
-        return "Expr.Ref"
-    }
-    if (kind == AstNodeCategory.ExprDeref) {
-        return "Expr.Deref"
-    }
-    if (kind == AstNodeCategory.ExprCopy) {
-        return "Expr.Copy"
-    }
-    if (kind == AstNodeCategory.TypeIntLit) {
-        return "Type.IntLit"
-    }
-    if (kind == AstNodeCategory.TypeNamed) {
-        return "Type.Named"
-    }
-    if (kind == AstNodeCategory.TypeGeneric) {
-        return "Type.Generic"
-    }
-    if (kind == AstNodeCategory.TypeReference) {
-        return "Type.Reference"
-    }
-    if (kind == AstNodeCategory.TypePointer) {
-        return "Type.Pointer"
-    }
-    if (kind == AstNodeCategory.TypeFunction) {
-        return "Type.Function"
-    }
-    if (kind == AstNodeCategory.TypeYield) {
-        return "Type.Yield"
+    when (kind) {
+        AstNodeCategory.Module -> {
+            return "Module"
+        }
+
+        AstNodeCategory.DataClass -> {
+            return "DataClass"
+        }
+
+        AstNodeCategory.Enum -> {
+            return "Enum"
+        }
+
+        AstNodeCategory.TypeAlias -> {
+            return "TypeAlias"
+        }
+
+        AstNodeCategory.Function -> {
+            return "Function"
+        }
+
+        AstNodeCategory.Var -> {
+            return "Var"
+        }
+
+        AstNodeCategory.StmtVarDecl -> {
+            return "Stmt.VarDecl"
+        }
+
+        AstNodeCategory.StmtAssign -> {
+            return "Stmt.Assign"
+        }
+
+        AstNodeCategory.StmtIf -> {
+            return "Stmt.If"
+        }
+
+        AstNodeCategory.StmtWhile -> {
+            return "Stmt.While"
+        }
+
+        AstNodeCategory.StmtReturn -> {
+            return "Stmt.Return"
+        }
+
+        AstNodeCategory.StmtBreak -> {
+            return "Stmt.Break"
+        }
+
+        AstNodeCategory.StmtContinue -> {
+            return "Stmt.Continue"
+        }
+
+        AstNodeCategory.StmtExprStmt -> {
+            return "Stmt.ExprStmt"
+        }
+
+        AstNodeCategory.StmtLabel -> {
+            return "Stmt.Label"
+        }
+
+        AstNodeCategory.StmtGoto -> {
+            return "Stmt.Goto"
+        }
+
+        AstNodeCategory.StmtIfTrue -> {
+            return "Stmt.IfTrue"
+        }
+
+        AstNodeCategory.StmtIfFalse -> {
+            return "Stmt.IfFalse"
+        }
+
+        AstNodeCategory.StmtBlock -> {
+            return "Stmt.Block"
+        }
+
+        AstNodeCategory.StmtYield -> {
+            return "Stmt.Yield"
+        }
+
+        AstNodeCategory.ExprIntLit -> {
+            return "Expr.IntLit"
+        }
+
+        AstNodeCategory.ExprFloatLit -> {
+            return "Expr.FloatLit"
+        }
+
+        AstNodeCategory.ExprStrLit -> {
+            return "Expr.StrLit"
+        }
+
+        AstNodeCategory.ExprCharLit -> {
+            return "Expr.CharLit"
+        }
+
+        AstNodeCategory.ExprBoolLit -> {
+            return "Expr.BoolLit"
+        }
+
+        AstNodeCategory.ExprNullLit -> {
+            return "Expr.NullLit"
+        }
+
+        AstNodeCategory.ExprName -> {
+            return "Expr.Name"
+        }
+
+        AstNodeCategory.ExprGenericName -> {
+            return "Expr.GenericName"
+        }
+
+        AstNodeCategory.ExprMember -> {
+            return "Expr.Member"
+        }
+
+        AstNodeCategory.ExprCall -> {
+            return "Expr.Call"
+        }
+
+        AstNodeCategory.ExprIndex -> {
+            return "Expr.Index"
+        }
+
+        AstNodeCategory.ExprUnary -> {
+            return "Expr.Unary"
+        }
+
+        AstNodeCategory.ExprBinary -> {
+            return "Expr.Binary"
+        }
+
+        AstNodeCategory.ExprLambda -> {
+            return "Expr.Lambda"
+        }
+
+        AstNodeCategory.ExprRef -> {
+            return "Expr.Ref"
+        }
+
+        AstNodeCategory.ExprDeref -> {
+            return "Expr.Deref"
+        }
+
+        AstNodeCategory.ExprCopy -> {
+            return "Expr.Copy"
+        }
+
+        AstNodeCategory.TypeIntLit -> {
+            return "Type.IntLit"
+        }
+
+        AstNodeCategory.TypeNamed -> {
+            return "Type.Named"
+        }
+
+        AstNodeCategory.TypeGeneric -> {
+            return "Type.Generic"
+        }
+
+        AstNodeCategory.TypeReference -> {
+            return "Type.Reference"
+        }
+
+        AstNodeCategory.TypePointer -> {
+            return "Type.Pointer"
+        }
+
+        AstNodeCategory.TypeFunction -> {
+            return "Type.Function"
+        }
+
+        AstNodeCategory.TypeYield -> {
+            return "Type.Yield"
+        }
     }
     return ""
 }
@@ -247,23 +290,19 @@ fun xmlChildren(node: *AstXmlNode, role: AstNodeKind): List<AstXmlNode> {
 
 fun xmlCount(node: *AstXmlNode, role: AstNodeKind): Int {
     var count: Int = 0
-    var i: Int = 0
-    while (i < node.Children.count()) {
-        if (node.Children[i].name == role) {
+    for (*child in node.Children) {
+        if (child.name == role) {
             count = count + 1
         }
-        i = i + 1
     }
     return count
 }
 
 fun xmlHasChild(node: *AstXmlNode, role: AstNodeKind): Bool {
-    var i: Int = 0
-    while (i < node.Children.count()) {
-        if (node.Children[i].name == role) {
+    for (*child in node.Children) {
+        if (child.name == role) {
             return true
         }
-        i = i + 1
     }
     return false
 }
@@ -272,10 +311,8 @@ fun xmlHasChild(node: *AstXmlNode, role: AstNodeKind): Bool {
 fun xmlTypeParamNames(node: *AstXmlNode): List<Str> {
     val params: List<AstXmlNode> = xmlChildren(node, AstNodeKind.TypeParam)
     var names: List<Str> = List<Str>()
-    var i: Int = 0
-    while (i < params.size()) {
-        names.append(xmlAttr(*params[i], AstNodeAttributeKind.Name))
-        i = i + 1
+    for (*param in params) {
+        names.append(xmlAttr(param, AstNodeAttributeKind.Name))
     }
     return names
 }
@@ -301,12 +338,10 @@ fun xmlDecls(module: *AstXmlNode): List<AstXmlNode> {
 }
 
 fun xmlHasImports(module: *AstXmlNode): Bool {
-    var i: Int = 0
-    while (i < module.Children.count()) {
-        if (module.Children[i].name == AstNodeKind.Import) {
+    for (*child in module.Children) {
+        if (child.name == AstNodeKind.Import) {
             return true
         }
-        i = i + 1
     }
     return false
 }

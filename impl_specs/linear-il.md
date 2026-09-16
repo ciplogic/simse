@@ -232,6 +232,7 @@ CallVoid         callee=Method, args...=Value               # f(a, b)
 CallIndirect     dst=Var, callee=Var, args...=Value         # x = f(a, b), f a callable slot
 CallIndirectVoid callee=Var, args...=Value
 CallCtor         dst=Var, type=Type, args...=Value          # Point(1, 2), List<Str>(), a closure
+Pack             dst=Var, values...=Value                   # List<Str>{a, b}: a container from values (`newarr` + fill)
 
 Return           value=Value
 ReturnVoid
@@ -269,6 +270,25 @@ and that is the property a backend needs.
   moves to a slot first (`dst = Call f`, then the address of that slot) - which
   *extends* the temporary's life to the slot's, i.e. it is safe, never dangling. That
   is the one place where the IL is deliberately blunter than the C++ it emits.
+- **`Pack` builds a container from values in one instruction** - the bytecode's
+  `newarr`/`fill-array-data`, and the reason a list literal is one operation. Its
+  destination's *type* says which container it is, so the instruction carries no type
+  operand: `List<Str>{a, b, c}` is `Pack dst, a, b, c` with `dst : List<Str>`. Two
+  shapes produce it: the list literal `listOf<Str>(a, b, c)` (a call the extractor turns
+  into the construction - `CallCtor` stays `List<Str>()`, the empty list, and
+  `List<T>(n)` stays the RTL's count construction, `specs/containers.md`), and a call
+  that *packs its trailing arguments* into a last parameter that is a `List<T>` or
+  `*List<T>` (`specs/functions.md`), where a `*List<T>` parameter takes the address of
+  the fresh slot (`Pack` into a `_sm_base` slot, then `Deref`) so not even the list is
+  copied. A backend spells it as the RTL's initializer-list construction, which is what
+  makes a packed list of up to four elements allocate nothing (`List` is
+  `SmallVector<T, 4>`).
+- **A call argument's handle is inferred by the extractor** (`specs/functions.md`,
+  "Handles at a call"): the instruction list gets a `Deref` (an address, or a counted
+  reference's `.get()`), a `CopyValue` (a copy of a pointee) or a `Box` (a boxed copy)
+  between the argument and the call - one more instruction, never a change of the
+  callee. The types have to match: the conversion is skipped when the argument's
+  pointee is not the parameter's, which leaves the call the type error it was.
 
 ## Printing it
 
@@ -317,16 +337,17 @@ Measured over the whole compiler (`--root cppsrc`); the numbers come from
 
 | | |
 | --- | --- |
-| bodies | 537 |
-| instructions | 37,132 (13,987 of them are `Declare`) |
+| bodies | 545 |
+| instructions | 38,151 (14,268 of them are `Declare`) |
 | `Unsupported` markers | **0** - the instruction set covers every statement shape the lowering produces |
 | `Lambda` markers | **0** - a lambda is a closure construction (`CallCtor`), and the opcode is a leftover of the pre-closure model |
-| extractor-synthesized slots (`_sm_base<n>`) | 1,636 |
-| ... of those, untyped (`?`) | **25** |
-| ... folded at their single use | **14** |
-| place instructions (`FieldAddr`/`IndexAddr`/`GetStaticAddr`) | 949 / 216 / 9 - each a declared `*T` slot |
+| extractor-synthesized slots (`_sm_base<n>`) | 1,595 |
+| ... of those, untyped (`?`) | **93** (a `for`'s machine slot is one: the lowering built its class, so no rule names it - the count of them moves with the number of `for` loops in the sources) |
+| ... folded at their single use | 15 |
+| place instructions (`FieldAddr`/`IndexAddr`/`GetStaticAddr`) | 944 / 139 / 9 - each a declared `*T` slot |
+| `Pack` (a container built from values) | 18 - the compiler's own list literals (`List<IlSignature>(...)`, `List<Str>(...)`, ...), one instruction each |
 | materialised literals | **0** (was 1,486 before operand literals) |
-| assignments that copy a slot (`SetVar x, y`) | 406 |
+| assignments that copy a slot (`SetVar x, y`) | 408 |
 
 Three consequences worth stating plainly:
 

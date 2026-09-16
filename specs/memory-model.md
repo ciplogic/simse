@@ -132,6 +132,12 @@ var p: *Point = *b   // p is a raw pointer to the same box that b manages
 
 Status: required for the first implementation.
 
+A **call argument** is converted between a value and a handle when the two are the same
+type: a `*T` parameter takes a `T` argument's address, a `*T`/`&T` argument is read
+through for a by-value parameter, and `&T` boxes a copy of what it is given. The writer
+writes the `*` for a *binding* (`val p: *T = x`), never for a call
+(`specs/functions.md`, "Handles at a call").
+
 Member access, indexing, and method calls through a counted reference (`&T`) or
 a raw pointer (`*T`) automatically reach the pointee. For example, if `source`
 has type `&Str`, then `source[i]`, `source.size()`, and any member call on

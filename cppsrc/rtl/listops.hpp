@@ -21,18 +21,12 @@ void simse_list_append(List<T>& self, const std::type_identity_t<T>& value) {
     self.push_back(value);
 }
 
-// The two *count* constructions, which `specs/containers.md` spells as
-// `listOfCount<T>(count)` and `listOfFilled<T>(count, value)`: `List<T>(a, b, c)`
-// in the language is the *element* list (one `Pack` instruction), so a count is
-// never mistaken for an element.
+// The list literal's fallback (`cppsrc/rtl/rtl.kt`): the compiler turns
+// `listOf<Str>("a", "b")` into the construction itself, so this runs only for a
+// position with no destination slot (a dropped result).
 template <class T>
-List<T> simse_list_count(Int count) {
-    return List<T>(count);
-}
-
-template <class T>
-List<T> simse_list_filled(Int count, const T& value) {
-    return List<T>(count, value);
+List<T> simse_listOf(const List<T>* values) {
+    return *values;
 }
 
 // Removes the single element at `index`.

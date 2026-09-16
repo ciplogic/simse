@@ -41,6 +41,11 @@ namespace sema {
     // Whether a pointee is a container with `operator[]` element access.
     bool isIndexableContainer(const ast::TypeExpr* type);
 
+    // The pointee of a type *node*, after stripping any number of `&`/`*` handles - the
+    // node form of `pointee`, for a type a caller holds directly (a parameter's own type
+    // node, say).
+    const ast::TypeExpr* pointeeOf(const ast::TypeExpr* type);
+
     // The `List<T>` a *type* names, looking through any handle (`*List<T>`, `&List<T>`)
     // and the alias form `PList<T>` (= `&List<T>`). Null when the type is not a list.
     // This is the *argument* side of the packing rule - what tells `addAll(*xs)` from

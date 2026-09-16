@@ -458,105 +458,111 @@ var byReference: Bool
             return
         }
         val kind: AstNodeCategory = xmlKind(stmt)
-        if (kind == AstNodeCategory.StmtYield) {
-            this.yields = this.yields + 1
-            val branch: Int = this.yields
-            val value: AstXmlNode = this.expr(xmlChild(stmt, AstNodeKind.Value))
-            if (this.byReference) {
-                // `*value = e; return true;`
-                out.append(yldAssign(yldDeref(linName(AstNodeKind.None, "value", 0, 0)), value))
-                out.append(yldAssign(yldThisMember(yldBranchField()), yldIntLiteral(branch)))
-                out.append(yldReturn(yldBoolLiteral(true)))
-            } else {
-                var args: List<AstXmlNode> = List<AstXmlNode>()
-                args.append(value)
-                out.append(yldAssign(yldThisMember(yldBranchField()), yldIntLiteral(branch)))
-                out.append(yldReturn(yldOptionalCall(this.elementType, "some", *args)))
-            }
-            out.append(linLabel(yldLabel(branch), 0, 0))
-            return
-        }
-        if (kind == AstNodeCategory.StmtReturn) {
-            // A `return` in a yielding body is `yield break`: the machine is finished. A
-            // value (which the `..T` signature does not allow) is still evaluated, so
-            // nothing silently disappears.
-            val returnValue: AstXmlNode = xmlChild(stmt, AstNodeKind.Value)
-            if (!xmlIsEmpty(*returnValue)) {
-                out.append(yldExprStmt(this.expr(returnValue)))
-            }
-            out.append(yldAssign(yldThisMember(yldBranchField()), yldIntLiteral(-1)))
-            out.append(yldReturn(this.finishValue()))
-            return
-        }
-        if (kind == AstNodeCategory.StmtVarDecl) {
-            val name: Str = xmlAttr(stmt, AstNodeAttributeKind.Name)
-            val declared: AstXmlNode = xmlChild(stmt, AstNodeKind.Type)
-            val init: AstXmlNode = xmlChild(stmt, AstNodeKind.Init)
-            if (linIsSlotName(name)) {
-                // The lowering's own storage stays a local of the method: it is
-                // per-statement, so it is re-initialised on every entry and never has to
-                // survive a yield.
-                var children: List<AstXmlNode> = List<AstXmlNode>()
-                if (!xmlIsEmpty(*declared)) {
-                    var declaredChild: AstXmlNode = copy(declared)
-                    declaredChild.name = AstNodeKind.Type
-                    children.append(declaredChild)
+        when (kind) {
+            AstNodeCategory.StmtYield -> {
+                this.yields = this.yields + 1
+                val branch: Int = this.yields
+                val value: AstXmlNode = this.expr(xmlChild(stmt, AstNodeKind.Value))
+                if (this.byReference) {
+                    // `*value = e; return true;`
+                    out.append(yldAssign(yldDeref(linName(AstNodeKind.None, "value", 0, 0)), value))
+                    out.append(yldAssign(yldThisMember(yldBranchField()), yldIntLiteral(branch)))
+                    out.append(yldReturn(yldBoolLiteral(true)))
+                } else {
+                    var args: List<AstXmlNode> = List<AstXmlNode>()
+                    args.append(value)
+                    out.append(yldAssign(yldThisMember(yldBranchField()), yldIntLiteral(branch)))
+                    out.append(yldReturn(yldOptionalCall(this.elementType, "some", *args)))
                 }
+                out.append(linLabel(yldLabel(branch), 0, 0))
+                return
+            }
+
+            AstNodeCategory.StmtReturn -> {
+                // A `return` in a yielding body is `yield break`: the machine is finished. A
+                // value (which the `..T` signature does not allow) is still evaluated, so
+                // nothing silently disappears.
+                val returnValue: AstXmlNode = xmlChild(stmt, AstNodeKind.Value)
+                if (!xmlIsEmpty(*returnValue)) {
+                    out.append(yldExprStmt(this.expr(returnValue)))
+                }
+                out.append(yldAssign(yldThisMember(yldBranchField()), yldIntLiteral(-1)))
+                out.append(yldReturn(this.finishValue()))
+                return
+            }
+
+            AstNodeCategory.StmtVarDecl -> {
+                val name: Str = xmlAttr(stmt, AstNodeAttributeKind.Name)
+                val declared: AstXmlNode = xmlChild(stmt, AstNodeKind.Type)
+                val init: AstXmlNode = xmlChild(stmt, AstNodeKind.Init)
+                if (linIsSlotName(name)) {
+                    // The lowering's own storage stays a local of the method: it is
+                    // per-statement, so it is re-initialised on every entry and never has to
+                    // survive a yield.
+                    var children: List<AstXmlNode> = List<AstXmlNode>()
+                    if (!xmlIsEmpty(*declared)) {
+                        var declaredChild: AstXmlNode = copy(declared)
+                        declaredChild.name = AstNodeKind.Type
+                        children.append(declaredChild)
+                    }
+                    if (!xmlIsEmpty(*init)) {
+                        var initChild: AstXmlNode = this.expr(init)
+                        initChild.name = AstNodeKind.Init
+                        children.append(initChild)
+                    }
+                    out.append(yldWithChildren(stmt, *children))
+                    return
+                }
+                // Everything else is a field now; its initializer runs where it was, which is
+                // on the way to the first yield (a machine that resumes past it does not run it
+                // again).
                 if (!xmlIsEmpty(*init)) {
-                    var initChild: AstXmlNode = this.expr(init)
-                    initChild.name = AstNodeKind.Init
-                    children.append(initChild)
+                    out.append(yldAssign(yldThisMember(name), this.expr(init)))
                 }
+                return
+            }
+
+            AstNodeCategory.StmtAssign -> {
+                var children: List<AstXmlNode> = List<AstXmlNode>()
+                var target: AstXmlNode = this.expr(xmlChild(stmt, AstNodeKind.Target))
+                target.name = AstNodeKind.Target
+                children.append(target)
+                var value: AstXmlNode = this.expr(xmlChild(stmt, AstNodeKind.Value))
+                value.name = AstNodeKind.Value
+                children.append(value)
                 out.append(yldWithChildren(stmt, *children))
                 return
             }
-            // Everything else is a field now; its initializer runs where it was, which is
-            // on the way to the first yield (a machine that resumes past it does not run it
-            // again).
-            if (!xmlIsEmpty(*init)) {
-                out.append(yldAssign(yldThisMember(name), this.expr(init)))
+
+            AstNodeCategory.StmtExprStmt -> {
+                var children: List<AstXmlNode> = List<AstXmlNode>()
+                var inner: AstXmlNode = this.expr(xmlChild(stmt, AstNodeKind.Expr))
+                inner.name = AstNodeKind.Expr
+                children.append(inner)
+                out.append(yldWithChildren(stmt, *children))
+                return
             }
-            return
-        }
-        if (kind == AstNodeCategory.StmtAssign) {
-            var children: List<AstXmlNode> = List<AstXmlNode>()
-            var target: AstXmlNode = this.expr(xmlChild(stmt, AstNodeKind.Target))
-            target.name = AstNodeKind.Target
-            children.append(target)
-            var value: AstXmlNode = this.expr(xmlChild(stmt, AstNodeKind.Value))
-            value.name = AstNodeKind.Value
-            children.append(value)
-            out.append(yldWithChildren(stmt, *children))
-            return
-        }
-        if (kind == AstNodeCategory.StmtExprStmt) {
-            var children: List<AstXmlNode> = List<AstXmlNode>()
-            var inner: AstXmlNode = this.expr(xmlChild(stmt, AstNodeKind.Expr))
-            inner.name = AstNodeKind.Expr
-            children.append(inner)
-            out.append(yldWithChildren(stmt, *children))
-            return
-        }
-        if (kind == AstNodeCategory.StmtIfTrue || kind == AstNodeCategory.StmtIfFalse) {
-            val cond: AstXmlNode = this.expr(xmlChild(stmt, AstNodeKind.Cond))
-            out.append(
-                linCondJump(
-                    kind, *cond, xmlAttr(stmt, AstNodeAttributeKind.Name),
-                    xmlLine(stmt), xmlColumn(stmt)
+
+            AstNodeCategory.StmtIfTrue, AstNodeCategory.StmtIfFalse -> {
+                val cond: AstXmlNode = this.expr(xmlChild(stmt, AstNodeKind.Cond))
+                out.append(
+                    linCondJump(
+                        kind, *cond, xmlAttr(stmt, AstNodeAttributeKind.Name),
+                        xmlLine(stmt), xmlColumn(stmt)
+                    )
                 )
-            )
-            return
-        }
-        if (kind == AstNodeCategory.StmtBlock) {
-            var inner: List<AstXmlNode> = List<AstXmlNode>()
-            val children: List<AstXmlNode> = xmlChildren(stmt, AstNodeKind.Body)
-            var i: Int = 0
-            while (i < children.size()) {
-                this.statements(*children[i], *inner)
-                i = i + 1
+                return
             }
-            out.append(linBlock(*inner, xmlLine(stmt), xmlColumn(stmt)))
-            return
+
+            AstNodeCategory.StmtBlock -> {
+                var inner: List<AstXmlNode> = List<AstXmlNode>()
+                val children: List<AstXmlNode> = xmlChildren(stmt, AstNodeKind.Body)
+                for (*child in children) {
+                    this.statements(child, *inner)
+                }
+                out.append(linBlock(*inner, xmlLine(stmt), xmlColumn(stmt)))
+                return
+            }
         }
         // Labels and gotos are the control flow, and `break`/`continue` are gone by now.
         out.append(copy(stmt))

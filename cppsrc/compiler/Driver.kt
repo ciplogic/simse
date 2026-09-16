@@ -134,43 +134,57 @@ fun main(args: List<Str>): Int {
     var i: Int = 0
     while (i < args.size()) {
         val arg: Str = args[i]
-        if (arg == "-o") {
-            if (i + 1 >= args.size()) {
-                eprintln("simse_transpile: -o requires a path")
-                return 2
+        when (arg) {
+            "-o" -> {
+                if (i + 1 >= args.size()) {
+                    eprintln("simse_transpile: -o requires a path")
+                    return 2
+                }
+                i = i + 1
+                output = args[i]
             }
-            i = i + 1
-            output = args[i]
-        } else if (arg == "--prelude") {
-            if (i + 1 >= args.size()) {
-                eprintln("simse_transpile: --prelude requires a path")
-                return 2
+
+            "--prelude" -> {
+                if (i + 1 >= args.size()) {
+                    eprintln("simse_transpile: --prelude requires a path")
+                    return 2
+                }
+                i = i + 1
+                preludePath = args[i]
+                preludeExplicit = true
             }
-            i = i + 1
-            preludePath = args[i]
-            preludeExplicit = true
-        } else if (arg == "--root") {
-            if (i + 1 >= args.size()) {
-                eprintln("simse_transpile: --root requires a path")
-                return 2
+
+            "--root" -> {
+                if (i + 1 >= args.size()) {
+                    eprintln("simse_transpile: --root requires a path")
+                    return 2
+                }
+                i = i + 1
+                rootDir = args[i]
+                haveRoot = true
             }
-            i = i + 1
-            rootDir = args[i]
-            haveRoot = true
-        } else if (arg == "--module-root") {
-            if (i + 1 >= args.size()) {
-                eprintln("simse_transpile: --module-root requires a path")
-                return 2
+
+            "--module-root" -> {
+                if (i + 1 >= args.size()) {
+                    eprintln("simse_transpile: --module-root requires a path")
+                    return 2
+                }
+                i = i + 1
+                extraRoots.append(args[i])
             }
-            i = i + 1
-            extraRoots.append(args[i])
-        } else if (arg == "--showLinearRepresentation") {
-            ilSetShow(true)
-        } else if (arg == "-h" || arg == "--help") {
-            println("usage: simse_transpile <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module-root <dir>]... [--showLinearRepresentation]")
-            return 0
-        } else {
-            inputs.append(arg)
+
+            "--showLinearRepresentation" -> {
+                ilSetShow(true)
+            }
+
+            "-h", "--help" -> {
+                println("usage: simse_transpile <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module-root <dir>]... [--showLinearRepresentation]")
+                return 0
+            }
+
+            else -> {
+                inputs.append(arg)
+            }
         }
         i = i + 1
     }

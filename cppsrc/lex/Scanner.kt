@@ -104,48 +104,18 @@ var multiCharOperatorTable: List<Str> = makeMultiCharOperators()
 var tokenRuleTable: List<TokenMatcher> = makeTokenRules()
 
 fun makeReservedWords(): List<Str> {
-    var words: List<Str> = List<Str>()
-    words.append("class")
-    words.append("data")
-    words.append("val")
-    words.append("var")
-    words.append("fun")
-    words.append("return")
-    words.append("while")
-    words.append("for")
-    words.append("if")
-    words.append("else")
-    words.append("true")
-    words.append("false")
-    words.append("null")
-    words.append("enum")
-    words.append("typealias")
-    words.append("native")
-    words.append("import")
-    words.append("this")
-    words.append("break")
-    words.append("continue")
-    words.append("when")
-    words.append("yield")
-    words.append("package")
+    var words: List<Str> = listOf<Str>(
+        "class", "data", "val", "var", "fun", "return", "while", "for",
+        "if", "else", "true", "false", "null", "enum", "typealias", "native",
+        "import", "this", "break", "continue", "when", "yield", "package"
+    )
     return words
 }
 
 fun makeMultiCharOperators(): List<Str> {
-    var operators: List<Str> = List<Str>()
-    operators.append("->")
-    operators.append("==")
-    operators.append("!=")
-    operators.append("<=")
-    operators.append(">=")
-    operators.append("&&")
-    operators.append("||")
-    operators.append("+=")
-    operators.append("-=")
-    operators.append("*=")
-    operators.append("/=")
-    operators.append("%=")
-    operators.append("..")
+    var operators: List<Str> = listOf<Str>(
+        "->", "==", "!=", "<=", ">=", "&&", "||", "+=", "-=", "*=", "/=", "%=", ".."
+    )
     return operators
 }
 
@@ -205,14 +175,17 @@ fun matchEndOfLine(view: StrView): Int {
         return 0
     }
     val ch: Char = view.at(0)
-    if (ch == '\n') {
-        return 1
-    }
-    if (ch == '\r') {
-        if (view.size() >= 2 && view.at(1) == '\n') {
-            return 2
+    when (ch) {
+        '\n' -> {
+            return 1
         }
-        return 1
+
+        '\r' -> {
+            if (view.size() >= 2 && view.at(1) == '\n') {
+                return 2
+            }
+            return 1
+        }
     }
     return 0
 }
@@ -279,12 +252,15 @@ fun matchStringLiteral(view: StrView): Int {
     var i = 1
     while (i < view.size()) {
         val ch: Char = view.at(i)
-        if (ch == '\\') {
-            i = i + 2
-            continue
-        }
-        if (ch == '"') {
-            return i + 1
+        when (ch) {
+            '\\' -> {
+                i = i + 2
+                continue
+            }
+
+            '"' -> {
+                return i + 1
+            }
         }
         i = i + 1
     }
@@ -298,15 +274,19 @@ fun matchCharLiteral(view: StrView): Int {
     var i = 1
     while (i < view.size()) {
         val ch: Char = view.at(i)
-        if (ch == '\\') {
-            i = i + 2
-            continue
-        }
-        if (ch == '\'') {
-            return i + 1
-        }
-        if (ch == '\n') {
-            return 0
+        when (ch) {
+            '\\' -> {
+                i = i + 2
+                continue
+            }
+
+            '\'' -> {
+                return i + 1
+            }
+
+            '\n' -> {
+                return 0
+            }
         }
         i = i + 1
     }

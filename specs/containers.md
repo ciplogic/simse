@@ -65,6 +65,31 @@ such as append, insert, remove, and clear. These operations may change its
 length and may move its heap buffer, so raw pointers into a list are not stable
 across mutations that relocate storage.
 
+### Constructing a list
+
+`listOf<T>(a, b, c)` builds a list **from its values**, in that order, and is one
+instruction (`Pack`, `impl_specs/linear-il.md`). Up to four elements live in the
+list's inline buffer, so a short literal allocates nothing:
+
+```simse
+val keywords: List<Str> = listOf<Str>("static", "var", "val")
+val primes: List<Int> = listOf(2, 3, 5, 7)   // the element type is inferred
+val empty: List<Str> = listOf<Str>()
+```
+
+`List<T>(...)` is the RTL's own construction, and a **count**:
+
+```simse
+val zeros: List<Int> = List<Int>(3)              // three default elements
+val flags: List<Bool> = List<Bool>(4, false)    // four copies of false
+```
+
+so a literal can never be mistaken for a size (`List<Str>("a", "b")` is a count
+construction that takes no `Str`, and is refused rather than silently reinterpreted).
+`Array<T>(n)` is a count construction for the same reason - an array is fixed-length,
+so a count is what it is built from (`specs/built-in-types.md`) - and only a list is
+built from values.
+
 ### Minimal `List<T>` API
 
 Status: required for the first implementation.

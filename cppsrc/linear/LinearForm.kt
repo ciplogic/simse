@@ -213,55 +213,56 @@ data class IlSignature(
 var ilSignatureTable: List<IlSignature> = makeIlSignatures()
 
 fun makeIlSignatures(): List<IlSignature> {
-    var table: List<IlSignature> = List<IlSignature>()
-    table.append(IlSignature(IlOpKind.Label, "Label"))
-    table.append(IlSignature(IlOpKind.Goto, "Label"))
-    table.append(IlSignature(IlOpKind.IfTrue, "Value,Label"))
-    table.append(IlSignature(IlOpKind.IfFalse, "Value,Label"))
-    table.append(IlSignature(IlOpKind.Declare, "Var"))
-    // A declaration the instruction *after* it initialises: the two are one line of
-    // C++. The distinction is real because the hoisting turns a declaration's
-    // initializer into a separate assignment, which is a bare `Declare`.
-    table.append(IlSignature(IlOpKind.DeclareInit, "Var"))
-    // One assignment op for every kind of value: the destination slot's type is what a
-    // backend spells from, so the opcode says nothing about it - `SetVar x, y` copies a
-    // slot, `SetVar x, 5` carries the constant in the operand.
-    table.append(IlSignature(IlOpKind.SetVar, "Var,Value"))
-    // ... except `null`, whose spelling comes from the destination's type
-    // (`Opt<T>()` vs `nullptr`) rather than from a literal.
-    table.append(IlSignature(IlOpKind.SetVar_Null, "Var"))
-    table.append(IlSignature(IlOpKind.BinaryOp, "Var,Text,Value,Value"))
-    table.append(IlSignature(IlOpKind.UnaryOp, "Var,Text,Value"))
-    table.append(IlSignature(IlOpKind.Cast, "Var,Value"))       // Enum.toInt(): the one cast
-    table.append(IlSignature(IlOpKind.Box, "Var,Var"))          // &x -> a counted handle
-    table.append(IlSignature(IlOpKind.Deref, "Var,Var"))        // *x -> a borrow, a `.get()`,
-    //                                                              or a load of a `*T`
-    table.append(IlSignature(IlOpKind.CopyValue, "Var,Var"))    // copy(x)
-    table.append(IlSignature(IlOpKind.Store, "Var,Value"))      // *p = v
-    table.append(IlSignature(IlOpKind.GetField, "Var,Var,Text"))
-    table.append(IlSignature(IlOpKind.SetField, "Var,Text,Value"))
-    table.append(IlSignature(IlOpKind.GetIndex, "Var,Var,Value"))
-    table.append(IlSignature(IlOpKind.SetIndex, "Var,Value,Value"))
-    table.append(IlSignature(IlOpKind.FieldAddr, "Var,Var,Text"))
-    table.append(IlSignature(IlOpKind.IndexAddr, "Var,Var,Value"))
-    table.append(IlSignature(IlOpKind.GetStatic, "Var,Text"))
-    table.append(IlSignature(IlOpKind.GetStaticAddr, "Var,Text"))
-    table.append(IlSignature(IlOpKind.SetStatic, "Text,Value"))
-    table.append(IlSignature(IlOpKind.Call, "Var,Method,Value..."))
-    table.append(IlSignature(IlOpKind.CallVoid, "Method,Value..."))
-    table.append(IlSignature(IlOpKind.CallIndirect, "Var,Var,Value..."))
-    table.append(IlSignature(IlOpKind.CallIndirectVoid, "Var,Value..."))
-    table.append(IlSignature(IlOpKind.CallCtor, "Var,Type,Value..."))
-    // A container built from values in one instruction - the IL's
-    // `newarr`/`fill-array-data`: `List<T>{v1, v2, ...}`. The destination's type says
-    // which container it is, and the values are elements (not fields), which is what
-    // lets a call to a function whose last parameter is a list pack its trailing
-    // arguments (`specs/functions.md`).
-    table.append(IlSignature(IlOpKind.Pack, "Var,Value..."))
-    table.append(IlSignature(IlOpKind.Return, "Value"))
-    table.append(IlSignature(IlOpKind.ReturnVoid, ""))
-    table.append(IlSignature(IlOpKind.Lambda, "Var"))
-    table.append(IlSignature(IlOpKind.Unsupported, "Var,Text"))
+    var table: List<IlSignature> = listOf<IlSignature>(
+        IlSignature(IlOpKind.Label, "Label"),
+        IlSignature(IlOpKind.Goto, "Label"),
+        IlSignature(IlOpKind.IfTrue, "Value,Label"),
+        IlSignature(IlOpKind.IfFalse, "Value,Label"),
+        IlSignature(IlOpKind.Declare, "Var"),
+        // A declaration the instruction *after* it initialises: the two are one line of
+        // C++. The distinction is real because the hoisting turns a declaration's
+        // initializer into a separate assignment, which is a bare `Declare`.
+        IlSignature(IlOpKind.DeclareInit, "Var"),
+        // One assignment op for every kind of value: the destination slot's type is what a
+        // backend spells from, so the opcode says nothing about it - `SetVar x, y` copies a
+        // slot, `SetVar x, 5` carries the constant in the operand.
+        IlSignature(IlOpKind.SetVar, "Var,Value"),
+        // ... except `null`, whose spelling comes from the destination's type
+        // (`Opt<T>()` vs `nullptr`) rather than from a literal.
+        IlSignature(IlOpKind.SetVar_Null, "Var"),
+        IlSignature(IlOpKind.BinaryOp, "Var,Text,Value,Value"),
+        IlSignature(IlOpKind.UnaryOp, "Var,Text,Value"),
+        IlSignature(IlOpKind.Cast, "Var,Value"),     // Enum.toInt(): the one cast
+        IlSignature(IlOpKind.Box, "Var,Var"),        // &x -> a counted handle
+        IlSignature(IlOpKind.Deref, "Var,Var"),      // *x -> a borrow, a `.get()`,
+        //                                             or a load of a `*T`
+        IlSignature(IlOpKind.CopyValue, "Var,Var"),  // copy(x)
+        IlSignature(IlOpKind.Store, "Var,Value"),    // *p = v
+        IlSignature(IlOpKind.GetField, "Var,Var,Text"),
+        IlSignature(IlOpKind.SetField, "Var,Text,Value"),
+        IlSignature(IlOpKind.GetIndex, "Var,Var,Value"),
+        IlSignature(IlOpKind.SetIndex, "Var,Value,Value"),
+        IlSignature(IlOpKind.FieldAddr, "Var,Var,Text"),
+        IlSignature(IlOpKind.IndexAddr, "Var,Var,Value"),
+        IlSignature(IlOpKind.GetStatic, "Var,Text"),
+        IlSignature(IlOpKind.GetStaticAddr, "Var,Text"),
+        IlSignature(IlOpKind.SetStatic, "Text,Value"),
+        IlSignature(IlOpKind.Call, "Var,Method,Value..."),
+        IlSignature(IlOpKind.CallVoid, "Method,Value..."),
+        IlSignature(IlOpKind.CallIndirect, "Var,Var,Value..."),
+        IlSignature(IlOpKind.CallIndirectVoid, "Var,Value..."),
+        IlSignature(IlOpKind.CallCtor, "Var,Type,Value..."),
+        // A container built from values in one instruction - the IL's
+        // `newarr`/`fill-array-data`: `List<T>{v1, v2, ...}`. The destination's type says
+        // which container it is, and the values are elements (not fields), which is what
+        // lets a call to a function whose last parameter is a list pack its trailing
+        // arguments (`specs/functions.md`).
+        IlSignature(IlOpKind.Pack, "Var,Value..."),
+        IlSignature(IlOpKind.Return, "Value"),
+        IlSignature(IlOpKind.ReturnVoid, ""),
+        IlSignature(IlOpKind.Lambda, "Var"),
+        IlSignature(IlOpKind.Unsupported, "Var,Text")
+    )
     return table
 }
 
@@ -270,41 +271,42 @@ fun makeIlSignatures(): List<IlSignature> {
 var ilOpKindTexts: List<Str> = makeIlOpKindTexts()
 
 fun makeIlOpKindTexts(): List<Str> {
-    var texts: List<Str> = List<Str>()
-    texts.append("Label")
-    texts.append("Goto")
-    texts.append("IfTrue")
-    texts.append("IfFalse")
-    texts.append("Declare")
-    texts.append("DeclareInit")
-    texts.append("SetVar")
-    texts.append("SetVar_Null")
-    texts.append("BinaryOp")
-    texts.append("UnaryOp")
-    texts.append("Cast")
-    texts.append("Box")
-    texts.append("Deref")
-    texts.append("CopyValue")
-    texts.append("Store")
-    texts.append("GetField")
-    texts.append("SetField")
-    texts.append("GetIndex")
-    texts.append("SetIndex")
-    texts.append("FieldAddr")
-    texts.append("IndexAddr")
-    texts.append("GetStatic")
-    texts.append("GetStaticAddr")
-    texts.append("SetStatic")
-    texts.append("Call")
-    texts.append("CallVoid")
-    texts.append("CallIndirect")
-    texts.append("CallIndirectVoid")
-    texts.append("CallCtor")
-    texts.append("Pack")
-    texts.append("Return")
-    texts.append("ReturnVoid")
-    texts.append("Lambda")
-    texts.append("Unsupported")
+    var texts: List<Str> = listOf<Str>(
+        "Label",
+        "Goto",
+        "IfTrue",
+        "IfFalse",
+        "Declare",
+        "DeclareInit",
+        "SetVar",
+        "SetVar_Null",
+        "BinaryOp",
+        "UnaryOp",
+        "Cast",
+        "Box",
+        "Deref",
+        "CopyValue",
+        "Store",
+        "GetField",
+        "SetField",
+        "GetIndex",
+        "SetIndex",
+        "FieldAddr",
+        "IndexAddr",
+        "GetStatic",
+        "GetStaticAddr",
+        "SetStatic",
+        "Call",
+        "CallVoid",
+        "CallIndirect",
+        "CallIndirectVoid",
+        "CallCtor",
+        "Pack",
+        "Return",
+        "ReturnVoid",
+        "Lambda",
+        "Unsupported"
+    )
     return texts
 }
 
@@ -327,30 +329,39 @@ fun ilSignature(kind: IlOpKind): Opt<IlSignature> {
 }
 
 fun ilVarKindText(kind: IlVarKind): Str {
-    if (kind == IlVarKind.Argument) {
-        return "Argument"
-    }
-    if (kind == IlVarKind.Local) {
-        return "Local"
-    }
-    if (kind == IlVarKind.Expression) {
-        return "Expression"
-    }
-    if (kind == IlVarKind.Temp) {
-        return "Temp"
+    when (kind) {
+        IlVarKind.Argument -> {
+            return "Argument"
+        }
+
+        IlVarKind.Local -> {
+            return "Local"
+        }
+
+        IlVarKind.Expression -> {
+            return "Expression"
+        }
+
+        IlVarKind.Temp -> {
+            return "Temp"
+        }
     }
     return "?"
 }
 
 fun ilMethodKindText(kind: IlMethodKind): Str {
-    if (kind == IlMethodKind.Function) {
-        return "Function"
-    }
-    if (kind == IlMethodKind.Method) {
-        return "Method"
-    }
-    if (kind == IlMethodKind.Constructor) {
-        return "Constructor"
+    when (kind) {
+        IlMethodKind.Function -> {
+            return "Function"
+        }
+
+        IlMethodKind.Method -> {
+            return "Method"
+        }
+
+        IlMethodKind.Constructor -> {
+            return "Constructor"
+        }
     }
     return "?"
 }
@@ -383,42 +394,44 @@ fun ilTypeText(typeNode: *AstXmlNode): Str {
         return "?"
     }
     val kind: AstNodeCategory = xmlKind(typeNode)
-    if (kind == AstNodeCategory.TypeIntLit) {
-        return xmlAttr(typeNode, AstNodeAttributeKind.Text)
-    }
-    if (kind == AstNodeCategory.TypeNamed) {
-        return xmlAttr(typeNode, AstNodeAttributeKind.Name)
-    }
-    if (kind == AstNodeCategory.TypeGeneric) {
-        var args: List<Str> = List<Str>()
-        val typeArgs: List<AstXmlNode> = xmlChildren(typeNode, AstNodeKind.TypeArg)
-        var i: Int = 0
-        while (i < typeArgs.size()) {
-            args.append(ilTypeText(*typeArgs[i]))
-            i = i + 1
+    when (kind) {
+        AstNodeCategory.TypeIntLit -> {
+            return xmlAttr(typeNode, AstNodeAttributeKind.Text)
         }
-        return xmlAttr(typeNode, AstNodeAttributeKind.Name) + "<" + ilJoinList(*args, ", ") + ">"
-    }
-    if (kind == AstNodeCategory.TypeReference) {
-        return "&" + ilTypeText(*xmlChild(typeNode, AstNodeKind.Inner))
-    }
-    if (kind == AstNodeCategory.TypePointer) {
-        return "*" + ilTypeText(*xmlChild(typeNode, AstNodeKind.Inner))
-    }
-    // A `..T` (and anything else) spells `?`: the C++ ring's `ilTypeText` switches on
-    // Named/IntLit/Generic/Reference/Pointer/Function only, and the two dumps have to
-    // agree byte for byte. A machine is not a value type, so a body that *is* one shows
-    // its return type as `?` in both rings.
-    if (kind == AstNodeCategory.TypeFunction) {
-        var params: List<Str> = List<Str>()
-        val paramTypes: List<AstXmlNode> = xmlChildren(typeNode, AstNodeKind.ParamType)
-        var i: Int = 0
-        while (i < paramTypes.size()) {
-            params.append(ilTypeText(*paramTypes[i]))
-            i = i + 1
+
+        AstNodeCategory.TypeNamed -> {
+            return xmlAttr(typeNode, AstNodeAttributeKind.Name)
         }
-        return "(" + ilJoinList(*params, ", ") + ") -> "
-        +ilTypeText(*xmlChild(typeNode, AstNodeKind.ReturnType))
+
+        AstNodeCategory.TypeGeneric -> {
+            var args: List<Str> = List<Str>()
+            val typeArgs: List<AstXmlNode> = xmlChildren(typeNode, AstNodeKind.TypeArg)
+            for (*typeArg in typeArgs) {
+                args.append(ilTypeText(typeArg))
+            }
+            return xmlAttr(typeNode, AstNodeAttributeKind.Name) + "<" + ilJoinList(*args, ", ") + ">"
+        }
+
+        AstNodeCategory.TypeReference -> {
+            return "&" + ilTypeText(*xmlChild(typeNode, AstNodeKind.Inner))
+        }
+
+        AstNodeCategory.TypePointer -> {
+            return "*" + ilTypeText(*xmlChild(typeNode, AstNodeKind.Inner))
+        }
+        // A `..T` (and anything else) spells `?`: the C++ ring's `ilTypeText` switches on
+        // Named/IntLit/Generic/Reference/Pointer/Function only, and the two dumps have to
+        // agree byte for byte. A machine is not a value type, so a body that *is* one shows
+        // its return type as `?` in both rings.
+        AstNodeCategory.TypeFunction -> {
+            var params: List<Str> = List<Str>()
+            val paramTypes: List<AstXmlNode> = xmlChildren(typeNode, AstNodeKind.ParamType)
+            for (*paramType in paramTypes) {
+                params.append(ilTypeText(paramType))
+            }
+            return "(" + ilJoinList(*params, ", ") + ") -> "
+            +ilTypeText(*xmlChild(typeNode, AstNodeKind.ReturnType))
+        }
     }
     return "?"
 }
@@ -427,11 +440,14 @@ fun ilTypeText(typeNode: *AstXmlNode): Str {
 // handle, `*T` for an explicit pointer receiver.
 fun ilReceiverTypeText(typeNode: *AstXmlNode): Str {
     val kind: AstNodeCategory = xmlKind(typeNode)
-    if (kind == AstNodeCategory.TypeReference) {
-        return "&" + ilTypeText(*xmlChild(typeNode, AstNodeKind.Inner))
-    }
-    if (kind == AstNodeCategory.TypePointer) {
-        return "*" + ilTypeText(*xmlChild(typeNode, AstNodeKind.Inner))
+    when (kind) {
+        AstNodeCategory.TypeReference -> {
+            return "&" + ilTypeText(*xmlChild(typeNode, AstNodeKind.Inner))
+        }
+
+        AstNodeCategory.TypePointer -> {
+            return "*" + ilTypeText(*xmlChild(typeNode, AstNodeKind.Inner))
+        }
     }
     return "*" + ilTypeText(typeNode)
 }
@@ -443,65 +459,86 @@ fun ilReceiverTypeText(typeNode: *AstXmlNode): Str {
 fun ilWritesDestination(kind: IlOpKind): Bool {
     // Written out rather than derived, because deriving it means reading the operands
     // *and* knowing which of them produce a value, which is the thing being stated.
-    if (kind == IlOpKind.SetVar) {
-        return true
-    }
-    if (kind == IlOpKind.SetVar_Null) {
-        return true
-    }
-    if (kind == IlOpKind.BinaryOp) {
-        return true
-    }
-    if (kind == IlOpKind.UnaryOp) {
-        return true
-    }
-    if (kind == IlOpKind.Cast) {
-        return true
-    }
-    if (kind == IlOpKind.Box) {
-        return true
-    }
-    if (kind == IlOpKind.Deref) {
-        return true
-    }
-    if (kind == IlOpKind.CopyValue) {
-        return true
-    }
-    if (kind == IlOpKind.GetField) {
-        return true
-    }
-    if (kind == IlOpKind.GetIndex) {
-        return true
-    }
-    if (kind == IlOpKind.FieldAddr) {
-        return true
-    }
-    if (kind == IlOpKind.IndexAddr) {
-        return true
-    }
-    if (kind == IlOpKind.GetStatic) {
-        return true
-    }
-    if (kind == IlOpKind.GetStaticAddr) {
-        return true
-    }
-    if (kind == IlOpKind.Call) {
-        return true
-    }
-    if (kind == IlOpKind.CallIndirect) {
-        return true
-    }
-    if (kind == IlOpKind.CallCtor) {
-        return true
-    }
-    if (kind == IlOpKind.Pack) {
-        return true
-    }
-    if (kind == IlOpKind.Lambda) {
-        return true
-    }
-    if (kind == IlOpKind.Unsupported) {
-        return true
+    when (kind) {
+        IlOpKind.SetVar -> {
+            return true
+        }
+
+        IlOpKind.SetVar_Null -> {
+            return true
+        }
+
+        IlOpKind.BinaryOp -> {
+            return true
+        }
+
+        IlOpKind.UnaryOp -> {
+            return true
+        }
+
+        IlOpKind.Cast -> {
+            return true
+        }
+
+        IlOpKind.Box -> {
+            return true
+        }
+
+        IlOpKind.Deref -> {
+            return true
+        }
+
+        IlOpKind.CopyValue -> {
+            return true
+        }
+
+        IlOpKind.GetField -> {
+            return true
+        }
+
+        IlOpKind.GetIndex -> {
+            return true
+        }
+
+        IlOpKind.FieldAddr -> {
+            return true
+        }
+
+        IlOpKind.IndexAddr -> {
+            return true
+        }
+
+        IlOpKind.GetStatic -> {
+            return true
+        }
+
+        IlOpKind.GetStaticAddr -> {
+            return true
+        }
+
+        IlOpKind.Call -> {
+            return true
+        }
+
+        IlOpKind.CallIndirect -> {
+            return true
+        }
+
+        IlOpKind.CallCtor -> {
+            return true
+        }
+
+        IlOpKind.Pack -> {
+            return true
+        }
+
+        IlOpKind.Lambda -> {
+            return true
+        }
+
+        IlOpKind.Unsupported -> {
+            return true
+        }
     }
     return false
 }
@@ -542,23 +579,30 @@ fun ilKindOfToken(token: Str): IlOperandKind {
     if (ilTokenRepeats(base)) {
         base = base.substr(0, base.size() - 3)
     }
-    if (base == "Var") {
-        return IlOperandKind.Var
-    }
-    if (base == "Value") {
-        return IlOperandKind.Value
-    }
-    if (base == "Text") {
-        return IlOperandKind.Text
-    }
-    if (base == "Type") {
-        return IlOperandKind.Type
-    }
-    if (base == "Method") {
-        return IlOperandKind.Method
-    }
-    if (base == "Label") {
-        return IlOperandKind.Label
+    when (base) {
+        "Var" -> {
+            return IlOperandKind.Var
+        }
+
+        "Value" -> {
+            return IlOperandKind.Value
+        }
+
+        "Text" -> {
+            return IlOperandKind.Text
+        }
+
+        "Type" -> {
+            return IlOperandKind.Type
+        }
+
+        "Method" -> {
+            return IlOperandKind.Method
+        }
+
+        "Label" -> {
+            return IlOperandKind.Label
+        }
     }
     return IlOperandKind.None
 }
@@ -659,23 +703,29 @@ fun ilPoolAsText(text: Str): Str {
 // The operand as the reader wants it: the name from the table it indexes, with the raw
 // index only in the `?` fallbacks.
 fun ilRenderOperand(body: *IlBody, kind: IlOperandKind, value: Int): Str {
-    if (kind == IlOperandKind.Var || kind == IlOperandKind.Value) {
-        return ilVarName(body, value)
-    }
-    if (kind == IlOperandKind.Text) {
-        return ilPoolAsText(ilPoolText(body, value))
-    }
-    if (kind == IlOperandKind.Type) {
-        return ilTypeName(body, value)
-    }
-    if (kind == IlOperandKind.Method) {
-        if (value < 0 || value >= body.methods.size()) {
-            return "?m" + ilIntText(value)
+    when (kind) {
+        IlOperandKind.Var, IlOperandKind.Value -> {
+            return ilVarName(body, value)
         }
-        return body.methods[value].name
-    }
-    if (kind == IlOperandKind.Label) {
-        return ilLabelName(body, value)
+
+        IlOperandKind.Text -> {
+            return ilPoolAsText(ilPoolText(body, value))
+        }
+
+        IlOperandKind.Type -> {
+            return ilTypeName(body, value)
+        }
+
+        IlOperandKind.Method -> {
+            if (value < 0 || value >= body.methods.size()) {
+                return "?m" + ilIntText(value)
+            }
+            return body.methods[value].name
+        }
+
+        IlOperandKind.Label -> {
+            return ilLabelName(body, value)
+        }
     }
     return "?"
 }
@@ -711,157 +761,188 @@ fun ilOpComment(body: *IlBody, op: *IlOp): Str {
     val kind: IlOpKind = op.kind
     val operands: *List<Int> = *op.operands
 
-    if (kind == IlOpKind.Declare) {
-        val slot: Int = ilOperandAt(operands, 0)
-        return "var " + ilVarName(body, slot) + ": " + ilVarTypeName(body, slot)
-    }
-    if (kind == IlOpKind.Label) {
-        return ilLabelName(body, ilOperandAt(operands, 0)) + ":"
-    }
-    if (kind == IlOpKind.Goto) {
-        return "goto " + ilLabelName(body, ilOperandAt(operands, 0))
-    }
-    if (kind == IlOpKind.IfTrue || kind == IlOpKind.IfFalse) {
-        val condition: Str = ilVarName(body, ilOperandAt(operands, 0))
-        val target: Str = ilLabelName(body, ilOperandAt(operands, 1))
-        if (kind == IlOpKind.IfTrue) {
-            return "if (" + condition + ") goto " + target
+    when (kind) {
+        IlOpKind.Declare -> {
+            val slot: Int = ilOperandAt(operands, 0)
+            return "var " + ilVarName(body, slot) + ": " + ilVarTypeName(body, slot)
         }
-        return "if (!" + condition + ") goto " + target
-    }
-    if (kind == IlOpKind.SetVar) {
-        return ilVarName(body, ilOperandAt(operands, 0)) + " = "
-        +ilVarName(body, ilOperandAt(operands, 1))
-    }
-    if (kind == IlOpKind.SetVar_Null) {
-        return ilVarName(body, ilOperandAt(operands, 0)) + " = null"
-    }
-    if (kind == IlOpKind.BinaryOp) {
-        return ilVarName(body, ilOperandAt(operands, 0)) + " = "
-        +ilVarName(body, ilOperandAt(operands, 2)) + " "
-        +ilPoolText(body, ilOperandAt(operands, 1)) + " "
-        +ilVarName(body, ilOperandAt(operands, 3))
-    }
-    if (kind == IlOpKind.UnaryOp) {
-        return ilVarName(body, ilOperandAt(operands, 0)) + " = "
-        +ilPoolText(body, ilOperandAt(operands, 1))
-        +ilVarName(body, ilOperandAt(operands, 2))
-    }
-    if (kind == IlOpKind.Cast) {
-        return ilVarName(body, ilOperandAt(operands, 0)) + " = cast "
-        +ilVarName(body, ilOperandAt(operands, 1))
-    }
-    if (kind == IlOpKind.Box) {
-        return ilVarName(body, ilOperandAt(operands, 0)) + " = &"
-        +ilVarName(body, ilOperandAt(operands, 1))
-    }
-    if (kind == IlOpKind.Deref) {
-        return ilVarName(body, ilOperandAt(operands, 0)) + " = *"
-        +ilVarName(body, ilOperandAt(operands, 1))
-    }
-    if (kind == IlOpKind.CopyValue) {
-        return ilVarName(body, ilOperandAt(operands, 0)) + " = copy("
-        +ilVarName(body, ilOperandAt(operands, 1)) + ")"
-    }
-    if (kind == IlOpKind.Store) {
-        return "*" + ilVarName(body, ilOperandAt(operands, 0)) + " = "
-        +ilVarName(body, ilOperandAt(operands, 1))
-    }
-    if (kind == IlOpKind.GetField) {
-        return ilVarName(body, ilOperandAt(operands, 0)) + " = "
-        +ilVarName(body, ilOperandAt(operands, 1)) + "."
-        +ilPoolText(body, ilOperandAt(operands, 2))
-    }
-    if (kind == IlOpKind.SetField) {
-        return ilVarName(body, ilOperandAt(operands, 1)) + "."
-        +ilPoolText(body, ilOperandAt(operands, 0)) + " = "
-        +ilVarName(body, ilOperandAt(operands, 2))
-    }
-    if (kind == IlOpKind.GetIndex) {
-        return ilVarName(body, ilOperandAt(operands, 0)) + " = "
-        +ilVarName(body, ilOperandAt(operands, 1)) + "["
-        +ilVarName(body, ilOperandAt(operands, 2)) + "]"
-    }
-    if (kind == IlOpKind.SetIndex) {
-        return ilVarName(body, ilOperandAt(operands, 1)) + "["
-        +ilVarName(body, ilOperandAt(operands, 2)) + "] = "
-        +ilVarName(body, ilOperandAt(operands, 3))
-    }
-    if (kind == IlOpKind.FieldAddr) {
-        return ilVarName(body, ilOperandAt(operands, 0)) + " = &"
-        +ilVarName(body, ilOperandAt(operands, 1)) + "."
-        +ilPoolText(body, ilOperandAt(operands, 2))
-    }
-    if (kind == IlOpKind.IndexAddr) {
-        return ilVarName(body, ilOperandAt(operands, 0)) + " = &"
-        +ilVarName(body, ilOperandAt(operands, 1)) + "["
-        +ilVarName(body, ilOperandAt(operands, 2)) + "]"
-    }
-    if (kind == IlOpKind.GetStatic) {
-        return ilVarName(body, ilOperandAt(operands, 0)) + " = "
-        +ilPoolText(body, ilOperandAt(operands, 1))
-    }
-    if (kind == IlOpKind.GetStaticAddr) {
-        return ilVarName(body, ilOperandAt(operands, 0)) + " = &"
-        +ilPoolText(body, ilOperandAt(operands, 1))
-    }
-    if (kind == IlOpKind.SetStatic) {
-        return ilPoolText(body, ilOperandAt(operands, 0)) + " = "
-        +ilVarName(body, ilOperandAt(operands, 1))
-    }
-    if (kind == IlOpKind.Call || kind == IlOpKind.CallVoid) {
-        val hasDst: Bool = kind == IlOpKind.Call
-        var dst: Str = Str()
-        if (hasDst) {
-            dst = ilVarName(body, ilOperandAt(operands, 0)) + " = "
+
+        IlOpKind.Label -> {
+            return ilLabelName(body, ilOperandAt(operands, 0)) + ":"
         }
-        var methodOp: Int = ilOperandAt(operands, 0)
-        var first: Int = 1
-        if (hasDst) {
-            methodOp = ilOperandAt(operands, 1)
-            first = 2
+
+        IlOpKind.Goto -> {
+            return "goto " + ilLabelName(body, ilOperandAt(operands, 0))
         }
-        if (methodOp < 0 || methodOp >= body.methods.size()) {
-            return dst + "?m" + ilIntText(methodOp) + "(" + ilArgList(body, operands, first) + ")"
+
+        IlOpKind.IfTrue, IlOpKind.IfFalse -> {
+            val condition: Str = ilVarName(body, ilOperandAt(operands, 0))
+            val target: Str = ilLabelName(body, ilOperandAt(operands, 1))
+            if (kind == IlOpKind.IfTrue) {
+                return "if (" + condition + ") goto " + target
+            }
+            return "if (!" + condition + ") goto " + target
         }
-        val method: IlMethod = body.methods[methodOp]
-        if (method.kind == IlMethodKind.Method && first < operands.size()) {
-            return dst + ilVarName(body, operands[first]) + "." + method.name + "("
-            +ilArgList(body, operands, first + 1) + ")"
+
+        IlOpKind.SetVar -> {
+            return ilVarName(body, ilOperandAt(operands, 0)) + " = "
+            +ilVarName(body, ilOperandAt(operands, 1))
         }
-        return dst + method.name + "(" + ilArgList(body, operands, first) + ")"
-    }
-    if (kind == IlOpKind.CallIndirect || kind == IlOpKind.CallIndirectVoid) {
-        val hasDst2: Bool = kind == IlOpKind.CallIndirect
-        var dst2: Str = Str()
-        var calleeAt: Int = 0
-        if (hasDst2) {
-            dst2 = ilVarName(body, ilOperandAt(operands, 0)) + " = "
-            calleeAt = 1
+
+        IlOpKind.SetVar_Null -> {
+            return ilVarName(body, ilOperandAt(operands, 0)) + " = null"
         }
-        return dst2 + ilVarName(body, ilOperandAt(operands, calleeAt)) + "("
-        +ilArgList(body, operands, calleeAt + 1) + ")"
-    }
-    if (kind == IlOpKind.Pack) {
-        return ilVarName(body, ilOperandAt(operands, 0)) + " = ["
-        +ilArgList(body, operands, 1) + "]"
-    }
-    if (kind == IlOpKind.CallCtor) {
-        return ilVarName(body, ilOperandAt(operands, 0)) + " = new "
-        +ilTypeName(body, ilOperandAt(operands, 1)) + "("
-        +ilArgList(body, operands, 2) + ")"
-    }
-    if (kind == IlOpKind.Return) {
-        return "return " + ilVarName(body, ilOperandAt(operands, 0))
-    }
-    if (kind == IlOpKind.ReturnVoid) {
-        return "return"
-    }
-    if (kind == IlOpKind.Lambda) {
-        return ilVarName(body, ilOperandAt(operands, 0)) + " = <lambda>"
-    }
-    if (kind == IlOpKind.Unsupported) {
-        return "<unsupported: " + ilPoolText(body, ilOperandAt(operands, 1)) + ">"
+
+        IlOpKind.BinaryOp -> {
+            return ilVarName(body, ilOperandAt(operands, 0)) + " = "
+            +ilVarName(body, ilOperandAt(operands, 2)) + " "
+            +ilPoolText(body, ilOperandAt(operands, 1)) + " "
+            +ilVarName(body, ilOperandAt(operands, 3))
+        }
+
+        IlOpKind.UnaryOp -> {
+            return ilVarName(body, ilOperandAt(operands, 0)) + " = "
+            +ilPoolText(body, ilOperandAt(operands, 1))
+            +ilVarName(body, ilOperandAt(operands, 2))
+        }
+
+        IlOpKind.Cast -> {
+            return ilVarName(body, ilOperandAt(operands, 0)) + " = cast "
+            +ilVarName(body, ilOperandAt(operands, 1))
+        }
+
+        IlOpKind.Box -> {
+            return ilVarName(body, ilOperandAt(operands, 0)) + " = &"
+            +ilVarName(body, ilOperandAt(operands, 1))
+        }
+
+        IlOpKind.Deref -> {
+            return ilVarName(body, ilOperandAt(operands, 0)) + " = *"
+            +ilVarName(body, ilOperandAt(operands, 1))
+        }
+
+        IlOpKind.CopyValue -> {
+            return ilVarName(body, ilOperandAt(operands, 0)) + " = copy("
+            +ilVarName(body, ilOperandAt(operands, 1)) + ")"
+        }
+
+        IlOpKind.Store -> {
+            return "*" + ilVarName(body, ilOperandAt(operands, 0)) + " = "
+            +ilVarName(body, ilOperandAt(operands, 1))
+        }
+
+        IlOpKind.GetField -> {
+            return ilVarName(body, ilOperandAt(operands, 0)) + " = "
+            +ilVarName(body, ilOperandAt(operands, 1)) + "."
+            +ilPoolText(body, ilOperandAt(operands, 2))
+        }
+
+        IlOpKind.SetField -> {
+            return ilVarName(body, ilOperandAt(operands, 1)) + "."
+            +ilPoolText(body, ilOperandAt(operands, 0)) + " = "
+            +ilVarName(body, ilOperandAt(operands, 2))
+        }
+
+        IlOpKind.GetIndex -> {
+            return ilVarName(body, ilOperandAt(operands, 0)) + " = "
+            +ilVarName(body, ilOperandAt(operands, 1)) + "["
+            +ilVarName(body, ilOperandAt(operands, 2)) + "]"
+        }
+
+        IlOpKind.SetIndex -> {
+            return ilVarName(body, ilOperandAt(operands, 1)) + "["
+            +ilVarName(body, ilOperandAt(operands, 2)) + "] = "
+            +ilVarName(body, ilOperandAt(operands, 3))
+        }
+
+        IlOpKind.FieldAddr -> {
+            return ilVarName(body, ilOperandAt(operands, 0)) + " = &"
+            +ilVarName(body, ilOperandAt(operands, 1)) + "."
+            +ilPoolText(body, ilOperandAt(operands, 2))
+        }
+
+        IlOpKind.IndexAddr -> {
+            return ilVarName(body, ilOperandAt(operands, 0)) + " = &"
+            +ilVarName(body, ilOperandAt(operands, 1)) + "["
+            +ilVarName(body, ilOperandAt(operands, 2)) + "]"
+        }
+
+        IlOpKind.GetStatic -> {
+            return ilVarName(body, ilOperandAt(operands, 0)) + " = "
+            +ilPoolText(body, ilOperandAt(operands, 1))
+        }
+
+        IlOpKind.GetStaticAddr -> {
+            return ilVarName(body, ilOperandAt(operands, 0)) + " = &"
+            +ilPoolText(body, ilOperandAt(operands, 1))
+        }
+
+        IlOpKind.SetStatic -> {
+            return ilPoolText(body, ilOperandAt(operands, 0)) + " = "
+            +ilVarName(body, ilOperandAt(operands, 1))
+        }
+
+        IlOpKind.Call, IlOpKind.CallVoid -> {
+            val hasDst: Bool = kind == IlOpKind.Call
+            var dst: Str = Str()
+            if (hasDst) {
+                dst = ilVarName(body, ilOperandAt(operands, 0)) + " = "
+            }
+            var methodOp: Int = ilOperandAt(operands, 0)
+            var first: Int = 1
+            if (hasDst) {
+                methodOp = ilOperandAt(operands, 1)
+                first = 2
+            }
+            if (methodOp < 0 || methodOp >= body.methods.size()) {
+                return dst + "?m" + ilIntText(methodOp) + "(" + ilArgList(body, operands, first) + ")"
+            }
+            val method: IlMethod = body.methods[methodOp]
+            if (method.kind == IlMethodKind.Method && first < operands.size()) {
+                return dst + ilVarName(body, operands[first]) + "." + method.name + "("
+                +ilArgList(body, operands, first + 1) + ")"
+            }
+            return dst + method.name + "(" + ilArgList(body, operands, first) + ")"
+        }
+
+        IlOpKind.CallIndirect, IlOpKind.CallIndirectVoid -> {
+            val hasDst2: Bool = kind == IlOpKind.CallIndirect
+            var dst2: Str = Str()
+            var calleeAt: Int = 0
+            if (hasDst2) {
+                dst2 = ilVarName(body, ilOperandAt(operands, 0)) + " = "
+                calleeAt = 1
+            }
+            return dst2 + ilVarName(body, ilOperandAt(operands, calleeAt)) + "("
+            +ilArgList(body, operands, calleeAt + 1) + ")"
+        }
+
+        IlOpKind.Pack -> {
+            return ilVarName(body, ilOperandAt(operands, 0)) + " = ["
+            +ilArgList(body, operands, 1) + "]"
+        }
+
+        IlOpKind.CallCtor -> {
+            return ilVarName(body, ilOperandAt(operands, 0)) + " = new "
+            +ilTypeName(body, ilOperandAt(operands, 1)) + "("
+            +ilArgList(body, operands, 2) + ")"
+        }
+
+        IlOpKind.Return -> {
+            return "return " + ilVarName(body, ilOperandAt(operands, 0))
+        }
+
+        IlOpKind.ReturnVoid -> {
+            return "return"
+        }
+
+        IlOpKind.Lambda -> {
+            return ilVarName(body, ilOperandAt(operands, 0)) + " = <lambda>"
+        }
+
+        IlOpKind.Unsupported -> {
+            return "<unsupported: " + ilPoolText(body, ilOperandAt(operands, 1)) + ">"
+        }
     }
     return Str()
 }
@@ -999,10 +1080,8 @@ fun ilCollectExprNames(node: *AstXmlNode, order: *List<Str>, seen: *Dictionary<S
     if (xmlKind(node) == AstNodeCategory.ExprLambda) {
         return
     }
-    var i: Int = 0
-    while (i < node.Children.count()) {
-        ilCollectExprNames(*node.Children[i], order, seen)
-        i = i + 1
+    for (*child in node.Children) {
+        ilCollectExprNames(child, order, seen)
     }
 }
 
@@ -1013,9 +1092,7 @@ fun ilCollectStmtNames(
     stmts: *List<AstXmlNode>, declared: *Dictionary<Str, Bool>,
     order: *List<Str>, seen: *Dictionary<Str, Bool>
 ): Unit {
-    var i: Int = 0
-    while (i < stmts.size()) {
-        val stmt: *AstXmlNode = *stmts[i]
+    for (*stmt in stmts) {
         if (xmlKind(stmt) == AstNodeCategory.StmtVarDecl) {
             val declaredName: Str = xmlAttr(stmt, AstNodeAttributeKind.Name)
             if (!declaredName.isEmpty()) {
@@ -1030,7 +1107,6 @@ fun ilCollectStmtNames(
         ilCollectStmtNamesIn(stmt, AstNodeKind.Body, declared, order, seen)
         ilCollectStmtNamesIn(stmt, AstNodeKind.Then, declared, order, seen)
         ilCollectStmtNamesIn(stmt, AstNodeKind.Else, declared, order, seen)
-        i = i + 1
     }
 }
 
@@ -1067,33 +1143,19 @@ fun ilCollectStmtNamesIn(
 // ---- operand lists ---------------------------------------------------------
 
 fun ilOps1(a: Int): List<Int> {
-    var ops: List<Int> = List<Int>()
-    ops.append(a)
-    return ops
+    return listOf<Int>(a)
 }
 
 fun ilOps2(a: Int, b: Int): List<Int> {
-    var ops: List<Int> = List<Int>()
-    ops.append(a)
-    ops.append(b)
-    return ops
+    return listOf<Int>(a, b)
 }
 
 fun ilOps3(a: Int, b: Int, c: Int): List<Int> {
-    var ops: List<Int> = List<Int>()
-    ops.append(a)
-    ops.append(b)
-    ops.append(c)
-    return ops
+    return listOf<Int>(a, b, c)
 }
 
 fun ilOps4(a: Int, b: Int, c: Int, d: Int): List<Int> {
-    var ops: List<Int> = List<Int>()
-    ops.append(a)
-    ops.append(b)
-    ops.append(c)
-    ops.append(d)
-    return ops
+    return listOf<Int>(a, b, c, d)
 }
 
 // A type node built for a synthesized slot: the language's types are nodes, so a receiver
@@ -1171,7 +1233,16 @@ data class IlExtractor(
     // The synthesized slots that carry a type: their declarations go to the top of the
     // instruction list (with the line that needed them, for the dump).
     var hoisted: List<Int>,
-    var hoistedLines: List<Int>
+    var hoistedLines: List<Int>,
+    // The caches the type questions read: the context `semTypeOfExpr` is given and the
+    // frame as it wants to see it (`typeContext`/`frameNames`), plus the flag that says
+    // whether each is still valid (`typeContextReady`/`frameNamesStale`). The context is
+    // *borrowed* storage of the caller's - the way `unit` and `closureCounter` are - because
+    // a `SemBody` field here would be an incomplete type where this class is defined.
+    var typeContext: *SemBody,
+    var typeContextReady: Bool,
+    var frameNames: Dictionary<Str, AstXmlNode>,
+    var frameNamesStale: Bool
 ) {
 
     // ---- tables -----------------------------------------------------------
@@ -1179,7 +1250,19 @@ data class IlExtractor(
     fun addVar(name: Str, typeText: Str, kind: IlVarKind, typeNode: AstXmlNode): Int {
         this.out.vars.append(IlVar(name, this.typeIndex(typeText, typeNode), kind))
         this.varAt.insert(name, this.out.vars.size() - 1)
+        this.frameChanged()
         return this.out.vars.size() - 1
+    }
+
+    // Give a slot a type after the fact: the destination of a list literal is the call's
+    // own slot, and the literal knows the type it is building even when the position it
+    // stands in would only have inferred it.
+    fun setSlotType(slot: Int, typeNode: AstXmlNode): Unit {
+        if (slot < 0 || slot >= this.out.vars.size() || xmlIsEmpty(*typeNode)) {
+            return
+        }
+        this.out.vars[slot].typeIndex = this.typeIndex(ilTypeText(*typeNode), typeNode)
+        this.frameChanged()
     }
 
     // The type table: text for the dump, the node (when there is one) for a backend. The
@@ -1279,22 +1362,59 @@ data class IlExtractor(
 
     // ---- the types of what the extractor synthesizes ----------------------
 
+    // The context `semTypeOfExpr` reads, and the frame as it wants to see it. Both are
+    // constant for a body except when a slot is added, so they are built once and reused:
+    // every question used to rebuild them (a dictionary of every slot, and a `SemBody` with
+    // its lists copied), which cost the compiler's own transpile about a third of its time
+    // once the extractor began asking about *call* arguments as well as about the slots it
+    // synthesizes.
+    fun frameChanged(): Unit {
+        this.frameNamesStale = true
+    }
+
+    // The context, borrowed: the same one every question about this body is asked with.
+    // The storage is the caller's, the way the extractor's own frame tables are filled in
+    // place; it is written once, on the first question.
+    fun bodyContext(): *SemBody {
+        if (this.typeContextReady) {
+            return this.typeContext
+        }
+        this.typeContext.decl = this.fn.decl
+        this.typeContext.selfType = this.fn.receiver
+        this.typeContext.selfDecl = this.fn.selfDecl
+        this.typeContext.typeParams = this.fn.typeParams
+        this.typeContext.paramNames = this.fn.paramNames
+        this.typeContext.paramTypes = this.fn.paramTypes
+        this.typeContext.captures = this.fn.captureTypes
+        if (xmlIsEmpty(*this.typeContext.selfType) && !this.fn.closureSymbol.isEmpty()) {
+            // A machine method or a lambda body: `this` is the instance of the class the
+            // lowering built (a value receiver reads through it).
+            this.typeContext.selfType = ilNamedTypeNode(this.fn.closureSymbol)
+        }
+        this.typeContextReady = true
+        return this.typeContext
+    }
+
     // The frame is a scope: every slot's name and its type. That is exactly the shape
     // `semTypeOfExpr` takes, and the reason the extractor can give a type to a slot the
     // statements never declared (a place, a value position the lowering left inline) - a
     // slot without one cannot be declared at the top of the body, and then the instruction
-    // that reads it has to inline the whole expression it stands for.
-    fun frameTypes(): Dictionary<Str, AstXmlNode> {
-        var names: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
-        var i: Int = 0
-        while (i < this.out.vars.size()) {
-            val typeNode: AstXmlNode = ilVarType(*this.out, i)
-            if (!xmlIsEmpty(*typeNode)) {
-                names.insert(this.out.vars[i].name, typeNode)
+    // that reads it has to inline the whole expression it stands for. Borrowed, and rebuilt
+    // only when the frame changed.
+    fun frameTypes(): *Dictionary<Str, AstXmlNode> {
+        if (this.frameNamesStale) {
+            this.frameNames.clear()
+            var i: Int = 0
+            while (i < this.out.vars.size()) {
+                val typeNode: AstXmlNode = ilVarType(*this.out, i)
+                if (!xmlIsEmpty(*typeNode)) {
+                    this.frameNames.insert(this.out.vars[i].name, typeNode)
+                }
+                i = i + 1
             }
-            i = i + 1
+            this.frameNamesStale = false
         }
-        return names
+        return *this.frameNames
     }
 
     // The type of an expression, from the rules the *type pass* applies to a whole body -
@@ -1305,17 +1425,7 @@ data class IlExtractor(
         if (this.fn.facts == null) {
             return xmlEmptyNode()
         }
-        var context: SemBody = SemBody(
-            this.fn.decl, this.fn.typeParams, this.fn.receiver, this.fn.selfDecl,
-            this.fn.paramNames, this.fn.paramTypes, this.fn.captureTypes
-        )
-        if (xmlIsEmpty(*context.selfType) && !this.fn.closureSymbol.isEmpty()) {
-            // A machine method or a lambda body: `this` is the instance of the class the
-            // lowering built (a value receiver reads through it).
-            context.selfType = ilNamedTypeNode(this.fn.closureSymbol)
-        }
-        val names: Dictionary<Str, AstXmlNode> = this.frameTypes()
-        return semTypeOfExpr(*e, this.fn.facts, *context, *names)
+        return semTypeOfExpr(*e, this.fn.facts, this.bodyContext(), this.frameTypes())
     }
 
     // The type of the *value* an instruction writes for this expression. It is the type
@@ -1486,161 +1596,172 @@ data class IlExtractor(
     // ---- statements -------------------------------------------------------
 
     fun stmts(list: *List<AstXmlNode>): Unit {
-        var i: Int = 0
-        while (i < list.size()) {
-            this.statement(*list[i])
-            i = i + 1
+        for (*stmt in list) {
+            this.statement(stmt)
         }
     }
 
     fun statement(stmt: *AstXmlNode): Unit {
         this.line = xmlLine(stmt)
         val kind: AstNodeCategory = xmlKind(stmt)
-        if (kind == AstNodeCategory.StmtLabel) {
-            this.emit(IlOpKind.Label, ilOps1(this.labelIndex(xmlAttr(stmt, AstNodeAttributeKind.Name))))
-            return
-        }
-        if (kind == AstNodeCategory.StmtGoto) {
-            this.emit(IlOpKind.Goto, ilOps1(this.labelIndex(xmlAttr(stmt, AstNodeAttributeKind.Name))))
-            return
-        }
-        if (kind == AstNodeCategory.StmtIfTrue || kind == AstNodeCategory.StmtIfFalse) {
-            val cond: AstXmlNode = xmlChild(stmt, AstNodeKind.Cond)
-            this.emit(
-                ilCategoryName(kind), ilOps2(
-                    this.operandOf(*cond),
-                    this.labelIndex(xmlAttr(stmt, AstNodeAttributeKind.Name))
-                )
-            )
-            return
-        }
-        if (kind == AstNodeCategory.StmtVarDecl) {
-            val typeNode: AstXmlNode = xmlChild(stmt, AstNodeKind.Type)
-            var typeText: Str = "?"
-            if (!xmlIsEmpty(*typeNode)) {
-                typeText = ilTypeText(*typeNode)
-            }
-            val name: Str = xmlAttr(stmt, AstNodeAttributeKind.Name)
-            var slotKind: IlVarKind = IlVarKind.Local
-            if (linIsSlotName(name)) {
-                slotKind = IlVarKind.Expression
-            }
-            val slot: Int = this.addVar(name, typeText, slotKind, typeNode)
-            val init: AstXmlNode = xmlChild(stmt, AstNodeKind.Init)
-            if (xmlIsEmpty(*init)) {
-                this.emit(IlOpKind.Declare, ilOps1(slot))
-            } else {
-                this.emit(IlOpKind.DeclareInit, ilOps1(slot))
-                this.into(slot, init)
-            }
-            return
-        }
-        if (kind == AstNodeCategory.StmtAssign) {
-            this.assign(*xmlChild(stmt, AstNodeKind.Target), *xmlChild(stmt, AstNodeKind.Value))
-            return
-        }
-        if (kind == AstNodeCategory.StmtReturn) {
-            val value: AstXmlNode = xmlChild(stmt, AstNodeKind.Value)
-            if (xmlIsEmpty(*value)) {
-                this.emit(IlOpKind.ReturnVoid, List<Int>())
-            } else {
-                this.emit(IlOpKind.Return, ilOps1(this.operandOf(*value)))
-            }
-            return
-        }
-        if (kind == AstNodeCategory.StmtExprStmt) {
-            val expr: AstXmlNode = xmlChild(stmt, AstNodeKind.Expr)
-            if (xmlKind(*expr) == AstNodeCategory.ExprCall) {
-                this.call(-1, expr)
+        when (kind) {
+            AstNodeCategory.StmtLabel -> {
+                this.emit(IlOpKind.Label, ilOps1(this.labelIndex(xmlAttr(stmt, AstNodeAttributeKind.Name))))
                 return
             }
-            // A read with no destination: keep it visible rather than dropping it.
-            this.unsupported("expression statement")
-            return
-        }
-        if (kind == AstNodeCategory.StmtBlock) {
-            val container: AstXmlNode = xmlChild(stmt, AstNodeKind.Body)
-            var i: Int = 0
-            val children: Array<AstXmlNode> = container.Children
-            var body: List<AstXmlNode> = List<AstXmlNode>()
-            while (i < children.count()) {
-                body.append(children[i])
-                i = i + 1
+
+            AstNodeCategory.StmtGoto -> {
+                this.emit(IlOpKind.Goto, ilOps1(this.labelIndex(xmlAttr(stmt, AstNodeAttributeKind.Name))))
+                return
             }
-            this.stmts(*body)
-            return
-        }
-        if (kind == AstNodeCategory.StmtIf || kind == AstNodeCategory.StmtWhile
-            || kind == AstNodeCategory.StmtBreak
-            || kind == AstNodeCategory.StmtContinue
-        ) {
-            this.unsupported("structured statement reached the IL")
-            return
+
+            AstNodeCategory.StmtIfTrue, AstNodeCategory.StmtIfFalse -> {
+                val cond: AstXmlNode = xmlChild(stmt, AstNodeKind.Cond)
+                this.emit(
+                    ilCategoryName(kind), ilOps2(
+                        this.operandOf(*cond),
+                        this.labelIndex(xmlAttr(stmt, AstNodeAttributeKind.Name))
+                    )
+                )
+                return
+            }
+
+            AstNodeCategory.StmtVarDecl -> {
+                val typeNode: AstXmlNode = xmlChild(stmt, AstNodeKind.Type)
+                var typeText: Str = "?"
+                if (!xmlIsEmpty(*typeNode)) {
+                    typeText = ilTypeText(*typeNode)
+                }
+                val name: Str = xmlAttr(stmt, AstNodeAttributeKind.Name)
+                var slotKind: IlVarKind = IlVarKind.Local
+                if (linIsSlotName(name)) {
+                    slotKind = IlVarKind.Expression
+                }
+                val slot: Int = this.addVar(name, typeText, slotKind, typeNode)
+                val init: AstXmlNode = xmlChild(stmt, AstNodeKind.Init)
+                if (xmlIsEmpty(*init)) {
+                    this.emit(IlOpKind.Declare, ilOps1(slot))
+                } else {
+                    this.emit(IlOpKind.DeclareInit, ilOps1(slot))
+                    this.into(slot, init)
+                }
+                return
+            }
+
+            AstNodeCategory.StmtAssign -> {
+                this.assign(*xmlChild(stmt, AstNodeKind.Target), *xmlChild(stmt, AstNodeKind.Value))
+                return
+            }
+
+            AstNodeCategory.StmtReturn -> {
+                val value: AstXmlNode = xmlChild(stmt, AstNodeKind.Value)
+                if (xmlIsEmpty(*value)) {
+                    this.emit(IlOpKind.ReturnVoid, List<Int>())
+                } else {
+                    this.emit(IlOpKind.Return, ilOps1(this.operandOf(*value)))
+                }
+                return
+            }
+
+            AstNodeCategory.StmtExprStmt -> {
+                val expr: AstXmlNode = xmlChild(stmt, AstNodeKind.Expr)
+                if (xmlKind(*expr) == AstNodeCategory.ExprCall) {
+                    this.call(-1, expr)
+                    return
+                }
+                // A read with no destination: keep it visible rather than dropping it.
+                this.unsupported("expression statement")
+                return
+            }
+
+            AstNodeCategory.StmtBlock -> {
+                val container: AstXmlNode = xmlChild(stmt, AstNodeKind.Body)
+                var i: Int = 0
+                val children: Array<AstXmlNode> = container.Children
+                var body: List<AstXmlNode> = List<AstXmlNode>()
+                while (i < children.count()) {
+                    body.append(children[i])
+                    i = i + 1
+                }
+                this.stmts(*body)
+                return
+            }
+
+            AstNodeCategory.StmtIf, AstNodeCategory.StmtWhile,
+            AstNodeCategory.StmtBreak, AstNodeCategory.StmtContinue -> {
+                this.unsupported("structured statement reached the IL")
+                return
+            }
         }
         this.unsupported("statement")
     }
 
     fun assign(target: *AstXmlNode, value: *AstXmlNode): Unit {
         val targetKind: AstNodeCategory = xmlKind(target)
-        if (targetKind == AstNodeCategory.ExprName) {
-            val name: Str = xmlAttr(target, AstNodeAttributeKind.Name)
-            // A write to a captured variable writes the closure's field.
-            if (this.fn.captures.has(name)) {
+        when (targetKind) {
+            AstNodeCategory.ExprName -> {
+                val name: Str = xmlAttr(target, AstNodeAttributeKind.Name)
+                // A write to a captured variable writes the closure's field.
+                if (this.fn.captures.has(name)) {
+                    this.emit(
+                        IlOpKind.SetField, ilOps3(
+                            this.varIndex("self"), this.poolIndex(name),
+                            this.operandOf(value)
+                        )
+                    )
+                    return
+                }
+                val slot: Int = this.varIndex(name)
+                if (slot >= 0) {
+                    this.into(slot, *value)
+                    return
+                }
+                this.emit(IlOpKind.SetStatic, ilOps2(this.poolIndex(name), this.operandOf(value)))
+                return
+            }
+
+            AstNodeCategory.ExprMember -> {
+                val lhs: AstXmlNode = xmlChild(target, AstNodeKind.Receiver)
+                val fieldName: Str = xmlAttr(target, AstNodeAttributeKind.Name)
+                if (this.isTypeBase(lhs)) {
+                    this.emit(
+                        IlOpKind.SetStatic, ilOps2(
+                            this.poolIndex(this.baseText(lhs) + "." + fieldName),
+                            this.operandOf(value)
+                        )
+                    )
+                    return
+                }
                 this.emit(
                     IlOpKind.SetField, ilOps3(
-                        this.varIndex("self"), this.poolIndex(name),
+                        this.receiverOf(lhs), this.poolIndex(fieldName),
                         this.operandOf(value)
                     )
                 )
                 return
             }
-            val slot: Int = this.varIndex(name)
-            if (slot >= 0) {
-                this.into(slot, *value)
-                return
-            }
-            this.emit(IlOpKind.SetStatic, ilOps2(this.poolIndex(name), this.operandOf(value)))
-            return
-        }
-        if (targetKind == AstNodeCategory.ExprMember) {
-            val lhs: AstXmlNode = xmlChild(target, AstNodeKind.Receiver)
-            val fieldName: Str = xmlAttr(target, AstNodeAttributeKind.Name)
-            if (this.isTypeBase(lhs)) {
+
+            AstNodeCategory.ExprIndex -> {
                 this.emit(
-                    IlOpKind.SetStatic, ilOps2(
-                        this.poolIndex(this.baseText(lhs) + "." + fieldName),
+                    IlOpKind.SetIndex, ilOps3(
+                        this.receiverOf(xmlChild(target, AstNodeKind.Receiver)),
+                        this.operandOf(*xmlChild(target, AstNodeKind.Index)),
                         this.operandOf(value)
                     )
                 )
                 return
             }
-            this.emit(
-                IlOpKind.SetField, ilOps3(
-                    this.receiverOf(lhs), this.poolIndex(fieldName),
-                    this.operandOf(value)
+
+            AstNodeCategory.ExprDeref -> {
+                // `*p = v`: the emitter writes through the pointer's type.
+                this.emit(
+                    IlOpKind.Store, ilOps2(
+                        this.operandOf(*xmlChild(target, AstNodeKind.Operand)),
+                        this.operandOf(value)
+                    )
                 )
-            )
-            return
-        }
-        if (targetKind == AstNodeCategory.ExprIndex) {
-            this.emit(
-                IlOpKind.SetIndex, ilOps3(
-                    this.receiverOf(xmlChild(target, AstNodeKind.Receiver)),
-                    this.operandOf(*xmlChild(target, AstNodeKind.Index)),
-                    this.operandOf(value)
-                )
-            )
-            return
-        }
-        if (targetKind == AstNodeCategory.ExprDeref) {
-            // `*p = v`: the emitter writes through the pointer's type.
-            this.emit(
-                IlOpKind.Store, ilOps2(
-                    this.operandOf(*xmlChild(target, AstNodeKind.Operand)),
-                    this.operandOf(value)
-                )
-            )
-            return
+                return
+            }
         }
         this.unsupported("assignment target")
     }
@@ -1652,48 +1773,54 @@ data class IlExtractor(
     // slot the extractor synthesizes for the place.
     fun operandOf(expr: *AstXmlNode): Int {
         val kind: AstNodeCategory = xmlKind(expr)
-        if (kind == AstNodeCategory.ExprIntLit || kind == AstNodeCategory.ExprFloatLit
-            || kind == AstNodeCategory.ExprStrLit || kind == AstNodeCategory.ExprCharLit
-        ) {
-            // A literal in a value position rides the instruction as an operand: the pool
-            // holds the token's own text, so a backend prints exactly what the statement
-            // path printed - `i > 0`, not `_sm_base1 = 0; ... i > _sm_base1`.
-            return this.literalOperand(xmlAttr(expr, AstNodeAttributeKind.Text))
-        }
-        if (kind == AstNodeCategory.ExprBoolLit) {
-            return this.literalOperand(xmlAttr(expr, AstNodeAttributeKind.Value))
-        }
-        if (kind == AstNodeCategory.ExprNullLit) {
-            // `null`'s spelling depends on the expected type (`Opt<T>()` vs `nullptr`),
-            // which only the destination slot's type states for certain - so it is
-            // materialised. It is the one value with no type of its own, so the slot stays
-            // untyped and the backend inlines it where it is read.
-            val slot: Int = this.freshSlotText("?")
-            this.emit(IlOpKind.SetVar_Null, ilOps1(slot))
-            return slot
-        }
-        if (kind == AstNodeCategory.ExprName) {
-            return this.nameOf(*expr)
-        }
-        if (kind == AstNodeCategory.ExprMember || kind == AstNodeCategory.ExprIndex
-            || kind == AstNodeCategory.ExprCall || kind == AstNodeCategory.ExprBinary
-            || kind == AstNodeCategory.ExprUnary || kind == AstNodeCategory.ExprRef
-            || kind == AstNodeCategory.ExprDeref || kind == AstNodeCategory.ExprCopy
-        ) {
-            // A value the body does not hold in a slot: the extractor makes one, and the
-            // *type rules* type it - so the instruction that reads it names a declared slot
-            // instead of inlining the whole expression it stands for.
-            val typeNode: AstXmlNode = this.valueType(*expr)
-            val slot: Int = this.freshSlot(this.slotTypeText(typeNode), typeNode)
-            this.into(slot, *expr)
-            return slot
-        }
-        if (kind == AstNodeCategory.ExprLambda) {
-            return this.lambdaOf(expr, -1)
-        }
-        if (kind == AstNodeCategory.ExprGenericName) {
-            this.unsupported("type name in a value position")
-            return this.freshSlotText("?")
+        when (kind) {
+            AstNodeCategory.ExprIntLit, AstNodeCategory.ExprFloatLit,
+            AstNodeCategory.ExprStrLit, AstNodeCategory.ExprCharLit -> {
+                // A literal in a value position rides the instruction as an operand: the pool
+                // holds the token's own text, so a backend prints exactly what the statement
+                // path printed - `i > 0`, not `_sm_base1 = 0; ... i > _sm_base1`.
+                return this.literalOperand(xmlAttr(expr, AstNodeAttributeKind.Text))
+            }
+
+            AstNodeCategory.ExprBoolLit -> {
+                return this.literalOperand(xmlAttr(expr, AstNodeAttributeKind.Value))
+            }
+
+            AstNodeCategory.ExprNullLit -> {
+                // `null`'s spelling depends on the expected type (`Opt<T>()` vs `nullptr`),
+                // which only the destination slot's type states for certain - so it is
+                // materialised. It is the one value with no type of its own, so the slot stays
+                // untyped and the backend inlines it where it is read.
+                val slot: Int = this.freshSlotText("?")
+                this.emit(IlOpKind.SetVar_Null, ilOps1(slot))
+                return slot
+            }
+
+            AstNodeCategory.ExprName -> {
+                return this.nameOf(*expr)
+            }
+
+            AstNodeCategory.ExprMember, AstNodeCategory.ExprIndex,
+            AstNodeCategory.ExprCall, AstNodeCategory.ExprBinary,
+            AstNodeCategory.ExprUnary, AstNodeCategory.ExprRef,
+            AstNodeCategory.ExprDeref, AstNodeCategory.ExprCopy -> {
+                // A value the body does not hold in a slot: the extractor makes one, and the
+                // *type rules* type it - so the instruction that reads it names a declared slot
+                // instead of inlining the whole expression it stands for.
+                val typeNode: AstXmlNode = this.valueType(*expr)
+                val slot: Int = this.freshSlot(this.slotTypeText(typeNode), typeNode)
+                this.into(slot, *expr)
+                return slot
+            }
+
+            AstNodeCategory.ExprLambda -> {
+                return this.lambdaOf(expr, -1)
+            }
+
+            AstNodeCategory.ExprGenericName -> {
+                this.unsupported("type name in a value position")
+                return this.freshSlotText("?")
+            }
         }
         this.unsupported("expression")
         return this.freshSlotText("?")
@@ -1703,110 +1830,124 @@ data class IlExtractor(
     // produces is one operation deep, so one case here is one instruction.
     fun into(slot: Int, e: AstXmlNode): Unit {
         val kind: AstNodeCategory = xmlKind(*e)
-        if (kind == AstNodeCategory.ExprIntLit || kind == AstNodeCategory.ExprFloatLit
-            || kind == AstNodeCategory.ExprStrLit || kind == AstNodeCategory.ExprCharLit
-        ) {
-            this.emit(IlOpKind.SetVar, ilOps2(slot, this.literalOperand(xmlAttr(*e, AstNodeAttributeKind.Text))))
-            return
-        }
-        if (kind == AstNodeCategory.ExprBoolLit) {
-            this.emit(IlOpKind.SetVar, ilOps2(slot, this.literalOperand(xmlAttr(*e, AstNodeAttributeKind.Value))))
-            return
-        }
-        if (kind == AstNodeCategory.ExprNullLit) {
-            this.emit(IlOpKind.SetVar_Null, ilOps1(slot))
-            return
-        }
-        if (kind == AstNodeCategory.ExprName) {
-            this.emit(IlOpKind.SetVar, ilOps2(slot, this.nameOf(e)))
-            return
-        }
-        if (kind == AstNodeCategory.ExprMember) {
-            val lhs: AstXmlNode = xmlChild(*e, AstNodeKind.Receiver)
-            val fieldName: Str = xmlAttr(*e, AstNodeAttributeKind.Name)
-            if (this.isTypeBase(lhs)) {
-                this.emit(IlOpKind.GetStatic, ilOps2(slot, this.poolIndex(this.baseText(lhs) + "." + fieldName)))
+        when (kind) {
+            AstNodeCategory.ExprIntLit, AstNodeCategory.ExprFloatLit,
+            AstNodeCategory.ExprStrLit, AstNodeCategory.ExprCharLit -> {
+                this.emit(IlOpKind.SetVar, ilOps2(slot, this.literalOperand(xmlAttr(*e, AstNodeAttributeKind.Text))))
                 return
             }
-            this.emit(IlOpKind.GetField, ilOps3(slot, this.receiverOf(lhs), this.poolIndex(fieldName)))
-            return
-        }
-        if (kind == AstNodeCategory.ExprIndex) {
-            this.emit(
-                IlOpKind.GetIndex, ilOps3(
-                    slot, this.receiverOf(xmlChild(*e, AstNodeKind.Receiver)),
-                    this.operandOf(*xmlChild(*e, AstNodeKind.Index))
-                )
-            )
-            return
-        }
-        if (kind == AstNodeCategory.ExprBinary) {
-            this.emit(
-                IlOpKind.BinaryOp, ilOps4(
-                    slot, this.poolIndex(xmlAttr(*e, AstNodeAttributeKind.Op)),
-                    this.operandOf(*xmlChild(*e, AstNodeKind.Lhs)),
-                    this.operandOf(*xmlChild(*e, AstNodeKind.Rhs))
-                )
-            )
-            return
-        }
-        if (kind == AstNodeCategory.ExprUnary) {
-            this.emit(
-                IlOpKind.UnaryOp, ilOps3(
-                    slot, this.poolIndex(xmlAttr(*e, AstNodeAttributeKind.Op)),
-                    this.operandOf(*xmlChild(*e, AstNodeKind.Operand))
-                )
-            )
-            return
-        }
-        if (kind == AstNodeCategory.ExprRef) {
-            this.emit(IlOpKind.Box, ilOps2(slot, this.operandOf(*xmlChild(*e, AstNodeKind.Operand))))
-            return
-        }
-        if (kind == AstNodeCategory.ExprDeref) {
-            // `*x` is the address of what `x` denotes: of a value's own storage (the place
-            // itself, or `&name`), of a counted reference's pointee (`.get()`), or the load
-            // through a raw pointer - the backend reads which from the operand's slot type.
-            // A place that is a chain already *is* its address, so it is copied; a name, a
-            // handle and a call's result are read and the address is taken from the value.
-            val operand: AstXmlNode = xmlChild(*e, AstNodeKind.Operand)
-            val operandName: Str = xmlAttr(*operand, AstNodeAttributeKind.Name)
-            if (xmlKind(*operand) == AstNodeCategory.ExprName && this.isStaticName(operandName)) {
-                // A file-level static is not a slot of the frame, so its address is its own
-                // instruction (writing the value into a slot first would take the address of
-                // a copy).
-                this.emit(IlOpKind.GetStaticAddr, ilOps2(slot, this.poolIndex(operandName)))
+
+            AstNodeCategory.ExprBoolLit -> {
+                this.emit(IlOpKind.SetVar, ilOps2(slot, this.literalOperand(xmlAttr(*e, AstNodeAttributeKind.Value))))
                 return
             }
-            if ((xmlKind(*operand) == AstNodeCategory.ExprMember
-                        || xmlKind(*operand) == AstNodeCategory.ExprIndex)
-                && !this.isHandleExpr(operand)
-            ) {
-                // A chain that is a place: the address *is* the place slot. (A call's result
-                // is not a place - its address is taken at the call, which is what `Deref`
-                // spells for a value.)
-                this.emit(IlOpKind.SetVar, ilOps2(slot, this.receiverOf(operand)))
+
+            AstNodeCategory.ExprNullLit -> {
+                this.emit(IlOpKind.SetVar_Null, ilOps1(slot))
                 return
             }
-            this.emit(IlOpKind.Deref, ilOps2(slot, this.valueOf(operand)))
-            return
-        }
-        if (kind == AstNodeCategory.ExprCopy) {
-            this.emit(IlOpKind.CopyValue, ilOps2(slot, this.operandOf(*xmlChild(*e, AstNodeKind.Operand))))
-            return
-        }
-        if (kind == AstNodeCategory.ExprCall) {
-            this.call(slot, e)
-            return
-        }
-        if (kind == AstNodeCategory.ExprLambda) {
-            // A lambda whose value is dropped still constructs its class.
-            this.lambdaOf(*e, slot)
-            return
-        }
-        if (kind == AstNodeCategory.ExprGenericName) {
-            this.unsupported("type name in a value position")
-            return
+
+            AstNodeCategory.ExprName -> {
+                this.emit(IlOpKind.SetVar, ilOps2(slot, this.nameOf(e)))
+                return
+            }
+
+            AstNodeCategory.ExprMember -> {
+                val lhs: AstXmlNode = xmlChild(*e, AstNodeKind.Receiver)
+                val fieldName: Str = xmlAttr(*e, AstNodeAttributeKind.Name)
+                if (this.isTypeBase(lhs)) {
+                    this.emit(IlOpKind.GetStatic, ilOps2(slot, this.poolIndex(this.baseText(lhs) + "." + fieldName)))
+                    return
+                }
+                this.emit(IlOpKind.GetField, ilOps3(slot, this.receiverOf(lhs), this.poolIndex(fieldName)))
+                return
+            }
+
+            AstNodeCategory.ExprIndex -> {
+                this.emit(
+                    IlOpKind.GetIndex, ilOps3(
+                        slot, this.receiverOf(xmlChild(*e, AstNodeKind.Receiver)),
+                        this.operandOf(*xmlChild(*e, AstNodeKind.Index))
+                    )
+                )
+                return
+            }
+
+            AstNodeCategory.ExprBinary -> {
+                this.emit(
+                    IlOpKind.BinaryOp, ilOps4(
+                        slot, this.poolIndex(xmlAttr(*e, AstNodeAttributeKind.Op)),
+                        this.operandOf(*xmlChild(*e, AstNodeKind.Lhs)),
+                        this.operandOf(*xmlChild(*e, AstNodeKind.Rhs))
+                    )
+                )
+                return
+            }
+
+            AstNodeCategory.ExprUnary -> {
+                this.emit(
+                    IlOpKind.UnaryOp, ilOps3(
+                        slot, this.poolIndex(xmlAttr(*e, AstNodeAttributeKind.Op)),
+                        this.operandOf(*xmlChild(*e, AstNodeKind.Operand))
+                    )
+                )
+                return
+            }
+
+            AstNodeCategory.ExprRef -> {
+                this.emit(IlOpKind.Box, ilOps2(slot, this.operandOf(*xmlChild(*e, AstNodeKind.Operand))))
+                return
+            }
+
+            AstNodeCategory.ExprDeref -> {
+                // `*x` is the address of what `x` denotes: of a value's own storage (the place
+                // itself, or `&name`), of a counted reference's pointee (`.get()`), or the load
+                // through a raw pointer - the backend reads which from the operand's slot type.
+                // A place that is a chain already *is* its address, so it is copied; a name, a
+                // handle and a call's result are read and the address is taken from the value.
+                val operand: AstXmlNode = xmlChild(*e, AstNodeKind.Operand)
+                val operandName: Str = xmlAttr(*operand, AstNodeAttributeKind.Name)
+                if (xmlKind(*operand) == AstNodeCategory.ExprName && this.isStaticName(operandName)) {
+                    // A file-level static is not a slot of the frame, so its address is its own
+                    // instruction (writing the value into a slot first would take the address of
+                    // a copy).
+                    this.emit(IlOpKind.GetStaticAddr, ilOps2(slot, this.poolIndex(operandName)))
+                    return
+                }
+                if ((xmlKind(*operand) == AstNodeCategory.ExprMember
+                            || xmlKind(*operand) == AstNodeCategory.ExprIndex)
+                    && !this.isHandleExpr(operand)
+                ) {
+                    // A chain that is a place: the address *is* the place slot. (A call's result
+                    // is not a place - its address is taken at the call, which is what `Deref`
+                    // spells for a value.)
+                    this.emit(IlOpKind.SetVar, ilOps2(slot, this.receiverOf(operand)))
+                    return
+                }
+                this.emit(IlOpKind.Deref, ilOps2(slot, this.valueOf(operand)))
+                return
+            }
+
+            AstNodeCategory.ExprCopy -> {
+                this.emit(IlOpKind.CopyValue, ilOps2(slot, this.operandOf(*xmlChild(*e, AstNodeKind.Operand))))
+                return
+            }
+
+            AstNodeCategory.ExprCall -> {
+                this.call(slot, e)
+                return
+            }
+
+            AstNodeCategory.ExprLambda -> {
+                // A lambda whose value is dropped still constructs its class.
+                this.lambdaOf(*e, slot)
+                return
+            }
+
+            AstNodeCategory.ExprGenericName -> {
+                this.unsupported("type name in a value position")
+                return
+            }
         }
         this.unsupported("expression")
     }
@@ -1901,39 +2042,44 @@ data class IlExtractor(
     // being lost in a copy.
     fun receiverOf(e: AstXmlNode): Int {
         val kind: AstNodeCategory = xmlKind(*e)
-        if (kind == AstNodeCategory.ExprName) {
-            // A file-level static is not a slot of the frame: as a base it is its own
-            // *address*, so a call that mutates it reaches the storage and not a copy of it
-            // (`names.append(x)` appends to `names`).
-            if (this.isStaticName(xmlAttr(*e, AstNodeAttributeKind.Name))) {
-                return this.staticAddr(e)
+        when (kind) {
+            AstNodeCategory.ExprName -> {
+                // A file-level static is not a slot of the frame: as a base it is its own
+                // *address*, so a call that mutates it reaches the storage and not a copy of it
+                // (`names.append(x)` appends to `names`).
+                if (this.isStaticName(xmlAttr(*e, AstNodeAttributeKind.Name))) {
+                    return this.staticAddr(e)
+                }
+                return this.nameOf(e)
             }
-            return this.nameOf(e)
-        }
-        if (kind == AstNodeCategory.ExprMember) {
-            val lhs: AstXmlNode = xmlChild(*e, AstNodeKind.Receiver)
-            if (this.isTypeBase(lhs)) {
-                return this.valueOf(e)
+
+            AstNodeCategory.ExprMember -> {
+                val lhs: AstXmlNode = xmlChild(*e, AstNodeKind.Receiver)
+                if (this.isTypeBase(lhs)) {
+                    return this.valueOf(e)
+                }
+                if (!this.needsPlace(e)) {
+                    return this.valueOf(e)
+                }
+                return this.place(
+                    IlOpKind.FieldAddr, lhs, e,
+                    xmlAttr(*e, AstNodeAttributeKind.Name), xmlEmptyNode()
+                )
             }
-            if (!this.needsPlace(e)) {
-                return this.valueOf(e)
+
+            AstNodeCategory.ExprIndex -> {
+                if (!this.needsPlace(e)) {
+                    return this.valueOf(e)
+                }
+                return this.place(
+                    IlOpKind.IndexAddr, xmlChild(*e, AstNodeKind.Receiver), e, Str(),
+                    xmlChild(*e, AstNodeKind.Index)
+                )
             }
-            return this.place(
-                IlOpKind.FieldAddr, lhs, e,
-                xmlAttr(*e, AstNodeAttributeKind.Name), xmlEmptyNode()
-            )
-        }
-        if (kind == AstNodeCategory.ExprIndex) {
-            if (!this.needsPlace(e)) {
-                return this.valueOf(e)
+
+            AstNodeCategory.ExprDeref -> {
+                return this.operandOf(*xmlChild(*e, AstNodeKind.Operand))
             }
-            return this.place(
-                IlOpKind.IndexAddr, xmlChild(*e, AstNodeKind.Receiver), e, Str(),
-                xmlChild(*e, AstNodeKind.Index)
-            )
-        }
-        if (kind == AstNodeCategory.ExprDeref) {
-            return this.operandOf(*xmlChild(*e, AstNodeKind.Operand))
         }
         return this.valueOf(e)
     }
@@ -2026,13 +2172,11 @@ data class IlExtractor(
                 List<AstNodeAttribute>(), Array<AstXmlNode>()
             )
             node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
-            var i: Int = 0
             val args: List<AstXmlNode> = xmlChildren(*e, AstNodeKind.TypeArg)
-            while (i < args.size()) {
-                var arg: AstXmlNode = copy(*args[i])
+            for (*typeArg in args) {
+                var arg: AstXmlNode = copy(typeArg)
                 arg.name = AstNodeKind.TypeArg
                 xmlAddChild(*node, arg)
-                i = i + 1
             }
             return node
         }
@@ -2044,20 +2188,26 @@ data class IlExtractor(
     // whether the argument was a slot or a constant.
     fun literalTypeText(e: AstXmlNode): Str {
         val kind: AstNodeCategory = xmlKind(*e)
-        if (kind == AstNodeCategory.ExprIntLit) {
-            return "Int"
-        }
-        if (kind == AstNodeCategory.ExprFloatLit) {
-            return "Float64"
-        }
-        if (kind == AstNodeCategory.ExprStrLit) {
-            return "Str"
-        }
-        if (kind == AstNodeCategory.ExprCharLit) {
-            return "Char"
-        }
-        if (kind == AstNodeCategory.ExprBoolLit) {
-            return "Bool"
+        when (kind) {
+            AstNodeCategory.ExprIntLit -> {
+                return "Int"
+            }
+
+            AstNodeCategory.ExprFloatLit -> {
+                return "Float64"
+            }
+
+            AstNodeCategory.ExprStrLit -> {
+                return "Str"
+            }
+
+            AstNodeCategory.ExprCharLit -> {
+                return "Char"
+            }
+
+            AstNodeCategory.ExprBoolLit -> {
+                return "Bool"
+            }
         }
         return "?"
     }
@@ -2074,28 +2224,68 @@ data class IlExtractor(
 
     // ---- calls ------------------------------------------------------------
 
-    // Whether a construction's callee names a `List<...>` type.
-    fun isListConstruction(callee: AstXmlNode): Bool {
-        return xmlKind(*callee) == AstNodeCategory.ExprGenericName
-                && xmlAttr(*callee, AstNodeAttributeKind.Name) == "List"
-                && xmlCount(*callee, AstNodeKind.TypeArg) == 1
+    // The symbol a `native("...")` declaration names, without its quotes.
+    fun ilNativeSymbolOf(decl: AstXmlNode): Str {
+        val text: Str = xmlAttr(*decl, AstNodeAttributeKind.NativeSymbol)
+        if (text.size() >= 2 && text.substr(0, 1) == "\"" && text.substr(text.size() - 1, 1) == "\"") {
+            return text.substr(1, text.size() - 2)
+        }
+        return text
+    }
+
+    // Whether a call's target is the prelude's list literal (`rtl.kt`'s `listOf<T>`): the
+    // one native whose *call* is not a call.
+    fun ilIsListOf(target: AstXmlNode): Bool {
+        return xmlAttr(*target, AstNodeAttributeKind.IsNative) == "true"
+                && xmlAttr(*target, AstNodeAttributeKind.HasNativeSymbol) == "true"
+                && this.ilNativeSymbolOf(target) == "simse_listOf"
+    }
+
+    // The `List<T>` a `listOf<T>(...)` names: the type argument it was written with, or -
+    // when it was written without one, which the language infers (`specs/functions.md`) -
+    // the type of its first element.
+    fun ilListOfType(callee: AstXmlNode, args: List<AstXmlNode>, from: Int): AstXmlNode {
+        if (xmlKind(*callee) == AstNodeCategory.ExprGenericName
+            && xmlCount(*callee, AstNodeKind.TypeArg) == 1
+        ) {
+            return semGenericType("List", xmlChildren(*callee, AstNodeKind.TypeArg))
+        }
+        if (from < args.size()) {
+            val element: AstXmlNode = this.exprType(args[from])
+            if (!xmlIsEmpty(*element)) {
+                var typeArgs: List<AstXmlNode> = List<AstXmlNode>()
+                typeArgs.append(semReRole(element, AstNodeKind.TypeArg))
+                return semGenericType("List", typeArgs)
+            }
+        }
+        return xmlEmptyNode()
     }
 
     // The declaration a call resolves to, when the extractor can name it: the same rule
     // the checker applies - an exact parameter count first, then a last parameter a call
-    // may pack into - so a stage that needs more than the name does not have to guess.
-    // Empty when the facts are not available (a body with no facts, or a callee that is a
-    // local).
-    fun callTarget(callee: AstXmlNode, argCount: Int, member: Bool): AstXmlNode {
+    // may pack into - so a stage that needs more than the name does not have to guess. A
+    // member call also resolves by its *receiver*: two types may each have a method of the
+    // same name (`Analyzer.exprType` and `IlExtractor.exprType` take different parameters),
+    // and a name is not a declaration. The receiver's type is asked for only when there is
+    // more than one declaration to choose between. An ambiguous name resolves to nothing -
+    // no packing, no conversion - which is exactly the call it was before either existed.
+    // Empty when the facts are not available (a body with no facts, a callee that is a
+    // local, a static call's type).
+    fun callTarget(callee: AstXmlNode, receiver: AstXmlNode, argCount: Int, member: Bool): AstXmlNode {
         if (this.fn.facts == null) {
             return xmlEmptyNode()
         }
         val name: Str = xmlAttr(*callee, AstNodeAttributeKind.Name)
-        var pack: AstXmlNode = xmlEmptyNode()
+        // The candidates are *indices* into the facts, not the facts themselves: a
+        // `SemFnFact` carries its declaration node and its attribute list, so a copy per
+        // candidate per call would be work the C++ ring - which holds `const FnFact*` -
+        // never does.
+        var candidates: List<Int> = List<Int>()
         var i: Int = 0
         while (i < this.fn.facts.functions.size()) {
-            val fact: *SemFnFact = *this.fn.facts.functions[i]
+            val index: Int = i
             i = i + 1
+            val fact: *SemFnFact = *this.fn.facts.functions[index]
             if (xmlIsEmpty(*fact.decl)
                 || xmlAttr(*fact.decl, AstNodeAttributeKind.Name) != name
             ) {
@@ -2105,19 +2295,73 @@ data class IlExtractor(
             if (factMember != member) {
                 continue
             }
+            candidates.append(index)
+        }
+        if (candidates.size() > 1 && member && !xmlIsEmpty(*receiver)) {
+            val receiverType: AstXmlNode = this.exprType(receiver)
+            val recv: AstXmlNode = semPointeeOf(*receiverType)
+            var matching: List<Int> = List<Int>()
+            var m: Int = 0
+            while (m < candidates.size()) {
+                val index: Int = candidates[m]
+                m = m + 1
+                val fact: *SemFnFact = *this.fn.facts.functions[index]
+                if (!xmlIsEmpty(*recv) && !xmlIsEmpty(*fact.receiver)
+                    && !semUnifyType(*fact.receiver, *recv, *fact.templateParams)
+                ) {
+                    continue // another type's method of the same name
+                }
+                matching.append(index)
+            }
+            candidates = matching
+        }
+        var exact: AstXmlNode = xmlEmptyNode()
+        var pack: AstXmlNode = xmlEmptyNode()
+        var exactCount: Int = 0
+        var packCount: Int = 0
+        var k: Int = 0
+        while (k < candidates.size()) {
+            val fact: *SemFnFact = *this.fn.facts.functions[candidates[k]]
+            k = k + 1
             val params: List<AstXmlNode> = xmlChildren(*fact.decl, AstNodeKind.Param)
             val paramCount: Int = params.size()
             if (paramCount == argCount) {
-                return fact.decl
+                exact = fact.decl
+                exactCount = exactCount + 1
+                continue
             }
-            if (xmlIsEmpty(*pack) && paramCount > 0
+            if (paramCount > 0
                 && semIsPackTarget(*xmlChild(*params[paramCount - 1], AstNodeKind.Type))
                 && argCount >= paramCount - 1
             ) {
                 pack = fact.decl
+                packCount = packCount + 1
             }
         }
-        return pack
+        if (exactCount > 0) {
+            if (exactCount == 1) {
+                return exact
+            }
+            return xmlEmptyNode()
+        }
+        if (packCount == 1) {
+            return pack
+        }
+        return xmlEmptyNode()
+    }
+
+    // The type of an *argument*, which the pack and the handle conversions both ask for: a
+    // name is a slot of this frame and already carries one, so the common argument costs a
+    // dictionary lookup; anything else has to be asked of the type rules, which is the
+    // expensive question and the reason it is asked as rarely as the rules allow.
+    fun argumentType(e: AstXmlNode): AstXmlNode {
+        if (xmlKind(*e) == AstNodeCategory.ExprName) {
+            val name: Str = xmlAttr(*e, AstNodeAttributeKind.Name)
+            if (this.varAt.has(name)) {
+                return ilVarType(*this.out, this.varAt.get(name).value())
+            }
+        }
+        return this.exprType(e)
     }
 
     // Where the *pack* starts in an argument list, or -1 when the arguments are passed as
@@ -2139,7 +2383,7 @@ data class IlExtractor(
             return -1
         }
         if (args.size() == params.size() && args.size() > 0) {
-            val last: AstXmlNode = this.exprType(*args[args.size() - 1])
+            val last: AstXmlNode = this.argumentType(args[args.size() - 1])
             if (xmlIsEmpty(*last) || !xmlIsEmpty(*semListTypeOf(*last))) {
                 return -1
             }
@@ -2177,6 +2421,93 @@ data class IlExtractor(
         return bound
     }
 
+    // A value read out of a handle, as a slot of the pointee's type: what a by-value
+    // parameter needs when the argument is a borrow or a counted reference. (`CopyValue` is
+    // the language's `copy`, which reads through a handle - the emitter spells it `*(x)`.)
+    fun readThrough(pointeeType: *AstXmlNode, from: Int): Int {
+        val typeNode: AstXmlNode = copy(pointeeType)
+        val slot: Int = this.freshSlot(ilTypeText(*typeNode), typeNode)
+        this.emit(IlOpKind.CopyValue, ilOps2(slot, from))
+        return slot
+    }
+
+    // The argument a call passes for one parameter, converted the way the two types require
+    // (`specs/functions.md`):
+    //
+    // | parameter | argument |                            |
+    // | --------- | -------- | -------------------------- |
+    // | `*T`      | `T`      | the place's address (`&x`) |
+    // | `*T`      | `&T`     | the handle's pointee (`x.get()`) |
+    // | `T`       | `*T`/`&T`| a copy of the pointee      |
+    // | `&T`      | `T`/`*T` | a *boxed copy* - `&x` means exactly that |
+    //
+    // Nothing is converted when the two are not the same type to begin with: a `List<Int>`
+    // argument is not a `*List<Str>`, and the call is the type error it always was. This is
+    // why a parameter can change from `List<T>` to `*List<T>` (a borrow, no copy) without
+    // every caller having to spell the `*`, and why the reverse change still compiles. A
+    // `*T` *binding* (`val p: *T = x`) is a different question - a pointer that outlives
+    // the expression it points into has to be asked for, so the writer writes it.
+    fun convertArgument(target: AstXmlNode, index: Int, arg: AstXmlNode, slot: Int): Int {
+        if (xmlIsEmpty(*target)) {
+            return slot
+        }
+        val params: List<AstXmlNode> = xmlChildren(*target, AstNodeKind.Param)
+        if (index >= params.size()) {
+            return slot
+        }
+        val param: AstXmlNode = xmlChild(*params[index], AstNodeKind.Type)
+        if (xmlIsEmpty(*param)) {
+            return slot
+        }
+        val wantPointer: Bool = xmlKind(*param) == AstNodeCategory.TypePointer
+        val wantShared: Bool = !wantPointer && ilIsHandleType(*param)
+        // The argument's type: the slot it was extracted into already carries one - that is
+        // what makes an instruction one operation over typed slots - so this costs a lookup
+        // in the common case. Only an untyped slot (a `for` machine, a bare `null`) has to
+        // be asked of the type rules, which is the expensive question.
+        var actual: AstXmlNode = ilVarType(*this.out, slot)
+        if (xmlIsEmpty(*actual)) {
+            actual = this.exprType(arg)
+        }
+        if (xmlIsEmpty(*actual)) {
+            return slot
+        }
+        val wanted: AstXmlNode = semPointeeOf(*param)
+        val given: AstXmlNode = semPointeeOf(*actual)
+        if (xmlIsEmpty(*wanted) || xmlIsEmpty(*given)) {
+            return slot
+        }
+        if (ilTypeText(*wanted) != ilTypeText(*given)) {
+            return slot // not the same type
+        }
+        val havePointer: Bool = xmlKind(*actual) == AstNodeCategory.TypePointer
+        val haveShared: Bool = !havePointer && ilIsHandleType(*actual)
+        val haveValue: Bool = !havePointer && !haveShared
+        if ((wantPointer && havePointer) || (wantShared && haveShared)) {
+            return slot
+        }
+        if (wantPointer) {
+            val handle: AstXmlNode = copy(param)
+            val bound: Int = this.freshSlot(ilTypeText(*handle), handle)
+            this.emit(IlOpKind.Deref, ilOps2(bound, slot)) // an address, never a copy
+            return bound
+        }
+        if (wantShared) {
+            var value: Int = slot
+            if (!haveValue) {
+                value = this.readThrough(*wanted, slot)
+            }
+            val box: AstXmlNode = copy(param)
+            val held: Int = this.freshSlot(ilTypeText(*box), box)
+            this.emit(IlOpKind.Box, ilOps2(held, value)) // `&x` boxes a copy
+            return held
+        }
+        if (haveValue) {
+            return slot
+        }
+        return this.readThrough(*wanted, slot)
+    }
+
     // `dst < 0` means the result is dropped (`CallVoid`).
     fun call(dst: Int, e: AstXmlNode): Unit {
         val callee: AstXmlNode = xmlChild(*e, AstNodeKind.Callee)
@@ -2206,9 +2537,38 @@ data class IlExtractor(
 
         // The trailing arguments may pack into a last parameter that is a list
         // (`fun addAll(values: *List<Int>)` called as `addAll(1, 2, 3)`, or
-        // `"Hello {0}".Format("world")`).
-        val target: AstXmlNode = this.callTarget(callee, argNodes.size(), receiverCall)
-        val packFrom: Int = this.packStart(*target, argNodes)
+        // `"Hello {0}".Format("world")`). A static call (`Res<Str>.ok(x)`) is not looked
+        // up: its callee is a type, and the same name may be a plain function of another
+        // shape.
+        var target: AstXmlNode = xmlEmptyNode()
+        if (!staticCall) {
+            var receiverNode: AstXmlNode = xmlEmptyNode()
+            if (receiverCall) {
+                receiverNode = lhs
+            }
+            target = this.callTarget(callee, receiverNode, argNodes.size(), receiverCall)
+        }
+        val packFrom: Int = this.packStart(target, argNodes)
+
+        // `listOf<T>(a, b, c)` is the language's list literal: the same `Pack` instruction
+        // a packed call builds, written out. It is not a call at all - the native it names
+        // exists so the checker and the type rules have a signature to read - so a backend
+        // that sees one of these writes the construction and never the function.
+        if (hasDst && packFrom >= 0 && !xmlIsEmpty(*target) && this.ilIsListOf(target)) {
+            val listType: AstXmlNode = this.ilListOfType(callee, argNodes, packFrom)
+            if (!xmlIsEmpty(*listType)) {
+                this.setSlotType(dst, listType)
+                var packing: List<Int> = List<Int>()
+                packing.append(dst)
+                var p: Int = packFrom
+                while (p < argNodes.size()) {
+                    packing.append(this.operandOf(*argNodes[p]))
+                    p = p + 1
+                }
+                this.emit(IlOpKind.Pack, packing)
+                return
+            }
+        }
 
         var args: List<Int> = List<Int>()
         var argTypes: List<Int> = List<Int>()
@@ -2218,13 +2578,13 @@ data class IlExtractor(
         }
         var i: Int = 0
         while (i < plain) {
-            val slot: Int = this.operandOf(*argNodes[i])
+            val slot: Int = this.convertArgument(target, i, *argNodes[i], this.operandOf(*argNodes[i]))
             args.append(slot)
             argTypes.append(this.operandType(slot, argNodes[i]))
             i = i + 1
         }
         if (packFrom >= 0 && !xmlIsEmpty(*target)) {
-            val slot: Int = this.packArguments(*target, argNodes, packFrom)
+            val slot: Int = this.packArguments(target, argNodes, packFrom)
             args.append(slot)
             argTypes.append(this.out.vars[slot].typeIndex)
         }
@@ -2281,22 +2641,10 @@ data class IlExtractor(
                 this.unsupported("constructor call with no destination")
                 return
             }
-            // A `List<T>` built *from* its elements: `List<Str>("a", "b", "c")` is one
-            // `Pack`, which is the cheapest way to write a literal list - the elements are
-            // copied into the fresh list and nothing else is, and up to four of them stay
-            // in its inline buffer. The count constructions are *not* this: they are the
-            // RTL's `listOfCount`/`listOfFilled` (`cppsrc/rtl/rtl.kt`), so a literal can
-            // never be mistaken for a size. `List<T>()` with no arguments stays the empty
-            // list, and `Array<T>(n)` stays the count construction it is specified to be.
-            if (argNodes.size() > 0 && this.isListConstruction(callee)) {
-                i = 0 // `dst` is already there
-                while (i < args.size()) {
-                    operands.append(args[i])
-                    i = i + 1
-                }
-                this.emit(IlOpKind.Pack, operands)
-                return
-            }
+            // A `List<T>()` with no arguments is the empty list, and `List<T>(n)`
+            // / `List<T>(n, v)` are the RTL's *count* constructions - a literal
+            // is `listOf<T>(a, b, c)`, which is the `Pack` above, so the two can
+            // never be confused.
             operands.append(this.typeIndex(this.baseText(callee), this.calleeToType(callee)))
             i = 0
             while (i < args.size()) {
@@ -2418,12 +2766,16 @@ data class IlExtractor(
         lowered = semInferTypes(*lowered, this.fn.facts, *lambdaSemantics, *lambdaTypes)
         lowered = linFinishForEmission(lowered, paramNames)
 
+        // The extractor's type context: storage of this frame's, borrowed by the inner
+        // extractor the way `unit` and `closureCounter` are.
+        var innerContext: SemBody = ilEmptySemantics()
         var inner: IlExtractor = IlExtractor(
             info, this.unit, this.closureCounter,
             ilEmptyBody(), Dictionary<Str, Int>(),
             Dictionary<Str, Int>(), Dictionary<Str, Int>(),
             Dictionary<Str, Int>(), Dictionary<Str, Int>(), 1, 0,
-            List<Int>(), List<Int>()
+            List<Int>(), List<Int>(),
+            *innerContext, false, Dictionary<Str, AstXmlNode>(), true
         )
         inner.begin(this.out.file)
         val innerBody: IlBody = inner.run(lowered)
@@ -2459,9 +2811,7 @@ data class IlExtractor(
         if (dst < 0) {
             target = this.freshSlot(symbol, classType)
         }
-        var operands: List<Int> = List<Int>()
-        operands.append(target)
-        operands.append(this.typeIndex(symbol, classType))
+        var operands: List<Int> = listOf<Int>(target, this.typeIndex(symbol, classType))
         ci = 0
         while (ci < captured.size()) {
             // The capture is a slot of *this* frame (that is what put it in the closure), so
@@ -2545,6 +2895,16 @@ fun ilEmptyBody(): IlBody {
     )
 }
 
+// The semantic context an extractor's cache starts as: the C++ ring's default-constructed
+// `sema::Body`, empty - `bodyContext` fills it in from the function on first use, so only
+// the flag that says "not built yet" (`typeContextReady`) is ever read before then.
+fun ilEmptySemantics(): SemBody {
+    return SemBody(
+        xmlEmptyNode(), List<Str>(), xmlEmptyNode(), xmlEmptyNode(),
+        List<Str>(), List<AstXmlNode>(), Dictionary<Str, AstXmlNode>()
+    )
+}
+
 // The names the schema gives a jump category, as the opcode's own name (`IfTrue`,
 // `IfFalse`): the instruction set spells them that way.
 // The opcode for a `StmtIfTrue`/`StmtIfFalse` category (the lowering's two jump forms,
@@ -2562,11 +2922,15 @@ fun ilCategoryName(kind: AstNodeCategory): IlOpKind {
 fun ilExtractUnit(fn: IlFunction, body: List<AstXmlNode>, file: Str): IlUnit {
     var unit: IlUnit = IlUnit(ilEmptyBody(), List<IlBody>(), List<IlClosure>())
     var counter: Int = 1
+    // The type context the extractor fills in on its first question: storage of this
+    // frame's, borrowed the way `unit` and `counter` are.
+    var context: SemBody = ilEmptySemantics()
     var extractor: IlExtractor = IlExtractor(
         fn, *unit, *counter, ilEmptyBody(),
         Dictionary<Str, Int>(), Dictionary<Str, Int>(),
         Dictionary<Str, Int>(), Dictionary<Str, Int>(),
-        Dictionary<Str, Int>(), 1, 0, List<Int>(), List<Int>()
+        Dictionary<Str, Int>(), 1, 0, List<Int>(), List<Int>(),
+        *context, false, Dictionary<Str, AstXmlNode>(), true
     )
     extractor.begin(file)
     val extracted: IlBody = extractor.run(body)

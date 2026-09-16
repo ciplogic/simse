@@ -38,33 +38,43 @@ data class SkeletonNode(var children: &List<SkeletonNode>, var type: SkeletonTyp
 
 // Maps a closing token to the opening token it matches.
 fun matchingOpenToken(closingToken: Str): Str {
-    if (closingToken == ">") {
-        return "<"
-    }
-    if (closingToken == "}") {
-        return "{"
-    }
-    if (closingToken == "]") {
-        return "["
-    }
-    if (closingToken == ")") {
-        return "("
+    when (closingToken) {
+        ">" -> {
+            return "<"
+        }
+
+        "}" -> {
+            return "{"
+        }
+
+        "]" -> {
+            return "["
+        }
+
+        ")" -> {
+            return "("
+        }
     }
     return ""
 }
 
 fun blockTypeForOpenToken(openingToken: Str): SkeletonType {
-    if (openingToken == "(") {
-        return SkeletonType.Paren
-    }
-    if (openingToken == "[") {
-        return SkeletonType.Square
-    }
-    if (openingToken == "{") {
-        return SkeletonType.Block
-    }
-    if (openingToken == "<") {
-        return SkeletonType.Generics
+    when (openingToken) {
+        "(" -> {
+            return SkeletonType.Paren
+        }
+
+        "[" -> {
+            return SkeletonType.Square
+        }
+
+        "{" -> {
+            return SkeletonType.Block
+        }
+
+        "<" -> {
+            return SkeletonType.Generics
+        }
     }
     return SkeletonType.None
 }

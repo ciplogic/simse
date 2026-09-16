@@ -36,16 +36,16 @@ package linear
 // as an expression is how a missing child would end up bound to a temporary.
 fun exprIsSimple(e: *AstXmlNode): Bool {
     val kind: AstNodeCategory = xmlKind(e)
-    if (kind == AstNodeCategory.None) {
-        return true
-    }
-    if (kind == AstNodeCategory.ExprIntLit || kind == AstNodeCategory.ExprFloatLit
-        || kind == AstNodeCategory.ExprStrLit || kind == AstNodeCategory.ExprCharLit
-        || kind == AstNodeCategory.ExprBoolLit || kind == AstNodeCategory.ExprNullLit
-        || kind == AstNodeCategory.ExprName || kind == AstNodeCategory.ExprGenericName
-        || kind == AstNodeCategory.ExprLambda
-    ) {
-        return true
+    when (kind) {
+        AstNodeCategory.None -> {
+            return true
+        }
+
+        AstNodeCategory.ExprIntLit, AstNodeCategory.ExprFloatLit, AstNodeCategory.ExprStrLit,
+        AstNodeCategory.ExprCharLit, AstNodeCategory.ExprBoolLit, AstNodeCategory.ExprNullLit,
+        AstNodeCategory.ExprName, AstNodeCategory.ExprGenericName, AstNodeCategory.ExprLambda -> {
+            return true
+        }
     }
     return false
 }
@@ -55,13 +55,14 @@ fun exprIsSimple(e: *AstXmlNode): Bool {
 // reference.
 fun exprIsPlace(e: *AstXmlNode): Bool {
     val kind: AstNodeCategory = xmlKind(e)
-    if (kind == AstNodeCategory.ExprName || kind == AstNodeCategory.ExprGenericName
-        || kind == AstNodeCategory.ExprDeref
-    ) {
-        return true
-    }
-    if (kind == AstNodeCategory.ExprMember || kind == AstNodeCategory.ExprIndex) {
-        return exprIsPlace(*xmlChild(e, AstNodeKind.Receiver))
+    when (kind) {
+        AstNodeCategory.ExprName, AstNodeCategory.ExprGenericName, AstNodeCategory.ExprDeref -> {
+            return true
+        }
+
+        AstNodeCategory.ExprMember, AstNodeCategory.ExprIndex -> {
+            return exprIsPlace(*xmlChild(e, AstNodeKind.Receiver))
+        }
     }
     return false
 }
@@ -154,10 +155,8 @@ data class ExprFlattener(
 
     fun flatList(exprs: *List<AstXmlNode>, temps: *List<AstXmlNode>): List<AstXmlNode> {
         var out: List<AstXmlNode> = List<AstXmlNode>()
-        var i: Int = 0
-        while (i < exprs.size()) {
-            out.append(this.flat(*exprs[i], ExprSlot.Value, temps))
-            i = i + 1
+        for (*expr in exprs) {
+            out.append(this.flat(expr, ExprSlot.Value, temps))
         }
         return out
     }
@@ -166,11 +165,14 @@ data class ExprFlattener(
     // (`a[i].f(...)` stays a call on `a[i]`).
     fun flatCallee(e: *AstXmlNode, temps: *List<AstXmlNode>): AstXmlNode {
         val kind: AstNodeCategory = xmlKind(e)
-        if (kind == AstNodeCategory.ExprMember) {
-            return this.flat(e, ExprSlot.Path, temps)
-        }
-        if (kind == AstNodeCategory.ExprName || kind == AstNodeCategory.ExprGenericName) {
-            return copy(e)
+        when (kind) {
+            AstNodeCategory.ExprMember -> {
+                return this.flat(e, ExprSlot.Path, temps)
+            }
+
+            AstNodeCategory.ExprName, AstNodeCategory.ExprGenericName -> {
+                return copy(e)
+            }
         }
         return this.flat(e, ExprSlot.Value, temps)
     }
@@ -187,46 +189,53 @@ data class ExprFlattener(
     // The same node with its operands flattened. The original is never touched.
     fun rebuild(e: *AstXmlNode, temps: *List<AstXmlNode>): AstXmlNode {
         val kind: AstNodeCategory = xmlKind(e)
-        if (kind == AstNodeCategory.ExprMember) {
-            var receiver: List<AstXmlNode> = List<AstXmlNode>()
-            receiver.append(this.pathOrValue(*xmlChild(e, AstNodeKind.Receiver), temps))
-            return exprReplaceRole(e, AstNodeKind.Receiver, *receiver)
-        }
-        if (kind == AstNodeCategory.ExprIndex) {
-            var receiver: List<AstXmlNode> = List<AstXmlNode>()
-            receiver.append(this.pathOrValue(*xmlChild(e, AstNodeKind.Receiver), temps))
-            var index: List<AstXmlNode> = List<AstXmlNode>()
-            index.append(this.flat(*xmlChild(e, AstNodeKind.Index), ExprSlot.Value, temps))
-            val withReceiver: AstXmlNode = exprReplaceRole(e, AstNodeKind.Receiver, *receiver)
-            return exprReplaceRole(*withReceiver, AstNodeKind.Index, *index)
-        }
-        if (kind == AstNodeCategory.ExprCall) {
-            var callee: List<AstXmlNode> = List<AstXmlNode>()
-            callee.append(this.flatCallee(*xmlChild(e, AstNodeKind.Callee), temps))
-            val argList: List<AstXmlNode> = xmlChildren(e, AstNodeKind.Arg)
-            val args: List<AstXmlNode> = this.flatList(*argList, temps)
-            val withCallee: AstXmlNode = exprReplaceRole(e, AstNodeKind.Callee, *callee)
-            return exprReplaceRole(*withCallee, AstNodeKind.Arg, *args)
-        }
-        if (kind == AstNodeCategory.ExprBinary) {
-            var lhs: List<AstXmlNode> = List<AstXmlNode>()
-            lhs.append(this.flat(*xmlChild(e, AstNodeKind.Lhs), ExprSlot.Value, temps))
-            var rhs: List<AstXmlNode> = List<AstXmlNode>()
-            rhs.append(this.flat(*xmlChild(e, AstNodeKind.Rhs), ExprSlot.Value, temps))
-            val withLhs: AstXmlNode = exprReplaceRole(e, AstNodeKind.Lhs, *lhs)
-            return exprReplaceRole(*withLhs, AstNodeKind.Rhs, *rhs)
-        }
-        if (kind == AstNodeCategory.ExprUnary || kind == AstNodeCategory.ExprCopy) {
-            var operand: List<AstXmlNode> = List<AstXmlNode>()
-            operand.append(this.flat(*xmlChild(e, AstNodeKind.Operand), ExprSlot.Value, temps))
-            return exprReplaceRole(e, AstNodeKind.Operand, *operand)
-        }
-        if (kind == AstNodeCategory.ExprRef || kind == AstNodeCategory.ExprDeref) {
-            // `&x` boxes and `*x` borrows: both keep a place in place, or the address
-            // of a temporary would be taken.
-            var operand: List<AstXmlNode> = List<AstXmlNode>()
-            operand.append(this.pathOrValue(*xmlChild(e, AstNodeKind.Operand), temps))
-            return exprReplaceRole(e, AstNodeKind.Operand, *operand)
+        when (kind) {
+            AstNodeCategory.ExprMember -> {
+                var receiver: List<AstXmlNode> = List<AstXmlNode>()
+                receiver.append(this.pathOrValue(*xmlChild(e, AstNodeKind.Receiver), temps))
+                return exprReplaceRole(e, AstNodeKind.Receiver, *receiver)
+            }
+
+            AstNodeCategory.ExprIndex -> {
+                var receiver: List<AstXmlNode> = List<AstXmlNode>()
+                receiver.append(this.pathOrValue(*xmlChild(e, AstNodeKind.Receiver), temps))
+                var index: List<AstXmlNode> = List<AstXmlNode>()
+                index.append(this.flat(*xmlChild(e, AstNodeKind.Index), ExprSlot.Value, temps))
+                val withReceiver: AstXmlNode = exprReplaceRole(e, AstNodeKind.Receiver, *receiver)
+                return exprReplaceRole(*withReceiver, AstNodeKind.Index, *index)
+            }
+
+            AstNodeCategory.ExprCall -> {
+                var callee: List<AstXmlNode> = List<AstXmlNode>()
+                callee.append(this.flatCallee(*xmlChild(e, AstNodeKind.Callee), temps))
+                val argList: List<AstXmlNode> = xmlChildren(e, AstNodeKind.Arg)
+                val args: List<AstXmlNode> = this.flatList(*argList, temps)
+                val withCallee: AstXmlNode = exprReplaceRole(e, AstNodeKind.Callee, *callee)
+                return exprReplaceRole(*withCallee, AstNodeKind.Arg, *args)
+            }
+
+            AstNodeCategory.ExprBinary -> {
+                var lhs: List<AstXmlNode> = List<AstXmlNode>()
+                lhs.append(this.flat(*xmlChild(e, AstNodeKind.Lhs), ExprSlot.Value, temps))
+                var rhs: List<AstXmlNode> = List<AstXmlNode>()
+                rhs.append(this.flat(*xmlChild(e, AstNodeKind.Rhs), ExprSlot.Value, temps))
+                val withLhs: AstXmlNode = exprReplaceRole(e, AstNodeKind.Lhs, *lhs)
+                return exprReplaceRole(*withLhs, AstNodeKind.Rhs, *rhs)
+            }
+
+            AstNodeCategory.ExprUnary, AstNodeCategory.ExprCopy -> {
+                var operand: List<AstXmlNode> = List<AstXmlNode>()
+                operand.append(this.flat(*xmlChild(e, AstNodeKind.Operand), ExprSlot.Value, temps))
+                return exprReplaceRole(e, AstNodeKind.Operand, *operand)
+            }
+
+            AstNodeCategory.ExprRef, AstNodeCategory.ExprDeref -> {
+                // `&x` boxes and `*x` borrows: both keep a place in place, or the address
+                // of a temporary would be taken.
+                var operand: List<AstXmlNode> = List<AstXmlNode>()
+                operand.append(this.pathOrValue(*xmlChild(e, AstNodeKind.Operand), temps))
+                return exprReplaceRole(e, AstNodeKind.Operand, *operand)
+            }
         }
         return copy(e)
     }
@@ -260,77 +269,83 @@ data class ExprFlattener(
     }
 
     fun walkStmts(stmts: List<AstXmlNode>, out: *List<AstXmlNode>): Unit {
-        var i: Int = 0
-        while (i < stmts.size()) {
-            this.walkStmt(*stmts[i], out)
-            i = i + 1
+        for (*stmt in stmts) {
+            this.walkStmt(stmt, out)
         }
     }
 
     fun walkStmt(stmt: *AstXmlNode, out: *List<AstXmlNode>): Unit {
         val kind: AstNodeCategory = xmlKind(stmt)
         var temps: List<AstXmlNode> = List<AstXmlNode>()
-        if (kind == AstNodeCategory.StmtBlock) {
-            var inner: List<AstXmlNode> = List<AstXmlNode>()
-            this.walkStmts(xmlChildren(*xmlChild(stmt, AstNodeKind.Body), AstNodeKind.Stmt), *inner)
-            out.append(linBlock(*inner, xmlLine(stmt), xmlColumn(stmt)))
-            return
-        }
-        if (kind == AstNodeCategory.StmtVarDecl) {
-            // The temporaries stay in this scope: the declared name is visible for the
-            // rest of the region. A region that declares anything is already a C++
-            // block (`linLowerBody`), which is what keeps a jump from crossing them.
-            var init: List<AstXmlNode> = List<AstXmlNode>()
-            init.append(this.flat(*xmlChild(stmt, AstNodeKind.Init), ExprSlot.Root, *temps))
-            var i: Int = 0
-            while (i < temps.size()) {
-                out.append(temps[i])
-                i = i + 1
+        when (kind) {
+            AstNodeCategory.StmtBlock -> {
+                var inner: List<AstXmlNode> = List<AstXmlNode>()
+                this.walkStmts(xmlChildren(*xmlChild(stmt, AstNodeKind.Body), AstNodeKind.Stmt), *inner)
+                out.append(linBlock(*inner, xmlLine(stmt), xmlColumn(stmt)))
+                return
             }
-            out.append(exprReplaceRole(stmt, AstNodeKind.Init, *init))
-            return
-        }
-        if (kind == AstNodeCategory.StmtIfTrue || kind == AstNodeCategory.StmtIfFalse) {
-            // The condition is a *value* position like any operand: a comparison or a
-            // call that is not a single name becomes its own temporary, so a jump is
-            // the only thing the statement does.
-            var cond: List<AstXmlNode> = List<AstXmlNode>()
-            cond.append(this.flat(*xmlChild(stmt, AstNodeKind.Cond), ExprSlot.Value, *temps))
-            out.append(this.withTemps(exprReplaceRole(stmt, AstNodeKind.Cond, *cond), *temps))
-            return
-        }
-        if (kind == AstNodeCategory.StmtAssign) {
-            var target: List<AstXmlNode> = List<AstXmlNode>()
-            target.append(this.flat(*xmlChild(stmt, AstNodeKind.Target), ExprSlot.Path, *temps))
-            var value: List<AstXmlNode> = List<AstXmlNode>()
-            value.append(this.flat(*xmlChild(stmt, AstNodeKind.Value), ExprSlot.Root, *temps))
-            val withTarget: AstXmlNode = exprReplaceRole(stmt, AstNodeKind.Target, *target)
-            out.append(this.withTemps(exprReplaceRole(*withTarget, AstNodeKind.Value, *value), *temps))
-            return
-        }
-        if (kind == AstNodeCategory.StmtReturn) {
-            // Same for the returned value: `return i < 2;` is a temporary and then a
-            // `return` of one name.
-            var value: List<AstXmlNode> = List<AstXmlNode>()
-            value.append(this.flat(*xmlChild(stmt, AstNodeKind.Value), ExprSlot.Value, *temps))
-            out.append(this.withTemps(exprReplaceRole(stmt, AstNodeKind.Value, *value), *temps))
-            return
-        }
-        if (kind == AstNodeCategory.StmtExprStmt) {
-            var expr: List<AstXmlNode> = List<AstXmlNode>()
-            expr.append(this.flat(*xmlChild(stmt, AstNodeKind.Expr), ExprSlot.Root, *temps))
-            out.append(this.withTemps(exprReplaceRole(stmt, AstNodeKind.Expr, *expr), *temps))
-            return
-        }
-        if (kind == AstNodeCategory.StmtYield) {
-            // `yield e` hands a value out, so its expression is a value position like a
-            // `return`'s: one operand, or a temporary. (The state-machine pass replaces the
-            // statement afterwards.) Without this, the *first* thing the machine inlines is
-            // a whole expression, and the two rings stop emitting the same C++.
-            var value: List<AstXmlNode> = List<AstXmlNode>()
-            value.append(this.flat(*xmlChild(stmt, AstNodeKind.Value), ExprSlot.Value, *temps))
-            out.append(this.withTemps(exprReplaceRole(stmt, AstNodeKind.Value, *value), *temps))
-            return
+
+            AstNodeCategory.StmtVarDecl -> {
+                // The temporaries stay in this scope: the declared name is visible for the
+                // rest of the region. A region that declares anything is already a C++
+                // block (`linLowerBody`), which is what keeps a jump from crossing them.
+                var init: List<AstXmlNode> = List<AstXmlNode>()
+                init.append(this.flat(*xmlChild(stmt, AstNodeKind.Init), ExprSlot.Root, *temps))
+                var i: Int = 0
+                while (i < temps.size()) {
+                    out.append(temps[i])
+                    i = i + 1
+                }
+                out.append(exprReplaceRole(stmt, AstNodeKind.Init, *init))
+                return
+            }
+
+            AstNodeCategory.StmtIfTrue, AstNodeCategory.StmtIfFalse -> {
+                // The condition is a *value* position like any operand: a comparison or a
+                // call that is not a single name becomes its own temporary, so a jump is
+                // the only thing the statement does.
+                var cond: List<AstXmlNode> = List<AstXmlNode>()
+                cond.append(this.flat(*xmlChild(stmt, AstNodeKind.Cond), ExprSlot.Value, *temps))
+                out.append(this.withTemps(exprReplaceRole(stmt, AstNodeKind.Cond, *cond), *temps))
+                return
+            }
+
+            AstNodeCategory.StmtAssign -> {
+                var target: List<AstXmlNode> = List<AstXmlNode>()
+                target.append(this.flat(*xmlChild(stmt, AstNodeKind.Target), ExprSlot.Path, *temps))
+                var value: List<AstXmlNode> = List<AstXmlNode>()
+                value.append(this.flat(*xmlChild(stmt, AstNodeKind.Value), ExprSlot.Root, *temps))
+                val withTarget: AstXmlNode = exprReplaceRole(stmt, AstNodeKind.Target, *target)
+                out.append(this.withTemps(exprReplaceRole(*withTarget, AstNodeKind.Value, *value), *temps))
+                return
+            }
+
+            AstNodeCategory.StmtReturn -> {
+                // Same for the returned value: `return i < 2;` is a temporary and then a
+                // `return` of one name.
+                var value: List<AstXmlNode> = List<AstXmlNode>()
+                value.append(this.flat(*xmlChild(stmt, AstNodeKind.Value), ExprSlot.Value, *temps))
+                out.append(this.withTemps(exprReplaceRole(stmt, AstNodeKind.Value, *value), *temps))
+                return
+            }
+
+            AstNodeCategory.StmtExprStmt -> {
+                var expr: List<AstXmlNode> = List<AstXmlNode>()
+                expr.append(this.flat(*xmlChild(stmt, AstNodeKind.Expr), ExprSlot.Root, *temps))
+                out.append(this.withTemps(exprReplaceRole(stmt, AstNodeKind.Expr, *expr), *temps))
+                return
+            }
+
+            AstNodeCategory.StmtYield -> {
+                // `yield e` hands a value out, so its expression is a value position like a
+                // `return`'s: one operand, or a temporary. (The state-machine pass replaces the
+                // statement afterwards.) Without this, the *first* thing the machine inlines is
+                // a whole expression, and the two rings stop emitting the same C++.
+                var value: List<AstXmlNode> = List<AstXmlNode>()
+                value.append(this.flat(*xmlChild(stmt, AstNodeKind.Value), ExprSlot.Value, *temps))
+                out.append(this.withTemps(exprReplaceRole(stmt, AstNodeKind.Value, *value), *temps))
+                return
+            }
         }
         // Label and Goto hold no expressions; If/While/Switch/Break/Continue cannot
         // appear here (`linLowerBody` removed them).

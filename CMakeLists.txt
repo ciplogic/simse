@@ -173,7 +173,10 @@ add_custom_command(
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/common"
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/lex"
                 -o "${SIMSE_SKEL_GENERATED}"
-        DEPENDS "${SIMSE_REPO_ROOT}/cppsrc/skelparser/SkeletonParser.kt" simse_transpile
+        DEPENDS "${SIMSE_REPO_ROOT}/cppsrc/skelparser/SkeletonParser.kt"
+                "${SIMSE_REPO_ROOT}/cppsrc/lex/Scanner.kt"
+                "${SIMSE_REPO_ROOT}/cppsrc/common/common.kt"
+                simse_transpile
         COMMENT "T11: transpiling SkeletonParser.kt"
         VERBATIM)
 
@@ -223,7 +226,10 @@ add_custom_command(
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/common"
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/lex"
                 -o "${SIMSE_PARSER_GENERATED}"
-        DEPENDS "${SIMSE_REPO_ROOT}/cppsrc/parser/Parser.kt" simse_transpile
+        DEPENDS "${SIMSE_REPO_ROOT}/cppsrc/parser/Parser.kt"
+                "${SIMSE_REPO_ROOT}/cppsrc/lex/Scanner.kt"
+                "${SIMSE_REPO_ROOT}/cppsrc/common/common.kt"
+                simse_transpile
         COMMENT "T19: transpiling Parser.kt"
         VERBATIM)
 
@@ -260,10 +266,12 @@ add_custom_target(parser_diff ALL
 
 # --- T21: differential sema (hand-written vs transpiled) ---------------------
 # Sema.kt is transpiled together with its transitive `import cppsrc.parser`
-# (which pulls in Scanner.kt and common). Both drivers print the diagnostics
-# for the same fixtures; the reference driver also checks itself against
-# tests/golden/*.sema.expected, so this proves `reference == golden` and
-# `simse == reference`.
+# (which pulls in Scanner.kt and common) and the rest of its own package: the
+# arity check asks the packing rule, which lives in TypeInfer.kt, exactly as the
+# hand-written Sema.cpp asks `sema::isPackTarget` from TypeInfer.cpp. Both drivers
+# print the diagnostics for the same fixtures; the reference driver also checks
+# itself against tests/golden/*.sema.expected, so this proves `reference == golden`
+# and `simse == reference`.
 set(SIMSE_SEMA_GENERATED "${SIMSE_SELFHOST_DIR}/Sema.kt.cpp")
 add_custom_command(
         OUTPUT "${SIMSE_SEMA_GENERATED}"
@@ -273,9 +281,11 @@ add_custom_command(
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/common"
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/lex"
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/parser"
+                --module-root "${SIMSE_REPO_ROOT}/cppsrc/sema"
                 -o "${SIMSE_SEMA_GENERATED}"
         DEPENDS
                 "${SIMSE_REPO_ROOT}/cppsrc/sema/Sema.kt"
+                "${SIMSE_REPO_ROOT}/cppsrc/sema/TypeInfer.kt"
                 "${SIMSE_REPO_ROOT}/cppsrc/parser/Parser.kt"
                 "${SIMSE_REPO_ROOT}/cppsrc/lex/Scanner.kt"
                 "${SIMSE_REPO_ROOT}/cppsrc/common/common.kt"
@@ -340,6 +350,8 @@ add_custom_command(
                 "${SIMSE_REPO_ROOT}/cppsrc/sema/TypeInfer.kt"
                 "${SIMSE_REPO_ROOT}/cppsrc/linear/ExpressionLowering.kt"
                 "${SIMSE_REPO_ROOT}/cppsrc/linear/Linear.kt"
+                "${SIMSE_REPO_ROOT}/cppsrc/linear/LinearForm.kt"
+                "${SIMSE_REPO_ROOT}/cppsrc/linear/Yield.kt"
                 "${SIMSE_REPO_ROOT}/cppsrc/linear/Simplify.kt"
                 "${SIMSE_REPO_ROOT}/cppsrc/parser/Parser.kt"
                 "${SIMSE_REPO_ROOT}/cppsrc/lex/Scanner.kt"

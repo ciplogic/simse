@@ -170,8 +170,14 @@ explicit `cppsrc/compiler/Driver.kt` input.
   extractor synthesizes (a read's base, a call's receiver, a borrow's operand) is typed
   by the type pass's own rules (`sema::typeOfExpr`) and declared with the frame - so
   `attributes[i].size()` is three instructions (`IndexAddr`, `GetField`, `Call`) and
-  three lines of C++, never one expression. What a backend still folds is a slot whose
-  type the rules cannot name (25 over `cppsrc`, mostly a bare `null`), which is the one
+  three lines of C++, never one expression. A container built from values is one
+  instruction too (`Pack`: `listOf<Str>(a, b, c)`, and a call whose last parameter is a
+  `List<T>`/`*List<T>` packs its trailing arguments into one - `specs/functions.md`),
+  and a call argument whose handle is inferred (a `*T` parameter taking a value's
+  address, a `*T`/`&T` argument read through for a by-value parameter) is one more
+  instruction between the two, never a change of the callee.
+  What a backend still folds is a slot whose
+  type the rules cannot name (a `for`'s machine slot, mostly a bare `null`), which is the one
   shape that prints where it is read.
   `LinearForm.kt` is the whole thing mirrored: the model, the signature table, the
   printer, the extractor, and the backend lives in `Codegen.kt`
@@ -308,9 +314,23 @@ Key design points:
 - **Never** weaken the C++ reference or the XmlNode schema to make a mirror
   pass; fix the transpiler or the mirror generically. Do not special-case a
   specific file.
-- Prefer `while` + `Span<T>` over a range-`for` in Simse code (the language has no
-  `foreach` over containers; `for` iterates a `yield`ing machine only). Use `when`
-  for kind dispatch; lambdas are supported (by-value capture).
+- **Prefer the container `for` to an index walk.** `for (*x in xs)` binds a *pointer* to
+each element - no copy per iteration, and a write through `x` reaches the element - while
+`for (x in xs)` binds a copy; the indexed form `for ((*x, i) in xs)` adds a counter that
+counts iterations (a `continue` still advances it). Convert a `while (i < xs.size())`
+walk only when `i` is used *only* to index `xs`, `xs` is not mutated in the body, and the
+element is used as a *place* (an assignment target, a member access, or an argument where
+a `*T` is wanted) - a pointer where a value was meant is the one bug this rewrite
+produces. Keep `while` + `Span<T>` for the rest (the index used elsewhere, the container
+re-read or mutated, an element read as a value).
+- **Prefer `when` to a chain of `if`s on one local** (`when` is the language's only
+selection statement and it evaluates its subject once - so the subject must be a plain
+local no arm assigns to), and a **`listOf<T>(a, b, c)` literal to a run of `append`s**
+(one `Pack` instruction, inline up to four elements; `List<T>(n)` is the RTL's *count*
+construction and stays that). A parameter may be a copy (`List<T>`) or a borrow
+(`*List<T>`) without the callers caring: a call argument's handle is inferred when the
+types match (`specs/functions.md`, "Handles at a call"), so `f(xs)` is `f(&xs)` for a
+borrow parameter and a read-through for a by-value one.
 - **Iterate a container of aggregates with the pointer form** - `for (*x in xs)` /
   `for ((*x, i) in xs)` - not `for (x in xs)`: the value form binds a *copy* of each
   element, the pointer form binds its place (`*T`, through the container's prelude
@@ -338,7 +358,10 @@ Scalars (`Int8..64`, `Float32/64`, `Char`, `Bool`), `Str` (with a method library
 `find`, `substr`, `startsWith`, `endsWith`, `replace`, `toInt`, `toFloat`,
 `charAt`, `trim`, `split`, `toUpper`, `toLower`, `isEmpty`, `indexOf`,
 `lastIndexOf`); `List<T>` (with `append`, `removeAt`, `removeRange`, `insert`,
-`clear`, `contains`, `sort`); `Dictionary<K,V>` (`get`/`has`/`insert`/`remove`/
+`clear`, `contains`, `sort`, the literal `listOf<T>(a, b, c)` - one `Pack`
+instruction, inline up to four elements - the count constructions `List<T>(n)` /
+`List<T>(n, value)`, and a call whose last parameter is a `List<T>`/`*List<T>` packing
+its trailing arguments, `specs/functions.md`); `Dictionary<K,V>` (`get`/`has`/`insert`/`remove`/
 `keys`/`values`/`size`/`clear`); `Opt<T>`, `Res<T>` (with `Res<T>.ok/.err`,
 `Opt<T>.some/.none`); `Span<T>` (a borrowed view: pointer + length); `XmlNode`/`Attribute`;
 `data class` (with methods), `enum` (with `toInt`/`fromInt`), `typealias`

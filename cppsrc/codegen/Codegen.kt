@@ -157,34 +157,43 @@ fun cgUnquote(text: Str): Str {
 fun cgPrecedence(e: *AstXmlNode): Int {
     if (xmlKind(e) == AstNodeCategory.ExprBinary) {
         val op: Str = xmlAttr(e, AstNodeAttributeKind.Op)
-        if (op == "||") {
-            return 1
-        }
-        if (op == "&&") {
-            return 2
-        }
-        if (op == "==" || op == "!=") {
-            return 3
-        }
-        if (op == "<" || op == ">" || op == "<=" || op == ">=") {
-            return 4
-        }
-        if (op == "+" || op == "-") {
-            return 5
-        }
-        if (op == "*" || op == "/" || op == "%") {
-            return 6
+        when (op) {
+            "||" -> {
+                return 1
+            }
+
+            "&&" -> {
+                return 2
+            }
+
+            "==", "!=" -> {
+                return 3
+            }
+
+            "<", ">", "<=", ">=" -> {
+                return 4
+            }
+
+            "+", "-" -> {
+                return 5
+            }
+
+            "*", "/", "%" -> {
+                return 6
+            }
         }
         return 1
     }
     val kind: AstNodeCategory = xmlKind(e)
-    if (kind == AstNodeCategory.ExprUnary || kind == AstNodeCategory.ExprDeref || kind == AstNodeCategory.ExprCopy) {
-        return 7
-    }
-    if (kind == AstNodeCategory.ExprRef || kind == AstNodeCategory.ExprCall || kind == AstNodeCategory.ExprIndex
-        || kind == AstNodeCategory.ExprMember
-    ) {
-        return 9
+    when (kind) {
+        AstNodeCategory.ExprUnary, AstNodeCategory.ExprDeref, AstNodeCategory.ExprCopy -> {
+            return 7
+        }
+
+        AstNodeCategory.ExprRef, AstNodeCategory.ExprCall, AstNodeCategory.ExprIndex,
+        AstNodeCategory.ExprMember -> {
+            return 9
+        }
     }
     return 10
 }
@@ -384,15 +393,14 @@ data class Emitter(
     fun collectPackages(): Unit {
         var names: List<Str> = List<Str>()
         var i: Int = 0
-        while (i < this.inputs.size()) {
-            val pkg: Str = this.inputPackage(*this.inputs[i])
+        for (*input in this.inputs) {
+            val pkg: Str = this.inputPackage(input)
             // `rtl` is the built-in namespace, and an empty package is a
             // programmatically built module (the merged prelude); neither is
             // indexed, so neither is ever prefixed.
             if (pkg != "rtl" && pkg != "" && !names.contains(pkg)) {
                 names.append(pkg)
             }
-            i = i + 1
         }
         names.sort((left: Str, right: Str) -> left < right)
         var next: Int = 1
@@ -562,22 +570,16 @@ data class Emitter(
             facts.enumNames.insert(enumTypeNames[e], true)
             e = e + 1
         }
-        var f: Int = 0
-        while (f < this.functions.size()) {
-            val fn: *CgFn = *this.functions[f]
+        for (*fn in this.functions) {
             facts.functions.append(SemFnFact(copy(fn.decl), copy(fn.receiver), fn.templateParams))
-            f = f + 1
         }
         val extensionNames: List<Str> = this.nativeExtensions.keys()
         var x: Int = 0
         while (x < extensionNames.size()) {
             val overloads: List<CgNativeExt> = this.nativeExtensions.get(extensionNames[x]).value()
             var mapped: List<SemExtFact> = List<SemExtFact>()
-            var o: Int = 0
-            while (o < overloads.size()) {
-                val ext: *CgNativeExt = *overloads[o]
+            for (*ext in overloads) {
                 mapped.append(SemExtFact(copy(ext.receiver), copy(ext.returnType), ext.typeParams))
-                o = o + 1
             }
             facts.nativeExtensions.insert(extensionNames[x], mapped)
             x = x + 1
@@ -617,10 +619,8 @@ data class Emitter(
 
     fun typeArgsString(baseName: Str, args: *List<AstXmlNode>): Str {
         var rendered: List<Str> = List<Str>()
-        var i: Int = 0
-        while (i < args.size()) {
-            rendered.append(this.type(*args[i]))
-            i = i + 1
+        for (*arg in args) {
+            rendered.append(this.type(arg))
         }
         if (baseName == "SmallVector" && rendered.size() == 2) {
             val first: Str = rendered[0]
@@ -656,47 +656,52 @@ data class Emitter(
 
     fun type(typeExpr: *AstXmlNode): Str {
         val kind: AstNodeCategory = xmlKind(typeExpr)
-        if (kind == AstNodeCategory.TypeIntLit) {
-            return xmlAttr(typeExpr, AstNodeAttributeKind.Text)
-        }
-        if (kind == AstNodeCategory.TypeNamed) {
-            return this.typeName(xmlAttr(typeExpr, AstNodeAttributeKind.Name), typeExpr)
-        }
-        if (kind == AstNodeCategory.TypeGeneric) {
-            return this.typeName(xmlAttr(typeExpr, AstNodeAttributeKind.Name), typeExpr)
-            +"<" + this.typeArgsString(
-                xmlAttr(typeExpr, AstNodeAttributeKind.Name),
-                *xmlChildren(typeExpr, AstNodeKind.TypeArg)
-            ) + ">"
-        }
-        if (kind == AstNodeCategory.TypeReference) {
-            val inner: AstXmlNode = xmlChild(typeExpr, AstNodeKind.Inner)
-            if (xmlIsEmpty(*inner)) {
-                return "std::shared_ptr<void>"
+        when (kind) {
+            AstNodeCategory.TypeIntLit -> {
+                return xmlAttr(typeExpr, AstNodeAttributeKind.Text)
             }
-            return "std::shared_ptr<" + this.type(*inner) + ">"
-        }
-        if (kind == AstNodeCategory.TypePointer) {
-            val inner: AstXmlNode = xmlChild(typeExpr, AstNodeKind.Inner)
-            if (xmlIsEmpty(*inner)) {
-                return "void*"
+
+            AstNodeCategory.TypeNamed -> {
+                return this.typeName(xmlAttr(typeExpr, AstNodeAttributeKind.Name), typeExpr)
             }
-            return this.type(*inner) + "*"
-        }
-        if (kind == AstNodeCategory.TypeFunction) {
-            val retNode: AstXmlNode = xmlChild(typeExpr, AstNodeKind.ReturnType)
-            var ret: Str = "void"
-            if (!xmlIsEmpty(*retNode)) {
-                ret = this.type(*retNode)
+
+            AstNodeCategory.TypeGeneric -> {
+                return this.typeName(xmlAttr(typeExpr, AstNodeAttributeKind.Name), typeExpr)
+                +"<" + this.typeArgsString(
+                    xmlAttr(typeExpr, AstNodeAttributeKind.Name),
+                    *xmlChildren(typeExpr, AstNodeKind.TypeArg)
+                ) + ">"
             }
-            val paramNodes: List<AstXmlNode> = xmlChildren(typeExpr, AstNodeKind.ParamType)
-            var params: List<Str> = List<Str>()
-            var i: Int = 0
-            while (i < paramNodes.size()) {
-                params.append(this.type(*paramNodes[i]))
-                i = i + 1
+
+            AstNodeCategory.TypeReference -> {
+                val inner: AstXmlNode = xmlChild(typeExpr, AstNodeKind.Inner)
+                if (xmlIsEmpty(*inner)) {
+                    return "std::shared_ptr<void>"
+                }
+                return "std::shared_ptr<" + this.type(*inner) + ">"
             }
-            return "Func<" + ret + "(" + cgJoin(*params, ", ") + ")>"
+
+            AstNodeCategory.TypePointer -> {
+                val inner: AstXmlNode = xmlChild(typeExpr, AstNodeKind.Inner)
+                if (xmlIsEmpty(*inner)) {
+                    return "void*"
+                }
+                return this.type(*inner) + "*"
+            }
+
+            AstNodeCategory.TypeFunction -> {
+                val retNode: AstXmlNode = xmlChild(typeExpr, AstNodeKind.ReturnType)
+                var ret: Str = "void"
+                if (!xmlIsEmpty(*retNode)) {
+                    ret = this.type(*retNode)
+                }
+                val paramNodes: List<AstXmlNode> = xmlChildren(typeExpr, AstNodeKind.ParamType)
+                var params: List<Str> = List<Str>()
+                for (*paramNode in paramNodes) {
+                    params.append(this.type(paramNode))
+                }
+                return "Func<" + ret + "(" + cgJoin(*params, ", ") + ")>"
+            }
         }
         return "/*unsupported*/"
     }
@@ -742,12 +747,10 @@ data class Emitter(
 
     // Whether any static has an initializer, i.e. whether the pass is needed.
     fun hasStaticInit(): Bool {
-        var i: Int = 0
-        while (i < this.statics.size()) {
-            if (!xmlIsEmpty(*xmlChild(*this.statics[i].decl, AstNodeKind.Init))) {
+        for (*entry in this.statics) {
+            if (!xmlIsEmpty(*xmlChild(*entry.decl, AstNodeKind.Init))) {
                 return true
             }
-            i = i + 1
         }
         return false
     }
@@ -851,26 +854,32 @@ data class Emitter(
     // (`cppsrc/rtl/astxml.hpp`).
     fun factoryParamByValue(t: *AstXmlNode): Bool {
         val kind: AstNodeCategory = xmlKind(t)
-        if (kind == AstNodeCategory.TypePointer || kind == AstNodeCategory.TypeIntLit) {
-            return true
-        }
-        if (kind == AstNodeCategory.TypeReference || kind == AstNodeCategory.TypeFunction) {
-            return false
-        }
-        if (kind == AstNodeCategory.TypeYield) {
-            return false
-        }
-        if (kind == AstNodeCategory.TypeGeneric) {
-            // `RawArray<T>` *is* `T*`; the rest are containers, optionals and handles,
-            // all of which own storage.
-            return xmlAttr(t, AstNodeAttributeKind.Name) == "RawArray"
-        }
-        if (kind == AstNodeCategory.TypeNamed) {
-            val name: Str = xmlAttr(t, AstNodeAttributeKind.Name)
-            if (this.isScalarName(name)) {
+        when (kind) {
+            AstNodeCategory.TypePointer, AstNodeCategory.TypeIntLit -> {
                 return true
             }
-            return this.enumNames.has(name)
+
+            AstNodeCategory.TypeReference, AstNodeCategory.TypeFunction -> {
+                return false
+            }
+
+            AstNodeCategory.TypeYield -> {
+                return false
+            }
+
+            AstNodeCategory.TypeGeneric -> {
+                // `RawArray<T>` *is* `T*`; the rest are containers, optionals and handles,
+                // all of which own storage.
+                return xmlAttr(t, AstNodeAttributeKind.Name) == "RawArray"
+            }
+
+            AstNodeCategory.TypeNamed -> {
+                val name: Str = xmlAttr(t, AstNodeAttributeKind.Name)
+                if (this.isScalarName(name)) {
+                    return true
+                }
+                return this.enumNames.has(name)
+            }
         }
         return false
     }
@@ -878,11 +887,14 @@ data class Emitter(
     // The scalar names: the types whose C++ spelling is a register-width value (`Int`
     // and friends, `Bool`, `Char`, `Float64`).
     fun isScalarName(name: Str): Bool {
-        if (name == "Bool" || name == "Char" || name == "Int") {
-            return true
-        }
-        if (name == "Int8" || name == "Int16" || name == "Int32" || name == "Int64") {
-            return true
+        when (name) {
+            "Bool", "Char", "Int" -> {
+                return true
+            }
+
+            "Int8", "Int16", "Int32", "Int64" -> {
+                return true
+            }
         }
         return name == "Float32" || name == "Float64"
     }
@@ -1245,10 +1257,8 @@ data class Emitter(
                 this.collectTypeNames(fn.receiver)
                 this.collectTypeNames(xmlChild(*fn.decl, AstNodeKind.ReturnType))
                 val params: List<AstXmlNode> = xmlChildren(*fn.decl, AstNodeKind.Param)
-                var p: Int = 0
-                while (p < params.size()) {
-                    this.collectTypeNames(xmlChild(*params[p], AstNodeKind.Type))
-                    p = p + 1
+                for (*param in params) {
+                    this.collectTypeNames(xmlChild(param, AstNodeKind.Type))
                 }
             }
             if (this.referencedNames.size() != namesBefore
@@ -1387,10 +1397,8 @@ data class Emitter(
             names.append("self")
         }
         val params: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
-        var i: Int = 0
-        while (i < params.size()) {
-            names.append(xmlAttr(*params[i], AstNodeAttributeKind.Name))
-            i = i + 1
+        for (*param in params) {
+            names.append(xmlAttr(param, AstNodeAttributeKind.Name))
         }
         if (argv) {
             names.append("simse_argIndex")
@@ -1955,10 +1963,8 @@ data class Emitter(
                     xmlAttr(*baseType, AstNodeAttributeKind.Name)
                 )
             )
-            var i: Int = 0
-            while (i < args.size()) {
-                xmlAddChild(*node, this.renameRole(*args[i], AstNodeKind.TypeArg))
-                i = i + 1
+            for (*arg in args) {
+                xmlAddChild(*node, this.renameRole(arg, AstNodeKind.TypeArg))
             }
             return node
         }
@@ -2028,110 +2034,138 @@ data class Emitter(
         }
         val op: *IlOp = *il.ops[opIndex]
         val kind: IlOpKind = op.kind
-        if (kind == IlOpKind.SetVar) {
-            return this.ilOperandNode(il, frame, this.ilOperandAt(*op.operands, 1), depth)
-        }
-        if (kind == IlOpKind.SetVar_Null) {
-            return AstXmlNode(
-                AstNodeKind.Expr,
-                AstNodeCategory.ExprNullLit,
-                List<AstNodeAttribute>(),
-                Array<AstXmlNode>()
-            )
-        }
-        if (kind == IlOpKind.BinaryOp) {
-            val opIndex2: Int = this.ilOperandAt(*op.operands, 1)
-            if (opIndex2 < 0 || opIndex2 >= il.pool.size()) {
-                return xmlEmptyNode()
+        when (kind) {
+            IlOpKind.SetVar -> {
+                return this.ilOperandNode(il, frame, this.ilOperandAt(*op.operands, 1), depth)
             }
-            val lhs: AstXmlNode = this.ilOperandNode(il, frame, this.ilOperandAt(*op.operands, 2), depth)
-            val rhs: AstXmlNode = this.ilOperandNode(il, frame, this.ilOperandAt(*op.operands, 3), depth)
-            return this.ilBinaryNode(*lhs, il.pool[opIndex2], *rhs)
-        }
-        if (kind == IlOpKind.UnaryOp) {
-            val opIndex2: Int = this.ilOperandAt(*op.operands, 1)
-            val operand: AstXmlNode = this.ilOperandNode(il, frame, this.ilOperandAt(*op.operands, 2), depth)
-            if (opIndex2 < 0 || opIndex2 >= il.pool.size() || xmlIsEmpty(*operand)) {
-                return xmlEmptyNode()
+
+            IlOpKind.SetVar_Null -> {
+                return AstXmlNode(
+                    AstNodeKind.Expr,
+                    AstNodeCategory.ExprNullLit,
+                    List<AstNodeAttribute>(),
+                    Array<AstXmlNode>()
+                )
             }
-            var node: AstXmlNode =
-                AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprUnary, List<AstNodeAttribute>(), Array<AstXmlNode>())
-            node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Op, il.pool[opIndex2]))
-            xmlAddChild(*node, this.renameRole(*operand, AstNodeKind.Operand))
-            return node
-        }
-        if (kind == IlOpKind.GetField || kind == IlOpKind.FieldAddr) {
-            val textIndex: Int = this.ilOperandAt(*op.operands, 2)
-            if (textIndex < 0 || textIndex >= il.pool.size()) {
-                return xmlEmptyNode()
-            }
-            val base: AstXmlNode = this.ilSlotNode(il, frame, this.ilOperandAt(*op.operands, 1), depth)
-            val member: AstXmlNode = this.ilMemberNode(*base, il.pool[textIndex])
-            if (kind == IlOpKind.GetField) {
-                return member
-            }
-            return this.ilBorrowNode(*member, depth)
-        }
-        if (kind == IlOpKind.IndexAddr || kind == IlOpKind.GetIndex) {
-            val base: AstXmlNode = this.ilSlotNode(il, frame, this.ilOperandAt(*op.operands, 1), depth)
-            val index: AstXmlNode = this.ilOperandNode(il, frame, this.ilOperandAt(*op.operands, 2), depth)
-            if (xmlIsEmpty(*base) || xmlIsEmpty(*index)) {
-                return xmlEmptyNode()
-            }
-            var node: AstXmlNode =
-                AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprIndex, List<AstNodeAttribute>(), Array<AstXmlNode>())
-            xmlAddChild(*node, this.renameRole(*base, AstNodeKind.Receiver))
-            xmlAddChild(*node, this.renameRole(*index, AstNodeKind.Index))
-            if (kind == IlOpKind.GetIndex) {
-                return node
-            }
-            return this.ilBorrowNode(*node, depth)
-        }
-        if (kind == IlOpKind.Deref || kind == IlOpKind.CopyValue || kind == IlOpKind.Box) {
-            val operand: AstXmlNode = this.ilSlotNode(il, frame, this.ilOperandAt(*op.operands, 1), depth)
-            if (xmlIsEmpty(*operand)) {
-                return xmlEmptyNode()
-            }
-            var category: AstNodeCategory = AstNodeCategory.ExprDeref
-            if (kind == IlOpKind.CopyValue) {
-                category = AstNodeCategory.ExprCopy
-            } else if (kind == IlOpKind.Box) {
-                category = AstNodeCategory.ExprRef
-            }
-            var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, category, List<AstNodeAttribute>(), Array<AstXmlNode>())
-            xmlAddChild(*node, this.renameRole(*operand, AstNodeKind.Operand))
-            return node
-        }
-        if (kind == IlOpKind.GetStatic) {
-            return this.ilGetStaticNode(il, op)
-        }
-        if (kind == IlOpKind.GetStaticAddr) {
-            // The address of a file-level static: `&name` (`ilBorrowNode` spells a name
-            // that way), never the address of a copy of it.
-            val place: AstXmlNode = this.ilGetStaticNode(il, op)
-            return this.ilBorrowNode(*place, depth)
-        }
-        if (kind == IlOpKind.Call || kind == IlOpKind.CallVoid) {
-            return this.ilCallNode(il, frame, op)
-        }
-        if (kind == IlOpKind.CallCtor) {
-            val callee: AstXmlNode = this.ilTypeBaseNode(il, this.ilOperandAt(*op.operands, 1), true)
-            if (xmlIsEmpty(*callee)) {
-                return xmlEmptyNode()
-            }
-            var call: AstXmlNode =
-                AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCall, List<AstNodeAttribute>(), Array<AstXmlNode>())
-            xmlAddChild(*call, this.renameRole(*callee, AstNodeKind.Callee))
-            var i: Int = 2
-            while (i < op.operands.size()) {
-                val arg: AstXmlNode = this.ilOperandNode(il, frame, op.operands[i], 0)
-                if (xmlIsEmpty(*arg)) {
+
+            IlOpKind.BinaryOp -> {
+                val opIndex2: Int = this.ilOperandAt(*op.operands, 1)
+                if (opIndex2 < 0 || opIndex2 >= il.pool.size()) {
                     return xmlEmptyNode()
                 }
-                xmlAddChild(*call, this.renameRole(*arg, AstNodeKind.Arg))
-                i = i + 1
+                val lhs: AstXmlNode = this.ilOperandNode(il, frame, this.ilOperandAt(*op.operands, 2), depth)
+                val rhs: AstXmlNode = this.ilOperandNode(il, frame, this.ilOperandAt(*op.operands, 3), depth)
+                return this.ilBinaryNode(*lhs, il.pool[opIndex2], *rhs)
             }
-            return call
+
+            IlOpKind.UnaryOp -> {
+                val opIndex2: Int = this.ilOperandAt(*op.operands, 1)
+                val operand: AstXmlNode = this.ilOperandNode(il, frame, this.ilOperandAt(*op.operands, 2), depth)
+                if (opIndex2 < 0 || opIndex2 >= il.pool.size() || xmlIsEmpty(*operand)) {
+                    return xmlEmptyNode()
+                }
+                var node: AstXmlNode =
+                    AstXmlNode(
+                        AstNodeKind.Expr,
+                        AstNodeCategory.ExprUnary,
+                        List<AstNodeAttribute>(),
+                        Array<AstXmlNode>()
+                    )
+                node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Op, il.pool[opIndex2]))
+                xmlAddChild(*node, this.renameRole(*operand, AstNodeKind.Operand))
+                return node
+            }
+
+            IlOpKind.GetField, IlOpKind.FieldAddr -> {
+                val textIndex: Int = this.ilOperandAt(*op.operands, 2)
+                if (textIndex < 0 || textIndex >= il.pool.size()) {
+                    return xmlEmptyNode()
+                }
+                val base: AstXmlNode = this.ilSlotNode(il, frame, this.ilOperandAt(*op.operands, 1), depth)
+                val member: AstXmlNode = this.ilMemberNode(*base, il.pool[textIndex])
+                if (kind == IlOpKind.GetField) {
+                    return member
+                }
+                return this.ilBorrowNode(*member, depth)
+            }
+
+            IlOpKind.IndexAddr, IlOpKind.GetIndex -> {
+                val base: AstXmlNode = this.ilSlotNode(il, frame, this.ilOperandAt(*op.operands, 1), depth)
+                val index: AstXmlNode = this.ilOperandNode(il, frame, this.ilOperandAt(*op.operands, 2), depth)
+                if (xmlIsEmpty(*base) || xmlIsEmpty(*index)) {
+                    return xmlEmptyNode()
+                }
+                var node: AstXmlNode =
+                    AstXmlNode(
+                        AstNodeKind.Expr,
+                        AstNodeCategory.ExprIndex,
+                        List<AstNodeAttribute>(),
+                        Array<AstXmlNode>()
+                    )
+                xmlAddChild(*node, this.renameRole(*base, AstNodeKind.Receiver))
+                xmlAddChild(*node, this.renameRole(*index, AstNodeKind.Index))
+                if (kind == IlOpKind.GetIndex) {
+                    return node
+                }
+                return this.ilBorrowNode(*node, depth)
+            }
+
+            IlOpKind.Deref, IlOpKind.CopyValue, IlOpKind.Box -> {
+                val operand: AstXmlNode = this.ilSlotNode(il, frame, this.ilOperandAt(*op.operands, 1), depth)
+                if (xmlIsEmpty(*operand)) {
+                    return xmlEmptyNode()
+                }
+                var category: AstNodeCategory = AstNodeCategory.ExprDeref
+                if (kind == IlOpKind.CopyValue) {
+                    category = AstNodeCategory.ExprCopy
+                } else if (kind == IlOpKind.Box) {
+                    category = AstNodeCategory.ExprRef
+                }
+                var node: AstXmlNode =
+                    AstXmlNode(AstNodeKind.Expr, category, List<AstNodeAttribute>(), Array<AstXmlNode>())
+                xmlAddChild(*node, this.renameRole(*operand, AstNodeKind.Operand))
+                return node
+            }
+
+            IlOpKind.GetStatic -> {
+                return this.ilGetStaticNode(il, op)
+            }
+
+            IlOpKind.GetStaticAddr -> {
+                // The address of a file-level static: `&name` (`ilBorrowNode` spells a name
+                // that way), never the address of a copy of it.
+                val place: AstXmlNode = this.ilGetStaticNode(il, op)
+                return this.ilBorrowNode(*place, depth)
+            }
+
+            IlOpKind.Call, IlOpKind.CallVoid -> {
+                return this.ilCallNode(il, frame, op)
+            }
+
+            IlOpKind.CallCtor -> {
+                val callee: AstXmlNode = this.ilTypeBaseNode(il, this.ilOperandAt(*op.operands, 1), true)
+                if (xmlIsEmpty(*callee)) {
+                    return xmlEmptyNode()
+                }
+                var call: AstXmlNode =
+                    AstXmlNode(
+                        AstNodeKind.Expr,
+                        AstNodeCategory.ExprCall,
+                        List<AstNodeAttribute>(),
+                        Array<AstXmlNode>()
+                    )
+                xmlAddChild(*call, this.renameRole(*callee, AstNodeKind.Callee))
+                var i: Int = 2
+                while (i < op.operands.size()) {
+                    val arg: AstXmlNode = this.ilOperandNode(il, frame, op.operands[i], 0)
+                    if (xmlIsEmpty(*arg)) {
+                        return xmlEmptyNode()
+                    }
+                    xmlAddChild(*call, this.renameRole(*arg, AstNodeKind.Arg))
+                    i = i + 1
+                }
+                return call
+            }
         }
         // `Cast` (no source node), `CallIndirect` (a callable slot), a lambda body, and
         // anything the extractor marked: not expressible yet.
@@ -2586,10 +2620,8 @@ data class Emitter(
         val savedClosures: Dictionary<Str, Bool> = this.closureSymbols
         this.ilSeedFrameTypes(il)
         var closures: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
-        var i: Int = 0
-        while (i < unit.closures.size()) {
-            closures.insert(unit.closures[i].symbol, true)
-            i = i + 1
+        for (*closure in unit.closures) {
+            closures.insert(closure.symbol, true)
         }
         this.closureSymbols = closures
         val result: IlText = this.ilEmitOpsChecked(il, level)
@@ -2648,15 +2680,12 @@ data class Emitter(
             i = i + 1
         }
         var params: List<Str> = List<Str>()
-        i = 0
-        while (i < closure.params.size()) {
-            val param: *IlVar = *closure.params[i]
+        for (*param in closure.params) {
             val paramType: AstXmlNode = ilTypeNode(*unit.lambdas[closure.bodyIndex], param.typeIndex)
             if (xmlIsEmpty(*paramType)) {
                 return IlText(false, "", "the lambda parameter '" + param.name + "' has no type")
             }
             params.append(this.type(*paramType) + " " + param.name)
-            i = i + 1
         }
         text.appendStr("    auto operator()(" + cgJoin(*params, ", ") + ") {\n")
         val bodyText: IlText = this.emitClosureMethodText(unit, closure, 2)
@@ -2674,9 +2703,7 @@ data class Emitter(
     // in a fixed order, so "just before the body" is both legal and reproducible.
     fun emitClosureClasses(unit: *IlUnit): IlText {
         var text: Str = Str()
-        var i: Int = 0
-        while (i < unit.closures.size()) {
-            val closure: *IlClosure = *unit.closures[i]
+        for (*closure in unit.closures) {
             if (!this.emittedClosures.has(closure.symbol)) {
                 val classText: IlText = this.emitClosureClass(unit, closure)
                 if (!classText.ok) {
@@ -2685,7 +2712,6 @@ data class Emitter(
                 text.appendStr(classText.text)
                 this.emittedClosures.insert(closure.symbol, true)
             }
-            i = i + 1
         }
         return IlText(true, text, "")
     }
@@ -2742,10 +2768,7 @@ data class Emitter(
             // and the names a method has of its own are the pointer `advance` writes
             // through, the dispatcher's branch and the receiver field - a local of any of
             // those names would alias one of them.
-            var machineReserved: List<Str> = List<Str>()
-            machineReserved.append("value")
-            machineReserved.append("branch")
-            machineReserved.append("_sm_self")
+            var machineReserved: List<Str> = listOf<Str>("value", "branch", "_sm_self")
             val finalBody: List<AstXmlNode> = linFinishForEmission(lowered, machineReserved)
             val machine: Yielded = linLowerYield(decl, elementType, finalBody, "advance")
             if (!machine.error.isEmpty()) {
@@ -2775,11 +2798,9 @@ data class Emitter(
         this.line(0, factory + "(" + cgJoin(*factoryParams, ", ") + ") {")
         this.line(1, classType + " machine{};")
         val declared: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
-        var i: Int = 0
-        while (i < declared.size()) {
-            val name: Str = xmlAttr(*declared[i], AstNodeAttributeKind.Name)
+        for (*param in declared) {
+            val name: Str = xmlAttr(param, AstNodeAttributeKind.Name)
             this.line(1, "machine." + name + " = " + name + ";")
-            i = i + 1
         }
         if (!xmlIsEmpty(*xmlChild(decl, AstNodeKind.Receiver))) {
             // The receiver of an extension function crosses a yield like any other value,
@@ -2804,9 +2825,7 @@ data class Emitter(
             }
         }
         val declared: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
-        var i: Int = 0
-        while (i < declared.size()) {
-            val param: *AstXmlNode = *declared[i]
+        for (*param in declared) {
             val paramType: AstXmlNode = xmlChild(param, AstNodeKind.Type)
             if (xmlIsEmpty(*paramType)) {
                 this.fail(
@@ -2819,7 +2838,6 @@ data class Emitter(
             if (this.failed) {
                 return params
             }
-            i = i + 1
         }
         return params
     }
@@ -2876,9 +2894,7 @@ data class Emitter(
             }
             i = i + 1
         }
-        i = 0
-        while (i < machine.methods.size()) {
-            val method: *YldMethod = *machine.methods[i]
+        for (*method in machine.methods) {
             var params: List<Str> = List<Str>()
             var p: Int = 0
             while (p < method.params.size()) {
@@ -2938,7 +2954,6 @@ data class Emitter(
                 return
             }
             this.line(1, "}")
-            i = i + 1
         }
         this.line(0, "};")
         this.line(0, "")
@@ -2966,10 +2981,9 @@ data class Emitter(
             facts, List<Str>(), inferred
         )
         var i: Int = 0
-        while (i < method.params.size()) {
-            info.paramNames.append(method.params[i].name)
-            info.paramTypes.append(method.params[i].typeNode)
-            i = i + 1
+        for (*param in method.params) {
+            info.paramNames.append(param.name)
+            info.paramTypes.append(param.typeNode)
         }
         i = 0
         while (i < this.statics.size()) {
@@ -3093,12 +3107,15 @@ data class Emitter(
             return false
         }
         val kind: AstNodeCategory = xmlKind(typeNode)
-        if (kind == AstNodeCategory.TypeNamed) {
-            return xmlAttr(typeNode, AstNodeAttributeKind.Name) == "Str"
-        }
-        if (kind == AstNodeCategory.TypeGeneric) {
-            val name: Str = xmlAttr(typeNode, AstNodeAttributeKind.Name)
-            return name == "List" || name == "Array" || name == "Dictionary" || name == "SmallVector" || name == "Span"
+        when (kind) {
+            AstNodeCategory.TypeNamed -> {
+                return xmlAttr(typeNode, AstNodeAttributeKind.Name) == "Str"
+            }
+
+            AstNodeCategory.TypeGeneric -> {
+                val name: Str = xmlAttr(typeNode, AstNodeAttributeKind.Name)
+                return name == "List" || name == "Array" || name == "Dictionary" || name == "SmallVector" || name == "Span"
+            }
         }
         return false
     }
@@ -3121,104 +3138,107 @@ data class Emitter(
             }
         }
         val ak: AstNodeCategory = xmlKind(*actualPtr)
-        if (pk == AstNodeCategory.TypeIntLit) {
-            return ak == AstNodeCategory.TypeIntLit && xmlAttr(
-                *actualPtr,
-                AstNodeAttributeKind.Text
-            ) == xmlAttr(pattern, AstNodeAttributeKind.Text)
-        }
-        if (pk == AstNodeCategory.TypeNamed) {
-            if (xmlIsTypeParam(xmlAttr(pattern, AstNodeAttributeKind.Name), typeParams)) {
-                return true
+        when (pk) {
+            AstNodeCategory.TypeIntLit -> {
+                return ak == AstNodeCategory.TypeIntLit && xmlAttr(
+                    *actualPtr,
+                    AstNodeAttributeKind.Text
+                ) == xmlAttr(pattern, AstNodeAttributeKind.Text)
             }
-            return ak == AstNodeCategory.TypeNamed && xmlAttr(*actualPtr, AstNodeAttributeKind.Name) == xmlAttr(
-                pattern,
-                AstNodeAttributeKind.Name
-            )
-        }
-        if (pk == AstNodeCategory.TypeGeneric) {
-            if (xmlIsTypeParam(xmlAttr(pattern, AstNodeAttributeKind.Name), typeParams)) {
-                return true
+
+            AstNodeCategory.TypeNamed -> {
+                if (xmlIsTypeParam(xmlAttr(pattern, AstNodeAttributeKind.Name), typeParams)) {
+                    return true
+                }
+                return ak == AstNodeCategory.TypeNamed && xmlAttr(*actualPtr, AstNodeAttributeKind.Name) == xmlAttr(
+                    pattern,
+                    AstNodeAttributeKind.Name
+                )
             }
-            if (ak != AstNodeCategory.TypeGeneric) {
-                return false
-            }
-            val patternName: Str = xmlAttr(pattern, AstNodeAttributeKind.Name)
-            val actualName: Str = xmlAttr(*actualPtr, AstNodeAttributeKind.Name)
-            if (actualName != patternName
-                && !(patternName == "List" && actualName == "PList")
-                && !(patternName == "PList" && actualName == "List")
-            ) {
-                return false
-            }
-            val patternArgs: List<AstXmlNode> = xmlChildren(pattern, AstNodeKind.TypeArg)
-            val actualArgs: List<AstXmlNode> = xmlChildren(*actualPtr, AstNodeKind.TypeArg)
-            if (patternArgs.size() != actualArgs.size()) {
-                return false
-            }
-            var i: Int = 0
-            while (i < patternArgs.size()) {
-                if (!this.unifyType(*patternArgs[i], *actualArgs[i], typeParams)) {
+
+            AstNodeCategory.TypeGeneric -> {
+                if (xmlIsTypeParam(xmlAttr(pattern, AstNodeAttributeKind.Name), typeParams)) {
+                    return true
+                }
+                if (ak != AstNodeCategory.TypeGeneric) {
                     return false
                 }
-                i = i + 1
+                val patternName: Str = xmlAttr(pattern, AstNodeAttributeKind.Name)
+                val actualName: Str = xmlAttr(*actualPtr, AstNodeAttributeKind.Name)
+                if (actualName != patternName
+                    && !(patternName == "List" && actualName == "PList")
+                    && !(patternName == "PList" && actualName == "List")
+                ) {
+                    return false
+                }
+                val patternArgs: List<AstXmlNode> = xmlChildren(pattern, AstNodeKind.TypeArg)
+                val actualArgs: List<AstXmlNode> = xmlChildren(*actualPtr, AstNodeKind.TypeArg)
+                if (patternArgs.size() != actualArgs.size()) {
+                    return false
+                }
+                var i: Int = 0
+                while (i < patternArgs.size()) {
+                    if (!this.unifyType(*patternArgs[i], *actualArgs[i], typeParams)) {
+                        return false
+                    }
+                    i = i + 1
+                }
+                return true
             }
-            return true
-        }
-        if (pk == AstNodeCategory.TypeReference) {
-            if (ak == AstNodeCategory.TypeReference && !xmlIsEmpty(*xmlChild(*actualPtr, AstNodeKind.Inner))
-                && !xmlIsEmpty(*xmlChild(pattern, AstNodeKind.Inner))
-            ) {
-                return this.unifyType(
-                    *xmlChild(pattern, AstNodeKind.Inner),
-                    *xmlChild(*actualPtr, AstNodeKind.Inner),
-                    typeParams
-                )
+
+            AstNodeCategory.TypeReference -> {
+                if (ak == AstNodeCategory.TypeReference && !xmlIsEmpty(*xmlChild(*actualPtr, AstNodeKind.Inner))
+                    && !xmlIsEmpty(*xmlChild(pattern, AstNodeKind.Inner))
+                ) {
+                    return this.unifyType(
+                        *xmlChild(pattern, AstNodeKind.Inner),
+                        *xmlChild(*actualPtr, AstNodeKind.Inner),
+                        typeParams
+                    )
+                }
+                return false
             }
-            return false
-        }
-        if (pk == AstNodeCategory.TypePointer) {
-            if (ak == AstNodeCategory.TypePointer && !xmlIsEmpty(*xmlChild(*actualPtr, AstNodeKind.Inner))
-                && !xmlIsEmpty(*xmlChild(pattern, AstNodeKind.Inner))
-            ) {
-                return this.unifyType(
-                    *xmlChild(pattern, AstNodeKind.Inner),
-                    *xmlChild(*actualPtr, AstNodeKind.Inner),
-                    typeParams
-                )
+
+            AstNodeCategory.TypePointer -> {
+                if (ak == AstNodeCategory.TypePointer && !xmlIsEmpty(*xmlChild(*actualPtr, AstNodeKind.Inner))
+                    && !xmlIsEmpty(*xmlChild(pattern, AstNodeKind.Inner))
+                ) {
+                    return this.unifyType(
+                        *xmlChild(pattern, AstNodeKind.Inner),
+                        *xmlChild(*actualPtr, AstNodeKind.Inner),
+                        typeParams
+                    )
+                }
+                return false
             }
-            return false
-        }
-        // `..T` is a state machine (impl_specs/yield.md) and carries its element type the
-        // way a pointer carries its pointee, so a pattern `..T` matches `..Int`
-        // element-wise - which is what lets the prelude's `fun ..T.smToYield(): ..T` be
-        // found for a machine.
-        if (pk == AstNodeCategory.TypeYield) {
-            if (ak == AstNodeCategory.TypeYield && !xmlIsEmpty(*xmlChild(*actualPtr, AstNodeKind.Inner))
-                && !xmlIsEmpty(*xmlChild(pattern, AstNodeKind.Inner))
-            ) {
-                return this.unifyType(
-                    *xmlChild(pattern, AstNodeKind.Inner),
-                    *xmlChild(*actualPtr, AstNodeKind.Inner),
-                    typeParams
-                )
+            // `..T` is a state machine (impl_specs/yield.md) and carries its element type the
+            // way a pointer carries its pointee, so a pattern `..T` matches `..Int`
+            // element-wise - which is what lets the prelude's `fun ..T.smToYield(): ..T` be
+            // found for a machine.
+            AstNodeCategory.TypeYield -> {
+                if (ak == AstNodeCategory.TypeYield && !xmlIsEmpty(*xmlChild(*actualPtr, AstNodeKind.Inner))
+                    && !xmlIsEmpty(*xmlChild(pattern, AstNodeKind.Inner))
+                ) {
+                    return this.unifyType(
+                        *xmlChild(pattern, AstNodeKind.Inner),
+                        *xmlChild(*actualPtr, AstNodeKind.Inner),
+                        typeParams
+                    )
+                }
+                return false
             }
-            return false
         }
         return false
     }
 
     fun functionReturn(name: Str): AstXmlNode {
-        var i: Int = 0
-        while (i < this.functions.size()) {
-            val fn: *CgFn = *this.functions[i]
+        for (*fn in this.functions) {
             if (xmlAttr(*fn.decl, AstNodeAttributeKind.Name) == name) {
                 val ret: AstXmlNode = xmlChild(*fn.decl, AstNodeKind.ReturnType)
                 if (!xmlIsEmpty(*ret)) {
                     return ret
                 }
             }
-            i = i + 1
         }
         return xmlEmptyNode()
     }
@@ -3246,16 +3266,13 @@ data class Emitter(
         }
         if (this.nativeExtensions.has(calleeText)) {
             val extensions: List<CgNativeExt> = this.nativeExtensions.get(calleeText).value()
-            var e: Int = 0
-            while (e < extensions.size()) {
-                val ext: *CgNativeExt = *extensions[e]
+            for (*ext in extensions) {
                 if (!xmlIsEmpty(*recv) && !xmlIsEmpty(*ext.receiver)
                     && this.unifyType(*ext.receiver, *recv, *ext.typeParams)
                     && !xmlIsEmpty(*ext.returnType)
                 ) {
                     return ext.returnType
                 }
-                e = e + 1
             }
         }
         if (!xmlIsEmpty(*recv) && xmlKind(*recv) == AstNodeCategory.TypeGeneric) {
@@ -3280,174 +3297,204 @@ data class Emitter(
 
     fun inferType(e: *AstXmlNode): AstXmlNode {
         val kind: AstNodeCategory = xmlKind(e)
-        if (kind == AstNodeCategory.ExprIntLit) {
-            return this.namedType("Int")
-        }
-        if (kind == AstNodeCategory.ExprFloatLit) {
-            return this.namedType("Float64")
-        }
-        if (kind == AstNodeCategory.ExprStrLit) {
-            return this.namedType("Str")
-        }
-        if (kind == AstNodeCategory.ExprCharLit) {
-            return this.namedType("Char")
-        }
-        if (kind == AstNodeCategory.ExprBoolLit) {
-            return this.namedType("Bool")
-        }
-        if (kind == AstNodeCategory.ExprNullLit) {
-            return xmlEmptyNode()
-        }
-        if (kind == AstNodeCategory.ExprName) {
-            val name: Str = xmlAttr(e, AstNodeAttributeKind.Name)
-            if (name == "this") {
-                return this.selfType
+        when (kind) {
+            AstNodeCategory.ExprIntLit -> {
+                return this.namedType("Int")
             }
-            if (this.localTypes.has(name)) {
-                return this.localTypes.get(name).value()
+
+            AstNodeCategory.ExprFloatLit -> {
+                return this.namedType("Float64")
             }
-            val staticNode: AstXmlNode = this.staticType(name)
-            if (!xmlIsEmpty(*staticNode)) {
-                return staticNode
+
+            AstNodeCategory.ExprStrLit -> {
+                return this.namedType("Str")
             }
-            if (this.enumNames.has(name)) {
-                return this.namedType(name)
+
+            AstNodeCategory.ExprCharLit -> {
+                return this.namedType("Char")
             }
-            return xmlEmptyNode()
-        }
-        if (kind == AstNodeCategory.ExprGenericName) {
-            return this.genericTypeExpr(xmlAttr(e, AstNodeAttributeKind.Name), *xmlChildren(e, AstNodeKind.TypeArg))
-        }
-        if (kind == AstNodeCategory.ExprMember) {
-            val lhs: AstXmlNode = xmlChild(e, AstNodeKind.Receiver)
-            if (xmlKind(*lhs) == AstNodeCategory.ExprName && this.enumNames.has(
-                    xmlAttr(
-                        *lhs,
-                        AstNodeAttributeKind.Name
-                    )
-                )
-            ) {
-                return this.namedType(xmlAttr(*lhs, AstNodeAttributeKind.Name))
+
+            AstNodeCategory.ExprBoolLit -> {
+                return this.namedType("Bool")
             }
-            val baseType: AstXmlNode = this.inferType(*lhs)
-            val base: AstXmlNode = this.pointee(*baseType)
-            if (xmlIsEmpty(*base)) {
+
+            AstNodeCategory.ExprNullLit -> {
                 return xmlEmptyNode()
             }
-            val memberText: Str = xmlAttr(e, AstNodeAttributeKind.Name)
-            if (xmlKind(*base) == AstNodeCategory.TypeGeneric && xmlAttr(*base, AstNodeAttributeKind.Name) == "Res") {
-                val typeArgs: List<AstXmlNode> = xmlChildren(*base, AstNodeKind.TypeArg)
-                if (memberText == "value" && typeArgs.size() > 0) {
-                    return typeArgs[0]
+
+            AstNodeCategory.ExprName -> {
+                val name: Str = xmlAttr(e, AstNodeAttributeKind.Name)
+                if (name == "this") {
+                    return this.selfType
                 }
-                if (memberText == "error") {
-                    return this.namedType("Str")
+                if (this.localTypes.has(name)) {
+                    return this.localTypes.get(name).value()
                 }
+                val staticNode: AstXmlNode = this.staticType(name)
+                if (!xmlIsEmpty(*staticNode)) {
+                    return staticNode
+                }
+                if (this.enumNames.has(name)) {
+                    return this.namedType(name)
+                }
+                return xmlEmptyNode()
             }
-            val baseKind: AstNodeCategory = xmlKind(*base)
-            if (baseKind == AstNodeCategory.TypeNamed || baseKind == AstNodeCategory.TypeGeneric) {
-                val baseName: Str = xmlAttr(*base, AstNodeAttributeKind.Name)
-                if (this.types.has(baseName)) {
-                    val decl: AstXmlNode = this.types.get(baseName).value()
-                    if (decl.name == AstNodeKind.DataClass) {
-                        val fields: List<AstXmlNode> = xmlChildren(*decl, AstNodeKind.Field)
-                        var i: Int = 0
-                        while (i < fields.size()) {
-                            if (xmlAttr(*fields[i], AstNodeAttributeKind.Name) == memberText) {
-                                return xmlChild(*fields[i], AstNodeKind.Type)
+
+            AstNodeCategory.ExprGenericName -> {
+                return this.genericTypeExpr(xmlAttr(e, AstNodeAttributeKind.Name), *xmlChildren(e, AstNodeKind.TypeArg))
+            }
+
+            AstNodeCategory.ExprMember -> {
+                val lhs: AstXmlNode = xmlChild(e, AstNodeKind.Receiver)
+                if (xmlKind(*lhs) == AstNodeCategory.ExprName && this.enumNames.has(
+                        xmlAttr(
+                            *lhs,
+                            AstNodeAttributeKind.Name
+                        )
+                    )
+                ) {
+                    return this.namedType(xmlAttr(*lhs, AstNodeAttributeKind.Name))
+                }
+                val baseType: AstXmlNode = this.inferType(*lhs)
+                val base: AstXmlNode = this.pointee(*baseType)
+                if (xmlIsEmpty(*base)) {
+                    return xmlEmptyNode()
+                }
+                val memberText: Str = xmlAttr(e, AstNodeAttributeKind.Name)
+                if (xmlKind(*base) == AstNodeCategory.TypeGeneric && xmlAttr(
+                        *base,
+                        AstNodeAttributeKind.Name
+                    ) == "Res"
+                ) {
+                    val typeArgs: List<AstXmlNode> = xmlChildren(*base, AstNodeKind.TypeArg)
+                    if (memberText == "value" && typeArgs.size() > 0) {
+                        return typeArgs[0]
+                    }
+                    if (memberText == "error") {
+                        return this.namedType("Str")
+                    }
+                }
+                val baseKind: AstNodeCategory = xmlKind(*base)
+                if (baseKind == AstNodeCategory.TypeNamed || baseKind == AstNodeCategory.TypeGeneric) {
+                    val baseName: Str = xmlAttr(*base, AstNodeAttributeKind.Name)
+                    if (this.types.has(baseName)) {
+                        val decl: AstXmlNode = this.types.get(baseName).value()
+                        if (decl.name == AstNodeKind.DataClass) {
+                            val fields: List<AstXmlNode> = xmlChildren(*decl, AstNodeKind.Field)
+                            for (*field in fields) {
+                                if (xmlAttr(field, AstNodeAttributeKind.Name) == memberText) {
+                                    return xmlChild(field, AstNodeKind.Type)
+                                }
                             }
-                            i = i + 1
                         }
                     }
                 }
+                return xmlEmptyNode()
             }
-            return xmlEmptyNode()
-        }
-        if (kind == AstNodeCategory.ExprCall) {
-            val callee: AstXmlNode = xmlChild(e, AstNodeKind.Callee)
-            val calleeKind: AstNodeCategory = xmlKind(*callee)
-            if (calleeKind == AstNodeCategory.ExprGenericName) {
-                val name: Str = xmlAttr(*callee, AstNodeAttributeKind.Name)
-                if (this.types.has(name) || semIsRtlTypeName(name)) {
-                    return this.genericTypeExpr(name, *xmlChildren(*callee, AstNodeKind.TypeArg))
+
+            AstNodeCategory.ExprCall -> {
+                val callee: AstXmlNode = xmlChild(e, AstNodeKind.Callee)
+                val calleeKind: AstNodeCategory = xmlKind(*callee)
+                if (calleeKind == AstNodeCategory.ExprGenericName) {
+                    val name: Str = xmlAttr(*callee, AstNodeAttributeKind.Name)
+                    if (this.types.has(name) || semIsRtlTypeName(name)) {
+                        return this.genericTypeExpr(name, *xmlChildren(*callee, AstNodeKind.TypeArg))
+                    }
+                    return this.functionReturn(name)
                 }
-                return this.functionReturn(name)
-            }
-            if (calleeKind == AstNodeCategory.ExprName) {
-                val name: Str = xmlAttr(*callee, AstNodeAttributeKind.Name)
-                if (this.types.has(name) || semIsRtlTypeName(name)) {
-                    return this.namedType(name)
+                if (calleeKind == AstNodeCategory.ExprName) {
+                    val name: Str = xmlAttr(*callee, AstNodeAttributeKind.Name)
+                    if (this.types.has(name) || semIsRtlTypeName(name)) {
+                        return this.namedType(name)
+                    }
+                    return this.functionReturn(name)
                 }
-                return this.functionReturn(name)
-            }
-            if (calleeKind == AstNodeCategory.ExprMember) {
-                return this.memberCallReturn(*callee)
-            }
-            return xmlEmptyNode()
-        }
-        if (kind == AstNodeCategory.ExprIndex) {
-            val baseType: AstXmlNode = this.inferType(*xmlChild(e, AstNodeKind.Receiver))
-            val base: AstXmlNode = this.pointee(*baseType)
-            if (xmlIsEmpty(*base)) {
+                if (calleeKind == AstNodeCategory.ExprMember) {
+                    return this.memberCallReturn(*callee)
+                }
                 return xmlEmptyNode()
             }
-            if (xmlKind(*base) == AstNodeCategory.TypeNamed && xmlAttr(*base, AstNodeAttributeKind.Name) == "Str") {
-                return this.namedType("Char")
+
+            AstNodeCategory.ExprIndex -> {
+                val baseType: AstXmlNode = this.inferType(*xmlChild(e, AstNodeKind.Receiver))
+                val base: AstXmlNode = this.pointee(*baseType)
+                if (xmlIsEmpty(*base)) {
+                    return xmlEmptyNode()
+                }
+                if (xmlKind(*base) == AstNodeCategory.TypeNamed && xmlAttr(*base, AstNodeAttributeKind.Name) == "Str") {
+                    return this.namedType("Char")
+                }
+                if (xmlKind(*base) != AstNodeCategory.TypeGeneric) {
+                    return xmlEmptyNode()
+                }
+                val typeArgs: List<AstXmlNode> = xmlChildren(*base, AstNodeKind.TypeArg)
+                if (typeArgs.size() == 0) {
+                    return xmlEmptyNode()
+                }
+                val baseName: Str = xmlAttr(*base, AstNodeAttributeKind.Name)
+                if (baseName == "SmallVector" && typeArgs.size() == 2) {
+                    return typeArgs[1]
+                }
+                if (baseName == "Dictionary" && typeArgs.size() == 2) {
+                    return typeArgs[1]
+                }
+                return typeArgs[0]
             }
-            if (xmlKind(*base) != AstNodeCategory.TypeGeneric) {
-                return xmlEmptyNode()
+
+            AstNodeCategory.ExprRef -> {
+                var node: AstXmlNode = AstXmlNode(
+                    AstNodeKind.Type,
+                    AstNodeCategory.TypeReference,
+                    List<AstNodeAttribute>(),
+                    Array<AstXmlNode>()
+                )
+                xmlAddChild(
+                    *node,
+                    this.renameRole(*this.inferType(*xmlChild(e, AstNodeKind.Operand)), AstNodeKind.Inner)
+                )
+                return node
             }
-            val typeArgs: List<AstXmlNode> = xmlChildren(*base, AstNodeKind.TypeArg)
-            if (typeArgs.size() == 0) {
-                return xmlEmptyNode()
+
+            AstNodeCategory.ExprDeref -> {
+                var node: AstXmlNode =
+                    AstXmlNode(
+                        AstNodeKind.Type,
+                        AstNodeCategory.TypePointer,
+                        List<AstNodeAttribute>(),
+                        Array<AstXmlNode>()
+                    )
+                xmlAddChild(
+                    *node,
+                    this.renameRole(*this.inferType(*xmlChild(e, AstNodeKind.Operand)), AstNodeKind.Inner)
+                )
+                return node
             }
-            val baseName: Str = xmlAttr(*base, AstNodeAttributeKind.Name)
-            if (baseName == "SmallVector" && typeArgs.size() == 2) {
-                return typeArgs[1]
+
+            AstNodeCategory.ExprCopy, AstNodeCategory.ExprUnary -> {
+                return this.inferType(*xmlChild(e, AstNodeKind.Operand))
             }
-            if (baseName == "Dictionary" && typeArgs.size() == 2) {
-                return typeArgs[1]
+
+            AstNodeCategory.ExprBinary -> {
+                val op: Str = xmlAttr(e, AstNodeAttributeKind.Op)
+                if (op == "==" || op == "!=" || op == "<" || op == ">" || op == "<=" || op == ">="
+                    || op == "&&" || op == "||"
+                ) {
+                    return this.namedType("Bool")
+                }
+                return this.inferType(*xmlChild(e, AstNodeKind.Lhs))
             }
-            return typeArgs[0]
-        }
-        if (kind == AstNodeCategory.ExprRef) {
-            var node: AstXmlNode = AstXmlNode(
-                AstNodeKind.Type,
-                AstNodeCategory.TypeReference,
-                List<AstNodeAttribute>(),
-                Array<AstXmlNode>()
-            )
-            xmlAddChild(*node, this.renameRole(*this.inferType(*xmlChild(e, AstNodeKind.Operand)), AstNodeKind.Inner))
-            return node
-        }
-        if (kind == AstNodeCategory.ExprDeref) {
-            var node: AstXmlNode =
-                AstXmlNode(AstNodeKind.Type, AstNodeCategory.TypePointer, List<AstNodeAttribute>(), Array<AstXmlNode>())
-            xmlAddChild(*node, this.renameRole(*this.inferType(*xmlChild(e, AstNodeKind.Operand)), AstNodeKind.Inner))
-            return node
-        }
-        if (kind == AstNodeCategory.ExprCopy || kind == AstNodeCategory.ExprUnary) {
-            return this.inferType(*xmlChild(e, AstNodeKind.Operand))
-        }
-        if (kind == AstNodeCategory.ExprBinary) {
-            val op: Str = xmlAttr(e, AstNodeAttributeKind.Op)
-            if (op == "==" || op == "!=" || op == "<" || op == ">" || op == "<=" || op == ">="
-                || op == "&&" || op == "||"
-            ) {
-                return this.namedType("Bool")
+
+            AstNodeCategory.ExprLambda -> {
+                var fnType: AstXmlNode = AstXmlNode(
+                    AstNodeKind.Type,
+                    AstNodeCategory.TypeFunction,
+                    List<AstNodeAttribute>(),
+                    Array<AstXmlNode>()
+                )
+                val paramTypes: List<AstXmlNode> = xmlChildren(e, AstNodeKind.ParamType)
+                xmlAddChildren(*fnType, *paramTypes)
+                return fnType
             }
-            return this.inferType(*xmlChild(e, AstNodeKind.Lhs))
-        }
-        if (kind == AstNodeCategory.ExprLambda) {
-            var fnType: AstXmlNode = AstXmlNode(
-                AstNodeKind.Type,
-                AstNodeCategory.TypeFunction,
-                List<AstNodeAttribute>(),
-                Array<AstXmlNode>()
-            )
-            val paramTypes: List<AstXmlNode> = xmlChildren(e, AstNodeKind.ParamType)
-            xmlAddChildren(*fnType, *paramTypes)
-            return fnType
         }
         return xmlEmptyNode()
     }
@@ -3691,211 +3738,231 @@ data class Emitter(
 
     fun exprInner(e: *AstXmlNode, expected: *AstXmlNode): Str {
         val kind: AstNodeCategory = xmlKind(e)
-        if (kind == AstNodeCategory.ExprIntLit || kind == AstNodeCategory.ExprFloatLit
-            || kind == AstNodeCategory.ExprCharLit
-        ) {
-            return xmlAttr(e, AstNodeAttributeKind.Text)
-        }
-        if (kind == AstNodeCategory.ExprStrLit) {
-            // A table entry is a `const Str` *glvalue*: a comparison or a `const Str&`
-            // parameter binds it without building anything, while an owned position copies
-            // it exactly as it copied the literal.
-            val text: Str = xmlAttr(e, AstNodeAttributeKind.Text)
-            if (this.literalAt.has(text)) {
-                return "__sm_stringTable[" + this.literalAt.get(text).value().toString() + "]"
+        when (kind) {
+            AstNodeCategory.ExprIntLit, AstNodeCategory.ExprFloatLit, AstNodeCategory.ExprCharLit -> {
+                return xmlAttr(e, AstNodeAttributeKind.Text)
             }
-            return text
-        }
-        if (kind == AstNodeCategory.ExprBoolLit) {
-            return xmlAttr(e, AstNodeAttributeKind.Value)
-        }
-        if (kind == AstNodeCategory.ExprNullLit) {
-            return this.nullTo(expected)
-        }
-        if (kind == AstNodeCategory.ExprName) {
-            val name: Str = xmlAttr(e, AstNodeAttributeKind.Name)
-            if (name == "this") {
-                // The receiver is the *object* in the language and a raw pointer in the
-                // emitted code when it is a value receiver (`T* self`), so reading it
-                // reads through the pointer; a handle receiver is its handle. Inside a
-                // closure class the receiver is C++'s `this`.
-                if (this.inClosureMethod) {
-                    if (this.selfKind == NameKind.Value) {
-                        return "(*this)"
+
+            AstNodeCategory.ExprStrLit -> {
+                // A table entry is a `const Str` *glvalue*: a comparison or a `const Str&`
+                // parameter binds it without building anything, while an owned position copies
+                // it exactly as it copied the literal.
+                val text: Str = xmlAttr(e, AstNodeAttributeKind.Text)
+                if (this.literalAt.has(text)) {
+                    return "__sm_stringTable[" + this.literalAt.get(text).value().toString() + "]"
+                }
+                return text
+            }
+
+            AstNodeCategory.ExprBoolLit -> {
+                return xmlAttr(e, AstNodeAttributeKind.Value)
+            }
+
+            AstNodeCategory.ExprNullLit -> {
+                return this.nullTo(expected)
+            }
+
+            AstNodeCategory.ExprName -> {
+                val name: Str = xmlAttr(e, AstNodeAttributeKind.Name)
+                if (name == "this") {
+                    // The receiver is the *object* in the language and a raw pointer in the
+                    // emitted code when it is a value receiver (`T* self`), so reading it
+                    // reads through the pointer; a handle receiver is its handle. Inside a
+                    // closure class the receiver is C++'s `this`.
+                    if (this.inClosureMethod) {
+                        if (this.selfKind == NameKind.Value) {
+                            return "(*this)"
+                        }
+                        return "this"
                     }
-                    return "this"
+                    if (this.selfKind == NameKind.Value) {
+                        return "(*self)"
+                    }
+                    return "self"
                 }
-                if (this.selfKind == NameKind.Value) {
-                    return "(*self)"
+                if (this.localTypes.has(name)) {
+                    return name
                 }
-                return "self"
-            }
-            if (this.localTypes.has(name)) {
+                // A file-level static is emitted under its package's prefix; a bare
+                // name that is not a local is otherwise a reference to a top-level
+                // function used as a value (e.g. a callable argument), so it carries
+                // that function's prefix, and a known prelude native resolves to its
+                // symbol instead.
+                if (this.staticsByName.has(name)) {
+                    return this.qualify(this.staticsByName.get(name).value().packageName, name)
+                }
+                val pkg: Str = this.functionPackage(name)
+                if (pkg != "") {
+                    return this.qualify(pkg, name)
+                }
+                val nativeOpt: Opt<Str> = this.nativeSymbols.get(name)
+                if (nativeOpt.hasValue()) {
+                    return nativeOpt.value()
+                }
                 return name
             }
-            // A file-level static is emitted under its package's prefix; a bare
-            // name that is not a local is otherwise a reference to a top-level
-            // function used as a value (e.g. a callable argument), so it carries
-            // that function's prefix, and a known prelude native resolves to its
-            // symbol instead.
-            if (this.staticsByName.has(name)) {
-                return this.qualify(this.staticsByName.get(name).value().packageName, name)
+
+            AstNodeCategory.ExprGenericName -> {
+                this.fail(
+                    e,
+                    "unsupported: generic-qualified expression '" + xmlAttr(e, AstNodeAttributeKind.Name) + "<...>'"
+                )
+                return "/*unsupported*/"
             }
-            val pkg: Str = this.functionPackage(name)
-            if (pkg != "") {
-                return this.qualify(pkg, name)
-            }
-            val nativeOpt: Opt<Str> = this.nativeSymbols.get(name)
-            if (nativeOpt.hasValue()) {
-                return nativeOpt.value()
-            }
-            return name
-        }
-        if (kind == AstNodeCategory.ExprGenericName) {
-            this.fail(
-                e,
-                "unsupported: generic-qualified expression '" + xmlAttr(e, AstNodeAttributeKind.Name) + "<...>'"
-            )
-            return "/*unsupported*/"
-        }
-        if (kind == AstNodeCategory.ExprMember) {
-            val lhs: AstXmlNode = xmlChild(e, AstNodeKind.Receiver)
-            if (xmlKind(*lhs) == AstNodeCategory.ExprName && this.enumNames.has(
-                    xmlAttr(
-                        *lhs,
+
+            AstNodeCategory.ExprMember -> {
+                val lhs: AstXmlNode = xmlChild(e, AstNodeKind.Receiver)
+                if (xmlKind(*lhs) == AstNodeCategory.ExprName && this.enumNames.has(
+                        xmlAttr(
+                            *lhs,
+                            AstNodeAttributeKind.Name
+                        )
+                    )
+                ) {
+                    val enumName: Str = xmlAttr(*lhs, AstNodeAttributeKind.Name)
+                    return this.qualify(this.typePackage(enumName), enumName) + "::" + xmlAttr(
+                        e,
                         AstNodeAttributeKind.Name
                     )
+                }
+                return this.memberAccess(*lhs, xmlAttr(e, AstNodeAttributeKind.Name))
+            }
+
+            AstNodeCategory.ExprCall -> {
+                return this.call(e)
+            }
+
+            AstNodeCategory.ExprIndex -> {
+                val lhs: AstXmlNode = xmlChild(e, AstNodeKind.Receiver)
+                val baseExpr: Str = this.expr(*lhs, 9, *xmlEmptyNode())
+                val baseType: AstXmlNode = this.inferType(*lhs)
+                var deref: Bool = false
+                if (!xmlIsEmpty(*baseType)) {
+                    if (this.isHandleType(*baseType) && xmlKind(*baseType) != AstNodeCategory.TypePointer) {
+                        deref = true
+                    } else if (xmlKind(*baseType) == AstNodeCategory.TypePointer) {
+                        deref = this.isIndexableContainer(*xmlChild(*baseType, AstNodeKind.Inner))
+                    }
+                }
+                if (deref) {
+                    return "(*" + baseExpr + ")[" + this.expr(*xmlChild(e, AstNodeKind.Index), 0, *xmlEmptyNode()) + "]"
+                }
+                return baseExpr + "[" + this.expr(*xmlChild(e, AstNodeKind.Index), 0, *xmlEmptyNode()) + "]"
+            }
+
+            AstNodeCategory.ExprUnary -> {
+                return xmlAttr(e, AstNodeAttributeKind.Op) + this.expr(
+                    *xmlChild(e, AstNodeKind.Operand),
+                    7,
+                    *xmlEmptyNode()
                 )
-            ) {
-                val enumName: Str = xmlAttr(*lhs, AstNodeAttributeKind.Name)
-                return this.qualify(this.typePackage(enumName), enumName) + "::" + xmlAttr(e, AstNodeAttributeKind.Name)
             }
-            return this.memberAccess(*lhs, xmlAttr(e, AstNodeAttributeKind.Name))
-        }
-        if (kind == AstNodeCategory.ExprCall) {
-            return this.call(e)
-        }
-        if (kind == AstNodeCategory.ExprIndex) {
-            val lhs: AstXmlNode = xmlChild(e, AstNodeKind.Receiver)
-            val baseExpr: Str = this.expr(*lhs, 9, *xmlEmptyNode())
-            val baseType: AstXmlNode = this.inferType(*lhs)
-            var deref: Bool = false
-            if (!xmlIsEmpty(*baseType)) {
-                if (this.isHandleType(*baseType) && xmlKind(*baseType) != AstNodeCategory.TypePointer) {
-                    deref = true
-                } else if (xmlKind(*baseType) == AstNodeCategory.TypePointer) {
-                    deref = this.isIndexableContainer(*xmlChild(*baseType, AstNodeKind.Inner))
+
+            AstNodeCategory.ExprBinary -> {
+                val lhs: AstXmlNode = xmlChild(e, AstNodeKind.Lhs)
+                val rhs: AstXmlNode = xmlChild(e, AstNodeKind.Rhs)
+                val op: Str = xmlAttr(e, AstNodeAttributeKind.Op)
+                if (xmlKind(*lhs) == AstNodeCategory.ExprNullLit || xmlKind(*rhs) == AstNodeCategory.ExprNullLit) {
+                    var other: AstXmlNode = lhs
+                    if (xmlKind(*lhs) == AstNodeCategory.ExprNullLit) {
+                        other = rhs
+                    }
+                    val otherType: AstXmlNode = this.pointee(*this.inferType(*other))
+                    if (!xmlIsEmpty(*otherType) && xmlKind(*otherType) == AstNodeCategory.TypeGeneric
+                        && xmlAttr(*otherType, AstNodeAttributeKind.Name) == "Opt"
+                    ) {
+                        val hasValue: Str = this.expr(*other, 9, *xmlEmptyNode()) + ".hasValue()"
+                        if (op == "==") {
+                            return "!(" + hasValue + ")"
+                        }
+                        if (op == "!=") {
+                            return "(" + hasValue + ")"
+                        }
+                        this.fail(e, "unsupported: Opt-vs-null comparison '" + op + "'")
+                        return "/*unsupported*/"
+                    }
                 }
-            }
-            if (deref) {
-                return "(*" + baseExpr + ")[" + this.expr(*xmlChild(e, AstNodeKind.Index), 0, *xmlEmptyNode()) + "]"
-            }
-            return baseExpr + "[" + this.expr(*xmlChild(e, AstNodeKind.Index), 0, *xmlEmptyNode()) + "]"
-        }
-        if (kind == AstNodeCategory.ExprUnary) {
-            return xmlAttr(e, AstNodeAttributeKind.Op) + this.expr(
-                *xmlChild(e, AstNodeKind.Operand),
-                7,
-                *xmlEmptyNode()
-            )
-        }
-        if (kind == AstNodeCategory.ExprBinary) {
-            val lhs: AstXmlNode = xmlChild(e, AstNodeKind.Lhs)
-            val rhs: AstXmlNode = xmlChild(e, AstNodeKind.Rhs)
-            val op: Str = xmlAttr(e, AstNodeAttributeKind.Op)
-            if (xmlKind(*lhs) == AstNodeCategory.ExprNullLit || xmlKind(*rhs) == AstNodeCategory.ExprNullLit) {
-                var other: AstXmlNode = lhs
+                val p: Int = cgPrecedence(e)
+                var lhsExpected: AstXmlNode = xmlEmptyNode()
                 if (xmlKind(*lhs) == AstNodeCategory.ExprNullLit) {
-                    other = rhs
+                    lhsExpected = this.inferType(*rhs)
                 }
-                val otherType: AstXmlNode = this.pointee(*this.inferType(*other))
-                if (!xmlIsEmpty(*otherType) && xmlKind(*otherType) == AstNodeCategory.TypeGeneric
-                    && xmlAttr(*otherType, AstNodeAttributeKind.Name) == "Opt"
-                ) {
-                    val hasValue: Str = this.expr(*other, 9, *xmlEmptyNode()) + ".hasValue()"
-                    if (op == "==") {
-                        return "!(" + hasValue + ")"
+                var rhsExpected: AstXmlNode = xmlEmptyNode()
+                if (xmlKind(*rhs) == AstNodeCategory.ExprNullLit) {
+                    rhsExpected = this.inferType(*lhs)
+                }
+                return this.expr(*lhs, p, *lhsExpected) + " " + op + " " + this.expr(*rhs, p + 1, *rhsExpected)
+            }
+
+            AstNodeCategory.ExprLambda -> {
+                // A lambda is a closure *class* here, built by the instruction list; an
+                // expression node reaching this point means the lowering did not turn it into
+                // one (impl_specs/linear-il.md).
+                this.fail(e, "unsupported: a lambda outside a closure construction")
+                return "/*unsupported*/"
+            }
+
+            AstNodeCategory.ExprRef -> {
+                val operandNode: AstXmlNode = xmlChild(e, AstNodeKind.Operand)
+                if (xmlKind(*operandNode) == AstNodeCategory.ExprCall) {
+                    val callee: AstXmlNode = xmlChild(*operandNode, AstNodeKind.Callee)
+                    if (xmlKind(*callee) == AstNodeCategory.ExprGenericName && xmlAttr(
+                            *callee,
+                            AstNodeAttributeKind.Name
+                        ) == "List"
+                        && xmlCount(*operandNode, AstNodeKind.Arg) == 0
+                    ) {
+                        return "makeList<" + this.typeArgsString(
+                            "List",
+                            *xmlChildren(*callee, AstNodeKind.TypeArg)
+                        ) + ">()"
                     }
-                    if (op == "!=") {
-                        return "(" + hasValue + ")"
+                }
+                val operand: Str = this.expr(*operandNode, 0, *xmlEmptyNode())
+                return "std::make_shared<std::remove_cvref_t<decltype((" + operand + "))>>(" + operand + ")"
+            }
+
+            AstNodeCategory.ExprDeref -> {
+                val operandNode: AstXmlNode = xmlChild(e, AstNodeKind.Operand)
+                val operand: Str = this.expr(*operandNode, 7, *xmlEmptyNode())
+                val operandType: AstXmlNode = this.inferType(*operandNode)
+                var nameKind: NameKind = NameKind.Value
+                if (!xmlIsEmpty(*operandType)) {
+                    nameKind = this.kindOf(*operandType)
+                } else {
+                    nameKind = this.operandKind(*operandNode)
+                }
+                if (nameKind == NameKind.Shared) {
+                    return "(" + operand + ").get()"
+                }
+                if (nameKind == NameKind.Value) {
+                    // `*value` is the raw-pointer form: the address of the value, no
+                    // copy (specs/memory-model.md). A plain name is an lvalue, so
+                    // `&name`; anything else may be a temporary, which
+                    // simse_addressOf binds for the call.
+                    if (xmlKind(*operandNode) == AstNodeCategory.ExprName) {
+                        return "&" + operand
                     }
-                    this.fail(e, "unsupported: Opt-vs-null comparison '" + op + "'")
-                    return "/*unsupported*/"
+                    return "simse_addressOf(" + operand + ")"
                 }
+                return "*" + operand
             }
-            val p: Int = cgPrecedence(e)
-            var lhsExpected: AstXmlNode = xmlEmptyNode()
-            if (xmlKind(*lhs) == AstNodeCategory.ExprNullLit) {
-                lhsExpected = this.inferType(*rhs)
-            }
-            var rhsExpected: AstXmlNode = xmlEmptyNode()
-            if (xmlKind(*rhs) == AstNodeCategory.ExprNullLit) {
-                rhsExpected = this.inferType(*lhs)
-            }
-            return this.expr(*lhs, p, *lhsExpected) + " " + op + " " + this.expr(*rhs, p + 1, *rhsExpected)
-        }
-        if (kind == AstNodeCategory.ExprLambda) {
-            // A lambda is a closure *class* here, built by the instruction list; an
-            // expression node reaching this point means the lowering did not turn it into
-            // one (impl_specs/linear-il.md).
-            this.fail(e, "unsupported: a lambda outside a closure construction")
-            return "/*unsupported*/"
-        }
-        if (kind == AstNodeCategory.ExprRef) {
-            val operandNode: AstXmlNode = xmlChild(e, AstNodeKind.Operand)
-            if (xmlKind(*operandNode) == AstNodeCategory.ExprCall) {
-                val callee: AstXmlNode = xmlChild(*operandNode, AstNodeKind.Callee)
-                if (xmlKind(*callee) == AstNodeCategory.ExprGenericName && xmlAttr(
-                        *callee,
-                        AstNodeAttributeKind.Name
-                    ) == "List"
-                    && xmlCount(*operandNode, AstNodeKind.Arg) == 0
-                ) {
-                    return "makeList<" + this.typeArgsString("List", *xmlChildren(*callee, AstNodeKind.TypeArg)) + ">()"
+
+            AstNodeCategory.ExprCopy -> {
+                val operandNode: AstXmlNode = xmlChild(e, AstNodeKind.Operand)
+                val operand: Str = this.expr(*operandNode, 0, *xmlEmptyNode())
+                val operandType: AstXmlNode = this.inferType(*operandNode)
+                var nameKind: NameKind = NameKind.Value
+                if (!xmlIsEmpty(*operandType)) {
+                    nameKind = this.kindOf(*operandType)
+                } else {
+                    nameKind = this.operandKind(*operandNode)
                 }
-            }
-            val operand: Str = this.expr(*operandNode, 0, *xmlEmptyNode())
-            return "std::make_shared<std::remove_cvref_t<decltype((" + operand + "))>>(" + operand + ")"
-        }
-        if (kind == AstNodeCategory.ExprDeref) {
-            val operandNode: AstXmlNode = xmlChild(e, AstNodeKind.Operand)
-            val operand: Str = this.expr(*operandNode, 7, *xmlEmptyNode())
-            val operandType: AstXmlNode = this.inferType(*operandNode)
-            var nameKind: NameKind = NameKind.Value
-            if (!xmlIsEmpty(*operandType)) {
-                nameKind = this.kindOf(*operandType)
-            } else {
-                nameKind = this.operandKind(*operandNode)
-            }
-            if (nameKind == NameKind.Shared) {
-                return "(" + operand + ").get()"
-            }
-            if (nameKind == NameKind.Value) {
-                // `*value` is the raw-pointer form: the address of the value, no
-                // copy (specs/memory-model.md). A plain name is an lvalue, so
-                // `&name`; anything else may be a temporary, which
-                // simse_addressOf binds for the call.
-                if (xmlKind(*operandNode) == AstNodeCategory.ExprName) {
-                    return "&" + operand
+                if (nameKind == NameKind.Shared || nameKind == NameKind.Pointer) {
+                    return "*(" + operand + ")"
                 }
-                return "simse_addressOf(" + operand + ")"
+                return "(" + operand + ")"
             }
-            return "*" + operand
-        }
-        if (kind == AstNodeCategory.ExprCopy) {
-            val operandNode: AstXmlNode = xmlChild(e, AstNodeKind.Operand)
-            val operand: Str = this.expr(*operandNode, 0, *xmlEmptyNode())
-            val operandType: AstXmlNode = this.inferType(*operandNode)
-            var nameKind: NameKind = NameKind.Value
-            if (!xmlIsEmpty(*operandType)) {
-                nameKind = this.kindOf(*operandType)
-            } else {
-                nameKind = this.operandKind(*operandNode)
-            }
-            if (nameKind == NameKind.Shared || nameKind == NameKind.Pointer) {
-                return "*(" + operand + ")"
-            }
-            return "(" + operand + ")"
         }
         return "/*unsupported*/"
     }
@@ -3905,194 +3972,191 @@ data class Emitter(
         val calleeKind: AstNodeCategory = xmlKind(*callee)
         val argNodes: List<AstXmlNode> = xmlChildren(e, AstNodeKind.Arg)
 
-        if (calleeKind == AstNodeCategory.ExprGenericName) {
-            var args: List<Str> = List<Str>()
-            var i: Int = 0
-            while (i < argNodes.size()) {
-                args.append(this.expr(*argNodes[i], 0, *xmlEmptyNode()))
-                i = i + 1
-            }
-            val name: Str = xmlAttr(*callee, AstNodeAttributeKind.Name)
-            var calleeName: Str = this.qualify(this.functionPackage(name), name)
-            val nativeOpt: Opt<Str> = this.nativeSymbols.get(name)
-            var hasPlainFunction: Bool = false
-            var f: Int = 0
-            while (f < this.functions.size()) {
-                val candidate: *CgFn = *this.functions[f]
-                if (xmlAttr(*candidate.decl, AstNodeAttributeKind.IsNative) != "true"
-                    && xmlAttr(*candidate.decl, AstNodeAttributeKind.Name) == name
-                ) {
-                    hasPlainFunction = true
+        when (calleeKind) {
+            AstNodeCategory.ExprGenericName -> {
+                var args: List<Str> = List<Str>()
+                for (*argNode in argNodes) {
+                    args.append(this.expr(argNode, 0, *xmlEmptyNode()))
                 }
-                f = f + 1
-            }
-            if (!hasPlainFunction && nativeOpt.hasValue()) {
-                calleeName = nativeOpt.value()
-            }
-            if (this.dataClassNames.has(name)) {
-                calleeName = this.qualify(this.typePackage(name), "_make_" + name)
-            }
-            return calleeName + "<" + this.typeArgsString(name, *xmlChildren(*callee, AstNodeKind.TypeArg))
-            +">(" + cgJoin(*args, ", ") + ")"
-        }
-        if (calleeKind == AstNodeCategory.ExprName) {
-            val name: Str = xmlAttr(*callee, AstNodeAttributeKind.Name)
-            if (name == "println" || name == "print") {
-                var arg: Str = ""
-                if (argNodes.size() > 0) {
-                    arg = this.expr(*argNodes[0], 0, *xmlEmptyNode())
+                val name: Str = xmlAttr(*callee, AstNodeAttributeKind.Name)
+                var calleeName: Str = this.qualify(this.functionPackage(name), name)
+                val nativeOpt: Opt<Str> = this.nativeSymbols.get(name)
+                var hasPlainFunction: Bool = false
+                for (*candidate in this.functions) {
+                    if (xmlAttr(*candidate.decl, AstNodeAttributeKind.IsNative) != "true"
+                        && xmlAttr(*candidate.decl, AstNodeAttributeKind.Name) == name
+                    ) {
+                        hasPlainFunction = true
+                    }
                 }
-                var s: Str = "std::cout << std::boolalpha << (" + arg + ")"
-                if (name == "println") {
-                    s = s + " << std::endl"
+                if (!hasPlainFunction && nativeOpt.hasValue()) {
+                    calleeName = nativeOpt.value()
                 }
-                return s
-            }
-            val target: AstXmlNode = this.findFunction(name, argNodes.size())
-            var args: List<Str> = List<Str>()
-            val targetParams: List<AstXmlNode> = xmlChildren(*target, AstNodeKind.Param)
-            val targetReceiver: AstXmlNode = xmlChild(*target, AstNodeKind.Receiver)
-            var i: Int = 0
-            while (i < argNodes.size()) {
-                var expectedArg: AstXmlNode = xmlEmptyNode()
-                if (!xmlIsEmpty(*target) && i < targetParams.size()) {
-                    expectedArg = xmlChild(*targetParams[i], AstNodeKind.Type)
+                if (this.dataClassNames.has(name)) {
+                    calleeName = this.qualify(this.typePackage(name), "_make_" + name)
                 }
-                // A receiver function called by name takes the receiver first, and a
-                // value receiver is a raw pointer in the emitted code (`T* self`), so
-                // that argument is the object's address.
-                if (i == 0 && !xmlIsEmpty(*targetReceiver)
-                    && xmlAttr(*target, AstNodeAttributeKind.HasReceiver) == "true"
-                    && !this.isHandleType(*targetReceiver)
-                ) {
-                    args.append(this.receiverArg(*targetReceiver, *argNodes[0]))
-                } else {
-                    args.append(this.expr(*argNodes[i], 0, *expectedArg))
-                }
-                i = i + 1
-            }
-            val nativeOpt: Opt<Str> = this.nativeSymbols.get(name)
-            var hasPlainFunction: Bool = false
-            var f: Int = 0
-            while (f < this.functions.size()) {
-                val candidate: *CgFn = *this.functions[f]
-                if (xmlAttr(*candidate.decl, AstNodeAttributeKind.IsNative) != "true"
-                    && xmlAttr(*candidate.decl, AstNodeAttributeKind.Name) == name
-                ) {
-                    hasPlainFunction = true
-                }
-                f = f + 1
-            }
-            var calleeName: Str = this.qualify(this.functionPackage(name), name)
-            if (!hasPlainFunction && nativeOpt.hasValue()) {
-                calleeName = nativeOpt.value()
-            }
-            if (this.dataClassNames.has(name)) {
-                calleeName = this.qualify(this.typePackage(name), "_make_" + name)
-            }
-            return calleeName + "(" + cgJoin(*args, ", ") + ")"
-        }
-        if (calleeKind == AstNodeCategory.ExprMember) {
-            var args: List<Str> = List<Str>()
-            var i: Int = 0
-            while (i < argNodes.size()) {
-                args.append(this.expr(*argNodes[i], 0, *xmlEmptyNode()))
-                i = i + 1
-            }
-            val calleeText: Str = xmlAttr(*callee, AstNodeAttributeKind.Name)
-            val receiverExpr: AstXmlNode = xmlChild(*callee, AstNodeKind.Receiver)
-
-            // Machine identity: `x.smToYield()` on a machine *is* `x`. That is the wrap a
-            // `for` puts around what it iterates, and `..T` is not a spellable type, so the
-            // identity is the backend's rather than a function's (impl_specs/for.md).
-            if (calleeText == "smToYield") {
-                val identityRecv: AstXmlNode = this.pointee(*this.inferType(*receiverExpr))
-                if (!xmlIsEmpty(*identityRecv) && xmlKind(*identityRecv) == AstNodeCategory.TypeYield) {
-                    return this.expr(*receiverExpr, 0, *xmlEmptyNode())
-                }
+                return calleeName + "<" + this.typeArgsString(name, *xmlChildren(*callee, AstNodeKind.TypeArg))
+                +">(" + cgJoin(*args, ", ") + ")"
             }
 
-            // Enum conversions: `x.toInt()` and `Enum.fromInt(v)`.
-            if (calleeText == "toInt") {
-                val enumReceiver: AstXmlNode = this.pointee(*this.inferType(*receiverExpr))
-                if (!xmlIsEmpty(*enumReceiver) && xmlKind(*enumReceiver) == AstNodeCategory.TypeNamed
-                    && this.enumNames.has(xmlAttr(*enumReceiver, AstNodeAttributeKind.Name))
-                ) {
-                    return "static_cast<Int>(" + this.expr(*receiverExpr, 9, *xmlEmptyNode()) + ")"
+            AstNodeCategory.ExprName -> {
+                val name: Str = xmlAttr(*callee, AstNodeAttributeKind.Name)
+                if (name == "println" || name == "print") {
+                    var arg: Str = ""
+                    if (argNodes.size() > 0) {
+                        arg = this.expr(*argNodes[0], 0, *xmlEmptyNode())
+                    }
+                    var s: Str = "std::cout << std::boolalpha << (" + arg + ")"
+                    if (name == "println") {
+                        s = s + " << std::endl"
+                    }
+                    return s
                 }
-            }
-            if (calleeText == "fromInt" && xmlKind(*receiverExpr) == AstNodeCategory.ExprName
-                && this.enumNames.has(xmlAttr(*receiverExpr, AstNodeAttributeKind.Name))
-            ) {
-                val enumName: Str = xmlAttr(*receiverExpr, AstNodeAttributeKind.Name)
-                return this.qualify(this.typePackage(enumName), "simse_" + enumName + "_fromInt")
-                +"(" + cgJoin(*args, ", ") + ")"
-            }
-            if (xmlKind(*receiverExpr) == AstNodeCategory.ExprGenericName) {
-                val genericName: Str = xmlAttr(*receiverExpr, AstNodeAttributeKind.Name)
-                return this.qualify(this.typePackage(genericName), genericName) + "<"
-                +this.typeArgsString(genericName, *xmlChildren(*receiverExpr, AstNodeKind.TypeArg))
-                +">::" + calleeText + "(" + cgJoin(*args, ", ") + ")"
+                val target: AstXmlNode = this.findFunction(name, argNodes.size())
+                var args: List<Str> = List<Str>()
+                val targetParams: List<AstXmlNode> = xmlChildren(*target, AstNodeKind.Param)
+                val targetReceiver: AstXmlNode = xmlChild(*target, AstNodeKind.Receiver)
+                var i: Int = 0
+                while (i < argNodes.size()) {
+                    var expectedArg: AstXmlNode = xmlEmptyNode()
+                    if (!xmlIsEmpty(*target) && i < targetParams.size()) {
+                        expectedArg = xmlChild(*targetParams[i], AstNodeKind.Type)
+                    }
+                    // A receiver function called by name takes the receiver first, and a
+                    // value receiver is a raw pointer in the emitted code (`T* self`), so
+                    // that argument is the object's address.
+                    if (i == 0 && !xmlIsEmpty(*targetReceiver)
+                        && xmlAttr(*target, AstNodeAttributeKind.HasReceiver) == "true"
+                        && !this.isHandleType(*targetReceiver)
+                    ) {
+                        args.append(this.receiverArg(*targetReceiver, *argNodes[0]))
+                    } else {
+                        args.append(this.expr(*argNodes[i], 0, *expectedArg))
+                    }
+                    i = i + 1
+                }
+                val nativeOpt: Opt<Str> = this.nativeSymbols.get(name)
+                var hasPlainFunction: Bool = false
+                for (*candidate in this.functions) {
+                    if (xmlAttr(*candidate.decl, AstNodeAttributeKind.IsNative) != "true"
+                        && xmlAttr(*candidate.decl, AstNodeAttributeKind.Name) == name
+                    ) {
+                        hasPlainFunction = true
+                    }
+                }
+                var calleeName: Str = this.qualify(this.functionPackage(name), name)
+                if (!hasPlainFunction && nativeOpt.hasValue()) {
+                    calleeName = nativeOpt.value()
+                }
+                if (this.dataClassNames.has(name)) {
+                    calleeName = this.qualify(this.typePackage(name), "_make_" + name)
+                }
+                return calleeName + "(" + cgJoin(*args, ", ") + ")"
             }
 
-            val receiverType: AstXmlNode = this.inferType(*receiverExpr)
-            val receiver: AstXmlNode = this.pointee(*receiverType)
-            if (!xmlIsEmpty(*receiver)) {
-                val fnIndex: Int = this.findExtensionFn(calleeText, *receiverExpr)
-                if (fnIndex >= 0) {
-                    val fn: *CgFn = *this.functions[fnIndex]
-                    var all: Str = this.receiverArg(*fn.receiver, *receiverExpr)
+            AstNodeCategory.ExprMember -> {
+                var args: List<Str> = List<Str>()
+                for (*argNode in argNodes) {
+                    args.append(this.expr(argNode, 0, *xmlEmptyNode()))
+                }
+                val calleeText: Str = xmlAttr(*callee, AstNodeAttributeKind.Name)
+                val receiverExpr: AstXmlNode = xmlChild(*callee, AstNodeKind.Receiver)
+
+                // Machine identity: `x.smToYield()` on a machine *is* `x`. That is the wrap a
+                // `for` puts around what it iterates, and `..T` is not a spellable type, so the
+                // identity is the backend's rather than a function's (impl_specs/for.md).
+                if (calleeText == "smToYield") {
+                    val identityRecv: AstXmlNode = this.pointee(*this.inferType(*receiverExpr))
+                    if (!xmlIsEmpty(*identityRecv) && xmlKind(*identityRecv) == AstNodeCategory.TypeYield) {
+                        return this.expr(*receiverExpr, 0, *xmlEmptyNode())
+                    }
+                }
+
+                // Enum conversions: `x.toInt()` and `Enum.fromInt(v)`.
+                if (calleeText == "toInt") {
+                    val enumReceiver: AstXmlNode = this.pointee(*this.inferType(*receiverExpr))
+                    if (!xmlIsEmpty(*enumReceiver) && xmlKind(*enumReceiver) == AstNodeCategory.TypeNamed
+                        && this.enumNames.has(xmlAttr(*enumReceiver, AstNodeAttributeKind.Name))
+                    ) {
+                        return "static_cast<Int>(" + this.expr(*receiverExpr, 9, *xmlEmptyNode()) + ")"
+                    }
+                }
+                if (calleeText == "fromInt" && xmlKind(*receiverExpr) == AstNodeCategory.ExprName
+                    && this.enumNames.has(xmlAttr(*receiverExpr, AstNodeAttributeKind.Name))
+                ) {
+                    val enumName: Str = xmlAttr(*receiverExpr, AstNodeAttributeKind.Name)
+                    return this.qualify(this.typePackage(enumName), "simse_" + enumName + "_fromInt")
+                    +"(" + cgJoin(*args, ", ") + ")"
+                }
+                if (xmlKind(*receiverExpr) == AstNodeCategory.ExprGenericName) {
+                    val genericName: Str = xmlAttr(*receiverExpr, AstNodeAttributeKind.Name)
+                    return this.qualify(this.typePackage(genericName), genericName) + "<"
+                    +this.typeArgsString(genericName, *xmlChildren(*receiverExpr, AstNodeKind.TypeArg))
+                    +">::" + calleeText + "(" + cgJoin(*args, ", ") + ")"
+                }
+
+                val receiverType: AstXmlNode = this.inferType(*receiverExpr)
+                val receiver: AstXmlNode = this.pointee(*receiverType)
+                if (!xmlIsEmpty(*receiver)) {
+                    val fnIndex: Int = this.findExtensionFn(calleeText, *receiverExpr)
+                    if (fnIndex >= 0) {
+                        val fn: *CgFn = *this.functions[fnIndex]
+                        var all: Str = this.receiverArg(*fn.receiver, *receiverExpr)
+                        var a: Int = 0
+                        while (a < args.size()) {
+                            all = all + ", " + args[a]
+                            a = a + 1
+                        }
+                        return this.qualify(
+                            fn.packageName,
+                            xmlAttr(*fn.decl, AstNodeAttributeKind.Name)
+                        ) + "(" + all + ")"
+                    }
+                    val extIndex: Int = this.findNativeExt(calleeText, *receiverExpr)
+                    if (extIndex >= 0) {
+                        val extensions: List<CgNativeExt> = this.nativeExtensions.get(calleeText).value()
+                        val ext: *CgNativeExt = *extensions[extIndex]
+                        var all: Str = this.nativeReceiverArg(*ext.receiver, *receiverExpr)
+                        var a: Int = 0
+                        while (a < args.size()) {
+                            all = all + ", " + args[a]
+                            a = a + 1
+                        }
+                        return ext.symbol + "(" + all + ")"
+                    }
+                    return this.memberAccess(*receiverExpr, calleeText) + "(" + cgJoin(*args, ", ") + ")"
+                }
+
+                if (this.receiverFnNames.has(calleeText)) {
+                    val byName: Int = this.findReceiverFnByName(calleeText)
+                    var all: Str = ""
+                    if (byName >= 0) {
+                        val caller: *CgFn = *this.functions[byName]
+                        all = this.receiverArg(*caller.receiver, *receiverExpr)
+                    } else {
+                        all = this.expr(*receiverExpr, 9, *xmlEmptyNode())
+                    }
                     var a: Int = 0
                     while (a < args.size()) {
                         all = all + ", " + args[a]
                         a = a + 1
                     }
-                    return this.qualify(fn.packageName, xmlAttr(*fn.decl, AstNodeAttributeKind.Name)) + "(" + all + ")"
+                    return this.qualify(this.functionPackage(calleeText), calleeText) + "(" + all + ")"
                 }
-                val extIndex: Int = this.findNativeExt(calleeText, *receiverExpr)
-                if (extIndex >= 0) {
+                if (this.nativeExtensions.has(calleeText)) {
                     val extensions: List<CgNativeExt> = this.nativeExtensions.get(calleeText).value()
-                    val ext: *CgNativeExt = *extensions[extIndex]
-                    var all: Str = this.nativeReceiverArg(*ext.receiver, *receiverExpr)
-                    var a: Int = 0
-                    while (a < args.size()) {
-                        all = all + ", " + args[a]
-                        a = a + 1
+                    if (extensions.size() > 0) {
+                        var all: Str = this.expr(*receiverExpr, 9, *xmlEmptyNode())
+                        var a: Int = 0
+                        while (a < args.size()) {
+                            all = all + ", " + args[a]
+                            a = a + 1
+                        }
+                        return extensions[0].symbol + "(" + all + ")"
                     }
-                    return ext.symbol + "(" + all + ")"
                 }
                 return this.memberAccess(*receiverExpr, calleeText) + "(" + cgJoin(*args, ", ") + ")"
             }
-
-            if (this.receiverFnNames.has(calleeText)) {
-                val byName: Int = this.findReceiverFnByName(calleeText)
-                var all: Str = ""
-                if (byName >= 0) {
-                    val caller: *CgFn = *this.functions[byName]
-                    all = this.receiverArg(*caller.receiver, *receiverExpr)
-                } else {
-                    all = this.expr(*receiverExpr, 9, *xmlEmptyNode())
-                }
-                var a: Int = 0
-                while (a < args.size()) {
-                    all = all + ", " + args[a]
-                    a = a + 1
-                }
-                return this.qualify(this.functionPackage(calleeText), calleeText) + "(" + all + ")"
-            }
-            if (this.nativeExtensions.has(calleeText)) {
-                val extensions: List<CgNativeExt> = this.nativeExtensions.get(calleeText).value()
-                if (extensions.size() > 0) {
-                    var all: Str = this.expr(*receiverExpr, 9, *xmlEmptyNode())
-                    var a: Int = 0
-                    while (a < args.size()) {
-                        all = all + ", " + args[a]
-                        a = a + 1
-                    }
-                    return extensions[0].symbol + "(" + all + ")"
-                }
-            }
-            return this.memberAccess(*receiverExpr, calleeText) + "(" + cgJoin(*args, ", ") + ")"
         }
         this.fail(e, "unsupported: call target")
         return "/*unsupported*/"

@@ -145,9 +145,10 @@ data class Parser(
     // kind, line, column - the common prefix of most node attribute lists. The
     // node's kind is a field (`AstNodeCategory`), so only the position is here.
     fun posAttrs(line: Int, column: Int): List<AstNodeAttribute> {
-        var attrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
-        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, line.toString()))
-        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, column.toString()))
+        var attrs: List<AstNodeAttribute> = listOf<AstNodeAttribute>(
+            AstNodeAttribute(AstNodeAttributeKind.Line, line.toString()),
+            AstNodeAttribute(AstNodeAttributeKind.Column, column.toString())
+        )
         return attrs
     }
 
@@ -203,12 +204,13 @@ data class Parser(
         }
         this.skipSeparators()
 
-        var attrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
-        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, "1"))
-        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, "1"))
         // Every file declares exactly one package; the attribute is always
         // present. Matches ast::toXmlNode.
-        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Package, packageName))
+        var attrs: List<AstNodeAttribute> = listOf<AstNodeAttribute>(
+            AstNodeAttribute(AstNodeAttributeKind.Line, "1"),
+            AstNodeAttribute(AstNodeAttributeKind.Column, "1"),
+            AstNodeAttribute(AstNodeAttributeKind.Package, packageName)
+        )
         var root: AstXmlNode = AstXmlNode(AstNodeKind.Module, AstNodeCategory.Module, attrs, Array<AstXmlNode>())
 
         var imports: List<AstXmlNode> = List<AstXmlNode>()
@@ -244,31 +246,40 @@ data class Parser(
             }
             path = path + "." + next
         }
-        var attrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
-        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Path, path))
-        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, pos.line.toString()))
-        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, pos.column.toString()))
+        var attrs: List<AstNodeAttribute> = listOf<AstNodeAttribute>(
+            AstNodeAttribute(AstNodeAttributeKind.Path, path),
+            AstNodeAttribute(AstNodeAttributeKind.Line, pos.line.toString()),
+            AstNodeAttribute(AstNodeAttributeKind.Column, pos.column.toString())
+        )
         return AstXmlNode(AstNodeKind.Import, AstNodeCategory.None, attrs, Array<AstXmlNode>())
     }
 
     fun parseDecl(): AstXmlNode {
-        if (this.checkText("var") || this.checkText("val")) {
-            return this.parseStaticVar()
-        }
-        if (this.checkText("data")) {
-            return this.parseDataClass()
-        }
-        if (this.checkText("enum")) {
-            return this.parseEnum()
-        }
-        if (this.checkText("typealias")) {
-            return this.parseTypeAlias()
-        }
-        if (this.checkText("native")) {
-            return this.parseFunction(true)
-        }
-        if (this.checkText("fun")) {
-            return this.parseFunction(false)
+        val text: Str = this.peek(0).text
+        when (text) {
+            "var", "val" -> {
+                return this.parseStaticVar()
+            }
+
+            "data" -> {
+                return this.parseDataClass()
+            }
+
+            "enum" -> {
+                return this.parseEnum()
+            }
+
+            "typealias" -> {
+                return this.parseTypeAlias()
+            }
+
+            "native" -> {
+                return this.parseFunction(true)
+            }
+
+            "fun" -> {
+                return this.parseFunction(false)
+            }
         }
         this.fail("expected declaration")
         return this.emptyNode()
@@ -359,11 +370,12 @@ data class Parser(
                         return this.emptyNode()
                     }
                 }
-                var fattrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
-                fattrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, fieldName))
-                fattrs.append(AstNodeAttribute(AstNodeAttributeKind.IsVar, boolText(isVar)))
-                fattrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, fieldPos.line.toString()))
-                fattrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, fieldPos.column.toString()))
+                var fattrs: List<AstNodeAttribute> = listOf<AstNodeAttribute>(
+                    AstNodeAttribute(AstNodeAttributeKind.Name, fieldName),
+                    AstNodeAttribute(AstNodeAttributeKind.IsVar, boolText(isVar)),
+                    AstNodeAttribute(AstNodeAttributeKind.Line, fieldPos.line.toString()),
+                    AstNodeAttribute(AstNodeAttributeKind.Column, fieldPos.column.toString())
+                )
                 var fnode: AstXmlNode = AstXmlNode(AstNodeKind.Field, AstNodeCategory.None, fattrs, Array<AstXmlNode>())
                 if (fieldType.name != AstNodeKind.None) {
                     xmlAddChild(*fnode, fieldType)
@@ -449,12 +461,13 @@ data class Parser(
                 }
                 hasValue = true
             }
-            var mattrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
-            mattrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, memberName))
-            mattrs.append(AstNodeAttribute(AstNodeAttributeKind.HasValue, boolText(hasValue)))
-            mattrs.append(AstNodeAttribute(AstNodeAttributeKind.Value, memberValue.toString()))
-            mattrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, memberPos.line.toString()))
-            mattrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, memberPos.column.toString()))
+            var mattrs: List<AstNodeAttribute> = listOf<AstNodeAttribute>(
+                AstNodeAttribute(AstNodeAttributeKind.Name, memberName),
+                AstNodeAttribute(AstNodeAttributeKind.HasValue, boolText(hasValue)),
+                AstNodeAttribute(AstNodeAttributeKind.Value, memberValue.toString()),
+                AstNodeAttribute(AstNodeAttributeKind.Line, memberPos.line.toString()),
+                AstNodeAttribute(AstNodeAttributeKind.Column, memberPos.column.toString())
+            )
             members.append(AstXmlNode(AstNodeKind.EnumMember, AstNodeCategory.None, mattrs, Array<AstXmlNode>()))
             this.skipSeparators()
             this.matchText(",")
@@ -622,10 +635,11 @@ data class Parser(
                     return this.emptyNode()
                 }
             }
-            var pattrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
-            pattrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, paramName))
-            pattrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, paramPos.line.toString()))
-            pattrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, paramPos.column.toString()))
+            var pattrs: List<AstNodeAttribute> = listOf<AstNodeAttribute>(
+                AstNodeAttribute(AstNodeAttributeKind.Name, paramName),
+                AstNodeAttribute(AstNodeAttributeKind.Line, paramPos.line.toString()),
+                AstNodeAttribute(AstNodeAttributeKind.Column, paramPos.column.toString())
+            )
             var pnode: AstXmlNode = AstXmlNode(AstNodeKind.Param, AstNodeCategory.None, pattrs, Array<AstXmlNode>())
             if (paramType.name != AstNodeKind.None) {
                 xmlAddChild(*pnode, paramType)
@@ -849,11 +863,15 @@ data class Parser(
     // one: `for` is a declaration plus the loop it runs (`parseFor`), and the
     // declaration has to sit outside the loop. Matches `Parser::parseStmtInto`.
     fun parseStmtInto(out: *List<AstXmlNode>): Bool {
-        if (this.checkText("for")) {
-            return this.parseFor(out)
-        }
-        if (this.checkText("when")) {
-            return this.parseWhen(out)
+        val text: Str = this.peek(0).text
+        when (text) {
+            "for" -> {
+                return this.parseFor(out)
+            }
+
+            "when" -> {
+                return this.parseWhen(out)
+            }
         }
         val stmt: AstXmlNode = this.parseStmt()
         if (this.failed) {
@@ -864,40 +882,49 @@ data class Parser(
     }
 
     fun parseStmt(): AstXmlNode {
-        if (this.checkText("val") || this.checkText("var")) {
-            return this.parseVarDecl()
-        }
-        if (this.checkText("if")) {
-            return this.parseIf()
-        }
-        if (this.checkText("while")) {
-            return this.parseWhile()
-        }
-        if (this.checkText("return")) {
-            return this.parseReturn()
-        }
-        if (this.checkText("yield")) {
-            return this.parseYield()
-        }
-        if (this.checkText("break")) {
-            val pos: SourcePos = this.peek(0).pos
-            this.advance()
-            return AstXmlNode(
-                AstNodeKind.Stmt,
-                AstNodeCategory.StmtBreak,
-                this.posAttrs(pos.line, pos.column),
-                Array<AstXmlNode>()
-            )
-        }
-        if (this.checkText("continue")) {
-            val pos: SourcePos = this.peek(0).pos
-            this.advance()
-            return AstXmlNode(
-                AstNodeKind.Stmt,
-                AstNodeCategory.StmtContinue,
-                this.posAttrs(pos.line, pos.column),
-                Array<AstXmlNode>()
-            )
+        val text: Str = this.peek(0).text
+        when (text) {
+            "val", "var" -> {
+                return this.parseVarDecl()
+            }
+
+            "if" -> {
+                return this.parseIf()
+            }
+
+            "while" -> {
+                return this.parseWhile()
+            }
+
+            "return" -> {
+                return this.parseReturn()
+            }
+
+            "yield" -> {
+                return this.parseYield()
+            }
+
+            "break" -> {
+                val pos: SourcePos = this.peek(0).pos
+                this.advance()
+                return AstXmlNode(
+                    AstNodeKind.Stmt,
+                    AstNodeCategory.StmtBreak,
+                    this.posAttrs(pos.line, pos.column),
+                    Array<AstXmlNode>()
+                )
+            }
+
+            "continue" -> {
+                val pos: SourcePos = this.peek(0).pos
+                this.advance()
+                return AstXmlNode(
+                    AstNodeKind.Stmt,
+                    AstNodeCategory.StmtContinue,
+                    this.posAttrs(pos.line, pos.column),
+                    Array<AstXmlNode>()
+                )
+            }
         }
 
         val pos: SourcePos = this.peek(0).pos
@@ -1532,39 +1559,46 @@ data class Parser(
 
     fun parseUnary(): ExprNode {
         val pos: SourcePos = this.peek(0).pos
-        if (this.checkText("!") || this.checkText("-")) {
-            val op: Str = this.advance().text
-            val operand: ExprNode = this.parseUnary()
-            if (this.failed) {
-                return this.emptyExpr()
+        val text: Str = this.peek(0).text
+        when (text) {
+            "!", "-" -> {
+                val op: Str = this.advance().text
+                val operand: ExprNode = this.parseUnary()
+                if (this.failed) {
+                    return this.emptyExpr()
+                }
+                var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+                attrs.append(AstNodeAttribute(AstNodeAttributeKind.Op, op))
+                var node: AstXmlNode =
+                    AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprUnary, attrs, Array<AstXmlNode>())
+                this.attach(*node, AstNodeKind.Operand, *operand.node)
+                return ExprNode(node, pos.line, pos.column)
             }
-            var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
-            attrs.append(AstNodeAttribute(AstNodeAttributeKind.Op, op))
-            var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprUnary, attrs, Array<AstXmlNode>())
-            this.attach(*node, AstNodeKind.Operand, *operand.node)
-            return ExprNode(node, pos.line, pos.column)
-        }
-        if (this.checkText("&")) {
-            this.advance()
-            val operand: ExprNode = this.parseUnary()
-            if (this.failed) {
-                return this.emptyExpr()
+
+            "&" -> {
+                this.advance()
+                val operand: ExprNode = this.parseUnary()
+                if (this.failed) {
+                    return this.emptyExpr()
+                }
+                var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+                var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprRef, attrs, Array<AstXmlNode>())
+                this.attach(*node, AstNodeKind.Operand, *operand.node)
+                return ExprNode(node, pos.line, pos.column)
             }
-            var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
-            var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprRef, attrs, Array<AstXmlNode>())
-            this.attach(*node, AstNodeKind.Operand, *operand.node)
-            return ExprNode(node, pos.line, pos.column)
-        }
-        if (this.checkText("*")) {
-            this.advance()
-            val operand: ExprNode = this.parseUnary()
-            if (this.failed) {
-                return this.emptyExpr()
+
+            "*" -> {
+                this.advance()
+                val operand: ExprNode = this.parseUnary()
+                if (this.failed) {
+                    return this.emptyExpr()
+                }
+                var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+                var node: AstXmlNode =
+                    AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprDeref, attrs, Array<AstXmlNode>())
+                this.attach(*node, AstNodeKind.Operand, *operand.node)
+                return ExprNode(node, pos.line, pos.column)
             }
-            var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
-            var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprDeref, attrs, Array<AstXmlNode>())
-            this.attach(*node, AstNodeKind.Operand, *operand.node)
-            return ExprNode(node, pos.line, pos.column)
         }
         return this.parsePostfix()
     }
@@ -1602,10 +1636,8 @@ data class Parser(
                 var node: AstXmlNode =
                     AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCall, attrs, Array<AstXmlNode>())
                 this.attach(*node, AstNodeKind.Callee, *expr.node)
-                var ai: Int = 0
-                while (ai < args.size()) {
-                    this.attach(*node, AstNodeKind.Arg, *args[ai])
-                    ai = ai + 1
+                for (*arg in args) {
+                    this.attach(*node, AstNodeKind.Arg, arg)
                 }
                 expr = ExprNode(node, expr.line, expr.column)
             } else if (this.matchText("[")) {
@@ -1871,23 +1903,30 @@ fun joinNames(names: *List<Str>): Str {
 // Binding powers for the Pratt expression parser. Left-associative (the
 // recursive call uses bp + 1).
 fun binaryBindingPower(op: Str): Int {
-    if (op == "||") {
-        return 10
-    }
-    if (op == "&&") {
-        return 20
-    }
-    if (op == "==" || op == "!=") {
-        return 30
-    }
-    if (op == "<" || op == ">" || op == "<=" || op == ">=") {
-        return 40
-    }
-    if (op == "+" || op == "-") {
-        return 50
-    }
-    if (op == "*" || op == "/" || op == "%") {
-        return 60
+    when (op) {
+        "||" -> {
+            return 10
+        }
+
+        "&&" -> {
+            return 20
+        }
+
+        "==", "!=" -> {
+            return 30
+        }
+
+        "<", ">", "<=", ">=" -> {
+            return 40
+        }
+
+        "+", "-" -> {
+            return 50
+        }
+
+        "*", "/", "%" -> {
+            return 60
+        }
     }
     return -1
 }

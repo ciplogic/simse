@@ -228,15 +228,15 @@ corpus has `diagnostic-*` cases that assert on *rejected* programs.
 
 ## Performance, honestly
 
-Measured on the compiler's own 15,090-line source tree, release builds, on one
+Measured on the compiler's own 15,932-line source tree, release builds, on one
 machine (an ARM64 laptop; the numbers wobble ~8% between windows):
 
 | Measure | Value |
 | --- | --- |
-| self-hosted compiler transpiling `cppsrc/` | ~0.86 s (~17.4k lines/s) |
-| hand-written C++ compiler, same input | ~0.21 s (~4.1x faster) |
+| self-hosted compiler transpiling `cppsrc/` | ~1.1 s (~14.7k lines/s) |
+| hand-written C++ compiler, same input | ~0.24 s (~4.5x faster) |
 | peak working set, self-hosted | ~31 MB |
-| emitted translation unit | ~1.26 MB for the whole compiler |
+| emitted translation unit | ~1.31 MB for the whole compiler |
 
 The remaining gap to the hand-written ring is the price of the abstractions the
 Simse ring uses (the AST as one uniform node type, strings and lists as values).

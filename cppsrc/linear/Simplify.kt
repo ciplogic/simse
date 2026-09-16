@@ -48,9 +48,7 @@ fun linBlockStmts(stmt: *AstXmlNode): List<AstXmlNode> {
 
 // A one-element list, for `exprReplaceRole`.
 fun linOne(node: AstXmlNode): List<AstXmlNode> {
-    var out: List<AstXmlNode> = List<AstXmlNode>()
-    out.append(node)
-    return out
+    return listOf<AstXmlNode>(node)
 }
 
 // ---- block flattening ------------------------------------------------------
@@ -107,12 +105,10 @@ fun linStmtCrosses(
         return false
     }
     val body: List<AstXmlNode> = linBlockStmts(stmt)
-    var i: Int = 0
-    while (i < body.size()) {
-        if (linStmtCrosses(*body[i], at, decls, labelNames, labelAt)) {
+    for (*item in body) {
+        if (linStmtCrosses(item, at, decls, labelNames, labelAt)) {
             return true
         }
-        i = i + 1
     }
     return false
 }
@@ -128,12 +124,10 @@ fun linItemCrosses(
     if (!linIsBlock(*stmts[p])) {
         return linStmtCrosses(*stmts[p], at, decls, labelNames, labelAt)
     }
-    var i: Int = 0
-    while (i < bodies[p].size()) {
-        if (linStmtCrosses(*bodies[p][i], at, decls, labelNames, labelAt)) {
+    for (*item in bodies[p]) {
+        if (linStmtCrosses(item, at, decls, labelNames, labelAt)) {
             return true
         }
-        i = i + 1
     }
     return false
 }
@@ -210,20 +204,18 @@ fun linSpliceIsSafe(stmts: *List<AstXmlNode>, bodies: *List<List<AstXmlNode>>, i
 // that carries its temporaries, and `break`/`continue` jump out of the body they
 // are written in. The scan therefore looks through blocks.
 fun linJumpsTo(stmts: *List<AstXmlNode>, name: Str): Bool {
-    var i: Int = 0
-    while (i < stmts.size()) {
-        if ((linIsGoto(*stmts[i]) || linIsCondJump(*stmts[i]))
-            && xmlAttr(*stmts[i], AstNodeAttributeKind.Name) == name
+    for (*stmt in stmts) {
+        if ((linIsGoto(stmt) || linIsCondJump(stmt))
+            && xmlAttr(stmt, AstNodeAttributeKind.Name) == name
         ) {
             return true
         }
-        if (linIsBlock(*stmts[i])) {
-            val body: List<AstXmlNode> = linBlockStmts(*stmts[i])
+        if (linIsBlock(stmt)) {
+            val body: List<AstXmlNode> = linBlockStmts(stmt)
             if (linJumpsTo(*body, name)) {
                 return true
             }
         }
-        i = i + 1
     }
     return false
 }
@@ -235,10 +227,11 @@ fun linInvertedJump(jump: *AstXmlNode, target: Str): AstXmlNode {
     if (xmlKind(jump) == AstNodeCategory.StmtIfTrue) {
         kind = AstNodeCategory.StmtIfFalse
     }
-    var attrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
-    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Line, xmlLine(jump).toString()))
-    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Column, xmlColumn(jump).toString()))
-    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, target))
+    var attrs: List<AstNodeAttribute> = listOf<AstNodeAttribute>(
+        AstNodeAttribute(AstNodeAttributeKind.Line, xmlLine(jump).toString()),
+        AstNodeAttribute(AstNodeAttributeKind.Column, xmlColumn(jump).toString()),
+        AstNodeAttribute(AstNodeAttributeKind.Name, target)
+    )
     var node: AstXmlNode = AstXmlNode(AstNodeKind.Stmt, kind, attrs, Array<AstXmlNode>())
     xmlAddChild(*node, xmlChild(jump, AstNodeKind.Cond))
     return node
@@ -310,7 +303,7 @@ data class LinSimplifier(
     // have to be in place before any is used.
     fun flattenPass(stmts: *List<AstXmlNode>): List<AstXmlNode> {
         val count: Int = stmts.size()
-        var bodies: List<List<AstXmlNode>> = listOfCount<List<AstXmlNode>>(count)
+        var bodies: List<List<AstXmlNode>> = List<List<AstXmlNode>>(count)
         var bodyList: List<AstXmlNode> = List<AstXmlNode>()
         var i: Int = 0
         while (i < count) {
@@ -321,7 +314,7 @@ data class LinSimplifier(
             i = i + 1
         }
 
-        var splicing: List<Bool> = listOfFilled<Bool>(count, false)
+        var splicing: List<Bool> = List<Bool>(count, false)
         i = 0
         while (i < count) {
             if (linIsBlock(*stmts[i]) && linSpliceIsSafe(stmts, *bodies, i)) {
@@ -624,28 +617,33 @@ fun linRenameShadowed(body: List<AstXmlNode>, reserved: List<Str>): List<AstXmlN
 // a pointer to nothing it could name).
 fun linIsSpellableType(typeNode: AstXmlNode): Bool {
     val kind: AstNodeCategory = xmlKind(*typeNode)
-    if (kind == AstNodeCategory.TypeNamed || kind == AstNodeCategory.TypeGeneric) {
-        return xmlAttr(*typeNode, AstNodeAttributeKind.Name) != ""
-    }
-    if (kind == AstNodeCategory.TypeIntLit) {
-        return true
-    }
-    if (kind == AstNodeCategory.TypeReference || kind == AstNodeCategory.TypePointer) {
-        return linIsSpellableType(xmlChild(*typeNode, AstNodeKind.Inner))
-    }
-    if (kind == AstNodeCategory.TypeFunction) {
-        if (!linIsSpellableType(xmlChild(*typeNode, AstNodeKind.ReturnType))) {
-            return false
+    when (kind) {
+        AstNodeCategory.TypeNamed, AstNodeCategory.TypeGeneric -> {
+            return xmlAttr(*typeNode, AstNodeAttributeKind.Name) != ""
         }
-        val params: List<AstXmlNode> = xmlChildren(*typeNode, AstNodeKind.ParamType)
-        var i: Int = 0
-        while (i < params.size()) {
-            if (!linIsSpellableType(params[i])) {
+
+        AstNodeCategory.TypeIntLit -> {
+            return true
+        }
+
+        AstNodeCategory.TypeReference, AstNodeCategory.TypePointer -> {
+            return linIsSpellableType(xmlChild(*typeNode, AstNodeKind.Inner))
+        }
+
+        AstNodeCategory.TypeFunction -> {
+            if (!linIsSpellableType(xmlChild(*typeNode, AstNodeKind.ReturnType))) {
                 return false
             }
-            i = i + 1
+            val params: List<AstXmlNode> = xmlChildren(*typeNode, AstNodeKind.ParamType)
+            var i: Int = 0
+            while (i < params.size()) {
+                if (!linIsSpellableType(params[i])) {
+                    return false
+                }
+                i = i + 1
+            }
+            return true
         }
-        return true
     }
     return false
 }

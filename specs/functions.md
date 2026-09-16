@@ -66,6 +66,93 @@ fun borrowed(items: *List<Int>): Unit {
 `&T` keeps its box alive through the call. `*T` is non-owning and may be null or
 dangling; using it is subject to the raw-pointer rules in `memory-model.md`.
 
+## Packing the trailing arguments
+
+Status: implemented in both rings; the call site is one `Pack` instruction
+(`impl_specs/linear-il.md`).
+
+A call packs its **trailing arguments** into a temporary list when its callee's
+**last parameter is a list** - by value (`List<T>`) or borrowed (`*List<T>`):
+
+```text
+fun addAll(values: *List<Int>): Int { ... }
+fun sum(values: List<Int>): Int { ... }
+fun format(shape: Str, items: *List<Str>): Str { ... }
+
+addAll(1, 2, 3)                  // one list: 1, 2, 3
+addAll(10)                       // one list: 10
+addAll()                         // the empty list
+sum(6, 7, 8)                     // the callee's copy of one list
+format("k", "a", "b")            // everything past the shape packs
+```
+
+- The list is built by **one instruction** (`Pack`, the RTL's initializer-list
+  construction) and `List<T>` is `SmallVector<T, 4>`, so a **packed list of up to four
+elements allocates nothing**: it lives in the temporary's inline buffer.
+- A `*List<T>` parameter is passed the **address** of that temporary, which is a slot of
+the caller's frame - so a packed call copies each element once and the list not at all.
+- **One argument for one parameter is the list itself**, whatever its handle form:
+  `addAll(*xs)` passes the list, it does not build a one-element list of a list. That is
+  what tells `addAll(*xs)` from `addAll(1)` when both have one argument.
+- The **counted forms are not pack targets**: `&List<T>` and `PList<T>` (which *is*
+  `&List<T>`, a `std::shared_ptr`) make a packed temporary pay for a control block and a
+  reference count it would drop again at the end of the same statement, for no use at all.
+  A call that would pack into one is the arity error it always was:
+
+  ```text
+  fun sum(values: &List<Int>): Int { ... }
+  sum(1, 2, 3)   // error: no overload of 'sum' takes 3 argument(s)
+  ```
+
+  The zero-copy spelling of the same call is the borrow, `fun sum(values: *List<Int>)`.
+- The rule is about the *last parameter* only, and a call that already fits is passed as
+  it is: `f(a, xs)`, where `xs` is the list and the counts match, is that call.
+- A **list literal** is the same instruction spelled directly: `listOf<Str>("a", "b",
+  "c")` builds the list from those values, in that order
+  (`specs/containers.md`). It is the one call the compiler never emits a call for.
+  `List<T>(...)` is the RTL's own construction - a *count* of elements - so a literal
+  can never be mistaken for a size, and vice versa.
+- A `List<T>` argument that the callee takes **by value** is copied into the parameter,
+  as value semantics require (the first section of this document); the pack itself
+  still builds the list once, and the copy is of a small list that usually lives inline.
+
+## Handles at a call
+
+A parameter that wants a handle accepts a value of the same type, and the compiler
+converts the argument at the call (`memory-model.md` owns what the handles mean):
+
+| parameter | argument | the call passes |
+| --- | --- | --- |
+| `*T` | `T` | the argument's **address** - a borrow, no copy |
+| `*T` | `&T` | the reference's pointee |
+| `T` | `*T` or `&T` | a **copy of the pointee** |
+| `&T` | `T` or `*T` | a **copy in a box** - which is what `&x` means |
+
+```text
+fun addAll(values: *List<Int>): Int { ... }
+fun sum(values: List<Int>): Int { ... }
+fun boxed(values: &List<Int>): Int { ... }
+
+val xs: List<Int> = listOf(1, 2, 3)
+addAll(xs)      // == addAll(*xs): the list itself, borrowed, not a copy
+sum(xs)         // the copy value semantics require
+sum(*xs)        // the same copy, read through the pointer
+boxed(xs)       // a copy inside the reference
+```
+
+- **This is what lets a parameter change from a copy to a borrow.** An API that finds
+  `fun addAll(values: List<Int>)` too expensive can become
+  `fun addAll(values: *List<Int>)` and every existing `addAll(xs)` call still compiles
+  - it copies nothing from then on. The reverse change compiles too.
+- **The types still have to match.** `addAll(aListOfStr)` against `*List<Int>` is not
+  converted: only the *handle* is inferred, never the type, so the call is the type
+  error it always was.
+- **A `*T` binding is not converted.** `val p: *List<Int> = xs` still writes the `*`:
+  a pointer that outlives the expression it points into is asked for explicitly, and
+  the convenience above is for a call, whose borrow ends with it.
+- **`&T` never shares what it is given**: it owns a box, so a value (or a pointee) is
+  copied into a fresh one. That is `&x`'s meaning everywhere else in the language.
+
 ## Extension functions
 
 An extension function places the receiver type before the function name:

@@ -76,6 +76,10 @@ namespace sema {
         return current;
     }
 
+    const ast::TypeExpr *pointeeOf(const ast::TypeExpr *type) {
+        return stripHandles(type);
+    }
+
     const ast::TypeExpr *listTypeOf(const ast::TypeExpr *type) {
         const ast::TypeExpr *base = stripHandles(type);
         // `PList<T>` *is* `&List<T>` spelled as one name (`cppsrc/rtl/containers.hpp`),

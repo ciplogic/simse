@@ -7,9 +7,10 @@
 // Positional information comes from the `line`/`column` attributes; the port
 // mirrors the C++ traversal exactly (hoisting, scopes, conservative checks).
 //
-// Iteration uses `while` and List indexing (there is no range-for). Kind dispatch
-// is an if-chain, not a `switch`, because the emitted C++ `switch` cannot switch
-// on a `Str`.
+// Iteration is a `while` with List indexing where the index is needed, and the
+// pointer form of `for` where it is not. Kind dispatch is a `when`, which the parser
+// lowers to the `if`/`else` chain the emitted C++ uses (`switch` cannot switch on a
+// `Str`).
 
 package sema
 
@@ -47,13 +48,14 @@ fun semaIsBuiltinType(name: Str): Bool {
 // The number of type parameters a built-in generic expects, or -1 when the name
 // is not a built-in generic.
 fun semaBuiltinGenericArity(name: Str): Int {
-    if (name == "List" || name == "Array" || name == "RawArray" || name == "Opt"
-        || name == "Res" || name == "PList"
-    ) {
-        return 1
-    }
-    if (name == "Dictionary" || name == "SmallVector") {
-        return 2
+    when (name) {
+        "List", "Array", "RawArray", "Opt", "Res", "PList" -> {
+            return 1
+        }
+
+        "Dictionary", "SmallVector" -> {
+            return 2
+        }
     }
     return -1
 }
@@ -75,69 +77,75 @@ fun semaUnifyReceiver(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *Li
         }
     }
     val ak: AstNodeCategory = xmlKind(*actualPtr)
-    if (pk == AstNodeCategory.TypeIntLit) {
-        return ak == AstNodeCategory.TypeIntLit && xmlAttr(*actualPtr, AstNodeAttributeKind.Text) == xmlAttr(
-            pattern,
-            AstNodeAttributeKind.Text
-        )
-    }
-    if (pk == AstNodeCategory.TypeNamed) {
-        if (xmlIsTypeParam(xmlAttr(pattern, AstNodeAttributeKind.Name), typeParams)) {
-            return true
+    when (pk) {
+        AstNodeCategory.TypeIntLit -> {
+            return ak == AstNodeCategory.TypeIntLit && xmlAttr(*actualPtr, AstNodeAttributeKind.Text) == xmlAttr(
+                pattern,
+                AstNodeAttributeKind.Text
+            )
         }
-        return ak == AstNodeCategory.TypeNamed && xmlAttr(*actualPtr, AstNodeAttributeKind.Name) == xmlAttr(
-            pattern,
-            AstNodeAttributeKind.Name
-        )
-    }
-    if (pk == AstNodeCategory.TypeGeneric) {
-        if (xmlIsTypeParam(xmlAttr(pattern, AstNodeAttributeKind.Name), typeParams)) {
-            return true
-        }
-        if (ak != AstNodeCategory.TypeGeneric || xmlAttr(*actualPtr, AstNodeAttributeKind.Name) != xmlAttr(
+
+        AstNodeCategory.TypeNamed -> {
+            if (xmlIsTypeParam(xmlAttr(pattern, AstNodeAttributeKind.Name), typeParams)) {
+                return true
+            }
+            return ak == AstNodeCategory.TypeNamed && xmlAttr(*actualPtr, AstNodeAttributeKind.Name) == xmlAttr(
                 pattern,
                 AstNodeAttributeKind.Name
             )
-        ) {
-            return false
         }
-        val patternArgs: List<AstXmlNode> = xmlChildren(pattern, AstNodeKind.TypeArg)
-        val actualArgs: List<AstXmlNode> = xmlChildren(*actualPtr, AstNodeKind.TypeArg)
-        if (patternArgs.size() != actualArgs.size()) {
-            return false
-        }
-        var i: Int = 0
-        while (i < patternArgs.size()) {
-            if (!semaUnifyReceiver(*patternArgs[i], *actualArgs[i], typeParams)) {
+
+        AstNodeCategory.TypeGeneric -> {
+            if (xmlIsTypeParam(xmlAttr(pattern, AstNodeAttributeKind.Name), typeParams)) {
+                return true
+            }
+            if (ak != AstNodeCategory.TypeGeneric || xmlAttr(*actualPtr, AstNodeAttributeKind.Name) != xmlAttr(
+                    pattern,
+                    AstNodeAttributeKind.Name
+                )
+            ) {
                 return false
             }
-            i = i + 1
+            val patternArgs: List<AstXmlNode> = xmlChildren(pattern, AstNodeKind.TypeArg)
+            val actualArgs: List<AstXmlNode> = xmlChildren(*actualPtr, AstNodeKind.TypeArg)
+            if (patternArgs.size() != actualArgs.size()) {
+                return false
+            }
+            var i: Int = 0
+            while (i < patternArgs.size()) {
+                if (!semaUnifyReceiver(*patternArgs[i], *actualArgs[i], typeParams)) {
+                    return false
+                }
+                i = i + 1
+            }
+            return true
         }
-        return true
-    }
-    if (pk == AstNodeCategory.TypeReference) {
-        if (ak == AstNodeCategory.TypeReference && !xmlIsEmpty(*xmlChild(*actualPtr, AstNodeKind.Inner))
-            && !xmlIsEmpty(*xmlChild(pattern, AstNodeKind.Inner))
-        ) {
-            return semaUnifyReceiver(
-                *xmlChild(pattern, AstNodeKind.Inner),
-                *xmlChild(*actualPtr, AstNodeKind.Inner),
-                typeParams
-            )
+
+        AstNodeCategory.TypeReference -> {
+            if (ak == AstNodeCategory.TypeReference && !xmlIsEmpty(*xmlChild(*actualPtr, AstNodeKind.Inner))
+                && !xmlIsEmpty(*xmlChild(pattern, AstNodeKind.Inner))
+            ) {
+                return semaUnifyReceiver(
+                    *xmlChild(pattern, AstNodeKind.Inner),
+                    *xmlChild(*actualPtr, AstNodeKind.Inner),
+                    typeParams
+                )
+            }
+            return false
         }
-        return false
-    }
-    if (pk == AstNodeCategory.TypePointer) {
-        if (ak == AstNodeCategory.TypePointer && !xmlIsEmpty(*xmlChild(*actualPtr, AstNodeKind.Inner))
-            && !xmlIsEmpty(*xmlChild(pattern, AstNodeKind.Inner))
-        ) {
-            return semaUnifyReceiver(
-                *xmlChild(pattern, AstNodeKind.Inner),
-                *xmlChild(*actualPtr, AstNodeKind.Inner),
-                typeParams
-            )
+
+        AstNodeCategory.TypePointer -> {
+            if (ak == AstNodeCategory.TypePointer && !xmlIsEmpty(*xmlChild(*actualPtr, AstNodeKind.Inner))
+                && !xmlIsEmpty(*xmlChild(pattern, AstNodeKind.Inner))
+            ) {
+                return semaUnifyReceiver(
+                    *xmlChild(pattern, AstNodeKind.Inner),
+                    *xmlChild(*actualPtr, AstNodeKind.Inner),
+                    typeParams
+                )
+            }
+            return false
         }
-        return false
     }
     return false
 }
@@ -155,29 +163,36 @@ fun semaIsForTemplateName(name: Str): Bool {
 // kept in step by hand - a divergence surfaces in the differentials.
 fun semaTypeText(node: *AstXmlNode): Str {
     val kind: AstNodeCategory = xmlKind(node)
-    if (kind == AstNodeCategory.TypeIntLit) {
-        return xmlAttr(node, AstNodeAttributeKind.Text)
-    }
-    if (kind == AstNodeCategory.TypeNamed) {
-        return xmlAttr(node, AstNodeAttributeKind.Name)
-    }
-    if (kind == AstNodeCategory.TypeGeneric) {
-        return xmlAttr(node, AstNodeAttributeKind.Name) + "<" + semaTypeTextList(
-            *xmlChildren(
-                node,
-                AstNodeKind.TypeArg
-            )
-        ) + ">"
-    }
-    if (kind == AstNodeCategory.TypeReference) {
-        return "&" + semaTypeText(*xmlChild(node, AstNodeKind.Inner))
-    }
-    if (kind == AstNodeCategory.TypePointer) {
-        return "*" + semaTypeText(*xmlChild(node, AstNodeKind.Inner))
-    }
-    if (kind == AstNodeCategory.TypeFunction) {
-        return "(" + semaTypeTextList(*xmlChildren(node, AstNodeKind.ParamType)) + ") -> "
-        +semaTypeText(*xmlChild(node, AstNodeKind.ReturnType))
+    when (kind) {
+        AstNodeCategory.TypeIntLit -> {
+            return xmlAttr(node, AstNodeAttributeKind.Text)
+        }
+
+        AstNodeCategory.TypeNamed -> {
+            return xmlAttr(node, AstNodeAttributeKind.Name)
+        }
+
+        AstNodeCategory.TypeGeneric -> {
+            return xmlAttr(node, AstNodeAttributeKind.Name) + "<" + semaTypeTextList(
+                *xmlChildren(
+                    node,
+                    AstNodeKind.TypeArg
+                )
+            ) + ">"
+        }
+
+        AstNodeCategory.TypeReference -> {
+            return "&" + semaTypeText(*xmlChild(node, AstNodeKind.Inner))
+        }
+
+        AstNodeCategory.TypePointer -> {
+            return "*" + semaTypeText(*xmlChild(node, AstNodeKind.Inner))
+        }
+
+        AstNodeCategory.TypeFunction -> {
+            return "(" + semaTypeTextList(*xmlChildren(node, AstNodeKind.ParamType)) + ") -> "
+            +semaTypeText(*xmlChild(node, AstNodeKind.ReturnType))
+        }
     }
     return "?"
 }
@@ -233,10 +248,8 @@ data class Analyzer(
             this.validateImports(*input.module)
             this.buildVisible(*input.module)
             val decls: List<AstXmlNode> = xmlDecls(*input.module)
-            var i: Int = 0
-            while (i < decls.size()) {
-                this.analyzeDecl(*decls[i])
-                i = i + 1
+            for (*decl in decls) {
+                this.analyzeDecl(decl)
             }
             this.popScope()
             n = n + 1
@@ -350,16 +363,14 @@ data class Analyzer(
     // Reports an import whose package no participating file declares.
     fun validateImports(module: *AstXmlNode): Unit {
         val imports: List<AstXmlNode> = xmlChildren(module, AstNodeKind.Import)
-        var i: Int = 0
-        while (i < imports.size()) {
-            val dotted: Str = xmlAttr(*imports[i], AstNodeAttributeKind.Path)
+        for (*importDecl in imports) {
+            val dotted: Str = xmlAttr(importDecl, AstNodeAttributeKind.Path)
             if (!this.declaredPackages.contains(dotted)) {
                 this.diag(
-                    xmlLine(*imports[i]), xmlColumn(*imports[i]),
+                    xmlLine(importDecl), xmlColumn(importDecl),
                     "cannot resolve import '" + dotted + "': no file declares package '" + dotted + "'"
                 )
             }
-            i = i + 1
         }
     }
 
@@ -373,10 +384,8 @@ data class Analyzer(
         var packages: List<Str> = List<Str>()
         packages.append(this.packageOf(module))
         val imports: List<AstXmlNode> = xmlChildren(module, AstNodeKind.Import)
-        var i: Int = 0
-        while (i < imports.size()) {
-            packages.append(xmlAttr(*imports[i], AstNodeAttributeKind.Path))
-            i = i + 1
+        for (*importDecl in imports) {
+            packages.append(xmlAttr(importDecl, AstNodeAttributeKind.Path))
         }
         packages.append("rtl")
 
@@ -455,16 +464,14 @@ data class Analyzer(
     }
 
     fun typeParamVisible(name: Str): Bool {
-        var i: Int = 0
-        while (i < this.typeScopes.size()) {
+        for (*scope in this.typeScopes) {
             var j: Int = 0
-            while (j < this.typeScopes[i].size()) {
-                if (this.typeScopes[i][j] == name) {
+            while (j < scope.size()) {
+                if (scope[j] == name) {
                     return true
                 }
                 j = j + 1
             }
-            i = i + 1
         }
         return false
     }
@@ -495,46 +502,48 @@ data class Analyzer(
 
     fun resolveType(type: *AstXmlNode): Unit {
         val kind: AstNodeCategory = xmlKind(type)
-        if (kind == AstNodeCategory.TypeIntLit) {
-            return
-        }
-        if (kind == AstNodeCategory.TypeNamed) {
-            this.checkTypeName(xmlAttr(type, AstNodeAttributeKind.Name), xmlLine(type), xmlColumn(type))
-            return
-        }
-        if (kind == AstNodeCategory.TypeGeneric) {
-            this.checkTypeName(xmlAttr(type, AstNodeAttributeKind.Name), xmlLine(type), xmlColumn(type))
-            this.checkInstantiationArity(
-                xmlAttr(type, AstNodeAttributeKind.Name), xmlCount(type, AstNodeKind.TypeArg),
-                xmlLine(type), xmlColumn(type)
-            )
-            val args: List<AstXmlNode> = xmlChildren(type, AstNodeKind.TypeArg)
-            var i: Int = 0
-            while (i < args.size()) {
-                this.resolveType(*args[i])
-                i = i + 1
+        when (kind) {
+            AstNodeCategory.TypeIntLit -> {
+                return
             }
-            return
-        }
-        if (kind == AstNodeCategory.TypeReference || kind == AstNodeCategory.TypePointer) {
-            val inner: AstXmlNode = xmlChild(type, AstNodeKind.Inner)
-            if (!xmlIsEmpty(*inner)) {
-                this.resolveType(*inner)
+
+            AstNodeCategory.TypeNamed -> {
+                this.checkTypeName(xmlAttr(type, AstNodeAttributeKind.Name), xmlLine(type), xmlColumn(type))
+                return
             }
-            return
-        }
-        if (kind == AstNodeCategory.TypeFunction) {
-            val params: List<AstXmlNode> = xmlChildren(type, AstNodeKind.ParamType)
-            var i: Int = 0
-            while (i < params.size()) {
-                this.resolveType(*params[i])
-                i = i + 1
+
+            AstNodeCategory.TypeGeneric -> {
+                this.checkTypeName(xmlAttr(type, AstNodeAttributeKind.Name), xmlLine(type), xmlColumn(type))
+                this.checkInstantiationArity(
+                    xmlAttr(type, AstNodeAttributeKind.Name), xmlCount(type, AstNodeKind.TypeArg),
+                    xmlLine(type), xmlColumn(type)
+                )
+                val args: List<AstXmlNode> = xmlChildren(type, AstNodeKind.TypeArg)
+                for (*arg in args) {
+                    this.resolveType(arg)
+                }
+                return
             }
-            val ret: AstXmlNode = xmlChild(type, AstNodeKind.ReturnType)
-            if (!xmlIsEmpty(*ret)) {
-                this.resolveType(*ret)
+
+            AstNodeCategory.TypeReference, AstNodeCategory.TypePointer -> {
+                val inner: AstXmlNode = xmlChild(type, AstNodeKind.Inner)
+                if (!xmlIsEmpty(*inner)) {
+                    this.resolveType(*inner)
+                }
+                return
             }
-            return
+
+            AstNodeCategory.TypeFunction -> {
+                val params: List<AstXmlNode> = xmlChildren(type, AstNodeKind.ParamType)
+                for (*param in params) {
+                    this.resolveType(param)
+                }
+                val ret: AstXmlNode = xmlChild(type, AstNodeKind.ReturnType)
+                if (!xmlIsEmpty(*ret)) {
+                    this.resolveType(*ret)
+                }
+                return
+            }
         }
     }
 
@@ -542,72 +551,74 @@ data class Analyzer(
 
     fun analyzeDecl(decl: *AstXmlNode): Unit {
         val kind: AstNodeCategory = xmlKind(decl)
-        if (kind == AstNodeCategory.Var) {
-            // Static storage: the type in the file's module scope, and the
-            // initializer as an ordinary expression. The initializer may name any
-            // hoisted declaration, including another static (specs/statics.md:
-            // the name is visible everywhere, the initialization order is not
-            // specified).
-            val staticType: AstXmlNode = xmlChild(decl, AstNodeKind.Type)
-            if (!xmlIsEmpty(*staticType)) {
-                this.resolveType(*staticType)
-            }
-            val init: AstXmlNode = xmlChild(decl, AstNodeKind.Init)
-            if (!xmlIsEmpty(*init)) {
-                this.analyzeExpr(*init)
-            }
-            return
-        }
-        if (kind == AstNodeCategory.DataClass) {
-            this.pushTypeScope()
-            val typeParams: List<Str> = xmlTypeParamNames(decl)
-            var i: Int = 0
-            while (i < typeParams.size()) {
-                this.declareType(typeParams[i])
-                i = i + 1
-            }
-            this.pushScope()
-            this.declareValue("this", true, false, *xmlEmptyNode())
-            val fields: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Field)
-            var f: Int = 0
-            while (f < fields.size()) {
-                val fieldType: AstXmlNode = xmlChild(*fields[f], AstNodeKind.Type)
-                if (!xmlIsEmpty(*fieldType)) {
-                    this.resolveType(*fieldType)
+        when (kind) {
+            AstNodeCategory.Var -> {
+                // Static storage: the type in the file's module scope, and the
+                // initializer as an ordinary expression. The initializer may name any
+                // hoisted declaration, including another static (specs/statics.md:
+                // the name is visible everywhere, the initialization order is not
+                // specified).
+                val staticType: AstXmlNode = xmlChild(decl, AstNodeKind.Type)
+                if (!xmlIsEmpty(*staticType)) {
+                    this.resolveType(*staticType)
                 }
-                f = f + 1
+                val init: AstXmlNode = xmlChild(decl, AstNodeKind.Init)
+                if (!xmlIsEmpty(*init)) {
+                    this.analyzeExpr(*init)
+                }
+                return
             }
-            val methods: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Function)
-            var m: Int = 0
-            while (m < methods.size()) {
-                this.analyzeFunction(*methods[m])
-                m = m + 1
+
+            AstNodeCategory.DataClass -> {
+                this.pushTypeScope()
+                val typeParams: List<Str> = xmlTypeParamNames(decl)
+                var i: Int = 0
+                while (i < typeParams.size()) {
+                    this.declareType(typeParams[i])
+                    i = i + 1
+                }
+                this.pushScope()
+                this.declareValue("this", true, false, *xmlEmptyNode())
+                val fields: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Field)
+                for (*field in fields) {
+                    val fieldType: AstXmlNode = xmlChild(field, AstNodeKind.Type)
+                    if (!xmlIsEmpty(*fieldType)) {
+                        this.resolveType(*fieldType)
+                    }
+                }
+                val methods: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Function)
+                for (*method in methods) {
+                    this.analyzeFunction(method)
+                }
+                this.popScope()
+                this.popTypeScope()
+                return
             }
-            this.popScope()
-            this.popTypeScope()
-            return
-        }
-        if (kind == AstNodeCategory.Enum) {
-            return
-        }
-        if (kind == AstNodeCategory.TypeAlias) {
-            this.pushTypeScope()
-            val typeParams: List<Str> = xmlTypeParamNames(decl)
-            var i: Int = 0
-            while (i < typeParams.size()) {
-                this.declareType(typeParams[i])
-                i = i + 1
+
+            AstNodeCategory.Enum -> {
+                return
             }
-            val target: AstXmlNode = xmlChild(decl, AstNodeKind.TargetType)
-            if (!xmlIsEmpty(*target)) {
-                this.resolveType(*target)
+
+            AstNodeCategory.TypeAlias -> {
+                this.pushTypeScope()
+                val typeParams: List<Str> = xmlTypeParamNames(decl)
+                var i: Int = 0
+                while (i < typeParams.size()) {
+                    this.declareType(typeParams[i])
+                    i = i + 1
+                }
+                val target: AstXmlNode = xmlChild(decl, AstNodeKind.TargetType)
+                if (!xmlIsEmpty(*target)) {
+                    this.resolveType(*target)
+                }
+                this.popTypeScope()
+                return
             }
-            this.popTypeScope()
-            return
-        }
-        if (kind == AstNodeCategory.Function) {
-            this.analyzeFunction(decl)
-            return
+
+            AstNodeCategory.Function -> {
+                this.analyzeFunction(decl)
+                return
+            }
         }
     }
 
@@ -628,16 +639,14 @@ data class Analyzer(
             }
         }
         val params: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
-        var p: Int = 0
-        while (p < params.size()) {
-            val paramType: AstXmlNode = xmlChild(*params[p], AstNodeKind.Type)
+        for (*param in params) {
+            val paramType: AstXmlNode = xmlChild(param, AstNodeKind.Type)
             if (!xmlIsEmpty(*paramType)) {
                 this.resolveType(*paramType)
             }
             // Parameters are not `val` declarations, so reassigning one is never
             // reported (under-report rather than risk a false hit).
-            this.declareValue(xmlAttr(*params[p], AstNodeAttributeKind.Name), true, false, *paramType)
-            p = p + 1
+            this.declareValue(xmlAttr(param, AstNodeAttributeKind.Name), true, false, *paramType)
         }
         val returnType: AstXmlNode = xmlChild(decl, AstNodeKind.ReturnType)
         if (!xmlIsEmpty(*returnType)) {
@@ -647,10 +656,8 @@ data class Analyzer(
         val savedLoopDepth: Int = this.loopDepth
         this.loopDepth = 0
         val body: List<AstXmlNode> = xmlChildren(*xmlChild(decl, AstNodeKind.Body), AstNodeKind.Stmt)
-        var s: Int = 0
-        while (s < body.size()) {
-            this.analyzeStmt(*body[s])
-            s = s + 1
+        for (*stmtNode in body) {
+            this.analyzeStmt(stmtNode)
         }
         this.loopDepth = savedLoopDepth
 
@@ -662,116 +669,119 @@ data class Analyzer(
 
     fun analyzeStmt(stmt: *AstXmlNode): Unit {
         val kind: AstNodeCategory = xmlKind(stmt)
-        if (kind == AstNodeCategory.StmtVarDecl) {
-            val init: AstXmlNode = xmlChild(stmt, AstNodeKind.Init)
-            if (!xmlIsEmpty(*init)) {
-                this.analyzeExpr(*init)
-            }
-            val declaredType: AstXmlNode = xmlChild(stmt, AstNodeKind.Type)
-            if (!xmlIsEmpty(*declaredType)) {
-                this.resolveType(*declaredType)
-            }
-            var type: AstXmlNode = declaredType
-            if (xmlIsEmpty(*type) && !xmlIsEmpty(*init)) {
-                type = this.exprType(*init)
-            }
-            this.checkForIterable(stmt)
-            this.declareValue(
-                xmlAttr(stmt, AstNodeAttributeKind.Name),
-                xmlAttr(stmt, AstNodeAttributeKind.IsVar) == "true",
-                true,
-                *type
-            )
-            return
-        }
-        if (kind == AstNodeCategory.StmtAssign) {
-            val target: AstXmlNode = xmlChild(stmt, AstNodeKind.Target)
-            if (!xmlIsEmpty(*target)) {
-                this.analyzeExpr(*target)
-            }
-            val value: AstXmlNode = xmlChild(stmt, AstNodeKind.Value)
-            if (!xmlIsEmpty(*value)) {
-                this.analyzeExpr(*value)
-            }
-            if (!xmlIsEmpty(*target) && xmlKind(*target) == AstNodeCategory.ExprName) {
-                val binding: Opt<ValueBinding> = this.lookupValue(xmlAttr(*target, AstNodeAttributeKind.Name))
-                if (binding.hasValue() && binding.value().checkAssign && !binding.value().isMutable) {
-                    this.diag(
-                        xmlLine(*target), xmlColumn(*target),
-                        "cannot assign to val '" + xmlAttr(*target, AstNodeAttributeKind.Name) + "'"
-                    )
+        when (kind) {
+            AstNodeCategory.StmtVarDecl -> {
+                val init: AstXmlNode = xmlChild(stmt, AstNodeKind.Init)
+                if (!xmlIsEmpty(*init)) {
+                    this.analyzeExpr(*init)
                 }
+                val declaredType: AstXmlNode = xmlChild(stmt, AstNodeKind.Type)
+                if (!xmlIsEmpty(*declaredType)) {
+                    this.resolveType(*declaredType)
+                }
+                var type: AstXmlNode = declaredType
+                if (xmlIsEmpty(*type) && !xmlIsEmpty(*init)) {
+                    type = this.exprType(*init)
+                }
+                this.checkForIterable(stmt)
+                this.declareValue(
+                    xmlAttr(stmt, AstNodeAttributeKind.Name),
+                    xmlAttr(stmt, AstNodeAttributeKind.IsVar) == "true",
+                    true,
+                    *type
+                )
+                return
             }
-            return
-        }
-        if (kind == AstNodeCategory.StmtIf) {
-            val cond: AstXmlNode = xmlChild(stmt, AstNodeKind.Cond)
-            if (!xmlIsEmpty(*cond)) {
-                this.analyzeExpr(*cond)
+
+            AstNodeCategory.StmtAssign -> {
+                val target: AstXmlNode = xmlChild(stmt, AstNodeKind.Target)
+                if (!xmlIsEmpty(*target)) {
+                    this.analyzeExpr(*target)
+                }
+                val value: AstXmlNode = xmlChild(stmt, AstNodeKind.Value)
+                if (!xmlIsEmpty(*value)) {
+                    this.analyzeExpr(*value)
+                }
+                if (!xmlIsEmpty(*target) && xmlKind(*target) == AstNodeCategory.ExprName) {
+                    val binding: Opt<ValueBinding> = this.lookupValue(xmlAttr(*target, AstNodeAttributeKind.Name))
+                    if (binding.hasValue() && binding.value().checkAssign && !binding.value().isMutable) {
+                        this.diag(
+                            xmlLine(*target), xmlColumn(*target),
+                            "cannot assign to val '" + xmlAttr(*target, AstNodeAttributeKind.Name) + "'"
+                        )
+                    }
+                }
+                return
             }
-            this.pushScope()
-            val thenBody: List<AstXmlNode> = xmlChildren(*xmlChild(stmt, AstNodeKind.Then), AstNodeKind.Stmt)
-            var t: Int = 0
-            while (t < thenBody.size()) {
-                this.analyzeStmt(*thenBody[t])
-                t = t + 1
-            }
-            this.popScope()
-            val elseBlock: AstXmlNode = xmlChild(stmt, AstNodeKind.Else)
-            if (!xmlIsEmpty(*elseBlock)) {
+
+            AstNodeCategory.StmtIf -> {
+                val cond: AstXmlNode = xmlChild(stmt, AstNodeKind.Cond)
+                if (!xmlIsEmpty(*cond)) {
+                    this.analyzeExpr(*cond)
+                }
                 this.pushScope()
-                val elseBody: List<AstXmlNode> = xmlChildren(*elseBlock, AstNodeKind.Stmt)
-                var e: Int = 0
-                while (e < elseBody.size()) {
-                    this.analyzeStmt(*elseBody[e])
-                    e = e + 1
+                val thenBody: List<AstXmlNode> = xmlChildren(*xmlChild(stmt, AstNodeKind.Then), AstNodeKind.Stmt)
+                for (*thenStmt in thenBody) {
+                    this.analyzeStmt(thenStmt)
                 }
                 this.popScope()
+                val elseBlock: AstXmlNode = xmlChild(stmt, AstNodeKind.Else)
+                if (!xmlIsEmpty(*elseBlock)) {
+                    this.pushScope()
+                    val elseBody: List<AstXmlNode> = xmlChildren(*elseBlock, AstNodeKind.Stmt)
+                    for (*elseStmt in elseBody) {
+                        this.analyzeStmt(elseStmt)
+                    }
+                    this.popScope()
+                }
+                return
             }
-            return
-        }
-        if (kind == AstNodeCategory.StmtWhile) {
-            val cond: AstXmlNode = xmlChild(stmt, AstNodeKind.Cond)
-            if (!xmlIsEmpty(*cond)) {
-                this.analyzeExpr(*cond)
+
+            AstNodeCategory.StmtWhile -> {
+                val cond: AstXmlNode = xmlChild(stmt, AstNodeKind.Cond)
+                if (!xmlIsEmpty(*cond)) {
+                    this.analyzeExpr(*cond)
+                }
+                this.pushScope()
+                this.loopDepth = this.loopDepth + 1
+                val body: List<AstXmlNode> = xmlChildren(*xmlChild(stmt, AstNodeKind.Body), AstNodeKind.Stmt)
+                for (*bodyStmt in body) {
+                    this.analyzeStmt(bodyStmt)
+                }
+                this.loopDepth = this.loopDepth - 1
+                this.popScope()
+                return
             }
-            this.pushScope()
-            this.loopDepth = this.loopDepth + 1
-            val body: List<AstXmlNode> = xmlChildren(*xmlChild(stmt, AstNodeKind.Body), AstNodeKind.Stmt)
-            var b: Int = 0
-            while (b < body.size()) {
-                this.analyzeStmt(*body[b])
-                b = b + 1
+
+            AstNodeCategory.StmtReturn -> {
+                val value: AstXmlNode = xmlChild(stmt, AstNodeKind.Value)
+                if (!xmlIsEmpty(*value)) {
+                    this.analyzeExpr(*value)
+                }
+                return
             }
-            this.loopDepth = this.loopDepth - 1
-            this.popScope()
-            return
-        }
-        if (kind == AstNodeCategory.StmtReturn) {
-            val value: AstXmlNode = xmlChild(stmt, AstNodeKind.Value)
-            if (!xmlIsEmpty(*value)) {
-                this.analyzeExpr(*value)
+
+            AstNodeCategory.StmtBreak -> {
+                if (this.loopDepth == 0) {
+                    this.diag(xmlLine(stmt), xmlColumn(stmt), "'break' outside a loop")
+                }
+                return
             }
-            return
-        }
-        if (kind == AstNodeCategory.StmtBreak) {
-            if (this.loopDepth == 0) {
-                this.diag(xmlLine(stmt), xmlColumn(stmt), "'break' outside a loop")
+
+            AstNodeCategory.StmtContinue -> {
+                if (this.loopDepth == 0) {
+                    this.diag(xmlLine(stmt), xmlColumn(stmt), "'continue' outside a loop")
+                }
+                return
             }
-            return
-        }
-        if (kind == AstNodeCategory.StmtContinue) {
-            if (this.loopDepth == 0) {
-                this.diag(xmlLine(stmt), xmlColumn(stmt), "'continue' outside a loop")
+
+            AstNodeCategory.StmtExprStmt -> {
+                val expr: AstXmlNode = xmlChild(stmt, AstNodeKind.Expr)
+                if (!xmlIsEmpty(*expr)) {
+                    this.analyzeExpr(*expr)
+                }
+                return
             }
-            return
-        }
-        if (kind == AstNodeCategory.StmtExprStmt) {
-            val expr: AstXmlNode = xmlChild(stmt, AstNodeKind.Expr)
-            if (!xmlIsEmpty(*expr)) {
-                this.analyzeExpr(*expr)
-            }
-            return
         }
     }
 
@@ -779,109 +789,106 @@ data class Analyzer(
 
     fun analyzeExpr(expr: *AstXmlNode): Unit {
         val kind: AstNodeCategory = xmlKind(expr)
-        if (kind == AstNodeCategory.ExprIntLit || kind == AstNodeCategory.ExprFloatLit || kind == AstNodeCategory.ExprStrLit
-            || kind == AstNodeCategory.ExprCharLit || kind == AstNodeCategory.ExprBoolLit || kind == AstNodeCategory.ExprNullLit
-            || kind == AstNodeCategory.ExprName
-        ) {
-            return
-        }
-        if (kind == AstNodeCategory.ExprGenericName) {
-            this.checkGenericNameArity(expr)
-            val args: List<AstXmlNode> = xmlChildren(expr, AstNodeKind.TypeArg)
-            var i: Int = 0
-            while (i < args.size()) {
-                this.resolveType(*args[i])
-                i = i + 1
+        when (kind) {
+            AstNodeCategory.ExprIntLit, AstNodeCategory.ExprFloatLit, AstNodeCategory.ExprStrLit, AstNodeCategory.ExprCharLit,
+            AstNodeCategory.ExprBoolLit, AstNodeCategory.ExprNullLit, AstNodeCategory.ExprName -> {
+                return
             }
-            return
-        }
-        if (kind == AstNodeCategory.ExprMember) {
-            val receiver: AstXmlNode = xmlChild(expr, AstNodeKind.Receiver)
-            if (!xmlIsEmpty(*receiver)) {
-                this.analyzeExpr(*receiver)
-            }
-            return
-        }
-        if (kind == AstNodeCategory.ExprCall) {
-            val callee: AstXmlNode = xmlChild(expr, AstNodeKind.Callee)
-            if (!xmlIsEmpty(*callee)) {
-                this.analyzeExpr(*callee)
-            }
-            val args: List<AstXmlNode> = xmlChildren(expr, AstNodeKind.Arg)
-            var i: Int = 0
-            while (i < args.size()) {
-                this.analyzeExpr(*args[i])
-                i = i + 1
-            }
-            this.checkCallArity(expr)
-            this.checkExtensionCallArity(expr)
-            return
-        }
-        if (kind == AstNodeCategory.ExprIndex) {
-            val receiver: AstXmlNode = xmlChild(expr, AstNodeKind.Receiver)
-            if (!xmlIsEmpty(*receiver)) {
-                this.analyzeExpr(*receiver)
-            }
-            val index: AstXmlNode = xmlChild(expr, AstNodeKind.Index)
-            if (!xmlIsEmpty(*index)) {
-                this.analyzeExpr(*index)
-            }
-            return
-        }
-        if (kind == AstNodeCategory.ExprUnary || kind == AstNodeCategory.ExprRef || kind == AstNodeCategory.ExprDeref
-            || kind == AstNodeCategory.ExprCopy
-        ) {
-            val operand: AstXmlNode = xmlChild(expr, AstNodeKind.Operand)
-            if (!xmlIsEmpty(*operand)) {
-                this.analyzeExpr(*operand)
-            }
-            return
-        }
-        if (kind == AstNodeCategory.ExprBinary) {
-            val lhs: AstXmlNode = xmlChild(expr, AstNodeKind.Lhs)
-            if (!xmlIsEmpty(*lhs)) {
-                this.analyzeExpr(*lhs)
-            }
-            val rhs: AstXmlNode = xmlChild(expr, AstNodeKind.Rhs)
-            if (!xmlIsEmpty(*rhs)) {
-                this.analyzeExpr(*rhs)
-            }
-            return
-        }
-        if (kind == AstNodeCategory.ExprLambda) {
-            this.pushScope()
-            val names: List<Str> = xmlLambdaParams(expr)
-            val paramTypes: List<AstXmlNode> = xmlChildren(expr, AstNodeKind.ParamType)
-            var i: Int = 0
-            while (i < names.size()) {
-                var type: AstXmlNode = xmlEmptyNode()
-                if (paramTypes.size() == names.size()) {
-                    type = paramTypes[i]
+
+            AstNodeCategory.ExprGenericName -> {
+                this.checkGenericNameArity(expr)
+                val args: List<AstXmlNode> = xmlChildren(expr, AstNodeKind.TypeArg)
+                for (*arg in args) {
+                    this.resolveType(arg)
                 }
-                if (!xmlIsEmpty(*type)) {
-                    this.resolveType(*type)
+                return
+            }
+
+            AstNodeCategory.ExprMember -> {
+                val receiver: AstXmlNode = xmlChild(expr, AstNodeKind.Receiver)
+                if (!xmlIsEmpty(*receiver)) {
+                    this.analyzeExpr(*receiver)
                 }
-                this.declareValue(names[i], true, false, *type)
-                i = i + 1
+                return
             }
-            if (paramTypes.size() != names.size()) {
-                var k: Int = 0
-                while (k < paramTypes.size()) {
-                    this.resolveType(*paramTypes[k])
-                    k = k + 1
+
+            AstNodeCategory.ExprCall -> {
+                val callee: AstXmlNode = xmlChild(expr, AstNodeKind.Callee)
+                if (!xmlIsEmpty(*callee)) {
+                    this.analyzeExpr(*callee)
                 }
+                val args: List<AstXmlNode> = xmlChildren(expr, AstNodeKind.Arg)
+                for (*arg in args) {
+                    this.analyzeExpr(arg)
+                }
+                this.checkCallArity(expr)
+                this.checkExtensionCallArity(expr)
+                return
             }
-            val savedLoopDepth: Int = this.loopDepth
-            this.loopDepth = 0
-            val body: List<AstXmlNode> = xmlChildren(*xmlChild(expr, AstNodeKind.Body), AstNodeKind.Stmt)
-            var s: Int = 0
-            while (s < body.size()) {
-                this.analyzeStmt(*body[s])
-                s = s + 1
+
+            AstNodeCategory.ExprIndex -> {
+                val receiver: AstXmlNode = xmlChild(expr, AstNodeKind.Receiver)
+                if (!xmlIsEmpty(*receiver)) {
+                    this.analyzeExpr(*receiver)
+                }
+                val index: AstXmlNode = xmlChild(expr, AstNodeKind.Index)
+                if (!xmlIsEmpty(*index)) {
+                    this.analyzeExpr(*index)
+                }
+                return
             }
-            this.loopDepth = savedLoopDepth
-            this.popScope()
-            return
+
+            AstNodeCategory.ExprUnary, AstNodeCategory.ExprRef, AstNodeCategory.ExprDeref, AstNodeCategory.ExprCopy -> {
+                val operand: AstXmlNode = xmlChild(expr, AstNodeKind.Operand)
+                if (!xmlIsEmpty(*operand)) {
+                    this.analyzeExpr(*operand)
+                }
+                return
+            }
+
+            AstNodeCategory.ExprBinary -> {
+                val lhs: AstXmlNode = xmlChild(expr, AstNodeKind.Lhs)
+                if (!xmlIsEmpty(*lhs)) {
+                    this.analyzeExpr(*lhs)
+                }
+                val rhs: AstXmlNode = xmlChild(expr, AstNodeKind.Rhs)
+                if (!xmlIsEmpty(*rhs)) {
+                    this.analyzeExpr(*rhs)
+                }
+                return
+            }
+
+            AstNodeCategory.ExprLambda -> {
+                this.pushScope()
+                val names: List<Str> = xmlLambdaParams(expr)
+                val paramTypes: List<AstXmlNode> = xmlChildren(expr, AstNodeKind.ParamType)
+                var i: Int = 0
+                while (i < names.size()) {
+                    var type: AstXmlNode = xmlEmptyNode()
+                    if (paramTypes.size() == names.size()) {
+                        type = paramTypes[i]
+                    }
+                    if (!xmlIsEmpty(*type)) {
+                        this.resolveType(*type)
+                    }
+                    this.declareValue(names[i], true, false, *type)
+                    i = i + 1
+                }
+                if (paramTypes.size() != names.size()) {
+                    for (*paramType in paramTypes) {
+                        this.resolveType(paramType)
+                    }
+                }
+                val savedLoopDepth: Int = this.loopDepth
+                this.loopDepth = 0
+                val body: List<AstXmlNode> = xmlChildren(*xmlChild(expr, AstNodeKind.Body), AstNodeKind.Stmt)
+                for (*stmtNode in body) {
+                    this.analyzeStmt(stmtNode)
+                }
+                this.loopDepth = savedLoopDepth
+                this.popScope()
+                return
+            }
         }
     }
 
@@ -890,12 +897,10 @@ data class Analyzer(
         val name: Str = xmlAttr(expr, AstNodeAttributeKind.Name)
         if (this.functions.has(name)) {
             val overloads: List<AstXmlNode> = this.functions.get(name).value()
-            var i: Int = 0
-            while (i < overloads.size()) {
-                if (xmlCount(*overloads[i], AstNodeKind.TypeParam) == argCount) {
+            for (*overload in overloads) {
+                if (xmlCount(overload, AstNodeKind.TypeParam) == argCount) {
                     return
                 }
-                i = i + 1
             }
             this.diag(
                 xmlLine(expr), xmlColumn(expr), "no overload of '" + name + "' takes "
@@ -1150,9 +1155,8 @@ data class Analyzer(
         }
         val overloads: List<AstXmlNode> = this.functions.get(name).value()
         var known: AstXmlNode = xmlEmptyNode()
-        var i: Int = 0
-        while (i < overloads.size()) {
-            val declared: AstXmlNode = xmlChild(*overloads[i], AstNodeKind.ReturnType)
+        for (*overload in overloads) {
+            val declared: AstXmlNode = xmlChild(overload, AstNodeKind.ReturnType)
             if (!xmlIsEmpty(*declared)) {
                 if (xmlKind(*declared) == AstNodeCategory.TypeYield) {
                     return declared
@@ -1161,7 +1165,6 @@ data class Analyzer(
                     known = declared
                 }
             }
-            i = i + 1
         }
         return known
     }

@@ -285,7 +285,17 @@ namespace linear {
                 slot.kind = kind;
                 out.vars.push_back(slot);
                 varAt[name] = (int) out.vars.size() - 1;
+                frameChanged();
                 return (int) out.vars.size() - 1;
+            }
+
+            // Give a slot a type after the fact: the destination of a list literal is
+            // the call's own slot, and the literal knows the type it is building even
+            // when the position it stands in would only have inferred it.
+            void setSlotType(int slot, const ast::TypePtr &type) {
+                if (slot < 0 || slot >= (int) out.vars.size() || !type) return;
+                out.vars[slot].typeIndex = typeIndex(ilTypeText(*type), type);
+                frameChanged();
             }
 
             // The type table: text for the dump, the node (when there is one) for a
@@ -373,19 +383,47 @@ namespace linear {
 
             // ---- the types of what the extractor synthesizes --------------------
 
-            // The frame is a scope: every slot's name and its type. That is exactly the
-            // shape `sema::typeOfExpr` takes, and the reason the extractor can give a
-            // type to a slot the statements never declared (a place, a value position
-            // the lowering left inline) - a slot without one cannot be declared at the
-            // top of the body, and then the instruction that reads it has to inline the
-            // whole expression it stands for.
-            Dictionary<Str, ast::TypePtr> frameTypes() {
-                Dictionary<Str, ast::TypePtr> names;
-                for (int i = 0; i < (int) out.vars.size(); i++) {
-                    ast::TypePtr type = ilVarType(out, i);
-                    if (type) names[out.vars[i].name] = type;
+            // The context `sema::typeOfExpr` reads, and the frame as it wants to see it.
+            // Both are constant for a body except when a slot is added, so they are built
+            // once and reused: every question used to rebuild them (a dictionary of every
+            // slot, and a `sema::Body` with its lists copied), which cost the compiler's
+            // own transpile about a third of its time once the extractor began asking
+            // about *call* arguments as well as about the slots it synthesizes.
+            sema::Body typeContext;
+            bool typeContextReady = false;
+            Dictionary<Str, ast::TypePtr> frameNames;
+            bool frameNamesStale = true;
+
+            void frameChanged() { frameNamesStale = true; }
+
+            const sema::Body &bodyContext() {
+                if (typeContextReady) return typeContext;
+                typeContext.decl = fn.decl;
+                typeContext.selfType = fn.receiver;
+                typeContext.selfDecl = fn.selfDecl;
+                typeContext.typeParams = fn.typeParams;
+                typeContext.paramNames = fn.paramNames;
+                typeContext.paramTypes = fn.paramTypes;
+                typeContext.captures = fn.captureTypes;
+                if (!typeContext.selfType && !fn.closureSymbol.empty()) {
+                    // A machine method or a lambda body: `this` is the instance of the
+                    // class the lowering built (a value receiver reads through it).
+                    typeContext.selfType = sema::namedType(fn.closureSymbol);
                 }
-                return names;
+                typeContextReady = true;
+                return typeContext;
+            }
+
+            const Dictionary<Str, ast::TypePtr> &frameTypes() {
+                if (frameNamesStale) {
+                    frameNames.clear();
+                    for (int i = 0; i < (int) out.vars.size(); i++) {
+                        ast::TypePtr type = ilVarType(out, i);
+                        if (type) frameNames[out.vars[i].name] = type;
+                    }
+                    frameNamesStale = false;
+                }
+                return frameNames;
             }
 
             // The type of an expression, from the rules the *type pass* applies to a
@@ -394,20 +432,7 @@ namespace linear {
             // the caller then leaves the slot untyped.
             ast::TypePtr exprType(const Expr &e) {
                 if (fn.facts == nullptr) return nullptr;
-                sema::Body context;
-                context.decl = fn.decl;
-                context.selfType = fn.receiver;
-                context.selfDecl = fn.selfDecl;
-                context.typeParams = fn.typeParams;
-                context.paramNames = fn.paramNames;
-                context.paramTypes = fn.paramTypes;
-                context.captures = fn.captureTypes;
-                if (!context.selfType && !fn.closureSymbol.empty()) {
-                    // A machine method or a lambda body: `this` is the instance of the
-                    // class the lowering built (a value receiver reads through it).
-                    context.selfType = sema::namedType(fn.closureSymbol);
-                }
-                return sema::typeOfExpr(e, *fn.facts, context, frameTypes());
+                return sema::typeOfExpr(e, *fn.facts, bodyContext(), frameTypes());
             }
 
             // The type of the *value* an instruction writes for this expression. It is
@@ -833,32 +858,108 @@ namespace linear {
 
             // ---- calls -----------------------------------------------------------
 
-            // Whether a construction's callee names a `List<...>` type.
-            bool isListConstruction(const Expr &callee) {
-                return callee.kind == ExprKind::GenericName && callee.text == "List"
-                       && callee.typeArgs.size() == 1;
+            // The symbol a `native("...")` declaration names, without its quotes.
+            static Str nativeSymbolOf(const ast::Decl &decl) {
+                const Str &text = decl.nativeSymbol;
+                if (text.size() >= 2 && text[0] == '"' && text[text.size() - 1] == '"') {
+                    return text.substr(1, text.size() - 2);
+                }
+                return text;
+            }
+
+            // Whether a call's target is the prelude's list literal (`rtl.kt`'s
+            // `listOf<T>`): the one native whose *call* is not a call.
+            static bool isListOf(const ast::Decl &target) {
+                return target.isNative && target.hasNativeSymbol
+                       && nativeSymbolOf(target) == "simse_listOf";
+            }
+
+            // The `List<T>` a `listOf<T>(...)` names: the type argument it was written
+            // with, or - when it was written without one, which the language infers
+            // (`specs/functions.md`) - the type of its first element.
+            ast::TypePtr listOfType(const Expr &callee, const List<ExprPtr> &args, int from) {
+                if (callee.kind == ExprKind::GenericName && callee.typeArgs.size() == 1) {
+                    return sema::genericType("List", callee.typeArgs);
+                }
+                if (from < (int) args.size()) {
+                    const ast::TypePtr element = exprType(*args[from]);
+                    if (element) {
+                        List<ast::TypePtr> typeArgs;
+                        typeArgs.push_back(element);
+                        return sema::genericType("List", typeArgs);
+                    }
+                }
+                return nullptr;
             }
 
             // The declaration a call resolves to, when the extractor can name it: the
             // same rule the checker applies - an exact parameter count first, then a last
             // parameter a call may pack into - so a stage that needs more than the name
-            // does not have to guess. Null when the facts are not available (a body with
-            // no facts, or a callee that is a local).
-            const ast::Decl *callTarget(const Expr &callee, int argCount, bool member) {
+            // does not have to guess. A member call also resolves by its *receiver*: two
+            // types may each have a method of the same name (`Analyzer.exprType` and
+            // `IlExtractor.exprType` take different parameters), and a name is not a
+            // declaration. The receiver's type is asked for only when there is more than
+            // one declaration to choose between. An ambiguous name resolves to nothing -
+            // no packing, no conversion - which is exactly the call it was before either
+            // existed. Null when the facts are not available (a body with no facts, a
+            // callee that is a local, a static call's type).
+            const ast::Decl *callTarget(const Expr &callee, const Expr *receiver, int argCount,
+                                        bool member) {
                 if (fn.facts == nullptr) return nullptr;
-                const ast::Decl *pack = nullptr;
+                List<const sema::FnFact *> candidates;
                 for (const sema::FnFact &fact: fn.facts->functions) {
                     if (fact.decl == nullptr || fact.decl->name != callee.text) continue;
                     if ((fact.receiver != nullptr) != member) continue;
-                    const int paramCount = (int) fact.decl->params.size();
-                    if (paramCount == argCount) return fact.decl;
-                    if (pack == nullptr && paramCount > 0
-                        && sema::isPackTarget(fact.decl->params[paramCount - 1].type.get())
+                    candidates.push_back(&fact);
+                }
+                if (candidates.size() > 1 && member && receiver != nullptr) {
+                    const ast::TypePtr receiverType = exprType(*receiver);
+                    const ast::TypeExpr *recv = receiverType
+                                                        ? sema::pointeeOf(receiverType.get())
+                                                        : nullptr;
+                    List<const sema::FnFact *> matching;
+                    for (const sema::FnFact *fact: candidates) {
+                        if (recv != nullptr && fact->receiver != nullptr
+                            && !sema::unifyType(*fact->receiver, *recv, fact->templateParams)) {
+                            continue; // another type's method of the same name
+                        }
+                        matching.push_back(fact);
+                    }
+                    candidates = matching;
+                }
+                const ast::Decl *exact = nullptr;
+                const ast::Decl *pack = nullptr;
+                int exactCount = 0;
+                int packCount = 0;
+                for (const sema::FnFact *fact: candidates) {
+                    const int paramCount = (int) fact->decl->params.size();
+                    if (paramCount == argCount) {
+                        exact = fact->decl;
+                        exactCount++;
+                        continue;
+                    }
+                    if (paramCount > 0
+                        && sema::isPackTarget(fact->decl->params[paramCount - 1].type.get())
                         && argCount >= paramCount - 1) {
-                        pack = fact.decl;
+                        pack = fact->decl;
+                        packCount++;
                     }
                 }
-                return pack;
+                if (exactCount > 0) return exactCount == 1 ? exact : nullptr;
+                return packCount == 1 ? pack : nullptr;
+            }
+
+            // The type of an *argument*, which the pack and the handle conversions both
+            // ask for: a name is a slot of this frame and already carries one, so the
+            // common argument costs a dictionary lookup; anything else has to be asked of
+            // the type rules, which is the expensive question and the reason it is asked
+            // as rarely as the rules allow.
+            ast::TypePtr argumentType(const Expr &e) {
+                if (e.kind == ExprKind::Name) {
+                    auto found = varAt.find(e.text);
+                    if (found != varAt.end()) return ilVarType(out, found->second);
+                }
+                return exprType(e);
             }
 
             // Where the *pack* starts in an argument list, or -1 when the arguments are
@@ -872,7 +973,7 @@ namespace linear {
                 const ast::TypeExpr *wanted = target->params[target->params.size() - 1].type.get();
                 if (!sema::isPackTarget(wanted)) return -1;
                 if ((int) args.size() == (int) target->params.size() && !args.empty()) {
-                    const ast::TypePtr last = exprType(*args[args.size() - 1]);
+                    const ast::TypePtr last = argumentType(*args[args.size() - 1]);
                     if (!last || sema::listTypeOf(last.get()) != nullptr) return -1;
                 }
                 return (int) target->params.size() - 1;
@@ -901,6 +1002,73 @@ namespace linear {
                 return bound;
             }
 
+            // A value read out of a handle, as a slot of the pointee's type: what a
+            // by-value parameter needs when the argument is a borrow or a counted
+            // reference. (`CopyValue` is the language's `copy`, which reads through a
+            // handle - the emitter spells it `*(x)`.)
+            int readThrough(const ast::TypeExpr *pointeeType, int from) {
+                const ast::TypePtr type = std::make_shared<ast::TypeExpr>(*pointeeType);
+                const int slot = freshSlot(ilTypeText(*type), type);
+                emit(IlOpKind::CopyValue, {slot, from});
+                return slot;
+            }
+
+            // The argument a call passes for one parameter, converted the way the two
+            // types require (`specs/functions.md`):
+            //
+            // | parameter | argument |                   |
+            // | --------- | -------- | ----------------- |
+            // | `*T`      | `T`      | the place's address (`&x`) |
+            // | `*T`      | `&T`     | the handle's pointee (`x.get()`) |
+            // | `T`       | `*T`/`&T`| a copy of the pointee |
+            // | `&T`      | `T`/`*T` | a *boxed copy* - `&x` means exactly that |
+            //
+            // Nothing is converted when the two are not the same type to begin with: a
+            // `List<Int>` argument is not a `*List<Str>`, and the call is the type error
+            // it always was. This is why a parameter can change from `List<T>` to
+            // `*List<T>` (a borrow, no copy) without every caller having to spell the
+            // `*`, and why the reverse change still compiles. A `*T` *binding*
+            // (`val p: *T = x`) is a different question - a pointer that outlives the
+            // expression it points into has to be asked for, so the writer writes it.
+            int convertArgument(const ast::Decl *target, int index, const Expr &arg, int slot) {
+                if (target == nullptr || index >= (int) target->params.size()) return slot;
+                const ast::TypeExpr *param = target->params[index].type.get();
+                if (param == nullptr) return slot;
+                const bool wantPointer = param->kind == ast::TypeKind::Pointer;
+                const bool wantShared = !wantPointer && sema::isHandleType(param);
+                // The argument's type: the slot it was extracted into already carries one
+                // - that is what makes an instruction one operation over typed slots - so
+                // this costs a lookup in the common case. Only an untyped slot (a `for`
+                // machine, a bare `null`) has to be asked of the type rules, which is the
+                // expensive question.
+                ast::TypePtr actual = ilVarType(out, slot);
+                if (actual == nullptr) actual = exprType(arg);
+                if (actual == nullptr) return slot;
+                const ast::TypeExpr *wanted = sema::pointeeOf(param);
+                const ast::TypeExpr *given = sema::pointeeOf(actual.get());
+                if (wanted == nullptr || given == nullptr) return slot;
+                if (ilTypeText(*wanted) != ilTypeText(*given)) return slot; // not the same type
+                const bool havePointer = actual->kind == ast::TypeKind::Pointer;
+                const bool haveShared = !havePointer && sema::isHandleType(actual.get());
+                const bool haveValue = !havePointer && !haveShared;
+                if ((wantPointer && havePointer) || (wantShared && haveShared)) return slot;
+                if (wantPointer) {
+                    const ast::TypePtr handle = std::make_shared<ast::TypeExpr>(*param);
+                    const int bound = freshSlot(ilTypeText(*handle), handle);
+                    emit(IlOpKind::Deref, {bound, slot}); // an address, never a copy
+                    return bound;
+                }
+                if (wantShared) {
+                    const int value = haveValue ? slot : readThrough(wanted, slot);
+                    const ast::TypePtr box = std::make_shared<ast::TypeExpr>(*param);
+                    const int held = freshSlot(ilTypeText(*box), box);
+                    emit(IlOpKind::Box, {held, value}); // `&x` boxes a copy
+                    return held;
+                }
+                if (haveValue) return slot;
+                return readThrough(wanted, slot);
+            }
+
             // `dst < 0` means the result is dropped (`CallVoid`).
             void call(int dst, const Expr &e) {
                 const Expr &callee = *e.lhs;
@@ -919,15 +1087,40 @@ namespace linear {
 
                 // The trailing arguments may pack into a last parameter that is a list
                 // (`fun addAll(values: *List<Int>)` called as `addAll(1, 2, 3)`, or
-                // `"Hello {0}".Format("world")`).
-                const ast::Decl *target = callTarget(callee, (int) e.args.size(), receiverCall);
+                // `"Hello {0}".Format("world")`). A static call (`Res<Str>.ok(x)`) is
+                // not looked up: its callee is a type, and the same name may be a plain
+                // function of another shape.
+                const ast::Decl *target = staticCall
+                                               ? nullptr
+                                               : callTarget(callee,
+                                                            receiverCall ? callee.lhs.get() : nullptr,
+                                                            (int) e.args.size(), receiverCall);
                 const int packFrom = packStart(target, e.args);
+
+                // `listOf<T>(a, b, c)` is the language's list literal: the same `Pack`
+                // instruction a packed call builds, written out. It is not a call at all -
+                // the native it names exists so the checker and the type rules have a
+                // signature to read - so a backend that sees one of these writes the
+                // construction and never the function.
+                if (hasDst && packFrom >= 0 && target != nullptr && isListOf(*target)) {
+                    const ast::TypePtr listType = listOfType(callee, e.args, packFrom);
+                    if (listType != nullptr) {
+                        setSlotType(dst, listType);
+                        List<int> packing;
+                        packing.push_back(dst);
+                        for (int i = packFrom; i < (int) e.args.size(); i++) {
+                            packing.push_back(operand(e.args[i]));
+                        }
+                        emit(IlOpKind::Pack, packing);
+                        return;
+                    }
+                }
 
                 List<int> args;
                 List<int> argTypes;
                 const int plain = packFrom < 0 ? (int) e.args.size() : packFrom;
                 for (int i = 0; i < plain; i++) {
-                    int slot = operand(e.args[i]);
+                    int slot = convertArgument(target, i, *e.args[i], operand(e.args[i]));
                     args.push_back(slot);
                     argTypes.push_back(operandType(slot, e.args[i]));
                 }
@@ -971,20 +1164,10 @@ namespace linear {
                         unsupported("constructor call with no destination");
                         return;
                     }
-                    // A `List<T>` built *from* its elements: `List<Str>("a", "b", "c")`
-                    // is one `Pack`, which is the cheapest way to write a literal list -
-                    // the elements are copied into the fresh list and nothing else is, and
-                    // up to four of them stay in its inline buffer. The count
-                    // constructions are *not* this: they are the RTL's
-                    // `listOfCount`/`listOfFilled` (`cppsrc/rtl/rtl.kt`), so a literal can
-                    // never be mistaken for a size. `List<T>()` with no arguments stays
-                    // the empty list, and `Array<T>(n)` stays the count construction it
-                    // is specified to be.
-                    if (!e.args.empty() && isListConstruction(callee)) {
-                        for (int arg: args) operands.push_back(arg); // `dst` is already there
-                        emit(IlOpKind::Pack, operands);
-                        return;
-                    }
+                    // A `List<T>()` with no arguments is the empty list, and `List<T>(n)`
+                    // / `List<T>(n, v)` are the RTL's *count* constructions - a literal
+                    // is `listOf<T>(a, b, c)`, which is the `Pack` above, so the two can
+                    // never be confused.
                     operands.push_back(typeIndex(baseText(callee), calleeToTypePtr(callee)));
                     for (int arg: args) operands.push_back(arg);
                     emit(IlOpKind::CallCtor, operands);

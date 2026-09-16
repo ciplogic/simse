@@ -143,9 +143,7 @@ fun main(): Int {
         println(i.toString() + ": " + v.toString())   // 0:0, 1:2, 2:4, ...
     }
 
-    val words: List<Str> = List<Str>()
-    words.append("one")
-    words.append("two")
+    val words: List<Str> = listOf<Str>("one", "two")
     for (w in words) {                     // a container, in its own order
         println(w)
     }
@@ -234,9 +232,7 @@ declare a local of the same name, because neither is naming the other's:
 typealias Taker = (Int) -> Unit
 
 fun main(): Int {
-    val items: List<Int> = List<Int>()
-    items.append(10)
-    items.append(20)
+    val items: List<Int> = listOf(10, 20)
 
     val addUp: Taker = (n: Int) -> {
         for (value in items) {           // `value` is this lambda's own
@@ -321,9 +317,7 @@ indexing, `toArray()`/`toList()` and the shared `arrayEmpty<T>()`;
 `SmallVector<4, T>` keeps up to four elements inline.
 
 ```simse
-val values: List<Int> = List<Int>()
-values.append(10)
-values.append(20)
+val values: List<Int> = listOf(10, 20)     // one instruction, elements inline
 values.removeAt(0)
 println(values.size())                   // 1
 
@@ -331,6 +325,59 @@ val arr: Array<Int> = values.toArray()
 println(arr[0])                          // 20
 var again: List<Int> = arr.toList()
 again.append(30)
+```
+
+A list is built from its elements with `listOf(a, b, c)` - one instruction, and up to
+four elements live inside the list, so a short literal allocates nothing - or from a
+count with the type's own construction:
+
+```simse
+val keywords: List<Str> = listOf<Str>("static", "var", "val")
+val primes: List<Int> = listOf(2, 3, 5, 7)          // the type is inferred
+val zeros: List<Int> = List<Int>(3)                 // three default elements
+val flags: List<Bool> = List<Bool>(4, false)        // four copies of false
+val none: List<Str> = listOf<Str>()
+```
+
+And a call **packs its trailing arguments** into a last parameter that is a list, so a
+function can take "all the rest" the way `printf` does:
+
+```simse
+fun addAll(values: *List<Int>): Int {
+    var total: Int = 0
+    for (*value in values) {
+        total = total + *value
+    }
+    return total
+}
+
+println(addAll(1, 2, 3))                         // 6 - one list, built in place
+println(addAll())                                // 0 - the empty list
+println(addAll(*values))                         // the list itself, not a list of a list
+```
+
+So a `fun format(shape: Str, items: *List<Str>)` is called as
+`format("Hello!")` or `format("Hello {0}!", "world")`: everything past the shape
+packs into one list.
+
+The `*List<T>` form is the zero-copy one: the packed list is a temporary of the
+caller's own frame and the parameter is its address, so each element is copied once and
+the list not at all. A by-value `List<T>` parameter packs too, and takes its copy as
+value semantics require. The **counted** forms (`&List<T>`, `PList<T>`) are deliberately
+not pack targets - a control block and a reference count for a temporary that dies at
+the end of the statement would be cost with no use - so `sum(1, 2, 3)` against a
+`&List<Int>` parameter is the arity error it always was; write `*List<Int>`.
+
+The handle in a **call argument** is inferred when both sides are the same type, which
+is what lets a parameter move from a copy to a borrow without breaking its callers:
+
+```simse
+val xs: List<Int> = listOf(4, 5)
+addAll(xs)      // the compiler passes `*xs`: the list itself, borrowed, no copy
+addAll(*xs)     // the same call, written out
+sum(xs)         // a by-value parameter takes its copy
+sum(*xs)        // ... and reads through a pointer the same way
+boxed(xs)       // a `&List<Int>` parameter takes a copy *inside* the reference
 ```
 
 `Dictionary<K, V>` is the hash dictionary (`get`/`has`/`insert`/`remove`/`size`/

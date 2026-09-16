@@ -1572,3 +1572,93 @@ compiler *did* catch and one it could not:
   change was meant to remove; hence `startsWithPtr`.
 - `continue` before the loop's `i = i + 1`: the compiler cannot see it, and the
   lookup spins forever. Increment first, then `continue`.
+
+- **A call packs its trailing arguments, and a list has a literal (T61).** The one
+  thing a Simse program could not do in one instruction was build a small list: every
+  element was an `append`, so `val keywords = ["static", "var", "val"]` was three calls
+  and three growth checks - and a function wanting "all the rest" of its arguments
+  (`format(shape, items...)`) could not be written at all. Both are now the same
+  instruction, `Pack` (`impl_specs/linear-il.md`): the IL's `newarr` + fill.
+
+  - **A callee whose last parameter is a list packs.** `fun addAll(values: *List<Int>)`
+    called as `addAll(1, 2, 3)` builds one list of three elements; `sum(6, 7, 8)` with a
+    by-value `List<Int>` packs too. In the extractor, not the parser: the arguments are
+    already extracted into slots there, the frame is flat, and the pack is one more
+    instruction over slots that exist.
+  - **The counted forms are deliberately excluded** (`&List<T>`, `PList<T>`, which are
+    the same `std::shared_ptr<List<T>>`): a packed list is a throwaway temporary, so a
+    control block plus a reference count that drops at the end of the same statement
+    would be cost with no use. `sum(1, 2, 3)` against a `&List<Int>` parameter is the
+    arity error it always was (`stress/diagnostic-pack-counted`), and the zero-copy
+    spelling is the borrow.
+  - **One argument for one parameter is the list itself** - `addAll(*xs)` passes it and
+    builds no one-element list of a list - which is what tells `addAll(*xs)` from
+    `addAll(1)` when both have one argument. An argument whose type the rules cannot name
+    leaves the call exactly as it was.
+  - **`listOf<T>(a, b, c)` is the literal**, the same instruction spelled directly. Since
+    `List` is `SmallVector<T, 4>`, a literal of up to four elements stores them in the
+    inline buffer and allocates nothing: one construction, no growth, no heap. It is
+    *not* the type's own name doing double duty: `List<T>(...)` stays the RTL's
+    construction, which is a **count** (`List<Int>(3)`, `List<Bool>(4, false)`), so a
+    literal can never be mistaken for a size. Written without type arguments,
+    `listOf(2, 3, 5)` takes its element type from the first value. The prelude declares
+    it (`native("simse_listOf") fun listOf<T>(values: *List<T>): List<T>`) so the
+    checker and the type rules have a signature to read, and the extractor emits the
+    `Pack` into the call's own destination instead of a call.
+  - **A call argument's handle is inferred** (`specs/functions.md`, "Handles at a
+    call"): a `*T` parameter accepts a `T` argument (its address - so an API can change
+    `fun f(xs: List<Int>)` to `fun f(xs: *List<Int>)` and every existing call keeps
+    compiling, and stops copying), a by-value parameter reads through a `*T`/`&T`
+    argument, and `&T` boxes a copy of what it is given. Types that are not the same are
+    not converted (`List<Int>` against `*List<Str>` is the type error it always was),
+    and a `*T` *binding* still writes its `*`.
+  - **A member call resolves by its receiver, and an ambiguous name resolves to
+    nothing.** `callTarget` (the extractor's window on the program's declarations, the
+    same rule the checker applies) now unifies the receiver's type, because two types
+    may each have a method of the same name - `Analyzer.exprType(expr: *AstXmlNode)` and
+    `IlExtractor.exprType(e: AstXmlNode)` both exist, and a name is not a declaration.
+    That was harmless while the lookup only decided packing; with the argument
+    conversion it decided *types*, so it had to become exact.
+  - **The RTL's count constructions stay as they were** - `List<T>(n)` and
+    `List<T>(n, value)` - and `Array<T>(n)` keeps its count construction too (an array
+    is fixed-length, so a count is what it is built from - `specs/built-in-types.md`).
+
+  Measured over the compiler's own tree (`bun tools/_il_report.mjs`): 545 bodies,
+  38,151 instructions, **18 `Pack`** (the sources' own list literals - `listOf<IlSignature>`
+  in `LinearForm.kt`, `listOf<Str>` in `Scanner.kt`, `listOf<AstNodeAttribute>` in
+  `Parser.kt`, ...), 1,595 synthesized slots of which 93 untyped (a `for`'s machine slot
+  is one, so the count moves with the number of `for` loops) and 15 folded. The published
+  bootstrap goes 41,066 -> **42,633** lines (1.26 -> 1.31 MB) and self-transpiles in
+  **1078/1113 ms** (was 847/858 on the T60 tree with the smaller source), the hand-written
+  ring in 240/246 ms (`cl.exe`-only compile 17.0 s, the compiled bootstrap reproduces
+  itself in 1101 ms, full cycle 18.13 s) - the rings' *ratio* is unchanged at **4.5x**,
+  which is the number that does not move with the machine's load. This is a *user*
+  feature: the compiler itself packs nothing, so its own throughput is not the
+  measurement that matters.
+
+  Verified: both configurations rebuild clean, the five differentials are byte-identical,
+  T23 is byte-identical, `simse_tests.exe` **56/56**, `bun tools/stress.js` **35/35** on
+  the self-hosted ring and on the hand-written one (with the new `pack-args` case, and
+  `diagnostic-pack-counted` asserting the counted form is still refused), and
+  `cppsrc/simse_bootstrap.cpp` regenerated so `bun tools/bootstrap.js` reports the fixed
+  point byte for byte. No golden changed.
+
+  Docs updated with it: `specs/functions.md` ("Packing the trailing arguments"),
+  `specs/containers.md` ("Constructing a list"), `impl_specs/linear-il.md` (the `Pack`
+  row, the corpus numbers).
+
+- **The compiler's own Simse sources were migrated to the new vocabulary (T61, same
+  change).** With the literal and the packing rule in hand, the `.kt` ring was swept
+  file by file for three shapes: a local list built by consecutive `append`s (a literal
+  now), an `if`-chain testing one local against values (a `when` now), and an index walk
+  `while (i < C.size())` whose element is used as a place (`for (*item in C)` now). 29
+  conversions in the small files, 14 in `LinearForm.kt`, 11 in `Parser.kt`, 6 in
+  `Codegen.kt`, 16 in the sema pair, plus `Simplify`/`Yield`/`Linear`/`ExpressionLowering`
+  - and the refactor is *why* the emitted compiler now carries 18 `Pack`s. The rules
+  that kept it safe are worth keeping: the `when` subject must be a plain local that no
+  arm assigns to (the lowering evaluates it once, an `if`-chain re-reads it); the pointer
+  `for` is for a container the body does not mutate, with an index used *only* to index
+  it, and only where the element is used as a *place* (`*C[i]` becomes the loop variable
+  itself - a leftover `*` on a pointer is the one bug this pass produced, and the
+  generated C++ caught it: `xmlAttr(*field, ...)` on a `*AstXmlNode`). Nothing outside
+  `cppsrc/**/*.kt` changed in the sweep.
