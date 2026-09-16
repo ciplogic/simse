@@ -29,9 +29,12 @@
 namespace linear {
     // `Expression` is the lowering's own storage (`_sm_expr<n>`, `simse_sw_<n>`):
     // declared, so a backend declares it where the hoisting put it. `Temp` is the
-    // extractor's: a slot that exists only because a value position held more than a
-    // name, which a backend *folds* into the instruction that reads it (it has no
-    // source declaration to print and, in the corpus, exactly one use).
+    // extractor's: a slot it synthesised for a position the statements did not hold in
+    // a slot of its own. It is a declared slot like any other when the type rules can
+    // name it (the frame carries the type, and the declaration goes to the top of the
+    // instruction list with the rest of the frame); a slot whose type they cannot name
+    // has no declaration to print, so a backend folds its single use into the
+    // instruction that reads it.
     enum class IlVarKind { Argument, Local, Expression, Temp };
     // What the *shape* of a call is: the backend resolves the symbol (a native's C
     // name, a `_make_` factory, an extension lowered to a free function) from the
@@ -72,6 +75,7 @@ namespace linear {
         FieldAddr,
         IndexAddr,
         GetStatic,
+        GetStaticAddr,
         SetStatic,
         Call,
         CallVoid,
@@ -191,6 +195,10 @@ namespace linear {
         // neither a frame slot nor one of these is a `GetStatic` the extractor cannot
         // type (it stays `?` in the frame).
         Dictionary<Str, Str> statics;
+        // The class this body is a method of, when the *lowering* built it (a state
+        // machine): its fields are what `this.<name>` reaches, and the type rules need
+        // them (`sema::Body::selfDecl`).
+        const ast::Decl *selfDecl = nullptr;
 
         // What a *lambda* body needs to run its own type pass: the program facts (the
         // extractor types a lambda body itself, because a lambda's frame is not the

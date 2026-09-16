@@ -96,6 +96,12 @@ namespace sema {
         const ast::Decl* decl = nullptr;
         ast::TypePtr selfType; // the type of `this`, when there is one
         List<Str> typeParams;
+        // The class `this` is an instance of, when it is one the *lowering* built: a
+        // state machine (impl_specs/yield.md). Such a class has no declaration the
+        // program wrote, so its fields are reachable only through this - and the
+        // rules have to reach them, or `this.<field>` (a machine's `_sm_self`, say)
+        // types as nothing and the emitter has to guess what it is.
+        const ast::Decl* selfDecl = nullptr;
 
         // A *lambda* body has no declaration. Its frame is its own parameters plus the
         // values it captures, which the language models as fields of the closure
@@ -124,4 +130,16 @@ namespace sema {
     List<ast::StmtPtr> inferTypes(const List<ast::StmtPtr>& body, const Facts& facts,
                                   const Body& ctx,
                                   Dictionary<Str, ast::TypePtr>* inferred = nullptr);
+
+    // The type of **one expression**, with the names in scope given explicitly: the
+    // same rules the pass applies to a whole body, asked about a single node.
+    //
+    // The IL extractor is the caller that needs this. Its frame is flat (a name per
+    // slot, no scopes), and the slots it *synthesizes* - the place behind a read, a
+    // value it has to declare - have no declaration in the source to take a type
+    // from, so it asks here. That is what lets every slot of an instruction list
+    // carry a type and every instruction be one operation over typed slots
+    // (`impl_specs/linear-il.md`). Null when the rules cannot name the expression.
+    ast::TypePtr typeOfExpr(const ast::Expr& expr, const Facts& facts, const Body& ctx,
+                            const Dictionary<Str, ast::TypePtr>& names);
 }

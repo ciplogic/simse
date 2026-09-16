@@ -30,9 +30,12 @@ import common
 import sema
 
 // `Expression` is the lowering's own storage (`_sm_expr<n>`, `simse_sw_<n>`):
-// declared, so a backend declares it where the hoisting put it. `Temp` is the
-// extractor's: a slot that exists only because a value position held more than a
-// name, which a backend *folds* into the instruction that reads it.
+// declared, so a backend declares it where the hoisting put it. `Temp` is the extractor's:
+// a slot it synthesised for a position the statements did not hold in a slot of its own.
+// It is a declared slot like any other when the type rules can name it (the frame carries
+// the type, and the declaration goes to the top of the instruction list with the rest of
+// the frame); a slot whose type they cannot name has no declaration to print, so a backend
+// folds its single use into the instruction that reads it.
 enum IlVarKind {
     Argument,
     Local,
@@ -90,6 +93,7 @@ enum IlOpKind {
     FieldAddr,
     IndexAddr,
     GetStatic,
+    GetStaticAddr,
     SetStatic,
     Call,
     CallVoid,
@@ -159,6 +163,10 @@ data class IlFunction(
     var receiver: AstXmlNode,
     var symbol: Str,
     var statics: Dictionary<Str, Str>,
+    // The class this body is a method of, when the *lowering* built it (a state machine):
+    // its fields are what `this.<name>` reaches, and the type rules need them
+    // (`SemBody.selfDecl`).
+    var selfDecl: AstXmlNode,
     var paramNames: List<Str>,
     var paramTypes: List<AstXmlNode>,
     var closureSymbol: Str,
@@ -236,6 +244,7 @@ fun makeIlSignatures(): List<IlSignature> {
     table.append(IlSignature(IlOpKind.FieldAddr, "Var,Var,Text"))
     table.append(IlSignature(IlOpKind.IndexAddr, "Var,Var,Value"))
     table.append(IlSignature(IlOpKind.GetStatic, "Var,Text"))
+    table.append(IlSignature(IlOpKind.GetStaticAddr, "Var,Text"))
     table.append(IlSignature(IlOpKind.SetStatic, "Text,Value"))
     table.append(IlSignature(IlOpKind.Call, "Var,Method,Value..."))
     table.append(IlSignature(IlOpKind.CallVoid, "Method,Value..."))
@@ -277,6 +286,7 @@ fun makeIlOpKindTexts(): List<Str> {
     texts.append("FieldAddr")
     texts.append("IndexAddr")
     texts.append("GetStatic")
+    texts.append("GetStaticAddr")
     texts.append("SetStatic")
     texts.append("Call")
     texts.append("CallVoid")
@@ -462,6 +472,9 @@ fun ilWritesDestination(kind: IlOpKind): Bool {
         return true
     }
     if (kind == IlOpKind.GetStatic) {
+        return true
+    }
+    if (kind == IlOpKind.GetStaticAddr) {
         return true
     }
     if (kind == IlOpKind.Call) {
@@ -775,6 +788,10 @@ fun ilOpComment(body: *IlBody, op: *IlOp): Str {
     }
     if (kind == IlOpKind.GetStatic) {
         return ilVarName(body, ilOperandAt(operands, 0)) + " = "
+        +ilPoolText(body, ilOperandAt(operands, 1))
+    }
+    if (kind == IlOpKind.GetStaticAddr) {
+        return ilVarName(body, ilOperandAt(operands, 0)) + " = &"
         +ilPoolText(body, ilOperandAt(operands, 1))
     }
     if (kind == IlOpKind.SetStatic) {
@@ -1099,6 +1116,24 @@ fun ilReceiverTypeNode(typeNode: *AstXmlNode): AstXmlNode {
     return ilPointerNode(typeNode)
 }
 
+// Whether a type is reached through a handle (`&T`, `*T`, or the `PList<T>` alias of
+// `&List<T>`): the C++ ring's `sema::isHandleType`, which this ring spells on the emitter
+// (`Emitter.isHandleType`). The extractor is not the emitter, so it reads the same rule
+// here.
+fun ilIsHandleType(typeNode: *AstXmlNode): Bool {
+    if (xmlIsEmpty(typeNode)) {
+        return false
+    }
+    val kind: AstNodeCategory = xmlKind(typeNode)
+    if (kind == AstNodeCategory.TypeReference || kind == AstNodeCategory.TypePointer) {
+        return true
+    }
+    if (kind == AstNodeCategory.TypeGeneric && xmlAttr(typeNode, AstNodeAttributeKind.Name) == "PList") {
+        return true
+    }
+    return false
+}
+
 // ---- the extractor ---------------------------------------------------------
 
 // One body into instructions. The frame comes from `IlFunction` (a declaration's
@@ -1117,7 +1152,11 @@ data class IlExtractor(
     var methodAt: Dictionary<Str, Int>,
     var labelAt: Dictionary<Str, Int>,
     var nextBase: Int,
-    var line: Int
+    var line: Int,
+    // The synthesized slots that carry a type: their declarations go to the top of the
+    // instruction list (with the line that needed them, for the dump).
+    var hoisted: List<Int>,
+    var hoistedLines: List<Int>
 ) {
 
     // ---- tables -----------------------------------------------------------
@@ -1207,15 +1246,77 @@ data class IlExtractor(
             IlVarKind.Temp, typeNode
         )
         this.nextBase = this.nextBase + 1
-        // A slot the extractor synthesised exists nowhere in the statements, so the
-        // instruction list has to say where it comes from: here, in front of the
-        // instruction that first writes it.
-        this.emit(IlOpKind.Declare, ilOps1(slot))
+        if (!xmlIsEmpty(*typeNode)) {
+            this.hoisted.append(slot)
+            this.hoistedLines.append(this.line)
+        } else {
+            // A slot the type rules could not name: the instruction list has to say where
+            // it comes from *here*, in front of the instruction that first writes it, and
+            // the backend declares it with `auto`.
+            this.emit(IlOpKind.Declare, ilOps1(slot))
+        }
         return slot
     }
 
     fun freshSlotText(typeText: Str): Int {
         return this.freshSlot(typeText, xmlEmptyNode())
+    }
+
+    // ---- the types of what the extractor synthesizes ----------------------
+
+    // The frame is a scope: every slot's name and its type. That is exactly the shape
+    // `semTypeOfExpr` takes, and the reason the extractor can give a type to a slot the
+    // statements never declared (a place, a value position the lowering left inline) - a
+    // slot without one cannot be declared at the top of the body, and then the instruction
+    // that reads it has to inline the whole expression it stands for.
+    fun frameTypes(): Dictionary<Str, AstXmlNode> {
+        var names: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
+        var i: Int = 0
+        while (i < this.out.vars.size()) {
+            val typeNode: AstXmlNode = ilVarType(*this.out, i)
+            if (!xmlIsEmpty(*typeNode)) {
+                names.insert(this.out.vars[i].name, typeNode)
+            }
+            i = i + 1
+        }
+        return names
+    }
+
+    // The type of an expression, from the rules the *type pass* applies to a whole body -
+    // asked here about one node, with this body's frame in scope. An empty node when the
+    // rules cannot name it (or when there are no facts to ask); the caller then leaves the
+    // slot untyped.
+    fun exprType(e: AstXmlNode): AstXmlNode {
+        if (this.fn.facts == null) {
+            return xmlEmptyNode()
+        }
+        var context: SemBody = SemBody(
+            this.fn.decl, this.fn.typeParams, this.fn.receiver, this.fn.selfDecl,
+            this.fn.paramNames, this.fn.paramTypes, this.fn.captureTypes
+        )
+        if (xmlIsEmpty(*context.selfType) && !this.fn.closureSymbol.isEmpty()) {
+            // A machine method or a lambda body: `this` is the instance of the class the
+            // lowering built (a value receiver reads through it).
+            context.selfType = ilNamedTypeNode(this.fn.closureSymbol)
+        }
+        val names: Dictionary<Str, AstXmlNode> = this.frameTypes()
+        return semTypeOfExpr(*e, this.fn.facts, *context, *names)
+    }
+
+    // The type of the *value* an instruction writes for this expression. It is the type
+    // rules' answer, unchanged: they already describe what the emitter spells (`*x` on a
+    // value is the address, on `&T` the `.get()`, on `*T` the load through it).
+    fun valueType(e: AstXmlNode): AstXmlNode {
+        return this.exprType(e)
+    }
+
+    // The type of a slot to synthesise for `e`: its own type, spelled the way the frame
+    // spells types, or `?` when there is none.
+    fun slotTypeText(typeNode: AstXmlNode): Str {
+        if (xmlIsEmpty(*typeNode)) {
+            return "?"
+        }
+        return ilTypeText(*typeNode)
     }
 
     fun emit(kind: IlOpKind, operands: List<Int>): Unit {
@@ -1258,6 +1359,34 @@ data class IlExtractor(
 
     fun run(body: List<AstXmlNode>): IlBody {
         this.stmts(*body)
+        // The extractor's own slots are the body's registers: a slot with a type is
+        // declared once, at the top of the instruction list, exactly where `hoistSlots` put
+        // the lowering's own slots - so the frame is flat, no jump can cross a declaration,
+        // and nothing has to be scoped. A slot without a type (a shape the type rules
+        // cannot name) keeps its declaration in front of the instruction that first writes
+        // it, which the backend then pairs with that instruction as `auto`.
+        if (this.hoisted.size() > 0) {
+            var ops: List<IlOp> = List<IlOp>()
+            var lines: List<Int> = List<Int>()
+            var i: Int = 0
+            while (i < this.hoisted.size()) {
+                ops.append(IlOp(IlOpKind.Declare, ilOps1(this.hoisted[i])))
+                lines.append(this.hoistedLines[i])
+                i = i + 1
+            }
+            i = 0
+            while (i < this.out.ops.size()) {
+                ops.append(this.out.ops[i])
+                i = i + 1
+            }
+            i = 0
+            while (i < this.out.lines.size()) {
+                lines.append(this.out.lines[i])
+                i = i + 1
+            }
+            this.out.ops = ops
+            this.out.lines = lines
+        }
         return this.out
     }
 
@@ -1522,7 +1651,8 @@ data class IlExtractor(
         if (kind == AstNodeCategory.ExprNullLit) {
             // `null`'s spelling depends on the expected type (`Opt<T>()` vs `nullptr`),
             // which only the destination slot's type states for certain - so it is
-            // materialised.
+            // materialised. It is the one value with no type of its own, so the slot stays
+            // untyped and the backend inlines it where it is read.
             val slot: Int = this.freshSlotText("?")
             this.emit(IlOpKind.SetVar_Null, ilOps1(slot))
             return slot
@@ -1535,7 +1665,11 @@ data class IlExtractor(
             || kind == AstNodeCategory.ExprUnary || kind == AstNodeCategory.ExprRef
             || kind == AstNodeCategory.ExprDeref || kind == AstNodeCategory.ExprCopy
         ) {
-            val slot: Int = this.freshSlotText("?")
+            // A value the body does not hold in a slot: the extractor makes one, and the
+            // *type rules* type it - so the instruction that reads it names a declared slot
+            // instead of inlining the whole expression it stands for.
+            val typeNode: AstXmlNode = this.valueType(*expr)
+            val slot: Int = this.freshSlot(this.slotTypeText(typeNode), typeNode)
             this.into(slot, *expr)
             return slot
         }
@@ -1579,13 +1713,13 @@ data class IlExtractor(
                 this.emit(IlOpKind.GetStatic, ilOps2(slot, this.poolIndex(this.baseText(lhs) + "." + fieldName)))
                 return
             }
-            this.emit(IlOpKind.GetField, ilOps3(slot, this.valueOf(lhs), this.poolIndex(fieldName)))
+            this.emit(IlOpKind.GetField, ilOps3(slot, this.receiverOf(lhs), this.poolIndex(fieldName)))
             return
         }
         if (kind == AstNodeCategory.ExprIndex) {
             this.emit(
                 IlOpKind.GetIndex, ilOps3(
-                    slot, this.valueOf(xmlChild(*e, AstNodeKind.Receiver)),
+                    slot, this.receiverOf(xmlChild(*e, AstNodeKind.Receiver)),
                     this.operandOf(*xmlChild(*e, AstNodeKind.Index))
                 )
             )
@@ -1615,9 +1749,31 @@ data class IlExtractor(
             return
         }
         if (kind == AstNodeCategory.ExprDeref) {
-            // `*x` is a borrow, `.get()`, or a load depending on what `x` is - the
-            // backend reads that from the operand's slot type.
-            this.emit(IlOpKind.Deref, ilOps2(slot, this.operandOf(*xmlChild(*e, AstNodeKind.Operand))))
+            // `*x` is the address of what `x` denotes: of a value's own storage (the place
+            // itself, or `&name`), of a counted reference's pointee (`.get()`), or the load
+            // through a raw pointer - the backend reads which from the operand's slot type.
+            // A place that is a chain already *is* its address, so it is copied; a name, a
+            // handle and a call's result are read and the address is taken from the value.
+            val operand: AstXmlNode = xmlChild(*e, AstNodeKind.Operand)
+            val operandName: Str = xmlAttr(*operand, AstNodeAttributeKind.Name)
+            if (xmlKind(*operand) == AstNodeCategory.ExprName && this.isStaticName(operandName)) {
+                // A file-level static is not a slot of the frame, so its address is its own
+                // instruction (writing the value into a slot first would take the address of
+                // a copy).
+                this.emit(IlOpKind.GetStaticAddr, ilOps2(slot, this.poolIndex(operandName)))
+                return
+            }
+            if ((xmlKind(*operand) == AstNodeCategory.ExprMember
+                        || xmlKind(*operand) == AstNodeCategory.ExprIndex)
+                && !this.isHandleExpr(operand)
+            ) {
+                // A chain that is a place: the address *is* the place slot. (A call's result
+                // is not a place - its address is taken at the call, which is what `Deref`
+                // spells for a value.)
+                this.emit(IlOpKind.SetVar, ilOps2(slot, this.receiverOf(operand)))
+                return
+            }
+            this.emit(IlOpKind.Deref, ilOps2(slot, this.valueOf(operand)))
             return
         }
         if (kind == AstNodeCategory.ExprCopy) {
@@ -1640,23 +1796,103 @@ data class IlExtractor(
         this.unsupported("expression")
     }
 
-    // A read of a place: the value behind it, as a slot.
+    // A read of a place: the value behind it, as a slot. The place itself is read through
+    // `receiverOf` - so reading `a[i].f` borrows the element rather than copying it into a
+    // temporary of the extractor's own.
     fun valueOf(e: AstXmlNode): Int {
         if (xmlKind(*e) == AstNodeCategory.ExprName) {
             return this.nameOf(e)
         }
-        val slot: Int = this.freshSlotText("?")
+        val typeNode: AstXmlNode = this.valueType(e)
+        val slot: Int = this.freshSlot(this.slotTypeText(typeNode), typeNode)
         this.into(slot, e)
         return slot
     }
 
-    // A base that is a *place*: a call's receiver, or an assignment target's base. A
-    // plain name is that slot; anything deeper becomes an **address** slot
-    // (`FieldAddr`/`IndexAddr`), so a call that mutates its receiver reaches the original
-    // and not a copy.
+    // Whether an expression's *value* is already a handle (`&T`/`*T`/`PList`). Such a value
+    // denotes storage on its own, so it *is* the place: taking its address would take the
+    // address of the pointer.
+    fun isHandleExpr(e: AstXmlNode): Bool {
+        val typeNode: AstXmlNode = this.exprType(e)
+        if (xmlIsEmpty(*typeNode)) {
+            return false
+        }
+        return ilIsHandleType(*typeNode)
+    }
+
+    // Whether a base needs an explicit address instruction: it is an *inline* value, of a
+    // type the rules can name. A handle value already denotes the storage, and an
+    // unnameable one keeps the value form - the address of something whose type is unknown
+    // is not a thing the emitted C++ can spell.
+    fun needsPlace(e: AstXmlNode): Bool {
+        val typeNode: AstXmlNode = this.exprType(e)
+        if (xmlIsEmpty(*typeNode)) {
+            return false
+        }
+        return !ilIsHandleType(*typeNode)
+    }
+
+    // The address of an inline value's storage, as one instruction: the slot holds the
+    // pointer, typed from the type rules, so a backend can declare it and resolve a call
+    // reached through it. A place is never a copy.
+    fun place(
+        kind: IlOpKind, baseExpr: AstXmlNode, whole: AstXmlNode, field: Str,
+        indexExpr: AstXmlNode
+    ): Int {
+        val pointee: AstXmlNode = this.exprType(whole)
+        var typeNode: AstXmlNode = xmlEmptyNode()
+        if (!xmlIsEmpty(*pointee)) {
+            typeNode = ilPointerNode(*pointee)
+        }
+        var typeText: Str = "*?"
+        if (!xmlIsEmpty(*typeNode)) {
+            typeText = ilTypeText(*typeNode)
+        }
+        val slot: Int = this.freshSlot(typeText, typeNode)
+        val base: Int = this.receiverOf(baseExpr)
+        var operands: List<Int> = ilOps2(slot, base)
+        if (kind == IlOpKind.FieldAddr) {
+            operands.append(this.poolIndex(field))
+        } else {
+            operands.append(this.operandOf(*indexExpr))
+        }
+        this.emit(kind, operands)
+        return slot
+    }
+
+    // The address of a file-level static, as one instruction: the base a call or a write
+    // through the static needs (`&ns1_names`), never a copy of it.
+    fun staticAddr(e: AstXmlNode): Int {
+        val pointee: AstXmlNode = this.exprType(e)
+        var typeNode: AstXmlNode = xmlEmptyNode()
+        if (!xmlIsEmpty(*pointee)) {
+            typeNode = ilPointerNode(*pointee)
+        }
+        var typeText: Str = "*?"
+        if (!xmlIsEmpty(*typeNode)) {
+            typeText = ilTypeText(*typeNode)
+        }
+        val slot: Int = this.freshSlot(typeText, typeNode)
+        val name: Str = xmlAttr(*e, AstNodeAttributeKind.Name)
+        this.emit(IlOpKind.GetStaticAddr, ilOps2(slot, this.poolIndex(name)))
+        return slot
+    }
+
+    // A base through which something is reached: a call's receiver, a read's base, an
+    // assignment target's base. A plain name *is* that base; a handle value is one too (it
+    // already points at the storage); an *inline* value has to have its address taken -
+    // which is what `FieldAddr`/`IndexAddr` are. That is what keeps a read from copying an
+    // aggregate (the C++ of a field read is `p->f`, not a copy of a struct) and a write from
+    // being lost in a copy.
     fun receiverOf(e: AstXmlNode): Int {
         val kind: AstNodeCategory = xmlKind(*e)
         if (kind == AstNodeCategory.ExprName) {
+            // A file-level static is not a slot of the frame: as a base it is its own
+            // *address*, so a call that mutates it reaches the storage and not a copy of it
+            // (`names.append(x)` appends to `names`).
+            if (this.isStaticName(xmlAttr(*e, AstNodeAttributeKind.Name))) {
+                return this.staticAddr(e)
+            }
             return this.nameOf(e)
         }
         if (kind == AstNodeCategory.ExprMember) {
@@ -1664,24 +1900,22 @@ data class IlExtractor(
             if (this.isTypeBase(lhs)) {
                 return this.valueOf(e)
             }
-            val slot: Int = this.freshSlotText("*?")
-            this.emit(
-                IlOpKind.FieldAddr, ilOps3(
-                    slot, this.receiverOf(lhs),
-                    this.poolIndex(xmlAttr(*e, AstNodeAttributeKind.Name))
-                )
+            if (!this.needsPlace(e)) {
+                return this.valueOf(e)
+            }
+            return this.place(
+                IlOpKind.FieldAddr, lhs, e,
+                xmlAttr(*e, AstNodeAttributeKind.Name), xmlEmptyNode()
             )
-            return slot
         }
         if (kind == AstNodeCategory.ExprIndex) {
-            val slot: Int = this.freshSlotText("*?")
-            this.emit(
-                IlOpKind.IndexAddr, ilOps3(
-                    slot, this.receiverOf(xmlChild(*e, AstNodeKind.Receiver)),
-                    this.operandOf(*xmlChild(*e, AstNodeKind.Index))
-                )
+            if (!this.needsPlace(e)) {
+                return this.valueOf(e)
+            }
+            return this.place(
+                IlOpKind.IndexAddr, xmlChild(*e, AstNodeKind.Receiver), e, Str(),
+                xmlChild(*e, AstNodeKind.Index)
             )
-            return slot
         }
         if (kind == AstNodeCategory.ExprDeref) {
             return this.operandOf(*xmlChild(*e, AstNodeKind.Operand))
@@ -1717,12 +1951,19 @@ data class IlExtractor(
             return slot
         }
         // A file-level static the extractor was told about, or a name only the backend can
-        // resolve (`GetStatic` in both cases).
+        // resolve (`GetStatic` in both cases). The type rules know the statics the program
+        // declares, so the slot carries a type and the backend declares it with the frame
+        // instead of inlining the read.
+        val typeNode: AstXmlNode = this.exprType(e)
         var typeText: Str = "?"
-        if (this.fn.statics.has(name)) {
-            typeText = this.fn.statics.get(name).value()
+        if (xmlIsEmpty(*typeNode)) {
+            if (this.fn.statics.has(name)) {
+                typeText = this.fn.statics.get(name).value()
+            }
+        } else {
+            typeText = ilTypeText(*typeNode)
         }
-        val fresh: Int = this.freshSlotText(typeText)
+        val fresh: Int = this.freshSlot(typeText, typeNode)
         this.emit(IlOpKind.GetStatic, ilOps2(fresh, this.poolIndex(name)))
         return fresh
     }
@@ -1743,6 +1984,14 @@ data class IlExtractor(
             return false
         }
         return !this.fn.statics.has(name)
+    }
+
+    // A name that is file-level static storage rather than a slot of the frame.
+    fun isStaticName(name: Str): Bool {
+        if (this.hasVar(name)) {
+            return false
+        }
+        return this.fn.statics.has(name)
     }
 
     fun baseText(e: AstXmlNode): Str {
@@ -1986,7 +2235,7 @@ data class IlExtractor(
         // Filled by the lambda's own type pass, below; `begin` copies it into the body.
         var lambdaTypes: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
         var info: IlFunction = IlFunction(
-            xmlEmptyNode(), xmlEmptyNode(), symbol, this.fn.statics,
+            xmlEmptyNode(), xmlEmptyNode(), symbol, this.fn.statics, xmlEmptyNode(),
             paramNames, paramTypes, symbol,
             Dictionary<Str, Bool>(), Dictionary<Str, AstXmlNode>(),
             this.fn.facts, this.fn.typeParams, *lambdaTypes
@@ -2013,7 +2262,7 @@ data class IlExtractor(
         // the `smToYield` identity).
         var lowered: List<AstXmlNode> = ilLambdaLower(*bodyList)
         val lambdaSemantics: SemBody = SemBody(
-            xmlEmptyNode(), this.fn.typeParams, ilNamedTypeNode(symbol),
+            xmlEmptyNode(), this.fn.typeParams, ilNamedTypeNode(symbol), xmlEmptyNode(),
             paramNames, paramTypes, info.captureTypes
         )
         lowered = semInferTypes(*lowered, this.fn.facts, *lambdaSemantics, *lambdaTypes)
@@ -2023,7 +2272,8 @@ data class IlExtractor(
             info, this.unit, this.closureCounter,
             ilEmptyBody(), Dictionary<Str, Int>(),
             Dictionary<Str, Int>(), Dictionary<Str, Int>(),
-            Dictionary<Str, Int>(), Dictionary<Str, Int>(), 1, 0
+            Dictionary<Str, Int>(), Dictionary<Str, Int>(), 1, 0,
+            List<Int>(), List<Int>()
         )
         inner.begin(this.out.file)
         val innerBody: IlBody = inner.run(lowered)
@@ -2166,7 +2416,7 @@ fun ilExtractUnit(fn: IlFunction, body: List<AstXmlNode>, file: Str): IlUnit {
         fn, *unit, *counter, ilEmptyBody(),
         Dictionary<Str, Int>(), Dictionary<Str, Int>(),
         Dictionary<Str, Int>(), Dictionary<Str, Int>(),
-        Dictionary<Str, Int>(), 1, 0
+        Dictionary<Str, Int>(), 1, 0, List<Int>(), List<Int>()
     )
     extractor.begin(file)
     val extracted: IlBody = extractor.run(body)

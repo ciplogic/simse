@@ -134,6 +134,29 @@ which positions must be *slots* (`Var`: a destination, a place) and which accept
 constant (`Value`: nearly every read position), which is exactly what a verifier and
 a backend need to know and nothing more.
 
+**One instruction is one operation, over declared slots.** Every operand is a slot of
+the frame or a constant - never an expression - and every slot a body uses is declared
+by the frame itself (`Declare`), with a type: a value position the statements did not
+hold in a slot of its own (a read's base, a call's receiver, a borrow's operand) gets
+one from the extractor, typed by the same rules the type pass uses (`sema::typeOfExpr`),
+and the declaration goes to the top of the instruction list with the rest of the frame.
+So `attributes[i].size()` is three instructions - the address of the element, the read
+through it, the call - and never one expression:
+
+```
+IndexAddr        _sm_base1, attributes, i       # _sm_base1: *Attribute
+GetField         _sm_expr1, _sm_base1, "n"      # _sm_expr1 = _sm_base1->n
+Call             _sm_expr2, size, _sm_base1     # _sm_expr2 = size(_sm_base1)
+```
+
+The **place** instructions are what makes that possible without copying: `IndexAddr`
+and `FieldAddr` write the *address* of a place into a `*T` slot, so a call that mutates
+its receiver reaches the original, a read copies nothing, and a write through the place
+is a write to the original. A base whose *value* is already a handle (`&T`/`*T`) needs
+no address instruction - the handle is the base - which is also why an unnameable base
+keeps the value form: the address of something whose type is unknown is not a thing the
+emitted C++ can spell.
+
 ```
 Label            label=Label
 Goto             target=Label
@@ -152,14 +175,56 @@ Deref            dst=Var, src=Var                 # a = *x   a borrow (&x), a `.
                                                   #          load of a `*T`, by src's type
 CopyValue        dst=Var, src=Var                 # a = copy(x)  the value behind a handle
 Store            ptr=Var, value=Value             # *p = v
+```
 
+### The conversion: one operation, spelled by its types
+
+`Box`, `Deref` and `CopyValue` are **one operation seen from three call sites** - convert
+the value in `src` to the type of `dst` - and while the migration is in flight all three
+opcodes stay accepted and must spell the same text for the same pair of types. What the
+instruction *means* is the pair, not the opcode; the backend already works this way (it
+reads the spelling from the types, `impl_specs/linear-il.md`'s "the IL infers nothing"),
+it just does not look at `dst` yet.
+
+| `src` | `dst` | C++ | opcode that used to spell it |
+| --- | --- | --- | --- |
+| `T` | `T` | `(x)` - a copy, C++ value semantics | `CopyValue` |
+| `T` | `*T` | `&x` / `simse_addressOf(x)` - the address, no copy | `Deref` |
+| `T` | `&T` | `std::make_shared<T>(x)` - a fresh box around a copy | `Box` |
+| `&T` | `*T` | `(x).get()` - the pointer inside the box | `Deref` |
+| `&T` | `T` | `*(x)` - the value behind the box | `CopyValue` |
+| `*T` | `T` | `*x` - a load | `CopyValue`, and `Deref` (which spelled it `*x`) |
+
+Rows not in the table are **illegal**, and that is the verifier's job rather than C++'s:
+`*T` -> `&T` is the one that matters (adopting a raw pointer into a box would claim an
+ownership nobody granted), and `src == dst` needs no instruction at all. Today an illegal
+pair leaks out as a C++ error in the generated file (`cannot convert from 'AstXmlNode *'
+to 'const AstXmlNode &'`) instead of a diagnostic, which is what this table exists to fix.
+
+Two things the unification must **not** blur, because they are per row:
+
+- **`&T` -> `*T` can be null and `*T` -> `T` can dangle.** Both are the caller's hazard
+  and belong to whatever later guards raw pointers (`specs/memory-model.md`); narrowing
+  the opcode set is not what makes them safe.
+- **`T` -> `&T` is a *snapshot*.** It boxes a copy, so later writes to `x` are not seen
+  through the handle and vice versa. It is the only row that allocates.
+
+The table is also what the implicit copy becomes: wherever a `T` is required and the
+expression has type `*T`/`&T`, the same instruction is inserted - no new opcode, and no
+`copy` in the language. `copy(v)` on a value is the first row (the identity), which is why
+`copy` can disappear without the IL gaining anything to replace it.
+
+The rest of the instruction list, unchanged:
+
+```
 GetField         dst=Var, base=Var, name=Text     # x = a.f
 SetField         base=Var, name=Text, value=Value # a.f = b     -> ["f", a, b]
 GetIndex         dst=Var, base=Var, index=Value   # x = a[i]
 SetIndex         base=Var, index=Value, value=Value  # a[i] = b
-IndexAddr        dst=Var, base=Var, index=Value   # an address slot (*T): a[i].f = v
-FieldAddr        dst=Var, base=Var, name=Text     # ... and a.f().f = v
+IndexAddr        dst=Var, base=Var, index=Value   # the address of a[i] (`ldelema`)
+FieldAddr        dst=Var, base=Var, name=Text     # the address of a.f (`ldflda`)
 GetStatic        dst=Var, name=Text               # an enum member or a file-level var
+GetStaticAddr    dst=Var, name=Text               # the *address* of a file-level var
 SetStatic        name=Text, value=Value
 
 Call             dst=Var, callee=Method, args...=Value      # x = f(a, b)
@@ -246,38 +311,36 @@ emitted C++ is byte-identical with and without the flag (checked).
 
 ## What the corpus says
 
-Measured over the whole compiler (`--root cppsrc`, 321 bodies, 24,144 instructions);
-the numbers come from `bun tools/_il_report.mjs il.txt --fold` over the dump
+Measured over the whole compiler (`--root cppsrc`); the numbers come from
+`bun tools/_il_report.mjs il.txt` over the dump
 (`--showLinearRepresentation 2> il.txt`):
 
 | | |
 | --- | --- |
-| bodies | 321 |
-| instructions | 24,144 (the emitted C++ is ~23.6k lines, 8,575 of these are `Declare`) |
+| bodies | 537 |
+| instructions | 37,132 (13,987 of them are `Declare`) |
 | `Unsupported` markers | **0** - the instruction set covers every statement shape the lowering produces |
-| `Lambda` markers | **2** - only two bodies in the compiler hold a lambda |
-| extractor-synthesized slots (`_sm_base<n>`) | 845, and **every one is defined once and used once** |
-| ... of those, currently untyped (`?`) | 637 |
+| `Lambda` markers | **0** - a lambda is a closure construction (`CallCtor`), and the opcode is a leftover of the pre-closure model |
+| extractor-synthesized slots (`_sm_base<n>`) | 1,636 |
+| ... of those, untyped (`?`) | **25** |
+| ... folded at their single use | **14** |
+| place instructions (`FieldAddr`/`IndexAddr`/`GetStaticAddr`) | 949 / 216 / 9 - each a declared `*T` slot |
 | materialised literals | **0** (was 1,486 before operand literals) |
-| assignments that copy a slot (`SetVar x, y`) | 21 (the `Move` this replaced) |
+| assignments that copy a slot (`SetVar x, y`) | 406 |
 
 Three consequences worth stating plainly:
 
 - **The projection is as complete as the design says.** Everything the emitter can
-  read is expressed, and the two bodies that are not are the two lambdas - so the
-  closure work (item 5) is a two-body problem in the compiler, not the wall it
-  looked like.
-- **The synthesized slots are exactly the inlining a backend must do.** They exist
-  because a value position held more than a name (`a.f`, `a[i]`, `*p`, `x == "List"
-  || y`), which is what the emitter prints inline; since each one has a single use,
-  substituting its defining instruction into that use reproduces today's text and
-  drops the declaration - and with it the last untyped slot in the frame. So the
-  fold is not an optimisation here, it is what makes the IL *equivalent* to the
-  statement path, and it is the one pass `LinearCodeGen` needs to compare byte for
-  byte.
+  read is expressed, and the only shape the instruction set does not spell (a lambda
+  body still inside an expression) does not occur in the compiler at all.
+- **A synthesized slot is a frame slot, not a hole in the shape.** It exists because a
+  value position held more than a name (`a.f`, `a[i]`, `*p`), and the type rules name it
+  in all but 25 cases over the compiler - so it is declared with the frame and read by
+  name wherever it is used, which is what makes the instruction list a *sequence of
+  operations* rather than a tree with the nodes written down elsewhere.
 - **The two shape questions resolved in favour of not changing the output.** With
   literals riding the pool as operands and `Declare` as an instruction, the
-  projection still generates **byte-identical** C++ with and without the flag (it is
+  projection generates **byte-identical** C++ with and without the flag (it is
   pure, and the flag only chooses whether the dump is written), and nothing that
   follows has to churn the goldens just to *reach* the IL.
 
@@ -300,21 +363,26 @@ it) and the Simse one (`Codegen.kt`'s `emitIlBodyText`/`ilEmitOps`/`emitClosureC
 over `linear/LinearForm.kt`'s extractor). They report the same counts and their
 emitted files are byte-identical, which is what T23 pins.
 
-The backend does not re-spell anything: an operand becomes a leaf node - a slot
-is a name, a constant is its literal, a place is the path it came from, folded back
-out of the instruction that built it - and `expr`/`call`/`memberAccess` write the
-text. That is also why the port could be checked the way it was: both paths agreed *by
-construction*, so a diff between them was a check instead of an approximation.
+The backend does not re-spell anything: an operand becomes a leaf node - a slot is a
+name, a constant is its literal - and `expr`/`call`/`memberAccess` write the text. A
+place instruction is the one operand that has to be *built* rather than named: its
+text is the address of what it names (`&x`, or `simse_addressOf(...)`), because that
+is what the slot holds. The rules below are what the statement tree used to do
+implicitly.
 
 Four rules do the work the statement tree used to do implicitly:
 
-- **Folding**: a `Temp` slot with one definition and one use is inlined at that use
-  (it exists only because a value position held more than a name), which is exactly
-  where the statement path inlined the same expression. Everything else is declared
-  and assigned.
-- **`Declare`/`DeclareInit`**: one line with the instruction that follows
-  (`Str out = "";`), or a bare one where the hoisting left it. The distinction is
-  real because the hoisting turns a declaration's initializer into an assignment.
+- **One instruction, one statement.** Nothing is inlined into anything: so
+  `attributes[i].size()` is an address instruction, a read and a call - three lines of
+  C++, one operation each - and a backend never has to reconstruct an expression.
+- **`Declare`/`DeclareInit`**: a slot with a spelled type is declared with the frame
+  (`T name;`, at the top of the body, where every `Declare` of a typed slot stands); a
+  slot the type rules could not name is declared where its single definition is
+  (`auto name = <value>;`), which is also the only place a value is ever inlined at its
+  use - a shape with no type of its own, such as a bare `null`, prints where it is read.
+  Either way the *value* is assigned where the instruction stands, and where a jump
+  crosses such a declaration the backend opens the one block C++ requires
+  ([stmt.dcl]/3, and that is the only reason a body has braces).
 - **The flags**: `--showLinearRepresentation` is the only one left, and it only
   dumps. The statement emitter, its `--statementsCodegen` escape hatch and
   `--linearCodegen`'s comparison report are gone: the IL is the source of the output,
@@ -395,10 +463,10 @@ deferred). `&lambda` rides the existing `Box`, i.e. `std::make_shared<Class>(ins
 
 | # | Item | State | Blocks |
 | --- | --- | --- | --- |
-| 1 | Every slot has a spelled type | done for the emitting path: a slot with no type is only *folded* (never declared), and an untyped declaration falls back | - |
+| 1 | Every slot has a spelled type | **done for the frame**: the extractor asks `sema::typeOfExpr` for the slots it synthesizes, so 1,611 of the compiler's 1,636 are declared with the frame and 25 stay `?` (a shape with no type of its own, such as a bare `null`), which a backend folds at its single use | - |
 | 2 | Shadowed source names become unique frame entries | the frame already keeps them apart (analysis is slot-keyed); a rename in the lowering is still wanted before a bytecode backend sees two `x` | codegen |
 | 3 | Borrow-of-temporary becomes an owned slot | work, small | codegen |
-| 4 | Paths become address instructions (`IndexAddr`/`FieldAddr`) | **done**: 239 `FieldAddr`, 9 `IndexAddr`, folded back into their uses | - |
+| 4 | Paths become address instructions (`IndexAddr`/`FieldAddr`) | **done**: 949 `FieldAddr`, 216 `IndexAddr`, 9 `GetStaticAddr` - declared `*T` slots the instructions read by name | - |
 | 5 | Lambdas become closure classes + an `invoke` method | **done**: the closure is computed, the class carries it as fields, the method is the lambda's own `IlBody` | - |
 | 6 | Value-position `&&` / `||` / `?:` materialise into slots through labels | not needed for codegen: `BinaryOp "&&"` prints as C++ `&&`, which already short-circuits; a *bytecode* target would need it (163 synthesized slots are `||`/`&&` chains) | - |
 | 7 | Frame size: every slot is live for the whole body | deferred, by design | - |
@@ -408,17 +476,18 @@ deferred). `&lambda` rides the existing `Box`, i.e. `std::make_shared<Class>(ins
 
 ## Next
 
-1. Delete the statement emitters. The IL expresses every body of the compiler (0 not
-   expressible) and the only text differences left are the closure model and the blocks
-   the flat form drops - both deliberate. What is missing before the fallback can go is
-   *coverage evidence*: the corpus (`stress/`, `tests/fixtures`) has to keep reporting 0
-   fallbacks, and the shapes the IL cannot spell yet (`CallIndirect` - calling a value in
-   a variable - and `Cast`) have to be counted. Until then the statement path stays as a
-   silent fallback.
-2. `verifyIlBody` (operand counts and kinds from the signature table, jump targets in
+1. `verifyIlBody` (operand counts and kinds from the signature table, jump targets in
    range, a call's argument count against its `IlMethod`, every label defined) - the
-   check that is cheap once the IL is the source of truth.
-3. The prelude-body rule, then `smToYield` (`impl_specs/for.md`, `impl_specs/yield.md`).
+   check that is cheap now that the IL is the source of truth, and the one thing standing
+   between the form and a reader that trusts it blindly.
+2. The 25 untyped slots in the compiler, one shape at a time: a bare `null` in a value
+   position is the bulk of them, and it needs the *expected* type - which a call's
+   signature could supply where the type rules cannot. Each one closed removes a fold and
+   makes another body purely instructions.
+3. A *bytecode* target, if one is ever wanted: the instruction list is already one
+   operation per instruction over declared slots, so what a VM would need on top is a
+   register allocator (the frame keeps every slot live for the whole body, by design) and
+   the value-position `&&`/`||` materialisation (item 6 below).
 
 ## Dropping the statement emitter
 

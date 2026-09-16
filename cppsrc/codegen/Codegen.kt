@@ -264,6 +264,10 @@ data class Emitter(
     var emittedClosures: Dictionary<Str, Bool>,
     var emittedYieldables: Dictionary<Str, Bool>,
 
+// The decl of the machine being emitted (the last one registered), which the extractor
+// needs as the class `this` is an instance of.
+    var machineDecl: AstXmlNode,
+
 // Why an instruction could not be expressed: set where the attempt gives up, read
 // by the caller that turns it into a reason line.
     var ilWhy: Str,
@@ -838,6 +842,51 @@ data class Emitter(
         }
     }
 
+    // Whether a factory parameter is a value the aggregate can be *moved* out of, or one
+    // that rides in a register. The factory is compiler-generated and its parameters are
+    // dead the moment the aggregate is built, so a scalar needs nothing and anything that
+    // owns storage is moved: a temporary argument then costs no copy at all (it is elided
+    // into the parameter) and an lvalue costs exactly the one copy value semantics
+    // require - the parameter. This is the idiom the RTL's own constructors use
+    // (`cppsrc/rtl/astxml.hpp`).
+    fun factoryParamByValue(t: *AstXmlNode): Bool {
+        val kind: AstNodeCategory = xmlKind(t)
+        if (kind == AstNodeCategory.TypePointer || kind == AstNodeCategory.TypeIntLit) {
+            return true
+        }
+        if (kind == AstNodeCategory.TypeReference || kind == AstNodeCategory.TypeFunction) {
+            return false
+        }
+        if (kind == AstNodeCategory.TypeYield) {
+            return false
+        }
+        if (kind == AstNodeCategory.TypeGeneric) {
+            // `RawArray<T>` *is* `T*`; the rest are containers, optionals and handles,
+            // all of which own storage.
+            return xmlAttr(t, AstNodeAttributeKind.Name) == "RawArray"
+        }
+        if (kind == AstNodeCategory.TypeNamed) {
+            val name: Str = xmlAttr(t, AstNodeAttributeKind.Name)
+            if (this.isScalarName(name)) {
+                return true
+            }
+            return this.enumNames.has(name)
+        }
+        return false
+    }
+
+    // The scalar names: the types whose C++ spelling is a register-width value (`Int`
+    // and friends, `Bool`, `Char`, `Float64`).
+    fun isScalarName(name: Str): Bool {
+        if (name == "Bool" || name == "Char" || name == "Int") {
+            return true
+        }
+        if (name == "Int8" || name == "Int16" || name == "Int32" || name == "Int64") {
+            return true
+        }
+        return name == "Float32" || name == "Float64"
+    }
+
     fun emitDataClass(decl: *AstXmlNode): Unit {
         this.setActiveTypeParams(xmlTypeParamNames(decl))
         val fields: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Field)
@@ -854,8 +903,13 @@ data class Emitter(
                 )
                 return
             }
-            params.append(this.type(*fieldType) + " " + xmlAttr(*field, AstNodeAttributeKind.Name))
-            values.append(xmlAttr(*field, AstNodeAttributeKind.Name))
+            var param: Str = this.type(*fieldType) + " " + xmlAttr(*field, AstNodeAttributeKind.Name)
+            params.append(param)
+            var value: Str = xmlAttr(*field, AstNodeAttributeKind.Name)
+            if (!this.factoryParamByValue(*fieldType)) {
+                value = "std::move(" + value + ")"
+            }
+            values.append(value)
             i = i + 1
         }
         if (this.failed) {
@@ -1489,7 +1543,7 @@ data class Emitter(
         var lowered: List<AstXmlNode> =
             linLowerForEmission(xmlChildren(*xmlChild(decl, AstNodeKind.Body), AstNodeKind.Stmt))
         val semantics: SemBody = SemBody(
-            copy(decl), fn.templateParams, copy(selfTypePtr),
+            copy(decl), fn.templateParams, copy(selfTypePtr), xmlEmptyNode(),
             List<Str>(), List<AstXmlNode>(), Dictionary<Str, AstXmlNode>()
         )
         // The proof of the pass, kept: it is what tells the backend a slot holds a
@@ -1545,7 +1599,7 @@ data class Emitter(
         }
         var info: IlFunction = IlFunction(
             copy(decl), fn.receiver, symbol,
-            Dictionary<Str, Str>(), List<Str>(), List<AstXmlNode>(),
+            Dictionary<Str, Str>(), xmlEmptyNode(), List<Str>(), List<AstXmlNode>(),
             "", Dictionary<Str, Bool>(), Dictionary<Str, AstXmlNode>(),
             facts, fn.templateParams, inferred
         )
@@ -1677,16 +1731,24 @@ data class Emitter(
         }
     }
 
-    // Whether an instruction's result is inlined at its use instead of being assigned to
-    // a slot: the extractor's own temporaries (a place, a constant expression) with a
-    // single definition and a single use are skipped, and the expression stands where
-    // they were read - which is where the statement path inlined it.
+    // Whether an instruction's result is inlined at its use instead of being assigned to a
+    // slot. The instruction list is one operation per instruction and every *typed* slot is
+    // a declared slot of the frame, so a value is read where it was written and no
+    // instruction inlines another. The one exception is a slot the type rules could not
+    // name - the extractor's own temporary for a shape that has no type of its own, such
+    // as a bare `null`, whose C++ spelling depends on the context it is read in. It cannot
+    // be declared at the top of the body (`auto x;` is not a declaration) and it has
+    // exactly one definition and one use, so that use is where the expression went.
     fun ilFolded(il: *IlBody, frame: *IlFrame, slot: Int): Bool {
         if (slot < 0 || slot >= il.vars.size()) {
             return false
         }
         if (il.vars[slot].kind != IlVarKind.Temp) {
             return false
+        }
+        val slotType: AstXmlNode = ilVarType(il, slot)
+        if (!xmlIsEmpty(*slotType)) {
+            return false // a typed slot is declared
         }
         if (this.ilIntAt(*frame.defineCount, slot, 0) != 1) {
             return false
@@ -1696,6 +1758,16 @@ data class Emitter(
         }
         // A closure is an aggregate, not an expression: it keeps its slot.
         return !this.ilSlotHoldsClosure(il, frame, slot)
+    }
+
+    // Whether a slot is declared with the frame at the top of the body (a typed slot)
+    // rather than in front of the instruction that first writes it.
+    fun ilDeclaredAtTop(il: *IlBody, slot: Int): Bool {
+        if (slot < 0 || slot >= il.vars.size()) {
+            return false
+        }
+        val slotType: AstXmlNode = ilVarType(il, slot)
+        return !xmlIsEmpty(*slotType)
     }
 
     // Whether an instruction builds a closure class instance, which is an *aggregate* and
@@ -1799,6 +1871,21 @@ data class Emitter(
             AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprMember, List<AstNodeAttribute>(), Array<AstXmlNode>())
         node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
         xmlAddChild(*node, this.renameRole(base, AstNodeKind.Receiver))
+        return node
+    }
+
+    // The *address* of a place, as the emitter spells a borrow: `&name` for a plain name,
+    // `simse_addressOf(...)` otherwise - which is what an `IndexAddr`/`FieldAddr`
+    // instruction writes (`ldelema`/`ldflda` in the IL's own shape,
+    // `impl_specs/linear-il.md`). A place is the one value an instruction may not copy: a
+    // call that mutates its receiver has to reach the original.
+    fun ilBorrowNode(place: *AstXmlNode, depth: Int): AstXmlNode {
+        if (xmlIsEmpty(place) || depth > 24) {
+            return xmlEmptyNode()
+        }
+        var node: AstXmlNode =
+            AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprDeref, List<AstNodeAttribute>(), Array<AstXmlNode>())
+        xmlAddChild(*node, this.renameRole(place, AstNodeKind.Operand))
         return node
     }
 
@@ -1979,7 +2066,11 @@ data class Emitter(
                 return xmlEmptyNode()
             }
             val base: AstXmlNode = this.ilSlotNode(il, frame, this.ilOperandAt(*op.operands, 1), depth)
-            return this.ilMemberNode(*base, il.pool[textIndex])
+            val member: AstXmlNode = this.ilMemberNode(*base, il.pool[textIndex])
+            if (kind == IlOpKind.GetField) {
+                return member
+            }
+            return this.ilBorrowNode(*member, depth)
         }
         if (kind == IlOpKind.IndexAddr || kind == IlOpKind.GetIndex) {
             val base: AstXmlNode = this.ilSlotNode(il, frame, this.ilOperandAt(*op.operands, 1), depth)
@@ -1991,7 +2082,10 @@ data class Emitter(
                 AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprIndex, List<AstNodeAttribute>(), Array<AstXmlNode>())
             xmlAddChild(*node, this.renameRole(*base, AstNodeKind.Receiver))
             xmlAddChild(*node, this.renameRole(*index, AstNodeKind.Index))
-            return node
+            if (kind == IlOpKind.GetIndex) {
+                return node
+            }
+            return this.ilBorrowNode(*node, depth)
         }
         if (kind == IlOpKind.Deref || kind == IlOpKind.CopyValue || kind == IlOpKind.Box) {
             val operand: AstXmlNode = this.ilSlotNode(il, frame, this.ilOperandAt(*op.operands, 1), depth)
@@ -2010,6 +2104,12 @@ data class Emitter(
         }
         if (kind == IlOpKind.GetStatic) {
             return this.ilGetStaticNode(il, op)
+        }
+        if (kind == IlOpKind.GetStaticAddr) {
+            // The address of a file-level static: `&name` (`ilBorrowNode` spells a name
+            // that way), never the address of a copy of it.
+            val place: AstXmlNode = this.ilGetStaticNode(il, op)
+            return this.ilBorrowNode(*place, depth)
         }
         if (kind == IlOpKind.Call || kind == IlOpKind.CallVoid) {
             return this.ilCallNode(il, frame, op)
@@ -2123,21 +2223,38 @@ data class Emitter(
         // A declaration a jump can cross needs a block around it: the jump may not enter
         // the declaration's scope past it.
         var blockEnd: Dictionary<Int, Int> = Dictionary<Int, Int>()
+        var declareOp: Dictionary<Int, Int> = Dictionary<Int, Int>() // slot -> the declaration's position
         var scan: Int = 0
         while (scan < il.ops.size()) {
             val op: *IlOp = *il.ops[scan]
             if (op.kind == IlOpKind.Declare || op.kind == IlOpKind.DeclareInit) {
+                val slot: Int = this.ilOperandAt(*op.operands, 0)
                 // A declaration that prints nothing - the folding inlines it at its use -
                 // keeps nothing legal, so it asks for no block either.
-                var folded: Bool = false
-                if (op.operands.size() > 0) {
-                    folded = this.ilFolded(il, frame, op.operands[0])
+                if (this.ilFolded(il, frame, slot)) {
+                    scan = scan + 1
+                    continue
                 }
-                if (!folded) {
-                    val crossing: IlCrossing = this.ilJumpCrossing(il, scan)
-                    if (crossing.end >= 0) {
-                        blockEnd.insert(scan, crossing.end)
+                // A typed slot is declared where the `Declare` stands (the hoisting put
+                // it at the top); an untyped one is declared at the instruction that
+                // first writes it - or, when the two are adjacent, right here, where they
+                // print as one line (`auto x = <value>;`).
+                var at: Int = scan
+                if (!this.ilDeclaredAtTop(il, slot)) {
+                    val def: Int = this.ilIntAt(*frame.defOp, slot, -1)
+                    if (def == scan + 1) {
+                        at = scan
+                    } else {
+                        at = def
                     }
+                    if (at < 0) {
+                        scan = scan + 1
+                        continue
+                    }
+                }
+                val crossing: IlCrossing = this.ilJumpCrossing(il, at)
+                if (crossing.end >= 0) {
+                    blockEnd.insert(at, crossing.end)
                 }
             }
             scan = scan + 1
@@ -2191,42 +2308,42 @@ data class Emitter(
                     continue // inlined at its use
                 }
                 val slotType: AstXmlNode = ilVarType(il, slot)
-                // A slot the type pass could not spell is still declarable when the
-                // declaration initialises it: `auto`, exactly as the statement path
-                // writes it.
-                val initialized: Bool = kind == IlOpKind.DeclareInit
-                if (xmlIsEmpty(*slotType) && !initialized) {
-                    return IlText(
-                        false, "", "the slot '" + il.vars[slot].name
-                                + "' has neither a type nor an initializer"
-                    )
-                }
-                var decl: Str = "auto " + il.vars[slot].name
                 if (!xmlIsEmpty(*slotType)) {
-                    decl = this.ilDeclTypeText(il, slot) + " " + il.vars[slot].name
-                }
-                if (initialized) {
-                    // An initialised declaration is one line, exactly as the statement
-                    // path writes it (`Str out = "";`) - and the instruction that
-                    // computes the value can be a few further down, with the
-                    // initializer's own temporaries in between (which are folded away,
-                    // so they print nothing).
-                    val def: Int = this.ilIntAt(*frame.defOp, slot, -1)
-                    val valueText: Opt<Str> = this.ilValueText(il, frame, def, *slotType)
-                    if (!valueText.hasValue()) {
-                        // The initializer has no expression form - a closure is an
-                        // aggregate, not a call - so the slot is declared bare and the
-                        // instruction assigns it.
-                        this.ilLine(*text, lvl, decl + ";")
-                        i = i + 1
-                        continue
-                    }
-                    this.ilLine(*text, lvl, decl + " = " + valueText.value() + ";")
-                    consumedByDeclare = def
+                    // A declared slot with a type: one line, and the instruction that
+                    // computes its value assigns it where that instruction stands. (The
+                    // hoisting turned the declaration's initializer into exactly such an
+                    // assignment.)
+                    this.ilLine(
+                        *text, lvl, this.ilDeclTypeText(il, slot) + " " + il.vars[slot].name
+                                + ";"
+                    )
                     i = i + 1
                     continue
                 }
-                this.ilLine(*text, lvl, decl + ";")
+                // A slot the type rules could not name is declared with `auto` and its own
+                // definition as the initializer - which only works where the two are
+                // adjacent; otherwise the definition is where the declaration goes (below)
+                // and this prints nothing.
+                val def: Int = this.ilIntAt(*frame.defOp, slot, -1)
+                if (def != i + 1) {
+                    if (def < 0) {
+                        return IlText(
+                            false, "", "the slot '" + il.vars[slot].name
+                                    + "' has neither a type nor an initializer"
+                        )
+                    }
+                    i = i + 1
+                    continue
+                }
+                val valueText: Opt<Str> = this.ilValueText(il, frame, def, *xmlEmptyNode())
+                if (!valueText.hasValue()) {
+                    if (this.ilWhy.isEmpty()) {
+                        return IlText(false, "", "an initializer with no expression form")
+                    }
+                    return IlText(false, "", "cannot express " + this.ilWhy)
+                }
+                this.ilLine(*text, lvl, "auto " + il.vars[slot].name + " = " + valueText.value() + ";")
+                consumedByDeclare = def
                 i = i + 1
                 continue
             }
@@ -2273,18 +2390,29 @@ data class Emitter(
             }
             if (dst >= 0) {
                 val slotType: AstXmlNode = ilVarType(il, dst)
-                if (xmlIsEmpty(*slotType)) {
-                    return IlText(
-                        false, "", "the slot '" + il.vars[dst].name
-                                + "' has no type to assign"
-                    )
-                }
+                // An instruction that defines a slot the type rules could not name *is*
+                // that slot's declaration (`auto x = <this>;`), which is where a slot
+                // without a type has to be declared - a typed one was declared with the
+                // frame at the top of the body.
+                val declares: Bool =
+                    xmlIsEmpty(*slotType) && this.ilIntAt(*frame.defOp, dst, -1) == i
                 val valueText: Opt<Str> = this.ilValueText(il, frame, i, *slotType)
                 if (!valueText.hasValue()) {
                     if (this.ilWhy.isEmpty()) {
                         return IlText(false, "", "'" + ilOpKindText(kind) + "' cannot be expressed yet")
                     }
                     return IlText(false, "", "cannot express " + this.ilWhy)
+                }
+                if (declares) {
+                    this.ilLine(*text, lvl, "auto " + il.vars[dst].name + " = " + valueText.value() + ";")
+                    i = i + 1
+                    continue
+                }
+                if (xmlIsEmpty(*slotType)) {
+                    return IlText(
+                        false, "", "the slot '" + il.vars[dst].name
+                                + "' has no type to assign"
+                    )
                 }
                 this.ilLine(*text, lvl, il.vars[dst].name + " = " + valueText.value() + ";")
                 i = i + 1
@@ -2580,7 +2708,7 @@ data class Emitter(
             var lowered: List<AstXmlNode> =
                 linLowerForEmission(xmlChildren(*xmlChild(decl, AstNodeKind.Body), AstNodeKind.Stmt))
             val semantics: SemBody = SemBody(
-                copy(decl), fn.templateParams, copy(selfTypePtr),
+                copy(decl), fn.templateParams, copy(selfTypePtr), xmlEmptyNode(),
                 List<Str>(), List<AstXmlNode>(), Dictionary<Str, AstXmlNode>()
             )
             // The map is the machine's methods' frame too: the bodies are the same
@@ -2695,6 +2823,7 @@ data class Emitter(
             i = i + 1
         }
         this.types.insert(className, declNode)
+        this.machineDecl = declNode
     }
 
     // The machine itself: the fields, then one method per way of advancing it.
@@ -2774,7 +2903,7 @@ data class Emitter(
             // lowering's output): the frame is the machine's, so its fields are read and
             // written through `self`, exactly as a lambda body reads its captures.
             this.emitBodyAt(
-                this.ilMachineMethod(className, method, facts, inferred), method.body,
+                this.ilMachineMethod(className, method, *this.machineDecl, facts, inferred), method.body,
                 fn.file, 2
             )
             this.inClosureMethod = savedClosure
@@ -2799,14 +2928,18 @@ data class Emitter(
     // spelled every field read and write as an explicit `this.x` member, so a bare name in
     // the body is the method's own - and a parameter that happens to share a field's name
     // (`advance(value: *T)` against a field `value`) must resolve to the parameter.
+    //
+    // The machine's class travels as the body's `selfDecl`: the class is the lowering's own
+    // output, so the type rules never saw it - and a field read (`this._sm_self`) is how
+    // the body reaches everything that crossed a `yield`.
     fun ilMachineMethod(
-        className: Str, method: *YldMethod, facts: *SemFacts,
+        className: Str, method: *YldMethod, selfDecl: *AstXmlNode, facts: *SemFacts,
         inferred: *Dictionary<Str, AstXmlNode>
     ): IlFunction {
         var info: IlFunction = IlFunction(
             xmlEmptyNode(), xmlEmptyNode(),
             className + "::" + method.name, Dictionary<Str, Str>(),
-            List<Str>(), List<AstXmlNode>(), className,
+            copy(selfDecl), List<Str>(), List<AstXmlNode>(), className,
             Dictionary<Str, Bool>(), Dictionary<Str, AstXmlNode>(),
             facts, List<Str>(), inferred
         )
@@ -4031,6 +4164,7 @@ fun newEmitter(inputs: List<CgInput>): Emitter {
         Dictionary<Str, Bool>(),
         Dictionary<Str, Bool>(),
         Dictionary<Str, Bool>(),
+        xmlEmptyNode(),
         "",
         false
     )

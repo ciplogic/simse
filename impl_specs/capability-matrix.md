@@ -1407,6 +1407,159 @@ numbers shifted with the parser/scanner edits).
   all three compilers, the two rings emit the compiler byte for byte, and
   `bun tools/bootstrap.js` reports the fixed point byte for byte (36688 lines, 1.12 MB).
 
+- **The pointer form of `for` used where a loop was copying its element (T58).** Four
+  index walks in the compiler's own sources handed each element to the body *by value*
+  - `val attr: AstNodeAttribute = like.attributes[i]` - so every iteration paid for a
+  copy of an aggregate:
+
+  - `simNameAttrs` (`cppsrc/linear/Simplify.kt`) - and this one copied **twice** per
+    element, because the `else` branch then put the copy into the result list. It is now
+    `for (*attr in like.attributes)` with an explicit `attrs.append(copy(attr))`, so the
+    copy that remains is the one the result list actually needs (and the `Name` match
+    copies nothing);
+  - `exprReplaceRole` (`cppsrc/linear/ExpressionLowering.kt`) and its sema twin
+    `semReplaceRole` (`cppsrc/sema/TypeInfer.kt`) - `for (*child in existing)` with
+    `kids.append(copy(child))`;
+  - `parseSkeleton`'s token walk (`cppsrc/skelparser/SkeletonParser.kt`) -
+    `for (*token in tokens)` with `addTerminalChild(copy(token))`.
+
+  What the pass has to do, since it is not a find-and-replace: the pointer form makes the
+  binding a `*T`, so in the body `*x` (which was the address of the *copy*) becomes `x`
+  (the pointer now in hand), and a use that needs a `T` becomes `copy(x)`. The compiler
+  reports every one of those as a type error (`cannot convert from 'AstXmlNode' to
+  'AstXmlNode *'`), so the work is convert -> build -> fix, one loop at a time - which is
+  also why each `copy(x)` is worth reading as a confirmation that the copy is intended.
+  A loop is only a candidate when the index is used nowhere else in the body, the
+  container is not touched in the body (the pointer form holds the container, the index
+  form re-reads it), and the binding is never assigned (with the pointer form that would
+  write the element instead of a copy). Roughly a quarter of the loops shaped like this
+  in the tree pass those three tests; the rest read the container again or use the index
+  for something else, and need a per-loop decision.
+
+  Measured: interleaved A/B, 13 pairs, 724.1/764.5 ms -> **712.3/742.3 ms** (~1.6% at the
+  minimum, ~2.9% at the median); `bun tools/bootstrap.js` 731/738 ms -> **717/725 ms**.
+  Four loops is a small slice of the compiler, so the per-loop share is small too - the
+  point of the record is the shape and the rules, not the total.
+
+  Verified: both configurations rebuild clean, the five differentials are byte-identical,
+  T23 is byte-identical, `simse_tests.exe` **56/56**, `bun tools/stress.js` **33/33** on
+  the self-hosted and hand-written rings, no golden changed (the change is in the
+  compiler's own sources, so the fixtures' emitted C++ is untouched), and
+  `bun tools/bootstrap.js` reports the fixed point byte for byte.
+
+- **The IL is a strict bytecode now: one instruction is one operation over declared,
+  typed slots (T59).** The instruction list was *already* one operation per instruction,
+  but a slot the extractor had synthesized for a position the statements did not hold in
+  a slot of its own - a read's base, a call's receiver - carried **no type**, so the
+  backend folded it: the whole expression went back inline at its single use, and the
+  emitted C++ computed several operations in one statement (`_sm_expr1 = items[i].n;` is
+  an index and a field read). The fold had also become load-bearing for *correctness*
+  rather than text: a `GetIndex` temporary stood in for a place, and only the re-inlining
+  made the address the right one.
+
+  What changed, in both rings:
+
+  - **The type rules answer about one expression** (`sema::typeOfExpr` /
+    `semTypeOfExpr`, new): the same rules the pass applies to a whole body, asked with an
+    explicit name environment - the extractor's flat frame - so a slot the extractor
+    synthesizes gets the type a declaration could have spelled.
+  - **A typed synthesized slot is declared with the frame**: its `Declare` goes to the
+    top of the instruction list, exactly where `hoistSlots` puts the lowering's own slots,
+    so a body is one block of declared registers, no jump can cross a declaration, and
+    the emitted C++ keeps T57's *no braces* (0 blocks in the compiler's own output).
+  - **A read's base is a place instruction**: `IndexAddr`/`FieldAddr` write the address
+    of the place (`&items[i]`, `&self->source`) into a `*T` slot that is declared and read
+    by name - so a read copies no aggregate and a call that mutates its receiver reaches
+    the original. A base whose *value* is already a handle needs no address (the handle is
+    the base); an *unnameable* base keeps the value form, because the address of something
+    whose type is unknown is not a thing the emitted C++ can spell.
+  - **New opcode `GetStaticAddr`** (`dst = &<name>`): `*static` is the address of the
+    static, not of a copy of it. (`*reservedWordTable` had been returning the address of a
+    local copy - the fold hid it, because the copy was never materialized.)
+  - **`Deref`'s operand follows the place/value rule**: a `Member`/`Index` chain that is an
+    inline value is a place (`*items[i]` is `&items[i]`); a call's result is a value, whose
+    address is taken at the call.
+  - **The backend does not inline anything**: a typed slot's text is its name, a typed
+    declaration is `T name;` where the frame put it, and the *only* fold left is a slot
+    with no type at all - 25 over the compiler - declared where its single definition is
+    (`auto x = <value>;`), with the C++ scope rule ([stmt.dcl]/3) applied at that position.
+  - **A machine's class reaches the type rules** (`IlFunction::selfDecl`,
+    `sema::Body::selfDecl`): the lowering built it, so `this._sm_self` types as `*List<T>`
+    instead of nothing - which is what had made a prelude machine's `size()` call take the
+    member-call path with a dereferenced receiver (`(*this->_sm_self)->size()`).
+
+  Measured over the compiler's own tree: 537 bodies, 37,132 instructions, 1,636
+  synthesized slots of which **25 untyped** and **14 folded** (was 845 / 637); 949
+  `FieldAddr`, 216 `IndexAddr`, 9 `GetStaticAddr`. The published bootstrap goes 36,696 ->
+  **40,943** lines (1.12 -> 1.26 MB) and the two transpiles cost more - the
+  address of every place is now a declared slot rather than an expression the emitter
+  rebuilt: `--root cppsrc` **805/808 -> 859/863 ms** self-hosted, **178/187 -> 198/200 ms**
+  hand-written; the `cl.exe`-only compile of the published file 15.26 -> **15.51 s** and the
+  compiled bootstrap reproduces itself in 862 ms (full cycle 16.37 s). Programs behave
+  identically (the whole corpus and the suite agree on the output); what changed is the
+  *shape*: the emitted C++ is one operation per statement.
+
+  Verified: both configurations rebuild clean, the five differentials are byte-identical,
+  T23 (`simse_out1.cpp` == the stage-1 regeneration) is byte-identical, `simse_tests.exe`
+  **56/56**, `bun tools/stress.js` **33/33** on the self-hosted ring *and* on the
+  hand-written one, the two rings' IL dumps are byte-identical over `cppsrc` (40,136
+  lines), and `cppsrc/simse_bootstrap.cpp` was regenerated with
+  `bun build.js --release --out ...` so `bun tools/bootstrap.js` reports the fixed point
+  byte for byte.
+
+  Two goldens change on purpose (`tests/golden/for_iteration.kt.cpp.expected`,
+  `tests/golden/lambda_scopes.kt.cpp.expected`), and one behavioral bug was caught while
+  landing it: a static *read* into a typed slot is a copy, so `names.append(x)` appended to
+  the copy and `names` stayed empty (`stress/statics`) - the reason a static used as a base
+  is `GetStaticAddr`.
+
+  Docs updated with it: `impl_specs/linear-il.md` (the instruction table, the corpus
+  numbers, the codegen rules, the capabilities table), and the published numbers in
+  `docs/getting-started.md`, `docs/how-it-works.md`, `docs/state-of-the-field.md`
+  (15,040 source lines, 56 tests, 33 stress cases, the bootstrap block above).
+
+- **The generated constructors stop copying their arguments (T60).** The `_make_<Name>`
+  factory is the one call boundary the emitter owns (a user function's parameters are the
+  language's value semantics, and the RTL natives already take `const T&`), and it was the
+  worst of them: every non-scalar argument was copied **twice** - once into the parameter,
+  once into the field - so constructing a `data class` with four `Str` fields allocated
+  eight times. The factory now moves what it built the aggregate out of:
+
+  ```cpp
+  // before                                   // after
+  ns1_Rec ns1__make_Rec(Str a, Str b, ...) {  ns1_Rec ns1__make_Rec(Str a, Str b, ...) {
+      return ns1_Rec{a, b, c, d};                 return ns1_Rec{std::move(a), ...};
+  }                                           }
+  ```
+
+  That is the RTL's own idiom - `AstXmlNode(AstNodeKind, AstNodeCategory,
+  List<AstNodeAttribute>, Array<AstXmlNode>)` takes by value and moves into its fields - and
+  it is strictly better than the two shapes it replaces: a temporary argument costs no copy
+  at all (it is elided into the parameter) and an lvalue costs exactly the one copy value
+  semantics require. `T&` parameters were the first idea and are wrong (they cannot bind a
+  literal or a temporary); `const T&` also removes the second copy but *forces* one for a
+  temporary, so by value plus a move dominates both. Scalars, enums and raw pointers ride in
+  a register as before.
+
+  Measured, and the honest answer is two different numbers. On the **compiler's own
+  workload it is not measurable**: interleaved A/B of two release boot binaries over
+  `--root cppsrc` (12-14 pairs each) reported 857.6/867.0 -> 847.0/858.8 and
+  864.7/880.0 -> 860.9/876.3 ms - a consistent sign, but inside the machine's wobble - and
+  the reason is the RTL: the compiler's own values are small enough to live in the inline
+  buffers (`List<T>` is `SmallVector<T, 4>`, `Str` holds 23 characters inline), so their
+  copies never allocate. Where it *does* show is a construction-heavy program whose values
+  are past the inline buffers: 2,000,000 constructions of a `data class` with four
+  32-character `Str` fields, the two emissions compiled with `/O2` and interleaved
+  (10 pairs) - **306.2/311.4 -> 168.1/170.0 ms** (~1.8x, half the allocations), identical
+  output. So this is a win for a *user's* value-heavy program, not for the compiler.
+
+  Verified: both configurations rebuild clean, the five differentials are byte-identical,
+  T23 is byte-identical, `simse_tests.exe` **56/56**, `bun tools/stress.js` **33/33** on the
+  self-hosted ring and the hand-written one, and `cppsrc/simse_bootstrap.cpp` regenerated so
+  `bun tools/bootstrap.js` reports the fixed point byte for byte (41,066 lines, 1.26 MB).
+  No golden changed: the fixtures' data classes are scalar-only, so their emission is
+  identical (and so is every `expected.cpp` in the corpus).
+
 ### Note: the shape of a lookup like this
 
 Worth recording because the first attempt at T39 got it wrong in four ways the

@@ -165,7 +165,14 @@ explicit `cppsrc/compiler/Driver.kt` input.
   `impl_specs/linear-lowering.md`. `LinearForm.{h,cpp}` projects the same body into
   the flat linear IL (one instruction list, no blocks), prints it for
   `--showLinearRepresentation` and emits C++ **from** it - the only codegen
-  (`impl_specs/linear-il.md`).
+  (`impl_specs/linear-il.md`). The IL is a strict bytecode: one instruction is one
+  operation, every operand is a slot of the declared frame or a constant, and a slot the
+  extractor synthesizes (a read's base, a call's receiver, a borrow's operand) is typed
+  by the type pass's own rules (`sema::typeOfExpr`) and declared with the frame - so
+  `attributes[i].size()` is three instructions (`IndexAddr`, `GetField`, `Call`) and
+  three lines of C++, never one expression. What a backend still folds is a slot whose
+  type the rules cannot name (25 over `cppsrc`, mostly a bare `null`), which is the one
+  shape that prints where it is read.
   `LinearForm.kt` is the whole thing mirrored: the model, the signature table, the
   printer, the extractor, and the backend lives in `Codegen.kt`
   (`emitIlBodyText`/`ilEmitOps`/the closure classes), so **both rings emit from the IL**.

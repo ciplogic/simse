@@ -149,7 +149,7 @@ They are kept in lockstep by machines, not by discipline. The build runs:
 4. **The stress corpus** - `stress/<name>/` is a complete program with its
    expected stdout (and optional args, stdin, expected `.cpp`, or an expected
    transpile error). The harness transpiles, compiles and runs each one with the
-   compiler under test; 29 cases today, run against both rings.
+   compiler under test; 33 cases today, run against both rings.
 5. **`tools/bootstrap.js`** - the bootstrap itself, timed: transpile the source
    tree, compile the published `cppsrc/simse_bootstrap.cpp` with `cl.exe` alone,
    and check that the compiler that comes out of it reproduces that file byte for
@@ -228,15 +228,15 @@ corpus has `diagnostic-*` cases that assert on *rejected* programs.
 
 ## Performance, honestly
 
-Measured on the compiler's own 14,228-line source tree, release builds, on one
+Measured on the compiler's own 15,090-line source tree, release builds, on one
 machine (an ARM64 laptop; the numbers wobble ~8% between windows):
 
 | Measure | Value |
 | --- | --- |
-| self-hosted compiler transpiling `cppsrc/` | ~0.81 s (~17.6k lines/s) |
-| hand-written C++ compiler, same input | ~0.18 s (~4.6x faster) |
+| self-hosted compiler transpiling `cppsrc/` | ~0.86 s (~17.4k lines/s) |
+| hand-written C++ compiler, same input | ~0.21 s (~4.1x faster) |
 | peak working set, self-hosted | ~31 MB |
-| emitted translation unit | ~1.10 MB for the whole compiler |
+| emitted translation unit | ~1.26 MB for the whole compiler |
 
 The remaining gap to the hand-written ring is the price of the abstractions the
 Simse ring uses (the AST as one uniform node type, strings and lists as values).

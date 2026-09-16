@@ -149,6 +149,9 @@ namespace codegen {
             // know what `this.<field>` is without it. Owned here because `types` holds
             // pointers into it.
             List<std::shared_ptr<ast::Decl>> machineTypes;
+            // The decl of the machine being emitted (the last one registered), which the
+            // extractor needs as the class `this` is an instance of.
+            const ast::Decl *machineDecl = nullptr;
             Dictionary<Str, bool> enumNames;
             // Non-prelude data classes we emitted; their construction lowers to
             // the `_make_<Name>` factory instead of an emitted constructor.
@@ -586,6 +589,46 @@ namespace codegen {
                 }
             }
 
+            // Whether a factory parameter is a value the aggregate can be *moved* out
+            // of, or one that rides in a register. The factory is compiler-generated and
+            // its parameters are dead the moment the aggregate is built, so a scalar
+            // needs nothing and anything that owns storage is moved: a temporary
+            // argument then costs no copy at all (it is elided into the parameter) and
+            // an lvalue costs exactly the one copy value semantics require - the
+            // parameter. Copying the parameter *again* into the field is the copy this
+            // avoids, and for a `Str` past its inline capacity, a `List` past its inline
+            // buffer, a dictionary or a handle (`&T`, whose copy is a refcount bump)
+            // that copy is an allocation. (Passing `const T&` would avoid the second
+            // copy too, but it forces one for a temporary - by value plus a move is
+            // better than both.) This is the idiom the RTL's own constructors use
+            // (`cppsrc/rtl/astxml.hpp`).
+            bool factoryParamByValue(const ast::TypeExpr &type) {
+                switch (type.kind) {
+                    case ast::TypeKind::Pointer:
+                    case ast::TypeKind::IntLit:
+                        return true;
+                    case ast::TypeKind::Reference:
+                    case ast::TypeKind::Function:
+                    case ast::TypeKind::Yield:
+                        return false;
+                    case ast::TypeKind::Generic:
+                        // `RawArray<T>` *is* `T*`; the rest are containers, optionals
+                        // and handles, all of which own storage.
+                        return type.name == "RawArray";
+                    case ast::TypeKind::Named:
+                        return isScalarName(type.name) || enumNames.count(type.name) > 0;
+                }
+                return false;
+            }
+
+            // The scalar names: the types whose C++ spelling is a register-width
+            // value (`Int` and friends, `Bool`, `Char`, `Float64`).
+            static bool isScalarName(const Str &name) {
+                return name == "Bool" || name == "Char" || name == "Int" || name == "Int8"
+                       || name == "Int16" || name == "Int32" || name == "Int64"
+                       || name == "Float32" || name == "Float64";
+            }
+
             void emitDataClass(const ast::Decl &decl) {
                 setActiveTypeParams(decl.typeParams);
                 List<Str> params;
@@ -596,7 +639,9 @@ namespace codegen {
                         return;
                     }
                     params.push_back(type(*field.type) + " " + field.name);
-                    values.push_back(field.name);
+                    values.push_back(factoryParamByValue(*field.type)
+                                             ? field.name
+                                             : Str("std::move(") + field.name + Str(")"));
                 }
                 if (failed) return;
 
@@ -1217,6 +1262,7 @@ namespace codegen {
             // must resolve to the parameter.
             linear::IlFunction ilMachineMethod(const Str &className,
                                               const linear::YieldMethod &method,
+                                              const ast::Decl *selfDecl,
                                               const sema::Facts *facts = nullptr,
                                               const Dictionary<Str, ast::TypePtr> *inferred = nullptr) {
                 linear::IlFunction info;
@@ -1224,6 +1270,11 @@ namespace codegen {
                 info.closureSymbol = className;
                 info.facts = facts;
                 info.inferredTypes = inferred;
+                // The machine's class, with its fields: the class is the lowering's own
+                // output, so the type rules never saw it - and a field read
+                // (`this._sm_self`) is how the body reaches everything that crossed a
+                // `yield`.
+                info.selfDecl = selfDecl;
                 for (const ast::Param &param: method.params) {
                     info.paramNames.push_back(param.name);
                     info.paramTypes.push_back(param.type);
@@ -1347,17 +1398,29 @@ namespace codegen {
             }
 
             // Whether an instruction's result is inlined at its use instead of being
-            // assigned to a slot: the extractor's own temporaries (a place, a
-            // constant expression) with a single definition and a single use are
-            // skipped, and the expression stands where they were read - which is where
-            // the statement path inlined it.
+            // assigned to a slot. The instruction list is one operation per instruction
+            // and every *typed* slot is a declared slot of the frame, so a value is read
+            // where it was written and no instruction inlines another. The one exception
+            // is a slot the type rules could not name - the extractor's own temporary for
+            // a shape that has no type of its own, such as a bare `null`, whose C++
+            // spelling depends on the context it is read in. It cannot be declared at the
+            // top of the body (`auto x;` is not a declaration) and it has exactly one
+            // definition and one use, so that use is where the expression went.
             bool ilFolded(const linear::IlBody &il, const IlFrame &frame, int slot) const {
                 if (slot < 0 || slot >= (int) il.vars.size()) return false;
                 if (il.vars[slot].kind != linear::IlVarKind::Temp) return false;
+                if (linear::ilVarType(il, slot)) return false; // a typed slot is declared
                 if (ilIntAt(frame.defineCount, slot, 0) != 1) return false;
                 if (ilIntAt(frame.useCount, slot, 0) != 1) return false;
                 // A closure is an aggregate, not an expression: it keeps its slot.
                 return !ilSlotHoldsClosure(il, frame, slot);
+            }
+
+            // Whether a slot is declared with the frame at the top of the body (a typed
+            // slot) rather than in front of the instruction that first writes it.
+            bool ilDeclaredAtTop(const linear::IlBody &il, int slot) const {
+                return slot >= 0 && slot < (int) il.vars.size()
+                       && linear::ilVarType(il, slot) != nullptr;
             }
 
             // Whether an instruction builds a closure class instance, which is an
@@ -1442,6 +1505,20 @@ namespace codegen {
                 node->kind = ExprKind::Member;
                 node->text = name;
                 node->lhs = base;
+                return node;
+            }
+
+            // The *address* of a place, as the emitter spells a borrow: `&name` for a
+            // plain name, `simse_addressOf(...)` otherwise - which is what an
+            // `IndexAddr`/`FieldAddr` instruction writes (`ldelema`/`ldflda` in the IL's
+            // own shape, `impl_specs/linear-il.md`). A place is the one value an
+            // instruction may not copy: a call that mutates its receiver has to reach
+            // the original.
+            static ast::ExprPtr ilBorrowNode(const ast::ExprPtr &place, int depth) {
+                if (!place || depth > 24) return nullptr;
+                auto node = std::make_shared<ast::Expr>();
+                node->kind = ExprKind::Deref;
+                node->lhs = place;
                 return node;
             }
 
@@ -1581,11 +1658,13 @@ namespace codegen {
                 if (kind == IlOpKind::GetField || kind == IlOpKind::FieldAddr) {
                     const int textIndex = ilOperandAt(op.operands, 2);
                     if (textIndex < 0 || textIndex >= (int) il.pool.size()) return nullptr;
-                    return ilMemberNode(
+                    ast::ExprPtr member = ilMemberNode(
                             ilSlotNode(il, frame, ilOperandAt(op.operands, 1), depth),
                             il.pool[textIndex]);
+                    if (kind == IlOpKind::GetField) return member;
+                    return ilBorrowNode(member, depth);
                 }
-                if (kind == IlOpKind::IndexAddr) {
+                if (kind == IlOpKind::IndexAddr || kind == IlOpKind::GetIndex) {
                     ast::ExprPtr base = ilSlotNode(il, frame, ilOperandAt(op.operands, 1), depth);
                     ast::ExprPtr index = ilOperandNode(il, frame, ilOperandAt(op.operands, 2), depth);
                     if (!base || !index) return nullptr;
@@ -1593,17 +1672,8 @@ namespace codegen {
                     node->kind = ExprKind::Index;
                     node->lhs = base;
                     node->rhs = index;
-                    return node;
-                }
-                if (kind == IlOpKind::GetIndex) {
-                    ast::ExprPtr base = ilSlotNode(il, frame, ilOperandAt(op.operands, 1), depth);
-                    ast::ExprPtr index = ilOperandNode(il, frame, ilOperandAt(op.operands, 2), depth);
-                    if (!base || !index) return nullptr;
-                    auto node = std::make_shared<ast::Expr>();
-                    node->kind = ExprKind::Index;
-                    node->lhs = base;
-                    node->rhs = index;
-                    return node;
+                    if (kind == IlOpKind::GetIndex) return node;
+                    return ilBorrowNode(node, depth);
                 }
                 if (kind == IlOpKind::Deref || kind == IlOpKind::CopyValue || kind == IlOpKind::Box) {
                     ast::ExprPtr operand = ilSlotNode(il, frame, ilOperandAt(op.operands, 1), depth);
@@ -1616,6 +1686,11 @@ namespace codegen {
                     return node;
                 }
                 if (kind == IlOpKind::GetStatic) return ilGetStaticNode(il, op);
+                if (kind == IlOpKind::GetStaticAddr) {
+                    // The address of a file-level static: `&name` (`ilBorrowNode` spells a
+                    // name that way), never the address of a copy of it.
+                    return ilBorrowNode(ilGetStaticNode(il, op), depth);
+                }
                 if (kind == IlOpKind::Call || kind == IlOpKind::CallVoid) {
                     return ilCallNode(il, frame, op);
                 }
@@ -1719,11 +1794,20 @@ namespace codegen {
                 for (int i = 0; i < (int) il.ops.size(); i++) {
                     const linear::IlOp &op = il.ops[i];
                     if (op.kind != IlOpKind::Declare && op.kind != IlOpKind::DeclareInit) continue;
-                    // A declaration that prints nothing - the folding inlines it at its use -
-                    // keeps nothing legal, so it asks for no block either.
-                    if (ilFolded(il, frame, ilOperandAt(op.operands, 0))) continue;
-                    const IlCrossing crossing = ilJumpCrossing(il, i);
-                    if (crossing.end >= 0) blockEnd[i] = crossing.end;
+                    const int slot = ilOperandAt(op.operands, 0);
+                    if (ilFolded(il, frame, slot)) continue;
+                    // A typed slot is declared where the `Declare` stands (the hoisting put
+                    // it at the top); an untyped one is declared at the instruction that
+                    // first writes it - or, when the two are adjacent, right here, where
+                    // they print as one line (`auto x = <value>;`).
+                    int at = i;
+                    if (!ilDeclaredAtTop(il, slot)) {
+                        const int def = ilIntAt(frame.defOp, slot, -1);
+                        at = def == i + 1 ? i : def;
+                        if (at < 0) continue;
+                    }
+                    const IlCrossing crossing = ilJumpCrossing(il, at);
+                    if (crossing.end >= 0) blockEnd[at] = crossing.end;
                 }
                 struct IlScope {
                     int start = 0;
@@ -1768,40 +1852,35 @@ namespace codegen {
                         }
                         if (ilFolded(il, frame, slot)) continue; // inlined at its use
                         ast::TypePtr slotType = linear::ilVarType(il, slot);
-                        // A slot the type pass could not spell is still declarable when
-                        // the declaration initialises it: `auto`, exactly as the
-                        // statement path writes it.
-                        const bool initialized = kind == IlOpKind::DeclareInit;
-                        if (!slotType && !initialized) {
-                            return ilFail(reason, "the slot '" + il.vars[slot].name
-                                                 + "' has neither a type nor an initializer");
-                        }
-                        Str decl = slotType ? Str(ilDeclTypeText(il, slot, *slotType) + " "
-                                                                 + il.vars[slot].name)
-                                            : Str("auto " + il.vars[slot].name);
-                        // An initialised declaration is one line, exactly as the
-                        // statement path writes it (`Str out = "";`) - and the
-                        // instruction that computes the value can be a few further
-                        // down, with the initializer's own temporaries in between
-                        // (which are folded away, so they print nothing). A bare one is
-                        // the hoisting's `T x;`, with the assignment left where it was.
-                        if (kind == IlOpKind::DeclareInit) {
-                            // A jump may cross it: the block opened above keeps the
-                            // initialization legal, so it stays one line.
-                            const int def = ilIntAt(frame.defOp, slot, -1);
-                            Str valueText;
-                            if (!ilValueText(il, frame, def, slotType, valueText)) {
-                                // The initializer has no expression form - a closure is an
-                                // aggregate, not a call - so the slot is declared bare and
-                                // the instruction assigns it.
-                                line(level, decl + ";");
-                                continue;
-                            }
-                            line(level, decl + " = " + valueText + ";");
-                            consumedByDeclare = def;
+                        if (slotType) {
+                            // A declared slot with a type: one line, and the instruction
+                            // that computes its value assigns it where that instruction
+                            // stands. (The hoisting turned the declaration's initializer
+                            // into exactly such an assignment.)
+                            line(level, ilDeclTypeText(il, slot, *slotType) + " "
+                                        + il.vars[slot].name + ";");
                             continue;
                         }
-                        line(level, decl + ";");
+                        // A slot the type rules could not name is declared with `auto`
+                        // and its own definition as the initializer - which only works
+                        // where the two are adjacent; otherwise the definition is where
+                        // the declaration goes (below) and this prints nothing.
+                        const int def = ilIntAt(frame.defOp, slot, -1);
+                        if (def != i + 1) {
+                            if (def < 0) {
+                                return ilFail(reason, "the slot '" + il.vars[slot].name
+                                                     + "' has neither a type nor an initializer");
+                            }
+                            continue;
+                        }
+                        Str valueText;
+                        if (!ilValueText(il, frame, def, nullptr, valueText)) {
+                            return ilFail(reason, ilWhy.empty()
+                                                          ? Str("an initializer with no expression form")
+                                                          : "cannot express " + ilWhy);
+                        }
+                        line(level, Str("auto ") + il.vars[slot].name + " = " + valueText + ";");
+                        consumedByDeclare = def;
                         continue;
                     }
                     if (kind == IlOpKind::Label) {
@@ -1833,16 +1912,25 @@ namespace codegen {
                     if (dst >= 0 && ilFolded(il, frame, dst)) continue; // inlined at its use
                     if (dst >= 0) {
                         ast::TypePtr slotType = linear::ilVarType(il, dst);
-                        if (!slotType) {
-                            return ilFail(reason, "the slot '" + il.vars[dst].name
-                                                 + "' has no type to assign");
-                        }
+                        // An instruction that defines a slot the type rules could not
+                        // name *is* that slot's declaration (`auto x = <this>;`), which
+                        // is where a slot without a type has to be declared - a typed one
+                        // was declared with the frame at the top of the body.
+                        const bool declares = !slotType && ilIntAt(frame.defOp, dst, -1) == i;
                         Str valueText;
                         if (!ilValueText(il, frame, i, slotType, valueText)) {
                             return ilFail(reason, ilWhy.empty()
                                                           ? Str("'") + ilOpKindText(kind)
                                                                 + Str("' cannot be expressed yet")
                                                           : "cannot express " + ilWhy);
+                        }
+                        if (declares) {
+                            line(level, Str("auto ") + il.vars[dst].name + " = " + valueText + ";");
+                            continue;
+                        }
+                        if (!slotType) {
+                            return ilFail(reason, "the slot '" + il.vars[dst].name
+                                                 + "' has no type to assign");
                         }
                         line(level, il.vars[dst].name + " = " + valueText + ";");
                         continue;
@@ -2204,6 +2292,7 @@ namespace codegen {
                 decl->fields = machine.fields;
                 types[className] = decl.get();
                 machineTypes.push_back(decl);
+                machineDecl = decl.get();
             }
 
             // The machine itself: the fields, then one method per way of advancing it.
@@ -2264,8 +2353,8 @@ namespace codegen {
                     // the lowering's output): the frame is the machine's, so its
                     // fields are read and written through `self`, exactly as a lambda
                     // body reads its captures.
-                    emitBodyAt(ilMachineMethod(className, method, &facts, &inferred), method.body,
-                               fn.file, 2);
+                    emitBodyAt(ilMachineMethod(className, method, machineDecl, &facts, &inferred),
+                               method.body, fn.file, 2);
                     inClosureMethod = savedClosure;
                     selfKind = savedSelfKind;
                     selfType = savedSelfType;

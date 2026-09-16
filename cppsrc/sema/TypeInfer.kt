@@ -548,6 +548,13 @@ data class SemBody(
 
     var typeParams: List<Str>,
     var selfType: AstXmlNode,
+    // The class `this` is an instance of, when it is one the *lowering* built: a state
+    // machine (impl_specs/yield.md). Such a class has no declaration the program wrote,
+    // so its fields are reachable only through this - and the rules have to reach them,
+    // or `this.<field>` (a machine's `_sm_self`, say) types as nothing and the emitter
+    // has to guess what it is.
+    var selfDecl: AstXmlNode,
+
     var paramNames: List<Str>,
     var paramTypes: List<AstXmlNode>,
     var captures: Dictionary<Str, AstXmlNode>
@@ -575,6 +582,27 @@ data class SemInfer(
 
     fun popScope(): Unit {
         this.scopes.removeAt(this.scopes.size() - 1)
+    }
+
+    // One expression, typed against the names the caller knows. The extractor's frame
+    // is flat (one binding per name, no scopes), which is exactly what `names` is; the
+    // scope is pushed and popped so the call leaves nothing behind.
+    fun typeOf(e: *AstXmlNode, names: *Dictionary<Str, AstXmlNode>): AstXmlNode {
+        this.pushScope()
+        val known: List<Str> = names.keys()
+        var i: Int = 0
+        while (i < known.size()) {
+            val typeNode: AstXmlNode = names.get(known[i]).value()
+            // The C++ ring marks only the names that carry a type; an empty node is this
+            // ring's "no type".
+            if (!xmlIsEmpty(*typeNode)) {
+                this.mark(known[i], typeNode)
+            }
+            i = i + 1
+        }
+        val result: AstXmlNode = this.infer(e)
+        this.popScope()
+        return result
     }
 
     // Records a binding in the scope being built *and* in the flat record.
@@ -1050,17 +1078,25 @@ data class SemInfer(
             val baseKind: AstNodeCategory = xmlKind(*base)
             if (baseKind == AstNodeCategory.TypeNamed || baseKind == AstNodeCategory.TypeGeneric) {
                 val baseName: Str = xmlAttr(*base, AstNodeAttributeKind.Name)
+                var decl: AstXmlNode = xmlEmptyNode()
                 if (this.facts.types.has(baseName)) {
-                    val decl: AstXmlNode = this.facts.types.get(baseName).value()
-                    if (decl.name == AstNodeKind.DataClass) {
-                        val fields: List<AstXmlNode> = xmlChildren(*decl, AstNodeKind.Field)
-                        var i: Int = 0
-                        while (i < fields.size()) {
-                            if (xmlAttr(*fields[i], AstNodeAttributeKind.Name) == memberText) {
-                                return this.instantiate(*decl, *base, xmlChild(*fields[i], AstNodeKind.Type))
-                            }
-                            i = i + 1
+                    decl = this.facts.types.get(baseName).value()
+                } else if (!xmlIsEmpty(*this.body.selfDecl)
+                    && xmlAttr(*this.body.selfDecl, AstNodeAttributeKind.Name) == baseName
+                ) {
+                    // A class the lowering built (a state machine): its fields are not a
+                    // declaration the program wrote, so they are reached through the body's
+                    // own context.
+                    decl = this.body.selfDecl
+                }
+                if (decl.name == AstNodeKind.DataClass) {
+                    val fields: List<AstXmlNode> = xmlChildren(*decl, AstNodeKind.Field)
+                    var i: Int = 0
+                    while (i < fields.size()) {
+                        if (xmlAttr(*fields[i], AstNodeAttributeKind.Name) == memberText) {
+                            return this.instantiate(*decl, *base, xmlChild(*fields[i], AstNodeKind.Type))
                         }
+                        i = i + 1
                     }
                 }
             }
@@ -1190,4 +1226,46 @@ fun semInferTypes(
         i = i + 1
     }
     return out
+}
+
+// The type of **one expression**, with the names in scope given explicitly: the same rules
+// the pass applies to a whole body, asked about a single node.
+//
+// The IL extractor is the caller that needs this. Its frame is flat (a name per slot, no
+// scopes), and the slots it *synthesizes* - the place behind a read, a value it has to
+// declare - have no declaration in the source to take a type from, so it asks here. That
+// is what lets every slot of an instruction list carry a type and every instruction be one
+// operation over typed slots (`impl_specs/linear-il.md`). An empty node when the rules
+// cannot name the expression.
+fun semTypeOfExpr(
+    expr: *AstXmlNode, facts: *SemFacts, ctx: *SemBody, names: *Dictionary<Str, AstXmlNode>
+): AstXmlNode {
+    // The C++ ring seeds the frame in the inference's constructor; this ring seeds it at
+    // each entry point instead, so the same frame is built here before the one expression
+    // is typed.
+    val infer: SemInfer = SemInfer(facts, ctx, List<Dictionary<Str, AstXmlNode>>(), Dictionary<Str, AstXmlNode>())
+    infer.pushScope()
+    val params: List<AstXmlNode> = xmlChildren(*ctx.decl, AstNodeKind.Param)
+    var i: Int = 0
+    while (i < params.size()) {
+        val paramType: AstXmlNode = xmlChild(*params[i], AstNodeKind.Type)
+        if (!xmlIsEmpty(*paramType)) {
+            infer.mark(xmlAttr(*params[i], AstNodeAttributeKind.Name), paramType)
+        }
+        i = i + 1
+    }
+    i = 0
+    while (i < ctx.paramNames.size()) {
+        if (i < ctx.paramTypes.size() && !xmlIsEmpty(*ctx.paramTypes[i])) {
+            infer.mark(ctx.paramNames[i], ctx.paramTypes[i])
+        }
+        i = i + 1
+    }
+    val captureNames: List<Str> = ctx.captures.keys()
+    i = 0
+    while (i < captureNames.size()) {
+        infer.mark(captureNames[i], ctx.captures.get(captureNames[i]).value())
+        i = i + 1
+    }
+    return infer.typeOf(expr, names)
 }

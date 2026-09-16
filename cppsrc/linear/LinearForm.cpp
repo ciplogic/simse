@@ -73,6 +73,7 @@ namespace linear {
                     {IlOpKind::FieldAddr, "Var,Var,Text"},
                     {IlOpKind::IndexAddr, "Var,Var,Value"},
                     {IlOpKind::GetStatic, "Var,Text"},
+                    {IlOpKind::GetStaticAddr, "Var,Text"},
                     {IlOpKind::SetStatic, "Text,Value"},
                     {IlOpKind::Call, "Var,Method,Value..."},
                     {IlOpKind::CallVoid, "Method,Value..."},
@@ -92,8 +93,8 @@ namespace linear {
                 "Label", "Goto", "IfTrue", "IfFalse", "Declare", "DeclareInit", "SetVar",
                 "SetVar_Null", "BinaryOp", "UnaryOp", "Cast", "Box", "Deref", "CopyValue",
                 "Store", "GetField", "SetField", "GetIndex", "SetIndex", "FieldAddr",
-                "IndexAddr", "GetStatic", "SetStatic", "Call", "CallVoid", "CallIndirect",
-                "CallIndirectVoid", "CallCtor", "Return", "ReturnVoid", "Lambda",
+                "IndexAddr", "GetStatic", "GetStaticAddr", "SetStatic", "Call", "CallVoid",
+                "CallIndirect", "CallIndirectVoid", "CallCtor", "Return", "ReturnVoid", "Lambda",
                 "Unsupported",
         };
 
@@ -224,6 +225,28 @@ namespace linear {
 
             IlBody run(const List<StmtPtr> &body) {
                 stmts(body);
+                // The extractor's own slots are the body's registers: a slot with a type
+                // is declared once, at the top of the instruction list, exactly where
+                // `hoistSlots` put the lowering's own slots - so the frame is flat, no
+                // jump can cross a declaration, and nothing has to be scoped. A slot
+                // without a type (a shape the type rules cannot name) keeps its
+                // declaration in front of the instruction that first writes it, which
+                // the backend then pairs with that instruction as `auto`.
+                if (!hoisted.empty()) {
+                    List<IlOp> ops;
+                    List<int> lines;
+                    for (int i = 0; i < (int) hoisted.size(); i++) {
+                        IlOp op;
+                        op.kind = IlOpKind::Declare;
+                        op.operands.push_back(hoisted[i]);
+                        ops.push_back(op);
+                        lines.push_back(hoistedLines[i]);
+                    }
+                    for (const IlOp &op: out.ops) ops.push_back(op);
+                    for (int sourceLine: out.lines) lines.push_back(sourceLine);
+                    out.ops = ops;
+                    out.lines = lines;
+                }
                 return std::move(out);
             }
 
@@ -240,6 +263,10 @@ namespace linear {
             Dictionary<Str, int> labelAt;
             int nextBase = 1;               // `_sm_base<n>` for a synthesized slot
             int line = 0;
+            // The synthesized slots that carry a type: their declarations go to the top
+            // of the instruction list (with the line that needed them, for the dump).
+            List<int> hoisted;
+            List<int> hoistedLines;
 
             // ---- tables ---------------------------------------------------------
 
@@ -325,11 +352,77 @@ namespace linear {
             int freshSlot(const Str &typeText, const ast::TypePtr &type) {
                 int slot = addVar(Str("_sm_base") + intText(nextBase++), typeText,
                                   IlVarKind::Temp, type);
-                // A slot the extractor synthesised exists nowhere in the statements,
-                // so the instruction list has to say where it comes from: here, in
-                // front of the instruction that first writes it.
-                emit(IlOpKind::Declare, {slot});
+                if (type) {
+                    hoisted.push_back(slot);
+                    hoistedLines.push_back(line);
+                } else {
+                    // A slot the type rules could not name: the instruction list has to
+                    // say where it comes from *here*, in front of the instruction that
+                    // first writes it, and the backend declares it with `auto`.
+                    emit(IlOpKind::Declare, {slot});
+                }
                 return slot;
+            }
+
+            // ---- the types of what the extractor synthesizes --------------------
+
+            // The frame is a scope: every slot's name and its type. That is exactly the
+            // shape `sema::typeOfExpr` takes, and the reason the extractor can give a
+            // type to a slot the statements never declared (a place, a value position
+            // the lowering left inline) - a slot without one cannot be declared at the
+            // top of the body, and then the instruction that reads it has to inline the
+            // whole expression it stands for.
+            Dictionary<Str, ast::TypePtr> frameTypes() {
+                Dictionary<Str, ast::TypePtr> names;
+                for (int i = 0; i < (int) out.vars.size(); i++) {
+                    ast::TypePtr type = ilVarType(out, i);
+                    if (type) names[out.vars[i].name] = type;
+                }
+                return names;
+            }
+
+            // The type of an expression, from the rules the *type pass* applies to a
+            // whole body - asked here about one node, with this body's frame in scope.
+            // Null when the rules cannot name it (or when there are no facts to ask);
+            // the caller then leaves the slot untyped.
+            ast::TypePtr exprType(const Expr &e) {
+                if (fn.facts == nullptr) return nullptr;
+                sema::Body context;
+                context.decl = fn.decl;
+                context.selfType = fn.receiver;
+                context.selfDecl = fn.selfDecl;
+                context.typeParams = fn.typeParams;
+                context.paramNames = fn.paramNames;
+                context.paramTypes = fn.paramTypes;
+                context.captures = fn.captureTypes;
+                if (!context.selfType && !fn.closureSymbol.empty()) {
+                    // A machine method or a lambda body: `this` is the instance of the
+                    // class the lowering built (a value receiver reads through it).
+                    context.selfType = sema::namedType(fn.closureSymbol);
+                }
+                return sema::typeOfExpr(e, *fn.facts, context, frameTypes());
+            }
+
+            // The type of the *value* an instruction writes for this expression. It is
+            // the type rules' answer, unchanged: they already describe what the emitter
+            // spells (`*x` on a value is the address, on `&T` the `.get()`, on `*T` the
+            // load through it).
+            ast::TypePtr valueType(const Expr &e) {
+                return exprType(e);
+            }
+
+            // The type of a slot to synthesise for `e`: its own type, spelled the way
+            // the frame spells types, or `?` when there is none.
+            Str slotTypeText(const ast::TypePtr &type) {
+                return type ? ilTypeText(*type) : Str("?");
+            }
+
+            static ast::TypePtr pointerTo(const ast::TypePtr &pointee) {
+                if (!pointee) return nullptr;
+                auto pointer = std::make_shared<ast::TypeExpr>();
+                pointer->kind = ast::TypeKind::Pointer;
+                pointer->inner = pointee;
+                return pointer;
             }
 
             void emit(IlOpKind kind, const List<int> &operands) {
@@ -530,7 +623,9 @@ namespace linear {
                     case ExprKind::NullLit: {
                         // `null`'s spelling depends on the expected type (`Opt<T>()`
                         // vs `nullptr`), which only the destination slot's type
-                        // states for certain - so it is materialised.
+                        // states for certain - so it is materialised. It is the one
+                        // value with no type of its own, so the slot stays untyped and
+                        // the backend inlines it where it is read.
                         int slot = freshSlot(Str("?"));
                         emit(IlOpKind::SetVar_Null, {slot});
                         return slot;
@@ -539,7 +634,12 @@ namespace linear {
                     case ExprKind::Member: case ExprKind::Index: case ExprKind::Call:
                     case ExprKind::Binary: case ExprKind::Unary: case ExprKind::Ref:
                     case ExprKind::Deref: case ExprKind::Copy: {
-                        int slot = freshSlot(Str("?"));
+                        // A value the body does not hold in a slot: the extractor makes
+                        // one, and the *type rules* type it - so the instruction that
+                        // reads it names a declared slot instead of inlining the whole
+                        // expression it stands for.
+                        const ast::TypePtr type = valueType(e);
+                        int slot = freshSlot(slotTypeText(type), type);
                         into(slot, e);
                         return slot;
                     }
@@ -578,10 +678,10 @@ namespace linear {
                                  {slot, poolIndex(baseText(*e.lhs) + "." + e.text)});
                             return;
                         }
-                        emit(IlOpKind::GetField, {slot, valueOf(*e.lhs), poolIndex(e.text)});
+                        emit(IlOpKind::GetField, {slot, receiver(*e.lhs), poolIndex(e.text)});
                         return;
                     case ExprKind::Index:
-                        emit(IlOpKind::GetIndex, {slot, valueOf(*e.lhs), operand(*e.rhs)});
+                        emit(IlOpKind::GetIndex, {slot, receiver(*e.lhs), operand(*e.rhs)});
                         return;
                     case ExprKind::Binary:
                         emit(IlOpKind::BinaryOp,
@@ -594,9 +694,29 @@ namespace linear {
                         emit(IlOpKind::Box, {slot, operand(*e.lhs)});
                         return;
                     case ExprKind::Deref:
-                        // `*x` is a borrow, `.get()`, or a load depending on what `x`
-                        // is - the backend reads that from the operand's slot type.
-                        emit(IlOpKind::Deref, {slot, operand(*e.lhs)});
+                        // `*x` is the address of what `x` denotes: of a value's own
+                        // storage (the place itself, or `&name`), of a counted
+                        // reference's pointee (`.get()`), or the load through a raw
+                        // pointer - the backend reads which from the operand's slot type.
+                        // A place that is a chain already *is* its address, so it is
+                        // copied; a name, a handle and a call's result are read and the
+                        // address is taken from the value.
+                        if (e.lhs && e.lhs->kind == ExprKind::Name && isStaticName(e.lhs->text)) {
+                            // A file-level static is not a slot of the frame, so its
+                            // address is its own instruction (writing the value into a
+                            // slot first would take the address of a copy).
+                            emit(IlOpKind::GetStaticAddr, {slot, poolIndex(e.lhs->text)});
+                            return;
+                        }
+                        if (e.lhs && (e.lhs->kind == ExprKind::Member || e.lhs->kind == ExprKind::Index)
+                            && !isHandleExpr(*e.lhs)) {
+                            // A chain that is a place: the address *is* the place slot. (A
+                            // call's result is not a place - its address is taken at the
+                            // call, which is what `Deref` spells for a value.)
+                            emit(IlOpKind::SetVar, {slot, receiver(*e.lhs)});
+                            return;
+                        }
+                        emit(IlOpKind::Deref, {slot, valueOf(*e.lhs)});
                         return;
                     case ExprKind::Copy:
                         emit(IlOpKind::CopyValue, {slot, operand(*e.lhs)});
@@ -616,31 +736,86 @@ namespace linear {
                 unsupported("expression");
             }
 
-            // A read of a place: the value behind it, as a slot.
+            // A read of a place: the value behind it, as a slot. The place itself is
+            // read through `receiver` - so reading `a[i].f` borrows the element rather
+            // than copying it into a temporary of the extractor's own.
             int valueOf(const Expr &e) {
                 if (e.kind == ExprKind::Name) return name(e);
-                int slot = freshSlot(Str("?"));
+                const ast::TypePtr type = valueType(e);
+                int slot = freshSlot(slotTypeText(type), type);
                 into(slot, e);
                 return slot;
             }
 
-            // A base that is a *place*: a call's receiver, or an assignment target's
-            // base. A plain name is that slot; anything deeper becomes an **address**
-            // slot (`FieldAddr`/`IndexAddr`), so a call that mutates its receiver
-            // reaches the original and not a copy.
+            // The address of a file-level static, as one instruction: the base a call or
+            // a write through the static needs (`&ns1_names`), never a copy of it.
+            int staticAddr(const Expr &e) {
+                const ast::TypePtr type = pointerTo(exprType(e));
+                const int slot = freshSlot(type ? ilTypeText(*type) : Str("*?"), type);
+                emit(IlOpKind::GetStaticAddr, {slot, poolIndex(e.text)});
+                return slot;
+            }
+
+            // Whether an expression's *value* is already a handle (`&T`/`*T`/`PList`).
+            // Such a value denotes storage on its own, so it *is* the place: taking its
+            // address would take the address of the pointer.
+            bool isHandleExpr(const Expr &e) {
+                const ast::TypePtr type = exprType(e);
+                return type != nullptr && sema::isHandleType(type.get());
+            }
+
+            // Whether a base needs an explicit address instruction: it is an *inline*
+            // value, of a type the rules can name. A handle value already denotes the
+            // storage, and an unnameable one keeps the value form - the address of
+            // something whose type is unknown is not a thing the emitted C++ can spell.
+            bool needsPlace(const Expr &e) {
+                const ast::TypePtr type = exprType(e);
+                return type != nullptr && !sema::isHandleType(type.get());
+            }
+
+            // The address of an inline value's storage, as one instruction: the slot
+            // holds the pointer, typed from the type rules, so a backend can declare it
+            // and resolve a call reached through it. A place is never a copy.
+            int place(IlOpKind kind, const Expr &baseExpr, const Expr &whole, const Str &field,
+                      const ExprPtr &indexExpr) {
+                const ast::TypePtr pointee = exprType(whole);
+                const ast::TypePtr type = pointerTo(pointee);
+                const int slot = freshSlot(type ? ilTypeText(*type) : Str("*?"), type);
+                const int base = receiver(baseExpr);
+                List<int> operands;
+                operands.push_back(slot);
+                operands.push_back(base);
+                if (kind == IlOpKind::FieldAddr) {
+                    operands.push_back(poolIndex(field));
+                } else {
+                    operands.push_back(operand(indexExpr));
+                }
+                emit(kind, operands);
+                return slot;
+            }
+
+            // A base through which something is reached: a call's receiver, a read's
+            // base, an assignment target's base. A plain name *is* that base; a handle
+            // value is one too (it already points at the storage); an *inline* value has
+            // to have its address taken - which is what `FieldAddr`/`IndexAddr` are. That
+            // is what keeps a read from copying an aggregate (the C++ of a field read is
+            // `p->f`, not a copy of a struct) and a write from being lost in a copy.
             int receiver(const Expr &e) {
                 switch (e.kind) {
-                    case ExprKind::Name: return name(e);
+                    case ExprKind::Name:
+                        // A file-level static is not a slot of the frame: as a base it is
+                        // its own *address*, so a call that mutates it reaches the storage
+                        // and not a copy of it (`names.append(x)` appends to `names`).
+                        if (isStaticName(e.text)) return staticAddr(e);
+                        return name(e);
                     case ExprKind::Member: {
                         if (isTypeBase(*e.lhs)) return valueOf(e);
-                        int slot = freshSlot(Str("*?"));
-                        emit(IlOpKind::FieldAddr, {slot, receiver(*e.lhs), poolIndex(e.text)});
-                        return slot;
+                        if (!needsPlace(e)) return valueOf(e);
+                        return place(IlOpKind::FieldAddr, *e.lhs, e, e.text, nullptr);
                     }
                     case ExprKind::Index: {
-                        int slot = freshSlot(Str("*?"));
-                        emit(IlOpKind::IndexAddr, {slot, receiver(*e.lhs), operand(*e.rhs)});
-                        return slot;
+                        if (!needsPlace(e)) return valueOf(e);
+                        return place(IlOpKind::IndexAddr, *e.lhs, e, Str(), e.rhs);
                     }
                     case ExprKind::Deref:
                         return operand(*e.lhs);
@@ -866,10 +1041,14 @@ namespace linear {
                 int slot = varIndex(e.text);
                 if (slot >= 0) return slot;
                 // A file-level static the extractor was told about, or a name only the
-                // backend can resolve (`GetStatic` in both cases).
+                // backend can resolve (`GetStatic` in both cases). The type rules know
+                // the statics the program declares, so the slot carries a type and the
+                // backend declares it with the frame instead of inlining the read.
                 auto known = fn.statics.find(e.text);
-                Str typeText = known == fn.statics.end() ? Str("?") : known->second;
-                int fresh = freshSlot(typeText);
+                const ast::TypePtr type = exprType(e);
+                Str typeText = type ? ilTypeText(*type)
+                                    : (known == fn.statics.end() ? Str("?") : known->second);
+                int fresh = freshSlot(typeText, type);
                 emit(IlOpKind::GetStatic, {fresh, poolIndex(e.text)});
                 return fresh;
             }
@@ -880,6 +1059,11 @@ namespace linear {
                 if (e.text == "this" || hasVar(e.text)) return false;
                 if (captures != nullptr && captures->count(e.text) > 0) return false;
                 return fn.statics.find(e.text) == fn.statics.end();
+            }
+
+            // A name that is file-level static storage rather than a slot of the frame.
+            bool isStaticName(const Str &name) {
+                return !hasVar(name) && fn.statics.find(name) != fn.statics.end();
             }
 
             Str baseText(const Expr &e) {
@@ -1156,6 +1340,10 @@ namespace linear {
                 return varName(body, operandAt(operands, 0)) + " = "
                        + poolText(body, operandAt(operands, 1));
             }
+            if (kind == IlOpKind::GetStaticAddr) {
+                return varName(body, operandAt(operands, 0)) + " = &"
+                       + poolText(body, operandAt(operands, 1));
+            }
             if (kind == IlOpKind::SetStatic) {
                 return poolText(body, operandAt(operands, 0)) + " = "
                        + varName(body, operandAt(operands, 1));
@@ -1272,6 +1460,7 @@ namespace linear {
             case IlOpKind::FieldAddr:
             case IlOpKind::IndexAddr:
             case IlOpKind::GetStatic:
+            case IlOpKind::GetStaticAddr:
             case IlOpKind::Call:
             case IlOpKind::CallIndirect:
             case IlOpKind::CallCtor:

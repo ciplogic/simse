@@ -291,6 +291,20 @@ namespace sema {
                 return allTypes;
             }
 
+            // One expression, typed against the names the caller knows. The extractor's
+            // frame is flat (one binding per name, no scopes), which is exactly what
+            // `names` is; the scope is pushed and popped so the call leaves nothing
+            // behind.
+            ast::TypePtr typeOf(const ast::Expr &e, const Dictionary<Str, ast::TypePtr> &names) {
+                scopes.emplace_back();
+                for (const auto &entry: names) {
+                    if (entry.second) mark(entry.first, entry.second);
+                }
+                ast::TypePtr type = infer(e);
+                scopes.pop_back();
+                return type;
+            }
+
         private:
             const Facts &facts;
             const Body &body;
@@ -467,12 +481,21 @@ namespace sema {
                             if (e.text == "error" || e.text == "Error") return namedType("Str");
                         }
                         if (base->kind == TypeKind::Named || base->kind == TypeKind::Generic) {
+                            const ast::Decl *decl = nullptr;
                             auto declared = facts.types.find(base->name);
-                            if (declared != facts.types.end()
-                                && declared->second->kind == ast::DeclKind::DataClass) {
-                                for (const ast::Field &field: declared->second->fields) {
+                            if (declared != facts.types.end()) {
+                                decl = declared->second;
+                            } else if (body.selfDecl != nullptr
+                                       && body.selfDecl->name == base->name) {
+                                // A class the lowering built (a state machine): its fields
+                                // are not a declaration the program wrote, so they are
+                                // reached through the body's own context.
+                                decl = body.selfDecl;
+                            }
+                            if (decl != nullptr && decl->kind == ast::DeclKind::DataClass) {
+                                for (const ast::Field &field: decl->fields) {
                                     if (field.name == e.text) {
-                                        return instantiate(*declared->second, *base, field.type);
+                                        return instantiate(*decl, *base, field.type);
                                     }
                                 }
                             }
@@ -707,6 +730,13 @@ namespace sema {
                 return nullptr;
             }
         };
+
+        // The pass's own rules, asked about one expression (see the header).
+        ast::TypePtr typeOfOne(const ast::Expr &expr, const Facts &facts, const Body &body,
+                               const Dictionary<Str, ast::TypePtr> &names) {
+            Infer infer(facts, body);
+            return infer.typeOf(expr, names);
+        }
     }
 
     List<ast::StmtPtr> inferTypes(const List<ast::StmtPtr> &body, const Facts &facts,
@@ -715,5 +745,10 @@ namespace sema {
         List<ast::StmtPtr> out = infer.statements(body);
         if (inferred) *inferred = infer.proven();
         return out;
+    }
+
+    ast::TypePtr typeOfExpr(const ast::Expr &expr, const Facts &facts, const Body &ctx,
+                            const Dictionary<Str, ast::TypePtr> &names) {
+        return typeOfOne(expr, facts, ctx, names);
     }
 }
