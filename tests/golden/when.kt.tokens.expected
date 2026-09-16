@@ -13,10 +13,12 @@ Comment	6:1	// a `case` that has to be constant.
 EndOfLine	6:37	\r\n
 ReservedWord	7:1	enum
 Space	7:5	 
-Identifier	7:6	Color
+ReservedWord	7:6	class
 Space	7:11	 
-Operator	7:12	{
-EndOfLine	7:13	\r\n
+Identifier	7:12	Color
+Space	7:17	 
+Operator	7:18	{
+EndOfLine	7:19	\r\n
 Space	8:1	    
 Identifier	8:5	Red
 Operator	8:8	,

@@ -114,7 +114,7 @@ data class IlText(
 )
 
 // How a name's storage is reached, for `.` vs `->`, `*x` vs `x.get()`, `copy`.
-enum NameKind { Value, Shared, Pointer }
+enum class NameKind { Value, Shared, Pointer }
 
 // ---- helpers --------------------------------------------------------------
 
@@ -888,15 +888,14 @@ data class Emitter(
     // and friends, `Bool`, `Char`, `Float64`).
     fun isScalarName(name: Str): Bool {
         when (name) {
-            "Bool", "Char", "Int" -> {
-                return true
-            }
-
-            "Int8", "Int16", "Int32", "Int64" -> {
+            "Bool", "Char", "Int",
+            "Int8", "Int16", "Int32", "Int64",
+            "Float32", "Float64" -> {
                 return true
             }
         }
-        return name == "Float32" || name == "Float64"
+
+        return false
     }
 
     fun emitDataClass(decl: *AstXmlNode): Unit {

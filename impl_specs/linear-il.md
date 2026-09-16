@@ -290,6 +290,27 @@ and that is the property a backend needs.
   callee. The types have to match: the conversion is skipped when the argument's
   pointee is not the parameter's, which leaves the call the type error it was.
 
+- **A compound assignment is a read, a fold and a write through the same place.**
+  `x op= v` (`+= -= *= /= %=`) and the step forms (`i++`/`i--`, which the parser writes as
+  `+= 1`/`-= 1`) lower per target shape, and every shape locates the place *once*
+  (`specs/memory-model.md`, "Compound assignment and the step operators"):
+
+  | target | instructions |
+  | --- | --- |
+  | a local slot `i` | `BinaryOp i, op, i, v` - one instruction, no address |
+  | a closure field | `GetField t, self, name` · `BinaryOp u, op, t, v` · `SetField self, name, u` |
+  | a file-level `var` | `GetStatic t, name` · `BinaryOp u, op, t, v` · `SetStatic name, u` |
+  | `a.f` | `GetField t, base, f` · `BinaryOp u, op, t, v` · `SetField base, f, u` |
+  | `a[i]` | `GetIndex t, base, i` · `BinaryOp u, op, t, v` · `SetIndex base, i, u` |
+  | `*p` | `Deref t, p` · `BinaryOp u, op, t, v` · `Store p, u` |
+
+  `base` is what the plain write already uses (`receiverOf`: `FieldAddr`/`IndexAddr`/
+  `GetStaticAddr` for an inline value, the slot or the handle itself for a name), so a
+  write cannot land in a copy - and the base and the index are computed *once* and shared
+  by the read and the write, so an index with an effect runs once. The `Deref` in the
+  last row is a load (its operand is a `*T`), the same instruction the conversion table
+  above spells `*x`.
+
 ## Printing it
 
 `--showLinearRepresentation` (the C++ driver) prints one body per function: the file

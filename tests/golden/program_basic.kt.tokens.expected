@@ -6,10 +6,12 @@ Comment	2:1	// Declarations, statements, and expressions.
 EndOfLine	2:46	\n
 ReservedWord	3:1	enum
 Space	3:5	 
-Identifier	3:6	Color
+ReservedWord	3:6	class
 Space	3:11	 
-Operator	3:12	{
-EndOfLine	3:13	\n
+Identifier	3:12	Color
+Space	3:17	 
+Operator	3:18	{
+EndOfLine	3:19	\n
 Space	4:1	    
 Identifier	4:5	Red
 Operator	4:8	,

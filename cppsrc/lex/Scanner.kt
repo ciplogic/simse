@@ -10,7 +10,7 @@ package lex
 
 import common
 
-enum TokenKind {
+enum class TokenKind {
     None,
     Space,
     Comment,
@@ -114,7 +114,8 @@ fun makeReservedWords(): List<Str> {
 
 fun makeMultiCharOperators(): List<Str> {
     var operators: List<Str> = listOf<Str>(
-        "->", "==", "!=", "<=", ">=", "&&", "||", "+=", "-=", "*=", "/=", "%=", ".."
+        "->", "==", "!=", "<=", ">=", "&&", "||", "+=", "-=", "*=", "/=", "%=",
+        "++", "--", ".."
     )
     return operators
 }

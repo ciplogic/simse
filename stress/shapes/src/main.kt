@@ -1,5 +1,5 @@
 package fixtures
-enum Shape {
+enum class Shape {
     Circle,
     Square = 4
 }

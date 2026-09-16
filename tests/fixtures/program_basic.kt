@@ -1,6 +1,6 @@
 package fixtures
 // Declarations, statements, and expressions.
-enum Color {
+enum class Color {
     Red,
     Green = 4,
     Blue

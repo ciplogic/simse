@@ -2,7 +2,7 @@ package fixtures
 // T14: exercises `when`, null nullability, the Str/Char library, numeric
 // conversions, min/max, and enum toInt/fromInt.
 
-enum Color {
+enum class Color {
     Red,
     Green = 4,
     Blue

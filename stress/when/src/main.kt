@@ -6,7 +6,7 @@ package whencase
 // `break`/`continue` is the enclosing loop's, and a `when` with no `else` just falls
 // through to what follows it.
 
-enum Size {
+enum class Size {
     Small,
     Big
 }

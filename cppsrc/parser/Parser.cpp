@@ -27,6 +27,17 @@ namespace parser {
                    || op == "*=" || op == "/=" || op == "%=";
         }
 
+        // The step operators: `i++` and `i--`, which are statements rather than values.
+        bool isStepOp(const Str &op) {
+            return op == "++" || op == "--";
+        }
+
+        // The compound assignment a step is: `i++` is `i += 1`, `i--` is `i -= 1`.
+        Str stepAssignOp(const Str &op) {
+            if (op == "++") return Str("+=");
+            return Str("-=");
+        }
+
         // ---- node builders for the `for` desugaring ----------------------------
         // A `for` is spelled out as the `while` it means (see `parseFor`), so these
         // build the pieces that template needs. They carry the `for` token's position
@@ -416,6 +427,8 @@ namespace parser {
                 decl->kind = ast::DeclKind::Enum;
                 decl->pos = peek().pos;
                 advance(); // enum
+                // `enum class`, spelled the way `data class` is: there is no bare `enum`.
+                if (!expectText("class")) return decl;
                 if (!expectIdentifier(decl->name)) return decl;
                 if (checkText("<")) {
                     if (!parseTypeParams(decl->typeParams)) return decl;
@@ -721,10 +734,32 @@ namespace parser {
                     advance();
                     return stmt;
                 }
+                if (isStepOp(peek().text)) {
+                    // A step's value is the assignment's, so there is nothing for a
+                    // *prefix* one to hand back: it has to stand on its own as a
+                    // statement.
+                    fail(Str("`") + peek().text + "` stands on its own as a statement (`i" +
+                         peek().text + "`)");
+                    return nullptr;
+                }
 
                 common::SourcePos pos = peek().pos;
                 ast::ExprPtr expr = parseExpr(0);
                 if (!expr) return nullptr;
+                if (isStepOp(peek().text)) {
+                    // `i++` / `i--`: the step forms, which are the compound assignment
+                    // below with a `1` (specs/memory-model.md). A step reached anywhere
+                    // else - inside an expression, or in the prefix position a statement
+                    // starts with - is the diagnostic above, because the statement's value
+                    // is what it would hand back.
+                    auto stmt = std::make_shared<ast::Stmt>();
+                    stmt->kind = ast::StmtKind::Assign;
+                    stmt->pos = pos;
+                    stmt->target = expr;
+                    stmt->op = stepAssignOp(advance().text);
+                    stmt->value = intLiteral(1, pos);
+                    return stmt;
+                }
                 if (isAssignOp(peek().text)) {
                     auto stmt = std::make_shared<ast::Stmt>();
                     stmt->kind = ast::StmtKind::Assign;

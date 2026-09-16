@@ -26,6 +26,7 @@ Nothing here overrides the topic specs; where a topic spec speaks, it wins.
 | Enum member qualification `EnumType.Member` | `declarations.md` |
 | Module-level declaration hoisting; locals are not hoisted | `declarations.md` |
 | Automatic dereference through `&T`/`*T` for member/index/call | `memory-model.md` |
+| Compound assignment (`+= -= *= /= %=`) and the step operators (`i++`, `i--`) update a place in place | `memory-model.md` |
 
 ## Still deferred
 

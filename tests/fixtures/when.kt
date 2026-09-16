@@ -4,7 +4,7 @@ package fixtures
 // spelling of `switch`, desugared in the parser to the `if`/`else` chain it means -
 // so these goldens show a chain of `If`s, and a label is an `==` operand rather than
 // a `case` that has to be constant.
-enum Color {
+enum class Color {
     Red,
     Green,
     Blue = 7

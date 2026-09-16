@@ -420,6 +420,10 @@ data class Parser(
     fun parseEnum(): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
         this.advance() // enum
+        // `enum class`, spelled the way `data class` is: there is no bare `enum`.
+        if (!this.expectText("class")) {
+            return this.emptyNode()
+        }
         val name: Str = this.expectName()
         if (this.failed) {
             return this.emptyNode()
@@ -925,12 +929,32 @@ data class Parser(
                     Array<AstXmlNode>()
                 )
             }
+
+            "++", "--" -> {
+                // A step's value is the assignment's, so there is nothing for a *prefix* one
+                // to hand back: it has to stand on its own as a statement.
+                this.fail("`" + text + "` stands on its own as a statement (`i" + text + "`)")
+                return this.emptyNode()
+            }
         }
 
         val pos: SourcePos = this.peek(0).pos
         val expr: ExprNode = this.parseExpr(0)
         if (this.failed) {
             return this.emptyNode()
+        }
+        if (isStepOp(this.peek(0).text)) {
+            // `i++` / `i--`: the step forms, which are the compound assignment above with a
+            // `1` (specs/memory-model.md). A step reached anywhere else - inside an
+            // expression, or in the prefix position a statement starts with - is the
+            // diagnostic above, because the statement's value is what it would hand back.
+            val step: Str = this.advance().text
+            var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+            attrs.append(AstNodeAttribute(AstNodeAttributeKind.Op, stepAssignOp(step)))
+            var node: AstXmlNode = AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtAssign, attrs, Array<AstXmlNode>())
+            this.attach(node, AstNodeKind.Target, expr.node)
+            this.attach(node, AstNodeKind.Value, this.intLiteralAt(1, pos).node)
+            return node
         }
         if (isAssignOp(this.peek(0).text)) {
             val op: Str = this.advance().text
@@ -1934,6 +1958,19 @@ fun binaryBindingPower(op: Str): Int {
 fun isAssignOp(op: Str): Bool {
     return op == "=" || op == "+=" || op == "-="
             || op == "*=" || op == "/=" || op == "%="
+}
+
+// The step operators: `i++` and `i--`, which are statements rather than values.
+fun isStepOp(op: Str): Bool {
+    return op == "++" || op == "--"
+}
+
+// The compound assignment a step is: `i++` is `i += 1`, `i--` is `i -= 1`.
+fun stepAssignOp(op: Str): Str {
+    if (op == "++") {
+        return "+="
+    }
+    return "-="
 }
 
 // ---- entry points ---------------------------------------------------------

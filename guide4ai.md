@@ -367,11 +367,13 @@ instruction, inline up to four elements - the count constructions `List<T>(n)` /
 its trailing arguments, `specs/functions.md`); `Dictionary<K,V>` (`get`/`has`/`insert`/`remove`/
 `keys`/`values`/`size`/`clear`); `Opt<T>`, `Res<T>` (with `Res<T>.ok/.err`,
 `Opt<T>.some/.none`); `Span<T>` (a borrowed view: pointer + length); `XmlNode`/`Attribute`;
-`data class` (with methods), `enum` (with `toInt`/`fromInt`), `typealias`
+`data class` (with methods), `enum class` (with `toInt`/`fromInt`), `typealias`
 (incl. generic and function types); functions incl. extension functions and
 `native fun`; `val`/`var` (locals, and at file level **static storage** -
 `specs/statics.md`); `if`/`else`, `when`, `while`,
-`break`/`continue`, `return`; `null`; memory operators `&T`/`*T`/`copy`;
+`break`/`continue`, `return`; compound assignment (`+= -= *= /= %=`) and the step
+statements (`i++`, `i--`), which update a place in place - the place is located
+once and nothing is copied (`specs/memory-model.md`); `null`; memory operators `&T`/`*T`/`copy`;
 lambdas with by-value capture; generics reified via C++ templates; modules and
 packages. `yield` and `for` are implemented in **both rings**: both scan `..`/`yield`,
 parse `..T`, `yield e` and every `for` form (all desugared in the parser), both report a

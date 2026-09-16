@@ -177,6 +177,25 @@ An aggregate reads through itself (`cell.value`); a pointer to a scalar is read 
 `*value`. It costs what the same loop written with `while` and an index costs, so it is
 the shape to prefer in a hot loop (`specs/functions.md`).
 
+A variable - or any other place - is updated in place with `+=`, `-=`, `*=`, `/=`, `%=`,
+and stepped with `i++` / `i--`:
+
+```simse
+var i: Int = 1
+i += 2                          // i is 3 now
+
+data class Cell(var value: Int)
+val cells: List<Cell> = listOf(Cell(1))
+cells[0].value++                // the element's field, updated where it lives
+```
+
+The target's **place** is located once, so an index with an effect runs once
+(`cells[next()].value += 1` calls `next()` once) and nothing is copied on the way: a
+field of an element and a `*T` parameter both update what they name
+(`specs/memory-model.md`). `i++` is `i += 1` and `i--` is `i -= 1`, and because an
+assignment has no value they stand on their own as a statement - the prefix form
+(`++i`) and a step inside an expression (`x = i++`) are diagnostics.
+
 ## Functions, extensions, lambdas
 
 Functions are top-level or methods; the receiver may be declared as an
@@ -288,7 +307,7 @@ Enums are integer-valued; members may carry explicit values, and `toInt()` /
 function is the way to print one (`stress/language-tour`).
 
 ```simse
-enum Color {
+enum class Color {
     Red,
     Green = 4,
     Blue

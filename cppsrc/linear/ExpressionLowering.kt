@@ -121,7 +121,7 @@ fun exprReplaceRole(like: *AstXmlNode, role: AstNodeKind, replacements: *List<As
 // initializer, an assignment's value), `Value` is a position whose *value* is read,
 // and `Path` is a position that must stay an alias (a call receiver, an assignment
 // target, the operand of `&`/`*`).
-enum ExprSlot {
+enum class ExprSlot {
     Root,
     Value,
     Path

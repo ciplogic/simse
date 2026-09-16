@@ -591,6 +591,11 @@ namespace linear {
             void assign(const Stmt &stmt) {
                 const Expr &target = *stmt.target;
                 const Expr &value = *stmt.value;
+                // `x op= v`, and the parser's `x++`/`x--` (see `assignCompound`).
+                if (isCompoundAssignOp(stmt.op)) {
+                    assignCompound(target, compoundBinaryOp(stmt.op), value);
+                    return;
+                }
                 switch (target.kind) {
                     case ExprKind::Name: {
                         // A write to a captured variable writes the closure's field.
@@ -629,6 +634,121 @@ namespace linear {
                         unsupported("assignment target");
                         return;
                 }
+            }
+
+            static bool isCompoundAssignOp(const Str &op) {
+                return op == "+=" || op == "-=" || op == "*=" || op == "/=" || op == "%=";
+            }
+
+            // The binary operation a compound assignment's operator names: `+=` is
+            // `x = x + v`.
+            static Str compoundBinaryOp(const Str &op) {
+                if (op == "+=") return Str("+");
+                if (op == "-=") return Str("-");
+                if (op == "*=") return Str("*");
+                if (op == "/=") return Str("/");
+                return Str("%");
+            }
+
+            // `x op= v` - and `x++`/`x--`, which are the parser's `x += 1` and `x -= 1`:
+            // the target's *place* is located once, its current value is read out of that
+            // same place, folded with the operation, and written back through it. So
+            // `a[i] += 1` evaluates `a` and `i` once, `*p += 1` is one load, one fold and
+            // one store, and a write can never land in a copy of what the target names.
+            void assignCompound(const Expr &target, const Str &op, const Expr &value) {
+                switch (target.kind) {
+                    case ExprKind::Name: {
+                        // A captured variable lives in the closure's object: read and write
+                        // its field, so the fold sees what the target holds.
+                        if (captures != nullptr && captures->count(target.text) > 0) {
+                            int base = varIndex(Str("self"));
+                            int field = poolIndex(target.text);
+                            int current = readField(target, base, field);
+                            emit(IlOpKind::SetField,
+                                 {base, field, fold(current, op, value, target)});
+                            return;
+                        }
+                        // A local slot *is* the place: `i = i + 1` is one instruction, and
+                        // there is no address to take.
+                        int slot = varIndex(target.text);
+                        if (slot >= 0) {
+                            emit(IlOpKind::BinaryOp, {slot, poolIndex(op), slot, operand(value)});
+                            return;
+                        }
+                        int name = poolIndex(target.text);
+                        int current = readStatic(target, name);
+                        emit(IlOpKind::SetStatic, {name, fold(current, op, value, target)});
+                        return;
+                    }
+                    case ExprKind::Member: {
+                        if (isTypeBase(*target.lhs)) {
+                            int field = poolIndex(baseText(*target.lhs) + "." + target.text);
+                            int current = readStatic(target, field);
+                            emit(IlOpKind::SetStatic, {field, fold(current, op, value, target)});
+                            return;
+                        }
+                        // The base is the reference the whole expression is reached
+                        // through: it is located once, and both the read and the write name
+                        // the field on it.
+                        int base = receiver(*target.lhs);
+                        int field = poolIndex(target.text);
+                        int current = readField(target, base, field);
+                        emit(IlOpKind::SetField, {base, field, fold(current, op, value, target)});
+                        return;
+                    }
+                    case ExprKind::Index: {
+                        // The base and the index are each evaluated once, into the operands
+                        // the read and the write share - so an index with a side effect runs
+                        // once.
+                        int base = receiver(*target.lhs);
+                        int index = operand(*target.rhs);
+                        int current = freshValueSlot(target);
+                        emit(IlOpKind::GetIndex, {current, base, index});
+                        emit(IlOpKind::SetIndex, {base, index, fold(current, op, value, target)});
+                        return;
+                    }
+                    case ExprKind::Deref: {
+                        // `*p += 1`: the pointer *is* the place, so the load and the store
+                        // both go through it and the pointee is written in place.
+                        int pointer = operand(*target.lhs);
+                        int current = freshValueSlot(target);
+                        emit(IlOpKind::Deref, {current, pointer});
+                        emit(IlOpKind::Store, {pointer, fold(current, op, value, target)});
+                        return;
+                    }
+                    default:
+                        unsupported("compound assignment target");
+                        return;
+                }
+            }
+
+            // The current value of a field, as one instruction: the base is the one the
+            // write will use, so the place is not located twice.
+            int readField(const Expr &whole, int base, int field) {
+                int slot = freshValueSlot(whole);
+                emit(IlOpKind::GetField, {slot, base, field});
+                return slot;
+            }
+
+            int readStatic(const Expr &whole, int name) {
+                int slot = freshValueSlot(whole);
+                emit(IlOpKind::GetStatic, {slot, name});
+                return slot;
+            }
+
+            // `current <op> value`, in a slot of the target's own type - the value the
+            // write puts back.
+            int fold(int current, const Str &op, const Expr &value, const Expr &whole) {
+                int slot = freshValueSlot(whole);
+                emit(IlOpKind::BinaryOp, {slot, poolIndex(op), current, operand(value)});
+                return slot;
+            }
+
+            // A slot for the value of `e`, typed the way `valueOf` types the slots it
+            // synthesizes.
+            int freshValueSlot(const Expr &e) {
+                ast::TypePtr type = valueType(e);
+                return freshSlot(slotTypeText(type), type);
             }
 
             // ---- values ---------------------------------------------------------

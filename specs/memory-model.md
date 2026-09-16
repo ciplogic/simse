@@ -146,6 +146,41 @@ syntactic convenience only: it does not change the ownership, nullability, or
 unsafety rules of the reference, and dereferencing a null/dangling handle is
 still unchecked undefined behavior.
 
+### Compound assignment and the step operators
+
+Status: required for the first implementation.
+
+`x op= v` (`+=`, `-=`, `*=`, `/=`, `%=`) and the step forms `x++` / `x--` are a
+statement-level shorthand for updating a place in place: the target's *place* is
+located once, its current value is read out of that same place, the operation is
+folded into it, and the result is written back through it.
+
+```text
+i += 1        // i = i + 1  - a local slot, one operation, no address
+xs[n] += 1    // the list and `n` are evaluated once, the element is updated in place
+c.hits++      // the receiver is located once, the field is updated through it
+*value += 1   // the load and the store both go through the pointer
+total -= 1    // a file-level `var`: its static storage is updated
+```
+
+The place is located **once**, so a receiver or an index with an effect runs
+once (`xs[next()] += 1` calls `next()` once), and **nothing is copied on the
+way**: a target that is not a local slot is reached through a raw pointer to the
+place, never through a copy of the value. That is why the forms hold on a field
+of an element (`counters[i].hits += 1`) and through a `*T` parameter, and why
+such a write cannot be lost in a copy.
+
+`i++` and `i--` are the same statement with a `1`: the parser writes `i += 1`
+and `i -= 1`. Their value is the assignment's, and an assignment has none, so
+
+- a statement may not begin with `++`/`--`: the **prefix** form is rejected; and
+- a step inside an expression (`x = i++`, `f(i++)`) is rejected as well - the
+diagnostic names the statement form.
+
+A step on a dereference applies to the **place the `*` names**, not to the
+pointer: `*value++` is `*value = *value + 1`, not C's `*(value++)`. Advancing a
+pointer is not a language operation.
+
 ## Type aliases
 
 `typealias` names a (possibly composed) type, so memory operators can be given

@@ -36,7 +36,7 @@ import sema
 // the type, and the declaration goes to the top of the instruction list with the rest of
 // the frame); a slot whose type they cannot name has no declaration to print, so a backend
 // folds its single use into the instruction that reads it.
-enum IlVarKind {
+enum class IlVarKind {
     Argument,
     Local,
     Expression,
@@ -46,7 +46,7 @@ enum IlVarKind {
 // What the *shape* of a call is: the backend resolves the symbol from the name and the
 // operand types it finds in the frame, so the IL stays free of anything but the
 // program's own spelling.
-enum IlMethodKind {
+enum class IlMethodKind {
     Function,
     Method,
     Constructor
@@ -55,7 +55,7 @@ enum IlMethodKind {
 // `Var` is a **slot** - a destination, or a place read (`GetField`'s base); `Value` is
 // a slot *or* a constant, which is what most operand positions are. The opcodes say
 // nothing about types: the frame does.
-enum IlOperandKind {
+enum class IlOperandKind {
     Var,
     Value,
     Text,
@@ -70,7 +70,7 @@ enum IlOperandKind {
 // compare instead of a string compare, and an instruction carrying four bytes of
 // opcode instead of a `Str` (which is what `IlOp` used to be). The order matches
 // `makeIlSignatures()`'s, so an opcode's signature is the table row at `kind.toInt()`.
-enum IlOpKind {
+enum class IlOpKind {
     Label,
     Goto,
     IfTrue,
@@ -1189,6 +1189,35 @@ fun ilDerefNode(operand: AstXmlNode): AstXmlNode {
     return node
 }
 
+// Whether an assignment's operator is one of the compound forms (`+=`, `-=`, `*=`, `/=`,
+// `%=`). The step forms (`i++`, `i--`) are the parser's `+= 1` and `-= 1`, so the
+// lowering sees one shape for all of them.
+fun isCompoundAssignOp(op: Str): Bool {
+    return op == "+=" || op == "-=" || op == "*=" || op == "/=" || op == "%="
+}
+
+// The binary operation a compound assignment's operator names: `+=` is `x = x + v`.
+fun compoundBinaryOp(op: Str): Str {
+    when (op) {
+        "+=" -> {
+            return "+"
+        }
+
+        "-=" -> {
+            return "-"
+        }
+
+        "*=" -> {
+            return "*"
+        }
+
+        "/=" -> {
+            return "/"
+        }
+    }
+    return "%"
+}
+
 fun ilNamedTypeNode(name: Str): AstXmlNode {
     var node: AstXmlNode = AstXmlNode(
         AstNodeKind.Type, AstNodeCategory.TypeNamed,
@@ -1664,7 +1693,7 @@ data class IlExtractor(
             }
 
             AstNodeCategory.StmtAssign -> {
-                this.assign(xmlChild(stmt, AstNodeKind.Target), xmlChild(stmt, AstNodeKind.Value))
+                this.assign(stmt, xmlChild(stmt, AstNodeKind.Target), xmlChild(stmt, AstNodeKind.Value))
                 return
             }
 
@@ -1711,7 +1740,12 @@ data class IlExtractor(
         this.unsupported("statement")
     }
 
-    fun assign(target: *AstXmlNode, value: *AstXmlNode): Unit {
+    fun assign(stmt: *AstXmlNode, target: *AstXmlNode, value: *AstXmlNode): Unit {
+        val op: Str = xmlAttr(stmt, AstNodeAttributeKind.Op)
+        if (isCompoundAssignOp(op)) {
+            this.assignCompound(target, compoundBinaryOp(op), value)
+            return
+        }
         val targetKind: AstNodeCategory = xmlKind(target)
         when (targetKind) {
             AstNodeCategory.ExprName -> {
@@ -1779,6 +1813,120 @@ data class IlExtractor(
             }
         }
         this.unsupported("assignment target")
+    }
+
+    // `x op= v` - and `x++`/`x--`, which are the parser's `x += 1` and `x -= 1`: the
+    // target's *place* is located once, its current value is read out of that same place,
+    // folded with the operation, and written back through it. So `a[i] += 1` evaluates `a`
+    // and `i` once, `*p += 1` is one load, one fold and one store, and a write can never
+    // land in a copy of what the target names.
+    fun assignCompound(target: *AstXmlNode, op: Str, value: *AstXmlNode): Unit {
+        val targetKind: AstNodeCategory = xmlKind(target)
+        when (targetKind) {
+            AstNodeCategory.ExprName -> {
+                val name: Str = xmlAttr(target, AstNodeAttributeKind.Name)
+                // A captured variable lives in the closure's object: read and write its
+                // field, so the fold sees what the target holds.
+                if (this.fn.captures.has(name)) {
+                    val base: Int = this.varIndex("self")
+                    val field: Int = this.poolIndex(name)
+                    val current: Int = this.readField(target, base, field)
+                    this.emit(
+                        IlOpKind.SetField,
+                        ilOps3(base, field, this.fold(current, op, value, target))
+                    )
+                    return
+                }
+                // A local slot *is* the place: `i = i + 1` is one instruction, and there is
+                // no address to take.
+                val slot: Int = this.varIndex(name)
+                if (slot >= 0) {
+                    this.emit(
+                        IlOpKind.BinaryOp, ilOps4(
+                            slot, this.poolIndex(op), slot, this.operandOf(value)
+                        )
+                    )
+                    return
+                }
+                // A file-level `var` lives in static storage: read, fold, write back - the
+                // name is the same place both times.
+                val staticName: Int = this.poolIndex(name)
+                val current: Int = this.readStatic(target, staticName)
+                this.emit(
+                    IlOpKind.SetStatic,
+                    ilOps2(staticName, this.fold(current, op, value, target))
+                )
+                return
+            }
+
+            AstNodeCategory.ExprMember -> {
+                val lhs: AstXmlNode = xmlChild(target, AstNodeKind.Receiver)
+                val fieldName: Str = xmlAttr(target, AstNodeAttributeKind.Name)
+                if (this.isTypeBase(lhs)) {
+                    val field: Int = this.poolIndex(this.baseText(lhs) + "." + fieldName)
+                    val current: Int = this.readStatic(target, field)
+                    this.emit(IlOpKind.SetStatic, ilOps2(field, this.fold(current, op, value, target)))
+                    return
+                }
+                // The base is the reference the whole expression is reached through: it is
+                // located once, and both the read and the write name the field on it.
+                val base: Int = this.receiverOf(lhs)
+                val field: Int = this.poolIndex(fieldName)
+                val current: Int = this.readField(target, base, field)
+                this.emit(IlOpKind.SetField, ilOps3(base, field, this.fold(current, op, value, target)))
+                return
+            }
+
+            AstNodeCategory.ExprIndex -> {
+                // The base and the index are each evaluated once, into the operands the read
+                // and the write share - so an index with a side effect runs once.
+                val base: Int = this.receiverOf(xmlChild(target, AstNodeKind.Receiver))
+                val index: Int = this.operandOf(xmlChild(target, AstNodeKind.Index))
+                val current: Int = this.freshValueSlot(target)
+                this.emit(IlOpKind.GetIndex, ilOps3(current, base, index))
+                this.emit(IlOpKind.SetIndex, ilOps3(base, index, this.fold(current, op, value, target)))
+                return
+            }
+
+            AstNodeCategory.ExprDeref -> {
+                // `*p += 1`: the pointer *is* the place, so the load and the store both go
+                // through it and the pointee is written in place.
+                val pointer: Int = this.operandOf(xmlChild(target, AstNodeKind.Operand))
+                val current: Int = this.freshValueSlot(target)
+                this.emit(IlOpKind.Deref, ilOps2(current, pointer))
+                this.emit(IlOpKind.Store, ilOps2(pointer, this.fold(current, op, value, target)))
+                return
+            }
+        }
+        this.unsupported("compound assignment target")
+    }
+
+    // The current value of a field, as one instruction: the base is the one the write will
+    // use, so the place is not located twice.
+    fun readField(whole: *AstXmlNode, base: Int, field: Int): Int {
+        val slot: Int = this.freshValueSlot(whole)
+        this.emit(IlOpKind.GetField, ilOps3(slot, base, field))
+        return slot
+    }
+
+    fun readStatic(whole: *AstXmlNode, name: Int): Int {
+        val slot: Int = this.freshValueSlot(whole)
+        this.emit(IlOpKind.GetStatic, ilOps2(slot, name))
+        return slot
+    }
+
+    // `current <op> value`, in a slot of the target's own type - the value the write puts
+    // back.
+    fun fold(current: Int, op: Str, value: *AstXmlNode, whole: *AstXmlNode): Int {
+        val slot: Int = this.freshValueSlot(whole)
+        this.emit(IlOpKind.BinaryOp, ilOps4(slot, this.poolIndex(op), current, this.operandOf(value)))
+        return slot
+    }
+
+    // A slot for the value of `e`, typed the way `valueOf` types the slots it synthesizes.
+    fun freshValueSlot(e: *AstXmlNode): Int {
+        val typeNode: AstXmlNode = this.valueType(e)
+        return this.freshSlot(this.slotTypeText(typeNode), typeNode)
     }
 
     // ---- values -----------------------------------------------------------

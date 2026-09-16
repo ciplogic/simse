@@ -74,14 +74,16 @@ arguments, inheritance, and generated methods beyond construction/copying are
 not part of this baseline. Methods may be declared in the class body, but they
 are compiled as static receiver functions; see `functions.md`.
 
-## `enum`
+## `enum class`
 
-`enum` declares a named integer-backed type, similar to a C# enum. Each member
-has an integer representation. If no explicit value is supplied, the first
-member is `0` and each following member increments by one.
+`enum class` declares a named integer-backed type, similar to a C# enum. The
+`class` keyword is required - an enum is a class of constants, spelled the way
+Kotlin spells it, so a bare `enum Name` is a syntax error. Each member has an
+integer representation. If no explicit value is supplied, the first member is `0`
+and each following member increments by one.
 
 ```text
-enum Color {
+enum class Color {
     Red,          // 0
     Green,        // 1
     Blue = 4,     // 4
@@ -147,7 +149,7 @@ full rules.
 
 Status: required for the first implementation.
 
-Module-level declarations (functions, `data class`, `enum`, `typealias`, and the
+Module-level declarations (functions, `data class`, `enum class`, `typealias`, and the
 file-level `var`/`val` of `specs/statics.md`) are **hoisted**. They are visible
 throughout the module regardless of textual order,
 like Kotlin, Java, or C#. Declarations may be referenced before their textual

@@ -18,7 +18,7 @@
 package rtl
 
 // The structural role of a node - the schema's fixed set.
-enum AstNodeKind {
+enum class AstNodeKind {
     None,
     Module,
     Import,
@@ -58,7 +58,7 @@ enum AstNodeKind {
 
 // An attribute's key: the schema's attribute names. The category (`kind`) is not
 // here: it is a field of the node, not an attribute.
-enum AstNodeAttributeKind {
+enum class AstNodeAttributeKind {
     Line,
     Column,
     Name,
@@ -82,7 +82,7 @@ enum AstNodeAttributeKind {
 // keeps its category, so a node carries both, and the category is a field rather
 // than an attribute so every test on it is an integer compare. `None` means the
 // node has no `kind` (a `Field`, a `Param`, a container, ...).
-enum AstNodeCategory {
+enum class AstNodeCategory {
     None,
     Module,
     DataClass,

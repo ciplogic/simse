@@ -94,7 +94,7 @@ selecting between same-named declarations) is a separate language change.
 | `Span<T>` | `Span<T>` (shim struct) | borrowed view: `ptr` + `len`; `slice` returns a new span |
 | `SmallVector<N, T>` | `SmallVector<T, N>` (`List<T>` is the `N = 4` instantiation) | inline vector |
 | user `data class C` | `struct C` (aggregate) + `_make_C` factory | construction lowers to the factory; no emitted constructors. The factory takes each field by value and **moves** it into the aggregate (`ns1_Rec{std::move(a), ...}`), the RTL's own idiom (`rtl-abi.md` T60): a temporary argument is elided into the parameter (no copy), an lvalue costs the one copy value semantics require, and anything that owns storage - `Str`, `List<T>`, a dictionary, a `&T` handle - is never copied twice |
-| user `enum E` | `enum class E` | explicit values when given |
+| user `enum class E` | `enum class E` | explicit values when given |
 | callable `(A, B) -> R` | `Func<R(A, B)>` (`std::function`) | `Unit` return -> `void` |
 
 ## String literals: one table (T52)

@@ -42,7 +42,7 @@ current `cppsrc/{parser,sema,codegen,rtl}` implementations.
 
 | Feature | Where used | Status | Notes |
 | --- | --- | --- | --- |
-| `enum` + `Enum.Member` access | `TokenKind.Eof` | supported | emits `TokenKind::Eof`. |
+| `enum class` + `Enum.Member` access | `TokenKind.Eof` | supported | emits `TokenKind::Eof`. |
 | `typealias` to function type | `MatchLenFunc`, `CharPredicate` | supported | `Func<R(A...)>`. |
 | Function values / calling a parameter | `rule.match(view)` | supported | `Func` is `std::function`. |
 | Generic data class instantiation | `List<TokenMatcher>` | supported | |
@@ -62,7 +62,7 @@ current `cppsrc/{parser,sema,codegen,rtl}` implementations.
 | Feature | Where used | Status | Notes |
 | --- | --- | --- | --- |
 | `import cppsrc.lex` (scanner API) | whole file | supported | transitive imports merge. |
-| `enum` + member access | `SkeletonType.Terminal` | supported | |
+| `enum class` + member access | `SkeletonType.Terminal` | supported | |
 | Generic data class instantiation | `List<SkeletonNode>` | supported | |
 | `&List<T>` fields and methods | `SkeletonNode` | supported | |
 | `var` parameter mutation | folding loop | supported | parameters are mutable. |

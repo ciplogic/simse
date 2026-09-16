@@ -13,7 +13,7 @@ package skelparser
 import lex
 import common
 
-enum SkeletonType {
+enum class SkeletonType {
     None,
     Program,
     Terminal,
