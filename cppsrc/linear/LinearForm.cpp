@@ -124,9 +124,19 @@ namespace linear {
             return "?";
         }
 
+        // The parts, joined by `separator`. Reads them only; builds the result in place
+        // (`out = out + part` copies the whole buffer per part) and reserves the exact
+        // length first, so the text is written once instead of the accumulated prefix
+        // being copied at every growth step.
         Str joinList(const List<Str> &parts, const char *separator) {
+            const Int count = (Int) parts.size();
             Str out;
-            for (int i = 0; i < (int) parts.size(); i++) {
+            if (count == 0) return out;
+            const Int separatorLen = (Int) std::char_traits<char>::length(separator);
+            Int len = separatorLen * (count - 1);
+            for (const Str &part: parts) len += part.size();
+            out.reserve(len);
+            for (Int i = 0; i < count; i++) {
                 if (i > 0) out += separator;
                 out += parts[i];
             }
@@ -1962,7 +1972,16 @@ namespace linear {
                 for (const ast::TypePtr &arg: type.typeArgs) {
                     args.push_back(arg ? ilTypeText(*arg) : Str("?"));
                 }
-                return type.name + "<" + joinList(args, ", ") + ">";
+                const Str joined = joinList(args, ", ");
+                // `name + "<" + joined + ">"` builds and copies the prefix three
+                // times; one reserved buffer writes it once.
+                Str out;
+                out.reserve(type.name.size() + joined.size() + 2);
+                out += type.name;
+                out += '<';
+                out += joined;
+                out += '>';
+                return out;
             }
             case ast::TypeKind::Reference:
                 return Str("&") + (type.inner ? ilTypeText(*type.inner) : Str("?"));
@@ -1973,8 +1992,15 @@ namespace linear {
                 for (const ast::TypePtr &param: type.paramTypes) {
                     params.push_back(param ? ilTypeText(*param) : Str("?"));
                 }
-                Str ret = type.returnType ? ilTypeText(*type.returnType) : Str("Unit");
-                return "(" + joinList(params, ", ") + ") -> " + ret;
+                const Str joined = joinList(params, ", ");
+                const Str ret = type.returnType ? ilTypeText(*type.returnType) : Str("Unit");
+                Str out;
+                out.reserve(joined.size() + ret.size() + 8);
+                out += '(';
+                out += joined;
+                out += ") -> ";
+                out += ret;
+                return out;
             }
         }
         return "?";

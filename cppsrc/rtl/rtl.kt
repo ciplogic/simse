@@ -142,6 +142,17 @@ native("simse_str_append") fun append(this: Str, value: Char): Unit
 // buffer every time, so emitters use this instead.
 native("simse_str_appendStr") fun appendStr(this: Str, value: Str): Unit
 
+// The same append for a text the caller only *borrows* (`*Str`): what is appended
+// is the borrow's own pointee, nothing is copied on the way - which is what makes
+// a join of a list's elements a run of appends with no element copied.
+native("simse_str_appendStrPtr") fun appendStrPtr(this: Str, value: *Str): Unit
+
+// Pre-allocates the buffer for a run of `append`/`appendStr` calls: the text is
+// then written once, instead of the accumulated prefix being copied at every
+// growth step. A *hint*, not a length - the string keeps its size, and a longer
+// run grows it as usual.
+native("simse_str_reserve") fun reserve(this: Str, count: Int): Unit
+
 // `find` returns -1 when `sub` is absent (the language's spelling of npos).
 native("simse_str_find") fun find(this: Str, sub: Str): Int
 native("simse_str_find") fun indexOf(this: Str, sub: Str): Int

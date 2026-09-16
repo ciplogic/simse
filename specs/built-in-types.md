@@ -132,6 +132,20 @@ Status: required for the first implementation.
 - `resize(n: Int)`; and
 - `data()`, which returns a NUL-terminated buffer for C interop.
 
+Two more are what a *joiner* wants, and both are on the emitted surface
+(`cppsrc/rtl/rtl.kt`):
+
+- `reserve(count: Int)` grows the buffer once for a run of appends, so the text is
+  written once instead of the accumulated prefix being copied at every growth step.
+  A hint, not a length: the string keeps its size, and appends past the reservation
+  grow it as usual. It pays for a *large* result (`count` well past the inline 24
+  bytes); for a small one the growth it saves is smaller than the extra pass that
+  computes `count`, so a joiner of a handful of short parts needs it least.
+- `appendStr(s: Str)` appends in place (`out = out + s` rebuilds the whole buffer),
+  and `appendStrPtr(s: *Str)` is the same for a text the caller only *borrows* -
+  `out.appendStrPtr(part)` of a `for (*part in parts)` appends the element itself,
+  with nothing copied on the way.
+
 Indexing and member calls are permitted directly on a `&Str` and on a `*Str`,
 with automatic dereference (see `memory-model.md`).
 

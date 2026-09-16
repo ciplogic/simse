@@ -215,12 +215,28 @@ fun semaTypeText(node: *AstXmlNode): Str {
 
 fun semaTypeTextList(types: *List<AstXmlNode>): Str {
     var out: Str = Str()
+    val count: Int = types.size()
+    if (count == 0) {
+        return out
+    }
+    // The parts are rendered first so the buffer can be reserved for the whole
+    // text: `out = out + part` copies the accumulated prefix per part.
+    var parts: List<Str> = List<Str>()
+    var len: Int = 2 * (count - 1)
     var i: Int = 0
-    while (i < types.size()) {
+    while (i < count) {
+        val text: Str = semaTypeText(types[i])
+        len += text.size()
+        parts.append(text)
+        i = i + 1
+    }
+    out.reserve(len)
+    i = 0
+    while (i < count) {
         if (i > 0) {
-            out = out + ", "
+            out.appendStr(", ")
         }
-        out = out + semaTypeText(types[i])
+        out.appendStr(parts[i])
         i = i + 1
     }
     return out

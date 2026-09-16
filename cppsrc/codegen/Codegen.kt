@@ -119,18 +119,62 @@ enum class NameKind { Value, Shared, Pointer }
 // ---- helpers --------------------------------------------------------------
 
 // Reads the parts only; a `*List<Str>` avoids copying the caller's list. Builds
-// the result in place: `out = out + part` would copy the whole buffer per part.
+// the result in place - `out = out + part` copies the whole buffer per part - and
+// reserves the exact length first, so the buffer is grown (and the prefix copied)
+// once instead of at every growth step. The parts are appended through the borrow
+// the pointer `for` hands out (`appendStrPtr`), so no element is copied either. A
+// one-character separator is the character append it is (`cgJoinChar`).
 fun cgJoin(parts: *List<Str>, separator: Str): Str {
+    if (separator.size() == 1) {
+        return cgJoinChar(parts, separator[0])
+    }
     var out: Str = ""
-    var i: Int = 0
-    while (i < parts.size()) {
-        if (i > 0) {
+    if (parts.size() == 0) {
+        return out
+    }
+    out.reserve(cgJoinLength(parts, separator.size()))
+    var first: Bool = true
+    for (*part in parts) {
+        if (!first) {
             out.appendStr(separator)
         }
-        out.appendStr(parts[i])
-        i = i + 1
+        out.appendStrPtr(part)
+        first = false
     }
     return out
+}
+
+// The same join with a one-character separator: `cgJoin(parts, ",")` without the
+// `Str` for the comma, and the separator appended as the character it is.
+fun cgJoinChar(parts: *List<Str>, separator: Char): Str {
+    var out: Str = ""
+    if (parts.size() == 0) {
+        return out
+    }
+    out.reserve(cgJoinLength(parts, 1))
+    var first: Bool = true
+    for (*part in parts) {
+        if (!first) {
+            out.append(separator)
+        }
+        out.appendStrPtr(part)
+        first = false
+    }
+    return out
+}
+
+// The exact length `cgJoin`/`cgJoinChar` are about to write: every part plus one
+// separator between each pair. What `reserve` is given.
+fun cgJoinLength(parts: *List<Str>, separatorLen: Int): Int {
+    val count: Int = parts.size()
+    var len: Int = 0
+    if (count > 1) {
+        len = separatorLen * (count - 1)
+    }
+    for (*part in parts) {
+        len += part.size()
+    }
+    return len
 }
 
 fun cgIndent(level: Int): Str {

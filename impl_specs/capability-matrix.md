@@ -1717,3 +1717,37 @@ compiler *did* catch and one it could not:
   (`readThrough` then the operation that asked for it), so a backend could print `*(text)`
   at that one use - `peek().text == *(text)`, no copy at all - the way it already folds an
   untyped slot. That is the extension to the folding rule, not a new rule.
+
+- **`Str` grew the two operations a joiner wants (T64).** `reserve(count)` (the emitted
+  `simse_str_reserve`, a hint that grows the buffer once) and `appendStrPtr(value: *Str)`
+  (an append of a *borrow*, the `Ptr` convention `StrView.startsWithPtr` already keeps), and
+  the compiler's three joins now use them: `cgJoin`/`cgJoinChar` (Codegen), `ilJoinList`
+  (LinearForm, whose `out = out + part` rebuilt the whole buffer per part) and
+  `semaTypeTextList`, plus the two rings' `ilTypeText` builders, which now write into one
+  reserved buffer instead of a `name + "<" + joined + ">"` chain of three.
+
+  The shapes measured, over 256 parts x 40 chars (a 10 KB result) and 1024 x 200 (200 KB),
+  as a standalone program (`stress/.work/repro2`, `nowMillis`, checksummed so nothing is
+  optimised away):
+
+  | accumulation | 10 KB, 500 joins | 200 KB, 100 joins |
+  | --- | --- | --- |
+  | `out = out + part` | 98 ms | 2819 ms |
+  | `appendStrPtr` in place | 9 ms | 32 ms |
+  | `appendStrPtr` + `reserve` | 13 ms | 15 ms |
+
+  So the *in-place* append is the win (10x on small parts, 88x on large ones) and
+  `reserve` pays exactly on the large result (2x there) and costs a little on the small one
+  (the exact-size allocation and the extra pass that measures it beat what the doubling
+  saved). The compiler's own joins are all in the small column, and the self-transpile A/B
+  is neutral (1131.3 -> 1132.8 ms median, 7 interleaved runs) - the joins are a small share
+  of the emitter's work; what they are for is the *shape* the language should offer.
+
+  Two latent bugs surfaced on the way, both reported rather than fixed here (neither is on
+  a path the compiler's own sources take): a `main` whose parameter is named `argv` emits
+  `int main(int argc, char** argv)` with a local `List<Str> argv` of the same name
+  (uncompilable C++), and a *plain* function whose name collides with a `native fun`
+  extension picks up the extension's return type - `fun find(parts: *List<Str>, index: Int):
+  *Str` typed as `Int`, from `Str.find`'s signature - because the emitter records an
+  explicit-`this` native's receiver as *empty*, so `functionReturn` treats it as a plain
+  function.

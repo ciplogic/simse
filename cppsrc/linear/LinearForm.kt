@@ -366,15 +366,30 @@ fun ilMethodKindText(kind: IlMethodKind): Str {
     return "?"
 }
 
+// The parts, joined by `separator`. Reads them only; builds the result in place
+// (`out = out + part` copies the whole buffer per part) and reserves the exact
+// length first, so the text is written once instead of the accumulated prefix
+// being copied at every growth step. Both the separator and the parts are appended
+// through the borrows the caller hands out (`appendStrPtr`), so nothing is copied
+// on the way.
 fun ilJoinList(parts: *List<Str>, separator: *Str): Str {
     var out: Str = Str()
-    var i: Int = 0
-    while (i < parts.size()) {
-        if (i > 0) {
-            out = out + separator
+    val count: Int = parts.size()
+    if (count == 0) {
+        return out
+    }
+    var len: Int = separator.size() * (count - 1)
+    for (*part in parts) {
+        len += part.size()
+    }
+    out.reserve(len)
+    var first: Bool = true
+    for (*part in parts) {
+        if (!first) {
+            out.appendStrPtr(separator)
         }
-        out = out + parts[i]
-        i = i + 1
+        out.appendStrPtr(part)
+        first = false
     }
     return out
 }
@@ -409,7 +424,18 @@ fun ilTypeText(typeNode: *AstXmlNode): Str {
             for (*typeArg in typeArgs) {
                 args.append(ilTypeText(typeArg))
             }
-            return xmlAttr(typeNode, AstNodeAttributeKind.Name) + "<" + ilJoinList(args, ", ") + ">"
+            val name: *Str = xmlAttr(typeNode, AstNodeAttributeKind.Name)
+            val joined: Str = ilJoinList(args, ", ")
+            // `name + "<" + joined + ">"` would build and copy the prefix three
+            // times; one reserved buffer writes it once, and the name is appended
+            // through its borrow.
+            var out: Str = Str()
+            out.reserve(name.size() + joined.size() + 2)
+            out.appendStrPtr(name)
+            out.append('<')
+            out.appendStr(joined)
+            out.append('>')
+            return out
         }
 
         AstNodeCategory.TypeReference -> {
@@ -429,8 +455,15 @@ fun ilTypeText(typeNode: *AstXmlNode): Str {
             for (*paramType in paramTypes) {
                 params.append(ilTypeText(paramType))
             }
-            return "(" + ilJoinList(params, ", ") + ") -> "
-            +ilTypeText(xmlChild(typeNode, AstNodeKind.ReturnType))
+            val joined: Str = ilJoinList(params, ", ")
+            val ret: Str = ilTypeText(xmlChild(typeNode, AstNodeKind.ReturnType))
+            var out: Str = Str()
+            out.reserve(joined.size() + ret.size() + 8)
+            out.append('(')
+            out.appendStr(joined)
+            out.appendStr(") -> ")
+            out.appendStr(ret)
+            return out
         }
     }
     return "?"

@@ -96,6 +96,23 @@ inline void simse_str_appendStr(Str& self, const Str& value) {
     self.append(value);
 }
 
+// `Str.appendStrPtr(text)`: the same append for a text the caller only *borrows*
+// (`*Str`, the `Ptr` convention `StrView.startsWithPtr` keeps). The reference the
+// append takes is the borrow's own pointee, so nothing is copied on the way -
+// `out.appendStrPtr(part)` of a loop variable appends the element itself.
+inline void simse_str_appendStrPtr(Str& self, const Str* value) {
+    if (value != nullptr) self.append(*value);
+}
+
+// `Str.reserve(count)`: grows the buffer once, so a run of `append`/`appendStr`
+// writes the text once instead of copying the accumulated prefix at every growth
+// step. A *hint*, not a length: the string keeps its size, and an append past the
+// reservation grows it as usual. `SmString::reserve` keeps the terminating NUL,
+// so `count` is the character count the caller is about to write.
+inline void simse_str_reserve(Str& self, Int count) {
+    self.reserve((Str::size_type) count);
+}
+
 // `Int.toString()`: the scalar-to-inline-string conversion (specs/memory-model.md).
 inline Str simse_int_toString(Int self) {
     return std::to_string(self);

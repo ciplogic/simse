@@ -36,9 +36,40 @@ namespace codegen {
         // subset needs; anything unknown is treated as a plain value.
         enum class NameKind { Value, Shared, Pointer };
 
-        Str join(const List<Str> &parts, const Str &separator) {
+        // The exact length a join is about to write: every part plus one separator
+        // between each pair. What `reserve` is given.
+        Int joinLength(const List<Str> &parts, Int separatorLen) {
+            const Int count = (Int) parts.size();
+            Int len = count > 1 ? separatorLen * (count - 1) : 0;
+            for (const Str &part: parts) len += part.size();
+            return len;
+        }
+
+        // The join with a one-character separator: `join(parts, ",")` without the `Str`
+        // for the comma, and the separator appended as the character it is.
+        Str joinChar(const List<Str> &parts, char separator) {
+            const Int count = (Int) parts.size();
             Str out;
-            for (int i = 0; i < (int) parts.size(); i++) {
+            if (count == 0) return out;
+            out.reserve(joinLength(parts, 1));
+            for (Int i = 0; i < count; i++) {
+                if (i > 0) out += separator;
+                out += parts[i];
+            }
+            return out;
+        }
+
+        // Reads the parts only; builds the result in place - `out = out + part` copies
+        // the whole buffer per part - and reserves the exact length first, so the buffer
+        // is grown (and the prefix copied) once instead of at every growth step. A
+        // one-character separator goes through the character append.
+        Str join(const List<Str> &parts, const Str &separator) {
+            if (separator.size() == 1) return joinChar(parts, separator[0]);
+            const Int count = (Int) parts.size();
+            Str out;
+            if (count == 0) return out;
+            out.reserve(joinLength(parts, separator.size()));
+            for (Int i = 0; i < count; i++) {
                 if (i > 0) out += separator;
                 out += parts[i];
             }
