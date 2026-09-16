@@ -2427,12 +2427,40 @@ namespace codegen {
             // `expected` is the contextual type used to lower a bare `null`: an
             // `Opt<T>` context becomes `Opt<T>()`, a `*T`/`&T` context `nullptr`.
             Str expr(const ast::Expr &e, int minPrecedence, const ast::TypePtr &expected = nullptr) {
+                // The value/handle half of the conversion table (`impl_specs/linear-il.md`):
+                // a `*T`/`&T` spelled where a `T` is *expected* is read through. This is the
+                // dst-driven rule - the position states the type it wants, and the
+                // instruction means the pair - and it is what lets a `*T` parameter, a
+                // `*List<T>`, or a borrowing accessor (`xmlAttr`'s `*Str`) be read without
+                // every use spelling the `*`.
+                if (needsReadThrough(e, expected)) {
+                    return Str("*(") + expr(e, 0, nullptr) + ")";
+                }
                 int p = precedence(e);
                 Str s;
                 if (p < minPrecedence) s += "(";
                 s += exprInner(e, expected);
                 if (p < minPrecedence) s += ")";
                 return s;
+            }
+
+            // Whether the value `e` has to be read through to be spelled as `expected`: the
+            // two are the same type modulo the handle (`*T`/`&T` for a `T`), which is the row
+            // the emitter spells `*(x)` (`exprInner`'s `ExprCopy` arm is the definition). Two
+            // things it must not do: convert when *no* type is expected (an argument, an
+            // operand - the extractor says what those want), and convert a value *into* a
+            // handle, which is the `*T` *binding* the writer has to spell
+            // (`specs/memory-model.md`).
+            bool needsReadThrough(const ast::Expr &e, const ast::TypePtr &expected) {
+                if (expected == nullptr || sema::isHandleType(expected.get())) return false;
+                // `copy(v)` is the conversion already spelled, by the extractor or by the
+                // writer.
+                if (e.kind == ExprKind::Copy) return false;
+                const ast::TypePtr have = inferType(e);
+                if (have == nullptr || !sema::isHandleType(have.get())) return false;
+                const ast::TypeExpr *pointee = sema::pointeeOf(have.get());
+                if (pointee == nullptr) return false;
+                return linear::ilTypeText(*pointee) == linear::ilTypeText(*expected);
             }
 
             NameKind operandKind(const ast::Expr &e) {
@@ -2600,10 +2628,23 @@ namespace codegen {
                         return type;
                     }
                     case ExprKind::Deref: {
-                        auto type = std::make_shared<ast::TypeExpr>();
-                        type->kind = TypeKind::Pointer;
-                        type->inner = inferType(*e.lhs);
-                        return type;
+                        // `*x` is the *address* of what `x` denotes: of a value's own
+                        // storage (`&x`), of a counted reference's pointee (`x.get()`),
+                        // or the pointer it already is - and then the emitter reads
+                        // *through* it, so the type is the pointee. The type pass's
+                        // `Infer::infer` spells the same three cases; this is that rule,
+                        // so the emitter's guess and the pass's answer agree (the `Deref`
+                        // instruction means one of the three,
+                        // `impl_specs/linear-il.md`).
+                        ast::TypePtr operand = inferType(*e.lhs);
+                        if (operand == nullptr) return nullptr;
+                        if (operand->kind == TypeKind::Pointer) return operand->inner;
+                        auto through = std::make_shared<ast::TypeExpr>();
+                        through->kind = TypeKind::Pointer;
+                        through->inner = operand->kind == TypeKind::Reference
+                                                 ? operand->inner
+                                                 : operand;
+                        return through->inner ? through : nullptr;
                     }
                     case ExprKind::Copy:
                     case ExprKind::Unary:
@@ -2613,7 +2654,13 @@ namespace codegen {
                             || e.text == "<=" || e.text == ">=" || e.text == "&&" || e.text == "||") {
                             return namedType("Bool");
                         }
-                        return inferType(*e.lhs);
+                        // The operation is on *values*: a handle operand is read through
+                        // to its pointee - the expr `*T -> T` row, which the extractor
+                        // spells at the operand (`binaryOperand`), so the left operand as
+                        // a value is what the instruction writes and the frame declares.
+                        const ast::TypePtr lhs = e.lhs ? inferType(*e.lhs) : nullptr;
+                        const ast::TypeExpr *base = lhs ? pointee(lhs) : nullptr;
+                        return base ? std::make_shared<ast::TypeExpr>(*base) : nullptr;
                     }
                     case ExprKind::Lambda: {
                         // Best-effort callable type; return type is left unknown

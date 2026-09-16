@@ -1155,7 +1155,7 @@ data class SemInfer(
                 val lhs: AstXmlNode = xmlChild(e, AstNodeKind.Receiver)
                 // An enum member expression has the enum's type.
                 if (xmlKind(lhs) == AstNodeCategory.ExprName
-                    && this.facts.enumNames.has(xmlAttr(lhs, AstNodeAttributeKind.Name))
+                    && this.facts.enumNames.has(copy(xmlAttr(lhs, AstNodeAttributeKind.Name)))
                 ) {
                     return semNamedType(xmlAttr(lhs, AstNodeAttributeKind.Name))
                 }
@@ -1284,7 +1284,13 @@ data class SemInfer(
                 ) {
                     return semNamedType("Bool")
                 }
-                return this.infer(xmlChild(e, AstNodeKind.Lhs))
+                // The operation is on *values*: a handle operand is read through to its
+                // pointee (the `*T -> T` row of the conversion table, which the extractor
+                // spells at the operand), so the result is the left operand as a value.
+                // Returning the operand's own type would claim the result is a handle too
+                // - and then every slot the extractor made for `a + b` would be declared
+                // as one.
+                return semPointee(this.infer(xmlChild(e, AstNodeKind.Lhs)))
             }
         }
         // A lambda's type comes from the callable type it is used against, which is

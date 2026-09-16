@@ -1963,25 +1963,35 @@ data class IlExtractor(
         return this.exprType(e)
     }
 
-    // One operand of a binary operation: read through the handle it is when the *other*
-    // operand says the operation is on values. `out + separator` with `separator: *Str` is
+    // One operand of a binary operation: read through the handle it is, because the
+    // operation is on *values*. `out + separator` with `separator: *Str` is
     // `out + *separator` - the `*T -> T` row of the conversion table
     // (`impl_specs/linear-il.md`), which is "wherever a `T` is required" read at an operand,
     // and the same rule that lets a parameter be a `*T` without every call spelling the `*`
-    // (`specs/functions.md`, "Handles at a call"). A handle whose pointee is not the other
-    // operand's type is left alone, and so is a pair of handles: two pointers compared are
-    // a meaning of its own. What is left is the type error it always was.
+    // (`specs/functions.md`, "Handles at a call").
+    //
+    // The *other* operand is what says the operation is on values, and it says so in two
+    // ways: it is a value of the handle's own pointee (`*separator` against a `Str`), or it
+    // is a handle of that pointee too (`xmlAttr(a, Name) == xmlAttr(b, Name)` is the two
+    // *strings* compared - `Str` has value semantics, and a borrow is not a pointer in the
+    // language's eyes). A handle against a *different* type is left alone: comparing two
+    // unrelated handles is a meaning of its own, or the type error it always was. So is a
+    // handle against `null` (an empty type), which is the one comparison a raw pointer is
+    // *for*.
     fun binaryOperand(me: AstXmlNode, other: AstXmlNode, slot: Int): Int {
         val mine: AstXmlNode = this.operandValueType(slot, me)
         if (xmlIsEmpty(mine) || !ilIsHandleType(mine)) {
             return slot
         }
         val theirs: AstXmlNode = this.exprType(other)
-        if (xmlIsEmpty(theirs) || ilIsHandleType(theirs)) {
+        if (xmlIsEmpty(theirs)) {
             return slot
         }
         val pointee: AstXmlNode = semPointeeOf(mine)
-        if (xmlIsEmpty(pointee) || ilTypeText(pointee) != ilTypeText(theirs)) {
+        val otherValue: AstXmlNode = semPointeeOf(theirs)
+        if (xmlIsEmpty(pointee) || xmlIsEmpty(otherValue)
+            || ilTypeText(pointee) != ilTypeText(otherValue)
+        ) {
             return slot
         }
         return this.readThrough(pointee, slot)

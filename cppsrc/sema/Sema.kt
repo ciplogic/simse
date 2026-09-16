@@ -401,7 +401,7 @@ data class Analyzer(
         packages.append(this.packageOf(module))
         val imports: List<AstXmlNode> = xmlChildren(module, AstNodeKind.Import)
         for (*importDecl in imports) {
-            packages.append(xmlAttr(importDecl, AstNodeAttributeKind.Path))
+            packages.append(copy(xmlAttr(importDecl, AstNodeAttributeKind.Path)))
         }
         packages.append("rtl")
 
@@ -1073,7 +1073,7 @@ data class Analyzer(
                 built.attributes.append(
                     AstNodeAttribute(
                         AstNodeAttributeKind.Name,
-                        xmlAttr(callee, AstNodeAttributeKind.Name)
+                        copy(xmlAttr(callee, AstNodeAttributeKind.Name))
                     )
                 )
                 val args: List<AstXmlNode> = xmlChildren(callee, AstNodeKind.TypeArg)

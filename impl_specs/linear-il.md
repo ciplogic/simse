@@ -218,6 +218,20 @@ operand** whose fellow operand is a value (`specs/memory-model.md`): `out + sepa
 `separator: *Str` is `CopyValue` into a slot and then `out + that` - the same row the
 explicit `*separator` would spell.
 
+**The destination's type is what spells the conversion, and the emitter reads it there.**
+Every instruction whose operand is a value with a declared destination type already says
+which row it is, so `emitIlBodyText` reads the spelling off the two types rather than off
+the opcode (`Codegen`'s `needsReadThrough`, mirrored in `Codegen.cpp`): a `*T`/`&T`
+spelled where the destination, the returned type, the assigned slot or a static's declared
+type is a `T` is read through, `*(x)`, and nothing else in that position has to be said.
+That is the half that pays for a **borrowing accessor**: `xmlAttr` returns `*Str` - the
+address of the attribute's own storage, no string constructed (`ns2_xmlAttr` became a
+pointer walk with one `simse_addressOf`) - and its callers are unchanged, because a `Str`
+is what they ask for. It is also why the two operand sides had to agree: `xmlAttr(a, Name)
+== xmlAttr(b, Name)` is a *string* comparison, and a pair of handles of the *same* pointee
+is read through on both sides (`LinearForm`'s `binaryOperand`), while a pair of *different*
+handles - and a handle against `null` - is left exactly as it was.
+
 The rest of the instruction list, unchanged:
 
 ```

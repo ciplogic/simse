@@ -47,13 +47,30 @@ fun xmlAddChildren(node: *AstXmlNode, children: *List<AstXmlNode>): Unit {
     node.Children = all.toArray()
 }
 
-fun xmlAttr(node: *AstXmlNode, name: AstNodeAttributeKind): Str {
+// The value a missing attribute reads as: one shared empty `Str`, so `xmlAttr` can hand
+// back a borrow (`*Str`) without a null pointer - a `*T` has no null check, and every
+// caller of an attribute comparison would then have to test it. A file-level `val`, so it
+// starts as the empty value and nothing writes it; what `xmlAttr` returns borrows the
+// *node's* storage, so a caller reads it, and does not write through it
+// (`specs/memory-model.md`).
+val xmlMissingAttr: Str = ""
+
+// The attribute `name`, borrowed from the node rather than copied out of it.
+//
+// The value is a `*Str` because this is the compiler's most-called helper - every field
+// read of every node goes through it - and a `Str` return constructs and destroys a string
+// per call: that showed up as a third of the self-hosted transpile (`ns2_xmlAttr`'s total
+// CPU) while its lookup loop is inlined and cheap. A borrowed string compares,
+// concatenates and calls its methods like any other (the value/handle conversion,
+// `specs/memory-model.md`), so a caller that only *reads* it copies nothing; one that needs
+// a `Str` of its own gets the copy the conversion spells.
+fun xmlAttr(node: *AstXmlNode, name: AstNodeAttributeKind): *Str {
     for (*attr in node.attributes) {
         if (attr.name == name) {
-            return attr.value
+            return *attr.value
         }
     }
-    return ""
+    return *xmlMissingAttr
 }
 
 // The node's category: what it is (the schema's `kind`), read straight off the
@@ -312,7 +329,7 @@ fun xmlTypeParamNames(node: *AstXmlNode): List<Str> {
     val params: List<AstXmlNode> = xmlChildren(node, AstNodeKind.TypeParam)
     var names: List<Str> = List<Str>()
     for (*param in params) {
-        names.append(xmlAttr(param, AstNodeAttributeKind.Name))
+        names.append(copy(xmlAttr(param, AstNodeAttributeKind.Name)))
     }
     return names
 }

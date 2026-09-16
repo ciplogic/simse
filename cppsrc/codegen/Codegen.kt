@@ -380,7 +380,7 @@ data class Emitter(
     ): Unit {
         this.functions.append(CgFn(copy(decl), copy(receiver), file, templateParams, prelude, packageName, isMethod))
         if (!xmlIsEmpty(receiver)) {
-            this.receiverFnNames.insert(xmlAttr(decl, AstNodeAttributeKind.Name), true)
+            this.receiverFnNames.insert(copy(xmlAttr(decl, AstNodeAttributeKind.Name)), true)
         }
     }
 
@@ -1031,7 +1031,7 @@ data class Emitter(
                 next = xmlIntAttr(member, AstNodeAttributeKind.Value, 0)
             }
             values.append(next)
-            names.append(xmlAttr(member, AstNodeAttributeKind.Name))
+            names.append(copy(xmlAttr(member, AstNodeAttributeKind.Name)))
             next = next + 1
             i = i + 1
         }
@@ -1224,7 +1224,7 @@ data class Emitter(
         if (xmlAttr(fn.decl, AstNodeAttributeKind.HasBody) != "true") {
             return false
         }
-        if (!this.referencedNames.has(xmlAttr(fn.decl, AstNodeAttributeKind.Name))) {
+        if (!this.referencedNames.has(copy(xmlAttr(fn.decl, AstNodeAttributeKind.Name)))) {
             return false
         }
         val receiverName: Str = this.outerTypeName(fn.receiver)
@@ -1271,7 +1271,7 @@ data class Emitter(
                     this.collectNames(fn.decl, *this.referencedNames)
                     continue
                 }
-                if (!this.referencedNames.has(xmlAttr(fn.decl, AstNodeAttributeKind.Name))) {
+                if (!this.referencedNames.has(copy(xmlAttr(fn.decl, AstNodeAttributeKind.Name)))) {
                     continue
                 }
                 this.collectTypeNames(fn.receiver)
@@ -1329,8 +1329,8 @@ data class Emitter(
             val param: AstXmlNode = params[i]
             val paramType: AstXmlNode = xmlChild(param, AstNodeKind.Type)
             if (!xmlIsEmpty(paramType)) {
-                this.nameKinds.insert(xmlAttr(param, AstNodeAttributeKind.Name), this.kindOf(paramType))
-                this.localTypes.insert(xmlAttr(param, AstNodeAttributeKind.Name), paramType)
+                this.nameKinds.insert(copy(xmlAttr(param, AstNodeAttributeKind.Name)), this.kindOf(paramType))
+                this.localTypes.insert(copy(xmlAttr(param, AstNodeAttributeKind.Name)), paramType)
             }
             i = i + 1
         }
@@ -1418,7 +1418,7 @@ data class Emitter(
         }
         val params: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
         for (*param in params) {
-            names.append(xmlAttr(param, AstNodeAttributeKind.Name))
+            names.append(copy(xmlAttr(param, AstNodeAttributeKind.Name)))
         }
         if (argv) {
             names.append("simse_argIndex")
@@ -1637,7 +1637,7 @@ data class Emitter(
             val typeNode: AstXmlNode = xmlChild(entry.decl, AstNodeKind.Type)
             if (!xmlIsEmpty(typeNode)) {
                 info.statics.insert(
-                    xmlAttr(entry.decl, AstNodeAttributeKind.Name),
+                    copy(xmlAttr(entry.decl, AstNodeAttributeKind.Name)),
                     ilTypeText(typeNode)
                 )
             }
@@ -1980,7 +1980,7 @@ data class Emitter(
             node.attributes.append(
                 AstNodeAttribute(
                     AstNodeAttributeKind.Name,
-                    xmlAttr(baseType, AstNodeAttributeKind.Name)
+                    copy(xmlAttr(baseType, AstNodeAttributeKind.Name))
                 )
             )
             for (*arg in args) {
@@ -3010,7 +3010,7 @@ data class Emitter(
             val entry: CgStatic = this.statics[i]
             val typeNode: AstXmlNode = xmlChild(entry.decl, AstNodeKind.Type)
             if (!xmlIsEmpty(typeNode)) {
-                info.statics.insert(xmlAttr(entry.decl, AstNodeAttributeKind.Name), ilTypeText(typeNode))
+                info.statics.insert(copy(xmlAttr(entry.decl, AstNodeAttributeKind.Name)), ilTypeText(typeNode))
             }
             i = i + 1
         }
@@ -3060,6 +3060,14 @@ data class Emitter(
     // ---- expressions ------------------------------------------------------
 
     fun expr(e: *AstXmlNode, minPrec: Int, expected: *AstXmlNode): Str {
+        // The value/handle half of the conversion table (`impl_specs/linear-il.md`): a
+        // `*T`/`&T` spelled where a `T` is *expected* is read through. This is the
+        // dst-driven rule - the position states the type it wants, and the instruction means
+        // the pair - and it is what lets a `*T` parameter, a `*List<T>`, or a borrowing
+        // accessor (`xmlAttr`'s `*Str`) be read without every use spelling the `*`.
+        if (this.cgNeedsReadThrough(e, expected)) {
+            return "*(" + this.expr(e, 0, xmlEmptyNode()) + ")"
+        }
         val p: Int = cgPrecedence(e)
         var s: Str = ""
         if (p < minPrec) {
@@ -3070,6 +3078,31 @@ data class Emitter(
             s = s + ")"
         }
         return s
+    }
+
+    // Whether the value `e` has to be read through to be spelled as `expected`: the two are
+    // the same type modulo the handle (`*T`/`&T` for a `T`), which is the row the emitter
+    // spells `*(x)` (`exprInner`'s `ExprCopy` arm is the definition). Two things it must not
+    // do: convert when *no* type is expected (an argument, an operand - the extractor says
+    // what those want), and convert a value *into* a handle, which is the `*T` *binding* the
+    // writer has to spell (`specs/memory-model.md`).
+    fun cgNeedsReadThrough(e: *AstXmlNode, expected: *AstXmlNode): Bool {
+        if (xmlIsEmpty(expected) || ilIsHandleType(expected)) {
+            return false
+        }
+        // `copy(v)` is the conversion already spelled, by the extractor or by the writer.
+        if (xmlKind(e) == AstNodeCategory.ExprCopy) {
+            return false
+        }
+        val have: AstXmlNode = this.inferType(e)
+        if (xmlIsEmpty(have) || !ilIsHandleType(have)) {
+            return false
+        }
+        val pointee: AstXmlNode = semPointeeOf(have)
+        if (xmlIsEmpty(pointee)) {
+            return false
+        }
+        return ilTypeText(pointee) == ilTypeText(expected)
     }
 
     fun operandKind(e: *AstXmlNode): NameKind {
@@ -3367,9 +3400,11 @@ data class Emitter(
             AstNodeCategory.ExprMember -> {
                 val lhs: AstXmlNode = xmlChild(e, AstNodeKind.Receiver)
                 if (xmlKind(lhs) == AstNodeCategory.ExprName && this.enumNames.has(
-                        xmlAttr(
-                            lhs,
-                            AstNodeAttributeKind.Name
+                        copy(
+                            xmlAttr(
+                                lhs,
+                                AstNodeAttributeKind.Name
+                            )
                         )
                     )
                 ) {
@@ -3476,6 +3511,25 @@ data class Emitter(
             }
 
             AstNodeCategory.ExprDeref -> {
+                // `*x` is the *address* of what `x` denotes: of a value's own storage
+                // (`&x`), of a counted reference's pointee (`x.get()`), or the pointer
+                // itself when `x` already is one - and then the emitter reads *through*
+                // it, so the type is the pointee. The type pass's `SemInfer.infer` spells
+                // the same three cases; this is that rule, so the emitter's guess and the
+                // pass's answer agree (the `Deref` instruction means one of the three,
+                // `impl_specs/linear-il.md`).
+                val operand: AstXmlNode = this.inferType(xmlChild(e, AstNodeKind.Operand))
+                if (xmlIsEmpty(operand)) {
+                    return xmlEmptyNode()
+                }
+                val operandKind: AstNodeCategory = xmlKind(operand)
+                if (operandKind == AstNodeCategory.TypePointer) {
+                    val pointee: AstXmlNode = xmlChild(operand, AstNodeKind.Inner)
+                    if (xmlIsEmpty(pointee)) {
+                        return xmlEmptyNode()
+                    }
+                    return this.renameRole(pointee, AstNodeKind.Type)
+                }
                 var node: AstXmlNode =
                     AstXmlNode(
                         AstNodeKind.Type,
@@ -3483,10 +3537,14 @@ data class Emitter(
                         List<AstNodeAttribute>(),
                         Array<AstXmlNode>()
                     )
-                xmlAddChild(
-                    node,
-                    this.renameRole(this.inferType(xmlChild(e, AstNodeKind.Operand)), AstNodeKind.Inner)
-                )
+                var inner: AstXmlNode = operand
+                if (operandKind == AstNodeCategory.TypeReference) {
+                    inner = xmlChild(operand, AstNodeKind.Inner)
+                }
+                if (xmlIsEmpty(inner)) {
+                    return xmlEmptyNode()
+                }
+                xmlAddChild(node, this.renameRole(inner, AstNodeKind.Inner))
                 return node
             }
 
@@ -3501,7 +3559,11 @@ data class Emitter(
                 ) {
                     return this.namedType("Bool")
                 }
-                return this.inferType(xmlChild(e, AstNodeKind.Lhs))
+                // The operation is on *values*: a handle operand is read through to its
+                // pointee - the expr `*T -> T` row, which the extractor spells at the
+                // operand (`binaryOperand`), so the left operand as a value is what the
+                // instruction writes and what the frame declares.
+                return this.pointee(this.inferType(xmlChild(e, AstNodeKind.Lhs)))
             }
 
             AstNodeCategory.ExprLambda -> {
@@ -3833,9 +3895,11 @@ data class Emitter(
             AstNodeCategory.ExprMember -> {
                 val lhs: AstXmlNode = xmlChild(e, AstNodeKind.Receiver)
                 if (xmlKind(lhs) == AstNodeCategory.ExprName && this.enumNames.has(
-                        xmlAttr(
-                            lhs,
-                            AstNodeAttributeKind.Name
+                        copy(
+                            xmlAttr(
+                                lhs,
+                                AstNodeAttributeKind.Name
+                            )
                         )
                     )
                 ) {
@@ -4096,13 +4160,13 @@ data class Emitter(
                 if (calleeText == "toInt") {
                     val enumReceiver: AstXmlNode = this.pointee(this.inferType(receiverExpr))
                     if (!xmlIsEmpty(enumReceiver) && xmlKind(enumReceiver) == AstNodeCategory.TypeNamed
-                        && this.enumNames.has(xmlAttr(enumReceiver, AstNodeAttributeKind.Name))
+                        && this.enumNames.has(copy(xmlAttr(enumReceiver, AstNodeAttributeKind.Name)))
                     ) {
                         return "static_cast<Int>(" + this.expr(receiverExpr, 12, xmlEmptyNode()) + ")"
                     }
                 }
                 if (calleeText == "fromInt" && xmlKind(receiverExpr) == AstNodeCategory.ExprName
-                    && this.enumNames.has(xmlAttr(receiverExpr, AstNodeAttributeKind.Name))
+                    && this.enumNames.has(copy(xmlAttr(receiverExpr, AstNodeAttributeKind.Name)))
                 ) {
                     val enumName: Str = xmlAttr(receiverExpr, AstNodeAttributeKind.Name)
                     return this.qualify(this.typePackage(enumName), "simse_" + enumName + "_fromInt")

@@ -1662,3 +1662,42 @@ compiler *did* catch and one it could not:
   itself - a leftover `*` on a pointer is the one bug this pass produced, and the
   generated C++ caught it: `xmlAttr(*field, ...)` on a `*AstXmlNode`). Nothing outside
   `cppsrc/**/*.kt` changed in the sweep.
+
+- **The value/handle conversion got its second half, and `xmlAttr` became a borrow (T62).**
+  The conversion table was already what a call argument and a binary operand asked for; the
+  destination-driven half was missing, so a `*T` could not be *returned* or *assigned*
+  where a `T` was wanted. Now `Codegen`'s `needsReadThrough` (and its `Codegen.cpp` mirror)
+  reads the spelling off the two types - a `*T`/`&T` where the destination slot, the
+  returned type, an assignment or a file-level `var`'s declared type is a `T` is
+  `*(x)` - which is what lets an accessor hand back a borrow. `ns2_xmlAttr` returns `*Str`
+  (the attribute's own storage, or the shared `xmlMissingAttr` for a missing one) instead of
+  constructing a `Str` per call, and its ~250 callers did not change: the positions they
+  read it in ask for a `Str`. Three correctness fixes came with it: the emitter's
+  `inferType` for `*x` is the *type-directed* rule the type pass already used (a pointer
+  operand's `*x` is a load, not another address - the old guess spelled `*(*stmt)`), and a
+  binary operation whose *both* operands are handles of the same pointee reads both through
+  (`xmlAttr(a, Name) == xmlAttr(b, Name)` is a string comparison - pointer equality there
+  silently broke `semaUnifyReceiver`, which the sema differential caught), and the type
+  pass's rule for `a op b` is the left operand *as a value*, so the slot the extractor
+  declares for it is a `Str`, not a `*Str`.
+
+  `copy(...)` is still spelled by hand where the destination's type cannot be read: a
+  container of `Str` (`names.append(copy(xmlAttr(param, Name)))`) and a native extension's
+  type parameter (`Dictionary<K, V>.has(key: K)` - the extension's parameters are not in
+  the facts, so the extractor cannot resolve `K`). Closing that gap is the follow-up.
+
+  Measured (`tools/_bench_ab.mjs`, 7 interleaved runs, same input): self-transpile
+  **1000.8/1026.9 ms** against the pre-change compiler's **1068.5/1090.3 ms** (min/median)
+  - about 6%, not the 33% the profile's `ns2_xmlAttr` row suggested (that row's *total* CPU
+  includes its callers). `bun tools/bootstrap.js` now reports the fixed point byte for byte
+  at **1021 ms** self-transpile, 254 ms for the C++ ring.
+
+  Verified: both configurations rebuild clean, the five differentials are byte-identical,
+  T22/T23 pass in both, `simse_tests.exe` **56/56**, `bun tools/stress.js` **40/40** on the
+  self-hosted ring and on the hand-written one, and `cppsrc/simse_bootstrap.cpp` regenerated
+  so `bun tools/bootstrap.js` reports the fixed point byte for byte. No golden changed.
+
+  Docs updated with it: `specs/memory-model.md` ("Automatic dereference": the operand rule
+  with two handles, and the value positions a destination's type spells) and
+  `impl_specs/linear-il.md` ("The conversion": the destination-driven spelling, the
+  borrowing accessor, and why the two operand sides had to agree).

@@ -138,12 +138,33 @@ through for a by-value parameter, and `&T` boxes a copy of what it is given. The
 writes the `*` for a *binding* (`val p: *T = x`), never for a call
 (`specs/functions.md`, "Handles at a call").
 
-A **binary operand** is converted the same way when the *other* operand is a value:
-`out + separator` with `separator: *Str` is `out + *separator`, so a function can take a
-`*T` without every use of it spelling the `*`. A handle whose pointee is not the other
-operand's type is left alone, and so is a pair of handles - two pointers compared are a
-meaning of its own - and what is left is the type error it always was
+A **binary operand** is converted the same way, because every operator the language has
+is an operator on *values*: `out + separator` with `separator: *Str` is
+`out + *separator`, so a function can take a `*T` without every use of it spelling the
+`*`. The *other* operand is what says the operation is on values, and it says so in two
+ways: it is a value of the handle's own pointee (a `Str` next to the `*Str`), or it is a
+handle of that pointee too - `xmlAttr(a, Name) == xmlAttr(b, Name)` compares the two
+*strings*, since a borrow of a `Str` is a `Str` (value semantics) and not a pointer in the
+language's eyes. A handle against a *different* type is left alone: comparing two
+unrelated handles is a meaning of its own, or the type error it always was. So is a
+handle against `null`, which is the one comparison a raw pointer is *for*
 (`impl_specs/linear-il.md`, "The conversion: one operation, spelled by its types").
+
+A **value position the destination's type is known for** is converted too, and that is the
+half that makes a borrowing accessor usable: a declaration (`val name: Str = xmlAttr(n,
+Name)`), an assignment to a typed slot, a `return`, and a file-level `var`'s initializer
+read a `*T`/`&T` through to the `T` the position asks for. So an accessor can return a
+*borrow* into what it read - `xmlAttr` hands back a `*Str` that points into the node's own
+storage and copies nothing - while every caller that wants a `Str` of its own writes
+nothing at all.
+
+The **call argument** is where the conversion is inferred from the callee's parameter
+(`specs/functions.md`, "Handles at a call"), so it fires wherever that parameter's type is
+known. Two parameters it cannot read are a `native fun` extension's type parameter
+(`Dictionary<K, V>.has(key: K)` - the declaration's parameters are not in the facts) and a
+data class's field (a construction reads a constructor, not a `Param`); there the writer
+asks for the value with an explicit `copy(...)`, which is also what a container of `Str`
+needs for an element (`names.append(copy(xmlAttr(param, Name)))`).
 
 Member access, indexing, and method calls through a counted reference (`&T`) or
 a raw pointer (`*T`) automatically reach the pointee. For example, if `source`

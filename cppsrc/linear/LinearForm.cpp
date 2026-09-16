@@ -769,22 +769,31 @@ namespace linear {
                 return exprType(e);
             }
 
-            // One operand of a binary operation: read through the handle it is when the
-            // *other* operand says the operation is on values. `out + separator` with
-            // `separator: *Str` is `out + *separator` - the `*T -> T` row of the conversion
-            // table (`impl_specs/linear-il.md`), which is "wherever a `T` is required"
-            // read at an operand, and the same rule that lets a parameter be a `*T`
-            // without every call spelling the `*` (`specs/functions.md`, "Handles at a
-            // call"). A handle whose pointee is not the other operand's type is left
-            // alone, and so is a pair of handles: two pointers compared are a meaning of
-            // its own. What is left is the type error it always was.
+            // One operand of a binary operation: read through the handle it is, because
+            // the operation is on *values*. `out + separator` with `separator: *Str` is
+            // `out + *separator` - the `*T -> T` row of the conversion table
+            // (`impl_specs/linear-il.md`), which is "wherever a `T` is required" read at an
+            // operand, and the same rule that lets a parameter be a `*T` without every
+            // call spelling the `*` (`specs/functions.md`, "Handles at a call").
+            //
+            // The *other* operand is what says the operation is on values, and it says so
+            // in two ways: it is a value of the handle's own pointee (`*separator` against
+            // a `Str`), or it is a handle of that pointee too (`xmlAttr(a, Name) ==
+            // xmlAttr(b, Name)` is the two *strings* compared - `Str` has value
+            // semantics, and a borrow is not a pointer in the language's eyes). A handle
+            // against a *different* type is left alone: comparing two unrelated handles
+            // is a meaning of its own, or the type error it always was. So is a handle
+            // against `null` (an empty type), which is the one comparison a raw pointer
+            // is *for*.
             int binaryOperand(const Expr &me, const Expr &other, int slot) {
                 const ast::TypePtr mine = operandValueType(slot, me);
                 if (!mine || !sema::isHandleType(mine.get())) return slot;
                 const ast::TypePtr theirs = exprType(other);
-                if (!theirs || sema::isHandleType(theirs.get())) return slot;
+                if (!theirs) return slot;
                 const ast::TypeExpr *pointee = sema::pointeeOf(mine.get());
-                if (pointee == nullptr || ilTypeText(*pointee) != ilTypeText(*theirs)) return slot;
+                const ast::TypeExpr *otherValue = sema::pointeeOf(theirs.get());
+                if (pointee == nullptr || otherValue == nullptr) return slot;
+                if (ilTypeText(*pointee) != ilTypeText(*otherValue)) return slot;
                 return readThrough(pointee, slot);
             }
 

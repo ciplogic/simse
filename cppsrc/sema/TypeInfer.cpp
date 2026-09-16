@@ -595,12 +595,21 @@ namespace sema {
                     }
                     case ExprKind::Unary:
                         return e.lhs ? infer(*e.lhs) : nullptr;
-                    case ExprKind::Binary:
+                    case ExprKind::Binary: {
                         if (e.text == "==" || e.text == "!=" || e.text == "<" || e.text == ">"
                             || e.text == "<=" || e.text == ">=" || e.text == "&&" || e.text == "||") {
                             return namedType("Bool");
                         }
-                        return e.lhs ? infer(*e.lhs) : nullptr;
+                        // The operation is on *values*: a handle operand is read through
+                        // to its pointee (the `*T -> T` row of the conversion table,
+                        // which the extractor spells at the operand), so the result is
+                        // the left operand as a value. Returning the operand's own type
+                        // would claim the result is a handle too - and then every slot
+                        // the extractor made for `a + b` would be declared as one.
+                        const ast::TypePtr lhs = e.lhs ? infer(*e.lhs) : nullptr;
+                        const ast::TypeExpr *base = lhs ? pointee(lhs) : nullptr;
+                        return base ? std::make_shared<ast::TypeExpr>(*base) : nullptr;
+                    }
                     case ExprKind::Lambda:
                         // A lambda's type comes from the callable type it is used
                         // against, which is the emitter's business (its parameters may
