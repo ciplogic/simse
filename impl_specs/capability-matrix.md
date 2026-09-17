@@ -1816,3 +1816,235 @@ compiler *did* catch and one it could not:
   `specs/memory-model.md` ("Extraction": the operation is what the extractor emits, not what
   a program writes) and `impl_specs/linear-il.md` ("The conversion": the three parameter
   shapes, and the type itself is never inferred).
+
+- **The type questions borrow the frame, and the pipeline's scans read nodes in place
+  (T66).** The `.kt` ring was 3.8-4x the hand-written one; it is **2.8x** now
+  (`tools/_bench_ab.mjs`, 9 interleaved runs on the same tree: **1247.5/1289.2 ->
+  885.1/919.1 ms** min/median against the C++ ring's 314.3/323.6 ms). What the copies cost
+  was measured first, not guessed: the RTL's `SmallVector` copy constructor was instrumented
+  (a size bucket, plus a phase tag the ring sets around each stage) and one self-transpile
+  turned out to copy **6.78M lists / 18.8M elements**, of which **6.20M lists / 17.0M
+  elements are `List<AstNodeAttribute>`** - i.e. `AstXmlNode` copies, each one deep-copying
+  up to four attributes and their `Str`s. So every change below is "copy less", and the
+  phase tag said where: 6.5M of the element copies sat in `linLowerForEmission`, 6.0M in
+  `linFinishForEmission`, 3.1M in the IL extractor.
+
+  The largest single site was the extractor's type question. `SemInfer.typeOf` re-seeded the
+  caller's frame into a new scope *per question* - one dictionary insert per name, per
+  question - which the phase tag measured at **258 of the 361 ms** the extractor spent in
+  `semTypeOfExpr` (11,247 questions, ~23us each, on frames of a few dozen names). `SemInfer`
+  now has a `baseScope`, the *outermost* scope, **borrowed** from the caller (`typeOf`
+  assigns the pointer); everything the inference marks still lands in a pushed scope above
+  it, so shadowing is unchanged. The same pass rebuilt the extractor's frame dictionary from
+  scratch whenever a slot was added (`frameChanged` -> a full walk of `out.vars` at the next
+  question - 66 ms); `addVar`/`setSlotType` now insert the one entry (`frameAdd`), which is
+  sound because the frame is append-only. Together: **361 -> 24 ms** in the type questions
+  and **483 -> 140 ms** in `ilExtractUnit`.
+
+  Then the scans that copy a block's statement list just to read it: `linJumpsTo` (run once
+  per label of a body, so its `linBlockStmts` copies were quadratic-adjacent) and
+  `linStmtCrosses` now walk a block's `Body` children in place (`linStmtJumpsTo`), and the
+  simplifier's prune/label passes and the slot hoisting bind the statement they are looking
+  at as `*AstXmlNode` instead of a value (a value binding *and* the append copied every
+  statement twice per pass). In `ExprFlattener` a statement nothing was rebuilt under is
+  passed on as it is, instead of being rebuilt through `exprReplaceRole` (which copies every
+  child of it) - and the parser hoists `parsePostfix`'s argument list out of the `while`,
+  clearing it per call, and builds a call's callee+arguments as **one** children array
+  (`roleOf`) where `attach`-per-argument rebuilt the array per child.
+
+  Unchanged on purpose: everything about *what* is emitted. The strongest check is
+  structural - the pre-change compiler binary and the post-change one transpile the same
+  `cppsrc` tree to **byte-identical** C++ (`cmp`), and the differentials, the two-step
+  bootstrap and the goldens agree. Two later attempts were reverted for failing exactly that
+  check, and they are the two things worth knowing before trying this again: a `flat` that
+  returns the original node when nothing under it was bound (it changes which expressions
+  get bound, because the rebuild is also what decides *what* a bind sees), and an early-out
+  in `linHoistSlots` (neutral in time, so it was dropped rather than kept).
+
+  Verified: both CMake rings rebuild clean (five differentials byte-identical, T23's
+  two-step bootstrap byte-identical), `simse_tests.exe` **56/56**, `bun tools/stress.js`
+  **40/40** on the self-hosted ring, and the amalgamation the release build emits is
+  unchanged.
+
+- **A call on `this` passes the receiver, not the address of a dereference of it (T67).**
+  The T47 rule ("a value receiver is `T* self`") made `receiverArg` take the receiver
+  expression's *address*, which for the bare `this` came out as
+  `ns1_ilEmitOpsChecked(simse_addressOf((*self)), il, level)` - a dereference followed by
+  the address of the dereference, i.e. `self`, spelled the long way, at **1,741** call
+  sites in the compiler's own emission. It copies nothing (`*self` is an lvalue, so
+  `simse_addressOf` binds the referent and returns it), but it *reads* like a copy of the
+  whole receiver in the artifact that is supposed to be read by hand, every time a method
+  calls another on itself.
+
+  The emitter now special-cases the one receiver that already *is* the address: a bare
+  `this` with a value receiver is passed as `self` (C++'s `this` inside a closure class)
+  by the new `selfPointer()`, in both rings and in both places the language spells the
+  receiver's address - the call (`receiverArg`) and the borrow `*this` (`ExprDeref`). A
+  receiver that is a *place* is untouched: `counter.twice()` is still
+  `ns1_twice(simse_addressOf(counter))` and `holder.counter.bump()` still takes
+  `&holder.counter`, which is `stress/pointer-place`'s rule from the other side.
+
+  Neutral in time (`tools/_bench_ab.mjs`, 9 interleaved pairs: 791.1/801.6 -> 799.6/808.2
+  ms - the fix was never about a copy, since `&(*p)` folds to `p`); the change is in what
+  the output *says*. Covered by the new `stress/receiver-shapes` (`expected.cpp` pins the
+  four spellings: a self-call, `*this`, a local, and a field), which is also the corpus'
+  first case with a method call on `this` - that gap is why no golden moved when the
+  emitter changed.
+
+  Verified: both CMake rings rebuild clean (T22 byte-identical, T23's two-step bootstrap
+  byte-identical), `simse_tests.exe` **56/56**, `bun tools/stress.js` **41/41** on the
+  self-hosted ring and **41/41** on the hand-written one, and `cppsrc/simse_bootstrap.cpp`
+  regenerated so `bun tools/bootstrap.js` reports the fixed point byte for byte.
+
+- **The ring's remaining index walks iterate by pointer (T68).** `for (*x in xs)` binds the
+  *element* - one pointer, no copy - where `while (i < xs.size())` with `val x: T = xs[i]`
+  copies a value per iteration, and `for (x in xs)` copies one too. The ring already used
+  the pointer form in most places (all 27 `for` loops in `Codegen.kt`, the statement walks in
+  `Simplify.kt`); this is the rest of it, chosen by the same rule the guide states - the
+  container is read-only in the body, the element is only read (or used as a place), and no
+  pointer escapes the loop - which is what makes the copy-free form safe: a pointer into a
+  list whose storage moves under an append, or one that outlives the walk, is the bug this
+  rewrite can produce.
+
+  The ones that were *hot*, not just tidy: the scanner's rule walk (`nextToken` bound one
+  `TokenMatcher` per rule per token position - the ring's innermost loop); the renamer
+  (`SimRenamer.rewrite` took its node **by value**, so the shadowing pass rebuilt every node
+  of every body after copying it, and `renamedTo` bound a `SimRenameScope` by value, which
+  copies the `Dictionary` a scope holds, once per name node of the body); the two overload
+  scans in `Sema`, which bound a candidate declaration per call; and the extractor's
+  `typeIndex`, which bound the type node it was about to read. The rest (`collect`,
+  `emitTypes`, `emitForwardTypes`, `emitStatics`, `emitStaticInit`, `emitDataClass`,
+  `emitEnum`, `emitEnumConversion`, `emitNativeDeclarations`, `collectProgramNames`,
+  `beginScope`, `emitFunction`, `ilFunctionFor`, `registerMachineType`, `emitMachine`,
+  `signatureText`, `lambdaOf`, `readFileAsTokens`) are once-per-program or once-per-body
+  walks: nothing measurable on their own, kept because a value copy of an `AstXmlNode` (or
+  of a struct holding one) in the ring's own source is exactly what T66 spent its effort
+  removing.
+
+  Measured: a compiler built from the same tree with only the style difference
+  (`tools/_bench_ab.mjs`, 25 interleaved pairs) **777.5/811.1 -> 758.8/781.1 ms** min/median
+  (~2-4%), and the emitted C++ is **byte-identical** - the strongest check for a change like
+  this, because the two compilers read the *same* sources and only their own code differs.
+  Verified as usual: five differentials byte-identical, T23's two-step bootstrap
+  byte-identical, `simse_tests.exe` **56/56**, `bun tools/stress.js` **41/41** on both rings,
+  and `cppsrc/simse_bootstrap.cpp` regenerated with the fixed point byte for byte.
+
+- **`fmtStr` fills a matched shape only (T69).** The operation's contract had two edge cases
+  ("with no `|` left the remaining items are appended, and with no item left the rest of the
+  format is appended verbatim"), and they cost a branch and a `min` in a function the emitter
+  calls for every shaped line it writes. The shape a *fixed format* writes is **one item per
+  `|`**, and that is now the only one the operation handles: the point count is compared to
+  the item count up front, and anything else - a mismatch, or no item list - comes back as
+  the format itself, unfilled, rather than half-filled. `simse_countChars` is the helper that
+  makes the check (one scan of the format, which the removed `points` loop did anyway), and
+  the write pass behind it is one loop with no per-point condition.
+
+  The assumption was checked, not assumed: all **38** literal `fmtStr(...)` call sites in the
+  ring pass exactly one item per `|` (a scratch scan over `cppsrc`), and the compiler built
+  with the change emits **byte-identical** C++ to the one built without it - which is what
+  makes "the shape always matches" a fact about the ring rather than a hope. Measured
+  **neutral** (`tools/_bench_ab.mjs`, 25 interleaved pairs, the CMake libraries rebuilt on
+  each side so both link a matching header: 834.7/890.8 -> 842.4/881.6 ms) - the branches it
+  removes were never the cost; what the change buys is a function with no edge cases in it.
+
+  Docs updated with it: `specs/built-in-types.md` (the shape, and what a mismatch gets),
+  `cppsrc/rtl/rtl.kt`'s prelude comment, and the header's own comment. Verified: both CMake
+  rings rebuild clean (T22 and T23 byte-identical), `simse_tests.exe` **56/56**,
+  `bun tools/stress.js` **41/41** on both rings, `cppsrc/simse_bootstrap.cpp` regenerated with
+  the fixed point byte for byte.
+
+- **`min`, `max` and `fmtStr` are written in the language now (T70).** The RTL's
+  *operation* layer is moving off C++ where it can: a prelude `fun` **with a body** is
+  emitted by the compiler for both rings and only when a program reaches it
+  (`reachesPreludeBody`), which is how `List<T>.smToYield` already worked. What decides a
+  candidate is not taste but a grep - a native whose only reference is the header that
+  defines it has no C++ caller left:
+
+  - `simse_fmtStr` went first (the user's example): the body is `charAt` + `append` +
+    `appendStr` + `reserve`, all of them primitives that stay native, and the two edge
+    cases of T69 stay gone. The header's `simse_countChars`/`simse_fmtStr` are deleted;
+    the emitted C++ now carries `Str fmtStr(Str* fmt, List<Str>* items)` built by the
+    compiler, and **the two-step bootstrap still holds byte for byte** - which is the real
+    proof, because the stage-1 compiler *runs* the migrated function to produce its own
+    output. Measured **neutral** (`tools/_bench_ab.mjs`, 25 interleaved pairs, CMake
+    libraries rebuilt on each side: 768.7/785.8 -> 766.5/792.4 ms) - `simse_str_charAt` is
+    an inline header function, so the loop the language writes folds into what the C++
+    version did.
+  - `simse_min`/`simse_max` became one generic each (`fun min<T>(a: T, b: T): T`), so the
+    `Int`-only natives and the C++ templates behind them are gone. A generic Simse function
+    is reified as a C++ template, and the ring's own `smaller<T>` experiment confirmed the
+    checker accepts `<` on a bare type parameter.
+
+  What the generic form exposed - and it is a *pre-existing* gap, not a regression in
+  behaviour the old natives had: the type pass substitutes the arguments of an **explicit**
+  instantiation into a call's result and nothing else (`sema/TypeInfer.kt`'s
+  `functionReturn`; `sema/TypeInfer.h` says so in as many words). So `min(3, 2)` has type
+  `T`, and a *member call* on it cannot resolve: `min(3, 2).toString()` emits the wrong
+  native (the fallback picks the first extension named `toString` - `StrView`'s - and the
+  generated C++ fails to compile, instead of a Simse diagnostic). `min<Int>(3, 2)` and
+  `val n: Int = min(3, 2)` both work. Inferring the bindings from the *argument* types
+  (the `semBindTypes`/`semSubstitute` pair already exists, used for extension receivers)
+  is the fix, and it is the gate for migrating more generic RTL operations.
+
+  The new `stress/rtl-simse` covers all three (nothing in the compiler calls `min`/`max`,
+  so without it their bodies would never be compiled at all): the generic form for `Int`,
+  `Str` and `Float64`, both instantiation spellings, `fmtStr`'s matched shape (`||`
+  included) and its refusal. The migration rule and the `Span`/`StrView` verdict are
+  recorded in `impl_specs/rtl-abi.md`. Verified: five differentials byte-identical, T23's
+  two-step bootstrap byte-identical, `simse_tests.exe` **56/56**, `bun tools/stress.js`
+  **42/42** on both rings, `cppsrc/simse_bootstrap.cpp` regenerated with the fixed point
+  byte for byte.
+
+- **`Str.isEmpty` is the language's own body, and a prelude body is emitted when a call
+  reaches it (T71).** The second RTL operation off C++, and the first one with a
+  **receiver**: `simse_str_isEmpty` is deleted from `strops.hpp`, and `rtl.kt` carries
+
+  ```text
+  fun Str.isEmpty(): Bool {
+      return this.size() == 0
+  }
+  ```
+
+  Three things the migration settled, in the order they came up:
+
+  - **The receiver's spelling is not the pointer question it looks like.** The receiver of
+    a `native` is the explicit first parameter (`this: Str`); a function *with* a body has
+    to write the receiver type before the name, because only that form is marked a
+    receiver - the explicit `this` is a plain parameter named `this`, so member syntax
+    never reaches it (both rings; `xs.firstOrNone()` on the documented
+    `fun firstOrNone<T>(this: List<T>)` of `specs/functions.md` emits the C++ member call
+    `xs.firstOrNone()`), and the emitted signature is `firstOrNone(List<T>* self)` all the
+    same. This is a *reported* spec/impl gap, not a decision: the parser sets
+    `HasReceiver` only for the receiver-type form, while `native` extensions implement the
+    explicit one in `addNativeExt`.
+  - **`*Str` buys nothing here either.** `receiverParam` emits `T* self` for a *value*
+    receiver and `Str* self` for a `*Str` one - the same parameter - so no receiver is ever
+    copied and the pointer spelling only changes the language-visible type. (On a *plain*
+    parameter it is the reverse of free: a `*Str` parameter takes an argument's *address*,
+    so a literal or a temporary is first copied into a slot to have one - probed, see
+    T70's `fmtStr`/the `*` argument rule.)
+  - **The reachability rule had a hole, and the migration is what exposed it.** A prelude
+    body was emitted only when the program also *named* the receiver's type
+    (`reachesPreludeBody`), which is what keeps one container's `smToYield` machine out of a
+    program that iterates another's. A program that never names `Str` - `"".isEmpty()` on a
+    literal, or a receiver of an inferred local - therefore emitted *no* body and called
+    one anyway: `error C3861: 'isEmpty': identifier not found` in the generated C++, in both
+    rings. The rule now falls back to the call when *no* overload of the name is
+    attributable (the whole group is emitted; an unused overload is dead but valid C++),
+    and keeps the type test when one of them is - so `smToYield` behaves exactly as before.
+    `stress/str-isempty` is the smallest program with the shape (a literal receiver, no
+    `Str` type named anywhere); it does not compile before the fix.
+
+  What it costs, measured rather than argued: the native was an `inline` header function,
+  so the *call* is what changed, and the new body is a function the caller's own TU
+  carries - **neutral** (`tools/_bench_ab.mjs`, 25 interleaved pairs, two passes:
+  774.0/806.6 -> 769.6/805.2 and 784.3/805.4 -> 768.5/818.3 ms min/median; min is the
+  readable number on this machine). The emitted code is not literally the same: a *field*
+  receiver loses the read-back a native's value receiver needed
+  (`simse_str_isEmpty((*_sm_base))` -> `isEmpty(_sm_base)`), and a *literal* receiver gains a
+  materialized `Str` slot, which no call site in the ring has. `stress/rtl-simse` grew the
+  receiver shapes (literal, local, `this.text` in a method of the program's own), and the
+  ring's output is byte-identical - the two legs of the bench above emit the same file.
+  Verified: five differentials byte-identical, T23's two-step bootstrap byte-identical,
+  `simse_tests.exe` **56/56**, `bun tools/stress.js` **43/43** on both rings,
+  `cppsrc/simse_bootstrap.cpp` regenerated with the fixed point byte for byte.

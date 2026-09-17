@@ -1029,11 +1029,8 @@ data class Analyzer(
             typeArgCount = xmlCount(callee, AstNodeKind.TypeArg)
         }
         val overloads: List<AstXmlNode> = this.functions.get(name).value()
-        var i: Int = 0
-        while (i < overloads.size()) {
-            val overload: AstXmlNode = overloads[i]
+        for (*overload in overloads) {
             if (generic && xmlCount(overload, AstNodeKind.TypeParam) != typeArgCount) {
-                i = i + 1
                 continue
             }
             val paramCount: Int = xmlCount(overload, AstNodeKind.Param)
@@ -1059,7 +1056,6 @@ data class Analyzer(
                     return
                 }
             }
-            i = i + 1
         }
         this.diag(
             xmlLine(call), xmlColumn(call), "no overload of '" + name + "' takes "
@@ -1271,9 +1267,7 @@ data class Analyzer(
         val argCount: Int = xmlCount(call, AstNodeKind.Arg)
         var compatible: Bool = false
         val overloads: List<AstXmlNode> = this.functions.get(name).value()
-        var i: Int = 0
-        while (i < overloads.size()) {
-            val fn: AstXmlNode = overloads[i]
+        for (*fn in overloads) {
             var receiver: AstXmlNode = xmlEmptyNode()
             var valueParamCount: Int = 0
             var hasRecv: Bool = false
@@ -1311,7 +1305,6 @@ data class Analyzer(
                     }
                 }
             }
-            i = i + 1
         }
         if (compatible) {
             this.diag(

@@ -133,7 +133,12 @@ data class ExprFlattener(
     // Whether an expression was actually bound to a temporary. Everything else
     // this pass does keeps the shape it read, so a body that is already lowered
     // comes back with this false (`linLowerForEmission`).
-    var changed: Bool
+    var changed: Bool,
+    // Whether the statement being walked had anything rebuilt under it. A rebuild builds
+    // a fresh node, and a statement nothing was rebuilt under is passed on *as it is* -
+    // the pass runs on every round of `linLowerForEmission`, and rebuilding a statement
+    // copies every child of it (`exprReplaceRole`).
+    var touched: Bool
 ) {
     fun freshTemp(): Str {
         val id: Int = this.next
@@ -189,6 +194,7 @@ data class ExprFlattener(
     // The same node with its operands flattened. The original is never touched.
     fun rebuild(e: *AstXmlNode, temps: *List<AstXmlNode>): AstXmlNode {
         val kind: AstNodeCategory = xmlKind(e)
+        this.touched = true
         when (kind) {
             AstNodeCategory.ExprMember -> {
                 var receiver: List<AstXmlNode> = List<AstXmlNode>()
@@ -268,19 +274,33 @@ data class ExprFlattener(
         return linBlock(temps, xmlLine(stmt), xmlColumn(stmt))
     }
 
-    fun walkStmts(stmts: List<AstXmlNode>, out: *List<AstXmlNode>): Unit {
+    // Whether any statement of the list had something rebuilt under it: a child's walk
+    // clears the flag as it goes, so the answer is the disjunction, not the last one.
+    fun walkStmts(stmts: List<AstXmlNode>, out: *List<AstXmlNode>): Bool {
+        var any: Bool = false
         for (*stmt in stmts) {
             this.walkStmt(stmt, out)
+            if (this.touched) {
+                any = true
+            }
         }
+        return any
     }
 
     fun walkStmt(stmt: *AstXmlNode, out: *List<AstXmlNode>): Unit {
         val kind: AstNodeCategory = xmlKind(stmt)
         var temps: List<AstXmlNode> = List<AstXmlNode>()
+        this.touched = false
         when (kind) {
             AstNodeCategory.StmtBlock -> {
                 var inner: List<AstXmlNode> = List<AstXmlNode>()
-                this.walkStmts(xmlChildren(xmlChild(stmt, AstNodeKind.Body), AstNodeKind.Stmt), inner)
+                val anyInner: Bool =
+                    this.walkStmts(xmlChildren(xmlChild(stmt, AstNodeKind.Body), AstNodeKind.Stmt), inner)
+                this.touched = anyInner
+                if (!anyInner) {
+                    out.append(stmt)
+                    return
+                }
                 out.append(linBlock(inner, xmlLine(stmt), xmlColumn(stmt)))
                 return
             }
@@ -291,6 +311,10 @@ data class ExprFlattener(
                 // block (`linLowerBody`), which is what keeps a jump from crossing them.
                 var init: List<AstXmlNode> = List<AstXmlNode>()
                 init.append(this.flat(xmlChild(stmt, AstNodeKind.Init), ExprSlot.Root, temps))
+                if (!this.touched) {
+                    out.append(stmt)
+                    return
+                }
                 var i: Int = 0
                 while (i < temps.size()) {
                     out.append(temps[i])
@@ -306,6 +330,10 @@ data class ExprFlattener(
                 // the only thing the statement does.
                 var cond: List<AstXmlNode> = List<AstXmlNode>()
                 cond.append(this.flat(xmlChild(stmt, AstNodeKind.Cond), ExprSlot.Value, temps))
+                if (!this.touched) {
+                    out.append(stmt)
+                    return
+                }
                 out.append(this.withTemps(exprReplaceRole(stmt, AstNodeKind.Cond, cond), temps))
                 return
             }
@@ -315,6 +343,10 @@ data class ExprFlattener(
                 target.append(this.flat(xmlChild(stmt, AstNodeKind.Target), ExprSlot.Path, temps))
                 var value: List<AstXmlNode> = List<AstXmlNode>()
                 value.append(this.flat(xmlChild(stmt, AstNodeKind.Value), ExprSlot.Root, temps))
+                if (!this.touched) {
+                    out.append(stmt)
+                    return
+                }
                 val withTarget: AstXmlNode = exprReplaceRole(stmt, AstNodeKind.Target, target)
                 out.append(this.withTemps(exprReplaceRole(withTarget, AstNodeKind.Value, value), temps))
                 return
@@ -325,6 +357,10 @@ data class ExprFlattener(
                 // `return` of one name.
                 var value: List<AstXmlNode> = List<AstXmlNode>()
                 value.append(this.flat(xmlChild(stmt, AstNodeKind.Value), ExprSlot.Value, temps))
+                if (!this.touched) {
+                    out.append(stmt)
+                    return
+                }
                 out.append(this.withTemps(exprReplaceRole(stmt, AstNodeKind.Value, value), temps))
                 return
             }
@@ -332,6 +368,10 @@ data class ExprFlattener(
             AstNodeCategory.StmtExprStmt -> {
                 var expr: List<AstXmlNode> = List<AstXmlNode>()
                 expr.append(this.flat(xmlChild(stmt, AstNodeKind.Expr), ExprSlot.Root, temps))
+                if (!this.touched) {
+                    out.append(stmt)
+                    return
+                }
                 out.append(this.withTemps(exprReplaceRole(stmt, AstNodeKind.Expr, expr), temps))
                 return
             }
@@ -343,6 +383,10 @@ data class ExprFlattener(
                 // a whole expression, and the two rings stop emitting the same C++.
                 var value: List<AstXmlNode> = List<AstXmlNode>()
                 value.append(this.flat(xmlChild(stmt, AstNodeKind.Value), ExprSlot.Value, temps))
+                if (!this.touched) {
+                    out.append(stmt)
+                    return
+                }
                 out.append(this.withTemps(exprReplaceRole(stmt, AstNodeKind.Value, value), temps))
                 return
             }
@@ -355,7 +399,7 @@ data class ExprFlattener(
 
 // Lowers the expressions of one linear body; the counter restarts per body.
 fun linLowerExprs(body: List<AstXmlNode>): LinLowered {
-    var flattener: ExprFlattener = ExprFlattener(1, false)
+    var flattener: ExprFlattener = ExprFlattener(1, false, false)
     var out: List<AstXmlNode> = List<AstXmlNode>()
     flattener.walkStmts(body, out)
     return LinLowered(out, flattener.changed)

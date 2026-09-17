@@ -533,15 +533,13 @@ data class Emitter(
 
     fun collect(): Unit {
         this.collectPackages()
-        var i: Int = 0
-        while (i < this.inputs.size()) {
-            val input: CgInput = this.inputs[i]
-            val pkg: Str = this.inputPackage(this.inputs[i])
+        // The pointer form on both lists: a declaration is a value, so the index walk copied
+        // one per iteration, and neither list is what this fills (the tables are). The
+        // tables and the dictionaries are left alone while they are walked like this.
+        for (*input in this.inputs) {
+            val pkg: Str = this.inputPackage(input)
             val decls: List<AstXmlNode> = xmlDecls(input.module)
-            var d: Int = 0
-            while (d < decls.size()) {
-                val decl: AstXmlNode = decls[d]
-                d = d + 1
+            for (*decl in decls) {
                 val declName: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
                 if (decl.name == AstNodeKind.Var) {
                     // A file-level static: storage and an initializer for the
@@ -592,9 +590,7 @@ data class Emitter(
                     val receiver: AstXmlNode = this.classReceiver(decl)
                     val methods: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Function)
                     val classParams: List<Str> = xmlTypeParamNames(decl)
-                    var m: Int = 0
-                    while (m < methods.size()) {
-                        val method: AstXmlNode = methods[m]
+                    for (*method in methods) {
                         var methodParams: List<Str> = List<Str>()
                         var p: Int = 0
                         while (p < classParams.size()) {
@@ -608,11 +604,9 @@ data class Emitter(
                             q = q + 1
                         }
                         this.addFunction(method, receiver, input.fileName, methodParams, input.prelude, pkg, true)
-                        m = m + 1
                     }
                 }
             }
-            i = i + 1
         }
     }
 
@@ -800,10 +794,7 @@ data class Emitter(
     // first yields the empty value rather than indeterminate data
     // (specs/statics.md).
     fun emitStatics(): Unit {
-        var i: Int = 0
-        while (i < this.statics.size()) {
-            val entry: CgStatic = this.statics[i]
-            i = i + 1
+        for (*entry in this.statics) {
             this.curFile = entry.file
             val typeNode: AstXmlNode = xmlChild(entry.decl, AstNodeKind.Type)
             val storage: Str = this.qualify(entry.packageName, xmlAttr(entry.decl, AstNodeAttributeKind.Name))
@@ -839,10 +830,7 @@ data class Emitter(
         }
         this.line(0, "// File-level static storage (specs/statics.md): initialized before main's body.")
         this.line(0, "void simse_initStatics() {")
-        var i: Int = 0
-        while (i < this.statics.size()) {
-            val entry: CgStatic = this.statics[i]
-            i = i + 1
+        for (*entry in this.statics) {
             val init: AstXmlNode = xmlChild(entry.decl, AstNodeKind.Init)
             if (xmlIsEmpty(init)) {
                 continue
@@ -870,18 +858,12 @@ data class Emitter(
     // pointer, a reference or a parameter needs - and it is what lets a generated data
     // class name another package's type at all.
     fun emitForwardTypes(): Unit {
-        var i: Int = 0
-        while (i < this.inputs.size()) {
-            val input: CgInput = this.inputs[i]
-            i = i + 1
+        for (*input in this.inputs) {
             if (input.prelude) {
                 continue
             }
             val decls: List<AstXmlNode> = xmlDecls(input.module)
-            var d: Int = 0
-            while (d < decls.size()) {
-                val decl: AstXmlNode = decls[d]
-                d = d + 1
+            for (*decl in decls) {
                 if (decl.name != AstNodeKind.DataClass) {
                     continue
                 }
@@ -896,19 +878,13 @@ data class Emitter(
     }
 
     fun emitTypes(): Unit {
-        var i: Int = 0
-        while (i < this.inputs.size()) {
-            val input: CgInput = this.inputs[i]
-            i = i + 1
+        for (*input in this.inputs) {
             if (input.prelude) {
                 continue
             }
             this.curFile = input.fileName
             val decls: List<AstXmlNode> = xmlDecls(input.module)
-            var d: Int = 0
-            while (d < decls.size()) {
-                val decl: AstXmlNode = decls[d]
-                d = d + 1
+            for (*decl in decls) {
                 if (decl.name == AstNodeKind.DataClass) {
                     this.emitDataClass(decl)
                 } else if (decl.name == AstNodeKind.Enum) {
@@ -982,9 +958,7 @@ data class Emitter(
         val fields: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Field)
         var params: List<Str> = List<Str>()
         var values: List<Str> = List<Str>()
-        var i: Int = 0
-        while (i < fields.size()) {
-            val field: AstXmlNode = fields[i]
+        for (*field in fields) {
             val fieldType: AstXmlNode = xmlChild(field, AstNodeKind.Type)
             if (xmlIsEmpty(fieldType)) {
                 this.fail(
@@ -1000,7 +974,6 @@ data class Emitter(
                 value = "std::move(" + value + ")"
             }
             values.append(value)
-            i = i + 1
         }
         if (this.failed) {
             return
@@ -1018,14 +991,11 @@ data class Emitter(
             this.line(0, tmpl)
         }
         this.line(0, fmtStr("struct | {", emittedName))
-        var f: Int = 0
-        while (f < fields.size()) {
-            val field: AstXmlNode = fields[f]
+        for (*field in fields) {
             this.line(
                 1,
                 this.type(xmlChild(field, AstNodeKind.Type)) + " " + xmlAttr(field, AstNodeAttributeKind.Name) + ";"
             )
-            f = f + 1
         }
         this.line(0, "};")
         this.line(0, "SIMSE_PACK_POP")
@@ -1057,15 +1027,12 @@ data class Emitter(
         }
         this.line(0, fmtStr("enum class | {", this.qualify(this.typePackage(name), name)))
         val members: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.EnumMember)
-        var i: Int = 0
-        while (i < members.size()) {
-            val member: AstXmlNode = members[i]
+        for (*member in members) {
             var text: Str = xmlAttr(member, AstNodeAttributeKind.Name)
             if (xmlAttr(member, AstNodeAttributeKind.HasValue) == "true") {
                 text = text + " = " + xmlAttr(member, AstNodeAttributeKind.Value)
             }
             this.line(1, text + ",")
-            i = i + 1
         }
         this.line(0, "};")
     }
@@ -1082,16 +1049,13 @@ data class Emitter(
         var values: List<Int> = List<Int>()
         var names: List<Str> = List<Str>()
         var next: Int = 0
-        var i: Int = 0
-        while (i < members.size()) {
-            val member: AstXmlNode = members[i]
+        for (*member in members) {
             if (xmlAttr(member, AstNodeAttributeKind.HasValue) == "true") {
                 next = xmlIntAttr(member, AstNodeAttributeKind.Value, 0)
             }
             values.append(next)
             names.append(xmlAttr(member, AstNodeAttributeKind.Name))
             next = next + 1
-            i = i + 1
         }
         this.line(
             0, "inline Opt<" + emittedName + "> "
@@ -1142,10 +1106,7 @@ data class Emitter(
 
     fun emitNativeDeclarations(): Unit {
         this.setActiveTypeParams(List<Str>())
-        var i: Int = 0
-        while (i < this.nativeDecls.size()) {
-            val nativeInfo: CgNativeDecl = this.nativeDecls[i]
-            i = i + 1
+        for (*nativeInfo in this.nativeDecls) {
             if (nativeInfo.prelude) {
                 continue
             }
@@ -1169,9 +1130,7 @@ data class Emitter(
             }
             val params: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
             var paramTexts: List<Str> = List<Str>()
-            var p: Int = 0
-            while (p < params.size()) {
-                val param: AstXmlNode = params[p]
+            for (*param in params) {
                 val paramType: AstXmlNode = xmlChild(param, AstNodeKind.Type)
                 if (xmlIsEmpty(paramType)) {
                     this.fail(
@@ -1194,7 +1153,6 @@ data class Emitter(
                 } else {
                     paramTexts.append("const " + mapped + "& " + name)
                 }
-                p = p + 1
             }
             this.sourceComment(decl)
             val tmpl: Str = this.templateClause(xmlTypeParamNames(decl))
@@ -1291,19 +1249,51 @@ data class Emitter(
         if (xmlAttr(fn.decl, AstNodeAttributeKind.HasBody) != "true") {
             return false
         }
-        if (!this.referencedNames.has(xmlAttr(fn.decl, AstNodeAttributeKind.Name))) {
+        val name: Str = xmlAttr(fn.decl, AstNodeAttributeKind.Name)
+        if (!this.referencedNames.has(name)) {
             return false
         }
         val receiverName: Str = this.outerTypeName(fn.receiver)
         if (receiverName == "") {
             return true
         }
-        // A receiver that is the function's own type parameter says nothing - any type can
-        // be one.
+        // A receiver that is the function's own type parameter says nothing - any type
+        // can be one.
         if (xmlIsTypeParam(receiverName, fn.templateParams)) {
             return true
         }
-        return this.referencedTypes.has(receiverName)
+        if (this.referencedTypes.has(receiverName)) {
+            return true
+        }
+        // The name is called, but *no* body of it names its receiver's type: a program can
+        // call `"".isEmpty()` without ever naming `Str` (a literal receiver, an inferred
+        // local), and the call cannot be attributed to one overload. The whole group is
+        // emitted rather than none of it - the body the call reaches has to exist, and an
+        // unused overload is dead but valid C++.
+        return !this.preludeReceiverNamed(name)
+    }
+
+    // Whether any prelude body of `name` has its receiver's outer type name referenced by
+    // the program: the per-overload half of the rule above. When one of the group *is*
+    // attributable the type test is what tells the rest apart (`List`'s `smToYield` is not
+    // `Span`'s), so the members the program does not name stay unemitted.
+    fun preludeReceiverNamed(name: Str): Bool {
+        var i: Int = 0
+        while (i < this.functions.size()) {
+            val other: *CgFn = *this.functions[i]
+            i = i + 1
+            if (!other.prelude || xmlAttr(other.decl, AstNodeAttributeKind.HasBody) != "true") {
+                continue
+            }
+            if (xmlAttr(other.decl, AstNodeAttributeKind.Name) != name) {
+                continue
+            }
+            val otherReceiver: Str = this.outerTypeName(other.receiver)
+            if (otherReceiver != "" && this.referencedTypes.has(otherReceiver)) {
+                return true
+            }
+        }
+        return false
     }
 
     // Fills `referencedNames` and `referencedTypes` from the program - never from the
@@ -1311,10 +1301,7 @@ data class Emitter(
     // an emitted body may call another, and a native's signature is what says which types
     // a call reaches (`xs.toArray()` reaches an `Array`).
     fun collectProgramNames(): Unit {
-        var i: Int = 0
-        while (i < this.inputs.size()) {
-            val input: CgInput = this.inputs[i]
-            i = i + 1
+        for (*input in this.inputs) {
             if (!input.prelude) {
                 this.collectNames(input.module, *this.referencedNames)
             }
@@ -1391,15 +1378,12 @@ data class Emitter(
             this.nameKinds.insert("self", selfK)
         }
         val params: List<AstXmlNode> = xmlChildren(fn.decl, AstNodeKind.Param)
-        var i: Int = 0
-        while (i < params.size()) {
-            val param: AstXmlNode = params[i]
+        for (*param in params) {
             val paramType: AstXmlNode = xmlChild(param, AstNodeKind.Type)
             if (!xmlIsEmpty(paramType)) {
                 this.nameKinds.insert(xmlAttr(param, AstNodeAttributeKind.Name), this.kindOf(paramType))
                 this.localTypes.insert(xmlAttr(param, AstNodeAttributeKind.Name), paramType)
             }
-            i = i + 1
         }
     }
 
@@ -1551,9 +1535,7 @@ data class Emitter(
         }
         // The argv form's parameter is built from argc/argv, not passed.
         if (!mainArgs) {
-            var i: Int = 0
-            while (i < params0.size()) {
-                val param: AstXmlNode = params0[i]
+            for (*param in params0) {
                 val paramType: AstXmlNode = xmlChild(param, AstNodeKind.Type)
                 if (xmlIsEmpty(paramType)) {
                     this.fail(
@@ -1573,7 +1555,6 @@ data class Emitter(
                 if (this.failed) {
                     return
                 }
-                i = i + 1
             }
         }
         if (!hasSelf) {
@@ -1698,9 +1679,7 @@ data class Emitter(
             "", Dictionary<Str, Bool>(), Dictionary<Str, AstXmlNode>(),
             facts, fn.templateParams, inferred
         )
-        var i: Int = 0
-        while (i < this.statics.size()) {
-            val entry: CgStatic = this.statics[i]
+        for (*entry in this.statics) {
             val typeNode: AstXmlNode = xmlChild(entry.decl, AstNodeKind.Type)
             if (!xmlIsEmpty(typeNode)) {
                 info.statics.insert(
@@ -1708,7 +1687,6 @@ data class Emitter(
                     ilTypeText(typeNode)
                 )
             }
-            i = i + 1
         }
         return info
     }
@@ -2939,15 +2917,12 @@ data class Emitter(
         var declNode: AstXmlNode =
             AstXmlNode(AstNodeKind.DataClass, AstNodeCategory.DataClass, List<AstNodeAttribute>(), Array<AstXmlNode>())
         declNode.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, className))
-        var i: Int = 0
-        while (i < machine.fields.size()) {
-            val field: YldField = machine.fields[i]
+        for (*field in machine.fields) {
             var fieldNode: AstXmlNode =
                 AstXmlNode(AstNodeKind.Field, AstNodeCategory.None, List<AstNodeAttribute>(), Array<AstXmlNode>())
             fieldNode.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, field.name))
             xmlAddChild(fieldNode, this.renameRole(field.typeNode, AstNodeKind.Type))
             xmlAddChild(declNode, this.renameRole(fieldNode, AstNodeKind.Field))
-            i = i + 1
         }
         this.types.insert(className, declNode)
         this.machineDecl = declNode
@@ -2968,9 +2943,7 @@ data class Emitter(
             this.line(0, tmpl)
         }
         this.line(0, fmtStr("struct | {", className))
-        var i: Int = 0
-        while (i < machine.fields.size()) {
-            val field: YldField = machine.fields[i]
+        for (*field in machine.fields) {
             if (xmlIsEmpty(field.typeNode)) {
                 this.fail(decl, "yield: the field '" + field.name + "' has no type")
                 return
@@ -2979,18 +2952,14 @@ data class Emitter(
             if (this.failed) {
                 return
             }
-            i = i + 1
         }
         for (*method in machine.methods) {
             var params: List<Str> = List<Str>()
-            var p: Int = 0
-            while (p < method.params.size()) {
-                val param: YldParam = method.params[p]
+            for (*param in method.params) {
                 params.append(this.type(param.typeNode) + " " + param.name)
                 if (this.failed) {
                     return
                 }
-                p = p + 1
             }
             var result: Str = "Opt<" + this.type(elementType) + ">"
             if (method.name == "advance") {
@@ -3014,14 +2983,11 @@ data class Emitter(
             this.curReturnType = elementType
             // The method's own parameters are what tells a pointer receiver from a value
             // one (`*value = x` writes through it).
-            p = 0
-            while (p < method.params.size()) {
-                val param: YldParam = method.params[p]
+            for (*param in method.params) {
                 if (!xmlIsEmpty(param.typeNode)) {
                     this.nameKinds.insert(param.name, this.kindOf(param.typeNode))
                     this.localTypes.insert(param.name, param.typeNode)
                 }
-                p = p + 1
             }
             // The body goes through the same two paths as any other (the IL is what a
             // machine's methods must be expressible in, since the machine *is* the
@@ -3073,13 +3039,11 @@ data class Emitter(
             info.paramTypes.append(param.typeNode)
         }
         i = 0
-        while (i < this.statics.size()) {
-            val entry: CgStatic = this.statics[i]
+        for (*entry in this.statics) {
             val typeNode: AstXmlNode = xmlChild(entry.decl, AstNodeKind.Type)
             if (!xmlIsEmpty(typeNode)) {
                 info.statics.insert(xmlAttr(entry.decl, AstNodeAttributeKind.Name), ilTypeText(typeNode))
             }
-            i = i + 1
         }
         return info
     }
@@ -3662,9 +3626,21 @@ data class Emitter(
     // is unwrapped with `.get()`, and a raw pointer is already that address. A handle
     // receiver keeps its form: a counted reference stays a counted reference, so a
     // method that takes `this: &T` can store `self` and keep its refcount.
+    //
+    // A bare `this` is the one receiver that *is* that address already: the emitted
+    // receiver is the very `T* self` the method was called with, so the call passes the
+    // pointer. Spelling it out - `simse_addressOf((*self))`, a dereference and then the
+    // address of the dereference - copies nothing but *reads* like a copy of the whole
+    // receiver, at every call a method makes on itself (`Codegen`'s own ring has 1,741
+    // of them), and the emitted C++ is supposed to be readable.
     fun receiverArg(pattern: *AstXmlNode, recv: *AstXmlNode): Str {
         if (this.isHandleType(pattern)) {
             return this.expr(recv, 12, xmlEmptyNode())
+        }
+        if (this.selfKind == NameKind.Value && xmlKind(recv) == AstNodeCategory.ExprName
+            && xmlAttr(recv, AstNodeAttributeKind.Name) == "this"
+        ) {
+            return this.selfPointer()
         }
         val recvType: AstXmlNode = this.inferType(recv)
         if (!xmlIsEmpty(recvType)) {
@@ -3679,6 +3655,17 @@ data class Emitter(
             }
         }
         return fmtStr("simse_addressOf(|)", this.expr(recv, 12, xmlEmptyNode()))
+    }
+
+    // The emitted receiver, as the raw pointer it already is: the `T* self` a value
+    // receiver is, or C++'s `this` inside a closure class. That pointer is the receiver's
+    // address, so a call on `this` passes it and a borrow of `this` (`*this`) is it, with
+    // no dereference to spell.
+    fun selfPointer(): Str {
+        if (this.inClosureMethod) {
+            return "this"
+        }
+        return "self"
     }
 
     // The receiver argument for a lowered *native* call: the host's own signature
@@ -4104,6 +4091,12 @@ data class Emitter(
                     // copy (specs/memory-model.md). A plain name is an lvalue, so
                     // `&name`; anything else may be a temporary, which
                     // simse_addressOf binds for the call.
+                    if (this.selfKind == NameKind.Value && xmlKind(operandNode) == AstNodeCategory.ExprName
+                        && xmlAttr(operandNode, AstNodeAttributeKind.Name) == "this"
+                    ) {
+                        // The receiver's address is the receiver: `*this` is `self`.
+                        return this.selfPointer()
+                    }
                     if (xmlKind(operandNode) == AstNodeCategory.ExprName) {
                         return "&" + operand
                     }

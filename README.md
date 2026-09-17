@@ -183,17 +183,17 @@ that pack their trailing arguments into a last `List` parameter, file I/O, the
 `main(args)` form, `yield`, and `for` over anything with a `smToYield` - a container,
 or a state machine itself),
 a self-hosted compiler that reproduces its own output byte for byte, 56 in-process
-tests, five differential stage tests and 40 end-to-end stress programs.
+tests, five differential stage tests and 41 end-to-end stress programs.
 
 On speed (`bun tools/bootstrap.js`, release, this machine - the range is machine load,
 best of 5 runs idle):
 
 | | |
 | --- | --- |
-| the compiler transpiling its own source tree | **16,735 lines of Simse in 1.08 s** (45,266 lines of C++ out, ~15.4k lines/s) |
-| the same tree through the hand-written C++ ring | 0.27 s (the Simse ring is ~4x that; the flat-body work - every declaration at the top of its body - costs the Simse ring a share of the transpile, and the C++ ring nothing) |
-| compiling the published `cppsrc/simse_bootstrap.cpp` with `cl.exe` | ~17 s release (`/O2 /Ob3`), ~3.1 s debug |
-| **from the published file to a compiler that reproduces it** | **~18 s**, then ~1.1 s per self-transpile |
+| the compiler transpiling its own source tree | **16,825 lines of Simse in 0.89 s** (45,439 lines of C++ out, ~18.8k lines/s) |
+| the same tree through the hand-written C++ ring | 0.31 s (the Simse ring is ~2.9x that - the flat-body work, every declaration at the top of its body, costs the Simse ring a share of the transpile, and the C++ ring nothing; the rest is the `.kt` ring's value-semantics AST, `impl_specs/capability-matrix.md` T66) |
+| compiling the published `cppsrc/simse_bootstrap.cpp` with `cl.exe` | ~18 s release (`/O2 /Ob3`), ~3.1 s debug |
+| **from the published file to a compiler that reproduces it** | **~19 s**, then ~0.9 s per self-transpile |
 
 Not there yet, in rough order of how soon a user would miss it: `for` over a
 `Dictionary` and ranges, string interpolation, closed unions + exhaustive `when`, a

@@ -25,10 +25,8 @@ inline Char simse_str_charAt(const Str& self, Int index) {
     return (Char) self[index];
 }
 
-inline Bool simse_str_isEmpty(const Str& self) {
-    return self.empty();
-}
-
+// `Str.isEmpty()` is the prelude's own body (cppsrc/rtl/rtl.kt), not a native: `size()`
+// is the built-in it needs.
 inline Bool simse_str_isSpaceByte(Char ch) {
     return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r';
 }
@@ -189,16 +187,4 @@ inline Str simse_char_toString(Char self) {
 
 inline Str simse_bool_toString(Bool self) {
     return self ? "true" : "false";
-}
-
-// ---- min / max ------------------------------------------------------------
-
-template <class T>
-inline T simse_min(const T& a, const T& b) {
-    return b < a ? b : a;
-}
-
-template <class T>
-inline T simse_max(const T& a, const T& b) {
-    return a < b ? b : a;
 }

@@ -166,7 +166,7 @@ simse_transpile <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>
 ```bat
 cmake-build-debug\simse_tests.exe           :: 56 tests: fixtures, goldens, round-trips
 cmake-build-debug\simse_tests.exe --update  :: regenerate the goldens (deliberate changes only)
-stress.bat                                  :: transpile, compile and run the 35 stress programs
+stress.bat                                  :: transpile, compile and run the 41 stress programs
 stress.bat --list                           :: what the corpus contains
 stress.bat --filter strings                 :: one case
 stress.bat --simse cmake-build-debug\simse_transpile.exe

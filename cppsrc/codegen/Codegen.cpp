@@ -928,7 +928,32 @@ namespace codegen {
                     std::find(fn.decl->functionTypeParams.begin(),
                               fn.decl->functionTypeParams.end(), receiverName)
                     != fn.decl->functionTypeParams.end();
-                return isTypeParam || referencedTypes.count(receiverName) > 0;
+                if (isTypeParam) return true;
+                if (referencedTypes.count(receiverName) > 0) return true;
+                // The name is called, but *no* body of it names its receiver's type: a
+                // program can call `"".isEmpty()` without ever naming `Str` (a literal
+                // receiver, an inferred local), and the call cannot be attributed to one
+                // overload. The whole group is emitted rather than none of it - the body
+                // the call reaches has to exist, and an unused overload is dead but valid
+                // C++.
+                return !preludeReceiverNamed(fn.decl->name);
+            }
+
+            // Whether any prelude body of `name` has its receiver's outer type name
+            // referenced by the program: the per-overload half of the rule above. When one
+            // of the group *is* attributable the type test is what tells the rest apart
+            // (`List`'s `smToYield` is not `Span`'s), so the members the program does not
+            // name stay unemitted.
+            bool preludeReceiverNamed(const Str &name) {
+                for (const Fn &other: functions) {
+                    if (!other.prelude || !other.decl->hasBody) continue;
+                    if (other.decl->name != name) continue;
+                    const Str otherReceiver = outerTypeName(other.receiver);
+                    if (!otherReceiver.empty() && referencedTypes.count(otherReceiver) > 0) {
+                        return true;
+                    }
+                }
+                return false;
             }
 
             // Fills `referencedNames` and `referencedTypes` from the program - never from
@@ -2715,9 +2740,19 @@ namespace codegen {
             // and a raw pointer is already that address. A handle receiver keeps its
             // form: a counted reference stays a counted reference, so a method that
             // takes `this: &T` can store `self` and keep its refcount.
+            //
+            // A bare `this` is the one receiver that *is* that address already: the
+            // emitted receiver is the very `T* self` the method was called with, so the
+            // call passes the pointer. Spelling it out - `simse_addressOf((*self))`, a
+            // dereference and then the address of the dereference - copies nothing but
+            // *reads* like a copy of the whole receiver, at every call a method makes on
+            // itself, and the emitted C++ is supposed to be readable.
             Str receiverArg(const ast::TypePtr &pattern, const ast::Expr &recv) {
                 if (isHandleType(pattern.get())) {
                     return expr(recv, 12);
+                }
+                if (selfKind == NameKind::Value && recv.kind == ExprKind::Name && recv.text == "this") {
+                    return selfPointer();
                 }
                 ast::TypePtr recvType = inferType(recv);
                 if (recvType) {
@@ -2730,6 +2765,15 @@ namespace codegen {
                     }
                 }
                 return "simse_addressOf(" + expr(recv, 12) + ")";
+            }
+
+            // The emitted receiver, as the raw pointer it already is: the `T* self` a
+            // value receiver is, or C++'s `this` inside a closure class. That pointer is
+            // the receiver's address, so a call on `this` passes it and a borrow of
+            // `this` (`*this`) is it, with no dereference to spell.
+            Str selfPointer() const {
+                if (inClosureMethod) return "this";
+                return "self";
             }
 
             // The receiver argument for a lowered *native* call: the host's own
@@ -3005,6 +3049,11 @@ namespace codegen {
                             // value, no copy (specs/memory-model.md). A plain name
                             // is an lvalue, so `&name`; anything else may be a
                             // temporary, which simse_addressOf binds for the call.
+                            if (selfKind == NameKind::Value && e.lhs && e.lhs->kind == ExprKind::Name
+                                && e.lhs->text == "this") {
+                                // The receiver's address is the receiver: `*this` is `self`.
+                                return selfPointer();
+                            }
                             if (e.lhs && e.lhs->kind == ExprKind::Name) return "&" + operand;
                             return "simse_addressOf(" + operand + ")";
                         }

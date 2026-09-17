@@ -23,14 +23,16 @@ reified generics, packages and imports, `main()` and `main(args)`, and a
 
 **The compiler.** Self-hosted to a fixed point: the transpiled compiler
 reproduces its own output byte for byte. Two implementations (hand-written C++
-and Simse) with five differential stage tests, 56 in-process tests and 40
+and Simse) with five differential stage tests, 56 in-process tests and 41
 end-to-end stress programs.
 
-**The performance story.** Transpiling the compiler's own 16,735-line source tree
-takes ~1.08 s (release, ~15.4k lines/s) with ~31 MB peak working set; the
-hand-written C++ ring does the same work in ~0.27 s, so the self-hosted ring is
-**~4.0x slower** - the price of the uniform AST and value-semantics
-containers, not of the language's design. The runtime's dictionary is the RTL's
+**The performance story.** Transpiling the compiler's own 16,825-line source tree
+takes ~0.89 s (release, ~18.8k lines/s) with ~31 MB peak working set; the
+hand-written C++ ring does the same work in ~0.31 s, so the self-hosted ring is
+**~2.9x slower** - the price of the uniform AST and value-semantics containers,
+not of the language's design (the ring was ~4.0x before the copying the type
+questions and the lowering passes did per call was removed;
+`impl_specs/capability-matrix.md` T66). The runtime's dictionary is the RTL's
 own: `SmDictionary` keeps one row per entry, with the cached hash and chain link
 next to the key and value, so a probe touches one cache line and iteration is a
 pointer walk (measured ~8x and deep copies ~5x the `std::unordered_map` it

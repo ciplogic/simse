@@ -605,7 +605,10 @@ Do these only when asked; roughly prioritized:
 - **A value receiver is `T* self`** (T47): method signatures, call sites
   (`ns_f(simse_addressOf(x))`) and bodies (`self->field`, a bare `this` reading as
   `(*self)`) all follow it, while `this: &T` stays `std::shared_ptr<T> self` and
-  `this: *T` stays `T* self`. The hand-written differential drivers
+  `this: *T` stays `T* self`. A call on the bare `this` is the one receiver that
+  needs no address taken - the emitted receiver already is one - so it is
+  `ns_f(self)` (C++'s `this` in a closure class), and `*this` is `self` too. The
+  hand-written differential drivers
   (`tests/*_simse_main.cpp`) call emitted receiver functions directly, so they pass
   `&scanner` - and a *native* extension is the one call the emitter passes the
   receiver expression to unchanged, because the host's C++ signature decides.

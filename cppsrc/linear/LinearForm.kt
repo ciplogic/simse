@@ -1350,7 +1350,10 @@ data class IlExtractor(
     fun addVar(name: Str, typeText: Str, kind: IlVarKind, typeNode: AstXmlNode): Int {
         this.out.vars.append(IlVar(name, this.typeIndex(typeText, typeNode), kind))
         this.varAt.insert(name, this.out.vars.size() - 1)
-        this.frameChanged()
+        // The frame the type questions read is kept up to date *in place*: it is only ever
+        // appended to, so a new slot is one insert - a full rebuild is what the first
+        // question after a change used to pay.
+        this.frameAdd(name, typeNode)
         return this.out.vars.size() - 1
     }
 
@@ -1362,7 +1365,7 @@ data class IlExtractor(
             return
         }
         this.out.vars[slot].typeIndex = this.typeIndex(ilTypeText(typeNode), typeNode)
-        this.frameChanged()
+        this.frameAdd(this.out.vars[slot].name, typeNode)
     }
 
     // The type table: text for the dump, the node (when there is one) for a backend. The
@@ -1372,7 +1375,7 @@ data class IlExtractor(
         if (this.typeAt.has(text)) {
             val index: Int = this.typeAt.get(text).value()
             if (!xmlIsEmpty(node) && index < this.out.typeNodes.size()) {
-                val existing: AstXmlNode = this.out.typeNodes[index]
+                val existing: *AstXmlNode = *this.out.typeNodes[index]
                 if (xmlIsEmpty(existing)) {
                     this.out.typeNodes[index] = node
                 }
@@ -1470,6 +1473,16 @@ data class IlExtractor(
     // synthesizes.
     fun frameChanged(): Unit {
         this.frameNamesStale = true
+    }
+
+    // One new (or newly typed) binding of the frame. A frame that has not been built yet
+    // stays unbuilt - the first question builds it whole - and one that has takes the
+    // single entry: only `addVar`/`setSlotType` ever change it, and both only add.
+    fun frameAdd(name: Str, typeNode: AstXmlNode): Unit {
+        if (this.frameNamesStale || xmlIsEmpty(typeNode)) {
+            return
+        }
+        this.frameNames.insert(name, typeNode)
     }
 
     // The context, borrowed: the same one every question about this body is asked with.
@@ -1673,13 +1686,10 @@ data class IlExtractor(
 
     fun signatureText(): Str {
         var params: List<Str> = List<Str>()
-        var i: Int = 0
-        while (i < this.out.vars.size()) {
-            val slot: IlVar = this.out.vars[i]
+        for (*slot in this.out.vars) {
             if (slot.kind == IlVarKind.Argument) {
                 params.append(this.out.types[slot.typeIndex] + " " + slot.name)
             }
-            i = i + 1
         }
         // A lambda's result is whatever its body returns, which C++ deduces; a function's
         // is its declared type.
@@ -3143,13 +3153,10 @@ data class IlExtractor(
             }
             ci = ci + 1
         }
-        var vi: Int = 0
-        while (vi < innerBody.vars.size()) {
-            val slot: IlVar = innerBody.vars[vi]
+        for (*slot in innerBody.vars) {
             if (slot.kind == IlVarKind.Argument && slot.name != "self") {
                 closure.params.append(slot)
             }
-            vi = vi + 1
         }
         closure.signature = "(" + ilJoinList(captured, ", ") + ") " + innerBody.signature
         this.unit.lambdas.append(innerBody)

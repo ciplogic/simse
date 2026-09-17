@@ -190,9 +190,18 @@ data class Parser(
     // `parent` is a non-owning pointer, so the append replaces the caller's
     // `Children` handle even though the node itself is not passed by value.
     fun attach(parent: *AstXmlNode, role: AstNodeKind, child: *AstXmlNode): Unit {
+        xmlAddChild(parent, this.roleOf(child, role))
+    }
+
+    // `child` under `role`, for a caller that is collecting a node's children itself:
+    // appending them one at a time through `xmlAddChild` rebuilds the whole children
+    // array per child (an append is an array-to-list-to-array round trip), so a node
+    // with k children costs O(k*k) - a call collects its callee and arguments this way
+    // and builds the array once.
+    fun roleOf(child: *AstXmlNode, role: AstNodeKind): AstXmlNode {
         var renamed: AstXmlNode = child
         renamed.name = role
-        xmlAddChild(parent, renamed)
+        return renamed
     }
 
     // A container node is one whose children are just `children`: the array is
@@ -1674,9 +1683,12 @@ data class Parser(
         if (this.failed) {
             return this.emptyExpr()
         }
+        // One list for the whole walk, cleared per call: the arguments of the call being
+        // parsed (they are copied into the node below), not one list per iteration.
+        var args: List<AstXmlNode> = List<AstXmlNode>()
         while (true) {
             if (this.matchText("(")) {
-                var args: List<AstXmlNode> = List<AstXmlNode>()
+                args.clear()
                 this.skipNewlines()
                 if (!this.checkText(")")) {
                     val first: ExprNode = this.parseExpr(0)
@@ -1698,13 +1710,16 @@ data class Parser(
                 if (!this.expectText(")")) {
                     return this.emptyExpr()
                 }
+                var kids: List<AstXmlNode> = List<AstXmlNode>()
+                kids.append(this.roleOf(expr.node, AstNodeKind.Callee))
+                var a: Int = 0
+                while (a < args.size()) {
+                    kids.append(this.roleOf(*args[a], AstNodeKind.Arg))
+                    a = a + 1
+                }
                 var attrs: List<AstNodeAttribute> = this.posAttrs(expr.line, expr.column)
                 var node: AstXmlNode =
-                    AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCall, attrs, Array<AstXmlNode>())
-                this.attach(node, AstNodeKind.Callee, expr.node)
-                for (*arg in args) {
-                    this.attach(node, AstNodeKind.Arg, arg)
-                }
+                    AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCall, attrs, kids.toArray())
                 expr = ExprNode(node, expr.line, expr.column)
             } else if (this.matchText("[")) {
                 this.skipNewlines()

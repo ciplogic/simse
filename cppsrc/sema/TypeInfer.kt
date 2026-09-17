@@ -700,6 +700,11 @@ data class SemBody(
 
 // ---- the pass -------------------------------------------------------------
 
+// The empty outermost scope, for an inference that is not asked about one body's frame
+// (`semInferTypes` seeds the frame into its own pushed scope): a shared, never written
+// dictionary, so `lookup` always has one to read.
+val semNoScope: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
+
 // Both the facts and the body are **borrowed**, not copied: the pass only reads
 // them, and a body is annotated once per function, so copying the program tables
 // (hundreds of functions, three dictionaries) per body would dominate the run.
@@ -712,7 +717,13 @@ data class SemInfer(
 // spell - a name holding a state machine is `..T`, and `Stmt.type` never carries
 // that. A frame is keyed by name (the lowering gives each scope its own
 // variables), so this is what the backend seeds a body's frame from.
-    var types: Dictionary<Str, AstXmlNode>
+    var types: Dictionary<Str, AstXmlNode>,
+
+// The *outermost* scope, borrowed from the caller (`typeOf`): the extractor's
+// frame is one dictionary per body, and re-seeding it into a scope copied the
+// whole frame per question - two thirds of every question's cost, measured. It is
+// read only after the pushed scopes, so anything the inference marks still wins.
+    var baseScope: *Dictionary<Str, AstXmlNode>
 ) {
     fun pushScope(): Unit {
         this.scopes.append(Dictionary<Str, AstXmlNode>())
@@ -724,20 +735,11 @@ data class SemInfer(
 
     // One expression, typed against the names the caller knows. The extractor's frame
     // is flat (one binding per name, no scopes), which is exactly what `names` is; the
-    // scope is pushed and popped so the call leaves nothing behind.
+    // scope is pushed and popped so the call leaves nothing behind, and the frame itself
+    // is *borrowed* as the outermost scope rather than copied into the pushed one.
     fun typeOf(e: *AstXmlNode, names: *Dictionary<Str, AstXmlNode>): AstXmlNode {
         this.pushScope()
-        val known: List<Str> = names.keys()
-        var i: Int = 0
-        while (i < known.size()) {
-            val typeNode: AstXmlNode = names.get(known[i]).value()
-            // The C++ ring marks only the names that carry a type; an empty node is this
-            // ring's "no type".
-            if (!xmlIsEmpty(typeNode)) {
-                this.mark(known[i], typeNode)
-            }
-            i = i + 1
-        }
+        this.baseScope = names
         val result: AstXmlNode = this.infer(e)
         this.popScope()
         return result
@@ -759,6 +761,9 @@ data class SemInfer(
                 return this.scopes[i].get(name).value()
             }
             i = i - 1
+        }
+        if (this.baseScope.has(name)) {
+            return this.baseScope.get(name).value()
         }
         return xmlEmptyNode()
     }
@@ -1368,7 +1373,9 @@ fun semInferTypes(
     body: *List<AstXmlNode>, facts: *SemFacts, ctx: *SemBody,
     inferred: *Dictionary<Str, AstXmlNode>
 ): List<AstXmlNode> {
-    val infer: SemInfer = SemInfer(facts, ctx, List<Dictionary<Str, AstXmlNode>>(), Dictionary<Str, AstXmlNode>())
+    val infer: SemInfer = SemInfer(
+        facts, ctx, List<Dictionary<Str, AstXmlNode>>(), Dictionary<Str, AstXmlNode>(), *semNoScope
+    )
     infer.pushScope()
     val params: List<AstXmlNode> = xmlChildren(ctx.decl, AstNodeKind.Param)
     var i: Int = 0
@@ -1421,7 +1428,9 @@ fun semTypeOfExpr(
     // The C++ ring seeds the frame in the inference's constructor; this ring seeds it at
     // each entry point instead, so the same frame is built here before the one expression
     // is typed.
-    val infer: SemInfer = SemInfer(facts, ctx, List<Dictionary<Str, AstXmlNode>>(), Dictionary<Str, AstXmlNode>())
+    val infer: SemInfer = SemInfer(
+        facts, ctx, List<Dictionary<Str, AstXmlNode>>(), Dictionary<Str, AstXmlNode>(), *semNoScope
+    )
     infer.pushScope()
     val params: List<AstXmlNode> = xmlChildren(ctx.decl, AstNodeKind.Param)
     var i: Int = 0

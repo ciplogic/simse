@@ -417,9 +417,9 @@ var source: Str)
             // A raw pointer to the scanner's own `source`; the view must not
             // copy or count the text (see cppsrc/rtl/span.hpp).
             val view: StrView = spanOfStr(this.source).slice(this.pos)
-            var i = 0
-            while (i < this.rules.size()) {
-                val rule: TokenMatcher = this.rules[i]
+            // The pointer form: a matcher is a value, so the index walk copied one per
+            // rule per token position, and the matcher itself is reached through it.
+            for (*rule in this.rules) {
                 val matchLength: Int = rule.match(view)
                 if (matchLength > 0) {
                     val startPos: SourcePos = SourcePos(this.pos, this.line, this.column)
@@ -428,7 +428,6 @@ var source: Str)
                     this.advance(matchLength)
                     return Res<Token>.ok(token)
                 }
-                i = i + 1
             }
             return Res<Token>.err(unexpectedCharacterMessage(this.line, this.column, escapedSnippet(view, 10)))
         }
@@ -468,13 +467,10 @@ fun readFileAndSkipSpacesTokens(scanner: *Scanner, fileName: Str): Res<List<Toke
 
     var tokens: List<Token> = List<Token>()
     val all: List<Token> = allResult.value
-    var i = 0
-    while (i < all.size()) {
-        val token: Token = all[i]
+    for (*token in all) {
         if (!isSpaceBasedToken(token.kind)) {
             tokens.append(token)
         }
-        i = i + 1
     }
     return Res<List<Token>>.ok(tokens)
 }

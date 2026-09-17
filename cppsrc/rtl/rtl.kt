@@ -8,8 +8,11 @@
 // and a prelude function *with* a body is emitted into the amalgamation as any
 // other function (`smToYield` below is the first one - impl_specs/for.md).
 //
-// The explicit `this` parameter makes each declaration an extension on its
-// receiver's type; the explicit symbol names the C++ implementation.
+// The explicit `this` parameter makes a `native` declaration an extension on its
+// receiver's type, and the explicit symbol names the C++ implementation; a function with
+// a *body* writes the receiver type before the name instead (`fun Str.isEmpty()`), which
+// is the form the parser marks a receiver - see `impl_specs/rtl-abi.md`, "The receiver
+// spelling differs from a native's".
 
 package rtl
 
@@ -149,11 +152,44 @@ native("simse_str_appendStrPtr") fun appendStrPtr(this: Str, value: *Str): Unit
 
 // The format text with each `|` replaced, in order, by one item: how an emitter
 // writes a fixed shape (`"(", ")"`, `"<|::|>"`) without building a temporary per
-// `+`. The length is known before anything is written - the format minus the
-// points it fills, plus every item - so the text is assembled in one buffer.
-// What does not line up loses nothing: with no `|` left the remaining items are
-// appended, and with no item left the rest of the format is appended verbatim.
-native("simse_fmtStr") fun fmtStr(fmt: *Str, items: *List<Str>): Str
+// `+`. The shape is one item per `|`, and the text is written once into a reserved
+// buffer; a call whose points and items do not line up - or that passes no item list -
+// gets the format back, unfilled, rather than a half-filled result.
+//
+// The body is the language's own (`impl_specs/rtl-abi.md`): `charAt`, `append`,
+// `appendStr` and `reserve` are the primitives it is written over, so nothing about
+// the formatting is C++ any more.
+fun fmtStr(fmt: *Str, items: *List<Str>): Str {
+    if (items == null) {
+        return fmt
+    }
+    var points: Int = 0
+    var i: Int = 0
+    while (i < fmt.size()) {
+        if (fmt.charAt(i) == '|') {
+            points = points + 1
+        }
+        i = i + 1
+    }
+    if (points != items.size()) {
+        return fmt
+    }
+    var out: Str = ""
+    out.reserve(fmt.size())
+    var used: Int = 0
+    i = 0
+    while (i < fmt.size()) {
+        val ch: Char = fmt.charAt(i)
+        if (ch == '|') {
+            out.appendStr(items[used])
+            used = used + 1
+        } else {
+            out.append(ch)
+        }
+        i = i + 1
+    }
+    return out
+}
 
 // Pre-allocates the buffer for a run of `append`/`appendStr` calls: the text is
 // then written once, instead of the accumulated prefix being copied at every
@@ -174,7 +210,18 @@ native("simse_str_trim") fun trim(this: Str): Str
 native("simse_str_split") fun split(this: Str, separator: Str): List<Str>
 native("simse_str_toUpper") fun toUpper(this: Str): Str
 native("simse_str_toLower") fun toLower(this: Str): Str
-native("simse_str_isEmpty") fun isEmpty(this: Str): Bool
+
+// `isEmpty` is the language's own body, not C++ (impl_specs/rtl-abi.md): `size()` is the
+// built-in it needs, so nothing here is native. Note the *receiver spelling*: a `native`
+// declaration writes its receiver as the explicit first parameter (`this: Str`), but a
+// function *with* a body has to write the receiver type before the name - that form is
+// what marks it an extension, and only the receiver-type form is resolved at a member
+// call (the explicit `this` is a plain function whose first parameter is named `this`).
+// It also drops the read-back a native's value receiver costs: the emitted parameter is
+// `Str* self` either way, so `xmlAttr(...).isEmpty()` no longer spells `(*ptr)`.
+fun Str.isEmpty(): Bool {
+    return this.size() == 0
+}
 
 // Whole-string parses; a malformed string yields `Opt.none()` (no exceptions).
 native("simse_str_toInt") fun toInt(this: Str): Opt<Int>
@@ -201,8 +248,22 @@ native("simse_bool_toString") fun toString(this: Bool): Str
 
 // ---- min / max ------------------------------------------------------------
 
-native("simse_min") fun min(a: Int, b: Int): Int
-native("simse_max") fun max(a: Int, b: Int): Int
+// The smaller/larger of two values: `<` on the type is all the body needs, so both are
+// one generic the language itself writes (reified per instantiation, like any generic
+// function) rather than a native per type.
+fun min<T>(a: T, b: T): T {
+    if (a < b) {
+        return a
+    }
+    return b
+}
+
+fun max<T>(a: T, b: T): T {
+    if (a > b) {
+        return a
+    }
+    return b
+}
 
 // ---- time -----------------------------------------------------------------
 

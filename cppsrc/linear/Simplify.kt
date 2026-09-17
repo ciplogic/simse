@@ -41,7 +41,10 @@ fun linIsBlock(stmt: *AstXmlNode): Bool {
     return xmlKind(stmt) == AstNodeCategory.StmtBlock
 }
 
-// The statements of a `StmtBlock` (its `Body` child's `Stmt` children).
+// The statements of a `StmtBlock` (its `Body` child's `Stmt` children). A caller that
+// only *reads* them walks the block in place instead (`linStmtJumpsTo` / `linStmtCrosses`):
+// this form copies every statement of the block, and the label scan runs once per label
+// of the body.
 fun linBlockStmts(stmt: *AstXmlNode): List<AstXmlNode> {
     return xmlChildren(xmlChild(stmt, AstNodeKind.Body), AstNodeKind.Stmt)
 }
@@ -93,7 +96,8 @@ fun linJumpCrosses(
 }
 
 // Every jump inside `stmt` - each of them running after everything before the
-// top-level statement it sits in - tested against the spliced declarations.
+// top-level statement it sits in - tested against the spliced declarations. The
+// block's statements are walked in place (see `linStmtJumpsTo`).
 fun linStmtCrosses(
     stmt: *AstXmlNode, at: Int, decls: *List<Int>, labelNames: *List<Str>,
     labelAt: *List<Int>
@@ -104,10 +108,15 @@ fun linStmtCrosses(
     if (!linIsBlock(stmt)) {
         return false
     }
-    val body: List<AstXmlNode> = linBlockStmts(stmt)
-    for (*item in body) {
-        if (linStmtCrosses(item, at, decls, labelNames, labelAt)) {
-            return true
+    for (*child in stmt.Children) {
+        if (child.name == AstNodeKind.Body) {
+            for (*item in child.Children) {
+                if (item.name == AstNodeKind.Stmt
+                    && linStmtCrosses(item, at, decls, labelNames, labelAt)
+                ) {
+                    return true
+                }
+            }
         }
     }
     return false
@@ -199,23 +208,41 @@ fun linSpliceIsSafe(stmts: *List<AstXmlNode>, bodies: *List<List<AstXmlNode>>, i
     return true
 }
 
+// Whether the statement - or anything inside the block it is - jumps to `name`. Read
+// through the block's nodes: `linBlockStmts` would copy every statement of the block,
+// and this scan runs once per *label* of the body.
+fun linStmtJumpsTo(stmt: *AstXmlNode, name: Str): Bool {
+    if ((linIsGoto(stmt) || linIsCondJump(stmt))
+        && xmlAttr(stmt, AstNodeAttributeKind.Name) == name
+    ) {
+        return true
+    }
+    if (!linIsBlock(stmt)) {
+        return false
+    }
+    for (*child in stmt.Children) {
+        if (child.name == AstNodeKind.Body) {
+            for (*item in child.Children) {
+                if (item.name == AstNodeKind.Stmt && linStmtJumpsTo(item, name)) {
+                    return true
+                }
+            }
+        }
+    }
+    return false
+}
+
 // A label belongs to the sequence it sits in, but a jump to it may sit in any
 // scope inside that sequence: the expression lowering wraps a jump in the block
 // that carries its temporaries, and `break`/`continue` jump out of the body they
 // are written in. The scan therefore looks through blocks.
 fun linJumpsTo(stmts: *List<AstXmlNode>, name: Str): Bool {
-    for (*stmt in stmts) {
-        if ((linIsGoto(stmt) || linIsCondJump(stmt))
-            && xmlAttr(stmt, AstNodeAttributeKind.Name) == name
-        ) {
+    var i: Int = 0
+    while (i < stmts.size()) {
+        if (linStmtJumpsTo(*stmts[i], name)) {
             return true
         }
-        if (linIsBlock(stmt)) {
-            val body: List<AstXmlNode> = linBlockStmts(stmt)
-            if (linJumpsTo(body, name)) {
-                return true
-            }
-        }
+        i = i + 1
     }
     return false
 }
@@ -244,7 +271,9 @@ data class LinSimplifier(
         var out: List<AstXmlNode> = List<AstXmlNode>()
         var i: Int = 0
         while (i < stmts.size()) {
-            val stmt: AstXmlNode = stmts[i]
+            // The *pointer* form: a statement is a value, so binding it by value here and
+            // appending the binding copied every statement twice per pass.
+            val stmt: *AstXmlNode = *stmts[i]
             if ((linIsGoto(stmt) || linIsCondJump(stmt)) && i + 1 < stmts.size()
                 && linIsLabel(stmts[i + 1])
                 && xmlAttr(stmts[i + 1], AstNodeAttributeKind.Name) == xmlAttr(stmt, AstNodeAttributeKind.Name)
@@ -281,7 +310,7 @@ data class LinSimplifier(
         var out: List<AstXmlNode> = List<AstXmlNode>()
         var i: Int = 0
         while (i < stmts.size()) {
-            val stmt: AstXmlNode = stmts[i]
+            val stmt: *AstXmlNode = *stmts[i]
             if (linIsLabel(stmt) && !linJumpsTo(stmts, xmlAttr(stmt, AstNodeAttributeKind.Name))) {
                 this.changed = true
             } else {
@@ -425,19 +454,16 @@ fun simNameAttrs(like: *AstXmlNode, name: Str): List<AstNodeAttribute> {
 // Every name a body binds: the declarations of its statements, at any depth. A use of one
 // of those inside a lambda is the lambda's own wherever it stands, so the enclosing scopes
 // must not rewrite it, and the lambda's own pass is what names it.
-fun simBoundNames(body: AstXmlNode, bound: List<Str>): List<Str> {
+fun simBoundNames(body: *AstXmlNode, bound: List<Str>): List<Str> {
     var names: List<Str> = bound
     val stmts: List<AstXmlNode> = xmlChildren(body, AstNodeKind.Stmt)
-    var i: Int = 0
-    while (i < stmts.size()) {
-        val stmt: AstXmlNode = stmts[i]
+    for (*stmt in stmts) {
         if (xmlKind(stmt) == AstNodeCategory.StmtVarDecl) {
             names.append(xmlAttr(stmt, AstNodeAttributeKind.Name))
         }
         names = simBoundNames(xmlChild(stmt, AstNodeKind.Body), names)
         names = simBoundNames(xmlChild(stmt, AstNodeKind.Then), names)
         names = simBoundNames(xmlChild(stmt, AstNodeKind.Else), names)
-        i = i + 1
     }
     return names
 }
@@ -451,7 +477,9 @@ data class SimRenamer(
     fun renamedTo(name: Str): Str {
         var i: Int = this.scopes.size() - 1
         while (i >= 0) {
-            val scope: SimRenameScope = this.scopes[i]
+            // The scope is borrowed: a `SimRenameScope` holds a dictionary, so binding it
+            // by value copied that dictionary at every name the walk asks about.
+            val scope: *SimRenameScope = *this.scopes[i]
             if (scope.renamed.has(name)) {
                 return scope.renamed.get(name).value()
             }
@@ -478,12 +506,10 @@ data class SimRenamer(
     // One statement list: name its own declarations first - a use may stand before the
     // declaration it means (`hoisting.kt`), and the scope answers for the whole list
     // either way - then rewrite the list with that scope pushed.
-    fun inList(stmts: List<AstXmlNode>): List<AstXmlNode> {
+    fun inList(stmts: *List<AstXmlNode>): List<AstXmlNode> {
         var scope: SimRenameScope = SimRenameScope(Dictionary<Str, Str>())
         var emitted: List<Str> = List<Str>()
-        var i: Int = 0
-        while (i < stmts.size()) {
-            val stmt: AstXmlNode = stmts[i]
+        for (*stmt in stmts) {
             var name: Str = ""
             if (xmlKind(stmt) == AstNodeCategory.StmtVarDecl) {
                 val original: Str = xmlAttr(stmt, AstNodeAttributeKind.Name)
@@ -495,13 +521,12 @@ data class SimRenamer(
                 this.used.insert(name, true)
             }
             emitted.append(name)
-            i = i + 1
         }
         this.scopes.append(scope)
         var out: List<AstXmlNode> = List<AstXmlNode>()
-        i = 0
+        var i: Int = 0
         while (i < stmts.size()) {
-            var stmt: AstXmlNode = this.rewrite(stmts[i], true)
+            var stmt: AstXmlNode = this.rewrite(*stmts[i], true)
             if (emitted[i] != "") {
                 stmt.attributes = simNameAttrs(stmt, emitted[i])
             }
@@ -514,22 +539,22 @@ data class SimRenamer(
 
     // A list inside a lambda body: the declarations there are the lambda's own, so this
     // pass rewrites the uses and names nothing.
-    fun listOf(stmts: List<AstXmlNode>, nameNested: Bool): List<AstXmlNode> {
+    fun listOf(stmts: *List<AstXmlNode>, nameNested: Bool): List<AstXmlNode> {
         if (nameNested) {
             return this.inList(stmts)
         }
         var out: List<AstXmlNode> = List<AstXmlNode>()
-        var i: Int = 0
-        while (i < stmts.size()) {
-            out.append(this.rewrite(stmts[i], false))
-            i = i + 1
+        for (*stmt in stmts) {
+            out.append(this.rewrite(stmt, false))
         }
         return out
     }
 
     // One node: its expressions rewritten, and the statement lists inside it named (or, in
-    // a lambda body, rewritten for uses only).
-    fun rewrite(node: AstXmlNode, nameNested: Bool): AstXmlNode {
+    // a lambda body, rewritten for uses only). The node is *borrowed*: the walk reads it and
+    // builds the rewritten one, and a by-value parameter copied every node of the body (and
+    // of every expression under it) once per pass.
+    fun rewrite(node: *AstXmlNode, nameNested: Bool): AstXmlNode {
         val kind: AstNodeCategory = xmlKind(node)
         val masked: Bool = kind == AstNodeCategory.ExprLambda
         // Inside a lambda body this body names *nothing*: the lambda is a body of its own,
@@ -564,7 +589,7 @@ data class SimRenamer(
         var kids: List<AstXmlNode> = List<AstXmlNode>()
         var i: Int = 0
         while (i < node.Children.count()) {
-            val child: AstXmlNode = node.Children[i]
+            val child: *AstXmlNode = *node.Children[i]
             if (child.name == AstNodeKind.Body || child.name == AstNodeKind.Then
                 || child.name == AstNodeKind.Else
             ) {
@@ -573,7 +598,7 @@ data class SimRenamer(
                     kids.append(
                         exprReplaceRole(
                             child, AstNodeKind.Stmt,
-                            this.listOf(stmts, nested)
+                            this.listOf(*stmts, nested)
                         )
                     )
                 } else {
@@ -608,7 +633,7 @@ fun linRenameShadowed(body: List<AstXmlNode>, reserved: List<Str>): List<AstXmlN
         i = i + 1
     }
     var renamer: SimRenamer = SimRenamer(List<SimRenameScope>(), used)
-    return renamer.inList(body)
+    return renamer.inList(*body)
 }
 
 // Whether a declaration is one the hoisting can move: a declaration has to be writable
@@ -665,7 +690,7 @@ fun linHoistInList(stmts: *List<AstXmlNode>, decls: *List<AstXmlNode>, atTop: Bo
     var out: List<AstXmlNode> = List<AstXmlNode>()
     var i: Int = 0
     while (i < stmts.size()) {
-        val stmt: AstXmlNode = stmts[i]
+        val stmt: *AstXmlNode = *stmts[i]
         if (linIsHoistable(stmt)) {
             val name: Str = xmlAttr(stmt, AstNodeAttributeKind.Name)
             val init: AstXmlNode = xmlChild(stmt, AstNodeKind.Init)

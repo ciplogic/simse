@@ -156,8 +156,9 @@ write). The length is known before anything is written - the format minus the po
 fills, plus every item - so the result is assembled in one buffer, and nothing needs a
 `reserve` of its own.
 
-What does not line up loses nothing: with no `|` left the remaining items are appended
-(`||` is an empty run), and with no item left the rest of the format is appended verbatim.
+A fixed shape means **one item per `|`**, and that is the only shape the operation is for:
+a call whose points and items do not line up gets the format back, unfilled, rather than a
+half-filled result.
 
 Indexing and member calls are permitted directly on a `&Str` and on a `*Str`,
 with automatic dereference (see `memory-model.md`).

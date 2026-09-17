@@ -6,6 +6,39 @@ This document fixes the runtime representation that generated C++ targets and
 records where that representation diverges from `specs/`. It exists so the
 bootstrap shims do not silently become the de-facto specification.
 
+> **The operation layer of the RTL is moving into the language.** The types and
+> their layout stay hand-written C++ (the list above), and so does anything
+> hand-written C++ calls - but an operation whose only callers are Simse,
+> and whose body the language can express, is a prelude `fun` *with a body*
+> (`cppsrc/rtl/rtl.kt`) rather than a native: the compiler emits it, and it is
+> the same code in both rings. `min`, `max`, `fmtStr` and `Str.isEmpty` are
+> already there (`impl_specs/capability-matrix.md` T70, T71). What decides a
+> candidate is a grep: a symbol referenced only by the header that defines it has
+> no C++ caller left. Notably **blocked** today - and by design, not by accident -
+> are `Span<T>` and `StrView` themselves: `lex/Scanner.cpp` (the hand-written
+> ring) builds and reads both through `span.hpp`/`strview.hpp`, so the *types* and
+> the operations it uses (`spanOf`, `spanOfStr`, `at`, `size`, `slice`,
+> `startsWith`, `toString`) stay C++ until that ring retires. `StrView`'s other
+> operations (`find`, `indexOf`, `isEmpty`, `charAt`, `substr`, `startsWithPtr`)
+> have no C++ caller at all, so they are candidates.
+>
+> **The receiver spelling differs from a native's.** A `native` declaration writes
+> its receiver as the explicit first parameter (`this: Str`); a function *with* a
+> body has to write the receiver type before the name (`fun Str.isEmpty()`),
+> because only that form is marked a receiver - the explicit `this` is a plain
+> parameter named `this`, so a member call does not reach it (a *reported* gap,
+> not a decision: `specs/functions.md`, "Generic functions", documents the
+> explicit form as an extension; `native` extensions already implement it). The
+> emitted shape is the same either way - a receiver is `T* self`, never a copy -
+> so a migrated operation spells no `*` on its receiver.
+>
+> **A prelude body is emitted when a program reaches it** (`reachesPreludeBody`,
+> both rings). The name has to be called, and - because the prelude has one
+> `smToYield` per container - the receiver's type name has to be named too, or
+> the call could not be attributed to one overload. Since T71 the fallback for an
+> *unattributable* name is to emit the whole group rather than none of it: a
+> program may call `"".isEmpty()` without ever naming `Str` as a type.
+
 ## Decision
 
 For the first end-to-end slice, generated C++ targets the **current
@@ -369,9 +402,11 @@ No new RTL operations were required for the v1 subset. Specifically:
   `simse_addressOf(expr)` otherwise. `simse_addressOf` (`rtl/types.hpp`) binds
   lvalues and temporaries, so a call result can be passed as a pointer for the
   duration of the call without copying; read-only `*XmlNode` / `*List<T>`
-  parameters use this form at their call sites. `*ref` lowers to `.get()` on a
-  `std::shared_ptr`; `*ptr` lowers to `*ptr`; `copy(x)` lowers to `*(x)` for
-  references/pointers and a plain copy otherwise.
+  parameters use this form at their call sites. A bare `this` is the one operand
+  that is already the address: a value receiver *is* the `T* self` the call site
+  passed, so `*this` is `self` (and a call on `this` passes it - see 13). `*ref`
+  lowers to `.get()` on a `std::shared_ptr`; `*ptr` lowers to `*ptr`; `copy(x)`
+  lowers to `*(x)` for references/pointers and a plain copy otherwise.
 - `&List<T>()` construction would use the existing `makeList<T>()`, but the v1
   subset does not emit it (see gaps below).
 
@@ -491,7 +526,11 @@ written and are not yet mapped.
     access is `self->field`, a bare `this` reads as the object (`(*self)`), and a call
     site passes the receiver's **address** (`ns_f(simse_addressOf(x))`, which covers a
     place and a temporary alike - the latter is valid for the call, per
-    `simse_addressOf`'s contract). A receiver declared as a handle keeps it, which is
+    `simse_addressOf`'s contract). A receiver that is the bare `this` is the one case
+    where no address has to be taken - the emitted receiver *is* that address - so the
+    call passes the pointer itself (`ns_f(self)`, C++'s `this` inside a closure class)
+    and a borrow of the receiver (`*this`) is the same pointer. A receiver declared as
+    a handle keeps it, which is
     what keeps refcounting available to the body: `this: &T` stays
     `std::shared_ptr<T> self` (so `self` can be stored in a list and keeps its
     refcount), and `this: *T` stays `T* self` (where `this` *is* the pointer, so
