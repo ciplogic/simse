@@ -24,9 +24,15 @@ package resources
 
 import common
 
-// One resource: the key the program looks it up by, and the text it holds. Both hold the
-// file's own bytes - the pool and the C++ escapes are the emitter's business.
-data class ResourceEntry(
+// One resource, as the *compiler* read it from a file: the key the program will look it
+// up by, and the text it holds. Both hold the file's own bytes - the pool and the C++
+// escapes are the emitter's business.
+//
+// The name is deliberately not `ResourceEntry`: that is the RTL's type, the pair of
+// `StrView`s the program carries (cppsrc/rtl/resources.hpp + resources.kt), and the
+// emitter's type table is flat by name, so one of the two has to be spelled differently.
+// This one is the reader's item; that one is the program's entry.
+data class ResourceItem(
     var key: Str,
 
     var value: Str
@@ -88,9 +94,9 @@ fun resUnquote(text: Str): Str {
 // An entry is a line whose first `:` has a non-empty key before it. When nothing follows
 // the colon the value is the fenced block that follows (its lines as written, each
 // followed by a newline); when no fence follows, the value is empty.
-fun resParseText(text: Str): List<ResourceEntry> {
+fun resParseText(text: Str): List<ResourceItem> {
     val lines: List<Str> = text.split("\n")
-    var entries: List<ResourceEntry> = List<ResourceEntry>()
+    var entries: List<ResourceItem> = List<ResourceItem>()
     var section: Str = ""
     var i: Int = 0
     while (i < lines.size()) {
@@ -113,7 +119,7 @@ fun resParseText(text: Str): List<ResourceEntry> {
         val key: Str = resQualifiedKey(section, line.substr(0, colon).trim())
         val rest: Str = line.substr(colon + 1, line.size() - colon - 1).trim()
         if (rest.size() > 0) {
-            entries.append(ResourceEntry(key, resUnquote(rest)))
+            entries.append(ResourceItem(key, resUnquote(rest)))
             i = i + 1
             continue
         }
@@ -148,7 +154,7 @@ fun resParseText(text: Str): List<ResourceEntry> {
         } else {
             i = i + 1
         }
-        entries.append(ResourceEntry(key, value))
+        entries.append(ResourceItem(key, value))
     }
     return entries
 }
@@ -157,21 +163,21 @@ fun resParseText(text: Str): List<ResourceEntry> {
 // written more than once takes the last value, in the position it was *first* written. A
 // section two files both fill in merges because the key already carries the prefix, and
 // the order is the file order (`specs/resources.md`, "Discovery").
-fun resDedup(entries: List<ResourceEntry>): List<ResourceEntry> {
+fun resDedup(entries: List<ResourceItem>): List<ResourceItem> {
     var last: Dictionary<Str, Str> = Dictionary<Str, Str>()
     var i: Int = 0
     while (i < entries.size()) {
         last.insert(entries[i].key, entries[i].value)
         i = i + 1
     }
-    var out: List<ResourceEntry> = List<ResourceEntry>()
+    var out: List<ResourceItem> = List<ResourceItem>()
     var seen: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     i = 0
     while (i < entries.size()) {
         val key: Str = entries[i].key
         if (!seen.has(key)) {
             seen.insert(key, true)
-            out.append(ResourceEntry(key, last.get(key).value()))
+            out.append(ResourceItem(key, last.get(key).value()))
         }
         i = i + 1
     }
@@ -215,11 +221,11 @@ fun resResourceFiles(moduleRoots: List<Str>): List<Str> {
 }
 
 // Reads and parses every resource file in order and joins them into the one flat list.
-fun resLoadFiles(files: List<Str>): List<ResourceEntry> {
-    var all: List<ResourceEntry> = List<ResourceEntry>()
+fun resLoadFiles(files: List<Str>): List<ResourceItem> {
+    var all: List<ResourceItem> = List<ResourceItem>()
     var f: Int = 0
     while (f < files.size()) {
-        val parsed: List<ResourceEntry> = resParseText(readFile(files[f]))
+        val parsed: List<ResourceItem> = resParseText(readFile(files[f]))
         var p: Int = 0
         while (p < parsed.size()) {
             all.append(parsed[p])
@@ -232,25 +238,39 @@ fun resLoadFiles(files: List<Str>): List<ResourceEntry> {
 
 // The whole discovery in one call, for a driver: every `_res.md` under `moduleRoots`,
 // parsed and joined.
-fun resLoad(moduleRoots: List<Str>): List<ResourceEntry> {
+fun resLoad(moduleRoots: List<Str>): List<ResourceItem> {
     return resLoadFiles(resResourceFiles(moduleRoots))
 }
 
-// The entries as the emitter's own shape: every key and value as the C++ literal its
-// bytes are written into the program's pool as (`resQuoteLiteral`), key then value, in
-// the order the files were read. This is what a driver hands codegen
-// (`Codegen.emitProgram`), because a pool is a pool of literal texts and nothing
-// downstream needs the pairs as pairs: entry `i` is the literals `2*i` and `2*i + 1`.
-fun resLoadLiterals(moduleRoots: List<Str>): List<Str> {
-    val entries: List<ResourceEntry> = resLoad(moduleRoots)
+// The same entries in the same order as one flat list of the texts themselves - key,
+// value, key, value, ... - which is what a reader that looks a key up *by spelling*
+// wants (`resValueOf` is the same scan over the pairs). The emitter holds this list: it
+// both looks sections up in it and quotes what it pools, so one list serves both
+// (`Codegen.emitProgram`).
+fun resEntriesFlat(entries: List<ResourceItem>): List<Str> {
     var out: List<Str> = List<Str>()
     var i: Int = 0
     while (i < entries.size()) {
-        out.append(resQuoteLiteral(entries[i].key))
-        out.append(resQuoteLiteral(entries[i].value))
+        out.append(entries[i].key)
+        out.append(entries[i].value)
         i = i + 1
     }
     return out
+}
+
+// The text `entries` holds for `key`, or "" when they do not carry it. The compiler's
+// own lookup, for the places that run before the program exists to call `Resources.get`
+// (the driver's generated sources); `resDedup` already made the keys unique, so one
+// scan is enough.
+fun resValueOf(entries: List<ResourceItem>, key: Str): Str {
+    var i: Int = 0
+    while (i < entries.size()) {
+        if (entries[i].key == key) {
+            return entries[i].value
+        }
+        i = i + 1
+    }
+    return ""
 }
 
 // ---- the C++ literal ------------------------------------------------------

@@ -30,7 +30,9 @@
 //   --define <d[=v]>  extra preprocessor define for the compile (repeatable)
 //   --arch <arch>     vcvarsall target architecture (default: the host's)
 //   --jobs <n>        cases to run at once (default: 1; 0 = one per CPU)
-//   --update          rewrite the `expected.*` files from this run
+//   --update          rewrite `expected.stdout`/`.stderr`/`.exit` from this run
+//                     (`expected.cpp` is not machine-updated: a changed amalgamation is
+//                     read, then copied over by hand from `stress/.work/<case>/out.cpp`)
 //   --list            list the cases and their expectations, then exit
 //   --keep-going      report every failure instead of stopping at the first
 //   --verbose         print the commands, and each program's output

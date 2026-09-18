@@ -73,11 +73,16 @@ Details worth knowing:
 - **A declaration's C++ can be generated instead of hand-written.** `native("sym")` is
   sugar for `@SmGen("cpp", "defined-in-headers", "sym")`: an *attribute* that selects
   a generator for the method's implementation, with the method written body-less
-  (`impl_specs/generators.md`). One generator is in use today, `res`, whose text is a
-  resource: the RTL's `spanOf` is one (`cppsrc/rtl/_res.md`), and the emitted file
-  assembles from named **sections** - includes, forward, types, statics, prototypes,
-  init, bodies - so a generated declaration lands in `forward` and its definition in
-  `bodies` without codegen having to know about either.
+  (`impl_specs/generators.md`). Two more generators are in use: `res`, whose text is a C++
+  *resource* - the tree's own `_res.md` files first, the compiler's second, which is where
+  the RTL's own C++ lives now (`cppsrc/rtl/_res.md`: `strtable`, `timeops`, `listops`,
+  `spanOf`) - and `kt`, whose text is *Simse source* the driver hands back to the
+  compiler's own front end: parsed, checked and emitted with the program, the call site
+  unchanged (`stress/smgen-kt`). The emitted file assembles from named **sections** -
+  includes, support, profile, strings, resources, forward, types, statics, prototypes,
+  init, bodies - so a generated *declaration* lands in `forward`, a *definition* in
+  `bodies`, and text the preamble needs in `support`, without codegen having to know about
+  any of them.
 
 ## What the output looks like
 
@@ -178,13 +183,22 @@ headers:
 | `xml.hpp` | `Attribute`, `XmlNode`: the general tree a program can build |
 | `span.hpp` | `Span<T>`: a borrowed view over a contiguous run of `T` (`at`, `slice`) |
 | `strview.hpp` | `StrView`: the view over a string's bytes, a `Span<Char>` plus `charAt`, `find`/`indexOf`, `startsWith`, `startsWithPtr`, `substr`, `toString` |
-| `strops.hpp`, `listops.hpp`, `dictops.hpp`, `fs.hpp` | the native operations behind the prelude |
+| `fs.hpp` | the file/directory natives over `native.cpp` |
 | `filestream.hpp` | `FileStream`: reading a file line by line (`readLine(): Opt<Str>`, `readLineInto(*Str)` with a recycled buffer, and `readLineView(): Opt<StrView>` in place) |
-| `timeops.hpp` | `simse_nowMillis`, a monotonic clock for logging and for measuring runs |
 | `astxml.hpp` | the compiler's AST node (roles/keys as enums) |
 
-The prelude (`cppsrc/rtl/*.kt`) declares the surface; its bodies are *not*
-emitted, because the behavior lives in those headers. Every type follows the
+The C++ that used to need a header of its own is a **resource** now
+(`cppsrc/rtl/_res.md`, read by the `res` generator): the string table's decoder
+(`strtable`), the clocks (`timeops`), the `List`/`Array` primitives (`listops`), the
+`Dictionary` operations (`dictops`), the string/character/numeric conversions (`strops`),
+and `spanOf`. Each is a section of that file - a declaration in its `forward:`, a definition
+in its `bodies:` - and the emitter places a section's texts in the emitted file's section of
+the same name, so `strtable`'s decoder is emitted into every program (it is what the
+preamble needs) while `strops`' text is emitted only into a program that reaches one of its
+symbols.
+
+The prelude (`cppsrc/rtl/*.kt`) declares the surface; its bodies are *not* emitted,
+because the behavior lives in those headers or in the resource. Every type follows the
 language's layout model: **4-byte packing** (`SIMSE_PACK_PUSH`/`SIMSE_PACK_POP`),
 32-bit indexes, and no `[refcount][typeId]` header yet - divergences from the
 specification are listed in

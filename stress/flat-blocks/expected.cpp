@@ -3,6 +3,50 @@
 #include <iostream>
 #include <type_traits>
 
+// The string-literal pool's decoder (impl_specs/rtl-abi.md, "String literals: one
+// table"): the emitter writes one pool of bytes plus two run-length encoded index
+// series - where each entry starts and how long it is - and this expands them into the
+// `StrView` per entry, once, before `main` runs. It was cppsrc/rtl/strtable.hpp.
+//
+// Six things are deliberate in the shape the emitter writes:
+//
+//  - **Both series are stored as "what to subtract from the previous value"**, with an
+//    implicit 0 before the first entry: `value[i] = value[i-1] - series[i]`. The
+//    literals are ordered longest first, so a length series descends slowly and a
+//    *difference* of it is a small number - mostly 0 between the many literals of equal
+//    length (85% of them on the compiler's own table).
+//  - **Each series is run-length encoded**: its length first, then alternating blocks of
+//    non-repeating values (a count, then that many values) and of runs (a count, then
+//    that many `times, value` pairs), until the length is filled. The element type is a
+//    template parameter because the emitter picks the width: `Int16` when every number
+//    fits, `Int` otherwise.
+//  - The pool is the literal texts themselves, adjacent, so the C++ compiler decodes
+//    every escape and the emitter's decoding only has to agree about *how many bytes* an
+//    escape costs. The emitted `static_assert` on the pool's `sizeof` is the check.
+//  - The series are expanded into *stack* arrays in the initializer and dropped when it
+//    returns: no heap, and the encoded statics are all the program carries.
+//  - An entry is a 12-byte `StrView`, not the 32-byte owning `Str` the table used to
+//    hold, and start-up allocates nothing for the literals.
+//  - The pool is `const char` (a string literal, read-only) while `StrView` holds the
+//    language's mutable `Char*`; the constness is cast away here, in the one place the
+//    pool is touched, and nothing writes through it.
+
+template <class T>
+void simse_strTableExpand(const T* stream, Int* out, Int count);
+void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, StrView* table, Int count);
+
+// Time natives (the Simse surface is the prelude file cppsrc/rtl/rtl.kt). Both are
+// monotonic clocks - never going backwards - since an arbitrary fixed point:
+// `simse_nowMillis` for logging, the finer `simse_nowMicros` for the instrumented
+// profiler (`cppsrc/profiling`, and the emitted `profileApp.measure(...)` of a
+// `--profile` build). It was cppsrc/rtl/timeops.hpp; the definitions are still
+// cppsrc/rtl/native.cpp's, because they are the platform's business. `emit: always`
+// because the profiler's runtime is emitted by the *compiler* rather than named by the
+// program: a `--profile` build needs these two declarations whether or not the program
+// ever asks for the time.
+Int64 simse_nowMillis();
+Int64 simse_nowMicros();
+
 // The program's string literals: one pool, and two run-length encoded index
 // series (offsets as deltas, then lengths), each as what to subtract from the
 // previous value; strtable.hpp has the stream format.
@@ -25,10 +69,112 @@ static struct __SmStringTableInitType {
     }
 } __sm_stringTableInit;
 
+#include <cstdint>
+#include <type_traits>
+
+// The List/Array/Str primitives behind the prelude (impl_specs/native-interop.md), moved
+// out of cppsrc/rtl/listops.hpp. Index and range errors are unchecked, matching the
+// language's no-exceptions policy: `removeAt`/`removeRange` with an out-of-range index is
+// undefined behavior (specs/language-decisions.md).
+
+// Appends `value` to the end of `self`. The value is a non-deduced context so a literal
+// argument (e.g. a `const char[]`) converts to the element type instead of making `T`
+// ambiguous.
+template <class T>
+void simse_list_append(List<T>& self, const std::type_identity_t<T>& value);
+
+// The list literal's fallback (cppsrc/rtl/rtl.kt): the compiler turns
+// `listOf<Str>("a", "b")` into the construction itself, so this runs only for a position
+// with no destination slot.
+template <class T>
+List<T> simse_listOf(const List<T>* values);
+
+template <class T>
+void simse_list_removeAt(List<T>& self, Int index);
+template <class T>
+void simse_list_removeRange(List<T>& self, Int start, Int end);
+template <class T>
+Int simse_array_count(const Array<T>& self);
+template <class T>
+Array<T> simse_list_toArray(const List<T>& self);
+template <class T>
+List<T> simse_array_toList(const Array<T>& self);
+template <class T>
+Array<T> simse_arrayEmpty();
+
+void simse_str_append(Str& self, Char value);
+void simse_str_appendStr(Str& self, const Str& value);
+void simse_str_appendStrPtr(Str& self, const Str* value);
+void simse_str_reserve(Str& self, Int count);
+Str simse_int_toString(Int self);
+
+#include <algorithm>
+#include <type_traits>
+#include <utility>
+
+// The Dictionary operations and the extra List helpers behind the prelude
+// (impl_specs/native-interop.md), moved out of cppsrc/rtl/dictops.hpp. The key/value
+// parameters are non-deduced (`std::type_identity_t`) so that a literal argument (e.g. a
+// `const char[]` key or an integer value) converts to the element type instead of making
+// the template argument ambiguous.
+//
+// Errors are unchecked, matching the dictionary's own semantics and the language's
+// no-exceptions policy: `get`/`has` on a missing key behave as documented, while `remove`
+// of an absent key is a no-op.
+
+// `dictionaryOf<K, V>()`: the empty-dictionary construction.
+template <class K, class V>
+Dictionary<K, V> simse_dictionaryOf();
+
+// `d.get(key)`: the value for `key`, or an empty `Opt` when absent.
+template <class K, class V>
+Opt<V> simse_dict_get(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
+
+// `d.has(key)`: whether `key` is present.
+template <class K, class V>
+Bool simse_dict_has(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
+
+// `d.insert(key, value)`: insert or replace.
+template <class K, class V>
+void simse_dict_insert(Dictionary<K, V>& self, const std::type_identity_t<K>& key,
+                       const std::type_identity_t<V>& value);
+
+// `d.remove(key)`: erase when present (a no-op otherwise).
+template <class K, class V>
+void simse_dict_remove(Dictionary<K, V>& self, const std::type_identity_t<K>& key);
+
+// `d.size()`: the number of entries.
+template <class K, class V>
+Int simse_dict_size(const Dictionary<K, V>& self);
+
+// `d.keys()`: the keys in the dictionary's iteration order (unspecified; sort for a
+// deterministic order).
+template <class K, class V>
+List<K> simse_dict_keys(const Dictionary<K, V>& self);
+
+// `d.values()`: the values in the dictionary's iteration order (unspecified).
+template <class K, class V>
+List<V> simse_dict_values(const Dictionary<K, V>& self);
+
+// `d.clear()`: remove every entry.
+template <class K, class V>
+void simse_dict_clear(Dictionary<K, V>& self);
+
+// `items.contains(value)`: linear membership test (`operator==` on elements).
+template <class T>
+Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& value);
+
+// `items.sort(less)`: in-place sort using the `(T, T) -> Bool` comparator. The comparator
+// comes from a Simse lambda (a C++ lambda or Func), so it is a template parameter rather
+// than a fixed type.
+template <class T, class F>
+void simse_list_sort(List<T>& self, F less);
+
 Opt<Int> ns1_pick(Int i);
 Res<Str> ns1_parse(Int n);
 Str ns1_describe(Int n);
 Int ns1_countUntil(List<Str> names, Int limit);
+
 // stress/flat-blocks/src/main.kt:12
 Opt<Int> ns1_pick(Int i) {
     Bool _sm_expr1;
@@ -132,4 +278,195 @@ int main() {
     _sm_expr9 = ns1_countUntil(names, 2);
     std::cout << std::boolalpha << (_sm_expr9) << std::endl;
     return 0;
+}
+
+template <class T>
+inline void simse_list_append(List<T>& self, const std::type_identity_t<T>& value) {
+    self.push_back(value);
+}
+
+template <class T>
+inline List<T> simse_listOf(const List<T>* values) {
+    return *values;
+}
+
+// Removes the single element at `index`.
+template <class T>
+inline void simse_list_removeAt(List<T>& self, Int index) {
+    self.erase(self.begin() + index);
+}
+
+// Removes the half-open range [start, end).
+template <class T>
+inline void simse_list_removeRange(List<T>& self, Int start, Int end) {
+    self.erase(self.begin() + start, self.begin() + end);
+}
+
+// `Array<T>.count()`: the element count stored at the front of the block.
+template <class T>
+inline Int simse_array_count(const Array<T>& self) {
+    return self.count();
+}
+
+// `List<T>.toArray()` (specs/built-in-types.md): copies the elements into one count-first
+// block. Element copies are value copies, like every other copy in the language.
+template <class T>
+inline Array<T> simse_list_toArray(const List<T>& self) {
+    const Int count = self.size();
+    if (count <= 0) {
+        return Array<T>();
+    }
+    Array<T> result(count);
+    for (Int i = 0; i < count; i++) {
+        result[i] = self[i];
+    }
+    return result;
+}
+
+// `Array<T>.toList()`: the growable copy, which is how an element is added to an array.
+template <class T>
+inline List<T> simse_array_toList(const Array<T>& self) {
+    List<T> result;
+    const Int count = self.count();
+    result.reserve(count);
+    for (Int i = 0; i < count; i++) {
+        result.push_back(self[i]);
+    }
+    return result;
+}
+
+// `arrayEmpty<T>()`: the shared, zero-length array of `T` (no allocation).
+template <class T>
+inline Array<T> simse_arrayEmpty() {
+    return Array<T>();
+}
+
+// `Str.append(ch)`: `Str` has no single-character append, so this is `push_back`.
+inline void simse_str_append(Str& self, Char value) {
+    self.push_back(static_cast<char>(value));
+}
+
+// `Str.appendStr(text)`: appends in place, so an emitter accumulates output without
+// `out = out + text` rebuilding the whole buffer on every line (which is quadratic).
+inline void simse_str_appendStr(Str& self, const Str& value) {
+    self.append(value);
+}
+
+// `Str.appendStrPtr(text)`: the same append for a text the caller only *borrows*, so
+// nothing is copied on the way.
+inline void simse_str_appendStrPtr(Str& self, const Str* value) {
+    if (value != nullptr) self.append(*value);
+}
+
+// `Str.reserve(count)`: grows the buffer once, so a run of appends writes the text once
+// instead of copying the accumulated prefix at every growth step. A *hint*, not a length.
+inline void simse_str_reserve(Str& self, Int count) {
+    self.reserve((Str::size_type) count);
+}
+
+// `Int.toString()`: the scalar-to-inline-string conversion (specs/memory-model.md).
+inline Str simse_int_toString(Int self) {
+    return std::to_string(self);
+}
+
+// `dictionaryOf<K, V>()`: `Dictionary<K, V>` is a value type, so this default-constructs
+// one.
+template <class K, class V>
+inline Dictionary<K, V> simse_dictionaryOf() {
+    return Dictionary<K, V>();
+}
+
+template <class K, class V>
+inline Opt<V> simse_dict_get(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
+    auto it = self.find(key);
+    if (it == self.end()) return Opt<V>::none();
+    return Opt<V>::some(it->second);
+}
+
+template <class K, class V>
+inline Bool simse_dict_has(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
+    return self.find(key) != self.end();
+}
+
+template <class K, class V>
+inline void simse_dict_insert(Dictionary<K, V>& self, const std::type_identity_t<K>& key,
+                              const std::type_identity_t<V>& value) {
+    self.insert_or_assign(key, value);
+}
+
+template <class K, class V>
+inline void simse_dict_remove(Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
+    self.erase(key);
+}
+
+template <class K, class V>
+inline Int simse_dict_size(const Dictionary<K, V>& self) {
+    return (Int) self.size();
+}
+
+template <class K, class V>
+inline List<K> simse_dict_keys(const Dictionary<K, V>& self) {
+    List<K> out;
+    out.reserve((Int) self.size());
+    for (const auto& entry : self) out.push_back(entry.first);
+    return out;
+}
+
+template <class K, class V>
+inline List<V> simse_dict_values(const Dictionary<K, V>& self) {
+    List<V> out;
+    out.reserve((Int) self.size());
+    for (const auto& entry : self) out.push_back(entry.second);
+    return out;
+}
+
+template <class K, class V>
+inline void simse_dict_clear(Dictionary<K, V>& self) {
+    self.clear();
+}
+
+template <class T>
+inline Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& value) {
+    for (const T& item : self) {
+        if (item == value) return true;
+    }
+    return false;
+}
+
+template <class T, class F>
+inline void simse_list_sort(List<T>& self, F less) {
+    std::sort(self.begin(), self.end(), less);
+}
+
+// Expands one run-length encoded series into `out`, which holds `count` values.
+template <class T>
+inline void simse_strTableExpand(const T* stream, Int* out, Int count) {
+    Int at = 0;
+    Int cursor = 1; // stream[0] is the series' own length
+    while (at < count) {
+        const Int literals = (Int) stream[cursor++];
+        for (Int i = 0; i < literals && at < count; i++) out[at++] = (Int) stream[cursor++];
+        if (at >= count) break;
+        const Int runs = (Int) stream[cursor++];
+        for (Int i = 0; i < runs && at < count; i++) {
+            const Int times = (Int) stream[cursor++];
+            const Int value = (Int) stream[cursor++];
+            for (Int j = 0; j < times && at < count; j++) out[at++] = value;
+        }
+    }
+}
+
+// Fills `table` from the pool and the two expanded series: an offset increment and a
+// byte count per entry, both rebuilt by subtracting the stored value from the one before.
+inline void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, StrView* table, Int count) {
+    Char* bytes = const_cast<Char*>(reinterpret_cast<const Char*>(pool));
+    Int delta = 0;  // this entry's offset increment, rebuilt from the start series
+    Int length = 0; // this entry's byte count, rebuilt from the length series
+    Int at = 0;
+    for (Int i = 0; i < count; i++) {
+        delta -= starts[i];
+        length -= lengths[i];
+        at += delta;
+        table[i] = StrView(bytes + at, length);
+    }
 }

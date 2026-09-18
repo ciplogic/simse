@@ -5,6 +5,51 @@
 
 // stress/smgen-cpp/src/main.kt:9
 Str simse_str_trim(const Str& text);
+
+// The string-literal pool's decoder (impl_specs/rtl-abi.md, "String literals: one
+// table"): the emitter writes one pool of bytes plus two run-length encoded index
+// series - where each entry starts and how long it is - and this expands them into the
+// `StrView` per entry, once, before `main` runs. It was cppsrc/rtl/strtable.hpp.
+//
+// Six things are deliberate in the shape the emitter writes:
+//
+//  - **Both series are stored as "what to subtract from the previous value"**, with an
+//    implicit 0 before the first entry: `value[i] = value[i-1] - series[i]`. The
+//    literals are ordered longest first, so a length series descends slowly and a
+//    *difference* of it is a small number - mostly 0 between the many literals of equal
+//    length (85% of them on the compiler's own table).
+//  - **Each series is run-length encoded**: its length first, then alternating blocks of
+//    non-repeating values (a count, then that many values) and of runs (a count, then
+//    that many `times, value` pairs), until the length is filled. The element type is a
+//    template parameter because the emitter picks the width: `Int16` when every number
+//    fits, `Int` otherwise.
+//  - The pool is the literal texts themselves, adjacent, so the C++ compiler decodes
+//    every escape and the emitter's decoding only has to agree about *how many bytes* an
+//    escape costs. The emitted `static_assert` on the pool's `sizeof` is the check.
+//  - The series are expanded into *stack* arrays in the initializer and dropped when it
+//    returns: no heap, and the encoded statics are all the program carries.
+//  - An entry is a 12-byte `StrView`, not the 32-byte owning `Str` the table used to
+//    hold, and start-up allocates nothing for the literals.
+//  - The pool is `const char` (a string literal, read-only) while `StrView` holds the
+//    language's mutable `Char*`; the constness is cast away here, in the one place the
+//    pool is touched, and nothing writes through it.
+
+template <class T>
+void simse_strTableExpand(const T* stream, Int* out, Int count);
+void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, StrView* table, Int count);
+
+// Time natives (the Simse surface is the prelude file cppsrc/rtl/rtl.kt). Both are
+// monotonic clocks - never going backwards - since an arbitrary fixed point:
+// `simse_nowMillis` for logging, the finer `simse_nowMicros` for the instrumented
+// profiler (`cppsrc/profiling`, and the emitted `profileApp.measure(...)` of a
+// `--profile` build). It was cppsrc/rtl/timeops.hpp; the definitions are still
+// cppsrc/rtl/native.cpp's, because they are the platform's business. `emit: always`
+// because the profiler's runtime is emitted by the *compiler* rather than named by the
+// program: a `--profile` build needs these two declarations whether or not the program
+// ever asks for the time.
+Int64 simse_nowMillis();
+Int64 simse_nowMicros();
+
 // The program's string literals: one pool, and two run-length encoded index
 // series (offsets as deltas, then lengths), each as what to subtract from the
 // previous value; strtable.hpp has the stream format.
@@ -27,10 +72,283 @@ static struct __SmStringTableInitType {
     }
 } __sm_stringTableInit;
 
+#include <charconv>
+#include <cstddef>
+#include <system_error>
+
+// The string, character, numeric-conversion and min/max operations behind the prelude
+// (impl_specs/native-interop.md, specs/built-in-types.md), moved out of
+// cppsrc/rtl/strops.hpp.
+//
+// `Str` is the inline `SmString` (smstring.hpp): every size, length and index here is the
+// language's `Int` (`int32_t`), including `Str::npos`, which is `-1`. Index/range errors
+// are unchecked where the underlying operation is unchecked; the `Opt`-returning
+// conversions never throw.
+
+// `Str.charAt(index)`: the byte at `index` (unchecked; no bounds test).
+Char simse_str_charAt(const Str& self, Int index);
+
+// `Str.trim()` strips leading and trailing whitespace (space, tab, newline, CR).
+Str simse_str_trim(const Str& self);
+
+// `Str.split(separator)` splits on every occurrence. An empty separator returns the whole
+// string as a single element. Two overloads: a separator string and a separator byte.
+List<Str> simse_str_split(const Str& self, const Str& separator);
+List<Str> simse_str_split(const Str& self, Char separator);
+
+// ASCII/byte case folding (the string type is a byte string).
+Str simse_str_toUpper(const Str& self);
+Str simse_str_toLower(const Str& self);
+
+// `Str.find(sub)` returns the first index of `sub`, or -1 when absent (the language's
+// spelling of C++ `npos`).
+Int simse_str_find(const Str& self, const Str& sub);
+
+// `Str.lastIndexOf(sub)` returns the last index of `sub`, or -1 when absent.
+Int simse_str_lastIndexOf(const Str& self, const Str& sub);
+
+// `Str.substr(start, len)` clamps `start` to [0, size]; `len` may run past the end.
+Str simse_str_substr(const Str& self, Int start, Int len);
+
+Bool simse_str_startsWith(const Str& self, const Str& prefix);
+Bool simse_str_endsWith(const Str& self, const Str& suffix);
+
+// `Str.replace(from, to)` replaces every occurrence of `from` with `to`.
+Str simse_str_replace(const Str& self, const Str& from, const Str& to);
+
+// `Str.toInt()`/`Str.toFloat()` parse the whole string; failure (or a non-empty trailing
+// remainder) yields `Opt.none()`. No exceptions: `std::from_chars` reports errors through
+// its return value.
+Opt<Int> simse_str_toInt(const Str& self);
+Opt<Float64> simse_str_toFloat(const Str& self);
+
+// `Char` is a signed 8-bit integer; the checks are byte-range tests so they do not depend
+// on the C locale. Space, tab, newline and carriage return count as space; form feed and
+// vertical tab do not.
+Bool simse_char_isDigit(Char self);
+Bool simse_char_isAlpha(Char self);
+Bool simse_char_isAlphaOrDigit(Char self);
+Bool simse_char_isSpace(Char self);
+
+// Numeric conversions. `Char` is an 8-bit integer, so it stringifies as a number.
+template <class T>
+Str simse_num_toString(const T& self);
+Str simse_char_toString(Char self);
+Str simse_bool_toString(Bool self);
+
 // stress/smgen-cpp/src/main.kt:11
 int main() {
     Str _sm_expr1;
     _sm_expr1 = simse_str_trim(__sm_stringTable[0]);
     std::cout << std::boolalpha << (_sm_expr1) << std::endl;
     return 0;
+}
+
+// `Str.isEmpty()` is the prelude's own body (cppsrc/rtl/rtl.kt), not a resource: `size()`
+// is the built-in it needs. This one is the shared space test the `Char` predicate below
+// uses too.
+inline Bool simse_str_isSpaceByte(Char ch) {
+    return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r';
+}
+
+inline Char simse_str_charAt(const Str& self, Int index) {
+    return (Char) self[index];
+}
+
+inline Str simse_str_trim(const Str& self) {
+    Int begin = 0;
+    Int end = self.size();
+    while (begin < end && simse_str_isSpaceByte((Char) self[begin])) begin++;
+    while (end > begin && simse_str_isSpaceByte((Char) self[end - 1])) end--;
+    return self.substr(begin, end - begin);
+}
+
+inline List<Str> simse_str_split(const Str& self, const Str& separator) {
+    List<Str> parts;
+    if (separator.empty()) {
+        parts.push_back(self);
+        return parts;
+    }
+    Int pos = 0;
+    while (true) {
+        Int found = self.find(separator, pos);
+        if (found == Str::npos) {
+            parts.push_back(self.substr(pos));
+            break;
+        }
+        parts.push_back(self.substr(pos, found - pos));
+        pos = found + separator.size();
+    }
+    return parts;
+}
+
+// How many bytes of `self` are `ch`: what the byte-separator split reserves up front.
+inline Int simse_count_char_in_str(const Str* self, char ch) {
+    Int count = 0;
+    const char* data = self->data();
+    Int len = self->size();
+    for (Int i = 0; i < len; i++) {
+        if (data[i] == ch) {
+            count++;
+        }
+    }
+    return count;
+}
+
+inline List<Str> simse_str_split(const Str& self, Char separator) {
+    List<Str> parts;
+    parts.reserve(simse_count_char_in_str(&self, separator));
+    Int pos = 0;
+    while (true) {
+        Int found = self.find(separator, pos);
+        if (found == Str::npos) {
+            parts.push_back(self.substr(pos));
+            break;
+        }
+        parts.push_back(self.substr(pos, found - pos));
+        pos = found + 1;
+    }
+    return parts;
+}
+
+inline Str simse_str_toUpper(const Str& self) {
+    Str result = self;
+    for (char& ch : result) {
+        if (ch >= 'a' && ch <= 'z') ch = (char) (ch - 'a' + 'A');
+    }
+    return result;
+}
+
+inline Str simse_str_toLower(const Str& self) {
+    Str result = self;
+    for (char& ch : result) {
+        if (ch >= 'A' && ch <= 'Z') ch = (char) (ch - 'A' + 'a');
+    }
+    return result;
+}
+
+inline Int simse_str_find(const Str& self, const Str& sub) {
+    Int found = self.find(sub);
+    return found == Str::npos ? -1 : found;
+}
+
+inline Int simse_str_lastIndexOf(const Str& self, const Str& sub) {
+    Int found = self.rfind(sub);
+    return found == Str::npos ? -1 : found;
+}
+
+inline Str simse_str_substr(const Str& self, Int start, Int len) {
+    if (start < 0) start = 0;
+    if (start > self.size()) start = self.size();
+    Str result = self.substr(start);
+    if (len >= 0 && len < result.size()) result.resize(len);
+    return result;
+}
+
+inline Bool simse_str_startsWith(const Str& self, const Str& prefix) {
+    return prefix.size() <= self.size() && self.compare(0, prefix.size(), prefix) == 0;
+}
+
+inline Bool simse_str_endsWith(const Str& self, const Str& suffix) {
+    return suffix.size() <= self.size()
+           && self.compare(self.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
+inline Str simse_str_replace(const Str& self, const Str& from, const Str& to) {
+    if (from.empty()) return self;
+    Str result;
+    Int pos = 0;
+    while (true) {
+        Int found = self.find(from, pos);
+        if (found == Str::npos) {
+            result.append(self, pos, Str::npos);
+            break;
+        }
+        result.append(self, pos, found - pos);
+        result += to;
+        pos = found + from.size();
+    }
+    return result;
+}
+
+inline Opt<Int> simse_str_toInt(const Str& self) {
+    if (self.empty()) return Opt<Int>::none();
+    Int value = 0;
+    const char* begin = self.data();
+    const char* end = begin + self.size();
+    std::from_chars_result parsed = std::from_chars(begin, end, value);
+    if (parsed.ec != std::errc() || parsed.ptr != end) return Opt<Int>::none();
+    return Opt<Int>::some(value);
+}
+
+inline Opt<Float64> simse_str_toFloat(const Str& self) {
+    if (self.empty()) return Opt<Float64>::none();
+    Float64 value = 0;
+    const char* begin = self.data();
+    const char* end = begin + self.size();
+    std::from_chars_result parsed = std::from_chars(begin, end, value);
+    if (parsed.ec != std::errc() || parsed.ptr != end) return Opt<Float64>::none();
+    return Opt<Float64>::some(value);
+}
+
+inline Bool simse_char_isDigit(Char self) {
+    return self >= '0' && self <= '9';
+}
+
+inline Bool simse_char_isAlpha(Char self) {
+    return (self >= 'a' && self <= 'z') || (self >= 'A' && self <= 'Z');
+}
+
+inline Bool simse_char_isAlphaOrDigit(Char self) {
+    return simse_char_isAlpha(self) || simse_char_isDigit(self);
+}
+
+inline Bool simse_char_isSpace(Char self) {
+    return simse_str_isSpaceByte(self);
+}
+
+template <class T>
+inline Str simse_num_toString(const T& self) {
+    return std::to_string(self);
+}
+
+inline Str simse_char_toString(Char self) {
+    return std::to_string((int) self);
+}
+
+inline Str simse_bool_toString(Bool self) {
+    return self ? "true" : "false";
+}
+
+// Expands one run-length encoded series into `out`, which holds `count` values.
+template <class T>
+inline void simse_strTableExpand(const T* stream, Int* out, Int count) {
+    Int at = 0;
+    Int cursor = 1; // stream[0] is the series' own length
+    while (at < count) {
+        const Int literals = (Int) stream[cursor++];
+        for (Int i = 0; i < literals && at < count; i++) out[at++] = (Int) stream[cursor++];
+        if (at >= count) break;
+        const Int runs = (Int) stream[cursor++];
+        for (Int i = 0; i < runs && at < count; i++) {
+            const Int times = (Int) stream[cursor++];
+            const Int value = (Int) stream[cursor++];
+            for (Int j = 0; j < times && at < count; j++) out[at++] = value;
+        }
+    }
+}
+
+// Fills `table` from the pool and the two expanded series: an offset increment and a
+// byte count per entry, both rebuilt by subtracting the stored value from the one before.
+inline void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, StrView* table, Int count) {
+    Char* bytes = const_cast<Char*>(reinterpret_cast<const Char*>(pool));
+    Int delta = 0;  // this entry's offset increment, rebuilt from the start series
+    Int length = 0; // this entry's byte count, rebuilt from the length series
+    Int at = 0;
+    for (Int i = 0; i < count; i++) {
+        delta -= starts[i];
+        length -= lengths[i];
+        at += delta;
+        table[i] = StrView(bytes + at, length);
+    }
 }

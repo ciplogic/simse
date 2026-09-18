@@ -47,9 +47,40 @@ void simse_strTableDecode(const char* pool, const Int* starts, const Int* length
 Int64 simse_nowMillis();
 Int64 simse_nowMicros();
 
-// `spanOf(items)`: a span over a list's elements, generated (`cppsrc/rtl/_res.md`).
-template <class T>
-Span<T> simse_spanOf(List<T>* items);
+// The program's string literals: one pool, and two run-length encoded index
+// series (offsets as deltas, then lengths), each as what to subtract from the
+// previous value; strtable.hpp has the stream format.
+static const Int __sm_stringCount = 5;
+static const char __sm_stringPool[] =
+    "// The implementation of `greeting` (stress/smgen-kt/src/main.kt), written in Simse and\n// compiled with the program: nothing about it is C++, and nothing was hand-written\n// twice - the declaration says what the call looks like, this says what it does.\nfun greeting(name: Str): Str {\n    var text: Str = \"Hello, \"\n    text.appendStr(name)\n    text.append('!')\n    return text\n}\n" "greet:source" "Hello, " "world" "" 
+;
+static const Int16 __sm_stringStarts[] = {5,5,0,-379,367,5,2};
+static const Int16 __sm_stringLens[] = {5,5,-379,367,5,2,5};
+static_assert(sizeof(__sm_stringPool) - 1 == 403, "the string pool and its length index disagree");
+static StrView __sm_stringTable[__sm_stringCount];
+static struct __SmStringTableInitType {
+    __SmStringTableInitType() {
+        Int starts[__sm_stringCount];
+        Int lens[__sm_stringCount];
+        simse_strTableExpand(__sm_stringStarts, starts, __sm_stringCount);
+        simse_strTableExpand(__sm_stringLens, lens, __sm_stringCount);
+        simse_strTableDecode(__sm_stringPool, starts, lens, __sm_stringTable,
+            __sm_stringCount);
+    }
+} __sm_stringTableInit;
+
+// The resources the compiler read from `_res.md` files (specs/resources.md):
+// string-table indices, key then value, and the one installer that builds
+// them into the program's `Resources` table before `main`.
+static const Int __sm_resourceIndex[] = {1,0};
+static const Int __sm_resourceCount = 1;
+namespace {
+    struct __SmResourceInit {
+        __SmResourceInit() {
+            Resources::install(__sm_stringTable, __sm_resourceIndex, __sm_resourceCount);
+        }
+    } __sm_resourceInit;
+}
 
 #include <cstdint>
 #include <type_traits>
@@ -90,95 +121,25 @@ void simse_str_appendStrPtr(Str& self, const Str* value);
 void simse_str_reserve(Str& self, Int count);
 Str simse_int_toString(Int self);
 
-#include <algorithm>
-#include <type_traits>
-#include <utility>
+Str greeting(Str name);
 
-// The Dictionary operations and the extra List helpers behind the prelude
-// (impl_specs/native-interop.md), moved out of cppsrc/rtl/dictops.hpp. The key/value
-// parameters are non-deduced (`std::type_identity_t`) so that a literal argument (e.g. a
-// `const char[]` key or an integer value) converts to the element type instead of making
-// the template argument ambiguous.
-//
-// Errors are unchecked, matching the dictionary's own semantics and the language's
-// no-exceptions policy: `get`/`has` on a missing key behave as documented, while `remove`
-// of an absent key is a no-op.
-
-// `dictionaryOf<K, V>()`: the empty-dictionary construction.
-template <class K, class V>
-Dictionary<K, V> simse_dictionaryOf();
-
-// `d.get(key)`: the value for `key`, or an empty `Opt` when absent.
-template <class K, class V>
-Opt<V> simse_dict_get(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
-
-// `d.has(key)`: whether `key` is present.
-template <class K, class V>
-Bool simse_dict_has(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
-
-// `d.insert(key, value)`: insert or replace.
-template <class K, class V>
-void simse_dict_insert(Dictionary<K, V>& self, const std::type_identity_t<K>& key,
-                       const std::type_identity_t<V>& value);
-
-// `d.remove(key)`: erase when present (a no-op otherwise).
-template <class K, class V>
-void simse_dict_remove(Dictionary<K, V>& self, const std::type_identity_t<K>& key);
-
-// `d.size()`: the number of entries.
-template <class K, class V>
-Int simse_dict_size(const Dictionary<K, V>& self);
-
-// `d.keys()`: the keys in the dictionary's iteration order (unspecified; sort for a
-// deterministic order).
-template <class K, class V>
-List<K> simse_dict_keys(const Dictionary<K, V>& self);
-
-// `d.values()`: the values in the dictionary's iteration order (unspecified).
-template <class K, class V>
-List<V> simse_dict_values(const Dictionary<K, V>& self);
-
-// `d.clear()`: remove every entry.
-template <class K, class V>
-void simse_dict_clear(Dictionary<K, V>& self);
-
-// `items.contains(value)`: linear membership test (`operator==` on elements).
-template <class T>
-Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& value);
-
-// `items.sort(less)`: in-place sort using the `(T, T) -> Bool` comparator. The comparator
-// comes from a Simse lambda (a C++ lambda or Func), so it is a template parameter rather
-// than a fixed type.
-template <class T, class F>
-void simse_list_sort(List<T>& self, F less);
-
-// stress/smgen-res-collision/src/main.kt:17
+// stress/smgen-kt/src/main.kt:12
 int main() {
-    List<Int>* _sm_base1;
-    List<Int>* _sm_base2;
-    List<Int> items;
-    Span<Int> real;
-    Span<Int> empty;
-    Int _sm_expr1;
-    Int _sm_expr2;
-    items = List<Int>();
-    simse_list_append(items, 3);
-    _sm_base1 = &items;
-    real = simse_spanOf(_sm_base1);
-    _sm_base2 = &items;
-    empty = simse_spanOf(_sm_base2);
-    _sm_expr1 = real.size();
+    Str _sm_expr1;
+    Str _sm_expr2;
+    _sm_expr1 = greeting(__sm_stringTable[3]);
     std::cout << std::boolalpha << (_sm_expr1) << std::endl;
-    _sm_expr2 = empty.size();
+    _sm_expr2 = greeting(__sm_stringTable[4]);
     std::cout << std::boolalpha << (_sm_expr2) << std::endl;
     return 0;
 }
-
-// The collision fixture (the `spanOfEmpty` section of cppsrc/rtl/_res.md): the same
-// symbol as `spanOf`, so whichever declaration the emitter reaches last wins.
-template <class T>
-inline Span<T> simse_spanOf(List<T>* items) {
-    return Span<T>(nullptr, -1);
+// <generated>/kt.kt:7
+Str greeting(Str name) {
+    Str text;
+    text = __sm_stringTable[2];
+    simse_str_appendStr(text, name);
+    simse_str_append(text, '!');
+    return text;
 }
 
 template <class T>
@@ -268,75 +229,6 @@ inline void simse_str_reserve(Str& self, Int count) {
 // `Int.toString()`: the scalar-to-inline-string conversion (specs/memory-model.md).
 inline Str simse_int_toString(Int self) {
     return std::to_string(self);
-}
-
-// `dictionaryOf<K, V>()`: `Dictionary<K, V>` is a value type, so this default-constructs
-// one.
-template <class K, class V>
-inline Dictionary<K, V> simse_dictionaryOf() {
-    return Dictionary<K, V>();
-}
-
-template <class K, class V>
-inline Opt<V> simse_dict_get(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
-    auto it = self.find(key);
-    if (it == self.end()) return Opt<V>::none();
-    return Opt<V>::some(it->second);
-}
-
-template <class K, class V>
-inline Bool simse_dict_has(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
-    return self.find(key) != self.end();
-}
-
-template <class K, class V>
-inline void simse_dict_insert(Dictionary<K, V>& self, const std::type_identity_t<K>& key,
-                              const std::type_identity_t<V>& value) {
-    self.insert_or_assign(key, value);
-}
-
-template <class K, class V>
-inline void simse_dict_remove(Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
-    self.erase(key);
-}
-
-template <class K, class V>
-inline Int simse_dict_size(const Dictionary<K, V>& self) {
-    return (Int) self.size();
-}
-
-template <class K, class V>
-inline List<K> simse_dict_keys(const Dictionary<K, V>& self) {
-    List<K> out;
-    out.reserve((Int) self.size());
-    for (const auto& entry : self) out.push_back(entry.first);
-    return out;
-}
-
-template <class K, class V>
-inline List<V> simse_dict_values(const Dictionary<K, V>& self) {
-    List<V> out;
-    out.reserve((Int) self.size());
-    for (const auto& entry : self) out.push_back(entry.second);
-    return out;
-}
-
-template <class K, class V>
-inline void simse_dict_clear(Dictionary<K, V>& self) {
-    self.clear();
-}
-
-template <class T>
-inline Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& value) {
-    for (const T& item : self) {
-        if (item == value) return true;
-    }
-    return false;
-}
-
-template <class T, class F>
-inline void simse_list_sort(List<T>& self, F less) {
-    std::sort(self.begin(), self.end(), less);
 }
 
 // Expands one run-length encoded series into `out`, which holds `count` values.

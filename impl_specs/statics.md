@@ -188,7 +188,8 @@ its own `stress/<name>` case.
    <= 0` returns the shared zero-length block - so the object's initializer needs
    nothing below it: there is no circularity between the object and
    `arrayEmpty`. What leaves C++ is the `native("simse_arrayEmpty")` declaration
-   and its implementation in `listops.hpp`; the shim's internal zero-length block
+   and its implementation (the `listops` section of `cppsrc/rtl/_res.md`); the shim's
+   internal zero-length block
    stays, because it is what a C++ `Array<T>` default-constructs to (the type's
    own default, not a language-level static). The first piece of the *language*
    surface written in Simse.

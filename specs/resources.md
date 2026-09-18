@@ -98,23 +98,34 @@ built before the feature existed.
 
 ## The API
 
-`Resources` is a prelude type (declarations in `cppsrc/rtl/resources.kt`, implementation in
-`cppsrc/rtl/resources.hpp`) with **static** methods - `Resources.get(k)` is a static call,
-the shape `Res<Str>.ok(x)` has:
+`Resources` is a prelude type (`cppsrc/rtl/resources.kt`), and its methods are the
+language's own code over the table the C++ header hands out - only the storage
+(`cppsrc/rtl/resources.hpp`) is C++. `Resources.get(k)` is a static call, the shape
+`Res<Str>.ok(x)` has:
 
 ```simse
-fun get(key: Str): StrView          // the value, empty when the key is absent
+fun entries(): Span<ResourceEntry>   // the table, borrowed
+fun get(key: Str): StrView           // the value, empty when the key is absent
 fun has(key: Str): Bool
-fun count(): Int                    // how many resources the program carries
+fun count(): Int                     // how many resources the program carries
 ```
 
-The declarations are ordinary prelude natives on the type (`native("simse_resources_get")
-fun get(this: Resources, key: Str): StrView`), which is what gives the checker their
-signatures; the *emitter* spells every call as the static form `Resources::get(...)`, so
-the C++ `struct Resources` carries the statics and nothing calls the natives.
+`ResourceEntry` is the C++ `struct ResourceEntry` field for field - a pair of `StrView`s
+borrowing the string table - and the type a program walks when it wants more than the
+lookup (an index, a section scan).
 
-The entries are built **once**, at startup, as a list of `StrView` pairs borrowing the
-string table - `install` does that and nothing else does:
+The declarations are prelude natives with an explicit `this` (`native("resourcesGet")
+fun get(this: Resources, key: Str): StrView`), which is what gives the checker a
+signature for `Resources.get(k)` and the emitter a symbol to call; the symbol names the
+plain prelude function underneath it (`fun resourcesGet(key: Str): StrView`), which is
+where the scan is written. The emitter spells such a call as the *symbol*
+(`resourcesGet(k)`), not as a C++ static - `Emitter.staticCallSymbol` - and its name walk
+records the same symbol, which is what makes the prelude body reachable. Two things stay
+C++ because the language cannot say them: a table built before any of the program's code
+runs, and the default-constructed `StrView`.
+
+The entries are built **once**, at startup, by `install`, which is called by the table
+the emitter writes - a list of `StrView` pairs borrowing the string table:
 
 ```cpp
 struct ResourceEntry {
@@ -128,47 +139,68 @@ program's to write, in one line, rather than a second shape in the API:
 
 ```simse
 val prefix: Str = "Profiling:"
-for (this_resource in keys) { ... }   // or: Resources.get("Profiling:Profile BootStrap")
+for (*this_resource in Resources.entries()) { ... }   // or: Resources.get("Profiling:...")
 ```
 
 ## Resources as a generator's C++
 
 A resource is also how a `@SmGen` declaration gets its C++
-(`impl_specs/generators.md`): `@SmGen("res", section)` looks up `<section>:symbol`
-(the symbol a call goes to) and `<section>:<name>` for each section name, and adds the
-text it finds there to that section. The value is C++ as written - no escapes are
-interpreted on the way in - so the resource is the one place that text lives.
+(`impl_specs/generators.md`): `@SmGen("res", section[, symbol])` looks up `<section>:symbol`
+(the symbol a call goes to; the attribute's second argument is the same statement, and is
+what a *shared* section needs, since one section cannot carry one `symbol:` for many
+declarations) and `<section>:<name>` for each section name, and adds the text it finds
+there to that section. On the way in, a section may declare `<section>:emit` = `always`:
+text the compiler emits for every program, with no declaration to hang it on - what the
+string table's own decoder and the clock the profiler reads are.
 
-The pool a generator reads is the **compiler's** (`Resources.get`): the compiler is
-itself compiled with `--root cppsrc`, so a `_res.md` file anywhere under `cppsrc` is in
-the compiler it builds. `cppsrc/rtl/_res.md` is the RTL's own generated C++ (to begin
-with, `spanOf`), and `cppsrc/rtl/smgen_collision_res.md` is the decoy
-`stress/smgen-res-collision` pins the last-write-wins rule with.
+The lookup reads the **tree being compiled first** - the `_res.md` files under its module
+roots, the very list the driver read - and the **compiler's own table second**, which is
+what gives a program the RTL's C++ (`cppsrc/rtl/_res.md`) without that program having to
+carry the RTL's resource file; a program that carries a section of the same name supplies
+it to itself. `@SmGen("kt", section)` reads `<section>:source` by the same rule. So a
+`_res.md` file under `cppsrc` is generated C++ in the compiler every build *and* in the
+compiler's own source tree, which is what lets the RTL's generated functions be a resource
+rather than a header.
+
+The value is C++ as written - no escapes are interpreted on the way in - so the resource
+is the one place that text lives. `cppsrc/rtl/_res.md` is the RTL's own generated C++
+(`strtable`, `timeops`, `listops`, `dictops`, `strops`, `spanOf`), and its `spanOfEmpty`
+section is the decoy
+`stress/smgen-res-collision` pins the last-write-wins rule with;
+`stress/smgen-res-program` is a program whose own file supplies one.
+
+A resource can hold **Simse** too: `@SmGen("kt", section)` reads `<section>:source` and
+hands it to the compiler's own front end - the driver parses it, `analyze` checks it with
+the program and codegen emits it - so the generated function is compiled, not pasted.
 
 ## Where it lives
 
 | piece | file |
 | --- | --- |
-| the format, the join, the discovery | `cppsrc/resources/Resources.kt` |
+| the format, the join, the discovery | `cppsrc/resources/Resources.kt` (its `ResourceItem` is the reader's pair - not the RTL's `ResourceEntry`, because the emitter's type table is flat by name) |
 | discovery in the driver | one call to the module: `cppsrc/compiler/Driver.kt` |
+| the lookup a generator reads | `Emitter.resText`/`resHas`/`resAlwaysSections` (`cppsrc/codegen/Codegen.kt`), over the flat list `resEntriesFlat` builds |
 | pooling and the table | the emitter: `cppsrc/codegen/Codegen.kt`, after `emitStringTable` |
-| the API | `cppsrc/rtl/resources.kt` (surface), `cppsrc/rtl/resources.hpp` (implementation) |
-| the static form | `Emitter.call` (the shape `Enum.fromInt` has) |
+| the storage and `install` | `cppsrc/rtl/resources.hpp` |
+| the API and the lookup | `cppsrc/rtl/resources.kt` (Simse) |
+| the static form | `Emitter.call` + `Emitter.staticCallSymbol` |
 | the RTL's generated C++ | `cppsrc/rtl/_res.md`, read by the `res` generator |
 | the end-to-end case | `stress/resources/` |
 
 ## Status
 
 Implemented for the whole path: discovery, parse, join, pooling, the emitted table, the
-`Resources` API, and the `res` generator that reads the compiler's own pool
-(`impl_specs/generators.md`). `stress/resources` prints every shape the format has: a
-fenced block, an inline value, an empty value, a missing key, a comparison against a
-literal, and the escapes a value needs on the way into the pool (a double quote, a
-backslash, a tab, and a value ending in a backslash). `bun tools/stress.js` is
-**53/53**, and the bootstrap fixed point (`bun tools/bootstrap.js`) holds byte for byte.
+`Resources` API - the lookup itself now written in Simse over the `Span<ResourceEntry>`
+the C++ storage hands out - and the `res` generator, which reads the tree being compiled
+first and the compiler's own pool second (`impl_specs/generators.md`). `stress/resources`
+prints every shape the format has: a fenced block, an inline value, an empty value, a
+missing key, a comparison against a literal, and the escapes a value needs on the way into
+the pool (a double quote, a backslash, a tab, and a value ending in a backslash).
+`bun tools/stress.js` is **56/56**, and the bootstrap fixed point (`bun tools/bootstrap.js`)
+holds byte for byte.
 
 Not done yet: a resource *section* helper (deliberately - a section is a key prefix), a
 name-to-index shortcut for lookups (`Resources.get` is a linear scan of a handful of
 entries; a `Dictionary` would need a startup build that the `StrView`s make unnecessary
-for this size), and a *program's* own `_res.md` as a generator's input (today the
-generator reads the compiler's pool).
+for this size), and a resource *program* (a resource that is Simse and that the compiler
+runs: `kt` compiles it into the program, which is all a generator needs today).

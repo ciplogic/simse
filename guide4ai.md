@@ -115,15 +115,22 @@ driver's - and `build.bat` can compile it.
   the headers (`types.hpp`,
   `containers.hpp`, `smstring.hpp`, `strsmallvector.hpp`, `optional.hpp`,
   `functional.hpp`, `result.hpp`, `xml.hpp`, `span.hpp`,
-  `strview.hpp`, `strtable.hpp`, `resources.hpp`,
-  `listops.hpp`, `strops.hpp`, `dictops.hpp`, `fs.hpp`, `filestream.hpp`,
-  `timeops.hpp`, `simse.hpp`), the one implementations file `native.cpp`
+  | `strview.hpp`, `resources.hpp`,
+  `fs.hpp`, `filestream.hpp`, `simse.hpp`), the one implementations file `native.cpp`
   (the `native(...)` symbols: file I/O, directory listing, the clock), the
-  `_res.md` files that hold the RTL's *generated* C++ (`_res.md` for `spanOf`,
-  `smgen_collision_res.md` for the collision fixture - the `res` generator reads the
-  compiler's own pool, `impl_specs/generators.md`), AND the
+  `_res.md` file that holds the RTL's *generated* C++ - one section per header it came
+  from (`strtable`, `timeops`, `listops`, `dictops`, `strops`, and `spanOf`, plus the
+  collision fixture's `spanOfEmpty`) with `symbol:`/`emit: always` deciding how a
+  declaration reaches it
+  (`impl_specs/generators.md`) - AND the
   **prelude** `.kt` files (`rtl.kt`, `Span.kt`, `StrView.kt`, `xml.kt`,
-  `astxml.kt`, `fs.kt`, `resources.kt`) declaring the RTL surface.
+  `astxml.kt`, `fs.kt`, `resources.kt`) declaring the RTL surface - and, where the only
+  thing C++ must supply is a raw pointer, *implementing* it: `resources.kt`'s
+  `Resources.entries/get/has/count` are Simse over the `Span<ResourceEntry>`
+  `resources.hpp` hands out, and `rtl.kt`'s `append`/`toArray`/`toString`/... reach the
+  `listops` section of `_res.md` the way `Span.kt`'s `spanOf` reaches `spanOf`.
+  The three headers that text came from (`strtable.hpp`, `timeops.hpp`, `listops.hpp`)
+  are gone, and so are their `#include`s.
   `List<T>` is `SmallVector<T, 4>`, `Str` is the inline `SmString`
   (`smstring.hpp`), whose buffer is `strsmallvector.hpp`'s `StrSmallVector`, the
   char-specialized form of the `SmallVector<char, 24>` layout — `Int _len`
@@ -201,7 +208,11 @@ driver's - and `build.bat` can compile it.
 - `cppsrc/compiler/Driver.kt` — the CLI and the shared transpile core: it loads the
   prelude set, scans the module roots, parses and analyzes the compilation, and
   amalgamates the result into one C++ translation unit. The compiler *is* this file plus
-  the stages it imports; there is no separate C++ driver.
+  the stages it imports; there is no separate C++ driver. It is also where **generated
+  Simse sources** enter (`@SmGen("kt", ...)`): after parsing the modules it reads
+  `<section>:source` from the program's resources, joins them into one module and parses
+  it with `driverParseSource`, so the front end runs again over text that is not a file
+  (`impl_specs/generators.md`).
 - `stress/` - the end-to-end stress corpus: one folder per Simse project
   (`src/` + `expected.stdout` + optional `args`/`stdin`/`expected.cpp`/
   `expected.transpile-error`), run by `tools/stress.js` against the compiler under
@@ -268,11 +279,13 @@ Key design points:
   `impl_specs/reification.md`): distinct Simse instantiations become distinct
   C++ types; `SmallVector<N,T>` maps to `SmallVector<T,N>`.
 - **Native boundary** (see `impl_specs/native-interop.md`): `native fun` /
-  `native("Symbol") fun` declares a function whose body is hand-written C++.
-  Container/string/dict/fs operations are prelude extensions over RTL C++
-  templates (`listops.hpp`, `strops.hpp`, `dictops.hpp`, `span.hpp`, `fs.hpp`).
+  `native("Symbol") fun` declares a function whose body is hand-written C++. A body that
+  is a *resource* is `@SmGen("res", section[, symbol])` instead, which is where the RTL's
+  own operations live now (`cppsrc/rtl/_res.md`); what is left as `native` is the
+  platform's C++ (`native.cpp`) and the type core.
 - **Prelude**: `cppsrc/rtl/*.kt` is implicitly in scope everywhere; its
-  method bodies are NOT emitted (behavior lives in the RTL C++ headers).
+  method bodies are NOT emitted (behavior lives in the RTL's C++, which is a header or a
+  resource section).
 - **Modules/packages** (see `specs/modules.md`): a **module is a directory**, a
   **package is a namespace** declared by a mandatory `package a.b.c` as each
   file's first declaration. Imports are style (A): the compiler scans module
@@ -336,9 +349,12 @@ Key design points:
   could parse an `@` in the prelude. The published bootstrap never needs a hand-patch:
   refreshing it (`--out cppsrc/simse_bootstrap.cpp`) carries the new scanner and parser.
 - **A `_res.md` file under `cppsrc` is part of the compiler**, not of a program: the
-  compiler's own build pools it and the `res` generator reads it at compile time
-  (`impl_specs/generators.md`). Edit one and the next build is the one that sees it -
-  and the amalgamation changes, so refresh the bootstrap too.
+  compiler's own build pools it, the `res` generator reads it *first* while the tree is
+  being compiled, and it is what every other program gets from the compiler's own table
+  (`impl_specs/generators.md`). Edit one and the next build is the one that sees it - and
+  the amalgamation changes, so refresh the bootstrap too. Because the tree's own file wins,
+  moving a header's C++ into a `_res.md` section needs no staged build (the *source* half -
+  a declaration that changes shape in the prelude `.kt` - still does).
 - **Prefer the container `for` to an index walk.** `for (*x in xs)` binds a *pointer* to
 each element - no copy per iteration, and a write through `x` reaches the element - while
 `for (x in xs)` binds a copy; the indexed form `for ((*x, i) in xs)` adds a counter that
@@ -421,8 +437,9 @@ its trailing arguments, `specs/functions.md`); `Dictionary<K,V>` (`get`/`has`/`i
 `data class` (with methods), `enum class` (with `toInt`/`fromInt`), `typealias`
 (incl. generic and function types); functions incl. extension functions and
 `native fun`; **attributes** (`@Identifier` + `@SmGen`, one per declaration, methods
-only: `specs/attributes.md`, `impl_specs/generators.md`) with the `cpp` and `res`
-generators and the `Sections` sink; `val`/`var` (locals, and at file level **static storage** -
+only: `specs/attributes.md`, `impl_specs/generators.md`) with the `cpp` (headers), `res`
+(C++ from a resource) and `kt` (generated Simse source) generators, and the `Sections`
+sink; `val`/`var` (locals, and at file level **static storage** -
 `specs/statics.md`); `if`/`else`, `when`, `while`,
 `break`/`continue`, `return`; the bitwise operators `& | ^ << >>` (precedence: bitwise
 binds *tighter* than a comparison, Python's order, `specs/built-in-types.md`);
@@ -475,14 +492,24 @@ ring: they name C++ files that no longer exist, and their evidence lines are his
 
 Do these only when asked; roughly prioritized:
 
-1. **Commit the work when asked.** The T35-T40 performance work is committed
+1. **Continue the resource migration** (T29 in `impl_specs/roadmap.md` did `strtable`,
+   `timeops`, `listops`, `dictops` and `strops`). What is left is the pair that is
+   declarations over `native.cpp` bodies (`fs.hpp`, `filestream.hpp`): the declarations can
+   move, the bodies cannot until the language has file/string APIs of its own - and unlike
+   the five that moved, `native.cpp`'s own translation unit needs those declarations, so a
+   header has to stay for it either way. The type core (`types.hpp`, `containers.hpp`,
+   `smstring.hpp`, `smdictionary.hpp`, `span.hpp`, `strview.hpp`, `strsmallvector.hpp`,
+   `optional.hpp`, `result.hpp`, `functional.hpp`, `xml.hpp`, `astxml.hpp`) stays: it is
+   what the amalgamation is compiled *against*, and some of it needs language features
+   that do not exist yet (statics in an object, a ref-counted layout).
+2. **Commit the work when asked.** The T35-T40 performance work is committed
    (`d5de0f8`); anything after it is uncommitted as usual - never commit unless the
    user asks.
-2. **Stage-2 self-host**: the fixed point runs through the published bootstrap
+3. **Stage-2 self-host**: the fixed point runs through the published bootstrap
    (`tools/bootstrap.js`: compile it, transpile `cppsrc`, compare the bytes). A second
    generation (compile the bootstrap's own output, compare again) would strengthen the
    proof; `tools/stress.js` could also grow cases.
-3. **Deferred language features** (spec'd or implied, not implemented):
+4. **Deferred language features** (spec'd or implied, not implemented):
    attributes on types/fields/parameters/statements, stacked attributes, and
    per-instantiation generators (`@Json`, enum-to-string, int-to-enum -
    `impl_specs/generators.md`'s "Deferred" and roadmap T27);
@@ -504,12 +531,12 @@ Do these only when asked; roughly prioritized:
    JSON codegen, sockets/HTTP, Linux/macOS, user FFI) - is
    `impl_specs/user-language-roadmap.md`, with its own non-goals and open
    questions.
-4. **RTL spec convergence**: the RTL is a shim (`Str` is the spec-shaped inline
+5. **RTL spec convergence**: the RTL is a shim (`Str` is the spec-shaped inline
    `SmString`, `List` is `SmallVector<T, 4>`, `Dictionary` is the RTL's own
    `SmDictionary`; no `[refcount][typeId]` header). Divergences are
    documented in `impl_specs/rtl-abi.md`; the eventual target must match
    `specs/`.
-5. **Sema is quadratic in a single file's declaration count** (T40,
+6. **Sema is quadratic in a single file's declaration count** (T40,
    `impl_specs/capability-matrix.md`): every per-file stage is linear except sema
    (408 -> 6,155 ms when a one-file input grows 3-4x), so a single 30k+ line file
    would take seconds while many small files stay linear. Suspects in
@@ -517,12 +544,12 @@ Do these only when asked; roughly prioritized:
    `globalFunctions`/`packageDecls`, `buildVisible` re-running per file, per-call
    overload scans (`analyzeCall`, `markExtensionUsed`), `lookupValue`'s scope walk.
    Fix when a real workload needs it.
-6. **Ergonomics/robustness**: lambda typing is conservative (a body/return
+7. **Ergonomics/robustness**: lambda typing is conservative (a body/return
    mismatch surfaces as a C++ compile error, not a Simse diagnostic); generic
    type aliases aren't expanded when resolving an expected callable type; `Str`
    is byte-oriented (ASCII case mapping); the single ~190 KB amalgamated TU may
    need attention as the compiler grows.
-7. **SmDictionary's hit lookups are its weak spot** (T41,
+8. **SmDictionary's hit lookups are its weak spot** (T41,
    `impl_specs/capability-matrix.md`): the RTL's dictionary packs the cached hash
    and chain link next to the key and value, so iteration is a pointer walk (~8x),
    deep copies ~5x and miss lookups ~1.6x faster than the `std::unordered_map` it
@@ -530,17 +557,17 @@ Do these only when asked; roughly prioritized:
    (bucket-as-row-index, a second dependent load) leaves hit lookups on
    cache-resident tables ~1.8x slower. `SmallVector::operator[]`'s inline/heap
    branch per access and the cached-hash pre-test on hits are the other suspects.
-8. **`Dictionary` has no in-place access to a stored value** (T42): `get` copies
+9. **`Dictionary` has no in-place access to a stored value** (T42): `get` copies
    the value out and `insert` writes it back, so the 1BRC aggregation pays two
    lookups per line where the C++ baseline pays one - the last gap to the Bun
    reference (1.6x). A `getPtr`/`withValue`-style native is the
    next library change; it is a library gap, not a language one.
-9. **Lambda bodies are the last declarations without a type.** (What the inference
+10. **Lambda bodies are the last declarations without a type.** (What the inference
    proves, and why, is in `impl_specs/linear-lowering.md`, "Type inference on the
    lowered body" - not repeated here.) To close it: run `sema::inferTypes` on a
    lambda's body too, with a `sema::Body` built from the lambda's own parameters and
    return type; small, at the two `lambda()` call sites, and it is also the last
-   thing keeping a lambda body from flattening (item 10). The rest of the item:
+   thing keeping a lambda body from flattening (item 11). The rest of the item:
    - **The emitter could consume expression-level types** instead of guessing them
      (`inferType`/`memberCallReturn`/`findNativeExt` shrink to lookups); the
      inference already resolves more than the emitter asks it for.
@@ -556,7 +583,7 @@ Do these only when asked; roughly prioritized:
      Not blocking anything today.
    - The three recorded gaps (a prelude struct method such as `Span.size()`, a native
      extension called as a plain function, a call through a function-typed local).
-10. ~~**A flat body still keeps the program's own scopes**~~ **done**: every declaration
+11. ~~**A flat body still keeps the program's own scopes**~~ **done**: every declaration
    of a body moves to the top of it (`hoistSlots`), shadowed names are renamed first
    (`renameShadowed`, `_sm_<name>_<n>`), and the body is one scope with no blocks - the
    IL's own frame is flat, and the statement path agrees (515 of 528 bodies over
@@ -565,17 +592,30 @@ Do these only when asked; roughly prioritized:
      place) stays where it is, and the block around it with it: that is the only
      reason a body-level block survives (26 in the emitted compiler, against 21 before
      the change - the rest is the statement path's own residue). Closing it means
-     typing the three recorded inference gaps (item 9).
+     typing the three recorded inference gaps (item 10).
    - **The placement in the body is the cost knob**: every slot is live for the whole
      body (no liveness reuse). On the 1BRC the measurement says it costs nothing
      (1323 ms against 1322 ms for the same program emitted before this pass), so the
      knob is not worth turning until a workload says otherwise; the rule for a tighter
      placement is the one `spliceIsSafe` already computes.
-   - **Run the inference on lambda bodies** (item 9): besides typing them, that is
+   - **Run the inference on lambda bodies** (item 10): besides typing them, that is
      what lets a lambda's slots hoist and fold like any other body's.
 
 ## 9. Gotchas
 
+- **The emitter's type table is flat by name**, so a prelude type and a program type of
+  the same name collide: `cppsrc/resources/Resources.kt`'s reader pair had to be renamed
+  `ResourceItem` when the RTL's `ResourceEntry` arrived (the symptom is the prelude's own
+  code emitted against `nsN_ResourceEntry`). Keep prelude/RTL names unique project-wide.
+- **A *static* call's result has no inferred type** (`Resources.entries()` is emitted
+  fine, but a member chained straight onto it, `Resources.entries().size()`, resolves
+  against nothing and picks the wrong overload). Bind it to a typed local first - that is
+  what `resourcesCount` does.
+- **A `@SmGen("kt", ...)` declaration must not live in package `rtl`**, which is where
+  the driver puts the generated module (a bare name there is the symbol a call reaches,
+  so the generated function can carry the declaration's own name). Same package means two
+  declarations of one name. A receiver form (`this`/`fun T.f`) is not supported for `kt`
+  yet either.
 - **A Kotlin formatter is active for `.kt` files in this editor.** It re-indents and, at
   its own width, breaks a long line - which can split `@SmGen(...) fun f(...)` onto two
   lines and shuffle the lines after it. The parser accepts both forms, so a *program* is
@@ -585,7 +625,10 @@ Do these only when asked; roughly prioritized:
 - **A generated section's items render at the end of their section**, so a
   resource-backed `bodies` text (a definition) lands after every emitted body. The
   matching `forward` declaration is what makes the call sites valid; a generator that
-  needs its text *earlier* must name an earlier section (or `forward`).
+  needs its text *earlier* must name an earlier section (or `forward`). The emitter
+  writes nothing into `support` or `forward` itself - they exist for generated text, and
+  `support` is what the *preamble* needs (the string table's decoder), so it renders
+  before it.
 - `LNK1168` on build = a running `simse.exe` holds the output; kill it first.
 - `build.bat` defaults to a debug build (`/MDd`), so the MSVC debug STL asserts are
   live: bad input such as a directory passed where a `.kt` file is expected can
@@ -594,7 +637,25 @@ Do these only when asked; roughly prioritized:
 - Running the compiler with no `--root` and no inputs scans `.` - every `.kt` in
   the repository, including the stress cases, which each have their own `main`.
   Pass `--root cppsrc` (or another clean module root) instead.
-- Prelude `.kt` bodies are not emitted; put behavior in the RTL C++ headers.
+- Prelude `.kt` bodies are not emitted; put behavior in the RTL's C++ - a header for the
+  type core and the platform, a `cppsrc/rtl/_res.md` section for everything else
+  (`@SmGen("res", section[, symbol])`).
+- **A generator's declaration must carry the symbol the call reaches**, because a pass
+  that reads the declaration without the emitter's tables reads it from the *attributes*:
+  the parser fills `NativeSymbol`/`HasNativeSymbol` for both `cpp` and `res`, and
+  `linear`'s `listOf<T>` list literal is the pass that depends on it (`ilIsListOf`). A
+  `@SmGen("res", "listops")` declaration whose symbol is *not* in the attribute - the
+  2-argument form, which relies on the section's `symbol:` - is a real call and not a
+  `Pack`, so the emitter then has no type for it (`unsupported type 'T'` in the IL).
+  `listOf` names its symbol explicitly for that reason.
+- **A prelude generator is emitted only when reached** - by the name a call spells or by
+  the symbol a call reaches - so a call the *emitter itself* spells has to record its
+  reach (`emitFunctions` does it for the entry point's `simse_list_append`), and the
+  generator pass runs *after* every body for the same reason. Symptom when it is missed:
+  `identifier not found` in the generated C++ for a symbol nothing declared.
+- **Every block of the amalgamation starts with a blank line** (`Sections.appendBlock`),
+  so a generated text reads as its own block; a writer that already ends its text with a
+  blank line is not doubled.
 - **The prelude is read from disk at run time**, so a compiler older than
   `cppsrc/rtl/*.kt` sees a declaration it does not know how to emit (a new
   `native(...)` on a new type is the shape that bites: it falls back to the

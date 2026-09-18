@@ -47,55 +47,55 @@ void simse_strTableDecode(const char* pool, const Int* starts, const Int* length
 Int64 simse_nowMillis();
 Int64 simse_nowMicros();
 
-struct ns1_Counter;
-// stress/hello/src/main.kt:2
-SIMSE_PACK_PUSH
-struct ns1_Counter {
-    Int value;
-};
-SIMSE_PACK_POP
-ns1_Counter ns1__make_Counter(Int value) {
-    return ns1_Counter{value};
+// The program's string literals: one pool, and two run-length encoded index
+// series (offsets as deltas, then lengths), each as what to subtract from the
+// previous value; strtable.hpp has the stream format.
+static const Int __sm_stringCount = 6;
+static const char __sm_stringPool[] =
+    "// `triple(value)` (src/main.kt), the program's own generated function: the declaration\n// reaches this text, and the emitter never emits a prototype of its own for it.\nInt fixtures_triple(Int value);\n" "inline Int fixtures_triple(Int value) {\n    return value * 3;\n}\n" "fixtures_triple" "triple:forward" "triple:bodies" "triple:symbol" 
+;
+static const Int16 __sm_stringStarts[] = {6,4,0,-201,137,49,1,2,1};
+static const Int16 __sm_stringLens[] = {6,3,-201,137,49,1,2,1,1,0};
+static_assert(sizeof(__sm_stringPool) - 1 == 320, "the string pool and its length index disagree");
+static StrView __sm_stringTable[__sm_stringCount];
+static struct __SmStringTableInitType {
+    __SmStringTableInitType() {
+        Int starts[__sm_stringCount];
+        Int lens[__sm_stringCount];
+        simse_strTableExpand(__sm_stringStarts, starts, __sm_stringCount);
+        simse_strTableExpand(__sm_stringLens, lens, __sm_stringCount);
+        simse_strTableDecode(__sm_stringPool, starts, lens, __sm_stringTable,
+            __sm_stringCount);
+    }
+} __sm_stringTableInit;
+
+// The resources the compiler read from `_res.md` files (specs/resources.md):
+// string-table indices, key then value, and the one installer that builds
+// them into the program's `Resources` table before `main`.
+static const Int __sm_resourceIndex[] = {5,2,3,0,4,1};
+static const Int __sm_resourceCount = 3;
+namespace {
+    struct __SmResourceInit {
+        __SmResourceInit() {
+            Resources::install(__sm_stringTable, __sm_resourceIndex, __sm_resourceCount);
+        }
+    } __sm_resourceInit;
 }
 
-Int ns1_bump(ns1_Counter* self);
+// `triple(value)` (src/main.kt), the program's own generated function: the declaration
+// reaches this text, and the emitter never emits a prototype of its own for it.
+Int fixtures_triple(Int value);
 
-// stress/hello/src/main.kt:3
-Int ns1_bump(ns1_Counter* self) {
-    Int _sm_expr1;
-    Int _sm_expr2;
-    _sm_expr1 = self->value;
-    _sm_expr2 = _sm_expr1 + 1;
-    return _sm_expr2;
-}
-// stress/hello/src/main.kt:8
+// stress/smgen-res-program/src/main.kt:11
 int main() {
-    Int i;
-    Int total;
-    Bool _sm_expr1;
-    ns1_Counter c;
-    Bool _sm_expr2;
-    Int _sm_expr3;
-    i = 0;
-    total = 0;
-    L1:;
-    _sm_expr1 = i < 5;
-    if (!(_sm_expr1)) goto L2;
-    total = total + i;
-    i = i + 1;
-    goto L1;
-    L2:;
-    c = ns1__make_Counter(10);
-    _sm_expr2 = total > 5;
-    if (!(_sm_expr2)) goto L4;
-    std::cout << std::boolalpha << (total) << std::endl;
-    goto L5;
-    L4:;
-    _sm_expr3 = ns1_bump(simse_addressOf(c));
-    std::cout << std::boolalpha << (_sm_expr3) << std::endl;
-    L5:;
-    std::cout << std::boolalpha << (true) << std::endl;
+    Int _sm_expr1;
+    _sm_expr1 = fixtures_triple(14);
+    std::cout << std::boolalpha << (_sm_expr1) << std::endl;
     return 0;
+}
+
+inline Int fixtures_triple(Int value) {
+    return value * 3;
 }
 
 // Expands one run-length encoded series into `out`, which holds `count` values.

@@ -104,15 +104,33 @@ data class Sections(
         return out
     }
 
+    // `text` appended as a block of its own: a blank line first, unless the output already
+    // ends with one (or is empty). Nothing when `text` is empty, so an empty section costs
+    // nothing. The check is what keeps one blank line from becoming two where a writer
+    // already ended its text with one.
+    fun appendBlock(out: *Str, text: Str): Unit {
+        if (text.size() == 0) {
+            return
+        }
+        if (out.size() > 0 && !out.endsWith("\n\n")) {
+            out.append('\n')
+        }
+        out.appendStr(text)
+    }
+
     // The whole amalgamation: every section in order, its own text then its items.
+    //
+    // Every block starts fresh - a section's own text and each item alike - so a generated
+    // text never runs into the line before it, which is what keeps a resource's C++
+    // readable in the amalgamation (`impl_specs/generators.md`).
     fun render(): Str {
         var out: Str = Str()
         for (*section in this.sections) {
-            out.appendStrPtr(*section.text)
+            this.appendBlock(*out, section.text)
             val keys: List<Str> = section.items.keys()
             var k: Int = 0
             while (k < keys.size()) {
-                out.appendStr(section.items.get(keys[k]).value())
+                this.appendBlock(*out, section.items.get(keys[k]).value())
                 k = k + 1
             }
         }
@@ -121,12 +139,34 @@ data class Sections(
 }
 
 // The sections every compilation starts with, in the order the emitter assembles them:
-// includes, forward, types, statics, prototypes, init, bodies
-// (impl_specs/generators.md). `forward` starts empty - it is for generated
-// declarations - and `current` starts at `includes`, the emitter's first stage.
+// includes, support, profile, strings, resources, forward, types, statics, prototypes,
+// init, bodies (impl_specs/generators.md). Each one is a *phase* of the assembly, which
+// is what makes the order meaningful for a generator:
+//
+//   includes   the banner and the `#include`s
+//   support    generated text the *preamble* needs (a table's decoder, a clock's
+//              declaration); it renders before everything that follows, and the emitter
+//              writes nothing into it itself
+//   profile    the profiler's runtime, which a `--profile` build emits and which needs
+//              what `support` declared
+//   strings    the string-literal table and its initializer, which needs `support`'s
+//              decoder
+//   resources  the resource table and its installer
+//   forward    generated declarations that must precede the program's types and bodies
+//   types      the forward type declarations and the type definitions
+//   statics    file-level static storage
+//   prototypes every function's prototype
+//   init       the generated static-initialization pass
+//   bodies     every function body, and a generated definition that is not a declaration
+//
+// `current` starts at `includes`, the emitter's first stage.
 fun cgNewSections(): Sections {
     var list: List<NamedSection> = List<NamedSection>()
     list.append(NamedSection("includes", Str(), Dictionary<Str, Str>()))
+    list.append(NamedSection("support", Str(), Dictionary<Str, Str>()))
+    list.append(NamedSection("profile", Str(), Dictionary<Str, Str>()))
+    list.append(NamedSection("strings", Str(), Dictionary<Str, Str>()))
+    list.append(NamedSection("resources", Str(), Dictionary<Str, Str>()))
     list.append(NamedSection("forward", Str(), Dictionary<Str, Str>()))
     list.append(NamedSection("types", Str(), Dictionary<Str, Str>()))
     list.append(NamedSection("statics", Str(), Dictionary<Str, Str>()))

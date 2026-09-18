@@ -1,6 +1,7 @@
 #pragma once
 
 #include "containers.hpp"
+#include "span.hpp"
 #include "strview.hpp"
 #include "types.hpp"
 
@@ -9,15 +10,15 @@
 // Every entry is a pair of `StrView`s into that table, so the feature owns no text of its
 // own and copies none.
 //
-// The static methods are the shape Simse's `Resources.get(key)` needs - the shape
-// `Res<T>.ok(x)` has - because the emitter spells the call `Resources::get(...)`. The
-// Simse surface that gives them their signatures is the prelude file
-// cppsrc/rtl/resources.kt.
+// This header is only the *storage*: `install` (called by the table the emitter writes)
+// and the entries themselves. What the language's API *does* with them is Simse, in the
+// prelude file cppsrc/rtl/resources.kt - `Resources.get/has/count` are written there
+// over the `Span<ResourceEntry>` below, so the lookup is the language's own code and
+// this file has nothing to keep in step with it.
 //
-// `install` is not part of the language surface: the table the emitter writes just above
-// `main` calls it directly, with the program's string table and the `{key, value, key,
-// value, ...}` index of its entries. A program with no `_res.md` file emits no call, so
-// it carries none of this.
+// The one thing that cannot be Simse is the table itself: it is built at start-up, before
+// any of the program's code runs, from string-table indices the emitter writes, and the
+// prelude reaches it through `simse_resources_entries` - a raw pointer's worth of glue.
 SIMSE_PACK_PUSH
 struct ResourceEntry {
     StrView key;
@@ -26,25 +27,22 @@ struct ResourceEntry {
 SIMSE_PACK_POP
 
 struct Resources {
-    // The value `key` holds, empty when the key is absent. The key is taken by
-    // reference: a caller's literal is a `StrView` at the site and converts to a
-    // temporary `Str`, which binds to this without a second copy.
-    static StrView get(const Str& key);
-    static Bool has(const Str& key);
-    static Int count();
-
+    // Not part of the language surface: the table the emitter writes just above `main`
+    // calls this with the program's string table and the `{key, value, key, value, ...}`
+    // index of its entries. A program with no `_res.md` file emits no call, so it carries
+    // none of this.
     static void install(const StrView* table, const Int* index, Int count);
 };
 
 // The entries, built once by `install` and read by everything else. The storage is a
 // function-local static, so a program that never calls `install` never constructs it.
-inline List<ResourceEntry>& simse_resourcesTable() {
+inline List<ResourceEntry>& simse_resourcesStorage() {
     static List<ResourceEntry> entries;
     return entries;
 }
 
 inline void Resources::install(const StrView* table, const Int* index, Int count) {
-    List<ResourceEntry>& entries = simse_resourcesTable();
+    List<ResourceEntry>& entries = simse_resourcesStorage();
     entries.clear();
     for (Int i = 0; i < count; i++) {
         ResourceEntry entry;
@@ -54,37 +52,10 @@ inline void Resources::install(const StrView* table, const Int* index, Int count
     }
 }
 
-inline StrView Resources::get(const Str& key) {
-    List<ResourceEntry>& entries = simse_resourcesTable();
-    for (Int i = 0; i < (Int) entries.size(); i++) {
-        if (entries[i].key == key) return entries[i].value;
-    }
-    return StrView();
-}
-
-inline Bool Resources::has(const Str& key) {
-    List<ResourceEntry>& entries = simse_resourcesTable();
-    for (Int i = 0; i < (Int) entries.size(); i++) {
-        if (entries[i].key == key) return true;
-    }
-    return false;
-}
-
-inline Int Resources::count() {
-    return (Int) simse_resourcesTable().size();
-}
-
-// The prelude declares the three operations above as natives on the type, so the checker
-// has a signature to read; the emitter spells every call as the static form, so nothing
-// reaches these. They exist because a native declaration names a symbol.
-inline StrView simse_resources_get(Resources, const Str& key) {
-    return Resources::get(key);
-}
-
-inline Bool simse_resources_has(Resources, const Str& key) {
-    return Resources::has(key);
-}
-
-inline Int simse_resources_count(Resources) {
-    return Resources::count();
+// `Resources.entries()` (cppsrc/rtl/resources.kt): a borrowed view of the table. The
+// list is filled once, before the program runs, and never grows again, so the span stays
+// valid for the rest of the run.
+inline Span<ResourceEntry> simse_resources_entries() {
+    List<ResourceEntry>& entries = simse_resourcesStorage();
+    return Span<ResourceEntry>(entries.data(), entries.size());
 }

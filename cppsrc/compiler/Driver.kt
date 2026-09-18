@@ -62,8 +62,14 @@ fun driverAppendDecls(target: *AstXmlNode, source: *AstXmlNode): Unit {
 // and the whole raw token list goes to `parseModule`, which is where the trivia the
 // grammar never sees is dropped (spaces, comments, and a newline inside `(...)`).
 fun driverParseFile(fileName: Str): Res<AstXmlNode> {
+    return driverParseSource(readFile(fileName), fileName)
+}
+
+// The same for source text that is not a file: a generator's output. Its name is what
+// every diagnostic and source comment will call it.
+fun driverParseSource(text: Str, fileName: Str): Res<AstXmlNode> {
     var scanner: Scanner = Scanner(getTokenRules(), 0, 1, 1, Str())
-    scanner.setSource(readFile(fileName))
+    scanner.setSource(text)
     var raw: List<Token> = List<Token>()
     while (true) {
         val result: Res<Token> = scanner.nextToken()
@@ -76,6 +82,74 @@ fun driverParseFile(fileName: Str): Res<AstXmlNode> {
         raw.append(result.Value)
     }
     return parseModule(*raw, fileName)
+}
+
+// ---- generated Simse sources ----------------------------------------------
+//
+// `impl_specs/generators.md`, the `kt` generator: a `@SmGen("kt", section)` declaration's
+// implementation is *Simse source*, which the compiler compiles like any other module -
+// it is parsed, checked and emitted with the program. The source is read from
+// `<section>:source`, from the program's own resources first and the compiler's when the
+// program does not carry it, and the generated module is in package `rtl`, where a bare
+// name is the symbol a call reaches: the generated function carries the declaration's own
+// name and the call site reaches it unchanged.
+
+// Every `@SmGen("kt", section)` declaration in a module tree, in source order - a walk
+// that does not care where a declaration sits (a top-level function, a method, a nested
+// module).
+fun driverCollectKtGen(node: AstXmlNode, sections: *List<Str>): Unit {
+    if (node.name == AstNodeKind.Function
+        && xmlAttr(node, AstNodeAttributeKind.Generator) == "kt"
+    ) {
+        sections.append(cgGeneratorArg(xmlAttr(node, AstNodeAttributeKind.GeneratorArgs), 0))
+    }
+    var i: Int = 0
+    while (i < node.Children.count()) {
+        driverCollectKtGen(node.Children[i], sections)
+        i = i + 1
+    }
+}
+
+// The generated module's text, or "" when the program makes no `kt` declaration. Every
+// section has to exist: a declaration whose source is missing could only fail later, in
+// the C++, with an error that names no declaration.
+fun driverGeneratedSource(modules: List<AstXmlNode>, resources: List<ResourceItem>): Res<Str> {
+    var sections: List<Str> = List<Str>()
+    var m: Int = 0
+    while (m < modules.size()) {
+        driverCollectKtGen(modules[m], sections)
+        m = m + 1
+    }
+    if (sections.size() == 0) {
+        return Res<Str>.ok("")
+    }
+    var text: Str = "package rtl\n"
+    var i: Int = 0
+    while (i < sections.size()) {
+        val section: Str = sections[i]
+        var source: Str = resValueOf(resources, section + ":source")
+        if (source == "") {
+            val key: Str = section + ":source"
+            if (Resources.has(key)) {
+                source = Resources.get(key).toString()
+            }
+        }
+        if (source == "") {
+            return Res<Str>.err(
+                "simse: no source for @SmGen(\"kt\", \"" + section + "\")"
+                        + " (needs the resource " + section + ":source)"
+            )
+        }
+        // Where a section starts, for a diagnostic or an emitted source comment: the
+        // whole module is one synthetic file, so the line is all a reader has.
+        text.appendStr("\n// " + section + "\n")
+        text.appendStr(source)
+        if (source.size() == 0 || source[source.size() - 1] != '\n') {
+            text.append('\n')
+        }
+        i = i + 1
+    }
+    return Res<Str>.ok(text)
 }
 
 // The compilation set: every `*.kt` under each module root (in the given
@@ -251,10 +325,12 @@ fun main(args: List<Str>): Int {
     val files: List<Str> = driverGatherFiles(moduleRoots, inputs, preludeCanon)
 
     // The resources (`_res.md`, specs/resources.md): every file the module roots hold,
-    // parsed, joined, and spelled as the C++ literals the program's pool is built from. A
-    // compilation with no resource file carries an empty list and emits the same C++ as one
-    // built before the feature existed.
-    val resourceLiterals: List<Str> = resLoadLiterals(moduleRoots)
+    // parsed and joined once, so the generated sources below, the sections a generator
+    // emits and the program's pool all read the very same list. A compilation with no
+    // resource file carries an empty list and emits the same C++ as one built before the
+    // feature existed.
+    val resources: List<ResourceItem> = resLoad(moduleRoots)
+    val resourceEntries: List<Str> = resEntriesFlat(resources)
 
     var fileNames: List<Str> = List<Str>()
     var modules: List<AstXmlNode> = List<AstXmlNode>()
@@ -268,6 +344,24 @@ fun main(args: List<Str>): Int {
         fileNames.append(files[f])
         modules.append(parsed.Value)
         f = f + 1
+    }
+
+    // The generated Simse sources (`@SmGen("kt", ...)`, impl_specs/generators.md): the
+    // compiler's front end runs again over text that is not a file, and what comes out is
+    // an ordinary module - checked with the program and emitted after it.
+    val generated: Res<Str> = driverGeneratedSource(modules, resources)
+    if (!generated.isOk()) {
+        eprintln(generated.Error)
+        return 1
+    }
+    if (generated.Value != "") {
+        val parsedGenerated: Res<AstXmlNode> = driverParseSource(generated.Value, "<generated>/kt.kt")
+        if (!parsedGenerated.isOk()) {
+            eprintln(parsedGenerated.Error)
+            return 1
+        }
+        fileNames.append("<generated>/kt.kt")
+        modules.append(parsedGenerated.Value)
     }
 
     // Compilation-wide name/type resolution over the prelude and every module.
@@ -302,7 +396,7 @@ fun main(args: List<Str>): Int {
         g = g + 1
     }
 
-    val emitted: Res<Str> = emitProgram(cgInputs, resourceLiterals)
+    val emitted: Res<Str> = emitProgram(cgInputs, resourceEntries)
     if (!emitted.isOk()) {
         eprintln(emitted.Error)
         return 1

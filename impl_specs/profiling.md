@@ -53,9 +53,10 @@ The timer is the body's **first** statement on purpose: nothing precedes it, so 
 can cross into its scope (the rule `ilJumpCrossing` exists for), and the frame's hoisted
 declarations follow it.
 
-The clock is the RTL's `simse_nowMicros` (`cppsrc/rtl/timeops.hpp`,
-`cppsrc/native/Native.cpp`, and the prelude surface `nowMicros()` in `cppsrc/rtl/rtl.kt`) -
-a monotonic microsecond clock, beside `simse_nowMillis`.
+The clock is the RTL's `simse_nowMicros` (the `timeops` section of `cppsrc/rtl/_res.md`
+for the declaration, `cppsrc/rtl/native.cpp` for the definition, and the prelude surface
+`nowMicros()` in `cppsrc/rtl/rtl.kt`) - a monotonic microsecond clock, beside
+`simse_nowMillis`.
 
 ## Enabling it
 

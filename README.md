@@ -87,7 +87,9 @@ int main() {
 
 There is no interpreter, no VM and no runtime library to ship: a Simse program
 is C++ with a small prelude of helper types (`Str`, `List`, `Dictionary`,
-`Opt`, `Res`, `Array`, `Span`) defined in headers.
+`Opt`, `Res`, `Array`, `Span`) defined by the runtime's headers, and the C++ that used to
+need a header of its own is a resource the emitter puts in the amalgamation
+(`cppsrc/rtl/_res.md`).
 
 ## What it is for
 

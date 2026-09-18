@@ -136,7 +136,8 @@ Every string literal in the program is emitted **once**, into a pool of bytes at
 of the file; beside it the emitter writes two parallel indexes - where each entry starts
 and how many bytes it is, both stored as *what to subtract from the previous value* and
 both run-length encoded - and startup expands the indexes, drops them, and builds one
-`StrView` per entry (`cppsrc/rtl/strtable.hpp`). Each site that mentions a literal reads
+`StrView` per entry (the `strtable` section of `cppsrc/rtl/_res.md`, which the emitter
+emits into every program's `support` and `bodies`). Each site that mentions a literal reads
 its entry and asks for the owned `Str`:
 
 ```cpp
@@ -475,9 +476,9 @@ a name that no longer exists, since both are `StrView` now). `typeName` now chec
 (`cppsrc/codegen/Codegen.cpp` and the `cgIsRtlTypeName`/`typeName` mirror in
 `Codegen.kt`); T23 and the five differentials stay byte-identical.
 
-`simse_nowMillis` (`cppsrc/rtl/timeops.hpp`) is a monotonic millisecond clock for
-logging and for measuring a run; it exists because the benchmark needed to report
-its own time the way the C++ baseline does.
+`simse_nowMillis` (the `timeops` section of `cppsrc/rtl/_res.md`) is a monotonic
+millisecond clock for logging and for measuring a run; it exists because the benchmark
+needed to report its own time the way the C++ baseline does.
 
 The Simse surface, with the C++ symbol each one reaches (`cppsrc/rtl/fs.kt`,
 `cppsrc/rtl/rtl.kt`):

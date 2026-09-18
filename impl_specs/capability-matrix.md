@@ -2637,3 +2637,99 @@ compiler *did* catch and one it could not:
   moved with them. And the comments inside the remaining `.kt` sources still refer to the
   port's history ("the hand-written ring", "both rings") in places: they are the record of
   how each piece was ported, not a description of the tree.
+
+- **Generators: attributes, `@SmGen`, `Sections`, and generated Simse (T26/T27).** A
+  declaration can now name the thing that implements it: `@SmGen` is an attribute on a
+  body-less method (`specs/attributes.md`), `@Identifier` is one scanner token, and the
+  parser fills three AST attributes (`Attribute`/`Generator`/`GeneratorArgs`) - which is
+  also what `native("sym")` lowers to (`@SmGen("cpp", "defined-in-headers", "sym")`), so
+  the two spellings are one declaration (`bun tools/smgen.js` asserts their amalgamations
+  are byte-identical). Three generators exist: `cpp` (the C++ is in the headers, i.e.
+  `native`), `res` (the C++ is a resource the *compiler* carries - `cppsrc/rtl/_res.md`,
+  whose `spanOf` is where the RTL's `spanOf` moved out of `span.hpp`, and whose
+  `spanOfEmpty` section pins the documented last-write-wins collision), and `kt` (the
+  implementation is *Simse source* from `<section>:source`, which the driver parses and
+  compiles with the program).
+
+  The amalgamation's assembly is now a first-class object: `Sections`
+  (`cppsrc/codegen/CgSections.kt`) holds the named sections in render order
+  (`includes -> forward -> types -> statics -> prototypes -> init -> bodies`), a
+  generator's addition is a named item inside one of them (last write wins), and a new
+  name appends at the end. Routing the emitter through it was verified the strict way -
+  the compiler before and after it transpiles `cppsrc` to identical C++ - and that is why
+  the emitter's own text stays a sequential buffer inside its section: its bytes cannot
+  depend on the item dictionary.
+
+  Generating *Simse* rather than C++ text is the interesting half: a C++-text generator
+  cannot name a program type (`Point` is `ns1_Point`, an index over the sorted package
+  set), while generated Simse goes through the same sema and codegen as the program -
+  `stress/smgen-kt` declares `greeting` and the source in its `_res.md` implements it,
+  the call site unchanged. What is *not* built yet is the step `@Json` needs: per-
+  instantiation generation (the emitter discovering what was reached, choosing a mangled
+  symbol, and the generator emitting the closure), which is T28.
+- **The resources API is Simse now.** The lookup was the last part of the feature that
+  had to be C++; `resources.hpp` is down to the storage and `install`, plus one accessor,
+  `simse_resources_entries()`, that hands the table out as a `Span<ResourceEntry>`. Over
+  that, `cppsrc/rtl/resources.kt` writes `Resources.entries/get/has/count` in the
+  language - a size test and `StrView.startsWith` per entry, allocation-free, what the
+  C++ did - and the static call `Resources.get(k)` now resolves through
+  `Emitter.staticCallSymbol` to the prelude function's *symbol* (the name walk records
+  the same symbol, which is what makes the prelude body reachable). Two findings from
+  that move, both in `guide4ai.md`'s gotchas now: the emitter's type table is flat by
+  name (the compiler's reader type had to become `ResourceItem` so the RTL's
+  `ResourceEntry` could exist), and a *static* call's result has no inferred type, so a
+  chained member needs a typed local.
+- **Release builds default to whole-program optimization** (`/GL`, whose link-time codegen
+  is LTCG; `--no-lto` opts out). Measured here: transpile 0.87 s vs 0.86 s with and
+  without, compile+link 16.4 s vs 19.2 s - neutral on this machine, and now the default
+  because run time is what it is for. `cl` ignores a bare `/LTCG` (D9002); linking `/GL`
+  objects is what requests the LTCG pass.
+
+  Verified after all of the above: `bun tools/stress.js` **55/55** (five `smgen-*` cases,
+  five attribute diagnostics, the rest unchanged), `bun tools/smgen.js` 1/1,
+  `bun tools/bootstrap.js` - the published `cppsrc/simse_bootstrap.cpp` refreshed and both
+  fixed-point comparisons byte-identical - and `./simse.exe` reproducing `simse_out.cpp`
+  (release+`/GL`: 0.86 s for the self-transpile).
+
+- **The RTL's generated C++ is a resource now (T29).** `strtable.hpp`, `timeops.hpp`,
+  `listops.hpp`, `dictops.hpp` and `strops.hpp` are gone: their text is the
+  `strtable`/`timeops`/`listops`/`dictops`/`strops` sections of `cppsrc/rtl/_res.md`, and
+  `rtl.kt`'s declarations reach it with `@SmGen("res", section, symbol)` instead of
+  `native(...)` (no prelude string/list/dictionary operation is a `native` any more). The
+  emitted assembly grew the
+  sections that made that possible (`support`, `profile`, `strings`, `resources`,
+  `forward`, then the emitter's own phases), and every block - a section's text, each
+  generated item - renders with a blank line before it, so a resource's C++ reads as its
+  own block in the amalgamation rather than running into the line above it.
+
+  Three findings are worth keeping. **The lookup had to become "the tree's own `_res.md`
+  first, the compiler's table second"** (`Emitter.resText`/`resHas`, the rule the `kt`
+  generator already used): with only the compiler's baked table, a tree whose RTL text
+  *is* the file on disk could not be built at all - the section the compiler needed was
+  not in the compiler that was compiling it. **A `res` declaration has to carry its
+  symbol in the attributes** (`NativeSymbol`, filled for `cpp` and `res` alike): `linear`'s
+  `listOf<T>` list literal reads the symbol off the declaration without the emitter's
+  tables, so a declaration that named it only as the attribute's argument stopped being a
+  `Pack` and the emitter had no type for the call (the symptom was `unsupported type 'T'`
+  while emitting a body). And **the generator pass runs after every body**, because the
+  reachability rule that keeps a prelude generator out of programs that do not use it
+  must also see what the emitter spelled itself: the entry point's argument list is built
+  with `simse_list_append`, which has no call site in the source (`stress/main-args` pins
+  it). A fourth came with `strops`: **a call records the symbol of the declaration it
+  names** (`collectNames`), not just of a call on a type name - a program may name an RTL
+  symbol directly (`native("simse_str_trim") fun trimmedText(...)`, `stress/smgen-native`),
+  which linked while that C++ was a header and needs the symbol reach now that it is a
+  section.
+
+  The five headers were not one change but two: `strtable`/`timeops`/`listops`/`spanOf`
+  first, then `dictops` and `strops` - and the second is what surfaced the fourth finding
+  above. `List.contains`/`sort` were `native` "on purpose" in `rtl.kt` before (their C++ was
+  in `dictops.hpp`, which the comment had got wrong); they are `res` declarations now, like
+  everything else the prelude offers.
+
+  A program's own `_res.md` can supply generated C++ for itself now, which
+  `stress/smgen-res-program` pins. Verified: `bun tools/stress.js` **56/56**, the emitted
+  C++ goldens re-captured (the decoder's text moved into every program's amalgamation -
+  that is the cost of the header going away), `bun tools/smgen.js` 1/1, and the bootstrap
+  fixed point holds byte for byte.
+

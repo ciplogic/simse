@@ -813,10 +813,19 @@ data class Parser(
                 this.setError(pos, "a method whose C++ is generated must not have a body")
                 return this.emptyNode()
             }
-            if (generatorName == "cpp" && attrArgs.size() >= 2
-                && attrLiteralText(attrArgs[1]) == "defined-in-headers"
-            ) {
-                if (attrArgs.size() >= 3) {
+            // The *third* argument names the C++ symbol a call reaches, in both forms
+            // whose text is not emitted here: `cpp`/`defined-in-headers` (a header
+            // defines it) and `res` (a resource does). Whichever was written, the
+            // declaration carries it as `NativeSymbol`, because a pass that reads the
+            // declaration without the emitter's tables reads it there - `linear`'s
+            // `listOf<T>` list literal is the one that does (`ilIsListOf`).
+            if (attrArgs.size() >= 3) {
+                // `cpp` names the symbol after its `defined-in-headers` argument, `res`
+                // right after the section; a generator with no symbol of its own (`kt`)
+                // does not reach here at all.
+                val inHeaders: Bool = generatorName == "cpp"
+                        && attrLiteralText(attrArgs[1]) == "defined-in-headers"
+                if (generatorName == "res" || inHeaders) {
                     nativeSymbol = attrArgs[2]
                     hasNativeSymbol = true
                 }

@@ -37,7 +37,8 @@ per-feature status, see `impl_specs/capability-matrix.md`.
 
 | ID  | Task | Depends on | Status |
 | --- | --- | --- | --- |
-| T27 | Per-instantiation generators (`@Json`, enum-to-string, int-to-enum) | T26 | Not started |
+| T28 | Per-instantiation generators (`@Json`, enum-to-string, int-to-enum) | T27 | Not started |
+| T29 | The RTL's generated C++ is a resource (`strtable`, `timeops`, `listops`, `spanOf`) | T26, T27 | Done |
 
 ### T26 - Generators: attributes + `@SmGen` + `Sections` - **Done**
 
@@ -73,15 +74,75 @@ Each step is verified; `impl_specs/generators.md` is the spec of record and
    `@SmGen("res", "spanOf")` in `cppsrc/rtl/Span.kt`. Call sites are unchanged
    (`simse_spanOf(...)`) and the whole corpus is green.
 
-### T27 - Per-instantiation generators - Not started
+### T27 - Generated Simse sources - **Done**
 
-The model is in `impl_specs/generators.md` ("Deferred"): instantiation collection,
-mangled symbols, a generator invoked per instantiation with its concrete type
-arguments, positioned diagnostics, and the `@Json` sugar. Also: enum-to-string and
-int-to-enum as trailing sections, the program's own `_res.md` as a generator's input,
-and attributes on things other than methods.
+A `@SmGen("kt", section)` declaration's implementation is Simse source, read from
+`<section>:source` (the program's own resources first, then the compiler's), joined by the
+driver into one module under the synthetic name `<generated>/kt.kt`, and compiled with the
+program - parsed, checked by `analyze`, emitted after it. The generated module is package
+`rtl`, so a bare name is the symbol a call reaches and the generated function carries the
+declaration's own name; nothing is emitted for the declaration itself, not even a
+prototype.
+
+Verified by `stress/smgen-kt` (end to end: declaration in `fixtures`, source in the
+case's `_res.md`, call site unchanged) and `stress/diagnostic-smgen-kt-missing` (the
+driver names the missing section). `impl_specs/generators.md` is the spec of record.
+
+### T28 - Per-instantiation generators - Not started
+
+The model is in `impl_specs/generators.md` ("Deferred"): a generator whose output is
+*built in code* rather than read from a resource, invoked per instantiation the emitter
+actually reached, with a mangled symbol the emitter chose, emitting the transitive
+closure of what the type needs - and the serializer itself written in Simse. That is the
+step that makes `@Json` (and enum-to-string, int-to-enum as trailing sections) possible.
+Also deferred: attributes on things other than methods, and user-supplied generators.
 
 See `impl_specs/generators.md` and `specs/attributes.md`.
+
+### T29 - The RTL's generated C++ is a resource - **Done**
+
+What a header held is a `_res.md` section now (`impl_specs/generators.md` is the spec of
+record). Steps, all verified:
+
+1. **The sections the assembly needs** (`cppsrc/codegen/CgSections.kt`): `support` (text the
+   preamble needs), `profile`, `strings`, `resources`, `forward` (generated declarations),
+   then types/statics/prototypes/init/bodies. Each block renders with a blank line before
+   it, so a generated text reads as its own block.
+2. **The lookup is the tree's own resources first** (`Emitter.resText`/`resHas`), the
+   compiler's table second - the rule `kt` already used. This is what lets the RTL's C++ be
+   a resource at all: while the compiler is built, the tree's `_res.md` is the newer one.
+3. **`@SmGen("res", section, symbol)`** - a *shared* section (one with no `symbol:`) holds
+   a header's worth of functions, so each declaration names its symbol; `section:emit` =
+   `always` marks text the compiler emits for every program.
+4. **The generator pass runs after every body**, because its reachability rule must see
+   what the emitter spelled itself (the entry point's `simse_list_append`).
+5. **The parser fills `NativeSymbol` for a `res` declaration** - a pass that reads the
+   declaration without the emitter's tables reads the symbol there, which is what keeps
+   `listOf<T>` the list literal.
+6. **The RTL text moved** into `cppsrc/rtl/_res.md` - `strtable` and `timeops`
+   (`emit: always`), `listops`, `dictops` and `strops` (shared) and `spanOf` - and
+   `strtable.hpp`, `timeops.hpp`, `listops.hpp`, `dictops.hpp` and `strops.hpp` are deleted
+   (their `#include`s went with them). `rtl.kt`'s declarations are `@SmGen("res", ...)`, and
+   none of the prelude's string/list/dictionary operations is `native` any more.
+7. **A call records the symbol of the declaration it names** (`collectNames`), not just a
+   call on a type name: a program that names an RTL symbol directly
+   (`native("simse_str_trim") fun trimmedText(...)`) linked while the C++ was in a header
+   and stopped when it moved into a section - the section is emitted only when it is
+   reached, and the only thing the program's call site spells is the *symbol*
+   (`stress/smgen-native` is the case).
+8. **Regression cases**: `stress/smgen-res-program` (a program's own `_res.md` supplies the
+   text) and `stress/main-args` (an emitter-spelled symbol is reached).
+
+Verified: `bun tools/stress.js` 56/56, `bun tools/smgen.js` byte-identical, and the
+bootstrap fixed point holds (`bun tools/bootstrap.js`).
+
+Still hand-written C++, in this order of ease: `fs.hpp` + `filestream.hpp` (declarations
+over `native.cpp` bodies - the declarations can move, the bodies cannot until the language
+has file/string APIs of its own) and the type core (`types.hpp`, `containers.hpp`,
+`smstring.hpp`, `smdictionary.hpp`, `span.hpp`, `strview.hpp`, `strsmallvector.hpp`,
+`optional.hpp`, `result.hpp`, `functional.hpp`, `xml.hpp`, `astxml.hpp`), which is what the
+amalgamation is compiled *against* and which needs language features that do not exist yet
+(statics in an object, a ref-counted layout), so it stays.
 
 ## Non-goals (for now)
 

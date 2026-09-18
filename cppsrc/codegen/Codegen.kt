@@ -301,12 +301,14 @@ fun cgIsMainArgs(decl: *AstXmlNode): Bool {
 data class Emitter(
     var inputs: List<CgInput>,
 
-// The resources the compiler read from `_res.md` files (specs/resources.md), in the shape
-// the pool wants: the C++ literal of every key and value, key then value
-// (`resources.resLoadLiterals`), so entry `i` is the literals `2*i` and `2*i + 1`. A list
-// of `Str` rather than the entries themselves, because this struct is emitted before the
-// resources package's own types (`CgStringTable.kt`'s note on file order).
-    var resourceLiterals: List<Str>,
+// The resources the compiler read from the tree's `_res.md` files (specs/resources.md),
+// as the flat list `resources.resEntriesFlat` builds: key, value, key, value, ... in the
+// order the files were read, each text as itself. What a generator reads its C++ from
+// (`resText`), and what the emitter pools (`collectResourceLiterals` quotes each text on
+// the way in). A list of `Str` rather than the entries themselves, because this struct is
+// emitted before the resources package's own types (`CgStringTable.kt`'s note on file
+// order).
+    var resourceEntries: List<Str>,
 
     var sections: Sections,
     var failed: Bool,
@@ -589,28 +591,47 @@ data class Emitter(
                     if (xmlAttr(decl, AstNodeAttributeKind.HasNativeSymbol) == "true") {
                         symbol = cgUnquote(xmlAttr(decl, AstNodeAttributeKind.NativeSymbol))
                     }
-                    // A declaration whose C++ a generator owns: `@SmGen("res", section)`
-                    // is the resource-backed one (impl_specs/generators.md). Nothing is
-                    // emitted for it here - its text is a resource, added to its section
-                    // in `emitGenerators` - and only the symbol it is called by is
-                    // registered now, because a call site needs it during emission.
-                    if (xmlAttr(decl, AstNodeAttributeKind.Generator) == "res") {
-                        val res: Str = cgGeneratorArg(
-                            xmlAttr(decl, AstNodeAttributeKind.GeneratorArgs), 0
-                        )
-                        val symbolKey: Str = res + ":symbol"
-                        if (Resources.has(symbolKey)) {
-                            symbol = Resources.get(symbolKey).toString()
+                    // A declaration whose C++ a generator owns (impl_specs/generators.md).
+                    // `res` places resource text in the emitted sections
+                    // (`emitGenerators`); `kt` names Simse source the driver compiles with
+                    // the program, so nothing is emitted for the declaration at all - not
+                    // even a prototype, because the generated function carries its own
+                    // declaration and the two spellings (a native's `const T&`, a body's
+                    // `T`) would be two different C++ functions. The symbol is the
+                    // declaration's own name, which is what the generated module's
+                    // package (`rtl`) makes the emitted name.
+                    val generator: Str = xmlAttr(decl, AstNodeAttributeKind.Generator)
+                    if (generator == "kt") {
+                        this.nativeSymbols.insert(declName, symbol)
+                    } else if (generator == "res") {
+                        val args: Str = xmlAttr(decl, AstNodeAttributeKind.GeneratorArgs)
+                        val res: Str = cgGeneratorArg(args, 0)
+                        // The symbol a call reaches: the attribute's second argument,
+                        // then the resource's own `symbol:`, then the declaration's name.
+                        // A *shared* resource - one section holding a header's worth of
+                        // functions - has to name each declaration's symbol here, because
+                        // the section itself cannot carry one.
+                        val attrSymbol: Str = cgGeneratorArg(args, 1)
+                        if (attrSymbol != "") {
+                            symbol = attrSymbol
+                        } else {
+                            val symbolKey: Str = res + ":symbol"
+                            if (this.resHas(symbolKey)) {
+                                symbol = this.resText(symbolKey)
+                            }
                         }
                         this.resGens.append(
                             CgResGen(decl, res, symbol, declName, input.prelude)
                         )
+                        this.nativeSymbols.insert(declName, symbol)
                     } else {
                         this.nativeDecls.append(CgNativeDecl(decl, input.fileName, symbol, input.prelude))
+                        this.nativeSymbols.insert(declName, symbol)
                     }
-                    this.nativeSymbols.insert(declName, symbol)
                     val params: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
-                    if (params.size() > 0 && xmlAttr(params[0], AstNodeAttributeKind.Name) == "this") {
+                    if (generator != "kt" && params.size() > 0
+                        && xmlAttr(params[0], AstNodeAttributeKind.Name) == "this"
+                    ) {
                         val ext: CgNativeExt = CgNativeExt(
                             symbol, xmlChild(params[0], AstNodeKind.Type),
                             xmlChild(decl, AstNodeKind.ReturnType),
@@ -1155,10 +1176,11 @@ data class Emitter(
         )
     }
 
-    // Generators (impl_specs/generators.md). Today there is one: `res`, whose C++ text
-    // is a resource the *compiler* carries (`Resources.get`) - `cppsrc/rtl/_res.md` for
-    // the RTL's own generated functions - so a resource under the compiler's module root
-    // becomes code in every program that reaches the declaration.
+    // Generators (impl_specs/generators.md). `res` is the one that places *C++* text in the
+    // sections - `cppsrc/rtl/_res.md` for the RTL's own generated functions, so a section
+    // under the compiler's module root becomes code in every program that reaches the
+    // declaration, and a program's own `_res.md` may supply one for itself (`kt` reads its
+    // text in the driver instead, because what it holds is Simse source).
     //
     // The text goes into the section its own key names (`<resource>:<section>`), under
     // the symbol as the item's key: two declarations that name the same symbol in the
@@ -1170,20 +1192,109 @@ data class Emitter(
     // body follows. A program's own declaration is always emitted, so one generated text
     // may call another; a prelude text must not (the call would be invisible here, since
     // a name inside a resource is not parsed).
+
+    // Where a resource key is looked up in `resourceEntries`: the index of the key in the
+    // flat key/value list, or -1. Two texts per entry, so the step is two.
+    fun resIndex(key: Str): Int {
+        var i: Int = 0
+        while (i + 1 < this.resourceEntries.size()) {
+            if (this.resourceEntries[i] == key) {
+                return i
+            }
+            i = i + 2
+        }
+        return -1
+    }
+
+    // The text `key` holds, the *program's* resources first: the tree being compiled
+    // carries the RTL's own `_res.md` while the RTL is part of the tree (the compiler's
+    // own build), and its own sections whenever it is a program. The compiler's table
+    // (`Resources`, the sections its own `_res.md` was built with) is the fallback, which
+    // is what hands every *other* program the RTL's C++ without that program having to
+    // carry the RTL's resource file. The same rule the `kt` generator's source lookup
+    // spells out (`Driver.driverGeneratedSource`).
+    fun resText(key: Str): Str {
+        val at: Int = this.resIndex(key)
+        if (at >= 0) {
+            return this.resourceEntries[at + 1]
+        }
+        return Resources.get(key).toString()
+    }
+
+    // True when either list carries `key`. A key may hold an *empty* text - a section with
+    // nothing under it - so this and `resText` are separate questions.
+    fun resHas(key: Str): Bool {
+        if (this.resIndex(key) >= 0) {
+            return true
+        }
+        return Resources.has(key)
+    }
+
+    // The sections a list marks `emit: always` (`<section>:emit` holds `always`): text the
+    // compiler emits for every program, with no declaration to hang it on. Both lists are
+    // walked, the program's first; which text then wins is `resText`'s business, so this
+    // only has to find the key in either.
+    fun resAlwaysSections(): List<Str> {
+        var out: List<Str> = List<Str>()
+        var i: Int = 0
+        while (i + 1 < this.resourceEntries.size()) {
+            val key: Str = this.resourceEntries[i]
+            if (key.endsWith(":emit") && this.resourceEntries[i + 1] == "always") {
+                out.append(key.substr(0, key.size() - 5))
+            }
+            i = i + 2
+        }
+        val all: Span<ResourceEntry> = Resources.entries()
+        var e: Int = 0
+        while (e < all.size()) {
+            val entryKey: Str = all[e].key.toString()
+            if (entryKey.endsWith(":emit") && all[e].value.toString() == "always") {
+                out.append(entryKey.substr(0, entryKey.size() - 5))
+            }
+            e = e + 1
+        }
+        return out
+    }
+
+    // A resource section's whole text: `<section>:<emit-section>` for every section name,
+    // added under the item key the section itself decides. A section that declares
+    // `symbol:` is keyed by it - two declarations of one symbol then replace each other,
+    // last write wins - and a section that does not is keyed by its own name, which is the
+    // *shared* form: one section holds a header's worth of functions and is emitted once,
+    // however many declarations reach it.
+    fun addResourceSection(section: Str): Unit {
+        var item: Str = section
+        val declared: Str = section + ":symbol"
+        if (this.resHas(declared)) {
+            item = this.resText(declared)
+        }
+        val names: List<Str> = this.sections.names()
+        var i: Int = 0
+        while (i < names.size()) {
+            val key: Str = section + ":" + names[i]
+            if (this.resHas(key)) {
+                this.sections.add(names[i], item, this.resText(key))
+            }
+            i = i + 1
+        }
+    }
+
     fun emitGenerators(): Unit {
         for (*gen in this.resGens) {
-            if (gen.prelude && !this.referencedNames.has(gen.name)) {
+            // By the name a call spells, or by the *symbol* a call reaches: a call on a
+            // type name records its symbol (`collectNames`), and so does the entry point's
+            // argument list, which the emitter spells itself (`emitFunctions`). This runs
+            // after every body for the same reason: what the emitter spelled is a reach
+            // the source walk cannot see.
+            if (gen.prelude && !this.referencedNames.has(gen.name)
+                && !this.referencedNames.has(gen.symbol)
+            ) {
                 continue
             }
-            val names: List<Str> = this.sections.names()
-            var i: Int = 0
-            while (i < names.size()) {
-                val key: Str = gen.resource + ":" + names[i]
-                if (Resources.has(key)) {
-                    this.sections.add(names[i], gen.symbol, Resources.get(key).toString())
-                }
-                i = i + 1
-            }
+            this.addResourceSection(gen.resource)
+        }
+        for (*section in this.resAlwaysSections()) {
+            this.addResourceSection(section)
         }
     }
 
@@ -1251,9 +1362,33 @@ data class Emitter(
 
     // ---- prelude reachability ---------------------------------------------
 
+    // The symbol a call on a *type name* reaches: `Resources.get(k)` is a declaration
+    // whose implementation is elsewhere - today a prelude function with a body, named by
+    // the declaration's own symbol (`cppsrc/rtl/resources.kt`) - so the call is that
+    // symbol. The lookup is over the explicit-`this` natives, which are already keyed by
+    // the declaration's name and carry the receiver type and the symbol. Empty when there
+    // is no such declaration, which is what the caller falls back on.
+    fun staticCallSymbol(receiverName: Str, calleeName: Str): Str {
+        val extensions: Opt<List<CgNativeExt>> = this.nativeExtensions.get(calleeName)
+        if (!extensions.hasValue()) {
+            return ""
+        }
+        for (*ext in extensions.value()) {
+            if (this.outerTypeName(ext.receiver) == receiverName) {
+                return ext.symbol
+            }
+        }
+        return ""
+    }
+
     // Every call name in a node's subtree: a callee is a name (`f(x)`), a generic name
     // (`f<Int>(x)`) or a member (`x.m(...)`), and in all three the call site spells it as
-    // the `Name` attribute of the callee node.
+    // the `Name` attribute of the callee node. A call records the *symbol* it reaches as
+    // well, because that symbol may name C++ that is somewhere else: a `res` declaration's
+    // text is emitted only when its section is reached (`emitGenerators`), and the call
+    // site never spells the prelude's own name for it (`Resources.get` is the shape that
+    // made this necessary, and a program naming an RTL symbol directly -
+    // `native("simse_str_trim") fun trimmedText(...)` - is the other).
     fun collectNames(node: AstXmlNode, names: *Dictionary<Str, Bool>): Unit {
         // The string literals ride the same walk: this is the emitter's one pass over the
         // whole program, so the table below covers every body it will emit. A literal the
@@ -1266,6 +1401,21 @@ data class Emitter(
             val name: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
             if (name != "") {
                 names.insert(name, true)
+                val named: Opt<Str> = this.nativeSymbols.get(name)
+                if (named.hasValue()) {
+                    names.insert(named.value(), true)
+                }
+            }
+            if (xmlKind(callee) == AstNodeCategory.ExprMember) {
+                val recv: AstXmlNode = xmlChild(callee, AstNodeKind.Receiver)
+                if (xmlKind(recv) == AstNodeCategory.ExprName) {
+                    val symbol: Str = this.staticCallSymbol(
+                        xmlAttr(recv, AstNodeAttributeKind.Name), name
+                    )
+                    if (symbol != "") {
+                        names.insert(symbol, true)
+                    }
+                }
             }
         }
         this.collectTypeNames(node)
@@ -1280,12 +1430,14 @@ data class Emitter(
 
     // The resources are literals like any other, and they go into the same pool the
     // program's string literals do (`specs/resources.md`, "What the program carries"):
-    // each key and value arrives already spelled as the C++ literal that holds its own
-    // bytes (`resources.resQuoteLiteral`), pooled before the sort so an index is the same
-    // in both rings.
+    // each key and value is spelled as the C++ literal that holds its own bytes
+    // (`resources.resQuoteLiteral`) here, where it is pooled, and both the pool and the table
+    // below read the same spelling back.
     fun collectResourceLiterals(): Unit {
-        for (*text in this.resourceLiterals) {
-            this.literals.add(text)
+        var i: Int = 0
+        while (i < this.resourceEntries.size()) {
+            this.literals.add(resQuoteLiteral(this.resourceEntries[i]))
+            i = i + 1
         }
     }
 
@@ -1296,12 +1448,12 @@ data class Emitter(
     // order. A program with no `_res.md` file writes none of this and stays byte-identical
     // to one built before the feature existed.
     fun emitResourceTable(): Unit {
-        if (this.resourceLiterals.size() == 0) {
+        if (this.resourceEntries.size() == 0) {
             return
         }
         var indices: List<Int> = List<Int>()
-        for (*text in this.resourceLiterals) {
-            indices.append(this.literals.indexOf(text))
+        for (*text in this.resourceEntries) {
+            indices.append(this.literals.indexOf(resQuoteLiteral(text)))
         }
         this.line(0, "// The resources the compiler read from `_res.md` files (specs/resources.md):")
         this.line(0, "// string-table indices, key then value, and the one installer that builds")
@@ -1311,7 +1463,7 @@ data class Emitter(
             0,
             fmtStr(
                 "static const Int __sm_resourceCount = |;",
-                (this.resourceLiterals.size() / 2).toString()
+                (this.resourceEntries.size() / 2).toString()
             )
         )
         this.line(0, "namespace {")
@@ -1804,10 +1956,16 @@ data class Emitter(
         }
         if (mainArgs) {
             val argName: Str = xmlAttr(params0[0], AstNodeAttributeKind.Name)
+            // The argument list is built here rather than by a call site in the program, so
+            // the reach is recorded as well as spelled: `append`'s C++ is a generated
+            // section (`cppsrc/rtl/_res.md`), and a prelude generator the program does not
+            // reach is not emitted (`emitGenerators`).
+            val appendSymbol: Str = "simse_list_append"
+            this.referencedNames.insert(appendSymbol, true)
             this.line(1, fmtStr("List<Str> | = List<Str>();", argName))
             this.line(1, "int simse_argIndex = 1;")
             this.line(1, "while (simse_argIndex < argc) {")
-            this.line(2, fmtStr("simse_list_append(|, Str(argv[simse_argIndex]));", argName))
+            this.line(2, fmtStr("|(|, Str(argv[simse_argIndex]));", appendSymbol, argName))
             this.line(2, "simse_argIndex = simse_argIndex + 1;")
             this.line(1, "}")
         }
@@ -3010,15 +3168,18 @@ data class Emitter(
                     +"(" + cgJoin(args, ", ") + ")"
                 }
 
-                // The `Resources` API: `Resources.get(k)`, `Resources.has(k)`,
-                // `Resources.count()` (`cppsrc/rtl/resources.kt`, specs/resources.md). A
-                // static form on a plain prelude type, like `Enum.fromInt` above - the C++
-                // `struct Resources` carries the statics - and the only three names it has.
-                if (xmlKind(receiverExpr) == AstNodeCategory.ExprName
-                    && xmlAttr(receiverExpr, AstNodeAttributeKind.Name) == "Resources"
-                    && (calleeText == "get" || calleeText == "has" || calleeText == "count")
-                ) {
-                    return "Resources::" + calleeText + "(" + cgJoin(args, ", ") + ")"
+                // The `Resources` API (`cppsrc/rtl/resources.kt`, specs/resources.md): a
+                // call on a *type name*, like `Enum.fromInt` above. The implementation is
+                // a declaration whose symbol is what the call reaches - today the
+                // prelude's own `resourcesGet`/`resourcesHas`/`resourcesCount`, which is
+                // where the lookup is written.
+                if (xmlKind(receiverExpr) == AstNodeCategory.ExprName) {
+                    val staticSymbol: Str = this.staticCallSymbol(
+                        xmlAttr(receiverExpr, AstNodeAttributeKind.Name), calleeText
+                    )
+                    if (staticSymbol != "") {
+                        return staticSymbol + "(" + cgJoin(args, ", ") + ")"
+                    }
                 }
                 if (xmlKind(receiverExpr) == AstNodeCategory.ExprGenericName) {
                     val genericName: Str = xmlAttr(receiverExpr, AstNodeAttributeKind.Name)
@@ -3099,10 +3260,17 @@ data class Emitter(
         text = text + "#include <iostream>\n"
         text = text + "#include <type_traits>\n"
         text = text + "\n"
-        // `--profile`: the instrumented profiler's runtime, which every emitted body of
-        // this program measures into (impl_specs/profiling.md). Nothing when it is off.
-        text = text + profPreludeText()
         this.sections.appendText(text)
+    }
+
+    // `--profile`: the instrumented profiler's runtime, which every emitted body of this
+    // program measures into (impl_specs/profiling.md). Nothing when it is off. It is a
+    // section of its own rather than part of the includes above, so that generated text
+    // which has to precede it - the `simse_nowMicros` declaration, which moved out of
+    // timeops.hpp into a resource - can be emitted in between (impl_specs/generators.md,
+    // the `support` section).
+    fun emitProfileText(): Unit {
+        this.sections.appendText(profPreludeText())
     }
 
     fun run(): Res<Str> {
@@ -3112,25 +3280,27 @@ data class Emitter(
         // are built here and threaded to the emitters rather than stored on the emitter:
         // the facts are one value per program, and a body's emitter only borrows it.
         val facts: SemFacts = this.collectFacts()
-        // The sections are the emitter's assembly stages, in this order
-        // (impl_specs/generators.md): includes, forward, types, statics, prototypes,
-        // init, bodies. `forward` is not begun here because the emitter writes nothing
-        // into it - it is where a generator's declaration goes, so it lands before
-        // every type and body.
+        // The sections are the emitter's assembly phases, in this order
+        // (impl_specs/generators.md): includes, support, profile, strings, resources,
+        // forward, types, statics, prototypes, init, bodies. `support` and `forward` are
+        // not begun here because the emitter writes nothing into them - they are where a
+        // generator's text goes, `support` for what the preamble below needs (a table's
+        // decoder, the clock the profiler reads) and `forward` for everything that has to
+        // precede the program's types and bodies.
         this.sections.begin("includes")
         this.preludeText()
         this.emitNativeDeclarations()
-        this.emitGenerators()
-        if (this.failed) {
-            return Res<Str>.err(this.error)
-        }
         // The walk above pooled every literal the program mentions, in first-encounter
         // order; sorting is what makes the indices canonical, so the table does not depend
         // on the order the walk happened to see them in. The resources are literals too, so
         // they are pooled before the sort.
         this.collectResourceLiterals()
         this.literals.sort()
+        this.sections.begin("profile")
+        this.emitProfileText()
+        this.sections.begin("strings")
         this.emitStringTable()
+        this.sections.begin("resources")
         this.emitResourceTable()
         this.sections.begin("types")
         this.emitForwardTypes()
@@ -3161,16 +3331,24 @@ data class Emitter(
         if (this.failed) {
             return Res<Str>.err(this.error)
         }
+        // The generators last: their text goes into the *named* sections, so the order it
+        // renders in is the section list's, not this call's - and running here means the
+        // reachability rule sees everything, including what the bodies' emission spelled
+        // itself (impl_specs/generators.md).
+        this.emitGenerators()
+        if (this.failed) {
+            return Res<Str>.err(this.error)
+        }
         return Res<Str>.ok(this.sections.render())
     }
 }
 
 // ---- entry point ----------------------------------------------------------
 
-fun newEmitter(inputs: List<CgInput>, resourceLiterals: List<Str>): Emitter {
+fun newEmitter(inputs: List<CgInput>, resourceEntries: List<Str>): Emitter {
     return Emitter(
         inputs,
-        resourceLiterals,
+        resourceEntries,
         cgNewSections(),
         false,
         "",
@@ -3211,12 +3389,12 @@ fun newEmitter(inputs: List<CgInput>, resourceLiterals: List<Str>): Emitter {
 // inputs always produce byte-identical output. On failure the error is formatted
 // as "<file>:<line>:<col>: <message>".
 //
-// `resourceLiterals` are the `_res.md` entries the driver read
-// (`resources.resLoadLiterals`, specs/resources.md): the C++ literal of every key and
-// value, key then value. They are pooled into the program's string table like any other
-// literal and installed into the `Resources` API at start-up. An empty list emits
-// neither.
-fun emitProgram(inputs: List<CgInput>, resourceLiterals: List<Str>): Res<Str> {
-    var emitter: Emitter = newEmitter(inputs, resourceLiterals)
+// `resourceEntries` are the `_res.md` entries the driver read
+// (`resources.resEntriesFlat`, specs/resources.md) as the flat key/value list of the texts
+// themselves. The emitter looks generated sections up in it (`resText`, program first) and
+// pools every key and value into the program's string table, which is what installs them
+// into the program's own `Resources` API at start-up. An empty list emits neither.
+fun emitProgram(inputs: List<CgInput>, resourceEntries: List<Str>): Res<Str> {
+    var emitter: Emitter = newEmitter(inputs, resourceEntries)
     return emitter.run()
 }
