@@ -203,10 +203,12 @@ diagnostic cases) all live there.
 
 The build also runs the differential ports of the scanner (`scanner_diff`), the
 skeleton parser (`skel_diff`), the parser (`parser_diff`), the sema pass
-(`sema_diff`), and the C++ emitter (`codegen_diff`); see
+(`sema_diff`), the resources parser (`resources_diff`, over the `tests/resources/*.md`
+fixtures), and the C++ emitter (`codegen_diff`); see
 `impl_specs/tasks/11-...`, `13-...`, `19-...`, `21-...`, and `22-...`.
 Each compares the hand-written C++ component against the transpiled Simse one over
-`tests/fixtures/*.kt`; the parser, sema, and codegen drivers additionally check
+`tests/fixtures/*.kt` (the resources one over its own `.md` fixtures); the parser,
+sema, and codegen drivers additionally check
 the reference output against the checked-in goldens.
 
 The `stage1_check` step is the two-step bootstrap: the C++ transpiler emits
@@ -222,6 +224,8 @@ the `emit_lang` fixture.
 
 ```
 simse_transpile <input.kt>... [-o <output.cpp>] [--prelude <file>]
+                [--root <dir>] [--module-root <dir>]...
+                [--showLinearRepresentation] [--profile]
 ```
 
 With no `-o` the output is written to `simse_out.cpp` in the current folder.

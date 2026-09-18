@@ -23,9 +23,9 @@
 
 // The generated translation unit qualifies every package's declarations with
 // `ns<index>_`, numbered in sorted package order (impl_specs/rtl-abi.md):
-// `codegen` is 1, `common` 2, `lex` 3, `linear` 4, `parser` 5, `sema` 6, so the
-// emitter's API below is `ns1_*`, the scanner surface `ns3_*`, and the parser
-// entry point `ns5_parseModule`.
+// `codegen` is 1, `common` 2, `lex` 3, `linear` 4, `parser` 5, `profiling` 6,
+// `resources` 7, `sema` 8, so the emitter's API below is `ns1_*`, the scanner surface
+// `ns3_*`, and the parser entry point `ns5_parseModule`.
 
 #ifndef SIMSE_SEMA_PRELUDE
 #define SIMSE_SEMA_PRELUDE ""
@@ -138,7 +138,7 @@ int main(int argc, char **argv) {
         }
         inputs.push_back(ns1_CgInput(name, input, false));
 
-        Res<Str> emitted = ns1_emitProgram(inputs);
+        Res<Str> emitted = ns1_emitProgram(inputs, List<Str>());
         if (emitted.isOk()) {
             printf("%s", emitted.Value.c_str());
         } else {

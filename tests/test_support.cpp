@@ -268,7 +268,9 @@ namespace tests {
         input.fileName = displayName;
         input.module = parsed.Value;
         inputs.push_back(input);
-        Res<Str> emitted = codegen::emitProgram(inputs);
+        // No resources: the fixture goldens are emitted from the source alone
+        // (specs/resources.md is a driver-level input, not a fixture one).
+        Res<Str> emitted = codegen::emitProgram(inputs, List<Str>());
         result.hasCpp = true;
         result.cpp = emitted.isOk() ? emitted.Value : ("CodegenError " + emitted.Error + "\n");
         return result;
@@ -298,7 +300,7 @@ namespace tests {
         input.fileName = name;
         input.module = parsed.Value;
         inputs.push_back(input);
-        Res<Str> emitted = codegen::emitProgram(inputs);
+        Res<Str> emitted = codegen::emitProgram(inputs, List<Str>());
         return emitted.isOk() ? emitted.Value : Str("");
     }
 

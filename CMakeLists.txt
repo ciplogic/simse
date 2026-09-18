@@ -35,7 +35,9 @@ add_library(simse_lib STATIC
         cppsrc/rtl/strops.hpp
         cppsrc/rtl/dictops.hpp
         cppsrc/rtl/fs.hpp
+        cppsrc/rtl/resources.hpp
         cppsrc/rtl/rtl.kt
+        cppsrc/rtl/resources.kt
         cppsrc/rtl/xml.kt
         cppsrc/rtl/Span.kt
         cppsrc/rtl/StrView.kt
@@ -65,6 +67,8 @@ add_library(simse_lib STATIC
         cppsrc/linear/Yield.h
         cppsrc/codegen/Codegen.cpp
         cppsrc/codegen/Codegen.h
+        cppsrc/resources/Resources.cpp
+        cppsrc/resources/Resources.h
         cppsrc/profiling/Profiling.cpp
         cppsrc/profiling/Profiling.h
         cppsrc/skelparser/SkeletonParser.cpp
@@ -329,6 +333,59 @@ add_custom_target(sema_diff ALL
         COMMENT "T21: diffing hand-written and transpiled sema diagnostics"
         VERBATIM)
 
+# --- differential resources parser (hand-written vs transpiled) --------------
+# Resources.kt is transpiled with its own package root and `cppsrc/common` (it reads
+# files through `readFile`). Both drivers parse the same `_res.md` fixtures with their
+# own ring and print one C++-quoted `key<TAB>value` line per entry, so the build diffs
+# the two parsers (specs/resources.md, "The file format").
+set(SIMSE_RESOURCES_GENERATED "${SIMSE_SELFHOST_DIR}/Resources.kt.cpp")
+set(SIMSE_RESOURCES_FIXTURES "${SIMSE_REPO_ROOT}/tests/resources")
+
+add_custom_command(
+        OUTPUT "${SIMSE_RESOURCES_GENERATED}"
+        COMMAND "${CMAKE_COMMAND}" -E make_directory "${SIMSE_SELFHOST_DIR}"
+        COMMAND $<TARGET_FILE:simse_transpile>
+                "${SIMSE_REPO_ROOT}/cppsrc/resources/Resources.kt"
+                --module-root "${SIMSE_REPO_ROOT}/cppsrc/common"
+                --module-root "${SIMSE_REPO_ROOT}/cppsrc/resources"
+                -o "${SIMSE_RESOURCES_GENERATED}"
+        DEPENDS "${SIMSE_REPO_ROOT}/cppsrc/resources/Resources.kt"
+                "${SIMSE_REPO_ROOT}/cppsrc/common/common.kt"
+                simse_transpile
+        COMMENT "transpiling Resources.kt"
+        VERBATIM)
+
+add_executable(resources_ref tests/resources_ref_main.cpp)
+target_link_libraries(resources_ref PRIVATE simse_lib)
+
+add_executable(resources_simse tests/resources_simse_main.cpp "${SIMSE_RESOURCES_GENERATED}")
+set_source_files_properties("${SIMSE_RESOURCES_GENERATED}" PROPERTIES HEADER_FILE_ONLY TRUE)
+target_include_directories(resources_simse PRIVATE "${SIMSE_SELFHOST_DIR}" "${SIMSE_REPO_ROOT}")
+target_link_libraries(resources_simse PRIVATE simse_native)
+
+set_target_properties(resources_ref resources_simse PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${SIMSE_SELFHOST_DIR}")
+
+add_custom_target(resources_diff ALL
+        COMMAND "${CMAKE_COMMAND}"
+                -DEXE=$<TARGET_FILE:resources_ref>
+                -DEXE_ARGS=${SIMSE_RESOURCES_FIXTURES}
+                -DOUT=${SIMSE_SELFHOST_DIR}/resources.ref.out
+                -DWORKDIR=${SIMSE_REPO_ROOT}
+                -P "${SIMSE_REPO_ROOT}/tests/run_capture.cmake"
+        COMMAND "${CMAKE_COMMAND}"
+                -DEXE=$<TARGET_FILE:resources_simse>
+                -DEXE_ARGS=${SIMSE_RESOURCES_FIXTURES}
+                -DOUT=${SIMSE_SELFHOST_DIR}/resources.kt.out
+                -DWORKDIR=${SIMSE_REPO_ROOT}
+                -P "${SIMSE_REPO_ROOT}/tests/run_capture.cmake"
+        COMMAND "${CMAKE_COMMAND}" -E compare_files --ignore-eol
+                "${SIMSE_SELFHOST_DIR}/resources.ref.out"
+                "${SIMSE_SELFHOST_DIR}/resources.kt.out"
+        DEPENDS resources_ref resources_simse
+        COMMENT "diffing hand-written and transpiled resource parsers"
+        VERBATIM)
+
 # --- T22: differential codegen (hand-written vs transpiled) ------------------
 # Codegen.kt is transpiled together with its transitive `import cppsrc.sema`
 # (which pulls in the parser, scanner, and common/xmlutil). Both drivers emit
@@ -347,6 +404,7 @@ add_custom_command(
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/sema"
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/linear"
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/profiling"
+                --module-root "${SIMSE_REPO_ROOT}/cppsrc/resources"
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/codegen"
                 -o "${SIMSE_CODEGEN_GENERATED}"
         DEPENDS
@@ -354,6 +412,7 @@ add_custom_command(
                 "${SIMSE_REPO_ROOT}/cppsrc/codegen/CgStringTable.kt"
                 "${SIMSE_REPO_ROOT}/cppsrc/codegen/IlCodeGen.kt"
                 "${SIMSE_REPO_ROOT}/cppsrc/profiling/Profiling.kt"
+                "${SIMSE_REPO_ROOT}/cppsrc/resources/Resources.kt"
                 "${SIMSE_REPO_ROOT}/cppsrc/sema/Sema.kt"
                 "${SIMSE_REPO_ROOT}/cppsrc/sema/TypeInfer.kt"
                 "${SIMSE_REPO_ROOT}/cppsrc/linear/ExpressionLowering.kt"
@@ -420,6 +479,7 @@ set(SIMSE_ALL_MIRRORS
         "${SIMSE_REPO_ROOT}/cppsrc/codegen/CgStringTable.kt"
         "${SIMSE_REPO_ROOT}/cppsrc/codegen/IlCodeGen.kt"
         "${SIMSE_REPO_ROOT}/cppsrc/profiling/Profiling.kt"
+        "${SIMSE_REPO_ROOT}/cppsrc/resources/Resources.kt"
         "${SIMSE_REPO_ROOT}/cppsrc/sema/Sema.kt"
         "${SIMSE_REPO_ROOT}/cppsrc/sema/TypeInfer.kt"
         "${SIMSE_REPO_ROOT}/cppsrc/linear/ExpressionLowering.kt"
@@ -436,6 +496,7 @@ set(SIMSE_ALL_MIRRORS
         "${SIMSE_REPO_ROOT}/cppsrc/rtl/StrView.kt"
         "${SIMSE_REPO_ROOT}/cppsrc/rtl/astxml.kt"
         "${SIMSE_REPO_ROOT}/cppsrc/rtl/rtl.kt"
+        "${SIMSE_REPO_ROOT}/cppsrc/rtl/resources.kt"
         "${SIMSE_REPO_ROOT}/cppsrc/rtl/xml.kt"
         "${SIMSE_REPO_ROOT}/cppsrc/rtl/fs.kt")
 set(SIMSE_STAGE1_DIR "${CMAKE_BINARY_DIR}/stage1")
@@ -460,6 +521,7 @@ set(SIMSE_COMPILER_ROOTS
         --module-root cppsrc/sema
         --module-root cppsrc/linear
         --module-root cppsrc/profiling
+        --module-root cppsrc/resources
         --module-root cppsrc/codegen
         --module-root cppsrc/compiler)
 

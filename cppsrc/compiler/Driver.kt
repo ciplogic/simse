@@ -32,6 +32,7 @@ import codegen
 import skelparser
 import common
 import profiling
+import resources
 
 // ---- module helpers -------------------------------------------------------
 
@@ -251,6 +252,12 @@ fun main(args: List<Str>): Int {
 
     val files: List<Str> = driverGatherFiles(moduleRoots, inputs, preludeCanon)
 
+    // The resources (`_res.md`, specs/resources.md): every file the module roots hold,
+    // parsed, joined, and spelled as the C++ literals the program's pool is built from. A
+    // compilation with no resource file carries an empty list and emits the same C++ as one
+    // built before the feature existed.
+    val resourceLiterals: List<Str> = resLoadLiterals(moduleRoots)
+
     var fileNames: List<Str> = List<Str>()
     var modules: List<AstXmlNode> = List<AstXmlNode>()
     var f: Int = 0
@@ -297,7 +304,7 @@ fun main(args: List<Str>): Int {
         g = g + 1
     }
 
-    val emitted: Res<Str> = emitProgram(cgInputs)
+    val emitted: Res<Str> = emitProgram(cgInputs, resourceLiterals)
     if (!emitted.isOk()) {
         eprintln(emitted.Error)
         return 1

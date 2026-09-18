@@ -156,6 +156,9 @@ explicit `cppsrc/compiler/Driver.kt` input.
   generated aggregate in `SIMSE_PACK_PUSH`/`SIMSE_PACK_POP`, and `SIMSE_NO_PACK4`
   reverts to the host's default alignment.
 - `cppsrc/common/` — `readFile`/`filesInDir`, `xmlutil` (C++ + Simse).
+- `cppsrc/resources/` — the `_res.md` reader (C++ + Simse): the format, the join, the
+  discovery, and the C++ literal a resource is pooled as (`specs/resources.md`). The
+  runtime half of it is `cppsrc/rtl/resources.{kt,hpp}`.
 - `cppsrc/lex/`, `cppsrc/skelparser/`, `cppsrc/parser/`, `cppsrc/sema/`,
   `cppsrc/linear/`, `cppsrc/codegen/`, `cppsrc/compiler/` - the compiler stages;
   each has a C++ implementation AND a `.kt` mirror. `linear` is the post-sema

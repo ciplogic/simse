@@ -4,6 +4,7 @@
 #include "linear/LinearForm.h"
 #include "parser/Parser.h"
 #include "profiling/Profiling.h"
+#include "resources/Resources.h"
 #include "sema/Sema.h"
 
 #include <algorithm>
@@ -20,15 +21,6 @@ static const char *kDefaultPrelude = "";
 using namespace common;
 
 namespace compiler {
-    namespace {
-        Str normalizePath(const Str &path) {
-            std::error_code ec;
-            std::filesystem::path canonical = std::filesystem::weakly_canonical(
-                    std::filesystem::path(simse_toStdString(path)), ec);
-            return ec ? path : simse_fromStdString(canonical.string());
-        }
-    }
-
     int transpile(const Request &request) {
         const Str &programName = request.programName;
 
@@ -70,7 +62,7 @@ namespace compiler {
                 fprintf(stderr, "%s\n", parsedPrelude.Error.c_str());
                 return 1;
             }
-            preludeCanon[normalizePath(preludeFile)] = true;
+            preludeCanon[canonicalPath(preludeFile)] = true;
             preludeNames.push_back(preludeFile);
             preludeModules.push_back(parsedPrelude.Value);
             for (const ast::Import &import: parsedPrelude.Value.imports) {
@@ -81,6 +73,13 @@ namespace compiler {
             }
         }
         bool hasPrelude = !preludeFiles.empty();
+
+        // The resources (`_res.md`, specs/resources.md): every file the module roots hold,
+        // parsed, joined, and spelled as the C++ literals the program's pool is built from.
+        // A compilation with no resource file carries an empty list and emits the same C++
+        // as one built before the feature existed. The roots are the same ones the sources
+        // came from, and `resourceFiles` dedups them like `chosen` below.
+        const List<Str> resourceLiterals = resources::loadLiterals(request.moduleRoots);
 
         // Gather the compilation: every `*.kt` under each module root, then the
         // explicit inputs. Files already loaded as prelude are excluded, and each
@@ -104,14 +103,14 @@ namespace compiler {
         List<Str> chosen;
         Dictionary<Str, bool> seen;
         for (const Str &display: candidates) {
-            Str canon = normalizePath(display);
+            Str canon = canonicalPath(display);
             if (preludeCanon.count(canon) > 0) continue;
             if (seen.count(canon) > 0) continue;
             seen[canon] = true;
             chosen.push_back(display);
         }
         std::sort(chosen.begin(), chosen.end(),
-                  [](const Str &a, const Str &b) { return normalizePath(a) < normalizePath(b); });
+                  [](const Str &a, const Str &b) { return canonicalPath(a) < canonicalPath(b); });
 
         List<Str> fileNames;
         List<ast::Module> modules;
@@ -175,7 +174,7 @@ namespace compiler {
             cgInputs.push_back(input);
         }
 
-        Res<Str> emitted = codegen::emitProgram(cgInputs);
+        Res<Str> emitted = codegen::emitProgram(cgInputs, resourceLiterals);
         if (!emitted.isOk()) {
             fprintf(stderr, "%s\n", emitted.Error.c_str());
             return 1;

@@ -2558,3 +2558,39 @@ compiler *did* catch and one it could not:
   inlining and pays ~40 ns per entry, so it prices *calls*, not the optimizer's code.
   Verified byte-identical on eight fixtures, every `.cpp` golden, T22/T23, `stress.js`
   44/44 on both rings and `bootstrap.js`'s fixed point.
+
+- **Resources: `_res.md` files, embedded in the program's string table (T79).** Text that
+  is not code - a template, a prompt, help text, the profiler's own generated C++ - now
+  lives in files the compiler reads and embeds in the pool the literals already use, so a
+  resource is a `StrView` over that pool at runtime and there is no FFI, no data directory
+  and no second copy of the text anywhere (`specs/resources.md`). The parser is a new
+  module, both rings (`cppsrc/resources/Resources.kt`, `Resources.{h,cpp}`), and its
+  differential is `resources_diff` (a `_res.md` fixture set dumped as one C++-quoted
+  `key<TAB>value` line per entry, plus the joined list): hand-written and transpiled
+  byte-identical. The end-to-end case is `stress/resources`, which prints every shape the
+  format has.
+
+  Four decisions the build forced, worth writing down because the draft did not have
+  them. **An entry is a line whose first `:` has something before it** - "a line whose
+  trimmed form ends with `:`" cannot express `Key: value`, and with `:` as the separator
+  that unavoidably makes an entry of prose containing one; the spec says so now. **A `\r`
+  before a newline is not part of a fence line**, so a value does not depend on the
+  file's line endings (the scanner's own rule). **The driver hands codegen the *quoted*
+  literals, not the entries**: `List<ResourceEntry>` as a field of the emitted `Emitter`
+  struct would be declared *after* the resources package's own type (the file-order rule
+  `CgStringTable.kt` documents), and quoting once keeps it off both walks - the pool is a
+  pool of literal texts, so that is also the honest shape. **`memberReturn` needed no
+  change**: declaring the three operations as ordinary prelude natives on the type
+  (`fun get(this: Resources, key: Str): StrView`) is what gives the checker their
+  signatures, and only the *emitter* needed the static form, spelled beside
+  `Enum.fromInt` (`Resources::get(...)`, the C++ `struct Resources` carrying the statics).
+
+  Verified: `simse_tests.exe` **61/61** (the whole `cppsrc` set still analyzes, and one
+  more source file), `bun tools/stress.js` **45/45** on the self-hosted ring and 45/45 on
+  `simse_transpile.exe`, the new case's emitted C++ byte-identical between the two rings,
+  T22/T23 green, and `bun tools/bootstrap.js`'s fixed point byte for byte. A program with
+  no `_res.md` is unchanged: every other case and every `.cpp` golden passed untouched.
+  A stale compiler is worth knowing about here - the *prelude* is read from disk at run
+  time, so an old `simse.exe` picks up `rtl/resources.kt` and spells the calls through the
+  natives it names (`simse_resources_get(Resources, ...)`); rebuild with
+  `bun build.js --release` before judging a new RTL declaration.

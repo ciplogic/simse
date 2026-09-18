@@ -2,6 +2,7 @@
 #include "../rtl/simse.hpp"
 
 #include <filesystem>
+#include <system_error>
 
 namespace common {
     Str readFile(const Str& filePath);
@@ -17,6 +18,17 @@ namespace common {
 
     inline Str fromPath(const std::filesystem::path& value) {
         return simse_fromStdString(value.string());
+    }
+
+    // The canonical spelling of `path` (weakly_canonical, or the path itself when that
+    // fails). Both drivers key their file sets by it, so `--root cppsrc` and an explicit
+    // `cppsrc/...` are one file and not two (`compiler::transpile`, `driverGatherFiles`),
+    // and so is a `_res.md` a root scan and a module root both reach
+    // (`resources::resourceFiles`).
+    inline Str canonicalPath(const Str& path) {
+        std::error_code ec;
+        std::filesystem::path canonical = std::filesystem::weakly_canonical(toPath(path), ec);
+        return ec ? path : fromPath(canonical);
     }
 
     // A position in a source file. `offset` is the 0-based byte offset of the

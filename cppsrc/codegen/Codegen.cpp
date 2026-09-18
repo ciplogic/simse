@@ -173,6 +173,17 @@ namespace codegen {
             return value < 0 ? -value : value;
         }
 
+        // `{0,-142,40}`: the one-line form an index array is written in. The values are
+        // small by construction, so one line holds the whole array (`cgIntListText`).
+        Str intListText(const List<Int> &values) {
+            Str text = "{";
+            for (int i = 0; i < (int) values.size(); i++) {
+                if (i > 0) text += ",";
+                text += std::to_string(values[i]);
+            }
+            return text + "}";
+        }
+
         // Run-length encodes one index series into the stream `strtable.hpp` documents: the
         // series' length, then alternating blocks of *non-repeating* values (a count, then
         // the values) and of *runs* (a count, then that many `times, value` pairs), until
@@ -209,7 +220,8 @@ namespace codegen {
 
         class Emitter {
         public:
-            explicit Emitter(const List<Input> &inputs) : inputs(inputs) {
+            explicit Emitter(const List<Input> &inputs, const List<Str> &resourceLiterals)
+                    : inputs(inputs), resourceLiterals(resourceLiterals) {
             }
 
             Res<Str> run() {
@@ -223,8 +235,10 @@ namespace codegen {
                 prelude();
                 emitNativeDeclarations();
                 if (failed) return resError<Str>(error);
+                collectResourceLiterals();
                 sortLiterals();
                 emitStringTable();
+                emitResourceTable();
                 emitForwardTypes();
                 if (failed) return resError<Str>(error);
                 emitTypes();
@@ -242,6 +256,13 @@ namespace codegen {
 
         private:
             const List<Input> &inputs;
+            // The resources the compiler read from `_res.md` files (cppsrc/resources,
+            // specs/resources.md), in the shape the pool wants: the C++ literal of every
+            // key and value, key then value (`resources::loadLiterals`), so entry `i` is
+            // the literals `2*i` and `2*i + 1`. A list of `Str` rather than the entries
+            // themselves, because that is all `collectResourceLiterals` and
+            // `emitResourceTable` need.
+            const List<Str> &resourceLiterals;
 
             Str out;
             bool failed = false;
@@ -888,6 +909,19 @@ namespace codegen {
             Dictionary<Str, int> literalAt;
             List<Str> literals;
 
+            // Pools `text` unless it is already there.
+            void addLiteral(const Str &text) {
+                if (literalAt.count(text) > 0) return;
+                literalAt[text] = 0;
+                literals.push_back(text);
+            }
+
+            // The pool index of `text`, or -1 when the walk never pooled it.
+            int literalIndexOf(const Str &text) {
+                auto found = literalAt.find(text);
+                return found == literalAt.end() ? -1 : found->second;
+            }
+
             void sortLiterals() {
                 // Longest first, then alphabetical (`val` < `var`, but `vars` < `val`): the
                 // order is the pool's layout, and it has to be the same in both rings. It
@@ -948,14 +982,6 @@ namespace codegen {
                     if (magnitudeOf(value) > worst) worst = magnitudeOf(value);
                 }
                 const Str element = worst <= 32767 ? "Int16" : "Int";
-                auto numbers = [](const List<Int> &values) {
-                    Str text = "{";
-                    for (int i = 0; i < (int) values.size(); i++) {
-                        if (i > 0) text += ",";
-                        text += std::to_string(values[i]);
-                    }
-                    return text + "}";
-                };
 
                 line(0, "// The program's string literals: one pool, and two run-length encoded index");
                 line(0, "// series (offsets as deltas, then lengths), each as what to subtract from the");
@@ -977,9 +1003,9 @@ namespace codegen {
                 }
                 line(0, packed);
                 line(0, ";");
-                line(0, "static const " + element + " __sm_stringStarts[] = " + numbers(startStream)
+                line(0, "static const " + element + " __sm_stringStarts[] = " + intListText(startStream)
                                 + ";");
-                line(0, "static const " + element + " __sm_stringLens[] = " + numbers(lengthStream)
+                line(0, "static const " + element + " __sm_stringLens[] = " + intListText(lengthStream)
                                 + ";");
                 line(0, "static_assert(sizeof(__sm_stringPool) - 1 == " + std::to_string(total)
                                 + ", \"the string pool and its length index disagree\");");
@@ -997,6 +1023,49 @@ namespace codegen {
                 line(0, "");
             }
 
+            // ---- the resources ----------------------------------------------------
+
+            // The resources are literals like any other, and they go into the same pool the
+            // program's string literals do (specs/resources.md, "What the program carries"):
+            // each key and value arrives already spelled as the C++ literal that holds its
+            // own bytes (`resources::loadLiterals`), pooled before the sort so an index is
+            // the same in both rings.
+            void collectResourceLiterals() {
+                for (const Str &text: resourceLiterals) {
+                    addLiteral(text);
+                }
+            }
+
+            // The resource table: one string-table index per key and per value, and the
+            // installer that hands them to the program's `Resources` API at start-up.
+            // Written *after* the string table, because the installer reads it -
+            // `__sm_stringTable` is filled by its own initializer, and statics of one
+            // translation unit initialize in declaration order. A program with no `_res.md`
+            // file writes none of this and stays byte-identical to one built before the
+            // feature existed.
+            void emitResourceTable() {
+                if (resourceLiterals.empty()) return;
+                List<Int> indices;
+                for (const Str &text: resourceLiterals) {
+                    indices.push_back(literalIndexOf(text));
+                }
+                line(0, "// The resources the compiler read from `_res.md` files (specs/resources.md):");
+                line(0, "// string-table indices, key then value, and the one installer that builds");
+                line(0, "// them into the program's `Resources` table before `main`.");
+                line(0, "static const Int __sm_resourceIndex[] = " + intListText(indices) + ";");
+                line(0, "static const Int __sm_resourceCount = "
+                                + std::to_string((int) resourceLiterals.size() / 2) + ";");
+                line(0, "namespace {");
+                line(1, "struct __SmResourceInit {");
+                line(2, "__SmResourceInit() {");
+                line(3, "Resources::install(__sm_stringTable, __sm_resourceIndex, "
+                                "__sm_resourceCount);");
+                line(2, "}");
+                line(1, "} __sm_resourceInit;");
+                line(0, "}");
+                line(0, "");
+            }
+
             // A prelude body costs a program only what it uses: `List<T>.smToYield` is
             // written in Simse (impl_specs/for.md), and a program that never iterates a
             // container should not carry its machine. The rule is a name reachability over
@@ -1007,10 +1076,7 @@ namespace codegen {
                 // over the whole program, so the table below covers every body it will
                 // emit. A literal the *lowering* invents is not in the parsed program and
                 // keeps its own spelling at the site.
-                if (expr.kind == ExprKind::StrLit && literalAt.count(expr.text) == 0) {
-                    literalAt[expr.text] = 0;
-                    literals.push_back(expr.text);
-                }
+                if (expr.kind == ExprKind::StrLit) addLiteral(expr.text);
                 if (expr.kind == ExprKind::Call && expr.lhs) {
                     const ast::Expr &callee = *expr.lhs;
                     if ((callee.kind == ExprKind::Name || callee.kind == ExprKind::GenericName
@@ -3148,9 +3214,9 @@ namespace codegen {
                         // a position that wants an owned `Str` converts it (`strview.hpp`).
                         // A literal the *lowering* invented is not in the pool and keeps its
                         // own spelling at the site.
-                        auto found = literalAt.find(e.text);
-                        if (found != literalAt.end()) {
-                            return "__sm_stringTable[" + std::to_string(found->second) + "]";
+                        const int found = literalIndexOf(e.text);
+                        if (found >= 0) {
+                            return "__sm_stringTable[" + std::to_string(found) + "]";
                         }
                         return e.text;
                     }
@@ -3386,6 +3452,17 @@ namespace codegen {
                                        "simse_" + callee.lhs->text + "_fromInt")
                                + "(" + join(args, ", ") + ")";
                     }
+                    // The `Resources` API: `Resources.get(k)`, `Resources.has(k)`,
+                    // `Resources.count()` (cppsrc/rtl/resources.kt, specs/resources.md). A
+                    // static form on a plain prelude type, like `Enum.fromInt` above - the
+                    // C++ `struct Resources` carries the statics - and the only three names
+                    // it has.
+                    if (callee.lhs && callee.lhs->kind == ExprKind::Name
+                        && callee.lhs->text == "Resources"
+                        && (callee.text == "get" || callee.text == "has"
+                            || callee.text == "count")) {
+                        return "Resources::" + callee.text + "(" + join(args, ", ") + ")";
+                    }
                     // Generic-qualified static call: `Res<T>.ok(x)` lowers to
                     // `Res<T>::ok(x)` (RTL Opt/Res provide static constructors).
                     if (callee.lhs && callee.lhs->kind == ExprKind::GenericName) {
@@ -3464,8 +3541,8 @@ namespace codegen {
         };
     }
 
-    Res<Str> emitProgram(const List<Input> &inputs) {
-        Emitter emitter(inputs);
+    Res<Str> emitProgram(const List<Input> &inputs, const List<Str> &resourceLiterals) {
+        Emitter emitter(inputs, resourceLiterals);
         return emitter.run();
     }
 }

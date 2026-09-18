@@ -178,7 +178,10 @@ data class StringTable(
     // *and* its own text, so the order is total and the non-stable sort is still
     // deterministic.
     fun sort(): Unit {
-        this.entries.sort((left: Str, right: Str) -> (left.size() > right.size()) || ((left.size() == right.size()) && (left < right)))
+        this.entries.sort(
+            (left: Str,
+            right: Str
+        ) -> (left.size() > right.size()) || ((left.size() == right.size()) && (left < right)))
         this.indexAt = Dictionary<Str, Int>()
         var i: Int = 0
         while (i < this.entries.size()) {
@@ -196,6 +199,16 @@ data class StringTable(
         if (!this.indexAt.has(text)) {
             return text
         }
-        return fmtStr("__sm_stringTable[|]", this.indexAt.get(text).value().toString())
+        return fmtStr("__sm_stringTable[|]", this.indexOf(text).toString())
+    }
+
+    // The pool index of `text`, or -1 when the walk never pooled it. The raw index, for a
+    // writer that needs the number rather than the site's spelling (the resource table,
+    // `Emitter.emitResourceTable`).
+    fun indexOf(text: Str): Int {
+        if (!this.indexAt.has(text)) {
+            return -1
+        }
+        return this.indexAt.get(text).value()
     }
 }

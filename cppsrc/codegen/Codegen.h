@@ -23,7 +23,13 @@ namespace codegen {
 
     // Amalgamates every input into one C++ translation unit. Deterministic: the
     // same inputs always produce byte-identical output.
-    Res<Str> emitProgram(const List<Input>& inputs);
+    //
+    // `resourceLiterals` are the `_res.md` entries the driver read
+    // (`resources::loadLiterals`, specs/resources.md): the C++ literal of every key and
+    // value, key then value. They are pooled into the program's string table like any
+    // other literal and installed into the `Resources` API at start-up. An empty list
+    // emits neither.
+    Res<Str> emitProgram(const List<Input>& inputs, const List<Str>& resourceLiterals);
 
     // `--showLinearRepresentation`: the IL of every body, on stderr (a debugging view;
     // the emitted file is the same with and without it).

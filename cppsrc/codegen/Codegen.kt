@@ -26,6 +26,7 @@ import sema
 import common
 import linear
 import profiling
+import resources
 
 // One parsed input. `prelude` inputs participate in symbol collection and are emitted
 // only when they carry a body: the RTL's declarations are natives (whose C++ is the
@@ -269,6 +270,13 @@ fun cgIsMainArgs(decl: *AstXmlNode): Bool {
 
 data class Emitter(
     var inputs: List<CgInput>,
+
+// The resources the compiler read from `_res.md` files (specs/resources.md), in the shape
+// the pool wants: the C++ literal of every key and value, key then value
+// (`resources.resLoadLiterals`), so entry `i` is the literals `2*i` and `2*i + 1`. A list
+// of `Str` rather than the entries themselves, because this struct is emitted before the
+// resources package's own types (`CgStringTable.kt`'s note on file order).
+    var resourceLiterals: List<Str>,
 
     var out: Str,
     var failed: Bool,
@@ -1187,6 +1195,55 @@ data class Emitter(
     }
 
     // ---- the string table -------------------------------------------------
+
+    // The resources are literals like any other, and they go into the same pool the
+    // program's string literals do (`specs/resources.md`, "What the program carries"):
+    // each key and value arrives already spelled as the C++ literal that holds its own
+    // bytes (`resources.resQuoteLiteral`), pooled before the sort so an index is the same
+    // in both rings.
+    fun collectResourceLiterals(): Unit {
+        for (*text in this.resourceLiterals) {
+            this.literals.add(text)
+        }
+    }
+
+    // The resource table: one string-table index per key and per value, and the installer
+    // that hands them to the program's `Resources` API at start-up. Written *after* the
+    // string table, because the installer reads it - `__sm_stringTable` is filled by its
+    // own initializer, and statics of one translation unit initialize in declaration
+    // order. A program with no `_res.md` file writes none of this and stays byte-identical
+    // to one built before the feature existed.
+    fun emitResourceTable(): Unit {
+        if (this.resourceLiterals.size() == 0) {
+            return
+        }
+        var indices: List<Int> = List<Int>()
+        for (*text in this.resourceLiterals) {
+            indices.append(this.literals.indexOf(text))
+        }
+        this.line(0, "// The resources the compiler read from `_res.md` files (specs/resources.md):")
+        this.line(0, "// string-table indices, key then value, and the one installer that builds")
+        this.line(0, "// them into the program's `Resources` table before `main`.")
+        this.line(0, fmtStr("static const Int __sm_resourceIndex[] = |;", cgIntListText(indices)))
+        this.line(
+            0,
+            fmtStr(
+                "static const Int __sm_resourceCount = |;",
+                (this.resourceLiterals.size() / 2).toString()
+            )
+        )
+        this.line(0, "namespace {")
+        this.line(1, "struct __SmResourceInit {")
+        this.line(2, "__SmResourceInit() {")
+        this.line(
+            3,
+            "Resources::install(__sm_stringTable, __sm_resourceIndex, __sm_resourceCount);"
+        )
+        this.line(2, "}")
+        this.line(1, "} __sm_resourceInit;")
+        this.line(0, "}")
+        this.line(0, "")
+    }
 
     // One pool and two run-length encoded indexes for the program's literals, expanded and
     // decoded once before `main` runs (`impl_specs/rtl-abi.md`, "String literals"). The
@@ -2870,6 +2927,17 @@ data class Emitter(
                     return this.qualify(this.typePackage(enumName), "simse_" + enumName + "_fromInt")
                     +"(" + cgJoin(args, ", ") + ")"
                 }
+
+                // The `Resources` API: `Resources.get(k)`, `Resources.has(k)`,
+                // `Resources.count()` (`cppsrc/rtl/resources.kt`, specs/resources.md). A
+                // static form on a plain prelude type, like `Enum.fromInt` above - the C++
+                // `struct Resources` carries the statics - and the only three names it has.
+                if (xmlKind(receiverExpr) == AstNodeCategory.ExprName
+                    && xmlAttr(receiverExpr, AstNodeAttributeKind.Name) == "Resources"
+                    && (calleeText == "get" || calleeText == "has" || calleeText == "count")
+                ) {
+                    return "Resources::" + calleeText + "(" + cgJoin(args, ", ") + ")"
+                }
                 if (xmlKind(receiverExpr) == AstNodeCategory.ExprGenericName) {
                     val genericName: Str = xmlAttr(receiverExpr, AstNodeAttributeKind.Name)
                     return this.qualify(this.typePackage(genericName), genericName) + "<"
@@ -2969,9 +3037,12 @@ data class Emitter(
         }
         // The walk above pooled every literal the program mentions, in first-encounter
         // order; sorting is what makes the indices canonical, so the table does not depend
-        // on the order the walk happened to see them in.
+        // on the order the walk happened to see them in. The resources are literals too, so
+        // they are pooled before the sort.
+        this.collectResourceLiterals()
         this.literals.sort()
         this.emitStringTable()
+        this.emitResourceTable()
         this.emitForwardTypes()
         if (this.failed) {
             return Res<Str>.err(this.error)
@@ -3002,9 +3073,10 @@ data class Emitter(
 
 // ---- entry point ----------------------------------------------------------
 
-fun newEmitter(inputs: List<CgInput>): Emitter {
+fun newEmitter(inputs: List<CgInput>, resourceLiterals: List<Str>): Emitter {
     return Emitter(
         inputs,
+        resourceLiterals,
         "",
         false,
         "",
@@ -3043,7 +3115,13 @@ fun newEmitter(inputs: List<CgInput>): Emitter {
 // Amalgamates every input into one C++ translation unit. Deterministic: the same
 // inputs always produce byte-identical output. On failure the error is formatted
 // as "<file>:<line>:<col>: <message>".
-fun emitProgram(inputs: List<CgInput>): Res<Str> {
-    var emitter: Emitter = newEmitter(inputs)
+//
+// `resourceLiterals` are the `_res.md` entries the driver read
+// (`resources.resLoadLiterals`, specs/resources.md): the C++ literal of every key and
+// value, key then value. They are pooled into the program's string table like any other
+// literal and installed into the `Resources` API at start-up. An empty list emits
+// neither.
+fun emitProgram(inputs: List<CgInput>, resourceLiterals: List<Str>): Res<Str> {
+    var emitter: Emitter = newEmitter(inputs, resourceLiterals)
     return emitter.run()
 }
