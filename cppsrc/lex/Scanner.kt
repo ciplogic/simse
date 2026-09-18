@@ -21,21 +21,26 @@ enum class TokenKind {
     String,
     Character,
     Operator,
+    Attribute,
     Eof
 }
 
 typealias MatchLenFunc = (StrView) -> Int
 typealias CharPredicate = (Char) -> Bool
 
-data class Token(var text: Str,
+data class Token(
+    var text: Str,
 
-var kind: TokenKind,
-var pos: SourcePos)
+    var kind: TokenKind,
+    var pos: SourcePos
+)
 
 // A matcher returns how many leading characters it accepts, or 0 for no match.
-data class TokenMatcher(var tokenKind: TokenKind,
+data class TokenMatcher(
+    var tokenKind: TokenKind,
 
-var match: MatchLenFunc)
+    var match: MatchLenFunc
+)
 
 // Horizontal whitespace only. Line endings are their own token kind.
 fun isSpace(ch: Char): Bool {
@@ -198,6 +203,23 @@ fun matchIdentifier(view: StrView): Int {
     return matchAllOfRules(view, isAlpha, isAlphaOrDigit)
 }
 
+// An `@Identifier` attribute token (specs/attributes.md): `@` immediately followed by
+// a name. The token's text keeps the `@` (it is the matched slice), so a dump shows
+// what was written; the parser strips it.
+fun matchAttribute(view: StrView): Int {
+    if (view.size() < 2 || view.at(0) != '@') {
+        return 0
+    }
+    if (!isAlpha(view.at(1))) {
+        return 0
+    }
+    var i: Int = 2
+    while (i < view.size() && isAlphaOrDigit(view.at(i))) {
+        i = i + 1
+    }
+    return i
+}
+
 fun matchReservedWord(view: StrView): Int {
     val length: Int = matchIdentifier(view)
     if (length == 0) {
@@ -323,6 +345,7 @@ fun makeTokenRules(): List<TokenMatcher> {
     addRule(rules, TokenKind.Character, matchCharLiteral)
     addRule(rules, TokenKind.Number, matchNumber)
     addRule(rules, TokenKind.ReservedWord, matchReservedWord)
+    addRule(rules, TokenKind.Attribute, matchAttribute)
     addRule(rules, TokenKind.Identifier, matchIdentifier)
     addRule(rules, TokenKind.Operator, matchOperator)
     return rules
@@ -379,13 +402,14 @@ fun unexpectedCharacterMessage(line: Int, column: Int, snippet: Str): Str {
     return line.toString() + ":" + column.toString() + ": Unexpected character: '" + snippet + "'"
 }
 
-data class Scanner(var rules: *List<TokenMatcher>,
+data class Scanner(
+    var rules: *List<TokenMatcher>,
 
-var pos: Int,
-var line: Int,
-var column: Int,
-var source: Str)
-{
+    var pos: Int,
+    var line: Int,
+    var column: Int,
+    var source: Str
+) {
     fun setSource(text: Str): Unit {
         this.source = text
         this.pos = 0

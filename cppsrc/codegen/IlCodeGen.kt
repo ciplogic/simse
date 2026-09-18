@@ -1408,11 +1408,11 @@ fun Emitter.emitMachine(
     for (*method in machine.methods) {
         var params: List<Str> = List<Str>()
         for (*param in method.params) {
-            params.append(this.type(param.typeNode) + " " + param.name)
-            if (this.failed) {
-                return
-            }
+        params.append(this.type(param.typeNode) + " " + param.name)
+        if (this.failed) {
+            return
         }
+    }
         // `advance()` answers whether there was a value; `value()` hands out the element.
         var result: Str = this.type(elementType)
         if (method.name == "advance") {
@@ -1437,11 +1437,11 @@ fun Emitter.emitMachine(
         // The method's own parameters are what tells a pointer receiver from a value
         // one (`*value = x` writes through it).
         for (*param in method.params) {
-            if (!xmlIsEmpty(param.typeNode)) {
-                this.nameKinds.insert(param.name, this.kindOf(param.typeNode))
-                this.localTypes.insert(param.name, param.typeNode)
-            }
+        if (!xmlIsEmpty(param.typeNode)) {
+            this.nameKinds.insert(param.name, this.kindOf(param.typeNode))
+            this.localTypes.insert(param.name, param.typeNode)
         }
+    }
         // The body goes through the same two paths as any other (the IL is what a
         // machine's methods must be expressible in, since the machine *is* the
         // lowering's output): the frame is the machine's, so its fields are read and
@@ -1537,7 +1537,7 @@ fun Emitter.emitBodyAt(info: IlFunction, body: List<AstXmlNode>, file: Str, leve
             return
         }
     }
-    this.out.appendStr(classes.text)
+    this.sections.appendText(classes.text)
     // The profiler's timer comes before the body's own storage: the frame's declarations
     // follow it, and nothing precedes it, so no jump can cross into its scope
     // (impl_specs/profiling.md). `measure` is false for a state machine's methods, whose
@@ -1545,8 +1545,8 @@ fun Emitter.emitBodyAt(info: IlFunction, body: List<AstXmlNode>, file: Str, leve
     if (measure) {
         val preamble: Str = profPreamble(info.symbol)
         if (preamble != "") {
-            this.ilLine(this.out, level, preamble)
+            this.sections.appendLine(cgIndent(level), preamble)
         }
     }
-    this.out.appendStr(emitted.text)
+    this.sections.appendText(emitted.text)
 }

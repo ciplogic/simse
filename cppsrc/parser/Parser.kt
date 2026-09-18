@@ -298,6 +298,9 @@ data class Parser(
     }
 
     fun parseDecl(): AstXmlNode {
+        if (this.checkKind(TokenKind.Attribute)) {
+            return this.parseAttributedDecl()
+        }
         val text: Str = this.peek(0).text
         when (text) {
             "var", "val" -> {
@@ -317,15 +320,56 @@ data class Parser(
             }
 
             "native" -> {
-                return this.parseFunction(true)
+                return this.parseFunction(true, "", List<Str>())
             }
 
             "fun" -> {
-                return this.parseFunction(false)
+                return this.parseFunction(false, "", List<Str>())
             }
         }
         this.fail("expected declaration")
         return this.emptyNode()
+    }
+
+    // An attributed declaration: `@SmGen("cpp", "defined-in-headers", "sym") fun f(...)`
+    // (specs/attributes.md). The `@Name` is one token (`TokenKind.Attribute`) and the
+    // arguments are literals; only method declarations take attributes in this baseline,
+    // so the declaration that must follow is `fun`.
+    fun parseAttributedDecl(): AstXmlNode {
+        val attrToken: Token = this.advance()
+        val attrText: Str = attrToken.text
+        var attrName: Str = attrText
+        if (attrText.size() > 0 && attrText[0] == '@') {
+            attrName = attrText.substr(1, attrText.size() - 1)
+        }
+        var args: List<Str> = List<Str>()
+        if (this.matchText("(")) {
+            this.skipNewlines()
+            while (!this.checkText(")") && !this.atEnd() && !this.failed) {
+                if (!this.checkKind(TokenKind.String) && !this.checkKind(TokenKind.Number)) {
+                    this.fail("attribute arguments are string or integer literals")
+                    return this.emptyNode()
+                }
+                val arg: Token = this.advance()
+                args.append(arg.text)
+                this.skipNewlines()
+                if (!this.matchText(",")) {
+                    break
+                }
+                this.skipNewlines()
+            }
+            if (!this.expectText(")")) {
+                return this.emptyNode()
+            }
+        }
+        // An attribute rides on its own line - the declaration it belongs to starts on
+        // the next one - so the separator between the two is skipped.
+        this.skipSeparators()
+        if (!this.checkText("fun")) {
+            this.fail("expected 'fun' after an attribute")
+            return this.emptyNode()
+        }
+        return this.parseFunction(false, attrName, args)
     }
 
     // A file-level `var`/`val`: static storage (specs/statics.md). The type is
@@ -443,7 +487,7 @@ data class Parser(
                     this.fail("expected method declaration")
                     return this.emptyNode()
                 }
-                methods.append(this.parseFunction(false))
+                methods.append(this.parseFunction(false, "", List<Str>()))
                 this.skipSeparators()
             }
             if (!this.expectText("}")) {
@@ -603,7 +647,15 @@ data class Parser(
         return ""
     }
 
-    fun parseFunction(isNative: Bool): AstXmlNode {
+    // `attrName`/`attrArgs` are the parsed `@SmGen` attribute, empty for a declaration
+    // without one (specs/attributes.md). A method that carries an attribute may be
+    // body-less, and its implementation belongs to the attribute's generator; a
+    // body-less method with no attribute has no implementation at all, which is what
+    // the `hasBody` check below rejects. The arguments are kept as they were written
+    // (a string literal still has its quotes), so the two spellings of one declaration
+    // - `native(sym)` and `@SmGen("cpp", "defined-in-headers", sym)` - fill exactly
+    // the same attributes.
+    fun parseFunction(isNative: Bool, attrName: Str, attrArgs: List<Str>): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
         var nativeSymbol: Str = ""
         var hasNativeSymbol: Bool = false
@@ -723,6 +775,57 @@ data class Parser(
             hasBody = true
         }
 
+        // What an attribute means: the declaration's C++ is the generator's, so there
+        // is no body to emit, and the generator names the symbol. `@SmGen("cpp",
+        // "defined-in-headers", sym)` is the form `native(sym)` spells, so it fills the
+        // same attributes - which is what makes the two spellings one declaration.
+        // `native(sym)` is sugar for it (impl_specs/generators.md), so the attributes
+        // are filled the same way whichever was written.
+        var attributeName: Str = attrName
+        var generatorName: Str = ""
+        var generatorArgs: Str = ""
+        if (attrName.size() > 0) {
+            // The attribute's first argument names the generator; the rest are its own.
+            if (attrArgs.size() > 0) {
+                generatorName = attrLiteralText(attrArgs[0])
+            }
+            var a: Int = 1
+            while (a < attrArgs.size()) {
+                if (a > 1) {
+                    generatorArgs = generatorArgs + ","
+                }
+                generatorArgs = generatorArgs + attrLiteralText(attrArgs[a])
+                a = a + 1
+            }
+        } else if (isNative) {
+            attributeName = "SmGen"
+            generatorName = "cpp"
+            generatorArgs = "defined-in-headers"
+            if (hasNativeSymbol) {
+                generatorArgs = generatorArgs + "," + attrLiteralText(nativeSymbol)
+            }
+        }
+        if (attributeName.size() > 0) {
+            // The generator owns the C++: nothing is emitted for the declaration itself,
+            // and a call reaches the symbol instead.
+            isNative = true
+            if (hasBody) {
+                this.setError(pos, "a method whose C++ is generated must not have a body")
+                return this.emptyNode()
+            }
+            if (generatorName == "cpp" && attrArgs.size() >= 2
+                && attrLiteralText(attrArgs[1]) == "defined-in-headers"
+            ) {
+                if (attrArgs.size() >= 3) {
+                    nativeSymbol = attrArgs[2]
+                    hasNativeSymbol = true
+                }
+            }
+        } else if (!hasBody && !isNative) {
+            this.setError(pos, "a body-less method needs 'native' or an attribute")
+            return this.emptyNode()
+        }
+
         var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
         attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, declName))
         attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsNative, boolText(isNative)))
@@ -731,6 +834,11 @@ data class Parser(
         attrs.append(AstNodeAttribute(AstNodeAttributeKind.HasNativeSymbol, boolText(hasNativeSymbol)))
         if (hasNativeSymbol) {
             attrs.append(AstNodeAttribute(AstNodeAttributeKind.NativeSymbol, nativeSymbol))
+        }
+        if (attributeName.size() > 0) {
+            attrs.append(AstNodeAttribute(AstNodeAttributeKind.Attribute, attributeName))
+            attrs.append(AstNodeAttribute(AstNodeAttributeKind.Generator, generatorName))
+            attrs.append(AstNodeAttribute(AstNodeAttributeKind.GeneratorArgs, generatorArgs))
         }
         var node: AstXmlNode = AstXmlNode(AstNodeKind.Function, AstNodeCategory.Function, attrs, Array<AstXmlNode>())
         if (hasReceiver) {
@@ -1951,6 +2059,15 @@ data class Parser(
 }
 
 // ---- helpers --------------------------------------------------------------
+
+// The value of one attribute argument (specs/attributes.md): a string literal without
+// its quotes, or an integer literal as written.
+fun attrLiteralText(text: Str): Str {
+    if (text.size() >= 2 && text.substr(0, 1) == "\"" && text.substr(text.size() - 1, 1) == "\"") {
+        return text.substr(1, text.size() - 2)
+    }
+    return text
+}
 
 fun boolText(value: Bool): Str {
     if (value) {

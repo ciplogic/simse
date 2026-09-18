@@ -131,6 +131,20 @@ val prefix: Str = "Profiling:"
 for (this_resource in keys) { ... }   // or: Resources.get("Profiling:Profile BootStrap")
 ```
 
+## Resources as a generator's C++
+
+A resource is also how a `@SmGen` declaration gets its C++
+(`impl_specs/generators.md`): `@SmGen("res", section)` looks up `<section>:symbol`
+(the symbol a call goes to) and `<section>:<name>` for each section name, and adds the
+text it finds there to that section. The value is C++ as written - no escapes are
+interpreted on the way in - so the resource is the one place that text lives.
+
+The pool a generator reads is the **compiler's** (`Resources.get`): the compiler is
+itself compiled with `--root cppsrc`, so a `_res.md` file anywhere under `cppsrc` is in
+the compiler it builds. `cppsrc/rtl/_res.md` is the RTL's own generated C++ (to begin
+with, `spanOf`), and `cppsrc/rtl/smgen_collision_res.md` is the decoy
+`stress/smgen-res-collision` pins the last-write-wins rule with.
+
 ## Where it lives
 
 | piece | file |
@@ -140,18 +154,21 @@ for (this_resource in keys) { ... }   // or: Resources.get("Profiling:Profile Bo
 | pooling and the table | the emitter: `cppsrc/codegen/Codegen.kt`, after `emitStringTable` |
 | the API | `cppsrc/rtl/resources.kt` (surface), `cppsrc/rtl/resources.hpp` (implementation) |
 | the static form | `Emitter.call` (the shape `Enum.fromInt` has) |
+| the RTL's generated C++ | `cppsrc/rtl/_res.md`, read by the `res` generator |
 | the end-to-end case | `stress/resources/` |
 
 ## Status
 
-Implemented for the whole path: discovery, parse, join, pooling, the emitted table, and the
-`Resources` API. `stress/resources` prints every shape the format has: a fenced block, an
-inline value, an empty value, a missing key, a comparison against a literal, and the escapes
-a value needs on the way into the pool (a double quote, a backslash, a tab, and a value
-ending in a backslash). `bun tools/stress.js` is **45/45**, and the bootstrap fixed point
-(`bun tools/bootstrap.js`) holds byte for byte.
+Implemented for the whole path: discovery, parse, join, pooling, the emitted table, the
+`Resources` API, and the `res` generator that reads the compiler's own pool
+(`impl_specs/generators.md`). `stress/resources` prints every shape the format has: a
+fenced block, an inline value, an empty value, a missing key, a comparison against a
+literal, and the escapes a value needs on the way into the pool (a double quote, a
+backslash, a tab, and a value ending in a backslash). `bun tools/stress.js` is
+**53/53**, and the bootstrap fixed point (`bun tools/bootstrap.js`) holds byte for byte.
 
-Not done yet: a resource *section* helper (deliberately - a section is a key prefix), and
-any name-to-index shortcut for lookups (`Resources.get` is a linear scan of a handful of
-entries; a `Dictionary` would need a startup build that the `StrView`s make unnecessary for
-this size).
+Not done yet: a resource *section* helper (deliberately - a section is a key prefix), a
+name-to-index shortcut for lookups (`Resources.get` is a linear scan of a handful of
+entries; a `Dictionary` would need a startup build that the `StrView`s make unnecessary
+for this size), and a *program's* own `_res.md` as a generator's input (today the
+generator reads the compiler's pool).

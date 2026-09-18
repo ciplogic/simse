@@ -29,9 +29,9 @@ bootstrap `cppsrc/simse_bootstrap.cpp`.
 ```sh
 # build (from the repo root): cppsrc -> ./simse_out.cpp -> ./simse.exe
 ./build.bat                             # debug (/MDd)
-./build.bat --release                   # /O2 /Ob3 /DNDEBUG
+./build.bat --release                   # /O2 /Ob3 /DNDEBUG + /GL (LTCG at link; the default)
+./build.bat --release --no-lto          # skip whole-program optimization: quicker to build
 ./build.bat --release --pdb             # + /Zi /DEBUG (a .pdb in build/), for a profiler
-./build.bat --release --lto             # + /GL /LTCG (measured neutral)
 ./build.bat my_simse.exe                # same, different executable name
 ./build.bat --cpp other.cpp --exe x.exe # compile an existing amalgamation
 ./build.bat --help                      # all options (see build.js)
@@ -75,7 +75,9 @@ The verification loop after a compiler change: `./build.bat --release`,
 `bun tools/stress.js`, then `bun tools/bootstrap.js` - the two-step property is
 that the compiler built from the published bootstrap must reproduce that file
 byte for byte, and that check is the one that catches a change whose emitted C++
-depends on the compiler that emitted it. When the change *is* visible in the
+depends on the compiler that emitted it. `bun tools/smgen.js` joins the loop when a
+`native(...)`/`@SmGen(...)` spelling is touched: it checks that the two spellings of one
+declaration emit the same C++. When the change *is* visible in the
 emitted C++, refresh the published file (`bun build.js --release --out
 cppsrc/simse_bootstrap.cpp`) and commit it with the source.
 
@@ -104,6 +106,7 @@ driver's - and `build.bat` can compile it.
   `transpilation.md`, `roadmap.md`, `user-language-roadmap.md` (the user-facing
   feature roadmap: static protocols, JSON codegen, sockets/HTTP, toolchain),
   `capability-matrix.md`, `rtl-abi.md`, `reification.md`, `native-interop.md`,
+  `generators.md` (`@SmGen`, the `Sections` sink, and the `res` generator),
   `ast-xmlnode.md`, `linear-lowering.md`, `linear-il.md` (the flat instruction list
   the backend is meant to consume, with its dump), `yield.md` (`yield` as a pure
   lowering to a state machine), `profiling.md` (the `--profile` instrument: one RAII
@@ -115,7 +118,10 @@ driver's - and `build.bat` can compile it.
   `strview.hpp`, `strtable.hpp`, `resources.hpp`,
   `listops.hpp`, `strops.hpp`, `dictops.hpp`, `fs.hpp`, `filestream.hpp`,
   `timeops.hpp`, `simse.hpp`), the one implementations file `native.cpp`
-  (the `native(...)` symbols: file I/O, directory listing, the clock), AND the
+  (the `native(...)` symbols: file I/O, directory listing, the clock), the
+  `_res.md` files that hold the RTL's *generated* C++ (`_res.md` for `spanOf`,
+  `smgen_collision_res.md` for the collision fixture - the `res` generator reads the
+  compiler's own pool, `impl_specs/generators.md`), AND the
   **prelude** `.kt` files (`rtl.kt`, `Span.kt`, `StrView.kt`, `xml.kt`,
   `astxml.kt`, `fs.kt`, `resources.kt`) declaring the RTL surface.
   `List<T>` is `SmallVector<T, 4>`, `Str` is the inline `SmString`
@@ -202,7 +208,8 @@ driver's - and `build.bat` can compile it.
   test (`stress/README.md`).
 - `tools/` - the JavaScript harness: `build` is `build.js` at the root (with
   `build.bat`), and this folder holds `stress.js` (the corpus above),
-  `bootstrap.js` (compile the published bootstrap, transpile, compare the bytes) and
+  `bootstrap.js` (compile the published bootstrap, transpile, compare the bytes),
+  `smgen.js` (the `native`/`@SmGen` byte-equality check) and
   `msvc.mjs` (the Visual Studio environment shared by all three). The remaining
   `_*.mjs`/probe files are the hand-written ring's scratch (A/B benchmarks and shape
   probes); they are not part of any workflow.
@@ -299,6 +306,11 @@ Key design points:
 - **A stale compiler is visible**: `tools/bootstrap.js` compares both the freshly
   compiled bootstrap *and* `./simse.exe` against the published file, so a repo whose
   compiler no longer matches its sources says so by name.
+- **One declaration, two spellings**: `native("sym")` and
+  `@SmGen("cpp", "defined-in-headers", "sym")` are the same declaration and must emit
+  the same C++ - `bun tools/smgen.js` compiles the pair (`stress/smgen-native`,
+  `stress/smgen-cpp`) and compares their amalgamations byte for byte, after replacing
+  the fixture path.
 
 ## 6. Change protocol (read before editing)
 
@@ -315,6 +327,18 @@ Key design points:
   under `stress/` for behavior that is not yet covered there.
 - **Never weaken the fixed point** (and never hand-edit `cppsrc/simse_bootstrap.cpp`: it
   is generated, and it is the one file that has to keep building the compiler).
+- **A surface change the running compiler cannot handle needs two builds.** An attribute
+  in the *prelude* (`cppsrc/rtl/*.kt`), or a change to what the parser records, is
+  visible to the compiler that is transpiling the tree - so build once with the old
+  spelling (which is what a stale `simse.exe` sees), then switch the source and build
+  again. The same shape applies to `@` itself: it landed in the scanner/parser while the
+  compiler's own sources stayed `@`-free, and only a compiler built *from* those changes
+  could parse an `@` in the prelude. The published bootstrap never needs a hand-patch:
+  refreshing it (`--out cppsrc/simse_bootstrap.cpp`) carries the new scanner and parser.
+- **A `_res.md` file under `cppsrc` is part of the compiler**, not of a program: the
+  compiler's own build pools it and the `res` generator reads it at compile time
+  (`impl_specs/generators.md`). Edit one and the next build is the one that sees it -
+  and the amalgamation changes, so refresh the bootstrap too.
 - **Prefer the container `for` to an index walk.** `for (*x in xs)` binds a *pointer* to
 each element - no copy per iteration, and a write through `x` reaches the element - while
 `for (x in xs)` binds a copy; the indexed form `for ((*x, i) in xs)` adds a counter that
@@ -396,7 +420,9 @@ its trailing arguments, `specs/functions.md`); `Dictionary<K,V>` (`get`/`has`/`i
 `Opt<T>.some/.none`); `Span<T>` (a borrowed view: pointer + length); `XmlNode`/`Attribute`;
 `data class` (with methods), `enum class` (with `toInt`/`fromInt`), `typealias`
 (incl. generic and function types); functions incl. extension functions and
-`native fun`; `val`/`var` (locals, and at file level **static storage** -
+`native fun`; **attributes** (`@Identifier` + `@SmGen`, one per declaration, methods
+only: `specs/attributes.md`, `impl_specs/generators.md`) with the `cpp` and `res`
+generators and the `Sections` sink; `val`/`var` (locals, and at file level **static storage** -
 `specs/statics.md`); `if`/`else`, `when`, `while`,
 `break`/`continue`, `return`; the bitwise operators `& | ^ << >>` (precedence: bitwise
 binds *tighter* than a comparison, Python's order, `specs/built-in-types.md`);
@@ -457,6 +483,9 @@ Do these only when asked; roughly prioritized:
    generation (compile the bootstrap's own output, compare again) would strengthen the
    proof; `tools/stress.js` could also grow cases.
 3. **Deferred language features** (spec'd or implied, not implemented):
+   attributes on types/fields/parameters/statements, stacked attributes, and
+   per-instantiation generators (`@Json`, enum-to-string, int-to-enum -
+   `impl_specs/generators.md`'s "Deferred" and roadmap T27);
    multiple `package` declarations per file (file-split shape); external-module
    manifests/versions/transitive resolution; range/`foreach` iteration over
    containers (`for` exists, but only over a machine - `impl_specs/for.md`);
@@ -547,6 +576,16 @@ Do these only when asked; roughly prioritized:
 
 ## 9. Gotchas
 
+- **A Kotlin formatter is active for `.kt` files in this editor.** It re-indents and, at
+  its own width, breaks a long line - which can split `@SmGen(...) fun f(...)` onto two
+  lines and shuffle the lines after it. The parser accepts both forms, so a *program* is
+  unaffected; a fixture whose `expected.cpp` pins source line numbers (or a file written
+  from outside, like a generated one) must keep its lines short, and a file written in
+  one go is worth re-reading before it is used.
+- **A generated section's items render at the end of their section**, so a
+  resource-backed `bodies` text (a definition) lands after every emitted body. The
+  matching `forward` declaration is what makes the call sites valid; a generator that
+  needs its text *earlier* must name an earlier section (or `forward`).
 - `LNK1168` on build = a running `simse.exe` holds the output; kill it first.
 - `build.bat` defaults to a debug build (`/MDd`), so the MSVC debug STL asserts are
   live: bad input such as a directory passed where a `.kt` file is expected can

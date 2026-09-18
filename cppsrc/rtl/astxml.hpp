@@ -84,6 +84,15 @@ enum class AstNodeAttributeKind : Int {
     HasReceiver,
     HasNativeSymbol,
     NativeSymbol,
+    // An `@SmGen` attribute (specs/attributes.md, impl_specs/generators.md): the
+    // attribute's own name (`SmGen`, and later the sugar `Json`), the generator it names
+    // - the attribute's *first* argument, `cpp` for `native(...)` - and the generator's
+    // remaining arguments in order, joined by `,`, a string literal without its quotes.
+    // `native(...)` is the `cpp`/`defined-in-headers` form, so a `native` declaration
+    // carries these too.
+    Attribute,
+    Generator,
+    GeneratorArgs,
     Package,
     Path,
     Params,

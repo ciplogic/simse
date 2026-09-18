@@ -73,6 +73,22 @@ data class CgNativeDecl(
     var prelude: Bool
 )
 
+// A `@SmGen("res", ...)` declaration: a generator whose C++ text is a resource the
+// compiler carries (`Resources.get`). `resource` is the resource section the attribute
+// names and `symbol` is what a call goes to - `<resource>:symbol` when the resource
+// declares one, the declaration's own name otherwise. `name` is the declaration's own
+// name and `prelude` says whether it came from the prelude, which is what the
+// reachability rule in `emitGenerators` needs; `decl` is the declaration itself, what a
+// generator reads (a per-instantiation one would read its parameters and return type).
+data class CgResGen(
+    var decl: AstXmlNode,
+
+    var resource: Str,
+    var symbol: Str,
+    var name: Str,
+    var prelude: Bool
+)
+
 // An explicit-`this` native extension; the receiver pattern selects the overload.
 data class CgNativeExt(
     var symbol: Str,
@@ -174,6 +190,20 @@ fun cgUnquote(text: Str): Str {
         return text.substr(1, text.size() - 2)
     }
     return text
+}
+
+// One argument of a `@SmGen` attribute: `args` is the generator's arguments, joined by
+// `,` (`AstNodeAttributeKind.GeneratorArgs`), so argument `index` is that field. An
+// index outside the list is the empty string.
+fun cgGeneratorArg(args: Str, index: Int): Str {
+    if (args.size() == 0 || index < 0) {
+        return ""
+    }
+    val parts: List<Str> = args.split(",")
+    if (index >= parts.size()) {
+        return ""
+    }
+    return parts[index]
 }
 
 // Binary operator precedence for wrapping; see Codegen.cpp precedence(). The numbers are
@@ -278,7 +308,7 @@ data class Emitter(
 // resources package's own types (`CgStringTable.kt`'s note on file order).
     var resourceLiterals: List<Str>,
 
-    var out: Str,
+    var sections: Sections,
     var failed: Bool,
     var error: Str,
     var curFile: Str,
@@ -301,6 +331,9 @@ data class Emitter(
     var functions: List<CgFn>,
     var receiverFnNames: Dictionary<Str, Bool>,
     var nativeDecls: List<CgNativeDecl>,
+
+// The `@SmGen("res", ...)` declarations (`emitGenerators`).
+    var resGens: List<CgResGen>,
     var nativeSymbols: Dictionary<Str, Str>,
     var nativeExtensions: Dictionary<Str, List<CgNativeExt>>,
     var activeTypeParams: Dictionary<Str, Bool>,
@@ -351,11 +384,10 @@ data class Emitter(
     }
 
     fun line(level: Int, text: Str): Unit {
-        // In place: `this.out = this.out + ...` copies the whole accumulated
-        // output on every line (quadratic in the size of the generated file).
-        this.out.appendStr(cgIndent(level))
-        this.out.appendStr(text)
-        this.out.append('\n')
+        // In place, into the current section: `this.out = this.out + ...` copies the
+        // whole accumulated output on every line (quadratic in the size of the
+        // generated file), and a section never re-copies what it already holds.
+        this.sections.appendLine(cgIndent(level), text)
     }
 
     fun sourceComment(posNode: *AstXmlNode): Unit {
@@ -557,7 +589,25 @@ data class Emitter(
                     if (xmlAttr(decl, AstNodeAttributeKind.HasNativeSymbol) == "true") {
                         symbol = cgUnquote(xmlAttr(decl, AstNodeAttributeKind.NativeSymbol))
                     }
-                    this.nativeDecls.append(CgNativeDecl(decl, input.fileName, symbol, input.prelude))
+                    // A declaration whose C++ a generator owns: `@SmGen("res", section)`
+                    // is the resource-backed one (impl_specs/generators.md). Nothing is
+                    // emitted for it here - its text is a resource, added to its section
+                    // in `emitGenerators` - and only the symbol it is called by is
+                    // registered now, because a call site needs it during emission.
+                    if (xmlAttr(decl, AstNodeAttributeKind.Generator) == "res") {
+                        val res: Str = cgGeneratorArg(
+                            xmlAttr(decl, AstNodeAttributeKind.GeneratorArgs), 0
+                        )
+                        val symbolKey: Str = res + ":symbol"
+                        if (Resources.has(symbolKey)) {
+                            symbol = Resources.get(symbolKey).toString()
+                        }
+                        this.resGens.append(
+                            CgResGen(decl, res, symbol, declName, input.prelude)
+                        )
+                    } else {
+                        this.nativeDecls.append(CgNativeDecl(decl, input.fileName, symbol, input.prelude))
+                    }
                     this.nativeSymbols.insert(declName, symbol)
                     val params: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
                     if (params.size() > 0 && xmlAttr(params[0], AstNodeAttributeKind.Name) == "this") {
@@ -1103,6 +1153,38 @@ data class Emitter(
             )
                     + " = " + targetText + ";"
         )
+    }
+
+    // Generators (impl_specs/generators.md). Today there is one: `res`, whose C++ text
+    // is a resource the *compiler* carries (`Resources.get`) - `cppsrc/rtl/_res.md` for
+    // the RTL's own generated functions - so a resource under the compiler's module root
+    // becomes code in every program that reaches the declaration.
+    //
+    // The text goes into the section its own key names (`<resource>:<section>`), under
+    // the symbol as the item's key: two declarations that name the same symbol in the
+    // same section therefore replace each other, last write wins, rather than emitting
+    // two definitions of one symbol (the documented collision).
+    //
+    // A *prelude* declaration the program never names is skipped, so a prelude
+    // generator costs a program only what it uses - the rule a prelude function with a
+    // body follows. A program's own declaration is always emitted, so one generated text
+    // may call another; a prelude text must not (the call would be invisible here, since
+    // a name inside a resource is not parsed).
+    fun emitGenerators(): Unit {
+        for (*gen in this.resGens) {
+            if (gen.prelude && !this.referencedNames.has(gen.name)) {
+                continue
+            }
+            val names: List<Str> = this.sections.names()
+            var i: Int = 0
+            while (i < names.size()) {
+                val key: Str = gen.resource + ":" + names[i]
+                if (Resources.has(key)) {
+                    this.sections.add(names[i], gen.symbol, Resources.get(key).toString())
+                }
+                i = i + 1
+            }
+        }
     }
 
     fun emitNativeDeclarations(): Unit {
@@ -3020,7 +3102,7 @@ data class Emitter(
         // `--profile`: the instrumented profiler's runtime, which every emitted body of
         // this program measures into (impl_specs/profiling.md). Nothing when it is off.
         text = text + profPreludeText()
-        this.out = text
+        this.sections.appendText(text)
     }
 
     fun run(): Res<Str> {
@@ -3030,8 +3112,15 @@ data class Emitter(
         // are built here and threaded to the emitters rather than stored on the emitter:
         // the facts are one value per program, and a body's emitter only borrows it.
         val facts: SemFacts = this.collectFacts()
+        // The sections are the emitter's assembly stages, in this order
+        // (impl_specs/generators.md): includes, forward, types, statics, prototypes,
+        // init, bodies. `forward` is not begun here because the emitter writes nothing
+        // into it - it is where a generator's declaration goes, so it lands before
+        // every type and body.
+        this.sections.begin("includes")
         this.preludeText()
         this.emitNativeDeclarations()
+        this.emitGenerators()
         if (this.failed) {
             return Res<Str>.err(this.error)
         }
@@ -3043,6 +3132,7 @@ data class Emitter(
         this.literals.sort()
         this.emitStringTable()
         this.emitResourceTable()
+        this.sections.begin("types")
         this.emitForwardTypes()
         if (this.failed) {
             return Res<Str>.err(this.error)
@@ -3051,23 +3141,27 @@ data class Emitter(
         if (this.failed) {
             return Res<Str>.err(this.error)
         }
+        this.sections.begin("statics")
         this.emitStatics()
         if (this.failed) {
             return Res<Str>.err(this.error)
         }
+        this.sections.begin("prototypes")
         this.emitFunctions(true, facts)
         if (this.failed) {
             return Res<Str>.err(this.error)
         }
+        this.sections.begin("init")
         this.emitStaticInit()
         if (this.failed) {
             return Res<Str>.err(this.error)
         }
+        this.sections.begin("bodies")
         this.emitFunctions(false, facts)
         if (this.failed) {
             return Res<Str>.err(this.error)
         }
-        return Res<Str>.ok(this.out)
+        return Res<Str>.ok(this.sections.render())
     }
 }
 
@@ -3077,7 +3171,7 @@ fun newEmitter(inputs: List<CgInput>, resourceLiterals: List<Str>): Emitter {
     return Emitter(
         inputs,
         resourceLiterals,
-        "",
+        cgNewSections(),
         false,
         "",
         "",
@@ -3091,6 +3185,7 @@ fun newEmitter(inputs: List<CgInput>, resourceLiterals: List<Str>): Emitter {
         List<CgFn>(),
         Dictionary<Str, Bool>(),
         List<CgNativeDecl>(),
+        List<CgResGen>(),
         Dictionary<Str, Str>(),
         Dictionary<Str, List<CgNativeExt>>(),
         Dictionary<Str, Bool>(),

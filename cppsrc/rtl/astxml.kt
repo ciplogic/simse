@@ -68,6 +68,17 @@ enum class AstNodeAttributeKind {
     HasReceiver,
     HasNativeSymbol,
     NativeSymbol,
+
+    // An `@SmGen` attribute (specs/attributes.md, impl_specs/generators.md): the
+    // attribute's own name (`SmGen`, and later the sugar `Json`), the generator it names
+    // - the attribute's *first* argument, `cpp` for `native(...)` - and the generator's
+    // remaining arguments in order, joined by `,`. A string literal is stored without
+    // its quotes (the parser's `attrLiteralText`), because a generator reads a name, a
+    // key or a symbol. `native(...)` is the `cpp`/`defined-in-headers` form, so a
+    // `native` declaration carries these too.
+    Attribute,
+    Generator,
+    GeneratorArgs,
     Package,
     Path,
     Params,
@@ -136,14 +147,18 @@ enum class AstNodeCategory {
 
 // One attribute: a key from the schema and its text value (numbers as decimal
 // text, booleans as "true"/"false"), so a node's scalars stay stringly typed.
-data class AstNodeAttribute(var name: AstNodeAttributeKind,
+data class AstNodeAttribute(
+    var name: AstNodeAttributeKind,
 
-var value: Str)
+    var value: Str
+)
 
 // One AST node: its role, its category, its attributes, and its children - one
 // ref-counted `Array<AstXmlNode>` whose shared empty array is what a leaf holds.
-data class AstXmlNode(var name: AstNodeKind,
+data class AstXmlNode(
+    var name: AstNodeKind,
 
-var kind: AstNodeCategory,
-var attributes: List<AstNodeAttribute>,
-var Children: Array<AstXmlNode>)
+    var kind: AstNodeCategory,
+    var attributes: List<AstNodeAttribute>,
+    var Children: Array<AstXmlNode>
+)

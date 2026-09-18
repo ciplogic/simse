@@ -31,9 +31,12 @@
 //   --profile         transpile with --profile: the emitted program carries the
 //                     instrumented profiler and prints its table at the end of main
 //                     (impl_specs/profiling.md)
-//   --release         release build: /O2 /Ob3 /DNDEBUG (default: debug, /MDd)
+//   --release         release build: /O2 /Ob3 /DNDEBUG, with whole-program
+//                     optimization (/GL, whose link-time codegen is LTCG) unless
+//                     --no-lto says otherwise
 //   --debug           debug build (the default)
-//   --lto             whole-program optimization: /GL + /LTCG (with --release)
+//   --no-lto          skip the release build's /GL: a quicker build, a slightly slower
+//                     compiler
 //   --pdb             keep debug info in a release build (/Zi /DEBUG; the .pdb lands
 //                     in the build folder), for a profiler or a debugger
 //   --arch <arch>     vcvarsall target architecture (default: the host's)
@@ -76,9 +79,12 @@ function usage() {
                     else the bootstrap compiled for this build)
   --no-gen          skip transpiling; compile the existing/--cpp file
   --profile         transpile with --profile (impl_specs/profiling.md)
-  --release         release build: /O2 /Ob3 /DNDEBUG (default: debug, /MDd)
+  --release         release build: /O2 /Ob3 /DNDEBUG, with whole-program
+                    optimization (/GL, whose link-time codegen is LTCG) unless
+                    --no-lto says otherwise
   --debug           debug build (the default)
-  --lto             whole-program optimization: /GL + /LTCG (with --release)
+  --no-lto          skip the release build's /GL: a quicker build, a slightly slower
+                    compiler
   --pdb             keep debug info in a release build (/Zi /DEBUG; the .pdb lands
                     in the build folder), for a profiler or a debugger
   --arch <arch>     vcvarsall target architecture (default: the host's)
@@ -95,7 +101,7 @@ function parseArgs(argv) {
     profile: false,
     release: false,
     debug: false,
-    lto: false,
+    lto: true,
     pdb: false,
     arch: null,
     compiler: null,
@@ -118,6 +124,7 @@ function parseArgs(argv) {
       case "--release": opts.release = true; break;
       case "--debug": opts.release = false; opts.debug = true; break;
       case "--lto": opts.lto = true; break;
+      case "--no-lto": opts.lto = false; break;
       case "--pdb": opts.pdb = true; break;
       case "--arch": opts.arch = value(i); i++; break;
       case "--define": opts.defines.push(value(i)); i++; break;
@@ -133,11 +140,18 @@ function parseArgs(argv) {
 // cl.exe's arguments for one configuration. `--release` and `--pdb` are separate on
 // purpose: `--release --pdb` is the pair a profiler wants (optimized code, full symbols),
 // which is what the deleted MSBuild profiling project used to provide.
+//
+// A release build links with whole-program optimization by default: the compiler is one
+// 46k-line translation unit, so the cross-function inlining LTCG buys is exactly the
+// shape it can use. `/GL` alone is the whole request - `cl` ignores a bare `/LTCG`
+// (D9002) because the link-time codegen is implied by linking `/GL` objects, which is
+// also why the link prints "Generating code". `--no-lto` is there for a quick build:
+// LTCG dominates a release build's time, and what it buys is run time.
 function compileFlags(opts) {
   const flags = opts.release ? ["/MD", "/O2", "/Ob3", "/DNDEBUG"] : ["/MDd", "/Od"];
   if (opts.pdb || !opts.release) flags.push("/Zi");
   if (opts.pdb) flags.push("/DEBUG");
-  if (opts.lto) flags.push("/GL", "/LTCG");
+  if (opts.release && opts.lto) flags.push("/GL");
   return flags;
 }
 

@@ -70,6 +70,14 @@ Details worth knowing:
   emitted as members (which is why `FileStream`'s `readLine`/`close` are methods of
   its struct). A user can declare their own with `native fun` / `native("symbol") fun`,
   which is how the file I/O in `stress/native-read-file` works.
+- **A declaration's C++ can be generated instead of hand-written.** `native("sym")` is
+  sugar for `@SmGen("cpp", "defined-in-headers", "sym")`: an *attribute* that selects
+  a generator for the method's implementation, with the method written body-less
+  (`impl_specs/generators.md`). One generator is in use today, `res`, whose text is a
+  resource: the RTL's `spanOf` is one (`cppsrc/rtl/_res.md`), and the emitted file
+  assembles from named **sections** - includes, forward, types, statics, prototypes,
+  init, bodies - so a generated declaration lands in `forward` and its definition in
+  `bodies` without codegen having to know about either.
 
 ## What the output looks like
 

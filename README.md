@@ -141,7 +141,7 @@ Requirements: Windows with Visual Studio (C++ workload) and
 ```bat
 :: 1. build the compiler from the Simse sources -> .\simse.exe
 ::    a fresh checkout first compiles the published bootstrap for this step;
-::    add --release for /O2 /Ob3 /DNDEBUG
+::    add --release for /O2 /Ob3 /DNDEBUG + /GL (--no-lto skips the whole-program step)
 build.bat
 
 :: 2. compile and run an example with it
@@ -169,6 +169,7 @@ bootstrap fixed-point check, is in
 | [docs/state-of-the-field.md](docs/state-of-the-field.md) | honest status: what works, what is rough, what is missing, and how it compares to the alternatives |
 | [docs/examples/](docs/examples/) | the three example programs used in the docs (`hello`, `tour`, `wordcount`) |
 | [impl_specs/user-language-roadmap.md](impl_specs/user-language-roadmap.md) | where the language is going, phased, with the non-goals |
+| [impl_specs/generators.md](impl_specs/generators.md) | the `@Identifier` token, `@SmGen` generation, the `Sections` sink, and the bootstrap path for the new syntax |
 | [guide4ai.md](guide4ai.md) | orientation for an AI/contributor session: build, invariants, change protocol |
 
 ## Status
@@ -206,7 +207,7 @@ explicit about each of these and the roadmap phases them.
 | `impl_specs/` | implementation plans and records: self-hosting plan, capability matrix, RTL ABI, the user-facing roadmap |
 | `stress/` | one folder per end-to-end program: source, arguments, expected output |
 | `build.js`, `build.bat`, `stress.bat` | the build and harness entry points: transpile the source tree, compile it with `cl.exe`, run the stress corpus |
-| `tools/` | the JavaScript harness: the stress runner (`stress.js`), the bootstrap fixed-point check (`bootstrap.js`), `msvc.mjs`, the probes |
+| `tools/` | the JavaScript harness: the stress runner (`stress.js`), the bootstrap fixed-point check (`bootstrap.js`), the `native`/`@SmGen` byte-equality check (`smgen.js`), `msvc.mjs`, the probes |
 | `docs/` | this documentation |
 
 ## Design principles

@@ -23,7 +23,8 @@ compiles the published `cppsrc/simse_bootstrap.cpp` and uses that (section 2).
 ```bat
 build.bat                                   :: debug: ./simse_out.cpp -> ./simse.exe
 build.bat my_compiler.exe                   :: ... with another executable name
-build.bat --release                         :: /O2 /Ob3 /DNDEBUG
+build.bat --release                         :: /O2 /Ob3 /DNDEBUG + /GL
+build.bat --release --no-lto                :: ... without whole-program optimization
 build.bat --release --pdb                   :: optimized code + a .pdb for the profiler
 build.bat --help                            :: all options
 build.bat --cpp other.cpp --exe other.exe   :: compile an existing amalgamation

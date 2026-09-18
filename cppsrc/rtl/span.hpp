@@ -56,7 +56,9 @@ SIMSE_PACK_POP
 
 // `spanOf(items)`: a span over a list's elements. It borrows the list - the list has
 // to outlive the span - and does not copy it (`&items` would box a copy instead).
-template <class T>
-inline Span<T> simse_spanOf(List<T>* items) {
-    return Span<T>(items->data(), items->size());
-}
+//
+// The declaration *and* the definition are generated: `spanOf` is an
+// `@SmGen("res", "spanOf")` declaration in the prelude (cppsrc/rtl/Span.kt) whose C++
+// is the `spanOf` section of cppsrc/rtl/_res.md, emitted into the amalgamation
+// (impl_specs/generators.md). Nothing about it is here any more - the file that holds
+// the Simse surface says what is generated, and the resource says the C++.

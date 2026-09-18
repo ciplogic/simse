@@ -54,4 +54,9 @@ data class Span<T>(var ptr: *T, var len: Int) {
 }
 
 // A span over a list's elements, borrowing the list (which must outlive the span).
-native("simse_spanOf") fun spanOf<T>(items: *List<T>): Span<T>
+//
+// The C++ is *generated* (impl_specs/generators.md): the `spanOf` resource section of
+// cppsrc/rtl/_res.md holds the declaration and the definition, and this declaration
+// names it. The spelling before generators existed was `native("simse_spanOf")`.
+@SmGen("res", "spanOf")
+fun spanOf<T>(items: *List<T>): Span<T>
