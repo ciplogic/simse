@@ -6,25 +6,28 @@ in the emitter knows what a yield is:
 
 ```text
 fun everyOther(n: Int): ..Int {        struct ns1_everyOther_yieldable {
-    var i: Int = 0                         Int branch{};
-    while (i < n) {                        Int n{};
-        if (i % 2 == 0) {                  Int i{};
-            yield i                        Opt<Int> next() {
-        }                                      if (this->branch == -1) goto LYend;
-        i = i + 1                              if (this->branch == 1) goto LY1;
-    }                                          this->i = 0;            // branch 0: the start
-}                                          L1:;
+    var i: Int = 0                         Int branch{};   // where the machine is
+    while (i < n) {                        Int current{};  // what it last yielded
+        if (i % 2 == 0) {                  Int n{};
+            yield i                        Int i{};
+        }                                  Bool advance() {
+        i = i + 1                              if (this->branch == -1) goto LYend;
+    }                                          if (this->branch == 1) goto LY1;
+}                                              this->i = 0;        // branch 0: the start
+                                           L1:;
                                            _sm_expr1 = this->i < this->n;
                                            if (!(_sm_expr1)) goto L2;
-                                           ...                          // the loop, as labels
+                                           ...                     // the loop, as labels
+                                           this->current = this->i;
                                            this->branch = 1;
-                                           return Opt<Int>::some(this->i);
-                                       LY1:;                            // the resumption point
+                                           return true;
+                                       LY1:;                       // the resumption point
                                            ...
                                        LYend:;
                                            this->branch = -1;
-                                           return Opt<Int>::none();
+                                           return false;
                                        }
+                                       Int value() { return this->current; }
                                    };
                                    ns1_everyOther_yieldable ns1_everyOther(Int n) { ... }
 ```
@@ -44,32 +47,44 @@ labels and gotos, `if`/`while` are gone, and the yielded value is already one
 operand) and after the type pass (so a local has the type its field needs), in
 `linear::lowerYield` (`cppsrc/linear/Yield.{h,cpp}`):
 
-1. **The fields** are `branch`, the parameters and every local the body declares -
-   except the lowering's own storage (`isSlotName`), which is per-statement and is
-   re-initialised on every entry, so it stays a local of the method.
+1. **The fields** are `branch`, `current`, the receiver of an extension function, then the
+   parameters and every local the body declares - except the lowering's own storage
+   (`isSlotName`), which is per-statement and is re-initialised on every entry, so it
+   stays a local of the method.
 2. **The dispatcher** is a chain of conditional jumps: `if (branch == -1) goto LYend;`
    then `if (branch == n) goto LYn;` for every yield. Branch `0` falls through, so it
    is the start. There is no `switch` anywhere - a `when` is already an `if`/`else`
    chain by this stage, so the arms would only be lowered to these jumps anyway.
-3. **`yield e`** becomes `branch = n; return Opt<T>.some(e); LYn:;` - the label *is*
-   the resumption point. In `advance` (see below) it is `*value = e; return true;`.
+3. **`yield e`** becomes `current = e; branch = n; return true; LYn:;` - the label *is*
+   the resumption point.
 4. **A `return`**, or the end of the body, finishes the machine:
-   `branch = -1; return Opt<T>.none();` - `yield break`.
+   `branch = -1; return false;` - `yield break`.
 5. **A reference of a field** - read or written - is `this.<name>`, so a name that
-   lives across a yield lives in the instance.
+   lives across a yield lives in the instance. A body name that would collide with one of
+   the machine's own members is emitted under a mangled one (`linear::yieldFieldName`,
+   `_sm_f_value`): `branch`, `current`, the receiver field and the two method names are
+   the machine's.
 
-## Two ways to advance a machine
+## One protocol
 
 ```simse
 val evens = everyOther(10)          // a machine on the stack
-var step: Opt<Int> = evens.next()   // the optional form
-while (step.hasValue()) { ... }
+while (evens.advance()) {           // step it, and ask whether it yielded
+    println(evens.value().toString())
+}
 ```
 
-`advance(value: *T): Bool` is the same machine without the copy: it writes through the
-caller's pointer and answers whether there was a value. Both share the `branch` field,
-so one machine is advanced either way; both are generated from the same rewrite, with
-only what a yield *does* with the value differing.
+`advance()` steps the machine and answers whether there was a value, leaving what it
+yielded in `current`; `value()` reads that field out as the element type. Nothing is
+constructed per element - no `Opt<T>` to build, ask `hasValue()` of, and unwrap. Both
+share the `branch` field, so one machine is advanced either way, and all four `for` forms
+use them (`impl_specs/for.md`).
+
+`value()` must answer the *element* type (`..T`'s inner), not `Opt<T>`: the type pass
+(`sema::Infer::memberReturn`) types it that way, and that is what makes a `for`'s loop
+variable a typed binding rather than an `auto` the emitter would resolve the wrong native
+for. For the pointer wrap (`smToYieldPtr`) the element type *is* `*T`, so `value()` hands
+out the place, which is what makes `for (*v in xs)` a borrow rather than a copy.
 
 ## What the caller gets
 
@@ -95,8 +110,8 @@ it.
 - Implemented in **both rings**: `yield`/`..T` in the parser, the rewrite in
   `linear::lowerYield` (`Yield.cpp` / `Yield.kt`), the class and factory in
   `Emitter::emitYieldable` (`Codegen.cpp` / `Codegen.kt`), and the cases
-  `stress/yield` (a `while` loop around the yield, both `next()` and `advance()`, a
-  machine advanced after it finished, both `for` forms) and `stress/generic-yield` (a
+  `stress/yield` (a machine advanced by hand, one advanced after it finished, a body that
+  names every machine member, both `for` forms) and `stress/generic-yield` (a
   generic yielding extension over `List<Int>` and `List<Str>`). Verified by transpiling,
   compiling and running them through the **self-hosted** compiler, and by the two rings
   emitting byte-identical C++ for them.

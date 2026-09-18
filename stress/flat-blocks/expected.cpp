@@ -3,15 +3,27 @@
 #include <iostream>
 #include <type_traits>
 
-// The program's string literals: one table, built once, read by every
-// site that mentions one (impl_specs/rtl-abi.md).
-static const Str __sm_stringTable[5] = {
-    "a",
-    "b",
-    "c",
-    "negative",
-    "parsed",
-};
+// The program's string literals: one pool, and two run-length encoded index
+// series (offsets as deltas, then lengths), each as what to subtract from the
+// previous value; strtable.hpp has the stream format.
+static const Int __sm_stringCount = 5;
+static const char __sm_stringPool[] =
+    "negative" "parsed" "a" "b" "c" 
+;
+static const Int16 __sm_stringStarts[] = {5,5,0,-8,2,5,0};
+static const Int16 __sm_stringLens[] = {5,3,-8,2,5,1,2,0};
+static_assert(sizeof(__sm_stringPool) - 1 == 17, "the string pool and its length index disagree");
+static StrView __sm_stringTable[__sm_stringCount];
+static struct __SmStringTableInitType {
+    __SmStringTableInitType() {
+        Int starts[__sm_stringCount];
+        Int lens[__sm_stringCount];
+        simse_strTableExpand(__sm_stringStarts, starts, __sm_stringCount);
+        simse_strTableExpand(__sm_stringLens, lens, __sm_stringCount);
+        simse_strTableDecode(__sm_stringPool, starts, lens, __sm_stringTable,
+            __sm_stringCount);
+    }
+} __sm_stringTableInit;
 
 Opt<Int> ns1_pick(Int i);
 Res<Str> ns1_parse(Int n);
@@ -44,10 +56,10 @@ Res<Str> ns1_parse(Int n) {
     Res<Str> _sm_expr3;
     _sm_expr1 = n < 0;
     if (!(_sm_expr1)) goto L2;
-    _sm_expr2 = Res<Str>::err(__sm_stringTable[3]);
+    _sm_expr2 = Res<Str>::err(__sm_stringTable[0]);
     return _sm_expr2;
     L2:;
-    _sm_expr3 = Res<Str>::ok(__sm_stringTable[4]);
+    _sm_expr3 = Res<Str>::ok(__sm_stringTable[1]);
     return _sm_expr3;
 }
 // stress/flat-blocks/src/main.kt:29
@@ -114,9 +126,9 @@ int main() {
     _sm_expr8 = ns1_describe(_sm_expr7);
     std::cout << std::boolalpha << (_sm_expr8) << std::endl;
     names = List<Str>();
-    simse_list_append(names, __sm_stringTable[0]);
-    simse_list_append(names, __sm_stringTable[1]);
     simse_list_append(names, __sm_stringTable[2]);
+    simse_list_append(names, __sm_stringTable[3]);
+    simse_list_append(names, __sm_stringTable[4]);
     _sm_expr9 = ns1_countUntil(names, 2);
     std::cout << std::boolalpha << (_sm_expr9) << std::endl;
     return 0;

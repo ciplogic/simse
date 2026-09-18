@@ -225,8 +225,8 @@ namespace parser {
             List<Token> toks;
             int cursor = 0;
             Str file;
-            // The `for` and `when` desugarings' names (`_sm_for<n>`, `_sm_step<n>`,
-            // `_sm_index<n>`, `_sm_when<n>`) come from this counter: per file, so nested
+            // The `for` and `when` desugarings' names (`_sm_for<n>`, `_sm_index<n>`,
+            // `_sm_when<n>`) come from this counter: per file, so nested
             // constructs never collide and two runs of the same source produce the same
             // names.
             int nextTemplateId = 1;
@@ -892,16 +892,14 @@ namespace parser {
             //
             //   for (v in m) { body }
             //       var _sm_for1 = m            // the machine, made once
-            //       while (true) {
-            //           var _sm_step1 = _sm_for1.next()
-            //           if (!_sm_step1.hasValue()) { break }
-            //           val v = _sm_step1.value()
+            //       while (_sm_for1.advance()) {
+            //           val v = _sm_for1.value()
             //           body
             //       }
             //
             //   for ((v, i) in m) { body }      // the same, plus the index
             //       var _sm_index1: Int = -1     // -1 so the pre-increment counts from 0
-            //       while (true) {
+            //       while (_sm_for1.advance()) {
             //           _sm_index1 = _sm_index1 + 1
             //           ...                      // then as above, plus `val i = _sm_index1`
             //
@@ -909,12 +907,16 @@ namespace parser {
             // is the element's *place* rather than a copy of it (the prelude's
             // `smToYieldPtr`).
             //
-            // The advance and the exhaustion test are the *first* statements of the
-            // body rather than the loop's condition, and the index is pre-incremented
-            // there too, for the same reason: `continue` jumps to the condition, so a
-            // `next()` in the condition would not advance the machine on a `continue`,
-            // and an index incremented at the end of the body would miss an iteration.
-            // The `-1` start is what makes the pre-increment hand out 0 first.
+            // The machine holds what it yielded (`current`), so the loop variable is one
+            // read from it: the protocol builds nothing per element - no `Opt` to
+            // construct, ask `hasValue()` of and unwrap (`impl_specs/for.md`).
+            //
+            // The index is pre-incremented as the body's *first* statement rather than in
+            // the loop's condition: `continue` jumps to the condition, which is the
+            // machine's own `advance()` and so is evaluated again (the machine does move
+            // along), but an index incremented at the end of the body would miss an
+            // iteration. The `-1` start is what makes the pre-increment hand out 0
+            // first.
             //
             // Everything the loop's body declares is fresh per iteration, and the
             // index is a *copy* of the counter: the names the user wrote (`v`, `i`)
@@ -966,7 +968,6 @@ namespace parser {
                 if (failed) return false;
 
                 const Str machineName = Str("_sm_for") + std::to_string(nextTemplateId);
-                const Str stepName = Str("_sm_step") + std::to_string(nextTemplateId);
                 const Str counterName = Str("_sm_index") + std::to_string(nextTemplateId);
                 nextTemplateId++;
 
@@ -989,24 +990,11 @@ namespace parser {
                                               binaryExpr("+", nameExpr(counterName, pos),
                                                          intLiteral(1, pos), pos), pos));
                 }
-                loop.push_back(varDeclStmt(stepName, true, nullptr,
-                                           methodCall(machineName, "next", pos), pos));
-
-                auto exhausted = std::make_shared<ast::Stmt>();
-                exhausted->kind = ast::StmtKind::If;
-                exhausted->pos = pos;
-                exhausted->cond = unaryExpr("!", methodCall(stepName, "hasValue", pos), pos);
-                auto leave = std::make_shared<ast::Stmt>();
-                leave->kind = ast::StmtKind::Break;
-                leave->pos = pos;
-                exhausted->thenBody.push_back(leave);
-                loop.push_back(exhausted);
-
                 // `val`: the loop variable is a fresh, per-iteration binding (as in
                 // Kotlin's `for`), so assigning to it cannot be mistaken for a way to
                 // move the machine along.
                 loop.push_back(varDeclStmt(valueName, false, nullptr,
-                                           methodCall(stepName, "value", pos), pos));
+                                           methodCall(machineName, "value", pos), pos));
                 if (withIndex) {
                     loop.push_back(varDeclStmt(indexName, false, nullptr,
                                                nameExpr(counterName, pos), pos));
@@ -1018,7 +1006,7 @@ namespace parser {
                 auto loopStmt = std::make_shared<ast::Stmt>();
                 loopStmt->kind = ast::StmtKind::While;
                 loopStmt->pos = pos;
-                loopStmt->cond = boolLiteral(true, pos);
+                loopStmt->cond = methodCall(machineName, "advance", pos);
                 loopStmt->body = loop;
                 out.push_back(loopStmt);
                 return true;

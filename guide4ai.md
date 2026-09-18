@@ -122,10 +122,12 @@ explicit `cppsrc/compiler/Driver.kt` input.
   `capability-matrix.md`, `rtl-abi.md`, `reification.md`, `native-interop.md`,
   `ast-xmlnode.md`, `linear-lowering.md`, `linear-il.md` (the flat instruction list
   the backend is meant to consume, with its dump), `yield.md` (`yield` as a pure
-  lowering to a state machine), `tasks/.
+  lowering to a state machine), `profiling.md` (the `--profile` instrument: one RAII
+  timer per emitted body and the table the program prints), `tasks/.
 - `cppsrc/rtl/` — hand-written runtime: C++ headers (`types.hpp`,
   `containers.hpp`, `smstring.hpp`, `strsmallvector.hpp`, `optional.hpp`,
   `functional.hpp`, `result.hpp`, `xml.hpp`, `span.hpp`,
+  `strview.hpp`, `strtable.hpp`,
   `listops.hpp`, `strops.hpp`, `dictops.hpp`, `fs.hpp`, `filestream.hpp`,
   `timeops.hpp`, `simse.hpp`) AND the **prelude** `.kt`
   files (`rtl.kt`, `Span.kt`, `xml.kt`, `fs.kt`)
@@ -216,6 +218,14 @@ explicit `cppsrc/compiler/Driver.kt` input.
   (the Visual Studio environment shared with `build.js`), the A/B helpers
   (`_bench_ab.mjs`, `_hoist_ab.bat`, `_cap_ab.bat`, `_probe.bat`, `memrun.cpp`,
   `str_bench.cpp`, ...) and the probe programs.
+- **Profiling**: `bun build.js --release --profile` builds a compiler (or any program,
+  via `--profile` on the CLI) whose every emitted body carries an RAII timer; the table
+  of inclusive microsecond totals and call counts prints on stderr when the program
+  exits (`cppsrc/profiling/`, `impl_specs/profiling.md`). With the flag off the emitted
+  file is byte-identical, so it is a tool and not a mode. `tools/_bench_ab.mjs` answers
+  "did this change the time", `tools/_loop_protocol.cpp` prices a *shape*, and
+  `--profile` says **where** - inclusive totals plus call counts, which is what a
+  sampling profile cannot tell you.
 - `benchmarks/` - published measurements; `benchmarks/onebrc/` is the naive 1BRC
   in Simse (`src/main.kt`, each line parsed in place through `StrView`) with the
   C++ STL baseline, the Bun generator/reference (`onebrc.mjs`), the measured
@@ -340,13 +350,29 @@ borrow parameter and a read-through for a by-value one.
   `smToYieldPtr`) and costs what the hand-written `while` + `*xs[i]` costs, measured to
   the millisecond (`impl_specs/for.md`). The compiler's own statement/child walks use
   it.
-- **Borrow AST-carrying structs; don't copy them.** A `val x: T = list[i]` where
-  `T` holds an `XmlNode` (`CgFn`, `CgNativeExt`, `CgInput`, `SemaInput`, ...)
+- **Borrow AST-carrying structs; don't copy them.** A `val x: T = list[i]` where `T`
+  holds an `XmlNode` (`CgFn`, `CgNativeExt`, `CgInput`, `SemaInput`, ...)
   deep-copies the subtree. In read-only loops use a pointer into the owner
   (`val fn: *CgFn = *this.functions[i]`, `val decl: *XmlNode = *fn.decl`) and let
   every function that only reads take `*T`; a by-value copy *per lookup* makes
   emission quadratic in the function/AST count (the `CgFn` copies did: the Debug
   `stage1_check` cost 6.6-8.7 s before they were removed, 2.1 s after).
+- **Read a node's own attributes once, into the collected struct that everyone scans.**
+  The Simse ring's node is a *uniform* attribute list, so `xmlAttr(node, Name)` is a scan;
+  the hand-written ring's `ast::Decl` has real fields, so `decl->name` is a load. Porting a
+  lookup walk verbatim therefore turns each field read into a scan *per candidate per call
+  site*: the emitter's function lookups (`findFunction`, `findReceiverFnByName`,
+  `findExtensionFn`, `memberCallReturn`, `functionPackage`, `reachesPreludeBody`) did that
+  and a profile put `xmlAttr` at **37%** of the self-transpile, ~7% of it real work
+  (T76 in `impl_specs/capability-matrix.md`). The fix is the shape of the collected struct
+  (`CgFn.name`/`isNative`/`hasBody`, filled once in `addFunction`), not the lookup loop:
+  rewriting `xmlAttr`'s own walk measured *neutral*. The IL backend's own per-declaration
+  rescans (`ilJumpCrossing` rebuilt a label map and walked the body per declaration, and
+  again per block) were hoisted the same way - one `List<Int>` per body, the crossing kept
+  with the block - and measured *neutral* too, with byte-identical output: the count of
+  reads, not the shape of one read, is what a profile of this ring is telling you about.
+  The remaining lever is therefore a **borrowed `xmlChild`** (`*AstXmlNode`, it returns a
+  176-byte copy today) - and even that only where the copy is the *per-read* cost.
 - **Don't spell `copy(...)`; the compiler converts where the destination says so.**
   A `val x: Str = h` where `h: *Str` reads through by itself, a call argument converts
   against its parameter, and a construction's arguments convert against the class's
@@ -422,7 +448,7 @@ session):
    `emitYieldable`/`emitMachine`/`ilMachineMethod`, and the builder contract they needed
    (`linCondJump` re-roots a *synthesized* condition under `Cond` - the C++ ring holds it
    structurally, so the gap was invisible there). `stress/yield` covers both `for`
-   forms, `continue`/`break`, `next()` and `advance(*T)`, through the self-hosted
+   forms, `continue`/`break`, `advance()`/`value()`, through the self-hosted
    compiler.
 4. ~~**`smToYield`**~~ **done** (`impl_specs/for.md`): `for (x in c)` becomes
    `c.smToYield()`, the prelude's `List<T>.smToYield(): ..T` is written in Simse, a
@@ -594,12 +620,44 @@ Do these only when asked; roughly prioritized:
   be declared yet (`'facts': unknown override specifier`). Program-level tables
   passed between stages go as **parameters** (that is why the emitter threads
   `SemFacts` through `emitFunctions`/`emitFunction`).
+- **Within one package the *file order* is the emitted order**, so the same rule
+  applies to a field whose type is declared in a sibling file: the driver scans a
+  module root by path, and the definition comes out where the file sorted
+  (`cppsrc/codegen/CgStringTable.kt` before `Codegen.kt`, because `Emitter` embeds a
+  `StringTable` by value). A by-value field needs the *complete* type, so a forward
+  declaration is not enough - name the file so it sorts first, or pass the value as
+  a parameter.
+- **Spell a char literal whose value is `"` as `'\"'`, not `'"'`** (three sites did
+  the latter): Kotlin's highlighter reads `'"'` as the start of a string and colours
+  the rest of the line as text. The emitted C++ keeps the *source spelling* of a char
+  literal, so `'\"'` reaches the generated file too - the same value, and the
+  bootstrap refresh carries the difference.
+- **An undefined value name is not diagnosed** (both rings): `text.find(D)` with no
+  `D` in scope transpiles clean (exit 0) and emits `simse_str_find(text, D)`, so the
+  user sees `'D': undeclared identifier` from C++ instead of a positioned Simse
+  error. `sema` reports an unknown *type*, not an unknown *value*; the emitter's
+  `ExprName` arm falls through to the raw name. Found while T71/T72 were worked (a
+  repro is in the capability matrix), still open.
 - **Every size, length and index in the RTL is the language's `Int`** (32-bit
   signed) and `Str::npos` is `-1`; a `std::size_t` appears only where the standard
   library's own signature needs one (allocation, `mem*`, `char_traits::length`), as
   an explicit widening cast. That is what keeps the compiler's own build free of
   C4267 (`size_t` to `Int`) warnings - do not reintroduce an unsigned size type to
   satisfy a std API; cast at that one call instead (`impl_specs/rtl-abi.md`).
+- **A string literal at a site is a `StrView`**, not a `Str` (`__sm_stringTable[k]`, a view
+  into the program's literal pool): comparisons and `+` have direct `StrView` overloads so
+  they build nothing, and every other position goes through the converting
+  `SmString(const StrView&)` and materializes the copy it always did. The consequence for
+  RTL work: **a new operator that takes two `Str`s needs its `StrView` overload too, or a
+  literal argument makes the call ambiguous**, because `const char* -> Str` and
+  `StrView -> Str` both exist and each candidate then converts a different operand. The
+  operators and the conversion live at the end of `cppsrc/rtl/strview.hpp` (the constructor
+  is *declared* in `smstring.hpp`, which cannot see `StrView`).
+- **A Simse identifier that is a C++ keyword is emitted verbatim** and breaks the
+  generated file, not the Simse program: `val long: Str = "..."` transpiles clean and
+  produces `Str long = ...;` (`C2628`). Nothing maps `long`/`class`/`template`/... out of
+  the way, and - like an undefined value name - the failure is at C++ compile time, with no
+  positioned Simse error. `stress/string-escapes` hit it while it was being written.
 - `stress/<case>/expected.cpp` is compared byte for byte but **`--update` never
   rewrites it**: copy `stress/.work/<case>/out.cpp` over it by hand.
 - **A value receiver is `T* self`** (T47): method signatures, call sites

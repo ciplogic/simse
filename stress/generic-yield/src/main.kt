@@ -43,13 +43,11 @@ fun main(): Int {
     // A machine built by a generic function is a value like any other: it can be held,
     // advanced by hand, and advanced again after it is finished.
     val byOne = numbers.everyNth(1)
-    var step: Opt<Int> = byOne.next()
     var total: Int = 0
-    while (step.hasValue()) {
-        total = total + step.value()
-        step = byOne.next()
+    while (byOne.advance()) {
+        total = total + byOne.value()
     }
     println(total.toString())
-    println(byOne.next().hasValue().toString())
+    println(byOne.advance().toString())
     return 0
 }

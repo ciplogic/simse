@@ -2048,3 +2048,513 @@ compiler *did* catch and one it could not:
   Verified: five differentials byte-identical, T23's two-step bootstrap byte-identical,
   `simse_tests.exe` **56/56**, `bun tools/stress.js` **43/43** on both rings,
   `cppsrc/simse_bootstrap.cpp` regenerated with the fixed point byte for byte.
+
+- **`Codegen.kt` split into three files, and the two resolution bugs the split exposed
+  (T72).** The emitter was one 4,423-line file; it is 2,944 lines now, with the rest in
+  two new files. Nothing about the emitted C++ was meant to change, and apart from the
+  moves it does not - the fixed point still holds byte for byte - which is what makes the
+  two findings below worth reading: both are *pre-existing*, and the second one is a
+  user-visible diagnostic gap.
+
+  - **`IlCodeGen.kt` (1,507 lines) is the instruction-list backend**: the IL's own types
+    (`IlFrame`, `IlCrossing`, `IlScope`, `IlText`) and the 41 walks that spell a body
+    (`dumpIl`, `ilFunctionFor`, `ilIntAt` ... `emitBodyAt`). They moved as **extension
+    functions on `Emitter`** (`fun Emitter.ilEmitOps(...)`), because a class cannot be
+    reopened in a second file and the emitted C++ is the same either way: an extension's
+    receiver is the `Emitter* self` a class method's is, so the call sites and the symbols
+    keep their spelling. The move itself was a script (find the region, dedent it, rewrite
+    each signature); the whole-file diff is the proof of how mechanical it is.
+  - **`CgStringTable.kt` is the literal pool as a class** (`StringTable`: `add`, `sort`,
+    `count`, `entry`, `spelling`), leaving `Codegen.kt` only the *emission*
+    (`emitStringTable`, which needs the emitter's output) - a literal site went from
+    "has/get/format" to `this.literals.spelling(text)`, and `sortLiterals` became the
+    `sort` step in `run`'s prelude. The `Cg` prefix is not decoration: the driver scans a
+    module root in path order and the amalgamation defines types in that order, and
+    `Emitter` embeds the table **by value**, so the file has to sort before `Codegen.kt`
+    (the same rule as "a data-class field cannot name another package's type", now
+    recorded for sibling files in `guide4ai.md`).
+  - **`'"'` is spelled `'\"'`** in the three char literals whose value is `"`
+    (`Scanner.kt` twice, `IlCodeGen.kt` once). Same `Char`, and Kotlin's highlighter stops
+    reading `'"'` as an unterminated string. The emitted C++ keeps the *source spelling*
+    of a char literal, so the bootstrap carries the change (three sites).
+
+  **Finding 1: a plain call can bind to an extension by scan order.** `linear`'s
+  `ilOpComment` calls **its own** `ilOperandAt(operands, 0)` (a plain function in
+  `LinearForm.kt`). While the codegen helper was a *method* of `Emitter`, nothing else
+  answered to that name - `functionPackage`/`hasPlainFunction` skip methods and natives -
+  but as an extension in `codegen` (scanned *before* `linear`) it became a candidate for a
+  bare call by name, shadowed the linear one, and the emitted call lost its receiver:
+  `ns1_ilOperandAt(operands, 0)` where the host takes `(self, operands, index)` - correct
+  C++ errors, and *no* Simse diagnostic. The fix here is the narrow one: the codegen
+  helper is renamed `ilOpOperand` (with a comment saying why), so the two names cannot be
+  confused. The rule itself - "a bare call prefers a plain function over an extension, and
+  among two plain ones the scan order decides" - is still open, and it needs both rings'
+  `functionPackage`/`hasPlainFunction` (or the sema) to agree on an order that is not the
+  file path.
+
+  **Finding 2: an undefined value name is not diagnosed.** `text.find(D)` with no `D` in
+  scope transpiles **clean** in both rings (exit 0) and emits `simse_str_find(text, D)`, so
+  the error the user sees is C++'s `'D': undeclared identifier` - a repro is three lines
+  and needs no RTL. `sema` reports an unknown *type*, not an unknown *value*, and the
+  emitter's `ExprName` arm falls through to the raw name (which the RTL's open surface
+  needs for a *declared* name it has not seen); a name that resolves to nothing should be a
+  positioned diagnostic instead. Still open.
+
+  Verified: five differentials byte-identical (T22 now transpiles `Codegen.kt` with
+  `--module-root cppsrc/codegen` and depends on the two new files; `SIMSE_ALL_MIRRORS`
+  lists them), T23's two-step bootstrap byte-identical in release *and* debug,
+  `simse_tests.exe` **58/58** (56 + one `PASS source` per new file), `bun tools/stress.js`
+  **43/43** on both rings, `cppsrc/simse_bootstrap.cpp` regenerated and the fixed point
+  byte for byte. `tools/_symdiff.mjs` is the check that a move lost nothing: it compares
+  the emitted *symbol sets* of two amalgamations, which is how the symbol changes there
+  (one rename, one deleted helper, seven new definitions) were confirmed to be the whole
+  of it.
+  No bench claim: the window was busy - the **unchanged** C++ ring measured
+  292 -> 454 ms in the same session - so an A/B there would have measured the machine; the
+  refactor's runtime effect is structural (one extra call per pooled literal). The rings
+  also agree byte for byte on the compiler's own sources
+  (`simse_transpile --root cppsrc` vs `simse.exe --root cppsrc`), which the fixture
+  differentials do not cover.
+
+- **The string-table join, measured before it was built (T73 - the design; the substrate
+  landed as T75).** The proposal: sort the pool by **decoded length first, text second**
+  (longest first, so shorter literals can be found inside longer ones), join the literals
+  into one text (appending only the ones that are *not* already a substring of it), store
+  one `(delta-from-previous-start, length)` pair per literal as `int16` when the joined text
+  is under 32K (`int32` otherwise), and rebuild the N `Str`s at startup by slicing the
+  joined text. It is a sound idea, and it is the right *representation* for the next step
+  - but as specified it is a measured **regression**, because the entries stay owning
+  `Str`s:
+
+  - On the compiler's own table (526 literals, 6638 decoded bytes;
+    `tools/_strtable_gain.mjs` over `cppsrc/simse_bootstrap.cpp`): **344 of 526** literals
+    are appended as pieces (65%), the joined text is **5762** bytes (13% of the text is
+    shared), the slices cost 2104 bytes.
+  - `Str` is 32 bytes (4 len + 4 cap + 24 inline), so **today's table is ~19.7 KB**
+    (526 objects, including 72 literals longer than the inline capacity that allocate
+    2907 bytes at static-init time).
+  - Join **+ materialized `Str` entries**: the same 526 objects *plus* the joined text and
+    the slices = **~23.9 KB** static (4.2 KB over today's 19.7) and the same static-init
+    allocations. The joined text is *added* to the per-literal copies instead of replacing
+    them, which is the whole of it.
+  - Join **+ `StrView` entries** (the `Str` objects go away, the entries point into the
+    joined text): **~10 KB**, no static-init allocations, no copies. *That* is the version
+    that pays - and it is the "a constant is a `StrView`" rule.
+
+  The rule is bigger than it looks, and the probe says so. Today a literal *use* is free
+  when it is read (`__sm_stringTable[k]` is a `const Str` glvalue that binds a `const Str&`
+  parameter); the ring's own emitted C++ mentions a literal at **1396** sites against 526
+  pooled entries. With view entries each `Str`-typed site needs a materialization unless
+  the RTL grows view operations, so the change is: the literal's *type*, the conversion at
+  every `Str` position (sema, extractor and emitter, both rings), view-taking operations
+  for the hot ones (`==`, `+`, `find`, a `Str` parameter) and the spec text for all of it.
+  And the interop the rule leans on is not there yet, silently: `view == text`,
+  `text == view`, `takesStr(view)` and `val owned: Str = view` all **transpile clean**
+  (exit 0) and then fail in C++ - `C2678` (binary `==`: no operator for `Str`/`StrView`),
+  `C2664` (`StrView` to `Str`), `C2679` (`=` from `StrView`) - which is T72's Finding 2
+  (an unresolved or mismatched name is emitted, not diagnosed) seen from the type side.
+
+  So the join is held as the substrate for the view work rather than landed on its own (the
+  substrate landed in **T75**, and this section is why: the entries had to stop being
+  owning `Str`s first). If the view rule is wanted, the order is: the
+  conversion/diagnostic work first (it is what makes a *wrong* site an error instead of a
+  C++ error), then the join and the view entries together, then the spec.
+
+  **The slice encoding: 7 bits a byte, high bit terminal (T73, refined).** The pairs are
+  not fixed-width: each value is a run of bytes carrying 7 payload bits each, with the
+  high bit *set on the last one* ("terminal"), so a length under 128 and a delta within
+  ±63 are one byte each. A delta spends its first byte's bit 6 on the sign and only 6 bits
+  on the value; continuation bytes carry 7 more bits, unsigned, low group first (`value |=
+  (byte & 0x7F) << shift`, `shift` = 0 then 6, 13, 20...). "start 0, len 27" is `0x80`,
+  `0x9B`; a next start of 27 is `0x9B` again; a reuse delta of -2 is `0x80 | 0x40 | 2` =
+  `0xC2`. On the compiler's own 526 slices that is **~1.2 KB** instead of the 2104 the
+  `int16` pairs need - real, and still not what decides the question:
+
+  - join + materialized `Str` entries: the same 526 objects **plus** text and slices =
+    **23.9 KB** (the encoding shaves 0.8 KB off the 24.7 above). A loss either way.
+  - join + `StrView` entries: **13.4 KB**, no static-init allocations. The object is what
+    matters, and the sizes are *measured* (`tools/probe_sizes.cpp`, compiled through
+    `build.js --cpp`): `Str` is 32 bytes and `StrView` is **12** since T74 packed it (it was
+    16), so at 20 000 literals it is 640 KB against 240 KB of views plus their text.
+    "Compact for large applications" is the view, not the join.
+
+  **Why it is landable without a language change (measured, `tools/_strtable_shapes.mjs`).**
+  The 1393 literal uses in the ring's own emitted C++ fall into three groups:
+
+  | shape | uses | under view entries |
+  | --- | --- | --- |
+  | `slot/field = literal` | 618 | unchanged: an owning position, a copy either way |
+  | `... + literal` / `literal + ...` | 386 | one `operator+` overload (or a copy) |
+  | `return literal;` | 119 | unchanged |
+  | a generated function's argument | ~250 | unchanged where the parameter is `Str` by value |
+  | a string native's argument | ~20 | an overload where the native *borrows* it |
+
+  So the rule can be **materialize by default, keep the view only where the RTL has a
+  borrowed overload** - no sema and no spec *type* change (a constant stays a `Str` to the
+  language; the view is the representation, which is the "sorted out as spec" part). The
+  allowlist starts at comparisons (`==`/`!=` both ways), `+` both ways, `println`'s `<<`,
+  and the natives that borrow a `Str` argument (`simse_str_find`, `simse_str_startsWith`,
+  `simse_str_split`, `simse_str_appendStr`, `simse_eprintln`); everything else materializes
+  exactly as today, so a missed allowlist entry costs a copy, never correctness. The
+  emitter's half is the join, the encoder and the table build; the RTL's half is the
+  overloads and the walk (a `(delta, len)` reader that fills a `StrView[N]`); both rings
+  must agree byte for byte, and the 1393 sites above are the shape list a differential
+  would exercise.
+
+- **`Span` and `StrView` follow the 4-byte packing rule (T74).** `specs/memory-model.md`
+  says every type is aligned to at most 4 bytes, and `types.hpp` says the RTL wraps its own
+  value containers in `SIMSE_PACK_PUSH` - but `Span` was the one value struct that was
+  missed, so on this 64-bit host it took the pointer's 8-byte alignment: `sizeof(Span<Char>)`
+  and `sizeof(StrView)` were **16**, with a 4-byte hole in every view the scanner, the
+  parser and the RTL pass around. Measured (`tools/probe_sizes.cpp`, a C++ probe compiled
+  through `build.js --cpp`): **16 -> 12** for both, `List<StrView>` 72 -> 56, while `Str`
+  stays 32 and the already-packed `AstXmlNode`/`AstNodeAttribute` are untouched at 176/36.
+  `xml.hpp`'s `XmlNode`/`Attribute` (312/64) keep host alignment - they are user-program
+  types and a separate call.
+
+  The emitted C++ is **byte-identical** (a layout is not printed), so no golden moved and
+  `cppsrc/simse_bootstrap.cpp` did not change; the win is in the compiler's own data and in
+  any program that walks spans. Verified: five differentials and T23 in release **and**
+  debug, `simse_tests.exe` **58/58**, `bun tools/stress.js` **43/43** on both rings, and
+  `bun tools/bootstrap.js`'s fixed point byte for byte. The two self-transpile timings moved
+  in the same direction (ring best 837 -> 761 ms, and the hand-written ring, which shares the
+  header, 292 -> 279 ms) - indicative, not a controlled A/B, since the box also went quiet
+  in between.
+
+  It also makes the string-table proposal cheaper: a `StrView[526]` table is 6312 bytes
+  rather than 8416, so T73's design totals **13.4 KB** (6312 of views + 5763 of joined text
+  + 1301 of varint slices) against today's ~24.3 KB - **~45%** off the table - and the 72
+  static-init allocations become none. T75 landed the views; the packed indexes and the
+  substring sharing are what is still open.
+
+- **The compiler's string table is a pool with two run-length encoded indexes, and its
+  entries are views (T75).** T73 was held because the entries stayed owning `Str`s; the
+  representation was landed as soon as they stopped being. What the emitter writes now:
+
+  ```cpp
+  // The program's string literals: one pool, and two run-length encoded index
+  // series (offsets as deltas, then lengths), each as what to subtract from the
+  // previous value; strtable.hpp has the stream format.
+  static const Int __sm_stringCount = 541;
+  static const char __sm_stringPool[] =
+      "usage: simse_transpile <input.kt>..." "yield: a `this` parameter cannot be a field; ..." ...;
+  static const Int16 __sm_stringStarts[] = {541,5,0,-142,40,5,17,1,2,2,4,6,...};
+  static const Int16 __sm_stringLens[] = {541,4,-142,40,5,17,1,2,2,4,6,...};
+  static_assert(sizeof(__sm_stringPool) - 1 == 7355,
+                "the string pool and its length index disagree");
+  static StrView __sm_stringTable[__sm_stringCount];
+  static struct __SmStringTableInitType {  // expands the index, fills the views,
+      __SmStringTableInitType() {           // drops the expansion - no heap
+          Int starts[__sm_stringCount];
+          Int lens[__sm_stringCount];
+          simse_strTableExpand(__sm_stringStarts, starts, __sm_stringCount);
+          simse_strTableExpand(__sm_stringLens, lens, __sm_stringCount);
+          simse_strTableDecode(__sm_stringPool, starts, lens, __sm_stringTable,
+              __sm_stringCount);
+      }
+  } __sm_stringTableInit;
+  ```
+
+  `simse_strTableExpand`/`simse_strTableDecode` (`cppsrc/rtl/strtable.hpp`) expand the two
+  streams into the stack arrays and walk them into the views; `StrView` grew a `toString()`
+  member (`strview.hpp`) because the *site* asks for the owned value. Six deliberate
+  choices:
+
+  - **Both series are "what to subtract from the previous value"**, with an implicit 0
+    before the first entry: `value[i] = value[i-1] - x[i]`, rebuilt in an `Int` accumulator,
+    so an element is only ever a *difference* and the pool's size is the one large number.
+    Longest-first order makes the length series descend slowly, and on this table **85% of
+    the differences are 0** (equal-length literals are adjacent), the largest magnitude is
+    the longest literal's 142.
+  - **Each series is run-length encoded**: its length, then alternating blocks of
+    non-repeating values (a count, then the values) and of runs (a count, then `times,
+    value` pairs), until the length is filled. That is what the zeros collapse to: on this
+    table 541 differences, 119 runs, longest run 37, and a stream of **256/257 numbers**
+    (513 numbers, **1026 B**) against 1082 B per series without the pass - 47%. A single
+    value is written once whichever block it lands in, so a block costs one count and no
+    more: on an all-distinct series that is `N + 3` numbers against `2N` for `(times, value)`
+    pairs, and on this run-heavy one 257 against 239 - the trade the format makes.
+  - **The element is `Int16` when every number in the stream fits**, which the emitter
+    checks (it encodes the stream, takes the largest magnitude and widens to `Int`
+    otherwise) - it can, because it computes every number. 2 bytes a number instead of 4 is
+    what lets each index be a single source line.
+  - **The lengths are numbers the emitter computed**, not `(Int) sizeof(<literal>) - 1`
+    expressions: with `sizeof` the length is a symbol in the generated file that the emitter
+    cannot index on, so the second series could not be written at all, and neither the
+    encoding nor the width could be chosen.
+  - **The pool is the literal texts again, adjacent**, so the C++ compiler decodes the
+    escapes of the emitted program and the emitter's `literalByteLength`
+    (`cgLiteralByteLength` in `CgStringTable.kt`) only has to agree about how many bytes an
+    escape *costs*. The `static_assert` on the pool's `sizeof` is that agreement, checked by
+    the program's own build: an escape counted differently shifts the total and stops the
+    build instead of silently shifting every literal after it. T23 pins it from the other
+    side - the stage-1 compiler reads its own 541 literals through this table and must
+    regenerate its source byte for byte. The pool is one source line while it fits, wrapped
+    at 60 000 characters - short of the standard's 65 536-character logical-line limit.
+  - **The sort is longest first, then text** (`val` < `var`, `vars` < `val`), as T73
+    specified - the order the difference series and, later, text sharing both want.
+
+  **`starts` is `lens` shifted while no two literals share text.** The offset increment of
+  entry `i` is entry `i-1`'s length, so the two streams expand to the same numbers with a
+  leading 0 (`tools/_strtable_runs.mjs` prints the check): two streams for one series of
+  information. Dropping `starts` and advancing the offset by the length the decoder just
+  rebuilt is a one-line change that halves the index; the stream returns when substring
+  sharing lands, which is what makes the increment independent of the previous length.
+
+  Measured on the compiler's own source set (541 entries, a 7355-byte pool - the count grew
+  526 -> 537 -> 541 as the emission text itself grew): **~19.7 KB of table before**
+  (526 `Str` objects, 16.4 KB static plus 2.9 KB allocated at static-init time for the 72
+  literals over the inline capacity) against **~14.5 KB now** (pool 7355 + 1026 B of
+  run-length encoded index + 6492 bytes of views), with **no startup allocation** and the
+  index's 4.3 KB expansion living on the stack only while the initializer runs. A table is
+  not compared across source revisions, so the number that means something is the per-entry
+  cost (32 bytes against 12 + the text) and the startup allocations (72 against 0); dropping
+  the redundant `starts` takes the index to ~513 B.
+
+  **The sites use the view, and the interop lives in `strview.hpp`.** A literal site reads
+  its entry as it stands, so **a comparison or a `+` builds no `Str`**: `str == literal`,
+  `literal == literal`, `literal + text` and `println(literal)` have direct overloads over
+  `StrView` (`==`/`!=`/`<`/`<=`/`>`/`>=` and `+` in all three pairings, plus an
+  `std::ostream` writer), and everything else - a slot, a `return`, a by-value parameter, a
+  `const Str&` argument, a list pack - reaches the converting constructor
+  (`SmString(const StrView&)`: declared in `smstring.hpp`, which cannot see `StrView`,
+  defined in `strview.hpp`, which includes it) and materializes exactly the copy it
+  materialized before. The *mixed* overload pair is load-bearing: without
+  `operator==(const Str&, StrView)` and its mirror, `str == literal` is **ambiguous** (one
+  candidate would convert the left operand, another the right), because `const char* -> Str`
+  and `StrView -> Str` both exist.
+
+  This is what recovered the cost of the first cut, which asked for the owned `Str` at
+  every mention: measured with `tools/_bench_ab.mjs`, 15 interleaved runs of the
+  self-transpile against the previous published bootstrap, same flags, the `toString()` cut
+  was **~7.5-9% slower** (**838.3/907.0 -> 918.1/962.4 ms**) and the view sites are **~0-2%**
+  - parity with the `Str` table (**804.4/827.7 -> 816.6/837.0** and **830.7/865.3 ->
+  831.9/883.2 ms** in two windows; the box's spread is wide, so read the ratio). Parity is
+  the honest expectation: the old table's read sites were construction-free too, so what the
+  view form buys is the memory, the startup allocations, and the `+` sites that used to copy
+  a long entry before appending. What still converts rather than borrows is a `const Str&`
+  argument to a native (`simse_str_find`, `startsWith`, `split`, `appendStr`, `eprintln` -
+  ~20 sites in the ring's own emission), the last entry of T73's allowlist.
+
+  **The binary is smaller too.** `static const Str __sm_stringTable[526] = {"a", "b", ...}` was
+  **526 dynamic initializers** - one `SmString(const char*)` construction per entry, inlined
+  one after another before `main`. The pool plus the two loops that expand and decode the
+  index replace all of that with one small function, and the entries themselves shrink.
+  Measured on the compiler's own release binary (`tools/_pe_sections.mjs` reads the PE
+  section table; the two binaries are the published bootstrap at HEAD against the current
+  one, same flags):
+
+  | section | before | after | delta |
+  | --- | --- | --- | --- |
+  | `.text` | 1 969 196 | 1 949 308 | **-19 888** |
+  | `.rdata` | 238 072 | 235 560 | -2 512 |
+  | `.data` | 20 408 | 10 072 | **-10 336** |
+  | `.pdata` | 49 232 | 46 800 | -2 432 |
+  | file | 2 279 424 | 2 237 952 | **-41 472** |
+
+  The `.text` win is the surprise and it is the bigger half: 526 initializer calls became
+  two loops, and that is *net* of the encoder the emitter gained. The `.data` win is exactly
+  the 16 832-byte `Str[526]` against the 6492-byte `StrView[541]` (16 832 - 6492 = 10 340,
+  against 10 336 aligned); `.rdata` shrinks because the literals used to exist twice, once as
+  the initializer's text and once in the built entry. The `.pdata` shrink follows the
+  initializer code.
+
+  What T73's spec still owes: dropping the redundant `starts` (the difference encoding makes
+  it a copy of `lens` until sharing lands), substring sharing (it needs the emitter to decode
+  escape *values*, not just counts, and it is what makes `starts` independent of `lens`), and
+  the borrowed-argument overloads above.
+
+  Verified: five differentials and T23 in release **and** debug, `simse_tests.exe`
+  **58/58**, `bun tools/stress.js` **44/44** on both rings (the new
+  `stress/string-escapes` pins the escape counting against the pool), and
+  `bun tools/bootstrap.js`'s fixed point byte for byte. 15 byte-compared goldens moved on
+  purpose (12 `tests/golden/*.cpp.expected`, `stress/flat-blocks/expected.cpp`); `hello`
+  and `receiver-shapes` carry no literals, so their `expected.cpp` did not.
+
+- **A profile of the self-transpile says the ring's gap is *when* a node's attributes are
+  read, and `CgFn` carries them now (T76).** The user profiled the Release binary:
+  `emitFunctions` **91.98%**, `emitBodyAt` 58.81% (the whole of its
+  `emitIlBodyText` -> `ilEmitOpsChecked` -> `ilEmitOps` chain, 41%/41%/39%), and
+  **`ns2_xmlAttr` 37.14%** with the attribute-iteration machine under it
+  (`List_smToYieldPtr_yieldable<AstNodeAttribute>::next`, 26.93%) - i.e. essentially *all*
+  of the IL emit loop's time was the compiler's most-called helper. Two readings of that
+  are possible and only one is right:
+
+  - *The loop is slow.* It is not: rewriting `xmlAttr` as an index walk over a borrowed
+    attribute list (no `Opt<*T>` per element, no machine) measured **neutral** - 15
+    interleaved runs of the self-transpile, `762.9/777.3` against `762.3/772.4` ms - so the
+    rewrite was reverted (and the pointer-`for` stays the ring's style, `guide4ai.md`).
+  - *The call count is absurd*, which is the answer. Where the calls came from was not
+    `expr` (a handful per emitted node) but the **lookup walks**: `findFunction`,
+    `findReceiverFnByName`, `findExtensionFn`, `memberCallReturn`, `functionPackage`,
+    `reachesPreludeBody` and `preludeReceiverNamed` scan *every* collected function and read
+    `xmlAttr(fn.decl, IsNative)` / `xmlAttr(fn.decl, Name)` / `xmlAttr(fn.decl, HasBody)`
+    per candidate - for every call site. The hand-written ring compares `decl->name` /
+    `decl->isNative` / `decl->hasBody` **fields** there, because its `ast::Decl` has them;
+    the Simse ring's node is a uniform attribute list, so its port turned each field read
+    into a fresh scan. That is the ring gap in one line.
+
+  `CgFn` now carries `name`, `isNative` and `hasBody`, filled once in `addFunction` (the one
+  place a `CgFn` is built), and every one of those walks compares fields. Measured with
+  `tools/_bench_ab.mjs`, 15 interleaved runs of the self-transpile, the published bootstrap
+  at HEAD against the new one, same flags: **800.4/814.3 -> 762.9/777.3 ms** min/median -
+  which is **~4.5% faster than the old `Str`-table compiler** and **~7% faster than the
+  state before this change** (`816.6/837.0`), so the whole string-table work plus this is a
+  net speedup and not a wash. `bun tools/bootstrap.js` agrees: the self-transpile is
+  790/794 ms against the hand-written ring's 290/303, a ratio of **2.7x** (it was 2.8-3.3x
+  in this session's earlier windows), with the fixed point still byte for byte.
+
+  **The `for` protocol is `current` + `advance()` + `value()` now, and it was landed as an
+  artifact change (T77).** Every machine used to emit *both* halves of the protocol -
+  `next() -> Opt<T>` and `advance(value: *T) -> Bool` - while the `for` lowering used
+  `next()` for all four forms, so in the compiler's own emitted C++ **`.advance(` appeared 0
+  times while `.next()` appeared 124**, and each `advance` body (~50 emitted lines per
+  instantiation) was compiled and never called. That is gone: the machine holds what it
+  yielded in a `current` field, `advance()` steps it and answers whether there was a value,
+  and `value()` reads `current` out as the *element* type - so the loop variable is still a
+  typed binding and the emitter needed **no new IL op** (`machine.value()` is a plain
+  `Call`). One protocol for all four `for` forms, no `Opt` in the artifact, no dead method
+  per instantiation.
+
+  - **It is not a speedup, and that is measured rather than argued.** This was the earlier
+    T76 reading: replacing the shape is not where the time goes.
+    `tools/_loop_protocol.cpp` prices the shapes directly (a search body with a runtime
+    key, the shape `xmlAttr` has, on a 64-element `List<Attr>` - `AstNodeAttribute`-sized -
+    over 200 000 rounds, `/O2 /Ob3` through `build.js --cpp`):
+
+    | shape | ns/element |
+    | --- | --- |
+    | `next()` + `Opt<*T>` (what the emitter used to write) | 0.51 |
+    | `advance(*T)` (emitted, never called) | 0.46-0.51 |
+    | `current` + `advance()` (what the emitter writes now) | 0.46-0.51 |
+    | index walk, no machine (baseline) | 0.32-0.41 |
+
+    The three protocol shapes are **identical** - MSVC inlines the machine and removes the
+    `Opt` - and dropping the machine entirely buys ~0.15 ns an element, which over the
+    compiler's few million attribute visits is under a millisecond. Two controlled A/Bs of
+    the real compiler with only `xmlAttr`'s body differing agreed (**770.6/781.7** against
+    **771.6/786.8** ms, and **764.4/772.6** against **762.3/772.4**, 15 interleaved runs
+    each), so the profiler's `next` figure was *memory-attributed*: the innermost frame of a
+    cache-walking loop gets the samples. The change was worth making for the artifact and
+    for the one protocol; it is not sold as a win.
+  - **A body may name what the machine names.** Collecting the fields turned up a latent
+    collision: `branch` and `current` were **silently skipped** (a local of either name
+    aliased the protocol field - its own initializer wrote the branch - which the
+    `machineReserved` list in `emitYieldable` was papering over), and `value`/`advance`
+    would have been a C++ redefinition (`Int value;` next to `Int value()`), which is
+    exactly what `stress/yield`'s `var value: Int` hit. A body name that collides is now
+    emitted under a mangled one (`linear::yieldFieldName`, `_sm_f_value`), and the rewrite
+    and the factory's `machine.x = x` go through the same rule; `stress/yield` names all
+    four (`branch`, `current`, `advance`, `value`).
+  - Verified: five differentials and T23 in release (fixed point byte for byte),
+    `simse_tests.exe` **58/58** in both configurations, `bun tools/stress.js` **44/44** on
+    both rings, and the two rings byte-identical on `stress/yield`. The goldens moved on
+    purpose (`tests/golden/{for_iteration,lambda_scopes,program_expr,when}.cpp.expected` and
+    the two `.astxml.expected` of the loops), and `cppsrc/simse_bootstrap.cpp` was refreshed
+    (`bun tools/bootstrap.js`: fixed point byte for byte). The IL hoisting below is verified
+    the strict way: the compiler before and after it transpile `cppsrc` to **byte-identical
+    C++** (`cmp` on the two outputs), which is what makes it a backend-internal change.
+
+  **The IL backend's per-declaration rescans, hoisted - and that is neutral too (T77b).**
+  The one place the backend did work proportional to the *body* rather than to the
+  instruction was the block a declaration needs when a jump crosses it: `ilJumpCrossing`
+  rebuilt a label->position **`Dictionary`** and rescanned the body for *every*
+  declaration - and the emit loop asked again (a second full call) when the block actually
+  opened. Three changes, none of which can change the output (it is byte-identical):
+
+  - the label positions are one `List<Int>` per body (`ilLabelPositions`) instead of a hash
+    map per declaration, so a jump's target is an array read;
+  - the crossing computed for a block is *kept* with the block (`blockEnd` holds the
+    `IlCrossing`, not just its `end`), so the walk runs once per block instead of twice;
+  - a `declareOp` dictionary the Simse ring allocated per body and never read is gone (the
+    C++ ring never had it).
+
+  Measured with `tools/_bench_ab.mjs` on the self-transpile, 15 interleaved runs:
+  **739.3/756.0** before against **751.2/759.2** after in one window, and **1225.9/1247.1**
+  against **1229.7/1240.9** in another (the machine was in two very different states; both
+  legs sat in the same one) - i.e. **neutral**, and the honest reading is that these
+  declarations are rare enough that the walk was never the cost. The other half of the
+  same attempt was **reverted**: memoizing `ilFolded` per slot (`three hash probes and a
+  closure-table lookup per operand read`) measured neutral in the self-hosted compiler
+  *and*, isolated, in the C++ ring (**250.5/260.2** with the memo against **251.1/261.2**
+  without, 15 runs), so it was dropped rather than kept as unearned state. The `labelPos`
+  array and the single crossing walk stayed: they are strictly less work with no new state,
+  not a speedup.
+
+  **The measurement itself needed a control.** A null A/B - the *same* binary on both
+  legs - reads **768.9/797.2** against **781.6/804.1** ms, so leg B carries a ~1% bias of
+  its own, and a window with background load showed medians 60% above the clean ones
+  (1245 ms against 780). Every number above is from an interleaved run in a quiet window,
+  and the `min` is the statistic to trust.
+
+  **Where the time actually is.** After this the profile reads `emitBodyAt` 47.29%
+  (`emitIlBodyText` 26.55% + `ilExtractUnit` 20.60%) with `xmlAttr` at 25.53% - and, since
+  the walk's shape is priced at nothing, that 25% is the **data** it reads: the emitter's
+  operand -> `AstXmlNode` -> text round trip (`ilValueText`/`expr`, 19.8% each) and the
+  extractor's per-node reads (`ilExtractUnit` -> `run` -> `stmts` -> `statement`, 20.6%,
+  20.1%, 19.9%, 19.8%). Cutting it means **reading fewer attributes per node**, not a
+  cheaper loop: a borrowed `xmlChild` (it returns a 176-byte `AstXmlNode` *copy* today,
+  attributes included), and a fast path that spells the common operand shapes without
+  building a node and reading it back. The two ring implementations are the evidence that
+  this is the whole difference: the hand-written ring reads *typed struct fields*
+  (`decl->name`, `expr->kind`) while this one scans attribute lists, and the ring ratio is
+  **2.85x** (`bun tools/bootstrap.js`: 780/813 ms against 274/277 ms).
+
+- **The instrument: `--profile`, one RAII timer per emitted body (T78).** The two
+  attempts above were both aimed by *reading* the profile and guessing, and both measured
+  neutral - so the next step was the tool, not a hunch. `--profile` makes the emitted
+  program measure itself: the runtime goes into the prologue, every emitted body gets
+  `auto __smProfile = profileApp.measure("ns1_emitFunction");` as its first statement
+  (destructor banks the elapsed microseconds, so the total is the body's whole run,
+  nested calls included), and a static's destructor prints the table on stderr when the
+  program leaves `main` - whichever `return` it took. Each row also carries the **call
+  count**, which is the number a sampling profile cannot give you and the one that
+  separates "called once, expensive" from "called a million times, cheap".
+
+  It lives in `cppsrc/profiling/` (`Profiling.kt` for the Simse ring, `Profiling.{h,cpp}`
+  for the C++ ring, `impl_specs/profiling.md`): the flag, the runtime text, and the three
+  one-line hooks (`preludeText`, `emitBodyAt`, `emitClosureClass`). Two details are
+  load-bearing and are commented where they sit: the timer is the body's *first*
+  statement (nothing precedes it, so no `goto` can cross into its scope - the `C2362` rule
+  `ilJumpCrossing` exists for), and the timer name is the body's emitted *symbol*, so a
+  row names the function and not its source line. `simse_nowMicros`
+  (`cppsrc/rtl/timeops.hpp` / `Native.cpp` / the `nowMicros()` surface) is the clock.
+
+  Enable it with `bun build.js --release --profile` (the flag is passed through to the
+  transpile step) or `simse_transpile --profile` for any program. Off, every hook returns
+  the empty string and the emitted file is **byte-identical** to before the flag existed -
+  which is why the whole suite stayed green: `simse_tests.exe` **59/59** in release and
+  debug, `bun tools/stress.js` **44/44** on both rings, T22/T23 green,
+  `bun tools/bootstrap.js`'s fixed point byte for byte, and the two rings byte-identical
+  with the flag *on* as well (`cmp` on `stress/yield` transpiled both ways). The published
+  bootstrap stays clean: a profiled compiler is a local artifact, never published.
+
+  Not evaluated yet - the flag was added as the *instrument*, and the first reading of its
+  numbers is the next step. What it already says about itself: a profiled compiler reports
+  **401 emitted bodies** on `--root cppsrc`, `main` first.
+
+- **The first reading of the instrument, and the fix it chose (T78 continued).** The
+  profiled compiler reports **526 emitted bodies** on `--root cppsrc`, and the shape
+  agrees with the sampling profile: `main` -> `emitProgram` (88%) -> `emitFunction` (1214
+  calls = 607 functions x 2 passes), and inside one function the lowering + hoist/simplify
+  + type pass is **2.22 s (53%)** against `emitBodyAt` **1.90 s (46%)**
+  (`ilExtractUnit` 0.99 / `emitIlBodyText` 0.91). That names the 44% of `emitFunction` the
+  sampling profile could not: the linear lowering, the hoist/simplify passes and the type
+  pass - not the IL backend.
+
+  Two corrections had to be made to the tool itself first, both from its own table:
+  measuring the yield machinery's `advance`/`value` (44.7M / 44.4M entries, ~22% of the
+  run) made the instrument its own subject, so `emitMachine` now passes `measure = false`;
+  and the entry was two `Dictionary` lookups (a `times` and a `calls`), now one row
+  struct. After that the instrumented run is 4.73 s against a clean 0.75 s.
+
+  The widest row was the *label scan*: `linStmtJumpsTo` 1.85M calls, reached once per
+  label through `linJumpsTo`, so `labelPass` scanned the whole sequence (with a `Str`
+  compare per statement) once for **every label**. Collecting the jump targets in one walk
+  (`linJumpTargets` / `linCollectJumpTargets`, both rings) cut the instrumented run
+  **4.73 s -> 3.64 s** and the clean release run **734.7/754.5 -> 720.6/743.7 ms**
+  (`tools/_bench_ab.mjs`, 15 interleaved runs, quiet window) - an order of magnitude less
+  than the instrumented number, and that gap is the lesson: the profiled build has no
+  inlining and pays ~40 ns per entry, so it prices *calls*, not the optimizer's code.
+  Verified byte-identical on eight fixtures, every `.cpp` golden, T22/T23, `stress.js`
+  44/44 on both rings and `bootstrap.js`'s fixed point.

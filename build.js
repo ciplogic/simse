@@ -68,6 +68,9 @@ function usage() {
                   --out cppsrc/simse_bootstrap.cpp refreshes the published bootstrap)
   --root <dir>    source root to transpile, relative to the repo (default: cppsrc)
   --no-gen        skip transpiling; compile the existing/--cpp file
+  --profile       transpile with --profile: the emitted program carries the
+                  instrumented profiler and prints its table at the end of main
+                  (impl_specs/profiling.md)
   --release       release build: /O2 /Ob3 /DNDEBUG and the release CMake libs
                   (cmake-build-release, /MD)
   --lto           whole-program optimization: /GL + /LTCG (with --release)
@@ -84,6 +87,7 @@ function parseArgs(argv) {
     out: "simse_out.cpp",
     exe: "simse.exe",
     gen: true,
+    profile: false,
     release: false,
     lto: false,
     configSet: false,
@@ -102,6 +106,7 @@ function parseArgs(argv) {
       case "--out": opts.out = value(i); i++; break;
       case "--root": opts.root = value(i); i++; break;
       case "--no-gen": opts.gen = false; break;
+      case "--profile": opts.profile = true; break;
       case "--release": opts.release = true; opts.configSet = true; break;
       case "--lto": opts.lto = true; break;
       case "--debug": opts.release = false; opts.configSet = true; break;
@@ -188,8 +193,11 @@ async function main() {
     }
     console.log(`build: transpiling ${opts.root} -> ${outCpp}`);
     // Run from the repository root so the source-map comments use the same
-    // relative paths as the build's stage-1 output.
-    const result = await $`"${transpileExe}" --root ${opts.root} -o ${outCpp}`.cwd(REPO).nothrow();
+    // relative paths as the build's stage-1 output. The arguments go as one array:
+    // two adjacent template interpolations would be *one* word to the shell.
+    const transpileArgs = [transpileExe, "--root", opts.root, "-o", outCpp];
+    if (opts.profile) transpileArgs.push("--profile");
+    const result = await $`${transpileArgs}`.cwd(REPO).nothrow();
     if (result.exitCode !== 0) fail(`transpiling failed (exit ${result.exitCode})`);
   }
 

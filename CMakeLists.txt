@@ -30,6 +30,7 @@ add_library(simse_lib STATIC
         cppsrc/rtl/containers.hpp
         cppsrc/rtl/span.hpp
         cppsrc/rtl/strview.hpp
+        cppsrc/rtl/strtable.hpp
         cppsrc/rtl/listops.hpp
         cppsrc/rtl/strops.hpp
         cppsrc/rtl/dictops.hpp
@@ -64,6 +65,8 @@ add_library(simse_lib STATIC
         cppsrc/linear/Yield.h
         cppsrc/codegen/Codegen.cpp
         cppsrc/codegen/Codegen.h
+        cppsrc/profiling/Profiling.cpp
+        cppsrc/profiling/Profiling.h
         cppsrc/skelparser/SkeletonParser.cpp
         cppsrc/skelparser/SkeletonParser.h
         tests/test_support.cpp
@@ -343,9 +346,14 @@ add_custom_command(
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/parser"
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/sema"
                 --module-root "${SIMSE_REPO_ROOT}/cppsrc/linear"
+                --module-root "${SIMSE_REPO_ROOT}/cppsrc/profiling"
+                --module-root "${SIMSE_REPO_ROOT}/cppsrc/codegen"
                 -o "${SIMSE_CODEGEN_GENERATED}"
         DEPENDS
                 "${SIMSE_REPO_ROOT}/cppsrc/codegen/Codegen.kt"
+                "${SIMSE_REPO_ROOT}/cppsrc/codegen/CgStringTable.kt"
+                "${SIMSE_REPO_ROOT}/cppsrc/codegen/IlCodeGen.kt"
+                "${SIMSE_REPO_ROOT}/cppsrc/profiling/Profiling.kt"
                 "${SIMSE_REPO_ROOT}/cppsrc/sema/Sema.kt"
                 "${SIMSE_REPO_ROOT}/cppsrc/sema/TypeInfer.kt"
                 "${SIMSE_REPO_ROOT}/cppsrc/linear/ExpressionLowering.kt"
@@ -409,6 +417,9 @@ add_custom_target(codegen_diff ALL
 set(SIMSE_ALL_MIRRORS
         "${SIMSE_REPO_ROOT}/cppsrc/compiler/Driver.kt"
         "${SIMSE_REPO_ROOT}/cppsrc/codegen/Codegen.kt"
+        "${SIMSE_REPO_ROOT}/cppsrc/codegen/CgStringTable.kt"
+        "${SIMSE_REPO_ROOT}/cppsrc/codegen/IlCodeGen.kt"
+        "${SIMSE_REPO_ROOT}/cppsrc/profiling/Profiling.kt"
         "${SIMSE_REPO_ROOT}/cppsrc/sema/Sema.kt"
         "${SIMSE_REPO_ROOT}/cppsrc/sema/TypeInfer.kt"
         "${SIMSE_REPO_ROOT}/cppsrc/linear/ExpressionLowering.kt"
@@ -448,6 +459,7 @@ set(SIMSE_COMPILER_ROOTS
         --module-root cppsrc/parser
         --module-root cppsrc/sema
         --module-root cppsrc/linear
+        --module-root cppsrc/profiling
         --module-root cppsrc/codegen
         --module-root cppsrc/compiler)
 

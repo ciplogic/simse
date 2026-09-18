@@ -25,6 +25,7 @@ package codegen
 import sema
 import common
 import linear
+import profiling
 
 // One parsed input. `prelude` inputs participate in symbol collection and are emitted
 // only when they carry a body: the RTL's declarations are natives (whose C++ is the
@@ -46,7 +47,20 @@ data class CgFn(
     var templateParams: List<Str>,
     var prelude: Bool,
     var packageName: Str,
-    var isMethod: Bool
+    var isMethod: Bool,
+
+    // The declaration's own attributes, read *once* when the function is collected.
+    // Every lookup walk (`findFunction`, `findReceiverFnByName`, `findExtensionFn`,
+    // `memberCallReturn`, `functionPackage`) scans all collected functions and tests
+    // these three on each candidate, for every call site; the hand-written ring compares
+    // `decl->name`/`decl->isNative`/`decl->hasBody` *fields* there, while the Simse ring
+    // had to walk the node's attribute list per candidate per read. A profile of the
+    // self-transpile put `xmlAttr` (and the attribute walk under it) at ~37% of the run,
+    // most of it these walks. A declaration does not change while emission reads it, so a
+    // field is the same value without the scan.
+    var name: Str,
+    var isNative: Bool,
+    var hasBody: Bool
 )
 
 // A `native fun` declaration to emit once at the top (and call by symbol).
@@ -76,42 +90,6 @@ data class CgStatic(
     var file: Str
 )
 
-// One type-table entry's node, or an empty node when the extractor had none (a
-// synthesised place: it can only be *folded* into the instruction that reads it, never
-// declared).
-data class IlFrame(
-    // Keyed by *slot index*: two scopes may declare the same name, and the frame keeps
-    // them apart (the lowering gives each its own slot), so an analysis keyed by name
-    // would merge two different variables.
-    var defOp: Dictionary<Int, Int>,
-
-    var defineCount: Dictionary<Int, Int>,
-    var useCount: Dictionary<Int, Int>
-)
-
-// Where a jump crosses a declaration, C++ wants a scope: a `goto` may not skip an
-// initialization ([stmt.dcl]/3, MSVC C2362). `end` is the earliest label a crossing
-// jump lands on, `lastJump` the last jump that crosses.
-data class IlCrossing(
-    var end: Int,
-
-    var lastJump: Int
-)
-
-// One open block of the flat form, and the label it ends before.
-data class IlScope(
-    var start: Int,
-
-    var end: Int
-)
-
-// The text one body's instructions spell, or why they could not be spelled.
-data class IlText(
-    var ok: Bool,
-
-    var text: Str,
-    var reason: Str
-)
 
 // How a name's storage is reached, for `.` vs `->`, `*x` vs `x.get()`, `copy`.
 enum class NameKind { Value, Shared, Pointer }
@@ -301,12 +279,9 @@ data class Emitter(
 // The names the program calls, for the prelude rule in `emitFunctions`.
     var referencedNames: Dictionary<Str, Bool>,
 
-// The program's string literals, as the read-only table the emitter puts at the top of
-// the file (`__sm_stringTable`): the walk that fills `referencedNames` collects them,
-// `literals` is sorted so the indices are canonical, and a literal site reads an entry
-// by index instead of building a `Str`.
-    var literalAt: Dictionary<Str, Int>,
-    var literals: List<Str>,
+// The program's string literals (`StringTable.kt`): the walk below pools them, the emitter
+// writes the read-only table at the top of the file, and a literal site reads its entry.
+    var literals: StringTable,
 
 // The types the program names, for the same rule's per-container part: the prelude has
 // a `smToYield` per container (`List`, `Array`, `Span`), and a program that iterates
@@ -427,9 +402,25 @@ data class Emitter(
         packageName: Str,
         isMethod: Bool
     ): Unit {
-        this.functions.append(CgFn(decl, receiver, file, templateParams, prelude, packageName, isMethod))
+        // The declaration's own attributes, read once here rather than on every lookup
+        // walk (`CgFn` documents why).
+        val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
+        this.functions.append(
+            CgFn(
+                decl,
+                receiver,
+                file,
+                templateParams,
+                prelude,
+                packageName,
+                isMethod,
+                name,
+                xmlAttr(decl, AstNodeAttributeKind.IsNative) == "true",
+                xmlAttr(decl, AstNodeAttributeKind.HasBody) == "true"
+            )
+        )
         if (!xmlIsEmpty(receiver)) {
-            this.receiverFnNames.insert(xmlAttr(decl, AstNodeAttributeKind.Name), true)
+            this.receiverFnNames.insert(name, true)
         }
     }
 
@@ -513,10 +504,10 @@ data class Emitter(
         while (i < this.functions.size()) {
             val fn: *CgFn = *this.functions[i]
             i = i + 1
-            if (xmlAttr(fn.decl, AstNodeAttributeKind.IsNative) == "true" || fn.isMethod) {
+            if (fn.isNative || fn.isMethod) {
                 continue
             }
-            if (xmlAttr(fn.decl, AstNodeAttributeKind.Name) == name) {
+            if (fn.name == name) {
                 return fn.packageName
             }
         }
@@ -635,7 +626,9 @@ data class Emitter(
             e = e + 1
         }
         for (*fn in this.functions) {
-            facts.functions.append(SemFnFact(copy(fn.decl), copy(fn.receiver), fn.templateParams))
+            facts.functions.append(
+                semFnFact(copy(fn.decl), copy(fn.receiver), fn.templateParams, fn.name, fn.isNative)
+            )
         }
         val extensionNames: List<Str> = this.nativeExtensions.keys()
         var x: Int = 0
@@ -1176,11 +1169,7 @@ data class Emitter(
         // whole program, so the table below covers every body it will emit. A literal the
         // *lowering* invents is not in the parsed program and keeps its own spelling.
         if (xmlKind(node) == AstNodeCategory.ExprStrLit) {
-            val text: Str = xmlAttr(node, AstNodeAttributeKind.Text)
-            if (!this.literalAt.has(text)) {
-                this.literalAt.insert(text, 0)
-                this.literals.append(text)
-            }
+            this.literals.add(xmlAttr(node, AstNodeAttributeKind.Text))
         }
         if (xmlKind(node) == AstNodeCategory.ExprCall) {
             val callee: AstXmlNode = xmlChild(node, AstNodeKind.Callee)
@@ -1199,45 +1188,120 @@ data class Emitter(
 
     // ---- the string table -------------------------------------------------
 
-    // The program's string literals, as the read-only table at the top of the file
-    // (`__sm_stringTable`). The walk above collects them in first-encounter order; they
-    // are then sorted, so the table is canonical and two rings that walk in different
-    // orders still agree on every index.
-    fun sortLiterals(): Unit {
-        this.literals.sort((left: Str, right: Str) -> left < right)
-        this.literalAt = Dictionary<Str, Int>()
-        var i: Int = 0
-        while (i < this.literals.size()) {
-            this.literalAt.insert(this.literals[i], i)
-            i = i + 1
-        }
-    }
-
-    // One entry per distinct literal, built once before `main` runs. A literal site then
-    // *reads* an entry instead of building a `Str`, so a use that only reads the text - a
-    // comparison, or a `const Str&` argument - never constructs one, and a literal longer
-    // than the inline capacity never allocates at the site. An owned position
-    // (`x = "..."`, `return`, a by-value parameter) still copies, because that is what the
-    // language's value semantics say.
+    // One pool and two run-length encoded indexes for the program's literals, expanded and
+    // decoded once before `main` runs (`impl_specs/rtl-abi.md`, "String literals"). The
+    // pool is the literals themselves as adjacent string literals, so the C++ compiler
+    // decodes the bytes; each index is stored as "what to subtract from the previous value"
+    // with an implicit 0 before the first entry, then run-length encoded
+    // (`cgRunLengthEncode`, `strtable.hpp`). The entries are ordered longest first, so a
+    // length series descends slowly and its differences are small - mostly 0 between
+    // literals of equal length - which is what the encoding and the `Int16` element are
+    // for. The `static_assert` on the pool's own size is the check that the pool and the
+    // lengths agree - a disagreement about one escape stops the build instead of shifting
+    // every literal after it. The series are expanded into stack arrays in the initializer
+    // and dropped there, and an entry is a 12-byte `StrView` (not the 32-byte owning `Str`
+    // the table held before), so start-up allocates nothing; the *site* converts the view
+    // with `toString()`, so the change is representation-only.
     fun emitStringTable(): Unit {
-        if (this.literals.size() == 0) {
+        if (this.literals.count() == 0) {
             return
         }
-        this.line(0, "// The program's string literals: one table, built once, read by every")
-        this.line(0, "// site that mentions one (impl_specs/rtl-abi.md).")
+        val count: Int = this.literals.count()
+
+        // `value[i] = value[i-1] - series[i]`, with an implicit 0 before the first entry.
+        // The offset increment is the previous entry's length while no two literals share
+        // text.
+        var starts: List<Int> = List<Int>()
+        var lengths: List<Int> = List<Int>()
+        var total: Int = 0
+        var previousStart: Int = 0
+        var previousLength: Int = 0
+        var i: Int = 0
+        while (i < count) {
+            val length: Int = cgLiteralByteLength(this.literals.entry(i))
+            val start: Int = previousLength
+            starts.append(previousStart - start)
+            lengths.append(previousLength - length)
+            previousStart = start
+            previousLength = length
+            total = total + length
+            i = i + 1
+        }
+        val startStream: List<Int> = cgRunLengthEncode(starts)
+        val lengthStream: List<Int> = cgRunLengthEncode(lengths)
+        var worst: Int = 0
+        for (value in startStream) {
+            if (cgMagnitudeOf(value) > worst) {
+                worst = cgMagnitudeOf(value)
+            }
+        }
+        for (value in lengthStream) {
+            if (cgMagnitudeOf(value) > worst) {
+                worst = cgMagnitudeOf(value)
+            }
+        }
+        var element: Str = "Int"
+        if (worst <= 32767) {
+            element = "Int16"
+        }
+
+        this.line(0, "// The program's string literals: one pool, and two run-length encoded index")
+        this.line(0, "// series (offsets as deltas, then lengths), each as what to subtract from the")
+        this.line(0, "// previous value; strtable.hpp has the stream format.")
+        this.line(0, fmtStr("static const Int __sm_stringCount = |;", count.toString()))
+        this.line(0, "static const char __sm_stringPool[] =")
+
+        // The literals again, adjacent, with a space between so they stay separate tokens.
+        // One line while it fits: the wrap point is the standard's 65 536-character limit
+        // on a logical source line, short of it.
+        var packed: Str = "    "
+        i = 0
+        while (i < count) {
+            val literal: Str = this.literals.entry(i)
+            if (packed.size() + 1 + literal.size() > 60000) {
+                this.line(0, packed)
+                packed = "    "
+            }
+            packed.appendStr(literal)
+            packed.append(' ')
+            i = i + 1
+        }
+        this.line(0, packed)
+        this.line(0, ";")
         this.line(
             0,
             fmtStr(
-                "static const Str __sm_stringTable[|] = {",
-                this.literals.size().toString()
+                "static const | __sm_stringStarts[] = |;",
+                element,
+                cgIntListText(startStream)
             )
         )
-        var i: Int = 0
-        while (i < this.literals.size()) {
-            this.line(1, this.literals[i] + ",")
-            i = i + 1
-        }
-        this.line(0, "};")
+        this.line(
+            0,
+            fmtStr(
+                "static const | __sm_stringLens[] = |;",
+                element,
+                cgIntListText(lengthStream)
+            )
+        )
+        this.line(
+            0,
+            fmtStr(
+                "static_assert(sizeof(__sm_stringPool) - 1 == |, \"the string pool and its length index disagree\");",
+                total.toString()
+            )
+        )
+        this.line(0, "static StrView __sm_stringTable[__sm_stringCount];")
+        this.line(0, "static struct __SmStringTableInitType {")
+        this.line(1, "__SmStringTableInitType() {")
+        this.line(2, "Int starts[__sm_stringCount];")
+        this.line(2, "Int lens[__sm_stringCount];")
+        this.line(2, "simse_strTableExpand(__sm_stringStarts, starts, __sm_stringCount);")
+        this.line(2, "simse_strTableExpand(__sm_stringLens, lens, __sm_stringCount);")
+        this.line(2, "simse_strTableDecode(__sm_stringPool, starts, lens, __sm_stringTable,")
+        this.line(3, "__sm_stringCount);")
+        this.line(1, "}")
+        this.line(0, "} __sm_stringTableInit;")
         this.line(0, "")
     }
 
@@ -1246,10 +1310,10 @@ data class Emitter(
     // `smToYield` per container (impl_specs/for.md), each container's machine is that
     // container's only, and the class name is the receiver's (`outerTypeName`).
     fun reachesPreludeBody(fn: *CgFn): Bool {
-        if (xmlAttr(fn.decl, AstNodeAttributeKind.HasBody) != "true") {
+        if (!fn.hasBody) {
             return false
         }
-        val name: Str = xmlAttr(fn.decl, AstNodeAttributeKind.Name)
+        val name: Str = fn.name
         if (!this.referencedNames.has(name)) {
             return false
         }
@@ -1282,10 +1346,10 @@ data class Emitter(
         while (i < this.functions.size()) {
             val other: *CgFn = *this.functions[i]
             i = i + 1
-            if (!other.prelude || xmlAttr(other.decl, AstNodeAttributeKind.HasBody) != "true") {
+            if (!other.prelude || !other.hasBody) {
                 continue
             }
-            if (xmlAttr(other.decl, AstNodeAttributeKind.Name) != name) {
+            if (other.name != name) {
                 continue
             }
             val otherReceiver: Str = this.outerTypeName(other.receiver)
@@ -1318,14 +1382,14 @@ data class Emitter(
                 if (!fn.prelude) {
                     continue
                 }
-                if (xmlAttr(fn.decl, AstNodeAttributeKind.HasBody) == "true") {
+                if (fn.hasBody) {
                     if (!this.reachesPreludeBody(fn)) {
                         continue
                     }
                     this.collectNames(fn.decl, *this.referencedNames)
                     continue
                 }
-                if (!this.referencedNames.has(xmlAttr(fn.decl, AstNodeAttributeKind.Name))) {
+                if (!this.referencedNames.has(fn.name)) {
                     continue
                 }
                 this.collectTypeNames(fn.receiver)
@@ -1481,10 +1545,10 @@ data class Emitter(
         // The declaration is read-only here, so borrow it instead of copying the
         // whole function AST (params, body, ...) out of the CgFn.
         val decl: *AstXmlNode = *fn.decl
-        if (xmlAttr(decl, AstNodeAttributeKind.IsNative) == "true") {
+        if (fn.isNative) {
             return
         }
-        val isMain: Bool = xmlIsEmpty(fn.receiver) && xmlAttr(decl, AstNodeAttributeKind.Name) == "main"
+        val isMain: Bool = xmlIsEmpty(fn.receiver) && fn.name == "main"
         if (isMain && prototypeOnly) {
             return
         }
@@ -1565,7 +1629,7 @@ data class Emitter(
         // emitted under its package's prefix (package qualification above).
         var fnName: Str = "main"
         if (!isMain) {
-            fnName = this.qualify(fn.packageName, xmlAttr(decl, AstNodeAttributeKind.Name))
+            fnName = this.qualify(fn.packageName, fn.name)
         }
         var signature: Str = ret + " " + fnName + "(" + cgJoin(params, ", ") + ")"
         if (mainArgs) {
@@ -1585,7 +1649,7 @@ data class Emitter(
             this.line(0, signature + ";")
             return
         }
-        if (xmlAttr(decl, AstNodeAttributeKind.HasBody) != "true") {
+        if (!fn.hasBody) {
             return
         }
 
@@ -1631,1462 +1695,19 @@ data class Emitter(
             this.cgReservedNames(decl, !xmlIsEmpty(fn.receiver), mainArgs)
         )
         this.dumpIl(fn, decl, finalBody, facts, inferred)
-        this.emitBodyAt(this.ilFunctionFor(fn, decl, facts, inferred), finalBody, fn.file, 1)
+        this.emitBodyAt(this.ilFunctionFor(fn, decl, facts, inferred), finalBody, fn.file, 1, true)
         if (this.failed) {
             return
         }
         this.line(0, "}")
     }
 
-    // ---- the linear IL ----------------------------------------------------
+    // ---- IL codegen --------------------------------------------------------
+    // The instruction-list backend lives in `cppsrc/codegen/IlCodeGen.kt`: the IL's
+    // types and the walks that spell a body's instructions are extension functions on
+    // `Emitter` there, so this file stays the front half (collection, spelling,
+    // expression text).
 
-    // `--showLinearRepresentation`: the IL of the body the emitter is about to read, on
-    // stderr (impl_specs/linear-il.md). The extraction is pure, so the emitted C++ is the
-    // same with and without it.
-    fun dumpIl(
-        fn: *CgFn, decl: *AstXmlNode, body: List<AstXmlNode>, facts: *SemFacts,
-        inferred: *Dictionary<Str, AstXmlNode>
-    ): Unit {
-        if (!ilShow()) {
-            return
-        }
-        val unit: IlUnit = ilExtractUnit(
-            this.ilFunctionFor(fn, decl, facts, inferred), body, fn.file
-        )
-        val text: Str = printIlUnit(unit)
-        // `eprintln` is the one stderr write the prelude has, and it adds the newline the
-        // dump already ends with: drop that one byte so the rings' dumps compare byte for
-        // byte.
-        if (text.size() > 0) {
-            eprintln(text.substr(0, text.size() - 1))
-        }
-    }
-
-    // What the extractor needs to know about the body's function: the declaration (name,
-    // parameters, return type), the receiver, the emitted symbol, and the file-level
-    // statics the body may name.
-    fun ilFunctionFor(
-        fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts,
-        inferred: *Dictionary<Str, AstXmlNode>
-    ): IlFunction {
-        var symbol: Str = this.qualify(fn.packageName, xmlAttr(decl, AstNodeAttributeKind.Name))
-        if (xmlIsEmpty(fn.receiver) && xmlAttr(decl, AstNodeAttributeKind.Name) == "main") {
-            symbol = "main"
-        }
-        var info: IlFunction = IlFunction(
-            decl, fn.receiver, symbol,
-            Dictionary<Str, Str>(), xmlEmptyNode(), List<Str>(), List<AstXmlNode>(),
-            "", Dictionary<Str, Bool>(), Dictionary<Str, AstXmlNode>(),
-            facts, fn.templateParams, inferred
-        )
-        for (*entry in this.statics) {
-            val typeNode: AstXmlNode = xmlChild(entry.decl, AstNodeKind.Type)
-            if (!xmlIsEmpty(typeNode)) {
-                info.statics.insert(
-                    xmlAttr(entry.decl, AstNodeAttributeKind.Name),
-                    ilTypeText(typeNode)
-                )
-            }
-        }
-        return info
-    }
-
-    // ---- emitting from the IL ---------------------------------------------
-    //
-    // The C++ of a body comes from its instruction list - the IL is the *only* codegen
-    // (impl_specs/linear-il.md). The IL is not a second language with a second spelling: an
-    // operand becomes a leaf `AstXmlNode` - a slot is a name, a constant is its literal, a
-    // place is the path it came from, folded back out of the instruction that built it -
-    // and the helpers above write the text.
-
-    fun ilIntAt(map: *Dictionary<Int, Int>, key: Int, fallback: Int): Int {
-        if (map.has(key)) {
-            return map.get(key).value()
-        }
-        return fallback
-    }
-
-    fun ilBump(map: *Dictionary<Int, Int>, key: Int): Unit {
-        map.insert(key, this.ilIntAt(map, key, 0) + 1)
-    }
-
-    fun ilOperandAt(operands: *List<Int>, index: Int): Int {
-        if (index >= 0 && index < operands.size()) {
-            return operands[index]
-        }
-        return -1
-    }
-
-    fun ilNameNode(text: Str): AstXmlNode {
-        var node: AstXmlNode =
-            AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprName, List<AstNodeAttribute>(), Array<AstXmlNode>())
-        node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, text))
-        return node
-    }
-
-    // The destination slot of an instruction, or -1 when it writes memory or jumps
-    // instead (`ilWritesDestination` is the one place that is stated).
-    fun ilDst(op: *IlOp): Int {
-        if (!ilWritesDestination(op.kind) || op.operands.size() == 0) {
-            return -1
-        }
-        return op.operands[0]
-    }
-
-    // The frame's types, from the body's own tables - no statement tree is read. First
-    // what the *type pass* proved for every name in the body, then the slots' declared
-    // types (which win: they are the spelled ones, and the map may still hold a name the
-    // shadowing pass renamed). The pass's record is what carries a machine: a slot holding
-    // one is `..T`, a declaration is never written with that (the emitted C++ uses
-    // `auto`), so the frame is the only place the type survives - and the emitter needs
-    // it, because `x.smToYield()` on a machine *is* `x`, an identity decided from the
-    // receiver's type (see `call`, impl_specs/for.md).
-    fun ilSeedFrameTypes(il: *IlBody): Unit {
-        val proven: List<Str> = il.inferredTypes.keys()
-        var i: Int = 0
-        while (i < proven.size()) {
-            val typeNode: AstXmlNode = il.inferredTypes.get(proven[i]).value()
-            this.localTypes.insert(proven[i], typeNode)
-            this.nameKinds.insert(proven[i], this.kindOf(typeNode))
-            i = i + 1
-        }
-        i = 0
-        while (i < il.vars.size()) {
-            val slotType: AstXmlNode = ilVarType(il, i)
-            if (!xmlIsEmpty(slotType)) {
-                this.localTypes.insert(il.vars[i].name, slotType)
-                this.nameKinds.insert(il.vars[i].name, this.kindOf(slotType))
-            }
-            i = i + 1
-        }
-    }
-
-    fun ilAnalyze(il: *IlBody, frame: *IlFrame): Unit {
-        var i: Int = 0
-        while (i < il.ops.size()) {
-            val op: *IlOp = *il.ops[i]
-            // A declaration reads nothing.
-            if (op.kind != IlOpKind.Declare) {
-                // An instruction that writes memory or jumps has no destination, but its
-                // operands are reads like any other - so the two are counted apart, and
-                // the first operand is only skipped when it is in fact the destination.
-                val dst: Int = this.ilDst(op)
-                if (dst >= 0 && dst < il.vars.size()) {
-                    // The *first* write is what initialises a slot: a loop target is
-                    // written again every iteration, and the declaration that spells it
-                    // wants the initializer, not the increment.
-                    if (!frame.defOp.has(dst)) {
-                        frame.defOp.insert(dst, i)
-                    }
-                    this.ilBump(*frame.defineCount, dst)
-                }
-                var j: Int = 0
-                while (j < op.operands.size()) {
-                    var read: Bool = true
-                    if (j == 0 && dst >= 0) {
-                        read = false
-                    }
-                    val kind: IlOperandKind = ilOperandKind(op, j)
-                    if (kind != IlOperandKind.Var && kind != IlOperandKind.Value) {
-                        // A label, a pool entry, a type, a callee.
-                        read = false
-                    }
-                    if (read) {
-                        val operand: Int = op.operands[j]
-                        if (operand >= 0 && operand < il.vars.size()) {
-                            this.ilBump(*frame.useCount, operand)
-                        }
-                    }
-                    j = j + 1
-                }
-            }
-            i = i + 1
-        }
-    }
-
-    // Whether an instruction's result is inlined at its use instead of being assigned to a
-    // slot. The instruction list is one operation per instruction and every *typed* slot is
-    // a declared slot of the frame, so a value is read where it was written and no
-    // instruction inlines another. The one exception is a slot the type rules could not
-    // name - the extractor's own temporary for a shape that has no type of its own, such
-    // as a bare `null`, whose C++ spelling depends on the context it is read in. It cannot
-    // be declared at the top of the body (`auto x;` is not a declaration) and it has
-    // exactly one definition and one use, so that use is where the expression went.
-    fun ilFolded(il: *IlBody, frame: *IlFrame, slot: Int): Bool {
-        if (slot < 0 || slot >= il.vars.size()) {
-            return false
-        }
-        if (il.vars[slot].kind != IlVarKind.Temp) {
-            return false
-        }
-        val slotType: AstXmlNode = ilVarType(il, slot)
-        if (!xmlIsEmpty(slotType)) {
-            return false // a typed slot is declared
-        }
-        if (this.ilIntAt(frame.defineCount, slot, 0) != 1) {
-            return false
-        }
-        if (this.ilIntAt(frame.useCount, slot, 0) != 1) {
-            return false
-        }
-        // A closure is an aggregate, not an expression: it keeps its slot.
-        return !this.ilSlotHoldsClosure(il, frame, slot)
-    }
-
-    // Whether a slot is declared with the frame at the top of the body (a typed slot)
-    // rather than in front of the instruction that first writes it.
-    fun ilDeclaredAtTop(il: *IlBody, slot: Int): Bool {
-        if (slot < 0 || slot >= il.vars.size()) {
-            return false
-        }
-        val slotType: AstXmlNode = ilVarType(il, slot)
-        return !xmlIsEmpty(slotType)
-    }
-
-    // Whether an instruction builds a closure class instance, which is an *aggregate* and
-    // not an expression: it cannot stand inside another expression, so its slot is never
-    // folded away.
-    fun ilConstructsClosure(op: *IlOp, il: *IlBody): Bool {
-        if (op.kind != IlOpKind.CallCtor) {
-            return false
-        }
-        val typeAt: Int = this.ilOperandAt(op.operands, 1)
-        if (typeAt < 0 || typeAt >= il.types.size()) {
-            return false
-        }
-        return this.closureSymbols.has(il.types[typeAt])
-    }
-
-    // The same question, asked about a slot: is the instruction that defines it a closure
-    // construction?
-    fun ilSlotHoldsClosure(il: *IlBody, frame: *IlFrame, slot: Int): Bool {
-        val def: Int = this.ilIntAt(frame.defOp, slot, -1)
-        if (def < 0 || def >= il.ops.size()) {
-            return false
-        }
-        return this.ilConstructsClosure(il.ops[def], il)
-    }
-
-    // The C++ of a slot's declared type. A closure class is spelled by its own name: it is
-    // emitted just above the body that constructs it, so no type dictionary knows it.
-    fun ilDeclTypeText(il: *IlBody, slot: Int): Str {
-        val slotType: AstXmlNode = ilVarType(il, slot)
-        if (xmlIsEmpty(slotType)) {
-            return ""
-        }
-        val typeIndex: Int = il.vars[slot].typeIndex
-        if (typeIndex >= 0 && typeIndex < il.types.size() && this.closureSymbols.has(il.types[typeIndex])) {
-            return il.types[typeIndex]
-        }
-        return this.type(slotType)
-    }
-
-    // A constant operand: the pool holds the text the C++ prints, so all that is left is
-    // to give it the node kind the emitter expects (`true` is a BoolLit, `"abc"` a
-    // StrLit, a digit run an IntLit or a FloatLit).
-    fun ilLiteralNode(text: Str): AstXmlNode {
-        var node: AstXmlNode =
-            AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprIntLit, List<AstNodeAttribute>(), Array<AstXmlNode>())
-        node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Text, text))
-        var dot: Bool = false
-        var i: Int = 0
-        while (i < text.size()) {
-            if (text[i] == '.') {
-                dot = true
-            }
-            i = i + 1
-        }
-        if (text.isEmpty() || text[0] == '"') {
-            node.kind = AstNodeCategory.ExprStrLit
-        } else if (text[0] == '\'') {
-            node.kind = AstNodeCategory.ExprCharLit
-        } else if (text == "true" || text == "false") {
-            node.kind = AstNodeCategory.ExprBoolLit
-            node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Value, text))
-        } else if (dot) {
-            node.kind = AstNodeCategory.ExprFloatLit
-        }
-        return node
-    }
-
-    fun ilSlotNode(il: *IlBody, frame: *IlFrame, slot: Int, depth: Int): AstXmlNode {
-        if (slot < 0 || slot >= il.vars.size() || depth > 24) {
-            return xmlEmptyNode()
-        }
-        val name: Str = il.vars[slot].name
-        // The receiver slot is the language's `this`, which the emitter spells `(*self)`
-        // (`(*this)` inside a closure class).
-        if (name == "self") {
-            return this.ilNameNode("this")
-        }
-        if (this.ilFolded(il, frame, slot)) {
-            return this.ilOpValueNode(il, frame, this.ilIntAt(frame.defOp, slot, -1), depth + 1)
-        }
-        return this.ilNameNode(name)
-    }
-
-    fun ilOperandNode(il: *IlBody, frame: *IlFrame, operand: Int, depth: Int): AstXmlNode {
-        if (operand < 0) {
-            val index: Int = -1 - operand
-            if (index >= il.pool.size()) {
-                return xmlEmptyNode()
-            }
-            return this.ilLiteralNode(il.pool[index])
-        }
-        return this.ilSlotNode(il, frame, operand, depth)
-    }
-
-    fun ilMemberNode(base: *AstXmlNode, name: Str): AstXmlNode {
-        if (xmlIsEmpty(base)) {
-            return xmlEmptyNode()
-        }
-        var node: AstXmlNode =
-            AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprMember, List<AstNodeAttribute>(), Array<AstXmlNode>())
-        node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
-        xmlAddChild(node, this.renameRole(base, AstNodeKind.Receiver))
-        return node
-    }
-
-    // The *address* of a place, as the emitter spells a borrow: `&name` for a plain name,
-    // `simse_addressOf(...)` otherwise - which is what an `IndexAddr`/`FieldAddr`
-    // instruction writes (`ldelema`/`ldflda` in the IL's own shape,
-    // `impl_specs/linear-il.md`). A place is the one value an instruction may not copy: a
-    // call that mutates its receiver has to reach the original.
-    fun ilBorrowNode(place: *AstXmlNode, depth: Int): AstXmlNode {
-        if (xmlIsEmpty(place) || depth > 24) {
-            return xmlEmptyNode()
-        }
-        var node: AstXmlNode =
-            AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprDeref, List<AstNodeAttribute>(), Array<AstXmlNode>())
-        xmlAddChild(node, this.renameRole(place, AstNodeKind.Operand))
-        return node
-    }
-
-    fun ilBinaryNode(lhs: *AstXmlNode, op: Str, rhs: *AstXmlNode): AstXmlNode {
-        if (xmlIsEmpty(lhs) || xmlIsEmpty(rhs)) {
-            return xmlEmptyNode()
-        }
-        var node: AstXmlNode =
-            AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprBinary, List<AstNodeAttribute>(), Array<AstXmlNode>())
-        node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Op, op))
-        xmlAddChild(node, this.renameRole(lhs, AstNodeKind.Lhs))
-        xmlAddChild(node, this.renameRole(rhs, AstNodeKind.Rhs))
-        return node
-    }
-
-    // The last `.` in `text`, or -1.
-    fun ilLastDot(text: Str): Int {
-        var dot: Int = -1
-        var i: Int = 0
-        while (i < text.size()) {
-            if (text[i] == '.') {
-                dot = i
-            }
-            i = i + 1
-        }
-        return dot
-    }
-
-    // A name in a value position that is not a local: an enum member (`Color.Red`,
-    // spelled `ns1_Color::Red`) or a file-level `var`.
-    fun ilGetStaticNode(il: *IlBody, op: *IlOp): AstXmlNode {
-        val textIndex: Int = this.ilOperandAt(op.operands, 1)
-        if (textIndex < 0 || textIndex >= il.pool.size()) {
-            return xmlEmptyNode()
-        }
-        val text: Str = il.pool[textIndex]
-        val dot: Int = this.ilLastDot(text)
-        if (dot <= 0) {
-            return this.ilNameNode(text)
-        }
-        val base: AstXmlNode = this.ilNameNode(text.substr(0, dot))
-        return this.ilMemberNode(base, text.substr(dot + 1, text.size() - dot - 1))
-    }
-
-    // The node for the type a *static* call is reached through: `Color.fromInt` keeps its
-    // name, `Res<Str>.ok` its type arguments.
-    //
-    // `asGenericName` is for a construction, whose callee the parser always produced as
-    // `Name<T>` (that is what makes it a `CallCtor`); a static call's base is a generic
-    // name only when the source wrote one.
-    fun ilTypeBaseNode(il: *IlBody, typeIndex: Int, asGenericName: Bool): AstXmlNode {
-        val baseType: AstXmlNode = ilTypeNode(il, typeIndex)
-        if (xmlIsEmpty(baseType)) {
-            return xmlEmptyNode()
-        }
-        val args: List<AstXmlNode> = xmlChildren(baseType, AstNodeKind.TypeArg)
-        if (xmlKind(baseType) == AstNodeCategory.TypeGeneric && (asGenericName || args.size() > 0)) {
-            var node: AstXmlNode = AstXmlNode(
-                AstNodeKind.Expr,
-                AstNodeCategory.ExprGenericName,
-                List<AstNodeAttribute>(),
-                Array<AstXmlNode>()
-            )
-            node.attributes.append(
-                AstNodeAttribute(
-                    AstNodeAttributeKind.Name,
-                    xmlAttr(baseType, AstNodeAttributeKind.Name)
-                )
-            )
-            for (*arg in args) {
-                xmlAddChild(node, this.renameRole(arg, AstNodeKind.TypeArg))
-            }
-            return node
-        }
-        return this.ilNameNode(xmlAttr(baseType, AstNodeAttributeKind.Name))
-    }
-
-    // A call instruction as the expression the emitter spells: the callee from the method
-    // table, the arguments from the operands.
-    fun ilCallNode(il: *IlBody, frame: *IlFrame, op: *IlOp): AstXmlNode {
-        val hasDst: Bool = this.ilDst(op) >= 0
-        var methodAt: Int = 0
-        if (hasDst) {
-            methodAt = 1
-        }
-        val methodIndex: Int = this.ilOperandAt(op.operands, methodAt)
-        if (methodIndex < 0 || methodIndex >= il.methods.size()) {
-            this.ilWhy = "a call with no callee"
-            return xmlEmptyNode()
-        }
-        val method: *IlMethod = *il.methods[methodIndex]
-
-        var call: AstXmlNode =
-            AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCall, List<AstNodeAttribute>(), Array<AstXmlNode>())
-        var first: Int = methodAt + 1
-        var callee: AstXmlNode = xmlEmptyNode()
-        if (method.kind == IlMethodKind.Method) {
-            val recv: AstXmlNode = this.ilSlotNode(il, frame, this.ilOperandAt(op.operands, first), 0)
-            if (xmlIsEmpty(recv)) {
-                this.ilWhy = "the receiver of '" + method.name + "'"
-                return xmlEmptyNode()
-            }
-            callee = this.ilMemberNode(recv, method.name)
-            first = first + 1
-        } else if (method.staticBase >= 0) {
-            val base: AstXmlNode = this.ilTypeBaseNode(il, method.staticBase, false)
-            if (xmlIsEmpty(base)) {
-                this.ilWhy = "the type '" + method.name + "' is reached through"
-                return xmlEmptyNode()
-            }
-            callee = this.ilMemberNode(base, method.name)
-        } else {
-            callee = this.ilNameNode(method.name)
-        }
-        if (xmlIsEmpty(callee)) {
-            return xmlEmptyNode()
-        }
-        xmlAddChild(call, this.renameRole(callee, AstNodeKind.Callee))
-        var i: Int = first
-        while (i < op.operands.size()) {
-            val arg: AstXmlNode = this.ilOperandNode(il, frame, op.operands[i], 0)
-            if (xmlIsEmpty(arg)) {
-                this.ilWhy = "an argument of '" + method.name + "'"
-                return xmlEmptyNode()
-            }
-            xmlAddChild(call, this.renameRole(arg, AstNodeKind.Arg))
-            i = i + 1
-        }
-        return call
-    }
-
-    // The expression a value-producing instruction computes, as a node. This is both the
-    // right-hand side of the instruction and what a *folded* slot stands for wherever it
-    // is read.
-    fun ilOpValueNode(il: *IlBody, frame: *IlFrame, opIndex: Int, depth: Int): AstXmlNode {
-        if (opIndex < 0 || opIndex >= il.ops.size() || depth > 24) {
-            return xmlEmptyNode()
-        }
-        val op: *IlOp = *il.ops[opIndex]
-        val kind: IlOpKind = op.kind
-        when (kind) {
-            IlOpKind.SetVar -> {
-                return this.ilOperandNode(il, frame, this.ilOperandAt(op.operands, 1), depth)
-            }
-
-            IlOpKind.SetVar_Null -> {
-                return AstXmlNode(
-                    AstNodeKind.Expr,
-                    AstNodeCategory.ExprNullLit,
-                    List<AstNodeAttribute>(),
-                    Array<AstXmlNode>()
-                )
-            }
-
-            IlOpKind.BinaryOp -> {
-                val opIndex2: Int = this.ilOperandAt(op.operands, 1)
-                if (opIndex2 < 0 || opIndex2 >= il.pool.size()) {
-                    return xmlEmptyNode()
-                }
-                val lhs: AstXmlNode = this.ilOperandNode(il, frame, this.ilOperandAt(op.operands, 2), depth)
-                val rhs: AstXmlNode = this.ilOperandNode(il, frame, this.ilOperandAt(op.operands, 3), depth)
-                return this.ilBinaryNode(lhs, il.pool[opIndex2], rhs)
-            }
-
-            IlOpKind.UnaryOp -> {
-                val opIndex2: Int = this.ilOperandAt(op.operands, 1)
-                val operand: AstXmlNode = this.ilOperandNode(il, frame, this.ilOperandAt(op.operands, 2), depth)
-                if (opIndex2 < 0 || opIndex2 >= il.pool.size() || xmlIsEmpty(operand)) {
-                    return xmlEmptyNode()
-                }
-                var node: AstXmlNode =
-                    AstXmlNode(
-                        AstNodeKind.Expr,
-                        AstNodeCategory.ExprUnary,
-                        List<AstNodeAttribute>(),
-                        Array<AstXmlNode>()
-                    )
-                node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Op, il.pool[opIndex2]))
-                xmlAddChild(node, this.renameRole(operand, AstNodeKind.Operand))
-                return node
-            }
-
-            IlOpKind.GetField, IlOpKind.FieldAddr -> {
-                val textIndex: Int = this.ilOperandAt(op.operands, 2)
-                if (textIndex < 0 || textIndex >= il.pool.size()) {
-                    return xmlEmptyNode()
-                }
-                val base: AstXmlNode = this.ilSlotNode(il, frame, this.ilOperandAt(op.operands, 1), depth)
-                val member: AstXmlNode = this.ilMemberNode(base, il.pool[textIndex])
-                if (kind == IlOpKind.GetField) {
-                    return member
-                }
-                return this.ilBorrowNode(member, depth)
-            }
-
-            IlOpKind.IndexAddr, IlOpKind.GetIndex -> {
-                val base: AstXmlNode = this.ilSlotNode(il, frame, this.ilOperandAt(op.operands, 1), depth)
-                val index: AstXmlNode = this.ilOperandNode(il, frame, this.ilOperandAt(op.operands, 2), depth)
-                if (xmlIsEmpty(base) || xmlIsEmpty(index)) {
-                    return xmlEmptyNode()
-                }
-                var node: AstXmlNode =
-                    AstXmlNode(
-                        AstNodeKind.Expr,
-                        AstNodeCategory.ExprIndex,
-                        List<AstNodeAttribute>(),
-                        Array<AstXmlNode>()
-                    )
-                xmlAddChild(node, this.renameRole(base, AstNodeKind.Receiver))
-                xmlAddChild(node, this.renameRole(index, AstNodeKind.Index))
-                if (kind == IlOpKind.GetIndex) {
-                    return node
-                }
-                return this.ilBorrowNode(node, depth)
-            }
-
-            IlOpKind.Deref, IlOpKind.CopyValue, IlOpKind.Box -> {
-                val operand: AstXmlNode = this.ilSlotNode(il, frame, this.ilOperandAt(op.operands, 1), depth)
-                if (xmlIsEmpty(operand)) {
-                    return xmlEmptyNode()
-                }
-                var category: AstNodeCategory = AstNodeCategory.ExprDeref
-                if (kind == IlOpKind.CopyValue) {
-                    category = AstNodeCategory.ExprCopy
-                } else if (kind == IlOpKind.Box) {
-                    category = AstNodeCategory.ExprRef
-                }
-                var node: AstXmlNode =
-                    AstXmlNode(AstNodeKind.Expr, category, List<AstNodeAttribute>(), Array<AstXmlNode>())
-                xmlAddChild(node, this.renameRole(operand, AstNodeKind.Operand))
-                return node
-            }
-
-            IlOpKind.GetStatic -> {
-                return this.ilGetStaticNode(il, op)
-            }
-
-            IlOpKind.GetStaticAddr -> {
-                // The address of a file-level static: `&name` (`ilBorrowNode` spells a name
-                // that way), never the address of a copy of it.
-                val place: AstXmlNode = this.ilGetStaticNode(il, op)
-                return this.ilBorrowNode(place, depth)
-            }
-
-            IlOpKind.Call, IlOpKind.CallVoid -> {
-                return this.ilCallNode(il, frame, op)
-            }
-
-            IlOpKind.CallCtor -> {
-                val callee: AstXmlNode = this.ilTypeBaseNode(il, this.ilOperandAt(op.operands, 1), true)
-                if (xmlIsEmpty(callee)) {
-                    return xmlEmptyNode()
-                }
-                var call: AstXmlNode =
-                    AstXmlNode(
-                        AstNodeKind.Expr,
-                        AstNodeCategory.ExprCall,
-                        List<AstNodeAttribute>(),
-                        Array<AstXmlNode>()
-                    )
-                xmlAddChild(call, this.renameRole(callee, AstNodeKind.Callee))
-                var i: Int = 2
-                while (i < op.operands.size()) {
-                    val arg: AstXmlNode = this.ilOperandNode(il, frame, op.operands[i], 0)
-                    if (xmlIsEmpty(arg)) {
-                        return xmlEmptyNode()
-                    }
-                    xmlAddChild(call, this.renameRole(arg, AstNodeKind.Arg))
-                    i = i + 1
-                }
-                return call
-            }
-        }
-        // `Cast` (no source node), `CallIndirect` (a callable slot), a lambda body, and
-        // anything the extractor marked: not expressible yet.
-        return xmlEmptyNode()
-    }
-
-    // Where a jump crosses a declaration, C++ wants a scope: a `goto` may not skip an
-    // initialization ([stmt.dcl]/3, MSVC C2362). The flat form has no scopes of its own,
-    // so the backend opens the *one* block that keeps the declaration legal - the same one
-    // the statement path keeps - and closes it at the label the jump lands on.
-    fun ilJumpCrossing(il: *IlBody, position: Int): IlCrossing {
-        var crossing: IlCrossing = IlCrossing(-1, -1)
-        var labelPos: Dictionary<Int, Int> = Dictionary<Int, Int>()
-        var i: Int = 0
-        while (i < il.ops.size()) {
-            val op: *IlOp = *il.ops[i]
-            if (op.kind == IlOpKind.Label && op.operands.size() > 0) {
-                labelPos.insert(op.operands[0], i)
-            }
-            i = i + 1
-        }
-        i = 0
-        while (i < position) {
-            val op: *IlOp = *il.ops[i]
-            var labelAt: Int = -1
-            if (op.kind == IlOpKind.Goto) {
-                labelAt = 0
-            } else if (op.kind == IlOpKind.IfTrue || op.kind == IlOpKind.IfFalse) {
-                labelAt = 1
-            }
-            if (labelAt >= 0) {
-                val target: Int = this.ilOperandAt(op.operands, labelAt)
-                if (labelPos.has(target)) {
-                    val at: Int = labelPos.get(target).value()
-                    if (at >= position) {
-                        if (crossing.end < 0 || at < crossing.end) {
-                            crossing.end = at
-                        }
-                        crossing.lastJump = i
-                    }
-                }
-            }
-            i = i + 1
-        }
-        return crossing
-    }
-
-    // The right-hand side of one instruction, as C++: the expression the instruction
-    // computes, or - for a construction that is an aggregate - the brace form, which has
-    // no expression node.
-    fun ilValueText(il: *IlBody, frame: *IlFrame, opIndex: Int, expected: *AstXmlNode): Opt<Str> {
-        if (opIndex < 0 || opIndex >= il.ops.size()) {
-            return Opt<Str>.none()
-        }
-        val op: *IlOp = *il.ops[opIndex]
-        if (op.kind == IlOpKind.Pack) {
-            // A list built from values: `List<T>{v1, v2, ...}`, the RTL's
-            // initializer-list construction. `List` is `SmallVector<T, 4>`, so the short
-            // list a packed call usually is stays inline and allocates nothing - which is
-            // why the pack builds a `List` and not an `Array`.
-            val slot: Int = this.ilOperandAt(op.operands, 0)
-            val slotType: AstXmlNode = ilVarType(il, slot)
-            if (xmlIsEmpty(slotType)) {
-                return Opt<Str>.none()
-            }
-            var values: List<Str> = List<Str>()
-            var j: Int = 1
-            while (j < op.operands.size()) {
-                val value: AstXmlNode = this.ilOperandNode(il, frame, op.operands[j], 0)
-                if (xmlIsEmpty(value)) {
-                    return Opt<Str>.none()
-                }
-                values.append(this.expr(value, 0, xmlEmptyNode()))
-                j = j + 1
-            }
-            return Opt<Str>.some(this.type(slotType) + "{" + cgJoin(values, ", ") + "}")
-        }
-        if (op.kind == IlOpKind.CallCtor) {
-            val typeAt: Int = this.ilOperandAt(op.operands, 1)
-            if (typeAt >= 0 && typeAt < il.types.size() && this.closureSymbols.has(il.types[typeAt])) {
-                var captured: List<Str> = List<Str>()
-                var j: Int = 2
-                while (j < op.operands.size()) {
-                    val arg: AstXmlNode = this.ilOperandNode(il, frame, op.operands[j], 0)
-                    if (xmlIsEmpty(arg)) {
-                        return Opt<Str>.none()
-                    }
-                    captured.append(this.expr(arg, 0, xmlEmptyNode()))
-                    j = j + 1
-                }
-                return Opt<Str>.some(il.types[typeAt] + "{" + cgJoin(captured, ", ") + "}")
-            }
-        }
-        val node: AstXmlNode = this.ilOpValueNode(il, frame, opIndex, 0)
-        if (xmlIsEmpty(node)) {
-            return Opt<Str>.none()
-        }
-        return Opt<Str>.some(this.expr(node, 0, expected))
-    }
-
-    fun ilLine(out: *Str, level: Int, text: Str): Unit {
-        out.appendStr(cgIndent(level))
-        out.appendStr(text)
-        out.append('\n')
-    }
-
-    // One body, instruction by instruction. Each instruction is one statement of the
-    // emitted C++ (a `Declare` pairs with the instruction that writes it), which is the
-    // whole point of the form.
-    fun ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
-        // A declaration a jump can cross needs a block around it: the jump may not enter
-        // the declaration's scope past it.
-        var blockEnd: Dictionary<Int, Int> = Dictionary<Int, Int>()
-        var declareOp: Dictionary<Int, Int> = Dictionary<Int, Int>() // slot -> the declaration's position
-        var scan: Int = 0
-        while (scan < il.ops.size()) {
-            val op: *IlOp = *il.ops[scan]
-            if (op.kind == IlOpKind.Declare || op.kind == IlOpKind.DeclareInit) {
-                val slot: Int = this.ilOperandAt(op.operands, 0)
-                // A declaration that prints nothing - the folding inlines it at its use -
-                // keeps nothing legal, so it asks for no block either.
-                if (this.ilFolded(il, frame, slot)) {
-                    scan = scan + 1
-                    continue
-                }
-                // A typed slot is declared where the `Declare` stands (the hoisting put
-                // it at the top); an untyped one is declared at the instruction that
-                // first writes it - or, when the two are adjacent, right here, where they
-                // print as one line (`auto x = <value>;`).
-                var at: Int = scan
-                if (!this.ilDeclaredAtTop(il, slot)) {
-                    val def: Int = this.ilIntAt(frame.defOp, slot, -1)
-                    if (def == scan + 1) {
-                        at = scan
-                    } else {
-                        at = def
-                    }
-                    if (at < 0) {
-                        scan = scan + 1
-                        continue
-                    }
-                }
-                val crossing: IlCrossing = this.ilJumpCrossing(il, at)
-                if (crossing.end >= 0) {
-                    blockEnd.insert(at, crossing.end)
-                }
-            }
-            scan = scan + 1
-        }
-        var scopes: List<IlScope> = List<IlScope>()
-        var consumedByDeclare: Int = -1
-        var lvl: Int = level
-        var text: Str = Str()
-
-        var i: Int = 0
-        while (i < il.ops.size()) {
-            // A block ends where its jump lands: the target stays outside it.
-            while (scopes.size() > 0 && scopes[scopes.size() - 1].end == i) {
-                scopes.removeAt(scopes.size() - 1)
-                lvl = lvl - 1
-                this.ilLine(text, lvl, "}")
-            }
-            if (i == consumedByDeclare) {
-                i = i + 1
-                continue
-            }
-            val op: *IlOp = *il.ops[i]
-            val kind: IlOpKind = op.kind
-            val dst: Int = this.ilDst(op)
-
-            if (blockEnd.has(i)) {
-                val end: Int = blockEnd.get(i).value()
-                val lastJump: Int = this.ilJumpCrossing(il, i).lastJump
-                var covered: Bool = false
-                var s: Int = 0
-                while (s < scopes.size()) {
-                    if (scopes[s].start > lastJump && scopes[s].end >= end) {
-                        covered = true
-                    }
-                    s = s + 1
-                }
-                if (!covered) {
-                    this.ilLine(text, lvl, "{")
-                    lvl = lvl + 1
-                    scopes.append(IlScope(i, end))
-                }
-            }
-
-            if (kind == IlOpKind.Declare || kind == IlOpKind.DeclareInit) {
-                val slot: Int = this.ilOperandAt(op.operands, 0)
-                if (slot < 0 || slot >= il.vars.size()) {
-                    return IlText(false, "", "a declare with no slot")
-                }
-                if (this.ilFolded(il, frame, slot)) {
-                    i = i + 1
-                    continue // inlined at its use
-                }
-                val slotType: AstXmlNode = ilVarType(il, slot)
-                if (!xmlIsEmpty(slotType)) {
-                    // A declared slot with a type: one line, and the instruction that
-                    // computes its value assigns it where that instruction stands. (The
-                    // hoisting turned the declaration's initializer into exactly such an
-                    // assignment.)
-                    this.ilLine(
-                        text, lvl, this.ilDeclTypeText(il, slot) + " " + il.vars[slot].name
-                                + ";"
-                    )
-                    i = i + 1
-                    continue
-                }
-                // A slot the type rules could not name is declared with `auto` and its own
-                // definition as the initializer - which only works where the two are
-                // adjacent; otherwise the definition is where the declaration goes (below)
-                // and this prints nothing.
-                val def: Int = this.ilIntAt(frame.defOp, slot, -1)
-                if (def != i + 1) {
-                    if (def < 0) {
-                        return IlText(
-                            false, "", "the slot '" + il.vars[slot].name
-                                    + "' has neither a type nor an initializer"
-                        )
-                    }
-                    i = i + 1
-                    continue
-                }
-                val valueText: Opt<Str> = this.ilValueText(il, frame, def, xmlEmptyNode())
-                if (!valueText.hasValue()) {
-                    if (this.ilWhy.isEmpty()) {
-                        return IlText(false, "", "an initializer with no expression form")
-                    }
-                    return IlText(false, "", "cannot express " + this.ilWhy)
-                }
-                this.ilLine(text, lvl, "auto " + il.vars[slot].name + " = " + valueText.value() + ";")
-                consumedByDeclare = def
-                i = i + 1
-                continue
-            }
-            if (kind == IlOpKind.Label) {
-                val label: Int = this.ilOperandAt(op.operands, 0)
-                if (label < 0 || label >= il.labels.size()) {
-                    return IlText(false, "", "a label with no name")
-                }
-                this.ilLine(text, lvl, il.labels[label] + ":;")
-                i = i + 1
-                continue
-            }
-            if (kind == IlOpKind.Goto || kind == IlOpKind.IfTrue || kind == IlOpKind.IfFalse) {
-                var labelAt: Int = 1
-                if (kind == IlOpKind.Goto) {
-                    labelAt = 0
-                }
-                val label: Int = this.ilOperandAt(op.operands, labelAt)
-                if (label < 0 || label >= il.labels.size()) {
-                    return IlText(false, "", "a jump with no label")
-                }
-                val target: Str = il.labels[label]
-                if (kind == IlOpKind.Goto) {
-                    this.ilLine(text, lvl, "goto " + target + ";")
-                    i = i + 1
-                    continue
-                }
-                val cond: AstXmlNode = this.ilOperandNode(il, frame, this.ilOperandAt(op.operands, 0), 0)
-                if (xmlIsEmpty(cond)) {
-                    return IlText(false, "", "a jump with no condition")
-                }
-                val test: Str = this.expr(cond, 0, xmlEmptyNode())
-                var jumpLine: Str = "if (!(" + test + ")) goto " + target + ";"
-                if (kind == IlOpKind.IfTrue) {
-                    jumpLine = "if (" + test + ") goto " + target + ";"
-                }
-                this.ilLine(text, lvl, jumpLine)
-                i = i + 1
-                continue
-            }
-            if (dst >= 0 && this.ilFolded(il, frame, dst)) {
-                i = i + 1
-                continue // inlined at its use
-            }
-            if (dst >= 0) {
-                val slotType: AstXmlNode = ilVarType(il, dst)
-                // An instruction that defines a slot the type rules could not name *is*
-                // that slot's declaration (`auto x = <this>;`), which is where a slot
-                // without a type has to be declared - a typed one was declared with the
-                // frame at the top of the body.
-                val declares: Bool =
-                    xmlIsEmpty(slotType) && this.ilIntAt(frame.defOp, dst, -1) == i
-                val valueText: Opt<Str> = this.ilValueText(il, frame, i, slotType)
-                if (!valueText.hasValue()) {
-                    if (this.ilWhy.isEmpty()) {
-                        return IlText(false, "", "'" + ilOpKindText(kind) + "' cannot be expressed yet")
-                    }
-                    return IlText(false, "", "cannot express " + this.ilWhy)
-                }
-                if (declares) {
-                    this.ilLine(text, lvl, "auto " + il.vars[dst].name + " = " + valueText.value() + ";")
-                    i = i + 1
-                    continue
-                }
-                if (xmlIsEmpty(slotType)) {
-                    return IlText(
-                        false, "", "the slot '" + il.vars[dst].name
-                                + "' has no type to assign"
-                    )
-                }
-                this.ilLine(text, lvl, il.vars[dst].name + " = " + valueText.value() + ";")
-                i = i + 1
-                continue
-            }
-            if (kind == IlOpKind.Store) {
-                val ptr: AstXmlNode = this.ilSlotNode(il, frame, this.ilOperandAt(op.operands, 0), 0)
-                val value: AstXmlNode = this.ilOperandNode(il, frame, this.ilOperandAt(op.operands, 1), 0)
-                if (xmlIsEmpty(ptr) || xmlIsEmpty(value)) {
-                    return IlText(false, "", "a store with no pointer")
-                }
-                var target: AstXmlNode = AstXmlNode(
-                    AstNodeKind.Expr,
-                    AstNodeCategory.ExprDeref,
-                    List<AstNodeAttribute>(),
-                    Array<AstXmlNode>()
-                )
-                xmlAddChild(target, this.renameRole(ptr, AstNodeKind.Operand))
-                val targetType: AstXmlNode = this.inferType(target)
-                this.ilLine(
-                    text, lvl, this.expr(target, 0, xmlEmptyNode()) + " = "
-                            + this.expr(value, 0, targetType) + ";"
-                )
-                i = i + 1
-                continue
-            }
-            if (kind == IlOpKind.SetField || kind == IlOpKind.SetIndex) {
-                var target: AstXmlNode = xmlEmptyNode()
-                if (kind == IlOpKind.SetField) {
-                    val textIndex: Int = this.ilOperandAt(op.operands, 1)
-                    if (textIndex < 0 || textIndex >= il.pool.size()) {
-                        return IlText(false, "", "a field write with no name")
-                    }
-                    val base: AstXmlNode = this.ilSlotNode(il, frame, this.ilOperandAt(op.operands, 0), 0)
-                    target = this.ilMemberNode(base, il.pool[textIndex])
-                } else {
-                    val base: AstXmlNode = this.ilSlotNode(il, frame, this.ilOperandAt(op.operands, 0), 0)
-                    val index: AstXmlNode = this.ilOperandNode(il, frame, this.ilOperandAt(op.operands, 1), 0)
-                    if (!xmlIsEmpty(base) && !xmlIsEmpty(index)) {
-                        target = AstXmlNode(
-                            AstNodeKind.Expr,
-                            AstNodeCategory.ExprIndex,
-                            List<AstNodeAttribute>(),
-                            Array<AstXmlNode>()
-                        )
-                        xmlAddChild(target, this.renameRole(base, AstNodeKind.Receiver))
-                        xmlAddChild(target, this.renameRole(index, AstNodeKind.Index))
-                    }
-                }
-                val value: AstXmlNode = this.ilOperandNode(il, frame, this.ilOperandAt(op.operands, 2), 0)
-                if (xmlIsEmpty(target) || xmlIsEmpty(value)) {
-                    return IlText(false, "", "a write with no target")
-                }
-                val targetType: AstXmlNode = this.inferType(target)
-                this.ilLine(
-                    text, lvl, this.expr(target, 0, xmlEmptyNode()) + " = "
-                            + this.expr(value, 0, targetType) + ";"
-                )
-                i = i + 1
-                continue
-            }
-            if (kind == IlOpKind.SetStatic) {
-                val textIndex: Int = this.ilOperandAt(op.operands, 0)
-                val value: AstXmlNode = this.ilOperandNode(il, frame, this.ilOperandAt(op.operands, 1), 0)
-                if (textIndex < 0 || textIndex >= il.pool.size() || xmlIsEmpty(value)) {
-                    return IlText(false, "", "a static write with no target")
-                }
-                val staticText: Str = il.pool[textIndex]
-                val dot: Int = this.ilLastDot(staticText)
-                var target: AstXmlNode = this.ilNameNode(staticText)
-                if (dot > 0) {
-                    val base: AstXmlNode = this.ilNameNode(staticText.substr(0, dot))
-                    target = this.ilMemberNode(base, staticText.substr(dot + 1, staticText.size() - dot - 1))
-                }
-                val targetType: AstXmlNode = this.inferType(target)
-                this.ilLine(
-                    text, lvl, this.expr(target, 0, xmlEmptyNode()) + " = "
-                            + this.expr(value, 0, targetType) + ";"
-                )
-                i = i + 1
-                continue
-            }
-            if (kind == IlOpKind.CallVoid || kind == IlOpKind.CallIndirectVoid) {
-                val call: AstXmlNode = this.ilCallNode(il, frame, op)
-                if (xmlIsEmpty(call)) {
-                    if (this.ilWhy.isEmpty()) {
-                        return IlText(false, "", "a void call")
-                    }
-                    return IlText(false, "", "cannot express " + this.ilWhy)
-                }
-                this.ilLine(text, lvl, this.expr(call, 0, xmlEmptyNode()) + ";")
-                i = i + 1
-                continue
-            }
-            if (kind == IlOpKind.Return || kind == IlOpKind.ReturnVoid) {
-                if (kind == IlOpKind.ReturnVoid) {
-                    this.ilLine(text, lvl, "return;")
-                    i = i + 1
-                    continue
-                }
-                val value: AstXmlNode = this.ilOperandNode(il, frame, this.ilOperandAt(op.operands, 0), 0)
-                if (xmlIsEmpty(value)) {
-                    return IlText(false, "", "a return with no value")
-                }
-                this.ilLine(text, lvl, "return " + this.expr(value, 0, this.curReturnType) + ";")
-                i = i + 1
-                continue
-            }
-            if (kind == IlOpKind.Lambda) {
-                return IlText(false, "", "a lambda body")
-            }
-            if (kind == IlOpKind.Unsupported) {
-                return IlText(false, "", "an unsupported shape")
-            }
-            return IlText(false, "", "the instruction '" + ilOpKindText(kind) + "'")
-        }
-        while (scopes.size() > 0) {
-            scopes.removeAt(scopes.size() - 1)
-            lvl = lvl - 1
-            this.ilLine(text, lvl, "}")
-        }
-        return IlText(true, text, "")
-    }
-
-    // One body's text, with its frame analysed and the type pass's failure state kept out
-    // of the caller's: a body the IL cannot spell is a *report*, not an error.
-    fun ilEmitOpsChecked(il: *IlBody, level: Int): IlText {
-        var frame: IlFrame = IlFrame(Dictionary<Int, Int>(), Dictionary<Int, Int>(), Dictionary<Int, Int>())
-        this.ilAnalyze(il, frame)
-        val savedFailed: Bool = this.failed
-        val savedError: Str = this.error
-        val result: IlText = this.ilEmitOps(il, frame, level)
-        var final: IlText = result
-        if (result.ok && this.failed) {
-            final = IlText(false, "", "the emitter reported: " + this.error)
-        }
-        this.failed = savedFailed
-        this.error = savedError
-        return final
-    }
-
-    // The C++ of one function body, from its IL. The frame's types are installed so the
-    // spelling helpers (`memberAccess`, the call resolution) see the same world the type
-    // pass gave them; nothing that survived a previous body is left behind.
-    fun emitIlBodyText(unit: *IlUnit, level: Int): IlText {
-        val il: *IlBody = *unit.body
-        val savedKinds: Dictionary<Str, NameKind> = this.nameKinds
-        val savedTypes: Dictionary<Str, AstXmlNode> = this.localTypes
-        val savedClosures: Dictionary<Str, Bool> = this.closureSymbols
-        this.ilSeedFrameTypes(il)
-        var closures: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
-        for (*closure in unit.closures) {
-            closures.insert(closure.symbol, true)
-        }
-        this.closureSymbols = closures
-        val result: IlText = this.ilEmitOpsChecked(il, level)
-        this.nameKinds = savedKinds
-        this.localTypes = savedTypes
-        this.closureSymbols = savedClosures
-        return result
-    }
-
-    // C++ of a lambda's body, as the class's method: the frame is the lambda's (its
-    // parameters and the closure instance), and `self` is C++'s `this`.
-    fun emitClosureMethodText(unit: *IlUnit, closure: *IlClosure, level: Int): IlText {
-        if (closure.bodyIndex < 0 || closure.bodyIndex >= unit.lambdas.size()) {
-            return IlText(false, "", "a closure with no body")
-        }
-        val body: *IlBody = *unit.lambdas[closure.bodyIndex]
-        val savedKinds: Dictionary<Str, NameKind> = this.nameKinds
-        val savedTypes: Dictionary<Str, AstXmlNode> = this.localTypes
-        val savedSelfKind: NameKind = this.selfKind
-        val savedSelfType: AstXmlNode = this.selfType
-        val savedClosure: Bool = this.inClosureMethod
-        this.nameKinds.clear()
-        this.localTypes.clear()
-        this.ilSeedFrameTypes(body)
-        var classType: AstXmlNode =
-            AstXmlNode(AstNodeKind.Type, AstNodeCategory.TypeNamed, List<AstNodeAttribute>(), Array<AstXmlNode>())
-        classType.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, closure.symbol))
-        this.selfKind = NameKind.Value
-        this.selfType = classType
-        this.inClosureMethod = true
-        val result: IlText = this.ilEmitOpsChecked(body, level)
-        this.nameKinds = savedKinds
-        this.localTypes = savedTypes
-        this.selfKind = savedSelfKind
-        this.selfType = savedSelfType
-        this.inClosureMethod = savedClosure
-        return result
-    }
-
-    // The class a lambda is: one field per captured variable, and one method - the
-    // language's `invoke`, which C++ spells `operator()`. A `[=]` capture list becomes an
-    // explicit struct, which is what lets a lambda live in the instruction list (and what
-    // `&lambda` counts references to).
-    fun emitClosureClass(unit: *IlUnit, closure: *IlClosure): IlText {
-        var text: Str = "struct " + closure.symbol + " {\n"
-        var i: Int = 0
-        while (i < closure.captures.size()) {
-            var fieldType: AstXmlNode = xmlEmptyNode()
-            if (i < closure.captureTypes.size()) {
-                fieldType = closure.captureTypes[i]
-            }
-            if (xmlIsEmpty(fieldType)) {
-                return IlText(false, "", "the capture '" + closure.captures[i] + "' has no type")
-            }
-            text.appendStr("    " + this.type(fieldType) + " " + closure.captures[i] + ";\n")
-            i = i + 1
-        }
-        var params: List<Str> = List<Str>()
-        for (*param in closure.params) {
-            val paramType: AstXmlNode = ilTypeNode(unit.lambdas[closure.bodyIndex], param.typeIndex)
-            if (xmlIsEmpty(paramType)) {
-                return IlText(false, "", "the lambda parameter '" + param.name + "' has no type")
-            }
-            params.append(this.type(paramType) + " " + param.name)
-        }
-        text.appendStr("    auto operator()(" + cgJoin(params, ", ") + ") {\n")
-        val bodyText: IlText = this.emitClosureMethodText(unit, closure, 2)
-        if (!bodyText.ok) {
-            return bodyText
-        }
-        text.appendStr(bodyText.text)
-        text.appendStr("    }\n")
-        text.appendStr("};\n\n")
-        return IlText(true, text, "")
-    }
-
-    // Writes out the classes of every lambda this body constructs, the first time one is
-    // needed. A definition has to precede its construction, and the functions are emitted
-    // in a fixed order, so "just before the body" is both legal and reproducible.
-    fun emitClosureClasses(unit: *IlUnit): IlText {
-        var text: Str = Str()
-        for (*closure in unit.closures) {
-            if (!this.emittedClosures.has(closure.symbol)) {
-                val classText: IlText = this.emitClosureClass(unit, closure)
-                if (!classText.ok) {
-                    return classText
-                }
-                text.appendStr(classText.text)
-                this.emittedClosures.insert(closure.symbol, true)
-            }
-        }
-        return IlText(true, text, "")
-    }
-
-    // A yielding function, emitted as the state machine it was lowered to
-    // (impl_specs/yield.md):
-    //
-    //   struct evens_yieldable { Int n; Int i; Int branch; Opt<Int> next() {...} };
-    //   ns1_evens_yieldable ns1_evens(Int n) { ...machine.n = n; ... }
-    //
-    // The function builds a machine on the stack and returns it by value, so a local
-    // iterator is a local struct; `&evens(n)` boxes a copy for a life that outlives the
-    // frame (the language's `&T`, as everywhere else).
-    fun emitYieldable(
-        fn: *
-        CgFn,
-        decl: *
-        AstXmlNode,
-        className: Str,
-        classType: Str,
-        prototypeOnly: Bool,
-        selfK: NameKind,
-        selfTypePtr: *
-        AstXmlNode,
-        facts: *
-        SemFacts
-    ): Unit {
-        val returnNode: AstXmlNode = xmlChild(decl, AstNodeKind.ReturnType)
-        val elementType: AstXmlNode = xmlChild(returnNode, AstNodeKind.Inner)
-        if (xmlIsEmpty(elementType)) {
-            this.fail(decl, "unsupported: '..' without an element type")
-            return
-        }
-
-        // A machine is emitted once: the prototype pass writes the class and the factory's
-        // declaration, the definition pass only fills the factory in.
-        if (!this.emittedYieldables.has(className)) {
-            this.emittedYieldables.insert(className, true)
-            // The linear body first: `yield` is a *lowering*, and it trades on the control
-            // flow being labels and gotos with the value already one operand
-            // (impl_specs/yield.md).
-            var lowered: List<AstXmlNode> =
-                linLowerForEmission(xmlChildren(xmlChild(decl, AstNodeKind.Body), AstNodeKind.Stmt))
-            val semantics: SemBody = SemBody(
-                decl, fn.templateParams, selfTypePtr, xmlEmptyNode(),
-                List<Str>(), List<AstXmlNode>(), Dictionary<Str, AstXmlNode>()
-            )
-            // The map is the machine's methods' frame too: the bodies are the same
-            // statements (the lowering rewrites them in place), so the names the pass
-            // proved are the names they carry.
-            var inferred: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
-            lowered = semInferTypes(lowered, facts, semantics, inferred)
-            // The machine's methods: the body's storage is the machine's fields (`this->`),
-            // and the names a method has of its own are the pointer `advance` writes
-            // through, the dispatcher's branch and the receiver field - a local of any of
-            // those names would alias one of them.
-            var machineReserved: List<Str> = listOf<Str>("value", "branch", "_sm_self")
-            val finalBody: List<AstXmlNode> = linFinishForEmission(lowered, machineReserved)
-            val machine: Yielded = linLowerYield(decl, elementType, finalBody, "advance")
-            if (!machine.error.isEmpty()) {
-                this.fail(decl, machine.error)
-                return
-            }
-            this.emitMachine(fn, decl, className, elementType, machine, facts, inferred)
-            if (this.failed) {
-                return
-            }
-        }
-
-        val factory: Str = classType + " " + this.qualify(fn.packageName, xmlAttr(decl, AstNodeAttributeKind.Name))
-        val tmpl: Str = this.templateClause(fn.templateParams)
-        val factoryParams: List<Str> = this.parameterList(fn, decl)
-        if (prototypeOnly) {
-            if (tmpl != "") {
-                this.line(0, tmpl)
-            }
-            this.line(0, fmtStr("|(|);", factory, cgJoin(factoryParams, ", ")))
-            return
-        }
-        this.sourceComment(decl)
-        if (tmpl != "") {
-            this.line(0, tmpl)
-        }
-        this.line(0, fmtStr("|(|) {", factory, cgJoin(factoryParams, ", ")))
-        this.line(1, classType + " machine{};")
-        val declared: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
-        for (*param in declared) {
-            val name: Str = xmlAttr(param, AstNodeAttributeKind.Name)
-            this.line(1, fmtStr("machine.| = |;", name, name))
-        }
-        if (!xmlIsEmpty(xmlChild(decl, AstNodeKind.Receiver))) {
-            // The receiver of an extension function crosses a yield like any other value,
-            // so it is a field and the factory fills it from its own `self` parameter
-            // (`yldReceiverField`).
-            this.line(1, fmtStr("machine.| = self;", yldReceiverField()))
-        }
-        this.line(1, "machine.branch = 0;")
-        this.line(1, "return machine;")
-        this.line(0, "}")
-    }
-
-    // The parameters of the factory: the receiver first when the function has one (an
-    // extension function's receiver is an ordinary parameter in the emitted C++, `T* self`
-    // for a value receiver), then the declaration's own.
-    fun parameterList(fn: *CgFn, decl: *AstXmlNode): List<Str> {
-        var params: List<Str> = List<Str>()
-        if (!xmlIsEmpty(fn.receiver)) {
-            params.append(this.receiverParam(fn.receiver))
-            if (this.failed) {
-                return params
-            }
-        }
-        val declared: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
-        for (*param in declared) {
-            val paramType: AstXmlNode = xmlChild(param, AstNodeKind.Type)
-            if (xmlIsEmpty(paramType)) {
-                this.fail(
-                    param,
-                    "unsupported: parameter '" + xmlAttr(param, AstNodeAttributeKind.Name) + "' without a type"
-                )
-                return params
-            }
-            params.append(this.type(paramType) + " " + xmlAttr(param, AstNodeAttributeKind.Name))
-            if (this.failed) {
-                return params
-            }
-        }
-        return params
-    }
-
-    // The machine is a class the type pass never saw - it is the lowering's own output -
-    // so its fields are registered as a data class here. That is what tells the spelling
-    // helpers what `this.<field>` is: a receiver field is a *pointer* (`T* self`), so
-    // `this._sm_self.size()` reaches through it rather than taking its address, and a
-    // method's parameter that shares a field's name still resolves to the parameter (the
-    // frame, not this table, decides names).
-    fun registerMachineType(className: Str, machine: *Yielded): Unit {
-        var declNode: AstXmlNode =
-            AstXmlNode(AstNodeKind.DataClass, AstNodeCategory.DataClass, List<AstNodeAttribute>(), Array<AstXmlNode>())
-        declNode.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, className))
-        for (*field in machine.fields) {
-            var fieldNode: AstXmlNode =
-                AstXmlNode(AstNodeKind.Field, AstNodeCategory.None, List<AstNodeAttribute>(), Array<AstXmlNode>())
-            fieldNode.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, field.name))
-            xmlAddChild(fieldNode, this.renameRole(field.typeNode, AstNodeKind.Type))
-            xmlAddChild(declNode, this.renameRole(fieldNode, AstNodeKind.Field))
-        }
-        this.types.insert(className, declNode)
-        this.machineDecl = declNode
-    }
-
-    // The machine itself: the fields, then one method per way of advancing it.
-    fun emitMachine(
-        fn: *CgFn, decl: *AstXmlNode, className: Str, elementType: AstXmlNode,
-        machine: *Yielded, facts: *SemFacts, inferred: *Dictionary<Str, AstXmlNode>
-    ): Unit {
-        this.sourceComment(decl)
-        this.registerMachineType(className, machine)
-        // A generic function's machine is a class template: its fields are typed with the
-        // function's type parameters, so the emitted C++ has to declare them where it uses
-        // them (impl_specs/yield.md).
-        val tmpl: Str = this.templateClause(fn.templateParams)
-        if (tmpl != "") {
-            this.line(0, tmpl)
-        }
-        this.line(0, fmtStr("struct | {", className))
-        for (*field in machine.fields) {
-            if (xmlIsEmpty(field.typeNode)) {
-                this.fail(decl, "yield: the field '" + field.name + "' has no type")
-                return
-            }
-            this.line(1, this.type(field.typeNode) + " " + field.name + "{};")
-            if (this.failed) {
-                return
-            }
-        }
-        for (*method in machine.methods) {
-            var params: List<Str> = List<Str>()
-            for (*param in method.params) {
-                params.append(this.type(param.typeNode) + " " + param.name)
-                if (this.failed) {
-                    return
-                }
-            }
-            var result: Str = "Opt<" + this.type(elementType) + ">"
-            if (method.name == "advance") {
-                result = "Bool"
-            }
-            this.line(1, fmtStr("| |(|) {", result, method.name, cgJoin(params, ", ")))
-            // The method is a C++ member function, so the machine's own values are
-            // reached through `this` - the same spelling the closure classes use.
-            val savedClosure: Bool = this.inClosureMethod
-            val savedSelfKind: NameKind = this.selfKind
-            val savedSelfType: AstXmlNode = this.selfType
-            val savedReturn: AstXmlNode = this.curReturnType
-            val savedKinds: Dictionary<Str, NameKind> = this.nameKinds
-            val savedTypes: Dictionary<Str, AstXmlNode> = this.localTypes
-            this.inClosureMethod = true
-            this.selfKind = NameKind.Value
-            var classType: AstXmlNode =
-                AstXmlNode(AstNodeKind.Type, AstNodeCategory.TypeNamed, List<AstNodeAttribute>(), Array<AstXmlNode>())
-            classType.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, className))
-            this.selfType = classType
-            this.curReturnType = elementType
-            // The method's own parameters are what tells a pointer receiver from a value
-            // one (`*value = x` writes through it).
-            for (*param in method.params) {
-                if (!xmlIsEmpty(param.typeNode)) {
-                    this.nameKinds.insert(param.name, this.kindOf(param.typeNode))
-                    this.localTypes.insert(param.name, param.typeNode)
-                }
-            }
-            // The body goes through the same two paths as any other (the IL is what a
-            // machine's methods must be expressible in, since the machine *is* the
-            // lowering's output): the frame is the machine's, so its fields are read and
-            // written through `self`, exactly as a lambda body reads its captures.
-            this.emitBodyAt(
-                this.ilMachineMethod(className, method, this.machineDecl, facts, inferred), method.body,
-                fn.file, 2
-            )
-            this.inClosureMethod = savedClosure
-            this.selfKind = savedSelfKind
-            this.selfType = savedSelfType
-            this.curReturnType = savedReturn
-            this.nameKinds = savedKinds
-            this.localTypes = savedTypes
-            if (this.failed) {
-                return
-            }
-            this.line(1, "}")
-        }
-        this.line(0, "};")
-        this.line(0, "")
-    }
-
-    // A state machine's method, as the extractor's body context: no declaration, the
-    // method's parameters, and - like a lambda - a class whose fields the body reaches
-    // through `this`. The *fields* are deliberately not captures: the lowering already
-    // spelled every field read and write as an explicit `this.x` member, so a bare name in
-    // the body is the method's own - and a parameter that happens to share a field's name
-    // (`advance(value: *T)` against a field `value`) must resolve to the parameter.
-    //
-    // The machine's class travels as the body's `selfDecl`: the class is the lowering's own
-    // output, so the type rules never saw it - and a field read (`this._sm_self`) is how
-    // the body reaches everything that crossed a `yield`.
-    fun ilMachineMethod(
-        className: Str, method: *YldMethod, selfDecl: *AstXmlNode, facts: *SemFacts,
-        inferred: *Dictionary<Str, AstXmlNode>
-    ): IlFunction {
-        var info: IlFunction = IlFunction(
-            xmlEmptyNode(), xmlEmptyNode(),
-            className + "::" + method.name, Dictionary<Str, Str>(),
-            selfDecl, List<Str>(), List<AstXmlNode>(), className,
-            Dictionary<Str, Bool>(), Dictionary<Str, AstXmlNode>(),
-            facts, List<Str>(), inferred
-        )
-        var i: Int = 0
-        for (*param in method.params) {
-            info.paramNames.append(param.name)
-            info.paramTypes.append(param.typeNode)
-        }
-        i = 0
-        for (*entry in this.statics) {
-            val typeNode: AstXmlNode = xmlChild(entry.decl, AstNodeKind.Type)
-            if (!xmlIsEmpty(typeNode)) {
-                info.statics.insert(xmlAttr(entry.decl, AstNodeAttributeKind.Name), ilTypeText(typeNode))
-            }
-        }
-        return info
-    }
-
-    // A failure with a position when the frame has a declaration, and position-less for a
-    // synthesized body (a lambda's, a machine's method).
-    fun failFromInfo(info: IlFunction, message: Str): Unit {
-        var node: AstXmlNode = xmlEmptyNode()
-        if (!xmlIsEmpty(info.decl)) {
-            node = copy(info.decl)
-        }
-        this.fail(node, message)
-    }
-
-    // A body is emitted from its instruction list - the IL is the *only* codegen
-    // (impl_specs/linear-il.md). A body the IL cannot spell is a bug in the extractor, not
-    // something to fall back from: it fails with the reason.
-    fun emitBodyAt(info: IlFunction, body: List<AstXmlNode>, file: Str, level: Int): Unit {
-        val unit: IlUnit = ilExtractUnit(info, body, file)
-        val emitted: IlText = this.emitIlBodyText(unit, level)
-        if (!emitted.ok) {
-            this.failFromInfo(
-                info, "internal: the body of '" + info.symbol
-                        + "' is not expressible in the IL (" + emitted.reason + ")"
-            )
-            return
-        }
-        // A lambda is a closure class, which the text above *constructs* but does not
-        // define: the class goes just above the body that builds it.
-        var classes: IlText = IlText(true, "", "")
-        if (unit.closures.size() > 0) {
-            classes = this.emitClosureClasses(unit)
-            if (!classes.ok) {
-                this.failFromInfo(
-                    info, "internal: a closure class could not be written ("
-                            + classes.reason + ")"
-                )
-                return
-            }
-        }
-        this.out.appendStr(classes.text)
-        this.out.appendStr(emitted.text)
-    }
 
     // ---- expressions ------------------------------------------------------
 
@@ -3317,7 +1938,7 @@ data class Emitter(
 
     fun functionReturn(name: Str): AstXmlNode {
         for (*fn in this.functions) {
-            if (xmlAttr(fn.decl, AstNodeAttributeKind.Name) == name) {
+            if (fn.name == name) {
                 val ret: AstXmlNode = xmlChild(fn.decl, AstNodeKind.ReturnType)
                 if (!xmlIsEmpty(ret)) {
                     return ret
@@ -3335,10 +1956,10 @@ data class Emitter(
         while (i < this.functions.size()) {
             val fn: *CgFn = *this.functions[i]
             i = i + 1
-            if (xmlAttr(fn.decl, AstNodeAttributeKind.IsNative) == "true" || xmlIsEmpty(fn.receiver)) {
+            if (fn.isNative || xmlIsEmpty(fn.receiver)) {
                 continue
             }
-            if (xmlAttr(fn.decl, AstNodeAttributeKind.Name) != calleeText) {
+            if (fn.name != calleeText) {
                 continue
             }
             val ret: AstXmlNode = xmlChild(fn.decl, AstNodeKind.ReturnType)
@@ -3375,6 +1996,17 @@ data class Emitter(
         }
         if (calleeText == "isOk" || calleeText == "hasValue") {
             return this.namedType("Bool")
+        }
+        if (!xmlIsEmpty(recv) && xmlKind(recv) == AstNodeCategory.TypeYield) {
+            // A machine's own methods (`impl_specs/for.md`): `value()` hands out the
+            // element, `advance()` answers whether there was one. The pass answers the
+            // same way (`TypeInfer.memberReturn`), so the guess and the answer agree.
+            if (calleeText == "value") {
+                return xmlChild(recv, AstNodeKind.Inner)
+            }
+            if (calleeText == "advance") {
+                return this.namedType("Bool")
+            }
         }
         return xmlEmptyNode()
     }
@@ -3691,10 +2323,10 @@ data class Emitter(
         while (i < this.functions.size()) {
             val fn: *CgFn = *this.functions[i]
             i = i + 1
-            if (xmlAttr(fn.decl, AstNodeAttributeKind.IsNative) == "true" || xmlIsEmpty(fn.receiver)) {
+            if (fn.isNative || xmlIsEmpty(fn.receiver)) {
                 continue
             }
-            if (xmlAttr(fn.decl, AstNodeAttributeKind.Name) == name) {
+            if (fn.name == name) {
                 return i - 1
             }
         }
@@ -3711,11 +2343,11 @@ data class Emitter(
         var i: Int = 0
         while (i < this.functions.size()) {
             val fn: *CgFn = *this.functions[i]
-            if (xmlAttr(fn.decl, AstNodeAttributeKind.IsNative) == "true" || xmlIsEmpty(fn.receiver)) {
+            if (fn.isNative || xmlIsEmpty(fn.receiver)) {
                 i = i + 1
                 continue
             }
-            if (xmlAttr(fn.decl, AstNodeAttributeKind.Name) == name && this.unifyType(
+            if (fn.name == name && this.unifyType(
                     fn.receiver,
                     recv,
                     fn.templateParams
@@ -3856,8 +2488,8 @@ data class Emitter(
         while (i < this.functions.size()) {
             val fn: *CgFn = *this.functions[i]
             i = i + 1
-            if (xmlAttr(fn.decl, AstNodeAttributeKind.IsNative) == "true" || fn.isMethod
-                || xmlAttr(fn.decl, AstNodeAttributeKind.Name) != name
+            if (fn.isNative || fn.isMethod
+                || fn.name != name
             ) {
                 continue
             }
@@ -3886,14 +2518,7 @@ data class Emitter(
                 // A table entry is a `const Str` *glvalue*: a comparison or a `const Str&`
                 // parameter binds it without building anything, while an owned position copies
                 // it exactly as it copied the literal.
-                val text: Str = xmlAttr(e, AstNodeAttributeKind.Text)
-                if (this.literalAt.has(text)) {
-                    return fmtStr(
-                        "__sm_stringTable[|]",
-                        this.literalAt.get(text).value().toString()
-                    )
-                }
-                return text
+                return this.literals.spelling(xmlAttr(e, AstNodeAttributeKind.Text))
             }
 
             AstNodeCategory.ExprBoolLit -> {
@@ -4264,10 +2889,7 @@ data class Emitter(
                             all = all + ", " + args[a]
                             a = a + 1
                         }
-                        return this.qualify(
-                            fn.packageName,
-                            xmlAttr(fn.decl, AstNodeAttributeKind.Name)
-                        ) + "(" + all + ")"
+                        return this.qualify(fn.packageName, fn.name) + "(" + all + ")"
                     }
                     val extIndex: Int = this.findNativeExt(calleeText, receiverExpr)
                     if (extIndex >= 0) {
@@ -4327,6 +2949,9 @@ data class Emitter(
         text = text + "#include <iostream>\n"
         text = text + "#include <type_traits>\n"
         text = text + "\n"
+        // `--profile`: the instrumented profiler's runtime, which every emitted body of
+        // this program measures into (impl_specs/profiling.md). Nothing when it is off.
+        text = text + profPreludeText()
         this.out = text
     }
 
@@ -4342,7 +2967,10 @@ data class Emitter(
         if (this.failed) {
             return Res<Str>.err(this.error)
         }
-        this.sortLiterals()
+        // The walk above pooled every literal the program mentions, in first-encounter
+        // order; sorting is what makes the indices canonical, so the table does not depend
+        // on the order the walk happened to see them in.
+        this.literals.sort()
         this.emitStringTable()
         this.emitForwardTypes()
         if (this.failed) {
@@ -4383,8 +3011,7 @@ fun newEmitter(inputs: List<CgInput>): Emitter {
         "",
         false,
         Dictionary<Str, Bool>(),
-        Dictionary<Str, Int>(),
-        List<Str>(),
+        StringTable(List<Str>(), Dictionary<Str, Int>()),
         Dictionary<Str, Bool>(),
         Dictionary<Str, AstXmlNode>(),
         Dictionary<Str, Bool>(),

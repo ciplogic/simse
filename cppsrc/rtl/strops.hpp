@@ -61,6 +61,36 @@ inline List<Str> simse_str_split(const Str& self, const Str& separator) {
     return parts;
 }
 
+inline Int count_char_in_str(const Str* self, char ch){
+    int count = 0;
+    const char* data = self->data();
+    int len = self->size();
+    for(int i = 0;i<len; i++){
+        if (data[i] == ch){
+            count++;
+        }
+    }
+    return count;
+}
+
+// `Str.split(separator)` splits on every occurrence. An empty separator returns
+// the whole string as a single element.
+inline List<Str> simse_str_split(const Str& self, Char separator) {
+    List<Str> parts;
+    parts.reserve(count_char_in_str(&self, separator));
+    Int pos = 0;
+    while (true) {
+        Int found = self.find(separator, pos);
+        if (found == Str::npos) {
+            parts.push_back(self.substr(pos));
+            break;
+        }
+        parts.push_back(self.substr(pos, found - pos));
+        pos = found + 1;
+    }
+    return parts;
+}
+
 // ASCII/byte case folding (the string type is a byte string).
 inline Str simse_str_toUpper(const Str& self) {
     Str result = self;

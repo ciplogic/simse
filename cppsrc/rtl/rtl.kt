@@ -270,3 +270,8 @@ fun max<T>(a: T, b: T): T {
 // Milliseconds since an arbitrary fixed point, monotonic (it never goes backwards),
 // for logging and for measuring a run. `Int64` because the value is large.
 native("simse_nowMillis") fun nowMillis(): Int64
+
+// The same clock in microseconds: what the instrumented profiler measures with
+// (`cppsrc/profiling/Profiling.kt` writes a `profileApp.measure(...)` per emitted body
+// into a `--profile` build, and its destructor banks the difference here).
+native("simse_nowMicros") fun nowMicros(): Int64

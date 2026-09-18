@@ -6,20 +6,16 @@ know about, and `break`/`continue` are the `while`'s own machinery.
 
 ```text
 for (v in m) { body }              var _sm_for1 = m.smToYield()
-                                   while (true) {
-                                       var _sm_step1 = _sm_for1.next()
-                                       if (!_sm_step1.hasValue()) { break }
-                                       val v = _sm_step1.value()
+                                   while (_sm_for1.advance()) {
+                                       val v = _sm_for1.value()
                                        body
                                    }
 
 for ((v, i) in m) { body }         var _sm_for1 = m.smToYield()
                                    var _sm_index1: Int = -1
-                                   while (true) {
+                                   while (_sm_for1.advance()) {
                                        _sm_index1 = _sm_index1 + 1
-                                       var _sm_step1 = _sm_for1.next()
-                                       if (!_sm_step1.hasValue()) { break }
-                                       val v = _sm_step1.value()
+                                       val v = _sm_for1.value()
                                        val i = _sm_index1
                                        body
                                    }
@@ -39,13 +35,15 @@ line the user wrote.
 
 Two details of the shape are load-bearing:
 
-- **The advance is the first statement of the body, not the loop's condition.**
-  `continue` jumps to the condition, so a `_sm_for1.next()` in the condition would leave
-  `continue` re-reading the same value forever. Being first in the body, it runs on every
-  iteration including a `continue`d one: `continue` means "skip the rest of the body".
-- **The index starts at `-1` and is pre-incremented at the same place**, for the same
-  reason: an index incremented at the *end* of the body would miss every iteration that
-  `continue` skipped. `-1` is what makes the pre-increment hand out `0` first.
+- **The advance is the loop's condition, and the body starts with the value.** The
+  machine's `advance()` is the `while` condition, so the loop moves on exactly where the
+  step used to be, and the body's first statement reads what it left in `current`
+  (`val v = _sm_for1.value()`). `continue` jumps to the condition, which is the machine's
+  own step, so a skipped iteration still moves the machine on.
+- **The index starts at `-1` and is pre-incremented as the body's first statement**, for
+  the same reason: an index incremented at the *end* of the body would miss every
+  iteration that `continue` skipped. `-1` is what makes the pre-increment hand out `0`
+  first.
 
 The index the user names (`i`) is bound per iteration from the counter
 (`val i = _sm_index1`), so the loop's variables are fresh per iteration, cannot be
@@ -66,11 +64,13 @@ of a machine, which is all the template calls:
 
 | receiver | method | type |
 | --- | --- | --- |
-| `..T` | `next()` | `Opt<T>` |
-| `..T` | `advance(*T)` | `Bool` |
+| `..T` | `advance()` | `Bool` |
+| `..T` | `value()` | `T` (the `..T`'s inner) |
 
-With that, `_sm_step1` is `Opt<Int>`, `v` is `Int`, and every temporary the linear pass
-made from them is typed too. `TypeKind::Yield` also had to start substituting like a
+With that, `_sm_for1` is the machine, `v` is `Int`, and every temporary the linear pass
+made from them is typed too. `value()` answering the element type - and not `Opt<T>` - is
+what makes `v` a typed binding; the emitter needs no new IL op for it (`machine.value()`
+is a plain `Call`). `TypeKind::Yield` also had to start substituting like a
 pointer does (`substituteBindings`), or a generic function's `..T` would have lost its
 element type before reaching that rule.
 
@@ -165,9 +165,9 @@ the machinery that already existed, because the machine is generic over its elem
 and `..*T` is a `..T` whose element is `*T`:
 
 - the element type is the `..T`'s `Inner` (`Codegen`'s `emitYieldable`), so `..*T` gives
-  `Opt<T*>` for `next()` and `T**` for `advance(*value)` with no special case;
-- `TypeInfer` types `next()` as `Opt<T>` from the same `Inner`, so the loop variable is
-  typed `*T` - a pointer variable the emitter reads *through* (`cell.value` is
+  `*T` for `value()` (and for the `current` field) with no special case;
+- `TypeInfer` types `value()` as the element type from the same `Inner`, so the loop
+  variable is typed `*T` - a pointer variable the emitter reads *through* (`cell.value` is
   `cell->value`), which is exactly what a `*T` parameter does everywhere else;
 - a machine is still the identity for `smToYield`, and has none for `smToYieldPtr`: it
   hands out values, not places, so `for (*v in someMachine)` is a diagnostic;

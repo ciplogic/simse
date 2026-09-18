@@ -250,7 +250,7 @@ fun matchComment(view: StrView): Int {
 }
 
 fun matchStringLiteral(view: StrView): Int {
-    if (view.size() == 0 || view.at(0) != '"') {
+    if (view.size() == 0 || view.at(0) != '\"') {
         return 0
     }
     var i = 1
@@ -262,7 +262,7 @@ fun matchStringLiteral(view: StrView): Int {
                 continue
             }
 
-            '"' -> {
+            '\"' -> {
                 return i + 1
             }
         }

@@ -6,55 +6,10 @@
 template <class T>
 struct List_smToYield_yieldable {
     Int branch{};
+    T current{};
     List<T>* _sm_self{};
     Int i{};
-    Opt<T> next() {
-        Bool _sm_base1;
-        Int _sm_base2;
-        Bool _sm_base3;
-        Int _sm_base4;
-        List<T>* _sm_base5;
-        Int _sm_base6;
-        List<T>* _sm_base7;
-        Int _sm_base8;
-        Opt<T> _sm_base9;
-        Int _sm_base10;
-        Int _sm_base11;
-        Opt<T> _sm_base12;
-        Int _sm_expr1;
-        Bool _sm_expr2;
-        T _sm_expr3;
-        _sm_base2 = this->branch;
-        _sm_base1 = _sm_base2 == -1;
-        if (_sm_base1) goto LYend;
-        _sm_base4 = this->branch;
-        _sm_base3 = _sm_base4 == 1;
-        if (_sm_base3) goto LY1;
-        this->i = 0;
-        L1:;
-        _sm_base5 = this->_sm_self;
-        _sm_expr1 = _sm_base5->size();
-        _sm_base6 = this->i;
-        _sm_expr2 = _sm_base6 < _sm_expr1;
-        if (!(_sm_expr2)) goto L2;
-        _sm_base7 = this->_sm_self;
-        _sm_base8 = this->i;
-        _sm_expr3 = (*_sm_base7)[_sm_base8];
-        this->branch = 1;
-        _sm_base9 = Opt<T>::some(_sm_expr3);
-        return _sm_base9;
-        LY1:;
-        _sm_base11 = this->i;
-        _sm_base10 = _sm_base11 + 1;
-        this->i = _sm_base10;
-        goto L1;
-        L2:;
-        LYend:;
-        this->branch = -1;
-        _sm_base12 = Opt<T>::none();
-        return _sm_base12;
-    }
-    Bool advance(T* value) {
+    Bool advance() {
         Bool _sm_base1;
         Int _sm_base2;
         Bool _sm_base3;
@@ -84,7 +39,7 @@ struct List_smToYield_yieldable {
         _sm_base7 = this->_sm_self;
         _sm_base8 = this->i;
         _sm_expr3 = (*_sm_base7)[_sm_base8];
-        *value = _sm_expr3;
+        this->current = _sm_expr3;
         this->branch = 1;
         return true;
         LY1:;
@@ -96,6 +51,11 @@ struct List_smToYield_yieldable {
         LYend:;
         this->branch = -1;
         return false;
+    }
+    T value() {
+        T _sm_base1;
+        _sm_base1 = this->current;
+        return _sm_base1;
     }
 };
 
@@ -104,55 +64,10 @@ List_smToYield_yieldable<T> smToYield(List<T>* self);
 template <class T>
 struct Array_smToYield_yieldable {
     Int branch{};
+    T current{};
     Array<T>* _sm_self{};
     Int i{};
-    Opt<T> next() {
-        Bool _sm_base1;
-        Int _sm_base2;
-        Bool _sm_base3;
-        Int _sm_base4;
-        Array<T>* _sm_base5;
-        Int _sm_base6;
-        Array<T>* _sm_base7;
-        Int _sm_base8;
-        Opt<T> _sm_base9;
-        Int _sm_base10;
-        Int _sm_base11;
-        Opt<T> _sm_base12;
-        Int _sm_expr1;
-        Bool _sm_expr2;
-        T _sm_expr3;
-        _sm_base2 = this->branch;
-        _sm_base1 = _sm_base2 == -1;
-        if (_sm_base1) goto LYend;
-        _sm_base4 = this->branch;
-        _sm_base3 = _sm_base4 == 1;
-        if (_sm_base3) goto LY1;
-        this->i = 0;
-        L1:;
-        _sm_base5 = this->_sm_self;
-        _sm_expr1 = simse_array_count((*_sm_base5));
-        _sm_base6 = this->i;
-        _sm_expr2 = _sm_base6 < _sm_expr1;
-        if (!(_sm_expr2)) goto L2;
-        _sm_base7 = this->_sm_self;
-        _sm_base8 = this->i;
-        _sm_expr3 = (*_sm_base7)[_sm_base8];
-        this->branch = 1;
-        _sm_base9 = Opt<T>::some(_sm_expr3);
-        return _sm_base9;
-        LY1:;
-        _sm_base11 = this->i;
-        _sm_base10 = _sm_base11 + 1;
-        this->i = _sm_base10;
-        goto L1;
-        L2:;
-        LYend:;
-        this->branch = -1;
-        _sm_base12 = Opt<T>::none();
-        return _sm_base12;
-    }
-    Bool advance(T* value) {
+    Bool advance() {
         Bool _sm_base1;
         Int _sm_base2;
         Bool _sm_base3;
@@ -182,7 +97,7 @@ struct Array_smToYield_yieldable {
         _sm_base7 = this->_sm_self;
         _sm_base8 = this->i;
         _sm_expr3 = (*_sm_base7)[_sm_base8];
-        *value = _sm_expr3;
+        this->current = _sm_expr3;
         this->branch = 1;
         return true;
         LY1:;
@@ -194,6 +109,11 @@ struct Array_smToYield_yieldable {
         LYend:;
         this->branch = -1;
         return false;
+    }
+    T value() {
+        T _sm_base1;
+        _sm_base1 = this->current;
+        return _sm_base1;
     }
 };
 
@@ -218,19 +138,14 @@ Array_smToYield_yieldable<T> smToYield(Array<T>* self) {
 // for_iteration.kt:12
 Int ns1_total(List<Int>* items) {
     Int sum;
-    Opt<Int> _sm_step1;
     Bool _sm_expr1;
-    Bool _sm_expr2;
     Int value;
     sum = 0;
     auto _sm_for1 = smToYield(items);
     L1:;
-    if (!(true)) goto L2;
-    _sm_step1 = _sm_for1.next();
-    _sm_expr1 = _sm_step1.hasValue();
-    _sm_expr2 = !_sm_expr1;
-    if (_sm_expr2) goto L2;
-    value = _sm_step1.value();
+    _sm_expr1 = _sm_for1.advance();
+    if (!(_sm_expr1)) goto L2;
+    value = _sm_for1.value();
     sum = sum + value;
     goto L1;
     L2:;
@@ -241,27 +156,22 @@ Int ns1_arrayTotal(List<Int>* numbers) {
     Array<Int> arr;
     Int sum;
     Int _sm_index2;
-    Opt<Int> _sm_step2;
     Bool _sm_expr1;
-    Bool _sm_expr2;
     Int value;
     Int index;
-    Bool _sm_expr3;
+    Bool _sm_expr2;
     arr = simse_list_toArray((*numbers));
     sum = 0;
     auto _sm_for2 = smToYield(simse_addressOf(arr));
     _sm_index2 = -1;
     L1:;
-    if (!(true)) goto L2;
+    _sm_expr1 = _sm_for2.advance();
+    if (!(_sm_expr1)) goto L2;
     _sm_index2 = _sm_index2 + 1;
-    _sm_step2 = _sm_for2.next();
-    _sm_expr1 = _sm_step2.hasValue();
-    _sm_expr2 = !_sm_expr1;
-    if (_sm_expr2) goto L2;
-    value = _sm_step2.value();
+    value = _sm_for2.value();
     index = _sm_index2;
-    _sm_expr3 = index == 0;
-    if (_sm_expr3) goto L1;
+    _sm_expr2 = index == 0;
+    if (_sm_expr2) goto L1;
     sum = sum + value;
     goto L1;
     L2:;

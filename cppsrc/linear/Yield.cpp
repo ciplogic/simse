@@ -135,6 +135,10 @@ namespace linear {
         }
         const char *kEndLabel = "LYend";
         const char *kBranchField = "branch";
+        // What the machine last yielded: `advance()` stores it here and a `for` reads its
+        // variable from it (`value()`), so the yielded value never travels through a
+        // constructed `Opt` (`impl_specs/for.md`).
+        const char *kCurrentField = "current";
         // The receiver of an extension function lives in the instance under this name
         // (`linear::yieldReceiverField` is how the emitter learns it).
         const char *kReceiverField = "_sm_self";
@@ -174,21 +178,35 @@ namespace linear {
                     yielded.error = error;
                     return yielded;
                 }
-                // `next()`: the optional form. `advance()`: the same machine without the
-                // copy - it writes through the caller's pointer and says whether there
-                // was a value.
-                yielded.methods.push_back(method("next", false, body));
+                // Two methods, one machine: `advance()` steps it and leaves what it
+                // yielded in `current`, answering whether there was one, and `value()`
+                // hands that element back - an untyped binding (`val v =
+                // machine.value()`) takes its type from there, which is what types a
+                // `for`'s loop variable without the loop knowing the type
+                // (`impl_specs/for.md`).
                 if (!valueTypeText.empty()) {
-                    yielded.methods.push_back(method("advance", true, body));
+                    yielded.methods.push_back(method(valueTypeText, body));
+                    yielded.methods.push_back(valueMethod());
                 }
                 if (!error.empty()) yielded.error = error;
                 return yielded;
             }
 
+            // `value()`: the element the machine last yielded, as its element type. For
+            // the pointer wrap (`smToYieldPtr`) that element type *is* `*T`, so this is
+            // the pointer, which is what makes `for (*v in xs)` a place rather than a
+            // copy.
+            YieldMethod valueMethod() const {
+                YieldMethod method;
+                method.name = "value";
+                method.body.push_back(returnStmt(thisMember(kCurrentField)));
+                return method;
+            }
+
         private:
             const ast::Decl &decl;
             ast::TypePtr elementType;
-            Str valueTypeText; // the type of `advance`'s value parameter
+            Str valueTypeText; // the name of the machine's stepping method (`advance`)
             Dictionary<Str, ast::TypePtr> fieldTypes;
             List<Str> fieldOrder;
             int yields = 0;
@@ -198,10 +216,11 @@ namespace linear {
                 if (error.empty()) error = message;
             }
 
-            // The fields: `branch`, the receiver (an extension function's `this` has to
-            // cross a yield like anything else), the parameters, and every local the body
-            // declares that is not the lowering's own storage (those are per-statement and
-            // are re-initialised on every entry, so they stay locals of the method).
+            // The fields: `branch`, `current` (what the machine last yielded), the
+            // receiver (an extension function's `this` has to cross a yield like anything
+            // else), the parameters, and every local the body declares that is not the
+            // lowering's own storage (those are per-statement and are re-initialised on
+            // every entry, so they stay locals of the method).
             void collectFields(const List<StmtPtr> &body, Yielded &yielded) {
                 ast::Field branch;
                 branch.name = kBranchField;
@@ -209,6 +228,13 @@ namespace linear {
                 branch.type = namedType("Int");
                 fieldTypes[branch.name] = branch.type;
                 fieldOrder.push_back(branch.name);
+
+                ast::Field current;
+                current.name = kCurrentField;
+                current.isVar = true;
+                current.type = elementType;
+                fieldTypes[current.name] = current.type;
+                fieldOrder.push_back(current.name);
 
                 if (decl.receiverType) {
                     fieldTypes[kReceiverField] = receiverFieldType(*decl.receiverType);
@@ -224,13 +250,14 @@ namespace linear {
                              "receiver before the name (`fun T.name`) instead");
                         return;
                     }
-                    if (fieldTypes.count(param.name) > 0) continue;
+                    const Str field = yieldFieldName(param.name);
+                    if (fieldTypes.count(field) > 0) continue;
                     if (!param.type) {
                         fail("yield: the parameter '" + param.name + "' has no type");
                         return;
                     }
-                    fieldTypes[param.name] = param.type;
-                    fieldOrder.push_back(param.name);
+                    fieldTypes[field] = param.type;
+                    fieldOrder.push_back(field);
                 }
                 collectLocals(body);
                 if (!error.empty()) return;
@@ -248,7 +275,7 @@ namespace linear {
                     if (!stmtPtr) continue;
                     const Stmt &stmt = *stmtPtr;
                     if (stmt.kind == StmtKind::VarDecl && !isSlotName(stmt.name)) {
-                        if (fieldTypes.count(stmt.name) == 0) {
+                        if (fieldTypes.count(yieldFieldName(stmt.name)) == 0) {
                             if (!stmt.type) {
                                 // A local that lives across a yield must be a field, and a
                                 // field needs a type - the type pass spells it, so an
@@ -259,8 +286,7 @@ namespace linear {
                                 // type), so a nested loop would need the machine's class
                                 // to survive a yield - which is the one thing a field
                                 // cannot be named from here.
-                                if (stmt.name.compare(0, 7, "_sm_for") == 0
-                                    || stmt.name.compare(0, 8, "_sm_step") == 0) {
+                                if (stmt.name.compare(0, 7, "_sm_for") == 0) {
                                     fail("yield: a `for` over a machine cannot cross a yield "
                                          "(the machine a call creates has no type to make a "
                                          "field of); collect the values into a `List` first");
@@ -270,8 +296,8 @@ namespace linear {
                                      + "' has no type to make a field of");
                                 return;
                             }
-                            fieldTypes[stmt.name] = stmt.type;
-                            fieldOrder.push_back(stmt.name);
+                            fieldTypes[yieldFieldName(stmt.name)] = stmt.type;
+                            fieldOrder.push_back(yieldFieldName(stmt.name));
                         }
                     }
                     collectLocals(stmt.body);
@@ -282,19 +308,9 @@ namespace linear {
 
             // One method of the machine. The body is the same statements either way:
             // only what a yield *does* with the value differs.
-            YieldMethod method(const Str &name, bool byReference, const List<StmtPtr> &body) {
+            YieldMethod method(const Str &name, const List<StmtPtr> &body) {
                 YieldMethod method;
                 method.name = name;
-                byReferenceMethod = byReference;
-                if (byReference) {
-                    ast::Param param;
-                    param.name = "value";
-                    auto pointer = std::make_shared<ast::TypeExpr>();
-                    pointer->kind = ast::TypeKind::Pointer;
-                    pointer->inner = elementType;
-                    param.type = pointer;
-                    method.params.push_back(param);
-                }
                 yields = 0;
                 List<StmtPtr> rewritten;
                 for (const StmtPtr &stmt : body) statements(stmt, rewritten);
@@ -322,7 +338,7 @@ namespace linear {
                 }
                 method.body.push_back(labelStmt(kEndLabel));
                 method.body.push_back(assignStmt(thisMember(kBranchField), intLiteral(-1)));
-                method.body.push_back(returnStmt(finishValue()));
+                method.body.push_back(returnStmt(boolLiteral(false)));
                 method.yieldCount = yields;
                 return method;
             }
@@ -337,29 +353,16 @@ namespace linear {
                 return stmt->init == nullptr;
             }
 
-            // What a finished machine answers: an empty optional, or `false` when the
-            // value is handed back through the caller's pointer.
-            ExprPtr finishValue() const {
-                return byReferenceMethod ? boolLiteral(false)
-                                         : optionalCall(elementType, "none", {});
-            }
-
             void statements(const StmtPtr &stmtPtr, List<StmtPtr> &out) {
                 if (!stmtPtr || !error.empty()) return;
                 const Stmt &stmt = *stmtPtr;
                 switch (stmt.kind) {
                     case StmtKind::Yield: {
+                        // `current = e; branch = k; return true;`
                         const int branch = ++yields;
-                        if (byReferenceMethod) {
-                            // `*value = e; return true;`
-                            out.push_back(assignStmt(derefNode(nameNode("value")), expr(stmt.expr)));
-                            out.push_back(assignStmt(thisMember(kBranchField), intLiteral(branch)));
-                            out.push_back(returnStmt(boolLiteral(true)));
-                        } else {
-                            out.push_back(assignStmt(thisMember(kBranchField), intLiteral(branch)));
-                            out.push_back(returnStmt(
-                                    optionalCall(elementType, "some", {expr(stmt.expr)})));
-                        }
+                        out.push_back(assignStmt(thisMember(kCurrentField), expr(stmt.expr)));
+                        out.push_back(assignStmt(thisMember(kBranchField), intLiteral(branch)));
+                        out.push_back(returnStmt(boolLiteral(true)));
                         out.push_back(labelStmt(yieldLabel(branch)));
                         return;
                     }
@@ -369,7 +372,7 @@ namespace linear {
                         // is still evaluated, so nothing silently disappears.
                         if (stmt.returnValue) out.push_back(exprStmt(expr(stmt.returnValue)));
                         out.push_back(assignStmt(thisMember(kBranchField), intLiteral(-1)));
-                        out.push_back(returnStmt(finishValue()));
+                        out.push_back(returnStmt(boolLiteral(false)));
                         return;
                     }
                     case StmtKind::VarDecl: {
@@ -386,7 +389,8 @@ namespace linear {
                         // was, which is on the way to the first yield (a machine that
                         // resumes past it does not run it again).
                         if (stmt.init) {
-                            out.push_back(assignStmt(thisMember(stmt.name), expr(stmt.init)));
+                            out.push_back(assignStmt(thisMember(yieldFieldName(stmt.name)),
+                                                     expr(stmt.init)));
                         }
                         return;
                     }
@@ -450,8 +454,8 @@ namespace linear {
                         }
                         return self;
                     }
-                    if (fieldTypes.count(node->text) > 0) {
-                        return memberNode(nameNode("this"), node->text);
+                    if (fieldTypes.count(yieldFieldName(node->text)) > 0) {
+                        return memberNode(nameNode("this"), yieldFieldName(node->text));
                     }
                     return node;
                 }
@@ -466,8 +470,6 @@ namespace linear {
                 }
                 return copy;
             }
-
-            bool byReferenceMethod = false;
         };
     }
 
@@ -491,5 +493,17 @@ namespace linear {
 
     Str yieldReceiverField() {
         return Str(kReceiverField);
+    }
+
+    Str yieldFieldName(const Str &name) {
+        // The names the machine itself uses: the two fields the lowering adds, the
+        // receiver's, and the two the protocol names. A body name equal to one of them
+        // would be a redefinition in C++ (`Int value;` next to `Int value()`), and for
+        // `branch`/`current` it would even alias silently, so it is mangled instead.
+        if (name == "branch" || name == "current" || name == "_sm_self"
+            || name == "advance" || name == "value") {
+            return Str("_sm_f_") + name;
+        }
+        return name;
     }
 }

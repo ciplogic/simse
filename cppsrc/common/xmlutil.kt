@@ -64,6 +64,21 @@ val xmlMissingAttr: Str = ""
 // concatenates and calls its methods like any other (the value/handle conversion,
 // `specs/memory-model.md`), so a caller that only *reads* it copies nothing; one that needs
 // a `Str` of its own gets the copy the conversion spells.
+//
+// The loop stays the pointer `for` the ring uses everywhere, and that is a *measured*
+// choice, not a style one. Two profiles put this function at ~37% and then ~25% of the
+// self-transpile with the attribute-iteration machine under it (`next`, 27% and 18%), which
+// reads like the protocol's cost - it is not. The `for`'s `next()`/`Opt<*T>`/`hasValue`/
+// `value` shape was replaced, twice, by an index loop over a borrow of the field, the
+// second time with the count hoisted (the first called `size()` per iteration, which is
+// exactly what the machine caches); against the machine the two measured **neutral** -
+// `764.4/772.6` and `762.9/777.3` against `762.3/772.4` and `770.6/781.7`, 15 interleaved
+// runs each (`tools/_bench_ab.mjs`). What the profiler attributes to `next` is the *memory*
+// it walks - the node's attribute list - which any walk pays, and MSVC inlines the machine
+// away at `/O2 /Ob3` anyway. So the walk's cost is the data, and cutting it means fewer
+// attribute reads per node (the emitter's operand -> node -> text round trip, or a
+// borrowed `xmlChild`), not a cheaper loop. `tools/_loop_protocol.cpp` is the probe that
+// prices the three shapes directly if the protocol is ever revisited.
 fun xmlAttr(node: *AstXmlNode, name: AstNodeAttributeKind): *Str {
     for (*attr in node.attributes) {
         if (attr.name == name) {

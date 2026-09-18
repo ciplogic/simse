@@ -764,17 +764,17 @@ namespace sema {
                     }
                 }
                 if (recv->kind == TypeKind::Yield) {
-                    // `..T` is a state machine (impl_specs/yield.md), and its two
-                    // methods are part of the lowering's ABI: `next()` hands out the
-                    // optional, `advance(*v)` answers whether there was a value. Typing
-                    // them here is what makes a `for`'s loop variable a *typed* binding
-                    // rather than an `auto` the emitter would have to guess a symbol
-                    // for (which it cannot: `v.toString()` on an unknown receiver
-                    // picks the `StrView` native).
-                    if (callee.text == "next" && recv->inner) {
-                        List<ast::TypePtr> args;
-                        args.push_back(recv->inner);
-                        return genericType("Opt", args);
+                    // `..T` is a state machine (impl_specs/yield.md), and its methods are
+                    // part of the lowering's ABI: `advance()` steps it and answers whether
+                    // there was a value, `value()` hands out what it yielded. Typing them
+                    // here is what makes a `for`'s loop variable a *typed* binding rather
+                    // than an `auto` the emitter would have to guess a symbol for (which it
+                    // cannot: `v.toString()` on an unknown receiver picks the `StrView`
+                    // native).
+                    if (callee.text == "value") {
+                        // The element type - and for the pointer wrap (`smToYieldPtr`) that
+                        // *is* `*T`, so a `for (*v in xs)` binding is the element's place.
+                        return recv->inner;
                     }
                     if (callee.text == "advance") return namedType("Bool");
                     // A machine is already iterable: `x.smToYield()` on one is `x`, so the

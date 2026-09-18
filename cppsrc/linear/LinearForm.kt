@@ -2571,13 +2571,15 @@ data class IlExtractor(
             val index: Int = i
             i = i + 1
             val fact: *SemFnFact = *this.fn.facts.functions[index]
-            if (xmlIsEmpty(fact.decl)
-                || xmlAttr(fact.decl, AstNodeAttributeKind.Name) != name
-            ) {
+            // The name, the receiver form and the parameter count are the fact's own,
+            // read once when it was built (`SemFnFact`): this walk runs over *every*
+            // collected function for *every* call site, and reading them off the
+            // declaration here was ~5M attribute walks of a name that never changes.
+            if (xmlIsEmpty(fact.decl) || fact.name != name) {
                 continue
             }
             val factMember: Bool = !xmlIsEmpty(fact.receiver)
-                    || (member && semIsExtensionDecl(fact.decl))
+                    || (member && fact.isExtension)
             if (factMember != member) {
                 continue
             }
@@ -2610,17 +2612,16 @@ data class IlExtractor(
         while (k < candidates.size()) {
             val fact: *SemFnFact = *this.fn.facts.functions[candidates[k]]
             k = k + 1
-            val params: List<AstXmlNode> = xmlChildren(fact.decl, AstNodeKind.Param)
-            val paramCount: Int = params.size() - semReceiverParams(fact.decl)
+            // The count and the pack test are the fact's own, so a candidate that does
+            // not match by arity needs no parameter list at all (the copy of every
+            // parameter the `xmlChildren` below costs is for the pack case only).
+            val paramCount: Int = fact.paramCount
             if (paramCount == argCount) {
                 exact = fact.decl
                 exactCount = exactCount + 1
                 continue
             }
-            if (paramCount > 0
-                && semIsPackTarget(xmlChild(params[params.size() - 1], AstNodeKind.Type))
-                && argCount >= paramCount - 1
-            ) {
+            if (fact.packTarget && argCount >= paramCount - 1) {
                 pack = fact.decl
                 packCount = packCount + 1
             }

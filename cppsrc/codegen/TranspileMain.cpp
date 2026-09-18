@@ -43,6 +43,7 @@ int main(int argc, char **argv) {
     List<Str> extraRoots;
     bool preludeExplicit = false;
     bool showIl = false;
+    bool profile = false;
     for (int i = 1; i < argc; i++) {
         Str arg = argv[i];
         if (arg == "-o") {
@@ -73,10 +74,12 @@ int main(int argc, char **argv) {
             extraRoots.push_back(argv[++i]);
         } else if (arg == "--showLinearRepresentation") {
             showIl = true;
+        } else if (arg == "--profile") {
+            profile = true;
         } else if (arg == "-h" || arg == "--help") {
             printf("usage: simse_transpile <input.kt>... [-o <output.cpp>]"
                    " [--prelude <file>] [--root <dir>] [--module-root <dir>]..."
-                   " [--showLinearRepresentation]\n");
+                   " [--showLinearRepresentation] [--profile]\n");
             return 0;
         } else {
             inputs.push_back(arg);
@@ -104,5 +107,6 @@ int main(int argc, char **argv) {
     request.preludeExplicit = preludeExplicit;
     request.output = output;
     request.showLinearRepresentation = showIl;
+    request.profile = profile;
     return compiler::transpile(request);
 }

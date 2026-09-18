@@ -11,6 +11,7 @@
 #include "containers.hpp"   // SmallVector, List, PList, Dictionary, Array, RawArray
 #include "span.hpp"         // Span<T> (borrowed view: pointer + length)
 #include "strview.hpp"      // StrView (Span<Char> + the text operations)
+#include "strtable.hpp"     // the byte-pooled string-literal table a program carries
 #include "optional.hpp"     // Opt<T>
 #include "listops.hpp"      // simse_list_* native List operations (prelude)
 #include "strops.hpp"       // simse_str_*/simse_char_*/min/max native ops (prelude)

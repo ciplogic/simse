@@ -33,17 +33,21 @@ namespace linear {
             return stmt;
         }
 
-        // A label belongs to the sequence it sits in, but a jump to it may sit in
-        // any scope inside that sequence: the expression lowering wraps a jump in
-        // the block that carries its temporaries, and `break`/`continue` jump out of
-        // the body they are written in. The scan therefore looks through blocks.
-        bool jumpsTo(const List<StmtPtr> &stmts, const Str &name) {
+        // Every name a jump in this sequence targets, blocks looked through: a jump to a
+        // label may sit in any scope inside the sequence (the expression lowering wraps a
+        // jump in the block that carries its temporaries, and `break`/`continue` jump out
+        // of the body they are written in).
+        //
+        // `labelPass` used to ask a *scan* for one name (`jumpsTo`), once per label - so
+        // the pass was quadratic in the sequence, with a `Str` compare per statement. That
+        // is the widest hot spot the instrumented profile shows (`linStmtJumpsTo` 1.85M
+        // calls, T78); collecting the targets once makes every label a hash lookup.
+        void collectJumpTargets(const List<StmtPtr> &stmts, Dictionary<Str, bool> &targets) {
             for (const StmtPtr &stmt: stmts) {
                 if (!stmt) continue;
-                if ((isGoto(stmt) || isCondJump(stmt)) && stmt->name == name) return true;
-                if (stmt->kind == StmtKind::Block && jumpsTo(stmt->body, name)) return true;
+                if (isGoto(stmt) || isCondJump(stmt)) targets[stmt->name] = true;
+                if (stmt->kind == StmtKind::Block) collectJumpTargets(stmt->body, targets);
             }
-            return false;
         }
 
         List<StmtPtr> prunePass(const List<StmtPtr> &stmts, bool &changed) {
@@ -79,9 +83,13 @@ namespace linear {
         }
 
         List<StmtPtr> labelPass(const List<StmtPtr> &stmts, bool &changed) {
+            // The targets are collected *once* for the sequence: asking per label was the
+            // quadratic scan `collectJumpTargets` documents.
+            Dictionary<Str, bool> targets;
+            collectJumpTargets(stmts, targets);
             List<StmtPtr> out;
             for (const StmtPtr &stmt: stmts) {
-                if (isLabel(stmt) && !jumpsTo(stmts, stmt->name)) {
+                if (isLabel(stmt) && targets.count(stmt->name) == 0) {
                     changed = true;
                     continue;
                 }

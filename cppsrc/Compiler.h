@@ -49,6 +49,12 @@ namespace compiler {
         // (impl_specs/linear-il.md). A debug view, so the emitted file stays
         // byte-identical with and without it.
         bool showLinearRepresentation = false;
+
+        // `--profile`: emit the instrumented profiler's runtime and one RAII timer per
+        // emitted body, and end `main` with the table (cppsrc/profiling,
+        // impl_specs/profiling.md). Off, the emitted file is byte-identical to one from
+        // before the flag existed.
+        bool profile = false;
     };
 
     // Scans the module roots, parses every input, runs the compilation-wide

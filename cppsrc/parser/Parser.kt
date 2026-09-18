@@ -1466,10 +1466,8 @@ data class Parser(
     // sees a `for`, and `break`/`continue` inside one are the `while`'s own:
     //
     //   for (v in m) { body }          var _sm_for1 = m
-    //                                  while (true) {
-    //                                      var _sm_step1 = _sm_for1.next()
-    //                                      if (!_sm_step1.hasValue()) { break }
-    //                                      val v = _sm_step1.value()
+    //                                  while (_sm_for1.advance()) {
+    //                                      val v = _sm_for1.value()
     //                                      body
     //                                  }
     //
@@ -1477,13 +1475,16 @@ data class Parser(
     //                                  the loop, the pre-increment as the body's first
     //                                  statement, and `val i = _sm_index1` after `v`.
     //
-    // The advance and the index are the *first* statements of the body rather than the
-    // loop's condition, and the index is pre-incremented there too, for the same
-    // reason: `continue` jumps to the condition, so a `next()` in the condition would
-    // not advance the machine on a `continue`, and an index incremented at the end of
-    // the body would miss that iteration. `-1` is what makes the pre-increment hand
-    // out 0 first. The names come from a per-file counter, so nested loops never
-    // collide and two runs produce the same output.
+    // The machine holds what it yielded (`current`), so the loop variable is one read from
+    // it: the protocol builds nothing per element - no `Opt` to construct, ask
+    // `hasValue()` of and unwrap (`impl_specs/for.md`).
+    //
+    // The index is pre-incremented as the body's *first* statement rather than in the
+    // loop's condition: `continue` jumps to the condition, which is the machine's own
+    // `advance()` and so is evaluated again (the machine does move along), but an index
+    // incremented at the end of the body would miss that iteration. `-1` is what makes the
+    // pre-increment hand out 0 first. The names come from a per-file counter, so nested
+    // loops never collide and two runs produce the same output.
     //
     // `*v` differs only in the wrap: the machine's element is then `*T`, so `v` is the
     // element's *place* rather than a copy of it (the prelude's `smToYieldPtr`).
@@ -1540,7 +1541,6 @@ data class Parser(
         val id: Int = this.nextTemplateId
         this.nextTemplateId = this.nextTemplateId + 1
         val machineName: Str = "_sm_for" + id.toString()
-        val stepName: Str = "_sm_step" + id.toString()
         val counterName: Str = "_sm_index" + id.toString()
 
         // The iterated expression is wrapped in the invisible `smToYield()` call: a
@@ -1566,15 +1566,7 @@ data class Parser(
             val value: ExprNode = this.binaryExprAt("+", this.nameExprAt(counterName, pos), one, pos)
             loop.append(this.assignNode(target, value, pos))
         }
-        val nextStep: ExprNode = this.methodCallAt(machineName, "next", pos)
-        loop.append(this.varDeclNode(stepName, true, this.emptyNode(), nextStep, pos))
-        val hasValue: ExprNode = this.methodCallAt(stepName, "hasValue", pos)
-        var leave: List<AstXmlNode> = List<AstXmlNode>()
-        leave.append(this.breakNode(pos))
-        loop.append(this.ifNode(this.unaryExprAt("!", hasValue, pos), leave, pos))
-        // `val`: the loop variable is a fresh, per-iteration binding (as in Kotlin's
-        // `for`), so assigning to it cannot be mistaken for moving the machine along.
-        val stepValue: ExprNode = this.methodCallAt(stepName, "value", pos)
+        val stepValue: ExprNode = this.methodCallAt(machineName, "value", pos)
         loop.append(this.varDeclNode(valueName, false, this.emptyNode(), stepValue, pos))
         if (withIndex) {
             val counterRef: ExprNode = this.nameExprAt(counterName, pos)
@@ -1585,7 +1577,7 @@ data class Parser(
             loop.append(body[bi])
             bi = bi + 1
         }
-        out.append(this.whileNode(this.boolLiteralAt(true, pos), loop, pos))
+        out.append(this.whileNode(this.methodCallAt(machineName, "advance", pos), loop, pos))
         return true
     }
 

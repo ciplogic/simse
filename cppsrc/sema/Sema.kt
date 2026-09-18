@@ -167,7 +167,7 @@ fun semaUnifyReceiver(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *Li
 }
 
 // Whether a name is one the `for` desugaring made. The generated names are per-file
-// counters (`_sm_for1`, `_sm_step1`, `_sm_index1`), like the lowering's own slots:
+// counters (`_sm_for1`, `_sm_index1`), like the lowering's own slots:
 // recognizable, and documented as not a user's to take.
 fun semaIsForTemplateName(name: Str): Bool {
     return name.startsWith("_sm_for")

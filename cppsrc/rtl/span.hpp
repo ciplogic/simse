@@ -17,6 +17,13 @@
 // The Simse surface is the prelude file cppsrc/rtl/Span.simse: it declares the fields
 // and the members, and codegen emits member calls onto this struct. Bounds are
 // unchecked, matching the RTL's no-exceptions policy.
+//
+// The 4-byte packing is the language's layout rule (specs/memory-model.md,
+// `SIMSE_PACK_PUSH` in types.hpp): a span is a value the language copies around, so it
+// follows the rule like the generated aggregates do. Without it the host aligns the
+// struct to the pointer's 8 bytes and `sizeof(Span<Char>)` is 16 instead of 12; the
+// pointer member itself is still 4-aligned (the same shape `Str`'s buffer has).
+SIMSE_PACK_PUSH
 template <class T>
 struct Span {
     // The first element (`*T`). A default-constructed span has none.
@@ -45,6 +52,7 @@ struct Span {
     // `count` elements from `start` (C# `Slice(int, int)`; unchecked).
     Span<T> slice(Int start, Int count) const { return Span<T>(ptr + start, count); }
 };
+SIMSE_PACK_POP
 
 // `spanOf(items)`: a span over a list's elements. It borrows the list - the list has
 // to outlive the span - and does not copy it (`&items` would box a copy instead).

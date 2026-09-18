@@ -3,6 +3,7 @@
 #include "codegen/Codegen.h"
 #include "linear/LinearForm.h"
 #include "parser/Parser.h"
+#include "profiling/Profiling.h"
 #include "sema/Sema.h"
 
 #include <algorithm>
@@ -34,6 +35,10 @@ namespace compiler {
         // The linear-form dump is a debug view of what the emitter is about to
         // read; it never reaches the emitted file (impl_specs/linear-il.md).
         linear::setShowIl(request.showLinearRepresentation);
+
+        // `--profile` does reach the emitted file: the emitter writes the profiler's
+        // runtime and a timer per body (impl_specs/profiling.md).
+        profiling::setEnabled(request.profile);
 
         // Load the prelude set: a directory contributes every `*.kt` in it, a
         // file contributes itself. Missing defaults are skipped silently; an

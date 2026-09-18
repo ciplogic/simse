@@ -437,7 +437,7 @@ namespace sema {
             }
 
             // Whether a name is one the `for` desugaring made. The generated names are
-            // per-file counters (`_sm_for1`, `_sm_step1`, `_sm_index1`), like the
+            // per-file counters (`_sm_for1`, `_sm_index1`), like the
             // lowering's own slots: recognizable, and documented as not a user's to take.
             static bool isForTemplateName(const Str &name) {
                 return name.compare(0, 7, "_sm_for") == 0;

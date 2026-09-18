@@ -6,6 +6,7 @@
 #include "../linear/LinearForm.h"
 #include "../linear/Yield.h"
 #include "../sema/TypeInfer.h"
+#include "../profiling/Profiling.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -123,6 +124,87 @@ namespace codegen {
                 return text.substr(1, text.length() - 2);
             }
             return text;
+        }
+
+        Bool isHexDigit(char value) {
+            return (value >= '0' && value <= '9') || (value >= 'a' && value <= 'f')
+                   || (value >= 'A' && value <= 'F');
+        }
+
+        // How many bytes a string literal's *source text* (quotes included) denotes:
+        // what the literal table's length index carries. The pool the emitter writes is
+        // the literal texts again, adjacent, so the C++ compiler decodes the bytes; this
+        // only has to agree with it about how many bytes each escape costs, and in a
+        // narrow literal every escape costs exactly one. The language's set is small
+        // (specs/built-in-types.md, `\n \r \t \0 \\ \' \"`); the two C++ forms
+        // whose length is a *run* rather than a character - `\xHH...` and octal - are
+        // counted the way the compiler counts them, so an input outside the spec set
+        // still lines up instead of shifting every literal after it.
+        Int literalByteLength(const Str &text) {
+            if (text.length() < 2 || text.front() != '"') return (Int) text.length();
+            Int count = 0;
+            const Int end = (Int) text.length() - 1; // the closing quote
+            Int i = 1;
+            while (i < end) {
+                if (text[i] != '\\') {
+                    count++;
+                    i++;
+                    continue;
+                }
+                i++;
+                if (i >= end) break;
+                const char escape = text[i];
+                i++;
+                if (escape == 'x') {
+                    while (i < end && isHexDigit(text[i])) i++;
+                } else if (escape >= '0' && escape <= '7') {
+                    int digits = 1;
+                    while (digits < 3 && i < end && text[i] >= '0' && text[i] <= '7') {
+                        i++;
+                        digits++;
+                    }
+                }
+                count++;
+            }
+            return count;
+        }
+
+        Int magnitudeOf(Int value) {
+            return value < 0 ? -value : value;
+        }
+
+        // Run-length encodes one index series into the stream `strtable.hpp` documents: the
+        // series' length, then alternating blocks of *non-repeating* values (a count, then
+        // the values) and of *runs* (a count, then that many `times, value` pairs), until
+        // the length is filled. A single value is written once, whichever block it lands
+        // in, so the encoding never costs more than a count per block - and the differences
+        // it is handed are mostly 0, which is what collapses.
+        List<Int> runLengthEncode(const List<Int> &values) {
+            const int count = (int) values.size();
+            List<Int> stream;
+            stream.push_back((Int) count);
+            int i = 0;
+            while (i < count) {
+                List<Int> literals;
+                while (i < count && !(i + 1 < count && values[i] == values[i + 1])) {
+                    literals.push_back(values[i]);
+                    i++;
+                }
+                stream.push_back((Int) literals.size());
+                for (const Int &literal: literals) stream.push_back(literal);
+                if (i >= count) break;
+                List<Int> runs;
+                while (i + 1 < count && values[i] == values[i + 1]) {
+                    int j = i;
+                    while (j < count && values[j] == values[i]) j++;
+                    runs.push_back(j - i);
+                    runs.push_back(values[i]);
+                    i = j;
+                }
+                stream.push_back((Int) runs.size() / 2);
+                for (const Int &value: runs) stream.push_back(value);
+            }
+            return stream;
         }
 
         class Emitter {
@@ -807,25 +889,111 @@ namespace codegen {
             List<Str> literals;
 
             void sortLiterals() {
-                std::sort(literals.begin(), literals.end());
+                // Longest first, then alphabetical (`val` < `var`, but `vars` < `val`): the
+                // order is the pool's layout, and it has to be the same in both rings. It
+                // is a total order - a Str is never its own length *and* its own text - so
+                // the non-stable sort is still deterministic.
+                std::sort(literals.begin(), literals.end(), [](const Str &left, const Str &right) {
+                    if (left.size() != right.size()) return left.size() > right.size();
+                    return left < right;
+                });
                 literalAt.clear();
                 for (int i = 0; i < (int) literals.size(); i++) literalAt[literals[i]] = i;
             }
 
-            // One entry per distinct literal, built once before `main` runs. A literal
-            // site then *reads* an entry instead of building a `Str`, so a use that only
-            // reads the text - a comparison, or a `const Str&` argument - never constructs
-            // one, and a literal longer than the inline capacity never allocates at the
-            // site. An owned position (`x = "..."`, `return`, a by-value parameter) still
-            // copies, because that is what the language's value semantics say.
+            // One pool and two run-length encoded indexes for the program's literals,
+            // expanded and decoded once before `main` runs (`impl_specs/rtl-abi.md`,
+            // "String literals"). The pool is the literals themselves as adjacent string
+            // literals, so the C++ compiler decodes the bytes; each index is stored as
+            // "what to subtract from the previous value" with an implicit 0 before the
+            // first entry, then run-length encoded (`runLengthEncode`, `strtable.hpp`).
+            // The entries are ordered longest first, so a length series descends slowly and
+            // its differences are small - mostly 0 between literals of equal length - which
+            // is what the encoding and the `Int16` element are for. The `static_assert` on
+            // the pool's own size is the check that the pool and the lengths agree - a
+            // disagreement about one escape stops the build instead of shifting every
+            // literal after it. The series are expanded into stack arrays in the
+            // initializer and dropped there, and an entry is a 12-byte `StrView` (not the
+            // 32-byte owning `Str` the table held before), so start-up allocates nothing;
+            // the *site* converts the view with `toString()`, so the change is
+            // representation-only.
             void emitStringTable() {
                 if (literals.empty()) return;
-                line(0, "// The program's string literals: one table, built once, read by every");
-                line(0, "// site that mentions one (impl_specs/rtl-abi.md).");
-                line(0, "static const Str __sm_stringTable[" + std::to_string(literals.size())
-                                + "] = {");
-                for (const Str &literal: literals) line(1, literal + ",");
-                line(0, "};");
+                const Int count = (Int) literals.size();
+
+                // `value[i] = value[i-1] - series[i]`, with an implicit 0 before the first
+                // entry. The offset increment is the previous entry's length while no two
+                // literals share text.
+                List<Int> starts;
+                List<Int> lengths;
+                Int total = 0;
+                Int previousStart = 0;
+                Int previousLength = 0;
+                for (const Str &literal: literals) {
+                    const Int length = literalByteLength(literal);
+                    const Int start = previousLength;
+                    starts.push_back(previousStart - start);
+                    lengths.push_back(previousLength - length);
+                    previousStart = start;
+                    previousLength = length;
+                    total += length;
+                }
+                const List<Int> startStream = runLengthEncode(starts);
+                const List<Int> lengthStream = runLengthEncode(lengths);
+                Int worst = 0;
+                for (const Int &value: startStream) {
+                    if (magnitudeOf(value) > worst) worst = magnitudeOf(value);
+                }
+                for (const Int &value: lengthStream) {
+                    if (magnitudeOf(value) > worst) worst = magnitudeOf(value);
+                }
+                const Str element = worst <= 32767 ? "Int16" : "Int";
+                auto numbers = [](const List<Int> &values) {
+                    Str text = "{";
+                    for (int i = 0; i < (int) values.size(); i++) {
+                        if (i > 0) text += ",";
+                        text += std::to_string(values[i]);
+                    }
+                    return text + "}";
+                };
+
+                line(0, "// The program's string literals: one pool, and two run-length encoded index");
+                line(0, "// series (offsets as deltas, then lengths), each as what to subtract from the");
+                line(0, "// previous value; strtable.hpp has the stream format.");
+                line(0, "static const Int __sm_stringCount = " + std::to_string(count) + ";");
+                line(0, "static const char __sm_stringPool[] =");
+
+                // The literals again, adjacent, with a space between so they stay separate
+                // tokens. One line while it fits: the wrap point is the standard's
+                // 65 536-character limit on a logical source line, short of it.
+                Str packed = "    ";
+                for (const Str &literal: literals) {
+                    if ((Int) packed.length() + 1 + (Int) literal.length() > 60000) {
+                        line(0, packed);
+                        packed = "    ";
+                    }
+                    packed += literal;
+                    packed += " ";
+                }
+                line(0, packed);
+                line(0, ";");
+                line(0, "static const " + element + " __sm_stringStarts[] = " + numbers(startStream)
+                                + ";");
+                line(0, "static const " + element + " __sm_stringLens[] = " + numbers(lengthStream)
+                                + ";");
+                line(0, "static_assert(sizeof(__sm_stringPool) - 1 == " + std::to_string(total)
+                                + ", \"the string pool and its length index disagree\");");
+                line(0, "static StrView __sm_stringTable[__sm_stringCount];");
+                line(0, "static struct __SmStringTableInitType {");
+                line(1, "__SmStringTableInitType() {");
+                line(2, "Int starts[__sm_stringCount];");
+                line(2, "Int lens[__sm_stringCount];");
+                line(2, "simse_strTableExpand(__sm_stringStarts, starts, __sm_stringCount);");
+                line(2, "simse_strTableExpand(__sm_stringLens, lens, __sm_stringCount);");
+                line(2, "simse_strTableDecode(__sm_stringPool, starts, lens, __sm_stringTable,");
+                line(3, "__sm_stringCount);");
+                line(1, "}");
+                line(0, "} __sm_stringTableInit;");
                 line(0, "");
             }
 
@@ -1258,14 +1426,14 @@ namespace codegen {
             void emitBody(const Fn &fn, const ast::Decl &decl, const List<ast::StmtPtr> &body,
                           const sema::Facts &facts,
                           const Dictionary<Str, ast::TypePtr> &inferred) {
-                emitBodyAt(ilFunction(fn, decl, &facts, &inferred), body, fn.file, 1);
+                emitBodyAt(ilFunction(fn, decl, &facts, &inferred), body, fn.file, 1, true);
             }
 
             // The same, for a body whose frame is not a declaration's: a lambda's, or a
             // state machine's method (both are "parameters plus a class whose fields the
             // body reads and writes").
             void emitBodyAt(const linear::IlFunction &info, const List<ast::StmtPtr> &body,
-                            const Str &file, int level) {
+                            const Str &file, int level, bool measure) {
                 const int prefix = (int) out.size();
                 const linear::IlUnit il = linear::extractIlUnit(info, body, file);
                 Str text;
@@ -1283,6 +1451,20 @@ namespace codegen {
                     fail(info.decl ? info.decl->pos : common::SourcePos{},
                          "internal: a closure class could not be written (" + reason + ")");
                     return;
+                }
+                // The profiler's timer comes before the body's own storage; `measure` is
+                // false for a state machine's methods, whose per-element cost is the
+                // timer's own (profiling/Profiling.kt states the policy).
+                if (measure) {
+                    Str preamble = profiling::preamble(info.symbol);
+                    if (!preamble.empty()) {
+                        Str withPreamble;
+                        withPreamble += Str(level * 4, ' ');
+                        withPreamble += preamble;
+                        withPreamble += '\n';
+                        withPreamble += text;
+                        text = withPreamble;
+                    }
                 }
                 out = out.substr(0, prefix) + classes + text;
             }
@@ -1782,24 +1964,36 @@ namespace codegen {
                 int lastJump = -1; // the last jump that crosses
             };
 
-            static IlCrossing ilJumpCrossing(const linear::IlBody &il, int position) {
-                IlCrossing crossing;
-                Dictionary<int, int> labelPos;
+            // Where each of the body's labels sits, or `-1` when the label has no `Label`
+            // instruction - one array per body, because the crossing below asks per
+            // *declaration* and rebuilding the map there meant a walk of the whole body
+            // (with a hash insert per label) for every one of them.
+            static List<int> ilLabelPositions(const linear::IlBody &il) {
+                List<int> positions;
+                for (int i = 0; i < (int) il.labels.size(); i++) positions.push_back(-1);
                 for (int i = 0; i < (int) il.ops.size(); i++) {
                     const linear::IlOp &op = il.ops[i];
                     if (op.kind != IlOpKind::Label || op.operands.empty()) continue;
-                    labelPos[op.operands[0]] = i;
+                    const int label = op.operands[0];
+                    if (label >= 0 && label < (int) positions.size()) positions[label] = i;
                 }
+                return positions;
+            }
+
+            static IlCrossing ilJumpCrossing(const linear::IlBody &il, const List<int> &labelPos,
+                                             int position) {
+                IlCrossing crossing;
                 for (int i = 0; i < position; i++) {
                     const linear::IlOp &op = il.ops[i];
                     const int labelAt = op.kind == IlOpKind::Goto ? 0
                                         : (op.kind == IlOpKind::IfTrue || op.kind == IlOpKind::IfFalse) ? 1
                                                                                         : -1;
                     if (labelAt < 0) continue;
-                    auto found = labelPos.find(ilOperandAt(op.operands, labelAt));
-                    if (found == labelPos.end()) continue;
-                    if (found->second < position) continue;
-                    if (crossing.end < 0 || found->second < crossing.end) crossing.end = found->second;
+                    const int target = ilOperandAt(op.operands, labelAt);
+                    if (target < 0 || target >= (int) labelPos.size()) continue;
+                    const int at = labelPos[target];
+                    if (at < position) continue;
+                    if (crossing.end < 0 || at < crossing.end) crossing.end = at;
                     crossing.lastJump = i;
                 }
                 return crossing;
@@ -1863,7 +2057,12 @@ namespace codegen {
                 // has no scopes of its own, so the backend opens the *one* block that
                 // keeps the declaration legal - the same one the statement path keeps -
                 // and closes it at the label the jump lands on.
-                Dictionary<int, int> blockEnd; // declaration position -> the label it must end before
+                Dictionary<int, IlCrossing> blockEnd; // declaration position -> the crossing that keeps it legal
+                // Both halves of the crossing are asked for a block: where it must end
+                // (here) and the last jump that crosses (below, when the block opens). The
+                // walk is the same one, so it is computed once and kept with the block
+                // rather than run again.
+                const List<int> labelPos = ilLabelPositions(il);
                 for (int i = 0; i < (int) il.ops.size(); i++) {
                     const linear::IlOp &op = il.ops[i];
                     if (op.kind != IlOpKind::Declare && op.kind != IlOpKind::DeclareInit) continue;
@@ -1879,8 +2078,8 @@ namespace codegen {
                         at = def == i + 1 ? i : def;
                         if (at < 0) continue;
                     }
-                    const IlCrossing crossing = ilJumpCrossing(il, at);
-                    if (crossing.end >= 0) blockEnd[at] = crossing.end;
+                    const IlCrossing crossing = ilJumpCrossing(il, labelPos, at);
+                    if (crossing.end >= 0) blockEnd[at] = crossing;
                 }
                 struct IlScope {
                     int start = 0;
@@ -1902,8 +2101,9 @@ namespace codegen {
                     const int dst = ilDst(op);
 
                     if (blockEnd.count(i) > 0) {
-                        const int end = blockEnd[i];
-                        const int lastJump = ilJumpCrossing(il, i).lastJump;
+                        const IlCrossing &crossing = blockEnd[i];
+                        const int end = crossing.end;
+                        const int lastJump = crossing.lastJump;
                         bool covered = false;
                         for (const IlScope &scope: scopes) {
                             if (scope.start > lastJump && scope.end >= end) covered = true;
@@ -2226,6 +2426,15 @@ namespace codegen {
                     params.push_back(type(*paramType) + " " + param.name);
                 }
                 out2 += "    auto operator()(" + join(params, ", ") + ") {\n";
+                // The profiler's timer is the method's first statement
+                // (impl_specs/profiling.md); nothing precedes it, so no jump can cross
+                // into its scope.
+                const Str closurePreamble = profiling::preamble(closure.symbol + "::operator()");
+                if (!closurePreamble.empty()) {
+                    out2 += Str(8, ' ');
+                    out2 += closurePreamble;
+                    out2 += '\n';
+                }
                 Str bodyText;
                 if (!emitClosureMethodText(unit, closure, 2, bodyText, reason)) return false;
                 out2 += bodyText;
@@ -2288,11 +2497,11 @@ namespace codegen {
                     Dictionary<Str, ast::TypePtr> inferred;
                     List<ast::StmtPtr> typed = sema::inferTypes(lowered, facts, semantics, &inferred);
                     // The machine's methods: the body's storage is the machine's fields
-                    // (`this->`), and the names a method has of its own are the pointer
-                    // `advance` writes through, the dispatcher's branch and the receiver
-                    // field - a local of any of those names would alias one of them.
+                    // (`this->`), and the names a method has of its own are what it yielded
+                    // (`current`), the dispatcher's branch and the receiver field - a local
+                    // of any of those names would alias one of them.
                     List<Str> machineReserved;
-                    machineReserved.push_back("value");
+                    machineReserved.push_back("current");
                     machineReserved.push_back("branch");
                     machineReserved.push_back("_sm_self");
                     List<ast::StmtPtr> finalBody = linear::finishForEmission(typed, machineReserved);
@@ -2319,7 +2528,11 @@ namespace codegen {
                 line(0, factory + "(" + join(factoryParams, ", ") + ") {");
                 line(1, classType + " machine{};");
                 for (const ast::Param &param: decl.params) {
-                    line(1, "machine." + param.name + " = " + param.name + ";");
+                    // The field carries a mangled name when the parameter's own would
+                    // collide with a machine member (`linear::yieldFieldName`), and the
+                    // rewrite inside the body maps it the same way.
+                    line(1, "machine." + linear::yieldFieldName(param.name) + " = "
+                                + param.name + ";");
                 }
                 if (decl.receiverType) {
                     // The receiver of an extension function crosses a yield like any other
@@ -2395,9 +2608,9 @@ namespace codegen {
                         params.push_back(type(*param.type) + " " + param.name);
                         if (failed) return;
                     }
-                    const Str result = method.name == "advance"
-                                               ? Str("Bool")
-                                               : Str("Opt<") + type(*elementType) + ">";
+                    // `advance()` answers whether there was a value; `value()` hands out
+                    // the element.
+                    const Str result = method.name == "advance" ? Str("Bool") : type(*elementType);
                     line(1, result + " " + method.name + "(" + join(params, ", ") + ") {");
                     // The method is a C++ member function, so the machine's own values
                     // are reached through `this` - the same spelling the closure
@@ -2427,7 +2640,7 @@ namespace codegen {
                     // fields are read and written through `self`, exactly as a lambda
                     // body reads its captures.
                     emitBodyAt(ilMachineMethod(className, method, machineDecl, &facts, &inferred),
-                               method.body, fn.file, 2);
+                               method.body, fn.file, 2, false);
                     inClosureMethod = savedClosure;
                     selfKind = savedSelfKind;
                     selfType = savedSelfType;
@@ -2589,6 +2802,14 @@ namespace codegen {
                 }
                 if (callee.text == "isOk" || callee.text == "hasValue") {
                     return namedType("Bool");
+                }
+                if (recv && recv->kind == TypeKind::Yield) {
+                    // A machine's own methods (`impl_specs/for.md`): `value()` hands out the
+                    // element, `advance()` answers whether there was one. The pass answers
+                    // the same way (`sema::Infer::memberReturn`), so the guess and the
+                    // answer agree.
+                    if (callee.text == "value") return recv->inner;
+                    if (callee.text == "advance") return namedType("Bool");
                 }
                 return nullptr;
             }
@@ -2922,9 +3143,11 @@ namespace codegen {
                     case ExprKind::CharLit:
                         return e.text;
                     case ExprKind::StrLit: {
-                        // A table entry is a `const Str` *glvalue*: a comparison or a
-                        // `const Str&` parameter binds it without building anything, while
-                        // an owned position copies it exactly as it copied the literal.
+                        // A table entry is a `StrView` into the program's literal pool
+                        // (`strtable.hpp`): a comparison or a `+` reads it as it stands, and
+                        // a position that wants an owned `Str` converts it (`strview.hpp`).
+                        // A literal the *lowering* invented is not in the pool and keeps its
+                        // own spelling at the site.
                         auto found = literalAt.find(e.text);
                         if (found != literalAt.end()) {
                             return "__sm_stringTable[" + std::to_string(found->second) + "]";
@@ -3234,6 +3457,9 @@ namespace codegen {
                 out += "#include <iostream>\n";
                 out += "#include <type_traits>\n";
                 out += "\n";
+                // `--profile`: the instrumented profiler's runtime, which every emitted
+                // body of this program measures into (impl_specs/profiling.md).
+                out += profiling::preludeText();
             }
         };
     }

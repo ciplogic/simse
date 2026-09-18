@@ -130,51 +130,148 @@ selecting between same-named declarations) is a separate language change.
 | user `enum class E` | `enum class E` | explicit values when given |
 | callable `(A, B) -> R` | `Func<R(A, B)>` (`std::function`) | `Unit` return -> `void` |
 
-## String literals: one table (T52)
+## String literals: one pool and two run-length encoded indexes (T52, T75)
 
-Every string literal in the program is emitted **once**, into a read-only table at
-the top of the file, and each site that mentions one reads the entry:
+Every string literal in the program is emitted **once**, into a pool of bytes at the top
+of the file; beside it the emitter writes two parallel indexes - where each entry starts
+and how many bytes it is, both stored as *what to subtract from the previous value* and
+both run-length encoded - and startup expands the indexes, drops them, and builds one
+`StrView` per entry (`cppsrc/rtl/strtable.hpp`). Each site that mentions a literal reads
+its entry and asks for the owned `Str`:
 
 ```cpp
-// The program's string literals: one table, built once, read by every
-// site that mentions one (impl_specs/rtl-abi.md).
-static const Str __sm_stringTable[482] = {
-    "    ",
-    "Expr.IntLit",
-    ...
-};
+// The program's string literals: one pool, and two run-length encoded index
+// series (offsets as deltas, then lengths), each as what to subtract from the
+// previous value; strtable.hpp has the stream format.
+static const Int __sm_stringCount = 541;
+static const char __sm_stringPool[] =
+    "usage: simse_transpile <input.kt>..." "yield: a `this` parameter cannot be a field; ..." ...;
+static const Int16 __sm_stringStarts[] = {541,5,0,-142,40,5,17,1,2,2,4,6,...};
+static const Int16 __sm_stringLens[] = {541,4,-142,40,5,17,1,2,2,4,6,...};
+static_assert(sizeof(__sm_stringPool) - 1 == 7355, "the string pool and its length index disagree");
+static StrView __sm_stringTable[__sm_stringCount];
+static struct __SmStringTableInitType {
+    __SmStringTableInitType() {
+        Int starts[__sm_stringCount];          // expanded, then dropped: two stack
+        Int lens[__sm_stringCount];            // arrays, no allocation
+        simse_strTableExpand(__sm_stringStarts, starts, __sm_stringCount);
+        simse_strTableExpand(__sm_stringLens, lens, __sm_stringCount);
+        simse_strTableDecode(__sm_stringPool, starts, lens, __sm_stringTable,
+            __sm_stringCount);
+    }
+} __sm_stringTableInit;
 
 Str ns1_xmlKind(...) {
     ...
-    return __sm_stringTable[31];      // was: return "Expr.IntLit";
+    return __sm_stringTable[31];   // was: return "Expr.IntLit";
 }
 ```
 
-Three reasons, in order of how much they measured:
+**The series encoding.** A stored `x[i]` means `value[i] = value[i-1] - x[i]`, with an
+implicit 0 before the first entry, and the rebuild accumulates in `Int` - so an element is
+only ever a *difference*, never an offset, and the pool's own size is the one large number.
+The literals are ordered longest first, so a length series descends slowly and its
+differences are small: **85% of them are 0** on the compiler's own table, because literals
+of equal length are adjacent, and the largest magnitude is 142, the longest literal. Each
+series is then **run-length encoded** - the series' length, then alternating blocks of
+non-repeating values (a count, then the values) and of runs (a count, then `times, value`
+pairs each), until the length is filled - which is what the zeros collapse to. On the
+compiler's own table (`tools/_strtable_runs.mjs`): 541 differences, 119 runs, longest run
+37, and a stream of **256/257 numbers** against 541 - 513 numbers, **1026 B**, against
+1082 B per series without the run-length pass. A single value is written once whichever
+block it lands in, so the encoding never costs more than one count per block: it is much
+better than `(times, value)` pairs would be on a literal-heavy series (all-distinct
+values: `N + 3` numbers against `2N`), and slightly worse on a run-heavy one (this table's
+119 runs: 257 against 239).
 
-- **A use that only *reads* the text stops constructing a `Str`.** Comparisons and
-  `const Str&` arguments (`simse_eprintln`, `simse_native_readFile`, every native in
-  `fs.hpp`) bind the entry with no conversion at all. A literal longer than the inline
-  capacity - 42% of the compiler's own are - used to build a heap-backed temporary at
-  each such site; now it cannot.
-- **The whole program shares one copy of each text.** A literal reused in a loop or in
-  five functions is built once instead of per use.
-- **An owned position still copies** (`x = "..."`, `return`, a by-value `Str`
-  parameter): the language's value semantics say so, and the copy of a heap-backed
-  entry allocates exactly as the literal did. That is why the win is ~2% on the
-  compiler's self-transpile and not more - comparisons were already construction-free
-  (below).
+**`Int16`, chosen by the emitter.** Every number in the stream is small (the largest here
+is 142 and the longest run is 37), and the emitter *checks* - it encodes the stream, takes
+the largest magnitude, and widens the element to `Int` if any number does not fit - so the
+width is chosen, not assumed. That is what lets the whole index be one source line, 2 bytes
+per number instead of 4.
 
-The table is `static const`, **not `constexpr`**: the 42% of literals that exceed the
-inline capacity cannot keep a heap allocation inside a constant expression, so the
-entries are built by the program's dynamic initialization, before `main` runs. The
-indices are compile-time constants the emitter assigns, so there is no dictionary and
-no start-up lookup; the entries are sorted so the table is canonical and the two rings
-agree on every index (T22/T23).
+**Why a pool and views.** An entry used to be a 32-byte owning `Str` (4 length + 4
+capacity + 24 bytes inline); it is a 12-byte `StrView` now (`Span<Char>` + the operations,
+packed by T74), the text is stored once, and start-up allocates nothing for it - 72 of
+the compiler's own literals were long enough to heap-allocate before. On the compiler's
+own source set (541 entries, a 7355-byte pool): **~19.7 KB of table before** (526 `Str`
+objects, 16.4 KB static plus 2.9 KB allocated at startup) against **~14.5 KB now**
+(pool 7355 + 1026 B of run-length encoded index + 6492 bytes of views, no allocation) -
+and the two stack arrays the initializer expands the index into are 4.3 KB of stack that
+is gone when it returns. The count grew 526 -> 541 because the emission text is itself
+literals - a table is not compared across source revisions, so the honest comparison is
+the per-entry cost (32 bytes against 12 + the text) and the startup allocations (72
+against 0).
 
-A literal the *lowering* invents is not in the parsed program and keeps its own
-spelling at the site, and the prelude's literals are not emitted (the prelude is
+**The binary shrinks as well, and by more than the data.** The old table was 526 *dynamic
+initializers* - one `SmString(const char*)` construction per entry, inlined one after the
+other - so replacing it with a pool and two loops removed ~19.9 KB of `.text` on the
+compiler's own release binary, against ~12.8 KB of `.rdata`/`.data` (the `Str[526]` array
+against the `StrView[541]` one, plus the literals that used to exist twice). Measured with
+`tools/_pe_sections.mjs`, the published bootstrap at HEAD against the current one, same
+flags: `.text` 1 969 196 -> 1 949 308, `.rdata` 238 072 -> 235 560, `.data` 20 408 ->
+10 072, `.pdata` 49 232 -> 46 800, file **2 279 424 -> 2 237 952 (-41 KB)**.
+
+**`starts` is `lens` shifted while no two literals share text.** The offset increment of
+entry `i` is entry `i-1`'s length, so the two streams expand to the same numbers with a
+leading 0 (`tools/_strtable_runs.mjs` prints the check) - two streams for one series of
+information. Dropping `starts` and letting the decoder advance the offset by the length it
+just rebuilt is a one-line change and halves the index; the series comes back the moment
+substring sharing lands (which is what makes an offset increment independent of the
+previous length).
+
+**Where the lengths come from, and the check that they are right.** The emitter computes
+them (`literalByteLength` in `Codegen.cpp`, `cgLiteralByteLength` in `CgStringTable.kt`),
+counting one byte per escape and a *run* for `\xHH...`/octal as C++ counts them. The pool
+is the literal texts themselves, adjacent, so the C++ compiler decodes the bytes of the
+emitted program; the emitter only has to agree about how many bytes an escape costs. The
+`static_assert` on the pool's own `sizeof` is the cross-check - a disagreement about one
+escape shifts the total and stops the program's build instead of silently shifting every
+literal after the mistake - and the two-step bootstrap (T23) pins it from the other side:
+the stage-1 compiler reads its own 541 literals through this table and must regenerate
+its source byte for byte.
+
+The entries are sorted **longest first, then text, alphabetically** (`val` < `var`, but
+`vars` < `val`), so the order is a total one and both rings agree on every index
+(T22/T23). A literal the *lowering* invents is not in the parsed program and keeps its
+own spelling at the site, and the prelude's literals are not emitted (the prelude is
 included, not transpiled).
+
+**The sites use the view, and the interop is in `strview.hpp`.** A literal `site` reads its
+entry as it stands, so **a comparison or a `+` builds no `Str`** - `str == literal`,
+`literal == literal`, `literal + text`, `println(literal)` all have direct overloads over
+`StrView` (`operator==`/`!=`/`<`/`<=`/`>`/`>=` and `+` in all three pairings, plus the
+`std::ostream` writer). Everything else - a slot, a `return`, a by-value parameter, a
+`const Str&` argument, a list pack - reaches the converting constructor
+(`SmString(const StrView&)`, declared in `smstring.hpp` because that header cannot see
+`StrView`, defined in `strview.hpp`) and materializes exactly the copy it materialized
+before the table became a pool of views. The pair of *mixed* overloads matters: without
+`operator==(const Str&, StrView)` and its mirror, `str == literal` is ambiguous (one
+candidate would convert the left operand, another the right), because `const char* -> Str`
+and `StrView -> Str` both exist.
+
+This is what recovered the cost of the *first* cut, which asked for the owned `Str` at
+every mention. Measured with `tools/_bench_ab.mjs` (15 interleaved runs of the
+self-transpile, the previous published bootstrap against the new one, same flags): the
+`toString()` cut was **~7.5-9% slower** (**838.3/907.0 -> 918.1/962.4 ms** in one window),
+and the view sites are **~0-2%**, i.e. parity with the `Str` table (**804.4/827.7 ->
+816.6/837.0 ms** and **830.7/865.3 -> 831.9/883.2 ms** in two windows). Parity is the
+honest expectation: the old table's read sites were construction-free too (`const Str` is a
+glvalue that binds a comparison directly), so what the view form buys is the memory
+(14.5 KB against 19.7 KB), the startup allocations (0 against 72), and the `+` sites that
+used to *copy* a long entry before appending. What the emitter still converts rather than
+borrows is an argument to a native that takes `const Str&` (`simse_str_find`,
+`startsWith`, `split`, `appendStr`, `eprintln` - about 20 sites in the ring's own emission),
+which is the remaining allowlist entry from T73.
+
+**Why the lengths are not `sizeof` expressions, and why there is no substring sharing.**
+`(Int) sizeof("<literal>") - 1` would let the C++ compiler compute the length with no
+emitter-side decoding at all - but then the length is a *symbol in the generated file*
+that the emitter cannot index on, and the second index (the deltas) could not be written.
+Sharing text between literals (pointing `"Hell"` into `"Hello "`) needs the emitter to
+decode escape *values*, not just counts, and it saves 875 bytes of pool on the compiler's
+own set against the 2.1 KB the extra index costs while the indexes are `Int`; it belongs
+with the packed encoding.
 
 **Why not wrap each literal in a `constexpr` helper instead.** That was measured and
 is *slower* (~3%): the RTL's `const char*` overloads (`operator==(const SmString&,
@@ -285,13 +382,16 @@ normative layout.
 10. **Alignment.** Spec: every type is 4-byte packed (`specs/memory-model.md`,
     "Alignment and packing"). Shim: generated aggregates are emitted between
     `SIMSE_PACK_PUSH` / `SIMSE_PACK_POP` (`cppsrc/rtl/types.hpp`), and
-    `SmallVector` and `Array` follow the same rule. The hand-written RTL structs
-    (`XmlNode`, `Attribute`, `Span`, ...) keep the host alignment because their
-    fields already sit on 4-byte boundaries, so packing them would not change a
-    single size. The host types the shims are built on (`std::shared_ptr`,
-    `std::function`) are declared 8-aligned and are therefore under-aligned by
-    the packed definitions; that is accepted while the shims exist.
-    `SIMSE_NO_PACK4` turns the packing off and reverts to host layout.
+    `SmallVector`, `Array`, `Span` and `StrView` follow the same rule. `Span` (and
+    `StrView` through it) was the one value struct that was *not* wrapped, and the
+    difference is a size, not a no-op: a struct holding a pointer is 16 bytes under
+    the host's alignment (8-byte pointer, `Int`, padding) and **12** under the rule,
+    which is what `sizeof` reports now (T74). The hand-written structs that hold
+    *host* types keep the host alignment, because those types are 8-aligned and
+    cannot be packed without lying about them: `xml.hpp`'s `XmlNode`/`Attribute`
+    (312/64), `FileStream`'s `std::ifstream`/`std::string`, and the shims built on
+    `std::shared_ptr`/`std::function`. `SIMSE_NO_PACK4` turns the packing off and
+    reverts to host layout.
 11. **`Dictionary<K, V>` implementation.** Spec: a value dictionary whose hashing,
     buckets and iteration order are deliberately unspecified
     (`specs/dictionary.md`). Shim: `Dictionary<K, V>` is

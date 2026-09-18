@@ -3,16 +3,27 @@
 #include <iostream>
 #include <type_traits>
 
-// The program's string literals: one table, built once, read by every
-// site that mentions one (impl_specs/rtl-abi.md).
-static const Str __sm_stringTable[6] = {
-    "?",
-    "a",
-    "b",
-    "green or blue",
-    "other",
-    "red",
-};
+// The program's string literals: one pool, and two run-length encoded index
+// series (offsets as deltas, then lengths), each as what to subtract from the
+// previous value; strtable.hpp has the stream format.
+static const Int __sm_stringCount = 6;
+static const char __sm_stringPool[] =
+    "green or blue" "other" "red" "?" "a" "b" 
+;
+static const Int16 __sm_stringStarts[] = {6,3,0,-13,8,1,2,2,1,0};
+static const Int16 __sm_stringLens[] = {6,2,-13,8,2,2,2,2,0};
+static_assert(sizeof(__sm_stringPool) - 1 == 24, "the string pool and its length index disagree");
+static StrView __sm_stringTable[__sm_stringCount];
+static struct __SmStringTableInitType {
+    __SmStringTableInitType() {
+        Int starts[__sm_stringCount];
+        Int lens[__sm_stringCount];
+        simse_strTableExpand(__sm_stringStarts, starts, __sm_stringCount);
+        simse_strTableExpand(__sm_stringLens, lens, __sm_stringCount);
+        simse_strTableDecode(__sm_stringPool, starts, lens, __sm_stringTable,
+            __sm_stringCount);
+    }
+} __sm_stringTableInit;
 
 // when.kt:7
 enum class ns1_Color {
@@ -43,7 +54,7 @@ Str ns1_name(ns1_Color c) {
     _sm_expr1 = ns1_Color::Red;
     _sm_expr2 = _sm_when1 == _sm_expr1;
     if (!(_sm_expr2)) goto L2;
-    return __sm_stringTable[5];
+    return __sm_stringTable[2];
     L2:;
     _sm_expr3 = ns1_Color::Green;
     _sm_expr4 = _sm_when1 == _sm_expr3;
@@ -52,9 +63,9 @@ Str ns1_name(ns1_Color c) {
     _sm_expr6 = _sm_when1 == _sm_expr5;
     if (!(_sm_expr6)) goto L5;
     L4:;
-    return __sm_stringTable[3];
+    return __sm_stringTable[0];
     L5:;
-    return __sm_stringTable[4];
+    return __sm_stringTable[1];
 }
 // when.kt:32
 Int ns1_step(Int a, Int b) {
@@ -86,11 +97,11 @@ Int ns1_labelled(Str text) {
     Bool _sm_expr1;
     Bool _sm_expr2;
     _sm_when3 = text;
-    _sm_expr1 = _sm_when3 == __sm_stringTable[1];
+    _sm_expr1 = _sm_when3 == __sm_stringTable[4];
     if (!(_sm_expr1)) goto L2;
     return 1;
     L2:;
-    _sm_expr2 = _sm_when3 == __sm_stringTable[2];
+    _sm_expr2 = _sm_when3 == __sm_stringTable[5];
     if (!(_sm_expr2)) goto L5;
     return 2;
     L5:;

@@ -258,6 +258,30 @@ fun yldBranchField(): Str {
     return "branch"
 }
 
+// What the machine last yielded. `advance()` stores it here and the `for` reads its
+// variable from it (`value()`), so the yielded value never travels through a constructed
+// `Opt` (`impl_specs/for.md`).
+fun yldCurrentField(): Str {
+    return "current"
+}
+
+// A machine's own members share the class with the fields the body declares: `branch`
+// and `current` (the lowering's), the receiver field, and the two methods the protocol
+// names (`advance`, `value`). A body name that would collide is therefore emitted under a
+// mangled one - and since a field is only ever named from the rewrite the lowering itself
+// does, or from the factory's `machine.x = x`, `yldFieldName` is the single place that
+// decides. Without it a local named `value` (or `branch`) is not diagnosed, it silently
+// aliases the protocol.
+fun yldFieldName(name: Str): Str {
+    if (
+        name == yldBranchField() || name == yldCurrentField()
+        || name == yldReceiverField() || name == "advance" || name == "value"
+    ) {
+        return "_sm_f_" + name
+    }
+    return name
+}
+
 // ---- the machine -----------------------------------------------------------
 
 data class YldMachinery(
@@ -268,8 +292,7 @@ var valueTypeText: Str,
 var fieldTypes: Dictionary<Str, AstXmlNode>,
 var fieldOrder: List<Str>,
 var yields: Int,
-var error: Str,
-var byReference: Bool
+var error: Str
 ) {
 
     fun fail(message: Str): Unit {
@@ -285,16 +308,28 @@ var byReference: Bool
             yielded.error = this.error
             return yielded
         }
-        // `next()`: the optional form. `advance()`: the same machine without the copy - it
-        // writes through the caller's pointer and says whether there was a value.
-        yielded.methods.append(this.method("next", false, body))
+        // Two methods, one machine: `advance()` steps it and leaves what it yielded in
+        // `current`, answering whether there was one, and `value()` hands that element
+        // back - an untyped binding (`val v = machine.value()`) takes its type from there,
+        // which is what types a `for`'s loop variable without the loop knowing the type
+        // (`impl_specs/for.md`).
         if (!this.valueTypeText.isEmpty()) {
-            yielded.methods.append(this.method("advance", true, body))
+            yielded.methods.append(this.method(this.valueTypeText, body))
+            yielded.methods.append(this.valueMethod())
         }
         if (!this.error.isEmpty()) {
             yielded.error = this.error
         }
         return yielded
+    }
+
+    // `value()`: the element the machine last yielded, as its element type. For the
+    // pointer wrap (`smToYieldPtr`) that element type *is* `*T`, so this is the pointer,
+    // which is what makes `for (*v in xs)` a place rather than a copy.
+    fun valueMethod(): YldMethod {
+        var body: List<AstXmlNode> = List<AstXmlNode>()
+        body.append(yldReturn(yldThisMember(yldCurrentField())))
+        return YldMethod("value", List<YldParam>(), body, 0)
     }
 
     // The fields: `branch`, the receiver (an extension function's `this` has to cross a
@@ -304,6 +339,10 @@ var byReference: Bool
     fun collectFields(body: List<AstXmlNode>, yielded: *Yielded): Unit {
         this.fieldTypes.insert(yldBranchField(), yldNamedType("Int"))
         this.fieldOrder.append(yldBranchField())
+        // What `advance` yields: a field of its own, so a `for` reads one load instead of
+        // whatever the old `next()` built (an `Opt` per element).
+        this.fieldTypes.insert(yldCurrentField(), this.elementType)
+        this.fieldOrder.append(yldCurrentField())
 
         val receiver: AstXmlNode = xmlChild(this.decl, AstNodeKind.Receiver)
         if (!xmlIsEmpty(receiver)) {
@@ -324,7 +363,7 @@ var byReference: Bool
                 this.fail("yield: a `this` parameter cannot be a field; write the receiver before the name (`fun T.name`) instead")
                 return
             }
-            if (this.fieldTypes.has(name)) {
+            if (this.fieldTypes.has(yldFieldName(name))) {
                 continue
             }
             val typeNode: AstXmlNode = xmlChild(param, AstNodeKind.Type)
@@ -332,8 +371,8 @@ var byReference: Bool
                 this.fail("yield: the parameter '" + name + "' has no type")
                 return
             }
-            this.fieldTypes.insert(name, typeNode)
-            this.fieldOrder.append(name)
+            this.fieldTypes.insert(yldFieldName(name), typeNode)
+            this.fieldOrder.append(yldFieldName(name))
         }
         this.collectLocals(body)
         if (!this.error.isEmpty()) {
@@ -356,7 +395,7 @@ var byReference: Bool
             }
             if (xmlKind(stmt) == AstNodeCategory.StmtVarDecl) {
                 val name: Str = xmlAttr(stmt, AstNodeAttributeKind.Name)
-                if (!linIsSlotName(name) && !this.fieldTypes.has(name)) {
+                if (!linIsSlotName(name) && !this.fieldTypes.has(yldFieldName(name))) {
                     val typeNode: AstXmlNode = xmlChild(stmt, AstNodeKind.Type)
                     if (xmlIsEmpty(typeNode)) {
                         // A local that lives across a yield must be a field, and a field
@@ -365,7 +404,7 @@ var byReference: Bool
                         // the machine a `for` iterates is created by a call, and a machine
                         // type is the class that call's own function got (`..T` is not a
                         // value type).
-                        if (name.startsWith("_sm_for") || name.startsWith("_sm_step")) {
+                        if (name.startsWith("_sm_for")) {
                             var message: Str = "yield: a `for` over a machine cannot cross a yield "
                             message.appendStr("(the machine a call creates has no type to make a ")
                             message.appendStr("field of); collect the values into a `List` first")
@@ -375,8 +414,8 @@ var byReference: Bool
                         this.fail("yield: the local '" + name + "' has no type to make a field of")
                         return
                     }
-                    this.fieldTypes.insert(name, typeNode)
-                    this.fieldOrder.append(name)
+                    this.fieldTypes.insert(yldFieldName(name), typeNode)
+                    this.fieldOrder.append(yldFieldName(name))
                 }
             }
             var locals: List<AstXmlNode> = xmlChildren(stmt, AstNodeKind.Body)
@@ -386,14 +425,11 @@ var byReference: Bool
         }
     }
 
-    // One method of the machine. The body is the same statements either way: only what a
-    // yield *does* with the value differs.
-    fun method(name: Str, byReference: Bool, body: List<AstXmlNode>): YldMethod {
+    // One method of the machine: the state machine that fills `current` and answers
+    // whether there was a value. The body is the same statements whatever the element
+    // type; only what a yield *does* with the value differs, and it is always the store.
+    fun method(name: Str, body: List<AstXmlNode>): YldMethod {
         var params: List<YldParam> = List<YldParam>()
-        this.byReference = byReference
-        if (byReference) {
-            params.append(YldParam("value", ilPointerOf(this.elementType)))
-        }
         this.yields = 0
         var rewritten: List<AstXmlNode> = List<AstXmlNode>()
         var i: Int = 0
@@ -440,17 +476,8 @@ var byReference: Bool
         }
         methodBody.append(linLabel(yldEndLabel(), 0, 0))
         methodBody.append(yldAssign(yldThisMember(yldBranchField()), yldIntLiteral(-1)))
-        methodBody.append(yldReturn(this.finishValue()))
+        methodBody.append(yldReturn(yldBoolLiteral(false)))
         return YldMethod(name, params, methodBody, this.yields)
-    }
-
-    // What a finished machine answers: an empty optional, or `false` when the value is
-    // handed back through the caller's pointer.
-    fun finishValue(): AstXmlNode {
-        if (this.byReference) {
-            return yldBoolLiteral(false)
-        }
-        return yldOptionalCall(this.elementType, "none", List<AstXmlNode>())
     }
 
     fun statements(stmt: *AstXmlNode, out: *List<AstXmlNode>): Unit {
@@ -463,17 +490,10 @@ var byReference: Bool
                 this.yields = this.yields + 1
                 val branch: Int = this.yields
                 val value: AstXmlNode = this.expr(xmlChild(stmt, AstNodeKind.Value))
-                if (this.byReference) {
-                    // `*value = e; return true;`
-                    out.append(yldAssign(yldDeref(linName(AstNodeKind.None, "value", 0, 0)), value))
-                    out.append(yldAssign(yldThisMember(yldBranchField()), yldIntLiteral(branch)))
-                    out.append(yldReturn(yldBoolLiteral(true)))
-                } else {
-                    var args: List<AstXmlNode> = List<AstXmlNode>()
-                    args.append(value)
-                    out.append(yldAssign(yldThisMember(yldBranchField()), yldIntLiteral(branch)))
-                    out.append(yldReturn(yldOptionalCall(this.elementType, "some", args)))
-                }
+                // `current = e; branch = k; return true;`
+                out.append(yldAssign(yldThisMember(yldCurrentField()), value))
+                out.append(yldAssign(yldThisMember(yldBranchField()), yldIntLiteral(branch)))
+                out.append(yldReturn(yldBoolLiteral(true)))
                 out.append(linLabel(yldLabel(branch), 0, 0))
                 return
             }
@@ -487,7 +507,7 @@ var byReference: Bool
                     out.append(yldExprStmt(this.expr(returnValue)))
                 }
                 out.append(yldAssign(yldThisMember(yldBranchField()), yldIntLiteral(-1)))
-                out.append(yldReturn(this.finishValue()))
+                out.append(yldReturn(yldBoolLiteral(false)))
                 return
             }
 
@@ -517,7 +537,7 @@ var byReference: Bool
                 // on the way to the first yield (a machine that resumes past it does not run it
                 // again).
                 if (!xmlIsEmpty(init)) {
-                    out.append(yldAssign(yldThisMember(name), this.expr(init)))
+                    out.append(yldAssign(yldThisMember(yldFieldName(name)), this.expr(init)))
                 }
                 return
             }
@@ -594,8 +614,8 @@ var byReference: Bool
                 }
                 return selfField
             }
-            if (this.fieldTypes.has(name)) {
-                return yldThisMember(name)
+            if (this.fieldTypes.has(yldFieldName(name))) {
+                return yldThisMember(yldFieldName(name))
             }
             return node
         }
@@ -654,7 +674,7 @@ fun linLowerYield(
 ): Yielded {
     var machinery: YldMachinery = YldMachinery(
         decl, elementType, valueTypeText,
-        Dictionary<Str, AstXmlNode>(), List<Str>(), 0, "", false
+        Dictionary<Str, AstXmlNode>(), List<Str>(), 0, ""
     )
     return machinery.run(linearBody)
 }

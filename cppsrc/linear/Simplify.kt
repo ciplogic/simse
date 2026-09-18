@@ -42,9 +42,9 @@ fun linIsBlock(stmt: *AstXmlNode): Bool {
 }
 
 // The statements of a `StmtBlock` (its `Body` child's `Stmt` children). A caller that
-// only *reads* them walks the block in place instead (`linStmtJumpsTo` / `linStmtCrosses`):
-// this form copies every statement of the block, and the label scan runs once per label
-// of the body.
+// only *reads* them walks the block in place instead (`linCollectJumpTargets` /
+// `linStmtCrosses`): this form copies every statement of the block, and the walks run
+// once per sequence, not once per statement.
 fun linBlockStmts(stmt: *AstXmlNode): List<AstXmlNode> {
     return xmlChildren(xmlChild(stmt, AstNodeKind.Body), AstNodeKind.Stmt)
 }
@@ -97,7 +97,7 @@ fun linJumpCrosses(
 
 // Every jump inside `stmt` - each of them running after everything before the
 // top-level statement it sits in - tested against the spliced declarations. The
-// block's statements are walked in place (see `linStmtJumpsTo`).
+// block's statements are walked in place (see `linStmtCrosses`).
 fun linStmtCrosses(
     stmt: *AstXmlNode, at: Int, decls: *List<Int>, labelNames: *List<Str>,
     labelAt: *List<Int>
@@ -211,42 +211,48 @@ fun linSpliceIsSafe(stmts: *List<AstXmlNode>, bodies: *List<List<AstXmlNode>>, i
 // Whether the statement - or anything inside the block it is - jumps to `name`. Read
 // through the block's nodes: `linBlockStmts` would copy every statement of the block,
 // and this scan runs once per *label* of the body.
-fun linStmtJumpsTo(stmt: *AstXmlNode, name: Str): Bool {
-    if ((linIsGoto(stmt) || linIsCondJump(stmt))
-        && xmlAttr(stmt, AstNodeAttributeKind.Name) == name
-    ) {
-        return true
+// Every name a jump in `stmts` targets, with blocks looked through: a jump to a label
+// may sit in any scope inside the sequence (the expression lowering wraps a jump in the
+// block that carries its temporaries, and `break`/`continue` jump out of the body they
+// are written in).
+//
+// `labelPass` is the only caller, and it used to ask a *scan* for one name (`jumpsTo`),
+// once per label - so the pass was quadratic in the sequence, with a `Str` compare per
+// statement. That is the widest hot spot the instrumented profile shows
+// (`linStmtJumpsTo` 1.85M calls, T78); collecting the targets once makes every label a
+// hash lookup instead.
+fun linJumpTargets(stmts: *List<AstXmlNode>): Dictionary<Str, Bool> {
+    var targets: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+    var i: Int = 0
+    while (i < stmts.size()) {
+        linCollectJumpTargets(*stmts[i], targets)
+        i = i + 1
+    }
+    return targets
+}
+
+fun linCollectJumpTargets(stmt: *AstXmlNode, targets: *Dictionary<Str, Bool>): Unit {
+    if (linIsGoto(stmt) || linIsCondJump(stmt)) {
+        targets.insert(xmlAttr(stmt, AstNodeAttributeKind.Name), true)
     }
     if (!linIsBlock(stmt)) {
-        return false
+        return
     }
     for (*child in stmt.Children) {
         if (child.name == AstNodeKind.Body) {
             for (*item in child.Children) {
-                if (item.name == AstNodeKind.Stmt && linStmtJumpsTo(item, name)) {
-                    return true
+                if (item.name == AstNodeKind.Stmt) {
+                    linCollectJumpTargets(item, targets)
                 }
             }
         }
     }
-    return false
 }
 
 // A label belongs to the sequence it sits in, but a jump to it may sit in any
 // scope inside that sequence: the expression lowering wraps a jump in the block
 // that carries its temporaries, and `break`/`continue` jump out of the body they
 // are written in. The scan therefore looks through blocks.
-fun linJumpsTo(stmts: *List<AstXmlNode>, name: Str): Bool {
-    var i: Int = 0
-    while (i < stmts.size()) {
-        if (linStmtJumpsTo(*stmts[i], name)) {
-            return true
-        }
-        i = i + 1
-    }
-    return false
-}
-
 // A copy of a conditional jump with a negated condition (IfTrue <-> IfFalse)
 // and a new target.
 fun linInvertedJump(jump: *AstXmlNode, target: Str): AstXmlNode {
@@ -307,11 +313,14 @@ data class LinSimplifier(
     }
 
     fun labelPass(stmts: *List<AstXmlNode>): List<AstXmlNode> {
+        // A label nothing jumps to is dropped. The targets are collected *once* for the
+        // sequence - asking per label was the quadratic scan `linJumpTargets` documents.
+        val targets: Dictionary<Str, Bool> = linJumpTargets(stmts)
         var out: List<AstXmlNode> = List<AstXmlNode>()
         var i: Int = 0
         while (i < stmts.size()) {
             val stmt: *AstXmlNode = *stmts[i]
-            if (linIsLabel(stmt) && !linJumpsTo(stmts, xmlAttr(stmt, AstNodeAttributeKind.Name))) {
+            if (linIsLabel(stmt) && !targets.has(xmlAttr(stmt, AstNodeAttributeKind.Name))) {
                 this.changed = true
             } else {
                 out.append(stmt)

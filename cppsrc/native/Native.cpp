@@ -93,3 +93,8 @@ Int64 simse_nowMillis() {
     const auto now = std::chrono::steady_clock::now().time_since_epoch();
     return (Int64) std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
 }
+
+Int64 simse_nowMicros() {
+    const auto now = std::chrono::steady_clock::now().time_since_epoch();
+    return (Int64) std::chrono::duration_cast<std::chrono::microseconds>(now).count();
+}

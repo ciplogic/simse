@@ -77,33 +77,19 @@ Module @1:1
                           Name items @37:23
               While @37:9
                 Cond
-                  BoolLit true @37:9
+                  Call @37:9
+                    Callee
+                      Member .advance @37:9
+                        Receiver
+                          Name _sm_for1 @37:9
                 Body
-                  VarDecl var _sm_step1 @37:9
-                    Init
-                      Call @37:9
-                        Callee
-                          Member .next @37:9
-                            Receiver
-                              Name _sm_for1 @37:9
-                  If @37:9
-                    Cond
-                      Unary ! @37:9
-                        Operand
-                          Call @37:9
-                            Callee
-                              Member .hasValue @37:9
-                                Receiver
-                                  Name _sm_step1 @37:9
-                    Then
-                      Break @37:9
                   VarDecl val value @37:9
                     Init
                       Call @37:9
                         Callee
                           Member .value @37:9
                             Receiver
-                              Name _sm_step1 @37:9
+                              Name _sm_for1 @37:9
                   ExprStmt @38:13
                     Call @38:13
                       Callee
@@ -144,33 +130,19 @@ Module @1:1
                               IntLit 2 @45:38
               While @45:9
                 Cond
-                  BoolLit true @45:9
+                  Call @45:9
+                    Callee
+                      Member .advance @45:9
+                        Receiver
+                          Name _sm_for2 @45:9
                 Body
-                  VarDecl var _sm_step2 @45:9
-                    Init
-                      Call @45:9
-                        Callee
-                          Member .next @45:9
-                            Receiver
-                              Name _sm_for2 @45:9
-                  If @45:9
-                    Cond
-                      Unary ! @45:9
-                        Operand
-                          Call @45:9
-                            Callee
-                              Member .hasValue @45:9
-                                Receiver
-                                  Name _sm_step2 @45:9
-                    Then
-                      Break @45:9
                   VarDecl val value @45:9
                     Init
                       Call @45:9
                         Callee
                           Member .value @45:9
                             Receiver
-                              Name _sm_step2 @45:9
+                              Name _sm_for2 @45:9
                   ExprStmt @46:13
                     Call @46:13
                       Callee
@@ -214,7 +186,11 @@ Module @1:1
                   IntLit -1 @53:9
               While @53:9
                 Cond
-                  BoolLit true @53:9
+                  Call @53:9
+                    Callee
+                      Member .advance @53:9
+                        Receiver
+                          Name _sm_for3 @53:9
                 Body
                   Assign = @53:9
                     Target
@@ -225,31 +201,13 @@ Module @1:1
                           Name _sm_index3 @53:9
                         Rhs
                           IntLit 1 @53:9
-                  VarDecl var _sm_step3 @53:9
-                    Init
-                      Call @53:9
-                        Callee
-                          Member .next @53:9
-                            Receiver
-                              Name _sm_for3 @53:9
-                  If @53:9
-                    Cond
-                      Unary ! @53:9
-                        Operand
-                          Call @53:9
-                            Callee
-                              Member .hasValue @53:9
-                                Receiver
-                                  Name _sm_step3 @53:9
-                    Then
-                      Break @53:9
                   VarDecl val value @53:9
                     Init
                       Call @53:9
                         Callee
                           Member .value @53:9
                             Receiver
-                              Name _sm_step3 @53:9
+                              Name _sm_for3 @53:9
                   VarDecl val index @53:9
                     Init
                       Name _sm_index3 @53:9

@@ -4,12 +4,16 @@ every other, up to 10:
 4
 6
 8
-countdown from 3, through a pointer:
+countdown from 3:
 3
 2
 1
 after the end:
 false
+shadowing the protocol:
+16
+15
+14
 with for:
 0
 2

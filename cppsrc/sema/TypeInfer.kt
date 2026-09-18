@@ -640,8 +640,45 @@ data class SemFnFact(
     var decl: AstXmlNode,
 
     var receiver: AstXmlNode,
-    var templateParams: List<Str>
+    var templateParams: List<Str>,
+
+    // The declaration's own facts, read *once* when the fact is built - the shape the
+    // hand-written ring's typed `sema::FnFact` has always had (`decl->name`,
+    // `decl->params.size()`). Three walks test them on *every* collected function for
+    // *every* call site: `callTarget` in the extractor, `functionReturn` and
+    // `memberReturn` in the type pass. Read from the node each time, that was ~9M
+    // attribute walks of a name that never changes - the widest per-call-site scan the
+    // instrumented profile shows (T78).
+    var name: Str,
+    var isNative: Bool,
+    // A `native fun` extension spells its receiver as an explicit `this` first parameter,
+    // so `receiver` is empty while the declaration *is* a member (`semIsExtensionDecl`).
+    var isExtension: Bool,
+    // The parameters a call's arguments convert against: its own, after the receiver.
+    var paramCount: Int,
+    // Whether its last parameter packs (a `List<T>`/`*List<T>`), computed from the same
+    // count so a candidate needs no parameter list at all (`semIsPackTarget`).
+    var packTarget: Bool
 )
+
+// The fact for one collected function: everything above, read from the declaration once.
+// `name` and `isNative` come from the emitter's `CgFn`, which read them the same way
+// (T76); the rest are the receiver/parameter facts `semIsExtensionDecl`,
+// `semReceiverParams` and `semIsPackTarget` answer - per candidate, before this.
+fun semFnFact(
+    decl: AstXmlNode, receiver: AstXmlNode, templateParams: List<Str>, name: Str,
+    isNative: Bool
+): SemFnFact {
+    val params: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
+    var packTarget: Bool = false
+    if (params.size() > 0) {
+        packTarget = semIsPackTarget(xmlChild(params[params.size() - 1], AstNodeKind.Type))
+    }
+    return SemFnFact(
+        decl, receiver, templateParams, name, isNative, semIsExtensionDecl(decl),
+        params.size() - semReceiverParams(decl), packTarget
+    )
+}
 
 // A `native fun` extension (`this` first parameter): its receiver pattern picks the
 // overload and its return type answers the call.
@@ -944,7 +981,7 @@ data class SemInfer(
         while (i < this.facts.functions.size()) {
             val fn: *SemFnFact = *this.facts.functions[i]
             i = i + 1
-            if (xmlAttr(fn.decl, AstNodeAttributeKind.Name) != name) {
+            if (fn.name != name) {
                 continue
             }
             val ret: AstXmlNode = xmlChild(fn.decl, AstNodeKind.ReturnType)
@@ -959,7 +996,7 @@ data class SemInfer(
             // parameter, so no receiver type was recorded for it: it is still a *member* -
             // a plain call does not reach it (`fun find(...)` must not pick up
             // `Str.find`'s signature).
-            if (!hasReceiver && semIsExtensionDecl(fn.decl)) {
+            if (!hasReceiver && fn.isExtension) {
                 continue
             }
             var bindings: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
@@ -1006,10 +1043,10 @@ data class SemInfer(
         while (i < this.facts.functions.size()) {
             val fn: *SemFnFact = *this.facts.functions[i]
             i = i + 1
-            if (xmlAttr(fn.decl, AstNodeAttributeKind.IsNative) == "true" || xmlIsEmpty(fn.receiver)) {
+            if (fn.isNative || xmlIsEmpty(fn.receiver)) {
                 continue
             }
-            if (xmlAttr(fn.decl, AstNodeAttributeKind.Name) != calleeText) {
+            if (fn.name != calleeText) {
                 continue
             }
             val ret: AstXmlNode = xmlChild(fn.decl, AstNodeKind.ReturnType)
@@ -1045,18 +1082,15 @@ data class SemInfer(
             }
         }
         if (xmlKind(recv) == AstNodeCategory.TypeYield) {
-            // `..T` is a state machine (impl_specs/yield.md), and its two methods are part
-            // of the lowering's ABI: `next()` hands out the optional, `advance(*v)` answers
-            // whether there was a value. Typing them here is what makes a `for`'s loop
-            // variable a *typed* binding rather than an `auto` the emitter would have to
-            // guess a symbol for.
-            if (calleeText == "next") {
-                val element: AstXmlNode = xmlChild(recv, AstNodeKind.Inner)
-                if (!xmlIsEmpty(element)) {
-                    var args: List<AstXmlNode> = List<AstXmlNode>()
-                    args.append(semReRole(element, AstNodeKind.TypeArg))
-                    return semGenericType("Opt", args)
-                }
+            // `..T` is a state machine (impl_specs/yield.md), and its methods are part of
+            // the lowering's ABI: `advance()` steps it and answers whether there was a
+            // value, `value()` hands out what it yielded. Typing them here is what makes a
+            // `for`'s loop variable a *typed* binding rather than an `auto` the emitter
+            // would have to guess a symbol for.
+            if (calleeText == "value") {
+                // The element type - and for the pointer wrap (`smToYieldPtr`) that *is*
+                // `*T`, so a `for (*v in xs)` binding is the element's place.
+                return semReRole(xmlChild(recv, AstNodeKind.Inner), AstNodeKind.Type)
             }
             if (calleeText == "advance") {
                 return semNamedType("Bool")

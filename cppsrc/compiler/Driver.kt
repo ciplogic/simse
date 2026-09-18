@@ -31,6 +31,7 @@ import sema
 import codegen
 import skelparser
 import common
+import profiling
 
 // ---- module helpers -------------------------------------------------------
 
@@ -177,8 +178,12 @@ fun main(args: List<Str>): Int {
                 ilSetShow(true)
             }
 
+            "--profile" -> {
+                profSetEnabled(true)
+            }
+
             "-h", "--help" -> {
-                println("usage: simse_transpile <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module-root <dir>]... [--showLinearRepresentation]")
+                println("usage: simse_transpile <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module-root <dir>]... [--showLinearRepresentation] [--profile]")
                 return 0
             }
 
