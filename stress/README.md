@@ -11,14 +11,11 @@ bun tools/stress.js --filter strings    # one case (or a few: repeat --filter)
 bun tools/stress.js --list              # what is here, and what each case checks
 bun tools/stress.js --release           # compile the programs with /O2 /Ob3
 bun tools/stress.js --jobs 4            # cases at a time (compiles are slow)
-bun tools/stress.js --simse cmake-build-debug/simse_transpile.exe   # test the other ring
+bun tools/stress.js --simse ./some_other_simse.exe   # test another compiler build
 ```
 
-The compiler under test is the point of the harness: by default it runs the
-self-hosted `./simse.exe` (build it with `bun build.js --release`), falling back
-to the CMake build's `simse_transpile.exe` when there is no such binary. Both
-rings must produce the same program outputs, so pointing `--simse` at the other
-one is a useful check in itself.
+The compiler under test is the point: by default the harness runs `./simse.exe`, the
+compiler built from the published bootstrap (`bun build.js`).
 
 ## A case
 
@@ -52,7 +49,7 @@ after the case passes.
 * **A failure is reproducible by hand**: the work directory holds everything the
   run produced, so `stress/.work/<name>/prog.exe` can be run again, and
   `out.cpp` compiled with any flags.
-* **Adding a case is adding a folder** - no build system edit, no CMake target,
+* **Adding a case is adding a folder** - no build system edit, no build target,
   no C++ driver.
 * The harness is JavaScript on purpose: the compiler is the artifact under test,
   and everything around it that can be written in a scripted host language keeps

@@ -1,5 +1,0 @@
-ReservedWord	1:1	package
-Space	1:8	 
-Identifier	1:9	fixtures
-EndOfLine	1:17	\n
-Error	2:1: Unexpected character: '\\xEF\\xBB\\xBFval x ='

@@ -68,7 +68,7 @@ dangling; using it is subject to the raw-pointer rules in `memory-model.md`.
 
 ## Packing the trailing arguments
 
-Status: implemented in both rings; the call site is one `Pack` instruction
+Status: implemented; the call site is one `Pack` instruction
 (`impl_specs/linear-il.md`).
 
 A call packs its **trailing arguments** into a temporary list when its callee's
@@ -364,7 +364,7 @@ iteration. Using either where it is not allowed is an error. There is no
 
 ## `when`
 
-Status: implemented in both rings; lowered to `if`/`else` in the parser
+Status: implemented; lowered to `if`/`else` in the parser
 (`Parser::parseWhen`).
 
 `when` is the language's selection statement - Kotlin's, and the only one: the
@@ -418,7 +418,7 @@ Not implemented, and reported rather than misparsed: Kotlin's pattern labels
 
 ## `for`
 
-Status: implemented in both rings; lowered to `while` in the parser (`impl_specs/for.md`).
+Status: implemented; lowered to `while` in the parser (`impl_specs/for.md`).
 Both rings parse it, emit the machine (`yield` is implemented in both) and report a `for`
 over a non-machine.
 

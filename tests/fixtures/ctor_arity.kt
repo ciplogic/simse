@@ -1,9 +1,0 @@
-package fixtures
-// Negative fixture: a data-class constructor called with the wrong number of
-// arguments. sema must report a positioned diagnostic.
-data class Widget(var a: Int, var b: Int)
-
-fun make(): Int {
-    val w: Widget = Widget(1)
-    return 0
-}

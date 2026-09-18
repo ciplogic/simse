@@ -45,18 +45,13 @@ Release
 ### Simse build outputs ###
 /simse_out.cpp
 /simse.exe
-# Root-level object/pdb files from a manual cl.exe run (build.js writes into the
-# CMake build folder's `manual/` instead).
+# Root-level object/pdb files from a manual cl.exe run (build.js writes into `build/`).
 /*.obj
 /*.pdb
 
-### Out-of-tree build folders (cmake-build-debug/-release carry their own) ###
-cmake-build-*/
-
-### Simse profiling project (simse.sln) ###
-/profile/
-/.vs/
-/simse.vcxproj.user
+### The tooling's work folders: transpiled C++, objects, the bootstrap executable
+### (build.js, tools/bootstrap.js) ###
+/build/
 
 ### Stress harness work directories (tools/stress.js) ###
 /stress/.work/

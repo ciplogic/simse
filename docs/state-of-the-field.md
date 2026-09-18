@@ -21,24 +21,22 @@ a machine itself),
 reified generics, packages and imports, `main()` and `main(args)`, and a
 `native fun` escape hatch for C++ symbols.
 
-**The compiler.** Self-hosted to a fixed point: the transpiled compiler
-reproduces its own output byte for byte. Two implementations (hand-written C++
-and Simse) with five differential stage tests, 56 in-process tests and 41
-end-to-end stress programs.
+**The compiler.** Self-hosted to a fixed point: the published
+`cppsrc/simse_bootstrap.cpp` builds a compiler with a C++ compiler alone, and
+that compiler transpiles the sources back into the same file byte for byte. One
+implementation, checked by `tools/bootstrap.js` and 45 end-to-end stress
+programs.
 
-**The performance story.** Transpiling the compiler's own 16,825-line source tree
-takes ~0.89 s (release, ~18.8k lines/s) with ~31 MB peak working set; the
-hand-written C++ ring does the same work in ~0.31 s, so the self-hosted ring is
-**~2.9x slower** - the price of the uniform AST and value-semantics containers,
-not of the language's design (the ring was ~4.0x before the copying the type
-questions and the lowering passes did per call was removed;
-`impl_specs/capability-matrix.md` T66). The runtime's dictionary is the RTL's
-own: `SmDictionary` keeps one row per entry, with the cached hash and chain link
-next to the key and value, so a probe touches one cache line and iteration is a
-pointer walk (measured ~8x and deep copies ~5x the `std::unordered_map` it
-replaced, and ~6% faster end to end on this workload); its weak spot is hit
-lookups in cache-resident tables, where the bucket-as-row-index indirection costs
-~1.8x.
+**The performance story.** Transpiling the compiler's own 17,905-line source
+tree takes ~1.1 s (release, ~16.4k lines/s) with ~31 MB peak working set, and
+the emitted 1.38 MB translation unit takes `cl.exe` ~21 s to optimize - the
+compiler's own share of a build is the small one. The runtime's dictionary is
+the RTL's own: `SmDictionary` keeps one row per entry, with the cached hash and
+chain link next to the key and value, so a probe touches one cache line and
+iteration is a pointer walk (measured ~8x and deep copies ~5x the
+`std::unordered_map` it replaced, and ~6% faster end to end on this workload);
+its weak spot is hit lookups in cache-resident tables, where the
+bucket-as-row-index indirection costs ~1.8x.
 
 - **A straight-line program, measured.** `benchmarks/onebrc` has the naive 1 Billion
   Row Challenge - read 10M `station;temperature` lines (127.7 MiB), aggregate per
@@ -119,8 +117,8 @@ these):
 Also known, and recorded rather than fixed: a single file with tens of thousands
 of declarations makes **sema quadratic** (~25 µs/line at 16k lines, ~99 µs/line
 at 64k, one file) although the per-file stages are linear; the amalgamated
-translation unit for the compiler is ~1 MB, so compiling the *output* is not free;
-and the language is byte-oriented, with ASCII-only case mapping.
+translation unit for the compiler is ~1.4 MB, so compiling the *output* is not
+free; and the language is byte-oriented, with ASCII-only case mapping.
 
 The toolchain is **Windows/MSVC only** today. The emitted C++ is portable in
 principle; nothing has been exercised on another platform.
@@ -146,7 +144,7 @@ keep the whole system - compiler, runtime and output - small enough to read.**
 The roadmap defines a gate per phase; taken together, the language is "there"
 when all of these are true on a fresh machine (Windows *and* Linux):
 
-1. `simse init`, write a program, `simse run` - without knowing what CMake is.
+1. `simse init`, write a program, `simse run` - without knowing what `cl.exe` is.
 2. A CLI tool with `for` loops, interpolation, protocols and JSON round-tripping
    a nested structure.
 3. A single-threaded JSON HTTP service: `simse run server`, curl it, and see

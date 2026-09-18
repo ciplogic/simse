@@ -539,73 +539,73 @@ data class Emitter(
             val pkg: Str = this.inputPackage(input)
             val decls: List<AstXmlNode> = xmlDecls(input.module)
             for (*decl in decls) {
-                val declName: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
-                if (decl.name == AstNodeKind.Var) {
-                    // A file-level static: storage and an initializer for the
-                    // generated pass (specs/statics.md). Prelude inputs declare the
-                    // runtime surface, not program statics, so they are skipped.
-                    if (!input.prelude) {
-                        val entry: CgStatic = CgStatic(decl, pkg, input.fileName)
-                        this.statics.append(entry)
-                        this.staticsByName.insert(declName, entry)
+            val declName: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
+            if (decl.name == AstNodeKind.Var) {
+                // A file-level static: storage and an initializer for the
+                // generated pass (specs/statics.md). Prelude inputs declare the
+                // runtime surface, not program statics, so they are skipped.
+                if (!input.prelude) {
+                    val entry: CgStatic = CgStatic(decl, pkg, input.fileName)
+                    this.statics.append(entry)
+                    this.staticsByName.insert(declName, entry)
+                }
+                continue
+            }
+            if (decl.name == AstNodeKind.Function) {
+                if (xmlAttr(decl, AstNodeAttributeKind.IsNative) == "true") {
+                    var symbol: Str = declName
+                    if (xmlAttr(decl, AstNodeAttributeKind.HasNativeSymbol) == "true") {
+                        symbol = cgUnquote(xmlAttr(decl, AstNodeAttributeKind.NativeSymbol))
                     }
+                    this.nativeDecls.append(CgNativeDecl(decl, input.fileName, symbol, input.prelude))
+                    this.nativeSymbols.insert(declName, symbol)
+                    val params: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
+                    if (params.size() > 0 && xmlAttr(params[0], AstNodeAttributeKind.Name) == "this") {
+                        val ext: CgNativeExt = CgNativeExt(
+                            symbol, xmlChild(params[0], AstNodeKind.Type),
+                            xmlChild(decl, AstNodeKind.ReturnType),
+                            xmlTypeParamNames(decl)
+                        )
+                        this.addNativeExt(declName, ext)
+                    }
+                }
+                var recv: AstXmlNode = xmlEmptyNode()
+                if (xmlAttr(decl, AstNodeAttributeKind.HasReceiver) == "true") {
+                    recv = xmlChild(decl, AstNodeKind.Receiver)
+                }
+                this.addFunction(decl, recv, input.fileName, xmlTypeParamNames(decl), input.prelude, pkg, false)
+                continue
+            }
+            this.types.insert(declName, decl)
+            this.typePackages.insert(declName, pkg)
+            if (decl.name == AstNodeKind.Enum) {
+                this.enumNames.insert(declName, true)
+            }
+            if (decl.name == AstNodeKind.DataClass) {
+                if (input.prelude) {
                     continue
                 }
-                if (decl.name == AstNodeKind.Function) {
-                    if (xmlAttr(decl, AstNodeAttributeKind.IsNative) == "true") {
-                        var symbol: Str = declName
-                        if (xmlAttr(decl, AstNodeAttributeKind.HasNativeSymbol) == "true") {
-                            symbol = cgUnquote(xmlAttr(decl, AstNodeAttributeKind.NativeSymbol))
-                        }
-                        this.nativeDecls.append(CgNativeDecl(decl, input.fileName, symbol, input.prelude))
-                        this.nativeSymbols.insert(declName, symbol)
-                        val params: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
-                        if (params.size() > 0 && xmlAttr(params[0], AstNodeAttributeKind.Name) == "this") {
-                            val ext: CgNativeExt = CgNativeExt(
-                                symbol, xmlChild(params[0], AstNodeKind.Type),
-                                xmlChild(decl, AstNodeKind.ReturnType),
-                                xmlTypeParamNames(decl)
-                            )
-                            this.addNativeExt(declName, ext)
-                        }
+                this.dataClassNames.insert(declName, true)
+                val receiver: AstXmlNode = this.classReceiver(decl)
+                val methods: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Function)
+                val classParams: List<Str> = xmlTypeParamNames(decl)
+                for (*method in methods) {
+                    var methodParams: List<Str> = List<Str>()
+                    var p: Int = 0
+                    while (p < classParams.size()) {
+                        methodParams.append(classParams[p])
+                        p = p + 1
                     }
-                    var recv: AstXmlNode = xmlEmptyNode()
-                    if (xmlAttr(decl, AstNodeAttributeKind.HasReceiver) == "true") {
-                        recv = xmlChild(decl, AstNodeKind.Receiver)
+                    val methodTypeParams: List<Str> = xmlTypeParamNames(method)
+                    var q: Int = 0
+                    while (q < methodTypeParams.size()) {
+                        methodParams.append(methodTypeParams[q])
+                        q = q + 1
                     }
-                    this.addFunction(decl, recv, input.fileName, xmlTypeParamNames(decl), input.prelude, pkg, false)
-                    continue
-                }
-                this.types.insert(declName, decl)
-                this.typePackages.insert(declName, pkg)
-                if (decl.name == AstNodeKind.Enum) {
-                    this.enumNames.insert(declName, true)
-                }
-                if (decl.name == AstNodeKind.DataClass) {
-                    if (input.prelude) {
-                        continue
-                    }
-                    this.dataClassNames.insert(declName, true)
-                    val receiver: AstXmlNode = this.classReceiver(decl)
-                    val methods: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Function)
-                    val classParams: List<Str> = xmlTypeParamNames(decl)
-                    for (*method in methods) {
-                        var methodParams: List<Str> = List<Str>()
-                        var p: Int = 0
-                        while (p < classParams.size()) {
-                            methodParams.append(classParams[p])
-                            p = p + 1
-                        }
-                        val methodTypeParams: List<Str> = xmlTypeParamNames(method)
-                        var q: Int = 0
-                        while (q < methodTypeParams.size()) {
-                            methodParams.append(methodTypeParams[q])
-                            q = q + 1
-                        }
-                        this.addFunction(method, receiver, input.fileName, methodParams, input.prelude, pkg, true)
-                    }
+                    this.addFunction(method, receiver, input.fileName, methodParams, input.prelude, pkg, true)
                 }
             }
+        }
         }
     }
 
@@ -865,16 +865,16 @@ data class Emitter(
             }
             val decls: List<AstXmlNode> = xmlDecls(input.module)
             for (*decl in decls) {
-                if (decl.name != AstNodeKind.DataClass) {
-                    continue
-                }
-                val tmpl: Str = this.templateClause(xmlTypeParamNames(decl))
-                if (tmpl != "") {
-                    this.line(0, tmpl)
-                }
-                val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
-                this.line(0, fmtStr("struct |;", this.qualify(this.typePackage(name), name)))
+            if (decl.name != AstNodeKind.DataClass) {
+                continue
             }
+            val tmpl: Str = this.templateClause(xmlTypeParamNames(decl))
+            if (tmpl != "") {
+                this.line(0, tmpl)
+            }
+            val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
+            this.line(0, fmtStr("struct |;", this.qualify(this.typePackage(name), name)))
+        }
         }
     }
 
@@ -886,18 +886,18 @@ data class Emitter(
             this.curFile = input.fileName
             val decls: List<AstXmlNode> = xmlDecls(input.module)
             for (*decl in decls) {
-                if (decl.name == AstNodeKind.DataClass) {
-                    this.emitDataClass(decl)
-                } else if (decl.name == AstNodeKind.Enum) {
-                    this.emitEnum(decl)
-                    this.emitEnumConversion(decl)
-                } else if (decl.name == AstNodeKind.TypeAlias) {
-                    this.emitTypeAlias(decl)
-                }
-                if (this.failed) {
-                    return
-                }
+            if (decl.name == AstNodeKind.DataClass) {
+                this.emitDataClass(decl)
+            } else if (decl.name == AstNodeKind.Enum) {
+                this.emitEnum(decl)
+                this.emitEnumConversion(decl)
+            } else if (decl.name == AstNodeKind.TypeAlias) {
+                this.emitTypeAlias(decl)
             }
+            if (this.failed) {
+                return
+            }
+        }
         }
     }
 
@@ -1132,29 +1132,29 @@ data class Emitter(
             val params: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
             var paramTexts: List<Str> = List<Str>()
             for (*param in params) {
-                val paramType: AstXmlNode = xmlChild(param, AstNodeKind.Type)
-                if (xmlIsEmpty(paramType)) {
-                    this.fail(
-                        param, "unsupported: native parameter '" + xmlAttr(param, AstNodeAttributeKind.Name)
-                                + "' without a type"
-                    )
-                    return
-                }
-                val mapped: Str = this.type(paramType)
-                if (this.failed) {
-                    return
-                }
-                var name: Str = xmlAttr(param, AstNodeAttributeKind.Name)
-                if (name == "this") {
-                    name = "self"
-                }
-                val pk: AstNodeCategory = xmlKind(paramType)
-                if (pk == AstNodeCategory.TypePointer || pk == AstNodeCategory.TypeReference) {
-                    paramTexts.append(mapped + " " + name)
-                } else {
-                    paramTexts.append("const " + mapped + "& " + name)
-                }
+            val paramType: AstXmlNode = xmlChild(param, AstNodeKind.Type)
+            if (xmlIsEmpty(paramType)) {
+                this.fail(
+                    param, "unsupported: native parameter '" + xmlAttr(param, AstNodeAttributeKind.Name)
+                            + "' without a type"
+                )
+                return
             }
+            val mapped: Str = this.type(paramType)
+            if (this.failed) {
+                return
+            }
+            var name: Str = xmlAttr(param, AstNodeAttributeKind.Name)
+            if (name == "this") {
+                name = "self"
+            }
+            val pk: AstNodeCategory = xmlKind(paramType)
+            if (pk == AstNodeCategory.TypePointer || pk == AstNodeCategory.TypeReference) {
+                paramTexts.append(mapped + " " + name)
+            } else {
+                paramTexts.append("const " + mapped + "& " + name)
+            }
+        }
             this.sourceComment(decl)
             val tmpl: Str = this.templateClause(xmlTypeParamNames(decl))
             if (tmpl != "") {
@@ -3012,7 +3012,7 @@ data class Emitter(
     // ---- prelude ----------------------------------------------------------
 
     fun preludeText(): Unit {
-        var text: Str = "// Generated by simse_transpile. Do not edit.\n"
+        var text: Str = "// Generated by the Simse compiler. Do not edit.\n"
         text = text + "#include \"cppsrc/rtl/simse.hpp\"\n"
         text = text + "#include <iostream>\n"
         text = text + "#include <type_traits>\n"

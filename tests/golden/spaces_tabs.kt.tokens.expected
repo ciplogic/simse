@@ -1,9 +1,0 @@
-ReservedWord	1:1	package
-Space	1:8	 
-Identifier	1:9	fixtures
-EndOfLine	1:17	\n
-Space	2:1	 \t
-ReservedWord	2:3	val
-Space	2:6	  
-Identifier	2:8	x
-EndOfLine	2:9	\n

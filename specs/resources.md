@@ -135,23 +135,21 @@ for (this_resource in keys) { ... }   // or: Resources.get("Profiling:Profile Bo
 
 | piece | file |
 | --- | --- |
-| the format, the join, the discovery | `cppsrc/resources/Resources.kt` (Simse ring), `Resources.{h,cpp}` (C++ ring) |
-| discovery in the drivers | the drivers call the module once: `cppsrc/compiler/Driver.kt`, `cppsrc/Compiler.cpp` |
-| pooling and the table | the emitters: `cppsrc/codegen/Codegen.kt` / `Codegen.cpp`, after `emitStringTable` |
+| the format, the join, the discovery | `cppsrc/resources/Resources.kt` |
+| discovery in the driver | one call to the module: `cppsrc/compiler/Driver.kt` |
+| pooling and the table | the emitter: `cppsrc/codegen/Codegen.kt`, after `emitStringTable` |
 | the API | `cppsrc/rtl/resources.kt` (surface), `cppsrc/rtl/resources.hpp` (implementation) |
-| the static form | `Emitter.call` in both emitters (the shape `Enum.fromInt` has) |
-| the differential | `tests/resources_ref_main.cpp` / `tests/resources_simse_main.cpp`, fixtures in `tests/resources/` |
+| the static form | `Emitter.call` (the shape `Enum.fromInt` has) |
 | the end-to-end case | `stress/resources/` |
 
 ## Status
 
-Implemented, both rings, for the whole path: discovery, parse, join, pooling, the emitted
-table, and the `Resources` API. The two rings emit byte-identical C++ for
-`stress/resources`, which prints every shape the format has: a fenced block, an inline
-value, an empty value, a missing key, a comparison against a literal, and the escapes a
-value needs on the way into the pool (a double quote, a backslash, a tab, and a value
-ending in a backslash). `bun tools/stress.js` is **45/45** on both rings,
-`simse_tests.exe` **61/61**, T22/T23 and `bootstrap.js`'s fixed point green.
+Implemented for the whole path: discovery, parse, join, pooling, the emitted table, and the
+`Resources` API. `stress/resources` prints every shape the format has: a fenced block, an
+inline value, an empty value, a missing key, a comparison against a literal, and the escapes
+a value needs on the way into the pool (a double quote, a backslash, a tab, and a value
+ending in a backslash). `bun tools/stress.js` is **45/45**, and the bootstrap fixed point
+(`bun tools/bootstrap.js`) holds byte for byte.
 
 Not done yet: a resource *section* helper (deliberately - a section is a key prefix), and
 any name-to-index shortcut for lookups (`Resources.get` is a linear scan of a handful of

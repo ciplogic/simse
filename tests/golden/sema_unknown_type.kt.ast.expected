@@ -1,8 +1,0 @@
-Module @1:1
-  Package fixtures @1:1
-  Function f @2:1
-    Param x: Nope
-    Return Int
-    Body
-      Return @3:5
-        IntLit 0 @3:12

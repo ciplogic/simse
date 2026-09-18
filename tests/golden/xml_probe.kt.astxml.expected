@@ -1,4 +1,0 @@
-Module kind='Module' line='1' column='1' package='fixtures'
-  DataClass kind='DataClass' line='2' column='1' name='Tile'
-    Field name='n' isVar='true' line='2' column='17'
-      Type kind='Type.Named' line='2' column='24' name='Int'

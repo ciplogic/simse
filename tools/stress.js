@@ -24,10 +24,11 @@
 //
 // Options:
 //   --filter <text>   only cases whose path contains <text> (repeatable)
-//   --simse <exe>     compiler to test (default: ./simse.exe, else the CMake
-//                     build's simse_transpile.exe)
+//   --simse <exe>     compiler to test (default: ./simse.exe; build it with
+//                     `bun build.js`)
 //   --release         compile the generated programs with /O2 /Ob3 (default: /MDd)
 //   --define <d[=v]>  extra preprocessor define for the compile (repeatable)
+//   --arch <arch>     vcvarsall target architecture (default: the host's)
 //   --jobs <n>        cases to run at once (default: 1; 0 = one per CPU)
 //   --update          rewrite the `expected.*` files from this run
 //   --list            list the cases and their expectations, then exit
@@ -35,14 +36,14 @@
 //   --verbose         print the commands, and each program's output
 //   -h, --help        this text
 //
-// The compiler under test is the point: by default the harness runs the
-// self-hosted `simse.exe` (build it with `bun build.js --release`), and only
-// falls back to the hand-written ring when there is no such binary.
+// The compiler under test is the point: the harness runs `./simse.exe`, the compiler
+// built from the published bootstrap, and every program it compiles is linked against
+// the same runtime (`cppsrc/rtl/native.cpp`) the compiler itself is.
 
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import * as path from "node:path";
 
-import { cachedArch, developerEnv, fail as failTool, normalizeArch, REPO, runCl, whichCl } from "./msvc.mjs";
+import { developerEnv, fail as failTool, hostArch, normalizeArch, REPO, runCl, whichCl } from "./msvc.mjs";
 
 const TOOL = "stress";
 const fail = (message) => failTool(TOOL, message);
@@ -62,6 +63,7 @@ function parseArgs(argv) {
     simse: null,
     release: false,
     defines: [],
+    arch: null,
     jobs: 1,
     update: false,
     list: false,
@@ -79,6 +81,7 @@ function parseArgs(argv) {
       case "--simse": opts.simse = value(i); i++; break;
       case "--release": opts.release = true; break;
       case "--define": opts.defines.push(value(i)); i++; break;
+      case "--arch": opts.arch = value(i); i++; break;
       case "--jobs": opts.jobs = Number(value(i)); i++; break;
       case "--update": opts.update = true; break;
       case "--list": opts.list = true; break;
@@ -140,17 +143,13 @@ function pickCompiler(explicit) {
   }
   const selfHosted = path.join(REPO, "simse.exe");
   if (existsSync(selfHosted)) return selfHosted;
-  for (const dir of ["cmake-build-release", "cmake-build-debug"]) {
-    const candidate = path.join(REPO, dir, "simse_transpile.exe");
-    if (existsSync(candidate)) return candidate;
-  }
-  fail("no compiler to test: build one with `bun build.js` or `cmake --build cmake-build-debug`");
+  fail("no compiler to test: build one with `bun build.js` (or point --simse at one)");
 }
 
-// The two C++ translation units every generated program may need: the `native`
-// boundary (file I/O, diagnostics) and the few `common` helpers it calls. They
-// are the part of the RTL that is not header-only, and compiling them once per
-// flag set keeps a full stress run to one compile per case.
+// The two C++ translation units every generated program needs: the runtime
+// (`cppsrc/rtl/native.cpp`: file I/O, diagnostics, the clock) and - when a case uses
+// one - the prelude header. It is the part of the RTL that is not header-only, and
+// compiling it once per flag set keeps a full stress run to one compile per case.
 //
 // The cache key is the flag set, and an object is reused only when it is newer
 // than its source *and* than every RTL header it can pull in: `Str`/`List`/`Array`
@@ -177,8 +176,7 @@ function sharedObjects(env, flags) {
   const key = Bun.hash(`${flags.join(" ")} ${process.platform} ${process.arch}`).toString(36);
   const dir = path.join(WORK, `native-${key}`);
   const objects = [
-    { source: path.join(REPO, "cppsrc", "native", "Native.cpp"), object: path.join(dir, "Native.obj") },
-    { source: path.join(REPO, "cppsrc", "common", "common.cpp"), object: path.join(dir, "common.obj") },
+    { source: path.join(REPO, "cppsrc", "rtl", "native.cpp"), object: path.join(dir, "native.obj") },
   ];
   const headerMtime = newestHeaderMtime();
   const fresh = (entry) => existsSync(entry.object)
@@ -338,7 +336,7 @@ async function main() {
   }
 
   const simse = pickCompiler(opts.simse);
-  const arch = normalizeArch(cachedArch(path.join(REPO, "cmake-build-debug")) || "arm64");
+  const arch = normalizeArch(opts.arch || hostArch());
   const env = developerEnv(arch, TOOL);
   const flags = opts.release ? ["/MD", "/O2", "/Ob3", "/DNDEBUG"] : ["/MDd"];
   for (const define of opts.defines) flags.push(`/D${define}`);

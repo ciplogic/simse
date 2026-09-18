@@ -20,19 +20,35 @@ expressible in the language.
 
 ## 2. Build / test / run
 
-Toolchain: CMake + Ninja + MSVC (arm64), C++20. CLion bundles cmake/ninja.
-From the build dir the wrapper sources `vcvarsall arm64` then runs
-`cmake --build .`; without it `cl` cannot find its headers.
+Toolchain: MSVC (arm64) + `cl.exe`, C++20, and the `bun` runtime for the
+harnesses. There is no build system to configure: the compiler is Simse, and the
+only hand-written C++ is the runtime it is compiled against (`cppsrc/rtl`: the
+headers plus the one translation unit `cppsrc/rtl/native.cpp`) and the published
+bootstrap `cppsrc/simse_bootstrap.cpp`.
 
 ```sh
-# build (from repo root)
-cd cmake-build-debug
-cmd //c _msvc_build.bat                 # incremental
-cmd //c "_msvc_build.bat --clean-first" # clean rebuild
+# build (from the repo root): cppsrc -> ./simse_out.cpp -> ./simse.exe
+./build.bat                             # debug (/MDd)
+./build.bat --release                   # /O2 /Ob3 /DNDEBUG
+./build.bat --release --pdb             # + /Zi /DEBUG (a .pdb in build/), for a profiler
+./build.bat --release --lto             # + /GL /LTCG (measured neutral)
+./build.bat my_simse.exe                # same, different executable name
+./build.bat --cpp other.cpp --exe x.exe # compile an existing amalgamation
+./build.bat --help                      # all options (see build.js)
 
-# tests / goldens
-./simse_tests.exe                       # check mode
-./simse_tests.exe --update              # regenerate goldens deliberately
+# The transpile step runs ./simse.exe when it exists - the compiler builds itself.
+# On a fresh checkout there is no compiler yet, so the build first compiles the
+# published bootstrap with cl.exe alone and uses that (see tools/bootstrap.js).
+
+# the published bootstrap: the same amalgamation, checked in at
+# cppsrc/simse_bootstrap.cpp so Simse can be built with a C++ compiler alone
+# (docs/getting-started.md, "Build the compiler without a compiler"). Refresh it
+# after compiler changes (the file is generated, never hand-edited):
+bun build.js --release --out cppsrc/simse_bootstrap.cpp   # also builds ./simse.exe
+
+# how fast does it bootstrap, and does the fixed point hold?
+bun tools/bootstrap.js                  # compile the bootstrap, transpile, compare the bytes
+bun tools/bootstrap.js --debug          # the same with the debug flags
 
 # the end-to-end stress corpus: one folder per program under stress/, each with
 # its expected output; the harness transpiles, compiles and runs every one of
@@ -41,64 +57,32 @@ bun tools/stress.js                     # or ./stress.bat; see stress/README.md
 bun tools/stress.js --list              # what the corpus contains
 bun tools/stress.js --filter modules --jobs 4
 
-# compile the whole compiler tree into one amalgamated file in the CURRENT folder
-./cmake-build-debug/simse_transpile.exe --root cppsrc   # -> ./simse_out.cpp (one main)
-./cmake-build-debug/simse_transpile.exe                 # -> scans "." (hits tests/fixtures: errors by design)
-
-# explicit-input form (used by the build/tests); -o defaults to simse_out.cpp
-./cmake-build-debug/simse_transpile.exe <files...> [-o out.cpp] [--prelude <path>] [--root <dir>] [--module-root <dir>...]
+# the compiler by hand (the compiler *is* the CLI; `--prelude` defaults to the
+# relative path cppsrc/rtl, so run it from the repo root)
+./simse.exe --root cppsrc -o simse_out.cpp            # the whole compiler
+./simse.exe --root stress/hello/src -o hello.cpp      # any project, same form
 
 # the linear IL of every emitted body, on stderr (debug view; the C++ output is
 # identical with and without it - impl_specs/linear-il.md)
-./cmake-build-debug/simse_transpile.exe --root cppsrc -o a.cpp --showLinearRepresentation 2> il.txt
+./simse.exe --root cppsrc -o a.cpp --showLinearRepresentation 2> il.txt
 
-# codegen: the C++ of every body comes from its instruction list - the IL is the only
-# codegen (a body it cannot spell is a hard error). The 2 lambda bodies are spelled as
-# closure classes, which is the one shape the model owns.
-./cmake-build-debug/simse_transpile.exe --root cppsrc -o a.cpp           # the default
-
-# transpile the compiler and compile it (bun + cl.exe, loads the VS environment)
-# compile an amalgamated output with cl.exe (loads the VS environment itself)
-./build.bat                             # cppsrc -> ./simse_out.cpp -> ./simse.exe (debug)
-./build.bat --release                   # release: /O2 /Ob3 /DNDEBUG, cmake-build-release libs (/MD)
-./build.bat --release --lto             # + whole-program optimization (/GL + /LTCG; measured neutral)
-./build.bat my_simse.exe                # same, different executable name
-./build.bat --cpp other.cpp --exe x.exe # compile an existing amalgamation
-./build.bat --help                      # all options (see build.js)
-
-# the published bootstrap: the same amalgamation, checked in at
-# cppsrc/simse_bootstrap.cpp so it can be built with a C++ compiler alone
-# (docs/getting-started.md, "Build the compiler without a compiler"). Refresh it
-# after compiler changes (the file is generated, never hand-edited):
-bun build.js --release --out cppsrc/simse_bootstrap.cpp   # also builds ./simse.exe
-
-# how fast does it bootstrap, and does the fixed point hold?
-bun tools/bootstrap.js                  # times: transpile, cl.exe, and the fixed point
-bun tools/bootstrap.js --debug          # the same with the debug toolchain
-
-# profiling: open simse.sln (ARM64; Release is the default configuration and
-# carries /Zi + /DEBUG). It compiles ONLY simse_out.cpp, refreshes that file
-# from cppsrc when a source is newer, and writes profile\<config>\simse.exe.
+# debugging / profiling the compiler:
+./simse.exe --root cppsrc -o prof.cpp --profile   # instrumented profiler in the program
+./build.bat --release --pdb                       # optimized + symbols, for the VS profiler
 ```
 
-The default build runs, as part of `ALL`: the five differentials plus
-`stage1_check` (the end-to-end programs are no longer CMake targets - they run
-under `bun tools/stress.js`, which is not part of the build because it tests the
-built compiler rather than the C++ ring).
-**If `simse*.exe` is running, linking fails with `LNK1168` - kill it first.**
+The verification loop after a compiler change: `./build.bat --release`,
+`bun tools/stress.js`, then `bun tools/bootstrap.js` - the two-step property is
+that the compiler built from the published bootstrap must reproduce that file
+byte for byte, and that check is the one that catches a change whose emitted C++
+depends on the compiler that emitted it. When the change *is* visible in the
+emitted C++, refresh the published file (`bun build.js --release --out
+cppsrc/simse_bootstrap.cpp`) and commit it with the source.
 
-`stage1_check` *is* the two-step transpiling check: it transpiles the compiler
-source set (`cppsrc/compiler/Driver.kt` plus the module roots) into
-`stage1/gen/simse_out.cpp`, keeps that as `stage1/gen/simse_out1.cpp`, compiles
-that copy into `stage1/simse_stage1.exe`, runs it over the same source set to
-regenerate `stage1/run/simse_out.cpp`, and requires the two files to be
-**byte-identical**. Re-run just this step from the build dir with
-`cmake --build . --target stage1_check`.
-
+**If `simse.exe` is running, linking it again fails with `LNK1168` - kill it first.**
 `--root cppsrc` scans the whole source tree (the prelude under `cppsrc/rtl` is
-excluded as prelude), so the amalgamation contains exactly one `main` — the
-driver's — and `build.bat` can compile it. `stage1_check` uses the equivalent
-explicit `cppsrc/compiler/Driver.kt` input.
+excluded as prelude), so the amalgamation contains exactly one `main` - the
+driver's - and `build.bat` can compile it.
 
 ## 3. Repo map
 
@@ -124,15 +108,17 @@ explicit `cppsrc/compiler/Driver.kt` input.
   the backend is meant to consume, with its dump), `yield.md` (`yield` as a pure
   lowering to a state machine), `profiling.md` (the `--profile` instrument: one RAII
   timer per emitted body and the table the program prints), `tasks/.
-- `cppsrc/rtl/` — hand-written runtime: C++ headers (`types.hpp`,
+- `cppsrc/rtl/` — the runtime, and the only hand-written C++ besides the bootstrap:
+  the headers (`types.hpp`,
   `containers.hpp`, `smstring.hpp`, `strsmallvector.hpp`, `optional.hpp`,
   `functional.hpp`, `result.hpp`, `xml.hpp`, `span.hpp`,
-  `strview.hpp`, `strtable.hpp`,
+  `strview.hpp`, `strtable.hpp`, `resources.hpp`,
   `listops.hpp`, `strops.hpp`, `dictops.hpp`, `fs.hpp`, `filestream.hpp`,
-  `timeops.hpp`, `simse.hpp`) AND the **prelude** `.kt`
-  files (`rtl.kt`, `Span.kt`, `xml.kt`, `fs.kt`)
-  declaring the RTL surface.
-  surface. `List<T>` is `SmallVector<T, 4>`, `Str` is the inline `SmString`
+  `timeops.hpp`, `simse.hpp`), the one implementations file `native.cpp`
+  (the `native(...)` symbols: file I/O, directory listing, the clock), AND the
+  **prelude** `.kt` files (`rtl.kt`, `Span.kt`, `StrView.kt`, `xml.kt`,
+  `astxml.kt`, `fs.kt`, `resources.kt`) declaring the RTL surface.
+  `List<T>` is `SmallVector<T, 4>`, `Str` is the inline `SmString`
   (`smstring.hpp`), whose buffer is `strsmallvector.hpp`'s `StrSmallVector`, the
   char-specialized form of the `SmallVector<char, 24>` layout — `Int _len`
   (character count, zero-based), `Int _cap` (allocated bytes), a 24-byte inline
@@ -149,19 +135,21 @@ explicit `cppsrc/compiler/Driver.kt` input.
   `kStrInlineCapacity` (`SIMSE_STR_INLINE_CAPACITY` overrides it per build; 16
   saves ~18% of the peak working set but spills 16-character strings, so 24
   stays the default — `impl_specs/capability-matrix.md` T33). The knobs that
-  remain (`SIMSE_STR_INLINE_CAPACITY`, `SIMSE_NO_PACK4`) have to match between
-  the compiler and the amalgamated output it is linked with, and `build.js`
-  mirrors the CMake cache automatically (`impl_specs/rtl-abi.md`). The language's layout model is
+  remains (`SIMSE_STR_INLINE_CAPACITY`, `SIMSE_NO_PACK4`) are passed with `--define`
+  and reach the amalgamation and `native.cpp` in the same `cl` invocation, so the two
+  can never disagree (`impl_specs/rtl-abi.md`). The language's layout model is
   **4-byte packing** (`specs/memory-model.md`): the emitter brackets every
   generated aggregate in `SIMSE_PACK_PUSH`/`SIMSE_PACK_POP`, and `SIMSE_NO_PACK4`
   reverts to the host's default alignment.
-- `cppsrc/common/` — `readFile`/`filesInDir`, `xmlutil` (C++ + Simse).
-- `cppsrc/resources/` — the `_res.md` reader (C++ + Simse): the format, the join, the
-  discovery, and the C++ literal a resource is pooled as (`specs/resources.md`). The
-  runtime half of it is `cppsrc/rtl/resources.{kt,hpp}`.
+- `cppsrc/common/` — `readFile` (a native declared next to the compiler, not in the
+  prelude) and `xmlutil.kt`, the XmlNode helpers every stage shares.
+- `cppsrc/resources/` — the `_res.md` reader: the format, the join, the discovery,
+  and the C++ literal a resource is pooled as (`specs/resources.md`). The runtime half
+  of it is `cppsrc/rtl/resources.{kt,hpp}`.
 - `cppsrc/lex/`, `cppsrc/skelparser/`, `cppsrc/parser/`, `cppsrc/sema/`,
-  `cppsrc/linear/`, `cppsrc/codegen/`, `cppsrc/compiler/` - the compiler stages;
-  each has a C++ implementation AND a `.kt` mirror. `linear` is the post-sema
+  `cppsrc/linear/`, `cppsrc/codegen/`, `cppsrc/compiler/`, `cppsrc/profiling/` -
+  the compiler stages, all Simse: scan, parse (AST), resolve/reify, lower to the
+  linear form, emit. `linear` is the post-sema
   lowering of control flow to labels/gotos (`Linear.{h,cpp}`/`Linear.kt`), the
   peephole trim of that form (`Simplify.*`), and the lowering of nested expressions
   into `_sm_expr<n>` temporaries (`ExpressionLowering.*`); `sema` also carries the
@@ -187,15 +175,15 @@ explicit `cppsrc/compiler/Driver.kt` input.
   What a backend still folds is a slot whose
   type the rules cannot name (a `for`'s machine slot, mostly a bare `null`), which is the one
   shape that prints where it is read.
-  `LinearForm.kt` is the whole thing mirrored: the model, the signature table, the
-  printer, the extractor, and the backend lives in `Codegen.kt`
-  (`emitIlBodyText`/`ilEmitOps`/the closure classes), so **both rings emit from the IL**.
-  `Yield.{h,cpp,simse}` is the one
+  `LinearForm.kt` is the whole thing: the model, the signature table, the
+  printer, the extractor - and the backend lives in `Codegen.kt`
+  (`emitIlBodyText`/`ilEmitOps`/the closure classes), so **the emitter emits from the IL
+  and from nothing else**. `Yield.kt` is the one
   language feature that is nothing but a lowering: `yield` becomes labels, a branch
-  field and a class (`impl_specs/yield.md`), and `for` (`Parser::parseFor`, which
+  field and a class (`impl_specs/yield.md`), and `for` (`Parser.kt`'s `parseFor`, which
   desugars the two forms to a `while` before anything else sees them) is the second
-  (`impl_specs/for.md`). `for` and `yield` are in **both** rings now - parser, sema,
-  the machine lowering and the emitter's `emitYieldable`/`emitMachine`, with a
+  (`impl_specs/for.md`). Both are parser..emitter: the machine lowering and
+  the emitter's `emitYieldable`/`emitMachine`, with a
   *generic* machine a class template and an extension function's receiver a field of it
   (`stress/yield`, `stress/generic-yield`). Iteration is a convention: `for (x in c)` is
   `c.smToYield()`, the prelude writes one per container in Simse (`List`, `Array`,
@@ -204,31 +192,27 @@ explicit `cppsrc/compiler/Driver.kt` input.
   by name *and* by the receiver's type, since a machine's class is named after its
   receiver - so a program that iterates a list carries no array machine
   (`stress/for-container`, `stress/for-array`, `stress/diagnostic-not-iterable`).
-  `tools/_ring/` is the two-ring probe.
-- `Compiler.{h,cpp}` — the shared transpile core; `cppsrc/codegen/TranspileMain.cpp`
-  — the `simse_transpile` CLI, the C++ compiler driver (the Simse mirror of it
-  is `cppsrc/compiler/Driver.kt`).
-- `cppsrc/native/` — hand-written C++ for `native(...)` symbols
-  (e.g. `simse_native_readFile`).
-- `tests/` - fixtures, goldens (`<fixture>.kt.{tokens,ast,astxml,sema,cpp}.expected`),
-  the test runner, and the differential drivers (`*_ref_main.cpp` /
-  `*_simse_main.cpp`).
+- `cppsrc/compiler/Driver.kt` — the CLI and the shared transpile core: it loads the
+  prelude set, scans the module roots, parses and analyzes the compilation, and
+  amalgamates the result into one C++ translation unit. The compiler *is* this file plus
+  the stages it imports; there is no separate C++ driver.
 - `stress/` - the end-to-end stress corpus: one folder per Simse project
   (`src/` + `expected.stdout` + optional `args`/`stdin`/`expected.cpp`/
   `expected.transpile-error`), run by `tools/stress.js` against the compiler under
   test (`stress/README.md`).
-- `tools/` - the JavaScript harness: `stress.js` (the corpus above), `msvc.mjs`
-  (the Visual Studio environment shared with `build.js`), the A/B helpers
-  (`_bench_ab.mjs`, `_hoist_ab.bat`, `_cap_ab.bat`, `_probe.bat`, `memrun.cpp`,
-  `str_bench.cpp`, ...) and the probe programs.
+- `tools/` - the JavaScript harness: `build` is `build.js` at the root (with
+  `build.bat`), and this folder holds `stress.js` (the corpus above),
+  `bootstrap.js` (compile the published bootstrap, transpile, compare the bytes) and
+  `msvc.mjs` (the Visual Studio environment shared by all three). The remaining
+  `_*.mjs`/probe files are the hand-written ring's scratch (A/B benchmarks and shape
+  probes); they are not part of any workflow.
 - **Profiling**: `bun build.js --release --profile` builds a compiler (or any program,
   via `--profile` on the CLI) whose every emitted body carries an RAII timer; the table
   of inclusive microsecond totals and call counts prints on stderr when the program
   exits (`cppsrc/profiling/`, `impl_specs/profiling.md`). With the flag off the emitted
-  file is byte-identical, so it is a tool and not a mode. `tools/_bench_ab.mjs` answers
-  "did this change the time", `tools/_loop_protocol.cpp` prices a *shape*, and
-  `--profile` says **where** - inclusive totals plus call counts, which is what a
-  sampling profile cannot tell you.
+  file is byte-identical, so it is a tool and not a mode. `--profile` says **where** -
+  inclusive totals plus call counts, which is what a sampling profile cannot tell you -
+  and `build.bat --release --pdb` is what feeds the VS sampling profiler.
 - `benchmarks/` - published measurements; `benchmarks/onebrc/` is the naive 1BRC
   in Simse (`src/main.kt`, each line parsed in place through `StrView`) with the
   C++ STL baseline, the Bun generator/reference (`onebrc.mjs`), the measured
@@ -237,16 +221,17 @@ explicit `cppsrc/compiler/Driver.kt` input.
 
 ## 4. Architecture
 
-Two "rings" that must stay in lockstep:
+**The compiler is Simse.** `cppsrc/**/*.kt` is the whole compiler: scanner, parser,
+sema/reification, the linear lowering, the emitter, and the driver. What is
+hand-written C++ is only the ground it stands on: the runtime (`cppsrc/rtl`: the
+headers plus `native.cpp`, the FFI the compiler and every program call) and the
+**published bootstrap** `cppsrc/simse_bootstrap.cpp` - the amalgamation of the
+tree, checked in so the compiler can be built by a C++ compiler alone.
 
-1. **Bootstrap ring (C++)**: the hand-written compiler — scanner, parser, sema,
-   codegen, driver — plus the RTL.
-2. **Self-host ring (`.kt`)**: the same compiler, ported, in `cppsrc/**/*.kt`.
-
-`simse_transpile` (C++, bootstrap) transpiles the self-host ring into one
-`simse_out.cpp`; that file (kept as `simse_out1.cpp`) is compiled into
-`simse_stage1`, which transpiles the same sources into a fresh `simse_out.cpp`
-that must be byte-identical (the fixed point).
+The bootstrap property is the invariant that replaces the old two-ring port:
+compile the published file, and the compiler it produces must transpile `cppsrc`
+back into **the same bytes**. `bun tools/bootstrap.js` checks it; a change that
+breaks it has either moved the emitted C++ or left the published file stale.
 
 Pipeline (per `impl_specs/transpilation.md`): discover sources -> scan -> parse
 (AST) -> resolve names/types -> reify generics -> lower each body to linear form,
@@ -258,8 +243,9 @@ fold the rest -> lower to C++ -> amalgamate. The emitters only know the linear
 statement forms (`Stmt.Label`/`Goto`/`IfTrue`/`IfFalse`/`Block`), expressions no
 deeper than one operation, and declarations that carry a type; structured
 `if`/`while` never reach emission (`for` and `when` were desugared while parsing).
-The two phases are `linear::lowerForEmission` and `linear::finishForEmission`, with
-`sema::inferTypes` between them (`impl_specs/linear-lowering.md`, "The pipeline").
+The two phases are `lowerForEmission` and `finishForEmission`
+(`cppsrc/linear/Linear.kt`), with the type pass between them
+(`impl_specs/linear-lowering.md`, "The pipeline").
 
 Key design points:
 
@@ -269,8 +255,7 @@ Key design points:
   `AstNodeAttributeKind` - all enums, in `cppsrc/rtl/astxml.kt` - so every test
   on a node is an integer compare. Attribute *values* are text, children are an
   `Array<AstXmlNode>` (one counted block, count first, the shared empty array for a
-  leaf). The C++ side has `ast::toXmlNode`/`dumpXmlNode` and the enum→text
-  spellings; the language-level `XmlNode` (`specs/xml-node.md`) stays the general
+  leaf). The language-level `XmlNode` (`specs/xml-node.md`) stays the general
   tree a program builds.
 - **Generics are reified via emitted C++ templates** (see
   `impl_specs/reification.md`): distinct Simse instantiations become distinct
@@ -300,36 +285,36 @@ Key design points:
 
 ## 5. Invariants and how they are verified
 
-- **FIVE differentials byte-identical**: `scanner_diff`, `skel_diff`,
-  `parser_diff`, `sema_diff`, `codegen_diff` (hand-written C++ vs transpiled
-  Simse, over the fixture set). Run automatically by the build.
-- **Two-step bootstrap fixed point**: `simse_out1.cpp` (the C++ transpiler's
-  output, kept) == `run/simse_out.cpp` (the stage-1 compiler's regeneration),
-  byte for byte (`stage1_check`).
+- **The bootstrap fixed point**: the compiler built from the published
+  `cppsrc/simse_bootstrap.cpp` transpiles `cppsrc` back into that same file, byte
+  for byte (`bun tools/bootstrap.js`). This is the strongest invariant in the repo:
+  it ties the published artifact to the sources, and it is what catches an emitted
+  byte that depends on which compiler emitted it.
 - **Determinism**: transpiling the same inputs twice is byte-identical.
-- **Goldens**: `simse_tests.exe` compares against `tests/golden/*.expected`
-  (regenerate with `--update` only when behavior intentionally changes).
 - **The stress corpus stays green**: `bun tools/stress.js` transpiles, compiles
-  and runs every program under `stress/` with the self-hosted compiler and
-  compares its output (one folder per program, `stress/README.md`). Both rings
-  must pass it: `--simse cmake-build-debug/simse_transpile.exe` checks the other
-  side of the port on the same corpus.
+  and runs every program under `stress/` with the compiler under test and compares
+  its output (one folder per program, `stress/README.md`). Cases cover the language
+  (containers, generics, `for`/`yield`, text, XML, statics, resources), the CLI
+  (`main(args)`, diagnostics), and the runtime (file reads, spans, string escapes).
+- **A stale compiler is visible**: `tools/bootstrap.js` compares both the freshly
+  compiled bootstrap *and* `./simse.exe` against the published file, so a repo whose
+  compiler no longer matches its sources says so by name.
 
 ## 6. Change protocol (read before editing)
 
-- **Two rings**: any compiler behavior change must be made in BOTH the C++
-  implementation and the matching `.kt` mirror (scanner, parser, sema,
-  codegen, driver, xmlutil). Keep them behaviorally identical.
-- After a change: rebuild (`_msvc_build.bat`), run `simse_tests.exe`
-  (`--update` then check mode), confirm the five differentials are still
-  byte-identical, and re-run `stage1_check` (the fixed point must still hold).
-  For anything visible to a program - the runtime, codegen, the driver - also
-  rebuild the self-hosted compiler (`bun build.js` or `build.bat`) and run
-  `bun tools/stress.js`; add a case under `stress/` for behavior that is not yet
-  covered there.
-- **Never** weaken the C++ reference or the XmlNode schema to make a mirror
-  pass; fix the transpiler or the mirror generically. Do not special-case a
-  specific file.
+- **One ring, and it is Simse.** A compiler behavior change is a change to
+  `cppsrc/**/*.kt`. There is no C++ mirror to keep in step any more; the runtime
+  (`cppsrc/rtl/*.hpp`, `native.cpp`) and the published bootstrap are the only C++,
+  and both are inputs to `cl.exe`, not a second implementation.
+- After a change: `./build.bat --release` (or `bun build.js --release`), then
+  `bun tools/stress.js`, then `bun tools/bootstrap.js` - the fixed point must still
+  hold. When the change is visible in the emitted C++, refresh the published file
+  (`bun build.js --release --out cppsrc/simse_bootstrap.cpp`) and say so; the
+  refresh is part of the change, not a separate commit.
+  For anything visible to a program - the runtime, codegen, the driver - add a case
+  under `stress/` for behavior that is not yet covered there.
+- **Never weaken the fixed point** (and never hand-edit `cppsrc/simse_bootstrap.cpp`: it
+  is generated, and it is the one file that has to keep building the compiler).
 - **Prefer the container `for` to an index walk.** `for (*x in xs)` binds a *pointer* to
 each element - no copy per iteration, and a write through `x` reaches the element - while
 `for (x in xs)` binds a copy; the indexed form `for ((*x, i) in xs)` adds a counter that
@@ -419,23 +404,23 @@ compound assignment (`+= -= *= /= %= &= |= ^= <<= >>=`) and the step
 statements (`i++`, `i--`), which update a place in place - the place is located
 once and nothing is copied (`specs/memory-model.md`); `null`; memory operators `&T`/`*T`/`copy`;
 lambdas with by-value capture; generics reified via C++ templates; modules and
-packages. `yield` and `for` are implemented in **both rings**: both scan `..`/`yield`,
-parse `..T`, `yield e` and every `for` form (all desugared in the parser), both report a
-`for` over a non-machine (`stress/diagnostic-for-not-a-machine`), both lower the
-machine (`linear/Yield.cpp` / `Yield.kt`) and both emit it
-(`emitYieldable`/`emitMachine` in `Codegen.cpp` and `Codegen.kt`); `stress/yield`
-runs the whole thing through the self-hosted compiler. Two things stay out of
-`cppsrc/**` and `tests/fixtures` on purpose: `yield` needs a machine whose body lives
+packages. `yield` and `for` are implemented end to end: the scanner reads `..`/`yield`, the
+parser handles `..T`, `yield e` and every `for` form (all desugared in the parser), a
+`for` over a non-machine is a diagnostic (`stress/diagnostic-for-not-a-machine`), the
+machine is lowered in `linear/Yield.kt` and emitted by
+`emitYieldable`/`emitMachine` in `Codegen.kt`; `stress/yield`
+runs the whole thing through the compiler. Two things stay out of
+`cppsrc/**` and the corpus on purpose: `yield` needs a machine whose body lives
 in a method, and the vocabulary is `..T`, `yield e`, `for (v in m)` /
 `for ((v, i) in m)` and their pointer forms `for (*v in m)` / `for ((*v, i) in m)`
 (the second wrap, `smToYieldPtr`, hands out `*T` places - no copy per iteration;
-`specs/functions.md`, `impl_specs/yield.md`, `impl_specs/for.md`, `stress/for-pointer`);
-`tools/_ring/` is the probe a ring comparison runs on.
+`specs/functions.md`, `impl_specs/yield.md`, `impl_specs/for.md`, `stress/for-pointer`).
 
 ## 8. TODOs / deferred
 
 **The agreed order for the next work** (the user's plan, recorded here so it survives a
-session):
+session). The entries below marked done are the *log* of the port to the single Simse
+ring: they name C++ files that no longer exist, and their evidence lines are history.
 
 1. ~~**`linear/LinearForm.kt`**~~ **done** - the IL in the Simse ring (model,
    signature table, printer, extractor) plus the backend in `Codegen.kt`
@@ -467,9 +452,10 @@ Do these only when asked; roughly prioritized:
 1. **Commit the work when asked.** The T35-T40 performance work is committed
    (`d5de0f8`); anything after it is uncommitted as usual - never commit unless the
    user asks.
-2. **Stage-2 self-host**: have `simse_stage1` compile itself a second time and
-   verify the fixed point again (stronger bootstrap proof). Also broaden
-   `stage1_check` to sweep more fixtures.
+2. **Stage-2 self-host**: the fixed point runs through the published bootstrap
+   (`tools/bootstrap.js`: compile it, transpile `cppsrc`, compare the bytes). A second
+   generation (compile the bootstrap's own output, compare again) would strengthen the
+   proof; `tools/stress.js` could also grow cases.
 3. **Deferred language features** (spec'd or implied, not implemented):
    multiple `package` declarations per file (file-split shape); external-module
    manifests/versions/transitive resolution; range/`foreach` iteration over
@@ -501,7 +487,7 @@ Do these only when asked; roughly prioritized:
    `cppsrc/sema/Sema.kt`: `collectGlobal`'s get-append-insert copies into
    `globalFunctions`/`packageDecls`, `buildVisible` re-running per file, per-call
    overload scans (`analyzeCall`, `markExtensionUsed`), `lookupValue`'s scope walk.
-   Fix in both rings when a real workload needs it.
+   Fix when a real workload needs it.
 6. **Ergonomics/robustness**: lambda typing is conservative (a body/return
    mismatch surfaces as a C++ compile error, not a Simse diagnostic); generic
    type aliases aren't expanded when resolving an expected callable type; `Str`
@@ -561,19 +547,26 @@ Do these only when asked; roughly prioritized:
 
 ## 9. Gotchas
 
-- `LNK1168` on build = a running `simse*.exe` holds the output; kill it first.
+- `LNK1168` on build = a running `simse.exe` holds the output; kill it first.
 - `build.bat` defaults to a debug build (`/MDd`), so the MSVC debug STL asserts are
   live: bad input such as a directory passed where a `.kt` file is expected can
   pop an assert dialog instead of a diagnostic. Use `build.bat --release`
-  (`/O2 /DNDEBUG`, release libs) for a build with the asserts compiled out.
-- Scanning `.` (no args) walks `tests/fixtures/*`, which intentionally contain
-  bad input and will make `simse_transpile` exit non-zero. Pass `--root cppsrc`
-  (or another clean module root) instead.
+  (`/O2 /Ob3 /DNDEBUG`) for a build with the asserts compiled out.
+- Running the compiler with no `--root` and no inputs scans `.` - every `.kt` in
+  the repository, including the stress cases, which each have their own `main`.
+  Pass `--root cppsrc` (or another clean module root) instead.
 - Prelude `.kt` bodies are not emitted; put behavior in the RTL C++ headers.
+- **The prelude is read from disk at run time**, so a compiler older than
+  `cppsrc/rtl/*.kt` sees a declaration it does not know how to emit (a new
+  `native(...)` on a new type is the shape that bites: it falls back to the
+  symbol the declaration names). `build.js` warns when `./simse.exe` is older than
+  the prelude; rebuilding is the fix.
 - Source-map comments embed the path as given, so absolute and relative runs
-  differ — cosmetic.
-- Goldens are sensitive to line-number shifts; regenerate with `--update` when
-  intentionally changing sources, then confirm check-mode passes.
+  differ — cosmetic, but they are *in* the amalgamation: the bootstrap refresh
+  changes with them.
+- **The emitted C++ embeds line numbers as comments**, so adding lines to a source
+  file changes the amalgamation. That is why `cppsrc/simse_bootstrap.cpp` is
+  refreshed (and re-checked) as part of a change rather than at release time.
 - **A jump is not always a sibling of its label.** The expression lowering wraps a
   jump in the block that carries its temporaries, and `break`/`continue` jump out of
   the body they are written in, so any pass that asks "is this label used?" must look
@@ -581,8 +574,8 @@ Do these only when asked; roughly prioritized:
   across a level must ask whether a jump at *any* depth now bypasses it - that is what
   `flattenBlocks`' rule and the `pos (J) < pos (D) <= pos (L)` condition are about.
   The symptom of getting the first one wrong is MSVC `C2094: use of undefined label`
-  in the *generated* C++, which no differential catches (both rings agree on the
-  broken output) - the build's stage-1 compile is what catches it.
+  in the *generated* C++, which only shows up when that output is compiled - the
+  stress corpus and the bootstrap's own compile are what catch it.
 - A pass that is `changed`-gated must report honestly: `linear::lowerForEmission`
   loops until a whole round changes nothing, so a stage that always claims a change
   never lets the round end (and one that never claims one stops the pipeline early).
@@ -601,17 +594,11 @@ Do these only when asked; roughly prioritized:
 - A handle's native operations must be **struct methods**, not free natives: the
   emitter calls `stream.readLine()` on a `*FileStream` as `(*stream).readLine()`.
   Same for `Span`/`XmlNode`.
-- After changing **any RTL header**, rebuild the CMake folder you are about to
-  build against (`cmake-build-<config>/_msvc_build.bat`) *before* `bun build.js`:
-  `build.js` links the prebuilt `simse_lib`/`simse_native`, and a stale library
-  built against an older header is not a link error but a silent *layout* mismatch
-  (a `Str` laid out with another inline capacity, say) - the program then reads zero
-  rows or crashes. `build.js --release` needs the release libs, the stress harness
-  the debug ones.
-- `bun tools/stress.js` prefers `./simse.exe` (the self-hosted ring) and falls
-  back to `cmake-build-*/simse_transpile.exe`; `--simse <path>` with the CMake
-  `simse.exe` is not the same CLI (it takes file arguments, not `--root`) and will
-  fail the corpus.
+- After changing **any RTL header**, the objects in `build/` are stale (the harness
+  caches them per flag set and rebuilds when a header is newer, but a manual `cl`
+  invocation is the caller's business). `build.js` compiles the amalgamation and
+  `native.cpp` in one `cl` invocation, so the two can never disagree about layout -
+  the old risk was linking a prebuilt library built against an older header.
 - **The Simse ring's nodes carry roles**, and a lookup is by role: a type read out
   of a declaration (`xmlChild(decl, ReturnType)`) comes back rooted as
   `ReturnType`, so putting it where a `Type` child belongs needs a re-root
@@ -669,19 +656,20 @@ Do these only when asked; roughly prioritized:
   `this: *T` stays `T* self`. A call on the bare `this` is the one receiver that
   needs no address taken - the emitted receiver already is one - so it is
   `ns_f(self)` (C++'s `this` in a closure class), and `*this` is `self` too. The
-  hand-written differential drivers
-  (`tests/*_simse_main.cpp`) call emitted receiver functions directly, so they pass
-  `&scanner` - and a *native* extension is the one call the emitter passes the
-  receiver expression to unchanged, because the host's C++ signature decides.
+  C++ drivers of the deleted differential harness called emitted receiver functions
+  directly and had to pass `&scanner`; a *native* extension is the one call the
+  emitter passes the receiver expression to unchanged, because the host's C++
+  signature decides.
 - **A borrow of a temporary lasts only for its call.** `*f()` lowers to
   `simse_addressOf(f())`, whose contract is exactly that
   (`cppsrc/rtl/types.hpp`) - so it must stay inline in the expression it is passed
   to. Hoisting it into a variable (which the expression lowering would otherwise do,
   since a value position is one operation deep) leaves a pointer to a dead
   temporary; `exprIsBindable` is the guard that keeps it where it is.
-- **`for` and `yield` are in both rings.** `for` is desugared in the
-  *parser* (`Parser::parseFor`, reached through `parseStmtInto`, the one statement
-  slot that expands to several), so no stage downstream has a `for` statement kind -
+- **`for` and `yield` are pure lowerings.** `for` is desugared in the
+  *parser* (`parseFor` in `Parser.kt`, reached through `parseStmtInto`, the one
+  statement slot that expands to several), so no stage downstream has a `for`
+  statement kind -
   which is also why `sema`'s "a `for` needs a `smToYield`" check keys on the template's
   `_sm_for<n>` name and reads the wrap call underneath it: that prefix is the only marker
   left of the construct. Two

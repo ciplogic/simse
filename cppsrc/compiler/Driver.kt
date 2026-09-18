@@ -1,12 +1,10 @@
 // Driver.kt
 //
-// The self-hosted compiler driver: a Simse port of cppsrc/codegen/TranspileMain.cpp
-// plus the module scanning in compiler::transpile (cppsrc/Compiler.cpp). It loads
-// the RTL prelude set, scans the module roots, parses and analyzes the whole
-// compilation, and amalgamates the result into one C++ translation unit. It is
-// the single root of the compiler source set: its imports pull in the scanner,
-// parser, sema, code generator, and the skeleton-parser mirror, so the stage-1
-// fixed point covers every mirror.
+// The compiler's driver: it loads the RTL prelude set, scans the module roots, parses
+// and analyzes the whole compilation, and amalgamates the result into one C++
+// translation unit. It is the single root of the compiler source set, and the CLI every
+// build runs: the compiler *is* these sources, and the published
+// `cppsrc/simse_bootstrap.cpp` is one amalgamation of them.
 //
 // Modules and packages (specs/modules.md): a module is a directory scanned from
 // the module roots; every `.kt` file found participates. `import a.b.c` only
@@ -19,9 +17,10 @@
 // The output file defaults to `simse_out.cpp` in the current folder - the amalgamated
 // compiler, the same file the published `cppsrc/simse_bootstrap.cpp` is a copy of
 // (docs/getting-started.md, "Building the compiler without a compiler"). Pass `-o` to
-// write anywhere else.
+// write anywhere else. The default prelude is the *relative* path `cppsrc/rtl`, so the
+// compiler is meant to run from the repository root.
 //
-// The filesystem/IO helpers are the T23 prelude natives (cppsrc/rtl/fs.kt).
+// The filesystem/IO helpers are the prelude natives (cppsrc/rtl/fs.kt).
 
 package compiler
 
@@ -59,10 +58,9 @@ fun driverAppendDecls(target: *AstXmlNode, source: *AstXmlNode): Unit {
 
 // ---- scanning / parsing ---------------------------------------------------
 
-// Reads, scans, and parses one file. Matches parser::parseFile: the scanner error
-// is prefixed with the file name, and the whole raw token list goes to `parseModule`,
-// which is where the trivia the grammar never sees is dropped (spaces, comments, and a
-// newline inside `(...)`).
+// Reads, scans, and parses one file. The scanner error is prefixed with the file name,
+// and the whole raw token list goes to `parseModule`, which is where the trivia the
+// grammar never sees is dropped (spaces, comments, and a newline inside `(...)`).
 fun driverParseFile(fileName: Str): Res<AstXmlNode> {
     var scanner: Scanner = Scanner(getTokenRules(), 0, 1, 1, Str())
     scanner.setSource(readFile(fileName))
@@ -84,8 +82,8 @@ fun driverParseFile(fileName: Str): Res<AstXmlNode> {
 // order, each root scanned recursively and sorted), then the explicit inputs.
 // Files already loaded as prelude are excluded and each canonical path is kept
 // once; the kept files are sorted by canonical path so the order depends only on
-// the file set, matching compiler::transpile byte for byte no matter how the
-// files were specified (a scanned root vs an explicit input).
+// the file set, not on how the files were specified (a scanned root vs an explicit
+// input).
 fun driverGatherFiles(moduleRoots: List<Str>, inputs: List<Str>, preludeCanon: List<Str>): List<Str> {
     var candidates: List<Str> = List<Str>()
     var r: Int = 0
@@ -116,8 +114,8 @@ fun driverGatherFiles(moduleRoots: List<Str>, inputs: List<Str>, preludeCanon: L
         }
         c = c + 1
     }
-    // After dedup the canonical keys are unique, so this sort is total and both
-    // compiler rings produce the same sequence.
+    // After dedup the canonical keys are unique, so this sort is total and the order is
+    // deterministic.
     chosen.sort((left: Str, right: Str) -> pathCanonical(left) < pathCanonical(right))
     return chosen
 }
@@ -139,7 +137,7 @@ fun main(args: List<Str>): Int {
         when (arg) {
             "-o" -> {
                 if (i + 1 >= args.size()) {
-                    eprintln("simse_transpile: -o requires a path")
+                    eprintln("simse: -o requires a path")
                     return 2
                 }
                 i = i + 1
@@ -148,7 +146,7 @@ fun main(args: List<Str>): Int {
 
             "--prelude" -> {
                 if (i + 1 >= args.size()) {
-                    eprintln("simse_transpile: --prelude requires a path")
+                    eprintln("simse: --prelude requires a path")
                     return 2
                 }
                 i = i + 1
@@ -158,7 +156,7 @@ fun main(args: List<Str>): Int {
 
             "--root" -> {
                 if (i + 1 >= args.size()) {
-                    eprintln("simse_transpile: --root requires a path")
+                    eprintln("simse: --root requires a path")
                     return 2
                 }
                 i = i + 1
@@ -168,7 +166,7 @@ fun main(args: List<Str>): Int {
 
             "--module-root" -> {
                 if (i + 1 >= args.size()) {
-                    eprintln("simse_transpile: --module-root requires a path")
+                    eprintln("simse: --module-root requires a path")
                     return 2
                 }
                 i = i + 1
@@ -184,7 +182,7 @@ fun main(args: List<Str>): Int {
             }
 
             "-h", "--help" -> {
-                println("usage: simse_transpile <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module-root <dir>]... [--showLinearRepresentation] [--profile]")
+                println("usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module-root <dir>]... [--showLinearRepresentation] [--profile]")
                 return 0
             }
 
@@ -225,7 +223,7 @@ fun main(args: List<Str>): Int {
         } else if (pathExists(resolvedPrelude)) {
             preludeFiles.append(resolvedPrelude)
         } else if (preludeExplicit) {
-            eprintln("simse_transpile: prelude not found: " + resolvedPrelude)
+            eprintln("simse: prelude not found: " + resolvedPrelude)
             return 2
         }
     }
@@ -310,7 +308,7 @@ fun main(args: List<Str>): Int {
         return 1
     }
     if (!writeFile(output, emitted.Value)) {
-        eprintln("simse_transpile: cannot write " + output)
+        eprintln("simse: cannot write " + output)
         return 1
     }
     return 0

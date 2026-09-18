@@ -1,4 +1,0 @@
-package fixtures
-fun f(x: Nope): Int {
-    return 0
-}

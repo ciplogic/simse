@@ -1,15 +1,14 @@
 // msvc.mjs - the Visual Studio plumbing shared by build.js (which compiles the
 // amalgamated compiler) and tools/stress.js (which compiles the transpiled
-// programs). Nothing here knows about Simse: it locates vcvarsall, materializes
-// the developer environment for one architecture, and reads the CMake cache.
+// programs). Nothing here knows about Simse: it locates vcvarsall and materializes
+// the developer environment for one architecture.
 //
-// Keeping it in one module is what lets `build.js` and the stress harness agree
-// on the environment without either of them owning a copy: the ambient prompt's
-// cl.exe may target another architecture than the CMake libraries, and linking
-// across that mix fails with LNK4272 plus a wall of LNK2019 unresolved
-// externals that hides the real cause.
+// Keeping it in one module is what lets `build.js` and the stress harness agree on
+// the environment without either of them owning a copy: the ambient prompt's cl.exe
+// may target another architecture than the binaries around it, and mixing them fails
+// with an unhelpful error deep in the linker.
 
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 
@@ -22,16 +21,12 @@ export function fail(tool, message) {
   process.exit(1);
 }
 
-// The target architecture the CMake build compiles for, read from the compiler
-// path in CMakeCache.txt (`.../bin/Host<host>/<target>/cl.exe`).
-export function cachedArch(buildDir) {
-  const cache = path.join(buildDir, "CMakeCache.txt");
-  if (!existsSync(cache)) return null;
-  const match = readFileSync(cache, "utf8").match(
-      /^CMAKE_CXX_COMPILER:[^=\r\n]*=.*[\\/]bin[\\/]Host[^\\/]+[\\/]([^\\/]+)[\\/]cl\.exe\s*$/im);
-  if (!match) return null;
-  const target = match[1].toLowerCase();
-  return target === "amd64" ? "x64" : target;
+// The target architecture: the host's, which is what a standalone build wants.
+// `--arch` overrides it (`arm64`, `x64`, `x86`).
+export function hostArch() {
+  if (process.arch === "arm64") return "arm64";
+  if (process.arch === "x64") return "x64";
+  return "x86";
 }
 
 // The vcvarsall.bat of the newest Visual Studio install, or null when none is
@@ -57,16 +52,6 @@ export function normalizeArch(value) {
   return lower === "amd64" ? "x64" : lower;
 }
 
-// The CMake build type recorded in CMakeCache.txt (Debug/Release/...), or null.
-export function cachedBuildType(buildDir) {
-  const cache = path.join(buildDir, "CMakeCache.txt");
-  if (!existsSync(cache)) return null;
-  const match = readFileSync(cache, "utf8").match(/^CMAKE_BUILD_TYPE:[^=\r\n]*=(.*)$/m);
-  if (!match) return null;
-  const value = match[1].trim();
-  return value || null;
-}
-
 // The architecture the compiler targets, from its banner ("... for ARM64").
 export function compilerTarget(cl, env) {
   const probe = Bun.spawnSync([cl], { env, stdout: "pipe", stderr: "pipe" });
@@ -76,8 +61,7 @@ export function compilerTarget(cl, env) {
 }
 
 // The Visual Studio developer environment for `arch`. A `cl` already on PATH is
-// only trusted when Visual Studio cannot be located: the ambient prompt may
-// target another architecture than the CMake libraries (LNK4272/LNK2019).
+// only trusted when Visual Studio cannot be located.
 export function developerEnv(arch, tool) {
   const vcvars = findVcvars();
   if (!vcvars) {

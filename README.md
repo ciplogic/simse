@@ -125,51 +125,47 @@ The result is a language that reads like Kotlin/.NET and builds like C.
    (`simse_str_split`, `simse_dict_get`, ...) for library operations.
 5. The result is compiled by a normal C++ compiler.
 
-The compiler is **self-hosted**: it is written in Simse (`cppsrc/**/*.kt`),
-and a hand-written C++ implementation of the same compiler (`cppsrc/**/*.cpp`)
-exists alongside it as the bootstrap. The bootstrap compiles the Simse sources;
-the resulting binary compiles the same sources again, and the two outputs must be
-**byte-identical** (the build fails otherwise). That fixed point, five
-differentially-tested stages, and a stress corpus are what keep the two
-implementations honest.
+The compiler is **self-hosted**: it is written in Simse (`cppsrc/**/*.kt`), and
+there is exactly one implementation of it. `cppsrc/simse_bootstrap.cpp` - the
+amalgamation of those sources, checked in - is what lets a fresh checkout build
+the compiler with a C++ compiler alone. The compiler that comes out of it
+transpiles the same sources back into that same file, **byte for byte**;
+`bun tools/bootstrap.js` checks that fixed point, and the stress corpus keeps it
+honest.
 
 ## Quick start
 
-Requirements: Windows with Visual Studio (C++ workload), CMake + Ninja, and
+Requirements: Windows with Visual Studio (C++ workload) and
 [bun](https://bun.sh).
 
 ```bat
-:: 1. build the bootstrap compiler (once)
-cmake -S . -B cmake-build-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug
-cmake --build cmake-build-debug
-
-:: 2. build the self-hosted compiler from the Simse sources -> .\simse.exe
+:: 1. build the compiler from the Simse sources -> .\simse.exe
+::    a fresh checkout first compiles the published bootstrap for this step;
+::    add --release for /O2 /Ob3 /DNDEBUG
 build.bat
 
-:: 3. compile and run an example with it
+:: 2. compile and run an example with it
 simse.exe --root docs/examples/hello -o hello.cpp
 build.bat --cpp hello.cpp --exe hello.exe
 hello.exe
 ```
 
-`build.bat` is a thin wrapper over `build.js` (see `build.bat --help`).
-`build.bat --release` (the configuration the numbers in this repository were
-measured with) needs a second CMake folder, `cmake-build-release`, configured the
-same way with `-DCMAKE_BUILD_TYPE=Release`.
-A full walkthrough, including the tests and the stress corpus, is in
+`build.bat` is a thin wrapper over `build.js` (see `build.bat --help`). On a
+fresh checkout there is no `./simse.exe` yet, so `build.js` first compiles the
+published `cppsrc/simse_bootstrap.cpp` together with `cppsrc/rtl/native.cpp` and
+uses that as the transpiler. Once `./simse.exe` exists it does the transpiling,
+and that step takes about a second; the rest of a build is `cl.exe` optimizing
+the generated C++. A full walkthrough, including the stress corpus and the
+bootstrap fixed-point check, is in
 [docs/getting-started.md](docs/getting-started.md).
-
-> The build folders checked into this repository (`cmake-build-*/`) are the
-> author's, with absolute paths from his machine. Reconfigure your own (step 1)
-> or edit the `_msvc_configure.bat` / `_msvc_build.bat` in one of them.
 
 ## Documentation
 
 | Document | What is in it |
 | --- | --- |
-| [docs/getting-started.md](docs/getting-started.md) | prerequisites, building the compiler, compiling your first program, the tests and the stress corpus, troubleshooting |
+| [docs/getting-started.md](docs/getting-started.md) | prerequisites, building the compiler, compiling your first program, the stress corpus, troubleshooting |
 | [docs/language-tour.md](docs/language-tour.md) | the language itself, with runnable fragments: values, control flow, data classes, enums, generics, collections, memory, modules |
-| [docs/how-it-works.md](docs/how-it-works.md) | the pipeline, the two compiler implementations, the emitted C++, the RTL, and how the build verifies itself |
+| [docs/how-it-works.md](docs/how-it-works.md) | the pipeline, the bootstrap fixed point, the emitted C++, the RTL, and how the build verifies itself |
 | [docs/state-of-the-field.md](docs/state-of-the-field.md) | honest status: what works, what is rough, what is missing, and how it compares to the alternatives |
 | [docs/examples/](docs/examples/) | the three example programs used in the docs (`hello`, `tour`, `wordcount`) |
 | [impl_specs/user-language-roadmap.md](impl_specs/user-language-roadmap.md) | where the language is going, phased, with the non-goals |
@@ -182,18 +178,17 @@ lambdas, `List`/`Array`/`Dictionary`/`Span`/`Opt`/`Res`/`Str`, list literals and
 that pack their trailing arguments into a last `List` parameter, file I/O, the
 `main(args)` form, `yield`, and `for` over anything with a `smToYield` - a container,
 or a state machine itself),
-a self-hosted compiler that reproduces its own output byte for byte, 56 in-process
-tests, five differential stage tests and 41 end-to-end stress programs.
+a self-hosted compiler that reproduces the published bootstrap byte for byte,
+and 45 end-to-end stress programs.
 
-On speed (`bun tools/bootstrap.js`, release, this machine - the range is machine load,
-best of 5 runs idle):
+On speed (`bun tools/bootstrap.js`, release, this machine - the range is machine
+load, best of 3 runs idle):
 
 | | |
 | --- | --- |
-| the compiler transpiling its own source tree | **16,825 lines of Simse in 0.89 s** (45,439 lines of C++ out, ~18.8k lines/s) |
-| the same tree through the hand-written C++ ring | 0.31 s (the Simse ring is ~2.9x that - the flat-body work, every declaration at the top of its body, costs the Simse ring a share of the transpile, and the C++ ring nothing; the rest is the `.kt` ring's value-semantics AST, `impl_specs/capability-matrix.md` T66) |
-| compiling the published `cppsrc/simse_bootstrap.cpp` with `cl.exe` | ~18 s release (`/O2 /Ob3`), ~3.1 s debug |
-| **from the published file to a compiler that reproduces it** | **~19 s**, then ~0.9 s per self-transpile |
+| the compiler transpiling its own source tree | **17,905 lines of Simse in ~1.1 s** (45,757 lines of C++ out, ~16.4k lines/s) |
+| compiling the published `cppsrc/simse_bootstrap.cpp` with `cl.exe` | ~21 s release (`/O2 /Ob3`) |
+| **from the published file to a compiler that reproduces it** | **~22 s**, then ~1.1 s per self-transpile |
 
 Not there yet, in rough order of how soon a user would miss it: `for` over a
 `Dictionary` and ranges, string interpolation, closed unions + exhaustive `when`, a
@@ -206,12 +201,12 @@ explicit about each of these and the roadmap phases them.
 
 | Path | Contents |
 | --- | --- |
-| `cppsrc/` | the compiler twice: hand-written C++ (`*.cpp`, `*.h`) and the Simse mirror (`*.kt`), plus `cppsrc/rtl/` (the runtime headers and the prelude), `cppsrc/native/` (native symbols), and `cppsrc/simse_bootstrap.cpp` - the amalgamated compiler, checked in so it can be built with a C++ compiler alone |
+| `cppsrc/` | the compiler in Simse (`lex/`, `parser/`, `sema/`, `linear/`, `codegen/`, `compiler/`), plus `cppsrc/rtl/` (the runtime headers, the prelude `.kt` files, and the one hand-written translation unit `native.cpp`) and `cppsrc/simse_bootstrap.cpp` - the amalgamated compiler, checked in so it can be built with a C++ compiler alone |
 | `specs/` | the language specification (normative): types, declarations, functions, memory model, generics, containers, modules, statics |
 | `impl_specs/` | implementation plans and records: self-hosting plan, capability matrix, RTL ABI, the user-facing roadmap |
 | `stress/` | one folder per end-to-end program: source, arguments, expected output |
-| `tests/` | fixtures, goldens, and the differential drivers |
-| `tools/` | the JavaScript harness: the stress runner (`stress.js`), the bootstrap measurement (`bootstrap.js`), the A/B benchmarks, the probes |
+| `build.js`, `build.bat`, `stress.bat` | the build and harness entry points: transpile the source tree, compile it with `cl.exe`, run the stress corpus |
+| `tools/` | the JavaScript harness: the stress runner (`stress.js`), the bootstrap fixed-point check (`bootstrap.js`), `msvc.mjs`, the probes |
 | `docs/` | this documentation |
 
 ## Design principles
@@ -227,8 +222,9 @@ explicit about each of these and the roadmap phases them.
   documented behavior.
 - **Small surface, no magic.** No macros, no operator overloading, no
   exceptions, no implicit threading.
-- **Two implementations, one behavior.** Every compiler change lands in both the
-  C++ and the Simse source, and the build proves they agree.
+- **One implementation, a fixed point.** The compiler is its Simse sources; the
+  published bootstrap and the compiler it produces must agree byte for byte, and
+  the build proves it.
 
 ## License
 

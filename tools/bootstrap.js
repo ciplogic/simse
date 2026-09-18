@@ -2,32 +2,34 @@
 //
 //   bun tools/bootstrap.js [--runs N] [--debug] [--simse <exe>]
 //
-// "Bootstrapping" Simse means: transpile the compiler source tree (`cppsrc`) into
-// `cppsrc/simse_bootstrap.cpp` - the amalgamation that is checked in, so that Simse can
-// be built from a C++ compiler alone - and compile that file. This tool times each step
-// and checks the fixed point:
+// "Bootstrapping" Simse means: `cppsrc/simse_bootstrap.cpp` - the published amalgamation of
+// the compiler source tree - is checked in, so Simse can be built with a C++ compiler alone;
+// and the compiler that comes out of it must transpile the same sources back into the same
+// bytes. This tool times each step and checks that fixed point:
 //
-//   1. transpile   the compiler compiling `cppsrc`, by the self-hosted binary and (for
-//                  comparison) by the hand-written C++ ring
-//   2. compile     `cppsrc/simse_bootstrap.cpp` -> `simse.exe`, with cl.exe only
-//                  (no CMake libraries: the file plus `cppsrc/native/Native.cpp` and
-//                  `cppsrc/common/common.cpp`, exactly as docs/getting-started.md
-//                  documents it)
-//   3. fixed point the compiler that came out of step 2, transpiling `cppsrc`, must
-//                  reproduce `cppsrc/simse_bootstrap.cpp` byte for byte - which is what
-//                  makes the published file a *bootstrap* and not a snapshot
+//   1. compile     the published `cppsrc/simse_bootstrap.cpp` and the runtime
+//                  `cppsrc/rtl/native.cpp` into `simse_boot.exe`, with cl.exe only - no
+//                  build system, nothing generated (docs/getting-started.md,
+//                  "Building the compiler without a compiler")
+//   2. transpile   `simse_boot.exe` compiling `cppsrc`, and - when a working compiler
+//                  exists - that compiler doing the same, so the two can be compared
+//   3. fixed point the regenerated file must equal `cppsrc/simse_bootstrap.cpp` byte for
+//                  byte, whichever compiler produced it. That is what makes the published
+//                  file a *bootstrap* and not a snapshot
 //
 // Timings are wall-clock, best and median of `--runs` (default 3, compiles run once
-// because they dominate). Everything lands in `cmake-build-<mode>/bootstrap/`.
+// because they dominate). Everything lands in `build/<mode>/bootstrap/`.
 
 import { spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import * as path from "node:path";
 
-import { cachedArch, developerEnv, fail as failTool, normalizeArch, REPO, whichCl } from "./msvc.mjs";
+import { developerEnv, fail as failTool, hostArch, normalizeArch, REPO, whichCl } from "./msvc.mjs";
 
 const TOOL = "bootstrap";
 const fail = (message) => failTool(TOOL, message);
+const BOOTSTRAP = path.join("cppsrc", "simse_bootstrap.cpp");
+const NATIVE = path.join("cppsrc", "rtl", "native.cpp");
 
 function parseArgs(argv) {
   const opts = { runs: 3, debug: false, simse: null };
@@ -78,30 +80,32 @@ function countLines(file) {
   return readFileSync(file, "utf8").split("\n").length;
 }
 
+// The same bytes on both sides of a `fc /b`.
+function sameBytes(left, right) {
+  return spawnSync("cmd", ["/c", "fc", "/b", left, right], { cwd: REPO, encoding: "utf8" }).status === 0;
+}
+
 function main() {
   const opts = parseArgs(process.argv.slice(2));
   if (!opts) return 0;
 
-  const buildDir = path.join(REPO, opts.debug ? "cmake-build-debug" : "cmake-build-release");
-  const work = path.join(buildDir, "bootstrap");
+  const mode = opts.debug ? "debug" : "release";
+  const work = path.join(REPO, "build", mode, "bootstrap");
   mkdirSync(work, { recursive: true });
 
-  const bootstrap = path.join(REPO, "cppsrc", "simse_bootstrap.cpp");
-  const generated = path.join(work, "simse_out.cpp");
-  const selfHosted = opts.simse ?? path.join(REPO, "simse.exe");
-  const cppRing = path.join(buildDir, "simse_transpile.exe");
-  const exe = path.join(work, "simse_boot.exe");
+  const bootstrap = path.join(REPO, BOOTSTRAP);
+  const native = path.join(REPO, NATIVE);
+  const bootExe = path.join(work, "simse_boot.exe");
+  const bootOut = path.join(work, "simse_boot_out.cpp");
+  const workingOut = path.join(work, "simse_working_out.cpp");
+  const working = opts.simse ? path.resolve(REPO, opts.simse) : path.join(REPO, "simse.exe");
+  const hasWorking = existsSync(working);
 
-  for (const required of [bootstrap, selfHosted, cppRing]) {
-    try {
-      statSync(required);
-    } catch {
-      fail(`missing ${path.relative(REPO, required)}` +
-           (required === selfHosted ? " (build it with `bun build.js`)" : ""));
-    }
+  for (const required of [bootstrap, native]) {
+    if (!existsSync(required)) fail(`missing ${path.relative(REPO, required)}`);
   }
 
-  const arch = normalizeArch(cachedArch(buildDir) || "arm64");
+  const arch = normalizeArch(hostArch());
   const env = developerEnv(arch, "build");
   const cl = whichCl(env);
   if (!cl) fail(`cl.exe not found on the Visual Studio PATH (arch ${arch})`);
@@ -114,49 +118,53 @@ function main() {
   const lines = Number((sourceLines.stdout || "0").trim()) || 0;
   const outLines = countLines(bootstrap);
 
-  console.log(`${TOOL}: ${opts.debug ? "debug" : "release"} build, ${opts.runs} run(s) for the transpiles`);
+  console.log(`${TOOL}: ${mode} build, ${opts.runs} run(s) for the transpiles`);
   console.log(`  sources    ${lines} lines of Simse under cppsrc`);
-  console.log(`  bootstrap  ${path.relative(REPO, bootstrap)}: ${outLines} lines, ` +
+  console.log(`  bootstrap  ${BOOTSTRAP}: ${outLines} lines, ` +
               `${(statSync(bootstrap).size / 1048576).toFixed(2)} MB (checked in, do not edit)`);
   console.log("");
-  console.log("1. transpile the compiler's own source tree");
-  timed(`self-hosted compiler (${path.relative(REPO, selfHosted)}) --root cppsrc`,
-        selfHosted, ["--root", "cppsrc", "-o", generated], opts.runs);
-  if (!opts.simse) {
-    timed(`hand-written C++ ring (${path.relative(buildDir, cppRing)}) --root cppsrc`,
-          cppRing, ["--root", "cppsrc", "-o", generated], opts.runs);
-  }
-  console.log("");
-  console.log("2. compile the published bootstrap (cl.exe only, no CMake libraries)");
-  const includeRoot = REPO;
-  const defines = [
-    `/DSIMSE_DEFAULT_PRELUDE="${path.join(REPO, "cppsrc", "rtl")}"`,
-    `/DSIMSE_SOURCE_ROOT="${REPO}"`,
-  ];
-  const compile = timed("bootstrap + Native.cpp + common.cpp -> simse_boot.exe", cl, [
-    "/nologo", "/std:c++20", "/EHsc", "/W3", "/I" + includeRoot, ...defines,
+  console.log("1. compile the published bootstrap (cl.exe only, no build system)");
+  const compile = timed(`${BOOTSTRAP} + ${NATIVE} -> simse_boot.exe`, cl, [
+    "/nologo", "/std:c++20", "/EHsc", "/W3", "/I" + REPO,
     ...(opts.debug ? ["/MDd", "/Od", "/Zi"] : ["/MD", "/O2", "/Ob3", "/DNDEBUG"]),
-    "cppsrc/simse_bootstrap.cpp", "cppsrc/native/Native.cpp", "cppsrc/common/common.cpp",
-    "/Fo" + path.join(work, "") + "\\", "/Fe:" + exe,
+    ...(opts.debug ? [`/Fd${bootExe}.pdb`] : []),
+    BOOTSTRAP, NATIVE,
+    "/Fo" + path.join(work, "") + "\\", "/Fe:" + bootExe,
   ], 1, env);
   console.log("");
-  console.log("3. fixed point: the compiled bootstrap transpiles cppsrc again");
-  const regen = path.join(work, "simse_boot_out.cpp");
-  const regenTime = timed("simse_boot.exe --root cppsrc", exe, ["--root", "cppsrc", "-o", regen], opts.runs);
-  const same = spawnSync("cmd", ["/c", "fc", "/b", bootstrap, regen], { cwd: REPO, encoding: "utf8" });
-  console.log(`  ${"output == cppsrc/simse_bootstrap.cpp".padEnd(52)} ` +
-              (same.status === 0 ? "yes, byte for byte" : "NO - the published file is stale"));
-  if (same.status !== 0) return 1;
+  console.log("2. transpile the compiler's own source tree");
+  const bootTime = timed(`simse_boot.exe (just built) --root cppsrc`,
+        bootExe, ["--root", "cppsrc", "-o", bootOut], opts.runs);
+  let workTime = null;
+  if (hasWorking) {
+    workTime = timed(`working compiler (${path.relative(REPO, working)}) --root cppsrc`,
+          working, ["--root", "cppsrc", "-o", workingOut], opts.runs);
+  } else {
+    console.log(`  ${"(no ./simse.exe to compare with)".padEnd(52)} build one with \`bun build.js\``);
+  }
+  console.log("");
+  console.log("3. fixed point: both outputs must equal the published bootstrap");
+  const bootSame = spawnSync("cmd", ["/c", "fc", "/b", bootstrap, bootOut], { cwd: REPO, encoding: "utf8" });
+  console.log(`  ${"simse_boot.exe's output == the bootstrap".padEnd(52)} ` +
+              (bootSame.status === 0 ? "yes, byte for byte" : "NO - the published file is stale"));
+  let workSame = true;
+  if (hasWorking) {
+    workSame = sameBytes(bootstrap, workingOut);
+    console.log(`  ${"the working compiler's output == the bootstrap".padEnd(52)} ` +
+                (workSame ? "yes, byte for byte" : "NO - rebuild it with `bun build.js`"));
+  }
+  if (bootSame.status !== 0 || !workSame) return 1;
 
-  const total = (regenTime ?? 0) + (compile ?? 0);
+  const total = (bootTime ?? 0) + (compile ?? 0);
   console.log("");
   console.log(`  from the published file to a working compiler: ${seconds(compile ?? 0)}`);
-  console.log(`  and that compiler reproduces itself in:        ${ms(regenTime ?? 0)}`);
+  console.log(`  and that compiler reproduces itself in:        ${ms(bootTime ?? 0)}`);
   console.log(`  full cycle (compile + self-transpile):         ${seconds(total)}`);
-  if (lines > 0 && regenTime) {
-    console.log(`  throughput: ${Math.round(lines / (regenTime / 1000))} lines/s of Simse ` +
-                `(${Math.round(outLines / (regenTime / 1000))} lines/s of C++ out)`);
+  if (lines > 0 && bootTime) {
+    console.log(`  throughput: ${Math.round(lines / (bootTime / 1000))} lines/s of Simse ` +
+                `(${Math.round(outLines / (bootTime / 1000))} lines/s of C++ out)`);
   }
+  if (workTime) console.log(`  the working compiler transpiles the same tree in: ${ms(workTime)}`);
   return 0;
 }
 
