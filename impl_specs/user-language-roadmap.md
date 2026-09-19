@@ -12,8 +12,9 @@ Written from the current sources: what exists is what the guide's feature list a
 
 Simse is: **a small, fully static language with no runtime** - no garbage
 collector, no exceptions, no threads, no vtables, no arenas - which is exactly what
-lets it transpile to **one readable C++ file** that any C++ toolchain compiles and
-any debugger opens.
+lets it transpile to **one C++ translation unit** that any C++ toolchain compiles and
+any debugger opens. That file is a lowering, not prose: hoisted locals, numbered
+temporaries and labels/gotos (`README.md`, "What it compiles to").
 
 That single constraint explains the whole surface:
 
@@ -242,7 +243,7 @@ surface plus a native layer; 6-7 are the ones that make it usable by strangers.
 | Exceptions | slow even when unthrown in this model (unwinding, tables, no-zero-cost guarantee in the emitted C++) | `Res<T>` for expected failures, `panic` for bugs |
 | Threads, async/await, coroutines | a data-race-free story and a runtime are both out of scope; scheduling costs code size | one core per process, `poll`-based event loop, process-level parallelism later |
 | Arenas / custom allocators | they drag in ownership rules the type system does not have | `reserve`, buffer reuse, `Array` blocks, inline `SmallVector` storage |
-| Dynamic dispatch, interfaces as values | vtables are what we are avoiding; they also break the "one readable .cpp" property | static protocols, closed unions + `when` |
+| Dynamic dispatch, interfaces as values | vtables are what we are avoiding; they also mean dynamic type information in a language that resolves everything statically | static protocols, closed unions + `when` |
 | Garbage collection, cycle collection | value semantics + reference counts are predictable and cheap | `&T` handles with a documented "no cycles" rule; `Array` for trees |
 | Runtime reflection / metadata | it needs a runtime | reified generics + `object` statics do the same work at compile time (JSON is the proof) |
 | A TLS stack in-tree | large, security-sensitive, and orthogonal to the language | terminate TLS in a proxy in front of the process |

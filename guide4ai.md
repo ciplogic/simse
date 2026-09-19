@@ -628,18 +628,17 @@ Do these only when asked; roughly prioritized:
 
 ## 9. Gotchas
 
-- **A resource section marked `!` is read and not carried** (`specs/resources.md`): the
-  compiler reads its entries - a generator looks its keys up, the emitter finds its text and
-  emits it as code - and the program it builds does not store them. It is what a `.md` file
-  holding *code* wants (a `kt` section's Simse source, a `res` section's C++): the code is
-  compiled in, and the text would otherwise be in the executable a second time. The marker is
-  trimmed off the section name, so a lookup by spelling cannot tell whether a section was
-  marked. A program's own code sections use it (`stress/resources-compileonly`,
-  `stress/smgen-kt`), and so does `cppsrc/rtl/_res.md` - every one of its sections - because the
-  compiler reads that file from disk beside its prelude as it compiles, the way it reads the
-  prelude's `.kt` files. That disk read is the second half of the generator lookup (the tree
-  being compiled is the first), so nothing has to be pooled: the compiler's own string pool
-  dropped from 33,446 bytes to 11,051 when the RTL's text stopped being embedded in it.
+- **A resource section marked `!` is read and not carried, and one marked `*` is binary**
+  (`specs/resources.md`, "Markers"): `!` means the compiler reads the entries and the program
+  does not store them - what a `.md` file holding *code* wants, since the code is compiled in
+  and the text would otherwise be a second copy of it - and `*` means the value as written is
+  **lower-case hex that stands for the bytes**, decoded on the way in, so what downstream sees
+  is an ordinary `Str` that may hold a `\0` in the middle (the emitter escapes every
+  non-printable byte as three-digit octal, and `cgLiteralByteLength` counts that as one byte).
+  Both may be written on a **section title or on one entry's key**, together and in either
+  order (`!*Hidden`), and the marker run is consumed with the whitespace around it - so a
+  lookup by spelling cannot tell whether anything was marked, and there is no way to take a
+  marker back (a marked section marks every entry under it).
 - **An XML comment cannot contain `--`**, so `simse.vcxproj`'s comments cannot spell a
   command-line flag: the debugger argument it sets (`LocalDebuggerCommandArguments`, the
   `root` option over `cppsrc`) has to be described in words there. It is worth knowing before

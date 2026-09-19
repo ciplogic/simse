@@ -2864,3 +2864,39 @@ compiler *did* catch and one it could not:
   all** - the emitted `Ref<T>` spelling and the `SmRef`/`std::shared_ptr` switch are exercised by
   the RTL's `Array`/`PList` and by the corpus (`stress/counted-reference`,
   `stress/pack-args`, `stress/language-tour`) rather than by the compiler's own ring.
+
+- **A `*` marker for binary resources, markers on individual keys, and the output framed
+  honestly.** The resource format grew a second marker: `*` means the value as written is
+  **lower-case hex that stands for the bytes**, decoded once on the way in
+  (`resValueText` -> `simse_resHexToBytes`), so nothing downstream knows it was hex - a
+  resource is a `Str` (pointer + length) whether or not it holds a `\0` in the middle. Both
+  markers are now read by one function (`resMarkedName`) from a **section title or an entry's
+  key**, may be written together in either order, and are consumed with the surrounding
+  whitespace; there is no way to unset one, so a marked section marks every entry under it and
+  a key's markers only add. `ResourceItem` carries the two flags (`compileOnly`, `binary`).
+
+  Three consequences worth remembering. **The pool has to hold arbitrary bytes**, so a
+  `*`-marked value is spelled by `resQuoteBinary` - printable bytes as themselves, everything
+  else as an *octal* escape with all three digits written (`\x` would take every hex digit that
+  follows it) - and `cgLiteralByteLength` already counts an octal escape as the one byte it is,
+  which is what lets a value begin with `\0` and keep its length (`stress/resources-binary`).
+  **The spelling moved out of the emitter**: the driver hands the emitter literals that are
+  already spelled (`resStoredLiterals`), so the pool and its index cannot disagree about how a
+  byte is written, and `Emitter.resourceEntries` - the full list, unused since the lookup moved
+  to `sourcegen` - is gone. And **the format's byte helpers needed a section of their own**
+  (`resfmt`): putting them in `strops` made every program that reached a `Str` operation carry
+  them, which three goldens caught immediately.
+
+  The same pass rewrote the framing the project outgrew: the README no longer promises
+  "readable C++" (the output is a *lowering* - hoisted locals, numbered temporaries,
+  labels/gotos - that a profiler and a debugger can use, and it will keep getting less
+  readable), it says plainly that there is one language and one implementation (the compiler's
+  own sources; the bootstrap is *its output*, checked in as the fixed-point proof and as the
+  way a C++-only machine builds a Simse compiler), and it spends its room on what writing the
+  language feels like instead of on the emitter's shape. The same claim was removed from
+  `impl_specs/user-language-roadmap.md`, `docs/state-of-the-field.md` and
+  `impl_specs/generators.md`.
+
+  Verified: `bun tools/stress.js` **61/61** (one new case, and no golden needed re-capturing
+  once the helpers stopped riding in `strops`), `bun tools/smgen.js` 1/1, and the bootstrap
+  fixed point holds byte for byte after one refresh.

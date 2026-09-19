@@ -150,8 +150,8 @@ and after it transpiles `cppsrc` to identical C++:
   this cannot change its bytes.
 - Every block - a section's own text and each item alike - starts fresh: a blank line
   before it, unless the output already ends with one. A generated text therefore never
-  runs into the line before it, which is what keeps a resource's C++ readable in the
-  amalgamation.
+  runs into the line before it, which is what keeps the emitted file's sections
+  separable - by a reader, and by anything that has to diff two of them.
 - A name the emitter does not know is a *new* section, appended at the end of the list,
   so a generator's own machinery renders after the program, out of the way.
 - `add` is **last write wins**: an existing key's text is replaced. A generator that

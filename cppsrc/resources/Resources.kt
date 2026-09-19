@@ -29,17 +29,23 @@ package resources
 import common
 
 // One resource, as the *compiler* read it from a file: the key the program will look it
-// up by, the text it holds, and whether the program carries it at all.
+// up by, the text it holds, and the two flags a marker can set.
 //
-// `compileOnly` is a section title written with a leading `!` (specs/resources.md): the
-// compiler reads the entry - a generator looks it up, the emitter finds the text - and the
-// program does **not** carry it. It is what keeps *code* in a `.md` file from being stored
-// in the executable as text as well as compiled in: a `kt` section's Simse source, or a
-// `res` section's C++. The marker is not part of the key, so a lookup by spelling is the
-// same whether the section was marked or not.
+// `compileOnly` is the `!` marker (specs/resources.md): the compiler reads the entry, the
+// program does not carry it. It is what keeps *code* in a `.md` file from being stored in
+// the executable as text as well as compiled in.
 //
-// Both texts hold the file's own bytes - the pool and the C++
-// escapes are the emitter's business.
+// `binary` is the `*` marker: the value as written is *hex that stands for the bytes*, so
+// by the time an entry reaches here it is already decoded - `value` holds the bytes
+// themselves, and nothing downstream has to know that the file spelled them as digits.
+//
+// Both markers may be written on a section's title or on one entry's key, together and in
+// either order; the marker characters are not part of the name, so a lookup by spelling is
+// the same whether anything was marked.
+//
+// The text holds the file's own bytes (the pool and the C++ escapes are the emitter's
+// business), and it is `Str` - the RTL's byte string - so a binary resource is an ordinary
+// value here: bytes that happen not to be text.
 //
 // The name is deliberately not `ResourceEntry`: that is the RTL's type, the pair of
 // `StrView`s the program carries (cppsrc/rtl/resources.hpp + resources.kt), and the
@@ -50,8 +56,57 @@ data class ResourceItem(
 
     var value: Str,
 
-    var compileOnly: Bool
+    var compileOnly: Bool,
+
+    var binary: Bool
 )
+
+// One name with its markers read: the name itself, and what the markers said.
+// `specs/resources.md`, "Markers".
+data class ResMarked(
+    var name: Str,
+
+    var compileOnly: Bool,
+
+    var binary: Bool
+)
+
+// Reads a section title's or an entry key's leading marker run: `!` makes what it marks
+// compile-only, `*` makes its value binary, they may appear together in either order, and
+// the run is consumed - the name that is left is the name the file means.
+//
+// There is no way to *unset* a marker: a marked section marks every entry under it, and an
+// entry's own markers are on top of the section's (`resParseText` combines the two with
+// `||`, which is the whole of the rule).
+fun resMarkedName(raw: Str): ResMarked {
+    var compileOnly: Bool = false
+    var binary: Bool = false
+    var i: Int = 0
+    while (i < raw.size()) {
+        if (raw[i] == '!') {
+            compileOnly = true
+        } else if (raw[i] == '*') {
+            binary = true
+        } else {
+            break
+        }
+        i = i + 1
+    }
+    return ResMarked(raw.substr(i, raw.size() - i).trim(), compileOnly, binary)
+}
+
+// The two byte-level helpers the format needs, whose C++ is the `resfmt` section of
+// `cppsrc/rtl/_res.md` (impl_specs/generators.md): turning a hex dump into the bytes it
+// stands for, and spelling bytes back out as the C++ literal the pool holds them as.
+//
+// They are here rather than in the prelude on purpose: this is the *format*'s machinery, and a
+// program has no use for either. Their section is `!`-marked and of their own (not part of
+// `strops`), so no program reaches them and none of this reaches a program's output.
+@SmGen("res", "resfmt", "simse_resHexToBytes")
+fun resHexToBytes(hex: Str): Str
+
+@SmGen("res", "resfmt", "simse_resQuoteBinary")
+fun resQuoteBinary(bytes: Str): Str
 
 // ---- the format -----------------------------------------------------------
 
@@ -114,24 +169,19 @@ fun resParseText(text: Str): List<ResourceItem> {
     var entries: List<ResourceItem> = List<ResourceItem>()
     var section: Str = ""
     var compileOnly: Bool = false
+    var binary: Bool = false
     var i: Int = 0
     while (i < lines.size()) {
         // A title is a line *underlined* by the line below it; both lines are spent, so an
-        // underline is never read as an entry of its own. A title that opens with `!` marks
-        // its section compile-only (`specs/resources.md`): the name is the rest of the
-        // title, so `!greet` is the section `greet`, read by the compiler and not carried by
-        // the program. A title with no name after the `!` is not a title, and leaves both
-        // the section and the marker as they were.
+        // underline is never read as an entry of its own. Its markers (`resMarkedName`) say
+        // what every entry under it is; a title with nothing left after its markers is not a
+        // title, and leaves the section and both markers as they were.
         if (i + 1 < lines.size() && resIsUnderline(lines[i + 1])) {
-            var title: Str = lines[i].trim()
-            var marked: Bool = false
-            if (title.startsWith("!")) {
-                marked = true
-                title = title.substr(1, title.size() - 1).trim()
-            }
-            if (title.size() > 0) {
-                section = title
-                compileOnly = marked
+            val marked: ResMarked = resMarkedName(lines[i].trim())
+            if (marked.name.size() > 0) {
+                section = marked.name
+                compileOnly = marked.compileOnly
+                binary = marked.binary
             }
             i = i + 2
             continue
@@ -142,10 +192,17 @@ fun resParseText(text: Str): List<ResourceItem> {
             i = i + 1
             continue
         }
-        val key: Str = resQualifiedKey(section, line.substr(0, colon).trim())
+        // The key's own markers are on top of the section's - either one marks the entry, so
+        // the two are combined with `||` and nothing can take a marker back.
+        val markedKey: ResMarked = resMarkedName(line.substr(0, colon).trim())
+        val key: Str = resQualifiedKey(section, markedKey.name)
+        val entryCompileOnly: Bool = compileOnly || markedKey.compileOnly
+        val entryBinary: Bool = binary || markedKey.binary
         val rest: Str = line.substr(colon + 1, line.size() - colon - 1).trim()
         if (rest.size() > 0) {
-            entries.append(ResourceItem(key, resUnquote(rest), compileOnly))
+            entries.append(
+                ResourceItem(key, resValueText(resUnquote(rest), entryBinary), entryCompileOnly, entryBinary)
+            )
             i = i + 1
             continue
         }
@@ -180,9 +237,19 @@ fun resParseText(text: Str): List<ResourceItem> {
         } else {
             i = i + 1
         }
-        entries.append(ResourceItem(key, value, compileOnly))
+        entries.append(ResourceItem(key, resValueText(value, entryBinary), entryCompileOnly, entryBinary))
     }
     return entries
+}
+
+// A value as the entry holds it: a `*`-marked one is hex that stands for the bytes, so it is
+// decoded here - once, on the way in - and everything downstream reads bytes (`resHexToBytes`,
+// whose C++ is the `strops` resource section).
+fun resValueText(value: Str, binary: Bool): Str {
+    if (!binary) {
+        return value
+    }
+    return resHexToBytes(value)
 }
 
 // The flat list a compilation keeps, from the entries of every file in order: a key
@@ -206,29 +273,14 @@ fun resDedup(entries: List<ResourceItem>): List<ResourceItem> {
             // The winner's own text *and* marker: a key written in a marked section and
             // again in an unmarked one is stored or not by the entry that won it.
             val won: ResourceItem = last.get(key).value()
-            out.append(ResourceItem(key, won.value, won.compileOnly))
+            out.append(ResourceItem(key, won.value, won.compileOnly, won.binary))
         }
         i = i + 1
     }
     return out
 }
 
-// The entries a **program** carries: everything except the sections marked compile-only
-// (`!`, `specs/resources.md`). The compiler read all of them - a generator looks a key up
-// in the full list, and the emitter finds a section's text in it - and these are the ones
-// that reach the program's string table and its `Resources` table.
-fun resStoredEntries(entries: List<ResourceItem>): List<ResourceItem> {
-    var out: List<ResourceItem> = List<ResourceItem>()
-    var i: Int = 0
-    while (i < entries.size()) {
-        if (!entries[i].compileOnly) {
-            out.append(entries[i])
-        }
-        i = i + 1
-    }
-    return out
-}
-
+// The text `entries` holds for `key`, or "" when they do not carry it. The compiler's
 // ---- discovery and loading ------------------------------------------------
 
 // Every `_res.md` file under each module root, recursively, each canonical path once, in
@@ -287,17 +339,24 @@ fun resLoad(moduleRoots: List<Str>): List<ResourceItem> {
     return resLoadFiles(resResourceFiles(moduleRoots))
 }
 
-// The same entries in the same order as one flat list of the texts themselves - key,
-// value, key, value, ... - which is what a reader that looks a key up *by spelling*
-// wants (`resValueOf` is the same scan over the pairs). The emitter holds this list: it
-// both looks sections up in it and quotes what it pools, so one list serves both
-// (`Codegen.emitProgram`).
-fun resEntriesFlat(entries: List<ResourceItem>): List<Str> {
+// The same entries, in the same order, each key and value spelled as **the C++ string
+// literal that holds its bytes** - which is what the emitter pools and what its length index
+// is built from. The spelling happens here, once, rather than in the emitter: a `*`-marked
+// value is bytes, not text, so it needs a different escape rule (`resQuoteBinary`, every
+// non-printable byte written as an octal escape), and a spelling that is only ever written
+// once cannot disagree with itself.
+fun resStoredLiterals(entries: List<ResourceItem>): List<Str> {
     var out: List<Str> = List<Str>()
     var i: Int = 0
     while (i < entries.size()) {
-        out.append(entries[i].key)
-        out.append(entries[i].value)
+        if (!entries[i].compileOnly) {
+            out.append(resQuoteLiteral(entries[i].key))
+            if (entries[i].binary) {
+                out.append(resQuoteBinary(entries[i].value))
+            } else {
+                out.append(resQuoteLiteral(entries[i].value))
+            }
+        }
         i = i + 1
     }
     return out

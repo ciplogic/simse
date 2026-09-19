@@ -671,3 +671,77 @@ inline Span<T> simse_spanOf(List<T>* items) {
     return Span<T>(nullptr, -1);
 }
 ```
+
+!resfmt
+====
+forward:
+```cpp
+// The resource format's two byte-level helpers (specs/resources.md, "Markers"): the bytes a
+// hex dump stands for, and those bytes spelled as the C++ literal the pool holds them as.
+//
+// They are reached by the declarations in `cppsrc/resources/Resources.kt`, which is a module
+// of the *compiler* - a program neither sees them nor emits them, which is why they are a
+// section of their own rather than part of `strops`: a shared section is emitted whole, so
+// any program that reached `strops` would carry these too.
+Str simse_resHexToBytes(const Str& self);
+Str simse_resQuoteBinary(const Str& self);
+```
+bodies:
+```cpp
+// The bytes a `*`-marked value's hex stands for: every pair of hex digits is one byte, in
+// order, so the value is a byte string like any other - a `Str` with a length, which may hold
+// a `\0` in the middle.
+//
+// The hex is **lower case** and whitespace (spaces, tabs, newlines) is not part of it, so a
+// dump may be wrapped however the file likes; decoding stops at the first character that is
+// neither, and a last digit left unpaired is dropped. Stopping rather than skipping is
+// deliberate: a value that is not lower-case hex decodes to nothing rather than to half its
+// bytes, which is the loudest failure this format can give - it validates nothing anywhere, so
+// the program's own output is where a bad dump shows up.
+inline Str simse_resHexToBytes(const Str& self) {
+    Str out;
+    out.reserve(self.size() / 2);
+    Int high = -1;
+    for (Char ch : self) {
+        if (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') continue;
+        Int digit = -1;
+        if (ch >= '0' && ch <= '9') digit = ch - '0';
+        else if (ch >= 'a' && ch <= 'f') digit = ch - 'a' + 10;
+        if (digit < 0) break;
+        if (high < 0) {
+            high = digit;
+        } else {
+            out.push_back((char) (high * 16 + digit));
+            high = -1;
+        }
+    }
+    return out;
+}
+
+// Bytes as the C++ literal the pool holds them as: printable bytes stand for themselves, and
+// every other byte is an octal escape with all three digits written, so that a following
+// character which happens to be an octal digit cannot run the escape on (`\x` would: it takes
+// every hex digit that follows it). `cgLiteralByteLength` counts an octal escape as the one
+// byte it is, which is what keeps the pool and its length index in step - and it is what makes
+// a `\0` in the middle of a value an ordinary byte of the pool.
+inline Str simse_resQuoteBinary(const Str& self) {
+    Str out = "\"";
+    for (Char ch : self) {
+        Int byte = (Int) (unsigned char) ch;
+        if (ch == '\\') {
+            out.append("\\\\");
+        } else if (ch == '\"') {
+            out.append("\\\"");
+        } else if (byte >= 0x20 && byte <= 0x7e) {
+            out.push_back((char) byte);
+        } else {
+            out.push_back('\\');
+            out.push_back((char) ('0' + ((byte >> 6) & 7)));
+            out.push_back((char) ('0' + ((byte >> 3) & 7)));
+            out.push_back((char) ('0' + (byte & 7)));
+        }
+    }
+    out.push_back('"');
+    return out;
+}
+```

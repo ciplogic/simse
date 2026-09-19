@@ -374,14 +374,13 @@ fun main(args: List<Str>): Int {
     // resource file carries an empty list and emits the same C++ as one built before the
     // feature existed.
     //
-    // Two views of that list: `resourceEntries` is everything, which is what the *emitter*
-    // looks a section up in (so a marked section's text is still emitted as code), and
-    // `resourceStored` is what the **program carries** - a section a `_res.md` marked with
-    // `!` is read by the compiler and left out of the program, which is what keeps code in a
-    // `.md` file from being stored in the executable as text on top of being compiled in.
+    // What the **program carries** is `resStoredLiterals`: every key and value of the entries
+    // that are not compile-only (`!`), each spelled as the C++ literal that holds its bytes -
+    // text by `resQuoteLiteral`, a `*`-marked value by `resQuoteBinary`, whose bytes are not
+    // text. The emitter pools exactly that list, so a marked section is read by the compiler
+    // and left out of the program it builds.
     val resources: List<ResourceItem> = resLoad(moduleRoots)
-    val resourceEntries: List<Str> = resEntriesFlat(resources)
-    val resourceStored: List<Str> = resEntriesFlat(resStoredEntries(resources))
+    val resourceStored: List<Str> = resStoredLiterals(resources)
 
     // The compiler's *own* resources: the `_res.md` files beside the prelude, read from disk
     // here like the prelude's `.kt` files are. These are the second half of the generator
@@ -474,7 +473,7 @@ fun main(args: List<Str>): Int {
         g = g + 1
     }
 
-    val emitted: Res<Str> = emitProgram(cgInputs, resourceEntries, resourceStored)
+    val emitted: Res<Str> = emitProgram(cgInputs, resourceStored)
     if (!emitted.isOk()) {
         eprintln(emitted.Error)
         return 1

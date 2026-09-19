@@ -201,10 +201,14 @@ preamble needs) while `strops`' text is emitted only into a program that reaches
 symbols.
 
 A section title may open with `!`, which marks its whole section **compile-only**: the
-compiler reads it and the program it builds does not carry it. That is what a `.md` file
-holding *code* wants - a `kt` section's Simse source, a `res` section's C++ are compiled in,
-so storing their text as well would be a second copy of the same bytes
-(`stress/resources-compileonly`). The RTL's own file is marked the same way throughout, all
+compiler reads it and the program it builds does not carry it. A `*` in the same place instead
+marks it **binary**: the value as written is lower-case hex that stands for the bytes, so what
+the program reads is an ordinary `Str` - which may hold a `\0` in the middle, since the emitter
+escapes every non-printable byte into the pool. Both markers may be written on a section title,
+on a single entry's key, or together in either order. That is what a `.md` file holding *code*
+wants - a `kt` section's Simse source, a `res` section's C++ are compiled in, so storing their
+text as well would be a second copy of the same bytes (`stress/resources-compileonly`,
+`stress/resources-binary`). The RTL's own file is marked the same way throughout, all
 seven sections: the compiler reads it from disk beside its prelude as it compiles, the way it
 reads the prelude's `.kt` files, so a program which carries no section of its own still
 receives the RTL's C++ - while the compiler no longer carries a second copy of that text in

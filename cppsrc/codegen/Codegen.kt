@@ -286,20 +286,15 @@ fun cgIsMainArgs(decl: *AstXmlNode): Bool {
 data class Emitter(
     var inputs: List<CgInput>,
 
-// The resources the compiler read from the tree's `_res.md` files (specs/resources.md),
-// as the flat list `resources.resEntriesFlat` builds: key, value, key, value, ... in the
-// order the files were read, each text as itself. It holds every entry, including the
-// compile-only ones (`!`) - *looking a section up* is `cppsrc/sourcegen`'s (`sourceGenResText`,
-// which searches the tree's files and then the compiler's own), and what the emitter does
-// with this list is *pool* it (`collectResourceLiterals`). A list of `Str` rather than the
-// entries, because this struct is emitted before the resources package's own types
-// (`CgStringTable.kt`'s note on file order).
-    var resourceEntries: List<Str>,
-
-// The subset of the same list the **program carries** (`resources.resStoredEntries`): a
-// section marked compile-only is read by the compiler and left out of the program, so it is
-// absent here and neither pooled nor installed into the program's `Resources` table
-// (`collectResourceLiterals`, `emitResourceTable`).
+// The resources the **program carries**, each key and value already spelled as the C++
+// string literal that holds its bytes - `resources.resStoredLiterals`, which is also where
+// the two escape rules live (`resQuoteLiteral` for text, `resQuoteBinary` for a `*`-marked
+// value, whose bytes are not text). The emitter pools exactly this list
+// (`collectResourceLiterals`) and reads the same texts back to find their indices
+// (`emitResourceTable`), so the pool and its index cannot disagree. A section marked
+// compile-only (`!`) is absent: the compiler reads it, the program does not carry it. A list
+// of `Str` rather than the entries, because this struct is emitted before the resources
+// package's own types (`CgStringTable.kt`'s note on file order).
     var resourceStored: List<Str>,
 
     var sections: *Sections,
@@ -1290,16 +1285,15 @@ data class Emitter(
 // ---- the string table -------------------------------------------------
 
     // The resources are literals like any other, and they go into the same pool the
-// program's string literals do (`specs/resources.md`, "What the program carries"):
-// each key and value of the *stored* list is spelled as the C++ literal that holds its
-// own bytes (`resources.resQuoteLiteral`) here, where it is pooled, and both the pool and
-// the table below read the same spelling back. A compile-only section is in
-// `resourceEntries` (so its text can be emitted as code) and not in `resourceStored`, so
-// nothing of it reaches the program.
+// program's string literals do (`specs/resources.md`, "What the program carries"): the list
+// arrives already spelled - each key and value as the C++ literal that holds its bytes, which
+// is `resources.resStoredLiterals`' business (a `*`-marked value is bytes, so it has an
+// escape rule of its own) - so pooling is an append and the table below reads the same
+// spelling back.
     fun collectResourceLiterals(): Unit {
         var i: Int = 0
         while (i < this.resourceStored.size()) {
-            this.literals.add(resQuoteLiteral(this.resourceStored[i]))
+            this.literals.add(this.resourceStored[i])
             i = i + 1
         }
     }
@@ -1316,7 +1310,7 @@ data class Emitter(
         }
         var indices: List<Int> = List<Int>()
         for (*text in this.resourceStored) {
-            indices.append(this.literals.indexOf(resQuoteLiteral(text)))
+            indices.append(this.literals.indexOf(text))
         }
         this.line(0, "// The resources the compiler read from `_res.md` files (specs/resources.md):")
         this.line(0, "// string-table indices, key then value, and the one installer that builds")
@@ -3215,10 +3209,9 @@ data class Emitter(
 
 // ---- entry point ----------------------------------------------------------
 
-fun newEmitter(inputs: List<CgInput>, resourceEntries: List<Str>, resourceStored: List<Str>): Emitter {
+fun newEmitter(inputs: List<CgInput>, resourceStored: List<Str>): Emitter {
     return Emitter(
         inputs,
-        resourceEntries,
         resourceStored,
         sourceGenSink(),
         false,
@@ -3259,13 +3252,14 @@ fun newEmitter(inputs: List<CgInput>, resourceEntries: List<Str>, resourceStored
 // inputs always produce byte-identical output. On failure the error is formatted
 // as "<file>:<line>:<col>: <message>".
 //
-// `resourceEntries` are the `_res.md` entries the driver read
-// (`resources.resEntriesFlat`, specs/resources.md) as the flat key/value list of the texts
-// themselves; the emitter pools every key and value into the program's string table, which is
-// what installs them into the program's own `Resources` API at start-up. An empty list emits
-// neither. The *generated* C++ a resource holds is `cppsrc/sourcegen`'s business
-// (impl_specs/generators.md).
-fun emitProgram(inputs: List<CgInput>, resourceEntries: List<Str>, resourceStored: List<Str>): Res<Str> {
-    var emitter: Emitter = newEmitter(inputs, resourceEntries, resourceStored)
+// `resourceStored` is what the program *carries* from its `_res.md` files
+// (`resources.resStoredLiterals`, specs/resources.md): each key and value already spelled as
+// the C++ literal that holds its bytes, in the order the files were read. The emitter pools
+// them into the program's string table and installs them into the program's own `Resources`
+// API at start-up; an empty list emits neither. A compile-only section (`!`) is not in it - the
+// compiler reads that, the program does not carry it - and the *generated* C++ a resource holds
+// is `cppsrc/sourcegen`'s business (impl_specs/generators.md).
+fun emitProgram(inputs: List<CgInput>, resourceStored: List<Str>): Res<Str> {
+    var emitter: Emitter = newEmitter(inputs, resourceStored)
     return emitter.run()
 }

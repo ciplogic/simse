@@ -1,9 +1,13 @@
 # Simse
 
-Simse is a small, statically typed language that compiles to **one readable C++
-file**. Its sources use the **`.kt` extension** - Kotlin's - because Simse is a
-Kotlin-flavored dialect: your editor's Kotlin mode highlights it, and the language
-is still Simse (`specs/`, `guide4ai.md`).
+Simse is a small, statically typed language that transpiles to **one C++ translation
+unit**. It is aimed at the kind of program you would otherwise write in Node or Python
+and then wish were faster, or in C++ and then wish were simpler: transpilers, code
+generators, CLI tools, hot loops, small single-threaded services.
+
+Simse sources use the **`.kt` extension** - Kotlin's - because Simse is a
+Kotlin-flavored dialect: your editor's Kotlin mode highlights it, and the language is
+still Simse.
 
 ```simse
 package tour
@@ -33,24 +37,161 @@ fun main(): Int {
 
     var k: Int = 0
     while (k < keys.size()) {
-        val count: Int = counts.get(keys[k]).value()
-        println(keys[k] + " = " + count.toString())
+        println(keys[k] + " = " + counts.get(keys[k]).value().toString())
         k = k + 1
     }
     return 0
 }
 ```
 
-```console
-$ ./tour.exe
-one = 1
-three = 3
-two = 2
+## What writing Simse feels like
+
+**Values, and nothing hidden behind them.** Every type is a value type: assignment
+copies, a `List` is a list, a `data class` is its fields. There is no object header, no
+identity to leak, and no garbage collector deciding when your data goes away.
+
+```simse
+data class Point(var x: Int, var y: Int) {
+    fun movedBy(dx: Int, dy: Int): Point {
+        return Point(this.x + dx, this.y + dy)
+    }
+}
+
+enum class Color {
+    Red,
+    Green,
+    Blue
+}
 ```
 
-The whole program becomes a single `.cpp` you can read, step through in a
-debugger, and hand to any C++20 compiler. A body is one scope: every declaration is
-at the top (the flat-IL hoisting), and control flow is labels and gotos.
+`data class` gets you a constructor, field access and a copy-on-assign value;
+`enum class` gets you `toInt()` and `fromInt()` for free. There are no base classes and
+no `interface`: code is reused by *composition* and by *extension*, and dispatch is
+resolved at compile time (a `Printable`-style protocol is on the roadmap, and it will be
+structural, not a vtable).
+
+**Functions are the unit of behavior, and extensions are how you add to a type.**
+
+```simse
+fun Str.shout(): Str {
+    return this.toUpper()
+}
+
+fun <T> firstOr(items: *List<T>, fallback: T): T {
+    if (items.size() == 0) {
+        return fallback
+    }
+    return items[0]
+}
+```
+
+`fun Str.shout()` is an extension: the receiver is the first parameter, written as
+`this`, and `"hi".shout()` is the call. Generic functions are **reified** - every
+concrete instantiation becomes its own C++ type - so `List<Int>` and `List<Str>` are
+different types all the way down, with no boxing and no type erasure.
+
+**Calls pack their trailing arguments.** A function whose last parameter is a `List`
+can be called with the elements written out, which is what makes `listOf`, `println`
+style helpers and variadic-looking APIs pleasant:
+
+```simse
+fun addAll(start: Int, rest: *List<Int>): Int { ... }
+
+val total: Int = addAll(10, 1, 2, 3)   // rest is the list [1, 2, 3]
+val justTen: Int = addAll(10)          // rest is empty
+```
+
+**Absence and failure are values, not control flow.** There are no exceptions: a lookup
+that can miss returns `Opt<T>`, and an operation that can fail returns `Res<T>`. Both are
+ordinary values you can pass around, and both say what they are at the call site.
+
+```simse
+val found: Opt<Int> = counts.get("two")
+if (found.hasValue()) {
+    println(found.value().toString())
+}
+
+val parsed: Res<Int> = parseConfig(text)
+if (!parsed.isOk()) {
+    eprintln(parsed.Error)
+    return 1
+}
+println(parsed.Value.toString())
+```
+
+**Handles are explicit.** `&T` is a reference-counted handle (single-threaded counting,
+one word of count next to the value), `*T` is a raw pointer, and `T` is a value. Boxing
+is spelled `&value`, and reading through a handle happens on its own where the type is
+known:
+
+```simse
+val counter: &Counter = &Counter(1)
+counter.bump()          // a call through the handle
+val here: Int = counter.value
+```
+
+**Iteration is a machine you can see through.** `for` works over containers, and over
+anything that provides a state machine; `yield` lets you *write* such a machine without
+turning your function inside out.
+
+```simse
+for (line in lines) {
+    println(line)
+}
+
+fun Int.naturals(upTo: Int): Int {
+    var i: Int = 0
+    while (i <= upTo) {
+        yield(i)
+        i = i + 1
+    }
+}
+```
+
+**Modules are directories, packages are namespaces.** A module is a directory of `.kt`
+files; a package is a name (`package a.b.c`, mandatory, one per file) and `import` only
+decides which packages are visible by their simple names - it never adds files. The
+compiler scans module roots, so where the files live is a project decision rather than a
+resolution rule. A project can carry a `simse.md` naming its modules, and a module its
+own `simse.md`; `rtl` is imported implicitly and holds the built-in types.
+
+**The language can carry its own extensions.** This is the part that makes Simse
+different from a transpiler with a fixed library: a declaration can say that its
+implementation is *somewhere else*, and the compiler will go and get it.
+
+```simse
+// The body is hand-written C++ that is linked in.
+native("simse_str_trim") fun trimmed(text: Str): Str
+
+// The body is C++ that lives in a resource section, emitted into the program that uses it.
+@SmGen("res", "listops", "simse_list_append")
+fun append<T>(this: *List<T>, value: T): Unit
+
+// The body is *Simse source*, from a resource section, compiled with the program.
+@SmGen("kt", "greet")
+fun greeting(name: Str): Str
+```
+
+A resource is a Markdown-shaped `_res.md` file: sections, `key: value` entries, fenced
+blocks for the text itself. It is how the runtime's own C++ is written (no header per
+feature), how a program can supply generated code for itself, and how a library can ship
+a *source generator* that extends the compiler. Sections and single entries can be marked
+`!` (read by the compiler, not carried by the program) and `*` (the value is hex that
+stands for bytes), which is what keeps a `.md` file from storing code twice.
+
+**Nothing magic.** No macros, no operator overloading, no exceptions, no reflection, no
+implicit threading, no runtime library to ship. When you want to see what your program
+became, it is one file, and the source-map comments point back at your `.kt` lines.
+
+## What it compiles to
+
+One `.cpp` file, and it is a **lowering, not prose**. Bodies are single scopes with their
+locals hoisted to the top, nested expressions become numbered temporaries
+(`_sm_expr1`), control flow is labels and `goto`, and library operations are calls to
+package-qualified RTL functions. It is mechanical on purpose: it will keep getting less
+readable as the language grows, and it is not meant to be extended by hand. What it buys
+you is a profiler that names your functions, a debugger that steps your `.kt` lines, and
+no interpreter, no VM, no metadata format, no runtime to install.
 
 ```cpp
 int main() {
@@ -60,7 +201,6 @@ int main() {
     Int i;
     Int _sm_expr1;
     Bool _sm_expr2;
-    Str _sm_expr3;
     Opt<Int> seen;
     text = "one two two three three three";
     counts = simse_dictionaryOf<Str, Int>();
@@ -85,66 +225,49 @@ int main() {
 }
 ```
 
-There is no interpreter, no VM and no runtime library to ship: a Simse program
-is C++ with a small prelude of helper types (`Str`, `List`, `Dictionary`,
-`Opt`, `Res`, `Array`, `Span`) defined by the runtime's headers, and the C++ that used to
-need a header of its own is a resource the emitter puts in the amalgamation
-(`cppsrc/rtl/_res.md`).
-
-## What it is for
-
-Simse is aimed at programs that are *tools*: transpilers and code generators,
-CLI utilities, hot loops, and small single-threaded JSON services - the kind of
-program you would otherwise write in Node or Python and then wish were faster,
-or in C++ and then wish were simpler.
-
-The design follows from one constraint: **no runtime**.
+There is no interpreter, no VM and no runtime library to ship: a Simse program is C++
+with a small prelude of types (`Str`, `List`, `Dictionary`, `Opt`, `Res`, `Array`,
+`Span`) and operations that are themselves written in Simse or live in resource sections
+(`cppsrc/rtl/`). The language's design follows from one constraint - **no runtime**:
 
 - **No garbage collector.** Values have value semantics; `&T` is an explicit
-  reference-counted handle (roughly `shared_ptr`), `*T` is a raw pointer.
-- **No exceptions.** Expected failures are values (`Opt<T>`, `Res<T>`); bugs
-  are `panic` territory. Nothing unwinds, so the happy path is not taxed.
-- **No threads.** A program is single-threaded; services are one process per
-  core (planned), not a thread pool.
-- **No vtables.** Dispatch is static: generic functions are reified per
-  instantiation, and protocols (planned) are satisfied structurally and
-  resolved at compile time - there is nothing to look up at run time.
+  reference-counted handle, `*T` a raw pointer (`specs/memory-model.md`).
+- **No exceptions.** Expected failures are values (`Opt<T>`, `Res<T>`); a bug is a
+  crash you get to see.
+- **No threads.** A program is single-threaded; more cores means more processes.
+- **No vtables.** Dispatch is static: generics are reified per instantiation, and
+  protocols (planned) resolve at compile time.
 
 The result is a language that reads like Kotlin/.NET and builds like C.
 
-## How it works
+## The compiler is written in Simse
 
-1. The compiler **scans** and **parses** a module root (a directory of `.kt`
-   files, each with a `package` declaration) into an XML-shaped AST.
-2. **Sema** resolves names and types; **generics are reified** - each concrete
-   instantiation becomes a distinct C++ type, so `List<Int>` and `List<Str>` are
-   `List<Int>` and `List<Str>` in the output.
-3. Control flow is **lowered to labels and gotos** (`if` and `while` never
-   reach the emitter - `for` and `when` are desugared in the parser), then
-   optionally simplified.
-4. **Codegen** emits C++ for the whole program as one translation unit, with
-   package-qualified names (`ns1_words`), source-map comments, and RTL calls
-   (`simse_str_split`, `simse_dict_get`, ...) for library operations.
-5. The result is compiled by a normal C++ compiler.
+The compiler *is* its Simse sources (`cppsrc/**/*.kt`): scanner, parser, semantic
+pass, control-flow lowering, and the C++ emitter. The only hand-written C++ is one
+runtime translation unit (`cppsrc/rtl/native.cpp`: file I/O, `system`, the process
+entry) plus the C++ that lives in resource sections.
 
-The compiler is **self-hosted**: it is written in Simse (`cppsrc/**/*.kt`), and
-there is exactly one implementation of it. `cppsrc/simse_bootstrap.cpp` - the
-amalgamation of those sources, checked in - is what lets a fresh checkout build
-the compiler with a C++ compiler alone. The compiler that comes out of it
-transpiles the same sources back into that same file, **byte for byte**;
-`bun tools/bootstrap.js` checks that fixed point, and the stress corpus keeps it
-honest.
+That leaves the bootstrap question - how do you build a compiler written in its own
+language, on a machine that has no Simse? The answer is **`cppsrc/simse_bootstrap.cpp`:
+the transpiled compiler, checked in**. It is the *output* of the compiler, published; a
+fresh checkout compiles it with `cl.exe` alone and gets a working transpiler, which then
+transpiles the tree again.
+
+Because the file is checked in, it is also a **proof**: the compiler must reproduce it
+byte for byte. `bun tools/bootstrap.js` rebuilds the published file, runs both compilers
+over the sources, and compares - so a change that made the output depend on which
+compiler emitted it fails the build rather than drifting. The corpus
+(`stress/`, one folder per program with its expected output and, where it matters, its
+expected `.cpp`) keeps the rest honest.
 
 ## Quick start
 
-Requirements: Windows with Visual Studio (C++ workload) and
-[bun](https://bun.sh).
+Requirements: Windows with Visual Studio (C++ workload) and [bun](https://bun.sh).
 
 ```bat
-:: 1. build the compiler from the Simse sources -> .\simse.exe
-::    a fresh checkout first compiles the published bootstrap for this step;
-::    add --release for /O2 /Ob3 /DNDEBUG + /GL (--no-lto skips the whole-program step)
-build.bat
+:: 1. build the compiler from its sources -> .\simse.exe
+::    a fresh checkout first compiles the published bootstrap for this step
+build.bat --release
 
 :: 2. compile and run an example with it
 simse.exe --root docs/examples/hello -o hello.cpp
@@ -152,84 +275,83 @@ build.bat --cpp hello.cpp --exe hello.exe
 hello.exe
 ```
 
-`build.bat` is a thin wrapper over `build.js` (see `build.bat --help`). On a
-fresh checkout there is no `./simse.exe` yet, so `build.js` first compiles the
-published `cppsrc/simse_bootstrap.cpp` together with `cppsrc/rtl/native.cpp` and
-uses that as the transpiler. Once `./simse.exe` exists it does the transpiling,
-and that step takes about a second; the rest of a build is `cl.exe` optimizing
-the generated C++. A full walkthrough, including the stress corpus and the
-bootstrap fixed-point check, is in
+`build.bat` is a thin wrapper over `build.js` (`build.bat --help` lists the options: `--release`,
+`--no-lto`, `--pdb`, `--define <name>` for the RTL's configuration switches, `--arch`). Once
+`./simse.exe` exists, transpiling the whole tree takes about a second; the rest of a build is
+`cl.exe` optimizing the emitted C++. A full walkthrough - prerequisites, the stress corpus, the
+bootstrap check, troubleshooting - is in
 [docs/getting-started.md](docs/getting-started.md).
-
-## Documentation
-
-| Document | What is in it |
-| --- | --- |
-| [docs/getting-started.md](docs/getting-started.md) | prerequisites, building the compiler, compiling your first program, the stress corpus, troubleshooting |
-| [docs/language-tour.md](docs/language-tour.md) | the language itself, with runnable fragments: values, control flow, data classes, enums, generics, collections, memory, modules |
-| [docs/how-it-works.md](docs/how-it-works.md) | the pipeline, the bootstrap fixed point, the emitted C++, the RTL, and how the build verifies itself |
-| [docs/state-of-the-field.md](docs/state-of-the-field.md) | honest status: what works, what is rough, what is missing, and how it compares to the alternatives |
-| [docs/examples/](docs/examples/) | the three example programs used in the docs (`hello`, `tour`, `wordcount`) |
-| [impl_specs/user-language-roadmap.md](impl_specs/user-language-roadmap.md) | where the language is going, phased, with the non-goals |
-| [impl_specs/generators.md](impl_specs/generators.md) | the `@Identifier` token, `@SmGen` generation, the `Sections` sink, and the bootstrap path for the new syntax |
-| [guide4ai.md](guide4ai.md) | orientation for an AI/contributor session: build, invariants, change protocol |
 
 ## Status
 
-Working today: the language above (data classes, enums, generics, extensions,
-lambdas, `List`/`Array`/`Dictionary`/`Span`/`Opt`/`Res`/`Str`, list literals and calls
-that pack their trailing arguments into a last `List` parameter, file I/O, the
-`main(args)` form, `yield`, and `for` over anything with a `smToYield` - a container,
-or a state machine itself),
-a self-hosted compiler that reproduces the published bootstrap byte for byte,
-and 45 end-to-end stress programs.
+Working today: data classes, enums, generics, extension functions, lambdas, statics,
+`List`/`Array`/`Dictionary`/`Span`/`Opt`/`Res`/`Str`, attributes and source generators
+(`cppsrc/sourcegen/`, `_res.md` resources, `native` declarations), list literals and
+trailing-argument packing, `for`/`yield` state machines, file I/O, the `main(args)` form,
+packages and modules, and a project file (`simse.md`). The compiler is self-hosted and
+reproduces the published bootstrap byte for byte, and **61 end-to-end stress programs**
+run in the corpus.
 
-On speed (`bun tools/bootstrap.js`, release, this machine - the range is machine
-load, best of 3 runs idle):
+On speed (`bun tools/bootstrap.js`, release, this machine - the range is machine load,
+best of a few runs while idle):
 
 | | |
 | --- | --- |
-| the compiler transpiling its own source tree | **17,905 lines of Simse in ~1.1 s** (45,757 lines of C++ out, ~16.4k lines/s) |
-| compiling the published `cppsrc/simse_bootstrap.cpp` with `cl.exe` | ~21 s release (`/O2 /Ob3`) |
-| **from the published file to a compiler that reproduces it** | **~22 s**, then ~1.1 s per self-transpile |
+| the compiler transpiling its own source tree | **19,600 lines of Simse in ~0.85 s** (48,800 lines of C++ out, ~24k lines/s) |
+| compiling the published `cppsrc/simse_bootstrap.cpp` with `cl.exe` | ~16 s release (`/O2 /Ob3` with LTO) |
+| **from the published file to a compiler that reproduces it** | **~17 s**, then under a second per self-transpile |
 
 Not there yet, in rough order of how soon a user would miss it: `for` over a
-`Dictionary` and ranges, string interpolation, closed unions + exhaustive `when`, a
-`Printable` protocol (so `println` works for your own types instead of only the
-built-ins), `Set`, byte buffers, JSON encode/decode generated from data classes,
-sockets and HTTP, and a Linux/macOS toolchain. `docs/state-of-the-field.md` is
-explicit about each of these and the roadmap phases them.
+`Dictionary` and ranges, string interpolation, closed unions with exhaustive `when`, a
+`Printable` protocol (so `println` works for your own types), `Set`, byte buffers, JSON
+encode/decode generated from data classes, sockets and HTTP, and a Linux/macOS
+toolchain. `docs/state-of-the-field.md` is explicit about each of these, and
+`impl_specs/user-language-roadmap.md` phases them.
 
 ## Repository layout
 
 | Path | Contents |
 | --- | --- |
-| `cppsrc/` | the compiler in Simse (`lex/`, `parser/`, `sema/`, `linear/`, `codegen/`, `compiler/`), plus `cppsrc/rtl/` (the runtime headers, the prelude `.kt` files, and the one hand-written translation unit `native.cpp`) and `cppsrc/simse_bootstrap.cpp` - the amalgamated compiler, checked in so it can be built with a C++ compiler alone |
-| `specs/` | the language specification (normative): types, declarations, functions, memory model, generics, containers, modules, statics |
-| `impl_specs/` | implementation plans and records: self-hosting plan, capability matrix, RTL ABI, the user-facing roadmap |
-| `stress/` | one folder per end-to-end program: source, arguments, expected output |
-| `build.js`, `build.bat`, `stress.bat` | the build and harness entry points: transpile the source tree, compile it with `cl.exe`, run the stress corpus |
-| `tools/` | the JavaScript harness: the stress runner (`stress.js`), the bootstrap fixed-point check (`bootstrap.js`), the `native`/`@SmGen` byte-equality check (`smgen.js`), `msvc.mjs`, the probes |
+| `cppsrc/` | the compiler in Simse (`lex/`, `parser/`, `sema/`, `linear/`, `codegen/`, `compiler/`, `sourcegen/`), plus `cppsrc/rtl/` (the prelude `.kt` files, the runtime headers, the resource file `_res.md`, and the one hand-written translation unit `native.cpp`) and `cppsrc/simse_bootstrap.cpp` - the published transpiled compiler, the output proof |
+| `specs/` | the language specification (normative): types, declarations, functions, memory model, generics, containers, modules, statics, resources |
+| `impl_specs/` | implementation plans and records: the capability matrix, the RTL ABI, generators, the user-facing roadmap |
+| `stress/` | one folder per end-to-end program: source, arguments, expected output, and where the emitted text is the point, an `expected.cpp` golden |
+| `build.js`, `build.bat`, `stress.bat` | the build and harness entry points: transpile the source tree, compile it with `cl.exe`, run the corpus |
+| `simse.vcxproj`, `simse.slnx` | the Visual Studio profiling project: the bootstrap and the runtime, with the debugger already set to run the compiler over its own tree |
+| `tools/` | the JavaScript harness: the stress runner (`stress.js`), the bootstrap fixed-point check (`bootstrap.js`), generator parity (`smgen.js`), the Visual Studio project check (`vscheck.mjs`), `msvc.mjs` |
 | `docs/` | this documentation |
+| `guide4ai.md` | orientation for a fresh contributor or AI session: the build, the invariants, the change protocol, the gotchas |
 
 ## Design principles
 
-- **The output is the artifact.** One `.cpp` file, readable, debuggable, no
-  generated metadata to interpret; the source-map comments point back at the
-  `.kt` lines.
-- **Static everything.** Types, dispatch, and generics are resolved at compile
-  time; there is no reflection and no runtime type information.
-- **Deterministic.** The same inputs produce byte-identical output; nothing
-  depends on a randomized hash or on uninitialized state, and where collection
-  iteration order could matter, callers sort or the order is part of the backing's
-  documented behavior.
-- **Small surface, no magic.** No macros, no operator overloading, no
-  exceptions, no implicit threading.
+- **The output is the artifact.** One `.cpp` file, faithfully lowered, with source-map
+  comments back to the `.kt` lines; no metadata to interpret and nothing to install. It
+  is not meant to be hand-edited or to read like prose.
+- **Static everything.** Types, dispatch and generics are resolved at compile time;
+  there is no reflection and no runtime type information.
+- **Deterministic.** The same inputs produce byte-identical output; nothing depends on a
+  randomized hash or on uninitialized state, and where iteration order could matter,
+  callers sort or the backing documents its order.
+- **Small surface, no magic.** No macros, no operator overloading, no exceptions, no
+  implicit threading.
 - **One implementation, a fixed point.** The compiler is its Simse sources; the
-  published bootstrap and the compiler it produces must agree byte for byte, and
-  the build proves it.
+  published bootstrap is its own output, and the build proves the two agree byte for
+  byte.
+
+## Documentation
+
+| Document | What is in it |
+| --- | --- |
+| [docs/getting-started.md](docs/getting-started.md) | prerequisites, building the compiler, compiling your first program, the corpus, troubleshooting |
+| [docs/language-tour.md](docs/language-tour.md) | the language itself, with runnable fragments: values, control flow, data classes, enums, generics, collections, memory, modules |
+| [docs/how-it-works.md](docs/how-it-works.md) | the pipeline, the bootstrap fixed point, the emitted C++, the runtime, and how the build verifies itself |
+| [docs/state-of-the-field.md](docs/state-of-the-field.md) | honest status: what works, what is rough, what is missing, and how it compares to the alternatives |
+| [docs/examples/](docs/examples/) | the example programs used in the docs (`hello`, `tour`, `wordcount`) |
+| [specs/](specs/) | the normative language specification |
+| [impl_specs/user-language-roadmap.md](impl_specs/user-language-roadmap.md) | where the language is going, phased, with the non-goals |
+| [impl_specs/generators.md](impl_specs/generators.md) | `@SmGen`, the source-generator registry, the `Sections` sink, and the bootstrap path for new syntax |
+| [guide4ai.md](guide4ai.md) | orientation for a contributor session: build, invariants, change protocol, gotchas |
 
 ## License
 
-MIT - see [`LICENSE`](LICENSE). Simse is a Kotlin-flavored dialect of its own
-making; it is not affiliated with Kotlin or JetBrains.
+Apache 2.0 - see [LICENSE](LICENSE).

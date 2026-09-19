@@ -128,9 +128,9 @@ principle; nothing has been exercised on another platform.
 | If you reach for | Simse gives you | Simse does not give you |
 | --- | --- | --- |
 | **Node.js / Python** for a small JSON service or a CLI tool | types, a native binary, no runtime to install, no GC pauses, ~50x less memory than a runtime that carries an interpreter | threads, an ecosystem of packages, a REPL, hand-rolled dynamic dispatch, `JSON.parse` of anything (yet) |
-| **Go** | similar simple syntax and static dispatch; smaller surface; a transpiled artifact you can read | goroutines, channels, a GC, a `go build`-sized toolchain, method sets, interfaces as values |
+| **Go** | similar simple syntax and static dispatch; smaller surface; a transpiled artifact you can profile and step through | goroutines, channels, a GC, a `go build`-sized toolchain, method sets, interfaces as values |
 | **Rust** | the same "no GC, no runtime" spirit; far fewer concepts (no lifetimes, no traits as types, no macros, no unsafe blocks to write); output is C++ you can inspect | the borrow checker's safety guarantees, the crate ecosystem, `cargo`, exhaustive pattern matching, zero-cost abstractions at Rust's level |
-| **C++** | no UB-by-default, no template metaprogramming, no build system archaeology, one readable output file | the full language, libraries, and tooling; manual control over allocation and layout |
+| **C++** | no UB-by-default, no template metaprogramming, no build system archaeology, one output file with source maps | the full language, libraries, and tooling; manual control over allocation and layout |
 | **Kotlin / C#** | a familiar surface (data classes, extensions, `List`/`Dictionary`/`Opt`/`Res`) with a native, allocation-light backend | interfaces with dynamic dispatch, generics without reification, exceptions, an IDE today |
 | **Lua / embedded scripting** | a typed alternative for plugins you would rather compile | interpretation, sandboxing, hot reload |
 

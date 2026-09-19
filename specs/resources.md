@@ -39,12 +39,6 @@ because it is a file a person edits and its diffs should read like the text they
   *trimmed*, and it prefixes the keys that follow it: `Title` + `Key` is the key
   `Title:Key`. The underline line is spent with its title, so it is never read as an entry
   of its own.
-- A title that **opens with `!`** marks its whole section *compile-only*: the compiler reads
-  its entries like any other, and the **program does not carry them** (see "What the program
-  carries" below). The `!` is trimmed off the name with the rest of the whitespace, so
-  `!greet` is the section `greet` and a lookup by spelling - `@SmGen("kt", "greet")` -
-  cannot tell whether the section was marked. A title with nothing after the `!` is not a
-  title, and leaves the section and the marker as they were.
 - An **entry** is a line whose *first* `:` has something before it. The key is what stands
   before that colon, *trimmed* - so a stray space or tab in a key is not a bug that only
   shows up at runtime (`Profiling: Name` and `Profiling:Name` are one key).
@@ -56,7 +50,8 @@ because it is a file a person edits and its diffs should read like the text they
     between the key and its fence are skipped; a line that is not a fence opening leaves
     the value empty rather than swallowing the text. An opening fence may name a language
     (` ```cpp `); the closing fence is the bare ` ``` `, and a block left open runs to the
-    end of the file.
+    end of the file. A `*`-marked value may be written either way, and a fenced one is
+    usually the readable form for a dump several bytes long.
 - A line whose first colon has *nothing* before it is not an entry, and neither is a line
   with no colon at all: those are prose, and ignored. A colon anywhere in prose therefore
   makes an entry of it - `:` is the separator, so text that is not an entry must not
@@ -66,8 +61,50 @@ because it is a file a person edits and its diffs should read like the text they
   is written as it is.
 - A key written twice takes the **last** value, in its first-seen position.
 - No escapes are interpreted: `` `\n` `` is a backslash and an `n`. What the file says is
-  what the program gets - except for the one place that has to be escaped, the C++ literal
-  the emitter pools the text as, which is its own business (`resQuoteLiteral`).
+  what the program gets - except for the two places that have to escape something, the C++
+  literal the emitter pools the text as (`resQuoteLiteral`) and the same for a `*`-marked
+  value's bytes (`resQuoteBinary`), which are the emitter's business.
+
+## Markers
+
+A section title or an entry's key may **open with markers**, which is the whole of how a
+resource says more about itself than its text:
+
+| marker | what it means on what it marks |
+| --- | --- |
+| `!` | **compile-only**: the compiler reads it, the program does not carry it |
+| `*` | **binary**: the value as written is hex that stands for the bytes |
+
+- They may be written **together, in either order** (`!*Hidden`, `*!Hidden`), and the run is
+  consumed with the whitespace around it: `!greet` is the section `greet`, `*Dark` the key
+  `Dark`, so a lookup by spelling - `@SmGen("kt", "greet")`, `Resources.get("Dark")` - cannot
+  tell whether anything was marked.
+- They may be written on a **section title** or on a **single entry's key**, and there is no
+  way to take one back: a marked section marks every entry under it, and a key's own markers
+  are on top of that (`Pictures:Icon` is binary because `Pictures` is). A title with nothing
+  left after its markers is not a title, and leaves the section and both markers as they were.
+- A marker is **not part of the name**, and the section is still a key *prefix*: marking a
+  section is not a new level of nesting, just two booleans on every entry under it.
+
+### What `*` means: hex that stands for bytes
+
+A `*`-marked value is a **lower-case hex dump of the bytes the resource holds**, and the
+reader turns it into those bytes on the way in. Nothing downstream knows it was ever hex: a
+resource is a `Str` - a pointer and a length - like any other, which is why a byte string
+with a `\0` in the middle needs no new type anywhere.
+
+- Every pair of hex digits is one byte, in order. Whitespace (spaces, tabs, newlines) is not
+  part of the dump, so it may be wrapped however the file likes; decoding **stops** at the
+  first character that is neither whitespace nor a lower-case hex digit, and a last digit left
+  unpaired is dropped.
+- Stopping rather than skipping is deliberate: a value that is not lower-case hex decodes to
+  nothing rather than to half its bytes, and this format validates nothing anywhere, so the
+  program's own output is where a bad dump shows up.
+- The bytes are **not necessarily text** - `5065746572` is `Peter`, but `00ff41` is three
+  bytes, one of them a `\0` - so the string table's own encoding is what has to carry them:
+  the emitter writes a non-printable byte as an octal escape with all three digits (which
+  `cgLiteralByteLength` counts as the one byte it is), so the pool, its length index and the
+  program's view of the text agree even when a value starts with `\0`.
 
 ## Discovery
 
@@ -110,6 +147,11 @@ in a `.md` file that holds *code* - a `kt` section's Simse source, a `res` secti
 the code is compiled into the program, and storing its text as well would be a duplicate of
 the same bytes. A resource that is *data* (a template, help text) is left unmarked, because
 the program is exactly what should read it.
+
+A `*`-marked value reaches the pool as the **bytes** its hex stood for, spelled so that the
+pool can hold any of them: printable bytes as themselves, everything else as an octal escape
+(`resQuoteBinary`). Nothing else about it is special - a resource is a key and a `Str`, and a
+byte string with a `\0` in it is still a key and a `Str`.
 
 ## The API
 
@@ -202,7 +244,9 @@ the program and codegen emits it - so the generated function is compiled, not pa
 | the format, the join, the discovery | `cppsrc/resources/Resources.kt` (its `ResourceItem` is the reader's pair - not the RTL's `ResourceEntry`, because the emitter's type table is flat by name) |
 | discovery in the driver | one call to the module: `cppsrc/compiler/Driver.kt` |
 | the lookup a generator reads | `sourcegen`'s `sourceGenResHas`/`sourceGenResText` (`cppsrc/sourcegen/GenTypes.kt`): the tree's own entries first, the compiler's own (read from disk beside the prelude) second |
-| pooling and the table | the emitter: `cppsrc/codegen/Codegen.kt`, after `emitStringTable`, over `resourceStored` (`resStoredEntries`) |
+| pooling and the table | the emitter: `cppsrc/codegen/Codegen.kt`, after `emitStringTable`, over `resourceStored` - the literals `resources.resStoredLiterals` already spelled |
+| the two escape rules, and the flags | `cppsrc/resources/Resources.kt`: `resMarkedName` (the markers), `resStoredLiterals` (`resQuoteLiteral`/`resQuoteBinary`), `resQuoteLiteral` |
+| the format's byte helpers | the `resfmt` section of `cppsrc/rtl/_res.md` (`simse_resHexToBytes`, `simse_resQuoteBinary`), reached only by the compiler's own module |
 | the storage and `install` | `cppsrc/rtl/resources.hpp` |
 | the API and the lookup | `cppsrc/rtl/resources.kt` (Simse) |
 | the static form | `Emitter.call` + `Emitter.staticCallSymbol` |
@@ -227,18 +271,27 @@ of carrying them in its pool. The cost of the marker is exactly that requirement
 gain is the second copy of the text - 23,034 bytes of pool, and on the last refresh 23,885
 bytes of the published bootstrap.
 
-The **compile-only marker** is implemented too: a section title opening with `!` is read
-like any other - the emitter finds its text, a generator finds its keys, both under the name
-without the `!` - and is left out of the pool and the table (`resStoredEntries`, the
-driver's `resourceStored`, `Emitter.collectResourceLiterals`/`emitResourceTable`).
-`stress/resources-compileonly` pins all four facts at once: the `kt` source in a marked
-section is compiled and its function works, the program does not carry that key, it does
-carry the unmarked section beside it, and the count is one rather than two. The corpus's own
-code resources use it (`stress/smgen-kt`, `stress/smgen-res-program`), where the effect is
-visible in the goldens: `smgen-kt`'s string pool drops from 403 bytes to 12, and
-`smgen-res-program` stops emitting a resource table (and a string table) at all.
+The **markers** are implemented: a section title or an entry's key may open with `!`, with
+`*`, or with both in either order, and the marker run is consumed - the entry then keeps its
+plain name, is left out of the pool and the table (`!`), and its value is decoded from hex
+into the bytes themselves (`*`) before anything else sees it. `stress/resources-compileonly`
+pins the `!` half (the `kt` source in a marked section is compiled and its function works, the
+program does not carry that key, it does carry the unmarked section beside it, and the count is
+one rather than two) and `stress/resources-binary` the `*` half, at both levels and combined:
+a section-level `*` (`Pictures`), a key-level one inside an unmarked section, a value spanning
+three lines, a value that is text after decoding, a leading `\0` whose *length* is what proves
+the pool carried it, a byte above `0x7f` read back as the signed `Char` it is, and a `!*`
+section whose entries the program does not carry at all. The corpus's own code resources use
+`!` (`stress/smgen-kt`, `stress/smgen-res-program`), where the effect is visible in the
+goldens: `smgen-kt`'s string pool drops from 403 bytes to 12, and `smgen-res-program` stops
+emitting a resource table (and a string table) at all.
 
-`bun tools/stress.js` is **60/60**, and the bootstrap fixed point (`bun tools/bootstrap.js`)
+The format's two byte-level helpers are a section of their own, `resfmt`
+(`cppsrc/rtl/_res.md`), reached by the declarations in `cppsrc/resources/Resources.kt`. They
+are not part of `strops`: a shared section is emitted whole, so putting them there would hand
+them to every program that reached a `Str` operation.
+
+`bun tools/stress.js` is **61/61**, and the bootstrap fixed point (`bun tools/bootstrap.js`)
 holds byte for byte.
 
 Not done yet: a resource *section* helper (deliberately - a section is a key prefix), a
