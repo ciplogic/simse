@@ -50,13 +50,13 @@ Int64 simse_nowMicros();
 // The program's string literals: one pool, and two run-length encoded index
 // series (offsets as deltas, then lengths), each as what to subtract from the
 // previous value; strtable.hpp has the stream format.
-static const Int __sm_stringCount = 5;
+static const Int __sm_stringCount = 3;
 static const char __sm_stringPool[] =
-    "// The implementation of `greeting` (stress/smgen-kt/src/main.kt), written in Simse and\n// compiled with the program: nothing about it is C++, and nothing was hand-written\n// twice - the declaration says what the call looks like, this says what it does.\nfun greeting(name: Str): Str {\n    var text: Str = \"Hello, \"\n    text.appendStr(name)\n    text.append('!')\n    return text\n}\n" "greet:source" "Hello, " "world" "" 
+    "Hello, " "world" "" 
 ;
-static const Int16 __sm_stringStarts[] = {5,5,0,-379,367,5,2};
-static const Int16 __sm_stringLens[] = {5,5,-379,367,5,2,5};
-static_assert(sizeof(__sm_stringPool) - 1 == 403, "the string pool and its length index disagree");
+static const Int16 __sm_stringStarts[] = {3,3,0,-7,2};
+static const Int16 __sm_stringLens[] = {3,3,-7,2,5};
+static_assert(sizeof(__sm_stringPool) - 1 == 12, "the string pool and its length index disagree");
 static StrView __sm_stringTable[__sm_stringCount];
 static struct __SmStringTableInitType {
     __SmStringTableInitType() {
@@ -68,19 +68,6 @@ static struct __SmStringTableInitType {
             __sm_stringCount);
     }
 } __sm_stringTableInit;
-
-// The resources the compiler read from `_res.md` files (specs/resources.md):
-// string-table indices, key then value, and the one installer that builds
-// them into the program's `Resources` table before `main`.
-static const Int __sm_resourceIndex[] = {1,0};
-static const Int __sm_resourceCount = 1;
-namespace {
-    struct __SmResourceInit {
-        __SmResourceInit() {
-            Resources::install(__sm_stringTable, __sm_resourceIndex, __sm_resourceCount);
-        }
-    } __sm_resourceInit;
-}
 
 #include <cstdint>
 #include <type_traits>
@@ -127,16 +114,16 @@ Str greeting(Str name);
 int main() {
     Str _sm_expr1;
     Str _sm_expr2;
-    _sm_expr1 = greeting(__sm_stringTable[3]);
+    _sm_expr1 = greeting(__sm_stringTable[1]);
     std::cout << std::boolalpha << (_sm_expr1) << std::endl;
-    _sm_expr2 = greeting(__sm_stringTable[4]);
+    _sm_expr2 = greeting(__sm_stringTable[2]);
     std::cout << std::boolalpha << (_sm_expr2) << std::endl;
     return 0;
 }
 // <generated>/kt.kt:7
 Str greeting(Str name) {
     Str text;
-    text = __sm_stringTable[2];
+    text = __sm_stringTable[0];
     simse_str_appendStr(text, name);
     simse_str_append(text, '!');
     return text;

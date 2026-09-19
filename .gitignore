@@ -53,6 +53,16 @@ Release
 ### (build.js, tools/bootstrap.js) ###
 /build/
 
+### The `_simse` cache: a project's extended compiler and the sources staged for it
+### (specs/simse-md.md) - written beside a project's root, never inside it ###
+_simse/
+
+### Visual Studio: the profiling project's output (simse.vcxproj/simse.slnx) and the
+### per-user state the IDE writes beside it ###
+/profile/
+.vs/
+*.user
+
 ### Stress harness work directories (tools/stress.js) ###
 /stress/.work/
 

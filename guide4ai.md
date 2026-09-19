@@ -159,10 +159,13 @@ driver's - and `build.bat` can compile it.
 - `cppsrc/resources/` — the `_res.md` reader: the format, the join, the discovery,
   and the C++ literal a resource is pooled as (`specs/resources.md`). The runtime half
   of it is `cppsrc/rtl/resources.{kt,hpp}`.
-- `cppsrc/lex/`, `cppsrc/skelparser/`, `cppsrc/parser/`, `cppsrc/sema/`,
+- `cppsrc/lex/`, `cppsrc/parser/`, `cppsrc/sema/`,
   `cppsrc/linear/`, `cppsrc/codegen/`, `cppsrc/compiler/`, `cppsrc/profiling/` -
   the compiler stages, all Simse: scan, parse (AST), resolve/reify, lower to the
-  linear form, emit. `linear` is the post-sema
+  linear form, emit. `sourcegen/` sits beside them: the source generators, one file per
+  generator plus the manager (`SourceGen.kt`) and the `Sections` sink (`Sections.kt`),
+  which `codegen` calls but which calls nothing back (`impl_specs/generators.md`).
+  `linear` is the post-sema
   lowering of control flow to labels/gotos (`Linear.{h,cpp}`/`Linear.kt`), the
   peephole trim of that form (`Simplify.*`), and the lowering of nested expressions
   into `_sm_expr<n>` temporaries (`ExpressionLowering.*`); `sema` also carries the
@@ -220,8 +223,9 @@ driver's - and `build.bat` can compile it.
 - `tools/` - the JavaScript harness: `build` is `build.js` at the root (with
   `build.bat`), and this folder holds `stress.js` (the corpus above),
   `bootstrap.js` (compile the published bootstrap, transpile, compare the bytes),
-  `smgen.js` (the `native`/`@SmGen` byte-equality check) and
-  `msvc.mjs` (the Visual Studio environment shared by all three). The remaining
+  `smgen.js` (the `native`/`@SmGen` byte-equality check), `vscheck.mjs` (build the Visual
+  Studio profiling project, `simse.vcxproj`), and
+  `msvc.mjs` (the Visual Studio environment shared by all of them). The remaining
   `_*.mjs`/probe files are the hand-written ring's scratch (A/B benchmarks and shape
   probes); they are not part of any workflow.
 - **Profiling**: `bun build.js --release --profile` builds a compiler (or any program,
@@ -278,6 +282,22 @@ Key design points:
 - **Generics are reified via emitted C++ templates** (see
   `impl_specs/reification.md`): distinct Simse instantiations become distinct
   C++ types; `SmallVector<N,T>` maps to `SmallVector<T,N>`.
+- **Source generators** (`@SmGen`, see `impl_specs/generators.md`) live in
+  `cppsrc/sourcegen/`, one generator per file, and each **registers itself** with one line at
+  the end of its own file - `val cppGenRegistered: Bool = registerSourceGen("cpp", cppGen,
+  true, true)` - whose file-level static initializer appends it to `sourceGenTable` (the
+  table has no initializer of its own: static initializers run in an unspecified order, and an
+  append onto storage that starts empty cannot lose one). A generator is a lambda over
+  `*SourceGenContext` and is asked three times - `Declare` (resolve the symbol a call
+  reaches), `Reparse` (hand back Simse source) and `Emit` (place text, and once more for the
+  program itself). It may read and write the AST nodes, the resources and the `Sections` sink,
+  and it calls nothing from the compiler's stages: that boundary is what keeps a program
+  author's generator from breaking when a compiler API changes.
+- **A project file (`simse.md`)** names the modules a project is built from and says which of
+  them ship source generators (`specs/simse-md.md`; the manifest half is implemented, the
+  extension is not). A root *with* a manifest is scanned as exactly the modules it names; a
+  root *without* one is scanned whole, as `--root cppsrc` does. A module that says
+  `sourcegen: true` is a hard error naming it for now.
 - **Native boundary** (see `impl_specs/native-interop.md`): `native fun` /
   `native("Symbol") fun` declares a function whose body is hand-written C++. A body that
   is a *resource* is `@SmGen("res", section[, symbol])` instead, which is where the RTL's
@@ -320,7 +340,7 @@ Key design points:
   compiled bootstrap *and* `./simse.exe` against the published file, so a repo whose
   compiler no longer matches its sources says so by name.
 - **One declaration, two spellings**: `native("sym")` and
-  `@SmGen("cpp", "defined-in-headers", "sym")` are the same declaration and must emit
+  `@SmGen("cpp", "sym")` are the same declaration and must emit
   the same C++ - `bun tools/smgen.js` compiles the pair (`stress/smgen-native`,
   `stress/smgen-cpp`) and compares their amalgamations byte for byte, after replacing
   the fixture path.
@@ -348,13 +368,18 @@ Key design points:
   compiler's own sources stayed `@`-free, and only a compiler built *from* those changes
   could parse an `@` in the prelude. The published bootstrap never needs a hand-patch:
   refreshing it (`--out cppsrc/simse_bootstrap.cpp`) carries the new scanner and parser.
-- **A `_res.md` file under `cppsrc` is part of the compiler**, not of a program: the
-  compiler's own build pools it, the `res` generator reads it *first* while the tree is
-  being compiled, and it is what every other program gets from the compiler's own table
-  (`impl_specs/generators.md`). Edit one and the next build is the one that sees it - and
-  the amalgamation changes, so refresh the bootstrap too. Because the tree's own file wins,
-  moving a header's C++ into a `_res.md` section needs no staged build (the *source* half -
-  a declaration that changes shape in the prelude `.kt` - still does).
+- **A `_res.md` file under `cppsrc` is part of the compiler**, not of a program: the `res`
+  generator reads it *first* while the tree is being compiled (the tree's own files win over
+  the compiler's own resources), and at run time the compiler reads it from disk for every
+  other program - the second half of the generator lookup, which is why it is what a program
+  with no `_res.md` of its own gets the RTL's C++ from (`impl_specs/generators.md`). Edit one
+  and the next build is the one that sees it - and the amalgamation changes, so refresh the
+  bootstrap too. Because the tree's own file wins, moving a header's C++ into a `_res.md`
+  section needs no staged build (the *source* half - a declaration that changes shape in the
+  prelude `.kt` - still does). Its sections are all marked `!`: the text is compiled into the
+  compiler, so embedding it in the compiler's own string pool as well was a second copy of it
+  (23 KB), and the compiler's run-time `Resources` table is now empty - that type is a
+  program-facing API.
 - **Prefer the container `for` to an index walk.** `for (*x in xs)` binds a *pointer* to
 each element - no copy per iteration, and a write through `x` reaches the element - while
 `for (x in xs)` binds a copy; the indexed form `for ((*x, i) in xs)` adds a counter that
@@ -603,6 +628,25 @@ Do these only when asked; roughly prioritized:
 
 ## 9. Gotchas
 
+- **A resource section marked `!` is read and not carried** (`specs/resources.md`): the
+  compiler reads its entries - a generator looks its keys up, the emitter finds its text and
+  emits it as code - and the program it builds does not store them. It is what a `.md` file
+  holding *code* wants (a `kt` section's Simse source, a `res` section's C++): the code is
+  compiled in, and the text would otherwise be in the executable a second time. The marker is
+  trimmed off the section name, so a lookup by spelling cannot tell whether a section was
+  marked. A program's own code sections use it (`stress/resources-compileonly`,
+  `stress/smgen-kt`), and so does `cppsrc/rtl/_res.md` - every one of its sections - because the
+  compiler reads that file from disk beside its prelude as it compiles, the way it reads the
+  prelude's `.kt` files. That disk read is the second half of the generator lookup (the tree
+  being compiled is the first), so nothing has to be pooled: the compiler's own string pool
+  dropped from 33,446 bytes to 11,051 when the RTL's text stopped being embedded in it.
+- **An XML comment cannot contain `--`**, so `simse.vcxproj`'s comments cannot spell a
+  command-line flag: the debugger argument it sets (`LocalDebuggerCommandArguments`, the
+  `root` option over `cppsrc`) has to be described in words there. It is worth knowing before
+  editing that file - MSBuild fails the whole load with `MSB4025` otherwise. `bun
+  tools/vscheck.mjs [Debug|Release]` builds the project from the command line, which is how a
+  change to the RTL's includes or to the amalgamation's shape can be caught without opening
+  the IDE.
 - **The emitter's type table is flat by name**, so a prelude type and a program type of
   the same name collide: `cppsrc/resources/Resources.kt`'s reader pair had to be renamed
   `ResourceItem` when the RTL's `ResourceEntry` arrived (the symptom is the prelude's own
@@ -656,6 +700,18 @@ Do these only when asked; roughly prioritized:
 - **Every block of the amalgamation starts with a blank line** (`Sections.appendBlock`),
   so a generated text reads as its own block; a writer that already ends its text with a
   blank line is not doubled.
+- **`*p` where `p: *Sections` (or any pointer) *reads through***: `sourceGenEmit(*this.sections,
+  ...)` materialized a *copy* of the assembly, so the generators filled the copy while
+  `render()` read the real sink and *every* program came out with no generated text at all
+  (`simse_dict_keys: identifier not found`, the compiler itself unable to build). A `*T`
+  parameter wants the pointer - `this.sections` - never `*this.sections`. The rule of thumb:
+  `val p: *T = x` is for a binding that must outlive its expression; passing a pointer that
+  is already one is just passing it.
+- **A generator lives in `cppsrc/sourcegen/` and calls nothing from the compiler's stages**
+  (`impl_specs/generators.md`, "The generator table"): it reads and writes AST nodes,
+  resources and the `Sections` sink, and answers a `SourceGenTransform`. That is what keeps
+  a generator from breaking when a compiler API changes - `Sections` moved out of `codegen`
+  for exactly that reason, so do not reach back into the emitter from a generator.
 - **The prelude is read from disk at run time**, so a compiler older than
   `cppsrc/rtl/*.kt` sees a declaration it does not know how to emit (a new
   `native(...)` on a new type is the shape that bites: it falls back to the

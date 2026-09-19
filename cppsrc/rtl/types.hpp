@@ -44,9 +44,9 @@ T* simse_addressOf(T&& value) {
 // bracketed with SIMSE_PACK_PUSH / SIMSE_PACK_POP; the C++ emitter wraps every
 // generated aggregate in them, and the RTL wraps its own value containers.
 //
-// This under-aligns host-library members (`Str` is std::string, `PList` is
-// std::shared_ptr, `Func` is std::function, ...) which the host declares with
-// 8-byte alignment. That is deliberate for the bootstrap shim and recorded in
+// This under-aligns host-library members (`Str` is std::string, the counted reference is a
+// `std::shared_ptr` while the shim is in use, `Func` is std::function, ...) which the host
+// declares with 8-byte alignment. That is deliberate for the bootstrap shim and recorded in
 // impl_specs/rtl-abi.md; `SIMSE_NO_PACK4` falls back to the host's default
 // alignment for builds that need it.
 #if defined(SIMSE_NO_PACK4)

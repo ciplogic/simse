@@ -39,6 +39,12 @@ because it is a file a person edits and its diffs should read like the text they
   *trimmed*, and it prefixes the keys that follow it: `Title` + `Key` is the key
   `Title:Key`. The underline line is spent with its title, so it is never read as an entry
   of its own.
+- A title that **opens with `!`** marks its whole section *compile-only*: the compiler reads
+  its entries like any other, and the **program does not carry them** (see "What the program
+  carries" below). The `!` is trimmed off the name with the rest of the whitespace, so
+  `!greet` is the section `greet` and a lookup by spelling - `@SmGen("kt", "greet")` -
+  cannot tell whether the section was marked. A title with nothing after the `!` is not a
+  title, and leaves the section and the marker as they were.
 - An **entry** is a line whose *first* `:` has something before it. The key is what stands
   before that colon, *trimmed* - so a stray space or tab in a key is not a bug that only
   shows up at runtime (`Profiling: Name` and `Profiling:Name` are one key).
@@ -95,6 +101,15 @@ namespace {
 The indices are positions in the string table, and the count is *entries*, not indices. A
 program with no `_res.md` file emits no table, no install, and is byte-identical to one
 built before the feature existed.
+
+A section marked `!` is **read and not stored**: its entries stay in the list the compiler
+works from - a generator looks its keys up, the emitter finds its text and emits it as code -
+and they are absent from the pool and from the table above, so `Resources.has` never sees
+them and the text is not in the executable a second time. That is the point of the marker:
+in a `.md` file that holds *code* - a `kt` section's Simse source, a `res` section's C++ -
+the code is compiled into the program, and storing its text as well would be a duplicate of
+the same bytes. A resource that is *data* (a template, help text) is left unmarked, because
+the program is exactly what should read it.
 
 ## The API
 
@@ -154,13 +169,20 @@ text the compiler emits for every program, with no declaration to hang it on - w
 string table's own decoder and the clock the profiler reads are.
 
 The lookup reads the **tree being compiled first** - the `_res.md` files under its module
-roots, the very list the driver read - and the **compiler's own table second**, which is
-what gives a program the RTL's C++ (`cppsrc/rtl/_res.md`) without that program having to
-carry the RTL's resource file; a program that carries a section of the same name supplies
-it to itself. `@SmGen("kt", section)` reads `<section>:source` by the same rule. So a
-`_res.md` file under `cppsrc` is generated C++ in the compiler every build *and* in the
-compiler's own source tree, which is what lets the RTL's generated functions be a resource
-rather than a header.
+roots, the very list the driver read - and the **compiler's own resources second**: the
+`_res.md` files *beside the compiler's prelude*, read from disk by the driver as the
+prelude's own `.kt` files are. That second half is what gives a program the RTL's C++
+(`cppsrc/rtl/_res.md`) without that program having to carry the RTL's resource file; a
+program that carries a section of the same name supplies it to itself.
+`@SmGen("kt", section)` reads `<section>:source` by the same rule. So a `_res.md` file under
+`cppsrc` is generated C++ in the compiler every build *and* in the compiler's own source
+tree, which is what lets the RTL's generated functions be a resource rather than a header.
+
+Because the compiler reads its own file, that file's sections are all marked `!` - the
+text is compiled in, and carrying a second copy of it in the compiler's own pool bought
+nothing (the pool was 33,446 bytes, 23,034 of them this text; it is 11,051 now, and the
+published bootstrap is 23,885 bytes smaller). The one requirement is that the compiler can
+find its tree, which it already had to for the prelude.
 
 The value is C++ as written - no escapes are interpreted on the way in - so the resource
 is the one place that text lives. `cppsrc/rtl/_res.md` is the RTL's own generated C++
@@ -179,24 +201,44 @@ the program and codegen emits it - so the generated function is compiled, not pa
 | --- | --- |
 | the format, the join, the discovery | `cppsrc/resources/Resources.kt` (its `ResourceItem` is the reader's pair - not the RTL's `ResourceEntry`, because the emitter's type table is flat by name) |
 | discovery in the driver | one call to the module: `cppsrc/compiler/Driver.kt` |
-| the lookup a generator reads | `Emitter.resText`/`resHas`/`resAlwaysSections` (`cppsrc/codegen/Codegen.kt`), over the flat list `resEntriesFlat` builds |
-| pooling and the table | the emitter: `cppsrc/codegen/Codegen.kt`, after `emitStringTable` |
+| the lookup a generator reads | `sourcegen`'s `sourceGenResHas`/`sourceGenResText` (`cppsrc/sourcegen/GenTypes.kt`): the tree's own entries first, the compiler's own (read from disk beside the prelude) second |
+| pooling and the table | the emitter: `cppsrc/codegen/Codegen.kt`, after `emitStringTable`, over `resourceStored` (`resStoredEntries`) |
 | the storage and `install` | `cppsrc/rtl/resources.hpp` |
 | the API and the lookup | `cppsrc/rtl/resources.kt` (Simse) |
 | the static form | `Emitter.call` + `Emitter.staticCallSymbol` |
 | the RTL's generated C++ | `cppsrc/rtl/_res.md`, read by the `res` generator |
-| the end-to-end case | `stress/resources/` |
+| the end-to-end case | `stress/resources/` (data the program carries) and `stress/resources-compileonly/` (a `!` section: read, not carried) |
 
 ## Status
 
 Implemented for the whole path: discovery, parse, join, pooling, the emitted table, the
 `Resources` API - the lookup itself now written in Simse over the `Span<ResourceEntry>`
 the C++ storage hands out - and the `res` generator, which reads the tree being compiled
-first and the compiler's own pool second (`impl_specs/generators.md`). `stress/resources`
+first and the compiler's own resources beside the prelude second
+(`impl_specs/generators.md`). `stress/resources`
 prints every shape the format has: a fenced block, an inline value, an empty value, a
 missing key, a comparison against a literal, and the escapes a value needs on the way into
 the pool (a double quote, a backslash, a tab, and a value ending in a backslash).
-`bun tools/stress.js` is **56/56**, and the bootstrap fixed point (`bun tools/bootstrap.js`)
+
+`cppsrc/rtl/_res.md` is entirely marked `!`, and the compiler's `Resources` table is
+therefore empty: the RTL type is a *program-facing* API now, and the compiler reads its own
+resources from the file (which it has to have anyway, for the prelude's `.kt` files) instead
+of carrying them in its pool. The cost of the marker is exactly that requirement, and the
+gain is the second copy of the text - 23,034 bytes of pool, and on the last refresh 23,885
+bytes of the published bootstrap.
+
+The **compile-only marker** is implemented too: a section title opening with `!` is read
+like any other - the emitter finds its text, a generator finds its keys, both under the name
+without the `!` - and is left out of the pool and the table (`resStoredEntries`, the
+driver's `resourceStored`, `Emitter.collectResourceLiterals`/`emitResourceTable`).
+`stress/resources-compileonly` pins all four facts at once: the `kt` source in a marked
+section is compiled and its function works, the program does not carry that key, it does
+carry the unmarked section beside it, and the count is one rather than two. The corpus's own
+code resources use it (`stress/smgen-kt`, `stress/smgen-res-program`), where the effect is
+visible in the goldens: `smgen-kt`'s string pool drops from 403 bytes to 12, and
+`smgen-res-program` stops emitting a resource table (and a string table) at all.
+
+`bun tools/stress.js` is **60/60**, and the bootstrap fixed point (`bun tools/bootstrap.js`)
 holds byte for byte.
 
 Not done yet: a resource *section* helper (deliberately - a section is a key prefix), a

@@ -40,11 +40,12 @@ implementation at all ("a body-less method needs 'native' or an attribute").
 `Attribute` (the attribute's own name), `Generator` (the generator the first argument
 names: `cpp`, `res`, `kt`) and `GeneratorArgs` (the remaining arguments, in order, joined by
 `,`, a string literal without its quotes) on the `Function` node. `native(...)` is sugar
-for `@SmGen("cpp", "defined-in-headers"[, symbol])` and fills the same attributes, which is
+for `@SmGen("cpp"[, symbol])` and fills the same attributes, which is
 what makes the two spellings one declaration (`impl_specs/generators.md`).
 
 A generator whose text is not emitted at the declaration - `cpp` and `res` - names the C++
-symbol a call reaches as its **third** argument, and the declaration carries it as
+symbol a call reaches as one of its own arguments: `cpp`'s *second* (`res` names its section
+first, so its symbol is the *third*), and the declaration carries it as
 `NativeSymbol`/`HasNativeSymbol` whichever spelling was written: a pass that reads the
 declaration without the emitter's tables reads the symbol there (the `listOf<T>` list
 literal, whose call is a `Pack` rather than a call, is the one that does).

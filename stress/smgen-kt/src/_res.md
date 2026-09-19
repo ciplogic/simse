@@ -6,7 +6,7 @@ program's own resources, compiles it with the program - package `rtl`, which is 
 line makes it - and the call site reaches the function by the declaration's own name.
 A prose line here is ignored only when it holds no colon.
 
-greet
+!greet
 ====
 source:
 ```kt

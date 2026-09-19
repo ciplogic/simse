@@ -5,7 +5,7 @@ emitter reads the tree's own `_res.md` files before the compiler's, which is wha
 program able to supply generated C++ for itself (impl_specs/generators.md, "The `res`
 generator").
 
-triple
+!triple
 ====
 symbol: fixtures_triple
 forward:

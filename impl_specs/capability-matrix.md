@@ -2642,7 +2642,7 @@ compiler *did* catch and one it could not:
   declaration can now name the thing that implements it: `@SmGen` is an attribute on a
   body-less method (`specs/attributes.md`), `@Identifier` is one scanner token, and the
   parser fills three AST attributes (`Attribute`/`Generator`/`GeneratorArgs`) - which is
-  also what `native("sym")` lowers to (`@SmGen("cpp", "defined-in-headers", "sym")`), so
+  also what `native("sym")` lowers to (`@SmGen("cpp", "sym")`), so
   the two spellings are one declaration (`bun tools/smgen.js` asserts their amalgamations
   are byte-identical). Three generators exist: `cpp` (the C++ is in the headers, i.e.
   `native`), `res` (the C++ is a resource the *compiler* carries - `cppsrc/rtl/_res.md`,
@@ -2652,7 +2652,8 @@ compiler *did* catch and one it could not:
   compiles with the program).
 
   The amalgamation's assembly is now a first-class object: `Sections`
-  (`cppsrc/codegen/CgSections.kt`) holds the named sections in render order
+  (`cppsrc/sourcegen/Sections.kt`, `cppsrc/codegen/CgSections.kt` when it landed) holds the
+  named sections in render order
   (`includes -> forward -> types -> statics -> prototypes -> init -> bodies`), a
   generator's addition is a named item inside one of them (last write wins), and a new
   name appends at the end. Routing the emitter through it was verified the strict way -
@@ -2733,3 +2734,133 @@ compiler *did* catch and one it could not:
   that is the cost of the header going away), `bun tools/smgen.js` 1/1, and the bootstrap
   fixed point holds byte for byte.
 
+- **The generators are a package of their own now (T30).** `cppsrc/sourcegen/` holds
+  `Sections.kt` (the sink, moved out of `codegen` verbatim), `GenTypes.kt` (the data a
+  generator sees: `SourceGenContext`, `SourceGenTransform`, `FullCompiledState`, the
+  `OnSourceGen` typealias), one file per generator (`CppGen.kt`, `ResGen.kt`, `KtGen.kt`),
+  and `SourceGen.kt` - the manager, with `addSourceGen`/`makeSourceGens` built the way
+  `lex/Scanner.kt` builds its token rules and the three entry points
+  `sourceGenDeclare`/`sourceGenReparseSource`/`sourceGenEmit`. A generator is a lambda over
+  `*SourceGenContext`; `codegen` keeps only the calling side.
+
+  The point is the boundary: a generator is the one part of the compiler a *program's*
+  author writes, so it may touch data (AST nodes, resources, the sink) and nothing else -
+  not the parser, not the emitter, not the semantic pass - and cannot break when a compiler
+  API changes. `Sections` left `codegen` for that reason: it is a data structure in the
+  generators' package now, held as one static per compilation and handed out as
+  `*Sections` (`sourceGenSink`), the same shape and for the same reason as the scanner's
+  rule table.
+
+  One trap found and paid for: **`*p` where `p: *Sections` reads through**, so calling
+  `sourceGenEmit(*this.sections, ...)` materialized a *copy* of the assembly - the
+  generators filled the copy while `render()` read the real sink, and every program came
+  out with no generated text at all (`simse_dict_keys`: identifier not found). The pointer
+  is passed, never dereferenced; `Sections.render`'s "text then items, each as its own
+  block" is unchanged, which is why the refactor is byte-neutral.
+
+  Verified the strict way, since the refactor should change no bytes: the refactored
+  compiler and the previous one transpile `cppsrc` to *identical* C++ (compared directly,
+  then `bun tools/bootstrap.js` after one `cppsrc/simse_bootstrap.cpp` refresh reports both
+  fixed-point comparisons byte for byte), `bun tools/stress.js` **56/56** with no golden
+  re-captured, `bun tools/smgen.js` 1/1.
+
+
+- **The project file (`simse.md`), and generators that register themselves (T31's first
+  half).** A root's `simse.md` names the modules a project is built from (`module: <dir>`,
+  repeated) and a module's own `simse.md` may say `sourcegen: true`; the driver reads both
+  before it scans anything (`manifestValues`/`driverExpandRoot`, `Driver.kt`), in the
+  resource idiom minus its sections: prose lines carry no entry, an entry is `key: value`, a
+  repeated key means "one more of these". **A root with a manifest is scanned as exactly the
+  modules it names**, so a `stray.kt` beside the manifest is not scanned; a root without one
+  is scanned whole, which is what `--root cppsrc` keeps doing - and what lets the compiler's
+  own tree gain a manifest later without a second code path. A module that declares
+  generators is a hard error naming it: the extension is not implemented, and a program that
+  asked for a generator must not compile silently without it
+  (`stress/manifest-modules`, `stress/diagnostic-manifest-sourcegen`).
+
+  The generators' own half landed with it: they now **register themselves**. `sourceGenTable`
+  has no initializer, and each generator's file ends in one line -
+  `val cppGenRegistered: Bool = registerSourceGen("cpp", cppGen, true, true)` - whose
+  file-level static initializer appends it to the table (`specs/statics.md`; the mechanism was
+  probed before it was relied on: a static whose initializer calls a function that appends to
+  another file's static-typed storage works). That is what a module's generator will do too,
+  and it is order-independent in a way an assignment would not be: the initialization pass's
+  order is unspecified, but "storage starts empty" is a guarantee and an append cannot lose a
+  registration. The dispatcher looks a generator up by name, so the order the table ends up
+  in is not observable either.
+
+  Verified: the compiler builds itself, `bun tools/stress.js` **58/58** (the two new cases),
+  `bun tools/smgen.js` 1/1, and the bootstrap fixed point holds after one refresh.
+
+- **A resource section can be marked compile-only (`!`).** A `_res.md` section title that
+  opens with `!` is *read and not carried*: the compiler reads its entries exactly as before -
+  a generator looks its keys up, the emitter finds its text and emits it as code - and the
+  program it builds does not store them. The `!` is trimmed off the name with the whitespace
+  around it, so a lookup by spelling cannot tell whether a section was marked, and the
+  presence of the entry differs only in `ResourceItem.compileOnly`. Two views of the one list
+  the driver read do the rest: `resEntriesFlat(resources)` is what the emitter *looks up*
+  (every entry) and `resEntriesFlat(resStoredEntries(resources))` is what it *pools* - the
+  program's string table and its `Resources` table are built from the second, so a marked
+  section is absent from both.
+
+  The reason is code that lives in a `.md` file: a `kt` section's Simse source, a `res`
+  section's C++, are compiled into the program, and storing the text as well duplicated the
+  same bytes (in the string pool *and* in the resource table). A resource that is *data* is
+  left unmarked, because the program is exactly what should read it. The effect is visible in
+  the corpus's goldens: `stress/smgen-kt`'s string pool drops from 403 bytes to 12 and its
+  resource table disappears, `stress/smgen-res-program` stops emitting a string table at all,
+  and `stress/resources-compileonly` pins all four facts at once (the generated function works
+  from a marked section, the program does not carry that key, it does carry the unmarked
+  section beside it, and the count is one).
+
+  One file was left unmarked at that point, `cppsrc/rtl/_res.md`, and the reason was the one
+  trap this feature had: a `_res.md` under `cppsrc` *was* the compiler's own run-time resource
+  table, which is how a program that carries no section of its own received the RTL's C++
+  (`Resources.get` was the second half of the generator lookup). Marking those sections would
+  have taken the text out of the compiler, and no program would have got its RTL code. That
+  was fixed one step later (the entry below) by moving the second half of the lookup to the
+  file itself.
+
+  Verified: `bun tools/stress.js` **59/59** (one new case, two goldens re-captured - and the
+  diffs are the point: the text and the table are gone), `bun tools/smgen.js` 1/1, and the
+  bootstrap fixed point holds byte for byte after one refresh.
+
+- **The compiler stops carrying its own resources (`cppsrc/rtl/_res.md` is `!` throughout).**
+  The pool the compiler built into itself was 33,446 bytes, and 23,034 of them were the text of
+  `cppsrc/rtl/_res.md` - text the compiler *also* had as code, since the `res` generator emits
+  it. The marker from the entry above could not simply be applied to that file: the second half
+  of the generator lookup *was* the compiler's own pooled table (`Resources.get`), read at run
+  time to serve a program that carries no `_res.md` of its own - so marking the file would have
+  taken the RTL's C++ out of the compiler, and no program would have received it.
+
+  The fix is to move that second half to the file. The driver now loads the resources **beside
+  the compiler's prelude** (`resLoad(driverResourceRoots(resolvedPrelude))`), exactly as it loads
+  the prelude's `.kt` files, and `sourcegen`'s state carries two lists - the tree's resources and
+  the compiler's own (`FullCompiledState.compilerResources`) - with `sourceGenResHas`/
+  `sourceGenResText` and `resGenAlways` reading the second instead of the RTL's `Resources` API.
+  The RTL's `Resources` type is a *program-facing* API now; the compiler reads files, which it
+  already had to do for the prelude. Every section of `cppsrc/rtl/_res.md` is marked `!`, so
+  nothing of it is pooled and the compiler's own `Resources` table is empty.
+
+  Verified: pool 33,446 → 11,051 bytes, and the published bootstrap 1,572,537 → 1,548,652 bytes
+  (one refresh). `bun tools/stress.js` **60/60** - every program still receives the RTL's code,
+  and the disk read is exercised by nearly every case, since almost none carries a `_res.md` of
+  its own - `bun tools/smgen.js` 1/1, and the bootstrap fixed point holds byte for byte.
+
+- **The skeleton parser is gone.** `cppsrc/skelparser/SkeletonParser.kt` (140 lines) was the
+  first component ported from the hand-written ring - the pilot that proved a Simse source file
+  could be transpiled, compiled and differentially checked against its C++ original
+  (`skel_diff`, byte-identical tree dumps) - and once `parser/Parser.kt` parsed tokens straight
+  into the AST it had no caller at all: nothing in `cppsrc` named `parseSkeleton`, `foldBack`,
+  `matchingOpenToken`, `blockTypeForOpenToken`, `isClosingToken`, `SkeletonNode` or
+  `SkeletonType`, the only link left was an unused `import skelparser` in the driver, and the C++
+  original it mirrored (`SkeletonParser.h`/`.cpp`) had already been deleted. It was compiled
+  into every build regardless (the tree is scanned whole), together with the string literals of
+  its token tests. Deleted, with the import; the pilot's history is this file's own log and the
+  porting story in guide4ai.md.
+
+  Worth knowing as a consequence: the only `&T`/`PList` sites in the compiler's own source were
+  in that file (`&List<SkeletonNode>` x11), so `cppsrc` now contains **no counted reference at
+  all** - the emitted `Ref<T>` spelling and the `SmRef`/`std::shared_ptr` switch are exercised by
+  the RTL's `Array`/`PList` and by the corpus (`stress/counted-reference`,
+  `stress/pack-args`, `stress/language-tour`) rather than by the compiler's own ring.

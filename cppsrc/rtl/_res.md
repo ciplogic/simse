@@ -11,7 +11,17 @@ definition, and a section's texts are placed in the emitted file's section of th
 name. A prose line here is ignored only when it holds no colon character, so keep the
 spelling of an entry line in mind when editing.
 
-strtable
+A title opening with `!` marks its whole section *compile-only* (specs/resources.md). The
+compiler reads such a section and the program it builds does not carry it. **Every code
+section in this file is marked**, because that is exactly what the file is - C++ the
+compiler emits into a program, which is compiled in. Carrying the same 23 KB of text in the
+compiler's own string table as well would be a second copy of it, and nothing needs that
+copy any more. The compiler reads this file from disk as it compiles, the way it reads the
+prelude `.kt` files beside it, and that read is the second half of the generator lookup
+(`impl_specs/generators.md`) - which is how a program carrying no `_res.md` of its own still
+receives the RTL's C++ (`specs/resources.md`, "What the program carries").
+
+!strtable
 ====
 emit: always
 support:
@@ -84,7 +94,7 @@ inline void simse_strTableDecode(const char* pool, const Int* starts, const Int*
 }
 ```
 
-timeops
+!timeops
 ====
 emit: always
 support:
@@ -102,7 +112,7 @@ Int64 simse_nowMillis();
 Int64 simse_nowMicros();
 ```
 
-listops
+!listops
 ====
 forward:
 ```cpp
@@ -237,7 +247,7 @@ inline Str simse_int_toString(Int self) {
 }
 ```
 
-dictops
+!dictops
 ====
 forward:
 ```cpp
@@ -375,7 +385,7 @@ inline void simse_list_sort(List<T>& self, F less) {
 }
 ```
 
-strops
+!strops
 ====
 forward:
 ```cpp
@@ -622,7 +632,7 @@ inline Str simse_bool_toString(Bool self) {
 }
 ```
 
-spanOf
+!spanOf
 ====
 symbol: simse_spanOf
 forward:
@@ -649,7 +659,7 @@ is what `stress/smgen-res-collision` needs to pin the documented last-write-wins
 the symbol, so a second generator that adds the same symbol replaces the first one's
 text - here with a span whose length is -1.
 
-spanOfEmpty
+!spanOfEmpty
 ====
 symbol: simse_spanOf
 bodies:

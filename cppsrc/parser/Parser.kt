@@ -331,7 +331,7 @@ data class Parser(
         return this.emptyNode()
     }
 
-    // An attributed declaration: `@SmGen("cpp", "defined-in-headers", "sym") fun f(...)`
+    // An attributed declaration: `@SmGen("cpp", "sym") fun f(...)`
     // (specs/attributes.md). The `@Name` is one token (`TokenKind.Attribute`) and the
     // arguments are literals; only method declarations take attributes in this baseline,
     // so the declaration that must follow is `fun`.
@@ -653,8 +653,7 @@ data class Parser(
     // body-less method with no attribute has no implementation at all, which is what
     // the `hasBody` check below rejects. The arguments are kept as they were written
     // (a string literal still has its quotes), so the two spellings of one declaration
-    // - `native(sym)` and `@SmGen("cpp", "defined-in-headers", sym)` - fill exactly
-    // the same attributes.
+    // - `native(sym)` and `@SmGen("cpp", sym)` - fill exactly the same attributes.
     fun parseFunction(isNative: Bool, attrName: Str, attrArgs: List<Str>): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
         var nativeSymbol: Str = ""
@@ -776,11 +775,11 @@ data class Parser(
         }
 
         // What an attribute means: the declaration's C++ is the generator's, so there
-        // is no body to emit, and the generator names the symbol. `@SmGen("cpp",
-        // "defined-in-headers", sym)` is the form `native(sym)` spells, so it fills the
-        // same attributes - which is what makes the two spellings one declaration.
-        // `native(sym)` is sugar for it (impl_specs/generators.md), so the attributes
-        // are filled the same way whichever was written.
+        // is no body to emit, and the generator names the symbol. `@SmGen("cpp", sym)`
+        // is the form `native(sym)` spells, so it fills the same attributes - which is
+        // what makes the two spellings one declaration. `native(sym)` is sugar for it
+        // (impl_specs/generators.md), so the attributes are filled the same way
+        // whichever was written.
         var attributeName: Str = attrName
         var generatorName: Str = ""
         var generatorArgs: Str = ""
@@ -800,9 +799,8 @@ data class Parser(
         } else if (isNative) {
             attributeName = "SmGen"
             generatorName = "cpp"
-            generatorArgs = "defined-in-headers"
             if (hasNativeSymbol) {
-                generatorArgs = generatorArgs + "," + attrLiteralText(nativeSymbol)
+                generatorArgs = attrLiteralText(nativeSymbol)
             }
         }
         if (attributeName.size() > 0) {
@@ -813,22 +811,24 @@ data class Parser(
                 this.setError(pos, "a method whose C++ is generated must not have a body")
                 return this.emptyNode()
             }
-            // The *third* argument names the C++ symbol a call reaches, in both forms
-            // whose text is not emitted here: `cpp`/`defined-in-headers` (a header
-            // defines it) and `res` (a resource does). Whichever was written, the
-            // declaration carries it as `NativeSymbol`, because a pass that reads the
-            // declaration without the emitter's tables reads it there - `linear`'s
-            // `listOf<T>` list literal is the one that does (`ilIsListOf`).
-            if (attrArgs.size() >= 3) {
-                // `cpp` names the symbol after its `defined-in-headers` argument, `res`
-                // right after the section; a generator with no symbol of its own (`kt`)
-                // does not reach here at all.
-                val inHeaders: Bool = generatorName == "cpp"
-                        && attrLiteralText(attrArgs[1]) == "defined-in-headers"
-                if (generatorName == "res" || inHeaders) {
-                    nativeSymbol = attrArgs[2]
-                    hasNativeSymbol = true
-                }
+            // The argument that names the C++ symbol a call reaches: `cpp` has no
+            // parameters of its own, so its symbol is the argument right after the
+            // generator's name; `res` names its section first, so its symbol is the
+            // third. `kt` names no symbol at all (its text is compiled from source).
+            // Whichever was written, the declaration carries the name as `NativeSymbol`,
+            // because a pass that reads the declaration without the emitter's tables
+            // reads it there - `linear`'s `listOf<T>` list literal is the one that does
+            // (`ilIsListOf`).
+            var symbolArg: Int = -1
+            if (generatorName == "cpp") {
+                symbolArg = 1
+            }
+            if (generatorName == "res") {
+                symbolArg = 2
+            }
+            if (symbolArg >= 0 && attrArgs.size() > symbolArg) {
+                nativeSymbol = attrArgs[symbolArg]
+                hasNativeSymbol = true
             }
         } else if (!hasBody && !isNative) {
             this.setError(pos, "a body-less method needs 'native' or an attribute")

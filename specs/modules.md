@@ -99,6 +99,12 @@ specified yet. The shape fixed here is: a module is a directory; the compiler
 scans module roots; and an external module is made available by adding its
 directory to a module root.
 
+The manifest half of this is `specs/simse-md.md`: a root's `simse.md` names the modules the
+project is built from (implemented - a root with a manifest is scanned as exactly the modules
+it names), a module's own `simse.md` may declare `sourcegen: true` (read and reported; using
+such a module is a hard error until the compiler can be extended by it), and a module that
+ships source generators makes the project compile with a compiler *extended* by them.
+
 ## What a package is not
 
 - It is not a compilation unit or an access-control boundary in this baseline.

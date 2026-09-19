@@ -74,8 +74,8 @@ enum class AstNodeAttributeKind {
     // - the attribute's *first* argument, `cpp` for `native(...)` - and the generator's
     // remaining arguments in order, joined by `,`. A string literal is stored without
     // its quotes (the parser's `attrLiteralText`), because a generator reads a name, a
-    // key or a symbol. `native(...)` is the `cpp`/`defined-in-headers` form, so a
-    // `native` declaration carries these too.
+    // key or a symbol. `native(...)` is the `cpp` form, so a `native` declaration
+    // carries these too.
     Attribute,
     Generator,
     GeneratorArgs,

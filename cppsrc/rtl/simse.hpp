@@ -13,6 +13,7 @@
 // Order follows dependencies: types and containers have no RTL-relative
 // dependencies, and the higher-level headers build on them.
 #include "types.hpp"        // scalar aliases and Str
+#include "ref.hpp"          // Ref<T> (`&T`): SmRef, or the std::shared_ptr shim
 #include "containers.hpp"   // SmallVector, List, PList, Dictionary, Array, RawArray
 #include "span.hpp"         // Span<T> (borrowed view: pointer + length)
 #include "strview.hpp"      // StrView (Span<Char> + the text operations)

@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  simse.vcxproj - the profiling project (`simse.slnx` is its solution).
+
+  It compiles the *published bootstrap*, `cppsrc\simse_bootstrap.cpp`, together with the
+  runtime's one hand-written translation unit `cppsrc\rtl\native.cpp` - exactly the pair
+  `build.js` compiles - so Visual Studio's profiler (Debug > Performance Profiler, Alt+F2) or
+  a debugger can be pointed at the compiler itself.
+
+  Why the bootstrap rather than the file `build.js` generates (`simse_out.cpp`): the bootstrap
+  is checked in, so this project always has a source and needs no generation step. The
+  repository refreshes it on every change (`build.js`, with the bootstrap as the output file);
+  to profile the very newest tree instead, point `ClCompile` below at `simse_out.cpp` after a
+  release build.
+
+  - **Release is the default**: /O2 /Ob3 with debug information, which is the pair a profiler
+    wants (optimized code, full symbols). Whole-program optimization is off on purpose, like
+    the repository's own release-with-symbols build: a sampled profile should be able to name
+    functions rather than sit inside a link-time-inlined blob.
+  - **Debug** is /Od with the debug runtime, for stepping.
+  - **F5 and the profiler run the compiler over its own sources**: `LocalDebuggerCommandArguments`
+    below is the `root` option over `cppsrc`, and the working directory is the repository root,
+    because both the prelude's default path (`cppsrc/rtl`) and that root are relative.
+  - Output: `profile\<Configuration>\simse.exe` + `.pdb` (git-ignored).
+  - `bun tools/vscheck.mjs [Debug|Release]` builds this project from the command line, with
+    the same Visual Studio environment the rest of the harness uses.
+  - The optional RTL defines (`SIMSE_NO_PACK4`, `SIMSE_STR_STD_STRING`, `SIMSE_SMREF`) are not
+    set here: this project builds what the repository builds by default. Add one to
+    `PreprocessorDefinitions` to profile that configuration - and remember that the RTL's
+    headers must agree with the amalgamation's.
+-->
+<Project DefaultTargets="Build" ToolsVersion="18.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Release|ARM64">
+      <Configuration>Release</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|ARM64">
+      <Configuration>Debug</Configuration>
+      <Platform>ARM64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{6E6F2A44-2C9B-4E9D-9F3C-2B7A5D8E1C10}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>simse</RootNamespace>
+    <ProjectName>simse</ProjectName>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+
+  <PropertyGroup Condition="'$(Configuration)'=='Release'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)'=='Debug'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v145</PlatformToolset>
+    <CharacterSet>MultiByte</CharacterSet>
+  </PropertyGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings" />
+  <ImportGroup Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props"
+            Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')"
+            Label="LocalAppDataPlatform" />
+  </ImportGroup>
+
+  <PropertyGroup>
+    <OutDir>$(ProjectDir)profile\$(Configuration)\</OutDir>
+    <IntDir>$(ProjectDir)profile\obj\$(Configuration)\</IntDir>
+    <TargetName>simse</TargetName>
+    <LinkIncremental>false</LinkIncremental>
+    <!-- What F5 and the profiler run: the compiler over its own sources, from the repository
+         root (the prelude's default path and the root option are both relative to it). -->
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)</LocalDebuggerWorkingDirectory>
+    <LocalDebuggerCommandArguments>--root cppsrc</LocalDebuggerCommandArguments>
+  </PropertyGroup>
+
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>NDEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <!-- Debug information in Release keeps symbols for the profiler. -->
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <AdditionalOptions>/FS %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+    </Link>
+  </ItemDefinitionGroup>
+
+  <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PreprocessorDefinitions>_DEBUG;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <ExceptionHandling>Sync</ExceptionHandling>
+      <Optimization>Disabled</Optimization>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+      <AdditionalOptions>/FS %(AdditionalOptions)</AdditionalOptions>
+      <AdditionalIncludeDirectories>$(ProjectDir);%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+    </Link>
+  </ItemDefinitionGroup>
+
+  <ItemGroup>
+    <!-- The published amalgamation and the runtime's one hand-written .cpp: the same pair
+         `build.js` compiles. -->
+    <ClCompile Include="cppsrc\simse_bootstrap.cpp" />
+    <ClCompile Include="cppsrc\rtl\native.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <!-- For navigation only: the amalgamation includes the RTL through simse.hpp. -->
+    <ClInclude Include="cppsrc\rtl\simse.hpp" />
+    <ClInclude Include="cppsrc\rtl\ref.hpp" />
+    <ClInclude Include="cppsrc\rtl\smref.hpp" />
+    <ClInclude Include="cppsrc\rtl\types.hpp" />
+    <ClInclude Include="cppsrc\rtl\containers.hpp" />
+  </ItemGroup>
+
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets" />
+</Project>

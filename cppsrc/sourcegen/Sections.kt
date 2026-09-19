@@ -1,8 +1,14 @@
-// CgSections.kt
+// Sections.kt
 //
 // The amalgamation's sections (impl_specs/generators.md): the ordered list of named
 // pieces the emitted file is assembled from, and the one sink every writer adds to -
 // the emitter a section at a time, a generator through `add`.
+//
+// This type lives in the generators' own package, not in `codegen`, for the boundary a
+// generator is held to: a generator may read and write *data structures* (the AST nodes,
+// the resources, this sink), but it must not call the compiler's code - the parser, the
+// emitter, the semantic pass - because that is what would break a generator whenever a
+// compiler API changes (impl_specs/generators.md, "What a generator may touch").
 //
 // A section is a name, the text the emitter wrote into it (in order), and the named
 // items a *generator* added. Rendering walks the sections in order and, within one,
@@ -22,7 +28,7 @@
 // know what the first did - documented behaviour, not a bug (impl_specs/generators.md,
 // "Sections and named entries"). A generator that cares checks `has` first.
 
-package codegen
+package sourcegen
 
 // One section: its name, the emitter's own lines, and the named additions.
 data class NamedSection(
@@ -80,7 +86,8 @@ data class Sections(
 
     // A generator's addition under `key`; an existing key's text is replaced.
     fun add(name: Str, key: Str, text: Str): Unit {
-        val target: *NamedSection = *this.sections[this.section(name)]
+        val at: Int = this.section(name)
+        val target: *NamedSection = *this.sections[at]
         target.items.insert(key, text)
     }
 
@@ -160,7 +167,7 @@ data class Sections(
 //   bodies     every function body, and a generated definition that is not a declaration
 //
 // `current` starts at `includes`, the emitter's first stage.
-fun cgNewSections(): Sections {
+fun sourceGenNewSections(): Sections {
     var list: List<NamedSection> = List<NamedSection>()
     list.append(NamedSection("includes", Str(), Dictionary<Str, Str>()))
     list.append(NamedSection("support", Str(), Dictionary<Str, Str>()))
@@ -174,4 +181,28 @@ fun cgNewSections(): Sections {
     list.append(NamedSection("init", Str(), Dictionary<Str, Str>()))
     list.append(NamedSection("bodies", Str(), Dictionary<Str, Str>()))
     return Sections(list, 0)
+}
+
+// ---- the sink -------------------------------------------------------------
+//
+// One per compilation, and a static for the same reason the scanner's tables are
+// (`cppsrc/lex/Scanner.kt`): the compiler is one compilation per process, and a static is
+// what lets the emitter *and* every generator hold the sink the same way - as a pointer
+// (`*Sections`) rather than as a value, which is also what keeps the emitted C++ legal
+// whichever package the pointer is named from.
+//
+// The driver resets it before anything writes (`sourceGenBegin`), and the emitter takes
+// its pointer from `sourceGenSink` when it is built.
+
+var sourceGenOutput: Sections = sourceGenNewSections()
+
+// The assembly the emitter writes into and the generators add to.
+fun sourceGenSink(): *Sections {
+    return * sourceGenOutput
+}
+
+// A fresh assembly: what `sourceGenBegin` leaves, so nothing of a previous compilation
+// (there is one per process today, but the compiler should not depend on that) survives.
+fun sourceGenResetSink(): Unit {
+    sourceGenOutput = sourceGenNewSections()
 }

@@ -47,41 +47,6 @@ void simse_strTableDecode(const char* pool, const Int* starts, const Int* length
 Int64 simse_nowMillis();
 Int64 simse_nowMicros();
 
-// The program's string literals: one pool, and two run-length encoded index
-// series (offsets as deltas, then lengths), each as what to subtract from the
-// previous value; strtable.hpp has the stream format.
-static const Int __sm_stringCount = 6;
-static const char __sm_stringPool[] =
-    "// `triple(value)` (src/main.kt), the program's own generated function: the declaration\n// reaches this text, and the emitter never emits a prototype of its own for it.\nInt fixtures_triple(Int value);\n" "inline Int fixtures_triple(Int value) {\n    return value * 3;\n}\n" "fixtures_triple" "triple:forward" "triple:bodies" "triple:symbol" 
-;
-static const Int16 __sm_stringStarts[] = {6,4,0,-201,137,49,1,2,1};
-static const Int16 __sm_stringLens[] = {6,3,-201,137,49,1,2,1,1,0};
-static_assert(sizeof(__sm_stringPool) - 1 == 320, "the string pool and its length index disagree");
-static StrView __sm_stringTable[__sm_stringCount];
-static struct __SmStringTableInitType {
-    __SmStringTableInitType() {
-        Int starts[__sm_stringCount];
-        Int lens[__sm_stringCount];
-        simse_strTableExpand(__sm_stringStarts, starts, __sm_stringCount);
-        simse_strTableExpand(__sm_stringLens, lens, __sm_stringCount);
-        simse_strTableDecode(__sm_stringPool, starts, lens, __sm_stringTable,
-            __sm_stringCount);
-    }
-} __sm_stringTableInit;
-
-// The resources the compiler read from `_res.md` files (specs/resources.md):
-// string-table indices, key then value, and the one installer that builds
-// them into the program's `Resources` table before `main`.
-static const Int __sm_resourceIndex[] = {5,2,3,0,4,1};
-static const Int __sm_resourceCount = 3;
-namespace {
-    struct __SmResourceInit {
-        __SmResourceInit() {
-            Resources::install(__sm_stringTable, __sm_resourceIndex, __sm_resourceCount);
-        }
-    } __sm_resourceInit;
-}
-
 // `triple(value)` (src/main.kt), the program's own generated function: the declaration
 // reaches this text, and the emitter never emits a prototype of its own for it.
 Int fixtures_triple(Int value);

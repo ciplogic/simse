@@ -71,7 +71,7 @@ Details worth knowing:
   its struct). A user can declare their own with `native fun` / `native("symbol") fun`,
   which is how the file I/O in `stress/native-read-file` works.
 - **A declaration's C++ can be generated instead of hand-written.** `native("sym")` is
-  sugar for `@SmGen("cpp", "defined-in-headers", "sym")`: an *attribute* that selects
+  sugar for `@SmGen("cpp", "sym")`: an *attribute* that selects
   a generator for the method's implementation, with the method written body-less
   (`impl_specs/generators.md`). Two more generators are in use: `res`, whose text is a C++
   *resource* - the tree's own `_res.md` files first, the compiler's second, which is where
@@ -82,7 +82,10 @@ Details worth knowing:
   includes, support, profile, strings, resources, forward, types, statics, prototypes,
   init, bodies - so a generated *declaration* lands in `forward`, a *definition* in
   `bodies`, and text the preamble needs in `support`, without codegen having to know about
-  any of them.
+  any of them. The generators are their own package (`cppsrc/sourcegen/`, one file per
+  generator, registered by name) precisely so that a *program's* author can write one
+  without depending on the compiler's internals: a generator sees the AST nodes, the
+  resources and the sections, and calls nothing from the compiler's stages.
 
 ## What the output looks like
 
@@ -196,6 +199,16 @@ in its `bodies:` - and the emitter places a section's texts in the emitted file'
 the same name, so `strtable`'s decoder is emitted into every program (it is what the
 preamble needs) while `strops`' text is emitted only into a program that reaches one of its
 symbols.
+
+A section title may open with `!`, which marks its whole section **compile-only**: the
+compiler reads it and the program it builds does not carry it. That is what a `.md` file
+holding *code* wants - a `kt` section's Simse source, a `res` section's C++ are compiled in,
+so storing their text as well would be a second copy of the same bytes
+(`stress/resources-compileonly`). The RTL's own file is marked the same way throughout, all
+seven sections: the compiler reads it from disk beside its prelude as it compiles, the way it
+reads the prelude's `.kt` files, so a program which carries no section of its own still
+receives the RTL's C++ - while the compiler no longer carries a second copy of that text in
+its own string pool (23,034 bytes of a 33,446-byte pool, gone).
 
 The prelude (`cppsrc/rtl/*.kt`) declares the surface; its bodies are *not* emitted,
 because the behavior lives in those headers or in the resource. Every type follows the

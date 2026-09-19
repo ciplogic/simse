@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "types.hpp"
+#include "ref.hpp"   // Ref<T> (`&T`) and the two box factories every allocation goes through
 
 // SmallVector<T, N> is a vector with a small-buffer optimization
 // (specs/containers.md): up to N elements live in an inline buffer inside the
@@ -391,12 +392,15 @@ using List = SmallVector<T, kListInlineCapacity>;
 // the language spelling `&List<T>`. It shares one heap list between handles
 // and deep-copies nothing on copy; the List itself remains a mutable value.
 // `makeList()` is the runtime spelling of the `&List<T>()` construction.
+//
+// The counted reference itself is `Ref` - one name for the two definitions of `&T`
+// (`ref.hpp`), which is why this is an alias of an alias rather than of `std::shared_ptr`.
 template <class T>
-using PList = std::shared_ptr<List<T>>;
+using PList = Ref<List<T>>;
 
 template <class T>
 PList<T> makeList() {
-    return std::make_shared<List<T>>();
+    return makeRef<List<T>>();
 }
 
 // Dictionary<K, V> is a built-in generic value dictionary (specs/dictionary.md),
@@ -426,10 +430,14 @@ using RawArray = T*;
 //     +------------------+
 //
 // Assignment shares the block and the length is fixed at construction. The
-// reference count is the `shared_ptr`'s; the spec's `[reference count][typeId]`
-// header is not materialized in this shim (impl_specs/rtl-abi.md), and neither is
-// a separate element buffer - the elements live in the same allocation as their
-// count, which is the point of the type.
+// reference count is the `Ref`'s - hence, under `SIMSE_SMREF`, the common header of
+// `specs/ref-counted-layout.md` leading the block (its `typeId` is not materialized, as in
+// the rest of the shim: impl_specs/rtl-abi.md) - and there is no separate element buffer:
+// the elements live in the same allocation as their count, which is the point of the type.
+//
+// `_len` is what lets the block destroy its own elements, so the one allocation needs no
+// deleter at all (`makeRefSized`, ref.hpp) - the cleanup a `shared_ptr` would type-erase is
+// the block's destructor.
 //
 // An empty array refers to the one shared empty block per element type, so
 // `Array<T>()` (and `arrayEmpty<T>()`) never allocate.
@@ -437,6 +445,15 @@ SIMSE_PACK_PUSH
 template <class T>
 struct ArrayBlock {
     Int _len;
+
+    explicit ArrayBlock(Int len) : _len(len) {}
+
+    ~ArrayBlock() {
+        T* elements = this->items();
+        for (Int i = 0; i < _len; i++) {
+            std::destroy_at(elements + i);
+        }
+    }
 
     // Elements start immediately after the count. Under the language's 4-byte
     // packing rule that offset is `sizeof(Int)`; with SIMSE_NO_PACK4 the host's
@@ -466,26 +483,17 @@ SIMSE_PACK_POP
 
 // The block's element lifetimes are managed by hand: the count leads the block,
 // so the elements cannot be a C++ array member, and `T` may need construction and
-// destruction (`Str`, aggregates holding one, ...).
+// destruction (`Str`, aggregates holding one, ...). The block's own destructor destroys
+// them, so what is left here is the allocation and the construction.
 namespace simse_array_detail {
     template <class T>
-    void destroyBlock(ArrayBlock<T>* block) {
-        T* elements = block->items();
-        for (Int i = 0; i < block->_len; i++) {
-            std::destroy_at(elements + i);
-        }
-        ::operator delete(static_cast<void*>(block));
-    }
-
-    template <class T>
-    std::shared_ptr<ArrayBlock<T>> makeBlock(Int count) {
-        auto* block = static_cast<ArrayBlock<T>*>(::operator new(ArrayBlock<T>::blockBytes(count)));
-        block->_len = count;
+    Ref<ArrayBlock<T>> makeBlock(Int count) {
+        Ref<ArrayBlock<T>> block = makeRefSized<ArrayBlock<T>>(ArrayBlock<T>::blockBytes(count), count);
         T* elements = block->items();
         for (Int i = 0; i < count; i++) {
             std::construct_at(elements + i);
         }
-        return std::shared_ptr<ArrayBlock<T>>(block, &destroyBlock<T>);
+        return block;
     }
 
     // The one shared empty block per element type. This is the per-type static
@@ -493,8 +501,8 @@ namespace simse_array_detail {
     // planned `object` declaration, which the RTL needs once the runtime surface
     // moves out of hand-written C++ (the deferred list in guide4ai.md).
     template <class T>
-    std::shared_ptr<ArrayBlock<T>> emptyBlock() {
-        static std::shared_ptr<ArrayBlock<T>> empty = makeBlock<T>(0);
+    Ref<ArrayBlock<T>> emptyBlock() {
+        static Ref<ArrayBlock<T>> empty = makeBlock<T>(0);
         return empty;
     }
 }
@@ -502,7 +510,7 @@ namespace simse_array_detail {
 SIMSE_PACK_PUSH
 template <class T>
 struct Array {
-    std::shared_ptr<ArrayBlock<T>> _block{};
+    Ref<ArrayBlock<T>> _block{};
 
     Array() : _block(simse_array_detail::emptyBlock<T>()) {}
 
