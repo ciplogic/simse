@@ -1100,7 +1100,7 @@ numbers shifted with the parser/scanner edits).
 
 - **A lambda body is typed like any other body, and the IL carries what the pass
   proved (T51).** Two things were wrong behind one symptom. `for` inside a lambda did
-  not compile: over a *machine* it emitted `smToYield(simse_addressOf(_sm_expr1))` for
+  not compile: over a *machine* it emitted `iter(simse_addressOf(_sm_expr1))` for
   a receiver that already was one (a C++ type error, and the wrap is the identity
   there - `impl_specs/for.md`), and over a *container* the loop variable had no type,
   so `v.toString()` picked the `StrView` overload.
@@ -1204,7 +1204,7 @@ numbers shifted with the parser/scanner edits).
   sources used before, and the statement separator means removing it would buy nothing),
   so the change moved no golden but the three token dumps.
 
-  `for (*x in xs)` / `for ((*x, i) in xs)`: the second wrap, `smToYieldPtr`, hands out
+  `for (*x in xs)` / `for ((*x, i) in xs)`: the second wrap, `iterPtr`, hands out
   each element's **place** (`..*T`), so a container of aggregates is walked without a
   copy per iteration and a write through the loop variable reaches the element. It is
   one more prelude function per container, not a second `for`: the machine is generic
@@ -1956,7 +1956,7 @@ compiler *did* catch and one it could not:
 - **`min`, `max` and `fmtStr` are written in the language now (T70).** The RTL's
   *operation* layer is moving off C++ where it can: a prelude `fun` **with a body** is
   emitted by the compiler for both rings and only when a program reaches it
-  (`reachesPreludeBody`), which is how `List<T>.smToYield` already worked. What decides a
+  (`reachesPreludeBody`), which is how `List<T>.iter` already worked. What decides a
   candidate is not taste but a grep - a native whose only reference is the header that
   defines it has no C++ caller left:
 
@@ -2025,13 +2025,13 @@ compiler *did* catch and one it could not:
     T70's `fmtStr`/the `*` argument rule.)
   - **The reachability rule had a hole, and the migration is what exposed it.** A prelude
     body was emitted only when the program also *named* the receiver's type
-    (`reachesPreludeBody`), which is what keeps one container's `smToYield` machine out of a
+    (`reachesPreludeBody`), which is what keeps one container's `iter` machine out of a
     program that iterates another's. A program that never names `Str` - `"".isEmpty()` on a
     literal, or a receiver of an inferred local - therefore emitted *no* body and called
     one anyway: `error C3861: 'isEmpty': identifier not found` in the generated C++, in both
     rings. The rule now falls back to the call when *no* overload of the name is
     attributable (the whole group is emitted; an unused overload is dead but valid C++),
-    and keeps the type test when one of them is - so `smToYield` behaves exactly as before.
+    and keeps the type test when one of them is - so `iter` behaves exactly as before.
     `stress/str-isempty` is the smallest program with the shape (a literal receiver, no
     `Str` type named anywhere); it does not compile before the fix.
 
@@ -2376,7 +2376,7 @@ compiler *did* catch and one it could not:
   `emitFunctions` **91.98%**, `emitBodyAt` 58.81% (the whole of its
   `emitIlBodyText` -> `ilEmitOpsChecked` -> `ilEmitOps` chain, 41%/41%/39%), and
   **`ns2_xmlAttr` 37.14%** with the attribute-iteration machine under it
-  (`List_smToYieldPtr_yieldable<AstNodeAttribute>::next`, 26.93%) - i.e. essentially *all*
+  (`List_iterPtr_yieldable<AstNodeAttribute>::next`, 26.93%) - i.e. essentially *all*
   of the IL emit loop's time was the compiler's most-called helper. Two readings of that
   are possible and only one is right:
 

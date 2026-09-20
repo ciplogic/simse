@@ -4,7 +4,7 @@ package fixtures
 // function that class is a template: its fields are typed with the function's own type
 // parameters, so `T` is a real type in the emitted C++ rather than a name out of scope.
 //
-// The receiver form is the one `smToYield` will use (`impl_specs/for.md`): the type pass
+// The receiver form is the one `iter` will use (`impl_specs/for.md`): the type pass
 // binds `T` from the receiver, so the loop variable is typed and `toString()` picks the
 // right overload.
 

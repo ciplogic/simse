@@ -332,7 +332,7 @@ data class YldMachinery(
     }
 
     // `value()`: the element the machine last yielded, as its element type. For the
-    // pointer wrap (`smToYieldPtr`) that element type *is* `*T`, so this is the pointer,
+    // pointer wrap (`iterPtr`) that element type *is* `*T`, so this is the pointer,
     // which is what makes `for (*v in xs)` a place rather than a copy.
     fun valueMethod(): YldMethod {
         var body: List<AstXmlNode> = List<AstXmlNode>()

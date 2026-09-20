@@ -242,11 +242,8 @@ Int ns1_countUntil(List<Str> names, Int limit);
 
 // stress/flat-blocks/src/main.kt:12
 Opt<Int> ns1_pick(Int i) {
-    Bool _sm_expr1;
-    Opt<Int> _sm_expr2;
-    Bool _sm_expr3;
-    Opt<Int> _sm_expr4;
-    Opt<Int> _sm_expr5;
+    Bool _sm_expr1, _sm_expr3;
+    Opt<Int> _sm_expr2, _sm_expr4, _sm_expr5;
     _sm_expr1 = i < 0;
     if (!(_sm_expr1)) goto L2;
     _sm_expr2 = Opt<Int>::none();
@@ -263,8 +260,7 @@ Opt<Int> ns1_pick(Int i) {
 // stress/flat-blocks/src/main.kt:22
 Res<Str> ns1_parse(Int n) {
     Bool _sm_expr1;
-    Res<Str> _sm_expr2;
-    Res<Str> _sm_expr3;
+    Res<Str> _sm_expr2, _sm_expr3;
     _sm_expr1 = n < 0;
     if (!(_sm_expr1)) goto L2;
     _sm_expr2 = Res<Str>::err(__sm_stringTable[0]);
@@ -276,10 +272,8 @@ Res<Str> ns1_parse(Int n) {
 // stress/flat-blocks/src/main.kt:29
 Str ns1_describe(Int n) {
     Res<Str> r;
-    Bool _sm_expr1;
-    Bool _sm_expr2;
-    Str _sm_expr3;
-    Str _sm_expr4;
+    Bool _sm_expr1, _sm_expr2;
+    Str _sm_expr3, _sm_expr4;
     r = ns1_parse(n);
     _sm_expr1 = r.isOk();
     _sm_expr2 = !_sm_expr1;
@@ -292,11 +286,8 @@ Str ns1_describe(Int n) {
 }
 // stress/flat-blocks/src/main.kt:37
 Int ns1_countUntil(List<Str> names, Int limit) {
-    Int i;
-    Int _sm_expr1;
-    Bool _sm_expr2;
-    Bool _sm_expr3;
-    Int _sm_expr4;
+    Int i, _sm_expr1, _sm_expr4;
+    Bool _sm_expr2, _sm_expr3;
     i = 0;
     L1:;
     _sm_expr1 = names.size();
@@ -314,16 +305,11 @@ Int ns1_countUntil(List<Str> names, Int limit) {
 }
 // stress/flat-blocks/src/main.kt:48
 int main() {
-    Opt<Int> _sm_expr1;
-    Int _sm_expr2;
-    Int _sm_expr3;
-    Opt<Int> _sm_expr4;
+    Opt<Int> _sm_expr1, _sm_expr4;
+    Int _sm_expr2, _sm_expr3, _sm_expr7, _sm_expr9;
     Bool _sm_expr5;
-    Str _sm_expr6;
-    Int _sm_expr7;
-    Str _sm_expr8;
+    Str _sm_expr6, _sm_expr8;
     List<Str> names;
-    Int _sm_expr9;
     _sm_expr1 = ns1_pick(3);
     _sm_expr2 = _sm_expr1.value();
     std::cout << std::boolalpha << (_sm_expr2) << std::endl;

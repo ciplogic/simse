@@ -210,7 +210,7 @@ driver's - and `build.bat` can compile it.
   the emitter's `emitYieldable`/`emitMachine`, with a
   *generic* machine a class template and an extension function's receiver a field of it
   (`stress/yield`, `stress/generic-yield`). Iteration is a convention: `for (x in c)` is
-  `c.smToYield()`, the prelude writes one per container in Simse (`List`, `Array`,
+  `c.iter()`, the prelude writes one per container in Simse (`List`, `Array`,
   `Span`), a machine is
   its own identity, and a prelude body is emitted only when the program reaches it -
   by name *and* by the receiver's type, since a machine's class is named after its
@@ -419,7 +419,7 @@ borrow parameter and a read-through for a by-value one.
 - **Iterate a container of aggregates with the pointer form** - `for (*x in xs)` /
   `for ((*x, i) in xs)` - not `for (x in xs)`: the value form binds a *copy* of each
   element, the pointer form binds its place (`*T`, through the container's prelude
-  `smToYieldPtr`) and costs what the hand-written `while` + `*xs[i]` costs, measured to
+  `iterPtr`) and costs what the hand-written `while` + `*xs[i]` costs, measured to
   the millisecond (`impl_specs/for.md`). The compiler's own statement/child walks use
   it.
 - **Borrow AST-carrying structs; don't copy them.** A `val x: T = list[i]` where `T`
@@ -500,7 +500,7 @@ runs the whole thing through the compiler. Two things stay out of
 `cppsrc/**` and the corpus on purpose: `yield` needs a machine whose body lives
 in a method, and the vocabulary is `..T`, `yield e`, `for (v in m)` /
 `for ((v, i) in m)` and their pointer forms `for (*v in m)` / `for ((*v, i) in m)`
-(the second wrap, `smToYieldPtr`, hands out `*T` places - no copy per iteration;
+(the second wrap, `iterPtr`, hands out `*T` places - no copy per iteration;
 `specs/functions.md`, `impl_specs/yield.md`, `impl_specs/for.md`, `stress/for-pointer`).
 
 ## 8. TODOs / deferred
@@ -525,12 +525,12 @@ ring: they name C++ files that no longer exist, and their evidence lines are his
    structurally, so the gap was invisible there). `stress/yield` covers both `for`
    forms, `continue`/`break`, `advance()`/`value()`, through the self-hosted
    compiler.
-4. ~~**`smToYield`**~~ **done** (`impl_specs/for.md`): `for (x in c)` becomes
-   `c.smToYield()`, the prelude's `List<T>.smToYield(): ..T` is written in Simse, a
+4. ~~**`iter`**~~ **done** (`impl_specs/for.md`): `for (x in c)` becomes
+   `c.iter()`, the prelude's `List<T>.iter(): ..T` is written in Simse, a
    machine is its own identity (the compiler's, since `..T` cannot be a parameter type),
    and this is what made generic machines and the receiver-in-the-machine work land.
    `Array<T>` and `Span<T>` landed the same way, which is where the machine class
-   started carrying its receiver's name (`List_smToYield_yieldable`) and the
+   started carrying its receiver's name (`List_iter_yieldable`) and the
    prelude-body rule grew its per-receiver half. What is left of the feature is
    `Dictionary` (its element type is the open question) and ranges, `for (i in (2 .. 5))`.
 
@@ -865,7 +865,7 @@ generated C++ of one translation unit, so nothing can be built against an older 
   *parser* (`parseFor` in `Parser.kt`, reached through `parseStmtInto`, the one
   statement slot that expands to several), so no stage downstream has a `for`
   statement kind -
-  which is also why `sema`'s "a `for` needs a `smToYield`" check keys on the template's
+  which is also why `sema`'s "a `for` needs an `iter`" check keys on the template's
   `_sm_for<n>` name and reads the wrap call underneath it: that prefix is the only marker
   left of the construct. Two
   consequences bite: the template's machine is a *local*, so a machine can never be a

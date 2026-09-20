@@ -64,7 +64,7 @@ fun spanOf<T>(items: *List<T>): Span<T>
 // `span.atPtr(index)`: the element at `index` as a *place* (`*T`) - the same element `at`
 // hands back as a value, reached by address, so nothing is copied and a write through it
 // reaches the span's source. It is the language's own body rather than a C++ member
-// (`min`/`max` in rtl.kt, `smToYield` below are the same shape): the emitter reifies it
+// (`min`/`max` in rtl.kt, `iter` below are the same shape): the emitter reifies it
 // per instantiation, and *the call site has a type* - `*T` - where the class's own
 // methods are emitted as members whose type the rules cannot name (`at`, `size`, `slice`
 // print as `auto`). `for (*x in xs)` is this same `*this[i]` (impl_specs/for.md).

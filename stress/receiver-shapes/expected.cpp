@@ -248,8 +248,7 @@ void ns1_bump(ns1_Counter* self) {
 }
 // stress/receiver-shapes/src/main.kt:25
 void ns1_add(ns1_Counter* self, Int delta) {
-    Int _sm_base1;
-    Int _sm_expr1;
+    Int _sm_base1, _sm_expr1;
     _sm_expr1 = self->n;
     _sm_base1 = _sm_expr1 + delta;
     self->n = _sm_base1;
@@ -275,21 +274,12 @@ void ns1_bumpTwice(ns1_Counter* counter) {
 }
 // stress/receiver-shapes/src/main.kt:47
 int main() {
-    Int* _sm_base1;
-    ns1_Counter* _sm_base2;
-    Int* _sm_base3;
-    ns1_Counter* _sm_base4;
-    ns1_Counter* _sm_base5;
-    Int* _sm_base6;
-    ns1_Counter counter;
+    Int* _sm_base1, * _sm_base3, * _sm_base6;
+    ns1_Counter* _sm_base2, * _sm_base4, * _sm_base5, * through;
+    ns1_Counter counter, _sm_expr4;
     Int _sm_expr1;
-    Str _sm_expr2;
-    ns1_Counter* through;
-    Str _sm_expr3;
-    ns1_Counter _sm_expr4;
+    Str _sm_expr2, _sm_expr3, _sm_expr5, _sm_expr6;
     ns1_Holder holder;
-    Str _sm_expr5;
-    Str _sm_expr6;
     counter = ns1__make_Counter(0);
     _sm_expr1 = ns1_twice(simse_addressOf(counter));
     _sm_expr2 = simse_int_toString(_sm_expr1);

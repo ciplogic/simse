@@ -1,7 +1,7 @@
 package fixtures
 
 // `for (*x in c)` and `for ((*x, i) in c)`: the pointer forms of `for`. The loop
-// variable is a *pointer to the element* (a `*T`, the prelude's `smToYieldPtr`) rather
+// variable is a *pointer to the element* (a `*T`, the prelude's `iterPtr`) rather
 // than a copy of it, so a loop over a container of aggregates copies nothing per
 // iteration and a mutation through the loop variable reaches the container
 // (impl_specs/for.md). A pointer to an aggregate reads through itself (`cell.value`),

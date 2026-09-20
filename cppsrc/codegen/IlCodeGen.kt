@@ -164,7 +164,7 @@ fun Emitter.ilDst(op: *IlOp): Int {
 // shadowing pass renamed). The pass's record is what carries a machine: a slot holding
 // one is `..T`, a declaration is never written with that (the emitted C++ uses
 // `auto`), so the frame is the only place the type survives - and the emitter needs
-// it, because `x.smToYield()` on a machine *is* `x`, an identity decided from the
+// it, because `x.iter()` on a machine *is* `x`, an identity decided from the
 // receiver's type (see `call`, impl_specs/for.md).
 fun Emitter.ilSeedFrameTypes(il: *IlBody): Unit {
     val proven: List<Str> = il.inferredTypes.keys()
@@ -304,6 +304,141 @@ fun Emitter.ilDeclTypeText(il: *IlBody, slot: Int): Str {
         return il.types[typeIndex]
     }
     return this.type(slotType)
+}
+
+// One declarator of a line that has already written its type: the pointer a *repeated*
+// declarator needs (`* b`), and nothing when the type has none (`b`).
+fun ilDeclarator(ptr: *Str, name: *Str): Str {
+    if (ptr == "") {
+        return name
+    }
+    return ptr + " " + name
+}
+
+// One type's declaration lines for the slots it declares: `Str a, b;` where the frame had
+// `Str a; Str b;`, wrapped once a line reaches `kIlDeclWidth` columns so that a body with
+// a hundred `Str` slots reads as lines instead of as one line of a thousand characters.
+//
+// A wrapped line is a **continuation** of one declaration, not another declaration: it
+// carries no type of its own (writing the type after a comma would make it a declarator's
+// name), the comma that ends the line before it carries the list on, and the caller
+// indents it one level (`ilEmitOps`).
+//
+// The type's trailing `*`s belong to **every** name: in `T* a, b;` the `b` would be a `T`,
+// since a declarator's `*` binds only the name it stands before. So the pointer is written
+// once per name - `T* a,\n        * b, * c;` - and the rest of the type once, in front
+// (`T** a, ** b;` for a pointer to a pointer, the same rule one level up).
+val kIlDeclWidth: Int = 100
+
+fun ilDeclLines(typeText: Str, names: *List<Str>): List<Str> {
+    var base: Str = typeText
+    var ptr: Str = ""
+    while (base.size() > 0 && base[base.size() - 1] == '*') {
+        ptr = ptr + "*"
+        base = base.substr(0, base.size() - 1)
+    }
+    var out: List<Str> = List<Str>()
+    var line: Str = Str()
+    var open: Bool = false
+    var i: Int = 0
+    while (i < names.size()) {
+        val piece: Str = ilDeclarator(ptr, names[i])
+        if (!open) {
+            line.appendStrPtr(base)
+            line.appendStrPtr(ptr)
+            line.append(' ')
+            line.appendStrPtr(names[i])
+            open = true
+        } else if (line.size() + 2 + piece.size() > kIlDeclWidth) {
+            line.append(',')
+            out.append(line)
+            line = Str()
+            line.appendStrPtr(piece)
+        } else {
+            line.appendStr(", ")
+            line.appendStrPtr(piece)
+        }
+        i = i + 1
+    }
+    line.append(';')
+    out.append(line)
+    return out
+}
+
+// The frame's storage, grouped by type: for every declaration of a run of adjacent
+// declarations that a backend prints at the top of the body, the lines to print - the
+// first declaration of a type prints the lines that list every name of that type, and
+// the others print nothing (an empty list). A declaration the run cannot cover, or a run
+// of one, is not in the answer at all, and its own line is what the emitter prints as
+// before.
+//
+// Grouping is safe because a declaration *is* storage: the hoisting left every
+// initializer behind as the assignment where it stood, so nothing runs at a declaration
+// and the names of one type may share a line. What must not move is the order of
+// *across* types - a group per type, in the order the types first appear - so the only
+// thing that changes in a grouped body is which lines the same declarations are written
+// on. A declaration a jump can cross needs a block around it rather than a shared line,
+// which is why one of those ends the run (`ilEmitOps`'s `blockEnd`).
+fun Emitter.ilDeclGroups(
+    il: *IlBody, frame: *IlFrame, blockEnd: *Dictionary<Int, IlCrossing>
+): Dictionary<Int, List<Str>> {
+    var lines: Dictionary<Int, List<Str>> = Dictionary<Int, List<Str>>()
+    var i: Int = 0
+    while (i < il.ops.size()) {
+        if (il.ops[i].kind != IlOpKind.Declare || blockEnd.has(i)) {
+            i = i + 1
+            continue
+        }
+        var types: List<Str> = List<Str>()
+        var groups: List<List<Str>> = List<List<Str>>()
+        var at: Int = i
+        while (at < il.ops.size() && il.ops[at].kind == IlOpKind.Declare && !blockEnd.has(at)) {
+            val slot: Int = this.ilOpOperand(il.ops[at].operands, 0)
+            if (slot < 0 || slot >= il.vars.size() || this.ilFolded(il, frame, slot)
+                || !this.ilDeclaredAtTop(il, slot)
+            ) {
+                break
+            }
+            val typeText: Str = this.ilDeclTypeText(il, slot)
+            if (typeText == "") {
+                break
+            }
+            var index: Int = -1
+            var t: Int = 0
+            while (t < types.size()) {
+                if (types[t] == typeText) {
+                    index = t
+                }
+                t = t + 1
+            }
+            if (index < 0) {
+                types.append(typeText)
+                groups.append(List<Str>())
+                index = types.size() - 1
+            }
+            groups[index].append(il.vars[slot].name)
+            at = at + 1
+        }
+        if (at - i < 2) {
+            // One declaration: nothing to group, and the emitter's own line is the one
+            // this body printed before.
+            i = i + 1
+            continue
+        }
+        var printed: Int = i
+        var t: Int = 0
+        while (t < types.size()) {
+            lines.insert(printed, ilDeclLines(types[t], *groups[t]))
+            printed = printed + 1
+            t = t + 1
+        }
+        while (printed < at) {
+            lines.insert(printed, List<Str>())
+            printed = printed + 1
+        }
+        i = at
+    }
+    return lines
 }
 
 // A constant operand: the pool holds the text the C++ prints, so all that is left is
@@ -824,6 +959,9 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
         }
         scan = scan + 1
     }
+    // The frame's storage, grouped by type (`ilDeclGroups`): computed here because a
+    // declaration that needs a block of its own is what ends a run a line may cover.
+    val declLines: Dictionary<Int, List<Str>> = this.ilDeclGroups(il, frame, *blockEnd)
     var scopes: List<IlScope> = List<IlScope>()
     var consumedByDeclare: Int = -1
     var lvl: Int = level
@@ -875,7 +1013,26 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
             }
             val slotType: AstXmlNode = ilVarType(il, slot)
             if (!xmlIsEmpty(slotType)) {
-                // A declared slot with a type: one line, and the instruction that
+                if (declLines.has(i)) {
+                    // A declaration a group of its type already lists: the first one of
+                    // that type prints the group's lines (`ilDeclLines`), the others are
+                    // named on them and print nothing here.
+                    val shared: List<Str> = declLines.get(i).value()
+                    var s: Int = 0
+                    while (s < shared.size()) {
+                        // A continuation line is indented one level deeper: it is the same
+                        // declaration, wrapped (`ilDeclLines`).
+                        var lineLvl: Int = lvl
+                        if (s > 0) {
+                            lineLvl = lvl + 1
+                        }
+                        this.ilLine(text, lineLvl, shared[s])
+                        s = s + 1
+                    }
+                    i = i + 1
+                    continue
+                }
+                // A declared slot with a type of its own line: the instruction that
                 // computes its value assigns it where that instruction stands. (The
                 // hoisting turned the declaration's initializer into exactly such an
                 // assignment.)

@@ -87,7 +87,7 @@ IlOpKind     = Label | Goto | IfTrue | IfFalse | ...   # one per row of the tabl
   (the emitted C++ types it `auto`, and `linear/Yield.cpp` relies on the declaration
   staying untyped to reject a `for` over a machine crossing a `yield`), so
   `vars[i].typeIndex` is `?` for it. The frame still has to know, because a `for` wraps
-  what it iterates in `smToYield()` and on a machine that wrap is the *identity* - a
+  what it iterates in `iter()` and on a machine that wrap is the *identity* - a
   decision only the receiver's type can make (`impl_specs/for.md`). So the body carries
   what the pass proved, and a backend seeds its spelling frame from it; the declared
   slot types are seeded after and win, since they are the spelled ones
@@ -675,7 +675,7 @@ The order that was followed:
 3. **Then `yield` in the Simse ring** - which became `emitYieldable`/`emitMachine` plus
    the lowering of `Yield.kt`, with the machine's bodies already just another IL body.
    (Done: `stress/yield`.)
-4. Then `smToYield` (`impl_specs/for.md`) - still open.
+4. Then `iter` (`impl_specs/for.md`) - still open.
 
 What is *not* a blocker: each step has an oracle that fails loudly if a ring drifts (the
 stage drivers in `tools/_ring`, T23, the corpus).

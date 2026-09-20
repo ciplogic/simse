@@ -136,7 +136,7 @@ data class IlBody(
 // which is more than the frame's slots carry: a name holding a state machine is
 // typed `..T`, and a declaration is never written with that (the emitted C++ uses
 // `auto`, and `linear/Yield.cpp` relies on the declaration staying untyped). The
-// backend still needs it, because `for` wraps what it iterates in `smToYield()` and,
+// backend still needs it, because `for` wraps what it iterates in `iter()` and,
 // on a machine, that wrap is the identity - a decision only the receiver's type can
 // make (impl_specs/for.md). Seeding a frame from this is how a machine-typed slot
 // stays typed without a statement tree.
@@ -445,7 +445,28 @@ fun ilTypeText(typeNode: *AstXmlNode): Str {
         AstNodeCategory.TypePointer -> {
             return "*" + ilTypeText(xmlChildPtr(typeNode, AstNodeKind.Inner))
         }
-        // A `..T` (and anything else) spells `?`: the C++ ring's `ilTypeText` switches on
+
+        AstNodeCategory.TypeYield -> {
+            // A machine (`..T`): `?` when nothing named the class, and the class with its
+            // own type arguments otherwise (`semMachineType` puts both on the node, so a
+            // machine slot has a spelled type like any other - which is what lets its
+            // declaration hoist out of the block a `for` used to keep).
+            val name: Str = xmlAttr(typeNode, AstNodeAttributeKind.Name)
+            if (name == "") {
+                return "?"
+            }
+            var args: List<Str> = List<Str>()
+            val typeArgs: List<AstXmlNode> = xmlChildren(typeNode, AstNodeKind.TypeArg)
+            for (*typeArg in typeArgs) {
+                args.append(ilTypeText(typeArg))
+            }
+            if (args.size() == 0) {
+                return name
+            }
+            return fmtStr("|<|>", name, ilJoinList(args, ", "))
+        }
+
+        // Anything else spells `?`: the C++ ring's `ilTypeText` switches on
         // Named/IntLit/Generic/Reference/Pointer/Function only, and the two dumps have to
         // agree byte for byte. A machine is not a value type, so a body that *is* one shows
         // its return type as `?` in both rings.
@@ -3186,7 +3207,7 @@ data class IlExtractor(
         // and captures. Without this pass the body's own declarations stay untyped, and a
         // slot the frame cannot name sends every spelling decision that needs a type the
         // wrong way (`v.toString()` picks the `StrView` overload; a `..T` receiver hides
-        // the `smToYield` identity).
+        // the `iter` identity).
         var lowered: List<AstXmlNode> = ilLambdaLower(bodyList)
         val lambdaSemantics: SemBody = SemBody(
             xmlEmptyNode(), this.fn.typeParams, ilNamedTypeNode(symbol), xmlEmptyNode(),

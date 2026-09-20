@@ -15,7 +15,7 @@ with a string library, `List<T>`, `Array<T>`, `SmallVector<N, T>`,
 `typealias`, functions, methods, extension methods, lambdas (by-value capture),
 `val`/`var` locals, file-level `var`/`val` statics, `if`/`else`, `when`, `while`,
 `break`/`continue`, `return`, `yield` (a body that yields becomes a state
-machine) and `for` (two forms, over anything with a `smToYield` - a container, or
+machine) and `for` (two forms, over anything with an `iter` - a container, or
 a machine itself),
 `null` for handles, memory operators (`&T` handles, `*T` pointers, `copy`),
 reified generics, packages and imports, `main()` and `main(args)`, and an
@@ -87,7 +87,7 @@ program a user would try to write:
 In rough order of how soon a user of the language notices (the roadmap phases
 these):
 
-1. **More iterables** - `for` iterates anything with a `smToYield`: a container has one
+1. **More iterables** - `for` iterates anything with an `iter`: a container has one
    per container type (the prelude writes `List<T>`, `Array<T>` and `Span<T>` ones in
    Simse), and a state machine is its own identity. A `Dictionary` and ranges
    (`for (i in (2 .. 5))`) are next; walking a `Dictionary` still means `keys()` and an

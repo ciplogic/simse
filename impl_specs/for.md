@@ -5,13 +5,13 @@ sema's checker, the linear pass, the emitters, the IL - has a `for` statement ki
 know about, and `break`/`continue` are the `while`'s own machinery.
 
 ```text
-for (v in m) { body }              var _sm_for1 = m.smToYield()
+for (v in m) { body }              var _sm_for1 = m.iter()
                                    while (_sm_for1.advance()) {
                                        val v = _sm_for1.value()
                                        body
                                    }
 
-for ((v, i) in m) { body }         var _sm_for1 = m.smToYield()
+for ((v, i) in m) { body }         var _sm_for1 = m.iter()
                                    var _sm_index1: Int = -1
                                    while (_sm_for1.advance()) {
                                        _sm_index1 = _sm_index1 + 1
@@ -22,8 +22,8 @@ for ((v, i) in m) { body }         var _sm_for1 = m.smToYield()
 ```
 
 A `*` on the variable is the same template with the *pointer* wrap
-(`m.smToYieldPtr()`), whose element type is `*T` - so `v` is the element's place, not a
-copy of it ("`smToYieldPtr`" below).
+(`m.iterPtr()`), whose element type is `*T` - so `v` is the element's place, not a
+copy of it ("`iterPtr`" below).
 
 ## Where it runs, and why there
 
@@ -79,40 +79,40 @@ element type before reaching that rule.
 The parser cannot tell what a `for` iterates, so the check lives in sema's checker
 (`Analyzer::checkForIterable`): the template's machine name is recognizable (`_sm_for<n>`,
 the same convention as the lowering's `_sm_expr<n>` slots), the initializer is the
-invisible `smToYield()` wrap, and when the *receiver's* type is known and is neither a
-machine nor a type with a `smToYield`, that is the error - at the `for`, naming the type
+invisible `iter()` wrap, and when the *receiver's* type is known and is neither a
+machine nor a type with an `iter`, that is the error - at the `for`, naming the type
 the user wrote, not the generated call:
 
 ```text
 stress/diagnostic-not-iterable/src/main.kt:11:5: a `for` iterates a machine (`..T`)
-or a type with a `smToYield`, and Int has neither; iterate a container with `while` and
+or a type with an `iter`, and Int has neither; iterate a container with `while` and
 an index
 ```
 
 An unknown receiver type stays silent (the C++ compiler gets the last word, as it does
 for any other member), so the check never fires on something the checker cannot name.
 
-## `smToYield`: what can be iterated
+## `iter`: what can be iterated
 
 **Landed** (see "Status" below for what it needed). The construct stays two forms -
 `for (v in x)` and `for ((v, i) in x)` - but *what can be iterated* is a convention
 instead of "a machine": the iterated expression is wrapped in an invisible call to a
-function named **`smToYield`**, so
+function named **`iter`**, so
 
 ```simse
 for (item in x) { ... }      // is the same program as
-for (item in x.smToYield()) { ... }
+for (item in x.iter()) { ... }
 ```
 
-and anything the language can find a `smToYield` for is iterable. The call is a
-*member* call (`x.smToYield()`, not `smToYield(x)`): the type pass binds a receiver
+and anything the language can find an `iter` for is iterable. The call is a
+*member* call (`x.iter()`, not `iter(x)`): the type pass binds a receiver
 function's type parameter from the receiver, which is what types the loop variable.
 
 The prelude's, as it is written, one per container - with `Array<T>` counting with
 `count()` and `Span<T>` with `size()`:
 
 ```simse
-fun List<T>.smToYield<T>(): ..T {
+fun List<T>.iter<T>(): ..T {
     var i: Int = 0
     while (i < this.size()) {
         yield this[i]
@@ -121,8 +121,8 @@ fun List<T>.smToYield<T>(): ..T {
 }
 ```
 
-**A machine's class carries its receiver's name** (`List_smToYield_yieldable`,
-`Array_smToYield_yieldable`): the prelude has one `smToYield` per container, so the
+**A machine's class carries its receiver's name** (`List_iter_yieldable`,
+`Array_iter_yieldable`): the prelude has one `iter` per container, so the
 function name alone would name every container's machine the same way. And because the
 name is the receiver's, **a prelude body is emitted for the receiver the program names**:
 the reachability over the program's calls (by name) is closed over the types it spells,
@@ -135,19 +135,19 @@ therefore carries the list machine only, not every container's.
   author writes (`fun Point.walk(): ..Point`), not by a runtime interface. The machine is
   reified per element type like any other generic function, so the "interface" is the
   *shape* and its witness is a concrete class.
-- **A machine**, which is already what `for` wants: `x.smToYield()` on a `..T` receiver is
+- **A machine**, which is already what `for` wants: `x.iter()` on a `..T` receiver is
   the *identity* (no wrapper object, no extra step). `..T` is not a spellable type, so the
   identity is the compiler's rather than a function's.
 - **A range, later**: `for (i in (2 .. 5))` becomes an iterator over the two bounds, i.e.
-  one more `smToYield` whose machine holds `2` and `5` as its parameters.
+  one more `iter` whose machine holds `2` and `5` as its parameters.
 
-What remains: `smToYield` for `Dictionary<K, V>` (a `while` over `keys()` is how it is
+What remains: `iter` for `Dictionary<K, V>` (a `while` over `keys()` is how it is
 walked today; what a dictionary's element should be - its keys, or a key/value pair - is
 the open question), and the range above.
 
-## `smToYieldPtr`: iterating without copying
+## `iterPtr`: iterating without copying
 
-`smToYield` hands out *values*, so `for (v in xs)` copies each element into `v` - for a
+`iter` hands out *values*, so `for (v in xs)` copies each element into `v` - for a
 container of aggregates that is a copy per iteration, while the hand-written
 `while (i < xs.size())` + `*xs[i]` loop the compiler used to write borrowed the element in
 place. The pointer form closes that gap and takes the index bookkeeping with it:
@@ -160,7 +160,7 @@ for ((*cell, i) in cells) { ... }  // the same, plus the iteration index
 ```
 
 It is one more *wrap*, not a second `for`: the parser's `parseFor` sees the `*` and wraps
-what is iterated in `smToYieldPtr()` instead of `smToYield()`. Everything downstream is
+what is iterated in `iterPtr()` instead of `iter()`. Everything downstream is
 the machinery that already existed, because the machine is generic over its element type
 and `..*T` is a `..T` whose element is `*T`:
 
@@ -169,7 +169,7 @@ and `..*T` is a `..T` whose element is `*T`:
 - `TypeInfer` types `value()` as the element type from the same `Inner`, so the loop
   variable is typed `*T` - a pointer variable the emitter reads *through* (`cell.value` is
   `cell->value`), which is exactly what a `*T` parameter does everywhere else;
-- a machine is still the identity for `smToYield`, and has none for `smToYieldPtr`: it
+- a machine is still the identity for `iter`, and has none for `iterPtr`: it
   hands out values, not places, so `for (*v in someMachine)` is a diagnostic;
 - sema's gate (`checkForIterable`) takes the wrap *name* from the call the parser wrote,
   so it reports the right one (`hasWrap`).
@@ -177,7 +177,7 @@ and `..*T` is a `..T` whose element is `*T`:
 The prelude writes one per container, next to its value twin:
 
 ```simse
-fun List<T>.smToYieldPtr<T>(): ..*T {
+fun List<T>.iterPtr<T>(): ..*T {
     var i: Int = 0
     while (i < this.size()) {
         yield *this[i]        // the element's place, not a copy
@@ -207,8 +207,8 @@ with `*value`).
 
 ## Status
 
-**Implemented in both rings.** `for (x in source)` is `source.smToYield()` plus the
-`while` the parser writes (`parseFor`), the prelude provides `List<T>.smToYield()` - a
+**Implemented in both rings.** `for (x in source)` is `source.iter()` plus the
+`while` the parser writes (`parseFor`), the prelude provides `List<T>.iter()` - a
 `yield`ing function, written in Simse - and a *machine* is its own identity, so
 `for (x in m)` still iterates `m` itself. What that needed beyond the wrap, and where
 it lives:
@@ -227,21 +227,21 @@ holds - a pointer for a value receiver. `this` in a *base* position stays that f
 The machining methods' bodies are typed against it: `emitMachine` registers the machine
 as a data class in the emitter's type table, which is what tells `memberAccess` and the
 index spelling what `this._sm_self` is.
-- **the wrap is a member call** (`source.smToYield()`): the type pass binds a receiver
+- **the wrap is a member call** (`source.iter()`): the type pass binds a receiver
 function's type parameter from the receiver (`memberReturn` -> `bindTypes`), so the loop
-variable is typed, while a plain `smToYield(source)` would leave it untyped. `Yield`
+variable is typed, while a plain `iter(source)` would leave it untyped. `Yield`
 patterns unify and bind like a pointer's pointee (`sema::unifyType`, `bindTypes`) for
 the same reason.
 - **the identity is the compiler's**: `..T` is not a spellable type, so no function can
-take a machine. `TypeInfer` types `x.smToYield()` on a `..T` receiver as the receiver,
+take a machine. `TypeInfer` types `x.iter()` on a `..T` receiver as the receiver,
 and the emitter emits the receiver itself - no wrapper object, no extra step.
 - **the gate is `Sema.kt`'s**: the wrap must resolve, so the check asks "is this a
-machine, or a type with a `smToYield`?" and names the receiver's type otherwise
+machine, or a type with an `iter`?" and names the receiver's type otherwise
 (`stress/diagnostic-not-iterable`). It compares receiver *names* (`List<T>` takes any
 `List<...>`), because that is all a diagnostic needs and the call itself is resolved
 with the full unification in `codegen`.
 - **a prelude body is emitted when the program reaches it by name**: prelude `fun`s were
-declarations-only, and `List<T>.smToYield` is the first one with a body. The rule is a
+declarations-only, and `List<T>.iter` is the first one with a body. The rule is a
 name reachability over the calls (a callee is a `Name`, a `GenericName` or a `Member`),
 closed over the prelude bodies that are themselves emitted - so a program that never
 iterates carries none of it, and the goldens do not move.
@@ -253,9 +253,9 @@ which meant the Simse ring inlined where the C++ ring hoisted).
 
 Still open:
 
-- **other containers**: `Dictionary<K, V>` has no `smToYield` yet (a `while` over
+- **other containers**: `Dictionary<K, V>` has no `iter` yet (a `while` over
   `keys()` is the way to walk it today); `Array<T>` and `Span<T>` landed with it.
-- **ranges**: `for (i in (2 .. 5))` - one more `smToYield` whose machine holds the two
+- **ranges**: `for (i in (2 .. 5))` - one more `iter` whose machine holds the two
   bounds.
 - **a `for` inside a yielding body**: the machine would have to be a *field*, and a
   field needs a nameable type (`impl_specs/yield.md`).
@@ -265,7 +265,7 @@ What the earlier plan listed, and what happened to it:
 - ~~the machine class must become a template~~ - done (above).
 - ~~the wrap must be a member call~~ - done.
 - ~~machine identity needs a `Yield` case in `unifyType`/`bindTypes`~~ - done (it is
-  what makes `m.smToYield()` resolve; the identity itself turned out to be the
+  what makes `m.iter()` resolve; the identity itself turned out to be the
   compiler's, since `..T` cannot be a parameter type).
 - ~~the prelude needs both functions above~~ - one function, plus the reachability rule.
 - the wrap is invisible in diagnostics - it is: the gate reports the *receiver's* type.

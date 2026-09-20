@@ -152,8 +152,7 @@ Str greeting(Str name);
 
 // stress/smgen-kt/src/main.kt:12
 int main() {
-    Str _sm_expr1;
-    Str _sm_expr2;
+    Str _sm_expr1, _sm_expr2;
     _sm_expr1 = greeting(__sm_stringTable[1]);
     std::cout << std::boolalpha << (_sm_expr1) << std::endl;
     _sm_expr2 = greeting(__sm_stringTable[2]);

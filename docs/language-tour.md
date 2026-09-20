@@ -118,10 +118,10 @@ fun sum(items: &List<Int>): Int {
 }
 ```
 
-`for` iterates **whatever has a `smToYield`** in one of exactly two forms: a state
+`for` iterates **whatever has an `iter`** in one of exactly two forms: a state
 machine - the value a function whose body `yield`s produces - or a container, which the
 prelude gives one per container (`List<T>`, `Array<T>`, `Span<T>`; a `Dictionary` and a
-range are not iterable yet). (A `smToYield` is an ordinary extension function returning
+range are not iterable yet). (A `iter` is an ordinary extension function returning
 `..T`, so your own type can have one too; see `specs/functions.md`.)
 
 ```simse
@@ -590,7 +590,7 @@ These are known rough edges, not design decisions to admire
   open a block there.
 - `println` of a float uses the C++ default formatting, and `println` of an enum
   prints its integer value.
-- There is no `foreach` keyword (`for` is it, and a container has a `smToYield` so
+- There is no `foreach` keyword (`for` is it, and a container has an `iter` so
   `for (x in list)` works), no `when` pattern labels (`is Type`, `in 1..5`) and no
   subjectless `when`, no string interpolation, no default parameter values, no
   capture-by-reference, and no `Set`.

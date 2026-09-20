@@ -1,11 +1,11 @@
 package fixtures
 
 // `for` over the fixed-length sequence and over borrowed storage: `Array<T>` and
-// `Span<T>` walk with their own `smToYield` in the prelude, written in the language's
+// `Span<T>` walk with their own `iter` in the prelude, written in the language's
 // `yield` like the `List<T>` one (impl_specs/for.md).
 //
 // A per-container machine is why a machine class carries its receiver's name
-// (`Array_smToYield_yieldable`), and why a program that iterates one container does not
+// (`Array_iter_yieldable`), and why a program that iterates one container does not
 // carry another's machine: a prelude body is emitted for the receiver a program names.
 
 fun arraySum(items: *List<Int>): Int {

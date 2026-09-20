@@ -311,7 +311,7 @@ data class Emitter(
     var literals: StringTable,
 
 // The types the program names, for the same rule's per-container part: the prelude has
-// a `smToYield` per container (`List`, `Array`, `Span`), and a program that iterates
+// an `iter` per container (`List`, `Array`, `Span`), and a program that iterates
 // one of them should not carry the others' machines.
     var referencedTypes: Dictionary<Str, Bool>,
     var types: Dictionary<Str, AstXmlNode>,
@@ -381,7 +381,7 @@ data class Emitter(
     }
 
     fun sourceComment(posNode: *AstXmlNode): Unit {
-        // A prelude function *with a body* is emitted now (`List<T>.smToYield`), and where
+        // A prelude function *with a body* is emitted now (`List<T>.iter`), and where
         // it came from is the compiler's own RTL, not the program the user is building:
         // naming it would put a machine-specific path in their file.
         if (this.curPrelude) {
@@ -679,7 +679,10 @@ data class Emitter(
         }
         for (*fn in this.functions) {
             facts.functions.append(
-                semFnFact(copy(fn.decl), copy(fn.receiver), fn.templateParams, fn.name, fn.isNative)
+                semFnFact(
+                    copy(fn.decl), copy(fn.receiver), fn.templateParams, fn.name,
+                    fn.packageName, fn.isNative
+                )
             )
         }
         val extensionNames: List<Str> = this.nativeExtensions.keys()
@@ -818,6 +821,26 @@ data class Emitter(
                     params.append(this.type(paramNode))
                 }
                 return fmtStr("Func<|(|)>", ret, cgJoin(params, ", "))
+            }
+
+            AstNodeCategory.TypeYield -> {
+                // A machine (`..T`): the class the lowering built for the function that
+                // creates it (`semMachineType` carries the name and the package, and the
+                // call site bound the class's own type parameters). `typeName` cannot
+                // spell it - the class is registered by the emitter, not declared by the
+                // program - so the name is qualified here, exactly as `emitFunction`
+                // spells the class it emits.
+                val name: Str = xmlAttr(typeExpr, AstNodeAttributeKind.Name)
+                if (name == "") {
+                    this.fail(typeExpr, "unsupported: a machine's type has no class to spell")
+                    return "/*machine*/"
+                }
+                val className: Str = this.qualify(xmlAttr(typeExpr, AstNodeAttributeKind.Package), name)
+                val args: List<AstXmlNode> = xmlChildren(typeExpr, AstNodeKind.TypeArg)
+                if (args.size() == 0) {
+                    return className
+                }
+                return fmtStr("|<|>", className, this.typeArgsString(name, args))
             }
         }
         return "/*unsupported*/"
@@ -1487,7 +1510,7 @@ data class Emitter(
 
     // Whether a prelude body is one the program reaches: its name is called, and - for an
 // extension - the program names the receiver's type as well. The prelude has one
-// `smToYield` per container (impl_specs/for.md), each container's machine is that
+// `iter` per container (impl_specs/for.md), each container's machine is that
 // container's only, and the class name is the receiver's (`outerTypeName`).
     fun reachesPreludeBody(fn: *CgFn): Bool {
         if (!fn.hasBody) {
@@ -1519,7 +1542,7 @@ data class Emitter(
 
     // Whether any prelude body of `name` has its receiver's outer type name referenced by
 // the program: the per-overload half of the rule above. When one of the group *is*
-// attributable the type test is what tells the rest apart (`List`'s `smToYield` is not
+// attributable the type test is what tells the rest apart (`List`'s `iter` is not
 // `Span`'s), so the members the program does not name stay unemitted.
     fun preludeReceiverNamed(name: *Str): Bool {
         var i: Int = 0
@@ -1597,7 +1620,7 @@ data class Emitter(
             // A prelude input is declarations-only *unless it has a body*: the RTL
             // declares natives, whose C++ is the header's (a native is skipped inside
             // `emitFunction`), and a prelude `fun` with a body is a function the language
-            // itself provides - `List<T>.smToYield(): ..T` is the first one
+            // itself provides - `List<T>.iter(): ..T` is the first one
             // (impl_specs/for.md). It is emitted when the program reaches it
             // (`reachesPreludeBody`), so a prelude body costs a program only what it
             // uses.
@@ -1642,7 +1665,7 @@ data class Emitter(
 
     // The name a machine's class is derived from: the function's own, prefixed with the
 // receiver's outer type name when the function is an extension (`List<T>`'s
-// `smToYield` is `List_smToYield`). The prelude provides a `smToYield` per container
+// `iter` is `List_iter`). The prelude provides an `iter` per container
 // (impl_specs/for.md), so the function name alone would give every container's machine
 // the same class name.
     fun machineName(decl: *AstXmlNode): Str {
@@ -2104,7 +2127,7 @@ data class Emitter(
             }
             // `..T` is a state machine (impl_specs/yield.md) and carries its element type the
             // way a pointer carries its pointee, so a pattern `..T` matches `..Int`
-            // element-wise - which is what lets the prelude's `fun ..T.smToYield(): ..T` be
+            // element-wise - which is what lets the prelude's `fun ..T.iter(): ..T` be
             // found for a machine.
             AstNodeCategory.TypeYield -> {
                 if (ak == AstNodeCategory.TypeYield && !xmlIsEmpty(xmlChildPtr(actualPtr, AstNodeKind.Inner))
@@ -3043,10 +3066,10 @@ data class Emitter(
                 val calleeText: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
                 val receiverExpr: *AstXmlNode = xmlChildPtr(callee, AstNodeKind.Receiver)
 
-                // Machine identity: `x.smToYield()` on a machine *is* `x`. That is the wrap a
+                // Machine identity: `x.iter()` on a machine *is* `x`. That is the wrap a
                 // `for` puts around what it iterates, and `..T` is not a spellable type, so the
                 // identity is the backend's rather than a function's (impl_specs/for.md).
-                if (calleeText == "smToYield") {
+                if (calleeText == "iter") {
                     val identityRecv: AstXmlNode = this.pointee(this.inferType(receiverExpr))
                     if (!xmlIsEmpty(identityRecv) && xmlKind(identityRecv) == AstNodeCategory.TypeYield) {
                         return this.expr(receiverExpr, 0, xmlEmptyNode())

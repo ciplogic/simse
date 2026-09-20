@@ -126,11 +126,11 @@ for (value in items) { ... }
 for ((value, index) in items) { ... }
 ```
 
-The prelude writes `List<T>.smToYield(): ..T` in Simse, and one per container besides it
+The prelude writes `List<T>.iter(): ..T` in Simse, and one per container besides it
 (`Array<T>`, `Span<T>`): a state machine that walks the container in order
 (`specs/functions.md`, `impl_specs/for.md`). The loop is therefore the `while` the language
 writes around a machine, `continue` still moves it on, and the iteration is over the
-container's own order, reading each element once. `Dictionary<K, V>` has no `smToYield`
+container's own order, reading each element once. `Dictionary<K, V>` has no `iter`
 yet, so it is walked with an index loop over `keys()`.
 
 ## `Dictionary<K, V>`
@@ -164,7 +164,7 @@ Status: required for the first implementation.
 length, nothing else. The language's spelling of C#'s `Span<T>`, it copies
 nothing and owns nothing, so it is valid only while the memory it points at is
 alive and unmodified. A span is iterable by `for` like any other container (the prelude
-has `Span<T>.smToYield`), and the state machine walks it with an index; a `while` that
+has `Span<T>.iter`), and the state machine walks it with an index; a `while` that
 slices is the way to walk *storage* without building a machine (`functions.md`):
 
 ```text

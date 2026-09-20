@@ -70,18 +70,36 @@ public:
 
     SmRef& operator=(const SmRef& other) noexcept {
         if (this != &other) {
+            // **`other` can live inside the box this handle owns.** `release` frees the box
+            // when this handle was the last one, and a pointer read after that is a pointer
+            // into freed memory - retaining through it then writes a count into storage the
+            // allocator has already taken back, which is heap corruption, not a leak (the
+            // symptom is a `release` at the top of a profile). The copy keeps the other box
+            // alive *across* the release, so what this handle adopts is a box whose count it
+            // has already taken: `keep` owns one count of it, this handle drops one of the
+            // old box, and the hand-off leaves the count exactly where it was.
+            //
+            // `std::shared_ptr` writes this as a temporary that outlives the reset; this is
+            // the same move with one handle instead of a control block, which is why the
+            // copy constructor (which cannot alias, `this` being fresh storage) is the
+            // whole of the implementation.
+            SmRef keep(other);
             this->release();
-            _ptr = other._ptr;
-            this->retain();
+            _ptr = keep._ptr;
+            // The box is this handle's now; `keep`'s destructor must not drop it again.
+            keep._ptr = nullptr;
         }
         return *this;
     }
 
     SmRef& operator=(SmRef&& other) noexcept {
         if (this != &other) {
-            this->release();
-            _ptr = other._ptr;
+            // The same aliasing hazard, and the same cure: read the other handle, empty it,
+            // and only then let the old box go.
+            T* keep = other._ptr;
             other._ptr = nullptr;
+            this->release();
+            _ptr = keep;
         }
         return *this;
     }
@@ -98,6 +116,14 @@ public:
 
     explicit operator bool() const noexcept { return _ptr != nullptr; }
 
+    // A handle tested against the language's `null` (`x != null`, `x == null`): the emitter
+    // spells the test `x != nullptr`, and an `explicit operator bool` takes part in no
+    // comparison - so the null test needs these, exactly as `std::shared_ptr` once supplied
+    // them. The comparison is the handle's identity, which is what a null test asks.
+    friend Bool operator==(const SmRef& ref, std::nullptr_t) noexcept { return ref._ptr == nullptr; }
+
+    friend Bool operator!=(const SmRef& ref, std::nullptr_t) noexcept { return ref._ptr != nullptr; }
+
     // How many handles own the box, `0` for a null handle. `std::shared_ptr` calls this
     // `use_count`; nothing the emitter writes spells it - it is here for the RTL and for a
     // C++-level check of the counting, since a Simse program cannot observe it.
@@ -113,12 +139,17 @@ public:
         return SmRef<T>(value);
     }
 
-    // The same for a box whose size is not `sizeof(T)`: `Array<T>`'s block carries its
-    // element count *and* its elements in the one allocation (specs/built-in-types.md), so
-    // the caller owns the size. `T` is still constructed in place here.
+    // The same for a box whose payload is not a `T`: `Array<T>`'s block carries its
+    // element count *and* its elements in the one allocation, so the caller owns the size
+    // of what it placed here. `payloadBytes` is that payload's size and nothing else - the
+    // header this class puts before the value is added *here*, exactly as `make` adds it,
+    // so a caller never has to know the layout's first word. (Getting that wrong is not a
+    // leak but corruption: a caller that passed the payload's size as the box's had every
+    // block four bytes short, so the last element wrote into the next allocation's
+    // metadata - which the debug heap reports at the *next* free, in whatever ran then.)
     template <class... A>
-    static SmRef<T> makeSized(std::size_t boxBytes, A&&... args) {
-        void* base = ::operator new(boxBytes);
+    static SmRef<T> makeSized(std::size_t payloadBytes, A&&... args) {
+        void* base = ::operator new(headerBytes() + payloadBytes);
         T* value = std::construct_at(valueAt(base), std::forward<A>(args)...);
         *countAt(base) = 1;
         return SmRef<T>(value);

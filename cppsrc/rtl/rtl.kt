@@ -7,7 +7,7 @@
 // (`@SmGen("res", section, symbol)`); a prelude declaration without a body is resolved
 // but never emitted (impl_specs/native-interop.md),
 // and a prelude function *with* a body is emitted into the amalgamation as any
-// other function (`smToYield` below is the first one - impl_specs/for.md).
+// other function (`iter` below is the first one - impl_specs/for.md).
 //
 // The explicit `this` parameter makes a declaration an extension on its
 // receiver's type, and the attribute names the C++ implementation
@@ -21,12 +21,12 @@ package rtl
 
 // ---- iteration -------------------------------------------------------------
 
-// A `for (x in c)` is `for (x in c.smToYield())`: anything with a `smToYield` in
+// A `for (x in c)` is `for (x in c.iter())`: anything with an `iter` in
 // scope is iterable, and the loop is the `while` the parser writes around it
 // (impl_specs/for.md). A container walks itself in order, and this is written in
 // the language's own `yield` - so the machine is an ordinary one, reified per
 // element type like any other generic function.
-fun List<T>.smToYield<T>(): ..T {
+fun List<T>.iter<T>(): ..T {
     var i: Int = 0
     while (i < this.size()) {
         yield this[i]
@@ -36,10 +36,10 @@ fun List<T>.smToYield<T>(): ..T {
 
 // The same walk over the fixed-length sequence and over borrowed storage: both index
 // from `0` and count with the operation their type provides (`Array` counts with
-// `count()`, a `Span` with `size()`). Per-container `smToYield`s are why a machine's
-// class carries its receiver's name (`List_smToYield_yieldable`): the function name
+// `count()`, a `Span` with `size()`). Per-container `iter`s are why a machine's
+// class carries its receiver's name (`List_iter_yieldable`): the function name
 // alone would name every container's machine the same way.
-fun Array<T>.smToYield<T>(): ..T {
+fun Array<T>.iter<T>(): ..T {
     var i: Int = 0
     while (i < this.count()) {
         yield this[i]
@@ -47,7 +47,7 @@ fun Array<T>.smToYield<T>(): ..T {
     }
 }
 
-fun Span<T>.smToYield<T>(): ..T {
+fun Span<T>.iter<T>(): ..T {
     var i: Int = 0
     while (i < this.size()) {
         yield this[i]
@@ -59,9 +59,9 @@ fun Span<T>.smToYield<T>(): ..T {
 // each element - `*this[i]`, the element's address - instead of a copy. That is the
 // form for a container of aggregates: nothing is copied per iteration, and a mutation
 // through the loop variable reaches the element in the container (impl_specs/for.md).
-// It is a separate wrap rather than a parameter of `smToYield` because its element
+// It is a separate wrap rather than a parameter of `iter` because its element
 // type is `*T`, which is what the machine hands out.
-fun List<T>.smToYieldPtr<T>(): ..*T {
+fun List<T>.iterPtr<T>(): ..*T {
     var i: Int = 0
     val len = this.size();
     while (i < len) {
@@ -70,7 +70,7 @@ fun List<T>.smToYieldPtr<T>(): ..*T {
     }
 }
 
-fun Array<T>.smToYieldPtr<T>(): ..*T {
+fun Array<T>.iterPtr<T>(): ..*T {
     var i: Int = 0
     val len = this.count();
     while (i < len) {
@@ -79,7 +79,7 @@ fun Array<T>.smToYieldPtr<T>(): ..*T {
     }
 }
 
-fun Span<T>.smToYieldPtr<T>(): ..*T {
+fun Span<T>.iterPtr<T>(): ..*T {
     var i: Int = 0
     val len = this.size();
     while (i < len) {
@@ -88,7 +88,7 @@ fun Span<T>.smToYieldPtr<T>(): ..*T {
     }
 }
 
-// A machine is already iterable: `x.smToYield()` on one *is* `x`, so `for (x in m)` and
+// A machine is already iterable: `x.iter()` on one *is* `x`, so `for (x in m)` and
 // iterating `m` by hand in a `while` see exactly the same values, with no wrapper object
 // and no extra step. That identity is the compiler's (`TypeInfer.kt` types the call as
 // the receiver, `Codegen.kt` emits the receiver itself): `..T` is not a spellable type,

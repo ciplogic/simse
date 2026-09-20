@@ -323,7 +323,7 @@ fun semBindOne(bindings: *Dictionary<Str, AstXmlNode>, name: *Str, typeNode: *As
 // emitter uses when it only needs a yes/no.
 // Whether a receiver pattern matches an actual type, with the pattern's type parameters
 // matching anything (`sema::unifyType` in the C++ ring). It is what answers "does a
-// `smToYield` take this receiver?" for the `for` check (`Sema.kt`).
+// `iter` take this receiver?" for the `for` check (`Sema.kt`).
 fun semUnifyType(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *List<Str>): Bool {
     var actualPtr: *AstXmlNode = actual
     val patternKind: AstNodeCategory = xmlKind(pattern)
@@ -650,6 +650,10 @@ data class SemFnFact(
     // attribute walks of a name that never changes - the widest per-call-site scan the
     // instrumented profile shows (T78).
     var name: Str,
+    // The package the function is declared in. A machine's C++ class is qualified by
+    // it (`semMachineType`), which is the half of the class's name the call site
+    // cannot see for itself.
+    var packageName: Str,
     var isNative: Bool,
     // A `native fun` extension spells its receiver as an explicit `this` first parameter,
     // so `receiver` is empty while the declaration *is* a member (`semIsExtensionDecl`).
@@ -667,7 +671,7 @@ data class SemFnFact(
 // `semReceiverParams` and `semIsPackTarget` answer - per candidate, before this.
 fun semFnFact(
     decl: *AstXmlNode, receiver: *AstXmlNode, templateParams: *List<Str>, name: *Str,
-    isNative: Bool
+    packageName: *Str, isNative: Bool
 ): SemFnFact {
     val params: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
     var packTarget: Bool = false
@@ -675,9 +679,86 @@ fun semFnFact(
         packTarget = semIsPackTarget(xmlChildPtr(params[params.size() - 1], AstNodeKind.Type))
     }
     return SemFnFact(
-        decl, receiver, templateParams, name, isNative, semIsExtensionDecl(decl),
+        decl, receiver, templateParams, name, packageName, isNative, semIsExtensionDecl(decl),
         params.size() - semReceiverParams(decl), packTarget
     )
+}
+
+// ---- the class a machine's type is spelled with -----------------------------
+//
+// A `..T` is a state machine (impl_specs/yield.md), and the C++ class it *is* is the
+// lowering's own output: the emitter names it after the function that creates it,
+// prefixed with the receiver's outer type name when that function is an extension, and
+// qualified by the function's own package (`List<T>.iter` is
+// `List_iter_yieldable`). A slot initialized from such a call is therefore
+// *spellable*, and that is what lets the hoisting move the machine's storage to the top
+// of the body (`linHoistSlots`) - the one declaration that used to keep a block around a
+// `for` and leave the linear form with scopes in scopes.
+//
+// The name is built at the *call site* because the declaration the slot sits in has to
+// carry it (`linIsSpellableType`): the type stays a `TypeYield`, with the class's name in
+// its `Name`, the class's own template arguments (the function's type parameters, bound
+// at the call site) as its `TypeArg` children, and the function's package in `Package` -
+// so every rule that reads a `..T` (`advance`/`value`, a machine's identity `iter`)
+// still sees the category it knows.
+
+// The outer name of a type, ignoring handles and arguments: `*List<Int>` and `List<Str>`
+// are both `List` - the name a machine's class carries (the emitter's `outerTypeName`,
+// in this package so the pass does not reach back into codegen).
+fun semOuterTypeName(typeNode: *AstXmlNode): Str {
+    if (xmlIsEmpty(typeNode)) {
+        return ""
+    }
+    var node: AstXmlNode = typeNode
+    while (true) {
+        val kind: AstNodeCategory = xmlKind(node)
+        if (kind != AstNodeCategory.TypeReference && kind != AstNodeCategory.TypePointer) {
+            break
+        }
+        val inner: AstXmlNode = xmlChild(node, AstNodeKind.Inner)
+        if (xmlIsEmpty(inner)) {
+            break
+        }
+        node = inner
+    }
+    val outerKind: AstNodeCategory = xmlKind(node)
+    if (outerKind != AstNodeCategory.TypeNamed && outerKind != AstNodeCategory.TypeGeneric) {
+        return ""
+    }
+    return xmlAttr(node, AstNodeAttributeKind.Name)
+}
+
+// The machine the call `fn` creates, as a *spellable* type: `ret` is the `..T` the call
+// answered with and `bindings` is what the call site bound the function's type
+// parameters to. An empty result - not a yielding function at all, or a class whose type
+// arguments nothing bound - leaves the type as it was, unspellable, and the declaration
+// it types keeps the `auto` (and the block with it) it had before.
+fun semMachineType(
+    ret: *AstXmlNode, fn: *SemFnFact, bindings: *Dictionary<Str, AstXmlNode>
+): AstXmlNode {
+    if (xmlKind(ret) != AstNodeCategory.TypeYield) {
+        return ret
+    }
+    // The class's own template arguments: the function's type parameters, which is what
+    // the emitted class is a template of (`emitFunction`'s `yieldType`).
+    var args: List<AstXmlNode> = List<AstXmlNode>()
+    var i: Int = 0
+    while (i < fn.templateParams.size()) {
+        if (!bindings.has(fn.templateParams[i])) {
+            return ret
+        }
+        args.append(semReRole(bindings.get(fn.templateParams[i]).value(), AstNodeKind.TypeArg))
+        i = i + 1
+    }
+    val outer: Str = semOuterTypeName(fn.receiver)
+    var machine: Str = fmtStr("|_yieldable", fn.name)
+    if (outer != "") {
+        machine = fmtStr("|_|_yieldable", outer, fn.name)
+    }
+    var node: AstXmlNode = semReplaceRole(ret, AstNodeKind.TypeArg, args)
+    node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, machine))
+    node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Package, fn.packageName))
+    return node
 }
 
 // A `native fun` extension (`this` first parameter): its receiver pattern picks the
@@ -877,6 +958,23 @@ data class SemInfer(
                 }
                 return true
             }
+
+            AstNodeCategory.TypeYield -> {
+                // A machine (`..T`): spellable only once the call that created it named
+                // its class (`semMachineType`). An anonymous one has no C++ spelling at
+                // all, which is what leaves its declaration an `auto` where it stands -
+                // and the block that declaration keeps with it.
+                if (xmlAttr(typeNode, AstNodeAttributeKind.Name) == "") {
+                    return false
+                }
+                val args: List<AstXmlNode> = xmlChildren(typeNode, AstNodeKind.TypeArg)
+                for (*arg in args) {
+                    if (!this.spellable(arg)) {
+                        return false
+                    }
+                }
+                return true
+            }
         }
         return false
     }
@@ -1023,7 +1121,7 @@ data class SemInfer(
             }
             val result: AstXmlNode = semSubstitute(ret, bindings, fn.templateParams)
             if (!xmlIsEmpty(result)) {
-                return result
+                return semMachineType(result, fn, bindings)
             }
         }
         return xmlEmptyNode()
@@ -1034,7 +1132,7 @@ data class SemInfer(
     // then the built-in accessors.
     // A receiver's type resolved through a `typealias`, the way the emitter resolves it
     // (`Emitter.resolveAlias`, codegen/Codegen.kt): `StrView` is `Span<Char>`
-    // (cppsrc/rtl/StrView.kt), so an extension on `Span<T>` - `atPtr`, `smToYield` - is
+    // (cppsrc/rtl/StrView.kt), so an extension on `Span<T>` - `atPtr`, `iter` - is
     // reachable through a view, because the alias *is* that type. A declared type that is
     // not an alias comes back as it went in.
     fun resolveAlias(typeNode: *AstXmlNode): AstXmlNode {
@@ -1089,7 +1187,7 @@ data class SemInfer(
             }
             val result: AstXmlNode = semSubstitute(ret, bindings, fn.templateParams)
             if (!xmlIsEmpty(result)) {
-                return result
+                return semMachineType(result, fn, bindings)
             }
         }
         if (this.facts.nativeExtensions.has(calleeText)) {
@@ -1118,17 +1216,17 @@ data class SemInfer(
             // `for`'s loop variable a *typed* binding rather than an `auto` the emitter
             // would have to guess a symbol for.
             if (calleeText == "value") {
-                // The element type - and for the pointer wrap (`smToYieldPtr`) that *is*
+                // The element type - and for the pointer wrap (`iterPtr`) that *is*
                 // `*T`, so a `for (*v in xs)` binding is the element's place.
                 return semReRole(xmlChild(recv, AstNodeKind.Inner), AstNodeKind.Type)
             }
             if (calleeText == "advance") {
                 return semNamedType("Bool")
             }
-            // A machine is already iterable: `x.smToYield()` on one is `x`, so the wrap a
+            // A machine is already iterable: `x.iter()` on one is `x`, so the wrap a
             // `for` puts around what it iterates is the identity there (impl_specs/for.md).
             // `..T` is not a spellable type, so no function could take one.
-            if (calleeText == "smToYield") {
+            if (calleeText == "iter") {
                 return receiverType
             }
         }
@@ -1164,6 +1262,54 @@ data class SemInfer(
         }
         if (calleeText == "isOk" || calleeText == "hasValue") {
             return semNamedType("Bool")
+        }
+        return this.classMemberReturn(*recv, calleeText)
+    }
+
+    // A member of a data class no `SemFnFact` stands for: a *prelude* class's methods,
+    // which is the one kind left - `Emitter.collect` skips every prelude declaration
+    // (a `Span`'s C++ is the RTL's `span.hpp`, and the emitter maps the type onto it), so
+    // `Span<Char>.at` has a declared return type (`T`) that nothing told this pass about.
+    // The receiver's own type arguments are what bind the class's type parameters, the
+    // same binding the fact loop above does for a member the program declared; a class
+    // the receiver does not instantiate leaves the call untyped, as before.
+    fun classMemberReturn(recv: *AstXmlNode, calleeName: *Str): AstXmlNode {
+        val kind: AstNodeCategory = xmlKind(recv)
+        if (kind != AstNodeCategory.TypeNamed && kind != AstNodeCategory.TypeGeneric) {
+            return xmlEmptyNode()
+        }
+        val typeName: Str = xmlAttr(recv, AstNodeAttributeKind.Name)
+        if (!this.facts.types.has(typeName)) {
+            return xmlEmptyNode()
+        }
+        val classDecl: AstXmlNode = this.facts.types.get(typeName).value()
+        if (classDecl.name != AstNodeKind.DataClass) {
+            return xmlEmptyNode()
+        }
+        val classParams: List<Str> = xmlTypeParamNames(classDecl)
+        val typeArgs: List<AstXmlNode> = xmlChildren(recv, AstNodeKind.TypeArg)
+        if (classParams.size() != typeArgs.size()) {
+            return xmlEmptyNode()
+        }
+        var bindings: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
+        var i: Int = 0
+        while (i < classParams.size()) {
+            bindings.insert(classParams[i], typeArgs[i])
+            i = i + 1
+        }
+        val methods: List<AstXmlNode> = xmlChildren(classDecl, AstNodeKind.Function)
+        for (*method in methods) {
+            if (xmlAttr(method, AstNodeAttributeKind.Name) != calleeName) {
+                continue
+            }
+            val ret: *AstXmlNode = xmlChildPtr(method, AstNodeKind.ReturnType)
+            if (xmlIsEmpty(ret)) {
+                continue
+            }
+            val result: AstXmlNode = semSubstitute(ret, bindings, classParams)
+            if (!xmlIsEmpty(result)) {
+                return result
+            }
         }
         return xmlEmptyNode()
     }

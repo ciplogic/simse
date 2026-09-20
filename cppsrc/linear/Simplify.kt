@@ -18,6 +18,7 @@
 package linear
 
 import common
+import optimizations
 
 fun linIsLabel(stmt: *AstXmlNode): Bool {
     return xmlKind(stmt) == AstNodeCategory.StmtLabel
@@ -646,9 +647,11 @@ fun linRenameShadowed(body: *List<AstXmlNode>, reserved: *List<Str>): List<AstXm
 }
 
 // Whether a declaration is one the hoisting can move: a declaration has to be writable
-// bare, and that needs its *whole* type - `auto x;` is not a declaration, a machine's
-// `..T` has no spelling at all, and the inference leaves some slots partly unknown (`*?`:
-// a pointer to nothing it could name).
+// bare, and that needs its *whole* type - `auto x;` is not a declaration, and the
+// inference leaves some slots partly unknown (`*?`: a pointer to nothing it could
+// name). A machine's `..T` *is* spellable once the call that created it named the
+// class (`semMachineType`): an anonymous one still has no spelling, and its declaration
+// keeps the block it stands in.
 fun linIsSpellableType(typeNode: *AstXmlNode): Bool {
     val kind: AstNodeCategory = xmlKind(typeNode)
     when (kind) {
@@ -657,6 +660,21 @@ fun linIsSpellableType(typeNode: *AstXmlNode): Bool {
         }
 
         AstNodeCategory.TypeIntLit -> {
+            return true
+        }
+
+        AstNodeCategory.TypeYield -> {
+            if (xmlAttr(typeNode, AstNodeAttributeKind.Name) == "") {
+                return false
+            }
+            val args: List<AstXmlNode> = xmlChildren(typeNode, AstNodeKind.TypeArg)
+            var i: Int = 0
+            while (i < args.size()) {
+                if (!linIsSpellableType(args[i])) {
+                    return false
+                }
+                i = i + 1
+            }
             return true
         }
 
@@ -778,6 +796,11 @@ fun linFinishForEmission(body: *List<AstXmlNode>, reserved: *List<Str>): List<As
         val folded: LinLowered = linFlattenBlocks(current)
         current = folded.body
         canChange = canChange || folded.changed
+        // The linear form's own passes (cppsrc/optimizations): they rewrite the body in
+        // place - `current` is the list they saw - and answer whether it moved.
+        if (linOptimizeBody(*current)) {
+            canChange = true
+        }
     }
     return current
 }

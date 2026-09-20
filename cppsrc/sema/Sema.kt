@@ -1110,8 +1110,8 @@ data class Analyzer(
     }
 
     // `for` is lowered in the parser into the declaration of the machine it iterates
-    // (`_sm_for<n>`, impl_specs/for.md), whose initializer is the invisible `smToYield()`
-    // / `smToYieldPtr()` wrap, so the checker sees the template rather than the construct,
+    // (`_sm_for<n>`, impl_specs/for.md), whose initializer is the invisible `iter()`
+    // / `iterPtr()` wrap, so the checker sees the template rather than the construct,
     // and the template's names are the one marker that says "this came from a `for`".
     // Something is iterable when that wrap resolves: a machine is (the identity), and
     // anything else needs the wrap in scope - the prelude has one per container, in both
@@ -1137,14 +1137,14 @@ data class Analyzer(
             return
         }
         if (xmlKind(receiverType) == AstNodeCategory.TypeYield) {
-            // A machine *is* the identity for `smToYield` - it hands out values, not
+            // A machine *is* the identity for `iter` - it hands out values, not
             // places, so it has no pointer form.
-            if (wrap == "smToYield") {
+            if (wrap == "iter") {
                 return
             }
             this.diag(
                 xmlLine(stmt), xmlColumn(stmt),
-                "a `for (*x in m)` needs a `smToYieldPtr`, and a machine yields values "
+                "a `for (*x in m)` needs an `iterPtr`, and a machine yields values "
                         + "rather than places: iterate it with `for (x in m)`"
             )
             return
@@ -1161,7 +1161,7 @@ data class Analyzer(
         )
     }
 
-    // Whether a wrap (`smToYield`, `smToYieldPtr`) takes this receiver: the convention the
+    // Whether a wrap (`iter`, `iterPtr`) takes this receiver: the convention the
     // parser's wrap calls through (`specs/functions.md`, impl_specs/for.md). The receiver's
     // *name* is what is compared - `List<T>` takes any `List<...>`, and a pattern type
     // parameter takes anything - which is all the gate needs; the emitted call is resolved

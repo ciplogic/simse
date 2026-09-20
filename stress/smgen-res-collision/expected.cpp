@@ -219,13 +219,10 @@ FileStream* simse_fileStream_open(const Str& path);
 
 // stress/smgen-res-collision/src/main.kt:17
 int main() {
-    List<Int>* _sm_base1;
-    List<Int>* _sm_base2;
+    List<Int>* _sm_base1, * _sm_base2;
     List<Int> items;
-    Span<Int> real;
-    Span<Int> empty;
-    Int _sm_expr1;
-    Int _sm_expr2;
+    Span<Int> real, empty;
+    Int _sm_expr1, _sm_expr2;
     items = List<Int>();
     simse_list_append(items, 3);
     _sm_base1 = &items;

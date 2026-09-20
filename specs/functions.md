@@ -430,9 +430,9 @@ Status: implemented; lowered to `while` in the parser (`impl_specs/for.md`).
 Both rings parse it, emit the machine (`yield` is implemented in both) and report a `for`
 over a non-machine.
 
-`for` iterates whatever has a **`smToYield`**: an `in`-scope extension function that
+`for` iterates whatever has a **`iter`**: an `in`-scope extension function that
 returns a state machine (`..T` in its signature, `impl_specs/yield.md`). A **container
-is iterable** - the prelude writes one `smToYield` per container in Simse (`List<T>`,
+is iterable** - the prelude writes one `iter` per container in Simse (`List<T>`,
 `Array<T>` and `Span<T>` today; `Dictionary<K, V>` and ranges are not iterable yet) - and
 a state machine is its own identity, so both of these work:
 
@@ -442,7 +442,7 @@ for ((value, index) in source) { ... }
 ```
 
 A `*` in front of the variable binds a **pointer to the element** instead of a copy of
-it, through the container's `smToYieldPtr` (the same walk, yielding `*T`):
+it, through the container's `iterPtr` (the same walk, yielding `*T`):
 
 ```text
 for (*value in source) { ... }
@@ -475,11 +475,11 @@ for (*cell in cells) {                    // a List<Cell>: no copy per iteration
 }
 ```
 
-The construct is `source.smToYield()`, and the loop is the `while` the language
+The construct is `source.iter()`, and the loop is the `while` the language
 writes around it (`impl_specs/for.md`). So:
 
 - `for` is a reserved keyword; `in` is only special in the header.
-- What is iterated is the machine `source.smToYield()` produces - created **once**,
+- What is iterated is the machine `source.iter()` produces - created **once**,
   before the loop starts, and advanced once per iteration. For a machine argument that
   call *is* the argument, so the machine is the one the source built.
 - `value` is bound once per iteration, and so is `index`. Both are fresh `val`s
@@ -499,7 +499,7 @@ writes around it (`impl_specs/for.md`). So:
   This is the form for a hot loop over a container of values - it costs no more than
   `while` with an index (`impl_specs/for.md`, the measurement there). `index` stays an
   `Int` copy in the indexed form; only the *value* is a pointer.
-- **A type is iterable when it has a `smToYield`** (or a `smToYieldPtr`, for the `*v`
+- **A type is iterable when it has an `iter`** (or an `iterPtr`, for the `*v`
   forms): an extension returning `..T` / `..*T`, which any type may add
   (`fun Point.walk(): ..Point` writes a machine like any other `yield`ing function, so
   the *shape* is the interface, not a runtime one). A type with none is an error,
@@ -507,7 +507,7 @@ writes around it (`impl_specs/for.md`). So:
 
   ```text
   stress/diagnostic-not-iterable/src/main.kt:11:5: a `for` iterates a machine
-  (`..T`) or a type with a `smToYield`, and Int has neither; iterate a container with
+  (`..T`) or a type with an `iter`, and Int has neither; iterate a container with
   `while` and an index
   ```
 
@@ -516,7 +516,7 @@ writes around it (`impl_specs/for.md`). So:
 
 - A `for` inside a body that itself yields is not supported yet; the diagnosed
   alternative is to collect the values into a `List` first (`impl_specs/yield.md`).
-- Ranges are next: `for (i in (2 .. 5))` is one more `smToYield` whose machine holds the
+- Ranges are next: `for (i in (2 .. 5))` is one more `iter` whose machine holds the
   two bounds (`impl_specs/for.md`).
 
 ## Default parameter values

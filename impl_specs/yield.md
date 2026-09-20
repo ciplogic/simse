@@ -83,7 +83,7 @@ use them (`impl_specs/for.md`).
 `value()` must answer the *element* type (`..T`'s inner), not `Opt<T>`: the type pass
 (`sema::Infer::memberReturn`) types it that way, and that is what makes a `for`'s loop
 variable a typed binding rather than an `auto` the emitter would resolve the wrong native
-for. For the pointer wrap (`smToYieldPtr`) the element type *is* `*T`, so `value()` hands
+for. For the pointer wrap (`iterPtr`) the element type *is* `*T`, so `value()` hands
 out the place, which is what makes `for (*v in xs)` a borrow rather than a copy.
 
 ## What the caller gets

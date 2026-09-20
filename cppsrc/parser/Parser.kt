@@ -630,7 +630,7 @@ data class Parser(
     }
 
     fun looksLikeTypeStart(): Bool {
-        // `..` starts a `..T` receiver: `fun ..T.smToYield<T>()` is the wrap that makes a
+        // `..` starts a `..T` receiver: `fun ..T.iter<T>()` is the wrap that makes a
         // machine iterable like any other source (impl_specs/for.md).
         return this.checkKind(TokenKind.Identifier)
                 || this.checkText("(") || this.checkText("&") || this.checkText("*")
@@ -1527,8 +1527,8 @@ data class Parser(
     }
 
     // `<target>.<wrap>()`: the wrap the `for` forms put around what they iterate
-    // (`smToYield`, or `smToYieldPtr` for the `*v` form).
-    fun smToYieldCall(target: *ExprNode, pos: SourcePos, wrap: *Str): ExprNode {
+    // (`iter`, or `iterPtr` for the `*v` form).
+    fun iterCall(target: *ExprNode, pos: SourcePos, wrap: *Str): ExprNode {
         var memberAttrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
         memberAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, wrap))
         var member: AstXmlNode =
@@ -1582,7 +1582,7 @@ data class Parser(
     // loops never collide and two runs produce the same output.
     //
     // `*v` differs only in the wrap: the machine's element is then `*T`, so `v` is the
-    // element's *place* rather than a copy of it (the prelude's `smToYieldPtr`).
+    // element's *place* rather than a copy of it (the prelude's `iterPtr`).
     fun parseFor(out: *List<AstXmlNode>): Bool {
         val pos: SourcePos = this.peek(0).pos
         this.advance() // for
@@ -1638,16 +1638,16 @@ data class Parser(
         val machineName: Str = "_sm_for" + id.toString()
         val counterName: Str = "_sm_index" + id.toString()
 
-        // The iterated expression is wrapped in the invisible `smToYield()` call: a
+        // The iterated expression is wrapped in the invisible `iter()` call: a
         // `for` iterates whatever has one, so a container walks itself in order and a
         // machine passes through (impl_specs/for.md). It is a *member* call, because
         // that is what binds the function's type parameter from the receiver - a plain
-        // `smToYield(x)` would leave the loop variable untyped.
-        var wrap: Str = "smToYield"
+        // `iter(x)` would leave the loop variable untyped.
+        var wrap: Str = "iter"
         if (valueIsPointer) {
-            wrap = "smToYieldPtr"
+            wrap = "iterPtr"
         }
-        val iterated: ExprNode = this.smToYieldCall(machine, pos, wrap)
+        val iterated: ExprNode = this.iterCall(machine, pos, wrap)
         out.append(this.varDeclNode(machineName, true, this.emptyNode(), iterated, pos))
         if (withIndex) {
             val counterInit: ExprNode = this.intLiteralAt(-1, pos)

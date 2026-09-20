@@ -2,7 +2,7 @@ package fixtures
 
 // T51: a `for` inside a lambda. A lambda body is a frame of its own - its parameters
 // plus the values it captures - and it is *typed* like any other body, so the loop
-// variable has a type (`value.toString()` is the integer spelling) and the `smToYield`
+// variable has a type (`value.toString()` is the integer spelling) and the `iter`
 // wrap a `for` puts around what it iterates is the identity on a machine.
 //
 // Both forms are here on purpose: over a container, and over a machine the program

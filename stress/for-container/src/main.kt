@@ -1,7 +1,7 @@
 package fixtures
 
 // T42: `for` over a container. The two forms are the same `while` the parser writes,
-// with the iterated expression wrapped in an invisible `smToYield()` call: `List<T>`
+// with the iterated expression wrapped in an invisible `iter()` call: `List<T>`
 // has one in the prelude, and it is written in the language's own `yield` - a machine
 // that walks the list in order (impl_specs/for.md).
 //

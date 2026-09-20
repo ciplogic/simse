@@ -19,7 +19,7 @@ Nothing here overrides the topic specs; where a topic spec speaks, it wins.
 | `package a.b.c` declares a file's package namespace as an opaque dotted identifier | `specs/modules.md` |
 | body-less declaration with an `@SmGen` attribute (`@SmGen("cpp"[, symbol])`) | `functions.md` |
 | `break`/`continue` are reserved and loop-only | `functions.md` |
-| `for` has exactly two forms and iterates whatever has a `smToYield` (a container, or a machine itself) | `functions.md` |
+| `for` has exactly two forms and iterates whatever has an `iter` (a container, or a machine itself) | `functions.md` |
 | `yield e` and `..T`: a body that yields is a state machine | `impl_specs/yield.md` |
 | Default parameter values are deferred | `functions.md` |
 | Line endings and `;` separate statements | `functions.md` |

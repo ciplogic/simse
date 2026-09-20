@@ -1,10 +1,10 @@
 # `for` over an array and a span
 
-`for` iterates whatever has a `smToYield` in scope (`specs/functions.md`), and the prelude
+`for` iterates whatever has a `iter` in scope (`specs/functions.md`), and the prelude
 writes one per container in Simse, with `yield`:
 
 ```simse
-fun Array<T>.smToYield<T>(): ..T {
+fun Array<T>.iter<T>(): ..T {
     var i: Int = 0
     while (i < this.count()) {
         yield this[i]
@@ -13,15 +13,15 @@ fun Array<T>.smToYield<T>(): ..T {
 }
 ```
 
-`List<T>.smToYield` walks `size()` and indexes the list; a `Span<T>` walks `size()` over
+`List<T>.iter` walks `size()` and indexes the list; a `Span<T>` walks `size()` over
 borrowed storage, so the thing it points at has to outlive the loop. A machine is a
 machine: `for (value in arr)`, `for ((value, index) in arr)`, `continue` and `break` work
 the same way they do over a list, because the loop is the same `while` the parser writes.
 
 Two details are visible in the emitted C++ rather than in the language:
 
-- **A machine's class carries its receiver's name** - `Array_smToYield_yieldable`,
-  `Span_smToYield_yieldable`. One prelude function name (`smToYield`) with several
+- **A machine's class carries its receiver's name** - `Array_iter_yieldable`,
+  `Span_iter_yieldable`. One prelude function name (`iter`) with several
   receivers needs several machine classes, and the receiver is what tells them apart.
 - **A prelude body is emitted for the receiver the program names.** A program that only
   iterates a list carries the list machine, not the array's or the span's, or the emitted

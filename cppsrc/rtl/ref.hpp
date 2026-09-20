@@ -26,40 +26,23 @@
 #include "smref.hpp"
 #include "types.hpp"
 
-#if defined(SIMSE_SMREF)
 template <class T>
 using Ref = SmRef<T>;
-#else
-template <class T>
-using Ref = std::shared_ptr<T>;
-#endif
 
 // The box construction the emitter spells for the language's `&value`: one box holding a `T`
 // built in place from the arguments. `std::make_shared` allocates the control block and the
 // object together for the shim; `SmRef::make` is the `[count][value]` allocation itself.
 template <class T, class... A>
 Ref<T> makeRef(A&&... args) {
-#if defined(SIMSE_SMREF)
     return SmRef<T>::make(std::forward<A>(args)...);
-#else
-    return std::make_shared<T>(std::forward<A>(args)...);
-#endif
 }
 
-// The same for a box whose size is not `sizeof(T)`: `Array<T>`'s block, whose element count
+// The same for a box whose payload is not `sizeof(T)`: `Array<T>`'s block, whose element count
 // and elements occupy the rest of the one allocation (containers.hpp). The box's own
 // destructor is the cleanup in both cases, so the shim's deleter is nothing but
-// `destroy_at` + the matching free.
+// `destroy_at` + the matching free. `payloadBytes` is the payload's size; the header the
+// box puts before it is `SmRef`'s business, not the caller's.
 template <class T, class... A>
-Ref<T> makeRefSized(std::size_t boxBytes, A&&... args) {
-#if defined(SIMSE_SMREF)
-    return SmRef<T>::makeSized(boxBytes, std::forward<A>(args)...);
-#else
-    void* base = ::operator new(boxBytes);
-    T* value = std::construct_at(reinterpret_cast<T*>(base), std::forward<A>(args)...);
-    return Ref<T>(value, [](T* doomed) {
-        std::destroy_at(doomed);
-        ::operator delete(static_cast<void*>(doomed));
-    });
-#endif
+Ref<T> makeRefSized(std::size_t payloadBytes, A&&... args) {
+    return SmRef<T>::makeSized(payloadBytes, std::forward<A>(args)...);
 }

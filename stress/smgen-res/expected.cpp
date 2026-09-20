@@ -222,7 +222,7 @@ int main() {
     List<Int>* _sm_base1;
     List<Int> items;
     Span<Int> view;
-    Int _sm_expr1;
+    Int _sm_expr1, _sm_expr2;
     items = List<Int>();
     simse_list_append(items, 11);
     simse_list_append(items, 22);
@@ -231,7 +231,7 @@ int main() {
     view = simse_spanOf(_sm_base1);
     _sm_expr1 = view.size();
     std::cout << std::boolalpha << (_sm_expr1) << std::endl;
-    auto _sm_expr2 = view.at(2);
+    _sm_expr2 = view.at(2);
     std::cout << std::boolalpha << (_sm_expr2) << std::endl;
     return 0;
 }

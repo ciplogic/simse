@@ -442,7 +442,7 @@ about callable types; none of them needs a new idea.
 
 What the closure frame gained by being typed is worth naming, because it was silent
 before: a `for` inside a lambda over a machine used to emit
-`smToYield(simse_addressOf(_sm_expr1))` for a receiver that was already a machine -
+`iter(simse_addressOf(_sm_expr1))` for a receiver that was already a machine -
 which is a C++ type error - and `v.toString()` on the loop variable picked the
 `StrView` overload, because the *type* decides which `toString` is meant.
 `stress/lambda-for` is the regression case (both `for` forms, over a container and

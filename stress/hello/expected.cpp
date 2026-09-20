@@ -102,20 +102,16 @@ Int ns1_bump(ns1_Counter* self);
 
 // stress/hello/src/main.kt:3
 Int ns1_bump(ns1_Counter* self) {
-    Int _sm_expr1;
-    Int _sm_expr2;
+    Int _sm_expr1, _sm_expr2;
     _sm_expr1 = self->value;
     _sm_expr2 = _sm_expr1 + 1;
     return _sm_expr2;
 }
 // stress/hello/src/main.kt:8
 int main() {
-    Int i;
-    Int total;
-    Bool _sm_expr1;
+    Int i, total, _sm_expr3;
+    Bool _sm_expr1, _sm_expr2;
     ns1_Counter c;
-    Bool _sm_expr2;
-    Int _sm_expr3;
     i = 0;
     total = 0;
     L1:;

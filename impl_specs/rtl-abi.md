@@ -38,7 +38,7 @@ bootstrap shims do not silently become the de-facto specification.
 >
 > **A prelude body is emitted when a program reaches it** (`reachesPreludeBody`,
 > both rings). The name has to be called, and - because the prelude has one
-> `smToYield` per container - the receiver's type name has to be named too, or
+> `iter` per container - the receiver's type name has to be named too, or
 > the call could not be attributed to one overload. Since T71 the fallback for an
 > *unattributable* name is to emit the whole group rather than none of it: a
 > program may call `"".isEmpty()` without ever naming `Str` as a type.
