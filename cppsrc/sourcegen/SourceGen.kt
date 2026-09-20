@@ -79,7 +79,7 @@ fun getSourceGens(): *List<SourceGenerator> {
 }
 
 // The index of the generator registered under `name`, or -1.
-fun sourceGenFind(name: Str): Int {
+fun sourceGenFind(name: *Str): Int {
     val gens: *List<SourceGenerator> = getSourceGens()
     var i: Int = 0
     while (i < gens.size()) {
@@ -93,14 +93,14 @@ fun sourceGenFind(name: Str): Int {
 
 // Whether a generator is registered for `name`: an `@SmGen` name nobody registered is a
 // diagnostic the emitter reports against the declaration, not a silent default.
-fun sourceGenHas(name: Str): Bool {
+fun sourceGenHas(name: *Str): Bool {
     return sourceGenFind(name) >= 0
 }
 
 // Whether a declaration of this generator gets a prototype of its own: its C++ is elsewhere
 // and already linked (a header's), so the call sites need the declaration. A generator whose
 // text is emitted or compiled declares the symbol itself.
-fun sourceGenDeclaresPrototype(name: Str): Bool {
+fun sourceGenDeclaresPrototype(name: *Str): Bool {
     val at: Int = sourceGenFind(name)
     if (at < 0) {
         return false
@@ -110,7 +110,7 @@ fun sourceGenDeclaresPrototype(name: Str): Bool {
 
 // Whether a declaration of this generator that has an explicit `this` is registered as a
 // receiver extension (the pattern that selects an overload by receiver).
-fun sourceGenRegistersReceiver(name: Str): Bool {
+fun sourceGenRegistersReceiver(name: *Str): Bool {
     val at: Int = sourceGenFind(name)
     if (at < 0) {
         return false
@@ -141,12 +141,12 @@ fun sourceGenTree(): *FullCompiledState {
 // lookup), and a fresh assembly. Everything a generator may look at is here by the time the
 // first dispatch runs.
 fun sourceGenBegin(
-    preludeNames: List<Str>,
-    preludeModules: List<AstXmlNode>,
-    fileNames: List<Str>,
-    modules: List<AstXmlNode>,
-    resources: List<ResourceItem>,
-    compilerResources: List<ResourceItem>
+    preludeNames: *List<Str>,
+    preludeModules: *List<AstXmlNode>,
+    fileNames: *List<Str>,
+    modules: *List<AstXmlNode>,
+    resources: *List<ResourceItem>,
+    compilerResources: *List<ResourceItem>
 ): Unit {
     sourceGenResetSink()
     sourceGenState.fileNames = preludeNames
@@ -166,7 +166,7 @@ fun sourceGenBegin(
 
 // A module that only exists after a reparse (the driver's generated one), so the tree a
 // generator sees is the whole compilation and not only the files it started with.
-fun sourceGenAddModule(fileName: Str, module: AstXmlNode): Unit {
+fun sourceGenAddModule(fileName: *Str, module: *AstXmlNode): Unit {
     sourceGenState.fileNames.append(fileName)
     sourceGenState.modules.append(module)
 }
@@ -180,7 +180,7 @@ fun sourceGenAddModule(fileName: Str, module: AstXmlNode): Unit {
 fun runSourceGen(ctx: *SourceGenContext): SourceGenTransform {
     val at: Int = sourceGenFind(ctx.name)
     if (at < 0) {
-        ctx.error = "unknown source generator '" + ctx.name + "'"
+        ctx.error = fmtStr("unknown source generator '|'", ctx.name)
         return SourceGenTransform(SourceTransformation.None, "")
     }
     val gen: *SourceGenerator = *getSourceGens()[at]
@@ -197,7 +197,7 @@ fun runSourceGen(ctx: *SourceGenContext): SourceGenTransform {
 // symbol a call reaches - the declaration's own name unless the declaration or its generator
 // says otherwise - and the error a generator's message, for the caller to report against the
 // declaration.
-fun sourceGenDeclare(decl: AstXmlNode, fileName: Str, prelude: Bool): Res<Str> {
+fun sourceGenDeclare(decl: *AstXmlNode, fileName: *Str, prelude: Bool): Res<Str> {
     val name: Str = xmlAttr(decl, AstNodeAttributeKind.Generator)
     val declName: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
     var symbol: Str = declName
@@ -316,7 +316,7 @@ fun sourceGenReparseSource(): Res<Str> {
 
 // One module's declarations, in order, depth first - the order the blocks are joined in, so
 // the generated module depends only on the sources.
-fun sourceGenReparseNode(node: AstXmlNode, blocks: *List<Str>): Res<Str> {
+fun sourceGenReparseNode(node: *AstXmlNode, blocks: *List<Str>): Res<Str> {
     if (node.name == AstNodeKind.Function
         && xmlAttr(node, AstNodeAttributeKind.Generator).size() > 0
     ) {
@@ -342,7 +342,7 @@ fun sourceGenReparseNode(node: AstXmlNode, blocks: *List<Str>): Res<Str> {
 // One declaration's answer to the reparse pass: its source, or "" when its generator has
 // nothing for the module. An unknown name is left to the emitter, which reports it against
 // the declaration it came from.
-fun sourceGenReparseDecl(decl: AstXmlNode): Res<Str> {
+fun sourceGenReparseDecl(decl: *AstXmlNode): Res<Str> {
     val name: Str = xmlAttr(decl, AstNodeAttributeKind.Generator)
     if (!sourceGenHas(name)) {
         return Res<Str>.ok("")

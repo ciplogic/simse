@@ -141,9 +141,9 @@ fun profPreludeText(): Str {
 // The first statement of an emitted body: the timer. `name` is the symbol the body is
 // emitted under (`ns1_emitFunction`, `..._yieldable::advance`), which is what the report
 // shows. Empty when the flag is off.
-fun profPreamble(name: Str): Str {
+fun profPreamble(name: *Str): Str {
     if (!profEnabledFlag) {
         return ""
     }
-    return "auto __smProfile = profileApp.measure(\"" + name + "\");"
+    return fmtStr("auto __smProfile = profileApp.measure(\"|\");", name)
 }

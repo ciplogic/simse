@@ -146,7 +146,7 @@ data class ExprFlattener(
         return "_sm_expr" + id.toString()
     }
 
-    fun roleName(role: AstNodeKind, name: Str, line: Int, column: Int): AstXmlNode {
+    fun roleName(role: AstNodeKind, name: *Str, line: Int, column: Int): AstXmlNode {
         return linName(role, name, line, column)
     }
 
@@ -276,7 +276,7 @@ data class ExprFlattener(
 
     // Whether any statement of the list had something rebuilt under it: a child's walk
     // clears the flag as it goes, so the answer is the disjunction, not the last one.
-    fun walkStmts(stmts: List<AstXmlNode>, out: *List<AstXmlNode>): Bool {
+    fun walkStmts(stmts: *List<AstXmlNode>, out: *List<AstXmlNode>): Bool {
         var any: Bool = false
         for (*stmt in stmts) {
             this.walkStmt(stmt, out)
@@ -398,7 +398,7 @@ data class ExprFlattener(
 }
 
 // Lowers the expressions of one linear body; the counter restarts per body.
-fun linLowerExprs(body: List<AstXmlNode>): LinLowered {
+fun linLowerExprs(body: *List<AstXmlNode>): LinLowered {
     var flattener: ExprFlattener = ExprFlattener(1, false, false)
     var out: List<AstXmlNode> = List<AstXmlNode>()
     flattener.walkStmts(body, out)

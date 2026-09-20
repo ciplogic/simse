@@ -398,8 +398,8 @@ fun escapedSnippet(view: StrView, maxLen: Int): Str {
 }
 
 // Mirrors the C++ scanner's std::to_string concatenation.
-fun unexpectedCharacterMessage(line: Int, column: Int, snippet: Str): Str {
-    return line.toString() + ":" + column.toString() + ": Unexpected character: '" + snippet + "'"
+fun unexpectedCharacterMessage(line: Int, column: Int, snippet: *Str): Str {
+    return fmtStr("|:|: Unexpected character: '|'", line.toString(), column.toString(), snippet)
 }
 
 data class Scanner(
@@ -410,7 +410,7 @@ data class Scanner(
     var column: Int,
     var source: Str
 ) {
-    fun setSource(text: Str): Unit {
+    fun setSource(text: *Str): Unit {
         this.source = text
         this.pos = 0
         this.line = 1
@@ -461,7 +461,7 @@ data class Scanner(
 
 // Reads `fileName`, scans it to end of input, and collects every token up to
 // (but not including) the Eof token. Returns the scanning error, if any.
-fun readFileAsTokens(scanner: *Scanner, fileName: Str): Res<List<Token>> {
+fun readFileAsTokens(scanner: *Scanner, fileName: *Str): Res<List<Token>> {
     val content: Str = readFile(fileName)
     scanner.setSource(content)
 
@@ -469,7 +469,7 @@ fun readFileAsTokens(scanner: *Scanner, fileName: Str): Res<List<Token>> {
     while (true) {
         val result: Res<Token> = scanner.nextToken()
         if (!result.isOk()) {
-            return Res<List<Token>>.err(fileName + ": " + result.error)
+            return Res<List<Token>>.err(fmtStr("|: |", fileName, result.error))
         }
         if (result.value.kind == TokenKind.Eof) {
             return Res<List<Token>>.ok(tokens)
@@ -483,7 +483,7 @@ fun isSpaceBasedToken(kind: TokenKind): Bool {
 }
 
 // Like readFileAsTokens, but drops Space and Comment tokens.
-fun readFileAndSkipSpacesTokens(scanner: *Scanner, fileName: Str): Res<List<Token>> {
+fun readFileAndSkipSpacesTokens(scanner: *Scanner, fileName: *Str): Res<List<Token>> {
     val allResult: Res<List<Token>> = readFileAsTokens(scanner, fileName)
     if (!allResult.isOk()) {
         return Res<List<Token>>.err(allResult.error)

@@ -118,7 +118,7 @@ fun resGenAlways(ctx: *SourceGenContext): SourceGenTransform {
 // key the section itself decides (its `symbol:` when it declares one, its own name when it
 // does not). Answers whether anything was added, which is what tells a declaration with no
 // text from one with.
-fun resGenAddSection(ctx: *SourceGenContext, section: Str): Bool {
+fun resGenAddSection(ctx: *SourceGenContext, section: *Str): Bool {
     var item: Str = section
     val declared: Str = section + ":symbol"
     if (sourceGenResHas(ctx.state, declared)) {
@@ -128,7 +128,7 @@ fun resGenAddSection(ctx: *SourceGenContext, section: Str): Bool {
     var added: Bool = false
     var i: Int = 0
     while (i < names.size()) {
-        val key: Str = section + ":" + names[i]
+        val key: Str = fmtStr("|:|", section, names[i])
         if (sourceGenResHas(ctx.state, key)) {
             ctx.sections.add(names[i], item, sourceGenResText(ctx.state, key))
             added = true

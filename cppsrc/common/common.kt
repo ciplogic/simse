@@ -1,11 +1,13 @@
 // common.kt
 //
-// Native file utilities. The declarations supply the Simse types/signatures;
-// bodies are owned by C++ (see impl_specs/plan-to-selfhost.md).
+// The compiler's own file utility. The C++ is generated from the `fileio` section of
+// cppsrc/rtl/_res.md (like the prelude's own filesystem operations, cppsrc/rtl/fs.kt), so
+// nothing is linked in beside the program's own translation unit.
 
 package common
 
-native("simse_native_readFile") fun readFile(filePath: Str): Str
+@SmGen("res", "fileio", "simse_native_readFile")
+fun readFile(filePath: Str): Str
 
 // A position in a source file. `offset` is the 0-based byte offset of the
 // token's first character; `line` and `column` are 1-based. Tabs count as a

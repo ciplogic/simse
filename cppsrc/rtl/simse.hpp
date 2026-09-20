@@ -7,8 +7,9 @@
 //
 // What a program's *generated* C++ needs is not necessarily here: the primitives the
 // prelude operations reach live in `cppsrc/rtl/_res.md` (the `strtable`, `timeops`,
-// `listops`, `dictops` and `strops` sections), which the emitter places in the
-// amalgamation's own sections, and `native.cpp` does not use them (`impl_specs/generators.md`).
+// `listops`, `dictops`, `strops`, `resfmt` and `fileio` sections), which the emitter places
+// in the amalgamation's own sections - a program that reaches one of them carries its
+// prototype and its definition, and has nothing to link (`impl_specs/generators.md`).
 
 // Order follows dependencies: types and containers have no RTL-relative
 // dependencies, and the higher-level headers build on them.
@@ -19,7 +20,6 @@
 #include "strview.hpp"      // StrView (Span<Char> + the text operations)
 #include "resources.hpp"    // the `_res.md` resources a program carries
 #include "optional.hpp"     // Opt<T>
-#include "fs.hpp"           // simse_listFiles/simse_writeFile/... native ops (prelude)
 #include "filestream.hpp"   // FileStream: simse_fileStream_* native ops (prelude)
 #include "functional.hpp"   // Func, Action, AutoDefer
 #include "result.hpp"       // Result/Res, ok, resError, err

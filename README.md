@@ -243,9 +243,10 @@ The result is a language that reads like Kotlin/.NET and builds like C.
 ## The compiler is written in Simse
 
 The compiler *is* its Simse sources (`cppsrc/**/*.kt`): scanner, parser, semantic
-pass, control-flow lowering, and the C++ emitter. The only hand-written C++ is one
-runtime translation unit (`cppsrc/rtl/native.cpp`: file I/O, `system`, the process
-entry) plus the C++ that lives in resource sections.
+pass, control-flow lowering, and the C++ emitter. The only hand-written C++ is the
+runtime's headers plus the C++ that lives in resource sections (`cppsrc/rtl/_res.md`:
+file I/O, the clocks, the prelude's primitives) - so a program, and the compiler
+itself, is one translation unit.
 
 That leaves the bootstrap question - how do you build a compiler written in its own
 language, on a machine that has no Simse? The answer is **`cppsrc/simse_bootstrap.cpp`:
@@ -312,12 +313,12 @@ toolchain. `docs/state-of-the-field.md` is explicit about each of these, and
 
 | Path | Contents |
 | --- | --- |
-| `cppsrc/` | the compiler in Simse (`lex/`, `parser/`, `sema/`, `linear/`, `codegen/`, `compiler/`, `sourcegen/`), plus `cppsrc/rtl/` (the prelude `.kt` files, the runtime headers, the resource file `_res.md`, and the one hand-written translation unit `native.cpp`) and `cppsrc/simse_bootstrap.cpp` - the published transpiled compiler, the output proof |
+| `cppsrc/` | the compiler in Simse (`lex/`, `parser/`, `sema/`, `linear/`, `codegen/`, `compiler/`, `sourcegen/`), plus `cppsrc/rtl/` (the prelude `.kt` files, the runtime headers, and the resource file `_res.md`, which holds the runtime's C++) and `cppsrc/simse_bootstrap.cpp` - the published transpiled compiler, the output proof |
 | `specs/` | the language specification (normative): types, declarations, functions, memory model, generics, containers, modules, statics, resources |
 | `impl_specs/` | implementation plans and records: the capability matrix, the RTL ABI, generators, the user-facing roadmap |
 | `stress/` | one folder per end-to-end program: source, arguments, expected output, and where the emitted text is the point, an `expected.cpp` golden |
 | `build.js`, `build.bat`, `stress.bat` | the build and harness entry points: transpile the source tree, compile it with `cl.exe`, run the corpus |
-| `simse.vcxproj`, `simse.slnx` | the Visual Studio profiling project: the bootstrap and the runtime, with the debugger already set to run the compiler over its own tree |
+| `simse.vcxproj`, `simse.slnx` | the Visual Studio profiling project: the published bootstrap (the runtime is generated into it), with the debugger already set to run the compiler over its own tree |
 | `tools/` | the JavaScript harness: the stress runner (`stress.js`), the bootstrap fixed-point check (`bootstrap.js`), generator parity (`smgen.js`), the Visual Studio project check (`vscheck.mjs`), `msvc.mjs` |
 | `docs/` | this documentation |
 | `guide4ai.md` | orientation for a fresh contributor or AI session: the build, the invariants, the change protocol, the gotchas |

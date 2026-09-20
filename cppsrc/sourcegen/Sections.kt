@@ -45,7 +45,7 @@ data class Sections(
     var current: Int
 ) {
     // The index of `name`, or -1. One linear scan over a handful of entries.
-    fun indexOf(name: Str): Int {
+    fun indexOf(name: *Str): Int {
         var i: Int = 0
         while (i < this.sections.size()) {
             if (this.sections[i].name == name) {
@@ -57,7 +57,7 @@ data class Sections(
     }
 
     // The section called `name`, created and appended when it does not exist yet.
-    fun section(name: Str): Int {
+    fun section(name: *Str): Int {
         val found: Int = this.indexOf(name)
         if (found >= 0) {
             return found
@@ -67,7 +67,7 @@ data class Sections(
     }
 
     // Makes `name` the section the emitter writes into.
-    fun begin(name: Str): Unit {
+    fun begin(name: *Str): Unit {
         this.current = this.section(name)
     }
 
@@ -85,18 +85,18 @@ data class Sections(
     }
 
     // A generator's addition under `key`; an existing key's text is replaced.
-    fun add(name: Str, key: Str, text: Str): Unit {
+    fun add(name: *Str, key: *Str, text: *Str): Unit {
         val at: Int = this.section(name)
         val target: *NamedSection = *this.sections[at]
         target.items.insert(key, text)
     }
 
-    fun has(name: Str, key: Str): Bool {
+    fun has(name: *Str, key: *Str): Bool {
         val target: *NamedSection = *this.sections[this.section(name)]
         return target.items.has(key)
     }
 
-    fun get(name: Str, key: Str): Opt<Str> {
+    fun get(name: *Str, key: *Str): Opt<Str> {
         val target: *NamedSection = *this.sections[this.section(name)]
         return target.items.get(key)
     }

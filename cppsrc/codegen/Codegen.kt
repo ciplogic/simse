@@ -104,7 +104,7 @@ enum class NameKind { Value, Shared, Pointer }
 // once instead of at every growth step. The parts are appended through the borrow
 // the pointer `for` hands out (`appendStrPtr`), so no element is copied either. A
 // one-character separator is the character append it is (`cgJoinChar`).
-fun cgJoin(parts: *List<Str>, separator: Str): Str {
+fun cgJoin(parts: *List<Str>, separator: *Str): Str {
     if (separator.size() == 1) {
         return cgJoinChar(parts, separator[0])
     }
@@ -180,7 +180,7 @@ fun cgUnquote(text: Str): Str {
 // One argument of a `@SmGen` attribute: `args` is the generator's arguments, joined by
 // `,` (`AstNodeAttributeKind.GeneratorArgs`), so argument `index` is that field. An
 // index outside the list is the empty string.
-fun cgGeneratorArg(args: Str, index: Int): Str {
+fun cgGeneratorArg(args: *Str, index: Int): Str {
     if (args.size() == 0 || index < 0) {
         return ""
     }
@@ -359,7 +359,7 @@ data class Emitter(
 
     // ---- diagnostics and output -------------------------------------------
 
-    fun fail(posNode: *AstXmlNode, message: Str): Unit {
+    fun fail(posNode: *AstXmlNode, message: *Str): Unit {
         if (this.failed) {
             return
         }
@@ -392,14 +392,14 @@ data class Emitter(
 
     // ---- symbol collection ------------------------------------------------
 
-    fun namedTypeExpr(name: Str): AstXmlNode {
+    fun namedTypeExpr(name: *Str): AstXmlNode {
         var node: AstXmlNode =
             AstXmlNode(AstNodeKind.Type, AstNodeCategory.TypeNamed, List<AstNodeAttribute>(), Array<AstXmlNode>())
         node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
         return node
     }
 
-    fun genericTypeExpr(name: Str, args: *List<AstXmlNode>): AstXmlNode {
+    fun genericTypeExpr(name: *Str, args: *List<AstXmlNode>): AstXmlNode {
         var node: AstXmlNode =
             AstXmlNode(AstNodeKind.Type, AstNodeCategory.TypeGeneric, List<AstNodeAttribute>(), args.toArray())
         node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
@@ -426,10 +426,10 @@ data class Emitter(
         AstXmlNode,
         receiver: *
         AstXmlNode,
-        file: Str,
-        templateParams: List<Str>,
+        file: *Str,
+        templateParams: *List<Str>,
         prelude: Bool,
-        packageName: Str,
+        packageName: *Str,
         isMethod: Bool
     ): Unit {
         // The declaration's own attributes, read once here rather than on every lookup
@@ -454,7 +454,7 @@ data class Emitter(
         }
     }
 
-    fun addNativeExt(name: Str, ext: CgNativeExt): Unit {
+    fun addNativeExt(name: *Str, ext: *CgNativeExt): Unit {
         if (this.nativeExtensions.has(name)) {
             var existing: List<CgNativeExt> = this.nativeExtensions.get(name).value()
             existing.append(ext)
@@ -497,7 +497,7 @@ data class Emitter(
         var next: Int = 1
         i = 0
         while (i < names.size()) {
-            this.nsPrefixes.insert(names[i], "ns" + next.toString() + "_")
+            this.nsPrefixes.insert(names[i], fmtStr("ns|_", next.toString()))
             next = next + 1
             i = i + 1
         }
@@ -506,19 +506,19 @@ data class Emitter(
     // The prefix of a package: empty for `rtl`, and for a name the emitter cannot
     // attribute to any package (leaving it alone beats mangling it into a symbol
     // that does not exist).
-    fun nsPrefix(packageName: Str): Str {
+    fun nsPrefix(packageName: *Str): Str {
         if (this.nsPrefixes.has(packageName)) {
             return this.nsPrefixes.get(packageName).value()
         }
         return ""
     }
 
-    fun qualify(packageName: Str, name: Str): Str {
+    fun qualify(packageName: *Str, name: *Str): Str {
         return this.nsPrefix(packageName) + name
     }
 
     // The package a declared type (data class, enum, typealias) came from.
-    fun typePackage(name: Str): Str {
+    fun typePackage(name: *Str): Str {
         if (this.typePackages.has(name)) {
             return this.typePackages.get(name).value()
         }
@@ -529,7 +529,7 @@ data class Emitter(
     // only, like the `hasPlainFunction` probes at the call sites - and a method is not a
     // plain function, so a call by name cannot resolve to one (two packages may spell
     // the same method name).
-    fun functionPackage(name: Str): Str {
+    fun functionPackage(name: *Str): Str {
         var i: Int = 0
         while (i < this.functions.size()) {
             val fn: *CgFn = *this.functions[i]
@@ -545,7 +545,7 @@ data class Emitter(
     }
 
     // The declared type of a file-level static, for expression inference.
-    fun staticType(name: Str): AstXmlNode {
+    fun staticType(name: *Str): AstXmlNode {
         if (this.staticsByName.has(name)) {
             return xmlChild(this.staticsByName.get(name).value().decl, AstNodeKind.Type)
         }
@@ -585,7 +585,7 @@ data class Emitter(
                     // arbitrary things to a compilation.
                     val generator: Str = xmlAttr(decl, AstNodeAttributeKind.Generator)
                     if (!sourceGenHas(generator)) {
-                        this.fail(decl, "unknown source generator '" + generator + "'")
+                        this.fail(decl, fmtStr("unknown source generator '|'", generator))
                         return
                     }
                     val declared: Res<Str> = sourceGenDeclare(decl, input.fileName, input.prelude)
@@ -704,7 +704,7 @@ data class Emitter(
 
     // ---- type mapping -----------------------------------------------------
 
-    fun setActiveTypeParams(params: List<Str>): Unit {
+    fun setActiveTypeParams(params: *List<Str>): Unit {
         this.activeTypeParams.clear()
         var i: Int = 0
         while (i < params.size()) {
@@ -713,7 +713,7 @@ data class Emitter(
         }
     }
 
-    fun templateClause(params: List<Str>): Str {
+    fun templateClause(params: *List<Str>): Str {
         if (params.size() == 0) {
             return ""
         }
@@ -726,7 +726,7 @@ data class Emitter(
         return fmtStr("template <|>", cgJoin(parts, ", "))
     }
 
-    fun typeArgsString(baseName: Str, args: *List<AstXmlNode>): Str {
+    fun typeArgsString(baseName: *Str, args: *List<AstXmlNode>): Str {
         var rendered: List<Str> = List<Str>()
         for (*arg in args) {
             rendered.append(this.type(arg))
@@ -739,7 +739,7 @@ data class Emitter(
         return cgJoin(rendered, ", ")
     }
 
-    fun typeName(name: Str, posNode: *AstXmlNode): Str {
+    fun typeName(name: *Str, posNode: *AstXmlNode): Str {
         if (name == "Unit") {
             return "void"
         }
@@ -852,7 +852,7 @@ data class Emitter(
                 return
             }
             this.sourceComment(entry.decl)
-            this.line(0, this.type(typeNode) + " " + storage + "{};")
+            this.line(0, fmtStr("| |{};", this.type(typeNode), storage))
             if (this.failed) {
                 return
             }
@@ -991,7 +991,7 @@ data class Emitter(
 
     // The scalar names: the types whose C++ spelling is a register-width value (`Int`
     // and friends, `Bool`, `Char`, `Float64`).
-    fun isScalarName(name: Str): Bool {
+    fun isScalarName(name: *Str): Bool {
         when (name) {
             "Bool", "Char", "Int",
             "Int8", "Int16", "Int32", "Int64",
@@ -1013,15 +1013,15 @@ data class Emitter(
             if (xmlIsEmpty(fieldType)) {
                 this.fail(
                     field,
-                    "unsupported: field '" + xmlAttr(field, AstNodeAttributeKind.Name) + "' without a type"
+                    fmtStr("unsupported: field '|' without a type", xmlAttr(field, AstNodeAttributeKind.Name))
                 )
                 return
             }
-            var param: Str = this.type(fieldType) + " " + xmlAttr(field, AstNodeAttributeKind.Name)
+            var param: Str = fmtStr("| |", this.type(fieldType), xmlAttr(field, AstNodeAttributeKind.Name))
             params.append(param)
             var value: Str = xmlAttr(field, AstNodeAttributeKind.Name)
             if (!this.factoryParamByValue(fieldType)) {
-                value = "std::move(" + value + ")"
+                value = fmtStr("std::move(|)", value)
             }
             values.append(value)
         }
@@ -1044,7 +1044,7 @@ data class Emitter(
         for (*field in fields) {
             this.line(
                 1,
-                this.type(xmlChild(field, AstNodeKind.Type)) + " " + xmlAttr(field, AstNodeAttributeKind.Name) + ";"
+                fmtStr("| |;", this.type(xmlChild(field, AstNodeKind.Type)), xmlAttr(field, AstNodeAttributeKind.Name))
             )
         }
         this.line(0, "};")
@@ -1055,14 +1055,19 @@ data class Emitter(
         // an emitted constructor.
         var target: Str = emittedName
         if (typeParams.size() > 0) {
-            target = emittedName + "<" + cgJoin(typeParams, ", ") + ">"
+            target = fmtStr("|<|>", emittedName, cgJoin(typeParams, ", "))
         }
         if (tmpl != "") {
             this.line(0, tmpl)
         }
         this.line(
-            0, target + " " + this.qualify(this.typePackage(name), "_make_" + name)
-                    + "(" + cgJoin(params, ", ") + ") {"
+            0,
+            fmtStr(
+                "| |(|) {",
+                target,
+                this.qualify(this.typePackage(name), "_make_" + name),
+                cgJoin(params, ", ")
+            )
         )
         this.line(1, fmtStr("return |{|};", target, cgJoin(values, ", ")))
         this.line(0, "}")
@@ -1087,7 +1092,9 @@ data class Emitter(
         this.line(0, "};")
     }
 
-    // A checked `Enum.fromInt(Int): Opt<Enum>` helper (an if-chain, not a switch).
+    // A checked `Enum.fromInt(Int): Opt<Enum>` helper (an if-chain, not a switch). An
+    // enum whose members run 0, 1, 2, ... needs no chain at all: the value *is* the
+    // member's index, so one range test and a cast is the whole check.
     fun emitEnumConversion(decl: *AstXmlNode): Unit {
         val typeParams: List<Str> = xmlTypeParamNames(decl)
         if (typeParams.size() > 0) {
@@ -1095,31 +1102,46 @@ data class Emitter(
         }
         val enumName: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
         val emittedName: Str = this.qualify(this.typePackage(enumName), enumName)
+        val fromIntName: Str =
+            this.qualify(this.typePackage(enumName), "simse_" + enumName + "_fromInt")
         val members: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.EnumMember)
         var values: List<Int> = List<Int>()
         var names: List<Str> = List<Str>()
         var next: Int = 0
+        var dense: Bool = members.size() > 0
         for (*member in members) {
             if (xmlAttr(member, AstNodeAttributeKind.HasValue) == "true") {
                 next = xmlIntAttr(member, AstNodeAttributeKind.Value, 0)
             }
             values.append(next)
+            if (next != values.size() - 1) {
+                dense = false
+            }
             names.append(xmlAttr(member, AstNodeAttributeKind.Name))
             next = next + 1
         }
-        this.line(
-            0, "inline Opt<" + emittedName + "> "
-                    + this.qualify(this.typePackage(enumName), "simse_" + enumName + "_fromInt")
-                    + "(Int value) {"
-        )
-        var k: Int = 0
-        while (k < names.size()) {
+        this.line(0, fmtStr("inline Opt<|> |(Int value) {", emittedName, fromIntName))
+        if (dense) {
             this.line(
-                1, "if (value == " + values[k].toString() + ") return Opt<"
-                        + emittedName + ">::some(" + emittedName + "::"
-                        + names[k] + ");"
+                1,
+                fmtStr(
+                    "if (value >= 0 && value <= |) return Opt<|>::some((|) value);",
+                    (names.size() - 1).toString(),
+                    emittedName,
+                    emittedName
+                )
             )
-            k = k + 1
+        } else {
+            var k: Int = 0
+            while (k < names.size()) {
+                this.line(
+                    1, fmtStr(
+                        "if (value == |) return Opt<|>::some(|::|);",
+                        values[k].toString(), emittedName, emittedName, names[k]
+                    )
+                )
+                k = k + 1
+            }
         }
         this.line(1, fmtStr("return Opt<|>::none();", emittedName))
         this.line(0, "}")
@@ -1130,7 +1152,7 @@ data class Emitter(
         if (xmlIsEmpty(target)) {
             this.fail(
                 decl,
-                "unsupported: typealias '" + xmlAttr(decl, AstNodeAttributeKind.Name) + "' without a target type"
+                fmtStr("unsupported: typealias '|' without a target type", xmlAttr(decl, AstNodeAttributeKind.Name))
             )
             return
         }
@@ -1146,11 +1168,14 @@ data class Emitter(
         }
         this.line(
             0,
-            "using " + this.qualify(
-                this.typePackage(xmlAttr(decl, AstNodeAttributeKind.Name)),
-                xmlAttr(decl, AstNodeAttributeKind.Name)
+            fmtStr(
+                "using | = |;",
+                this.qualify(
+                    this.typePackage(xmlAttr(decl, AstNodeAttributeKind.Name)),
+                    xmlAttr(decl, AstNodeAttributeKind.Name)
+                ),
+                targetText
             )
-                    + " = " + targetText + ";"
         )
     }
 
@@ -1165,8 +1190,8 @@ data class Emitter(
             this.setActiveTypeParams(xmlTypeParamNames(decl))
             if (nativeInfo.symbol.find("::") != -1) {
                 this.fail(
-                    decl, "unsupported: namespaced native symbol '" + nativeInfo.symbol
-                            + "' needs a global wrapper"
+                    decl,
+                    fmtStr("unsupported: namespaced native symbol '|' needs a global wrapper", nativeInfo.symbol)
                 )
                 return
             }
@@ -1184,8 +1209,11 @@ data class Emitter(
             val paramType: AstXmlNode = xmlChild(param, AstNodeKind.Type)
             if (xmlIsEmpty(paramType)) {
                 this.fail(
-                    param, "unsupported: native parameter '" + xmlAttr(param, AstNodeAttributeKind.Name)
-                            + "' without a type"
+                    param,
+                    fmtStr(
+                        "unsupported: native parameter '|' without a type",
+                        xmlAttr(param, AstNodeAttributeKind.Name)
+                    )
                 )
                 return
             }
@@ -1199,9 +1227,9 @@ data class Emitter(
             }
             val pk: AstNodeCategory = xmlKind(paramType)
             if (pk == AstNodeCategory.TypePointer || pk == AstNodeCategory.TypeReference) {
-                paramTexts.append(mapped + " " + name)
+                paramTexts.append(fmtStr("| |", mapped, name))
             } else {
-                paramTexts.append("const " + mapped + "& " + name)
+                paramTexts.append(fmtStr("const |& |", mapped, name))
             }
         }
             this.sourceComment(decl)
@@ -1224,7 +1252,7 @@ data class Emitter(
 // symbol. The lookup is over the explicit-`this` natives, which are already keyed by
 // the declaration's name and carry the receiver type and the symbol. Empty when there
 // is no such declaration, which is what the caller falls back on.
-    fun staticCallSymbol(receiverName: Str, calleeName: Str): Str {
+    fun staticCallSymbol(receiverName: *Str, calleeName: *Str): Str {
         val extensions: Opt<List<CgNativeExt>> = this.nativeExtensions.get(calleeName)
         if (!extensions.hasValue()) {
             return ""
@@ -1245,7 +1273,7 @@ data class Emitter(
 // site never spells the prelude's own name for it (`Resources.get` is the shape that
 // made this necessary, and a program naming an RTL symbol directly -
 // `native("simse_str_trim") fun trimmedText(...)` - is the other).
-    fun collectNames(node: AstXmlNode, names: *Dictionary<Str, Bool>): Unit {
+    fun collectNames(node: *AstXmlNode, names: *Dictionary<Str, Bool>): Unit {
         // The string literals ride the same walk: this is the emitter's one pass over the
         // whole program, so the table below covers every body it will emit. A literal the
         // *lowering* invents is not in the parsed program and keeps its own spelling.
@@ -1489,7 +1517,7 @@ data class Emitter(
 // the program: the per-overload half of the rule above. When one of the group *is*
 // attributable the type test is what tells the rest apart (`List`'s `smToYield` is not
 // `Span`'s), so the members the program does not name stay unemitted.
-    fun preludeReceiverNamed(name: Str): Bool {
+    fun preludeReceiverNamed(name: *Str): Bool {
         var i: Int = 0
         while (i < this.functions.size()) {
             val other: *CgFn = *this.functions[i]
@@ -1620,7 +1648,7 @@ data class Emitter(
         if (outer == "") {
             return name
         }
-        return outer + "_" + name
+        return fmtStr("|_|", outer, name)
     }
 
     // The outer name of a type, ignoring handles and arguments: `*List<Int>` and
@@ -1652,7 +1680,7 @@ data class Emitter(
     // Every type name in a type node, nesting included: `List<Array<Int>>` names both.
 // The roles are the positions a type occupies (`Type` for a declaration's, `Inner`
 // for a handle's pointee, ...), which is what makes this the same set in both rings.
-    fun collectTypeNames(node: AstXmlNode): Unit {
+    fun collectTypeNames(node: *AstXmlNode): Unit {
         val role: AstNodeKind = node.name
         if (role != AstNodeKind.Type && role != AstNodeKind.Inner && role != AstNodeKind.TypeArg
             && role != AstNodeKind.ReturnType && role != AstNodeKind.TargetType
@@ -1718,7 +1746,7 @@ data class Emitter(
         val yieldClass: Str = this.qualify(fn.packageName, this.machineName(decl)) + "_yieldable"
         var yieldType: Str = yieldClass
         if (yielding && fn.templateParams.size() > 0) {
-            yieldType = yieldClass + "<" + cgJoin(fn.templateParams, ", ") + ">"
+            yieldType = fmtStr("|<|>", yieldClass, cgJoin(fn.templateParams, ", "))
         }
         var ret: Str = "void"
         if (isMain) {
@@ -1752,7 +1780,7 @@ data class Emitter(
                 if (xmlIsEmpty(paramType)) {
                     this.fail(
                         param,
-                        "unsupported: parameter '" + xmlAttr(param, AstNodeAttributeKind.Name) + "' without a type"
+                        fmtStr("unsupported: parameter '|' without a type", xmlAttr(param, AstNodeAttributeKind.Name))
                     )
                     return
                 }
@@ -1762,7 +1790,7 @@ data class Emitter(
                     selfK = this.kindOf(paramType)
                     selfTypePtr = paramType
                 } else {
-                    params.append(this.type(paramType) + " " + xmlAttr(param, AstNodeAttributeKind.Name))
+                    params.append(fmtStr("| |", this.type(paramType), xmlAttr(param, AstNodeAttributeKind.Name)))
                 }
                 if (this.failed) {
                     return
@@ -1779,7 +1807,7 @@ data class Emitter(
         if (!isMain) {
             fnName = this.qualify(fn.packageName, fn.name)
         }
-        var signature: Str = ret + " " + fnName + "(" + cgJoin(params, ", ") + ")"
+        var signature: Str = fmtStr("| |(|)", ret, fnName, cgJoin(params, ", "))
         if (mainArgs) {
             signature = "int main(int argc, char** argv)"
         }
@@ -1926,7 +1954,7 @@ data class Emitter(
 
 // ---- lightweight type inference ---------------------------------------
 
-    fun namedType(name: Str): AstXmlNode {
+    fun namedType(name: *Str): AstXmlNode {
         return this.namedTypeExpr(name)
     }
 
@@ -2090,7 +2118,7 @@ data class Emitter(
         return false
     }
 
-    fun functionReturn(name: Str): AstXmlNode {
+    fun functionReturn(name: *Str): AstXmlNode {
         for (*fn in this.functions) {
             if (fn.name == name) {
                 val ret: AstXmlNode = xmlChild(fn.decl, AstNodeKind.ReturnType)
@@ -2472,7 +2500,7 @@ data class Emitter(
     // Index into `functions` of the first Simse-declared receiver function with this
 // name, or -1: used when the receiver's own type could not be inferred but the
 // callee is known.
-    fun findReceiverFnByName(name: Str): Int {
+    fun findReceiverFnByName(name: *Str): Int {
         var i: Int = 0
         while (i < this.functions.size()) {
             val fn: *CgFn = *this.functions[i]
@@ -2488,7 +2516,7 @@ data class Emitter(
     }
 
     // Index into `functions` of a Simse extension matching the receiver, or -1.
-    fun findExtensionFn(name: Str, recvExpr: *AstXmlNode): Int {
+    fun findExtensionFn(name: *Str, recvExpr: *AstXmlNode): Int {
         val recvType: AstXmlNode = this.inferType(recvExpr)
         val recv: AstXmlNode = this.pointee(recvType)
         if (xmlIsEmpty(recv)) {
@@ -2515,7 +2543,7 @@ data class Emitter(
     }
 
     // Index into `nativeExtensions[name]` of a matching receiver, or -1.
-    fun findNativeExt(name: Str, recvExpr: *AstXmlNode): Int {
+    fun findNativeExt(name: *Str, recvExpr: *AstXmlNode): Int {
         if (!this.nativeExtensions.has(name)) {
             return -1
         }
@@ -2536,7 +2564,7 @@ data class Emitter(
         return -1
     }
 
-    fun memberAccess(base: *AstXmlNode, name: Str): Str {
+    fun memberAccess(base: *AstXmlNode, name: *Str): Str {
         var arrow: Bool = false
         val baseType: AstXmlNode = this.inferType(base)
         if (xmlKind(base) == AstNodeCategory.ExprName
@@ -2637,7 +2665,7 @@ data class Emitter(
 
     // A non-native function with the given name and parameter count. A method is not
 // one: a plain call reaches only what the module declares.
-    fun findFunction(name: Str, argCount: Int): AstXmlNode {
+    fun findFunction(name: *Str, argCount: Int): AstXmlNode {
         var i: Int = 0
         while (i < this.functions.size()) {
             val fn: *CgFn = *this.functions[i]
@@ -2726,7 +2754,7 @@ data class Emitter(
             AstNodeCategory.ExprGenericName -> {
                 this.fail(
                     e,
-                    "unsupported: generic-qualified expression '" + xmlAttr(e, AstNodeAttributeKind.Name) + "<...>'"
+                    fmtStr("unsupported: generic-qualified expression '|<...>'", xmlAttr(e, AstNodeAttributeKind.Name))
                 )
                 return "/*unsupported*/"
             }
@@ -2743,9 +2771,10 @@ data class Emitter(
                     )
                 ) {
                     val enumName: Str = xmlAttr(lhs, AstNodeAttributeKind.Name)
-                    return this.qualify(this.typePackage(enumName), enumName) + "::" + xmlAttr(
-                        e,
-                        AstNodeAttributeKind.Name
+                    return fmtStr(
+                        "|::|",
+                        this.qualify(this.typePackage(enumName), enumName),
+                        xmlAttr(e, AstNodeAttributeKind.Name)
                     )
                 }
                 return this.memberAccess(lhs, xmlAttr(e, AstNodeAttributeKind.Name))
@@ -2774,7 +2803,7 @@ data class Emitter(
                         this.expr(xmlChild(e, AstNodeKind.Index), 0, xmlEmptyNode())
                     )
                 }
-                return baseExpr + "[" + this.expr(xmlChild(e, AstNodeKind.Index), 0, xmlEmptyNode()) + "]"
+                return fmtStr("|[|]", baseExpr, this.expr(xmlChild(e, AstNodeKind.Index), 0, xmlEmptyNode()))
             }
 
             AstNodeCategory.ExprUnary -> {
@@ -2805,7 +2834,7 @@ data class Emitter(
                         if (op == "!=") {
                             return fmtStr("(|)", hasValue)
                         }
-                        this.fail(e, "unsupported: Opt-vs-null comparison '" + op + "'")
+                        this.fail(e, fmtStr("unsupported: Opt-vs-null comparison '|'", op))
                         return "/*unsupported*/"
                     }
                 }
@@ -2818,7 +2847,7 @@ data class Emitter(
                 if (xmlKind(rhs) == AstNodeCategory.ExprNullLit) {
                     rhsExpected = this.inferType(lhs)
                 }
-                return this.expr(lhs, p, lhsExpected) + " " + op + " " + this.expr(rhs, p + 1, rhsExpected)
+                return fmtStr("| | |", this.expr(lhs, p, lhsExpected), op, this.expr(rhs, p + 1, rhsExpected))
             }
 
             AstNodeCategory.ExprLambda -> {
@@ -2839,10 +2868,10 @@ data class Emitter(
                         ) == "List"
                         && xmlCount(operandNode, AstNodeKind.Arg) == 0
                     ) {
-                        return "makeList<" + this.typeArgsString(
-                            "List",
-                            xmlChildren(callee, AstNodeKind.TypeArg)
-                        ) + ">()"
+                        return fmtStr(
+                            "makeList<|>()",
+                            this.typeArgsString("List", xmlChildren(callee, AstNodeKind.TypeArg))
+                        )
                     }
                 }
                 val operand: Str = this.expr(operandNode, 0, xmlEmptyNode())
@@ -2931,8 +2960,12 @@ data class Emitter(
                 if (this.dataClassNames.has(name)) {
                     calleeName = this.qualify(this.typePackage(name), "_make_" + name)
                 }
-                return calleeName + "<" + this.typeArgsString(name, xmlChildren(callee, AstNodeKind.TypeArg))
-                +">(" + cgJoin(args, ", ") + ")"
+                return fmtStr(
+                    "|<|>(|)",
+                    calleeName,
+                    this.typeArgsString(name, xmlChildren(callee, AstNodeKind.TypeArg)),
+                    cgJoin(args, ", ")
+                )
             }
 
             AstNodeCategory.ExprName -> {
@@ -2942,7 +2975,7 @@ data class Emitter(
                     if (argNodes.size() > 0) {
                         arg = this.expr(argNodes[0], 0, xmlEmptyNode())
                     }
-                    var s: Str = "std::cout << std::boolalpha << (" + arg + ")"
+                    var s: Str = fmtStr("std::cout << std::boolalpha << (|)", arg)
                     if (name == "println") {
                         s = s + " << std::endl"
                     }
@@ -2987,7 +3020,7 @@ data class Emitter(
                 if (this.dataClassNames.has(name)) {
                     calleeName = this.qualify(this.typePackage(name), "_make_" + name)
                 }
-                return calleeName + "(" + cgJoin(args, ", ") + ")"
+                return fmtStr("|(|)", calleeName, cgJoin(args, ", "))
             }
 
             AstNodeCategory.ExprMember -> {
@@ -3021,8 +3054,11 @@ data class Emitter(
                     && this.enumNames.has(xmlAttr(receiverExpr, AstNodeAttributeKind.Name))
                 ) {
                     val enumName: Str = xmlAttr(receiverExpr, AstNodeAttributeKind.Name)
-                    return this.qualify(this.typePackage(enumName), "simse_" + enumName + "_fromInt")
-                    +"(" + cgJoin(args, ", ") + ")"
+                    return fmtStr(
+                        "|(|)",
+                        this.qualify(this.typePackage(enumName), fmtStr("simse_|_fromInt", enumName)),
+                        cgJoin(args, ", ")
+                    )
                 }
 
                 // The `Resources` API (`cppsrc/rtl/resources.kt`, specs/resources.md): a
@@ -3035,14 +3071,18 @@ data class Emitter(
                         xmlAttr(receiverExpr, AstNodeAttributeKind.Name), calleeText
                     )
                     if (staticSymbol != "") {
-                        return staticSymbol + "(" + cgJoin(args, ", ") + ")"
+                        return fmtStr("|(|)", staticSymbol, cgJoin(args, ", "))
                     }
                 }
                 if (xmlKind(receiverExpr) == AstNodeCategory.ExprGenericName) {
                     val genericName: Str = xmlAttr(receiverExpr, AstNodeAttributeKind.Name)
-                    return this.qualify(this.typePackage(genericName), genericName) + "<"
-                    +this.typeArgsString(genericName, xmlChildren(receiverExpr, AstNodeKind.TypeArg))
-                    +">::" + calleeText + "(" + cgJoin(args, ", ") + ")"
+                    return fmtStr(
+                        "|<|>::|(|)",
+                        this.qualify(this.typePackage(genericName), genericName),
+                        this.typeArgsString(genericName, xmlChildren(receiverExpr, AstNodeKind.TypeArg)),
+                        calleeText,
+                        cgJoin(args, ", ")
+                    )
                 }
 
                 val receiverType: AstXmlNode = this.inferType(receiverExpr)
@@ -3057,7 +3097,7 @@ data class Emitter(
                             all = all + ", " + args[a]
                             a = a + 1
                         }
-                        return this.qualify(fn.packageName, fn.name) + "(" + all + ")"
+                        return fmtStr("|(|)", this.qualify(fn.packageName, fn.name), all)
                     }
                     val extIndex: Int = this.findNativeExt(calleeText, receiverExpr)
                     if (extIndex >= 0) {
@@ -3069,9 +3109,9 @@ data class Emitter(
                             all = all + ", " + args[a]
                             a = a + 1
                         }
-                        return ext.symbol + "(" + all + ")"
+                        return fmtStr("|(|)", ext.symbol, all)
                     }
-                    return this.memberAccess(receiverExpr, calleeText) + "(" + cgJoin(args, ", ") + ")"
+                    return fmtStr("|(|)", this.memberAccess(receiverExpr, calleeText), cgJoin(args, ", "))
                 }
 
                 if (this.receiverFnNames.has(calleeText)) {
@@ -3088,7 +3128,7 @@ data class Emitter(
                         all = all + ", " + args[a]
                         a = a + 1
                     }
-                    return this.qualify(this.functionPackage(calleeText), calleeText) + "(" + all + ")"
+                    return fmtStr("|(|)", this.qualify(this.functionPackage(calleeText), calleeText), all)
                 }
                 if (this.nativeExtensions.has(calleeText)) {
                     val extensions: List<CgNativeExt> = this.nativeExtensions.get(calleeText).value()
@@ -3099,10 +3139,10 @@ data class Emitter(
                             all = all + ", " + args[a]
                             a = a + 1
                         }
-                        return extensions[0].symbol + "(" + all + ")"
+                        return fmtStr("|(|)", extensions[0].symbol, all)
                     }
                 }
-                return this.memberAccess(receiverExpr, calleeText) + "(" + cgJoin(args, ", ") + ")"
+                return fmtStr("|(|)", this.memberAccess(receiverExpr, calleeText), cgJoin(args, ", "))
             }
         }
         this.fail(e, "unsupported: call target")
@@ -3209,7 +3249,7 @@ data class Emitter(
 
 // ---- entry point ----------------------------------------------------------
 
-fun newEmitter(inputs: List<CgInput>, resourceStored: List<Str>): Emitter {
+fun newEmitter(inputs: *List<CgInput>, resourceStored: *List<Str>): Emitter {
     return Emitter(
         inputs,
         resourceStored,
@@ -3259,7 +3299,7 @@ fun newEmitter(inputs: List<CgInput>, resourceStored: List<Str>): Emitter {
 // API at start-up; an empty list emits neither. A compile-only section (`!`) is not in it - the
 // compiler reads that, the program does not carry it - and the *generated* C++ a resource holds
 // is `cppsrc/sourcegen`'s business (impl_specs/generators.md).
-fun emitProgram(inputs: List<CgInput>, resourceStored: List<Str>): Res<Str> {
+fun emitProgram(inputs: *List<CgInput>, resourceStored: *List<Str>): Res<Str> {
     var emitter: Emitter = newEmitter(inputs, resourceStored)
     return emitter.run()
 }

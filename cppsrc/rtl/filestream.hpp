@@ -9,11 +9,10 @@
 #include "span.hpp"
 #include "types.hpp"
 
-// Reading a file line by line. The Simse surface is the prelude file
-// cppsrc/rtl/fs.simse; `simse_fileStream_open` is defined in
-// cppsrc/native/Native.cpp (linked as simse_native), and the operations below are
-// the struct's own methods because the emitter calls a handle's methods as members
-// (`stream.readLine()` on a `*FileStream` becomes `(*stream).readLine()`).
+// Reading a file line by line. The Simse surface is the prelude file cppsrc/rtl/fs.kt; the
+// struct's own methods below are what the emitter calls as members (`stream.readLine()` on a
+// `*FileStream` becomes `(*stream).readLine()`), and only `simse_fileStream_open` is a free
+// function - its prototype and definition are the `fileio` section of cppsrc/rtl/_res.md.
 //
 // The handle is a raw pointer: `openFileStream` creates it (null when the file
 // cannot be opened), `close` releases it - there is no destructor to run for a handle
@@ -149,5 +148,3 @@ private:
         if (count > 0) std::memcpy(buffer->data(), text, (std::size_t) count);
     }
 };
-
-FileStream* simse_fileStream_open(const Str& path);

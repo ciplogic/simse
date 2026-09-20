@@ -91,6 +91,11 @@ format("k", "a", "b")            // everything past the shape packs
 elements allocates nothing**: it lives in the temporary's inline buffer.
 - A `*List<T>` parameter is passed the **address** of that temporary, which is a slot of
 the caller's frame - so a packed call copies each element once and the list not at all.
+- **Each element is a value**, so it converts the way a by-value parameter's argument does
+  (`memory-model.md`, "Automatic dereference"): a handle among the trailing arguments is
+  read through to its pointee instead of being stored as a pointer. An accessor's borrow can
+  therefore be packed without the caller spelling `*a` - `format(template, a, b)` accepts a
+  `*Str` `a` - and it is the shape `fmtStr`'s items have.
 - **One argument for one parameter is the list itself**, whatever its handle form:
   `addAll(*xs)` passes the list, it does not build a one-element list of a list. That is
   what tells `addAll(*xs)` from `addAll(1)` when both have one argument.

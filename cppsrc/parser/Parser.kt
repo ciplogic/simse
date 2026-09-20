@@ -77,16 +77,18 @@ data class Parser(
         return false
     }
 
-    fun setError(pos: SourcePos, message: Str): Unit {
+    fun setError(pos: SourcePos, message: *Str): Unit {
         if (this.failed) {
             return
         }
         this.failed = true
-        this.error = this.file + ":" + pos.line.toString() + ":" + pos.column.toString()
-        +": " + message
+        this.error = fmtStr(
+            "|:|:|: |",
+            this.file, pos.line.toString(), pos.column.toString(), message
+        )
     }
 
-    fun fail(message: Str): Bool {
+    fun fail(message: *Str): Bool {
         this.setError(this.peek(0).pos, message)
         return false
     }
@@ -95,7 +97,7 @@ data class Parser(
         if (this.matchText(text)) {
             return true
         }
-        return this.fail("expected '" + text + "'")
+        return this.fail(fmtStr("expected '|'", text))
     }
 
     fun expectName(): Str {
@@ -654,7 +656,7 @@ data class Parser(
     // the `hasBody` check below rejects. The arguments are kept as they were written
     // (a string literal still has its quotes), so the two spellings of one declaration
     // - `native(sym)` and `@SmGen("cpp", sym)` - fill exactly the same attributes.
-    fun parseFunction(isNative: Bool, attrName: Str, attrArgs: List<Str>): AstXmlNode {
+    fun parseFunction(isNative: Bool, attrName: *Str, attrArgs: *List<Str>): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
         var nativeSymbol: Str = ""
         var hasNativeSymbol: Bool = false
@@ -1101,7 +1103,7 @@ data class Parser(
             "++", "--" -> {
                 // A step's value is the assignment's, so there is nothing for a *prefix* one
                 // to hand back: it has to stand on its own as a statement.
-                this.fail("`" + text + "` stands on its own as a statement (`i" + text + "`)")
+                this.fail(fmtStr("`|` stands on its own as a statement (`i|`)", text, text))
                 return this.emptyNode()
             }
         }
@@ -1254,7 +1256,7 @@ data class Parser(
 
     // `subj == a || subj == b`: one condition for an arm, so an arm with several
     // labels emits its body once and any expression is a legal label.
-    fun whenCondition(subject: Str, labels: *List<AstXmlNode>, pos: SourcePos): ExprNode {
+    fun whenCondition(subject: *Str, labels: *List<AstXmlNode>, pos: SourcePos): ExprNode {
         var cond: ExprNode = this.binaryExprAt(
             "==", this.nameExprAt(subject, pos),
             ExprNode(labels[0], pos.line, pos.column), pos
@@ -1447,7 +1449,7 @@ data class Parser(
     // carries the `for` token's position, so a diagnostic points at the line the user
     // wrote; `Parser::parseFor` in the C++ ring builds the same shape the same way.
 
-    fun varDeclNode(name: Str, isVar: Bool, typeNode: AstXmlNode, init: ExprNode, pos: SourcePos): AstXmlNode {
+    fun varDeclNode(name: *Str, isVar: Bool, typeNode: *AstXmlNode, init: *ExprNode, pos: SourcePos): AstXmlNode {
         var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
         attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
         attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsVar, boolText(isVar)))
@@ -1461,13 +1463,13 @@ data class Parser(
         return node
     }
 
-    fun namedTypeNode(name: Str, pos: SourcePos): AstXmlNode {
+    fun namedTypeNode(name: *Str, pos: SourcePos): AstXmlNode {
         var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
         attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
         return AstXmlNode(AstNodeKind.Type, AstNodeCategory.TypeNamed, attrs, Array<AstXmlNode>())
     }
 
-    fun assignNode(target: ExprNode, value: ExprNode, pos: SourcePos): AstXmlNode {
+    fun assignNode(target: *ExprNode, value: *ExprNode, pos: SourcePos): AstXmlNode {
         var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
         attrs.append(AstNodeAttribute(AstNodeAttributeKind.Op, "="))
         var node: AstXmlNode = AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtAssign, attrs, Array<AstXmlNode>())
@@ -1485,7 +1487,7 @@ data class Parser(
         )
     }
 
-    fun ifNode(cond: ExprNode, thenBody: List<AstXmlNode>, pos: SourcePos): AstXmlNode {
+    fun ifNode(cond: *ExprNode, thenBody: *List<AstXmlNode>, pos: SourcePos): AstXmlNode {
         var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
         var node: AstXmlNode = AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtIf, attrs, Array<AstXmlNode>())
         this.attach(node, AstNodeKind.Cond, cond.node)
@@ -1493,7 +1495,7 @@ data class Parser(
         return node
     }
 
-    fun whileNode(cond: ExprNode, body: List<AstXmlNode>, pos: SourcePos): AstXmlNode {
+    fun whileNode(cond: *ExprNode, body: *List<AstXmlNode>, pos: SourcePos): AstXmlNode {
         var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
         var node: AstXmlNode = AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtWhile, attrs, Array<AstXmlNode>())
         this.attach(node, AstNodeKind.Cond, cond.node)
@@ -1501,7 +1503,7 @@ data class Parser(
         return node
     }
 
-    fun nameExprAt(text: Str, pos: SourcePos): ExprNode {
+    fun nameExprAt(text: *Str, pos: SourcePos): ExprNode {
         var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
         attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, text))
         return ExprNode(
@@ -1531,7 +1533,7 @@ data class Parser(
         )
     }
 
-    fun unaryExprAt(op: Str, operand: ExprNode, pos: SourcePos): ExprNode {
+    fun unaryExprAt(op: *Str, operand: *ExprNode, pos: SourcePos): ExprNode {
         var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
         attrs.append(AstNodeAttribute(AstNodeAttributeKind.Op, op))
         var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprUnary, attrs, Array<AstXmlNode>())
@@ -1539,7 +1541,7 @@ data class Parser(
         return ExprNode(node, pos.line, pos.column)
     }
 
-    fun binaryExprAt(op: Str, lhs: ExprNode, rhs: ExprNode, pos: SourcePos): ExprNode {
+    fun binaryExprAt(op: *Str, lhs: *ExprNode, rhs: *ExprNode, pos: SourcePos): ExprNode {
         var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
         attrs.append(AstNodeAttribute(AstNodeAttributeKind.Op, op))
         var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprBinary, attrs, Array<AstXmlNode>())
@@ -1550,7 +1552,7 @@ data class Parser(
 
     // `<target>.<wrap>()`: the wrap the `for` forms put around what they iterate
     // (`smToYield`, or `smToYieldPtr` for the `*v` form).
-    fun smToYieldCall(target: ExprNode, pos: SourcePos, wrap: Str): ExprNode {
+    fun smToYieldCall(target: *ExprNode, pos: SourcePos, wrap: *Str): ExprNode {
         var memberAttrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
         memberAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, wrap))
         var member: AstXmlNode =
@@ -1563,7 +1565,7 @@ data class Parser(
     }
 
     // `<target>.<method>()`: the machine's `next`, `value`, `hasValue`.
-    fun methodCallAt(target: Str, method: Str, pos: SourcePos): ExprNode {
+    fun methodCallAt(target: *Str, method: *Str, pos: SourcePos): ExprNode {
         var memberAttrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
         memberAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, method))
         var member: AstXmlNode =
@@ -2101,7 +2103,7 @@ fun joinNames(names: *List<Str>): Str {
 
 // Binding powers for the Pratt expression parser. Left-associative (the
 // recursive call uses bp + 1).
-fun binaryBindingPower(op: Str): Int {
+fun binaryBindingPower(op: *Str): Int {
     when (op) {
         "||" -> {
             return 10
@@ -2150,7 +2152,7 @@ fun binaryBindingPower(op: Str): Int {
     return -1
 }
 
-fun isAssignOp(op: Str): Bool {
+fun isAssignOp(op: *Str): Bool {
     return op == "=" || op == "+=" || op == "-="
             || op == "*=" || op == "/=" || op == "%="
             || op == "&=" || op == "|=" || op == "^="
@@ -2158,12 +2160,12 @@ fun isAssignOp(op: Str): Bool {
 }
 
 // The step operators: `i++` and `i--`, which are statements rather than values.
-fun isStepOp(op: Str): Bool {
+fun isStepOp(op: *Str): Bool {
     return op == "++" || op == "--"
 }
 
 // The compound assignment a step is: `i++` is `i += 1`, `i--` is `i -= 1`.
-fun stepAssignOp(op: Str): Str {
+fun stepAssignOp(op: *Str): Str {
     if (op == "++") {
         return "+="
     }
@@ -2173,7 +2175,7 @@ fun stepAssignOp(op: Str): Str {
 // ---- entry points ---------------------------------------------------------
 
 // Parses a pre-filtered token cursor (with a synthetic Eof already appended).
-fun parseModule(cursor: Span<Token>, fileName: Str): Res<AstXmlNode> {
+fun parseModule(cursor: Span<Token>, fileName: *Str): Res<AstXmlNode> {
     var parser: Parser = Parser(cursor, false, "", fileName, 1, 0)
     val root: AstXmlNode = parser.parseRoot()
     if (parser.failed) {
@@ -2187,7 +2189,7 @@ fun parseModule(cursor: Span<Token>, fileName: Str): Res<AstXmlNode> {
 // separates nothing either: a condition or an argument list may be wrapped, and a
 // formatter is free to do it (Kotlin's rule, and the reason a Kotlin-kind formatter can
 // be pointed at these files, specs/declarations.md).
-fun parseModule(tokens: *List<Token>, fileName: Str): Res<AstXmlNode> {
+fun parseModule(tokens: *List<Token>, fileName: *Str): Res<AstXmlNode> {
     var toks: List<Token> = List<Token>()
     var bracketed: Int = 0
     var i: Int = 0

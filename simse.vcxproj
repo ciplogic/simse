@@ -2,10 +2,10 @@
 <!--
   simse.vcxproj - the profiling project (`simse.slnx` is its solution).
 
-  It compiles the *published bootstrap*, `cppsrc\simse_bootstrap.cpp`, together with the
-  runtime's one hand-written translation unit `cppsrc\rtl\native.cpp` - exactly the pair
+  It compiles the *published bootstrap*, `cppsrc\simse_bootstrap.cpp` - the one file
   `build.js` compiles - so Visual Studio's profiler (Debug > Performance Profiler, Alt+F2) or
-  a debugger can be pointed at the compiler itself.
+  a debugger can be pointed at the compiler itself. The runtime is generated into that file
+  (`cppsrc\rtl\_res.md`), so there is no second translation unit to add.
 
   Why the bootstrap rather than the file `build.js` generates (`simse_out.cpp`): the bootstrap
   is checked in, so this project always has a source and needs no generation step. The
@@ -128,10 +128,8 @@
   </ItemDefinitionGroup>
 
   <ItemGroup>
-    <!-- The published amalgamation and the runtime's one hand-written .cpp: the same pair
-         `build.js` compiles. -->
+    <!-- The published amalgamation: one file, the runtime included. -->
     <ClCompile Include="cppsrc\simse_bootstrap.cpp" />
-    <ClCompile Include="cppsrc\rtl\native.cpp" />
   </ItemGroup>
   <ItemGroup>
     <!-- For navigation only: the amalgamation includes the RTL through simse.hpp. -->

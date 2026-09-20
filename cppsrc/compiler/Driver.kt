@@ -38,7 +38,7 @@ import sourcegen
 // The directories the compiler's *own* resources are read from: the prelude's directory, or -
 // when `--prelude` names a single file - the directory that file is in, so the `_res.md`
 // beside it is still found (`resLoad` scans directories).
-fun driverResourceRoots(prelude: Str): List<Str> {
+fun driverResourceRoots(prelude: *Str): List<Str> {
     var roots: List<Str> = List<Str>()
     if (pathIsDirectory(prelude)) {
         roots.append(prelude)
@@ -82,20 +82,20 @@ fun driverAppendDecls(target: *AstXmlNode, source: *AstXmlNode): Unit {
 // Reads, scans, and parses one file. The scanner error is prefixed with the file name,
 // and the whole raw token list goes to `parseModule`, which is where the trivia the
 // grammar never sees is dropped (spaces, comments, and a newline inside `(...)`).
-fun driverParseFile(fileName: Str): Res<AstXmlNode> {
+fun driverParseFile(fileName: *Str): Res<AstXmlNode> {
     return driverParseSource(readFile(fileName), fileName)
 }
 
 // The same for source text that is not a file: a generator's output. Its name is what
 // every diagnostic and source comment will call it.
-fun driverParseSource(text: Str, fileName: Str): Res<AstXmlNode> {
+fun driverParseSource(text: *Str, fileName: *Str): Res<AstXmlNode> {
     var scanner: Scanner = Scanner(getTokenRules(), 0, 1, 1, Str())
     scanner.setSource(text)
     var raw: List<Token> = List<Token>()
     while (true) {
         val result: Res<Token> = scanner.nextToken()
         if (!result.isOk()) {
-            return Res<AstXmlNode>.err(fileName + ": " + result.Error)
+            return Res<AstXmlNode>.err(fmtStr("|: |", fileName, result.Error))
         }
         if (result.Value.kind == TokenKind.Eof) {
             break
@@ -122,7 +122,7 @@ fun driverParseSource(text: Str, fileName: Str): Res<AstXmlNode> {
 // once; the kept files are sorted by canonical path so the order depends only on
 // the file set, not on how the files were specified (a scanned root vs an explicit
 // input).
-fun driverGatherFiles(moduleRoots: List<Str>, inputs: List<Str>, preludeCanon: List<Str>): List<Str> {
+fun driverGatherFiles(moduleRoots: *List<Str>, inputs: *List<Str>, preludeCanon: *List<Str>): List<Str> {
     var candidates: List<Str> = List<Str>()
     var r: Int = 0
     while (r < moduleRoots.size()) {
@@ -169,7 +169,7 @@ fun driverGatherFiles(moduleRoots: List<Str>, inputs: List<Str>, preludeCanon: L
 // appears twice has to be seen twice.
 
 // Every value of `key` in a manifest's text, in order, trimmed.
-fun manifestValues(text: Str, key: Str): List<Str> {
+fun manifestValues(text: *Str, key: *Str): List<Str> {
     var out: List<Str> = List<Str>()
     val lines: List<Str> = text.split("\n")
     var i: Int = 0
@@ -185,7 +185,7 @@ fun manifestValues(text: Str, key: Str): List<Str> {
 }
 
 // A root's or a module's manifest path.
-fun manifestFile(dir: Str): Str {
+fun manifestFile(dir: *Str): Str {
     return dir + "/simse.md"
 }
 
@@ -194,7 +194,7 @@ fun manifestFile(dir: Str): Str {
 // module's own keys does). A module that declares `sourcegen: true` ships source generators,
 // which need a compiler *extended* with them; that is not implemented, so the compilation is
 // dropped rather than compiled without them (`specs/simse-md.md`).
-fun driverExpandRoot(root: Str, out: *List<Str>): Res<Str> {
+fun driverExpandRoot(root: *Str, out: *List<Str>): Res<Str> {
     val file: Str = manifestFile(root)
     if (!pathExists(file)) {
         out.append(root)
@@ -203,7 +203,7 @@ fun driverExpandRoot(root: Str, out: *List<Str>): Res<Str> {
     val text: Str = readFile(file)
     // A root that declares generators is itself a module that ships them.
     if (manifestValues(text, "sourcegen").contains("true")) {
-        return Res<Str>.err("module '" + root + "' declares source generators, which this compiler cannot use yet")
+        return Res<Str>.err(fmtStr("module '|' declares source generators, which this compiler cannot use yet", root))
     }
     val modules: List<Str> = manifestValues(text, "module")
     if (modules.size() == 0) {
@@ -212,10 +212,10 @@ fun driverExpandRoot(root: Str, out: *List<Str>): Res<Str> {
     }
     var i: Int = 0
     while (i < modules.size()) {
-        val module: Str = root + "/" + modules[i]
+        val module: Str = fmtStr("|/|", root, modules[i])
         if (manifestValues(readFile(manifestFile(module)), "sourcegen").contains("true")) {
             return Res<Str>.err(
-                "module '" + module + "' declares source generators, which this compiler cannot use yet"
+                fmtStr("module '|' declares source generators, which this compiler cannot use yet", module)
             )
         }
         out.append(module)

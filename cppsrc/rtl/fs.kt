@@ -1,24 +1,36 @@
 // fs.kt
 //
-// Filesystem/IO natives for the self-hosted compiler driver (T23). Declarations
-// only: the C++ bodies are in cppsrc/native/Native.cpp and the prototypes are in
-// cppsrc/rtl/fs.hpp (included by simse.hpp). This file is loaded as part of the
-// prelude set, so the driver can use these without an import.
+// Filesystem/IO prelude declarations for the self-hosted compiler driver (T23). The C++ is
+// *generated*, not linked: each declaration names its symbol in the `fileio` section of
+// cppsrc/rtl/_res.md, which carries both the prototype and the definition, so a program that
+// uses one of these stays one translation unit (`impl_specs/native-interop.md`). This file is
+// loaded as part of the prelude set, so the driver can use these without an import.
 
 package rtl
 
 // Every `ext`-suffixed file under `dir`, recursively, sorted; empty when `dir` is
 // not a directory. Matches `common::filesInDir`.
-native("simse_listFiles") fun listFiles(dir: Str, ext: Str): List<Str>
+@SmGen("res", "fileio", "simse_listFiles")
+fun listFiles(dir: Str, ext: Str): List<Str>
 
 // Every `ext`-suffixed file directly under `dir`, sorted (import resolution).
-native("simse_listFilesDirect") fun listFilesDirect(dir: Str, ext: Str): List<Str>
+@SmGen("res", "fileio", "simse_listFilesDirect")
+fun listFilesDirect(dir: Str, ext: Str): List<Str>
 
-native("simse_writeFile") fun writeFile(path: Str, content: Str): Bool
-native("simse_pathCanonical") fun pathCanonical(path: Str): Str
-native("simse_pathIsDirectory") fun pathIsDirectory(path: Str): Bool
-native("simse_pathExists") fun pathExists(path: Str): Bool
-native("simse_eprintln") fun eprintln(text: Str): Unit
+@SmGen("res", "fileio", "simse_writeFile")
+fun writeFile(path: Str, content: Str): Bool
+
+@SmGen("res", "fileio", "simse_pathCanonical")
+fun pathCanonical(path: Str): Str
+
+@SmGen("res", "fileio", "simse_pathIsDirectory")
+fun pathIsDirectory(path: Str): Bool
+
+@SmGen("res", "fileio", "simse_pathExists")
+fun pathExists(path: Str): Bool
+
+@SmGen("res", "fileio", "simse_eprintln")
+fun eprintln(text: Str): Unit
 
 // ---- reading a file line by line -------------------------------------------
 
@@ -47,7 +59,9 @@ native("simse_fileStream_readLineInto") fun readLineInto(this: *FileStream, buff
 // copy with `line.toString()` when the line must outlive it.
 native("simse_fileStream_readLineView") fun readLineView(this: *FileStream): Opt<StrView>
 
-native("simse_fileStream_open") fun openFileStream(path: Str): *FileStream
+@SmGen("res", "fileio", "simse_fileStream_open")
+fun openFileStream(path: Str): *FileStream
+
 native("simse_fileStream_close") fun close(this: *FileStream): Unit
 
 // The file's size in bytes (0 when it is unknown), for throughput reporting.

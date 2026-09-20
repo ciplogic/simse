@@ -54,7 +54,7 @@ can cross into its scope (the rule `ilJumpCrossing` exists for), and the frame's
 declarations follow it.
 
 The clock is the RTL's `simse_nowMicros` (the `timeops` section of `cppsrc/rtl/_res.md`
-for the declaration, `cppsrc/rtl/native.cpp` for the definition, and the prelude surface
+for the declaration and the definition, and the prelude surface
 `nowMicros()` in `cppsrc/rtl/rtl.kt`) - a monotonic microsecond clock, beside
 `simse_nowMillis`.
 

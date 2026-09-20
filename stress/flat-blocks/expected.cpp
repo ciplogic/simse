@@ -35,14 +35,18 @@ template <class T>
 void simse_strTableExpand(const T* stream, Int* out, Int count);
 void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, StrView* table, Int count);
 
+#include <chrono>
+
 // Time natives (the Simse surface is the prelude file cppsrc/rtl/rtl.kt). Both are
 // monotonic clocks - never going backwards - since an arbitrary fixed point:
 // `simse_nowMillis` for logging, the finer `simse_nowMicros` for the instrumented
 // profiler (`cppsrc/profiling`, and the emitted `profileApp.measure(...)` of a
-// `--profile` build). It was cppsrc/rtl/timeops.hpp; the definitions are still
-// cppsrc/rtl/native.cpp's, because they are the platform's business. `emit: always`
-// because the profiler's runtime is emitted by the *compiler* rather than named by the
-// program: a `--profile` build needs these two declarations whether or not the program
+// `--profile` build). It was cppsrc/rtl/timeops.hpp, and its definitions were the last
+// thing left in cppsrc/rtl/native.cpp - they are this section's now, so the clock is
+// emitted into the program like any other prelude body and there is nothing to link.
+// `emit: always`
+// because the profiler's runtime is emitted by the *compiler* rather than named by
+// the program: a `--profile` build needs these two declarations whether or not the program
 // ever asks for the time.
 Int64 simse_nowMillis();
 Int64 simse_nowMicros();
@@ -169,6 +173,42 @@ Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& val
 // than a fixed type.
 template <class T, class F>
 void simse_list_sort(List<T>& self, F less);
+
+#include <algorithm>
+#include <cstdio>
+#include <filesystem>
+#include <system_error>
+
+// The platform's filesystem/IO operations (impl_specs/native-interop.md). They were
+// cppsrc/rtl/native.cpp - the repository's one hand-written translation unit beside the
+// published bootstrap - so building a program meant compiling *and linking* a second file,
+// and a build that left it out failed in the linker rather than in the compiler. The bodies
+// are this section's now: a program that reaches one of these symbols has the prototype and
+// the definition emitted into its own translation unit, which is what makes
+// `cppsrc/simse_bootstrap.cpp` buildable on its own.
+//
+// `emit: always`, for the reason `timeops` is: a *program* may name any of these symbols
+// with a declaration of its own - `native("simse_native_readFile") fun readFile(...)`, which
+// is `native-interop.md`'s example and `stress/native-read-file`'s - and then no `res`
+// declaration reaches this section for it to be found by (`sourcegen/ResGen.kt`). The
+// platform's C++ is the runtime's FFI, so like a linked runtime it is there for every
+// program; what a program pays for it is about 4 KB of text, the same code the linker used
+// to place whether or not the program called it.
+//
+// The Simse surface is the prelude file cppsrc/rtl/fs.kt, plus `readFile` in
+// cppsrc/common/common.kt (a normal module of the compiler). The prototypes used to live in
+// cppsrc/rtl/fs.hpp and cppsrc/rtl/filestream.hpp, which is why those headers are gone - a
+// section carries its own declaration half in `forward`.
+
+Str simse_native_readFile(const Str& path);
+List<Str> simse_listFiles(const Str& dir, const Str& ext);
+List<Str> simse_listFilesDirect(const Str& dir, const Str& ext);
+Bool simse_writeFile(const Str& path, const Str& content);
+Str simse_pathCanonical(const Str& path);
+Bool simse_pathIsDirectory(const Str& path);
+Bool simse_pathExists(const Str& path);
+void simse_eprintln(const Str& text);
+FileStream* simse_fileStream_open(const Str& path);
 
 Opt<Int> ns1_pick(Int i);
 Res<Str> ns1_parse(Int n);
@@ -469,4 +509,119 @@ inline void simse_strTableDecode(const char* pool, const Int* starts, const Int*
         at += delta;
         table[i] = StrView(bytes + at, length);
     }
+}
+
+// The two monotonic clocks. `steady_clock` is the one clock the standard library
+// promises cannot go backwards, which is what makes a duration between two readings
+// meaningful (`impl_specs/profiling.md`).
+Int64 simse_nowMillis() {
+    const auto now = std::chrono::steady_clock::now().time_since_epoch();
+    return (Int64) std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
+}
+
+Int64 simse_nowMicros() {
+    const auto now = std::chrono::steady_clock::now().time_since_epoch();
+    return (Int64) std::chrono::duration_cast<std::chrono::microseconds>(now).count();
+}
+
+// The whole file as bytes; empty when it cannot be read.
+Str simse_native_readFile(const Str& path) {
+    Str result;
+    FILE* file = fopen(path.c_str(), "rb");
+    if (file == nullptr) return result;
+    fseek(file, 0, SEEK_END);
+    const int fileSize = ftell(file);
+    fseek(file, 0, SEEK_SET);
+    result.resize(fileSize);
+    fread(result.data(), 1, fileSize, file);
+    fclose(file);
+    return result;
+}
+
+// Every `ext`-suffixed file under `dir`, recursively, sorted; empty when `dir` is not a
+// directory. The one place the "generic separators" rule is applied, so a scanned path
+// matches the same path given explicitly (e.g. `--root cppsrc` vs an explicit input
+// file): this and the compiler's own dedup key both read these strings.
+List<Str> simse_listFiles(const Str& dir, const Str& ext) {
+    List<Str> matchingFiles;
+
+    // The standard filesystem API works in std::string; the language works in Str
+    // (`simse_toStdString` is a no-op copy when Str is std::string).
+    const std::string dirText = simse_toStdString(dir);
+    const std::string wantedExt = simse_toStdString(ext);
+
+    if (!std::filesystem::exists(dirText) || !std::filesystem::is_directory(dirText)) {
+        return matchingFiles;
+    }
+    for (const auto& entry: std::filesystem::recursive_directory_iterator(dirText)) {
+        if (entry.is_regular_file() && entry.path().extension() == wantedExt) {
+            matchingFiles.push_back(simse_fromStdString(entry.path().generic_string()));
+        }
+    }
+    std::sort(matchingFiles.begin(), matchingFiles.end());
+    return matchingFiles;
+}
+
+// The non-recursive form, for `import a.b.c` directory resolution.
+List<Str> simse_listFilesDirect(const Str& dir, const Str& ext) {
+    List<Str> files;
+    std::error_code ec;
+    if (!std::filesystem::is_directory(simse_toStdString(dir), ec)) {
+        return files;
+    }
+    for (const auto& entry: std::filesystem::directory_iterator(simse_toStdString(dir), ec)) {
+        if (entry.is_regular_file() && entry.path().extension() == simse_toStdString(ext)) {
+            files.push_back(simse_fromStdString(entry.path().generic_string()));
+        }
+    }
+    std::sort(files.begin(), files.end());
+    return files;
+}
+
+Bool simse_writeFile(const Str& path, const Str& content) {
+    FILE* out = fopen(path.c_str(), "wb");
+    if (out == nullptr) {
+        return false;
+    }
+    fwrite(content.data(), 1, content.length(), out);
+    fclose(out);
+    return true;
+}
+
+Str simse_pathCanonical(const Str& path) {
+    std::error_code ec;
+    std::filesystem::path canonical = std::filesystem::weakly_canonical(
+            std::filesystem::path(simse_toStdString(path)), ec);
+    return ec ? path : simse_fromStdString(canonical.string());
+}
+
+Bool simse_pathIsDirectory(const Str& path) {
+    std::error_code ec;
+    return std::filesystem::is_directory(simse_toStdString(path), ec);
+}
+
+Bool simse_pathExists(const Str& path) {
+    std::error_code ec;
+    return std::filesystem::exists(simse_toStdString(path), ec);
+}
+
+void simse_eprintln(const Str& text) {
+    fprintf(stderr, "%s\n", text.c_str());
+}
+
+// The stream's own operations (`readLine`, `readLineInto`, `fileSize`, `close`) are methods
+// of `FileStream` in cppsrc/rtl/filestream.hpp: the emitter calls a handle's methods as
+// members. Only the constructor-like `open` lives here, as a free function.
+FileStream* simse_fileStream_open(const Str& path) {
+    auto* stream = new FileStream();
+    stream->file.open(simse_toStdString(path), std::ios::binary);
+    if (!stream->file.is_open()) {
+        delete stream;
+        return nullptr;
+    }
+    stream->chunk.resize(256 * 1024);
+    std::error_code ec;
+    const std::uintmax_t size = std::filesystem::file_size(simse_toStdString(path), ec);
+    stream->size = ec ? 0 : (Int64) size;
+    return stream;
 }

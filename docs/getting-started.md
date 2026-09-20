@@ -15,10 +15,10 @@ works; a `cl.exe` already on your `PATH` is used only as a fallback.
 ## 1. Build the compiler
 
 `build.js` transpiles the compiler's own Simse sources (`cppsrc/**/*.kt`) into
-one `simse_out.cpp` and compiles that together with the runtime
-(`cppsrc/rtl/native.cpp`) into `./simse.exe`. It uses `./simse.exe` as the
-transpiler when one exists; on a fresh checkout there is none yet, so it first
-compiles the published `cppsrc/simse_bootstrap.cpp` and uses that (section 2).
+one `simse_out.cpp` and compiles that one file into `./simse.exe`. It uses
+`./simse.exe` as the transpiler when one exists; on a fresh checkout there is
+none yet, so it first compiles the published `cppsrc/simse_bootstrap.cpp` and
+uses that (section 2).
 
 ```bat
 build.bat                                   :: debug: ./simse_out.cpp -> ./simse.exe
@@ -32,9 +32,9 @@ build.bat --cpp other.cpp --exe other.exe   :: compile an existing amalgamation
 
 `build.bat` is a one-line launcher for `bun build.js`, which also finds Visual
 Studio through `tools/msvc.mjs` and reports what it is doing. `--define` reaches
-both the amalgamation and the natives, which are compiled together, so the
-`SIMSE_STR_INLINE_CAPACITY` / `SIMSE_NO_PACK4` knobs can never disagree between
-them. `--profile` transpiles with the instrumented profiler
+the whole translation unit - the amalgamation and the RTL C++ it carries are
+compiled together - so the `SIMSE_STR_INLINE_CAPACITY` / `SIMSE_NO_PACK4` knobs
+apply consistently. `--profile` transpiles with the instrumented profiler
 (`impl_specs/profiling.md`). The same script can transpile any other module
 root:
 
@@ -55,18 +55,20 @@ a claims file.
 
 ```bat
 cl /nologo /std:c++20 /EHsc /O2 /Ob3 /DNDEBUG /MD /W3 /I. ^
-   cppsrc/simse_bootstrap.cpp cppsrc/rtl/native.cpp ^
+   cppsrc/simse_bootstrap.cpp ^
    /Fe:simse.exe
 ```
 
-Two translation units - the amalgamated compiler and the runtime's natives - plus
-the RTL headers under `cppsrc/rtl/` that the amalgamation includes. The
-amalgamation alone leaves the `native(...)` symbols unresolved
+One translation unit - the amalgamated compiler - plus the RTL headers under
+`cppsrc/rtl/` that the amalgamation includes. The `native(...)` symbols it uses
 (`simse_native_readFile`, `simse_listFiles`, `simse_writeFile`,
-`simse_pathCanonical`, `simse_eprintln`, `simse_nowMillis`, ...); they are
-implemented in `cppsrc/rtl/native.cpp`. The result is a working compiler. Run it
-from the repository root: `simse.exe --root my_project -o my_project.cpp` - the
-RTL sits at the default prelude path `cppsrc/rtl`.
+`simse_pathCanonical`, `simse_eprintln`, `simse_nowMillis`, ...) are not linked
+in from a second file: their C++ lives in the RTL's resource sections
+(`cppsrc/rtl/_res.md`, the `fileio` and `timeops` sections), which are emitted
+into every program's translation unit, so the published bootstrap already carries
+them. The result is a working compiler. Run it from the repository root:
+`simse.exe --root my_project -o my_project.cpp` - the RTL sits at the default
+prelude path `cppsrc/rtl`.
 
 To refresh the published file after changing the compiler (it is generated, never
 hand-edited):
@@ -85,7 +87,7 @@ bootstrap: release build, 3 run(s) for the transpiles
   bootstrap  cppsrc\simse_bootstrap.cpp: 45757 lines, 1.38 MB (checked in, do not edit)
 
 1. compile the published bootstrap (cl.exe only, no build system)
-  cppsrc\simse_bootstrap.cpp + cppsrc\rtl\native.cpp -> simse_boot.exe best 20713 ms
+  cppsrc\simse_bootstrap.cpp -> simse_boot.exe         best 20713 ms
 
 2. transpile the compiler's own source tree
   simse_boot.exe (just built) --root cppsrc            best 1093 ms, median 1122 ms
@@ -119,11 +121,12 @@ hello.exe
 ```
 
 The first command transpiles every `.kt` file under the given module root (the
-`--root` directory) and writes one amalgamated C++ file; the second compiles it
-together with the runtime (`cppsrc/rtl/native.cpp`) and links the result.
-`simse.exe` with no arguments scans the current directory, which is rarely what
-you want here: the repository holds several independent programs - the prelude,
-the examples, the stress cases - that are not one module.
+`--root` directory) and writes one amalgamated C++ file; the second compiles that
+one file into the executable - the runtime is already in it, emitted from the
+RTL's resource sections. `simse.exe` with no arguments scans the current
+directory, which is rarely what you want here: the repository holds several
+independent programs - the prelude, the examples, the stress cases - that are not
+one module.
 
 The compiler's own CLI is:
 

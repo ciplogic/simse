@@ -55,9 +55,13 @@ A prelude file is parsed into the same module scope as the program's inputs, so
 its declarations resolve without an `import`. The default is
 `cppsrc/rtl/rtl.kt` (relative to the repository root, baked into the binaries);
 `simse_transpile --prelude <file>` overrides it, and a missing default is skipped
-silently. Prelude declarations are resolved but **never emitted**: their bodies
-are hand-written C++ pulled in transitively by `cppsrc/rtl/simse.hpp`. This is how
-the RTL surface (for example `List<T>.append`) becomes available to programs.
+silently. Prelude declarations are resolved but **never emitted as Simse code**: a
+`native` declaration's body is hand-written C++ pulled in transitively by
+`cppsrc/rtl/simse.hpp`, and a `@SmGen("res", section, symbol)` declaration's body
+is placed in the program's translation unit from its `cppsrc/rtl/_res.md` section
+when the program reaches the declaration or its symbol (a section marked
+`emit: always` is placed in every program). This is how the RTL
+surface (for example `List<T>.append`) becomes available to programs.
 
 A native extension is a `native` function whose first parameter is `this`; a
 member call `recv.name(args)` lowers to `<symbol>(recv, args)` with the receiver
@@ -65,20 +69,24 @@ first.
 
 ## v1 implementation
 
-`cppsrc/native/Native.h` / `Native.cpp` provide the first native symbol:
+The first symbol of this kind, `simse_native_readFile`, backs `readFile`, declared
+in `cppsrc/common/common.kt` as `@SmGen("res", "fileio", "simse_native_readFile")`:
 
 ```cpp
-Str simse_native_readFile(const Str& path); // forwards to common::readFile
+Str simse_native_readFile(const Str& path); // reads the whole file as bytes
 ```
 
-They build into the `simse_native` static library. Generated executables that
-use native functions link `simse_native` (which links the rest of the RTL).
+Its prototype and definition are the `fileio` section of `cppsrc/rtl/_res.md`, in
+the section's `forward:` and `bodies:` texts. There is no native translation unit
+and no `simse_native` library: the emitter places the section in the program's own
+translation unit, so there is nothing to link.
 
 ## Filesystem / IO natives (T23)
 
 The self-hosted driver needs a small filesystem surface. Declared in the prelude
-(`cppsrc/rtl/fs.kt`), prototyped in `cppsrc/rtl/fs.hpp` (included by
-`simse.hpp`), and defined in `cppsrc/native/Native.cpp`:
+(`cppsrc/rtl/fs.kt`) as `@SmGen("res", "fileio", <symbol>)`, prototyped in the
+`forward:` text of the `fileio` section of `cppsrc/rtl/_res.md` and defined in its
+`bodies:` text:
 
 | Simse | C++ symbol | Semantics |
 | --- | --- | --- |
@@ -90,8 +98,11 @@ The self-hosted driver needs a small filesystem surface. Declared in the prelude
 | `pathExists(path)` | `simse_pathExists` | |
 | `eprintln(text)` | `simse_eprintln` | one line to stderr |
 
-These are prelude declarations (available without an import) whose prototypes ship
-with the RTL header; programs that use them link `simse_native`.
+These are prelude declarations (available without an import) whose prototypes and
+definitions the emitter places in the program's own translation unit. The section
+is `emit: always` because a program may also name one of these symbols with a
+`native` declaration of its own, and then no `@SmGen` declaration reaches the
+section for it; there is nothing to link.
 
 ## The argv entry point
 

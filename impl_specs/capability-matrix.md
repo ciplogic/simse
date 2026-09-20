@@ -2900,3 +2900,86 @@ compiler *did* catch and one it could not:
   Verified: `bun tools/stress.js` **61/61** (one new case, and no golden needed re-capturing
   once the helpers stopped riding in `strops`), `bun tools/smgen.js` 1/1, and the bootstrap
   fixed point holds byte for byte after one refresh.
+
+- **One `fmtStr` template per line, a `fromInt` that short-circuits, and a pack whose
+  elements convert.** Three changes to what a body looks like, all of them shapes the
+  emitted C++ was spelling the long way.
+
+  **The `+` chains are gone.** Wherever the compiler built a line from several small
+  pieces it now writes one `fmtStr` template - ~145 call sites across `codegen`, `linear`,
+  `sema`, `parser`, `lex`, `sourcegen`, `compiler`, `profiling` and the RTL's
+  `resources`/`profiling` files: `"if (" + test + ") goto " + target + ";"` is
+  `fmtStr("if (|) goto |;", test, target)`. The rule stayed deliberately narrow - three
+  pieces or more, at least one of them a literal, and built *fresh*, so a
+  `text = text + ...` run inside a loop is still a run of appends. A literal `|` cannot be
+  spelled in a template, so a key like `name + "|" + kind` stayed a chain, and a two-piece
+  expression (`"goto " + target`) was left alone.
+
+  **A dense enum's `fromInt` is one range test.** `Enum.fromInt(Int): Opt<Enum>` was an
+  if-chain, one `if (value == N)` per member - 34 lines for `IlOpKind`. An enum whose
+  members run 0, 1, 2, ... *is* its own index, so it is now
+  `if (value >= 0 && value <= 33) return Opt<E>::some((E) value);`. The lower bound is not
+  decoration: without it `fromInt(-1)` answers `some((E) -1)` where the chain answered
+  `none()`. Only the dense shape short-circuits - a gap (`B = 5`) or a non-zero start keeps
+  the chain.
+
+  **A pack's elements convert** (`linear/LinearForm.kt`, `packArguments` and the `listOf`
+  literal path). Elements were taken with `operandOf`, so a handle element in a list of
+  values - `listOf<Str>(xmlAttr(n, Name))`, a `*Str` into a `List<Str>` - emitted
+  `List<Str>{p}` and was a C++ type error. They now convert the way a by-value parameter's
+  argument does (`specs/functions.md`, "Handles at a call", which records it), matching the
+  spec's own table for arguments. The migration is what found it: `fmtStr`'s items are `Str`
+  and `xmlAttr` answers a `*Str`, so the emitter's own calls are exactly this shape. It is
+  also the change that needed **two builds** - the tree's sources may not use a behavior the
+  running compiler does not have, so the first build spelled those sites through a `Str`
+  local and the second took the borrow directly.
+
+  The compiler's *own* amalgamation moved (the pool, whose literals the templates changed,
+  and the `:;` a label ends with), which is why the published bootstrap was refreshed. What
+  did **not** move is any program's output: `stress/hello` and `stress/flat-blocks`, the two
+  emission goldens, pass untouched and every other byte is unchanged.
+
+  Verified: `bun tools/stress.js` **61/61** - `stress/rtl-simse` grew the handle-item and
+  packed-handle sections and its `expected.stdout` is the one golden that changed - both
+  emission goldens byte-identical, `bun tools/smgen.js` 1/1, and the bootstrap fixed point
+  holds byte for byte after one refresh.
+
+- **The runtime's last hand-written translation unit is gone: a program is one file (T29
+  finished).** `cppsrc/rtl/native.cpp` - the platform's natives (file I/O, directory
+  listing, the path tests, `eprintln`, `FileStream::open`) and the two clocks - was the
+  repository's second hand-written translation unit, so every build was "compile the
+  amalgamation *and* native.cpp, then link", and a build that left the second file out
+  failed in the linker (`LNK2019`) rather than in the compiler. Anyone bootstrapping Simse
+  had to know that; now there is nothing to know.
+
+  The bodies are resources. `fileio` is a new section of `cppsrc/rtl/_res.md`: the
+  prototypes (which were `cppsrc/rtl/fs.hpp`, plus `simse_fileStream_open` in
+  `filestream.hpp`) are its `forward:` text and the definitions are its `bodies:` text, with
+  `native.cpp`'s two file-local helpers inlined into their one caller each. `timeops` gained
+  the clock bodies beside the declarations it already had, and `fs.hpp` is deleted. The
+  prelude declarations name their symbol in the section
+  (`@SmGen("res", "fileio", "simse_listFiles")` in `cppsrc/rtl/fs.kt`, and `readFile` in
+  `cppsrc/common/common.kt`), so nothing is linked in beside the program's own translation
+  unit: `build.js`, `tools/bootstrap.js`, `tools/stress.js`, `simse.vcxproj` and
+  `tools/vscheck.mjs` no longer name a second file, and `bun tools/bootstrap.js` compiles
+  `cppsrc/simse_bootstrap.cpp` with `cl.exe` alone.
+
+  **`fileio` is `emit: always`**, which is the one decision worth recording. A *program* may
+  name any of those symbols with a declaration of its own -
+  `native("simse_native_readFile") fun readFile(path: Str): Str`, which is
+  `impl_specs/native-interop.md`'s example and `stress/native-read-file`'s - and then no
+  `res` declaration exists to reach the section (`sourcegen/ResGen.kt` emits a section for
+  the declarations that name it, plus the `emit: always` ones, while a `native(...)`
+  declaration names the `cpp` generator). The narrow alternative - one section per platform
+  symbol with `symbol:`, emitted when that symbol is reached - would keep a program to what
+  it actually calls, at the cost of changing that mechanism; it is recorded in
+  `guide4ai.md` §8 rather than done. What every program pays for `emit: always` is about
+  4 KB of C++ text, the same functions the linker used to place whether or not they were
+  called.
+
+  Verified: `./build.bat --release` green, `bun tools/stress.js` **61/61**
+  (`native-read-file` is the case that pins the FFI path; the ten emission goldens were
+  re-captured and their only delta is the reworded `timeops` comment plus the `fileio`
+  section), and `bun tools/bootstrap.js` reports **one input file** with the fixed point
+  holding byte for byte (`cppsrc\simse_bootstrap.cpp -> simse_boot.exe`, 15.9 s,
+  self-transpile 866 ms, 1.49 MB / 49,585 lines checked in).

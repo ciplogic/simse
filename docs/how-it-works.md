@@ -149,14 +149,14 @@ The compiler is its Simse sources; there is one implementation.
 | Piece | Where | Role |
 | --- | --- | --- |
 | Compiler | `cppsrc/**/*.kt` | lexer, parser, sema, linear lowering, codegen and driver |
-| Runtime | `cppsrc/rtl/` | the headers, the prelude `.kt` files, and the one hand-written translation unit `native.cpp` |
+| Runtime | `cppsrc/rtl/` | the headers, the prelude `.kt` files, and the resource file `_res.md` that holds the runtime's C++ |
 | Published bootstrap | `cppsrc/simse_bootstrap.cpp` | the amalgamation of the compiler sources; it is what a checkout with only a C++ compiler builds |
 
 The invariant is a **fixed point**, and machines check it, not discipline:
 
 1. **`tools/bootstrap.js`** compiles the published `cppsrc/simse_bootstrap.cpp`
-   together with `cppsrc/rtl/native.cpp` using `cl.exe` alone, then has the
-   resulting binary transpile `cppsrc` again. The output must equal the published
+   with `cl.exe` alone, then has the resulting binary transpile `cppsrc` again.
+   The output must equal the published
    file **byte for byte** (and so must `./simse.exe`'s output, when one exists).
    This is the strongest statement the project makes: the compiler built from the
    published file behaves exactly like the one that produced it. `build.js`
@@ -186,7 +186,6 @@ headers:
 | `xml.hpp` | `Attribute`, `XmlNode`: the general tree a program can build |
 | `span.hpp` | `Span<T>`: a borrowed view over a contiguous run of `T` (`at`, `slice`) |
 | `strview.hpp` | `StrView`: the view over a string's bytes, a `Span<Char>` plus `charAt`, `find`/`indexOf`, `startsWith`, `startsWithPtr`, `substr`, `toString` |
-| `fs.hpp` | the file/directory natives over `native.cpp` |
 | `filestream.hpp` | `FileStream`: reading a file line by line (`readLine(): Opt<Str>`, `readLineInto(*Str)` with a recycled buffer, and `readLineView(): Opt<StrView>` in place) |
 | `astxml.hpp` | the compiler's AST node (roles/keys as enums) |
 
@@ -194,11 +193,11 @@ The C++ that used to need a header of its own is a **resource** now
 (`cppsrc/rtl/_res.md`, read by the `res` generator): the string table's decoder
 (`strtable`), the clocks (`timeops`), the `List`/`Array` primitives (`listops`), the
 `Dictionary` operations (`dictops`), the string/character/numeric conversions (`strops`),
-and `spanOf`. Each is a section of that file - a declaration in its `forward:`, a definition
-in its `bodies:` - and the emitter places a section's texts in the emitted file's section of
-the same name, so `strtable`'s decoder is emitted into every program (it is what the
-preamble needs) while `strops`' text is emitted only into a program that reaches one of its
-symbols.
+`spanOf`, and the platform's file I/O (`fileio`, which carries its own prototypes). Each is a
+section of that file - a declaration in its `forward:`, a definition in its `bodies:` - and
+the emitter places a section's texts in the emitted file's section of the same name, so
+`strtable`'s decoder is emitted into every program (it is what the preamble needs) while
+`strops`' text is emitted only into a program that reaches one of its symbols.
 
 A section title may open with `!`, which marks its whole section **compile-only**: the
 compiler reads it and the program it builds does not carry it. A `*` in the same place instead
@@ -209,7 +208,7 @@ on a single entry's key, or together in either order. That is what a `.md` file 
 wants - a `kt` section's Simse source, a `res` section's C++ are compiled in, so storing their
 text as well would be a second copy of the same bytes (`stress/resources-compileonly`,
 `stress/resources-binary`). The RTL's own file is marked the same way throughout, all
-seven sections: the compiler reads it from disk beside its prelude as it compiles, the way it
+eight sections: the compiler reads it from disk beside its prelude as it compiles, the way it
 reads the prelude's `.kt` files, so a program which carries no section of its own still
 receives the RTL's C++ - while the compiler no longer carries a second copy of that text in
 its own string pool (23,034 bytes of a 33,446-byte pool, gone).
@@ -238,7 +237,7 @@ today.
 
 The runtime's types are fixed (`List<T>` is `SmallVector<T, 4>`, `Str` is the
 inline `SmString`, `Dictionary<K, V>` is `SmDictionary`); two build knobs remain,
-and both are part of the ABI - the amalgamation and `cppsrc/rtl/native.cpp` are
+and both are part of the ABI - the amalgamation and the RTL C++ it carries are
 compiled in one `cl.exe` invocation, so `build.js --define` reaches both and they
 can never disagree; `impl_specs/capability-matrix.md` records what each one
 measured:

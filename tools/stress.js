@@ -39,13 +39,13 @@
 //   -h, --help        this text
 //
 // The compiler under test is the point: the harness runs `./simse.exe`, the compiler
-// built from the published bootstrap, and every program it compiles is linked against
-// the same runtime (`cppsrc/rtl/native.cpp`) the compiler itself is.
+// built from the published bootstrap, and every program it compiles is one translation
+// unit - the runtime is generated into it, so there is nothing to link beside the program.
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import * as path from "node:path";
 
-import { developerEnv, fail as failTool, hostArch, normalizeArch, REPO, runCl, whichCl } from "./msvc.mjs";
+import { developerEnv, fail as failTool, hostArch, normalizeArch, REPO, whichCl } from "./msvc.mjs";
 
 const TOOL = "stress";
 const fail = (message) => failTool(TOOL, message);
@@ -148,53 +148,10 @@ function pickCompiler(explicit) {
   fail("no compiler to test: build one with `bun build.js` (or point --simse at one)");
 }
 
-// The two C++ translation units every generated program needs: the runtime
-// (`cppsrc/rtl/native.cpp`: file I/O, diagnostics, the clock) and - when a case uses
-// one - the prelude header. It is the part of the RTL that is not header-only, and
-// compiling it once per flag set keeps a full stress run to one compile per case.
-//
-// The cache key is the flag set, and an object is reused only when it is newer
-// than its source *and* than every RTL header it can pull in: `Str`/`List`/`Array`
-// are header-defined, so a header-only change must rebuild them (a cached object
-// built under different `Str` internals links into a program compiled against the
-// new ones, which is an ODR violation with confusing symptoms).
-function newestHeaderMtime() {
-  let newest = 0;
-  const walk = (dir) => {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        walk(full);
-      } else if (entry.name.endsWith(".h") || entry.name.endsWith(".hpp")) {
-        newest = Math.max(newest, statSync(full).mtimeMs);
-      }
-    }
-  };
-  walk(path.join(REPO, "cppsrc"));
-  return newest;
-}
-
-function sharedObjects(env, flags) {
-  const key = Bun.hash(`${flags.join(" ")} ${process.platform} ${process.arch}`).toString(36);
-  const dir = path.join(WORK, `native-${key}`);
-  const objects = [
-    { source: path.join(REPO, "cppsrc", "rtl", "native.cpp"), object: path.join(dir, "native.obj") },
-  ];
-  const headerMtime = newestHeaderMtime();
-  const fresh = (entry) => existsSync(entry.object)
-    && statSync(entry.object).mtimeMs > statSync(entry.source).mtimeMs
-    && statSync(entry.object).mtimeMs > headerMtime;
-  if (objects.every(fresh)) {
-    return objects.map((entry) => entry.object);
-  }
-  mkdirSync(dir, { recursive: true });
-  for (const entry of objects) {
-    const args = ["cl", "/nologo", "/c", "/std:c++20", "/EHsc", "/W3", ...flags,
-      `/I${REPO}`, `/Fo${entry.object}`, entry.source];
-    if (runCl(env, args) !== 0) fail(`compiling ${path.relative(REPO, entry.source)} failed`);
-  }
-  return objects.map((entry) => entry.object);
-}
+// Every generated program is one translation unit: the runtime's primitives, the platform's
+// file I/O and the clocks are generated into it from `cppsrc/rtl/_res.md`
+// (`impl_specs/generators.md`), so there is no shared object to compile once per flag set
+// and nothing to link beside the program itself.
 
 function runProcess(command, options) {
   const started = performance.now();
@@ -259,7 +216,7 @@ function runCase(build, study) {
 
   const exe = path.join(work, "prog.exe");
   const compileArgs = ["cl", "/nologo", "/std:c++20", "/EHsc", "/W3", ...build.flags,
-    `/I${REPO}`, `/Fo${work}${path.sep}`, `/Fe${exe}`, outCpp, ...build.nativeObjects];
+    `/I${REPO}`, `/Fo${work}${path.sep}`, `/Fe${exe}`, outCpp];
   if (build.opts.verbose) console.log(`  ${compileArgs.join(" ")}`);
   const compiled = runProcess(compileArgs, { env: build.env });
   if (compiled.exit !== 0) {
@@ -345,8 +302,7 @@ async function main() {
 
   console.log(`${TOOL}: ${path.relative(REPO, simse)} (${opts.release ? "release" : "debug"} programs, ` +
       `${cases.length} cases${opts.jobs > 1 ? `, ${opts.jobs} at a time` : ""})`);
-  const nativeObjects = sharedObjects(env, flags);
-  const build = { simse, env, flags, nativeObjects, opts };
+  const build = { simse, env, flags, opts };
 
   const results = [];
   const pending = [...cases];

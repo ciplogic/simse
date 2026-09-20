@@ -78,7 +78,7 @@ data class ResMarked(
 // There is no way to *unset* a marker: a marked section marks every entry under it, and an
 // entry's own markers are on top of the section's (`resParseText` combines the two with
 // `||`, which is the whole of the rule).
-fun resMarkedName(raw: Str): ResMarked {
+fun resMarkedName(raw: *Str): ResMarked {
     var compileOnly: Bool = false
     var binary: Bool = false
     var i: Int = 0
@@ -111,7 +111,7 @@ fun resQuoteBinary(bytes: Str): Str
 // ---- the format -----------------------------------------------------------
 
 // True when `line` is a section underline: non-blank once trimmed, and nothing but `=`.
-fun resIsUnderline(line: Str): Bool {
+fun resIsUnderline(line: *Str): Bool {
     val text: Str = line.trim()
     if (text.size() == 0) {
         return false
@@ -128,22 +128,22 @@ fun resIsUnderline(line: Str): Bool {
 
 // True when `line` opens a fenced block. An opening fence may name a language
 // (` ```cpp `), which is why this is a prefix test while the closing one is exact.
-fun resIsFenceStart(line: Str): Bool {
+fun resIsFenceStart(line: *Str): Bool {
     return line.trim().startsWith("```")
 }
 
 // True when `line` closes a fenced block: the bare fence.
-fun resIsFenceEnd(line: Str): Bool {
+fun resIsFenceEnd(line: *Str): Bool {
     return line.trim() == "```"
 }
 
 // The key a section prefixes: `Title` + `Key` is `Title:Key`, and a key written before the
 // first title keeps its own name.
-fun resQualifiedKey(section: Str, key: Str): Str {
+fun resQualifiedKey(section: *Str, key: Str): Str {
     if (section.size() == 0) {
         return key
     }
-    return section + ":" + key
+    return fmtStr("|:|", section, key)
 }
 
 // `text` without one wrapping pair of single backticks, so `` Key: `text` `` and
@@ -164,7 +164,7 @@ fun resUnquote(text: Str): Str {
 // An entry is a line whose first `:` has a non-empty key before it. When nothing follows
 // the colon the value is the fenced block that follows (its lines as written, each
 // followed by a newline); when no fence follows, the value is empty.
-fun resParseText(text: Str): List<ResourceItem> {
+fun resParseText(text: *Str): List<ResourceItem> {
     val lines: List<Str> = text.split("\n")
     var entries: List<ResourceItem> = List<ResourceItem>()
     var section: Str = ""
@@ -256,7 +256,7 @@ fun resValueText(value: Str, binary: Bool): Str {
 // written more than once takes the last value, in the position it was *first* written. A
 // section two files both fill in merges because the key already carries the prefix, and
 // the order is the file order (`specs/resources.md`, "Discovery").
-fun resDedup(entries: List<ResourceItem>): List<ResourceItem> {
+fun resDedup(entries: *List<ResourceItem>): List<ResourceItem> {
     var last: Dictionary<Str, ResourceItem> = Dictionary<Str, ResourceItem>()
     var i: Int = 0
     while (i < entries.size()) {
@@ -286,7 +286,7 @@ fun resDedup(entries: List<ResourceItem>): List<ResourceItem> {
 // Every `_res.md` file under each module root, recursively, each canonical path once, in
 // canonical-path order - the same rule `driverGatherFiles` applies to the `*.kt` files, so
 // two rings that were handed the same roots agree on the file set and its order.
-fun resResourceFiles(moduleRoots: List<Str>): List<Str> {
+fun resResourceFiles(moduleRoots: *List<Str>): List<Str> {
     var candidates: List<Str> = List<Str>()
     var r: Int = 0
     while (r < moduleRoots.size()) {
@@ -318,7 +318,7 @@ fun resResourceFiles(moduleRoots: List<Str>): List<Str> {
 }
 
 // Reads and parses every resource file in order and joins them into the one flat list.
-fun resLoadFiles(files: List<Str>): List<ResourceItem> {
+fun resLoadFiles(files: *List<Str>): List<ResourceItem> {
     var all: List<ResourceItem> = List<ResourceItem>()
     var f: Int = 0
     while (f < files.size()) {
@@ -335,7 +335,7 @@ fun resLoadFiles(files: List<Str>): List<ResourceItem> {
 
 // The whole discovery in one call, for a driver: every `_res.md` under `moduleRoots`,
 // parsed and joined.
-fun resLoad(moduleRoots: List<Str>): List<ResourceItem> {
+fun resLoad(moduleRoots: *List<Str>): List<ResourceItem> {
     return resLoadFiles(resResourceFiles(moduleRoots))
 }
 
@@ -345,7 +345,7 @@ fun resLoad(moduleRoots: List<Str>): List<ResourceItem> {
 // value is bytes, not text, so it needs a different escape rule (`resQuoteBinary`, every
 // non-printable byte written as an octal escape), and a spelling that is only ever written
 // once cannot disagree with itself.
-fun resStoredLiterals(entries: List<ResourceItem>): List<Str> {
+fun resStoredLiterals(entries: *List<ResourceItem>): List<Str> {
     var out: List<Str> = List<Str>()
     var i: Int = 0
     while (i < entries.size()) {
@@ -366,7 +366,7 @@ fun resStoredLiterals(entries: List<ResourceItem>): List<Str> {
 // own lookup, for the places that run before the program exists to call `Resources.get`
 // (the driver's generated sources); `resDedup` already made the keys unique, so one
 // scan is enough.
-fun resValueOf(entries: List<ResourceItem>, key: Str): Str {
+fun resValueOf(entries: *List<ResourceItem>, key: *Str): Str {
     var i: Int = 0
     while (i < entries.size()) {
         if (entries[i].key == key) {
@@ -381,7 +381,7 @@ fun resValueOf(entries: List<ResourceItem>, key: Str): Str {
 // *empty* text - a section with nothing under it - and an absent key holds the same, so a
 // reader that has to tell the two apart asks this first (the generator lookup does,
 // `cppsrc/sourcegen/ResGen.kt`).
-fun resHas(entries: List<ResourceItem>, key: Str): Bool {
+fun resHas(entries: *List<ResourceItem>, key: *Str): Bool {
     var i: Int = 0
     while (i < entries.size()) {
         if (entries[i].key == key) {
@@ -399,7 +399,7 @@ fun resHas(entries: List<ResourceItem>, key: Str): Bool {
 // text agree: the escapes below are exactly the ones `cgLiteralByteLength` counts as one
 // byte each, and nothing else in the text is touched (a control byte the language has no
 // escape for is written as it is, which C++ accepts).
-fun resQuoteLiteral(text: Str): Str {
+fun resQuoteLiteral(text: *Str): Str {
     var out: Str = "\""
     var i: Int = 0
     while (i < text.size()) {

@@ -42,13 +42,13 @@ fun linRole(child: *AstXmlNode, role: AstNodeKind): AstXmlNode {
     return renamed
 }
 
-fun linLabel(name: Str, line: Int, column: Int): AstXmlNode {
+fun linLabel(name: *Str, line: Int, column: Int): AstXmlNode {
     var node: AstXmlNode = linStmt(AstNodeCategory.StmtLabel, line, column)
     node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
     return node
 }
 
-fun linGoto(name: Str, line: Int, column: Int): AstXmlNode {
+fun linGoto(name: *Str, line: Int, column: Int): AstXmlNode {
     var node: AstXmlNode = linStmt(AstNodeCategory.StmtGoto, line, column)
     node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
     return node
@@ -58,7 +58,7 @@ fun linGoto(name: Str, line: Int, column: Int): AstXmlNode {
 // condition that came from the source already carries that role, but one a lowering
 // *builds* (the yield machine's `if (branch == n) goto LYn;`) carries `Expr`, and the
 // emitter finds its condition by role.
-fun linCondJump(kind: AstNodeCategory, cond: *AstXmlNode, name: Str, line: Int, column: Int): AstXmlNode {
+fun linCondJump(kind: AstNodeCategory, cond: *AstXmlNode, name: *Str, line: Int, column: Int): AstXmlNode {
     var node: AstXmlNode = linStmt(kind, line, column)
     node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
     xmlAddChild(node, linRole(cond, AstNodeKind.Cond))
@@ -72,7 +72,7 @@ fun linBlock(body: *List<AstXmlNode>, line: Int, column: Int): AstXmlNode {
 }
 
 // The hoisted `switch` subject: an untyped VarDecl, so the emitter emits `auto`.
-fun linSubjectDecl(name: Str, init: *AstXmlNode, line: Int, column: Int): AstXmlNode {
+fun linSubjectDecl(name: *Str, init: *AstXmlNode, line: Int, column: Int): AstXmlNode {
     var node: AstXmlNode = linStmt(AstNodeCategory.StmtVarDecl, line, column)
     node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
     node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.IsVar, "false"))
@@ -80,7 +80,7 @@ fun linSubjectDecl(name: Str, init: *AstXmlNode, line: Int, column: Int): AstXml
     return node
 }
 
-fun linName(role: AstNodeKind, name: Str, line: Int, column: Int): AstXmlNode {
+fun linName(role: AstNodeKind, name: *Str, line: Int, column: Int): AstXmlNode {
     var attrs: List<AstNodeAttribute> = listOf<AstNodeAttribute>(
         AstNodeAttribute(AstNodeAttributeKind.Line, line.toString()),
         AstNodeAttribute(AstNodeAttributeKind.Column, column.toString()),
@@ -119,7 +119,7 @@ data class LinLowerer(
 
     // One body in, one linear body out. Pure: the input statements are not
     // modified (only copied or re-rooted).
-    fun lowerBody(stmts: List<AstXmlNode>): LinLowered {
+    fun lowerBody(stmts: *List<AstXmlNode>): LinLowered {
         var out: List<AstXmlNode> = List<AstXmlNode>()
         this.lowerStmts(stmts, "", "", out)
         return LinLowered(out, this.changed)
@@ -130,13 +130,13 @@ data class LinLowerer(
     // A statement is a value (`List<AstXmlNode>` holds them by value), so the pointer
     // form is what keeps the pass from copying every statement it walks: `*stmt` is the
     // element's place, and the passes it is handed to read through it.
-    fun lowerStmts(stmts: *List<AstXmlNode>, breakTo: Str, continueTo: Str, out: *List<AstXmlNode>): Unit {
+    fun lowerStmts(stmts: *List<AstXmlNode>, breakTo: *Str, continueTo: *Str, out: *List<AstXmlNode>): Unit {
         for (*stmt in stmts) {
             this.lowerStmt(stmt, breakTo, continueTo, out)
         }
     }
 
-    fun lowerStmt(stmt: *AstXmlNode, breakTo: Str, continueTo: Str, out: *List<AstXmlNode>): Unit {
+    fun lowerStmt(stmt: *AstXmlNode, breakTo: *Str, continueTo: *Str, out: *List<AstXmlNode>): Unit {
         val kind: AstNodeCategory = xmlKind(stmt)
         when (kind) {
             AstNodeCategory.StmtIf -> {
@@ -241,8 +241,8 @@ data class LinLowerer(
     fun lowerCondition(
         cond: *
         AstXmlNode,
-        trueTarget: Str,
-        falseTarget: Str,
+        trueTarget: *Str,
+        falseTarget: *Str,
         line: Int,
         column: Int,
         out: *
@@ -278,7 +278,7 @@ data class LinLowerer(
         out.append(linGoto(falseTarget, line, column))
     }
 
-    fun lowerIf(stmt: *AstXmlNode, breakTo: Str, continueTo: Str, out: *List<AstXmlNode>): Unit {
+    fun lowerIf(stmt: *AstXmlNode, breakTo: *Str, continueTo: *Str, out: *List<AstXmlNode>): Unit {
         val thenLabel: Str = this.freshLabel()
         val elseLabel: Str = this.freshLabel()
         val line: Int = xmlLine(stmt)
@@ -347,7 +347,7 @@ data class LinLowerer(
 }
 
 // Lowers one function-like body; the counter restarts per body.
-fun linLowerBody(stmts: List<AstXmlNode>): LinLowered {
+fun linLowerBody(stmts: *List<AstXmlNode>): LinLowered {
     var lowerer: LinLowerer = LinLowerer(1, false)
     return lowerer.lowerBody(stmts)
 }
@@ -366,7 +366,7 @@ fun linIsSlotName(name: Str): Bool {
 // that changed something the loop starts over. Folding is what lets the next round
 // see a flatter body - and a jump a block used to hide is a jump the peephole can
 // fold.
-fun linLowerForEmission(body: List<AstXmlNode>): List<AstXmlNode> {
+fun linLowerForEmission(body: *List<AstXmlNode>): List<AstXmlNode> {
     var current: List<AstXmlNode> = body
     var canChange: Bool = true
     var guard: Int = 0

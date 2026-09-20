@@ -44,7 +44,7 @@ fun cgIsHexDigit(ch: Char): Bool {
 // about how many bytes each escape costs, and in a narrow literal every escape costs
 // exactly one. The language's set is small (specs/built-in-types.md, `\n \r \t \0 \\ \'
 // \"`), and the run forms above are counted so that an input outside it still lines up.
-fun cgLiteralByteLength(text: Str): Int {
+fun cgLiteralByteLength(text: *Str): Int {
     if (text.size() < 2 || text[0] != '\"') {
         return text.size()
     }
@@ -81,7 +81,7 @@ fun cgLiteralByteLength(text: Str): Int {
 
 // `{0,-142,40}`: the one-line form the emitter writes an index array in. The values are
 // small by construction (`Emitter.emitStringTable`), so one line holds the whole array.
-fun cgIntListText(values: List<Int>): Str {
+fun cgIntListText(values: *List<Int>): Str {
     var text: Str = "{"
     var first: Bool = true
     for (value in values) {
@@ -109,7 +109,7 @@ fun cgMagnitudeOf(value: Int): Int {
 // is filled. A single value is written once, whichever block it lands in, so the encoding
 // never costs more than a count per block - and the differences it is handed are mostly 0,
 // which is what collapses.
-fun cgRunLengthEncode(values: List<Int>): List<Int> {
+fun cgRunLengthEncode(values: *List<Int>): List<Int> {
     val count: Int = values.size()
     var stream: List<Int> = List<Int>()
     stream.append(count)
@@ -155,7 +155,7 @@ data class StringTable(
 ) {
 
     // Pools `text` unless it is already there.
-    fun add(text: Str): Unit {
+    fun add(text: *Str): Unit {
         if (this.indexAt.has(text)) {
             return
         }
@@ -205,7 +205,7 @@ data class StringTable(
     // The pool index of `text`, or -1 when the walk never pooled it. The raw index, for a
     // writer that needs the number rather than the site's spelling (the resource table,
     // `Emitter.emitResourceTable`).
-    fun indexOf(text: Str): Int {
+    fun indexOf(text: *Str): Int {
         if (!this.indexAt.has(text)) {
             return -1
         }

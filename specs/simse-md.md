@@ -130,11 +130,11 @@ something to substitute. A build of this repository would say:
     build: bun build.js --release --cpp | --exe |
 
 (`build.js --cpp <file>` is exactly "compile this C++ file instead of regenerating", and it
-brings the MSVC environment, the flags, `cppsrc/rtl/native.cpp` and the include root with
+brings the MSVC environment, the flags and the include root with
 it.) A plain toolchain says the same thing without the build tool:
 
-    build: g++ -std=c++20 -O2 -I. | cppsrc/rtl/native.cpp -o |
-    build: cl /nologo /std:c++20 /EHsc /O2 /I. | cppsrc/rtl/native.cpp /Fe:|
+    build: g++ -std=c++20 -O2 -I. | -o |
+    build: cl /nologo /std:c++20 /EHsc /O2 /I. | /Fe:|
 
 Two consequences to keep in mind. The command is *not* a sandbox: it runs with the user's
 privileges and whatever the shell accepts, which is the point (a template can call a build
@@ -240,4 +240,5 @@ The step list lives in `impl_specs/roadmap.md` (T31).
 The implementation notes so far: staging a tree needs **directory creation** (a native, or
 `simse_writeFile` creating parents) and running the command needs **`system()`** (a native
 returning the normalized exit code, as above); the copy itself is `listFiles` +
-`readWholeFile` + `writeFile`, which the RTL has (`cppsrc/rtl/fs.kt`, `cppsrc/rtl/native.cpp`).
+`readWholeFile` + `writeFile`, which the RTL has (`cppsrc/rtl/fs.kt`, whose C++ is the
+`fileio` section of `cppsrc/rtl/_res.md`).

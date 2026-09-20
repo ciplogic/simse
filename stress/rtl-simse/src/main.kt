@@ -18,11 +18,33 @@ package fixtures
 //   - `fmtStr` fills one item per `|`, and a call whose points and items do not line up
 //     (or that passes no items) gets the format back *unfilled* rather than a
 //     half-filled result - the one shape it does not handle is the one it refuses.
+//   - an **item that is a handle is read through to its value**, exactly as a by-value
+//     parameter's argument is (`specs/functions.md`, "Handles at a call"): a pack stores
+//     values and never pointers. That is the shape the emitter's own `fmtStr` calls pass,
+//     since `xmlAttr` answers a `*Str`.
 //   - `Str.isEmpty` is a prelude body with a **receiver**: the receiver-type form
 //     (`fun Str.isEmpty()`) is what marks it an extension - a `native` spells the
 //     receiver as an explicit `this`, a function with a body cannot. Its call sites
 //     below are the shares a receiver has: a literal, a local, and a member call on
 //     `this` inside the body of a receiver function of its own.
+
+// A handle item is read through to its value, the way a by-value parameter's argument is
+// (`specs/functions.md`, "Handles at a call"): a pack of items stores values, never pointers.
+fun mirror(a: *Str, b: &Str): Str {
+    return fmtStr("[|::|]", a, b)
+}
+
+// The pack a call builds (`specs/functions.md`): the trailing arguments become one list,
+// each one a value - so a handle among them is read through here too.
+fun parcel(after: Str, items: *List<Str>): Str {
+    var out: Str = after
+    var i: Int = 0
+    while (i < items.size()) {
+        out = out + "+" + items[i]
+        i = i + 1
+    }
+    return out
+}
 
 fun main(): Int {
     // The inferred form: the destination spells the type.
@@ -53,6 +75,18 @@ fun main(): Int {
     val text: Str = "b"
     println(text.isEmpty())                       // false
     println(Shell("").isEmpty())                   // true
+
+    // A handle item is read through: the list holds the *pointee*.
+    val borrowed: Str = "item"
+    val ptr: *Str = *borrowed
+    val boxed: &Str = &borrowed
+    println(mirror(ptr, boxed))                   // [item::item]
+
+    // The same for the other two packs: a list literal, and a call's trailing arguments.
+    val parts: List<Str> = listOf<Str>(ptr, boxed, "leaf")
+    println(parts.size().toString())              // 3
+    println(parts[0])                             // item
+    println(parcel("head", ptr, boxed, "leaf"))   // head+item+item+leaf
     return 0
 }
 

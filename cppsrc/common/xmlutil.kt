@@ -82,10 +82,10 @@ val xmlMissingAttr: Str = ""
 fun xmlAttr(node: *AstXmlNode, name: AstNodeAttributeKind): *Str {
     for (*attr in node.attributes) {
         if (attr.name == name) {
-            return *attr.value
+            return * attr.value
         }
     }
-    return *xmlMissingAttr
+    return * xmlMissingAttr
 }
 
 // The node's category: what it is (the schema's `kind`), read straight off the
@@ -387,7 +387,7 @@ fun xmlLambdaParams(expr: *AstXmlNode): List<Str> {
 }
 
 // Reads the list only; a `*List<Str>` avoids copying the caller's list.
-fun xmlIsTypeParam(name: Str, typeParams: *List<Str>): Bool {
+fun xmlIsTypeParam(name: *Str, typeParams: *List<Str>): Bool {
     var i: Int = 0
     while (i < typeParams.size()) {
         if (typeParams[i] == name) {

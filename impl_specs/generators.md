@@ -227,16 +227,19 @@ text does not depend on the program's types.
   deliberately *not* marked: `cppsrc/rtl/_res.md` is the compiler's run-time table, the second
   half of the lookup below, and marking them would leave every program without the RTL's C++.
 
-The RTL's hand-written C++ lives here now, one section per header it came from
-(`cppsrc/rtl/_res.md`): `strtable` and `timeops` (`emit: always`), `listops`, `dictops`
+The RTL's hand-written C++ lives here now (`cppsrc/rtl/_res.md`), one section per
+header it came from: `strtable` and `timeops` (`emit: always`), `listops`, `dictops`
 and `strops` (shared: the List/Array/Str primitives, the Dictionary operations, and the
-string/character/numeric conversions the headers held), and `spanOf` (the first user,
-whose declaration and definition moved out of `span.hpp`). Five headers are gone -
-`strtable.hpp`, `timeops.hpp`, `listops.hpp`, `dictops.hpp`, `strops.hpp` - and `simse.hpp`
+string/character/numeric conversions the headers held), `spanOf` (the first user,
+whose declaration and definition moved out of `span.hpp`), and `fileio`
+(`emit: always`: the platform's filesystem/IO operations, which were `native.cpp` and
+`fs.hpp`). Six headers are gone - `strtable.hpp`, `timeops.hpp`, `listops.hpp`,
+`dictops.hpp`, `strops.hpp`, `fs.hpp` - and `simse.hpp`
 no longer includes them; a `@SmGen("res", ...)` declaration emits no prototype of its own,
 which is what the `forward` text of its section is for. What stays a header is the type core
-and the platform: `simse.hpp`'s own includes, plus the declarations over `native.cpp`
-(`fs.hpp`, `filestream.hpp`).
+and `filestream.hpp` (the `FileStream` struct and its methods, minus the
+`simse_fileStream_open` prototype): `simse.hpp`'s own includes. `cppsrc/rtl/native.cpp`,
+the repository's one hand-written translation unit, is gone with the bodies it held.
 
 ## Bootstrap
 

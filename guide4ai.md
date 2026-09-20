@@ -22,9 +22,11 @@ expressible in the language.
 
 Toolchain: MSVC (arm64) + `cl.exe`, C++20, and the `bun` runtime for the
 harnesses. There is no build system to configure: the compiler is Simse, and the
-only hand-written C++ is the runtime it is compiled against (`cppsrc/rtl`: the
-headers plus the one translation unit `cppsrc/rtl/native.cpp`) and the published
-bootstrap `cppsrc/simse_bootstrap.cpp`.
+only hand-written C++ is the runtime's headers (`cppsrc/rtl/*.hpp`) and the
+published bootstrap `cppsrc/simse_bootstrap.cpp`. Everything else a program needs -
+the RTL primitives, the platform's file I/O, the clocks - is generated into its own
+translation unit from `cppsrc/rtl/_res.md`, so a build is one `cl.exe` invocation
+over one file with nothing to link.
 
 ```sh
 # build (from the repo root): cppsrc -> ./simse_out.cpp -> ./simse.exe
@@ -116,10 +118,10 @@ driver's - and `build.bat` can compile it.
   `containers.hpp`, `smstring.hpp`, `strsmallvector.hpp`, `optional.hpp`,
   `functional.hpp`, `result.hpp`, `xml.hpp`, `span.hpp`,
   | `strview.hpp`, `resources.hpp`,
-  `fs.hpp`, `filestream.hpp`, `simse.hpp`), the one implementations file `native.cpp`
-  (the `native(...)` symbols: file I/O, directory listing, the clock), the
+  `filestream.hpp`, `simse.hpp`), the
   `_res.md` file that holds the RTL's *generated* C++ - one section per header it came
-  from (`strtable`, `timeops`, `listops`, `dictops`, `strops`, and `spanOf`, plus the
+  from (`strtable`, `timeops`, `listops`, `dictops`, `strops`, `resfmt`, and `spanOf`, plus a
+  `fileio` whose text was the runtime's one hand-written translation unit, plus the
   collision fixture's `spanOfEmpty`) with `symbol:`/`emit: always` deciding how a
   declaration reaches it
   (`impl_specs/generators.md`) - AND the
@@ -149,13 +151,14 @@ driver's - and `build.bat` can compile it.
   saves ~18% of the peak working set but spills 16-character strings, so 24
   stays the default — `impl_specs/capability-matrix.md` T33). The knobs that
   remains (`SIMSE_STR_INLINE_CAPACITY`, `SIMSE_NO_PACK4`) are passed with `--define`
-  and reach the amalgamation and `native.cpp` in the same `cl` invocation, so the two
-  can never disagree (`impl_specs/rtl-abi.md`). The language's layout model is
+  and reach the one translation unit a program is, headers and generated C++ together,
+  so nothing can disagree about layout (`impl_specs/rtl-abi.md`). The language's layout model is
   **4-byte packing** (`specs/memory-model.md`): the emitter brackets every
   generated aggregate in `SIMSE_PACK_PUSH`/`SIMSE_PACK_POP`, and `SIMSE_NO_PACK4`
   reverts to the host's default alignment.
-- `cppsrc/common/` — `readFile` (a native declared next to the compiler, not in the
-  prelude) and `xmlutil.kt`, the XmlNode helpers every stage shares.
+- `cppsrc/common/` — `readFile` (a declaration next to the compiler, not in the
+  prelude; its C++ is the `fileio` section like the RTL's own file operations) and
+  `xmlutil.kt`, the XmlNode helpers every stage shares.
 - `cppsrc/resources/` — the `_res.md` reader: the format, the join, the discovery,
   and the C++ literal a resource is pooled as (`specs/resources.md`). The runtime half
   of it is `cppsrc/rtl/resources.{kt,hpp}`.
@@ -245,10 +248,12 @@ driver's - and `build.bat` can compile it.
 
 **The compiler is Simse.** `cppsrc/**/*.kt` is the whole compiler: scanner, parser,
 sema/reification, the linear lowering, the emitter, and the driver. What is
-hand-written C++ is only the ground it stands on: the runtime (`cppsrc/rtl`: the
-headers plus `native.cpp`, the FFI the compiler and every program call) and the
+hand-written C++ is only the ground it stands on: the runtime's headers
+(`cppsrc/rtl/*.hpp`, the type core and the platform's types) and the
 **published bootstrap** `cppsrc/simse_bootstrap.cpp` - the amalgamation of the
-tree, checked in so the compiler can be built by a C++ compiler alone.
+tree, checked in so the compiler can be built by a C++ compiler alone. The rest of
+the runtime, the platform's own operations included, is generated into that one
+file from `cppsrc/rtl/_res.md` (`fileio`, `timeops`, ...).
 
 The bootstrap property is the invariant that replaces the old two-ring port:
 compile the published file, and the compiler it produces must transpile `cppsrc`
@@ -299,10 +304,14 @@ Key design points:
   root *without* one is scanned whole, as `--root cppsrc` does. A module that says
   `sourcegen: true` is a hard error naming it for now.
 - **Native boundary** (see `impl_specs/native-interop.md`): `native fun` /
-  `native("Symbol") fun` declares a function whose body is hand-written C++. A body that
-  is a *resource* is `@SmGen("res", section[, symbol])` instead, which is where the RTL's
-  own operations live now (`cppsrc/rtl/_res.md`); what is left as `native` is the
-  platform's C++ (`native.cpp`) and the type core.
+  `native("Symbol") fun` declares a function whose body is hand-written C++, which the
+  program links. A body that is a *resource* is `@SmGen("res", section[, symbol])`
+  instead, which is where the RTL's own operations live now (`cppsrc/rtl/_res.md`) -
+  including the platform's file I/O and clocks (`fileio`, `timeops`), which are
+  `emit: always` precisely because a program may name their symbols with a
+  `native(...)` declaration of its own. What is left as `native` is the type core -
+  `filestream.hpp`'s methods, `StrView`, `Span`, `XmlNode`, the `Str`/`List` primitives -
+  whose C++ is the RTL headers.
 - **Prelude**: `cppsrc/rtl/*.kt` is implicitly in scope everywhere; its
   method bodies are NOT emitted (behavior lives in the RTL's C++, which is a header or a
   resource section).
@@ -348,9 +357,10 @@ Key design points:
 ## 6. Change protocol (read before editing)
 
 - **One ring, and it is Simse.** A compiler behavior change is a change to
-  `cppsrc/**/*.kt`. There is no C++ mirror to keep in step any more; the runtime
-  (`cppsrc/rtl/*.hpp`, `native.cpp`) and the published bootstrap are the only C++,
-  and both are inputs to `cl.exe`, not a second implementation.
+  `cppsrc/**/*.kt`. There is no C++ mirror to keep in step any more; the runtime's
+  headers (`cppsrc/rtl/*.hpp`), the RTL's resource text (`cppsrc/rtl/_res.md`) and the
+  published bootstrap are the only C++, and all of them are inputs to `cl.exe`, not a
+  second implementation.
 - After a change: `./build.bat --release` (or `bun build.js --release`), then
   `bun tools/stress.js`, then `bun tools/bootstrap.js` - the fixed point must still
   hold. When the change is visible in the emitted C++, refresh the published file
@@ -517,12 +527,20 @@ ring: they name C++ files that no longer exist, and their evidence lines are his
 
 Do these only when asked; roughly prioritized:
 
-1. **Continue the resource migration** (T29 in `impl_specs/roadmap.md` did `strtable`,
-   `timeops`, `listops`, `dictops` and `strops`). What is left is the pair that is
-   declarations over `native.cpp` bodies (`fs.hpp`, `filestream.hpp`): the declarations can
-   move, the bodies cannot until the language has file/string APIs of its own - and unlike
-   the five that moved, `native.cpp`'s own translation unit needs those declarations, so a
-   header has to stay for it either way. The type core (`types.hpp`, `containers.hpp`,
+1. ~~**Continue the resource migration**~~ **done** (T29 did `strtable`, `timeops`,
+   `listops`, `dictops` and `strops`; this finished it): `cppsrc/rtl/native.cpp` and
+   `cppsrc/rtl/fs.hpp` are gone. The platform's bodies - file I/O, directory listing,
+   `FileStream::open`, the two clocks - are the `fileio` and `timeops` sections of
+   `cppsrc/rtl/_res.md`, their prototypes are `fileio`'s `forward:` text, and the prelude
+   declarations name them (`@SmGen("res", "fileio", "simse_listFiles")`). So a program,
+   the compiler included, is **one translation unit** with nothing to link, and
+   `cppsrc/simse_bootstrap.cpp` builds with `cl.exe` alone. `fileio` is `emit: always`
+   because a program may name one of its symbols with its own `native("simse_...")`
+   declaration (the FFI `impl_specs/native-interop.md` documents, and
+   `stress/native-read-file`), and no `res` declaration reaches the section in that case
+   (`sourcegen/ResGen.kt`). An alternative, if a program should carry only what it
+   reaches, is one section per platform symbol with `symbol:` reach - not done, because
+   it changes that mechanism. The type core (`types.hpp`, `containers.hpp`,
    `smstring.hpp`, `smdictionary.hpp`, `span.hpp`, `strview.hpp`, `strsmallvector.hpp`,
    `optional.hpp`, `result.hpp`, `functional.hpp`, `xml.hpp`, `astxml.hpp`) stays: it is
    what the amalgamation is compiled *against*, and some of it needs language features
@@ -749,11 +767,10 @@ Do these only when asked; roughly prioritized:
 - A handle's native operations must be **struct methods**, not free natives: the
   emitter calls `stream.readLine()` on a `*FileStream` as `(*stream).readLine()`.
   Same for `Span`/`XmlNode`.
-- After changing **any RTL header**, the objects in `build/` are stale (the harness
-  caches them per flag set and rebuilds when a header is newer, but a manual `cl`
-  invocation is the caller's business). `build.js` compiles the amalgamation and
-  `native.cpp` in one `cl` invocation, so the two can never disagree about layout -
-  the old risk was linking a prebuilt library built against an older header.
+- After changing **any RTL header**, the program you compile is that header plus the
+generated C++ of one translation unit, so nothing can be built against an older header:
+`build.js` compiles the amalgamation in one `cl` invocation, and the RTL's own C++
+(`cppsrc/rtl/_res.md`) is part of it.
 - **The Simse ring's nodes carry roles**, and a lookup is by role: a type read out
   of a declaration (`xmlChild(decl, ReturnType)`) comes back rooted as
   `ReturnType`, so putting it where a `Type` child belongs needs a re-root

@@ -163,7 +163,7 @@ data class SourceGenerator(
 // the parser joined them (`,` between them, string literals without their quotes), which is
 // the one spelling this package reads. It is `cgGeneratorArg`'s rule
 // (`cppsrc/codegen/Codegen.kt`), kept here so a generator does not depend on the emitter.
-fun sourceGenArg(args: Str, index: Int): Str {
+fun sourceGenArg(args: *Str, index: Int): Str {
     if (args.size() == 0 || index < 0) {
         return ""
     }
@@ -175,7 +175,7 @@ fun sourceGenArg(args: Str, index: Int): Str {
 }
 
 // The attribute arguments after the generator's name, as one list.
-fun sourceGenArgs(args: Str): List<Str> {
+fun sourceGenArgs(args: *Str): List<Str> {
     var out: List<Str> = List<Str>()
     if (args.size() == 0) {
         return out
@@ -214,7 +214,7 @@ fun sourceGenUnquote(text: Str): Str {
 
 // True when either list carries `key`. A key may hold an *empty* text - a section with
 // nothing under it - so this and the text below are separate questions.
-fun sourceGenResHas(state: *FullCompiledState, key: Str): Bool {
+fun sourceGenResHas(state: *FullCompiledState, key: *Str): Bool {
     if (resHas(state.resources, key)) {
         return true
     }
@@ -223,7 +223,7 @@ fun sourceGenResHas(state: *FullCompiledState, key: Str): Bool {
 
 // The text `key` holds - "" when neither list carries it, which `sourceGenResHas` tells
 // apart from a key that carries nothing.
-fun sourceGenResText(state: *FullCompiledState, key: Str): Str {
+fun sourceGenResText(state: *FullCompiledState, key: *Str): Str {
     if (resHas(state.resources, key)) {
         return resValueOf(state.resources, key)
     }

@@ -7,10 +7,10 @@
 // and the compiler that comes out of it must transpile the same sources back into the same
 // bytes. This tool times each step and checks that fixed point:
 //
-//   1. compile     the published `cppsrc/simse_bootstrap.cpp` and the runtime
-//                  `cppsrc/rtl/native.cpp` into `simse_boot.exe`, with cl.exe only - no
-//                  build system, nothing generated (docs/getting-started.md,
-//                  "Building the compiler without a compiler")
+//   1. compile     the published `cppsrc/simse_bootstrap.cpp` into `simse_boot.exe`, with
+//                  cl.exe only - no build system, nothing generated, and no second file to
+//                  link (docs/getting-started.md, "Building the compiler without a
+//                  compiler")
 //   2. transpile   `simse_boot.exe` compiling `cppsrc`, and - when a working compiler
 //                  exists - that compiler doing the same, so the two can be compared
 //   3. fixed point the regenerated file must equal `cppsrc/simse_bootstrap.cpp` byte for
@@ -29,7 +29,6 @@ import { developerEnv, fail as failTool, hostArch, normalizeArch, REPO, whichCl 
 const TOOL = "bootstrap";
 const fail = (message) => failTool(TOOL, message);
 const BOOTSTRAP = path.join("cppsrc", "simse_bootstrap.cpp");
-const NATIVE = path.join("cppsrc", "rtl", "native.cpp");
 
 function parseArgs(argv) {
   const opts = { runs: 3, debug: false, simse: null };
@@ -94,14 +93,13 @@ function main() {
   mkdirSync(work, { recursive: true });
 
   const bootstrap = path.join(REPO, BOOTSTRAP);
-  const native = path.join(REPO, NATIVE);
   const bootExe = path.join(work, "simse_boot.exe");
   const bootOut = path.join(work, "simse_boot_out.cpp");
   const workingOut = path.join(work, "simse_working_out.cpp");
   const working = opts.simse ? path.resolve(REPO, opts.simse) : path.join(REPO, "simse.exe");
   const hasWorking = existsSync(working);
 
-  for (const required of [bootstrap, native]) {
+  for (const required of [bootstrap]) {
     if (!existsSync(required)) fail(`missing ${path.relative(REPO, required)}`);
   }
 
@@ -124,11 +122,11 @@ function main() {
               `${(statSync(bootstrap).size / 1048576).toFixed(2)} MB (checked in, do not edit)`);
   console.log("");
   console.log("1. compile the published bootstrap (cl.exe only, no build system)");
-  const compile = timed(`${BOOTSTRAP} + ${NATIVE} -> simse_boot.exe`, cl, [
+  const compile = timed(`${BOOTSTRAP} -> simse_boot.exe`, cl, [
     "/nologo", "/std:c++20", "/EHsc", "/W3", "/I" + REPO,
     ...(opts.debug ? ["/MDd", "/Od", "/Zi"] : ["/MD", "/O2", "/Ob3", "/DNDEBUG"]),
     ...(opts.debug ? [`/Fd${bootExe}.pdb`] : []),
-    BOOTSTRAP, NATIVE,
+    BOOTSTRAP,
     "/Fo" + path.join(work, "") + "\\", "/Fe:" + bootExe,
   ], 1, env);
   console.log("");

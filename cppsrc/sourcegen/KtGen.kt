@@ -33,14 +33,14 @@ fun ktGen(ctx: *SourceGenContext): SourceGenTransform {
     val key: Str = section + ":source"
     val source: Str = sourceGenResText(ctx.state, key)
     if (source == "") {
-        ctx.error = "no source for @SmGen(\"kt\", \"" + section + "\") (needs the resource " + key + ")"
+        ctx.error = fmtStr("no source for @SmGen(\"kt\", \"|\") (needs the resource |)", section, key)
         return SourceGenTransform(SourceTransformation.None, section)
     }
 
     // One block per declaration, and the driver joins them into one module: a comment
     // naming the section is what a diagnostic or an emitted source comment can point at
     // (the module is a synthetic file, so the line is all a reader has).
-    ctx.source = "\n// " + section + "\n"
+    ctx.source = fmtStr("\n// |\n", section)
     ctx.source.appendStr(source)
     if (ctx.source[ctx.source.size() - 1] != '\n') {
         ctx.source.append('\n')

@@ -602,12 +602,12 @@ fun ilOperandTokens(signature: *IlSignature): List<Str> {
 }
 
 // Whether a token is the repeating one (`Var...`): the `...` is not part of its kind.
-fun ilTokenRepeats(token: Str): Bool {
+fun ilTokenRepeats(token: *Str): Bool {
     return token.size() > 3 && token[token.size() - 1] == '.'
             && token[token.size() - 2] == '.' && token[token.size() - 3] == '.'
 }
 
-fun ilKindOfToken(token: Str): IlOperandKind {
+fun ilKindOfToken(token: *Str): IlOperandKind {
     var base: Str = token
     if (ilTokenRepeats(base)) {
         base = base.substr(0, base.size() - 3)
@@ -730,7 +730,7 @@ fun ilPoolAsText(text: Str): Str {
     if (literal) {
         return text
     }
-    return "\"" + text + "\""
+    return fmtStr("\"|\"", text)
 }
 
 // The operand as the reader wants it: the name from the table it indexes, with the raw
@@ -797,7 +797,9 @@ fun ilOpComment(body: *IlBody, op: *IlOp): Str {
     when (kind) {
         IlOpKind.Declare -> {
             val slot: Int = ilOperandAt(operands, 0)
-            return "var " + ilVarName(body, slot) + ": " + ilVarTypeName(body, slot)
+            return fmtStr(
+                "var |: |", ilVarName(body, slot), ilVarTypeName(body, slot)
+            )
         }
 
         IlOpKind.Label -> {
@@ -812,14 +814,16 @@ fun ilOpComment(body: *IlBody, op: *IlOp): Str {
             val condition: Str = ilVarName(body, ilOperandAt(operands, 0))
             val target: Str = ilLabelName(body, ilOperandAt(operands, 1))
             if (kind == IlOpKind.IfTrue) {
-                return "if (" + condition + ") goto " + target
+                return fmtStr("if (|) goto |", condition, target)
             }
-            return "if (!" + condition + ") goto " + target
+            return fmtStr("if (!|) goto |", condition, target)
         }
 
         IlOpKind.SetVar -> {
-            return ilVarName(body, ilOperandAt(operands, 0)) + " = "
-            +ilVarName(body, ilOperandAt(operands, 1))
+            return fmtStr(
+                "| = |", ilVarName(body, ilOperandAt(operands, 0)),
+                ilVarName(body, ilOperandAt(operands, 1))
+            )
         }
 
         IlOpKind.SetVar_Null -> {
@@ -827,92 +831,124 @@ fun ilOpComment(body: *IlBody, op: *IlOp): Str {
         }
 
         IlOpKind.BinaryOp -> {
-            return ilVarName(body, ilOperandAt(operands, 0)) + " = "
-            +ilVarName(body, ilOperandAt(operands, 2)) + " "
-            +ilPoolText(body, ilOperandAt(operands, 1)) + " "
-            +ilVarName(body, ilOperandAt(operands, 3))
+            return fmtStr(
+                "| = | | |", ilVarName(body, ilOperandAt(operands, 0)),
+                ilVarName(body, ilOperandAt(operands, 2)),
+                ilPoolText(body, ilOperandAt(operands, 1)),
+                ilVarName(body, ilOperandAt(operands, 3))
+            )
         }
 
         IlOpKind.UnaryOp -> {
-            return ilVarName(body, ilOperandAt(operands, 0)) + " = "
-            +ilPoolText(body, ilOperandAt(operands, 1))
-            +ilVarName(body, ilOperandAt(operands, 2))
+            return fmtStr(
+                "| = ||", ilVarName(body, ilOperandAt(operands, 0)),
+                ilPoolText(body, ilOperandAt(operands, 1)),
+                ilVarName(body, ilOperandAt(operands, 2))
+            )
         }
 
         IlOpKind.Cast -> {
-            return ilVarName(body, ilOperandAt(operands, 0)) + " = cast "
-            +ilVarName(body, ilOperandAt(operands, 1))
+            return fmtStr(
+                "| = cast |", ilVarName(body, ilOperandAt(operands, 0)),
+                ilVarName(body, ilOperandAt(operands, 1))
+            )
         }
 
         IlOpKind.Box -> {
-            return ilVarName(body, ilOperandAt(operands, 0)) + " = &"
-            +ilVarName(body, ilOperandAt(operands, 1))
+            return fmtStr(
+                "| = &|", ilVarName(body, ilOperandAt(operands, 0)),
+                ilVarName(body, ilOperandAt(operands, 1))
+            )
         }
 
         IlOpKind.Deref -> {
-            return ilVarName(body, ilOperandAt(operands, 0)) + " = *"
-            +ilVarName(body, ilOperandAt(operands, 1))
+            return fmtStr(
+                "| = *|", ilVarName(body, ilOperandAt(operands, 0)),
+                ilVarName(body, ilOperandAt(operands, 1))
+            )
         }
 
         IlOpKind.CopyValue -> {
-            return ilVarName(body, ilOperandAt(operands, 0)) + " = copy("
-            +ilVarName(body, ilOperandAt(operands, 1)) + ")"
+            return fmtStr(
+                "| = copy(|)", ilVarName(body, ilOperandAt(operands, 0)),
+                ilVarName(body, ilOperandAt(operands, 1))
+            )
         }
 
         IlOpKind.Store -> {
-            return "*" + ilVarName(body, ilOperandAt(operands, 0)) + " = "
-            +ilVarName(body, ilOperandAt(operands, 1))
+            return fmtStr(
+                "*| = |", ilVarName(body, ilOperandAt(operands, 0)),
+                ilVarName(body, ilOperandAt(operands, 1))
+            )
         }
 
         IlOpKind.GetField -> {
-            return ilVarName(body, ilOperandAt(operands, 0)) + " = "
-            +ilVarName(body, ilOperandAt(operands, 1)) + "."
-            +ilPoolText(body, ilOperandAt(operands, 2))
+            return fmtStr(
+                "| = |.|", ilVarName(body, ilOperandAt(operands, 0)),
+                ilVarName(body, ilOperandAt(operands, 1)),
+                ilPoolText(body, ilOperandAt(operands, 2))
+            )
         }
 
         IlOpKind.SetField -> {
-            return ilVarName(body, ilOperandAt(operands, 1)) + "."
-            +ilPoolText(body, ilOperandAt(operands, 0)) + " = "
-            +ilVarName(body, ilOperandAt(operands, 2))
+            return fmtStr(
+                "|.| = |", ilVarName(body, ilOperandAt(operands, 1)),
+                ilPoolText(body, ilOperandAt(operands, 0)),
+                ilVarName(body, ilOperandAt(operands, 2))
+            )
         }
 
         IlOpKind.GetIndex -> {
-            return ilVarName(body, ilOperandAt(operands, 0)) + " = "
-            +ilVarName(body, ilOperandAt(operands, 1)) + "["
-            +ilVarName(body, ilOperandAt(operands, 2)) + "]"
+            return fmtStr(
+                "| = |[|]", ilVarName(body, ilOperandAt(operands, 0)),
+                ilVarName(body, ilOperandAt(operands, 1)),
+                ilVarName(body, ilOperandAt(operands, 2))
+            )
         }
 
         IlOpKind.SetIndex -> {
-            return ilVarName(body, ilOperandAt(operands, 1)) + "["
-            +ilVarName(body, ilOperandAt(operands, 2)) + "] = "
-            +ilVarName(body, ilOperandAt(operands, 3))
+            return fmtStr(
+                "|[|] = |", ilVarName(body, ilOperandAt(operands, 1)),
+                ilVarName(body, ilOperandAt(operands, 2)),
+                ilVarName(body, ilOperandAt(operands, 3))
+            )
         }
 
         IlOpKind.FieldAddr -> {
-            return ilVarName(body, ilOperandAt(operands, 0)) + " = &"
-            +ilVarName(body, ilOperandAt(operands, 1)) + "."
-            +ilPoolText(body, ilOperandAt(operands, 2))
+            return fmtStr(
+                "| = &|.|", ilVarName(body, ilOperandAt(operands, 0)),
+                ilVarName(body, ilOperandAt(operands, 1)),
+                ilPoolText(body, ilOperandAt(operands, 2))
+            )
         }
 
         IlOpKind.IndexAddr -> {
-            return ilVarName(body, ilOperandAt(operands, 0)) + " = &"
-            +ilVarName(body, ilOperandAt(operands, 1)) + "["
-            +ilVarName(body, ilOperandAt(operands, 2)) + "]"
+            return fmtStr(
+                "| = &|[|]", ilVarName(body, ilOperandAt(operands, 0)),
+                ilVarName(body, ilOperandAt(operands, 1)),
+                ilVarName(body, ilOperandAt(operands, 2))
+            )
         }
 
         IlOpKind.GetStatic -> {
-            return ilVarName(body, ilOperandAt(operands, 0)) + " = "
-            +ilPoolText(body, ilOperandAt(operands, 1))
+            return fmtStr(
+                "| = |", ilVarName(body, ilOperandAt(operands, 0)),
+                ilPoolText(body, ilOperandAt(operands, 1))
+            )
         }
 
         IlOpKind.GetStaticAddr -> {
-            return ilVarName(body, ilOperandAt(operands, 0)) + " = &"
-            +ilPoolText(body, ilOperandAt(operands, 1))
+            return fmtStr(
+                "| = &|", ilVarName(body, ilOperandAt(operands, 0)),
+                ilPoolText(body, ilOperandAt(operands, 1))
+            )
         }
 
         IlOpKind.SetStatic -> {
-            return ilPoolText(body, ilOperandAt(operands, 0)) + " = "
-            +ilVarName(body, ilOperandAt(operands, 1))
+            return fmtStr(
+                "| = |", ilPoolText(body, ilOperandAt(operands, 0)),
+                ilVarName(body, ilOperandAt(operands, 1))
+            )
         }
 
         IlOpKind.Call, IlOpKind.CallVoid -> {
@@ -928,14 +964,21 @@ fun ilOpComment(body: *IlBody, op: *IlOp): Str {
                 first = 2
             }
             if (methodOp < 0 || methodOp >= body.methods.size()) {
-                return dst + "?m" + ilIntText(methodOp) + "(" + ilArgList(body, operands, first) + ")"
+                return fmtStr(
+                    "|?m|(|)", dst, ilIntText(methodOp),
+                    ilArgList(body, operands, first)
+                )
             }
             val method: IlMethod = body.methods[methodOp]
             if (method.kind == IlMethodKind.Method && first < operands.size()) {
-                return dst + ilVarName(body, operands[first]) + "." + method.name + "("
-                +ilArgList(body, operands, first + 1) + ")"
+                return fmtStr(
+                    "||.|(|)", dst, ilVarName(body, operands[first]), method.name,
+                    ilArgList(body, operands, first + 1)
+                )
             }
-            return dst + method.name + "(" + ilArgList(body, operands, first) + ")"
+            return fmtStr(
+                "|(|)", dst, method.name, ilArgList(body, operands, first)
+            )
         }
 
         IlOpKind.CallIndirect, IlOpKind.CallIndirectVoid -> {
@@ -946,19 +989,25 @@ fun ilOpComment(body: *IlBody, op: *IlOp): Str {
                 dst2 = ilVarName(body, ilOperandAt(operands, 0)) + " = "
                 calleeAt = 1
             }
-            return dst2 + ilVarName(body, ilOperandAt(operands, calleeAt)) + "("
-            +ilArgList(body, operands, calleeAt + 1) + ")"
+            return fmtStr(
+                "|(|)", dst2, ilVarName(body, ilOperandAt(operands, calleeAt)),
+                ilArgList(body, operands, calleeAt + 1)
+            )
         }
 
         IlOpKind.Pack -> {
-            return ilVarName(body, ilOperandAt(operands, 0)) + " = ["
-            +ilArgList(body, operands, 1) + "]"
+            return fmtStr(
+                "| = [|]", ilVarName(body, ilOperandAt(operands, 0)),
+                ilArgList(body, operands, 1)
+            )
         }
 
         IlOpKind.CallCtor -> {
-            return ilVarName(body, ilOperandAt(operands, 0)) + " = new "
-            +ilTypeName(body, ilOperandAt(operands, 1)) + "("
-            +ilArgList(body, operands, 2) + ")"
+            return fmtStr(
+                "| = new |(|)", ilVarName(body, ilOperandAt(operands, 0)),
+                ilTypeName(body, ilOperandAt(operands, 1)),
+                ilArgList(body, operands, 2)
+            )
         }
 
         IlOpKind.Return -> {
@@ -974,7 +1023,9 @@ fun ilOpComment(body: *IlBody, op: *IlOp): Str {
         }
 
         IlOpKind.Unsupported -> {
-            return "<unsupported: " + ilPoolText(body, ilOperandAt(operands, 1)) + ">"
+            return fmtStr(
+                "<unsupported: |>", ilPoolText(body, ilOperandAt(operands, 1))
+            )
         }
     }
     return Str()
@@ -990,7 +1041,7 @@ fun printIlBody(body: *IlBody): Str {
     var types: List<Str> = List<Str>()
     var i: Int = 0
     while (i < body.types.size()) {
-        types.append(ilIntText(i) + " " + body.types[i])
+        types.append(fmtStr("| |", ilIntText(i), body.types[i]))
         i = i + 1
     }
     ilAppendTable(out, "types:   ", types)
@@ -1000,8 +1051,10 @@ fun printIlBody(body: *IlBody): Str {
     while (i < body.vars.size()) {
         val slot: IlVar = body.vars[i]
         vars.append(
-            ilIntText(i) + " " + slot.name + ":" + ilIntText(slot.typeIndex) + ":"
-                    + ilVarKindText(slot.kind)
+            fmtStr(
+                "| |:|:|", ilIntText(i), slot.name, ilIntText(slot.typeIndex),
+                ilVarKindText(slot.kind)
+            )
         )
         i = i + 1
     }
@@ -1010,7 +1063,7 @@ fun printIlBody(body: *IlBody): Str {
     var pool: List<Str> = List<Str>()
     i = 0
     while (i < body.pool.size()) {
-        pool.append(ilIntText(i) + " " + ilPoolAsText(body.pool[i]))
+        pool.append(fmtStr("| |", ilIntText(i), ilPoolAsText(body.pool[i])))
         i = i + 1
     }
     ilAppendTable(out, "pool:    ", pool)
@@ -1019,8 +1072,10 @@ fun printIlBody(body: *IlBody): Str {
     i = 0
     while (i < body.methods.size()) {
         val method: IlMethod = body.methods[i]
-        var text: Str = ilIntText(i) + " " + method.name + ":" + ilMethodKindText(method.kind) + ":"
-        +ilIntText(method.argCount)
+        var text: Str = fmtStr(
+            "| |:|:|", ilIntText(i), method.name, ilMethodKindText(method.kind),
+            ilIntText(method.argCount)
+        )
         if (method.staticBase >= 0) {
             text = text + ":static=" + ilTypeName(body, method.staticBase)
         }
@@ -1035,7 +1090,7 @@ fun printIlBody(body: *IlBody): Str {
     var labels: List<Str> = List<Str>()
     i = 0
     while (i < body.labels.size()) {
-        labels.append(ilIntText(i) + " " + body.labels[i])
+        labels.append(fmtStr("| |", ilIntText(i), body.labels[i]))
         i = i + 1
     }
     ilAppendTable(out, "labels:  ", labels)
@@ -1057,11 +1112,13 @@ fun printIlBody(body: *IlBody): Str {
             j = j + 1
         }
 
-        var text: Str = ilPadRight(ilIntText(i), 4) + ",  " + ilPadRight(ilOpKindText(op.kind), 16)
-        +ilJoinList(rendered, ", ")
+        var text: Str = fmtStr(
+            "|,  ||", ilPadRight(ilIntText(i), 4), ilPadRight(ilOpKindText(op.kind), 16),
+            ilJoinList(rendered, ", ")
+        )
         val comment: Str = ilOpComment(body, op)
         if (!comment.isEmpty()) {
-            text = ilPadRight(text, 74) + "# " + comment
+            text = fmtStr("|# |", ilPadRight(text, 74), comment)
         }
         var sourceLine: Int = 0
         if (i < body.lines.size()) {
@@ -1211,7 +1268,7 @@ fun ilPointerNode(inner: *AstXmlNode): AstXmlNode {
 // `Operand` role): the extractor makes one when a call argument's address is what a
 // `*T` parameter wants, so the address is spelled by the *same* code an explicit `*`
 // reaches (`into`).
-fun ilDerefNode(operand: AstXmlNode): AstXmlNode {
+fun ilDerefNode(operand: *AstXmlNode): AstXmlNode {
     var node: AstXmlNode = AstXmlNode(
         AstNodeKind.Expr, AstNodeCategory.ExprDeref,
         List<AstNodeAttribute>(), Array<AstXmlNode>()
@@ -1347,7 +1404,7 @@ data class IlExtractor(
 
     // ---- tables -----------------------------------------------------------
 
-    fun addVar(name: Str, typeText: Str, kind: IlVarKind, typeNode: AstXmlNode): Int {
+    fun addVar(name: *Str, typeText: *Str, kind: IlVarKind, typeNode: *AstXmlNode): Int {
         this.out.vars.append(IlVar(name, this.typeIndex(typeText, typeNode), kind))
         this.varAt.insert(name, this.out.vars.size() - 1)
         // The frame the type questions read is kept up to date *in place*: it is only ever
@@ -1371,7 +1428,7 @@ data class IlExtractor(
     // The type table: text for the dump, the node (when there is one) for a backend. The
     // first node seen for a text wins, so the table does not depend on which mention
     // happened to carry it.
-    fun typeIndex(text: Str, node: AstXmlNode): Int {
+    fun typeIndex(text: *Str, node: *AstXmlNode): Int {
         if (this.typeAt.has(text)) {
             val index: Int = this.typeAt.get(text).value()
             if (!xmlIsEmpty(node) && index < this.out.typeNodes.size()) {
@@ -1388,11 +1445,11 @@ data class IlExtractor(
         return this.out.types.size() - 1
     }
 
-    fun typeIndexText(text: Str): Int {
+    fun typeIndexText(text: *Str): Int {
         return this.typeIndex(text, xmlEmptyNode())
     }
 
-    fun poolIndex(text: Str): Int {
+    fun poolIndex(text: *Str): Int {
         if (this.poolAt.has(text)) {
             return this.poolAt.get(text).value()
         }
@@ -1401,7 +1458,7 @@ data class IlExtractor(
         return this.out.pool.size() - 1
     }
 
-    fun labelIndex(name: Str): Int {
+    fun labelIndex(name: *Str): Int {
         if (this.labelAt.has(name)) {
             return this.labelAt.get(name).value()
         }
@@ -1413,8 +1470,8 @@ data class IlExtractor(
     // A method's identity is its name, its kind, the type it is reached through (a static
     // call), and the types it is passed: the same name over two receivers is two entries.
     fun methodIndex(
-        name: Str, kind: IlMethodKind, staticBase: Int, returnType: Int,
-        argTypes: List<Int>
+        name: *Str, kind: IlMethodKind, staticBase: Int, returnType: Int,
+        argTypes: *List<Int>
     ): Int {
         var key: Str = name + "|" + ilMethodKindText(kind) + "|" + ilIntText(staticBase)
         var i: Int = 0
@@ -1430,18 +1487,18 @@ data class IlExtractor(
         return this.out.methods.size() - 1
     }
 
-    fun hasVar(name: Str): Bool {
+    fun hasVar(name: *Str): Bool {
         return this.varAt.has(name)
     }
 
-    fun varIndex(name: Str): Int {
+    fun varIndex(name: *Str): Int {
         if (this.varAt.has(name)) {
             return this.varAt.get(name).value()
         }
         return -1
     }
 
-    fun freshSlot(typeText: Str, typeNode: AstXmlNode): Int {
+    fun freshSlot(typeText: *Str, typeNode: *AstXmlNode): Int {
         val slot: Int = this.addVar(
             "_sm_base" + ilIntText(this.nextBase), typeText,
             IlVarKind.Temp, typeNode
@@ -1478,7 +1535,7 @@ data class IlExtractor(
     // One new (or newly typed) binding of the frame. A frame that has not been built yet
     // stays unbuilt - the first question builds it whole - and one that has takes the
     // single entry: only `addVar`/`setSlotType` ever change it, and both only add.
-    fun frameAdd(name: Str, typeNode: AstXmlNode): Unit {
+    fun frameAdd(name: *Str, typeNode: *AstXmlNode): Unit {
         if (this.frameNamesStale || xmlIsEmpty(typeNode)) {
             return
         }
@@ -1534,7 +1591,7 @@ data class IlExtractor(
     // asked here about one node, with this body's frame in scope. An empty node when the
     // rules cannot name it (or when there are no facts to ask); the caller then leaves the
     // slot untyped.
-    fun exprType(e: AstXmlNode): AstXmlNode {
+    fun exprType(e: *AstXmlNode): AstXmlNode {
         if (this.fn.facts == null) {
             return xmlEmptyNode()
         }
@@ -1544,20 +1601,20 @@ data class IlExtractor(
     // The type of the *value* an instruction writes for this expression. It is the type
     // rules' answer, unchanged: they already describe what the emitter spells (`*x` on a
     // value is the address, on `&T` the `.get()`, on `*T` the load through it).
-    fun valueType(e: AstXmlNode): AstXmlNode {
+    fun valueType(e: *AstXmlNode): AstXmlNode {
         return this.exprType(e)
     }
 
     // The type of a slot to synthesise for `e`: its own type, spelled the way the frame
     // spells types, or `?` when there is none.
-    fun slotTypeText(typeNode: AstXmlNode): Str {
+    fun slotTypeText(typeNode: *AstXmlNode): Str {
         if (xmlIsEmpty(typeNode)) {
             return "?"
         }
         return ilTypeText(typeNode)
     }
 
-    fun emit(kind: IlOpKind, operands: List<Int>): Unit {
+    fun emit(kind: IlOpKind, operands: *List<Int>): Unit {
         this.out.ops.append(IlOp(kind, operands))
         this.out.lines.append(this.line)
     }
@@ -1566,13 +1623,13 @@ data class IlExtractor(
         this.emit(IlOpKind.Unsupported, ilOps2(this.freshSlotText("?"), this.poolIndex(what)))
     }
 
-    fun literalOperand(text: Str): Int {
+    fun literalOperand(text: *Str): Int {
         return -1 - this.poolIndex(text)
     }
 
     // ---- the frame --------------------------------------------------------
 
-    fun begin(file: Str): Unit {
+    fun begin(file: *Str): Unit {
         this.out.file = file
         if (xmlIsEmpty(this.fn.decl)) {
             this.out.line = 0
@@ -1595,7 +1652,7 @@ data class IlExtractor(
         this.out.signature = this.signatureText()
     }
 
-    fun run(body: List<AstXmlNode>): IlBody {
+    fun run(body: *List<AstXmlNode>): IlBody {
         this.stmts(body)
         // The extractor's own slots are the body's registers: a slot with a type is
         // declared once, at the top of the instruction list, exactly where `hoistSlots` put
@@ -1688,7 +1745,7 @@ data class IlExtractor(
         var params: List<Str> = List<Str>()
         for (*slot in this.out.vars) {
             if (slot.kind == IlVarKind.Argument) {
-                params.append(this.out.types[slot.typeIndex] + " " + slot.name)
+                params.append(fmtStr("| |", this.out.types[slot.typeIndex], slot.name))
             }
         }
         // A lambda's result is whatever its body returns, which C++ deduces; a function's
@@ -1700,7 +1757,7 @@ data class IlExtractor(
                 retText = ilTypeText(declared)
             }
         }
-        return "(" + ilJoinList(params, ", ") + ") -> " + retText
+        return fmtStr("(|) -> |", ilJoinList(params, ", "), retText)
     }
 
     // ---- statements -------------------------------------------------------
@@ -1841,7 +1898,7 @@ data class IlExtractor(
                 if (this.isTypeBase(lhs)) {
                     this.emit(
                         IlOpKind.SetStatic, ilOps2(
-                            this.poolIndex(this.baseText(lhs) + "." + fieldName),
+                            this.poolIndex(fmtStr("|.|", this.baseText(lhs), fieldName)),
                             this.operandOf(value)
                         )
                     )
@@ -1929,7 +1986,7 @@ data class IlExtractor(
                 val lhs: AstXmlNode = xmlChild(target, AstNodeKind.Receiver)
                 val fieldName: Str = xmlAttr(target, AstNodeAttributeKind.Name)
                 if (this.isTypeBase(lhs)) {
-                    val field: Int = this.poolIndex(this.baseText(lhs) + "." + fieldName)
+                    val field: Int = this.poolIndex(fmtStr("|.|", this.baseText(lhs), fieldName))
                     val current: Int = this.readStatic(target, field)
                     this.emit(IlOpKind.SetStatic, ilOps2(field, this.fold(current, op, value, target)))
                     return
@@ -1998,7 +2055,7 @@ data class IlExtractor(
     // The type of the value in `slot`, which came from `e`: a place is a slot of this frame
     // and already carries one, so the common operand costs a lookup. Anything untyped (a
     // `for` machine, a bare `null`) is the expensive question for the type rules.
-    fun operandValueType(slot: Int, e: AstXmlNode): AstXmlNode {
+    fun operandValueType(slot: Int, e: *AstXmlNode): AstXmlNode {
         val carried: AstXmlNode = ilVarType(this.out, slot)
         if (!xmlIsEmpty(carried)) {
             return carried
@@ -2021,7 +2078,7 @@ data class IlExtractor(
     // unrelated handles is a meaning of its own, or the type error it always was. So is a
     // handle against `null` (an empty type), which is the one comparison a raw pointer is
     // *for*.
-    fun binaryOperand(me: AstXmlNode, other: AstXmlNode, slot: Int): Int {
+    fun binaryOperand(me: *AstXmlNode, other: *AstXmlNode, slot: Int): Int {
         val mine: AstXmlNode = this.operandValueType(slot, me)
         if (xmlIsEmpty(mine) || !ilIsHandleType(mine)) {
             return slot
@@ -2102,7 +2159,7 @@ data class IlExtractor(
 
     // Writes `e` into `slot`, one instruction per operation: every value the lowering
     // produces is one operation deep, so one case here is one instruction.
-    fun into(slot: Int, e: AstXmlNode): Unit {
+    fun into(slot: Int, e: *AstXmlNode): Unit {
         val kind: AstNodeCategory = xmlKind(e)
         when (kind) {
             AstNodeCategory.ExprIntLit, AstNodeCategory.ExprFloatLit,
@@ -2138,7 +2195,7 @@ data class IlExtractor(
                 if (this.isTypeBase(lhs)) {
                     this.emit(
                         IlOpKind.GetStatic,
-                        ilOps2(slot, this.poolIndex(this.baseText(lhs) + "." + fieldName))
+                        ilOps2(slot, this.poolIndex(fmtStr("|.|", this.baseText(lhs), fieldName)))
                     )
                     return
                 }
@@ -2240,7 +2297,7 @@ data class IlExtractor(
     // A read of a place: the value behind it, as a slot. The place itself is read through
     // `receiverOf` - so reading `a[i].f` borrows the element rather than copying it into a
     // temporary of the extractor's own.
-    fun valueOf(e: AstXmlNode): Int {
+    fun valueOf(e: *AstXmlNode): Int {
         if (xmlKind(e) == AstNodeCategory.ExprName) {
             return this.nameOf(e)
         }
@@ -2265,7 +2322,7 @@ data class IlExtractor(
     // type the rules can name. A handle value already denotes the storage, and an
     // unnameable one keeps the value form - the address of something whose type is unknown
     // is not a thing the emitted C++ can spell.
-    fun needsPlace(e: AstXmlNode): Bool {
+    fun needsPlace(e: *AstXmlNode): Bool {
         val typeNode: AstXmlNode = this.exprType(e)
         if (xmlIsEmpty(typeNode)) {
             return false
@@ -2277,8 +2334,8 @@ data class IlExtractor(
     // pointer, typed from the type rules, so a backend can declare it and resolve a call
     // reached through it. A place is never a copy.
     fun place(
-        kind: IlOpKind, baseExpr: AstXmlNode, whole: AstXmlNode, field: Str,
-        indexExpr: AstXmlNode
+        kind: IlOpKind, baseExpr: *AstXmlNode, whole: *AstXmlNode, field: *Str,
+        indexExpr: *AstXmlNode
     ): Int {
         val pointee: AstXmlNode = this.exprType(whole)
         var typeNode: AstXmlNode = xmlEmptyNode()
@@ -2325,7 +2382,7 @@ data class IlExtractor(
     // which is what `FieldAddr`/`IndexAddr` are. That is what keeps a read from copying an
     // aggregate (the C++ of a field read is `p->f`, not a copy of a struct) and a write from
     // being lost in a copy.
-    fun receiverOf(e: AstXmlNode): Int {
+    fun receiverOf(e: *AstXmlNode): Int {
         val kind: AstNodeCategory = xmlKind(e)
         when (kind) {
             AstNodeCategory.ExprName -> {
@@ -2371,7 +2428,7 @@ data class IlExtractor(
 
     // ---- names and types --------------------------------------------------
 
-    fun nameOf(e: AstXmlNode): Int {
+    fun nameOf(e: *AstXmlNode): Int {
         val name: Str = xmlAttr(e, AstNodeAttributeKind.Name)
         // A captured variable is a *field* of the closure, not a slot of this frame:
         // reading it reads through `self`.
@@ -2414,7 +2471,7 @@ data class IlExtractor(
         return fresh
     }
 
-    fun isTypeBase(e: AstXmlNode): Bool {
+    fun isTypeBase(e: *AstXmlNode): Bool {
         val kind: AstNodeCategory = xmlKind(e)
         if (kind == AstNodeCategory.ExprGenericName) {
             return true
@@ -2433,14 +2490,14 @@ data class IlExtractor(
     }
 
     // A name that is file-level static storage rather than a slot of the frame.
-    fun isStaticName(name: Str): Bool {
+    fun isStaticName(name: *Str): Bool {
         if (this.hasVar(name)) {
             return false
         }
         return this.fn.statics.has(name)
     }
 
-    fun baseText(e: AstXmlNode): Str {
+    fun baseText(e: *AstXmlNode): Str {
         if (xmlKind(e) == AstNodeCategory.ExprName) {
             return xmlAttr(e, AstNodeAttributeKind.Name)
         }
@@ -2449,7 +2506,7 @@ data class IlExtractor(
 
     // The `GenericName` node carries its type arguments; the IL wants the type as a node,
     // so a fresh generic type node is built from the name and those arguments.
-    fun calleeToType(e: AstXmlNode): AstXmlNode {
+    fun calleeToType(e: *AstXmlNode): AstXmlNode {
         val name: Str = xmlAttr(e, AstNodeAttributeKind.Name)
         if (xmlKind(e) == AstNodeCategory.ExprGenericName) {
             var node: AstXmlNode = AstXmlNode(
@@ -2471,7 +2528,7 @@ data class IlExtractor(
     // A literal expression's type, as the frame spells it: a literal operand is a *value*
     // with a type like any other, and the method table's `argTypes` should read the same
     // whether the argument was a slot or a constant.
-    fun literalTypeText(e: AstXmlNode): Str {
+    fun literalTypeText(e: *AstXmlNode): Str {
         val kind: AstNodeCategory = xmlKind(e)
         when (kind) {
             AstNodeCategory.ExprIntLit -> {
@@ -2497,7 +2554,7 @@ data class IlExtractor(
         return "?"
     }
 
-    fun operandType(slot: Int, expr: AstXmlNode): Int {
+    fun operandType(slot: Int, expr: *AstXmlNode): Int {
         if (slot >= 0) {
             return this.out.vars[slot].typeIndex
         }
@@ -2556,7 +2613,7 @@ data class IlExtractor(
     // no packing, no conversion - which is exactly the call it was before either existed.
     // Empty when the facts are not available (a body with no facts, a callee that is a
     // local, a static call's type).
-    fun callTarget(callee: AstXmlNode, receiver: AstXmlNode, argCount: Int, member: Bool): AstXmlNode {
+    fun callTarget(callee: *AstXmlNode, receiver: *AstXmlNode, argCount: Int, member: Bool): AstXmlNode {
         if (this.fn.facts == null) {
             return xmlEmptyNode()
         }
@@ -2642,7 +2699,7 @@ data class IlExtractor(
     // construction's arguments convert against its *fields*, the way a call's convert
     // against its parameters (`AstNodeAttribute(kind, value)`, whose C++ is the struct's
     // own constructor).
-    fun dataClassDecl(name: Str): AstXmlNode {
+    fun dataClassDecl(name: *Str): AstXmlNode {
         if (this.fn.facts == null || name == "") {
             return xmlEmptyNode()
         }
@@ -2687,7 +2744,7 @@ data class IlExtractor(
     // `addAll(1)`, and `Format(template, items)` from `Format(template, "world")`. An
     // argument whose type the rules cannot name leaves the call exactly as it was:
     // nothing is inferred, nothing is packed.
-    fun packStart(target: AstXmlNode, args: List<AstXmlNode>): Int {
+    fun packStart(target: *AstXmlNode, args: *List<AstXmlNode>): Int {
         if (xmlIsEmpty(target)) {
             return -1
         }
@@ -2709,10 +2766,12 @@ data class IlExtractor(
     }
 
     // The trailing arguments as one list, built by one `Pack` instruction: the list's
-    // type is the parameter's and the elements are the arguments as values. A
-    // `*List<T>` parameter gets the *address* of the fresh list - one element copy each,
-    // no copy of the list at all, and the slot outlives the call, since it is a slot of
-    // this body.
+    // type is the parameter's and the elements are the arguments as values - each one
+    // converted the way a by-value parameter's argument is, so a packed handle is read
+    // through instead of being stored as a pointer (`specs/functions.md`, "Handles at a
+    // call"). A `*List<T>` parameter gets the *address* of the fresh list - one element
+    // copy each, no copy of the list at all, and the slot outlives the call, since it is
+    // a slot of this body.
     fun packArguments(target: AstXmlNode, args: List<AstXmlNode>, from: Int): Int {
         val params: List<AstXmlNode> = xmlChildren(target, AstNodeKind.Param)
         var wanted: AstXmlNode = xmlEmptyNode()
@@ -2720,12 +2779,16 @@ data class IlExtractor(
             wanted = xmlChild(params[params.size() - 1], AstNodeKind.Type)
         }
         val list: AstXmlNode = semListTypeOf(wanted)
+        var element: AstXmlNode = xmlEmptyNode()
+        if (xmlCount(list, AstNodeKind.TypeArg) > 0) {
+            element = xmlChild(list, AstNodeKind.TypeArg)
+        }
         val slot: Int = this.freshSlot(this.slotTypeText(list), list)
         var operands: List<Int> = List<Int>()
         operands.append(slot)
         var i: Int = from
         while (i < args.size()) {
-            operands.append(this.operandOf(args[i]))
+            operands.append(this.convertArgument(target, element, args[i]))
             i = i + 1
         }
         this.emit(IlOpKind.Pack, operands)
@@ -2766,7 +2829,7 @@ data class IlExtractor(
     // every caller having to spell the `*`, and why the reverse change still compiles. A
     // `*T` *binding* (`val p: *T = x`) is a different question - a pointer that outlives
     // the expression it points into has to be asked for, so the writer writes it.
-    fun convertArgument(callee: AstXmlNode, param: AstXmlNode, arg: AstXmlNode): Int {
+    fun convertArgument(callee: *AstXmlNode, param: *AstXmlNode, arg: *AstXmlNode): Int {
         if (xmlIsEmpty(param)) {
             return this.operandOf(arg)
         }
@@ -2847,7 +2910,7 @@ data class IlExtractor(
     }
 
     // `dst < 0` means the result is dropped (`CallVoid`).
-    fun call(dst: Int, e: AstXmlNode): Unit {
+    fun call(dst: Int, e: *AstXmlNode): Unit {
         val callee: AstXmlNode = xmlChild(e, AstNodeKind.Callee)
         val hasDst: Bool = dst >= 0
         var returnType: Int = -1
@@ -2889,18 +2952,23 @@ data class IlExtractor(
         val packFrom: Int = this.packStart(target, argNodes)
 
         // `listOf<T>(a, b, c)` is the language's list literal: the same `Pack` instruction
-        // a packed call builds, written out. It is not a call at all - the native it names
+        // a packed call builds, written out - so its elements convert the same way
+        // (`packArguments`). It is not a call at all - the native it names
         // exists so the checker and the type rules have a signature to read - so a backend
         // that sees one of these writes the construction and never the function.
         if (hasDst && packFrom >= 0 && !xmlIsEmpty(target) && this.ilIsListOf(target)) {
             val listType: AstXmlNode = this.ilListOfType(callee, argNodes, packFrom)
             if (!xmlIsEmpty(listType)) {
                 this.setSlotType(dst, listType)
+                var element: AstXmlNode = xmlEmptyNode()
+                if (xmlCount(listType, AstNodeKind.TypeArg) > 0) {
+                    element = xmlChild(listType, AstNodeKind.TypeArg)
+                }
                 var packing: List<Int> = List<Int>()
                 packing.append(dst)
                 var p: Int = packFrom
                 while (p < argNodes.size()) {
-                    packing.append(this.operandOf(argNodes[p]))
+                    packing.append(this.convertArgument(target, element, argNodes[p]))
                     p = p + 1
                 }
                 this.emit(IlOpKind.Pack, packing)
@@ -3025,7 +3093,7 @@ data class IlExtractor(
         this.emitCall(hasDst, operands)
     }
 
-    fun emitCall(hasDst: Bool, operands: List<Int>): Unit {
+    fun emitCall(hasDst: Bool, operands: *List<Int>): Unit {
         if (hasDst) {
             this.emit(IlOpKind.Call, operands)
         } else {
@@ -3050,7 +3118,7 @@ data class IlExtractor(
     fun lambdaOf(e: *AstXmlNode, dst: Int): Int {
         val counter: Int = this.closureCounter[0]
         this.closureCounter[0] = counter + 1
-        val symbol: Str = this.ownerSymbol() + "_closure" + ilIntText(counter)
+        val symbol: Str = fmtStr("|_closure|", this.ownerSymbol(), ilIntText(counter))
 
         var read: List<Str> = List<Str>()
         var readSeen: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
@@ -3159,7 +3227,7 @@ data class IlExtractor(
                 closure.params.append(slot)
             }
         }
-        closure.signature = "(" + ilJoinList(captured, ", ") + ") " + innerBody.signature
+        closure.signature = fmtStr("(|) |", ilJoinList(captured, ", "), innerBody.signature)
         this.unit.lambdas.append(innerBody)
         this.unit.closures.append(closure)
 
@@ -3277,7 +3345,7 @@ fun ilCategoryName(kind: AstNodeCategory): IlOpKind {
 // Builds the IL of one body: the body itself plus the lambdas it constructs. The closure
 // symbols are numbered per *unit*, so a lambda inside a lambda still gets a name of its
 // own.
-fun ilExtractUnit(fn: IlFunction, body: List<AstXmlNode>, file: Str): IlUnit {
+fun ilExtractUnit(fn: *IlFunction, body: *List<AstXmlNode>, file: *Str): IlUnit {
     var unit: IlUnit = IlUnit(ilEmptyBody(), List<IlBody>(), List<IlClosure>())
     var counter: Int = 1
     // The type context the extractor fills in on its first question: storage of this

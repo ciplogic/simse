@@ -33,7 +33,7 @@ data class ValueBinding(
 
 // ---- built-in type knowledge ----------------------------------------------
 
-fun semaIsBuiltinType(name: Str): Bool {
+fun semaIsBuiltinType(name: *Str): Bool {
     if (name == "Int" || name == "Int8" || name == "Int16" || name == "Int32"
         || name == "Int64" || name == "Float32" || name == "Float64" || name == "Char"
         || name == "Str" || name == "Bool" || name == "Unit" || name == "List"
@@ -47,7 +47,7 @@ fun semaIsBuiltinType(name: Str): Bool {
 
 // The number of type parameters a built-in generic expects, or -1 when the name
 // is not a built-in generic.
-fun semaBuiltinGenericArity(name: Str): Int {
+fun semaBuiltinGenericArity(name: *Str): Int {
     when (name) {
         "List", "Array", "RawArray", "Opt", "Res", "PList" -> {
             return 1
@@ -169,7 +169,7 @@ fun semaUnifyReceiver(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *Li
 // Whether a name is one the `for` desugaring made. The generated names are per-file
 // counters (`_sm_for1`, `_sm_index1`), like the lowering's own slots:
 // recognizable, and documented as not a user's to take.
-fun semaIsForTemplateName(name: Str): Bool {
+fun semaIsForTemplateName(name: *Str): Bool {
     return name.startsWith("_sm_for")
 }
 
@@ -189,12 +189,11 @@ fun semaTypeText(node: *AstXmlNode): Str {
         }
 
         AstNodeCategory.TypeGeneric -> {
-            return xmlAttr(node, AstNodeAttributeKind.Name) + "<" + semaTypeTextList(
-                xmlChildren(
-                    node,
-                    AstNodeKind.TypeArg
-                )
-            ) + ">"
+            return fmtStr(
+                "|<|>",
+                xmlAttr(node, AstNodeAttributeKind.Name),
+                semaTypeTextList(xmlChildren(node, AstNodeKind.TypeArg))
+            )
         }
 
         AstNodeCategory.TypeReference -> {
@@ -206,8 +205,11 @@ fun semaTypeText(node: *AstXmlNode): Str {
         }
 
         AstNodeCategory.TypeFunction -> {
-            return "(" + semaTypeTextList(xmlChildren(node, AstNodeKind.ParamType)) + ") -> "
-            +semaTypeText(xmlChild(node, AstNodeKind.ReturnType))
+            return fmtStr(
+                "(|) -> |",
+                semaTypeTextList(xmlChildren(node, AstNodeKind.ParamType)),
+                semaTypeText(xmlChild(node, AstNodeKind.ReturnType))
+            )
         }
     }
     return "?"
@@ -288,10 +290,9 @@ data class Analyzer(
         }
     }
 
-    fun diag(line: Int, column: Int, message: Str): Unit {
+    fun diag(line: Int, column: Int, message: *Str): Unit {
         this.diags.append(
-            this.file + ":" + line.toString() + ":" + column.toString()
-                    + ": " + message
+            fmtStr("|:|:|: |", this.file, line.toString(), column.toString(), message)
         )
     }
 
@@ -305,7 +306,7 @@ data class Analyzer(
     // Appends `decl` under `key` in `map`, which is keyed by "pkg|name" (global)
     // or by bare name (visible). Operators are direct field mutations because
     // List/Dictionary are value types.
-    fun appendGlobalFunction(key: Str, decl: *AstXmlNode): Unit {
+    fun appendGlobalFunction(key: *Str, decl: *AstXmlNode): Unit {
         if (this.globalFunctions.has(key)) {
             var existing: List<AstXmlNode> = this.globalFunctions.get(key).value()
             existing.append(decl)
@@ -317,7 +318,7 @@ data class Analyzer(
         }
     }
 
-    fun appendPackageDecl(pkg: Str, decl: *AstXmlNode): Unit {
+    fun appendPackageDecl(pkg: *Str, decl: *AstXmlNode): Unit {
         if (this.packageDecls.has(pkg)) {
             var existing: List<AstXmlNode> = this.packageDecls.get(pkg).value()
             existing.append(decl)
@@ -329,7 +330,7 @@ data class Analyzer(
         }
     }
 
-    fun appendVisibleFunction(name: Str, decl: *AstXmlNode): Unit {
+    fun appendVisibleFunction(name: *Str, decl: *AstXmlNode): Unit {
         if (this.functions.has(name)) {
             var existing: List<AstXmlNode> = this.functions.get(name).value()
             existing.append(decl)
@@ -368,19 +369,28 @@ data class Analyzer(
                         || this.globalStatics.has(key)
                 if (isFunction) {
                     if (this.globalTypes.has(key) || this.globalStatics.has(key)) {
-                        this.diag(xmlLine(decl), xmlColumn(decl), "duplicate declaration '" + name + "'")
+                        this.diag(
+                            xmlLine(decl), xmlColumn(decl),
+                            fmtStr("duplicate declaration '|'", name)
+                        )
                     } else {
                         this.appendGlobalFunction(key, decl)
                     }
                 } else if (isStatic) {
                     if (nameTaken) {
-                        this.diag(xmlLine(decl), xmlColumn(decl), "duplicate declaration '" + name + "'")
+                        this.diag(
+                            xmlLine(decl), xmlColumn(decl),
+                            fmtStr("duplicate declaration '|'", name)
+                        )
                     } else {
                         this.globalStatics.insert(key, decl)
                     }
                 } else {
                     if (nameTaken) {
-                        this.diag(xmlLine(decl), xmlColumn(decl), "duplicate declaration '" + name + "'")
+                        this.diag(
+                            xmlLine(decl), xmlColumn(decl),
+                            fmtStr("duplicate declaration '|'", name)
+                        )
                     } else {
                         this.globalTypes.insert(key, decl)
                     }
@@ -400,7 +410,7 @@ data class Analyzer(
             if (!this.declaredPackages.contains(dotted)) {
                 this.diag(
                     xmlLine(importDecl), xmlColumn(importDecl),
-                    "cannot resolve import '" + dotted + "': no file declares package '" + dotted + "'"
+                    fmtStr("cannot resolve import '|': no file declares package '|'", dotted, dotted)
                 )
             }
         }
@@ -470,21 +480,21 @@ data class Analyzer(
         this.typeScopes.removeAt(this.typeScopes.size() - 1)
     }
 
-    fun declareType(name: Str): Unit {
+    fun declareType(name: *Str): Unit {
         if (this.typeScopes.size() == 0) {
             return
         }
         this.typeScopes[this.typeScopes.size() - 1].append(name)
     }
 
-    fun declareValue(name: Str, isMutable: Bool, checkAssign: Bool, type: *AstXmlNode): Unit {
+    fun declareValue(name: *Str, isMutable: Bool, checkAssign: Bool, type: *AstXmlNode): Unit {
         if (this.scopes.size() == 0) {
             return
         }
         this.scopes[this.scopes.size() - 1].insert(name, ValueBinding(isMutable, checkAssign, type))
     }
 
-    fun lookupValue(name: Str): Opt<ValueBinding> {
+    fun lookupValue(name: *Str): Opt<ValueBinding> {
         var i: Int = this.scopes.size() - 1
         while (i >= 0) {
             if (this.scopes[i].has(name)) {
@@ -495,7 +505,7 @@ data class Analyzer(
         return Opt<ValueBinding>.none()
     }
 
-    fun typeParamVisible(name: Str): Bool {
+    fun typeParamVisible(name: *Str): Bool {
         for (*scope in this.typeScopes) {
             var j: Int = 0
             while (j < scope.size()) {
@@ -510,14 +520,14 @@ data class Analyzer(
 
     // ---- type resolution --------------------------------------------------
 
-    fun checkTypeName(name: Str, line: Int, column: Int): Unit {
+    fun checkTypeName(name: *Str, line: Int, column: Int): Unit {
         if (semaIsBuiltinType(name) || this.types.has(name) || this.typeParamVisible(name)) {
             return
         }
-        this.diag(line, column, "unknown type '" + name + "'")
+        this.diag(line, column, fmtStr("unknown type '|'", name))
     }
 
-    fun checkInstantiationArity(name: Str, argCount: Int, line: Int, column: Int): Unit {
+    fun checkInstantiationArity(name: *Str, argCount: Int, line: Int, column: Int): Unit {
         var expected: Int = -1
         if (this.types.has(name)) {
             expected = xmlCount(this.types.get(name).value(), AstNodeKind.TypeParam)
@@ -526,8 +536,10 @@ data class Analyzer(
         }
         if (expected >= 0 && argCount != expected) {
             this.diag(
-                line, column, "'" + name + "' expects " + expected.toString()
-                        + " type argument(s) but got " + argCount.toString()
+                line, column, fmtStr(
+                    "'|' expects | type argument(s) but got |",
+                    name, expected.toString(), argCount.toString()
+                )
             )
         }
     }
@@ -739,7 +751,7 @@ data class Analyzer(
                     if (binding.hasValue() && binding.value().checkAssign && !binding.value().isMutable) {
                         this.diag(
                             xmlLine(target), xmlColumn(target),
-                            "cannot assign to val '" + xmlAttr(target, AstNodeAttributeKind.Name) + "'"
+                            fmtStr("cannot assign to val '|'", xmlAttr(target, AstNodeAttributeKind.Name))
                         )
                     }
                 }
@@ -935,8 +947,8 @@ data class Analyzer(
                 }
             }
             this.diag(
-                xmlLine(expr), xmlColumn(expr), "no overload of '" + name + "' takes "
-                        + argCount.toString() + " type argument(s)"
+                xmlLine(expr), xmlColumn(expr),
+                fmtStr("no overload of '|' takes | type argument(s)", name, argCount.toString())
             )
             return
         }
@@ -956,7 +968,7 @@ data class Analyzer(
     // A report rather than a silent copy, because the two spellings mean
     // different things. Every *other* handle conversion is inferred
     // (`convertArgument` in the extractor, `specs/functions.md`).
-    fun checkHandleArgument(callee: Str, function: *AstXmlNode, index: Int, arg: *AstXmlNode): Unit {
+    fun checkHandleArgument(callee: *Str, function: *AstXmlNode, index: Int, arg: *AstXmlNode): Unit {
         val params: List<AstXmlNode> = xmlChildren(function, AstNodeKind.Param)
         if (index >= params.size()) {
             return
@@ -981,10 +993,10 @@ data class Analyzer(
             pointeeText = semaTypeText(pointee)
         }
         this.diag(
-            xmlLine(arg), xmlColumn(arg), "'" + callee + "' takes a counted reference ('&"
-                    + pointeeText + "') and the argument is a raw pointer: a pointer cannot"
-                    + " become a reference in place - make a reference variable one line"
-                    + " before the call (var ref: &" + pointeeText + " = &value)"
+            xmlLine(arg), xmlColumn(arg), fmtStr(
+                "'|' takes a counted reference ('&|') and the argument is a raw pointer: a pointer cannot become a reference in place - make a reference variable one line before the call (var ref: &| = &value)",
+                callee, pointeeText, pointeeText
+            )
         )
     }
 
@@ -1012,9 +1024,10 @@ data class Analyzer(
                 val fieldCount: Int = xmlCount(decl, AstNodeKind.Field)
                 if (fieldCount != argCount) {
                     this.diag(
-                        xmlLine(call), xmlColumn(call), "data class '" + name
-                                + "' expects " + fieldCount.toString() + " field(s) but got "
-                                + argCount.toString()
+                        xmlLine(call), xmlColumn(call), fmtStr(
+                            "data class '|' expects | field(s) but got |",
+                            name, fieldCount.toString(), argCount.toString()
+                        )
                     )
                 }
                 return
@@ -1058,8 +1071,8 @@ data class Analyzer(
             }
         }
         this.diag(
-            xmlLine(call), xmlColumn(call), "no overload of '" + name + "' takes "
-                    + argCount.toString() + " argument(s)"
+            xmlLine(call), xmlColumn(call),
+            fmtStr("no overload of '|' takes | argument(s)", name, argCount.toString())
         )
     }
 
@@ -1141,9 +1154,10 @@ data class Analyzer(
         }
         this.diag(
             xmlLine(stmt), xmlColumn(stmt),
-            "a `for` iterates a machine (`..T`) or a type with a `" + wrap + "`, and "
-                    + semaTypeText(receiverType)
-                    + " has neither; iterate a container with `while` and an index"
+            fmtStr(
+                "a `for` iterates a machine (`..T`) or a type with a `|`, and | has neither; iterate a container with `while` and an index",
+                wrap, semaTypeText(receiverType)
+            )
         )
     }
 
@@ -1152,7 +1166,7 @@ data class Analyzer(
     // *name* is what is compared - `List<T>` takes any `List<...>`, and a pattern type
     // parameter takes anything - which is all the gate needs; the emitted call is resolved
     // with the full unification (in `codegen`), and a name this cannot decide stays silent.
-    fun hasWrap(wrap: Str, receiverType: *AstXmlNode): Bool {
+    fun hasWrap(wrap: *Str, receiverType: *AstXmlNode): Bool {
         if (!this.functions.has(wrap)) {
             return false
         }
@@ -1308,8 +1322,8 @@ data class Analyzer(
         }
         if (compatible) {
             this.diag(
-                xmlLine(call), xmlColumn(call), "no overload of '" + name + "' takes "
-                        + argCount.toString() + " argument(s)"
+                xmlLine(call), xmlColumn(call),
+                fmtStr("no overload of '|' takes | argument(s)", name, argCount.toString())
             )
         }
     }
@@ -1317,7 +1331,7 @@ data class Analyzer(
 
 // ---- entry point ----------------------------------------------------------
 
-fun newAnalyzer(inputs: List<SemaInput>): Analyzer {
+fun newAnalyzer(inputs: *List<SemaInput>): Analyzer {
     return Analyzer(
         inputs,
         "",
@@ -1338,7 +1352,7 @@ fun newAnalyzer(inputs: List<SemaInput>): Analyzer {
 // Analyzes the whole compilation (every participating file plus the implicit
 // prelude). Returns diagnostics of the form "<fileName>:<line>:<col>: <message>".
 // An empty list means the compilation is clean.
-fun analyze(inputs: List<SemaInput>): List<Str> {
+fun analyze(inputs: *List<SemaInput>): List<Str> {
     var analyzer: Analyzer = newAnalyzer(inputs)
     analyzer.run()
     return analyzer.diags

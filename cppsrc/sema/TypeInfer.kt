@@ -25,14 +25,14 @@ import common
 
 // ---- type nodes -----------------------------------------------------------
 
-fun semNamedType(name: Str): AstXmlNode {
+fun semNamedType(name: *Str): AstXmlNode {
     var node: AstXmlNode =
         AstXmlNode(AstNodeKind.Type, AstNodeCategory.TypeNamed, List<AstNodeAttribute>(), Array<AstXmlNode>())
     node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
     return node
 }
 
-fun semGenericType(name: Str, args: List<AstXmlNode>): AstXmlNode {
+fun semGenericType(name: *Str, args: *List<AstXmlNode>): AstXmlNode {
     var node: AstXmlNode =
         AstXmlNode(AstNodeKind.Type, AstNodeCategory.TypeGeneric, List<AstNodeAttribute>(), args.toArray())
     node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
@@ -42,7 +42,7 @@ fun semGenericType(name: Str, args: List<AstXmlNode>): AstXmlNode {
 // The built-in (RTL) type names: they keep their C++ spelling and need no
 // declaration to be usable in a type position. This is the one list - the emitter
 // calls it instead of keeping its own (`cgIsRtlTypeName` used to be a copy).
-fun semIsRtlTypeName(name: Str): Bool {
+fun semIsRtlTypeName(name: *Str): Bool {
     when (name) {
         "Int", "Int8", "Int16", "Int32", "Int64" -> {
             return true
@@ -140,7 +140,7 @@ fun semReRole(node: AstXmlNode, role: AstNodeKind): AstXmlNode {
 }
 
 // A one-element list, for `semReplaceRole`.
-fun semOne(node: AstXmlNode): List<AstXmlNode> {
+fun semOne(node: *AstXmlNode): List<AstXmlNode> {
     return listOf<AstXmlNode>(node)
 }
 
@@ -148,7 +148,7 @@ fun semOne(node: AstXmlNode): List<AstXmlNode> {
 // `replacements`; the other children keep their places. The lowering pass's
 // `exprReplaceRole`, which this package cannot import (the semantics are imported
 // by the lowering, never the other way round).
-fun semReplaceRole(like: *AstXmlNode, role: AstNodeKind, replacements: List<AstXmlNode>): AstXmlNode {
+fun semReplaceRole(like: *AstXmlNode, role: AstNodeKind, replacements: *List<AstXmlNode>): AstXmlNode {
     var kids: List<AstXmlNode> = List<AstXmlNode>()
     val existing: List<AstXmlNode> = like.Children.toList()
     var seen: Int = 0
@@ -171,7 +171,7 @@ fun semReplaceRole(like: *AstXmlNode, role: AstNodeKind, replacements: List<AstX
 
 // The declaration with a `Type` child of its own: what an untyped declaration was
 // missing. The child comes first, like a parsed `val x: T = ...`.
-fun semWithType(decl: *AstXmlNode, typeNode: AstXmlNode): AstXmlNode {
+fun semWithType(decl: *AstXmlNode, typeNode: *AstXmlNode): AstXmlNode {
     var kids: List<AstXmlNode> = List<AstXmlNode>()
     kids.append(typeNode)
     val existing: List<AstXmlNode> = decl.Children.toList()
@@ -293,7 +293,7 @@ fun semSameType(left: *AstXmlNode, right: *AstXmlNode): Bool {
     return false
 }
 
-fun semSameTypeList(left: List<AstXmlNode>, right: List<AstXmlNode>): Bool {
+fun semSameTypeList(left: *List<AstXmlNode>, right: *List<AstXmlNode>): Bool {
     if (left.size() != right.size()) {
         return false
     }
@@ -310,7 +310,7 @@ fun semSameTypeList(left: List<AstXmlNode>, right: List<AstXmlNode>): Bool {
 // Records `name := type`, refusing a second, different binding. A pattern type
 // parameter that stays unbound is not an error here: the caller finds out when it
 // substitutes the result type and nothing is left to spell.
-fun semBindOne(bindings: *Dictionary<Str, AstXmlNode>, name: Str, typeNode: AstXmlNode): Bool {
+fun semBindOne(bindings: *Dictionary<Str, AstXmlNode>, name: *Str, typeNode: *AstXmlNode): Bool {
     if (!bindings.has(name)) {
         bindings.insert(name, typeNode)
         return true
@@ -666,7 +666,7 @@ data class SemFnFact(
 // (T76); the rest are the receiver/parameter facts `semIsExtensionDecl`,
 // `semReceiverParams` and `semIsPackTarget` answer - per candidate, before this.
 fun semFnFact(
-    decl: AstXmlNode, receiver: AstXmlNode, templateParams: List<Str>, name: Str,
+    decl: *AstXmlNode, receiver: *AstXmlNode, templateParams: *List<Str>, name: *Str,
     isNative: Bool
 ): SemFnFact {
     val params: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
@@ -783,7 +783,7 @@ data class SemInfer(
     }
 
     // Records a binding in the scope being built *and* in the flat record.
-    fun mark(name: Str, typeNode: AstXmlNode): Unit {
+    fun mark(name: *Str, typeNode: *AstXmlNode): Unit {
         if (this.scopes.size() == 0) {
             return
         }
@@ -791,7 +791,7 @@ data class SemInfer(
         this.types.insert(name, typeNode)
     }
 
-    fun lookup(name: Str): AstXmlNode {
+    fun lookup(name: *Str): AstXmlNode {
         var i: Int = this.scopes.size() - 1
         while (i >= 0) {
             if (this.scopes[i].has(name)) {
@@ -818,7 +818,7 @@ data class SemInfer(
         return true
     }
 
-    fun spellableName(name: Str): Bool {
+    fun spellableName(name: *Str): Bool {
         if (name == "Unit") {
             return false // `void` has no values
         }
@@ -881,7 +881,7 @@ data class SemInfer(
         return false
     }
 
-    fun isTypeName(name: Str): Bool {
+    fun isTypeName(name: *Str): Bool {
         return this.facts.types.has(name) || semIsRtlTypeName(name)
     }
 
@@ -934,7 +934,7 @@ data class SemInfer(
 
     // ---- expressions ------------------------------------------------------
 
-    fun handle(kind: AstNodeCategory, inner: AstXmlNode): AstXmlNode {
+    fun handle(kind: AstNodeCategory, inner: *AstXmlNode): AstXmlNode {
         if (xmlIsEmpty(inner)) {
             return xmlEmptyNode()
         }
@@ -976,7 +976,7 @@ data class SemInfer(
     // *not* monomorphized here - it stays symbolic and the emitted C++ template
     // specializes it later - but a parameter nothing binds leaves no type to spell,
     // so the call answers with an empty node.
-    fun functionReturn(name: Str, typeArgs: List<AstXmlNode>, receiver: AstXmlNode): AstXmlNode {
+    fun functionReturn(name: *Str, typeArgs: *List<AstXmlNode>, receiver: *AstXmlNode): AstXmlNode {
         var i: Int = 0
         while (i < this.facts.functions.size()) {
             val fn: *SemFnFact = *this.facts.functions[i]
@@ -1142,7 +1142,7 @@ data class SemInfer(
     // function type (`predicate(x)` where `predicate: (Char) -> Bool`) - is an indirect
     // call, and its result is that type's return type, resolved through a `typealias`
     // (`CharPredicate`) exactly as the emitter resolves it.
-    fun callableReturn(typeNode: AstXmlNode): AstXmlNode {
+    fun callableReturn(typeNode: *AstXmlNode): AstXmlNode {
         var current: AstXmlNode = semPointee(typeNode)
         var guard: Int = 0
         while (!xmlIsEmpty(current) && guard < 16) {

@@ -91,7 +91,7 @@ translation unit - the generated code never spells a package name out:
   functions, methods lowered to free functions, and a function used as a value
   (a callable argument).
 - **`main` keeps its name** - it is the C++ entry point, not a package member -
-  and `native` symbols are hand-written C++ (`simse_native_readFile`), so they
+  and `native` symbols are hand-written C++ (`simse_fileStream_readLine`), so they
   are never prefixed. Fields, locals, parameters, labels and template parameters
   are emitted as written.
 - A programmatically built module with no package declaration (the prelude sets
@@ -333,7 +333,7 @@ normative layout.
    library: `simse_toStdString` / `simse_fromStdString`, the
    `std::getline(std::istream&, Str&)` helper, `FileStream`'s recycled line
    buffer (`cppsrc/rtl/filestream.hpp`), and the `std::filesystem`/`<fstream>`
-   use in `cppsrc/native/Native.cpp` and `cppsrc/common/common.cpp`.
+   use in the `fileio` section of `cppsrc/rtl/_res.md` and `cppsrc/common/common.cpp`.
 2. **`List<T>` implementation.** Spec: `List<T>` *is* `SmallVector<4, T>`
    (`specs/containers.md`). Shim: matches — `List<T>` is
    `SmallVector<T, kListInlineCapacity>` (4) — with the documented layout, and

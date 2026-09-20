@@ -50,7 +50,7 @@ fun linBlockStmts(stmt: *AstXmlNode): List<AstXmlNode> {
 }
 
 // A one-element list, for `exprReplaceRole`.
-fun linOne(node: AstXmlNode): List<AstXmlNode> {
+fun linOne(node: *AstXmlNode): List<AstXmlNode> {
     return listOf<AstXmlNode>(node)
 }
 
@@ -76,7 +76,7 @@ fun linMergedIndex(p: Int, i: Int, len: Int): Int {
 // of a declaration the splice brings into the parent's scope and land past it -
 // the one thing C++ rejects about the splice.
 fun linJumpCrosses(
-    jumpName: Str, at: Int, decls: *List<Int>, labelNames: *List<Str>,
+    jumpName: *Str, at: Int, decls: *List<Int>, labelNames: *List<Str>,
     labelAt: *List<Int>
 ): Bool {
     var l: Int = 0
@@ -255,7 +255,7 @@ fun linCollectJumpTargets(stmt: *AstXmlNode, targets: *Dictionary<Str, Bool>): U
 // are written in. The scan therefore looks through blocks.
 // A copy of a conditional jump with a negated condition (IfTrue <-> IfFalse)
 // and a new target.
-fun linInvertedJump(jump: *AstXmlNode, target: Str): AstXmlNode {
+fun linInvertedJump(jump: *AstXmlNode, target: *Str): AstXmlNode {
     var kind: AstNodeCategory = AstNodeCategory.StmtIfTrue
     if (xmlKind(jump) == AstNodeCategory.StmtIfTrue) {
         kind = AstNodeCategory.StmtIfFalse
@@ -385,7 +385,7 @@ data class LinSimplifier(
         return out
     }
 
-    fun run(stmts: List<AstXmlNode>): LinLowered {
+    fun run(stmts: *List<AstXmlNode>): LinLowered {
         var current: List<AstXmlNode> = stmts
         var any: Bool = false
         this.changed = true
@@ -443,7 +443,7 @@ data class SimRenameScope(var renamed: Dictionary<Str, Str>)
 
 // The same attributes with `Name` replaced (added when there is none): how a renamed
 // declaration and a rewritten use carry their new name.
-fun simNameAttrs(like: *AstXmlNode, name: Str): List<AstNodeAttribute> {
+fun simNameAttrs(like: *AstXmlNode, name: *Str): List<AstNodeAttribute> {
     var attrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
     var found: Bool = false
     for (*attr in like.attributes) {
@@ -483,7 +483,7 @@ data class SimRenamer(
     var used: Dictionary<Str, Bool>
 ) {
     // The innermost scope that renames this name, if any: "" when none does.
-    fun renamedTo(name: Str): Str {
+    fun renamedTo(name: *Str): Str {
         var i: Int = this.scopes.size() - 1
         while (i >= 0) {
             // The scope is borrowed: a `SimRenameScope` holds a dictionary, so binding it
@@ -504,10 +504,10 @@ data class SimRenamer(
     // lowering's own place slot.
     fun shadowName(name: Str): Str {
         var n: Int = 2
-        var candidate: Str = "_sm_" + name + "_" + n.toString()
+        var candidate: Str = fmtStr("_sm_|_|", name, n.toString())
         while (this.used.has(candidate)) {
             n = n + 1
-            candidate = "_sm_" + name + "_" + n.toString()
+            candidate = fmtStr("_sm_|_|", name, n.toString())
         }
         return candidate
     }
@@ -634,7 +634,7 @@ data class SimRenamer(
 
 // The body with one name per declaration: the first declaration of a name keeps it, and
 // every later one - in any scope of the body - is renamed with its uses.
-fun linRenameShadowed(body: List<AstXmlNode>, reserved: List<Str>): List<AstXmlNode> {
+fun linRenameShadowed(body: *List<AstXmlNode>, reserved: *List<Str>): List<AstXmlNode> {
     var used: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     var i: Int = 0
     while (i < reserved.size()) {
@@ -649,7 +649,7 @@ fun linRenameShadowed(body: List<AstXmlNode>, reserved: List<Str>): List<AstXmlN
 // bare, and that needs its *whole* type - `auto x;` is not a declaration, a machine's
 // `..T` has no spelling at all, and the inference leaves some slots partly unknown (`*?`:
 // a pointer to nothing it could name).
-fun linIsSpellableType(typeNode: AstXmlNode): Bool {
+fun linIsSpellableType(typeNode: *AstXmlNode): Bool {
     val kind: AstNodeCategory = xmlKind(typeNode)
     when (kind) {
         AstNodeCategory.TypeNamed, AstNodeCategory.TypeGeneric -> {
@@ -734,7 +734,7 @@ fun linHoistInList(stmts: *List<AstXmlNode>, decls: *List<AstXmlNode>, atTop: Bo
     return out
 }
 
-fun linHoistSlots(body: List<AstXmlNode>): LinLowered {
+fun linHoistSlots(body: *List<AstXmlNode>): LinLowered {
     var decls: List<AstXmlNode> = List<AstXmlNode>()
     val rewritten: List<AstXmlNode> = linHoistInList(body, decls, true)
     if (decls.size() == 0) {
@@ -762,7 +762,7 @@ fun linHoistSlots(body: List<AstXmlNode>): LinLowered {
 // label). The loop is the shape `linLowerForEmission` runs, with the hoisting in the place
 // of the rewriting stages - there is nothing left to rewrite. `reserved` is the names the
 // emitter has already declared in the body's own C++ scope (its parameters, `self`).
-fun linFinishForEmission(body: List<AstXmlNode>, reserved: List<Str>): List<AstXmlNode> {
+fun linFinishForEmission(body: *List<AstXmlNode>, reserved: *List<Str>): List<AstXmlNode> {
     var current: List<AstXmlNode> = linRenameShadowed(body, reserved)
     var canChange: Bool = true
     var guard: Int = 0
@@ -782,7 +782,7 @@ fun linFinishForEmission(body: List<AstXmlNode>, reserved: List<Str>): List<AstX
     return current
 }
 
-fun linSimplifyBody(body: List<AstXmlNode>): LinLowered {
+fun linSimplifyBody(body: *List<AstXmlNode>): LinLowered {
     var simplifier: LinSimplifier = LinSimplifier(false)
     return simplifier.run(body)
 }

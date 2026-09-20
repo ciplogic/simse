@@ -51,27 +51,35 @@ package linear
 import common
 
 // One field of the machine: the values that live across a yield.
-data class YldField(var name: Str,
+data class YldField(
+    var name: Str,
 
-var typeNode: AstXmlNode)
+    var typeNode: AstXmlNode
+)
 
 // One parameter of a machine method (`advance`'s `value: *T`).
-data class YldParam(var name: Str,
+data class YldParam(
+    var name: Str,
 
-var typeNode: AstXmlNode)
+    var typeNode: AstXmlNode
+)
 
 // One way of advancing the machine: `next()` (the optional form) or `advance(*T)` (the
 // same machine without the copy).
-data class YldMethod(var name: Str,
+data class YldMethod(
+    var name: Str,
 
-var params: List<YldParam>,
-var body: List<AstXmlNode>,
-var yieldCount: Int)
+    var params: List<YldParam>,
+    var body: List<AstXmlNode>,
+    var yieldCount: Int
+)
 
-data class Yielded(var fields: List<YldField>,
+data class Yielded(
+    var fields: List<YldField>,
 
-var methods: List<YldMethod>,
-var error: Str)
+    var methods: List<YldMethod>,
+    var error: Str
+)
 
 // ---- node builders ---------------------------------------------------------
 
@@ -288,11 +296,11 @@ data class YldMachinery(
     var decl: *AstXmlNode,
     var elementType: AstXmlNode,
 
-var valueTypeText: Str,
-var fieldTypes: Dictionary<Str, AstXmlNode>,
-var fieldOrder: List<Str>,
-var yields: Int,
-var error: Str
+    var valueTypeText: Str,
+    var fieldTypes: Dictionary<Str, AstXmlNode>,
+    var fieldOrder: List<Str>,
+    var yields: Int,
+    var error: Str
 ) {
 
     fun fail(message: Str): Unit {
@@ -301,7 +309,7 @@ var error: Str
         }
     }
 
-    fun run(body: List<AstXmlNode>): Yielded {
+    fun run(body: *List<AstXmlNode>): Yielded {
         var yielded: Yielded = Yielded(List<YldField>(), List<YldMethod>(), "")
         this.collectFields(body, yielded)
         if (!this.error.isEmpty()) {
@@ -368,7 +376,7 @@ var error: Str
             }
             val typeNode: AstXmlNode = xmlChild(param, AstNodeKind.Type)
             if (xmlIsEmpty(typeNode)) {
-                this.fail("yield: the parameter '" + name + "' has no type")
+                this.fail(fmtStr("yield: the parameter '|' has no type", name))
                 return
             }
             this.fieldTypes.insert(yldFieldName(name), typeNode)
@@ -411,7 +419,7 @@ var error: Str
                             this.fail(message)
                             return
                         }
-                        this.fail("yield: the local '" + name + "' has no type to make a field of")
+                        this.fail(fmtStr("yield: the local '|' has no type to make a field of", name))
                         return
                     }
                     this.fieldTypes.insert(yldFieldName(name), typeNode)
@@ -596,7 +604,7 @@ var error: Str
     // what is wanted: the spelling helpers dereference a pointer field where they have to
     // (`this._sm_self->size()`, `(*this._sm_self)[i]`). Anywhere else the language means
     // the object behind the receiver, so a value receiver's `this` is read back out of it.
-    fun expr(node: AstXmlNode): AstXmlNode {
+    fun expr(node: *AstXmlNode): AstXmlNode {
         return this.exprAt(node, false)
     }
 
