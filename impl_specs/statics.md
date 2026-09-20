@@ -187,7 +187,8 @@ its own `stress/<name>` case.
    (`specs/built-in-types.md`) and is already allocation-free in the shim - `count
    <= 0` returns the shared zero-length block - so the object's initializer needs
    nothing below it: there is no circularity between the object and
-   `arrayEmpty`. What leaves C++ is the `native("simse_arrayEmpty")` declaration
+   `arrayEmpty`. What leaves C++ is the `@SmGen("res", "listops", "simse_arrayEmpty")`
+   declaration
    and its implementation (the `listops` section of `cppsrc/rtl/_res.md`); the shim's
    internal zero-length block
    stays, because it is what a C++ `Array<T>` default-constructs to (the type's

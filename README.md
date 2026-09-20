@@ -161,7 +161,8 @@ implementation is *somewhere else*, and the compiler will go and get it.
 
 ```simse
 // The body is hand-written C++ that is linked in.
-native("simse_str_trim") fun trimmed(text: Str): Str
+@SmGen("cpp", "simse_str_trim")
+fun trimmed(text: Str): Str
 
 // The body is C++ that lives in a resource section, emitted into the program that uses it.
 @SmGen("res", "listops", "simse_list_append")
@@ -319,7 +320,7 @@ toolchain. `docs/state-of-the-field.md` is explicit about each of these, and
 | `stress/` | one folder per end-to-end program: source, arguments, expected output, and where the emitted text is the point, an `expected.cpp` golden |
 | `build.js`, `build.bat`, `stress.bat` | the build and harness entry points: transpile the source tree, compile it with `cl.exe`, run the corpus |
 | `simse.vcxproj`, `simse.slnx` | the Visual Studio profiling project: the published bootstrap (the runtime is generated into it), with the debugger already set to run the compiler over its own tree |
-| `tools/` | the JavaScript harness: the stress runner (`stress.js`), the bootstrap fixed-point check (`bootstrap.js`), generator parity (`smgen.js`), the Visual Studio project check (`vscheck.mjs`), `msvc.mjs` |
+| `tools/` | the JavaScript harness: the stress runner (`stress.js`), the bootstrap fixed-point check (`bootstrap.js`), the Visual Studio project check (`vscheck.mjs`), `msvc.mjs` |
 | `docs/` | this documentation |
 | `guide4ai.md` | orientation for a fresh contributor or AI session: the build, the invariants, the change protocol, the gotchas |
 

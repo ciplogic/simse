@@ -1195,7 +1195,7 @@ data class Emitter(
             if (nativeInfo.symbol.find("::") != -1) {
                 this.fail(
                     decl,
-                    fmtStr("unsupported: namespaced native symbol '|' needs a global wrapper", nativeInfo.symbol)
+                    fmtStr("unsupported: namespaced symbol '|' needs a global wrapper", nativeInfo.symbol)
                 )
                 return
             }
@@ -1215,7 +1215,7 @@ data class Emitter(
                 this.fail(
                     param,
                     fmtStr(
-                        "unsupported: native parameter '|' without a type",
+                        "unsupported: generated parameter '|' without a type",
                         xmlAttr(param, AstNodeAttributeKind.Name)
                     )
                 )
@@ -2149,7 +2149,7 @@ data class Emitter(
                 continue
             }
             val ret: *AstXmlNode = xmlChildPtr(fn.decl, AstNodeKind.ReturnType)
-            if (!xmlIsEmpty(recv) && this.unifyType(fn.receiver, recv, fn.templateParams)
+            if (!xmlIsEmpty(recv) && this.unifyType(this.resolveAlias(fn.receiver), recv, fn.templateParams)
                 && !xmlIsEmpty(ret)
             ) {
                 return ret
@@ -2159,7 +2159,7 @@ data class Emitter(
             val extensions: List<CgNativeExt> = this.nativeExtensions.get(calleeText).value()
             for (*ext in extensions) {
                 if (!xmlIsEmpty(recv) && !xmlIsEmpty(ext.receiver)
-                    && this.unifyType(ext.receiver, recv, ext.typeParams)
+                    && this.unifyType(this.resolveAlias(ext.receiver), recv, ext.typeParams)
                     && !xmlIsEmpty(ext.returnType)
                 ) {
                     return ext.returnType
@@ -2534,7 +2534,7 @@ data class Emitter(
                 continue
             }
             if (fn.name == name && this.unifyType(
-                    fn.receiver,
+                    this.resolveAlias(fn.receiver),
                     recv,
                     fn.templateParams
                 )
@@ -2560,7 +2560,7 @@ data class Emitter(
         var i: Int = 0
         while (i < extensions.size()) {
             val ext: *CgNativeExt = *extensions[i]
-            if (!xmlIsEmpty(ext.receiver) && this.unifyType(ext.receiver, recv, ext.typeParams)) {
+            if (!xmlIsEmpty(ext.receiver) && this.unifyType(this.resolveAlias(ext.receiver), recv, ext.typeParams)) {
                 return i
             }
             i = i + 1
@@ -2638,8 +2638,10 @@ data class Emitter(
     // an extension's (findExtensionFn/findNativeExt/memberCallReturn, and the checker's
     // own memberReturn): `StrView` is `Span<Char>` (cppsrc/rtl/StrView.kt), so an
     // extension on `Span<T>` is reachable through a view - the alias is the same type, and
-    // this is the one place the tree spells one name for it in a receiver position. A
-    // declared type that is not an alias is returned as it came in.
+    // this is the one place the tree spells one name for it in a receiver position. The
+    // *declared* receiver is resolved the same way, so the match works from either side:
+    // `Span<Char>.find` is the view's `find`. A declared type that is not an alias is
+    // returned as it came in.
     fun resolveAlias(typeNode: *AstXmlNode): AstXmlNode {
         var current: AstXmlNode = typeNode
         var guard: Int = 0

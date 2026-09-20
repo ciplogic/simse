@@ -3092,3 +3092,58 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   ten `expected.cpp` goldens re-captured by hand - their only delta is the new section
   text and that comment; `bun tools/bootstrap.js` both fixed-point checks byte for byte
   after the refresh, self-transpile 741 ms.
+
+- **`Span<T>.atPtr`, `at` leaves `StrView`, and `native` leaves the language (T83).**
+  Three asks, one theme: the intrinsics should say what they are.
+
+  **`Span<T>.atPtr(index): *T`** is a *language body* on the span
+  (`cppsrc/rtl/Span.kt`), not a C++ member - the emitter reifies it per instantiation
+  (`min`/`max`'s shape) and the call site has a **type**, where the class's own methods
+  print `auto` because the rules cannot name a member of a prelude data class. Its body
+  is `* this[index]` and *not* `* this.ptr[index]`, which is a finding: `*` on an index
+  of a raw pointer is **dropped** by the lowering today. `fun a(p: *Int): *Int { return *
+  p[0] }` emits `auto _sm_expr1 = p[0]; return _sm_expr1;` - the address-of is gone and
+  the C++ then fails to compile - while the container form `* xs[0]` emits
+  `simse_addressOf(xs[0])` correctly (`receiverOf`'s `ExprDeref` case hands the operand's
+  *value* to `operandOf`, and only a place-taking index reaches the `IndexAddr` path).
+  Pre-existing, not this change's, and **not fixed**: it is recorded in `guide4ai.md` §9
+  with the repro. `stress/span` covers `atPtr` - `bump` writes through the returned
+  pointer into the list the span borrows, and `headByte` reaches it through a *view*.
+
+  **`at` is not redeclared on `StrView`.** A view *is* a `Span<Char>`, so the span's own
+  member serves it: `view.at(i)`, emitted as a member call whose type the rules cannot
+  name (the same `auto` the span's `size`/`slice` already printed) - and the `strview`
+  section loses its `simse_strView_at` prototype, body and reach entry.
+
+  **A `typealias` receiver resolves in the member lookup** (`Emitter.resolveAlias` and
+  the checker's mirror, applied to *both* sides of the match - the actual receiver and
+  the extension's declared one, so `Span<Char>.find` is the view's `find` too). Without
+  it, dropping `at` would have been the only thing the alias did, and `atPtr` on a
+  `StrView` would not have existed; with it, `StrView` → `Span<Char>` and an extension
+  on `Span<T>` is reachable through the view - which is what makes the alias mean
+  something rather than being a spelling. Verified neutral for everything else: a probe
+  of `v.size()`/`v.find(x)`/`v.slice(1)` on a `StrView` emits byte for byte what the
+  name-matching compiler emitted (`cmp`).
+
+  **`native` is dropped from the language.** The parser's `native(...)` form is gone and
+  `native` is an ordinary identifier again (out of the scanner's reserved words); the two
+  diagnostics that named it say "a body-less method needs an attribute" and
+  "generated parameter"; `stress/native-read-file` writes
+  `@SmGen("cpp", "simse_native_readFile")` (its stdout is unchanged - the attribute fills
+  the same attributes the keyword did, which is what `bun tools/smgen.js` used to prove);
+  and `stress/smgen-native` + `tools/smgen.js` are **deleted**, because the invariant they
+  pinned (two spellings, one declaration) died with the second spelling.
+  `stress/smgen-cpp` stays: it is the case where a *program* names a generated symbol and
+  the `strops` section is reached for it. The emitter's **internal names still say
+  `native`** (`IsNative`, `NativeSymbol`, `nativeSymbols`, `nativeExtensions`,
+  `CgNativeExt`, `nativeReceiverArg`, ...): renaming them is mechanical and changes no
+  behavior, so it is recorded here rather than mixed into this change.
+
+  Verified: `./build.bat --release` green; `bun tools/stress.js` **61/61** (one case
+  fewer) with the goldens re-captured by hand - `flat-blocks`, `receiver-shapes`,
+  `smgen-res`, `smgen-res-collision` for the `at` removal, `smgen-cpp` for its rewritten
+  comment, and `diagnostic-bodyless-method`'s expected text - and `stress/span`'s
+  `expected.stdout` for the two new lines; `bun tools/bootstrap.js` both fixed-point
+  checks byte for byte after the refresh, self-transpile 732 ms; and the emitted C++ of
+  the compiler's own tree is unaffected by the `native` removal (the attribute path is
+  the same code the keyword fed).

@@ -39,26 +39,26 @@ a pass that reads the declaration without the emitter's tables reads the symbol 
 does, and a `@SmGen("res", section, symbol)` declaration that lost it silently stopped
 being the list literal.
 
-## `native` is a generator
+## The `cpp` generator
 
-`native("sym") fun f(...)` is **sugar** for `@SmGen("cpp", "sym")`:
-the parser fills the very same attributes, so the two spellings are one declaration and
-emit the same C++ (`bun tools/smgen.js` asserts exactly that). `cpp` means the
-implementation is linked in from a hand-written header - there is nowhere else it could
-be - so the generator has no parameters of its own, and the one argument it takes is the
+`@SmGen("cpp", "sym")` means the implementation is linked in from a hand-written header -
+there is nowhere else it could be - so the generator has no parameters of its own, and
+the one argument it takes is the
 shared symbol argument: the name of the C++ function, which the declaration's own name
-stands in for when it is not written (`native fun f(...)`).
+stands in for when it is not written (`@SmGen("cpp")`). It produces no text: the
+*manager* does what such a declaration needs - the symbol a call reaches, the prototype,
+the receiver pattern (`sourceGenDeclare`, `sourceGenDeclaresPrototype`) - and the header
+has the C++.
 
-**The RTL writes the attribute, not the sugar.** Every prelude declaration that reaches
-generated C++ says `@SmGen("res", section, symbol)` (the text is a resource section) or
-`@SmGen("cpp", symbol)` (the text is a header's, for the type core; `resources.kt`'s
-`get`/`has`/`count` use it for the third case - a symbol alias to a plain Simse function),
-so no file under
-`cppsrc/` spells `native` any more - the sugar stays in the language for the *program's*
-FFI (`impl_specs/native-interop.md`, `stress/native-read-file`) and for the equivalence
-fixture that keeps the two spellings honest (`stress/smgen-native`). Whether `native`
-should be dropped from the language outright is `guide4ai.md` §8's to decide; until then
-nothing in the runtime depends on it.
+The keyword that used to be sugar for it, `native("sym") fun f(...)`, is **gone from the
+language (T83)**: the two spellings were one declaration for as long as both existed
+(`bun tools/smgen.js` compared a pair of stress cases byte for byte until they could not
+diverge any more), and the attribute is the one spelling now. `native` is an ordinary
+identifier again, and every declaration that reaches generated C++ - the RTL's, and a
+program's own FFI - writes the attribute: `@SmGen("res", section, symbol)` when the text
+is a resource section (which is all of the RTL's C++ now, `impl_specs/rtl-abi.md`),
+`@SmGen("cpp", symbol)` for the type core, and, for `resources.kt`'s `get`/`has`/`count`, a
+symbol alias to a plain Simse function.
 
 ## The generator table
 
@@ -320,7 +320,7 @@ text is the point - an `expected.cpp` golden), or a focused check.
 
 | case / tool | pins |
 | --- | --- |
-| `stress/smgen-native` + `stress/smgen-cpp` + `bun tools/smgen.js` | `native("sym")` and `@SmGen("cpp", "sym")` emit byte-identical C++ |
+| `stress/smgen-cpp` + `bun tools/stress.js` | a program naming a generated symbol (`@SmGen("cpp", "simse_str_trim")`) reaches the resource section that defines it |
 | `stress/smgen-res` | a resource-backed declaration: the `forward` declaration and the `bodies` definition land in their sections |
 | `stress/smgen-res-program` | a *program's* own `_res.md` supplies the text: the tree's resources win over the compiler's |
 | `stress/smgen-res-collision` | the documented last-write-wins collision |

@@ -3,7 +3,7 @@
 #include <iostream>
 #include <type_traits>
 
-// stress/smgen-cpp/src/main.kt:10
+// stress/smgen-cpp/src/main.kt:9
 Str simse_str_trim(const Str& text);
 
 // The string-literal pool's decoder (impl_specs/rtl-abi.md, "String literals: one
@@ -176,7 +176,7 @@ Bool simse_pathExists(const Str& path);
 void simse_eprintln(const Str& text);
 FileStream* simse_fileStream_open(const Str& path);
 
-// stress/smgen-cpp/src/main.kt:12
+// stress/smgen-cpp/src/main.kt:11
 int main() {
     Str _sm_expr1;
     _sm_expr1 = simse_str_trim(__sm_stringTable[0]);

@@ -17,7 +17,7 @@ Nothing here overrides the topic specs; where a topic spec speaks, it wins.
 | `Res<T>`/`Opt<T>` inspection (`isOk`, `value`, `error`, `hasValue`) | `core-types.md` |
 | `import a.b.c` brings a package into unqualified scope by name; there is no `a.b.c.Name` access form | `specs/modules.md` |
 | `package a.b.c` declares a file's package namespace as an opaque dotted identifier | `specs/modules.md` |
-| `native fun` declaration form and explicit `native("Symbol")` | `functions.md` |
+| body-less declaration with an `@SmGen` attribute (`@SmGen("cpp"[, symbol])`) | `functions.md` |
 | `break`/`continue` are reserved and loop-only | `functions.md` |
 | `for` has exactly two forms and iterates whatever has a `smToYield` (a container, or a machine itself) | `functions.md` |
 | `yield e` and `..T`: a body that yields is a state machine | `impl_specs/yield.md` |

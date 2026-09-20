@@ -1,30 +1,32 @@
-# Native interop (`native fun`)
+# Native interop (hand-written C++)
 
-Status: decision recorded for T10.
+Status: decision recorded for T10; the spelling settled in T83.
 
 This document fixes the v1 boundary for calling hand-written C++ from Simse.
 
 ## Declaration form
 
 ```text
-native fun readFile(path: Str): Str
-native("simse_native_readFile") fun readFile(path: Str): Str
+@SmGen("cpp") fun readFile(path: Str): Str
+@SmGen("cpp", "simse_native_readFile") fun readFile(path: Str): Str
 ```
 
-- `native fun name(params): Ret` introduces a function with a Simse
+- The attribute names the generator that owns the implementation. `cpp` means the
+  C++ is hand-written and linked in (a header's), so the declaration has a Simse
   type/signature and **no body**.
-- `native("Symbol") fun name(...)` supplies the C++ symbol when it differs from
+- The second argument supplies the C++ symbol when it differs from
   the Simse name. Without it, the C++ symbol defaults to the Simse name.
 - In v1 the symbol must be a **plain global identifier**. A namespaced symbol
   such as `FileUtils::readFile` is rejected with a positioned `unsupported`
   diagnostic; expose such an implementation through a thin global wrapper whose
   name is the global identifier.
-- `native` is **sugar** for the attribute that names the C++ a declaration
-  reaches - `native("sym")` is `@SmGen("cpp", "sym")` - and it is the *program's*
-  spelling for the FFI (`stress/native-read-file`) and for a symbol the runtime
-  already has. The RTL itself writes the attribute instead, and names a `res`
-  section for everything whose text is generated: no file under `cppsrc/` spells
-  `native` any more (`impl_specs/generators.md`).
+- `native fun` / `native("Symbol") fun`, the keyword the first implementation
+  spelled this with, is **gone from the language (T83)**: it was sugar for
+  `@SmGen("cpp", ...)`, and once no declaration in the tree needed the sugar there
+  were two spellings of one thing (`impl_specs/generators.md`). A program that
+  wants a runtime symbol writes the attribute (`stress/native-read-file` names
+  `simse_native_readFile`, which no prelude declaration reaches - which is why
+  `fileio` is `emit: always`).
 
 ## Emission and call
 

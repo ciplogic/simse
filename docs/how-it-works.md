@@ -68,12 +68,13 @@ Details worth knowing:
   Simse lower to free functions over the RTL (`simse_str_split`,
   `simse_dict_get`, `simse_list_sort`, ...), except that a *handle's* methods are
   emitted as members (which is why `FileStream`'s `readLine`/`close` are methods of
-  its struct). A user can declare their own with `native fun` / `native("symbol") fun`,
+  its struct). A program can declare its own with `@SmGen("cpp", "symbol")`,
   which is how the file I/O in `stress/native-read-file` works.
-- **A declaration's C++ can be generated instead of hand-written.** `native("sym")` is
-  sugar for `@SmGen("cpp", "sym")`: an *attribute* that selects
-  a generator for the method's implementation, with the method written body-less
-  (`impl_specs/generators.md`). Two more generators are in use: `res`, whose text is a C++
+- **A declaration's C++ can be generated instead of hand-written.** An *attribute* on a
+  body-less method selects
+  a generator for its implementation (`impl_specs/generators.md`). Three are in use:
+  `cpp`, whose C++ is hand-written in a header (`@SmGen("cpp"[, symbol])`); `res`,
+  whose text is a C++
   *resource* - the tree's own `_res.md` files first, the compiler's second, which is where
   the RTL's own C++ lives now (`cppsrc/rtl/_res.md`: `strtable`, `timeops`, `listops`,
   `dictops`, `strops`, `spanOf`, `strview`, `filestream`, `resources`, `fileio`) - and

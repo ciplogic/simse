@@ -161,7 +161,7 @@ boxed(xs)       // a copy inside the reference
 - **A construction converts the same way.** `Rect(w, h)` where a field is `Int` and `w`
   came back as a `*Int` from an accessor reads it through like any call argument - the
   constructor is a call boundary too. And where the callee's own signature cannot name the
-  parameter's type (a `native fun` extension's bare type parameter, `Dictionary<K, V>.has(key:
+  parameter's type (a generated extension's bare type parameter, `Dictionary<K, V>.has(key:
   K)`), the argument's own type is what the conversion reads, which is what makes
   `names.append(accessor(...))` an element copy rather than a complaint.
 - **A `*T` binding is not converted.** `val p: *List<Int> = xs` still writes the `*`:
@@ -341,21 +341,24 @@ packages, imports, and resolution are specified in `specs/modules.md`.
 
 Status: required for the first implementation (bootstrap fallback).
 
-A declaration `native fun name(params): Ret` introduces a function with a Simse
-type/signature but no body; its implementation is provided by hand-written C++.
-An optional explicit-symbol form `native("Symbol") fun name(...)` may be used
-when the source name and the C++ symbol differ. Native bodies are absent from
+A declaration with no body and an `@SmGen` attribute introduces a function with a Simse
+type/signature whose implementation is generated - hand-written C++ for the `cpp`
+generator. An optional explicit-symbol argument `@SmGen("cpp", "Symbol")` may be used
+when the source name and the C++ symbol differ. Bodies are absent from
 Simse. The declaration form may be combined with a type-parameter list and the
 explicit `this` receiver form.
 
 ```text
-native fun readFile(path: Str): Str
-native("simse_native_readFile") fun readFile(path: Str): Str
-native("simse_list_append") fun append<T>(this: List<T>, value: T): Unit
+@SmGen("cpp") fun readFile(path: Str): Str
+@SmGen("cpp", "simse_native_readFile") fun readFile(path: Str): Str
+@SmGen("cpp", "simse_list_append") fun append<T>(this: List<T>, value: T): Unit
 ```
 
-The exact symbol naming, linkage, and build integration are deferred; see
-`impl_specs/native-interop.md`.
+The keyword this was spelled with first, `native fun` / `native("Symbol") fun`, is gone
+(T83): it was sugar for the attribute, and `@SmGen` is what the runtime and every program
+write. The exact symbol naming, linkage, and build integration are in
+`impl_specs/native-interop.md`; the generators themselves are
+`impl_specs/generators.md`.
 
 ## Control flow: `break` and `continue`
 

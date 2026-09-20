@@ -18,8 +18,8 @@ with a string library, `List<T>`, `Array<T>`, `SmallVector<N, T>`,
 machine) and `for` (two forms, over anything with a `smToYield` - a container, or
 a machine itself),
 `null` for handles, memory operators (`&T` handles, `*T` pointers, `copy`),
-reified generics, packages and imports, `main()` and `main(args)`, and a
-`native fun` escape hatch for C++ symbols.
+reified generics, packages and imports, `main()` and `main(args)`, and an
+`@SmGen` attribute to reach a C++ symbol.
 
 **The compiler.** Self-hosted to a fixed point: the published
 `cppsrc/simse_bootstrap.cpp` builds a compiler with a C++ compiler alone, and

@@ -111,7 +111,7 @@ var tokenRuleTable: List<TokenMatcher> = makeTokenRules()
 fun makeReservedWords(): List<Str> {
     var words: List<Str> = listOf<Str>(
         "class", "data", "val", "var", "fun", "return", "while", "for",
-        "if", "else", "true", "false", "null", "enum", "typealias", "native",
+        "if", "else", "true", "false", "null", "enum", "typealias",
         "import", "this", "break", "continue", "when", "yield", "package"
     )
     return words

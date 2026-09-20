@@ -78,14 +78,15 @@ static struct __SmStringTableInitType {
 // cppsrc/rtl/strview.hpp: `using StrView = Span<Char>`, the comparison operators, `+`,
 // `<<` and the `Str` conversions are reached by C++ overload resolution at a literal
 // site rather than by a prelude declaration, so no declaration could reach a section for
-// them - while these twelve are named, one symbol each, and a program that calls one
+// them - while these eleven are named, one symbol each, and a program that calls one
 // pays for this text (`sourcegen/ResGen.kt`).
 //
 // `StrView` *is* a `Span<Char>`, so `self.len`, `self[i]` and `self.slice(...)` below are
-// the span's own members (cppsrc/rtl/span.hpp).
+// the span's own members (cppsrc/rtl/span.hpp) - and `at` is *not* an operation of its
+// own: the span's member serves it (`cppsrc/rtl/StrView.kt`), as `atPtr` is the
+// language's (cppsrc/rtl/Span.kt).
 Int simse_strView_size(StrView self);
 Bool simse_strView_isEmpty(StrView self);
-Char& simse_strView_at(StrView self, Int index);
 StrView simse_strView_slice(StrView self, Int start);
 StrView simse_strView_slice(StrView self, Int start, Int count);
 Char simse_strView_charAt(StrView self, Int index);
@@ -350,10 +351,6 @@ inline Int simse_strView_size(StrView self) {
 
 inline Bool simse_strView_isEmpty(StrView self) {
     return self.len <= 0;
-}
-
-inline Char& simse_strView_at(StrView self, Int index) {
-    return self[index];
 }
 
 // `view.slice(start)`: from `start` to the end (C# `Slice(int)`).

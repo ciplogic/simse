@@ -68,6 +68,10 @@ fun spanOf<T>(items: *List<T>): Span<T>
 // per instantiation, and *the call site has a type* - `*T` - where the class's own
 // methods are emitted as members whose type the rules cannot name (`at`, `size`, `slice`
 // print as `auto`). `for (*x in xs)` is this same `*this[i]` (impl_specs/for.md).
+//
+// The body goes through the span's own index - `this[index]` - and not `this.ptr[index]`:
+// the *subscript* is the place the emitter can take the address of (`simse_addressOf`),
+// while `*` on an index of a raw pointer is dropped by the lowering today (guide4ai.md §9).
 fun Span<T>.atPtr<T>(index: Int): *T {
-    return * this.ptr[index]
+    return * this[index]
 }

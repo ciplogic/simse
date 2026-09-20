@@ -179,6 +179,8 @@ A span is a value, so `slice` returns a NEW span and the receiver is never
 mutated:
 
 - `size(): Int`; `isEmpty(): Bool`; `at(index: Int): T` (also `span[index]`);
+- `atPtr(index: Int): *T` - the element as a *place* (the address of the same element:
+  nothing is copied, and a write through it reaches the span's source);
 - `slice(start: Int): Span<T>` (from `start` to the end); and
 - `slice(start: Int, count: Int): Span<T>` (`count` elements from `start`).
 

@@ -1,10 +1,9 @@
 package fixtures
 
-// The `@SmGen("cpp", "sym")` spelling of a generated declaration
-// (impl_specs/generators.md). Its twin, stress/smgen-native, writes the same
-// declaration as `native("sym")`; the two files are identical except for these
-// comments and the shape of those two declaration lines - the `fun` is on line 10 in
-// both, so the two amalgamations can be compared byte for byte (`bun tools/smgen.js`).
+// A program naming a *generated* declaration: `@SmGen("cpp", "simse_str_trim")` says the
+// C++ is the `strops` section's, which the program does not carry unless something names
+// it - so this case is the `res` text being reached by a program that is not the RTL
+// (`impl_specs/generators.md`, `impl_specs/native-interop.md`).
 
 @SmGen("cpp", "simse_str_trim")
 fun trimmedText(text: Str): Str

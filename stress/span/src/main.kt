@@ -46,6 +46,19 @@ fun afterColon(text: Str): Str {
     return bytes.slice(at + 1, bytes.size() - at - 1).toString()
 }
 
+// `atPtr(i)`: the element as a *place* - `at`'s `*T` twin, so nothing is copied and a
+// write through it reaches what the span borrows. The body is the language's own
+// (`Span<T>.atPtr`, cppsrc/rtl/Span.kt), which is also why a call site has a type.
+fun bump(span: Span<Int>, index: Int): Unit {
+    val slot: *Int = span.atPtr(index)
+    slot[0] = slot[0] + 100
+}
+
+// A view *is* a `Span<Char>`, so the span's own extension is reached through it.
+fun headByte(text: *Str): *Char {
+    return spanOfStr(text).atPtr(0)
+}
+
 fun main(): Int {
     var items: List<Int> = List<Int>()
     items.append(4)
@@ -63,5 +76,11 @@ fun main(): Int {
     println(afterColon(text))
     println(spanOfStr(*text).startsWith("name"))
     println(text.substr(0, 4))
+
+    // The place form: the write lands in the list the span borrows.
+    bump(all, 1)
+    println(items[1])
+    var word: Str = "hey"
+    println(headByte(*word)[0])
     return 0
 }

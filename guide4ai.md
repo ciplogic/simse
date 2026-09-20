@@ -77,9 +77,7 @@ The verification loop after a compiler change: `./build.bat --release`,
 `bun tools/stress.js`, then `bun tools/bootstrap.js` - the two-step property is
 that the compiler built from the published bootstrap must reproduce that file
 byte for byte, and that check is the one that catches a change whose emitted C++
-depends on the compiler that emitted it. `bun tools/smgen.js` joins the loop when a
-`native(...)`/`@SmGen(...)` spelling is touched: it checks that the two spellings of one
-declaration emit the same C++. When the change *is* visible in the
+depends on the compiler that emitted it. When the change *is* visible in the
 emitted C++, refresh the published file (`bun build.js --release --out
 cppsrc/simse_bootstrap.cpp`) and commit it with the source.
 
@@ -233,7 +231,7 @@ driver's - and `build.bat` can compile it.
 - `tools/` - the JavaScript harness: `build` is `build.js` at the root (with
   `build.bat`), and this folder holds `stress.js` (the corpus above),
   `bootstrap.js` (compile the published bootstrap, transpile, compare the bytes),
-  `smgen.js` (the `native`/`@SmGen` byte-equality check), `vscheck.mjs` (build the Visual
+  `vscheck.mjs` (build the Visual
   Studio profiling project, `simse.vcxproj`), and
   `msvc.mjs` (the Visual Studio environment shared by all of them). The remaining
   `_*.mjs`/probe files are the hand-written ring's scratch (A/B benchmarks and shape
@@ -310,10 +308,10 @@ Key design points:
   extension is not). A root *with* a manifest is scanned as exactly the modules it names; a
   root *without* one is scanned whole, as `--root cppsrc` does. A module that says
   `sourcegen: true` is a hard error naming it for now.
-- **Native boundary** (see `impl_specs/native-interop.md`): `native fun` /
-  `native("Symbol") fun` declares a function whose body is hand-written C++, which the
-  program links - it is the *program's* FFI spelling, and sugar for the
-  `@SmGen("cpp", symbol)` the runtime's own declarations write. A body that is a
+- **Native boundary** (see `impl_specs/native-interop.md`): a body-less method with an
+  `@SmGen` attribute declares a function whose body is C++ somewhere else, and a program
+  reaches hand-written C++ with `@SmGen("cpp", "Symbol")` - the FFI spelling, which the
+  deleted `native("Symbol")` keyword used to be sugar for. A body that is a
   *resource* is `@SmGen("res", section[, symbol])`
   instead, which is where the RTL's own operations live now (`cppsrc/rtl/_res.md`) -
   including the platform's file I/O and clocks (`fileio`, `timeops`), which are
@@ -340,7 +338,7 @@ Key design points:
   `common` `ns2_`, `compiler` `ns3_`, ... for the compiler's own source set).
   Declarations and every reference to them carry the prefix, so two packages can
   both declare `Point` or `bump` without colliding in the amalgamated translation
-  unit. `main` keeps its name and `native` symbols are never prefixed.
+  unit. `main` keeps its name and generated symbols are never prefixed.
 
 ## 5. Invariants and how they are verified
 
@@ -358,13 +356,12 @@ Key design points:
 - **A stale compiler is visible**: `tools/bootstrap.js` compares both the freshly
   compiled bootstrap *and* `./simse.exe` against the published file, so a repo whose
   compiler no longer matches its sources says so by name.
-- **One declaration, two spellings**: `native("sym")` and
-  `@SmGen("cpp", "sym")` are the same declaration and must emit
-  the same C++ - `bun tools/smgen.js` compiles the pair (`stress/smgen-native`,
-  `stress/smgen-cpp`) and compares their amalgamations byte for byte, after replacing
-  the fixture path. The RTL itself writes the attribute (`@SmGen("res", section,
-  symbol)` or `@SmGen("cpp", symbol)`), so `native` has no user under `cppsrc/`;
-  dropping it from the language is `guide4ai.md` §8's call.
+- **One declaration, one spelling**: `@SmGen("cpp", "sym")` is how a declaration names
+  hand-written C++ and `@SmGen("res", section, sym)` how it names a resource section;
+  the `native("sym")` keyword that used to be sugar for the first is **gone from the
+  language** (T83) - `native` is an ordinary identifier again, the RTL writes the
+  attribute, and a program that wants a runtime symbol writes
+  `@SmGen("cpp", "simse_native_readFile")` (`stress/native-read-file`).
 
 ## 6. Change protocol (read before editing)
 
@@ -482,8 +479,8 @@ its trailing arguments, `specs/functions.md`); `Dictionary<K,V>` (`get`/`has`/`i
 `keys`/`values`/`size`/`clear`); `Opt<T>`, `Res<T>` (with `Res<T>.ok/.err`,
 `Opt<T>.some/.none`); `Span<T>` (a borrowed view: pointer + length); `XmlNode`/`Attribute`;
 `data class` (with methods), `enum class` (with `toInt`/`fromInt`), `typealias`
-(incl. generic and function types); functions incl. extension functions and
-`native fun`; **attributes** (`@Identifier` + `@SmGen`, one per declaration, methods
+(incl. generic and function types); functions incl. extension functions;
+**attributes** (`@Identifier` + `@SmGen`, one per declaration, methods
 only: `specs/attributes.md`, `impl_specs/generators.md`) with the `cpp` (headers), `res`
 (C++ from a resource) and `kt` (generated Simse source) generators, and the `Sections`
 sink; `val`/`var` (locals, and at file level **static storage** -
@@ -547,7 +544,8 @@ Do these only when asked; roughly prioritized:
    declarations name them (`@SmGen("res", "fileio", "simse_listFiles")`). So a program,
    the compiler included, is **one translation unit** with nothing to link, and
    `cppsrc/simse_bootstrap.cpp` builds with `cl.exe` alone. `fileio` is `emit: always`
-   because a program may name one of its symbols with its own `native("simse_...")`
+   because a program may name one of its symbols with its own
+   `@SmGen("cpp", "simse_...")`
    declaration (the FFI `impl_specs/native-interop.md` documents, and
    `stress/native-read-file`), and no `res` declaration reaches the section in that case
    (`sourcegen/ResGen.kt`). An alternative, if a program should carry only what it
@@ -557,14 +555,11 @@ Do these only when asked; roughly prioritized:
    `variant2.hpp`, `optional.hpp`, `result.hpp`, `functional.hpp`, `xml.hpp`,
    `astxml.hpp`) stays: it is
    what the amalgamation is compiled *against*, and some of it needs language features
-   that do not exist yet (statics in an object, a ref-counted layout). With T82 the
-   RTL's C++ is all `res` sections and no prelude declaration spells `native` any more:
+   that do not exist yet (statics in an object, a ref-counted layout). With T82/T83 the
+   RTL's C++ is all `res` sections, no prelude declaration spells a keyword any more, and
    what is left as `@SmGen("cpp", ...)` is the type core, the literal interop of
    `strview.hpp`, and three `resources.kt` declarations that are merely a symbol alias to
-   a plain Simse function. **Whether the language keeps `native` is open** -
-   it is the program's FFI spelling (`stress/native-read-file`) and sugar for
-   `@SmGen("cpp", sym)` (`stress/smgen-native` + `stress/smgen-cpp` pin the two
-   spellings as one declaration), and nothing under `cppsrc/` depends on it either way.
+   a plain Simse function.
 2. **Commit the work when asked.** The T35-T40 performance work is committed
    (`d5de0f8`); anything after it is uncommitted as usual - never commit unless the
    user asks.
@@ -784,7 +779,7 @@ Do these only when asked; roughly prioritized:
 - `&x` on a local **boxes a copy** (mutations through the box are lost); `*x`
   **borrows** and aliases the original. Take `*T` for out/aggregate parameters
   (the 1BRC's `tally` takes `*Dictionary<Str, Stats>`), never `&x`.
-- A handle's native operations must be **struct methods**, not free natives: the
+- A handle's *generated* operations must be **struct methods**, not free functions: the
   emitter calls `stream.readLine()` on a `*FileStream` as `(*stream).readLine()`.
   Same for `Span`/`XmlNode`.
 - After changing **any RTL header**, the program you compile is that header plus the
@@ -849,7 +844,7 @@ generated C++ of one translation unit, so nothing can be built against an older 
   needs no address taken - the emitted receiver already is one - so it is
   `ns_f(self)` (C++'s `this` in a closure class), and `*this` is `self` too. The
   C++ drivers of the deleted differential harness called emitted receiver functions
-  directly and had to pass `&scanner`; a *native* extension is the one call the
+  directly and had to pass `&scanner`; a *generated* extension is the one call the
   emitter passes the receiver expression to unchanged, because the host's C++
   signature decides.
 - **A borrow of a temporary lasts only for its call.** `*f()` lowers to
@@ -858,6 +853,14 @@ generated C++ of one translation unit, so nothing can be built against an older 
   to. Hoisting it into a variable (which the expression lowering would otherwise do,
   since a value position is one operation deep) leaves a pointer to a dead
   temporary; `exprIsBindable` is the guard that keeps it where it is.
+- **`*` on an index of a *raw pointer* is dropped by the lowering.** `* p[0]` where
+  `p: *Int` emits `p[0]` as a *value* - the address-of never reaches the IL, and the C++
+  then fails to compile (`cannot convert from 'Int' to 'Int*'`) - while the container form
+  `* xs[0]` emits `simse_addressOf(xs[0])` correctly. Write the place-taking form
+  (`* span[i]`, `* this[i]`); `Span<T>.atPtr` in `cppsrc/rtl/Span.kt` is the worked
+  example, and why it says `this[index]` rather than `this.ptr[index]`. Not fixed:
+  `receiverOf`'s `ExprDeref` case hands the operand to `operandOf`, and only an index
+  that needs a *place* reaches the `IndexAddr` path (`cppsrc/linear/LinearForm.kt`).
 - **`for` and `yield` are pure lowerings.** `for` is desugared in the
   *parser* (`parseFor` in `Parser.kt`, reached through `parseStmtInto`, the one
   statement slot that expands to several), so no stage downstream has a `for`
@@ -870,4 +873,4 @@ generated C++ of one translation unit, so nothing can be built against an older 
   (reported, not silently miscompiled); and a machine's C++ class is the creating
   function's, so `..T` stays unspellable - `sema::TypeInfer` carries the machine's two
   methods (`next` -> `Opt<T>`, `advance` -> `Bool`) precisely so a loop variable is a
-  typed binding rather than an `auto` the emitter would resolve the wrong native for.
+  typed binding rather than an `auto` the emitter would resolve the wrong overload for.

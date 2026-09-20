@@ -32,21 +32,19 @@ error.
 A method that carries an attribute **must omit its body**, ending at `;` or the line,
 exactly like a `native` declaration: the generator owns the C++, so a body would be
 dead code (diagnostic: "a method whose C++ is generated must not have a body"). The
-converse also holds - a body-less method that is neither `native` nor attributed has no
-implementation at all ("a body-less method needs 'native' or an attribute").
+converse also holds - a body-less method that is not attributed has no
+implementation at all ("a body-less method needs an attribute").
 
 ## What the parser records
 
 `Attribute` (the attribute's own name), `Generator` (the generator the first argument
 names: `cpp`, `res`, `kt`) and `GeneratorArgs` (the remaining arguments, in order, joined by
-`,`, a string literal without its quotes) on the `Function` node. `native(...)` is sugar
-for `@SmGen("cpp"[, symbol])` and fills the same attributes, which is
-what makes the two spellings one declaration (`impl_specs/generators.md`).
+`,`, a string literal without its quotes) on the `Function` node.
 
 A generator whose text is not emitted at the declaration - `cpp` and `res` - names the C++
 symbol a call reaches as one of its own arguments: `cpp`'s *second* (`res` names its section
 first, so its symbol is the *third*), and the declaration carries it as
-`NativeSymbol`/`HasNativeSymbol` whichever spelling was written: a pass that reads the
+`NativeSymbol`/`HasNativeSymbol`: a pass that reads the
 declaration without the emitter's tables reads the symbol there (the `listOf<T>` list
 literal, whose call is a `Pack` rather than a call, is the one that does).
 

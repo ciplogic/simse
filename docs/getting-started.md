@@ -60,7 +60,7 @@ cl /nologo /std:c++20 /EHsc /O2 /Ob3 /DNDEBUG /MD /W3 /I. ^
 ```
 
 One translation unit - the amalgamated compiler - plus the RTL headers under
-`cppsrc/rtl/` that the amalgamation includes. The `native(...)` symbols it uses
+`cppsrc/rtl/` that the amalgamation includes. The generated symbols it uses
 (`simse_native_readFile`, `simse_listFiles`, `simse_writeFile`,
 `simse_pathCanonical`, `simse_eprintln`, `simse_nowMillis`, ...) are not linked
 in from a second file: their C++ lives in the RTL's resource sections

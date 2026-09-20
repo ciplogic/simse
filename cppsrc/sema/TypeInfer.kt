@@ -1084,7 +1084,7 @@ data class SemInfer(
                 continue
             }
             var bindings: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
-            if (!semBindTypes(fn.receiver, recv, fn.templateParams, bindings)) {
+            if (!semBindTypes(this.resolveAlias(fn.receiver), recv, fn.templateParams, bindings)) {
                 continue
             }
             val result: AstXmlNode = semSubstitute(ret, bindings, fn.templateParams)
@@ -1102,7 +1102,7 @@ data class SemInfer(
                     continue
                 }
                 var bindings: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
-                if (!semBindTypes(ext.receiver, recv, ext.typeParams, bindings)) {
+                if (!semBindTypes(this.resolveAlias(ext.receiver), recv, ext.typeParams, bindings)) {
                     continue
                 }
                 val result: AstXmlNode = semSubstitute(ext.returnType, bindings, ext.typeParams)

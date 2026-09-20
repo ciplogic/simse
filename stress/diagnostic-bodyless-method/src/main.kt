@@ -1,6 +1,6 @@
 package broken
 
-// A body-less method has no implementation: it needs `native` or an attribute
+// A body-less method has no implementation: it needs an attribute
 // (specs/attributes.md). The case expects the transpile to fail with the
 // diagnostic below.
 

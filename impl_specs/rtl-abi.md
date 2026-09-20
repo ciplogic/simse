@@ -21,17 +21,18 @@ bootstrap shims do not silently become the de-facto specification.
 > `startsWithPtr`) are the `strview` section of `_res.md` - generated text a
 > declaration reaches, not a header's - and the *literal interop* of `strview.hpp`
 > stays C++ because the C++ compiler's overload resolution reaches it, not a
-> declaration. No prelude declaration spells `native` any more: what is left of the
-> `cpp` generator is the type core (`impl_specs/generators.md`, "`native` is a
+> declaration. No prelude declaration spells the old keyword any more: what is left of the
+> `cpp` generator is the type core (`impl_specs/generators.md`, "The `cpp`
 > generator").
 >
-> **The receiver spelling differs from a native's.** A `native` declaration writes
+> **The receiver spelling differs from a generated declaration's.** A body-less method
+> with an attribute writes
 > its receiver as the explicit first parameter (`this: Str`); a function *with* a
 > body has to write the receiver type before the name (`fun Str.isEmpty()`),
 > because only that form is marked a receiver - the explicit `this` is a plain
 > parameter named `this`, so a member call does not reach it (a *reported* gap,
 > not a decision: `specs/functions.md`, "Generic functions", documents the
-> explicit form as an extension; `native` extensions already implement it). The
+> explicit form as an extension; generated extensions already implement it). The
 > emitted shape is the same either way - a receiver is `T* self`, never a copy -
 > so a migrated operation spells no `*` on its receiver.
 >

@@ -203,7 +203,10 @@ list's elements and borrows the list, which must outlive the span.
 
 - `size(): Int`;
 - `isEmpty(): Bool`;
-- `at(index: Int): T` (also `span[index]`);
+- `at(index: Int): T` (also `span[index]`) - the element as a *value*;
+- `atPtr(index: Int): *T` - the element as a *place*: the address of the same
+  element, so nothing is copied and a write through it reaches the span's source
+  (`for (*x in xs)` hands out the same thing);
 - `slice(start: Int): Span<T>` - from `start` to the end (unchecked); and
 - `slice(start: Int, count: Int): Span<T>` - `count` elements from `start`
   (unchecked).
@@ -212,11 +215,10 @@ list's elements and borrows the list, which must outlive the span.
 `Span<Char>`: `typealias StrView = Span<Char>` (`cppsrc/rtl/StrView.kt`,
 `cppsrc/rtl/strview.hpp`), so one type carries both names and a `Span<Char>` a
 program holds is a `StrView`. It is what `FileStream.readLineView()` hands back
-and what `spanOfStr(text: *Str): StrView` builds (borrowing the string):
+and what `spanOfStr(text: *Str): StrView` builds (borrowing the string). What it
+*adds* to the span is the byte surface below - `size`/`isEmpty`/`at`/`slice`/
+`atPtr` are the span's own, reached through the alias:
 
-- `size(): Int`; `isEmpty(): Bool`; `at(index: Int): Char` (also `view[index]`);
-- `slice(start: Int): StrView` / `slice(start: Int, count: Int): StrView` - the
-  same two forms, staying a view;
 - `charAt(index: Int): Char` - the byte at `index` (unchecked);
 - `find(sub: Str): Int` / `indexOf(sub: Str): Int` - the index of the first
   occurrence of `sub`, or `-1` (compared in place, nothing copied);

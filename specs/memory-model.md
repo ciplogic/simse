@@ -166,7 +166,7 @@ nothing at all.
 The **call argument** is where the conversion is inferred from the callee's parameter
 (`specs/functions.md`, "Handles at a call"), so it fires wherever that parameter's type is
 known. Two parameter shapes carry a type the *callee's own signature* does not fix, and
-they are read from the argument instead: a `native fun` extension spells its receiver as an
+they are read from the argument instead: a generated extension spells its receiver as an
 explicit `this` first parameter, so `Dictionary<K, V>.has(key: K)`'s `key` is the second
 parameter, and its bare `K` is bound by the receiver - a handle argument is read through to
 the pointee the argument itself names - while a construction (`AstNodeAttribute(kind,

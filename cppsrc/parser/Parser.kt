@@ -321,12 +321,8 @@ data class Parser(
                 return this.parseTypeAlias()
             }
 
-            "native" -> {
-                return this.parseFunction(true, "", List<Str>())
-            }
-
             "fun" -> {
-                return this.parseFunction(false, "", List<Str>())
+                return this.parseFunction("", List<Str>())
             }
         }
         this.fail("expected declaration")
@@ -371,7 +367,7 @@ data class Parser(
             this.fail("expected 'fun' after an attribute")
             return this.emptyNode()
         }
-        return this.parseFunction(false, attrName, args)
+        return this.parseFunction(attrName, args)
     }
 
     // A file-level `var`/`val`: static storage (specs/statics.md). The type is
@@ -489,7 +485,7 @@ data class Parser(
                     this.fail("expected method declaration")
                     return this.emptyNode()
                 }
-                methods.append(this.parseFunction(false, "", List<Str>()))
+                methods.append(this.parseFunction("", List<Str>()))
                 this.skipSeparators()
             }
             if (!this.expectText("}")) {
@@ -653,39 +649,21 @@ data class Parser(
     // without one (specs/attributes.md). A method that carries an attribute may be
     // body-less, and its implementation belongs to the attribute's generator; a
     // body-less method with no attribute has no implementation at all, which is what
-    // the `hasBody` check below rejects. The arguments are kept as they were written
-    // (a string literal still has its quotes), so the two spellings of one declaration
-    // - `native(sym)` and `@SmGen("cpp", sym)` - fill exactly the same attributes.
-    fun parseFunction(isNative: Bool, attrName: *Str, attrArgs: *List<Str>): AstXmlNode {
+    // the `hasBody` check below rejects.
+    fun parseFunction(attrName: *Str, attrArgs: *List<Str>): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
         var nativeSymbol: Str = ""
         var hasNativeSymbol: Bool = false
 
-        if (isNative) {
-            this.advance() // native
-            if (this.matchText("(")) {
-                if (this.checkKind(TokenKind.String)) {
-                    nativeSymbol = this.advance().text
-                    hasNativeSymbol = true
-                }
-                if (!this.expectText(")")) {
-                    return this.emptyNode()
-                }
-            }
-            if (!this.expectText("fun")) {
-                return this.emptyNode()
-            }
-        } else {
-            if (!this.expectText("fun")) {
-                return this.emptyNode()
-            }
+        if (!this.expectText("fun")) {
+            return this.emptyNode()
         }
 
         var hasReceiver: Bool = false
         var receiverNode: AstXmlNode = this.emptyNode()
         var declName: Str = ""
 
-        if (!isNative && this.looksLikeTypeStart()) {
+        if (this.looksLikeTypeStart()) {
             val savedCursor: Span<Token> = this.cursor
             val savedFailed: Bool = this.failed
             val savedError: Str = this.error
@@ -781,7 +759,10 @@ data class Parser(
         // is the form `native(sym)` spells, so it fills the same attributes - which is
         // what makes the two spellings one declaration. `native(sym)` is sugar for it
         // (impl_specs/generators.md), so the attributes are filled the same way
-        // whichever was written.
+        // What an attribute means: the declaration's C++ is the generator's, so there
+        // is no body to emit, and the generator names the symbol. The attribute's
+        // arguments are kept as they were written (a string literal still has its
+        // quotes), because that is what the generator reads (`specs/attributes.md`).
         var attributeName: Str = attrName
         var generatorName: Str = ""
         var generatorArgs: Str = ""
@@ -798,13 +779,8 @@ data class Parser(
                 generatorArgs = generatorArgs + attrLiteralText(attrArgs[a])
                 a = a + 1
             }
-        } else if (isNative) {
-            attributeName = "SmGen"
-            generatorName = "cpp"
-            if (hasNativeSymbol) {
-                generatorArgs = attrLiteralText(nativeSymbol)
-            }
         }
+        var isNative: Bool = false
         if (attributeName.size() > 0) {
             // The generator owns the C++: nothing is emitted for the declaration itself,
             // and a call reaches the symbol instead.
@@ -832,8 +808,8 @@ data class Parser(
                 nativeSymbol = attrArgs[symbolArg]
                 hasNativeSymbol = true
             }
-        } else if (!hasBody && !isNative) {
-            this.setError(pos, "a body-less method needs 'native' or an attribute")
+        } else if (!hasBody) {
+            this.setError(pos, "a body-less method needs an attribute")
             return this.emptyNode()
         }
 
