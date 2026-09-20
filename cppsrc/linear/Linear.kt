@@ -222,12 +222,12 @@ data class LinLowerer(
         if (xmlKind(e) == AstNodeCategory.ExprBinary) {
             val op: Str = xmlAttr(e, AstNodeAttributeKind.Op)
             if (op == "&&" || op == "||") {
-                return this.isDecomposable(xmlChild(e, AstNodeKind.Lhs))
-                        && this.isDecomposable(xmlChild(e, AstNodeKind.Rhs))
+                return this.isDecomposable(xmlChildPtr(e, AstNodeKind.Lhs))
+                        && this.isDecomposable(xmlChildPtr(e, AstNodeKind.Rhs))
             }
         }
         if (xmlKind(e) == AstNodeCategory.ExprUnary && xmlAttr(e, AstNodeAttributeKind.Op) == "!") {
-            return this.isDecomposable(xmlChild(e, AstNodeKind.Operand))
+            return this.isDecomposable(xmlChildPtr(e, AstNodeKind.Operand))
         }
         return !this.containsShortCircuit(e)
     }
@@ -255,14 +255,14 @@ data class LinLowerer(
                 if (op == "&&") {
                     // Both operands must hold: the first one that does not jumps
                     // straight past the rest.
-                    this.lowerCondition(xmlChild(cond, AstNodeKind.Lhs), mid, falseTarget, line, column, out)
+                    this.lowerCondition(xmlChildPtr(cond, AstNodeKind.Lhs), mid, falseTarget, line, column, out)
                     out.append(linLabel(mid, line, column))
-                    this.lowerCondition(xmlChild(cond, AstNodeKind.Rhs), trueTarget, falseTarget, line, column, out)
+                    this.lowerCondition(xmlChildPtr(cond, AstNodeKind.Rhs), trueTarget, falseTarget, line, column, out)
                 } else {
                     // The first operand that holds jumps straight to the target.
-                    this.lowerCondition(xmlChild(cond, AstNodeKind.Lhs), trueTarget, mid, line, column, out)
+                    this.lowerCondition(xmlChildPtr(cond, AstNodeKind.Lhs), trueTarget, mid, line, column, out)
                     out.append(linLabel(mid, line, column))
-                    this.lowerCondition(xmlChild(cond, AstNodeKind.Rhs), trueTarget, falseTarget, line, column, out)
+                    this.lowerCondition(xmlChildPtr(cond, AstNodeKind.Rhs), trueTarget, falseTarget, line, column, out)
                 }
                 return
             }
@@ -270,7 +270,7 @@ data class LinLowerer(
         if (xmlKind(cond) == AstNodeCategory.ExprUnary && xmlAttr(cond, AstNodeAttributeKind.Op) == "!") {
             // `!x` is `x` with its outcomes swapped: the test itself is never negated
             // here, `IfTrue`/`IfFalse` covers both polarities.
-            this.lowerCondition(xmlChild(cond, AstNodeKind.Operand), falseTarget, trueTarget, line, column, out)
+            this.lowerCondition(xmlChildPtr(cond, AstNodeKind.Operand), falseTarget, trueTarget, line, column, out)
             return
         }
         val leaf: AstXmlNode = linRole(cond, AstNodeKind.Cond)
@@ -283,7 +283,7 @@ data class LinLowerer(
         val elseLabel: Str = this.freshLabel()
         val line: Int = xmlLine(stmt)
         val column: Int = xmlColumn(stmt)
-        val cond: AstXmlNode = xmlChild(stmt, AstNodeKind.Cond)
+        val cond: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Cond)
         if (this.containsShortCircuit(cond) && this.isDecomposable(cond)) {
             this.lowerCondition(cond, thenLabel, elseLabel, line, column, out)
         } else {
@@ -293,7 +293,7 @@ data class LinLowerer(
         out.append(linLabel(thenLabel, line, column))
         var thenOut: List<AstXmlNode> = List<AstXmlNode>()
         this.lowerStmts(
-            xmlChildren(xmlChild(stmt, AstNodeKind.Then), AstNodeKind.Stmt),
+            xmlChildren(xmlChildPtr(stmt, AstNodeKind.Then), AstNodeKind.Stmt),
             breakTo,
             continueTo,
             thenOut
@@ -305,7 +305,7 @@ data class LinLowerer(
             out.append(linLabel(elseLabel, line, column))
             var elseOut: List<AstXmlNode> = List<AstXmlNode>()
             this.lowerStmts(
-                xmlChildren(xmlChild(stmt, AstNodeKind.Else), AstNodeKind.Stmt),
+                xmlChildren(xmlChildPtr(stmt, AstNodeKind.Else), AstNodeKind.Stmt),
                 breakTo,
                 continueTo,
                 elseOut
@@ -324,13 +324,13 @@ data class LinLowerer(
         val column: Int = xmlColumn(stmt)
         var bodyOut: List<AstXmlNode> = List<AstXmlNode>()
         this.lowerStmts(
-            xmlChildren(xmlChild(stmt, AstNodeKind.Body), AstNodeKind.Stmt),
+            xmlChildren(xmlChildPtr(stmt, AstNodeKind.Body), AstNodeKind.Stmt),
             endLabel,
             condLabel,
             bodyOut
         )
         out.append(linLabel(condLabel, line, column))
-        val cond: AstXmlNode = xmlChild(stmt, AstNodeKind.Cond)
+        val cond: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Cond)
         if (this.containsShortCircuit(cond) && this.isDecomposable(cond)) {
             // The body label is where a holding operand lands; the fold in `simplify`
             // removes it again when only one jump remains.

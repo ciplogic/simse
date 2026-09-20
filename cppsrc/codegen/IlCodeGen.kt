@@ -99,7 +99,7 @@ fun Emitter.ilFunctionFor(
         facts, fn.templateParams, inferred
     )
     for (*entry in this.statics) {
-        val typeNode: AstXmlNode = xmlChild(entry.decl, AstNodeKind.Type)
+        val typeNode: *AstXmlNode = xmlChildPtr(entry.decl, AstNodeKind.Type)
         if (!xmlIsEmpty(typeNode)) {
             info.statics.insert(
                 xmlAttr(entry.decl, AstNodeAttributeKind.Name),
@@ -1247,8 +1247,8 @@ fun Emitter.emitYieldable(
     facts: *
     SemFacts
 ): Unit {
-    val returnNode: AstXmlNode = xmlChild(decl, AstNodeKind.ReturnType)
-    val elementType: AstXmlNode = xmlChild(returnNode, AstNodeKind.Inner)
+    val returnNode: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.ReturnType)
+    val elementType: *AstXmlNode = xmlChildPtr(returnNode, AstNodeKind.Inner)
     if (xmlIsEmpty(elementType)) {
         this.fail(decl, "unsupported: '..' without an element type")
         return
@@ -1262,7 +1262,7 @@ fun Emitter.emitYieldable(
         // flow being labels and gotos with the value already one operand
         // (impl_specs/yield.md).
         var lowered: List<AstXmlNode> =
-            linLowerForEmission(xmlChildren(xmlChild(decl, AstNodeKind.Body), AstNodeKind.Stmt))
+            linLowerForEmission(xmlChildren(xmlChildPtr(decl, AstNodeKind.Body), AstNodeKind.Stmt))
         val semantics: SemBody = SemBody(
             decl, fn.templateParams, selfTypePtr, xmlEmptyNode(),
             List<Str>(), List<AstXmlNode>(), Dictionary<Str, AstXmlNode>()
@@ -1313,7 +1313,7 @@ fun Emitter.emitYieldable(
         // the same way - so `machine.<field> = <param>` is the same rule on both sides.
         this.line(1, fmtStr("machine.| = |;", yldFieldName(name), name))
     }
-    if (!xmlIsEmpty(xmlChild(decl, AstNodeKind.Receiver))) {
+    if (!xmlIsEmpty(xmlChildPtr(decl, AstNodeKind.Receiver))) {
         // The receiver of an extension function crosses a yield like any other value,
         // so it is a field and the factory fills it from its own `self` parameter
         // (`yldReceiverField`).
@@ -1337,7 +1337,7 @@ fun Emitter.parameterList(fn: *CgFn, decl: *AstXmlNode): List<Str> {
     }
     val declared: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
     for (*param in declared) {
-        val paramType: AstXmlNode = xmlChild(param, AstNodeKind.Type)
+        val paramType: *AstXmlNode = xmlChildPtr(param, AstNodeKind.Type)
         if (xmlIsEmpty(paramType)) {
             this.fail(
                 param,
@@ -1487,7 +1487,7 @@ fun Emitter.ilMachineMethod(
     }
     i = 0
     for (*entry in this.statics) {
-        val typeNode: AstXmlNode = xmlChild(entry.decl, AstNodeKind.Type)
+        val typeNode: *AstXmlNode = xmlChildPtr(entry.decl, AstNodeKind.Type)
         if (!xmlIsEmpty(typeNode)) {
             info.statics.insert(xmlAttr(entry.decl, AstNodeAttributeKind.Name), ilTypeText(typeNode))
         }

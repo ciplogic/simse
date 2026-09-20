@@ -309,6 +309,33 @@ fun xmlChild(node: *AstXmlNode, role: AstNodeKind): AstXmlNode {
     return xmlEmptyNode()
 }
 
+// The absent child a *borrowed* lookup answers with: the same idea as `xmlMissingAttr`, so
+// a `*AstXmlNode` needs no null check and `xmlIsEmpty` reads it like any other node. A
+// file-level `val`, so it is one shared node and nothing writes it.
+val xmlMissingNode: AstXmlNode = AstXmlNode(
+    AstNodeKind.None, AstNodeCategory.None, List<AstNodeAttribute>(), Array<AstXmlNode>()
+)
+
+// The child whose role is `role`, *borrowed from the node* instead of copied out of it.
+// `xmlChild` is the same walk with a 176-byte copy at the end (`AstXmlNode` holds an
+// attribute list and a children handle); this ring reads children far more often than it
+// wants one of its own, so the borrow is the shape a walk wants - and it composes with the
+// `*AstXmlNode` parameters the surrounding helpers take, where the copy would be made
+// again at the call.
+//
+// The pointer is into the node's own children block, so it is valid only while that block
+// is the node's - `xmlAddChild`/`xmlAddChildren` *replace* it - and a write *through* the
+// borrow would reach the tree, which `xmlChild`'s copy absorbs. Read it; do not hold it
+// across a write to the node it came from.
+fun xmlChildPtr(node: *AstXmlNode, role: AstNodeKind): *AstXmlNode {
+    for (*child in node.Children) {
+        if (child.name == role) {
+            return child
+        }
+    }
+    return * xmlMissingNode
+}
+
 // Every child whose role is `role`, in order.
 fun xmlChildren(node: *AstXmlNode, role: AstNodeKind): List<AstXmlNode> {
     var out: List<AstXmlNode> = List<AstXmlNode>()

@@ -237,7 +237,7 @@ fun yldIsLocalDeclaration(stmt: *AstXmlNode): Bool {
     if (!linIsSlotName(xmlAttr(stmt, AstNodeAttributeKind.Name))) {
         return false
     }
-    return xmlIsEmpty(xmlChild(stmt, AstNodeKind.Init))
+    return xmlIsEmpty(xmlChildPtr(stmt, AstNodeKind.Init))
 }
 
 // The machine's field for the receiver of an extension function (`_sm_self`). The
@@ -352,7 +352,7 @@ data class YldMachinery(
         this.fieldTypes.insert(yldCurrentField(), this.elementType)
         this.fieldOrder.append(yldCurrentField())
 
-        val receiver: AstXmlNode = xmlChild(this.decl, AstNodeKind.Receiver)
+        val receiver: *AstXmlNode = xmlChildPtr(this.decl, AstNodeKind.Receiver)
         if (!xmlIsEmpty(receiver)) {
             this.fieldTypes.insert(yldReceiverField(), ilReceiverTypeNode(receiver))
             this.fieldOrder.append(yldReceiverField())
@@ -374,7 +374,7 @@ data class YldMachinery(
             if (this.fieldTypes.has(yldFieldName(name))) {
                 continue
             }
-            val typeNode: AstXmlNode = xmlChild(param, AstNodeKind.Type)
+            val typeNode: *AstXmlNode = xmlChildPtr(param, AstNodeKind.Type)
             if (xmlIsEmpty(typeNode)) {
                 this.fail(fmtStr("yield: the parameter '|' has no type", name))
                 return
@@ -404,7 +404,7 @@ data class YldMachinery(
             if (xmlKind(stmt) == AstNodeCategory.StmtVarDecl) {
                 val name: Str = xmlAttr(stmt, AstNodeAttributeKind.Name)
                 if (!linIsSlotName(name) && !this.fieldTypes.has(yldFieldName(name))) {
-                    val typeNode: AstXmlNode = xmlChild(stmt, AstNodeKind.Type)
+                    val typeNode: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Type)
                     if (xmlIsEmpty(typeNode)) {
                         // A local that lives across a yield must be a field, and a field
                         // needs a type - the type pass spells it, so an untyped one here is
@@ -497,7 +497,7 @@ data class YldMachinery(
             AstNodeCategory.StmtYield -> {
                 this.yields = this.yields + 1
                 val branch: Int = this.yields
-                val value: AstXmlNode = this.expr(xmlChild(stmt, AstNodeKind.Value))
+                val value: AstXmlNode = this.expr(xmlChildPtr(stmt, AstNodeKind.Value))
                 // `current = e; branch = k; return true;`
                 out.append(yldAssign(yldThisMember(yldCurrentField()), value))
                 out.append(yldAssign(yldThisMember(yldBranchField()), yldIntLiteral(branch)))
@@ -510,7 +510,7 @@ data class YldMachinery(
                 // A `return` in a yielding body is `yield break`: the machine is finished. A
                 // value (which the `..T` signature does not allow) is still evaluated, so
                 // nothing silently disappears.
-                val returnValue: AstXmlNode = xmlChild(stmt, AstNodeKind.Value)
+                val returnValue: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Value)
                 if (!xmlIsEmpty(returnValue)) {
                     out.append(yldExprStmt(this.expr(returnValue)))
                 }
@@ -521,8 +521,8 @@ data class YldMachinery(
 
             AstNodeCategory.StmtVarDecl -> {
                 val name: Str = xmlAttr(stmt, AstNodeAttributeKind.Name)
-                val declared: AstXmlNode = xmlChild(stmt, AstNodeKind.Type)
-                val init: AstXmlNode = xmlChild(stmt, AstNodeKind.Init)
+                val declared: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Type)
+                val init: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Init)
                 if (linIsSlotName(name)) {
                     // The lowering's own storage stays a local of the method: it is
                     // per-statement, so it is re-initialised on every entry and never has to
@@ -552,10 +552,10 @@ data class YldMachinery(
 
             AstNodeCategory.StmtAssign -> {
                 var children: List<AstXmlNode> = List<AstXmlNode>()
-                var target: AstXmlNode = this.expr(xmlChild(stmt, AstNodeKind.Target))
+                var target: AstXmlNode = this.expr(xmlChildPtr(stmt, AstNodeKind.Target))
                 target.name = AstNodeKind.Target
                 children.append(target)
-                var value: AstXmlNode = this.expr(xmlChild(stmt, AstNodeKind.Value))
+                var value: AstXmlNode = this.expr(xmlChildPtr(stmt, AstNodeKind.Value))
                 value.name = AstNodeKind.Value
                 children.append(value)
                 out.append(yldWithChildren(stmt, children))
@@ -564,7 +564,7 @@ data class YldMachinery(
 
             AstNodeCategory.StmtExprStmt -> {
                 var children: List<AstXmlNode> = List<AstXmlNode>()
-                var inner: AstXmlNode = this.expr(xmlChild(stmt, AstNodeKind.Expr))
+                var inner: AstXmlNode = this.expr(xmlChildPtr(stmt, AstNodeKind.Expr))
                 inner.name = AstNodeKind.Expr
                 children.append(inner)
                 out.append(yldWithChildren(stmt, children))
@@ -572,7 +572,7 @@ data class YldMachinery(
             }
 
             AstNodeCategory.StmtIfTrue, AstNodeCategory.StmtIfFalse -> {
-                val cond: AstXmlNode = this.expr(xmlChild(stmt, AstNodeKind.Cond))
+                val cond: AstXmlNode = this.expr(xmlChildPtr(stmt, AstNodeKind.Cond))
                 out.append(
                     linCondJump(
                         kind, cond, xmlAttr(stmt, AstNodeAttributeKind.Name),
@@ -615,7 +615,7 @@ data class YldMachinery(
         if (xmlKind(node) == AstNodeCategory.ExprName) {
             val name: Str = xmlAttr(node, AstNodeAttributeKind.Name)
             if (name == "this") {
-                val receiver: AstXmlNode = xmlChild(this.decl, AstNodeKind.Receiver)
+                val receiver: *AstXmlNode = xmlChildPtr(this.decl, AstNodeKind.Receiver)
                 val selfField: AstXmlNode = yldThisMember(yldReceiverField())
                 if (!base && !xmlIsEmpty(receiver) && !yldIsHandle(receiver)) {
                     return yldDeref(selfField)

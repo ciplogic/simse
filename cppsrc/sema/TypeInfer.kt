@@ -187,11 +187,11 @@ fun semWithType(decl: *AstXmlNode, typeNode: *AstXmlNode): AstXmlNode {
 
 // The pointee after stripping any number of `&`/`*` handles.
 fun semPointee(typeNode: *AstXmlNode): AstXmlNode {
-    var current: AstXmlNode = typeNode
+    var current: *AstXmlNode = typeNode
     while (!xmlIsEmpty(current)) {
         val kind: AstNodeCategory = xmlKind(current)
         if (kind == AstNodeCategory.TypeReference || kind == AstNodeCategory.TypePointer) {
-            val inner: AstXmlNode = xmlChild(current, AstNodeKind.Inner)
+            val inner: *AstXmlNode = xmlChildPtr(current, AstNodeKind.Inner)
             if (xmlIsEmpty(inner)) {
                 return current
             }
@@ -223,7 +223,7 @@ fun semListTypeOf(typeNode: *AstXmlNode): AstXmlNode {
         && xmlAttr(base, AstNodeAttributeKind.Name) == "PList"
         && xmlCount(base, AstNodeKind.TypeArg) == 1
     ) {
-        base = semPointee(xmlChild(base, AstNodeKind.TypeArg))
+        base = semPointee(xmlChildPtr(base, AstNodeKind.TypeArg))
     }
     if (xmlKind(base) == AstNodeCategory.TypeGeneric
         && xmlAttr(base, AstNodeAttributeKind.Name) == "List"
@@ -255,7 +255,7 @@ fun semIsPackTarget(typeNode: *AstXmlNode): Bool {
                 && xmlCount(typeNode, AstNodeKind.TypeArg) == 1
     }
     if (xmlKind(typeNode) == AstNodeCategory.TypePointer) {
-        val inner: AstXmlNode = xmlChild(typeNode, AstNodeKind.Inner)
+        val inner: *AstXmlNode = xmlChildPtr(typeNode, AstNodeKind.Inner)
         return xmlKind(inner) == AstNodeCategory.TypeGeneric
                 && xmlAttr(inner, AstNodeAttributeKind.Name) == "List"
                 && xmlCount(inner, AstNodeKind.TypeArg) == 1
@@ -287,7 +287,7 @@ fun semSameType(left: *AstXmlNode, right: *AstXmlNode): Bool {
         }
 
         AstNodeCategory.TypeReference, AstNodeCategory.TypePointer -> {
-            return semSameType(xmlChild(left, AstNodeKind.Inner), xmlChild(right, AstNodeKind.Inner))
+            return semSameType(xmlChildPtr(left, AstNodeKind.Inner), xmlChildPtr(right, AstNodeKind.Inner))
         }
     }
     return false
@@ -325,13 +325,13 @@ fun semBindOne(bindings: *Dictionary<Str, AstXmlNode>, name: *Str, typeNode: *As
 // matching anything (`sema::unifyType` in the C++ ring). It is what answers "does a
 // `smToYield` take this receiver?" for the `for` check (`Sema.kt`).
 fun semUnifyType(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *List<Str>): Bool {
-    var actualPtr: AstXmlNode = actual
+    var actualPtr: *AstXmlNode = actual
     val patternKind: AstNodeCategory = xmlKind(pattern)
     if (patternKind != AstNodeCategory.TypeReference && patternKind != AstNodeCategory.TypePointer) {
         while (true) {
             val actualKind: AstNodeCategory = xmlKind(actualPtr)
             if (actualKind == AstNodeCategory.TypeReference || actualKind == AstNodeCategory.TypePointer) {
-                val inner: AstXmlNode = xmlChild(actualPtr, AstNodeKind.Inner)
+                val inner: *AstXmlNode = xmlChildPtr(actualPtr, AstNodeKind.Inner)
                 if (xmlIsEmpty(inner)) {
                     break
                 }
@@ -393,12 +393,12 @@ fun semUnifyType(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *List<St
         }
 
         AstNodeCategory.TypeReference -> {
-            if (ak == AstNodeCategory.TypeReference && !xmlIsEmpty(xmlChild(actualPtr, AstNodeKind.Inner))
-                && !xmlIsEmpty(xmlChild(pattern, AstNodeKind.Inner))
+            if (ak == AstNodeCategory.TypeReference && !xmlIsEmpty(xmlChildPtr(actualPtr, AstNodeKind.Inner))
+                && !xmlIsEmpty(xmlChildPtr(pattern, AstNodeKind.Inner))
             ) {
                 return semUnifyType(
-                    xmlChild(pattern, AstNodeKind.Inner),
-                    xmlChild(actualPtr, AstNodeKind.Inner),
+                    xmlChildPtr(pattern, AstNodeKind.Inner),
+                    xmlChildPtr(actualPtr, AstNodeKind.Inner),
                     typeParams
                 )
             }
@@ -406,12 +406,12 @@ fun semUnifyType(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *List<St
         }
 
         AstNodeCategory.TypePointer -> {
-            if (ak == AstNodeCategory.TypePointer && !xmlIsEmpty(xmlChild(actualPtr, AstNodeKind.Inner))
-                && !xmlIsEmpty(xmlChild(pattern, AstNodeKind.Inner))
+            if (ak == AstNodeCategory.TypePointer && !xmlIsEmpty(xmlChildPtr(actualPtr, AstNodeKind.Inner))
+                && !xmlIsEmpty(xmlChildPtr(pattern, AstNodeKind.Inner))
             ) {
                 return semUnifyType(
-                    xmlChild(pattern, AstNodeKind.Inner),
-                    xmlChild(actualPtr, AstNodeKind.Inner),
+                    xmlChildPtr(pattern, AstNodeKind.Inner),
+                    xmlChildPtr(actualPtr, AstNodeKind.Inner),
                     typeParams
                 )
             }
@@ -421,12 +421,12 @@ fun semUnifyType(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *List<St
         AstNodeCategory.TypeYield -> {
             // `..T` is a state machine (impl_specs/yield.md) and carries its element type the way
             // a pointer carries its pointee, so a pattern `..T` matches `..Int` element-wise.
-            if (ak == AstNodeCategory.TypeYield && !xmlIsEmpty(xmlChild(actualPtr, AstNodeKind.Inner))
-                && !xmlIsEmpty(xmlChild(pattern, AstNodeKind.Inner))
+            if (ak == AstNodeCategory.TypeYield && !xmlIsEmpty(xmlChildPtr(actualPtr, AstNodeKind.Inner))
+                && !xmlIsEmpty(xmlChildPtr(pattern, AstNodeKind.Inner))
             ) {
                 return semUnifyType(
-                    xmlChild(pattern, AstNodeKind.Inner),
-                    xmlChild(actualPtr, AstNodeKind.Inner),
+                    xmlChildPtr(pattern, AstNodeKind.Inner),
+                    xmlChildPtr(actualPtr, AstNodeKind.Inner),
                     typeParams
                 )
             }
@@ -446,13 +446,13 @@ fun semBindTypes(
     bindings: *
     Dictionary<Str, AstXmlNode>
 ): Bool {
-    var actualPtr: AstXmlNode = actual
+    var actualPtr: *AstXmlNode = actual
     val patternKind: AstNodeCategory = xmlKind(pattern)
     if (patternKind != AstNodeCategory.TypeReference && patternKind != AstNodeCategory.TypePointer) {
         while (true) {
             val actualKind: AstNodeCategory = xmlKind(actualPtr)
             if (actualKind == AstNodeCategory.TypeReference || actualKind == AstNodeCategory.TypePointer) {
-                val inner: AstXmlNode = xmlChild(actualPtr, AstNodeKind.Inner)
+                val inner: *AstXmlNode = xmlChildPtr(actualPtr, AstNodeKind.Inner)
                 if (xmlIsEmpty(inner)) {
                     break
                 }
@@ -510,12 +510,12 @@ fun semBindTypes(
         }
 
         AstNodeCategory.TypeReference -> {
-            if (ak == AstNodeCategory.TypeReference && !xmlIsEmpty(xmlChild(actualPtr, AstNodeKind.Inner))
-                && !xmlIsEmpty(xmlChild(pattern, AstNodeKind.Inner))
+            if (ak == AstNodeCategory.TypeReference && !xmlIsEmpty(xmlChildPtr(actualPtr, AstNodeKind.Inner))
+                && !xmlIsEmpty(xmlChildPtr(pattern, AstNodeKind.Inner))
             ) {
                 return semBindTypes(
-                    xmlChild(pattern, AstNodeKind.Inner),
-                    xmlChild(actualPtr, AstNodeKind.Inner),
+                    xmlChildPtr(pattern, AstNodeKind.Inner),
+                    xmlChildPtr(actualPtr, AstNodeKind.Inner),
                     typeParams,
                     bindings
                 )
@@ -524,12 +524,12 @@ fun semBindTypes(
         }
 
         AstNodeCategory.TypePointer -> {
-            if (ak == AstNodeCategory.TypePointer && !xmlIsEmpty(xmlChild(actualPtr, AstNodeKind.Inner))
-                && !xmlIsEmpty(xmlChild(pattern, AstNodeKind.Inner))
+            if (ak == AstNodeCategory.TypePointer && !xmlIsEmpty(xmlChildPtr(actualPtr, AstNodeKind.Inner))
+                && !xmlIsEmpty(xmlChildPtr(pattern, AstNodeKind.Inner))
             ) {
                 return semBindTypes(
-                    xmlChild(pattern, AstNodeKind.Inner),
-                    xmlChild(actualPtr, AstNodeKind.Inner),
+                    xmlChildPtr(pattern, AstNodeKind.Inner),
+                    xmlChildPtr(actualPtr, AstNodeKind.Inner),
                     typeParams,
                     bindings
                 )
@@ -540,12 +540,12 @@ fun semBindTypes(
         AstNodeCategory.TypeYield -> {
             // `..T` is a state machine (impl_specs/yield.md) and carries its element type the way
             // a pointer carries its pointee, so its parameter is bound the same way.
-            if (ak == AstNodeCategory.TypeYield && !xmlIsEmpty(xmlChild(actualPtr, AstNodeKind.Inner))
-                && !xmlIsEmpty(xmlChild(pattern, AstNodeKind.Inner))
+            if (ak == AstNodeCategory.TypeYield && !xmlIsEmpty(xmlChildPtr(actualPtr, AstNodeKind.Inner))
+                && !xmlIsEmpty(xmlChildPtr(pattern, AstNodeKind.Inner))
             ) {
                 return semBindTypes(
-                    xmlChild(pattern, AstNodeKind.Inner),
-                    xmlChild(actualPtr, AstNodeKind.Inner),
+                    xmlChildPtr(pattern, AstNodeKind.Inner),
+                    xmlChildPtr(actualPtr, AstNodeKind.Inner),
                     typeParams,
                     bindings
                 )
@@ -599,7 +599,7 @@ fun semSubstitute(typeNode: *AstXmlNode, bindings: *Dictionary<Str, AstXmlNode>,
             // same way a pointer carries its pointee, so it substitutes the same way: the
             // type is unspellable either way, but its *element* type is what a `for`'s loop
             // variable is typed from.
-            val inner: AstXmlNode = semSubstitute(xmlChild(typeNode, AstNodeKind.Inner), bindings, typeParams)
+            val inner: AstXmlNode = semSubstitute(xmlChildPtr(typeNode, AstNodeKind.Inner), bindings, typeParams)
             if (xmlIsEmpty(inner)) {
                 return xmlEmptyNode()
             }
@@ -619,7 +619,7 @@ fun semSubstitute(typeNode: *AstXmlNode, bindings: *Dictionary<Str, AstXmlNode>,
                 }
                 params.append(semReRole(mapped, AstNodeKind.ParamType))
             }
-            val ret: AstXmlNode = semSubstitute(xmlChild(typeNode, AstNodeKind.ReturnType), bindings, typeParams)
+            val ret: AstXmlNode = semSubstitute(xmlChildPtr(typeNode, AstNodeKind.ReturnType), bindings, typeParams)
             if (xmlIsEmpty(ret)) {
                 return xmlEmptyNode()
             }
@@ -672,7 +672,7 @@ fun semFnFact(
     val params: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
     var packTarget: Bool = false
     if (params.size() > 0) {
-        packTarget = semIsPackTarget(xmlChild(params[params.size() - 1], AstNodeKind.Type))
+        packTarget = semIsPackTarget(xmlChildPtr(params[params.size() - 1], AstNodeKind.Type))
     }
     return SemFnFact(
         decl, receiver, templateParams, name, isNative, semIsExtensionDecl(decl),
@@ -862,11 +862,11 @@ data class SemInfer(
             }
 
             AstNodeCategory.TypeReference, AstNodeCategory.TypePointer -> {
-                return this.spellable(xmlChild(typeNode, AstNodeKind.Inner))
+                return this.spellable(xmlChildPtr(typeNode, AstNodeKind.Inner))
             }
 
             AstNodeCategory.TypeFunction -> {
-                if (!this.spellable(xmlChild(typeNode, AstNodeKind.ReturnType))) {
+                if (!this.spellable(xmlChildPtr(typeNode, AstNodeKind.ReturnType))) {
                     return false
                 }
                 val params: List<AstXmlNode> = xmlChildren(typeNode, AstNodeKind.ParamType)
@@ -901,8 +901,8 @@ data class SemInfer(
         val kind: AstNodeCategory = xmlKind(stmtNode)
         when (kind) {
             AstNodeCategory.StmtVarDecl -> {
-                val declared: AstXmlNode = xmlChild(stmtNode, AstNodeKind.Type)
-                val init: AstXmlNode = xmlChild(stmtNode, AstNodeKind.Init)
+                val declared: *AstXmlNode = xmlChildPtr(stmtNode, AstNodeKind.Type)
+                val init: *AstXmlNode = xmlChildPtr(stmtNode, AstNodeKind.Init)
                 var typeNode: AstXmlNode = declared
                 if (xmlIsEmpty(typeNode) && !xmlIsEmpty(init)) {
                     typeNode = this.infer(init)
@@ -921,7 +921,7 @@ data class SemInfer(
 
             AstNodeCategory.StmtBlock -> {
                 this.pushScope()
-                val inner: List<AstXmlNode> = xmlChildren(xmlChild(stmtNode, AstNodeKind.Body), AstNodeKind.Stmt)
+                val inner: List<AstXmlNode> = xmlChildren(xmlChildPtr(stmtNode, AstNodeKind.Body), AstNodeKind.Stmt)
                 val rebuilt: List<AstXmlNode> = this.stmts(inner)
                 this.popScope()
                 var body: AstXmlNode =
@@ -984,7 +984,7 @@ data class SemInfer(
             if (fn.name != name) {
                 continue
             }
-            val ret: AstXmlNode = xmlChild(fn.decl, AstNodeKind.ReturnType)
+            val ret: *AstXmlNode = xmlChildPtr(fn.decl, AstNodeKind.ReturnType)
             if (xmlIsEmpty(ret)) {
                 continue
             }
@@ -1033,7 +1033,7 @@ data class SemInfer(
     // lowers it: a Simse-declared extension/method first, then a native extension,
     // then the built-in accessors.
     fun memberReturn(callee: *AstXmlNode): AstXmlNode {
-        val receiverType: AstXmlNode = this.infer(xmlChild(callee, AstNodeKind.Receiver))
+        val receiverType: AstXmlNode = this.infer(xmlChildPtr(callee, AstNodeKind.Receiver))
         val recv: AstXmlNode = semPointee(receiverType)
         if (xmlIsEmpty(recv)) {
             return xmlEmptyNode()
@@ -1049,7 +1049,7 @@ data class SemInfer(
             if (fn.name != calleeText) {
                 continue
             }
-            val ret: AstXmlNode = xmlChild(fn.decl, AstNodeKind.ReturnType)
+            val ret: *AstXmlNode = xmlChildPtr(fn.decl, AstNodeKind.ReturnType)
             if (xmlIsEmpty(ret)) {
                 continue
             }
@@ -1252,7 +1252,7 @@ data class SemInfer(
             }
 
             AstNodeCategory.ExprMember -> {
-                val lhs: AstXmlNode = xmlChild(e, AstNodeKind.Receiver)
+                val lhs: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Receiver)
                 // An enum member expression has the enum's type.
                 if (xmlKind(lhs) == AstNodeCategory.ExprName
                     && this.facts.enumNames.has(xmlAttr(lhs, AstNodeAttributeKind.Name))
@@ -1308,11 +1308,11 @@ data class SemInfer(
             }
 
             AstNodeCategory.ExprCall -> {
-                return this.callReturn(xmlChild(e, AstNodeKind.Callee))
+                return this.callReturn(xmlChildPtr(e, AstNodeKind.Callee))
             }
 
             AstNodeCategory.ExprIndex -> {
-                val baseType: AstXmlNode = this.infer(xmlChild(e, AstNodeKind.Receiver))
+                val baseType: AstXmlNode = this.infer(xmlChildPtr(e, AstNodeKind.Receiver))
                 val base: AstXmlNode = semPointee(baseType)
                 if (xmlIsEmpty(base)) {
                     return xmlEmptyNode()
@@ -1340,7 +1340,7 @@ data class SemInfer(
             AstNodeCategory.ExprRef -> {
                 // `&x` boxes a copy for the call (`std::make_shared<T>(x)`), so the C++
                 // type is a counted reference to whatever `x` is.
-                return this.handle(AstNodeCategory.TypeReference, this.infer(xmlChild(e, AstNodeKind.Operand)))
+                return this.handle(AstNodeCategory.TypeReference, this.infer(xmlChildPtr(e, AstNodeKind.Operand)))
             }
 
             AstNodeCategory.ExprDeref -> {
@@ -1348,7 +1348,7 @@ data class SemInfer(
                 // (`&x`), of a counted reference's pointee (`x.get()`), or the pointer
                 // itself when `x` already is one - in which case the emitter reads
                 // through it, so the type is the pointee.
-                val operand: AstXmlNode = this.infer(xmlChild(e, AstNodeKind.Operand))
+                val operand: AstXmlNode = this.infer(xmlChildPtr(e, AstNodeKind.Operand))
                 if (xmlIsEmpty(operand)) {
                     return xmlEmptyNode()
                 }
@@ -1357,7 +1357,7 @@ data class SemInfer(
                     return semReRole(xmlChild(operand, AstNodeKind.Inner), AstNodeKind.Type)
                 }
                 if (operandKind == AstNodeCategory.TypeReference) {
-                    return this.handle(AstNodeCategory.TypePointer, xmlChild(operand, AstNodeKind.Inner))
+                    return this.handle(AstNodeCategory.TypePointer, xmlChildPtr(operand, AstNodeKind.Inner))
                 }
                 return this.handle(AstNodeCategory.TypePointer, operand)
             }
@@ -1365,7 +1365,7 @@ data class SemInfer(
             AstNodeCategory.ExprCopy -> {
                 // `copy(x)` is the *value*: a plain read of a value, or the pointee of a
                 // handle (`*(x)`).
-                val operand: AstXmlNode = this.infer(xmlChild(e, AstNodeKind.Operand))
+                val operand: AstXmlNode = this.infer(xmlChildPtr(e, AstNodeKind.Operand))
                 val value: AstXmlNode = semPointee(operand)
                 if (xmlIsEmpty(value)) {
                     return xmlEmptyNode()
@@ -1374,7 +1374,7 @@ data class SemInfer(
             }
 
             AstNodeCategory.ExprUnary -> {
-                return this.infer(xmlChild(e, AstNodeKind.Operand))
+                return this.infer(xmlChildPtr(e, AstNodeKind.Operand))
             }
 
             AstNodeCategory.ExprBinary -> {
@@ -1390,7 +1390,7 @@ data class SemInfer(
                 // Returning the operand's own type would claim the result is a handle too
                 // - and then every slot the extractor made for `a + b` would be declared
                 // as one.
-                return semPointee(this.infer(xmlChild(e, AstNodeKind.Lhs)))
+                return semPointee(this.infer(xmlChildPtr(e, AstNodeKind.Lhs)))
             }
         }
         // A lambda's type comes from the callable type it is used against, which is
@@ -1414,7 +1414,7 @@ fun semInferTypes(
     val params: List<AstXmlNode> = xmlChildren(ctx.decl, AstNodeKind.Param)
     var i: Int = 0
     for (*param in params) {
-        val paramType: AstXmlNode = xmlChild(param, AstNodeKind.Type)
+        val paramType: *AstXmlNode = xmlChildPtr(param, AstNodeKind.Type)
         if (!xmlIsEmpty(paramType)) {
             infer.mark(xmlAttr(param, AstNodeAttributeKind.Name), paramType)
         }
@@ -1469,7 +1469,7 @@ fun semTypeOfExpr(
     val params: List<AstXmlNode> = xmlChildren(ctx.decl, AstNodeKind.Param)
     var i: Int = 0
     for (*param in params) {
-        val paramType: AstXmlNode = xmlChild(param, AstNodeKind.Type)
+        val paramType: *AstXmlNode = xmlChildPtr(param, AstNodeKind.Type)
         if (!xmlIsEmpty(paramType)) {
             infer.mark(xmlAttr(param, AstNodeAttributeKind.Name), paramType)
         }

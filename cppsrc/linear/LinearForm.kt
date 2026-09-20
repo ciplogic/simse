@@ -439,11 +439,11 @@ fun ilTypeText(typeNode: *AstXmlNode): Str {
         }
 
         AstNodeCategory.TypeReference -> {
-            return "&" + ilTypeText(xmlChild(typeNode, AstNodeKind.Inner))
+            return "&" + ilTypeText(xmlChildPtr(typeNode, AstNodeKind.Inner))
         }
 
         AstNodeCategory.TypePointer -> {
-            return "*" + ilTypeText(xmlChild(typeNode, AstNodeKind.Inner))
+            return "*" + ilTypeText(xmlChildPtr(typeNode, AstNodeKind.Inner))
         }
         // A `..T` (and anything else) spells `?`: the C++ ring's `ilTypeText` switches on
         // Named/IntLit/Generic/Reference/Pointer/Function only, and the two dumps have to
@@ -456,7 +456,7 @@ fun ilTypeText(typeNode: *AstXmlNode): Str {
                 params.append(ilTypeText(paramType))
             }
             val joined: Str = ilJoinList(params, ", ")
-            val ret: Str = ilTypeText(xmlChild(typeNode, AstNodeKind.ReturnType))
+            val ret: Str = ilTypeText(xmlChildPtr(typeNode, AstNodeKind.ReturnType))
             var out: Str = Str()
             out.reserve(joined.size() + ret.size() + 8)
             out.append('(')
@@ -475,11 +475,11 @@ fun ilReceiverTypeText(typeNode: *AstXmlNode): Str {
     val kind: AstNodeCategory = xmlKind(typeNode)
     when (kind) {
         AstNodeCategory.TypeReference -> {
-            return "&" + ilTypeText(xmlChild(typeNode, AstNodeKind.Inner))
+            return "&" + ilTypeText(xmlChildPtr(typeNode, AstNodeKind.Inner))
         }
 
         AstNodeCategory.TypePointer -> {
-            return "*" + ilTypeText(xmlChild(typeNode, AstNodeKind.Inner))
+            return "*" + ilTypeText(xmlChildPtr(typeNode, AstNodeKind.Inner))
         }
     }
     return "*" + ilTypeText(typeNode)
@@ -1205,7 +1205,7 @@ fun ilCollectStmtExprs(
     stmt: *AstXmlNode, role: AstNodeKind, order: *List<Str>,
     seen: *Dictionary<Str, Bool>
 ): Unit {
-    val child: AstXmlNode = xmlChild(stmt, role)
+    val child: *AstXmlNode = xmlChildPtr(stmt, role)
     if (!xmlIsEmpty(child)) {
         ilCollectExprNames(child, order, seen)
     }
@@ -1216,7 +1216,7 @@ fun ilCollectStmtNamesIn(
     stmt: *AstXmlNode, role: AstNodeKind, declared: *Dictionary<Str, Bool>,
     order: *List<Str>, seen: *Dictionary<Str, Bool>
 ): Unit {
-    val container: AstXmlNode = xmlChild(stmt, role)
+    val container: *AstXmlNode = xmlChildPtr(stmt, role)
     if (xmlIsEmpty(container)) {
         return
     }
@@ -1721,7 +1721,7 @@ data class IlExtractor(
         while (i < params.size()) {
             val param: *AstXmlNode = *params[i]
             val name: Str = xmlAttr(param, AstNodeAttributeKind.Name)
-            val typeNode: AstXmlNode = xmlChild(param, AstNodeKind.Type)
+            val typeNode: *AstXmlNode = xmlChildPtr(param, AstNodeKind.Type)
             if (name == "this" && !hasSelf) {
                 var selfText: Str = "?"
                 if (!xmlIsEmpty(typeNode)) {
@@ -1752,7 +1752,7 @@ data class IlExtractor(
         // is its declared type.
         var retText: Str = "?"
         if (!xmlIsEmpty(this.fn.decl)) {
-            val declared: AstXmlNode = xmlChild(this.fn.decl, AstNodeKind.ReturnType)
+            val declared: *AstXmlNode = xmlChildPtr(this.fn.decl, AstNodeKind.ReturnType)
             if (!xmlIsEmpty(declared)) {
                 retText = ilTypeText(declared)
             }
@@ -1783,7 +1783,7 @@ data class IlExtractor(
             }
 
             AstNodeCategory.StmtIfTrue, AstNodeCategory.StmtIfFalse -> {
-                val cond: AstXmlNode = xmlChild(stmt, AstNodeKind.Cond)
+                val cond: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Cond)
                 this.emit(
                     ilCategoryName(kind), ilOps2(
                         this.operandOf(cond),
@@ -1794,7 +1794,7 @@ data class IlExtractor(
             }
 
             AstNodeCategory.StmtVarDecl -> {
-                val typeNode: AstXmlNode = xmlChild(stmt, AstNodeKind.Type)
+                val typeNode: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Type)
                 var typeText: Str = "?"
                 if (!xmlIsEmpty(typeNode)) {
                     typeText = ilTypeText(typeNode)
@@ -1805,7 +1805,7 @@ data class IlExtractor(
                     slotKind = IlVarKind.Expression
                 }
                 val slot: Int = this.addVar(name, typeText, slotKind, typeNode)
-                val init: AstXmlNode = xmlChild(stmt, AstNodeKind.Init)
+                val init: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Init)
                 if (xmlIsEmpty(init)) {
                     this.emit(IlOpKind.Declare, ilOps1(slot))
                 } else {
@@ -1816,12 +1816,12 @@ data class IlExtractor(
             }
 
             AstNodeCategory.StmtAssign -> {
-                this.assign(stmt, xmlChild(stmt, AstNodeKind.Target), xmlChild(stmt, AstNodeKind.Value))
+                this.assign(stmt, xmlChildPtr(stmt, AstNodeKind.Target), xmlChildPtr(stmt, AstNodeKind.Value))
                 return
             }
 
             AstNodeCategory.StmtReturn -> {
-                val value: AstXmlNode = xmlChild(stmt, AstNodeKind.Value)
+                val value: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Value)
                 if (xmlIsEmpty(value)) {
                     this.emit(IlOpKind.ReturnVoid, List<Int>())
                 } else {
@@ -1831,7 +1831,7 @@ data class IlExtractor(
             }
 
             AstNodeCategory.StmtExprStmt -> {
-                val expr: AstXmlNode = xmlChild(stmt, AstNodeKind.Expr)
+                val expr: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Expr)
                 if (xmlKind(expr) == AstNodeCategory.ExprCall) {
                     this.call(-1, expr)
                     return
@@ -1842,7 +1842,7 @@ data class IlExtractor(
             }
 
             AstNodeCategory.StmtBlock -> {
-                val container: AstXmlNode = xmlChild(stmt, AstNodeKind.Body)
+                val container: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Body)
                 var i: Int = 0
                 val children: Array<AstXmlNode> = container.Children
                 var body: List<AstXmlNode> = List<AstXmlNode>()
@@ -1893,7 +1893,7 @@ data class IlExtractor(
             }
 
             AstNodeCategory.ExprMember -> {
-                val lhs: AstXmlNode = xmlChild(target, AstNodeKind.Receiver)
+                val lhs: *AstXmlNode = xmlChildPtr(target, AstNodeKind.Receiver)
                 val fieldName: Str = xmlAttr(target, AstNodeAttributeKind.Name)
                 if (this.isTypeBase(lhs)) {
                     this.emit(
@@ -1916,8 +1916,8 @@ data class IlExtractor(
             AstNodeCategory.ExprIndex -> {
                 this.emit(
                     IlOpKind.SetIndex, ilOps3(
-                        this.receiverOf(xmlChild(target, AstNodeKind.Receiver)),
-                        this.operandOf(xmlChild(target, AstNodeKind.Index)),
+                        this.receiverOf(xmlChildPtr(target, AstNodeKind.Receiver)),
+                        this.operandOf(xmlChildPtr(target, AstNodeKind.Index)),
                         this.operandOf(value)
                     )
                 )
@@ -1928,7 +1928,7 @@ data class IlExtractor(
                 // `*p = v`: the emitter writes through the pointer's type.
                 this.emit(
                     IlOpKind.Store, ilOps2(
-                        this.operandOf(xmlChild(target, AstNodeKind.Operand)),
+                        this.operandOf(xmlChildPtr(target, AstNodeKind.Operand)),
                         this.operandOf(value)
                     )
                 )
@@ -1983,7 +1983,7 @@ data class IlExtractor(
             }
 
             AstNodeCategory.ExprMember -> {
-                val lhs: AstXmlNode = xmlChild(target, AstNodeKind.Receiver)
+                val lhs: *AstXmlNode = xmlChildPtr(target, AstNodeKind.Receiver)
                 val fieldName: Str = xmlAttr(target, AstNodeAttributeKind.Name)
                 if (this.isTypeBase(lhs)) {
                     val field: Int = this.poolIndex(fmtStr("|.|", this.baseText(lhs), fieldName))
@@ -2003,8 +2003,8 @@ data class IlExtractor(
             AstNodeCategory.ExprIndex -> {
                 // The base and the index are each evaluated once, into the operands the read
                 // and the write share - so an index with a side effect runs once.
-                val base: Int = this.receiverOf(xmlChild(target, AstNodeKind.Receiver))
-                val index: Int = this.operandOf(xmlChild(target, AstNodeKind.Index))
+                val base: Int = this.receiverOf(xmlChildPtr(target, AstNodeKind.Receiver))
+                val index: Int = this.operandOf(xmlChildPtr(target, AstNodeKind.Index))
                 val current: Int = this.freshValueSlot(target)
                 this.emit(IlOpKind.GetIndex, ilOps3(current, base, index))
                 this.emit(IlOpKind.SetIndex, ilOps3(base, index, this.fold(current, op, value, target)))
@@ -2014,7 +2014,7 @@ data class IlExtractor(
             AstNodeCategory.ExprDeref -> {
                 // `*p += 1`: the pointer *is* the place, so the load and the store both go
                 // through it and the pointee is written in place.
-                val pointer: Int = this.operandOf(xmlChild(target, AstNodeKind.Operand))
+                val pointer: Int = this.operandOf(xmlChildPtr(target, AstNodeKind.Operand))
                 val current: Int = this.freshValueSlot(target)
                 this.emit(IlOpKind.Deref, ilOps2(current, pointer))
                 this.emit(IlOpKind.Store, ilOps2(pointer, this.fold(current, op, value, target)))
@@ -2190,7 +2190,7 @@ data class IlExtractor(
             }
 
             AstNodeCategory.ExprMember -> {
-                val lhs: AstXmlNode = xmlChild(e, AstNodeKind.Receiver)
+                val lhs: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Receiver)
                 val fieldName: Str = xmlAttr(e, AstNodeAttributeKind.Name)
                 if (this.isTypeBase(lhs)) {
                     this.emit(
@@ -2206,16 +2206,16 @@ data class IlExtractor(
             AstNodeCategory.ExprIndex -> {
                 this.emit(
                     IlOpKind.GetIndex, ilOps3(
-                        slot, this.receiverOf(xmlChild(e, AstNodeKind.Receiver)),
-                        this.operandOf(xmlChild(e, AstNodeKind.Index))
+                        slot, this.receiverOf(xmlChildPtr(e, AstNodeKind.Receiver)),
+                        this.operandOf(xmlChildPtr(e, AstNodeKind.Index))
                     )
                 )
                 return
             }
 
             AstNodeCategory.ExprBinary -> {
-                val lhs: AstXmlNode = xmlChild(e, AstNodeKind.Lhs)
-                val rhs: AstXmlNode = xmlChild(e, AstNodeKind.Rhs)
+                val lhs: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Lhs)
+                val rhs: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Rhs)
                 this.emit(
                     IlOpKind.BinaryOp, ilOps4(
                         slot, this.poolIndex(xmlAttr(e, AstNodeAttributeKind.Op)),
@@ -2230,14 +2230,14 @@ data class IlExtractor(
                 this.emit(
                     IlOpKind.UnaryOp, ilOps3(
                         slot, this.poolIndex(xmlAttr(e, AstNodeAttributeKind.Op)),
-                        this.operandOf(xmlChild(e, AstNodeKind.Operand))
+                        this.operandOf(xmlChildPtr(e, AstNodeKind.Operand))
                     )
                 )
                 return
             }
 
             AstNodeCategory.ExprRef -> {
-                this.emit(IlOpKind.Box, ilOps2(slot, this.operandOf(xmlChild(e, AstNodeKind.Operand))))
+                this.emit(IlOpKind.Box, ilOps2(slot, this.operandOf(xmlChildPtr(e, AstNodeKind.Operand))))
                 return
             }
 
@@ -2247,7 +2247,7 @@ data class IlExtractor(
                 // through a raw pointer - the backend reads which from the operand's slot type.
                 // A place that is a chain already *is* its address, so it is copied; a name, a
                 // handle and a call's result are read and the address is taken from the value.
-                val operand: AstXmlNode = xmlChild(e, AstNodeKind.Operand)
+                val operand: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Operand)
                 val operandName: Str = xmlAttr(operand, AstNodeAttributeKind.Name)
                 if (xmlKind(operand) == AstNodeCategory.ExprName && this.isStaticName(operandName)) {
                     // A file-level static is not a slot of the frame, so its address is its own
@@ -2271,7 +2271,7 @@ data class IlExtractor(
             }
 
             AstNodeCategory.ExprCopy -> {
-                this.emit(IlOpKind.CopyValue, ilOps2(slot, this.operandOf(xmlChild(e, AstNodeKind.Operand))))
+                this.emit(IlOpKind.CopyValue, ilOps2(slot, this.operandOf(xmlChildPtr(e, AstNodeKind.Operand))))
                 return
             }
 
@@ -2396,7 +2396,7 @@ data class IlExtractor(
             }
 
             AstNodeCategory.ExprMember -> {
-                val lhs: AstXmlNode = xmlChild(e, AstNodeKind.Receiver)
+                val lhs: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Receiver)
                 if (this.isTypeBase(lhs)) {
                     return this.valueOf(e)
                 }
@@ -2414,13 +2414,13 @@ data class IlExtractor(
                     return this.valueOf(e)
                 }
                 return this.place(
-                    IlOpKind.IndexAddr, xmlChild(e, AstNodeKind.Receiver), e, Str(),
-                    xmlChild(e, AstNodeKind.Index)
+                    IlOpKind.IndexAddr, xmlChildPtr(e, AstNodeKind.Receiver), e, Str(),
+                    xmlChildPtr(e, AstNodeKind.Index)
                 )
             }
 
             AstNodeCategory.ExprDeref -> {
-                return this.operandOf(xmlChild(e, AstNodeKind.Operand))
+                return this.operandOf(xmlChildPtr(e, AstNodeKind.Operand))
             }
         }
         return this.valueOf(e)
@@ -2567,9 +2567,9 @@ data class IlExtractor(
     // ---- calls ------------------------------------------------------------
 
     // The symbol a `native("...")` declaration names, without its quotes.
-    fun ilNativeSymbolOf(decl: AstXmlNode): Str {
+    fun ilNativeSymbolOf(decl: *AstXmlNode): Str {
         val text: Str = xmlAttr(decl, AstNodeAttributeKind.NativeSymbol)
-        if (text.size() >= 2 && text.substr(0, 1) == "\"" && text.substr(text.size() - 1, 1) == "\"") {
+        if (text.size() >= 2 && text[0] == '\"' && text[text.size() - 1] == '\"') {
             return text.substr(1, text.size() - 2)
         }
         return text
@@ -2577,7 +2577,7 @@ data class IlExtractor(
 
     // Whether a call's target is the prelude's list literal (`rtl.kt`'s `listOf<T>`): the
     // one native whose *call* is not a call.
-    fun ilIsListOf(target: AstXmlNode): Bool {
+    fun ilIsListOf(target: *AstXmlNode): Bool {
         return xmlAttr(target, AstNodeAttributeKind.IsNative) == "true"
                 && xmlAttr(target, AstNodeAttributeKind.HasNativeSymbol) == "true"
                 && this.ilNativeSymbolOf(target) == "simse_listOf"
@@ -2752,7 +2752,7 @@ data class IlExtractor(
         if (params.size() == 0) {
             return -1
         }
-        val wanted: AstXmlNode = xmlChild(params[params.size() - 1], AstNodeKind.Type)
+        val wanted: *AstXmlNode = xmlChildPtr(params[params.size() - 1], AstNodeKind.Type)
         if (!semIsPackTarget(wanted)) {
             return -1
         }
@@ -2776,12 +2776,12 @@ data class IlExtractor(
         val params: List<AstXmlNode> = xmlChildren(target, AstNodeKind.Param)
         var wanted: AstXmlNode = xmlEmptyNode()
         if (params.size() > 0) {
-            wanted = xmlChild(params[params.size() - 1], AstNodeKind.Type)
+            wanted = xmlChildPtr(params[params.size() - 1], AstNodeKind.Type)
         }
         val list: AstXmlNode = semListTypeOf(wanted)
         var element: AstXmlNode = xmlEmptyNode()
         if (xmlCount(list, AstNodeKind.TypeArg) > 0) {
-            element = xmlChild(list, AstNodeKind.TypeArg)
+            element = xmlChildPtr(list, AstNodeKind.TypeArg)
         }
         val slot: Int = this.freshSlot(this.slotTypeText(list), list)
         var operands: List<Int> = List<Int>()
@@ -2911,14 +2911,14 @@ data class IlExtractor(
 
     // `dst < 0` means the result is dropped (`CallVoid`).
     fun call(dst: Int, e: *AstXmlNode): Unit {
-        val callee: AstXmlNode = xmlChild(e, AstNodeKind.Callee)
+        val callee: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Callee)
         val hasDst: Bool = dst >= 0
         var returnType: Int = -1
         if (hasDst) {
             returnType = this.out.vars[dst].typeIndex
         }
         val member: Bool = xmlKind(callee) == AstNodeCategory.ExprMember
-        val lhs: AstXmlNode = xmlChild(callee, AstNodeKind.Receiver)
+        val lhs: *AstXmlNode = xmlChildPtr(callee, AstNodeKind.Receiver)
         var staticCall: Bool = false
         if (member) {
             staticCall = this.isTypeBase(lhs)
@@ -2962,7 +2962,7 @@ data class IlExtractor(
                 this.setSlotType(dst, listType)
                 var element: AstXmlNode = xmlEmptyNode()
                 if (xmlCount(listType, AstNodeKind.TypeArg) > 0) {
-                    element = xmlChild(listType, AstNodeKind.TypeArg)
+                    element = xmlChildPtr(listType, AstNodeKind.TypeArg)
                 }
                 var packing: List<Int> = List<Int>()
                 packing.append(dst)
@@ -3005,7 +3005,7 @@ data class IlExtractor(
         while (i < plain) {
             var param: AstXmlNode = xmlEmptyNode()
             if (paramOffset + i < paramNodes.size()) {
-                param = xmlChild(paramNodes[paramOffset + i], AstNodeKind.Type)
+                param = xmlChildPtr(paramNodes[paramOffset + i], AstNodeKind.Type)
             }
             val slot: Int = this.convertArgument(paramOwner, param, argNodes[i])
             args.append(slot)
@@ -3130,7 +3130,7 @@ data class IlExtractor(
             declared.insert(paramNames[p], true)
             p = p + 1
         }
-        val bodyContainer: AstXmlNode = xmlChild(e, AstNodeKind.Body)
+        val bodyContainer: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Body)
         var bodyList: List<AstXmlNode> = List<AstXmlNode>()
         var bi: Int = 0
         while (bi < bodyContainer.Children.count()) {
@@ -3280,7 +3280,7 @@ fun ilSplitParams(text: Str): List<Str> {
 fun ilLambdaLower(body: *List<AstXmlNode>): List<AstXmlNode> {
     var out: List<AstXmlNode> = List<AstXmlNode>()
     if (body.size() == 1 && xmlKind(body[0]) == AstNodeCategory.StmtExprStmt) {
-        val expr: AstXmlNode = xmlChild(body[0], AstNodeKind.Expr)
+        val expr: *AstXmlNode = xmlChildPtr(body[0], AstNodeKind.Expr)
         if (!xmlIsEmpty(expr)) {
             var ret: AstXmlNode = linStmt(
                 AstNodeCategory.StmtReturn, xmlLine(body[0]),

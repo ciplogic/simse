@@ -171,7 +171,7 @@ fun cgIndent(level: Int): Str {
 // share the list own it (`semIsRtlTypeName`, sema/TypeInfer.kt).
 
 fun cgUnquote(text: Str): Str {
-    if (text.size() >= 2 && text.substr(0, 1) == "\"" && text.substr(text.size() - 1, 1) == "\"") {
+    if (text.size() >= 2 && text[0] == '\"' && text[text.size() - 1] == '\"') {
         return text.substr(1, text.size() - 2)
     }
     return text
@@ -263,7 +263,7 @@ fun cgIsMainArgs(decl: *AstXmlNode): Bool {
     if (params.size() != 1) {
         return false
     }
-    val paramType: AstXmlNode = xmlChild(params[0], AstNodeKind.Type)
+    val paramType: *AstXmlNode = xmlChildPtr(params[0], AstNodeKind.Type)
     if (xmlIsEmpty(paramType)) {
         return false
     }
@@ -786,7 +786,7 @@ data class Emitter(
             }
 
             AstNodeCategory.TypeReference -> {
-                val inner: AstXmlNode = xmlChild(typeExpr, AstNodeKind.Inner)
+                val inner: *AstXmlNode = xmlChildPtr(typeExpr, AstNodeKind.Inner)
                 if (xmlIsEmpty(inner)) {
                     // A reference with no inner type is not a language type; `Ref<void>` is
                     // the emitter's fallback for it, and nothing in the tree produces one.
@@ -799,7 +799,7 @@ data class Emitter(
             }
 
             AstNodeCategory.TypePointer -> {
-                val inner: AstXmlNode = xmlChild(typeExpr, AstNodeKind.Inner)
+                val inner: *AstXmlNode = xmlChildPtr(typeExpr, AstNodeKind.Inner)
                 if (xmlIsEmpty(inner)) {
                     return "void*"
                 }
@@ -807,7 +807,7 @@ data class Emitter(
             }
 
             AstNodeCategory.TypeFunction -> {
-                val retNode: AstXmlNode = xmlChild(typeExpr, AstNodeKind.ReturnType)
+                val retNode: *AstXmlNode = xmlChildPtr(typeExpr, AstNodeKind.ReturnType)
                 var ret: Str = "void"
                 if (!xmlIsEmpty(retNode)) {
                     ret = this.type(retNode)
@@ -846,7 +846,7 @@ data class Emitter(
     fun emitStatics(): Unit {
         for (*entry in this.statics) {
             this.curFile = entry.file
-            val typeNode: AstXmlNode = xmlChild(entry.decl, AstNodeKind.Type)
+            val typeNode: *AstXmlNode = xmlChildPtr(entry.decl, AstNodeKind.Type)
             val storage: Str = this.qualify(entry.packageName, xmlAttr(entry.decl, AstNodeAttributeKind.Name))
             if (this.failed) {
                 return
@@ -862,7 +862,7 @@ data class Emitter(
     // Whether any static has an initializer, i.e. whether the pass is needed.
     fun hasStaticInit(): Bool {
         for (*entry in this.statics) {
-            if (!xmlIsEmpty(xmlChild(entry.decl, AstNodeKind.Init))) {
+            if (!xmlIsEmpty(xmlChildPtr(entry.decl, AstNodeKind.Init))) {
                 return true
             }
         }
@@ -881,7 +881,7 @@ data class Emitter(
         this.line(0, "// File-level static storage (specs/statics.md): initialized before main's body.")
         this.line(0, "void simse_initStatics() {")
         for (*entry in this.statics) {
-            val init: AstXmlNode = xmlChild(entry.decl, AstNodeKind.Init)
+            val init: *AstXmlNode = xmlChildPtr(entry.decl, AstNodeKind.Init)
             if (xmlIsEmpty(init)) {
                 continue
             }
@@ -891,7 +891,7 @@ data class Emitter(
                 1,
                 fmtStr(
                     "| = |;",
-                    storage, this.expr(init, 0, xmlChild(entry.decl, AstNodeKind.Type))
+                    storage, this.expr(init, 0, xmlChildPtr(entry.decl, AstNodeKind.Type))
                 )
             )
             if (this.failed) {
@@ -1009,7 +1009,7 @@ data class Emitter(
         var params: List<Str> = List<Str>()
         var values: List<Str> = List<Str>()
         for (*field in fields) {
-            val fieldType: AstXmlNode = xmlChild(field, AstNodeKind.Type)
+            val fieldType: *AstXmlNode = xmlChildPtr(field, AstNodeKind.Type)
             if (xmlIsEmpty(fieldType)) {
                 this.fail(
                     field,
@@ -1044,7 +1044,11 @@ data class Emitter(
         for (*field in fields) {
             this.line(
                 1,
-                fmtStr("| |;", this.type(xmlChild(field, AstNodeKind.Type)), xmlAttr(field, AstNodeAttributeKind.Name))
+                fmtStr(
+                    "| |;",
+                    this.type(xmlChildPtr(field, AstNodeKind.Type)),
+                    xmlAttr(field, AstNodeAttributeKind.Name)
+                )
             )
         }
         this.line(0, "};")
@@ -1148,7 +1152,7 @@ data class Emitter(
     }
 
     fun emitTypeAlias(decl: *AstXmlNode): Unit {
-        val target: AstXmlNode = xmlChild(decl, AstNodeKind.TargetType)
+        val target: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.TargetType)
         if (xmlIsEmpty(target)) {
             this.fail(
                 decl,
@@ -1195,7 +1199,7 @@ data class Emitter(
                 )
                 return
             }
-            val returnNode: AstXmlNode = xmlChild(decl, AstNodeKind.ReturnType)
+            val returnNode: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.ReturnType)
             var ret: Str = "void"
             if (!xmlIsEmpty(returnNode)) {
                 ret = this.type(returnNode)
@@ -1206,7 +1210,7 @@ data class Emitter(
             val params: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
             var paramTexts: List<Str> = List<Str>()
             for (*param in params) {
-            val paramType: AstXmlNode = xmlChild(param, AstNodeKind.Type)
+            val paramType: *AstXmlNode = xmlChildPtr(param, AstNodeKind.Type)
             if (xmlIsEmpty(paramType)) {
                 this.fail(
                     param,
@@ -1281,7 +1285,7 @@ data class Emitter(
             this.literals.add(xmlAttr(node, AstNodeAttributeKind.Text))
         }
         if (xmlKind(node) == AstNodeCategory.ExprCall) {
-            val callee: AstXmlNode = xmlChild(node, AstNodeKind.Callee)
+            val callee: *AstXmlNode = xmlChildPtr(node, AstNodeKind.Callee)
             val name: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
             if (name != "") {
                 names.insert(name, true)
@@ -1291,7 +1295,7 @@ data class Emitter(
                 }
             }
             if (xmlKind(callee) == AstNodeCategory.ExprMember) {
-                val recv: AstXmlNode = xmlChild(callee, AstNodeKind.Receiver)
+                val recv: *AstXmlNode = xmlChildPtr(callee, AstNodeKind.Receiver)
                 if (xmlKind(recv) == AstNodeCategory.ExprName) {
                     val symbol: Str = this.staticCallSymbol(
                         xmlAttr(recv, AstNodeAttributeKind.Name), name
@@ -1569,10 +1573,10 @@ data class Emitter(
                     continue
                 }
                 this.collectTypeNames(fn.receiver)
-                this.collectTypeNames(xmlChild(fn.decl, AstNodeKind.ReturnType))
+                this.collectTypeNames(xmlChildPtr(fn.decl, AstNodeKind.ReturnType))
                 val params: List<AstXmlNode> = xmlChildren(fn.decl, AstNodeKind.Param)
                 for (*param in params) {
-                    this.collectTypeNames(xmlChild(param, AstNodeKind.Type))
+                    this.collectTypeNames(xmlChildPtr(param, AstNodeKind.Type))
                 }
             }
             if (this.referencedNames.size() != namesBefore
@@ -1619,7 +1623,7 @@ data class Emitter(
         }
         val params: List<AstXmlNode> = xmlChildren(fn.decl, AstNodeKind.Param)
         for (*param in params) {
-            val paramType: AstXmlNode = xmlChild(param, AstNodeKind.Type)
+            val paramType: *AstXmlNode = xmlChildPtr(param, AstNodeKind.Type)
             if (!xmlIsEmpty(paramType)) {
                 this.nameKinds.insert(xmlAttr(param, AstNodeAttributeKind.Name), this.kindOf(paramType))
                 this.localTypes.insert(xmlAttr(param, AstNodeAttributeKind.Name), paramType)
@@ -1643,7 +1647,7 @@ data class Emitter(
 // the same class name.
     fun machineName(decl: *AstXmlNode): Str {
         val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
-        val receiver: AstXmlNode = xmlChild(decl, AstNodeKind.Receiver)
+        val receiver: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.Receiver)
         val outer: Str = this.outerTypeName(receiver)
         if (outer == "") {
             return name
@@ -1736,7 +1740,7 @@ data class Emitter(
         }
 
         this.setActiveTypeParams(fn.templateParams)
-        val returnNode: AstXmlNode = xmlChild(decl, AstNodeKind.ReturnType)
+        val returnNode: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.ReturnType)
         // A body that yields is lowered to a state machine, and the function to a factory
         // for it (impl_specs/yield.md) - so the return type of the emitted function is the
         // machine's class, not the `..T` the source wrote. For a generic function the
@@ -1776,7 +1780,7 @@ data class Emitter(
         // The argv form's parameter is built from argc/argv, not passed.
         if (!mainArgs) {
             for (*param in params0) {
-                val paramType: AstXmlNode = xmlChild(param, AstNodeKind.Type)
+                val paramType: *AstXmlNode = xmlChildPtr(param, AstNodeKind.Type)
                 if (xmlIsEmpty(paramType)) {
                     this.fail(
                         param,
@@ -1863,7 +1867,7 @@ data class Emitter(
         // the body (`linFinishForEmission`) and the folding finish the job: the
         // emitter below knows the linear forms only.
         var lowered: List<AstXmlNode> =
-            linLowerForEmission(xmlChildren(xmlChild(decl, AstNodeKind.Body), AstNodeKind.Stmt))
+            linLowerForEmission(xmlChildren(xmlChildPtr(decl, AstNodeKind.Body), AstNodeKind.Stmt))
         val semantics: SemBody = SemBody(
             decl, fn.templateParams, selfTypePtr, xmlEmptyNode(),
             List<Str>(), List<AstXmlNode>(), Dictionary<Str, AstXmlNode>()
@@ -2074,12 +2078,12 @@ data class Emitter(
             }
 
             AstNodeCategory.TypeReference -> {
-                if (ak == AstNodeCategory.TypeReference && !xmlIsEmpty(xmlChild(actualPtr, AstNodeKind.Inner))
-                    && !xmlIsEmpty(xmlChild(pattern, AstNodeKind.Inner))
+                if (ak == AstNodeCategory.TypeReference && !xmlIsEmpty(xmlChildPtr(actualPtr, AstNodeKind.Inner))
+                    && !xmlIsEmpty(xmlChildPtr(pattern, AstNodeKind.Inner))
                 ) {
                     return this.unifyType(
-                        xmlChild(pattern, AstNodeKind.Inner),
-                        xmlChild(actualPtr, AstNodeKind.Inner),
+                        xmlChildPtr(pattern, AstNodeKind.Inner),
+                        xmlChildPtr(actualPtr, AstNodeKind.Inner),
                         typeParams
                     )
                 }
@@ -2087,12 +2091,12 @@ data class Emitter(
             }
 
             AstNodeCategory.TypePointer -> {
-                if (ak == AstNodeCategory.TypePointer && !xmlIsEmpty(xmlChild(actualPtr, AstNodeKind.Inner))
-                    && !xmlIsEmpty(xmlChild(pattern, AstNodeKind.Inner))
+                if (ak == AstNodeCategory.TypePointer && !xmlIsEmpty(xmlChildPtr(actualPtr, AstNodeKind.Inner))
+                    && !xmlIsEmpty(xmlChildPtr(pattern, AstNodeKind.Inner))
                 ) {
                     return this.unifyType(
-                        xmlChild(pattern, AstNodeKind.Inner),
-                        xmlChild(actualPtr, AstNodeKind.Inner),
+                        xmlChildPtr(pattern, AstNodeKind.Inner),
+                        xmlChildPtr(actualPtr, AstNodeKind.Inner),
                         typeParams
                     )
                 }
@@ -2103,12 +2107,12 @@ data class Emitter(
             // element-wise - which is what lets the prelude's `fun ..T.smToYield(): ..T` be
             // found for a machine.
             AstNodeCategory.TypeYield -> {
-                if (ak == AstNodeCategory.TypeYield && !xmlIsEmpty(xmlChild(actualPtr, AstNodeKind.Inner))
-                    && !xmlIsEmpty(xmlChild(pattern, AstNodeKind.Inner))
+                if (ak == AstNodeCategory.TypeYield && !xmlIsEmpty(xmlChildPtr(actualPtr, AstNodeKind.Inner))
+                    && !xmlIsEmpty(xmlChildPtr(pattern, AstNodeKind.Inner))
                 ) {
                     return this.unifyType(
-                        xmlChild(pattern, AstNodeKind.Inner),
-                        xmlChild(actualPtr, AstNodeKind.Inner),
+                        xmlChildPtr(pattern, AstNodeKind.Inner),
+                        xmlChildPtr(actualPtr, AstNodeKind.Inner),
                         typeParams
                     )
                 }
@@ -2121,7 +2125,7 @@ data class Emitter(
     fun functionReturn(name: *Str): AstXmlNode {
         for (*fn in this.functions) {
             if (fn.name == name) {
-                val ret: AstXmlNode = xmlChild(fn.decl, AstNodeKind.ReturnType)
+                val ret: *AstXmlNode = xmlChildPtr(fn.decl, AstNodeKind.ReturnType)
                 if (!xmlIsEmpty(ret)) {
                     return ret
                 }
@@ -2131,7 +2135,7 @@ data class Emitter(
     }
 
     fun memberCallReturn(callee: *AstXmlNode): AstXmlNode {
-        val receiverType: AstXmlNode = this.inferType(xmlChild(callee, AstNodeKind.Receiver))
+        val receiverType: AstXmlNode = this.inferType(xmlChildPtr(callee, AstNodeKind.Receiver))
         val recv: AstXmlNode = this.pointee(receiverType)
         val calleeText: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
         var i: Int = 0
@@ -2144,7 +2148,7 @@ data class Emitter(
             if (fn.name != calleeText) {
                 continue
             }
-            val ret: AstXmlNode = xmlChild(fn.decl, AstNodeKind.ReturnType)
+            val ret: *AstXmlNode = xmlChildPtr(fn.decl, AstNodeKind.ReturnType)
             if (!xmlIsEmpty(recv) && this.unifyType(fn.receiver, recv, fn.templateParams)
                 && !xmlIsEmpty(ret)
             ) {
@@ -2243,7 +2247,7 @@ data class Emitter(
             }
 
             AstNodeCategory.ExprMember -> {
-                val lhs: AstXmlNode = xmlChild(e, AstNodeKind.Receiver)
+                val lhs: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Receiver)
                 if (xmlKind(lhs) == AstNodeCategory.ExprName && this.enumNames.has(
                         copy(
                             xmlAttr(
@@ -2293,7 +2297,7 @@ data class Emitter(
             }
 
             AstNodeCategory.ExprCall -> {
-                val callee: AstXmlNode = xmlChild(e, AstNodeKind.Callee)
+                val callee: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Callee)
                 val calleeKind: AstNodeCategory = xmlKind(callee)
                 if (calleeKind == AstNodeCategory.ExprGenericName) {
                     val name: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
@@ -2316,7 +2320,7 @@ data class Emitter(
             }
 
             AstNodeCategory.ExprIndex -> {
-                val baseType: AstXmlNode = this.inferType(xmlChild(e, AstNodeKind.Receiver))
+                val baseType: AstXmlNode = this.inferType(xmlChildPtr(e, AstNodeKind.Receiver))
                 val base: AstXmlNode = this.pointee(baseType)
                 if (xmlIsEmpty(base)) {
                     return xmlEmptyNode()
@@ -2350,7 +2354,7 @@ data class Emitter(
                 )
                 xmlAddChild(
                     node,
-                    this.renameRole(this.inferType(xmlChild(e, AstNodeKind.Operand)), AstNodeKind.Inner)
+                    this.renameRole(this.inferType(xmlChildPtr(e, AstNodeKind.Operand)), AstNodeKind.Inner)
                 )
                 return node
             }
@@ -2363,13 +2367,13 @@ data class Emitter(
                 // the same three cases; this is that rule, so the emitter's guess and the
                 // pass's answer agree (the `Deref` instruction means one of the three,
                 // `impl_specs/linear-il.md`).
-                val operand: AstXmlNode = this.inferType(xmlChild(e, AstNodeKind.Operand))
+                val operand: AstXmlNode = this.inferType(xmlChildPtr(e, AstNodeKind.Operand))
                 if (xmlIsEmpty(operand)) {
                     return xmlEmptyNode()
                 }
                 val operandKind: AstNodeCategory = xmlKind(operand)
                 if (operandKind == AstNodeCategory.TypePointer) {
-                    val pointee: AstXmlNode = xmlChild(operand, AstNodeKind.Inner)
+                    val pointee: *AstXmlNode = xmlChildPtr(operand, AstNodeKind.Inner)
                     if (xmlIsEmpty(pointee)) {
                         return xmlEmptyNode()
                     }
@@ -2394,7 +2398,7 @@ data class Emitter(
             }
 
             AstNodeCategory.ExprCopy, AstNodeCategory.ExprUnary -> {
-                return this.inferType(xmlChild(e, AstNodeKind.Operand))
+                return this.inferType(xmlChildPtr(e, AstNodeKind.Operand))
             }
 
             AstNodeCategory.ExprBinary -> {
@@ -2408,7 +2412,7 @@ data class Emitter(
                 // pointee - the expr `*T -> T` row, which the extractor spells at the
                 // operand (`binaryOperand`), so the left operand as a value is what the
                 // instruction writes and what the frame declares.
-                return this.pointee(this.inferType(xmlChild(e, AstNodeKind.Lhs)))
+                return this.pointee(this.inferType(xmlChildPtr(e, AstNodeKind.Lhs)))
             }
 
             AstNodeCategory.ExprLambda -> {
@@ -2646,7 +2650,7 @@ data class Emitter(
             if (decl.name != AstNodeKind.TypeAlias) {
                 break
             }
-            val target: AstXmlNode = xmlChild(decl, AstNodeKind.TargetType)
+            val target: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.TargetType)
             if (xmlIsEmpty(target)) {
                 break
             }
@@ -2760,7 +2764,7 @@ data class Emitter(
             }
 
             AstNodeCategory.ExprMember -> {
-                val lhs: AstXmlNode = xmlChild(e, AstNodeKind.Receiver)
+                val lhs: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Receiver)
                 if (xmlKind(lhs) == AstNodeCategory.ExprName && this.enumNames.has(
                         copy(
                             xmlAttr(
@@ -2785,7 +2789,7 @@ data class Emitter(
             }
 
             AstNodeCategory.ExprIndex -> {
-                val lhs: AstXmlNode = xmlChild(e, AstNodeKind.Receiver)
+                val lhs: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Receiver)
                 val baseExpr: Str = this.expr(lhs, 12, xmlEmptyNode())
                 val baseType: AstXmlNode = this.inferType(lhs)
                 var deref: Bool = false
@@ -2793,30 +2797,30 @@ data class Emitter(
                     if (this.isHandleType(baseType) && xmlKind(baseType) != AstNodeCategory.TypePointer) {
                         deref = true
                     } else if (xmlKind(baseType) == AstNodeCategory.TypePointer) {
-                        deref = this.isIndexableContainer(xmlChild(baseType, AstNodeKind.Inner))
+                        deref = this.isIndexableContainer(xmlChildPtr(baseType, AstNodeKind.Inner))
                     }
                 }
                 if (deref) {
                     return fmtStr(
                         "(*|)[|]",
                         baseExpr,
-                        this.expr(xmlChild(e, AstNodeKind.Index), 0, xmlEmptyNode())
+                        this.expr(xmlChildPtr(e, AstNodeKind.Index), 0, xmlEmptyNode())
                     )
                 }
-                return fmtStr("|[|]", baseExpr, this.expr(xmlChild(e, AstNodeKind.Index), 0, xmlEmptyNode()))
+                return fmtStr("|[|]", baseExpr, this.expr(xmlChildPtr(e, AstNodeKind.Index), 0, xmlEmptyNode()))
             }
 
             AstNodeCategory.ExprUnary -> {
                 return xmlAttr(e, AstNodeAttributeKind.Op) + this.expr(
-                    xmlChild(e, AstNodeKind.Operand),
+                    xmlChildPtr(e, AstNodeKind.Operand),
                     7,
                     xmlEmptyNode()
                 )
             }
 
             AstNodeCategory.ExprBinary -> {
-                val lhs: AstXmlNode = xmlChild(e, AstNodeKind.Lhs)
-                val rhs: AstXmlNode = xmlChild(e, AstNodeKind.Rhs)
+                val lhs: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Lhs)
+                val rhs: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Rhs)
                 val op: Str = xmlAttr(e, AstNodeAttributeKind.Op)
                 if (xmlKind(lhs) == AstNodeCategory.ExprNullLit || xmlKind(rhs) == AstNodeCategory.ExprNullLit) {
                     var other: AstXmlNode = lhs
@@ -2859,9 +2863,9 @@ data class Emitter(
             }
 
             AstNodeCategory.ExprRef -> {
-                val operandNode: AstXmlNode = xmlChild(e, AstNodeKind.Operand)
+                val operandNode: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Operand)
                 if (xmlKind(operandNode) == AstNodeCategory.ExprCall) {
-                    val callee: AstXmlNode = xmlChild(operandNode, AstNodeKind.Callee)
+                    val callee: *AstXmlNode = xmlChildPtr(operandNode, AstNodeKind.Callee)
                     if (xmlKind(callee) == AstNodeCategory.ExprGenericName && xmlAttr(
                             callee,
                             AstNodeAttributeKind.Name
@@ -2882,7 +2886,7 @@ data class Emitter(
             }
 
             AstNodeCategory.ExprDeref -> {
-                val operandNode: AstXmlNode = xmlChild(e, AstNodeKind.Operand)
+                val operandNode: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Operand)
                 val operand: Str = this.expr(operandNode, 7, xmlEmptyNode())
                 val operandType: AstXmlNode = this.inferType(operandNode)
                 var nameKind: NameKind = NameKind.Value
@@ -2914,7 +2918,7 @@ data class Emitter(
             }
 
             AstNodeCategory.ExprCopy -> {
-                val operandNode: AstXmlNode = xmlChild(e, AstNodeKind.Operand)
+                val operandNode: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Operand)
                 val operand: Str = this.expr(operandNode, 0, xmlEmptyNode())
                 val operandType: AstXmlNode = this.inferType(operandNode)
                 var nameKind: NameKind = NameKind.Value
@@ -2933,7 +2937,7 @@ data class Emitter(
     }
 
     fun call(e: *AstXmlNode): Str {
-        val callee: AstXmlNode = xmlChild(e, AstNodeKind.Callee)
+        val callee: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Callee)
         val calleeKind: AstNodeCategory = xmlKind(callee)
         val argNodes: List<AstXmlNode> = xmlChildren(e, AstNodeKind.Arg)
 
@@ -2984,7 +2988,7 @@ data class Emitter(
                 val target: AstXmlNode = this.findFunction(name, argNodes.size())
                 var args: List<Str> = List<Str>()
                 val targetParams: List<AstXmlNode> = xmlChildren(target, AstNodeKind.Param)
-                val targetReceiver: AstXmlNode = xmlChild(target, AstNodeKind.Receiver)
+                val targetReceiver: *AstXmlNode = xmlChildPtr(target, AstNodeKind.Receiver)
                 var i: Int = 0
                 while (i < argNodes.size()) {
                     var expectedArg: AstXmlNode = xmlEmptyNode()
@@ -3029,7 +3033,7 @@ data class Emitter(
                     args.append(this.expr(argNode, 0, xmlEmptyNode()))
                 }
                 val calleeText: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
-                val receiverExpr: AstXmlNode = xmlChild(callee, AstNodeKind.Receiver)
+                val receiverExpr: *AstXmlNode = xmlChildPtr(callee, AstNodeKind.Receiver)
 
                 // Machine identity: `x.smToYield()` on a machine *is* `x`. That is the wrap a
                 // `for` puts around what it iterates, and `..T` is not a spellable type, so the

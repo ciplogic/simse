@@ -2074,7 +2074,7 @@ data class Parser(
 // The value of one attribute argument (specs/attributes.md): a string literal without
 // its quotes, or an integer literal as written.
 fun attrLiteralText(text: Str): Str {
-    if (text.size() >= 2 && text.substr(0, 1) == "\"" && text.substr(text.size() - 1, 1) == "\"") {
+    if (text.size() >= 2 && text[0] == '\"' && text[text.size() - 1] == '\"') {
         return text.substr(1, text.size() - 2)
     }
     return text
