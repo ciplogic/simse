@@ -83,7 +83,13 @@ declaration emit the same C++. When the change *is* visible in the
 emitted C++, refresh the published file (`bun build.js --release --out
 cppsrc/simse_bootstrap.cpp`) and commit it with the source.
 
-**If `simse.exe` is running, linking it again fails with `LNK1168` - kill it first.**
+- **If `simse.exe` is running, linking it again fails with `LNK1168` - kill it first.**
+  An *interrupted* build is worse than a running one: `cl` writes the executable where it
+  is asked to, so a build killed mid-link leaves a truncated `simse.exe` (exactly 2 MiB
+  of it, say), and the next build fails with `bun: unknown error:` (or `Exec format
+  error` from a shell) because the transpiler that build wanted to run is a file that is
+  not a program. The published bootstrap is the way back:
+  `./build.bat --release --cpp cppsrc/simse_bootstrap.cpp --exe simse.exe`.
 `--root cppsrc` scans the whole source tree (the prelude under `cppsrc/rtl` is
 excluded as prelude), so the amalgamation contains exactly one `main` - the
 driver's - and `build.bat` can compile it.
@@ -115,12 +121,13 @@ driver's - and `build.bat` can compile it.
   timer per emitted body and the table the program prints), `tasks/.
 - `cppsrc/rtl/` — the runtime, and the only hand-written C++ besides the bootstrap:
   the headers (`types.hpp`,
-  `containers.hpp`, `smstring.hpp`, `strsmallvector.hpp`, `optional.hpp`,
-  `functional.hpp`, `result.hpp`, `xml.hpp`, `span.hpp`,
+  `containers.hpp`, `smstring.hpp`, `strsmallvector.hpp`, `variant2.hpp`,
+  `optional.hpp`, `functional.hpp`, `result.hpp`, `xml.hpp`, `span.hpp`,
   | `strview.hpp`, `resources.hpp`,
   `filestream.hpp`, `simse.hpp`), the
   `_res.md` file that holds the RTL's *generated* C++ - one section per header it came
-  from (`strtable`, `timeops`, `listops`, `dictops`, `strops`, `resfmt`, and `spanOf`, plus a
+  from (`strtable`, `timeops`, `listops`, `dictops`, `strops`, `resfmt`, `spanOf`,
+  `strview`, `filestream`, `resources`, plus a
   `fileio` whose text was the runtime's one hand-written translation unit, plus the
   collision fixture's `spanOfEmpty`) with `symbol:`/`emit: always` deciding how a
   declaration reaches it
@@ -305,13 +312,16 @@ Key design points:
   `sourcegen: true` is a hard error naming it for now.
 - **Native boundary** (see `impl_specs/native-interop.md`): `native fun` /
   `native("Symbol") fun` declares a function whose body is hand-written C++, which the
-  program links. A body that is a *resource* is `@SmGen("res", section[, symbol])`
+  program links - it is the *program's* FFI spelling, and sugar for the
+  `@SmGen("cpp", symbol)` the runtime's own declarations write. A body that is a
+  *resource* is `@SmGen("res", section[, symbol])`
   instead, which is where the RTL's own operations live now (`cppsrc/rtl/_res.md`) -
   including the platform's file I/O and clocks (`fileio`, `timeops`), which are
   `emit: always` precisely because a program may name their symbols with a
-  `native(...)` declaration of its own. What is left as `native` is the type core -
-  `filestream.hpp`'s methods, `StrView`, `Span`, `XmlNode`, the `Str`/`List` primitives -
-  whose C++ is the RTL headers.
+  declaration of its own. What is left as `@SmGen("cpp", ...)` is the type core -
+  `FileStream`'s struct, `Span` (and `StrView`, which *is* `Span<Char>`), the
+  literal interop of `strview.hpp`, `XmlNode`, the `Str`/`List` primitives - whose C++
+  is the RTL headers.
 - **Prelude**: `cppsrc/rtl/*.kt` is implicitly in scope everywhere; its
   method bodies are NOT emitted (behavior lives in the RTL's C++, which is a header or a
   resource section).
@@ -352,7 +362,9 @@ Key design points:
   `@SmGen("cpp", "sym")` are the same declaration and must emit
   the same C++ - `bun tools/smgen.js` compiles the pair (`stress/smgen-native`,
   `stress/smgen-cpp`) and compares their amalgamations byte for byte, after replacing
-  the fixture path.
+  the fixture path. The RTL itself writes the attribute (`@SmGen("res", section,
+  symbol)` or `@SmGen("cpp", symbol)`), so `native` has no user under `cppsrc/`;
+  dropping it from the language is `guide4ai.md` §8's call.
 
 ## 6. Change protocol (read before editing)
 
@@ -542,9 +554,17 @@ Do these only when asked; roughly prioritized:
    reaches, is one section per platform symbol with `symbol:` reach - not done, because
    it changes that mechanism. The type core (`types.hpp`, `containers.hpp`,
    `smstring.hpp`, `smdictionary.hpp`, `span.hpp`, `strview.hpp`, `strsmallvector.hpp`,
-   `optional.hpp`, `result.hpp`, `functional.hpp`, `xml.hpp`, `astxml.hpp`) stays: it is
+   `variant2.hpp`, `optional.hpp`, `result.hpp`, `functional.hpp`, `xml.hpp`,
+   `astxml.hpp`) stays: it is
    what the amalgamation is compiled *against*, and some of it needs language features
-   that do not exist yet (statics in an object, a ref-counted layout).
+   that do not exist yet (statics in an object, a ref-counted layout). With T82 the
+   RTL's C++ is all `res` sections and no prelude declaration spells `native` any more:
+   what is left as `@SmGen("cpp", ...)` is the type core, the literal interop of
+   `strview.hpp`, and three `resources.kt` declarations that are merely a symbol alias to
+   a plain Simse function. **Whether the language keeps `native` is open** -
+   it is the program's FFI spelling (`stress/native-read-file`) and sugar for
+   `@SmGen("cpp", sym)` (`stress/smgen-native` + `stress/smgen-cpp` pin the two
+   spellings as one declaration), and nothing under `cppsrc/` depends on it either way.
 2. **Commit the work when asked.** The T35-T40 performance work is committed
    (`d5de0f8`); anything after it is uncommitted as usual - never commit unless the
    user asks.
@@ -731,7 +751,7 @@ Do these only when asked; roughly prioritized:
   for exactly that reason, so do not reach back into the emitter from a generator.
 - **The prelude is read from disk at run time**, so a compiler older than
   `cppsrc/rtl/*.kt` sees a declaration it does not know how to emit (a new
-  `native(...)` on a new type is the shape that bites: it falls back to the
+  `@SmGen` declaration on a new type is the shape that bites: it falls back to the
   symbol the declaration names). `build.js` warns when `./simse.exe` is older than
   the prelude; rebuilding is the fix.
 - Source-map comments embed the path as given, so absolute and relative runs

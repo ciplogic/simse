@@ -17,11 +17,12 @@
 #include "ref.hpp"          // Ref<T> (`&T`): SmRef, or the std::shared_ptr shim
 #include "containers.hpp"   // SmallVector, List, PList, Dictionary, Array, RawArray
 #include "span.hpp"         // Span<T> (borrowed view: pointer + length)
-#include "strview.hpp"      // StrView (Span<Char> + the text operations)
+#include "strview.hpp"      // StrView (an alias of Span<Char>, plus the text operations)
 #include "resources.hpp"    // the `_res.md` resources a program carries
-#include "optional.hpp"     // Opt<T>
+#include "variant2.hpp"     // Variant2<A, B>, VoidEnum: the storage of Opt and Res
+#include "optional.hpp"     // Opt<T> (Variant2<T, VoidEnum>)
 #include "filestream.hpp"   // FileStream: simse_fileStream_* native ops (prelude)
 #include "functional.hpp"   // Func, Action, AutoDefer
-#include "result.hpp"       // Result/Res, ok, resError, err
+#include "result.hpp"       // Res<T> (Variant2<T, Str>) and the free ok/err forms
 #include "xml.hpp"          // Attribute, XmlNode (the general tree a program builds)
 #include "astxml.hpp"       // AstNodeKind, AstNodeAttributeKind, AstXmlNode (the compiler's AST)

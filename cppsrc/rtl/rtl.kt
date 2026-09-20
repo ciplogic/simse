@@ -10,7 +10,8 @@
 // other function (`smToYield` below is the first one - impl_specs/for.md).
 //
 // The explicit `this` parameter makes a declaration an extension on its
-// receiver's type, and the attribute (or a `native(symbol)`) names the C++ implementation;
+// receiver's type, and the attribute names the C++ implementation
+// (`@SmGen("cpp", symbol)`, which `native(symbol)` is sugar for);
 // a function with a *body* writes the receiver type before the name instead
 // (`fun Str.isEmpty()`), which is the form the parser marks a receiver - see
 // `impl_specs/rtl-abi.md`, "The receiver spelling differs from a native's", and
@@ -286,13 +287,14 @@ fun toUpper(this: Str): Str
 fun toLower(this: Str): Str
 
 // `isEmpty` is the language's own body, not C++ (impl_specs/rtl-abi.md): `size()` is the
-// built-in it needs, so nothing here is native. Note the *receiver spelling*: a `native`
-// declaration writes its receiver as the explicit first parameter (`this: Str`), but a
+// built-in it needs, so nothing here is a `@SmGen` declaration. Note the *receiver
+// spelling*: a generated declaration writes its receiver as the explicit first parameter
+// (`this: Str`), but a
 // function *with* a body has to write the receiver type before the name - that form is
 // what marks it an extension, and only the receiver-type form is resolved at a member
 // call (the explicit `this` is a plain function whose first parameter is named `this`).
-// It also drops the read-back a native's value receiver costs: the emitted parameter is
-// `Str* self` either way, so `xmlAttr(...).isEmpty()` no longer spells `(*ptr)`.
+// It also drops the read-back a generated declaration's value receiver costs: the emitted
+// parameter is `Str* self` either way, so `xmlAttr(...).isEmpty()` no longer spells `(*ptr)`.
 fun Str.isEmpty(): Bool {
     return this.size() == 0
 }

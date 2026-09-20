@@ -285,9 +285,10 @@ void simse_eprintln(const Str& text) {
     fprintf(stderr, "%s\n", text.c_str());
 }
 
-// The stream's own operations (`readLine`, `readLineInto`, `fileSize`, `close`) are methods
-// of `FileStream` in cppsrc/rtl/filestream.hpp: the emitter calls a handle's methods as
-// members. Only the constructor-like `open` lives here, as a free function.
+// The stream's own operations (`readLine`, `readLineInto`, `readLineView`, `fileSize`,
+// `close`) are the `filestream` section below: the emitter calls a handle's methods as
+// members, and the struct that declares them is cppsrc/rtl/filestream.hpp. Only the
+// constructor-like `open` lives here, as a free function.
 FileStream* simse_fileStream_open(const Str& path) {
     auto* stream = new FileStream();
     stream->file.open(simse_toStdString(path), std::ios::binary);

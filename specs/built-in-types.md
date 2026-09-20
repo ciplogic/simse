@@ -208,11 +208,11 @@ list's elements and borrows the list, which must outlive the span.
 - `slice(start: Int, count: Int): Span<T>` - `count` elements from `start`
   (unchecked).
 
-`StrView` is the view a string's bytes are read through: it embeds a
-`Span<Char>` and adds the byte surface. The span is embedded rather than aliased,
-because an alias does not survive the emitter's receiver-type lookup. It is what
-`FileStream.readLineView()` hands back and what `spanOfStr(text: *Str): StrView`
-builds (borrowing the string):
+`StrView` is the view a string's bytes are read through, and it **is** a
+`Span<Char>`: `typealias StrView = Span<Char>` (`cppsrc/rtl/StrView.kt`,
+`cppsrc/rtl/strview.hpp`), so one type carries both names and a `Span<Char>` a
+program holds is a `StrView`. It is what `FileStream.readLineView()` hands back
+and what `spanOfStr(text: *Str): StrView` builds (borrowing the string):
 
 - `size(): Int`; `isEmpty(): Bool`; `at(index: Int): Char` (also `view[index]`);
 - `slice(start: Int): StrView` / `slice(start: Int, count: Int): StrView` - the

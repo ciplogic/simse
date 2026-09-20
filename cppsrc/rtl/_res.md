@@ -896,9 +896,10 @@ void simse_eprintln(const Str& text) {
     fprintf(stderr, "%s\n", text.c_str());
 }
 
-// The stream's own operations (`readLine`, `readLineInto`, `fileSize`, `close`) are methods
-// of `FileStream` in cppsrc/rtl/filestream.hpp: the emitter calls a handle's methods as
-// members. Only the constructor-like `open` lives here, as a free function.
+// The stream's own operations (`readLine`, `readLineInto`, `readLineView`, `fileSize`,
+// `close`) are the `filestream` section below: the emitter calls a handle's methods as
+// members, and the struct that declares them is cppsrc/rtl/filestream.hpp. Only the
+// constructor-like `open` lives here, as a free function.
 FileStream* simse_fileStream_open(const Str& path) {
     auto* stream = new FileStream();
     stream->file.open(simse_toStdString(path), std::ios::binary);
@@ -911,5 +912,261 @@ FileStream* simse_fileStream_open(const Str& path) {
     const std::uintmax_t size = std::filesystem::file_size(simse_toStdString(path), ec);
     stream->size = ec ? 0 : (Int64) size;
     return stream;
+}
+```
+
+!strview
+====
+forward:
+```cpp
+// The operations a view is read through (specs/built-in-types.md, "Views"; the
+// declarations are cppsrc/rtl/StrView.kt). The *type* and the *literal interop* stay in
+// cppsrc/rtl/strview.hpp: `using StrView = Span<Char>`, the comparison operators, `+`,
+// `<<` and the `Str` conversions are reached by C++ overload resolution at a literal
+// site rather than by a prelude declaration, so no declaration could reach a section for
+// them - while these eleven are named, one symbol each, and a program that calls one
+// pays for this text (`sourcegen/ResGen.kt`).
+//
+// `StrView` *is* a `Span<Char>`, so `self.len`, `self[i]` and `self.slice(...)` below are
+// the span's own members (cppsrc/rtl/span.hpp) - and `at` is *not* an operation of its
+// own: the span's member serves it (`cppsrc/rtl/StrView.kt`), as `atPtr` is the
+// language's (cppsrc/rtl/Span.kt).
+Int simse_strView_size(StrView self);
+Bool simse_strView_isEmpty(StrView self);
+StrView simse_strView_slice(StrView self, Int start);
+StrView simse_strView_slice(StrView self, Int start, Int count);
+Char simse_strView_charAt(StrView self, Int index);
+Bool simse_strView_startsWith(StrView self, const Str& text);
+Bool simse_strView_startsWithPtr(StrView self, const Str* text, Int length);
+Int simse_strView_find(StrView self, const Str& sub);
+Int simse_strView_indexOf(StrView self, const Str& sub);
+Str simse_strView_substr(StrView self, Int from, Int count);
+Str simse_strView_toString(StrView self);
+StrView simse_spanOfStr(Str* text);
+```
+bodies:
+```cpp
+inline Int simse_strView_size(StrView self) {
+    return self.len;
+}
+
+inline Bool simse_strView_isEmpty(StrView self) {
+    return self.len <= 0;
+}
+
+// `view.slice(start)`: from `start` to the end (C# `Slice(int)`).
+inline StrView simse_strView_slice(StrView self, Int start) {
+    return self.slice(start);
+}
+
+// `view.slice(start, count)`: `count` bytes from `start` (C# `Slice(int, int)`).
+inline StrView simse_strView_slice(StrView self, Int start, Int count) {
+    return self.slice(start, count);
+}
+
+inline Char simse_strView_charAt(StrView self, Int index) {
+    return self[index];
+}
+
+// True when the view begins with `text`.
+inline Bool simse_strView_startsWith(StrView self, const Str& text) {
+    const Int count = text.size();
+    if (count > self.len) return false;
+    for (Int i = 0; i < count; i++) {
+        if ((char) self[i] != text[i]) return false;
+    }
+    return true;
+}
+
+// `startsWithPtr(text, length)`: the same comparison against text this view does not
+// own, reached by raw pointer and with its length already known. `startsWith` would
+// copy the `Str` first, which is what a table lookup cannot afford; the first byte is
+// the caller's cheap test, this does the rest.
+inline Bool simse_strView_startsWithPtr(StrView self, const Str* text, Int length) {
+    if (length > self.len) return false;
+    for (Int i = 1; i < length; i++) {
+        if ((char) self[i] != (*text)[i]) return false;
+    }
+    return true;
+}
+
+// `find(sub)`: the index of the first occurrence of `sub` in the bytes, or -1. The
+// bytes are compared in place: nothing is copied.
+inline Int simse_strView_find(StrView self, const Str& sub) {
+    const Int needle = sub.size();
+    if (needle == 0) return 0;
+    if (needle > self.len) return -1;
+    for (Int i = 0; i + needle <= self.len; i++) {
+        Int j = 0;
+        while (j < needle && (char) self[i + j] == sub[j]) j++;
+        if (j == needle) return i;
+    }
+    return -1;
+}
+
+// `indexOf` is the other spelling of `find`.
+inline Int simse_strView_indexOf(StrView self, const Str& sub) {
+    return simse_strView_find(self, sub);
+}
+
+// The owned copy of `count` bytes from `from`, with `from` clamped to [0, size] and
+// `count` allowed to run to the end, like `Str.substr`.
+inline Str simse_strView_substr(StrView self, Int from, Int count) {
+    const Int len = self.len;
+    Int begin = from < 0 ? 0 : from;
+    if (begin > len) begin = len;
+    Int end = count < 0 ? begin : begin + count;
+    if (end > len) end = len;
+    Str result;
+    if (end > begin) {
+        result.resize(end - begin);
+        std::memcpy(result.data(), self.ptr + begin, (std::size_t) (end - begin));
+    }
+    return result;
+}
+
+// The owned copy of the whole view, as a `Str` (the language's `toString()`
+// convention, like `Int.toString()`).
+inline Str simse_strView_toString(StrView self) {
+    return simse_strView_substr(self, 0, self.len);
+}
+
+// `spanOfStr(text)`: a view over a string's bytes. It borrows the string - the string
+// has to outlive the view - and does not copy it (`&text` would box a copy instead).
+// `Str` is a `char` buffer on the C++ side and the language's `Char` is a signed byte,
+// hence the cast.
+inline StrView simse_spanOfStr(Str* text) {
+    return StrView(reinterpret_cast<Char*>(text->data()), text->size());
+}
+```
+
+!filestream
+====
+bodies:
+```cpp
+// `FileStream`'s operations. The struct - its fields and the declarations of these
+// methods - is cppsrc/rtl/filestream.hpp, and the emitter calls them as *members*
+// (`stream->readLine()`), which is why this section needs no `forward` text: the class
+// already declares each one. What a program carries is this text, and only when it calls
+// one of them (`cppsrc/rtl/fs.kt` names the section).
+
+// The next line without its line ending, or an empty `Opt` at end of file.
+Opt<Str> FileStream::readLine() {
+    if (!std::getline(file, line)) {
+        return Opt<Str>::none();
+    }
+    if (!line.empty() && line.back() == '\r') {
+        line.pop_back();
+    }
+    return Opt<Str>::some(simse_fromStdString(line));
+}
+
+// The next line into the caller's buffer (reused across calls), `false` at end of
+// file.
+Bool FileStream::readLineInto(Str* buffer) {
+    if (buffer == nullptr) return false;
+    Int from = 0;
+    Int count = 0;
+    if (!nextLineSpan(&from, &count)) return false;
+    take(buffer, chunk.data() + from, count);
+    return true;
+}
+
+// The next line as a view into the readahead buffer, or an empty `Opt` at end of
+// file. Nothing is copied; the span is valid until the next read on this stream.
+// The one cast `simse_spanOfStr` makes is spelled here too, so that a program reading
+// views does not also have to carry the `strview` section: `StrView` is a `Span<Char>`
+// and this view's bytes are the readahead buffer's, which nothing writes through.
+Opt<StrView> FileStream::readLineView() {
+    Int from = 0;
+    Int count = 0;
+    if (!nextLineSpan(&from, &count)) return Opt<StrView>::none();
+    Char* base = const_cast<Char*>(reinterpret_cast<const Char*>(chunk.data()));
+    return Opt<StrView>::some(StrView(base + from, count));
+}
+
+// The file's size in bytes (0 when it is unknown).
+Int64 FileStream::fileSize() const {
+    return size;
+}
+
+// Releases the handle: the stream was allocated by `simse_fileStream_open`.
+void FileStream::close() {
+    file.close();
+    delete this;
+}
+
+// Advances the readahead buffer to the next line's bytes: `*from`/`*count` are the
+// indexes of the line's first byte and its length (the line ending is not part of
+// it), already stripped of a trailing `\r`. `false` at end of file - and then the
+// chunk is left empty, so a view handed out before it stays the last line.
+Bool FileStream::nextLineSpan(Int* from, Int* count) {
+    Int at = chunkAt;
+    while (true) {
+        const Int limit = chunkLen;
+        if (at < limit) {
+            const char* base = chunk.data();
+            const void* found = std::memchr(base + at, '\n', (std::size_t) (limit - at));
+            if (found != nullptr) {
+                const Int end = (Int) ((const char*) found - base);
+                Int len = end - at;
+                if (len > 0 && base[end - 1] == '\r') len--;
+                *from = at;
+                *count = len;
+                chunkAt = end + 1;
+                return true;
+            }
+        }
+        // No newline in what is left of the chunk: keep the tail, refill, retry.
+        // When the tail alone fills the buffer, the line does not fit in it yet,
+        // so the buffer grows (once per new longest line).
+        Int tail = limit - at;
+        if (tail > 0 && at > 0) {
+            std::memmove(chunk.data(), chunk.data() + at, (std::size_t) tail);
+        }
+        if (tail == chunk.size()) {
+            chunk.resize(tail * 2);
+        }
+        file.read(chunk.data() + tail, (std::streamsize) (chunk.size() - tail));
+        const std::streamsize got = file.gcount();
+        if (got <= 0) {
+            // End of file: whatever the tail holds is the last line (the file did
+            // not end with a newline), and the next call reports the end.
+            chunkLen = 0;
+            chunkAt = 0;
+            if (tail == 0) return false;
+            Int len = tail;
+            if (len > 0 && chunk[len - 1] == '\r') len--;
+            *from = 0;
+            *count = len;
+            return true;
+        }
+        chunkLen = tail + (Int) got;
+        chunkAt = 0;
+        at = 0;
+    }
+}
+
+void FileStream::take(Str* buffer, const char* text, Int count) {
+    buffer->resize(count);
+    if (count > 0) std::memcpy(buffer->data(), text, (std::size_t) count);
+}
+```
+
+!resources
+====
+forward:
+```cpp
+// `Resources.entries()` (cppsrc/rtl/resources.kt): a borrowed view of the entries a
+// program carries. The storage stays in cppsrc/rtl/resources.hpp - `install`, which the
+// table the emitter writes calls before `main`, and the function-local static it fills -
+// because both are reached before any declaration is; this is the one accessor over it.
+Span<ResourceEntry> simse_resources_entries();
+```
+bodies:
+```cpp
+inline Span<ResourceEntry> simse_resources_entries() {
+    List<ResourceEntry>& entries = simse_resourcesStorage();
+    return Span<ResourceEntry>(entries.data(), entries.size());
 }
 ```

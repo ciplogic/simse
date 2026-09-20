@@ -36,8 +36,9 @@ fun eprintln(text: Str): Unit
 
 // `FileStream` is an open file read one line at a time. The handle is a raw
 // pointer: `openFileStream` creates it (and returns null when the file cannot be
-// opened), `close` releases it. The layout is the native's business
-// (cppsrc/rtl/filestream.hpp); Simse code only holds the handle.
+// opened), `close` releases it. The struct is cppsrc/rtl/filestream.hpp and the
+// operations below are its methods, defined in the `filestream` section of
+// cppsrc/rtl/_res.md; Simse code only holds the handle.
 //
 // A stream should be read with ONE of the three reads below: `readLine` leaves the
 // file position after what it read, and the other two share a readahead buffer, so
@@ -47,22 +48,27 @@ data class FileStream()
 // The convenient read: the next line without its line ending, or an empty `Opt` at
 // end of file. Every call hands back a fresh `Str`, which allocates when the line is
 // longer than `Str`'s inline capacity - a hot loop wants `readLineInto`.
-native("simse_fileStream_readLine") fun readLine(this: *FileStream): Opt<Str>
+@SmGen("res", "filestream", "simse_fileStream_readLine")
+fun readLine(this: *FileStream): Opt<Str>
 
 // The fast read: the next line into `buffer` (reused across calls), `false` at end
 // of file. No line copy beyond one `memcpy` into the caller's own `Str`.
-native("simse_fileStream_readLineInto") fun readLineInto(this: *FileStream, buffer: *Str): Bool
+@SmGen("res", "filestream", "simse_fileStream_readLineInto")
+fun readLineInto(this: *FileStream, buffer: *Str): Bool
 
 // The in-place read: the next line as a `StrView` (`Span<Char>`) into the stream's
 // readahead buffer, or an empty `Opt` at end of file. Nothing is copied, so the span
 // is valid only until the next read on this stream (a refill moves the bytes) - keep a
 // copy with `line.toString()` when the line must outlive it.
-native("simse_fileStream_readLineView") fun readLineView(this: *FileStream): Opt<StrView>
+@SmGen("res", "filestream", "simse_fileStream_readLineView")
+fun readLineView(this: *FileStream): Opt<StrView>
 
 @SmGen("res", "fileio", "simse_fileStream_open")
 fun openFileStream(path: Str): *FileStream
 
-native("simse_fileStream_close") fun close(this: *FileStream): Unit
+@SmGen("res", "filestream", "simse_fileStream_close")
+fun close(this: *FileStream): Unit
 
 // The file's size in bytes (0 when it is unknown), for throughput reporting.
-native("simse_fileStream_bytes") fun fileSize(this: *FileStream): Int64
+@SmGen("res", "filestream", "simse_fileStream_bytes")
+fun fileSize(this: *FileStream): Int64

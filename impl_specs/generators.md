@@ -49,6 +49,17 @@ be - so the generator has no parameters of its own, and the one argument it take
 shared symbol argument: the name of the C++ function, which the declaration's own name
 stands in for when it is not written (`native fun f(...)`).
 
+**The RTL writes the attribute, not the sugar.** Every prelude declaration that reaches
+generated C++ says `@SmGen("res", section, symbol)` (the text is a resource section) or
+`@SmGen("cpp", symbol)` (the text is a header's, for the type core; `resources.kt`'s
+`get`/`has`/`count` use it for the third case - a symbol alias to a plain Simse function),
+so no file under
+`cppsrc/` spells `native` any more - the sugar stays in the language for the *program's*
+FFI (`impl_specs/native-interop.md`, `stress/native-read-file`) and for the equivalence
+fixture that keeps the two spellings honest (`stress/smgen-native`). Whether `native`
+should be dropped from the language outright is `guide4ai.md` §8's to decide; until then
+nothing in the runtime depends on it.
+
 ## The generator table
 
 Every generator is **one file** under `cppsrc/sourcegen/`, and a `SourceGenerator` that

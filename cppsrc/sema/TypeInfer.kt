@@ -1032,9 +1032,39 @@ data class SemInfer(
     // The result of a member call (`recv.name(...)`), resolved the way the emitter
     // lowers it: a Simse-declared extension/method first, then a native extension,
     // then the built-in accessors.
+    // A receiver's type resolved through a `typealias`, the way the emitter resolves it
+    // (`Emitter.resolveAlias`, codegen/Codegen.kt): `StrView` is `Span<Char>`
+    // (cppsrc/rtl/StrView.kt), so an extension on `Span<T>` - `atPtr`, `smToYield` - is
+    // reachable through a view, because the alias *is* that type. A declared type that is
+    // not an alias comes back as it went in.
+    fun resolveAlias(typeNode: *AstXmlNode): AstXmlNode {
+        var current: AstXmlNode = typeNode
+        var guard: Int = 0
+        while (!xmlIsEmpty(current) && guard < 16) {
+            guard = guard + 1
+            if (xmlKind(current) != AstNodeCategory.TypeNamed) {
+                return current
+            }
+            val name: Str = xmlAttr(current, AstNodeAttributeKind.Name)
+            if (!this.facts.types.has(name)) {
+                return current
+            }
+            val decl: AstXmlNode = this.facts.types.get(name).value()
+            if (decl.name != AstNodeKind.TypeAlias) {
+                return current
+            }
+            val target: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.TargetType)
+            if (xmlIsEmpty(target)) {
+                return current
+            }
+            current = target
+        }
+        return current
+    }
+
     fun memberReturn(callee: *AstXmlNode): AstXmlNode {
         val receiverType: AstXmlNode = this.infer(xmlChildPtr(callee, AstNodeKind.Receiver))
-        val recv: AstXmlNode = semPointee(receiverType)
+        val recv: AstXmlNode = this.resolveAlias(semPointee(receiverType))
         if (xmlIsEmpty(recv)) {
             return xmlEmptyNode()
         }

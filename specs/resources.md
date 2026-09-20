@@ -171,15 +171,17 @@ fun count(): Int                     // how many resources the program carries
 borrowing the string table - and the type a program walks when it wants more than the
 lookup (an index, a section scan).
 
-The declarations are prelude natives with an explicit `this` (`native("resourcesGet")
-fun get(this: Resources, key: Str): StrView`), which is what gives the checker a
+The declarations carry an explicit `this` and name their implementation with `@SmGen`
+(`@SmGen("cpp", "resourcesGet") fun get(this: Resources, key: Str): StrView`), which is
+what gives the checker a
 signature for `Resources.get(k)` and the emitter a symbol to call; the symbol names the
 plain prelude function underneath it (`fun resourcesGet(key: Str): StrView`), which is
 where the scan is written. The emitter spells such a call as the *symbol*
 (`resourcesGet(k)`), not as a C++ static - `Emitter.staticCallSymbol` - and its name walk
-records the same symbol, which is what makes the prelude body reachable. Two things stay
-C++ because the language cannot say them: a table built before any of the program's code
-runs, and the default-constructed `StrView`.
+records the same symbol, which is what makes the prelude body reachable. What stays
+C++ because the language cannot say it: a table built before any of the program's code
+runs - the storage and `install` in `cppsrc/rtl/resources.hpp`, and the accessor over it
+(`entries`) in the `resources` section of `cppsrc/rtl/_res.md`.
 
 The entries are built **once**, at startup, by `install`, which is called by the table
 the emitter writes - a list of `StrView` pairs borrowing the string table:

@@ -186,11 +186,12 @@ Both slice forms are unchecked, like other container indexing. `spanOf(items:
 *List<T>): Span<T>` covers all of a list from index 0, **borrowing** the list; the
 source must outlive the span (`&items` would box a *copy*).
 
-Text has its own view on top of a span: `StrView` embeds a `Span<Char>` and adds
-the byte operations `charAt`, `find`/`indexOf`, `startsWith`, `startsWithPtr`,
-`substr`, and `toString` (`substr`/`toString` are the owned copies), and
-`spanOfStr(text: *Str): StrView` builds one from a string. `specs/built-in-types.md`
-("Views") has the full surface; `impl_specs/rtl-abi.md` has how each one lowers.
+Text has its own name for a span of bytes: `StrView` **is** a `Span<Char>` (one
+type, two names) and adds the byte operations `charAt`, `find`/`indexOf`,
+`startsWith`, `startsWithPtr`, `substr`, and `toString` (`substr`/`toString` are
+the owned copies), and `spanOfStr(text: *Str): StrView` builds one from a string.
+`specs/built-in-types.md` ("Views") has the full surface; `impl_specs/rtl-abi.md`
+has how each one lowers.
 
 ## `Str`
 

@@ -11,7 +11,7 @@
 // RTL advances the data pointer, which the language has no expression for.
 //
 // `Span<T>` stays uniform over `T`; the text-specific operations live on `StrView`
-// (StrView.kt), which embeds a `Span<Char>`. Walk a list with a span:
+// (StrView.kt), which *is* a `Span<Char>`. Walk a list with a span:
 
 // ```text
 // var span: Span<Int> = spanOf(*items)
@@ -60,3 +60,14 @@ data class Span<T>(var ptr: *T, var len: Int) {
 // names it. The spelling before generators existed was `native("simse_spanOf")`.
 @SmGen("res", "spanOf")
 fun spanOf<T>(items: *List<T>): Span<T>
+
+// `span.atPtr(index)`: the element at `index` as a *place* (`*T`) - the same element `at`
+// hands back as a value, reached by address, so nothing is copied and a write through it
+// reaches the span's source. It is the language's own body rather than a C++ member
+// (`min`/`max` in rtl.kt, `smToYield` below are the same shape): the emitter reifies it
+// per instantiation, and *the call site has a type* - `*T` - where the class's own
+// methods are emitted as members whose type the rules cannot name (`at`, `size`, `slice`
+// print as `auto`). `for (*x in xs)` is this same `*this[i]` (impl_specs/for.md).
+fun Span<T>.atPtr<T>(index: Int): *T {
+    return * this.ptr[index]
+}

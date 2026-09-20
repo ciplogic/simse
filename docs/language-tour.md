@@ -444,6 +444,11 @@ whose `Value` or `Error` hold the outcome (`isOk()`), used throughout the
 compiler for parsing and file work. `null` is a literal for `&T` and `*T` in a
 nullable context, so `x == null` tests a handle.
 
+Both are arms of one tagged union in the runtime (`Variant2<A, B>`,
+`cppsrc/rtl/variant2.hpp`): an `Opt<T>` is `Variant2<T, VoidEnum>` and a `Res<T>`
+is `Variant2<T, Str>`, and the tag - not the message - says which arm is live, so
+a result whose message happens to be empty is still a failure.
+
 ```simse
 fun describe(n: Int): Opt<Str> {
     if (n < 0) {

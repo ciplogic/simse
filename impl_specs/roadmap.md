@@ -139,10 +139,12 @@ Verified: `bun tools/stress.js` 56/56, `bun tools/smgen.js` byte-identical, and 
 bootstrap fixed point holds (`bun tools/bootstrap.js`).
 
 Still hand-written C++, in this order of ease: `filestream.hpp` (the `FileStream`
-struct and its methods; only the free `open` moved into the `fileio` section with the
-rest of the platform's C++) and the type core (`types.hpp`, `containers.hpp`,
+struct and its fields - its method bodies are the `filestream` section of `_res.md` and
+only the constructor-like `open` was ever in `fileio`) and the type core (`types.hpp`,
+`containers.hpp`,
 `smstring.hpp`, `smdictionary.hpp`, `span.hpp`, `strview.hpp`, `strsmallvector.hpp`,
-`optional.hpp`, `result.hpp`, `functional.hpp`, `xml.hpp`, `astxml.hpp`), which is what the
+`variant2.hpp`, `optional.hpp`, `result.hpp`, `functional.hpp`, `xml.hpp`,
+`astxml.hpp`), which is what the
 amalgamation is compiled *against* and which needs language features that do not exist yet
 (statics in an object, a ref-counted layout), so it stays.
 

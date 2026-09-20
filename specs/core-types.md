@@ -26,7 +26,8 @@ context. Its meaning is fixed by the expected type:
 - in a `*T` (raw pointer) context it lowers to a null pointer (`nullptr`);
 - in a `&T` (counted reference) context it lowers to an empty reference (a null
   `shared_ptr`, which owns no box); and
-- in an `Opt<T>` context it lowers to `Opt<T>()` (the empty optional).
+- in an `Opt<T>` context it lowers to `Opt<T>()` (a default-constructed optional,
+  which is the empty one: the union's `VoidEnum` arm).
 
 Comparisons `x == null` and `x != null` test the reference directly for `*T` and
 `&T`, and test `hasValue()` for `Opt<T>`. Because the meaning is context-driven, a
@@ -35,9 +36,12 @@ should be avoided; give the binding an explicit type.
 
 ## `Opt<T>`
 
-`Opt<T>` models an optional value, following `std::optional<T>`. It either
-holds a `T` or is empty. It is the recommended way to represent "no value"
-instead of a null pointer/reference.
+`Opt<T>` models an optional value. It either holds a `T` or is empty. It is the
+recommended way to represent "no value" instead of a null pointer/reference.
+
+Its storage is the RTL's two-alternative union, `Variant2<T, VoidEnum>`
+(`cppsrc/rtl/variant2.hpp`): the empty state is one arm of that union and a
+`VoidEnum` is what the arm holds, so an empty optional builds no payload at all.
 
 ```text
 var found: Opt<Point> = table.find(id)   // Opt: has a Point, or empty
@@ -68,6 +72,11 @@ means `Res<T>` has the same ownership and copy semantics as any other value
 containing a `T`; callers that need shared identity can explicitly use
 `Res<&T>`.
 
+`Res<T>` is the same two-alternative union (`Variant2<T, Str>`, `cppsrc/rtl/variant2.hpp`)
+with the payload and the message as its arms: a failed result carries no `T` and a
+successful one carries no message, and which arm is live is the union's tag. An
+empty message is therefore not a success - `Res<T>.err("")` is a failure.
+
 `Opt<T>` also stores its payload by value. It has exactly two states, `none` and
 `some(T)`, and copying it copies the contained value. `Opt<&T>` is therefore a
 valid way to represent an optional shared reference,
@@ -95,7 +104,7 @@ Status: required for the first implementation.
 
 `Res<T>` exposes the state and payload as:
 
-- `isOk(): Bool`;
+- `isOk(): Bool` (the union's tag);
 - `value: T` (the success payload); and
 - `error: Str` (the failure message).
 

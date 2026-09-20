@@ -9,10 +9,16 @@
 #include "span.hpp"
 #include "types.hpp"
 
-// Reading a file line by line. The Simse surface is the prelude file cppsrc/rtl/fs.kt; the
-// struct's own methods below are what the emitter calls as members (`stream.readLine()` on a
-// `*FileStream` becomes `(*stream).readLine()`), and only `simse_fileStream_open` is a free
-// function - its prototype and definition are the `fileio` section of cppsrc/rtl/_res.md.
+// Reading a file line by line. The Simse surface is the prelude file cppsrc/rtl/fs.kt,
+// and **this header is the struct alone**: its fields, its method declarations and the
+// three reads' contract. The bodies are the `filestream` section of cppsrc/rtl/_res.md -
+// the emitter calls a handle's methods as members (`stream->readLine()`), so the class
+// declares them here and the section defines them, and a program carries the text only
+// when it calls one. `<fstream>`/`<string>` are the fields' includes and `<cstring>` is
+// the section's (`memchr`/`memmove`/`memcpy`), since this header is compiled first.
+//
+// `simse_fileStream_open` is *not* a method: it is a free function in the always-emitted
+// `fileio` section, because a program may name it with a declaration of its own.
 //
 // The handle is a raw pointer: `openFileStream` creates it (null when the file
 // cannot be opened), `close` releases it - there is no destructor to run for a handle
@@ -52,99 +58,28 @@ struct FileStream {
     Int64 size = 0;          // the file's size in bytes, for throughput reporting
 
     // The next line without its line ending, or an empty `Opt` at end of file.
-    Opt<Str> readLine() {
-        if (!std::getline(file, line)) {
-            return Opt<Str>::none();
-        }
-        if (!line.empty() && line.back() == '\r') {
-            line.pop_back();
-        }
-        return Opt<Str>::some(simse_fromStdString(line));
-    }
+    Opt<Str> readLine();
 
     // The next line into the caller's buffer (reused across calls), `false` at end of
     // file.
-    Bool readLineInto(Str* buffer) {
-        if (buffer == nullptr) return false;
-        Int from = 0;
-        Int count = 0;
-        if (!nextLineSpan(&from, &count)) return false;
-        take(buffer, chunk.data() + from, count);
-        return true;
-    }
+    Bool readLineInto(Str* buffer);
 
     // The next line as a view into the readahead buffer, or an empty `Opt` at end of
     // file. Nothing is copied; the span is valid until the next read on this stream.
-    Opt<StrView> readLineView() {
-        Int from = 0;
-        Int count = 0;
-        if (!nextLineSpan(&from, &count)) return Opt<StrView>::none();
-        return Opt<StrView>::some(simse_strView_slice(simse_spanOfStr(&chunk), from, count));
-    }
+    Opt<StrView> readLineView();
 
     // The file's size in bytes (0 when it is unknown).
-    Int64 fileSize() const { return size; }
+    Int64 fileSize() const;
 
-    // Releases the handle; the natives cast it back to the stream and delete it.
-    void close() {
-        file.close();
-        delete this;
-    }
+    // Releases the handle; the stream was allocated by `simse_fileStream_open`.
+    void close();
 
 private:
     // Advances the readahead buffer to the next line's bytes: `*from`/`*count` are the
     // indexes of the line's first byte and its length (the line ending is not part of
     // it), already stripped of a trailing `\r`. `false` at end of file - and then the
     // chunk is left empty, so a view handed out before it stays the last line.
-    Bool nextLineSpan(Int* from, Int* count) {
-        Int at = chunkAt;
-        while (true) {
-            const Int limit = chunkLen;
-            if (at < limit) {
-                const char* base = chunk.data();
-                const void* found = std::memchr(base + at, '\n', (std::size_t) (limit - at));
-                if (found != nullptr) {
-                    const Int end = (Int) ((const char*) found - base);
-                    Int len = end - at;
-                    if (len > 0 && base[end - 1] == '\r') len--;
-                    *from = at;
-                    *count = len;
-                    chunkAt = end + 1;
-                    return true;
-                }
-            }
-            // No newline in what is left of the chunk: keep the tail, refill, retry.
-            // When the tail alone fills the buffer, the line does not fit in it yet,
-            // so the buffer grows (once per new longest line).
-            Int tail = limit - at;
-            if (tail > 0 && at > 0) {
-                std::memmove(chunk.data(), chunk.data() + at, (std::size_t) tail);
-            }
-            if (tail == chunk.size()) {
-                chunk.resize(tail * 2);
-            }
-            file.read(chunk.data() + tail, (std::streamsize) (chunk.size() - tail));
-            const std::streamsize got = file.gcount();
-            if (got <= 0) {
-                // End of file: whatever the tail holds is the last line (the file did
-                // not end with a newline), and the next call reports the end.
-                chunkLen = 0;
-                chunkAt = 0;
-                if (tail == 0) return false;
-                Int len = tail;
-                if (len > 0 && chunk[len - 1] == '\r') len--;
-                *from = 0;
-                *count = len;
-                return true;
-            }
-            chunkLen = tail + (Int) got;
-            chunkAt = 0;
-            at = 0;
-        }
-    }
+    Bool nextLineSpan(Int* from, Int* count);
 
-    static void take(Str* buffer, const char* text, Int count) {
-        buffer->resize(count);
-        if (count > 0) std::memcpy(buffer->data(), text, (std::size_t) count);
-    }
+    static void take(Str* buffer, const char* text, Int count);
 };

@@ -6,11 +6,15 @@
 // `install` the emitter's generated initializer calls); the API below is the language's
 // own code, over the `Span<ResourceEntry>` that header hands out.
 //
-// Each declaration is a `native` with an explicit `this` - the shape that gives the
-// checker a signature for `Resources.get(key)` and the emitter a symbol to call - and its
-// symbol names the plain function underneath it, which is where the lookup lives. Two
-// things stay C++ because the language cannot express them: a table built before any of
-// the program's code runs, and the default-constructed `StrView`.
+// Each declaration carries an explicit `this` and names its implementation with
+// `@SmGen` - the shape that gives the checker a signature for `Resources.get(key)` and
+// the emitter a symbol to call. Three of the four name a plain *Simse* function
+// underneath (`resourcesGet`/`resourcesHas`/`resourcesCount`, below): the member-call
+// spelling is what a program writes, the free function is the body, and the `cpp`
+// generator produces no C++ for them at all. The fourth, `entries`, is the
+// raw-pointer's worth of glue the language cannot express - a table built before any of
+// the program's code runs, whose accessor is the `resources` section of
+// cppsrc/rtl/_res.md over the storage in cppsrc/rtl/resources.hpp.
 //
 // This file is part of the RTL prelude set, so the type and its methods are in scope in
 // every program with no import, whether or not the program has a resource file.
@@ -28,17 +32,21 @@ data class ResourceEntry(var key: StrView, var value: StrView)
 
 // Every entry the program carries, in the order the compiler read them. A borrowed
 // view: the table is built once, before the program runs, and never grows after.
-native("simse_resources_entries") fun entries(this: Resources): Span<ResourceEntry>
+@SmGen("res", "resources", "simse_resources_entries")
+fun entries(this: Resources): Span<ResourceEntry>
 
 // The value `key` holds, empty when the key is absent. The key is the one the resource
 // file writes, its section prefix included (`Profiling:Profile BootStrap`).
-native("resourcesGet") fun get(this: Resources, key: Str): StrView
+@SmGen("cpp", "resourcesGet")
+fun get(this: Resources, key: Str): StrView
 
 // True when the program carries `key`.
-native("resourcesHas") fun has(this: Resources, key: Str): Bool
+@SmGen("cpp", "resourcesHas")
+fun has(this: Resources, key: Str): Bool
 
 // How many resources the program carries.
-native("resourcesCount") fun count(this: Resources): Int
+@SmGen("cpp", "resourcesCount")
+fun count(this: Resources): Int
 
 // ---- the lookup, in the language -------------------------------------------
 
@@ -56,8 +64,8 @@ fun resourcesGet(key: Str): StrView {
         }
         i = i + 1
     }
-    // The empty view. `StrView`'s one field is the span, so this is what "no bytes" is.
-    return StrView(Span<Char>(null, 0))
+    // The empty view: a span over nothing (`StrView` *is* a `Span<Char>`).
+    return Span<Char>(null, 0)
 }
 
 fun resourcesHas(key: Str): Bool {

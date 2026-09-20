@@ -30,7 +30,12 @@
 //
 // The public surface mirrors std::string closely enough that the compiler's
 // existing string code compiles against it.
-struct StrView;
+//
+// One name this header needs before its definition: `StrView` (strview.hpp) is an alias
+// of `Span<Char>`, and the converting constructor below takes the view a program's string
+// literals are (`span.hpp` has the template).
+template <class T>
+struct Span;
 
 SIMSE_PACK_PUSH
 class SmString {
@@ -66,11 +71,11 @@ public:
         _data.assignSubstring(text, (Int) count);
     }
 
-    // The owned copy of a `StrView` (strview.hpp): the program's string literals are
-    // views into one pool, and a position that wants a `Str` - a slot, an argument, a
-    // return - asks for this. The definition lives in strview.hpp, which is the first
-    // header that can see the type; the declaration is enough here.
-    SmString(const StrView& view);
+    // The owned copy of a `StrView` (strview.hpp), which is a `Span<Char>`: the program's
+    // string literals are views into one pool, and a position that wants a `Str` - a
+    // slot, an argument, a return - asks for this. The definition lives in strview.hpp,
+    // which is the first header that can see the type; the declaration is enough here.
+    SmString(const Span<Char>& view);
 
     // From a `std::string`: the native boundary (`simse_fromStdString`).
     constexpr SmString(const std::string& text) { _data.assign(text.data(), (Int) text.size()); }

@@ -64,8 +64,8 @@ Details worth knowing:
   global dictionary filled in sorted order, so two packages may both declare
   `Point` or `bump` without colliding in the single translation unit; the
   implicit `rtl` package is emitted unprefixed.
-- **Native operations are RTL calls.** Predule operations that are not written in
-  Simse lower to free functions over the RTL headers (`simse_str_split`,
+- **Native operations are RTL calls.** Prelude operations that are not written in
+  Simse lower to free functions over the RTL (`simse_str_split`,
   `simse_dict_get`, `simse_list_sort`, ...), except that a *handle's* methods are
   emitted as members (which is why `FileStream`'s `readLine`/`close` are methods of
   its struct). A user can declare their own with `native fun` / `native("symbol") fun`,
@@ -76,7 +76,8 @@ Details worth knowing:
   (`impl_specs/generators.md`). Two more generators are in use: `res`, whose text is a C++
   *resource* - the tree's own `_res.md` files first, the compiler's second, which is where
   the RTL's own C++ lives now (`cppsrc/rtl/_res.md`: `strtable`, `timeops`, `listops`,
-  `spanOf`) - and `kt`, whose text is *Simse source* the driver hands back to the
+  `dictops`, `strops`, `spanOf`, `strview`, `filestream`, `resources`, `fileio`) - and
+  `kt`, whose text is *Simse source* the driver hands back to the
   compiler's own front end: parsed, checked and emitted with the program, the call site
   unchanged (`stress/smgen-kt`). The emitted file assembles from named **sections** -
   includes, support, profile, strings, resources, forward, types, statics, prototypes,
@@ -182,18 +183,20 @@ headers:
 | `containers.hpp` | `SmallVector<T, N>` with a small-buffer optimization, `List<T>`, `Array<T>` (count-first block), `Dictionary<K, V>`, `PList<T>`, `RawArray<T>` |
 | `smstring.hpp`, `strsmallvector.hpp` | `Str`: an inline, NUL-terminated byte string with a 24-byte inline buffer |
 | `smdictionary.hpp` | `SmDictionary<TKey, TValue>`: the RTL's own dictionary (rows chained by index over a power-of-two bucket table), and the only implementation of `Dictionary<K, V>` |
-| `optional.hpp`, `result.hpp` | `Opt<T>`, `Res<T>` |
+| `variant2.hpp`, `optional.hpp`, `result.hpp` | `Variant2<A, B>`: the tagged union of two alternatives, plus `VoidEnum`; `Opt<T>` is `Variant2<T, VoidEnum>` and `Res<T>` is `Variant2<T, Str>` |
 | `xml.hpp` | `Attribute`, `XmlNode`: the general tree a program can build |
 | `span.hpp` | `Span<T>`: a borrowed view over a contiguous run of `T` (`at`, `slice`) |
-| `strview.hpp` | `StrView`: the view over a string's bytes, a `Span<Char>` plus `charAt`, `find`/`indexOf`, `startsWith`, `startsWithPtr`, `substr`, `toString` |
-| `filestream.hpp` | `FileStream`: reading a file line by line (`readLine(): Opt<Str>`, `readLineInto(*Str)` with a recycled buffer, and `readLineView(): Opt<StrView>` in place) |
+| `strview.hpp` | `StrView`: an alias of `Span<Char>` (`typealias StrView = Span<Char>`), plus the *literal interop* only - the comparison operators, `+`, `<<` and the `Str` conversions, which C++ overload resolution reaches at a literal site (the operations are the `strview` section) |
+| `filestream.hpp` | `FileStream`: the struct alone, reading a file line by line (`readLine(): Opt<Str>`, `readLineInto(*Str)` with a recycled buffer, and `readLineView(): Opt<StrView>` in place) - its method bodies are the `filestream` section |
 | `astxml.hpp` | the compiler's AST node (roles/keys as enums) |
 
 The C++ that used to need a header of its own is a **resource** now
 (`cppsrc/rtl/_res.md`, read by the `res` generator): the string table's decoder
 (`strtable`), the clocks (`timeops`), the `List`/`Array` primitives (`listops`), the
 `Dictionary` operations (`dictops`), the string/character/numeric conversions (`strops`),
-`spanOf`, and the platform's file I/O (`fileio`, which carries its own prototypes). Each is a
+`spanOf`, the view operations (`strview`), the file stream's methods (`filestream`), the
+resource table's accessor (`resources`), and the platform's file I/O (`fileio`, which
+carries its own prototypes). Each is a
 section of that file - a declaration in its `forward:`, a definition in its `bodies:` - and
 the emitter places a section's texts in the emitted file's section of the same name, so
 `strtable`'s decoder is emitted into every program (it is what the preamble needs) while

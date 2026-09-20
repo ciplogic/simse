@@ -19,6 +19,12 @@ native("simse_native_readFile") fun readFile(path: Str): Str
   such as `FileUtils::readFile` is rejected with a positioned `unsupported`
   diagnostic; expose such an implementation through a thin global wrapper whose
   name is the global identifier.
+- `native` is **sugar** for the attribute that names the C++ a declaration
+  reaches - `native("sym")` is `@SmGen("cpp", "sym")` - and it is the *program's*
+  spelling for the FFI (`stress/native-read-file`) and for a symbol the runtime
+  already has. The RTL itself writes the attribute instead, and names a `res`
+  section for everything whose text is generated: no file under `cppsrc/` spells
+  `native` any more (`impl_specs/generators.md`).
 
 ## Emission and call
 
@@ -47,7 +53,8 @@ native("simse_native_readFile") fun readFile(path: Str): Str
 
 Native functions report failure through `Res<T>` (an error `Str`), not C++
 exceptions. A `native fun` that returns `Res<T>` maps its error message into the
-`Res` value; the runtime shim defines `isOk()` as "the error string is empty".
+`Res` value; the runtime's `isOk()` reads the union's tag, so `Res<T>.err("")` is a
+failure like any other (`cppsrc/rtl/variant2.hpp`, `impl_specs/rtl-abi.md`).
 
 ## Prelude
 

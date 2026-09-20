@@ -2983,3 +2983,112 @@ compiler *did* catch and one it could not:
   section), and `bun tools/bootstrap.js` reports **one input file** with the fixed point
   holding byte for byte (`cppsrc\simse_bootstrap.cpp -> simse_boot.exe`, 15.9 s,
   self-transpile 866 ms, 1.49 MB / 49,585 lines checked in).
+
+- **The intrinsics are one union and one span: `Variant2`, and `StrView` is
+  `Span<Char>` (T81).** Two things the runtime had grown separately became one thing
+each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struct with a
+  `T` field beside a `Str` error, so a result was two objects that could disagree - and
+  did: `isOk()` was "`Error` is empty", which read `Res<T>.err("")` as a success. Both are
+  now arms of one local tagged union, `Variant2<A, B>` (`cppsrc/rtl/variant2.hpp`):
+  `Opt<T>` is `Variant2<T, VoidEnum>` and `Res<T>` is `Variant2<T, Str>`, `VoidEnum` being
+  the empty alternative that tells an optional from a result. `std::variant` was rejected
+  for two reasons that both matter to this runtime: `std::get` throws (there are no
+  exceptions here, and every accessor is unchecked like the rest of the RTL) and its
+  valueless-by-exception state is a third state `Res` cannot enter. What the two types
+  expose did not change - `.Value`/`.Error`, `value()`/`hasValue()`, `some`/`none`,
+  `ok`/`err` are the language's own spellings and the emitter writes them straight
+  through, so they are members of the one storage type.
+
+  `StrView` was a struct holding a `Span<Char>` plus the text operations, which made a
+  `StrView` and a `Span<Char>` different types for no observable reason. It is now
+  `typealias StrView = Span<Char>` on both sides (`cppsrc/rtl/StrView.kt`,
+  `cppsrc/rtl/strview.hpp`), so one type carries both names and the text operations are
+  natives *on the span*. Two things had to move with it: the `bytes` member (there is
+  none; a view is the span) and `StrView::toString()` (gone - it existed for a `.toString()`
+  on a string-pool entry that no emitted code ever wrote; the free `simse_strView_toString`
+  is what sites call). No emitter change was needed, which is the pleasant part: the
+  prelude declares its receivers as `StrView` and the call sites' types are spelled
+  `StrView` too, so the receiver-type lookup still matches, and `typeName` prints `StrView`
+  unchanged. `resources.kt`'s `StrView(Span<Char>(null, 0))` became `Span<Char>(null, 0)`.
+
+  **The interesting part is that triviality is a performance property.** The first cut
+  was one class body that always managed the union's lifetime, and it cost the
+  self-transpile **~3%** (interleaved A/B, min: 731.7 -> 754.9 ms): an owning-union type is
+  never trivially copyable or trivially destructible, so every `std::optional<Int>`-shaped
+  slot in the compiler - and there are many (`Opt<Int>`, `Opt<StrView>`, `Opt<NameKind>`,
+  plus every temporary) - turned into a value with a destructor to run and a copy the ABI
+  hands back through memory instead of in registers. `Variant2Storage<A, B, Managed>` now
+  has two forms, chosen by `!(is_trivially_copyable_v<A> && is_trivially_copyable_v<B>)`:
+  the trivial one declares no copy, move or destructor at all (a setter starts the other
+  arm's lifetime by assigning to it, `clear` is nothing), the managed one does the
+  placement-new/destroy dance. That recovered essentially all of it - **min +0.7% / median
+  +1.4%** (25 pairs) and **min +1.0% / median +1.1%** (30 pairs), against a null control
+  that reads ±1% - so the refactor is a wash by measurement. Two things that look like
+  they should share code cannot: the arms are spelled out in *each* form, because the
+  union's destructor is deleted as soon as one arm has one and a common base holding it
+  would carry that deletion into both forms, and the `First`/`Second` constructor tags are
+  what let a `Variant2<Str, Str>` - `Res<Str>`, the emitter's hot return type - say which
+  arm it is building.
+
+  Emitted program text is byte-identical (`cmp` on the compiler's own transpile, and the
+  nine `stress/*/expected.cpp` goldens pass untouched), so the change is
+  representation-only and **the published bootstrap does not move** - it was refreshed
+  anyway and came back byte for byte.
+
+  Verified: `./build.bat --release` green, `bun tools/stress.js` **62/62** - the new
+  `stress/optional-result` is the case that pins the union: `null` in an `Opt<T>`, an
+  `Opt<Str>` payload copied *out* of the union, re-assignment between arms, `err("")` as a
+  failure, `List<Opt<Int>>`, and a failed `Res<Int>` whose message is longer than the
+  inline buffer copied through the union and handed back - `bun tools/smgen.js` 1/1, both
+  `bun tools/bootstrap.js` fixed-point checks byte for byte, a `SIMSE_NO_PACK4` build of
+  the invariant probe, and static assertions that `Opt<Int>`/`Opt<StrView>` are trivially
+  copyable and trivially destructible while `Opt<Str>`/`Res<Str>` manage their storage.
+
+- **The RTL writes `@SmGen`, and the view/stream/resource operations are resources
+  (T82).** `native("sym")` was still the spelling of every prelude declaration that
+  reached hand-written C++ - the `StrView` operations, `FileStream`'s methods and the
+  `Resources` accessor - although the two spellings have been one declaration since T26
+  (`native("sym")` is sugar for `@SmGen("cpp", "sym")`, `bun tools/smgen.js`). They say
+  `@SmGen` now, so **no file under `cppsrc/` spells `native`**: the keyword stays the
+  *program's* FFI spelling, `stress/native-read-file` and the equivalence fixture
+  (`stress/smgen-native`, `stress/smgen-cpp`) keep it honest, and dropping it from the
+  language is `guide4ai.md` §8's call rather than this change's.
+
+  The same pass moved the C++ those declarations named out of the headers and into three
+  new `cppsrc/rtl/_res.md` sections, because a header is compiled *in* while a section is
+  text a declaration reaches:
+
+  - `strview` - the twelve view operations (`size`, `isEmpty`, `at`, `charAt`, `slice`
+    x2, `startsWith`, `startsWithPtr`, `find`, `indexOf`, `substr`, `toString`,
+    `spanOfStr`). `strview.hpp` keeps the *type* (`typealias StrView = Span<Char>`) and
+    the **literal interop** - the comparison operators, `+`, `<<`, `simse_strView_of`,
+    `simse_strView_compare`, the `Str` conversion - and that split is forced, not chosen:
+    the interop is reached by the C++ compiler's overload resolution at a literal site,
+    so no prelude declaration could name it and no section could be reached for it.
+  - `filestream` - `FileStream`'s method bodies, as out-of-line member definitions (the
+    emitter calls a handle's methods as members, so the *struct* has to keep declaring
+    them; `filestream.hpp` is fields, declarations and the three reads' contract now).
+    `readLineView` builds its view directly instead of calling `simse_spanOfStr`, so a
+    program that reads views does not drag the `strview` section in with it - the one
+    coupling the move would otherwise have created.
+  - `resources` - the one accessor over the table, `simse_resources_entries`; `install`
+    and the storage stay in `resources.hpp`, because the table the emitter writes calls
+    them before any declaration is reached.
+
+  **What the move costs, and why it is still the right shape.** The reach rule is
+  *name*-based (`SourceGenContext.isReached`), and a name like `size`, `toString`,
+  `isEmpty`, `at`, `slice` or `find` is a method on several types, so a program that calls
+  `names.size()` on a `List` carries the whole `strview` section: `stress/flat-blocks`
+  627 -> 749 lines of emitted C++, `stress/hello` +1 (the reworded `fileio` comment) and
+  the compiler's own amalgamation +122 of 50.6 k. Nothing runs differently (unused inline
+  functions are not codegen'd) - it is emitted *text*. One section per operation would
+  make the reach exact at the price of twelve sections; the convention is one section per
+  header's worth of operations (`listops`, `dictops`, `strops`), so it stays one.
+
+  Verified: the `@SmGen` migration alone is **byte-identical** in the emitted C++ (`cmp`
+  on the compiler's own transpile, before and after), which is the sugar relation failing
+  to matter, as documented; `bun tools/smgen.js` 1/1 (the prelude now on the attribute
+  side of the pair, the fixture still `native`); `bun tools/stress.js` **62/62** with the
+  ten `expected.cpp` goldens re-captured by hand - their only delta is the new section
+  text and that comment; `bun tools/bootstrap.js` both fixed-point checks byte for byte
+  after the refresh, self-transpile 741 ms.

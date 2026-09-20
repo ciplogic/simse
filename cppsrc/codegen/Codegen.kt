@@ -2136,7 +2136,7 @@ data class Emitter(
 
     fun memberCallReturn(callee: *AstXmlNode): AstXmlNode {
         val receiverType: AstXmlNode = this.inferType(xmlChildPtr(callee, AstNodeKind.Receiver))
-        val recv: AstXmlNode = this.pointee(receiverType)
+        val recv: AstXmlNode = this.resolveAlias(this.pointee(receiverType))
         val calleeText: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
         var i: Int = 0
         while (i < this.functions.size()) {
@@ -2522,7 +2522,7 @@ data class Emitter(
     // Index into `functions` of a Simse extension matching the receiver, or -1.
     fun findExtensionFn(name: *Str, recvExpr: *AstXmlNode): Int {
         val recvType: AstXmlNode = this.inferType(recvExpr)
-        val recv: AstXmlNode = this.pointee(recvType)
+        val recv: AstXmlNode = this.resolveAlias(this.pointee(recvType))
         if (xmlIsEmpty(recv)) {
             return -1
         }
@@ -2552,7 +2552,7 @@ data class Emitter(
             return -1
         }
         val recvType: AstXmlNode = this.inferType(recvExpr)
-        val recv: AstXmlNode = this.pointee(recvType)
+        val recv: AstXmlNode = this.resolveAlias(this.pointee(recvType))
         if (xmlIsEmpty(recv)) {
             return -1
         }
@@ -2634,6 +2634,12 @@ data class Emitter(
         return "nullptr"
     }
 
+    // A receiver's type is *resolved through a `typealias`* before it is matched against
+    // an extension's (findExtensionFn/findNativeExt/memberCallReturn, and the checker's
+    // own memberReturn): `StrView` is `Span<Char>` (cppsrc/rtl/StrView.kt), so an
+    // extension on `Span<T>` is reachable through a view - the alias is the same type, and
+    // this is the one place the tree spells one name for it in a receiver position. A
+    // declared type that is not an alias is returned as it came in.
     fun resolveAlias(typeNode: *AstXmlNode): AstXmlNode {
         var current: AstXmlNode = typeNode
         var guard: Int = 0

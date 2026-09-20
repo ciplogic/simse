@@ -15,12 +15,15 @@ bootstrap shims do not silently become the de-facto specification.
 > already there (`impl_specs/capability-matrix.md` T70, T71). What decides a
 > candidate is a grep: a symbol referenced only by the header that defines it has
 > no C++ caller left. Notably **blocked** today - and by design, not by accident -
-> are `Span<T>` and `StrView` themselves: `lex/Scanner.cpp` (the hand-written
-> ring) builds and reads both through `span.hpp`/`strview.hpp`, so the *types* and
-> the operations it uses (`spanOf`, `spanOfStr`, `at`, `size`, `slice`,
-> `startsWith`, `toString`) stay C++ until that ring retires. `StrView`'s other
-> operations (`find`, `indexOf`, `isEmpty`, `charAt`, `substr`, `startsWithPtr`)
-> have no C++ caller at all, so they are candidates.
+> are `Span<T>` and `StrView`: they are the *same type* now (`typealias StrView =
+> Span<Char>`), the operations above them (`spanOfStr`, `at`, `size`, `slice`,
+> `startsWith`, `toString`, `find`, `indexOf`, `isEmpty`, `charAt`, `substr`,
+> `startsWithPtr`) are the `strview` section of `_res.md` - generated text a
+> declaration reaches, not a header's - and the *literal interop* of `strview.hpp`
+> stays C++ because the C++ compiler's overload resolution reaches it, not a
+> declaration. No prelude declaration spells `native` any more: what is left of the
+> `cpp` generator is the type core (`impl_specs/generators.md`, "`native` is a
+> generator").
 >
 > **The receiver spelling differs from a native's.** A `native` declaration writes
 > its receiver as the explicit first parameter (`this: Str`); a function *with* a
@@ -52,11 +55,12 @@ For the first end-to-end slice, generated C++ targets the **current
   (`cppsrc/rtl/containers.hpp`)
 - `Dictionary<K, V> = SmDictionary<K, V>` (the RTL's own row/bucket dictionary,
   `cppsrc/rtl/smdictionary.hpp`)
-- `Opt<T>` and `Res<T>` = the shim structs (over `std::optional` / a value plus
-  error `Str`)
+- `Opt<T>` and `Res<T>` = the two arms of one local tagged union (`Variant2<T,
+  VoidEnum>` and `Variant2<T, Str>`, `cppsrc/rtl/variant2.hpp`)
 - `&T` lowers to `std::shared_ptr<T>`; `*T` lowers to `T*`
 - `Span<T>` = the borrowed view shim: a `*T` pointer plus a length
-  (`cppsrc/rtl/span.hpp`)
+  (`cppsrc/rtl/span.hpp`); `StrView` is its `char` instantiation, the same type
+  under a second name
 
 The ref-counted `[refcount][typeId][value]` header is **not** implemented in this
 slice, and nothing in the runtime allocates one. The `SmallVector`
@@ -120,11 +124,11 @@ selecting between same-named declarations) is a separate language change.
 | `RawArray<T>` | `RawArray<T>` (`T*`) | unmanaged pointer |
 | `&T` | `std::shared_ptr<T>` | counted reference |
 | `*T` | `T*` | raw pointer |
-| `Opt<T>` | `Opt<T>` (shim over `std::optional<T>`) | |
-| `Res<T>` | `Res<T>` (shim: `Value`, `Error`) | failure = non-empty `Error` |
+| `Opt<T>` | `Opt<T>` (`Variant2<T, VoidEnum>`) | `hasValue()`, `value()`, `some`, `none` |
+| `Res<T>` | `Res<T>` (`Variant2<T, Str>`) | `isOk()` reads the tag; `Value`/`Error` |
 | `Dictionary<K, V>` | `Dictionary<K, V>` (`SmDictionary`) | the RTL's own rows + power-of-two bucket table; sizes are `Int` |
 | `PList<T>` | `PList<T>` (`std::shared_ptr<List<T>>`) | the `&List<T>` spelling |
-| `Span<T>` | `Span<T>` (shim struct) | borrowed view: `ptr` + `len`; `slice` returns a new span |
+| `Span<T>` | `Span<T>` (shim struct) | borrowed view: `ptr` + `len`; `slice` returns a new span; `StrView` is `Span<Char>` |
 | `SmallVector<N, T>` | `SmallVector<T, N>` (`List<T>` is the `N = 4` instantiation) | inline vector |
 | user `data class C` | `struct C` (aggregate) + `_make_C` factory | construction lowers to the factory; no emitted constructors. The factory takes each field by value and **moves** it into the aggregate (`ns1_Rec{std::move(a), ...}`), the RTL's own idiom (`rtl-abi.md` T60): a temporary argument is elided into the parameter (no copy), an lvalue costs the one copy value semantics require, and anything that owns storage - `Str`, `List<T>`, a dictionary, a `&T` handle - is never copied twice |
 | user `enum class E` | `enum class E` | explicit values when given |
@@ -363,12 +367,19 @@ normative layout.
    spec behavior; `count()`, indexing, `arrayEmpty<T>()`, `List.toArray()` and
    `Array.toList()` are the surface (`tools/array_layout_probe.cpp` pins the
    offsets).
-7. **`Opt<T>` representation.** Spec: the core-types representation. Shim: a
-   struct wrapping `std::optional<T>` (an extra layer). Behavior (`hasValue`,
-   `value`) matches the documented API.
-8. **`Res<T>` failure sentinel.** Not spelled out in `specs/`; the shim defines
-   `isOk()` as "`Error` is empty". Generated code does not depend on this beyond
-   calling `isOk()`.
+7. **`Opt<T>` / `Res<T>` representation.** Spec: the core-types representation,
+   two states and a tag. Shim: one hand-written tagged union serves both
+   (`Variant2<A, B>`, `cppsrc/rtl/variant2.hpp`) - `Opt<T>` is `Variant2<T,
+   VoidEnum>` and `Res<T>` is `Variant2<T, Str>` - so an empty optional and a
+   failed result hold no payload, and the untaken arm is not constructed. The
+   alternatives are managed by hand (`setFirst`/`setSecond`/`clear`); `std::variant`
+   was rejected because its accessors throw and its valueless state is a third
+   state this type cannot enter. Behavior (`hasValue`, `value`) matches the
+   documented API.
+8. **`Res<T>` failure sentinel.** Resolved: `isOk()` reads the union's tag, not the
+   message, so `err("")` is a failure. The two-field shim this replaced defined
+   `isOk()` as "`Error` is empty", which read that one case as a success;
+   generated code only calls `isOk()`, so nothing else depended on it.
 9. **`SmallVector` operations.** The shim implements the std::vector-compatible
    surface the compiler uses: construction (default/copy/move/init-list/range/,
    `(count, value)`), assignment, `size`/`capacity`/`empty`/`reserve`,
