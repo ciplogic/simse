@@ -94,9 +94,6 @@ struct ns1_Counter {
     Int value;
 };
 SIMSE_PACK_POP
-ns1_Counter ns1__make_Counter(Int value) {
-    return ns1_Counter{value};
-}
 
 Int ns1_bump(ns1_Counter* self);
 
@@ -121,7 +118,7 @@ int main() {
     i = i + 1;
     goto L1;
     L2:;
-    c = ns1__make_Counter(10);
+    c = ns1_Counter{10};
     _sm_expr2 = total > 5;
     if (!(_sm_expr2)) goto L4;
     std::cout << std::boolalpha << (total) << std::endl;

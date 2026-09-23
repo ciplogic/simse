@@ -76,6 +76,54 @@ fun semaIsHandleType(typeNode: *AstXmlNode): Bool {
             && xmlAttr(typeNode, AstNodeAttributeKind.Name) == "PList"
 }
 
+// Whether a type node names a *view*: `Span<T>`, which `StrView` is the alias of
+// (`Span<Char>`, cppsrc/rtl/StrView.kt). A view owns no storage, so the C++ has no
+// conversion that builds one from an owned value - the emitter prints the call as
+// written and `cl.exe` rejects it. `checkViewArgument` reports that where the argument
+// is, instead.
+fun semaIsSpanType(node: *AstXmlNode): Bool {
+    return xmlKind(node) == AstNodeCategory.TypeGeneric
+            && xmlAttr(node, AstNodeAttributeKind.Name) == "Span"
+}
+
+// Whether a type node is an owned value a view cannot be handed as it stands: `Str` or
+// `List<T>`. Handles (`*T`/`&T`/`PList<T>`) are unwrapped first, since `*Str` names the
+// same owned storage. A view, a scalar, a type parameter and everything else answer false.
+fun semaIsOwnedViewSource(actual: *AstXmlNode): Bool {
+    var base: *AstXmlNode = actual
+    var guard: Int = 0
+    while (guard < 64) {
+        guard = guard + 1
+        val kind: AstNodeCategory = xmlKind(base)
+        if (kind == AstNodeCategory.TypePointer || kind == AstNodeCategory.TypeReference) {
+            val inner: *AstXmlNode = xmlChildPtr(base, AstNodeKind.Inner)
+            if (xmlIsEmpty(inner)) {
+                return false
+            }
+            base = inner
+            continue
+        }
+        if (kind == AstNodeCategory.TypeGeneric
+            && xmlAttr(base, AstNodeAttributeKind.Name) == "PList"
+        ) {
+            val args: List<AstXmlNode> = xmlChildren(base, AstNodeKind.TypeArg)
+            if (args.size() == 0) {
+                return false
+            }
+            base = * args [0]
+            continue
+        }
+        break
+    }
+    if (xmlKind(base) == AstNodeCategory.TypeNamed
+        && xmlAttr(base, AstNodeAttributeKind.Name) == "Str"
+    ) {
+        return true
+    }
+    return xmlKind(base) == AstNodeCategory.TypeGeneric
+            && xmlAttr(base, AstNodeAttributeKind.Name) == "List"
+}
+
 // ---- receiver unification -------------------------------------------------
 
 // Simple structural unification of an extension receiver pattern (which may
@@ -1000,6 +1048,136 @@ data class Analyzer(
         )
     }
 
+    // Whether a parameter type is a *view*: `Span<T>`, `StrView` (its alias of
+    // `Span<Char>`), or a program `typealias` that reaches one. The two common spellings
+    // are recognized by name; a `typealias` chain is followed one hop at a time, the way
+    // the emitter follows it (`Emitter.resolveAlias`).
+    fun isViewType(typeNode: *AstXmlNode): Bool {
+        if (semaIsSpanType(typeNode)) {
+            return true
+        }
+        var name: Str = ""
+        if (xmlKind(typeNode) == AstNodeCategory.TypeNamed) {
+            name = xmlAttr(typeNode, AstNodeAttributeKind.Name)
+        }
+        var guard: Int = 0
+        while (name != "" && guard < 64) {
+            guard = guard + 1
+            if (name == "StrView") {
+                return true
+            }
+            if (!this.types.has(name)) {
+                return false
+            }
+            val decl: AstXmlNode = this.types.get(name).value()
+            if (xmlKind(decl) != AstNodeCategory.TypeAlias) {
+                return false
+            }
+            val target: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.TargetType)
+            if (xmlIsEmpty(target)) {
+                return false
+            }
+            if (semaIsSpanType(target)) {
+                return true
+            }
+            if (xmlKind(target) != AstNodeCategory.TypeNamed) {
+                return false
+            }
+            name = xmlAttr(target, AstNodeAttributeKind.Name)
+        }
+        return false
+    }
+
+    // The checker's own typing of an argument: `exprType`, looked through the wrappers
+    // whose value is their operand's (`copy(x)`, `*x`, `&x`). A view is built from the
+    // *owned* value underneath, and `semaIsOwnedViewSource` strips the handles again - so
+    // peeling to the operand is the answer the check wants, with no type node to build.
+    fun viewArgBase(arg: *AstXmlNode): AstXmlNode {
+        val kind: AstNodeCategory = xmlKind(arg)
+        if (kind == AstNodeCategory.ExprDeref || kind == AstNodeCategory.ExprRef
+            || kind == AstNodeCategory.ExprCopy || kind == AstNodeCategory.ExprUnary
+        ) {
+            val operand: *AstXmlNode = xmlChildPtr(arg, AstNodeKind.Operand)
+            if (xmlIsEmpty(operand)) {
+                return xmlEmptyNode()
+            }
+            return this.viewArgBase(operand)
+        }
+        return this.exprType(arg)
+    }
+
+    // What the checker has to say about one argument of an accepted call, beyond the
+    // handle rule above: a **view parameter takes a view**. `Span<T>` (and `StrView`,
+    // which *is* `Span<Char>`) owns nothing, and the C++ has no conversion that builds a
+    // span out of a `Str` or a `List<T>` - the emitter cannot see that the call is broken
+    // and prints it as written, so the failure surfaces from `cl.exe` against the
+    // *generated* file instead of here.
+    //
+    // A string literal is *already* a view (the emitter writes it as its
+    // `__sm_stringTable[k]` entry, a `StrView`), so it needs nothing. Anything the
+    // checker cannot type is left to the emitter's own rules, which decide silently.
+    // Whether some overload of `callee` with `argCount` parameters would take `arg` for
+    // parameter `index`. `checkCallArity` walks the overloads by *arity* and the check
+    // sees the first match, but two overloads of one name may differ in a parameter's
+    // shape - `parseModule(Span<Token>, Str)` beside `parseModule(*List<Token>, Str)` -
+    // so a view parameter in *this* overload is not proof the call is broken. A parameter
+    // that is not a view takes the argument (the other rules speak for those), and a view
+    // parameter takes it when the argument is, or may be, a view.
+    fun viewArgHasOverload(callee: *Str, argCount: Int, index: Int, arg: *AstXmlNode): Bool {
+        if (!this.functions.has(callee)) {
+            return false
+        }
+        val overloads: List<AstXmlNode> = this.functions.get(callee).value()
+        for (*overload in overloads) {
+            if (xmlCount(overload, AstNodeKind.Param) != argCount) {
+                continue
+            }
+            val params: List<AstXmlNode> = xmlChildren(overload, AstNodeKind.Param)
+            if (index >= params.size()) {
+                continue
+            }
+            val param: *AstXmlNode = xmlChildPtr(params[index], AstNodeKind.Type)
+            if (xmlIsEmpty(param) || !this.isViewType(param)) {
+                return true
+            }
+            if (xmlKind(arg) == AstNodeCategory.ExprStrLit) {
+                return true
+            }
+            val actual: AstXmlNode = this.viewArgBase(arg)
+            if (xmlIsEmpty(actual) || !semaIsOwnedViewSource(actual)) {
+                return true
+            }
+        }
+        return false
+    }
+
+    fun checkViewArgument(callee: *Str, function: *AstXmlNode, index: Int, arg: *AstXmlNode): Unit {
+        val params: List<AstXmlNode> = xmlChildren(function, AstNodeKind.Param)
+        if (index >= params.size()) {
+            return
+        }
+        val param: *AstXmlNode = xmlChildPtr(params[index], AstNodeKind.Type)
+        if (xmlIsEmpty(param) || !this.isViewType(param)) {
+            return
+        }
+        if (xmlKind(arg) == AstNodeCategory.ExprStrLit) {
+            return
+        }
+        val actual: AstXmlNode = this.viewArgBase(arg)
+        if (xmlIsEmpty(actual) || !semaIsOwnedViewSource(actual)) {
+            return
+        }
+        if (this.viewArgHasOverload(callee, params.size(), index, arg)) {
+            return
+        }
+        this.diag(
+            xmlLine(arg), xmlColumn(arg), fmtStr(
+                "types are not compatible: '|' takes '|' and the argument is '|'",
+                callee, semaTypeText(param), semaTypeText(actual)
+            )
+        )
+    }
+
     fun checkCallArity(call: *AstXmlNode): Unit {
         val callee: *AstXmlNode = xmlChildPtr(call, AstNodeKind.Callee)
         if (xmlIsEmpty(callee)) {
@@ -1052,6 +1230,7 @@ data class Analyzer(
                 var a: Int = 0
                 while (a < argCount) {
                     this.checkHandleArgument(name, overload, a, args[a])
+                    this.checkViewArgument(name, overload, a, args[a])
                     a = a + 1
                 }
                 return
@@ -1064,7 +1243,7 @@ data class Analyzer(
             // argument per field, always.
             if (paramCount > 0) {
                 val params: List<AstXmlNode> = xmlChildren(overload, AstNodeKind.Param)
-                val lastType: *AstXmlNode = xmlChildPtr(params[paramCount - 1], AstNodeKind.Type)
+                val lastType: *AstXmlNode = xmlChildPtr(params[paramCount-1], AstNodeKind.Type)
                 if (semIsPackTarget(lastType) && argCount >= paramCount - 1) {
                     return
                 }
@@ -1077,7 +1256,7 @@ data class Analyzer(
     }
 
     // The receiver's type, when the checker tracks it (a local/parameter name or
-    // a generic construction). Empty when unknown.
+// a generic construction). Empty when unknown.
     fun exprType(expr: *AstXmlNode): AstXmlNode {
         if (xmlKind(expr) == AstNodeCategory.ExprName) {
             val binding: Opt<ValueBinding> = this.lookupValue(xmlAttr(expr, AstNodeAttributeKind.Name))
@@ -1110,14 +1289,14 @@ data class Analyzer(
     }
 
     // `for` is lowered in the parser into the declaration of the machine it iterates
-    // (`_sm_for<n>`, impl_specs/for.md), whose initializer is the invisible `iter()`
-    // / `iterPtr()` wrap, so the checker sees the template rather than the construct,
-    // and the template's names are the one marker that says "this came from a `for`".
-    // Something is iterable when that wrap resolves: a machine is (the identity), and
-    // anything else needs the wrap in scope - the prelude has one per container, in both
-    // flavours. Say so here, where the `for` still has a position: the C++ the template
-    // would otherwise emit does not compile, and its error would name a generated
-    // statement instead of the line the user wrote.
+// (`_sm_for<n>`, impl_specs/for.md), whose initializer is the invisible `iter()`
+// / `iterPtr()` wrap, so the checker sees the template rather than the construct,
+// and the template's names are the one marker that says "this came from a `for`".
+// Something is iterable when that wrap resolves: a machine is (the identity), and
+// anything else needs the wrap in scope - the prelude has one per container, in both
+// flavours. Say so here, where the `for` still has a position: the C++ the template
+// would otherwise emit does not compile, and its error would name a generated
+// statement instead of the line the user wrote.
     fun checkForIterable(stmt: *AstXmlNode): Unit {
         val init: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Init)
         if (xmlIsEmpty(init) || !semaIsForTemplateName(xmlAttr(stmt, AstNodeAttributeKind.Name))) {
@@ -1162,10 +1341,10 @@ data class Analyzer(
     }
 
     // Whether a wrap (`iter`, `iterPtr`) takes this receiver: the convention the
-    // parser's wrap calls through (`specs/functions.md`, impl_specs/for.md). The receiver's
-    // *name* is what is compared - `List<T>` takes any `List<...>`, and a pattern type
-    // parameter takes anything - which is all the gate needs; the emitted call is resolved
-    // with the full unification (in `codegen`), and a name this cannot decide stays silent.
+// parser's wrap calls through (`specs/functions.md`, impl_specs/for.md). The receiver's
+// *name* is what is compared - `List<T>` takes any `List<...>`, and a pattern type
+// parameter takes anything - which is all the gate needs; the emitted call is resolved
+// with the full unification (in `codegen`), and a name this cannot decide stays silent.
     fun hasWrap(wrap: *Str, receiverType: *AstXmlNode): Bool {
         if (!this.functions.has(wrap)) {
             return false
@@ -1187,7 +1366,7 @@ data class Analyzer(
     }
 
     // The receiver's outer type, ignoring handles and type arguments: `*List<Int>` and
-    // `List<Str>` are the same receiver for this purpose.
+// `List<Str>` are the same receiver for this purpose.
     fun semaReceiverNameMatches(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *List<Str>): Bool {
         var actualPtr: *AstXmlNode = actual
         while (true) {
@@ -1218,10 +1397,10 @@ data class Analyzer(
     }
 
     // The type of the expression a `for` iterates, for the shapes the checker can name
-    // without walking anything: a binding it tracks, a type construction, or a call of
-    // a declared function. Anything else stays unknown, and unknown stays silent - the
-    // C++ compiler gets the last word there, as it does for any other member it
-    // resolves.
+// without walking anything: a binding it tracks, a type construction, or a call of
+// a declared function. Anything else stays unknown, and unknown stays silent - the
+// C++ compiler gets the last word there, as it does for any other member it
+// resolves.
     fun iteratedType(expr: *AstXmlNode): AstXmlNode {
         if (xmlKind(expr) == AstNodeCategory.ExprName) {
             return this.exprType(expr)
@@ -1263,8 +1442,8 @@ data class Analyzer(
     }
 
     // Reports an arity mismatch only when a receiver-compatible extension method
-    // exists but no overload takes the given value-argument count. Unknown
-    // receiver types stay silent (conservative).
+// exists but no overload takes the given value-argument count. Unknown
+// receiver types stay silent (conservative).
     fun checkExtensionCallArity(call: *AstXmlNode): Unit {
         val callee: *AstXmlNode = xmlChildPtr(call, AstNodeKind.Callee)
         if (xmlKind(callee) != AstNodeCategory.ExprMember) {

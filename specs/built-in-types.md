@@ -146,9 +146,11 @@ Two more are what a *joiner* wants, and both are on the emitted surface
   `out.appendStrPtr(part)` of a `for (*part in parts)` appends the element itself,
   with nothing copied on the way.
 
-`fmtStr(fmt: *Str, items: *List<Str>): Str` is the same idea for a *fixed shape*: the
+`fmtStr(fmt: StrView, items: *List<Str>): Str` is the same idea for a *fixed shape*: the
 text is written as one template whose `|` characters are replaced, in order, by one item
-each. It is what an emitter writes instead of a `+` chain - `fmtStr("[|::|]", a, b)`
+each. The format is a `StrView` because a format is almost always a literal, and a
+literal already *is* a view: the call passes it as it stands, with no `Str` built. It is
+what an emitter writes instead of a `+` chain - `fmtStr("[|::|]", a, b)`
 where `a + "::" + b + "]"` would build three intermediate strings - and it is a member of
 the same family as a join, so it takes its items the way any pack-taking call does: the
 trailing arguments pack into the `*List<Str>` (`fmtStr("| |", "a", "b")`, no `listOf` to

@@ -973,80 +973,17 @@ data class Emitter(
         }
     }
 
-    // Whether a factory parameter is a value the aggregate can be *moved* out of, or one
-    // that rides in a register. The factory is compiler-generated and its parameters are
-    // dead the moment the aggregate is built, so a scalar needs nothing and anything that
-    // owns storage is moved: a temporary argument then costs no copy at all (it is elided
-    // into the parameter) and an lvalue costs exactly the one copy value semantics
-    // require - the parameter. This is the idiom the RTL's own constructors use
-    // (`cppsrc/rtl/astxml.hpp`).
-    fun factoryParamByValue(t: *AstXmlNode): Bool {
-        val kind: AstNodeCategory = xmlKind(t)
-        when (kind) {
-            AstNodeCategory.TypePointer, AstNodeCategory.TypeIntLit -> {
-                return true
-            }
-
-            AstNodeCategory.TypeReference, AstNodeCategory.TypeFunction -> {
-                return false
-            }
-
-            AstNodeCategory.TypeYield -> {
-                return false
-            }
-
-            AstNodeCategory.TypeGeneric -> {
-                // `RawArray<T>` *is* `T*`; the rest are containers, optionals and handles,
-                // all of which own storage.
-                return xmlAttr(t, AstNodeAttributeKind.Name) == "RawArray"
-            }
-
-            AstNodeCategory.TypeNamed -> {
-                val name: Str = xmlAttr(t, AstNodeAttributeKind.Name)
-                if (this.isScalarName(name)) {
-                    return true
-                }
-                return this.enumNames.has(name)
-            }
-        }
-        return false
-    }
-
-    // The scalar names: the types whose C++ spelling is a register-width value (`Int`
-    // and friends, `Bool`, `Char`, `Float64`).
-    fun isScalarName(name: *Str): Bool {
-        when (name) {
-            "Bool", "Char", "Int",
-            "Int8", "Int16", "Int32", "Int64",
-            "Float32", "Float64" -> {
-                return true
-            }
-        }
-
-        return false
-    }
-
     fun emitDataClass(decl: *AstXmlNode): Unit {
         this.setActiveTypeParams(xmlTypeParamNames(decl))
         val fields: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Field)
-        var params: List<Str> = List<Str>()
-        var values: List<Str> = List<Str>()
         for (*field in fields) {
-            val fieldType: *AstXmlNode = xmlChildPtr(field, AstNodeKind.Type)
-            if (xmlIsEmpty(fieldType)) {
+            if (xmlIsEmpty(xmlChildPtr(field, AstNodeKind.Type))) {
                 this.fail(
                     field,
                     fmtStr("unsupported: field '|' without a type", xmlAttr(field, AstNodeAttributeKind.Name))
                 )
                 return
             }
-            var param: Str = fmtStr("| |", this.type(fieldType), xmlAttr(field, AstNodeAttributeKind.Name))
-            params.append(param)
-            var value: Str = xmlAttr(field, AstNodeAttributeKind.Name)
-            if (!this.factoryParamByValue(fieldType)) {
-                value = fmtStr("std::move(|)", value)
-            }
-            values.append(value)
         }
         if (this.failed) {
             return
@@ -1076,28 +1013,6 @@ data class Emitter(
         }
         this.line(0, "};")
         this.line(0, "SIMSE_PACK_POP")
-
-        // The struct stays an aggregate; construction goes through a
-        // `_make_<Name>` factory so callers keep the `Name(args)` shape without
-        // an emitted constructor.
-        var target: Str = emittedName
-        if (typeParams.size() > 0) {
-            target = fmtStr("|<|>", emittedName, cgJoin(typeParams, ", "))
-        }
-        if (tmpl != "") {
-            this.line(0, tmpl)
-        }
-        this.line(
-            0,
-            fmtStr(
-                "| |(|) {",
-                target,
-                this.qualify(this.typePackage(name), "_make_" + name),
-                cgJoin(params, ", ")
-            )
-        )
-        this.line(1, fmtStr("return |{|};", target, cgJoin(values, ", ")))
-        this.line(0, "}")
     }
 
     fun emitEnum(decl: *AstXmlNode): Unit {
@@ -2993,7 +2908,16 @@ data class Emitter(
                     calleeName = nativeOpt.value()
                 }
                 if (this.dataClassNames.has(name)) {
-                    calleeName = this.qualify(this.typePackage(name), "_make_" + name)
+                    // A construction is the aggregate's own brace form, with the type
+                    // arguments spelled (`ns1_Box<Int>{1}`): the `_make_<Name>` factory
+                    // is gone, so nothing is left to C++ template deduction (`Box(2)`
+                    // deduces through CTAD instead - see the bare-name arm below).
+                    return fmtStr(
+                        "|<|>{|}",
+                        this.qualify(this.typePackage(name), name),
+                        this.typeArgsString(name, xmlChildren(callee, AstNodeKind.TypeArg)),
+                        cgJoin(args, ", ")
+                    )
                 }
                 return fmtStr(
                     "|<|>(|)",
@@ -3053,7 +2977,12 @@ data class Emitter(
                     calleeName = nativeOpt.value()
                 }
                 if (this.dataClassNames.has(name)) {
-                    calleeName = this.qualify(this.typePackage(name), "_make_" + name)
+                    // A construction the source wrote without type arguments: the brace
+                    // form, and the type arguments C++20's aggregate CTAD deduces - the
+                    // job the `_make_<Name>` factory's parameters used to do.
+                    return fmtStr(
+                        "|{|}", this.qualify(this.typePackage(name), name), cgJoin(args, ", ")
+                    )
                 }
                 return fmtStr("|(|)", calleeName, cgJoin(args, ", "))
             }

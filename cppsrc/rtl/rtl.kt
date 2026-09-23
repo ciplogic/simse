@@ -204,10 +204,16 @@ fun appendStrPtr(this: Str, value: *Str): Unit
 // buffer; a call whose points and items do not line up - or that passes no item list -
 // gets the format back, unfilled, rather than a half-filled result.
 //
+// The format is a **`StrView`**, because a format is almost always a literal and a
+// literal already *is* a view (`__sm_stringTable[k]`): the parameter takes it as it
+// stands, where a `*Str` parameter made the emitter materialize an owned `Str` copy of
+// the literal just to take its address. A `Str` a caller holds is spanned by hand
+// (`spanOfStr(*text)`), and the view converts to the returned `Str` once, at the end.
+//
 // The body is the language's own (`impl_specs/rtl-abi.md`): `charAt`, `append`,
 // `appendStr` and `reserve` are the primitives it is written over, so nothing about
 // the formatting is C++ any more.
-fun fmtStr(fmt: *Str, items: *List<Str>): Str {
+fun fmtStr(fmt: StrView, items: *List<Str>): Str {
     if (items == null) {
         return fmt
     }

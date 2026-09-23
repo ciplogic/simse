@@ -356,4 +356,4 @@ toolchain. `docs/state-of-the-field.md` is explicit about each of these, and
 
 ## License
 
-Apache 2.0 - see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).

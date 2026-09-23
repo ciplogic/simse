@@ -223,18 +223,12 @@ struct ns1_Counter {
     Int n;
 };
 SIMSE_PACK_POP
-ns1_Counter ns1__make_Counter(Int n) {
-    return ns1_Counter{n};
-}
 // stress/receiver-shapes/src/main.kt:40
 SIMSE_PACK_PUSH
 struct ns1_Holder {
     ns1_Counter counter;
 };
 SIMSE_PACK_POP
-ns1_Holder ns1__make_Holder(ns1_Counter counter) {
-    return ns1_Holder{std::move(counter)};
-}
 
 void ns1_bump(ns1_Counter* self);
 void ns1_add(ns1_Counter* self, Int delta);
@@ -280,7 +274,7 @@ int main() {
     Int _sm_expr1;
     Str _sm_expr2, _sm_expr3, _sm_expr5, _sm_expr6;
     ns1_Holder holder;
-    counter = ns1__make_Counter(0);
+    counter = ns1_Counter{0};
     _sm_expr1 = ns1_twice(simse_addressOf(counter));
     _sm_expr2 = simse_int_toString(_sm_expr1);
     std::cout << std::boolalpha << (_sm_expr2) << std::endl;
@@ -289,8 +283,8 @@ int main() {
     _sm_base1 = simse_addressOf(counter.n);
     _sm_expr3 = simse_int_toString((*_sm_base1));
     std::cout << std::boolalpha << (_sm_expr3) << std::endl;
-    _sm_expr4 = ns1__make_Counter(10);
-    holder = ns1__make_Holder(_sm_expr4);
+    _sm_expr4 = ns1_Counter{10};
+    holder = ns1_Holder{_sm_expr4};
     _sm_base2 = simse_addressOf(holder.counter);
     ns1_bump(_sm_base2);
     _sm_base4 = simse_addressOf(holder.counter);

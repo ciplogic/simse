@@ -3147,3 +3147,51 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   checks byte for byte after the refresh, self-transpile 732 ms; and the emitted C++ of
   the compiler's own tree is unaffected by the `native` removal (the attribute path is
   the same code the keyword fed).
+
+- **The `_make_<Name>` factories are gone, and the format of `fmtStr` is a view.** Three
+  changes to the emitted surface, all in the direction of less code. The numbers below are
+  interleaved A/B (`tools/_bench_ab.mjs`) of the compiler built before and after.
+
+  *A construction is the aggregate's own brace form.* `emitDataClass` no longer emits a
+  factory and `call` no longer redirects to one: a construction site writes the aggregate
+  directly (`ns1_Rec{a, b}`), with the type arguments spelled when the source wrote them
+  (`ns1_Box<Int>{1}`) and left to C++20's aggregate CTAD when it did not (`ns1_Box{2}` -
+  verified accepted by this toolchain). The factory was doing two jobs and both move to
+  the call site cleanly: deduction (its by-value parameters) becomes CTAD, and
+  `std::move` is **dropped rather than lifted**, because at a call site an lvalue argument
+  must be copied where inside the factory the parameter was already dead. That is exactly
+  the cost the factory had. `factoryParamByValue` and `isScalarName` go with it. The
+  compiler's own amalgamation drops 72 factory definitions and every `_make_`
+  (245 -> 0): **38,945 -> 38,780 lines (-0.42%)**, and the binary 2,331,648 -> 2,326,016
+  bytes. Three goldens pinned the old text and were re-captured by hand from
+  `stress/.work/<case>/out.cpp` (`hello`, `counted-reference`, `receiver-shapes`).
+
+  *`fmtStr`'s format is a `StrView`.* A format is a literal at every call site of this
+  tree (checked: no caller passes anything else), and a literal already *is* a view, so
+  the parameter takes it as it stands. Where a `*Str` parameter made the emitter build an
+  owned `Str` copy of the literal just to take its address
+  (`_sm_base4 = __sm_stringTable[195]; _sm_base3 = &_sm_base4; fmtStr(_sm_base3, ...)`),
+  the call is now `fmtStr(__sm_stringTable[195], ...)`. Spec: `specs/built-in-types.md`.
+
+  *A view argument that cannot become one is now a diagnostic.* `Sema.checkViewArgument`
+  reports `types are not compatible: 'f' takes 'StrView' and the argument is 'Str'` for a
+  `Span<T>`/`StrView` parameter and an owned `Str`/`List<T>` (handles unwrapped, literals
+  exempt, and asked of *every* same-arity overload first - because
+  `parseModule(Span<Token>, Str)` beside `parseModule(*List<Token>, Str)` is exactly the
+  shape that made a naive check report a call that compiles). It is what makes the
+  `*Str` -> `StrView` direction safe to take, since the emitter cannot see the broken call
+  and `cl.exe` would name the generated file instead.
+
+  Verified: `./build.bat --release` green (two builds - the running compiler has to carry
+  the new emitter before its output can be read as the new one); `bun tools/stress.js`
+  **61/61** with the three goldens above re-captured; `bun tools/bootstrap.js` both
+  fixed-point checks byte for byte after the refresh, and zero `_make_` in the published
+  file. **Speed, honestly:** the compiler's own runtime does *not* move - 40 interleaved
+  runs give medians of **732.6 ms (before) and 732.5 ms (after)** for the self-transpile,
+  which is what /O2 /Ob3 inlining the factories away should give. What does move is what
+  the output costs to compile: `/O2 /Ob3` over each amalgamation measures 16,733 -> 16,421
+  ms, and with the legs swapped (so the smaller file is measured *first*) 16,614 against
+  16,868 - the same ~1.5-1.9% in both orders, so it is not the harness's fixed A-then-B
+  ordering. Absolute times drift with the machine (a same-binary A/B mid-session read
+  1,235 ms for work that measured 732 ms earlier), so only the interleaved ratios are
+  worth quoting.

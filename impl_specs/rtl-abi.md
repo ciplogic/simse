@@ -90,8 +90,8 @@ translation unit - the generated code never spells a package name out:
   source set the assignment is `codegen` `ns1_`, `common` `ns2_`, `compiler`
   `ns3_`, `lex` `ns4_`, `linear` `ns5_`, `parser` `ns6_`, `sema` `ns7_`,
   `skelparser` `ns8_`.
-- The rule applies to declarations *and* to every reference: data classes and
-  their `_make_` factories, enums, their `simse_<Name>_fromInt` helpers and their
+- The rule applies to declarations *and* to every reference: data classes, enums,
+  their `simse_<Name>_fromInt` helpers and their
   members, typealiases, generic templates and their instantiations, plain
   functions, methods lowered to free functions, and a function used as a value
   (a callable argument).
@@ -131,7 +131,7 @@ selecting between same-named declarations) is a separate language change.
 | `PList<T>` | `PList<T>` (`std::shared_ptr<List<T>>`) | the `&List<T>` spelling |
 | `Span<T>` | `Span<T>` (shim struct) | borrowed view: `ptr` + `len`; `slice` returns a new span; `StrView` is `Span<Char>` |
 | `SmallVector<N, T>` | `SmallVector<T, N>` (`List<T>` is the `N = 4` instantiation) | inline vector |
-| user `data class C` | `struct C` (aggregate) + `_make_C` factory | construction lowers to the factory; no emitted constructors. The factory takes each field by value and **moves** it into the aggregate (`ns1_Rec{std::move(a), ...}`), the RTL's own idiom (`rtl-abi.md` T60): a temporary argument is elided into the parameter (no copy), an lvalue costs the one copy value semantics require, and anything that owns storage - `Str`, `List<T>`, a dictionary, a `&T` handle - is never copied twice |
+| user `data class C` | `struct C` (aggregate) | construction is the aggregate's own brace form at the call site (`ns1_Rec{a, b}`), with the type arguments spelled when the source wrote them (`ns1_Box<Int>{1}`) and C++20 aggregate CTAD when it did not (`ns1_Box{2}`) - the `_make_C` factory, whose by-value parameters did the deducing, is gone. A temporary argument is elided into the member (no copy); an lvalue costs the one copy value semantics require |
 | user `enum class E` | `enum class E` | explicit values when given |
 | callable `(A, B) -> R` | `Func<R(A, B)>` (`std::function`) | `Unit` return -> `void` |
 
