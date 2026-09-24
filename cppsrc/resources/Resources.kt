@@ -1,56 +1,24 @@
 // Resources.kt
 //
-// The resource files (`_res.md`, specs/resources.md): text a program carries that is not
-// code - a template, a prompt, help text, the profiler's own generated C++ - read by the
-// compiler and embedded in the program's string table. The mirror of
-// cppsrc/resources/Resources.cpp.
-//
-// A resource file is Markdown-shaped because a person edits it and its diffs should read
-// like the text they hold: a *section title* is a line underlined by a line of `=` only,
-// and a line that reads as `key: value` is an entry. A section is not nesting - it is a
-// *prefix* on the key (`Profiling` + `Name` gives `Profiling:Name`) - so a whole file
-// reduces to a flat list of (key, value) pairs and nothing downstream needs a tree. A title
-// that opens with `!` marks its whole section **compile-only**: the compiler reads it and
-// the program does not carry it, which is what keeps *code* in a `.md` file - a `kt`
-// section's Simse source, a `res` section's C++ - from being stored in the executable as
-// text on top of being compiled in.
-//
-// The parse is deliberately small: keys are trimmed (a stray space or tab in a key would
-// be a bug that only shows up at runtime), no escape is interpreted (what the file says is
-// what the program gets), and the one place that escapes anything is the C++ literal the
-// emitter writes a value into (`resQuoteLiteral`).
-//
-// Keys and values are pooled in the program's string table like any other literal
-// (`Codegen.kt`), so at runtime a resource is a `StrView` over the pool and there is no
-// second copy of its text anywhere.
+// The `_res.md` reader (specs/resources.md): text a program carries that is not code,
+// embedded in its string table. A file is a flat list of (key, value) pairs - a title line
+// underlined by `=` sets a key *prefix*, a `key: value` line is an entry - and a title
+// opening with `!` marks its section compile-only, so code in a `.md` section is not also
+// stored as text.
 
 package resources
 
 import common
 
-// One resource, as the *compiler* read it from a file: the key the program will look it
-// up by, the text it holds, and the two flags a marker can set.
+// One resource as the *compiler* read it: the key, the text, and the two markers.
 //
-// `compileOnly` is the `!` marker (specs/resources.md): the compiler reads the entry, the
-// program does not carry it. It is what keeps *code* in a `.md` file from being stored in
-// the executable as text as well as compiled in.
+// `compileOnly` (`!`): the compiler reads the entry, the program does not carry it.
+// `binary` (`*`): the value was written as hex for the bytes and is already decoded here.
+// Either marker may sit on a section title or an entry key, in either order, and is not part
+// of the name.
 //
-// `binary` is the `*` marker: the value as written is *hex that stands for the bytes*, so
-// by the time an entry reaches here it is already decoded - `value` holds the bytes
-// themselves, and nothing downstream has to know that the file spelled them as digits.
-//
-// Both markers may be written on a section's title or on one entry's key, together and in
-// either order; the marker characters are not part of the name, so a lookup by spelling is
-// the same whether anything was marked.
-//
-// The text holds the file's own bytes (the pool and the C++ escapes are the emitter's
-// business), and it is `Str` - the RTL's byte string - so a binary resource is an ordinary
-// value here: bytes that happen not to be text.
-//
-// The name is deliberately not `ResourceEntry`: that is the RTL's type, the pair of
-// `StrView`s the program carries (cppsrc/rtl/resources.hpp + resources.kt), and the
-// emitter's type table is flat by name, so one of the two has to be spelled differently.
-// This one is the reader's item; that one is the program's entry.
+// Named `ResourceItem`, not `ResourceEntry`: the latter is the RTL's `StrView` pair, and the
+// emitter's type table is flat by name.
 data class ResourceItem(
     var key: Str,
 
@@ -61,8 +29,8 @@ data class ResourceItem(
     var binary: Bool
 )
 
-// One name with its markers read: the name itself, and what the markers said.
-// `specs/resources.md`, "Markers".
+// One name with its markers read: the name itself and what the markers said
+// (specs/resources.md, "Markers").
 data class ResMarked(
     var name: Str,
 
@@ -71,13 +39,9 @@ data class ResMarked(
     var binary: Bool
 )
 
-// Reads a section title's or an entry key's leading marker run: `!` makes what it marks
-// compile-only, `*` makes its value binary, they may appear together in either order, and
-// the run is consumed - the name that is left is the name the file means.
-//
-// There is no way to *unset* a marker: a marked section marks every entry under it, and an
-// entry's own markers are on top of the section's (`resParseText` combines the two with
-// `||`, which is the whole of the rule).
+// Reads a title's or a key's leading marker run (`!` compile-only, `*` binary, together in
+// either order), consuming it - the name left is the name the file means. A marker cannot be
+// unset: an entry's markers only add to its section's.
 fun resMarkedName(raw: *Str): ResMarked {
     var compileOnly: Bool = false
     var binary: Bool = false
@@ -95,22 +59,15 @@ fun resMarkedName(raw: *Str): ResMarked {
     return ResMarked(raw.substr(i, raw.size() - i).trim(), compileOnly, binary)
 }
 
-// The two byte-level helpers the format needs, whose C++ is the `resfmt` section of
-// `cppsrc/rtl/_res.md` (impl_specs/generators.md): turning a hex dump into the bytes it
-// stands for, and spelling bytes back out as the C++ literal the pool holds them as.
-//
-// They are here rather than in the prelude on purpose: this is the *format*'s machinery, and a
-// program has no use for either. Their section is `!`-marked and of their own (not part of
-// `strops`), so no program reaches them and none of this reaches a program's output.
+// The format's two byte-level helpers, generated from the `resfmt` resource section
+// (impl_specs/generators.md): hex dump to bytes, and bytes back out as a C++ literal.
 @SmGen("res", "resfmt", "simse_resHexToBytes")
 fun resHexToBytes(hex: Str): Str
 
 @SmGen("res", "resfmt", "simse_resQuoteBinary")
 fun resQuoteBinary(bytes: Str): Str
 
-// ---- the format -----------------------------------------------------------
-
-// True when `line` is a section underline: non-blank once trimmed, and nothing but `=`.
+// True when `line` is a section underline: non-blank once trimmed, and all `=`.
 fun resIsUnderline(line: *Str): Bool {
     val text: Str = line.trim()
     if (text.size() == 0) {
@@ -126,8 +83,8 @@ fun resIsUnderline(line: *Str): Bool {
     return true
 }
 
-// True when `line` opens a fenced block. An opening fence may name a language
-// (` ```cpp `), which is why this is a prefix test while the closing one is exact.
+// True when `line` opens a fenced block (a prefix test, so a fence naming a language
+// matches); the closing fence is exact.
 fun resIsFenceStart(line: *Str): Bool {
     return line.trim().startsWith("```")
 }
@@ -137,8 +94,8 @@ fun resIsFenceEnd(line: *Str): Bool {
     return line.trim() == "```"
 }
 
-// The key a section prefixes: `Title` + `Key` is `Title:Key`, and a key written before the
-// first title keeps its own name.
+// The key a section prefixes: `Title` + `Key` is `Title:Key`; a key before the first title
+// keeps its own name.
 fun resQualifiedKey(section: *Str, key: Str): Str {
     if (section.size() == 0) {
         return key
@@ -146,8 +103,8 @@ fun resQualifiedKey(section: *Str, key: Str): Str {
     return fmtStr("|:|", section, key)
 }
 
-// `text` without one wrapping pair of single backticks, so `` Key: `text` `` and
-// `Key: text` hold the same value. Only one pair, and only when it wraps the whole text.
+// `text` without one wrapping pair of backticks, so `` Key: `text` `` and `Key: text` hold
+// the same value. Only one pair, and only when it wraps the whole text.
 fun resUnquote(text: Str): Str {
     if (text.size() >= 2 && text[0] == '`' && text[text.size() - 1] == '`') {
         return text.substr(1, text.size() - 2)
@@ -155,15 +112,10 @@ fun resUnquote(text: Str): Str {
     return text
 }
 
-// ---- the parse ------------------------------------------------------------
-
-// One resource file's entries, in the order they are written. Everything else is ignored:
-// blank lines, prose, and anything before the first title. A repeated key keeps its first
-// position with its last value (`resDedup`).
-//
-// An entry is a line whose first `:` has a non-empty key before it. When nothing follows
-// the colon the value is the fenced block that follows (its lines as written, each
-// followed by a newline); when no fence follows, the value is empty.
+// One resource file's entries, in written order; blank lines, prose, and anything before the
+// first title are ignored. An entry is a line whose first `:` has a non-empty key before it;
+// when nothing follows the colon the value is the fenced block that follows (lines as
+// written, each with a newline), and when no fence follows the value is empty.
 fun resParseText(text: *Str): List<ResourceItem> {
     val lines: List<Str> = text.split("\n")
     var entries: List<ResourceItem> = List<ResourceItem>()
@@ -172,10 +124,9 @@ fun resParseText(text: *Str): List<ResourceItem> {
     var binary: Bool = false
     var i: Int = 0
     while (i < lines.size()) {
-        // A title is a line *underlined* by the line below it; both lines are spent, so an
-        // underline is never read as an entry of its own. Its markers (`resMarkedName`) say
-        // what every entry under it is; a title with nothing left after its markers is not a
-        // title, and leaves the section and both markers as they were.
+        // A title is a line *underlined* by the next one; both lines are spent, so the
+        // underline is never read as an entry. A title whose name is empty after its markers
+        // is not a title, and leaves the section and both markers as they were.
         if (i + 1 < lines.size() && resIsUnderline(lines[i + 1])) {
             val marked: ResMarked = resMarkedName(lines[i].trim())
             if (marked.name.size() > 0) {
@@ -192,8 +143,7 @@ fun resParseText(text: *Str): List<ResourceItem> {
             i = i + 1
             continue
         }
-        // The key's own markers are on top of the section's - either one marks the entry, so
-        // the two are combined with `||` and nothing can take a marker back.
+        // The key's own markers add to the section's: either marks the entry, combined with `||`.
         val markedKey: ResMarked = resMarkedName(line.substr(0, colon).trim())
         val key: Str = resQualifiedKey(section, markedKey.name)
         val entryCompileOnly: Bool = compileOnly || markedKey.compileOnly
@@ -207,10 +157,9 @@ fun resParseText(text: *Str): List<ResourceItem> {
             continue
         }
 
-        // Nothing after the colon: the value is the fenced block that follows. Blank lines
-        // between the key and its fence are the file's own layout, so they are skipped -
-        // and a line that is *not* a fence leaves the value empty rather than swallowing
-        // it (the scan resumes there).
+        // Nothing after the colon: the value is the fenced block that follows, blank lines
+        // before it skipped. A line that is not a fence leaves the value empty (the scan
+        // resumes there).
         var value: Str = ""
         var j: Int = i + 1
         while (j < lines.size() && lines[j].trim().size() == 0) {
@@ -224,8 +173,8 @@ fun resParseText(text: *Str): List<ResourceItem> {
                     break
                 }
                 var body: Str = lines[j]
-                // A `\r` before the newline is not part of the line - the same rule the
-                // scanner applies - so a value does not depend on the file's line endings.
+                // A `\r` before the newline is not part of the line, so a value does not
+                // depend on the file's line endings.
                 if (body.size() > 0 && body[body.size() - 1] == '\r') {
                     body = body.substr(0, body.size() - 1)
                 }
@@ -242,9 +191,8 @@ fun resParseText(text: *Str): List<ResourceItem> {
     return entries
 }
 
-// A value as the entry holds it: a `*`-marked one is hex that stands for the bytes, so it is
-// decoded here - once, on the way in - and everything downstream reads bytes (`resHexToBytes`,
-// whose C++ is the `strops` resource section).
+// A value as the entry holds it: a `*`-marked one is hex for the bytes, decoded here once on
+// the way in, so everything downstream reads bytes.
 fun resValueText(value: Str, binary: Bool): Str {
     if (!binary) {
         return value
@@ -252,10 +200,9 @@ fun resValueText(value: Str, binary: Bool): Str {
     return resHexToBytes(value)
 }
 
-// The flat list a compilation keeps, from the entries of every file in order: a key
-// written more than once takes the last value, in the position it was *first* written. A
-// section two files both fill in merges because the key already carries the prefix, and
-// the order is the file order (`specs/resources.md`, "Discovery").
+// The flat list a compilation keeps, from every file's entries in order: a repeated key takes
+// the last value in the position it was *first* written. A section two files fill in merges,
+// since the key already carries the prefix (specs/resources.md, "Discovery").
 fun resDedup(entries: *List<ResourceItem>): List<ResourceItem> {
     var last: Dictionary<Str, ResourceItem> = Dictionary<Str, ResourceItem>()
     var i: Int = 0
@@ -270,8 +217,8 @@ fun resDedup(entries: *List<ResourceItem>): List<ResourceItem> {
         val key: Str = entries[i].key
         if (!seen.has(key)) {
             seen.insert(key, true)
-            // The winner's own text *and* marker: a key written in a marked section and
-            // again in an unmarked one is stored or not by the entry that won it.
+            // The winner's own text *and* marker: a key written in a marked section and again
+            // in an unmarked one is stored or not by whichever entry won.
             val won: ResourceItem = last.get(key).value()
             out.append(ResourceItem(key, won.value, won.compileOnly, won.binary))
         }
@@ -280,12 +227,8 @@ fun resDedup(entries: *List<ResourceItem>): List<ResourceItem> {
     return out
 }
 
-// The text `entries` holds for `key`, or "" when they do not carry it. The compiler's
-// ---- discovery and loading ------------------------------------------------
-
-// Every `_res.md` file under each module root, recursively, each canonical path once, in
-// canonical-path order - the same rule `driverGatherFiles` applies to the `*.kt` files, so
-// two rings that were handed the same roots agree on the file set and its order.
+// Every `_res.md` under each module root, recursively, each canonical path once, in
+// canonical-path order (the rule `driverGatherFiles` applies to the `*.kt` files).
 fun resResourceFiles(moduleRoots: *List<Str>): List<Str> {
     var candidates: List<Str> = List<Str>()
     var r: Int = 0
@@ -311,8 +254,7 @@ fun resResourceFiles(moduleRoots: *List<Str>): List<Str> {
         }
         c = c + 1
     }
-    // After dedup the canonical keys are unique, so this sort is total and both compiler
-    // rings produce the same sequence.
+    // After dedup the canonical keys are unique, so this sort is total.
     chosen.sort((left: Str, right: Str) -> pathCanonical(left) < pathCanonical(right))
     return chosen
 }
@@ -333,18 +275,14 @@ fun resLoadFiles(files: *List<Str>): List<ResourceItem> {
     return resDedup(all)
 }
 
-// The whole discovery in one call, for a driver: every `_res.md` under `moduleRoots`,
-// parsed and joined.
+// The whole discovery in one call: every `_res.md` under `moduleRoots`, parsed and joined.
 fun resLoad(moduleRoots: *List<Str>): List<ResourceItem> {
     return resLoadFiles(resResourceFiles(moduleRoots))
 }
 
-// The same entries, in the same order, each key and value spelled as **the C++ string
-// literal that holds its bytes** - which is what the emitter pools and what its length index
-// is built from. The spelling happens here, once, rather than in the emitter: a `*`-marked
-// value is bytes, not text, so it needs a different escape rule (`resQuoteBinary`, every
-// non-printable byte written as an octal escape), and a spelling that is only ever written
-// once cannot disagree with itself.
+// The same entries, each key and value spelled as the C++ string literal the emitter pools
+// (and its length index counts). A `*`-marked value is bytes, not text, so it needs the
+// different escape rule `resQuoteBinary` uses.
 fun resStoredLiterals(entries: *List<ResourceItem>): List<Str> {
     var out: List<Str> = List<Str>()
     var i: Int = 0
@@ -362,10 +300,8 @@ fun resStoredLiterals(entries: *List<ResourceItem>): List<Str> {
     return out
 }
 
-// The text `entries` holds for `key`, or "" when they do not carry it. The compiler's
-// own lookup, for the places that run before the program exists to call `Resources.get`
-// (the driver's generated sources); `resDedup` already made the keys unique, so one
-// scan is enough.
+// The text `entries` holds for `key`, or "" when absent. The compiler's own lookup, for the
+// places that run before the program can call `Resources.get`; keys are already unique.
 fun resValueOf(entries: *List<ResourceItem>, key: *Str): Str {
     var i: Int = 0
     while (i < entries.size()) {
@@ -377,10 +313,9 @@ fun resValueOf(entries: *List<ResourceItem>, key: *Str): Str {
     return ""
 }
 
-// True when `entries` carries `key`. `resValueOf` cannot answer this: a key may hold an
-// *empty* text - a section with nothing under it - and an absent key holds the same, so a
-// reader that has to tell the two apart asks this first (the generator lookup does,
-// `cppsrc/sourcegen/ResGen.kt`).
+// True when `entries` carries `key`. `resValueOf` cannot answer it: an *empty* value and an
+// absent key both read as "", so a caller that must tell them apart asks this first
+// (cppsrc/sourcegen/ResGen.kt).
 fun resHas(entries: *List<ResourceItem>, key: *Str): Bool {
     var i: Int = 0
     while (i < entries.size()) {
@@ -392,13 +327,9 @@ fun resHas(entries: *List<ResourceItem>, key: *Str): Bool {
     return false
 }
 
-// ---- the C++ literal ------------------------------------------------------
-
-// `text` as the C++ narrow string literal the emitter pools it as. Every resource's bytes
-// are written from *here*, so the pool, its length index and the program's own view of the
-// text agree: the escapes below are exactly the ones `cgLiteralByteLength` counts as one
-// byte each, and nothing else in the text is touched (a control byte the language has no
-// escape for is written as it is, which C++ accepts).
+// `text` as the C++ narrow string literal the emitter pools it as. The escapes must be
+// exactly the ones `cgLiteralByteLength` counts as one byte each, since the pool and the
+// program's view of the text are built from this same spelling.
 fun resQuoteLiteral(text: *Str): Str {
     var out: Str = "\""
     var i: Int = 0

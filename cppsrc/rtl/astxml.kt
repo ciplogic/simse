@@ -1,19 +1,10 @@
 // astxml.kt
 //
-// The compiler's AST node type (impl_specs/ast-xmlnode.md): the `XmlNode` schema
-// with the two stringly-typed parts - the node's role and an attribute's key -
-// replaced by enums. Declarations only: the concrete types and their constructors
-// live in cppsrc/rtl/astxml.hpp, and the text of each enum member (the role and
-// attribute names of the schema) belongs to the dump, `ast::astNodeKindText` /
-// `ast::astNodeAttributeText` in cppsrc/ast/Ast.cpp.
+// The compiler's AST node type (impl_specs/ast-xmlnode.md): the `XmlNode` schema with its
+// two stringly-typed parts - a node's role and an attribute's key - replaced by enums.
+// Declarations only; the concrete types and constructors live in `cppsrc/rtl/astxml.hpp`.
 //
-// It is a prelude type rather than a compiler-package one so both rings share one
-// definition: the Simse pipeline passes `AstXmlNode` trees around exactly like the
-// hand-written ring's `ast::toXmlNode` builds them for the differentials, and a
-// data class declared in a program package would be emitted instead of mapped.
-//
-// `AstNodeKind.None` is the absent sentinel (the schema has no null): a missing
-// optional child is a node whose role is `None`.
+// `AstNodeKind.None` is the absent sentinel: a missing optional child has role `None`.
 
 package rtl
 
@@ -56,8 +47,7 @@ enum class AstNodeKind {
     Arg
 }
 
-// An attribute's key: the schema's attribute names. The category (`kind`) is not
-// here: it is a field of the node, not an attribute.
+// An attribute's key: the schema's attribute names.
 enum class AstNodeAttributeKind {
     Line,
     Column,
@@ -69,13 +59,9 @@ enum class AstNodeAttributeKind {
     HasNativeSymbol,
     NativeSymbol,
 
-    // An `@SmGen` attribute (specs/attributes.md, impl_specs/generators.md): the
-    // attribute's own name (`SmGen`, and later the sugar `Json`), the generator it names
-    // - the attribute's *first* argument, `cpp` for `native(...)` - and the generator's
-    // remaining arguments in order, joined by `,`. A string literal is stored without
-    // its quotes (the parser's `attrLiteralText`), because a generator reads a name, a
-    // key or a symbol. `native(...)` is the `cpp` form, so a `native` declaration
-    // carries these too.
+    // An `@SmGen` attribute (specs/attributes.md): `Attribute` is its own name, `Generator`
+    // its first argument, `GeneratorArgs` the rest, joined by `,`. A string literal is
+    // stored without its quotes, because a generator reads a name or a symbol.
     Attribute,
     Generator,
     GeneratorArgs,
@@ -88,11 +74,8 @@ enum class AstNodeAttributeKind {
     HasValue
 }
 
-// What a node is - the schema's `kind` - as opposed to its role (`AstNodeKind`,
-// where it sits). The two are independent: re-rooting a node under a new role
-// keeps its category, so a node carries both, and the category is a field rather
-// than an attribute so every test on it is an integer compare. `None` means the
-// node has no `kind` (a `Field`, a `Param`, a container, ...).
+// What a node is - the schema's `kind` - as against its role (`AstNodeKind`, where it
+// sits). The two are independent, and `None` means the node has no `kind`.
 enum class AstNodeCategory {
     None,
     Module,
@@ -145,16 +128,16 @@ enum class AstNodeCategory {
     TypeYield
 }
 
-// One attribute: a key from the schema and its text value (numbers as decimal
-// text, booleans as "true"/"false"), so a node's scalars stay stringly typed.
+// One attribute: a schema key and its text value (numbers as decimal text, booleans as
+// "true"/"false"), so a node's scalars stay stringly typed.
 data class AstNodeAttribute(
     var name: AstNodeAttributeKind,
 
     var value: Str
 )
 
-// One AST node: its role, its category, its attributes, and its children - one
-// ref-counted `Array<AstXmlNode>` whose shared empty array is what a leaf holds.
+// One AST node: role, category, attributes, children. `Children` is one ref-counted
+// `Array<AstXmlNode>`; a leaf holds the shared empty array.
 data class AstXmlNode(
     var name: AstNodeKind,
 

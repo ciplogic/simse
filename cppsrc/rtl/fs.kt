@@ -1,15 +1,12 @@
 // fs.kt
 //
-// Filesystem/IO prelude declarations for the self-hosted compiler driver (T23). The C++ is
-// *generated*, not linked: each declaration names its symbol in the `fileio` section of
-// cppsrc/rtl/_res.md, which carries both the prototype and the definition, so a program that
-// uses one of these stays one translation unit (`impl_specs/native-interop.md`). This file is
-// loaded as part of the prelude set, so the driver can use these without an import.
+// Filesystem/IO prelude declarations for the compiler driver. Each names its symbol in the
+// `fileio` section of `cppsrc/rtl/_res.md`, so a program that uses one stays a single
+// translation unit (impl_specs/native-interop.md).
 
 package rtl
 
-// Every `ext`-suffixed file under `dir`, recursively, sorted; empty when `dir` is
-// not a directory. Matches `common::filesInDir`.
+// Every `ext`-suffixed file under `dir`, recursively, sorted; empty if `dir` is not a directory.
 @SmGen("res", "fileio", "simse_listFiles")
 fun listFiles(dir: Str, ext: Str): List<Str>
 
@@ -32,34 +29,24 @@ fun pathExists(path: Str): Bool
 @SmGen("res", "fileio", "simse_eprintln")
 fun eprintln(text: Str): Unit
 
-// ---- reading a file line by line -------------------------------------------
-
-// `FileStream` is an open file read one line at a time. The handle is a raw
-// pointer: `openFileStream` creates it (and returns null when the file cannot be
-// opened), `close` releases it. The struct is cppsrc/rtl/filestream.hpp and the
-// operations below are its methods, defined in the `filestream` section of
-// cppsrc/rtl/_res.md; Simse code only holds the handle.
+// `FileStream` is an open file read one line at a time. The handle is a raw pointer:
+// `openFileStream` creates it (null when the file cannot be opened), `close` releases it.
 //
-// A stream should be read with ONE of the three reads below: `readLine` leaves the
-// file position after what it read, and the other two share a readahead buffer, so
-// mixing them skips bytes.
+// Read with ONE of the three reads below: `readLine` leaves the position after what it
+// read, while the other two share a readahead buffer, so mixing them skips bytes.
 data class FileStream()
 
-// The convenient read: the next line without its line ending, or an empty `Opt` at
-// end of file. Every call hands back a fresh `Str`, which allocates when the line is
-// longer than `Str`'s inline capacity - a hot loop wants `readLineInto`.
+// The next line without its line ending, or an empty `Opt` at end of file. Allocates a
+// fresh `Str` per call; a hot loop wants `readLineInto`.
 @SmGen("res", "filestream", "simse_fileStream_readLine")
 fun readLine(this: *FileStream): Opt<Str>
 
-// The fast read: the next line into `buffer` (reused across calls), `false` at end
-// of file. No line copy beyond one `memcpy` into the caller's own `Str`.
+// The next line into `buffer` (reused across calls), `false` at end of file.
 @SmGen("res", "filestream", "simse_fileStream_readLineInto")
 fun readLineInto(this: *FileStream, buffer: *Str): Bool
 
-// The in-place read: the next line as a `StrView` (`Span<Char>`) into the stream's
-// readahead buffer, or an empty `Opt` at end of file. Nothing is copied, so the span
-// is valid only until the next read on this stream (a refill moves the bytes) - keep a
-// copy with `line.toString()` when the line must outlive it.
+// The next line as a `StrView` into the stream's readahead buffer, or an empty `Opt` at
+// end of file. Valid only until the next read on this stream; copy with `toString()`.
 @SmGen("res", "filestream", "simse_fileStream_readLineView")
 fun readLineView(this: *FileStream): Opt<StrView>
 
@@ -69,6 +56,6 @@ fun openFileStream(path: Str): *FileStream
 @SmGen("res", "filestream", "simse_fileStream_close")
 fun close(this: *FileStream): Unit
 
-// The file's size in bytes (0 when it is unknown), for throughput reporting.
+// The file's size in bytes (0 when unknown), for throughput reporting.
 @SmGen("res", "filestream", "simse_fileStream_bytes")
 fun fileSize(this: *FileStream): Int64

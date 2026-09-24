@@ -1,10 +1,7 @@
 // Scanner.kt
 //
-// The Simse-language scanner: token kinds, matcher functions, and the Scanner
-// type. It mirrors cppsrc/lex/Scanner.h and cppsrc/lex/Scanner.cpp so that the
-// C++ scanner can tokenize this file as a self-scan fixture.
-//
-// StrView lives in cppsrc/rtl/Span.kt (the RTL's borrowed view).
+// The Simse-language scanner: token kinds, matcher functions, and the `Scanner` type.
+// `StrView` is the RTL's borrowed view (`cppsrc/rtl/StrView.kt`).
 
 package lex
 
@@ -96,13 +93,8 @@ fun matchAllOfRules(view: StrView, first: CharPredicate, rest: CharPredicate): I
     return view.size()
 }
 
-// ---- the scanner's tables -------------------------------------------------
-//
-// The tables are static storage (specs/statics.md): the generated pass builds each
-// one once, before `main`'s body, and the hot paths read them through a raw
-// pointer (`*List<T>`) - not a value, not a counted `&` reference - so matching a
-// keyword or an operator copies nothing. A `List<Str>`-returning accessor rebuilt
-// the table per call, and `matchOperator` runs for every token.
+// Static storage (specs/statics.md), read through a raw pointer (`*List<T>`) so matching copies
+// nothing; a `List<Str>`-returning accessor would rebuild the table per call.
 
 var reservedWordTable: List<Str> = makeReservedWords()
 var multiCharOperatorTable: List<Str> = makeMultiCharOperators()
@@ -118,8 +110,8 @@ fun makeReservedWords(): List<Str> {
 }
 
 fun makeMultiCharOperators(): List<Str> {
-    // Longest first where one entry starts another (`>>=` before `>>`): the lookup returns
-    // the first entry the view starts with.
+    // Longest first where one entry starts another (`>>=` before `>>`): the lookup returns the
+    // first entry the view starts with.
     var operators: List<Str> = listOf<Str>(
         "->", "==", "!=", "<=", ">=", "&&", "||", "+=", "-=", "*=", "/=", "%=",
         "&=", "|=", "^=", "<<=", ">>=", "<<", ">>",
@@ -128,16 +120,8 @@ fun makeMultiCharOperators(): List<Str> {
     return operators
 }
 
-// The scanner's one table comparison: how much of `view` the table matches, or 0.
-// `exact` requires the whole view to be an entry (a reserved word); without it the
-// first entry `view` starts with wins (a multi-character operator).
-//
-// The cheap tests come first - the view's first character, then the entry's
-// length, then (for a reserved word) the exact length - and only a surviving
-// entry is compared character by character. The entry is reached through a raw
-// pointer into the table (`table[i]` would copy the `Str`), and the comparison
-// takes that pointer too (`StrView.startsWithPtr`), so no call here copies text.
-// Both lookups share this function and the tables above.
+// How much of `view` the table matches, or 0. `exact` requires the whole view to be an entry
+// (a reserved word); without it the first entry `view` starts with wins (a multi-char operator).
 fun tableMatch(view: StrView, table: *List<Str>, exact: Bool): Int {
     if (view.size() == 0) {
         return 0
@@ -203,9 +187,8 @@ fun matchIdentifier(view: StrView): Int {
     return matchAllOfRules(view, isAlpha, isAlphaOrDigit)
 }
 
-// An `@Identifier` attribute token (specs/attributes.md): `@` immediately followed by
-// a name. The token's text keeps the `@` (it is the matched slice), so a dump shows
-// what was written; the parser strips it.
+// `@Identifier` (specs/attributes.md). The token's text keeps the `@` (it is the matched
+// slice); the parser strips it.
 fun matchAttribute(view: StrView): Int {
     if (view.size() < 2 || view.at(0) != '@') {
         return 0
@@ -330,8 +313,7 @@ fun matchOperator(view: StrView): Int {
     return 0
 }
 
-// The parameters are read and written only; pointers avoid copying the caller's
-// list (a `TokenMatcher` holds a `Func`, which is not free to copy).
+// Pointers avoid copying the caller's list (`TokenMatcher` holds a `Func`, not free to copy).
 fun addRule(rules: *List<TokenMatcher>, tokenKind: TokenKind, match: MatchLenFunc): Unit {
     rules.append(TokenMatcher(tokenKind, match))
 }
@@ -355,10 +337,8 @@ fun getTokenRules(): *List<TokenMatcher> {
     return * tokenRuleTable
 }
 
-// Escapes the first `maxLen` bytes of `view` for a single-line diagnostic:
-// backslash, newline, carriage return, and tab get backslash escapes; printable
-// ASCII (32..126) is kept; every other byte (including >= 127) becomes \xNN with
-// two uppercase hex digits. Bytes are treated as unsigned.
+// Escapes the first `maxLen` bytes for a single-line diagnostic: printable ASCII (32..126)
+// kept, every other byte as \xNN with two uppercase hex digits, bytes unsigned.
 fun escapedSnippet(view: StrView, maxLen: Int): Str {
     val hexDigits: Str = "0123456789ABCDEF"
     var snippet: Str = Str()
@@ -397,7 +377,6 @@ fun escapedSnippet(view: StrView, maxLen: Int): Str {
     return snippet
 }
 
-// Mirrors the C++ scanner's std::to_string concatenation.
 fun unexpectedCharacterMessage(line: Int, column: Int, snippet: *Str): Str {
     return fmtStr("|:|: Unexpected character: '|'", line.toString(), column.toString(), snippet)
 }
@@ -417,9 +396,8 @@ data class Scanner(
         this.column = 1
     }
 
-    // Advances `pos` by `count` characters, updating line/column one character
-    // at a time. A newline is '\n', or '\r' not immediately followed by '\n'
-    // (so CRLF counts once). Tabs count as a single column.
+    // A newline is '\n', or '\r' not immediately followed by '\n' (so CRLF counts once); tabs
+    // count as a single column.
     fun advance(count: Int): Unit {
         var i = 0
         while (i < count) {
@@ -438,11 +416,9 @@ data class Scanner(
 
     fun nextToken(): Res<Token> {
         while (this.pos < this.source.size()) {
-            // A raw pointer to the scanner's own `source`; the view must not
-            // copy or count the text (see cppsrc/rtl/span.hpp).
+            // A view of the scanner's own `source`, not a copy (`cppsrc/rtl/StrView.kt`).
             val view: StrView = spanOfStr(this.source).slice(this.pos)
-            // The pointer form: a matcher is a value, so the index walk copied one per
-            // rule per token position, and the matcher itself is reached through it.
+            // Pointer form: a matcher is a value, so an index walk would copy one per rule.
             for (*rule in this.rules) {
                 val matchLength: Int = rule.match(view)
                 if (matchLength > 0) {
@@ -459,8 +435,7 @@ data class Scanner(
     }
 }
 
-// Reads `fileName`, scans it to end of input, and collects every token up to
-// (but not including) the Eof token. Returns the scanning error, if any.
+// Every token up to (not including) Eof, or the scanning error.
 fun readFileAsTokens(scanner: *Scanner, fileName: *Str): Res<List<Token>> {
     val content: Str = readFile(fileName)
     scanner.setSource(content)

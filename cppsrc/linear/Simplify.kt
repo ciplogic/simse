@@ -1,20 +1,9 @@
 // Simplify.kt
 //
-// Peephole simplification of the linear form produced by `linLowerBody`, ported
-// from cppsrc/linear/Simplify.cpp (impl_specs/linear-lowering.md). The rules are
-// semantics-preserving and deliberately simple; they exist so the emitted code
-// stays close to the structured code it came from.
-//
-//   goto L; L:;                    -> L:;
-//   if (c) goto L; L:;             -> L:;
-//   ifTrue (c) goto A; goto B; A:; -> ifFalse (c) goto B;
-//   goto L; <unreachable> L:;      -> goto L; L:;
-//   L:; (nothing jumps to it)      -> (removed)
-//   { {op} op }                    -> { op op }   (a block no jump crosses a
-//                                                   declaration of; `linFlattenBlocks`)
-//
-// Runs to a fixed point (dropping a jump can make a label unused, and dropping
-// statements can expose another jump-to-next or an unreachable run).
+// Peephole simplification of the linear form (impl_specs/linear-lowering.md): drops a jump
+// to the next label, folds `ifTrue (c) goto A; goto B; A:` into `ifFalse (c) goto B;`, and
+// drops an unreachable run and a label nothing jumps to. Runs to a fixed point, since a
+// dropped jump or statement can expose another fold.
 package linear
 
 import common
@@ -42,27 +31,19 @@ fun linIsBlock(stmt: *AstXmlNode): Bool {
     return xmlKind(stmt) == AstNodeCategory.StmtBlock
 }
 
-// The statements of a `StmtBlock` (its `Body` child's `Stmt` children). A caller that
-// only *reads* them walks the block in place instead (`linCollectJumpTargets` /
-// `linStmtCrosses`): this form copies every statement of the block, and the walks run
-// once per sequence, not once per statement.
+// The statements of a `StmtBlock`. A caller that only *reads* them walks the block in
+// place (`linCollectJumpTargets`/`linStmtCrosses`): this form copies each statement.
 fun linBlockStmts(stmt: *AstXmlNode): List<AstXmlNode> {
     return xmlChildren(xmlChildPtr(stmt, AstNodeKind.Body), AstNodeKind.Stmt)
 }
 
-// A one-element list, for `exprReplaceRole`.
 fun linOne(node: *AstXmlNode): List<AstXmlNode> {
     return listOf<AstXmlNode>(node)
 }
 
-// ---- block flattening ------------------------------------------------------
-//
-// A region of the linear form is a statement sequence; the blocks left in it
-// exist only where a declaration needs a C++ scope, which is why the simplifier
-// folds every other block into its parent. A block *is* needed when splicing it
-// would move one of its declarations across a jump: C++ rejects a jump that skips
-// the initialization of a variable in scope at the label ([stmt.dcl]/3, MSVC
-// C2362), and the linear form is full of jumps.
+// A region of the linear form is a statement sequence; the blocks left in it exist only
+// where a declaration needs a C++ scope, because C++ rejects a jump that skips the
+// initialization of a variable in scope at the label (C2362).
 
 // Where a statement of the region lands once the block's body takes the block's
 // place in it.
@@ -73,9 +54,8 @@ fun linMergedIndex(p: Int, i: Int, len: Int): Int {
     return p + len - 1
 }
 
-// Whether a jump to `jumpName` taken at index `at` would skip the initialization
-// of a declaration the splice brings into the parent's scope and land past it -
-// the one thing C++ rejects about the splice.
+// Whether a jump to `jumpName` taken at `at` would skip a spliced declaration and land past
+// it - the one thing C++ rejects about the splice.
 fun linJumpCrosses(
     jumpName: *Str, at: Int, decls: *List<Int>, labelNames: *List<Str>,
     labelAt: *List<Int>
@@ -96,9 +76,8 @@ fun linJumpCrosses(
     return false
 }
 
-// Every jump inside `stmt` - each of them running after everything before the
-// top-level statement it sits in - tested against the spliced declarations. The
-// block's statements are walked in place (see `linStmtCrosses`).
+// Every jump inside `stmt`, tested against the spliced declarations; the block's statements
+// are walked in place.
 fun linStmtCrosses(
     stmt: *AstXmlNode, at: Int, decls: *List<Int>, labelNames: *List<Str>,
     labelAt: *List<Int>
@@ -123,10 +102,8 @@ fun linStmtCrosses(
     return false
 }
 
-// The same test for item `p` of a level. A block item's body is `bodies[p]` rather
-// than the body of `stmts[p]`: the wrapper node is built at the splice decision, so
-// `stmts[p]` still carries the tree it was parsed as, not the flattened one - the
-// scan has to see what the children left behind.
+// The same test for item `p`. A block's body is `bodies[p]`, not `stmts[p]`: the wrapper is
+// built only when the block survives, so `stmts[p]` still carries the parsed tree.
 fun linItemCrosses(
     stmts: *List<AstXmlNode>, bodies: *List<List<AstXmlNode>>, p: Int, at: Int,
     decls: *List<Int>, labelNames: *List<Str>, labelAt: *List<Int>
@@ -142,14 +119,9 @@ fun linItemCrosses(
     return false
 }
 
-// Whether the block at `i` can be spliced into `stmts`: after the splice the
-// block's own declarations are in the parent's scope, so the splice is legal
-// exactly when no jump `J` and label `L` satisfy `pos (J) < pos (D) <= pos (L)`
-// for a declaration `D` it brings up.
-//
-// The block's body comes from `bodies[i]`, not from `stmts[i]`: the wrapper node is
-// built only when the block *survives* (in `flattenPass`), so a spliced block never
-// pays for one.
+// Whether the block at `i` can be spliced into `stmts`: after the splice its declarations
+// are in the parent's scope, so it is legal exactly when no jump `J` and label `L` satisfy
+// `pos (J) < pos (D) <= pos (L)` for a declaration `D` it brings up.
 fun linSpliceIsSafe(stmts: *List<AstXmlNode>, bodies: *List<List<AstXmlNode>>, i: Int): Bool {
     val body: *List<AstXmlNode> = *bodies[i]
     val len: Int = body.size()
@@ -209,19 +181,9 @@ fun linSpliceIsSafe(stmts: *List<AstXmlNode>, bodies: *List<List<AstXmlNode>>, i
     return true
 }
 
-// Whether the statement - or anything inside the block it is - jumps to `name`. Read
-// through the block's nodes: `linBlockStmts` would copy every statement of the block,
-// and this scan runs once per *label* of the body.
-// Every name a jump in `stmts` targets, with blocks looked through: a jump to a label
-// may sit in any scope inside the sequence (the expression lowering wraps a jump in the
-// block that carries its temporaries, and `break`/`continue` jump out of the body they
-// are written in).
-//
-// `labelPass` is the only caller, and it used to ask a *scan* for one name (`jumpsTo`),
-// once per label - so the pass was quadratic in the sequence, with a `Str` compare per
-// statement. That is the widest hot spot the instrumented profile shows
-// (`linStmtJumpsTo` 1.85M calls, T78); collecting the targets once makes every label a
-// hash lookup instead.
+// Every name a jump in `stmts` targets, looking through blocks: a jump may sit in any scope
+// inside the sequence. Collected once per sequence - asking per label is quadratic
+// (`linJumpTargets`).
 fun linJumpTargets(stmts: *List<AstXmlNode>): Dictionary<Str, Bool> {
     var targets: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     var i: Int = 0
@@ -250,12 +212,8 @@ fun linCollectJumpTargets(stmt: *AstXmlNode, targets: *Dictionary<Str, Bool>): U
     }
 }
 
-// A label belongs to the sequence it sits in, but a jump to it may sit in any
-// scope inside that sequence: the expression lowering wraps a jump in the block
-// that carries its temporaries, and `break`/`continue` jump out of the body they
-// are written in. The scan therefore looks through blocks.
-// A copy of a conditional jump with a negated condition (IfTrue <-> IfFalse)
-// and a new target.
+// A copy of a conditional jump with a negated condition (IfTrue <-> IfFalse) and a new
+// target.
 fun linInvertedJump(jump: *AstXmlNode, target: *Str): AstXmlNode {
     var kind: AstNodeCategory = AstNodeCategory.StmtIfTrue
     if (xmlKind(jump) == AstNodeCategory.StmtIfTrue) {
@@ -278,29 +236,22 @@ data class LinSimplifier(
         var out: List<AstXmlNode> = List<AstXmlNode>()
         var i: Int = 0
         while (i < stmts.size()) {
-            // The *pointer* form: a statement is a value, so binding it by value here and
-            // appending the binding copied every statement twice per pass.
             val stmt: *AstXmlNode = *stmts[i]
             if ((linIsGoto(stmt) || linIsCondJump(stmt)) && i + 1 < stmts.size()
                 && linIsLabel(stmts[i + 1])
                 && xmlAttr(stmts[i + 1], AstNodeAttributeKind.Name) == xmlAttr(stmt, AstNodeAttributeKind.Name)
             ) {
-                // A jump to the statement right after it does nothing.
                 this.changed = true
                 i = i + 1
             } else if (linIsCondJump(stmt) && i + 2 < stmts.size() && linIsGoto(stmts[i + 1])
                 && linIsLabel(stmts[i + 2])
                 && xmlAttr(stmts[i + 2], AstNodeAttributeKind.Name) == xmlAttr(stmt, AstNodeAttributeKind.Name)
             ) {
-                // `ifTrue (c) goto A; goto B; A:` is `ifFalse (c) goto B;`. The
-                // label A stays in the stream and is dropped below if nothing
-                // else jumps to it.
                 out.append(linInvertedJump(stmt, xmlAttr(stmts[i + 1], AstNodeAttributeKind.Name)))
                 this.changed = true
                 i = i + 2
             } else {
                 out.append(stmt)
-                // Nothing before the next label can be reached.
                 if (linIsTerminator(stmt)) {
                     while (i + 1 < stmts.size() && !linIsLabel(stmts[i + 1])) {
                         this.changed = true
@@ -314,8 +265,8 @@ data class LinSimplifier(
     }
 
     fun labelPass(stmts: *List<AstXmlNode>): List<AstXmlNode> {
-        // A label nothing jumps to is dropped. The targets are collected *once* for the
-        // sequence - asking per label was the quadratic scan `linJumpTargets` documents.
+        // A label nothing jumps to is dropped; the targets are collected once for the
+        // sequence (`linJumpTargets`).
         val targets: Dictionary<Str, Bool> = linJumpTargets(stmts)
         var out: List<AstXmlNode> = List<AstXmlNode>()
         var i: Int = 0
@@ -331,15 +282,10 @@ data class LinSimplifier(
         return out
     }
 
-    // Folds nested blocks into the parent sequence. Children come first: a spliced
-    // child is what makes its parent's declarations cross jumps, so the parent is
-    // judged on the body its children leave behind.
-    //
-    // A block's flattened body is computed up front but its *node* is not: it is built
-    // in the one branch where the block survives the splice, so a spliced block never
-    // pays for a fresh node. That is also why the decisions are a batch below - each
-    // one reads the block bodies of the *other* items in this sequence, so all of them
-    // have to be in place before any is used.
+    // Folds nested blocks into the parent sequence. Children come first: a spliced child is
+    // what makes its parent's declarations cross jumps, so the parent is judged on the body
+    // its children leave behind. A block's flattened body is computed up front but its node
+    // is built only where the block survives, so the splice decisions are read as a batch.
     fun flattenPass(stmts: *List<AstXmlNode>): List<AstXmlNode> {
         val count: Int = stmts.size()
         var bodies: List<List<AstXmlNode>> = List<List<AstXmlNode>>(count)
@@ -373,8 +319,8 @@ data class LinSimplifier(
                     k = k + 1
                 }
             } else if (linIsBlock(stmts[i])) {
-                // The block stays: it exists because a declaration must not be spliced
-                // across a jump. This is the only node this pass builds.
+                // The block stays: a declaration must not be spliced across a jump; this is
+                // the only node this pass builds.
                 val bodyNode: AstXmlNode =
                     exprLike(xmlChildPtr(stmts[i], AstNodeKind.Body), bodies[i])
                 out.append(exprReplaceRole(stmts[i], AstNodeKind.Body, linOne(bodyNode)))
@@ -402,48 +348,27 @@ data class LinSimplifier(
     }
 }
 
-// ---- slot hoisting --------------------------------------------------------
+// Every declaration of a body - the lowering's temporaries and the program's `val`/`var`
+// alike - moves to the top of the body, and each initializer becomes an assignment where
+// the declaration stood. A declaration at the top is one no jump can bypass, which is what
+// the folding needs (C2362): after it, no block is left for a declaration's sake. The
+// initialization stays where it was, so evaluation order and side effects do not move.
 //
-// **Every** declaration of a body - the lowering's own temporaries (`_sm_expr<n>`,
-// `simse_sw_<n>`) and the program's `val`/`var` alike - moves to the top of the body, and
-// each initializer becomes an assignment where the declaration stood:
-//
-//     { Bool _sm_expr2 = i == 3; if (_sm_expr2) goto L4; }
-//       ->
-//     Bool _sm_expr2;                          (at the top of the body)
-//     ...
-//     _sm_expr2 = i == 3;
-//     if (_sm_expr2) goto L4;
-//
-// A declaration at the top of the body is a declaration no jump can bypass, which
-// is the one thing the folding needs (C2362), so this is what turns the linear form
-// into one flat sequence: after it, no block is left for a declaration's sake. The
-// initialization stays where it was, so evaluation order and side effects do not move;
-// what moves is where the storage is declared, which makes every slot of the body live
-// for the whole body (a bytecode frame's slots, without liveness reuse).
-//
-// It runs **after the type pass**, because a declaration has to keep the type that
-// pass proved - `auto x;` is not a declaration - so a declaration the inference could
-// not spell, and a machine's `..T` (no type to write), keep their place.
-//
+// Runs after the type pass: a declaration has to keep the type that pass proved (`auto x;`
+// is not a declaration), so one the inference could not spell keeps its place.
 
-// ---- one scope per body ----------------------------------------------------
+// Hoisting gives a body one C++ scope, so a name must be unique *in the body*: the second
+// declaration of a name is renamed and the uses that resolve to it move with it, so a name
+// never changes what it means (impl_specs/linear-il.md). A generated name carries the
+// reserved `_sm_` prefix (`_sm_expr1`, `_sm_for1`), so a rename is never mistaken for a
+// source name.
 //
-// The hoisting below moves *every* declaration of a body to the top of it, so a body
-// has one scope. That is what makes a name have to be unique *in the body*: the language
-// lets two scopes reuse a name (shadowing), and one flat C++ scope cannot, so the second
-// declaration of a name is renamed - and the uses that resolve to it move with it, so a
-// name never changes what it means (impl_specs/linear-il.md, "the frame is flat"). A
-// generated name carries the `_sm_` prefix the language reserves for the compiler
-// (`_sm_expr1`, `_sm_for1`), so a rename is never mistaken for a name the program wrote.
-//
-// `reserved` is what the emitter has already put in the body's own C++ scope: the
-// parameters (and `self`), which are declared next to the hoisted storage.
+// `reserved` is what the emitter has already declared in that scope: the parameters and
+// `self`.
 
 data class SimRenameScope(var renamed: Dictionary<Str, Str>)
 
-// The same attributes with `Name` replaced (added when there is none): how a renamed
-// declaration and a rewritten use carry their new name.
+// The same attributes with `Name` replaced (added when absent).
 fun simNameAttrs(like: *AstXmlNode, name: *Str): List<AstNodeAttribute> {
     var attrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
     var found: Bool = false
@@ -461,9 +386,8 @@ fun simNameAttrs(like: *AstXmlNode, name: *Str): List<AstNodeAttribute> {
     return attrs
 }
 
-// Every name a body binds: the declarations of its statements, at any depth. A use of one
-// of those inside a lambda is the lambda's own wherever it stands, so the enclosing scopes
-// must not rewrite it, and the lambda's own pass is what names it.
+// Every name a body binds, at any depth. A use inside a lambda belongs to the lambda, so the
+// enclosing scopes must not rewrite it, and the lambda's own pass names it.
 fun simBoundNames(body: *AstXmlNode, bound: List<Str>): List<Str> {
     var names: List<Str> = bound
     val stmts: List<AstXmlNode> = xmlChildren(body, AstNodeKind.Stmt)
@@ -487,8 +411,6 @@ data class SimRenamer(
     fun renamedTo(name: *Str): Str {
         var i: Int = this.scopes.size() - 1
         while (i >= 0) {
-            // The scope is borrowed: a `SimRenameScope` holds a dictionary, so binding it
-            // by value copied that dictionary at every name the walk asks about.
             val scope: *SimRenameScope = *this.scopes[i]
             if (scope.renamed.has(name)) {
                 return scope.renamed.get(name).value()
@@ -498,11 +420,9 @@ data class SimRenamer(
         return ""
     }
 
-    // The name a shadowed declaration gets: `_sm_` and the original name, then the counter
-    // *after an underscore* - so a rename can never collide with a name the compiler
-    // generates itself (`_sm_expr1`, `_sm_base1`, `simse_sw_1`), which is the one thing a
-    // reserved prefix alone does not buy: `base2` renamed to `_sm_base2` would be the
-    // lowering's own place slot.
+    // The name a shadowed declaration gets: `_sm_` plus the original name, then the counter
+    // *after an underscore*, so a rename cannot collide with a name the compiler generates
+    // itself (`_sm_expr1`).
     fun shadowName(name: Str): Str {
         var n: Int = 2
         var candidate: Str = fmtStr("_sm_|_|", name, n.toString())
@@ -514,8 +434,8 @@ data class SimRenamer(
     }
 
     // One statement list: name its own declarations first - a use may stand before the
-    // declaration it means (`hoisting.kt`), and the scope answers for the whole list
-    // either way - then rewrite the list with that scope pushed.
+    // declaration it means, and the scope answers for the whole list either way - then
+    // rewrite the list with that scope pushed.
     fun inList(stmts: *List<AstXmlNode>): List<AstXmlNode> {
         var scope: SimRenameScope = SimRenameScope(Dictionary<Str, Str>())
         var emitted: List<Str> = List<Str>()
@@ -560,27 +480,23 @@ data class SimRenamer(
         return out
     }
 
-    // One node: its expressions rewritten, and the statement lists inside it named (or, in
-    // a lambda body, rewritten for uses only). The node is *borrowed*: the walk reads it and
-    // builds the rewritten one, and a by-value parameter copied every node of the body (and
-    // of every expression under it) once per pass.
+    // Its expressions rewritten and the statement lists inside it named (or, in a lambda
+    // body, uses only).
     fun rewrite(node: *AstXmlNode, nameNested: Bool): AstXmlNode {
         val kind: AstNodeCategory = xmlKind(node)
         val masked: Bool = kind == AstNodeCategory.ExprLambda
-        // Inside a lambda body this body names *nothing*: the lambda is a body of its own,
-        // so its declarations are its own pass's to name (the same rule the C++ ring's
-        // `rewriteUses(..., false)` states). Without this, two lambdas in one body that
-        // each declare the same local would see the *second* one renamed - the enclosing
-        // `used` had already seen the first - and the two rings would emit different
-        // names for the same program.
+        // Inside a lambda body this body names *nothing*: the lambda is a body of its own, so
+        // its declarations are its own pass's to name. Without this, two lambdas in one body
+        // that each declare the same local would see the *second* one renamed (the enclosing
+        // `used` had already seen the first).
         var nested: Bool = nameNested
         if (masked) {
             nested = false
         }
         if (masked) {
-            // A lambda is a body of its own, so its own declarations are not this body's
-            // to name - but a name it does not bind is captured from *this* body, and that
-            // is the name the scopes decide.
+            // A lambda is a body of its own, so its own declarations are not this body's to
+            // name - but a name it does not bind is captured from *this* body, and that is
+            // the name the scopes decide.
             var inner: SimRenameScope = SimRenameScope(Dictionary<Str, Str>())
             val params: List<Str> = xmlLambdaParams(node)
             var p: Int = 0
@@ -646,12 +562,10 @@ fun linRenameShadowed(body: *List<AstXmlNode>, reserved: *List<Str>): List<AstXm
     return renamer.inList(*body)
 }
 
-// Whether a declaration is one the hoisting can move: a declaration has to be writable
-// bare, and that needs its *whole* type - `auto x;` is not a declaration, and the
-// inference leaves some slots partly unknown (`*?`: a pointer to nothing it could
-// name). A machine's `..T` *is* spellable once the call that created it named the
-// class (`semMachineType`): an anonymous one still has no spelling, and its declaration
-// keeps the block it stands in.
+// Whether a declaration is one the hoisting can move: it must be writable bare, which needs
+// its whole type - `auto x;` is not a declaration, and the inference leaves some slots
+// partly unknown (`*?`). A machine's `..T` is spellable once the call that created it named
+// the class (`semMachineType`); an anonymous one keeps its block.
 fun linIsSpellableType(typeNode: *AstXmlNode): Bool {
     val kind: AstNodeCategory = xmlKind(typeNode)
     when (kind) {
@@ -707,12 +621,10 @@ fun linIsHoistable(stmt: *AstXmlNode): Bool {
     return linIsSpellableType(xmlChildPtr(stmt, AstNodeKind.Type))
 }
 
-// One statement list rewritten: every declaration becomes an assignment (when it had an
-// initializer) and its declaration is collected for the top of the body - so the caller
-// learns whether anything moved from `decls` alone. Blocks keep their place (the folding
-// is what deals with them); a lambda is a body of its own, so the walk does not enter one.
-// A declaration *already* at the top of the list is not collected: it is where the
-// hoisting puts one, so collecting it again would be work it did not do.
+// One list rewritten: every declaration becomes an assignment (when it had an initializer)
+// and is collected in `decls` for the top of the body. Blocks keep their place; a lambda is
+// a body of its own, so the walk does not enter one. A declaration already at the top is not
+// collected - it is where the hoisting puts one.
 fun linHoistInList(stmts: *List<AstXmlNode>, decls: *List<AstXmlNode>, atTop: Bool): List<AstXmlNode> {
     var out: List<AstXmlNode> = List<AstXmlNode>()
     var i: Int = 0
@@ -731,10 +643,8 @@ fun linHoistInList(stmts: *List<AstXmlNode>, decls: *List<AstXmlNode>, atTop: Bo
                 val none: List<AstXmlNode> = List<AstXmlNode>()
                 decls.append(exprReplaceRole(stmt, AstNodeKind.Init, none))
             } else if (!atTop) {
-                // A declaration with nothing to initialize: it moves to the top for the
-                // same reason as the rest (a jump may not skip it - the default
-                // construction of a `Str` is an initialization too), and nothing is left
-                // where it stood.
+                // Nothing is left where it stood: a default construction is an
+                // initialization too, so a jump may not skip it.
                 val none: List<AstXmlNode> = List<AstXmlNode>()
                 decls.append(exprReplaceRole(stmt, AstNodeKind.Init, none))
             } else {
@@ -772,14 +682,11 @@ fun linHoistSlots(body: *List<AstXmlNode>): LinLowered {
     return LinLowered(hoisted, true)
 }
 
-// The second half of the pipeline for one function-like body, run once `semInferTypes` has
-// spelled the declarations: the shadowing is resolved (`linRenameShadowed`), the
-// declarations move to the top of the body (`linHoistSlots`), which is what lets the
-// folding fold the blocks the declarations forced, and the peephole gets another look at
-// the flatter body (a jump a block hid is a jump it can fold, and a folded jump can free a
-// label). The loop is the shape `linLowerForEmission` runs, with the hoisting in the place
-// of the rewriting stages - there is nothing left to rewrite. `reserved` is the names the
-// emitter has already declared in the body's own C++ scope (its parameters, `self`).
+// The second half of the pipeline for one body, run once `semInferTypes` has spelled the
+// declarations: shadowing resolved, declarations hoisted to the top (which lets the folding
+// fold the blocks they forced), then the peephole again. The loop is `linLowerForEmission`'s
+// shape with hoisting in place of the rewriting stages. `reserved` is what the emitter has
+// already declared in the body's scope (its parameters, `self`).
 fun linFinishForEmission(body: *List<AstXmlNode>, reserved: *List<Str>): List<AstXmlNode> {
     var current: List<AstXmlNode> = linRenameShadowed(body, reserved)
     var canChange: Bool = true
@@ -796,8 +703,8 @@ fun linFinishForEmission(body: *List<AstXmlNode>, reserved: *List<Str>): List<As
         val folded: LinLowered = linFlattenBlocks(current)
         current = folded.body
         canChange = canChange || folded.changed
-        // The linear form's own passes (cppsrc/optimizations): they rewrite the body in
-        // place - `current` is the list they saw - and answer whether it moved.
+        // The linear form's own passes (cppsrc/optimizations) rewrite the body in place and
+        // answer whether it moved.
         if (linOptimizeBody(*current)) {
             canChange = true
         }

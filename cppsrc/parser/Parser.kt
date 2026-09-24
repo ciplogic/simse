@@ -1,23 +1,18 @@
 // Parser.kt
 //
-// The grammar parser, ported from cppsrc/parser/Parser.cpp. It consumes tokens
-// from the scanner and builds an AstXmlNode tree using the schema in
-// impl_specs/ast-xmlnode.md, byte-for-byte compatible with ast::toXmlNode in
-// cppsrc/ast/Ast.cpp.
+// The grammar parser: it consumes tokens from the scanner and builds an AstXmlNode tree
+// (impl_specs/ast-xmlnode.md). Errors are recorded in `failed`/`error`; the entry points
+// return Res.err with a positioned message.
 //
-// Iteration uses `Span<Token>` (there is no range-for, and the parser's token
-// window is a span over the scanner's list: `slice(1)` advances it). Errors are
-// recorded in `failed`/`error`; the entry points return Res.err with a positioned
-// message.
+// `for` and `when` are desugared here, so no stage downstream sees either.
 
 package parser
 
 import lex
 import common
 
-// An expression node plus the source position where the expression started. The
-// position is needed by parents (a Call/Index/Member/Binary node takes its
-// position from its callee/receiver/left operand).
+// The position travels with the expression: a parent node takes its own from the operand
+// it extends (callee, receiver or left).
 data class ExprNode(
     var node: AstXmlNode,
 
@@ -35,8 +30,6 @@ data class Parser(
     // The `>`s a `>>` closer left over: see `matchGenericCloser`.
     var pendingClosers: Int
 ) {
-
-    // ---- token cursor helpers ---------------------------------------------
 
     fun peek(offset: Int): Token {
         if (offset <= 0) {
@@ -108,12 +101,8 @@ data class Parser(
         return ""
     }
 
-    // One `>` of a type-argument list's closer. `>>` and `>>=` scan as single tokens (they
-    // are the shift operators), so a closer that finds one takes a single `>` out of it and
-    // remembers the rest: the closer of the list it is nested in takes that one without
-    // reading a token, which is what `List<List<Int>>` needs. What a `>>=` mostly is - the
-    // `>=` operator - is not something a closer can be asked for, so that one spelling is a
-    // diagnostic: write a space before the `=`.
+    // `>>` scans as one shift token, so a closer takes one `>` out of it and leaves the rest
+    // pending for the closer of the list it is nested in (`List<List<Int>>`). `>>=` is an error.
     fun checkGenericCloser(): Bool {
         if (this.pendingClosers > 0) {
             return true
@@ -146,11 +135,8 @@ data class Parser(
         }
     }
 
-    // The separator between a data class's fields: Kotlin's `,`
-    // (specs/declarations.md, "data class"). A `;` is accepted there too - it is what the
-    // sources used before the spelling was aligned with Kotlin, and it costs nothing to
-    // keep. Only the *field* list takes a comma: between statements and methods it is
-    // not a separator, because there it would read as an expression part.
+    // A data class's fields separate on `,` (or `;`); only the field list takes a comma,
+    // since between statements and methods one would read as an expression part.
     fun skipFieldSeparators(): Unit {
         while (this.checkKind(TokenKind.EndOfLine) || this.checkText(";") || this.checkText(",")) {
             this.advance()
@@ -168,8 +154,6 @@ data class Parser(
                 || this.checkText(";") || this.checkText("}")
     }
 
-    // ---- AstXmlNode builders -------------------------------------------------
-
     fun emptyNode(): AstXmlNode {
         return AstXmlNode(AstNodeKind.None, AstNodeCategory.None, List<AstNodeAttribute>(), Array<AstXmlNode>())
     }
@@ -178,8 +162,6 @@ data class Parser(
         return ExprNode(this.emptyNode(), 0, 0)
     }
 
-    // kind, line, column - the common prefix of most node attribute lists. The
-    // node's kind is a field (`AstNodeCategory`), so only the position is here.
     fun posAttrs(line: Int, column: Int): List<AstNodeAttribute> {
         var attrs: List<AstNodeAttribute> = listOf<AstNodeAttribute>(
             AstNodeAttribute(AstNodeAttributeKind.Line, line.toString()),
@@ -188,26 +170,20 @@ data class Parser(
         return attrs
     }
 
-    // Appends `child` under `parent` with the child's element role set to `role`.
-    // `parent` is a non-owning pointer, so the append replaces the caller's
-    // `Children` handle even though the node itself is not passed by value.
+    // `parent` is a non-owning pointer: the append replaces the caller's `Children` handle.
     fun attach(parent: *AstXmlNode, role: AstNodeKind, child: *AstXmlNode): Unit {
         xmlAddChild(parent, this.roleOf(child, role))
     }
 
-    // `child` under `role`, for a caller that is collecting a node's children itself:
-    // appending them one at a time through `xmlAddChild` rebuilds the whole children
-    // array per child (an append is an array-to-list-to-array round trip), so a node
-    // with k children costs O(k*k) - a call collects its callee and arguments this way
-    // and builds the array once.
+    // Sets `child`'s role without attaching it, for a caller collecting children itself:
+    // appending one at a time through `xmlAddChild` is O(k*k) for k children.
     fun roleOf(child: *AstXmlNode, role: AstNodeKind): AstXmlNode {
         var renamed: AstXmlNode = child
         renamed.name = role
         return renamed
     }
 
-    // A container node is one whose children are just `children`: the array is
-    // built once from the list rather than appended to per child.
+    // Children are built once from the list rather than appended to per child.
     fun container(name: AstNodeKind, children: *List<AstXmlNode>): AstXmlNode {
         return AstXmlNode(name, AstNodeCategory.None, List<AstNodeAttribute>(), children.toArray())
     }
@@ -225,12 +201,9 @@ data class Parser(
         xmlAddChildren(node, params)
     }
 
-    // ---- module -----------------------------------------------------------
-
     fun parseRoot(): AstXmlNode {
         this.skipSeparators()
-        // A mandatory, single, file-level `package a.b.c` as the first
-        // declaration. A second `package` is rejected by parseDecl.
+        // The mandatory file-level `package a.b.c`; a second one is rejected by parseDecl.
         var packageName: Str = ""
         if (!this.checkText("package")) {
             this.fail("expected 'package' declaration")
@@ -249,8 +222,6 @@ data class Parser(
         }
         this.skipSeparators()
 
-        // Every file declares exactly one package; the attribute is always
-        // present. Matches ast::toXmlNode.
         var attrs: List<AstNodeAttribute> = listOf<AstNodeAttribute>(
             AstNodeAttribute(AstNodeAttributeKind.Line, "1"),
             AstNodeAttribute(AstNodeAttributeKind.Column, "1"),
@@ -274,8 +245,6 @@ data class Parser(
         xmlAddChildren(root, decls)
         return root
     }
-
-    // ---- declarations -----------------------------------------------------
 
     fun parseImport(): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
@@ -329,10 +298,8 @@ data class Parser(
         return this.emptyNode()
     }
 
-    // An attributed declaration: `@SmGen("cpp", "sym") fun f(...)`
-    // (specs/attributes.md). The `@Name` is one token (`TokenKind.Attribute`) and the
-    // arguments are literals; only method declarations take attributes in this baseline,
-    // so the declaration that must follow is `fun`.
+    // `@SmGen("cpp", "sym") fun f(...)` (specs/attributes.md). Only method declarations take
+    // attributes, so `fun` must follow.
     fun parseAttributedDecl(): AstXmlNode {
         val attrToken: Token = this.advance()
         val attrText: Str = attrToken.text
@@ -360,8 +327,7 @@ data class Parser(
                 return this.emptyNode()
             }
         }
-        // An attribute rides on its own line - the declaration it belongs to starts on
-        // the next one - so the separator between the two is skipped.
+        // An attribute rides on its own line, so the separator before the declaration is skipped.
         this.skipSeparators()
         if (!this.checkText("fun")) {
             this.fail("expected 'fun' after an attribute")
@@ -370,10 +336,8 @@ data class Parser(
         return this.parseFunction(attrName, args)
     }
 
-    // A file-level `var`/`val`: static storage (specs/statics.md). The type is
-    // required (no inference) and the initializer is optional. The children are
-    // the same shape as a `Stmt.VarDecl`, so the emitters have one variable form;
-    // the role is `Var` because this is a declaration, not a statement.
+    // A file-level `var`/`val` (specs/statics.md): type required, initializer optional, and
+    // the shape matches a `Stmt.VarDecl` so the emitters have one variable form.
     fun parseStaticVar(): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
         val isVar: Bool = this.matchText("var")
@@ -474,8 +438,7 @@ data class Parser(
         }
 
         var methods: List<AstXmlNode> = List<AstXmlNode>()
-        // The body brace may stand on its own line (a formatter wraps the parameter list
-        // and leaves `{` behind it): a newline there is not a declaration boundary.
+        // The body brace may stand on its own line: a newline there is not a declaration boundary.
         this.skipNewlines()
         if (this.checkText("{")) {
             this.advance()
@@ -505,7 +468,7 @@ data class Parser(
     fun parseEnum(): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
         this.advance() // enum
-        // `enum class`, spelled the way `data class` is: there is no bare `enum`.
+        // `enum class`: there is no bare `enum`.
         if (!this.expectText("class")) {
             return this.emptyNode()
         }
@@ -645,11 +608,8 @@ data class Parser(
         return ""
     }
 
-    // `attrName`/`attrArgs` are the parsed `@SmGen` attribute, empty for a declaration
-    // without one (specs/attributes.md). A method that carries an attribute may be
-    // body-less, and its implementation belongs to the attribute's generator; a
-    // body-less method with no attribute has no implementation at all, which is what
-    // the `hasBody` check below rejects.
+    // `attrName`/`attrArgs` are the parsed attribute (specs/attributes.md). An attributed
+    // method may be body-less; a body-less method with no attribute has no implementation.
     fun parseFunction(attrName: *Str, attrArgs: *List<Str>): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
         var nativeSymbol: Str = ""
@@ -754,20 +714,13 @@ data class Parser(
             hasBody = true
         }
 
-        // What an attribute means: the declaration's C++ is the generator's, so there
-        // is no body to emit, and the generator names the symbol. `@SmGen("cpp", sym)`
-        // is the form `native(sym)` spells, so it fills the same attributes - which is
-        // what makes the two spellings one declaration. `native(sym)` is sugar for it
-        // (impl_specs/generators.md), so the attributes are filled the same way
-        // What an attribute means: the declaration's C++ is the generator's, so there
-        // is no body to emit, and the generator names the symbol. The attribute's
-        // arguments are kept as they were written (a string literal still has its
-        // quotes), because that is what the generator reads (`specs/attributes.md`).
+        // The attribute's C++ is the generator's, so there is no body to emit and the
+        // generator names the symbol; `@SmGen("cpp", sym)` and `native(sym)` fill the same
+        // attributes. The arguments are kept as written (a string keeps its quotes).
         var attributeName: Str = attrName
         var generatorName: Str = ""
         var generatorArgs: Str = ""
         if (attrName.size() > 0) {
-            // The attribute's first argument names the generator; the rest are its own.
             if (attrArgs.size() > 0) {
                 generatorName = attrLiteralText(attrArgs[0])
             }
@@ -782,20 +735,14 @@ data class Parser(
         }
         var isNative: Bool = false
         if (attributeName.size() > 0) {
-            // The generator owns the C++: nothing is emitted for the declaration itself,
-            // and a call reaches the symbol instead.
             isNative = true
             if (hasBody) {
                 this.setError(pos, "a method whose C++ is generated must not have a body")
                 return this.emptyNode()
             }
-            // The argument that names the C++ symbol a call reaches: `cpp` has no
-            // parameters of its own, so its symbol is the argument right after the
-            // generator's name; `res` names its section first, so its symbol is the
-            // third. `kt` names no symbol at all (its text is compiled from source).
-            // Whichever was written, the declaration carries the name as `NativeSymbol`,
-            // because a pass that reads the declaration without the emitter's tables
-            // reads it there - `linear`'s `listOf<T>` list literal is the one that does
+            // The symbol a call reaches: `cpp`'s is the argument after the generator name,
+            // `res`'s is the third (it names a section first), `kt`'s is none. Carried as
+            // `NativeSymbol` because a pass without the emitter's tables reads it there
             // (`ilIsListOf`).
             var symbolArg: Int = -1
             if (generatorName == "cpp") {
@@ -842,8 +789,6 @@ data class Parser(
         return node
     }
 
-    // ---- types ------------------------------------------------------------
-
     fun parseType(role: AstNodeKind): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
 
@@ -867,8 +812,7 @@ data class Parser(
             xmlAddChild(node, inner)
             return node
         }
-        // `..T`: the function's body yields `T`, so it is lowered to a state machine
-        // whose element type is `T` (impl_specs/yield.md).
+        // `..T`: lowered to a state machine whose element type is `T` (impl_specs/yield.md).
         if (this.matchText("..")) {
             val inner: AstXmlNode = this.parseType(AstNodeKind.Inner)
             if (this.failed) {
@@ -972,8 +916,7 @@ data class Parser(
             }
             out.append(arg)
             this.skipNewlines()
-            // A `>>` the argument's own list left over ends *this* list too: the closer is
-            // pending, not a token, and what follows the type is the caller's again.
+            // A pending closer ends this list too: what follows the type is the caller's again.
             if (this.checkGenericCloser()) {
                 break
             }
@@ -986,14 +929,10 @@ data class Parser(
         return out
     }
 
-    // ---- statements -------------------------------------------------------
-
     fun parseBlock(): List<AstXmlNode> {
         var body: List<AstXmlNode> = List<AstXmlNode>()
-        // A declaration's body brace may stand on its own line (`data class X(...)` then
-        // `{`): a newline before a `{` where a block is the only thing that can follow is
-        // not a statement boundary. Kotlin's rule, and why a Kotlin-kind formatter can be
-        // pointed at these files.
+        // A newline before a `{` where a block is the only thing that can follow is not a
+        // statement boundary (Kotlin's rule, and why a Kotlin formatter can be pointed here).
         this.skipNewlines()
         if (!this.expectText("{")) {
             return body
@@ -1009,9 +948,8 @@ data class Parser(
         return body
     }
 
-    // One source statement, appended to `out`. A statement *may* expand to more than
-    // one: `for` is a declaration plus the loop it runs (`parseFor`), and the
-    // declaration has to sit outside the loop. Matches `Parser::parseStmtInto`.
+    // One source statement appended to `out`, but a statement may expand to several: `for`
+    // is a declaration plus its loop, and the declaration must sit outside the loop.
     fun parseStmtInto(out: *List<AstXmlNode>): Bool {
         val text: Str = this.peek(0).text
         when (text) {
@@ -1077,8 +1015,7 @@ data class Parser(
             }
 
             "++", "--" -> {
-                // A step's value is the assignment's, so there is nothing for a *prefix* one
-                // to hand back: it has to stand on its own as a statement.
+                // A step's value is the assignment's, so a prefix one has nothing to hand back.
                 this.fail(fmtStr("`|` stands on its own as a statement (`i|`)", text, text))
                 return this.emptyNode()
             }
@@ -1090,10 +1027,8 @@ data class Parser(
             return this.emptyNode()
         }
         if (isStepOp(this.peek(0).text)) {
-            // `i++` / `i--`: the step forms, which are the compound assignment above with a
-            // `1` (specs/memory-model.md). A step reached anywhere else - inside an
-            // expression, or in the prefix position a statement starts with - is the
-            // diagnostic above, because the statement's value is what it would hand back.
+            // `i++`/`i--` are the compound assignment with a `1` (specs/memory-model.md);
+            // anywhere else a step is the diagnostic above.
             val step: Str = this.advance().text
             var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
             attrs.append(AstNodeAttribute(AstNodeAttributeKind.Op, stepAssignOp(step)))
@@ -1230,8 +1165,7 @@ data class Parser(
         return node
     }
 
-    // `subj == a || subj == b`: one condition for an arm, so an arm with several
-    // labels emits its body once and any expression is a legal label.
+    // One condition for an arm's labels, so their body is emitted once.
     fun whenCondition(subject: *Str, labels: *List<AstXmlNode>, pos: SourcePos): ExprNode {
         var cond: ExprNode = this.binaryExprAt(
             "==", this.nameExprAt(subject, pos),
@@ -1249,26 +1183,18 @@ data class Parser(
         return cond
     }
 
-    // `when` (specs/functions.md): the language's selection statement, in Kotlin's
-    // spelling and with Kotlin's semantics, desugared right here to the `if`/`else`
-    // chain it means - so nothing downstream knows what a `when` is:
+    // `when` (specs/functions.md): desugared here to the `if`/`else` chain it means, so
+    // nothing downstream knows what a `when` is.
     //
-    //   when (kind) {
-    //       Kind.A, Kind.B -> { body1 }
-    //       Kind.C -> { body2 }
-    //       else -> { body3 }
-    //   }
-    //     ->
+    //   when (kind) { A, B -> { body1 }; C -> { body2 }; else -> { body3 } }
+    //   ->
     //   var _sm_when1 = kind
-    //   if (_sm_when1 == Kind.A || _sm_when1 == Kind.B) { body1 }
-    //   else if (_sm_when1 == Kind.C) { body2 }
+    //   if (_sm_when1 == A || _sm_when1 == B) { body1 }
+    //   else if (_sm_when1 == C) { body2 }
     //   else { body3 }
     //
-    // The subject is bound to a name of the template's own (as `for` binds the
-    // machine): the source evaluates it once, so the chain must too. The arm bodies
-    // are blocks, `else` is the last arm, and arms do not fall through - which is what
-    // makes a `break`/`continue` inside an arm the enclosing loop's, as in Kotlin.
-    // Matches `Parser::parseWhen`.
+    // The subject binds to the template name because the chain must evaluate it once; arms
+    // do not fall through, so a `break`/`continue` in one is the enclosing loop's.
     fun parseWhen(out: *List<AstXmlNode>): Bool {
         val pos: SourcePos = this.peek(0).pos
         this.advance() // when
@@ -1288,14 +1214,12 @@ data class Parser(
         }
         this.skipSeparators()
 
-        // The template's own name for the subject, before the arms are parsed: a nested
-        // `for`/`when` in an arm body takes the next id (both rings number the same way).
+        // Bound before the arms are parsed, so a nested `for`/`when` in an arm takes the next id.
         val subjectName: Str = "_sm_when" + this.nextTemplateId.toString()
         this.nextTemplateId = this.nextTemplateId + 1
 
-        // One `if` per arm, in source order, plus the `else` arm's statements as the
-        // chain's tail. The nodes are linked afterwards, because `else if` is an `if`
-        // in the previous arm's else body.
+        // One `if` per arm in source order, the `else` arm's statements as the tail. The
+        // nodes are linked afterwards, because `else if` is an `if` in the previous arm.
         var arms: List<AstXmlNode> = List<AstXmlNode>()
         var tail: List<AstXmlNode> = List<AstXmlNode>()
         var seenElse: Bool = false
@@ -1322,8 +1246,7 @@ data class Parser(
                 this.fail("'else' must be the last arm of a 'when'")
                 return false
             }
-            // `is`/`in`/a range are Kotlin's pattern labels; the language has `==`
-            // against a value and that is all `when` matches on today.
+            // `is`/`in` are Kotlin's pattern labels; `when` matches a value with `==` only.
             if (this.checkText("is") || this.checkText("in")) {
                 this.fail("'when' matches a value or 'else', not a pattern")
                 return false
@@ -1357,10 +1280,9 @@ data class Parser(
             return false
         }
 
-        // The chain is right-nested: each arm's else body holds the next `if`, and the
-        // `else` arm's statements are the last arm's else body. The tail goes on first:
-        // linking copies an arm into its predecessor's else body (nodes are values), so
-        // an arm has to be complete before it is copied.
+        // The chain is right-nested, and the tail goes on first: linking copies an arm into
+        // its predecessor's else body (nodes are values), so an arm must be complete before
+        // it is.
         if (seenElse && arms.size() > 0 && tail.size() > 0) {
             xmlAddChild(arms[arms.size() - 1], this.container(AstNodeKind.Else, tail))
         }
@@ -1375,7 +1297,7 @@ data class Parser(
         if (arms.size() > 0) {
             out.append(arms[0])
         } else {
-            // `else` was the only arm: its statements are the whole construct.
+            // `else` was the only arm, so its statements are the whole construct.
             var e: Int = 0
             while (e < tail.size()) {
                 out.append(tail[e])
@@ -1403,9 +1325,8 @@ data class Parser(
         return node
     }
 
-    // `yield e`: the value the state machine hands out (impl_specs/yield.md). A
-    // statement like `return`, and the state-machine pass replaces it - nothing
-    // downstream has to know what a yield is. Matches `Parser::parseYield`.
+    // The value the state machine hands out (impl_specs/yield.md); a `return`-like statement
+    // the state-machine pass replaces.
     fun parseYield(): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
         this.advance() // yield
@@ -1419,11 +1340,8 @@ data class Parser(
         return node
     }
 
-    // ---- the `for` desugaring ---------------------------------------------
-    //
-    // The builders below assemble the pieces the template needs. Every node they make
-    // carries the `for` token's position, so a diagnostic points at the line the user
-    // wrote; `Parser::parseFor` in the C++ ring builds the same shape the same way.
+    // Builders for the `for` desugaring below. Every node they make carries the `for`
+    // token's position, so a diagnostic points at the line the user wrote.
 
     fun varDeclNode(name: *Str, isVar: Bool, typeNode: *AstXmlNode, init: *ExprNode, pos: SourcePos): AstXmlNode {
         var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
@@ -1526,8 +1444,7 @@ data class Parser(
         return ExprNode(node, pos.line, pos.column)
     }
 
-    // `<target>.<wrap>()`: the wrap the `for` forms put around what they iterate
-    // (`iter`, or `iterPtr` for the `*v` form).
+    // The `<target>.<wrap>()` wrap a `for` puts around what it iterates (`iter`/`iterPtr`).
     fun iterCall(target: *ExprNode, pos: SourcePos, wrap: *Str): ExprNode {
         var memberAttrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
         memberAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, wrap))
@@ -1540,8 +1457,7 @@ data class Parser(
         return ExprNode(call, pos.line, pos.column)
     }
 
-    // `<target>.<field>`: what the machine last yielded (`current`), read as a member
-    // - the `for` template binds its loop variable straight from the field (`impl_specs/for.md`).
+    // What the machine last yielded (`current`): the `for` template's loop variable.
     fun memberExprAt(target: *Str, field: *Str, pos: SourcePos): ExprNode {
         var memberAttrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
         memberAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, field))
@@ -1566,36 +1482,24 @@ data class Parser(
         return ExprNode(call, pos.line, pos.column)
     }
 
-    // `for` (specs/functions.md). Two forms, and each of them in two flavours - binding
-    // each element, or binding a *pointer* to it (`for (*v in c)`, `for ((*v, i) in c)`) -
-    // all iterating a *state machine* (`..T`, what a `yield`ing function produces).
-    // Every form is lowered right here to the `while` it means - so no stage downstream
-    // sees a `for`, and `break`/`continue` inside one are the `while`'s own:
+    // `for` (specs/functions.md): two forms, each binding an element or a *pointer* to it,
+    // all iterating a state machine (`..T`). Lowered here to the `while` it means, so no
+    // stage downstream sees a `for` and `break`/`continue` inside are the `while`'s own.
     //
-    //   for (v in m) { body }          var _sm_for1 = m
-    //                                  while (_sm_for1.advance()) {
-    //                                      val v = _sm_for1.current
-    //                                      body
-    //                                  }
+    //   for (v in m) { body }       var _sm_for1 = m
+    //                               while (_sm_for1.advance()) {
+    //                                   val v = _sm_for1.current
+    //                                   body
+    //                               }
     //
-    //   for ((v, i) in m) { body }     the same, plus `var _sm_index1: Int = -1` before
-    //                                  the loop, the pre-increment as the body's first
-    //                                  statement, and `val i = _sm_index1` after `v`.
+    //   for ((v, i) in m) { ... }   the same, plus `var _sm_index1: Int = -1` before the
+    //                               loop, the pre-increment as the body's first statement,
+    //                               and `val i = _sm_index1` after `v`.
     //
-    // The machine holds what it yielded (`current`), so the loop variable is one read of
-    // it: the protocol builds nothing per element - no `Opt` to construct, ask
-    // `hasValue()` of and unwrap - and nothing is copied through a `value()` call either
-    // (`impl_specs/for.md`).
-    //
-    // The index is pre-incremented as the body's *first* statement rather than in the
-    // loop's condition: `continue` jumps to the condition, which is the machine's own
-    // `advance()` and so is evaluated again (the machine does move along), but an index
-    // incremented at the end of the body would miss that iteration. `-1` is what makes the
-    // pre-increment hand out 0 first. The names come from a per-file counter, so nested
-    // loops never collide and two runs produce the same output.
-    //
-    // `*v` differs only in the wrap: the machine's element is then `*T`, so `v` is the
-    // element's *place* rather than a copy of it (the prelude's `iterPtr`).
+    // The index pre-increments as the body's *first* statement, not in the condition:
+    // `continue` jumps to the condition, so a bump at the end of the body would miss that
+    // iteration, and `-1` makes the first one 0. The names come from the per-file
+    // `nextTemplateId` counter, so nested loops never collide and two runs agree.
     fun parseFor(out: *List<AstXmlNode>): Bool {
         val pos: SourcePos = this.peek(0).pos
         this.advance() // for
@@ -1651,11 +1555,8 @@ data class Parser(
         val machineName: Str = "_sm_for" + id.toString()
         val counterName: Str = "_sm_index" + id.toString()
 
-        // The iterated expression is wrapped in the invisible `iter()` call: a
-        // `for` iterates whatever has one, so a container walks itself in order and a
-        // machine passes through (impl_specs/for.md). It is a *member* call, because
-        // that is what binds the function's type parameter from the receiver - a plain
-        // `iter(x)` would leave the loop variable untyped.
+        // A *member* `iter()` call, not `iter(x)`: that is what binds the function's type
+        // parameter from the receiver, leaving the loop variable typed.
         var wrap: Str = "iter"
         if (valueIsPointer) {
             wrap = "iterPtr"
@@ -1688,8 +1589,6 @@ data class Parser(
         out.append(this.whileNode(this.methodCallAt(machineName, "advance", pos), loop, pos))
         return true
     }
-
-    // ---- expressions (Pratt) ----------------------------------------------
 
     fun parseExpr(minBindingPower: Int): ExprNode {
         var left: ExprNode = this.parseUnary()
@@ -1783,8 +1682,7 @@ data class Parser(
         if (this.failed) {
             return this.emptyExpr()
         }
-        // One list for the whole walk, cleared per call: the arguments of the call being
-        // parsed (they are copied into the node below), not one list per iteration.
+        // One list for the whole walk, cleared per call: the arguments of the call being parsed.
         var args: List<AstXmlNode> = List<AstXmlNode>()
         while (true) {
             if (this.matchText("(")) {
@@ -2058,10 +1956,7 @@ data class Parser(
     }
 }
 
-// ---- helpers --------------------------------------------------------------
-
-// The value of one attribute argument (specs/attributes.md): a string literal without
-// its quotes, or an integer literal as written.
+// A string literal without its quotes, or an integer literal as written (specs/attributes.md).
 fun attrLiteralText(text: Str): Str {
     if (text.size() >= 2 && text[0] == '\"' && text[text.size() - 1] == '\"') {
         return text.substr(1, text.size() - 2)
@@ -2090,8 +1985,7 @@ fun joinNames(names: *List<Str>): Str {
     return out
 }
 
-// Binding powers for the Pratt expression parser. Left-associative (the
-// recursive call uses bp + 1).
+// Pratt binding powers; left-associative (the recursive call uses bp + 1).
 fun binaryBindingPower(op: *Str): Int {
     when (op) {
         "||" -> {
@@ -2110,10 +2004,8 @@ fun binaryBindingPower(op: *Str): Int {
             return 40
         }
 
-        // The bitwise operators, in Python's and Rust's order: tighter than a comparison and
-        // looser than the shifts, so `a & b == c` is `(a & b) == c` and a bit test needs no
-        // parentheses. (C puts them the other way round, where it silently means
-        // `a & (b == c)` - the trap this order exists to avoid; Python's `&` beats `==` too.)
+        // Bitwise sit between comparison and shift, as in Python and Rust, so `a & b == c` is
+        // `(a & b) == c`; C's opposite order silently means `a & (b == c)`.
         "|" -> {
             return 43
         }
@@ -2148,20 +2040,16 @@ fun isAssignOp(op: *Str): Bool {
             || op == "<<=" || op == ">>="
 }
 
-// The step operators: `i++` and `i--`, which are statements rather than values.
 fun isStepOp(op: *Str): Bool {
     return op == "++" || op == "--"
 }
 
-// The compound assignment a step is: `i++` is `i += 1`, `i--` is `i -= 1`.
 fun stepAssignOp(op: *Str): Str {
     if (op == "++") {
         return "+="
     }
     return "-="
 }
-
-// ---- entry points ---------------------------------------------------------
 
 // Parses a pre-filtered token cursor (with a synthetic Eof already appended).
 fun parseModule(cursor: Span<Token>, fileName: *Str): Res<AstXmlNode> {
@@ -2173,11 +2061,8 @@ fun parseModule(cursor: Span<Token>, fileName: *Str): Res<AstXmlNode> {
     return Res<AstXmlNode>.ok(root)
 }
 
-// Parses a raw token list: drops Space/Comment tokens and appends a synthetic
-// Eof, matching the C++ parser's constructor. A newline inside `(...)` or `[...]`
-// separates nothing either: a condition or an argument list may be wrapped, and a
-// formatter is free to do it (Kotlin's rule, and the reason a Kotlin-kind formatter can
-// be pointed at these files, specs/declarations.md).
+// Drops Space/Comment tokens and appends a synthetic Eof. A newline inside `(...)` or
+// `[...]` separates nothing: the list may be wrapped (specs/declarations.md).
 fun parseModule(tokens: *List<Token>, fileName: *Str): Res<AstXmlNode> {
     var toks: List<Token> = List<Token>()
     var bracketed: Int = 0

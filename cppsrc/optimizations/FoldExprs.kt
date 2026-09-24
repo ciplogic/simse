@@ -1,24 +1,9 @@
 // FoldExprs.kt
 //
-// The shared half of the constant-folding passes (`PassFold*.kt`): what a literal is, how
-// one is built, and the one walk that offers every expression of a body to a rule.
-//
-// A **rule** is a named function `(*AstXmlNode) -> AstXmlNode` that answers the node it
-// was given when it has nothing to fold, and a different *kind* of node when it has. That
-// "the kind changed" test is the whole of the change protocol: every fold below turns an
-// operation into a literal (or a branch into a jump), so a rule that keeps the kind has
-// folded nothing, and a rule that changes it has - which is how a pass reports honestly
-// without comparing two nodes (a structural `==` over an AST is a deep walk).
-//
-// The walk is **bottom-up**: a node's children are rewritten first, so a rule sees a node
-// whose operands are already folded (`(2 + 3) * 4` folds the `2 + 3` on the way down and
-// the rule then sees a literal it can multiply). It is also *in place*: a rewritten child
-// replaces the child it stood as, in the statement list the pass was handed - which is
-// what `Optimize.kt` requires, since the pipeline keeps the list it passed.
-//
-// Two things the walk deliberately does not enter: a **lambda** (its body is lowered as a
-// body of its own, `LinearForm.ilLambdaLower`, so folding it here would fold a body the
-// lowering has not seen yet) and a **type** node (nothing in a type is an expression).
+// The shared half of the `PassFold*` passes: what a literal is, how one is built, and the walk
+// that offers a body's expressions to a rule. A rule answers its input unchanged when it folded
+// nothing, a different *kind* when it did - that kind test is the change protocol, so it reports
+// honestly without a deep `==`. Bottom-up, in place; a lambda and a type node are not entered.
 
 package optimizations
 
@@ -27,8 +12,7 @@ import linear
 
 // ---- literals --------------------------------------------------------------
 
-// The five literal kinds a fold can produce or read, as one tag. `Fold.None` (0) is what
-// a node that is not a literal answers.
+// The literal kinds a fold can produce or read; `None` is not a literal.
 enum class FoldKind {
     None,
     Int,
@@ -64,9 +48,8 @@ fun foldKindOf(e: *AstXmlNode): FoldKind {
     return FoldKind.None
 }
 
-// The literal's own text: `Text` for the numeric, char and string literals (a string
-// literal carries its quotes, a char literal its apostrophes), `Value` for a `Bool`
-// (`true`/`false`). Empty for anything that is not a literal.
+// The literal's own text: `Text` (a string keeps its quotes, a char its apostrophes), or
+// `Value` for a `Bool`.
 fun foldLiteralText(e: *AstXmlNode): Str {
     if (foldKindOf(e) == FoldKind.Bool) {
         return xmlAttr(e, AstNodeAttributeKind.Value)
@@ -77,8 +60,8 @@ fun foldLiteralText(e: *AstXmlNode): Str {
     return ""
 }
 
-// The position attributes, which every built node keeps from the node it replaces: a
-// source comment and a diagnostic still point at the line the writer wrote.
+// The position attributes a built node keeps from the node it replaces, so diagnostics still
+// point at the source.
 fun foldPosAttrs(like: *AstXmlNode): List<AstNodeAttribute> {
     return listOf<AstNodeAttribute>(
         AstNodeAttribute(AstNodeAttributeKind.Line, xmlLine(like).toString()),
@@ -86,9 +69,8 @@ fun foldPosAttrs(like: *AstXmlNode): List<AstNodeAttribute> {
     )
 }
 
-// `like`, as a literal of another kind: the role (`name`) is kept - it is the position the
-// emitter reads the node from, `Init`/`Value`/`Cond`/`Lhs` - and the kind, attributes and
-// children are the literal's.
+// `like` as a literal of another kind: the role (`name`) is kept - it is the position the
+// emitter reads from.
 fun foldAsLiteral(like: *AstXmlNode, kind: AstNodeCategory, text: Str): AstXmlNode {
     var node: AstXmlNode = AstXmlNode(like.name, kind, foldPosAttrs(like), Array<AstXmlNode>())
     node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Text, text))
@@ -109,16 +91,14 @@ fun foldBoolLit(like: *AstXmlNode, value: Bool): AstXmlNode {
     return node
 }
 
-// A string literal carries its own quotes: the emitter reads `Text` back as the *source
-// spelling* (`CgStringTable.cgLiteralByteLength` counts the escapes), so a fold has to
-// build `"..."` and not the bare text.
+// A string literal carries its own quotes, because the emitter reads `Text` back as source
+// spelling (`CgStringTable.cgLiteralByteLength`), so a fold builds `"..."`, not bare text.
 fun foldStrLit(like: *AstXmlNode, text: Str): AstXmlNode {
     return foldAsLiteral(like, AstNodeCategory.ExprStrLit, fmtStr("\"|\"", text))
 }
 
-// The integer a literal holds, or empty: a literal the language wrote as a number is
-// decimal digits, and one with anything else in it (a run the parser left alone) folds
-// nothing.
+// The integer a literal holds, or empty (a literal with anything but decimal digits folds
+// nothing).
 fun foldIntValue(e: *AstXmlNode): Opt<Int> {
     if (foldKindOf(e) != FoldKind.Int) {
         return Opt<Int>.none()
@@ -126,9 +106,8 @@ fun foldIntValue(e: *AstXmlNode): Opt<Int> {
     return xmlAttr(e, AstNodeAttributeKind.Text).toInt()
 }
 
-// Whether a comparison or arithmetic operator is one of the simple ones. `&&`/`||` are
-// *not*: the lowering turns a short-circuit into branches before any of these passes see
-// it, so an `ExprBinary` carrying one is not the shape this walk is for.
+// Whether an operator is one of the simple arithmetic ones; `&&`/`||` are not, since the lowering
+// turns a short-circuit into branches before these passes see it.
 fun foldArithOp(op: *Str): Bool {
     when (op) {
         "+", "-", "*", "/", "%", "&", "|", "^", "<<", ">>" -> {
@@ -149,22 +128,16 @@ fun foldCompareOp(op: *Str): Bool {
 
 // ---- the walk --------------------------------------------------------------
 
-// Whether the walk rewrote anything. A field of a node the pass hands around, so the
-// recursion can report without returning a pair.
+// Whether the walk rewrote anything; a field so the recursion can report without a pair.
 data class FoldState(
     var changed: Bool
 )
 
-// Every expression under `node`, through `rule`. Answers the node that stands in `node`'s
-// place: the node itself when nothing under it folded, a rebuilt node when a child did,
-// and the rule's own answer when the rule folds the node itself.
+// Every expression under `node` through `rule`; answers the node that stands in its place.
 fun foldExprsUnder(node: *AstXmlNode, rule: (*AstXmlNode) -> AstXmlNode, state: *FoldState): AstXmlNode {
     val kind: AstNodeCategory = xmlKind(node)
-    // **A fold produces a value, so it may not stand in a place.** Three positions in a
-    // linear body are places rather than values, and the walk does not enter any of them:
-    // a `Target` (where a statement writes), and the operand of a `&`/`*` (which is the
-    // storage itself - `stepByThree(*value)` over a folded `value` would write to a
-    // temporary, which is the bug `stress/compound-assign` caught).
+    // A fold produces a value, so it may not stand in a place: the walk does not enter a `Target`
+    // or the operand of `&`/`*` (the storage - folding it would write through a temporary).
     if (node.name == AstNodeKind.Target || kind == AstNodeCategory.ExprRef
         || kind == AstNodeCategory.ExprDeref
     ) {
@@ -176,9 +149,8 @@ fun foldExprsUnder(node: *AstXmlNode, rule: (*AstXmlNode) -> AstXmlNode, state: 
     ) {
         return node
     }
-    // A child that folds is a rebuild of its parent: `exprLike` copies the attributes and
-    // the role, so the parent keeps the position the emitter reads it from. The flag is
-    // read *before* the children so a fold deeper down is what says "rebuild me".
+    // A folded child rebuilds its parent; the flag is read before the children, so a fold deeper
+    // down is what says "rebuild me".
     val before: Bool = state.changed
     var kids: List<AstXmlNode> = node.Children.toList()
     var i: Int = 0
@@ -198,17 +170,15 @@ fun foldExprsUnder(node: *AstXmlNode, rule: (*AstXmlNode) -> AstXmlNode, state: 
     return here
 }
 
-// One statement list, every expression through `rule`; a statement whose rewritten form is
-// a different node replaces the one it stood as, in place.
+// One statement list, every expression through `rule`, written back in place.
 fun foldExprsInList(stmts: *List<AstXmlNode>, rule: (*AstXmlNode) -> AstXmlNode): Bool {
     var state: FoldState = FoldState(false)
     var i: Int = 0
     while (i < stmts.size()) {
         val before: Bool = state.changed
         val stmt: AstXmlNode = foldExprsUnder(*stmts[i], rule, *state)
-        // A statement whose *own* kind did not move is still a different node when
-        // something under it folded (the rebuilt children), so the write-back test is the
-        // flag and not the kind.
+        // A statement whose own kind did not move is still a different node when a child folded,
+        // so the write-back test is the flag and not the kind.
         if (state.changed != before) {
             stmts[i] = stmt
         }

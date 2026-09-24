@@ -1,50 +1,9 @@
 // Yield.kt
 //
-// `yield`: a body that yields is a state machine, produced by lowering
-// (impl_specs/yield.md). The mirror of cppsrc/linear/Yield.cpp.
-//
-// `yield` is **not a semantic feature**. The parser produces one statement kind for it,
-// and everything else is a *rewrite* - which is why nothing in sema, in the type pass or
-// in the emitter knows what a yield is:
-//
-//   fun everyOther(n: Int): ..Int {      struct everyOther_yieldable {
-//       var i: Int = 0                       Int branch{};
-//       while (i < n) {                      Int n{};
-//           if (i % 2 == 0) {                Int i{};
-//               yield i                      Opt<Int> next() {
-//           }                                    if (this->branch == -1) goto LYend;
-//           i = i + 1                            if (this->branch == 1) goto LY1;
-//       }                                        this->i = 0;            // branch 0
-//   }                                            ...
-//                                            LY1:;                        // resume here
-//                                            ...
-//                                            LYend:;
-//                                            this->branch = -1;
-//                                            return Opt<Int>::none();
-//                                        }
-//                                    };
-//
-// The rewrite runs on the *linear* body (after the lowering, so the control flow is
-// already labels and gotos and the yielded value is one operand) and after the type pass
-// (so a local has the type a field needs), in `linLowerYield`:
-//
-//   1. fields = `branch`, the parameters, and every local the body declares - except the
-//      lowering's own storage (`linIsSlotName`), which is per-statement and stays a local
-//      of the method;
-//   2. the dispatcher is a chain of conditional jumps, `if (branch == -1) goto LYend;`
-//      then `if (branch == n) goto LYn;` for every yield (branch 0 falls through, so it is
-//      the start) - there is no `switch` anywhere, since it would only be lowered to
-//      these jumps anyway;
-//   3. `yield e` becomes `branch = n; return Opt<T>.some(e); LYn:;` - the label *is* the
-//      resumption point - or, in `advance`, `*value = e; return true;`;
-//   4. a `return` (or the end of the body) finishes the machine:
-//      `branch = -1; return Opt<T>.none();` - `yield break`;
-//   5. a reference to a field - read or written - is `this.<name>`, so a name that lives
-//      across a yield lives in the instance.
-//
-// The generated statements carry no source position (the C++ ring's builders leave it
-// zeroed), so the emitter writes no `// file:line` comment for them and the two rings'
-// output stays identical.
+// `yield` is a rewrite, not a semantic feature (impl_specs/yield.md): a yielding body
+// becomes a state machine of `branch`/`this.<name>` fields, run on the linear body after
+// the type pass. The dispatcher is a chain of `if (branch == n) goto LYn;` jumps; a yield
+// stores and returns `Opt<T>.some(e)`, and a `return` closes the machine.
 
 package linear
 
@@ -64,8 +23,8 @@ data class YldParam(
     var typeNode: AstXmlNode
 )
 
-// The one way of advancing the machine: `advance()`, which steps it and answers whether
-// there was a value (`name` is the emitting caller's, `advance`).
+// One way of advancing the machine: `advance()`, which steps it and answers whether there
+// was a value.
 data class YldMethod(
     var name: Str,
 
@@ -80,8 +39,6 @@ data class Yielded(
     var methods: List<YldMethod>,
     var error: Str
 )
-
-// ---- node builders ---------------------------------------------------------
 
 fun yldExpr(kind: AstNodeCategory): AstXmlNode {
     return AstXmlNode(AstNodeKind.Expr, kind, List<AstNodeAttribute>(), Array<AstXmlNode>())
@@ -108,7 +65,7 @@ fun yldBoolLiteral(value: Bool): AstXmlNode {
 }
 
 // The statement with its children replaced, keeping its own kind, attributes and source
-// position: a rewritten statement stays the statement it was (the C++ ring's `copyWith`).
+// position.
 fun yldWithChildren(like: *AstXmlNode, children: *List<AstXmlNode>): AstXmlNode {
     var node: AstXmlNode = AstXmlNode(like.name, like.kind, like.attributes, Array<AstXmlNode>())
     var i: Int = 0
@@ -180,7 +137,7 @@ fun yldCall(callee: AstXmlNode, args: *List<AstXmlNode>): AstXmlNode {
 }
 
 // `Opt<T>.some(value)` / `Opt<T>.none()`: a static call on the RTL's optional, which the
-// emitter already spells (`Opt<Int>::some(...)`).
+// emitter spells (`Opt<Int>::some(...)`).
 fun yldOptionalCall(elementType: AstXmlNode, method: Str, args: *List<AstXmlNode>): AstXmlNode {
     var base: AstXmlNode = yldExpr(AstNodeCategory.ExprGenericName)
     base.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, "Opt"))
@@ -226,10 +183,8 @@ fun yldIsHandle(typeNode: *AstXmlNode): Bool {
     return kind == AstNodeCategory.TypeReference || kind == AstNodeCategory.TypePointer
 }
 
-// Whether a statement is one of the method's own declarations: the lowering's storage
-// (`_sm_expr<n>`), declared without an initializer at the top of the body (`linIsSlotName`
-// is the one place that is stated). A user's local became a field, so this is exactly the
-// set that stays with the method.
+// Whether a statement is one of the method's own storage declarations (`_sm_expr<n>`, no
+// initializer, at the top of the body); a user's local became a field.
 fun yldIsLocalDeclaration(stmt: *AstXmlNode): Bool {
     if (xmlKind(stmt) != AstNodeCategory.StmtVarDecl) {
         return false
@@ -240,15 +195,12 @@ fun yldIsLocalDeclaration(stmt: *AstXmlNode): Bool {
     return xmlIsEmpty(xmlChildPtr(stmt, AstNodeKind.Init))
 }
 
-// The machine's field for the receiver of an extension function (`_sm_self`). The
-// receiver is an ordinary parameter (`specs/functions.md`), so it lives in the instance
-// like every other value that crosses a yield; the emitter initialises the field from its
-// own `self` parameter.
+// The field for an extension function's receiver (`_sm_self`): the receiver is an ordinary
+// parameter (`specs/functions.md`), so it crosses a yield like any other value.
 fun yldReceiverField(): Str {
     return "_sm_self"
 }
 
-// `if (cond) goto label;`
 fun yldJumpWhen(cond: AstXmlNode, label: Str): AstXmlNode {
     return linCondJump(AstNodeCategory.StmtIfTrue, cond, label, 0, 0)
 }
@@ -266,21 +218,15 @@ fun yldBranchField(): Str {
     return "branch"
 }
 
-// What the machine last yielded. `advance()` stores it here and the `for` binds its
-// loop variable from it (one field read, no `value()` call and no copy on the way),
-// so the yielded value never travels through a constructed `Opt` or a returned
-// temporary (`impl_specs/for.md`).
+// What the machine last yielded; `advance()` stores it and the `for` reads its loop variable
+// from it, so the value never travels through a constructed `Opt` (`impl_specs/for.md`).
 fun yldCurrentField(): Str {
     return "current"
 }
 
-// A machine's own members share the class with the fields the body declares: `branch`
-// and `current` (the lowering's), the receiver field, and the one method the protocol
-// names (`advance`). A body name that would collide is therefore emitted under a
-// mangled one - and since a field is only ever named from the rewrite the lowering itself
-// does, or from the factory's `machine.x = x`, `yldFieldName` is the single place that
-// decides. Without it a local named `branch` (or `current`) is not diagnosed, it silently
-// aliases the protocol.
+// A body name colliding with the machine's own members (`branch`, `current`, the receiver,
+// `advance`) is emitted mangled; this is the single place that decides, so a local named
+// `branch` cannot silently alias the protocol.
 fun yldFieldName(name: Str): Str {
     if (
         name == yldBranchField() || name == yldCurrentField()
@@ -290,8 +236,6 @@ fun yldFieldName(name: Str): Str {
     }
     return name
 }
-
-// ---- the machine -----------------------------------------------------------
 
 data class YldMachinery(
     var decl: *AstXmlNode,
@@ -317,11 +261,8 @@ data class YldMachinery(
             yielded.error = this.error
             return yielded
         }
-        // One method, one machine: `advance()` steps it and leaves what it yielded in
-        // `current`, answering whether there was one. The `for` template reads `current`
-        // itself (`impl_specs/for.md`), so there is no second method to hand the value
-        // back - a `value()` that returned it by value copied it twice where one field
-        // read copies it once (`impl_specs/yield.md`).
+        // `advance()` steps the machine and leaves what it yielded in `current`, answering
+        // whether there was one; the `for` reads `current` itself (`impl_specs/for.md`).
         if (!this.valueTypeText.isEmpty()) {
             yielded.methods.append(this.method(this.valueTypeText, body))
         }
@@ -331,15 +272,13 @@ data class YldMachinery(
         return yielded
     }
 
-    // The fields: `branch`, the receiver (an extension function's `this` has to cross a
-    // yield like anything else), the parameters, and every local the body declares that is
-    // not the lowering's own storage (those are per-statement and are re-initialised on
-    // every entry, so they stay locals of the method).
+    // `branch`, the receiver (an extension function's `this` has to cross a yield like
+    // anything else), the parameters, and every local the body declares that is not the
+    // lowering's storage (those are per-statement and stay locals of the method).
     fun collectFields(body: List<AstXmlNode>, yielded: *Yielded): Unit {
         this.fieldTypes.insert(yldBranchField(), yldNamedType("Int"))
         this.fieldOrder.append(yldBranchField())
-        // What `advance` yields: a field of its own, so a `for` reads one load instead of
-        // whatever the old `next()` built (an `Opt` per element).
+        // What `advance` yields: a field of its own, so a `for` reads one load.
         this.fieldTypes.insert(yldCurrentField(), this.elementType)
         this.fieldOrder.append(yldCurrentField())
 
@@ -356,9 +295,8 @@ data class YldMachinery(
             val name: Str = xmlAttr(param, AstNodeAttributeKind.Name)
             i = i + 1
             if (name == "this") {
-                // A receiver written as a parameter *is* the `this` of the body, and `this`
-                // cannot name a C++ member: the receiver-form spelling (`fun T.name`) is
-                // the one that can yield for now.
+                // A `this` parameter cannot be a field; the receiver-form spelling
+                // (`fun T.name`) is the one that can yield.
                 this.fail("yield: a `this` parameter cannot be a field; write the receiver before the name (`fun T.name`) instead")
                 return
             }
@@ -398,11 +336,8 @@ data class YldMachinery(
                     val typeNode: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Type)
                     if (xmlIsEmpty(typeNode)) {
                         // A local that lives across a yield must be a field, and a field
-                        // needs a type - the type pass spells it, so an untyped one here is
-                        // a gap in the body, not in this pass. One gap has a name of its own:
-                        // the machine a `for` iterates is created by a call, and a machine
-                        // type is the class that call's own function got (`..T` is not a
-                        // value type).
+                        // needs a type (the type pass spells it). A `for` machine type has no
+                        // spelling (`..T` is not a value type).
                         if (name.startsWith("_sm_for")) {
                             var message: Str = "yield: a `for` over a machine cannot cross a yield "
                             message.appendStr("(the machine a call creates has no type to make a ")
@@ -424,9 +359,7 @@ data class YldMachinery(
         }
     }
 
-    // One method of the machine: the state machine that fills `current` and answers
-    // whether there was a value. The body is the same statements whatever the element
-    // type; only what a yield *does* with the value differs, and it is always the store.
+    // One method of the machine: it fills `current` and answers whether there was a value.
     fun method(name: Str, body: List<AstXmlNode>): YldMethod {
         var params: List<YldParam> = List<YldParam>()
         this.yields = 0
@@ -437,12 +370,8 @@ data class YldMachinery(
             i = i + 1
         }
         var methodBody: List<AstXmlNode> = List<AstXmlNode>()
-        // The hoisted storage first - the declarations the lowering moved to the top of the
-        // body, which stay locals of the method (they are per-statement, so they never have
-        // to survive a call). They have to precede the dispatcher: a jump that skips a
-        // declaration is what C++ refuses (C2362), and for a generic function a declaration
-        // is `T`, i.e. non-trivial for `Str` and friends. So the dispatcher goes *after*
-        // them.
+        // The hoisted storage first: a jump that skips a declaration is what C++ refuses
+        // (C2362), so the dispatcher goes after it.
         var first: Int = 0
         while (first < rewritten.size() && yldIsLocalDeclaration(rewritten[first])) {
             methodBody.append(rewritten[first])
@@ -498,9 +427,8 @@ data class YldMachinery(
             }
 
             AstNodeCategory.StmtReturn -> {
-                // A `return` in a yielding body is `yield break`: the machine is finished. A
-                // value (which the `..T` signature does not allow) is still evaluated, so
-                // nothing silently disappears.
+                // A `return` is `yield break`; a value (which the `..T` signature does not
+                // allow) is still evaluated, so nothing silently disappears.
                 val returnValue: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Value)
                 if (!xmlIsEmpty(returnValue)) {
                     out.append(yldExprStmt(this.expr(returnValue)))
@@ -515,9 +443,8 @@ data class YldMachinery(
                 val declared: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Type)
                 val init: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Init)
                 if (linIsSlotName(name)) {
-                    // The lowering's own storage stays a local of the method: it is
-                    // per-statement, so it is re-initialised on every entry and never has to
-                    // survive a yield.
+                    // The lowering's storage stays a local: per-statement, re-initialised on
+                    // every entry.
                     var children: List<AstXmlNode> = List<AstXmlNode>()
                     if (!xmlIsEmpty(declared)) {
                         var declaredChild: AstXmlNode = declared
@@ -532,9 +459,8 @@ data class YldMachinery(
                     out.append(yldWithChildren(stmt, children))
                     return
                 }
-                // Everything else is a field now; its initializer runs where it was, which is
-                // on the way to the first yield (a machine that resumes past it does not run it
-                // again).
+                // Everything else is a field; its initializer runs where it was, on the way
+                // to the first yield (a resume past it does not run it again).
                 if (!xmlIsEmpty(init)) {
                     out.append(yldAssign(yldThisMember(yldFieldName(name)), this.expr(init)))
                 }
@@ -587,14 +513,10 @@ data class YldMachinery(
         out.append(stmt)
     }
 
-    // A name that is a field is read and written as a field of the machine, so the values
-    // live in the instance across calls. Everything else (the lowering's temporaries,
-    // statics, calls) is left as it was.
-    //
-    // `base` says the node is the receiver of a member or an index, where the *field* is
-    // what is wanted: the spelling helpers dereference a pointer field where they have to
-    // (`this._sm_self->size()`, `(*this._sm_self)[i]`). Anywhere else the language means
-    // the object behind the receiver, so a value receiver's `this` is read back out of it.
+    // A name that is a field is read and written as `this.<name>`, so values live in the
+    // instance across calls. `base` says the node is a receiver of a member/index, where the
+    // field itself is wanted (the spelling helpers dereference a pointer field:
+    // `this._sm_self->size()`); anywhere else the object behind the receiver is meant.
     fun expr(node: *AstXmlNode): AstXmlNode {
         return this.exprAt(node, false)
     }
@@ -618,15 +540,15 @@ data class YldMachinery(
             }
             return node
         }
-        // Every child is rewritten in place, position included: the children keep the
-        // roles they were read with, so the node's shape does not change.
+        // Every child is rewritten in place, position included: the children keep the roles
+        // they were read with.
         var copyNode: AstXmlNode = node
         var rebuilt: AstXmlNode = AstXmlNode(
             copyNode.name, copyNode.kind, copyNode.attributes,
             Array<AstXmlNode>()
         )
         // A member's or an index's receiver is a *place*, not a value: `this` there stays
-        // the field (see above).
+        // the field.
         val bases: Bool = xmlKind(node) == AstNodeCategory.ExprMember || xmlKind(node) == AstNodeCategory.ExprIndex
         var i: Int = 0
         while (i < copyNode.Children.count()) {

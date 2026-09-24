@@ -1,49 +1,29 @@
 // CgStringTable.kt
 //
-// The program's string literals: one pool, one index, one spelling. The emitter's walk
-// adds every literal it meets (`Codegen.kt`, `collectNames`); `sort` puts the pool in
-// canonical order, so two rings that met the literals in a different order still agree on
-// every index (impl_specs/rtl-abi.md, "String literals: one table", T52); and a literal
-// *site* reads its entry as the owned `Str` it used to be handed (`spelling`).
+// The program's string literals: one pool, one index, one spelling. The emitter's walk adds
+// every literal it meets; `sort` puts the pool in canonical order (longest first, then
+// alphabetical) and rebuilds the index from it, so the table is the same whichever order
+// the walk met the literals in (impl_specs/rtl-abi.md).
 //
-// The entry is a `StrView` into the pool the emitter writes beside the index
-// (`cppsrc/rtl/strtable.hpp`): 12 bytes and no start-up allocation, where the table used
-// to hold a 32-byte owning `Str` each - that is the memory the pool and the index buy.
-// Reading a comparison through the view instead of converting it is the next step; today
-// every site asks for `toString()`, so the change is representation-only.
+// A literal *site* reads a `StrView` into the pool (`spelling`); the pool and the two index
+// series are the emitter's to write (`Emitter.emitStringTable`).
 //
-// The class owns the pooling and the lookup. Writing the pool and the index out stays the
-// emitter's (`Emitter.emitStringTable`), because that is the one part that needs its
-// output.
-//
-// The `Cg` prefix is not decoration: the driver scans a module root in path order and the
-// amalgamated file defines its types in that order, so a data class that holds another
-// *by value* needs its type's file to sort first - `Emitter` embeds this table, and
-// `CgStringTable.kt` < `Codegen.kt` (`guide4ai.md`, "Gotchas").
-//
-// The split is the Kotlin ring's own, like `IlCodeGen.kt`: the hand-written ring keeps its
-// string table inside `Codegen.cpp`, and the two agree byte for byte (T22's differential).
-//
-// It stays a `data class` for now: the language has `data class` and `enum class` only, and
-// a ref-counted shape would want `&StringTable` (a counted handle) rather than a `class`
-// declaration the parser does not have yet.
+// The name matters: a module root is scanned in path order and the amalgamation defines its
+// types in that order, so a data class holding another *by value* needs its file to sort
+// first - `Emitter` embeds this table, and `CgStringTable.kt` < `Codegen.kt`.
 
 package codegen
 
-// True for a hexadecimal digit. The two C++ escapes whose *length* is a run rather than a
-// character (`\xHH...` and octal) are counted the way the C++ compiler counts them, so a
-// literal outside the language's own escape set still lines up with the pool instead of
-// shifting every literal after it (`cgLiteralByteLength`).
+// A hexadecimal digit. The two escapes whose length is a *run* rather than one character
+// (`\xHH...` and octal) are counted the way the C++ compiler counts them.
 fun cgIsHexDigit(ch: Char): Bool {
     return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F')
 }
 
-// How many bytes a string literal's *source text* (quotes included) denotes: what the
-// literal table's length index carries. The pool the emitter writes is the literal texts
-// again, adjacent, so the C++ compiler decodes the bytes; this only has to agree with it
-// about how many bytes each escape costs, and in a narrow literal every escape costs
-// exactly one. The language's set is small (specs/built-in-types.md, `\n \r \t \0 \\ \'
-// \"`), and the run forms above are counted so that an input outside it still lines up.
+// How many bytes a string literal's source text (quotes included) denotes: what the length
+// index carries. The pool is the literal texts again, adjacent, and the C++ compiler
+// decodes them, so this only has to agree about the cost of an escape - one byte each for
+// the language's own set (specs/built-in-types.md) and a run, counted above, for the rest.
 fun cgLiteralByteLength(text: *Str): Int {
     if (text.size() < 2 || text[0] != '\"') {
         return text.size()
@@ -79,8 +59,8 @@ fun cgLiteralByteLength(text: *Str): Int {
     return count
 }
 
-// `{0,-142,40}`: the one-line form the emitter writes an index array in. The values are
-// small by construction (`Emitter.emitStringTable`), so one line holds the whole array.
+// `{0,-142,40}`: the one-line form an index array is written in. The values are small by
+// construction, so one line holds the array.
 fun cgIntListText(values: *List<Int>): Str {
     var text: Str = "{"
     var first: Bool = true
@@ -95,7 +75,7 @@ fun cgIntListText(values: *List<Int>): Str {
     return text
 }
 
-// The absolute value of one index number, for the width check `emitStringTable` makes.
+// The absolute value of one index number, for the width check.
 fun cgMagnitudeOf(value: Int): Int {
     if (value < 0) {
         return 0 - value
@@ -103,12 +83,11 @@ fun cgMagnitudeOf(value: Int): Int {
     return value
 }
 
-// Run-length encodes one index series into the stream `strtable.hpp` documents: the
-// series' length, then alternating blocks of *non-repeating* values (a count, then the
-// values) and of *runs* (a count, then that many `times, value` pairs), until the length
-// is filled. A single value is written once, whichever block it lands in, so the encoding
-// never costs more than a count per block - and the differences it is handed are mostly 0,
-// which is what collapses.
+// Run-length encodes one index series: the series' length, then alternating blocks of
+// *non-repeating* values (a count, then the values) and of *runs* (a count, then that many
+// `times, value` pairs), until the length is filled. A single value is written once,
+// whichever block it lands in, and the differences it is handed are mostly 0, which is what
+// collapses.
 fun cgRunLengthEncode(values: *List<Int>): List<Int> {
     val count: Int = values.size()
     var stream: List<Int> = List<Int>()
@@ -149,8 +128,8 @@ data class StringTable(
     // The pooled texts, in canonical order once `sort` has run.
     var entries: List<Str>,
 
-    // Each text's index in `entries`. Provisional - every add records 0 - until `sort`
-    // rebuilds it; only `spelling` and the emission read it, and both run after the sort.
+    // Each text's index in `entries`. Provisional until `sort` rebuilds it; only `spelling`
+    // and the emission read it, and both run after the sort.
     var indexAt: Dictionary<Str, Int>
 ) {
 
@@ -171,17 +150,12 @@ data class StringTable(
         return this.entries[index]
     }
 
-    // Canonical order, and the index rebuilt from it: an entry's index is its position, so
-    // the table is the same whichever order the walk met the literals in. Longest first,
-    // then alphabetical (`val` < `var`, but `vars` < `val`) - the order is the pool's own
-    // layout, and it has to be the same in both rings. A `Str` is never its own length
-    // *and* its own text, so the order is total and the non-stable sort is still
-    // deterministic.
+    // Canonical order, and the index rebuilt from it: an entry's index is its position. A
+    // `Str` is never its own length *and* its own text, so the order is total and the
+    // non-stable sort is still deterministic.
     fun sort(): Unit {
-        this.entries.sort(
-            (left: Str,
-            right: Str
-        ) -> (left.size() > right.size()) || ((left.size() == right.size()) && (left < right)))
+        this.entries.sort((left: Str, right: Str) -> (left.size() > right.size())
+        || ((left.size() == right.size()) && (left < right)))
         this.indexAt = Dictionary<Str, Int>()
         var i: Int = 0
         while (i < this.entries.size()) {
@@ -190,11 +164,9 @@ data class StringTable(
         }
     }
 
-    // The emitted spelling of `text`: its pool entry - a `StrView`, so a comparison or a
-    // `+` reads it without building a `Str`, and an owned position converts it - when the
-    // walk pooled it, and the literal itself when the *lowering* invented it (a literal
-    // that is not in the parsed program was never pooled, and keeps its own spelling at the
-    // site; impl_specs/rtl-abi.md).
+    // The emitted spelling of `text`: its pool entry when the walk pooled it, and the
+    // literal itself when the *lowering* invented it (a literal that is not in the parsed
+    // program was never pooled).
     fun spelling(text: Str): Str {
         if (!this.indexAt.has(text)) {
             return text
@@ -202,9 +174,8 @@ data class StringTable(
         return fmtStr("__sm_stringTable[|]", this.indexOf(text).toString())
     }
 
-    // The pool index of `text`, or -1 when the walk never pooled it. The raw index, for a
-    // writer that needs the number rather than the site's spelling (the resource table,
-    // `Emitter.emitResourceTable`).
+    // The pool index of `text`, or -1 when the walk never pooled it: the raw number, for a
+    // writer that needs it rather than a site's spelling (`Emitter.emitResourceTable`).
     fun indexOf(text: *Str): Int {
         if (!this.indexAt.has(text)) {
             return -1

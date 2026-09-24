@@ -1,17 +1,9 @@
 // IlCodeGen.kt
 //
-// The instruction-list backend: the IL's own types and every walk that turns a body's
-// instruction list into C++ text. `Codegen.kt`'s `emitFunction`/`emitYieldable`/
-// `emitMachine` lower a body and hand it to `emitBodyAt` below; an instruction the IL
-// cannot spell is a hard error, never a fallback (impl_specs/linear-il.md).
-//
-// The walks are extension functions on `Emitter` (`fun Emitter.ilEmitOps(...)`) rather
-// than methods inside the data class: a split file cannot reopen the class, and the
-// emitted C++ is the same either way - an extension's receiver is the `Emitter* self`
-// a class method's is, so no call site and no symbol changes.
-//
-// This is a Kotlin-ring split: the hand-written ring keeps one `Codegen.cpp`, and the
-// two still agree on every fixture (T22's differential).
+// The instruction-list backend: the IL's own types and the walks that turn a body's
+// instruction list into C++ text (`emitBodyAt`). The IL is the only codegen, and an
+// instruction it cannot spell is a hard error, never a fallback (impl_specs/linear-il.md).
+// The walks are `Emitter` extension functions: a split file cannot reopen the class.
 
 package codegen
 
@@ -21,29 +13,23 @@ import linear
 import optimizations
 import profiling
 
-// One type-table entry's node, or an empty node when the extractor had none (a
-// synthesised place: it can only be *folded* into the instruction that reads it, never
-// declared).
 data class IlFrame(
-    // Keyed by *slot index*: two scopes may declare the same name, and the frame keeps
-    // them apart (the lowering gives each its own slot), so an analysis keyed by name
-    // would merge two different variables.
+    // Keyed by *slot index*, not name: two scopes may declare the same name.
     var defOp: Dictionary<Int, Int>,
 
     var defineCount: Dictionary<Int, Int>,
     var useCount: Dictionary<Int, Int>
 )
 
-// Where a jump crosses a declaration, C++ wants a scope: a `goto` may not skip an
-// initialization ([stmt.dcl]/3, MSVC C2362). `end` is the earliest label a crossing
-// jump lands on, `lastJump` the last jump that crosses.
+// A jump crossing a declaration needs a scope: a `goto` may not skip an initialization
+// ([stmt.dcl]/3, MSVC C2362). `end` is the label it lands on, `lastJump` the last jump.
 data class IlCrossing(
     var end: Int,
 
     var lastJump: Int
 )
 
-// One open block of the flat form, and the label it ends before.
+// One open block, and the label it ends before.
 data class IlScope(
     var start: Int,
 
@@ -58,11 +44,8 @@ data class IlText(
     var reason: Str
 )
 
-// ---- the linear IL ----------------------------------------------------
-
 // `--showLinearRepresentation`: the IL of the body the emitter is about to read, on
-// stderr (impl_specs/linear-il.md). The extraction is pure, so the emitted C++ is the
-// same with and without it.
+// stderr (impl_specs/linear-il.md).
 fun Emitter.dumpIl(
     fn: *CgFn, decl: *AstXmlNode, body: *List<AstXmlNode>, facts: *SemFacts,
     inferred: *Dictionary<Str, AstXmlNode>
@@ -70,21 +53,14 @@ fun Emitter.dumpIl(
     if (!ilShow()) {
         return
     }
-    val unit: IlUnit = ilExtractUnit(
-        this.ilFunctionFor(fn, decl, facts, inferred), body, fn.file
-    )
+    val unit: IlUnit = ilExtractUnit(this.ilFunctionFor(fn, decl, facts, inferred), body, fn.file)
     val text: Str = printIlUnit(unit)
-    // `eprintln` is the one stderr write the prelude has, and it adds the newline the
-    // dump already ends with: drop that one byte so the rings' dumps compare byte for
-    // byte.
+    // `eprintln` adds a newline the dump already ends with: drop that byte.
     if (text.size() > 0) {
         eprintln(text.substr(0, text.size() - 1))
     }
 }
 
-// What the extractor needs to know about the body's function: the declaration (name,
-// parameters, return type), the receiver, the emitted symbol, and the file-level
-// statics the body may name.
 fun Emitter.ilFunctionFor(
     fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts,
     inferred: *Dictionary<Str, AstXmlNode>
@@ -111,14 +87,8 @@ fun Emitter.ilFunctionFor(
     return info
 }
 
-// ---- emitting from the IL ---------------------------------------------
-//
-// The C++ of a body comes from its instruction list - the IL is the *only* codegen
-// (impl_specs/linear-il.md). The IL is not a second language with a second spelling: an
-// operand becomes a leaf `AstXmlNode` - a slot is a name, a constant is its literal, a
-// place is the path it came from, folded back out of the instruction that built it -
-// and the helpers above write the text.
-
+// An operand becomes a leaf `AstXmlNode` - a slot is a name, a constant its literal, a
+// place the path it came from, folded out of the instruction that built it.
 fun Emitter.ilIntAt(map: *Dictionary<Int, Int>, key: Int, fallback: Int): Int {
     if (map.has(key)) {
         return map.get(key).value()
@@ -130,12 +100,8 @@ fun Emitter.ilBump(map: *Dictionary<Int, Int>, key: Int): Unit {
     map.insert(key, this.ilIntAt(map, key, 0) + 1)
 }
 
-// The operand at `index`, or -1 when out of range - the same helper `linear`'s
-// `ilOpComment` has for itself (`cppsrc/linear/LinearForm.kt`), under a different name on
-// purpose: a *bare* call binds by simple name across the whole compilation, so two
-// same-named helpers in different packages are resolved by which package the scan reaches
-// first, not by the caller's package. `ilOperandAt` here shadowed the linear one in its
-// own body and the emitted call lost its receiver; see T71's entry.
+// The operand at `index`, or -1 when out of range. Not `ilOperandAt`: a bare call binds
+// by simple name across the whole compilation (`cppsrc/linear/LinearForm.kt`).
 fun Emitter.ilOpOperand(operands: *List<Int>, index: Int): Int {
     if (index >= 0 && index < operands.size()) {
         return operands[index]
@@ -150,8 +116,8 @@ fun Emitter.ilNameNode(text: *Str): AstXmlNode {
     return node
 }
 
-// The destination slot of an instruction, or -1 when it writes memory or jumps
-// instead (`ilWritesDestination` is the one place that is stated).
+// The destination slot of an instruction, or -1 when it writes memory or jumps instead
+// (`ilWritesDestination`).
 fun Emitter.ilDst(op: *IlOp): Int {
     if (!ilWritesDestination(op.kind) || op.operands.size() == 0) {
         return -1
@@ -159,14 +125,8 @@ fun Emitter.ilDst(op: *IlOp): Int {
     return op.operands[0]
 }
 
-// The frame's types, from the body's own tables - no statement tree is read. First
-// what the *type pass* proved for every name in the body, then the slots' declared
-// types (which win: they are the spelled ones, and the map may still hold a name the
-// shadowing pass renamed). The pass's record is what carries a machine: a slot holding
-// one is `..T`, a declaration is never written with that (the emitted C++ uses
-// `auto`), so the frame is the only place the type survives - and the emitter needs
-// it, because `x.iter()` on a machine *is* `x`, an identity decided from the
-// receiver's type (see `call`, impl_specs/for.md).
+// The frame's types, from the body's own tables. Declared types win over the pass's; a
+// machine's type survives only here, its declaration never written (impl_specs/for.md).
 fun Emitter.ilSeedFrameTypes(il: *IlBody): Unit {
     val proven: List<Str> = il.inferredTypes.keys()
     var i: Int = 0
@@ -191,16 +151,13 @@ fun Emitter.ilAnalyze(il: *IlBody, frame: *IlFrame): Unit {
     var i: Int = 0
     while (i < il.ops.size()) {
         val op: *IlOp = *il.ops[i]
-        // A declaration reads nothing.
         if (op.kind != IlOpKind.Declare) {
             // An instruction that writes memory or jumps has no destination, but its
-            // operands are reads like any other - so the two are counted apart, and
-            // the first operand is only skipped when it is in fact the destination.
+            // operands are still reads.
             val dst: Int = this.ilDst(op)
             if (dst >= 0 && dst < il.vars.size()) {
-                // The *first* write is what initialises a slot: a loop target is
-                // written again every iteration, and the declaration that spells it
-                // wants the initializer, not the increment.
+                // The *first* write initialises a slot: a loop target is written again
+                // every iteration, and the declaration wants the initializer.
                 if (!frame.defOp.has(dst)) {
                     frame.defOp.insert(dst, i)
                 }
@@ -230,14 +187,8 @@ fun Emitter.ilAnalyze(il: *IlBody, frame: *IlFrame): Unit {
     }
 }
 
-// Whether an instruction's result is inlined at its use instead of being assigned to a
-// slot. The instruction list is one operation per instruction and every *typed* slot is
-// a declared slot of the frame, so a value is read where it was written and no
-// instruction inlines another. The one exception is a slot the type rules could not
-// name - the extractor's own temporary for a shape that has no type of its own, such
-// as a bare `null`, whose C++ spelling depends on the context it is read in. It cannot
-// be declared at the top of the body (`auto x;` is not a declaration) and it has
-// exactly one definition and one use, so that use is where the expression went.
+// Whether a value is inlined at its use: only an untyped temp with exactly one
+// definition and one use (`auto x;` is not a declaration, so it cannot be declared).
 fun Emitter.ilFolded(il: *IlBody, frame: *IlFrame, slot: Int): Bool {
     if (slot < 0 || slot >= il.vars.size()) {
         return false
@@ -259,8 +210,7 @@ fun Emitter.ilFolded(il: *IlBody, frame: *IlFrame, slot: Int): Bool {
     return !this.ilSlotHoldsClosure(il, frame, slot)
 }
 
-// Whether a slot is declared with the frame at the top of the body (a typed slot)
-// rather than in front of the instruction that first writes it.
+// Whether a slot is declared with the frame at the top of the body (a typed slot).
 fun Emitter.ilDeclaredAtTop(il: *IlBody, slot: Int): Bool {
     if (slot < 0 || slot >= il.vars.size()) {
         return false
@@ -269,9 +219,8 @@ fun Emitter.ilDeclaredAtTop(il: *IlBody, slot: Int): Bool {
     return !xmlIsEmpty(slotType)
 }
 
-// Whether an instruction builds a closure class instance, which is an *aggregate* and
-// not an expression: it cannot stand inside another expression, so its slot is never
-// folded away.
+// Whether an instruction builds a closure class instance: an *aggregate*, not an
+// expression, so it cannot stand inside another expression and its slot never folds.
 fun Emitter.ilConstructsClosure(op: *IlOp, il: *IlBody): Bool {
     if (op.kind != IlOpKind.CallCtor) {
         return false
@@ -283,8 +232,6 @@ fun Emitter.ilConstructsClosure(op: *IlOp, il: *IlBody): Bool {
     return this.closureSymbols.has(il.types[typeAt])
 }
 
-// The same question, asked about a slot: is the instruction that defines it a closure
-// construction?
 fun Emitter.ilSlotHoldsClosure(il: *IlBody, frame: *IlFrame, slot: Int): Bool {
     val def: Int = this.ilIntAt(frame.defOp, slot, -1)
     if (def < 0 || def >= il.ops.size()) {
@@ -294,7 +241,7 @@ fun Emitter.ilSlotHoldsClosure(il: *IlBody, frame: *IlFrame, slot: Int): Bool {
 }
 
 // The C++ of a slot's declared type. A closure class is spelled by its own name: it is
-// emitted just above the body that constructs it, so no type dictionary knows it.
+// emitted above the body that constructs it, so no type dictionary knows it.
 fun Emitter.ilDeclTypeText(il: *IlBody, slot: Int): Str {
     val slotType: AstXmlNode = ilVarType(il, slot)
     if (xmlIsEmpty(slotType)) {
@@ -307,8 +254,7 @@ fun Emitter.ilDeclTypeText(il: *IlBody, slot: Int): Str {
     return this.type(slotType)
 }
 
-// One declarator of a line that has already written its type: the pointer a *repeated*
-// declarator needs (`* b`), and nothing when the type has none (`b`).
+// One declarator of a line that has already written its type: `* b`, or `b`.
 fun ilDeclarator(ptr: *Str, name: *Str): Str {
     if (ptr == "") {
         return name
@@ -316,19 +262,9 @@ fun ilDeclarator(ptr: *Str, name: *Str): Str {
     return ptr + " " + name
 }
 
-// One type's declaration lines for the slots it declares: `Str a, b;` where the frame had
-// `Str a; Str b;`, wrapped once a line reaches `kIlDeclWidth` columns so that a body with
-// a hundred `Str` slots reads as lines instead of as one line of a thousand characters.
-//
-// A wrapped line is a **continuation** of one declaration, not another declaration: it
-// carries no type of its own (writing the type after a comma would make it a declarator's
-// name), the comma that ends the line before it carries the list on, and the caller
-// indents it one level (`ilEmitOps`).
-//
-// The type's trailing `*`s belong to **every** name: in `T* a, b;` the `b` would be a `T`,
-// since a declarator's `*` binds only the name it stands before. So the pointer is written
-// once per name - `T* a,\n        * b, * c;` - and the rest of the type once, in front
-// (`T** a, ** b;` for a pointer to a pointer, the same rule one level up).
+// One type's declaration lines, wrapped at `kIlDeclWidth` columns. A wrapped line is a
+// *continuation* with no type of its own; the caller indents it one level. A trailing
+// `*` binds only the name it stands before, so it is written once per name.
 val kIlDeclWidth: Int = 100
 
 fun ilDeclLines(typeText: Str, names: *List<Str>): List<Str> {
@@ -366,20 +302,10 @@ fun ilDeclLines(typeText: Str, names: *List<Str>): List<Str> {
     return out
 }
 
-// The frame's storage, grouped by type: for every declaration of a run of adjacent
-// declarations that a backend prints at the top of the body, the lines to print - the
-// first declaration of a type prints the lines that list every name of that type, and
-// the others print nothing (an empty list). A declaration the run cannot cover, or a run
-// of one, is not in the answer at all, and its own line is what the emitter prints as
-// before.
-//
-// Grouping is safe because a declaration *is* storage: the hoisting left every
-// initializer behind as the assignment where it stood, so nothing runs at a declaration
-// and the names of one type may share a line. What must not move is the order of
-// *across* types - a group per type, in the order the types first appear - so the only
-// thing that changes in a grouped body is which lines the same declarations are written
-// on. A declaration a jump can cross needs a block around it rather than a shared line,
-// which is why one of those ends the run (`ilEmitOps`'s `blockEnd`).
+// The frame's storage grouped by type: the lines to print at each declaration's position,
+// the first of a type printing all its names. Safe because a declaration *is* storage and
+// a group per type keeps the across-type order; a declaration a jump can cross ends the
+// run and gets a block (`ilEmitOps`'s `blockEnd`).
 fun Emitter.ilDeclGroups(
     il: *IlBody, frame: *IlFrame, blockEnd: *Dictionary<Int, IlCrossing>
 ): Dictionary<Int, List<Str>> {
@@ -421,8 +347,7 @@ fun Emitter.ilDeclGroups(
             at = at + 1
         }
         if (at - i < 2) {
-            // One declaration: nothing to group, and the emitter's own line is the one
-            // this body printed before.
+            // One declaration: nothing to group.
             i = i + 1
             continue
         }
@@ -442,9 +367,8 @@ fun Emitter.ilDeclGroups(
     return lines
 }
 
-// A constant operand: the pool holds the text the C++ prints, so all that is left is
-// to give it the node kind the emitter expects (`true` is a BoolLit, `"abc"` a
-// StrLit, a digit run an IntLit or a FloatLit).
+// A constant operand: the pool already holds the text the C++ prints, so only the node
+// kind is left (`true` a BoolLit, `"abc"` a StrLit, a digit run an IntLit or FloatLit).
 fun Emitter.ilLiteralNode(text: *Str): AstXmlNode {
     var node: AstXmlNode =
         AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprIntLit, List<AstNodeAttribute>(), Array<AstXmlNode>())
@@ -509,10 +433,8 @@ fun Emitter.ilMemberNode(base: *AstXmlNode, name: *Str): AstXmlNode {
 }
 
 // The *address* of a place, as the emitter spells a borrow: `&name` for a plain name,
-// `simse_addressOf(...)` otherwise - which is what an `IndexAddr`/`FieldAddr`
-// instruction writes (`ldelema`/`ldflda` in the IL's own shape,
-// `impl_specs/linear-il.md`). A place is the one value an instruction may not copy: a
-// call that mutates its receiver has to reach the original.
+// `simse_addressOf(...)` otherwise (`impl_specs/linear-il.md`). A place is the one value
+// an instruction may not copy.
 fun Emitter.ilBorrowNode(place: *AstXmlNode, depth: Int): AstXmlNode {
     if (xmlIsEmpty(place) || depth > 24) {
         return xmlEmptyNode()
@@ -535,7 +457,6 @@ fun Emitter.ilBinaryNode(lhs: *AstXmlNode, op: *Str, rhs: *AstXmlNode): AstXmlNo
     return node
 }
 
-// The last `.` in `text`, or -1.
 fun Emitter.ilLastDot(text: *Str): Int {
     var dot: Int = -1
     var i: Int = 0
@@ -548,8 +469,7 @@ fun Emitter.ilLastDot(text: *Str): Int {
     return dot
 }
 
-// A name in a value position that is not a local: an enum member (`Color.Red`,
-// spelled `ns1_Color::Red`) or a file-level `var`.
+// A non-local name in a value position: an enum member (`Color.Red`) or a file-level `var`.
 fun Emitter.ilGetStaticNode(il: *IlBody, op: *IlOp): AstXmlNode {
     val textIndex: Int = this.ilOpOperand(op.operands, 1)
     if (textIndex < 0 || textIndex >= il.pool.size()) {
@@ -564,12 +484,9 @@ fun Emitter.ilGetStaticNode(il: *IlBody, op: *IlOp): AstXmlNode {
     return this.ilMemberNode(base, text.substr(dot + 1, text.size() - dot - 1))
 }
 
-// The node for the type a *static* call is reached through: `Color.fromInt` keeps its
-// name, `Res<Str>.ok` its type arguments.
-//
-// `asGenericName` is for a construction, whose callee the parser always produced as
-// `Name<T>` (that is what makes it a `CallCtor`); a static call's base is a generic
-// name only when the source wrote one.
+// The node for the type a *static* call is reached through. `asGenericName` is for a
+// construction, whose callee the parser always produces as `Name<T>` (what makes it a
+// `CallCtor`); a static call's base is generic only when the source wrote one.
 fun Emitter.ilTypeBaseNode(il: *IlBody, typeIndex: Int, asGenericName: Bool): AstXmlNode {
     val baseType: AstXmlNode = ilTypeNode(il, typeIndex)
     if (xmlIsEmpty(baseType)) {
@@ -597,8 +514,7 @@ fun Emitter.ilTypeBaseNode(il: *IlBody, typeIndex: Int, asGenericName: Bool): As
     return this.ilNameNode(xmlAttr(baseType, AstNodeAttributeKind.Name))
 }
 
-// A call instruction as the expression the emitter spells: the callee from the method
-// table, the arguments from the operands.
+// A call instruction as the expression the emitter spells.
 fun Emitter.ilCallNode(il: *IlBody, frame: *IlFrame, op: *IlOp): AstXmlNode {
     val hasDst: Bool = this.ilDst(op) >= 0
     var methodAt: Int = 0
@@ -651,9 +567,8 @@ fun Emitter.ilCallNode(il: *IlBody, frame: *IlFrame, op: *IlOp): AstXmlNode {
     return call
 }
 
-// The expression a value-producing instruction computes, as a node. This is both the
-// right-hand side of the instruction and what a *folded* slot stands for wherever it
-// is read.
+// The expression a value-producing instruction computes, as a node. Both the
+// instruction's right-hand side and what a *folded* slot stands for wherever it is read.
 fun Emitter.ilOpValueNode(il: *IlBody, frame: *IlFrame, opIndex: Int, depth: Int): AstXmlNode {
     if (opIndex < 0 || opIndex >= il.ops.size() || depth > 24) {
         return xmlEmptyNode()
@@ -758,8 +673,7 @@ fun Emitter.ilOpValueNode(il: *IlBody, frame: *IlFrame, opIndex: Int, depth: Int
         }
 
         IlOpKind.GetStaticAddr -> {
-            // The address of a file-level static: `&name` (`ilBorrowNode` spells a name
-            // that way), never the address of a copy of it.
+            // The address of a file-level static: `&name`, never of a copy of it.
             val place: AstXmlNode = this.ilGetStaticNode(il, op)
             return this.ilBorrowNode(place, depth)
         }
@@ -793,19 +707,13 @@ fun Emitter.ilOpValueNode(il: *IlBody, frame: *IlFrame, opIndex: Int, depth: Int
             return call
         }
     }
-    // `Cast` (no source node), `CallIndirect` (a callable slot), a lambda body, and
-    // anything the extractor marked: not expressible yet.
+    // `Cast`, `CallIndirect`, a lambda body, and anything the extractor marked: not
+    // expressible yet.
     return xmlEmptyNode()
 }
 
-// Where a jump crosses a declaration, C++ wants a scope: a `goto` may not skip an
-// initialization ([stmt.dcl]/3, MSVC C2362). The flat form has no scopes of its own,
-// so the backend opens the *one* block that keeps the declaration legal - the same one
-// the statement path keeps - and closes it at the label the jump lands on.
-// Where each of the body's labels sits, or `-1` when the label has no `Label`
-// instruction - one array per body, because the crossing below asks per *declaration*
-// and rebuilding the map there meant a walk of the whole body (with a hash insert per
-// label) for every one of them.
+// Where each of the body's labels sits, or -1 when it has no `Label` instruction. One
+// array per body: `ilJumpCrossing` asks per *declaration*.
 fun Emitter.ilLabelPositions(il: *IlBody): List<Int> {
     var positions: List<Int> = List<Int>()
     var i: Int = 0
@@ -827,6 +735,8 @@ fun Emitter.ilLabelPositions(il: *IlBody): List<Int> {
     return positions
 }
 
+// The scope a crossed declaration needs: the earliest label a jump lands on and the
+// last jump that crosses ([stmt.dcl]/3, MSVC C2362).
 fun Emitter.ilJumpCrossing(il: *IlBody, labelPos: *List<Int>, position: Int): IlCrossing {
     var crossing: IlCrossing = IlCrossing(-1, -1)
     var i: Int = 0
@@ -855,19 +765,16 @@ fun Emitter.ilJumpCrossing(il: *IlBody, labelPos: *List<Int>, position: Int): Il
     return crossing
 }
 
-// The right-hand side of one instruction, as C++: the expression the instruction
-// computes, or - for a construction that is an aggregate - the brace form, which has
-// no expression node.
+// The right-hand side of one instruction, as C++: the computed expression, or - for an
+// aggregate construction - the brace form, which has no expression node.
 fun Emitter.ilValueText(il: *IlBody, frame: *IlFrame, opIndex: Int, expected: *AstXmlNode): Opt<Str> {
     if (opIndex < 0 || opIndex >= il.ops.size()) {
         return Opt<Str>.none()
     }
     val op: *IlOp = *il.ops[opIndex]
     if (op.kind == IlOpKind.Pack) {
-        // A list built from values: `List<T>{v1, v2, ...}`, the RTL's
-        // initializer-list construction. `List` is `SmallVector<T, 4>`, so the short
-        // list a packed call usually is stays inline and allocates nothing - which is
-        // why the pack builds a `List` and not an `Array`.
+        // `List<T>{v1, v2, ...}`: `List` is `SmallVector<T, 4>`, so a short list stays
+        // inline and allocates nothing - which is why a pack builds a `List`, not an `Array`.
         val slot: Int = this.ilOpOperand(op.operands, 0)
         val slotType: AstXmlNode = ilVarType(il, slot)
         if (xmlIsEmpty(slotType)) {
@@ -914,32 +821,26 @@ fun Emitter.ilLine(out: *Str, level: Int, text: Str): Unit {
     out.append('\n')
 }
 
-// One body, instruction by instruction. Each instruction is one statement of the
-// emitted C++ (a `Declare` pairs with the instruction that writes it), which is the
-// whole point of the form.
+// One body, instruction by instruction: each instruction is one statement of the
+// emitted C++ (a `Declare` pairs with the instruction that writes it).
 fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
-    // A declaration a jump can cross needs a block around it: the jump may not enter
-    // the declaration's scope past it.
+    // A declaration a jump can cross needs a block of its own.
     var blockEnd: Dictionary<Int, IlCrossing> = Dictionary<Int, IlCrossing>()
-    // Both halves of the crossing are asked for a block: where it must end (here) and
-    // the last jump that crosses (below, when the block opens). The walk is the same
-    // one, so it is computed once and kept with the block rather than run again.
+    // Both halves of the crossing: where the block ends (here) and the last jump that
+    // crosses (below, when the block opens).
     val labelPos: List<Int> = this.ilLabelPositions(il)
     var scan: Int = 0
     while (scan < il.ops.size()) {
         val op: *IlOp = *il.ops[scan]
         if (op.kind == IlOpKind.Declare || op.kind == IlOpKind.DeclareInit) {
             val slot: Int = this.ilOpOperand(op.operands, 0)
-            // A declaration that prints nothing - the folding inlines it at its use -
-            // keeps nothing legal, so it asks for no block either.
+            // A folded declaration prints nothing, so it needs no block.
             if (this.ilFolded(il, frame, slot)) {
                 scan = scan + 1
                 continue
             }
-            // A typed slot is declared where the `Declare` stands (the hoisting put
-            // it at the top); an untyped one is declared at the instruction that
-            // first writes it - or, when the two are adjacent, right here, where they
-            // print as one line (`auto x = <value>;`).
+            // A typed slot is declared where the `Declare` stands; an untyped one at
+            // the instruction that first writes it (or here, when the two are adjacent).
             var at: Int = scan
             if (!this.ilDeclaredAtTop(il, slot)) {
                 val def: Int = this.ilIntAt(frame.defOp, slot, -1)
@@ -960,8 +861,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
         }
         scan = scan + 1
     }
-    // The frame's storage, grouped by type (`ilDeclGroups`): computed here because a
-    // declaration that needs a block of its own is what ends a run a line may cover.
+    // Grouped storage (`ilDeclGroups`): a declaration that needs a block ends a run.
     val declLines: Dictionary<Int, List<Str>> = this.ilDeclGroups(il, frame, *blockEnd)
     var scopes: List<IlScope> = List<IlScope>()
     var consumedByDeclare: Int = -1
@@ -1015,14 +915,12 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
             val slotType: AstXmlNode = ilVarType(il, slot)
             if (!xmlIsEmpty(slotType)) {
                 if (declLines.has(i)) {
-                    // A declaration a group of its type already lists: the first one of
-                    // that type prints the group's lines (`ilDeclLines`), the others are
-                    // named on them and print nothing here.
+                    // A declaration a group already lists: the first of its type prints
+                    // the group's lines (`ilDeclLines`), the others print nothing.
                     val shared: List<Str> = declLines.get(i).value()
                     var s: Int = 0
                     while (s < shared.size()) {
-                        // A continuation line is indented one level deeper: it is the same
-                        // declaration, wrapped (`ilDeclLines`).
+                        // A continuation line is one level deeper: the same declaration.
                         var lineLvl: Int = lvl
                         if (s > 0) {
                             lineLvl = lvl + 1
@@ -1033,20 +931,16 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
                     i = i + 1
                     continue
                 }
-                // A declared slot with a type of its own line: the instruction that
-                // computes its value assigns it where that instruction stands. (The
-                // hoisting turned the declaration's initializer into exactly such an
-                // assignment.)
+                // A typed slot on its own line: the instruction that computes its value
+                // assigns it where that instruction stands.
                 this.ilLine(
                     text, lvl, fmtStr("| |;", this.ilDeclTypeText(il, slot), il.vars[slot].name)
                 )
                 i = i + 1
                 continue
             }
-            // A slot the type rules could not name is declared with `auto` and its own
-            // definition as the initializer - which only works where the two are
-            // adjacent; otherwise the definition is where the declaration goes (below)
-            // and this prints nothing.
+            // An untyped slot is declared with `auto` and its own definition as the
+            // initializer - only where the two are adjacent; otherwise it prints nothing.
             val def: Int = this.ilIntAt(frame.defOp, slot, -1)
             if (def != i + 1) {
                 if (def < 0) {
@@ -1112,12 +1006,9 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
         }
         if (dst >= 0) {
             val slotType: AstXmlNode = ilVarType(il, dst)
-            // An instruction that defines a slot the type rules could not name *is*
-            // that slot's declaration (`auto x = <this>;`), which is where a slot
-            // without a type has to be declared - a typed one was declared with the
-            // frame at the top of the body.
-            val declares: Bool =
-                xmlIsEmpty(slotType) && this.ilIntAt(frame.defOp, dst, -1) == i
+            // An instruction that defines an untyped slot *is* that slot's declaration
+            // (`auto x = <this>;`); a typed one was declared with the frame at the top.
+            val declares: Bool = xmlIsEmpty(slotType) && this.ilIntAt(frame.defOp, dst, -1) == i
             val valueText: Opt<Str> = this.ilValueText(il, frame, i, slotType)
             if (!valueText.hasValue()) {
                 if (this.ilWhy.isEmpty()) {
@@ -1272,9 +1163,8 @@ fun Emitter.ilEmitOpsChecked(il: *IlBody, level: Int): IlText {
     return final
 }
 
-// The C++ of one function body, from its IL. The frame's types are installed so the
-// spelling helpers (`memberAccess`, the call resolution) see the same world the type
-// pass gave them; nothing that survived a previous body is left behind.
+// The C++ of one function body, from its IL. The frame's types are installed for the
+// spelling helpers, and nothing from a previous body is left behind.
 fun Emitter.emitIlBodyText(unit: *IlUnit, level: Int): IlText {
     val il: *IlBody = *unit.body
     val savedKinds: Dictionary<Str, NameKind> = this.nameKinds
@@ -1293,8 +1183,8 @@ fun Emitter.emitIlBodyText(unit: *IlUnit, level: Int): IlText {
     return result
 }
 
-// C++ of a lambda's body, as the class's method: the frame is the lambda's (its
-// parameters and the closure instance), and `self` is C++'s `this`.
+// A lambda's body as its class's method: `self` is C++'s `this`, and the frame is the
+// lambda's own.
 fun Emitter.emitClosureMethodText(unit: *IlUnit, closure: *IlClosure, level: Int): IlText {
     if (closure.bodyIndex < 0 || closure.bodyIndex >= unit.lambdas.size()) {
         return IlText(false, "", "a closure with no body")
@@ -1323,10 +1213,9 @@ fun Emitter.emitClosureMethodText(unit: *IlUnit, closure: *IlClosure, level: Int
     return result
 }
 
-// The class a lambda is: one field per captured variable, and one method - the
-// language's `invoke`, which C++ spells `operator()`. A `[=]` capture list becomes an
-// explicit struct, which is what lets a lambda live in the instruction list (and what
-// `&lambda` counts references to).
+// The class a lambda is: one field per capture and one `operator()` method - the
+// language's `invoke`. An explicit struct is what lets a lambda live in the instruction
+// list.
 fun Emitter.emitClosureClass(unit: *IlUnit, closure: *IlClosure): IlText {
     var text: Str = fmtStr("struct | {\n", closure.symbol)
     var i: Int = 0
@@ -1364,9 +1253,8 @@ fun Emitter.emitClosureClass(unit: *IlUnit, closure: *IlClosure): IlText {
     return IlText(true, text, "")
 }
 
-// Writes out the classes of every lambda this body constructs, the first time one is
-// needed. A definition has to precede its construction, and the functions are emitted
-// in a fixed order, so "just before the body" is both legal and reproducible.
+// The classes of every lambda this body constructs, emitted once. A definition must
+// precede its construction, and "just before the body" is reproducible.
 fun Emitter.emitClosureClasses(unit: *IlUnit): IlText {
     var text: Str = Str()
     for (*closure in unit.closures) {
@@ -1383,14 +1271,8 @@ fun Emitter.emitClosureClasses(unit: *IlUnit): IlText {
 }
 
 // A yielding function, emitted as the state machine it was lowered to
-// (impl_specs/yield.md):
-//
-//   struct evens_yieldable { Int n; Int i; Int branch; Opt<Int> next() {...} };
-//   ns1_evens_yieldable ns1_evens(Int n) { ...machine.n = n; ... }
-//
-// The function builds a machine on the stack and returns it by value, so a local
-// iterator is a local struct; `&evens(n)` boxes a copy for a life that outlives the
-// frame (the language's `&T`, as everywhere else).
+// (impl_specs/yield.md). It builds a machine on the stack and returns it by value, so a
+// local iterator is a local struct; `&evens(n)` boxes a copy.
 fun Emitter.emitYieldable(
     fn: *
     CgFn,
@@ -1416,24 +1298,20 @@ fun Emitter.emitYieldable(
     // declaration, the definition pass only fills the factory in.
     if (!this.emittedYieldables.has(className)) {
         this.emittedYieldables.insert(className, true)
-        // The linear body first: `yield` is a *lowering*, and it trades on the control
-        // flow being labels and gotos with the value already one operand
-        // (impl_specs/yield.md).
+        // The linear body first: `yield` is a *lowering* and trades on the control flow
+        // being labels and gotos (impl_specs/yield.md).
         var lowered: List<AstXmlNode> =
             linLowerForEmission(xmlChildren(xmlChildPtr(decl, AstNodeKind.Body), AstNodeKind.Stmt))
         val semantics: SemBody = SemBody(
             decl, fn.templateParams, selfTypePtr, xmlEmptyNode(),
             List<Str>(), List<AstXmlNode>(), Dictionary<Str, AstXmlNode>()
         )
-        // The map is the machine's methods' frame too: the bodies are the same
-        // statements (the lowering rewrites them in place), so the names the pass
-        // proved are the names they carry.
+        // This map is the machine's methods' frame too: the lowering rewrites the
+        // statements in place, so the names the pass proved are the names they carry.
         var inferred: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
         lowered = semInferTypes(lowered, facts, semantics, inferred)
-        // The machine's methods: the body's storage is the machine's fields (`this->`),
-        // and the names a method has of its own are what it yielded (`current`), the
-        // dispatcher's branch and the receiver field - a local of any of those names
-        // would alias one of them.
+        // The machine's method storage is the machine's fields (`this->`). These names
+        // are reserved: a local of any of them would alias the machine's own.
         var machineReserved: List<Str> = listOf<Str>("current", "branch", "_sm_self")
         val finalBody: List<AstXmlNode> = linFinishForEmission(lowered, machineReserved)
         val machine: Yielded = linLowerYield(decl, elementType, finalBody, "advance")
@@ -1467,14 +1345,12 @@ fun Emitter.emitYieldable(
     for (*param in declared) {
         val name: Str = xmlAttr(param, AstNodeAttributeKind.Name)
         // The field carries a mangled name when the parameter's own would collide with a
-        // machine member (`linear::yldFieldName`), and the rewrite inside the body maps it
-        // the same way - so `machine.<field> = <param>` is the same rule on both sides.
+        // machine member (`linear::yldFieldName`), the same rule the body rewrite uses.
         this.line(1, fmtStr("machine.| = |;", yldFieldName(name), name))
     }
     if (!xmlIsEmpty(xmlChildPtr(decl, AstNodeKind.Receiver))) {
-        // The receiver of an extension function crosses a yield like any other value,
-        // so it is a field and the factory fills it from its own `self` parameter
-        // (`yldReceiverField`).
+        // An extension function's receiver crosses a yield like any other value, so it is
+        // a field the factory fills from its own `self` (`yldReceiverField`).
         this.line(1, fmtStr("machine.| = self;", yldReceiverField()))
     }
     this.line(1, "machine.branch = 0;")
@@ -1482,9 +1358,8 @@ fun Emitter.emitYieldable(
     this.line(0, "}")
 }
 
-// The parameters of the factory: the receiver first when the function has one (an
-// extension function's receiver is an ordinary parameter in the emitted C++, `T* self`
-// for a value receiver), then the declaration's own.
+// The factory's parameters: the receiver first when there is one (an extension function's
+// receiver is an ordinary `T* self`), then the declaration's own.
 fun Emitter.parameterList(fn: *CgFn, decl: *AstXmlNode): List<Str> {
     var params: List<Str> = List<Str>()
     if (!xmlIsEmpty(fn.receiver)) {
@@ -1511,12 +1386,9 @@ fun Emitter.parameterList(fn: *CgFn, decl: *AstXmlNode): List<Str> {
     return params
 }
 
-// The machine is a class the type pass never saw - it is the lowering's own output -
-// so its fields are registered as a data class here. That is what tells the spelling
-// helpers what `this.<field>` is: a receiver field is a *pointer* (`T* self`), so
-// `this._sm_self.size()` reaches through it rather than taking its address, and a
-// method's parameter that shares a field's name still resolves to the parameter (the
-// frame, not this table, decides names).
+// The machine is a class the type pass never saw, so its fields are registered as a data
+// class here for the spelling helpers. A receiver field is a *pointer* (`T* self`), so
+// `this._sm_self.size()` reaches through it; the frame, not this table, decides names.
 fun Emitter.registerMachineType(className: *Str, machine: *Yielded): Unit {
     var declNode: AstXmlNode =
         AstXmlNode(AstNodeKind.DataClass, AstNodeCategory.DataClass, List<AstNodeAttribute>(), Array<AstXmlNode>())
@@ -1532,27 +1404,21 @@ fun Emitter.registerMachineType(className: *Str, machine: *Yielded): Unit {
     this.machineDecl = declNode
 }
 
-// The machine itself: the fields, then one method per way of advancing it.
+// The machine: its fields, then one method per way of advancing it.
 fun Emitter.emitMachine(
     fn: *CgFn, decl: *AstXmlNode, className: *Str, elementType: *AstXmlNode,
     machine: *Yielded, facts: *SemFacts, inferred: *Dictionary<Str, AstXmlNode>
 ): Unit {
     this.sourceComment(decl)
     this.registerMachineType(className, machine)
-    // A machine's methods are the *lowering's* output (linear/Yield.kt writes them after the
-    // body's own half of the pipeline ran), so they have not been through the optimizer:
-    // the `for` protocol's own shapes - a dispatcher reading `this.branch`, a `L2:; LYend:;`
-    // run - are exactly what `cppsrc/optimizations` folds, and a machine method is a body
-    // like any other (`Optimize.kt`). The passes rewrite in place and never touch a field a
-    // method might be entered at: they drop a branch whose condition is a literal, an
-    // unreachable statement, a jump to the statement after it, and a label nothing jumps
-    // to, none of which a state machine's own control flow is.
+    // A machine's methods are the lowering's output (linear/Yield.kt), so they have not been
+    // optimized: a machine method is a body like any other (`Optimize.kt`), and its own
+    // control flow is what the passes are careful never to disturb.
     for (*method in machine.methods) {
         linOptimizeBody(*method.body)
     }
     // A generic function's machine is a class template: its fields are typed with the
-    // function's type parameters, so the emitted C++ has to declare them where it uses
-    // them (impl_specs/yield.md).
+    // function's type parameters, so they are declared where used (impl_specs/yield.md).
     val tmpl: Str = this.templateClause(fn.templateParams)
     if (tmpl != "") {
         this.line(0, tmpl)
@@ -1582,8 +1448,7 @@ fun Emitter.emitMachine(
             result = "Bool"
         }
         this.line(1, fmtStr("| |(|) {", result, method.name, cgJoin(params, ", ")))
-        // The method is a C++ member function, so the machine's own values are
-        // reached through `this` - the same spelling the closure classes use.
+        // A C++ member function: the machine's values are reached through `this`.
         val savedClosure: Bool = this.inClosureMethod
         val savedSelfKind: NameKind = this.selfKind
         val savedSelfType: AstXmlNode = this.selfType
@@ -1597,18 +1462,15 @@ fun Emitter.emitMachine(
         classType.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, className))
         this.selfType = classType
         this.curReturnType = elementType
-        // The method's own parameters are what tells a pointer receiver from a value
-        // one (`*value = x` writes through it).
+        // The method's own parameters tell a pointer receiver from a value one.
         for (*param in method.params) {
         if (!xmlIsEmpty(param.typeNode)) {
             this.nameKinds.insert(param.name, this.kindOf(param.typeNode))
             this.localTypes.insert(param.name, param.typeNode)
         }
     }
-        // The body goes through the same two paths as any other (the IL is what a
-        // machine's methods must be expressible in, since the machine *is* the
-        // lowering's output): the frame is the machine's, so its fields are read and
-        // written through `self`, exactly as a lambda body reads its captures.
+        // The body goes through the same two paths as any other, with the machine's frame:
+        // its fields are read and written through `self`, as a lambda body reads captures.
         this.emitBodyAt(
             this.ilMachineMethod(className, method, this.machineDecl, facts, inferred), method.body,
             fn.file, 2, false
@@ -1628,16 +1490,10 @@ fun Emitter.emitMachine(
     this.line(0, "")
 }
 
-// A state machine's method, as the extractor's body context: no declaration, the
-// method's parameters, and - like a lambda - a class whose fields the body reaches
-// through `this`. The *fields* are deliberately not captures: the lowering already
-// spelled every field read and write as an explicit `this.x` member, so a bare name in
-// the body is the method's own - and a parameter that happens to share a field's name
-// (`advance(value: *T)` against a field `value`) must resolve to the parameter.
-//
-// The machine's class travels as the body's `selfDecl`: the class is the lowering's own
-// output, so the type rules never saw it - and a field read (`this._sm_self`) is how
-// the body reaches everything that crossed a `yield`.
+// A machine method as the extractor's body context: no declaration, the method's
+// parameters, and - like a lambda - a class reached through `this`. Its fields are not
+// captures (the lowering already spelled every field access as `this.x`), so a parameter
+// sharing a field's name resolves to the parameter; the class travels as `selfDecl`.
 fun Emitter.ilMachineMethod(
     className: *Str, method: *YldMethod, selfDecl: *AstXmlNode, facts: *SemFacts,
     inferred: *Dictionary<Str, AstXmlNode>
@@ -1664,8 +1520,8 @@ fun Emitter.ilMachineMethod(
     return info
 }
 
-// A failure with a position when the frame has a declaration, and position-less for a
-// synthesized body (a lambda's, a machine's method).
+// A failure with a position when the frame has a declaration, position-less otherwise (a
+// lambda's body, a machine's method).
 fun Emitter.failFromInfo(info: *IlFunction, message: *Str): Unit {
     var node: AstXmlNode = xmlEmptyNode()
     if (!xmlIsEmpty(info.decl)) {
@@ -1675,8 +1531,7 @@ fun Emitter.failFromInfo(info: *IlFunction, message: *Str): Unit {
 }
 
 // A body is emitted from its instruction list - the IL is the *only* codegen
-// (impl_specs/linear-il.md). A body the IL cannot spell is a bug in the extractor, not
-// something to fall back from: it fails with the reason.
+// (impl_specs/linear-il.md). One it cannot spell is an extractor bug, so it fails.
 fun Emitter.emitBodyAt(info: *IlFunction, body: *List<AstXmlNode>, file: *Str, level: Int, measure: Bool): Unit {
     val unit: IlUnit = ilExtractUnit(info, body, file)
     val emitted: IlText = this.emitIlBodyText(unit, level)
@@ -1686,8 +1541,8 @@ fun Emitter.emitBodyAt(info: *IlFunction, body: *List<AstXmlNode>, file: *Str, l
         )
         return
     }
-    // A lambda is a closure class, which the text above *constructs* but does not
-    // define: the class goes just above the body that builds it.
+    // A lambda is a closure class, which the text above *constructs* but does not define:
+    // the class goes just above the body that builds it.
     var classes: IlText = IlText(true, "", "")
     if (unit.closures.size() > 0) {
         classes = this.emitClosureClasses(unit)
@@ -1699,10 +1554,8 @@ fun Emitter.emitBodyAt(info: *IlFunction, body: *List<AstXmlNode>, file: *Str, l
         }
     }
     this.sections.appendText(classes.text)
-    // The profiler's timer comes before the body's own storage: the frame's declarations
-    // follow it, and nothing precedes it, so no jump can cross into its scope
-    // (impl_specs/profiling.md). `measure` is false for a state machine's methods, whose
-    // per-element cost is the timer's own (profiling/Profiling.kt states the policy).
+    // The profiler's timer comes before the body's storage, so no jump can cross into its
+    // scope (impl_specs/profiling.md). `measure` is false for a machine's methods.
     if (measure) {
         val preamble: Str = profPreamble(info.symbol)
         if (preamble != "") {

@@ -1,31 +1,13 @@
 // rtl.kt
 //
-// The bootstrap RTL surface: declarations the transpiler loads as a prelude into
-// every program's module scope, so programs can call these operations without an
-// explicit import. Most bodies are hand-written C++ elsewhere - a header for the type
-// core and the platform, the `_res.md` sections beside this file for everything else
-// (`@SmGen("res", section, symbol)`); a prelude declaration without a body is resolved
-// but never emitted (impl_specs/native-interop.md),
-// and a prelude function *with* a body is emitted into the amalgamation as any
-// other function (`iter` below is the first one - impl_specs/for.md).
-//
-// The explicit `this` parameter makes a declaration an extension on its
-// receiver's type, and the attribute names the C++ implementation
-// (`@SmGen("cpp", symbol)`, which `native(symbol)` is sugar for);
-// a function with a *body* writes the receiver type before the name instead
-// (`fun Str.isEmpty()`), which is the form the parser marks a receiver - see
-// `impl_specs/rtl-abi.md`, "The receiver spelling differs from a native's", and
-// `impl_specs/generators.md` for where the C++ of a body-less one lives.
+// The prelude: declarations in every program's module scope, so these operations need no
+// import. A declaration's C++ is named by its `@SmGen` attribute (`native(symbol)` is the
+// `cpp` generator's sugar); one with a body is emitted like any other function.
 
 package rtl
 
-// ---- iteration -------------------------------------------------------------
-
-// A `for (x in c)` is `for (x in c.iter())`: anything with an `iter` in
-// scope is iterable, and the loop is the `while` the parser writes around it
-// (impl_specs/for.md). A container walks itself in order, and this is written in
-// the language's own `yield` - so the machine is an ordinary one, reified per
-// element type like any other generic function.
+// `for (x in c)` is `for (x in c.iter())`: anything with an `iter` in scope is iterable,
+// and a container walks itself in order (impl_specs/for.md).
 fun List<T>.iter<T>(): ..T {
     var i: Int = 0
     val len = this.size();
@@ -35,16 +17,10 @@ fun List<T>.iter<T>(): ..T {
     }
 }
 
-// The same walk over the fixed-length sequence and over borrowed storage: both index
-// from `0` and count with the operation their type provides (`Array` counts with
-// `count()`, a `Span` with `size()`). Per-container `iter`s are why a machine's
-// class carries its receiver's name (`List_iter_yieldable`): the function name
-// alone would name every container's machine the same way.
-//
-// The count is read *once*, before the loop, and lives in a machine field (`len`): the
-// `while` is inside `advance()`, so a `this.size()` in the condition is a call per
-// element, re-read on every resume - the length is what a container of a fixed length
-// never changes, so it is hoisted the way the hand-written walk hoists it.
+// The same walk over the fixed-length sequence and borrowed storage, counted by the
+// operation each provides (`count()` for `Array`, `size()` for `Span`). The count is read
+// once, before the loop: the `while` lives in the machine's `advance()`, so a count in the
+// condition would be a call on every resumption.
 fun Array<T>.iter<T>(): ..T {
     var i: Int = 0
     val len = this.count();
@@ -63,12 +39,9 @@ fun Span<T>.iter<T>(): ..T {
     }
 }
 
-// The pointer form, `for (*x in c)`: the same walk, but it hands out the *place* of
-// each element - `*this[i]`, the element's address - instead of a copy. That is the
-// form for a container of aggregates: nothing is copied per iteration, and a mutation
-// through the loop variable reaches the element in the container (impl_specs/for.md).
-// It is a separate wrap rather than a parameter of `iter` because its element
-// type is `*T`, which is what the machine hands out.
+// The pointer form, `for (*x in c)`: the same walk, handing out each element's *place*
+// (`*this[i]`) instead of a copy, so a mutation through the loop variable reaches the
+// element (impl_specs/for.md).
 fun List<T>.iterPtr<T>(): ..*T {
     var i: Int = 0
     val len = this.size();
@@ -97,29 +70,14 @@ fun Span<T>.iterPtr<T>(): ..*T {
 }
 
 // A machine is already iterable: `x.iter()` on one *is* `x`, so `for (x in m)` and
-// iterating `m` by hand in a `while` see exactly the same values, with no wrapper object
-// and no extra step. That identity is the compiler's (`TypeInfer.kt` types the call as
-// the receiver, `Codegen.kt` emits the receiver itself): `..T` is not a spellable type,
-// so a function could not take one (impl_specs/for.md).
-
-// ---- List<T> --------------------------------------------------------------
-//
-// These are the C++ the *resource* holds now (`cppsrc/rtl/_res.md`, the `listops`
-// section, impl_specs/generators.md): the declarations moved out of `listops.hpp`, so
-// what a reader sees here is the language's surface and the resource is the one place its
-// C++ lives. The declarations stay the same shape; the symbol each one reaches is the
-// attribute's second argument.
+// iterating `m` in a `while` see the same values with no wrapper object.
 
 @SmGen("res", "listops", "simse_list_append")
 fun append<T>(this: List<T>, value: T): Unit
 
-// The list literal: `listOf<Str>("a", "b")` is one `Pack` instruction - the list built
-// from those values, in that order - and the compiler never emits a call for it. The
-// declaration is what gives the call a signature to be checked against (a `*List<T>`
-// parameter is what makes the trailing arguments pack), and the symbol is the fallback
-// a position with no destination slot still reaches. `List<T>(...)` keeps the RTL's own
-// construction: a count (`List<T>(n)`, `List<T>(n, value)`), which is why a literal is
-// this function and not the type's name (specs/containers.md).
+// The list literal: `listOf<Str>("a", "b")` builds one `Pack` in that order, with no call
+// emitted. The `*List<T>` parameter is what makes the trailing arguments pack, and
+// `List<T>(n, value)` is the count construction rather than a literal (specs/containers.md).
 @SmGen("res", "listops", "simse_listOf")
 fun listOf<T>(values: *List<T>): List<T>
 
@@ -132,18 +90,13 @@ fun removeRange<T>(this: List<T>, start: Int, end: Int): Unit
 @SmGen("res", "dictops", "simse_list_contains")
 fun contains<T>(this: List<T>, value: T): Bool
 
-// In-place sort; the comparator is a `(T, T) -> Bool` lambda (std::sort).
+// In-place sort; the comparator is a `(T, T) -> Bool` lambda.
 @SmGen("res", "dictops", "simse_list_sort")
 fun sort<T>(this: List<T>, less: (T, T) -> Bool): Unit
 
-// ---- Array<T> -------------------------------------------------------------
-
-// `Array<T>` is a fixed-length, reference-counted block of elements: one
-// allocation holds the element count first, then the elements
-// (specs/built-in-types.md). `arrayEmpty<T>()` is the shared empty array of `T`,
-// so an empty array allocates nothing; `toArray`/`toList` convert between the
-// fixed and the growable sequence, which is also how an array "grows": an array
-// cannot be appended to, a list can.
+// `Array<T>` is a fixed-length, ref-counted block: the allocation holds the element count
+// first, then the elements (specs/built-in-types.md). `arrayEmpty<T>()` is the shared empty
+// array; `toArray`/`toList` convert between the fixed and the growable sequence.
 @SmGen("res", "listops", "simse_arrayEmpty")
 fun arrayEmpty<T>(): Array<T>
 
@@ -156,12 +109,8 @@ fun toArray<T>(this: List<T>): Array<T>
 @SmGen("res", "listops", "simse_array_toList")
 fun toList<T>(this: Array<T>): List<T>
 
-// ---- Dictionary<K, V> -----------------------------------------------------
-
-// `Dictionary<K, V>` is a value type (the RTL's own `SmDictionary`); these are the
-// operations the language exposes on it. Keys/values are returned in the dictionary's
-// iteration order, which is unspecified: sort for determinism. Each declaration's C++ is
-// the `dictops` section of `cppsrc/rtl/_res.md`.
+// `Dictionary<K, V>` is a value type; keys and values come back in its iteration order,
+// which is unspecified - sort for determinism.
 @SmGen("res", "dictops", "simse_dictionaryOf")
 fun dictionaryOf<K, V>(): Dictionary<K, V>
 
@@ -189,38 +138,22 @@ fun values<K, V>(this: Dictionary<K, V>): List<V>
 @SmGen("res", "dictops", "simse_dict_clear")
 fun clear<K, V>(this: Dictionary<K, V>): Unit
 
-// ---- Str ------------------------------------------------------------------
-
-// Scalar/string conversions. `Str` is a byte string, so `append` takes a Char.
+// `Str` is a byte string, so `append` takes a Char.
 @SmGen("res", "listops", "simse_str_append")
 fun append(this: Str, value: Char): Unit
 
-// In-place append of a whole Str. `out = out + text` copies the accumulated
-// buffer every time, so emitters use this instead.
+// In-place append of a whole `Str`: `out = out + text` copies the accumulated buffer.
 @SmGen("res", "listops", "simse_str_appendStr")
 fun appendStr(this: Str, value: Str): Unit
 
-// The same append for a text the caller only *borrows* (`*Str`): what is appended
-// is the borrow's own pointee, nothing is copied on the way - which is what makes
-// a join of a list's elements a run of appends with no element copied.
+// The same append for a borrowed text (`*Str`): nothing is copied on the way.
 @SmGen("res", "listops", "simse_str_appendStrPtr")
 fun appendStrPtr(this: Str, value: *Str): Unit
 
-// The format text with each `|` replaced, in order, by one item: how an emitter
-// writes a fixed shape (`"(", ")"`, `"<|::|>"`) without building a temporary per
-// `+`. The shape is one item per `|`, and the text is written once into a reserved
-// buffer; a call whose points and items do not line up - or that passes no item list -
-// gets the format back, unfilled, rather than a half-filled result.
-//
-// The format is a **`StrView`**, because a format is almost always a literal and a
-// literal already *is* a view (`__sm_stringTable[k]`): the parameter takes it as it
-// stands, where a `*Str` parameter made the emitter materialize an owned `Str` copy of
-// the literal just to take its address. A `Str` a caller holds is spanned by hand
-// (`spanOfStr(*text)`), and the view converts to the returned `Str` once, at the end.
-//
-// The body is the language's own (`impl_specs/rtl-abi.md`): `charAt`, `append`,
-// `appendStr` and `reserve` are the primitives it is written over, so nothing about
-// the formatting is C++ any more.
+// The format text with each `|` replaced, in order, by one item - `fmtStr("|:|", a, b)`.
+// The shape must have one `|` per item and the items must all be present; a call whose
+// counts do not line up (or that passes no list) gets the format back, unfilled.
+// `fmt` is a `StrView`, so a literal format is taken as it stands, without a copy.
 fun fmtStr(fmt: StrView, items: *List<Str>): Str {
     if (items == null) {
         return fmt
@@ -253,10 +186,8 @@ fun fmtStr(fmt: StrView, items: *List<Str>): Str {
     return out
 }
 
-// Pre-allocates the buffer for a run of `append`/`appendStr` calls: the text is
-// then written once, instead of the accumulated prefix being copied at every
-// growth step. A *hint*, not a length - the string keeps its size, and a longer
-// run grows it as usual.
+// Pre-allocates the buffer for a run of `append`/`appendStr`: a *hint*, not a length - the
+// string keeps its size, and a longer run grows it as usual.
 @SmGen("res", "listops", "simse_str_reserve")
 fun reserve(this: Str, count: Int): Unit
 
@@ -300,27 +231,20 @@ fun toUpper(this: Str): Str
 @SmGen("res", "strops", "simse_str_toLower")
 fun toLower(this: Str): Str
 
-// `isEmpty` is the language's own body, not C++ (impl_specs/rtl-abi.md): `size()` is the
-// built-in it needs, so nothing here is a `@SmGen` declaration. Note the *receiver
-// spelling*: a generated declaration writes its receiver as the explicit first parameter
-// (`this: Str`), but a
-// function *with* a body has to write the receiver type before the name - that form is
-// what marks it an extension, and only the receiver-type form is resolved at a member
-// call (the explicit `this` is a plain function whose first parameter is named `this`).
-// It also drops the read-back a generated declaration's value receiver costs: the emitted
-// parameter is `Str* self` either way, so `xmlAttr(...).isEmpty()` no longer spells `(*ptr)`.
+// Written in the language, not C++: `size()` is the built-in it needs. Note the receiver
+// spelling (impl_specs/rtl-abi.md): a body writes the receiver type before the name
+// (`Str.isEmpty`), which is what marks it an extension resolved at a member call, where a
+// body-less declaration writes it as the explicit first parameter (`this: Str`).
 fun Str.isEmpty(): Bool {
     return this.size() == 0
 }
 
-// Whole-string parses; a malformed string yields `Opt.none()` (no exceptions).
+// Whole-string parses; a malformed string yields `Opt.none()`, not an exception.
 @SmGen("res", "strops", "simse_str_toInt")
 fun toInt(this: Str): Opt<Int>
 
 @SmGen("res", "strops", "simse_str_toFloat")
 fun toFloat(this: Str): Opt<Float64>
-
-// ---- Char -----------------------------------------------------------------
 
 @SmGen("res", "strops", "simse_char_isDigit")
 fun isDigit(this: Char): Bool
@@ -334,13 +258,9 @@ fun isAlphaOrDigit(this: Char): Bool
 @SmGen("res", "strops", "simse_char_isSpace")
 fun isSpace(this: Char): Bool
 
-// ---- numeric / boolean toString -------------------------------------------
-
 @SmGen("res", "listops", "simse_int_toString")
 fun toString(this: Int): Str
 
-// The generic numeric conversion is one template in the `strops` section
-// (`simse_num_toString`); the scalar overloads all reach it.
 @SmGen("res", "strops", "simse_num_toString")
 fun toString(this: Int8): Str
 
@@ -365,11 +285,7 @@ fun toString(this: Char): Str
 @SmGen("res", "strops", "simse_bool_toString")
 fun toString(this: Bool): Str
 
-// ---- min / max ------------------------------------------------------------
-
-// The smaller/larger of two values: `<` on the type is all the body needs, so both are
-// one generic the language itself writes (reified per instantiation, like any generic
-// function) rather than a native per type.
+// The smaller/larger of two values: `<` on the type is all the body needs.
 fun min<T>(a: T, b: T): T {
     if (a < b) {
         return a
@@ -384,15 +300,10 @@ fun max<T>(a: T, b: T): T {
     return b
 }
 
-// ---- time -----------------------------------------------------------------
-
-// Milliseconds since an arbitrary fixed point, monotonic (it never goes backwards),
-// for logging and for measuring a run. `Int64` because the value is large.
+// Milliseconds since an arbitrary fixed point, monotonic (never goes backwards).
 @SmGen("res", "timeops", "simse_nowMillis")
 fun nowMillis(): Int64
 
-// The same clock in microseconds: what the instrumented profiler measures with
-// (`cppsrc/profiling/Profiling.kt` writes a `profileApp.measure(...)` per emitted body
-// into a `--profile` build, and its destructor banks the difference here).
+// The same clock in microseconds: what the instrumented profiler measures with.
 @SmGen("res", "timeops", "simse_nowMicros")
 fun nowMicros(): Int64

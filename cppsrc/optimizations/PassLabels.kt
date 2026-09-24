@@ -1,42 +1,16 @@
 // PassLabels.kt
 //
-// The labels pass: a run of contiguous labels is one label.
-//
-//   L14:;
-//   L12:;
-//   L9:;
-//   literal = _sm_for2.value();
-//
-// Three names for one position - nothing runs between them, so entering the sequence at
-// `L14` and entering it at `L12` are the same place. The lowering mints a label per
-// branch it builds (`lowerIf`, `lowerWhile`, the `&&`/`||` short-circuits), and a branch
-// the peephole folds back leaves its label behind, so a body that has been through a
-// round or two ends up with exactly this shape. What the extra names cost is *jumps*:
-// every one of them is a target some `goto` still spells, so no later pass may drop the
-// label, and the emitted C++ carries a branch to a line it could have fallen into.
-//
-// The pass keeps the first name of a run and points every jump that named one of the
-// others at it. Nothing else moves: no statement is reordered, and the position the
-// jumps land on is the position they always landed on.
-//
-// What it is *not* is the unused-label pass - `LinSimplifier.labelPass` already drops a
-// label nothing jumps to, and it runs in the same round as this one. The two are
-// complementary: this pass turns `L12` and `L9` into names nothing else uses, and that
-// pass then removes their lines.
-//
-// **Safety is the point of the linear form.** A merged label is only ever the *next*
-// statement of the sequence it is in, so this pass never reasons about a jump crossing a
-// declaration, a scope, or a block: a run is broken by any statement that is not a label
-// (a block included - the brace between two labels is not a position a jump can land on,
-// which is why an inner block's run is collected as a run of its own).
+//   L14:;  L12:;  L9:;   ->   L14:;                (a run of contiguous labels is one name)
+// A run collapses onto its first name, and every jump to any other name in it is retargeted;
+// nothing is reordered and no jump lands anywhere new. `LinSimplifier.labelPass` then drops the
+// names nothing names any more.
 
 package optimizations
 
 import common
 import linear
 
-// Every merge the body has, as `merged name -> the name it stands for`, collected from
-// every sequence of the body (an inner block is a sequence of its own).
+// Every merge the body has, `merged name -> the name it stands for`, blocks included.
 fun linCollectLabelMerges(stmts: *List<AstXmlNode>, renames: *Dictionary<Str, Str>): Unit {
     var previous: Str = ""
     var i: Int = 0
@@ -48,8 +22,7 @@ fun linCollectLabelMerges(stmts: *List<AstXmlNode>, renames: *Dictionary<Str, St
         }
         if (name != "") {
             if (previous != "") {
-                // The whole run collapses onto its first name: `L14`, `L12`, `L9` is one
-                // position, and `previous` stays `L14` for `L9` as well.
+                // The run collapses onto its first name: `previous` stays `L14` for `L9` too.
                 renames.insert(name, previous)
             } else {
                 previous = name
@@ -65,18 +38,15 @@ fun linCollectLabelMerges(stmts: *List<AstXmlNode>, renames: *Dictionary<Str, St
     }
 }
 
-// The jump with one new target. The children come along (`Cond` is a conditional jump's
-// condition) and only the `Name` attribute is replaced - the rewrite the shadowing pass
-// gives a renamed use.
+// The jump with one new target: the children come along, only `Name` is replaced.
 fun linRetargetJump(stmt: *AstXmlNode, target: Str): AstXmlNode {
     var node: AstXmlNode = exprLike(stmt, stmt.Children.toList())
     node.attributes = simNameAttrs(stmt, target)
     return node
 }
 
-// The sequence with every merged label dropped and every jump through `renames` pointed
-// at the name it stands for. A block whose own sequence changed is rebuilt; one that did
-// not is passed on as it is, so a body with nothing to fold is not rebuilt at all.
+// The sequence with every merged label dropped and every jump pointed at the name it stands
+// for; an unchanged block is passed on as is, so a body with nothing to fold is not rebuilt.
 fun linFoldLabelsIn(stmts: *List<AstXmlNode>, renames: *Dictionary<Str, Str>): Bool {
     var changed: Bool = false
     var out: List<AstXmlNode> = List<AstXmlNode>()
@@ -113,8 +83,7 @@ fun linFoldLabelsIn(stmts: *List<AstXmlNode>, renames: *Dictionary<Str, Str>): B
     if (!changed) {
         return false
     }
-    // In place, because the pass reads and writes the body it was handed: the pipeline
-    // keeps the `List` it passed and only asks whether it moved.
+    // In place: the pipeline keeps the `List` it passed and only asks whether it moved.
     stmts.clear()
     for (*stmt in out) {
         stmts.append(stmt)
@@ -122,8 +91,7 @@ fun linFoldLabelsIn(stmts: *List<AstXmlNode>, renames: *Dictionary<Str, Str>): B
     return true
 }
 
-// One body's contiguous labels, folded. Two walks: the merges are what the second one
-// rewrites *to*, so every sequence has to be read before any jump is retargeted.
+// One body's contiguous labels, folded. Two walks: every sequence is read before a jump moves.
 fun linFoldLabels(stmts: *List<AstXmlNode>): Bool {
     var renames: Dictionary<Str, Str> = Dictionary<Str, Str>()
     linCollectLabelMerges(stmts, *renames)
@@ -133,5 +101,5 @@ fun linFoldLabels(stmts: *List<AstXmlNode>): Bool {
     return linFoldLabelsIn(stmts, *renames)
 }
 
-// Self-registration (`Optimize.kt`): the table starts empty and this is what fills it.
+// Self-registration (`Optimize.kt`).
 val linFoldLabelsPass: Bool = registerLinOptPass("foldLabels", linFoldLabels)

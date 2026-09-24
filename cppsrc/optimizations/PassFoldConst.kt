@@ -1,51 +1,24 @@
 // PassFoldConst.kt
 //
-// A slot that is written once, with a constant, is that constant at the reads that follow
-// it - which is what lets the other folds see past a temporary.
-//
-//   _sm_expr1 = false;      ->   _sm_expr1 = false;
-//   ifFalse _sm_expr1 L5;         ifFalse false L5;     (and then `PassFoldBranch`)
-//
-// Without this step most folds are invisible: the expression lowering binds a *binding*
-// (a value read twice, an aggregate) to a temporary, so a comparison in an `if` reaches the
-// branch as a slot and not as the literal the comparison folded to (`if (x > 100)` emits
-// `_sm_expr1 = 7 > 100; ifFalse _sm_expr1 L5`, and the branch fold has nothing to read).
-//
-// ## Why it is allowed to
-//
-// One rule, and it is a *dominance* rule rather than a guess:
-//
-//   - the name is written **exactly once** in the whole body - at any depth, and a write of
-//     anything (not only a literal) counts, or a later `x = y` would be invisible and a
-//     read would take the constant that a previous statement wrote;
-//   - that write is a literal, and it sits at the **top level** of the body;
-//   - the read is at the top level of the body **after** it, with **no label between them**:
-//     a jump may not land between the write and the read, so control reaching the read has
-//     passed through the write. A label therefore *clears* everything a walk has made
-//     available (`linFoldConstAvailable`), and a `goto` clears it too (control leaves).
-//
-// The write has to be at the top level for the read's index to mean anything, which is fine
-// in practice: the hoisting puts every declaration of a body at the top, and the temporaries
-// this step is for are written where they are used, in the sequence the branch is in.
-//
-// What it deliberately is not: a dataflow analysis. It does not look inside a block, it
-// does not track two writes that agree, and it does not try to prove that a label has no
-// incoming jump from before the write.
+//   _sm_expr1 = false;  ifFalse _sm_expr1 L5;   ->   ... ifFalse false L5;
+// A slot written exactly once, at the top level, with a literal, stands for it at every top-level
+// read after it with no label between; a label or `goto` clears that (a jump may not land between
+// write and read). Deliberately not a dataflow analysis.
 
 package optimizations
 
 import common
 import linear
 
-// One write: the name a statement writes, and the constant it writes when that is a literal.
+// One write: the name written and, when it is a literal, the constant.
 data class FoldConstSlot(
     var name: Str,
     var kind: FoldKind,
     var text: Str
 )
 
-// The constant a value expression is, in the shape a substitution writes back. Empty for
-// anything that is not a literal: a call, a name, an operation this round did not fold.
+// The constant a value expression is, in the shape a substitution writes back; empty for anything
+// but a literal.
 fun foldConstValue(e: *AstXmlNode): Opt<FoldGlobalConst> {
     val kind: FoldKind = foldKindOf(e)
     if (kind == FoldKind.None) {
@@ -58,8 +31,7 @@ fun foldConstValue(e: *AstXmlNode): Opt<FoldGlobalConst> {
     return Opt<FoldGlobalConst>.some(FoldGlobalConst(kind, text))
 }
 
-// The name a statement writes: the declaration's own, or an assignment's target. "" for a
-// statement that writes nothing (a label, a call, a comparison in an `if`).
+// The name a statement writes: a declaration's own or an assignment's target; "" otherwise.
 fun foldConstWriteName(stmt: *AstXmlNode): Str {
     val kind: AstNodeCategory = xmlKind(stmt)
     if (kind == AstNodeCategory.StmtVarDecl) {
@@ -78,9 +50,8 @@ fun foldConstWriteName(stmt: *AstXmlNode): Str {
     return xmlAttr(target, AstNodeAttributeKind.Name)
 }
 
-// The write a statement is, when its value is a literal. Only a plain `=` writes the
-// literal: `x += 1` is a *read* of `x` as well as a write of it, so the value it spells is
-// not what `x` holds afterwards - which is how `compound-assign` caught this the first run.
+// The write a statement is, when its value is a literal. Only a plain `=` qualifies: `x += 1` is
+// also a read of `x`, so the value it spells is not what `x` holds (compound-assign).
 fun foldConstWrite(stmt: *AstXmlNode): Opt<FoldConstSlot> {
     val name: Str = foldConstWriteName(stmt)
     if (name == "") {
@@ -105,8 +76,7 @@ fun foldConstWrite(stmt: *AstXmlNode): Opt<FoldConstSlot> {
     )
 }
 
-// Every name under `node`: what a place operator takes the address of, without asking
-// which name it is under.
+// Every name under `node`: what a place operator addresses, whatever the name.
 fun foldConstMarkNames(node: *AstXmlNode, unsafe: *Dictionary<Str, Bool>): Unit {
     if (xmlKind(node) == AstNodeCategory.ExprName) {
         unsafe.insert(xmlAttr(node, AstNodeAttributeKind.Name), true)
@@ -116,13 +86,9 @@ fun foldConstMarkNames(node: *AstXmlNode, unsafe: *Dictionary<Str, Bool>): Unit 
     }
 }
 
-// The names this body must not treat as constants whatever they hold: one handed to a call
-// (a `*T` parameter takes its address, and which parameters those are is not this pass's
-// to know), one under a `&`/`*` (the storage, which a write can reach through the pointer
-// without naming it - `stress/compound-assign`'s `stepByThree(*value)`), and the receiver
-// of a *method call*, which the emitter passes as `T* self` however `this` is spelled: a
-// value receiver is how the RTL mutates in place, so `text.appendStr(name)` writes `text`
-// without an assignment anywhere - which is the bug `stress/smgen-kt` caught.
+// The names this body must not treat as constants whatever they hold: one handed to a call (a
+// `*T` parameter takes its address), one under a `&`/`*` (the storage, reachable without naming
+// it), and a method call's receiver (`T* self`: `text.appendStr(name)` writes `text`).
 fun foldConstMarkUnsafe(node: *AstXmlNode, unsafe: *Dictionary<Str, Bool>): Unit {
     if (node.name == AstNodeKind.Arg && xmlKind(node) == AstNodeCategory.ExprName) {
         unsafe.insert(xmlAttr(node, AstNodeAttributeKind.Name), true)
@@ -139,9 +105,8 @@ fun foldConstMarkUnsafe(node: *AstXmlNode, unsafe: *Dictionary<Str, Bool>): Unit
     }
 }
 
-// The name a method call is made on, when it is a plain name: `text.appendStr(x)` writes
-// `text`, because the emitter hands the receiver to the callee as a pointer (`T* self`,
-// `guide4ai.md` "A value receiver is `T* self`").
+// The name a method call is made on, when plain: the emitter hands the receiver as `T* self`
+// (`guide4ai.md`), so `text.appendStr(x)` writes `text`.
 fun foldConstMarkReceiver(callee: *AstXmlNode, unsafe: *Dictionary<Str, Bool>): Unit {
     if (xmlIsEmpty(callee) || xmlKind(callee) != AstNodeCategory.ExprMember) {
         return
@@ -152,8 +117,7 @@ fun foldConstMarkReceiver(callee: *AstXmlNode, unsafe: *Dictionary<Str, Bool>): 
     }
 }
 
-// Every write under `node`, at any depth: a name written twice is not a constant, and the
-// count is over *all* writes so a later assignment to another value disqualifies the name.
+// Every write under `node`, at any depth, so a second write (to any value) disqualifies it.
 fun foldConstCountWrites(node: *AstXmlNode, counts: *Dictionary<Str, Int>): Unit {
     val name: Str = foldConstWriteName(node)
     if (name != "") {
@@ -168,12 +132,11 @@ fun foldConstCountWrites(node: *AstXmlNode, counts: *Dictionary<Str, Int>): Unit
     }
 }
 
-// What the substitution reads: the table the walk has made available at the statement it is
-// standing at. A program-wide `var` because a rule takes one node and nothing else
-// (`Optimize.kt`); the pass below is its only writer.
+// The table the walk has made available at the statement it stands at; a program-wide `var`
+// because a rule takes one node and nothing else.
 var linFoldConstAvailable: Dictionary<Str, FoldGlobalConst>
 
-// A read of a slot this walk has seen written once, with a literal, above it.
+// A read of a slot seen written once, with a literal, above.
 fun foldConstReadRule(e: *AstXmlNode): AstXmlNode {
     if (xmlKind(e) != AstNodeCategory.ExprName) {
         return e
@@ -194,8 +157,7 @@ fun linFoldConstBody(stmts: *List<AstXmlNode>): Bool {
         foldConstMarkUnsafe(*stmts[i], *unsafe)
         i = i + 1
     }
-    // The names the body writes exactly once, at the top level, with a literal - and never
-    // escapes through a pointer or a call.
+    // The names written exactly once, at the top level, with a literal, and not escaping.
     var singles: Dictionary<Str, FoldGlobalConst> = Dictionary<Str, FoldGlobalConst>()
     i = 0
     while (i < stmts.size()) {

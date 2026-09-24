@@ -1,41 +1,18 @@
 // LinearForm.kt
 //
-// The linear IL, in the Simse ring: the mirror of cppsrc/linear/LinearForm.cpp
-// (impl_specs/linear-il.md). The lowering leaves a body that is *almost* an
-// instruction list already - control flow is labels and jumps, every value position
-// is one operation deep, and the lowering's own storage is declared once at the top -
-// and this is the same data with the last trees removed, so a pass or a backend can
-// read one instruction at a time without knowing anything about scopes.
-//
-// The tables are per body and hold what instructions refer to by index:
-//
-//   types    every type the body mentions (the frame's slot types included)
-//   vars     the frame: name, type index, and what the slot is for
-//   pool     text: string literals, field names, operators
-//   methods  every callee the body calls, with enough of its shape to verify a call
-//   labels   label names; a label instruction carries one, a jump names one
-//   ops      the instructions, in order
-//   lines    the source line of each instruction, parallel to `ops`
-//
-// Nothing here is *inferred*: the frame is typed by the type pass before this runs,
-// and the backend decides spelling from the slot types. The dump this file prints is
-// byte-comparable with the C++ ring's - that is the oracle the port is checked with.
-//
-// The types of the *language* are `AstXmlNode` subtrees here (an empty node is "no
-// type"), so `ilTypeText` spells what the C++ ring spells through `ast::TypeExpr`.
+// The linear IL, per body: control flow is labels and jumps, so a pass or a backend reads
+// one instruction at a time without knowing about scopes (impl_specs/linear-il.md). The
+// tables hold what instructions refer to by index: `types`, `vars` (the frame), `pool`,
+// `methods`, `labels`, `ops`, `lines` (each op's line). A type is an `AstXmlNode` subtree.
 
 package linear
 
 import common
 import sema
 
-// `Expression` is the lowering's own storage (`_sm_expr<n>`, `simse_sw_<n>`):
-// declared, so a backend declares it where the hoisting put it. `Temp` is the extractor's:
-// a slot it synthesised for a position the statements did not hold in a slot of its own.
-// It is a declared slot like any other when the type rules can name it (the frame carries
-// the type, and the declaration goes to the top of the instruction list with the rest of
-// the frame); a slot whose type they cannot name has no declaration to print, so a backend
-// folds its single use into the instruction that reads it.
+// `Expression` is the lowering's own storage (`_sm_expr<n>`, `simse_sw_<n>`); `Temp` is the
+// extractor's, for a position the statements did not hold in a slot. A `Temp` the type rules
+// can name hoists with the frame; one they cannot stays untyped and its single use folds it.
 enum class IlVarKind {
     Argument,
     Local,
@@ -43,18 +20,15 @@ enum class IlVarKind {
     Temp
 }
 
-// What the *shape* of a call is: the backend resolves the symbol from the name and the
-// operand types it finds in the frame, so the IL stays free of anything but the
-// program's own spelling.
+// The shape of a call: the backend resolves the symbol from the name and the operand types.
 enum class IlMethodKind {
     Function,
     Method,
     Constructor
 }
 
-// `Var` is a **slot** - a destination, or a place read (`GetField`'s base); `Value` is
-// a slot *or* a constant, which is what most operand positions are. The opcodes say
-// nothing about types: the frame does.
+// `Var` is a slot - a destination, or a place read; `Value` is a slot or a constant. The
+// opcodes say nothing about types; the frame does.
 enum class IlOperandKind {
     Var,
     Value,
@@ -65,10 +39,7 @@ enum class IlOperandKind {
     None
 }
 
-// The instruction set: one opcode per IL instruction. An enum rather than the
-// opcode's *name*, because every pass and the backend dispatch on it - an `Int`
-// compare instead of a string compare, and an instruction carrying four bytes of
-// opcode instead of a `Str` (which is what `IlOp` used to be). The order matches
+// The instruction set: one opcode per IL instruction. The order matches
 // `makeIlSignatures()`'s, so an opcode's signature is the table row at `kind.toInt()`.
 enum class IlOpKind {
     Label,
@@ -118,28 +89,19 @@ data class IlMethod(
     var argTypes: List<Int>
 )
 
-// One instruction. An operand is an `Int` whose meaning is the opcode's operand kind
-// at that position: an index into a table, or a literal. A **negative** operand in a
-// `Value` position is a literal: it names `pool[-1-n]`, whose text a backend prints
-// verbatim (`0`, `"abc"`, `true`) - which is what keeps a constant inside the
-// instruction that uses it instead of a slot that would have to be declared.
+// One instruction. An operand's meaning is its opcode's operand kind: an index into a table,
+// or, for a negative operand in a `Value` position, a literal naming `pool[-1-n]`.
 data class IlOp(var kind: IlOpKind, var operands: List<Int>)
 
 data class IlBody(
     var file: Str, var line: Int, var symbol: Str, var signature: Str, var types: List<Str>,
 
-// The type node behind each `types` entry, when the extractor had one: the dump
-// only needs the text, but a backend spells C++ from these.
+// The type node behind each `types` entry, when the extractor had one.
     var typeNodes: List<AstXmlNode>,
 
-// What the *type pass* proved for every name in this body (`sema::inferTypes`),
-// which is more than the frame's slots carry: a name holding a state machine is
-// typed `..T`, and a declaration is never written with that (the emitted C++ uses
-// `auto`, and `linear/Yield.cpp` relies on the declaration staying untyped). The
-// backend still needs it, because `for` wraps what it iterates in `iter()` and,
-// on a machine, that wrap is the identity - a decision only the receiver's type can
-// make (impl_specs/for.md). Seeding a frame from this is how a machine-typed slot
-// stays typed without a statement tree.
+// What the *type pass* proved for every name in this body, more than the frame's slots
+// carry: a machine-typed (`..T`) slot stays typed from this without a statement tree
+// (impl_specs/for.md).
     var inferredTypes: Dictionary<Str, AstXmlNode>,
     var vars: List<IlVar>,
     var pool: List<Str>,
@@ -149,24 +111,16 @@ data class IlBody(
     var lines: List<Int>
 )
 
-// What the extractor needs to know about the body's function. A *lambda* body (and a
-// state machine's method) has no declaration: its parameters, the class it is the
-// `invoke` of, and the names it captures (which are fields of that class, not slots of
-// the frame). All of them are empty for a function.
-//
-// The last three are what a *lambda* body needs to run its own type pass: the program
-// facts (the extractor types a lambda body itself, because a lambda's frame is not the
-// enclosing function's), the type parameters in scope there, and the flat record the
-// enclosing body's pass produced (the top-level body's frame).
+// What the extractor needs to know about the body's function. A lambda (or machine-method)
+// body has no declaration; its captures are fields of its class, not frame slots. The last
+// three fields feed a lambda's own type pass (its frame is not the enclosing function's).
 data class IlFunction(
     var decl: AstXmlNode,
 
     var receiver: AstXmlNode,
     var symbol: Str,
     var statics: Dictionary<Str, Str>,
-    // The class this body is a method of, when the *lowering* built it (a state machine):
-    // its fields are what `this.<name>` reaches, and the type rules need them
-    // (`SemBody.selfDecl`).
+    // The class this body is a method of, when the *lowering* built it (a state machine).
     var selfDecl: AstXmlNode,
     var paramNames: List<Str>,
     var paramTypes: List<AstXmlNode>,
@@ -178,8 +132,7 @@ data class IlFunction(
     var inferredTypes: *Dictionary<Str, AstXmlNode>
 )
 
-// A lambda, as the language's model says it is: a class with one field per captured
-// variable and one method, so a callable value is an *instance* of it.
+// A lambda: a class with one field per captured variable and one method.
 data class IlClosure(
     var symbol: Str,
 
@@ -198,17 +151,13 @@ data class IlUnit(
     var closures: List<IlClosure>
 )
 
-// One entry per opcode, with its operands' kinds in order (`"Var,Text,Var,Var"`; a
-// trailing `...` means "the kind before it repeats here"). The printer and the backend
-// read this table, so it is the one place the IL's shape is written down. The rows are
-// in `IlOpKind` order.
+// One entry per opcode: its operands' kinds in order (`"Var,Text,Var,Var"`). A trailing
+// `...` means the kind before it repeats; rows are in `IlOpKind` order.
 data class IlSignature(
     var kind: IlOpKind,
 
     var operands: Str
 )
-
-// ---- the instruction set ---------------------------------------------------
 
 var ilSignatureTable: List<IlSignature> = makeIlSignatures()
 
@@ -219,23 +168,18 @@ fun makeIlSignatures(): List<IlSignature> {
         IlSignature(IlOpKind.IfTrue, "Value,Label"),
         IlSignature(IlOpKind.IfFalse, "Value,Label"),
         IlSignature(IlOpKind.Declare, "Var"),
-        // A declaration the instruction *after* it initialises: the two are one line of
-        // C++. The distinction is real because the hoisting turns a declaration's
+        // A declaration the instruction *after* it initialises - the hoisting splits an
         // initializer into a separate assignment, which is a bare `Declare`.
         IlSignature(IlOpKind.DeclareInit, "Var"),
-        // One assignment op for every kind of value: the destination slot's type is what a
-        // backend spells from, so the opcode says nothing about it - `SetVar x, y` copies a
-        // slot, `SetVar x, 5` carries the constant in the operand.
+        // One assignment op for every kind of value - the destination slot's type says which.
         IlSignature(IlOpKind.SetVar, "Var,Value"),
-        // ... except `null`, whose spelling comes from the destination's type
-        // (`Opt<T>()` vs `nullptr`) rather than from a literal.
+        // Except `null`, whose spelling comes from the destination's type.
         IlSignature(IlOpKind.SetVar_Null, "Var"),
         IlSignature(IlOpKind.BinaryOp, "Var,Text,Value,Value"),
         IlSignature(IlOpKind.UnaryOp, "Var,Text,Value"),
         IlSignature(IlOpKind.Cast, "Var,Value"),     // Enum.toInt(): the one cast
         IlSignature(IlOpKind.Box, "Var,Var"),        // &x -> a counted handle
-        IlSignature(IlOpKind.Deref, "Var,Var"),      // *x -> a borrow, a `.get()`,
-        //                                             or a load of a `*T`
+        IlSignature(IlOpKind.Deref, "Var,Var"),      // *x -> a borrow, `.get()`, or a `*T` load
         IlSignature(IlOpKind.CopyValue, "Var,Var"),  // copy(x)
         IlSignature(IlOpKind.Store, "Var,Value"),    // *p = v
         IlSignature(IlOpKind.GetField, "Var,Var,Text"),
@@ -252,11 +196,9 @@ fun makeIlSignatures(): List<IlSignature> {
         IlSignature(IlOpKind.CallIndirect, "Var,Var,Value..."),
         IlSignature(IlOpKind.CallIndirectVoid, "Var,Value..."),
         IlSignature(IlOpKind.CallCtor, "Var,Type,Value..."),
-        // A container built from values in one instruction - the IL's
-        // `newarr`/`fill-array-data`: `List<T>{v1, v2, ...}`. The destination's type says
-        // which container it is, and the values are elements (not fields), which is what
-        // lets a call to a function whose last parameter is a list pack its trailing
-        // arguments (`specs/functions.md`).
+        // A container built from values in one instruction: `List<T>{v1, ...}`. The
+        // destination's type says which container; the values are elements, which is what
+        // the pack builds on.
         IlSignature(IlOpKind.Pack, "Var,Value..."),
         IlSignature(IlOpKind.Return, "Value"),
         IlSignature(IlOpKind.ReturnVoid, ""),
@@ -266,8 +208,7 @@ fun makeIlSignatures(): List<IlSignature> {
     return table
 }
 
-// The opcode's spelling, in `IlOpKind` order (the dump reads it; the backend switches
-// on the enum and never needs the text).
+// The opcode's spelling, in `IlOpKind` order (the dump reads it).
 var ilOpKindTexts: List<Str> = makeIlOpKindTexts()
 
 fun makeIlOpKindTexts(): List<Str> {
@@ -318,8 +259,7 @@ fun ilOpKindText(kind: IlOpKind): Str {
     return ilOpKindTexts[index]
 }
 
-// The signature of an opcode. The table is in `IlOpKind` order, so the row *is* the
-// opcode: no search, which matters because a backend asks for one per operand.
+// An opcode's signature: the table is in `IlOpKind` order, so the row *is* the opcode.
 fun ilSignature(kind: IlOpKind): Opt<IlSignature> {
     val index: Int = kind.toInt()
     if (index < 0 || index >= ilSignatureTable.size()) {
@@ -366,12 +306,8 @@ fun ilMethodKindText(kind: IlMethodKind): Str {
     return "?"
 }
 
-// The parts, joined by `separator`. Reads them only; builds the result in place
-// (`out = out + part` copies the whole buffer per part) and reserves the exact
-// length first, so the text is written once instead of the accumulated prefix
-// being copied at every growth step. Both the separator and the parts are appended
-// through the borrows the caller hands out (`appendStrPtr`), so nothing is copied
-// on the way.
+// The parts, joined by `separator`. Reserves the exact length first and appends through
+// the caller's borrows, so the text is written once.
 fun ilJoinList(parts: *List<Str>, separator: *Str): Str {
     var out: Str = Str()
     val count: Int = parts.size()
@@ -398,12 +334,8 @@ fun ilIntText(value: Int): Str {
     return value.toString()
 }
 
-// The IL's spelling of a type: the language's own (`List<Str>`, `&Int`, `Box<T>`,
-// `(Int, Int) -> Bool`), unqualified. The dump is read by a person; a backend prints
-// its own text from the slots' types.
-//
-// A type the extractor could not name is an empty node, which spells `?` - the same
-// marker the C++ ring prints for a null `ast::TypeExpr`.
+// The IL's spelling of a type, in the language's own form and unqualified. An empty node
+// (a type the extractor could not name) spells `?`.
 fun ilTypeText(typeNode: *AstXmlNode): Str {
     if (xmlIsEmpty(typeNode)) {
         return "?"
@@ -426,9 +358,6 @@ fun ilTypeText(typeNode: *AstXmlNode): Str {
             }
             val name: *Str = xmlAttr(typeNode, AstNodeAttributeKind.Name)
             val joined: Str = ilJoinList(args, ", ")
-            // `name + "<" + joined + ">"` would build and copy the prefix three
-            // times; one reserved buffer writes it once, and the name is appended
-            // through its borrow.
             var out: Str = Str()
             out.reserve(name.size() + joined.size() + 2)
             out.appendStrPtr(name)
@@ -447,10 +376,8 @@ fun ilTypeText(typeNode: *AstXmlNode): Str {
         }
 
         AstNodeCategory.TypeYield -> {
-            // A machine (`..T`): `?` when nothing named the class, and the class with its
-            // own type arguments otherwise (`semMachineType` puts both on the node, so a
-            // machine slot has a spelled type like any other - which is what lets its
-            // declaration hoist out of the block a `for` used to keep).
+            // A machine (`..T`): `?` when nothing named the class, the class and its type
+            // arguments otherwise.
             val name: Str = xmlAttr(typeNode, AstNodeAttributeKind.Name)
             if (name == "") {
                 return "?"
@@ -466,10 +393,6 @@ fun ilTypeText(typeNode: *AstXmlNode): Str {
             return fmtStr("|<|>", name, ilJoinList(args, ", "))
         }
 
-        // Anything else spells `?`: the C++ ring's `ilTypeText` switches on
-        // Named/IntLit/Generic/Reference/Pointer/Function only, and the two dumps have to
-        // agree byte for byte. A machine is not a value type, so a body that *is* one shows
-        // its return type as `?` in both rings.
         AstNodeCategory.TypeFunction -> {
             var params: List<Str> = List<Str>()
             val paramTypes: List<AstXmlNode> = xmlChildren(typeNode, AstNodeKind.ParamType)
@@ -490,8 +413,7 @@ fun ilTypeText(typeNode: *AstXmlNode): Str {
     return "?"
 }
 
-// The type a receiver slot has in the frame: `*T self` for a value receiver, `&T` for a
-// handle, `*T` for an explicit pointer receiver.
+// A receiver slot's frame type: `*T` for a value or pointer receiver, `&T` for a handle.
 fun ilReceiverTypeText(typeNode: *AstXmlNode): Str {
     val kind: AstNodeCategory = xmlKind(typeNode)
     when (kind) {
@@ -506,13 +428,10 @@ fun ilReceiverTypeText(typeNode: *AstXmlNode): Str {
     return "*" + ilTypeText(typeNode)
 }
 
-// Whether an op's first `Var` operand is its *destination* - the rule the table leaves
-// implicit: "the first `Var` operand of an op that produces a value is where the value
-// goes". A backend folds a `Declare` into the instruction that writes the slot it
-// declared when this is true and the two are adjacent.
+// The rule the table leaves implicit: the first `Var` operand of an op that produces a
+// value is where the value goes.
 fun ilWritesDestination(kind: IlOpKind): Bool {
-    // Written out rather than derived, because deriving it means reading the operands
-    // *and* knowing which of them produce a value, which is the thing being stated.
+    // Written out rather than derived: deriving it needs to know which operands produce a value.
     when (kind) {
         IlOpKind.SetVar -> {
             return true
@@ -597,10 +516,7 @@ fun ilWritesDestination(kind: IlOpKind): Bool {
     return false
 }
 
-// ---- reading operands back -------------------------------------------------
-
-// `"Var,Method,Var..."` -> its tokens. Spelling a signature once per read is fine: the
-// dump is a debug aid, not a pass.
+// `"Var,Method,Var..."` -> its tokens.
 fun ilOperandTokens(signature: *IlSignature): List<Str> {
     var tokens: List<Str> = List<Str>()
     var current: Str = Str()
@@ -622,7 +538,6 @@ fun ilOperandTokens(signature: *IlSignature): List<Str> {
     return tokens
 }
 
-// Whether a token is the repeating one (`Var...`): the `...` is not part of its kind.
 fun ilTokenRepeats(token: *Str): Bool {
     return token.size() > 3 && token[token.size() - 1] == '.'
             && token[token.size() - 2] == '.' && token[token.size() - 3] == '.'
@@ -675,8 +590,7 @@ fun ilOperandKindAt(tokens: *List<Str>, index: Int): IlOperandKind {
     return IlOperandKind.None
 }
 
-// What operand `index` of `op` is, resolved from the signature table. A verifier, a
-// printer and a backend all read the operands through this rather than counting them.
+// What operand `index` of `op` is, from the signature table.
 fun ilOperandKind(op: *IlOp, index: Int): IlOperandKind {
     val signature: Opt<IlSignature> = ilSignature(op.kind)
     if (!signature.hasValue()) {
@@ -687,8 +601,7 @@ fun ilOperandKind(op: *IlOp, index: Int): IlOperandKind {
     return ilOperandKindAt(tokens, index)
 }
 
-// An operand the dump reads without trusting the instruction's arity: an out-of-range
-// read shows up as -1, which the renderers spell as a `?` marker.
+// An operand read without trusting the arity: out of range shows up as -1.
 fun ilOperandAt(operands: *List<Int>, index: Int): Int {
     if (index < 0 || index >= operands.size()) {
         return -1
@@ -703,10 +616,8 @@ fun ilPoolText(body: *IlBody, index: Int): Str {
     return body.pool[index]
 }
 
-// A `Var`-position operand as the dump shows it: the slot's name, or - when the operand
-// is a literal (a negative index) - the literal's own text. The two cannot be confused
-// because a destination is never a literal, and every other `Var` position can be
-// either.
+// A `Var`-position operand as the dump shows it: the slot's name, or a literal's text when
+// the operand is a negative index.
 fun ilVarName(body: *IlBody, index: Int): Str {
     if (index < 0) {
         return ilPoolText(body, -1 - index)
@@ -739,8 +650,7 @@ fun ilLabelName(body: *IlBody, index: Int): Str {
     return body.labels[index]
 }
 
-// A pool entry as the dump shows it: a literal already carries its own quotes; a name
-// or an operator gets them so the two are told apart.
+// A pool entry as the dump shows it: a literal already has quotes; a name is quoted.
 fun ilPoolAsText(text: Str): Str {
     if (text.isEmpty()) {
         return "\"\""
@@ -754,8 +664,7 @@ fun ilPoolAsText(text: Str): Str {
     return fmtStr("\"|\"", text)
 }
 
-// The operand as the reader wants it: the name from the table it indexes, with the raw
-// index only in the `?` fallbacks.
+// The operand as the reader wants it: the name from the table it indexes.
 fun ilRenderOperand(body: *IlBody, kind: IlOperandKind, value: Int): Str {
     when (kind) {
         IlOperandKind.Var, IlOperandKind.Value -> {
@@ -803,14 +712,8 @@ fun ilPadRight(text: Str, width: Int): Str {
     return out
 }
 
-// ---- the dump --------------------------------------------------------------
-
-// What the instruction means, spelled the way the language would write it. This is the
-// dump's reason to exist: reading instructions, not trees.
-//
-// Every read of an operand is bounds-checked: the dump must survive an instruction the
-// extractor built with the wrong arity (it then shows `?` markers instead of taking the
-// compiler down).
+// What the instruction means, spelled the way the language would write it. Every operand
+// read is bounds-checked, so a wrong-arity instruction shows `?` instead of crashing.
 fun ilOpComment(body: *IlBody, op: *IlOp): Str {
     val kind: IlOpKind = op.kind
     val operands: *List<Int> = *op.operands
@@ -1052,8 +955,7 @@ fun ilOpComment(body: *IlBody, op: *IlOp): Str {
     return Str()
 }
 
-// The dump: the tables, then one line per instruction, with the operands resolved for
-// the reader. Deterministic - it can be compared byte for byte with the C++ ring's.
+// The dump: the tables, then one line per instruction, operands resolved.
 fun printIlBody(body: *IlBody): Str {
     var out: Str = Str()
     out = out + "# " + body.file + ":" + ilIntText(body.line) + "  " + body.symbol + " "
@@ -1170,13 +1072,8 @@ fun printIlUnit(unit: *IlUnit): Str {
     return out
 }
 
-// ---- the closure of a lambda -----------------------------------------------
-//
-// The names a lambda body reads from *outside* itself: every read that is not one of its
-// parameters and not a name it declares. That set is the closure - what the class's
-// fields are - and it is computed, not guessed. Order is first-read, because the fields'
-// order (and so every table the IL builds) has to be reproducible.
-
+// The closure of a lambda: the names its body reads that are not its parameters and not
+// names it declares - the class's fields. Order is first-read, so the tables reproduce.
 fun ilCollectExprNames(node: *AstXmlNode, order: *List<Str>, seen: *Dictionary<Str, Bool>): Unit {
     if (xmlKind(node) == AstNodeCategory.ExprName) {
         val name: Str = xmlAttr(node, AstNodeAttributeKind.Name)
@@ -1186,8 +1083,8 @@ fun ilCollectExprNames(node: *AstXmlNode, order: *List<Str>, seen: *Dictionary<S
         }
         return
     }
-    // A nested lambda is its own closure: its free names are resolved against *its*
-    // frame when it is extracted, so walking into it here would collect the wrong set.
+    // A nested lambda is its own closure: its free names resolve against its own frame, so
+    // walking into it here would collect the wrong set.
     if (xmlKind(node) == AstNodeCategory.ExprLambda) {
         return
     }
@@ -1196,9 +1093,8 @@ fun ilCollectExprNames(node: *AstXmlNode, order: *List<Str>, seen: *Dictionary<S
     }
 }
 
-// The names a statement sequence reads, in the order the C++ ring walks them (the
-// statement's own expressions, then the statements of its containers). A name it declares
-// counts as declared, wherever in the sequence the declaration stands.
+// The names a statement sequence reads: the statement's own expressions, then its
+// containers'. A name it declares counts as declared wherever the declaration stands.
 fun ilCollectStmtNames(
     stmts: *List<AstXmlNode>, declared: *Dictionary<Str, Bool>,
     order: *List<Str>, seen: *Dictionary<Str, Bool>
@@ -1221,7 +1117,6 @@ fun ilCollectStmtNames(
     }
 }
 
-// One expression child of a statement, when the statement has it.
 fun ilCollectStmtExprs(
     stmt: *AstXmlNode, role: AstNodeKind, order: *List<Str>,
     seen: *Dictionary<Str, Bool>
@@ -1232,7 +1127,7 @@ fun ilCollectStmtExprs(
     }
 }
 
-// The statements of one container child (`Body`, `Then`, `Else`), when it has one.
+// The statements of one container child (`Body`, `Then`, `Else`).
 fun ilCollectStmtNamesIn(
     stmt: *AstXmlNode, role: AstNodeKind, declared: *Dictionary<Str, Bool>,
     order: *List<Str>, seen: *Dictionary<Str, Bool>
@@ -1251,8 +1146,6 @@ fun ilCollectStmtNamesIn(
     ilCollectStmtNames(body, declared, order, seen)
 }
 
-// ---- operand lists ---------------------------------------------------------
-
 fun ilOps1(a: Int): List<Int> {
     return listOf<Int>(a)
 }
@@ -1269,26 +1162,21 @@ fun ilOps4(a: Int, b: Int, c: Int, d: Int): List<Int> {
     return listOf<Int>(a, b, c, d)
 }
 
-// A type node built for a synthesized slot: the language's types are nodes, so a receiver
-// slot's `*T` is a pointer node around the receiver's own node (a copy, like the C++
-// ring's `receiverTypeNode`).
+// A pointer type node around `inner`, for a synthesized slot's `*T`. `inner` is copied.
 fun ilPointerNode(inner: *AstXmlNode): AstXmlNode {
     var node: AstXmlNode = AstXmlNode(
         AstNodeKind.Type, AstNodeCategory.TypePointer,
         List<AstNodeAttribute>(), Array<AstXmlNode>()
     )
     var renamed: AstXmlNode = inner
-    // The child's role is what the backend's `type()` looks up (`Inner`), so a synthesized
-    // `*T` has to carry it like a parsed one does.
+    // A synthesized `*T` carries the `Inner` role like a parsed one.
     renamed.name = AstNodeKind.Inner
     xmlAddChild(node, renamed)
     return node
 }
 
-// A `*x` node around an expression, the shape the parser builds (the operand under the
-// `Operand` role): the extractor makes one when a call argument's address is what a
-// `*T` parameter wants, so the address is spelled by the *same* code an explicit `*`
-// reaches (`into`).
+// A `*x` node (the operand under the `Operand` role), made when a `*T` parameter's
+// argument needs its address - so it is spelled by the same code an explicit `*` reaches.
 fun ilDerefNode(operand: *AstXmlNode): AstXmlNode {
     var node: AstXmlNode = AstXmlNode(
         AstNodeKind.Expr, AstNodeCategory.ExprDeref,
@@ -1300,17 +1188,16 @@ fun ilDerefNode(operand: *AstXmlNode): AstXmlNode {
     return node
 }
 
-// Whether an assignment's operator is one of the compound forms (`+=`, `-=`, `*=`, `/=`,
-// `%=`, `&=`, `|=`, `^=`, `<<=`, `>>=`). The step forms (`i++`, `i--`) are the parser's
-// `+= 1` and `-= 1`, so the lowering sees one shape for all of them.
+// Whether an assignment's operator is a compound form (`+=`, `<<=`, ...). The step forms
+// (`i++`, `i--`) are the parser's `+= 1`/`-= 1`.
 fun isCompoundAssignOp(op: Str): Bool {
     return op == "+=" || op == "-=" || op == "*=" || op == "/=" || op == "%="
             || op == "&=" || op == "|=" || op == "^="
             || op == "<<=" || op == ">>="
 }
 
-// The binary operation a compound assignment's operator names: `+=` is `x = x + v`. Every
-// operator the caller accepts has a row, so the last one is a fallback only `%=` reaches.
+// The binary operation a compound operator names. The fallback row is `%=`'s, the one
+// operator the `when` does not list.
 fun compoundBinaryOp(op: Str): Str {
     when (op) {
         "+=" -> {
@@ -1361,8 +1248,7 @@ fun ilNamedTypeNode(name: Str): AstXmlNode {
     return node
 }
 
-// The type a receiver slot is: already a pointer or a handle when the source said so,
-// otherwise a pointer to the value (a value receiver is `T* self`).
+// A receiver slot's type: already a pointer or a handle when the source said so, else `T*`.
 fun ilReceiverTypeNode(typeNode: *AstXmlNode): AstXmlNode {
     val kind: AstNodeCategory = xmlKind(typeNode)
     if (kind == AstNodeCategory.TypeReference || kind == AstNodeCategory.TypePointer) {
@@ -1372,9 +1258,7 @@ fun ilReceiverTypeNode(typeNode: *AstXmlNode): AstXmlNode {
 }
 
 // Whether a type is reached through a handle (`&T`, `*T`, or the `PList<T>` alias of
-// `&List<T>`): the C++ ring's `sema::isHandleType`, which this ring spells on the emitter
-// (`Emitter.isHandleType`). The extractor is not the emitter, so it reads the same rule
-// here.
+// `&List<T>`), the rule the emitter also spells.
 fun ilIsHandleType(typeNode: *AstXmlNode): Bool {
     if (xmlIsEmpty(typeNode)) {
         return false
@@ -1389,12 +1273,8 @@ fun ilIsHandleType(typeNode: *AstXmlNode): Bool {
     return false
 }
 
-// ---- the extractor ---------------------------------------------------------
-
-// One body into instructions. The frame comes from `IlFunction` (a declaration's
-// parameters and receiver, or a lambda's / a machine method's parameters and class), the
-// tables are filled in first-touch order, and every instruction carries the line of the
-// statement it came from.
+// One body into instructions. The frame comes from `IlFunction`; the tables are filled in
+// first-touch order, and every instruction carries the line of its statement.
 data class IlExtractor(
     var fn: IlFunction,
 
@@ -1408,36 +1288,27 @@ data class IlExtractor(
     var labelAt: Dictionary<Str, Int>,
     var nextBase: Int,
     var line: Int,
-    // The synthesized slots that carry a type: their declarations go to the top of the
-    // instruction list (with the line that needed them, for the dump).
+    // Synthesized slots that carry a type, declared at the top of the instruction list.
     var hoisted: List<Int>,
     var hoistedLines: List<Int>,
-    // The caches the type questions read: the context `semTypeOfExpr` is given and the
-    // frame as it wants to see it (`typeContext`/`frameNames`), plus the flag that says
-    // whether each is still valid (`typeContextReady`/`frameNamesStale`). The context is
-    // *borrowed* storage of the caller's - the way `unit` and `closureCounter` are - because
-    // a `SemBody` field here would be an incomplete type where this class is defined.
+    // The caches the type questions read (`typeContext`/`frameNames`, each with a
+    // stale flag). Borrowed storage of the caller's: a `SemBody` field would be incomplete here.
     var typeContext: *SemBody,
     var typeContextReady: Bool,
     var frameNames: Dictionary<Str, AstXmlNode>,
     var frameNamesStale: Bool
 ) {
 
-    // ---- tables -----------------------------------------------------------
-
     fun addVar(name: *Str, typeText: *Str, kind: IlVarKind, typeNode: *AstXmlNode): Int {
         this.out.vars.append(IlVar(name, this.typeIndex(typeText, typeNode), kind))
         this.varAt.insert(name, this.out.vars.size() - 1)
-        // The frame the type questions read is kept up to date *in place*: it is only ever
-        // appended to, so a new slot is one insert - a full rebuild is what the first
-        // question after a change used to pay.
+        // The frame the type questions read is kept in place: it is only ever appended to.
         this.frameAdd(name, typeNode)
         return this.out.vars.size() - 1
     }
 
-    // Give a slot a type after the fact: the destination of a list literal is the call's
-    // own slot, and the literal knows the type it is building even when the position it
-    // stands in would only have inferred it.
+    // Give a slot a type after the fact: a list literal's destination knows the type it is
+    // building even when the position would only have inferred it.
     fun setSlotType(slot: Int, typeNode: AstXmlNode): Unit {
         if (slot < 0 || slot >= this.out.vars.size() || xmlIsEmpty(typeNode)) {
             return
@@ -1446,9 +1317,7 @@ data class IlExtractor(
         this.frameAdd(this.out.vars[slot].name, typeNode)
     }
 
-    // The type table: text for the dump, the node (when there is one) for a backend. The
-    // first node seen for a text wins, so the table does not depend on which mention
-    // happened to carry it.
+    // The type table: text for the dump, the node for a backend. The first node for a text wins.
     fun typeIndex(text: *Str, node: *AstXmlNode): Int {
         if (this.typeAt.has(text)) {
             val index: Int = this.typeAt.get(text).value()
@@ -1488,8 +1357,8 @@ data class IlExtractor(
         return this.out.labels.size() - 1
     }
 
-    // A method's identity is its name, its kind, the type it is reached through (a static
-    // call), and the types it is passed: the same name over two receivers is two entries.
+    // A method's identity is its name, kind, static base and argument types, so the same name
+    // over two receivers is two entries.
     fun methodIndex(
         name: *Str, kind: IlMethodKind, staticBase: Int, returnType: Int,
         argTypes: *List<Int>
@@ -1529,9 +1398,7 @@ data class IlExtractor(
             this.hoisted.append(slot)
             this.hoistedLines.append(this.line)
         } else {
-            // A slot the type rules could not name: the instruction list has to say where
-            // it comes from *here*, in front of the instruction that first writes it, and
-            // the backend declares it with `auto`.
+            // A slot the type rules could not name is declared here, in front of its first write.
             this.emit(IlOpKind.Declare, ilOps1(slot))
         }
         return slot
@@ -1541,21 +1408,14 @@ data class IlExtractor(
         return this.freshSlot(typeText, xmlEmptyNode())
     }
 
-    // ---- the types of what the extractor synthesizes ----------------------
-
     // The context `semTypeOfExpr` reads, and the frame as it wants to see it. Both are
-    // constant for a body except when a slot is added, so they are built once and reused:
-    // every question used to rebuild them (a dictionary of every slot, and a `SemBody` with
-    // its lists copied), which cost the compiler's own transpile about a third of its time
-    // once the extractor began asking about *call* arguments as well as about the slots it
-    // synthesizes.
+    // constant for a body except when a slot is added, so they are built once and reused.
     fun frameChanged(): Unit {
         this.frameNamesStale = true
     }
 
-    // One new (or newly typed) binding of the frame. A frame that has not been built yet
-    // stays unbuilt - the first question builds it whole - and one that has takes the
-    // single entry: only `addVar`/`setSlotType` ever change it, and both only add.
+    // One new (or newly typed) binding. An unbuilt frame stays unbuilt; a built one takes the
+    // single entry (`addVar`/`setSlotType` only ever add).
     fun frameAdd(name: *Str, typeNode: *AstXmlNode): Unit {
         if (this.frameNamesStale || xmlIsEmpty(typeNode)) {
             return
@@ -1563,9 +1423,8 @@ data class IlExtractor(
         this.frameNames.insert(name, typeNode)
     }
 
-    // The context, borrowed: the same one every question about this body is asked with.
-    // The storage is the caller's, the way the extractor's own frame tables are filled in
-    // place; it is written once, on the first question.
+    // The borrowed context every question about this body is asked with; written once, on the
+    // first question.
     fun bodyContext(): *SemBody {
         if (this.typeContextReady) {
             return this.typeContext
@@ -1578,20 +1437,15 @@ data class IlExtractor(
         this.typeContext.paramTypes = this.fn.paramTypes
         this.typeContext.captures = this.fn.captureTypes
         if (xmlIsEmpty(this.typeContext.selfType) && !this.fn.closureSymbol.isEmpty()) {
-            // A machine method or a lambda body: `this` is the instance of the class the
-            // lowering built (a value receiver reads through it).
+            // A machine method or a lambda body: `this` is the class instance the lowering built.
             this.typeContext.selfType = ilNamedTypeNode(this.fn.closureSymbol)
         }
         this.typeContextReady = true
         return this.typeContext
     }
 
-    // The frame is a scope: every slot's name and its type. That is exactly the shape
-    // `semTypeOfExpr` takes, and the reason the extractor can give a type to a slot the
-    // statements never declared (a place, a value position the lowering left inline) - a
-    // slot without one cannot be declared at the top of the body, and then the instruction
-    // that reads it has to inline the whole expression it stands for. Borrowed, and rebuilt
-    // only when the frame changed.
+    // The frame as a scope: every slot's name and type, the shape `semTypeOfExpr` takes. A slot
+    // without one cannot be declared, so its reader inlines the expression it stands for.
     fun frameTypes(): *Dictionary<Str, AstXmlNode> {
         if (this.frameNamesStale) {
             this.frameNames.clear()
@@ -1608,10 +1462,8 @@ data class IlExtractor(
         return * this.frameNames
     }
 
-    // The type of an expression, from the rules the *type pass* applies to a whole body -
-    // asked here about one node, with this body's frame in scope. An empty node when the
-    // rules cannot name it (or when there are no facts to ask); the caller then leaves the
-    // slot untyped.
+    // The type of an expression, from the rules the *type pass* applies to a whole body, asked
+    // about one node with this frame in scope. Empty when the rules cannot name it.
     fun exprType(e: *AstXmlNode): AstXmlNode {
         if (this.fn.facts == null) {
             return xmlEmptyNode()
@@ -1619,15 +1471,13 @@ data class IlExtractor(
         return semTypeOfExpr(e, this.fn.facts, this.bodyContext(), this.frameTypes())
     }
 
-    // The type of the *value* an instruction writes for this expression. It is the type
-    // rules' answer, unchanged: they already describe what the emitter spells (`*x` on a
-    // value is the address, on `&T` the `.get()`, on `*T` the load through it).
+    // The type of the value an instruction writes for this expression: the rules' answer,
+    // unchanged.
     fun valueType(e: *AstXmlNode): AstXmlNode {
         return this.exprType(e)
     }
 
-    // The type of a slot to synthesise for `e`: its own type, spelled the way the frame
-    // spells types, or `?` when there is none.
+    // A synthesized slot's type, spelled as the frame does, or `?` when there is none.
     fun slotTypeText(typeNode: *AstXmlNode): Str {
         if (xmlIsEmpty(typeNode)) {
             return "?"
@@ -1648,8 +1498,6 @@ data class IlExtractor(
         return -1 - this.poolIndex(text)
     }
 
-    // ---- the frame --------------------------------------------------------
-
     fun begin(file: *Str): Unit {
         this.out.file = file
         if (xmlIsEmpty(this.fn.decl)) {
@@ -1658,9 +1506,8 @@ data class IlExtractor(
             this.out.line = xmlLine(this.fn.decl)
         }
         this.out.symbol = this.fn.symbol
-        // The types the enclosing pass proved, so the frame carries the slots a
-        // declaration could not name (a `..T` machine). The extractor still adds each
-        // slot's own declared type as it goes; both are keyed by name.
+        // The types the enclosing pass proved, so the frame carries slots a declaration could
+        // not name (a `..T` machine). Both are keyed by name.
         val declaredTypes: List<Str> = this.fn.inferredTypes.keys()
         var ti: Int = 0
         while (ti < declaredTypes.size()) {
@@ -1675,12 +1522,10 @@ data class IlExtractor(
 
     fun run(body: *List<AstXmlNode>): IlBody {
         this.stmts(body)
-        // The extractor's own slots are the body's registers: a slot with a type is
-        // declared once, at the top of the instruction list, exactly where `hoistSlots` put
-        // the lowering's own slots - so the frame is flat, no jump can cross a declaration,
-        // and nothing has to be scoped. A slot without a type (a shape the type rules
-        // cannot name) keeps its declaration in front of the instruction that first writes
-        // it, which the backend then pairs with that instruction as `auto`.
+        // The extractor's own slots are the body's registers: a typed one is declared once at
+        // the top of the instruction list, so the frame is flat and no jump crosses a
+        // declaration. An untyped one keeps its declaration in front of the instruction that
+        // first writes it.
         if (this.hoisted.size() > 0) {
             var ops: List<IlOp> = List<IlOp>()
             var lines: List<Int> = List<Int>()
@@ -1708,8 +1553,8 @@ data class IlExtractor(
 
     fun buildFrame(): Unit {
         if (!this.fn.closureSymbol.isEmpty()) {
-            // A lambda (or a machine's method): the receiver is the class instance - whose
-            // fields the captures are - and the parameter list is the body's own.
+            // A lambda (or a machine's method): the receiver is the class instance whose
+            // fields the captures are.
             this.addVar(
                 "self", "*" + this.fn.closureSymbol, IlVarKind.Argument,
                 ilPointerNode(ilNamedTypeNode(this.fn.closureSymbol))
@@ -1769,8 +1614,7 @@ data class IlExtractor(
                 params.append(fmtStr("| |", this.out.types[slot.typeIndex], slot.name))
             }
         }
-        // A lambda's result is whatever its body returns, which C++ deduces; a function's
-        // is its declared type.
+        // A lambda's result is what its body returns; a function's is its declared type.
         var retText: Str = "?"
         if (!xmlIsEmpty(this.fn.decl)) {
             val declared: *AstXmlNode = xmlChildPtr(this.fn.decl, AstNodeKind.ReturnType)
@@ -1780,8 +1624,6 @@ data class IlExtractor(
         }
         return fmtStr("(|) -> |", ilJoinList(params, ", "), retText)
     }
-
-    // ---- statements -------------------------------------------------------
 
     fun stmts(list: *List<AstXmlNode>): Unit {
         for (*stmt in list) {
@@ -1946,7 +1788,7 @@ data class IlExtractor(
             }
 
             AstNodeCategory.ExprDeref -> {
-                // `*p = v`: the emitter writes through the pointer's type.
+                // `*p = v`.
                 this.emit(
                     IlOpKind.Store, ilOps2(
                         this.operandOf(xmlChildPtr(target, AstNodeKind.Operand)),
@@ -1959,18 +1801,15 @@ data class IlExtractor(
         this.unsupported("assignment target")
     }
 
-    // `x op= v` - and `x++`/`x--`, which are the parser's `x += 1` and `x -= 1`: the
-    // target's *place* is located once, its current value is read out of that same place,
-    // folded with the operation, and written back through it. So `a[i] += 1` evaluates `a`
-    // and `i` once, `*p += 1` is one load, one fold and one store, and a write can never
-    // land in a copy of what the target names.
+    // `x op= v` (and `x++`/`x--`, the parser's `x += 1`/`x -= 1`): the target's place is located
+    // once, its value read out of it, folded and written back through it - so an index with a
+    // side effect runs once and a write cannot land in a copy.
     fun assignCompound(target: *AstXmlNode, op: Str, value: *AstXmlNode): Unit {
         val targetKind: AstNodeCategory = xmlKind(target)
         when (targetKind) {
             AstNodeCategory.ExprName -> {
                 val name: Str = xmlAttr(target, AstNodeAttributeKind.Name)
-                // A captured variable lives in the closure's object: read and write its
-                // field, so the fold sees what the target holds.
+                // A captured variable lives in the closure's object: read and write its field.
                 if (this.fn.captures.has(name)) {
                     val base: Int = this.varIndex("self")
                     val field: Int = this.poolIndex(name)
@@ -1981,8 +1820,7 @@ data class IlExtractor(
                     )
                     return
                 }
-                // A local slot *is* the place: `i = i + 1` is one instruction, and there is
-                // no address to take.
+                // A local slot *is* the place: `i = i + 1` is one instruction.
                 val slot: Int = this.varIndex(name)
                 if (slot >= 0) {
                     this.emit(
@@ -1992,8 +1830,7 @@ data class IlExtractor(
                     )
                     return
                 }
-                // A file-level `var` lives in static storage: read, fold, write back - the
-                // name is the same place both times.
+                // A file-level `var` lives in static storage: read, fold, write back through the name.
                 val staticName: Int = this.poolIndex(name)
                 val current: Int = this.readStatic(target, staticName)
                 this.emit(
@@ -2012,8 +1849,7 @@ data class IlExtractor(
                     this.emit(IlOpKind.SetStatic, ilOps2(field, this.fold(current, op, value, target)))
                     return
                 }
-                // The base is the reference the whole expression is reached through: it is
-                // located once, and both the read and the write name the field on it.
+                // The base is located once; the read and the write both name the field on it.
                 val base: Int = this.receiverOf(lhs)
                 val field: Int = this.poolIndex(fieldName)
                 val current: Int = this.readField(target, base, field)
@@ -2022,8 +1858,7 @@ data class IlExtractor(
             }
 
             AstNodeCategory.ExprIndex -> {
-                // The base and the index are each evaluated once, into the operands the read
-                // and the write share - so an index with a side effect runs once.
+                // The base and the index are evaluated once, into operands the read and the write share.
                 val base: Int = this.receiverOf(xmlChildPtr(target, AstNodeKind.Receiver))
                 val index: Int = this.operandOf(xmlChildPtr(target, AstNodeKind.Index))
                 val current: Int = this.freshValueSlot(target)
@@ -2033,8 +1868,7 @@ data class IlExtractor(
             }
 
             AstNodeCategory.ExprDeref -> {
-                // `*p += 1`: the pointer *is* the place, so the load and the store both go
-                // through it and the pointee is written in place.
+                // `*p += 1`: the pointer *is* the place; the load and the store both go through it.
                 val pointer: Int = this.operandOf(xmlChildPtr(target, AstNodeKind.Operand))
                 val current: Int = this.freshValueSlot(target)
                 this.emit(IlOpKind.Deref, ilOps2(current, pointer))
@@ -2045,8 +1879,7 @@ data class IlExtractor(
         this.unsupported("compound assignment target")
     }
 
-    // The current value of a field, as one instruction: the base is the one the write will
-    // use, so the place is not located twice.
+    // The current value of a field, as one instruction; the base is the one the write uses.
     fun readField(whole: *AstXmlNode, base: Int, field: Int): Int {
         val slot: Int = this.freshValueSlot(whole)
         this.emit(IlOpKind.GetField, ilOps3(slot, base, field))
@@ -2059,23 +1892,21 @@ data class IlExtractor(
         return slot
     }
 
-    // `current <op> value`, in a slot of the target's own type - the value the write puts
-    // back.
+    // `current <op> value`, in a slot of the target's own type.
     fun fold(current: Int, op: Str, value: *AstXmlNode, whole: *AstXmlNode): Int {
         val slot: Int = this.freshValueSlot(whole)
         this.emit(IlOpKind.BinaryOp, ilOps4(slot, this.poolIndex(op), current, this.operandOf(value)))
         return slot
     }
 
-    // A slot for the value of `e`, typed the way `valueOf` types the slots it synthesizes.
+    // A slot for the value of `e`, typed the way `valueOf` types its slots.
     fun freshValueSlot(e: *AstXmlNode): Int {
         val typeNode: AstXmlNode = this.valueType(e)
         return this.freshSlot(this.slotTypeText(typeNode), typeNode)
     }
 
-    // The type of the value in `slot`, which came from `e`: a place is a slot of this frame
-    // and already carries one, so the common operand costs a lookup. Anything untyped (a
-    // `for` machine, a bare `null`) is the expensive question for the type rules.
+    // The type of the value in `slot`, which came from `e`: a place already carries one, so the
+    // common operand costs a lookup; anything untyped is the rules' expensive question.
     fun operandValueType(slot: Int, e: *AstXmlNode): AstXmlNode {
         val carried: AstXmlNode = ilVarType(this.out, slot)
         if (!xmlIsEmpty(carried)) {
@@ -2084,21 +1915,10 @@ data class IlExtractor(
         return this.exprType(e)
     }
 
-    // One operand of a binary operation: read through the handle it is, because the
-    // operation is on *values*. `out + separator` with `separator: *Str` is
-    // `out + *separator` - the `*T -> T` row of the conversion table
-    // (`impl_specs/linear-il.md`), which is "wherever a `T` is required" read at an operand,
-    // and the same rule that lets a parameter be a `*T` without every call spelling the `*`
-    // (`specs/functions.md`, "Handles at a call").
-    //
-    // The *other* operand is what says the operation is on values, and it says so in two
-    // ways: it is a value of the handle's own pointee (`*separator` against a `Str`), or it
-    // is a handle of that pointee too (`xmlAttr(a, Name) == xmlAttr(b, Name)` is the two
-    // *strings* compared - `Str` has value semantics, and a borrow is not a pointer in the
-    // language's eyes). A handle against a *different* type is left alone: comparing two
-    // unrelated handles is a meaning of its own, or the type error it always was. So is a
-    // handle against `null` (an empty type), which is the one comparison a raw pointer is
-    // *for*.
+    // One operand of a binary operation: read through the handle it is, because the operation
+    // is on *values* (`out + separator` with `separator: *Str` is `out + *separator`; the
+    // `*T -> T` row of impl_specs/linear-il.md). A handle against a different type, or against
+    // `null`, is left alone.
     fun binaryOperand(me: *AstXmlNode, other: *AstXmlNode, slot: Int): Int {
         val mine: AstXmlNode = this.operandValueType(slot, me)
         if (xmlIsEmpty(mine) || !ilIsHandleType(mine)) {
@@ -2118,19 +1938,15 @@ data class IlExtractor(
         return this.readThrough(pointee, slot)
     }
 
-    // ---- values -----------------------------------------------------------
-
-    // The value `expr` produces, as an operand: a frame slot, a literal (a negative
-    // operand, see `literalOperand`), or - when the position holds more than a name - a
-    // slot the extractor synthesizes for the place.
+    // The value `expr` produces, as an operand: a frame slot, a literal (a negative operand),
+    // or - when the position holds more than a name - a slot the extractor synthesizes.
     fun operandOf(expr: *AstXmlNode): Int {
         val kind: AstNodeCategory = xmlKind(expr)
         when (kind) {
             AstNodeCategory.ExprIntLit, AstNodeCategory.ExprFloatLit,
             AstNodeCategory.ExprStrLit, AstNodeCategory.ExprCharLit -> {
-                // A literal in a value position rides the instruction as an operand: the pool
-                // holds the token's own text, so a backend prints exactly what the statement
-                // path printed - `i > 0`, not `_sm_base1 = 0; ... i > _sm_base1`.
+                // A literal in a value position rides the instruction as an operand: the pool holds
+                // the token's own text, so a backend prints `i > 0` and not a slot.
                 return this.literalOperand(xmlAttr(expr, AstNodeAttributeKind.Text))
             }
 
@@ -2139,10 +1955,8 @@ data class IlExtractor(
             }
 
             AstNodeCategory.ExprNullLit -> {
-                // `null`'s spelling depends on the expected type (`Opt<T>()` vs `nullptr`),
-                // which only the destination slot's type states for certain - so it is
-                // materialised. It is the one value with no type of its own, so the slot stays
-                // untyped and the backend inlines it where it is read.
+                // `null`'s spelling depends on the expected type, which only the destination slot's
+                // type states for certain - so it is materialised, untyped, and the backend inlines it.
                 val slot: Int = this.freshSlotText("?")
                 this.emit(IlOpKind.SetVar_Null, ilOps1(slot))
                 return slot
@@ -2156,9 +1970,8 @@ data class IlExtractor(
             AstNodeCategory.ExprCall, AstNodeCategory.ExprBinary,
             AstNodeCategory.ExprUnary, AstNodeCategory.ExprRef,
             AstNodeCategory.ExprDeref, AstNodeCategory.ExprCopy -> {
-                // A value the body does not hold in a slot: the extractor makes one, and the
-                // *type rules* type it - so the instruction that reads it names a declared slot
-                // instead of inlining the whole expression it stands for.
+                // A value the body does not hold in a slot: the extractor makes one and the *type rules*
+                // type it, so the instruction names a declared slot instead of inlining the expression.
                 val typeNode: AstXmlNode = this.valueType(expr)
                 val slot: Int = this.freshSlot(this.slotTypeText(typeNode), typeNode)
                 this.into(slot, expr)
@@ -2178,8 +1991,8 @@ data class IlExtractor(
         return this.freshSlotText("?")
     }
 
-    // Writes `e` into `slot`, one instruction per operation: every value the lowering
-    // produces is one operation deep, so one case here is one instruction.
+    // Writes `e` into `slot`, one instruction per operation: a value the lowering produces is
+    // one operation deep.
     fun into(slot: Int, e: *AstXmlNode): Unit {
         val kind: AstNodeCategory = xmlKind(e)
         when (kind) {
@@ -2263,17 +2076,14 @@ data class IlExtractor(
             }
 
             AstNodeCategory.ExprDeref -> {
-                // `*x` is the address of what `x` denotes: of a value's own storage (the place
-                // itself, or `&name`), of a counted reference's pointee (`.get()`), or the load
-                // through a raw pointer - the backend reads which from the operand's slot type.
-                // A place that is a chain already *is* its address, so it is copied; a name, a
-                // handle and a call's result are read and the address is taken from the value.
+                // `*x` is the address of what `x` denotes: of a value's own storage (or `&name`), of a
+                // counted reference's pointee (`.get()`), or the load through a raw pointer. A place that
+                // is a chain already *is* its address, so it is copied; other forms are read first.
                 val operand: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Operand)
                 val operandName: Str = xmlAttr(operand, AstNodeAttributeKind.Name)
                 if (xmlKind(operand) == AstNodeCategory.ExprName && this.isStaticName(operandName)) {
-                    // A file-level static is not a slot of the frame, so its address is its own
-                    // instruction (writing the value into a slot first would take the address of
-                    // a copy).
+                    // A file-level static is not a frame slot, so its address is its own instruction -
+                    // writing it into a slot first would take the address of a copy.
                     this.emit(IlOpKind.GetStaticAddr, ilOps2(slot, this.poolIndex(operandName)))
                     return
                 }
@@ -2281,9 +2091,8 @@ data class IlExtractor(
                             || xmlKind(operand) == AstNodeCategory.ExprIndex)
                     && !this.isHandleExpr(operand)
                 ) {
-                    // A chain that is a place: the address *is* the place slot. (A call's result
-                    // is not a place - its address is taken at the call, which is what `Deref`
-                    // spells for a value.)
+                    // A chain that is a place: the address *is* the place slot. (A call's result is not a
+                    // place.)
                     this.emit(IlOpKind.SetVar, ilOps2(slot, this.receiverOf(operand)))
                     return
                 }
@@ -2315,9 +2124,8 @@ data class IlExtractor(
         this.unsupported("expression")
     }
 
-    // A read of a place: the value behind it, as a slot. The place itself is read through
-    // `receiverOf` - so reading `a[i].f` borrows the element rather than copying it into a
-    // temporary of the extractor's own.
+    // A read of a place: the value behind it, as a slot, read through `receiverOf` - so
+    // reading `a[i].f` borrows the element rather than copying it into a temporary.
     fun valueOf(e: *AstXmlNode): Int {
         if (xmlKind(e) == AstNodeCategory.ExprName) {
             return this.nameOf(e)
@@ -2328,9 +2136,8 @@ data class IlExtractor(
         return slot
     }
 
-    // Whether an expression's *value* is already a handle (`&T`/`*T`/`PList`). Such a value
-    // denotes storage on its own, so it *is* the place: taking its address would take the
-    // address of the pointer.
+    // Whether an expression's *value* is already a handle (`&T`/`*T`/`PList`): such a value
+    // denotes storage, so it *is* the place - its address would be the address of the pointer.
     fun isHandleExpr(e: AstXmlNode): Bool {
         val typeNode: AstXmlNode = this.exprType(e)
         if (xmlIsEmpty(typeNode)) {
@@ -2339,10 +2146,8 @@ data class IlExtractor(
         return ilIsHandleType(typeNode)
     }
 
-    // Whether a base needs an explicit address instruction: it is an *inline* value, of a
-    // type the rules can name. A handle value already denotes the storage, and an
-    // unnameable one keeps the value form - the address of something whose type is unknown
-    // is not a thing the emitted C++ can spell.
+    // Whether a base needs an explicit address instruction: it is an inline value of a type the
+    // rules can name. A handle (or an unnameable type) keeps the value form.
     fun needsPlace(e: *AstXmlNode): Bool {
         val typeNode: AstXmlNode = this.exprType(e)
         if (xmlIsEmpty(typeNode)) {
@@ -2351,9 +2156,8 @@ data class IlExtractor(
         return !ilIsHandleType(typeNode)
     }
 
-    // The address of an inline value's storage, as one instruction: the slot holds the
-    // pointer, typed from the type rules, so a backend can declare it and resolve a call
-    // reached through it. A place is never a copy.
+    // The address of an inline value's storage, as one instruction: the slot holds the pointer,
+    // typed from the rules. A place is never a copy.
     fun place(
         kind: IlOpKind, baseExpr: *AstXmlNode, whole: *AstXmlNode, field: *Str,
         indexExpr: *AstXmlNode
@@ -2379,8 +2183,7 @@ data class IlExtractor(
         return slot
     }
 
-    // The address of a file-level static, as one instruction: the base a call or a write
-    // through the static needs (`&ns1_names`), never a copy of it.
+    // The address of a file-level static (`&ns1_names`), never a copy of it.
     fun staticAddr(e: AstXmlNode): Int {
         val pointee: AstXmlNode = this.exprType(e)
         var typeNode: AstXmlNode = xmlEmptyNode()
@@ -2397,19 +2200,15 @@ data class IlExtractor(
         return slot
     }
 
-    // A base through which something is reached: a call's receiver, a read's base, an
-    // assignment target's base. A plain name *is* that base; a handle value is one too (it
-    // already points at the storage); an *inline* value has to have its address taken -
-    // which is what `FieldAddr`/`IndexAddr` are. That is what keeps a read from copying an
-    // aggregate (the C++ of a field read is `p->f`, not a copy of a struct) and a write from
-    // being lost in a copy.
+    // A base through which something is reached. A plain name *is* that base; a handle value is
+    // one too; an inline value must have its address taken - what `FieldAddr`/`IndexAddr` are -
+    // which is what keeps a read from copying an aggregate and a write from being lost.
     fun receiverOf(e: *AstXmlNode): Int {
         val kind: AstNodeCategory = xmlKind(e)
         when (kind) {
             AstNodeCategory.ExprName -> {
-                // A file-level static is not a slot of the frame: as a base it is its own
-                // *address*, so a call that mutates it reaches the storage and not a copy of it
-                // (`names.append(x)` appends to `names`).
+                // A file-level static is not a frame slot: as a base it is its own *address*, so a call
+                // that mutates it reaches the storage (`names.append(x)` appends to `names`).
                 if (this.isStaticName(xmlAttr(e, AstNodeAttributeKind.Name))) {
                     return this.staticAddr(e)
                 }
@@ -2447,12 +2246,9 @@ data class IlExtractor(
         return this.valueOf(e)
     }
 
-    // ---- names and types --------------------------------------------------
-
     fun nameOf(e: *AstXmlNode): Int {
         val name: Str = xmlAttr(e, AstNodeAttributeKind.Name)
-        // A captured variable is a *field* of the closure, not a slot of this frame:
-        // reading it reads through `self`.
+        // A captured variable is a field of the closure, not a frame slot: read through `self`.
         if (this.fn.captures.has(name)) {
             var text: Str = "?"
             if (this.fn.captureTypes.has(name)) {
@@ -2463,8 +2259,7 @@ data class IlExtractor(
             return slot
         }
         if (name == "this") {
-            // Not `self`: a receiver's own slot is `self` in the emitted C++ (T47), so a
-            // local of that name would shadow it in this method's body.
+            // Not `self`: a receiver's slot is `self`, so a local of that name would shadow it.
             val selfSlot: Int = this.varIndex("self")
             if (selfSlot >= 0) {
                 return selfSlot
@@ -2474,10 +2269,8 @@ data class IlExtractor(
         if (slot >= 0) {
             return slot
         }
-        // A file-level static the extractor was told about, or a name only the backend can
-        // resolve (`GetStatic` in both cases). The type rules know the statics the program
-        // declares, so the slot carries a type and the backend declares it with the frame
-        // instead of inlining the read.
+        // A file-level static, or a name only the backend can resolve (`GetStatic` either way). The
+        // slot carries a type, so the backend declares it with the frame.
         val typeNode: AstXmlNode = this.exprType(e)
         var typeText: Str = "?"
         if (xmlIsEmpty(typeNode)) {
@@ -2525,8 +2318,7 @@ data class IlExtractor(
         return ilTypeText(this.calleeToType(e))
     }
 
-    // The `GenericName` node carries its type arguments; the IL wants the type as a node,
-    // so a fresh generic type node is built from the name and those arguments.
+    // The type a `GenericName` names: a fresh generic node from its name and type arguments.
     fun calleeToType(e: *AstXmlNode): AstXmlNode {
         val name: Str = xmlAttr(e, AstNodeAttributeKind.Name)
         if (xmlKind(e) == AstNodeCategory.ExprGenericName) {
@@ -2546,9 +2338,8 @@ data class IlExtractor(
         return ilNamedTypeNode(name)
     }
 
-    // A literal expression's type, as the frame spells it: a literal operand is a *value*
-    // with a type like any other, and the method table's `argTypes` should read the same
-    // whether the argument was a slot or a constant.
+    // A literal expression's type: a literal operand is a value with a type like any other, so
+    // the method table's `argTypes` read the same for a slot or a constant.
     fun literalTypeText(e: *AstXmlNode): Str {
         val kind: AstNodeCategory = xmlKind(e)
         when (kind) {
@@ -2585,8 +2376,6 @@ data class IlExtractor(
         return this.typeIndexText(this.literalTypeText(expr))
     }
 
-    // ---- calls ------------------------------------------------------------
-
     // The symbol a `native("...")` declaration names, without its quotes.
     fun ilNativeSymbolOf(decl: *AstXmlNode): Str {
         val text: Str = xmlAttr(decl, AstNodeAttributeKind.NativeSymbol)
@@ -2596,17 +2385,15 @@ data class IlExtractor(
         return text
     }
 
-    // Whether a call's target is the prelude's list literal (`rtl.kt`'s `listOf<T>`): the
-    // one native whose *call* is not a call.
+    // Whether a call's target is the prelude's list literal (`rtl.kt`'s `listOf<T>`).
     fun ilIsListOf(target: *AstXmlNode): Bool {
         return xmlAttr(target, AstNodeAttributeKind.IsNative) == "true"
                 && xmlAttr(target, AstNodeAttributeKind.HasNativeSymbol) == "true"
                 && this.ilNativeSymbolOf(target) == "simse_listOf"
     }
 
-    // The `List<T>` a `listOf<T>(...)` names: the type argument it was written with, or -
-    // when it was written without one, which the language infers (`specs/functions.md`) -
-    // the type of its first element.
+    // The `List<T>` a `listOf<T>(...)` names: its written type argument, or - when it was
+    // written without one, which the language infers - the type of its first element.
     fun ilListOfType(callee: AstXmlNode, args: List<AstXmlNode>, from: Int): AstXmlNode {
         if (xmlKind(callee) == AstNodeCategory.ExprGenericName
             && xmlCount(callee, AstNodeKind.TypeArg) == 1
@@ -2624,35 +2411,25 @@ data class IlExtractor(
         return xmlEmptyNode()
     }
 
-    // The declaration a call resolves to, when the extractor can name it: the same rule
-    // the checker applies - an exact parameter count first, then a last parameter a call
-    // may pack into - so a stage that needs more than the name does not have to guess. A
-    // member call also resolves by its *receiver*: two types may each have a method of the
-    // same name (`Analyzer.exprType` and `IlExtractor.exprType` take different parameters),
-    // and a name is not a declaration. The receiver's type is asked for only when there is
-    // more than one declaration to choose between. An ambiguous name resolves to nothing -
-    // no packing, no conversion - which is exactly the call it was before either existed.
-    // Empty when the facts are not available (a body with no facts, a callee that is a
-    // local, a static call's type).
+    // The declaration a call resolves to, by the checker's rule: an exact parameter count
+    // first, then a last parameter a call may pack into. A member call also resolves by its
+    // receiver's type. An ambiguous name resolves to nothing (no packing, no conversion), and
+    // so does a call whose facts are unavailable.
     fun callTarget(callee: *AstXmlNode, receiver: *AstXmlNode, argCount: Int, member: Bool): AstXmlNode {
         if (this.fn.facts == null) {
             return xmlEmptyNode()
         }
         val name: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
-        // The candidates are *indices* into the facts, not the facts themselves: a
-        // `SemFnFact` carries its declaration node and its attribute list, so a copy per
-        // candidate per call would be work the C++ ring - which holds `const FnFact*` -
-        // never does.
+        // The candidates are *indices* into the facts, not the facts themselves: a `SemFnFact`
+        // carries its declaration node and attribute list, so a copy per candidate would be work.
         var candidates: List<Int> = List<Int>()
         var i: Int = 0
         while (i < this.fn.facts.functions.size()) {
             val index: Int = i
             i = i + 1
             val fact: *SemFnFact = *this.fn.facts.functions[index]
-            // The name, the receiver form and the parameter count are the fact's own,
-            // read once when it was built (`SemFnFact`): this walk runs over *every*
-            // collected function for *every* call site, and reading them off the
-            // declaration here was ~5M attribute walks of a name that never changes.
+            // The name, receiver form and parameter count are the fact's own, read once when it
+            // was built (`SemFnFact`): this walk runs over every collected function for every call.
             if (xmlIsEmpty(fact.decl) || fact.name != name) {
                 continue
             }
@@ -2690,9 +2467,8 @@ data class IlExtractor(
         while (k < candidates.size()) {
             val fact: *SemFnFact = *this.fn.facts.functions[candidates[k]]
             k = k + 1
-            // The count and the pack test are the fact's own, so a candidate that does
-            // not match by arity needs no parameter list at all (the copy of every
-            // parameter the `xmlChildren` below costs is for the pack case only).
+            // The count and the pack test are the fact's own, so a candidate that does not match by
+            // arity needs no parameter list.
             val paramCount: Int = fact.paramCount
             if (paramCount == argCount) {
                 exact = fact.decl
@@ -2717,9 +2493,7 @@ data class IlExtractor(
     }
 
     // The declaration of a data class the facts know, by name (empty otherwise): a
-    // construction's arguments convert against its *fields*, the way a call's convert
-    // against its parameters (`AstNodeAttribute(kind, value)`, whose C++ is the struct's
-    // own constructor).
+    // construction's arguments convert against its *fields*, as a call's do against parameters.
     fun dataClassDecl(name: *Str): AstXmlNode {
         if (this.fn.facts == null || name == "") {
             return xmlEmptyNode()
@@ -2734,10 +2508,8 @@ data class IlExtractor(
         return decl
     }
 
-    // The receiver *pattern* of a fact: its recorded receiver, or - for a `native fun`
-    // extension, which spells the receiver as an explicit `this` first parameter - that
-    // parameter's type. What picks between two same-named overloads for different
-    // receivers (`append` on a `List<T>` and on a `Str`).
+    // A fact's receiver *pattern*: its recorded receiver, or - for a `native fun` extension,
+    // whose receiver is an explicit `this` first parameter - that parameter's type.
     fun receiverPattern(fact: *SemFnFact): AstXmlNode {
         if (!xmlIsEmpty(fact.receiver)) {
             return fact.receiver
@@ -2745,10 +2517,8 @@ data class IlExtractor(
         return semExtensionReceiver(fact.decl)
     }
 
-    // The type of an *argument*, which the pack and the handle conversions both ask for: a
-    // name is a slot of this frame and already carries one, so the common argument costs a
-    // dictionary lookup; anything else has to be asked of the type rules, which is the
-    // expensive question and the reason it is asked as rarely as the rules allow.
+    // The type of an *argument*, which the pack and the handle conversions both ask for: a name
+    // already carries one, so the common argument costs a lookup; anything else asks the rules.
     fun argumentType(e: AstXmlNode): AstXmlNode {
         if (xmlKind(e) == AstNodeCategory.ExprName) {
             val name: Str = xmlAttr(e, AstNodeAttributeKind.Name)
@@ -2759,12 +2529,9 @@ data class IlExtractor(
         return this.exprType(e)
     }
 
-    // Where the *pack* starts in an argument list, or -1 when the arguments are passed as
-    // they are. One argument per parameter is still the list itself when that argument
-    // *is* a list, whatever its handle form - which is what tells `addAll(*xs)` from
-    // `addAll(1)`, and `Format(template, items)` from `Format(template, "world")`. An
-    // argument whose type the rules cannot name leaves the call exactly as it was:
-    // nothing is inferred, nothing is packed.
+    // Where the *pack* starts in an argument list, or -1 when the arguments are passed as they
+    // are. A single argument that *is* a list, whatever its handle form, is still the list
+    // itself; an argument the rules cannot name leaves the call exactly as it was.
     fun packStart(target: *AstXmlNode, args: *List<AstXmlNode>): Int {
         if (xmlIsEmpty(target)) {
             return -1
@@ -2786,13 +2553,9 @@ data class IlExtractor(
         return params.size() - 1 - semReceiverParams(target)
     }
 
-    // The trailing arguments as one list, built by one `Pack` instruction: the list's
-    // type is the parameter's and the elements are the arguments as values - each one
-    // converted the way a by-value parameter's argument is, so a packed handle is read
-    // through instead of being stored as a pointer (`specs/functions.md`, "Handles at a
-    // call"). A `*List<T>` parameter gets the *address* of the fresh list - one element
-    // copy each, no copy of the list at all, and the slot outlives the call, since it is
-    // a slot of this body.
+    // The trailing arguments as one list, built by one `Pack` instruction: the list's type is
+    // the parameter's, the elements are the arguments as values. A `*List<T>` parameter gets the
+    // address of the fresh list, which outlives the call because it is a slot of this body.
     fun packArguments(target: AstXmlNode, args: List<AstXmlNode>, from: Int): Int {
         val params: List<AstXmlNode> = xmlChildren(target, AstNodeKind.Param)
         var wanted: AstXmlNode = xmlEmptyNode()
@@ -2822,9 +2585,8 @@ data class IlExtractor(
         return bound
     }
 
-    // A value read out of a handle, as a slot of the pointee's type: what a by-value
-    // parameter needs when the argument is a borrow or a counted reference. (`CopyValue` is
-    // the language's `copy`, which reads through a handle - the emitter spells it `*(x)`.)
+    // A value read out of a handle, as a slot of the pointee's type - what a by-value parameter
+    // needs when the argument is a borrow or a counted reference (the language's `copy`).
     fun readThrough(pointeeType: *AstXmlNode, from: Int): Int {
         val typeNode: AstXmlNode = pointeeType
         val slot: Int = this.freshSlot(ilTypeText(typeNode), typeNode)
@@ -2832,35 +2594,27 @@ data class IlExtractor(
         return slot
     }
 
-    // The argument a call passes for one parameter, converted the way the two types require
+    // The argument a call passes for one parameter, converted as the two types require
     // (`specs/functions.md`):
     //
-    // | parameter | argument |                            |
-    // | --------- | -------- | -------------------------- |
-    // | `*T`      | `T`      | the place's address (`&x`) |
-    // | `*T`      | `&T`     | the handle's pointee (`x.get()`) |
-    // | `T`       | `*T`/`&T`| a copy of the pointee      |
-    // | `&T`      | `T`      | a *boxed copy* - `&x` means exactly that |
-    // | `&T`      | `*T`     | **nothing**: the checker reports it (a pointer cannot
-    // |           |          | become a counted reference in place - `Sema.cpp`) |
+    // | parameter | argument  |                                |
+    // | --------- | --------- | ------------------------------ |
+    // | `*T`      | `T`       | the place's address (`&x`)     |
+    // | `*T`      | `&T`      | the handle's pointee (`x.get()`) |
+    // | `T`       | `*T`/`&T` | a copy of the pointee          |
+    // | `&T`      | `T`       | a boxed copy - `&x` means that |
+    // | `&T`      | `*T`      | nothing; the checker reports it |
     //
-    // Nothing is converted when the two are not the same type to begin with: a `List<Int>`
-    // argument is not a `*List<Str>`, and the call is the type error it always was. This is
-    // why a parameter can change from `List<T>` to `*List<T>` (a borrow, no copy) without
-    // every caller having to spell the `*`, and why the reverse change still compiles. A
-    // `*T` *binding* (`val p: *T = x`) is a different question - a pointer that outlives
-    // the expression it points into has to be asked for, so the writer writes it.
+    // Nothing is converted when the two are not the same type; a `*T` binding is a different
+    // question, so the writer writes it.
     fun convertArgument(callee: *AstXmlNode, param: *AstXmlNode, arg: *AstXmlNode): Int {
         if (xmlIsEmpty(param)) {
             return this.operandOf(arg)
         }
         val wantPointer: Bool = xmlKind(param) == AstNodeCategory.TypePointer
         val wantShared: Bool = !wantPointer && ilIsHandleType(param)
-        // The argument's type, cheaply where it can be: a local is a slot of this frame and
-        // already carries one, so the common argument costs a lookup. Everything else is
-        // asked of the type *rules* - never of a materialised value, which is what the
-        // pointer path below would leave behind: reading `this.out` to find its type copies
-        // the whole body, once per argument, and `frameTypes` does that per slot per rebuild.
+        // The argument's type, cheaply where it can be: a local already carries one, so the common
+        // argument costs a lookup; the rest asks the type *rules*, never a materialised value.
         var actual: AstXmlNode = xmlEmptyNode()
         if (xmlKind(arg) == AstNodeCategory.ExprName) {
             val named: Int = this.varIndex(xmlAttr(arg, AstNodeAttributeKind.Name))
@@ -2884,12 +2638,9 @@ data class IlExtractor(
         if ((wantPointer && havePointer) || (wantShared && haveShared)) {
             return this.operandOf(arg)
         }
-        // A parameter that is one of the callee's own type parameters, bare
-        // (`List<T>.append(value: T)`, `Dictionary<K, V>.has(key: K)`): the *receiver*
-        // binds it, so the two types cannot be compared here - what the conversion needs
-        // is the parameter's *form*, and a bare parameter is a value, so a handle argument
-        // is read through to the type the argument itself names. (A slot typed `T` could
-        // not even be declared outside the callee's own template.)
+        // A parameter that is one of the callee's own bare type parameters
+        // (`List<T>.append(value: T)`): the *receiver* binds it, so the two types cannot be compared
+        // here - a bare parameter is a value, so a handle argument is read through to its own type.
         if (semIsBareTypeParam(callee, param)) {
             if (haveValue) {
                 return this.operandOf(arg)
@@ -2904,12 +2655,9 @@ data class IlExtractor(
             return this.operandOf(arg) // not the same type
         }
         if (wantPointer) {
-            // The address, spelled exactly as an explicit `*` spells it (`into`'s `Deref`
-            // arm is the definition): a member/index chain *is* its own address (`&a.f`,
-            // never the address of a copy of `a.f` - a callee that writes through the
-            // pointer has to write into the caller's object), a static name is its
-            // `GetStaticAddr`, and a name or a temporary is `&x` / the address taken at the
-            // call.
+            // The address, spelled as an explicit `*` spells it (`into`'s `Deref` arm is the
+            // definition): a member/index chain *is* its own address (`&a.f`, never the address of a
+            // copy), a static name is its `GetStaticAddr`, a name is `&x`.
             val handle: AstXmlNode = param
             val bound: Int = this.freshSlot(ilTypeText(handle), handle)
             this.into(bound, ilDerefNode(arg))
@@ -2946,9 +2694,8 @@ data class IlExtractor(
         }
         val receiverCall: Bool = member && !staticCall
 
-        // The receiver is evaluated first - it is the leftmost thing the C++ call reads -
-        // and a `Method` call carries it as its first argument, so the count of `Var`
-        // operands after the callee is exactly what `IlMethod::argCount` says.
+        // The receiver is evaluated first, and a `Method` call carries it as its first argument, so
+        // the `Var` operands after the callee match `IlMethod::argCount`.
         var recvSlot: Int = -1
         if (receiverCall) {
             recvSlot = this.receiverOf(lhs)
@@ -2957,11 +2704,8 @@ data class IlExtractor(
         val calleeName: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
         val argNodes: List<AstXmlNode> = xmlChildren(e, AstNodeKind.Arg)
 
-        // The trailing arguments may pack into a last parameter that is a list
-        // (`fun addAll(values: *List<Int>)` called as `addAll(1, 2, 3)`, or
-        // `"Hello {0}".Format("world")`). A static call (`Res<Str>.ok(x)`) is not looked
-        // up: its callee is a type, and the same name may be a plain function of another
-        // shape.
+        // The trailing arguments may pack into a list-valued last parameter. A static call
+        // (`Res<Str>.ok(x)`) is not looked up: its callee is a type.
         var target: AstXmlNode = xmlEmptyNode()
         if (!staticCall) {
             var receiverNode: AstXmlNode = xmlEmptyNode()
@@ -2972,11 +2716,9 @@ data class IlExtractor(
         }
         val packFrom: Int = this.packStart(target, argNodes)
 
-        // `listOf<T>(a, b, c)` is the language's list literal: the same `Pack` instruction
-        // a packed call builds, written out - so its elements convert the same way
-        // (`packArguments`). It is not a call at all - the native it names
-        // exists so the checker and the type rules have a signature to read - so a backend
-        // that sees one of these writes the construction and never the function.
+        // `listOf<T>(a, b, c)` is the language's list literal: the same `Pack` a packed call builds,
+        // so its elements convert the same way. It is not a call - the native it names exists only
+        // so the checker has a signature to read.
         if (hasDst && packFrom >= 0 && !xmlIsEmpty(target) && this.ilIsListOf(target)) {
             val listType: AstXmlNode = this.ilListOfType(callee, argNodes, packFrom)
             if (!xmlIsEmpty(listType)) {
@@ -3003,11 +2745,8 @@ data class IlExtractor(
         if (packFrom >= 0) {
             plain = packFrom
         }
-        // The parameters the arguments convert against, and the declaration that owns
-        // them (which names its own type parameters): the callee's, or - for a
-        // construction the extractor sees as a plain call (`AstNodeAttribute(kind,
-        // value)`, a prelude data class whose C++ is the struct's own constructor) - the
-        // class's *fields*, which is the same rule a call's parameters are.
+        // The parameters the arguments convert against, and the declaration that owns them: the
+        // callee's, or a prelude data class's *fields* (a construction seen as a plain call).
         var paramOwner: AstXmlNode = xmlEmptyNode()
         var paramNodes: List<AstXmlNode> = List<AstXmlNode>()
         var paramOffset: Int = 0
@@ -3065,9 +2804,7 @@ data class IlExtractor(
             return
         }
         if (staticCall) {
-            // A static call: `Res<Str>.ok(x)`, `Color.fromInt(v)`. The type is part of the
-            // method's identity, and the node lets a backend spell its type arguments as
-            // the source wrote them.
+            // A static call (`Res<Str>.ok(x)`): the type is part of the method's identity.
             operands.append(
                 this.methodIndex(
                     calleeName, IlMethodKind.Function,
@@ -3084,17 +2821,14 @@ data class IlExtractor(
             return
         }
         if (xmlKind(callee) == AstNodeCategory.ExprGenericName) {
-            // A construction: `Point(1, 2)`, `List<Str>()`. The type operand is the *node*
-            // the callee was, so a backend can spell the type arguments the way the source
-            // wrote them.
+            // A construction (`Point(1, 2)`): the type operand is the *node* the callee was, so a
+            // backend can spell its type arguments as the source wrote them.
             if (!hasDst) {
                 this.unsupported("constructor call with no destination")
                 return
             }
-            // A `List<T>()` with no arguments is the empty list, and `List<T>(n)`
-            // / `List<T>(n, v)` are the RTL's *count* constructions - a literal
-            // is `listOf<T>(a, b, c)`, which is the `Pack` above, so the two can
-            // never be confused.
+            // `List<T>()` is the empty list; `List<T>(n)`/`List<T>(n, v)` are the RTL's *count*
+            // constructions. A literal is `listOf<T>(a, b, c)`, the `Pack` above.
             operands.append(this.typeIndex(this.baseText(callee), this.calleeToType(callee)))
             i = 0
             while (i < args.size()) {
@@ -3122,10 +2856,7 @@ data class IlExtractor(
         }
     }
 
-    // ---- lambdas ----------------------------------------------------------
-
-    // The symbol prefix a synthesized class takes: the body's own emitted name, so two
-    // bodies never spell the same class and the dump says where it came from.
+    // The symbol prefix a synthesized class takes: the body's own emitted name.
     fun ownerSymbol(): Str {
         if (this.fn.symbol.isEmpty()) {
             return "_closure_owner"
@@ -3133,9 +2864,8 @@ data class IlExtractor(
         return this.fn.symbol
     }
 
-    // A lambda, projected the way the language models it: a class with one field per
-    // *captured* variable and one method. `dst < 0` means the value goes nowhere (the
-    // class is still constructed).
+    // A lambda: a class with one field per captured variable and one method. `dst < 0` means the
+    // value goes nowhere (the class is still constructed).
     fun lambdaOf(e: *AstXmlNode, dst: Int): Int {
         val counter: Int = this.closureCounter[0]
         this.closureCounter[0] = counter + 1
@@ -3160,9 +2890,8 @@ data class IlExtractor(
         }
         ilCollectStmtNames(bodyList, declared, read, readSeen)
 
-        // The closure: what the body reads that the *enclosing* frame holds. A name that is
-        // neither (a static, a type, a function) is not captured - the enclosing `nameOf`
-        // resolves it the same way it always did.
+        // The closure: what the body reads that the *enclosing* frame holds. A static, a type or a
+        // function is not captured.
         var captured: List<Str> = List<Str>()
         var ri: Int = 0
         while (ri < read.size()) {
@@ -3180,7 +2909,7 @@ data class IlExtractor(
             captured.append(name)
         }
 
-        // Filled by the lambda's own type pass, below; `begin` copies it into the body.
+        // Filled by the lambda's own type pass below; `begin` copies it into the body.
         var lambdaTypes: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
         var info: IlFunction = IlFunction(
             xmlEmptyNode(), xmlEmptyNode(), symbol, this.fn.statics, xmlEmptyNode(),
@@ -3192,8 +2921,7 @@ data class IlExtractor(
         while (ci < captured.size()) {
             val name: Str = captured[ci]
             info.captures.insert(name, true)
-            // The field's type is the enclosing slot's: the class's field has it, so a read
-            // of it in the body is typed without inference.
+            // The field's type is the enclosing slot's, so a read in the body is typed without inference.
             val slotType: AstXmlNode = ilVarTypeNode(this.out, this.varIndex(name))
             if (!xmlIsEmpty(slotType)) {
                 info.captureTypes.insert(name, slotType)
@@ -3201,13 +2929,9 @@ data class IlExtractor(
             ci = ci + 1
         }
 
-        // The lambda's body has a frame of its own, so it is lowered here, the way the
-        // emitter lowers it - including the single-expression body, which is the `return`
-        // it stands for - and it is *typed* here too, with a frame of its own: parameters
-        // and captures. Without this pass the body's own declarations stay untyped, and a
-        // slot the frame cannot name sends every spelling decision that needs a type the
-        // wrong way (`v.toString()` picks the `StrView` overload; a `..T` receiver hides
-        // the `iter` identity).
+        // The lambda's body has a frame of its own, so it is lowered and *typed* here, with that
+        // frame: parameters and captures. Without this pass its declarations stay untyped, and a
+        // slot the frame cannot name sends every spelling decision the wrong way.
         var lowered: List<AstXmlNode> = ilLambdaLower(bodyList)
         val lambdaSemantics: SemBody = SemBody(
             xmlEmptyNode(), this.fn.typeParams, ilNamedTypeNode(symbol), xmlEmptyNode(),
@@ -3216,8 +2940,7 @@ data class IlExtractor(
         lowered = semInferTypes(lowered, this.fn.facts, lambdaSemantics, lambdaTypes)
         lowered = linFinishForEmission(lowered, paramNames)
 
-        // The extractor's type context: storage of this frame's, borrowed by the inner
-        // extractor the way `unit` and `closureCounter` are.
+        // Type context for the inner extractor, borrowed as `unit` and `closureCounter` are.
         var innerContext: SemBody = ilEmptySemantics()
         var inner: IlExtractor = IlExtractor(
             info, this.unit, this.closureCounter,
@@ -3252,7 +2975,7 @@ data class IlExtractor(
         this.unit.lambdas.append(innerBody)
         this.unit.closures.append(closure)
 
-        // The value: a construction of the class, with the captured values.
+        // The value: a construction of the class with the captured values.
         val classType: AstXmlNode = ilNamedTypeNode(symbol)
         var target: Int = dst
         if (dst < 0) {
@@ -3261,8 +2984,7 @@ data class IlExtractor(
         var operands: List<Int> = listOf<Int>(target, this.typeIndex(symbol, classType))
         ci = 0
         while (ci < captured.size()) {
-            // The capture is a slot of *this* frame (that is what put it in the closure), so
-            // the construction passes its value by index.
+            // The capture is a slot of *this* frame, so the construction passes it by index.
             operands.append(this.varIndex(captured[ci]))
             ci = ci + 1
         }
@@ -3271,8 +2993,7 @@ data class IlExtractor(
     }
 }
 
-// A lambda's parameter names, from the `Params` attribute the parser writes (comma
-// separated). An empty attribute is no parameters.
+// A lambda's parameter names, from the comma-separated `Params` attribute.
 fun ilSplitParams(text: Str): List<Str> {
     var out: List<Str> = List<Str>()
     if (text.isEmpty()) {
@@ -3295,9 +3016,7 @@ fun ilSplitParams(text: Str): List<Str> {
 }
 
 // A lambda's body, lowered the way the emitter lowers it (impl_specs/linear-lowering.md),
-// with the single-expression body rewritten to the `return` it stands for. `params` is what
-// the body's own C++ scope already declares (its parameters), so a hoisted declaration that
-// would collide with one is renamed.
+// with a single-expression body rewritten to the `return` it stands for.
 fun ilLambdaLower(body: *List<AstXmlNode>): List<AstXmlNode> {
     var out: List<AstXmlNode> = List<AstXmlNode>()
     if (body.size() == 1 && xmlKind(body[0]) == AstNodeCategory.StmtExprStmt) {
@@ -3322,7 +3041,7 @@ fun ilLambdaLower(body: *List<AstXmlNode>): List<AstXmlNode> {
     return linLowerForEmission(out)
 }
 
-// The type node of a frame slot, or an empty node when the extractor could not name it.
+// The type node of a frame slot, or empty when the extractor could not name it.
 fun ilVarTypeNode(body: *IlBody, slot: Int): AstXmlNode {
     if (slot < 0 || slot >= body.vars.size()) {
         return xmlEmptyNode()
@@ -3342,9 +3061,8 @@ fun ilEmptyBody(): IlBody {
     )
 }
 
-// The semantic context an extractor's cache starts as: the C++ ring's default-constructed
-// `sema::Body`, empty - `bodyContext` fills it in from the function on first use, so only
-// the flag that says "not built yet" (`typeContextReady`) is ever read before then.
+// The empty semantic context an extractor's cache starts as; `bodyContext` fills it in on
+// first use, so only the "not built yet" flag is read before then.
 fun ilEmptySemantics(): SemBody {
     return SemBody(
         xmlEmptyNode(), List<Str>(), xmlEmptyNode(), xmlEmptyNode(),
@@ -3352,10 +3070,7 @@ fun ilEmptySemantics(): SemBody {
     )
 }
 
-// The names the schema gives a jump category, as the opcode's own name (`IfTrue`,
-// `IfFalse`): the instruction set spells them that way.
-// The opcode for a `StmtIfTrue`/`StmtIfFalse` category (the lowering's two jump forms,
-// which the extractor sees as statements).
+// The opcode for a `StmtIfTrue`/`StmtIfFalse` category (the lowering's two jump forms).
 fun ilCategoryName(kind: AstNodeCategory): IlOpKind {
     if (kind == AstNodeCategory.StmtIfTrue) {
         return IlOpKind.IfTrue
@@ -3363,14 +3078,12 @@ fun ilCategoryName(kind: AstNodeCategory): IlOpKind {
     return IlOpKind.IfFalse
 }
 
-// Builds the IL of one body: the body itself plus the lambdas it constructs. The closure
-// symbols are numbered per *unit*, so a lambda inside a lambda still gets a name of its
-// own.
+// The IL of one body: the body plus the lambdas it constructs. Closure symbols are numbered
+// per *unit*, so a lambda inside a lambda still gets its own name.
 fun ilExtractUnit(fn: *IlFunction, body: *List<AstXmlNode>, file: *Str): IlUnit {
     var unit: IlUnit = IlUnit(ilEmptyBody(), List<IlBody>(), List<IlClosure>())
     var counter: Int = 1
-    // The type context the extractor fills in on its first question: storage of this
-    // frame's, borrowed the way `unit` and `counter` are.
+    // Type context the extractor fills in on first use, borrowed as `unit` and `counter` are.
     var context: SemBody = ilEmptySemantics()
     var extractor: IlExtractor = IlExtractor(
         fn, *unit, *counter, ilEmptyBody(),
@@ -3385,12 +3098,8 @@ fun ilExtractUnit(fn: *IlFunction, body: *List<AstXmlNode>, file: *Str): IlUnit 
     return unit
 }
 
-// ---- the dump flag ---------------------------------------------------------
-
-// `--showLinearRepresentation`: the emitter forms the IL of every body it emits and
-// writes the dump to stderr, so the linear form can be read next to the code it produced
-// (impl_specs/linear-il.md). Off unless the driver asks for it, and it never touches the
-// emitted C++.
+// `--showLinearRepresentation`: the emitter forms the IL of every body and writes the dump
+// to stderr (impl_specs/linear-il.md). Off unless the driver asks.
 var ilShowFlag: Bool = false
 
 fun ilShow(): Bool {
@@ -3417,14 +3126,12 @@ fun ilVarType(body: *IlBody, slot: Int): AstXmlNode {
     return ilTypeNode(body, body.vars[slot].typeIndex)
 }
 
-// The whole dump of one body, ready to write: a blank line before it, like the framed
-// form the stderr dump uses.
+// The whole dump of one body, ready to write: a blank line before it.
 fun ilDumpBody(body: *IlBody): Str {
     return "\n" + printIlBody(body)
 }
 
-// One table of the dump: the label, then its entries separated by three spaces. An empty
-// table is dropped, like the C++ ring does.
+// One table of the dump: the label, then its entries separated by three spaces.
 fun ilAppendTable(out: *Str, label: Str, entries: *List<Str>): Unit {
     if (entries.size() == 0) {
         return

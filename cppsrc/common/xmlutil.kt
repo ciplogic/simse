@@ -1,23 +1,15 @@
 // xmlutil.kt
 //
-// Shared accessors over the compiler's AST schema (impl_specs/ast-xmlnode.md):
-// the read-only ones (attribute lookup, children by structural role, positions,
-// counts, the type-parameter list) are used by the ported sema and code generator
-// so the two agree on how nodes are read, and `xmlAddChild` is the one writer a
-// tree builder needs.
+// Shared accessors over `AstXmlNode` (cppsrc/rtl/astxml.kt, impl_specs/ast-xmlnode.md): the
+// read-only ones, so sema and emitter agree on how nodes are read, and `xmlAddChild` for
+// building. Roles and attribute keys are enums, so every lookup is an integer compare.
 //
-// The node type is `AstXmlNode` (cppsrc/rtl/astxml.kt): the role of a node and
-// the key of an attribute are enums, so every lookup here is an integer compare;
-// attribute *values* are text, as the schema specifies.
-//
-// These are ordinary emitted Simse functions (NOT prelude declarations), so they
-// are available through the `common` import that a file using them declares.
+// Ordinary `common` functions (not prelude declarations): a file needs the `common` import.
 
 package common
 
-// An empty node is the "absent" sentinel: the schema has no null, so a missing
-// optional child (an untyped field, a missing return type, ...) is a role-less,
-// kind-less node.
+// The "absent" sentinel: the schema has no null, so a missing optional child is a
+// role-less, kind-less node.
 fun xmlEmptyNode(): AstXmlNode {
     return AstXmlNode(AstNodeKind.None, AstNodeCategory.None, List<AstNodeAttribute>(), Array<AstXmlNode>())
 }
@@ -26,10 +18,8 @@ fun xmlIsEmpty(node: *AstXmlNode): Bool {
     return node.name == AstNodeKind.None
 }
 
-// Appends one child. `Children` is an `Array<AstXmlNode>` - a fixed-length,
-// shareable block (specs/xml-node.md), so appending replaces the node's handle
-// with a block one element longer through the list round trip the array API
-// specifies; an alias of the old children array keeps the old children.
+// Appends one child. `Children` is a fixed-length block, so this replaces the node's handle
+// with a block one longer; an alias of the old array keeps the old children.
 fun xmlAddChild(node: *AstXmlNode, child: AstXmlNode): Unit {
     var children: List<AstXmlNode> = node.Children.toList()
     children.append(child)
@@ -47,38 +37,14 @@ fun xmlAddChildren(node: *AstXmlNode, children: *List<AstXmlNode>): Unit {
     node.Children = all.toArray()
 }
 
-// The value a missing attribute reads as: one shared empty `Str`, so `xmlAttr` can hand
-// back a borrow (`*Str`) without a null pointer - a `*T` has no null check, and every
-// caller of an attribute comparison would then have to test it. A file-level `val`, so it
-// starts as the empty value and nothing writes it; what `xmlAttr` returns borrows the
-// *node's* storage, so a caller reads it, and does not write through it
-// (`specs/memory-model.md`).
+// The value a missing attribute reads as: one shared empty `Str`, so `xmlAttr` can hand back
+// a borrow (`*Str`) with no null for callers to test. A file-level `val`, never written.
 val xmlMissingAttr: Str = ""
 
-// The attribute `name`, borrowed from the node rather than copied out of it.
-//
-// The value is a `*Str` because this is the compiler's most-called helper - every field
-// read of every node goes through it - and a `Str` return constructs and destroys a string
-// per call: that showed up as a third of the self-hosted transpile (`ns2_xmlAttr`'s total
-// CPU) while its lookup loop is inlined and cheap. A borrowed string compares,
-// concatenates and calls its methods like any other (the value/handle conversion,
-// `specs/memory-model.md`), so a caller that only *reads* it copies nothing; one that needs
-// a `Str` of its own gets the copy the conversion spells.
-//
-// The loop stays the pointer `for` the ring uses everywhere, and that is a *measured*
-// choice, not a style one. Two profiles put this function at ~37% and then ~25% of the
-// self-transpile with the attribute-iteration machine under it (`next`, 27% and 18%), which
-// reads like the protocol's cost - it is not. The `for`'s `next()`/`Opt<*T>`/`hasValue`/
-// `value` shape was replaced, twice, by an index loop over a borrow of the field, the
-// second time with the count hoisted (the first called `size()` per iteration, which is
-// exactly what the machine caches); against the machine the two measured **neutral** -
-// `764.4/772.6` and `762.9/777.3` against `762.3/772.4` and `770.6/781.7`, 15 interleaved
-// runs each (`tools/_bench_ab.mjs`). What the profiler attributes to `next` is the *memory*
-// it walks - the node's attribute list - which any walk pays, and MSVC inlines the machine
-// away at `/O2 /Ob3` anyway. So the walk's cost is the data, and cutting it means fewer
-// attribute reads per node (the emitter's operand -> node -> text round trip, or a
-// borrowed `xmlChild`), not a cheaper loop. `tools/_loop_protocol.cpp` is the probe that
-// prices the three shapes directly if the protocol is ever revisited.
+// The attribute `name`, borrowed from the node rather than copied out of it: this is the
+// compiler's most-called helper, and a `Str` return would construct and destroy a string per
+// call. A caller that only reads copies nothing; do not write through the borrow. The pointer
+// `for` is a measured choice - leave it, the cost is the data it walks (specs/memory-model.md).
 fun xmlAttr(node: *AstXmlNode, name: AstNodeAttributeKind): *Str {
     for (*attr in node.attributes) {
         if (attr.name == name) {
@@ -88,16 +54,13 @@ fun xmlAttr(node: *AstXmlNode, name: AstNodeAttributeKind): *Str {
     return * xmlMissingAttr
 }
 
-// The node's category: what it is (the schema's `kind`), read straight off the
-// node - a `Str` comparison used to be the alternative.
+// The node's category - the schema's `kind`, not its role.
 fun xmlKind(node: *AstXmlNode): AstNodeCategory {
     return node.kind
 }
 
-// The schema's text for a category ("Stmt.If", "Type.Generic", ...), for
-// diagnostics that have to name a kind. The dump spells the same values on the
-// C++ side (`ast::astNodeCategoryText`); the two are kept in step by hand, and a
-// divergence would surface in the differentials.
+// The schema's text for a category ("Stmt.If", "Type.Generic", ...), for diagnostics that
+// have to name a kind.
 fun xmlKindText(kind: AstNodeCategory): Str {
     when (kind) {
         AstNodeCategory.Module -> {
@@ -297,10 +260,8 @@ fun xmlColumn(node: *AstXmlNode): Int {
 
 // The first child whose role is `role`, or an empty node.
 fun xmlChild(node: *AstXmlNode, role: AstNodeKind): AstXmlNode {
-    // The *pointer* form on purpose: `for (child in node.Children)` binds a copy of
-    // each element, and `Children` is a reference-counted `Array` - the count churn
-    // per element per lookup is the difference between a lookup and a copy, in the
-    // compiler's hottest helper. `copy(child)` reads the one element that matched.
+    // The pointer `for` is deliberate: the value form binds a copy per element, and
+    // `Children` is ref-counted, so it churns counts in the compiler's hottest helper.
     for (*child in node.Children) {
         if (child.name == role) {
             return child
@@ -309,24 +270,18 @@ fun xmlChild(node: *AstXmlNode, role: AstNodeKind): AstXmlNode {
     return xmlEmptyNode()
 }
 
-// The absent child a *borrowed* lookup answers with: the same idea as `xmlMissingAttr`, so
-// a `*AstXmlNode` needs no null check and `xmlIsEmpty` reads it like any other node. A
-// file-level `val`, so it is one shared node and nothing writes it.
+// The absent node a borrowed lookup answers with, the same idea as `xmlMissingAttr`: a
+// `*AstXmlNode` needs no null check. A file-level `val`, never written.
 val xmlMissingNode: AstXmlNode = AstXmlNode(
     AstNodeKind.None, AstNodeCategory.None, List<AstNodeAttribute>(), Array<AstXmlNode>()
 )
 
-// The child whose role is `role`, *borrowed from the node* instead of copied out of it.
-// `xmlChild` is the same walk with a 176-byte copy at the end (`AstXmlNode` holds an
-// attribute list and a children handle); this ring reads children far more often than it
-// wants one of its own, so the borrow is the shape a walk wants - and it composes with the
-// `*AstXmlNode` parameters the surrounding helpers take, where the copy would be made
-// again at the call.
+// The child whose role is `role`, *borrowed from the node* instead of copied out of it (a
+// copy costs 176 bytes here, and callers already hold `*AstXmlNode`).
 //
-// The pointer is into the node's own children block, so it is valid only while that block
-// is the node's - `xmlAddChild`/`xmlAddChildren` *replace* it - and a write *through* the
-// borrow would reach the tree, which `xmlChild`'s copy absorbs. Read it; do not hold it
-// across a write to the node it came from.
+// The pointer is into the node's own children block: it is valid only while that block is
+// the node's - `xmlAddChild`/`xmlAddChildren` replace it - and a write through it reaches
+// the tree. Read it; do not hold it across a write to the node.
 fun xmlChildPtr(node: *AstXmlNode, role: AstNodeKind): *AstXmlNode {
     for (*child in node.Children) {
         if (child.name == role) {
@@ -382,8 +337,8 @@ fun xmlIsDecl(node: *AstXmlNode): Bool {
             || name == AstNodeKind.Function || name == AstNodeKind.Var
 }
 
-// The declaration children of a Module (imports excluded), in source order.
-// `Var` is a file-level `var`/`val`: static storage (specs/statics.md).
+// The declaration children of a Module (imports excluded), in source order. `Var` is a
+// file-level `var`/`val`: static storage (specs/statics.md).
 fun xmlDecls(module: *AstXmlNode): List<AstXmlNode> {
     var out: List<AstXmlNode> = List<AstXmlNode>()
     for (*child in module.Children) {
@@ -403,8 +358,8 @@ fun xmlHasImports(module: *AstXmlNode): Bool {
     return false
 }
 
-// The comma-joined `params` attribute of a lambda, split back into names. An
-// empty attribute means no parameters (not one empty name).
+// The comma-joined `params` attribute of a lambda, split back into names. An empty
+// attribute means no parameters, not one empty name.
 fun xmlLambdaParams(expr: *AstXmlNode): List<Str> {
     val raw: Str = xmlAttr(expr, AstNodeAttributeKind.Params)
     if (raw == "") {
@@ -413,7 +368,7 @@ fun xmlLambdaParams(expr: *AstXmlNode): List<Str> {
     return raw.split(",")
 }
 
-// Reads the list only; a `*List<Str>` avoids copying the caller's list.
+// Reads the list only: a `*List<Str>` avoids copying the caller's list.
 fun xmlIsTypeParam(name: *Str, typeParams: *List<Str>): Bool {
     var i: Int = 0
     while (i < typeParams.size()) {

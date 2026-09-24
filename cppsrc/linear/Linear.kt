@@ -1,29 +1,12 @@
 // Linear.kt
 //
-// Post-sema lowering of structured control flow into labels and gotos, ported
-// from cppsrc/linear/Linear.cpp (impl_specs/linear-lowering.md). The emitter
-// consumes only the linear forms, so it no longer knows If/While/Switch/
-// Break/Continue:
-//
-//   label L;            -> Stmt.Label
-//   goto L;             -> Stmt.Goto
-//   if (c) goto L;      -> Stmt.IfTrue
-//   if (!(c)) goto L;   -> Stmt.IfFalse
-//   { ... }             -> Stmt.Block
-//
-// Bodies are wrapped in blocks because a C++ jump may not bypass a declaration
-// that is still in scope at the target; the language already scopes each
-// branch/loop body separately, so the wrapper preserves semantics.
-//
-// Label numbering restarts at L1 for every body (function/method or lambda):
-// labels are function scoped in C++, so per-body numbering cannot collide, and
-// re-emitting a body (generic instantiation) always produces the same names.
-// The hoisted `switch` subject is named `simse_sw_<n>` from the same counter.
+// Structured control flow lowered to labels and gotos (impl_specs/linear-lowering.md); the
+// emitter sees only these forms. A body is wrapped in a block where a jump would otherwise
+// bypass a declaration in scope at its target; labels restart at L1 per body, so C++'s
+// per-function scope cannot collide across bodies.
 package linear
 
 import common
-
-// ---- node construction -----------------------------------------------------
 
 fun linStmt(kind: AstNodeCategory, line: Int, column: Int): AstXmlNode {
     var attrs: List<AstNodeAttribute> = listOf<AstNodeAttribute>(
@@ -33,9 +16,8 @@ fun linStmt(kind: AstNodeCategory, line: Int, column: Int): AstXmlNode {
     return AstXmlNode(AstNodeKind.Stmt, kind, attrs, Array<AstXmlNode>())
 }
 
-// The same node under a new structural role; the AST carries roles in the
-// element name (impl_specs/ast-xmlnode.md), so a reused expression has to be
-// re-rooted for its new position.
+// The same node under a new structural role; roles live in the element name
+// (impl_specs/ast-xmlnode.md), so a reused expression must be re-rooted.
 fun linRole(child: *AstXmlNode, role: AstNodeKind): AstXmlNode {
     var renamed: AstXmlNode = child
     renamed.name = role
@@ -54,9 +36,7 @@ fun linGoto(name: *Str, line: Int, column: Int): AstXmlNode {
     return node
 }
 
-// `kind` is StmtIfTrue or StmtIfFalse. The condition is re-rooted under `Cond`: a
-// condition that came from the source already carries that role, but one a lowering
-// *builds* (the yield machine's `if (branch == n) goto LYn;`) carries `Expr`, and the
+// The condition is re-rooted under `Cond`: a lowering-*built* jump carries `Expr`, and the
 // emitter finds its condition by role.
 fun linCondJump(kind: AstNodeCategory, cond: *AstXmlNode, name: *Str, line: Int, column: Int): AstXmlNode {
     var node: AstXmlNode = linStmt(kind, line, column)
@@ -71,7 +51,7 @@ fun linBlock(body: *List<AstXmlNode>, line: Int, column: Int): AstXmlNode {
     return node
 }
 
-// The hoisted `switch` subject: an untyped VarDecl, so the emitter emits `auto`.
+// An untyped `VarDecl`: the emitter spells it `auto`.
 fun linSubjectDecl(name: *Str, init: *AstXmlNode, line: Int, column: Int): AstXmlNode {
     var node: AstXmlNode = linStmt(AstNodeCategory.StmtVarDecl, line, column)
     node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
@@ -89,12 +69,8 @@ fun linName(role: AstNodeKind, name: *Str, line: Int, column: Int): AstXmlNode {
     return AstXmlNode(role, AstNodeCategory.ExprName, attrs, Array<AstXmlNode>())
 }
 
-// ---- the lowering ----------------------------------------------------------
-
-// What one stage of the linear form produced: the body, and whether the stage
-// changed anything. The stages run in a loop - each can leave work for the
-// others - and stop when a whole round changes nothing, so every stage has to
-// report the work it did and, just as important, the work it did not do.
+// One stage's output: the body, and whether that stage changed anything. Every stage has to
+// report the work it did *not* do: the stages loop until a whole round changes nothing.
 data class LinLowered(
     var body: List<AstXmlNode>,
 
@@ -103,8 +79,6 @@ data class LinLowered(
 
 data class LinLowerer(
     var next: Int,
-
-// Whether this pass actually lowered anything.
     var changed: Bool
 ) {
     fun nextId(): Int {
@@ -117,8 +91,8 @@ data class LinLowerer(
         return "L" + this.nextId().toString()
     }
 
-    // One body in, one linear body out. Pure: the input statements are not
-    // modified (only copied or re-rooted).
+    // One body in, one linear body out; the input statements are not modified (only copied
+    // or re-rooted).
     fun lowerBody(stmts: *List<AstXmlNode>): LinLowered {
         var out: List<AstXmlNode> = List<AstXmlNode>()
         this.lowerStmts(stmts, "", "", out)
@@ -126,10 +100,6 @@ data class LinLowerer(
     }
 
     // breakTo/continueTo are empty when no enclosing construct accepts them.
-    //
-    // A statement is a value (`List<AstXmlNode>` holds them by value), so the pointer
-    // form is what keeps the pass from copying every statement it walks: `*stmt` is the
-    // element's place, and the passes it is handed to read through it.
     fun lowerStmts(stmts: *List<AstXmlNode>, breakTo: *Str, continueTo: *Str, out: *List<AstXmlNode>): Unit {
         for (*stmt in stmts) {
             this.lowerStmt(stmt, breakTo, continueTo, out)
@@ -174,10 +144,8 @@ data class LinLowerer(
         out.append(stmt)
     }
 
-    // A region needs its own C++ scope only when it declares a variable at its
-    // own level: a jump may not bypass an initialization that is still in scope
-    // at the target. Everything else is spliced flat into the enclosing
-    // sequence, which keeps the emitted code compact.
+    // A region needs its own C++ scope only when it declares a variable at its own level; a
+    // jump may not bypass an initialization still in scope at the target.
     fun appendBody(body: *List<AstXmlNode>, line: Int, column: Int, out: *List<AstXmlNode>): Unit {
         if (this.declares(body)) {
             out.append(linBlock(body, line, column))
@@ -197,8 +165,8 @@ data class LinLowerer(
         return false
     }
 
-    // Whether an expression contains `&&` or `||` anywhere - including inside a call's
-    // arguments, where the *value* form applies and nothing here can decompose it.
+    // Whether an expression contains `&&` or `||` anywhere, including inside a call's
+    // arguments, where nothing here can decompose it.
     fun containsShortCircuit(e: *AstXmlNode): Bool {
         if (xmlKind(e) == AstNodeCategory.ExprBinary) {
             val op: Str = xmlAttr(e, AstNodeAttributeKind.Op)
@@ -215,9 +183,8 @@ data class LinLowerer(
         return false
     }
 
-    // A condition that is nothing but boolean operators (`&&`, `||`, `!`) and leaves
-    // with no short-circuit inside them: the conditions this pass can decompose into
-    // jumps.
+    // A condition that is nothing but `&&`/`||`/`!` over leaves with no short-circuit
+    // inside them: what this pass can decompose into jumps.
     fun isDecomposable(e: *AstXmlNode): Bool {
         if (xmlKind(e) == AstNodeCategory.ExprBinary) {
             val op: Str = xmlAttr(e, AstNodeAttributeKind.Op)
@@ -232,12 +199,10 @@ data class LinLowerer(
         return !this.containsShortCircuit(e)
     }
 
-    // Lowers a boolean condition into conditional jumps, one per leaf, with `&&`/`||`
-    // evaluating short-circuit exactly as the `if`/`while` they came from
-    // (impl_specs/linear-lowering.md, "Short-circuit operators"). A leaf is tested with
-    // whichever of `IfTrue`/`IfFalse` matches its value, so no negation is spelled out
-    // here; `simplify`, which runs next, folds each leaf's jump pair into one
-    // conditional jump and drops the labels the chain no longer needs.
+    // A boolean condition as conditional jumps, one per leaf, `&&`/`||` short-circuiting
+    // as the `if`/`while` they came from (impl_specs/linear-lowering.md, "Short-circuit
+    // operators"). A leaf is tested with whichever of `IfTrue`/`IfFalse` matches its value,
+    // so no negation is spelled out here.
     fun lowerCondition(
         cond: *
         AstXmlNode,
@@ -253,13 +218,12 @@ data class LinLowerer(
             if (op == "&&" || op == "||") {
                 val mid: Str = this.freshLabel()
                 if (op == "&&") {
-                    // Both operands must hold: the first one that does not jumps
-                    // straight past the rest.
+                    // Both operands must hold: the first that does not jumps past the rest.
                     this.lowerCondition(xmlChildPtr(cond, AstNodeKind.Lhs), mid, falseTarget, line, column, out)
                     out.append(linLabel(mid, line, column))
                     this.lowerCondition(xmlChildPtr(cond, AstNodeKind.Rhs), trueTarget, falseTarget, line, column, out)
                 } else {
-                    // The first operand that holds jumps straight to the target.
+                    // The first operand that holds jumps to the target.
                     this.lowerCondition(xmlChildPtr(cond, AstNodeKind.Lhs), trueTarget, mid, line, column, out)
                     out.append(linLabel(mid, line, column))
                     this.lowerCondition(xmlChildPtr(cond, AstNodeKind.Rhs), trueTarget, falseTarget, line, column, out)
@@ -268,8 +232,8 @@ data class LinLowerer(
             }
         }
         if (xmlKind(cond) == AstNodeCategory.ExprUnary && xmlAttr(cond, AstNodeAttributeKind.Op) == "!") {
-            // `!x` is `x` with its outcomes swapped: the test itself is never negated
-            // here, `IfTrue`/`IfFalse` covers both polarities.
+            // `!x` is `x` with its outcomes swapped; `IfTrue`/`IfFalse` covers both
+            // polarities.
             this.lowerCondition(xmlChildPtr(cond, AstNodeKind.Operand), falseTarget, trueTarget, line, column, out)
             return
         }
@@ -332,8 +296,8 @@ data class LinLowerer(
         out.append(linLabel(condLabel, line, column))
         val cond: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Cond)
         if (this.containsShortCircuit(cond) && this.isDecomposable(cond)) {
-            // The body label is where a holding operand lands; the fold in `simplify`
-            // removes it again when only one jump remains.
+            // Where a holding operand lands; `linSimplifyBody` folds it away when one jump
+            // remains.
             val bodyLabel: Str = this.freshLabel()
             this.lowerCondition(cond, bodyLabel, endLabel, line, column, out)
             out.append(linLabel(bodyLabel, line, column))
@@ -352,26 +316,21 @@ fun linLowerBody(stmts: *List<AstXmlNode>): LinLowered {
     return lowerer.lowerBody(stmts)
 }
 
-// The names the lowering generates for its own storage: the expression lowering's
-// temporaries (`_sm_expr<n>`). A name the program wrote can collide with one of
-// these - an accepted, documented risk - but nothing the lowering generates came
-// from the source, which is what the slot hoisting asks about (Linear.h).
+// The lowering's own storage names (`_sm_expr<n>`): nothing the lowering generates came
+// from the source, which is what the slot hoisting asks about.
 fun linIsSlotName(name: Str): Bool {
     return name.startsWith("_sm_expr")
 }
 
-// The whole linear form of one function-like body, ready to emit: the stages
-// (`linLowerBody`, `linSimplifyBody`, `linLowerExprs`) run in a loop until none of
-// them has work left, then the block folding (`linFlattenBlocks`) runs, and while
-// that changed something the loop starts over. Folding is what lets the next round
-// see a flatter body - and a jump a block used to hide is a jump the peephole can
-// fold.
+// The whole linear form of one function-like body, ready to emit: the stages run in a loop
+// until none has work left, then the block folding runs and the loop starts over. Folding
+// is what lets the next round see a flatter body.
 fun linLowerForEmission(body: *List<AstXmlNode>): List<AstXmlNode> {
     var current: List<AstXmlNode> = body
     var canChange: Bool = true
     var guard: Int = 0
-    // A round only removes statements (it never adds any), so the loop below always
-    // terminates; the guard is there to bound a bug, not the work.
+    // A round only removes statements, so the loop terminates; the guard bounds a bug, not
+    // the work.
     while (canChange && guard < 256) {
         guard = guard + 1
         var canExtract: Bool = true

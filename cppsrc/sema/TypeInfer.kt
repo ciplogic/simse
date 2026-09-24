@@ -1,29 +1,13 @@
 // TypeInfer.kt
 //
-// A semantic step that runs on a *lowered* body - the Simse mirror of
-// cppsrc/sema/TypeInfer.cpp (impl_specs/linear-lowering.md, "Expression
-// lowering"). After the linear and expression lowering have produced the emitter's
-// final vocabulary, it gives every declaration the lowering introduced - and any
-// `val`/`var` the program left unannotated - a type, so the emitter does not have to
-// guess one while it emits and does not fall back to `auto`.
-//
-// It is deliberately *not* a reifier: a type parameter in scope is a perfectly good
-// type to spell (the emitted C++ is a template, so the C++ compiler specializes it
-// later), and an explicit instantiation substitutes its type arguments into the
-// call's result. Anything the pass cannot spell in this body - a type parameter that
-// is not in scope, a lambda, `&x`/`*x`/`copy(x)`/`null`, a call it cannot resolve -
-// leaves the declaration untyped, exactly as it was before this pass existed.
-//
-// Types are `AstXmlNode` subtrees like everywhere else in this ring, and an empty
-// node (`xmlEmptyNode`) is "no/unknown type". The pass reads the program-level facts
-// the emitter has already collected (`SemFacts`), never files, and it never modifies
-// the parsed AST: only a declaration that gains a type is rebuilt.
+// A semantic step on a *lowered* body (impl_specs/linear-lowering.md): after lowering, it
+// types every declaration the lowering introduced - and any unannotated `val`/`var` - so
+// the emitter never has to guess one or fall back to `auto`. It is not a reifier: a type
+// parameter in scope is a good type to spell. An empty `AstXmlNode` is "no/unknown type".
 
 package sema
 
 import common
-
-// ---- type nodes -----------------------------------------------------------
 
 fun semNamedType(name: *Str): AstXmlNode {
     var node: AstXmlNode =
@@ -39,9 +23,8 @@ fun semGenericType(name: *Str, args: *List<AstXmlNode>): AstXmlNode {
     return node
 }
 
-// The built-in (RTL) type names: they keep their C++ spelling and need no
-// declaration to be usable in a type position. This is the one list - the emitter
-// calls it instead of keeping its own (`cgIsRtlTypeName` used to be a copy).
+// The built-in (RTL) type names: they keep their C++ spelling and need no declaration
+// to be usable in a type position. The emitter calls this one list (`cgIsRtlTypeName`).
 fun semIsRtlTypeName(name: *Str): Bool {
     when (name) {
         "Int", "Int8", "Int16", "Int32", "Int64" -> {
@@ -72,11 +55,8 @@ fun semIsRtlTypeName(name: *Str): Bool {
 }
 
 // The receiver type of a declaration that spells it as an explicit `this` first
-// parameter (`native fun has<K, V>(this: Dictionary<K, V>, key: K): Bool`) - empty for
-// everything else (a prefix receiver, `Type.name(...)`, is not a parameter at all).
-// Such a declaration is a *member*: `callTarget` takes it for a member call, and
-// `functionReturn` refuses it for a plain one (`fun find(...)` must not pick up
-// `Str.find`'s signature).
+// parameter (empty otherwise). Such a declaration is a *member*: `functionReturn`
+// refuses it for a plain call (`fun find(...)` must not pick up `Str.find`).
 fun semExtensionReceiver(decl: *AstXmlNode): AstXmlNode {
     if (xmlIsEmpty(decl)) {
         return xmlEmptyNode()
@@ -92,8 +72,8 @@ fun semExtensionReceiver(decl: *AstXmlNode): AstXmlNode {
     return xmlEmptyNode()
 }
 
-// How many leading parameters of a declaration are that receiver: 1 or 0. The
-// parameters a call's arguments convert against start *after* it.
+// How many leading parameters are the receiver (1 or 0); a call's arguments convert
+// against the parameters after it.
 fun semReceiverParams(decl: *AstXmlNode): Int {
     if (xmlIsEmpty(semExtensionReceiver(decl))) {
         return 0
@@ -101,14 +81,12 @@ fun semReceiverParams(decl: *AstXmlNode): Int {
     return 1
 }
 
-// Whether a declaration spells its receiver that way.
 fun semIsExtensionDecl(decl: *AstXmlNode): Bool {
     return !xmlIsEmpty(semExtensionReceiver(decl))
 }
 
 // Whether `param` is one of `decl`'s own type parameters, bare (`T`, not `List<T>`):
-// what an argument can only be compared against as a *form*, since the receiver - not
-// this call - binds it.
+// the receiver, not this call, binds it.
 fun semIsBareTypeParam(decl: *AstXmlNode, param: *AstXmlNode): Bool {
     if (xmlIsEmpty(decl) || xmlIsEmpty(param)) {
         return false
@@ -125,11 +103,8 @@ fun semIsBareTypeParam(decl: *AstXmlNode, param: *AstXmlNode): Bool {
     return false
 }
 
-// The node re-rooted under `role`. A type read out of a declaration carries the
-// role it was read from (`ReturnType` in a signature, `TypeArg` in an argument
-// list, `Type` in a field) while the place it is put back into expects its own -
-// the emitter looks children up by role, so a type that is re-used must be
-// re-rooted, exactly like the emitter's own `renameRole` does for `Inner`.
+// The node re-rooted under `role`: the emitter looks children up by role, so a type
+// re-used from another position must be re-rooted (as `renameRole` does for `Inner`).
 fun semReRole(node: AstXmlNode, role: AstNodeKind): AstXmlNode {
     if (node.name == role) {
         return node
@@ -139,15 +114,12 @@ fun semReRole(node: AstXmlNode, role: AstNodeKind): AstXmlNode {
     return renamed
 }
 
-// A one-element list, for `semReplaceRole`.
 fun semOne(node: *AstXmlNode): List<AstXmlNode> {
     return listOf<AstXmlNode>(node)
 }
 
 // The same node with every child whose role is `role` replaced, in order, by
-// `replacements`; the other children keep their places. The lowering pass's
-// `exprReplaceRole`, which this package cannot import (the semantics are imported
-// by the lowering, never the other way round).
+// `replacements`. The lowering's `exprReplaceRole`, which this package cannot import.
 fun semReplaceRole(like: *AstXmlNode, role: AstNodeKind, replacements: *List<AstXmlNode>): AstXmlNode {
     var kids: List<AstXmlNode> = List<AstXmlNode>()
     val existing: List<AstXmlNode> = like.Children.toList()
@@ -169,8 +141,7 @@ fun semReplaceRole(like: *AstXmlNode, role: AstNodeKind, replacements: *List<Ast
     return AstXmlNode(like.name, like.kind, copy(like.attributes), kids.toArray())
 }
 
-// The declaration with a `Type` child of its own: what an untyped declaration was
-// missing. The child comes first, like a parsed `val x: T = ...`.
+// The declaration with a leading `Type` child, like a parsed `val x: T = ...`.
 fun semWithType(decl: *AstXmlNode, typeNode: *AstXmlNode): AstXmlNode {
     var kids: List<AstXmlNode> = List<AstXmlNode>()
     kids.append(typeNode)
@@ -203,22 +174,16 @@ fun semPointee(typeNode: *AstXmlNode): AstXmlNode {
     return current
 }
 
-// The pointee of a type *node*, after stripping any number of `&`/`*` handles - the node
-// form of `semPointee`, for a type a caller holds directly (a parameter's own type node,
-// say).
+// The node form of `semPointee`.
 fun semPointeeOf(typeNode: *AstXmlNode): AstXmlNode {
     return semPointee(typeNode)
 }
 
-// The `List<T>` a *type* names, looking through any handle (`*List<T>`, `&List<T>`) and
-// the alias form `PList<T>` (= `&List<T>`). Empty when the type is not a list. This is
-// the *argument* side of the packing rule - what tells `addAll(*xs)` from `addAll(1)`
-// when the two have the same argument count (`specs/functions.md`, "Packing the trailing
-// arguments").
+// The `List<T>` a *type* names, through handles and the `PList<T>` alias; empty when not
+// a list. The *argument* side of the packing rule (`specs/functions.md`).
 fun semListTypeOf(typeNode: *AstXmlNode): AstXmlNode {
     var base: AstXmlNode = semPointee(typeNode)
-    // `PList<T>` *is* `&List<T>` spelled as one name (`cppsrc/rtl/containers.hpp`), so it
-    // is a list too - as an *argument's* type, which is what this answers.
+    // `PList<T>` is `&List<T>` spelled as one name, so it is a list too.
     if (xmlKind(base) == AstNodeCategory.TypeGeneric
         && xmlAttr(base, AstNodeAttributeKind.Name) == "PList"
         && xmlCount(base, AstNodeKind.TypeArg) == 1
@@ -234,22 +199,16 @@ fun semListTypeOf(typeNode: *AstXmlNode): AstXmlNode {
     return xmlEmptyNode()
 }
 
-// Whether a *parameter*'s type is one a call may pack its trailing arguments into: a
-// by-value `List<T>` or a borrowed `*List<T>`. Deliberately not the counted
-// `&List<T>`/`PList<T>` - a packed list is a throwaway temporary, so a control block and
-// a reference count it never needed would be the cost of the convenience - and not a
-// type reached through a name the rule cannot see through, such as an alias. Both the
-// checker (which accepts the arity) and the IL extractor (which builds the list) ask it,
-// so the rule lives in one place.
+// Whether a *parameter*'s type takes packed trailing arguments: a by-value `List<T>` or a
+// borrowed `*List<T>`, deliberately not the counted `&List<T>`/`PList<T>` (a packed list is
+// a throwaway temporary), and not a type reached through an alias. The checker and the
+// extractor share it.
 fun semIsPackTarget(typeNode: *AstXmlNode): Bool {
     if (xmlIsEmpty(typeNode)) {
         return false
     }
-    // The counted forms are not pack targets: `&List<T>`/`PList<T>` is a
-    // `std::shared_ptr<List<T>>`, so a throwaway temporary would allocate a control
-    // block and take a count that drops at the end of the same statement - strictly more
-    // work than the one copy a by-value parameter costs. A borrow (`*List<T>`) and a
-    // by-value `List<T>` are what a pack feeds (specs/functions.md).
+    // The counted forms would allocate a control block for a temporary that dies in the
+    // same statement - more work than the one copy a by-value parameter costs.
     if (xmlKind(typeNode) == AstNodeCategory.TypeGeneric) {
         return xmlAttr(typeNode, AstNodeAttributeKind.Name) == "List"
                 && xmlCount(typeNode, AstNodeKind.TypeArg) == 1
@@ -307,9 +266,8 @@ fun semSameTypeList(left: *List<AstXmlNode>, right: *List<AstXmlNode>): Bool {
     return true
 }
 
-// Records `name := type`, refusing a second, different binding. A pattern type
-// parameter that stays unbound is not an error here: the caller finds out when it
-// substitutes the result type and nothing is left to spell.
+// Records `name := type`, refusing a second, different binding. An unbound pattern type
+// parameter is not an error here: the caller finds out when substitution leaves nothing.
 fun semBindOne(bindings: *Dictionary<Str, AstXmlNode>, name: *Str, typeNode: *AstXmlNode): Bool {
     if (!bindings.has(name)) {
         bindings.insert(name, typeNode)
@@ -318,12 +276,9 @@ fun semBindOne(bindings: *Dictionary<Str, AstXmlNode>, name: *Str, typeNode: *As
     return semSameType(bindings.get(name).value(), typeNode)
 }
 
-// The binding form of unification: what each pattern type parameter matched
-// (`List<T>` against `List<Str>` binds T := Str). Mirrors `unifyType`, which the
-// emitter uses when it only needs a yes/no.
 // Whether a receiver pattern matches an actual type, with the pattern's type parameters
-// matching anything (`sema::unifyType` in the C++ ring). It is what answers "does a
-// `iter` take this receiver?" for the `for` check (`Sema.kt`).
+// matching anything. It answers "does an `iter` take this receiver?" for the `for` check
+// (`Sema.kt`).
 fun semUnifyType(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *List<Str>): Bool {
     var actualPtr: *AstXmlNode = actual
     val patternKind: AstNodeCategory = xmlKind(pattern)
@@ -369,8 +324,7 @@ fun semUnifyType(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *List<St
             }
             val patternName: Str = xmlAttr(pattern, AstNodeAttributeKind.Name)
             val actualName: Str = xmlAttr(actualPtr, AstNodeAttributeKind.Name)
-            // `PList<T>` is the alias of `&List<T>`; match it against a `List<T>` pattern (the
-            // call dereferences).
+            // `PList<T>` is the alias of `&List<T>`; match it against a `List<T>` pattern.
             if (actualName != patternName
                 && !(patternName == "List" && actualName == "PList")
                 && !(patternName == "PList" && actualName == "List")
@@ -419,8 +373,7 @@ fun semUnifyType(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *List<St
         }
 
         AstNodeCategory.TypeYield -> {
-            // `..T` is a state machine (impl_specs/yield.md) and carries its element type the way
-            // a pointer carries its pointee, so a pattern `..T` matches `..Int` element-wise.
+            // `..T` carries its element type like a pointer its pointee, so it matches element-wise.
             if (ak == AstNodeCategory.TypeYield && !xmlIsEmpty(xmlChildPtr(actualPtr, AstNodeKind.Inner))
                 && !xmlIsEmpty(xmlChildPtr(pattern, AstNodeKind.Inner))
             ) {
@@ -436,6 +389,8 @@ fun semUnifyType(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *List<St
     return false
 }
 
+// The binding form of unification: what each pattern type parameter matched
+// (`List<T>` against `List<Str>` binds T := Str). `semUnifyType` is the yes/no form.
 fun semBindTypes(
     pattern: *
     AstXmlNode,
@@ -486,8 +441,7 @@ fun semBindTypes(
             }
             val patternName: Str = xmlAttr(pattern, AstNodeAttributeKind.Name)
             val actualName: Str = xmlAttr(actualPtr, AstNodeAttributeKind.Name)
-            // `PList<T>` is the alias of `&List<T>`; match it against a `List<T>`
-            // receiver pattern (the call dereferences).
+            // `PList<T>` is the alias of `&List<T>`; match it against a `List<T>` pattern.
             if (actualName != patternName
                 && !(patternName == "List" && actualName == "PList")
                 && !(patternName == "PList" && actualName == "List")
@@ -538,8 +492,7 @@ fun semBindTypes(
         }
 
         AstNodeCategory.TypeYield -> {
-            // `..T` is a state machine (impl_specs/yield.md) and carries its element type the way
-            // a pointer carries its pointee, so its parameter is bound the same way.
+            // `..T` carries its element type like a pointer its pointee, so it binds the same way.
             if (ak == AstNodeCategory.TypeYield && !xmlIsEmpty(xmlChildPtr(actualPtr, AstNodeKind.Inner))
                 && !xmlIsEmpty(xmlChildPtr(pattern, AstNodeKind.Inner))
             ) {
@@ -556,10 +509,8 @@ fun semBindTypes(
     return false
 }
 
-// Replaces every type parameter of `typeNode` from `bindings`. An empty result means
-// one of them was unbound and there is nothing to spell. The result is re-rooted as
-// a standalone type (`AstNodeKind.Type`); the caller re-roots it for the place it
-// puts it in.
+// Replaces every type parameter of `typeNode` from `bindings`; an empty result means one
+// was unbound and there is nothing to spell. The result is re-rooted as `AstNodeKind.Type`.
 fun semSubstitute(typeNode: *AstXmlNode, bindings: *Dictionary<Str, AstXmlNode>, typeParams: *List<Str>): AstXmlNode {
     if (xmlIsEmpty(typeNode)) {
         return xmlEmptyNode()
@@ -595,10 +546,8 @@ fun semSubstitute(typeNode: *AstXmlNode, bindings: *Dictionary<Str, AstXmlNode>,
         }
 
         AstNodeCategory.TypeReference, AstNodeCategory.TypePointer, AstNodeCategory.TypeYield -> {
-            // `..T` (a machine yielding `T`, impl_specs/yield.md) carries its element type the
-            // same way a pointer carries its pointee, so it substitutes the same way: the
-            // type is unspellable either way, but its *element* type is what a `for`'s loop
-            // variable is typed from.
+            // `..T` substitutes like a pointer's pointee: the type is unspellable either way,
+            // but its *element* type is what a `for`'s loop variable is typed from.
             val inner: AstXmlNode = semSubstitute(xmlChildPtr(typeNode, AstNodeKind.Inner), bindings, typeParams)
             if (xmlIsEmpty(inner)) {
                 return xmlEmptyNode()
@@ -633,8 +582,6 @@ fun semSubstitute(typeNode: *AstXmlNode, bindings: *Dictionary<Str, AstXmlNode>,
     return xmlEmptyNode()
 }
 
-// ---- the facts and the body context ---------------------------------------
-
 // A program-level function/method fact the inference resolves a call with.
 data class SemFnFact(
     var decl: AstXmlNode,
@@ -642,33 +589,24 @@ data class SemFnFact(
     var receiver: AstXmlNode,
     var templateParams: List<Str>,
 
-    // The declaration's own facts, read *once* when the fact is built - the shape the
-    // hand-written ring's typed `sema::FnFact` has always had (`decl->name`,
-    // `decl->params.size()`). Three walks test them on *every* collected function for
-    // *every* call site: `callTarget` in the extractor, `functionReturn` and
-    // `memberReturn` in the type pass. Read from the node each time, that was ~9M
-    // attribute walks of a name that never changes - the widest per-call-site scan the
-    // instrumented profile shows (T78).
+    // Read once when the fact is built: three walks test these on every collected function
+    // for every call site, so reading them from the node each time dominated the profile.
     var name: Str,
-    // The package the function is declared in. A machine's C++ class is qualified by
-    // it (`semMachineType`), which is the half of the class's name the call site
-    // cannot see for itself.
+    // The package the function is declared in; `semMachineType` qualifies a machine's C++
+    // class with it.
     var packageName: Str,
     var isNative: Bool,
     // A `native fun` extension spells its receiver as an explicit `this` first parameter,
-    // so `receiver` is empty while the declaration *is* a member (`semIsExtensionDecl`).
+    // so `receiver` is empty while the declaration is still a member.
     var isExtension: Bool,
     // The parameters a call's arguments convert against: its own, after the receiver.
     var paramCount: Int,
-    // Whether its last parameter packs (a `List<T>`/`*List<T>`), computed from the same
-    // count so a candidate needs no parameter list at all (`semIsPackTarget`).
+    // Whether its last parameter packs (a `List<T>`/`*List<T>`), from `semIsPackTarget`.
     var packTarget: Bool
 )
 
 // The fact for one collected function: everything above, read from the declaration once.
-// `name` and `isNative` come from the emitter's `CgFn`, which read them the same way
-// (T76); the rest are the receiver/parameter facts `semIsExtensionDecl`,
-// `semReceiverParams` and `semIsPackTarget` answer - per candidate, before this.
+// `name` and `isNative` come from the emitter's `CgFn`, which read them the same way.
 fun semFnFact(
     decl: *AstXmlNode, receiver: *AstXmlNode, templateParams: *List<Str>, name: *Str,
     packageName: *Str, isNative: Bool
@@ -684,27 +622,15 @@ fun semFnFact(
     )
 }
 
-// ---- the class a machine's type is spelled with -----------------------------
-//
-// A `..T` is a state machine (impl_specs/yield.md), and the C++ class it *is* is the
-// lowering's own output: the emitter names it after the function that creates it,
-// prefixed with the receiver's outer type name when that function is an extension, and
-// qualified by the function's own package (`List<T>.iter` is
-// `List_iter_yieldable`). A slot initialized from such a call is therefore
-// *spellable*, and that is what lets the hoisting move the machine's storage to the top
-// of the body (`linHoistSlots`) - the one declaration that used to keep a block around a
-// `for` and leave the linear form with scopes in scopes.
-//
-// The name is built at the *call site* because the declaration the slot sits in has to
-// carry it (`linIsSpellableType`): the type stays a `TypeYield`, with the class's name in
-// its `Name`, the class's own template arguments (the function's type parameters, bound
-// at the call site) as its `TypeArg` children, and the function's package in `Package` -
-// so every rule that reads a `..T` (`advance`/`value`, a machine's identity `iter`)
-// still sees the category it knows.
+// The C++ class a `..T` machine *is* (impl_specs/yield.md): the emitter names it after
+// the creating function, prefixed with the receiver's outer type name for an extension,
+// qualified by the function's package (`List<T>.iter` is `List_iter_yieldable`). Building
+// the name at the call site is what makes the slot spellable and lets `linHoistSlots`
+// hoist the machine's storage: the type stays a `TypeYield` (name in `Name`, template args
+// in `TypeArg`, package in `Package`) so every `..T` rule still sees the category it knows.
 
-// The outer name of a type, ignoring handles and arguments: `*List<Int>` and `List<Str>`
-// are both `List` - the name a machine's class carries (the emitter's `outerTypeName`,
-// in this package so the pass does not reach back into codegen).
+// The outer name of a type, ignoring handles and arguments (`*List<Int>` is `List`); the
+// emitter's `outerTypeName`, here so the pass does not reach back into codegen.
 fun semOuterTypeName(typeNode: *AstXmlNode): Str {
     if (xmlIsEmpty(typeNode)) {
         return ""
@@ -728,19 +654,16 @@ fun semOuterTypeName(typeNode: *AstXmlNode): Str {
     return xmlAttr(node, AstNodeAttributeKind.Name)
 }
 
-// The machine the call `fn` creates, as a *spellable* type: `ret` is the `..T` the call
-// answered with and `bindings` is what the call site bound the function's type
-// parameters to. An empty result - not a yielding function at all, or a class whose type
-// arguments nothing bound - leaves the type as it was, unspellable, and the declaration
-// it types keeps the `auto` (and the block with it) it had before.
+// The machine a call creates, as a *spellable* type: `ret` is the answered `..T`,
+// `bindings` what the call site bound. An unspellable result (not yielding, or an
+// unbound class argument) leaves the declaration an `auto`.
 fun semMachineType(
     ret: *AstXmlNode, fn: *SemFnFact, bindings: *Dictionary<Str, AstXmlNode>
 ): AstXmlNode {
     if (xmlKind(ret) != AstNodeCategory.TypeYield) {
         return ret
     }
-    // The class's own template arguments: the function's type parameters, which is what
-    // the emitted class is a template of (`emitFunction`'s `yieldType`).
+    // The class's template arguments: the function's type parameters (`emitFunction`).
     var args: List<AstXmlNode> = List<AstXmlNode>()
     var i: Int = 0
     while (i < fn.templateParams.size()) {
@@ -761,8 +684,8 @@ fun semMachineType(
     return node
 }
 
-// A `native fun` extension (`this` first parameter): its receiver pattern picks the
-// overload and its return type answers the call.
+// A `native fun` extension (`this` first parameter): its receiver picks the overload,
+// its return type answers the call.
 data class SemExtFact(
     var receiver: AstXmlNode,
 
@@ -770,9 +693,8 @@ data class SemExtFact(
     var typeParams: List<Str>
 )
 
-// Everything about the program the inference reads. The emitter fills this in from
-// its own symbol collection; it holds the same nodes, so filling it copies no
-// declarations.
+// Everything about the program the inference reads, filled from the emitter's own symbol
+// collection. It holds the same nodes, so filling it copies no declarations.
 data class SemFacts(
     var types: Dictionary<Str, AstXmlNode>,
 
@@ -789,26 +711,20 @@ fun semNewFacts(): SemFacts {
     )
 }
 
-// One function-like body being annotated: its declaration (which carries the
-// parameters), the type of `this`, and the type parameters in scope (the class's
-// plus the function's).
+// One function-like body being annotated: its declaration (which carries the parameters),
+// the type of `this`, and the type parameters in scope (class plus function).
 //
-// A *lambda* body has no declaration. Its frame is its own parameters plus the values
-// it captures, which the language models as fields of the closure instance
-// (specs/memory-model.md): inside the body a captured name simply *has* that type, so
-// the pass seeds it like a parameter. `paramNames` and `paramTypes` are parallel, and
-// a parameter's type may be missing where the callable type the lambda is used
-// against supplies it.
+// A *lambda* body has no declaration: its frame is its parameters plus its captures
+// (fields of the closure instance, specs/memory-model.md), seeded like parameters.
+// `paramNames` and `paramTypes` are parallel; a type may be missing where the callable
+// type supplies it.
 data class SemBody(
     var decl: AstXmlNode,
 
     var typeParams: List<Str>,
     var selfType: AstXmlNode,
-    // The class `this` is an instance of, when it is one the *lowering* built: a state
-    // machine (impl_specs/yield.md). Such a class has no declaration the program wrote,
-    // so its fields are reachable only through this - and the rules have to reach them,
-    // or `this.<field>` (a machine's `_sm_self`, say) types as nothing and the emitter
-    // has to guess what it is.
+    // The class `this` is an instance of, when the *lowering* built it (a state machine):
+    // it has no declaration the program wrote, so its fields are reachable only through this.
     var selfDecl: AstXmlNode,
 
     var paramNames: List<Str>,
@@ -816,31 +732,25 @@ data class SemBody(
     var captures: Dictionary<Str, AstXmlNode>
 )
 
-// ---- the pass -------------------------------------------------------------
-
-// The empty outermost scope, for an inference that is not asked about one body's frame
-// (`semInferTypes` seeds the frame into its own pushed scope): a shared, never written
-// dictionary, so `lookup` always has one to read.
+// The empty outermost scope (`semInferTypes` seeds the frame into its own pushed scope):
+// a shared, never written dictionary, so `lookup` always has one to read.
 val semNoScope: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
 
-// Both the facts and the body are **borrowed**, not copied: the pass only reads
-// them, and a body is annotated once per function, so copying the program tables
-// (hundreds of functions, three dictionaries) per body would dominate the run.
+// Both the facts and the body are borrowed, not copied: a body is annotated once per
+// function, and copying the program tables per body would dominate the run.
 data class SemInfer(
     var facts: *SemFacts,
     var body: *SemBody,
     var scopes: List<Dictionary<Str, AstXmlNode>>,
 
-// The flat record of every binding the pass proved, whatever a declaration can
-// spell - a name holding a state machine is `..T`, and `Stmt.type` never carries
-// that. A frame is keyed by name (the lowering gives each scope its own
-// variables), so this is what the backend seeds a body's frame from.
+// The flat record of every binding the pass proved, whatever a declaration can spell (a
+// machine is `..T`, which `Stmt.type` never carries). A frame is keyed by name, so this is
+// what the backend seeds a body's frame from.
     var types: Dictionary<Str, AstXmlNode>,
 
-// The *outermost* scope, borrowed from the caller (`typeOf`): the extractor's
-// frame is one dictionary per body, and re-seeding it into a scope copied the
-// whole frame per question - two thirds of every question's cost, measured. It is
-// read only after the pushed scopes, so anything the inference marks still wins.
+// The *outermost* scope, borrowed from the caller (`typeOf`): re-seeding the extractor's
+// frame into a scope copied the whole frame per question. Read after the pushed scopes, so
+// anything the inference marks still wins.
     var baseScope: *Dictionary<Str, AstXmlNode>
 ) {
     fun pushScope(): Unit {
@@ -851,10 +761,8 @@ data class SemInfer(
         this.scopes.removeAt(this.scopes.size() - 1)
     }
 
-    // One expression, typed against the names the caller knows. The extractor's frame
-    // is flat (one binding per name, no scopes), which is exactly what `names` is; the
-    // scope is pushed and popped so the call leaves nothing behind, and the frame itself
-    // is *borrowed* as the outermost scope rather than copied into the pushed one.
+    // One expression, typed against the caller's (flat) frame `names`; the scope is pushed
+    // and popped so the call leaves nothing behind, and `names` is borrowed, not copied.
     fun typeOf(e: *AstXmlNode, names: *Dictionary<Str, AstXmlNode>): AstXmlNode {
         this.pushScope()
         this.baseScope = names
@@ -886,11 +794,9 @@ data class SemInfer(
         return xmlEmptyNode()
     }
 
-    // A declaration is annotated only when its initializer is an expression whose
-    // *value* the C++ type of the declaration can name. A lambda needs its expected
-    // callable type and `null` has no type of its own; everything else - including
-    // `&x`, `*x` and `copy(x)` - is typed below, so the emitter never has to fall
-    // back to `auto` for it.
+    // A declaration is annotated only when the *value* of its initializer has a C++ type:
+    // a lambda needs its expected callable type and `null` has none. Everything else,
+    // including `&x`/`*x`/`copy(x)`, is typed below.
     fun declarable(init: *AstXmlNode): Bool {
         val kind: AstNodeCategory = xmlKind(init)
         if (kind == AstNodeCategory.ExprLambda || kind == AstNodeCategory.ExprNullLit) {
@@ -912,9 +818,8 @@ data class SemInfer(
         return semIsRtlTypeName(name)
     }
 
-    // Whether the emitter can spell this type in this body. A type parameter that is
-    // not in scope would name nothing in the emitted C++ and an undeclared name would
-    // make the emitter fail; both mean "leave it to `auto`" instead.
+    // Whether the emitter can spell this type in this body: an out-of-scope type parameter
+    // or an undeclared name would not compile, so both mean "leave it to `auto`".
     fun spellable(typeNode: *AstXmlNode): Bool {
         if (xmlIsEmpty(typeNode)) {
             return false
@@ -960,10 +865,8 @@ data class SemInfer(
             }
 
             AstNodeCategory.TypeYield -> {
-                // A machine (`..T`): spellable only once the call that created it named
-                // its class (`semMachineType`). An anonymous one has no C++ spelling at
-                // all, which is what leaves its declaration an `auto` where it stands -
-                // and the block that declaration keeps with it.
+                // A machine (`..T`) is spellable only once `semMachineType` named its class;
+                // an anonymous one has no C++ spelling, so its declaration stays an `auto`.
                 if (xmlAttr(typeNode, AstNodeAttributeKind.Name) == "") {
                     return false
                 }
@@ -982,8 +885,6 @@ data class SemInfer(
     fun isTypeName(name: *Str): Bool {
         return this.facts.types.has(name) || semIsRtlTypeName(name)
     }
-
-    // ---- statements -------------------------------------------------------
 
     fun stmts(list: *List<AstXmlNode>): List<AstXmlNode> {
         var out: List<AstXmlNode> = List<AstXmlNode>()
@@ -1030,8 +931,6 @@ data class SemInfer(
         return stmtNode
     }
 
-    // ---- expressions ------------------------------------------------------
-
     fun handle(kind: AstNodeCategory, inner: *AstXmlNode): AstXmlNode {
         if (xmlIsEmpty(inner)) {
             return xmlEmptyNode()
@@ -1068,12 +967,10 @@ data class SemInfer(
         return semSubstitute(memberType, bindings, classParams)
     }
 
-    // The return type of a call, with the callee's type parameters bound from an
-    // explicit instantiation (`identity<Int>(7)`) or from the receiver
-    // (`Box<Int>.get()`). A function whose result still mentions a type parameter is
-    // *not* monomorphized here - it stays symbolic and the emitted C++ template
-    // specializes it later - but a parameter nothing binds leaves no type to spell,
-    // so the call answers with an empty node.
+    // The return type of a call, the callee's type parameters bound from an explicit
+    // instantiation (`identity<Int>(7)`) or the receiver (`Box<Int>.get()`). A result that
+    // still mentions a type parameter stays symbolic (the C++ template specializes it
+    // later); a parameter nothing binds leaves no type to spell.
     fun functionReturn(name: *Str, typeArgs: *List<AstXmlNode>, receiver: *AstXmlNode): AstXmlNode {
         var i: Int = 0
         while (i < this.facts.functions.size()) {
@@ -1090,10 +987,8 @@ data class SemInfer(
             if (hasReceiver != !xmlIsEmpty(receiver)) {
                 continue
             }
-            // A `native fun` extension spells its receiver as an explicit `this` first
-            // parameter, so no receiver type was recorded for it: it is still a *member* -
-            // a plain call does not reach it (`fun find(...)` must not pick up
-            // `Str.find`'s signature).
+            // A `native fun` extension has no recorded receiver but is still a *member*: a
+            // plain call must not reach it (`functionReturn` for `fun find(...)`).
             if (!hasReceiver && fn.isExtension) {
                 continue
             }
@@ -1127,14 +1022,10 @@ data class SemInfer(
         return xmlEmptyNode()
     }
 
-    // The result of a member call (`recv.name(...)`), resolved the way the emitter
-    // lowers it: a Simse-declared extension/method first, then a native extension,
-    // then the built-in accessors.
-    // A receiver's type resolved through a `typealias`, the way the emitter resolves it
-    // (`Emitter.resolveAlias`, codegen/Codegen.kt): `StrView` is `Span<Char>`
-    // (cppsrc/rtl/StrView.kt), so an extension on `Span<T>` - `atPtr`, `iter` - is
-    // reachable through a view, because the alias *is* that type. A declared type that is
-    // not an alias comes back as it went in.
+    // The result of a member call (`recv.name(...)`): a declared extension/method, then a
+    // native extension, then the built-in accessors, the way the emitter lowers it.
+    // A receiver type through a `typealias` (`Emitter.resolveAlias`): `StrView` is
+    // `Span<Char>`, so an extension on `Span<T>` is reachable through a view.
     fun resolveAlias(typeNode: *AstXmlNode): AstXmlNode {
         var current: AstXmlNode = typeNode
         var guard: Int = 0
@@ -1210,18 +1101,13 @@ data class SemInfer(
             }
         }
         if (xmlKind(recv) == AstNodeCategory.TypeYield) {
-            // `..T` is a state machine (impl_specs/yield.md), and its surface is part of
-            // the lowering's ABI: `advance()` steps it and answers whether there was a
-            // value, and the field `current` holds what it yielded (typed by the member
-            // rule in `infer`). Typing them is what makes a `for`'s loop variable a
-            // *typed* binding rather than an `auto` the emitter would have to guess a
-            // symbol for (`impl_specs/for.md`).
+            // A machine's surface is the lowering's ABI: `advance()` steps it, and `current`
+            // holds what it yielded. Typing them makes a `for`'s loop variable a typed binding.
             if (calleeText == "advance") {
                 return semNamedType("Bool")
             }
-            // A machine is already iterable: `x.iter()` on one is `x`, so the wrap a
-            // `for` puts around what it iterates is the identity there (impl_specs/for.md).
-            // `..T` is not a spellable type, so no function could take one.
+            // A machine is already iterable: `x.iter()` is `x` (`impl_specs/for.md`); `..T`
+            // is not spellable, so no function could take one.
             if (calleeText == "iter") {
                 return receiverType
             }
@@ -1229,13 +1115,10 @@ data class SemInfer(
         if (xmlKind(recv) == AstNodeCategory.TypeGeneric) {
             val typeArgs: List<AstXmlNode> = xmlChildren(recv, AstNodeKind.TypeArg)
             val recvName: Str = xmlAttr(recv, AstNodeAttributeKind.Name)
-            // The constructors the spec spells as static forms (`Opt<int>.none()`,
-            // `Opt<int>.some(42)`, `Res<int>.ok(42)`, `Res<int>.err(...)`,
-            // specs/core-types.md). Nothing declares them - `Type.name(...)` lowers to
-            // `Type::name(...)` syntactically - so their result type is stated here: the
-            // type they are qualified by. It is per *name*, not "a static form answers
-            // its own type": `EnumType.fromInt(n)` is typed by the enum rule below
-            // (`specs/declarations.md`), and is deliberately not in this list.
+            // The static constructor forms (`Opt<int>.none()`, `Res<int>.ok(42)`,
+            // specs/core-types.md) have no declaration, so their result type is stated here:
+            // the type they are qualified by. Per *name* - `EnumType.fromInt(n)` is the enum
+            // rule's (`specs/declarations.md`), deliberately not in this list.
             if ((recvName == "Opt" && (calleeText == "none" || calleeText == "some"))
                 || (recvName == "Res" && (calleeText == "ok" || calleeText == "err"))
             ) {
@@ -1260,8 +1143,7 @@ data class SemInfer(
             return semNamedType("Bool")
         }
         // An enum's conversions (`specs/declarations.md`): `E.toInt()` is the member's
-        // integer value and `E.fromInt(n)` the unchecked cast back, both typed here so a
-        // binding holding one is a typed binding rather than an `auto`.
+        // integer value, `E.fromInt(n)` the unchecked cast back.
         if (xmlKind(recv) == AstNodeCategory.TypeNamed
             && this.facts.enumNames.has(xmlAttr(recv, AstNodeAttributeKind.Name))
         ) {
@@ -1275,13 +1157,9 @@ data class SemInfer(
         return this.classMemberReturn(*recv, calleeText)
     }
 
-    // A member of a data class no `SemFnFact` stands for: a *prelude* class's methods,
-    // which is the one kind left - `Emitter.collect` skips every prelude declaration
-    // (a `Span`'s C++ is the RTL's `span.hpp`, and the emitter maps the type onto it), so
-    // `Span<Char>.at` has a declared return type (`T`) that nothing told this pass about.
-    // The receiver's own type arguments are what bind the class's type parameters, the
-    // same binding the fact loop above does for a member the program declared; a class
-    // the receiver does not instantiate leaves the call untyped, as before.
+    // A member of a data class no `SemFnFact` stands for: a *prelude* class's methods
+    // (`Emitter.collect` skips prelude declarations, so `Span<Char>.at`'s `T` is not in
+    // the facts). The receiver's own type arguments bind the class's type parameters.
     fun classMemberReturn(recv: *AstXmlNode, calleeName: *Str): AstXmlNode {
         val kind: AstNodeCategory = xmlKind(recv)
         if (kind != AstNodeCategory.TypeNamed && kind != AstNodeCategory.TypeGeneric) {
@@ -1323,10 +1201,8 @@ data class SemInfer(
         return xmlEmptyNode()
     }
 
-    // A callable's own return type. Calling a *value* - a parameter or local of a
-    // function type (`predicate(x)` where `predicate: (Char) -> Bool`) - is an indirect
-    // call, and its result is that type's return type, resolved through a `typealias`
-    // (`CharPredicate`) exactly as the emitter resolves it.
+    // A callable's own return type: calling a *value* of function type (`predicate(x)`) is
+    // an indirect call, resolved through a `typealias` as the emitter resolves it.
     fun callableReturn(typeNode: *AstXmlNode): AstXmlNode {
         var current: AstXmlNode = semPointee(typeNode)
         var guard: Int = 0
@@ -1451,10 +1327,8 @@ data class SemInfer(
                 }
                 val memberText: Str = xmlAttr(e, AstNodeAttributeKind.Name)
                 if (xmlKind(base) == AstNodeCategory.TypeYield) {
-                    // A machine's own field (`impl_specs/for.md`): `current` is what it last
-                    // yielded, so the `for` template's loop variable is typed by it. For the
-                    // pointer wrap (`iterPtr`) the element type *is* `*T`, which is what
-                    // makes `for (*v in xs)` a place rather than a copy.
+                    // A machine's `current` field (`impl_specs/for.md`): what it last yielded.
+                    // For `iterPtr` the element type *is* `*T`, a place rather than a copy.
                     if (memberText == "current") {
                         return semReRole(xmlChild(base, AstNodeKind.Inner), AstNodeKind.Type)
                     }
@@ -1465,9 +1339,8 @@ data class SemInfer(
                     ) == "Res"
                 ) {
                     val typeArgs: List<AstXmlNode> = xmlChildren(base, AstNodeKind.TypeArg)
-                    // The spec spells these `value`/`error` (specs/core-types.md); the RTL's
-                    // own fields are `Value`/`Error`, and a name it does not remap is
-                    // emitted as written - so both reach C++, and both have to type here.
+                    // The spec spells these `value`/`error`, the RTL's fields `Value`/`Error`;
+                    // an unremapped name is emitted as written, so both reach C++ (core-types.md).
                     if ((memberText == "value" || memberText == "Value") && typeArgs.size() > 0) {
                         return semReRole(typeArgs[0], AstNodeKind.Type)
                     }
@@ -1484,9 +1357,8 @@ data class SemInfer(
                     } else if (!xmlIsEmpty(this.body.selfDecl)
                         && xmlAttr(this.body.selfDecl, AstNodeAttributeKind.Name) == baseName
                     ) {
-                        // A class the lowering built (a state machine): its fields are not a
-                        // declaration the program wrote, so they are reached through the body's
-                        // own context.
+                        // A class the lowering built (a state machine): its fields are reached
+                        // through the body's own context, not a written declaration.
                         decl = this.body.selfDecl
                     }
                     if (decl.name == AstNodeKind.DataClass) {
@@ -1538,10 +1410,8 @@ data class SemInfer(
             }
 
             AstNodeCategory.ExprDeref -> {
-                // `*x` is the *address* of what `x` denotes: of a value's own storage
-                // (`&x`), of a counted reference's pointee (`x.get()`), or the pointer
-                // itself when `x` already is one - in which case the emitter reads
-                // through it, so the type is the pointee.
+                // `*x` is the *address* of what `x` denotes: a value's own storage (`&x`), a
+                // counted reference's pointee (`x.get()`), or a pointer (read through).
                 val operand: AstXmlNode = this.infer(xmlChildPtr(e, AstNodeKind.Operand))
                 if (xmlIsEmpty(operand)) {
                     return xmlEmptyNode()
@@ -1557,8 +1427,7 @@ data class SemInfer(
             }
 
             AstNodeCategory.ExprCopy -> {
-                // `copy(x)` is the *value*: a plain read of a value, or the pointee of a
-                // handle (`*(x)`).
+                // `copy(x)` is the *value*: a plain read, or the pointee of a handle (`*(x)`).
                 val operand: AstXmlNode = this.infer(xmlChildPtr(e, AstNodeKind.Operand))
                 val value: AstXmlNode = semPointee(operand)
                 if (xmlIsEmpty(value)) {
@@ -1579,24 +1448,20 @@ data class SemInfer(
                     return semNamedType("Bool")
                 }
                 // The operation is on *values*: a handle operand is read through to its
-                // pointee (the `*T -> T` row of the conversion table, which the extractor
-                // spells at the operand), so the result is the left operand as a value.
-                // Returning the operand's own type would claim the result is a handle too
-                // - and then every slot the extractor made for `a + b` would be declared
-                // as one.
+                // pointee, so the result is the left operand as a value. Returning the handle
+                // itself would make the emitter declare every slot for `a + b` as one.
                 return semPointee(this.infer(xmlChildPtr(e, AstNodeKind.Lhs)))
             }
         }
-        // A lambda's type comes from the callable type it is used against, which is
-        // the emitter's business (its parameters may even be inferred from there).
+        // A lambda's type comes from the callable type it is used against (the emitter's
+        // business, which may infer its parameters from there).
         return xmlEmptyNode()
     }
 }
 
-// Fills in the type of every untyped `VarDecl` in `body` the pass can prove; the
-// statements that gain nothing come back as they are. `inferred` receives what the
-// pass proved for every name - including the ones a C++ declaration cannot spell
-// (`..T`), which the frame still needs (see `SemInfer.types`).
+// Fills in the type of every untyped `VarDecl` in `body` the pass can prove; others come
+// back as they are. `inferred` receives every proven name, including ones a C++
+// declaration cannot spell (`..T`), which the frame still needs (see `SemInfer.types`).
 fun semInferTypes(
     body: *List<AstXmlNode>, facts: *SemFacts, ctx: *SemBody,
     inferred: *Dictionary<Str, AstXmlNode>
@@ -1613,10 +1478,8 @@ fun semInferTypes(
             infer.mark(xmlAttr(param, AstNodeAttributeKind.Name), paramType)
         }
     }
-    // A lambda's frame: its own parameters (a type may be missing where the callable
-    // type it is used against supplies it), then the values it captures, which are
-    // fields of the closure instance and therefore simply have their type inside the
-    // body.
+    // A lambda's frame: its parameters (a type may come from the callable type it is used
+    // against), then its captures, which are closure fields.
     i = 0
     while (i < ctx.paramNames.size()) {
         if (i < ctx.paramTypes.size() && !xmlIsEmpty(ctx.paramTypes[i])) {
@@ -1641,21 +1504,16 @@ fun semInferTypes(
     return out
 }
 
-// The type of **one expression**, with the names in scope given explicitly: the same rules
-// the pass applies to a whole body, asked about a single node.
+// The type of one expression, with the names in scope given explicitly: the same rules the
+// pass applies to a whole body, asked about a single node.
 //
-// The IL extractor is the caller that needs this. Its frame is flat (a name per slot, no
-// scopes), and the slots it *synthesizes* - the place behind a read, a value it has to
-// declare - have no declaration in the source to take a type from, so it asks here. That
-// is what lets every slot of an instruction list carry a type and every instruction be one
-// operation over typed slots (`impl_specs/linear-il.md`). An empty node when the rules
-// cannot name the expression.
+// The IL extractor needs this: its flat frame's synthesized slots (the place behind a read,
+// a value it must declare) have no source declaration to take a type from, and a type per
+// slot is what makes every instruction one operation over typed slots (`impl_specs/linear-il.md`).
 fun semTypeOfExpr(
     expr: *AstXmlNode, facts: *SemFacts, ctx: *SemBody, names: *Dictionary<Str, AstXmlNode>
 ): AstXmlNode {
-    // The C++ ring seeds the frame in the inference's constructor; this ring seeds it at
-    // each entry point instead, so the same frame is built here before the one expression
-    // is typed.
+    // The frame is seeded at the entry points, not the constructor.
     val infer: SemInfer = SemInfer(
         facts, ctx, List<Dictionary<Str, AstXmlNode>>(), Dictionary<Str, AstXmlNode>(), *semNoScope
     )

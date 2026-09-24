@@ -1,51 +1,19 @@
 // SourceGen.kt
 //
-// The source generators' manager (impl_specs/generators.md): the table of registered
-// generators, the dispatch, and the three entry points the rest of the compiler calls.
-//
-//   sourceGenDeclare        codegen, for every declaration that carries an attribute:
-//                           resolves the symbol a call reaches and records the declaration
-//                           for the `Emit` phase. The value is that symbol; an error is the
-//                           generator's own message.
-//   sourceGenReparseSource  the driver, before the program is checked: the Simse source a
-//                           generator produced, joined into one module (or "" when none
-//                           did).
-//   sourceGenEmit           codegen, after every body: the text that needs the program's
-//                           calls to be known - the reach set - and the one pass a
-//                           generator gets for the program itself.
-//
-// The table is filled by the generators themselves: each one registers from its own file
-// with a file-level static - `registerSourceGen`, one line at the end of the generator's
-// source - so the built-in three and a module's generator register the same way. It is read
-// through a pointer - the shape `cppsrc/lex/Scanner.kt` gives its token matchers, and a
-// static for the same reason: the compiler is one compilation per process.
-//
-// This package calls nothing from the compiler's stages, and this file is the boundary a
-// generator is held to: a generator reads and writes the *data* it is handed (the AST nodes,
-// the resources, the sections) and answers a `SourceGenTransform`; everything else - the
-// prototype, the receiver pattern, the parsing of what it produced - is done by the caller.
-// A generator therefore cannot break when a compiler API changes, and it cannot do
-// arbitrary things to the compilation either.
+// The source generators' manager (impl_specs/generators.md): the registered-generator table,
+// the dispatch, and the three entry points the compiler calls - `sourceGenDeclare` (codegen,
+// resolves the symbol a call reaches), `sourceGenReparseSource` (the driver, joins
+// generator-produced Simse source), and `sourceGenEmit` (codegen, places text that needs the
+// reach set). Each generator registers itself from its own file with a file-level static.
 
 package sourcegen
 
 import common
 import resources
 
-// ---- the table ------------------------------------------------------------
-//
-// The table starts **empty** and every generator appends itself to it, from its own file,
-// with a file-level static whose initializer is the registration (`specs/statics.md`). That
-// is what makes the order the initialization pass runs in irrelevant: storage starts empty
-// as a guarantee, and a registration is an *append*, so whether the built-in three run
-// before or after a module's generator cannot matter. An assignment here - the
-// `var table = makeSourceGens()` this used to be - would have been order-dependent: a
-// registration that ran first would be overwritten by the assignment that ran second.
-//
-// The dispatcher looks a generator up by *name*, so the order the table ends up in is not
-// observable either; a name must simply not repeat. The manager's own statics are program
-// statics (this tree is a program to the compiler that builds it), so they run in
-// `simse_initStatics`, before the driver is reached.
+// The table starts empty and each generator appends to it (a file-level static), so the order
+// the initialization pass runs in cannot matter; an assignment would have been order-dependent.
+// The dispatcher looks a generator up by name, so a name must simply not repeat.
 
 var sourceGenTable: List<SourceGenerator>
 
@@ -59,11 +27,9 @@ fun addSourceGen(
     gens.append(SourceGenerator(name, transform, declaresPrototype, registersReceiver))
 }
 
-// One generator's self-registration: what a generator's file-level static is initialized
-// with, so that registering reads as one line at the end of the generator's own file
-// (`specs/simse-md.md`, a module's generators register the same way). It answers `Bool`
-// because a static's initializer is an expression and every static has a type - the value
-// itself is never read.
+// A generator's self-registration - one line at the end of its own file (`specs/simse-md.md`).
+// Answers `Bool` because a static's initializer is an expression and every static has a type;
+// the value is never read.
 fun registerSourceGen(
     name: Str,
     transform: OnSourceGen,
@@ -78,7 +44,6 @@ fun getSourceGens(): *List<SourceGenerator> {
     return * sourceGenTable
 }
 
-// The index of the generator registered under `name`, or -1.
 fun sourceGenFind(name: *Str): Int {
     val gens: *List<SourceGenerator> = getSourceGens()
     var i: Int = 0
@@ -91,15 +56,13 @@ fun sourceGenFind(name: *Str): Int {
     return -1
 }
 
-// Whether a generator is registered for `name`: an `@SmGen` name nobody registered is a
-// diagnostic the emitter reports against the declaration, not a silent default.
+// An `@SmGen` name nobody registered is a diagnostic the emitter reports, not a silent default.
 fun sourceGenHas(name: *Str): Bool {
     return sourceGenFind(name) >= 0
 }
 
-// Whether a declaration of this generator gets a prototype of its own: its C++ is elsewhere
-// and already linked (a header's), so the call sites need the declaration. A generator whose
-// text is emitted or compiled declares the symbol itself.
+// Its C++ is elsewhere and already linked (a header's), so call sites need the declaration;
+// a generator whose text is emitted or compiled declares the symbol itself.
 fun sourceGenDeclaresPrototype(name: *Str): Bool {
     val at: Int = sourceGenFind(name)
     if (at < 0) {
@@ -108,8 +71,8 @@ fun sourceGenDeclaresPrototype(name: *Str): Bool {
     return getSourceGens()[at].declaresPrototype
 }
 
-// Whether a declaration of this generator that has an explicit `this` is registered as a
-// receiver extension (the pattern that selects an overload by receiver).
+// An explicit `this` registers as a receiver extension (the pattern that selects an overload
+// by receiver).
 fun sourceGenRegistersReceiver(name: *Str): Bool {
     val at: Int = sourceGenFind(name)
     if (at < 0) {
@@ -117,8 +80,6 @@ fun sourceGenRegistersReceiver(name: *Str): Bool {
     }
     return getSourceGens()[at].registersReceiver
 }
-
-// ---- the compilation ------------------------------------------------------
 
 var sourceGenState: FullCompiledState = makeSourceGenState()
 
@@ -129,17 +90,15 @@ fun makeSourceGenState(): FullCompiledState {
     )
 }
 
-// The whole state, for the dispatch below: a generator is handed this pointer, so it sees
-// the files that were read and the resources they carry, and nothing else of the compiler.
+// A generator is handed this pointer: the files read and the resources they carry, nothing
+// else of the compiler.
 fun sourceGenTree(): *FullCompiledState {
     return * sourceGenState
 }
 
-// The driver's start, before the program is checked: the files that were read (the prelude
-// first, then the program), the resources they carry, the compiler's *own* resources (the
-// `_res.md` files beside the prelude, read from disk - the second half of the generator
-// lookup), and a fresh assembly. Everything a generator may look at is here by the time the
-// first dispatch runs.
+// The driver's start, before the program is checked: the files read (the prelude first, then
+// the program), the resources they carry, the compiler's *own* resources, and a fresh
+// assembly.
 fun sourceGenBegin(
     preludeNames: *List<Str>,
     preludeModules: *List<AstXmlNode>,
@@ -164,19 +123,14 @@ fun sourceGenBegin(
     }
 }
 
-// A module that only exists after a reparse (the driver's generated one), so the tree a
-// generator sees is the whole compilation and not only the files it started with.
+// A module that only exists after a reparse, so a generator sees the whole compilation.
 fun sourceGenAddModule(fileName: *Str, module: *AstXmlNode): Unit {
     sourceGenState.fileNames.append(fileName)
     sourceGenState.modules.append(module)
 }
 
-// ---- dispatch -------------------------------------------------------------
-
-// One dispatch: the generator registered for `ctx.name` runs, and every answer that names a
-// key is recorded in the state's dictionary - which is what a generator that would produce
-// the same thing twice reads back to answer `AlreadyExisting` (a generator that produces
-// several keys records the rest itself, GenTypes.kt's `FullCompiledState`).
+// The generator registered for `ctx.name` runs; a non-empty key is recorded in the state's
+// dictionary, which is what `AlreadyExisting` is read back from.
 fun runSourceGen(ctx: *SourceGenContext): SourceGenTransform {
     val at: Int = sourceGenFind(ctx.name)
     if (at < 0) {
@@ -191,12 +145,8 @@ fun runSourceGen(ctx: *SourceGenContext): SourceGenTransform {
     return answer
 }
 
-// ---- the compiler's entry points ------------------------------------------
-
-// The emitter's `collect` pass: one declaration that carries an attribute. The value is the
-// symbol a call reaches - the declaration's own name unless the declaration or its generator
-// says otherwise - and the error a generator's message, for the caller to report against the
-// declaration.
+// The emitter's `collect` pass, one attributed declaration: the value is the symbol a call
+// reaches, the error a generator's message for the caller to report.
 fun sourceGenDeclare(decl: *AstXmlNode, fileName: *Str, prelude: Bool): Res<Str> {
     val name: Str = xmlAttr(decl, AstNodeAttributeKind.Generator)
     val declName: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
@@ -229,11 +179,9 @@ fun sourceGenDeclare(decl: *AstXmlNode, fileName: *Str, prelude: Bool): Res<Str>
     return Res<Str>.ok(ctx.symbol)
 }
 
-// The emitter's other pass, after every body: by now the program's calls are known, so a
-// *prelude* declaration nothing reaches is skipped, and the text a generator produces only
-// here - a resource section - lands in the assembly. Every generator is then asked once more
-// for the program itself (`declaration` empty): that is where text no declaration named goes
-// (`emit: always`, a generator's own sections).
+// The emitter's other pass, after every body: a *prelude* declaration nothing reaches is
+// skipped, and text only a generator produces here lands. Every generator is then asked once
+// more with an empty declaration, for text no declaration named (`emit: always`).
 fun sourceGenEmit(sections: *Sections, reachedNames: *Dictionary<Str, Bool>): Res<Str> {
     var i: Int = 0
     while (i < sourceGenState.requests.size()) {
@@ -286,10 +234,9 @@ fun sourceGenEmit(sections: *Sections, reachedNames: *Dictionary<Str, Bool>): Re
     return Res<Str>.ok("")
 }
 
-// The driver's pass, before the program is checked: every declaration in the *program's* own
-// modules that answers `ReparseRequired` contributes Simse source, and the blocks are joined
-// into the one module the front end parses with the program. A prelude declaration is not
-// walked: its source would have to be part of the RTL, which is loaded before this runs.
+// Collects the Simse source every program declaration answers `ReparseRequired`, joined into
+// the one module parsed with the program. Prelude declarations are not walked: their source
+// would have to be part of the RTL, loaded before this runs.
 fun sourceGenReparseSource(): Res<Str> {
     var blocks: List<Str> = List<Str>()
     var m: Int = sourceGenState.preludeCount
@@ -303,8 +250,8 @@ fun sourceGenReparseSource(): Res<Str> {
     if (blocks.size() == 0) {
         return Res<Str>.ok("")
     }
-    // One module, one package: a bare name in `rtl` is the symbol a call reaches, which is
-    // what lets a generated function carry the declaration's own name.
+    // One module in package `rtl`: a bare name there is the symbol a call reaches, which lets a
+    // generated function carry the declaration's own name.
     var text: Str = "package rtl\n"
     var i: Int = 0
     while (i < blocks.size()) {
@@ -314,8 +261,7 @@ fun sourceGenReparseSource(): Res<Str> {
     return Res<Str>.ok(text)
 }
 
-// One module's declarations, in order, depth first - the order the blocks are joined in, so
-// the generated module depends only on the sources.
+// Depth first, in order: the order blocks are joined, so the module depends only on the sources.
 fun sourceGenReparseNode(node: *AstXmlNode, blocks: *List<Str>): Res<Str> {
     if (node.name == AstNodeKind.Function
         && xmlAttr(node, AstNodeAttributeKind.Generator).size() > 0
@@ -339,9 +285,8 @@ fun sourceGenReparseNode(node: *AstXmlNode, blocks: *List<Str>): Res<Str> {
     return Res<Str>.ok("")
 }
 
-// One declaration's answer to the reparse pass: its source, or "" when its generator has
-// nothing for the module. An unknown name is left to the emitter, which reports it against
-// the declaration it came from.
+// Its source, or "" when its generator has nothing for the module. An unknown name is left to
+// the emitter, which reports it against the declaration.
 fun sourceGenReparseDecl(decl: *AstXmlNode): Res<Str> {
     val name: Str = xmlAttr(decl, AstNodeAttributeKind.Generator)
     if (!sourceGenHas(name)) {

@@ -1,37 +1,24 @@
 // Sema.kt
 //
-// The name/type-resolution pass, ported from cppsrc/sema/Sema.cpp. It consumes the
-// AstXmlNode AST (schema in impl_specs/ast-xmlnode.md) and returns the same
-// diagnostics, in the same order, as the C++ `sema::analyze`.
-//
-// Positional information comes from the `line`/`column` attributes; the port
-// mirrors the C++ traversal exactly (hoisting, scopes, conservative checks).
-//
-// Iteration is a `while` with List indexing where the index is needed, and the
-// pointer form of `for` where it is not. Kind dispatch is a `when`, which the parser
-// lowers to the `if`/`else` chain the emitted C++ uses (`switch` cannot switch on a
-// `Str`).
+// The name/type-resolution pass: it consumes the AstXmlNode AST (schema in
+// impl_specs/ast-xmlnode.md). Positional information comes from the
+// `line`/`column` attributes.
 
 package sema
 
 import parser
 import common
 
-// The read-only AstXmlNode accessors (xmlAttr, xmlChild, xmlChildren, ...) live in
-// cppsrc/common/xmlutil.kt and arrive through `import common`. The AstXmlNode and
-// AstNodeAttribute types come from the implicit RTL prelude. Only the sema-specific
-// logic stays here.
+// The read-only AstXmlNode accessors (xmlAttr, xmlChild, ...) live in
+// cppsrc/common/xmlutil.kt and arrive through `import common`.
 
-// A value binding in scope: mutability, whether assignment is checked, and the
-// declared/inferred type (an empty AstXmlNode when unknown).
+// `type` is an empty AstXmlNode when unknown.
 data class ValueBinding(
     var isMutable: Bool,
 
     var checkAssign: Bool,
     var type: AstXmlNode
 )
-
-// ---- built-in type knowledge ----------------------------------------------
 
 fun semaIsBuiltinType(name: *Str): Bool {
     if (name == "Int" || name == "Int8" || name == "Int16" || name == "Int32"
@@ -45,8 +32,6 @@ fun semaIsBuiltinType(name: *Str): Bool {
     return false
 }
 
-// The number of type parameters a built-in generic expects, or -1 when the name
-// is not a built-in generic.
 fun semaBuiltinGenericArity(name: *Str): Int {
     when (name) {
         "List", "Array", "RawArray", "Opt", "Res", "PList" -> {
@@ -60,10 +45,8 @@ fun semaBuiltinGenericArity(name: *Str): Int {
     return -1
 }
 
-// Whether a type is reached through a handle (`&T`, `*T`, or the `PList<T>` alias of
-// `&List<T>`): the C++ ring's `sema::isHandleType` (cppsrc/sema/TypeInfer.cpp), which
-// this ring has no other home for. The extractor spells the same rule as
-// `ilIsHandleType` and the emitter as `Emitter.isHandleType`; the checker asks it too.
+// A handle: `&T`, `*T`, or the `PList<T>` alias of `&List<T>`. The extractor spells
+// the same rule as `ilIsHandleType`, the emitter as `Emitter.isHandleType`.
 fun semaIsHandleType(typeNode: *AstXmlNode): Bool {
     if (xmlIsEmpty(typeNode)) {
         return false
@@ -76,19 +59,15 @@ fun semaIsHandleType(typeNode: *AstXmlNode): Bool {
             && xmlAttr(typeNode, AstNodeAttributeKind.Name) == "PList"
 }
 
-// Whether a type node names a *view*: `Span<T>`, which `StrView` is the alias of
-// (`Span<Char>`, cppsrc/rtl/StrView.kt). A view owns no storage, so the C++ has no
-// conversion that builds one from an owned value - the emitter prints the call as
-// written and `cl.exe` rejects it. `checkViewArgument` reports that where the argument
-// is, instead.
+// A *view*: `Span<T>` (`StrView` is its `Span<Char>` alias, cppsrc/rtl/StrView.kt), which
+// owns no storage, so the C++ has no conversion from an owned value (`checkViewArgument`).
 fun semaIsSpanType(node: *AstXmlNode): Bool {
     return xmlKind(node) == AstNodeCategory.TypeGeneric
             && xmlAttr(node, AstNodeAttributeKind.Name) == "Span"
 }
 
-// Whether a type node is an owned value a view cannot be handed as it stands: `Str` or
-// `List<T>`. Handles (`*T`/`&T`/`PList<T>`) are unwrapped first, since `*Str` names the
-// same owned storage. A view, a scalar, a type parameter and everything else answer false.
+// An owned value a view cannot be handed as it stands: `Str` or `List<T>`, after
+// unwrapping handles (`*Str` names the same owned storage).
 fun semaIsOwnedViewSource(actual: *AstXmlNode): Bool {
     var base: *AstXmlNode = actual
     var guard: Int = 0
@@ -124,12 +103,8 @@ fun semaIsOwnedViewSource(actual: *AstXmlNode): Bool {
             && xmlAttr(base, AstNodeAttributeKind.Name) == "List"
 }
 
-// ---- receiver unification -------------------------------------------------
-
-// Simple structural unification of an extension receiver pattern (which may
-// mention the extension's type parameters) against the actual receiver type.
-// References/pointers on the actual side are auto-dereferenced, matching the
-// member-call decision.
+// Structural unification of an extension receiver pattern against the actual type;
+// references/pointers on the actual side are auto-dereferenced.
 fun semaUnifyReceiver(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *List<Str>): Bool {
     var actualPtr: *AstXmlNode = actual
     val pk: AstNodeCategory = xmlKind(pattern)
@@ -214,17 +189,14 @@ fun semaUnifyReceiver(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *Li
     return false
 }
 
-// Whether a name is one the `for` desugaring made. The generated names are per-file
-// counters (`_sm_for1`, `_sm_index1`), like the lowering's own slots:
-// recognizable, and documented as not a user's to take.
+// Whether a name is one the `for` desugaring made: the `_sm_for1`/`_sm_index1`
+// counters, which are not a user's to take.
 fun semaIsForTemplateName(name: *Str): Bool {
     return name.startsWith("_sm_for")
 }
 
 // The schema's spelling of a type node ("List<Int>", "*Str", "(Int) -> Bool"), for
-// diagnostics that have to name one. The C++ ring's dump spells types through
-// `ast::typeToString`; this is the same function over `AstXmlNode`, and the two are
-// kept in step by hand - a divergence surfaces in the differentials.
+// diagnostics that have to name one.
 fun semaTypeText(node: *AstXmlNode): Str {
     val kind: AstNodeCategory = xmlKind(node)
     when (kind) {
@@ -269,8 +241,7 @@ fun semaTypeTextList(types: *List<AstXmlNode>): Str {
     if (count == 0) {
         return out
     }
-    // The parts are rendered first so the buffer can be reserved for the whole
-    // text: `out = out + part` copies the accumulated prefix per part.
+    // Parts are rendered first so the buffer can be reserved once: `out + part` copies.
     var parts: List<Str> = List<Str>()
     var len: Int = 2 * (count - 1)
     var i: Int = 0
@@ -292,10 +263,8 @@ fun semaTypeTextList(types: *List<AstXmlNode>): Str {
     return out
 }
 
-// ---- the analyzer ---------------------------------------------------------
-
-// One participating file: its name (for diagnostics) and its parsed Module node.
-// The Module carries the declared package, which namespaces its declarations.
+// One participating file and its parsed Module; the Module carries the package that
+// namespaces its declarations.
 data class SemaInput(
     var fileName: Str,
 
@@ -318,8 +287,6 @@ data class Analyzer(
     var loopDepth: Int,
     var diags: List<Str>
 ) {
-
-    // ---- entry ------------------------------------------------------------
 
     fun run(): Unit {
         this.collectGlobal()
@@ -344,16 +311,13 @@ data class Analyzer(
         )
     }
 
-    // ---- symbol collection ------------------------------------------------
-
     // "<a>.<b>" for the module's package; the empty string is the root package.
     fun packageOf(module: *AstXmlNode): Str {
         return xmlAttr(module, AstNodeAttributeKind.Package)
     }
 
-    // Appends `decl` under `key` in `map`, which is keyed by "pkg|name" (global)
-    // or by bare name (visible). Operators are direct field mutations because
-    // List/Dictionary are value types.
+    // Appends `decl` under `key` in `map`, keyed by "pkg|name" (global) or bare name
+    // (visible); List/Dictionary are value types, hence the read-append-write-back.
     fun appendGlobalFunction(key: *Str, decl: *AstXmlNode): Unit {
         if (this.globalFunctions.has(key)) {
             var existing: List<AstXmlNode> = this.globalFunctions.get(key).value()
@@ -390,11 +354,10 @@ data class Analyzer(
         }
     }
 
-    // Collects every declaration into its package scope, reporting a duplicate
-    // top-level name within one package, including across two files that declare
-    // the same package. File-level statics (`Var`, specs/statics.md) share the
-    // namespace with the other declarations but are collected separately: they
-    // are values, not types.
+    // Collects every declaration into its package scope, reporting a duplicate top-level
+    // name within one package (across two files too). File-level statics (`Var`,
+    // specs/statics.md) share that namespace but are collected separately: they are
+    // values, not types.
     fun collectGlobal(): Unit {
         var n: Int = 0
         while (n < this.inputs.size()) {
@@ -450,7 +413,6 @@ data class Analyzer(
         }
     }
 
-    // Reports an import whose package no participating file declares.
     fun validateImports(module: *AstXmlNode): Unit {
         val imports: List<AstXmlNode> = xmlChildren(module, AstNodeKind.Import)
         for (*importDecl in imports) {
@@ -464,10 +426,9 @@ data class Analyzer(
         }
     }
 
-    // Builds the unqualified scope of one file: its own package, then each
-    // imported package, then the implicit `rtl` prelude. It also pushes the
-    // module scope the file's declarations are analyzed in, where the visible
-    // file-level statics live as values (specs/statics.md); `run` pops it.
+    // Builds the unqualified scope of one file: its own package, then imports, then the
+    // implicit `rtl` prelude. Pushes the module scope (with file-level statics as values,
+    // specs/statics.md) that `run` pops.
     fun buildVisible(module: *AstXmlNode): Unit {
         this.types = Dictionary<Str, AstXmlNode>()
         this.functions = Dictionary<Str, List<AstXmlNode>>()
@@ -509,8 +470,6 @@ data class Analyzer(
             p = p + 1
         }
     }
-
-    // ---- scopes -----------------------------------------------------------
 
     fun pushScope(): Unit {
         this.scopes.append(Dictionary<Str, ValueBinding>())
@@ -565,8 +524,6 @@ data class Analyzer(
         }
         return false
     }
-
-    // ---- type resolution --------------------------------------------------
 
     fun checkTypeName(name: *Str, line: Int, column: Int): Unit {
         if (semaIsBuiltinType(name) || this.types.has(name) || this.typeParamVisible(name)) {
@@ -639,17 +596,12 @@ data class Analyzer(
         }
     }
 
-    // ---- declaration analysis ---------------------------------------------
-
     fun analyzeDecl(decl: *AstXmlNode): Unit {
         val kind: AstNodeCategory = xmlKind(decl)
         when (kind) {
             AstNodeCategory.Var -> {
-                // Static storage: the type in the file's module scope, and the
-                // initializer as an ordinary expression. The initializer may name any
-                // hoisted declaration, including another static (specs/statics.md:
-                // the name is visible everywhere, the initialization order is not
-                // specified).
+                // Static storage: the initializer may name any hoisted declaration,
+                // including another static (specs/statics.md; init order unspecified).
                 val staticType: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.Type)
                 if (!xmlIsEmpty(staticType)) {
                     this.resolveType(staticType)
@@ -736,8 +688,7 @@ data class Analyzer(
             if (!xmlIsEmpty(paramType)) {
                 this.resolveType(paramType)
             }
-            // Parameters are not `val` declarations, so reassigning one is never
-            // reported (under-report rather than risk a false hit).
+            // Parameters are not `val` declarations, so reassigning one is never reported.
             this.declareValue(xmlAttr(param, AstNodeAttributeKind.Name), true, false, paramType)
         }
         val returnType: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.ReturnType)
@@ -756,8 +707,6 @@ data class Analyzer(
         this.popScope()
         this.popTypeScope()
     }
-
-    // ---- statement analysis -----------------------------------------------
 
     fun analyzeStmt(stmt: *AstXmlNode): Unit {
         val kind: AstNodeCategory = xmlKind(stmt)
@@ -876,8 +825,6 @@ data class Analyzer(
             }
         }
     }
-
-    // ---- expression analysis ----------------------------------------------
 
     fun analyzeExpr(expr: *AstXmlNode): Unit {
         val kind: AstNodeCategory = xmlKind(expr)
@@ -1003,19 +950,9 @@ data class Analyzer(
         this.checkInstantiationArity(name, argCount, xmlLine(expr), xmlColumn(expr))
     }
 
-    // What the checker has to say about one argument of an accepted call. One rule
-    // so far: a **raw pointer cannot become a counted reference in place**. The
-    // language shares a *box* (`&x` is the counted reference to a copy of `x`),
-    // and a `*T` argument is a pointer to somebody's storage - the compiler would
-    // have to guess whether the call wants a copy of that storage or a share of a
-    // box that does not exist. So the writer says it, one line before the call:
-    //
-    //     var boxed: &Int = &v      // a reference to a copy of v
-    //     printRef(boxed)
-    //
-    // A report rather than a silent copy, because the two spellings mean
-    // different things. Every *other* handle conversion is inferred
-    // (`convertArgument` in the extractor, `specs/functions.md`).
+    // A raw pointer cannot become a counted reference in place: `&x` shares a box, while
+    // `*T` points into somebody's storage. Every other handle conversion is inferred
+    // (`convertArgument`, `specs/functions.md`).
     fun checkHandleArgument(callee: *Str, function: *AstXmlNode, index: Int, arg: *AstXmlNode): Unit {
         val params: List<AstXmlNode> = xmlChildren(function, AstNodeKind.Param)
         if (index >= params.size()) {
@@ -1048,10 +985,8 @@ data class Analyzer(
         )
     }
 
-    // Whether a parameter type is a *view*: `Span<T>`, `StrView` (its alias of
-    // `Span<Char>`), or a program `typealias` that reaches one. The two common spellings
-    // are recognized by name; a `typealias` chain is followed one hop at a time, the way
-    // the emitter follows it (`Emitter.resolveAlias`).
+    // Whether a parameter type is a *view*: `Span<T>`, `StrView`, or a program
+    // `typealias` reaching one (followed one hop at a time, as `Emitter.resolveAlias`).
     fun isViewType(typeNode: *AstXmlNode): Bool {
         if (semaIsSpanType(typeNode)) {
             return true
@@ -1088,10 +1023,8 @@ data class Analyzer(
         return false
     }
 
-    // The checker's own typing of an argument: `exprType`, looked through the wrappers
-    // whose value is their operand's (`copy(x)`, `*x`, `&x`). A view is built from the
-    // *owned* value underneath, and `semaIsOwnedViewSource` strips the handles again - so
-    // peeling to the operand is the answer the check wants, with no type node to build.
+    // `exprType` looked through the wrappers whose value is their operand's (`copy(x)`,
+    // `*x`, `&x`): peeling to the operand is what the view check wants.
     fun viewArgBase(arg: *AstXmlNode): AstXmlNode {
         val kind: AstNodeCategory = xmlKind(arg)
         if (kind == AstNodeCategory.ExprDeref || kind == AstNodeCategory.ExprRef
@@ -1106,23 +1039,10 @@ data class Analyzer(
         return this.exprType(arg)
     }
 
-    // What the checker has to say about one argument of an accepted call, beyond the
-    // handle rule above: a **view parameter takes a view**. `Span<T>` (and `StrView`,
-    // which *is* `Span<Char>`) owns nothing, and the C++ has no conversion that builds a
-    // span out of a `Str` or a `List<T>` - the emitter cannot see that the call is broken
-    // and prints it as written, so the failure surfaces from `cl.exe` against the
-    // *generated* file instead of here.
-    //
-    // A string literal is *already* a view (the emitter writes it as its
-    // `__sm_stringTable[k]` entry, a `StrView`), so it needs nothing. Anything the
-    // checker cannot type is left to the emitter's own rules, which decide silently.
     // Whether some overload of `callee` with `argCount` parameters would take `arg` for
-    // parameter `index`. `checkCallArity` walks the overloads by *arity* and the check
-    // sees the first match, but two overloads of one name may differ in a parameter's
-    // shape - `parseModule(Span<Token>, Str)` beside `parseModule(*List<Token>, Str)` -
-    // so a view parameter in *this* overload is not proof the call is broken. A parameter
-    // that is not a view takes the argument (the other rules speak for those), and a view
-    // parameter takes it when the argument is, or may be, a view.
+    // parameter `index`: a non-view parameter takes the argument, and a view parameter
+    // takes it when the argument is (or may be) a view. `checkCallArity` sees only the
+    // first arity match, but two overloads may differ in parameter shape.
     fun viewArgHasOverload(callee: *Str, argCount: Int, index: Int, arg: *AstXmlNode): Bool {
         if (!this.functions.has(callee)) {
             return false
@@ -1151,6 +1071,9 @@ data class Analyzer(
         return false
     }
 
+    // A view parameter takes a view: `Span<T>` owns nothing, so the C++ has no conversion
+    // from a `Str` or `List<T>` and the emitter prints the call as written. A string
+    // literal is already a view (`__sm_stringTable[k]`).
     fun checkViewArgument(callee: *Str, function: *AstXmlNode, index: Int, arg: *AstXmlNode): Unit {
         val params: List<AstXmlNode> = xmlChildren(function, AstNodeKind.Param)
         if (index >= params.size()) {
@@ -1194,8 +1117,7 @@ data class Analyzer(
         }
         val argCount: Int = xmlCount(call, AstNodeKind.Arg)
 
-        // A call to a known data class is a constructor call: the argument count
-        // must match the declared field count exactly.
+        // A construction is not a call: the argument count must match the field count.
         if (this.types.has(name)) {
             val decl: AstXmlNode = this.types.get(name).value()
             if (xmlKind(decl) == AstNodeCategory.DataClass) {
@@ -1235,12 +1157,8 @@ data class Analyzer(
                 }
                 return
             }
-            // The trailing arguments may *pack* into a last parameter that is a list
-            // (`fun addAll(values: *List<Int>)` called as `addAll(1, 2, 3)`), so a call
-            // with more arguments than parameters is legal when the last parameter takes
-            // a pack - and one with fewer, which is the same call with no elements
-            // (`specs/functions.md`). A construction is not a call here: it takes one
-            // argument per field, always.
+            // Trailing arguments may pack into a final list parameter, so counts both above
+            // and below the parameter count are legal (`specs/functions.md`).
             if (paramCount > 0) {
                 val params: List<AstXmlNode> = xmlChildren(overload, AstNodeKind.Param)
                 val lastType: *AstXmlNode = xmlChildPtr(params[paramCount-1], AstNodeKind.Type)
@@ -1255,8 +1173,8 @@ data class Analyzer(
         )
     }
 
-    // The receiver's type, when the checker tracks it (a local/parameter name or
-// a generic construction). Empty when unknown.
+    // The receiver's type when the checker tracks it (a local/parameter or a generic
+    // construction); empty when unknown.
     fun exprType(expr: *AstXmlNode): AstXmlNode {
         if (xmlKind(expr) == AstNodeCategory.ExprName) {
             val binding: Opt<ValueBinding> = this.lookupValue(xmlAttr(expr, AstNodeAttributeKind.Name))
@@ -1288,15 +1206,10 @@ data class Analyzer(
         return xmlEmptyNode()
     }
 
-    // `for` is lowered in the parser into the declaration of the machine it iterates
-// (`_sm_for<n>`, impl_specs/for.md), whose initializer is the invisible `iter()`
-// / `iterPtr()` wrap, so the checker sees the template rather than the construct,
-// and the template's names are the one marker that says "this came from a `for`".
-// Something is iterable when that wrap resolves: a machine is (the identity), and
-// anything else needs the wrap in scope - the prelude has one per container, in both
-// flavours. Say so here, where the `for` still has a position: the C++ the template
-// would otherwise emit does not compile, and its error would name a generated
-// statement instead of the line the user wrote.
+    // `for` is lowered into the declaration of the machine it iterates (`_sm_for<n>`,
+    // impl_specs/for.md), whose initializer is an invisible `iter()`/`iterPtr()` wrap:
+    // the template names are the marker, and something is iterable when that wrap
+    // resolves. Reporting here names the user's line rather than the generated statement.
     fun checkForIterable(stmt: *AstXmlNode): Unit {
         val init: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Init)
         if (xmlIsEmpty(init) || !semaIsForTemplateName(xmlAttr(stmt, AstNodeAttributeKind.Name))) {
@@ -1316,8 +1229,8 @@ data class Analyzer(
             return
         }
         if (xmlKind(receiverType) == AstNodeCategory.TypeYield) {
-            // A machine *is* the identity for `iter` - it hands out values, not
-            // places, so it has no pointer form.
+            // A machine is the identity for `iter`: it hands out values, not places, so
+            // it has no pointer form.
             if (wrap == "iter") {
                 return
             }
@@ -1340,11 +1253,9 @@ data class Analyzer(
         )
     }
 
-    // Whether a wrap (`iter`, `iterPtr`) takes this receiver: the convention the
-// parser's wrap calls through (`specs/functions.md`, impl_specs/for.md). The receiver's
-// *name* is what is compared - `List<T>` takes any `List<...>`, and a pattern type
-// parameter takes anything - which is all the gate needs; the emitted call is resolved
-// with the full unification (in `codegen`), and a name this cannot decide stays silent.
+    // Whether a wrap (`iter`, `iterPtr`) takes this receiver, by receiver *name* only:
+    // `List<T>` takes any `List<...>`, a type parameter takes anything. An undecidable
+    // name stays silent; the emitted call is resolved with full unification in `codegen`.
     fun hasWrap(wrap: *Str, receiverType: *AstXmlNode): Bool {
         if (!this.functions.has(wrap)) {
             return false
@@ -1365,8 +1276,7 @@ data class Analyzer(
         return false
     }
 
-    // The receiver's outer type, ignoring handles and type arguments: `*List<Int>` and
-// `List<Str>` are the same receiver for this purpose.
+    // The receiver's outer type, ignoring handles and type arguments.
     fun semaReceiverNameMatches(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *List<Str>): Bool {
         var actualPtr: *AstXmlNode = actual
         while (true) {
@@ -1396,11 +1306,8 @@ data class Analyzer(
         return false
     }
 
-    // The type of the expression a `for` iterates, for the shapes the checker can name
-// without walking anything: a binding it tracks, a type construction, or a call of
-// a declared function. Anything else stays unknown, and unknown stays silent - the
-// C++ compiler gets the last word there, as it does for any other member it
-// resolves.
+    // The type a `for` iterates, for the shapes the checker can name: a tracked binding,
+    // a type construction, or a declared function's return type. Unknown stays silent.
     fun iteratedType(expr: *AstXmlNode): AstXmlNode {
         if (xmlKind(expr) == AstNodeCategory.ExprName) {
             return this.exprType(expr)
@@ -1412,8 +1319,7 @@ data class Analyzer(
         var name: Str = ""
         if (xmlKind(callee) == AstNodeCategory.ExprGenericName) {
             name = xmlAttr(callee, AstNodeAttributeKind.Name)
-            // `List<Int>()` builds a value of the name it calls, so it is the type;
-            // `f<Int>(x)` calls the function, and its signature answers.
+            // `List<Int>()` builds a value of the name it calls; `f<Int>(x)` calls f.
             if (this.types.has(name)) {
                 return this.exprType(expr)
             }
@@ -1441,9 +1347,8 @@ data class Analyzer(
         return known
     }
 
-    // Reports an arity mismatch only when a receiver-compatible extension method
-// exists but no overload takes the given value-argument count. Unknown
-// receiver types stay silent (conservative).
+    // Reports an arity mismatch only when a receiver-compatible extension exists but no
+    // overload takes the argument count; unknown receiver types stay silent.
     fun checkExtensionCallArity(call: *AstXmlNode): Unit {
         val callee: *AstXmlNode = xmlChildPtr(call, AstNodeKind.Callee)
         if (xmlKind(callee) != AstNodeCategory.ExprMember) {
@@ -1508,8 +1413,6 @@ data class Analyzer(
     }
 }
 
-// ---- entry point ----------------------------------------------------------
-
 fun newAnalyzer(inputs: *List<SemaInput>): Analyzer {
     return Analyzer(
         inputs,
@@ -1528,9 +1431,8 @@ fun newAnalyzer(inputs: *List<SemaInput>): Analyzer {
     )
 }
 
-// Analyzes the whole compilation (every participating file plus the implicit
-// prelude). Returns diagnostics of the form "<fileName>:<line>:<col>: <message>".
-// An empty list means the compilation is clean.
+// Analyzes the whole compilation and returns "<fileName>:<line>:<col>: <message>"
+// diagnostics; an empty list means clean.
 fun analyze(inputs: *List<SemaInput>): List<Str> {
     var analyzer: Analyzer = newAnalyzer(inputs)
     analyzer.run()

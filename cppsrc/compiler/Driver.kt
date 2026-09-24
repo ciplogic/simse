@@ -1,26 +1,11 @@
 // Driver.kt
 //
-// The compiler's driver: it loads the RTL prelude set, scans the module roots, parses
-// and analyzes the whole compilation, and amalgamates the result into one C++
-// translation unit. It is the single root of the compiler source set, and the CLI every
-// build runs: the compiler *is* these sources, and the published
-// `cppsrc/simse_bootstrap.cpp` is one amalgamation of them.
+// The compiler's driver and CLI (`cppsrc/simse_bootstrap.cpp` is one amalgamation of these
+// sources): loads the RTL prelude, scans the module roots, analyzes the whole compilation
+// and amalgamates it into one C++ translation unit. Modules and packages: specs/modules.md.
 //
-// Modules and packages (specs/modules.md): a module is a directory scanned from
-// the module roots; every `.kt` file found participates. `import a.b.c` only
-// makes package `a.b.c` visible unqualified, so resolution is by package name and
-// never depends on the working directory.
-//
-// Usage: <program> <input.kt>... [-o <output.cpp>] [--prelude <file>]
-//                  [--root <dir>] [--module-root <dir>]...
-//
-// The output file defaults to `simse_out.cpp` in the current folder - the amalgamated
-// compiler, the same file the published `cppsrc/simse_bootstrap.cpp` is a copy of
-// (docs/getting-started.md, "Building the compiler without a compiler"). Pass `-o` to
-// write anywhere else. The default prelude is the *relative* path `cppsrc/rtl`, so the
-// compiler is meant to run from the repository root.
-//
-// The filesystem/IO helpers are the prelude natives (cppsrc/rtl/fs.kt).
+// Usage: <program> <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>]
+//     [--module-root <dir>]...
 
 package compiler
 
@@ -33,11 +18,8 @@ import profiling
 import resources
 import sourcegen
 
-// ---- module helpers -------------------------------------------------------
-
-// The directories the compiler's *own* resources are read from: the prelude's directory, or -
-// when `--prelude` names a single file - the directory that file is in, so the `_res.md`
-// beside it is still found (`resLoad` scans directories).
+// Where the compiler's *own* resources are read from: the prelude's directory, or the
+// directory a single-file `--prelude` is in, so the `_res.md` beside it is still found.
 fun driverResourceRoots(prelude: *Str): List<Str> {
     var roots: List<Str> = List<Str>()
     if (pathIsDirectory(prelude)) {
@@ -77,17 +59,13 @@ fun driverAppendDecls(target: *AstXmlNode, source: *AstXmlNode): Unit {
     xmlAddChildren(target, decls)
 }
 
-// ---- scanning / parsing ---------------------------------------------------
-
-// Reads, scans, and parses one file. The scanner error is prefixed with the file name,
-// and the whole raw token list goes to `parseModule`, which is where the trivia the
-// grammar never sees is dropped (spaces, comments, and a newline inside `(...)`).
+// The scanner error is prefixed with the file name; the raw token list goes to `parseModule`,
+// which drops the trivia the grammar never sees.
 fun driverParseFile(fileName: *Str): Res<AstXmlNode> {
     return driverParseSource(readFile(fileName), fileName)
 }
 
-// The same for source text that is not a file: a generator's output. Its name is what
-// every diagnostic and source comment will call it.
+// For source text that is not a file: `fileName` is what every diagnostic calls it.
 fun driverParseSource(text: *Str, fileName: *Str): Res<AstXmlNode> {
     var scanner: Scanner = Scanner(getTokenRules(), 0, 1, 1, Str())
     scanner.setSource(text)
@@ -105,23 +83,10 @@ fun driverParseSource(text: *Str, fileName: *Str): Res<AstXmlNode> {
     return parseModule(*raw, fileName)
 }
 
-// ---- generated Simse sources ----------------------------------------------
-//
-// `impl_specs/generators.md`: a declaration whose generator answers `ReparseRequired` - the
-// `kt` generator, whose source is a resource (`cppsrc/sourcegen/KtGen.kt`) - contributes
-// Simse source, which the compiler compiles like any other module: it is parsed, checked and
-// emitted with the program. What the declarations are is the generators' own business, so
-// the driver only asks for the text and parses it; `sourcegen` joins it into one module in
-// package `rtl`, where a bare name is the symbol a call reaches, so the generated function
-// carries the declaration's own name and the call site reaches it unchanged.
-
-
-// The compilation set: every `*.kt` under each module root (in the given
-// order, each root scanned recursively and sorted), then the explicit inputs.
-// Files already loaded as prelude are excluded and each canonical path is kept
-// once; the kept files are sorted by canonical path so the order depends only on
-// the file set, not on how the files were specified (a scanned root vs an explicit
-// input).
+// The compilation set: every `*.kt` under each module root, then the explicit inputs; prelude
+// files are excluded and each canonical path kept once. Sorted by canonical path, so the order
+// depends only on the file set, not on how the files were specified (a scanned root vs an
+// explicit input).
 fun driverGatherFiles(moduleRoots: *List<Str>, inputs: *List<Str>, preludeCanon: *List<Str>): List<Str> {
     var candidates: List<Str> = List<Str>()
     var r: Int = 0
@@ -152,23 +117,14 @@ fun driverGatherFiles(moduleRoots: *List<Str>, inputs: *List<Str>, preludeCanon:
         }
         c = c + 1
     }
-    // After dedup the canonical keys are unique, so this sort is total and the order is
-    // deterministic.
+    // Canonical keys are unique after dedup, so this sort is total and the order deterministic.
     chosen.sort((left: Str, right: Str) -> pathCanonical(left) < pathCanonical(right))
     return chosen
 }
 
-// ---- the project file (`simse.md`) ----------------------------------------
-//
-// `specs/simse-md.md`: a `simse.md` at a module root is the project's manifest - the modules
-// the project is built from - and a module's own `simse.md` carries that module's keys. The
-// shape is the resource idiom without its sections and fenced values (`specs/resources.md`):
-// prose lines carry no entry and are ignored, an entry is `key: value`, and a repeated key
-// means "one more of these". The reader is deliberately small and separate from `resources`:
-// a manifest is read *before* anything else is (it decides what is scanned), and a key that
-// appears twice has to be seen twice.
+// `specs/simse-md.md`: an entry is `key: value` and a repeated key means "one more of these";
+// prose lines carry no entry. Read separately from `resources`, before anything else is scanned.
 
-// Every value of `key` in a manifest's text, in order, trimmed.
 fun manifestValues(text: *Str, key: *Str): List<Str> {
     var out: List<Str> = List<Str>()
     val lines: List<Str> = text.split("\n")
@@ -184,16 +140,13 @@ fun manifestValues(text: *Str, key: *Str): List<Str> {
     return out
 }
 
-// A root's or a module's manifest path.
 fun manifestFile(dir: *Str): Str {
     return dir + "/simse.md"
 }
 
-// One root, expanded into the module roots to scan: the modules its manifest names, or the
-// root itself when it has no manifest (or names no module - what a file carrying only a
-// module's own keys does). A module that declares `sourcegen: true` ships source generators,
-// which need a compiler *extended* with them; that is not implemented, so the compilation is
-// dropped rather than compiled without them (`specs/simse-md.md`).
+// Expands one root into the module roots to scan: the manifest's modules, or the root itself
+// when it names none. `sourcegen: true` needs a compiler extended with those generators, which
+// does not exist, so such a compilation is rejected (`specs/simse-md.md`).
 fun driverExpandRoot(root: *Str, out: *List<Str>): Res<Str> {
     val file: Str = manifestFile(root)
     if (!pathExists(file)) {
@@ -201,7 +154,6 @@ fun driverExpandRoot(root: *Str, out: *List<Str>): Res<Str> {
         return Res<Str>.ok("")
     }
     val text: Str = readFile(file)
-    // A root that declares generators is itself a module that ships them.
     if (manifestValues(text, "sourcegen").contains("true")) {
         return Res<Str>.err(fmtStr("module '|' declares source generators, which this compiler cannot use yet", root))
     }
@@ -223,8 +175,6 @@ fun driverExpandRoot(root: *Str, out: *List<Str>): Res<Str> {
     }
     return Res<Str>.ok("")
 }
-
-// ---- entry point ----------------------------------------------------------
 
 fun main(args: List<Str>): Int {
     var inputs: List<Str> = List<Str>()
@@ -305,10 +255,8 @@ fun main(args: List<Str>): Int {
         output = "simse_out.cpp"
     }
 
-    // The roots the command line named, then each expanded through its own manifest
-    // (`specs/simse-md.md`): a root whose `simse.md` names modules is scanned as those
-    // modules, a root without one is scanned whole - which is what this compiler's own
-    // build does.
+    // The command line's roots, each expanded through its manifest (a root without one is
+    // scanned whole - what this compiler's own build does).
     var roots: List<Str> = List<Str>()
     if (haveRoot) {
         roots.append(rootDir)
@@ -368,30 +316,16 @@ fun main(args: List<Str>): Int {
 
     val files: List<Str> = driverGatherFiles(moduleRoots, inputs, preludeCanon)
 
-    // The resources (`_res.md`, specs/resources.md): every file the module roots hold,
-    // parsed and joined once, so the generated sources below, the sections a generator
-    // emits and the program's pool all read the very same list. A compilation with no
-    // resource file carries an empty list and emits the same C++ as one built before the
-    // feature existed.
-    //
-    // What the **program carries** is `resStoredLiterals`: every key and value of the entries
-    // that are not compile-only (`!`), each spelled as the C++ literal that holds its bytes -
-    // text by `resQuoteLiteral`, a `*`-marked value by `resQuoteBinary`, whose bytes are not
-    // text. The emitter pools exactly that list, so a marked section is read by the compiler
-    // and left out of the program it builds.
+    // The resources (`_res.md`, specs/resources.md): every file the module roots hold, parsed
+    // once so the generated sources, the sections and the program's pool read the same list.
+    // `resourceStored` holds only the keys the program *carries* - the entries not marked
+    // compile-only (`!`) - each as the C++ literal holding its bytes.
     val resources: List<ResourceItem> = resLoad(moduleRoots)
     val resourceStored: List<Str> = resStoredLiterals(resources)
 
-    // The compiler's *own* resources: the `_res.md` files beside the prelude, read from disk
-    // here like the prelude's `.kt` files are. These are the second half of the generator
-    // lookup (`cppsrc/sourcegen/GenTypes.kt`), and what hands a program the RTL's C++ when
-    // the program carries no section of its own.
-    //
-    // They used to be the compiler's *pool* - the RTL's text embedded in the compiler's own
-    // string table and read back through the `Resources` API - which meant the compiler
-    // carried 23 KB of text it already had as code. The file is the source of truth and the
-    // compiler already reads the directory for its prelude, so the pool is gone:
-    // `cppsrc/rtl/_res.md` is marked `!` (`specs/resources.md`).
+    // The compiler's *own* resources (`_res.md` beside the prelude, read here like its `.kt`
+    // files): the second half of the generator lookup (`cppsrc/sourcegen/GenTypes.kt`), which
+    // hands a program the RTL's C++ when it carries no section of its own.
     var compilerResources: List<ResourceItem> = List<ResourceItem>()
     if (resolvedPrelude != "") {
         compilerResources = resLoad(driverResourceRoots(resolvedPrelude))
@@ -411,17 +345,13 @@ fun main(args: List<Str>): Int {
         f = f + 1
     }
 
-    // The generators' state (`cppsrc/sourcegen/SourceGen.kt`): the files that were read
-    // (the prelude first, then the program), the resources they carry, the compiler's own
-    // resources, and a fresh output assembly. It is filled here because the two passes below -
-    // the reparse one right after this, and the emitter's much later - read the same state,
-    // and a generator is handed it whole.
+    // The generators' state (`cppsrc/sourcegen/SourceGen.kt`), filled here because the reparse
+    // pass below and the emitter's much later pass both read it.
     sourceGenBegin(preludeNames, preludeModules, fileNames, modules, resources, compilerResources)
 
-    // The generated Simse sources (impl_specs/generators.md): a declaration whose generator
-    // answers `ReparseRequired` - the `kt` generator reads its source from a resource - hands
-    // the compiler text that is not a file, and the front end runs again over it, so what
-    // comes out is an ordinary module: checked with the program and emitted after it.
+    // The generated Simse sources (impl_specs/generators.md): a `ReparseRequired` declaration -
+    // the `kt` generator - hands the compiler text that is not a file, parsed here as an
+    // ordinary module: checked with the program and emitted after it.
     val generated: Res<Str> = sourceGenReparseSource()
     if (!generated.isOk()) {
         eprintln(generated.Error)
@@ -435,9 +365,8 @@ fun main(args: List<Str>): Int {
         }
         fileNames.append("<generated>/kt.kt")
         modules.append(parsedGenerated.Value)
-        // The generated module is part of the tree a generator sees, so it is added to the
-        // state too: the second pass runs after this one, and a generator that walks the
-        // program should see everything it was compiled with.
+        // Added to the generators' state too: the second pass runs after this one, and a
+        // generator walking the program should see everything it was compiled with.
         sourceGenAddModule("<generated>/kt.kt", parsedGenerated.Value)
     }
 

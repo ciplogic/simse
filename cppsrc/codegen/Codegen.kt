@@ -1,24 +1,8 @@
 // Codegen.kt
 //
-// The C++ emitter, ported from cppsrc/codegen/Codegen.cpp. It consumes the
-// AstXmlNode AST (schema in impl_specs/ast-xmlnode.md) and amalgamates one or more
-// modules into a single translation unit, byte-for-byte identical to the C++
-// `codegen::emitProgram`.
-//
-// The C++ emitter's `ast::TypePtr` layer (inferType/unifyType/pointee/
-// isHandleType and the per-function localTypes/nameKinds tables) is re-expressed
-// over the AstXmlNode type nodes; an empty node means "no/unknown type".
-//
-// `import sema`, `import common` and `import linear` bring the packages the
-// emitted file uses (the xml accessors and the linear lowering) into unqualified
-// scope. Under the modules-and-packages
-// model an import never adds files; the driver scans the module roots, so the
-// generated file is a self-contained front end for the differential harness.
-// Emission itself does not call sema.
-//
-// Kind dispatch is an if-chain, not a `switch`, because the emitted C++ `switch`
-// cannot switch on a `Str`. Method overloading is avoided (method dispatch is by
-// name and receiver, not arity).
+// The C++ emitter: the AstXmlNode AST (impl_specs/ast-xmlnode.md) goes in, one
+// amalgamated translation unit comes out. An empty type node means "no/unknown
+// type".
 
 package codegen
 
@@ -30,9 +14,8 @@ import profiling
 import resources
 import sourcegen
 
-// One parsed input. `prelude` inputs participate in symbol collection and are emitted
-// only when they carry a body: the RTL's declarations are natives (whose C++ is the
-// header's), and a prelude `fun` with a body is a function the language itself provides.
+// One parsed input. `prelude` inputs are collected but emitted only when they carry a
+// body (the RTL's declarations are natives, whose C++ is the header's).
 data class CgInput(
     var fileName: Str,
 
@@ -52,15 +35,9 @@ data class CgFn(
     var packageName: Str,
     var isMethod: Bool,
 
-    // The declaration's own attributes, read *once* when the function is collected.
-    // Every lookup walk (`findFunction`, `findReceiverFnByName`, `findExtensionFn`,
-    // `memberCallReturn`, `functionPackage`) scans all collected functions and tests
-    // these three on each candidate, for every call site; the hand-written ring compares
-    // `decl->name`/`decl->isNative`/`decl->hasBody` *fields* there, while the Simse ring
-    // had to walk the node's attribute list per candidate per read. A profile of the
-    // self-transpile put `xmlAttr` (and the attribute walk under it) at ~37% of the run,
-    // most of it these walks. A declaration does not change while emission reads it, so a
-    // field is the same value without the scan.
+    // Read *once* at collection, not walked from the node on every lookup walk (every
+    // call site tests these three on each candidate): a declaration does not change
+    // while emission reads it.
     var name: Str,
     var isNative: Bool,
     var hasBody: Bool
@@ -97,14 +74,8 @@ data class CgStatic(
 // How a name's storage is reached, for `.` vs `->`, `*x` vs `x.get()`, `copy`.
 enum class NameKind { Value, Shared, Pointer }
 
-// ---- helpers --------------------------------------------------------------
-
-// Reads the parts only; a `*List<Str>` avoids copying the caller's list. Builds
-// the result in place - `out = out + part` copies the whole buffer per part - and
-// reserves the exact length first, so the buffer is grown (and the prefix copied)
-// once instead of at every growth step. The parts are appended through the borrow
-// the pointer `for` hands out (`appendStrPtr`), so no element is copied either. A
-// one-character separator is the character append it is (`cgJoinChar`).
+// Reads the parts only; each is appended through the borrow the pointer `for` hands
+// out (`appendStrPtr`), so no element is copied.
 fun cgJoin(parts: *List<Str>, separator: *Str): Str {
     if (separator.size() == 1) {
         return cgJoinChar(parts, separator[0])
@@ -125,8 +96,6 @@ fun cgJoin(parts: *List<Str>, separator: *Str): Str {
     return out
 }
 
-// The same join with a one-character separator: `cgJoin(parts, ",")` without the
-// `Str` for the comma, and the separator appended as the character it is.
 fun cgJoinChar(parts: *List<Str>, separator: Char): Str {
     var out: Str = ""
     if (parts.size() == 0) {
@@ -144,8 +113,6 @@ fun cgJoinChar(parts: *List<Str>, separator: Char): Str {
     return out
 }
 
-// The exact length `cgJoin`/`cgJoinChar` are about to write: every part plus one
-// separator between each pair. What `reserve` is given.
 fun cgJoinLength(parts: *List<Str>, separatorLen: Int): Int {
     val count: Int = parts.size()
     var len: Int = 0
@@ -168,8 +135,8 @@ fun cgIndent(level: Int): Str {
     return out
 }
 
-// The emitter no longer keeps its own copy of the RTL type names: the semantics that
-// share the list own it (`semIsRtlTypeName`, sema/TypeInfer.kt).
+// The RTL type-name list lives with the semantics that share it: `semIsRtlTypeName`
+// (sema/TypeInfer.kt).
 
 fun cgUnquote(text: Str): Str {
     if (text.size() >= 2 && text[0] == '\"' && text[text.size() - 1] == '\"') {
@@ -178,9 +145,8 @@ fun cgUnquote(text: Str): Str {
     return text
 }
 
-// One argument of a `@SmGen` attribute: `args` is the generator's arguments, joined by
-// `,` (`AstNodeAttributeKind.GeneratorArgs`), so argument `index` is that field. An
-// index outside the list is the empty string.
+// One argument of a `@SmGen` attribute, from the comma-joined `GeneratorArgs`; an index
+// outside the list is the empty string.
 fun cgGeneratorArg(args: *Str, index: Int): Str {
     if (args.size() == 0 || index < 0) {
         return ""
@@ -192,12 +158,9 @@ fun cgGeneratorArg(args: *Str, index: Int): Str {
     return parts[index]
 }
 
-// Binary operator precedence for wrapping; see Codegen.cpp precedence(). The numbers are
-// a scale, not a table of levels: what matters is their order (a parenthesised operand is
-// one the operation binds looser than its own), and `12` is what the postfix positions are
-// printed with - anything at or above `12` needs no parentheses. The bitwise operators sit
-// where Python and Rust put them (tighter than a comparison, looser than a shift);
-// `binaryBindingPower` in the parser has the same order.
+// Binary operator precedence for wrapping. The numbers are a scale, not levels - their
+// order is what matters, and `12` is the postfix position (at or above it needs no
+// parentheses); the parser's `binaryBindingPower` has the same order.
 fun cgPrecedence(e: *AstXmlNode): Int {
     if (xmlKind(e) == AstNodeCategory.ExprBinary) {
         val op: Str = xmlAttr(e, AstNodeAttributeKind.Op)
@@ -282,20 +245,13 @@ fun cgIsMainArgs(decl: *AstXmlNode): Bool {
     return xmlKind(args[0]) == AstNodeCategory.TypeNamed && xmlAttr(args[0], AstNodeAttributeKind.Name) == "Str"
 }
 
-// ---- the emitter ----------------------------------------------------------
-
 data class Emitter(
     var inputs: List<CgInput>,
 
-// The resources the **program carries**, each key and value already spelled as the C++
-// string literal that holds its bytes - `resources.resStoredLiterals`, which is also where
-// the two escape rules live (`resQuoteLiteral` for text, `resQuoteBinary` for a `*`-marked
-// value, whose bytes are not text). The emitter pools exactly this list
-// (`collectResourceLiterals`) and reads the same texts back to find their indices
-// (`emitResourceTable`), so the pool and its index cannot disagree. A section marked
-// compile-only (`!`) is absent: the compiler reads it, the program does not carry it. A list
-// of `Str` rather than the entries, because this struct is emitted before the resources
-// package's own types (`CgStringTable.kt`'s note on file order).
+// The resources the program carries, each key and value already spelled as the C++ literal
+// holding its bytes (`resources.resStoredLiterals`, which owns the escape rules); a
+// compile-only (`!`) section is absent. A list of `Str` rather than the entries, to stay
+// ahead of the resources package's own types in file order (`CgStringTable.kt`).
     var resourceStored: List<Str>,
 
     var sections: *Sections,
@@ -307,13 +263,11 @@ data class Emitter(
 // The names the program calls, for the prelude rule in `emitFunctions`.
     var referencedNames: Dictionary<Str, Bool>,
 
-// The program's string literals (`StringTable.kt`): the walk below pools them, the emitter
-// writes the read-only table at the top of the file, and a literal site reads its entry.
+// The program's string literals; the walk below pools them (CgStringTable.kt).
     var literals: StringTable,
 
-// The types the program names, for the same rule's per-container part: the prelude has
-// an `iter` per container (`List`, `Array`, `Span`), and a program that iterates
-// one of them should not carry the others' machines.
+// The types the program names, for the prelude rule's per-container part: an `iter` per
+// container, and a program that iterates one should not carry the others' machines.
     var referencedTypes: Dictionary<Str, Bool>,
     var types: Dictionary<Str, AstXmlNode>,
     var enumNames: Dictionary<Str, Bool>,
@@ -322,9 +276,8 @@ data class Emitter(
     var receiverFnNames: Dictionary<Str, Bool>,
     var nativeDecls: List<CgNativeDecl>,
 
-// The `@SmGen("res", ...)` declarations (impl_specs/generators.md) are the generator
-// pass's business, and it lives in `cppsrc/sourcegen`; the emitter keeps the two tables a
-// generator's answer is registered in.
+// The two tables a generator's answer is registered in (impl_specs/generators.md; the
+// pass lives in `cppsrc/sourcegen`).
     var nativeSymbols: Dictionary<Str, Str>,
     var nativeExtensions: Dictionary<Str, List<CgNativeExt>>,
     var activeTypeParams: Dictionary<Str, Bool>,
@@ -338,27 +291,24 @@ data class Emitter(
     var statics: List<CgStatic>,
     var staticsByName: Dictionary<Str, CgStatic>,
 
-// ---- the IL path (impl_specs/linear-il.md) ----------------------------
-// The classes this unit constructs, and the ones already written out: a closure
-// class is emitted just above the body that builds it, once.
+// The classes this unit constructs, versus the ones already written out: a closure class
+// is emitted just above the body that builds it, once.
     var closureSymbols: Dictionary<Str, Bool>,
     var emittedClosures: Dictionary<Str, Bool>,
     var emittedYieldables: Dictionary<Str, Bool>,
 
-// The decl of the machine being emitted (the last one registered), which the extractor
-// needs as the class `this` is an instance of.
+// The decl of the machine being emitted (the last one registered): the extractor needs it
+// as the class `this` is an instance of.
     var machineDecl: AstXmlNode,
 
-// Why an instruction could not be expressed: set where the attempt gives up, read
-// by the caller that turns it into a reason line.
+// Why an instruction could not be expressed: set where the attempt gives up, read by the
+// caller that turns it into a reason line.
     var ilWhy: Str,
 
 // Inside a closure class's method (or a machine's): the receiver is C++'s `this`,
 // because a member function has no `self` parameter.
     var inClosureMethod: Bool
 ) {
-
-    // ---- diagnostics and output -------------------------------------------
 
     fun fail(posNode: *AstXmlNode, message: *Str): Unit {
         if (this.failed) {
@@ -375,23 +325,19 @@ data class Emitter(
     }
 
     fun line(level: Int, text: Str): Unit {
-        // In place, into the current section: `this.out = this.out + ...` copies the
-        // whole accumulated output on every line (quadratic in the size of the
-        // generated file), and a section never re-copies what it already holds.
+        // In place into the current section: appending never re-copies the accumulated
+        // output, which would be quadratic in the size of the generated file.
         this.sections.appendLine(cgIndent(level), text)
     }
 
     fun sourceComment(posNode: *AstXmlNode): Unit {
-        // A prelude function *with a body* is emitted now (`List<T>.iter`), and where
-        // it came from is the compiler's own RTL, not the program the user is building:
-        // naming it would put a machine-specific path in their file.
+        // A prelude body is the compiler's own RTL, not the program being built: naming its
+        // source would put a machine-specific path in the user's file.
         if (this.curPrelude) {
             return
         }
         this.line(0, fmtStr("// |:|", this.curFile, xmlLine(posNode).toString()))
     }
-
-    // ---- symbol collection ------------------------------------------------
 
     fun namedTypeExpr(name: *Str): AstXmlNode {
         var node: AstXmlNode =
@@ -423,18 +369,15 @@ data class Emitter(
     }
 
     fun addFunction(
-        decl: *
-        AstXmlNode,
-        receiver: *
-        AstXmlNode,
+        decl: *AstXmlNode,
+        receiver: *AstXmlNode,
         file: *Str,
         templateParams: *List<Str>,
         prelude: Bool,
         packageName: *Str,
         isMethod: Bool
     ): Unit {
-        // The declaration's own attributes, read once here rather than on every lookup
-        // walk (`CgFn` documents why).
+        // Read once here rather than on every lookup walk (`CgFn` documents why).
         val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
         this.functions.append(
             CgFn(
@@ -467,16 +410,9 @@ data class Emitter(
         }
     }
 
-    // ---- package qualification --------------------------------------------
-    //
-    // Every declaration is emitted under its package's prefix: `rtl` - the
-    // namespace the built-in types live in (specs/modules.md, the implicit
-    // import) - is emitted bare, and every other package gets `ns<index>_` from
-    // the global dictionary below. The dictionary assigns indices in sorted
-    // package order, so the numbering never depends on discovery order and the
-    // output stays reproducible. This is what keeps two packages' same-named
-    // declarations apart in the amalgamated translation unit without spelling a
-    // package name out in the generated code.
+    // Every declaration carries its package's prefix: `rtl` (the built-in namespace,
+    // specs/modules.md) is bare, and every other package gets `ns<index>_`. The indices
+    // are assigned in sorted package order, so numbering never depends on discovery order.
 
     fun inputPackage(input: *CgInput): Str {
         return xmlAttr(input.module, AstNodeAttributeKind.Package)
@@ -487,9 +423,8 @@ data class Emitter(
         var i: Int = 0
         for (*input in this.inputs) {
             val pkg: Str = this.inputPackage(input)
-            // `rtl` is the built-in namespace, and an empty package is a
-            // programmatically built module (the merged prelude); neither is
-            // indexed, so neither is ever prefixed.
+            // `rtl` is the built-in namespace and an empty package a programmatically
+            // built module; neither is indexed, so neither is ever prefixed.
             if (pkg != "rtl" && pkg != "" && !names.contains(pkg)) {
                 names.append(pkg)
             }
@@ -504,9 +439,8 @@ data class Emitter(
         }
     }
 
-    // The prefix of a package: empty for `rtl`, and for a name the emitter cannot
-    // attribute to any package (leaving it alone beats mangling it into a symbol
-    // that does not exist).
+    // The prefix of a package; empty for `rtl` and for a name no package can be
+    // attributed to.
     fun nsPrefix(packageName: *Str): Str {
         if (this.nsPrefixes.has(packageName)) {
             return this.nsPrefixes.get(packageName).value()
@@ -526,10 +460,8 @@ data class Emitter(
         return ""
     }
 
-    // The package of the plain (non-native) function `name`, or "". Matches by name
-    // only, like the `hasPlainFunction` probes at the call sites - and a method is not a
-    // plain function, so a call by name cannot resolve to one (two packages may spell
-    // the same method name).
+    // The package of the plain (non-native) function `name`, or "". A method is not a
+    // plain function, so a call by name cannot resolve to one.
     fun functionPackage(name: *Str): Str {
         var i: Int = 0
         while (i < this.functions.size()) {
@@ -555,18 +487,17 @@ data class Emitter(
 
     fun collect(): Unit {
         this.collectPackages()
-        // The pointer form on both lists: a declaration is a value, so the index walk copied
-        // one per iteration, and neither list is what this fills (the tables are). The
-        // tables and the dictionaries are left alone while they are walked like this.
+        // The pointer form on both lists: a declaration is a value, so the index walk would
+        // copy one per iteration.
         for (*input in this.inputs) {
             val pkg: Str = this.inputPackage(input)
             val decls: List<AstXmlNode> = xmlDecls(input.module)
             for (*decl in decls) {
             val declName: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
             if (decl.name == AstNodeKind.Var) {
-                // A file-level static: storage and an initializer for the
-                // generated pass (specs/statics.md). Prelude inputs declare the
-                // runtime surface, not program statics, so they are skipped.
+                // A file-level static: storage and an initializer for the generated pass
+                // (specs/statics.md); prelude inputs declare the runtime surface, not
+                // program statics, so they are skipped.
                 if (!input.prelude) {
                     val entry: CgStatic = CgStatic(decl, pkg, input.fileName)
                     this.statics.append(entry)
@@ -577,13 +508,7 @@ data class Emitter(
             if (decl.name == AstNodeKind.Function) {
                 if (xmlAttr(decl, AstNodeAttributeKind.IsNative) == "true") {
                     // A declaration whose implementation an attribute selects
-                    // (impl_specs/generators.md). The whole of what a name means - which text
-                    // goes where, whether this declaration keeps a prototype, whether its
-                    // receiver pattern is registered - is `cppsrc/sourcegen`'s, and a
-                    // generator is handed *data* only (the AST, the resources, the output
-                    // sections), never a compiler API: that is what keeps a generator from
-                    // breaking when the compiler changes, and what keeps it from doing
-                    // arbitrary things to a compilation.
+                    // (impl_specs/generators.md); a generator is handed data, never an API.
                     val generator: Str = xmlAttr(decl, AstNodeAttributeKind.Generator)
                     if (!sourceGenHas(generator)) {
                         this.fail(decl, fmtStr("unknown source generator '|'", generator))
@@ -596,9 +521,9 @@ data class Emitter(
                     }
                     val symbol: Str = declared.Value
                     this.nativeSymbols.insert(declName, symbol)
-                    // The C++ is elsewhere but linked in already (a header's), so the
-                    // declaration is what the call sites need; a generator whose text is
-                    // emitted or compiled declares the symbol itself.
+                    // The C++ is elsewhere but linked in already, so the declaration is what
+                    // call sites need; a generator whose text is emitted declares the symbol
+                    // itself.
                     if (sourceGenDeclaresPrototype(generator)) {
                         this.nativeDecls.append(CgNativeDecl(decl, input.fileName, symbol, input.prelude))
                     }
@@ -654,17 +579,14 @@ data class Emitter(
         }
     }
 
-    // The program-level facts the semantic step on the lowered body reads
-    // (sema/TypeInfer.kt), built from the tables `collect` filled. Filling them
-    // copies no declarations: the nodes are shared.
+    // The program-level facts the semantic step reads (sema/TypeInfer.kt), built from the
+    // tables `collect` filled; the nodes are shared, not copied.
     fun collectFacts(): SemFacts {
         val facts: SemFacts = semNewFacts()
         this.fillFacts(facts)
         return facts
     }
 
-    // Copies the collected tables into `facts` (a structural copy of the keys; the
-    // declarations and type nodes themselves are shared).
     fun fillFacts(facts: *SemFacts): Unit {
         val typeNames: List<Str> = this.types.keys()
         var t: Int = 0
@@ -705,8 +627,6 @@ data class Emitter(
             s = s + 1
         }
     }
-
-    // ---- type mapping -----------------------------------------------------
 
     fun setActiveTypeParams(params: *List<Str>): Unit {
         this.activeTypeParams.clear()
@@ -750,9 +670,8 @@ data class Emitter(
         if (this.activeTypeParams.has(name)) {
             return name
         }
-        // A declared type shadows an RTL type *name*: a compiler-side view type of
-        // the same name is a different type from the RTL's. The RTL's own prelude
-        // types keep their C++ spelling unprefixed.
+        // A declared type shadows an RTL type *name*: a compiler-side view type of the same
+        // name is a different type. The RTL's own prelude types keep their C++ spelling.
         if (this.types.has(name)) {
             val packageName: Str = this.typePackage(name)
             if (packageName == "rtl") {
@@ -792,13 +711,12 @@ data class Emitter(
             AstNodeCategory.TypeReference -> {
                 val inner: *AstXmlNode = xmlChildPtr(typeExpr, AstNodeKind.Inner)
                 if (xmlIsEmpty(inner)) {
-                    // A reference with no inner type is not a language type; `Ref<void>` is
-                    // the emitter's fallback for it, and nothing in the tree produces one.
+                    // `Ref<void>` is the fallback for a reference with no inner type; nothing
+                    // in the tree produces one.
                     return "Ref<void>"
                 }
-                // `&T` is the counted reference, and `Ref` is its one C++ name (ref.hpp):
-                // the shim's `std::shared_ptr` or the RTL's `SmRef`, chosen by building with
-                // `SIMSE_SMREF`, so the emitted text does not depend on the choice.
+                // `&T` is the counted reference, spelled `Ref<T>` (ref.hpp): `std::shared_ptr`
+                // or `SmRef`, chosen at build time, so emitted text does not depend on it.
                 return fmtStr("Ref<|>", this.type(inner))
             }
 
@@ -825,12 +743,9 @@ data class Emitter(
             }
 
             AstNodeCategory.TypeYield -> {
-                // A machine (`..T`): the class the lowering built for the function that
-                // creates it (`semMachineType` carries the name and the package, and the
-                // call site bound the class's own type parameters). `typeName` cannot
-                // spell it - the class is registered by the emitter, not declared by the
-                // program - so the name is qualified here, exactly as `emitFunction`
-                // spells the class it emits.
+                // A machine (`..T`): the class the lowering built for the creating function.
+                // It is registered by the emitter, not declared by the program, so `typeName`
+                // cannot spell it - hence the qualification here (`semMachineType`).
                 val name: Str = xmlAttr(typeExpr, AstNodeAttributeKind.Name)
                 if (name == "") {
                     this.fail(typeExpr, "unsupported: a machine's type has no class to spell")
@@ -861,11 +776,8 @@ data class Emitter(
         return NameKind.Value
     }
 
-    // ---- declarations -----------------------------------------------------
-
-    // Storage for every file-level static, value-initialized so it starts empty:
-    // the generated pass below fills in the initializers, and a read that happens
-    // first yields the empty value rather than indeterminate data
+    // Storage for every file-level static, value-initialized so a read before the generated
+    // pass below fills in the initializers yields the empty value, not indeterminate data
     // (specs/statics.md).
     fun emitStatics(): Unit {
         for (*entry in this.statics) {
@@ -893,11 +805,9 @@ data class Emitter(
         return false
     }
 
-    // The generated initialization pass (specs/statics.md): the initializers of the
-    // file-level statics, run before the body of `main`. It is emitted here rather
-    // than as C++ static initialization so that the language owns the order, and it
-    // is emitted in declaration order - which the language does not guarantee, so a
-    // program must not depend on one static being initialized before another.
+    // The generated initialization pass (specs/statics.md), run before `main`'s body so the
+    // language owns the order; a program must not depend on one static initializing before
+    // another.
     fun emitStaticInit(): Unit {
         if (!this.hasStaticInit()) {
             return
@@ -925,12 +835,9 @@ data class Emitter(
         this.line(0, "}")
     }
 
-    // Every aggregate the program declares, named once *before* any of them is defined.
-    // A generated struct may hold a *pointer* to a type from another package
-    // (`IlFunction`'s facts), and packages are emitted in source order, so the
-    // definition would otherwise be used before it exists. A forward declaration is all a
-    // pointer, a reference or a parameter needs - and it is what lets a generated data
-    // class name another package's type at all.
+    // Every aggregate the program declares, named before any is defined: packages are
+    // emitted in source order and a generated struct may hold a pointer to another package's
+    // type, so the definition would otherwise come too late.
     fun emitForwardTypes(): Unit {
         for (*input in this.inputs) {
             if (input.prelude) {
@@ -996,7 +903,7 @@ data class Emitter(
         this.sourceComment(decl)
         val tmpl: Str = this.templateClause(typeParams)
         // Generated aggregates follow the language's 4-byte packing rule
-        // (specs/memory-model.md); the macros come from rtl/types.hpp.
+        // (specs/memory-model.md).
         this.line(0, "SIMSE_PACK_PUSH")
         if (tmpl != "") {
             this.line(0, tmpl)
@@ -1023,9 +930,7 @@ data class Emitter(
         if (tmpl != "") {
             this.line(0, tmpl)
         }
-        // One line: an enum is a list of names, and a member with an explicit value keeps
-        // it (`Green = 4`). Nothing about the declaration needs the room a member per line
-        // takes, and the compiler's own source has enums of 34 members.
+        // One line: a member with an explicit value keeps it (`Green = 4`).
         var parts: List<Str> = List<Str>()
         val members: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.EnumMember)
         for (*member in members) {
@@ -1050,14 +955,9 @@ data class Emitter(
         )
     }
 
-    // The enum's one emitted conversion: `Enum.fromInt(Int): Enum`, the *direct cast* back
-    // (`specs/declarations.md`) - an enum's runtime representation is `Int`, and it is a
-    // scoped `enum class`, so the cast is defined for every `Int` it is handed. `toInt()`
-    // needs no helper: the emitter spells it at the call site as `static_cast<Int>(x)`, one
-    // operation and no second symbol (`Emitter.call`).
-    //
-    // One line, like the enum itself: a helper this small is emitted per enum and nothing
-    // about it needs the room.
+    // The enum's one emitted conversion: `fromInt` is the direct cast back
+    // (`specs/declarations.md`); `toInt` needs no helper - the call site spells
+    // `static_cast<Int>(x)` (`Emitter.call`).
     fun emitEnumConversion(decl: *AstXmlNode): Unit {
         val typeParams: List<Str> = xmlTypeParamNames(decl)
         if (typeParams.size() > 0) {
@@ -1170,14 +1070,8 @@ data class Emitter(
         }
     }
 
-// ---- prelude reachability ---------------------------------------------
-
-    // The symbol a call on a *type name* reaches: `Resources.get(k)` is a declaration
-// whose implementation is elsewhere - today a prelude function with a body, named by
-// the declaration's own symbol (`cppsrc/rtl/resources.kt`) - so the call is that
-// symbol. The lookup is over the explicit-`this` natives, which are already keyed by
-// the declaration's name and carry the receiver type and the symbol. Empty when there
-// is no such declaration, which is what the caller falls back on.
+    // The symbol a call on a *type name* reaches (`Resources.get(k)`): the declaration's own
+    // symbol, looked up among the explicit-`this` natives; empty when there is none.
     fun staticCallSymbol(receiverName: *Str, calleeName: *Str): Str {
         val extensions: Opt<List<CgNativeExt>> = this.nativeExtensions.get(calleeName)
         if (!extensions.hasValue()) {
@@ -1191,18 +1085,12 @@ data class Emitter(
         return ""
     }
 
-    // Every call name in a node's subtree: a callee is a name (`f(x)`), a generic name
-// (`f<Int>(x)`) or a member (`x.m(...)`), and in all three the call site spells it as
-// the `Name` attribute of the callee node. A call records the *symbol* it reaches as
-// well, because that symbol may name C++ that is somewhere else: a `res` declaration's
-// text is emitted only when its section is reached (`sourcegen`, `resGenEmit`), and the call
-// site never spells the prelude's own name for it (`Resources.get` is the shape that
-// made this necessary, and a program naming an RTL symbol directly -
-// `native("simse_str_trim") fun trimmedText(...)` - is the other).
+    // Every call name in a node's subtree; a call also records the symbol it reaches,
+    // because that symbol may name C++ emitted elsewhere (a `res` declaration's text is
+    // emitted only when its section is reached).
     fun collectNames(node: *AstXmlNode, names: *Dictionary<Str, Bool>): Unit {
-        // The string literals ride the same walk: this is the emitter's one pass over the
-        // whole program, so the table below covers every body it will emit. A literal the
-        // *lowering* invents is not in the parsed program and keeps its own spelling.
+        // The string literals ride the same walk, the emitter's one pass over the whole
+        // program; a literal the *lowering* invents keeps its own spelling.
         if (xmlKind(node) == AstNodeCategory.ExprStrLit) {
             this.literals.add(xmlAttr(node, AstNodeAttributeKind.Text))
         }
@@ -1236,14 +1124,8 @@ data class Emitter(
         }
     }
 
-// ---- the string table -------------------------------------------------
-
-    // The resources are literals like any other, and they go into the same pool the
-// program's string literals do (`specs/resources.md`, "What the program carries"): the list
-// arrives already spelled - each key and value as the C++ literal that holds its bytes, which
-// is `resources.resStoredLiterals`' business (a `*`-marked value is bytes, so it has an
-// escape rule of its own) - so pooling is an append and the table below reads the same
-// spelling back.
+    // The resources pool with the program's literals (`specs/resources.md`): the list already
+    // arrives spelled as C++ literals (`resources.resStoredLiterals`), so pooling is an append.
     fun collectResourceLiterals(): Unit {
         var i: Int = 0
         while (i < this.resourceStored.size()) {
@@ -1252,12 +1134,8 @@ data class Emitter(
         }
     }
 
-    // The resource table: one string-table index per key and per value, and the installer
-// that hands them to the program's `Resources` API at start-up. Written *after* the
-// string table, because the installer reads it - `__sm_stringTable` is filled by its
-// own initializer, and statics of one translation unit initialize in declaration
-// order. A program with no `_res.md` file writes none of this and stays byte-identical
-// to one built before the feature existed.
+    // The resource table: a string-table index per key and per value, and the installer that
+    // hands them to `Resources` at start-up. Written after the string table, which it reads.
     fun emitResourceTable(): Unit {
         if (this.resourceStored.size() == 0) {
             return
@@ -1290,29 +1168,18 @@ data class Emitter(
         this.line(0, "")
     }
 
-    // One pool and two run-length encoded indexes for the program's literals, expanded and
-// decoded once before `main` runs (`impl_specs/rtl-abi.md`, "String literals"). The
-// pool is the literals themselves as adjacent string literals, so the C++ compiler
-// decodes the bytes; each index is stored as "what to subtract from the previous value"
-// with an implicit 0 before the first entry, then run-length encoded
-// (`cgRunLengthEncode`, `strtable.hpp`). The entries are ordered longest first, so a
-// length series descends slowly and its differences are small - mostly 0 between
-// literals of equal length - which is what the encoding and the `Int16` element are
-// for. The `static_assert` on the pool's own size is the check that the pool and the
-// lengths agree - a disagreement about one escape stops the build instead of shifting
-// every literal after it. The series are expanded into stack arrays in the initializer
-// and dropped there, and an entry is a 12-byte `StrView` (not the 32-byte owning `Str`
-// the table held before), so start-up allocates nothing; the *site* converts the view
-// with `toString()`, so the change is representation-only.
+    // One pool and two run-length encoded indexes, expanded and decoded before `main` runs
+    // (`impl_specs/rtl-abi.md`, "String literals"): each index is "what to subtract from the
+    // previous value" with an implicit 0 before the first entry (`cgRunLengthEncode`,
+    // `strtable.hpp`). The `static_assert` is the check that the pool and the lengths agree.
     fun emitStringTable(): Unit {
         if (this.literals.count() == 0) {
             return
         }
         val count: Int = this.literals.count()
 
-        // `value[i] = value[i-1] - series[i]`, with an implicit 0 before the first entry.
-        // The offset increment is the previous entry's length while no two literals share
-        // text.
+        // `value[i] = value[i-1] - series[i]`, with an implicit 0 before the first entry. The
+        // offset increment is the previous entry's length while no two literals share text.
         var starts: List<Int> = List<Int>()
         var lengths: List<Int> = List<Int>()
         var total: Int = 0
@@ -1353,9 +1220,8 @@ data class Emitter(
         this.line(0, fmtStr("static const Int __sm_stringCount = |;", count.toString()))
         this.line(0, "static const char __sm_stringPool[] =")
 
-        // The literals again, adjacent, with a space between so they stay separate tokens.
-        // One line while it fits: the wrap point is the standard's 65 536-character limit
-        // on a logical source line, short of it.
+        // The literals again, adjacent, a space between so they stay separate tokens; wrapped
+        // short of the standard's 65 536-character logical source line limit.
         var packed: Str = "    "
         i = 0
         while (i < count) {
@@ -1408,9 +1274,7 @@ data class Emitter(
     }
 
     // Whether a prelude body is one the program reaches: its name is called, and - for an
-// extension - the program names the receiver's type as well. The prelude has one
-// `iter` per container (impl_specs/for.md), each container's machine is that
-// container's only, and the class name is the receiver's (`outerTypeName`).
+    // extension - the program names the receiver's type too (impl_specs/for.md).
     fun reachesPreludeBody(fn: *CgFn): Bool {
         if (!fn.hasBody) {
             return false
@@ -1423,26 +1287,20 @@ data class Emitter(
         if (receiverName == "") {
             return true
         }
-        // A receiver that is the function's own type parameter says nothing - any type
-        // can be one.
+        // A receiver that is the function's own type parameter says nothing - any type can be one.
         if (xmlIsTypeParam(receiverName, fn.templateParams)) {
             return true
         }
         if (this.referencedTypes.has(receiverName)) {
             return true
         }
-        // The name is called, but *no* body of it names its receiver's type: a program can
-        // call `"".isEmpty()` without ever naming `Str` (a literal receiver, an inferred
-        // local), and the call cannot be attributed to one overload. The whole group is
-        // emitted rather than none of it - the body the call reaches has to exist, and an
-        // unused overload is dead but valid C++.
+        // The name is called but no body of it names its receiver's type (`"".isEmpty()` need
+        // never name `Str`), so the whole group is emitted - the body the call reaches must exist.
         return !this.preludeReceiverNamed(name)
     }
 
-    // Whether any prelude body of `name` has its receiver's outer type name referenced by
-// the program: the per-overload half of the rule above. When one of the group *is*
-// attributable the type test is what tells the rest apart (`List`'s `iter` is not
-// `Span`'s), so the members the program does not name stay unemitted.
+    // Whether any prelude body of `name` has its receiver's type referenced: the per-overload
+    // half of the rule above, which tells `List`'s `iter` from `Span`'s.
     fun preludeReceiverNamed(name: *Str): Bool {
         var i: Int = 0
         while (i < this.functions.size()) {
@@ -1462,10 +1320,9 @@ data class Emitter(
         return false
     }
 
-    // Fills `referencedNames` and `referencedTypes` from the program - never from the
-// prelude's own unused bodies - and closes both over the prelude the program reaches:
-// an emitted body may call another, and a native's signature is what says which types
-// a call reaches (`xs.toArray()` reaches an `Array`).
+    // Fills `referencedNames` and `referencedTypes` from the program, never from the prelude's
+    // own unused bodies, then closes them over the prelude it reaches: an emitted body may
+    // call another, and a native's signature names the types a call reaches.
     fun collectProgramNames(): Unit {
         for (*input in this.inputs) {
             if (!input.prelude) {
@@ -1512,17 +1369,11 @@ data class Emitter(
     fun emitFunctions(prototypeOnly: Bool, facts: *SemFacts): Unit {
         var i: Int = 0
         while (i < this.functions.size()) {
-            // A pointer into `functions`: `CgFn` carries two XmlNodes, so a copy
-            // here would deep-copy the whole declaration per function.
+            // A pointer into `functions`: a copy would deep-copy the declaration per function.
             val fn: *CgFn = *this.functions[i]
             i = i + 1
-            // A prelude input is declarations-only *unless it has a body*: the RTL
-            // declares natives, whose C++ is the header's (a native is skipped inside
-            // `emitFunction`), and a prelude `fun` with a body is a function the language
-            // itself provides - `List<T>.iter(): ..T` is the first one
-            // (impl_specs/for.md). It is emitted when the program reaches it
-            // (`reachesPreludeBody`), so a prelude body costs a program only what it
-            // uses.
+            // A prelude body is emitted only when the program reaches it
+            // (`reachesPreludeBody`), so it costs a program only what it uses.
             if (fn.prelude && !this.reachesPreludeBody(fn)) {
                 continue
             }
@@ -1562,11 +1413,9 @@ data class Emitter(
         return mapped + "* self"
     }
 
-    // The name a machine's class is derived from: the function's own, prefixed with the
-// receiver's outer type name when the function is an extension (`List<T>`'s
-// `iter` is `List_iter`). The prelude provides an `iter` per container
-// (impl_specs/for.md), so the function name alone would give every container's machine
-// the same class name.
+    // The class name of a machine: the function's own, prefixed with the receiver's outer
+    // type name for an extension (`List<T>`'s `iter` is `List_iter`), so containers do not
+    // collide.
     fun machineName(decl: *AstXmlNode): Str {
         val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
         val receiver: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.Receiver)
@@ -1577,9 +1426,8 @@ data class Emitter(
         return fmtStr("|_|", outer, name)
     }
 
-    // The outer name of a type, ignoring handles and arguments: `*List<Int>` and
-// `List<Str>` are both `List` - the name a receiver and a machine class are spelled
-// with.
+    // The outer name of a type, ignoring handles and arguments: `*List<Int>` and `List<Str>`
+    // are both `List`.
     fun outerTypeName(typeNode: *AstXmlNode): Str {
         if (xmlIsEmpty(typeNode)) {
             return ""
@@ -1603,9 +1451,9 @@ data class Emitter(
         return xmlAttr(node, AstNodeAttributeKind.Name)
     }
 
-    // Every type name in a type node, nesting included: `List<Array<Int>>` names both.
-// The roles are the positions a type occupies (`Type` for a declaration's, `Inner`
-// for a handle's pointee, ...), which is what makes this the same set in both rings.
+    // Every type name in a type node, nesting included: `List<Array<Int>>` names both. The
+    // roles are the positions a type occupies (`Type` for a declaration's, `Inner` for a
+    // handle's pointee, ...).
     fun collectTypeNames(node: *AstXmlNode): Unit {
         val role: AstNodeKind = node.name
         if (role != AstNodeKind.Type && role != AstNodeKind.Inner && role != AstNodeKind.TypeArg
@@ -1625,9 +1473,8 @@ data class Emitter(
         }
     }
 
-    // The names a body's own C++ scope already has: the parameters (and `self`, and the
-// one the argv form of `main` writes). A hoisted declaration may not collide with one
-// of them, so the hoisting renames it away (`linFinishForEmission`'s `reserved`).
+    // The names a body's own C++ scope already has, which a hoisted declaration may not
+    // collide with (`linFinishForEmission`'s `reserved`).
     fun cgReservedNames(decl: *AstXmlNode, hasSelf: Bool, argv: Bool): List<Str> {
         var names: List<Str> = List<Str>()
         if (hasSelf) {
@@ -1644,8 +1491,7 @@ data class Emitter(
     }
 
     fun emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit {
-        // The declaration is read-only here, so borrow it instead of copying the
-        // whole function AST (params, body, ...) out of the CgFn.
+        // Read-only here: borrow instead of copying the whole function AST out of the CgFn.
         val decl: *AstXmlNode = *fn.decl
         if (fn.isNative) {
             return
@@ -1663,11 +1509,9 @@ data class Emitter(
 
         this.setActiveTypeParams(fn.templateParams)
         val returnNode: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.ReturnType)
-        // A body that yields is lowered to a state machine, and the function to a factory
-        // for it (impl_specs/yield.md) - so the return type of the emitted function is the
-        // machine's class, not the `..T` the source wrote. For a generic function the
-        // class is a template, so its *name* carries the type parameters wherever it is a
-        // type (inside the class the injected-class-name covers `self`).
+        // A yielding body is lowered to a state machine and the function to a factory for it
+        // (impl_specs/yield.md): the emitted return type is the machine's class, not `..T`;
+        // for a generic function the class is a template, so its name carries the parameters.
         val yielding: Bool = !xmlIsEmpty(returnNode) && xmlKind(returnNode) == AstNodeCategory.TypeYield
         val yieldClass: Str = this.qualify(fn.packageName, this.machineName(decl)) + "_yieldable"
         var yieldType: Str = yieldClass
@@ -1727,8 +1571,7 @@ data class Emitter(
             selfK = NameKind.Value
         }
 
-        // The entry point keeps its unprefixed name; every other function is
-        // emitted under its package's prefix (package qualification above).
+        // The entry point keeps its unprefixed name; every other function is prefixed.
         var fnName: Str = "main"
         if (!isMain) {
             fnName = this.qualify(fn.packageName, fn.name)
@@ -1739,8 +1582,7 @@ data class Emitter(
         }
         val tmpl: Str = this.templateClause(fn.templateParams)
         if (yielding) {
-            // The machine + the factory, and nothing else: the body of the source function
-            // *is* the machine.
+            // The machine plus the factory, nothing else: the source body *is* the machine.
             this.emitYieldable(fn, decl, yieldClass, yieldType, prototypeOnly, selfK, selfTypePtr, facts)
             return
         }
@@ -1767,10 +1609,8 @@ data class Emitter(
         }
         if (mainArgs) {
             val argName: Str = xmlAttr(params0[0], AstNodeAttributeKind.Name)
-            // The argument list is built here rather than by a call site in the program, so
-            // the reach is recorded as well as spelled: `append`'s C++ is a generated
-            // section (`cppsrc/rtl/_res.md`), and a prelude generator the program does not
-            // reach is not emitted (`sourcegen`'s dispatching pass).
+            // The argument list is built here, not at a program call site, so the reach is
+            // recorded as well as spelled: `append`'s C++ is a generated section.
             val appendSymbol: Str = "simse_list_append"
             this.referencedNames.insert(appendSymbol, true)
             this.line(1, fmtStr("List<Str> | = List<Str>();", argName))
@@ -1781,21 +1621,17 @@ data class Emitter(
             this.line(1, "}")
         }
         this.curReturnType = returnNode
-        // Structured control flow is lowered to labels/gotos, its expressions are
-        // extracted into temporaries, and the blocks the lowering wrapped around a
-        // declaration are folded again - in a loop, because each stage can leave work
-        // for the others (impl_specs/linear-lowering.md). The type pass then spells
-        // the declarations, which is what lets their own storage move to the top of
-        // the body (`linFinishForEmission`) and the folding finish the job: the
-        // emitter below knows the linear forms only.
+        // Structured control flow is lowered to labels/gotos and expressions extracted into
+        // temporaries, in a loop because each stage leaves work for the others
+        // (impl_specs/linear-lowering.md); the emitter below knows the linear forms only.
         var lowered: List<AstXmlNode> =
             linLowerForEmission(xmlChildren(xmlChildPtr(decl, AstNodeKind.Body), AstNodeKind.Stmt))
         val semantics: SemBody = SemBody(
             decl, fn.templateParams, selfTypePtr, xmlEmptyNode(),
             List<Str>(), List<AstXmlNode>(), Dictionary<Str, AstXmlNode>()
         )
-        // The proof of the pass, kept: it is what tells the backend a slot holds a
-        // machine, which a declaration can never say (`..T` is not spellable).
+        // The proof of the pass: `inferred` tells the backend a slot holds a machine, which a
+        // declaration can never say (`..T` is not spellable).
         var inferred: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
         lowered = semInferTypes(lowered, facts, semantics, inferred)
         val finalBody: List<AstXmlNode> = linFinishForEmission(
@@ -1810,21 +1646,12 @@ data class Emitter(
         this.line(0, "}")
     }
 
-// ---- IL codegen --------------------------------------------------------
-// The instruction-list backend lives in `cppsrc/codegen/IlCodeGen.kt`: the IL's
-// types and the walks that spell a body's instructions are extension functions on
-// `Emitter` there, so this file stays the front half (collection, spelling,
-// expression text).
-
-
-// ---- expressions ------------------------------------------------------
+// The instruction-list backend lives in `cppsrc/codegen/IlCodeGen.kt`: the IL's types and
+// the walks that spell a body's instructions are extension functions on `Emitter` there.
 
     fun expr(e: *AstXmlNode, minPrec: Int, expected: *AstXmlNode): Str {
-        // The value/handle half of the conversion table (`impl_specs/linear-il.md`): a
-        // `*T`/`&T` spelled where a `T` is *expected* is read through. This is the
-        // dst-driven rule - the position states the type it wants, and the instruction means
-        // the pair - and it is what lets a `*T` parameter, a `*List<T>`, or a borrowing
-        // accessor (`xmlAttr`'s `*Str`) be read without every use spelling the `*`.
+        // The dst-driven half of the conversion table (`impl_specs/linear-il.md`): a `*T`/`&T`
+        // spelled where a `T` is expected is read through, so a use need not spell the `*`.
         if (this.cgNeedsReadThrough(e, expected)) {
             return fmtStr("*(|)", this.expr(e, 0, xmlEmptyNode()))
         }
@@ -1840,12 +1667,9 @@ data class Emitter(
         return s
     }
 
-    // Whether the value `e` has to be read through to be spelled as `expected`: the two are
-// the same type modulo the handle (`*T`/`&T` for a `T`), which is the row the emitter
-// spells `*(x)` (`exprInner`'s `ExprCopy` arm is the definition). Two things it must not
-// do: convert when *no* type is expected (an argument, an operand - the extractor says
-// what those want), and convert a value *into* a handle, which is the `*T` *binding* the
-// writer has to spell (`specs/memory-model.md`).
+    // Whether `e` has to be read through to be spelled as `expected` - the same type modulo
+    // the handle. It must not convert with no type expected, nor a value *into* a handle
+    // (that `*T` binding is the writer's to spell, `specs/memory-model.md`).
     fun cgNeedsReadThrough(e: *AstXmlNode, expected: *AstXmlNode): Bool {
         if (xmlIsEmpty(expected) || ilIsHandleType(expected)) {
             return false
@@ -1877,8 +1701,6 @@ data class Emitter(
         }
         return NameKind.Value
     }
-
-// ---- lightweight type inference ---------------------------------------
 
     fun namedType(name: *Str): AstXmlNode {
         return this.namedTypeExpr(name)
@@ -2024,10 +1846,8 @@ data class Emitter(
                 }
                 return false
             }
-            // `..T` is a state machine (impl_specs/yield.md) and carries its element type the
-            // way a pointer carries its pointee, so a pattern `..T` matches `..Int`
-            // element-wise - which is what lets the prelude's `fun ..T.iter(): ..T` be
-            // found for a machine.
+            // `..T` is a state machine and carries its element type like a pointer its
+            // pointee, so a pattern `..T` matches `..Int` element-wise (impl_specs/yield.md).
             AstNodeCategory.TypeYield -> {
                 if (ak == AstNodeCategory.TypeYield && !xmlIsEmpty(xmlChildPtr(actualPtr, AstNodeKind.Inner))
                     && !xmlIsEmpty(xmlChildPtr(pattern, AstNodeKind.Inner))
@@ -2106,10 +1926,9 @@ data class Emitter(
             return this.namedType("Bool")
         }
         if (!xmlIsEmpty(recv) && xmlKind(recv) == AstNodeCategory.TypeYield) {
-            // A machine's own surface (`impl_specs/for.md`): `advance()` answers whether
-            // there was a value; `current` is the field holding it, and the type pass
-            // answers both the same way (`TypeInfer.memberReturn`/`infer`), so the guess
-            // and the answer agree.
+            // A machine's own surface (`impl_specs/for.md`): `advance()` answers whether there
+            // was a value, `current` is the field holding it; the type pass answers both the
+            // same way.
             if (calleeText == "advance") {
                 return this.namedType("Bool")
             }
@@ -2117,8 +1936,8 @@ data class Emitter(
                 return xmlChild(recv, AstNodeKind.Inner)
             }
         }
-        // An enum's conversions (`specs/declarations.md`): `E.toInt()` is the member's
-        // integer value, `E.fromInt(n)` the unchecked cast back.
+        // An enum's conversions (`specs/declarations.md`): `toInt()` is the member's value,
+        // `fromInt(n)` the unchecked cast back.
         if (!xmlIsEmpty(recv) && xmlKind(recv) == AstNodeCategory.TypeNamed
             && this.enumNames.has(xmlAttr(recv, AstNodeAttributeKind.Name))
         ) {
@@ -2301,13 +2120,9 @@ data class Emitter(
             }
 
             AstNodeCategory.ExprDeref -> {
-                // `*x` is the *address* of what `x` denotes: of a value's own storage
-                // (`&x`), of a counted reference's pointee (`x.get()`), or the pointer
-                // itself when `x` already is one - and then the emitter reads *through*
-                // it, so the type is the pointee. The type pass's `SemInfer.infer` spells
-                // the same three cases; this is that rule, so the emitter's guess and the
-                // pass's answer agree (the `Deref` instruction means one of the three,
-                // `impl_specs/linear-il.md`).
+                // `*x` is the address of what `x` denotes: a value's storage (`&x`), a counted
+                // reference's pointee (`x.get()`), or the pointer itself - in which case the
+                // type is the pointee. `SemInfer.infer` spells the same three cases.
                 val operand: AstXmlNode = this.inferType(xmlChildPtr(e, AstNodeKind.Operand))
                 if (xmlIsEmpty(operand)) {
                     return xmlEmptyNode()
@@ -2349,10 +2164,8 @@ data class Emitter(
                 ) {
                     return this.namedType("Bool")
                 }
-                // The operation is on *values*: a handle operand is read through to its
-                // pointee - the expr `*T -> T` row, which the extractor spells at the
-                // operand (`binaryOperand`), so the left operand as a value is what the
-                // instruction writes and what the frame declares.
+                // The operation is on values: a handle operand is read through to its pointee -
+                // the `*T -> T` row, spelled at the operand (`binaryOperand`).
                 return this.pointee(this.inferType(xmlChildPtr(e, AstNodeKind.Lhs)))
             }
 
@@ -2378,20 +2191,9 @@ data class Emitter(
         return renamed
     }
 
-    // The receiver argument for a lowered *Simse* call: a value receiver is a raw
-// pointer in the emitted code, so the argument is the receiver object's address.
-// `simse_addressOf` covers both a place (`&x`) and a temporary, whose pointer is
-// valid for the call it is passed to (cppsrc/rtl/types.hpp); a counted reference
-// is unwrapped with `.get()`, and a raw pointer is already that address. A handle
-// receiver keeps its form: a counted reference stays a counted reference, so a
-// method that takes `this: &T` can store `self` and keep its refcount.
-//
-// A bare `this` is the one receiver that *is* that address already: the emitted
-// receiver is the very `T* self` the method was called with, so the call passes the
-// pointer. Spelling it out - `simse_addressOf((*self))`, a dereference and then the
-// address of the dereference - copies nothing but *reads* like a copy of the whole
-// receiver, at every call a method makes on itself (`Codegen`'s own ring has 1,741
-// of them), and the emitted C++ is supposed to be readable.
+    // The receiver argument for a lowered Simse call: a value receiver is a raw pointer, so
+    // the argument is the receiver's address (`simse_addressOf`, cppsrc/rtl/types.hpp); a
+    // counted reference is unwrapped with `.get()`, and a bare `this` is already that pointer.
     fun receiverArg(pattern: *AstXmlNode, recv: *AstXmlNode): Str {
         if (this.isHandleType(pattern)) {
             return this.expr(recv, 12, xmlEmptyNode())
@@ -2416,10 +2218,9 @@ data class Emitter(
         return fmtStr("simse_addressOf(|)", this.expr(recv, 12, xmlEmptyNode()))
     }
 
-    // The emitted receiver, as the raw pointer it already is: the `T* self` a value
-// receiver is, or C++'s `this` inside a closure class. That pointer is the receiver's
-// address, so a call on `this` passes it and a borrow of `this` (`*this`) is it, with
-// no dereference to spell.
+    // The emitted receiver as the raw pointer it already is: `self`, or C++'s `this` inside a
+    // closure class. That pointer is the receiver's address, so a borrow of `this` spells no
+    // dereference.
     fun selfPointer(): Str {
         if (this.inClosureMethod) {
             return "this"
@@ -2427,10 +2228,9 @@ data class Emitter(
         return "self"
     }
 
-    // The receiver argument for a lowered *native* call: the host's own signature
-// decides whether it wants a value, a reference or a pointer, so the receiver
-// expression is passed as it is - dereferenced through a handle, because the
-// RTL's value receivers are written `T&` there.
+    // The receiver argument for a lowered native call: the host signature decides the form, so
+    // the expression passes as it is, dereferenced through a handle (the RTL's value receivers
+    // are `T&`).
     fun nativeReceiverArg(pattern: *AstXmlNode, recv: *AstXmlNode): Str {
         if (this.isHandleType(pattern)) {
             return this.expr(recv, 12, xmlEmptyNode())
@@ -2442,9 +2242,7 @@ data class Emitter(
         return this.expr(recv, 12, xmlEmptyNode())
     }
 
-    // Index into `functions` of the first Simse-declared receiver function with this
-// name, or -1: used when the receiver's own type could not be inferred but the
-// callee is known.
+    // Index into `functions` of the first Simse-declared receiver function with this name, or -1.
     fun findReceiverFnByName(name: *Str): Int {
         var i: Int = 0
         while (i < this.functions.size()) {
@@ -2515,9 +2313,7 @@ data class Emitter(
         if (xmlKind(base) == AstNodeCategory.ExprName
             && xmlAttr(base, AstNodeAttributeKind.Name) == "this" && this.selfKind == NameKind.Value
         ) {
-            // A value receiver is a raw pointer in the emitted code (`T* self`), so its
-            // members are reached with `->` whatever the language type of the receiver
-            // is.
+            // A value receiver is a raw pointer (`T* self`), so its members are reached with `->`.
             arrow = true
         } else if (!xmlIsEmpty(baseType)) {
             arrow = this.isHandleType(baseType)
@@ -2546,10 +2342,8 @@ data class Emitter(
         if (arrow) {
             op = "->"
         }
-        // A value receiver's own member access reads through its pointer
-        // (`self->field`). The bare name `this` reads as the object (`(*self)`),
-        // which is what a *value* use of the receiver needs, so this one spot spells
-        // the pointer instead.
+        // A value receiver's own member access reads through its pointer (`self->field`); the
+        // bare name `this` elsewhere reads as the object (`(*self)`).
         if (xmlKind(base) == AstNodeCategory.ExprName && xmlAttr(base, AstNodeAttributeKind.Name) == "this"
             && this.selfKind == NameKind.Value
         ) {
@@ -2575,14 +2369,9 @@ data class Emitter(
         return "nullptr"
     }
 
-    // A receiver's type is *resolved through a `typealias`* before it is matched against
-    // an extension's (findExtensionFn/findNativeExt/memberCallReturn, and the checker's
-    // own memberReturn): `StrView` is `Span<Char>` (cppsrc/rtl/StrView.kt), so an
-    // extension on `Span<T>` is reachable through a view - the alias is the same type, and
-    // this is the one place the tree spells one name for it in a receiver position. The
-    // *declared* receiver is resolved the same way, so the match works from either side:
-    // `Span<Char>.find` is the view's `find`. A declared type that is not an alias is
-    // returned as it came in.
+    // A receiver's type is resolved through a `typealias` before matching (`StrView` is
+    // `Span<Char>`, cppsrc/rtl/StrView.kt), and so is the declared receiver, so the match works
+    // from either side. A non-alias type is returned as it came in.
     fun resolveAlias(typeNode: *AstXmlNode): AstXmlNode {
         var current: AstXmlNode = typeNode
         var guard: Int = 0
@@ -2616,8 +2405,7 @@ data class Emitter(
         return xmlEmptyNode()
     }
 
-    // A non-native function with the given name and parameter count. A method is not
-// one: a plain call reaches only what the module declares.
+    // A non-native function with the given name and parameter count; a method is not one.
     fun findFunction(name: *Str, argCount: Int): AstXmlNode {
         var i: Int = 0
         while (i < this.functions.size()) {
@@ -2650,9 +2438,8 @@ data class Emitter(
             }
 
             AstNodeCategory.ExprStrLit -> {
-                // A table entry is a `const Str` *glvalue*: a comparison or a `const Str&`
-                // parameter binds it without building anything, while an owned position copies
-                // it exactly as it copied the literal.
+                // A table entry is a `const Str` glvalue: a comparison or a `const Str&`
+                // parameter binds it without building anything; an owned position copies it.
                 return this.literals.spelling(xmlAttr(e, AstNodeAttributeKind.Text))
             }
 
@@ -2667,10 +2454,9 @@ data class Emitter(
             AstNodeCategory.ExprName -> {
                 val name: Str = xmlAttr(e, AstNodeAttributeKind.Name)
                 if (name == "this") {
-                    // The receiver is the *object* in the language and a raw pointer in the
-                    // emitted code when it is a value receiver (`T* self`), so reading it
-                    // reads through the pointer; a handle receiver is its handle. Inside a
-                    // closure class the receiver is C++'s `this`.
+                    // A value receiver is a raw pointer (`T* self`) in the emitted code, so
+                    // reading it reads through the pointer; a handle receiver is its handle.
+                    // Inside a closure class the receiver is C++'s `this`.
                     if (this.inClosureMethod) {
                         if (this.selfKind == NameKind.Value) {
                             return "(*this)"
@@ -2685,11 +2471,9 @@ data class Emitter(
                 if (this.localTypes.has(name)) {
                     return name
                 }
-                // A file-level static is emitted under its package's prefix; a bare
-                // name that is not a local is otherwise a reference to a top-level
-                // function used as a value (e.g. a callable argument), so it carries
-                // that function's prefix, and a known prelude native resolves to its
-                // symbol instead.
+                // Not a local: a static carries its package's prefix, a top-level function used
+                // as a value carries its function's, and a known prelude native resolves to its
+                // symbol.
                 if (this.staticsByName.has(name)) {
                     return this.qualify(this.staticsByName.get(name).value().packageName, name)
                 }
@@ -2804,9 +2588,8 @@ data class Emitter(
             }
 
             AstNodeCategory.ExprLambda -> {
-                // A lambda is a closure *class* here, built by the instruction list; an
-                // expression node reaching this point means the lowering did not turn it into
-                // one (impl_specs/linear-il.md).
+                // A lambda is a closure class, built by the instruction list; reaching here
+                // means the lowering did not turn it into one (impl_specs/linear-il.md).
                 this.fail(e, "unsupported: a lambda outside a closure construction")
                 return "/*unsupported*/"
             }
@@ -2848,10 +2631,9 @@ data class Emitter(
                     return fmtStr("(|).get()", operand)
                 }
                 if (nameKind == NameKind.Value) {
-                    // `*value` is the raw-pointer form: the address of the value, no
-                    // copy (specs/memory-model.md). A plain name is an lvalue, so
-                    // `&name`; anything else may be a temporary, which
-                    // simse_addressOf binds for the call.
+                    // `*value` is the address of the value, no copy (specs/memory-model.md): a
+                    // plain name is an lvalue (`&name`), anything else may be a temporary
+                    // (`simse_addressOf`).
                     if (this.selfKind == NameKind.Value && xmlKind(operandNode) == AstNodeCategory.ExprName
                         && xmlAttr(operandNode, AstNodeAttributeKind.Name) == "this"
                     ) {
@@ -2911,10 +2693,8 @@ data class Emitter(
                     calleeName = nativeOpt.value()
                 }
                 if (this.dataClassNames.has(name)) {
-                    // A construction is the aggregate's own brace form, with the type
-                    // arguments spelled (`ns1_Box<Int>{1}`): the `_make_<Name>` factory
-                    // is gone, so nothing is left to C++ template deduction (`Box(2)`
-                    // deduces through CTAD instead - see the bare-name arm below).
+                    // A construction is the aggregate's brace form, with the type arguments
+                    // spelled (`ns1_Box<Int>{1}`); CTAD covers the bare-name arm below.
                     return fmtStr(
                         "|<|>{|}",
                         this.qualify(this.typePackage(name), name),
@@ -2953,9 +2733,8 @@ data class Emitter(
                     if (!xmlIsEmpty(target) && i < targetParams.size()) {
                         expectedArg = xmlChild(targetParams[i], AstNodeKind.Type)
                     }
-                    // A receiver function called by name takes the receiver first, and a
-                    // value receiver is a raw pointer in the emitted code (`T* self`), so
-                    // that argument is the object's address.
+                    // A receiver function called by name takes the receiver first, a value
+                    // receiver as its address (`T* self`).
                     if (i == 0 && !xmlIsEmpty(targetReceiver)
                         && xmlAttr(target, AstNodeAttributeKind.HasReceiver) == "true"
                         && !this.isHandleType(targetReceiver)
@@ -2980,9 +2759,8 @@ data class Emitter(
                     calleeName = nativeOpt.value()
                 }
                 if (this.dataClassNames.has(name)) {
-                    // A construction the source wrote without type arguments: the brace
-                    // form, and the type arguments C++20's aggregate CTAD deduces - the
-                    // job the `_make_<Name>` factory's parameters used to do.
+                    // A construction without type arguments: the brace form, with C++20
+                    // aggregate CTAD deducing them.
                     return fmtStr(
                         "|{|}", this.qualify(this.typePackage(name), name), cgJoin(args, ", ")
                     )
@@ -2998,9 +2776,9 @@ data class Emitter(
                 val calleeText: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
                 val receiverExpr: *AstXmlNode = xmlChildPtr(callee, AstNodeKind.Receiver)
 
-                // Machine identity: `x.iter()` on a machine *is* `x`. That is the wrap a
-                // `for` puts around what it iterates, and `..T` is not a spellable type, so the
-                // identity is the backend's rather than a function's (impl_specs/for.md).
+                // `x.iter()` on a machine *is* `x` - the wrap a `for` puts around what it
+                // iterates; `..T` is not spellable, so the identity is the backend's
+                // (impl_specs/for.md).
                 if (calleeText == "iter") {
                     val identityRecv: AstXmlNode = this.pointee(this.inferType(receiverExpr))
                     if (!xmlIsEmpty(identityRecv) && xmlKind(identityRecv) == AstNodeCategory.TypeYield) {
@@ -3028,11 +2806,9 @@ data class Emitter(
                     )
                 }
 
-                // The `Resources` API (`cppsrc/rtl/resources.kt`, specs/resources.md): a
-                // call on a *type name*, like `Enum.fromInt` above. The implementation is
-                // a declaration whose symbol is what the call reaches - today the
-                // prelude's own `resourcesGet`/`resourcesHas`/`resourcesCount`, which is
-                // where the lookup is written.
+                // The `Resources` API (`cppsrc/rtl/resources.kt`, specs/resources.md): a call
+                // on a *type name*, like `Enum.fromInt` above; the declaration's symbol is what
+                // the call reaches.
                 if (xmlKind(receiverExpr) == AstNodeCategory.ExprName) {
                     val staticSymbol: Str = this.staticCallSymbol(
                         xmlAttr(receiverExpr, AstNodeAttributeKind.Name), calleeText
@@ -3116,8 +2892,6 @@ data class Emitter(
         return "/*unsupported*/"
     }
 
-// ---- prelude ----------------------------------------------------------
-
     fun preludeText(): Unit {
         var text: Str = "// Generated by the Simse compiler. Do not edit.\n"
         text = text + "#include \"cppsrc/rtl/simse.hpp\"\n"
@@ -3127,12 +2901,9 @@ data class Emitter(
         this.sections.appendText(text)
     }
 
-    // `--profile`: the instrumented profiler's runtime, which every emitted body of this
-// program measures into (impl_specs/profiling.md). Nothing when it is off. It is a
-// section of its own rather than part of the includes above, so that generated text
-// which has to precede it - the `simse_nowMicros` declaration, which moved out of
-// timeops.hpp into a resource - can be emitted in between (impl_specs/generators.md,
-// the `support` section).
+    // `--profile`: the instrumented profiler's runtime, which every emitted body measures into
+    // (impl_specs/profiling.md); nothing when it is off. A section of its own so `support` text
+    // can precede it.
     fun emitProfileText(): Unit {
         this.sections.appendText(profPreludeText())
     }
@@ -3140,11 +2911,9 @@ data class Emitter(
     fun run(): Res<Str> {
         this.collect()
         this.collectProgramNames()
-        // The program's constant globals (`optimizations/FoldGlobals.kt`): one analysis over
-        // every module, run here because a body's own passes are handed a body and nothing
-        // else, and a constant global is a property of the *program*. Two walks over the
-        // inputs: the declarations first (the borrow rule asks which functions take a
-        // handle parameter), then the bodies.
+        // The program's constant globals (`optimizations/FoldGlobals.kt`), a property of the
+        // whole program: declarations first (the borrow rule asks which functions take a handle
+        // parameter), then bodies.
         linConstGlobalsReset()
         for (*input in this.inputs) {
             foldGlobalScanDecls(*input.module)
@@ -3153,24 +2922,17 @@ data class Emitter(
             foldGlobalScanBodies(*input.module)
         }
         linConstGlobalsBuild()
-        // The semantic step on the lowered body reads these (sema/TypeInfer.kt). They
-        // are built here and threaded to the emitters rather than stored on the emitter:
-        // the facts are one value per program, and a body's emitter only borrows it.
+        // The facts the semantic step reads (sema/TypeInfer.kt), one value per program; they
+        // are threaded to the emitters rather than stored on the emitter.
         val facts: SemFacts = this.collectFacts()
-        // The sections are the emitter's assembly phases, in this order
-        // (impl_specs/generators.md): includes, support, profile, strings, resources,
-        // forward, types, statics, prototypes, init, bodies. `support` and `forward` are
-        // not begun here because the emitter writes nothing into them - they are where a
-        // generator's text goes, `support` for what the preamble below needs (a table's
-        // decoder, the clock the profiler reads) and `forward` for everything that has to
-        // precede the program's types and bodies.
+        // The assembly phases, in order (impl_specs/generators.md): includes, support,
+        // profile, strings, resources, forward, types, statics, prototypes, init, bodies.
+        // `support` and `forward` are not begun here because a generator writes them.
         this.sections.begin("includes")
         this.preludeText()
         this.emitNativeDeclarations()
-        // The walk above pooled every literal the program mentions, in first-encounter
-        // order; sorting is what makes the indices canonical, so the table does not depend
-        // on the order the walk happened to see them in. The resources are literals too, so
-        // they are pooled before the sort.
+        // Sorting is what makes the indices canonical, so the table does not depend on the
+        // order the walk met literals in. The resources are literals too, pooled before the sort.
         this.collectResourceLiterals()
         this.literals.sort()
         this.sections.begin("profile")
@@ -3208,13 +2970,9 @@ data class Emitter(
         if (this.failed) {
             return Res<Str>.err(this.error)
         }
-        // The generators last (impl_specs/generators.md): their text goes into the *named*
-        // sections, so when this runs does not decide where it renders - and running here
-        // means the reachability rule sees every body, including what the emitter spelled
-        // itself. `cppsrc/sourcegen` is where a generator lives; this is only the call.
-        //
-        // `this.sections` *is* the pointer (`sections: *Sections`): `*this.sections` would
-        // read the sink out into a copy, and the generators would fill the copy.
+        // The generators last (impl_specs/generators.md): their text goes into named sections,
+        // so when this runs does not decide where it renders, and the reachability rule sees
+        // every body. `this.sections` *is* the pointer - `*this.sections` would fill a copy.
         val generated: Res<Str> = sourceGenEmit(this.sections, *this.referencedNames)
         if (!generated.isOk()) {
             this.fail(xmlEmptyNode(), generated.Error)
@@ -3226,8 +2984,6 @@ data class Emitter(
         return Res<Str>.ok(this.sections.render())
     }
 }
-
-// ---- entry point ----------------------------------------------------------
 
 fun newEmitter(inputs: *List<CgInput>, resourceStored: *List<Str>): Emitter {
     return Emitter(
@@ -3268,17 +3024,12 @@ fun newEmitter(inputs: *List<CgInput>, resourceStored: *List<Str>): Emitter {
     )
 }
 
-// Amalgamates every input into one C++ translation unit. Deterministic: the same
-// inputs always produce byte-identical output. On failure the error is formatted
-// as "<file>:<line>:<col>: <message>".
+// Amalgamates every input into one translation unit, byte-identical for identical inputs; on
+// failure the error is formatted "<file>:<line>:<col>: <message>".
 //
-// `resourceStored` is what the program *carries* from its `_res.md` files
-// (`resources.resStoredLiterals`, specs/resources.md): each key and value already spelled as
-// the C++ literal that holds its bytes, in the order the files were read. The emitter pools
-// them into the program's string table and installs them into the program's own `Resources`
-// API at start-up; an empty list emits neither. A compile-only section (`!`) is not in it - the
-// compiler reads that, the program does not carry it - and the *generated* C++ a resource holds
-// is `cppsrc/sourcegen`'s business (impl_specs/generators.md).
+// `resourceStored` is what the program carries from its `_res.md` files
+// (`resources.resStoredLiterals`, specs/resources.md), already spelled as the C++ literal that
+// holds its bytes, in the order the files were read.
 fun emitProgram(inputs: *List<CgInput>, resourceStored: *List<Str>): Res<Str> {
     var emitter: Emitter = newEmitter(inputs, resourceStored)
     return emitter.run()

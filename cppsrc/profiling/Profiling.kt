@@ -1,37 +1,15 @@
 // Profiling.kt
 //
 // The instrumented profiler (`--profile`, impl_specs/profiling.md): one RAII timer per
-// emitted body, and the table the program prints when it leaves. The mirror of
-// cppsrc/profiling/Profiling.cpp.
+// emitted body, and the table printed when the program leaves. The runtime is emitted into
+// the program as text (the prologue below), and it is a *flag*: with `--profile` off
+// everything here returns "", so a program built without it is unchanged.
 //
-// It is a *flag*, not a feature: with `--profile` off, everything here returns the empty
-// string, so a program built without it is byte-identical to one built before the flag
-// existed. The runtime itself is *generated into* the program (the prologue below)
-// rather than linked in from a header: it is a few lines, it uses only what the RTL
-// already gives every program (`Str`, `List`, `Dictionary`, `simse_nowMicros`), and a
-// self-contained file needs no include path of its own.
-//
-// What a measurement is: `profileApp.measure("ns1_emitFunction")` is constructed as the
-// first statement of an emitted body and destroyed when that body leaves - through any
-// `return` - so the total is that body's whole run, nested calls included. The table is
-// sorted by total, and each row also carries the call count, which is what tells
-// "called once, expensive" from "called a million times, cheap".
-//
-// What is **not** measured: a state machine's methods (`advance`, `value`). They are the
-// per-element inner loop of every `for`, and `value` is a one-line accessor, so a timer
-// in them costs more than they do: the flags' first reading (T78) put `advance` at 44.7M
-// calls and `value` at 44.4M in the compiler's own transpile, which was ~22% of the
-// measured run for the two of them. `emitMachine` passes `measure = false` for them; a
-// body's *own* timer still covers their work, since they are only ever entered from a
-// measured caller.
+// State machines' `advance`/`value` are not measured: a body's own timer covers them.
 
 package profiling
 
-// ---- the flag --------------------------------------------------------------
-
-// `--profile`: emit the runtime and a `measure(...)` preamble in every body. The C++
-// ring keeps the same flag (`cppsrc/profiling/Profiling.h`), so the two rings emit the
-// same C++ with the flag on or off.
+// `--profile`: emit the runtime and a `measure(...)` preamble in every body.
 var profEnabledFlag: Bool = false
 
 fun profEnabled(): Bool {
@@ -42,11 +20,8 @@ fun profSetEnabled(value: Bool): Unit {
     profEnabledFlag = value
 }
 
-// ---- what the emitter writes -----------------------------------------------
-
 // The prologue's addition: the `<cstdio>` the report prints through, then the runtime
-// itself. Empty when the flag is off, so a program that is not being profiled carries no
-// trace of any of this.
+// itself. Empty when the flag is off.
 fun profPreludeText(): Str {
     if (!profEnabledFlag) {
         return ""
@@ -138,9 +113,8 @@ fun profPreludeText(): Str {
     return text
 }
 
-// The first statement of an emitted body: the timer. `name` is the symbol the body is
-// emitted under (`ns1_emitFunction`, `..._yieldable::advance`), which is what the report
-// shows. Empty when the flag is off.
+// The first statement of an emitted body: the timer, named by the symbol the body is emitted
+// under. Empty when the flag is off.
 fun profPreamble(name: *Str): Str {
     if (!profEnabledFlag) {
         return ""
