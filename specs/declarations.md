@@ -100,10 +100,12 @@ var code: Int = color.toInt()     // 1
 var other: Color = Color.fromInt(4)
 ```
 
-`fromInt` is checked: an integer that is not one of the declared enum values
-produces `Opt<Color>.none()` rather than an invalid enum value. Converting an
-enum to `Int` is always valid. Implicit conversion between `Int` and an enum is
-not allowed; use `toInt()` or `fromInt(...)` explicitly.
+`fromInt` is the **direct cast back** to the enum, unchecked: an enum's runtime
+representation is `Int`, so an integer that names no member is still that value (the
+casting conversion is defined for every `Int` - a scoped `enum class` holds the whole
+range of its underlying type). Converting an enum to `Int` is always valid, and it is
+the same kind of operation. Implicit conversion between `Int` and an enum is not
+allowed; use `toInt()` or `fromInt(...)` explicitly.
 
 Enum members are immutable constants. Duplicate integer values are allowed, so
 multiple names may represent the same value; `fromInt` returns the enum value
@@ -124,15 +126,26 @@ Status: required for the first implementation.
 Every declared enum has two conversions, emitted by the compiler for that enum:
 
 - `value.toInt(): Int` - the member's integer value (always valid); and
-- `EnumType.fromInt(n: Int): Opt<EnumType>` - checked: an integer that is not one
-  of the declared values yields `Opt<EnumType>.none()` rather than an invalid
-  enum. Duplicate member values are allowed, so `fromInt` may report a value that
-  several names share; it does not promise which alias name is preferred.
+- `EnumType.fromInt(n: Int): EnumType` - the direct cast back, unchecked: an
+  integer that names no member is still that value, because an enum's runtime
+  representation *is* an `Int` and the cast is defined for every value of its
+  underlying type. Duplicate member values are allowed, so `fromInt` may report a
+  value that several names share; it does not promise which alias name is
+  preferred.
+
+The two are the two directions of one relation, which is what "the enum is `Int` at
+runtime" means in the type system: `toInt` never fails, and `fromInt` is the cast it
+inverts.
+
+(Earlier drafts had `fromInt(n: Int): Opt<EnumType>`, the checked form. It is the cast
+now: the runtime representation is an `Int`, so an `Opt` around the result would carry a
+membership test the language does not perform anywhere else - `Color.fromInt(9)` is not
+"no color", it is the value `9` seen as a `Color`.)
 
 ```text
 var code: Int = Color.Green.toInt()          // 4
-var other: Opt<Color> = Color.fromInt(4)    // some(Color.Green)
-var bad: Opt<Color> = Color.fromInt(9)      // none
+var other: Color = Color.fromInt(4)         // Color.Green
+var any: Color = Color.fromInt(9)           // the cast's value, no member named
 ```
 
 ## Package declarations

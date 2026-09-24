@@ -523,7 +523,7 @@ ring: they name C++ files that no longer exist, and their evidence lines are his
    `emitYieldable`/`emitMachine`/`ilMachineMethod`, and the builder contract they needed
    (`linCondJump` re-roots a *synthesized* condition under `Cond` - the C++ ring holds it
    structurally, so the gap was invisible there). `stress/yield` covers both `for`
-   forms, `continue`/`break`, `advance()`/`value()`, through the self-hosted
+   forms, `continue`/`break`, `advance()`/`current`, through the self-hosted
    compiler.
 4. ~~**`iter`**~~ **done** (`impl_specs/for.md`): `for (x in c)` becomes
    `c.iter()`, the prelude's `List<T>.iter(): ..T` is written in Simse, a
@@ -871,6 +871,7 @@ generated C++ of one translation unit, so nothing can be built against an older 
   consequences bite: the template's machine is a *local*, so a machine can never be a
   field, and a `for` inside a body that yields therefore has no field to live in
   (reported, not silently miscompiled); and a machine's C++ class is the creating
-  function's, so `..T` stays unspellable - `sema::TypeInfer` carries the machine's two
-  methods (`next` -> `Opt<T>`, `advance` -> `Bool`) precisely so a loop variable is a
-  typed binding rather than an `auto` the emitter would resolve the wrong overload for.
+  function's, so `..T` stays unspellable - `sema::TypeInfer` carries the machine's surface
+  (`advance` -> `Bool`, the field `current` -> the element type) precisely so a loop
+  variable is a typed binding rather than an `auto` the emitter would resolve the wrong
+  overload for.

@@ -1540,7 +1540,19 @@ data class Parser(
         return ExprNode(call, pos.line, pos.column)
     }
 
-    // `<target>.<method>()`: the machine's `next`, `value`, `hasValue`.
+    // `<target>.<field>`: what the machine last yielded (`current`), read as a member
+    // - the `for` template binds its loop variable straight from the field (`impl_specs/for.md`).
+    fun memberExprAt(target: *Str, field: *Str, pos: SourcePos): ExprNode {
+        var memberAttrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        memberAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, field))
+        var member: AstXmlNode =
+            AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprMember, memberAttrs, Array<AstXmlNode>())
+        val receiver: ExprNode = this.nameExprAt(target, pos)
+        this.attach(member, AstNodeKind.Receiver, receiver.node)
+        return ExprNode(member, pos.line, pos.column)
+    }
+
+    // `<target>.<method>()`: the machine's `advance`.
     fun methodCallAt(target: *Str, method: *Str, pos: SourcePos): ExprNode {
         var memberAttrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
         memberAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, method))
@@ -1562,7 +1574,7 @@ data class Parser(
     //
     //   for (v in m) { body }          var _sm_for1 = m
     //                                  while (_sm_for1.advance()) {
-    //                                      val v = _sm_for1.value()
+    //                                      val v = _sm_for1.current
     //                                      body
     //                                  }
     //
@@ -1570,9 +1582,10 @@ data class Parser(
     //                                  the loop, the pre-increment as the body's first
     //                                  statement, and `val i = _sm_index1` after `v`.
     //
-    // The machine holds what it yielded (`current`), so the loop variable is one read from
+    // The machine holds what it yielded (`current`), so the loop variable is one read of
     // it: the protocol builds nothing per element - no `Opt` to construct, ask
-    // `hasValue()` of and unwrap (`impl_specs/for.md`).
+    // `hasValue()` of and unwrap - and nothing is copied through a `value()` call either
+    // (`impl_specs/for.md`).
     //
     // The index is pre-incremented as the body's *first* statement rather than in the
     // loop's condition: `continue` jumps to the condition, which is the machine's own
@@ -1661,7 +1674,7 @@ data class Parser(
             val value: ExprNode = this.binaryExprAt("+", this.nameExprAt(counterName, pos), one, pos)
             loop.append(this.assignNode(target, value, pos))
         }
-        val stepValue: ExprNode = this.methodCallAt(machineName, "value", pos)
+        val stepValue: ExprNode = this.memberExprAt(machineName, "current", pos)
         loop.append(this.varDeclNode(valueName, false, this.emptyNode(), stepValue, pos))
         if (withIndex) {
             val counterRef: ExprNode = this.nameExprAt(counterName, pos)

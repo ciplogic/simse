@@ -45,7 +45,7 @@ fun main(): Int {
     val byOne = numbers.everyNth(1)
     var total: Int = 0
     while (byOne.advance()) {
-        total = total + byOne.value()
+        total = total + byOne.current
     }
     println(total.toString())
     println(byOne.advance().toString())

@@ -28,7 +28,8 @@ package rtl
 // element type like any other generic function.
 fun List<T>.iter<T>(): ..T {
     var i: Int = 0
-    while (i < this.size()) {
+    val len = this.size();
+    while (i < len) {
         yield this[i]
         i = i + 1
     }
@@ -39,9 +40,15 @@ fun List<T>.iter<T>(): ..T {
 // `count()`, a `Span` with `size()`). Per-container `iter`s are why a machine's
 // class carries its receiver's name (`List_iter_yieldable`): the function name
 // alone would name every container's machine the same way.
+//
+// The count is read *once*, before the loop, and lives in a machine field (`len`): the
+// `while` is inside `advance()`, so a `this.size()` in the condition is a call per
+// element, re-read on every resume - the length is what a container of a fixed length
+// never changes, so it is hoisted the way the hand-written walk hoists it.
 fun Array<T>.iter<T>(): ..T {
     var i: Int = 0
-    while (i < this.count()) {
+    val len = this.count();
+    while (i < len) {
         yield this[i]
         i = i + 1
     }
@@ -49,7 +56,8 @@ fun Array<T>.iter<T>(): ..T {
 
 fun Span<T>.iter<T>(): ..T {
     var i: Int = 0
-    while (i < this.size()) {
+    val len = this.size();
+    while (i < len) {
         yield this[i]
         i = i + 1
     }

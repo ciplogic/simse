@@ -27,7 +27,6 @@ fun everyOther(n: Int): ..Int {        struct ns1_everyOther_yieldable {
                                            this->branch = -1;
                                            return false;
                                        }
-                                       Int value() { return this->current; }
                                    };
                                    ns1_everyOther_yieldable ns1_everyOther(Int n) { ... }
 ```
@@ -62,29 +61,34 @@ operand) and after the type pass (so a local has the type its field needs), in
 5. **A reference of a field** - read or written - is `this.<name>`, so a name that
    lives across a yield lives in the instance. A body name that would collide with one of
    the machine's own members is emitted under a mangled one (`linear::yieldFieldName`,
-   `_sm_f_value`): `branch`, `current`, the receiver field and the two method names are
-   the machine's.
+   `_sm_f_current`): `branch`, `current`, the receiver field and `advance` are the
+   machine's.
 
 ## One protocol
 
 ```simse
 val evens = everyOther(10)          // a machine on the stack
 while (evens.advance()) {           // step it, and ask whether it yielded
-    println(evens.value().toString())
+    println(evens.current.toString())
 }
 ```
 
 `advance()` steps the machine and answers whether there was a value, leaving what it
-yielded in `current`; `value()` reads that field out as the element type. Nothing is
-constructed per element - no `Opt<T>` to build, ask `hasValue()` of, and unwrap. Both
-share the `branch` field, so one machine is advanced either way, and all four `for` forms
-use them (`impl_specs/for.md`).
+yielded in `current`, the machine's field. Nothing is constructed per element - no
+`Opt<T>` to build, ask `hasValue()` of, and unwrap. All four `for` forms use it
+(`impl_specs/for.md`).
 
-`value()` must answer the *element* type (`..T`'s inner), not `Opt<T>`: the type pass
-(`sema::Infer::memberReturn`) types it that way, and that is what makes a `for`'s loop
+`current` has the *element* type (`..T`'s inner), not `Opt<T>`: the type pass
+(`sema::Infer`) types it that way, and that is what makes a `for`'s loop
 variable a typed binding rather than an `auto` the emitter would resolve the wrong native
-for. For the pointer wrap (`iterPtr`) the element type *is* `*T`, so `value()` hands
-out the place, which is what makes `for (*v in xs)` a borrow rather than a copy.
+for. For the pointer wrap (`iterPtr`) the element type *is* `*T`, so `current` holds
+the place, which is what makes `for (*v in xs)` a borrow rather than a copy.
+
+**There is no `value()`.** A machine used to emit one (`T value() { return this->current; }`)
+and the `for` template called it, which copied the element twice - the field into the
+method's returned temporary, the temporary into the loop variable - where reading the
+field copies it once. `current` is a field of every element type (a scalar, an aggregate,
+`*T`), so one member read is the whole conversion, and the protocol is one method.
 
 ## What the caller gets
 
@@ -115,6 +119,11 @@ it.
   generic yielding extension over `List<Int>` and `List<Str>`). Verified by transpiling,
   compiling and running them through the **self-hosted** compiler, and by the two rings
   emitting byte-identical C++ for them.
+- **The machine's method is optimized like any other body**: the rewrite runs *after* the
+  body's own half of the pipeline, so its output - the dispatcher, the label runs - had
+  never been through `cppsrc/optimizations`. `emitMachine` runs `linOptimizeBody` over each
+  method body before emitting it, which folds the contiguity (`L2:; LYend:;` is one label)
+  and the jumps around it.
 - What the feature grew, in order:
   - **a generic function can yield**: the machine is a class template, and its name
     carries the function's type parameters wherever it is a *type*.

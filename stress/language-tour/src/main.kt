@@ -64,14 +64,11 @@ fun main(): Int {
     println(describe(5))
 
     println(Color.Green.toInt())
-    val parsed: Opt<Color> = Color.fromInt(4)
-    if (parsed.hasValue()) {
-        println("parsed")
-    }
-    val missingColor: Opt<Color> = Color.fromInt(9)
-    if (!missingColor.hasValue()) {
-        println("missing color")
-    }
+    val parsed: Color = Color.fromInt(4)
+    println(label(parsed))
+    // `fromInt` is the direct cast back (`specs/declarations.md`): an enum's runtime
+    // representation is an `Int`, so an integer that names no member is still that value.
+    println(Color.fromInt(5).toInt())
 
     val present: &Box = maybeRef(true)
     if (present != null) {

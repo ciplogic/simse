@@ -7,12 +7,13 @@ package demo
 //
 //   val evens = everyOther(10)     // a machine, built by value
 //   while (evens.advance()) {
-//       println(evens.value().toString())
+//       println(evens.current.toString())
 //   }
 //
 // `advance()` steps the machine, leaves what it yielded in its `current` field and
-// answers whether there was a value; `value()` reads that field out, so nothing is
-// built per element - no `Opt` to construct and unwrap.
+// answers whether there was a value; the reader reads the field out, so nothing is
+// built per element - no `Opt` to construct and unwrap, and no `value()` call to
+// copy the element through on the way out.
 //
 // A machine is also what `for` iterates (specs/functions.md): `for (v in m)` and
 // `for ((v, i) in m)` are the `while` above with the advance as their first
@@ -31,9 +32,9 @@ fun everyOther(n: Int): ..Int {
 }
 
 // The same machine, advanced by hand: `advance()` takes no argument and the yielded
-// value stays in the machine until `value()` is asked for it. The local is called
-// `value`, which is also the protocol's method name: the field is emitted under a
-// mangled one (`linear::yieldFieldName`), so a program's own names never alias it.
+// value stays in the machine's `current` field until the reader reads it. The local is
+// called `value`, which was the protocol's method name until the `for` template began
+// reading `current` itself: the field is emitted under the local's own name now.
 fun countdown(from: Int): ..Int {
     var value: Int = from
     while (value > 0) {
@@ -44,7 +45,8 @@ fun countdown(from: Int): ..Int {
 }
 
 // Every name the machine itself uses, taken by the body: `branch` and `current` (the
-// lowering's fields), `advance` and `value` (the methods). Each becomes `_sm_f_<name>`.
+// lowering's fields) and `advance` (the protocol's method). Each that collides becomes
+// `_sm_f_<name>`; `value` is an ordinary body name again.
 fun shadowing(base: Int): ..Int {
     var current: Int = base
     var advance: Int = 1
@@ -60,13 +62,13 @@ fun main(): Int {
     println("every other, up to 10:")
     val evens = everyOther(10)
     while (evens.advance()) {
-        println(evens.value().toString())
+        println(evens.current.toString())
     }
 
     println("countdown from 3:")
     val down = countdown(3)
     while (down.advance()) {
-        println(down.value().toString())
+        println(down.current.toString())
     }
 
     // A machine can be advanced after it is finished; it stays finished.

@@ -1210,16 +1210,12 @@ data class SemInfer(
             }
         }
         if (xmlKind(recv) == AstNodeCategory.TypeYield) {
-            // `..T` is a state machine (impl_specs/yield.md), and its methods are part of
+            // `..T` is a state machine (impl_specs/yield.md), and its surface is part of
             // the lowering's ABI: `advance()` steps it and answers whether there was a
-            // value, `value()` hands out what it yielded. Typing them here is what makes a
-            // `for`'s loop variable a *typed* binding rather than an `auto` the emitter
-            // would have to guess a symbol for.
-            if (calleeText == "value") {
-                // The element type - and for the pointer wrap (`iterPtr`) that *is*
-                // `*T`, so a `for (*v in xs)` binding is the element's place.
-                return semReRole(xmlChild(recv, AstNodeKind.Inner), AstNodeKind.Type)
-            }
+            // value, and the field `current` holds what it yielded (typed by the member
+            // rule in `infer`). Typing them is what makes a `for`'s loop variable a
+            // *typed* binding rather than an `auto` the emitter would have to guess a
+            // symbol for (`impl_specs/for.md`).
             if (calleeText == "advance") {
                 return semNamedType("Bool")
             }
@@ -1238,8 +1234,8 @@ data class SemInfer(
             // specs/core-types.md). Nothing declares them - `Type.name(...)` lowers to
             // `Type::name(...)` syntactically - so their result type is stated here: the
             // type they are qualified by. It is per *name*, not "a static form answers
-            // its own type": `EnumType.fromInt(n)` answers `Opt<EnumType>`
-            // (specs/declarations.md), and is deliberately not in this list.
+            // its own type": `EnumType.fromInt(n)` is typed by the enum rule below
+            // (`specs/declarations.md`), and is deliberately not in this list.
             if ((recvName == "Opt" && (calleeText == "none" || calleeText == "some"))
                 || (recvName == "Res" && (calleeText == "ok" || calleeText == "err"))
             ) {
@@ -1262,6 +1258,19 @@ data class SemInfer(
         }
         if (calleeText == "isOk" || calleeText == "hasValue") {
             return semNamedType("Bool")
+        }
+        // An enum's conversions (`specs/declarations.md`): `E.toInt()` is the member's
+        // integer value and `E.fromInt(n)` the unchecked cast back, both typed here so a
+        // binding holding one is a typed binding rather than an `auto`.
+        if (xmlKind(recv) == AstNodeCategory.TypeNamed
+            && this.facts.enumNames.has(xmlAttr(recv, AstNodeAttributeKind.Name))
+        ) {
+            if (calleeText == "toInt") {
+                return semNamedType("Int")
+            }
+            if (calleeText == "fromInt") {
+                return semReRole(recv, AstNodeKind.Type)
+            }
         }
         return this.classMemberReturn(*recv, calleeText)
     }
@@ -1441,6 +1450,15 @@ data class SemInfer(
                     return xmlEmptyNode()
                 }
                 val memberText: Str = xmlAttr(e, AstNodeAttributeKind.Name)
+                if (xmlKind(base) == AstNodeCategory.TypeYield) {
+                    // A machine's own field (`impl_specs/for.md`): `current` is what it last
+                    // yielded, so the `for` template's loop variable is typed by it. For the
+                    // pointer wrap (`iterPtr`) the element type *is* `*T`, which is what
+                    // makes `for (*v in xs)` a place rather than a copy.
+                    if (memberText == "current") {
+                        return semReRole(xmlChild(base, AstNodeKind.Inner), AstNodeKind.Type)
+                    }
+                }
                 if (xmlKind(base) == AstNodeCategory.TypeGeneric && xmlAttr(
                         base,
                         AstNodeAttributeKind.Name

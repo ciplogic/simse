@@ -3195,3 +3195,63 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   ordering. Absolute times drift with the machine (a same-binary A/B mid-session read
   1,235 ms for work that measured 732 ms earlier), so only the interleaved ratios are
   worth quoting.
+
+- **The `for` protocol is `advance()` + `current`, the enum conversions are direct casts,
+  and a machine's method body is optimized like any other.** Four changes to what a body
+  looks like, all of them shapes the emitted C++ was spelling the long way, plus the
+  pass stage a machine method was missing.
+
+  **`value()` is gone; the `for` template reads `current`.** The machine has held what it
+  yielded in a `current` field since T77, and `value()` handed that field back - by
+  value, so the element was copied twice on the way out (the field into the method's
+  returned temporary, the temporary into the loop variable) where reading the field
+  copies it once. `parseFor` binds `val v = _sm_for1.current` now (a `memberExprAt`, one
+  `GetField` in the IL), `YldMachinery.valueMethod` and the `value` cases in
+  `TypeInfer.memberReturn`/`Emitter.memberCallReturn` are deleted, `TypeInfer`/`Emitter`
+  type the *field* from the `..T`'s `Inner`, and `linear::yieldFieldName` no longer mangles
+  a body name `value` (it was never a collision - `value` is an ordinary name again;
+  `current`, `branch`, `_sm_self` and `advance` still are). In the compiler's own output
+  **6 `value()` methods (grep `value() {`) -> 0**, and the pointer form still hands out the
+  place: the field's type is the element type, `*T` for `iterPtr`.
+
+  **The prelude's `iter` hoists the length.** `val len = this.size()` before the loop, in
+  all three value wraps (`iterPtr` already did it), so the `while` inside `advance()` tests
+  a field instead of calling `size()`/`count()` per element - per *resume*, since the
+  condition is re-entered after every yield. This is what the hand-written protocol probe
+  did (`tools/_loop_protocol.cpp` reads its length once, outside the round loop).
+
+  **The enum conversions are casts, one line each.** `enum class ns1_Color { Red, Green = 4,
+  Blue };` is one line (it was a member per line) and its helper is one line,
+  `inline ns1_Color ns1_simse_Color_fromInt(Int value) { return (ns1_Color) value; }` - the
+  if-chain and the range test are gone, and `fromInt` now answers the **enum**, unchecked,
+  rather than `Opt<Enum>`: an enum's runtime representation *is* `Int` and a scoped
+  `enum class` holds every value of its underlying type, so the cast is the whole
+  conversion. That is a **spec change** (`specs/declarations.md`), made deliberately and
+  recorded there; `toInt()` needs no helper and is unchanged
+  (`static_cast<Int>(x)` at each call site, `Emitter.call`). `fromInt`'s type is now
+  stated by the type pass and the emitter's guess (the enum itself), so a binding
+  holding one is typed rather than an `auto`. In the compiler's own tree the **9 enum
+  blocks and their helpers are 127 lines -> 18**.
+
+  **A machine's method body runs the linear optimizations** (`cppsrc/optimizations`, the
+  package the other bodies already go through). The rewrite in `linear/Yield.kt` produces
+  the method bodies *after* the body's own half of the pipeline has run, so nothing had
+  ever folded them; `emitMachine` now runs `linOptimizeBody` over each method body before
+  emitting it. The passes are the same ones a function or a lambda gets, and they are safe
+  here for the same reason they are there: they drop a branch with a literal condition, an
+  unreachable statement, a jump to the statement after it, and a label nothing jumps to -
+  none of which is a state machine's control flow. The visible fold is the label
+  contiguity the lowering leaves (`L2:; LYend:;` is one label, and the dispatcher's jump
+  to it is re-aimed), which is what makes the emitted `advance()` read as the hand-written
+  machine in `tools/_loop_protocol.cpp`.
+
+  Verified: `./build.bat --release` green in two builds (the enum emitter and the field
+  read had to be in the running compiler before their own output could be read as the new
+  one); `bun tools/stress.js` **61/61**; `bun tools/bootstrap.js` both fixed-point checks
+  byte for byte after the refresh (`bun build.js --release --out cppsrc/simse_bootstrap.cpp`).
+  The corpus moved with the surface: `stress/yield` and `stress/generic-yield` read
+  `current` instead of calling `value()`, and `stress/language-tour` (`expected.stdout`
+  re-captured) exercises the unchecked `fromInt`. Emitted size, per program: `stress/for-container`
+  **38,309 -> 38,280 bytes**, `stress/language-tour` **37,677 -> 37,236** (the bootstrap's own
+  line count is not comparable across this change - the `optimizations` package landed in the
+  same working tree).

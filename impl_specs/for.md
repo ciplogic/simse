@@ -7,7 +7,7 @@ know about, and `break`/`continue` are the `while`'s own machinery.
 ```text
 for (v in m) { body }              var _sm_for1 = m.iter()
                                    while (_sm_for1.advance()) {
-                                       val v = _sm_for1.value()
+                                       val v = _sm_for1.current
                                        body
                                    }
 
@@ -15,7 +15,7 @@ for ((v, i) in m) { body }         var _sm_for1 = m.iter()
                                    var _sm_index1: Int = -1
                                    while (_sm_for1.advance()) {
                                        _sm_index1 = _sm_index1 + 1
-                                       val v = _sm_for1.value()
+                                       val v = _sm_for1.current
                                        val i = _sm_index1
                                        body
                                    }
@@ -38,8 +38,8 @@ Two details of the shape are load-bearing:
 - **The advance is the loop's condition, and the body starts with the value.** The
   machine's `advance()` is the `while` condition, so the loop moves on exactly where the
   step used to be, and the body's first statement reads what it left in `current`
-  (`val v = _sm_for1.value()`). `continue` jumps to the condition, which is the machine's
-  own step, so a skipped iteration still moves the machine on.
+  (`val v = _sm_for1.current`, one field read). `continue` jumps to the condition, which
+  is the machine's own step, so a skipped iteration still moves the machine on.
 - **The index starts at `-1` and is pre-incremented as the body's first statement**, for
   the same reason: an index incremented at the *end* of the body would miss every
   iteration that `continue` skipped. `-1` is what makes the pre-increment hand out `0`
@@ -59,20 +59,22 @@ machine classes, and `..T` names neither. A name bound to a machine therefore st
 `v.toString()` on an untyped receiver resolves to the `StrView` native, and
 `simse_strView_toString(Int)` does not compile.
 
-So the lowering-time type pass (`cppsrc/sema/TypeInfer.cpp`) now knows the *two* methods
-of a machine, which is all the template calls:
+So the lowering-time type pass (`cppsrc/sema/TypeInfer.cpp`) now knows the *one* method of
+a machine's protocol and its one field, which is all the template reads:
 
-| receiver | method | type |
+| receiver | name | type |
 | --- | --- | --- |
 | `..T` | `advance()` | `Bool` |
-| `..T` | `value()` | `T` (the `..T`'s inner) |
+| `..T` | `current` (field) | `T` (the `..T`'s inner) |
 
 With that, `_sm_for1` is the machine, `v` is `Int`, and every temporary the linear pass
-made from them is typed too. `value()` answering the element type - and not `Opt<T>` - is
-what makes `v` a typed binding; the emitter needs no new IL op for it (`machine.value()`
-is a plain `Call`). `TypeKind::Yield` also had to start substituting like a
-pointer does (`substituteBindings`), or a generic function's `..T` would have lost its
-element type before reaching that rule.
+made from them is typed too. Reading `current` directly is what makes `v` a typed
+binding; the emitter needs no new IL op for it (`_sm_for1.current` is a plain `GetField`)
+and the machine has no `value()` to call, so the element is copied *once* into `v`
+rather than twice (field into the method's return, return into `v` -
+`impl_specs/yield.md`, "One protocol"). `TypeKind::Yield` also had to start substituting
+like a pointer does (`substituteBindings`), or a generic function's `..T` would have lost
+its element type before reaching that rule.
 
 ## What the compiler says about a `for`
 
@@ -114,12 +116,18 @@ The prelude's, as it is written, one per container - with `Array<T>` counting wi
 ```simse
 fun List<T>.iter<T>(): ..T {
     var i: Int = 0
-    while (i < this.size()) {
+    val len = this.size();
+    while (i < len) {
         yield this[i]
         i = i + 1
     }
 }
 ```
+
+The length is read **once**, before the loop, and lives in a machine field (`len`): the
+`while` ends up inside `advance()`, so a `this.size()` in its condition is a call per
+element - re-read on every resume - where the length of a container the loop does not
+change is a constant of the walk.
 
 **A machine's class carries its receiver's name** (`List_iter_yieldable`,
 `Array_iter_yieldable`): the prelude has one `iter` per container, so the
@@ -165,8 +173,8 @@ the machinery that already existed, because the machine is generic over its elem
 and `..*T` is a `..T` whose element is `*T`:
 
 - the element type is the `..T`'s `Inner` (`Codegen`'s `emitYieldable`), so `..*T` gives
-  `*T` for `value()` (and for the `current` field) with no special case;
-- `TypeInfer` types `value()` as the element type from the same `Inner`, so the loop
+  `*T` for the `current` field with no special case;
+- `TypeInfer` types `current` as that same `Inner`, so the loop
   variable is typed `*T` - a pointer variable the emitter reads *through* (`cell.value` is
   `cell->value`), which is exactly what a `*T` parameter does everywhere else;
 - a machine is still the identity for `iter`, and has none for `iterPtr`: it
@@ -179,7 +187,8 @@ The prelude writes one per container, next to its value twin:
 ```simse
 fun List<T>.iterPtr<T>(): ..*T {
     var i: Int = 0
-    while (i < this.size()) {
+    val len = this.size();
+    while (i < len) {
         yield *this[i]        // the element's place, not a copy
         i = i + 1
     }

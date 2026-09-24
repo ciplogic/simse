@@ -18,6 +18,7 @@ package codegen
 import sema
 import common
 import linear
+import optimizations
 import profiling
 
 // One type-table entry's node, or an empty node when the extractor had none (a
@@ -1538,6 +1539,17 @@ fun Emitter.emitMachine(
 ): Unit {
     this.sourceComment(decl)
     this.registerMachineType(className, machine)
+    // A machine's methods are the *lowering's* output (linear/Yield.kt writes them after the
+    // body's own half of the pipeline ran), so they have not been through the optimizer:
+    // the `for` protocol's own shapes - a dispatcher reading `this.branch`, a `L2:; LYend:;`
+    // run - are exactly what `cppsrc/optimizations` folds, and a machine method is a body
+    // like any other (`Optimize.kt`). The passes rewrite in place and never touch a field a
+    // method might be entered at: they drop a branch whose condition is a literal, an
+    // unreachable statement, a jump to the statement after it, and a label nothing jumps
+    // to, none of which a state machine's own control flow is.
+    for (*method in machine.methods) {
+        linOptimizeBody(*method.body)
+    }
     // A generic function's machine is a class template: its fields are typed with the
     // function's type parameters, so the emitted C++ has to declare them where it uses
     // them (impl_specs/yield.md).

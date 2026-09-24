@@ -64,8 +64,8 @@ data class YldParam(
     var typeNode: AstXmlNode
 )
 
-// One way of advancing the machine: `next()` (the optional form) or `advance(*T)` (the
-// same machine without the copy).
+// The one way of advancing the machine: `advance()`, which steps it and answers whether
+// there was a value (`name` is the emitting caller's, `advance`).
 data class YldMethod(
     var name: Str,
 
@@ -266,24 +266,25 @@ fun yldBranchField(): Str {
     return "branch"
 }
 
-// What the machine last yielded. `advance()` stores it here and the `for` reads its
-// variable from it (`value()`), so the yielded value never travels through a constructed
-// `Opt` (`impl_specs/for.md`).
+// What the machine last yielded. `advance()` stores it here and the `for` binds its
+// loop variable from it (one field read, no `value()` call and no copy on the way),
+// so the yielded value never travels through a constructed `Opt` or a returned
+// temporary (`impl_specs/for.md`).
 fun yldCurrentField(): Str {
     return "current"
 }
 
 // A machine's own members share the class with the fields the body declares: `branch`
-// and `current` (the lowering's), the receiver field, and the two methods the protocol
-// names (`advance`, `value`). A body name that would collide is therefore emitted under a
+// and `current` (the lowering's), the receiver field, and the one method the protocol
+// names (`advance`). A body name that would collide is therefore emitted under a
 // mangled one - and since a field is only ever named from the rewrite the lowering itself
 // does, or from the factory's `machine.x = x`, `yldFieldName` is the single place that
-// decides. Without it a local named `value` (or `branch`) is not diagnosed, it silently
+// decides. Without it a local named `branch` (or `current`) is not diagnosed, it silently
 // aliases the protocol.
 fun yldFieldName(name: Str): Str {
     if (
         name == yldBranchField() || name == yldCurrentField()
-        || name == yldReceiverField() || name == "advance" || name == "value"
+        || name == yldReceiverField() || name == "advance"
     ) {
         return "_sm_f_" + name
     }
@@ -316,28 +317,18 @@ data class YldMachinery(
             yielded.error = this.error
             return yielded
         }
-        // Two methods, one machine: `advance()` steps it and leaves what it yielded in
-        // `current`, answering whether there was one, and `value()` hands that element
-        // back - an untyped binding (`val v = machine.value()`) takes its type from there,
-        // which is what types a `for`'s loop variable without the loop knowing the type
-        // (`impl_specs/for.md`).
+        // One method, one machine: `advance()` steps it and leaves what it yielded in
+        // `current`, answering whether there was one. The `for` template reads `current`
+        // itself (`impl_specs/for.md`), so there is no second method to hand the value
+        // back - a `value()` that returned it by value copied it twice where one field
+        // read copies it once (`impl_specs/yield.md`).
         if (!this.valueTypeText.isEmpty()) {
             yielded.methods.append(this.method(this.valueTypeText, body))
-            yielded.methods.append(this.valueMethod())
         }
         if (!this.error.isEmpty()) {
             yielded.error = this.error
         }
         return yielded
-    }
-
-    // `value()`: the element the machine last yielded, as its element type. For the
-    // pointer wrap (`iterPtr`) that element type *is* `*T`, so this is the pointer,
-    // which is what makes `for (*v in xs)` a place rather than a copy.
-    fun valueMethod(): YldMethod {
-        var body: List<AstXmlNode> = List<AstXmlNode>()
-        body.append(yldReturn(yldThisMember(yldCurrentField())))
-        return YldMethod("value", List<YldParam>(), body, 0)
     }
 
     // The fields: `branch`, the receiver (an extension function's `this` has to cross a

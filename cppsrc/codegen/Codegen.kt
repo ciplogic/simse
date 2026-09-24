@@ -25,6 +25,7 @@ package codegen
 import sema
 import common
 import linear
+import optimizations
 import profiling
 import resources
 import sourcegen
@@ -1022,21 +1023,41 @@ data class Emitter(
         if (tmpl != "") {
             this.line(0, tmpl)
         }
-        this.line(0, fmtStr("enum class | {", this.qualify(this.typePackage(name), name)))
+        // One line: an enum is a list of names, and a member with an explicit value keeps
+        // it (`Green = 4`). Nothing about the declaration needs the room a member per line
+        // takes, and the compiler's own source has enums of 34 members.
+        var parts: List<Str> = List<Str>()
         val members: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.EnumMember)
         for (*member in members) {
-            var text: Str = xmlAttr(member, AstNodeAttributeKind.Name)
             if (xmlAttr(member, AstNodeAttributeKind.HasValue) == "true") {
-                text = text + " = " + xmlAttr(member, AstNodeAttributeKind.Value)
+                parts.append(
+                    fmtStr(
+                        "| = |",
+                        xmlAttr(member, AstNodeAttributeKind.Name),
+                        xmlAttr(member, AstNodeAttributeKind.Value)
+                    )
+                )
+            } else {
+                parts.append(xmlAttr(member, AstNodeAttributeKind.Name))
             }
-            this.line(1, text + ",")
         }
-        this.line(0, "};")
+        this.line(
+            0,
+            fmtStr(
+                "enum class | { | };", this.qualify(this.typePackage(name), name),
+                cgJoin(*parts, ", ")
+            )
+        )
     }
 
-    // A checked `Enum.fromInt(Int): Opt<Enum>` helper (an if-chain, not a switch). An
-    // enum whose members run 0, 1, 2, ... needs no chain at all: the value *is* the
-    // member's index, so one range test and a cast is the whole check.
+    // The enum's one emitted conversion: `Enum.fromInt(Int): Enum`, the *direct cast* back
+    // (`specs/declarations.md`) - an enum's runtime representation is `Int`, and it is a
+    // scoped `enum class`, so the cast is defined for every `Int` it is handed. `toInt()`
+    // needs no helper: the emitter spells it at the call site as `static_cast<Int>(x)`, one
+    // operation and no second symbol (`Emitter.call`).
+    //
+    // One line, like the enum itself: a helper this small is emitted per enum and nothing
+    // about it needs the room.
     fun emitEnumConversion(decl: *AstXmlNode): Unit {
         val typeParams: List<Str> = xmlTypeParamNames(decl)
         if (typeParams.size() > 0) {
@@ -1046,47 +1067,10 @@ data class Emitter(
         val emittedName: Str = this.qualify(this.typePackage(enumName), enumName)
         val fromIntName: Str =
             this.qualify(this.typePackage(enumName), "simse_" + enumName + "_fromInt")
-        val members: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.EnumMember)
-        var values: List<Int> = List<Int>()
-        var names: List<Str> = List<Str>()
-        var next: Int = 0
-        var dense: Bool = members.size() > 0
-        for (*member in members) {
-            if (xmlAttr(member, AstNodeAttributeKind.HasValue) == "true") {
-                next = xmlIntAttr(member, AstNodeAttributeKind.Value, 0)
-            }
-            values.append(next)
-            if (next != values.size() - 1) {
-                dense = false
-            }
-            names.append(xmlAttr(member, AstNodeAttributeKind.Name))
-            next = next + 1
-        }
-        this.line(0, fmtStr("inline Opt<|> |(Int value) {", emittedName, fromIntName))
-        if (dense) {
-            this.line(
-                1,
-                fmtStr(
-                    "if (value >= 0 && value <= |) return Opt<|>::some((|) value);",
-                    (names.size() - 1).toString(),
-                    emittedName,
-                    emittedName
-                )
-            )
-        } else {
-            var k: Int = 0
-            while (k < names.size()) {
-                this.line(
-                    1, fmtStr(
-                        "if (value == |) return Opt<|>::some(|::|);",
-                        values[k].toString(), emittedName, emittedName, names[k]
-                    )
-                )
-                k = k + 1
-            }
-        }
-        this.line(1, fmtStr("return Opt<|>::none();", emittedName))
-        this.line(0, "}")
+        this.line(
+            0,
+            fmtStr("inline | |(Int value) { return (|) value; }", emittedName, fromIntName, emittedName)
+        )
     }
 
     fun emitTypeAlias(decl: *AstXmlNode): Unit {
@@ -2122,14 +2106,27 @@ data class Emitter(
             return this.namedType("Bool")
         }
         if (!xmlIsEmpty(recv) && xmlKind(recv) == AstNodeCategory.TypeYield) {
-            // A machine's own methods (`impl_specs/for.md`): `value()` hands out the
-            // element, `advance()` answers whether there was one. The pass answers the
-            // same way (`TypeInfer.memberReturn`), so the guess and the answer agree.
-            if (calleeText == "value") {
-                return xmlChild(recv, AstNodeKind.Inner)
-            }
+            // A machine's own surface (`impl_specs/for.md`): `advance()` answers whether
+            // there was a value; `current` is the field holding it, and the type pass
+            // answers both the same way (`TypeInfer.memberReturn`/`infer`), so the guess
+            // and the answer agree.
             if (calleeText == "advance") {
                 return this.namedType("Bool")
+            }
+            if (calleeText == "current") {
+                return xmlChild(recv, AstNodeKind.Inner)
+            }
+        }
+        // An enum's conversions (`specs/declarations.md`): `E.toInt()` is the member's
+        // integer value, `E.fromInt(n)` the unchecked cast back.
+        if (!xmlIsEmpty(recv) && xmlKind(recv) == AstNodeCategory.TypeNamed
+            && this.enumNames.has(xmlAttr(recv, AstNodeAttributeKind.Name))
+        ) {
+            if (calleeText == "toInt") {
+                return this.namedType("Int")
+            }
+            if (calleeText == "fromInt") {
+                return this.renameRole(recv, AstNodeKind.Type)
             }
         }
         return xmlEmptyNode()
@@ -2203,6 +2200,12 @@ data class Emitter(
                     return xmlEmptyNode()
                 }
                 val memberText: Str = xmlAttr(e, AstNodeAttributeKind.Name)
+                if (xmlKind(base) == AstNodeCategory.TypeYield) {
+                    // A machine's own field (`impl_specs/for.md`): what it last yielded.
+                    if (memberText == "current") {
+                        return xmlChild(base, AstNodeKind.Inner)
+                    }
+                }
                 if (xmlKind(base) == AstNodeCategory.TypeGeneric && xmlAttr(
                         base,
                         AstNodeAttributeKind.Name
@@ -3137,6 +3140,19 @@ data class Emitter(
     fun run(): Res<Str> {
         this.collect()
         this.collectProgramNames()
+        // The program's constant globals (`optimizations/FoldGlobals.kt`): one analysis over
+        // every module, run here because a body's own passes are handed a body and nothing
+        // else, and a constant global is a property of the *program*. Two walks over the
+        // inputs: the declarations first (the borrow rule asks which functions take a
+        // handle parameter), then the bodies.
+        linConstGlobalsReset()
+        for (*input in this.inputs) {
+            foldGlobalScanDecls(*input.module)
+        }
+        for (*input in this.inputs) {
+            foldGlobalScanBodies(*input.module)
+        }
+        linConstGlobalsBuild()
         // The semantic step on the lowered body reads these (sema/TypeInfer.kt). They
         // are built here and threaded to the emitters rather than stored on the emitter:
         // the facts are one value per program, and a body's emitter only borrows it.

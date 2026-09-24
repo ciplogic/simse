@@ -319,8 +319,10 @@ fun main(): Int {
 ```
 
 Enums are integer-valued; members may carry explicit values, and `toInt()` /
-`fromInt()` convert. There is no automatic member *name* yet, so a `when`
-function is the way to print one (`stress/language-tour`).
+`fromInt()` convert between the enum and its `Int` representation - `fromInt` is the
+direct cast back, so it asks for no `Opt` and checks nothing. There is no automatic
+member *name* yet, so a `when` function is the way to print one
+(`stress/language-tour`).
 
 ```simse
 enum class Color {

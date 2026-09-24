@@ -16,29 +16,26 @@ fun everyOther(n: Int): ..Int {
 }
 ```
 
-Advance it with `next()`, which hands out `Opt<T>`, or with `advance(*T)`, which writes
-through your pointer instead of copying an optional and answers `Bool`:
+Advance it with `advance()`, which answers `Bool` and leaves what it yielded in the
+machine's `current` field:
 
 ```simse
 val evens = everyOther(10)
-var step: Opt<Int> = evens.next()
-while (step.hasValue()) {
-    println(step.value().toString())
-    step = evens.next()
-}
-
-val down = countdown(3)
-var slot: Int = 0
-var more: Bool = down.advance(*slot)
-while (more) {
-    println(slot.toString())
-    more = down.advance(*slot)
+while (evens.advance()) {
+    println(evens.current.toString())
 }
 ```
 
+There is one protocol, `advance()` plus `current` - no `Opt<T>` per step to build and
+unwrap, and no `value()` method: a `for` reads `current` itself, and a field read copies
+the element once where a `value()` that returned it copied it twice.
+
 A machine is also what `for` iterates: `for (v in m)` and `for ((v, i) in m)` are the
-`while` above with the advance as their first statement, so `continue` still moves the
-machine on and the index still counts it.
+`while` above with the advance as the condition, so `continue` still moves the machine on
+and the index still counts it. This case's program uses both, advances a machine by hand,
+advances one after it finished (it stays finished) and names every member the machine
+itself uses (`branch`, `current`, `advance`), which is what the mangled `_sm_f_*` fields
+are for.
 
 `expected.stdout` is this program's output:
 
@@ -49,12 +46,16 @@ every other, up to 10:
 4
 6
 8
-countdown from 3, through a pointer:
+countdown from 3:
 3
 2
 1
 after the end:
 false
+shadowing the protocol:
+16
+15
+14
 with for:
 0
 2
@@ -74,9 +75,9 @@ skip 4, stop after 8:
 4=8
 ```
 
-The case runs in the harness (`bun tools/stress.js --filter yield`) through both rings -
-the hand-written compiler and the self-hosted one - so `yield` and `for` are covered
-end to end by the ring that emits from the linear IL.
+The case runs in the harness (`bun tools/stress.js --filter yield`) through the
+self-hosted compiler, so `yield` and `for` are covered end to end by the ring that emits
+from the linear IL.
 
 Implementation and the transformation, step by step: `impl_specs/yield.md`; the `for`
 desugaring: `impl_specs/for.md`.
