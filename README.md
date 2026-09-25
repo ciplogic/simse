@@ -287,12 +287,12 @@ bootstrap check, troubleshooting - is in
 ## Status
 
 Working today: data classes, enums, generics, extension functions, lambdas, statics,
-`List`/`Array`/`Dictionary`/`Span`/`Opt`/`Res`/`Str`, attributes and source generators
-(`cppsrc/sourcegen/`, `_res.md` resources, `native` declarations), list literals and
-trailing-argument packing, `for`/`yield` state machines, file I/O, the `main(args)` form,
-packages and modules, and a project file (`simse.md`). The compiler is self-hosted and
-reproduces the published bootstrap byte for byte, and **61 end-to-end stress programs**
-run in the corpus.
+`List`/`Array`/`Dictionary`/`Span`/`Opt`/`Res`/`Str`, `Res` propagation (`x!!`), attributes
+and source generators (`cppsrc/sourcegen/`, `_res.md` resources, `native` declarations),
+list literals and trailing-argument packing, `for`/`yield` state machines, file I/O, the
+`main(args)` form, packages and modules, and a project file (`simse.md`). The compiler is
+self-hosted and reproduces the published bootstrap byte for byte, and **61 end-to-end stress
+programs** run in the corpus.
 
 On speed (`bun tools/bootstrap.js`, release, this machine - the range is machine load,
 best of a few runs while idle):

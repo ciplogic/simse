@@ -481,6 +481,24 @@ fun main(): Int {
 }
 ```
 
+Propagating a failure is the common case, so a postfix `!!` on a `Res` is the payload or
+an early `return` of the failure from the enclosing function:
+
+```simse
+fun readValue(text: Str): Res<Str> {
+    val parsed: Res<Int> = parse(text)
+    val n: Int = parsed!!              // the payload, or `parse`'s failure, returned here
+    return Res<Str>.ok("value=" + n.toString())
+}
+```
+
+The value is evaluated once. When the operand's declared type is the function's own return
+type the failure path returns the operand itself (a move); otherwise the message is carried
+into a rebuilt `Res<T>` - nothing is remapped on the way, because a `Res`'s error arm is
+always a `Str`. `!!` must be the whole right-hand side of a `val`/`var`, an assignment, or a
+statement of its own, and the enclosing function must return a `Res` (a `!!` anywhere else
+is a positioned diagnostic).
+
 ## Memory: values, handles, pointers
 
 Assignment copies values. `&value` boxes a value in a reference-counted handle

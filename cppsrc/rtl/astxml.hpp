@@ -161,6 +161,9 @@ enum class AstNodeCategory : Int {
     TypeFunction,
     // `..T`: the body yields `T`, so the function builds a state machine.
     TypeYield,
+    // `x!!`: the payload of a `Res`, or its failure returned out of the enclosing
+    // function. Expanded by the parser (cppsrc/parser/Propagate.kt).
+    ExprPropagate,
 };
 
 SIMSE_PACK_PUSH

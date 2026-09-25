@@ -1,0 +1,9 @@
+42
+value=7
+false
+not a number: abc
+false
+not a number: abc
+10
+false
+not a number: xyz

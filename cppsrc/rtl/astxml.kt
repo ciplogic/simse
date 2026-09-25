@@ -125,7 +125,12 @@ enum class AstNodeCategory {
     TypeFunction,
 
     // `..T`: the body yields `T`, so the function builds a state machine.
-    TypeYield
+    TypeYield,
+
+    // `x!!`: the success payload of a `Res`, or the failure returned out of the enclosing
+    // function. A rewrite like `for` (cppsrc/parser/Propagate.kt), so nothing past the
+    // parser sees the operator.
+    ExprPropagate
 }
 
 // One attribute: a schema key and its text value (numbers as decimal text, booleans as

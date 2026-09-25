@@ -1745,6 +1745,16 @@ data class Parser(
                     AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprMember, attrs, Array<AstXmlNode>())
                 this.attach(node, AstNodeKind.Receiver, expr.node)
                 expr = ExprNode(node, expr.line, expr.column)
+            } else if (this.checkText("!") && this.peek(1).text == "!") {
+                // `x!!` (cppsrc/parser/Propagate.kt): the payload of a `Res`, or its failure
+                // returned out of the enclosing function. Two bangs, so no scanner change.
+                this.advance()
+                this.advance()
+                var attrs: List<AstNodeAttribute> = this.posAttrs(expr.line, expr.column)
+                var node: AstXmlNode =
+                    AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprPropagate, attrs, Array<AstXmlNode>())
+                this.attach(node, AstNodeKind.Operand, expr.node)
+                expr = ExprNode(node, expr.line, expr.column)
             } else {
                 break
             }

@@ -38,6 +38,17 @@ fun driverResourceRoots(prelude: *Str): List<Str> {
     return roots
 }
 
+// `x!!` is expanded before sema sees the tree (cppsrc/parser/Propagate.kt), so nothing past
+// the parser has an operator to know about. Answers false when the module has a diagnostic.
+fun driverRewritePropagate(module: *AstXmlNode, fileName: *Str): Bool {
+    val error: Str = propRewriteModule(module, fileName)
+    if (error == "") {
+        return true
+    }
+    eprintln(error)
+    return false
+}
+
 fun driverNewModule(): AstXmlNode {
     return AstXmlNode(AstNodeKind.Module, AstNodeCategory.None, List<AstNodeAttribute>(), Array<AstXmlNode>())
 }
@@ -307,9 +318,13 @@ fun main(args: List<Str>): Int {
         }
         preludeCanon.append(pathCanonical(preludeFiles[p]))
         preludeNames.append(preludeFiles[p])
-        preludeModules.append(parsedPrelude.Value)
-        driverAppendNamed(mergedPrelude, parsedPrelude.Value, AstNodeKind.Import)
-        driverAppendDecls(mergedPrelude, parsedPrelude.Value)
+        val preludeModule: AstXmlNode = parsedPrelude.Value
+        if (!driverRewritePropagate(preludeModule, preludeFiles[p])) {
+            return 1
+        }
+        preludeModules.append(preludeModule)
+        driverAppendNamed(mergedPrelude, preludeModule, AstNodeKind.Import)
+        driverAppendDecls(mergedPrelude, preludeModule)
         p = p + 1
     }
     val hasPrelude: Bool = preludeFiles.size() > 0
@@ -340,8 +355,12 @@ fun main(args: List<Str>): Int {
             eprintln(parsed.Error)
             return 1
         }
+        val module: AstXmlNode = parsed.Value
+        if (!driverRewritePropagate(module, files[f])) {
+            return 1
+        }
         fileNames.append(files[f])
-        modules.append(parsed.Value)
+        modules.append(module)
         f = f + 1
     }
 
@@ -363,11 +382,15 @@ fun main(args: List<Str>): Int {
             eprintln(parsedGenerated.Error)
             return 1
         }
+        val generatedModule: AstXmlNode = parsedGenerated.Value
+        if (!driverRewritePropagate(generatedModule, "<generated>/kt.kt")) {
+            return 1
+        }
         fileNames.append("<generated>/kt.kt")
-        modules.append(parsedGenerated.Value)
+        modules.append(generatedModule)
         // Added to the generators' state too: the second pass runs after this one, and a
         // generator walking the program should see everything it was compiled with.
-        sourceGenAddModule("<generated>/kt.kt", parsedGenerated.Value)
+        sourceGenAddModule("<generated>/kt.kt", generatedModule)
     }
 
     // Compilation-wide name/type resolution over the prelude and every module.
