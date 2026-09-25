@@ -3120,3 +3120,37 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   `... * p = v`), which reaches emission as `assignment target (Expr.Binary)`. Workarounds:
   make it the block's first statement, or parenthesize (`(*p) = v`). Recorded in
   `stress/dictionary`; the parser rule itself is unchanged.
+
+- **A parameter every call site passes the same literal is folded away (constant parameters).**
+  `cppsrc/parser/ConstParams.kt` (`cpFoldConstParams`) is a whole-program AST-to-AST rewrite that
+  runs in the driver with the `!!` expansion, once every module is parsed and before sema
+  (`impl_specs/const-params.md`). A name-level gather records every plain-name call site and every
+  name read as a value over the prelude and the program; a candidate is a program function with a
+  body, declared exactly once, that is not `main`. It folds the first parameter that is a *value*
+  parameter (not `*T`/`&T`) whose every call site passes the exact same syntactic literal (kind
+  and text, never line/column) at an argument count equal to the parameter count: the parameter is
+  dropped, a typed local (`val p: T = <literal>`) is prepended to the body, and every call site
+  loses that argument. A name used as a value, a member call (the receiver form), a differing
+  literal, a generic-name call and a `null` all decline. The typed local is what lets a yielding
+  body's parameter become a machine field (`impl_specs/yield.md`) - `stress/machines` shows
+  `everyOther(n)`/`countdown(from)` folding with the local as a struct field.
+
+  The signature is why this cannot live later: the emitter reads a declaration's parameters from
+  the AST at emit time and lowers that same AST body into the IL (`Codegen.kt`'s `emitFunction`),
+  and the passes under `cppsrc/optimizations/` see one already-lowered body at a time - a signature
+  is not theirs to move.
+
+  The fold is invisible in a program's stdout, so `stress/fold-const-params` pins it: `logMe`
+  (the same literal at two call sites) folds to `void ns1_logMe()`, while `maybe` (differing
+  literals), `Str.tag` (receiver form only) and `markIt` (also passed as a value) keep their
+  parameters - `expected.cpp` is the proof. The pass reaches the compiler's own source too: over
+  `cppsrc` it folds, among others, `xmlIntAttr`'s `fallback` (`0` at both call sites),
+  `escapedSnippet`'s `maxLen` (`10`), `ilSetShow`/`profSetEnabled`'s `value` (`true`) and
+  `propGenericName`'s `name` (`"Res"`), and the folded local then feeds the existing linear
+  constant propagation (`foldConst`), which collapses `logMe`'s dead branch.
+
+  Verified: `./build.bat --release`, `bun tools/stress.js` **38/38**, and both
+  `bun tools/bootstrap.js` fixed-point checks byte for byte after the refresh. Two emission
+  goldens moved on purpose - `stress/objects/expected.cpp` (`makeAdder(10)` -> `makeAdder()` with
+  `factor = 10`, `area(3, 4)` -> `area(4)` with `3 * height`) and `stress/machines/expected.cpp`
+  (the folded yieldable parameters) - re-captured from the run.

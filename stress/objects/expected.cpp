@@ -404,7 +404,7 @@ Int ns1_bump(ns1_CounterHello* self);
 Int ns1_partHello();
 Int ns1_apply(ns1_Mapper f, Int value);
 Int ns1_countIf(List<Int>* items, ns1_Predicate predicate);
-ns1_Mapper ns1_makeAdder(Int factor);
+ns1_Mapper ns1_makeAdder();
 Int ns1_partLambdas();
 Str ns1_label(ns1_Color c);
 Str ns1_describe(Int n);
@@ -430,7 +430,7 @@ Str ns1_parcel(Str after, List<Str>* items);
 Int ns1_partRtlSimse();
 Bool ns1_isEmpty(ns1_Shell* self);
 Str ns1_describeShapes(Str* self);
-Int ns1_area(Int width, Int height);
+Int ns1_area(Int height);
 Int ns1_partShapes();
 Attribute ns1_attr(Str name, Str value);
 List<Attribute> ns1_attrs3(Attribute a, Attribute b, Attribute c);
@@ -648,7 +648,7 @@ Int ns1_countIf(List<Int>* items, ns1_Predicate predicate) {
     return count;
 }
 // stress/objects/src/main.kt:117
-ns1_Mapper ns1_makeAdder(Int factor) {
+ns1_Mapper ns1_makeAdder() {
 struct ns1_makeAdder_closure1 {
     Int factor;
     auto operator()(Int v) {
@@ -660,6 +660,8 @@ struct ns1_makeAdder_closure1 {
 };
 
     ns1_makeAdder_closure1 _sm_base1;
+    Int factor;
+    factor = 10;
     _sm_base1 = ns1_makeAdder_closure1{factor};
     return _sm_base1;
 }
@@ -727,7 +729,7 @@ struct ns1_partLambdas_closure5 {
     _sm_base1 = ns1_partLambdas_closure2{};
     _sm_expr3 = ns1_apply(_sm_base1, 41);
     std::cout << std::boolalpha << (_sm_expr3) << std::endl;
-    add10 = ns1_makeAdder(10);
+    add10 = ns1_makeAdder();
     _sm_expr4 = add10(5);
     std::cout << std::boolalpha << (_sm_expr4) << std::endl;
     items = List<Int>();
@@ -1288,9 +1290,9 @@ Str ns1_describeShapes(Str* self) {
     return (*self);
 }
 // stress/objects/src/main.kt:593
-Int ns1_area(Int width, Int height) {
+Int ns1_area(Int height) {
     Int _sm_expr1;
-    _sm_expr1 = width * height;
+    _sm_expr1 = 3 * height;
     return _sm_expr1;
 }
 // stress/objects/src/main.kt:597
@@ -1302,7 +1304,7 @@ Int ns1_partShapes() {
     name = __sm_stringTable[35];
     _sm_expr1 = ns1_describeShapes(simse_addressOf(name));
     std::cout << std::boolalpha << (_sm_expr1) << std::endl;
-    _sm_expr2 = ns1_area(3, 4);
+    _sm_expr2 = ns1_area(4);
     std::cout << std::boolalpha << (_sm_expr2) << std::endl;
     _sm_expr3 = ns1_Shape::Circle;
     _sm_expr4 = ns1_Shape::Circle;

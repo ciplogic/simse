@@ -631,12 +631,14 @@ Do these only when asked; roughly prioritized:
    went through it too: `get`+`insert` became one in-place update, worth 7% of that
    loop (`benchmarks/onebrc/benchmark.md`). What is left of that gap is the two `Str`s
    per line.
-10. **Lambda bodies are the last declarations without a type.** (What the inference
-   proves, and why, is in `impl_specs/linear-lowering.md`, "Type inference on the
-   lowered body" - not repeated here.) To close it: run `sema::inferTypes` on a
-   lambda's body too, with a `sema::Body` built from the lambda's own parameters and
-   return type; small, at the two `lambda()` call sites, and it is also the last
-   thing keeping a lambda body from flattening (item 11). The rest of the item:
+10. ~~**Lambda bodies are the last declarations without a type**~~ **done** (T51,
+   `impl_specs/capability-matrix.md`): `LinearForm`'s `lambda()` runs `sema::inferTypes`
+   on a lambda's body too, with a `Body` built from the lambda's own parameters and
+   return type, so a closure frame's types are inferred like every other body's - which
+   is also what let a lambda body flatten (item 11). **The function-typed-local gap is
+   closed as well** (verified: a `val` and a `var` holding a lambda are each callable,
+   including a `Res`-returning transformer - see the probe recorded with
+   `stress/propagate-lambda`). What is left of the item, none of it blocking a task:
    - **The emitter could consume expression-level types** instead of guessing them
      (`inferType`/`memberCallReturn`/`findNativeExt` shrink to lookups); the
      inference already resolves more than the emitter asks it for.
@@ -650,8 +652,9 @@ Do these only when asked; roughly prioritized:
      has to come from the parameter) and knowing which parameters are pointers, so
      that a `*T` parameter decides place-vs-value instead of the argument's shape.
      Not blocking anything today.
-   - The three recorded gaps (a prelude struct method such as `Span.size()`, a native
-     extension called as a plain function, a call through a function-typed local).
+   - Two of the three gaps this item used to record are unchecked since then (a prelude
+     struct method such as `Span.size()`, a native extension called as a plain function);
+     the third, a call through a function-typed local, is closed.
 11. ~~**A flat body still keeps the program's own scopes**~~ **done**: every declaration
    of a body moves to the top of it (`hoistSlots`), shadowed names are renamed first
    (`renameShadowed`, `_sm_<name>_<n>`), and the body is one scope with no blocks - the

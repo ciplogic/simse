@@ -424,6 +424,13 @@ fun main(args: List<Str>): Int {
         rmod = rmod + 1
     }
 
+    // Constant parameters (impl_specs/const-params.md): a whole-program specialization, run with
+    // the `!!` expansion and before sema, so the checker, the lowering and the emitter all see
+    // the rewritten program and nothing downstream knows the optimization exists. It is an
+    // AST-to-AST rewrite, and the driver holds the modules as a `List`, so the pass returns the
+    // rewritten ones (a module no fold reaches is the same node).
+    modules = cpFoldConstParams(preludeModules, modules)
+
     // Compilation-wide name/type resolution over the prelude and every module.
     var semaInputs: List<SemaInput> = List<SemaInput>()
     var s: Int = 0
