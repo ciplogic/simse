@@ -193,6 +193,19 @@ fun fmtStr(fmt: StrView, items: *List<Str>): Str {
     return out
 }
 
+// The emitter's own concatenation, not the program's: a `+` chain over `Str` and an
+// `fmtStr` whose format is a literal are fused into one `Concat` instruction
+// (impl_specs/linear-il.md, "Concat"), which the emitter *expands* - one length sum, one
+// `resize`, and one slot write per part through a pointer that advances
+// (cppsrc/codegen/IlCodeGen.kt's `ilConcatStatements`) - and whose reach it records itself.
+// This declaration is the anchor the section hangs on: the symbol below is the one the
+// emitter records (`ilConcatSymbol`, cppsrc/linear/MergeConcat.kt), so reaching it emits the
+// section's primitives (`strcat`, cppsrc/rtl/_res.md) and nothing else. No program calls it -
+// the emitter writes those symbols - and the section's `forward` text *is* the declaration,
+// so it places no prototype of its own.
+@SmGen("res", "strcat", "simse_strAddInt")
+fun strAddInt(target: *Char, value: Int64, count: Int): Unit
+
 // Pre-allocates the buffer for a run of `append`/`appendStr`: a *hint*, not a length - the
 // string keeps its size, and a longer run grows it as usual.
 @SmGen("res", "listops", "simse_str_reserve")

@@ -210,6 +210,36 @@ Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& val
 template <class T, class F>
 void simse_list_sort(List<T>& self, F less);
 
+#include <bit>
+#include <cstring>
+
+// The primitives a concatenation is *expanded* into (impl_specs/linear-il.md, "Concat").
+// There is no `cat` function and no per-part `append`: the emitter computes every part's
+// *exact* length, performs one `resize`, and then writes each part straight into the slot it
+// owns while one `char*` advances by that part's length. So a chain of n parts touches the
+// allocator once, computes each part once and copies each part once - the shape Java 9's
+// `StringConcatFactory` has, with the C++ compiler seeing the straight-line form instead of a
+// variadic call.
+//
+// No program names these: the emitter writes the symbols itself, the way it writes
+// `simse_addressOf`. What each kind of part costs:
+//   * a text part (a `Str`, or a literal whose length the lowering already knows) is a
+//     `std::memcpy` - a constant size is one register or vector store, a runtime `Str` size
+//     one call;
+//   * an integer (`Int8`/`Int16`/`Int32`/`Int64`, `Int`) is *counted* by the bit scan below
+//     (`std::bit_width` plus one power-of-ten comparison, never a division loop) and *written*
+//     by `simse_strAddInt` - two digits per step out of a table, right to left inside the slot
+//     that was made for it, so the digits are never built into a second buffer;
+//   * a `Char` is one byte;
+//   * a `Bool` is a `StrView` over a two-entry table ("true"/"false"): it has no digits to
+//     render and is not a hot path, so it goes through the text path.
+// A float is deliberately *absent*: its length is only known by formatting it, so the lowering
+// keeps the `toString()` call (one `Str`, made ahead of time) and the part *is* that `Str` -
+// one conversion, not one for the length and another for the write.
+Int simse_strCountDigits(Int64 value);
+void simse_strAddInt(char* target, Int64 value, Int count);
+StrView simse_strBoolView(Bool value);
+
 #include <charconv>
 #include <cstddef>
 #include <system_error>
@@ -1133,14 +1163,23 @@ Int ns1_partReceiverShapes() {
 }
 // stress/objects/src/main.kt:515
 Str ns1_mirror(Str* a, Ref<Str> b) {
-    List<Str> _sm_base1;
     Str _sm_base2, _sm_base3, _sm_expr1;
-    List<Str>* _sm_base4;
     _sm_base2 = *(a);
     _sm_base3 = *(b);
-    _sm_base1 = List<Str>{_sm_base2, _sm_base3};
-    _sm_base4 = &_sm_base1;
-    _sm_expr1 = fmtStr(__sm_stringTable[10], _sm_base4);
+    {
+        _sm_expr1.resize(4 + _sm_base2.size() + _sm_base3.size());
+        char* __sm_catP0 = _sm_expr1.data();
+        *__sm_catP0 = (char) ('[');
+        __sm_catP0 = __sm_catP0 + 1;
+        std::memcpy(__sm_catP0, _sm_base2.data(), _sm_base2.size());
+        __sm_catP0 = __sm_catP0 + _sm_base2.size();
+        std::memcpy(__sm_catP0, "::", 2);
+        __sm_catP0 = __sm_catP0 + 2;
+        std::memcpy(__sm_catP0, _sm_base3.data(), _sm_base3.size());
+        __sm_catP0 = __sm_catP0 + _sm_base3.size();
+        *__sm_catP0 = (char) (']');
+        __sm_catP0 = __sm_catP0 + 1;
+    }
     return _sm_expr1;
 }
 // stress/objects/src/main.kt:521
@@ -1154,9 +1193,23 @@ Str ns1_parcel(Str after, List<Str>* items) {
     _sm_expr1 = items->size();
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L2;
-    _sm_expr3 = out + __sm_stringTable[49];
+    {
+        _sm_expr3.resize(1 + out.size());
+        char* __sm_catP1 = _sm_expr3.data();
+        std::memcpy(__sm_catP1, out.data(), out.size());
+        __sm_catP1 = __sm_catP1 + out.size();
+        *__sm_catP1 = (char) ('+');
+        __sm_catP1 = __sm_catP1 + 1;
+    }
     _sm_expr4 = (*items)[i];
-    out = _sm_expr3 + _sm_expr4;
+    {
+        out.resize(_sm_expr3.size() + _sm_expr4.size());
+        char* __sm_catP2 = out.data();
+        std::memcpy(__sm_catP2, _sm_expr3.data(), _sm_expr3.size());
+        __sm_catP2 = __sm_catP2 + _sm_expr3.size();
+        std::memcpy(__sm_catP2, _sm_expr4.data(), _sm_expr4.size());
+        __sm_catP2 = __sm_catP2 + _sm_expr4.size();
+    }
     i = i + 1;
     goto L1;
     L2:;
@@ -1164,8 +1217,8 @@ Str ns1_parcel(Str after, List<Str>* items) {
 }
 // stress/objects/src/main.kt:531
 Int ns1_partRtlSimse() {
-    List<Str> _sm_base1, _sm_base3, _sm_base5, _sm_base7, _sm_base9, _sm_base16, parts;
-    List<Str>* _sm_base2, * _sm_base4, * _sm_base6, * _sm_base8, * _sm_base10, * _sm_base19;
+    List<Str> _sm_base7, _sm_base9, _sm_base16, parts;
+    List<Str>* _sm_base8, * _sm_base10, * _sm_base19;
     Str _sm_base11, _sm_base12, _sm_base13, _sm_base14, _sm_base15, _sm_base17, _sm_base18, _sm_expr1,
         _sm_expr2, _sm_expr3, _sm_expr4, _sm_expr6, _sm_expr7, _sm_expr8, _sm_expr9, _sm_expr10, _sm_expr11,
         text, borrowed, _sm_expr17, _sm_expr19, _sm_expr20;
@@ -1188,17 +1241,44 @@ Int ns1_partRtlSimse() {
     _sm_expr5 = min<Float64>(2.5, 1.5);
     _sm_expr6 = simse_num_toString(_sm_expr5);
     std::cout << std::boolalpha << (_sm_expr6) << std::endl;
-    _sm_base1 = List<Str>{__sm_stringTable[53], __sm_stringTable[54]};
-    _sm_base2 = &_sm_base1;
-    _sm_expr7 = fmtStr(__sm_stringTable[10], _sm_base2);
+    {
+        _sm_expr7.resize(6);
+        char* __sm_catP3 = _sm_expr7.data();
+        *__sm_catP3 = (char) ('[');
+        __sm_catP3 = __sm_catP3 + 1;
+        *__sm_catP3 = (char) ('a');
+        __sm_catP3 = __sm_catP3 + 1;
+        std::memcpy(__sm_catP3, "::", 2);
+        __sm_catP3 = __sm_catP3 + 2;
+        *__sm_catP3 = (char) ('b');
+        __sm_catP3 = __sm_catP3 + 1;
+        *__sm_catP3 = (char) (']');
+        __sm_catP3 = __sm_catP3 + 1;
+    }
     std::cout << std::boolalpha << (_sm_expr7) << std::endl;
-    _sm_base3 = List<Str>{__sm_stringTable[50], __sm_stringTable[51], __sm_stringTable[52]};
-    _sm_base4 = &_sm_base3;
-    _sm_expr8 = fmtStr(__sm_stringTable[20], _sm_base4);
+    {
+        _sm_expr8.resize(5);
+        char* __sm_catP4 = _sm_expr8.data();
+        *__sm_catP4 = (char) ('1');
+        __sm_catP4 = __sm_catP4 + 1;
+        *__sm_catP4 = (char) (',');
+        __sm_catP4 = __sm_catP4 + 1;
+        *__sm_catP4 = (char) ('2');
+        __sm_catP4 = __sm_catP4 + 1;
+        *__sm_catP4 = (char) (',');
+        __sm_catP4 = __sm_catP4 + 1;
+        *__sm_catP4 = (char) ('3');
+        __sm_catP4 = __sm_catP4 + 1;
+    }
     std::cout << std::boolalpha << (_sm_expr8) << std::endl;
-    _sm_base5 = List<Str>{__sm_stringTable[56], __sm_stringTable[57]};
-    _sm_base6 = &_sm_base5;
-    _sm_expr9 = fmtStr(__sm_stringTable[46], _sm_base6);
+    {
+        _sm_expr9.resize(2);
+        char* __sm_catP5 = _sm_expr9.data();
+        *__sm_catP5 = (char) ('x');
+        __sm_catP5 = __sm_catP5 + 1;
+        *__sm_catP5 = (char) ('y');
+        __sm_catP5 = __sm_catP5 + 1;
+    }
     std::cout << std::boolalpha << (_sm_expr9) << std::endl;
     _sm_base7 = List<Str>{__sm_stringTable[56]};
     _sm_base8 = &_sm_base7;
@@ -1387,7 +1467,7 @@ Str ns1_indentation(Int depth) {
 // stress/objects/src/main.kt:686
 Str ns1_dumpNode(XmlNode node, Int depth) {
     List<Attribute>* _sm_base1, * _sm_base2;
-    Str _sm_base3, _sm_expr1, _sm_expr2, out, _sm_expr7, _sm_expr8, _sm_expr9, _sm_expr10;
+    Str _sm_base3, _sm_expr1, _sm_expr2, out, _sm_expr8, _sm_expr9;
     XmlNode _sm_base4;
     Int i, _sm_expr3, j, _sm_expr13;
     Bool _sm_expr4, _sm_expr12;
@@ -1395,7 +1475,14 @@ Str ns1_dumpNode(XmlNode node, Int depth) {
     Array<XmlNode> children;
     _sm_expr1 = ns1_indentation(depth);
     _sm_expr2 = node.name;
-    out = _sm_expr1 + _sm_expr2;
+    {
+        out.resize(_sm_expr1.size() + _sm_expr2.size());
+        char* __sm_catP6 = out.data();
+        std::memcpy(__sm_catP6, _sm_expr1.data(), _sm_expr1.size());
+        __sm_catP6 = __sm_catP6 + _sm_expr1.size();
+        std::memcpy(__sm_catP6, _sm_expr2.data(), _sm_expr2.size());
+        __sm_catP6 = __sm_catP6 + _sm_expr2.size();
+    }
     i = 0;
     L1:;
     _sm_base1 = simse_addressOf(node.attributes);
@@ -1404,18 +1491,47 @@ Str ns1_dumpNode(XmlNode node, Int depth) {
     if (!(_sm_expr4)) goto L2;
     _sm_base2 = simse_addressOf(node.attributes);
     attribute = (*_sm_base2)[i];
-    _sm_expr1 = out + __sm_stringTable[47];
+    {
+        _sm_expr1.resize(1 + out.size());
+        char* __sm_catP7 = _sm_expr1.data();
+        std::memcpy(__sm_catP7, out.data(), out.size());
+        __sm_catP7 = __sm_catP7 + out.size();
+        *__sm_catP7 = (char) (' ');
+        __sm_catP7 = __sm_catP7 + 1;
+    }
     _sm_expr2 = attribute.name;
-    _sm_expr7 = _sm_expr1 + _sm_expr2;
-    _sm_expr8 = _sm_expr7 + __sm_stringTable[44];
+    {
+        _sm_expr8.resize(2 + _sm_expr1.size() + _sm_expr2.size());
+        char* __sm_catP8 = _sm_expr8.data();
+        std::memcpy(__sm_catP8, _sm_expr1.data(), _sm_expr1.size());
+        __sm_catP8 = __sm_catP8 + _sm_expr1.size();
+        std::memcpy(__sm_catP8, _sm_expr2.data(), _sm_expr2.size());
+        __sm_catP8 = __sm_catP8 + _sm_expr2.size();
+        std::memcpy(__sm_catP8, "='", 2);
+        __sm_catP8 = __sm_catP8 + 2;
+    }
     _sm_base3 = attribute.value;
     _sm_expr9 = ns1_escapeText(_sm_base3);
-    _sm_expr10 = _sm_expr8 + _sm_expr9;
-    out = _sm_expr10 + __sm_stringTable[48];
+    {
+        out.resize(1 + _sm_expr8.size() + _sm_expr9.size());
+        char* __sm_catP9 = out.data();
+        std::memcpy(__sm_catP9, _sm_expr8.data(), _sm_expr8.size());
+        __sm_catP9 = __sm_catP9 + _sm_expr8.size();
+        std::memcpy(__sm_catP9, _sm_expr9.data(), _sm_expr9.size());
+        __sm_catP9 = __sm_catP9 + _sm_expr9.size();
+        *__sm_catP9 = (char) ('\'');
+        __sm_catP9 = __sm_catP9 + 1;
+    }
     i = i + 1;
     goto L1;
     L2:;
-    out = out + __sm_stringTable[45];
+    {
+        Int __sm_catAt10 = out.size();
+        out.resize(__sm_catAt10 + 1);
+        char* __sm_catP10 = out.data() + __sm_catAt10;
+        *__sm_catP10 = (char) ('\n');
+        __sm_catP10 = __sm_catP10 + 1;
+    }
     children = node.Children;
     j = 0;
     L3:;
@@ -1425,7 +1541,13 @@ Str ns1_dumpNode(XmlNode node, Int depth) {
     _sm_expr13 = depth + 1;
     _sm_base4 = children[j];
     _sm_expr1 = ns1_dumpNode(_sm_base4, _sm_expr13);
-    out = out + _sm_expr1;
+    {
+        Int __sm_catAt11 = out.size();
+        out.resize(__sm_catAt11 + _sm_expr1.size());
+        char* __sm_catP11 = out.data() + __sm_catAt11;
+        std::memcpy(__sm_catP11, _sm_expr1.data(), _sm_expr1.size());
+        __sm_catP11 = __sm_catP11 + _sm_expr1.size();
+    }
     j = j + 1;
     goto L3;
     L4:;
@@ -1747,6 +1869,79 @@ inline Bool simse_list_contains(const List<T>& self, const std::type_identity_t<
 template <class T, class F>
 inline void simse_list_sort(List<T>& self, F less) {
     std::sort(self.begin(), self.end(), less);
+}
+
+// The powers of ten the bit scan settles its guess against.
+static const unsigned long long smStrDigitPow10[20] = {
+    1ull, 10ull, 100ull, 1000ull, 10000ull, 100000ull, 1000000ull, 10000000ull,
+    100000000ull, 1000000000ull, 10000000000ull, 100000000000ull, 1000000000000ull,
+    10000000000000ull, 100000000000000ull, 1000000000000000ull, 10000000000000000ull,
+    100000000000000000ull, 1000000000000000000ull, 10000000000000000000ull
+};
+
+// The digit count, exact for every width (a narrower integer widens to `Int64` with the same
+// digits). `std::bit_width(magnitude)` is the position of the highest set bit plus one - one
+// `clz`/`bsr` - and `1233 / 4096 = 0.3010...` is log10(2), so the product is
+// floor(log10(magnitude)) or one off; the comparison against that power of ten settles which.
+// The early return is the one case the scan cannot answer (`0`), and the sign is a separate
+// term, counted on the widened value so `-INT64_MIN` never overflows.
+inline Int simse_strCountDigits(Int64 value) {
+    unsigned long long magnitude =
+        value < 0 ? 0ull - (unsigned long long) value : (unsigned long long) value;
+    if (magnitude < 10ull) {
+        return value < 0 ? 2 : 1;
+    }
+    Int bits = (Int) std::bit_width(magnitude);
+    Int guess = (Int) (((unsigned int) bits * 1233u) >> 12);
+    Int digits = guess + (magnitude >= smStrDigitPow10[guess] ? 1 : 0);
+    return digits + (value < 0 ? 1 : 0);
+}
+
+// Two digits per step: the table holds "00".."99", so the inner loop never divides by ten.
+struct SmStrDigitPairTable {
+    char text[200];
+    constexpr SmStrDigitPairTable() : text() {
+        for (Int i = 0; i < 100; i = i + 1) {
+            text[i * 2] = (char) ('0' + i / 10);
+            text[i * 2 + 1] = (char) ('0' + i % 10);
+        }
+    }
+};
+
+static constexpr SmStrDigitPairTable smStrDigitPairs{};
+
+// The digits of `value`, written straight into the `count` bytes `target` already owns and
+// walking *back* through them (the least-significant pair first), so no second buffer and no
+// second pass is needed. `count` must be exact - `simse_strCountDigits`'s answer, sign
+// included - because the slots of the parts around this one depend on it.
+inline void simse_strAddInt(char* target, Int64 value, Int count) {
+    unsigned long long magnitude =
+        value < 0 ? 0ull - (unsigned long long) value : (unsigned long long) value;
+    if (value < 0) {
+        target[0] = '-';
+        count = count - 1;
+        target = target + 1;
+    }
+    while (count >= 2) {
+        unsigned int pair = (unsigned int) (magnitude % 100ull);
+        magnitude /= 100ull;
+        count = count - 2;
+        target[count] = smStrDigitPairs.text[pair * 2];
+        target[count + 1] = smStrDigitPairs.text[pair * 2 + 1];
+    }
+    if (count == 1) {
+        target[0] = (char) ('0' + (Int) magnitude);
+    }
+}
+
+// The two texts a bool can be, as a `StrView` over a two-entry table - the string-table shape,
+// so a bool part is just another text part (a `memcpy` of a runtime length) and needs no digits
+// of its own. Cold enough that the two loads the compiler folds it to do not matter.
+inline StrView simse_strBoolView(Bool value) {
+    static Char texts[2][6] = {"true", "false"};
+    static Int lens[2] = {4, 5};
+    Int at = value ? 0 : 1;
+    return StrView(texts[at], lens[at]);
 }
 
 // `Str.isEmpty()` is the prelude's own body (cppsrc/rtl/rtl.kt), not a resource: `size()`

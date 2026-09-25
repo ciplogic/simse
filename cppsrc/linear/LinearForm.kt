@@ -72,6 +72,11 @@ enum class IlOpKind {
     CallIndirectVoid,
     CallCtor,
     Pack,
+    // The fused concatenation (MergeConcat.kt): the parts of a `+` chain over `Str`, or of
+    // an `fmtStr`, whose lengths are summed once and whose bytes are appended once
+    // (`ilConcatStatements`, cppsrc/codegen/IlCodeGen.kt). The lowerer never builds one;
+    // the fusion does.
+    Concat,
     Return,
     ReturnVoid,
     Lambda,
@@ -200,6 +205,7 @@ fun makeIlSignatures(): List<IlSignature> {
         // destination's type says which container; the values are elements, which is what
         // the pack builds on.
         IlSignature(IlOpKind.Pack, "Var,Value..."),
+        IlSignature(IlOpKind.Concat, "Var,Value..."),
         IlSignature(IlOpKind.Return, "Value"),
         IlSignature(IlOpKind.ReturnVoid, ""),
         IlSignature(IlOpKind.Lambda, "Var"),
@@ -243,6 +249,7 @@ fun makeIlOpKindTexts(): List<Str> {
         "CallIndirectVoid",
         "CallCtor",
         "Pack",
+        "Concat",
         "Return",
         "ReturnVoid",
         "Lambda",
@@ -502,6 +509,10 @@ fun ilWritesDestination(kind: IlOpKind): Bool {
         }
 
         IlOpKind.Pack -> {
+            return true
+        }
+
+        IlOpKind.Concat -> {
             return true
         }
 
@@ -922,6 +933,13 @@ fun ilOpComment(body: *IlBody, op: *IlOp): Str {
         IlOpKind.Pack -> {
             return fmtStr(
                 "| = [|]", ilVarName(body, ilOperandAt(operands, 0)),
+                ilArgList(body, operands, 1)
+            )
+        }
+
+        IlOpKind.Concat -> {
+            return fmtStr(
+                "| = concat(|)", ilVarName(body, ilOperandAt(operands, 0)),
                 ilArgList(body, operands, 1)
             )
         }

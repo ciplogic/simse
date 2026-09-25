@@ -55,6 +55,8 @@ fun Emitter.dumpIl(
         return
     }
     val unit: IlUnit = ilExtractUnit(this.ilFunctionFor(fn, decl, facts, inferred), body, fn.file)
+    // The dump shows the IL the emitter is about to read, so the fusion runs here too.
+    this.ilFuseConcatUnit(unit)
     val text: Str = printIlUnit(unit)
     // `eprintln` adds a newline the dump already ends with: drop that byte.
     if (text.size() > 0) {
@@ -767,6 +769,213 @@ fun Emitter.ilJumpCrossing(il: *IlBody, labelPos: *List<Int>, position: Int): Il
     return crossing
 }
 
+// A concatenation as the statements the emitter expands it into (cppsrc/linear/MergeConcat.kt,
+// impl_specs/linear-il.md, "Concat"): every part's *exact* length is summed, one `resize` makes
+// the whole buffer, and then each part is written straight into the slot it owns while one
+// `char*` advances by that part's length - the shape Java 9's `StringConcatFactory` has, with
+// the C++ compiler seeing the straight-line form. So a chain of n parts touches the allocator
+// once, computes each part once and copies each part once.
+//
+//   * a literal part contributes its own byte count as a compile-time integer and is copied
+//     with a constant-size `std::memcpy` (one register or vector store) - a one-byte literal
+//     as a `Char` write, and an empty one with nothing at all;
+//   * a `Str` part contributes `.size()` and is copied with a runtime `memcpy`;
+//   * an integer part contributes `simse_strCountDigits` (a bit scan) and is written by
+//     `simse_strAddInt`; the count is kept in a temporary, because the sum and the pointer's
+//     advance both read it. A `Char` is one byte; a `Bool` is a `StrView` over a two-entry
+//     table (MergeConcat's `ilConcatNumberOk`); a float is never a part - its `toString` is not
+//     folded, so it is a `Str` part.
+//
+// The expansion is its own C++ block: the temporaries it names cannot be jumped into, and they
+// need no place in the function's declaration group.
+//
+// The destination is written *in place* exactly when the fusion left it as the first part
+// (`s = s + x`, MergeConcat's `ilConcatDstOk`): then the bytes already there are the chain's
+// prefix and every other part is written after them. No part may read the destination - the
+// fusion refuses that - so the fresh chain needs no `clear`: one `resize` and the writes cover
+// every byte the new value has.
+//
+// `out` receives the statements, at `level`; `false` leaves it untouched and `ilWhy` says why.
+fun Emitter.ilConcatStatements(il: *IlBody, frame: *IlFrame, op: *IlOp, level: Int, out: *Str): Bool {
+    val dst: Int = ilConcatDst(op)
+    if (dst < 0 || dst >= il.vars.size()) {
+        this.ilWhy = "a concatenation with no destination"
+        return false
+    }
+    if (this.ilFolded(il, frame, dst)) {
+        this.ilWhy = "a concatenation into a slot with no storage"
+        return false
+    }
+    val name: Str = il.vars[dst].name
+    // The first part is the destination exactly when the instruction is `s = s + ...`: the one
+    // shape whose chain keeps the bytes that are already there.
+    val inPlace: Bool = op.operands.size() > 1 && op.operands[1] == dst
+    // Every temporary of this expansion is named after one id, so two chains in the same C++
+    // scope cannot collide (`__sm_` is the prefix user code cannot write).
+    val id: Int = this.ilConcatTemps
+    this.ilConcatTemps = this.ilConcatTemps + 1
+    val atName: Str = fmtStr("__sm_catAt|", id.toString())
+    val pName: Str = fmtStr("__sm_catP|", id.toString())
+    // One count temporary per integer part, and the four things the expansion is made of, in
+    // the order it writes them: the compile-time byte count, the runtime count terms, the
+    // declarations those terms need, and the writes.
+    var counts: Int = 0
+    var fixed: Int = 0
+    var sums: List<Str> = List<Str>()
+    var prelude: List<Str> = List<Str>()
+    var writes: List<Str> = List<Str>()
+    var i: Int = 1
+    while (i < op.operands.size()) {
+        val part: Int = op.operands[i]
+        if (inPlace && i == 1) {
+            // The destination's own bytes: the prefix `at` measures, never a write.
+        } else if (part < 0) {
+            val text: Str = il.pool[-1 - part]
+            if (text.size() == 0) {
+                this.ilWhy = "a part of a concatenation"
+                return false
+            }
+            if (text[0] == '\'') {
+                fixed = fixed + 1
+                writes.append(fmtStr("*| = (char) (|);", pName, text))
+                writes.append(fmtStr("| = | + 1;", pName, pName))
+            } else if (text[0] == '\"') {
+                val len: Int = cgLiteralByteLength(text)
+                fixed = fixed + len
+                if (len == 1) {
+                    // One byte: a `Char` write is what a one-byte copy folds to, spelled so
+                    // it stays a byte store even where `memcpy` is a call. The literal's inner
+                    // text becomes a character literal - the one shape that would not is a raw
+                    // apostrophe, which a string may spell unescaped.
+                    val inner: Str = text.substr(1, text.size() - 2)
+                    var ch: Str = fmtStr("'|'", inner)
+                    if (inner == "'") {
+                        ch = "'\\''"
+                    }
+                    writes.append(fmtStr("*| = (char) (|);", pName, ch))
+                    writes.append(fmtStr("| = | + 1;", pName, pName))
+                } else if (len > 1) {
+                    writes.append(fmtStr("std::memcpy(|, |, |);", pName, text, len.toString()))
+                    writes.append(fmtStr("| = | + |;", pName, pName, len.toString()))
+                }
+                // An empty literal contributes nothing: no count, no write - just the
+                // `resize` that every chain needs, and the part is done.
+            } else {
+                this.ilWhy = "a part of a concatenation"
+                return false
+            }
+        } else {
+            val kind: Str = ilConcatValueText(il, part)
+            val value: Str = this.ilConcatPartText(il, frame, part)
+            if (value == "") {
+                this.ilWhy = "a part of a concatenation"
+                return false
+            }
+            if (kind == "Str") {
+                sums.append(fmtStr("|.size()", value))
+                writes.append(fmtStr("std::memcpy(|, |.data(), |.size());", pName, value, value))
+                writes.append(fmtStr("| = | + |.size();", pName, pName, value))
+            } else if (kind == "Char") {
+                fixed = fixed + 1
+                writes.append(fmtStr("*| = (char) (|);", pName, value))
+                writes.append(fmtStr("| = | + 1;", pName, pName))
+            } else if (kind == "Bool") {
+                sums.append(fmtStr("simse_strBoolView(|).len", value))
+                writes.append(fmtStr(
+                    "std::memcpy(|, simse_strBoolView(|).ptr, simse_strBoolView(|).len);",
+                    pName, value, value
+                ))
+                writes.append(fmtStr("| = | + simse_strBoolView(|).len;", pName, pName, value))
+            } else if (ilConcatNumberOk(kind)) {
+                val count: Str = fmtStr("__sm_catC|_|", id.toString(), counts.toString())
+                counts = counts + 1
+                prelude.append(fmtStr("Int | = simse_strCountDigits(|);", count, value))
+                sums.append(count)
+                writes.append(fmtStr("simse_strAddInt(|, |, |);", pName, value, count))
+                writes.append(fmtStr("| = | + |;", pName, pName, count))
+            } else {
+                this.ilWhy = "a part of a concatenation"
+                return false
+            }
+        }
+        i = i + 1
+    }
+    if (op.operands.size() < 2) {
+        this.ilWhy = "a concatenation with no part"
+        return false
+    }
+    // The length sum: the constant part first, then the runtime terms.
+    var rest: Str = ""
+    if (fixed > 0 || sums.size() == 0) {
+        rest = ilIntText(fixed)
+    }
+    var s: Int = 0
+    while (s < sums.size()) {
+        if (rest == "") {
+            rest = sums[s]
+        } else {
+            rest = fmtStr("| + |", rest, sums[s])
+        }
+        s = s + 1
+    }
+    // Every part is expressible, so the buffer is written where the instruction stands: a slot
+    // with no type node has no declaration of its own (its `Declare` prints nothing).
+    if (!this.ilDeclaredAtTop(il, dst)) {
+        var declared: Str = this.ilDeclTypeText(il, dst)
+        if (declared == "") {
+            declared = "Str"
+        }
+        this.ilLine(out, level, fmtStr("| |;", declared, name))
+    }
+    this.ilLine(out, level, "{")
+    var p: Int = 0
+    while (p < prelude.size()) {
+        this.ilLine(out, level + 1, prelude[p])
+        p = p + 1
+    }
+    // The pointer only when something is written: a chain of nothing but empty literals is a
+    // `resize` and no writes, and a name no one reads would be dead C++.
+    if (inPlace) {
+        this.ilLine(out, level + 1, fmtStr("Int | = |.size();", atName, name))
+        this.ilLine(out, level + 1, fmtStr("|.resize(| + |);", name, atName, rest))
+        if (writes.size() > 0) {
+            this.ilLine(out, level + 1, fmtStr("char* | = |.data() + |;", pName, name, atName))
+        }
+    } else {
+        this.ilLine(out, level + 1, fmtStr("|.resize(|);", name, rest))
+        if (writes.size() > 0) {
+            this.ilLine(out, level + 1, fmtStr("char* | = |.data();", pName, name))
+        }
+    }
+    p = 0
+    while (p < writes.size()) {
+        this.ilLine(out, level + 1, writes[p])
+        p = p + 1
+    }
+    this.ilLine(out, level, "}")
+    return true
+}
+
+// One part's value, spelled the way its operand is (`ilOperandNode`/`expr`): a pooled literal
+// becomes its table entry, a lowering-invented piece the literal itself, and a slot its name.
+// A *handle* slot is dereferenced: a `toString` the fusion folded away reads its receiver
+// through `*T`/`&T` (a field's address, MergeConcat's `ilConcatValueText`), and what the part
+// writes is that value, never the pointer.
+fun Emitter.ilConcatPartText(il: *IlBody, frame: *IlFrame, part: Int): Str {
+    val node: AstXmlNode = this.ilOperandNode(il, frame, part, 0)
+    if (xmlIsEmpty(node)) {
+        return ""
+    }
+    val text: Str = this.expr(node, 0, xmlEmptyNode())
+    if (part >= 0) {
+        var typeNode: AstXmlNode = ilVarType(il, part)
+        if (this.isHandleType(*typeNode)) {
+            return fmtStr("(*|)", text)
+        }
+    }
+    return text
+}
+
 // The right-hand side of one instruction, as C++: the computed expression, or - for an
 // aggregate construction - the brace form, which has no expression node.
 fun Emitter.ilValueText(il: *IlBody, frame: *IlFrame, opIndex: Int, expected: *AstXmlNode): Opt<Str> {
@@ -774,6 +983,12 @@ fun Emitter.ilValueText(il: *IlBody, frame: *IlFrame, opIndex: Int, expected: *A
         return Opt<Str>.none()
     }
     val op: *IlOp = *il.ops[opIndex]
+    if (op.kind == IlOpKind.Concat) {
+        // The fusion expands a concatenation where it *writes* it (`ilConcatStatements`), and a
+        // destination is always a slot with a type of its own, so this cannot be reached.
+        this.ilWhy = "a concatenation in a value position"
+        return Opt<Str>.none()
+    }
     if (op.kind == IlOpKind.Pack) {
         // `List<T>{v1, v2, ...}`: `List` is `SmallVector<T, 4>`, so a short list stays
         // inline and allocates nothing - which is why a pack builds a `List`, not an `Array`.
@@ -999,6 +1214,19 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
                 jumpLine = fmtStr("if (|) goto |;", test, target)
             }
             this.ilLine(text, lvl, jumpLine)
+            i = i + 1
+            continue
+        }
+        if (dst >= 0 && kind == IlOpKind.Concat) {
+            // A concatenation is a *sequence*, not one expression: one length sum, one
+            // `resize`, one slot write per part (`ilConcatStatements`).
+            if (!this.ilConcatStatements(il, frame, op, lvl, text)) {
+                var why: Str = this.ilWhy
+                if (why == "") {
+                    why = "a concatenation"
+                }
+                return IlText(false, "", "cannot express " + why)
+            }
             i = i + 1
             continue
         }
@@ -1532,10 +1760,29 @@ fun Emitter.failFromInfo(info: *IlFunction, message: *Str): Unit {
     this.fail(node, message)
 }
 
+// The IL's own post-pass (cppsrc/linear/MergeConcat.kt): a `+` chain over `Str` and an
+// `fmtStr` whose format is a literal become one `Concat` instruction, which the emitter
+// expands into one length sum, one `resize` and one slot write per part
+// (`ilConcatStatements`) - one buffer, allocated once, each part written once. The
+// primitives' C++ is a *generated* section, so its reach is recorded as well as spelled: the
+// same rule the `main` argument list's `append` follows (cppsrc/rtl/rtl.kt).
+fun Emitter.ilFuseConcatUnit(unit: *IlUnit): Unit {
+    var fused: Bool = ilFuseConcat(*unit.body)
+    for (*lambda in unit.lambdas) {
+        if (ilFuseConcat(lambda)) {
+            fused = true
+        }
+    }
+    if (fused) {
+        this.referencedNames.insert(ilConcatSymbol(), true)
+    }
+}
+
 // A body is emitted from its instruction list - the IL is the *only* codegen
 // (impl_specs/linear-il.md). One it cannot spell is an extractor bug, so it fails.
 fun Emitter.emitBodyAt(info: *IlFunction, body: *List<AstXmlNode>, file: *Str, level: Int, measure: Bool): Unit {
     val unit: IlUnit = ilExtractUnit(info, body, file)
+    this.ilFuseConcatUnit(unit)
     val emitted: IlText = this.emitIlBodyText(unit, level)
     if (!emitted.ok) {
         this.failFromInfo(

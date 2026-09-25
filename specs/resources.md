@@ -198,7 +198,7 @@ itself. Because the compiler reads that file, its sections are all marked `!`, s
 is compiled in and not carried a second time in the compiler's own pool (the pool was 33,446
 bytes, 23,034 of them this text; it is 11,051 now, and the published bootstrap is 23,885
 bytes smaller). `cppsrc/rtl/_res.md` is the RTL's own generated C++ (`strtable`, `timeops`,
-`listops`, `dictops`, `strops`, `spanOf`); its `spanOfEmpty` section is the decoy
+`listops`, `dictops`, `strops`, `strcat`, `spanOf`); its `spanOfEmpty` section is the decoy
 `stress/smgen-res-collision` pins the last-write-wins rule with, and
 `stress/smgen-res-program` is a program whose own file supplies one.
 

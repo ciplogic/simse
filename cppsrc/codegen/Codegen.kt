@@ -307,7 +307,11 @@ data class Emitter(
 
 // Inside a closure class's method (or a machine's): the receiver is C++'s `this`,
 // because a member function has no `self` parameter.
-    var inClosureMethod: Bool
+    var inClosureMethod: Bool,
+
+// How many concatenation expansions have been written: each names its own temporaries
+// (`__sm_cat*`), so two chains in one C++ scope cannot collide.
+    var ilConcatTemps: Int
 ) {
 
     fun fail(posNode: *AstXmlNode, message: *Str): Unit {
@@ -3029,7 +3033,8 @@ fun newEmitter(inputs: *List<CgInput>, resourceStored: *List<Str>): Emitter {
         Dictionary<Str, Bool>(),
         xmlEmptyNode(),
         "",
-        false
+        false,
+        0
     )
 }
 

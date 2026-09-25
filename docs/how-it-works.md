@@ -77,7 +77,7 @@ Details worth knowing:
   whose text is a C++
   *resource* - the tree's own `_res.md` files first, the compiler's second, which is where
   the RTL's own C++ lives now (`cppsrc/rtl/_res.md`: `strtable`, `timeops`, `listops`,
-  `dictops`, `strops`, `spanOf`, `strview`, `filestream`, `resources`, `fileio`) - and
+  `dictops`, `strops`, `strcat`, `spanOf`, `strview`, `filestream`, `resources`, `fileio`) - and
   `kt`, whose text is *Simse source* the driver hands back to the
   compiler's own front end: parsed, checked and emitted with the program, the call site
   unchanged (`stress/smgen-kt`). The emitted file assembles from named **sections** -
@@ -195,8 +195,9 @@ The C++ that used to need a header of its own is a **resource** now
 (`cppsrc/rtl/_res.md`, read by the `res` generator): the string table's decoder
 (`strtable`), the clocks (`timeops`), the `List`/`Array` primitives (`listops`), the
 `Dictionary` operations (`dictops`), the string/character/numeric conversions (`strops`),
-`spanOf`, the view operations (`strview`), the file stream's methods (`filestream`), the
-resource table's accessor (`resources`), and the platform's file I/O (`fileio`, which
+the concatenation (`strcat`), `spanOf`, the view operations (`strview`), the file stream's
+methods (`filestream`), the resource table's accessor (`resources`), and the platform's
+file I/O (`fileio`, which
 carries its own prototypes). Each is a
 section of that file - a declaration in its `forward:`, a definition in its `bodies:` - and
 the emitter places a section's texts in the emitted file's section of the same name, so

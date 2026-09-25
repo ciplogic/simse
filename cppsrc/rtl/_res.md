@@ -9,7 +9,11 @@ so the compiler emits them for every program - `strtable`, the string table's de
 named by the program. Three are
 *shared*, one header's worth of functions
 that a declaration reaches by naming its symbol - `listops`, `dictops`, `strops`. `spanOf`
-(and the collision fixture's `spanOfEmpty`) carries a symbol key of its own. `support`
+(and the collision fixture's `spanOfEmpty`) carries a symbol key of its own. `strcat` is the
+emitter's own concatenation (`cppsrc/linear/MergeConcat.kt`, expanded by
+`ilConcatStatements` in `cppsrc/codegen/IlCodeGen.kt`), reached by the compiler rather
+than named by a program - the emitter records the reach itself - and a section of its own
+so that reaching a string *operation* does not carry all the rest. `support`
 holds what the program's *preamble* needs, `forward` a declaration and `bodies` a
 definition, and a section's texts are placed in the emitted file's section of the same
 name. A prose line here is ignored only when it holds no colon character, so keep the
@@ -270,6 +274,115 @@ inline Str simse_int_toString(Int self) {
 }
 ```
 
+!strcat
+====
+forward:
+```cpp
+#include <bit>
+#include <cstring>
+
+// The primitives a concatenation is *expanded* into (impl_specs/linear-il.md, "Concat").
+// There is no `cat` function and no per-part `append`: the emitter computes every part's
+// *exact* length, performs one `resize`, and then writes each part straight into the slot it
+// owns while one `char*` advances by that part's length. So a chain of n parts touches the
+// allocator once, computes each part once and copies each part once - the shape Java 9's
+// `StringConcatFactory` has, with the C++ compiler seeing the straight-line form instead of a
+// variadic call.
+//
+// No program names these: the emitter writes the symbols itself, the way it writes
+// `simse_addressOf`. What each kind of part costs:
+//   * a text part (a `Str`, or a literal whose length the lowering already knows) is a
+//     `std::memcpy` - a constant size is one register or vector store, a runtime `Str` size
+//     one call;
+//   * an integer (`Int8`/`Int16`/`Int32`/`Int64`, `Int`) is *counted* by the bit scan below
+//     (`std::bit_width` plus one power-of-ten comparison, never a division loop) and *written*
+//     by `simse_strAddInt` - two digits per step out of a table, right to left inside the slot
+//     that was made for it, so the digits are never built into a second buffer;
+//   * a `Char` is one byte;
+//   * a `Bool` is a `StrView` over a two-entry table ("true"/"false"): it has no digits to
+//     render and is not a hot path, so it goes through the text path.
+// A float is deliberately *absent*: its length is only known by formatting it, so the lowering
+// keeps the `toString()` call (one `Str`, made ahead of time) and the part *is* that `Str` -
+// one conversion, not one for the length and another for the write.
+Int simse_strCountDigits(Int64 value);
+void simse_strAddInt(char* target, Int64 value, Int count);
+StrView simse_strBoolView(Bool value);
+```
+bodies:
+```cpp
+// The powers of ten the bit scan settles its guess against.
+static const unsigned long long smStrDigitPow10[20] = {
+    1ull, 10ull, 100ull, 1000ull, 10000ull, 100000ull, 1000000ull, 10000000ull,
+    100000000ull, 1000000000ull, 10000000000ull, 100000000000ull, 1000000000000ull,
+    10000000000000ull, 100000000000000ull, 1000000000000000ull, 10000000000000000ull,
+    100000000000000000ull, 1000000000000000000ull, 10000000000000000000ull
+};
+
+// The digit count, exact for every width (a narrower integer widens to `Int64` with the same
+// digits). `std::bit_width(magnitude)` is the position of the highest set bit plus one - one
+// `clz`/`bsr` - and `1233 / 4096 = 0.3010...` is log10(2), so the product is
+// floor(log10(magnitude)) or one off; the comparison against that power of ten settles which.
+// The early return is the one case the scan cannot answer (`0`), and the sign is a separate
+// term, counted on the widened value so `-INT64_MIN` never overflows.
+inline Int simse_strCountDigits(Int64 value) {
+    unsigned long long magnitude =
+        value < 0 ? 0ull - (unsigned long long) value : (unsigned long long) value;
+    if (magnitude < 10ull) {
+        return value < 0 ? 2 : 1;
+    }
+    Int bits = (Int) std::bit_width(magnitude);
+    Int guess = (Int) (((unsigned int) bits * 1233u) >> 12);
+    Int digits = guess + (magnitude >= smStrDigitPow10[guess] ? 1 : 0);
+    return digits + (value < 0 ? 1 : 0);
+}
+
+// Two digits per step: the table holds "00".."99", so the inner loop never divides by ten.
+struct SmStrDigitPairTable {
+    char text[200];
+    constexpr SmStrDigitPairTable() : text() {
+        for (Int i = 0; i < 100; i = i + 1) {
+            text[i * 2] = (char) ('0' + i / 10);
+            text[i * 2 + 1] = (char) ('0' + i % 10);
+        }
+    }
+};
+
+static constexpr SmStrDigitPairTable smStrDigitPairs{};
+
+// The digits of `value`, written straight into the `count` bytes `target` already owns and
+// walking *back* through them (the least-significant pair first), so no second buffer and no
+// second pass is needed. `count` must be exact - `simse_strCountDigits`'s answer, sign
+// included - because the slots of the parts around this one depend on it.
+inline void simse_strAddInt(char* target, Int64 value, Int count) {
+    unsigned long long magnitude =
+        value < 0 ? 0ull - (unsigned long long) value : (unsigned long long) value;
+    if (value < 0) {
+        target[0] = '-';
+        count = count - 1;
+        target = target + 1;
+    }
+    while (count >= 2) {
+        unsigned int pair = (unsigned int) (magnitude % 100ull);
+        magnitude /= 100ull;
+        count = count - 2;
+        target[count] = smStrDigitPairs.text[pair * 2];
+        target[count + 1] = smStrDigitPairs.text[pair * 2 + 1];
+    }
+    if (count == 1) {
+        target[0] = (char) ('0' + (Int) magnitude);
+    }
+}
+
+// The two texts a bool can be, as a `StrView` over a two-entry table - the string-table shape,
+// so a bool part is just another text part (a `memcpy` of a runtime length) and needs no digits
+// of its own. Cold enough that the two loads the compiler folds it to do not matter.
+inline StrView simse_strBoolView(Bool value) {
+    static Char texts[2][6] = {"true", "false"};
+    static Int lens[2] = {4, 5};
+    Int at = value ? 0 : 1;
+    return StrView(texts[at], lens[at]);
+}
+```
 !dictops
 ====
 forward:

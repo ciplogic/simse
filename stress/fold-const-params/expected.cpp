@@ -98,6 +98,36 @@ Str simse_strView_substr(StrView self, Int from, Int count);
 Str simse_strView_toString(StrView self);
 StrView simse_spanOfStr(Str* text);
 
+#include <bit>
+#include <cstring>
+
+// The primitives a concatenation is *expanded* into (impl_specs/linear-il.md, "Concat").
+// There is no `cat` function and no per-part `append`: the emitter computes every part's
+// *exact* length, performs one `resize`, and then writes each part straight into the slot it
+// owns while one `char*` advances by that part's length. So a chain of n parts touches the
+// allocator once, computes each part once and copies each part once - the shape Java 9's
+// `StringConcatFactory` has, with the C++ compiler seeing the straight-line form instead of a
+// variadic call.
+//
+// No program names these: the emitter writes the symbols itself, the way it writes
+// `simse_addressOf`. What each kind of part costs:
+//   * a text part (a `Str`, or a literal whose length the lowering already knows) is a
+//     `std::memcpy` - a constant size is one register or vector store, a runtime `Str` size
+//     one call;
+//   * an integer (`Int8`/`Int16`/`Int32`/`Int64`, `Int`) is *counted* by the bit scan below
+//     (`std::bit_width` plus one power-of-ten comparison, never a division loop) and *written*
+//     by `simse_strAddInt` - two digits per step out of a table, right to left inside the slot
+//     that was made for it, so the digits are never built into a second buffer;
+//   * a `Char` is one byte;
+//   * a `Bool` is a `StrView` over a two-entry table ("true"/"false"): it has no digits to
+//     render and is not a hot path, so it goes through the text path.
+// A float is deliberately *absent*: its length is only known by formatting it, so the lowering
+// keeps the `toString()` call (one `Str`, made ahead of time) and the part *is* that `Str` -
+// one conversion, not one for the length and another for the write.
+Int simse_strCountDigits(Int64 value);
+void simse_strAddInt(char* target, Int64 value, Int count);
+StrView simse_strBoolView(Bool value);
+
 #include <cstdint>
 #include <type_traits>
 
@@ -225,22 +255,57 @@ void ns1_tag(Str* self, Bool on) {
     Str _sm_base1, _sm_base2, _sm_expr1, _sm_expr2, _sm_expr4;
     if (!(on)) goto L2;
     _sm_base1 = ((*self));
-    _sm_expr1 = __sm_stringTable[7] + _sm_base1;
-    _sm_expr2 = _sm_expr1 + __sm_stringTable[6];
+    {
+        _sm_expr1.resize(4 + _sm_base1.size());
+        char* __sm_catP0 = _sm_expr1.data();
+        std::memcpy(__sm_catP0, "tag(", 4);
+        __sm_catP0 = __sm_catP0 + 4;
+        std::memcpy(__sm_catP0, _sm_base1.data(), _sm_base1.size());
+        __sm_catP0 = __sm_catP0 + _sm_base1.size();
+    }
+    {
+        _sm_expr2.resize(5 + _sm_expr1.size());
+        char* __sm_catP1 = _sm_expr2.data();
+        std::memcpy(__sm_catP1, _sm_expr1.data(), _sm_expr1.size());
+        __sm_catP1 = __sm_catP1 + _sm_expr1.size();
+        std::memcpy(__sm_catP1, "): on", 5);
+        __sm_catP1 = __sm_catP1 + 5;
+    }
     std::cout << std::boolalpha << (_sm_expr2) << std::endl;
     goto L3;
     L2:;
     _sm_base2 = ((*self));
-    _sm_expr1 = __sm_stringTable[7] + _sm_base2;
-    _sm_expr4 = _sm_expr1 + __sm_stringTable[5];
+    {
+        _sm_expr1.resize(4 + _sm_base2.size());
+        char* __sm_catP2 = _sm_expr1.data();
+        std::memcpy(__sm_catP2, "tag(", 4);
+        __sm_catP2 = __sm_catP2 + 4;
+        std::memcpy(__sm_catP2, _sm_base2.data(), _sm_base2.size());
+        __sm_catP2 = __sm_catP2 + _sm_base2.size();
+    }
+    {
+        _sm_expr4.resize(6 + _sm_expr1.size());
+        char* __sm_catP3 = _sm_expr4.data();
+        std::memcpy(__sm_catP3, _sm_expr1.data(), _sm_expr1.size());
+        __sm_catP3 = __sm_catP3 + _sm_expr1.size();
+        std::memcpy(__sm_catP3, "): off", 6);
+        __sm_catP3 = __sm_catP3 + 6;
+    }
     std::cout << std::boolalpha << (_sm_expr4) << std::endl;
     L3:;
 }
 // stress/fold-const-params/src/main.kt:45
 void ns1_markIt(Int level) {
-    Str _sm_expr1, _sm_expr2;
-    _sm_expr1 = simse_int_toString(level);
-    _sm_expr2 = __sm_stringTable[4] + _sm_expr1;
+    Str _sm_expr2;
+    {
+        Int __sm_catC4_0 = simse_strCountDigits(level);
+        _sm_expr2.resize(8 + __sm_catC4_0);
+        char* __sm_catP4 = _sm_expr2.data();
+        std::memcpy(__sm_catP4, "markIt: ", 8);
+        __sm_catP4 = __sm_catP4 + 8;
+        simse_strAddInt(__sm_catP4, level, __sm_catC4_0);
+        __sm_catP4 = __sm_catP4 + __sm_catC4_0;
+    }
     std::cout << std::boolalpha << (_sm_expr2) << std::endl;
 }
 // stress/fold-const-params/src/main.kt:49
@@ -352,6 +417,79 @@ inline Str simse_strView_toString(StrView self) {
 // hence the cast.
 inline StrView simse_spanOfStr(Str* text) {
     return StrView(reinterpret_cast<Char*>(text->data()), text->size());
+}
+
+// The powers of ten the bit scan settles its guess against.
+static const unsigned long long smStrDigitPow10[20] = {
+    1ull, 10ull, 100ull, 1000ull, 10000ull, 100000ull, 1000000ull, 10000000ull,
+    100000000ull, 1000000000ull, 10000000000ull, 100000000000ull, 1000000000000ull,
+    10000000000000ull, 100000000000000ull, 1000000000000000ull, 10000000000000000ull,
+    100000000000000000ull, 1000000000000000000ull, 10000000000000000000ull
+};
+
+// The digit count, exact for every width (a narrower integer widens to `Int64` with the same
+// digits). `std::bit_width(magnitude)` is the position of the highest set bit plus one - one
+// `clz`/`bsr` - and `1233 / 4096 = 0.3010...` is log10(2), so the product is
+// floor(log10(magnitude)) or one off; the comparison against that power of ten settles which.
+// The early return is the one case the scan cannot answer (`0`), and the sign is a separate
+// term, counted on the widened value so `-INT64_MIN` never overflows.
+inline Int simse_strCountDigits(Int64 value) {
+    unsigned long long magnitude =
+        value < 0 ? 0ull - (unsigned long long) value : (unsigned long long) value;
+    if (magnitude < 10ull) {
+        return value < 0 ? 2 : 1;
+    }
+    Int bits = (Int) std::bit_width(magnitude);
+    Int guess = (Int) (((unsigned int) bits * 1233u) >> 12);
+    Int digits = guess + (magnitude >= smStrDigitPow10[guess] ? 1 : 0);
+    return digits + (value < 0 ? 1 : 0);
+}
+
+// Two digits per step: the table holds "00".."99", so the inner loop never divides by ten.
+struct SmStrDigitPairTable {
+    char text[200];
+    constexpr SmStrDigitPairTable() : text() {
+        for (Int i = 0; i < 100; i = i + 1) {
+            text[i * 2] = (char) ('0' + i / 10);
+            text[i * 2 + 1] = (char) ('0' + i % 10);
+        }
+    }
+};
+
+static constexpr SmStrDigitPairTable smStrDigitPairs{};
+
+// The digits of `value`, written straight into the `count` bytes `target` already owns and
+// walking *back* through them (the least-significant pair first), so no second buffer and no
+// second pass is needed. `count` must be exact - `simse_strCountDigits`'s answer, sign
+// included - because the slots of the parts around this one depend on it.
+inline void simse_strAddInt(char* target, Int64 value, Int count) {
+    unsigned long long magnitude =
+        value < 0 ? 0ull - (unsigned long long) value : (unsigned long long) value;
+    if (value < 0) {
+        target[0] = '-';
+        count = count - 1;
+        target = target + 1;
+    }
+    while (count >= 2) {
+        unsigned int pair = (unsigned int) (magnitude % 100ull);
+        magnitude /= 100ull;
+        count = count - 2;
+        target[count] = smStrDigitPairs.text[pair * 2];
+        target[count + 1] = smStrDigitPairs.text[pair * 2 + 1];
+    }
+    if (count == 1) {
+        target[0] = (char) ('0' + (Int) magnitude);
+    }
+}
+
+// The two texts a bool can be, as a `StrView` over a two-entry table - the string-table shape,
+// so a bool part is just another text part (a `memcpy` of a runtime length) and needs no digits
+// of its own. Cold enough that the two loads the compiler folds it to do not matter.
+inline StrView simse_strBoolView(Bool value) {
+    static Char texts[2][6] = {"true", "false"};
+    static Int lens[2] = {4, 5};
+    Int at = value ? 0 : 1;
+    return StrView(texts[at], lens[at]);
 }
 
 template <class T>

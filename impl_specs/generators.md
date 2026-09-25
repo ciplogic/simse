@@ -242,7 +242,9 @@ program's types.
 The RTL's hand-written C++ is here (`cppsrc/rtl/_res.md`), one section per header it came
 from: `strtable` and `timeops` (`emit: always`), `listops`, `dictops` and `strops`
 (shared: the List/Array/Str primitives, the Dictionary operations, and the
-string/character/numeric conversions the headers held), and `spanOf` (the first user). A
+string/character/numeric conversions the headers held), `spanOf` (the first user) and
+`strcat` (the emitter's own concatenation: no *program* names it, the emitter records its
+reach, and the one declaration it hangs on is shaped so a program cannot usefully call it). A
 module owns its own resource, so `fileio` (`emit: always`: the platform's filesystem/IO
 operations) and `filestream` (`emit: reached`: the `FileStream` reads, a program paying for them
 only when it reads one) are `cppsrc/modules/io/_res.md` now, and the `json` generator's helper is

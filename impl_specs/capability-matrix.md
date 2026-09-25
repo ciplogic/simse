@@ -3219,3 +3219,158 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   `stress/README.md` documents the case's new `compiler-args` file (one line of extra transpiler
   arguments, after `--root src -o out.cpp`), and `stress/json` uses it for
   `--module cppsrc/modules/json`.
+
+- **A module owns its resources, and its declarations are reach-gated.** Four pieces landed
+  together, each small and each needed to make the module boundary real:
+
+  - **`emit: reached`** (`cppsrc/sourcegen/ResGen.kt`): a section marked that way is gated by the
+    reach set *even when the declaration that names it is a module's* - a prelude declaration was
+    gated already, a program's was not. `filestream` is the first, so the `io` module hands out
+    `readLine` without every program that names `io` carrying the stream C++ (the compiler's own
+    build proves it: `FileStream::readLine` is absent from its emission).
+  - **The `io` module** (`cppsrc/modules/io/api.kt`): the file and directory operations
+    (`listFiles`, `listFilesDirect`, `writeFile`, `pathCanonical`, `pathIsDirectory`,
+    `pathExists`, `eprintln`, the three reads and `close`/`fileSize`) moved out of the prelude.
+    `FileStream` is the one thing that stayed (`cppsrc/rtl/fs.kt`): a *type* cannot name its C++
+    with `@SmGen` in this language - attributes are methods-only - so a `data class` in a program
+    module would be emitted as a struct clashing with `filestream.hpp`. `Driver.kt`,
+    `resources/Resources.kt`, `sema/Async.kt` and `codegen/IlCodeGen.kt` `import io`; a program
+    reaches the module with `--module cppsrc/modules/io`.
+  - **A module's C++ is the module's resource.** `fileio` and `filestream` moved from
+    `cppsrc/rtl/_res.md` to `cppsrc/modules/io/_res.md`, and the `json` generator's helper to
+    `cppsrc/modules/json/_res.md`. The RTL's file is the *prelude's* C++ now. The pay-off is the
+    size win asked about earlier: **a program that does not name `io` no longer carries the
+    ~139 lines / 4 KB of platform file I/O** (nine `expected.cpp` goldens lost exactly that
+    block).
+  - **`tasks` stopped depending on `fileio`.** The workers' read called
+    `simse_native_readFile` by forward declaration, which only worked while `fileio` was
+    force-emitted; it reads its file with `std::ifstream` inline now (`cppsrc/rtl/_res.md`), the
+    cross-section dependency the move exposed.
+
+  Alongside them, **a module's `sourcegen: true` no longer blocks a compilation**
+  (`driverExpandRoot`): the compiler carries the built-in generators, so naming such a module
+  works, and a declaration whose generator it lacks fails at emission with the generator named
+  (`stress/diagnostic-manifest-sourcegen`, whose module now declares `@SmGen("nope")` - the old
+  hard error was the deferral's placeholder).
+
+  Verified: `./build.bat --release`, `bun tools/stress.js` **39/39**, and both
+  `bun tools/bootstrap.js` fixed-point checks byte for byte. The compiler's own emitted C++ came
+  out **byte-identical** to the published bootstrap, so no refresh was needed: the move changed
+  which resource file a section is read from, not the text the emitter places. Nine
+  `expected.cpp` goldens were re-captured for the `fileio` removal, and `stress/native-read-file`,
+  `stress/read-lines`, `benchmarks/onebrc` and `docs/examples/async` gained `--module
+  cppsrc/modules/io` (the first through its `compiler-args`, the examples through their build
+  commands).
+
+- **A `+` chain, and an `fmtStr` with a literal format, are one `Concat` instruction - and one
+  buffer.** The language's `+` is binary, so `a + b + c` lowered to two instructions with a
+  `Str` temporary between them. `Str::operator+` reserves only its own pair, so a chain of *n*
+  parts allocated *n-1* times and copied the prefix each time (quadratic). An `fmtStr` call was
+  worse in a different way: the format was a runtime string, re-scanned on every call to count
+  `|` and find the pieces. Both now have the shape Java 9's `StringConcatFactory` has: **sum the exact
+  lengths, allocate once, write each part into its own slot** - and for `fmtStr` the split
+  happens at compile time, so no format is scanned at run time.
+
+  - **A new IL instruction, `Concat`** (`cppsrc/linear/LinearForm.kt`, `impl_specs/linear-il.md`):
+    `dst = concat(part, ...)`, one operand per part, signature `Var,Value...`. It is the
+    IL's first instruction no *lowering* builds.
+  - **`cppsrc/linear/MergeConcat.kt`** builds it, as a post-pass over the *instruction list* -
+    the one place a slot's type and a chain's shape are both visible at once, which is why it is
+    not a `cppsrc/optimizations` pass (those see the statement list, where the expression
+    lowering has already split the chain) and not the emitter's (a text decision could not reuse
+    a slot's type). It runs per body in `ilFuseConcatUnit` (`IlCodeGen.kt`, called from
+    `emitBodyAt` and from the `--showLinearRepresentation` dump, so the dump shows exactly the
+    IL the emitter reads).
+    - **A chain folds left to right.** `t = a + b` immediately followed by `s = t + c`, with
+      `t` read exactly once, becomes `s = Concat(a, b, c)`; because each instruction's own
+      `Concat` is the *previous* instruction for the next one, a chain of any length folds in a
+      single pass.
+    - **An `fmtStr` splits at compile time.** The `Pack`/`Deref`/`Call` triple must be
+      adjacent, the format must be a *literal* with no backslash in it (an escape could hide a
+      pipe or a quote, and re-encoding the pieces would be a second decoder), and its `|` count
+      must equal the packed item count - the counts the runtime itself checks. Pieces become
+      `Concat` operands, empty ones dropped.
+    - **An integer part is only ever a *fold*.** `s + n` in C++ appends `(char) n` - one
+      *byte* - so a `+` operand that is a number refuses the fusion, and only a `toString` the
+      chain absorbs hands its receiver over as digits. The same reason refuses a `Char` fold
+      (a `Char` *is* an `Int8`, so "one character" and "a number" would be one part kind),
+      and the same rule refuses a format that is a variable, a `StrView` *slot* (it could look
+      into the destination), a `|` count that does not line up, and a destination the chain
+      reads more than once, or not first. The code then stays as it was, which is what makes
+      this a pure optimization. `stress/concat` pins the refusals: a `StrView`-valued format
+      and `fmtStr("a=|b=|", a)` still call the runtime `fmtStr`, whose answer (the format,
+      unfilled) is the program's output.
+    - **The destination has to be a slot with a declaration**, because the expansion *writes*
+      where the instruction stands and a slot with no type node is declared by the instruction
+      that assigns it (`ilDeclaredAtTop`); the fusion refuses one, and a rewrite it refuses
+      must put back what it had already absorbed (`rollback`, which re-appends the *taken*
+      instructions - cutting the list back is not enough, since a consume only ever removes
+      from the end).
+    - **The temporaries a chain left lose their `Declare`** (the slot has no writer left), so
+      the emitted C++ is shorter as well as faster: `stress/objects` lost six `List<Str>*`
+      slots and their `Pack`/`Deref` pairs.
+  - **The emitter *expands* the instruction - there is no `cat` function**
+    (`ilConcatStatements`, `cppsrc/codegen/IlCodeGen.kt`), so the C++ compiler sees
+    straight-line code it can fold instead of a variadic call it has to trust. The expansion
+    sums the parts' *exact* lengths, performs **one `resize`**, and then fills the slot with a
+    pointer that advances by each part's length - `s.resize(<sum>); char* p = s.data();
+    std::memcpy(p, "x=", 2); p += 2; simse_strAddInt(p, n, c); p += c; ...` - so each part is
+    computed once and copied once, there is no `clear`, and no per-part `append`. The whole
+    expansion is one C++ **block**, so its temporaries (`__sm_catAt<k>`/`__sm_catP<k>`/
+    `__sm_catC<k>_<j>`, from a per-emitter counter so two chains in one scope cannot collide)
+    cannot be jumped into and need no place in the function's declaration group.
+    - A *literal* part contributes a compile-time integer (`cgLiteralByteLength`) and is copied
+      with a constant-size `std::memcpy` - one register or vector store. A one-byte literal is
+      a `Char` write instead (the same byte store, spelled so it survives an unoptimized
+      build), and an empty one contributes nothing at all - no count, no write, no pointer -
+      so `fmtStr("")` and a chain of nothing but empty literals are one `resize(0)`. A `Str`
+      part contributes `.size()` and is copied with a runtime `memcpy`; a `Char` is one byte.
+    - An **integer part is counted by a bit scan and written by `simse_strAddInt`** - never a
+      `Str` of its own, and never `snprintf`: `std::bit_width(magnitude)` plus one
+      power-of-ten comparison (`(bits * 1233) >> 12` is `floor(log10)`, or one off) gives the
+      exact count, and one `Int64` overload serves every width (a narrower integer widens
+      with the same digits). The digits go two per step out of a `"00"`..`"99"` table, right
+      to left inside the slot, the sign taken off first and the magnitude made unsigned
+      before negating (so `Int64`'s minimum is right). The count is kept in a temporary,
+      because the sum and the pointer's advance both read it.
+    - A destination that is also the chain's first part (`s = s + x`) keeps the bytes already
+      there (`at = s.size()`) and writes from there, which is what makes `while (...) s = s +
+      "z"` grow linearly; every other destination is overwritten from byte zero by the
+      `resize` and the writes together, so it needs no `clear`.
+    - A `Bool` has no digits to render and is not hot, so it goes through the *text* path as a
+      `StrView` over a two-entry `"true"`/`"false"` table. A float is not folded at all - its
+      length is only known by formatting it, so the `toString` call stays and hands over *one*
+      `Str`, made ahead of time.
+  - **The primitives are a resource section of their own** (`strcat` in `cppsrc/rtl/_res.md`):
+    `simse_strCountDigits(Int64)` (the bit scan above), `simse_strAddInt(char*, Int64, Int)`
+    (the two-digit writes) and `simse_strBoolView(Bool)` (the two-entry table). No program
+    names one, so the emitter records the reach itself (`referencedNames.insert`, the rule the
+    `main` argument list's `simse_list_append` already followed); the anchor the section hangs
+    on is `@SmGen("res", "strcat", "simse_strAddInt")` in `cppsrc/rtl/rtl.kt`, and the
+    section's `forward` text *is* the declaration, so it places no prototype of its own. Its
+    *own* section rather than an addition to `strops`/`listops`, because those are shared -
+    reaching one operation carries all of them. A program's own `append`/`appendStr` are
+    `listops`; the v2 `appendText`/`appendChar`/`appendInt`/`appendBool`/`countText`/
+    `countBool` primitives are gone, since nothing but the expansion ever named them.
+  - **A `toString` a chain absorbs hands over its *receiver*, not a `Str`**: `t = n.toString()`
+    immediately before `s = t + x` becomes a number part, so `"n=" + n` has no intermediate.
+    A receiver read through a handle - a field's address, `simse_addressOf(obj.count)` - is the
+    one shape where the value has to be spelled, and it is spelled `(*_sm_baseN)`, the same
+    dereference the RTL's own receiver conventions use. `stress/concat` pins it (`t=3`).
+
+  The shape was chosen by an isolated benchmark kept in the gitignored `build/digits/`
+  (`count_digits.cpp`: the bit scan against the if-tree and the `/1000` hint, a `thread_local`
+  collector against writing into the slot, `to_chars`, and hand copies against `memcpy` - a
+  constant-size `memcpy` measured the same as `*(unsigned int*)` and five times a runtime
+  length). Four integer parts in one chain measured 3.4/4.4/6.3/8.9 ns (small/medium/Int32/
+  Int64) against the earlier `snprintf` append's 31.9/36.8/43.9/56.3.
+
+  Verified: the compiler was rebuilt from HEAD's published bootstrap (the v2 compiler emits
+  symbols this section no longer defines), then `bun build.js --release --out
+  cppsrc/simse_bootstrap.cpp` regenerated the published bootstrap from its own emitted C++,
+  `bun tools/stress.js --release --jobs 4 --keep-going` is **40/40** (the case is
+  `stress/concat`), and `bun tools/bootstrap.js` holds both fixed-point checks byte for byte.
+  Four `expected.cpp` goldens were re-captured (`concat`, `fold-const-params`, `machines`,
+  `objects`) - every difference an expansion, the `strcat` section, or a `Declare` the fusion
+  left dead.
+

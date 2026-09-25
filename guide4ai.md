@@ -134,7 +134,7 @@ driver's - and `build.bat` can compile it.
   | `strview.hpp`, `resources.hpp`,
   `filestream.hpp`, `simse.hpp`), the
   `_res.md` file that holds the RTL's *generated* C++ - one section per header it came
-  from (`strtable`, `timeops`, `listops`, `dictops`, `strops`, `resfmt`, `spanOf`,
+  from (`strtable`, `timeops`, `listops`, `dictops`, `strops`, `resfmt`, `strcat`, `spanOf`,
   `strview`, `filestream`, `resources`, plus a
   `fileio` whose text was the runtime's one hand-written translation unit, plus the
   collision fixture's `spanOfEmpty`) with `symbol:`/`emit: always`/`emit: reached` deciding how a
@@ -217,7 +217,13 @@ driver's - and `build.bat` can compile it.
   `LinearForm.kt` is the whole thing: the model, the signature table, the
   printer, the extractor - and the backend lives in `Codegen.kt`
   (`emitIlBodyText`/`ilEmitOps`/the closure classes), so **the emitter emits from the IL
-  and from nothing else**. `Yield.kt` is the one
+  and from nothing else**. `MergeConcat.kt` is the one pass over that instruction list: a
+  `+` chain over `Str`, and an `fmtStr` whose format is a literal, become one `Concat`
+  instruction - one buffer, one `resize` for the summed length, the shape Java 9's
+  `StringConcatFactory` has. The emitter *expands* it where it stands (`ilConcatStatements`:
+  a length sum, one `resize`, then one slot write per part through a pointer that advances -
+  a literal's length a constant and copied by `memcpy`, an integer's counted by a bit scan
+  and written by `simse_strAddInt`), so no `cat` function is called. `Yield.kt` is the one
   language feature that is nothing but a lowering: `yield` becomes labels, a branch
   field and a class (`impl_specs/yield.md`), and `for` (`Parser.kt`'s `parseFor`, which
   desugars the two forms to a `while` before anything else sees them) is the second

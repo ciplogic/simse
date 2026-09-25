@@ -258,6 +258,7 @@ CallIndirect     dst=Var, callee=Var, args...=Value         # x = f(a, b), f a c
 CallIndirectVoid callee=Var, args...=Value
 CallCtor         dst=Var, type=Type, args...=Value          # Point(1, 2), List<Str>(), a closure
 Pack             dst=Var, values...=Value                   # List<Str>{a, b}: a container from values (`newarr` + fill)
+Concat           dst=Var, parts...=Value                    # the fused `Str` concatenation (`concat`, MergeConcat.kt)
 
 Return           value=Value
 ReturnVoid
@@ -306,6 +307,21 @@ body whose dump has neither is fully covered by the IL.
   copied. A backend spells it as the RTL's initializer-list construction, which is what
   makes a packed list of up to four elements allocate nothing (`List` is
   `SmallVector<T, 4>`).
+- **`Concat` is the fused string concatenation** (`cppsrc/linear/MergeConcat.kt`). The
+  language's `+` is binary, so `a + b + c` is two `BinaryOp`s with a `Str` temporary
+  between them and one allocation per link, and an `fmtStr` whose format is a literal is
+  a `Pack`/`Deref`/`Call` that re-scans that format at run time. A post-pass over the
+  instruction list - the one place a slot's type and a chain's shape are both visible -
+  merges the whole chain, and the split format, into *one* instruction over every part,
+  which the backend *expands* into a length sum, one `resize` and one slot write per part
+  (the Java 9 `StringConcatFactory` shape, `ilConcatStatements` in
+  `cppsrc/codegen/IlCodeGen.kt`, `cppsrc/rtl/_res.md`'s `strcat` section): no call, so a
+  *literal* part contributes a compile-time integer to the sum and a destination that is
+  the chain's own first part is appended onto in place. It declines rather than guess - a
+  `+` operand that is a number (`s + n` appends one *byte*), a format that is not a
+  literal or holds an escape, a `+`-count that does not match the packed items, a
+  destination the chain reads somewhere but first - and leaves the code as it was, where
+  the runtime's own `fmtStr` still answers.
 - **A call argument's handle is inferred by the extractor** (`specs/functions.md`,
   "Handles at a call"): the instruction list gets a `Deref` (an address, or a counted
   reference's `.get()`), a `CopyValue` (a copy of a pointee) or a `Box` (a boxed copy)
