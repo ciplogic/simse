@@ -8,11 +8,11 @@ package concat
 //
 // This program is the shape that rule has to keep honest: the chains it takes (a literal, a
 // slot, a `Char`, a member, a call's result), a chain that starts from the destination
-// itself (`acc = acc + ...`, appended *in place* onto bytes already reserved, against the
+// itself (`acc = acc + ...`, written *in place* onto the bytes already there, against the
 // same chain read into a fresh `Str`), the `fmtStr` shapes it takes (no `|` at all, one per
-// item, pieces empty at either end) and the two it must *refuse* - a format that is a
-// variable, and a format whose `|` count does not match its items, where the runtime's own
-// `fmtStr` is what answers.
+// item, pieces empty at either end), a one-byte literal and an empty one, and the two it
+// must *refuse* - a format that is a variable, and a format whose `|` count does not match
+// its items, where the runtime's own `fmtStr` is what answers.
 
 data class Tag(var name: Str, var count: Int)
 

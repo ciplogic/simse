@@ -54,13 +54,13 @@ Int64 simse_nowMicros();
 // The program's string literals: one pool, and two run-length encoded index
 // series (offsets as deltas, then lengths), each as what to subtract from the
 // previous value; strtable.hpp has the stream format.
-static const Int __sm_stringCount = 19;
+static const Int __sm_stringCount = 29;
 static const char __sm_stringPool[] =
-    "shadowing the protocol:" "every other, up to 10:" "with for and an index:" "skip 4, stop after 8:" "countdown from 3:" "after the end:" "with for:" "negative" "called" "parsed" "alpha" "gamma" "beta" "gone" ":" "=" "a" "b" "c" 
+    "relational" "equality" "bitwise" "letter" "empty" "other" "shift" " -> " "HEAD" "head" "pair" "abc" "!=" "<<" "<=" "==" ">=" "ab" "zz" "||" " " "&" "<" ">" "?" "^" "a" "|" "" 
 ;
-static const Int16 __sm_stringStarts[] = {19,16,0,-23,1,0,1,4,3,5,1,2,0,1,0,1,0,3,1,3,0};
-static const Int16 __sm_stringLens[] = {19,15,-23,1,0,1,4,3,5,1,2,0,1,0,1,0,3,1,4,0};
-static_assert(sizeof(__sm_stringPool) - 1 == 171, "the string pool and its length index disagree");
+static const Int16 __sm_stringStarts[] = {29,3,0,-10,2,2,3,1,2,0,1,1,3,3,0,2,1,7,0,1,1,1,7,0};
+static const Int16 __sm_stringLens[] = {29,2,-10,2,2,3,1,2,0,1,1,3,3,0,2,1,7,0,1,1,1,7,0,1,1};
+static_assert(sizeof(__sm_stringPool) - 1 == 89, "the string pool and its length index disagree");
 static StrView __sm_stringTable[__sm_stringCount];
 static struct __SmStringTableInitType {
     __SmStringTableInitType() {
@@ -236,70 +236,6 @@ Int simse_strCountDigits(Int64 value);
 void simse_strAddInt(char* target, Int64 value, Int count);
 StrView simse_strBoolView(Bool value);
 
-#include <charconv>
-#include <cstddef>
-#include <system_error>
-
-// The string, character, numeric-conversion and min/max operations behind the prelude
-// (impl_specs/native-interop.md, specs/built-in-types.md), moved out of
-// cppsrc/rtl/strops.hpp.
-//
-// `Str` is the inline `SmString` (smstring.hpp): every size, length and index here is the
-// language's `Int` (`int32_t`), including `Str::npos`, which is `-1`. Index/range errors
-// are unchecked where the underlying operation is unchecked; the `Opt`-returning
-// conversions never throw.
-
-// `Str.charAt(index)`: the byte at `index` (unchecked; no bounds test).
-Char simse_str_charAt(const Str& self, Int index);
-
-// `Str.trim()` strips leading and trailing whitespace (space, tab, newline, CR).
-Str simse_str_trim(const Str& self);
-
-// `Str.split(separator)` splits on every occurrence. An empty separator returns the whole
-// string as a single element. Two overloads: a separator string and a separator byte.
-List<Str> simse_str_split(const Str& self, const Str& separator);
-List<Str> simse_str_split(const Str& self, Char separator);
-
-// ASCII/byte case folding (the string type is a byte string).
-Str simse_str_toUpper(const Str& self);
-Str simse_str_toLower(const Str& self);
-
-// `Str.find(sub)` returns the first index of `sub`, or -1 when absent (the language's
-// spelling of C++ `npos`).
-Int simse_str_find(const Str& self, const Str& sub);
-
-// `Str.lastIndexOf(sub)` returns the last index of `sub`, or -1 when absent.
-Int simse_str_lastIndexOf(const Str& self, const Str& sub);
-
-// `Str.substr(start, len)` clamps `start` to [0, size]; `len` may run past the end.
-Str simse_str_substr(const Str& self, Int start, Int len);
-
-Bool simse_str_startsWith(const Str& self, const Str& prefix);
-Bool simse_str_endsWith(const Str& self, const Str& suffix);
-
-// `Str.replace(from, to)` replaces every occurrence of `from` with `to`.
-Str simse_str_replace(const Str& self, const Str& from, const Str& to);
-
-// `Str.toInt()`/`Str.toFloat()` parse the whole string; failure (or a non-empty trailing
-// remainder) yields `Opt.none()`. No exceptions: `std::from_chars` reports errors through
-// its return value.
-Opt<Int> simse_str_toInt(const Str& self);
-Opt<Float64> simse_str_toFloat(const Str& self);
-
-// `Char` is a signed 8-bit integer; the checks are byte-range tests so they do not depend
-// on the C locale. Space, tab, newline and carriage return count as space; form feed and
-// vertical tab do not.
-Bool simse_char_isDigit(Char self);
-Bool simse_char_isAlpha(Char self);
-Bool simse_char_isAlphaOrDigit(Char self);
-Bool simse_char_isSpace(Char self);
-
-// Numeric conversions. `Char` is an 8-bit integer, so it stringifies as a number.
-template <class T>
-Str simse_num_toString(const T& self);
-Str simse_char_toString(Char self);
-Str simse_bool_toString(Bool self);
-
 template <class T>
 struct List_iter_yieldable {
     Int branch{};
@@ -346,187 +282,9 @@ struct List_iter_yieldable {
 
 template <class T>
 List_iter_yieldable<T> iter(List<T>* self);
-Int ns1_compute();
-Int ns1_partDeadCode();
-Opt<Int> ns1_pick(Int i);
-Res<Str> ns1_parse(Int n);
-Str ns1_describe(Int n);
-Int ns1_countUntil(List<Str> names);
-Int ns1_partFlatBlocks();
-// stress/machines/src/main.kt:91
-template <class T>
-struct ns1_List_everyNth_yieldable {
-    Int branch{};
-    T current{};
-    List<T>* _sm_self{};
-    Int step{};
-    Int i{};
-    Bool advance() {
-        Bool _sm_base1, _sm_base3, _sm_expr2;
-        Int _sm_base2, _sm_base4, _sm_base6, _sm_base8, _sm_base9, _sm_base10, _sm_base11, _sm_expr1;
-        List<T>* _sm_base5, * _sm_base7;
-        T _sm_expr3;
-        _sm_base2 = this->branch;
-        _sm_base1 = _sm_base2 == -1;
-        if (_sm_base1) goto L2;
-        _sm_base4 = this->branch;
-        _sm_base3 = _sm_base4 == 1;
-        if (_sm_base3) goto LY1;
-        this->i = 0;
-        L1:;
-        _sm_base5 = this->_sm_self;
-        _sm_expr1 = _sm_base5->size();
-        _sm_base6 = this->i;
-        _sm_expr2 = _sm_base6 < _sm_expr1;
-        if (!(_sm_expr2)) goto L2;
-        _sm_base7 = this->_sm_self;
-        _sm_base8 = this->i;
-        _sm_expr3 = (*_sm_base7)[_sm_base8];
-        this->current = _sm_expr3;
-        this->branch = 1;
-        return true;
-        LY1:;
-        _sm_base10 = this->i;
-        _sm_base11 = this->step;
-        _sm_base9 = _sm_base10 + _sm_base11;
-        this->i = _sm_base9;
-        goto L1;
-        L2:;
-        this->branch = -1;
-        return false;
-    }
-};
-
-template <class T>
-ns1_List_everyNth_yieldable<T> ns1_everyNth(List<T>* self, Int step);
-Int ns1_partGenericYield();
-// stress/machines/src/main.kt:158
-struct ns1_everyOther_yieldable {
-    Int branch{};
-    Int current{};
-    Int n{};
-    Int i{};
-    Bool advance() {
-        Bool _sm_base1, _sm_base3, _sm_expr1, _sm_expr3;
-        Int _sm_base2, _sm_base4, _sm_base5, _sm_base6, _sm_base7, _sm_base8, _sm_base9, _sm_base10,
-            _sm_expr2;
-        _sm_base2 = this->branch;
-        _sm_base1 = _sm_base2 == -1;
-        if (_sm_base1) goto L2;
-        _sm_base4 = this->branch;
-        _sm_base3 = _sm_base4 == 1;
-        if (_sm_base3) goto LY1;
-        this->n = 10;
-        this->i = 0;
-        L1:;
-        _sm_base5 = this->i;
-        _sm_base6 = this->n;
-        _sm_expr1 = _sm_base5 < _sm_base6;
-        if (!(_sm_expr1)) goto L2;
-        _sm_base7 = this->i;
-        _sm_expr2 = _sm_base7 % 2;
-        _sm_expr3 = _sm_expr2 == 0;
-        if (!(_sm_expr3)) goto LY1;
-        _sm_base8 = this->i;
-        this->current = _sm_base8;
-        this->branch = 1;
-        return true;
-        LY1:;
-        _sm_base10 = this->i;
-        _sm_base9 = _sm_base10 + 1;
-        this->i = _sm_base9;
-        goto L1;
-        L2:;
-        this->branch = -1;
-        return false;
-    }
-};
-
-ns1_everyOther_yieldable ns1_everyOther();
-// stress/machines/src/main.kt:172
-struct ns1_countdown_yieldable {
-    Int branch{};
-    Int current{};
-    Int value{};
-    Bool advance() {
-        Bool _sm_base1, _sm_base3, _sm_expr1;
-        Int _sm_base2, _sm_base4, _sm_base5, _sm_base6, _sm_base7, _sm_base8;
-        _sm_base2 = this->branch;
-        _sm_base1 = _sm_base2 == -1;
-        if (_sm_base1) goto L2;
-        _sm_base4 = this->branch;
-        _sm_base3 = _sm_base4 == 1;
-        if (_sm_base3) goto LY1;
-        this->value = 3;
-        L1:;
-        _sm_base5 = this->value;
-        _sm_expr1 = _sm_base5 > 0;
-        if (!(_sm_expr1)) goto L2;
-        _sm_base6 = this->value;
-        this->current = _sm_base6;
-        this->branch = 1;
-        return true;
-        LY1:;
-        _sm_base8 = this->value;
-        _sm_base7 = _sm_base8 - 1;
-        this->value = _sm_base7;
-        goto L1;
-        L2:;
-        this->branch = -1;
-        return false;
-    }
-};
-
-ns1_countdown_yieldable ns1_countdown();
-// stress/machines/src/main.kt:184
-struct ns1_shadowing_yieldable {
-    Int branch{};
-    Int current{};
-    Int _sm_current_2{};
-    Int _sm_f_advance{};
-    Int _sm_branch_2{};
-    Int value{};
-    Bool advance() {
-        Bool _sm_base1, _sm_base3, _sm_expr1;
-        Int _sm_base2, _sm_base4, _sm_base5, _sm_base6, _sm_base7, _sm_base8, _sm_base9, _sm_base10,
-            _sm_base11, _sm_expr2, _sm_expr3, _sm_expr4;
-        _sm_base2 = this->branch;
-        _sm_base1 = _sm_base2 == -1;
-        if (_sm_base1) goto L2;
-        _sm_base4 = this->branch;
-        _sm_base3 = _sm_base4 == 1;
-        if (_sm_base3) goto LY1;
-        this->_sm_current_2 = 10;
-        this->_sm_f_advance = 1;
-        this->_sm_branch_2 = 2;
-        this->value = 3;
-        L1:;
-        _sm_base5 = this->value;
-        _sm_expr1 = _sm_base5 > 0;
-        if (!(_sm_expr1)) goto L2;
-        _sm_base6 = this->_sm_current_2;
-        _sm_base7 = this->_sm_f_advance;
-        _sm_expr2 = _sm_base6 + _sm_base7;
-        _sm_base8 = this->_sm_branch_2;
-        _sm_expr3 = _sm_expr2 + _sm_base8;
-        _sm_base9 = this->value;
-        _sm_expr4 = _sm_expr3 + _sm_base9;
-        this->current = _sm_expr4;
-        this->branch = 1;
-        return true;
-        LY1:;
-        _sm_base11 = this->value;
-        _sm_base10 = _sm_base11 - 1;
-        this->value = _sm_base10;
-        goto L1;
-        L2:;
-        this->branch = -1;
-        return false;
-    }
-};
-
-ns1_shadowing_yieldable ns1_shadowing();
-Int ns1_partYield();
+Str ns1_classify(Str op);
+Str ns1_viewKind(StrView v);
+Str ns1_fixed(Str op);
 
 template <class T>
 List_iter_yieldable<T> iter(List<T>* self) {
@@ -535,325 +293,184 @@ List_iter_yieldable<T> iter(List<T>* self) {
     machine.branch = 0;
     return machine;
 }
-// stress/machines/src/main.kt:5
-Int ns1_compute() {
-    std::cout << std::boolalpha << (__sm_stringTable[8]) << std::endl;
-    return 3;
-}
-// stress/machines/src/main.kt:10
-Int ns1_partDeadCode() {
-    Int live;
-    ns1_compute();
-    live = 5;
-    std::cout << std::boolalpha << (live) << std::endl;
-    return 0;
-}
-// stress/machines/src/main.kt:32
-Opt<Int> ns1_pick(Int i) {
-    Bool _sm_expr1, _sm_expr3;
-    Opt<Int> _sm_expr2;
-    _sm_expr1 = i < 0;
+// stress/when-strings/src/main.kt:11
+Str ns1_classify(Str op) {
+    Int _sm_when1_n;
+    Bool _sm_expr1, _sm_expr2, _sm_expr4, _sm_expr5, _sm_expr7, _sm_expr8, _sm_expr10, _sm_expr11,
+        _sm_expr12, _sm_expr13, _sm_expr14, _sm_expr15, _sm_expr17, _sm_expr18, _sm_expr20, _sm_expr21,
+        _sm_expr22, _sm_expr23, _sm_expr24, _sm_expr25, _sm_expr26;
+    Char _sm_expr3;
+    _sm_when1_n = op.size();
+    _sm_expr1 = _sm_when1_n == 0;
     if (!(_sm_expr1)) goto L2;
-    _sm_expr2 = Opt<Int>::none();
-    return _sm_expr2;
+    return __sm_stringTable[4];
     L2:;
-    _sm_expr3 = i >= 10;
-    if (!(_sm_expr3)) goto L4;
-    _sm_expr2 = Opt<Int>::none();
-    return _sm_expr2;
-    L4:;
-    _sm_expr2 = Opt<Int>::some(i);
-    return _sm_expr2;
-}
-// stress/machines/src/main.kt:42
-Res<Str> ns1_parse(Int n) {
-    Bool _sm_expr1;
-    Res<Str> _sm_expr2;
-    _sm_expr1 = n < 0;
-    if (!(_sm_expr1)) goto L2;
-    _sm_expr2 = Res<Str>::err(__sm_stringTable[7]);
-    return _sm_expr2;
-    L2:;
-    _sm_expr2 = Res<Str>::ok(__sm_stringTable[9]);
-    return _sm_expr2;
-}
-// stress/machines/src/main.kt:49
-Str ns1_describe(Int n) {
-    Res<Str> r;
-    Bool _sm_expr1, _sm_expr2;
-    Str _sm_expr3;
-    r = ns1_parse(n);
-    _sm_expr1 = r.isOk();
-    _sm_expr2 = !_sm_expr1;
-    if (!(_sm_expr2)) goto L2;
-    _sm_expr3 = r.Error;
-    return _sm_expr3;
-    L2:;
-    _sm_expr3 = r.Value;
-    return _sm_expr3;
-}
-// stress/machines/src/main.kt:57
-Int ns1_countUntil(List<Str> names) {
-    Int limit, i, _sm_expr1;
-    Bool _sm_expr2, _sm_expr3;
-    limit = 2;
-    i = 0;
-    L1:;
-    _sm_expr1 = names.size();
-    _sm_expr2 = i < _sm_expr1;
-    if (!(_sm_expr2)) goto L2;
-    _sm_expr3 = i >= limit;
-    if (!(_sm_expr3)) goto L4;
-    return i;
-    L4:;
-    i = i + 1;
-    goto L1;
-    L2:;
-    _sm_expr1 = names.size();
-    return _sm_expr1;
-}
-// stress/machines/src/main.kt:68
-Int ns1_partFlatBlocks() {
-    Opt<Int> _sm_expr1, _sm_expr4;
-    Int _sm_expr2, _sm_expr3, _sm_expr7, _sm_expr9;
-    Bool _sm_expr5;
-    Str _sm_expr6, _sm_expr8;
-    List<Str> names;
-    _sm_expr1 = ns1_pick(3);
-    _sm_expr2 = _sm_expr1.value();
-    std::cout << std::boolalpha << (_sm_expr2) << std::endl;
-    _sm_expr3 = -1;
-    _sm_expr4 = ns1_pick(_sm_expr3);
-    _sm_expr5 = _sm_expr4.hasValue();
-    std::cout << std::boolalpha << (_sm_expr5) << std::endl;
-    _sm_expr6 = ns1_describe(2);
-    std::cout << std::boolalpha << (_sm_expr6) << std::endl;
-    _sm_expr7 = -2;
-    _sm_expr8 = ns1_describe(_sm_expr7);
-    std::cout << std::boolalpha << (_sm_expr8) << std::endl;
-    names = List<Str>();
-    simse_list_append(names, __sm_stringTable[16]);
-    simse_list_append(names, __sm_stringTable[17]);
-    simse_list_append(names, __sm_stringTable[18]);
-    _sm_expr9 = ns1_countUntil(names);
-    std::cout << std::boolalpha << (_sm_expr9) << std::endl;
-    return 0;
-}
-// stress/machines/src/main.kt:91
-template <class T>
-ns1_List_everyNth_yieldable<T> ns1_everyNth(List<T>* self, Int step) {
-    ns1_List_everyNth_yieldable<T> machine{};
-    machine.step = step;
-    machine._sm_self = self;
-    machine.branch = 0;
-    return machine;
-}
-// stress/machines/src/main.kt:99
-Int ns1_partGenericYield() {
-    char* __sm_catP;
-    Int __sm_catC0;
-    List<Int> numbers;
-    ns1_List_everyNth_yieldable<Int> _sm_expr1, _sm_for1, byOne;
-    Bool _sm_expr2, _sm_expr5, _sm_expr9, _sm_expr12;
-    Int value, _sm_index2, index, total, _sm_expr10;
-    Str _sm_expr3, word, _sm_expr8, _sm_expr11, _sm_expr13;
-    List<Str> words;
-    ns1_List_everyNth_yieldable<Str> _sm_expr4, _sm_for2;
-    numbers = List<Int>();
-    simse_list_append(numbers, 1);
-    simse_list_append(numbers, 2);
-    simse_list_append(numbers, 3);
-    simse_list_append(numbers, 4);
-    simse_list_append(numbers, 5);
-    simse_list_append(numbers, 6);
-    _sm_expr1 = ns1_everyNth(simse_addressOf(numbers), 2);
-    _sm_for1 = _sm_expr1;
-    L1:;
-    _sm_expr2 = _sm_for1.advance();
-    if (!(_sm_expr2)) goto L2;
-    value = _sm_for1.current;
-    _sm_expr3 = simse_int_toString(value);
-    std::cout << std::boolalpha << (_sm_expr3) << std::endl;
-    goto L1;
-    L2:;
-    words = List<Str>();
-    simse_list_append(words, __sm_stringTable[10]);
-    simse_list_append(words, __sm_stringTable[12]);
-    simse_list_append(words, __sm_stringTable[11]);
-    _sm_expr4 = ns1_everyNth(simse_addressOf(words), 2);
-    _sm_for2 = _sm_expr4;
-    _sm_index2 = -1;
-    L3:;
-    _sm_expr5 = _sm_for2.advance();
-    if (!(_sm_expr5)) goto L4;
-    _sm_index2 = _sm_index2 + 1;
-    word = _sm_for2.current;
-    index = _sm_index2;
-    __sm_catC0 = simse_strCountDigits(index);
-    _sm_expr8.resize(1 + __sm_catC0 + word.size());
-    __sm_catP = _sm_expr8.data();
-    simse_strAddInt(__sm_catP, index, __sm_catC0);
-    __sm_catP = __sm_catP + __sm_catC0;
-    *__sm_catP = (char) (':');
-    __sm_catP = __sm_catP + 1;
-    std::memcpy(__sm_catP, word.data(), word.size());
-    std::cout << std::boolalpha << (_sm_expr8) << std::endl;
-    goto L3;
-    L4:;
-    byOne = ns1_everyNth(simse_addressOf(numbers), 1);
-    total = 0;
-    L5:;
-    _sm_expr9 = byOne.advance();
-    if (!(_sm_expr9)) goto L6;
-    _sm_expr10 = byOne.current;
-    total = total + _sm_expr10;
-    goto L5;
-    L6:;
-    _sm_expr11 = simse_int_toString(total);
-    std::cout << std::boolalpha << (_sm_expr11) << std::endl;
-    _sm_expr12 = byOne.advance();
-    _sm_expr13 = simse_bool_toString(_sm_expr12);
-    std::cout << std::boolalpha << (_sm_expr13) << std::endl;
-    return 0;
-}
-// stress/machines/src/main.kt:158
-ns1_everyOther_yieldable ns1_everyOther() {
-    ns1_everyOther_yieldable machine{};
-    machine.branch = 0;
-    return machine;
-}
-// stress/machines/src/main.kt:172
-ns1_countdown_yieldable ns1_countdown() {
-    ns1_countdown_yieldable machine{};
-    machine.branch = 0;
-    return machine;
-}
-// stress/machines/src/main.kt:184
-ns1_shadowing_yieldable ns1_shadowing() {
-    ns1_shadowing_yieldable machine{};
-    machine.branch = 0;
-    return machine;
-}
-// stress/machines/src/main.kt:195
-Int ns1_partYield() {
-    char* __sm_catP;
-    Int* _sm_base1, * _sm_base2;
-    ns1_everyOther_yieldable evens, _sm_expr10, _sm_for4, _sm_expr13, _sm_for5, _sm_expr19, _sm_for6;
-    Bool _sm_expr1, _sm_expr3, _sm_expr5, _sm_expr8, _sm_expr11, _sm_expr14, _sm_expr20, _sm_expr21,
-        _sm_expr22;
-    Str _sm_expr2, _sm_expr4, _sm_expr6, _sm_expr9, _sm_expr12, _sm_expr15, _sm_expr16, _sm_expr17,
-        _sm_expr18, _sm_expr26;
-    ns1_countdown_yieldable down;
-    ns1_shadowing_yieldable _sm_expr7, _sm_for3;
-    Int total, value, _sm_index5, _sm_value_2, index, _sm_index6, _sm_value_3, _sm_index_2;
-    std::cout << std::boolalpha << (__sm_stringTable[1]) << std::endl;
-    evens = ns1_everyOther();
-    L1:;
-    _sm_expr1 = evens.advance();
-    if (!(_sm_expr1)) goto L2;
-    _sm_base1 = simse_addressOf(evens.current);
-    _sm_expr2 = simse_int_toString((*_sm_base1));
-    std::cout << std::boolalpha << (_sm_expr2) << std::endl;
-    goto L1;
-    L2:;
-    std::cout << std::boolalpha << (__sm_stringTable[4]) << std::endl;
-    down = ns1_countdown();
-    L3:;
-    _sm_expr3 = down.advance();
-    if (!(_sm_expr3)) goto L4;
-    _sm_base2 = simse_addressOf(down.current);
-    _sm_expr4 = simse_int_toString((*_sm_base2));
-    std::cout << std::boolalpha << (_sm_expr4) << std::endl;
-    goto L3;
-    L4:;
-    std::cout << std::boolalpha << (__sm_stringTable[5]) << std::endl;
-    _sm_expr5 = down.advance();
-    _sm_expr6 = simse_bool_toString(_sm_expr5);
-    std::cout << std::boolalpha << (_sm_expr6) << std::endl;
-    std::cout << std::boolalpha << (__sm_stringTable[0]) << std::endl;
-    _sm_expr7 = ns1_shadowing();
-    _sm_for3 = _sm_expr7;
-    L5:;
-    _sm_expr8 = _sm_for3.advance();
-    if (!(_sm_expr8)) goto L6;
-    total = _sm_for3.current;
-    _sm_expr9 = simse_int_toString(total);
-    std::cout << std::boolalpha << (_sm_expr9) << std::endl;
-    goto L5;
-    L6:;
-    std::cout << std::boolalpha << (__sm_stringTable[6]) << std::endl;
-    _sm_expr10 = ns1_everyOther();
-    _sm_for4 = _sm_expr10;
+    _sm_expr2 = _sm_when1_n == 1;
+    if (!(_sm_expr2)) goto L7;
+    _sm_expr3 = op[0];
+    _sm_expr4 = _sm_expr3 == '|';
+    if (_sm_expr4) goto L4;
     L7:;
-    _sm_expr11 = _sm_for4.advance();
-    if (!(_sm_expr11)) goto L8;
-    value = _sm_for4.current;
-    _sm_expr12 = simse_int_toString(value);
-    std::cout << std::boolalpha << (_sm_expr12) << std::endl;
-    goto L7;
-    L8:;
-    std::cout << std::boolalpha << (__sm_stringTable[2]) << std::endl;
-    _sm_expr13 = ns1_everyOther();
-    _sm_for5 = _sm_expr13;
-    _sm_index5 = -1;
-    L9:;
-    _sm_expr14 = _sm_for5.advance();
-    if (!(_sm_expr14)) goto L10;
-    _sm_index5 = _sm_index5 + 1;
-    _sm_value_2 = _sm_for5.current;
-    index = _sm_index5;
-    _sm_expr15 = simse_int_toString(index);
-    _sm_expr16.resize(1 + _sm_expr15.size());
-    __sm_catP = _sm_expr16.data();
-    std::memcpy(__sm_catP, _sm_expr15.data(), _sm_expr15.size());
-    __sm_catP = __sm_catP + _sm_expr15.size();
-    *__sm_catP = (char) (':');
-    _sm_expr17 = simse_int_toString(_sm_value_2);
-    _sm_expr18.resize(_sm_expr16.size() + _sm_expr17.size());
-    __sm_catP = _sm_expr18.data();
-    std::memcpy(__sm_catP, _sm_expr16.data(), _sm_expr16.size());
-    __sm_catP = __sm_catP + _sm_expr16.size();
-    std::memcpy(__sm_catP, _sm_expr17.data(), _sm_expr17.size());
-    std::cout << std::boolalpha << (_sm_expr18) << std::endl;
-    goto L9;
-    L10:;
-    std::cout << std::boolalpha << (__sm_stringTable[3]) << std::endl;
-    _sm_expr19 = ns1_everyOther();
-    _sm_for6 = _sm_expr19;
-    _sm_index6 = -1;
-    L11:;
-    _sm_expr20 = _sm_for6.advance();
-    if (!(_sm_expr20)) goto L12;
-    _sm_index6 = _sm_index6 + 1;
-    _sm_value_3 = _sm_for6.current;
-    _sm_index_2 = _sm_index6;
-    _sm_expr21 = _sm_value_3 == 4;
-    if (_sm_expr21) goto L11;
-    _sm_expr22 = _sm_value_3 > 8;
-    if (_sm_expr22) goto L12;
-    _sm_expr15 = simse_int_toString(_sm_index_2);
-    _sm_expr16.resize(1 + _sm_expr15.size());
-    __sm_catP = _sm_expr16.data();
-    std::memcpy(__sm_catP, _sm_expr15.data(), _sm_expr15.size());
-    __sm_catP = __sm_catP + _sm_expr15.size();
-    *__sm_catP = (char) ('=');
-    _sm_expr17 = simse_int_toString(_sm_value_3);
-    _sm_expr26.resize(_sm_expr16.size() + _sm_expr17.size());
-    __sm_catP = _sm_expr26.data();
-    std::memcpy(__sm_catP, _sm_expr16.data(), _sm_expr16.size());
-    __sm_catP = __sm_catP + _sm_expr16.size();
-    std::memcpy(__sm_catP, _sm_expr17.data(), _sm_expr17.size());
-    std::cout << std::boolalpha << (_sm_expr26) << std::endl;
-    goto L11;
+    _sm_expr5 = _sm_when1_n == 1;
+    if (!(_sm_expr5)) goto L6;
+    _sm_expr3 = op[0];
+    _sm_expr7 = _sm_expr3 == '^';
+    if (_sm_expr7) goto L4;
+    L6:;
+    _sm_expr8 = _sm_when1_n == 1;
+    if (!(_sm_expr8)) goto L5;
+    _sm_expr3 = op[0];
+    _sm_expr10 = _sm_expr3 == '&';
+    if (!(_sm_expr10)) goto L5;
+    L4:;
+    return __sm_stringTable[2];
+    L5:;
+    _sm_expr11 = _sm_when1_n == 2;
+    if (!(_sm_expr11)) goto L14;
+    _sm_expr12 = op == __sm_stringTable[15];
+    if (_sm_expr12) goto L12;
+    L14:;
+    _sm_expr13 = _sm_when1_n == 2;
+    if (!(_sm_expr13)) goto L13;
+    _sm_expr14 = op == __sm_stringTable[12];
+    if (!(_sm_expr14)) goto L13;
     L12:;
-    return 0;
+    return __sm_stringTable[1];
+    L13:;
+    _sm_expr15 = _sm_when1_n == 1;
+    if (!(_sm_expr15)) goto L22;
+    _sm_expr3 = op[0];
+    _sm_expr17 = _sm_expr3 == '<';
+    if (_sm_expr17) goto L18;
+    L22:;
+    _sm_expr18 = _sm_when1_n == 1;
+    if (!(_sm_expr18)) goto L21;
+    _sm_expr3 = op[0];
+    _sm_expr20 = _sm_expr3 == '>';
+    if (_sm_expr20) goto L18;
+    L21:;
+    _sm_expr21 = _sm_when1_n == 2;
+    if (!(_sm_expr21)) goto L20;
+    _sm_expr22 = op == __sm_stringTable[14];
+    if (_sm_expr22) goto L18;
+    L20:;
+    _sm_expr23 = _sm_when1_n == 2;
+    if (!(_sm_expr23)) goto L19;
+    _sm_expr24 = op == __sm_stringTable[16];
+    if (!(_sm_expr24)) goto L19;
+    L18:;
+    return __sm_stringTable[0];
+    L19:;
+    _sm_expr25 = _sm_when1_n == 2;
+    if (!(_sm_expr25)) goto L29;
+    _sm_expr26 = op == __sm_stringTable[13];
+    if (!(_sm_expr26)) goto L29;
+    return __sm_stringTable[6];
+    L29:;
+    return __sm_stringTable[5];
 }
-// stress/machines/src/main.kt:248
+// stress/when-strings/src/main.kt:40
+Str ns1_viewKind(StrView v) {
+    Int _sm_when2_n;
+    Bool _sm_expr1, _sm_expr3, _sm_expr4, _sm_expr6, _sm_expr7, _sm_expr8;
+    _sm_when2_n = simse_strView_size(v);
+    _sm_expr1 = _sm_when2_n == 1;
+    if (!(_sm_expr1)) goto L3;
+    {
+        auto _sm_expr2 = v[0];
+        _sm_expr3 = _sm_expr2 == 'a';
+        if (_sm_expr3) goto L1;
+    }
+    L3:;
+    _sm_expr4 = _sm_when2_n == 1;
+    if (!(_sm_expr4)) goto L2;
+    {
+        auto _sm_expr5 = v[0];
+        _sm_expr6 = _sm_expr5 == 'b';
+        if (!(_sm_expr6)) goto L2;
+    }
+    L1:;
+    return __sm_stringTable[3];
+    L2:;
+    _sm_expr7 = _sm_when2_n == 2;
+    if (!(_sm_expr7)) goto L8;
+    _sm_expr8 = v == __sm_stringTable[17];
+    if (!(_sm_expr8)) goto L8;
+    return __sm_stringTable[10];
+    L8:;
+    return __sm_stringTable[24];
+}
+// stress/when-strings/src/main.kt:57
+Str ns1_fixed(Str op) {
+    Bool _sm_expr1;
+    _sm_expr1 = op == __sm_stringTable[9];
+    if (!(_sm_expr1)) goto L2;
+    return __sm_stringTable[8];
+    L2:;
+    return __sm_stringTable[5];
+}
+// stress/when-strings/src/main.kt:70
 int main() {
-    ns1_partDeadCode();
-    ns1_partFlatBlocks();
-    ns1_partGenericYield();
-    ns1_partYield();
+    char* __sm_catP;
+    List<Str> ops;
+    List_iter_yieldable<Str> _sm_for4;
+    Bool _sm_expr1;
+    Str op, _sm_expr2, _sm_expr3, _sm_expr4, _sm_expr7, _sm_expr9, _sm_expr10, _sm_expr11, _sm_expr12,
+        _sm_expr13, _sm_expr14, _sm_expr15;
+    ops = List<Str>{__sm_stringTable[28], __sm_stringTable[27], __sm_stringTable[25], __sm_stringTable[21], __sm_stringTable[15], __sm_stringTable[12], __sm_stringTable[22], __sm_stringTable[23], __sm_stringTable[14], __sm_stringTable[16], __sm_stringTable[13], __sm_stringTable[18], __sm_stringTable[19]};
+    _sm_for4 = iter(simse_addressOf(ops));
+    L1:;
+    _sm_expr1 = _sm_for4.advance();
+    if (!(_sm_expr1)) goto L2;
+    op = _sm_for4.current;
+    _sm_expr2.resize(4 + op.size());
+    __sm_catP = _sm_expr2.data();
+    std::memcpy(__sm_catP, op.data(), op.size());
+    __sm_catP = __sm_catP + op.size();
+    std::memcpy(__sm_catP, " -> ", 4);
+    _sm_expr3 = ns1_classify(op);
+    _sm_expr4.resize(_sm_expr2.size() + _sm_expr3.size());
+    __sm_catP = _sm_expr4.data();
+    std::memcpy(__sm_catP, _sm_expr2.data(), _sm_expr2.size());
+    __sm_catP = __sm_catP + _sm_expr2.size();
+    std::memcpy(__sm_catP, _sm_expr3.data(), _sm_expr3.size());
+    std::cout << std::boolalpha << (_sm_expr4) << std::endl;
+    goto L1;
+    L2:;
+    _sm_expr2 = ns1_viewKind(__sm_stringTable[26]);
+    _sm_expr3.resize(1 + _sm_expr2.size());
+    __sm_catP = _sm_expr3.data();
+    std::memcpy(__sm_catP, _sm_expr2.data(), _sm_expr2.size());
+    __sm_catP = __sm_catP + _sm_expr2.size();
+    *__sm_catP = (char) (' ');
+    _sm_expr7 = ns1_viewKind(__sm_stringTable[17]);
+    _sm_expr9.resize(1 + _sm_expr3.size() + _sm_expr7.size());
+    __sm_catP = _sm_expr9.data();
+    std::memcpy(__sm_catP, _sm_expr3.data(), _sm_expr3.size());
+    __sm_catP = __sm_catP + _sm_expr3.size();
+    std::memcpy(__sm_catP, _sm_expr7.data(), _sm_expr7.size());
+    __sm_catP = __sm_catP + _sm_expr7.size();
+    *__sm_catP = (char) (' ');
+    _sm_expr10 = ns1_viewKind(__sm_stringTable[11]);
+    _sm_expr11.resize(_sm_expr9.size() + _sm_expr10.size());
+    __sm_catP = _sm_expr11.data();
+    std::memcpy(__sm_catP, _sm_expr9.data(), _sm_expr9.size());
+    __sm_catP = __sm_catP + _sm_expr9.size();
+    std::memcpy(__sm_catP, _sm_expr10.data(), _sm_expr10.size());
+    std::cout << std::boolalpha << (_sm_expr11) << std::endl;
+    _sm_expr12 = ns1_fixed(__sm_stringTable[9]);
+    _sm_expr13.resize(1 + _sm_expr12.size());
+    __sm_catP = _sm_expr13.data();
+    std::memcpy(__sm_catP, _sm_expr12.data(), _sm_expr12.size());
+    __sm_catP = __sm_catP + _sm_expr12.size();
+    *__sm_catP = (char) (' ');
+    _sm_expr14 = ns1_fixed(__sm_stringTable[5]);
+    _sm_expr15.resize(_sm_expr13.size() + _sm_expr14.size());
+    __sm_catP = _sm_expr15.data();
+    std::memcpy(__sm_catP, _sm_expr13.data(), _sm_expr13.size());
+    __sm_catP = __sm_catP + _sm_expr13.size();
+    std::memcpy(__sm_catP, _sm_expr14.data(), _sm_expr14.size());
+    std::cout << std::boolalpha << (_sm_expr15) << std::endl;
     return 0;
 }
 
@@ -1184,182 +801,6 @@ inline StrView simse_strBoolView(Bool value) {
     static Int lens[2] = {4, 5};
     Int at = value ? 0 : 1;
     return StrView(texts[at], lens[at]);
-}
-
-// `Str.isEmpty()` is the prelude's own body (cppsrc/rtl/rtl.kt), not a resource: `size()`
-// is the built-in it needs. This one is the shared space test the `Char` predicate below
-// uses too.
-inline Bool simse_str_isSpaceByte(Char ch) {
-    return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r';
-}
-
-inline Char simse_str_charAt(const Str& self, Int index) {
-    return (Char) self[index];
-}
-
-inline Str simse_str_trim(const Str& self) {
-    Int begin = 0;
-    Int end = self.size();
-    while (begin < end && simse_str_isSpaceByte((Char) self[begin])) begin++;
-    while (end > begin && simse_str_isSpaceByte((Char) self[end - 1])) end--;
-    return self.substr(begin, end - begin);
-}
-
-inline List<Str> simse_str_split(const Str& self, const Str& separator) {
-    List<Str> parts;
-    if (separator.empty()) {
-        parts.push_back(self);
-        return parts;
-    }
-    Int pos = 0;
-    while (true) {
-        Int found = self.find(separator, pos);
-        if (found == Str::npos) {
-            parts.push_back(self.substr(pos));
-            break;
-        }
-        parts.push_back(self.substr(pos, found - pos));
-        pos = found + separator.size();
-    }
-    return parts;
-}
-
-// How many bytes of `self` are `ch`: what the byte-separator split reserves up front.
-inline Int simse_count_char_in_str(const Str* self, char ch) {
-    Int count = 0;
-    const char* data = self->data();
-    Int len = self->size();
-    for (Int i = 0; i < len; i++) {
-        if (data[i] == ch) {
-            count++;
-        }
-    }
-    return count;
-}
-
-inline List<Str> simse_str_split(const Str& self, Char separator) {
-    List<Str> parts;
-    parts.reserve(simse_count_char_in_str(&self, separator));
-    Int pos = 0;
-    while (true) {
-        Int found = self.find(separator, pos);
-        if (found == Str::npos) {
-            parts.push_back(self.substr(pos));
-            break;
-        }
-        parts.push_back(self.substr(pos, found - pos));
-        pos = found + 1;
-    }
-    return parts;
-}
-
-inline Str simse_str_toUpper(const Str& self) {
-    Str result = self;
-    for (char& ch : result) {
-        if (ch >= 'a' && ch <= 'z') ch = (char) (ch - 'a' + 'A');
-    }
-    return result;
-}
-
-inline Str simse_str_toLower(const Str& self) {
-    Str result = self;
-    for (char& ch : result) {
-        if (ch >= 'A' && ch <= 'Z') ch = (char) (ch - 'A' + 'a');
-    }
-    return result;
-}
-
-inline Int simse_str_find(const Str& self, const Str& sub) {
-    Int found = self.find(sub);
-    return found == Str::npos ? -1 : found;
-}
-
-inline Int simse_str_lastIndexOf(const Str& self, const Str& sub) {
-    Int found = self.rfind(sub);
-    return found == Str::npos ? -1 : found;
-}
-
-inline Str simse_str_substr(const Str& self, Int start, Int len) {
-    if (start < 0) start = 0;
-    if (start > self.size()) start = self.size();
-    Str result = self.substr(start);
-    if (len >= 0 && len < result.size()) result.resize(len);
-    return result;
-}
-
-inline Bool simse_str_startsWith(const Str& self, const Str& prefix) {
-    return prefix.size() <= self.size() && self.compare(0, prefix.size(), prefix) == 0;
-}
-
-inline Bool simse_str_endsWith(const Str& self, const Str& suffix) {
-    return suffix.size() <= self.size()
-           && self.compare(self.size() - suffix.size(), suffix.size(), suffix) == 0;
-}
-
-inline Str simse_str_replace(const Str& self, const Str& from, const Str& to) {
-    if (from.empty()) return self;
-    Str result;
-    Int pos = 0;
-    while (true) {
-        Int found = self.find(from, pos);
-        if (found == Str::npos) {
-            result.append(self, pos, Str::npos);
-            break;
-        }
-        result.append(self, pos, found - pos);
-        result += to;
-        pos = found + from.size();
-    }
-    return result;
-}
-
-inline Opt<Int> simse_str_toInt(const Str& self) {
-    if (self.empty()) return Opt<Int>::none();
-    Int value = 0;
-    const char* begin = self.data();
-    const char* end = begin + self.size();
-    std::from_chars_result parsed = std::from_chars(begin, end, value);
-    if (parsed.ec != std::errc() || parsed.ptr != end) return Opt<Int>::none();
-    return Opt<Int>::some(value);
-}
-
-inline Opt<Float64> simse_str_toFloat(const Str& self) {
-    if (self.empty()) return Opt<Float64>::none();
-    Float64 value = 0;
-    const char* begin = self.data();
-    const char* end = begin + self.size();
-    std::from_chars_result parsed = std::from_chars(begin, end, value);
-    if (parsed.ec != std::errc() || parsed.ptr != end) return Opt<Float64>::none();
-    return Opt<Float64>::some(value);
-}
-
-inline Bool simse_char_isDigit(Char self) {
-    return self >= '0' && self <= '9';
-}
-
-inline Bool simse_char_isAlpha(Char self) {
-    return (self >= 'a' && self <= 'z') || (self >= 'A' && self <= 'Z');
-}
-
-inline Bool simse_char_isAlphaOrDigit(Char self) {
-    return simse_char_isAlpha(self) || simse_char_isDigit(self);
-}
-
-inline Bool simse_char_isSpace(Char self) {
-    return simse_str_isSpaceByte(self);
-}
-
-template <class T>
-inline Str simse_num_toString(const T& self) {
-    return std::to_string(self);
-}
-
-inline Str simse_char_toString(Char self) {
-    return std::to_string((int) self);
-}
-
-inline Str simse_bool_toString(Bool self) {
-    return self ? "true" : "false";
 }
 
 // Expands one run-length encoded series into `out`, which holds `count` values.

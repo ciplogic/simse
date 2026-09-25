@@ -127,9 +127,10 @@ fun cgJoinLength(parts: *List<Str>, separatorLen: Int): Int {
 
 fun cgIndent(level: Int): Str {
     var out: Str = ""
+    out.reserve(level * 4)
     var i: Int = 0
-    while (i < level * 4) {
-        out.append(' ')
+    while (i < level) {
+        out.appendStr("    ")
         i = i + 1
     }
     return out
@@ -307,11 +308,7 @@ data class Emitter(
 
 // Inside a closure class's method (or a machine's): the receiver is C++'s `this`,
 // because a member function has no `self` parameter.
-    var inClosureMethod: Bool,
-
-// How many concatenation expansions have been written: each names its own temporaries
-// (`__sm_cat*`), so two chains in one C++ scope cannot collide.
-    var ilConcatTemps: Int
+    var inClosureMethod: Bool
 ) {
 
     fun fail(posNode: *AstXmlNode, message: *Str): Unit {
@@ -3033,8 +3030,7 @@ fun newEmitter(inputs: *List<CgInput>, resourceStored: *List<Str>): Emitter {
         Dictionary<Str, Bool>(),
         xmlEmptyNode(),
         "",
-        false,
-        0
+        false
     )
 }
 

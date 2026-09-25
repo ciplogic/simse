@@ -131,7 +131,7 @@ one module.
 The compiler's own CLI is:
 
 ```
-simse.exe --root <dir> -o <out.cpp> [--prelude <dir>] [--profile] [--showLinearRepresentation]
+simse.exe --root <dir> -o <out.cpp> [--prelude <dir>] [--profile] [--no-concat] [--when-first-char] [--showLinearRepresentation]
 ```
 
 - `--root <dir>` scans a directory tree for `.kt` files (the compiler's own

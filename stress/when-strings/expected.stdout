@@ -1,0 +1,15 @@
+ -> empty
+| -> bitwise
+^ -> bitwise
+& -> bitwise
+== -> equality
+!= -> equality
+< -> relational
+> -> relational
+<= -> relational
+>= -> relational
+<< -> shift
+zz -> other
+|| -> other
+letter pair ?
+HEAD other

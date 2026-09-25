@@ -366,21 +366,22 @@ Str fmtStr(StrView fmt, List<Str>* items) {
 }
 // stress/concat/src/main.kt:19
 Str ns1_pair(Str a, Str b) {
+    char* __sm_catP;
     Str _sm_expr2;
-    {
-        _sm_expr2.resize(1 + a.size() + b.size());
-        char* __sm_catP0 = _sm_expr2.data();
-        std::memcpy(__sm_catP0, a.data(), a.size());
-        __sm_catP0 = __sm_catP0 + a.size();
-        *__sm_catP0 = (char) ('-');
-        __sm_catP0 = __sm_catP0 + 1;
-        std::memcpy(__sm_catP0, b.data(), b.size());
-        __sm_catP0 = __sm_catP0 + b.size();
-    }
+    _sm_expr2.resize(1 + a.size() + b.size());
+    __sm_catP = _sm_expr2.data();
+    std::memcpy(__sm_catP, a.data(), a.size());
+    __sm_catP = __sm_catP + a.size();
+    *__sm_catP = (char) ('-');
+    __sm_catP = __sm_catP + 1;
+    std::memcpy(__sm_catP, b.data(), b.size());
     return _sm_expr2;
 }
 // stress/concat/src/main.kt:23
 int main() {
+    char* __sm_catP;
+    Int __sm_catAt;
+    Int __sm_catC0;
     Int* _sm_base1;
     List<Str> _sm_base10, _sm_base12;
     List<Str>* _sm_base11, * _sm_base13;
@@ -391,159 +392,113 @@ int main() {
     StrView format;
     a = __sm_stringTable[1];
     b = __sm_stringTable[4];
-    {
-        _sm_expr2.resize(1 + a.size() + b.size());
-        char* __sm_catP1 = _sm_expr2.data();
-        std::memcpy(__sm_catP1, a.data(), a.size());
-        __sm_catP1 = __sm_catP1 + a.size();
-        std::memcpy(__sm_catP1, b.data(), b.size());
-        __sm_catP1 = __sm_catP1 + b.size();
-        *__sm_catP1 = (char) ('!');
-        __sm_catP1 = __sm_catP1 + 1;
-    }
+    _sm_expr2.resize(1 + a.size() + b.size());
+    __sm_catP = _sm_expr2.data();
+    std::memcpy(__sm_catP, a.data(), a.size());
+    __sm_catP = __sm_catP + a.size();
+    std::memcpy(__sm_catP, b.data(), b.size());
+    __sm_catP = __sm_catP + b.size();
+    *__sm_catP = (char) ('!');
     std::cout << std::boolalpha << (_sm_expr2) << std::endl;
-    {
-        _sm_expr3.resize(1 + a.size());
-        char* __sm_catP2 = _sm_expr3.data();
-        *__sm_catP2 = (char) ('x');
-        __sm_catP2 = __sm_catP2 + 1;
-        std::memcpy(__sm_catP2, a.data(), a.size());
-        __sm_catP2 = __sm_catP2 + a.size();
-    }
+    _sm_expr3.resize(1 + a.size());
+    __sm_catP = _sm_expr3.data();
+    *__sm_catP = (char) ('x');
+    __sm_catP = __sm_catP + 1;
+    std::memcpy(__sm_catP, a.data(), a.size());
     std::cout << std::boolalpha << (_sm_expr3) << std::endl;
-    {
-        _sm_expr5.resize(1 + a.size() + b.size());
-        char* __sm_catP3 = _sm_expr5.data();
-        std::memcpy(__sm_catP3, a.data(), a.size());
-        __sm_catP3 = __sm_catP3 + a.size();
-        *__sm_catP3 = (char) (':');
-        __sm_catP3 = __sm_catP3 + 1;
-        std::memcpy(__sm_catP3, b.data(), b.size());
-        __sm_catP3 = __sm_catP3 + b.size();
-    }
+    _sm_expr5.resize(1 + a.size() + b.size());
+    __sm_catP = _sm_expr5.data();
+    std::memcpy(__sm_catP, a.data(), a.size());
+    __sm_catP = __sm_catP + a.size();
+    *__sm_catP = (char) (':');
+    __sm_catP = __sm_catP + 1;
+    std::memcpy(__sm_catP, b.data(), b.size());
     std::cout << std::boolalpha << (_sm_expr5) << std::endl;
     _sm_expr6 = ns1_pair(__sm_stringTable[17], __sm_stringTable[18]);
-    {
-        _sm_expr7.resize(a.size() + _sm_expr6.size());
-        char* __sm_catP4 = _sm_expr7.data();
-        std::memcpy(__sm_catP4, a.data(), a.size());
-        __sm_catP4 = __sm_catP4 + a.size();
-        std::memcpy(__sm_catP4, _sm_expr6.data(), _sm_expr6.size());
-        __sm_catP4 = __sm_catP4 + _sm_expr6.size();
-    }
+    _sm_expr7.resize(a.size() + _sm_expr6.size());
+    __sm_catP = _sm_expr7.data();
+    std::memcpy(__sm_catP, a.data(), a.size());
+    __sm_catP = __sm_catP + a.size();
+    std::memcpy(__sm_catP, _sm_expr6.data(), _sm_expr6.size());
     std::cout << std::boolalpha << (_sm_expr7) << std::endl;
     _sm_expr8 = ns1_pair(a, b);
     std::cout << std::boolalpha << (_sm_expr8) << std::endl;
     tag = ns1_Tag{__sm_stringTable[19], 3};
     _sm_expr9 = tag.name;
-    {
-        _sm_expr10.resize(1 + _sm_expr9.size());
-        char* __sm_catP5 = _sm_expr10.data();
-        std::memcpy(__sm_catP5, _sm_expr9.data(), _sm_expr9.size());
-        __sm_catP5 = __sm_catP5 + _sm_expr9.size();
-        *__sm_catP5 = (char) ('=');
-        __sm_catP5 = __sm_catP5 + 1;
-    }
+    _sm_expr10.resize(1 + _sm_expr9.size());
+    __sm_catP = _sm_expr10.data();
+    std::memcpy(__sm_catP, _sm_expr9.data(), _sm_expr9.size());
+    __sm_catP = __sm_catP + _sm_expr9.size();
+    *__sm_catP = (char) ('=');
     _sm_base1 = simse_addressOf(tag.count);
-    {
-        Int __sm_catC6_0 = simse_strCountDigits((*_sm_base1));
-        _sm_expr12.resize(_sm_expr10.size() + __sm_catC6_0);
-        char* __sm_catP6 = _sm_expr12.data();
-        std::memcpy(__sm_catP6, _sm_expr10.data(), _sm_expr10.size());
-        __sm_catP6 = __sm_catP6 + _sm_expr10.size();
-        simse_strAddInt(__sm_catP6, (*_sm_base1), __sm_catC6_0);
-        __sm_catP6 = __sm_catP6 + __sm_catC6_0;
-    }
+    __sm_catC0 = simse_strCountDigits((*_sm_base1));
+    _sm_expr12.resize(_sm_expr10.size() + __sm_catC0);
+    __sm_catP = _sm_expr12.data();
+    std::memcpy(__sm_catP, _sm_expr10.data(), _sm_expr10.size());
+    __sm_catP = __sm_catP + _sm_expr10.size();
+    simse_strAddInt(__sm_catP, (*_sm_base1), __sm_catC0);
     std::cout << std::boolalpha << (_sm_expr12) << std::endl;
-    {
-        _sm_expr13.resize(4);
-        char* __sm_catP7 = _sm_expr13.data();
-        std::memcpy(__sm_catP7, "aa", 2);
-        __sm_catP7 = __sm_catP7 + 2;
-        std::memcpy(__sm_catP7, "bb", 2);
-        __sm_catP7 = __sm_catP7 + 2;
-    }
+    _sm_expr13.resize(4);
+    __sm_catP = _sm_expr13.data();
+    std::memcpy(__sm_catP, "aa", 2);
+    __sm_catP = __sm_catP + 2;
+    std::memcpy(__sm_catP, "bb", 2);
     std::cout << std::boolalpha << (_sm_expr13) << std::endl;
     acc = __sm_stringTable[6];
-    {
-        Int __sm_catAt8 = acc.size();
-        acc.resize(__sm_catAt8 + 1 + a.size() + b.size());
-        char* __sm_catP8 = acc.data() + __sm_catAt8;
-        *__sm_catP8 = (char) ('-');
-        __sm_catP8 = __sm_catP8 + 1;
-        std::memcpy(__sm_catP8, a.data(), a.size());
-        __sm_catP8 = __sm_catP8 + a.size();
-        std::memcpy(__sm_catP8, b.data(), b.size());
-        __sm_catP8 = __sm_catP8 + b.size();
-    }
+    __sm_catAt = acc.size();
+    acc.resize(__sm_catAt + 1 + a.size() + b.size());
+    __sm_catP = acc.data() + __sm_catAt;
+    *__sm_catP = (char) ('-');
+    __sm_catP = __sm_catP + 1;
+    std::memcpy(__sm_catP, a.data(), a.size());
+    __sm_catP = __sm_catP + a.size();
+    std::memcpy(__sm_catP, b.data(), b.size());
     std::cout << std::boolalpha << (acc) << std::endl;
-    {
-        _sm_expr17.resize(2 + acc.size());
-        char* __sm_catP9 = _sm_expr17.data();
-        *__sm_catP9 = (char) ('[');
-        __sm_catP9 = __sm_catP9 + 1;
-        std::memcpy(__sm_catP9, acc.data(), acc.size());
-        __sm_catP9 = __sm_catP9 + acc.size();
-        *__sm_catP9 = (char) (']');
-        __sm_catP9 = __sm_catP9 + 1;
-    }
+    _sm_expr17.resize(2 + acc.size());
+    __sm_catP = _sm_expr17.data();
+    *__sm_catP = (char) ('[');
+    __sm_catP = __sm_catP + 1;
+    std::memcpy(__sm_catP, acc.data(), acc.size());
+    __sm_catP = __sm_catP + acc.size();
+    *__sm_catP = (char) (']');
     std::cout << std::boolalpha << (_sm_expr17) << std::endl;
-    {
-        _sm_expr18.resize(5);
-        char* __sm_catP10 = _sm_expr18.data();
-        std::memcpy(__sm_catP10, "plain", 5);
-        __sm_catP10 = __sm_catP10 + 5;
-    }
+    _sm_expr18.resize(5);
+    __sm_catP = _sm_expr18.data();
+    std::memcpy(__sm_catP, "plain", 5);
     std::cout << std::boolalpha << (_sm_expr18) << std::endl;
-    {
-        _sm_expr19.resize(2 + a.size());
-        char* __sm_catP11 = _sm_expr19.data();
-        std::memcpy(__sm_catP11, "a=", 2);
-        __sm_catP11 = __sm_catP11 + 2;
-        std::memcpy(__sm_catP11, a.data(), a.size());
-        __sm_catP11 = __sm_catP11 + a.size();
-    }
+    _sm_expr19.resize(2 + a.size());
+    __sm_catP = _sm_expr19.data();
+    std::memcpy(__sm_catP, "a=", 2);
+    __sm_catP = __sm_catP + 2;
+    std::memcpy(__sm_catP, a.data(), a.size());
     std::cout << std::boolalpha << (_sm_expr19) << std::endl;
-    {
-        _sm_expr20.resize(1 + a.size() + b.size());
-        char* __sm_catP12 = _sm_expr20.data();
-        std::memcpy(__sm_catP12, a.data(), a.size());
-        __sm_catP12 = __sm_catP12 + a.size();
-        *__sm_catP12 = (char) ('x');
-        __sm_catP12 = __sm_catP12 + 1;
-        std::memcpy(__sm_catP12, b.data(), b.size());
-        __sm_catP12 = __sm_catP12 + b.size();
-    }
+    _sm_expr20.resize(1 + a.size() + b.size());
+    __sm_catP = _sm_expr20.data();
+    std::memcpy(__sm_catP, a.data(), a.size());
+    __sm_catP = __sm_catP + a.size();
+    *__sm_catP = (char) ('x');
+    __sm_catP = __sm_catP + 1;
+    std::memcpy(__sm_catP, b.data(), b.size());
     std::cout << std::boolalpha << (_sm_expr20) << std::endl;
-    {
-        _sm_expr21.resize(3 + a.size() + b.size());
-        char* __sm_catP13 = _sm_expr21.data();
-        std::memcpy(__sm_catP13, "b=", 2);
-        __sm_catP13 = __sm_catP13 + 2;
-        std::memcpy(__sm_catP13, a.data(), a.size());
-        __sm_catP13 = __sm_catP13 + a.size();
-        *__sm_catP13 = (char) ('=');
-        __sm_catP13 = __sm_catP13 + 1;
-        std::memcpy(__sm_catP13, b.data(), b.size());
-        __sm_catP13 = __sm_catP13 + b.size();
-    }
+    _sm_expr21.resize(3 + a.size() + b.size());
+    __sm_catP = _sm_expr21.data();
+    std::memcpy(__sm_catP, "b=", 2);
+    __sm_catP = __sm_catP + 2;
+    std::memcpy(__sm_catP, a.data(), a.size());
+    __sm_catP = __sm_catP + a.size();
+    *__sm_catP = (char) ('=');
+    __sm_catP = __sm_catP + 1;
+    std::memcpy(__sm_catP, b.data(), b.size());
     std::cout << std::boolalpha << (_sm_expr21) << std::endl;
-    {
-        _sm_expr23.resize(a.size());
-        char* __sm_catP14 = _sm_expr23.data();
-        std::memcpy(__sm_catP14, a.data(), a.size());
-        __sm_catP14 = __sm_catP14 + a.size();
-    }
+    _sm_expr23.resize(a.size());
+    __sm_catP = _sm_expr23.data();
+    std::memcpy(__sm_catP, a.data(), a.size());
     std::cout << std::boolalpha << (_sm_expr23) << std::endl;
-    {
-        _sm_expr24.resize(0);
-    }
+    _sm_expr24.resize(0);
     std::cout << std::boolalpha << (_sm_expr24) << std::endl;
     bare = __sm_stringTable[14];
-    {
-        Int __sm_catAt16 = bare.size();
-        bare.resize(__sm_catAt16 + 0);
-    }
+    __sm_catAt = bare.size();
+    bare.resize(__sm_catAt + 0);
     std::cout << std::boolalpha << (bare) << std::endl;
     format = __sm_stringTable[7];
     _sm_base10 = List<Str>{a};

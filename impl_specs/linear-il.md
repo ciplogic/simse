@@ -321,7 +321,9 @@ body whose dump has neither is fully covered by the IL.
   `+` operand that is a number (`s + n` appends one *byte*), a format that is not a
   literal or holds an escape, a `+`-count that does not match the packed items, a
   destination the chain reads somewhere but first - and leaves the code as it was, where
-  the runtime's own `fmtStr` still answers.
+  the runtime's own `fmtStr` still answers. `--no-concat` turns the whole pass off (a `+`
+  chain and a literal `fmtStr` keep the lowering's shape, and the `strcat` section goes
+  with it): the A/B switch for what the fusion costs and what it buys, off by default.
 - **A call argument's handle is inferred by the extractor** (`specs/functions.md`,
   "Handles at a call"): the instruction list gets a `Deref` (an address, or a counted
   reference's `.get()`), a `CopyValue` (a copy of a pointee) or a `Box` (a boxed copy)
@@ -442,7 +444,8 @@ expression.
   Either way the *value* is assigned where the instruction stands, and where a jump
   crosses such a declaration the backend opens the one block C++ requires
   ([stmt.dcl]/3, and that is the only reason a body has braces).
-- **The flags**: `--showLinearRepresentation` (dump only) is the only one left;
+- **The flags**: `--showLinearRepresentation` (dump only) and `--no-concat` (the fusion
+  off, `MergeConcat.kt`) are the two left;
   `--statementsCodegen` and `--linearCodegen` are gone, and a body the IL cannot spell fails
   with the reason instead of falling back.
 - **The one block the flat form keeps**: where a jump crosses a declaration, C++

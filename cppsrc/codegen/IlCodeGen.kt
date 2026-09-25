@@ -769,6 +769,74 @@ fun Emitter.ilJumpCrossing(il: *IlBody, labelPos: *List<Int>, position: Int): Il
     return crossing
 }
 
+// What a body's concatenations need declared at its top: whether any chain writes a byte (the
+// shared `char*` cursor), whether any chain is in place (the `at` temporary), and how many
+// integer counts the widest chain needs at once. One pass, so the body declares exactly what
+// it uses.
+data class IlConcatPool(
+    var pointer: Bool,
+    var at: Bool,
+    var counts: Int
+)
+
+fun ilConcatPoolOf(il: *IlBody): IlConcatPool {
+    var pool: IlConcatPool = IlConcatPool(false, false, 0)
+    var i: Int = 0
+    while (i < il.ops.size()) {
+        val op: *IlOp = *il.ops[i]
+        if (op.kind == IlOpKind.Concat) {
+            val inPlace: Bool = op.operands.size() > 1 && op.operands[1] == ilConcatDst(op)
+            var counts: Int = 0
+            var j: Int = 1
+            while (j < op.operands.size()) {
+                val part: Int = op.operands[j]
+                if (inPlace && j == 1) {
+                    pool.at = true
+                } else if (part < 0) {
+                    // A char literal writes; an empty string literal is the one part that does not.
+                    val text: Str = il.pool[-1 - part]
+                    if (text.size() > 0 && (text[0] != '\"' || cgLiteralByteLength(text) > 0)) {
+                        pool.pointer = true
+                    }
+                } else {
+                    pool.pointer = true
+                    if (ilConcatNumberOk(ilConcatValueText(il, part))) {
+                        counts = counts + 1
+                    }
+                }
+                j = j + 1
+            }
+            if (counts > pool.counts) {
+                pool.counts = counts
+            }
+        }
+        i = i + 1
+    }
+    return pool
+}
+
+// The concatenation storage a body needs, at its top: declared where a jump cannot skip it, so
+// one `char*` cursor serves every chain (`ilConcatStatements` recycles it on each `resize`) and
+// the counts are one line. Nothing here collides across bodies - each has its own scope.
+fun Emitter.ilConcatPreamble(il: *IlBody, out: *Str, level: Int): Unit {
+    val pool: IlConcatPool = ilConcatPoolOf(il)
+    if (pool.pointer) {
+        this.ilLine(out, level, "char* __sm_catP;")
+    }
+    if (pool.at) {
+        this.ilLine(out, level, "Int __sm_catAt;")
+    }
+    if (pool.counts > 0) {
+        var names: List<Str> = List<Str>()
+        var c: Int = 0
+        while (c < pool.counts) {
+            names.append(fmtStr("__sm_catC|", c.toString()))
+            c = c + 1
+        }
+        this.ilLine(out, level, fmtStr("Int |;", cgJoin(names, ", ")))
+    }
+}
+
 // A concatenation as the statements the emitter expands it into (cppsrc/linear/MergeConcat.kt,
 // impl_specs/linear-il.md, "Concat"): every part's *exact* length is summed, one `resize` makes
 // the whole buffer, and then each part is written straight into the slot it owns while one
@@ -810,15 +878,14 @@ fun Emitter.ilConcatStatements(il: *IlBody, frame: *IlFrame, op: *IlOp, level: I
     // The first part is the destination exactly when the instruction is `s = s + ...`: the one
     // shape whose chain keeps the bytes that are already there.
     val inPlace: Bool = op.operands.size() > 1 && op.operands[1] == dst
-    // Every temporary of this expansion is named after one id, so two chains in the same C++
-    // scope cannot collide (`__sm_` is the prefix user code cannot write).
-    val id: Int = this.ilConcatTemps
-    this.ilConcatTemps = this.ilConcatTemps + 1
-    val atName: Str = fmtStr("__sm_catAt|", id.toString())
-    val pName: Str = fmtStr("__sm_catP|", id.toString())
-    // One count temporary per integer part, and the four things the expansion is made of, in
-    // the order it writes them: the compile-time byte count, the runtime count terms, the
-    // declarations those terms need, and the writes.
+    // The cursor and the counts are the *body's* names (`ilConcatPreamble` declares them at the
+    // top): a `char*` is a cursor every `resize` recycles, and a chain's counts are dead before
+    // the next chain starts, so one set per body serves them all. A chain can sit in a block the
+    // crossing logic opened, which is why they cannot be declared per chain.
+    val atName: Str = "__sm_catAt"
+    val pName: Str = "__sm_catP"
+    // Three things the expansion is made of, in the order it writes them: the compile-time byte
+    // count, the runtime count terms, and the writes.
     var counts: Int = 0
     var fixed: Int = 0
     var sums: List<Str> = List<Str>()
@@ -887,9 +954,9 @@ fun Emitter.ilConcatStatements(il: *IlBody, frame: *IlFrame, op: *IlOp, level: I
                 ))
                 writes.append(fmtStr("| = | + simse_strBoolView(|).len;", pName, pName, value))
             } else if (ilConcatNumberOk(kind)) {
-                val count: Str = fmtStr("__sm_catC|_|", id.toString(), counts.toString())
+                val count: Str = fmtStr("__sm_catC|", counts.toString())
                 counts = counts + 1
-                prelude.append(fmtStr("Int | = simse_strCountDigits(|);", count, value))
+                prelude.append(fmtStr("| = simse_strCountDigits(|);", count, value))
                 sums.append(count)
                 writes.append(fmtStr("simse_strAddInt(|, |, |);", pName, value, count))
                 writes.append(fmtStr("| = | + |;", pName, pName, count))
@@ -927,32 +994,34 @@ fun Emitter.ilConcatStatements(il: *IlBody, frame: *IlFrame, op: *IlOp, level: I
         }
         this.ilLine(out, level, fmtStr("| |;", declared, name))
     }
-    this.ilLine(out, level, "{")
+    // The last write's advance is dead - nothing reads the cursor after it - so it goes.
+    if (writes.size() > 0) {
+        writes.removeAt(writes.size() - 1)
+    }
     var p: Int = 0
     while (p < prelude.size()) {
-        this.ilLine(out, level + 1, prelude[p])
+        this.ilLine(out, level, prelude[p])
         p = p + 1
     }
-    // The pointer only when something is written: a chain of nothing but empty literals is a
-    // `resize` and no writes, and a name no one reads would be dead C++.
+    // `at` reads the destination's size *before* the one `resize` moves it, and the counts read
+    // only the parts, so the order is: the counts, `at`, the resize, the pointer, the writes.
     if (inPlace) {
-        this.ilLine(out, level + 1, fmtStr("Int | = |.size();", atName, name))
-        this.ilLine(out, level + 1, fmtStr("|.resize(| + |);", name, atName, rest))
+        this.ilLine(out, level, fmtStr("| = |.size();", atName, name))
+        this.ilLine(out, level, fmtStr("|.resize(| + |);", name, atName, rest))
         if (writes.size() > 0) {
-            this.ilLine(out, level + 1, fmtStr("char* | = |.data() + |;", pName, name, atName))
+            this.ilLine(out, level, fmtStr("| = |.data() + |;", pName, name, atName))
         }
     } else {
-        this.ilLine(out, level + 1, fmtStr("|.resize(|);", name, rest))
+        this.ilLine(out, level, fmtStr("|.resize(|);", name, rest))
         if (writes.size() > 0) {
-            this.ilLine(out, level + 1, fmtStr("char* | = |.data();", pName, name))
+            this.ilLine(out, level, fmtStr("| = |.data();", pName, name))
         }
     }
     p = 0
     while (p < writes.size()) {
-        this.ilLine(out, level + 1, writes[p])
+        this.ilLine(out, level, writes[p])
         p = p + 1
     }
-    this.ilLine(out, level, "}")
     return true
 }
 
@@ -1084,6 +1153,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
     var consumedByDeclare: Int = -1
     var lvl: Int = level
     var text: Str = Str()
+    this.ilConcatPreamble(il, text, lvl)
 
     var i: Int = 0
     while (i < il.ops.size()) {

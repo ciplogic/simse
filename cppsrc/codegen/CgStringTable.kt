@@ -16,47 +16,11 @@ package codegen
 
 // A hexadecimal digit. The two escapes whose length is a *run* rather than one character
 // (`\xHH...` and octal) are counted the way the C++ compiler counts them.
-fun cgIsHexDigit(ch: Char): Bool {
-    return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F')
-}
-
-// How many bytes a string literal's source text (quotes included) denotes: what the length
-// index carries. The pool is the literal texts again, adjacent, and the C++ compiler
-// decodes them, so this only has to agree about the cost of an escape - one byte each for
-// the language's own set (specs/built-in-types.md) and a run, counted above, for the rest.
+// How many bytes a string literal's source text (quotes included) denotes. The decoder itself
+// is `common`'s (`litByteLength`, common/literals.kt), because the parser's `when` lowering
+// reads the same byte counts: one escape table, one answer.
 fun cgLiteralByteLength(text: *Str): Int {
-    if (text.size() < 2 || text[0] != '\"') {
-        return text.size()
-    }
-    var count: Int = 0
-    val end: Int = text.size() - 1
-    var i: Int = 1
-    while (i < end) {
-        if (text[i] != '\\') {
-            count = count + 1
-            i = i + 1
-            continue
-        }
-        i = i + 1
-        if (i >= end) {
-            break
-        }
-        val escape: Char = text[i]
-        i = i + 1
-        if (escape == 'x') {
-            while (i < end && cgIsHexDigit(text[i])) {
-                i = i + 1
-            }
-        } else if (escape >= '0' && escape <= '7') {
-            var digits: Int = 1
-            while (digits < 3 && i < end && text[i] >= '0' && text[i] <= '7') {
-                i = i + 1
-                digits = digits + 1
-            }
-        }
-        count = count + 1
-    }
-    return count
+    return litByteLength(text)
 }
 
 // `{0,-142,40}`: the one-line form an index array is written in. The values are small by

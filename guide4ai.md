@@ -76,6 +76,18 @@ bun tools/stress.js --filter modules --jobs 4
 # the checker knows yet - it is the async work's own view of the coloring.
 ./simse.exe --root docs/examples/async/src --showAsync
 
+# the string-concat fusion off (the `MergeConcat` pass, cppsrc/linear/MergeConcat.kt): same
+# binary, both shapes, the A/B for what the fusion costs and what it buys. Note a bare
+# non-`Str` `fmtStr` item needs the fusion today (impl_specs/capability-matrix.md).
+./simse.exe --root stress/concat/src -o fused.cpp
+./simse.exe --root stress/concat/src -o unfused.cpp --no-concat
+
+# the other A/B switch: the `when`-over-strings lowering (cppsrc/parser/Parser.kt) is on by
+# default; --when-first-char adds its first-byte guard to a longer literal (measured: no gain,
+# which is why it is off), --no-when-dispatch takes the guards off entirely.
+./simse.exe --root stress/when-strings/src -o when.cpp
+./simse.exe --root stress/when-strings/src -o when-plain.cpp --no-when-dispatch
+
 # debugging / profiling the compiler:
 ./simse.exe --root cppsrc -o prof.cpp --profile   # instrumented profiler in the program
 ./build.bat --release --pdb                       # optimized + symbols, for the VS profiler

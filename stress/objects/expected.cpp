@@ -746,16 +746,15 @@ struct ns1_partLambdas_closure5 {
 }
 // stress/objects/src/main.kt:167
 Str ns1_label(ns1_Color c) {
-    ns1_Color _sm_when1, _sm_expr1;
+    ns1_Color _sm_expr1;
     Bool _sm_expr2, _sm_expr4;
-    _sm_when1 = c;
     _sm_expr1 = ns1_Color::Red;
-    _sm_expr2 = _sm_when1 == _sm_expr1;
+    _sm_expr2 = c == _sm_expr1;
     if (!(_sm_expr2)) goto L2;
     return __sm_stringTable[37];
     L2:;
     _sm_expr1 = ns1_Color::Green;
-    _sm_expr4 = _sm_when1 == _sm_expr1;
+    _sm_expr4 = c == _sm_expr1;
     if (!(_sm_expr4)) goto L5;
     return __sm_stringTable[14];
     L5:;
@@ -763,14 +762,12 @@ Str ns1_label(ns1_Color c) {
 }
 // stress/objects/src/main.kt:183
 Str ns1_describe(Int n) {
-    Int _sm_when2;
     Bool _sm_expr1, _sm_expr2;
-    _sm_when2 = n;
-    _sm_expr1 = _sm_when2 == 0;
+    _sm_expr1 = n == 0;
     if (!(_sm_expr1)) goto L2;
     return __sm_stringTable[32];
     L2:;
-    _sm_expr2 = _sm_when2 == 1;
+    _sm_expr2 = n == 1;
     if (!(_sm_expr2)) goto L5;
     return __sm_stringTable[36];
     L5:;
@@ -1163,27 +1160,26 @@ Int ns1_partReceiverShapes() {
 }
 // stress/objects/src/main.kt:515
 Str ns1_mirror(Str* a, Ref<Str> b) {
+    char* __sm_catP;
     Str _sm_base2, _sm_base3, _sm_expr1;
     _sm_base2 = *(a);
     _sm_base3 = *(b);
-    {
-        _sm_expr1.resize(4 + _sm_base2.size() + _sm_base3.size());
-        char* __sm_catP0 = _sm_expr1.data();
-        *__sm_catP0 = (char) ('[');
-        __sm_catP0 = __sm_catP0 + 1;
-        std::memcpy(__sm_catP0, _sm_base2.data(), _sm_base2.size());
-        __sm_catP0 = __sm_catP0 + _sm_base2.size();
-        std::memcpy(__sm_catP0, "::", 2);
-        __sm_catP0 = __sm_catP0 + 2;
-        std::memcpy(__sm_catP0, _sm_base3.data(), _sm_base3.size());
-        __sm_catP0 = __sm_catP0 + _sm_base3.size();
-        *__sm_catP0 = (char) (']');
-        __sm_catP0 = __sm_catP0 + 1;
-    }
+    _sm_expr1.resize(4 + _sm_base2.size() + _sm_base3.size());
+    __sm_catP = _sm_expr1.data();
+    *__sm_catP = (char) ('[');
+    __sm_catP = __sm_catP + 1;
+    std::memcpy(__sm_catP, _sm_base2.data(), _sm_base2.size());
+    __sm_catP = __sm_catP + _sm_base2.size();
+    std::memcpy(__sm_catP, "::", 2);
+    __sm_catP = __sm_catP + 2;
+    std::memcpy(__sm_catP, _sm_base3.data(), _sm_base3.size());
+    __sm_catP = __sm_catP + _sm_base3.size();
+    *__sm_catP = (char) (']');
     return _sm_expr1;
 }
 // stress/objects/src/main.kt:521
 Str ns1_parcel(Str after, List<Str>* items) {
+    char* __sm_catP;
     Str out, _sm_expr3, _sm_expr4;
     Int i, _sm_expr1;
     Bool _sm_expr2;
@@ -1193,23 +1189,17 @@ Str ns1_parcel(Str after, List<Str>* items) {
     _sm_expr1 = items->size();
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L2;
-    {
-        _sm_expr3.resize(1 + out.size());
-        char* __sm_catP1 = _sm_expr3.data();
-        std::memcpy(__sm_catP1, out.data(), out.size());
-        __sm_catP1 = __sm_catP1 + out.size();
-        *__sm_catP1 = (char) ('+');
-        __sm_catP1 = __sm_catP1 + 1;
-    }
+    _sm_expr3.resize(1 + out.size());
+    __sm_catP = _sm_expr3.data();
+    std::memcpy(__sm_catP, out.data(), out.size());
+    __sm_catP = __sm_catP + out.size();
+    *__sm_catP = (char) ('+');
     _sm_expr4 = (*items)[i];
-    {
-        out.resize(_sm_expr3.size() + _sm_expr4.size());
-        char* __sm_catP2 = out.data();
-        std::memcpy(__sm_catP2, _sm_expr3.data(), _sm_expr3.size());
-        __sm_catP2 = __sm_catP2 + _sm_expr3.size();
-        std::memcpy(__sm_catP2, _sm_expr4.data(), _sm_expr4.size());
-        __sm_catP2 = __sm_catP2 + _sm_expr4.size();
-    }
+    out.resize(_sm_expr3.size() + _sm_expr4.size());
+    __sm_catP = out.data();
+    std::memcpy(__sm_catP, _sm_expr3.data(), _sm_expr3.size());
+    __sm_catP = __sm_catP + _sm_expr3.size();
+    std::memcpy(__sm_catP, _sm_expr4.data(), _sm_expr4.size());
     i = i + 1;
     goto L1;
     L2:;
@@ -1217,6 +1207,7 @@ Str ns1_parcel(Str after, List<Str>* items) {
 }
 // stress/objects/src/main.kt:531
 Int ns1_partRtlSimse() {
+    char* __sm_catP;
     List<Str> _sm_base7, _sm_base9, _sm_base16, parts;
     List<Str>* _sm_base8, * _sm_base10, * _sm_base19;
     Str _sm_base11, _sm_base12, _sm_base13, _sm_base14, _sm_base15, _sm_base17, _sm_base18, _sm_expr1,
@@ -1241,44 +1232,35 @@ Int ns1_partRtlSimse() {
     _sm_expr5 = min<Float64>(2.5, 1.5);
     _sm_expr6 = simse_num_toString(_sm_expr5);
     std::cout << std::boolalpha << (_sm_expr6) << std::endl;
-    {
-        _sm_expr7.resize(6);
-        char* __sm_catP3 = _sm_expr7.data();
-        *__sm_catP3 = (char) ('[');
-        __sm_catP3 = __sm_catP3 + 1;
-        *__sm_catP3 = (char) ('a');
-        __sm_catP3 = __sm_catP3 + 1;
-        std::memcpy(__sm_catP3, "::", 2);
-        __sm_catP3 = __sm_catP3 + 2;
-        *__sm_catP3 = (char) ('b');
-        __sm_catP3 = __sm_catP3 + 1;
-        *__sm_catP3 = (char) (']');
-        __sm_catP3 = __sm_catP3 + 1;
-    }
+    _sm_expr7.resize(6);
+    __sm_catP = _sm_expr7.data();
+    *__sm_catP = (char) ('[');
+    __sm_catP = __sm_catP + 1;
+    *__sm_catP = (char) ('a');
+    __sm_catP = __sm_catP + 1;
+    std::memcpy(__sm_catP, "::", 2);
+    __sm_catP = __sm_catP + 2;
+    *__sm_catP = (char) ('b');
+    __sm_catP = __sm_catP + 1;
+    *__sm_catP = (char) (']');
     std::cout << std::boolalpha << (_sm_expr7) << std::endl;
-    {
-        _sm_expr8.resize(5);
-        char* __sm_catP4 = _sm_expr8.data();
-        *__sm_catP4 = (char) ('1');
-        __sm_catP4 = __sm_catP4 + 1;
-        *__sm_catP4 = (char) (',');
-        __sm_catP4 = __sm_catP4 + 1;
-        *__sm_catP4 = (char) ('2');
-        __sm_catP4 = __sm_catP4 + 1;
-        *__sm_catP4 = (char) (',');
-        __sm_catP4 = __sm_catP4 + 1;
-        *__sm_catP4 = (char) ('3');
-        __sm_catP4 = __sm_catP4 + 1;
-    }
+    _sm_expr8.resize(5);
+    __sm_catP = _sm_expr8.data();
+    *__sm_catP = (char) ('1');
+    __sm_catP = __sm_catP + 1;
+    *__sm_catP = (char) (',');
+    __sm_catP = __sm_catP + 1;
+    *__sm_catP = (char) ('2');
+    __sm_catP = __sm_catP + 1;
+    *__sm_catP = (char) (',');
+    __sm_catP = __sm_catP + 1;
+    *__sm_catP = (char) ('3');
     std::cout << std::boolalpha << (_sm_expr8) << std::endl;
-    {
-        _sm_expr9.resize(2);
-        char* __sm_catP5 = _sm_expr9.data();
-        *__sm_catP5 = (char) ('x');
-        __sm_catP5 = __sm_catP5 + 1;
-        *__sm_catP5 = (char) ('y');
-        __sm_catP5 = __sm_catP5 + 1;
-    }
+    _sm_expr9.resize(2);
+    __sm_catP = _sm_expr9.data();
+    *__sm_catP = (char) ('x');
+    __sm_catP = __sm_catP + 1;
+    *__sm_catP = (char) ('y');
     std::cout << std::boolalpha << (_sm_expr9) << std::endl;
     _sm_base7 = List<Str>{__sm_stringTable[56]};
     _sm_base8 = &_sm_base7;
@@ -1466,6 +1448,8 @@ Str ns1_indentation(Int depth) {
 }
 // stress/objects/src/main.kt:686
 Str ns1_dumpNode(XmlNode node, Int depth) {
+    char* __sm_catP;
+    Int __sm_catAt;
     List<Attribute>* _sm_base1, * _sm_base2;
     Str _sm_base3, _sm_expr1, _sm_expr2, out, _sm_expr8, _sm_expr9;
     XmlNode _sm_base4;
@@ -1475,14 +1459,11 @@ Str ns1_dumpNode(XmlNode node, Int depth) {
     Array<XmlNode> children;
     _sm_expr1 = ns1_indentation(depth);
     _sm_expr2 = node.name;
-    {
-        out.resize(_sm_expr1.size() + _sm_expr2.size());
-        char* __sm_catP6 = out.data();
-        std::memcpy(__sm_catP6, _sm_expr1.data(), _sm_expr1.size());
-        __sm_catP6 = __sm_catP6 + _sm_expr1.size();
-        std::memcpy(__sm_catP6, _sm_expr2.data(), _sm_expr2.size());
-        __sm_catP6 = __sm_catP6 + _sm_expr2.size();
-    }
+    out.resize(_sm_expr1.size() + _sm_expr2.size());
+    __sm_catP = out.data();
+    std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
+    __sm_catP = __sm_catP + _sm_expr1.size();
+    std::memcpy(__sm_catP, _sm_expr2.data(), _sm_expr2.size());
     i = 0;
     L1:;
     _sm_base1 = simse_addressOf(node.attributes);
@@ -1491,47 +1472,35 @@ Str ns1_dumpNode(XmlNode node, Int depth) {
     if (!(_sm_expr4)) goto L2;
     _sm_base2 = simse_addressOf(node.attributes);
     attribute = (*_sm_base2)[i];
-    {
-        _sm_expr1.resize(1 + out.size());
-        char* __sm_catP7 = _sm_expr1.data();
-        std::memcpy(__sm_catP7, out.data(), out.size());
-        __sm_catP7 = __sm_catP7 + out.size();
-        *__sm_catP7 = (char) (' ');
-        __sm_catP7 = __sm_catP7 + 1;
-    }
+    _sm_expr1.resize(1 + out.size());
+    __sm_catP = _sm_expr1.data();
+    std::memcpy(__sm_catP, out.data(), out.size());
+    __sm_catP = __sm_catP + out.size();
+    *__sm_catP = (char) (' ');
     _sm_expr2 = attribute.name;
-    {
-        _sm_expr8.resize(2 + _sm_expr1.size() + _sm_expr2.size());
-        char* __sm_catP8 = _sm_expr8.data();
-        std::memcpy(__sm_catP8, _sm_expr1.data(), _sm_expr1.size());
-        __sm_catP8 = __sm_catP8 + _sm_expr1.size();
-        std::memcpy(__sm_catP8, _sm_expr2.data(), _sm_expr2.size());
-        __sm_catP8 = __sm_catP8 + _sm_expr2.size();
-        std::memcpy(__sm_catP8, "='", 2);
-        __sm_catP8 = __sm_catP8 + 2;
-    }
+    _sm_expr8.resize(2 + _sm_expr1.size() + _sm_expr2.size());
+    __sm_catP = _sm_expr8.data();
+    std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
+    __sm_catP = __sm_catP + _sm_expr1.size();
+    std::memcpy(__sm_catP, _sm_expr2.data(), _sm_expr2.size());
+    __sm_catP = __sm_catP + _sm_expr2.size();
+    std::memcpy(__sm_catP, "='", 2);
     _sm_base3 = attribute.value;
     _sm_expr9 = ns1_escapeText(_sm_base3);
-    {
-        out.resize(1 + _sm_expr8.size() + _sm_expr9.size());
-        char* __sm_catP9 = out.data();
-        std::memcpy(__sm_catP9, _sm_expr8.data(), _sm_expr8.size());
-        __sm_catP9 = __sm_catP9 + _sm_expr8.size();
-        std::memcpy(__sm_catP9, _sm_expr9.data(), _sm_expr9.size());
-        __sm_catP9 = __sm_catP9 + _sm_expr9.size();
-        *__sm_catP9 = (char) ('\'');
-        __sm_catP9 = __sm_catP9 + 1;
-    }
+    out.resize(1 + _sm_expr8.size() + _sm_expr9.size());
+    __sm_catP = out.data();
+    std::memcpy(__sm_catP, _sm_expr8.data(), _sm_expr8.size());
+    __sm_catP = __sm_catP + _sm_expr8.size();
+    std::memcpy(__sm_catP, _sm_expr9.data(), _sm_expr9.size());
+    __sm_catP = __sm_catP + _sm_expr9.size();
+    *__sm_catP = (char) ('\'');
     i = i + 1;
     goto L1;
     L2:;
-    {
-        Int __sm_catAt10 = out.size();
-        out.resize(__sm_catAt10 + 1);
-        char* __sm_catP10 = out.data() + __sm_catAt10;
-        *__sm_catP10 = (char) ('\n');
-        __sm_catP10 = __sm_catP10 + 1;
-    }
+    __sm_catAt = out.size();
+    out.resize(__sm_catAt + 1);
+    __sm_catP = out.data() + __sm_catAt;
+    *__sm_catP = (char) ('\n');
     children = node.Children;
     j = 0;
     L3:;
@@ -1541,13 +1510,10 @@ Str ns1_dumpNode(XmlNode node, Int depth) {
     _sm_expr13 = depth + 1;
     _sm_base4 = children[j];
     _sm_expr1 = ns1_dumpNode(_sm_base4, _sm_expr13);
-    {
-        Int __sm_catAt11 = out.size();
-        out.resize(__sm_catAt11 + _sm_expr1.size());
-        char* __sm_catP11 = out.data() + __sm_catAt11;
-        std::memcpy(__sm_catP11, _sm_expr1.data(), _sm_expr1.size());
-        __sm_catP11 = __sm_catP11 + _sm_expr1.size();
-    }
+    __sm_catAt = out.size();
+    out.resize(__sm_catAt + _sm_expr1.size());
+    __sm_catP = out.data() + __sm_catAt;
+    std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
     j = j + 1;
     goto L3;
     L4:;

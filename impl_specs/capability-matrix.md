@@ -3374,3 +3374,78 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   `objects`) - every difference an expansion, the `strcat` section, or a `Declare` the fusion
   left dead.
 
+
+- **The fusion has an off switch, and turning it off found a hole.** `--no-concat`
+  (`ilNoConcatFlag` / `ilNoConcat` / `ilSetNoConcat` in `cppsrc/linear/MergeConcat.kt`, parsed
+  in `cppsrc/compiler/Driver.kt`) skips `ilFuseConcat` entirely, so one binary emits both
+  shapes and the two can be measured against each other. On the same program the `strcat`
+  section and every expansion disappear with it: over the five concat-reaching stress cases the
+  C++ shrinks by 6.5-8.8 KB, and `stress/json` - which reaches no concatenation at all - is
+  **byte-identical**, which is what pins the switch to this pass and nothing else. Every case's
+  program output is byte-identical on and off, and a formatting loop (two chains a round, text
+  and integers, 300k rounds) measures **4-5 ms fused against 45-51 ms unfused**, same total.
+
+  - **What it exposed: a bare non-`Str` `fmtStr` item only builds while fused.** The pack
+    caller `packArguments` does coerce each trailing argument (`convertArgument`), but that
+    function returns the argument unchanged when the two types differ - a comment there says the
+    conversion is skipped so the call "stays the type error it was", which assumes the *checker*
+    rejected it. It did not: `Sema.checkCallArgs` `return`s for a pack target without checking
+    the elements against the list's element type (`Sema.kt:1163`). So `fmtStr("n=|", n)` with an
+    `Int` `n` passes the front end, emits `List<Str>{n}` - not C++ - and compiles only because
+    `MergeConcat` absorbs the `Pack` and formats `n` itself. `--no-concat` therefore cannot build
+    such a program; it builds every program that writes `.toString()` first, which is what the
+    compiler's own sources and every stress case do. Closing it is a language decision, not a
+    bug fix: **either** make the checker reject a packed element that is not the element type
+    (the rule `convertArgument`'s comment already assumes; the fusion's number handling then
+    only serves a folded `toString` in a `+` chain), **or** make the lowering coerce *and* teach
+    `fmtStrParts` to absorb the inserted `toString` so the fused path stays digit-direct. Until
+    one is chosen, the off switch is meaningful for `+` chains and for `fmtStr` over `Str` items.
+
+- **A `when` over string literals tests the length first, not the whole string.** A `when` is
+  desugared in the parser (`Parser.kt`'s `parseWhen`), so the arms were a chain of
+  `subject == literal` comparisons - one `simse_strView_compare` per label, which is an
+  out-of-line `memcmp` for a text of a few bytes. When *every* label of every arm is a string
+  literal (a length is a compile-time property only for a literal), the desugar now also binds
+  the subject's length in a second template (`_sm_when<n>_n`) and guards each label's test:
+
+  - `<len> == L && subject == "..."` for two bytes or more;
+  - `<len> == 1 && subject[0] == '<c>'` for one byte - the byte *is* the text, so no string
+    compare is left;
+  - `<len> == 0` for `""`, the only text of length zero, so no content test either.
+
+  Every guard is a *necessary* condition of `==` (`==` on a string means the same length and the
+  same bytes), so the predicate is unchanged and only the tests got cheaper. That is what makes
+  the rewrite safe to do in the parser, before any type is known: it needs no labels, no `goto`,
+  no reordering and no duplicated arm body - the arm bodies, their order and the `else` are
+  exactly what the old desugar built. An arm whose labels span two lengths (`"<", ">", "<=",
+  ">="`) is the case that would have forced a label-and-`goto` structure with a shared body; the
+  per-label guard has no such problem. The first byte is spelled into a `Char` literal only when
+  it is printable ASCII (the quote and the backslash escaped), so no byte ever has to become an
+  integer or leave a `Char`'s range; a byte with no spelling simply keeps the plain comparison.
+  `common/literals.kt` is the decoder this and the emitter's `cgLiteralByteLength` now share
+  (`litByteLength`), because a length the two disagree about would be a miscompile.
+
+  - **Two switches, both for measuring.** `--no-when-dispatch` takes the guards off (the plain
+    chain), and `--when-first-char` *adds* the first-byte guard to a label of two or more bytes -
+    the assumption being that a `Char` load rejects a same-length label before its `memcmp`. The
+    guards are on by default; `--when-first-char` is not.
+  - **Measured on the compiler's own self-transpile, neither one pays.** The rewrite lands in the
+    compiler's body - its emitted C++ goes from 464 string comparisons to 153 length tests, 14
+    char tests and 420 comparisons (44 labels became exact) - yet the self-transpile does not
+    move: `dispatch` 1250 ms, `no dispatch` 1262 ms, `first-char` 1259 ms on one 15-round
+    interleaved run, and 1240/1237/1242 ms on a 25-round one, with the paired per-round deltas
+    changing sign between the two runs (mean `+1.7` ms, wins 14/25 at 25 rounds). The transpile
+    is parsing, the AST walk and allocation, with a few hundred `when` labels nowhere near its
+    hot path, so this is the wrong workload to justify the rewrite - a classifier loop over
+    string keys (the shape `cgPrecedence` has, called in a loop rather than per expression) is
+    the one that would show it. The first-char guard's own first run looked 12 ms *worse*, which
+    did not reproduce either: at this scale both are below the noise.
+  - **The corpus had no string `when` at all**: 40/40 passed with *zero* golden changes when the
+    rewrite landed, which is why `stress/when-strings` exists now - mixed lengths, an arm whose
+    labels span two lengths, a `StrView` subject, an arm that is a constant rather than a literal
+    (left alone), and the same program run with the guards on, off and with `--when-first-char`,
+    all three byte-identical in output.
+
+  Verified: `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js`
+  - both fixed points byte for byte, with the compiler's own string `when`s rewritten in its own
+  emitted C++, which is the real test of the rewrite; `bun tools/stress.js` **41/41**.

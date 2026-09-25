@@ -268,6 +268,26 @@ fun main(args: List<Str>): Int {
                 ilSetShow(true)
             }
 
+            // The `MergeConcat` pass off (cppsrc/linear/MergeConcat.kt): the A/B switch
+            // that shows what the fused concatenation costs and what it buys.
+            "--no-concat" -> {
+                ilSetNoConcat(true)
+            }
+
+            // The `when`-over-strings lowering (cppsrc/parser/Parser.kt): off for the A/B,
+            // and `--when-first-char` to add the first-byte guard to a longer literal.
+            "--no-when-dispatch" -> {
+                setWhenDispatch(false)
+            }
+
+            "--when-first-char" -> {
+                setWhenFirstChar(true)
+            }
+
+            "--when-copy-subject" -> {
+                setWhenCopySubject(true)
+            }
+
             "--showAsync" -> {
                 showAsync = true
             }
@@ -277,7 +297,7 @@ fun main(args: List<Str>): Int {
             }
 
             "-h", "--help" -> {
-                println("usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module <dir>]... [--showLinearRepresentation] [--showAsync] [--profile]")
+                println("usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module <dir>]... [--no-concat] [--no-when-dispatch] [--when-first-char] [--when-copy-subject] [--showLinearRepresentation] [--showAsync] [--profile]")
                 return 0
             }
 

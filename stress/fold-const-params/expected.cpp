@@ -252,60 +252,48 @@ void ns1_maybe(Bool flag) {
 }
 // stress/fold-const-params/src/main.kt:35
 void ns1_tag(Str* self, Bool on) {
+    char* __sm_catP;
     Str _sm_base1, _sm_base2, _sm_expr1, _sm_expr2, _sm_expr4;
     if (!(on)) goto L2;
     _sm_base1 = ((*self));
-    {
-        _sm_expr1.resize(4 + _sm_base1.size());
-        char* __sm_catP0 = _sm_expr1.data();
-        std::memcpy(__sm_catP0, "tag(", 4);
-        __sm_catP0 = __sm_catP0 + 4;
-        std::memcpy(__sm_catP0, _sm_base1.data(), _sm_base1.size());
-        __sm_catP0 = __sm_catP0 + _sm_base1.size();
-    }
-    {
-        _sm_expr2.resize(5 + _sm_expr1.size());
-        char* __sm_catP1 = _sm_expr2.data();
-        std::memcpy(__sm_catP1, _sm_expr1.data(), _sm_expr1.size());
-        __sm_catP1 = __sm_catP1 + _sm_expr1.size();
-        std::memcpy(__sm_catP1, "): on", 5);
-        __sm_catP1 = __sm_catP1 + 5;
-    }
+    _sm_expr1.resize(4 + _sm_base1.size());
+    __sm_catP = _sm_expr1.data();
+    std::memcpy(__sm_catP, "tag(", 4);
+    __sm_catP = __sm_catP + 4;
+    std::memcpy(__sm_catP, _sm_base1.data(), _sm_base1.size());
+    _sm_expr2.resize(5 + _sm_expr1.size());
+    __sm_catP = _sm_expr2.data();
+    std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
+    __sm_catP = __sm_catP + _sm_expr1.size();
+    std::memcpy(__sm_catP, "): on", 5);
     std::cout << std::boolalpha << (_sm_expr2) << std::endl;
     goto L3;
     L2:;
     _sm_base2 = ((*self));
-    {
-        _sm_expr1.resize(4 + _sm_base2.size());
-        char* __sm_catP2 = _sm_expr1.data();
-        std::memcpy(__sm_catP2, "tag(", 4);
-        __sm_catP2 = __sm_catP2 + 4;
-        std::memcpy(__sm_catP2, _sm_base2.data(), _sm_base2.size());
-        __sm_catP2 = __sm_catP2 + _sm_base2.size();
-    }
-    {
-        _sm_expr4.resize(6 + _sm_expr1.size());
-        char* __sm_catP3 = _sm_expr4.data();
-        std::memcpy(__sm_catP3, _sm_expr1.data(), _sm_expr1.size());
-        __sm_catP3 = __sm_catP3 + _sm_expr1.size();
-        std::memcpy(__sm_catP3, "): off", 6);
-        __sm_catP3 = __sm_catP3 + 6;
-    }
+    _sm_expr1.resize(4 + _sm_base2.size());
+    __sm_catP = _sm_expr1.data();
+    std::memcpy(__sm_catP, "tag(", 4);
+    __sm_catP = __sm_catP + 4;
+    std::memcpy(__sm_catP, _sm_base2.data(), _sm_base2.size());
+    _sm_expr4.resize(6 + _sm_expr1.size());
+    __sm_catP = _sm_expr4.data();
+    std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
+    __sm_catP = __sm_catP + _sm_expr1.size();
+    std::memcpy(__sm_catP, "): off", 6);
     std::cout << std::boolalpha << (_sm_expr4) << std::endl;
     L3:;
 }
 // stress/fold-const-params/src/main.kt:45
 void ns1_markIt(Int level) {
+    char* __sm_catP;
+    Int __sm_catC0;
     Str _sm_expr2;
-    {
-        Int __sm_catC4_0 = simse_strCountDigits(level);
-        _sm_expr2.resize(8 + __sm_catC4_0);
-        char* __sm_catP4 = _sm_expr2.data();
-        std::memcpy(__sm_catP4, "markIt: ", 8);
-        __sm_catP4 = __sm_catP4 + 8;
-        simse_strAddInt(__sm_catP4, level, __sm_catC4_0);
-        __sm_catP4 = __sm_catP4 + __sm_catC4_0;
-    }
+    __sm_catC0 = simse_strCountDigits(level);
+    _sm_expr2.resize(8 + __sm_catC0);
+    __sm_catP = _sm_expr2.data();
+    std::memcpy(__sm_catP, "markIt: ", 8);
+    __sm_catP = __sm_catP + 8;
+    simse_strAddInt(__sm_catP, level, __sm_catC0);
     std::cout << std::boolalpha << (_sm_expr2) << std::endl;
 }
 // stress/fold-const-params/src/main.kt:49

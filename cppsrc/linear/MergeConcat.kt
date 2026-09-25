@@ -600,6 +600,13 @@ fun ilConcatWrittenSlots(ops: *List<IlOp>, count: Int): List<Bool> {
 // The body's instruction list, with every fusable concatenation merged. Answers whether the
 // body changed; a body with nothing to fuse is left exactly as it was.
 fun ilFuseConcat(il: *IlBody): Bool {
+    // `--no-concat`: the pass's own switch, so one binary produces both shapes and the two
+    // can be measured against each other - the same program, the same compiler, one flag.
+    // Nothing is fused and no reach is recorded, so the `strcat` section stays out of the
+    // program as well.
+    if (ilNoConcat()) {
+        return false
+    }
     var fuser: IlConcatFuser = IlConcatFuser(
         il, ilConcatUseCounts(il), List<IlOp>(), List<Int>(), Dictionary<Int, Bool>(), false,
         List<IlOp>(), List<Int>()
@@ -630,4 +637,19 @@ fun ilFuseConcat(il: *IlBody): Bool {
     il.ops = ops
     il.lines = lines
     return true
+}
+
+// `--no-concat`: skip the pass above, so a `+` chain over `Str` and an `fmtStr` with a
+// literal format keep the shape the lowering gave them (one allocation per `+` link, the
+// format re-scanned by the runtime `fmtStr`) - the fusion `off` side of an A/B, and a way
+// to read what the fusion would have done (`--showLinearRepresentation`). Off by default:
+// the fusion is a pure optimization and this only removes it.
+var ilNoConcatFlag: Bool = false
+
+fun ilNoConcat(): Bool {
+    return ilNoConcatFlag
+}
+
+fun ilSetNoConcat(value: Bool): Unit {
+    ilNoConcatFlag = value
 }
