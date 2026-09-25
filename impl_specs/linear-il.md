@@ -465,7 +465,7 @@ instance and `&lambda` a counted handle to one.
   body - the names it reads that are not its own parameters and not names it declares - in
   first-read order (reproducible, because the field order is what every downstream table
   follows). `makeAdder`'s `(v: Int) -> v + factor` captures `factor`; the five lambdas in
-  `stress/lambdas`'s `main` capture nothing.
+  `stress/objects`' `lambdas` part capture nothing.
 - **The capture is a field, not a copy in the frame**: inside the body a captured
   name is `GetField this <name>` (and a write is `SetField`), and the construction
   passes the enclosing frame's values: `CallCtor dst, <Class>, captures...`, which the

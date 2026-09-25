@@ -1,0 +1,100 @@
+10
+11
+10
+11
+12
+12
+7
+1
+2
+0
+10
+true
+42
+10
+42
+15
+2
+2
+300
+red
+green
+other
+zero
+many
+4
+green
+5
+7
+absent
+3
+null raw
+6
+-1
+hello
+true
+true
+hello simse
+42
+bad int
+2.5
+true
+false
+true
+true
+5
+true
+2.500000
+3
+9
+false
+4
+false
+3
+5
+false
+hello
+false
+0
+true
+positive
+2
+false
+false
+a message that does not fit in the inline buffer
+9
+2
+2
+6
+3
+3
+2
+5
+11
+7
+2
+3
+a
+b
+1.500000
+[a::b]
+1,2,3
+xy
+no points
+| |
+false
+true
+false
+true
+[item::item]
+3
+item
+head+item+item+leaf
+box
+12
+true
+a
+Module kind='Module' line='1' column='1'
+  DataClass kind='DataClass' line='1' column='1' name='Tile'
+    Field name='n' isVar='true' line='1' column='17'
+      Type kind='Type.Named' line='1' column='24' name='Int'

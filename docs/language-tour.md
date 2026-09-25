@@ -103,7 +103,7 @@ fun main(): Int {
 ```
 
 There is no `foreach` over containers: storage is walked with an index and `while`,
-or with `Span<T>` (`stress/span`) - a borrowed view (pointer plus length) with
+or with `Span<T>` (`stress/collections`) - a borrowed view (pointer plus length) with
 `size()`, `isEmpty()`, `at(i)`/`span[i]` and `slice(start)`/`slice(start, count)`:
 
 ```simse
@@ -322,7 +322,7 @@ Enums are integer-valued; members may carry explicit values, and `toInt()` /
 `fromInt()` convert between the enum and its `Int` representation - `fromInt` is the
 direct cast back, so it asks for no `Opt` and checks nothing. There is no automatic
 member *name* yet, so a `when` function is the way to print one
-(`stress/language-tour`).
+(`stress/objects`).
 
 ```simse
 enum class Color {

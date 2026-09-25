@@ -62,7 +62,7 @@ bun tools/stress.js --filter modules --jobs 4
 # the compiler by hand (the compiler *is* the CLI; `--prelude` defaults to the
 # relative path cppsrc/rtl, so run it from the repo root)
 ./simse.exe --root cppsrc -o simse_out.cpp            # the whole compiler
-./simse.exe --root stress/hello/src -o hello.cpp      # any project, same form
+./simse.exe --root stress/strings/src -o strings.cpp  # any case, same form
 
 # the linear IL of every emitted body, on stderr (debug view; the C++ output is
 # identical with and without it - impl_specs/linear-il.md)
@@ -209,13 +209,13 @@ driver's - and `build.bat` can compile it.
   (`impl_specs/for.md`). Both are parser..emitter: the machine lowering and
   the emitter's `emitYieldable`/`emitMachine`, with a
   *generic* machine a class template and an extension function's receiver a field of it
-  (`stress/yield`, `stress/generic-yield`). Iteration is a convention: `for (x in c)` is
+  (`stress/machines`). Iteration is a convention: `for (x in c)` is
   `c.iter()`, the prelude writes one per container in Simse (`List`, `Array`,
   `Span`), a machine is
   its own identity, and a prelude body is emitted only when the program reaches it -
   by name *and* by the receiver's type, since a machine's class is named after its
   receiver - so a program that iterates a list carries no array machine
-  (`stress/for-container`, `stress/for-array`, `stress/diagnostic-not-iterable`).
+  (`stress/collections`, `stress/diagnostic-not-iterable`).
 - `cppsrc/compiler/Driver.kt` — the CLI and the shared transpile core: it loads the
   prelude set, scans the module roots, parses and analyzes the compilation, and
   amalgamates the result into one C++ translation unit. The compiler *is* this file plus
@@ -495,13 +495,13 @@ packages. `yield` and `for` are implemented end to end: the scanner reads `..`/`
 parser handles `..T`, `yield e` and every `for` form (all desugared in the parser), a
 `for` over a non-machine is a diagnostic (`stress/diagnostic-for-not-a-machine`), the
 machine is lowered in `linear/Yield.kt` and emitted by
-`emitYieldable`/`emitMachine` in `Codegen.kt`; `stress/yield`
+`emitYieldable`/`emitMachine` in `Codegen.kt`; `stress/machines`
 runs the whole thing through the compiler. Two things stay out of
 `cppsrc/**` and the corpus on purpose: `yield` needs a machine whose body lives
 in a method, and the vocabulary is `..T`, `yield e`, `for (v in m)` /
 `for ((v, i) in m)` and their pointer forms `for (*v in m)` / `for ((*v, i) in m)`
 (the second wrap, `iterPtr`, hands out `*T` places - no copy per iteration;
-`specs/functions.md`, `impl_specs/yield.md`, `impl_specs/for.md`, `stress/for-pointer`).
+`specs/functions.md`, `impl_specs/yield.md`, `impl_specs/for.md`, `stress/collections`).
 
 ## 8. TODOs / deferred
 
@@ -522,7 +522,7 @@ ring: they name C++ files that no longer exist, and their evidence lines are his
 3. ~~**`yield` in the Simse ring**~~ **done**: `Codegen.kt`'s
    `emitYieldable`/`emitMachine`/`ilMachineMethod`, and the builder contract they needed
    (`linCondJump` re-roots a *synthesized* condition under `Cond` - the C++ ring holds it
-   structurally, so the gap was invisible there). `stress/yield` covers both `for`
+   structurally, so the gap was invisible there). `stress/machines` covers both `for`
    forms, `continue`/`break`, `advance()`/`current`, through the self-hosted
    compiler.
 4. ~~**`iter`**~~ **done** (`impl_specs/for.md`): `for (x in c)` becomes
@@ -838,7 +838,8 @@ generated C++ of one translation unit, so nothing can be built against an older 
   generated file, not the Simse program: `val long: Str = "..."` transpiles clean and
   produces `Str long = ...;` (`C2628`). Nothing maps `long`/`class`/`template`/... out of
   the way, and - like an undefined value name - the failure is at C++ compile time, with no
-  positioned Simse error. `stress/string-escapes` hit it while it was being written.
+  positioned Simse error. `stress/strings`' `string-escapes` part hit it while it was
+  being written.
 - `stress/<case>/expected.cpp` is compared byte for byte but **`--update` never
   rewrites it**: copy `stress/.work/<case>/out.cpp` over it by hand.
 - **A value receiver is `T* self`** (T47): method signatures, call sites

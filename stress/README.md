@@ -38,9 +38,39 @@ passing one: the harness fails it and tells you to capture the output with
 reading what the program printed, never as a way to make a red case green.
 
 `expected.cpp` is the emission golden: it pins the generated C++ for a program,
-which is how the old fixture goldens pinned it. `stress/hello` has one because
-it is tiny; drop one into any case by copying `stress/.work/<name>/out.cpp`
-after the case passes.
+which is how the old fixture goldens pinned it. `stress/objects` and
+`stress/machines` carry one each (they replaced the cases that pinned the emitted
+shapes); drop one into any case by copying `stress/.work/<name>/out.cpp` after the
+case passes.
+
+## Categories
+
+Most cases are one *category* of the language, merged into one project: a single
+`src/main.kt` holding every case it replaced as a `part<Name>` function, called in
+order by the file's own `main`, with a `// ---- <case> ----` marker per part.
+`--filter collections` runs the collections category the way `--filter dictionary`
+used to run the part of it that was a case.
+
+```
+stress/<category>/
+  src/main.kt   `// ---- <case> ----` per merged case, then `main` calling each part
+  expected.stdout
+  expected.cpp  where the merged cases pinned the emitted C++
+```
+
+A case is a project, and what a project costs is `cl.exe`: the transpile is ~15 ms,
+the C++ compile ~1 s. Merging 34 single-program cases into 5 took the whole suite
+from **52 s to 24 s** (33 cases, serial). A part's body is verbatim from the case it
+replaced, and the merged program's stdout is the concatenation in marker order.
+
+What stays one folder per case, and why:
+
+- `diagnostic-*`: the transpile *must* fail, and a real error is the file the error
+  is in - two failures in one file can only ever be one case.
+- The build-configuration cases - `main-args`, `native-read-file`, `read-lines`,
+  `modules`, `qualified-names`, `manifest-modules`, `statics`, `resources*`,
+  `smgen-*`: each is a different *project* (its own `simse.md` manifest, `_res.md`,
+  `args` or data file), not just a different program, so there is nothing to merge.
 
 ## Why folders
 

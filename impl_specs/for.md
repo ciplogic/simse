@@ -192,9 +192,9 @@ transpiling `--root cppsrc`, interleaved A/B, 11 pairs):
 | `for (x in xs)` (the value form) | 810.8 ms | 826.8 ms |
 
 The pointer form is the hand-written loop's cost, without its index - which is why the
-compiler's own statement/child walks use it (`stress/for-pointer` covers the semantics:
-a write through the loop variable reaches the container, and a scalar element is read
-with `*value`).
+compiler's own statement/child walks use it (`stress/collections`' `for-pointer` part
+covers the semantics: a write through the loop variable reaches the container, and a
+scalar element is read with `*value`).
 
 ## Status
 
