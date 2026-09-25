@@ -174,10 +174,15 @@ fun propReplaceChild(like: *AstXmlNode, role: AstNodeKind, replacement: AstXmlNo
     return node
 }
 
-// The first `!!` anywhere below `node`, or an empty node: a diagnostic needs its position.
+// The first `!!` at this body's *own* level, or an empty node: a diagnostic needs its position.
+// A lambda body is a place of its own - its `!!` propagates into the lambda's result, not this
+// body's - so the walk stops there (propRewriteLambdas owns those).
 fun propFind(node: AstXmlNode): AstXmlNode {
     if (xmlKind(node) == AstNodeCategory.ExprPropagate) {
         return node
+    }
+    if (xmlKind(node) == AstNodeCategory.ExprLambda) {
+        return xmlEmptyNode()
     }
     for (*child in node.Children) {
         val found: AstXmlNode = propFind(child)
@@ -441,11 +446,134 @@ fun propStmt(state: *PropState, stmt: *AstXmlNode, out: *List<AstXmlNode>): Unit
     out.append(stmt)
 }
 
+// The declaration a call's name reaches, by name - the approximation the coloring pass uses too
+// (cppsrc/sema/Async.kt). A name two declarations share resolves to the first, which costs the
+// identity path at worst and never correctness: the remap form is always right.
+fun propFindFunction(declarations: *List<AstXmlNode>, name: Str): AstXmlNode {
+    for (*decl in declarations) {
+        if (xmlAttr(decl, AstNodeAttributeKind.Name) == name) {
+            return decl
+        }
+    }
+    return xmlEmptyNode()
+}
+
+// A lambda argument's target: the result type of the parameter it is passed to. A lambda has no
+// declared return type, so *this* - not the enclosing function's - is what a `!!` inside it
+// propagates into.
+fun propLambdaTarget(call: *AstXmlNode, argIndex: Int, declarations: *List<AstXmlNode>): AstXmlNode {
+    val callee: *AstXmlNode = xmlChildPtr(call, AstNodeKind.Callee)
+    val name: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
+    if (name == "") {
+        return xmlEmptyNode()
+    }
+    val decl: AstXmlNode = propFindFunction(declarations, name)
+    if (xmlIsEmpty(decl)) {
+        return xmlEmptyNode()
+    }
+    val params: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
+    if (argIndex >= params.size()) {
+        return xmlEmptyNode()
+    }
+    val paramType: AstXmlNode = xmlChild(params[argIndex], AstNodeKind.Type)
+    if (xmlKind(paramType) != AstNodeCategory.TypeFunction) {
+        return xmlEmptyNode()
+    }
+    return xmlChild(paramType, AstNodeKind.ReturnType)
+}
+
+// One lambda body rewritten in place, with the result type its parameter names as the target.
+// `propFind` stops at a nested lambda, so a lambda inside a lambda is the recursion's business.
+fun propRewriteLambdaBody(lambda: *AstXmlNode, target: AstXmlNode, fileName: *Str): Str {
+    val body: *AstXmlNode = xmlChildPtr(lambda, AstNodeKind.Body)
+    if (xmlIsEmpty(body)) {
+        return ""
+    }
+    val found: AstXmlNode = propFind(body)
+    if (xmlIsEmpty(found)) {
+        return ""
+    }
+    var state: PropState = PropState(
+        1, dictionaryOf<Str, AstXmlNode>(), List<Str>(), target, "", 0, 0
+    )
+    // A lambda's parameters are read from the `Params` attribute - names, no types - so only the
+    // body's own declared locals can serve the identity path; the rest take the remap path.
+    propCollectLocals(state, xmlChildren(body, AstNodeKind.Stmt))
+    var out: List<AstXmlNode> = List<AstXmlNode>()
+    propStmts(state, xmlChildren(body, AstNodeKind.Stmt), out)
+    if (!state.error.isEmpty()) {
+        return fmtStr(
+            "|: |:|: |", fileName, state.errorLine.toString(),
+            state.errorColumn.toString(), state.error
+        )
+    }
+    body.Children = out.toArray()
+    return ""
+}
+
+// Every lambda argument of one call, in argument order.
+fun propCallLambdas(call: *AstXmlNode, fileName: *Str, declarations: *List<AstXmlNode>): Str {
+    var index: Int = 0
+    for (*arg in call.Children) {
+        if (arg.name != AstNodeKind.Arg) {
+            continue
+        }
+        val position: Int = index
+        index = index + 1
+        if (xmlKind(arg) != AstNodeCategory.ExprLambda) {
+            continue
+        }
+        val target: AstXmlNode = propLambdaTarget(call, position, declarations)
+        val inner: AstXmlNode = propResInner(target)
+        if (xmlIsEmpty(inner)) {
+            // A lambda the pass cannot place: only a `!!` inside it needs reporting, so a lambda
+            // that does not propagate is left alone and the C++ compiler keeps the last word.
+            val body: AstXmlNode = xmlChild(arg, AstNodeKind.Body)
+            val found: AstXmlNode = propFind(body)
+            if (xmlIsEmpty(found)) {
+                continue
+            }
+            return fmtStr(
+                "|: |:|: |", fileName, xmlLine(found).toString(), xmlColumn(found).toString(),
+                "`!!` inside a lambda propagates into the lambda's own result, and this parameter's type has none"
+            )
+        }
+        val error: Str = propRewriteLambdaBody(arg, inner, fileName)
+        if (error != "") {
+            return error
+        }
+    }
+    return ""
+}
+
+// Every lambda argument anywhere below `node`, each rewritten with its own target.
+fun propRewriteLambdas(node: *AstXmlNode, fileName: *Str, declarations: *List<AstXmlNode>): Str {
+    if (xmlKind(node) == AstNodeCategory.ExprCall) {
+        val error: Str = propCallLambdas(node, fileName, declarations)
+        if (error != "") {
+            return error
+        }
+    }
+    for (*child in node.Children) {
+        val error: Str = propRewriteLambdas(child, fileName, declarations)
+        if (error != "") {
+            return error
+        }
+    }
+    return ""
+}
+
 // One function-like body rewritten in place: the module's function, or a data class's method.
-fun propRewriteBody(decl: *AstXmlNode, fileName: *Str): Str {
+// Lambdas go first: their `!!` belongs to *their* result, so a body whose only `!!` is inside a
+// lambda need not answer a `Res` itself.
+fun propRewriteBody(decl: *AstXmlNode, fileName: *Str, declarations: *List<AstXmlNode>): Str {
     val body: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.Body)
     if (xmlIsEmpty(body)) {
         return ""
+    }
+    val lambdaError: Str = propRewriteLambdas(body, fileName, declarations)
+    if (lambdaError != "") {
+        return lambdaError
     }
     val found: AstXmlNode = propFind(body)
     if (xmlIsEmpty(found)) {
@@ -482,14 +610,14 @@ fun propRewriteBody(decl: *AstXmlNode, fileName: *Str): Str {
     return ""
 }
 
-fun propRewriteDecl(decl: *AstXmlNode, fileName: *Str): Str {
+fun propRewriteDecl(decl: *AstXmlNode, fileName: *Str, declarations: *List<AstXmlNode>): Str {
     if (decl.name == AstNodeKind.Function) {
-        return propRewriteBody(decl, fileName)
+        return propRewriteBody(decl, fileName, declarations)
     }
     if (decl.name == AstNodeKind.DataClass) {
         val methods: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Function)
         for (*method in methods) {
-            val error: Str = propRewriteBody(method, fileName)
+            val error: Str = propRewriteBody(method, fileName, declarations)
             if (error != "") {
                 return error
             }
@@ -498,15 +626,33 @@ fun propRewriteDecl(decl: *AstXmlNode, fileName: *Str): Str {
     return ""
 }
 
-// Every declaration of a parsed module, each function's `!!` expanded. Answers "" when the
-// module is clean, or one positioned diagnostic.
-fun propRewriteModule(module: *AstXmlNode, fileName: *Str): Str {
+// Every declaration of one parsed module, each function's and each lambda's `!!` expanded. Answers
+// "" when the module is clean, or one positioned diagnostic.
+fun propRewriteModule(module: *AstXmlNode, fileName: *Str, declarations: *List<AstXmlNode>): Str {
     val decls: List<AstXmlNode> = xmlDecls(module)
     for (*decl in decls) {
-        val error: Str = propRewriteDecl(decl, fileName)
+        val error: Str = propRewriteDecl(decl, fileName, declarations)
         if (error != "") {
             return error
         }
     }
     return ""
+}
+
+// Every function declaration a module contributes, so the pass can resolve a call's parameter
+// types by name. The driver collects the prelude's too - a lambda's target is often a prelude
+// declaration (`asyncRunTransform`) - and runs the pass once, when all of them are in hand.
+fun propCollectDecls(module: *AstXmlNode, out: *List<AstXmlNode>): Unit {
+    val top: List<AstXmlNode> = xmlDecls(module)
+    for (*decl in top) {
+        if (decl.name == AstNodeKind.Function) {
+            out.append(decl)
+        }
+        if (decl.name == AstNodeKind.DataClass) {
+            val methods: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Function)
+            for (*method in methods) {
+                out.append(method)
+            }
+        }
+    }
 }

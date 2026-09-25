@@ -496,8 +496,9 @@ The value is evaluated once. When the operand's declared type is the function's 
 type the failure path returns the operand itself (a move); otherwise the message is carried
 into a rebuilt `Res<T>` - nothing is remapped on the way, because a `Res`'s error arm is
 always a `Str`. `!!` must be the whole right-hand side of a `val`/`var`, an assignment, or a
-statement of its own, and the enclosing function must return a `Res` (a `!!` anywhere else
-is a positioned diagnostic).
+statement of its own, and what it propagates into must be a `Res`: the enclosing function's
+return type, or - inside a lambda, which has no declared return type - the result type of the
+parameter the lambda is passed to. A `!!` anywhere else is a positioned diagnostic.
 
 ## Memory: values, handles, pointers
 

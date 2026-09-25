@@ -68,6 +68,11 @@ bun tools/stress.js --filter modules --jobs 4
 # identical with and without it - impl_specs/linear-il.md)
 ./simse.exe --root cppsrc -o a.cpp --showLinearRepresentation 2> il.txt
 
+# which functions are async and which callee carried it in, on stderr
+# (impl_specs/async.md). The dump returns before sema, because `Async<T>` is not a type
+# the checker knows yet - it is the async work's own view of the coloring.
+./simse.exe --root docs/examples/async/src --showAsync
+
 # debugging / profiling the compiler:
 ./simse.exe --root cppsrc -o prof.cpp --profile   # instrumented profiler in the program
 ./build.bat --release --pdb                       # optimized + symbols, for the VS profiler
@@ -115,7 +120,9 @@ driver's - and `build.bat` can compile it.
   `generators.md` (`@SmGen`, the `Sections` sink, and the `res` generator),
   `ast-xmlnode.md`, `linear-lowering.md`, `linear-il.md` (the flat instruction list
   the backend is meant to consume, with its dump), `yield.md` (`yield` as a pure
-  lowering to a state machine), `profiling.md` (the `--profile` instrument: one RAII
+  lowering to a state machine), `async.md` (`Async<T>`: the colorless async design, the
+  `!!` operator, the coloring pass and its `--showAsync` dump - and what is still to
+  build), `profiling.md` (the `--profile` instrument: one RAII
   timer per emitted body and the table the program prints), `tasks/.
 - `cppsrc/rtl/` — the runtime, and the only hand-written C++ besides the bootstrap:
   the headers (`types.hpp`,

@@ -38,17 +38,6 @@ fun driverResourceRoots(prelude: *Str): List<Str> {
     return roots
 }
 
-// `x!!` is expanded before sema sees the tree (cppsrc/parser/Propagate.kt), so nothing past
-// the parser has an operator to know about. Answers false when the module has a diagnostic.
-fun driverRewritePropagate(module: *AstXmlNode, fileName: *Str): Bool {
-    val error: Str = propRewriteModule(module, fileName)
-    if (error == "") {
-        return true
-    }
-    eprintln(error)
-    return false
-}
-
 fun driverNewModule(): AstXmlNode {
     return AstXmlNode(AstNodeKind.Module, AstNodeCategory.None, List<AstNodeAttribute>(), Array<AstXmlNode>())
 }
@@ -195,6 +184,7 @@ fun main(args: List<Str>): Int {
     var haveRoot: Bool = false
     var extraRoots: List<Str> = List<Str>()
     var preludeExplicit: Bool = false
+    var showAsync: Bool = false
 
     var i: Int = 0
     while (i < args.size()) {
@@ -242,12 +232,16 @@ fun main(args: List<Str>): Int {
                 ilSetShow(true)
             }
 
+            "--showAsync" -> {
+                showAsync = true
+            }
+
             "--profile" -> {
                 profSetEnabled(true)
             }
 
             "-h", "--help" -> {
-                println("usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module-root <dir>]... [--showLinearRepresentation] [--profile]")
+                println("usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module-root <dir>]... [--showLinearRepresentation] [--showAsync] [--profile]")
                 return 0
             }
 
@@ -318,13 +312,9 @@ fun main(args: List<Str>): Int {
         }
         preludeCanon.append(pathCanonical(preludeFiles[p]))
         preludeNames.append(preludeFiles[p])
-        val preludeModule: AstXmlNode = parsedPrelude.Value
-        if (!driverRewritePropagate(preludeModule, preludeFiles[p])) {
-            return 1
-        }
-        preludeModules.append(preludeModule)
-        driverAppendNamed(mergedPrelude, preludeModule, AstNodeKind.Import)
-        driverAppendDecls(mergedPrelude, preludeModule)
+        preludeModules.append(parsedPrelude.Value)
+        driverAppendNamed(mergedPrelude, parsedPrelude.Value, AstNodeKind.Import)
+        driverAppendDecls(mergedPrelude, parsedPrelude.Value)
         p = p + 1
     }
     val hasPrelude: Bool = preludeFiles.size() > 0
@@ -355,12 +345,8 @@ fun main(args: List<Str>): Int {
             eprintln(parsed.Error)
             return 1
         }
-        val module: AstXmlNode = parsed.Value
-        if (!driverRewritePropagate(module, files[f])) {
-            return 1
-        }
         fileNames.append(files[f])
-        modules.append(module)
+        modules.append(parsed.Value)
         f = f + 1
     }
 
@@ -382,15 +368,60 @@ fun main(args: List<Str>): Int {
             eprintln(parsedGenerated.Error)
             return 1
         }
-        val generatedModule: AstXmlNode = parsedGenerated.Value
-        if (!driverRewritePropagate(generatedModule, "<generated>/kt.kt")) {
-            return 1
-        }
         fileNames.append("<generated>/kt.kt")
-        modules.append(generatedModule)
+        modules.append(parsedGenerated.Value)
         // Added to the generators' state too: the second pass runs after this one, and a
         // generator walking the program should see everything it was compiled with.
-        sourceGenAddModule("<generated>/kt.kt", generatedModule)
+        sourceGenAddModule("<generated>/kt.kt", parsedGenerated.Value)
+    }
+
+    // `--showAsync`: the coloring the machine lowering will act on (cppsrc/sema/Async.kt). It
+    // runs *before* sema because `Async<T>` is not a type the checker knows yet - the dump is
+    // how the inference is checked while the state machine is still being built.
+    if (showAsync) {
+        var asyncFunctions: List<AstXmlNode> = List<AstXmlNode>()
+        for (*preludeModule in preludeModules) {
+            asyncCollect(preludeModule, asyncFunctions)
+        }
+        for (*mod in modules) {
+            asyncCollect(mod, asyncFunctions)
+        }
+        var asyncReasons: List<Str> = List<Str>()
+        val asyncNames: List<Str> = asyncColor(asyncFunctions, asyncReasons)
+        asyncDump(asyncFunctions, asyncNames, asyncReasons)
+        return 0
+    }
+
+    // `x!!` is expanded before sema sees the tree (cppsrc/parser/Propagate.kt), so nothing past the
+    // parser has an operator to know about. It runs once, here, because a lambda's failures
+    // propagate into the result type its *parameter* names - which needs the callee's declaration,
+    // and that declaration may be in the prelude.
+    var propagateDecls: List<AstXmlNode> = List<AstXmlNode>()
+    for (*preMod in preludeModules) {
+        propCollectDecls(preMod, propagateDecls)
+    }
+    for (*progMod in modules) {
+        propCollectDecls(progMod, propagateDecls)
+    }
+    var pmod: Int = 0
+    while (pmod < preludeModules.size()) {
+        var preludeTarget: AstXmlNode = preludeModules[pmod]
+        val error: Str = propRewriteModule(preludeTarget, preludeNames[pmod], propagateDecls)
+        if (error != "") {
+            eprintln(error)
+            return 1
+        }
+        pmod = pmod + 1
+    }
+    var rmod: Int = 0
+    while (rmod < modules.size()) {
+        var programTarget: AstXmlNode = modules[rmod]
+        val error: Str = propRewriteModule(programTarget, fileNames[rmod], propagateDecls)
+        if (error != "") {
+            eprintln(error)
+            return 1
+        }
+        rmod = rmod + 1
     }
 
     // Compilation-wide name/type resolution over the prelude and every module.

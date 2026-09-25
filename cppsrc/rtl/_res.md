@@ -1182,3 +1182,146 @@ inline Span<ResourceEntry> simse_resources_entries() {
     return Span<ResourceEntry>(entries.data(), entries.size());
 }
 ```
+
+!tasks
+====
+forward:
+```cpp
+#include <condition_variable>
+#include <mutex>
+#include <thread>
+#include <vector>
+
+// The work pool (impl_specs/async.md, "The runtime"): `ioThreads` worker threads behind two
+// queues. The thread that called `simse_tasksStart` is the *loop* - a program's main logic -
+// and the workers are the io side; they meet only at the queues. Only *values* cross a queue,
+// never a counted handle, and a reference is transferred under the queue's own lock, which is
+// what lets the language's reference counts stay non-atomic: one owner at a time. A worker
+// touches its job and the queues and nothing else, which is what makes it pool-schedulable.
+//
+// simse_native_readFile is the `fileio` section's reader, declared here so this section's
+// bodies do not depend on the order the sections render in.
+Str simse_native_readFile(const Str& path);
+
+void simse_tasksStart(Int ioThreads);
+void simse_tasksStop();
+void simse_tasksSubmitRead(Int slot, const Str& path);
+void simse_tasksJoin(Int count);
+Str simse_tasksText(Int slot);
+```
+bodies:
+```cpp
+namespace simse_tasks {
+
+struct Job {
+    Int slot;
+    Str path;
+};
+
+// Heap-allocated and never freed: a program that never stops the pool must still exit quietly,
+// and a static's destructor racing a worker's wait would not.
+struct Pool {
+    std::mutex workMutex;
+    std::condition_variable workReady;
+    std::vector<Job> work;
+    bool closed = false;
+
+    std::mutex doneMutex;
+    std::condition_variable doneReady;
+    std::vector<Str> texts;
+    Int completed = 0;
+
+    std::vector<std::thread> workers;
+};
+
+Pool& storage() {
+    static Pool* shared = new Pool();
+    return *shared;
+}
+
+void worker(Pool* shared) {
+    for (;;) {
+        Job job;
+        {
+            std::unique_lock<std::mutex> lock(shared->workMutex);
+            shared->workReady.wait(lock, [shared] { return shared->closed || !shared->work.empty(); });
+            if (shared->work.empty()) return;
+            // Any order will do: the join counts completions, it does not order them.
+            job = shared->work.back();
+            shared->work.pop_back();
+        }
+        Str text = simse_native_readFile(job.path);
+        {
+            std::lock_guard<std::mutex> lock(shared->doneMutex);
+            if (job.slot >= 0 && (std::size_t) job.slot < shared->texts.size()) {
+                shared->texts[(std::size_t) job.slot] = text;
+            }
+            shared->completed = shared->completed + 1;
+        }
+        shared->doneReady.notify_all();
+    }
+}
+
+}  // namespace simse_tasks
+
+void simse_tasksStart(Int ioThreads) {
+    simse_tasks::Pool& shared = simse_tasks::storage();
+    if (!shared.workers.empty()) {
+        return;
+    }
+    if (ioThreads < 1) {
+        ioThreads = 1;
+    }
+    for (Int i = 0; i < ioThreads; i = i + 1) {
+        shared.workers.push_back(std::thread(simse_tasks::worker, &shared));
+    }
+}
+
+void simse_tasksStop() {
+    simse_tasks::Pool& shared = simse_tasks::storage();
+    {
+        std::lock_guard<std::mutex> lock(shared.workMutex);
+        shared.closed = true;
+    }
+    shared.workReady.notify_all();
+    for (Int i = 0; i < (Int) shared.workers.size(); i = i + 1) {
+        std::thread& thread = shared.workers[(std::size_t) i];
+        if (thread.joinable()) {
+            thread.join();
+        }
+    }
+    shared.workers.clear();
+}
+
+void simse_tasksSubmitRead(Int slot, const Str& path) {
+    simse_tasks::Pool& shared = simse_tasks::storage();
+    // The two locks are never held at once, so there is no order to get wrong.
+    {
+        std::lock_guard<std::mutex> lock(shared.doneMutex);
+        if (slot >= 0 && (std::size_t) slot >= shared.texts.size()) {
+            shared.texts.resize((std::size_t) slot + 1);
+        }
+    }
+    {
+        std::lock_guard<std::mutex> lock(shared.workMutex);
+        shared.work.push_back(simse_tasks::Job{slot, path});
+    }
+    shared.workReady.notify_one();
+}
+
+// The structural join: wait until `count` jobs have settled, whatever order they finished in.
+void simse_tasksJoin(Int count) {
+    simse_tasks::Pool& shared = simse_tasks::storage();
+    std::unique_lock<std::mutex> lock(shared.doneMutex);
+    shared.doneReady.wait(lock, [&shared, count] { return shared.completed >= count; });
+}
+
+Str simse_tasksText(Int slot) {
+    simse_tasks::Pool& shared = simse_tasks::storage();
+    std::lock_guard<std::mutex> lock(shared.doneMutex);
+    if (slot < 0 || (std::size_t) slot >= shared.texts.size()) {
+        return Str();
+    }
+    return shared.texts[(std::size_t) slot];
+}
+```
