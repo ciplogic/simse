@@ -51,9 +51,27 @@ void simse_strTableDecode(const char* pool, const Int* starts, const Int* length
 Int64 simse_nowMillis();
 Int64 simse_nowMicros();
 
-// `spanOf(items)`: a span over a list's elements, generated (`cppsrc/rtl/_res.md`).
-template <class T>
-Span<T> simse_spanOf(List<T>* items);
+// The program's string literals: one pool, and two run-length encoded index
+// series (offsets as deltas, then lengths), each as what to subtract from the
+// previous value; strtable.hpp has the stream format.
+static const Int __sm_stringCount = 13;
+static const char __sm_stringPool[] =
+    "a\"b\\c" "flagged" "corner" "false" "plain" "name" "text" "true" "box" "tag" "x" "y" "{" 
+;
+static const Int16 __sm_stringStarts[] = {13,3,0,-5,-2,1,2,1,2,0,1,1,2,0,4,1,0,2,0};
+static const Int16 __sm_stringLens[] = {13,2,-5,-2,1,2,1,2,0,1,1,2,0,3,1,0,2,1,2,0};
+static_assert(sizeof(__sm_stringPool) - 1 == 49, "the string pool and its length index disagree");
+static StrView __sm_stringTable[__sm_stringCount];
+static struct __SmStringTableInitType {
+    __SmStringTableInitType() {
+        Int starts[__sm_stringCount];
+        Int lens[__sm_stringCount];
+        simse_strTableExpand(__sm_stringStarts, starts, __sm_stringCount);
+        simse_strTableExpand(__sm_stringLens, lens, __sm_stringCount);
+        simse_strTableDecode(__sm_stringPool, starts, lens, __sm_stringTable,
+            __sm_stringCount);
+    }
+} __sm_stringTableInit;
 
 // The operations a view is read through (specs/built-in-types.md, "Views"; the
 // declarations are cppsrc/rtl/StrView.kt). The *type* and the *literal interop* stay in
@@ -188,30 +206,273 @@ Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& val
 template <class T, class F>
 void simse_list_sort(List<T>& self, F less);
 
-// stress/smgen-res-collision/src/main.kt:17
+#include <charconv>
+#include <cstddef>
+#include <system_error>
+
+// The string, character, numeric-conversion and min/max operations behind the prelude
+// (impl_specs/native-interop.md, specs/built-in-types.md), moved out of
+// cppsrc/rtl/strops.hpp.
+//
+// `Str` is the inline `SmString` (smstring.hpp): every size, length and index here is the
+// language's `Int` (`int32_t`), including `Str::npos`, which is `-1`. Index/range errors
+// are unchecked where the underlying operation is unchecked; the `Opt`-returning
+// conversions never throw.
+
+// `Str.charAt(index)`: the byte at `index` (unchecked; no bounds test).
+Char simse_str_charAt(const Str& self, Int index);
+
+// `Str.trim()` strips leading and trailing whitespace (space, tab, newline, CR).
+Str simse_str_trim(const Str& self);
+
+// `Str.split(separator)` splits on every occurrence. An empty separator returns the whole
+// string as a single element. Two overloads: a separator string and a separator byte.
+List<Str> simse_str_split(const Str& self, const Str& separator);
+List<Str> simse_str_split(const Str& self, Char separator);
+
+// ASCII/byte case folding (the string type is a byte string).
+Str simse_str_toUpper(const Str& self);
+Str simse_str_toLower(const Str& self);
+
+// `Str.find(sub)` returns the first index of `sub`, or -1 when absent (the language's
+// spelling of C++ `npos`).
+Int simse_str_find(const Str& self, const Str& sub);
+
+// `Str.lastIndexOf(sub)` returns the last index of `sub`, or -1 when absent.
+Int simse_str_lastIndexOf(const Str& self, const Str& sub);
+
+// `Str.substr(start, len)` clamps `start` to [0, size]; `len` may run past the end.
+Str simse_str_substr(const Str& self, Int start, Int len);
+
+Bool simse_str_startsWith(const Str& self, const Str& prefix);
+Bool simse_str_endsWith(const Str& self, const Str& suffix);
+
+// `Str.replace(from, to)` replaces every occurrence of `from` with `to`.
+Str simse_str_replace(const Str& self, const Str& from, const Str& to);
+
+// `Str.toInt()`/`Str.toFloat()` parse the whole string; failure (or a non-empty trailing
+// remainder) yields `Opt.none()`. No exceptions: `std::from_chars` reports errors through
+// its return value.
+Opt<Int> simse_str_toInt(const Str& self);
+Opt<Float64> simse_str_toFloat(const Str& self);
+
+// `Char` is a signed 8-bit integer; the checks are byte-range tests so they do not depend
+// on the C locale. Space, tab, newline and carriage return count as space; form feed and
+// vertical tab do not.
+Bool simse_char_isDigit(Char self);
+Bool simse_char_isAlpha(Char self);
+Bool simse_char_isAlphaOrDigit(Char self);
+Bool simse_char_isSpace(Char self);
+
+// Numeric conversions. `Char` is an 8-bit integer, so it stringifies as a number.
+template <class T>
+Str simse_num_toString(const T& self);
+Str simse_char_toString(Char self);
+Str simse_bool_toString(Bool self);
+
+struct ns1_Point;
+struct ns1_Label;
+struct ns1_Shape;
+// stress/json/src/main.kt:14
+SIMSE_PACK_PUSH
+struct ns1_Point {
+    Int x;
+    Int y;
+};
+SIMSE_PACK_POP
+// stress/json/src/main.kt:15
+SIMSE_PACK_PUSH
+struct ns1_Label {
+    Str text;
+    Bool flagged;
+};
+SIMSE_PACK_POP
+// stress/json/src/main.kt:16
+SIMSE_PACK_PUSH
+struct ns1_Shape {
+    Str name;
+    ns1_Point corner;
+    ns1_Label tag;
+};
+SIMSE_PACK_POP
+
+Str jsonQuoted(Str value);
+Str toJson(ns1_Point* self);
+Str toJson(Int* self);
+Str toJson(ns1_Label* self);
+Str toJson(Str* self);
+Str toJson(Bool* self);
+Str toJson(ns1_Shape* self);
+
+// stress/json/src/main.kt:18
 int main() {
-    List<Int>* _sm_base1, * _sm_base2;
-    List<Int> items;
-    Span<Int> real, empty;
-    Int _sm_expr1, _sm_expr2;
-    items = List<Int>();
-    simse_list_append(items, 3);
-    _sm_base1 = &items;
-    real = simse_spanOf(_sm_base1);
-    _sm_base2 = &items;
-    empty = simse_spanOf(_sm_base2);
-    _sm_expr1 = real.size();
+    ns1_Point p, _sm_expr3;
+    Str _sm_expr1, _sm_expr2, _sm_expr5;
+    ns1_Label label, _sm_expr4;
+    ns1_Shape shape;
+    p = ns1_Point{1, 2};
+    _sm_expr1 = toJson(simse_addressOf(p));
     std::cout << std::boolalpha << (_sm_expr1) << std::endl;
-    _sm_expr2 = empty.size();
+    label = ns1_Label{__sm_stringTable[0], true};
+    _sm_expr2 = toJson(simse_addressOf(label));
     std::cout << std::boolalpha << (_sm_expr2) << std::endl;
+    _sm_expr3 = ns1_Point{3, 4};
+    _sm_expr4 = ns1_Label{__sm_stringTable[4], false};
+    shape = ns1_Shape{__sm_stringTable[8], _sm_expr3, _sm_expr4};
+    _sm_expr5 = toJson(simse_addressOf(shape));
+    std::cout << std::boolalpha << (_sm_expr5) << std::endl;
     return 0;
 }
-
-// The collision fixture (the `spanOfEmpty` section of cppsrc/rtl/_res.md): the same
-// symbol as `spanOf`, so whichever declaration the emitter reaches last wins.
-template <class T>
-inline Span<T> simse_spanOf(List<T>* items) {
-    return Span<T>(nullptr, -1);
+// <generated>/kt.kt:7
+Str jsonQuoted(Str value) {
+    Str out;
+    Int i, _sm_expr1;
+    Bool _sm_expr2, _sm_expr3, _sm_expr4, _sm_expr5, _sm_expr6, _sm_expr7;
+    Char ch;
+    out = Str();
+    simse_str_append(out, '"');
+    i = 0;
+    L1:;
+    _sm_expr1 = value.size();
+    _sm_expr2 = i < _sm_expr1;
+    if (!(_sm_expr2)) goto L2;
+    ch = simse_str_charAt(value, i);
+    _sm_expr3 = ch == '"';
+    if (!(_sm_expr3)) goto L4;
+    simse_str_append(out, '\\');
+    simse_str_append(out, '"');
+    goto L17;
+    L4:;
+    _sm_expr4 = ch == '\\';
+    if (!(_sm_expr4)) goto L7;
+    simse_str_append(out, '\\');
+    simse_str_append(out, '\\');
+    goto L17;
+    L7:;
+    _sm_expr5 = ch == '\n';
+    if (!(_sm_expr5)) goto L10;
+    simse_str_append(out, '\\');
+    simse_str_append(out, 'n');
+    goto L17;
+    L10:;
+    _sm_expr6 = ch == '\r';
+    if (!(_sm_expr6)) goto L13;
+    simse_str_append(out, '\\');
+    simse_str_append(out, 'r');
+    goto L17;
+    L13:;
+    _sm_expr7 = ch == '\t';
+    if (!(_sm_expr7)) goto L16;
+    simse_str_append(out, '\\');
+    simse_str_append(out, 't');
+    goto L17;
+    L16:;
+    simse_str_append(out, ch);
+    L17:;
+    i = i + 1;
+    goto L1;
+    L2:;
+    simse_str_append(out, '"');
+    return out;
+}
+// <generated>/kt.kt:36
+Str toJson(ns1_Point* self) {
+    Int* _sm_base1, * _sm_base2;
+    Str out, _sm_expr1, _sm_expr2;
+    out = __sm_stringTable[12];
+    simse_str_append(out, '"');
+    simse_str_appendStr(out, __sm_stringTable[10]);
+    simse_str_append(out, '"');
+    simse_str_append(out, ':');
+    _sm_base1 = simse_addressOf(self->x);
+    _sm_expr1 = toJson(_sm_base1);
+    simse_str_appendStr(out, _sm_expr1);
+    simse_str_append(out, ',');
+    simse_str_append(out, '"');
+    simse_str_appendStr(out, __sm_stringTable[11]);
+    simse_str_append(out, '"');
+    simse_str_append(out, ':');
+    _sm_base2 = simse_addressOf(self->y);
+    _sm_expr2 = toJson(_sm_base2);
+    simse_str_appendStr(out, _sm_expr2);
+    simse_str_append(out, '}');
+    return out;
+}
+// <generated>/kt.kt:52
+Str toJson(Int* self) {
+    Str _sm_expr1;
+    _sm_expr1 = simse_int_toString((*self));
+    return _sm_expr1;
+}
+// <generated>/kt.kt:55
+Str toJson(ns1_Label* self) {
+    Str* _sm_base1;
+    Bool* _sm_base2;
+    Str out, _sm_expr1, _sm_expr2;
+    out = __sm_stringTable[12];
+    simse_str_append(out, '"');
+    simse_str_appendStr(out, __sm_stringTable[6]);
+    simse_str_append(out, '"');
+    simse_str_append(out, ':');
+    _sm_base1 = simse_addressOf(self->text);
+    _sm_expr1 = toJson(_sm_base1);
+    simse_str_appendStr(out, _sm_expr1);
+    simse_str_append(out, ',');
+    simse_str_append(out, '"');
+    simse_str_appendStr(out, __sm_stringTable[1]);
+    simse_str_append(out, '"');
+    simse_str_append(out, ':');
+    _sm_base2 = simse_addressOf(self->flagged);
+    _sm_expr2 = toJson(_sm_base2);
+    simse_str_appendStr(out, _sm_expr2);
+    simse_str_append(out, '}');
+    return out;
+}
+// <generated>/kt.kt:71
+Str toJson(Str* self) {
+    Str _sm_expr1;
+    _sm_expr1 = jsonQuoted((*self));
+    return _sm_expr1;
+}
+// <generated>/kt.kt:74
+Str toJson(Bool* self) {
+    if (!((*self))) goto L2;
+    return __sm_stringTable[7];
+    L2:;
+    return __sm_stringTable[3];
+}
+// <generated>/kt.kt:80
+Str toJson(ns1_Shape* self) {
+    Str* _sm_base1;
+    ns1_Point* _sm_base2;
+    ns1_Label* _sm_base3;
+    Str out, _sm_expr1, _sm_expr2, _sm_expr3;
+    out = __sm_stringTable[12];
+    simse_str_append(out, '"');
+    simse_str_appendStr(out, __sm_stringTable[5]);
+    simse_str_append(out, '"');
+    simse_str_append(out, ':');
+    _sm_base1 = simse_addressOf(self->name);
+    _sm_expr1 = toJson(_sm_base1);
+    simse_str_appendStr(out, _sm_expr1);
+    simse_str_append(out, ',');
+    simse_str_append(out, '"');
+    simse_str_appendStr(out, __sm_stringTable[2]);
+    simse_str_append(out, '"');
+    simse_str_append(out, ':');
+    _sm_base2 = simse_addressOf(self->corner);
+    _sm_expr2 = toJson(_sm_base2);
+    simse_str_appendStr(out, _sm_expr2);
+    simse_str_append(out, ',');
+    simse_str_append(out, '"');
+    simse_str_appendStr(out, __sm_stringTable[9]);
+    simse_str_append(out, '"');
+    simse_str_append(out, ':');
+    _sm_base3 = simse_addressOf(self->tag);
+    _sm_expr3 = toJson(_sm_base3);
+    simse_str_appendStr(out, _sm_expr3);
+    simse_str_append(out, '}');
+    return out;
 }
 
 inline Int simse_strView_size(StrView self) {
@@ -468,6 +729,182 @@ inline Bool simse_list_contains(const List<T>& self, const std::type_identity_t<
 template <class T, class F>
 inline void simse_list_sort(List<T>& self, F less) {
     std::sort(self.begin(), self.end(), less);
+}
+
+// `Str.isEmpty()` is the prelude's own body (cppsrc/rtl/rtl.kt), not a resource: `size()`
+// is the built-in it needs. This one is the shared space test the `Char` predicate below
+// uses too.
+inline Bool simse_str_isSpaceByte(Char ch) {
+    return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r';
+}
+
+inline Char simse_str_charAt(const Str& self, Int index) {
+    return (Char) self[index];
+}
+
+inline Str simse_str_trim(const Str& self) {
+    Int begin = 0;
+    Int end = self.size();
+    while (begin < end && simse_str_isSpaceByte((Char) self[begin])) begin++;
+    while (end > begin && simse_str_isSpaceByte((Char) self[end - 1])) end--;
+    return self.substr(begin, end - begin);
+}
+
+inline List<Str> simse_str_split(const Str& self, const Str& separator) {
+    List<Str> parts;
+    if (separator.empty()) {
+        parts.push_back(self);
+        return parts;
+    }
+    Int pos = 0;
+    while (true) {
+        Int found = self.find(separator, pos);
+        if (found == Str::npos) {
+            parts.push_back(self.substr(pos));
+            break;
+        }
+        parts.push_back(self.substr(pos, found - pos));
+        pos = found + separator.size();
+    }
+    return parts;
+}
+
+// How many bytes of `self` are `ch`: what the byte-separator split reserves up front.
+inline Int simse_count_char_in_str(const Str* self, char ch) {
+    Int count = 0;
+    const char* data = self->data();
+    Int len = self->size();
+    for (Int i = 0; i < len; i++) {
+        if (data[i] == ch) {
+            count++;
+        }
+    }
+    return count;
+}
+
+inline List<Str> simse_str_split(const Str& self, Char separator) {
+    List<Str> parts;
+    parts.reserve(simse_count_char_in_str(&self, separator));
+    Int pos = 0;
+    while (true) {
+        Int found = self.find(separator, pos);
+        if (found == Str::npos) {
+            parts.push_back(self.substr(pos));
+            break;
+        }
+        parts.push_back(self.substr(pos, found - pos));
+        pos = found + 1;
+    }
+    return parts;
+}
+
+inline Str simse_str_toUpper(const Str& self) {
+    Str result = self;
+    for (char& ch : result) {
+        if (ch >= 'a' && ch <= 'z') ch = (char) (ch - 'a' + 'A');
+    }
+    return result;
+}
+
+inline Str simse_str_toLower(const Str& self) {
+    Str result = self;
+    for (char& ch : result) {
+        if (ch >= 'A' && ch <= 'Z') ch = (char) (ch - 'A' + 'a');
+    }
+    return result;
+}
+
+inline Int simse_str_find(const Str& self, const Str& sub) {
+    Int found = self.find(sub);
+    return found == Str::npos ? -1 : found;
+}
+
+inline Int simse_str_lastIndexOf(const Str& self, const Str& sub) {
+    Int found = self.rfind(sub);
+    return found == Str::npos ? -1 : found;
+}
+
+inline Str simse_str_substr(const Str& self, Int start, Int len) {
+    if (start < 0) start = 0;
+    if (start > self.size()) start = self.size();
+    Str result = self.substr(start);
+    if (len >= 0 && len < result.size()) result.resize(len);
+    return result;
+}
+
+inline Bool simse_str_startsWith(const Str& self, const Str& prefix) {
+    return prefix.size() <= self.size() && self.compare(0, prefix.size(), prefix) == 0;
+}
+
+inline Bool simse_str_endsWith(const Str& self, const Str& suffix) {
+    return suffix.size() <= self.size()
+           && self.compare(self.size() - suffix.size(), suffix.size(), suffix) == 0;
+}
+
+inline Str simse_str_replace(const Str& self, const Str& from, const Str& to) {
+    if (from.empty()) return self;
+    Str result;
+    Int pos = 0;
+    while (true) {
+        Int found = self.find(from, pos);
+        if (found == Str::npos) {
+            result.append(self, pos, Str::npos);
+            break;
+        }
+        result.append(self, pos, found - pos);
+        result += to;
+        pos = found + from.size();
+    }
+    return result;
+}
+
+inline Opt<Int> simse_str_toInt(const Str& self) {
+    if (self.empty()) return Opt<Int>::none();
+    Int value = 0;
+    const char* begin = self.data();
+    const char* end = begin + self.size();
+    std::from_chars_result parsed = std::from_chars(begin, end, value);
+    if (parsed.ec != std::errc() || parsed.ptr != end) return Opt<Int>::none();
+    return Opt<Int>::some(value);
+}
+
+inline Opt<Float64> simse_str_toFloat(const Str& self) {
+    if (self.empty()) return Opt<Float64>::none();
+    Float64 value = 0;
+    const char* begin = self.data();
+    const char* end = begin + self.size();
+    std::from_chars_result parsed = std::from_chars(begin, end, value);
+    if (parsed.ec != std::errc() || parsed.ptr != end) return Opt<Float64>::none();
+    return Opt<Float64>::some(value);
+}
+
+inline Bool simse_char_isDigit(Char self) {
+    return self >= '0' && self <= '9';
+}
+
+inline Bool simse_char_isAlpha(Char self) {
+    return (self >= 'a' && self <= 'z') || (self >= 'A' && self <= 'Z');
+}
+
+inline Bool simse_char_isAlphaOrDigit(Char self) {
+    return simse_char_isAlpha(self) || simse_char_isDigit(self);
+}
+
+inline Bool simse_char_isSpace(Char self) {
+    return simse_str_isSpaceByte(self);
+}
+
+template <class T>
+inline Str simse_num_toString(const T& self) {
+    return std::to_string(self);
+}
+
+inline Str simse_char_toString(Char self) {
+    return std::to_string((int) self);
+}
+
+inline Str simse_bool_toString(Bool self) {
+    return self ? "true" : "false";
 }
 
 // Expands one run-length encoded series into `out`, which holds `count` values.

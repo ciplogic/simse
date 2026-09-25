@@ -3154,3 +3154,68 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   goldens moved on purpose - `stress/objects/expected.cpp` (`makeAdder(10)` -> `makeAdder()` with
   `factor = 10`, `area(3, 4)` -> `area(4)` with `3 * height`) and `stress/machines/expected.cpp`
   (the folded yieldable parameters) - re-captured from the run.
+
+- **A `json` source generator, and the serializers a program's types produce.** The `json`
+  module (`cppsrc/modules/json/`: `api.kt` plus a `generators/JsonGen.kt`) holds the first
+  generator whose output is Simse *built in code* rather than read from a resource, so it reads
+  the program's own type structure. A program names the module (`--module cppsrc/modules/json`)
+  and writes `import json` then `value.toJson()`; the declaration it binds to is
+  `@SmGen("json") fun T.toJson<T>(): Str`, and the generator emits one concrete
+  `fun T.toJson(): Str` per type, recursively: a data class is an object of its fields'
+  serializers, a scalar a leaf.
+
+  The API is an extension, not a free `toJson<T>(value: *T): Str`, and that is forced, not
+  chosen: a plain-name call is resolved by name and arity alone (`Emitter.findFunction`), so an
+  overload set of `toJson(*T)` cannot be typed at a call site - the argument's handle (a `*T`
+  wants the value's address) is read off the callee, and there is no single "the callee", only
+  whichever same-arity overload the lookup returned. A member call is resolved by the receiver's
+  type, the shape `toString` has, so `value.toJson()` picks the right serializer. The experiment
+  is the evidence: one `toJson(*Point)` overload takes the address at `toJson(p)`, two
+  (`*Int` + `*Point`) do not, and the C++ fails to convert the value.
+
+  The output is the transitive closure, **once per type**: the set is keyed by the type's name, so
+  a program with many `Int` fields carries one `Int.toJson`, and a `toJson` the *program* writes
+  for a receiver type is found first and left alone. `stress/json/expected.cpp` pins it - one
+  prototype and one definition per type. The generated module is `rtl` (the driver's synthetic
+  reparse module) and begins with one `import` per package a serialized class lives in; the fixed
+  quoting helper is the `json:helpers` section of `cppsrc/rtl/_res.md`, read as Simse text rather
+  than escaped inside the generator. Only *named* types are supported so far (a `List<T>`/`Opt<T>`/
+  `*T` field or a generic class is a diagnostic naming it), and generation is program-wide rather
+  than per reach - both are the deferred step in `impl_specs/generators.md`.
+
+  Verified: `./build.bat --release`, `bun tools/stress.js` **39/39** (the new `stress/json` case is
+  the end-to-end proof - it names the module from its `compiler-args` and imports it, and its
+  golden pins the once-per-type emission), and both `bun tools/bootstrap.js` fixed-point checks
+  byte for byte after the refresh.
+
+- **The module layout, and a repeatable `--module` list.** Modules are directories under
+  `cppsrc/modules/`, one per module (`json` first), each with its compiler-side sources in a
+  `generators/` subfolder by convention. The driver gained a repeatable `--module <dir>` (the old
+  `--module-root` is the same option) beside `--root`, and the two mean different things:
+
+  - **`--root <dir>` is a tree**, scanned whole - what the compiler's own build does
+    (`--root cppsrc`), and why `cppsrc/modules/**/generators/*.kt` is compiled into the compiler.
+  - **`--module <dir>` is a module**, scanned without its `generators/` - so a program that names
+    it gets the module's declarations (`api.kt`) and never its generator sources, which are
+    written against the compiler's own packages (`sourcegen`, `common`).
+
+  Duplicates merge: a directory named twice (a repeated `--module`, or the same directory under
+  `--root` and `--module`) is kept once, compared by canonical path (`driverDedupRoots`). The
+  generated code is merged **in memory** by the driver's reparse pass - no output directory is
+  written, and nothing stale can be picked up by a later build.
+
+  One consequence worth stating, because it is what makes the module's `api.kt` safe to keep in
+  the compiler's own tree: the `json` generator acts only on a program that *imports* `json` and
+  skips the module's own package, so the compiler building itself generates nothing (the
+  two-phase build that added `api.kt` is the usual surface-change step, `guide4ai.md` §6).
+
+  The `io` module (the next one: paths, directories and the file operations) is not moved yet for
+  two reasons: `FileStream` is a *type*, and a type cannot carry `@SmGen` in the language, so a
+  program module would emit a struct that clashes with `filestream.hpp`; and a module declaration
+  is emitted unconditionally (only a *prelude* declaration is reach-bounded), so moving `fs.kt`
+  would make every program that names the module carry the file I/O. Both are the module work's
+  next pieces.
+
+  `stress/README.md` documents the case's new `compiler-args` file (one line of extra transpiler
+  arguments, after `--root src -o out.cpp`), and `stress/json` uses it for
+  `--module cppsrc/modules/json`.

@@ -21,6 +21,7 @@
 package sema
 
 import common
+import io
 
 // Whether a type node is the marker: `Async<...>`, possibly through the name a program spells.
 fun asyncIsMarker(typeNode: *AstXmlNode): Bool {

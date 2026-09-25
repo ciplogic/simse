@@ -63,6 +63,9 @@ bun tools/stress.js --filter modules --jobs 4
 # relative path cppsrc/rtl, so run it from the repo root)
 ./simse.exe --root cppsrc -o simse_out.cpp            # the whole compiler
 ./simse.exe --root stress/strings/src -o strings.cpp  # any case, same form
+# a module on the command line (`--module` repeats; duplicates merge): the
+# module's declarations are visible (`import json`), its `generators/` is not
+./simse.exe --root my/src --module cppsrc/modules/json -o out.cpp
 
 # the linear IL of every emitted body, on stderr (debug view; the C++ output is
 # identical with and without it - impl_specs/linear-il.md)
@@ -134,7 +137,7 @@ driver's - and `build.bat` can compile it.
   from (`strtable`, `timeops`, `listops`, `dictops`, `strops`, `resfmt`, `spanOf`,
   `strview`, `filestream`, `resources`, plus a
   `fileio` whose text was the runtime's one hand-written translation unit, plus the
-  collision fixture's `spanOfEmpty`) with `symbol:`/`emit: always` deciding how a
+  collision fixture's `spanOfEmpty`) with `symbol:`/`emit: always`/`emit: reached` deciding how a
   declaration reaches it
   (`impl_specs/generators.md`) - AND the
   **prelude** `.kt` files (`rtl.kt`, `Span.kt`, `StrView.kt`, `xml.kt`,
@@ -180,6 +183,11 @@ driver's - and `build.bat` can compile it.
   linear form, emit. `sourcegen/` sits beside them: the source generators, one file per
   generator plus the manager (`SourceGen.kt`) and the `Sections` sink (`Sections.kt`),
   which `codegen` calls but which calls nothing back (`impl_specs/generators.md`).
+  `cppsrc/modules/` holds the reusable modules (`json` first: an `api.kt` plus the
+  compiler-side sources in a `generators/` subfolder, `specs/simse-md.md`); `--module <dir>`
+  names one on the command line (repeatable, duplicates merged), while `--root` scans a tree whole,
+  so the module's generators are compiled into the compiler and never into a program that imports
+  the module.
   `linear` is the post-sema
   lowering of control flow to labels/gotos (`Linear.{h,cpp}`/`Linear.kt`), the
   peephole trim of that form (`Simplify.*`), and the lowering of nested expressions
@@ -265,7 +273,8 @@ hand-written C++ is only the ground it stands on: the runtime's headers
 **published bootstrap** `cppsrc/simse_bootstrap.cpp` - the amalgamation of the
 tree, checked in so the compiler can be built by a C++ compiler alone. The rest of
 the runtime, the platform's own operations included, is generated into that one
-file from `cppsrc/rtl/_res.md` (`fileio`, `timeops`, ...).
+file from `_res.md` files - the prelude's own (`cppsrc/rtl/_res.md`) and each module's
+(`cppsrc/modules/io/_res.md` carries the platform's file I/O, for instance).
 
 The bootstrap property is the invariant that replaces the old two-ring port:
 compile the published file, and the compiler it produces must transpile `cppsrc`
@@ -489,7 +498,8 @@ its trailing arguments, `specs/functions.md`); `Dictionary<K,V>` (`get`/`getPtr`
 (incl. generic and function types); functions incl. extension functions;
 **attributes** (`@Identifier` + `@SmGen`, one per declaration, methods
 only: `specs/attributes.md`, `impl_specs/generators.md`) with the `cpp` (headers), `res`
-(C++ from a resource) and `kt` (generated Simse source) generators, and the `Sections`
+(C++ from a resource), `kt` (generated Simse source) and `json` (Simse built in code
+from the program's types - `value.toJson()`) generators, and the `Sections`
 sink; `val`/`var` (locals, and at file level **static storage** -
 `specs/statics.md`); `if`/`else`, `when`, `while`,
 `break`/`continue`, `return`; the bitwise operators `& | ^ << >>` (precedence: bitwise
@@ -546,9 +556,9 @@ Do these only when asked; roughly prioritized:
 1. ~~**Continue the resource migration**~~ **done** (T29 did `strtable`, `timeops`,
    `listops`, `dictops` and `strops`; this finished it): `cppsrc/rtl/native.cpp` and
    `cppsrc/rtl/fs.hpp` are gone. The platform's bodies - file I/O, directory listing,
-   `FileStream::open`, the two clocks - are the `fileio` and `timeops` sections of
-   `cppsrc/rtl/_res.md`, their prototypes are `fileio`'s `forward:` text, and the prelude
-   declarations name them (`@SmGen("res", "fileio", "simse_listFiles")`). So a program,
+   `FileStream::open`, the two clocks - are `fileio`/`filestream` (the `io` module's own resource
+   now, `cppsrc/modules/io/_res.md`) and `timeops` (the RTL's), their prototypes are the sections'
+   `forward:` text, and the declarations name them (`@SmGen("res", "fileio", "simse_listFiles")`). So a program,
    the compiler included, is **one translation unit** with nothing to link, and
    `cppsrc/simse_bootstrap.cpp` builds with `cl.exe` alone. `fileio` is `emit: always`
    because a program may name one of its symbols with its own

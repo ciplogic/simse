@@ -5,7 +5,7 @@
 // and amalgamates it into one C++ translation unit. Modules and packages: specs/modules.md.
 //
 // Usage: <program> <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>]
-//     [--module-root <dir>]...
+//     [--module <dir>]...
 
 package compiler
 
@@ -14,6 +14,7 @@ import parser
 import sema
 import codegen
 import common
+import io
 import profiling
 import resources
 import sourcegen
@@ -83,18 +84,31 @@ fun driverParseSource(text: *Str, fileName: *Str): Res<AstXmlNode> {
     return parseModule(*raw, fileName)
 }
 
+// A path under a `generators/` directory of a *module*: the compiler-side sources a module ships
+// (specs/simse-md.md), which a program that names the module must not compile into itself - they
+// are written against the compiler's own packages (`sourcegen`, `common`), not a program's.
+fun driverIsGeneratorSource(path: *Str): Bool {
+    return path.find("/generators/") >= 0 || path.find("\\generators\\") >= 0
+            || path.startsWith("generators/") || path.startsWith("generators\\")
+}
+
 // The compilation set: every `*.kt` under each module root, then the explicit inputs; prelude
 // files are excluded and each canonical path kept once. Sorted by canonical path, so the order
 // depends only on the file set, not on how the files were specified (a scanned root vs an
-// explicit input).
-fun driverGatherFiles(moduleRoots: *List<Str>, inputs: *List<Str>, preludeCanon: *List<Str>): List<Str> {
+// explicit input). `moduleIsTree` is parallel to `moduleRoots`: a *tree* (`--root`) is scanned
+// whole, a *module* (`--module`) without its `generators/`.
+fun driverGatherFiles(
+    moduleRoots: *List<Str>, moduleIsTree: *List<Bool>, inputs: *List<Str>, preludeCanon: *List<Str>
+): List<Str> {
     var candidates: List<Str> = List<Str>()
     var r: Int = 0
     while (r < moduleRoots.size()) {
         val rootFiles: List<Str> = listFiles(moduleRoots[r], ".kt")
         var f: Int = 0
         while (f < rootFiles.size()) {
-            candidates.append(rootFiles[f])
+            if (moduleIsTree[r] || !driverIsGeneratorSource(rootFiles[f])) {
+                candidates.append(rootFiles[f])
+            }
             f = f + 1
         }
         r = r + 1
@@ -144,33 +158,51 @@ fun manifestFile(dir: *Str): Str {
     return dir + "/simse.md"
 }
 
+// Duplicate roots are one module: the same directory named twice merges to its first occurrence,
+// compared by canonical path, so a user who is over-zealous (a `--module` repeated, or the same
+// directory under `--root` and `--module`) pays for it once. The two flags travel together: a
+// merged-away duplicate takes its `isTree` flag with it.
+fun driverDedupRoots(
+    roots: List<Str>, isTree: List<Bool>, outRoots: *List<Str>, outTree: *List<Bool>
+): Unit {
+    var seen: List<Str> = List<Str>()
+    var i: Int = 0
+    while (i < roots.size()) {
+        val canon: Str = pathCanonical(roots[i])
+        if (!seen.contains(canon)) {
+            seen.append(canon)
+            outRoots.append(roots[i])
+            outTree.append(isTree[i])
+        }
+        i = i + 1
+    }
+}
+
 // Expands one root into the module roots to scan: the manifest's modules, or the root itself
-// when it names none. `sourcegen: true` needs a compiler extended with those generators, which
-// does not exist, so such a compilation is rejected (`specs/simse-md.md`).
-fun driverExpandRoot(root: *Str, out: *List<Str>): Res<Str> {
+// when it names none. `isTree` says a `--root` is scanned whole; a manifest's `module:` entries
+// are *modules* (scanned without their `generators/`). A module's `sourcegen: true` no longer
+// blocks a compilation: the compiler carries the built-in generators, so a module that ships
+// them is usable, and a declaration whose generator the compiler does not have is named at
+// emission (`unknown source generator`). Staging and building a compiler with a module's
+// generators is still the deferred step (`specs/simse-md.md`).
+fun driverExpandRoot(root: *Str, isTree: Bool, out: *List<Str>, outTree: *List<Bool>): Res<Str> {
     val file: Str = manifestFile(root)
     if (!pathExists(file)) {
         out.append(root)
+        outTree.append(isTree)
         return Res<Str>.ok("")
     }
     val text: Str = readFile(file)
-    if (manifestValues(text, "sourcegen").contains("true")) {
-        return Res<Str>.err(fmtStr("module '|' declares source generators, which this compiler cannot use yet", root))
-    }
     val modules: List<Str> = manifestValues(text, "module")
     if (modules.size() == 0) {
         out.append(root)
+        outTree.append(isTree)
         return Res<Str>.ok("")
     }
     var i: Int = 0
     while (i < modules.size()) {
-        val module: Str = fmtStr("|/|", root, modules[i])
-        if (manifestValues(readFile(manifestFile(module)), "sourcegen").contains("true")) {
-            return Res<Str>.err(
-                fmtStr("module '|' declares source generators, which this compiler cannot use yet", module)
-            )
-        }
-        out.append(module)
+        out.append(fmtStr("|/|", root, modules[i]))
+        outTree.append(false)
         i = i + 1
     }
     return Res<Str>.ok("")
@@ -183,6 +215,9 @@ fun main(args: List<Str>): Int {
     var rootDir: Str = ""
     var haveRoot: Bool = false
     var extraRoots: List<Str> = List<Str>()
+    // Parallel to `extraRoots`: a `--root` is a *tree* (scanned whole), a `--module` is a
+    // *module* (scanned without its `generators/`, the compiler-side sources it ships).
+    var extraTrees: List<Bool> = List<Bool>()
     var preludeExplicit: Bool = false
     var showAsync: Bool = false
 
@@ -219,13 +254,14 @@ fun main(args: List<Str>): Int {
                 haveRoot = true
             }
 
-            "--module-root" -> {
+            "--module-root", "--module" -> {
                 if (i + 1 >= args.size()) {
-                    eprintln("simse: --module-root requires a path")
+                    eprintln("simse: --module requires a path")
                     return 2
                 }
                 i = i + 1
                 extraRoots.append(args[i])
+                extraTrees.append(false)
             }
 
             "--showLinearRepresentation" -> {
@@ -241,7 +277,7 @@ fun main(args: List<Str>): Int {
             }
 
             "-h", "--help" -> {
-                println("usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module-root <dir>]... [--showLinearRepresentation] [--showAsync] [--profile]")
+                println("usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module <dir>]... [--showLinearRepresentation] [--showAsync] [--profile]")
                 return 0
             }
 
@@ -263,24 +299,35 @@ fun main(args: List<Str>): Int {
     // The command line's roots, each expanded through its manifest (a root without one is
     // scanned whole - what this compiler's own build does).
     var roots: List<Str> = List<Str>()
+    var rootTrees: List<Bool> = List<Bool>()
     if (haveRoot) {
         roots.append(rootDir)
+        rootTrees.append(true)
     }
     var e: Int = 0
     while (e < extraRoots.size()) {
         roots.append(extraRoots[e])
+        rootTrees.append(extraTrees[e])
         e = e + 1
     }
     var moduleRoots: List<Str> = List<Str>()
+    var moduleTrees: List<Bool> = List<Bool>()
     var r: Int = 0
     while (r < roots.size()) {
-        val expanded: Res<Str> = driverExpandRoot(roots[r], *moduleRoots)
+        val expanded: Res<Str> = driverExpandRoot(roots[r], rootTrees[r], *moduleRoots, *moduleTrees)
         if (!expanded.isOk()) {
             eprintln("simse: " + expanded.Error)
             return 2
         }
         r = r + 1
     }
+    // The same module named more than once is one module (a `--root` and a `--module` of the same
+    // directory, or a duplicate `--module`): the first spelling wins, compared by canonical path.
+    var dedupedRoots: List<Str> = List<Str>()
+    var dedupedTrees: List<Bool> = List<Bool>()
+    driverDedupRoots(moduleRoots, moduleTrees, *dedupedRoots, *dedupedTrees)
+    moduleRoots = dedupedRoots
+    moduleTrees = dedupedTrees
 
     // Prelude set: a directory contributes every `*.kt` in it, a file itself.
     var resolvedPrelude: Str = "cppsrc/rtl"
@@ -319,7 +366,7 @@ fun main(args: List<Str>): Int {
     }
     val hasPrelude: Bool = preludeFiles.size() > 0
 
-    val files: List<Str> = driverGatherFiles(moduleRoots, inputs, preludeCanon)
+    val files: List<Str> = driverGatherFiles(moduleRoots, moduleTrees, inputs, preludeCanon)
 
     // The resources (`_res.md`, specs/resources.md): every file the module roots hold, parsed
     // once so the generated sources, the sections and the program's pool read the same list.

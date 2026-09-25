@@ -29,6 +29,8 @@ stress/<name>/
   expected.transpile-error  optional: the transpile must fail and its stderr must
                             contain this text; nothing is compiled or run
   args                      optional: one line of arguments for the program
+  compiler-args             optional: one line of extra arguments for the transpiler,
+                            after `--root src -o out.cpp` (a `--module <dir>`, say)
   stdin                     optional: fed to the program
 ```
 

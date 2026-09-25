@@ -81,15 +81,16 @@ first.
 Str simse_native_readFile(const Str& path); // reads the whole file as bytes
 ```
 
-Its prototype and definition are the `fileio` section of `cppsrc/rtl/_res.md`, in the
+Its prototype and definition are the `fileio` section of `cppsrc/modules/io/_res.md` (the
+`io` module's own resource), in the
 section's `forward:` and `bodies:` texts. The emitter places the section in the program's own
 translation unit, so there is nothing to link.
 
 ## Filesystem / IO natives (T23)
 
 The self-hosted driver needs a small filesystem surface. Declared in the prelude
-(`cppsrc/rtl/fs.kt`) as `@SmGen("res", "fileio", <symbol>)`, prototyped in the
-`forward:` text of the `fileio` section of `cppsrc/rtl/_res.md` and defined in its
+(`cppsrc/modules/io/api.kt`) as `@SmGen("res", "fileio", <symbol>)`, prototyped in the
+`forward:` text of the `fileio` section of `cppsrc/modules/io/_res.md` and defined in its
 `bodies:` text:
 
 | Simse | C++ symbol | Semantics |

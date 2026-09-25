@@ -1,7 +1,9 @@
 # Generators (`@SmGen`)
 
-Status: **implemented** for the `cpp`, `res` and `kt` generators, the `Sections` sink, and
-the bootstrap path. Per-instantiation generators (`@Json`) are deferred (see the end).
+Status: **implemented** for the `cpp`, `res`, `kt` and `json` generators, the `Sections` sink,
+and the bootstrap path. Per-*reach* generation - a declaration whose output is built for the
+instantiations a program actually uses - is deferred (see the end); `json` is the first slice of
+the "output built in code" kind, and it emits one serializer per type the program declares.
 
 ## `@SmGen`
 
@@ -64,6 +66,16 @@ Every generator is **one file** under `cppsrc/sourcegen/`, and a `SourceGenerato
 | `CppGen.kt` | `cpp` | a header, linked in | yes | yes |
 | `ResGen.kt` | `res` | a resource section | no | yes |
 | `KtGen.kt` | `kt` | Simse source, compiled with the program | no | no |
+| `JsonGen.kt` | `json` | Simse source, *built in code* from the program's types | no | no |
+
+Each module's generators live in a `generators/` subfolder - the `json` module's is
+`cppsrc/modules/json/generators/JsonGen.kt` - and the built-in three are one file each under
+`cppsrc/sourcegen/`. A module's `generators/` is **compiler-side**: `--root` scans a tree whole
+(so the compiler's own build compiles the generators in), while `--module` names a module and
+scans it without its `generators/`, so a program that imports the module gets its declarations and
+never the generator sources (which are written against the compiler's own packages). The `json`
+row is the first generator that reads the program's **type structure** instead of a resource; the
+module is where that grows (the per-reach step below).
 
 The last two columns are the two things only the generator can know, so they are part of its
 registration line.
@@ -102,8 +114,8 @@ The same generator is asked three times, once per phase:
 | `Emit` | codegen, after every body | place text that needs the program's *reach set*, and - asked once more with an empty declaration - text about the program itself |
 
 The `Emit` phase runs once per declaration and then once per generator with `xmlIsEmpty(ctx.declaration)`
-- the second is what `emit: always` (a resource's program-wide text) and a generator's own
-sections hang on. `runSourceGen` records a non-empty `SourceGenTransform.key` in
+- the second is what `emit: always` (a resource's program-wide text), `emit: reached` (a
+  module's reach-gated text) and a generator's own sections hang on. `runSourceGen` records a non-empty `SourceGenTransform.key` in
 `FullCompiledState.definitions`, which is how a generator that would produce the same thing
 twice answers `AlreadyExisting` instead - a generator producing several keys checks and inserts
 the rest itself, since a key is one `Str`.
@@ -192,10 +204,15 @@ program's types.
 - `<section>:emit` = `always` is the marker for text with no declaration to hang it on:
   the compiler emits the section for every program. `strtable` (the string table's decoder)
   and `timeops` (the clock the profiler reads) are the two.
+- `<section>:emit` = `reached` gates a section for a *module's* declarations too: the text lands
+  only when a call reaches the declaration, so a module costs a program only what it uses.
+  `filestream` is the first - it is what lets the `io` module hand out `readLine` without every
+  program that names `io` carrying the stream code.
 - A *prelude* declaration the program never names is skipped, so a prelude generator
-  costs a program only what it uses - the rule a prelude function with a body follows.
-  A program's own declaration is always emitted, so one generated text may call another;
-  a prelude text must not, because a name inside a resource is never parsed.
+  costs a program only what it uses - the rule a prelude function with a body follows. A
+  *module* declaration is skipped the same way when its section says `emit: reached`. A
+  declaration of the program's own root is always emitted, so one generated text may call
+  another; a prelude or gated text must not, because a name inside a resource is never parsed.
 - **A reach is by name or by symbol.** The set the rule above reads holds the names the
   program calls and the symbols some calls reach: `collectNames` records the symbol of the
   declaration a call *names* (`nativeSymbols`), the symbol of a call on a type name
@@ -225,8 +242,11 @@ program's types.
 The RTL's hand-written C++ is here (`cppsrc/rtl/_res.md`), one section per header it came
 from: `strtable` and `timeops` (`emit: always`), `listops`, `dictops` and `strops`
 (shared: the List/Array/Str primitives, the Dictionary operations, and the
-string/character/numeric conversions the headers held), `spanOf` (the first user), and
-`fileio` (`emit: always`: the platform's filesystem/IO operations). A `@SmGen("res", ...)`
+string/character/numeric conversions the headers held), and `spanOf` (the first user). A
+module owns its own resource, so `fileio` (`emit: always`: the platform's filesystem/IO
+operations) and `filestream` (`emit: reached`: the `FileStream` reads, a program paying for them
+only when it reads one) are `cppsrc/modules/io/_res.md` now, and the `json` generator's helper is
+`cppsrc/modules/json/_res.md`. A `@SmGen("res", ...)`
 declaration emits no prototype of its own, which is what the `forward` text of its section
 is for. What stays a header is the type core and `filestream.hpp` (the `FileStream` struct
 and its methods, minus the `simse_fileStream_open` prototype): `simse.hpp`'s own includes.
@@ -291,6 +311,46 @@ module per declaration, and generators whose source is *built* in code rather th
 from a resource (that is the per-instantiation step below, which needs the emitter's
 discovery loop: emit, ask the generator for what was reached, re-emit).
 
+## The `json` generator
+
+`@SmGen("json") fun T.toJson<T>(): Str` - the declaration the `json` module's `api.kt` carries -
+asks for a JSON serializer, and `cppsrc/modules/json/generators/JsonGen.kt` **builds that Simse
+source in code**: it is the one generator that reads the program's own *type structure* rather
+than a resource. A program names the module (`--module cppsrc/modules/json`) and writes
+`import json`, then `value.toJson()`; that becomes `{"x":1,"y":2}` for
+`data class Point(var x: Int, var y: Int)`.
+
+- **A program opts in by importing.** The generator acts only on a program a module of which
+  spells `import json`, and it skips the module's *own* package (the trigger and the generator's
+  own `JsonTypes`). So the compiler building itself, whose tree now carries the module's `api.kt`,
+  generates nothing and pays nothing.
+- **The API is an extension, and that is forced.** A plain-name call is resolved by name and
+  arity alone (`Emitter.findFunction`), so a set of `toJson(*T)` overloads cannot be typed at a
+  call site: an argument's handle (a `*T` wants the value's address) is read off the callee, and
+  "the callee" is whichever same-name same-arity overload the lookup returned. A *member* call is
+  resolved by the receiver's **type** - `toString`'s shape - so `value.toJson()` picks the right
+  serializer every time. That is why the declaration is an extension and every generated function
+  is `fun T.toJson(): Str`.
+- **The declaration emits nothing**, not even a prototype (`declaresPrototype` is false, as for
+  `kt`): the generated extension's own declaration is what a call binds to.
+- **The output is the transitive closure, emitted once per type.** A data class becomes an object
+  of its fields' serializers, recursing into sub-types; a scalar is a leaf. The set is keyed by
+  the type's name, so a program with a hundred `Int` fields carries one `Int.toJson`, and a
+  `toJson` the *program* writes for a receiver type is found first and left alone - the "don't
+  generate twice" rule. `stress/json/expected.cpp` pins it: one prototype and one definition per
+  type.
+- **The scalars** are `Int`/`Int8..Int64` and `Float32/64` (their own `toString`), `Bool` (the JSON
+  literal) and `Str`/`Char` (quoted, with the JSON escapes). The quoting helper is the
+  `json:helpers` section of `cppsrc/modules/json/_res.md` - fixed Simse text the generator reads, so it
+  stays readable rather than an escaped literal inside the generator.
+- **The generated module is `rtl`** (the driver's synthetic reparse module) and begins with one
+  `import` per package a serialized class lives in, which is what lets it name a program-defined
+  class. Two classes sharing a name across packages are rejected, because one `import` cannot
+  disambiguate them.
+- **Not yet**: only *named* types are supported - a `List<T>`, an `Opt<T>`, a `*T` field or a
+  type alias is a diagnostic naming the field, and a generic data class is rejected. Generation is
+  program-wide (every class the program declares), not per reach - the deferred step's pieces.
+
 ## Regression discipline
 
 Every bug found while building this gets a **minimal reproducer** committed with the fix:
@@ -314,16 +374,15 @@ text is the point - an `expected.cpp` golden), or a focused check.
 
 ## Deferred
 
-- **A reached-instantiation generator** (`@SmGen("json") fun serializeJson<T>(obj: *T): Str`):
-  a declaration whose output is *built in code* - the generator is a compiler-side Simse
-  function that reads the declaration and the concrete type arguments and returns Simse
-  source, which the driver compiles like a `kt` section's. It needs what the `kt` step
-  does not: the emitter's discovery loop (emit once, collect the instantiations actually
-  reached, ask the generator, re-emit), the emitter choosing a mangled symbol per
-  instantiation, and the generator emitting the transitive closure it needs (a nested
-  `List<Point>` serializer) through the same naming helper. A later `@Json` spelling is
-  sugar for it, and this is the step that makes the serializer itself Simse - the
-  generator writes the serialization code in the language, not in C++.
+- **Per-*reach* generation (the `json` generator's next step).** `cppsrc/json/JsonGen.kt`
+  already builds the serializer source in code and emits the transitive closure once per type
+  (see "The `json` generator"); what it does not do is scope to what the program *serializes* -
+  it walks every declared class. A reached generator needs the emitter's discovery loop (emit
+  once, collect the types actually reached, ask the generator, re-emit), and - for a *free*
+  `toJson<T>(*T)` API rather than the extension the name+arity resolution forces - a mangled
+  symbol chosen per instantiation. The other half is shape coverage: a `List<T>`/`Opt<T>`/`*T`
+  field and a generic data class each need a serializer for a shape that has no name of its own
+  yet, built through the same naming helper.
 - **The compiler's resources as the generator's input everywhere**: done - `res` and
   `kt` both read the tree's own `_res.md` files first and the compiler's second.
 - Attributes on types, fields, parameters, and statements; stacked attributes; multiple

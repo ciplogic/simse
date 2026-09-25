@@ -1,0 +1,3 @@
+{"x":1,"y":2}
+{"text":"a\"b\\c","flagged":true}
+{"name":"box","corner":{"x":3,"y":4},"tag":{"text":"plain","flagged":false}}

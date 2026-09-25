@@ -133,8 +133,8 @@ fun cpCollectCandidates(
         // cannot be attributed, and an overload set would be rewritten wrongly.
         val count: *Int = counts.getPtr(name)
         if (count == null || * count != 1) {
-        continue
-    }
+            continue
+        }
         out.append(decl)
         names.insert(name, true)
     }

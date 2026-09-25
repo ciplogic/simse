@@ -9,6 +9,7 @@ package codegen
 
 import sema
 import common
+import io
 import linear
 import optimizations
 import profiling

@@ -26,7 +26,7 @@ the same data.
 bun benchmarks\onebrc\onebrc.mjs gen 10000000 benchmarks\onebrc\data\measurements.txt --seed 42
 
 :: the Simse implementation (release build; it reports its own time on stderr)
-bun build.js --release --root benchmarks\onebrc --out benchmarks\onebrc\onebrc.cpp --exe benchmarks\onebrc\onebrc.exe
+bun build.js --release --root benchmarks\onebrc --module cppsrc\modules\io --out benchmarks\onebrc\onebrc.cpp --exe benchmarks\onebrc\onebrc.exe
 benchmarks\onebrc\onebrc.exe benchmarks\onebrc\data\measurements.txt
 
 :: the C++ baseline

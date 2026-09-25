@@ -41,12 +41,13 @@ fun resGenDeclare(ctx: *SourceGenContext): SourceGenTransform {
     return SourceGenTransform(SourceTransformation.ChangedOutput, "")
 }
 
-// Once every body is emitted, so a *prelude* declaration nothing reaches is skipped.
+// Once every body is emitted, so a declaration nothing reaches is skipped: a *prelude*
+// declaration always, a *module* declaration when its section asks for it (`emit: reached`).
 fun resGenEmit(ctx: *SourceGenContext): SourceGenTransform {
-    if (ctx.prelude && !ctx.isReached()) {
+    val section: Str = ctx.parameter(0)
+    if ((ctx.prelude || resGenReachable(ctx, section)) && !ctx.isReached()) {
         return SourceGenTransform(SourceTransformation.None, "")
     }
-    val section: Str = ctx.parameter(0)
     if (!resGenAddSection(ctx, section)) {
         // Nothing to place: a call site then names a symbol nothing declares, which the C++
         // compile reports (the emitter cannot fail here).
@@ -85,6 +86,15 @@ fun resGenAlways(ctx: *SourceGenContext): SourceGenTransform {
         return SourceGenTransform(SourceTransformation.AlreadyExisting, "")
     }
     return SourceGenTransform(SourceTransformation.ChangedOutput, "")
+}
+
+// Whether a section asks to be reach-gated for a *module's* declarations too: `<section>:emit`
+// is `reached` (`emit: always` is the other marker, for text with no declaration at all). A
+// module's C++ then costs a program only what it uses, the rule a prelude declaration already
+// follows.
+fun resGenReachable(ctx: *SourceGenContext, section: *Str): Bool {
+    val key: Str = section + ":emit"
+    return sourceGenResText(ctx.state, key) == "reached"
 }
 
 // `<section>:<name>` for every current section name, under the item key the section decides

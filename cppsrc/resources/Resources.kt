@@ -9,6 +9,7 @@
 package resources
 
 import common
+import io
 
 // One resource as the *compiler* read it: the key, the text, and the two markers.
 //

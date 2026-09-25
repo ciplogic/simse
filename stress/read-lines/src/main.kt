@@ -1,5 +1,7 @@
 package readlines
 
+import io
+
 // `FileStream`'s three readers over one awkward little file: short and long lines
 // (one of each straddles `Str`'s 23-byte inline capacity), a CRLF line, empty
 // lines, trailing spaces, and a final line with no newline. `data.txt` is read
@@ -79,12 +81,16 @@ fun main(): Int {
     var view: Opt<StrView> = inPlace.readLineView()
     while (view.hasValue()) {
         val text: StrView = view.value()
-        println("view[" + viewed.toString() + "] len=" + text.size().toString()
-                + " <" + text.toString() + ">")
+        println(
+            "view[" + viewed.toString() + "] len=" + text.size().toString()
+                    + " <" + text.toString() + ">"
+        )
         val space: Int = text.find(" ")
         if (space >= 0) {
-            println("    first word=<" + text.slice(0, space).toString() + ">, rest=<"
-                    + text.slice(space + 1, text.size() - space - 1).toString() + ">")
+            println(
+                "    first word=<" + text.slice(0, space).toString() + ">, rest=<"
+                        + text.slice(space + 1, text.size() - space - 1).toString() + ">"
+            )
         }
         viewed = viewed + 1
         view = inPlace.readLineView()
@@ -95,8 +101,10 @@ fun main(): Int {
     if (count == copied && count == viewed) {
         println("all three readers agree on every line")
     } else {
-        println("MISMATCH: " + count.toString() + " vs " + copied.toString()
-                + " vs " + viewed.toString())
+        println(
+            "MISMATCH: " + count.toString() + " vs " + copied.toString()
+                    + " vs " + viewed.toString()
+        )
     }
 
     return longLines();
@@ -119,8 +127,10 @@ fun longLines(): Int {
         eprintln("read-lines: cannot write " + longPath + " (run this under tools/stress.js)")
         return 2
     }
-    println("long fixture: " + content.size().toString() + " bytes, one line of "
-            + big.size().toString())
+    println(
+        "long fixture: " + content.size().toString() + " bytes, one line of "
+                + big.size().toString()
+    )
 
     val into: *FileStream = openFileStream(longPath)
     if (into == null) {
@@ -132,8 +142,10 @@ fun longLines(): Int {
     while (into.readLineInto(*buffer)) {
         lengths.append(buffer.size())
         if (buffer.size() > 100) {
-            println("  into long line starts <" + buffer.substr(0, 10) + "> ends <"
-                    + buffer.substr(buffer.size() - 10, 10) + ">")
+            println(
+                "  into long line starts <" + buffer.substr(0, 10) + "> ends <"
+                        + buffer.substr(buffer.size() - 10, 10) + ">"
+            )
         }
     }
     into.close()
@@ -150,8 +162,10 @@ fun longLines(): Int {
         val text: StrView = view.value()
         fromViews.append(text.size())
         if (text.size() > 100) {
-            println("  view long line starts <" + text.substr(0, 10) + "> ends <"
-                    + text.substr(text.size() - 10, 10) + ">")
+            println(
+                "  view long line starts <" + text.substr(0, 10) + "> ends <"
+                        + text.substr(text.size() - 10, 10) + ">"
+            )
         }
         view = views.readLineView()
     }
@@ -161,8 +175,10 @@ fun longLines(): Int {
     if (lengths.size() == fromViews.size()) {
         println("both readers agree on the long line too")
     } else {
-        println("MISMATCH on the long fixture: " + lengths.size().toString() + " vs "
-                + fromViews.size().toString())
+        println(
+            "MISMATCH on the long fixture: " + lengths.size().toString() + " vs "
+                    + fromViews.size().toString()
+        )
     }
     return 0
 }

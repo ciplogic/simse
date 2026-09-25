@@ -1,5 +1,7 @@
 package onebrc
 
+import io
+
 // The 1 Billion Row Challenge, written the naive way: a line at a time, a `Str` key
 // per station, a `Dictionary` of aggregates, and a sorted report at the end. No
 // mmap, no chunked parsing, no per-station arrays, no threads - the straight-line

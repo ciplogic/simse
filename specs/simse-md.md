@@ -1,12 +1,16 @@
 ---
 # `simse.md`: the project file, and module-declared source generators
 
-Status: **the manifest half is implemented; the extension is not**. A root's `simse.md`
-(`module:` entries) and a module's (`sourcegen:`) are read by the driver, and a module that
-declares generators is a hard error naming it (`stress/manifest-modules`,
-`stress/diagnostic-manifest-sourcegen`). This is the manifest `specs/modules.md` left
-deferred plus the right for a module to extend the compiler; the "Open questions" at the
-end say what is still undecided.
+Status: **the manifest half, the module layout and command-line module naming are implemented;
+the compiler extension is not**. A root's `simse.md` (`module:` entries) and a module's
+(`sourcegen:`) are read by the driver, and a `sourcegen: true` module is *accepted*: the compiler
+carries the built-in generators, so naming such a module works, and a declaration whose generator
+it does not have is named at emission (`unknown source generator`,
+`stress/diagnostic-manifest-sourcegen`). Modules are named on the command line with `--module
+<dir>` (repeatable, duplicates merged) or by a root's manifest. Staging and building a compiler
+with a module's generators is what remains. This is the manifest `specs/modules.md` left deferred
+plus the right for a module to extend the compiler; the "Open questions" at the end say what is
+still undecided.
 
 ## The file
 
@@ -34,7 +38,7 @@ The format is the one `_res.md` already reads (`specs/resources.md`): markdown, 
 | file | key | meaning |
 | --- | --- | --- |
 | root `simse.md` | `module: <dir>` | a module of the project, relative to the file. The entry may repeat. A file with no `module:` entry leaves the root scanned whole - which is what a module's own manifest is |
-| module `simse.md` | `sourcegen: true` | this module ships source generators (`cppsrc/sourcegen`'s kind), so a project using it must be compiled by a compiler that carries them |
+| module `simse.md` | `sourcegen: true` | this module ships source generators (`cppsrc/sourcegen`'s kind). A compiler that *carries* them (the built-in ones, today) accepts it; one that does not fails at emission, naming the generator a declaration reaches |
 
 A root with no `simse.md` behaves as before: `--root <dir>` is the single module root. The
 manifest is additive: nothing that works now stops working, and `--root` remains the way a
@@ -45,12 +49,37 @@ the root means, not a hint on top of the directory walk. A root whose manifest l
 module (a file carrying only a module's own keys) is scanned whole, so a manifest cannot
 empty a scan by accident.
 
+## The layout
+
+Modules live in a `modules/` directory (this repository keeps it at `cppsrc/modules/`), one
+directory per module. A module's **declarations** - what a program sees - are its `.kt` files;
+its **source generators**, if it ships any, live in a `generators/` subfolder:
+
+    modules/
+        json/
+            api.kt              the surface a program imports
+            generators/         compiler-side sources; a generator registers itself
+                JsonGen.kt
+        io/                     the file/directory operations (next)
+
+`--module <dir>` names a module (repeatable); duplicate directories are merged by canonical
+path, so naming one twice costs nothing. `--root <dir>` is a **tree** and is scanned whole -
+which is what the compiler's own build does (`--root cppsrc`), so `modules/**/generators/*.kt`
+is compiled *into the compiler*. A program that names the module gets the module's declarations
+and never its `generators/`, whose sources are written against the compiler's own packages.
+Generated output is merged **in memory** by the driver's reparse pass; no directory is written,
+so nothing stale can be picked up by a later build.
+
 ## What `sourcegen: true` means
 
 `impl_specs/generators.md` fixes what a generator *is*: a function over data
 (`*SourceGenContext`, `Sections`, the AST nodes and resources) registered in the compiler's
 table, one file per generator. It is compiled into the compiler, so a project that imports
-such a module is compiled by a compiler **extended** with the module's generator sources:
+such a module is compiled by a compiler **extended** with the module's generator sources.
+**For now the extension is not staged**: the compiler carries the built-in generators
+(`cpp`, `res`, `kt`, `json`), so naming a `sourcegen: true` module works when its declarations
+reach one of those, and a generator the compiler does not have is a hard error at emission.
+The staged shape below is what remains:
 
 1. The compiler finds the module's generators (the module declares them).
 2. It builds an extended compiler: its own source tree plus the module's generator sources,
@@ -200,5 +229,5 @@ The step list lives in `impl_specs/roadmap.md` (T31).
 The implementation notes so far: staging a tree needs **directory creation** (a native, or
 `simse_writeFile` creating parents) and running the command needs **`system()`** (a native
 returning the normalized exit code, as above); the copy itself is `listFiles` +
-`readWholeFile` + `writeFile`, which the RTL has (`cppsrc/rtl/fs.kt`, whose C++ is the
-`fileio` section of `cppsrc/rtl/_res.md`).
+`readWholeFile` + `writeFile`, which the RTL has (`cppsrc/modules/io/api.kt`, whose C++ is the
+`fileio` section of `cppsrc/modules/io/_res.md`).

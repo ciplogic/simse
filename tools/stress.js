@@ -20,6 +20,8 @@
 //                             passes when the transpile fails and prints it
 //                             (no compile or run happens)
 //   args                      one line of arguments for the program
+//   compiler-args             one line of extra arguments for the *transpiler*, after
+//                             `--root src -o out.cpp` (a `--module <dir>`, say)
 //   stdin                     fed to the program on stdin
 //
 // Options:
@@ -183,10 +185,11 @@ function runCase(build, study) {
   const expectedErr = readIfPresent(path.join(dir, "expected.stderr"));
   const expectedExit = readIfPresent(path.join(dir, "expected.exit"));
   const args = (readIfPresent(path.join(dir, "args")) || "").trim().split(/\s+/).filter((part) => part.length > 0);
+  const compilerArgs = (readIfPresent(path.join(dir, "compiler-args")) || "").trim().split(/\s+/).filter((part) => part.length > 0);
   const stdin = readIfPresent(path.join(dir, "stdin"));
 
   const outCpp = path.join(work, "out.cpp");
-  const transpile = runProcess([build.simse, "--root", path.join("stress", name, "src"), "-o", outCpp], {
+  const transpile = runProcess([build.simse, "--root", path.join("stress", name, "src"), "-o", outCpp, ...compilerArgs], {
     env: build.env,
   });
   const verbose = build.opts.verbose ? `\n${transpile.stdout}${transpile.stderr}` : "";
@@ -274,6 +277,7 @@ function describe(caseDir) {
   if (existsSync(path.join(caseDir, "expected.transpile-error"))) marks.push("transpile-error");
   if (existsSync(path.join(caseDir, "expected.cpp"))) marks.push("cpp-golden");
   if (existsSync(path.join(caseDir, "args"))) marks.push("args");
+  if (existsSync(path.join(caseDir, "compiler-args"))) marks.push("compiler-args");
   if (existsSync(path.join(caseDir, "stdin"))) marks.push("stdin");
   if (existsSync(path.join(caseDir, "expected.exit"))) marks.push("exit-code");
   if (existsSync(path.join(caseDir, "expected.stderr"))) marks.push("stderr");

@@ -96,7 +96,7 @@ path the table above runs, whose whole-program number in that session was 1093/1
 bun benchmarks\onebrc\onebrc.mjs gen 10000000 benchmarks\onebrc\data\measurements.txt --seed 42
 
 :: the two implementations
-bun build.js --release --root benchmarks\onebrc --out benchmarks\onebrc\onebrc.cpp --exe benchmarks\onebrc\onebrc.exe
+bun build.js --release --root benchmarks\onebrc --module cppsrc\modules\io --out benchmarks\onebrc\onebrc.cpp --exe benchmarks\onebrc\onebrc.exe
 benchmarks\onebrc\build_naive.bat
 
 :: each reports its own time; compare the reports against the reference

@@ -35,7 +35,7 @@ implementation ("a body-less method needs an attribute").
 ## What the parser records
 
 The parser records on the `Function` node: `Attribute` (the attribute's own name),
-`Generator` (the generator the first argument names: `cpp`, `res`, `kt`), and
+`Generator` (the generator the first argument names: `cpp`, `res`, `kt`, `json`), and
 `GeneratorArgs` (the remaining arguments, in order, joined by `,`, a string literal
 without its quotes).
 

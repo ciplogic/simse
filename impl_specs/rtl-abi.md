@@ -365,7 +365,8 @@ runtime-alignment task; the shim is not the normative layout.
 
 ### Reading files line by line, and the clock
 
-`FileStream` (`cppsrc/rtl/filestream.hpp`, prelude `cppsrc/rtl/fs.kt`) is the
+`FileStream` (`cppsrc/rtl/filestream.hpp`, prelude `cppsrc/rtl/fs.kt` for the *type*; the
+operations are the `io` module's) is the
 RTL's line reader. `openFileStream(path): *FileStream` is a free native (null when
 the file cannot be opened); the operations are **methods of the struct** -
 `readLine(): Opt<Str>`, `readLineInto(buffer: *Str): Bool`,
@@ -411,7 +412,7 @@ byte-identical.
 `simse_nowMillis` (the `timeops` section of `cppsrc/rtl/_res.md`) is a monotonic
 millisecond clock for logging and for measuring a run.
 
-The Simse surface, with the C++ symbol each one reaches (`cppsrc/rtl/fs.kt`,
+The Simse surface, with the C++ symbol each one reaches (`cppsrc/modules/io/api.kt`,
 `cppsrc/rtl/rtl.kt`):
 
 | Simse | C++ symbol | Notes |

@@ -1,5 +1,7 @@
 package asyncsample
 
+import io
+
 // The program the async work is for: two suspended file operations and a chain that reaches
 // them. `readFileTextAsync` answers `Async<Res<Str>>` because the file may not exist, and the
 // `Res` is what `!!` propagates - so a failure needs no exception and no callback, it is a
@@ -14,7 +16,7 @@ package asyncsample
 // Until the machine lowering lands this program does not compile; `--showAsync` is how the
 // inference is checked (cppsrc/sema/Async.kt):
 //
-//     ./simse.exe --root docs/examples/async/src --showAsync
+//     ./simse.exe --root docs/examples/async/src --module cppsrc/modules/io --showAsync
 
 // The leaves: a body-less declaration is where the runtime's suspension lives (the `@SmGen`
 // form the RTL uses for everything whose body is C++). The section is not written yet - the
