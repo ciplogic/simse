@@ -1,31 +1,21 @@
-# The linear IL (draft)
+# The linear IL
 
-The form `impl_specs/linear-lowering.md` builds is already *almost* an instruction
-list: control flow is labels, gotos and conditional jumps, every value position is one
-operation deep, and **every** declaration sits once at the top of the body (the slot
-hoisting: one scope per body). What is left that is not linear:
+The form `impl_specs/linear-lowering.md` builds is already *almost* an instruction list:
+control flow is labels, gotos and conditional jumps, every value position is one operation
+deep, and every declaration sits once at the top of the body (slot hoisting). What is left
+that is not linear: a statement is still a small tree (`Assign` holds a target *path* and a
+value, `Call` a callee and N arguments, `IfTrue` a condition), and a lambda is an expression
+with a body inside it. The IL removes both, so a later optimization reads one instruction at
+a time. The model is Smali's (`.method` / `.registers` / `.local` / `const-string` next to the
+`invoke-*` family).
 
-- a statement is still a small tree (`Assign` holds a target *path* and a value,
-  `Call` holds a callee and N arguments, `IfTrue` holds a condition);
-- a lambda is an expression **with a body inside it**.
-
-This is the shape that removes all three, so a later optimization can read one
-instruction at a time without knowing anything about scopes or expression trees. The
-model is Smali's (`.method` / `.registers` / `.local` / `const-string` next to the
-`invoke-*` family), which is a good fit because it is *designed* to be printed and
-read, not just executed.
-
-Status: **implemented in both rings, and the only codegen.** `cppsrc/linear/LinearForm.{h,cpp}`
-(projection, printer, dump flag) and `LinearForm.kt` (the same, mirrored) hold the
-model; the backend lives in each emitter - `Emitter::emitIlBodyText` in `Codegen.cpp`
-and `emitIlBodyText`/`ilEmitOps`/`emitClosureClass` in `Codegen.kt`. The tables, the
-operand kinds and the instruction list below are what the code does.
-`--showLinearRepresentation` dumps the IL; nothing else is selectable, because the
-statement emitter and the two flags that used to reach it (`--linearCodegen`'s
-comparison report and `--statementsCodegen`'s escape hatch) have been deleted. What the
-IL cannot spell is now a hard error, not a fallback.
-"What the corpus says" is the measured state of the projection over the whole
-compiler.
+Status: **implemented, and the only codegen.** `cppsrc/linear/LinearForm.kt` holds the model
+(projection, printer, dump flag) and `cppsrc/codegen/IlCodeGen.kt` the backend
+(`emitIlBodyText` / `ilEmitOps` / `emitClosureClass`); the tables, operand kinds and
+instruction list below are what the code does. `--showLinearRepresentation` dumps the IL; the
+statement emitter and its `--linearCodegen` / `--statementsCodegen` flags are deleted, so what
+the IL cannot spell is a hard error, not a fallback. "What the corpus says" is the measured
+state over the whole compiler.
 
 ## Body
 
@@ -74,8 +64,7 @@ IlOpKind     = Label | Goto | IfTrue | IfFalse | ...   # one per row of the tabl
   (`"CallIndirectVoid"`) exists only for the dump (`ilOpKindText`) and for diagnostics;
   the backend switches on the enum and never compares text. An instruction the
   extractor cannot build is `IlOpKind::Unsupported` - a value in the enum, not a
-  missing string - and the two rings' dumps are compared opcode for opcode, which is
-  what keeps the model honest.
+  missing string.
 - **The IL infers nothing.** Every slot has the type the type pass gave it, and the
   backend decides spelling from those types (`+` on two `Str`s is an append,
   `simse_addressOf(x)` vs `x.get()` follows `*T` vs `&T`): that is a *lookup*, not an
@@ -83,15 +72,14 @@ IlOpKind     = Label | Goto | IfTrue | IfFalse | ...   # one per row of the tabl
   from the signature table, jump targets in range, a call's argument count against its
   `IlMethod`, a `BinaryOp` whose operand types make sense.
 - **`inferred` is the type pass's whole record, and it says more than `vars` does.** A
-  slot holding a state machine is `..T`: a *declaration* is never written with that
-  (the emitted C++ types it `auto`, and `linear/Yield.cpp` relies on the declaration
-  staying untyped to reject a `for` over a machine crossing a `yield`), so
-  `vars[i].typeIndex` is `?` for it. The frame still has to know, because a `for` wraps
-  what it iterates in `iter()` and on a machine that wrap is the *identity* - a
-  decision only the receiver's type can make (`impl_specs/for.md`). So the body carries
-  what the pass proved, and a backend seeds its spelling frame from it; the declared
-  slot types are seeded after and win, since they are the spelled ones
-  (`Emitter::ilSeedFrameTypes`).
+  slot holding a state machine is `..T`, a type a *declaration* is never written with
+  (the emitted C++ types it `auto`, and `cppsrc/linear/Yield.kt` relies on that to reject a
+  `for` over a machine crossing a `yield`), so `vars[i].typeIndex` is `?` for it. The frame
+  still has to know: a `for` wraps what it iterates in `iter()` and on a machine that wrap
+  is the *identity*, a decision only the receiver's type can make (`impl_specs/for.md`). So
+  the body carries what the pass proved, and a backend seeds its spelling frame from it -
+  declared slot types seeded after and winning, since they are the spelled ones
+  (`ilSeedFrameTypes`).
 - **`Label` is an instruction**, so a label's position *is* its position in `ops`, and
   a jump carries a **label index**, not an op index:
 
@@ -100,23 +88,21 @@ IlOpKind     = Label | Goto | IfTrue | IfFalse | ...   # one per row of the tabl
   13,  IfFalse 5, 3                   # if (!(vars[5])) goto L4
   ```
 
-  That is the point of keeping labels: inserting or removing instructions does not
-  invalidate a single operand, which matters because the peephole and the folding
-  rewrite the list. The C++ backend prints `L4:;` and `goto L4;` and needs no
-  resolution at all; a future bytecode backend resolves a label index to an offset in
-  one pass over `ops`.
+  That is why labels are kept: inserting or removing instructions does not invalidate an
+  operand, which matters because the peephole and the folding rewrite the list. A backend
+  prints `L4:;`/`goto L4;` and resolves nothing; a bytecode backend resolves a label index
+  to an offset in one pass over `ops`.
 - **`lines` is not optional**: the emitter's `// file:line` comments, the goldens and
   every diagnostic come from it. One line per instruction is enough - a body is in one
   file.
 
 ## Operand kinds
 
-An operand is an `int`; *what it indexes* is the opcode's signature, stated once here
-and read by the verifier and the printer alike. The table is keyed by the opcode itself
-(`ilSignature(op.kind)` is the row, one row per `IlOpKind`), so asking what an operand
-at a position indexes costs nothing. **The first `Var` operand of an op that
-produces a value is its destination** (Smali's convention), and the table says which
-ones produce a value.
+An operand is an `int`; *what it indexes* is the opcode's signature, stated once here and read
+by the verifier and the printer alike. The table is keyed by the opcode itself
+(`ilSignature(op.kind)` is the row, one row per `IlOpKind`). **The first `Var` operand of an op
+that produces a value is its destination** (Smali's convention), and the table says which ops
+produce a value.
 
 | Kind | Indexes |
 | --- | --- |
@@ -127,21 +113,18 @@ ones produce a value.
 | `Method` | a callee (`methods`) |
 | `Label` | a label (`labels`) |
 
-The split is what keeps the opcodes free of types: the frame says what a slot holds,
-so `SetVar` needs no `_Int`/`_String` suffix and no numeric operand kind - a constant
-rides the instruction as text the backend prints verbatim. The table also states
-which positions must be *slots* (`Var`: a destination, a place) and which accept a
-constant (`Value`: nearly every read position), which is exactly what a verifier and
-a backend need to know and nothing more.
+The split keeps the opcodes free of types - the frame says what a slot holds, so `SetVar`
+needs no `_Int`/`_String` suffix and a constant rides the instruction as text the backend
+prints verbatim - and states which positions must be slots (`Var`) and which accept a
+constant (`Value`): what a verifier and a backend need, nothing more.
 
-**One instruction is one operation, over declared slots.** Every operand is a slot of
-the frame or a constant - never an expression - and every slot a body uses is declared
-by the frame itself (`Declare`), with a type: a value position the statements did not
-hold in a slot of its own (a read's base, a call's receiver, a borrow's operand) gets
-one from the extractor, typed by the same rules the type pass uses (`sema::typeOfExpr`),
-and the declaration goes to the top of the instruction list with the rest of the frame.
-So `attributes[i].size()` is three instructions - the address of the element, the read
-through it, the call - and never one expression:
+**One instruction is one operation, over declared slots.** Every operand is a frame slot or a
+constant, never an expression, and every slot a body uses is declared by the frame
+(`Declare`) with a type: a value position the statements did not hold in a slot of its own (a
+read's base, a call's receiver, a borrow's operand) gets one from the extractor, typed by the
+same rules the type pass uses (`sema::typeOfExpr`), and the declaration joins the frame at the
+top of the instruction list. So `attributes[i].size()` is three instructions, never one
+expression:
 
 ```
 IndexAddr        _sm_base1, attributes, i       # _sm_base1: *Attribute
@@ -180,13 +163,11 @@ Store            ptr=Var, value=Value             # *p = v
 ### The conversion: one operation, spelled by its types
 
 `Box`, `Deref` and `CopyValue` are **one operation seen from three call sites** - convert
-the value in `src` to the type of `dst` - and while the migration is in flight all three
-opcodes stay accepted and must spell the same text for the same pair of types. What the
-instruction *means* is the pair, not the opcode; the backend already works this way (it
-reads the spelling from the types, `impl_specs/linear-il.md`'s "the IL infers nothing"),
-it just does not look at `dst` yet.
+the value in `src` to the type of `dst`. All three opcodes stay accepted and must spell the
+same text for the same pair of types: the instruction *means* the pair, not the opcode, and
+the backend reads the spelling from the types.
 
-| `src` | `dst` | C++ | opcode that used to spell it |
+| `src` | `dst` | C++ | opcode |
 | --- | --- | --- | --- |
 | `T` | `T` | `(x)` - a copy, C++ value semantics | `CopyValue` |
 | `T` | `*T` | `&x` / `simse_addressOf(x)` - the address, no copy | `Deref` |
@@ -195,11 +176,11 @@ it just does not look at `dst` yet.
 | `&T` | `T` | `*(x)` - the value behind the box | `CopyValue` |
 | `*T` | `T` | `*x` - a load | `CopyValue`, and `Deref` (which spelled it `*x`) |
 
-Rows not in the table are **illegal**, and that is the verifier's job rather than C++'s:
-`*T` -> `&T` is the one that matters (adopting a raw pointer into a box would claim an
-ownership nobody granted), and `src == dst` needs no instruction at all. Today an illegal
-pair leaks out as a C++ error in the generated file (`cannot convert from 'AstXmlNode *'
-to 'const AstXmlNode &'`) instead of a diagnostic, which is what this table exists to fix.
+Rows not in the table are **illegal**, which the verifier must reject rather than C++: `*T` ->
+`&T` is the one that matters (adopting a raw pointer into a box would claim an ownership
+nobody granted), and `src == dst` needs no instruction. An illegal pair currently leaks out
+as a C++ error in the generated file (`cannot convert from 'AstXmlNode *' to 'const
+AstXmlNode &'`) instead of a diagnostic.
 
 Two things the unification must **not** blur, because they are per row:
 
@@ -211,11 +192,10 @@ Two things the unification must **not** blur, because they are per row:
 
 The table is also what the implicit copy becomes: wherever a `T` is required and the
 expression has type `*T`/`&T`, the same instruction is inserted - no new opcode, and no
-`copy` in the language. `copy(v)` on a value is the first row (the identity), so `copy` can
-disappear without the IL gaining anything to replace it - and in the compiler's own ring it
-has: `cppsrc/**/*.kt` spells no `copy(...)` at all, and the amalgamation comes out with
-every conversion folded into the destination that asks for it. The positions that ask
-today are a call argument (`specs/functions.md`, "Handles at a call") and a **binary
+`copy` in the language. `copy(v)` on a value is the first row (the identity), so `copy`
+disappears without the IL gaining anything to replace it - `cppsrc/**/*.kt` spells no
+`copy(...)`, and every conversion folds into the destination that asks for it. The positions
+that ask are a call argument (`specs/functions.md`, "Handles at a call") and a **binary
 operand** whose fellow operand is a value (`specs/memory-model.md`): `out + separator` with
 `separator: *Str` is `CopyValue` into a slot and then `out + that` - the same row the
 explicit `*separator` would spell.
@@ -224,8 +204,8 @@ explicit `*separator` would spell.
 carry a type the callee's own signature does not fix, so the table above cannot be entered
 from `param` alone; the extraction resolves them from the *argument* instead:
 
-- **A `native fun` extension's receiver**, which the declaration spells as an explicit
-  `this` first parameter (`native fun has<K, V>(this: Dictionary<K, V>, key: K): Bool`).
+- **A native extension's receiver**, which the declaration spells as an explicit `this`
+  first parameter (`...has<K, V>(this: Dictionary<K, V>, key: K): Bool`).
   Two consequences beyond the conversion: the fact's own `receiver` is *empty*, so
   `callTarget` counts such a declaration as a member through
   `extensionReceiver`/`receiverParams`/`isExtensionDecl` - which is also what tells two
@@ -249,16 +229,15 @@ parameter is the type error it always was. Only the handle is inferred, never th
 **The destination's type is what spells the conversion, and the emitter reads it there.**
 Every instruction whose operand is a value with a declared destination type already says
 which row it is, so `emitIlBodyText` reads the spelling off the two types rather than off
-the opcode (`Codegen`'s `needsReadThrough`, mirrored in `Codegen.cpp`): a `*T`/`&T`
-spelled where the destination, the returned type, the assigned slot or a static's declared
-type is a `T` is read through, `*(x)`, and nothing else in that position has to be said.
-That is the half that pays for a **borrowing accessor**: `xmlAttr` returns `*Str` - the
-address of the attribute's own storage, no string constructed (`ns2_xmlAttr` became a
-pointer walk with one `simse_addressOf`) - and its callers are unchanged, because a `Str`
-is what they ask for. It is also why the two operand sides had to agree: `xmlAttr(a, Name)
-== xmlAttr(b, Name)` is a *string* comparison, and a pair of handles of the *same* pointee
-is read through on both sides (`LinearForm`'s `binaryOperand`), while a pair of *different*
-handles - and a handle against `null` - is left exactly as it was.
+the opcode (`needsReadThrough`): a `*T`/`&T` spelled where the destination, the returned
+type, the assigned slot or a static's declared type is a `T` is read through, `*(x)`, and
+nothing else in that position has to be said. This is what lets a **borrowing accessor**
+work: `xmlAttr` returns `*Str` - the address of the attribute's own storage, no string
+constructed (`ns2_xmlAttr` is a pointer walk with one `simse_addressOf`) - and its callers
+are unchanged, because a `Str` is what they ask for. The two operand sides must agree:
+`xmlAttr(a, Name) == xmlAttr(b, Name)` is a *string* comparison, a pair of handles of the
+*same* pointee is read through on both sides (`LinearForm.kt`'s `binaryOperand`), and a pair
+of *different* handles - and a handle against `null` - is left as it is.
 
 The rest of the instruction list, unchanged:
 
@@ -287,15 +266,14 @@ Lambda           dst=Var            # a body still inside an expression (marker)
 Unsupported      dst=Var, why=Text  # anything the extractor cannot express (marker)
 ```
 
-The two markers are instructions *on purpose*: a shape the extractor cannot write
-down shows up as a gap in the dump and a count in the verifier, instead of being
-silently dropped. A body whose dump has neither is a body the IL covers in full,
-and that is the property a backend needs.
+The two markers are instructions *on purpose*: a shape the extractor cannot write down shows
+up as a gap in the dump and a count in the verifier rather than being silently dropped, so a
+body whose dump has neither is fully covered by the IL.
 
 - **`BinaryOp` carries the source operator and nothing about types.** `a = b + c` is
   `["+", a, b, c]` whether the operands are `Int`s or `Str`s; the frame's types decide
-  what the backend prints. If an optimizer ever wants the resolved operation it can
-  read the operand types the same way.
+  what the backend prints, and an optimizer can read the resolved operation from the
+  operand types the same way.
 - **Calls to natives and to methods are the same op.** A *native* is a `Method` entry
   whose kind says so (the backend's receiver convention differs there, the rule T47
   already follows); a *method* puts the receiver in `args[0]`, whose slot type (`*T` or
@@ -304,18 +282,17 @@ and that is the property a backend needs.
   function-typed `Local`, an `&lambda` handle) is called through the slot, which is
   exactly Smali's `invoke-interface` next to `invoke-static`.
 - **`Cast` exists because the language has exactly one cast**: `Enum.toInt()` is
-  `static_cast<Int>(x)` in the emitter today, and `Enum.fromInt(v)` is a *call* to a
-  synthesized helper (`ns1_simse_NameKind_fromInt`), so the method table covers it.
-  Every other conversion (`toInt`, `toString`, `toFloat`, an integer widening) is a
-  call, as the user expected.
-- **Address slots** (`IndexAddr`, `FieldAddr`) are .NET's `ldelema`/`ldflda` pair and
-  are what lets `Slot::Path` disappear: a path becomes a value of type `*T`, the alias
-  semantics stay visible, and `a[i].append(x)` is a call with an address operand.
-- **Borrow of a temporary**: today `*f()` stays inline (`simse_addressOf(f())`, valid
-  for the call it is passed to). An instruction list cannot nest, so the *owned* value
-  moves to a slot first (`dst = Call f`, then the address of that slot) - which
-  *extends* the temporary's life to the slot's, i.e. it is safe, never dangling. That
-  is the one place where the IL is deliberately blunter than the C++ it emits.
+  `static_cast<Int>(x)`, and `Enum.fromInt(v)` is a *call* to a synthesized helper
+  (`ns1_simse_NameKind_fromInt`), so the method table covers it. Every other conversion
+  (`toInt`, `toString`, `toFloat`, an integer widening) is a call.
+- **Address slots** (`IndexAddr`, `FieldAddr`) are .NET's `ldelema`/`ldflda` pair: a path
+  becomes a value of type `*T`, the alias semantics stay visible, and `a[i].append(x)` is
+  a call with an address operand.
+- **Borrow of a temporary**: `*f()` stays inline (`simse_addressOf(f())`, valid for the call
+  it is passed to). An instruction list cannot nest, so the *owned* value moves to a slot
+  first (`dst = Call f`, then the address of that slot) - which *extends* the temporary's
+  life to the slot's, i.e. safe, never dangling. The one place the IL is deliberately
+  blunter than the C++ it emits.
 - **`Pack` builds a container from values in one instruction** - the bytecode's
   `newarr`/`fill-array-data`, and the reason a list literal is one operation. Its
   destination's *type* says which container it is, so the instruction carries no type
@@ -359,9 +336,9 @@ and that is the property a backend needs.
 
 ## Printing it
 
-`--showLinearRepresentation` (the C++ driver) prints one body per function: the file
-and signature, the tables, then one line per instruction with the operands resolved
-for the reader and the source line appended. Real output, verbatim:
+`--showLinearRepresentation` prints one body per function: the file and signature, the tables,
+then one line per instruction with the operands resolved and the source line appended. Real
+output, verbatim:
 
 ```
 # cppsrc/codegen/Codegen.kt:54  ns1_cgJoin (*List<Str> parts, Str separator) -> Str
@@ -380,21 +357,18 @@ labels:  0 L1   1 L2   2 L4
 12  ,  BinaryOp        _sm_expr3, ">", i, 0                # _sm_expr3 = i > 0  (line 58)
 ```
 
-A declaration followed by the instruction that writes it is one line in the emitted
-C++ (`Str out = "";`), which is what `ilWritesDestination` is for; a declaration left
-behind by the slot hoisting has no instruction of its own and stays a bare
-`Str _sm_expr1;`.
+A declaration followed by the instruction that writes it is one line in the emitted C++
+(`Str out = "";`, `ilWritesDestination`); a declaration left behind by the slot hoisting has no
+instruction of its own and stays a bare `Str _sm_expr1;`.
 
 (`methods:` shows `name:kind:argCount`, plus `:static=<type>` for a static call and
 `:ret=<type>` when the call has a result; a `Method`'s receiver is its first
 argument, so `size:Method:1` is `parts.size()`.)
 
 The dump is **deterministic** (tables in first-use order, one line per op) because the
-build compares outputs byte for byte: it can become a golden category
-(`tests/golden/<fixture>.il.expected`) and a *sharper* differential than the emitted
-C++ - two rings whose IL dumps agree are far harder to be "accidentally equal" than
-two whose C++ text agrees. The extraction is pure and the dump goes to stderr, so the
-emitted C++ is byte-identical with and without the flag (checked).
+build compares outputs byte for byte, so it can become a golden category
+(`tests/golden/<fixture>.il.expected`). The extraction is pure and the dump goes to
+stderr, so the emitted C++ is byte-identical with and without the flag (checked).
 
 ## What the corpus says
 
@@ -407,7 +381,7 @@ Measured over the whole compiler (`--root cppsrc`); the numbers come from
 | bodies | 545 |
 | instructions | 38,151 (14,268 of them are `Declare`) |
 | `Unsupported` markers | **0** - the instruction set covers every statement shape the lowering produces |
-| `Lambda` markers | **0** - a lambda is a closure construction (`CallCtor`), and the opcode is a leftover of the pre-closure model |
+| `Lambda` markers | **0** - a lambda is a closure construction (`CallCtor`) |
 | extractor-synthesized slots (`_sm_base<n>`) | 1,595 |
 | ... of those, untyped (`?`) | **93** (a `for`'s machine slot is one: the lowering built its class, so no rule names it - the count of them moves with the number of `for` loops in the sources) |
 | ... folded at their single use | 15 |
@@ -416,28 +390,15 @@ Measured over the whole compiler (`--root cppsrc`); the numbers come from
 | materialised literals | **0** (was 1,486 before operand literals) |
 | assignments that copy a slot (`SetVar x, y`) | 408 |
 
-Three consequences worth stating plainly:
-
-- **The projection is as complete as the design says.** Everything the emitter can
-  read is expressed, and the only shape the instruction set does not spell (a lambda
-  body still inside an expression) does not occur in the compiler at all.
-- **A synthesized slot is a frame slot, not a hole in the shape.** It exists because a
-  value position held more than a name (`a.f`, `a[i]`, `*p`), and the type rules name it
-  in all but 25 cases over the compiler - so it is declared with the frame and read by
-  name wherever it is used, which is what makes the instruction list a *sequence of
-  operations* rather than a tree with the nodes written down elsewhere.
-- **The two shape questions resolved in favour of not changing the output.** With
-  literals riding the pool as operands and `Declare` as an instruction, the
-  projection generates **byte-identical** C++ with and without the flag (it is
-  pure, and the flag only chooses whether the dump is written), and nothing that
-  follows has to churn the goldens just to *reach* the IL.
+- **A synthesized slot is a frame slot, not a hole in the shape.** It exists because a value
+  position held more than a name (`a.f`, `a[i]`, `*p`); the type rules name it in all but 25
+  cases over the compiler, so it is declared with the frame and read by name wherever it is
+  used.
 
 ## Codegen from the IL
 
-**Implemented, and the only codegen.** The emitter reads the instruction list for every
-body; there is no statement emitter left to reach (the escape hatch and the comparison
-report were deleted once the port was done). Over the
-whole compiler source set (`--root cppsrc`, 502 bodies), the port's record was:
+The emitter reads the instruction list for every body. Over the whole compiler source set
+(`--root cppsrc`, 502 bodies) the record was:
 
 | | |
 | --- | --- |
@@ -446,23 +407,17 @@ whole compiler source set (`--root cppsrc`, 502 bodies), the port's record was:
 | differing (the closure model: a class here, `[=]` in the statement path) | 2 |
 | not expressible | **0** |
 
-Both rings do this: the C++ backend (`Emitter::emitIlBodyText` and the helpers around
-it) and the Simse one (`Codegen.kt`'s `emitIlBodyText`/`ilEmitOps`/`emitClosureClass`,
-over `linear/LinearForm.kt`'s extractor). They report the same counts and their
-emitted files are byte-identical, which is what T23 pins.
-
 The backend does not re-spell anything: an operand becomes a leaf node - a slot is a
 name, a constant is its literal - and `expr`/`call`/`memberAccess` write the text. A
-place instruction is the one operand that has to be *built* rather than named: its
-text is the address of what it names (`&x`, or `simse_addressOf(...)`), because that
-is what the slot holds. The rules below are what the statement tree used to do
-implicitly.
+place instruction is the one operand that has to be *built* rather than named: its text
+is the address of what it names (`&x`, or `simse_addressOf(...)`), because that is what
+the slot holds.
 
-Four rules do the work the statement tree used to do implicitly:
+Four rules do this:
 
-- **One instruction, one statement.** Nothing is inlined into anything: so
-  `attributes[i].size()` is an address instruction, a read and a call - three lines of
-  C++, one operation each - and a backend never has to reconstruct an expression.
+- **One instruction, one statement.** `attributes[i].size()` is an address instruction, a read
+  and a call - three lines of C++, one operation each - so a backend never reconstructs an
+expression.
 - **`Declare`/`DeclareInit`**: a slot with a spelled type is declared with the frame
   (`T name;`, at the top of the body, where every `Declare` of a typed slot stands); a
   slot the type rules could not name is declared where its single definition is
@@ -471,17 +426,16 @@ Four rules do the work the statement tree used to do implicitly:
   Either way the *value* is assigned where the instruction stands, and where a jump
   crosses such a declaration the backend opens the one block C++ requires
   ([stmt.dcl]/3, and that is the only reason a body has braces).
-- **The flags**: `--showLinearRepresentation` is the only one left, and it only
-  dumps. The statement emitter, its `--statementsCodegen` escape hatch and
-  `--linearCodegen`'s comparison report are gone: the IL is the source of the output,
-  full stop, and a body it cannot spell fails with the reason instead of falling back.
+- **The flags**: `--showLinearRepresentation` (dump only) is the only one left;
+  `--statementsCodegen` and `--linearCodegen` are gone, and a body the IL cannot spell fails
+  with the reason instead of falling back.
 - **The one block the flat form keeps**: where a jump crosses a declaration, C++
   wants a scope (a `goto` may not skip an initialization, MSVC C2362). The backend
-  opens exactly that block - the one the statement path keeps - and closes it at the
-  label the jump lands on. So "linear" means *no scope the language does not force*,
-  which is also why the emitted text still has 154 bodies with braces.
+  opens exactly that block and closes it at the label the jump lands on. So "linear"
+  means *no scope the language does not force*, which is also why the emitted text
+  still has 154 bodies with braces.
 
-What that buys, verified end to end:
+Verified end to end:
 
 ```sh
 ./cmake-build-debug/simse_transpile.exe --root cppsrc -o a.cpp   # from the IL
@@ -492,28 +446,26 @@ bun tools/stress.js --simse ./il_simse.exe      # 30/30
 bun tools/bootstrap.js                          # and the fixed point holds (~0.8 s)
 ```
 
-The instruction list is what the emitter reads; the shape of the C++ it writes is not the
-bottleneck the way it was feared to be. (The port itself cost no runtime speed: comparing
-an IL-emitted compiler against a statement-emitted one measured 0.95 s against 0.93 s,
-best of 3, release.)
+The port itself cost no runtime speed: an IL-emitted compiler against a
+statement-emitted one measured 0.95 s against 0.93 s, best of 3, release.
 
-The two bodies whose text differs are the two lambdas in the compiler
-(`ns1_collectPackages`, `ns3_driverGatherFiles` pass a lambda to `sort`): there the
-statement path's `[=]` becomes the closure class the language specifies, which is the
-one difference the model owns - and it is the text that is emitted, so a lambda *is*
-an instance of its class in the output too.
+The two differing bodies are the two lambdas in the compiler (`ns1_collectPackages`,
+`ns3_driverGatherFiles` pass a lambda to `sort`): there the statement path's `[=]`
+becomes the closure class the language specifies, which is the one difference the model
+owns - and it is the text that is emitted, so a lambda *is* an instance of its class in
+the output too.
 
 ## Lambdas: the closure, and the class it is
 
-**Implemented.** A lambda is projected the way `specs/memory-model.md` models it: a
-class with one field per captured value and one method (`invoke`, which C++ spells
-`operator()`), so the value is an instance and `&lambda` a counted handle to one.
+A lambda is projected the way `specs/memory-model.md` models it: a class with one field per
+captured value and one method (`invoke`, which C++ spells `operator()`), so the value is an
+instance and `&lambda` a counted handle to one.
 
-- **The closure is computed**, not guessed: `IlClosure::captures` is the free
-  variables of the body - the names it reads that are not its own parameters and not
-  names it declares - in first-read order (reproducible, because the field order is
-  what every downstream table follows). `makeAdder`'s `(v: Int) -> v + factor`
-  captures `factor`; the five lambdas in `stress/lambdas`'s `main` capture nothing.
+- **The closure is computed**, not guessed: `IlClosure::captures` is the free variables of the
+  body - the names it reads that are not its own parameters and not names it declares - in
+  first-read order (reproducible, because the field order is what every downstream table
+  follows). `makeAdder`'s `(v: Int) -> v + factor` captures `factor`; the five lambdas in
+  `stress/lambdas`'s `main` capture nothing.
 - **The capture is a field, not a copy in the frame**: inside the body a captured
   name is `GetField this <name>` (and a write is `SetField`), and the construction
   passes the enclosing frame's values: `CallCtor dst, <Class>, captures...`, which the
@@ -539,8 +491,8 @@ The corpus, with the closure classes in the emitted code:
 | | |
 | --- | --- |
 | compiler bodies: byte-identical / same code / differing / not expressible | 170 / 149 / **2** / **0** |
-| the 2 differing | `collectPackages` and `driverGatherFiles`: `[=](...)` in the statement path against the class here - the closure model, by construction |
-| `stress/lambdas` (capturing lambda, block-bodied lambda, lambdas as arguments) | builds and prints the golden output; the emitted compiler self-transpiles **byte-identically** (`cmp` against the statement path) and the corpus is 28/28 |
+| the 2 differing | `collectPackages` and `driverGatherFiles`: the closure class against the statement path's `[=](...)` - the closure model, by construction |
+| `stress/lambdas` (capturing lambda, block-bodied lambda, lambdas as arguments) | builds and prints the golden output; the emitted compiler self-transpiles **byte-identically** and the corpus is 28/28 |
 
 What is *not* projected yet, all outside the corpus: a nested lambda reading an
 enclosing lambda's capture (the capture is a field, so it would have to be read into
@@ -560,14 +512,12 @@ deferred). `&lambda` rides the existing `Box`, i.e. `std::make_shared<Class>(ins
 | 7 | Frame size: every slot is live for the whole body | deferred, by design | - |
 | 8 | Literals ride the pool as **operand literals** (a negative operand is `pool[-1-n]`) | **done**; 1,486 materialised constants gone | - |
 | 9 | Declarations are `Declare`/`DeclareInit` instructions | **done**; the placement is the lowering's, and the backend adds only the scope C++ forces | - |
-| 10 | The Simse mirror (`LinearForm.kt` + the IL backend in `Codegen.kt`) | **done**: the extractor, the printer, the backend (`emitIlBodyText`/`ilEmitOps`/the closure classes) and the two flags; both rings report the same counts and emit identical files | - |
+| 10 | The IL backend (`LinearForm.kt` + `IlCodeGen.kt`) | **done**: the extractor, the printer, the backend (`emitIlBodyText`/`ilEmitOps`/the closure classes) and the two flags | - |
 
 ## Next
 
 1. `verifyIlBody` (operand counts and kinds from the signature table, jump targets in
-   range, a call's argument count against its `IlMethod`, every label defined) - the
-   check that is cheap now that the IL is the source of truth, and the one thing standing
-   between the form and a reader that trusts it blindly.
+   range, a call's argument count against its `IlMethod`, every label defined).
 2. The 25 untyped slots in the compiler, one shape at a time: a bare `null` in a value
    position is the bulk of them, and it needs the *expected* type - which a call's
    signature could supply where the type rules cannot. Each one closed removes a fold and
@@ -579,120 +529,39 @@ deferred). `&lambda` rides the existing `Box`, i.e. `std::make_shared<Class>(ins
 
 ## Dropping the statement emitter
 
-The goal: the IL is the *only* input to code generation. Then `if`/`while`/`for`
-statement shapes, lambda expressions and the yield lowering all have exactly one
-interface to satisfy, an optimization pass has one form to read, and the Simse ring's
-port gets one target instead of two.
-
-What is already true, measured:
+The IL is the *only* input to code generation. Measured:
 
 - **The IL expresses every body of the compiler**: over `cppsrc` the report is
   `502 bodies, 276 byte-identical, 224 identical without blocks, 2 differing, 0 not
   expressible`. The two differences are the closure model's (`[=]` capture list against
-  the class the language specifies), not gaps in the instruction set - and the class is
-  what the output spells now.
+  the class the language specifies), not gaps in the instruction set.
 - **A machine is expressible too.** A state machine's method bodies go through the same
-  two paths as any other body (`Emitter::emitMachine` -> `emitBodyCheckedAt`, with the
-  machine's class as the frame's `self`), and `stress/yield` reports
-  `5 bodies, 5 identical without blocks, 0 differing, 0 not expressible`. The machine it
-  emits compiles and prints exactly what the statement path printed - both `for` forms,
-  `continue` and `break` included (`stress/yield` runs it through the self-hosted
-  compiler).
+  paths as any other body (`emitMachine` -> `emitBodyCheckedAt`, with the machine's class
+  as the frame's `self`), and `stress/yield` reports `5 bodies, 5 identical without
+  blocks, 0 differing, 0 not expressible` - the emitted machine compiles and prints the
+  expected output for both `for` forms, `continue` and `break` included.
 - **A compiler built from IL-emitted output works**: transpiling `cppsrc` (the default
-  now) and compiling that file gives a compiler that passes the whole stress corpus, and
+  now) and compiling that file gives a compiler that passes the whole stress corpus and
   reproduces its own source byte-for-byte - so the backend is complete for everything the
   compiler's own source needs.
 
-What the switch needed: **T23 pins the two rings together.** The IL's text is *flatter*
-than the statement path's (blocks and the gotos that only they needed are gone: 224 of
-502 bodies differ that way) and it spells a lambda as the class the language specifies
-(`specs/memory-model.md`) instead of a C++ `[=]`. The stage-1 fixed point compares the
-C++ ring's output with the Simse ring's own, so switching one ring alone would turn T23
-red - somewhere other than in the file that changed. Both rings were moved in one
-change, which is why the port came first.
-
-The order that was followed:
-
-1. **`cppsrc/linear/LinearForm.kt`** - the extractor, the printer and the backend,
-   over the Simse ring's statements (the same algorithms, one XML dialect: roles instead
-   of struct fields). The oracle is the C++ ring's own two dumps: `--showLinearRepresentation`
-   over `cppsrc` must be byte-identical between the rings, and then the port's comparison
-   report had to read the same in both (that report, with the flags that reached it, is
-   deleted now).
-
-   **Landed and verified** (`LinearForm.kt`): the model (`IlVar`/`IlMethod`/`IlOp`/`IlBody`/
-   `IlClosure`/`IlUnit`/`IlFunction` as data classes, the three enums), the signature
-   table, the operand readers, `ilTypeText`/`ilReceiverTypeText`/`ilWritesDestination`, the
-   whole printer, and the **extractor** (`IlExtractor`: the frame, statements, values,
-   calls, names, lambdas with their computed closure). The Simse ring's driver has
-   `--showLinearRepresentation` and `Codegen.kt` calls the extractor per body, so the
-   two rings' dumps can be compared, and they are **byte-identical**:
-
-   - every program under `stress/*/src` (25/25);
-   - `--root cppsrc` - the compiler's own 341 bodies, 32,964 lines of dump, 0 differing.
-
-   That is the IL's *front* end in both rings. Two divergences surfaced on the way and
-   were fixed: the `CallVoid` comment read operand 0 as the method index (the C++
-   `operandAt(operands, hasDst ? 1 : 0)` rule), and the Simse ring's switch lowering gave
-   a case's compare the *switch's* position instead of the case's - invisible in the
-   emitted C++ (which is byte-identical for that program) and only visible in the IL's
-   `(line N)` comments, which is exactly the kind of drift the dump comparison exists to
-   catch.
-
-   **Next: the emitter** - the last piece before the Simse ring can emit from the IL.
-   The port is smaller than it looks, because an op's operands become *leaf* nodes and the
-   spelling helpers are the ones `Codegen.kt` already has:
-
-   | C++ (`Codegen.cpp`) | Simse (`Codegen.kt`) |
-   | --- | --- |
-   | `IlFrame` + `ilAnalyze` (slot -> defining op, use counts) | the same over `Dictionary<Int, Int>` |
-   | `ilSlotNode`/`ilOperandNode`/`ilMemberNode` (`ast::Expr` leaves) | the same, building `AstXmlNode` leaves |
-   | `ilValueText`/`ilOpValueNode` (operand -> expression, folding a `Declare` into the op that writes it) | the same, then `this.expr(...)` |
-   | `emitIlOps` (241 lines, one branch per opcode) | the same branches, calling the existing `this.line`/`this.expr`/`this.type` helpers |
-   | `emitIlBodyText` (frame install/restore) | the same, saving `nameKinds`/`localTypes`/`ilUnit`/`closureSymbols` |
-   | `emitClosureClasses` + `emitClosureMethodText` (169 lines) | **new in the Simse ring** - it has no class model yet, only `[=]` |
-
-   Two things to know before writing it:
-
-   - **The IL's text is mostly the statement path's own spellings** (187 of 341 bodies
-     byte-identical, 152 identical once blocks are folded), so `emitIlOps` can rebuild the
-     linear *statement* vocabulary and hand it to the existing emitters wherever that is
-     simpler than building expressions - what it must add is the folding the statement
-     path does not do (`Declare` + the op that writes the slot = one `T x = v;` line,
-     which `ilWritesDestination` + adjacency decides).
-   - **The switch is all-or-nothing per ring**, and T23 is what enforces it: a lambda is a
-     *class* in the IL's model and a `[=]` in the statement model, so the Simse ring needs
-     closure classes before either ring can drop its statement emitter.
-
-   Then the driver flag became the behavior with no flag, and T23 proves the fixed
-   point in the new form - which is the state the user asked for: **the Simse ring
-   self-hosts on the linear IL.** (Done: see "Codegen from the IL" above.)
-
-2. **Switch both rings to the IL** in one change: `Codegen.{cpp,simse}` keeps
-   the IL backend, and both rings move together so T23 stays green.
-   (Done. The statement emitters were deleted afterwards, once the corpus and T23 were
-   green on the IL alone.)
-3. **Then `yield` in the Simse ring** - which became `emitYieldable`/`emitMachine` plus
-   the lowering of `Yield.kt`, with the machine's bodies already just another IL body.
-   (Done: `stress/yield`.)
-4. Then `iter` (`impl_specs/for.md`) - still open.
-
-What is *not* a blocker: each step has an oracle that fails loudly if a ring drifts (the
-stage drivers in `tools/_ring`, T23, the corpus).
+`yield` is done (`emitYieldable`/`emitMachine` plus the lowering of `Yield.kt`, with the
+machine's bodies already just another IL body - `stress/yield`), and `iter`
+(`impl_specs/for.md`) is still open.
 
 ## Open decisions
 
-1. ~~Operator opcodes typed or untyped?~~ **Untyped**, as the user put it: everything
-   is already typed in the frame, so `["+", a, b, c]` and a lookup are enough.
+1. ~~Operator opcodes typed or untyped?~~ **Untyped**: everything is already typed in the
+   frame, so `["+", a, b, c]` and a lookup are enough.
 2. **`IlMethod`'s fields**: implemented as `name` + `kind` + `argCount` +
    `staticBase` + `returnType` + `argTypes` - more than the minimum, because the
    verifier and the dump both want them and a call site is where a bug shows.
-3. **Small integers inline as `Imm`** - *decided the other way*: there is no `Imm`
-   operand kind at all. A constant's *text* is what a backend prints, so the pool holds
-   it (`0`, `3.14`, `"abc"`, `'a'`, `true`) and the operand references it; a numeric
-   operand would be a second spelling of the same thing, and one more kind to resolve.
-4. **`SetVar_<Type>` opcodes** - *dropped*, as raised: the destination slot is typed,
-   so `SetVar dst, value` says everything, and the value's own kind (a slot or a
+3. **Small integers inline as `Imm`** - *decided the other way*: there is no `Imm` operand
+   kind. A constant's *text* is what a backend prints, so the pool holds it (`0`, `3.14`,
+   `"abc"`, `'a'`, `true`) and the operand references it; a numeric operand would be a second
+   spelling of the same thing, and one more kind to resolve.
+4. **`SetVar_<Type>` opcodes** - *dropped*: the destination slot is typed, so
+   `SetVar dst, value` says everything, and the value's own kind (a slot or a
    constant) is the operand's, not the opcode's. Six opcodes and `Move` collapsed into
    `SetVar`, plus `SetVar_Null` for the one constant whose spelling comes from the
    type rather than from a literal (`Opt<T>()` vs `nullptr`). A `SetVar_Constant`
@@ -701,38 +570,22 @@ stage drivers in `tools/_ring`, T23, the corpus).
    because the `Value` operand kind already states that a position accepts a constant.
 5. **The dump's operand style**: resolved names next to the raw index only in the
    `?m5`-style fallbacks (which cannot happen for an instruction the extractor built).
-6. ~~Does the IL replace the `Stmt` tree, or is it projected from it?~~ **Projected
-   first**, and that is what landed: the extraction is pure and the flag proves the
-   emitted C++ is unchanged. The peephole moves onto the IL next, then the emitter.
-7. **Literal operands, or materialised constants?** *Decided and implemented: the
-   pool carries the literal, and a negative operand in a `Value` position means "the
-   literal at `pool[-1 - n]`".* That is the one encoding that keeps what the emitter
-   prints *verbatim*: the pool holds a string token's own text (`"abc"`, quotes
-   included), an integer's digits and `true`/`false`, which is exactly the C++ the
-   statement path spells - so `i > 0` stays `i > 0` instead of `_sm_base1 = 0; ...
-   i > _sm_base1`. A `null` is the exception and keeps its own op (`SetVar_Null`),
-   because its spelling depends on the expected type (`Opt<T>()` vs `nullptr`) and the
-   destination slot is where the IL has that type for certain.
-8. **Declarations: a prologue, or a `Declare` instruction?** *Decided and
-   implemented: a `Declare` instruction* (`Declare dst=Var`), and - since the
-   flat-body round - the *prologue too*: `hoistSlots` moves every declaration to the
-   top of the body and turns its initializer into an assignment where it stood, so a
-   body has one scope and the emitted code is a prologue by construction
-   (`impl_specs/linear-lowering.md`, "Slot hoisting: one scope per body"). The
-   `Declare` op is what is left for the slots that *stay* in place - the ones the type
-   pass could not spell in full, where `auto x;` is not a declaration. A backend folds
-   `Declare` + the next instruction when that instruction writes the slot it declared
-   (`ilWritesDestination`), which is how a declaration with an initializer stays one
-   line.
-
-With 7 and 8 decided that way, codegen from the IL can aim at **byte-identical**
-output with the statement path, which is what makes the side-by-side comparison a
-verification instead of an approximation: build `LinearCodeGen` behind
-`--linearCodegen`, emit every body both ways, and let the corpus say where the two
-disagree. Anything that cannot be byte-identical (a lambda body) is a *reported*
-fallback to the statement path, never a silent difference.
-
-Both rings have to stay in step: `LinearForm.cpp` landed in the C++ ring first, and
-the Simse mirror (`LinearForm.kt`, `lin*`/`il*` naming, the AST as `AstXmlNode`)
-has to follow before a Simse build can print the same dump. T23 does not see the
-dump while the flag is off, which is why the C++ ring could land alone.
+6. ~~Does the IL replace the `Stmt` tree, or is it projected from it?~~ **Projected**: the
+   extraction is pure and the flag proves the emitted C++ is unchanged.
+7. **Literal operands, or materialised constants?** *Decided: the pool carries the literal,
+   and a negative operand in a `Value` position means "the literal at `pool[-1 - n]`".* That
+   is the one encoding that keeps what the emitter prints *verbatim*: the pool holds a string
+   token's own text (`"abc"`, quotes included), an integer's digits and `true`/`false`, which
+   is exactly the C++ emitted verbatim - so `i > 0` stays `i > 0` instead of `_sm_base1 = 0;
+   ... i > _sm_base1`. A `null` is the exception and keeps its own op (`SetVar_Null`), because
+   its spelling depends on the expected type (`Opt<T>()` vs `nullptr`) and the destination slot
+   is where the IL has that type for certain.
+8. **Declarations: a prologue, or a `Declare` instruction?** *Decided: a `Declare`
+   instruction* (`Declare dst=Var`), and the *prologue too*: `hoistSlots` moves every
+   declaration to the top of the body and turns its initializer into an assignment where it
+   stood, so a body has one scope and the emitted code is a prologue by construction
+   (`impl_specs/linear-lowering.md`, "Slot hoisting: one scope per body"). The `Declare` op
+   is what is left for the slots that *stay* in place - the ones the type pass could not spell
+   in full, where `auto x;` is not a declaration. A backend folds `Declare` + the next
+   instruction when that instruction writes the slot it declared (`ilWritesDestination`), which
+   is how a declaration with an initializer stays one line.

@@ -2,15 +2,12 @@
 
 Status: decision recorded for T9.
 
-This document fixes how generics are reified on the C++ backend. The decision is
-deliberately not redesigned here; it is recorded and then implemented.
-
 ## Decision
 
-Reification is realized on the C++ backend by **emitting C++ templates**.
-Distinct Simse instantiations become distinct C++ types through ordinary C++
-template instantiation. There is **no erasure** and no universal runtime object.
-Hand-emitting monomorphized concrete types is explicitly deferred.
+Generics are reified on the C++ backend by emitting C++ templates: distinct Simse
+instantiations become distinct C++ types through ordinary C++ template
+instantiation. There is no erasure and no universal runtime object. Hand-emitting
+monomorphized concrete types is deferred.
 
 Mapping from Simse declarations to C++:
 
@@ -43,14 +40,13 @@ capacity `N` first while the RTL template is declared `SmallVector<T, int N>`.
 
 ## Instantiation tracking
 
-The compiler still tracks the set of concrete instantiations a program
-references, and reports instantiation arity/argument errors (`List<Int, Str>` and
-`Pair<Int>` for a two-parameter `Pair` are rejected with a positioned
-diagnostic). It does **not** emit unused instantiations: because the backend
-emits templates, a concrete type is only produced at a use site, so
-declarations that are never instantiated generate no code. Value parameters such
-as `SmallVector<4, T>` participate in the C++ type itself
-(`SmallVector<T, 4>`), so distinct capacities are distinct types.
+The compiler tracks the set of concrete instantiations a program references and
+reports arity/argument errors (`List<Int, Str>`, and `Pair<Int>` for a
+two-parameter `Pair`, are rejected with a positioned diagnostic). It does not emit
+unused instantiations: a concrete type is produced only at a use site, so a
+declaration never instantiated generates no code. Value parameters such as
+`SmallVector<4, T>` participate in the C++ type itself (`SmallVector<T, 4>`), so
+distinct capacities are distinct types.
 
 ## Divergences / notes
 

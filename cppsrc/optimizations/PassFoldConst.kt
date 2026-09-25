@@ -76,54 +76,14 @@ fun foldConstWrite(stmt: *AstXmlNode): Opt<FoldConstSlot> {
     )
 }
 
-// Every name under `node`: what a place operator addresses, whatever the name.
-fun foldConstMarkNames(node: *AstXmlNode, unsafe: *Dictionary<Str, Bool>): Unit {
-    if (xmlKind(node) == AstNodeCategory.ExprName) {
-        unsafe.insert(xmlAttr(node, AstNodeAttributeKind.Name), true)
-    }
-    for (*child in node.Children) {
-        foldConstMarkNames(child, unsafe)
-    }
-}
-
-// The names this body must not treat as constants whatever they hold: one handed to a call (a
-// `*T` parameter takes its address), one under a `&`/`*` (the storage, reachable without naming
-// it), and a method call's receiver (`T* self`: `text.appendStr(name)` writes `text`).
-fun foldConstMarkUnsafe(node: *AstXmlNode, unsafe: *Dictionary<Str, Bool>): Unit {
-    if (node.name == AstNodeKind.Arg && xmlKind(node) == AstNodeCategory.ExprName) {
-        unsafe.insert(xmlAttr(node, AstNodeAttributeKind.Name), true)
-    }
-    val kind: AstNodeCategory = xmlKind(node)
-    if (kind == AstNodeCategory.ExprDeref || kind == AstNodeCategory.ExprRef) {
-        foldConstMarkNames(node, unsafe)
-    }
-    if (kind == AstNodeCategory.ExprCall) {
-        foldConstMarkReceiver(xmlChildPtr(node, AstNodeKind.Callee), unsafe)
-    }
-    for (*child in node.Children) {
-        foldConstMarkUnsafe(child, unsafe)
-    }
-}
-
-// The name a method call is made on, when plain: the emitter hands the receiver as `T* self`
-// (`guide4ai.md`), so `text.appendStr(x)` writes `text`.
-fun foldConstMarkReceiver(callee: *AstXmlNode, unsafe: *Dictionary<Str, Bool>): Unit {
-    if (xmlIsEmpty(callee) || xmlKind(callee) != AstNodeCategory.ExprMember) {
-        return
-    }
-    val recv: *AstXmlNode = xmlChildPtr(callee, AstNodeKind.Receiver)
-    if (!xmlIsEmpty(recv) && xmlKind(recv) == AstNodeCategory.ExprName) {
-        unsafe.insert(xmlAttr(recv, AstNodeAttributeKind.Name), true)
-    }
-}
-
 // Every write under `node`, at any depth, so a second write (to any value) disqualifies it.
 fun foldConstCountWrites(node: *AstXmlNode, counts: *Dictionary<Str, Int>): Unit {
     val name: Str = foldConstWriteName(node)
     if (name != "") {
         var seen: Int = 0
-        if (counts.has(name)) {
-            seen = counts.get(name).value()
+        val seenPtr: *Int = counts.getPtr(name)
+        if (seenPtr != null) {
+            seen = * seenPtr
         }
         counts.insert(name, seen + 1)
     }
@@ -142,10 +102,11 @@ fun foldConstReadRule(e: *AstXmlNode): AstXmlNode {
         return e
     }
     val name: Str = xmlAttr(e, AstNodeAttributeKind.Name)
-    if (!linFoldConstAvailable.has(name)) {
+    val lit: *FoldGlobalConst = linFoldConstAvailable.getPtr(name)
+    if (lit == null) {
         return e
     }
-    return foldGlobalLiteral(e, linFoldConstAvailable.get(name).value())
+    return foldGlobalLiteral(e, *lit)
 }
 
 fun linFoldConstBody(stmts: *List<AstXmlNode>): Bool {
@@ -154,7 +115,7 @@ fun linFoldConstBody(stmts: *List<AstXmlNode>): Bool {
     var i: Int = 0
     while (i < stmts.size()) {
         foldConstCountWrites(*stmts[i], *counts)
-        foldConstMarkUnsafe(*stmts[i], *unsafe)
+        linUseDefMarkEscapes(*stmts[i], *unsafe)
         i = i + 1
     }
     // The names written exactly once, at the top level, with a literal, and not escaping.
@@ -162,10 +123,11 @@ fun linFoldConstBody(stmts: *List<AstXmlNode>): Bool {
     i = 0
     while (i < stmts.size()) {
         val write: Opt<FoldConstSlot> = foldConstWrite(*stmts[i])
-        if (write.hasValue() && counts.get(write.value().name).value() == 1
-            && !unsafe.has(write.value().name)
-        ) {
-            singles.insert(write.value().name, FoldGlobalConst(write.value().kind, write.value().text))
+        if (write.hasValue()) {
+            val count: *Int = counts.getPtr(write.value().name)
+            if ( * count == 1 && !unsafe.has(write.value().name)) {
+                singles.insert(write.value().name, FoldGlobalConst(write.value().kind, write.value().text))
+            }
         }
         i = i + 1
     }
@@ -190,10 +152,11 @@ fun linFoldConstBody(stmts: *List<AstXmlNode>): Bool {
             }
         }
         val write: Opt<FoldConstSlot> = foldConstWrite(*stmts[i])
-        if (write.hasValue() && singles.has(write.value().name)) {
-            linFoldConstAvailable.insert(
-                write.value().name, singles.get(write.value().name).value()
-            )
+        if (write.hasValue()) {
+            val single: *FoldGlobalConst = singles.getPtr(write.value().name)
+            if (single != null) {
+                linFoldConstAvailable.insert(write.value().name, *single)
+            }
         }
         i = i + 1
     }

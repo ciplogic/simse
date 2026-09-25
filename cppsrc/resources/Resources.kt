@@ -219,7 +219,7 @@ fun resDedup(entries: *List<ResourceItem>): List<ResourceItem> {
             seen.insert(key, true)
             // The winner's own text *and* marker: a key written in a marked section and again
             // in an unmarked one is stored or not by whichever entry won.
-            val won: ResourceItem = last.get(key).value()
+            val won: *ResourceItem = last.getPtr(key)
             out.append(ResourceItem(key, won.value, won.compileOnly, won.binary))
         }
         i = i + 1

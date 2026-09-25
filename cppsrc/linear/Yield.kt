@@ -317,7 +317,8 @@ data class YldMachinery(
         }
         var f: Int = 0
         while (f < this.fieldOrder.size()) {
-            yielded.fields.append(YldField(this.fieldOrder[f], this.fieldTypes.get(this.fieldOrder[f]).value()))
+            val fieldType: *AstXmlNode = this.fieldTypes.getPtr(this.fieldOrder[f])
+            yielded.fields.append(YldField(this.fieldOrder[f], *fieldType))
             f = f + 1
         }
     }

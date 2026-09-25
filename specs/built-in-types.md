@@ -4,8 +4,6 @@ Status: design baseline — built-in types for the first implementation.
 
 ## Scalar types
 
-The language provides these fixed-width scalar types:
-
 | Type | Representation | Notes |
 | --- | --- | --- |
 | `Char` | signed 8-bit integer | Exactly equivalent to `Int8` |
@@ -16,11 +14,10 @@ The language provides these fixed-width scalar types:
 | `Float32` | 32-bit IEEE-754 floating point | |
 | `Float64` | 64-bit IEEE-754 floating point | |
 
-`Char` is not a Unicode scalar type. It is an 8-bit signed value and has the
-same representation, range, layout, and arithmetic behavior as `Int8`.
+`Char` is not a Unicode scalar type: it has the same representation, range, layout, and
+arithmetic behavior as `Int8`.
 
-`Int` is the default integer type and is currently an alias of `Int32`. Code
-that requires a fixed width should use an explicit integer type.
+`Int` is the default integer type and is an alias of `Int32`.
 
 ### `Bool`
 
@@ -35,13 +32,6 @@ Status: required for the first implementation.
 
 `'c'` denotes a `Char` (`Int8`) value. The supported escapes are
 `\n`, `\r`, `\t`, `\0`, `\\`, `\'`, and `\"`. An unknown escape is an error.
-`Char` is not a Unicode scalar.
-
-```text
-val newline: Char = '\n'
-val quote: Char = '\''
-val letter: Char = 'a'
-```
 
 ## Operators
 
@@ -60,20 +50,11 @@ The binary operators, loosest first (each row binds tighter than the one above i
 | `+` `-` | additive; `+` also concatenates `Str` |
 | `*` `/` `%` | multiplicative |
 
-All of them are left-associative and none of them is an assignment. `!` negates a
-`Bool`; `~` (bitwise not) and the unsigned shifts are **not** implemented.
+All of them are left-associative and none is an assignment. `!` negates a `Bool`; `~`
+(bitwise not) and the unsigned shifts are not implemented.
 
-The bitwise pair binds *tighter* than a comparison, which is Python's and Rust's
-order and not C's. That is deliberate: in C's order `flags & mask == 0` silently
-means `flags & (mask == 0)`, and the mistake is the classic one in a bit test. Here
-
-```text
-flags & mask == 0      // (flags & mask) == 0   - what a reader expects
-flags << 2 + 1         // flags << 3            - the shift is looser than `+`
-```
-
-The shifts sit between `+` and `&`, so `1 << 2 + 1` is `1 << 3`, the same as in C
-and Rust - Rust moves only the bitwise pair, as this language does.
+The bitwise pair binds tighter than a comparison (Python's and Rust's order, not C's),
+and the shifts sit between `+` and `&`.
 
 ### Compound assignment and the step operators
 
@@ -85,39 +66,20 @@ rule; there is no `&&=`, `||=`, or relational compound form.
 
 ## `List<T>`
 
-`List<T>` is a mutable value type with deep-copy semantics. It stores a
-growable sequence of `T` values using the inline-buffer representation in
-`containers.md`:
-
-```text
-List<T> = class {
-    values: SmallVector<4, T>
-}
-```
-
-Copying a list copies its elements and storage. Taking `&List<T>` explicitly
-boxes a copy, while `*List<T>` borrows existing storage without copying.
-Lists are mutable: elements can be read and assigned, and the sequence can be
-grown, cleared, or have elements inserted and removed. Mutating one list value
-does not mutate a copied list value.
+`List<T>` is a mutable value type over the inline `SmallVector<4, T>` buffer, with
+deep-copy semantics (`containers.md`). Copying copies its elements and storage; `&List<T>`
+boxes a copy, `*List<T>` borrows existing storage. Elements can be read and assigned, and
+the sequence grown, cleared, inserted into, and removed from; mutating one list value does
+not mutate a copy.
 
 ## `Str`
 
-`Str` is a mutable byte-string value represented as `SmallVector<24, Char>`
-with one reserved trailing zero byte. It stores 23 non-zero characters inline
-and spills to a heap buffer for longer strings. Both inline and heap storage
-are terminated by `0` for C interoperation.
-
-```text
-Str = SmallVector<24, Char>
-```
-
-Because `Char` is signed 8-bit, `Str` is a byte string rather than a Unicode
-string. `Str` is mutable like a C++ `std::string`: characters can be read and
-assigned, and the string can be appended to, cleared, resized, or have ranges
-modified. Copying a `Str` deep-copies its characters and storage. NUL
-termination is maintained after every mutation; the trailing terminator is not
-part of the logical string length.
+`Str` is `SmallVector<24, Char>` with a reserved trailing zero byte: 23 characters inline,
+spilling to a NUL-terminated heap buffer for C interop. `Char` is signed 8-bit, so `Str` is a
+mutable byte string (`std::string`-like): characters can be read and assigned, and the string
+appended to, cleared, resized, or have ranges modified. Copying deep-copies its characters
+and storage; the terminating NUL is not part of the logical length (`containers.md`,
+`core-types.md`).
 
 ### Minimal `Str` API
 
@@ -132,35 +94,22 @@ Status: required for the first implementation.
 - `resize(n: Int)`; and
 - `data()`, which returns a NUL-terminated buffer for C interop.
 
-Two more are what a *joiner* wants, and both are on the emitted surface
+`reserve` and the two in-place appends are also on the emitted surface
 (`cppsrc/rtl/rtl.kt`):
 
-- `reserve(count: Int)` grows the buffer once for a run of appends, so the text is
-  written once instead of the accumulated prefix being copied at every growth step.
-  A hint, not a length: the string keeps its size, and appends past the reservation
-  grow it as usual. It pays for a *large* result (`count` well past the inline 24
-  bytes); for a small one the growth it saves is smaller than the extra pass that
-  computes `count`, so a joiner of a handful of short parts needs it least.
-- `appendStr(s: Str)` appends in place (`out = out + s` rebuilds the whole buffer),
-  and `appendStrPtr(s: *Str)` is the same for a text the caller only *borrows* -
-  `out.appendStrPtr(part)` of a `for (*part in parts)` appends the element itself,
-  with nothing copied on the way.
+- `reserve(count: Int)` grows the buffer once for a run of appends. A hint, not a length:
+  the string keeps its size, and appends past the reservation grow it as usual.
+- `appendStr(s: Str)` appends in place (`out = out + s` rebuilds the whole buffer);
+  `appendStrPtr(s: *Str)` is the same for a text the caller only borrows.
 
-`fmtStr(fmt: StrView, items: *List<Str>): Str` is the same idea for a *fixed shape*: the
-text is written as one template whose `|` characters are replaced, in order, by one item
-each. The format is a `StrView` because a format is almost always a literal, and a
-literal already *is* a view: the call passes it as it stands, with no `Str` built. It is
-what an emitter writes instead of a `+` chain - `fmtStr("[|::|]", a, b)`
-where `a + "::" + b + "]"` would build three intermediate strings - and it is a member of
-the same family as a join, so it takes its items the way any pack-taking call does: the
-trailing arguments pack into the `*List<Str>` (`fmtStr("| |", "a", "b")`, no `listOf` to
-write). The length is known before anything is written - the format minus the points it
-fills, plus every item - so the result is assembled in one buffer, and nothing needs a
-`reserve` of its own.
+`fmtStr(fmt: StrView, items: *List<Str>): Str` writes one template whole, replacing its
+`|` characters in order with one item each. The format is a `StrView` because a format is
+almost always a literal, which already is a view. The trailing arguments pack into the
+`*List<Str>` (`fmtStr("| |", "a", "b")`). The result length is known up front, so it is
+assembled in one buffer with no `reserve`.
 
-A fixed shape means **one item per `|`**, and that is the only shape the operation is for:
-a call whose points and items do not line up gets the format back, unfilled, rather than a
-half-filled result.
+A fixed shape means one item per `|`: a call whose points and items do not line up gets
+the format back, unfilled, rather than a half-filled result.
 
 Indexing and member calls are permitted directly on a `&Str` and on a `*Str`,
 with automatic dereference (see `memory-model.md`).
@@ -190,36 +139,32 @@ The bootstrap RTL also provides these `Str` operations (native extensions):
 
 ### Views: `Span<T>` and `StrView`
 
-Status: implemented in the bootstrap RTL (`cppsrc/rtl/Span.kt` and
-`cppsrc/rtl/StrView.kt`, `cppsrc/rtl/span.hpp` and `cppsrc/rtl/strview.hpp`).
+Status: implemented in the bootstrap RTL (`cppsrc/rtl/Span.kt`, `cppsrc/rtl/StrView.kt`,
+`cppsrc/rtl/span.hpp`, `cppsrc/rtl/strview.hpp`).
 
-A `Span<T>` is a borrowed view over a contiguous run of `T`: a `*T` pointer plus
-a length, nothing else. It copies nothing and owns nothing, so it is valid only
-while its source is alive and unchanged; a view over a buffer a stream owns is
-valid until that stream is read again. Views are the idiom for parsing one buffer
-(tokenize, split, scan) without allocating per token: `slice` stays a view,
-`substr` and `toString` are the owned copies. `spanOf(items: *List<T>)` spans a
-list's elements and borrows the list, which must outlive the span.
+A `Span<T>` is a borrowed view over a contiguous run of `T`: a `*T` pointer plus a
+length, nothing else. It copies and owns nothing, so it is valid only while its source is
+alive and unchanged; a view over a buffer a stream owns is valid until that stream is
+read again. `slice` stays a view; `substr` and `toString` are the owned copies.
+`spanOf(items: *List<T>)` spans a list's elements and borrows the list, which must
+outlive the span.
 
 `Span<T>` is uniform over `T`:
 
 - `size(): Int`;
 - `isEmpty(): Bool`;
 - `at(index: Int): T` (also `span[index]`) - the element as a *value*;
-- `atPtr(index: Int): *T` - the element as a *place*: the address of the same
-  element, so nothing is copied and a write through it reaches the span's source
-  (`for (*x in xs)` hands out the same thing);
+- `atPtr(index: Int): *T` - the element as a *place* (the address of the same element):
+  nothing is copied, and a write through it reaches the span's source;
 - `slice(start: Int): Span<T>` - from `start` to the end (unchecked); and
 - `slice(start: Int, count: Int): Span<T>` - `count` elements from `start`
   (unchecked).
 
-`StrView` is the view a string's bytes are read through, and it **is** a
-`Span<Char>`: `typealias StrView = Span<Char>` (`cppsrc/rtl/StrView.kt`,
-`cppsrc/rtl/strview.hpp`), so one type carries both names and a `Span<Char>` a
-program holds is a `StrView`. It is what `FileStream.readLineView()` hands back
-and what `spanOfStr(text: *Str): StrView` builds (borrowing the string). What it
-*adds* to the span is the byte surface below - `size`/`isEmpty`/`at`/`slice`/
-`atPtr` are the span's own, reached through the alias:
+`StrView` is the view a string's bytes are read through, and it is a `Span<Char>`:
+`typealias StrView = Span<Char>` (`cppsrc/rtl/StrView.kt`, `cppsrc/rtl/strview.hpp`). It is
+what `FileStream.readLineView()` hands back and what `spanOfStr(text: *Str): StrView`
+builds (borrowing the string). `size`/`isEmpty`/`at`/`slice`/`atPtr` are the span's own,
+reached through the alias; it adds the byte surface below:
 
 - `charAt(index: Int): Char` - the byte at `index` (unchecked);
 - `find(sub: Str): Int` / `indexOf(sub: Str): Int` - the index of the first
@@ -231,10 +176,6 @@ and what `spanOfStr(text: *Str): StrView` builds (borrowing the string). What it
 - `substr(from: Int, count: Int): Str` - the owned copy, with `from` clamped to
   `[0, size]` and `count` allowed to run to the end, like `Str.substr`; and
 - `toString(): Str` - the owned copy of the whole view.
-
-Indexing and member calls are permitted directly on a `*Str`, with automatic
-dereference, so a view's body can read through its source without an explicit
-dereference.
 
 ### String parsing
 
@@ -268,72 +209,34 @@ numeric values of the same type.
 
 ## `RawArray<T>`
 
-`RawArray<T>` is a spelling alias for `*T`:
-
-```text
-RawArray<T> = *T
-```
-
-It is an unmanaged pointer to the first element of a contiguous region of `T`.
-It carries no element count, does not participate in reference counting, and
-does not keep the allocation alive. Pointer indexing requires the caller to
-know the valid bounds. A null or dangling `RawArray<T>` may be carried, but
-reading or writing through it is unchecked undefined behavior.
+`RawArray<T>` is a spelling alias for `*T`: an unmanaged pointer to the first element of a
+contiguous region of `T`. It carries no element count, does not participate in reference
+counting, and does not keep the allocation alive. Pointer indexing requires the caller to
+know the valid bounds. A null or dangling `RawArray<T>` may be carried, but reading or
+writing through it is unchecked undefined behavior.
 
 `RawArray<T>` is intended for FFI, allocators, and low-level runtime code. It is
 not interchangeable with `Array<T>`.
 
 ## `Array<T>`
 
-`Array<T>` is a heap-backed, reference-counted contiguous array. The variable
-stores a counted reference to one allocation. Assignment copies the reference
-and increments its count; the allocation is freed when the last reference is
-dropped. Array elements are not copied by assignment.
-
-The allocation contains its metadata and elements in one contiguous block. All
-ref-counted allocations begin with the common `[reference count][typeId]`
-header defined in `ref-counted-layout.md`:
-
-```text
-Array allocation:
-+----------------------+  offset 0
-| reference count      |  runtime-managed count
-+----------------------+  offset sizeof(RefCount)
-| typeId               |  compiler-generated type number
-+----------------------+  offset sizeof(RefCount) + sizeof(TypeId)
-| element count        |  number of T elements
-+----------------------+  offset sizeof(RefCount) + sizeof(TypeId) + sizeof(Count)
-| T[0]                 |
-| T[1]                 |
-| ...                  |
-| T[count - 1]         |
-+----------------------+
-```
-
-The elements begin immediately after the common header and element-count field,
-subject only to the language's alignment requirements. The header and elements
-are allocated together; an implementation must not allocate a separate element
-buffer for `Array<T>`. The `typeId` is currently unused; it does not provide
-virtual dispatch or dynamic casts.
+`Array<T>` is a heap-backed, reference-counted contiguous array: the variable stores a
+counted reference to one allocation, assignment copies the reference and increments its
+count, and the allocation is freed when the last reference is dropped. Elements are not
+copied by assignment. The allocation holds the common ref-counted header
+(`[reference count][typeId]`) and the element count followed by the elements, in one
+contiguous block (`ref-counted-layout.md`); the header and elements are allocated
+together, and an implementation must not allocate a separate element buffer. The `typeId`
+is unused for dispatch or casting.
 
 `Array<T>` is already a reference type. `&Array<T>` is not allowed, and
 `*Array<T>` is a raw pointer to the array allocation/header. Use indexing on
 `Array<T>` for normal element access. A null `Array<T>` handle is permitted;
 use `Opt<Array<T>>` when absence should be explicit.
 
-```text
-var first: Array<Int32> = Array<Int32>(3)
-first[0] = 10
-
-var second: Array<Int32> = first   // shares the same allocation
-second[0] = 20
-first[0]                         // 20
-```
-
-The array count is immutable after construction for the initial implementation.
-The elements themselves are mutable through indexing or other element-update
-operations. An array cannot be grown or shrunk; `List<T>` is the resizable
-sequence type.
+The array count is immutable after construction. The elements themselves are mutable
+through indexing or other element-update operations. An array cannot be grown or shrunk;
+`List<T>` is the resizable sequence type.
 
 ### Minimal `Array<T>` API
 
@@ -345,16 +248,14 @@ The minimally supported `Array<T>` operations are:
 - `arrayEmpty<T>(): Array<T>`, the **shared** empty array of `T`: every call
   returns the same zero-length array, so an empty array never allocates, and a
   defaulted `Array<T>` is that array rather than a null handle;
-- `Array<T>.toList(): List<T>`, the growable copy - an array is fixed length, so
-  adding an element goes through a list (`array.toList()` + `append` +
-  `toArray()`), and
+- `Array<T>.toList(): List<T>`, the growable copy - an array is fixed length, so adding an
+  element goes through a list, and
 - `List<T>.toArray(): Array<T>`, the fixed-length copy of a list
   (`specs/containers.md`).
 
-Both conversions copy the elements; only the *allocation* is shared (assignment
-of an array copies the handle, not the elements).
+Both conversions copy the elements; only the allocation is shared (assignment of an
+array copies the handle, not the elements).
 
-```text
 ## Relationship between containers
 
 | Type | Storage | Copy/assignment behavior | Owns lifetime? |

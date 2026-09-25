@@ -317,12 +317,11 @@ data class Analyzer(
     }
 
     // Appends `decl` under `key` in `map`, keyed by "pkg|name" (global) or bare name
-    // (visible); List/Dictionary are value types, hence the read-append-write-back.
+    // (visible); `getPtr` gives the dictionary's own list, so the append needs no write-back.
     fun appendGlobalFunction(key: *Str, decl: *AstXmlNode): Unit {
-        if (this.globalFunctions.has(key)) {
-            var existing: List<AstXmlNode> = this.globalFunctions.get(key).value()
+        val existing: *List<AstXmlNode> = this.globalFunctions.getPtr(key)
+        if (existing != null) {
             existing.append(decl)
-            this.globalFunctions.insert(key, existing)
         } else {
             var fresh: List<AstXmlNode> = List<AstXmlNode>()
             fresh.append(decl)
@@ -331,10 +330,9 @@ data class Analyzer(
     }
 
     fun appendPackageDecl(pkg: *Str, decl: *AstXmlNode): Unit {
-        if (this.packageDecls.has(pkg)) {
-            var existing: List<AstXmlNode> = this.packageDecls.get(pkg).value()
+        val existing: *List<AstXmlNode> = this.packageDecls.getPtr(pkg)
+        if (existing != null) {
             existing.append(decl)
-            this.packageDecls.insert(pkg, existing)
         } else {
             var fresh: List<AstXmlNode> = List<AstXmlNode>()
             fresh.append(decl)
@@ -343,10 +341,9 @@ data class Analyzer(
     }
 
     fun appendVisibleFunction(name: *Str, decl: *AstXmlNode): Unit {
-        if (this.functions.has(name)) {
-            var existing: List<AstXmlNode> = this.functions.get(name).value()
+        val existing: *List<AstXmlNode> = this.functions.getPtr(name)
+        if (existing != null) {
             existing.append(decl)
-            this.functions.insert(name, existing)
         } else {
             var fresh: List<AstXmlNode> = List<AstXmlNode>()
             fresh.append(decl)
@@ -447,8 +444,8 @@ data class Analyzer(
             val pkg: Str = packages[p]
             if (!seen.contains(pkg)) {
                 seen.append(pkg)
-                if (this.packageDecls.has(pkg)) {
-                    val decls: List<AstXmlNode> = this.packageDecls.get(pkg).value()
+                val decls: *List<AstXmlNode> = this.packageDecls.getPtr(pkg)
+                if (decls != null) {
                     var d: Int = 0
                     while (d < decls.size()) {
                         val decl: AstXmlNode = decls[d]
@@ -534,8 +531,9 @@ data class Analyzer(
 
     fun checkInstantiationArity(name: *Str, argCount: Int, line: Int, column: Int): Unit {
         var expected: Int = -1
-        if (this.types.has(name)) {
-            expected = xmlCount(this.types.get(name).value(), AstNodeKind.TypeParam)
+        val typeDecl: *AstXmlNode = this.types.getPtr(name)
+        if (typeDecl != null) {
+            expected = xmlCount(typeDecl, AstNodeKind.TypeParam)
         } else {
             expected = semaBuiltinGenericArity(name)
         }
@@ -934,8 +932,8 @@ data class Analyzer(
     fun checkGenericNameArity(expr: *AstXmlNode): Unit {
         val argCount: Int = xmlCount(expr, AstNodeKind.TypeArg)
         val name: Str = xmlAttr(expr, AstNodeAttributeKind.Name)
-        if (this.functions.has(name)) {
-            val overloads: List<AstXmlNode> = this.functions.get(name).value()
+        val overloads: *List<AstXmlNode> = this.functions.getPtr(name)
+        if (overloads != null) {
             for (*overload in overloads) {
                 if (xmlCount(overload, AstNodeKind.TypeParam) == argCount) {
                     return
@@ -1001,10 +999,10 @@ data class Analyzer(
             if (name == "StrView") {
                 return true
             }
-            if (!this.types.has(name)) {
+            val decl: *AstXmlNode = this.types.getPtr(name)
+            if (decl == null) {
                 return false
             }
-            val decl: AstXmlNode = this.types.get(name).value()
             if (xmlKind(decl) != AstNodeCategory.TypeAlias) {
                 return false
             }
@@ -1044,10 +1042,10 @@ data class Analyzer(
     // takes it when the argument is (or may be) a view. `checkCallArity` sees only the
     // first arity match, but two overloads may differ in parameter shape.
     fun viewArgHasOverload(callee: *Str, argCount: Int, index: Int, arg: *AstXmlNode): Bool {
-        if (!this.functions.has(callee)) {
+        val overloads: *List<AstXmlNode> = this.functions.getPtr(callee)
+        if (overloads == null) {
             return false
         }
-        val overloads: List<AstXmlNode> = this.functions.get(callee).value()
         for (*overload in overloads) {
             if (xmlCount(overload, AstNodeKind.Param) != argCount) {
                 continue
@@ -1118,8 +1116,8 @@ data class Analyzer(
         val argCount: Int = xmlCount(call, AstNodeKind.Arg)
 
         // A construction is not a call: the argument count must match the field count.
-        if (this.types.has(name)) {
-            val decl: AstXmlNode = this.types.get(name).value()
+        val decl: *AstXmlNode = this.types.getPtr(name)
+        if (decl != null) {
             if (xmlKind(decl) == AstNodeCategory.DataClass) {
                 val fieldCount: Int = xmlCount(decl, AstNodeKind.Field)
                 if (fieldCount != argCount) {
@@ -1134,14 +1132,14 @@ data class Analyzer(
             }
         }
 
-        if (!this.functions.has(name)) {
+        val overloads: *List<AstXmlNode> = this.functions.getPtr(name)
+        if (overloads == null) {
             return
         }
         var typeArgCount: Int = 0
         if (generic) {
             typeArgCount = xmlCount(callee, AstNodeKind.TypeArg)
         }
-        val overloads: List<AstXmlNode> = this.functions.get(name).value()
         for (*overload in overloads) {
             if (generic && xmlCount(overload, AstNodeKind.TypeParam) != typeArgCount) {
                 continue
@@ -1257,10 +1255,10 @@ data class Analyzer(
     // `List<T>` takes any `List<...>`, a type parameter takes anything. An undecidable
     // name stays silent; the emitted call is resolved with full unification in `codegen`.
     fun hasWrap(wrap: *Str, receiverType: *AstXmlNode): Bool {
-        if (!this.functions.has(wrap)) {
+        val overloads: *List<AstXmlNode> = this.functions.getPtr(wrap)
+        if (overloads == null) {
             return false
         }
-        val overloads: List<AstXmlNode> = this.functions.get(wrap).value()
         var i: Int = 0
         while (i < overloads.size()) {
             val candidate: *AstXmlNode = *overloads[i]
@@ -1328,10 +1326,10 @@ data class Analyzer(
         } else {
             return xmlEmptyNode()
         }
-        if (!this.functions.has(name)) {
+        val overloads: *List<AstXmlNode> = this.functions.getPtr(name)
+        if (overloads == null) {
             return xmlEmptyNode()
         }
-        val overloads: List<AstXmlNode> = this.functions.get(name).value()
         var known: AstXmlNode = xmlEmptyNode()
         for (*overload in overloads) {
             val declared: *AstXmlNode = xmlChildPtr(overload, AstNodeKind.ReturnType)
@@ -1355,7 +1353,8 @@ data class Analyzer(
             return
         }
         val name: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
-        if (!this.functions.has(name)) {
+        val overloads: *List<AstXmlNode> = this.functions.getPtr(name)
+        if (overloads == null) {
             return
         }
         val actual: AstXmlNode = this.exprType(xmlChildPtr(callee, AstNodeKind.Receiver))
@@ -1364,7 +1363,6 @@ data class Analyzer(
         }
         val argCount: Int = xmlCount(call, AstNodeKind.Arg)
         var compatible: Bool = false
-        val overloads: List<AstXmlNode> = this.functions.get(name).value()
         for (*fn in overloads) {
             var receiver: AstXmlNode = xmlEmptyNode()
             var valueParamCount: Int = 0

@@ -1,9 +1,8 @@
 # Statics: implementation plan
 
-Status: slice 1 (file-level `var`/`val`) implemented in both rings and green; the
-`object` slices (2-5) are specified here, not implemented. The language rules are
-`specs/statics.md`. This file is the contract for the work: the AST schema, the
-emitted shapes, and the slices each ring implements in lockstep.
+Status: slice 1 (file-level `var`/`val`) implemented and green; the `object` slices (2-5) are
+specified here, not implemented. Language rules: `specs/statics.md`. This file is the
+contract: the AST schema, the emitted shapes, and the slices.
 
 ## AST schema
 
@@ -30,9 +29,9 @@ data classes and `Var` for its fields.
 
 ## Emitted shapes
 
-The language's rules (`specs/statics.md`) map onto plain C++ globals plus one
-generated pass. Storage is value-initialized, so it starts empty; the pass
-assigns the initializers; `main` calls the pass first.
+The language's rules (`specs/statics.md`) map onto plain C++ globals plus one generated pass:
+storage is value-initialized (starts empty), the pass assigns the initializers, and `main` calls
+the pass first.
 
 ```cpp
 // package counters:  var requests: Int = 0
@@ -57,20 +56,17 @@ int main() {
 }
 ```
 
-A generic object cannot be enumerated by looking at its declaration, so the
-emitter **collects its instantiations at reification time**
-(`impl_specs/reification.md`, below in this file):
+A generic object cannot be enumerated from its declaration, so the emitter **collects its
+instantiations at reification time** (`impl_specs/reification.md`, below):
 
-- every mention of an object with **concrete** type arguments
-  (`Cache<Int>`, in a type position, a member access or a call) is recorded as
-  (object, rendered arguments), deduplicated by that rendered text - the same text
-  the emitted C++ uses, so the pass names the instance exactly as the program
-  does;
-- a mention inside a **generic body** is recorded against that body as a template
-  mention (object name plus the argument expression as written, type parameters
-  and all). When the body is itself reified with concrete arguments - the only
-  way its code can run - the recorded mentions are substituted and joined to the
-  concrete set.
+- every mention of an object with **concrete** type arguments (`Cache<Int>`, in a type
+  position, a member access or a call) is recorded as (object, rendered arguments),
+  deduplicated by that rendered text - the same text the emitted C++ uses, so the pass names
+  the instance exactly as the program does;
+- a mention inside a **generic body** is recorded against that body as a template mention
+  (object name plus the argument expression as written, type parameters and all). When the
+  body is itself reified with concrete arguments - the only way its code can run - the
+  recorded mentions are substituted and joined to the concrete set.
 
 The pass then emits, for each collected instantiation, that instantiation's
 initializers against its instance. The mention that never gets a concrete
@@ -134,35 +130,29 @@ Accesses: `requests` -> `ns1_requests`; `Defaults.retries` ->
 
 ## Slices
 
-Each slice lands in BOTH rings (`cppsrc/**/*.kt` and the C++ mirror), keeps the
-five differentials byte-identical and the bootstrap fixed point intact, and adds
-its own `stress/<name>` case.
+Each slice keeps the five differentials byte-identical and the bootstrap fixed point intact,
+and adds its own `stress/<name>` case.
 
-1. **File-level `var`/`val`.** Parser: a top-level `var`/`val` declaration.
-   Sema: statics in the module symbol table, and expression-name resolution
-   (locals and parameters shadow statics). Codegen: storage, the pass, and the
-   call at the top of `main`, plus expression names.
+1. **File-level `var`/`val`.** Parser: a top-level `var`/`val` declaration. Sema: statics in
+   the module symbol table, and expression-name resolution (locals and parameters shadow
+   statics). Codegen: storage, the pass, and the call at the top of `main`, plus expression
+   names.
 
-   *Landed.* The declaration role is `Var`, the parser requires the `:` type (a
-   missing annotation reports `expected ':'`), the module scope is pushed per
-   file by `buildVisible` and popped by `run`, and codegen collects the
-   declarations in source order into `statics`/`staticsByName` (prelude statics
-   are skipped) and emits them before the function prototypes, so
-   `simse_initStatics` and `main` can both call them. `stress/statics` pins it;
-   `tools/array_layout_probe.cpp` pins the empty-array sharing that slice 4
-   depends on.
+   *Landed.* The declaration role is `Var`, the parser requires the `:` type (a missing
+   annotation reports `expected ':'`), the module scope is pushed per file by `buildVisible`
+   and popped by `run`, and codegen collects the declarations in source order into
+   `statics`/`staticsByName` (prelude statics skipped) and emits them before the function
+   prototypes, so `simse_initStatics` and `main` can both call them. `stress/statics` pins it;
+   `tools/array_layout_probe.cpp` pins the empty-array sharing slice 4 depends on.
 
    *First use in the compiler:* the scanner's three tables (`reservedWordTable`,
-   `multiCharOperatorTable`, `tokenRuleTable` in `cppsrc/lex/Scanner.kt`) are
-   file-level statics: the pass builds each one once and the hot comparisons read
-   them through a raw pointer (`*List<T>`), where an accessor returning a
-   `List<Str>` rebuilt the table per call - `matchOperator` runs for every token,
-   so that was an allocation per token. The driver contract this adds: the emitted
-   pass is named `simse_initStatics` and `main` calls it when the program has one
-   (`emitFunction` emits the call), so a host that links a generated component
-   **without** a `main` of its own - `tests/*_simse_main.cpp`, the differential
-   drivers - must call `simse_initStatics()` before using the component. Those
-   four drivers do.
+   `multiCharOperatorTable`, `tokenRuleTable` in `cppsrc/lex/Scanner.kt`) are file-level
+   statics: the pass builds each once and the hot comparisons read them through a raw pointer
+   (`*List<T>`), where an accessor returning a `List<Str>` rebuilt the table per call -
+   `matchOperator` runs for every token, so that was an allocation per token. The driver
+   contract this adds: the pass is named `simse_initStatics`, and a host that links a generated
+   component **without** a `main` of its own - `tests/*_simse_main.cpp`, the differential
+   drivers - must call `simse_initStatics()` before using the component (those four do).
 2. **`object` (non-generic).** Parser: `object` with `Var` members. Sema: the
    object name in the declaration namespace; `Name.field` in expressions and as
    an assignment target. Codegen: the struct, the instance, pass entries, member

@@ -10,8 +10,6 @@ and copying a data class copies each field according to that field's type
 semantics. A data class is not implicitly heap allocated or reference counted;
 use `&T` when shared identity is required.
 
-The first supported user-defined type is `Point`:
-
 ```text
 data class Point(var x: Int, var y: Int)
 ```
@@ -20,26 +18,8 @@ Fields are separated by `,` (Kotlin's spelling; the list may be wrapped across l
 and a `;` is accepted there too). The declaration is otherwise line-oriented: a field
 list that runs over several lines continues until the `)`.
 
-The constructor has the same field order as the declaration:
-
-```text
-val origin = Point(0, 0)
-var point = Point(1, 2)
-
-point.x = 10
-point.y = 20
-```
-
-`Point(1, 2)` constructs a value, not a counted reference. Boxing is explicit:
-
-```text
-val point = Point(1, 2)
-var refPoint: &Point = &point   // fresh, non-null boxed copy
-
-refPoint.x = 3                  // mutates the boxed Point
-point.x                         // still 1; boxing copied the value
-refPoint = null                 // reference variables may later be null
-```
+`Point(1, 2)` constructs a value, not a counted reference; `&point` is a fresh, non-null
+boxed copy (boxing copies the value), and a `&T` variable may later be `null`.
 
 ### Fields and `var`/`val`
 
@@ -48,17 +28,8 @@ Each data-class field is declared with either `var` or `val`:
 - `var name: T` is mutable after construction.
 - `val name: T` is immutable after construction.
 
-The same keywords apply to local variables and parameters:
-
-```text
-val immutablePoint = Point(1, 2)
-var mutablePoint = Point(1, 2)
-
-mutablePoint.x = 4
-// immutablePoint.x = 4   // compile-time error: immutablePoint is a val
-```
-
-`val` prevents rebinding or mutation through that variable. It does not make a
+The same keywords apply to local variables and parameters. `val` prevents rebinding
+or mutation through that variable. It does not make a
 referenced object immutable: a `val ref: &Point` cannot be assigned a different
 reference, but the pointed-to `Point` may still be changed through another
 mutable handle. A `val` data-class field likewise prevents assigning that field;
@@ -76,11 +47,10 @@ are compiled as static receiver functions; see `functions.md`.
 
 ## `enum class`
 
-`enum class` declares a named integer-backed type, similar to a C# enum. The
-`class` keyword is required - an enum is a class of constants, spelled the way
-Kotlin spells it, so a bare `enum Name` is a syntax error. Each member has an
-integer representation. If no explicit value is supplied, the first member is `0`
-and each following member increments by one.
+`enum class` declares a named integer-backed type. The `class` keyword is required: a
+bare `enum Name` is a syntax error. Each member has an integer representation; if no
+explicit value is supplied, the first member is `0` and each following member increments
+by one.
 
 ```text
 enum class Color {
@@ -92,24 +62,11 @@ enum class Color {
 ```
 
 The enum is a distinct type for declarations and function signatures, but its
-runtime representation is `Int` and its size/alignment are those of `Int`:
+runtime representation is `Int` and its size/alignment are those of `Int`.
 
-```text
-var color: Color = Color.Green
-var code: Int = color.toInt()     // 1
-var other: Color = Color.fromInt(4)
-```
-
-`fromInt` is the **direct cast back** to the enum, unchecked: an enum's runtime
-representation is `Int`, so an integer that names no member is still that value (the
-casting conversion is defined for every `Int` - a scoped `enum class` holds the whole
-range of its underlying type). Converting an enum to `Int` is always valid, and it is
-the same kind of operation. Implicit conversion between `Int` and an enum is not
-allowed; use `toInt()` or `fromInt(...)` explicitly.
-
-Enum members are immutable constants. Duplicate integer values are allowed, so
-multiple names may represent the same value; `fromInt` returns the enum value
-but does not promise which alias name is preferred for display.
+Implicit conversion between `Int` and an enum is not allowed; use `toInt()` or
+`fromInt(...)` explicitly. Enum members are immutable constants, and duplicate integer
+values are allowed, so several names may represent the same value.
 
 ### Enum member qualification
 
@@ -133,15 +90,6 @@ Every declared enum has two conversions, emitted by the compiler for that enum:
   value that several names share; it does not promise which alias name is
   preferred.
 
-The two are the two directions of one relation, which is what "the enum is `Int` at
-runtime" means in the type system: `toInt` never fails, and `fromInt` is the cast it
-inverts.
-
-(Earlier drafts had `fromInt(n: Int): Opt<EnumType>`, the checked form. It is the cast
-now: the runtime representation is an `Int`, so an `Opt` around the result would carry a
-membership test the language does not perform anywhere else - `Color.fromInt(9)` is not
-"no color", it is the value `9` seen as a `Color`.)
-
 ```text
 var code: Int = Color.Green.toInt()          // 4
 var other: Color = Color.fromInt(4)         // Color.Green
@@ -163,12 +111,11 @@ full rules.
 Status: required for the first implementation.
 
 Module-level declarations (functions, `data class`, `enum class`, `typealias`, and the
-file-level `var`/`val` of `specs/statics.md`) are **hoisted**. They are visible
-throughout the module regardless of textual order,
-like Kotlin, Java, or C#. Declarations may be referenced before their textual
-definition, and mutually recursive functions need no source-level forward
-declaration. Methods within a class body are likewise order-independent relative
-to one another and to the class's fields.
+file-level `var`/`val` of `specs/statics.md`) are hoisted: visible throughout the module
+regardless of textual order. Declarations may be referenced before their textual
+definition, and mutually recursive functions need no forward declaration. Methods within
+a class body are likewise order-independent relative to one another and to the class's
+fields.
 
 Local variables are **not** hoisted: a local is visible only from its declaration
 onward, so a local use-before-declaration is an error.

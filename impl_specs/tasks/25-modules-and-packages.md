@@ -15,14 +15,13 @@ resolution only, never which files are compiled.
 
 ## Motivation
 
-Imports grew out of a directory-based draft (`import a.b.c` meant the directory
-`./a/b/c`, with a silent fallback to it when no file declared the package). That
-couples resolution to the working directory and the scan root and gives `package`
-no fixed meaning. The design in `specs/modules.md` separates the two: modules are
-the physical unit (directories on module roots) and packages are the logical unit
-(namespaces declared per file, independent of layout). Several modules may
-contribute to one package, and resolution by package name is layout-independent
-and identical wherever the compiler is invoked.
+The design in `specs/modules.md` separates modules (the physical unit: directories on module
+roots) from packages (the logical unit: namespaces declared per file, independent of layout).
+Several modules may contribute to one package, and resolution by package name is
+layout-independent and identical wherever the compiler is invoked. An earlier directory-based
+draft (`import a.b.c` meant `./a/b/c`, with a silent fallback when no file declared the
+package) coupled resolution to the working directory and the scan root and gave `package` no
+fixed meaning.
 
 ## Scope
 
@@ -90,13 +89,12 @@ Out:
 
 ## Implementation notes
 
-- **Loader (style A).** A compilation is the project module root (the `simse`
-  positional directory, or `--root`) plus each repeatable `--module-root`,
-  scanned recursively; every `.kt` found is included, and `simse_transpile`
-  also includes its explicit inputs. `import` never adds files. `parser`
-  `parseFileWithImports`/`collectImportSet` (and the Simse `ImportLoader`) were
-  removed; module scanning is `common::filesInDir` driven by `compiler::transpile`
-  and mirrored in `cppsrc/compiler/Driver.kt`.
+- **Loader (style A).** A compilation is the project module root (the `simse` positional
+  directory, or `--root`) plus each repeatable `--module-root`, scanned recursively; every
+  `.kt` found is included, and `simse_transpile` also includes its explicit inputs. `import`
+  never adds files. Module scanning is `common::filesInDir` driven by `compiler::transpile`
+  and mirrored in `cppsrc/compiler/Driver.kt` (the earlier
+  `parseFileWithImports`/`collectImportSet`/`ImportLoader` are gone).
 - **Sema is compilation-wide.** `sema::analyze(List<Input>)` (C++) and
   `analyze(List<SemaInput>)` (Simse) collect declarations grouped by declared
   package, report duplicate top-level names within a package (across files),
@@ -110,15 +108,15 @@ Out:
 
 ## Steps
 
-1. Make the `package` declaration mandatory and require it first (before imports
-   and other declarations) in both parsers.
-2. Scan the module roots into a package index; resolve imports by package name
-   only, removing the directory fallback.
+1. Make the `package` declaration mandatory and require it first (before imports and other
+   declarations) in both parsers.
+2. Scan the module roots into a package index; resolve imports by package name only, removing
+   the directory fallback.
 3. Put the prelude (`rtl`) packages in scope implicitly.
 4. Add duplicate-definition checking for top-level names shared across a package.
 5. Align the mirrors, fixtures, and goldens with mandatory package declarations.
-6. Validate the CLI behavior, the clean build, the differentials, the fixed
-   point, and `simse_tests`.
+6. Validate the CLI behavior, the clean build, the differentials, the fixed point, and
+   `simse_tests`.
 
 ## Risks / notes
 

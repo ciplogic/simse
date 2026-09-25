@@ -475,7 +475,7 @@ Scalars (`Int8..64`, `Float32/64`, `Char`, `Bool`), `Str` (with a method library
 `clear`, `contains`, `sort`, the literal `listOf<T>(a, b, c)` - one `Pack`
 instruction, inline up to four elements - the count constructions `List<T>(n)` /
 `List<T>(n, value)`, and a call whose last parameter is a `List<T>`/`*List<T>` packing
-its trailing arguments, `specs/functions.md`); `Dictionary<K,V>` (`get`/`has`/`insert`/`remove`/
+its trailing arguments, `specs/functions.md`); `Dictionary<K,V>` (`get`/`getPtr`/`has`/`insert`/`remove`/
 `keys`/`values`/`size`/`clear`); `Opt<T>`, `Res<T>` (with `Res<T>.ok/.err`,
 `Opt<T>.some/.none`); `Span<T>` (a borrowed view: pointer + length); `XmlNode`/`Attribute`;
 `data class` (with methods), `enum class` (with `toInt`/`fromInt`), `typealias`
@@ -615,11 +615,15 @@ Do these only when asked; roughly prioritized:
    (bucket-as-row-index, a second dependent load) leaves hit lookups on
    cache-resident tables ~1.8x slower. `SmallVector::operator[]`'s inline/heap
    branch per access and the cached-hash pre-test on hits are the other suspects.
-9. **`Dictionary` has no in-place access to a stored value** (T42): `get` copies
-   the value out and `insert` writes it back, so the 1BRC aggregation pays two
-   lookups per line where the C++ baseline pays one - the last gap to the Bun
-   reference (1.6x). A `getPtr`/`withValue`-style native is the
-   next library change; it is a library gap, not a language one.
+9. **`Dictionary` in-place access - done** (T42): `getPtr(key): *V` is the value's place
+   (or `null`), `get` is built on it and `has` is the pointer test, and the compiler's
+   own lookups use it, so a lookup of an `AstXmlNode`/`List` no longer deep-copies the
+   value. It also removed the `has`+`get` double lookup, and the
+   `get`-append-`insert` write-back in sema's symbol collection (the guide's §6 note
+   about `collectGlobal`'s copies) became an in-place append. The 1BRC's aggregation
+   went through it too: `get`+`insert` became one in-place update, worth 7% of that
+   loop (`benchmarks/onebrc/benchmark.md`). What is left of that gap is the two `Str`s
+   per line.
 10. **Lambda bodies are the last declarations without a type.** (What the inference
    proves, and why, is in `impl_specs/linear-lowering.md`, "Type inference on the
    lowered body" - not repeated here.) To close it: run `sema::inferTypes` on a

@@ -5,7 +5,7 @@ The [1BRC](https://github.com/gunnarmorling/1brc): read a file of
 sorted by station. This folder holds the *naive* Simse implementation, the C++ STL
 baseline it is compared against, and the generator/reference that both are checked
 against. **The measured result is in [`benchmark.md`](benchmark.md)** - the Simse
-program is 1.27x faster than the naive C++ one on 10M rows.
+program is 1.16x faster than the naive C++ one on 10M rows.
 
 Nothing here is optimized: no mmap, no chunked parsing, no per-station arrays, no
 threads. The point is a straight-line implementation in each language, measured on
@@ -13,7 +13,7 @@ the same data.
 
 | File | What it is |
 | --- | --- |
-| `src/main.kt` | the Simse implementation (package `onebrc`): a line at a time, each line parsed in place as a `StrView` |
+| `src/main.kt` | the Simse implementation (package `onebrc`): a line at a time, each line parsed in place as a `StrView`, each station's aggregate updated in place through `Dictionary.getPtr` |
 | `brc_naive.cpp` | the C++ baseline: `std::ifstream` + `std::getline` + `std::unordered_map<std::string, Stats>` + `std::stod` |
 | `build_naive.bat` | compiles the baseline with the release flags (`/O2 /Ob3 /DNDEBUG`) |
 | `onebrc.mjs` | `gen` writes a measurement file, `check` is the reference aggregate, `--selftest` covers its rounding/chunk logic |

@@ -60,8 +60,9 @@ fun linFoldLabelsIn(stmts: *List<AstXmlNode>, renames: *Dictionary<Str, Str>): B
         }
         if (linIsGoto(stmt) || linIsCondJump(stmt)) {
             val name: Str = xmlAttr(stmt, AstNodeAttributeKind.Name)
-            if (renames.has(name)) {
-                val target: Str = renames.get(name).value()
+            val targetPtr: *Str = renames.getPtr(name)
+            if (targetPtr != null) {
+                val target: Str = *targetPtr
                 out.append(linRetargetJump(stmt, target))
                 changed = true
                 continue

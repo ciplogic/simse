@@ -16,10 +16,11 @@ fun linResolveJumpTarget(start: Str, next: *Dictionary<Str, Str>): Str {
     var guard: Int = 0
     while (guard < 8) {
         guard = guard + 1
-        if (!next.has(current)) {
+        val stepPtr: *Str = next.getPtr(current)
+        if (stepPtr == null) {
             return current
         }
-        val step: Str = next.get(current).value()
+        val step: Str = *stepPtr
         if (step == current) {
             return current
         }
@@ -60,8 +61,9 @@ fun linThreadJumpsIn(stmts: *List<AstXmlNode>, threads: *Dictionary<Str, Str>): 
         i = i + 1
         if (linIsGoto(stmt) || linIsCondJump(stmt)) {
             val name: Str = xmlAttr(stmt, AstNodeAttributeKind.Name)
-            if (threads.has(name)) {
-                val target: Str = threads.get(name).value()
+            val targetPtr: *Str = threads.getPtr(name)
+            if (targetPtr != null) {
+                val target: Str = *targetPtr
                 if (target != name) {
                     out.append(linRetargetJump(stmt, target))
                     changed = true

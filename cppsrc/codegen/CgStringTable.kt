@@ -177,9 +177,10 @@ data class StringTable(
     // The pool index of `text`, or -1 when the walk never pooled it: the raw number, for a
     // writer that needs it rather than a site's spelling (`Emitter.emitResourceTable`).
     fun indexOf(text: *Str): Int {
-        if (!this.indexAt.has(text)) {
+        val index: *Int = this.indexAt.getPtr(text)
+        if (index == null) {
             return -1
         }
-        return this.indexAt.get(text).value()
+        return * index
     }
 }

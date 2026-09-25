@@ -155,6 +155,13 @@ Str simse_int_toString(Int self);
 template <class K, class V>
 Dictionary<K, V> simse_dictionaryOf();
 
+// `d.getPtr(key)`: the value's place in the dictionary, or `null` when the key is
+// absent - the read that copies nothing (`get` copies the value out, `has` is this with
+// the pointer tested). The place is the dictionary's own storage, so it is valid until
+// the next `insert`/`remove`/`clear` on that dictionary.
+template <class K, class V>
+V* simse_dict_getPtr(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
+
 // `d.get(key)`: the value for `key`, or an empty `Opt` when absent.
 template <class K, class V>
 Opt<V> simse_dict_get(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
@@ -243,7 +250,7 @@ Int ns1_countUntil(List<Str> names, Int limit);
 // stress/flat-blocks/src/main.kt:12
 Opt<Int> ns1_pick(Int i) {
     Bool _sm_expr1, _sm_expr3;
-    Opt<Int> _sm_expr2, _sm_expr4, _sm_expr5;
+    Opt<Int> _sm_expr2;
     _sm_expr1 = i < 0;
     if (!(_sm_expr1)) goto L2;
     _sm_expr2 = Opt<Int>::none();
@@ -251,29 +258,29 @@ Opt<Int> ns1_pick(Int i) {
     L2:;
     _sm_expr3 = i >= 10;
     if (!(_sm_expr3)) goto L4;
-    _sm_expr4 = Opt<Int>::none();
-    return _sm_expr4;
+    _sm_expr2 = Opt<Int>::none();
+    return _sm_expr2;
     L4:;
-    _sm_expr5 = Opt<Int>::some(i);
-    return _sm_expr5;
+    _sm_expr2 = Opt<Int>::some(i);
+    return _sm_expr2;
 }
 // stress/flat-blocks/src/main.kt:22
 Res<Str> ns1_parse(Int n) {
     Bool _sm_expr1;
-    Res<Str> _sm_expr2, _sm_expr3;
+    Res<Str> _sm_expr2;
     _sm_expr1 = n < 0;
     if (!(_sm_expr1)) goto L2;
     _sm_expr2 = Res<Str>::err(__sm_stringTable[0]);
     return _sm_expr2;
     L2:;
-    _sm_expr3 = Res<Str>::ok(__sm_stringTable[1]);
-    return _sm_expr3;
+    _sm_expr2 = Res<Str>::ok(__sm_stringTable[1]);
+    return _sm_expr2;
 }
 // stress/flat-blocks/src/main.kt:29
 Str ns1_describe(Int n) {
     Res<Str> r;
     Bool _sm_expr1, _sm_expr2;
-    Str _sm_expr3, _sm_expr4;
+    Str _sm_expr3;
     r = ns1_parse(n);
     _sm_expr1 = r.isOk();
     _sm_expr2 = !_sm_expr1;
@@ -281,12 +288,12 @@ Str ns1_describe(Int n) {
     _sm_expr3 = r.Error;
     return _sm_expr3;
     L2:;
-    _sm_expr4 = r.Value;
-    return _sm_expr4;
+    _sm_expr3 = r.Value;
+    return _sm_expr3;
 }
 // stress/flat-blocks/src/main.kt:37
 Int ns1_countUntil(List<Str> names, Int limit) {
-    Int i, _sm_expr1, _sm_expr4;
+    Int i, _sm_expr1;
     Bool _sm_expr2, _sm_expr3;
     i = 0;
     L1:;
@@ -300,8 +307,8 @@ Int ns1_countUntil(List<Str> names, Int limit) {
     i = i + 1;
     goto L1;
     L2:;
-    _sm_expr4 = names.size();
-    return _sm_expr4;
+    _sm_expr1 = names.size();
+    return _sm_expr1;
 }
 // stress/flat-blocks/src/main.kt:48
 int main() {
@@ -521,15 +528,20 @@ inline Dictionary<K, V> simse_dictionaryOf() {
 }
 
 template <class K, class V>
+inline V* simse_dict_getPtr(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
+    return self.valuePtr(key);
+}
+
+template <class K, class V>
 inline Opt<V> simse_dict_get(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
-    auto it = self.find(key);
-    if (it == self.end()) return Opt<V>::none();
-    return Opt<V>::some(it->second);
+    const V* found = simse_dict_getPtr(self, key);
+    if (found == nullptr) return Opt<V>::none();
+    return Opt<V>::some(*found);
 }
 
 template <class K, class V>
 inline Bool simse_dict_has(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
-    return self.find(key) != self.end();
+    return simse_dict_getPtr(self, key) != nullptr;
 }
 
 template <class K, class V>

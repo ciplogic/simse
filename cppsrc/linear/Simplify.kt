@@ -412,8 +412,9 @@ data class SimRenamer(
         var i: Int = this.scopes.size() - 1
         while (i >= 0) {
             val scope: *SimRenameScope = *this.scopes[i]
-            if (scope.renamed.has(name)) {
-                return scope.renamed.get(name).value()
+            val renamed: *Str = scope.renamed.getPtr(name)
+            if (renamed != null) {
+                return *renamed
             }
             i = i - 1
         }

@@ -4,43 +4,31 @@ Status: implementation baseline.
 
 ## Source files
 
-Simse source files use the `.kt` extension. A project may contain one or
-more `.kt` files, and the transpiler discovers and processes those files as
-the language source set.
-
-For example:
+Simse source files use the `.kt` extension. A project may contain one or more
+`.kt` files, and the transpiler discovers and processes those files as the
+language source set, e.g.:
 
 ```text
 main.kt
 cppsrc/lex/Scanner.kt
 ```
 
-The former `../cppsrc/main.kt` / `../cppsrc/main.cpp` sample pair has been
-removed; the comparison cases are now the compiler's own `.kt` sources and
-the fixtures under `tests/`.
-
 ## Generated C++ output
 
-The final transpilation result is one amalgamated `.cpp` file. It contains the
-generated C++ for all compiled `.kt` source files in the project, arranged so
-that it can be opened, compiled, stepped through, and debugged as one ordinary
-C++ translation unit.
+The final transpilation result is one amalgamated `.cpp` file containing the generated C++ for
+every compiled `.kt` file, arranged so it can be compiled and debugged as one ordinary C++
+translation unit - a first-class debugging artifact: when generated behavior is incorrect,
+developers inspect the C++ in a debugger and compare it with the intended Simse source and
+runtime behavior.
 
-The final `.cpp` file is intentionally a first-class debugging artifact. When
-the generated behavior is incorrect, developers can inspect the generated C++
-in a debugger such as Visual Studio and compare it with the intended Simse
-source and runtime behavior.
-
-The amalgamated file must preserve source mapping information where practical,
-for example with comments containing the originating `.kt` path and line
-range. Exact debugger mapping directives are an implementation detail, but the
-generated file must remain readable enough for manual comparison.
+The file must preserve source mapping where practical, for example with comments containing
+the originating `.kt` path and line range. Exact debugger mapping directives are an
+implementation detail, but the file must remain readable enough for manual comparison.
 
 ## Staged transpilation
 
-Transpilation is performed in stages. Each stage consumes the representation
-from the previous stage and produces the representation required by the next
-stage. At minimum, the implementation is expected to separate:
+Transpilation is staged; each stage consumes the previous stage's representation
+and produces the next stage's. At minimum the implementation separates:
 
 1. source discovery and loading;
 2. lexing/parsing;
@@ -51,9 +39,9 @@ stage. At minimum, the implementation is expected to separate:
    so the emitter only handles the linear statement forms); and
 6. C++ amalgamation and final file emission.
 
-The exact internal data structures and number of stages are implementation
-details. Stages may use temporary in-memory or on-disk artifacts, but the
-externally useful final artifact is the single amalgamated `.cpp` file.
+The exact data structures and number of stages are implementation details.
+Stages may use temporary in-memory or on-disk artifacts, but the externally
+useful final artifact is the single amalgamated `.cpp` file.
 
 If intermediate files are emitted for debugging, they must be clearly marked as
 generated stage output and must not be mistaken for the final output. Their
@@ -61,29 +49,21 @@ naming and retention policy are not yet fixed.
 
 ## Authority and comparison model
 
-The generated C++ file is the reference implementation for the transpiler's
-actual emitted behavior. The compiler may initially contain bugs, and the
-generated C++ exists specifically so those bugs can be inspected and compared
-in a native C++ debugger.
+The generated C++ file is the reference implementation for the transpiler's actual emitted
+behavior.
 
-The `.kt` source remains the language-level intent and the input to
-transpilation. Generated C++ is not edited as a way to change the language
-program; fixes should be made in the transpiler or Simse source and then
-regenerated.
+The `.kt` source remains the language-level intent and the input to transpilation. Generated
+C++ is not edited to change the language program; fixes go in the transpiler or Simse source
+and are then regenerated.
 
-When a behavior is not specified by a language or implementation spec, the
-generated C++ output is the authoritative behavior for that build. An explicit
-specification is the exception: the specification defines the required
-behavior, and generated C++ that contradicts it is a transpiler bug.
+When a behavior is not specified by a language or implementation spec, the generated C++
+output is authoritative for that build. An explicit specification is the exception: it defines
+the required behavior, and generated C++ that contradicts it is a transpiler bug.
 
-This gives the project two useful comparison points:
+The two comparison points:
 
 - `.kt`: intended source program;
 - final amalgamated `.cpp`: concrete emitted/reference implementation.
-
-The former `../cppsrc/main.kt` / `../cppsrc/main.cpp` pair was an example of
-this comparison workflow, not a requirement that every generated file remain
-manually edited side by side forever.
 
 ## Runtime and RTL boundary
 
@@ -92,10 +72,10 @@ remain hand-written C++ and are not required to be implemented in Simse.
 Transpiled Simse code may include and call the RTL, but the RTL itself is an
 implementation boundary rather than part of the self-hosted Simse source set.
 
-The RTL may therefore use C++ facilities, compiler intrinsics, platform APIs,
-and low-level memory operations that are not yet expressible in Simse. Its
-behavior must still satisfy the relevant language specifications when exposed
-to generated Simse code.
+The RTL may therefore use C++ facilities, compiler intrinsics, platform APIs, and
+low-level memory operations that are not yet expressible in Simse. Its behavior
+must still satisfy the relevant language specifications when exposed to generated
+Simse code.
 
 ## Final output requirements
 

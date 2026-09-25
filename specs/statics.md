@@ -68,9 +68,8 @@ Every static variable has the same shape:
 - the relative order of two static initializers is **not specified**: a program
   must not depend on one static being initialized before another.
 
-Storage starting empty rather than indeterminate is a guarantee, not a caveat: a
-read that happens before that variable's initializer has run yields the empty
-value, never undefined data. What is unspecified is *which* initializers ran.
+A read before that variable's initializer has run yields the empty value, never
+undefined data; what is unspecified is which initializers ran.
 
 Static variables are hoisted like every other module-level declaration
 (`specs/declarations.md`), so a function may reference a static declared later in
@@ -84,10 +83,8 @@ that mentions `Cache<T>` - the pass initializes that instantiation's variables
 before the body of `main`. Instantiations the compiler cannot enumerate are the
 residual case: a mention that stays behind a type parameter and is never reified
 concretely from the program's own code is initialized on **first use** instead.
-Either way the initializer of a given instantiation runs **exactly once**, in
-whichever path reaches it first; a read never runs it again. That is observable
-only through the rule above - order between statics is unspecified, and a
-partially initialized program is never observed.
+Either way the initializer of a given instantiation runs exactly once, in whichever
+path reaches it first; a read never runs it again.
 
 Initializers are ordinary expressions evaluated in the pass: there is no
 compile-time evaluation and no `const` in this feature. Constant folding is

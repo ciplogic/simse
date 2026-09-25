@@ -5,14 +5,11 @@ Status: design baseline — modules, packages, and imports for the first impleme
 
 ## Modules (physical)
 
-A **module is a directory** containing Simse source files (`.kt` - Kotlin's
-extension, because Simse is a Kotlin-flavored dialect, so an editor's Kotlin mode
-highlights it and the file name says what the file is); any
-subdirectory is a submodule. Modules are the physical unit of source
-organization: the compiler is given one or more **module roots** and scans them,
-including every `.kt` file it finds. An external module — a separately
-supplied library, comparable to a .NET class library — is brought in by placing
-its directory on a module root.
+A **module is a directory** containing Simse source files (`.kt`); any subdirectory is a
+submodule. Modules are the physical unit of source organization: the compiler is given one
+or more **module roots** and scans them, including every `.kt` file it finds. An external
+module - a separately supplied library - is brought in by placing its directory on a module
+root.
 
 ## Packages (logical)
 
@@ -47,12 +44,10 @@ with the operations that come with them:
 - the callable type form `(A, B) -> R`;
 - the runtime's tree types `XmlNode` and `Attribute`.
 
-`rtl` is the **implicit import**: every file is compiled as if it began with
-`import rtl`, so these names need no import and no qualifier. It is the same
-mechanism as an explicit `import` (below) - the only difference is that no file
-writes it. Nothing else about `rtl` is special: it is an ordinary package that
-several modules may contribute to, which is exactly how the runtime's surface is
-assembled from the prelude files.
+`rtl` is the **implicit import**: every file is compiled as if it began with `import rtl`,
+so these names need no import and no qualifier. It is the same mechanism as an explicit
+`import` (below), only not written. Nothing else about `rtl` is special: it is an ordinary
+package that several modules may contribute to.
 
 ### Deferred: multiple packages per file
 
@@ -64,8 +59,8 @@ initially: the first implementation supports exactly one package per file.
 
 ## Imports
 
-`import a.b.c` brings the package `a.b.c` into unqualified scope, comparable to
-`using` in .NET. It does not add files to the compilation.
+`import a.b.c` brings the package `a.b.c` into unqualified scope. It does not add files to
+the compilation.
 
 - The compiler already includes every `.kt` file found under the scanned
   module roots; `import` only affects how names are written.
@@ -85,11 +80,9 @@ wherever the compiler is invoked.
 
 ### Implementation status
 
-Everything in this spec is implemented: the first implementation resolves
-`import`ed packages into unqualified scope, reports an import of a package that
-no scanned file declares, and treats `rtl` as implicitly in scope.
-Fully-qualified `a.b.c.Name` access is out of scope, not a pending item: there is
-no qualified-name form, and declarations are referenced by their simple names.
+Implemented: `import`ed packages resolve into unqualified scope, an import of a package no
+scanned file declares is an error, and `rtl` is implicitly in scope. There is no
+qualified-name form.
 
 ## External modules (deferred)
 
@@ -101,8 +94,8 @@ directory to a module root.
 
 The manifest half of this is `specs/simse-md.md`: a root's `simse.md` names the modules the
 project is built from (implemented - a root with a manifest is scanned as exactly the modules
-it names), a module's own `simse.md` may declare `sourcegen: true` (read and reported; using
-such a module is a hard error until the compiler can be extended by it), and a module that
+it names); a module's own `simse.md` may declare `sourcegen: true` (read and reported; using
+such a module is a hard error until the compiler can be extended by it); and a module that
 ships source generators makes the project compile with a compiler *extended* by them.
 
 ## What a package is not

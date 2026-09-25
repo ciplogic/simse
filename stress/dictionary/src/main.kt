@@ -1,5 +1,5 @@
 package fixtures
-// Exercises the Dictionary surface and the List extras (T20): insert, get, has,
+// Exercises the Dictionary surface and the List extras (T20): insert, get, getPtr, has,
 // size, keys/values (sorted for determinism), contains, sort, remove, clear.
 
 fun main(): Int {
@@ -12,6 +12,19 @@ fun main(): Int {
     println(counts.size())
     println(counts.get("a").value())
     println(counts.has("z"))
+
+    // `getPtr` hands out the value's place: `null` when the key is absent, and a write
+    // through it reaches the entry. The write is the *first* statement of its block on
+    // purpose: a statement starting with `*` after another statement is read as a
+    // multiplication continuation (`*p = v` on its own line means `... * p = v`), so a
+    // deref write belongs first in a block or in parentheses.
+    val present: *Int = counts.getPtr("b")
+    if (present != null) {
+        *present = 21
+        println(*present)
+    }
+    println(counts.get("b").value())
+    println(counts.getPtr("z") == null)
 
     var names: List<Str> = counts.keys()
     names.sort((left: Str, right: Str) -> left < right)

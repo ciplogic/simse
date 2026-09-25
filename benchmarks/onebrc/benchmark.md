@@ -7,7 +7,7 @@ thing one writes, in both languages.
 
 | | |
 | --- | --- |
-| Simse | `src/main.kt` - `readLineView(): Opt<StrView>` parses each line **in place** |
+| Simse | `src/main.kt` - `readLineView(): Opt<StrView>` parses each line **in place**, and `Dictionary.getPtr` updates each station's aggregate **in place** |
 | C++ | `brc_naive.cpp` - `std::ifstream` + `std::getline` + `std::stod` + `std::unordered_map<std::string, Stats>` |
 | Reference | `onebrc.mjs check` - the aggregate in JavaScript, which both reports are compared against |
 
@@ -17,26 +17,29 @@ bytes (127.7 MiB), 100 stations.
 ## Result
 
 Windows on ARM64, MSVC (C++20) with `/O2 /Ob3 /DNDEBUG`, single-threaded. Each
-binary reports its own time over the read-and-aggregate loop (printing excluded);
-4 interleaved pairs (baseline, Simse, baseline, Simse, ...) because this machine
-throttles under load, with the Bun reference aggregate in the same loop as a canary
-for the machine's state; min/median of the four:
+binary reports its own time over the read-and-aggregate loop (printing excluded),
+and the legs are interleaved round by round (baseline, Simse legs, canary) because
+this machine throttles under load; min/median of the five rounds:
 
 | Implementation | Time (min/median) | Throughput | Peak working set |
 | --- | --- | --- | --- |
-| **Simse, parsing in place (`readLineView`)** | **1093 / 1106 ms** | **123 / 121 MB/s** | 6.5 MB |
-| C++ STL baseline | 1390 / 1405 ms | 96 / 95 MB/s | 5.9 MB |
-| Bun reference aggregate (`check`) | 712 ms | 188 MB/s | — |
+| **Simse: in-place parse, in-place aggregate (`readLineView`, `getPtr`)** | **1157 / 1167 ms** | **116 / 115 MB/s** | 6.5 MB |
+| C++ STL baseline | 1340 / 1360 ms | 100 / 98 MB/s | 5.9 MB |
+| Bun reference aggregate (`check`) | 673 / 677 ms | 199 / 198 MB/s | — |
 
-**The Simse program is 1.27x faster than the naive C++ one** on the same data, and
-1.54x behind the JavaScript reference. Both programs' reports are byte-identical to
-the reference (100 stations, values in exact tenths).
+**The Simse program is 1.16x faster than the naive C++ one** on the same data, and
+1.72x behind the JavaScript reference. All three reports are byte-identical to each
+other (100 stations, values in exact tenths).
+
+**The `getPtr` change is worth 7% of the loop**, and it is the one number here that
+does not depend on the session: the same source with `get`+`insert` and with `getPtr`
+ran **1246 / 1256 ms against 1157 / 1167 ms**, in the same five interleaved rounds,
+with no round of either leg overlapping the other.
 
 The ratio is one session's number, not a constant: measured in the same style on the
-same data it has run **1.26x-1.40x**, because the C++ baseline varies more than the
-Simse program does (1390-1580 ms against 1056-1177 ms across sessions, each with the
-reference leg as a canary - 705-727 ms in the cool sittings). The Simse side is the
-stable one.
+same data it has run **1.16x-1.40x**, because the C++ baseline varies more than the
+Simse program does (1340-1580 ms against 1056-1177 ms across sessions, each with the
+reference leg as a canary - 673-727 ms). The Simse side is the stable one.
 
 ## Where the time goes
 
@@ -51,9 +54,12 @@ stable one.
   `Str`). Both are small enough to stay in `Str`'s inline buffer, but they are the
   obvious next thing to remove - `StrView.toInt()` and a `StrView`-keyed lookup
   would do it. See `guide4ai.md` section 8.
-- **The dictionary costs two lookups per line.** `get` then `insert`, because the
-  API has no in-place access to a stored value. The C++ baseline does one. That is
-  a library gap, not a language one, and is the single largest remaining item.
+- **The dictionary costs one lookup per line now.** The program used to do `get` then
+  `insert` - two lookups, a copy out and a copy back - because the API had no in-place
+  access to a stored value. `Dictionary.getPtr` hands back the value's *place*, so the
+  aggregate is updated where it lives (`stats->min = value` in the emitted C++), and
+  that is the 7% measured above. The C++ baseline's `operator[]` always worked this
+  way: the gap was the library's, not the language's.
 - **Memory is a wash.** 6.5 MB against 5.9 MB peak working set: neither program
   holds the file, and the dictionary of 100 stations dominates both.
 - **The flat-IL hoisting costs nothing here.** Every declaration of a body now lives at
@@ -63,6 +69,12 @@ stable one.
   pairs, one session, both binaries on the same data). Longer lifetimes and no liveness
   reuse are not free in general, but on this workload they are not visible - the
   reader's advantage is unchanged.
+- **The linear passes added since cost nothing here either.** `mergeLocals`,
+  `deadStores` and `deadLocals` (`cppsrc/optimizations/usedef`) A/B'd the same way:
+  this program built by the compiler from before them ran **1148 / 1154 ms** against
+  **1157 / 1167 ms** for the current one (min/median of the same five rounds, the two
+  legs' rounds overlapping). A loop bound by the reader and the dictionary does not
+  notice a few locals sharing storage.
 
 For context, the reader alone is worth **1.88x** on this workload. Measured the
 same way on the same data while the benchmark still had all three modes (the
@@ -75,7 +87,7 @@ readers all remain in the RTL, `impl_specs/rtl-abi.md`):
 | `readLineView(): Opt<StrView>` | 1087 / 1088 ms | nothing - a span into the buffer |
 
 (The in-place row was measured before the view became a `StrView`: the same code
-path the table above runs, which re-measured at 1093/1106 ms as the whole program.)
+path the table above runs, whose whole-program number in that session was 1093/1106 ms.)
 
 ## Reproducing it
 
@@ -123,3 +135,7 @@ bun benchmarks\onebrc\onebrc.mjs check benchmarks\onebrc\data\measurements.txt
 - **Station names.** The built-in list is 100 ASCII names; `--stations <csv>` takes
   the official `weather_stations.csv`. Sorting is byte order on both sides, so
   non-ASCII names would need the same collation everywhere.
+- **Updating the aggregate in place.** `getPtr` returns the dictionary's own storage,
+  valid until the next `insert`/`remove`/`clear`; `fold` writes through it and returns
+  without inserting. `get` returns a copy, which is what the old shape needed: read
+  the aggregate out, and insert it back.

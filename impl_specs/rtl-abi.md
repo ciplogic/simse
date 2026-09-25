@@ -2,51 +2,33 @@
 
 Status: decision recorded for the first end-to-end slice (T6).
 
-This document fixes the runtime representation that generated C++ targets and
-records where that representation diverges from `specs/`. It exists so the
-bootstrap shims do not silently become the de-facto specification.
+The runtime representation generated C++ targets, and where it diverges from `specs/`
+(so the bootstrap shims do not become the de-facto specification).
 
-> **The operation layer of the RTL is moving into the language.** The types and
-> their layout stay hand-written C++ (the list above), and so does anything
-> hand-written C++ calls - but an operation whose only callers are Simse,
-> and whose body the language can express, is a prelude `fun` *with a body*
-> (`cppsrc/rtl/rtl.kt`) rather than a native: the compiler emits it, and it is
-> the same code in both rings. `min`, `max`, `fmtStr` and `Str.isEmpty` are
-> already there (`impl_specs/capability-matrix.md` T70, T71). What decides a
-> candidate is a grep: a symbol referenced only by the header that defines it has
-> no C++ caller left. Notably **blocked** today - and by design, not by accident -
-> are `Span<T>` and `StrView`: they are the *same type* now (`typealias StrView =
-> Span<Char>`), the operations above them (`spanOfStr`, `at`, `size`, `slice`,
-> `startsWith`, `toString`, `find`, `indexOf`, `isEmpty`, `charAt`, `substr`,
-> `startsWithPtr`) are the `strview` section of `_res.md` - generated text a
-> declaration reaches, not a header's - and the *literal interop* of `strview.hpp`
-> stays C++ because the C++ compiler's overload resolution reaches it, not a
-> declaration. No prelude declaration spells the old keyword any more: what is left of the
-> `cpp` generator is the type core (`impl_specs/generators.md`, "The `cpp`
-> generator").
+> **The RTL's operation layer lives in the language.** Types, layout and anything
+> hand-written C++ calls stay C++; an operation whose callers are all Simse and whose body
+> the language can express is a prelude `fun` *with a body* (`cppsrc/rtl/rtl.kt`), emitted
+> by the compiler. Candidate test: a symbol referenced only by the header that defines it.
+> `Span<T>`/`StrView` are the exception - `typealias StrView = Span<Char>`, their operations
+> are the `strview` section of `_res.md`, and the *literal interop* of `strview.hpp` stays
+> C++ because overload resolution reaches it, not a declaration. What is left of the `cpp`
+> generator is the type core (`impl_specs/generators.md`).
 >
-> **The receiver spelling differs from a generated declaration's.** A body-less method
-> with an attribute writes
-> its receiver as the explicit first parameter (`this: Str`); a function *with* a
-> body has to write the receiver type before the name (`fun Str.isEmpty()`),
-> because only that form is marked a receiver - the explicit `this` is a plain
-> parameter named `this`, so a member call does not reach it (a *reported* gap,
-> not a decision: `specs/functions.md`, "Generic functions", documents the
-> explicit form as an extension; generated extensions already implement it). The
-> emitted shape is the same either way - a receiver is `T* self`, never a copy -
-> so a migrated operation spells no `*` on its receiver.
+> **Receiver spelling.** A body-less attributed method writes its receiver as the explicit
+> first parameter (`this: Str`); a function *with* a body writes the receiver type before the
+> name (`fun Str.isEmpty()`), because only that form is marked a receiver - the explicit
+> `this` is a plain parameter named `this`, so a member call does not reach it
+> (`specs/functions.md`, "Generic functions"). A receiver is `T* self`, never a copy, and a
+> migrated operation spells no `*` on it.
 >
-> **A prelude body is emitted when a program reaches it** (`reachesPreludeBody`,
-> both rings). The name has to be called, and - because the prelude has one
-> `iter` per container - the receiver's type name has to be named too, or
-> the call could not be attributed to one overload. Since T71 the fallback for an
-> *unattributable* name is to emit the whole group rather than none of it: a
-> program may call `"".isEmpty()` without ever naming `Str` as a type.
+> **A prelude body is emitted when a program reaches it** (`reachesPreludeBody`): the name
+> has to be called *and* the receiver's type named, because the prelude has one `iter` per
+> container and the call must be attributed to one overload. An *unattributable* name emits
+> the whole group rather than none of it - so `"".isEmpty()` works without naming `Str`.
 
 ## Decision
 
-For the first end-to-end slice, generated C++ targets the **current
-`cppsrc/rtl` shims** as-is:
+Generated C++ targets the **`cppsrc/rtl` shims** as-is:
 
 - `Str = SmString` (the spec layout: inline `SmallVector<char, 24>` plus the
   terminating NUL; `cppsrc/rtl/smstring.hpp`)
@@ -63,15 +45,12 @@ For the first end-to-end slice, generated C++ targets the **current
   (`cppsrc/rtl/span.hpp`); `StrView` is its `char` instantiation, the same type
   under a second name
 
-The ref-counted `[refcount][typeId][value]` header is **not** implemented in this
-slice, and nothing in the runtime allocates one. The `SmallVector`
-small-buffer optimization *is* implemented and is what both `List<T>` and `Str`
-are built on. The goal remains one compiling, debugger-friendly
-translation unit, not the final memory layout; every remaining divergence is
-listed below and is deferred, not resolved.
-
-`typeId` is currently unused by the runtime and is not stored. Nothing in the
-language subset needs it (no virtual dispatch, no dynamic casts).
+The ref-counted `[refcount][typeId][value]` header is **not** implemented, and nothing in
+the runtime allocates one; `typeId` is unused and not stored (no virtual dispatch or
+dynamic casts in the language subset). The `SmallVector` small-buffer optimization *is*
+implemented and is what both `List<T>` and `Str` are built on. Target: one compiling,
+debugger-friendly translation unit, not the final memory layout - every divergence is
+listed below and deferred.
 
 ## Emitted symbol names (package qualification)
 
@@ -102,12 +81,12 @@ translation unit - the generated code never spells a package name out:
 - A programmatically built module with no package declaration (the prelude sets
   are merged into one such module by the drivers) is treated like `rtl`.
 
-Known limitation, unchanged by this: name *resolution* is still by simple name
-across the whole compilation, so if two packages declare the same top-level name
-the program resolves to one of them rather than choosing by import. The prefix
-keeps such a program well-formed - each name is emitted consistently with the
-declaration it resolved to - and making resolution package-aware (imports
-selecting between same-named declarations) is a separate language change.
+Known limitation: name *resolution* is still by simple name across the whole compilation,
+so if two packages declare the same top-level name the program resolves to one of them
+rather than choosing by import. The prefix keeps such a program well-formed - each name is
+emitted consistently with the declaration it resolved to - and making resolution
+package-aware (imports selecting between same-named declarations) is a separate language
+change.
 
 ## Simse type -> C++ representation
 
@@ -131,7 +110,7 @@ selecting between same-named declarations) is a separate language change.
 | `PList<T>` | `PList<T>` (`std::shared_ptr<List<T>>`) | the `&List<T>` spelling |
 | `Span<T>` | `Span<T>` (shim struct) | borrowed view: `ptr` + `len`; `slice` returns a new span; `StrView` is `Span<Char>` |
 | `SmallVector<N, T>` | `SmallVector<T, N>` (`List<T>` is the `N = 4` instantiation) | inline vector |
-| user `data class C` | `struct C` (aggregate) | construction is the aggregate's own brace form at the call site (`ns1_Rec{a, b}`), with the type arguments spelled when the source wrote them (`ns1_Box<Int>{1}`) and C++20 aggregate CTAD when it did not (`ns1_Box{2}`) - the `_make_C` factory, whose by-value parameters did the deducing, is gone. A temporary argument is elided into the member (no copy); an lvalue costs the one copy value semantics require |
+| user `data class C` | `struct C` (aggregate) | construction is the aggregate's own brace form at the call site (`ns1_Rec{a, b}`), with the type arguments spelled when the source wrote them (`ns1_Box<Int>{1}`) and C++20 aggregate CTAD when it did not (`ns1_Box{2}`). A temporary argument is elided into the member (no copy); an lvalue costs the one copy value semantics require |
 | user `enum class E` | `enum class E` | explicit values when given |
 | callable `(A, B) -> R` | `Func<R(A, B)>` (`std::function`) | `Unit` return -> `void` |
 
@@ -148,7 +127,7 @@ its entry and asks for the owned `Str`:
 ```cpp
 // The program's string literals: one pool, and two run-length encoded index
 // series (offsets as deltas, then lengths), each as what to subtract from the
-// previous value; strtable.hpp has the stream format.
+// previous value; the strtable section has the stream format.
 static const Int __sm_stringCount = 541;
 static const char __sm_stringPool[] =
     "usage: simse_transpile <input.kt>..." "yield: a `this` parameter cannot be a field; ..." ...;
@@ -169,187 +148,138 @@ static struct __SmStringTableInitType {
 
 Str ns1_xmlKind(...) {
     ...
-    return __sm_stringTable[31];   // was: return "Expr.IntLit";
+    return __sm_stringTable[31];   // the "Expr.IntLit" entry
 }
 ```
 
-**The series encoding.** A stored `x[i]` means `value[i] = value[i-1] - x[i]`, with an
-implicit 0 before the first entry, and the rebuild accumulates in `Int` - so an element is
-only ever a *difference*, never an offset, and the pool's own size is the one large number.
-The literals are ordered longest first, so a length series descends slowly and its
-differences are small: **85% of them are 0** on the compiler's own table, because literals
-of equal length are adjacent, and the largest magnitude is 142, the longest literal. Each
-series is then **run-length encoded** - the series' length, then alternating blocks of
-non-repeating values (a count, then the values) and of runs (a count, then `times, value`
-pairs each), until the length is filled - which is what the zeros collapse to. On the
-compiler's own table (`tools/_strtable_runs.mjs`): 541 differences, 119 runs, longest run
-37, and a stream of **256/257 numbers** against 541 - 513 numbers, **1026 B**, against
-1082 B per series without the run-length pass. A single value is written once whichever
-block it lands in, so the encoding never costs more than one count per block: it is much
-better than `(times, value)` pairs would be on a literal-heavy series (all-distinct
-values: `N + 3` numbers against `2N`), and slightly worse on a run-heavy one (this table's
-119 runs: 257 against 239).
+**The series encoding.** A stored `x[i]` means `value[i] = value[i-1] - x[i]` (implicit 0 before
+the first entry), rebuilt by accumulating in `Int`, so an element is only ever a *difference*.
+Literals are ordered longest first, so a length series descends slowly: **85% of the differences
+are 0** on the compiler's own table (equal-length literals adjacent), largest magnitude 142
+(the longest literal). Each series is run-length encoded - its length, then alternating blocks
+of non-repeating values (a count, then the values) and runs (a count, then `times, value` pairs)
+to the length. Compiler's own table (`tools/_strtable_runs.mjs`): 541 differences, 119 runs,
+longest run 37, stream **256/257 numbers** against 541 - 513 numbers, **1026 B**, against
+1082 B without the pass. Much better than `(times, value)` pairs on a literal-heavy series
+(all-distinct: `N + 3` numbers against `2N`), slightly worse on a run-heavy one (119 runs: 257
+against 239).
 
-**`Int16`, chosen by the emitter.** Every number in the stream is small (the largest here
-is 142 and the longest run is 37), and the emitter *checks* - it encodes the stream, takes
-the largest magnitude, and widens the element to `Int` if any number does not fit - so the
-width is chosen, not assumed. That is what lets the whole index be one source line, 2 bytes
-per number instead of 4.
+**`Int16`, chosen by the emitter.** Every stream number is small (largest 142, longest run 37);
+the emitter encodes, takes the largest magnitude, and widens the element to `Int` if any number
+does not fit. The whole index is one source line, 2 bytes/number instead of 4.
 
-**Why a pool and views.** An entry used to be a 32-byte owning `Str` (4 length + 4
-capacity + 24 bytes inline); it is a 12-byte `StrView` now (`Span<Char>` + the operations,
-packed by T74), the text is stored once, and start-up allocates nothing for it - 72 of
-the compiler's own literals were long enough to heap-allocate before. On the compiler's
-own source set (541 entries, a 7355-byte pool): **~19.7 KB of table before** (526 `Str`
-objects, 16.4 KB static plus 2.9 KB allocated at startup) against **~14.5 KB now**
-(pool 7355 + 1026 B of run-length encoded index + 6492 bytes of views, no allocation) -
-and the two stack arrays the initializer expands the index into are 4.3 KB of stack that
-is gone when it returns. The count grew 526 -> 541 because the emission text is itself
-literals - a table is not compared across source revisions, so the honest comparison is
-the per-entry cost (32 bytes against 12 + the text) and the startup allocations (72
-against 0).
+**Why a pool and views.** An entry was a 32-byte owning `Str` (4 length + 4 capacity + 24
+inline); it is a 12-byte `StrView` (`Span<Char>` + the operations, packed by T74), text stored
+once, start-up allocating nothing - 72 literals used to heap-allocate. Compiler's own set (541
+entries, 7355-byte pool): **~19.7 KB of table before** (526 `Str` objects, 16.4 KB static +
+2.9 KB startup) against **~14.5 KB now** (pool 7355 + 1026 B index + 6492 bytes of views, no
+allocation); the initializer's two stack arrays are 4.3 KB, gone on return. The count grew
+526 -> 541 because the emission text is itself literals; the honest per-revision comparison is
+per-entry cost (32 bytes against 12 + the text) and startup allocations (72 against 0).
 
-**The binary shrinks as well, and by more than the data.** The old table was 526 *dynamic
-initializers* - one `SmString(const char*)` construction per entry, inlined one after the
-other - so replacing it with a pool and two loops removed ~19.9 KB of `.text` on the
-compiler's own release binary, against ~12.8 KB of `.rdata`/`.data` (the `Str[526]` array
-against the `StrView[541]` one, plus the literals that used to exist twice). Measured with
-`tools/_pe_sections.mjs`, the published bootstrap at HEAD against the current one, same
-flags: `.text` 1 969 196 -> 1 949 308, `.rdata` 238 072 -> 235 560, `.data` 20 408 ->
-10 072, `.pdata` 49 232 -> 46 800, file **2 279 424 -> 2 237 952 (-41 KB)**.
+**The binary shrinks too.** The old table was 526 *dynamic initializers* (one
+`SmString(const char*)` each, inlined), so a pool and two loops removed ~19.9 KB of `.text` on
+the compiler's release binary against ~12.8 KB of `.rdata`/`.data` (the `Str[526]` array vs
+`StrView[541]`, plus literals that existed twice). `tools/_pe_sections.mjs`, published
+bootstrap at HEAD vs current, same flags: `.text` 1 969 196 -> 1 949 308, `.rdata` 238 072 ->
+235 560, `.data` 20 408 -> 10 072, `.pdata` 49 232 -> 46 800, file
+**2 279 424 -> 2 237 952 (-41 KB)**.
 
-**`starts` is `lens` shifted while no two literals share text.** The offset increment of
-entry `i` is entry `i-1`'s length, so the two streams expand to the same numbers with a
-leading 0 (`tools/_strtable_runs.mjs` prints the check) - two streams for one series of
-information. Dropping `starts` and letting the decoder advance the offset by the length it
-just rebuilt is a one-line change and halves the index; the series comes back the moment
-substring sharing lands (which is what makes an offset increment independent of the
-previous length).
+**`starts` is `lens` shifted while no two literals share text.** The offset increment of entry
+`i` is entry `i-1`'s length, so the two streams expand to the same numbers with a leading 0
+(`tools/_strtable_runs.mjs` prints the check). Dropping `starts` and letting the decoder advance
+by the length it just rebuilt halves the index; the series returns with substring sharing, which
+makes an offset increment independent of the previous length.
 
-**Where the lengths come from, and the check that they are right.** The emitter computes
-them (`literalByteLength` in `Codegen.cpp`, `cgLiteralByteLength` in `CgStringTable.kt`),
-counting one byte per escape and a *run* for `\xHH...`/octal as C++ counts them. The pool
-is the literal texts themselves, adjacent, so the C++ compiler decodes the bytes of the
-emitted program; the emitter only has to agree about how many bytes an escape costs. The
-`static_assert` on the pool's own `sizeof` is the cross-check - a disagreement about one
-escape shifts the total and stops the program's build instead of silently shifting every
-literal after the mistake - and the two-step bootstrap (T23) pins it from the other side:
-the stage-1 compiler reads its own 541 literals through this table and must regenerate
-its source byte for byte.
+**Where the lengths come from.** The emitter computes them (`cgLiteralByteLength`,
+`CgStringTable.kt`), one byte per escape and a *run* for `\xHH...`/octal as C++ counts them. The
+pool is the literal texts adjacent, so the C++ compiler decodes the bytes; the emitter only has
+to agree on escape cost. The pool's own `sizeof` `static_assert` is the cross-check - one escape
+disagreement shifts the total and stops the build instead of silently shifting every later
+literal - and the two-step bootstrap (T23) pins it from the other side (stage 1 reads its own
+541 literals and must regenerate its source byte for byte).
 
 The entries are sorted **longest first, then text, alphabetically** (`val` < `var`, but
-`vars` < `val`), so the order is a total one and both rings agree on every index
-(T22/T23). A literal the *lowering* invents is not in the parsed program and keeps its
-own spelling at the site, and the prelude's literals are not emitted (the prelude is
-included, not transpiled).
+`vars` < `val`), so the order is total (T22/T23). A literal the *lowering* invents keeps its own
+spelling at the site, and the prelude's literals are not emitted (the prelude is included, not
+transpiled).
 
-**The sites use the view, and the interop is in `strview.hpp`.** A literal `site` reads its
-entry as it stands, so **a comparison or a `+` builds no `Str`** - `str == literal`,
-`literal == literal`, `literal + text`, `println(literal)` all have direct overloads over
-`StrView` (`operator==`/`!=`/`<`/`<=`/`>`/`>=` and `+` in all three pairings, plus the
-`std::ostream` writer). Everything else - a slot, a `return`, a by-value parameter, a
-`const Str&` argument, a list pack - reaches the converting constructor
-(`SmString(const StrView&)`, declared in `smstring.hpp` because that header cannot see
-`StrView`, defined in `strview.hpp`) and materializes exactly the copy it materialized
-before the table became a pool of views. The pair of *mixed* overloads matters: without
-`operator==(const Str&, StrView)` and its mirror, `str == literal` is ambiguous (one
-candidate would convert the left operand, another the right), because `const char* -> Str`
-and `StrView -> Str` both exist.
+**The sites use the view; the interop is `strview.hpp`.** A literal site reads its entry as it
+stands, so **a comparison or `+` builds no `Str`** - `str == literal`, `literal == literal`,
+`literal + text`, `println(literal)` have direct `StrView` overloads (`operator==`/`!=`/`<`/`<=`/
+`>`/`>=`, `+` in all three pairings, plus the `std::ostream` writer). Everything else (a slot, a
+`return`, a by-value parameter, a `const Str&` argument, a list pack) reaches the converting
+constructor (`SmString(const StrView&)`, declared in `smstring.hpp`, defined in `strview.hpp`)
+and materializes the same copy as before. The *mixed* overloads matter: without
+`operator==(const Str&, StrView)` and its mirror, `str == literal` is ambiguous, because both
+`const char* -> Str` and `StrView -> Str` exist.
 
-This is what recovered the cost of the *first* cut, which asked for the owned `Str` at
-every mention. Measured with `tools/_bench_ab.mjs` (15 interleaved runs of the
-self-transpile, the previous published bootstrap against the new one, same flags): the
-`toString()` cut was **~7.5-9% slower** (**838.3/907.0 -> 918.1/962.4 ms** in one window),
-and the view sites are **~0-2%**, i.e. parity with the `Str` table (**804.4/827.7 ->
-816.6/837.0 ms** and **830.7/865.3 -> 831.9/883.2 ms** in two windows). Parity is the
-honest expectation: the old table's read sites were construction-free too (`const Str` is a
-glvalue that binds a comparison directly), so what the view form buys is the memory
-(14.5 KB against 19.7 KB), the startup allocations (0 against 72), and the `+` sites that
-used to *copy* a long entry before appending. What the emitter still converts rather than
-borrows is an argument to a native that takes `const Str&` (`simse_str_find`,
-`startsWith`, `split`, `appendStr`, `eprintln` - about 20 sites in the ring's own emission),
-which is the remaining allowlist entry from T73.
+Measured with `tools/_bench_ab.mjs` (15 interleaved self-transpile runs, previous published
+bootstrap vs new, same flags): the `toString()` cut was **~7.5-9% slower**
+(**838.3/907.0 -> 918.1/962.4 ms** in one window), the view sites **~0-2%**
+(**804.4/827.7 -> 816.6/837.0 ms** and **830.7/865.3 -> 831.9/883.2 ms**), i.e. parity -
+expected, since the old table's read sites were construction-free too (`const Str` binds a
+comparison directly). The view form buys the memory (14.5 KB against 19.7 KB), the startup
+allocations (0 against 72), and the `+` sites that used to *copy* a long entry. Still converted
+rather than borrowed: an argument to a native taking `const Str&` (`simse_str_find`,
+`startsWith`, `split`, `appendStr`, `eprintln` - about 20 sites), the remaining allowlist entry
+from T73.
 
-**Why the lengths are not `sizeof` expressions, and why there is no substring sharing.**
-`(Int) sizeof("<literal>") - 1` would let the C++ compiler compute the length with no
-emitter-side decoding at all - but then the length is a *symbol in the generated file*
-that the emitter cannot index on, and the second index (the deltas) could not be written.
-Sharing text between literals (pointing `"Hell"` into `"Hello "`) needs the emitter to
-decode escape *values*, not just counts, and it saves 875 bytes of pool on the compiler's
-own set against the 2.1 KB the extra index costs while the indexes are `Int`; it belongs
-with the packed encoding.
+**Why the lengths are not `sizeof` expressions.** `(Int) sizeof("<literal>") - 1` would let the
+C++ compiler compute the length with no emitter-side decoding, but the length would then be a
+*symbol in the generated file* the emitter cannot index on, and the second index (the deltas)
+could not be written. Substring sharing (pointing `"Hell"` into `"Hello "`) needs the emitter to
+decode escape *values*, not counts; it saves 875 bytes of pool on the compiler's own set against
+the 2.1 KB the extra index costs while the indexes are `Int`, so it belongs with the packed
+encoding.
 
-**Why not wrap each literal in a `constexpr` helper instead.** That was measured and
-is *slower* (~3%): the RTL's `const char*` overloads (`operator==(const SmString&,
-const char*)` and friends) compare a literal **in place** - `compareBytes(text,
-length)` with the `strlen` folded to a constant - so they never built a temporary, and
-wrapping forces one. The conversion path was already `constexpr`
-(`SmString(const char*)` over the constexpr `assign`), so there was nothing left to
-fold there either.
+**Why not wrap each literal in a `constexpr` helper.** Measured, *slower* (~3%): the RTL's
+`const char*` overloads (`operator==(const SmString&, const char*)` and friends) compare a
+literal **in place** (`compareBytes(text, length)`, `strlen` folded to a constant) and never
+built a temporary; wrapping forces one. The conversion path (`SmString(const char*)` over the
+constexpr `assign`) had nothing to fold either.
 
 ## Divergences from `specs/`
 
-These are the known, accepted differences while the shims are kept. They are
-deferred to a later runtime-alignment task; the shim must not be treated as the
-normative layout.
+Known, accepted differences while the shims are kept, deferred to a later
+runtime-alignment task; the shim is not the normative layout.
 
-1. **`Str` layout.** Spec: inline `SmallVector<24, Char>` with a reserved NUL and
-   a 23-byte inline capacity (`specs/containers.md`, `specs/built-in-types.md`).
-   Shim: the same shape, but the capacity is a build knob — `Str` is `SmString`
-   (`cppsrc/rtl/smstring.hpp`) over `StrSmallVector`
-   (`cppsrc/rtl/strsmallvector.hpp`), the char-specialized form of that vector:
-   `Int _len`, `Int _cap`, an inline byte buffer unioned with the heap pointer,
-   4-byte packed, without the per-element lifetime machinery the generic
-   `SmallVector` needs. The inline capacity is defined once, in
-   `strsmallvector.hpp` (`kStrInlineCapacity`), and read from there by both the
-   buffer and `SmString`; its default is the spec's **24 bytes** (23 characters
-   inline). It is overridable with `-DSIMSE_STR_INLINE_CAPACITY=<n>` so the
-   size/speed trade-off can be measured without editing sources; T33 in
-   `impl_specs/capability-matrix.md` records those measurements (16 bytes saves
-   ~18% of the peak working set but sends 16-character strings — `"Name: John
-   Smith"`, `"Expr.GenericName"` — to the heap, which the default avoids). The
-   capacity
-   is **part of the ABI**: every translation unit in a binary has to agree on it,
-   or the two sides disagree about where a `Str`'s bytes live — which corrupts
-   memory rather than failing to link. `build.js` therefore mirrors the cache
-   value into the amalgamation compile (with a warning when a `--define`
-   disagrees), exactly as it does for `SIMSE_NO_PACK4` (item 10);
-   `impl_specs/capability-matrix.md` (T33) records the measurements behind the
-   default. The buffer
-   counts **characters** in `_len` (zero-based: the empty string is `_len == 0`,
-   the same convention the generic `SmallVector` uses for its elements) and keeps
-   the terminating NUL one byte past the text, in the allocation that `_cap`
-   measures in bytes (`data()[size()]` is always `'\0'`), so reads — `size()`,
-   `empty()`, `end()` — need no adjustment for the terminator and the `+1` lives
-   only in the write paths, which run once per mutation. The NUL is written as
-   part of every growing operation (`push_back`, `resize`, `assign`, `append`),
-   so there is no separate terminate pass. `Str.size()` is the character count,
-   as the spec requires. The inline
-   path is `constexpr`-constructible, so
-   `constexpr Str` works while the text fits inline. Every size, length and index
-   here is the language's `Int` (32-bit signed): `SmString::size_type` is
-   `int32_t` and `npos` is `-1`, not `std::size_t`'s `SIZE_MAX`. `std::size_t`
-   appears only where the standard library's own signature requires one
-   (allocation, `memcpy`/`memmove`/`memchr`,
-   `std::char_traits<char>::length`), always as an explicit widening cast, so
-   nothing converts a `size_t` down into an `Int` - which is what retired the
-   C4267 warnings. `std::string` is not a language backing any more; it survives
-   **only at the native boundary**, where code has to talk to the standard
-   library: `simse_toStdString` / `simse_fromStdString`, the
-   `std::getline(std::istream&, Str&)` helper, `FileStream`'s recycled line
-   buffer (`cppsrc/rtl/filestream.hpp`), and the `std::filesystem`/`<fstream>`
-   use in the `fileio` section of `cppsrc/rtl/_res.md` and `cppsrc/common/common.cpp`.
+1. **`Str` layout.** Spec: inline `SmallVector<24, Char>`, reserved NUL, 23-byte inline
+   capacity (`specs/containers.md`, `specs/built-in-types.md`). Shim: same shape, capacity
+   a build knob - `SmString` (`cppsrc/rtl/smstring.hpp`) over `StrSmallVector`
+   (`cppsrc/rtl/strsmallvector.hpp`), the char-specialized vector: `Int _len`, `Int _cap`,
+   an inline byte buffer unioned with the heap pointer, 4-byte packed, no per-element
+   lifetime machinery. Capacity defined once (`kStrInlineCapacity` in `strsmallvector.hpp`);
+   default the spec's **24 bytes** (23 chars inline); overridable with
+   `-DSIMSE_STR_INLINE_CAPACITY=<n>` (T33: 16 bytes saves ~18% of the peak working set but
+   sends 16-character strings - `"Name: John Smith"`, `"Expr.GenericName"` - to the heap,
+   which the default avoids). The capacity is **part of the ABI**: every translation unit
+   in a binary has to agree, or the two sides disagree about where a `Str`'s bytes live -
+   memory corruption, not a link error. `build.js` mirrors the cache value into the
+   amalgamation compile (with a warning when a `--define` disagrees), as for
+   `SIMSE_NO_PACK4` (item 10). `_len` counts **characters** (zero-based; empty is
+   `_len == 0`, the generic `SmallVector`'s convention); the NUL sits one byte past the
+   text, in the allocation `_cap` measures in bytes (`data()[size()]` is always `'\0'`), so
+   reads (`size()`, `empty()`, `end()`) need no adjustment and the `+1` lives only in the
+   write paths. The NUL is written by every growing operation (`push_back`, `resize`,
+   `assign`, `append`) - no separate terminate pass. `Str.size()` is the character count.
+   The inline path is `constexpr`-constructible. Every size/length/index is `Int` (32-bit
+   signed): `SmString::size_type` is `int32_t`, `npos` is `-1`. `std::size_t` appears only
+   where a stdlib signature requires it (allocation, `memcpy`/`memmove`/`memchr`,
+   `char_traits<char>::length`), always as an explicit widening cast, so nothing narrows a
+   `size_t` into an `Int` (this retired the C4267 warnings). `std::string` survives **only
+   at the native boundary**: `simse_toStdString`/`simse_fromStdString`,
+   `std::getline(std::istream&, Str&)`, `FileStream`'s recycled line buffer
+   (`cppsrc/rtl/filestream.hpp`), and the `std::filesystem`/`<fstream>` use in the `fileio`
+   section of `cppsrc/rtl/_res.md`.
 2. **`List<T>` implementation.** Spec: `List<T>` *is* `SmallVector<4, T>`
-   (`specs/containers.md`). Shim: matches — `List<T>` is
-   `SmallVector<T, kListInlineCapacity>` (4) — with the documented layout, and
-   that is its only implementation: there is no `std::vector` mode to select.
+   (`specs/containers.md`). Shim: matches - `SmallVector<T, kListInlineCapacity>` (4), the
+   documented layout, and its only implementation (no `std::vector` mode).
 3. **Index width / packing.** Spec: 32-bit indices and sizes, 4-byte packing
-   (`specs/containers.md`). Shim: matches on the width — every size, length and
-   index in the RTL is the language's `Int` (32-bit signed; `SmallVector`'s
-   `size_type` is `Int`, `SmString::size_type` is `int32_t`, `npos` is `-1`) —
-   and `std::size_t` appears only where the standard library's own signature
-   requires one, always as an explicit widening cast, so nothing converts a
-   `size_t` down into an `Int`. Packing is item 10.
+   (`specs/containers.md`). Shim: matches on the width - `SmallVector::size_type` is `Int`,
+   `SmString::size_type` is `int32_t`, `npos` is `-1` - and `std::size_t` appears only
+   where a stdlib signature requires one, always as an explicit widening cast. Packing is
+   item 10.
 4. **`&T` representation.** Spec: a box with the common
    `[reference count][typeId][boxed value]` header
    (`specs/memory-model.md`, `specs/ref-counted-layout.md`). Shim:
@@ -377,10 +307,8 @@ normative layout.
    was rejected because its accessors throw and its valueless state is a third
    state this type cannot enter. Behavior (`hasValue`, `value`) matches the
    documented API.
-8. **`Res<T>` failure sentinel.** Resolved: `isOk()` reads the union's tag, not the
-   message, so `err("")` is a failure. The two-field shim this replaced defined
-   `isOk()` as "`Error` is empty", which read that one case as a success;
-   generated code only calls `isOk()`, so nothing else depended on it.
+8. **`Res<T>` failure sentinel.** `isOk()` reads the union's tag, not the message, so
+   `err("")` is a failure. Generated code only calls `isOk()`.
 9. **`SmallVector` operations.** The shim implements the std::vector-compatible
    surface the compiler uses: construction (default/copy/move/init-list/range/,
    `(count, value)`), assignment, `size`/`capacity`/`empty`/`reserve`,
@@ -395,14 +323,13 @@ normative layout.
 10. **Alignment.** Spec: every type is 4-byte packed (`specs/memory-model.md`,
     "Alignment and packing"). Shim: generated aggregates are emitted between
     `SIMSE_PACK_PUSH` / `SIMSE_PACK_POP` (`cppsrc/rtl/types.hpp`), and
-    `SmallVector`, `Array`, `Span` and `StrView` follow the same rule. `Span` (and
-    `StrView` through it) was the one value struct that was *not* wrapped, and the
-    difference is a size, not a no-op: a struct holding a pointer is 16 bytes under
-    the host's alignment (8-byte pointer, `Int`, padding) and **12** under the rule,
-    which is what `sizeof` reports now (T74). The hand-written structs that hold
-    *host* types keep the host alignment, because those types are 8-aligned and
-    cannot be packed without lying about them: `xml.hpp`'s `XmlNode`/`Attribute`
-    (312/64), `FileStream`'s `std::ifstream`/`std::string`, and the shims built on
+    `SmallVector`, `Array`, `Span` and `StrView` follow the same rule. The difference
+    is a size, not a no-op: a struct holding a pointer is 16 bytes under the host's
+    alignment (8-byte pointer, `Int`, padding) and **12** under the rule, which is
+    what `sizeof` reports now (T74). The hand-written structs that hold *host* types
+    keep the host alignment, because those types are 8-aligned and cannot be packed
+    without lying about them: `xml.hpp`'s `XmlNode`/`Attribute` (312/64),
+    `FileStream`'s `std::ifstream`/`std::string`, and the shims built on
     `std::shared_ptr`/`std::function`. `SIMSE_NO_PACK4` turns the packing off and
     reverts to host layout.
 11. **`Dictionary<K, V>` implementation.** Spec: a value dictionary whose hashing,
@@ -421,21 +348,18 @@ normative layout.
     _rows.size()` (so iteration is a pointer walk over `_rows`), and `growBuckets()`
     packs in the same pass because it already walks every row to rebuild the chains.
     An insert into an empty bucket skips the chain walk and the key compare
-    altogether (no row hashes there, so the key cannot be present). That shape is
-    what it is good at: iteration is a pointer walk, deep copies of a packed row
-    vector are cheap, and a missing key falls out of the bucket walk early -
-    measured against the `std::unordered_map` it replaced, iteration ~8x, deep
-    copies ~5x and miss lookups ~1.6x, and ~6% faster end to end on the 6,357-line
-    self-transpile (37 interleaved pairs over two windows: 62.6/68.2 and 61.5/69.5
-    ms against 67.2/72.7 and 65.2/73.8 ms), with `fill`/`erase` and the compiler's
-    small-dictionary churn at parity. The one deficit is hit lookups on
-    cache-resident tables, ~1.8x slower, because the bucket is a row index (a
-    second dependent load); the `impl_specs/capability-matrix.md` (T41) entry has
-    the full table and the suspects. Two semantic properties worth recording: it
-    keeps no reference/iterator stability across an insert (rows live in a
-    `SmallVector`), and `keys()`/`values()` order is row order (insertion order,
-    holes packed away on demand) rather than bucket order - both are unspecified in
-    the spec, and nothing in the tree depends on either.
+    altogether (no row hashes there, so the key cannot be present). Measured against
+    the `std::unordered_map` it replaced: iteration ~8x, deep copies ~5x and miss
+    lookups ~1.6x, and ~6% faster end to end on the 6,357-line self-transpile (37
+    interleaved pairs over two windows: 62.6/68.2 and 61.5/69.5 ms against 67.2/72.7
+    and 65.2/73.8 ms), with `fill`/`erase` and the compiler's small-dictionary churn
+    at parity. The one deficit is hit lookups on cache-resident tables, ~1.8x slower,
+    because the bucket is a row index (a second dependent load); the
+    `impl_specs/capability-matrix.md` (T41) entry has the full table and the suspects.
+    Two semantic properties worth recording: it keeps no reference/iterator stability
+    across an insert (rows live in a `SmallVector`), and `keys()`/`values()` order is
+    row order (insertion order, holes packed away on demand) rather than bucket order -
+    both are unspecified in the spec, and nothing in the tree depends on either.
 
 ## Operations the emitter needs
 
@@ -479,18 +403,13 @@ dictionary's key type, and the temperature, which `tenths` takes as a `Str`);
 removing those is the next step, together with in-place dictionary access (item
 11's remaining gap).
 
-A type-name subtlety this cost a cycle to learn: the emitter resolves a type name
-by consulting the RTL list *before* the program's own declarations, so a declared
-type that shares a prelude name was shadowed in every emitted signature (it happened
-when the RTL gained `StrView` while the compiler had a `common.StrView` of its own -
-a name that no longer exists, since both are `StrView` now). `typeName` now checks
-`types` first and lets a declared type from any package other than `rtl` win
-(`cppsrc/codegen/Codegen.cpp` and the `cgIsRtlTypeName`/`typeName` mirror in
-`Codegen.kt`); T23 and the five differentials stay byte-identical.
+The emitter resolves a type name by consulting the program's own declarations *before*
+the RTL list, so a declared type from any package other than `rtl` wins over a prelude
+name (`typeName`, `cgIsRtlTypeName` in `Codegen.kt`); T23 and the five differentials stay
+byte-identical.
 
 `simse_nowMillis` (the `timeops` section of `cppsrc/rtl/_res.md`) is a monotonic
-millisecond clock for logging and for measuring a run; it exists because the benchmark
-needed to report its own time the way the C++ baseline does.
+millisecond clock for logging and for measuring a run.
 
 The Simse surface, with the C++ symbol each one reaches (`cppsrc/rtl/fs.kt`,
 `cppsrc/rtl/rtl.kt`):
@@ -507,7 +426,7 @@ The Simse surface, with the C++ symbol each one reaches (`cppsrc/rtl/fs.kt`,
 
 ### Boxing, addresses, and `copy`
 
-No new RTL operations were required for the v1 subset. Specifically:
+No new RTL operations were required:
 
 - Boxing (`&value`) lowers to `std::make_shared<std::remove_cvref_t<decltype(...)>>(value)`,
   which comes from `<memory>` via `cppsrc/rtl/simse.hpp`.
@@ -525,16 +444,16 @@ No new RTL operations were required for the v1 subset. Specifically:
 
 ### `Dictionary<K, V>` and the `List` extras (T20)
 
-The front end (the Simse sema port) needs maps, so `Dictionary<K, V>`
-(`SmDictionary`) gained a native surface in `cppsrc/rtl/dictops.hpp`, and
-`List<T>` gained two helpers. All are prelude natives with explicit symbols
-(`cppsrc/rtl/rtl.kt`):
+The front end needs maps, so `Dictionary<K, V>` (`SmDictionary`) gained a native
+surface in the `dictops` section of `cppsrc/rtl/_res.md`, and `List<T>` gained two
+helpers. All are prelude natives with explicit symbols (`cppsrc/rtl/rtl.kt`):
 
 | Simse | C++ symbol | Notes |
 | --- | --- | --- |
 | `dictionaryOf<K, V>()` | `simse_dictionaryOf` | empty `Dictionary<K, V>` |
-| `d.get(key)` | `simse_dict_get` | `Opt<V>`; empty when absent |
-| `d.has(key)` | `simse_dict_has` | `Bool` |
+| `d.getPtr(key)` | `simse_dict_getPtr` | `*V`: the value's place, or `null` when absent |
+| `d.get(key)` | `simse_dict_get` | `Opt<V>`; empty when absent - built on `getPtr` |
+| `d.has(key)` | `simse_dict_has` | `Bool` - `getPtr` with the pointer tested |
 | `d.insert(key, value)` | `simse_dict_insert` | insert or replace |
 | `d.remove(key)` | `simse_dict_remove` | erase; a no-op when absent |
 | `d.size()` | `simse_dict_size` | `Int` |
@@ -544,8 +463,13 @@ The front end (the Simse sema port) needs maps, so `Dictionary<K, V>`
 | `items.contains(value)` | `simse_list_contains` | linear `operator==` scan |
 | `items.sort(less)` | `simse_list_sort` | in-place `std::sort` with the `(T, T) -> Bool` lambda |
 
-`get`/`has`/`insert`/`remove` take their key (and value) as a non-deduced
-`std::type_identity_t` so a literal argument converts to the element type. A
+`getPtr`/`get`/`has`/`insert`/`remove` take their key (and value) as a non-deduced
+`std::type_identity_t` so a literal argument converts to the element type. The pointer
+`getPtr` answers is the dictionary's own row - one `findRow` walk, no copy - and it is
+valid until the next `insert`/`remove`/`clear` on that dictionary (`valuePtr` in
+`smdictionary.hpp`, which is `const` because the row list is already `mutable` for the
+packing a query memoizes). Neither `get` nor `has` packs holes any more: they answer from
+the row lookup, and only the iterator-producing calls (`find`/`begin`/`end`) pack. A
 generic *native* call lowers to its symbol with the type arguments, e.g.
 `dictionaryOf<Str, Int>()` -> `simse_dictionaryOf<Str, Int>()`; a `(T, T) -> Bool`
 comparator lowers to a C++ lambda, so `sort` is a template over the comparator
@@ -553,8 +477,8 @@ type. `keys()`/`values()` follow the dictionary's own iteration order, which the
 spec leaves unspecified; sort for determinism.
 
 Identity comparison on handles: `==`/`!=` on `&T` (`std::shared_ptr`) and `*T`
-compare the handle/pointer itself (C++ `operator==`), which is what the sema port
-uses to compare declaration handles for identity.
+compare the handle/pointer itself (C++ `operator==`), used to compare declaration
+handles for identity.
 
 ### `Span<T>`
 
@@ -609,28 +533,26 @@ print(x)    ->  std::cout << std::boolalpha << (x);
 
 ## v1 subset gaps (emit a positioned "unsupported" error)
 
-Now lowered: generic declarations, uses, and calls (via C++ templates; see
-`impl_specs/reification.md`), generic `typealias`, `native fun` (see
+Lowered: generic declarations, uses, and calls (via C++ templates; see
+`impl_specs/reification.md`), generic `typealias`, native declarations (see
 `impl_specs/native-interop.md`), `when`, `null`, generic-qualified static calls
-(`Res<T>.ok(x)`, `Opt<T>.some(x)`), `Span<T>`, and lambdas with by-value
-captures.
+(`Res<T>.ok(x)`, `Opt<T>.some(x)`), `Span<T>`, and lambdas with by-value captures.
 
 Still unsupported (each produces `<file>:<line>:<col>: unsupported: ...` rather
 than a crash): namespaced native symbols, untyped parameters/fields, compound
 assignment operators (`+=` etc.), lambda reference captures, and `for`/range-for
 (use `Span<T>` and `while`). `List<T>.append`, `removeAt`, `removeRange`,
-`contains`, and `sort` lower to the native extension symbols in
-`cppsrc/rtl/{listops,dictops}.hpp` declared in the RTL prelude; the remaining
-`List` methods (`insert`, `clear`) are still emitted as
-written and are not yet mapped.
+`contains`, and `sort` lower to the native extension symbols of the
+`listops`/`dictops` sections of `cppsrc/rtl/_res.md`, declared in the RTL prelude;
+the remaining `List` methods (`insert`, `clear`) are still emitted as written and
+are not yet mapped.
 
-12. **`Str::size()` is `Int`.** The language spells every `size` accessor `Int`
-    (the `Dictionary`/`Span`/`StrView` natives all return `Int`), and the shim
-    now matches: `SmString::size_type` is `int32_t`, so `size()`/`length()` are
-    the language's `Int` and `npos` is `-1`. `std::size_t` appears only where
-    the standard library's own signature requires one, always as an explicit
-    widening cast, so the emitted code no longer narrows a `size_t` into an
-    `Int`, and the `C4267` warning on the compiler's own build is gone.
+12. **`Str::size()` is `Int`.** Every language `size` accessor is `Int` (the
+    `Dictionary`/`Span`/`StrView` natives all return `Int`): `SmString::size_type` is
+    `int32_t`, so `size()`/`length()` are `Int` and `npos` is `-1`. `std::size_t` appears
+    only where a stdlib signature requires one, always as an explicit widening cast, so
+    nothing narrows a `size_t` into an `Int` (retiring the C4267 warnings on the
+    compiler's own build).
 
 13. **A value receiver is a raw pointer (`T* self`).** A method whose receiver is a
     *value* (`fun advance(...)` inside a data class, `fun f(this: Point, ...)`,
@@ -643,13 +565,9 @@ written and are not yet mapped.
     where no address has to be taken - the emitted receiver *is* that address - so the
     call passes the pointer itself (`ns_f(self)`, C++'s `this` inside a closure class)
     and a borrow of the receiver (`*this`) is the same pointer. A receiver declared as
-    a handle keeps it, which is
-    what keeps refcounting available to the body: `this: &T` stays
+    a handle keeps it, which keeps refcounting available to the body: `this: &T` stays
     `std::shared_ptr<T> self` (so `self` can be stored in a list and keeps its
     refcount), and `this: *T` stays `T* self` (where `this` *is* the pointer, so
-    `*this` is the pointee and a method body is unchanged from before). *Native*
-    extensions are the one exception: their host signature decides, so the emitter
-    passes the receiver expression as it always did (`nativeReceiverArg`) and the
-    RTL's `T&`-taking helpers did not have to change. The hand-written differential
-    drivers (`tests/*_simse_main.cpp`) call emitted receiver functions directly and
-    were updated to pass `&scanner`.
+    `*this` is the pointee). *Native* extensions are the one exception: their host
+    signature decides, so the emitter passes the receiver expression itself
+    (`nativeReceiverArg`) and the RTL's `T&`-taking helpers are unchanged.

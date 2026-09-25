@@ -114,6 +114,13 @@ fun toList<T>(this: Array<T>): List<T>
 @SmGen("res", "dictops", "simse_dictionaryOf")
 fun dictionaryOf<K, V>(): Dictionary<K, V>
 
+// `getPtr` reads the value's *place*: nothing is copied, and `null` answers "absent".
+// The place is the dictionary's own storage, so it is valid until the next `insert`,
+// `remove` or `clear`. `get` copies the value out, and `has` is `getPtr` with the pointer
+// tested.
+@SmGen("res", "dictops", "simse_dict_getPtr")
+fun getPtr<K, V>(this: Dictionary<K, V>, key: K): *V
+
 @SmGen("res", "dictops", "simse_dict_get")
 fun get<K, V>(this: Dictionary<K, V>, key: K): Opt<V>
 

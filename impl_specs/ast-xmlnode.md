@@ -1,25 +1,19 @@
 # XmlNode AST schema
 
-Status: implemented in both rings. The C++ AST (`cppsrc/ast/Ast.h`) is converted to
-the schema by `ast::toXmlNode`, and the Simse parser builds it directly; both are
-rendered by `ast::dumpXmlNode`.
+Status: implemented.
 
-The compiler's carrier is **`AstXmlNode`** (`cppsrc/rtl/astxml.kt` +
-`cppsrc/rtl/astxml.hpp`): the node model below with the stringly-typed parts
-replaced by enums - the node's structural role is an `AstNodeKind`, its category
-(the schema's `kind`) is an `AstNodeCategory`, and an attribute's key is an
-`AstNodeAttributeKind` - so **every test on a node is an integer compare**, and
-the only text left in a tree is an attribute *value* (a number as decimal text, a
-boolean as `true`/`false`, an identifier, a literal's source text). It is the dump
-(`ast::astNodeKindText` / `astNodeCategoryText` / `astNodeAttributeText`) that
-turns an enum back into the schema's spelling, which is why the `.astxml` goldens
-are unchanged byte for byte. Simse code that has to name a kind in a diagnostic
-uses `common.xmlKindText`. `AstXmlNode` is a prelude/RTL type so both rings share
-one definition; the language-level `XmlNode` (`specs/xml-node.md`) stays the
-general tree a *program* builds.
+The compiler's carrier is `AstXmlNode` (`cppsrc/rtl/astxml.kt` + `cppsrc/rtl/astxml.hpp`):
+the node model below with the stringly-typed parts replaced by enums - the node's structural
+role is an `AstNodeKind`, its category (the schema's `kind`) an `AstNodeCategory`, and an
+attribute's key an `AstNodeAttributeKind` - so every test on a node is an integer compare, and
+the only text left in a tree is an attribute *value* (a number as decimal text, a boolean as
+`true`/`false`, an identifier, a literal's source text). The dump turns an enum back into the
+schema's spelling, which is why the `.astxml` goldens are unchanged byte for byte; Simse code
+naming a kind in a diagnostic uses `common.xmlKindText`. `AstXmlNode` is a prelude/RTL type;
+the language-level `XmlNode` (`specs/xml-node.md`) stays the general tree a *program* builds.
 
-This document is the schema; goldens live in
-`tests/golden/<fixture>.astxml.expected` and are checked by `simse_tests`.
+This document is the schema; goldens live in `tests/golden/<fixture>.astxml.expected`, checked
+by `simse_tests`.
 
 ## Node model
 
@@ -33,8 +27,7 @@ Every AST element is one `AstXmlNode` with four parts:
   `ExprBinary`, `TypeGeneric`, ... or `None` when the node has no `kind`). Role and
   category are independent: re-rooting a node under a new role (`attach`) keeps its
   category, so a `Cond` node is still an `ExprBinary`. The dump prints it as
-  `kind='...'` in its schema position (first), from the enum - it is a field, not
-  an attribute, so every test on it is an integer compare.
+  `kind='...'` first, from the enum - a field, not an attribute.
 - **attributes** - an ordered `List<AstNodeAttribute>` of (key, value) pairs. The
   key is an `AstNodeAttributeKind` (`Line`, `Name`, `IsVar`, ...); the value is
   text: numbers are decimal, booleans are `true` or `false`.
@@ -171,11 +164,8 @@ Module kind='Module' line='1' column='1' package='fixtures'
 
 - **Attributes are stringly typed.** Every scalar becomes text, so a consumer
   must parse numbers/booleans back out. Roles, categories and attribute keys are
-  enums, so the *structure* is typed; only the values are text.
-- **Roles are carried by the node's role enum**, so a consumer compares
-  `AstNodeKind` values; the ambiguity the role names resolved by convention is the
-  same, but a wrong role in the tree is now a value the enum does not contain
-  rather than a typo in a string.
+  enums, so the *structure* is typed; only the values are text, and a wrong role in
+  the tree is a value the enum does not contain rather than a typo in a string.
 - **Positions are line/column only.** The byte `offset` from `SourcePos` is not
   carried (it is derivable from the text but not recorded).
 - **Everything fits.** All current AST constructs have a schema form; nothing had

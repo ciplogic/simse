@@ -2,21 +2,19 @@
 
 Status: design baseline — value dictionary for the first implementation.
 
-`Dictionary<K, V>` is a built-in generic **value type** for key/value storage.
-Its behavior is equivalent in purpose to `std::unordered_map<K, V>`:
+`Dictionary<K, V>` is a built-in generic value type for key/value storage,
+equivalent in purpose to `std::unordered_map<K, V>`:
 
-- keys are associated with values;
-- keys are unique;
+- keys are associated with values and are unique;
 - insertion of an existing key updates or replaces its value according to the
   dictionary operation used;
 - lookup, insertion, removal, and membership operations are supported; and
-- copying a dictionary copies the dictionary and its contents using value
-  semantics.
+- copying a dictionary copies its contents using value semantics.
 
-The exact operation names and lookup-result API are deferred until the
-collection API is specified. A dictionary may use heap storage internally, but
-the dictionary value owns that storage and does not share it implicitly when
-copied. Use `&Dictionary<K, V>` when shared identity is required.
+The exact operation names and lookup-result API are deferred until the collection API
+is specified. A dictionary may use heap storage internally, but the dictionary value
+owns that storage and does not share it implicitly when copied. Use
+`&Dictionary<K, V>` when shared identity is required.
 
 ```text
 var scores: Dictionary<Str, Int32> = Dictionary<Str, Int32>()

@@ -399,10 +399,9 @@ data class Emitter(
     }
 
     fun addNativeExt(name: *Str, ext: *CgNativeExt): Unit {
-        if (this.nativeExtensions.has(name)) {
-            var existing: List<CgNativeExt> = this.nativeExtensions.get(name).value()
+        val existing: *List<CgNativeExt> = this.nativeExtensions.getPtr(name)
+        if (existing != null) {
             existing.append(ext)
-            this.nativeExtensions.insert(name, existing)
         } else {
             var fresh: List<CgNativeExt> = List<CgNativeExt>()
             fresh.append(ext)
@@ -442,8 +441,9 @@ data class Emitter(
     // The prefix of a package; empty for `rtl` and for a name no package can be
     // attributed to.
     fun nsPrefix(packageName: *Str): Str {
-        if (this.nsPrefixes.has(packageName)) {
-            return this.nsPrefixes.get(packageName).value()
+        val prefix: *Str = this.nsPrefixes.getPtr(packageName)
+        if (prefix != null) {
+            return *prefix
         }
         return ""
     }
@@ -454,8 +454,9 @@ data class Emitter(
 
     // The package a declared type (data class, enum, typealias) came from.
     fun typePackage(name: *Str): Str {
-        if (this.typePackages.has(name)) {
-            return this.typePackages.get(name).value()
+        val packageName: *Str = this.typePackages.getPtr(name)
+        if (packageName != null) {
+            return *packageName
         }
         return ""
     }
@@ -479,8 +480,9 @@ data class Emitter(
 
     // The declared type of a file-level static, for expression inference.
     fun staticType(name: *Str): AstXmlNode {
-        if (this.staticsByName.has(name)) {
-            return xmlChild(this.staticsByName.get(name).value().decl, AstNodeKind.Type)
+        val entry: *CgStatic = this.staticsByName.getPtr(name)
+        if (entry != null) {
+            return xmlChild(entry.decl, AstNodeKind.Type)
         }
         return xmlEmptyNode()
     }
@@ -591,7 +593,8 @@ data class Emitter(
         val typeNames: List<Str> = this.types.keys()
         var t: Int = 0
         while (t < typeNames.size()) {
-            facts.types.insert(typeNames[t], this.types.get(typeNames[t]).value())
+            val node: *AstXmlNode = this.types.getPtr(typeNames[t])
+            facts.types.insert(typeNames[t], node)
             t = t + 1
         }
         val enumTypeNames: List<Str> = this.enumNames.keys()
@@ -611,7 +614,7 @@ data class Emitter(
         val extensionNames: List<Str> = this.nativeExtensions.keys()
         var x: Int = 0
         while (x < extensionNames.size()) {
-            val overloads: List<CgNativeExt> = this.nativeExtensions.get(extensionNames[x]).value()
+            val overloads: *List<CgNativeExt> = this.nativeExtensions.getPtr(extensionNames[x])
             var mapped: List<SemExtFact> = List<SemExtFact>()
             for (*ext in overloads) {
                 mapped.append(SemExtFact(copy(ext.receiver), copy(ext.returnType), ext.typeParams))
@@ -622,7 +625,7 @@ data class Emitter(
         val staticNames: List<Str> = this.staticsByName.keys()
         var s: Int = 0
         while (s < staticNames.size()) {
-            val entry: *CgStatic = *this.staticsByName.get(staticNames[s]).value()
+            val entry: *CgStatic = this.staticsByName.getPtr(staticNames[s])
             facts.statics.insert(staticNames[s], xmlChild(entry.decl, AstNodeKind.Type))
             s = s + 1
         }
@@ -1073,11 +1076,11 @@ data class Emitter(
     // The symbol a call on a *type name* reaches (`Resources.get(k)`): the declaration's own
     // symbol, looked up among the explicit-`this` natives; empty when there is none.
     fun staticCallSymbol(receiverName: *Str, calleeName: *Str): Str {
-        val extensions: Opt<List<CgNativeExt>> = this.nativeExtensions.get(calleeName)
-        if (!extensions.hasValue()) {
+        val extensions: *List<CgNativeExt> = this.nativeExtensions.getPtr(calleeName)
+        if (extensions == null) {
             return ""
         }
-        for (*ext in extensions.value()) {
+        for (*ext in extensions) {
             if (this.outerTypeName(ext.receiver) == receiverName) {
                 return ext.symbol
             }
@@ -1695,8 +1698,9 @@ data class Emitter(
             if (name == "this") {
                 return this.selfKind
             }
-            if (this.nameKinds.has(name)) {
-                return this.nameKinds.get(name).value()
+            val kind: *NameKind = this.nameKinds.getPtr(name)
+            if (kind != null) {
+                return *kind
             }
         }
         return NameKind.Value
@@ -1897,8 +1901,8 @@ data class Emitter(
                 return ret
             }
         }
-        if (this.nativeExtensions.has(calleeText)) {
-            val extensions: List<CgNativeExt> = this.nativeExtensions.get(calleeText).value()
+        val extensions: *List<CgNativeExt> = this.nativeExtensions.getPtr(calleeText)
+        if (extensions != null) {
             for (*ext in extensions) {
                 if (!xmlIsEmpty(recv) && !xmlIsEmpty(ext.receiver)
                     && this.unifyType(this.resolveAlias(ext.receiver), recv, ext.typeParams)
@@ -1983,8 +1987,9 @@ data class Emitter(
                 if (name == "this") {
                     return this.selfType
                 }
-                if (this.localTypes.has(name)) {
-                    return this.localTypes.get(name).value()
+                val localType: *AstXmlNode = this.localTypes.getPtr(name)
+                if (localType != null) {
+                    return *localType
                 }
                 val staticNode: AstXmlNode = this.staticType(name)
                 if (!xmlIsEmpty(staticNode)) {
@@ -2041,8 +2046,8 @@ data class Emitter(
                 val baseKind: AstNodeCategory = xmlKind(base)
                 if (baseKind == AstNodeCategory.TypeNamed || baseKind == AstNodeCategory.TypeGeneric) {
                     val baseName: Str = xmlAttr(base, AstNodeAttributeKind.Name)
-                    if (this.types.has(baseName)) {
-                        val decl: AstXmlNode = this.types.get(baseName).value()
+                    val decl: *AstXmlNode = this.types.getPtr(baseName)
+                    if (decl != null) {
                         if (decl.name == AstNodeKind.DataClass) {
                             val fields: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Field)
                             for (*field in fields) {
@@ -2287,7 +2292,8 @@ data class Emitter(
 
     // Index into `nativeExtensions[name]` of a matching receiver, or -1.
     fun findNativeExt(name: *Str, recvExpr: *AstXmlNode): Int {
-        if (!this.nativeExtensions.has(name)) {
+        val extensions: *List<CgNativeExt> = this.nativeExtensions.getPtr(name)
+        if (extensions == null) {
             return -1
         }
         val recvType: AstXmlNode = this.inferType(recvExpr)
@@ -2295,7 +2301,6 @@ data class Emitter(
         if (xmlIsEmpty(recv)) {
             return -1
         }
-        val extensions: List<CgNativeExt> = this.nativeExtensions.get(name).value()
         var i: Int = 0
         while (i < extensions.size()) {
             val ext: *CgNativeExt = *extensions[i]
@@ -2321,8 +2326,11 @@ data class Emitter(
             val baseName: Str = xmlAttr(base, AstNodeAttributeKind.Name)
             if (baseName == "this") {
                 arrow = this.selfKind != NameKind.Value
-            } else if (this.nameKinds.has(baseName) && this.nameKinds.get(baseName).value() == NameKind.Shared) {
-                arrow = true
+            } else {
+                val kind: *NameKind = this.nameKinds.getPtr(baseName)
+                if (kind != null && *kind == NameKind.Shared) {
+                    arrow = true
+                }
             }
         }
         var field: Str = name
@@ -2381,10 +2389,10 @@ data class Emitter(
                 break
             }
             val name: Str = xmlAttr(current, AstNodeAttributeKind.Name)
-            if (!this.types.has(name)) {
+            val decl: *AstXmlNode = this.types.getPtr(name)
+            if (decl == null) {
                 break
             }
-            val decl: AstXmlNode = this.types.get(name).value()
             if (decl.name != AstNodeKind.TypeAlias) {
                 break
             }
@@ -2474,8 +2482,9 @@ data class Emitter(
                 // Not a local: a static carries its package's prefix, a top-level function used
                 // as a value carries its function's, and a known prelude native resolves to its
                 // symbol.
-                if (this.staticsByName.has(name)) {
-                    return this.qualify(this.staticsByName.get(name).value().packageName, name)
+                val entry: *CgStatic = this.staticsByName.getPtr(name)
+                if (entry != null) {
+                    return this.qualify(entry.packageName, name)
                 }
                 val pkg: Str = this.functionPackage(name)
                 if (pkg != "") {
@@ -2844,7 +2853,7 @@ data class Emitter(
                     }
                     val extIndex: Int = this.findNativeExt(calleeText, receiverExpr)
                     if (extIndex >= 0) {
-                        val extensions: List<CgNativeExt> = this.nativeExtensions.get(calleeText).value()
+                        val extensions: *List<CgNativeExt> = this.nativeExtensions.getPtr(calleeText)
                         val ext: *CgNativeExt = *extensions[extIndex]
                         var all: Str = this.nativeReceiverArg(ext.receiver, receiverExpr)
                         var a: Int = 0
@@ -2873,8 +2882,8 @@ data class Emitter(
                     }
                     return fmtStr("|(|)", this.qualify(this.functionPackage(calleeText), calleeText), all)
                 }
-                if (this.nativeExtensions.has(calleeText)) {
-                    val extensions: List<CgNativeExt> = this.nativeExtensions.get(calleeText).value()
+                val extensions: *List<CgNativeExt> = this.nativeExtensions.getPtr(calleeText)
+                if (extensions != null) {
                     if (extensions.size() > 0) {
                         var all: Str = this.expr(receiverExpr, 12, xmlEmptyNode())
                         var a: Int = 0

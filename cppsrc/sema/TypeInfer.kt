@@ -269,11 +269,12 @@ fun semSameTypeList(left: *List<AstXmlNode>, right: *List<AstXmlNode>): Bool {
 // Records `name := type`, refusing a second, different binding. An unbound pattern type
 // parameter is not an error here: the caller finds out when substitution leaves nothing.
 fun semBindOne(bindings: *Dictionary<Str, AstXmlNode>, name: *Str, typeNode: *AstXmlNode): Bool {
-    if (!bindings.has(name)) {
+    val existing: *AstXmlNode = bindings.getPtr(name)
+    if (existing == null) {
         bindings.insert(name, typeNode)
         return true
     }
-    return semSameType(bindings.get(name).value(), typeNode)
+    return semSameType(existing, typeNode)
 }
 
 // Whether a receiver pattern matches an actual type, with the pattern's type parameters
@@ -526,10 +527,11 @@ fun semSubstitute(typeNode: *AstXmlNode, bindings: *Dictionary<Str, AstXmlNode>,
             if (!xmlIsTypeParam(name, typeParams)) {
                 return semReRole(typeNode, AstNodeKind.Type)
             }
-            if (!bindings.has(name)) {
+            val bound: *AstXmlNode = bindings.getPtr(name)
+            if (bound == null) {
                 return xmlEmptyNode()
             }
-            return semReRole(bindings.get(name).value(), AstNodeKind.Type)
+            return semReRole(*bound, AstNodeKind.Type)
         }
 
         AstNodeCategory.TypeGeneric -> {
@@ -667,10 +669,11 @@ fun semMachineType(
     var args: List<AstXmlNode> = List<AstXmlNode>()
     var i: Int = 0
     while (i < fn.templateParams.size()) {
-        if (!bindings.has(fn.templateParams[i])) {
+        val bound: *AstXmlNode = bindings.getPtr(fn.templateParams[i])
+        if (bound == null) {
             return ret
         }
-        args.append(semReRole(bindings.get(fn.templateParams[i]).value(), AstNodeKind.TypeArg))
+        args.append(semReRole(*bound, AstNodeKind.TypeArg))
         i = i + 1
     }
     val outer: Str = semOuterTypeName(fn.receiver)
@@ -783,13 +786,15 @@ data class SemInfer(
     fun lookup(name: *Str): AstXmlNode {
         var i: Int = this.scopes.size() - 1
         while (i >= 0) {
-            if (this.scopes[i].has(name)) {
-                return this.scopes[i].get(name).value()
+            val declared: *AstXmlNode = this.scopes[i].getPtr(name)
+            if (declared != null) {
+                return * declared
             }
             i = i - 1
         }
-        if (this.baseScope.has(name)) {
-            return this.baseScope.get(name).value()
+        val base: *AstXmlNode = this.baseScope.getPtr(name)
+        if (base != null) {
+            return * base
         }
         return xmlEmptyNode()
     }
@@ -1035,10 +1040,10 @@ data class SemInfer(
                 return current
             }
             val name: Str = xmlAttr(current, AstNodeAttributeKind.Name)
-            if (!this.facts.types.has(name)) {
+            val decl: *AstXmlNode = this.facts.types.getPtr(name)
+            if (decl == null) {
                 return current
             }
-            val decl: AstXmlNode = this.facts.types.get(name).value()
             if (decl.name != AstNodeKind.TypeAlias) {
                 return current
             }
@@ -1081,8 +1086,8 @@ data class SemInfer(
                 return semMachineType(result, fn, bindings)
             }
         }
-        if (this.facts.nativeExtensions.has(calleeText)) {
-            val extensions: List<SemExtFact> = this.facts.nativeExtensions.get(calleeText).value()
+        val extensions: *List<SemExtFact> = this.facts.nativeExtensions.getPtr(calleeText)
+        if (extensions != null) {
             var e: Int = 0
             while (e < extensions.size()) {
                 val ext: *SemExtFact = *extensions[e]
@@ -1166,10 +1171,10 @@ data class SemInfer(
             return xmlEmptyNode()
         }
         val typeName: Str = xmlAttr(recv, AstNodeAttributeKind.Name)
-        if (!this.facts.types.has(typeName)) {
+        val classDecl: *AstXmlNode = this.facts.types.getPtr(typeName)
+        if (classDecl == null) {
             return xmlEmptyNode()
         }
-        val classDecl: AstXmlNode = this.facts.types.get(typeName).value()
         if (classDecl.name != AstNodeKind.DataClass) {
             return xmlEmptyNode()
         }
@@ -1215,10 +1220,10 @@ data class SemInfer(
                 return xmlEmptyNode()
             }
             val aliasName: Str = xmlAttr(current, AstNodeAttributeKind.Name)
-            if (!this.facts.types.has(aliasName)) {
+            val decl: *AstXmlNode = this.facts.types.getPtr(aliasName)
+            if (decl == null) {
                 return xmlEmptyNode()
             }
-            val decl: AstXmlNode = this.facts.types.get(aliasName).value()
             if (decl.name != AstNodeKind.TypeAlias) {
                 return xmlEmptyNode()
             }
@@ -1294,8 +1299,9 @@ data class SemInfer(
                     return local
                 }
                 // File-level static storage (specs/statics.md).
-                if (this.facts.statics.has(name)) {
-                    return semReRole(this.facts.statics.get(name).value(), AstNodeKind.Type)
+                val staticType: *AstXmlNode = this.facts.statics.getPtr(name)
+                if (staticType != null) {
+                    return semReRole(*staticType, AstNodeKind.Type)
                 }
                 // A bare enum type name used as the receiver of a static conversion.
                 if (this.facts.enumNames.has(name)) {
@@ -1351,17 +1357,17 @@ data class SemInfer(
                 val baseKind: AstNodeCategory = xmlKind(base)
                 if (baseKind == AstNodeCategory.TypeNamed || baseKind == AstNodeCategory.TypeGeneric) {
                     val baseName: Str = xmlAttr(base, AstNodeAttributeKind.Name)
-                    var decl: AstXmlNode = xmlEmptyNode()
-                    if (this.facts.types.has(baseName)) {
-                        decl = this.facts.types.get(baseName).value()
-                    } else if (!xmlIsEmpty(this.body.selfDecl)
-                        && xmlAttr(this.body.selfDecl, AstNodeAttributeKind.Name) == baseName
-                    ) {
-                        // A class the lowering built (a state machine): its fields are reached
-                        // through the body's own context, not a written declaration.
-                        decl = this.body.selfDecl
+                    var decl: *AstXmlNode = this.facts.types.getPtr(baseName)
+                    if (decl == null) {
+                        if (!xmlIsEmpty(this.body.selfDecl)
+                            && xmlAttr(this.body.selfDecl, AstNodeAttributeKind.Name) == baseName
+                        ) {
+                            // A class the lowering built (a state machine): its fields are reached
+                            // through the body's own context, not a written declaration.
+                            decl = *this.body.selfDecl
+                        }
                     }
-                    if (decl.name == AstNodeKind.DataClass) {
+                    if (decl != null && decl.name == AstNodeKind.DataClass) {
                         val fields: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Field)
                         for (*field in fields) {
                             if (xmlAttr(field, AstNodeAttributeKind.Name) == memberText) {
@@ -1490,7 +1496,7 @@ fun semInferTypes(
     val captureNames: List<Str> = ctx.captures.keys()
     i = 0
     while (i < captureNames.size()) {
-        infer.mark(captureNames[i], ctx.captures.get(captureNames[i]).value())
+        infer.mark(captureNames[i], ctx.captures.getPtr(captureNames[i]))
         i = i + 1
     }
     val out: List<AstXmlNode> = infer.stmts(body)
@@ -1498,7 +1504,8 @@ fun semInferTypes(
     val proven: List<Str> = infer.types.keys()
     i = 0
     while (i < proven.size()) {
-        inferred.insert(proven[i], infer.types.get(proven[i]).value())
+        val provenType: *AstXmlNode = infer.types.getPtr(proven[i])
+        inferred.insert(proven[i], *provenType)
         i = i + 1
     }
     return out
@@ -1536,7 +1543,7 @@ fun semTypeOfExpr(
     val captureNames: List<Str> = ctx.captures.keys()
     i = 0
     while (i < captureNames.size()) {
-        infer.mark(captureNames[i], ctx.captures.get(captureNames[i]).value())
+        infer.mark(captureNames[i], ctx.captures.getPtr(captureNames[i]))
         i = i + 1
     }
     return infer.typeOf(expr, names)

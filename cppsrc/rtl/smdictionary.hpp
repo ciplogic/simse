@@ -173,6 +173,17 @@ public:
     // calls do.
     Bool has(const TKey& key) const { return findRow(key) >= 0; }
 
+    // The value slot of `key`, or nullptr when absent: the in-place read behind the
+    // language's `getPtr`, so a lookup of a large value does not copy it out - `get`
+    // copies it into an `Opt` and `has` is this with the pointer tested (`cppsrc/rtl/_res.md`).
+    // `const` like `find`/`has` (both are queries, and `_rows` is `mutable` for the packing
+    // a query memoizes); the pointer is non-const because the language's dictionary
+    // receiver is always a place.
+    TValue* valuePtr(const TKey& key) const {
+        const Row row = findRow(key);
+        return row < 0 ? nullptr : &_rows[row].second;
+    }
+
     // The std surface: 0 or 1.
     Int count(const TKey& key) const { return findRow(key) >= 0 ? 1 : 0; }
 

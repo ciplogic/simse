@@ -137,6 +137,13 @@ Str simse_int_toString(Int self);
 template <class K, class V>
 Dictionary<K, V> simse_dictionaryOf();
 
+// `d.getPtr(key)`: the value's place in the dictionary, or `null` when the key is
+// absent - the read that copies nothing (`get` copies the value out, `has` is this with
+// the pointer tested). The place is the dictionary's own storage, so it is valid until
+// the next `insert`/`remove`/`clear` on that dictionary.
+template <class K, class V>
+V* simse_dict_getPtr(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
+
 // `d.get(key)`: the value for `key`, or an empty `Opt` when absent.
 template <class K, class V>
 Opt<V> simse_dict_get(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
@@ -433,15 +440,20 @@ inline Dictionary<K, V> simse_dictionaryOf() {
 }
 
 template <class K, class V>
+inline V* simse_dict_getPtr(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
+    return self.valuePtr(key);
+}
+
+template <class K, class V>
 inline Opt<V> simse_dict_get(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
-    auto it = self.find(key);
-    if (it == self.end()) return Opt<V>::none();
-    return Opt<V>::some(it->second);
+    const V* found = simse_dict_getPtr(self, key);
+    if (found == nullptr) return Opt<V>::none();
+    return Opt<V>::some(*found);
 }
 
 template <class K, class V>
 inline Bool simse_dict_has(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
-    return self.find(key) != self.end();
+    return simse_dict_getPtr(self, key) != nullptr;
 }
 
 template <class K, class V>

@@ -90,8 +90,9 @@ fun Emitter.ilFunctionFor(
 // An operand becomes a leaf `AstXmlNode` - a slot is a name, a constant its literal, a
 // place the path it came from, folded out of the instruction that built it.
 fun Emitter.ilIntAt(map: *Dictionary<Int, Int>, key: Int, fallback: Int): Int {
-    if (map.has(key)) {
-        return map.get(key).value()
+    val found: *Int = map.getPtr(key)
+    if (found != null) {
+        return * found
     }
     return fallback
 }
@@ -131,8 +132,8 @@ fun Emitter.ilSeedFrameTypes(il: *IlBody): Unit {
     val proven: List<Str> = il.inferredTypes.keys()
     var i: Int = 0
     while (i < proven.size()) {
-        val typeNode: AstXmlNode = il.inferredTypes.get(proven[i]).value()
-        this.localTypes.insert(proven[i], typeNode)
+        val typeNode: *AstXmlNode = il.inferredTypes.getPtr(proven[i])
+        this.localTypes.insert(proven[i], *typeNode)
         this.nameKinds.insert(proven[i], this.kindOf(typeNode))
         i = i + 1
     }
@@ -884,8 +885,8 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
         val kind: IlOpKind = op.kind
         val dst: Int = this.ilDst(op)
 
-        if (blockEnd.has(i)) {
-            val crossing: IlCrossing = blockEnd.get(i).value()
+        val crossing: *IlCrossing = blockEnd.getPtr(i)
+        if (crossing != null) {
             val end: Int = crossing.end
             val lastJump: Int = crossing.lastJump
             var covered: Bool = false
@@ -914,10 +915,10 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
             }
             val slotType: AstXmlNode = ilVarType(il, slot)
             if (!xmlIsEmpty(slotType)) {
-                if (declLines.has(i)) {
+                val shared: *List<Str> = declLines.getPtr(i)
+                if (shared != null) {
                     // A declaration a group already lists: the first of its type prints
                     // the group's lines (`ilDeclLines`), the others print nothing.
-                    val shared: List<Str> = declLines.get(i).value()
                     var s: Int = 0
                     while (s < shared.size()) {
                         // A continuation line is one level deeper: the same declaration.

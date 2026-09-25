@@ -88,11 +88,13 @@ fun tallyView(line: StrView, counts: *Dictionary<Str, Stats>): Unit {
     fold(line.substr(0, semi), tenths(line.substr(semi + 1, line.size() - semi - 1)), counts)
 }
 
-// One station's tenths folded into `counts`.
+// One station's tenths folded into `counts`. The aggregate is reached through `getPtr`
+// and updated where it lives: `get` would copy it out and `insert` would hash the name
+// again, which is two lookups per line against the baseline's one. The pointer is valid
+// until the next `insert` on the dictionary, and none happens between here and the write.
 fun fold(name: Str, value: Int, counts: *Dictionary<Str, Stats>): Unit {
-    val existing: Opt<Stats> = counts.get(name)
-    if (existing.hasValue()) {
-        val stats: Stats = existing.value()
+    val stats: *Stats = counts.getPtr(name)
+    if (stats != null) {
         if (value < stats.min) {
             stats.min = value
         }
@@ -101,10 +103,9 @@ fun fold(name: Str, value: Int, counts: *Dictionary<Str, Stats>): Unit {
         }
         stats.sum = stats.sum + value
         stats.count = stats.count + 1
-        counts.insert(name, stats)
-    } else {
-        counts.insert(name, Stats(value, value, value, 1))
+        return
     }
+    counts.insert(name, Stats(value, value, value, 1))
 }
 
 fun main(args: List<Str>): Int {
@@ -141,9 +142,15 @@ fun main(args: List<Str>): Int {
     names.sort((left: Str, right: Str) -> left < right)
     var i: Int = 0
     while (i < names.size()) {
-        val stats: Stats = counts.get(names[i]).value()
-        println("{" + names[i] + "=" + formatTenths(stats.min) + "/"
-                + formatTenths(meanOf(stats.sum, stats.count)) + "/" + formatTenths(stats.max) + "}")
+        // The name is one `keys()` gave back, so the place is there: `get` would copy the
+        // aggregate a second time for a report that only reads it.
+        val stats: *Stats = counts.getPtr(names[i])
+        if (stats != null) {
+            println(
+                "{" + names[i] + "=" + formatTenths(stats.min) + "/"
+                        + formatTenths(meanOf(stats.sum, stats.count)) + "/" + formatTenths(stats.max) + "}"
+            )
+        }
         i = i + 1
     }
 
@@ -151,7 +158,9 @@ fun main(args: List<Str>): Int {
     if (elapsed > 0) {
         rate = (size / 1048576) * 1000 / elapsed
     }
-    eprintln(lines.toString() + " rows, " + counts.size().toString() + " stations, "
-             + elapsed.toString() + " ms, " + rate.toString() + " MB/s")
+    eprintln(
+        lines.toString() + " rows, " + counts.size().toString() + " stations, "
+                + elapsed.toString() + " ms, " + rate.toString() + " MB/s"
+    )
     return 0
 }

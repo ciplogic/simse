@@ -47,20 +47,22 @@ bucket-as-row-index indirection costs ~1.8x.
 
 | Implementation | Time | Throughput |
 | --- | --- | --- |
-| **Simse, parsing each line in place (`readLineView()`)** | **1093 / 1106 ms** | **123 / 121 MB/s** |
-| C++ STL baseline (`getline` + `stod`) | 1390 / 1405 ms | 96 MB/s |
-| Bun reference aggregate | 712 ms | 188 MB/s |
+| **Simse: in-place parse (`readLineView()`) and in-place aggregate (`getPtr`)** | **1157 / 1167 ms** | **116 / 115 MB/s** |
+| C++ STL baseline (`getline` + `stod`) | 1340 / 1360 ms | 100 / 98 MB/s |
+| Bun reference aggregate | 673 / 677 ms | 199 / 198 MB/s |
 
-So the naive Simse program is **1.27x faster** than the naive C++ one on the same
-data (the ratio has run 1.26-1.40x across sessions - the C++ baseline varies more
-than the Simse program), and 1.54x behind the JS reference. Reading the line into a fresh `Str` per
+So the naive Simse program is **1.16x faster** than the naive C++ one on the same
+data (the ratio has run 1.16-1.40x across sessions - the C++ baseline varies more
+than the Simse program), and 1.72x behind the JS reference. Reading the line into a fresh `Str` per
 line (`readLine()`) or into a recycled one (`readLineInto`) costs 116-66 MB/s on
 the same program, which is why the in-place reader is the one the benchmark keeps.
-The remaining gap to close is in the *library*, not the language: the dictionary
-has no in-place access to a stored value, so the Simse program does two lookups per
-line where the C++ one does one, and the station name and the temperature still
-become `Str` values. `benchmarks/onebrc/benchmark.md` has the method, the numbers
-per reader and how to reproduce them.
+The one gap that was squarely the *library*'s has since closed: `Dictionary.getPtr`
+hands back the value's place, so the aggregate is updated where it lives instead of
+`get`ting a copy and `insert`ing it back - two lookups per line where the C++ one does
+one - and that was worth 7% of the loop (1246 / 1256 ms against 1157 / 1167 ms, the
+same source and the same interleaved rounds). What remains is that the station name
+and the temperature still become `Str` values. `benchmarks/onebrc/benchmark.md` has
+the method, the numbers per reader and how to reproduce them.
 
 **The deployment story.** One amalgamated `.cpp` per program, no runtime to ship,
 no garbage collector, no reflection metadata. Programs are native binaries built

@@ -1319,8 +1319,9 @@ data class IlExtractor(
 
     // The type table: text for the dump, the node for a backend. The first node for a text wins.
     fun typeIndex(text: *Str, node: *AstXmlNode): Int {
-        if (this.typeAt.has(text)) {
-            val index: Int = this.typeAt.get(text).value()
+        val found: *Int = this.typeAt.getPtr(text)
+        if (found != null) {
+            val index: Int = *found
             if (!xmlIsEmpty(node) && index < this.out.typeNodes.size()) {
                 val existing: *AstXmlNode = *this.out.typeNodes[index]
                 if (xmlIsEmpty(existing)) {
@@ -1340,8 +1341,9 @@ data class IlExtractor(
     }
 
     fun poolIndex(text: *Str): Int {
-        if (this.poolAt.has(text)) {
-            return this.poolAt.get(text).value()
+        val found: *Int = this.poolAt.getPtr(text)
+        if (found != null) {
+            return *found
         }
         this.out.pool.append(text)
         this.poolAt.insert(text, this.out.pool.size() - 1)
@@ -1349,8 +1351,9 @@ data class IlExtractor(
     }
 
     fun labelIndex(name: *Str): Int {
-        if (this.labelAt.has(name)) {
-            return this.labelAt.get(name).value()
+        val found: *Int = this.labelAt.getPtr(name)
+        if (found != null) {
+            return *found
         }
         this.out.labels.append(name)
         this.labelAt.insert(name, this.out.labels.size() - 1)
@@ -1369,8 +1372,9 @@ data class IlExtractor(
             key = key + "|" + ilIntText(argTypes[i])
             i = i + 1
         }
-        if (this.methodAt.has(key)) {
-            return this.methodAt.get(key).value()
+        val found: *Int = this.methodAt.getPtr(key)
+        if (found != null) {
+            return *found
         }
         this.out.methods.append(IlMethod(name, kind, argTypes.size(), staticBase, returnType, argTypes))
         this.methodAt.insert(key, this.out.methods.size() - 1)
@@ -1382,8 +1386,9 @@ data class IlExtractor(
     }
 
     fun varIndex(name: *Str): Int {
-        if (this.varAt.has(name)) {
-            return this.varAt.get(name).value()
+        val found: *Int = this.varAt.getPtr(name)
+        if (found != null) {
+            return *found
         }
         return -1
     }
@@ -1512,7 +1517,7 @@ data class IlExtractor(
         var ti: Int = 0
         while (ti < declaredTypes.size()) {
             this.out.inferredTypes.insert(
-                declaredTypes[ti], this.fn.inferredTypes.get(declaredTypes[ti]).value()
+                declaredTypes[ti], *this.fn.inferredTypes.getPtr(declaredTypes[ti])
             )
             ti = ti + 1
         }
@@ -2251,10 +2256,14 @@ data class IlExtractor(
         // A captured variable is a field of the closure, not a frame slot: read through `self`.
         if (this.fn.captures.has(name)) {
             var text: Str = "?"
-            if (this.fn.captureTypes.has(name)) {
-                text = ilTypeText(this.fn.captureTypes.get(name).value())
+            var captureNode: AstXmlNode = xmlEmptyNode()
+            val capturedType: *AstXmlNode = this.fn.captureTypes.getPtr(name)
+            if (capturedType != null) {
+                // The node is read through the pointer: the table is not copied from.
+                captureNode = *capturedType
+                text = ilTypeText(capturedType)
             }
-            val slot: Int = this.freshSlot(text, this.fn.captureTypes.get(name).value())
+            val slot: Int = this.freshSlot(text, captureNode)
             this.emit(IlOpKind.GetField, ilOps3(slot, this.varIndex("self"), this.poolIndex(name)))
             return slot
         }
@@ -2274,8 +2283,9 @@ data class IlExtractor(
         val typeNode: AstXmlNode = this.exprType(e)
         var typeText: Str = "?"
         if (xmlIsEmpty(typeNode)) {
-            if (this.fn.statics.has(name)) {
-                typeText = this.fn.statics.get(name).value()
+            val staticType: *Str = this.fn.statics.getPtr(name)
+            if (staticType != null) {
+                typeText = *staticType
             }
         } else {
             typeText = ilTypeText(typeNode)
@@ -2498,14 +2508,14 @@ data class IlExtractor(
         if (this.fn.facts == null || name == "") {
             return xmlEmptyNode()
         }
-        if (!this.fn.facts.types.has(name)) {
+        val decl: *AstXmlNode = this.fn.facts.types.getPtr(name)
+        if (decl == null) {
             return xmlEmptyNode()
         }
-        val decl: AstXmlNode = this.fn.facts.types.get(name).value()
         if (xmlKind(decl) != AstNodeCategory.DataClass) {
             return xmlEmptyNode()
         }
-        return decl
+        return *decl
     }
 
     // A fact's receiver *pattern*: its recorded receiver, or - for a `native fun` extension,
@@ -2522,8 +2532,9 @@ data class IlExtractor(
     fun argumentType(e: AstXmlNode): AstXmlNode {
         if (xmlKind(e) == AstNodeCategory.ExprName) {
             val name: Str = xmlAttr(e, AstNodeAttributeKind.Name)
-            if (this.varAt.has(name)) {
-                return ilVarType(this.out, this.varAt.get(name).value())
+            val found: *Int = this.varAt.getPtr(name)
+            if (found != null) {
+                return ilVarType(this.out, *found)
             }
         }
         return this.exprType(e)
@@ -2959,8 +2970,9 @@ data class IlExtractor(
         )
         ci = 0
         while (ci < captured.size()) {
-            if (info.captureTypes.has(captured[ci])) {
-                closure.captureTypes.append(info.captureTypes.get(captured[ci]).value())
+            val capturedType: *AstXmlNode = info.captureTypes.getPtr(captured[ci])
+            if (capturedType != null) {
+                closure.captureTypes.append(*capturedType)
             } else {
                 closure.captureTypes.append(xmlEmptyNode())
             }

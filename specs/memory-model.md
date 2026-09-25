@@ -4,19 +4,14 @@ Status: design baseline — suitable for the first self-hosted implementation.
 
 ## Layout types (`class` and `data class`)
 
-Writing `class C { ... }` declares only the **layout** (the shape of data) of
-`C`. By itself the name `C` in a type position denotes a *value*: its storage
-is inline where the variable lives, and copying a value deep-copies it.
+`class C { ... }` declares only the layout (shape of data) of `C`. The name `C` in a type
+position denotes a value: its storage is inline where the variable lives, and copying a
+value deep-copies it.
 
-User-facing record declarations use `data class C(...)`; see
-`declarations.md`. A `data class` is also an inline value/layout type. Its
-constructor creates a value, and `&value` explicitly creates a counted boxed
-copy. The `class C { ... }` spelling remains the low-level/layout spelling for
-compiler and runtime-defined types.
-
-- `class List<T> { ... }` is a mutable value type backed by a growable inline
-  buffer, analogous to C++ `std::vector<T>`. Copying a `List<T>` deep-copies
-  its elements and buffer.
+Record declarations use `data class C(...)` (`declarations.md`), also an inline value/layout
+type. The `class C { ... }` spelling is the low-level/layout spelling for compiler- and
+runtime-defined types; `class List<T> { ... }` is a mutable value type backed by a growable
+inline buffer, and copying it deep-copies its elements and buffer.
 
 ### Alignment and packing
 
@@ -32,32 +27,27 @@ The language's layout model is **4-byte packing**: values are laid out on
   field more than 4-byte alignment.
 - Arrays and container buffers use the packed element size as the stride.
 
-This is normative: the ABI does not promise 8-byte alignment for `Int64` or
-`Float64` fields, pointer fields, or any aggregate member, and code that relies
-on the host's default (8-byte) alignment is outside the specification. `Str`
-and `&T` are themselves built from 4-aligned pieces (`Str` is a `SmallVector`
-of `Char`, `&T` is a counted box), so the rule is uniform across the language.
+This is normative: the ABI does not promise 8-byte alignment for `Int64` or `Float64`
+fields, pointer fields, or any aggregate member, and code relying on the host's default
+(8-byte) alignment is outside the specification. `Str` and `&T` are built from 4-aligned
+pieces too, so the rule is uniform.
 
-Status: the bootstrap shims spell `Str` as the inline `SmString` (not
-`std::string`), `&T` as `std::shared_ptr` and callables as `std::function`. The
-host types are declared with 8-byte alignment, so 4-byte packing under-aligns
-them; that is accepted for now and recorded in `impl_specs/rtl-abi.md`
-(`SIMSE_NO_PACK4` reverts to the host layout).
+Status: the bootstrap shims spell `Str` as the inline `SmString` (not `std::string`),
+`&T` as `std::shared_ptr`, and callables as `std::function`. Those host types are declared
+with 8-byte alignment, so 4-byte packing under-aligns them; that is accepted for now
+(`impl_specs/rtl-abi.md`; `SIMSE_NO_PACK4` reverts to the host layout).
 
 ### Arrays
 
-`Array<T>` lives on the heap and behaves like a reference-counted Java/C#-style
-array: the variable holds a reference, and assignment shares the allocation
-with no element deep copy. The allocation contains the reference count, the
-element count, and the elements immediately afterward in one block. `Array<T>`
-is already a reference and takes no memory operator. `RawArray<T>` is the
-separate unmanaged `T*` form. See `built-in-types.md` for the complete layout.
+`Array<T>` lives on the heap and behaves like a reference-counted array: the variable holds
+a reference, assignment shares the allocation with no element deep copy, and the allocation
+holds the reference count, element count, and elements in one block. It is already a
+reference and takes no memory operator; `RawArray<T>` is the separate unmanaged `T*` form
+(`built-in-types.md`, `ref-counted-layout.md`).
 
-`Array<T>` is mutable through its elements, but its length is fixed at
-construction, like a Java or C# array. Assignment such as `a = b` shares the
-same allocation, so changing an element through either handle is visible
-through the other. Growing, shrinking, inserting, and removing elements are
-not array operations.
+Its elements are mutable but its length is fixed at construction. Assignment `a = b`
+shares the same allocation, so a change through either handle is visible through the
+other. Growing, shrinking, inserting, and removing elements are not array operations.
 
 ## Memory operators on types
 
@@ -94,44 +84,22 @@ The underlying value of a reference (`&T`) or a raw pointer (`*T`) is obtained
 with the explicit `copy` operation. `copy` copies the value out into a plain
 local; it never transfers ownership and never consumes the reference.
 
-```text
-var value: Point = copy(b)   // deep copy from &Point
-var value2: Point = copy(p)  // deep copy from *Point; unsafe if p is invalid
-```
-
 Taking a raw pointer and copying through it is unsafe unless the compiler can
 prove the pointer is valid for the complete expression. The first
 self-hosted implementation may require an explicit `unsafe` block for all raw
 pointer creation, dereference, and `copy` operations through `*T`.
 
-The operation is rarely *written* any more. Every position whose type is known reads a
-handle through on its own ("Automatic dereference", below), so `copy` is what the
-extractor emits for such a position rather than what a program spells - the compiler's own
-ring spells no `copy(...)` at all.
+The operation is rarely written: every position whose type is known reads a handle through
+on its own ("Automatic dereference", below), so `copy` is what the extractor emits.
 
 ## Expression semantics
 
-The memory operators also appear as expressions.
-
-- `b = &a` — **boxes a copy** of `a` into a fresh, non-null counted reference. The box is
-  a snapshot, so later mutations of `a` are not reflected in `b` (and
-  mutations through `b` do not affect `a`).
-- `b = *a` — yields a **raw pointer to `a`**; no copy is made.
-  - If `a` is a **value type** (`T`), `b` is a raw pointer (`*T`) to `a`'s own
-    storage. Reads/writes through `b` are visible in `a` (and vice versa),
-    exactly as in C/C++. This introduces aliasing and a possible
-    dangling-pointer hazard if `a` goes out of scope while `b` is still used.
-  - If `a` is already a counted reference (`&T`), `b` is a raw pointer to the
-    **same box** that `a` manages — equivalent to `shared_ptr<T>::get()`: it
-    drops refcount management but points at the same storage.
-
-```text
-data class Point(var x: Int, var y: Int)
-
-var a: Point = Point(1, 2)
-var b: &Point = &a   // b is a counted reference to a copy of a
-var p: *Point = *b   // p is a raw pointer to the same box that b manages
-```
+- `b = &a` boxes a copy of `a` into a fresh, non-null counted reference: a snapshot, so
+  later mutations of `a` are not reflected in `b` and vice versa.
+- `b = *a` yields a raw pointer to `a`, no copy made. For a value `a` it points at `a`'s
+  own storage (reads/writes through `b` are visible in `a` and vice versa, with the aliasing
+  and dangling hazard of C/C++); for a `&T` `a` it points at the **same box**, equivalent to
+  `shared_ptr<T>::get()`.
 
 ### Automatic dereference
 
@@ -143,45 +111,32 @@ through for a by-value parameter, and `&T` boxes a copy of what it is given. The
 writes the `*` for a *binding* (`val p: *T = x`), never for a call
 (`specs/functions.md`, "Handles at a call").
 
-A **binary operand** is converted the same way, because every operator the language has
-is an operator on *values*: `out + separator` with `separator: *Str` is
-`out + *separator`, so a function can take a `*T` without every use of it spelling the
-`*`. The *other* operand is what says the operation is on values, and it says so in two
-ways: it is a value of the handle's own pointee (a `Str` next to the `*Str`), or it is a
-handle of that pointee too - `xmlAttr(a, Name) == xmlAttr(b, Name)` compares the two
-*strings*, since a borrow of a `Str` is a `Str` (value semantics) and not a pointer in the
-language's eyes. A handle against a *different* type is left alone: comparing two
-unrelated handles is a meaning of its own, or the type error it always was. So is a
-handle against `null`, which is the one comparison a raw pointer is *for*
-(`impl_specs/linear-il.md`, "The conversion: one operation, spelled by its types").
+A **binary operand** is converted the same way, since every operator is on values:
+`out + separator` with `separator: *Str` is `out + *separator`. The other operand says the
+operation is on values, being either a value of the handle's own pointee (a `Str` next to
+the `*Str`) or a handle of that pointee too - `xmlAttr(a, Name) == xmlAttr(b, Name)`
+compares the two strings. A handle against a different type, or against `null`, is left
+alone (`impl_specs/linear-il.md`).
 
-A **value position the destination's type is known for** is converted too, and that is the
-half that makes a borrowing accessor usable: a declaration (`val name: Str = xmlAttr(n,
-Name)`), an assignment to a typed slot, a `return`, and a file-level `var`'s initializer
-read a `*T`/`&T` through to the `T` the position asks for. So an accessor can return a
-*borrow* into what it read - `xmlAttr` hands back a `*Str` that points into the node's own
-storage and copies nothing - while every caller that wants a `Str` of its own writes
-nothing at all.
+A **value position whose destination type is known** is converted too: a declaration
+(`val name: Str = xmlAttr(n, Name)`), an assignment to a typed slot, a `return`, and a
+file-level `var`'s initializer read a `*T`/`&T` through to the `T` the position asks for, so
+an accessor can hand back a *borrow* (`xmlAttr` returns a `*Str` into the node's storage)
+while a caller that wants a `Str` of its own writes nothing.
 
-The **call argument** is where the conversion is inferred from the callee's parameter
-(`specs/functions.md`, "Handles at a call"), so it fires wherever that parameter's type is
-known. Two parameter shapes carry a type the *callee's own signature* does not fix, and
-they are read from the argument instead: a generated extension spells its receiver as an
-explicit `this` first parameter, so `Dictionary<K, V>.has(key: K)`'s `key` is the second
-parameter, and its bare `K` is bound by the receiver - a handle argument is read through to
-the pointee the argument itself names - while a construction (`AstNodeAttribute(kind,
-value)`) converts its arguments against the data class's *fields*, which is the same rule.
-No call in the compiler's own ring spells a `copy` any more, for an element of a container
-(`names.append(copy(xmlAttr(param, Name)))`) or for anything else: what the destination
-decides, the extractor emits.
+Two parameter shapes carry a type the callee's own signature does not fix, and the
+conversion reads the argument instead: a generated extension's receiver is an explicit
+`this` first parameter, so `Dictionary<K, V>.has(key: K)`'s bare `K` is bound by the
+receiver, while a construction (`AstNodeAttribute(kind, value)`) converts its arguments
+against the data class's fields. So no call spells a `copy`: what the destination decides,
+the extractor emits.
 
-Member access, indexing, and method calls through a counted reference (`&T`) or
-a raw pointer (`*T`) automatically reach the pointee. For example, if `source`
-has type `&Str`, then `source[i]`, `source.size()`, and any member call on
-`source` operate on the `Str` it points to, not on the handle. This is a
-syntactic convenience only: it does not change the ownership, nullability, or
-unsafety rules of the reference, and dereferencing a null/dangling handle is
-still unchecked undefined behavior.
+Member access, indexing, and method calls through a counted reference (`&T`) or a raw
+pointer (`*T`) automatically reach the pointee: if `source` has type `&Str`, then
+`source[i]`, `source.size()`, and any member call on `source` operate on the `Str` it
+points to, not on the handle. This is a syntactic convenience only: it does not change the
+ownership, nullability, or unsafety rules of the reference, and dereferencing a
+null/dangling handle is still unchecked undefined behavior.
 
 ### Compound assignment and the step operators
 
@@ -192,20 +147,10 @@ statement-level shorthand for updating a place in place: the target's *place* is
 located once, its current value is read out of that same place, the operation is
 folded into it, and the result is written back through it.
 
-```text
-i += 1        // i = i + 1  - a local slot, one operation, no address
-xs[n] += 1    // the list and `n` are evaluated once, the element is updated in place
-c.hits++      // the receiver is located once, the field is updated through it
-*value += 1   // the load and the store both go through the pointer
-total -= 1    // a file-level `var`: its static storage is updated
-```
-
-The place is located **once**, so a receiver or an index with an effect runs
-once (`xs[next()] += 1` calls `next()` once), and **nothing is copied on the
-way**: a target that is not a local slot is reached through a raw pointer to the
-place, never through a copy of the value. That is why the forms hold on a field
-of an element (`counters[i].hits += 1`) and through a `*T` parameter, and why
-such a write cannot be lost in a copy.
+The place is located **once**, so a receiver or an index with an effect runs once
+(`xs[next()] += 1` calls `next()` once), and **nothing is copied on the way**: a target that
+is not a local slot is reached through a raw pointer to the place, never through a copy of
+the value.
 
 `i++` and `i--` are the same statement with a `1`: the parser writes `i += 1`
 and `i -= 1`. Their value is the assignment's, and an assignment has none, so
@@ -220,15 +165,10 @@ pointer is not a language operation.
 
 ## Type aliases
 
-`typealias` names a (possibly composed) type, so memory operators can be given
-a readable name. An alias may target any type, including a value type, array,
-counted reference (`&T`), raw pointer (`*T`), or callable type. The alias does
-not remove or change the target type's ownership, nullability, or safety rules.
-
-```text
-typealias PList<T> = &List<T>   // named counted reference to a List<T>
-typealias Raw<T> = *T            // named raw pointer; still nullable/unsafe
-```
+`typealias` names a (possibly composed) type. An alias may target any type, including a
+value type, array, counted reference (`&T`), raw pointer (`*T`), or callable type. The alias
+does not remove or change the target type's ownership, nullability, or safety rules.
+`PList<T>` (a counted reference to `List<T>`) and `Raw<T>` are such aliases.
 
 Aliases may be generic. Parameters are declared between the alias name and the
 equals sign, and every parameter used on the right-hand side must be declared
@@ -243,88 +183,52 @@ typealias PointAction = Action<Point>
 typealias PointPtrAction = PtrAction<Point>
 ```
 
-`Action<T>` accepts a value of `T`; `PtrAction<T>` accepts a nullable,
-non-owning raw pointer to `T`. A pointer parameter does not keep its target
-alive, and invoking a `PtrAction<T>` with a null or dangling pointer has the
-same unchecked undefined behavior as any other raw-pointer use.
+`Action<T>` accepts a value of `T`; `PtrAction<T>` accepts a nullable, non-owning raw
+pointer to `T`, which does not keep its target alive, and invoking it with a null or
+dangling pointer is unchecked undefined behavior.
 
-Function types use the same `typealias` construct. A callable alias has a
-parameter list followed by `->` and its return type:
+Function types use the same `typealias` construct: a parameter list followed by `->` and
+the return type (`typealias Mapper = (Int) -> Str`); the no-return form uses `Unit`
+(`typealias Action = (Point) -> Unit`). `Unit` is the single no-useful-value return type:
+a function declared with no return value has an `Action`-compatible type and reaching the
+end of it is valid, while a function returning any other type must return a value on every
+path.
 
-```text
-typealias Mapper = (Int) -> Str
-typealias Reducer = (Int, Int) -> Int
-```
+Function aliases lower to the runtime's `Func<...>`/`std::function` representation, holding
+named functions, lambdas, or other compatible callables. Assignment copies the callable
+handle/value according to the backend representation; invoking a null callable is an
+unchecked runtime error.
 
-The no-return form uses `Unit` as the return type:
+Lambda parameters are typed in the lambda when the expected callable type is not enough
+to infer them. A lambda captures the local values its body references, by value: the
+closure gets its own copy of each captured value, so mutating the original afterwards does
+not change the closure. A captured counted reference (`&T`) is copied by value, which
+copies the handle and therefore shares the same box. Explicit capture lists and capture by
+reference are deferred.
 
-```text
-typealias Action = (Point) -> Unit
-```
+The set of captured values is computed: it is the free variables of the body - the names
+it reads that are not its own parameters and not names it declares. A lambda is modelled
+as
 
-`Unit` is the single no-useful-value return type. A function declared with no
-return value has an `Action`-compatible type, and reaching the end of such a
-function is valid. A function returning any other type must return a value on
-every path.
+- a class with one field per captured value, and
+- one method, `invoke`, whose parameters are the lambda's and whose body is the lambda's
+  body; inside it a captured name is a field of the instance.
 
-Function aliases are transparent names for callable types and lower to the
-runtime's `Func<...>`/`std::function` representation. They may hold named
-functions, lambdas, or other compatible callable values. Assignment copies the
-callable handle/value according to the backend representation; invoking a null
-callable is an unchecked runtime error.
-
-```text
-typealias Mapper = (Int) -> Str
-typealias Action = (Point) -> Unit
-
-var stringify: Mapper = (value: Int) -> value.toString()
-var printPoint: Action = (point: Point) -> {
-    println(point.x)
-    println(point.y)
-}
-
-val text: Str = stringify(42)
-printPoint(Point(1, 2))
-```
-
-Lambda parameters are typed in the lambda when the expected callable type is
-not enough to infer them. A lambda expression captures the local values its body
-**references, by value**: the closure gets its own copy of each captured value, so
-mutating the original afterwards does not change the closure. A captured counted
-reference (`&T`) is copied by value, which copies the handle and therefore
-**shares** the same box. Explicit capture lists and capture by reference are
-deferred.
-
-The set of captured values is **computed**: it is the free variables of the body -
-the names it reads that are not its own parameters and not names it declares. That
-set is the closure, and a lambda is modelled as
-
-- a **class** with one field per captured value, and
-- one method, `invoke`, whose parameters are the lambda's and whose body is the
-  lambda's body; inside it a captured name is a field of the instance.
-
-The callable types of `rtl` (`Func<Ret(Params)>`, and `Unit`-returning ones -
-the `IInvocableFunc` / `IInvocableAction` of the conventional one-method
-interface) are exactly that one method, so a lambda value *is* an instance of its
-class and a call through a callable value is a call of `invoke`. A `&lambda` is a
-counted handle to that instance (`&T`), which is what lets a closure outlive the
-frame that built it.
+The callable types of `rtl` (`Func<Ret(Params)>` and the `Unit`-returning `IInvocableFunc`
+/ `IInvocableAction`) are exactly that one method, so a lambda value *is* an instance of
+its class and a call through a callable value is a call of `invoke`. A `&lambda` is a
+counted handle to that instance (`&T`), which lets a closure outlive the frame that built
+it.
 
 A lambda's parameter types come from the explicit annotations, or from the
 expected callable type when the lambda is assigned to a callable-typed variable
 or passed to a callable-typed parameter. Its return type comes from the expected
 callable type, or is inferred from a single trailing expression or a `return`.
 
-```text
-typealias Mapper = (Int) -> Int
-val doubler: Mapper = (v: Int) -> v * 2
-val add10: Mapper = makeAdder(10)   // a closure capturing `10` by value
-```
-
-Type aliases are transparent: they do not create a new runtime type, ownership
-mode, or layout. Generic aliases are permitted when all referenced type
-parameters are declared. A counted reference is the only stable way to share a
-mutable object; copying a value never creates sharing implicitly.
+Type aliases create no new runtime type, ownership mode, or layout. Generic aliases are
+permitted when all referenced type parameters are declared. A counted reference is the
+only stable way to share a mutable object; copying a value never creates sharing
+implicitly.
 
 ## Nullability and raw-pointer lifetime
 

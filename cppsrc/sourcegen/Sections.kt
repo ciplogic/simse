@@ -101,7 +101,8 @@ data class Sections(
             val keys: List<Str> = section.items.keys()
             var k: Int = 0
             while (k < keys.size()) {
-                this.appendBlock(*out, section.items.get(keys[k]).value())
+                val item: *Str = section.items.getPtr(keys[k])
+                this.appendBlock(*out, *item)
                 k = k + 1
             }
         }

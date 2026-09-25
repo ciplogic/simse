@@ -4,9 +4,8 @@ Status: design baseline — suitable for the first self-hosted implementation.
 
 ## Policy: no nulls, no exceptions
 
-The language has **no exception mechanism**, and null is discouraged. Absence
-and failure are expressed with explicit wrapper types rather than by returning
-null or throwing.
+The language has no exception mechanism, and null is discouraged: absence and failure are
+expressed with explicit wrapper types.
 
 Reference variables are nullable. A counted-reference construction such as
 `&point` always produces a non-null live box, but a variable of type `&T` may
@@ -36,12 +35,9 @@ should be avoided; give the binding an explicit type.
 
 ## `Opt<T>`
 
-`Opt<T>` models an optional value. It either holds a `T` or is empty. It is the
-recommended way to represent "no value" instead of a null pointer/reference.
-
-Its storage is the RTL's two-alternative union, `Variant2<T, VoidEnum>`
-(`cppsrc/rtl/variant2.hpp`): the empty state is one arm of that union and a
-`VoidEnum` is what the arm holds, so an empty optional builds no payload at all.
+`Opt<T>` models an optional value: it either holds a `T` or is empty. Its storage is the
+RTL's two-alternative union, `Variant2<T, VoidEnum>` (`cppsrc/rtl/variant2.hpp`), whose
+empty state is the `VoidEnum` arm, so an empty optional builds no payload.
 
 ```text
 var found: Opt<Point> = table.find(id)   // Opt: has a Point, or empty
@@ -49,15 +45,12 @@ var found: Opt<Point> = table.find(id)   // Opt: has a Point, or empty
 
 ## `Str`
 
-`Str` is the language's **inline byte-string** type: a value type whose
-characters are stored inline, so copying a `Str` deep-copies its text.
-Concretely, `Str` is `SmallVector<24, Char>` and stores up to 23 characters
-inline (see `built-in-types.md` and `containers.md`).
+`Str` is the language's inline byte-string type: the value type `SmallVector<24, Char>`,
+storing up to 23 characters inline (`built-in-types.md`, `containers.md`).
 
 ## `Res<T>`
 
-`Res<T>` is the **result** type for fallible operations. There being no
-exceptions, functions that can fail report it by returning a `Res`:
+`Res<T>` is the result type for fallible operations; a function that can fail returns one:
 
 - On success it carries a `T`.
 - On failure it carries an error message as an inline string (`Str`).
@@ -66,23 +59,20 @@ exceptions, functions that can fail report it by returning a `Res`:
 Res<int> parse(const Str& s)   // success: int; failure: error string
 ```
 
-The error is always an inline string, so `Res` takes a single type parameter
-(`T`, the success payload). The success payload is stored **by value**. This
-means `Res<T>` has the same ownership and copy semantics as any other value
-containing a `T`; callers that need shared identity can explicitly use
-`Res<&T>`.
+The error is always an inline string, so `Res` takes a single type parameter (`T`, the
+success payload), stored by value. `Res<T>` therefore has the same ownership and copy
+semantics as any value containing a `T`; use `Res<&T>` for shared identity.
 
 `Res<T>` is the same two-alternative union (`Variant2<T, Str>`, `cppsrc/rtl/variant2.hpp`)
 with the payload and the message as its arms: a failed result carries no `T` and a
-successful one carries no message, and which arm is live is the union's tag. An
-empty message is therefore not a success - `Res<T>.err("")` is a failure.
+successful one carries no message, and the union's tag says which arm is live. An empty
+message is therefore not a success - `Res<T>.err("")` is a failure.
 
 `Opt<T>` also stores its payload by value. It has exactly two states, `none` and
-`some(T)`, and copying it copies the contained value. `Opt<&T>` is therefore a
-valid way to represent an optional shared reference,
-with normal reference counting on copies. `Opt<*T>` similarly represents an
-optional raw pointer, but does not make the pointed-to storage safe or extend
-its lifetime.
+`some(T)`, and copying it copies the contained value. `Opt<&T>` is therefore a valid way
+to represent an optional shared reference, with normal reference counting on copies.
+`Opt<*T>` represents an optional raw pointer, but does not make the pointed-to storage
+safe or extend its lifetime.
 
 The constructors and projections are explicit:
 
@@ -108,11 +98,9 @@ Status: required for the first implementation.
 - `value: T` (the success payload); and
 - `error: Str` (the failure message).
 
-The RTL's own fields are spelled `Value`/`Error` (the C++ `Res<T>` in `result.hpp`), and
-the emitter remaps only the lowercase pair, so a name it does not remap is emitted as
-written. Both spellings therefore compile and both are typed, but the sources use
-`Value`/`Error` throughout and the lowercase pair has no advantage - one of the two
-should go (`impl_specs/capability-matrix.md`, T57).
+The RTL's own fields are spelled `Value`/`Error` (`result.hpp`); the emitter remaps only the
+lowercase pair, so both spellings compile, but the sources use `Value`/`Error` and one should
+go (`impl_specs/capability-matrix.md`, T57).
 
 `Opt<T>` exposes the state and payload as:
 

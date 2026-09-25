@@ -1,190 +1,15 @@
-# Capability matrix: porting components to Simse
+# Capability matrix: the change log
 
-Status: living document. Records, per compiler component, which language and RTL
-features that component needs in order to be written in Simse and transpiled,
-plus whether the bootstrap compiler currently supports each feature. It is the
-working checklist for the incremental port described in
-`impl_specs/plan-to-selfhost.md`.
+Status: living document - one section per change to the compiler, recording what moved,
+what it cost, and how it was verified. The current state of the language is `guide4ai.md`
+§7 with `README.md` and `specs/`; per-subsystem design is the neighbouring
+`impl_specs/*.md`; this file is the record of how it got there.
 
-Status values:
-
-- **supported** - the compiler/RTL handles it today; a self-host attempt may rely on it.
-- **partial** - handled for some shapes, or only after a codegen fix; see notes.
-- **missing** - not handled; a self-host attempt will fail until it is added.
-
-The matrix is derived from the real sources (`cppsrc/lex/Scanner.kt`,
-`cppsrc/common/common.kt`, `cppsrc/skelparser/SkeletonParser.kt`) and the
-current `cppsrc/{parser,sema,codegen,rtl}` implementations.
-
-## Intended port order
-
-1. **common** - the smallest, no self-referential dependencies; needed by every
-   other mirror.
-2. **scanner** (`Scanner.kt`) - the first real differential test; needs
-   `common` via `import cppsrc.common`.
-3. **skeleton parser** - uses the scanner API and `List<SkeletonNode>`.
-4. **AST/parser/sema/codegen** - the largest, still C++-only; port last.
-
-## `common`
-
-| Feature | Needed by | Status | Notes |
-| --- | --- | --- | --- |
-| `data class` with fields and methods | `common` | supported | lowered to a C++ struct plus free functions. |
-| `var`/`val` locals, `while`, `if`, `return` | `common` | supported | |
-| `Str` value type, indexing, `size()`, literals | `common` | supported | `Str` is `std::string`. |
-| `&T` fields and `&value` construction | `common` | supported | `&T` -> `std::shared_ptr<T>`. |
-| `&T` member access / indexing auto-deref | `common` | supported | emits `(*handle)[i]`, `handle->m()`. |
-| `native("Symbol") fun` without body | `common.readFile` | supported | `simse_native_readFile`. |
-| `import a.b.c` merging a directory | any importer | supported | resolved relative to the repo root. |
-| Generic data class | not used here | supported | C++ templates. |
-
-## Scanner (`Scanner.kt`)
-
-| Feature | Where used | Status | Notes |
-| --- | --- | --- | --- |
-| `enum class` + `Enum.Member` access | `TokenKind.Eof` | supported | emits `TokenKind::Eof`. |
-| `typealias` to function type | `MatchLenFunc`, `CharPredicate` | supported | `Func<R(A...)>`. |
-| Function values / calling a parameter | `rule.match(view)` | supported | `Func` is `std::function`. |
-| Generic data class instantiation | `List<TokenMatcher>` | supported | |
-| `&T` return + `&T` parameter | `getTokenRules`, `addRule` | supported | `&List<T>()` -> `makeList<T>()`; calls deref as needed. |
-| `List<T>` methods (`append`, `size`, indexing) | `tokens`, `rules`, `words` | supported | `append`/`removeAt`/`removeRange` lower to `simse_list_*`. |
-| `Str.append(Char)` | `escapedSnippet` | supported | lowers to `simse_str_append`. |
-| `Int.toString()` | `unexpectedCharacterMessage` | supported | lowers to `std::to_string`. |
-| Static generic calls `Res<T>.ok/.err` | `readFileAsTokens` | supported | emits `Res<T>::ok(...)`. |
-| `Res<T>` accessors as properties (`value`, `error`) | `readFileAsTokens` | supported | emitted as `Value`/`Error`. |
-| `while`, `break`, `continue` | matchers | supported | |
-| `Bool` logic and comparisons | matchers | supported | |
-| Method calls through `*T` | `readFileAsTokens(scanner: *Scanner)` | supported | `*scanner` auto-deref. |
-| Import cycles | `import cppsrc.common` | supported | reported, not followed. |
-
-## Skeleton parser (`SkeletonParser.kt`)
-
-| Feature | Where used | Status | Notes |
-| --- | --- | --- | --- |
-| `import cppsrc.lex` (scanner API) | whole file | supported | transitive imports merge. |
-| `enum class` + member access | `SkeletonType.Terminal` | supported | |
-| Generic data class instantiation | `List<SkeletonNode>` | supported | |
-| `&List<T>` fields and methods | `SkeletonNode` | supported | |
-| `var` parameter mutation | folding loop | supported | parameters are mutable. |
-| Indexing assignment | deleting a folded range | supported | |
-| Full self-transpile (ported) | whole file | supported | emits, compiles, and diffs byte-identically against the C++ `parseSkeleton` over every fixture (`skel_diff`). |
-
-## AST / parser / sema / codegen mirrors
-
-The parser (T19), sema (T21), and code generator (T22) are ported, and the
-driver/CLI plumbing is ported too (T23): the compiler now self-hosts at stage 1.
-The XmlNode accessors are shared through `cppsrc/common/xmlutil.kt`, and the
-filesystem/IO surface is the prelude natives in `cppsrc/rtl/fs.kt`.
-
-## Ported components
-
-Progress of the incremental port (see `impl_specs/roadmap.md`):
-
-| Component | Mirror | Emits | Compiles | Diff-identical | Harness |
-| --- | --- | --- | --- | --- | --- |
-| common / xmlutil | `cppsrc/common/*.kt` | yes (merged transitively) | yes | exercised through every port | part of each diff |
-| scanner | `cppsrc/lex/Scanner.kt` | yes | yes | yes (5532-line dump) | `scanner_diff` |
-| skeleton parser | `cppsrc/skelparser/SkeletonParser.kt` | yes | yes | yes (4992-line tree dump) | `skel_diff` |
-| parser | `cppsrc/parser/Parser.kt` | yes | yes | yes (2136-line XmlNode dump) | `parser_diff` |
-| sema | `cppsrc/sema/Sema.kt` | yes | yes | yes (40-line diagnostic dump) | `sema_diff` |
-| codegen | `cppsrc/codegen/Codegen.kt` | yes | yes | yes (804-line emission dump) | `codegen_diff` |
-| driver / CLI | `cppsrc/compiler/Driver.kt` | yes | yes | two-step fixed point (`simse_out1.cpp` == `simse_out.cpp`, the published copy of which is `cppsrc/simse_bootstrap.cpp`) | `stage1_check` |
-
-## Feature status changes (last port)
-
-1. **Pointer-index auto-dereference.** `tokens[i]` where `tokens: *List<Token>` now
-   emits `(*tokens)[i]`; indexing a raw array of scalars stays `p[i]`.
-2. **Constructor arity checking** in sema: a call to a known `data class` whose
-   argument count differs from the field count is now diagnosed
-   (e.g. `data class 'Widget' expects 2 field(s) but got 1`).
-3. **`SkeletonNode` default member initializers** in C++ (`_type = None`,
-   `_token = {}`), matching the Simse mirror's explicit zero token so the tree
-   dump is identical.
-
-## Feature status changes (T14/T15)
-
-The AST/parser port is unblocked by these generic additions:
-
-1. **`switch`/`case`/`default`** - reserved words, parsed into a Switch AST node,
-   type-checked (constant labels; `break` allowed in a switch), lowered to C++
-   `switch`.
-2. **`null` literal** - lowered by expected type: `nullptr` for `*T`/`&T` and
-   `Opt<T>()` for `Opt<T>`; `x == null`/`!= null` test `hasValue()` for `Opt`.
-3. **`Str` library** - `find`, `substr`, `startsWith`, `endsWith`, `replace`,
-   `toInt`, `toFloat` as prelude natives (`cppsrc/rtl/strops.hpp`).
-4. **`Char` predicates** - `isDigit`, `isAlpha`, `isAlphaOrDigit`, `isSpace`.
-5. **Numeric `toString`** for every scalar plus `Bool`; `min`/`max`.
-6. **Enum conversions** - `Enum.toInt()` and checked `Enum.fromInt(Int)`.
-7. **PList as a list handle** - `PList<T>` (`&List<T>`) is treated as a handle
-   for member access/index/call lowering, so `XmlNode.Children.append(...)` works.
-8. **XmlNode carrier** - `Attribute`/`XmlNode` mapped onto the RTL types; the AST
-   converts to `XmlNode` (`ast::toXmlNode`) with a deterministic dump and
-   `.astxml` goldens.
-
-A latent use-after-free in codegen was also fixed: `pointee(inferType(x))`
-returned a pointer into a temporary `TypePtr`; call sites now keep the
-`TypePtr` alive.
-
-## Feature status changes (T16/T17/T18)
-
-1. **`Cursor<T>`** - an immutable, `Span`-like list view; the iteration idiom now
-   that `for`/range-for stays deferred. `next`/`slice` return new cursors.
-2. **`Str` library completed** - `charAt`, `trim`, `split`, `toUpper`, `toLower`,
-   `isEmpty`, and `indexOf`/`lastIndexOf` on top of the earlier surface.
-3. **Lambdas** - lowered to C++ lambdas with by-value captures (`[=]`),
-   assignable to `Func<Ret(Params)>`; parameter types from annotations or the
-   expected callable type; return type from the expected type or the body.
-4. **Prelude data-class methods** now lower to C++ member calls (not free
-   functions), which is what makes `Cursor.hasValue()` / `next()` work: the
-   bodies live in `cppsrc/rtl/cursor.hpp`.
-
-## AST / parser / sema / codegen (target features)
-
-| Feature | Needed by | Status | Notes |
-| --- | --- | --- | --- |
-| `switch` statements | parser dispatch by kind | supported | Switch AST + sema + C++ lowering. |
-| `null` for `&T`/`*T`/`Opt` | nullable AST children | supported | context-directed lowering. |
-| `Str` library | token text handling | supported | `find`/`indexOf`/`lastIndexOf`/`substr`/`charAt`/`startsWith`/`endsWith`/`replace`/`trim`/`split`/`toUpper`/`toLower`/`isEmpty`/`toInt`/`toFloat`. |
-| `Char` predicates | lexer helpers | supported | prelude natives. |
-| numeric `toString` | diagnostics | supported | all scalars + Bool. |
-| `min`/`max` | range handling | supported | prelude natives. |
-| enum `toInt`/`fromInt` | kind dispatch | supported | per-enum helper emitted. |
-| XmlNode AST carrier | AST in Simse | supported (C++ converter + Simse carrier proof) | schema in `impl_specs/ast-xmlnode.md`. |
-| Dictionary operations | symbol tables, scopes | supported | `dictionaryOf`/`get`/`has`/`insert`/`remove`/`size`/`keys`/`values`/`clear` (`cppsrc/rtl/dictops.hpp`, T20). |
-| List `contains`/`sort` | dedup, deterministic order | supported | `simse_list_contains`; `sort` takes a `(T, T) -> Bool` lambda. |
-| XmlNode accessors | sema consumption | supported | emitted helper functions in `Sema.kt` (attribute lookup, children by role, positions). |
-| `Span<T>` | iteration instead of range-for | supported | `while (!span.isEmpty()) { ... span = span.slice(1) }`. |
-| lambdas/closures | visitors | supported | by-value captures; reference captures deferred. |
-| `for` | loop rewriting | `for` over a machine only | two forms, desugared to `while` in the parser; a container is walked with an index or a `Span<T>` (`specs/functions.md`, `impl_specs/for.md`). |
-| range-for over a container | loop rewriting | missing | deferred; `Span<T>` is the replacement idiom. |
-| string interpolation | diagnostics | missing | deferred. |
-| `when`/pattern matching | dispatch | missing | deferred; use `switch`. |
-
-> **Note.** The C++ compiler's own loops have **not** been refactored to
-> `Span<T>`; that happens per component during the parser port. `Span` is the
-> language-level replacement for range-for, not a change to the C++ sources.
-
-## Feature gaps seen by the compiler team
-
-These are the language/RTL features that were missing or wrong and had to be
-added or fixed across the self-host attempts (each fix is generic, not
-component-specific):
-
-1. **Import resolution.** `import a.b.c` now merges every `*.kt` directly
-   under `a/b/c`, with cycle detection.
-2. **Enum-qualified access in expressions** now lowers generally to `Enum::Member`.
-3. **Generic-qualified static calls** (`Res<T>.ok(x)`) lower to `Type<T>::method(x)`;
-   the RTL `Res` gained static `ok`/`err`.
-4. **`&T`/`*T` auto-dereference** for member access, indexing, and calls.
-5. **Receiver-typed method resolution** in codegen so a name like `append` or
-   `toString` picks the correct lowering for the receiver's type.
-6. **`Str.append(Char)`** and **`Int.toString()`** RTL/builtin lowerings.
-7. **`&List<T>()`** construction lowers to `makeList<T>()`.
-8. **Pointer-index auto-dereference**: indexing through a `*T` whose pointee is a
-   container (`*List<T>`, `*Str`, ...) emits `(*p)[i]` (found porting the
-   skeleton parser's `parseSkeleton(tokens: *List<Token>)`).
-9. **Constructor arity checking** in sema (found a real mirror bug:
-   `Token("", TokenKind.None)` had 2 arguments for a 3-field `Token`).
+The per-component feature matrices and the port order that opened this file are gone: they
+described a port that finished (the compiler is self-hosting) and had drifted out of date
+with it - they still listed the deleted `native` keyword and `switch`, a checked
+`fromInt`, `cursor.hpp`, and `when` as missing. The log below is the feature-level record
+they were standing in for.
 
 ## Update log
 
@@ -3196,62 +3021,102 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   1,235 ms for work that measured 732 ms earlier), so only the interleaved ratios are
   worth quoting.
 
-- **The `for` protocol is `advance()` + `current`, the enum conversions are direct casts,
-  and a machine's method body is optimized like any other.** Four changes to what a body
-  looks like, all of them shapes the emitted C++ was spelling the long way, plus the
-  pass stage a machine method was missing.
+- **The `for` protocol is `advance()` + `current`, the enum conversions are casts, and a
+  machine's method body is optimized like any other.** Four changes to the emitted shapes.
 
-  **`value()` is gone; the `for` template reads `current`.** The machine has held what it
-  yielded in a `current` field since T77, and `value()` handed that field back - by
-  value, so the element was copied twice on the way out (the field into the method's
-  returned temporary, the temporary into the loop variable) where reading the field
-  copies it once. `parseFor` binds `val v = _sm_for1.current` now (a `memberExprAt`, one
-  `GetField` in the IL), `YldMachinery.valueMethod` and the `value` cases in
-  `TypeInfer.memberReturn`/`Emitter.memberCallReturn` are deleted, `TypeInfer`/`Emitter`
-  type the *field* from the `..T`'s `Inner`, and `linear::yieldFieldName` no longer mangles
-  a body name `value` (it was never a collision - `value` is an ordinary name again;
-  `current`, `branch`, `_sm_self` and `advance` still are). In the compiler's own output
-  **6 `value()` methods (grep `value() {`) -> 0**, and the pointer form still hands out the
-  place: the field's type is the element type, `*T` for `iterPtr`.
+  **`value()` is gone; the `for` template reads `current`.** A `value()` returned the
+  field by value, so the element was copied twice (field into the returned temporary, then
+  into the loop variable); one field read copies it once. `parseFor` binds
+  `val v = _sm_for1.current` (`memberExprAt`, one `GetField` in the IL), `valueMethod` and
+  the `value` cases in `TypeInfer.memberReturn`/`Emitter.memberCallReturn` are deleted, the
+  field is typed from the `..T`'s `Inner`, and `yieldFieldName` no longer mangles a body
+  name `value`. Compiler's own output: **6 `value()` methods -> 0**. The pointer form still
+  hands out the place (`current` is the element type, `*T` for `iterPtr`).
 
-  **The prelude's `iter` hoists the length.** `val len = this.size()` before the loop, in
-  all three value wraps (`iterPtr` already did it), so the `while` inside `advance()` tests
-  a field instead of calling `size()`/`count()` per element - per *resume*, since the
-  condition is re-entered after every yield. This is what the hand-written protocol probe
-  did (`tools/_loop_protocol.cpp` reads its length once, outside the round loop).
+  **The prelude's `iter` hoists the length** (`val len = this.size()` before the loop, all
+  three value wraps), so the `while` inside `advance()` tests a field instead of calling
+  `size()`/`count()` on every resume.
 
-  **The enum conversions are casts, one line each.** `enum class ns1_Color { Red, Green = 4,
-  Blue };` is one line (it was a member per line) and its helper is one line,
-  `inline ns1_Color ns1_simse_Color_fromInt(Int value) { return (ns1_Color) value; }` - the
-  if-chain and the range test are gone, and `fromInt` now answers the **enum**, unchecked,
-  rather than `Opt<Enum>`: an enum's runtime representation *is* `Int` and a scoped
-  `enum class` holds every value of its underlying type, so the cast is the whole
-  conversion. That is a **spec change** (`specs/declarations.md`), made deliberately and
-  recorded there; `toInt()` needs no helper and is unchanged
-  (`static_cast<Int>(x)` at each call site, `Emitter.call`). `fromInt`'s type is now
-  stated by the type pass and the emitter's guess (the enum itself), so a binding
-  holding one is typed rather than an `auto`. In the compiler's own tree the **9 enum
-  blocks and their helpers are 127 lines -> 18**.
+  **The enum conversions are casts, one line each** (`enum class X { A, B = 4 };`, and
+  `inline X ns_simse_X_fromInt(Int value) { return (X) value; }`). `fromInt` answers the
+  enum, unchecked, instead of `Opt<Enum>` - a **spec change**, recorded in
+  `specs/declarations.md`; `toInt()` stays `static_cast<Int>(x)` at the call site. The
+  compiler's own tree: **9 enum blocks + helpers, 127 lines -> 18**.
 
-  **A machine's method body runs the linear optimizations** (`cppsrc/optimizations`, the
-  package the other bodies already go through). The rewrite in `linear/Yield.kt` produces
-  the method bodies *after* the body's own half of the pipeline has run, so nothing had
-  ever folded them; `emitMachine` now runs `linOptimizeBody` over each method body before
-  emitting it. The passes are the same ones a function or a lambda gets, and they are safe
-  here for the same reason they are there: they drop a branch with a literal condition, an
-  unreachable statement, a jump to the statement after it, and a label nothing jumps to -
-  none of which is a state machine's control flow. The visible fold is the label
-  contiguity the lowering leaves (`L2:; LYend:;` is one label, and the dispatcher's jump
-  to it is re-aimed), which is what makes the emitted `advance()` read as the hand-written
-  machine in `tools/_loop_protocol.cpp`.
+  **A machine's method body runs the linear optimizations.** `linear/Yield.kt` writes those
+  bodies *after* the body's own half of the pipeline, so nothing had folded them;
+  `emitMachine` now runs `linOptimizeBody` over each. The fold is the label contiguity the
+  lowering leaves (`L2:; LYend:;` -> one label, the dispatcher's jump re-aimed).
 
-  Verified: `./build.bat --release` green in two builds (the enum emitter and the field
-  read had to be in the running compiler before their own output could be read as the new
-  one); `bun tools/stress.js` **61/61**; `bun tools/bootstrap.js` both fixed-point checks
-  byte for byte after the refresh (`bun build.js --release --out cppsrc/simse_bootstrap.cpp`).
-  The corpus moved with the surface: `stress/yield` and `stress/generic-yield` read
-  `current` instead of calling `value()`, and `stress/language-tour` (`expected.stdout`
-  re-captured) exercises the unchecked `fromInt`. Emitted size, per program: `stress/for-container`
-  **38,309 -> 38,280 bytes**, `stress/language-tour` **37,677 -> 37,236** (the bootstrap's own
-  line count is not comparable across this change - the `optimizations` package landed in the
-  same working tree).
+  Verified: `./build.bat --release` (two builds), `bun tools/stress.js` **61/61**,
+  `bun tools/bootstrap.js` both fixed-point checks byte for byte after the refresh.
+  `stress/yield` and `stress/generic-yield` read `current`; `stress/language-tour` exercises
+  the unchecked `fromInt` (`expected.stdout` re-captured). Emitted size: `stress/for-container`
+  **38,309 -> 38,280 bytes**, `stress/language-tour` **37,677 -> 37,236**.
+
+- **Comment and formatting pass over every Simse source.** `cppsrc/**/*.kt`: 21,884 ->
+  19,610 lines, tokens unchanged. The comments had grown into essays - the history of the
+  deleted C++ ring, restatements of the code at hand, a paragraph per spelling decision -
+  and the editor's Kotlin formatter had left wrapped call sites behind. Cut: history and
+  narration, restatement, `// ---- banner ----` separators, bold markup. Kept, in one or
+  two lines each: the rule or invariant an editor would break without knowing, and the
+  pointer to the spec or symbol that owns a decision.
+
+  Verified two ways, both cheap enough to run after every file. `tools/_codecmp.mjs` proves
+  a file is comments-and-whitespace only, by tokenizing (string/char literals verbatim,
+  multi-char operators as one token - the formatter is known to split `<<` into `< <`, and
+  a whitespace-blind check would miss that). `tools/_maskcmp.mjs` proves the whole tree
+  transpiles to the same C++ once the `// path:line` source comments are masked, against
+  `build/base.cpp`, the pre-pass amalgamation. Then `bun tools/stress.js` 61/61 and both
+  `bun tools/bootstrap.js` fixed-point checks byte for byte after the refresh - the
+  published bootstrap embeds source line numbers, so it moved with the sources.
+
+  `specs/**` and `impl_specs/**` had the same pass in prose (-22% and -12..22% by file):
+  porting history, migration status, and rules restated as their consequences removed, with
+  every normative rule, table, symbol name, status line and measurement kept.
+  `impl_specs/capability-matrix.md` lost its opening port-era matrices - stale, they listed
+  the deleted `native` and `switch`, a checked `fromInt`, `cursor.hpp`, `when`-as-missing -
+  for a short header; the log below is otherwise untouched.
+
+- **`Dictionary.getPtr`: the value's place, and the sema quadratic is gone.** `SmDictionary`
+  gained `valuePtr(key)` (the row lookup + the value's address, `null` when absent), the
+  `dictops` section gained `simse_dict_getPtr`, and the prelude declares
+  `getPtr<K, V>(key): *V`. `get` is built on it and `has` is the pointer test
+  (`simse_dict_getPtr(self, key) != nullptr`), so one walk serves all three. Neither `get`
+  nor `has` packs holes any more - they answer from the row lookup - and only the
+  iterator-producing calls (`find`/`begin`/`end`) pack.
+
+  The compiler's own lookups use it: **78 sites**, mostly `val x: AstXmlNode =
+  d.get(k).value()` becoming `val x: *AstXmlNode = d.getPtr(k)` (a pointer, passed on to the
+  `*AstXmlNode`-taking helpers) and `has`+`get` pairs collapsing to one lookup. The
+  `get`-append-`insert` write-back became an in-place append - `List` is a value type, so
+  appending through the pointer is what the copy-then-insert did without the copy, and it
+  drops a self-assignment. That is `collectGlobal`'s and `TypeInfer`'s symbol collection, the
+  T40 suspect.
+
+  **Measured** (`tools/_quad.mjs`: one file of `N` two-line functions, `--root` it and
+  transpile; the before compiler is `build/old_simse.exe`, built from the previous published
+  bootstrap; three interleaved rounds, best of each):
+
+  | declarations | before | after |
+  | --- | --- | --- |
+  | 1,000 | 168 ms | 83 ms |
+  | 4,000 | 1,433 ms | 250 ms |
+  | 8,000 | 5,412 ms | 498 ms |
+
+  8x the input cost 32x the time before and costs 6x now: **sema is linear in a single
+  file's declaration count** (T40). The 8,000-declaration program's emitted C++ is
+  byte-identical between the two compilers.
+
+  Verified: `./build.bat --release`, `bun tools/stress.js` **61/61** (the `dictionary` case
+  gained a `getPtr` read, an in-place write and a null test; three `expected.cpp` goldens
+  re-captured by hand for the changed `dictops` text), and both `bun tools/bootstrap.js`
+  fixed-point checks byte for byte after the refresh. Three goldens - `flat-blocks`,
+  `smgen-res`, `smgen-res-collision` - pin that section's text, so a `_res.md` edit reaches
+  them.
+
+  Found while writing the case: a statement starting with `*` and following another
+  statement is parsed as a *multiplication continuation* (`*p = v` on its own line reads as
+  `... * p = v`), which reaches emission as `assignment target (Expr.Binary)`. Workarounds:
+  make it the block's first statement, or parenthesize (`(*p) = v`). Recorded in
+  `stress/dictionary`; the parser rule itself is unchanged.

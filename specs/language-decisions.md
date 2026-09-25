@@ -1,10 +1,7 @@
 # Language surface decisions (index)
 
-Status: consolidated. The provisional decisions that used to live here have been
-folded into the topic specs, which are now normative. This file is kept as a
-short index so the decisions remain discoverable from one place.
-
-Nothing here overrides the topic specs; where a topic spec speaks, it wins.
+Status: consolidated. The decisions that used to live here are folded into the topic
+specs, which are normative and win over this file. This file is a short index.
 
 ## Where each decision now lives
 

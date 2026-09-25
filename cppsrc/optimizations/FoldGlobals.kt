@@ -251,10 +251,11 @@ fun foldGlobalRule(e: *AstXmlNode): AstXmlNode {
         return e
     }
     val name: Str = xmlAttr(e, AstNodeAttributeKind.Name)
-    if (!linConstGlobals.has(name)) {
+    val entry: *FoldGlobalConst = linConstGlobals.getPtr(name)
+    if (entry == null) {
         return e
     }
-    return foldGlobalLiteral(e, linConstGlobals.get(name).value())
+    return foldGlobalLiteral(e, *entry)
 }
 
 fun linFoldGlobalsBody(stmts: *List<AstXmlNode>): Bool {

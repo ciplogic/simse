@@ -2,8 +2,6 @@
 
 Status: decision recorded for T10; the spelling settled in T83.
 
-This document fixes the v1 boundary for calling hand-written C++ from Simse.
-
 ## Declaration form
 
 ```text
@@ -20,13 +18,11 @@ This document fixes the v1 boundary for calling hand-written C++ from Simse.
   such as `FileUtils::readFile` is rejected with a positioned `unsupported`
   diagnostic; expose such an implementation through a thin global wrapper whose
   name is the global identifier.
-- `native fun` / `native("Symbol") fun`, the keyword the first implementation
-  spelled this with, is **gone from the language (T83)**: it was sugar for
-  `@SmGen("cpp", ...)`, and once no declaration in the tree needed the sugar there
-  were two spellings of one thing (`impl_specs/generators.md`). A program that
-  wants a runtime symbol writes the attribute (`stress/native-read-file` names
-  `simse_native_readFile`, which no prelude declaration reaches - which is why
-  `fileio` is `emit: always`).
+- `native fun` / `native("Symbol") fun` is **gone from the language (T83)**: it was
+  sugar for `@SmGen("cpp", ...)`, and there were then two spellings of one thing
+  (`impl_specs/generators.md`). A program that wants a runtime symbol writes the
+  attribute (`stress/native-read-file` names `simse_native_readFile`, which no
+  prelude declaration reaches - which is why `fileio` is `emit: always`).
 
 ## Emission and call
 
@@ -54,7 +50,7 @@ This document fixes the v1 boundary for calling hand-written C++ from Simse.
 ## Failure reporting
 
 Native functions report failure through `Res<T>` (an error `Str`), not C++
-exceptions. A `native fun` that returns `Res<T>` maps its error message into the
+exceptions. A function that returns `Res<T>` maps its error message into the
 `Res` value; the runtime's `isOk()` reads the union's tag, so `Res<T>.err("")` is a
 failure like any other (`cppsrc/rtl/variant2.hpp`, `impl_specs/rtl-abi.md`).
 
@@ -72,22 +68,21 @@ when the program reaches the declaration or its symbol (a section marked
 `emit: always` is placed in every program). This is how the RTL
 surface (for example `List<T>.append`) becomes available to programs.
 
-A native extension is a `native` function whose first parameter is `this`; a
+A native extension is a body-less function whose first parameter is `this`; a
 member call `recv.name(args)` lowers to `<symbol>(recv, args)` with the receiver
 first.
 
 ## v1 implementation
 
-The first symbol of this kind, `simse_native_readFile`, backs `readFile`, declared
-in `cppsrc/common/common.kt` as `@SmGen("res", "fileio", "simse_native_readFile")`:
+`simse_native_readFile` backs `readFile`, declared in `cppsrc/common/common.kt` as
+`@SmGen("res", "fileio", "simse_native_readFile")`:
 
 ```cpp
 Str simse_native_readFile(const Str& path); // reads the whole file as bytes
 ```
 
-Its prototype and definition are the `fileio` section of `cppsrc/rtl/_res.md`, in
-the section's `forward:` and `bodies:` texts. There is no native translation unit
-and no `simse_native` library: the emitter places the section in the program's own
+Its prototype and definition are the `fileio` section of `cppsrc/rtl/_res.md`, in the
+section's `forward:` and `bodies:` texts. The emitter places the section in the program's own
 translation unit, so there is nothing to link.
 
 ## Filesystem / IO natives (T23)
@@ -110,7 +105,7 @@ The self-hosted driver needs a small filesystem surface. Declared in the prelude
 These are prelude declarations (available without an import) whose prototypes and
 definitions the emitter places in the program's own translation unit. The section
 is `emit: always` because a program may also name one of these symbols with a
-`native` declaration of its own, and then no `@SmGen` declaration reaches the
+native declaration of its own, and then no `@SmGen` declaration reaches the
 section for it; there is nothing to link.
 
 ## The argv entry point
@@ -118,4 +113,4 @@ section for it; there is nothing to link.
 A top-level `fun main(args: List<Str>): Int` lowers to C++
 `int main(int argc, char** argv)`, with `args` built from `argv[1..]` (the program
 name is excluded). The zero-argument `fun main(): Int` form is unchanged. Both
-forms are lowered identically by the hand-written and transpiled emitters.
+forms are lowered identically.

@@ -25,37 +25,31 @@ Three attributes on the `Function` node (`AstNodeAttributeKind`), filled by the 
 | `Generator` | the generator the first argument names (`cpp`, `res`, `kt`) |
 | `GeneratorArgs` | the generator's remaining arguments, in order, joined by `,`; a string literal without its quotes |
 
-`IsNative` is `true` for every generated method (nothing is emitted for the declaration
-itself, and a call reaches a symbol instead), which is why the existing native paths -
-the symbol table, the `this`-receiver extensions, the prelude rules - apply unchanged.
+`IsNative` is `true` for every generated method, so the native paths (the symbol table, the
+`this`-receiver extensions, the prelude rules) apply unchanged.
 
 A generator whose text is *not* emitted at the declaration - `cpp` and `res` - names the
 symbol a call reaches as a generator argument, and the declaration carries it as
 `NativeSymbol`/`HasNativeSymbol` whichever spelling was written: `cpp` has no parameters of
 its own, so its symbol is the argument right after the generator's name, while `res` names
-its section first and so its symbol is the third. That is not bookkeeping:
-a pass that reads the declaration without the emitter's tables reads the symbol there -
-`linear`'s `listOf<T>` list literal (whose call is a `Pack`, not a call) is the one that
-does, and a `@SmGen("res", section, symbol)` declaration that lost it silently stopped
-being the list literal.
+its section first and so its symbol is the third. A pass that reads the declaration
+without the emitter's tables reads the symbol there: `linear`'s `listOf<T>` list literal
+(whose call is a `Pack`, not a call) is the one that does, and a
+`@SmGen("res", section, symbol)` declaration that lost it silently stopped being the list
+literal.
 
 ## The `cpp` generator
 
-`@SmGen("cpp", "sym")` means the implementation is linked in from a hand-written header -
-there is nowhere else it could be - so the generator has no parameters of its own, and
-the one argument it takes is the
-shared symbol argument: the name of the C++ function, which the declaration's own name
-stands in for when it is not written (`@SmGen("cpp")`). It produces no text: the
-*manager* does what such a declaration needs - the symbol a call reaches, the prototype,
-the receiver pattern (`sourceGenDeclare`, `sourceGenDeclaresPrototype`) - and the header
-has the C++.
+`@SmGen("cpp", "sym")` means the implementation is linked in from a hand-written header,
+so the generator has no parameters of its own and its one argument is the shared symbol
+argument: the name of the C++ function, which the declaration's own name stands in for when
+it is not written (`@SmGen("cpp")`). It produces no text: the *manager* does what such a
+declaration needs - the symbol a call reaches, the prototype, the receiver pattern
+(`sourceGenDeclare`, `sourceGenDeclaresPrototype`) - and the header has the C++.
 
-The keyword that used to be sugar for it, `native("sym") fun f(...)`, is **gone from the
-language (T83)**: the two spellings were one declaration for as long as both existed
-(`bun tools/smgen.js` compared a pair of stress cases byte for byte until they could not
-diverge any more), and the attribute is the one spelling now. `native` is an ordinary
-identifier again, and every declaration that reaches generated C++ - the RTL's, and a
-program's own FFI - writes the attribute: `@SmGen("res", section, symbol)` when the text
+`native("sym") fun f(...)`, the keyword that used to be sugar for it, is **gone from the
+language (T83)**: `native` is an ordinary identifier again, and every declaration that
+reaches generated C++ writes the attribute - `@SmGen("res", section, symbol)` when the text
 is a resource section (which is all of the RTL's C++ now, `impl_specs/rtl-abi.md`),
 `@SmGen("cpp", symbol)` for the type core, and, for `resources.kt`'s `get`/`has`/`count`, a
 symbol alias to a plain Simse function.
@@ -71,8 +65,8 @@ Every generator is **one file** under `cppsrc/sourcegen/`, and a `SourceGenerato
 | `ResGen.kt` | `res` | a resource section | no | yes |
 | `KtGen.kt` | `kt` | Simse source, compiled with the program | no | no |
 
-The last two columns are the two things only the generator can know, which is why they are
-part of its own registration line.
+The last two columns are the two things only the generator can know, so they are part of its
+registration line.
 
 A generator is a `typealias OnSourceGen = (*SourceGenContext) -> SourceGenTransform`
 (`GenTypes.kt`): it takes *data* and answers a transform. The context carries the generator's
@@ -94,11 +88,10 @@ by one file would have overwritten a registration that ran earlier. The dispatch
 generator up by name, so the order the table ends up in is not observable either; a name
 must simply not repeat. A module's generator registers the same way (`specs/simse-md.md`).
 
-**What a generator may touch** is the boundary the package exists for: it reads and writes the
-AST nodes, the resources and the sections, and it calls nothing from the compiler's stages - not
-the parser, not the emitter, not the semantic pass. A generator therefore cannot break when a
-compiler API changes (impl_specs/generators.md's own rule, and the reason `Sections` left
-`codegen` for this package).
+**What a generator may touch** is the boundary the package exists for: it reads and writes
+the AST nodes, the resources and the sections, and it calls nothing from the compiler's
+stages - not the parser, not the emitter, not the semantic pass - so it cannot break when a
+compiler API changes (which is also why `Sections` left `codegen` for this package).
 
 The same generator is asked three times, once per phase:
 
@@ -133,9 +126,8 @@ that knows the order:
     render(): Str
     appendBlock(out: *Str, text: Str)
 
-The predefined sections are the emitter's own assembly *phases*, and each name says what
-renders there. The order is what makes the routing **byte-neutral** - the compiler before
-and after it transpiles `cppsrc` to identical C++:
+The predefined sections are the emitter's assembly *phases*. The order keeps the routing
+**byte-neutral** (emitting `cppsrc` before and after it is identical C++):
 
     includes -> support -> profile -> strings -> resources -> forward -> types ->
     statics -> prototypes -> init -> bodies
@@ -154,44 +146,37 @@ and after it transpiles `cppsrc` to identical C++:
 | `init` | the generated static-initialization pass |
 | `bodies` | every function body, and a generated *definition* |
 
-- A section holds two kinds of text: the emitter's own lines (`text`, appended in order)
-  and the **items** a generator adds (`items`, keyed text). Rendering walks the sections
-  in order and, within one, writes `text` first and then the items in the dictionary's
-  own order (key order, so it is deterministic) - which is why routing the emitter through
-  this cannot change its bytes.
-- Every block - a section's own text and each item alike - starts fresh: a blank line
-  before it, unless the output already ends with one. A generated text therefore never
-  runs into the line before it, which is what keeps the emitted file's sections
-  separable - by a reader, and by anything that has to diff two of them.
-- A name the emitter does not know is a *new* section, appended at the end of the list,
-  so a generator's own machinery renders after the program, out of the way.
-- `add` is **last write wins**: an existing key's text is replaced. A generator that
-  cares checks `has` first.
-- One `Sections` per compilation, held as the static `sourceGenOutput` and handed out as a
-  pointer (`sourceGenSink`, `sourceGenResetSink`): the emitter and every generator hold the sink
-  the same way, as `*Sections`, which also keeps the emitted C++ legal whichever package the
-  pointer is named from. **The pointer is passed, never read through**: `*this.sections` where
-  `sections: *Sections` is a *copy* in Simse, so `sourceGenEmit(*this.sections, ...)` would fill a
-  copy and render an empty file.
+- A section holds the emitter's own lines (`text`, in order) and the **items** a generator
+  adds (`items`, keyed text). Rendering walks the sections in order and, within one, writes
+  `text` then the items in key order (deterministic) - so routing the emitter through this
+  cannot change its bytes.
+- Every block (a section's text and each item) starts with a blank line unless the output
+  already ends with one, keeping the sections separable.
+- A name the emitter does not know is a *new* section, appended at the end of the list.
+- `add` is **last write wins**: an existing key's text is replaced; a generator that cares
+  checks `has` first.
+- One `Sections` per compilation, the static `sourceGenOutput`, handed out as a pointer
+  (`sourceGenSink`, `sourceGenResetSink`): the emitter and every generator hold it as
+  `*Sections`. **The pointer is passed, never read through**: `*this.sections` where
+  `sections: *Sections` is a *copy* in Simse, so `sourceGenEmit(*this.sections, ...)` would
+  fill a copy and render an empty file.
 
 ## The `res` generator
 
 `@SmGen("res", section[, symbol])` takes its C++ from a **resource** - the generated
-functions of the RTL come from `cppsrc/rtl/_res.md`, a program's own from its `_res.md`.
-It is the generator for C++ that must be written by hand once and reused: a template whose
-text does not depend on the program's types.
+functions of the RTL come from `cppsrc/rtl/_res.md`, a program's own from its `_res.md`. It is
+for C++ written by hand once and reused: a template whose text does not depend on the
+program's types.
 
-- **Where the text comes from**: the tree being compiled *first* (the `_res.md` files
-  under its module roots, the list the driver read), **the compiler's own resources second** -
-  the `_res.md` files beside the compiler's prelude, read from disk as the prelude's own
-  `.kt` files are. The driver hands both lists to `sourceGenBegin`, so the lookup
-  (`sourceGenResHas`/`sourceGenResText`) needs nothing of the compiler's, and the same rule
-  is what the `kt` generator's source lookup uses. The second half is what hands every
-  program the RTL's C++ without that program carrying the RTL's resource file; the first is
-  what lets the compiler's own RTL be a resource file rather
-  than a header, since while the compiler is being built the tree's file is the newer one.
-  `sourceGenResHas`/`sourceGenResText` are the two questions asked of those lists (`resHas`
-  is separate because a key may hold an *empty* text).
+- **Where the text comes from**: the tree being compiled *first* (the `_res.md` files under
+  its module roots, the list the driver read), **the compiler's own resources second** - the
+  `_res.md` files beside the compiler's prelude, read from disk as the prelude's own `.kt`
+  files are. The driver hands both lists to `sourceGenBegin`, so the lookup
+  (`sourceGenResHas`/`sourceGenResText`) needs nothing of the compiler's - the same rule the
+  `kt` generator's source lookup uses. This gives every program the RTL's C++ without carrying
+  its resource file, and lets the compiler's own RTL be a resource file rather than a header
+  (while the compiler is built, the tree's file is the newer one). `resHas` is separate because
+  a key may hold an *empty* text.
 - `<section>:symbol` names the symbol a call goes to, and so does the attribute's second
   argument - the attribute wins where both are written. A declaration that names neither
   goes to its own name.
@@ -206,8 +191,7 @@ text does not depend on the program's types.
   its symbol (the attribute's third argument), because the section cannot.
 - `<section>:emit` = `always` is the marker for text with no declaration to hang it on:
   the compiler emits the section for every program. `strtable` (the string table's decoder)
-  and `timeops` (the clock the profiler reads) are the two, and they are why the RTL's
-  headers could go away at all.
+  and `timeops` (the clock the profiler reads) are the two.
 - A *prelude* declaration the program never names is skipped, so a prelude generator
   costs a program only what it uses - the rule a prelude function with a body follows.
   A program's own declaration is always emitted, so one generated text may call another;
@@ -238,47 +222,42 @@ text does not depend on the program's types.
   deliberately *not* marked: `cppsrc/rtl/_res.md` is the compiler's run-time table, the second
   half of the lookup below, and marking them would leave every program without the RTL's C++.
 
-The RTL's hand-written C++ lives here now (`cppsrc/rtl/_res.md`), one section per
-header it came from: `strtable` and `timeops` (`emit: always`), `listops`, `dictops`
-and `strops` (shared: the List/Array/Str primitives, the Dictionary operations, and the
-string/character/numeric conversions the headers held), `spanOf` (the first user,
-whose declaration and definition moved out of `span.hpp`), and `fileio`
-(`emit: always`: the platform's filesystem/IO operations, which were `native.cpp` and
-`fs.hpp`). Six headers are gone - `strtable.hpp`, `timeops.hpp`, `listops.hpp`,
-`dictops.hpp`, `strops.hpp`, `fs.hpp` - and `simse.hpp`
-no longer includes them; a `@SmGen("res", ...)` declaration emits no prototype of its own,
-which is what the `forward` text of its section is for. What stays a header is the type core
-and `filestream.hpp` (the `FileStream` struct and its methods, minus the
-`simse_fileStream_open` prototype): `simse.hpp`'s own includes. `cppsrc/rtl/native.cpp`,
-the repository's one hand-written translation unit, is gone with the bodies it held.
+The RTL's hand-written C++ is here (`cppsrc/rtl/_res.md`), one section per header it came
+from: `strtable` and `timeops` (`emit: always`), `listops`, `dictops` and `strops`
+(shared: the List/Array/Str primitives, the Dictionary operations, and the
+string/character/numeric conversions the headers held), `spanOf` (the first user), and
+`fileio` (`emit: always`: the platform's filesystem/IO operations). A `@SmGen("res", ...)`
+declaration emits no prototype of its own, which is what the `forward` text of its section
+is for. What stays a header is the type core and `filestream.hpp` (the `FileStream` struct
+and its methods, minus the `simse_fileStream_open` prototype): `simse.hpp`'s own includes.
 
 ## Bootstrap
 
 Adding `@Identifier` to the *scanner* and attributes to the *parser* is a one-time step
 the published bootstrap cannot do for itself, so the order matters:
 
-1. The scanner and parser changes land while the compiler's own sources stay `@`-free:
-   the bootstrap still parses them, and the resulting compiler understands `@`.
-2. Once that compiler exists, `@` may appear in the compiler's own sources - including
-   the prelude - and `bun build.js --out cppsrc/simse_bootstrap.cpp` refreshes the
-   published file, which then carries the new scanner and parser. No hand-patch of
-   `simse_bootstrap.cpp` is needed; `bun tools/bootstrap.js` is the check.
+1. The scanner and parser changes land while the compiler's own sources stay `@`-free: the
+   bootstrap still parses them, and the resulting compiler understands `@`.
+2. `@` may then appear in the compiler's own sources - including the prelude - and
+   `bun build.js --out cppsrc/simse_bootstrap.cpp` refreshes the published file, which carries
+   the new scanner and parser. No hand-patch of `simse_bootstrap.cpp` is needed;
+   `bun tools/bootstrap.js` is the check.
 3. A change the *running* compiler cannot emit yet (the prelude's own declarations, the
-   parser's own attribute layout) needs the two-phase build the bootstrap dance always
-   needs: build once with the old spelling, then switch the source and build again. The
-   *resource* half of a prelude change does not need one any more: the emitter reads the
-   tree's own `_res.md` first, so a section that only just arrived is found there.
+   parser's own attribute layout) needs the two-phase build: build once with the old spelling,
+   then switch the source and build again. The *resource* half of a prelude change does not:
+   the emitter reads the tree's own `_res.md` first, so a section that only just arrived is
+   found there.
 
 ## Generated Simse sources (`kt`)
 
-The second kind of implementation a generator can supply is **Simse source**:
+The second kind of implementation a generator can supply is Simse source:
 
     @SmGen("kt", "greet") fun greeting(name: Str): Str
 
 - `<section>:source` holds the source, read from the **program's** own resources first (the
   `_res.md` files under its module roots) and from the compiler's when the program does not
-  carry it. A section that is missing is a driver error naming it - it could otherwise only
-  fail later, in the C++, where nothing names the declaration.
+  carry it. A missing section is a driver error naming it, since it could otherwise only fail
+  later in the C++, where nothing names the declaration.
 - The source is *Simse*, so the compiler compiles it: the **driver** scans the parsed
   modules for these declarations, joins the sources into one module under the synthetic
   file name `<generated>/kt.kt`, and parses it (`driverParseSource`) - it is then checked
@@ -303,9 +282,9 @@ The second kind of implementation a generator can supply is **Simse source**:
 The point of generating *Simse* rather than C++ text: the compiler resolves everything for
 the generated code that a C++-text generator cannot - package prefixes (`ns1_Point`), the
 RTL's own symbol names, generics, member access, the string library - and the generator
-itself is ordinary Simse that builds a `Str`. `stress/smgen-kt` is the end-to-end case;
-the declaration there is in package `fixtures` and its source defines `greeting`, which
-the call site reaches unchanged.
+itself is ordinary Simse that builds a `Str`. `stress/smgen-kt` is the end-to-end case; the
+declaration there is in package `fixtures` and its source defines `greeting`, which the
+call site reaches unchanged.
 
 Not supported yet: a `kt` declaration with a receiver (`this`/`fun T.f`), a generated
 module per declaration, and generators whose source is *built* in code rather than read
