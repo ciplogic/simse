@@ -56,13 +56,13 @@ Int64 simse_nowNanos();
 // The program's string literals: one pool, and two run-length encoded index
 // series (offsets as deltas, then lengths), each as what to subtract from the
 // previous value; strtable.hpp has the stream format.
-static const Int __sm_stringCount = 22;
+static const Int __sm_stringCount = 7;
 static const char __sm_stringPool[] =
-    "a=|b=|" "alpha" "b=|=|" "plain" "beta" "a=|" "run" "v=|" "|x|" "aa" "bb" "!" "-" "=" "Z" "[" "]" "p" "q" "t" "x" "" 
+    "line one\nline \"two\" with \\ back\n\ttabbed" "line one\nline \"two\" with \\ back\n	tabbed" "He said \"hi\" and left \\ right" "line one" "matched" "no" "" 
 ;
-static const Int16 __sm_stringStarts[] = {22,3,0,-6,1,3,2,0,2,1,3,0,3,1,0,1,1,9,0};
-static const Int16 __sm_stringLens[] = {22,2,-6,1,3,2,0,2,1,3,0,3,1,0,1,1,9,0,1,1};
-static_assert(sizeof(__sm_stringPool) - 1 == 51, "the string pool and its length index disagree");
+static const Int16 __sm_stringStarts[] = {7,7,0,-39,0,10,21,1,5};
+static const Int16 __sm_stringLens[] = {7,7,-39,0,10,21,1,5,2};
+static_assert(sizeof(__sm_stringPool) - 1 == 124, "the string pool and its length index disagree");
 static StrView __sm_stringTable[__sm_stringCount];
 static struct __SmStringTableInitType {
     __SmStringTableInitType() {
@@ -99,45 +99,6 @@ Int simse_strView_indexOf(StrView self, const Str& sub);
 Str simse_strView_substr(StrView self, Int from, Int count);
 Str simse_strView_toString(StrView self);
 StrView simse_spanOfStr(Str* text);
-
-#include <cstdint>
-#include <type_traits>
-
-// The List/Array/Str primitives behind the prelude (impl_specs/native-interop.md), moved
-// out of cppsrc/rtl/listops.hpp. Index and range errors are unchecked, matching the
-// language's no-exceptions policy: `removeAt`/`removeRange` with an out-of-range index is
-// undefined behavior (specs/language-decisions.md).
-
-// Appends `value` to the end of `self`. The value is a non-deduced context so a literal
-// argument (e.g. a `const char[]`) converts to the element type instead of making `T`
-// ambiguous.
-template <class T>
-void simse_list_append(List<T>& self, const std::type_identity_t<T>& value);
-
-// The list literal's fallback (cppsrc/rtl/rtl.kt): the compiler turns
-// `listOf<Str>("a", "b")` into the construction itself, so this runs only for a position
-// with no destination slot.
-template <class T>
-List<T> simse_listOf(const List<T>* values);
-
-template <class T>
-void simse_list_removeAt(List<T>& self, Int index);
-template <class T>
-void simse_list_removeRange(List<T>& self, Int start, Int end);
-template <class T>
-Int simse_array_count(const Array<T>& self);
-template <class T>
-Array<T> simse_list_toArray(const List<T>& self);
-template <class T>
-List<T> simse_array_toList(const Array<T>& self);
-template <class T>
-Array<T> simse_arrayEmpty();
-
-void simse_str_append(Str& self, Char value);
-void simse_str_appendStr(Str& self, const Str& value);
-void simse_str_appendStrPtr(Str& self, const Str* value);
-void simse_str_reserve(Str& self, Int count);
-Str simse_int_toString(Int self);
 
 #include <algorithm>
 #include <type_traits>
@@ -208,36 +169,6 @@ Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& val
 template <class T, class F>
 void simse_list_sort(List<T>& self, F less);
 
-#include <bit>
-#include <cstring>
-
-// The primitives a concatenation is *expanded* into (impl_specs/linear-il.md, "Concat").
-// There is no `cat` function and no per-part `append`: the emitter computes every part's
-// *exact* length, performs one `resize`, and then writes each part straight into the slot it
-// owns while one `char*` advances by that part's length. So a chain of n parts touches the
-// allocator once, computes each part once and copies each part once - the shape Java 9's
-// `StringConcatFactory` has, with the C++ compiler seeing the straight-line form instead of a
-// variadic call.
-//
-// No program names these: the emitter writes the symbols itself, the way it writes
-// `simse_addressOf`. What each kind of part costs:
-//   * a text part (a `Str`, or a literal whose length the lowering already knows) is a
-//     `std::memcpy` - a constant size is one register or vector store, a runtime `Str` size
-//     one call;
-//   * an integer (`Int8`/`Int16`/`Int32`/`Int64`, `Int`) is *counted* by the bit scan below
-//     (`std::bit_width` plus one power-of-ten comparison, never a division loop) and *written*
-//     by `simse_strAddInt` - two digits per step out of a table, right to left inside the slot
-//     that was made for it, so the digits are never built into a second buffer;
-//   * a `Char` is one byte;
-//   * a `Bool` is a `StrView` over a two-entry table ("true"/"false"): it has no digits to
-//     render and is not a hot path, so it goes through the text path.
-// A float is deliberately *absent*: its length is only known by formatting it, so the lowering
-// keeps the `toString()` call (one `Str`, made ahead of time) and the part *is* that `Str` -
-// one conversion, not one for the length and another for the write.
-Int simse_strCountDigits(Int64 value);
-void simse_strAddInt(char* target, Int64 value, Int count);
-StrView simse_strBoolView(Bool value);
-
 #include <charconv>
 #include <cstddef>
 #include <system_error>
@@ -302,215 +233,47 @@ Str simse_num_toString(const T& self);
 Str simse_char_toString(Char self);
 Str simse_bool_toString(Bool self);
 
-struct ns1_Tag;
-// stress/concat/src/main.kt:17
-SIMSE_PACK_PUSH
-struct ns1_Tag {
-    Str name;
-    Int count;
-};
-SIMSE_PACK_POP
+Bool isEmpty(Str* self);
 
-Str fmtStr(StrView fmt, List<Str>* items);
-Str ns1_pair(Str a, Str b);
-
-Str fmtStr(StrView fmt, List<Str>* items) {
-    Str _sm_base2, out;
-    Bool _sm_expr1, _sm_expr3, _sm_expr5, _sm_expr7, _sm_expr10, _sm_expr11;
-    Int points, i, _sm_expr2, _sm_expr8, used;
-    Char _sm_expr4, ch;
-    _sm_expr1 = items == nullptr;
-    if (!(_sm_expr1)) goto L2;
-    return fmt;
-    L2:;
-    points = 0;
-    i = 0;
-    L3:;
-    _sm_expr2 = simse_strView_size(fmt);
-    _sm_expr3 = i < _sm_expr2;
-    if (!(_sm_expr3)) goto L4;
-    _sm_expr4 = simse_strView_charAt(fmt, i);
-    _sm_expr5 = _sm_expr4 == '|';
-    if (!(_sm_expr5)) goto L6;
-    points = points + 1;
-    L6:;
-    i = i + 1;
-    goto L3;
-    L4:;
-    _sm_expr2 = items->size();
-    _sm_expr7 = points != _sm_expr2;
-    if (!(_sm_expr7)) goto L8;
-    return fmt;
-    L8:;
-    out = __sm_stringTable[21];
-    _sm_expr8 = simse_strView_size(fmt);
-    simse_str_reserve(out, _sm_expr8);
-    used = 0;
-    i = 0;
-    L9:;
-    _sm_expr2 = simse_strView_size(fmt);
-    _sm_expr10 = i < _sm_expr2;
-    if (!(_sm_expr10)) goto L10;
-    ch = simse_strView_charAt(fmt, i);
-    _sm_expr11 = ch == '|';
-    if (!(_sm_expr11)) goto L12;
-    _sm_base2 = (*items)[used];
-    simse_str_appendStr(out, _sm_base2);
-    used = used + 1;
-    goto L13;
-    L12:;
-    simse_str_append(out, ch);
-    L13:;
-    i = i + 1;
-    goto L9;
-    L10:;
-    return out;
-}
-// stress/concat/src/main.kt:19
-Str ns1_pair(Str a, Str b) {
-    char* __sm_catP;
-    Str _sm_expr2;
-    _sm_expr2.resize(1 + a.size() + b.size());
-    __sm_catP = _sm_expr2.data();
-    std::memcpy(__sm_catP, a.data(), a.size());
-    __sm_catP = __sm_catP + a.size();
-    *__sm_catP = (char) ('-');
-    __sm_catP = __sm_catP + 1;
-    std::memcpy(__sm_catP, b.data(), b.size());
+Bool isEmpty(Str* self) {
+    Int _sm_expr1;
+    Bool _sm_expr2;
+    _sm_expr1 = self->size();
+    _sm_expr2 = _sm_expr1 == 0;
     return _sm_expr2;
 }
-// stress/concat/src/main.kt:23
+// stress/raw-strings/src/main.kt:7
 int main() {
-    char* __sm_catP;
-    Int __sm_catAt;
-    Int __sm_catC0;
-    Int* _sm_base1;
-    List<Str> _sm_base10, _sm_base12;
-    List<Str>* _sm_base11, * _sm_base13;
-    Str a, b, _sm_expr2, _sm_expr3, _sm_expr5, _sm_expr6, _sm_expr7, _sm_expr8, _sm_expr9, _sm_expr10,
-        _sm_expr12, _sm_expr13, acc, _sm_expr17, _sm_expr18, _sm_expr19, _sm_expr20, _sm_expr21, _sm_expr23,
-        _sm_expr24, bare, _sm_expr25, _sm_expr26;
-    ns1_Tag tag;
-    StrView format;
-    a = __sm_stringTable[1];
-    b = __sm_stringTable[4];
-    _sm_expr2.resize(1 + a.size() + b.size());
-    __sm_catP = _sm_expr2.data();
-    std::memcpy(__sm_catP, a.data(), a.size());
-    __sm_catP = __sm_catP + a.size();
-    std::memcpy(__sm_catP, b.data(), b.size());
-    __sm_catP = __sm_catP + b.size();
-    *__sm_catP = (char) ('!');
+    Str text, empty, quoted;
+    Int _sm_expr1, _sm_expr2, _sm_when1_n, _sm_expr8;
+    Bool _sm_expr3, _sm_expr4, _sm_expr5, _sm_expr6, _sm_expr7;
+    text = __sm_stringTable[1];
+    _sm_expr1 = text.size();
+    std::cout << std::boolalpha << (_sm_expr1) << std::endl;
+    std::cout << std::boolalpha << (text) << std::endl;
+    empty = __sm_stringTable[6];
+    _sm_expr2 = empty.size();
     std::cout << std::boolalpha << (_sm_expr2) << std::endl;
-    _sm_expr3.resize(1 + a.size());
-    __sm_catP = _sm_expr3.data();
-    *__sm_catP = (char) ('x');
-    __sm_catP = __sm_catP + 1;
-    std::memcpy(__sm_catP, a.data(), a.size());
+    _sm_expr3 = isEmpty(simse_addressOf(empty));
     std::cout << std::boolalpha << (_sm_expr3) << std::endl;
-    _sm_expr5.resize(1 + a.size() + b.size());
-    __sm_catP = _sm_expr5.data();
-    std::memcpy(__sm_catP, a.data(), a.size());
-    __sm_catP = __sm_catP + a.size();
-    *__sm_catP = (char) (':');
-    __sm_catP = __sm_catP + 1;
-    std::memcpy(__sm_catP, b.data(), b.size());
+    _sm_expr4 = text == __sm_stringTable[0];
+    std::cout << std::boolalpha << (_sm_expr4) << std::endl;
+    _sm_expr5 = simse_str_startsWith(text, __sm_stringTable[3]);
     std::cout << std::boolalpha << (_sm_expr5) << std::endl;
-    _sm_expr6 = ns1_pair(__sm_stringTable[17], __sm_stringTable[18]);
-    _sm_expr7.resize(a.size() + _sm_expr6.size());
-    __sm_catP = _sm_expr7.data();
-    std::memcpy(__sm_catP, a.data(), a.size());
-    __sm_catP = __sm_catP + a.size();
-    std::memcpy(__sm_catP, _sm_expr6.data(), _sm_expr6.size());
-    std::cout << std::boolalpha << (_sm_expr7) << std::endl;
-    _sm_expr8 = ns1_pair(a, b);
+    _sm_when1_n = text.size();
+    _sm_expr6 = _sm_when1_n == 39;
+    if (!(_sm_expr6)) goto L2;
+    _sm_expr7 = text == __sm_stringTable[1];
+    if (!(_sm_expr7)) goto L2;
+    std::cout << std::boolalpha << (__sm_stringTable[4]) << std::endl;
+    goto L4;
+    L2:;
+    std::cout << std::boolalpha << (__sm_stringTable[5]) << std::endl;
+    L4:;
+    quoted = __sm_stringTable[2];
+    _sm_expr8 = quoted.size();
     std::cout << std::boolalpha << (_sm_expr8) << std::endl;
-    tag = ns1_Tag{__sm_stringTable[19], 3};
-    _sm_expr9 = tag.name;
-    _sm_expr10.resize(1 + _sm_expr9.size());
-    __sm_catP = _sm_expr10.data();
-    std::memcpy(__sm_catP, _sm_expr9.data(), _sm_expr9.size());
-    __sm_catP = __sm_catP + _sm_expr9.size();
-    *__sm_catP = (char) ('=');
-    _sm_base1 = simse_addressOf(tag.count);
-    __sm_catC0 = simse_strCountDigits((*_sm_base1));
-    _sm_expr12.resize(_sm_expr10.size() + __sm_catC0);
-    __sm_catP = _sm_expr12.data();
-    std::memcpy(__sm_catP, _sm_expr10.data(), _sm_expr10.size());
-    __sm_catP = __sm_catP + _sm_expr10.size();
-    simse_strAddInt(__sm_catP, (*_sm_base1), __sm_catC0);
-    std::cout << std::boolalpha << (_sm_expr12) << std::endl;
-    _sm_expr13.resize(4);
-    __sm_catP = _sm_expr13.data();
-    std::memcpy(__sm_catP, "aa", 2);
-    __sm_catP = __sm_catP + 2;
-    std::memcpy(__sm_catP, "bb", 2);
-    std::cout << std::boolalpha << (_sm_expr13) << std::endl;
-    acc = __sm_stringTable[6];
-    __sm_catAt = acc.size();
-    acc.resize(__sm_catAt + 1 + a.size() + b.size());
-    __sm_catP = acc.data() + __sm_catAt;
-    *__sm_catP = (char) ('-');
-    __sm_catP = __sm_catP + 1;
-    std::memcpy(__sm_catP, a.data(), a.size());
-    __sm_catP = __sm_catP + a.size();
-    std::memcpy(__sm_catP, b.data(), b.size());
-    std::cout << std::boolalpha << (acc) << std::endl;
-    _sm_expr17.resize(2 + acc.size());
-    __sm_catP = _sm_expr17.data();
-    *__sm_catP = (char) ('[');
-    __sm_catP = __sm_catP + 1;
-    std::memcpy(__sm_catP, acc.data(), acc.size());
-    __sm_catP = __sm_catP + acc.size();
-    *__sm_catP = (char) (']');
-    std::cout << std::boolalpha << (_sm_expr17) << std::endl;
-    _sm_expr18.resize(5);
-    __sm_catP = _sm_expr18.data();
-    std::memcpy(__sm_catP, "plain", 5);
-    std::cout << std::boolalpha << (_sm_expr18) << std::endl;
-    _sm_expr19.resize(2 + a.size());
-    __sm_catP = _sm_expr19.data();
-    std::memcpy(__sm_catP, "a=", 2);
-    __sm_catP = __sm_catP + 2;
-    std::memcpy(__sm_catP, a.data(), a.size());
-    std::cout << std::boolalpha << (_sm_expr19) << std::endl;
-    _sm_expr20.resize(1 + a.size() + b.size());
-    __sm_catP = _sm_expr20.data();
-    std::memcpy(__sm_catP, a.data(), a.size());
-    __sm_catP = __sm_catP + a.size();
-    *__sm_catP = (char) ('x');
-    __sm_catP = __sm_catP + 1;
-    std::memcpy(__sm_catP, b.data(), b.size());
-    std::cout << std::boolalpha << (_sm_expr20) << std::endl;
-    _sm_expr21.resize(3 + a.size() + b.size());
-    __sm_catP = _sm_expr21.data();
-    std::memcpy(__sm_catP, "b=", 2);
-    __sm_catP = __sm_catP + 2;
-    std::memcpy(__sm_catP, a.data(), a.size());
-    __sm_catP = __sm_catP + a.size();
-    *__sm_catP = (char) ('=');
-    __sm_catP = __sm_catP + 1;
-    std::memcpy(__sm_catP, b.data(), b.size());
-    std::cout << std::boolalpha << (_sm_expr21) << std::endl;
-    _sm_expr23.resize(a.size());
-    __sm_catP = _sm_expr23.data();
-    std::memcpy(__sm_catP, a.data(), a.size());
-    std::cout << std::boolalpha << (_sm_expr23) << std::endl;
-    _sm_expr24.resize(0);
-    std::cout << std::boolalpha << (_sm_expr24) << std::endl;
-    bare = __sm_stringTable[14];
-    __sm_catAt = bare.size();
-    bare.resize(__sm_catAt + 0);
-    std::cout << std::boolalpha << (bare) << std::endl;
-    format = __sm_stringTable[7];
-    _sm_base10 = List<Str>{a};
-    _sm_base11 = &_sm_base10;
-    _sm_expr25 = fmtStr(format, _sm_base11);
-    std::cout << std::boolalpha << (_sm_expr25) << std::endl;
-    _sm_base12 = List<Str>{a};
-    _sm_base13 = &_sm_base12;
-    _sm_expr26 = fmtStr(__sm_stringTable[0], _sm_base13);
-    std::cout << std::boolalpha << (_sm_expr26) << std::endl;
+    std::cout << std::boolalpha << (quoted) << std::endl;
     return 0;
 }
 
@@ -607,95 +370,6 @@ inline StrView simse_spanOfStr(Str* text) {
     return StrView(reinterpret_cast<Char*>(text->data()), text->size());
 }
 
-template <class T>
-inline void simse_list_append(List<T>& self, const std::type_identity_t<T>& value) {
-    self.push_back(value);
-}
-
-template <class T>
-inline List<T> simse_listOf(const List<T>* values) {
-    return *values;
-}
-
-// Removes the single element at `index`.
-template <class T>
-inline void simse_list_removeAt(List<T>& self, Int index) {
-    self.erase(self.begin() + index);
-}
-
-// Removes the half-open range [start, end).
-template <class T>
-inline void simse_list_removeRange(List<T>& self, Int start, Int end) {
-    self.erase(self.begin() + start, self.begin() + end);
-}
-
-// `Array<T>.count()`: the element count stored at the front of the block.
-template <class T>
-inline Int simse_array_count(const Array<T>& self) {
-    return self.count();
-}
-
-// `List<T>.toArray()` (specs/built-in-types.md): copies the elements into one count-first
-// block. Element copies are value copies, like every other copy in the language.
-template <class T>
-inline Array<T> simse_list_toArray(const List<T>& self) {
-    const Int count = self.size();
-    if (count <= 0) {
-        return Array<T>();
-    }
-    Array<T> result(count);
-    for (Int i = 0; i < count; i++) {
-        result[i] = self[i];
-    }
-    return result;
-}
-
-// `Array<T>.toList()`: the growable copy, which is how an element is added to an array.
-template <class T>
-inline List<T> simse_array_toList(const Array<T>& self) {
-    List<T> result;
-    const Int count = self.count();
-    result.reserve(count);
-    for (Int i = 0; i < count; i++) {
-        result.push_back(self[i]);
-    }
-    return result;
-}
-
-// `arrayEmpty<T>()`: the shared, zero-length array of `T` (no allocation).
-template <class T>
-inline Array<T> simse_arrayEmpty() {
-    return Array<T>();
-}
-
-// `Str.append(ch)`: `Str` has no single-character append, so this is `push_back`.
-inline void simse_str_append(Str& self, Char value) {
-    self.push_back(static_cast<char>(value));
-}
-
-// `Str.appendStr(text)`: appends in place, so an emitter accumulates output without
-// `out = out + text` rebuilding the whole buffer on every line (which is quadratic).
-inline void simse_str_appendStr(Str& self, const Str& value) {
-    self.append(value);
-}
-
-// `Str.appendStrPtr(text)`: the same append for a text the caller only *borrows*, so
-// nothing is copied on the way.
-inline void simse_str_appendStrPtr(Str& self, const Str* value) {
-    if (value != nullptr) self.append(*value);
-}
-
-// `Str.reserve(count)`: grows the buffer once, so a run of appends writes the text once
-// instead of copying the accumulated prefix at every growth step. A *hint*, not a length.
-inline void simse_str_reserve(Str& self, Int count) {
-    self.reserve((Str::size_type) count);
-}
-
-// `Int.toString()`: the scalar-to-inline-string conversion (specs/memory-model.md).
-inline Str simse_int_toString(Int self) {
-    return std::to_string(self);
-}
-
 // `dictionaryOf<K, V>()`: `Dictionary<K, V>` is a value type, so this default-constructs
 // one.
 template <class K, class V>
@@ -768,79 +442,6 @@ inline Bool simse_list_contains(const List<T>& self, const std::type_identity_t<
 template <class T, class F>
 inline void simse_list_sort(List<T>& self, F less) {
     std::sort(self.begin(), self.end(), less);
-}
-
-// The powers of ten the bit scan settles its guess against.
-static const unsigned long long smStrDigitPow10[20] = {
-    1ull, 10ull, 100ull, 1000ull, 10000ull, 100000ull, 1000000ull, 10000000ull,
-    100000000ull, 1000000000ull, 10000000000ull, 100000000000ull, 1000000000000ull,
-    10000000000000ull, 100000000000000ull, 1000000000000000ull, 10000000000000000ull,
-    100000000000000000ull, 1000000000000000000ull, 10000000000000000000ull
-};
-
-// The digit count, exact for every width (a narrower integer widens to `Int64` with the same
-// digits). `std::bit_width(magnitude)` is the position of the highest set bit plus one - one
-// `clz`/`bsr` - and `1233 / 4096 = 0.3010...` is log10(2), so the product is
-// floor(log10(magnitude)) or one off; the comparison against that power of ten settles which.
-// The early return is the one case the scan cannot answer (`0`), and the sign is a separate
-// term, counted on the widened value so `-INT64_MIN` never overflows.
-inline Int simse_strCountDigits(Int64 value) {
-    unsigned long long magnitude =
-        value < 0 ? 0ull - (unsigned long long) value : (unsigned long long) value;
-    if (magnitude < 10ull) {
-        return value < 0 ? 2 : 1;
-    }
-    Int bits = (Int) std::bit_width(magnitude);
-    Int guess = (Int) (((unsigned int) bits * 1233u) >> 12);
-    Int digits = guess + (magnitude >= smStrDigitPow10[guess] ? 1 : 0);
-    return digits + (value < 0 ? 1 : 0);
-}
-
-// Two digits per step: the table holds "00".."99", so the inner loop never divides by ten.
-struct SmStrDigitPairTable {
-    char text[200];
-    constexpr SmStrDigitPairTable() : text() {
-        for (Int i = 0; i < 100; i = i + 1) {
-            text[i * 2] = (char) ('0' + i / 10);
-            text[i * 2 + 1] = (char) ('0' + i % 10);
-        }
-    }
-};
-
-static constexpr SmStrDigitPairTable smStrDigitPairs{};
-
-// The digits of `value`, written straight into the `count` bytes `target` already owns and
-// walking *back* through them (the least-significant pair first), so no second buffer and no
-// second pass is needed. `count` must be exact - `simse_strCountDigits`'s answer, sign
-// included - because the slots of the parts around this one depend on it.
-inline void simse_strAddInt(char* target, Int64 value, Int count) {
-    unsigned long long magnitude =
-        value < 0 ? 0ull - (unsigned long long) value : (unsigned long long) value;
-    if (value < 0) {
-        target[0] = '-';
-        count = count - 1;
-        target = target + 1;
-    }
-    while (count >= 2) {
-        unsigned int pair = (unsigned int) (magnitude % 100ull);
-        magnitude /= 100ull;
-        count = count - 2;
-        target[count] = smStrDigitPairs.text[pair * 2];
-        target[count + 1] = smStrDigitPairs.text[pair * 2 + 1];
-    }
-    if (count == 1) {
-        target[0] = (char) ('0' + (Int) magnitude);
-    }
-}
-
-// The two texts a bool can be, as a `StrView` over a two-entry table - the string-table shape,
-// so a bool part is just another text part (a `memcpy` of a runtime length) and needs no digits
-// of its own. Cold enough that the two loads the compiler folds it to do not matter.
-inline StrView simse_strBoolView(Bool value) {
-    static Char texts[2][6] = {"true", "false"};
-    static Int lens[2] = {4, 5};
-    Int at = value ? 0 : 1;
-    return StrView(texts[at], lens[at]);
 }
 
 // `Str.isEmpty()` is the prelude's own body (cppsrc/rtl/rtl.kt), not a resource: `size()`

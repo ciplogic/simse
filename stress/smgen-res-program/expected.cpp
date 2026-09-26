@@ -37,19 +37,21 @@ void simse_strTableDecode(const char* pool, const Int* starts, const Int* length
 
 #include <chrono>
 
-// Time natives (the Simse surface is the prelude file cppsrc/rtl/rtl.kt). Both are
+// Time natives (the Simse surface is the prelude file cppsrc/rtl/rtl.kt). All three are
 // monotonic clocks - never going backwards - since an arbitrary fixed point:
-// `simse_nowMillis` for logging, the finer `simse_nowMicros` for the instrumented
-// profiler (`cppsrc/profiling`, and the emitted `profileApp.measure(...)` of a
-// `--profile` build). It was cppsrc/rtl/timeops.hpp, and its definitions were the last
+// `simse_nowMillis` for logging, and the finer `simse_nowMicros` / `simse_nowNanos` for
+// the instrumented profiler (`cppsrc/profiling`, and the emitted `profileApp.measure(...)`
+// of a `--profile` build; `--profile-nanos` picks the nanosecond clock). It was
+// cppsrc/rtl/timeops.hpp, and its definitions were the last
 // thing left in cppsrc/rtl/native.cpp - they are this section's now, so the clock is
 // emitted into the program like any other prelude body and there is nothing to link.
 // `emit: always`
 // because the profiler's runtime is emitted by the *compiler* rather than named by
-// the program: a `--profile` build needs these two declarations whether or not the program
+// the program: a `--profile` build needs these declarations whether or not the program
 // ever asks for the time.
 Int64 simse_nowMillis();
 Int64 simse_nowMicros();
+Int64 simse_nowNanos();
 
 // `triple(value)` (src/main.kt), the program's own generated function: the declaration
 // reaches this text, and the emitter never emits a prototype of its own for it.
@@ -100,7 +102,7 @@ inline void simse_strTableDecode(const char* pool, const Int* starts, const Int*
     }
 }
 
-// The two monotonic clocks. `steady_clock` is the one clock the standard library
+// The three monotonic clocks. `steady_clock` is the one clock the standard library
 // promises cannot go backwards, which is what makes a duration between two readings
 // meaningful (`impl_specs/profiling.md`).
 Int64 simse_nowMillis() {
@@ -111,4 +113,9 @@ Int64 simse_nowMillis() {
 Int64 simse_nowMicros() {
     const auto now = std::chrono::steady_clock::now().time_since_epoch();
     return (Int64) std::chrono::duration_cast<std::chrono::microseconds>(now).count();
+}
+
+Int64 simse_nowNanos() {
+    const auto now = std::chrono::steady_clock::now().time_since_epoch();
+    return (Int64) std::chrono::duration_cast<std::chrono::nanoseconds>(now).count();
 }

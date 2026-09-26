@@ -316,7 +316,8 @@ data class Parser(
                     return this.emptyNode()
                 }
                 val arg: Token = this.advance()
-                args.append(arg.text)
+                val argText: Str = arg.text
+                args.append(this.stringTokenText(argText))
                 this.skipNewlines()
                 if (!this.matchText(",")) {
                     break
@@ -1922,6 +1923,16 @@ data class Parser(
         return expr
     }
 
+    // A string token's text: the ordinary quoted literal as written, or the quoted literal a
+    // backtick string's raw content spells (litRawString) - so everything downstream, the
+    // when guards and StrView resolution included, sees one kind of text.
+    fun stringTokenText(text: *Str): Str {
+        if (text.size() > 0 && text[0] == '`') {
+            return litRawString(text)
+        }
+        return *text
+    }
+
     fun parsePrimary(): ExprNode {
         val pos: SourcePos = this.peek(0).pos
         if (this.checkKind(TokenKind.Number)) {
@@ -1935,7 +1946,8 @@ data class Parser(
             return ExprNode(AstXmlNode(AstNodeKind.Expr, kind, attrs, Array<AstXmlNode>()), pos.line, pos.column)
         }
         if (this.checkKind(TokenKind.String)) {
-            val text: Str = this.advance().text
+            val raw: Str = this.advance().text
+            val text: Str = this.stringTokenText(raw)
             var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
             attrs.append(AstNodeAttribute(AstNodeAttributeKind.Text, text))
             return ExprNode(

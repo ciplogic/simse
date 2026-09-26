@@ -1539,7 +1539,7 @@ fun Emitter.emitClosureClass(unit: *IlUnit, closure: *IlClosure): IlText {
         params.append(fmtStr("| |", this.type(paramType), param.name))
     }
     text.appendStr(fmtStr("    auto operator()(|) {\n", cgJoin(params, ", ")))
-    val preamble: Str = profPreamble(closure.symbol + "::operator()")
+    val preamble: Str = profPreamble(this.profIndexOf(closure.symbol + "::operator()"))
     if (preamble != "") {
         text.appendStr(fmtStr("||\n", cgIndent(2), preamble))
     }
@@ -1876,7 +1876,7 @@ fun Emitter.emitBodyAt(info: *IlFunction, body: *List<AstXmlNode>, file: *Str, l
     // The profiler's timer comes before the body's storage, so no jump can cross into its
     // scope (impl_specs/profiling.md). `measure` is false for a machine's methods.
     if (measure) {
-        val preamble: Str = profPreamble(info.symbol)
+        val preamble: Str = profPreamble(this.profIndexOf(info.symbol))
         if (preamble != "") {
             this.sections.appendLine(cgIndent(level), preamble)
         }

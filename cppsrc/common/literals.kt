@@ -89,6 +89,38 @@ fun litCharSpelling(text: *Str): Str {
     return ""
 }
 
+// The quoted spelling of a backtick string (specs/built-in-types.md): its token text is the
+// whole backtick run, and what the string pool carries must be an ordinary C++ string
+// literal, so the bytes that need it are escaped - a backslash and a double quote - and
+// every line ending becomes one newline escape (CRLF and a lone CR both). Nothing else is: a
+// backtick string offers no escape of its own and its content is taken as written.
+fun litRawString(text: *Str): Str {
+    var out: Str = "\""
+    val end: Int = text.size() - 1
+    var i: Int = 1
+    while (i < end) {
+        val ch: Char = text.charAt(i)
+        if (ch == '\\' || ch == '\"') {
+            out.append('\\')
+            out.append(ch)
+        } else if (ch == '\r') {
+            if (i + 1 < end && text.charAt(i + 1) == '\n') {
+                i = i + 1
+            }
+            out.append('\\')
+            out.append('n')
+        } else if (ch == '\n') {
+            out.append('\\')
+            out.append('n')
+        } else {
+            out.append(ch)
+        }
+        i = i + 1
+    }
+    out.append('\"')
+    return out
+}
+
 // The character literal for one printable character, `'` and `\` escaped.
 fun litSpellChar(ch: Char): Str {
     var out: Str = "'"

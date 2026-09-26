@@ -33,6 +33,34 @@ Status: required for the first implementation.
 `'c'` denotes a `Char` (`Int8`) value. The supported escapes are
 `\n`, `\r`, `\t`, `\0`, `\\`, `\'`, and `\"`. An unknown escape is an error.
 
+### String literals
+
+Status: implemented (`stress/raw-strings`).
+
+`"..."` is a string literal. Its escapes are the character literals' set, plus `\xNN`
+with any run of hex digits and an octal escape of up to three digits; each denotes one
+byte (`cppsrc/common/literals.kt` is the one decoder).
+
+A **backtick string** is the same value written raw:
+
+```
+val text: Str = `first line
+second "line" with a \ backslash`
+```
+
+There is no escape and no interpolation: the next backtick ends the string, so a
+backtick cannot appear inside, and every byte between the two backticks is the content -
+a real newline included, which is what lets a string span lines. A line ending is
+normalized to one `\n` (CRLF and a lone CR both), so a source file's line endings do not
+change the value. A `"` and a `\` are written as they stand; that - and the multi-line
+form - is what makes a backtick string the way to hold another language's source text
+verbatim (the profiler's emitted C++, `cppsrc/profiling/Profiling.kt`).
+
+Both forms are one entry in the program's literal pool, and at a site a `StrView` into
+it, exactly alike (`impl_specs/rtl-abi.md`): a backtick string is spelled as the
+ordinary `"..."` literal denoting the same bytes, so nothing downstream distinguishes
+them.
+
 ## Operators
 
 Status: required for the first implementation.

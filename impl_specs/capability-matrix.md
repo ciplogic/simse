@@ -3449,3 +3449,103 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   Verified: `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js`
   - both fixed points byte for byte, with the compiler's own string `when`s rewritten in its own
   emitted C++, which is the real test of the rewrite; `bun tools/stress.js` **41/41**.
+
+- **The profiler indexes its rows, and its table is CSV.** `--profile` used to key its runtime
+  table by the body's *name*: `Dictionary<Str, ProfileRow>`, one hash-and-`Str`-compare per body
+  entry, and the report sorted an `order` list of strings and formatted them with
+  `c_str()`. Every emitted body also carried its name as a string literal, so `xmlKind` - a
+  one-field compare called millions of times - paid a dictionary lookup to be counted. The rows
+  are now a `List<FunctionData>`, indexed by a dense `Int` the emitter hands out while it writes
+  the bodies (`Emitter.profIndexOf`), and a measurement is one array index and two clock reads:
+  `ProfileScope(Int index, List<FunctionData> *)` increments `calls` in its constructor (entry)
+  and banks the elapsed microseconds in its destructor, and `measure(Int)` grows the list to the
+  index the first time it sees it. The names became one table of constants,
+  `simse_profiling::kMethodNames[]`, written with the bodies (`Emitter.emitProfileNames`, after
+  `emitFunctions(false)`, because the last index only exists then); they are C++ string
+  literals, so the report names a row without building a Simse `Str`. No dictionary, no `Str`,
+  no per-entry allocation is left in the runtime.
+
+  - **The report is CSV, and it goes to a file.** The aligned stderr table became
+    `name,total_us,calls`, biggest total first, with a header; a row whose `calls` is zero (a
+    measured body the run never entered) is omitted. The default destination is the file
+    `simse_profile.txt` (`--profile-file <path>`, and `bun build.js --profile` passes it
+    through); `--profile-file -` keeps it on stderr, and an unopenable path falls back there.
+    The path is a transpile-time constant (`simse_profiling::kProfileFile`), because `--profile`
+    is a build mode and not a program's own argument.
+  - **The proof file.** `cppsrc/simse_profile.txt` sits beside the bootstrap: the CSV a release,
+    profiled compiler wrote about its own `--root cppsrc` run (769 measured bodies; `main` 5.9 s
+    inclusive, `ns1_emitFunction` 1818 calls, `ns8_foldExprsUnder` 1.86M). The `calls` column is
+    exact; `total_us` is one machine.
+
+  Verified: a profiled `stress/strings` program writes a correct CSV and prints the same to
+  stderr with `--profile-file -`; with the flag off `bun tools/stress.js` is **41/41** (no golden
+  moved - the flag returns the empty string at every hook, and `Emitter.profIndexOf` returns
+  early, so the emitted C++ is byte-identical), and
+  `bun build.js --release --out cppsrc/simse_bootstrap.cpp` + `bun tools/bootstrap.js` give both
+  fixed points byte for byte.
+
+- **The profiler names packages, and it can count nanoseconds.** Two follow-ups on the indexed
+  table. First, the compiled body names in the report were the mangled C++ symbols -
+  `ns1_emitProgram`, `ns7_linFinishForEmission` - which the compiler alone can read. The
+  `nsN_` prefix *is* the package (`Emitter.collectPackages` assigns it in sorted package order),
+  so `Emitter.prettySymbol` rewrites a leading prefix to the package and the table now reads
+  `codegen::emitProgram`, `linear::linFinishForEmission`, `optimizations::foldExprsUnder`, with
+  `main` and the `rtl` prelude bodies passing through unprefixed. Only the profiler's table is
+  spelled this way; the emitted symbols stay mangled, and the rewrite happens once per distinct
+  body, when its index is handed out. Second, `--profile-nanos` switches the emitted timer from
+  `simse_nowMicros()` to `simse_nowNanos()` and the CSV column from `total_us` to `total_ns`;
+  `bun build.js --profile-nanos` passes it through. Because a nanosecond count is ~1000x a
+  microsecond one (an `Int32` wraps it in ~2 s), the instant and the count are `Int64` in both
+  units - `FunctionData.total`, `FunctionData.calls`, `ProfileScope::start_` and both clocks all
+  return/hold `Int64` - so the unit is a display choice, not a range one.
+
+  - **A third clock.** `simse_nowNanos` joins `simse_nowMillis` / `simse_nowMicros` in the
+    `timeops` section of `cppsrc/rtl/_res.md` (the section carries `emit: always` precisely
+    because the profiler's runtime is emitted by the compiler, so the clock is in every program
+    whether or not the program asks for the time). `steady_clock` on Windows resolves to ~100 ns,
+    finer than the microsecond reading.
+
+  Verified: a profiled `stress/strings` program writes `strings::partStrIsEmpty` names, and with
+  `--profile-nanos` the same program writes `name,total_ns,calls` and measures through
+  `simse_nowNanos()`; the checked-in `cppsrc/simse_profile.txt` is regenerated from a release,
+  profiled compiler (`codegen::emitProgram` 5.3 s inclusive, `codegen::emitFunction` 1826 calls);
+  the 11 `.cpp` goldens that carry `timeops` were re-captured (the only change is the added
+  clock), `bun tools/stress.js` is **41/41**, and
+  `bun build.js --release --out cppsrc/simse_bootstrap.cpp` + `bun tools/bootstrap.js` give both
+  fixed points byte for byte.
+
+- **A backtick string is the language's raw, multi-line literal.** Written between two
+  backticks, it has no escape and no interpolation: the next backtick ends it, so a backtick
+  cannot appear inside, and every byte between them is the content - a real newline included,
+  which is what lets a string span lines (JavaScript's delimiter, C#'s verbatim semantics,
+  without the `@`). The scanner has one more matcher (`matchRawStringLiteral`,
+  `cppsrc/lex/Scanner.kt`), ordered *last* in the rule table on purpose: a backtick is the one
+  character no earlier rule accepts, so only a backtick ever reaches it and no other token pays
+  for the rule. The parser then turns the token into an ordinary string literal rather than a
+  new node kind: `Parser.stringTokenText` hands a backtick token's raw text to `litRawString`
+  (`common/literals.kt`), which spells it as the `"..."` literal denoting the same bytes - a
+  backslash and a quote escaped, each line ending one `\n` - so the AST text, the string pool,
+  the length index, the `when` guards and the `StrView` a literal resolves to are all exactly a
+  regular literal's, with no special case anywhere downstream.
+
+  - **Line endings are normalized, and that is the point.** A source file is CRLF on Windows and
+    LF elsewhere (the repository's own `Profiling.kt` is CRLF), and a raw multi-line string
+    would otherwise carry a `\r` into the value and into the pool. `litRawString` maps CRLF and a
+    lone CR both to one `\n`, so the string is the same whichever line endings the checkout has -
+    what JavaScript's template literals do, and what keeps the bootstrap's fixed point byte for
+    byte across checkouts.
+  - **It is how the profiler's C++ is now written.** `cppsrc/profiling/Profiling.kt`'s prelude -
+    ~110 lines of `appendStr("...\n")` calls, one escaped C++ line each - is one backtick string
+    per run, with the four computed pieces (the clock, twice, the unit and the file path)
+    concatenated in; `Codegen.preludeText` is the same for its five lines. The only cost is that
+    the embedded C++ comments could no longer use backticks themselves (nothing escapes one), so
+    the few that did were reworded; the emitted C++ is otherwise byte-identical, which diffing a
+    `--profile` program's runtime against the previous compiler's shows.
+
+  Verified: `stress/raw-strings` (new) pins a multi-line string, an embedded `"` and `\`, an
+  empty backtick string, equality with the escaped `"..."` form, `startsWith`, and a backtick
+  string as a `when` label - with its `expected.cpp`; `bun tools/stress.js` is **42/42** (41 +
+  the new case, with no other golden moved); `bun build.js --release --out
+  cppsrc/simse_bootstrap.cpp` + `bun tools/bootstrap.js` give both fixed points byte for byte;
+  and a `--profile` build of `stress/strings` emits the same runtime as before apart from the
+  reworded comments.

@@ -34,9 +34,11 @@ build.bat --cpp other.cpp --exe other.exe   :: compile an existing amalgamation
 Studio through `tools/msvc.mjs` and reports what it is doing. `--define` reaches
 the whole translation unit - the amalgamation and the RTL C++ it carries are
 compiled together - so the `SIMSE_STR_INLINE_CAPACITY` / `SIMSE_NO_PACK4` knobs
-apply consistently. `--profile` transpiles with the instrumented profiler
-(`impl_specs/profiling.md`). The same script can transpile any other module
-root:
+apply consistently. `--profile` transpiles with the instrumented profiler, which writes
+its CSV to `simse_profile.txt` when the program runs (`--profile-file <path>`; `-` is
+stderr), and `--profile-file` / `--profile-nanos` pass through from `build.bat`
+(`impl_specs/profiling.md`).
+The same script can transpile any other module root:
 
 ```bat
 bun build.js --release --root my_project --out my_project.cpp --exe my_project.exe
@@ -131,14 +133,15 @@ one module.
 The compiler's own CLI is:
 
 ```
-simse.exe --root <dir> -o <out.cpp> [--prelude <dir>] [--profile] [--no-concat] [--when-first-char] [--showLinearRepresentation]
+simse.exe --root <dir> -o <out.cpp> [--prelude <dir>] [--profile] [--profile-file <path>] [--profile-nanos] [--no-concat] [--when-first-char] [--showLinearRepresentation]
 ```
 
 - `--root <dir>` scans a directory tree for `.kt` files (the compiler's own
   source tree is `cppsrc`);
 - `--prelude <dir>` overrides the implicit prelude, which defaults to the
   relative path `cppsrc/rtl`, so run the compiler from the repository root;
-- `--profile` emits the instrumented profiler;
+- `--profile` emits the instrumented profiler, whose CSV goes to `simse_profile.txt` (or
+  `--profile-file <path>`; `-` is stderr), in microseconds or `--profile-nanos`;
   `--showLinearRepresentation` dumps the linear IL (see
   `impl_specs/profiling.md` and `impl_specs/linear-il.md`).
 

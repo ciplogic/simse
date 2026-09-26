@@ -296,8 +296,25 @@ fun main(args: List<Str>): Int {
                 profSetEnabled(true)
             }
 
+            // --profile-file <path>: where the instrumented profiler's table is written
+            // when the program leaves (default simse_profile.txt; '-' keeps it on stderr).
+            "--profile-file" -> {
+                if (i + 1 >= args.size()) {
+                    eprintln("simse: --profile-file requires a path")
+                    return 2
+                }
+                i = i + 1
+                profSetFile(args[i])
+            }
+
+            // --profile-nanos: emit the nanosecond clock and the total_ns column (the totals
+            // are Int64 either way).
+            "--profile-nanos" -> {
+                profSetNanos(true)
+            }
+
             "-h", "--help" -> {
-                println("usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module <dir>]... [--no-concat] [--no-when-dispatch] [--when-first-char] [--when-copy-subject] [--showLinearRepresentation] [--showAsync] [--profile]")
+                println("usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module <dir>]... [--no-concat] [--no-when-dispatch] [--when-first-char] [--when-copy-subject] [--showLinearRepresentation] [--showAsync] [--profile] [--profile-file <path>] [--profile-nanos]")
                 return 0
             }
 

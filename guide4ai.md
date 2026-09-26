@@ -89,7 +89,7 @@ bun tools/stress.js --filter modules --jobs 4
 ./simse.exe --root stress/when-strings/src -o when-plain.cpp --no-when-dispatch
 
 # debugging / profiling the compiler:
-./simse.exe --root cppsrc -o prof.cpp --profile   # instrumented profiler in the program
+./simse.exe --root cppsrc -o prof.cpp --profile   # instrumented profiler (writes simse_profile.txt)
 ./build.bat --release --pdb                       # optimized + symbols, for the VS profiler
 ```
 
@@ -138,7 +138,7 @@ driver's - and `build.bat` can compile it.
   lowering to a state machine), `async.md` (`Async<T>`: the colorless async design, the
   `!!` operator, the coloring pass and its `--showAsync` dump - and what is still to
   build), `profiling.md` (the `--profile` instrument: one RAII
-  timer per emitted body and the table the program prints), `tasks/.
+  timer per emitted body and the CSV the program writes), `tasks/.
 - `cppsrc/rtl/` — the runtime, and the only hand-written C++ besides the bootstrap:
   the headers (`types.hpp`,
   `containers.hpp`, `smstring.hpp`, `strsmallvector.hpp`, `variant2.hpp`,
@@ -270,12 +270,14 @@ driver's - and `build.bat` can compile it.
   `_*.mjs`/probe files are the hand-written ring's scratch (A/B benchmarks and shape
   probes); they are not part of any workflow.
 - **Profiling**: `bun build.js --release --profile` builds a compiler (or any program,
-  via `--profile` on the CLI) whose every emitted body carries an RAII timer; the table
-  of inclusive microsecond totals and call counts prints on stderr when the program
-  exits (`cppsrc/profiling/`, `impl_specs/profiling.md`). With the flag off the emitted
-  file is byte-identical, so it is a tool and not a mode. `--profile` says **where** -
-  inclusive totals plus call counts, which is what a sampling profile cannot tell you -
-  and `build.bat --release --pdb` is what feeds the VS sampling profiler.
+  via `--profile` on the CLI) whose every emitted body carries an RAII timer; the CSV of
+  inclusive totals and call counts is written when the program exits, to
+  `simse_profile.txt` by default (`--profile-file <path>`, `-` for stderr; `--profile-nanos`
+  for `total_ns`; `cppsrc/profiling/`, `impl_specs/profiling.md`, and `cppsrc/simse_profile.txt`
+  is the proof file). With the flag off the emitted file is byte-identical, so it is a tool and
+  not a mode. `--profile` says **where** - inclusive totals plus call counts, which is
+  what a sampling profile cannot tell you - and `build.bat --release --pdb` is what
+  feeds the VS sampling profiler.
 - `benchmarks/` - published measurements; `benchmarks/onebrc/` is the naive 1BRC
   in Simse (`src/main.kt`, each line parsed in place through `StrView`) with the
   C++ STL baseline, the Bun generator/reference (`onebrc.mjs`), the measured
@@ -501,6 +503,11 @@ borrow parameter and a read-through for a by-value one.
 - **Do not commit** unless the user explicitly asks.
 
 ## 7. Language features currently implemented
+
+**Literals**: `"..."` with the escape set (`\n \r \t \0 \\ \' \" \xNN`, octal),
+and a backtick string - raw and multi-line, no escape and no interpolation, the next
+backtick ends it (`specs/built-in-types.md`). Both are one pool entry and read as a
+`StrView` at a site, exactly alike.
 
 Scalars (`Int8..64`, `Float32/64`, `Char`, `Bool`), `Str` (with a method library:
 `find`, `substr`, `startsWith`, `endsWith`, `replace`, `toInt`, `toFloat`,

@@ -225,6 +225,13 @@ rather than borrowed: an argument to a native taking `const Str&` (`simse_str_fi
 `startsWith`, `split`, `appendStr`, `eprintln` - about 20 sites), the remaining allowlist entry
 from T73.
 
+**A backtick string is pooled as its `"..."` spelling.** The pool holds C++ string
+literals verbatim, because the C++ compiler is what decodes them, so a raw, multi-line
+string cannot go in as written. The parser spells it as the ordinary double-quoted literal
+for the same bytes (`litRawString`, `common/literals.kt`) - a backslash and a quote escaped,
+each line ending one `\n` - and everything downstream, this length index included, sees a
+plain literal (`specs/built-in-types.md`, `stress/raw-strings`).
+
 **Why the lengths are not `sizeof` expressions.** `(Int) sizeof("<literal>") - 1` would let the
 C++ compiler compute the length with no emitter-side decoding, but the length would then be a
 *symbol in the generated file* the emitter cannot index on, and the second index (the deltas)

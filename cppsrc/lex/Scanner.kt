@@ -276,6 +276,24 @@ fun matchStringLiteral(view: StrView): Int {
     return 0
 }
 
+// A backtick string: a raw, multi-line text with no escape and no interpolation - the next
+// backtick ends it, so a backtick cannot appear inside and there is nothing to escape. The
+// parser stores the ordinary quoted literal litRawString spells from its content
+// (common/literals.kt), so everything downstream sees a plain string literal.
+fun matchRawStringLiteral(view: StrView): Int {
+    if (view.size() == 0 || view.at(0) != '`') {
+        return 0
+    }
+    var i = 1
+    while (i < view.size()) {
+        if (view.at(i) == '`') {
+            return i + 1
+        }
+        i = i + 1
+    }
+    return 0
+}
+
 fun matchCharLiteral(view: StrView): Int {
     if (view.size() == 0 || view.at(0) != '\'') {
         return 0
@@ -330,6 +348,9 @@ fun makeTokenRules(): List<TokenMatcher> {
     addRule(rules, TokenKind.Attribute, matchAttribute)
     addRule(rules, TokenKind.Identifier, matchIdentifier)
     addRule(rules, TokenKind.Operator, matchOperator)
+    // Last: a backtick is the one character no earlier rule accepts, so only a backtick ever
+    // reaches this matcher and no other token pays for it.
+    addRule(rules, TokenKind.String, matchRawStringLiteral)
     return rules
 }
 

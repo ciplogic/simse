@@ -30,8 +30,10 @@
 //                     else the bootstrap compiled for this build)
 //   --no-gen          skip transpiling; compile the existing/--cpp file
 //   --profile         transpile with --profile: the emitted program carries the
-//                     instrumented profiler and prints its table at the end of main
+//                     instrumented profiler and writes its table at the end of main
 //                     (impl_specs/profiling.md)
+//   --profile-file <f>  where that table goes (default simse_profile.txt; '-' is stderr)
+//   --profile-nanos   measure nanoseconds (the total_ns column) instead of microseconds
 //   --release         release build: /O2 /Ob3 /DNDEBUG, with whole-program
 //                     optimization (/GL, whose link-time codegen is LTCG) unless
 //                     --no-lto says otherwise
@@ -79,6 +81,8 @@ function usage() {
                     else the bootstrap compiled for this build)
   --no-gen          skip transpiling; compile the existing/--cpp file
   --profile         transpile with --profile (impl_specs/profiling.md)
+  --profile-file <f>  profile table path (default simse_profile.txt; '-' is stderr)
+  --profile-nanos   measure nanoseconds instead of microseconds
   --release         release build: /O2 /Ob3 /DNDEBUG, with whole-program
                     optimization (/GL, whose link-time codegen is LTCG) unless
                     --no-lto says otherwise
@@ -99,6 +103,8 @@ function parseArgs(argv) {
     exe: "simse.exe",
     gen: true,
     profile: false,
+    profileFile: null,
+    profileNanos: false,
     release: false,
     debug: false,
     lto: true,
@@ -121,6 +127,8 @@ function parseArgs(argv) {
       case "--compiler": opts.compiler = value(i); i++; break;
       case "--no-gen": opts.gen = false; break;
       case "--profile": opts.profile = true; break;
+      case "--profile-file": opts.profileFile = value(i); i++; break;
+      case "--profile-nanos": opts.profileNanos = true; break;
       case "--release": opts.release = true; break;
       case "--debug": opts.release = false; opts.debug = true; break;
       case "--lto": opts.lto = true; break;
@@ -225,6 +233,8 @@ async function main() {
     console.log(`build:            with ${path.relative(REPO, compiler)}`);
     const transpileArgs = [compiler, "--root", opts.root, "-o", outCpp];
     if (opts.profile) transpileArgs.push("--profile");
+    if (opts.profileFile) transpileArgs.push("--profile-file", opts.profileFile);
+    if (opts.profileNanos) transpileArgs.push("--profile-nanos");
     const result = await $`${transpileArgs}`.cwd(REPO).nothrow();
     if (result.exitCode !== 0) fail(`transpiling failed (exit ${result.exitCode})`);
   }
