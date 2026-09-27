@@ -142,7 +142,7 @@ int main() {
     goto L1;
     L2:;
     // ...
-    simse_list_sort(keys, [=](Str left, Str right) -> Bool { return left < right; });
+    simse_list_sort(keys, compareLessThan);
     // ...
 }
 ```

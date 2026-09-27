@@ -111,7 +111,7 @@ fun partTextProcessing(): Int {
 
     var longest: Str = ""
     var keys: List<Str> = counts.keys()
-    keys.sort((left: Str, right: Str) -> left < right)
+    keys.sort(compareLessThan)
     var k: Int = 0
     while (k < keys.size()) {
         if (keys[k].size() > longest.size()) {

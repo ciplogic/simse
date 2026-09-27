@@ -248,6 +248,24 @@ fun main(): Int {
 }
 ```
 
+A function marked `data` is **pure** - no side effects, and its result a function of its
+arguments - which lets the compiler fold two identical calls on an unchanged receiver into
+one:
+
+```simse
+data fun Str.toLen(): Int {
+    return this.size()
+}
+
+fun twiceLen(s: Str): Int {
+    return s.toLen() + s.toLen()   // one call; the slot is added twice
+}
+```
+
+The mark is a promise rather than a guess: a `data` function that writes through a pointer or
+a file-level `var` would make the reuse wrong, and a function *without* the mark keeps every
+call (`specs/functions.md`).
+
 A lambda body may also be a block, written on the same line as the arrow:
 
 ```simse
@@ -435,9 +453,14 @@ println(counts.get("a").value())         // 1
 println(counts.has("z"))                 // false
 
 val keys: List<Str> = counts.keys()
-keys.sort((left: Str, right: Str) -> left < right)
+keys.sort(compareLessThan)
 println(keys[0] + " " + keys[1])         // a b
 ```
+
+`sort` takes its comparator **by pointer**, so a comparison reads each element where it
+lives instead of copying it: `compareLessThan` is the built-in `Str` ordering (the two
+strings compared as views), and a custom comparator spells the pointers -
+`items.sort((left: *T, right: *T) -> ...)`.
 
 ## Absence and failure
 

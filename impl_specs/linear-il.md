@@ -335,9 +335,12 @@ pointer or counted reference counts as written (the callee may write through it)
 the local merge re-used for another value refuses the group (its writer set must be the
 group's own calls). It declines rather than guess - a call whose argument is written, a
 first call outside the first block, an untyped slot, an indirect callee - and leaves the
-code as it was. The pass is deliberately narrow today: `spanOfStr` alone is reused, while
-the mechanism is the same for any accessor whose value is a function of its argument
-(`name.size()` is the next one).
+code as it was. Which callees it may reuse is the emitter's `pureCallees`: every function
+declared `data` (a *pure* function, `specs/functions.md`), plus the language's read-only
+length accessors `size`/`count`, which are built-ins with no declaration to mark. `spanOfStr`
+and `isEmpty` carry the mark in the prelude, so the shape above folds; a user's
+`data fun Str.toLen()` folds the same way (`stress/pure-function`), while an unmarked
+function's two calls are left alone however alike they look.
 - **A call argument's handle is inferred by the extractor** (`specs/functions.md`,
   "Handles at a call"): the instruction list gets a `Deref` (an address, or a counted
   reference's `.get()`), a `CopyValue` (a copy of a pointee) or a `Box` (a boxed copy)

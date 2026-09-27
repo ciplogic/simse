@@ -165,9 +165,10 @@ void simse_dict_clear(Dictionary<K, V>& self);
 template <class T>
 Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& value);
 
-// `items.sort(less)`: in-place sort using the `(T, T) -> Bool` comparator. The comparator
+// `items.sort(less)`: in-place sort using the `(*T, *T) -> Bool` comparator. The comparator
 // comes from a Simse lambda (a C++ lambda or Func), so it is a template parameter rather
-// than a fixed type.
+// than a fixed type; it takes its two elements by pointer, so each is read where `std::sort`
+// holds it instead of being copied into the comparison.
 template <class T, class F>
 void simse_list_sort(List<T>& self, F less);
 
@@ -461,7 +462,9 @@ inline Bool simse_list_contains(const List<T>& self, const std::type_identity_t<
 
 template <class T, class F>
 inline void simse_list_sort(List<T>& self, F less) {
-    std::sort(self.begin(), self.end(), less);
+    std::sort(self.begin(), self.end(), [&less](const T& a, const T& b) {
+        return less(const_cast<T*>(&a), const_cast<T*>(&b));
+    });
 }
 
 // `Str.isEmpty()` is the prelude's own body (cppsrc/rtl/rtl.kt), not a resource: `size()`

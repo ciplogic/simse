@@ -132,7 +132,7 @@ fun driverGatherFiles(
         c = c + 1
     }
     // Canonical keys are unique after dedup, so this sort is total and the order deterministic.
-    chosen.sort((left: Str, right: Str) -> pathCanonical(left) < pathCanonical(right))
+    chosen.sort((left: *Str, right: *Str) -> pathCanonical(left) < pathCanonical(right))
     return chosen
 }
 

@@ -146,6 +146,34 @@ fun (*List<Int>).clearThroughPointer(): Unit { this.clear() }
 The exact mutability checks for extension receivers follow normal `var`/`val`
 and pointer rules; the extension declaration does not bypass them.
 
+## Pure functions (`data`)
+
+A `data` modifier on a function asserts that it is **pure**: no side effects, and its result
+is a function of its receiver and its arguments alone. The compiler trusts the claim - it is
+the only source of truth for a body-less `@SmGen` function - and uses it to fold a repeated
+call of an unchanged argument into the first one, so
+
+```simse
+data fun Str.toLen(): Int {
+    return this.size()
+}
+
+fun twice(s: Str): Int {
+    return s.toLen() + s.toLen()   // one call: nothing writes `s` between them
+}
+```
+
+emits one `toLen(s)` and adds the slot twice. A function without the mark keeps every call,
+however alike two look - the mark is a promise, not a guess, and one that writes through a
+pointer or a file-level `var` would make the reuse wrong.
+
+The mark sits on the declaration: `data fun f(...)`, `data fun T.m(...)`, and an attribute
+with it (`@SmGen(...)` on the line above, or `data` first). The language's own read-only
+length accessors (`size`, `count`) are pure without a declaration. Purity is about
+*observable* effects, so writes to the function's own locals do not matter. It is not
+*checked* yet - a later pass computes purity from the body (only pure calls, no write through
+a `*T`/`&T` parameter or a file-level `var`) and can then flag an over-claimed `data`.
+
 ## Methods inside classes
 
 Methods written inside a `class` or `data class` body are equivalent to extension

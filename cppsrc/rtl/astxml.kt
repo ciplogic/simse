@@ -71,7 +71,13 @@ enum class AstNodeAttributeKind {
     Op,
     Value,
     Text,
-    HasValue
+    HasValue,
+
+    // `data fun` (a *pure* function): no side effects, the result a function of its receiver
+    // and arguments. The compiler trusts the mark - it is the only source of truth for a
+    // body-less (`@SmGen`) function - and uses it to reuse a repeated call of an unchanged
+    // argument (`linear/ReusePure.kt`). Appended last so the values already in use do not move.
+    IsPure
 }
 
 // What a node is - the schema's `kind` - as against its role (`AstNodeKind`, where it

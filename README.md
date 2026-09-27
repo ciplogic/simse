@@ -33,7 +33,7 @@ fun main(): Int {
     }
 
     val keys: List<Str> = counts.keys()
-    keys.sort((left: Str, right: Str) -> left < right)
+    keys.sort(compareLessThan)   // the built-in `Str` ordering
 
     var k: Int = 0
     while (k < keys.size()) {
@@ -290,7 +290,8 @@ bootstrap check, troubleshooting - is in
 
 ## Status
 
-Working today: data classes, enums, generics, extension functions, lambdas, statics,
+Working today: data classes, enums, generics, extension functions, pure (`data`)
+functions the compiler may reuse, lambdas, statics,
 `List`/`Array`/`Dictionary`/`Span`/`Opt`/`Res`/`Str`, `Res` propagation (`x!!`), attributes
 and source generators (`cppsrc/sourcegen/`, `_res.md` resources, `native` declarations),
 list literals and trailing-argument packing, `for`/`yield` state machines, file I/O, the

@@ -256,7 +256,7 @@ fun resResourceFiles(moduleRoots: *List<Str>): List<Str> {
         c = c + 1
     }
     // After dedup the canonical keys are unique, so this sort is total.
-    chosen.sort((left: Str, right: Str) -> pathCanonical(left) < pathCanonical(right))
+    chosen.sort((left: *Str, right: *Str) -> pathCanonical(left) < pathCanonical(right))
     return chosen
 }
 

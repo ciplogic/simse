@@ -133,7 +133,7 @@ fun partDictionary(): Int {
     println(counts.getPtr("z") == null)
 
     var names: List<Str> = counts.keys()
-    names.sort((left: Str, right: Str) -> left < right)
+    names.sort(compareLessThan)
     var i: Int = 0
     while (i < names.size()) {
         println(names[i])
@@ -143,7 +143,7 @@ fun partDictionary(): Int {
     println(names.contains("z"))
 
     var values: List<Int> = counts.values()
-    values.sort((left: Int, right: Int) -> left < right)
+    values.sort((left: *Int, right: *Int) -> left < right)
     var j: Int = 0
     while (j < values.size()) {
         println(values[j])

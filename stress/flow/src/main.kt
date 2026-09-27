@@ -336,7 +336,7 @@ fun partRecursion(): Int {
     }
     println(sum(*values))
 
-    values.sort((left: Int, right: Int) -> left < right)
+    values.sort((left: *Int, right: *Int) -> left < right)
     println(sum(*values))
 
     var span: Span<Int> = spanOf(*values)

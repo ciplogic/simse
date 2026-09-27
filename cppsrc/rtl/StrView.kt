@@ -12,10 +12,10 @@ package rtl
 typealias StrView = Span<Char>
 
 @SmGen("res", "strview", "simse_strView_size")
-fun size(this: StrView): Int
+data fun size(this: StrView): Int
 
 @SmGen("res", "strview", "simse_strView_isEmpty")
-fun isEmpty(this: StrView): Bool
+data fun isEmpty(this: StrView): Bool
 
 // The byte at `index` is the span's own `at` (`Span<T>.at`); a view is a `Span<Char>`, so
 // declaring it here too would be one operation under two names.
@@ -58,4 +58,4 @@ fun toString(this: StrView): Str
 
 // A view over a string's bytes, borrowing the string (which must outlive the view).
 @SmGen("res", "strview", "simse_spanOfStr")
-fun spanOfStr(text: *Str): StrView
+data fun spanOfStr(text: *Str): StrView

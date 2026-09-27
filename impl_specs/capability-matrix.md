@@ -3821,3 +3821,65 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   1.30 s (the emitted C++ is ~13% longer from the un-inverted branches), after the reuse pass's
   own scans were made one walk with a cached signature table - the first shape of the pass cost
   0.85 s of transpile time, none of it in the emitted program.
+
+- **`List<T>.sort` takes its comparator by pointer, and a function passed by name reaches its
+  prelude body.** `std::sort` hands each element to the comparator as a `T&`, but the prelude
+  declared `sort(less: (T, T) -> Bool)` and the emitted closure took both elements *by value* -
+  so every comparison deep-copied a `Str` (a heap copy past the inline buffer), which is exactly
+  what a sort of `Str` calls per comparison. Three changes:
+
+  - **The comparator takes `*T`.** `cppsrc/rtl/rtl.kt`'s `sort<T>(this: List<T>, less: (*T, *T) -> Bool)`
+    hands the comparator its two elements by pointer, and `simse_list_sort` (`cppsrc/rtl/_res.md`)
+    adapts `std::sort`'s `const T&` to that `T*` in the wrapper it passes, so no element is copied
+    into the comparison. `compareLessThan(left: *Str, right: *Str)` is the `Str` ordering to pass
+    (`spanOfStr(left) < spanOfStr(right)` - the bytes read in place); a `*Int` comparator compares
+    through (`*l < *r`), a `*Tally` one reads a field in place (`left.count > right.count`). Every
+    call site moved: the compiler's own `CgStringTable.sort` (which also now reuses one
+    `left.size()`/`right.size()` pair), `collectPackages`, `driverGatherFiles`, `resResourceFiles`,
+    `asyncDump`, and the stress/docs/benchmark programs. `specs/containers.md`, `impl_specs/rtl-abi.md`
+    and `docs/how-it-works.md` carry the new signature.
+  - **A bare name in an argument position is a reached name.** `collectNames`
+    (`cppsrc/codegen/Codegen.kt`) now records `items.sort(compareLessThan)`'s `compareLessThan`.
+    A function passed *as a value* is not a call, so its prelude body was never emitted and the
+    generated C++ called an undeclared function - the same hole the "whole group is emitted"
+    fallback had closed for calls.
+  - **`ReusePure.kt`'s reuse set gained `size`/`isEmpty`** (`ilReuseCall`), so a comparator that
+    asks a `*Str` for its size twice (`left.size() > right.size()` then `left.size() == right.size()`)
+    keeps one call on each.
+
+  Verified: `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
+  both fixed points byte for byte; `bun tools/stress.js` **44/44**, the eight `expected.cpp` goldens
+  that embed the `dictops` forward text refreshed.
+
+- **`data fun`: a declared-*pure* function the reuse pass may fold.** `ReusePure.kt` could only
+  reuse three names hard-coded *in the pass* (`spanOfStr`, `size`, `isEmpty`), so every other
+  accessor was opaque - the reuse `semIsBuiltinType` depends on worked only because `spanOfStr`
+  happened to be on the list, and a user's `toLen`/`toString`/`toInt` got nothing. `data` now
+  marks a function **pure**: no side effects, the result a function of its receiver and
+  arguments. It is the writer's *promise*, trusted as given - the only source of truth for a
+  body-less `@SmGen` function - and nothing is inferred yet; being conservative is the point.
+
+  - **Syntax.** `Parser.parseDecl` accepts `data` before `fun` (`data class` is unchanged) and
+    `parseAttributedDecl` accepts it beside an attribute (`@SmGen(...)` on the line above, or
+    `data` first), so `data fun Str.toLen(): Int { ... }` and `data fun spanOfStr(...)` both
+    parse. The declaration carries a new `AstNodeAttributeKind.IsPure` (`cppsrc/rtl/astxml.kt`
+    and its `.hpp` mirror, appended last).
+  - **Plumbing.** `Codegen.addFunction` reads the mark into `CgFn.isPure` and collects the names
+    into the emitter's `pureCallees`; `run` seeds it with the language's read-only length
+    accessors `size`/`count` (built-ins with no declaration to mark). `IlCodeGen`'s two
+    `ilReuseUnit` call sites pass the set, and `ReusePure.ilReuseCall` became a lookup in it.
+  - **Every reuse guard is unchanged** - an argument the body writes, one a callee may write
+    through, a first call outside the first block, an untyped slot, an indirect callee, and a
+    result slot with another writer all still refuse - so the change only *widens* what may be
+    folded. The prelude marks `spanOfStr`, `StrView.size`/`isEmpty` and `Str.isEmpty`; the
+    compiler's own `boolText` carries the mark too.
+  - **Stress test.** `stress/pure-function` pins both directions: a `data fun Str.toLen()`
+    called twice on one unchanged `Str` emits **one** call (`_sm_expr1 + _sm_expr1`), while an
+    unmarked `Str.bump()` - it writes a file-level `var` - still emits both, and the stdout
+    check reads their `5 + 1` then `5 + 2` (13).
+
+  Verified: `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
+  both fixed points byte for byte; `bun tools/stress.js` **45/45** (`cppsrc/rtl/*.kt` is read at
+  run time, so the marks needed a two-build: a debug compiler that *parses* `data`, then the
+  release build that uses it). No existing `expected.cpp` moved - the marks enable exactly the
+  reuses the old name whitelist already had, plus `count`, which no case folds twice.

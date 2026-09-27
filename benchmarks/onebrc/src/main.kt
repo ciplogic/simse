@@ -141,7 +141,7 @@ fun main(args: List<Str>): Int {
     stream.close()
 
     var names: List<Str> = counts.keys()
-    names.sort((left: Str, right: Str) -> left < right)
+    names.sort(compareLessThan)
     var i: Int = 0
     while (i < names.size()) {
         // The name is one `keys()` gave back, so the place is there: `get` would copy the

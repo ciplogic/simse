@@ -40,7 +40,11 @@ data class CgFn(
     // while emission reads it.
     var name: Str,
     var isNative: Bool,
-    var hasBody: Bool
+    var hasBody: Bool,
+
+    // The `data` modifier: the writer's claim that the function is pure (no side effects,
+    // the result a function of its arguments). `pureCallees` collects those names.
+    var isPure: Bool
 )
 
 // A `native fun` declaration to emit once at the top (and call by symbol).
@@ -313,7 +317,14 @@ data class Emitter(
 // The measured bodies' names, in the index order the profiler's constant table uses, and
 // the memo that hands each name its index (`--profile`; empty when the flag is off).
     var profNames: List<Str>,
-    var profNameIndex: Dictionary<Str, Int>
+    var profNameIndex: Dictionary<Str, Int>,
+
+// The callees whose repeated call the reuse pass may merge (`linear/ReusePure.kt`): the
+// names of functions declared `data` (pure), filled as the declarations are collected, plus
+// the language's own read-only length accessors - `size`/`count` are built-ins with no
+// declaration to mark. Keyed by *name*: a `data` mark is a promise, and a call is folded
+// only between two calls naming the same callee and the same argument.
+    var pureCallees: Dictionary<Str, Bool>
 ) {
 
     fun fail(posNode: *AstXmlNode, message: *Str): Unit {
@@ -412,11 +423,15 @@ data class Emitter(
                 isMethod,
                 name,
                 xmlAttr(decl, AstNodeAttributeKind.IsNative) == "true",
-                xmlAttr(decl, AstNodeAttributeKind.HasBody) == "true"
+                xmlAttr(decl, AstNodeAttributeKind.HasBody) == "true",
+                xmlAttr(decl, AstNodeAttributeKind.IsPure) == "true"
             )
         )
         if (!xmlIsEmpty(receiver)) {
             this.receiverFnNames.insert(name, true)
+        }
+        if (xmlAttr(decl, AstNodeAttributeKind.IsPure) == "true") {
+            this.pureCallees.insert(name, true)
         }
     }
 
@@ -450,7 +465,7 @@ data class Emitter(
                 names.append(pkg)
             }
         }
-        names.sort((left: Str, right: Str) -> left < right)
+        names.sort(compareLessThan)
         var next: Int = 1
         i = 0
         while (i < names.size()) {
@@ -1146,6 +1161,15 @@ data class Emitter(
                     if (symbol != "") {
                         names.insert(symbol, true)
                     }
+                }
+            }
+            // A function passed by *name* (a comparator, `items.sort(compareLessThan)`) is a
+            // bare name in an argument position, not a call - but it is reached the same way,
+            // so its own prelude body has to be emitted or the emitted C++ calls a function
+            // nothing declared.
+            for (*arg in node.Children) {
+                if (arg.name == AstNodeKind.Arg && xmlKind(arg) == AstNodeCategory.ExprName) {
+                    names.insert(xmlAttr(arg, AstNodeAttributeKind.Name), true)
                 }
             }
         }
@@ -3098,6 +3122,11 @@ fun Emitter.emitUninit(fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts, prototype
     }
 
     fun run(): Res<Str> {
+        // The language's own read-only length accessors, which have no declaration to mark
+        // `data`; a program that declares its own `size`/`count` is trusted the same way the
+        // old name whitelist trusted it.
+        this.pureCallees.insert("size", true)
+        this.pureCallees.insert("count", true)
         this.collect()
         this.collectProgramNames()
         // The program's constant globals (`optimizations/FoldGlobals.kt`), a property of the
@@ -3212,7 +3241,8 @@ fun newEmitter(inputs: *List<CgInput>, resourceStored: *List<Str>): Emitter {
         "",
         false,
         List<Str>(),
-        Dictionary<Str, Int>()
+        Dictionary<Str, Int>(),
+        Dictionary<Str, Bool>()
     )
 }
 

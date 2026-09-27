@@ -25,7 +25,7 @@ fun main(): Int {
     }
 
     val keys: List<Str> = counts.keys()
-    keys.sort((left: Str, right: Str) -> left < right)
+    keys.sort(compareLessThan)
 
     var k: Int = 0
     while (k < keys.size()) {

@@ -34,7 +34,7 @@ fun main(): Int {
         tallies.append(Tally(keys[k], counts.get(keys[k]).value()))
         k = k + 1
     }
-    tallies.sort((left: Tally, right: Tally) -> left.count > right.count)
+    tallies.sort((left: *Tally, right: *Tally) -> left.count > right.count)
 
     var t: Int = 0
     while (t < tallies.size()) {

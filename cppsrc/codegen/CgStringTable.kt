@@ -118,8 +118,8 @@ data class StringTable(
     // `Str` is never its own length *and* its own text, so the order is total and the
     // non-stable sort is still deterministic.
     fun sort(): Unit {
-        this.entries.sort((left: Str, right: Str) -> (left.size() > right.size())
-        || ((left.size() == right.size()) && (left < right)))
+        this.entries.sort((left: *Str, right: *Str) -> (left.size() > right.size())
+        || ((left.size() == right.size()) && (spanOfStr(left) < spanOfStr(right))))
         this.indexAt = Dictionary<Str, Int>()
         var i: Int = 0
         while (i < this.entries.size()) {

@@ -469,7 +469,7 @@ helpers. All are prelude natives with explicit symbols (`cppsrc/rtl/rtl.kt`):
 | `d.values()` | `simse_dict_values` | `List<V>`, unspecified order |
 | `d.clear()` | `simse_dict_clear` | remove every entry |
 | `items.contains(value)` | `simse_list_contains` | linear `operator==` scan |
-| `items.sort(less)` | `simse_list_sort` | in-place `std::sort` with the `(T, T) -> Bool` lambda |
+| `items.sort(less)` | `simse_list_sort` | in-place `std::sort` with the `(*T, *T) -> Bool` comparator |
 
 `getPtr`/`get`/`has`/`insert`/`remove` take their key (and value) as a non-deduced
 `std::type_identity_t` so a literal argument converts to the element type. The pointer
@@ -479,7 +479,7 @@ valid until the next `insert`/`remove`/`clear` on that dictionary (`valuePtr` in
 packing a query memoizes). Neither `get` nor `has` packs holes any more: they answer from
 the row lookup, and only the iterator-producing calls (`find`/`begin`/`end`) pack. A
 generic *native* call lowers to its symbol with the type arguments, e.g.
-`dictionaryOf<Str, Int>()` -> `simse_dictionaryOf<Str, Int>()`; a `(T, T) -> Bool`
+`dictionaryOf<Str, Int>()` -> `simse_dictionaryOf<Str, Int>()`; a `(*T, *T) -> Bool`
 comparator lowers to a C++ lambda, so `sort` is a template over the comparator
 type. `keys()`/`values()` follow the dictionary's own iteration order, which the
 spec leaves unspecified; sort for determinism.

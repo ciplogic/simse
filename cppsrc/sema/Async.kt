@@ -132,7 +132,7 @@ fun asyncDump(functions: List<AstXmlNode>, asyncNames: List<Str>, reasons: List<
         lines.append(line)
         i = i + 1
     }
-    lines.sort((left: Str, right: Str) -> left < right)
+    lines.sort(compareLessThan)
     for (*line in lines) {
         eprintln(line)
     }

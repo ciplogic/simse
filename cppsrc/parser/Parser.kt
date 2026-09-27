@@ -278,7 +278,7 @@ data class Parser(
 
     fun parseDecl(): AstXmlNode {
         if (this.checkKind(TokenKind.Attribute)) {
-            return this.parseAttributedDecl()
+            return this.parseAttributedDecl(false)
         }
         val text: Str = this.peek(0).text
         when (text) {
@@ -287,7 +287,24 @@ data class Parser(
             }
 
             "data" -> {
-                return this.parseDataClass()
+                // `data class` is a data class; `data fun` marks a *pure* function - no side
+                // effects, the result a function of its receiver and arguments - which lets
+                // the reuse pass merge a repeated call of an unchanged argument
+                // (`linear/ReusePure.kt`).
+                if (this.peek(1).text == "class") {
+                    return this.parseDataClass()
+                }
+                if (this.peek(1).text == "fun") {
+                    this.advance() // data
+                    return this.parseFunction("", List<Str>(), true)
+                }
+                if (this.peek(1).kind == TokenKind.Attribute) {
+                    // `data @SmGen(...) fun ...`: the mark may precede the attribute.
+                    this.advance() // data
+                    return this.parseAttributedDecl(true)
+                }
+                this.fail("expected 'class' or 'fun' after 'data'")
+                return this.emptyNode()
             }
 
             "enum" -> {
@@ -299,7 +316,7 @@ data class Parser(
             }
 
             "fun" -> {
-                return this.parseFunction("", List<Str>())
+                return this.parseFunction("", List<Str>(), false)
             }
         }
         this.fail("expected declaration")
@@ -308,7 +325,7 @@ data class Parser(
 
     // `@SmGen("cpp", "sym") fun f(...)` (specs/attributes.md). Only method declarations take
     // attributes, so `fun` must follow.
-    fun parseAttributedDecl(): AstXmlNode {
+    fun parseAttributedDecl(pure: Bool): AstXmlNode {
         val attrToken: Token = this.advance()
         val attrText: Str = attrToken.text
         var attrName: Str = attrText
@@ -338,11 +355,18 @@ data class Parser(
         }
         // An attribute rides on its own line, so the separator before the declaration is skipped.
         this.skipSeparators()
+        // `@SmGen(...) data fun f(...)` marks a pure function too (`data` is a modifier, the
+        // attribute selects the C++).
+        var isPure: Bool = pure
+        if (this.matchText("data")) {
+            isPure = true
+            this.skipSeparators()
+        }
         if (!this.checkText("fun")) {
             this.fail("expected 'fun' after an attribute")
             return this.emptyNode()
         }
-        return this.parseFunction(attrName, args)
+        return this.parseFunction(attrName, args, isPure)
     }
 
     // A file-level `var`/`val` (specs/statics.md): type required, initializer optional, and
@@ -457,7 +481,7 @@ data class Parser(
                     this.fail("expected method declaration")
                     return this.emptyNode()
                 }
-                methods.append(this.parseFunction("", List<Str>()))
+                methods.append(this.parseFunction("", List<Str>(), false))
                 this.skipSeparators()
             }
             if (!this.expectText("}")) {
@@ -619,7 +643,9 @@ data class Parser(
 
     // `attrName`/`attrArgs` are the parsed attribute (specs/attributes.md). An attributed
     // method may be body-less; a body-less method with no attribute has no implementation.
-    fun parseFunction(attrName: *Str, attrArgs: *List<Str>): AstXmlNode {
+    // `pure` is the `data` modifier: the writer's claim that the function has no side
+    // effects, which the reuse pass reads (`ReusePure.kt`).
+    fun parseFunction(attrName: *Str, attrArgs: *List<Str>, pure: Bool): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
         var nativeSymbol: Str = ""
         var hasNativeSymbol: Bool = false
@@ -775,6 +801,7 @@ data class Parser(
         attrs.append(AstNodeAttribute(AstNodeAttributeKind.HasBody, boolText(hasBody)))
         attrs.append(AstNodeAttribute(AstNodeAttributeKind.HasReceiver, boolText(hasReceiver)))
         attrs.append(AstNodeAttribute(AstNodeAttributeKind.HasNativeSymbol, boolText(hasNativeSymbol)))
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsPure, boolText(pure)))
         if (hasNativeSymbol) {
             attrs.append(AstNodeAttribute(AstNodeAttributeKind.NativeSymbol, nativeSymbol))
         }
@@ -2205,7 +2232,10 @@ fun attrLiteralText(text: Str): Str {
     return text
 }
 
-fun boolText(value: Bool): Str {
+// `data`: a pure function - no side effects, the result a function of `value` - so the
+// reuse pass may merge two `boolText(x)` calls with the same unchanged `x`
+// (`linear/ReusePure.kt`).
+data fun boolText(value: Bool): Str {
     if (value) {
         return "true"
     }

@@ -89,7 +89,9 @@ The minimally supported `List<T>` operations are:
   `[start, end)`;
 - `clear()`;
 - `contains(value: T): Bool`, a linear membership test;
-- `sort(less: (T, T) -> Bool)`, an in-place sort using the comparator lambda; and
+- `sort(less: (*T, *T) -> Bool)`, an in-place sort using the comparator, which receives
+  each element by pointer so a comparison reads the element where it lives instead of
+  copying it (`compareLessThan` is the `Str` ordering, comparing the two as views); and
 - `toArray(): Array<T>`, the fixed-length copy (specs/built-in-types.md), the
   counterpart of `Array<T>.toList()`.
 

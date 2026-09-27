@@ -12,11 +12,13 @@
 //
 // Each restriction is a *refusal* rather than a guess:
 //
-//   - only the callees `ilReuseCall` names are reused (today `spanOfStr` alone: the view of a
-//     string's bytes, the call the `when` lowering and the `Str`/literal comparison build,
-//     `Parser.kt`). The mechanism is the same for any such accessor - `name.size()` is the next
-//     one - but a result is only reused when its value is known to be a function of the
-//     argument alone;
+//   - only the callees the emitter called *pure* are reused: the names of the functions
+//     declared `data` (no side effects, the result a function of its arguments) plus the
+//     language's read-only length accessors, collected into `pureCallees` (`Codegen.kt`).
+//     The view of a string's bytes (`spanOfStr`) is the one the `when` lowering and the
+//     `Str`/literal comparison build (`Parser.kt`); `size`/`isEmpty` and any user `data fun`
+//     answer the same way. A result is only reused when its value is known to be a function
+//     of the argument alone;
 //   - the argument is a frame slot this body never writes (`defCount`) and never hands to a
 //     call that could write it (`escapes`): a raw pointer or a counted reference a callee
 //     receives may be written through, which would change what a *later* view sees (a view is
@@ -42,10 +44,14 @@ package linear
 
 import common
 
-// The callees whose call may be reused - read the argument, answer the same value for the same
-// argument, write nothing. `spanOfStr(v)` is the view of a string's bytes.
-fun ilReuseCall(name: *Str): Bool {
-    return name == "spanOfStr"
+// The callees whose call may be reused - read the argument, answer the same value for the
+// same argument, write nothing. The names are the emitter's `pureCallees`: every `data`
+// function (`spanOfStr`, `isEmpty`, a user's `toLen`, ...) and the built-in `size`/`count`,
+// which have no declaration to mark. A `data` mark is a *promise* - one that writes its
+// receiver would make the reuse wrong - which is why the set is built from explicit marks,
+// never inferred yet.
+fun ilReuseCall(pure: *Dictionary<Str, Bool>, name: *Str): Bool {
+    return pure.has(name)
 }
 
 // The slot an op writes, or -1 when it writes no value.
@@ -85,12 +91,12 @@ fun ilReuseArgBase(kind: IlOpKind): Int {
 // Whether reading a slot in an argument of this call is safe for the slot: the callee is one
 // this pass reuses (a pure read), or the parameter is *by value* - a value the callee cannot
 // write through. A raw pointer or a counted reference is not.
-fun ilReuseArgSafe(il: *IlBody, methodIndex: Int, argIndex: Int): Bool {
+fun ilReuseArgSafe(il: *IlBody, pure: *Dictionary<Str, Bool>, methodIndex: Int, argIndex: Int): Bool {
     if (methodIndex < 0 || methodIndex >= il.methods.size()) {
         return false
     }
     val method: IlMethod = il.methods[methodIndex]
-    if (ilReuseCall(method.name)) {
+    if (ilReuseCall(pure, method.name)) {
         return true
     }
     if (argIndex < 0 || argIndex >= method.argTypes.size()) {
@@ -113,7 +119,7 @@ data class IlReuseHit(
     var dst: Int
 )
 
-fun ilReuseHit(il: *IlBody, op: *IlOp): IlReuseHit {
+fun ilReuseHit(il: *IlBody, pure: *Dictionary<Str, Bool>, op: *IlOp): IlReuseHit {
     if (op.kind != IlOpKind.Call || op.operands.size() != 3) {
         return IlReuseHit("", -1, -1)
     }
@@ -122,7 +128,7 @@ fun ilReuseHit(il: *IlBody, op: *IlOp): IlReuseHit {
         return IlReuseHit("", -1, -1)
     }
     val method: IlMethod = il.methods[methodIndex]
-    if (!ilReuseCall(method.name)) {
+    if (!ilReuseCall(pure, method.name)) {
         return IlReuseHit("", -1, -1)
     }
     val arg: Int = op.operands[2]
@@ -178,7 +184,7 @@ fun ilReuseOperandKind(op: *IlOp, index: Int): IlOperandKind {
 
 // Whether the body calls a reusable callee at all: the cheap gate in front of the pass - most
 // bodies have no such call, and the scans below are not free.
-fun ilReuseHasCall(il: *IlBody): Bool {
+fun ilReuseHasCall(il: *IlBody, pure: *Dictionary<Str, Bool>): Bool {
     var i: Int = 0
     while (i < il.ops.size()) {
         val op: *IlOp = *il.ops[i]
@@ -188,7 +194,7 @@ fun ilReuseHasCall(il: *IlBody): Bool {
         }
         val methodIndex: Int = op.operands[1]
         if (methodIndex >= 0 && methodIndex < il.methods.size()
-            && ilReuseCall(il.methods[methodIndex].name)
+            && ilReuseCall(pure, il.methods[methodIndex].name)
         ) {
             return true
         }
@@ -198,9 +204,9 @@ fun ilReuseHasCall(il: *IlBody): Bool {
 
 // The body's instruction list, with every repeated pure call of an unchanged slot merged into
 // the first one. Answers whether the body changed.
-fun ilReusePure(il: *IlBody): Bool {
+fun ilReusePure(il: *IlBody, pure: *Dictionary<Str, Bool>): Bool {
     val count: Int = il.vars.size()
-    if (count == 0 || il.ops.size() == 0 || !ilReuseHasCall(il)) {
+    if (count == 0 || il.ops.size() == 0 || !ilReuseHasCall(il, pure)) {
         return false
     }
 
@@ -227,13 +233,13 @@ fun ilReusePure(il: *IlBody): Bool {
             var j: Int = base
             while (j < op.operands.size()) {
                 val slot: Int = op.operands[j]
-                if (slot >= 0 && slot < count && !ilReuseArgSafe(il, methodIndex, j - base)) {
+                if (slot >= 0 && slot < count && !ilReuseArgSafe(il, pure, methodIndex, j - base)) {
                     escapes[slot] = true
                 }
                 j = j + 1
             }
         }
-        val hit: IlReuseHit = ilReuseHit(il, op)
+        val hit: IlReuseHit = ilReuseHit(il, pure, op)
         if (hit.arg >= 0 && hit.dst >= 0 && !xmlIsEmpty(ilVarType(il, hit.dst))) {
             allOps.append(i)
             allKeys.append(ilReuseKey(hit.callee, hit.arg))
@@ -345,10 +351,10 @@ fun ilReusePure(il: *IlBody): Bool {
 
 // Every body of a unit - the function and the lambdas it constructs - since the slots of one
 // are not the slots of another.
-fun ilReuseUnit(unit: *IlUnit): Bool {
-    var changed: Bool = ilReusePure(*unit.body)
+fun ilReuseUnit(unit: *IlUnit, pure: *Dictionary<Str, Bool>): Bool {
+    var changed: Bool = ilReusePure(*unit.body, pure)
     for (*lambda in unit.lambdas) {
-        if (ilReusePure(lambda)) {
+        if (ilReusePure(lambda, pure)) {
             changed = true
         }
     }

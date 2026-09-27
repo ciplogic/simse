@@ -525,7 +525,8 @@ its trailing arguments, `specs/functions.md`); `Dictionary<K,V>` (`get`/`getPtr`
 `keys`/`values`/`size`/`clear`); `Opt<T>`, `Res<T>` (with `Res<T>.ok/.err`,
 `Opt<T>.some/.none`); `Span<T>` (a borrowed view: pointer + length); `XmlNode`/`Attribute`;
 `data class` (with methods), `enum class` (with `toInt`/`fromInt`), `typealias`
-(incl. generic and function types); functions incl. extension functions;
+(incl. generic and function types); functions incl. extension functions and pure (`data`)
+functions (`specs/functions.md`);
 **attributes** (`@Identifier` + `@SmGen`, one per declaration, methods
 only: `specs/attributes.md`, `impl_specs/generators.md`) with the `cpp` (headers), `res`
 (C++ from a resource), `kt` (generated Simse source) and `json` (Simse built in code

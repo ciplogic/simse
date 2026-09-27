@@ -90,9 +90,19 @@ fun removeRange<T>(this: List<T>, start: Int, end: Int): Unit
 @SmGen("res", "dictops", "simse_list_contains")
 fun contains<T>(this: List<T>, value: T): Bool
 
-// In-place sort; the comparator is a `(T, T) -> Bool` lambda.
+// In-place sort. The comparator takes its two elements *by pointer* (`(*T, *T) -> Bool`):
+// `std::sort` hands each element to it as a `T&`, and a pointer parameter reads the element
+// where it lives - a by-value `(T, T) -> Bool` comparator copies both elements on every
+// comparison, which for a `Str` is a heap copy per compare. `compareLessThan` below is the
+// `Str` ordering to pass for the common case.
 @SmGen("res", "dictops", "simse_list_sort")
-fun sort<T>(this: List<T>, less: (T, T) -> Bool): Unit
+fun sort<T>(this: List<T>, less: (*T, *T) -> Bool): Unit
+
+// The `Str` ordering for `sort` (`specs/containers.md`): the two strings compared as *views*,
+// in place, so `keys.sort(compareLessThan)` copies nothing per comparison.
+fun compareLessThan(left: *Str, right: *Str): Bool {
+    return spanOfStr(left) < spanOfStr(right)
+}
 
 // `Array<T>` is a fixed-length, ref-counted block: the allocation holds the element count
 // first, then the elements (specs/built-in-types.md). `arrayEmpty<T>()` is the shared empty
@@ -255,7 +265,10 @@ fun toLower(this: Str): Str
 // spelling (impl_specs/rtl-abi.md): a body writes the receiver type before the name
 // (`Str.isEmpty`), which is what marks it an extension resolved at a member call, where a
 // body-less declaration writes it as the explicit first parameter (`this: Str`).
-fun Str.isEmpty(): Bool {
+//
+// `data`: a pure function, so a repeated `s.isEmpty()` on an unchanged `s` is one call
+// (`linear/ReusePure.kt`).
+data fun Str.isEmpty(): Bool {
     return this.size() == 0
 }
 
