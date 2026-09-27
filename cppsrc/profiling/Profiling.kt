@@ -13,7 +13,8 @@
 //
 // The instant stays `Int64` (a nanosecond count is ~1000x a microsecond one, and the
 // `--profile-nanos` unit is a display choice, not a range one), and the report's names are
-// the packages the compiler knows (`ns1_emitFunction` is `codegen::emitFunction`).
+// the packages the compiler knows (`ns1_emitFunction` is `codegen.emitFunction`). A name is
+// Simse-spelled, so the namespace separator is `.` (`profDots`), not C++'s `::`.
 //
 // The runtime is a backtick string (specs/built-in-types.md): raw and multi-line, so the C++
 // is written as it is read, and only the computed pieces - the clock, the unit, the file
@@ -27,8 +28,8 @@ package profiling
 var profEnabledFlag: Bool = false
 
 // `--profile-file <path>`: where the table is written when the program leaves. The default
-// is `simse_profile.txt`; `-` (or an empty path) keeps it on stderr.
-var profFileFlag: Str = "simse_profile.txt"
+// is `simse_profile.csv`; `-` (or an empty path) keeps it on stderr.
+var profFileFlag: Str = "simse_profile.csv"
 
 fun profEnabled(): Bool {
     return profEnabledFlag
@@ -107,7 +108,7 @@ namespace simse_profiling {
     extern const char *const kMethodNames[];
 
     // Where the table goes when the program leaves (--profile-file, default
-    // simse_profile.txt; a lone '-' keeps it on stderr).
+    // simse_profile.csv; a lone '-' keeps it on stderr).
     static const char *const kProfileFile = "`)
     text.appendStr(profEscape(profFileFlag))
     text.appendStr(`";
@@ -201,6 +202,24 @@ namespace {
 // The name table, emitted beside the bodies (`--profile`): the constant a `measure` call
 // indexes with is the index here. One C++ string constant per measured body, so the report
 // names a row without building a Simse `Str`. Empty when the flag is off.
+// A name as Simse spells it: a namespace separates with `.`, not C++'s `::` (`ns1_emitFunction`
+// is `codegen.emitFunction`). `prettySymbol` already writes the `.`, but a lambda symbol reaches
+// it with a `::operator()` suffix of its own, so the last pass folds any `::` left.
+fun profDots(name: *Str): Str {
+    var out: Str = Str()
+    var i: Int = 0
+    while (i < name.size()) {
+        if (name.charAt(i) == ':' && i + 1 < name.size() && name.charAt(i + 1) == ':') {
+            out.append('.')
+            i = i + 2
+        } else {
+            out.append(name.charAt(i))
+            i = i + 1
+        }
+    }
+    return out
+}
+
 fun profNameTableText(names: *List<Str>): Str {
     if (!profEnabledFlag) {
         return ""
@@ -215,7 +234,7 @@ fun profNameTableText(names: *List<Str>): Str {
     }
     for (*name in names) {
         text.appendStr(`        "`)
-        text.appendStr(profEscape(name))
+        text.appendStr(profEscape(profDots(name)))
         text.appendStr(`",
 `)
     }

@@ -1,9 +1,13 @@
 // Simplify.kt
 //
 // Peephole simplification of the linear form (impl_specs/linear-lowering.md): drops a jump
-// to the next label, folds `ifTrue (c) goto A; goto B; A:` into `ifFalse (c) goto B;`, and
-// drops an unreachable run and a label nothing jumps to. Runs to a fixed point, since a
-// dropped jump or statement can expose another fold.
+// to the next label, drops an unreachable run and a label nothing jumps to. Runs to a fixed
+// point, since a dropped jump or statement can expose another fold.
+//
+// The condition of a branch is *not* inverted: `ifTrue (c) goto A; goto B; A:` stays as the
+// lowering built it (the condition the reader wrote, then the branch to the arm and the jump
+// past it), rather than being folded into one `ifFalse (c) goto B;`. The fold saved a jump
+// but reordered the emitted text, so it is gone; a `goto` to the next label is still dropped.
 package linear
 
 import common
@@ -212,23 +216,6 @@ fun linCollectJumpTargets(stmt: *AstXmlNode, targets: *Dictionary<Str, Bool>): U
     }
 }
 
-// A copy of a conditional jump with a negated condition (IfTrue <-> IfFalse) and a new
-// target.
-fun linInvertedJump(jump: *AstXmlNode, target: *Str): AstXmlNode {
-    var kind: AstNodeCategory = AstNodeCategory.StmtIfTrue
-    if (xmlKind(jump) == AstNodeCategory.StmtIfTrue) {
-        kind = AstNodeCategory.StmtIfFalse
-    }
-    var attrs: List<AstNodeAttribute> = listOf<AstNodeAttribute>(
-        AstNodeAttribute(AstNodeAttributeKind.Line, xmlLine(jump).toString()),
-        AstNodeAttribute(AstNodeAttributeKind.Column, xmlColumn(jump).toString()),
-        AstNodeAttribute(AstNodeAttributeKind.Name, target)
-    )
-    var node: AstXmlNode = AstXmlNode(AstNodeKind.Stmt, kind, attrs, Array<AstXmlNode>())
-    xmlAddChild(node, xmlChildPtr(jump, AstNodeKind.Cond))
-    return node
-}
-
 data class LinSimplifier(
     var changed: Bool
 ) {
@@ -243,13 +230,6 @@ data class LinSimplifier(
             ) {
                 this.changed = true
                 i = i + 1
-            } else if (linIsCondJump(stmt) && i + 2 < stmts.size() && linIsGoto(stmts[i + 1])
-                && linIsLabel(stmts[i + 2])
-                && xmlAttr(stmts[i + 2], AstNodeAttributeKind.Name) == xmlAttr(stmt, AstNodeAttributeKind.Name)
-            ) {
-                out.append(linInvertedJump(stmt, xmlAttr(stmts[i + 1], AstNodeAttributeKind.Name)))
-                this.changed = true
-                i = i + 2
             } else {
                 out.append(stmt)
                 if (linIsTerminator(stmt)) {

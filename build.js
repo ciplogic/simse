@@ -32,7 +32,7 @@
 //   --profile         transpile with --profile: the emitted program carries the
 //                     instrumented profiler and writes its table at the end of main
 //                     (impl_specs/profiling.md)
-//   --profile-file <f>  where that table goes (default simse_profile.txt; '-' is stderr)
+//   --profile-file <f>  where that table goes (default simse_profile.csv; '-' is stderr)
 //   --profile-nanos   measure nanoseconds (the total_ns column) instead of microseconds
 //   --release         release build: /O2 /Ob3 /DNDEBUG, with whole-program
 //                     optimization (/GL, whose link-time codegen is LTCG) unless
@@ -81,7 +81,7 @@ function usage() {
                     else the bootstrap compiled for this build)
   --no-gen          skip transpiling; compile the existing/--cpp file
   --profile         transpile with --profile (impl_specs/profiling.md)
-  --profile-file <f>  profile table path (default simse_profile.txt; '-' is stderr)
+  --profile-file <f>  profile table path (default simse_profile.csv; '-' is stderr)
   --profile-nanos   measure nanoseconds instead of microseconds
   --release         release build: /O2 /Ob3 /DNDEBUG, with whole-program
                     optimization (/GL, whose link-time codegen is LTCG) unless

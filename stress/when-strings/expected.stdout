@@ -12,4 +12,8 @@
 zz -> other
 || -> other
 letter pair ?
+ ~ empty-or-bar
+| ~ empty-or-bar
+ab ~ two
+zz ~ other
 HEAD other

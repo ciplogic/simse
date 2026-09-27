@@ -90,8 +90,3 @@ fun foldCompareRule(e: *AstXmlNode): AstXmlNode {
     return e
 }
 
-fun linFoldCompareBody(stmts: *List<AstXmlNode>): Bool {
-    return foldExprsInList(stmts, foldCompareRule)
-}
-
-val linFoldComparePass: Bool = registerLinOptPass("foldCompare", linFoldCompareBody)

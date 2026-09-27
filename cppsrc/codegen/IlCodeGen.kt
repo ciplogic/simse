@@ -90,6 +90,31 @@ fun Emitter.ilFunctionFor(
     return info
 }
 
+// The extractor's view of a destructor body: like a machine method's, there is no `self`
+// parameter - `this` is C++'s - so the class travels as `closureSymbol`/`selfDecl` and the
+// frame's receiver slot is what `this` names.
+fun Emitter.ilDestructorFor(
+    fn: *CgFn, decl: *AstXmlNode, classDecl: AstXmlNode, symbol: Str, className: Str,
+    facts: *SemFacts, inferred: *Dictionary<Str, AstXmlNode>
+): IlFunction {
+    var info: IlFunction = IlFunction(
+        decl, xmlEmptyNode(), symbol,
+        Dictionary<Str, Str>(), classDecl, List<Str>(), List<AstXmlNode>(),
+        className, Dictionary<Str, Bool>(), Dictionary<Str, AstXmlNode>(),
+        facts, fn.templateParams, inferred
+    )
+    for (*entry in this.statics) {
+        val typeNode: *AstXmlNode = xmlChildPtr(entry.decl, AstNodeKind.Type)
+        if (!xmlIsEmpty(typeNode)) {
+            info.statics.insert(
+                xmlAttr(entry.decl, AstNodeAttributeKind.Name),
+                ilTypeText(typeNode)
+            )
+        }
+    }
+    return info
+}
+
 // An operand becomes a leaf `AstXmlNode` - a slot is a name, a constant its literal, a
 // place the path it came from, folded out of the instruction that built it.
 fun Emitter.ilIntAt(map: *Dictionary<Int, Int>, key: Int, fallback: Int): Int {
@@ -1052,6 +1077,12 @@ fun Emitter.ilValueText(il: *IlBody, frame: *IlFrame, opIndex: Int, expected: *A
         return Opt<Str>.none()
     }
     val op: *IlOp = *il.ops[opIndex]
+    if (op.kind == IlOpKind.CallCtor) {
+        val boxed: Opt<Str> = this.ilBoxedCtorText(il, frame, op)
+        if (boxed.hasValue()) {
+            return boxed
+        }
+    }
     if (op.kind == IlOpKind.Concat) {
         // The fusion expands a concatenation where it *writes* it (`ilConcatStatements`), and a
         // destination is always a slot with a type of its own, so this cannot be reached.
@@ -1099,6 +1130,35 @@ fun Emitter.ilValueText(il: *IlBody, frame: *IlFrame, opIndex: Int, expected: *A
         return Opt<Str>.none()
     }
     return Opt<Str>.some(this.expr(node, 0, expected))
+}
+
+// `&Ctor(args)`: the box built in place, `makeRef<C>(args...)` - the extractor gives the
+// construction the `&C` slot as its destination (LinearForm.kt, `ExprRef`). Empty for a
+// construction whose destination is a value, which is spelled its own way.
+fun Emitter.ilBoxedCtorText(il: *IlBody, frame: *IlFrame, op: *IlOp): Opt<Str> {
+    val dst: Int = this.ilOpOperand(op.operands, 0)
+    if (dst < 0 || dst >= il.vars.size()) {
+        return Opt<Str>.none()
+    }
+    val dstType: AstXmlNode = ilVarType(il, dst)
+    if (xmlIsEmpty(dstType) || xmlKind(dstType) != AstNodeCategory.TypeReference) {
+        return Opt<Str>.none()
+    }
+    val inner: *AstXmlNode = xmlChildPtr(dstType, AstNodeKind.Inner)
+    if (xmlIsEmpty(inner)) {
+        return Opt<Str>.none()
+    }
+    var args: List<Str> = List<Str>()
+    var i: Int = 2
+    while (i < op.operands.size()) {
+        val arg: AstXmlNode = this.ilOperandNode(il, frame, op.operands[i], 0)
+        if (xmlIsEmpty(arg)) {
+            return Opt<Str>.none()
+        }
+        args.append(this.expr(arg, 0, xmlEmptyNode()))
+        i = i + 1
+    }
+    return Opt<Str>.some(fmtStr("makeRef<|>(|)", this.type(inner), cgJoin(args, ", ")))
 }
 
 fun Emitter.ilLine(out: *Str, level: Int, text: Str): Unit {

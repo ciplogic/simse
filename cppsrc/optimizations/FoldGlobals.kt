@@ -258,12 +258,3 @@ fun foldGlobalRule(e: *AstXmlNode): AstXmlNode {
     return foldGlobalLiteral(e, *entry)
 }
 
-fun linFoldGlobalsBody(stmts: *List<AstXmlNode>): Bool {
-    if (linConstGlobals.size() == 0) {
-        return false
-    }
-    return foldExprsInList(stmts, foldGlobalRule)
-}
-
-// Self-registration (`Optimize.kt`).
-val linFoldGlobalsPass: Bool = registerLinOptPass("foldGlobals", linFoldGlobalsBody)

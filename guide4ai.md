@@ -489,7 +489,7 @@ borrow parameter and a read-through for a by-value one.
   compiler's own ring spells none of them. The `*` is written for a *binding* that
   outlives its expression (`val p: *T = x`) and for `for (*x in xs)`, and nowhere else.
 - **Build a fixed shape with `fmtStr`, a run of appends with `reserve`.**
-  `fmtStr("|::|", a, b)` writes one buffer where `a + "::" + b` builds three
+  `fmtStr("|.|", a, b)` writes one buffer where `a + "." + b` builds three
   (`specs/built-in-types.md`); its trailing arguments pack into the `*List<Str>` like any
   pack-taking call, so there is no `listOf` to write. For a join, `out.reserve(len)` then
   `out.appendStrPtr(part)` per part - `out = out + part` rebuilds the buffer per part
@@ -508,6 +508,11 @@ borrow parameter and a read-through for a by-value one.
 and a backtick string - raw and multi-line, no escape and no interpolation, the next
 backtick ends it (`specs/built-in-types.md`). Both are one pool entry and read as a
 `StrView` at a site, exactly alike.
+
+**Destructors**: a data class may declare one `fun unInit()`, emitted as its C++ destructor;
+such a type is held only by `*T`/`&T` (a value copy would run the destructor too - a
+diagnostic), `&Ctor(args)` builds the box in place, and a call `x.unInit()` is a
+diagnostic too (`specs/declarations.md`, `stress/uninit`).
 
 Scalars (`Int8..64`, `Float32/64`, `Char`, `Bool`), `Str` (with a method library:
 `find`, `substr`, `startsWith`, `endsWith`, `replace`, `toInt`, `toFloat`,

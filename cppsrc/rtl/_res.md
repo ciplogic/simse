@@ -910,7 +910,8 @@ forward:
 // cppsrc/rtl/strview.hpp: `using StrView = Span<Char>`, the comparison operators, `+`,
 // `<<` and the `Str` conversions are reached by C++ overload resolution at a literal
 // site rather than by a prelude declaration, so no declaration could reach a section for
-// them - while these eleven are named, one symbol each, and a program that calls one
+// them - while these are named, one symbol each (except `spanOfStr`: one symbol, two
+// overloads - a `Str`'s borrow and a `StrView`'s identity) - and a program that calls one
 // pays for this text (`sourcegen/ResGen.kt`).
 //
 // `StrView` *is* a `Span<Char>`, so `self.len`, `self[i]` and `self.slice(...)` below are
@@ -929,6 +930,7 @@ Int simse_strView_indexOf(StrView self, const Str& sub);
 Str simse_strView_substr(StrView self, Int from, Int count);
 Str simse_strView_toString(StrView self);
 StrView simse_spanOfStr(Str* text);
+StrView simse_spanOfStr(StrView view);
 ```
 bodies:
 ```cpp
@@ -1023,6 +1025,14 @@ inline Str simse_strView_toString(StrView self) {
 // hence the cast.
 inline StrView simse_spanOfStr(Str* text) {
     return StrView(reinterpret_cast<Char*>(text->data()), text->size());
+}
+
+// `spanOfStr(view)`: a `StrView` already is a view, so this overload is the identity. It is
+// what lets the `when`-over-strings desugar (`Parser.kt`'s `parseWhen`) extract the subject
+// with `spanOfStr` without knowing whether it is a `Str` or a `StrView` - the C++ overload
+// resolution picks the borrowed view or the identity, and the tests compare against it.
+inline StrView simse_spanOfStr(StrView view) {
+    return view;
 }
 ```
 

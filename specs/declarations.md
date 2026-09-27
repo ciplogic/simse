@@ -43,7 +43,47 @@ For the initial implementation, constructors must receive one argument for
 each declared field, in declaration order. Default field values, named
 arguments, inheritance, and generated methods beyond construction/copying are
 not part of this baseline. Methods may be declared in the class body, but they
-are compiled as static receiver functions; see `functions.md`.
+are compiled as static receiver functions; see `functions.md` - `unInit` below
+is the one exception, because it is a destructor and not a callable.
+
+### Destructors: `unInit`
+
+Status: implemented (the by-value rule, the destructor, in-place boxing of a
+constructed box, and the shape checks; `stress/uninit`,
+`stress/diagnostic-uninit-value`).
+
+A data class may declare one method named `unInit` - its **destructor**:
+
+```
+data class Res(var id: Int) {
+    fun unInit(): Unit {
+        println("close " + this.id.toString())
+    }
+}
+```
+
+It takes no parameters and returns nothing, and it is emitted as the type's C++
+destructor (`Res::~Res()`, declared in the struct and defined with the bodies), so its
+body runs when the value is destroyed. It is not callable: there is no function of that
+name to call. Each of these is a diagnostic - a second `unInit` on one class, a parameter,
+a returned value, and a call `x.unInit()`.
+
+Such a type may be held only through a **handle** (`&T`) or a **raw pointer** (`*T`). A
+value of it is a copy, and every copy would run the destructor - the same resource closed
+once per copy - so a declaration, field, parameter or return type that names the type (or
+a container of it) is a diagnostic:
+
+```
+val r: &Res = &Res(7)     // ok: the box's last owner destroys it, once
+val p: *Res = *r          // ok: a raw pointer owns nothing
+val bad: Res = Res(7)     // error: 'Res' has an unInit: hold it by '*Res' or '&Res'
+```
+
+`&T` is what gives the single destruction: boxing owns one count, copying the handle adds
+an owner, and the last one to go destroys the box (`specs/memory-model.md`). Because the
+destructor makes a *copy* observable, `&Ctor(args)` builds the box **in place**
+(`makeRef<C>(args...)`) instead of constructing a temporary and copying it into the box -
+the temporary's own destructor would otherwise run as well.
 
 ## `enum class`
 

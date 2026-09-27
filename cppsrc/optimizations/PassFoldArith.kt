@@ -94,9 +94,3 @@ fun foldArithRule(e: *AstXmlNode): AstXmlNode {
     return foldIntLit(e, value.value())
 }
 
-fun linFoldArithBody(stmts: *List<AstXmlNode>): Bool {
-    return foldExprsInList(stmts, foldArithRule)
-}
-
-// Self-registration (`Optimize.kt`).
-val linFoldArithPass: Bool = registerLinOptPass("foldArith", linFoldArithBody)

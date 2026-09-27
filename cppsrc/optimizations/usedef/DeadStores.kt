@@ -91,14 +91,11 @@ fun linDeadStoresOptimization(stmts: *List<AstXmlNode>): Bool {
         linUseDefDeclared(stmts, *declared)
         var i: Int = 0
         while (i < stmts.size()) {
-            val stmt: *AstXmlNode = *stmts[i]
             linUseDefCount(useDefs.usesAt(i), *reads)
-            // A name a lambda reads is read: the lambda may run long after the store.
-            var captured: List<Str> = List<Str>()
-            linUseDefCaptured(stmt, *captured)
-            linUseDefCount(captured, *reads)
             i = i + 1
         }
+        // A name a lambda reads is read: the lambda may run long after the store.
+        linUseDefMarkEach(useDefs.captures.keys(), *reads)
 
         var out: List<AstXmlNode> = List<AstXmlNode>()
         var removed: Bool = false

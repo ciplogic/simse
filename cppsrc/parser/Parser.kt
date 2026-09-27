@@ -162,6 +162,14 @@ data class Parser(
         return ExprNode(this.emptyNode(), 0, 0)
     }
 
+    // A comparison a string literal is tested against: `Str == "lit"` compares the *view* of
+    // the string against the literal, never a copy of it (`spanOfStr`, cppsrc/rtl/StrView.kt) -
+    // the view operators read the bytes in place, and a `*Str` operand is not read through at
+    // all. The `when`-over-strings desugar does the same for its tests (`parseWhen`).
+    fun isStringCompareOp(op: *Str): Bool {
+        return op == "==" || op == "!=" || op == "<" || op == "<=" || op == ">" || op == ">="
+    }
+
     fun posAttrs(line: Int, column: Int): List<AstNodeAttribute> {
         var attrs: List<AstNodeAttribute> = listOf<AstNodeAttribute>(
             AstNodeAttribute(AstNodeAttributeKind.Line, line.toString()),
@@ -1207,6 +1215,16 @@ data class Parser(
         return ExprNode(call, pos.line, pos.column)
     }
 
+    // `<callee>(<arg>)`, for a free call the desugaring builds rather than parses.
+    fun freeCallAt(callee: *Str, arg: *ExprNode, pos: SourcePos): ExprNode {
+        val calleeExpr: ExprNode = this.nameExprAt(callee, pos)
+        var callAttrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        var call: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCall, callAttrs, Array<AstXmlNode>())
+        this.attach(call, AstNodeKind.Callee, calleeExpr.node)
+        this.attach(call, AstNodeKind.Arg, arg.node)
+        return ExprNode(call, pos.line, pos.column)
+    }
+
     // `<receiver>[<index>]`, for a receiver that is an expression rather than a name.
     fun receiverIndexAt(receiver: *ExprNode, index: *ExprNode, pos: SourcePos): ExprNode {
         var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
@@ -1309,14 +1327,19 @@ data class Parser(
     //
     // The template exists so the subject is evaluated once; arms do not fall through, so a
     // `break`/`continue` in one is the enclosing loop's. A **place** subject skips the template
-    // entirely (`whenSubjectIsPlace`): reading it again per test is free and cannot change, and
-    // the template would *copy* a `Str` subject - a heap copy, on every execution.
+    // entirely (`whenSubjectIsPlace`): reading it again per test is free and cannot change.
     //
     // When *every* arm's labels are string literals - and `--when-dispatch` is on, which it is
-    // by default - the chain also gets the subject's length in a second template
-    // (`_sm_when1_n`), and each label's test is guarded by it (`whenLabelCondition`). The arms,
-    // their order, their bodies and the `else` are untouched; only the tests got cheaper, so the
-    // rewrite cannot change which arm matches.
+    // by default - the chain also binds a **view** of the subject (`_sm_when1_v`, `spanOfStr`,
+    // cppsrc/rtl/StrView.kt) and its length in a template (`_sm_when1_n`), and each label's test
+    // compares the view and is guarded by the length (`whenLabelCondition`). The view is what
+    // keeps the subject from being copied per label: `subject == "..."` binds the subject to a
+    // `Str` temporary for *every* literal - a heap copy, for a text longer than the inline
+    // buffer - while a view of it is a pointer and a length. A subject that already is a
+    // `StrView` views itself (the same `spanOfStr`, whose `StrView` overload is the identity,
+    // cppsrc/rtl/_res.md), so the desugar never has to know which of the two it got. The arms,
+    // their order, their bodies and the `else` are untouched; only the tests got cheaper, so
+    // the rewrite cannot change which arm matches.
     fun parseWhen(out: *List<AstXmlNode>): Bool {
         val pos: SourcePos = this.peek(0).pos
         this.advance() // when
@@ -1339,15 +1362,17 @@ data class Parser(
         // Bound before the arms are parsed, so a nested `for`/`when` in an arm takes the next id.
         val whenId: Int = this.nextTemplateId
         val subjectName: Str = "_sm_when" + whenId.toString()
+        val viewName: Str = subjectName + "_v"
         val lengthName: Str = subjectName + "_n"
         this.nextTemplateId = whenId + 1
 
-        // The subject as the tests read it: itself when it is a place, the template otherwise.
+        // The subject's own value: itself when it is a place, the template otherwise.
         val place: Bool = this.whenSubjectIsPlace(subject.node) && !whenCopySubject()
-        var subjectExpr: ExprNode = subject
+        var base: ExprNode = subject
         if (!place) {
-            subjectExpr = this.nameExprAt(subjectName, pos)
+            base = this.nameExprAt(subjectName, pos)
         }
+        var subjectExpr: ExprNode = base
 
         // One `if` per arm in source order, the `else` arm's statements as the tail. Labels and
         // bodies are collected first, because whether the tests can be guarded - every label a
@@ -1420,6 +1445,14 @@ data class Parser(
             return false
         }
         val dispatch: Bool = whenDispatch() && literals && armLabels.size() > 0
+        if (dispatch) {
+            // The tests read a *view* over the subject (`_sm_when<n>_v`), never the subject
+            // itself: a `Str` subject would be copied into a `Str` temporary for every label
+            // (a heap copy, for a text longer than the inline buffer), while a view of it
+            // compares in place - and a subject that is already a `StrView` views itself, so
+            // the same desugar serves both and never has to know which one it got.
+            subjectExpr = this.nameExprAt(viewName, pos)
+        }
 
         var arms: List<AstXmlNode> = List<AstXmlNode>()
         var a: Int = 0
@@ -1448,6 +1481,12 @@ data class Parser(
             out.append(this.varDeclNode(subjectName, true, this.emptyNode(), subject, pos))
         }
         if (dispatch) {
+            // The view the tests compare against, taken once from the subject
+            // (`spanOfStr`, cppsrc/rtl/StrView.kt): a borrowed view of a `Str`, the identity of
+            // a `StrView`, chosen by C++ overload resolution.
+            out.append(
+                this.varDeclNode(viewName, true, this.emptyNode(), this.freeCallAt("spanOfStr", base, pos), pos)
+            )
             // Once, so a guarded test does not call `size()` per label.
             out.append(
                 this.varDeclNode(
@@ -1782,11 +1821,31 @@ data class Parser(
             if (this.failed) {
                 return this.emptyExpr()
             }
+            // One side of a comparison against a string literal is wrapped in `spanOfStr`: the
+            // test reads a view of the place instead of copying it into a `Str` temporary, and
+            // a `*Str` operand is not read at all. Only a *place* is wrapped - a call's or an
+            // operation's result is materialised anyway, so a view of it would only add work.
+            var lhsNode: AstXmlNode = left.node
+            var rhsNode: AstXmlNode = right.node
+            if (this.isStringCompareOp(op)) {
+                if (xmlKind(right.node) == AstNodeCategory.ExprStrLit
+                    && this.whenSubjectIsPlace(left.node)
+                ) {
+                    val viewed: ExprNode = this.freeCallAt("spanOfStr", left, SourcePos(0, left.line, left.column))
+                    lhsNode = viewed.node
+                }
+                if (xmlKind(left.node) == AstNodeCategory.ExprStrLit
+                    && this.whenSubjectIsPlace(right.node)
+                ) {
+                    val viewed: ExprNode = this.freeCallAt("spanOfStr", right, SourcePos(0, right.line, right.column))
+                    rhsNode = viewed.node
+                }
+            }
             var attrs: List<AstNodeAttribute> = this.posAttrs(left.line, left.column)
             attrs.append(AstNodeAttribute(AstNodeAttributeKind.Op, op))
             var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprBinary, attrs, Array<AstXmlNode>())
-            this.attach(node, AstNodeKind.Lhs, left.node)
-            this.attach(node, AstNodeKind.Rhs, right.node)
+            this.attach(node, AstNodeKind.Lhs, lhsNode)
+            this.attach(node, AstNodeKind.Rhs, rhsNode)
             left = ExprNode(node, left.line, left.column)
         }
         return left

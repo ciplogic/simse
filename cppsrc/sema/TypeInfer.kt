@@ -1384,8 +1384,11 @@ data class SemInfer(
             }
 
             AstNodeCategory.ExprIndex -> {
-                val baseType: AstXmlNode = this.infer(xmlChildPtr(e, AstNodeKind.Receiver))
-                val base: AstXmlNode = semPointee(baseType)
+                // The receiver through a `typealias`: `StrView` is `Span<Char>`, so a view's
+                // index is the span's element (`Char`) where the bare alias would leave it `?`.
+                val baseType: AstXmlNode =
+                    this.resolveAlias(this.infer(xmlChildPtr(e, AstNodeKind.Receiver)))
+                val base: AstXmlNode = this.resolveAlias(semPointee(baseType))
                 if (xmlIsEmpty(base)) {
                     return xmlEmptyNode()
                 }

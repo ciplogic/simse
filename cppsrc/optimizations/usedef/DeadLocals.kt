@@ -20,14 +20,11 @@ fun linDeadLocalsOptimization(stmts: *List<AstXmlNode>): Bool {
     linUseDefDeclared(stmts, *declared)
     var i: Int = 0
     while (i < stmts.size()) {
-        val stmt: *AstXmlNode = *stmts[i]
         linUseDefCount(useDefs.usesAt(i), *named)
         linUseDefCount(useDefs.defsAt(i), *named)
-        var captured: List<Str> = List<Str>()
-        linUseDefCaptured(stmt, *captured)
-        linUseDefCount(captured, *named)
         i = i + 1
     }
+    linUseDefMarkEach(useDefs.captures.keys(), *named)
 
     var drop: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     val names: List<Str> = declared.keys()

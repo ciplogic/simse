@@ -52,9 +52,3 @@ fun foldToStringRule(e: *AstXmlNode): AstXmlNode {
     return foldStrLit(e, text)
 }
 
-fun linFoldToStringBody(stmts: *List<AstXmlNode>): Bool {
-    return foldExprsInList(stmts, foldToStringRule)
-}
-
-// Self-registration (`Optimize.kt`).
-val linFoldToStringPass: Bool = registerLinOptPass("foldToString", linFoldToStringBody)

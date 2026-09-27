@@ -1,0 +1,1 @@
+'Res' has an unInit: hold it by '*Res' or '&Res' - a value copy would run its destructor too

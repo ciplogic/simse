@@ -1,9 +1,12 @@
 // UseDefs.kt
 //
 // The use-def facts of the linear form, per statement: the names it reads, the names it writes,
-// and whether it ends a block (a label or a jump). A pass that pairs one name's storage with
-// another's, or drops a name nothing reads, reads a body through this instead of walking the
-// tree itself - `MergeLocals.kt`, `DeadStores.kt` and `DeadLocals.kt` do.
+// whether it ends a block (a label or a jump), and - once per body, not once per statement - the
+// names whose storage escapes and the names a lambda captures. One subtree walk per statement
+// fills the reads and both sets, where the escapes and the captures used to be three more walks;
+// the two sets live on the body because a caller only asks *whether* a name escapes or is
+// captured, and a per-statement list of each would be paid for at every statement whether or not
+// it is empty.
 
 package optimizations
 
@@ -30,6 +33,15 @@ fun linUseDefCount(names: List<Str>, counts: *Dictionary<Str, Int>): Unit {
     }
 }
 
+// Every name `names` marks, as a presence (the count is incidental), for the body-level sets.
+fun linUseDefMarkEach(names: List<Str>, marks: *Dictionary<Str, Int>): Unit {
+    var i: Int = 0
+    while (i < names.size()) {
+        marks.insert(names[i], 1)
+        i = i + 1
+    }
+}
+
 // ---- the names whose storage escapes naming ---------------------------------
 
 // Every name under `node`, a lambda body included.
@@ -39,6 +51,16 @@ fun linUseDefNames(node: *AstXmlNode, names: *List<Str>): Unit {
     }
     for (*child in node.Children) {
         linUseDefNames(child, names)
+    }
+}
+
+// The same, marked rather than listed: a lambda's captures are a set, not an ordered run.
+fun linUseDefMarkNames(node: *AstXmlNode, marks: *Dictionary<Str, Int>): Unit {
+    if (xmlKind(node) == AstNodeCategory.ExprName) {
+        marks.insert(xmlAttr(node, AstNodeAttributeKind.Name), 1)
+    }
+    for (*child in node.Children) {
+        linUseDefMarkNames(child, marks)
     }
 }
 
@@ -56,7 +78,9 @@ fun linUseDefReceiver(callee: *AstXmlNode, unsafe: *Dictionary<Str, Bool>): Unit
 
 // The names this body must not treat as a value whichever they hold: one handed to a call (a
 // `*T` parameter keeps its address), one under a `&`/`*` (the storage, reachable without naming
-// it), and a method call's receiver (`T* self`).
+// it), and a method call's receiver (`T* self`). `linUseDefWalk` records the same per statement;
+// this walks on its own for `PassFoldConst`, which counts its writes as it goes and so does not
+// read a body through `linUseDefsOf`.
 fun linUseDefMarkEscapes(node: *AstXmlNode, unsafe: *Dictionary<Str, Bool>): Unit {
     if (node.name == AstNodeKind.Arg && xmlKind(node) == AstNodeCategory.ExprName) {
         unsafe.insert(xmlAttr(node, AstNodeAttributeKind.Name), true)
@@ -79,29 +103,6 @@ fun linUseDefMarkEscapes(node: *AstXmlNode, unsafe: *Dictionary<Str, Bool>): Uni
     }
 }
 
-// Every name a lambda under `node` reads or binds. A lambda runs when it is called, so such a
-// name lives past the statement that holds it.
-fun linUseDefCaptured(node: *AstXmlNode, names: *List<Str>): Unit {
-    if (xmlKind(node) == AstNodeCategory.ExprLambda) {
-        linUseDefNames(node, names)
-        return
-    }
-    for (*child in node.Children) {
-        linUseDefCaptured(child, names)
-    }
-}
-
-// The names a lambda body captures, for a body that must not share their storage.
-fun linUseDefMarkCaptures(node: *AstXmlNode, unsafe: *Dictionary<Str, Bool>): Unit {
-    var captured: List<Str> = List<Str>()
-    linUseDefCaptured(node, *captured)
-    var i: Int = 0
-    while (i < captured.size()) {
-        unsafe.insert(captured[i], true)
-        i = i + 1
-    }
-}
-
 // ---- the facts, per statement -----------------------------------------------
 
 // One statement: the names it reads, the names it writes, and whether it ends a block.
@@ -113,11 +114,14 @@ data class LinUseDef(
 
 // A body's statements with their facts and the block each statement falls in. A block is the
 // run of statements between two boundaries, so it holds no jump and no label: a name written
-// and read inside one block is live for that block only.
+// and read inside one block is live for that block only. `escapes` and `captures` are the body's
+// own: which names it hands out, and which a lambda reads or binds.
 data class LinUseDefs(
     var stmts: *List<AstXmlNode>,
     var facts: List<LinUseDef>,
-    var blocks: List<Int>
+    var blocks: List<Int>,
+    var escapes: Dictionary<Str, Bool>,
+    var captures: Dictionary<Str, Int>
 ) {
     fun usesAt(i: Int): List<Str> {
         if (i < 0 || i >= this.facts.size()) {
@@ -140,6 +144,18 @@ data class LinUseDefs(
             return -1
         }
         return this.blocks[i]
+    }
+
+    // Whether a lambda anywhere in the body reads or binds `name`. The lambda runs later, so a
+    // store it reads is not dead, and its storage may not be shared with another local's.
+    fun captured(name: Str): Bool {
+        return this.captures.has(name)
+    }
+
+    // Whether the body hands `name`'s storage out - a call argument, a name under `&`/`*`, a
+    // method call's receiver - or a lambda captures it.
+    fun escaped(name: Str): Bool {
+        return this.escapes.has(name) || this.captures.has(name)
     }
 
     // `renamed` applied to the body in place: a use moves with the name it means, and a
@@ -165,36 +181,61 @@ fun linUseDefIsBoundary(stmt: *AstXmlNode): Bool {
             || kind == AstNodeCategory.StmtBlock
 }
 
-// Every name a statement reads; a lambda body is a body of its own, so its statements are not
-// this one's.
-fun linUseDefStatementNames(node: *AstXmlNode, names: *List<Str>): Unit {
-    if (xmlKind(node) == AstNodeCategory.ExprLambda) {
+// One statement's reads, escapes and captures in a single subtree walk. A lambda is where the
+// three part ways: it runs when it is called, so its body is not a read here and not an escape
+// either - every name it touches is a capture, and the walk stops at the lambda because the
+// captures already are all of them.
+fun linUseDefWalk(
+    node: *AstXmlNode, uses: *List<Str>, escapes: *Dictionary<Str, Bool>,
+    captures: *Dictionary<Str, Int>
+): Unit {
+    val kind: AstNodeCategory = xmlKind(node)
+    if (kind == AstNodeCategory.ExprLambda) {
+        linUseDefMarkNames(node, captures)
         return
     }
-    if (xmlKind(node) == AstNodeCategory.ExprName) {
-        names.append(xmlAttr(node, AstNodeAttributeKind.Name))
+    if (kind == AstNodeCategory.ExprName) {
+        uses.append(xmlAttr(node, AstNodeAttributeKind.Name))
+    }
+    if (node.name == AstNodeKind.Arg && kind == AstNodeCategory.ExprName) {
+        escapes.insert(xmlAttr(node, AstNodeAttributeKind.Name), true)
+    }
+    if (kind == AstNodeCategory.ExprRef || kind == AstNodeCategory.ExprDeref) {
+        var place: List<Str> = List<Str>()
+        linUseDefNames(node, *place)
+        var i: Int = 0
+        while (i < place.size()) {
+            escapes.insert(place[i], true)
+            i = i + 1
+        }
+    }
+    if (kind == AstNodeCategory.ExprCall) {
+        linUseDefReceiver(xmlChildPtr(node, AstNodeKind.Callee), escapes)
     }
     for (*child in node.Children) {
-        linUseDefStatementNames(child, names)
+        linUseDefWalk(child, uses, escapes, captures)
     }
 }
 
 // The names a statement reads. The plain target of an assignment is written, not read; an
 // element or a field the target names is read.
-fun linUseDefUses(stmt: *AstXmlNode, names: *List<Str>): Unit {
+fun linUseDefReads(
+    stmt: *AstXmlNode, uses: *List<Str>, escapes: *Dictionary<Str, Bool>,
+    captures: *Dictionary<Str, Int>
+): Unit {
     if (xmlKind(stmt) == AstNodeCategory.StmtAssign
         && xmlAttr(stmt, AstNodeAttributeKind.Op) == "="
         && xmlKind(xmlChildPtr(stmt, AstNodeKind.Target)) == AstNodeCategory.ExprName
     ) {
         for (*child in stmt.Children) {
             if (child.name != AstNodeKind.Target) {
-                linUseDefStatementNames(child, names)
+                linUseDefWalk(child, uses, escapes, captures)
             }
         }
         return
     }
     for (*child in stmt.Children) {
-        linUseDefStatementNames(child, names)
+        linUseDefWalk(child, uses, escapes, captures)
     }
 }
 
@@ -217,10 +258,13 @@ fun linUseDefWrites(stmt: *AstXmlNode, names: *List<Str>): Unit {
     }
 }
 
-// One body read once: every statement's names, and the block it falls in.
+// One body read once: every statement's names - reads, escapes and captures in one walk - and
+// the block it falls in.
 fun linUseDefsOf(stmts: *List<AstXmlNode>): LinUseDefs {
     var facts: List<LinUseDef> = List<LinUseDef>()
     var blocks: List<Int> = List<Int>()
+    var escapes: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+    var captures: Dictionary<Str, Int> = Dictionary<Str, Int>()
     var block: Int = 0
     var i: Int = 0
     while (i < stmts.size()) {
@@ -231,14 +275,14 @@ fun linUseDefsOf(stmts: *List<AstXmlNode>): LinUseDefs {
         }
         var uses: List<Str> = List<Str>()
         var defs: List<Str> = List<Str>()
-        linUseDefUses(stmt, *uses)
+        linUseDefReads(stmt, *uses, *escapes, *captures)
         linUseDefWrites(stmt, *defs)
         var fact: LinUseDef = LinUseDef(uses, defs, boundary)
         facts.append(fact)
         blocks.append(block)
         i = i + 1
     }
-    return LinUseDefs(stmts, facts, blocks)
+    return LinUseDefs(stmts, facts, blocks, escapes, captures)
 }
 
 // The names the body declares at its own level. A declaration is the storage, not a use of the

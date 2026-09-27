@@ -204,10 +204,18 @@ data class ExprFlattener(
             }
 
             AstNodeCategory.ExprRef, AstNodeCategory.ExprDeref -> {
+                val operandPtr: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Operand)
+                if (kind == AstNodeCategory.ExprRef && xmlKind(operandPtr) == AstNodeCategory.ExprCall) {
+                    // `&Ctor(args)`: the construction stays the operand (its own arguments
+                    // flattened), because the extractor makes the *box* its destination.
+                    var built: List<AstXmlNode> = List<AstXmlNode>()
+                    built.append(this.rebuild(operandPtr, temps))
+                    return exprReplaceRole(e, AstNodeKind.Operand, built)
+                }
                 // `&x` boxes and `*x` borrows: the operand stays a place, or the address
                 // of a temporary would be taken.
                 var operand: List<AstXmlNode> = List<AstXmlNode>()
-                operand.append(this.pathOrValue(xmlChildPtr(e, AstNodeKind.Operand), temps))
+                operand.append(this.pathOrValue(operandPtr, temps))
                 return exprReplaceRole(e, AstNodeKind.Operand, operand)
             }
         }

@@ -2094,7 +2094,15 @@ data class IlExtractor(
             }
 
             AstNodeCategory.ExprRef -> {
-                this.emit(IlOpKind.Box, ilOps2(slot, this.operandOf(xmlChildPtr(e, AstNodeKind.Operand))))
+                val operand: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Operand)
+                if (this.isBoxedConstruction(operand)) {
+                    // `&Ctor(args)` is one box built in place: the construction's own
+                    // destination is the `&C` slot, which the backend spells
+                    // `makeRef<C>(args...)`. No temporary, so no destructor runs on one.
+                    this.call(slot, this.asConstruction(operand))
+                    return
+                }
+                this.emit(IlOpKind.Box, ilOps2(slot, this.operandOf(operand)))
                 return
             }
 
@@ -2111,11 +2119,14 @@ data class IlExtractor(
                     return
                 }
                 if ((xmlKind(operand) == AstNodeCategory.ExprMember
-                            || xmlKind(operand) == AstNodeCategory.ExprIndex)
+                            || xmlKind(operand) == AstNodeCategory.ExprIndex
+                            || xmlKind(operand) == AstNodeCategory.ExprDeref)
                     && !this.isHandleExpr(operand)
                 ) {
                     // A chain that is a place: the address *is* the place slot. (A call's result is not a
-                    // place.)
+                    // place.) A deref's slot is the pointer it reads through (`receiverOf`), so `*(*p)`
+                    // is `p` - never the address of a copy of the pointee, which is what an argument
+                    // converted to a `*T` parameter used to build.
                     this.emit(IlOpKind.SetVar, ilOps2(slot, this.receiverOf(operand)))
                     return
                 }
@@ -2518,6 +2529,42 @@ data class IlExtractor(
             return pack
         }
         return xmlEmptyNode()
+    }
+
+    // Whether `e` builds a value of a declared data class - `Box<Int>(3)` by its generic
+    // name, `Res(7)` by a bare one - which is what makes `&e` a box to build in place. A
+    // container's construction (`List<Int>(n)`) is not one: it is boxed like any value.
+    fun isBoxedConstruction(e: *AstXmlNode): Bool {
+        if (xmlKind(e) != AstNodeCategory.ExprCall) {
+            return false
+        }
+        val callee: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Callee)
+        val kind: AstNodeCategory = xmlKind(callee)
+        if (kind != AstNodeCategory.ExprGenericName && kind != AstNodeCategory.ExprName) {
+            return false
+        }
+        val name: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
+        if (name == "") {
+            return false
+        }
+        return !xmlIsEmpty(this.dataClassDecl(name))
+    }
+
+    // `Ctor(args)` as the construction it is: a generic name already is one, and a bare name
+    // is re-spelled as one, because `call` takes its construction branch on the callee's kind.
+    fun asConstruction(e: *AstXmlNode): AstXmlNode {
+        val callee: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Callee)
+        if (xmlKind(callee) == AstNodeCategory.ExprGenericName) {
+            return *e
+        }
+        var generic: AstXmlNode =
+            AstXmlNode(AstNodeKind.Callee, AstNodeCategory.ExprGenericName, List<AstNodeAttribute>(), Array<AstXmlNode>())
+        generic.attributes.append(
+            AstNodeAttribute(AstNodeAttributeKind.Name, xmlAttr(callee, AstNodeAttributeKind.Name))
+        )
+        var callees: List<AstXmlNode> = List<AstXmlNode>()
+        callees.append(generic)
+        return exprReplaceRole(e, AstNodeKind.Callee, callees)
     }
 
     // The declaration of a data class the facts know, by name (empty otherwise): a

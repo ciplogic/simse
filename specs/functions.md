@@ -272,15 +272,23 @@ when (kind) {            var _sm_when1 = kind
 The name is the parser's own (`_sm_when<n>` from the per-file template counter), as
 `for`'s machine name is, so a program cannot take it.
 
-**A `when` over string literals guards its tests by length.** When every label of every arm is
-a string literal, the parser also binds the subject's length (`_sm_when<n>_n`) and each label's
-test becomes `<length> == <the label's byte length> && ...`, so a label whose length cannot match
-is rejected by one integer compare instead of a `memcmp`. A one-byte label's test *is* the byte
-(`subject[0] == '|'`, no string compare left) and an empty label's is the bare length test, since
-`""` is the only text of length zero. `--when-first-char` adds the first-byte guard to a label of
-two or more bytes as well (off by default: measured, it did not pay), and `--no-when-dispatch`
-turns the whole guard off. Every guard is a *necessary* condition of `==`, and the arms, their
-order, their bodies and the `else` are untouched - so what matches cannot change.
+**A `when` over string literals compares a view of the subject and guards its tests by
+length.** When every label of every arm is a string literal, the parser binds a **view** of the
+subject (`_sm_when<n>_v = spanOfStr(...)`, `cppsrc/rtl/StrView.kt`) and its length
+(`_sm_when<n>_n`), and each label's test compares the view instead of the subject:
+`<view> == <label>`, guarded by `<length> == <the label's byte length> && ...`, so a label whose
+length cannot match is rejected by one integer compare instead of a `memcmp`. The view is what
+keeps the subject from being *copied* per label - `subject == "..."` materializes the subject
+as a `Str` temporary for every literal (a heap copy, for a text longer than the inline buffer),
+while a view of it is a pointer and a length. A subject that already is a `StrView` views
+itself (the `StrView` overload of `spanOfStr` is the identity), so the desugar never has to know
+which of the two it got. A one-byte label's test *is* the byte (`view[0] == '|'`, no string
+compare left) and an empty label's is the bare length test, since `""` is the only text of
+length zero. `--when-first-char` adds the first-byte guard to a label of two or more bytes as
+well (off by default: measured, it did not pay), and `--no-when-dispatch` turns the whole guard
+off (the plain comparisons on the subject, as before). Every guard is a *necessary* condition of
+`==`, and the arms, their order, their bodies and the `else` are untouched - so what matches
+cannot change.
 
 Not implemented, and reported rather than misparsed: Kotlin's pattern labels
 (`is Type`, `in 1..5`), a subjectless `when { cond -> }`, and `when` as an expression.

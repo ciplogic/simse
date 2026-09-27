@@ -285,11 +285,16 @@ data class Analyzer(
     var scopes: List<Dictionary<Str, ValueBinding>>,
     var typeScopes: List<List<Str>>,
     var loopDepth: Int,
-    var diags: List<Str>
+    var diags: List<Str>,
+
+// The type names that declare `unInit` (`collectUninitTypes`): such a type has a C++
+// destructor, so a value of it would run that destructor once per copy.
+    var uninitTypes: Dictionary<Str, Bool>
 ) {
 
     fun run(): Unit {
         this.collectGlobal()
+        this.collectUninitTypes()
         var n: Int = 0
         while (n < this.inputs.size()) {
             val input: SemaInput = this.inputs[n]
@@ -302,6 +307,92 @@ data class Analyzer(
             }
             this.popScope()
             n = n + 1
+        }
+    }
+
+    // Every class that declares `unInit`, before anything is analyzed: the rule below reads
+    // the set, and a declaration may name a type from any module.
+    fun collectUninitTypes(): Unit {
+        var n: Int = 0
+        while (n < this.inputs.size()) {
+            val input: *SemaInput = *this.inputs[n]
+            for (*decl in xmlDecls(input.module)) {
+                if (decl.name != AstNodeKind.DataClass) {
+                    continue
+                }
+                val className: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
+                var seen: Bool = false
+                for (*method in xmlChildren(decl, AstNodeKind.Function)) {
+                    if (xmlAttr(method, AstNodeAttributeKind.Name) != "unInit") {
+                        continue
+                    }
+                    // The shape a destructor has: no parameters, nothing returned, once.
+                    if (seen) {
+                        this.diag(
+                            xmlLine(method), xmlColumn(method),
+                            fmtStr("'|' declares unInit twice: a type has one destructor", className)
+                        )
+                    }
+                    seen = true
+                    if (xmlCount(method, AstNodeKind.Param) > 0) {
+                        this.diag(xmlLine(method), xmlColumn(method), "unInit takes no parameters")
+                    }
+                    // An explicit `: Unit` is "nothing" too; anything else is a mistake.
+                    val ret: *AstXmlNode = xmlChildPtr(method, AstNodeKind.ReturnType)
+                    if (!xmlIsEmpty(ret) && semaTypeText(ret) != "Unit") {
+                        this.diag(xmlLine(method), xmlColumn(method), "unInit returns nothing")
+                    }
+                    this.uninitTypes.insert(className, true)
+                }
+            }
+            n = n + 1
+        }
+    }
+
+    // `unInit` is a destructor, not a callable (`specs/declarations.md`): `x.unInit()` is the
+    // mistake the name invites, and the emitted C++ would name a function never emitted.
+    fun checkUninitCall(call: *AstXmlNode, callee: *AstXmlNode): Unit {
+        if (xmlKind(callee) != AstNodeCategory.ExprMember) {
+            return
+        }
+        if (xmlAttr(callee, AstNodeAttributeKind.Name) != "unInit") {
+            return
+        }
+        this.diag(
+            xmlLine(call), xmlColumn(call),
+            "unInit is a type's destructor: it is not called - the value's last owner destroys it"
+        )
+    }
+
+    // A `*T` or `&T` holds a type with a destructor; a value does not. A `T` value is a copy,
+    // and every copy runs `~T()` - the resource closed once per copy - which is what the
+    // handle is for (`&T` destroys the box when its last owner goes). A `*`/`&` anywhere in
+    // the type is the escape: `List<&T>` is fine, `List<T>` is not.
+    fun checkUninitHolder(typeNode: *AstXmlNode, line: Int, column: Int): Unit {
+        if (xmlIsEmpty(typeNode)) {
+            return
+        }
+        val kind: AstNodeCategory = xmlKind(typeNode)
+        if (kind == AstNodeCategory.TypePointer || kind == AstNodeCategory.TypeReference) {
+            return
+        }
+        if (kind == AstNodeCategory.TypeNamed || kind == AstNodeCategory.TypeGeneric) {
+            val name: Str = xmlAttr(typeNode, AstNodeAttributeKind.Name)
+            if (this.uninitTypes.has(name)) {
+                this.diag(
+                    line, column,
+                    fmtStr(
+                        "'|' has an unInit: hold it by '*|' or '&|' - a value copy would run its destructor too",
+                        name, name, name
+                    )
+                )
+                return
+            }
+        }
+        var i: Int = 0
+        while (i < typeNode.Children.count()) {
+            this.checkUninitHolder(typeNode.Children[i], line, column)
+            i = i + 1
         }
     }
 
@@ -603,6 +694,7 @@ data class Analyzer(
                 val staticType: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.Type)
                 if (!xmlIsEmpty(staticType)) {
                     this.resolveType(staticType)
+                    this.checkUninitHolder(staticType, xmlLine(decl), xmlColumn(decl))
                 }
                 val init: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.Init)
                 if (!xmlIsEmpty(init)) {
@@ -626,6 +718,7 @@ data class Analyzer(
                     val fieldType: *AstXmlNode = xmlChildPtr(field, AstNodeKind.Type)
                     if (!xmlIsEmpty(fieldType)) {
                         this.resolveType(fieldType)
+                        this.checkUninitHolder(fieldType, xmlLine(field), xmlColumn(field))
                     }
                 }
                 val methods: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Function)
@@ -685,6 +778,7 @@ data class Analyzer(
             val paramType: *AstXmlNode = xmlChildPtr(param, AstNodeKind.Type)
             if (!xmlIsEmpty(paramType)) {
                 this.resolveType(paramType)
+                this.checkUninitHolder(paramType, xmlLine(param), xmlColumn(param))
             }
             // Parameters are not `val` declarations, so reassigning one is never reported.
             this.declareValue(xmlAttr(param, AstNodeAttributeKind.Name), true, false, paramType)
@@ -692,6 +786,7 @@ data class Analyzer(
         val returnType: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.ReturnType)
         if (!xmlIsEmpty(returnType)) {
             this.resolveType(returnType)
+            this.checkUninitHolder(returnType, xmlLine(decl), xmlColumn(decl))
         }
 
         val savedLoopDepth: Int = this.loopDepth
@@ -717,6 +812,7 @@ data class Analyzer(
                 val declaredType: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Type)
                 if (!xmlIsEmpty(declaredType)) {
                     this.resolveType(declaredType)
+                    this.checkUninitHolder(declaredType, xmlLine(stmt), xmlColumn(stmt))
                 }
                 var type: AstXmlNode = declaredType
                 if (xmlIsEmpty(type) && !xmlIsEmpty(init)) {
@@ -860,6 +956,7 @@ data class Analyzer(
                 }
                 this.checkCallArity(expr)
                 this.checkExtensionCallArity(expr)
+                this.checkUninitCall(expr, callee)
                 return
             }
 
@@ -1425,7 +1522,8 @@ fun newAnalyzer(inputs: *List<SemaInput>): Analyzer {
         List<Dictionary<Str, ValueBinding>>(),
         List<List<Str>>(),
         0,
-        List<Str>()
+        List<Str>(),
+        Dictionary<Str, Bool>()
     )
 }
 

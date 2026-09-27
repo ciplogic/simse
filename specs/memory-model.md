@@ -68,6 +68,10 @@ the common ref-counted allocation header described in `ref-counted-layout.md`:
   boxing a copy of `value`, analogous to `make_shared`. A variable or field of
   type `&T` may subsequently be assigned `null`; a null handle owns no count
   and cannot be safely dereferenced.
+- The one shape that is *not* a copy is `&Ctor(args)` - a construction. It builds
+  the box in place (`makeRef<C>(args...)`) rather than making a temporary and
+  copying it, which matters for a type with a destructor (`specs/declarations.md`,
+  "Destructors"): the temporary's destructor would run too.
 - `&` is not allowed on arrays or other already-reference types (nothing to
   promote), so its operand is a value/layout type.
 

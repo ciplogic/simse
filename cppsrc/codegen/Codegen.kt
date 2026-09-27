@@ -374,6 +374,17 @@ data class Emitter(
         return this.genericTypeExpr(xmlAttr(decl, AstNodeAttributeKind.Name), args)
     }
 
+    // The class's `unInit`, if it declares one: the method that is the type's C++ destructor
+    // (`emitUninit`). Empty for a class without one.
+    fun cgUninitMethod(decl: *AstXmlNode): AstXmlNode {
+        for (*member in xmlChildren(decl, AstNodeKind.Function)) {
+            if (xmlAttr(member, AstNodeAttributeKind.Name) == "unInit") {
+                return member
+            }
+        }
+        return xmlEmptyNode()
+    }
+
     fun addFunction(
         decl: *AstXmlNode,
         receiver: *AstXmlNode,
@@ -927,6 +938,14 @@ data class Emitter(
                     xmlAttr(field, AstNodeAttributeKind.Name)
                 )
             )
+        }
+        if (!xmlIsEmpty(this.cgUninitMethod(decl))) {
+            // A class with `unInit` has a real destructor: declared here, defined with the
+            // bodies (`emitUninit`), so its body may call anything the prototypes declare.
+            this.line(1, fmtStr("~|();", emittedName))
+            if (this.failed) {
+                return
+            }
         }
         this.line(0, "};")
         this.line(0, "SIMSE_PACK_POP")
@@ -1505,6 +1524,12 @@ data class Emitter(
         if (fn.isNative) {
             return
         }
+        // `unInit` is the type's destructor, not a callable function: the struct declares
+        // `~T()` and the definition is emitted where a body belongs (`emitUninit`).
+        if (!xmlIsEmpty(fn.receiver) && fn.name == "unInit") {
+            this.emitUninit(fn, decl, facts, prototypeOnly)
+            return
+        }
         val isMain: Bool = xmlIsEmpty(fn.receiver) && fn.name == "main"
         if (isMain && prototypeOnly) {
             return
@@ -1657,6 +1682,85 @@ data class Emitter(
 
 // The instruction-list backend lives in `cppsrc/codegen/IlCodeGen.kt`: the IL's types and
 // the walks that spell a body's instructions are extension functions on `Emitter` there.
+
+// `unInit` is a type's destructor. The struct declares `~T()` (`emitDataClass`) and this
+// emits the definition, `T::~T() { ... }`, where a body belongs - after the prototypes, so the
+// body may call anything. The receiver is C++'s `this` rather than a `self` parameter, which
+// is what the closure spelling already means (`inClosureMethod`); the frame's `self` slot is
+// what `this` names, so the body reaches its fields through `this->`.
+fun Emitter.emitUninit(fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts, prototypeOnly: Bool): Unit {
+    if (prototypeOnly) {
+        // Declared inside the struct, which `emitDataClass` writes.
+        return
+    }
+    if (!fn.hasBody) {
+        return
+    }
+    val className: Str = this.outerTypeName(fn.receiver)
+    if (className == "") {
+        this.fail(decl, "unInit: the receiver has no type name")
+        return
+    }
+    val classPtr: *AstXmlNode = this.types.getPtr(className)
+    if (classPtr == null) {
+        this.fail(decl, fmtStr("unInit: no declaration of '|'", className))
+        return
+    }
+    val classDecl: AstXmlNode = *classPtr
+    val emittedName: Str = this.qualify(this.typePackage(className), className)
+    var qualified: Str = emittedName
+    if (fn.templateParams.size() > 0) {
+        qualified = fmtStr("|<|>", emittedName, cgJoin(fn.templateParams, ", "))
+    }
+    this.setActiveTypeParams(fn.templateParams)
+    val tmpl: Str = this.templateClause(fn.templateParams)
+    this.sourceComment(decl)
+    if (tmpl != "") {
+        this.line(0, tmpl)
+    }
+    this.line(0, fmtStr("|::~|() {", qualified, emittedName))
+
+    val savedClosure: Bool = this.inClosureMethod
+    val savedSelfKind: NameKind = this.selfKind
+    val savedSelfType: AstXmlNode = this.selfType
+    val savedReturn: AstXmlNode = this.curReturnType
+    val savedKinds: Dictionary<Str, NameKind> = this.nameKinds
+    val savedTypes: Dictionary<Str, AstXmlNode> = this.localTypes
+    this.nameKinds = Dictionary<Str, NameKind>()
+    this.localTypes = Dictionary<Str, AstXmlNode>()
+    this.inClosureMethod = true
+    this.selfKind = NameKind.Value
+    var classType: AstXmlNode =
+        AstXmlNode(AstNodeKind.Type, AstNodeCategory.TypeNamed, List<AstNodeAttribute>(), Array<AstXmlNode>())
+    classType.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, className))
+    this.selfType = classType
+    this.curReturnType = xmlEmptyNode()
+
+    var lowered: List<AstXmlNode> =
+        linLowerForEmission(xmlChildren(xmlChildPtr(decl, AstNodeKind.Body), AstNodeKind.Stmt))
+    val semantics: SemBody = SemBody(
+        decl, fn.templateParams, fn.receiver, xmlEmptyNode(),
+        List<Str>(), List<AstXmlNode>(), Dictionary<Str, AstXmlNode>()
+    )
+    var inferred: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
+    lowered = semInferTypes(lowered, facts, semantics, inferred)
+    // `self` is reserved: the frame has a slot of that name for `this`.
+    val finalBody: List<AstXmlNode> = linFinishForEmission(lowered, this.cgReservedNames(decl, true, false))
+    this.emitBodyAt(
+        this.ilDestructorFor(fn, decl, classDecl, fmtStr("|::~|()", qualified, emittedName), emittedName, facts, inferred),
+        finalBody, fn.file, 1, false
+    )
+    this.inClosureMethod = savedClosure
+    this.selfKind = savedSelfKind
+    this.selfType = savedSelfType
+    this.curReturnType = savedReturn
+    this.nameKinds = savedKinds
+    this.localTypes = savedTypes
+    if (this.failed) {
+        return
+    }
+    this.line(0, "}")
+}
 
     fun expr(e: *AstXmlNode, minPrec: Int, expected: *AstXmlNode): Str {
         // The dst-driven half of the conversion table (`impl_specs/linear-il.md`): a `*T`/`&T`
@@ -2939,17 +3043,43 @@ data class Emitter(
         return index
     }
 
-    // A measured body's name as a reader can place it: the `nsN_` prefix the compiler assigns
-    // *is* its package, so `ns1_emitFunction` reads `codegen::emitFunction`. `rtl` and `main`
-    // are unprefixed and pass through. Only the profiler's table wants this spelling; the
-    // emitted symbols stay mangled.
+    // A measured body's name as a reader can place it (`--profile`). The `nsN_` prefix the
+    // compiler assigns *is* its package, so `ns1_emitFunction` reads `codegen.emitFunction` -
+    // Simse's separator, not C++'s (`profDots` folds any `::` left). A lambda's measured body is
+    // the synthesized `<owner>_closure<N>` class whose `operator()` is the call, so it is named
+    // for what the reader wrote: `ns1_partTextProcessing_closure1::operator()` reads
+    // `strings.partTextProcessing.lambda1`. `rtl` and `main` are unprefixed and pass through.
+    // Only the profiler's table wants this spelling; the emitted symbols stay mangled.
     fun prettySymbol(name: *Str): Str {
+        val closureAt: Int = name.indexOf("_closure")
+        if (closureAt > 0) {
+            val rest: Str = name.substr(closureAt + 8, name.size() - closureAt - 8)
+            var digits: Str = Str()
+            var d: Int = 0
+            while (d < rest.size()) {
+                val ch: Char = rest.charAt(d)
+                if (ch < '0' || ch > '9') {
+                    break
+                }
+                digits.append(ch)
+                d = d + 1
+            }
+            if (digits.size() > 0) {
+                return fmtStr("|.lambda|", this.packageName(name.substr(0, closureAt)), digits)
+            }
+        }
+        return this.packageName(name)
+    }
+
+    // A plain symbol with its `nsN_` package prefix spelled out (`ns1_emitFunction` is
+    // `codegen.emitFunction`); an unprefixed symbol (`main`, an `rtl` native) passes through.
+    fun packageName(name: *Str): Str {
         val packages: List<Str> = this.nsPrefixes.keys()
         var i: Int = 0
         while (i < packages.size()) {
             val prefix: Str = this.nsPrefix(packages[i])
             if (prefix.size() > 0 && name.startsWith(prefix)) {
-                return packages[i] + "::" + name.substr(prefix.size(), name.size() - prefix.size())
+                return packages[i] + "." + name.substr(prefix.size(), name.size() - prefix.size())
             }
             i = i + 1
         }

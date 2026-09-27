@@ -96,6 +96,16 @@ fun foldConstCountWrites(node: *AstXmlNode, counts: *Dictionary<Str, Int>): Unit
 // because a rule takes one node and nothing else.
 var linFoldConstAvailable: Dictionary<Str, FoldGlobalConst>
 
+// This pass is not fused with the literal folds (`PassFoldAll.kt`): its rule reads the table
+// the pass counts per body, so it walks on its own, with a one-rule list built once.
+fun foldConstRuleList(): List<FoldRule> {
+    var rules: List<FoldRule> = List<FoldRule>()
+    rules.append(foldConstReadRule)
+    return rules
+}
+
+var foldConstRules: List<FoldRule> = foldConstRuleList()
+
 // A read of a slot seen written once, with a literal, above.
 fun foldConstReadRule(e: *AstXmlNode): AstXmlNode {
     if (xmlKind(e) != AstNodeCategory.ExprName) {
@@ -145,7 +155,7 @@ fun linFoldConstBody(stmts: *List<AstXmlNode>): Bool {
         }
         if (linFoldConstAvailable.size() > 0) {
             var state: FoldState = FoldState(false)
-            val rewritten: AstXmlNode = foldExprsUnder(*stmts[i], foldConstReadRule, *state)
+            val rewritten: AstXmlNode = foldExprsUnder(*stmts[i], *foldConstRules, *state)
             if (state.changed) {
                 stmts[i] = rewritten
                 changed = true

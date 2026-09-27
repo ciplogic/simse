@@ -3549,3 +3549,233 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   cppsrc/simse_bootstrap.cpp` + `bun tools/bootstrap.js` give both fixed points byte for byte;
   and a `--profile` build of `stress/strings` emits the same runtime as before apart from the
   reworded comments.
+
+- **The literal folds are one traversal, not four - and the self-transpile drops 8.4%.** The
+  fourth reading of the profile (`cppsrc/simse_profile.csv`) put `foldExprsUnder` at
+  **1,867,455 calls / 23.2%** of the run, with `foldGlobalRule`, `foldArithRule`,
+  `foldCompareRule` and `foldToStringRule` each standing at **368,444** - i.e. the same tree,
+  walked once per rule. The four folds were four registered passes inside `linOptimizeBody`'s
+  fixpoint, so every body's expressions were traversed four times a round (and the round
+  repeats). `foldExprsUnder` also copied `node.Children` (`toList()`) at *every* visit, fold or
+  no fold, and returned by value - so the traversal itself, not the rules, was the cost.
+
+  - **One walk, four rules.** `FoldExprs.kt`'s walk now takes a list of rules
+    (`typealias FoldRule`), offered bottom-up in order at each node, and a rule's output is the
+    next one's input - so a fold one rule just made is seen by the rest at the same visit. The
+    list is `foldAllRules()` (`PassFoldAll.kt`, the new pass): a constant global, integer
+    arithmetic, a comparison, `toString` - the order the passes used to run. `foldConst` stays
+    its own pass (its rule reads a table the pass counts per body *before* walking), now with a
+    one-rule list. The four `linFold*Body`/`linFold*Pass` registrations are gone; each rule stays
+    in its own file, beside its subject.
+  - **The mechanism, measured.** A profiled compiler after the change reads `foldExprsUnder`
+    **467,924 calls** (from 1,867,455, **-75%**) and `foldExprsInList` 2,550 (from 10,168); each
+    rule is still called ~368,735 times, because they are now four rule *applications* per node
+    of one traversal rather than one rule per four traversals. `linOptimizeBody` 2,066,594 ->
+    1,934,545 us and `linFinishForEmission` 2,415,083 -> 2,303,617 us in the instrumented build.
+  - **Equivalence, before speed.** The fold's output is pinned as unchanged: the compiler before
+    and after transpile a frozen copy of the whole tree (`cppsrc`, 23.5k lines of Simse, 49,856
+    lines of emitted C++) to **byte-identical C++** (`cmp`), every `.cpp` golden passes without
+    re-capture, and `bun tools/bootstrap.js`'s fixed point is byte for byte. The pass's *name*
+    changed (`foldAll`), so `linOptPassName`'s output moved; no emitted text did.
+  - **Measured with `tools/_bench_ab.mjs`, 20 interleaved runs, the same input tree, both legs at
+    `--release`:** the pre-change compiler **1293.9 / 1340.1 ms** min/median against the new one
+    **1181.8 / 1227.5 ms** - **-8.7% / -8.4%**. The window's null A/B (the *same* binary on both
+    legs) read **1177.9 / 1230.7** against **1187.6 / 1224.9 ms** - under 1% - and an earlier
+    window was noisy enough (null spread 7%) that its own 9% reading could not have been trusted
+    alone. `bun tools/bootstrap.js` then reports the self-transpile at 1131 ms.
+
+  Verified: `bun tools/stress.js` **42/42**, `bun build.js --release --out
+  cppsrc/simse_bootstrap.cpp` + `bun tools/bootstrap.js` both fixed points byte for byte.
+
+- **What is left in the same profile, and why it is next.** Two clusters want the same treatment
+  - fusing repeated traversals of one statement's subtree. They are recorded here so the reading
+  is not lost:
+
+  - **The use-def facts are re-walked.** `linUseDefCaptured` 1,436,378 calls,
+    `linUseDefMarkEscapes` 957,715, `linUseDefStatementNames` 847,863, `linUseDefUses`/`Writes`/
+    `IsBoundary` 435,329 each: per statement the subtree is walked for uses (`linUseDefsOf`),
+    again for escapes (`linMergeCandidates`) and again for lambda captures - and `linUseDefsOf`
+    is rebuilt by `mergeLocals`, `deadStores` and `deadLocals` on every fixpoint round. One walk
+    per statement filling a richer `LinUseDef` (uses, defs, escapes, captures, "has a lambda")
+    removes the other three walkers and their per-statement `List<Str>`s.
+  - **`linSpliceIsSafe` is quadratic.** 12,858 calls at 21.7 us each, `linIsBlock` 1,819,123,
+    `linStmtCrosses` 422,751, `linMergedIndex` 275,732, `linItemCrosses` 182,573: `flattenPass`
+    asks it per block candidate, and each call rescans all of `stmts` to rebuild its label and
+    declaration index before walking every item. The index belongs to the body, once per
+    `flattenPass`, not to each candidate.
+  - **`xmlKind` 22.0M, `xmlIsEmpty` 17.9M, `xmlAttr` 11.6M** are the *walk-step* counts now that
+    both are one-field reads: 22M node visits. Findings 1-3 are all ways to visit fewer nodes,
+    which is the lever the earlier entries already showed (a cheaper loop measured neutral;
+    reading fewer attributes and fewer nodes is what pays).
+
+- **`unInit` is a type's destructor, and a type that has one is held by handle only.** A data
+  class's `unInit` method maps to a C++ destructor: `emitDataClass` (`cppsrc/codegen/Codegen.kt`)
+  declares `~T()` in the struct, and `emitUninit` emits its definition where the bodies go - after
+  the prototypes, so the body may call anything the class can. The body is emitted through the
+  closure spelling (`inClosureMethod`), because the receiver is C++'s `this` rather than a `self`
+  parameter: the extractor's frame is built by `ilDestructorFor` (`cppsrc/codegen/IlCodeGen.kt`)
+  with the class as `closureSymbol`/`selfDecl`, so a field reads `this->field`. Nothing about the
+  *call* is new - `~T()` is where a C++ destructor is written.
+
+  - **Why a value is refused.** A value of such a type is a copy, and every copy runs `~T()`: a
+    resource would be closed once per copy. `&T` is the counted handle (`Ref<T>::~Ref` destroys
+    the box when its last owner goes) and `*T` is the raw pointer that destroys nothing - and the
+    type may sit anywhere inside either (`List<&T>` is fine, `List<T>` is not).
+    `Analyzer.checkUninitHolder` (`cppsrc/sema/Sema.kt`, over a `uninitTypes` set built once by
+    `collectUninitTypes` in `run`) descends the type and reports a bare `T`:
+
+    > `'Res' has an unInit: hold it by '*Res' or '&Res' - a value copy would run its destructor too`
+
+    It is wired into every *held* position: a data-class field, a function parameter, a return
+    type, a local `var`/`val`, and a file-level `Var`. Pinned by
+    `stress/diagnostic-uninit-value` (`expected.transpile-error`, the message above) and by
+    `stress/uninit`, whose output is `open 7 / close 7 / share 9 / close 9 / done` - a lone box
+    closes when its owner goes, a shared box once when the second owner goes.
+  - **The shape checks, the same pass.** `collectUninitTypes` also reports a second `unInit`
+    (`'T' declares unInit twice: a type has one destructor`), a destructor with parameters
+    (`unInit takes no parameters`) and one with a value returned (`unInit returns nothing`; an
+    explicit `: Unit` is nothing and passes). And `checkUninitCall` reports the call the name
+    invites - `x.unInit()` - because a destructor is not called, and the emitted C++ would name a
+    function never emitted:
+
+    > `unInit is a type's destructor: it is not called - the value's last owner destroys it`
+  - **`&Ctor(args)` builds the box in place.** The value rule made this necessary, not merely
+    tidy: with `&Box(7)` lowered as a value temporary that `makeRef` then copies, the
+    temporary's `~Box()` would run too - observable the moment a type has an `unInit`. So
+    `ExprRef` over a construction keeps the construction as its operand
+    (`cppsrc/linear/ExpressionLowering.kt`), and the extractor's `ExprRef` branch
+    (`cppsrc/linear/LinearForm.kt`) makes that construction *the box*: its destination is the
+    `&C` slot, which `ilBoxedCtorText` (`cppsrc/codegen/IlCodeGen.kt`) spells
+    `makeRef<C>(args...)`. The emitted C++, before and after:
+
+    ```cpp
+    // before: a value temporary, then a box that copies it - the temporary's ~Box() runs
+    ns1_Box _sm_expr1;
+    Ref<ns1_Box> _sm_expr2;
+    ...
+    _sm_expr1 = ns1_Box{7};
+    _sm_expr2 = makeRef<std::remove_cvref_t<decltype((_sm_expr1))>>(_sm_expr1);
+    return _sm_expr2;
+
+    // after: one box, built in place - no temporary, so no destructor on one
+    Ref<ns1_Box> _sm_expr1;
+    ...
+    _sm_expr1 = makeRef<ns1_Box>(7);
+    return _sm_expr1;
+    ```
+
+    `isBoxedConstruction` admits a declared data class by generic *or* bare name and excludes a
+    container (`List<Int>(n)` is boxed like any value); `asConstruction` re-spells a bare callee
+    as the generic name, because `call` takes its construction branch on the callee's kind.
+  - **The golden move.** `stress/objects/expected.cpp` re-captured: `&Box(3)`/`&Box(7)` now emit
+    `makeRef<ns1_Box>(3)`/`(7)` with no temporary, and the removed slots renumber the later
+    `_sm_expr` names - the only source of that diff.
+
+  Verified: `bun tools/stress.js` **44/44** (the new `stress/uninit` and
+  `stress/diagnostic-uninit-value` among them); `bun build.js --release --out
+  cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js` - both fixed points byte for byte.
+
+- **A flag an `if` consumes shares one slot: the block model capped the leak.** The emitted
+  compiler had 19 `Bool` slots in one body where one flag is live at a time - the
+  `when`-over-strings dispatch chain (`semaIsBuiltinType`, and the same shape in
+  `stress/when-strings`'s `classify`):
+
+  ```cpp
+  Bool _sm_expr1, _sm_expr2, _sm_expr4, _sm_expr5, _sm_expr7, _sm_expr8, _sm_expr10, ...
+  ...
+  _sm_expr12 = _sm_base12 == __sm_stringTable[573];
+  if (_sm_expr12) goto L1;
+  ```
+
+  `mergeLocals` already merges a local written and read inside one block, and each flag here is
+  written once and read once. The miss is the boundary: `linUseDefsOf` counts a boundary where it
+  *starts*, so the `if` that reads the flag stands in the **next** block, and the same-block test
+  rejected every flag an if-chain makes. `linMergeSharesBlock` (`MergeLocals.kt`) adds one case: a
+  `Bool` written in block `B` and read by the conditional that opens `B+1` (`linIsCondJump`) shares
+  too - the flag is dead once the branch decided, so the next block's flag reuses the slot. **Only
+  `Bool`**: a `Str`/object slot keeps the plain block test.
+  - **The shape, pinned.** `ns1_classify` drops from 21 `Bool` declarations to **one**
+    (`Bool _sm_expr1;`), and the chain reads `_sm_expr1 = ...; if (!(_sm_expr1)) goto ...;` at every
+    arm. Six goldens re-captured - `concat`, `json`, `machines`, `objects`, `raw-strings`,
+    `when-strings` - all strictly *fewer* `Bool` slots and no other shape change.
+  - **Equivalence.** `bun tools/stress.js` **44/44** - the six re-captured goldens now compile and
+    run, so their `expected.stdout` is checked, not skipped by the golden diff. `bun build.js
+    --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js`: both fixed points
+    byte for byte.
+  - **Size, not speed.** The bootstrap is **50,591 -> 50,392 lines** (1.77 -> 1.73 MB). The
+    self-transpile is flat (1.25/1.28 s against 1.23/1.24 s before - within the window's drift):
+    a scalar was a register either way, so this is a shorter declaration and less C++ for the
+    host compiler to parse, which the published bootstrap's own compile shows (16.2 s -> 14.4 s,
+    one session).
+  - **Why not the others.** A `Str`/`List`/object slot's lifetime wants its block to hold; the
+    if-chain only ever makes flags, so the merge is scoped to `Bool` rather than re-arguing
+    liveness per type.
+
+- **The profiler's names are Simse-spelled, and `simse_profile.csv` is the default.** Two
+  reader-facing fixes in the `--profile` report (`impl_specs/profiling.md`):
+  - **`.`, not `::`.** `Emitter.prettySymbol` (`cppsrc/codegen/Codegen.kt`) spelled a package
+    `codegen::emitFunction`; it now writes `codegen.emitFunction`, and `profDots`
+    (`cppsrc/profiling/Profiling.kt`) folds the `::` a lambda symbol reaches the table with
+    (`ns1_partTextProcessing_closure1::operator()` -> `strings.partTextProcessing_closure1.operator()`).
+    A row reads as Simse, not as mangled C++. Verified in the emitted `kMethodNames[]`: no `::`.
+  - **The default file is `simse_profile.csv`** (the flag already was; a stale prologue comment
+    still said `.txt`, now fixed), matching the checked-in `cppsrc/simse_profile.csv`.
+
+- **The use-def facts are one walk - and the instrumented profile's hot rows are not all real.**
+  The follow-up to the fold fusion's "the use-def facts are re-walked" note. Each of
+  `DeadLocals`, `DeadStores` and `MergeLocals` walked every statement's subtree again for what
+  it needed *besides* the reads: a lambda's captures (`linUseDefCaptured`, three callers), the
+  escape set (`linUseDefMarkEscapes`) and the reads (`linUseDefStatementNames`). The instrumented
+  reading put `linUseDefCaptured` at **1,436,378 calls** (and `linUseDefStatementNames` 847,863,
+  `linUseDefUses` 435,329) - the biggest leaf cluster after the accessors.
+
+  - **One walk, two body-level sets.** `linUseDefsOf` now fills reads, escapes and captures in a
+    single subtree walk per statement (`linUseDefWalk`/`linUseDefReads`), and the escapes and
+    the captures are *body-level* dictionaries rather than per-statement lists: a caller asks
+    only *whether* a name escapes (`LinUseDefs.escaped`) or is captured (`captured`), so a list
+    per statement would be paid for at every statement whether or not it is empty. `LinUseDef`
+    stays three fields. The three walkers are gone; `linUseDefMarkEscapes` stays for
+    `PassFoldConst`, which counts its writes as it walks and does not read a body through
+    `linUseDefsOf`.
+  - **The first shape was slower, and the profile is why.** Storing `escapes`/`captures` *per
+    statement* (a five-field `LinUseDef`) made the compiler **11% slower** (interleaved A/B, min
+    **1260 -> 1404 ms**): two more ref-counted lists per statement, built and copied at every
+    statement, cost more than the walks they replaced - and those walks were cheap in the
+    optimized build precisely because the instrumented profile's *per-call overhead* is what made
+    them look hot. The body-level sets are the fix: the same calls eliminated, **~4% faster on
+    the min** (1262 -> 1212 ms, 40 interleaved runs; median 1404 -> 1391, inside the window's
+    drift). Output-neutral: the pre- and post-change compilers emit byte-identical C++ for the
+    compiler's own tree, `bun tools/stress.js` **44/44**, and both bootstrap fixed points hold.
+  - **`linSpliceIsSafe` is the same story.** The splice test in `flattenPass` re-walked every
+    statement's subtree for jumps per candidate block (291,097 us / 13,108 calls instrumented).
+    Hoisting the jump collection to once per item (`linJumpNames` + a jump list per item) is
+    output-neutral on the compiler tree and **perf-neutral** too (min **1171.7 vs 1170.5 ms**):
+    the subtrees are small and the walk inlines, so the instrumented row was call overhead, not
+    work. Left alone - complexity for no measured gain. A lesson for the next reading: an
+    instrumented row is a call count first and a time second (impl_specs/profiling.md).
+
+- **A lambda's measured body is named as the reader wrote it.** The profiler table showed a
+  synthesized closure class as `resources.resResourceFiles_closure1.operator()` - C++ spelling
+  that reads like a type. `Emitter.prettySymbol` now maps `<owner>_closure<N>` (with or without
+  the `::operator()` a registration adds) to `<owner>.lambda<N>`, so the row reads
+  `resources.resResourceFiles.lambda1`. Only the `--profile` table changes.
+
+- **A `when` over string literals tests a *view* of its subject, so the subject is not copied
+  per label.** The length guard above turned N `memcmp`s into integer compares, but the subject
+  itself was still read into a `Str` temporary for every label that got past its guard: a
+  **place** subject that is not a name - the compiler's own `when (*name)` over a `Str*
+  parameter is the shape - is bound by the expression lowering to a `Str` temp
+  (`_sm_base1 = *(name)`), a heap copy once the text passes the 24-byte inline buffer, once per
+  arm. `parseWhen` now binds a view first and tests against it:
+  `_sm_when<n>_v = spanOfStr(<subject>)`, then `<view> == <label>` and `<view>[0]`, with the
+  length read from the view (`_sm_when<n>_n = <view>.size()`). `spanOfStr` is total over the
+  subject's two spellings now - a second `strview` overload returns a `StrView` as it stands
+  (`cppsrc/rtl/_res.md`), beside the `Str*` one that borrows - so the desugar needs no type and
+  a `StrView` subject (`viewKind` in `stress/when-strings`) views itself. The arms, their order,
+  their bodies and the `else` are byte-identical to the old rewrite; only the tests moved onto
+  the view. `--no-when-dispatch` still takes the whole guard off (the plain chain on the
+  subject), and `--when-first-char`/`--when-copy-subject` are untouched.
+
+  Verified: `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js`
+  - both fixed points byte for byte; `bun tools/stress.js` **44/44**, the ten `expected.cpp`
+  goldens refreshed for the new lowering and the `strview` comment.

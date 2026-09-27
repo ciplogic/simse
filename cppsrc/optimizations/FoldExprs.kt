@@ -10,6 +10,10 @@ package optimizations
 import common
 import linear
 
+// A fold rule: one expression in, the node that stands in its place. A rule answers its input
+// unchanged when it folded nothing, a different *kind* when it did (`foldExprsUnder`).
+typealias FoldRule = (*AstXmlNode) -> AstXmlNode
+
 // ---- literals --------------------------------------------------------------
 
 // The literal kinds a fold can produce or read; `None` is not a literal.
@@ -133,8 +137,11 @@ data class FoldState(
     var changed: Bool
 )
 
-// Every expression under `node` through `rule`; answers the node that stands in its place.
-fun foldExprsUnder(node: *AstXmlNode, rule: (*AstXmlNode) -> AstXmlNode, state: *FoldState): AstXmlNode {
+// Every expression under `node` through every rule, in the order given; answers the node that
+// stands in its place. The rules share one traversal - each is a bottom-up rewrite of the same
+// nodes, so a walk per rule visited every node once per rule (`foldAllRules`). A rule's output is
+// the next rule's input, so a node one rule just folded is offered, folded, to the rest.
+fun foldExprsUnder(node: *AstXmlNode, rules: *List<FoldRule>, state: *FoldState): AstXmlNode {
     val kind: AstNodeCategory = xmlKind(node)
     // A fold produces a value, so it may not stand in a place: the walk does not enter a `Target`
     // or the operand of `&`/`*` (the storage - folding it would write through a temporary).
@@ -155,28 +162,33 @@ fun foldExprsUnder(node: *AstXmlNode, rule: (*AstXmlNode) -> AstXmlNode, state: 
     var kids: List<AstXmlNode> = node.Children.toList()
     var i: Int = 0
     while (i < kids.size()) {
-        kids[i] = foldExprsUnder(*kids[i], rule, state)
+        kids[i] = foldExprsUnder(*kids[i], rules, state)
         i = i + 1
     }
     var here: AstXmlNode = node
     if (state.changed != before) {
         here = exprLike(node, kids)
     }
-    val after: AstXmlNode = rule(*here)
-    if (xmlKind(after) != xmlKind(here)) {
-        state.changed = true
-        return after
+    i = 0
+    while (i < rules.size()) {
+        val rule: FoldRule = rules[i]
+        val after: AstXmlNode = rule(*here)
+        if (xmlKind(after) != xmlKind(here)) {
+            state.changed = true
+            here = after
+        }
+        i = i + 1
     }
     return here
 }
 
-// One statement list, every expression through `rule`, written back in place.
-fun foldExprsInList(stmts: *List<AstXmlNode>, rule: (*AstXmlNode) -> AstXmlNode): Bool {
+// One statement list, every expression through every rule, written back in place.
+fun foldExprsInList(stmts: *List<AstXmlNode>, rules: *List<FoldRule>): Bool {
     var state: FoldState = FoldState(false)
     var i: Int = 0
     while (i < stmts.size()) {
         val before: Bool = state.changed
-        val stmt: AstXmlNode = foldExprsUnder(*stmts[i], rule, *state)
+        val stmt: AstXmlNode = foldExprsUnder(*stmts[i], rules, *state)
         // A statement whose own kind did not move is still a different node when a child folded,
         // so the write-back test is the flag and not the kind.
         if (state.changed != before) {
@@ -185,4 +197,16 @@ fun foldExprsInList(stmts: *List<AstXmlNode>, rule: (*AstXmlNode) -> AstXmlNode)
         i = i + 1
     }
     return state.changed
+}
+
+// The literal folds as one traversal, in the order the passes used to run: a constant global,
+// then integer arithmetic, then a comparison, then `toString` - so each rule sees what the one
+// before it just spelled. One list, because one walk per rule cost four traversals of every body.
+fun foldAllRules(): List<FoldRule> {
+    var rules: List<FoldRule> = List<FoldRule>()
+    rules.append(foldGlobalRule)
+    rules.append(foldArithRule)
+    rules.append(foldCompareRule)
+    rules.append(foldToStringRule)
+    return rules
 }

@@ -16,7 +16,7 @@ With `--profile` (and **nothing at all** without it):
    `auto __smProfile = profileApp.measure(<index>);`, where `<index>` is a dense `Int` constant;
 3. **the names** are one table of constants, `simse_profiling::kMethodNames[]`, written with the
    bodies - index `k` is the constant that body `k` measures with, and the name is the body's
-   *package-qualified* one (`ns1_emitFunction` is written `codegen::emitFunction`);
+   *package-qualified* one (`ns1_emitFunction` is written `codegen.emitFunction`);
 4. **`main` needs nothing**: the report is a static's destructor, so it runs once the program
    leaves `main` - whichever `return` it took, and also when it falls off the end.
 
@@ -48,21 +48,23 @@ The report is **CSV**, biggest total first, with one header line:
 ```csv
 name,total_us,calls
 main,6013955,1
-codegen::emitProgram,5327680,1
-linear::linFinishForEmission,2415083,901
-codegen::emitBodyAt,1998447,896
-optimizations::foldExprsUnder,1392667,1867455
+codegen.emitProgram,5327680,1
+linear.linFinishForEmission,2415083,901
+codegen.emitBodyAt,1998447,896
+optimizations.foldExprsUnder,1392667,1867455
 ```
 
 A row with `calls == 0` (a measured body the run never entered) is left out. The `calls` column
 is exact; `total_us` is wall time and machine-dependent. The name column is the body's symbol
 with the compiler's `nsN_` package prefix spelled out (`Emitter.prettySymbol`: `ns1_` is
-`codegen::`), so a row names a package and a function a reader can find; `rtl` and `main` are
-unprefixed and unchanged.
+`codegen.`), Simse-spelled - a namespace separates with `.`, not C++'s `::` (`profDots` folds
+the `::` a lambda symbol carries) - so a row names a package and a function a reader can find;
+`rtl` and `main` are unprefixed and unchanged. A lambda's synthesized `<owner>_closure<N>`
+class is named for what was written: `ns1_foo_closure1::operator()` reads `pkg.foo.lambda1`.
 
 ## Where it goes
 
-The default is the file **`simse_profile.txt`** in the working directory; `--profile-file <path>`
+The default is the file **`simse_profile.csv`** in the working directory; `--profile-file <path>`
 overrides it, and `--profile-file -` (an empty path too) keeps it on **stderr**. A path that
 cannot be opened falls back to stderr.
 
@@ -116,7 +118,7 @@ artifact, never published.
 
 ## The proof file
 
-`cppsrc/simse_profile.txt` sits beside the bootstrap: it is the CSV a release, profiled compiler
+`cppsrc/simse_profile.csv` sits beside the bootstrap: it is the CSV a release, profiled compiler
 wrote about its own run of `--root cppsrc`, in the default microseconds. Its `calls` column is
 exact (the compiler's emitted bodies and how often each ran); its `total_us` column is one machine
 on one day. Reproduce it with:
@@ -124,7 +126,7 @@ on one day. Reproduce it with:
 ```sh
 bun build.js --release --profile --exe build/digits/simse_prof.exe --out build/digits/prof_compiler.cpp
 ./build/digits/simse_prof.exe --root cppsrc -o build/digits/prof_self_out.cpp
-cp simse_profile.txt cppsrc/simse_profile.txt
+cp simse_profile.csv cppsrc/simse_profile.csv
 ```
 
 ## How to read a row
@@ -156,13 +158,13 @@ cp simse_profile.txt cppsrc/simse_profile.txt
 ## Status
 
 Implemented: the flag (`Request.profile`, `--profile` in both drivers), the CSV report,
-`--profile-file` (default `simse_profile.txt`, `-` for stderr) and `--profile-nanos`, the emitted
+`--profile-file` (default `simse_profile.csv`, `-` for stderr) and `--profile-nanos`, the emitted
 runtime, the dense `Int` method table with package-qualified `kMethodNames[]`, `simse_nowMicros` /
 `simse_nowNanos`, and `bun build.js --profile` / `--profile-file` / `--profile-nanos`.
 
-Verified: a profiled `stress/strings` program writes a correct CSV with `strings::partStrings`
+Verified: a profiled `stress/strings` program writes a correct CSV with `strings.partStrings`
 names (and the `-` file prints it to stderr, and `--profile-nanos` writes `total_ns` with
 `simse_nowNanos()`); a profiled release compiler over `--root cppsrc` writes the checked-in
-`cppsrc/simse_profile.txt` (769 measured bodies, `codegen::emitProgram` 5.3 s inclusive); with the
-flag off `bun tools/stress.js` is **41/41** and `bun tools/bootstrap.js`'s fixed point is byte for
+`cppsrc/simse_profile.csv` (769 measured bodies, `codegen.emitProgram` 5.3 s inclusive); with the
+flag off `bun tools/stress.js` is **44/44** and `bun tools/bootstrap.js`'s fixed point is byte for
 byte.

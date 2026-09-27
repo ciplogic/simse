@@ -11,6 +11,13 @@
 // Sharing one declaration is one fewer object constructed and destroyed - for a `Str`, a `List`
 // or a class, which the C++ compiler does not overlap. A scalar buys no stack either way (it is
 // already a register), only a shorter declaration.
+//
+// A flag is the case the plain block test misses. A `Bool` local's one read is usually the `if`
+// that closes the block it was written in (`if (flag) goto L;`), and that `if` stands in the
+// *next* block (`linUseDefsOf` counts a boundary where it starts), so the same-block test rejects
+// the very flags an if-chain makes. The flag is dead once the branch decided, so a `Bool` written
+// in one block and read by the next block's opening conditional shares too (`linMergeSharesBlock`).
+// Only `Bool`: a `Str`/object slot wants its block to hold it.
 
 package optimizations
 
@@ -46,14 +53,10 @@ fun linMergeCandidates(stmts: *List<AstXmlNode>, useDefs: LinUseDefs): List<Merg
     var reads: Dictionary<Str, Int> = Dictionary<Str, Int>()
     var writeAt: Dictionary<Str, Int> = Dictionary<Str, Int>()
     var readAt: Dictionary<Str, Int> = Dictionary<Str, Int>()
-    var unsafe: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     var i: Int = 0
     while (i < stmts.size()) {
-        val stmt: *AstXmlNode = *stmts[i]
         linMergeCount(useDefs.defsAt(i), *writes, *writeAt, i)
         linMergeCount(useDefs.usesAt(i), *reads, *readAt, i)
-        linUseDefMarkEscapes(stmt, *unsafe)
-        linUseDefMarkCaptures(stmt, *unsafe)
         i = i + 1
     }
 
@@ -66,15 +69,16 @@ fun linMergeCandidates(stmts: *List<AstXmlNode>, useDefs: LinUseDefs): List<Merg
         ) {
             val name: Str = xmlAttr(stmt, AstNodeAttributeKind.Name)
             val typeNode: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Type)
-            if (!xmlIsEmpty(typeNode) && !unsafe.has(name)
+            if (!xmlIsEmpty(typeNode) && !useDefs.escaped(name)
                 && linUseDefAt(*writes, name, 0) == 1 && linUseDefAt(*reads, name, 0) == 1
             ) {
                 val write: Int = linUseDefAt(*writeAt, name, -1)
                 val read: Int = linUseDefAt(*readAt, name, -1)
-                if (write >= 0 && write < read && useDefs.blockAt(write) == useDefs.blockAt(read)) {
-                    var local: MergeLocal = MergeLocal(
-                        name, semaTypeText(typeNode), write, useDefs.blockAt(write)
-                    )
+                val typeKey: Str = semaTypeText(typeNode)
+                if (write >= 0 && write < read
+                    && linMergeSharesBlock(stmts, useDefs, typeKey, write, read)
+                ) {
+                    var local: MergeLocal = MergeLocal(name, typeKey, write, useDefs.blockAt(write))
                     candidates.append(local)
                 }
             }
@@ -82,6 +86,23 @@ fun linMergeCandidates(stmts: *List<AstXmlNode>, useDefs: LinUseDefs): List<Merg
         i = i + 1
     }
     return candidates
+}
+
+// Whether a local written at `write` and read at `read` may share storage. A name written and read
+// inside one block is live for that block only, so it shares with another block's. A `Bool` is the
+// extra case: its only read is usually the `if` that closes its block, which stands in the next
+// block and reads it there (`linIsCondJump`), and the flag is dead once that branch decided - so a
+// write whose only read is that closing conditional shares too.
+fun linMergeSharesBlock(
+    stmts: *List<AstXmlNode>, useDefs: LinUseDefs, typeKey: Str, write: Int, read: Int
+): Bool {
+    if (useDefs.blockAt(write) == useDefs.blockAt(read)) {
+        return true
+    }
+    if (typeKey != "Bool" || read < 0 || read >= stmts.size()) {
+        return false
+    }
+    return useDefs.blockAt(read) == useDefs.blockAt(write) + 1 && linIsCondJump(*stmts[read])
 }
 
 // The names taken over: one storage per ordinal a type has already reached in this block, so two

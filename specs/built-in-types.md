@@ -191,7 +191,11 @@ outlive the span.
 `StrView` is the view a string's bytes are read through, and it is a `Span<Char>`:
 `typealias StrView = Span<Char>` (`cppsrc/rtl/StrView.kt`, `cppsrc/rtl/strview.hpp`). It is
 what `FileStream.readLineView()` hands back and what `spanOfStr(text: *Str): StrView`
-builds (borrowing the string). `size`/`isEmpty`/`at`/`slice`/`atPtr` are the span's own,
+builds (borrowing the string). `spanOfStr` is total over the two spellings of its subject:
+a `Str`'s bytes are borrowed, and a `StrView` is returned as it stands (the identity), so
+a caller needs no view type in hand - which is how the `when`-over-strings lowering takes a
+view of its subject without knowing whether it is a `Str` or a `StrView`
+(`specs/functions.md`). `size`/`isEmpty`/`at`/`slice`/`atPtr` are the span's own,
 reached through the alias; it adds the byte surface below:
 
 - `charAt(index: Int): Char` - the byte at `index` (unchecked);
