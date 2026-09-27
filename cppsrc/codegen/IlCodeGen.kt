@@ -1881,6 +1881,34 @@ fun Emitter.ilMachineMethod(
     return info
 }
 
+// A task method as the extractor's body context: the `run()` of a lowered `suspend` body. Like a
+// machine's method there is no declaration and the class travels as `selfDecl`, so `this.<field>`
+// resolves to the task's own storage; the protocol is free functions (`tasks*`), so no header field
+// or member is named by the body.
+//
+// `task` is a *pointer* for the same reason `ilMachineMethod`'s `method` is: `IlFunction.inferredTypes`
+// is a pointer into `task.inferred`, and a by-value parameter would make that address dangle the
+// moment this returns (a stack-use-after-scope the extractor then reads - `stress/suspend` pinned
+// it).
+fun Emitter.ilTaskMethod(
+    className: *Str, task: *TskTask, selfDecl: *AstXmlNode, facts: *SemFacts
+): IlFunction {
+    var info: IlFunction = IlFunction(
+        xmlEmptyNode(), xmlEmptyNode(),
+        fmtStr("|::run", className), Dictionary<Str, Str>(),
+        selfDecl, List<Str>(), List<AstXmlNode>(), className,
+        Dictionary<Str, Bool>(), Dictionary<Str, AstXmlNode>(),
+        facts, List<Str>(), task.inferred
+    )
+    for (*entry in this.statics) {
+        val typeNode: *AstXmlNode = xmlChildPtr(entry.decl, AstNodeKind.Type)
+        if (!xmlIsEmpty(typeNode)) {
+            info.statics.insert(xmlAttr(entry.decl, AstNodeAttributeKind.Name), ilTypeText(typeNode))
+        }
+    }
+    return info
+}
+
 // A failure with a position when the frame has a declaration, position-less otherwise (a
 // lambda's body, a machine's method).
 fun Emitter.failFromInfo(info: *IlFunction, message: *Str): Unit {

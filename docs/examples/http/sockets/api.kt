@@ -82,8 +82,10 @@ fun netReadPort(addr: *Int8): Int
 @SmGen("res", "netglue", "simse_net_bytesToStr")
 fun netBytesToStr(bytes: *Int8, count: Int): Str
 
-@SmGen("res", "netglue", "simse_net_recvBuf")
-fun netRecvBuf(): *Int8
+// The receive buffer a caller owns: a heap `List<Int8>` of `size` bytes. Two queue threads can each
+// read a connection at once, because the library keeps no buffer of its own.
+@SmGen("res", "netglue", "simse_net_buffer")
+fun netBuffer(size: Int): List<Int8>
 
 @SmGen("res", "netglue", "simse_net_recvCap")
 fun netRecvCap(): Int
@@ -183,22 +185,21 @@ fun netSend(s: Int64, text: *Str): Bool {
 
 // One blocking read of up to `capacity` bytes into a caller's `buffer`; the byte count, 0 when the
 // peer closed, -1 on error. This is the raw form - `buffer` is a pointer a caller gets from a
-// `List<Int8>` with `spanOf(*bytes).atPtr(0)` - and `netReceive` is the one a server usually
-// wants, reading into the library's own buffer.
+// `List<Int8>` with `spanOf(*bytes).atPtr(0)` - and `netReceive` is the one a server usually wants.
 fun netRecv(s: Int64, buffer: *Int8, capacity: Int): Int {
     return wsaRecv(s, buffer, capacity, 0)
 }
 
-// One blocking read into the library's receive buffer; the byte count, 0 when the peer closed, -1
-// on error. Read the bytes with `netReceivedText`. The buffer is one per process, which is exactly
-// right for a blocking server that reads one request at a time.
-fun netReceive(s: Int64): Int {
-    return wsaRecv(s, netRecvBuf(), netRecvCap(), 0)
+// One blocking read into a caller-owned heap buffer; the byte count, 0 when the peer closed, -1 on
+// error. Read the bytes with `netReceivedText`. The buffer is the caller's - a `List<Int8>` from
+// `netBuffer`, usually a task's own field - so two threads serving two connections never share one.
+fun netReceive(s: Int64, buffer: *List<Int8>): Int {
+    return wsaRecv(s, spanOf(buffer).atPtr(0), buffer.size(), 0)
 }
 
-// The `count` bytes just read, as an owned `Str`.
-fun netReceivedText(count: Int): Str {
-    return netBytesToStr(netRecvBuf(), count)
+// The `count` bytes just read into `buffer`, as an owned `Str`.
+fun netReceivedText(buffer: *List<Int8>, count: Int): Str {
+    return netBytesToStr(spanOf(buffer).atPtr(0), count)
 }
 
 fun netClose(s: Int64): Unit {

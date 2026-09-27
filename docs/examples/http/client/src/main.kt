@@ -36,10 +36,11 @@ fun exchange(port: Int, request: *Str, connectTries: Int): Str {
     // the one place to append rather than `fmtStr` (each append grows the same buffer; `out = out +
     // part` would rebuild it).
     var response: Str = ""
-    var n: Int = netReceive(conn)
+    val buffer: List<Int8> = netBuffer(netRecvCap())
+    var n: Int = netReceive(conn, *buffer)
     while (n > 0) {
-        response.appendStr(netReceivedText(n))
-        n = netReceive(conn)
+        response.appendStr(netReceivedText(*buffer, n))
+        n = netReceive(conn, *buffer)
     }
     netClose(conn)
     return response

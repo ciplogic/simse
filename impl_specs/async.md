@@ -431,7 +431,25 @@ than by the lowering (`stress/task-chain`): the ref-counted frame with a status 
 `branch`, the loop-only ready queue, the `Suspended -> Runnable` enqueue guard, and the release
 order - the child drops its parent reference *before* resuming it, and the parent reads the result
 *before* dropping the child - all exercised with no machine, no compiler change and no thread.
-`emitTask` replaces the chain; the header and the loop are what it emits against.
+`emitTask` replaces the chain; the header and the loop are what it emits against. The **push
+machine and `emitTask`** have since landed on top of it (`cppsrc/linear/Task.kt`, `emitTask` in
+`cppsrc/codegen/Codegen.kt`), with **no fast path** - every suspension is a heap task the loop runs
+(the `ValueTask`-style shortcut is noted in the runtime, not taken). A suspending body lowers to a
+task class; a call becomes `<f>_smNew(args)` then `tasksSuspendAt(handle, k)` then a `return`, with
+the resume label reading `<f>_smResult(handle)` and releasing it; `return v` stores `result` and
+calls `tasksFinish()`. The protocol is free functions over an opaque `*Int8` handle (`tasksBranch`,
+`tasksSuspendAt`, `tasksFinish`, `tasksReleaseHandle` in the `tasks` section), so the lowering never
+names a task type, and a suspending `main` is the root task (`simse_tasksStart` + `simse_tasksRunLoop`).
+`stress/suspend` (`suspend fun answer(): Int { return 42 }`, called by `main`) runs the whole chain:
+root enqueued, `answer` created and suspended on, the loop resumes the root, 42 read at the resume
+label. The *waiting* leaf is what is still missing, which is the next step.
+
+**A documentation step of its own, deliberately last.** While the machinery is being built,
+`guide4ai.md`, `README.md`, `docs/state-of-the-field.md`, `docs/language-tour.md` and
+`docs/examples/async` are *not* chased: the stress counts and the "no threads" sentence have
+already drifted, and the example still writes the body-less leaves. One pass at the end updates
+them together - the counts, the `suspend` story, the runtime's opt-in thread pool, and the
+example's narrative.
 
 **`suspend` is a declaration modifier** now, and `Async<...>` is gone from the language: the
 scanner reserves the keyword, the parser carries the `IsSuspend` attribute (`cppsrc/parser/
@@ -441,12 +459,11 @@ signature keeps its plain return type, so there is nothing for a caller to spell
 type name - `docs/examples/async/src/main.kt` writes `suspend fun readFileTextAsync(path: Str):
 Res<Str>`, and `--showAsync` still infers `copyFile` and `main` while `describe` stays
 synchronous. `stress/suspend` pins the syntax (`suspend fun answer(): Int { return 42 }`, called
-by `main`). A suspending body is not yet lowered, so a call to one is still an ordinary direct
-call - which is what the fake leaf the next step is tested against relies on.
+by `main`).
 
-Next, in order: the push machine in `linear/` with `emitTask`, keyed on the coloring table (over
-the header and the loop the chain has already proved), refusing a body that also yields, and
-tested against a **synchronous fake leaf**; then `asyncRunTransform`/`runAndForget` lowering (the
-dynamic fan-out, which needs a child-handle list and a pending count in the frame); the file
-leaves suspended rather than blocking; then the socket read/write/accept leaves and the async
-server.
+Next, in order: the **file leaves** - `readFileTextAsync`/`writeFileAsync` as body-less `suspend`
+`@SmGen` declarations whose C++ submits to a pool queue and completes the task from the loop's
+completion side, plus the corpus case (file present, file absent); then
+`asyncRunTransform`/`runAndForget` lowering (the dynamic fan-out, which needs a child-handle list
+and a pending count in the frame); then the socket read/write/accept leaves and the async server.
+The documentation pass above is last.

@@ -35,14 +35,16 @@ fun main(): Int {
     // client -> server
     var request: Str = "ping"
     println(netSend(client, *request))
-    val count: Int = netReceive(conn)
-    println(netReceivedText(count))
+    val serverBuf: List<Int8> = netBuffer(netRecvCap())
+    val count: Int = netReceive(conn, *serverBuf)
+    println(netReceivedText(*serverBuf, count))
 
     // server -> client
     var answer: Str = "pong"
     println(netSend(conn, *answer))
-    val back: Int = netReceive(client)
-    println(netReceivedText(back))
+    val clientBuf: List<Int8> = netBuffer(netRecvCap())
+    val back: Int = netReceive(client, *clientBuf)
+    println(netReceivedText(*clientBuf, back))
 
     netClose(client)
     netClose(conn)

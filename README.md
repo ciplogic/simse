@@ -249,7 +249,9 @@ with a small prelude of types (`Str`, `List`, `Dictionary`, `Opt`, `Res`, `Array
   reference-counted handle, `*T` a raw pointer (`specs/memory-model.md`).
 - **No exceptions.** Expected failures are values (`Opt<T>`, `Res<T>`); a bug is a
   crash you get to see.
-- **No threads.** A program is single-threaded; more cores means more processes.
+- **No threads of your own.** A program's own logic is single-threaded; more cores means
+  more processes. The RTL keeps one opt-in work pool (`tasksQueue`) for a job that is a pure
+  function of its inputs - where the suspending (async) leaves will run the blocking part.
 - **No vtables.** Dispatch is static: generics are reified per instantiation, and
   protocols (planned) resolve at compile time.
 

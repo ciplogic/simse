@@ -8,8 +8,9 @@ one bulk copy at the boundary:
   (`simse_net_addr`, `simse_net_addrSize`, `simse_net_fillAddr`, `simse_net_readPort`,
   `simse_net_wsaData`). Simse cannot lay a struct out at the platform's alignment nor reinterpret a
   pointer, and a scratch the platform writes through must outlive the call;
-- the receive buffer and its capacity (`simse_net_recvBuf`, `simse_net_recvCap`) - the library owns
-  one, a design choice that keeps the call sites free of a `spanOf(list).atPtr(0)` dance;
+- the receive buffer and its capacity (`simse_net_buffer`, `simse_net_recvCap`) - the *caller* owns
+  one (a heap `List<Int8>`), so two queues' threads can read at once and the library keeps no buffer
+  of its own;
 - `simse_net_bytesToStr` - the one bulk copy (`memcpy`) where native bytes become an owned `Str`.
 
 Nothing else: an option value, a name length and a `Str`'s byte address are all ordinary Simse
@@ -36,7 +37,7 @@ Int32 simse_net_addrSize();
 Int32 simse_net_fillAddr(Int8* addr, Int32 ip, Int32 port);
 Int32 simse_net_readPort(const Int8* addr);
 Str simse_net_bytesToStr(const Int8* bytes, Int32 count);
-Int8* simse_net_recvBuf();
+List<Int8> simse_net_buffer(Int32 size);
 Int32 simse_net_recvCap();
 ```
 bodies:
@@ -99,15 +100,17 @@ Str simse_net_bytesToStr(const Int8* bytes, Int32 count) {
     return text;
 }
 
-// The one receive buffer, owned here rather than as a Simse `List<Int8>`: a plain `char[]` is what
-// a blocking server wants (one request in flight), and it keeps the call sites free of the
-// `spanOf(list).atPtr(0)` dance.
-Int8* simse_net_recvBuf() {
-    static char buffer[65536];
-    return reinterpret_cast<Int8*>(buffer);
+// The receive buffer a caller owns: a heap `List<Int8>` of `size` bytes, so two queue threads can
+// each read a connection at once. The library keeps no buffer of its own.
+List<Int8> simse_net_buffer(Int32 size) {
+    List<Int8> buffer;
+    buffer.resize(size);
+    return buffer;
 }
 
+// The conventional read size a caller's `simse_net_buffer` uses: a request line and its headers fit
+// comfortably, and a caller that needs more reads another chunk into the same buffer.
 Int32 simse_net_recvCap() {
-    return (Int32) 65536;
+    return (Int32) 2048;
 }
 ```

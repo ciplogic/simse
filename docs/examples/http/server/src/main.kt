@@ -53,11 +53,12 @@ fun respond(conn: Int64, status: Str, contentType: Str, body: Str): Unit {
 }
 
 fun handle(conn: Int64): Unit {
-    val count: Int = netReceive(conn)
+    val buffer: List<Int8> = netBuffer(netRecvCap())
+    val count: Int = netReceive(conn, *buffer)
     if (count <= 0) {
         return
     }
-    val path: Str = targetPath(firstLine(netReceivedText(count)))
+    val path: Str = targetPath(firstLine(netReceivedText(*buffer, count)))
     if (path == "/json") {
         respond(conn, "200 OK", "application/json", "{\"name\":\"Hello world\"}")
     } else if (path == "/" || path == "/hello") {

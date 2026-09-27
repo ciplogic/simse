@@ -27,6 +27,33 @@ package rtl
 @SmGen("res", "tasks", "simse_tasksQueue")
 fun tasksQueue(id: Int, threads: Int): Unit
 
+// Mark `id` a *compute* queue: the scheduler hands it tasks (round-robin) rather than file jobs.
+// A program that marks none keeps the single-threaded caller's queue.
+@SmGen("res", "tasks", "simse_tasksCompute")
+fun tasksCompute(id: Int, threads: Int): Unit
+
+// The sync root's join: drive until every task has completed. A root that `forget`s work calls this
+// after its own loop, because the caller's thread - not a task - is what would otherwise stop.
+@SmGen("res", "tasks", "simse_tasksDrain")
+fun tasksDrain(): Unit
+
+// Hand a fresh, parentless task to the queues: the one thing `tasksSpawn` does. It resumes nobody,
+// so the thread that runs it to completion frees it.
+@SmGen("res", "tasks", "simse_tasksEnqueue")
+fun tasksEnqueue(child: *Int8): Unit
+
+// Hand `child` to the queues and step aside, so the caller does not wait for it. A `suspend`
+// function like any other - the suspension is what yields the caller's thread so the spawned task
+// gets a turn - and it answers `true`. `child` comes from a suspend function's factory
+// (`handleTask(conn)` for `handle`), which the compiler declares alongside the function.
+//
+// `Bool`, not `Res<Bool>`: the prelude must not name a bare type a program may redefine (a program
+// declaring its own `Res` with an `unInit` would otherwise bind this return type to it).
+suspend fun tasksSpawn(child: *Int8): Bool {
+    tasksEnqueue(child)
+    return true
+}
+
 // Stop and join every queue. A program that never calls this still exits: the pool belongs to the
 // runtime, not to the program.
 @SmGen("res", "tasks", "simse_tasksStop")
@@ -56,3 +83,23 @@ fun tasksText(slot: Int): Str
 // (impl_specs/async.md, "The emitted shapes").
 @SmGen("res", "tasks", "simse_tasksChainTrace")
 fun tasksChainTrace(): List<Int>
+
+// The task ABI's loop entry, and the reach marker for it: a suspending `main` starts its root
+// task and drives the loop with this, so a program that suspends carries the `Task` base and
+// the loop (impl_specs/async.md). A program that never suspends never reaches it.
+@SmGen("res", "tasks", "simse_tasksRunLoop")
+fun tasksRunLoop(): Unit
+
+// The task protocol a lowered `suspend` body calls (impl_specs/async.md); a program never names
+// any of them, and the loop's current task is the caller, so none takes a task argument.
+@SmGen("res", "tasks", "simse_tasksBranch")
+fun tasksBranch(): Int
+
+@SmGen("res", "tasks", "simse_tasksFinish")
+fun tasksFinish(): Unit
+
+@SmGen("res", "tasks", "simse_tasksSuspendAt")
+fun tasksSuspendAt(child: *Int8, at: Int): Unit
+
+@SmGen("res", "tasks", "simse_tasksReleaseHandle")
+fun tasksReleaseHandle(child: *Int8): Unit
