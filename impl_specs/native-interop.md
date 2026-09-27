@@ -2,7 +2,8 @@
 
 Status: decision recorded for T10; the spelling settled in T83; the run-time `native`
 generator (`LoadLibraryA`/`GetProcAddress`) is implemented
-(`cppsrc/sourcegen/NativeInvokeGen.kt`, `stress/native-invoke`, `docs/examples/sdl2`).
+(`cppsrc/sourcegen/NativeInvokeGen.kt`, `stress/native-invoke`, `docs/examples/sdl2`,
+`docs/examples/http`).
 
 ## Declaration form
 
@@ -113,6 +114,13 @@ Int32 __sm_native_sdlInit(const Int32& flags) {
   symbol; a different binding is a diagnostic rather than a silent merge.
 - Windows is the only loader today (`LoadLibraryA`/`GetProcAddress`); a `dlopen`/`dlsym` arm
   belongs in the generator's own text.
+
+Two worked examples ship with it. `docs/examples/sdl2` is a window bound to `SDL2.dll` (an
+opaque `SDL_Window*` as `*Int8`, and a `res` section that owns the `SDL_Event` union and casts
+its bytes). `docs/examples/http` is the other direction: `sockets`, a minimalist **blocking**
+Winsock2 (`ws2_32.dll`) library whose glue is only `SOCKADDR_IN` layout, a byte swap written out
+so `htons` need not be linked, and one receive buffer - with an HTTP/1.1 server and a client on
+top (`stress/sockets` is the headless loopback check).
 
 ## Prelude
 

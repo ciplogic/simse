@@ -75,6 +75,8 @@ _simse/
 /docs/examples/**/*.ilk
 ### The SDL2 example copies the DLL it binds at run time (docs/examples/sdl2/run.bat) ###
 /docs/examples/sdl2/app/SDL2.dll
+### The HTTP example's server log (docs/examples/http) ###
+/docs/examples/http/**/*.log
 
 ### 1BRC benchmark: generated data and the C++ baseline build ###
 /benchmarks/onebrc/data/

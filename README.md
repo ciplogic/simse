@@ -179,8 +179,9 @@ fun sdlInit(flags: Int): Int
 
 `native` is the P/Invoke form: nothing is linked and no header is included, and the
 emitted thunk loads the library with `LoadLibraryA`, casts the resolved symbol to the
-declaration's own signature, and calls it (`docs/examples/sdl2` is a whole SDL2 window
-written this way).
+declaration's own signature, and calls it. `docs/examples/sdl2` is a whole SDL2 window
+written this way, and `docs/examples/http` is a blocking socket library over `ws2_32.dll`
+with a single-threaded HTTP/1.1 server on top - the two ends of what the form is for.
 
 A resource is a Markdown-shaped `_res.md` file: sections, `key: value` entries, fenced
 blocks for the text itself. It is how the runtime's own C++ is written (no header per
@@ -362,7 +363,7 @@ toolchain. `docs/state-of-the-field.md` is explicit about each of these, and
 | [docs/language-tour.md](docs/language-tour.md) | the language itself, with runnable fragments: values, control flow, data classes, enums, generics, collections, memory, modules |
 | [docs/how-it-works.md](docs/how-it-works.md) | the pipeline, the bootstrap fixed point, the emitted C++, the runtime, and how the build verifies itself |
 | [docs/state-of-the-field.md](docs/state-of-the-field.md) | honest status: what works, what is rough, what is missing, and how it compares to the alternatives |
-| [docs/examples/](docs/examples/) | the example programs used in the docs (`hello`, `tour`, `wordcount`, and `sdl2` - the P/Invoke wrapper to SDL2) |
+| [docs/examples/](docs/examples/) | the example programs used in the docs (`hello`, `tour`, `wordcount`, `sdl2` - the P/Invoke wrapper to SDL2, and `http` - a blocking socket library with an HTTP/1.1 server) |
 | [specs/](specs/) | the normative language specification |
 | [impl_specs/user-language-roadmap.md](impl_specs/user-language-roadmap.md) | where the language is going, phased, with the non-goals |
 | [impl_specs/generators.md](impl_specs/generators.md) | `@SmGen`, the source-generator registry, the `Sections` sink, and the bootstrap path for new syntax |

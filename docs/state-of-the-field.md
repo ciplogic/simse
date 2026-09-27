@@ -21,8 +21,9 @@ a machine itself),
 reified generics, packages and imports, `main()` and `main(args)`, and an
 `@SmGen` attribute to reach the implementation of a declaration wherever it lives: hand-written
 C++ (`cpp`), a resource section (`res`), generated Simse source (`kt`, `json`), or a native
-shared library's symbol resolved at run time (`native` - the P/Invoke shape,
-`docs/examples/sdl2`).
+shared library's symbol resolved at run time (`native` - the P/Invoke shape:
+`docs/examples/sdl2` a window, `docs/examples/http` a blocking socket library and an HTTP/1.1
+server).
 
 **The compiler.** Self-hosted to a fixed point: the published
 `cppsrc/simse_bootstrap.cpp` builds a compiler with a C++ compiler alone, and

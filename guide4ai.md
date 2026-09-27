@@ -350,7 +350,8 @@ Key design points:
   deleted `native("Symbol")` keyword used to be sugar for. `@SmGen("native", library[, symbol])`
   is the P/Invoke form: the symbol is a shared library's, resolved at run time with
   `LoadLibraryA`/`GetProcAddress` (`cppsrc/sourcegen/NativeInvokeGen.kt`, Windows only today),
-  so a program links nothing and needs no header (`docs/examples/sdl2`). A body that is a
+  so a program links nothing and needs no header (`docs/examples/sdl2`, `docs/examples/http` - the latter a
+  blocking Winsock2 socket library with an HTTP/1.1 server on it). A body that is a
   *resource* is `@SmGen("res", section[, symbol])`
   instead, which is where the RTL's own operations live now (`cppsrc/rtl/_res.md`) -
   including the platform's file I/O and clocks (`fileio`, `timeops`), which are

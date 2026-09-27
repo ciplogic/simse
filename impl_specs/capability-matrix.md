@@ -3910,8 +3910,11 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
     `SDL_KEYDOWN`).
 
   Verified: `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js`
-  - both fixed points byte for byte; `bun tools/stress.js` **47/47**, the two new cases being
+  - both fixed points byte for byte; `bun tools/stress.js` **48/48**, the three new cases being
   `stress/native-invoke` (binds `kernel32.dll`'s `GetCurrentProcessId`/`GetCommandLineA`, so the
-  loader is under test anywhere a Windows toolchain runs) and `stress/diagnostic-native-no-library`.
-  The worked example is `docs/examples/sdl2` - a `sdl2` wrapper module and a window that Escape
-  quits - built and run on this machine.
+  loader is under test anywhere a Windows toolchain runs), `stress/diagnostic-native-no-library`,
+  and `stress/sockets` (a loopback connection inside one process). The worked examples are
+  `docs/examples/sdl2` (a window that Escape quits) and `docs/examples/http` (the `sockets`
+  module - a blocking Winsock2 wrapper - with an HTTP/1.1 server and client on top), both built
+  and run on this machine; the server reaches ~9k requests/s with one blocking connection and
+  ~33k with ten (`docs/examples/http/bench.bat`).
