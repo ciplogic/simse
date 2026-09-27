@@ -71,10 +71,10 @@ bun tools/stress.js --filter modules --jobs 4
 # identical with and without it - impl_specs/linear-il.md)
 ./simse.exe --root cppsrc -o a.cpp --showLinearRepresentation 2> il.txt
 
-# which functions are async and which callee carried it in, on stderr
-# (impl_specs/async.md). The dump returns before sema, because `Async<T>` is not a type
-# the checker knows yet - it is the async work's own view of the coloring.
-./simse.exe --root docs/examples/async/src --showAsync
+# which functions can suspend and which callee carried it in, on stderr
+# (impl_specs/async.md). The dump returns before sema, because a suspending body has no
+# machine to run yet - it is the async work's own view of the coloring.
+./simse.exe --root docs/examples/async/src --module cppsrc/modules/io --showAsync
 
 # the string-concat fusion off (the `MergeConcat` pass, cppsrc/linear/MergeConcat.kt): same
 # binary, both shapes, the A/B for what the fusion costs and what it buys. Note a bare
@@ -135,9 +135,9 @@ driver's - and `build.bat` can compile it.
   `generators.md` (`@SmGen`, the `Sections` sink, and the `res` generator),
   `ast-xmlnode.md`, `linear-lowering.md`, `linear-il.md` (the flat instruction list
   the backend is meant to consume, with its dump), `yield.md` (`yield` as a pure
-  lowering to a state machine), `async.md` (`Async<T>`: the colorless async design, the
-  `!!` operator, the coloring pass and its `--showAsync` dump - and what is still to
-  build), `profiling.md` (the `--profile` instrument: one RAII
+  lowering to a state machine), `async.md` (colorless async: the `suspend` declaration
+  modifier, the `!!` operator, the coloring pass and its `--showAsync` dump - and what
+  is still to build), `profiling.md` (the `--profile` instrument: one RAII
   timer per emitted body and the CSV the program writes), `tasks/.
 - `cppsrc/rtl/` — the runtime, and the only hand-written C++ besides the bootstrap:
   the headers (`types.hpp`,
@@ -555,6 +555,15 @@ in a method, and the vocabulary is `..T`, `yield e`, `for (v in m)` /
 `for ((v, i) in m)` and their pointer forms `for (*v in m)` / `for ((*v, i) in m)`
 (the second wrap, `iterPtr`, hands out `*T` places - no copy per iteration;
 `specs/functions.md`, `impl_specs/yield.md`, `impl_specs/for.md`, `stress/collections`).
+
+**`suspend`** is a declaration modifier (a keyword since the async work,
+`impl_specs/async.md`): the scanner reserves it, the parser carries it as the `IsSuspend`
+attribute, and the coloring pass keys on it - a function that calls a suspending function can
+suspend too, transitively, up to `main`, and `--showAsync` dumps the result. It is a modifier,
+not a type: the signature keeps the plain return type (no `Async<T>`, no `await`), and `!!`
+needs no wrapper to look through (`stress/suspend`, `docs/examples/async/src/main.kt`). The
+machine lowering that turns a suspending body into a task is still to build, so a call to one is
+today an ordinary direct call.
 
 ## 8. TODOs / deferred
 

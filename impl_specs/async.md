@@ -1,4 +1,4 @@
-# `Async<T>`: colorless async, ref-counted tasks
+# `suspend`: colorless async, ref-counted tasks
 
 The goal: a program suspends where it waits (file I/O, and later sockets), without the
 function coloring C#-style `async`/`await` forces on a codebase. The user writes the *leaves*
@@ -15,35 +15,49 @@ inspected.
 | --- | --- |
 | `x!!` — `Res` payload, or an early `return` of the failure | **done**, `cppsrc/parser/Propagate.kt` |
 | the coloring pass + `--showAsync` | **done**, `cppsrc/sema/Async.kt` |
-| the work pool: threads behind two queues, and a structural join | **done**, `cppsrc/rtl/tasks.kt`, the `tasks` section of `cppsrc/rtl/_res.md`, `stress/tasks` |
-| `Async<T>` in the checker (the awaited type at a call site) | next |
+| the work pool: **named queues** (an `Int` id → that queue's workers) and a structural join | **done**, `cppsrc/rtl/tasks.kt`, the `tasks` section of `cppsrc/rtl/_res.md`, `stress/tasks` |
+| the task header + the loop, proved by a hand-written two-task chain | **done**, the `tasks` section of `cppsrc/rtl/_res.md`, `stress/task-chain` |
+| `suspend` on a declaration, in place of the `Async<T>` marker (below) | **done** - `cppsrc/lex/Scanner.kt`, `cppsrc/parser/Parser.kt` (the `IsSuspend` attribute), `cppsrc/sema/Async.kt`, `cppsrc/parser/Propagate.kt`, `stress/suspend` |
+| a call to a suspending callee is a suspension (the coloring's fixed point) | **done**, `cppsrc/sema/Async.kt`, `--showAsync` |
 | the push machine (a body that suspends → a state machine) | next |
 | `asyncRunTransform` / `runAndForget` lowering over the pool | next |
 | the file leaves, suspended rather than blocking | next |
 | the corpus: file present, file absent | next |
 
-## `Async<T>` is a marker, not a value
+## `suspend` is a modifier on a declaration, not a type
 
-Like `..T` (`impl_specs/yield.md`), `Async<T>` is **not a value type**: it is a return-position
-marker meaning "this body can suspend and finishes with `T`" — C#'s `async Task<T>` in one word.
-`Async` is therefore a reserved name (the emitter's type table is flat by name; keep it unique
-project-wide).
+A body that suspends says so with the `suspend` modifier, and its *signature stays the plain
+one* — the payload type, no wrapper:
 
-`Async<T>` is **equivalent to `&Async<T>`**: the task instance is a ref-counted heap frame, so
-every reference to it — the runtime's root, a parent waiting on it, a child holding its parent —
-is counted and the frame dies when the last one drops. That is what makes the lifetime work in
-the cases that would otherwise need manual reasoning (a task outliving the frame that started
-it, a parent kept alive by a child still running), with no GC and no ownership analysis.
+```simse
+@SmGen("res", "asyncfs", "simse_async_readFileText")
+suspend fun readFileTextAsync(path: Str): Res<Str>
+```
+
+There is therefore **no `Async<T>` in the type system at all**: nothing to teach the checker,
+nothing a parameter or field can name, no reserved name, and no wrapper for `!!` to look through.
+The task instance is still a ref-counted heap frame — `&`-counted, so a task outliving the frame
+that started it, and a parent kept alive by a child still running, both just work — but that frame
+is the *lowering's*, and a program never names its type. The modifier is required only where the
+body cannot show the suspension (a `@SmGen` leaf); an inferred caller may write it as
+documentation.
+
+*(Landed: the scanner reserves `suspend`; the parser carries it as the `IsSuspend` attribute
+(`cppsrc/parser/Parser.kt`); the coloring keys on it (`cppsrc/sema/Async.kt`); `Propagate.kt`'s
+one-wrapper hop is gone, so `!!` reads a plain `Res<T>`; and `docs/examples/async/src/main.kt`
+writes `suspend fun readFileTextAsync(path: Str): Res<Str>` - `stress/suspend` pins the syntax.)*
 
 ## No coloring to write
 
 ```
-async(f) = declared Async (f)  ∨  ∃ edge f → g with async(g)      -- least fixed point
+async(f) = declared suspend(f)  ∨  ∃ edge f → g with async(g)      -- least fixed point
 ```
 
-and a call site suspends exactly when its resolved callee answers `Async<T>`; the value the
-call produces is the `T`. There is **no `await`/`suspend` keyword in the source** — the call is
-the suspension, which is the "invisible" half of the feature. `Async<Async<T>>` is not a thing.
+and a call site suspends exactly when its resolved callee is `suspend` — declared or inferred —
+and the value the call produces is the callee's own return value. There is **no `await`, and no
+`suspend` at a call site** — the call *is* the suspension, which is the "invisible" half of the
+feature; the modifier marks only the leaves, where the body is C++. `Async<Async<T>>` is not a
+thing because there is no `Async` to nest.
 
 The graph is **name-level**, the approximation the prelude reachability already uses
 (`impl_specs/for.md`): a callee is the name a call spells (`f`, `f<T>`, or the member of `x.f`).
@@ -97,8 +111,8 @@ into N children: the lowering needs a **list of child handles in the frame** and
 **pending-children count** the join drains. That is why `asyncRunTransform` is compiler-known -
 like `listOf` and its `Pack` instruction (`impl_specs/linear-il.md`) - with the signature above,
 which is the price of the one shape a server actually wants. It is also why the language needs no
-`spawn` keyword and no `join`: **a task is never a first-class value**, `Async<T>` stays a
-return-position marker, and a task's handle is always the compiler's storage for a suspension.
+`spawn` keyword and no `join`: **a task is never a first-class value**, a suspension has no type to
+spell, and a task's handle is always the compiler's storage for it.
 
 The token is a **borrow** (`*TaskToken`), not a copy: a copy would carry its own cancelled flag, so
 cancellation would not be shared. `items` is borrowed too, which only the structural join makes
@@ -151,9 +165,10 @@ joined is freed when it completes because the loop holds the only reference to i
 
 ## The machine is *push*, where `yield` is *pull*
 
-`yield` is driven by its caller (`advance()`), an `Async` task is driven by what it waits on:
+`yield` is driven by its caller (`advance()`), a suspending function's task is driven by what it
+waits on:
 
-| | `..T` yieldable | `Async<T>` task |
+| | `..T` yieldable | a `suspend` task |
 | --- | --- | --- |
 | who drives it | the caller pulls, `advance() -> Bool` | the callee pushes: it resumes the caller |
 | lifetime | a stack value, or `&`-boxed | a counted handle; it outlives the frame that started it |
@@ -198,7 +213,7 @@ Where the parent's drop goes is exact, and it is what makes the free lock-free:
   suspension, dropped at the resume label every time. The slot is dead afterwards, so the
   existing local merging (`cppsrc/optimizations/usedef/MergeLocals.kt`) can reuse it - the
   handle costs a frame slot during the wait and nothing after it. A **`spawn`ed task's handle
-  is** user-visible: an ordinary `Async<T>` value whose lifetime its own scope decides, dropped
+  is** user-visible: an ordinary counted value whose lifetime its own scope decides, dropped
   on `join` or when the name goes out of scope. Two constructions, two lifetimes, one rule.
 - a callee that completed **synchronously** has no frame at all: nothing was created, nothing
   suspends, nothing is freed. That is the sync-completion fast path paying off.
@@ -217,7 +232,46 @@ work that has to block or burn CPU - file reads and writes, gzip. The two sides 
 | work | loop -> pool | a job: a value-only input (a path, a buffer, a level) |
 | completion | pool -> loop | the job's result value, and which task was waiting for it |
 
-**Synchronization is the queue's, and nothing else's.** The counts stay non-atomic: a
+### Named queues, and the id is the app's
+
+Work is not one queue but a **table of them, each identified by an `Int` the program chooses**
+(`tasksQueue(id, threads)`, `cppsrc/rtl/tasks.kt`). The runtime creates nothing on its own; these
+are the conventional ids and the counts the examples use:
+
+| id | queue | threads | who submits |
+| --- | --- | --- | --- |
+| 0 | accept | 1 | an accept thread — a *producer*, handing the loop a connection |
+| 1 | file read | 2 | the loop, through a read leaf |
+| 2 | file write | 2 | the loop, through a write leaf |
+| 3 | socket read | 2 | the loop, through a socket-read leaf |
+| 4 | socket write | 2 | the loop, through a socket-write leaf |
+| 16+ | the app's own | — | the app |
+
+**The thread count is the knob, and the reason to split queues at all is isolation.** A queue's
+threads *are* that kind's concurrency — a blocking leaf holds its worker for the whole wait — so
+more threads is more concurrency for that kind, while two queues of the same kind are not extra
+capacity, they are a slow kind that cannot starve another. A submit to a queue nobody made still
+runs: it creates the queue with one worker, so a missing `tasksQueue` is a pool of one rather
+than a job that never runs. A program's own queues should start at 16 so a later default cannot
+collide with them.
+
+The accept queue differs in one way: it is a **producer**, not a consumer. An accept thread
+blocks in `accept` and hands the loop a connection — a socket is an `Int64`, so it crosses a
+queue like any other value — and the loop starts the request task. That keeps a blocking `accept`
+off the loop while the loop stays the only place a task is touched.
+
+**Completion is one shared side**, whichever queue ran the job: the loop is the only reader, so
+there is one place to wait and one place a task is written. The item is *tagged* by the kind of
+work it answers — a read's text, an accept's socket — because the loop has to deliver it to the
+right sort of waiting task; today only file reads exist, so today it is a slot and a `Str`.
+
+**Synchronization is the queue's, and nothing else's.** Nothing that runs *inside* a task is
+locked, and that is the point: a task's state is the *loop's* (single-threaded), and the code a
+worker runs is **functional** — a pure function of the values it was handed, in and out by value,
+no `&T` and no file-level static — so there is no shared mutable state for a lock to protect and
+no race to lose, by construction rather than by luck. A socket is an `Int64` and crosses like any
+other value; what two jobs on one socket do concurrently (a read and a write) is the kernel's own
+serialization, not something the pool arbitrates. The counts stay non-atomic: a
 non-atomic count is only wrong when two threads touch it at once, and the design makes that
 impossible rather than making it cheap to do. A reference is **transferred under the queue's
 lock** - the enqueue retains, the dequeue takes ownership, both inside the same critical
@@ -271,11 +325,11 @@ pinned** (FIFO), and nothing depends on an unordered container.
   completion queue, and the loop marks the waiting task `Runnable`, enqueues it and runs it.
   Nothing spins: when the ready queue is empty the loop blocks on the completion queue, which is
   all that is left of the "close the world" step.
-- The leaves are the RTL's: `readFileTextAsync(path): Async<Res<Str>>` and
-  `writeFileAsync(path, text): Async<Res<Int>>`, returning `Res` because a file may not exist.
-  A missing file is then an ordinary value: `!!` propagates it, no exception and no callback.
-  They are `@SmGen("res", ...)` declarations, so the runtime's C++ lives in a resource section
-  like the rest of the platform's operations (`impl_specs/generators.md`).
+- The leaves are the RTL's: `suspend fun readFileTextAsync(path: Str): Res<Str>` and
+  `suspend fun writeFileAsync(path: Str, text: Str): Res<Int>`, returning `Res` because a file may
+  not exist. A missing file is then an ordinary value: `!!` propagates it, no exception and no
+  callback. They are `@SmGen("res", ...)` declarations, so the runtime's C++ lives in a resource
+  section like the rest of the platform's operations (`impl_specs/generators.md`).
 
 The corpus case is the program in `docs/examples/async/`, run twice: the file present (the copy
 succeeds and the byte count is printed) and the file absent (the failure propagates out of
@@ -290,9 +344,9 @@ instantiation and named like the machine is (`<fn>_task`, `<outer>_<fn>_task` fo
 **The class:** `branch` (0 = start, `k` = the k-th suspension, `-1` = done - the `yield` convention,
 so the dispatcher is the same chain of conditional jumps `emitMachine` already prints, with the
 resume entry where `advance()` was); the parameters and every local that lives across a suspension;
-`result` (the `T` of `Async<T>`, what `return v` stores); the refcount, `status` and `parent` in the
-shared header; one child-handle field per suspension; and a pending-children count in a body that
-fans out.
+`result` (the callee's own return type, what `return v` stores); the refcount, `status` and `parent`
+in the shared header; one child-handle field per suspension; and a pending-children count in a body
+that fans out.
 
 **A suspension** (`val x = f(args)`, `f` async):
 
@@ -338,10 +392,12 @@ entry, which is the shape the machine's own method already emits.
 
 **Order of assembly, so each step is verifiable on its own:** the task header and the loop in the
 `tasks` section first (a hand-written two-task chain proves the status discipline, the release order
-and the loop's idle behaviour with no compiler change at all); then `Async<T>` in the checker; then
-the lowering and `emitTask`, tested against a **synchronous fake leaf** so the whole ABI is exercised
-with no threading; then `asyncRunTransform`/`runAndForget`; then the file leaves over the pool and
-the corpus case.
+and the loop's idle behaviour with no compiler change at all - **done**, `stress/task-chain`) - the
+queues it runs on are already there as *named queues*; then `suspend` on a declaration and in the
+coloring (**done**, `stress/suspend`); then the lowering and
+`emitTask`, tested against a **synchronous fake leaf** so the whole ABI is exercised with no
+threading; then `asyncRunTransform`/`runAndForget`; then the file leaves over the pool and the corpus
+case; then the socket leaves and the server.
 
 ## Known restrictions to diagnose, not to miscompile
 
@@ -349,7 +405,9 @@ the corpus case.
   live across a suspension (the same reason a machine cannot cross a `yield` —
   `impl_specs/yield.md`). Either the machine becomes a field or the construct is reported.
 - **An indirect call** that could reach a suspension (above).
-- **`Async<T>` in a value position** (a parameter, a field, a local): a task is not a value.
+- **A task in a value position** is not a restriction any more: with `suspend` a modifier rather
+  than `Async<T>` a type, there is no type to write in a parameter, a field or a local - the
+  lowering's storage for a suspension is the compiler's, and a program cannot name it at all.
 
 ## Status
 
@@ -358,15 +416,37 @@ the target is the parameter's function-type result, so a transformer can be an i
 (`stress/propagate-lambda`); the coloring with its dump -
 `cppsrc/sema/Async.kt`, `--showAsync`, checked against `docs/examples/async/src/main.kt`
 (`copyFile` and `main` inferred async, the two leaves declared, `describe` and the whole prelude
-synchronous, and the compiler's own 903 declarations all synchronous); and the **work pool**
-(`cppsrc/rtl/tasks.kt` + the `tasks` section, `stress/tasks`), which is the half of the runtime
-that has nothing to do with tasks: N `std::thread`s behind a work queue and a completion queue,
-a reference transferred under the queue's lock, values crossing and handles never, and a
-structural join. Its surface is synchronous on purpose - submit, join, read what settled - so it
-could be built and verified before any of the machine work started.
+synchronous, and the compiler's own 903 declarations all synchronous); and the **work pool as
+named queues** (`cppsrc/rtl/tasks.kt` + the `tasks` section, `stress/tasks`) - the half of the
+runtime that has nothing to do with tasks: an `Int`-identified queue per kind with its own
+workers, a reference transferred under the queue's lock, values crossing and handles never, one
+shared completion side, and a structural join. Its surface is synchronous on purpose - submit,
+join, read what settled - so it could be built and verified before any of the machine work
+started. *(The pool was rewritten from one work queue to the named-queue table while the server
+was being designed; the compiler's own emitted bytes did not move, because nothing under
+`cppsrc` reaches the pool.)*
 
-Next, in order: `Async<T>` in the checker (a call to an async function is typed as its payload);
-the task header (status, parent, pending-children count) with its queues over the pool's; the push
-machine in `linear/`; then `asyncRunTransform`/`runAndForget` lowering (the dynamic fan-out, which
-needs a child-handle list and a pending count in the frame), and the file leaves suspended rather
-than blocking.
+The **task header and the loop** are done as well, proved by a hand-written two-task chain rather
+than by the lowering (`stress/task-chain`): the ref-counted frame with a status orthogonal to
+`branch`, the loop-only ready queue, the `Suspended -> Runnable` enqueue guard, and the release
+order - the child drops its parent reference *before* resuming it, and the parent reads the result
+*before* dropping the child - all exercised with no machine, no compiler change and no thread.
+`emitTask` replaces the chain; the header and the loop are what it emits against.
+
+**`suspend` is a declaration modifier** now, and `Async<...>` is gone from the language: the
+scanner reserves the keyword, the parser carries the `IsSuspend` attribute (`cppsrc/parser/
+Parser.kt`, with/without an `@SmGen` attribute), the coloring keys on it (`cppsrc/sema/Async.kt`),
+and `Propagate.kt`'s one-wrapper hop is dropped, so `!!` reads a plain `Res<T>`. A declaration's
+signature keeps its plain return type, so there is nothing for a caller to spell and no reserved
+type name - `docs/examples/async/src/main.kt` writes `suspend fun readFileTextAsync(path: Str):
+Res<Str>`, and `--showAsync` still infers `copyFile` and `main` while `describe` stays
+synchronous. `stress/suspend` pins the syntax (`suspend fun answer(): Int { return 42 }`, called
+by `main`). A suspending body is not yet lowered, so a call to one is still an ordinary direct
+call - which is what the fake leaf the next step is tested against relies on.
+
+Next, in order: the push machine in `linear/` with `emitTask`, keyed on the coloring table (over
+the header and the loop the chain has already proved), refusing a body that also yields, and
+tested against a **synchronous fake leaf**; then `asyncRunTransform`/`runAndForget` lowering (the
+dynamic fan-out, which needs a child-handle list and a pending count in the frame); the file
+leaves suspended rather than blocking; then the socket read/write/accept leaves and the async
+server.

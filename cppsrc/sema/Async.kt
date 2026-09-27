@@ -1,12 +1,12 @@
 // Async.kt
 //
-// The coloring pass: which functions are async, and why. `Async<T>` in a return position is
-// the marker - it names a function that can suspend and finishes with `T` - and every
-// function that *calls* one is async too, transitively, up to `main`. Nothing is annotated by
-// hand except the leaf: the user writes the function that actually suspends, and the least
-// fixed point below carries that outward. A function no suspension reaches keeps its plain
-// signature and its direct call, which is the whole point - coloring stops at the first
-// function that reaches no suspension, so pure helper code never becomes a state machine.
+// The coloring pass: which functions can suspend, and why. `suspend` on a declaration is the
+// marker - it names a function whose body may wait - and every function that *calls* one can
+// suspend too, transitively, up to `main`. Nothing is annotated by hand except the leaf: the
+// user writes the function that actually suspends, and the least fixed point below carries that
+// outward. A function no suspension reaches keeps its plain signature and its direct call, which
+// is the whole point - coloring stops at the first function that reaches no suspension, so pure
+// helper code never becomes a state machine.
 //
 // The call graph is *name-level*, the approximation the prelude reachability already uses
 // (impl_specs/for.md): a callee is the name a call spells - `f`, `f<T>`, or the member of
@@ -15,29 +15,19 @@
 // links separately, so there is no call that could be async without being visible.
 //
 // `--showAsync` dumps the result (the debug view this pass exists for). The machine lowering
-// is the next step; until it lands, a program that *calls* an async function does not
-// compile - sema has no `Async` type - so the dump is how the inference is checked.
+// is the next step; until it lands, a program that *calls* a suspending function does not
+// compile - there is no task to run - so the dump is how the inference is checked.
 
 package sema
 
 import common
 import io
 
-// Whether a type node is the marker: `Async<...>`, possibly through the name a program spells.
-fun asyncIsMarker(typeNode: *AstXmlNode): Bool {
-    if (xmlKind(typeNode) != AstNodeCategory.TypeGeneric) {
-        return false
-    }
-    return xmlAttr(typeNode, AstNodeAttributeKind.Name) == "Async"
-}
-
-// A declaration's own marker: `Async<T>` in the return position.
+// A declaration's marker: the `suspend` modifier, which the parser carries as `IsSuspend`
+// (impl_specs/async.md). It is a modifier on the declaration, not a type - the signature keeps
+// its plain return type, which is why nothing else in the checker has to know about it.
 fun asyncDeclared(decl: *AstXmlNode): Bool {
-    val ret: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.ReturnType)
-    if (xmlIsEmpty(ret)) {
-        return false
-    }
-    return asyncIsMarker(ret)
+    return xmlAttr(decl, AstNodeAttributeKind.IsSuspend) == "true"
 }
 
 // The names a call in `node` reaches: the spelled name of a `Name`, `GenericName` or `Member`
@@ -125,7 +115,7 @@ fun asyncDump(functions: List<AstXmlNode>, asyncNames: List<Str>, reasons: List<
     while (i < asyncNames.size()) {
         var line: Str = fmtStr("async! |", asyncNames[i])
         if (reasons[i] == "") {
-            line = line + "  (declared Async<T>)"
+            line = line + "  (declared suspend)"
         } else {
             line = fmtStr("async  |   <- |", asyncNames[i], reasons[i])
         }
@@ -143,5 +133,5 @@ fun asyncDump(functions: List<AstXmlNode>, asyncNames: List<Str>, reasons: List<
         }
     }
     eprintln(fmtStr("sync | declarations reach no suspension", sync.toString()))
-    eprintln("legend: async! names Async<T>, async is inferred from the callee it shows")
+    eprintln("legend: async! is declared suspend, async is inferred from the callee it shows")
 }

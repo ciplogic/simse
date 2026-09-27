@@ -278,7 +278,7 @@ data class Parser(
 
     fun parseDecl(): AstXmlNode {
         if (this.checkKind(TokenKind.Attribute)) {
-            return this.parseAttributedDecl(false)
+            return this.parseAttributedDecl(false, false)
         }
         val text: Str = this.peek(0).text
         when (text) {
@@ -296,14 +296,31 @@ data class Parser(
                 }
                 if (this.peek(1).text == "fun") {
                     this.advance() // data
-                    return this.parseFunction("", List<Str>(), true)
+                    return this.parseFunction("", List<Str>(), true, false)
                 }
                 if (this.peek(1).kind == TokenKind.Attribute) {
                     // `data @SmGen(...) fun ...`: the mark may precede the attribute.
                     this.advance() // data
-                    return this.parseAttributedDecl(true)
+                    return this.parseAttributedDecl(true, false)
                 }
                 this.fail("expected 'class' or 'fun' after 'data'")
+                return this.emptyNode()
+            }
+
+            "suspend" -> {
+                // `suspend fun`: the declaration's body may wait, so the lowering turns it into
+                // a ref-counted task and a call to it is a suspension (impl_specs/async.md).
+                // The modifier is the whole marker - the signature keeps the plain return type
+                // and there is no `Async<T>`.
+                if (this.peek(1).text == "fun") {
+                    this.advance() // suspend
+                    return this.parseFunction("", List<Str>(), false, true)
+                }
+                if (this.peek(1).kind == TokenKind.Attribute) {
+                    this.advance() // suspend
+                    return this.parseAttributedDecl(false, true)
+                }
+                this.fail("expected 'fun' or an attribute after 'suspend'")
                 return this.emptyNode()
             }
 
@@ -316,7 +333,7 @@ data class Parser(
             }
 
             "fun" -> {
-                return this.parseFunction("", List<Str>(), false)
+                return this.parseFunction("", List<Str>(), false, false)
             }
         }
         this.fail("expected declaration")
@@ -325,7 +342,7 @@ data class Parser(
 
     // `@SmGen("cpp", "sym") fun f(...)` (specs/attributes.md). Only method declarations take
     // attributes, so `fun` must follow.
-    fun parseAttributedDecl(pure: Bool): AstXmlNode {
+    fun parseAttributedDecl(pure: Bool, suspendModifier: Bool): AstXmlNode {
         val attrToken: Token = this.advance()
         val attrText: Str = attrToken.text
         var attrName: Str = attrText
@@ -355,18 +372,24 @@ data class Parser(
         }
         // An attribute rides on its own line, so the separator before the declaration is skipped.
         this.skipSeparators()
-        // `@SmGen(...) data fun f(...)` marks a pure function too (`data` is a modifier, the
-        // attribute selects the C++).
+        // `@SmGen(...) data fun f(...)` marks a pure function and `@SmGen(...) suspend fun f(...)`
+        // a suspending one (`data`/`suspend` are modifiers, the attribute selects the C++).
         var isPure: Bool = pure
-        if (this.matchText("data")) {
-            isPure = true
+        var isSuspend: Bool = suspendModifier
+        while (this.checkText("data") || this.checkText("suspend")) {
+            if (this.matchText("data")) {
+                isPure = true
+            } else {
+                this.matchText("suspend")
+                isSuspend = true
+            }
             this.skipSeparators()
         }
         if (!this.checkText("fun")) {
             this.fail("expected 'fun' after an attribute")
             return this.emptyNode()
         }
-        return this.parseFunction(attrName, args, isPure)
+        return this.parseFunction(attrName, args, isPure, isSuspend)
     }
 
     // A file-level `var`/`val` (specs/statics.md): type required, initializer optional, and
@@ -481,7 +504,7 @@ data class Parser(
                     this.fail("expected method declaration")
                     return this.emptyNode()
                 }
-                methods.append(this.parseFunction("", List<Str>(), false))
+                methods.append(this.parseFunction("", List<Str>(), false, false))
                 this.skipSeparators()
             }
             if (!this.expectText("}")) {
@@ -644,8 +667,10 @@ data class Parser(
     // `attrName`/`attrArgs` are the parsed attribute (specs/attributes.md). An attributed
     // method may be body-less; a body-less method with no attribute has no implementation.
     // `pure` is the `data` modifier: the writer's claim that the function has no side
-    // effects, which the reuse pass reads (`ReusePure.kt`).
-    fun parseFunction(attrName: *Str, attrArgs: *List<Str>, pure: Bool): AstXmlNode {
+    // effects, which the reuse pass reads (`ReusePure.kt`). `suspendModifier` is the `suspend`
+    // modifier: the declaration's body may wait (impl_specs/async.md), carried as the
+    // `IsSuspend` attribute for the coloring pass.
+    fun parseFunction(attrName: *Str, attrArgs: *List<Str>, pure: Bool, suspendModifier: Bool): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
         var nativeSymbol: Str = ""
         var hasNativeSymbol: Bool = false
@@ -802,6 +827,7 @@ data class Parser(
         attrs.append(AstNodeAttribute(AstNodeAttributeKind.HasReceiver, boolText(hasReceiver)))
         attrs.append(AstNodeAttribute(AstNodeAttributeKind.HasNativeSymbol, boolText(hasNativeSymbol)))
         attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsPure, boolText(pure)))
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsSuspend, boolText(suspendModifier)))
         if (hasNativeSymbol) {
             attrs.append(AstNodeAttribute(AstNodeAttributeKind.NativeSymbol, nativeSymbol))
         }

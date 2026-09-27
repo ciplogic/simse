@@ -101,10 +101,12 @@ var multiCharOperatorTable: List<Str> = makeMultiCharOperators()
 var tokenRuleTable: List<TokenMatcher> = makeTokenRules()
 
 fun makeReservedWords(): List<Str> {
+    // `suspend` (impl_specs/async.md) is the modifier that marks a declaration whose body may
+    // wait; it is a keyword, so a program cannot also use the name.
     var words: List<Str> = listOf<Str>(
         "class", "data", "val", "var", "fun", "return", "while", "for",
         "if", "else", "true", "false", "null", "enum", "typealias",
-        "import", "this", "break", "continue", "when", "yield", "package"
+        "import", "this", "break", "continue", "when", "yield", "package", "suspend"
     )
     return words
 }

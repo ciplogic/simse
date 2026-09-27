@@ -77,7 +77,13 @@ enum class AstNodeAttributeKind {
     // and arguments. The compiler trusts the mark - it is the only source of truth for a
     // body-less (`@SmGen`) function - and uses it to reuse a repeated call of an unchanged
     // argument (`linear/ReusePure.kt`). Appended last so the values already in use do not move.
-    IsPure
+    IsPure,
+
+    // `suspend fun` (impl_specs/async.md): the declaration's body may wait, so the lowering
+    // turns it into a ref-counted task and a call to it is a suspension. It is a modifier on
+    // the declaration, not a type - the signature stays the plain one. Appended last so the
+    // values already in use do not move.
+    IsSuspend
 }
 
 // What a node is - the schema's `kind` - as against its role (`AstNodeKind`, where it

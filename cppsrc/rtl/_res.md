@@ -1062,23 +1062,44 @@ inline Span<ResourceEntry> simse_resources_entries() {
 forward:
 ```cpp
 #include <condition_variable>
+#include <deque>
 #include <fstream>
 #include <mutex>
+#include <string>
 #include <thread>
 #include <vector>
 
-// The work pool (impl_specs/async.md, "The runtime"): `ioThreads` worker threads behind two
-// queues. The thread that called `simse_tasksStart` is the *loop* - a program's main logic -
-// and the workers are the io side; they meet only at the queues. Only *values* cross a queue,
-// never a counted handle, and a reference is transferred under the queue's own lock, which is
-// what lets the language's reference counts stay non-atomic: one owner at a time. A worker
-// touches its job and the queues and nothing else, which is what makes it pool-schedulable.
+// The work pool (impl_specs/async.md, "The runtime"): a table of *named queues*, each with its
+// own worker threads. The thread that drives the loop is a program's main logic and is not a
+// worker; workers are the io side, and they meet the loop only at the queues. Only *values*
+// cross a queue, never a counted handle, and a reference is transferred under the queue's own
+// lock, which is what lets the language's reference counts stay non-atomic: one owner at a time.
+// A worker touches its job and the queues and nothing else, which is what makes it
+// pool-schedulable.
 //
-void simse_tasksStart(Int ioThreads);
+// A queue is identified by an `Int` (`simse_tasksQueue`), so a program picks its own ids and
+// the thread count is the whole knob: a queue's threads are that queue's concurrency, since a
+// blocking job holds its worker for the whole wait. Two queues of one kind buy isolation, not
+// capacity. Completion is one shared side: whichever queue ran a job, the loop is what reads the
+// result, so there is one place to wait and one place a task is written.
+//
+// **The queues are the only thing locked.** Nothing that runs inside a task is: a task's state
+// belongs to the loop thread (single-threaded logic), and a worker's job is functional - a pure
+// function of the values it was handed, in and out by value, no `&T`, no file-level static - so
+// there is no shared mutable state for a lock to protect and no race to lose. A socket is an
+// `Int64` and crosses like any other value.
+//
+// The task header and the loop (impl_specs/async.md, "Status, calls, and asyncRunTransform") are
+// here too, with step one's proof - a hand-written two-task chain - so the status discipline and
+// the release order are exercised before the `suspend` lowering exists. That chain is
+// scaffolding: `emitTask` replaces it.
+//
+void simse_tasksQueue(Int id, Int threads);
 void simse_tasksStop();
-void simse_tasksSubmitRead(Int slot, const Str& path);
+void simse_tasksSubmitReadOn(Int id, Int slot, const Str& path);
 void simse_tasksJoin(Int count);
 Str simse_tasksText(Int slot);
+List<Int> simse_tasksChainTrace();
 ```
 bodies:
 ```cpp
@@ -1089,20 +1110,30 @@ struct Job {
     Str path;
 };
 
-// Heap-allocated and never freed: a program that never stops the pool must still exit quietly,
-// and a static's destructor racing a worker's wait would not.
-struct Pool {
+// One named queue: its own work list and its own workers. Heap-allocated and never freed - a
+// program that never stops the pool must still exit quietly, and a worker's pointer to it has to
+// stay valid while the table regrows.
+struct Queue {
     std::mutex workMutex;
     std::condition_variable workReady;
-    std::vector<Job> work;
+    std::deque<Job> work;
     bool closed = false;
+    std::vector<std::thread> workers;
+};
 
+// Heap-allocated and never freed, for the same reason.
+struct Pool {
+    // The queue table itself. A worker holds its own `Queue*` and never looks one up, so this
+    // lock is only ever taken on the submit/stop side.
+    std::mutex tableMutex;
+    std::vector<Queue*> queues;
+
+    // The completion side, shared by every queue: the loop reads results here, so there is one
+    // place to wait and the order a job settled in is not observable.
     std::mutex doneMutex;
     std::condition_variable doneReady;
     std::vector<Str> texts;
     Int completed = 0;
-
-    std::vector<std::thread> workers;
 };
 
 Pool& storage() {
@@ -1110,16 +1141,17 @@ Pool& storage() {
     return *shared;
 }
 
-void worker(Pool* shared) {
+void worker(Pool* shared, Queue* queue) {
     for (;;) {
         Job job;
         {
-            std::unique_lock<std::mutex> lock(shared->workMutex);
-            shared->workReady.wait(lock, [shared] { return shared->closed || !shared->work.empty(); });
-            if (shared->work.empty()) return;
-            // Any order will do: the join counts completions, it does not order them.
-            job = shared->work.back();
-            shared->work.pop_back();
+            std::unique_lock<std::mutex> lock(queue->workMutex);
+            queue->workReady.wait(lock, [queue] { return queue->closed || !queue->work.empty(); });
+            if (queue->work.empty()) return;
+            // FIFO: a queue is a queue, so the oldest submission goes first. Which worker takes
+            // it is the scheduler's business, and nothing observes that.
+            job = queue->work.front();
+            queue->work.pop_front();
         }
         // The job's file, read here rather than through `fileio`: that section is the `io`
         // module's C++ now (cppsrc/modules/io/_res.md), a layer this prelude section must not
@@ -1146,38 +1178,234 @@ void worker(Pool* shared) {
     }
 }
 
-}  // namespace simse_tasks
+// The table entry for `id`, created - with at least one worker - on first use. `threads`
+// *adds* workers to one already made, so a later `simse_tasksQueue` only ever grows a queue.
+Queue* queueFor(Pool* shared, Int id, Int threads) {
+    if (id < 0) {
+        id = 0;
+    }
+    if (threads < 1) {
+        threads = 1;
+    }
+    std::lock_guard<std::mutex> lock(shared->tableMutex);
+    if ((std::size_t) id >= shared->queues.size()) {
+        shared->queues.resize((std::size_t) id + 1, nullptr);
+    }
+    Queue* queue = shared->queues[(std::size_t) id];
+    if (queue == nullptr) {
+        queue = new Queue();
+        shared->queues[(std::size_t) id] = queue;
+    }
+    while ((Int) queue->workers.size() < threads) {
+        queue->workers.push_back(std::thread(worker, shared, queue));
+    }
+    return queue;
+}
 
-void simse_tasksStart(Int ioThreads) {
-    simse_tasks::Pool& shared = simse_tasks::storage();
-    if (!shared.workers.empty()) {
+// ---- The task header and the loop (step one's proof) -------------------------------------------
+//
+// A `suspend` body is lowered to a *task*: a ref-counted heap frame the loop drives, in place of
+// the stack a synchronous call would use (impl_specs/async.md, "The machine is push"). Step one
+// writes the header and the loop by hand and proves them with a two-task chain, so the status
+// discipline and the release order are exercised before any of the machine work exists.
+// `emitTask` replaces the chain; the header and the loop are what it will emit against.
+
+// `branch` says *where* execution stopped (0 = start, k = the k-th suspension, -1 = done); the
+// status says *why it is not running*. They are orthogonal, and the status is what the runtime
+// sees through this type-erased base - a generated machine class is the subclass.
+enum class TaskStatus { Runnable, Running, Suspended, Done };
+
+struct Loop;
+
+// The task header.
+struct Task {
+    Int refcount = 1;
+    TaskStatus status = TaskStatus::Runnable;
+    // The task to resume when this one completes, held as a counted reference; null for the root.
+    Task* parent = nullptr;
+    Int branch = 0;
+    // What `return v` stores and the parent reads. A generated task makes this the callee's own
+    // return type; step one's chain carries the scalar its fake leaf answers, so it is an `Int`.
+    Int result = 0;
+    Loop* loop = nullptr;
+
+    // The count is non-atomic on purpose: only the loop thread touches a task
+    // (impl_specs/async.md, "Synchronization is the queue's, and nothing else's").
+    void retain() { refcount = refcount + 1; }
+    void release() {
+        refcount = refcount - 1;
+        if (refcount <= 0) {
+            delete this;
+        }
+    }
+
+    // The body. The loop calls it whenever the task became Runnable again; the dispatch on
+    // `branch` is inside it, exactly as `emitMachine` prints the yieldable's.
+    virtual void run() = 0;
+    virtual ~Task() { }
+
+    // The callee pushes the caller: set the parent Runnable and hand it back to the loop. The
+    // *enqueue guard* - only a task that is still waiting is woken - is what makes a duplicate
+    // completion (or one arriving after the task is Done) a no-op rather than a resumption body
+    // run twice. Only a *Running* task calls this; that is the one whose completion it is.
+    void resume();
+};
+
+// The ready queue - which task runs next - belongs to the loop alone: no lock, because only the
+// loop thread touches it, and its FIFO order is what pins the trace (impl_specs/async.md, "The
+// runtime"). The real loop's one wait is a blocking pop on the completion side; step one has no
+// pool thread, so draining the ready queue *is* driving the program.
+struct Loop {
+    std::deque<Task*> ready;
+
+    void enqueue(Task* task) { ready.push_back(task); }
+
+    void drive() {
+        while (!ready.empty()) {
+            Task* task = ready.front();
+            ready.pop_front();
+            if (task->status != TaskStatus::Runnable) {
+                continue;
+            }
+            task->status = TaskStatus::Running;
+            task->run();
+        }
+    }
+};
+
+void Task::resume() {
+    if (status != TaskStatus::Suspended) {
         return;
     }
-    if (ioThreads < 1) {
-        ioThreads = 1;
+    status = TaskStatus::Runnable;
+    loop->enqueue(this);
+}
+
+// The steps the chain records, so its trace is plain numbers rather than formatted text. The loop's
+// order can be read straight off it, and the one value that crossed a suspension sits where the
+// root read it - right where step `RootResumed` puts it.
+enum class ChainStep {
+    RootStart = 1,
+    ChildCreated = 2,
+    RootSuspended = 3,
+    ChildLeafRan = 4,
+    ChildReleasedParent = 5,
+    ChildResumedRoot = 6,
+    RootResumed = 7,
+    RootDroppedChild = 9,
+    RootDone = 10,
+};
+
+typedef std::vector<Int> ChainTrace;
+
+// The *child* of the chain - the callee. Its body is a synchronous fake leaf: the shape of an async
+// leaf with the wait taken out (the real file read returns `Res<Str>` and arrives at step five), so
+// the chain finishes with no pool and no thread and what is proved is the task discipline, not the
+// io.
+struct ChainChild : Task {
+    ChainTrace* trace = nullptr;
+
+    void run() override {
+        // The fake leaf: `return 42`, a callee that completes synchronously and so never suspends
+        // its caller. What it answers crosses to the parent through `result`, which is the whole
+        // point of the chain.
+        trace->push_back((Int) ChainStep::ChildLeafRan);
+        result = 42;
+        // `return v`: store the result, mark the body done, then release the parent *before*
+        // resuming it - a finished child must not keep its parent alive (impl_specs/async.md,
+        // "No cycle").
+        branch = -1;
+        status = TaskStatus::Done;
+        Task* up = parent;
+        parent = nullptr;
+        trace->push_back((Int) ChainStep::ChildReleasedParent);
+        if (up != nullptr) {
+            up->release();
+            up->resume();
+            trace->push_back((Int) ChainStep::ChildResumedRoot);
+        }
     }
-    for (Int i = 0; i < ioThreads; i = i + 1) {
-        shared.workers.push_back(std::thread(simse_tasks::worker, &shared));
+};
+
+// The *root* of the chain - the caller that suspends. Step one's `main`.
+struct ChainRoot : Task {
+    ChainTrace* trace = nullptr;
+    // The compiler's storage for the suspension: the counted handle to the child. It is dead at
+    // the resume label, which is why its frame slot can be reused afterwards.
+    ChainChild* child = nullptr;
+
+    void run() override {
+        if (branch == 0) {
+            trace->push_back((Int) ChainStep::RootStart);
+            ChainChild* c = new ChainChild();
+            c->loop = loop;
+            c->trace = trace;
+            child = c;
+            loop->enqueue(c);  // a fresh task starts Runnable
+            trace->push_back((Int) ChainStep::ChildCreated);
+            if (c->status != TaskStatus::Done) {
+                // It really suspended: the child holds the parent (counted), the caller records
+                // where to resume and steps aside. This `if` is the sync-completion fast path - a
+                // callee that ran to completion never suspends the caller, and creates no frame.
+                c->parent = this;
+                this->retain();
+                branch = 1;
+                status = TaskStatus::Suspended;
+                trace->push_back((Int) ChainStep::RootSuspended);
+                return;
+            }
+        }
+        // L1: the resume label, where the child handed us back.
+        trace->push_back((Int) ChainStep::RootResumed);
+        // Read the value out *before* the drop: values cross a suspension, handles do not, so the
+        // child may go immediately. This last release is ordinary single-threaded code on the loop,
+        // which is why freeing a task needs no lock.
+        Int got = child->result;
+        trace->push_back(got);
+        child->release();
+        child = nullptr;
+        trace->push_back((Int) ChainStep::RootDroppedChild);
+        // `return v`: the root's own completion - nothing above it to resume.
+        result = got;
+        branch = -1;
+        status = TaskStatus::Done;
+        trace->push_back((Int) ChainStep::RootDone);
     }
+};
+
+}  // namespace simse_tasks
+
+void simse_tasksQueue(Int id, Int threads) {
+    simse_tasks::queueFor(&simse_tasks::storage(), id, threads);
 }
 
 void simse_tasksStop() {
     simse_tasks::Pool& shared = simse_tasks::storage();
+    std::vector<simse_tasks::Queue*> all;
     {
-        std::lock_guard<std::mutex> lock(shared.workMutex);
-        shared.closed = true;
+        std::lock_guard<std::mutex> lock(shared.tableMutex);
+        all = shared.queues;
     }
-    shared.workReady.notify_all();
-    for (Int i = 0; i < (Int) shared.workers.size(); i = i + 1) {
-        std::thread& thread = shared.workers[(std::size_t) i];
-        if (thread.joinable()) {
-            thread.join();
+    for (std::size_t i = 0; i < all.size(); i++) {
+        if (all[i] == nullptr) continue;
+        {
+            std::lock_guard<std::mutex> lock(all[i]->workMutex);
+            all[i]->closed = true;
         }
+        all[i]->workReady.notify_all();
     }
-    shared.workers.clear();
+    for (std::size_t i = 0; i < all.size(); i++) {
+        if (all[i] == nullptr) continue;
+        for (std::size_t w = 0; w < all[i]->workers.size(); w++) {
+            if (all[i]->workers[w].joinable()) {
+                all[i]->workers[w].join();
+            }
+        }
+        all[i]->workers.clear();
+    }
 }
 
-void simse_tasksSubmitRead(Int slot, const Str& path) {
+void simse_tasksSubmitReadOn(Int id, Int slot, const Str& path) {
     simse_tasks::Pool& shared = simse_tasks::storage();
     // The two locks are never held at once, so there is no order to get wrong.
     {
@@ -1186,14 +1414,17 @@ void simse_tasksSubmitRead(Int slot, const Str& path) {
             shared.texts.resize((std::size_t) slot + 1);
         }
     }
+    // A queue nobody made still works: one worker, so a program that forgot `simse_tasksQueue`
+    // gets a pool of one rather than a job that never runs.
+    simse_tasks::Queue* queue = simse_tasks::queueFor(&shared, id, 1);
     {
-        std::lock_guard<std::mutex> lock(shared.workMutex);
-        shared.work.push_back(simse_tasks::Job{slot, path});
+        std::lock_guard<std::mutex> lock(queue->workMutex);
+        queue->work.push_back(simse_tasks::Job{slot, path});
     }
-    shared.workReady.notify_one();
+    queue->workReady.notify_one();
 }
 
-// The structural join: wait until `count` jobs have settled, whatever order they finished in.
+// The structural join: wait until `count` jobs have settled, whatever queue ran them.
 void simse_tasksJoin(Int count) {
     simse_tasks::Pool& shared = simse_tasks::storage();
     std::unique_lock<std::mutex> lock(shared.doneMutex);
@@ -1207,6 +1438,27 @@ Str simse_tasksText(Int slot) {
         return Str();
     }
     return shared.texts[(std::size_t) slot];
+}
+
+// The chain's driver: build the root, hand it to the loop, drive it, and answer the steps it
+// recorded - the one value that crossed the suspension among them. Step one's proof, scaffolding
+// for `emitTask`; a program never names a task.
+List<Int> simse_tasksChainTrace() {
+    simse_tasks::Loop loop;
+    simse_tasks::ChainTrace trace;
+    simse_tasks::ChainRoot* root = new simse_tasks::ChainRoot();
+    root->loop = &loop;
+    root->trace = &trace;
+    loop.enqueue(root);
+    loop.drive();
+    // The runtime's handle to the root, dropped when the root completes - the same rule the loop
+    // applies one level down.
+    root->release();
+    List<Int> steps;
+    for (std::size_t i = 0; i < trace.size(); i++) {
+        steps.push_back(trace[i]);
+    }
+    return steps;
 }
 ```
 

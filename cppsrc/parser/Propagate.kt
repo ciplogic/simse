@@ -231,31 +231,21 @@ fun propTypeEqual(a: AstXmlNode, b: AstXmlNode): Bool {
     return false
 }
 
-// The `T` of a `Res<T>` return type, looking through one `Async<...>` wrapper: an async
-// function returns `Async<Res<T>>`, and `!!` inside it still propagates a `Res<T>` - the
-// `return` carrying the failure is the machine's own completion.
+// The `T` of a `Res<T>` return type. With `suspend` a modifier rather than an `Async<...>`
+// wrapper (impl_specs/async.md), a suspending function's return type is the plain one, so `!!`
+// reads a `Res<T>` payload straight out - there is no wrapper to look through any more.
 fun propResInner(typeNode: *AstXmlNode): AstXmlNode {
-    var current: AstXmlNode = *typeNode
-    var guard: Int = 0
-    while (guard < 4) {
-        guard = guard + 1
-        if (xmlKind(current) != AstNodeCategory.TypeGeneric) {
-            return xmlEmptyNode()
-        }
-        val name: Str = xmlAttr(current, AstNodeAttributeKind.Name)
-        val arg: AstXmlNode = xmlChild(current, AstNodeKind.TypeArg)
-        if (xmlIsEmpty(arg)) {
-            return xmlEmptyNode()
-        }
-        if (name == "Res") {
-            return arg
-        }
-        if (name != "Async") {
-            return xmlEmptyNode()
-        }
-        current = arg
+    if (xmlKind(typeNode) != AstNodeCategory.TypeGeneric) {
+        return xmlEmptyNode()
     }
-    return xmlEmptyNode()
+    if (xmlAttr(typeNode, AstNodeAttributeKind.Name) != "Res") {
+        return xmlEmptyNode()
+    }
+    val arg: AstXmlNode = xmlChild(typeNode, AstNodeKind.TypeArg)
+    if (xmlIsEmpty(arg)) {
+        return xmlEmptyNode()
+    }
+    return arg
 }
 
 // Every typed local of a function body, by name.

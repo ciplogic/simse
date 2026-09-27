@@ -460,8 +460,9 @@ fun main(args: List<Str>): Int {
     }
 
     // `--showAsync`: the coloring the machine lowering will act on (cppsrc/sema/Async.kt). It
-    // runs *before* sema because `Async<T>` is not a type the checker knows yet - the dump is
-    // how the inference is checked while the state machine is still being built.
+    // runs *before* sema so the dump is available while the lowering is still being built: a
+    // program that calls a suspending function has no task to run yet, so it does not compile,
+    // and the dump is how the inference is checked in the meantime.
     if (showAsync) {
         var asyncFunctions: List<AstXmlNode> = List<AstXmlNode>()
         for (*preludeModule in preludeModules) {
