@@ -347,7 +347,10 @@ Key design points:
 - **Native boundary** (see `impl_specs/native-interop.md`): a body-less method with an
   `@SmGen` attribute declares a function whose body is C++ somewhere else, and a program
   reaches hand-written C++ with `@SmGen("cpp", "Symbol")` - the FFI spelling, which the
-  deleted `native("Symbol")` keyword used to be sugar for. A body that is a
+  deleted `native("Symbol")` keyword used to be sugar for. `@SmGen("native", library[, symbol])`
+  is the P/Invoke form: the symbol is a shared library's, resolved at run time with
+  `LoadLibraryA`/`GetProcAddress` (`cppsrc/sourcegen/NativeInvokeGen.kt`, Windows only today),
+  so a program links nothing and needs no header (`docs/examples/sdl2`). A body that is a
   *resource* is `@SmGen("res", section[, symbol])`
   instead, which is where the RTL's own operations live now (`cppsrc/rtl/_res.md`) -
   including the platform's file I/O and clocks (`fileio`, `timeops`), which are
@@ -529,8 +532,9 @@ its trailing arguments, `specs/functions.md`); `Dictionary<K,V>` (`get`/`getPtr`
 functions (`specs/functions.md`);
 **attributes** (`@Identifier` + `@SmGen`, one per declaration, methods
 only: `specs/attributes.md`, `impl_specs/generators.md`) with the `cpp` (headers), `res`
-(C++ from a resource), `kt` (generated Simse source) and `json` (Simse built in code
-from the program's types - `value.toJson()`) generators, and the `Sections`
+(C++ from a resource), `kt` (generated Simse source), `json` (Simse built in code
+from the program's types - `value.toJson()`) and `native` (a shared library,
+resolved at run time with `LoadLibraryA`) generators, and the `Sections`
 sink; `val`/`var` (locals, and at file level **static storage** -
 `specs/statics.md`); `if`/`else`, `when`, `while`,
 `break`/`continue`, `return`; the bitwise operators `& | ^ << >>` (precedence: bitwise

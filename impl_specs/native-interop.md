@@ -1,6 +1,8 @@
 # Native interop (hand-written C++)
 
-Status: decision recorded for T10; the spelling settled in T83.
+Status: decision recorded for T10; the spelling settled in T83; the run-time `native`
+generator (`LoadLibraryA`/`GetProcAddress`) is implemented
+(`cppsrc/sourcegen/NativeInvokeGen.kt`, `stress/native-invoke`, `docs/examples/sdl2`).
 
 ## Declaration form
 
@@ -53,6 +55,64 @@ Native functions report failure through `Res<T>` (an error `Str`), not C++
 exceptions. A function that returns `Res<T>` maps its error message into the
 `Res` value; the runtime's `isOk()` reads the union's tag, so `Res<T>.err("")` is a
 failure like any other (`cppsrc/rtl/variant2.hpp`, `impl_specs/rtl-abi.md`).
+
+## The `native` generator: P/Invoke
+
+`@SmGen("native", library[, symbol])` binds a declaration to an exported symbol of a native
+**shared library**, resolved at run time - the P/Invoke shape, and the C# `[DllImport]`
+analogue:
+
+```text
+@SmGen("native", "SDL2.dll", "SDL_Init") fun sdlInit(flags: Int): Int
+@SmGen("native", "SDL2.dll") fun SDL_Quit(): Unit      // symbol = the declaration's own name
+```
+
+The declaration is an ordinary body-less method with a Simse signature, and the *reader writes
+the ABI's signature* the way a `[DllImport]` declaration does: `Int` is the native `int`, and a
+handle is `*Int8`, crossing as the library's own pointer. Nothing is linked and no header is
+needed at the call site; what a call reaches is a generated **thunk**, emitted per reached
+declaration into `forward` and `bodies`, with one shared loader in `support`:
+
+```cpp
+// includes/support, once per program that reaches a `native` declaration
+#include <windows.h>
+inline FARPROC __sm_nativeResolve(const char* library, const char* symbol) {
+    /* LoadLibraryA once, cached; then GetProcAddress */
+}
+
+// forward/bodies, per reached declaration; every call reaches this, not the native symbol
+Int32 __sm_native_sdlInit(const Int32& flags) {
+    using Fn = Int32 (*)(Int32);
+    static Fn fn = (Fn) __sm_nativeResolve("SDL2.dll", "SDL_Init");
+    if (fn == nullptr) return Int32{0};
+    return fn(flags);
+}
+```
+
+- **Nothing to link.** The library is loaded on the first call (`LoadLibraryA`) and the symbol
+  resolved (`GetProcAddress`), so a program stays one translation unit and an import library is
+  irrelevant. Only the DLL has to be findable at run time (beside the executable, or on the
+  search path). A missing library or symbol answers the declaration's default value (0, an empty
+  `Str`, a null pointer) rather than crashing.
+- **The cast is the generator's.** The `FARPROC` is cast to the function pointer the
+  declaration's signature builds (`(Fn)`), which is where a compatible-but-different ABI type
+  (`Uint32` for `Int`, `Uint8` for `Int`) is reconciled - the same latitude P/Invoke takes.
+- **Handles are raw pointers.** A `*T` parameter or return is the native pointer (`void*`
+  inside the function pointer), cast at the thunk's edge, so an opaque library type
+  (`SDL_Window*`) is a `*Int8`. This is also how a union-style API is reached: the bytes of an
+  `SDL_Event` are owned by a `res` section that includes the real header and reinterprets them,
+  because the language has no cast (`docs/examples/sdl2/wrapper/_res.md`).
+- **Types.** The generator maps `Int`/`Int32`/`Int8`/`Int16`/`Int64`, `Float32`/`Float64`,
+  `Bool`, `Char`, `Str` (a native `const char*`, a returned one copied into an owned `Str`) and
+  `*T`; anything else is a diagnostic naming the declaration.
+- **Reach-gated.** A declaration nothing calls emits no thunk, so a module's binding costs a
+  program only what it uses (the rule `<section>:emit` = `reached` gives a resource), and the
+  compiler's own build pays nothing for a module it carries but never calls.
+- **One thunk per declaration name.** The generated symbol is `__sm_native_<declaration>`, so two
+  packages that both declare, say, `open` share a thunk only when they name the same library and
+  symbol; a different binding is a diagnostic rather than a silent merge.
+- Windows is the only loader today (`LoadLibraryA`/`GetProcAddress`); a `dlopen`/`dlsym` arm
+  belongs in the generator's own text.
 
 ## Prelude
 

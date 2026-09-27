@@ -1,6 +1,6 @@
 # Generators (`@SmGen`)
 
-Status: **implemented** for the `cpp`, `res`, `kt` and `json` generators, the `Sections` sink,
+Status: **implemented** for the `cpp`, `res`, `kt`, `json` and `native` generators, the `Sections` sink,
 and the bootstrap path. Per-*reach* generation - a declaration whose output is built for the
 instantiations a program actually uses - is deferred (see the end); `json` is the first slice of
 the "output built in code" kind, and it emits one serializer per type the program declares.
@@ -67,9 +67,10 @@ Every generator is **one file** under `cppsrc/sourcegen/`, and a `SourceGenerato
 | `ResGen.kt` | `res` | a resource section | no | yes |
 | `KtGen.kt` | `kt` | Simse source, compiled with the program | no | no |
 | `JsonGen.kt` | `json` | Simse source, *built in code* from the program's types | no | no |
+| `NativeInvokeGen.kt` | `native` | a shared library, resolved at run time (`LoadLibraryA`) | no | no |
 
 Each module's generators live in a `generators/` subfolder - the `json` module's is
-`cppsrc/modules/json/generators/JsonGen.kt` - and the built-in three are one file each under
+`cppsrc/modules/json/generators/JsonGen.kt` - and the built-in four are one file each under
 `cppsrc/sourcegen/`. A module's `generators/` is **compiler-side**: `--root` scans a tree whole
 (so the compiler's own build compiles the generators in), while `--module` names a module and
 scans it without its `generators/`, so a program that imports the module gets its declarations and
@@ -353,6 +354,19 @@ than a resource. A program names the module (`--module cppsrc/modules/json`) and
   type alias is a diagnostic naming the field, and a generic data class is rejected. Generation is
   program-wide (every class the program declares), not per reach - the deferred step's pieces.
 
+## The `native` generator
+
+`@SmGen("native", library[, symbol])` binds a declaration to an exported symbol of a native
+shared library, resolved on the first call with `LoadLibraryA`/`GetProcAddress` - the P/Invoke
+shape (`impl_specs/native-interop.md`, "The `native` generator: P/Invoke"). It is the generator
+whose output names neither a resource nor a program type: the shared loader goes to `support`,
+and each reached declaration's thunk (a `forward` declaration and a `bodies` definition) casts
+the resolved `FARPROC` to the function pointer its own signature builds. A `*T` is `void*`
+inside that pointer and cast at the thunk's edge, which is how a `[DllImport]`-style binding
+reaches an opaque handle. Windows is the only loader today; `docs/examples/sdl2` is the worked
+example and `stress/native-invoke` the headless check (it binds `kernel32.dll`, which is always
+there, so the loader is what is under test).
+
 ## Regression discipline
 
 Every bug found while building this gets a **minimal reproducer** committed with the fix:
@@ -373,6 +387,8 @@ text is the point - an `expected.cpp` golden), or a focused check.
 | `stress/diagnostic-bodyless-method` | a body-less method with no attribute is rejected |
 | `stress/diagnostic-attribute-arg` | an attribute argument must be a literal |
 | `stress/diagnostic-attribute-token` | a `@` not followed by an identifier is a scanner error |
+| `stress/native-invoke` | the `native` generator: a run-time-bound `kernel32.dll` symbol works (a scalar and a `Str` return) |
+| `stress/diagnostic-native-no-library` | a `native` declaration naming no library is rejected by name |
 
 ## Deferred
 

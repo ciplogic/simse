@@ -3883,3 +3883,35 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   run time, so the marks needed a two-build: a debug compiler that *parses* `data`, then the
   release build that uses it). No existing `expected.cpp` moved - the marks enable exactly the
   reuses the old name whitelist already had, plus `count`, which no case folds twice.
+
+- **The `native` generator: a P/Invoke-style binding to a shared library.** `@SmGen("native",
+  library[, symbol])` declares a body-less method whose implementation is an exported symbol of a
+  native DLL, resolved at run time - the C# `[DllImport]` shape, and the one FFI form the five
+  generators did not have (`cpp` needs the C++ linked in, `res`/`kt` need a resource). One new
+  file, `cppsrc/sourcegen/NativeInvokeGen.kt`, self-registers as `native` with
+  `declaresPrototype`/`registersReceiver` both `false`.
+
+  - **What it emits.** A shared loader into `support` (`__sm_nativeResolve`: `LoadLibraryA` once
+    per library, cached in a 16-entry table, then `GetProcAddress`), `windows.h`/`cstring` into
+    `includes`, and per reached declaration a thunk into `forward`/`bodies`:
+    `static Fn fn = (Fn) __sm_nativeResolve("SDL2.dll", "SDL_Init");` where `Fn` is the function
+    pointer the declaration's *own* signature builds. The `FARPROC` cast is where a
+    compatible-but-different ABI type (`Uint32` for `Int`, `Uint8` for `Int`) is reconciled, and a
+    `*T` is `void*` inside `Fn` and cast at the thunk's edge - which is why an opaque `SDL_Window*`
+    is a `*Int8` in Simse, and why the caller writes the ABI's signature the way it writes a
+    `[DllImport]` one. Nothing is linked and no header is needed; a missing library or symbol
+    answers the declaration's default value (`0`, an empty `Str`, `nullptr`) rather than crashing.
+  - **Reach-gated like `emit: reached`.** `Emit` returns without text when `ctx.isReached()` is
+    false, so a module's binding costs a program only what it calls - and the compiler's own build
+    pays nothing for a module it scans but never reaches.
+  - **A union stays C++.** Simse has no pointer cast, so `SDL_Event` (a union of every event shape)
+    is owned by a small `res` section in the wrapper's `_res.md`, which includes the real header
+    and reinterprets the bytes (`SDL_Event*` for the type, `SDL_KeyboardEvent*` once the type says
+    `SDL_KEYDOWN`).
+
+  Verified: `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js`
+  - both fixed points byte for byte; `bun tools/stress.js` **47/47**, the two new cases being
+  `stress/native-invoke` (binds `kernel32.dll`'s `GetCurrentProcessId`/`GetCommandLineA`, so the
+  loader is under test anywhere a Windows toolchain runs) and `stress/diagnostic-native-no-library`.
+  The worked example is `docs/examples/sdl2` - a `sdl2` wrapper module and a window that Escape
+  quits - built and run on this machine.

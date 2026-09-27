@@ -73,6 +73,8 @@ _simse/
 /docs/examples/**/*.exe
 /docs/examples/**/*.pdb
 /docs/examples/**/*.ilk
+### The SDL2 example copies the DLL it binds at run time (docs/examples/sdl2/run.bat) ###
+/docs/examples/sdl2/app/SDL2.dll
 
 ### 1BRC benchmark: generated data and the C++ baseline build ###
 /benchmarks/onebrc/data/
