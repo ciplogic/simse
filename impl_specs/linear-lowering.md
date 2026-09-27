@@ -74,10 +74,16 @@ code it came from:
 ```
 goto L; L:;                     -> L:;                       (nothing to jump to)
 if (c) goto L; L:;              -> L:;                       (same, conditional)
-ifTrue (c) goto A; goto B; A:;  -> ifFalse (c) goto B;       (the if/else fold)
 goto L; <unreachable> L:;       -> goto L; L:;
 L:; (nothing jumps to it)       -> (removed)
 ```
+
+The pass does **not** invert a condition. `ifTrue (c) goto A; goto B; A:;` used to fold into
+`ifFalse (c) goto B;` - one jump fewer, but the emitted text then tested the *negation* of
+what the program wrote, and an `if`'s arm was found by falling into it rather than by the
+branch that named it. The fold is gone: a branch keeps the condition the lowering gave it
+(`StmtIfTrue` for the condition as written), the arm is reached by the branch to its label,
+and the else entry is the `goto` after it.
 
 The dead-code rule removes the `goto` that follows a `return`/`goto` up to the next label
 (labels are kept: a `break`/`continue` may still target them). The pass repeats to a fixed
@@ -94,7 +100,9 @@ whose only jump the lowering had just wrapped - a `goto` to a missing label.
 Applied to the shapes above, `if (c) { T } else { E }` becomes:
 
 ```
-if (!(c)) goto L2;      # the else entry (L2), with L1's label gone
+if (c) goto L1;         # the then entry, the branch the source names
+    goto L2;            # ... and the else entry it does not take
+L1:;
     T'
     goto L3;
 L2:;

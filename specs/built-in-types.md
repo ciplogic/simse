@@ -61,6 +61,14 @@ it, exactly alike (`impl_specs/rtl-abi.md`): a backtick string is spelled as the
 ordinary `"..."` literal denoting the same bytes, so nothing downstream distinguishes
 them.
 
+A string a literal is compared against is tested as a view of it, not a copy: the parser
+wraps a *place* operand of a comparison with a literal (`name == "Int"`) in `spanOfStr`
+(`cppsrc/rtl/StrView.kt`, `Parser.kt`'s `parseExpr`), so the comparison reads the bytes in
+place - a `*Str` operand is not read through, and a `Str` one is not copied - and the
+comparisons resolve to the view operators. A call's or an operation's result is materialised
+anyway, so it is left as it stands. `when` over string literals does the same for its tests
+(`specs/functions.md`).
+
 ## Operators
 
 Status: required for the first implementation.

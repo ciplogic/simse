@@ -3779,3 +3779,45 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   Verified: `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js`
   - both fixed points byte for byte; `bun tools/stress.js` **44/44**, the ten `expected.cpp`
   goldens refreshed for the new lowering and the `strview` comment.
+
+- **A branch keeps its condition, a `Str`/literal comparison reads a view, and a repeated
+  pure call is one call.** Four changes that share one thread - the emitted C++ should read
+  the way the program does, and should not copy a string to ask what it is.
+
+  - **The `if` fold is gone.** `linSimplifyBody` (`cppsrc/linear/Simplify.kt`) used to fold
+    `ifTrue (c) goto A; goto B; A:` into `ifFalse (c) goto B;` - one jump fewer, but the
+    emitted text then tested the negation of what the source wrote, and the arm was reached
+    by falling into it. The fold is removed: a branch names the condition as written
+    (`if (c) goto then; goto else; then:; ...`), which is the shape `Parser.kt`'s `when`
+    desugar already emits (`impl_specs/linear-lowering.md`, "Simplification stage").
+  - **`StrView[i]` is typed `Char`.** `SemInfer.infer`'s index rule now resolves the
+    receiver's `typealias` first (`cppsrc/sema/TypeInfer.kt`), so `StrView` reaches
+    `Span<Char>` and its element is `Char` instead of `?`. A `when` length-one guard therefore
+    declares `Char _sm_expr` at the top of the body rather than an untyped `auto` in a block:
+    a typed slot is declared once with the frame, an untyped one has to be scoped
+    (`ilDeclaredAtTop`/`ilFolded`, `cppsrc/codegen/IlCodeGen.kt`).
+  - **A string comparison against a literal compares views.** `Parser.parseExpr` wraps a
+    *place* operand of a comparison with a string literal in `spanOfStr` (`Parser.kt`), so
+    `name == "Int"` is `spanOfStr(name) == "Int"` - a view against a view, read in place -
+    where the old shape bound `*name` to a `Str` temporary (a heap copy past the inline buffer)
+    to compare it. Only a place is wrapped: a call's or an operation's result is materialised
+    anyway. `when`'s own tests already did this; the two now agree.
+  - **`ReusePure.kt`: a repeated pure call of an unchanged slot is merged into the first one.**
+    The comparison rewrite turns `semIsBuiltinType`'s nineteen `name == "<type>"` tests into
+    nineteen `spanOfStr(name)` calls; the pass keeps the first and every later one reads its
+    slot, so the body builds **one** view and tests every label against it. It is at the IL
+    (`cppsrc/linear/ReusePure.kt`, run beside `ilFuseConcatUnit`), where a slot's defs and uses
+    are one list. It declines rather than guess: a call whose argument the body writes, an
+    argument a callee receives as a raw pointer or counted reference (the callee may write
+    through it - a by-value parameter is safe), a first call outside the body's first block
+    (it would not dominate the uses), an untyped slot, an indirect callee, and a slot whose
+    writers are not exactly the merged calls' own (the local merge re-uses a slot for another
+    value, and reading it back would be the wrong value). `spanOfStr` is the only reusable
+    callee today; the mechanism is the same for `name.size()` and the rest.
+
+  Verified: `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then
+  `bun tools/bootstrap.js` - both fixed points byte for byte; `bun tools/stress.js` **44/44**
+  with the ten `expected.cpp` goldens refreshed. The compiler's own transpile went 1.19 s to
+  1.30 s (the emitted C++ is ~13% longer from the un-inverted branches), after the reuse pass's
+  own scans were made one walk with a cached signature table - the first shape of the pass cost
+  0.85 s of transpile time, none of it in the emitted program.

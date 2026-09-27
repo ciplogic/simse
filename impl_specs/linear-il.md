@@ -324,6 +324,20 @@ body whose dump has neither is fully covered by the IL.
   the runtime's own `fmtStr` still answers. `--no-concat` turns the whole pass off (a `+`
   chain and a literal `fmtStr` keep the lowering's shape, and the `strcat` section goes
   with it): the A/B switch for what the fusion costs and what it buys, off by default.
+- **A repeated pure call of an unchanged slot is merged into the first one**
+  (`cppsrc/linear/ReusePure.kt`). A `Str` tested against literals lowers to a view of it per
+test - `spanOfStr(name) == "Int" || spanOfStr(name) == "Int8" || ...` (`Parser.kt`'s
+comparison rewrite) - and every one of those calls answers the same view, because `name` is
+not written in the body and no call could write through it. The pass keeps the *first* call
+of a `(callee, argument)` pair - which must stand in the body's first block, so it dominates
+every use - and every later one becomes a read of its slot. A slot a callee receives as a raw
+pointer or counted reference counts as written (the callee may write through it), and a slot
+the local merge re-used for another value refuses the group (its writer set must be the
+group's own calls). It declines rather than guess - a call whose argument is written, a
+first call outside the first block, an untyped slot, an indirect callee - and leaves the
+code as it was. The pass is deliberately narrow today: `spanOfStr` alone is reused, while
+the mechanism is the same for any accessor whose value is a function of its argument
+(`name.size()` is the next one).
 - **A call argument's handle is inferred by the extractor** (`specs/functions.md`,
   "Handles at a call"): the instruction list gets a `Deref` (an address, or a counted
   reference's `.get()`), a `CopyValue` (a copy of a pointee) or a `Box` (a boxed copy)
