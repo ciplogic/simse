@@ -336,13 +336,18 @@ data class Emitter(
         this.sections.appendLine(cgIndent(level), text)
     }
 
+    // The amalgamation's source map, one comment per emitted declaration: the *file* a body
+    // came from, not the line. The line made the comment move whenever any body above it moved
+    // a line, so a small edit to one file rewrote thousands of lines of the emitted C++ (and of
+    // every `expected.cpp` golden); the file alone is what a reader of the one emitted file
+    // needs, and it keeps the amalgamation stable across edits that do not change a declaration.
     fun sourceComment(posNode: *AstXmlNode): Unit {
         // A prelude body is the compiler's own RTL, not the program being built: naming its
         // source would put a machine-specific path in the user's file.
         if (this.curPrelude) {
             return
         }
-        this.line(0, fmtStr("// |:|", this.curFile, xmlLine(posNode).toString()))
+        this.line(0, "// " + this.curFile)
     }
 
     fun namedTypeExpr(name: *Str): AstXmlNode {

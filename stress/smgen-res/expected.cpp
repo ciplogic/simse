@@ -192,7 +192,7 @@ Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& val
 template <class T, class F>
 void simse_list_sort(List<T>& self, F less);
 
-// stress/smgen-res/src/main.kt:12
+// stress/smgen-res/src/main.kt
 int main() {
     List<Int>* _sm_base1;
     List<Int> items;

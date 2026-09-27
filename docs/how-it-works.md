@@ -98,12 +98,14 @@ declaration of a body is at the top of it and the body is one scope
 labels, gotos and assignments:
 
 ```cpp
-List<Str> ns1_words(Str& self);
-// docs/examples/tour/src/main.kt:7
-List<Str> ns1_words(Str& self) {
-    return simse_str_split(self, " ");
+List<Str> ns1_words(Str* self);
+// docs/examples/tour/src/main.kt
+List<Str> ns1_words(Str* self) {
+    List<Str> _sm_expr1;
+    _sm_expr1 = simse_str_split((*self), __sm_stringTable[2]);
+    return _sm_expr1;
 }
-// docs/examples/tour/src/main.kt:11
+// docs/examples/tour/src/main.kt
 int main() {
     Str text;
     Dictionary<Str, Int> counts;
@@ -113,7 +115,7 @@ int main() {
     Bool _sm_expr2;
     Str _sm_expr3;
     Opt<Int> seen;
-    text = "one two two three three three";
+    text = __sm_stringTable[0];
     counts = simse_dictionaryOf<Str, Int>();
     words = ns1_words(simse_addressOf(text));
     i = 0;
@@ -123,11 +125,18 @@ int main() {
     if (!(_sm_expr2)) goto L2;
     _sm_expr3 = words[i];
     seen = simse_dict_get(counts, _sm_expr3);
-    if (!(seen.hasValue())) goto L4;
-    simse_dict_insert(counts, words[i], seen.value() + 1);
+    _sm_expr2 = seen.hasValue();
+    if (_sm_expr2) goto L3;
+    goto L4;
+    L3:;
+    _sm_expr1 = seen.value();
+    _sm_expr5 = _sm_expr1 + 1;
+    _sm_base2 = words[i];
+    simse_dict_insert(counts, _sm_base2, _sm_expr5);
     goto L5;
     L4:;
-    simse_dict_insert(counts, words[i], 1);
+    _sm_base3 = words[i];
+    simse_dict_insert(counts, _sm_base3, 1);
     L5:;
     i = i + 1;
     goto L1;
@@ -140,9 +149,9 @@ int main() {
 
 Note what is *not* there: no metadata tables, no reflection data, no class
 hierarchy, no heap allocation for the `while` loop or the dictionary entry unless
-the data structure itself needs one. The source-map comments (`// path:line`)
-point every generated statement back at the Simse line that produced it, which is
-what makes the output debuggable.
+the data structure itself needs one. The source-map comments (`// path`) point
+every generated declaration back at the Simse file that produced it, which is what
+makes the output debuggable.
 
 ## The bootstrap fixed point (and why the build trusts it)
 

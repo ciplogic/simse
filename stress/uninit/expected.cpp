@@ -236,7 +236,7 @@ Str simse_char_toString(Char self);
 Str simse_bool_toString(Bool self);
 
 struct ns1_Res;
-// stress/uninit/src/main.kt:11
+// stress/uninit/src/main.kt
 SIMSE_PACK_PUSH
 struct ns1_Res {
     Int id;
@@ -247,7 +247,7 @@ SIMSE_PACK_POP
 void ns1_oneOwner();
 void ns1_twoOwners();
 
-// stress/uninit/src/main.kt:12
+// stress/uninit/src/main.kt
 ns1_Res::~ns1_Res() {
     char* __sm_catP;
     Str _sm_expr1, _sm_expr2;
@@ -259,7 +259,7 @@ ns1_Res::~ns1_Res() {
     std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
     std::cout << std::boolalpha << (_sm_expr2) << std::endl;
 }
-// stress/uninit/src/main.kt:18
+// stress/uninit/src/main.kt
 void ns1_oneOwner() {
     char* __sm_catP;
     Int __sm_catC0;
@@ -276,7 +276,7 @@ void ns1_oneOwner() {
     simse_strAddInt(__sm_catP, (*_sm_base1), __sm_catC0);
     std::cout << std::boolalpha << (_sm_expr2) << std::endl;
 }
-// stress/uninit/src/main.kt:24
+// stress/uninit/src/main.kt
 void ns1_twoOwners() {
     char* __sm_catP;
     Int __sm_catC0;
@@ -294,7 +294,7 @@ void ns1_twoOwners() {
     simse_strAddInt(__sm_catP, (*_sm_base1), __sm_catC0);
     std::cout << std::boolalpha << (_sm_expr2) << std::endl;
 }
-// stress/uninit/src/main.kt:30
+// stress/uninit/src/main.kt
 int main() {
     ns1_oneOwner();
     ns1_twoOwners();

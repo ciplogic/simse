@@ -57,7 +57,7 @@ Int64 simse_nowNanos();
 // reaches this text, and the emitter never emits a prototype of its own for it.
 Int fixtures_triple(Int value);
 
-// stress/smgen-res-program/src/main.kt:11
+// stress/smgen-res-program/src/main.kt
 int main() {
     Int _sm_expr1;
     _sm_expr1 = fixtures_triple(14);

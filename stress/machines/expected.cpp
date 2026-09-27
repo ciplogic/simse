@@ -357,7 +357,7 @@ Res<Str> ns1_parse(Int n);
 Str ns1_describe(Int n);
 Int ns1_countUntil(List<Str> names);
 Int ns1_partFlatBlocks();
-// stress/machines/src/main.kt:91
+// stress/machines/src/main.kt
 template <class T>
 struct ns1_List_everyNth_yieldable {
     Int branch{};
@@ -404,7 +404,7 @@ struct ns1_List_everyNth_yieldable {
 template <class T>
 ns1_List_everyNth_yieldable<T> ns1_everyNth(List<T>* self, Int step);
 Int ns1_partGenericYield();
-// stress/machines/src/main.kt:158
+// stress/machines/src/main.kt
 struct ns1_everyOther_yieldable {
     Int branch{};
     Int current{};
@@ -449,7 +449,7 @@ struct ns1_everyOther_yieldable {
 };
 
 ns1_everyOther_yieldable ns1_everyOther();
-// stress/machines/src/main.kt:172
+// stress/machines/src/main.kt
 struct ns1_countdown_yieldable {
     Int branch{};
     Int current{};
@@ -484,7 +484,7 @@ struct ns1_countdown_yieldable {
 };
 
 ns1_countdown_yieldable ns1_countdown();
-// stress/machines/src/main.kt:184
+// stress/machines/src/main.kt
 struct ns1_shadowing_yieldable {
     Int branch{};
     Int current{};
@@ -541,12 +541,12 @@ List_iter_yieldable<T> iter(List<T>* self) {
     machine.branch = 0;
     return machine;
 }
-// stress/machines/src/main.kt:5
+// stress/machines/src/main.kt
 Int ns1_compute() {
     std::cout << std::boolalpha << (__sm_stringTable[8]) << std::endl;
     return 3;
 }
-// stress/machines/src/main.kt:10
+// stress/machines/src/main.kt
 Int ns1_partDeadCode() {
     Int live;
     ns1_compute();
@@ -554,7 +554,7 @@ Int ns1_partDeadCode() {
     std::cout << std::boolalpha << (live) << std::endl;
     return 0;
 }
-// stress/machines/src/main.kt:32
+// stress/machines/src/main.kt
 Opt<Int> ns1_pick(Int i) {
     Bool _sm_expr1;
     Opt<Int> _sm_expr2;
@@ -575,7 +575,7 @@ Opt<Int> ns1_pick(Int i) {
     _sm_expr2 = Opt<Int>::some(i);
     return _sm_expr2;
 }
-// stress/machines/src/main.kt:42
+// stress/machines/src/main.kt
 Res<Str> ns1_parse(Int n) {
     Bool _sm_expr1;
     Res<Str> _sm_expr2;
@@ -589,7 +589,7 @@ Res<Str> ns1_parse(Int n) {
     _sm_expr2 = Res<Str>::ok(__sm_stringTable[9]);
     return _sm_expr2;
 }
-// stress/machines/src/main.kt:49
+// stress/machines/src/main.kt
 Str ns1_describe(Int n) {
     Res<Str> r;
     Bool _sm_expr1, _sm_expr2;
@@ -606,7 +606,7 @@ Str ns1_describe(Int n) {
     _sm_expr3 = r.Value;
     return _sm_expr3;
 }
-// stress/machines/src/main.kt:57
+// stress/machines/src/main.kt
 Int ns1_countUntil(List<Str> names) {
     Int limit, i, _sm_expr1;
     Bool _sm_expr2;
@@ -628,7 +628,7 @@ Int ns1_countUntil(List<Str> names) {
     _sm_expr1 = names.size();
     return _sm_expr1;
 }
-// stress/machines/src/main.kt:68
+// stress/machines/src/main.kt
 Int ns1_partFlatBlocks() {
     Opt<Int> _sm_expr1, _sm_expr4;
     Int _sm_expr2, _sm_expr3, _sm_expr7, _sm_expr9;
@@ -655,7 +655,7 @@ Int ns1_partFlatBlocks() {
     std::cout << std::boolalpha << (_sm_expr9) << std::endl;
     return 0;
 }
-// stress/machines/src/main.kt:91
+// stress/machines/src/main.kt
 template <class T>
 ns1_List_everyNth_yieldable<T> ns1_everyNth(List<T>* self, Int step) {
     ns1_List_everyNth_yieldable<T> machine{};
@@ -664,7 +664,7 @@ ns1_List_everyNth_yieldable<T> ns1_everyNth(List<T>* self, Int step) {
     machine.branch = 0;
     return machine;
 }
-// stress/machines/src/main.kt:99
+// stress/machines/src/main.kt
 Int ns1_partGenericYield() {
     char* __sm_catP;
     Int __sm_catC0;
@@ -732,25 +732,25 @@ Int ns1_partGenericYield() {
     std::cout << std::boolalpha << (_sm_expr13) << std::endl;
     return 0;
 }
-// stress/machines/src/main.kt:158
+// stress/machines/src/main.kt
 ns1_everyOther_yieldable ns1_everyOther() {
     ns1_everyOther_yieldable machine{};
     machine.branch = 0;
     return machine;
 }
-// stress/machines/src/main.kt:172
+// stress/machines/src/main.kt
 ns1_countdown_yieldable ns1_countdown() {
     ns1_countdown_yieldable machine{};
     machine.branch = 0;
     return machine;
 }
-// stress/machines/src/main.kt:184
+// stress/machines/src/main.kt
 ns1_shadowing_yieldable ns1_shadowing() {
     ns1_shadowing_yieldable machine{};
     machine.branch = 0;
     return machine;
 }
-// stress/machines/src/main.kt:195
+// stress/machines/src/main.kt
 Int ns1_partYield() {
     char* __sm_catP;
     Int* _sm_base1, * _sm_base2;
@@ -863,7 +863,7 @@ Int ns1_partYield() {
     L12:;
     return 0;
 }
-// stress/machines/src/main.kt:248
+// stress/machines/src/main.kt
 int main() {
     ns1_partDeadCode();
     ns1_partFlatBlocks();

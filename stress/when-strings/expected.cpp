@@ -298,7 +298,7 @@ List_iter_yieldable<T> iter(List<T>* self) {
     machine.branch = 0;
     return machine;
 }
-// stress/when-strings/src/main.kt:13
+// stress/when-strings/src/main.kt
 Str ns1_classify(Str op) {
     Str* _sm_base1;
     StrView _sm_when1_v;
@@ -403,7 +403,7 @@ Str ns1_classify(Str op) {
     L29:;
     return __sm_stringTable[6];
 }
-// stress/when-strings/src/main.kt:44
+// stress/when-strings/src/main.kt
 Str ns1_classifyPtr(Str* op) {
     Str* _sm_base1;
     StrView _sm_when2_v;
@@ -445,7 +445,7 @@ Str ns1_classifyPtr(Str* op) {
     L7:;
     return __sm_stringTable[6];
 }
-// stress/when-strings/src/main.kt:61
+// stress/when-strings/src/main.kt
 Str ns1_viewKind(StrView v) {
     StrView _sm_when3_v;
     Int _sm_when3_n;
@@ -484,7 +484,7 @@ Str ns1_viewKind(StrView v) {
     L8:;
     return __sm_stringTable[27];
 }
-// stress/when-strings/src/main.kt:78
+// stress/when-strings/src/main.kt
 Str ns1_fixed(Str op) {
     Bool _sm_expr1;
     _sm_expr1 = op == __sm_stringTable[10];
@@ -495,7 +495,7 @@ Str ns1_fixed(Str op) {
     L2:;
     return __sm_stringTable[6];
 }
-// stress/when-strings/src/main.kt:91
+// stress/when-strings/src/main.kt
 int main() {
     char* __sm_catP;
     Str* _sm_base1;

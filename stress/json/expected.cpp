@@ -277,21 +277,21 @@ Str simse_bool_toString(Bool self);
 struct ns1_Point;
 struct ns1_Label;
 struct ns1_Shape;
-// stress/json/src/main.kt:14
+// stress/json/src/main.kt
 SIMSE_PACK_PUSH
 struct ns1_Point {
     Int x;
     Int y;
 };
 SIMSE_PACK_POP
-// stress/json/src/main.kt:15
+// stress/json/src/main.kt
 SIMSE_PACK_PUSH
 struct ns1_Label {
     Str text;
     Bool flagged;
 };
 SIMSE_PACK_POP
-// stress/json/src/main.kt:16
+// stress/json/src/main.kt
 SIMSE_PACK_PUSH
 struct ns1_Shape {
     Str name;
@@ -308,7 +308,7 @@ Str toJson(Str* self);
 Str toJson(Bool* self);
 Str toJson(ns1_Shape* self);
 
-// stress/json/src/main.kt:18
+// stress/json/src/main.kt
 int main() {
     ns1_Point p, _sm_expr3;
     Str _sm_expr1, _sm_expr2, _sm_expr5;
@@ -327,7 +327,7 @@ int main() {
     std::cout << std::boolalpha << (_sm_expr5) << std::endl;
     return 0;
 }
-// <generated>/kt.kt:7
+// <generated>/kt.kt
 Str jsonQuoted(Str value) {
     Str out;
     Int i, _sm_expr1;
@@ -389,7 +389,7 @@ Str jsonQuoted(Str value) {
     simse_str_append(out, '"');
     return out;
 }
-// <generated>/kt.kt:36
+// <generated>/kt.kt
 Str toJson(ns1_Point* self) {
     Int* _sm_base1, * _sm_base2;
     Str out, _sm_expr1, _sm_expr2;
@@ -412,13 +412,13 @@ Str toJson(ns1_Point* self) {
     simse_str_append(out, '}');
     return out;
 }
-// <generated>/kt.kt:52
+// <generated>/kt.kt
 Str toJson(Int* self) {
     Str _sm_expr1;
     _sm_expr1 = simse_int_toString((*self));
     return _sm_expr1;
 }
-// <generated>/kt.kt:55
+// <generated>/kt.kt
 Str toJson(ns1_Label* self) {
     Str* _sm_base1;
     Bool* _sm_base2;
@@ -442,13 +442,13 @@ Str toJson(ns1_Label* self) {
     simse_str_append(out, '}');
     return out;
 }
-// <generated>/kt.kt:71
+// <generated>/kt.kt
 Str toJson(Str* self) {
     Str _sm_expr1;
     _sm_expr1 = jsonQuoted((*self));
     return _sm_expr1;
 }
-// <generated>/kt.kt:74
+// <generated>/kt.kt
 Str toJson(Bool* self) {
     if ((*self)) goto L1;
     goto L2;
@@ -457,7 +457,7 @@ Str toJson(Bool* self) {
     L2:;
     return __sm_stringTable[3];
 }
-// <generated>/kt.kt:80
+// <generated>/kt.kt
 Str toJson(ns1_Shape* self) {
     Str* _sm_base1;
     ns1_Point* _sm_base2;

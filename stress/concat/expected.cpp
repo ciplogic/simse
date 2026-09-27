@@ -305,7 +305,7 @@ Str simse_char_toString(Char self);
 Str simse_bool_toString(Bool self);
 
 struct ns1_Tag;
-// stress/concat/src/main.kt:17
+// stress/concat/src/main.kt
 SIMSE_PACK_PUSH
 struct ns1_Tag {
     Str name;
@@ -376,7 +376,7 @@ Str fmtStr(StrView fmt, List<Str>* items) {
     L10:;
     return out;
 }
-// stress/concat/src/main.kt:19
+// stress/concat/src/main.kt
 Str ns1_pair(Str a, Str b) {
     char* __sm_catP;
     Str _sm_expr2;
@@ -389,7 +389,7 @@ Str ns1_pair(Str a, Str b) {
     std::memcpy(__sm_catP, b.data(), b.size());
     return _sm_expr2;
 }
-// stress/concat/src/main.kt:23
+// stress/concat/src/main.kt
 int main() {
     char* __sm_catP;
     Int __sm_catAt;

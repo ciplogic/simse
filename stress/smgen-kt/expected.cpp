@@ -116,7 +116,7 @@ Str simse_int_toString(Int self);
 
 Str greeting(Str name);
 
-// stress/smgen-kt/src/main.kt:12
+// stress/smgen-kt/src/main.kt
 int main() {
     Str _sm_expr1, _sm_expr2;
     _sm_expr1 = greeting(__sm_stringTable[1]);
@@ -125,7 +125,7 @@ int main() {
     std::cout << std::boolalpha << (_sm_expr2) << std::endl;
     return 0;
 }
-// <generated>/kt.kt:7
+// <generated>/kt.kt
 Str greeting(Str name) {
     Str text;
     text = __sm_stringTable[0];

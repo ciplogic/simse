@@ -244,7 +244,7 @@ Bool isEmpty(Str* self) {
     _sm_expr2 = _sm_expr1 == 0;
     return _sm_expr2;
 }
-// stress/raw-strings/src/main.kt:7
+// stress/raw-strings/src/main.kt
 int main() {
     Str* _sm_base1, * _sm_base2;
     Str text, empty, quoted;

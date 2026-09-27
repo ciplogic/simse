@@ -241,11 +241,11 @@ void ns1_tag(Str* self, Bool on);
 void ns1_markIt(Int level);
 void ns1_apply(Func<void(Int)> f);
 
-// stress/fold-const-params/src/main.kt:16
+// stress/fold-const-params/src/main.kt
 void ns1_logMe() {
     std::cout << std::boolalpha << (__sm_stringTable[1]) << std::endl;
 }
-// stress/fold-const-params/src/main.kt:25
+// stress/fold-const-params/src/main.kt
 void ns1_maybe(Bool flag) {
     if (flag) goto L1;
     goto L2;
@@ -256,7 +256,7 @@ void ns1_maybe(Bool flag) {
     std::cout << std::boolalpha << (__sm_stringTable[3]) << std::endl;
     L3:;
 }
-// stress/fold-const-params/src/main.kt:35
+// stress/fold-const-params/src/main.kt
 void ns1_tag(Str* self, Bool on) {
     char* __sm_catP;
     Str _sm_base1, _sm_base2, _sm_expr1, _sm_expr2, _sm_expr4;
@@ -291,7 +291,7 @@ void ns1_tag(Str* self, Bool on) {
     std::cout << std::boolalpha << (_sm_expr4) << std::endl;
     L3:;
 }
-// stress/fold-const-params/src/main.kt:45
+// stress/fold-const-params/src/main.kt
 void ns1_markIt(Int level) {
     char* __sm_catP;
     Int __sm_catC0;
@@ -304,11 +304,11 @@ void ns1_markIt(Int level) {
     simse_strAddInt(__sm_catP, level, __sm_catC0);
     std::cout << std::boolalpha << (_sm_expr2) << std::endl;
 }
-// stress/fold-const-params/src/main.kt:49
+// stress/fold-const-params/src/main.kt
 void ns1_apply(Func<void(Int)> f) {
     f(7);
 }
-// stress/fold-const-params/src/main.kt:53
+// stress/fold-const-params/src/main.kt
 int main() {
     Str _sm_base1;
     ns1_logMe();

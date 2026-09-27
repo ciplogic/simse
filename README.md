@@ -182,7 +182,8 @@ stands for bytes), which is what keeps a `.md` file from storing code twice.
 
 **Nothing magic.** No macros, no operator overloading, no exceptions, no reflection, no
 implicit threading, no runtime library to ship. When you want to see what your program
-became, it is one file, and the source-map comments point back at your `.kt` lines.
+became, it is one file, and the source-map comments point back at the `.kt` file each
+declaration came from.
 
 ## What it compiles to
 
@@ -213,7 +214,10 @@ int main() {
     if (!(_sm_expr2)) goto L2;
     _sm_expr3 = words[i];
     seen = simse_dict_get(counts, _sm_expr3);
-    if (!(seen.hasValue())) goto L4;
+    _sm_expr2 = seen.hasValue();
+    if (_sm_expr2) goto L3;
+    goto L4;
+    L3:;
     simse_dict_insert(counts, words[i], seen.value() + 1);
     goto L5;
     L4:;
@@ -327,8 +331,8 @@ toolchain. `docs/state-of-the-field.md` is explicit about each of these, and
 ## Design principles
 
 - **The output is the artifact.** One `.cpp` file, faithfully lowered, with source-map
-  comments back to the `.kt` lines; no metadata to interpret and nothing to install. It
-  is not meant to be hand-edited or to read like prose.
+  comments back to the `.kt` files it came from; no metadata to interpret and nothing to
+  install. It is not meant to be hand-edited or to read like prose.
 - **Static everything.** Types, dispatch and generics are resolved at compile time;
   there is no reflection and no runtime type information.
 - **Deterministic.** The same inputs produce byte-identical output; nothing depends on a

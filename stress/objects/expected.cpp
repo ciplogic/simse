@@ -318,13 +318,13 @@ struct ns1_Grid;
 struct ns1_CounterReceiverShapes;
 struct ns1_Holder;
 struct ns1_Shell;
-// stress/objects/src/main.kt:14
+// stress/objects/src/main.kt
 SIMSE_PACK_PUSH
 struct ns1_Counter {
     Int value;
 };
 SIMSE_PACK_POP
-// stress/objects/src/main.kt:53
+// stress/objects/src/main.kt
 SIMSE_PACK_PUSH
 template <class A, class B>
 struct ns1_Pair {
@@ -332,56 +332,56 @@ struct ns1_Pair {
     B second;
 };
 SIMSE_PACK_POP
-// stress/objects/src/main.kt:72
+// stress/objects/src/main.kt
 SIMSE_PACK_PUSH
 struct ns1_CounterHello {
     Int value;
 };
 SIMSE_PACK_POP
-// stress/objects/src/main.kt:98
+// stress/objects/src/main.kt
 using ns1_Mapper = Func<Int(Int)>;
-// stress/objects/src/main.kt:99
+// stress/objects/src/main.kt
 using ns1_Predicate = Func<Bool(Int)>;
-// stress/objects/src/main.kt:159
+// stress/objects/src/main.kt
 enum class ns1_Color { Red, Green = 4, Blue };
 inline ns1_Color ns1_simse_Color_fromInt(Int value) { return (ns1_Color) value; }
-// stress/objects/src/main.kt:165
+// stress/objects/src/main.kt
 SIMSE_PACK_PUSH
 struct ns1_Box {
     Int value;
 };
 SIMSE_PACK_POP
-// stress/objects/src/main.kt:379
+// stress/objects/src/main.kt
 SIMSE_PACK_PUSH
 struct ns1_Cell {
     Int value;
 };
 SIMSE_PACK_POP
-// stress/objects/src/main.kt:381
+// stress/objects/src/main.kt
 SIMSE_PACK_PUSH
 struct ns1_Grid {
     ns1_Cell cell;
 };
 SIMSE_PACK_POP
-// stress/objects/src/main.kt:436
+// stress/objects/src/main.kt
 SIMSE_PACK_PUSH
 struct ns1_CounterReceiverShapes {
     Int n;
 };
 SIMSE_PACK_POP
-// stress/objects/src/main.kt:456
+// stress/objects/src/main.kt
 SIMSE_PACK_PUSH
 struct ns1_Holder {
     ns1_CounterReceiverShapes counter;
 };
 SIMSE_PACK_POP
-// stress/objects/src/main.kt:576
+// stress/objects/src/main.kt
 SIMSE_PACK_PUSH
 struct ns1_Shell {
     Str text;
 };
 SIMSE_PACK_POP
-// stress/objects/src/main.kt:584
+// stress/objects/src/main.kt
 enum class ns1_Shape { Circle, Square = 4 };
 inline ns1_Shape ns1_simse_Shape_fromInt(Int value) { return (ns1_Shape) value; }
 
@@ -529,7 +529,7 @@ T max(T a, T b) {
     L2:;
     return b;
 }
-// stress/objects/src/main.kt:15
+// stress/objects/src/main.kt
 Int ns1_bump(ns1_Counter* self) {
     Int _sm_base1, _sm_expr1, _sm_expr2;
     _sm_expr1 = self->value;
@@ -538,13 +538,13 @@ Int ns1_bump(ns1_Counter* self) {
     _sm_expr2 = self->value;
     return _sm_expr2;
 }
-// stress/objects/src/main.kt:21
+// stress/objects/src/main.kt
 Int ns1_read(Ref<ns1_Counter> box) {
     Int _sm_expr1;
     _sm_expr1 = box->value;
     return _sm_expr1;
 }
-// stress/objects/src/main.kt:27
+// stress/objects/src/main.kt
 Int ns1_bumpThrough(Ref<ns1_Counter> box) {
     Ref<ns1_Counter> again;
     Int _sm_expr1;
@@ -552,7 +552,7 @@ Int ns1_bumpThrough(Ref<ns1_Counter> box) {
     _sm_expr1 = ns1_bump((again).get());
     return _sm_expr1;
 }
-// stress/objects/src/main.kt:32
+// stress/objects/src/main.kt
 Int ns1_partCountedReference() {
     Int _sm_base1, _sm_base2, _sm_base3, _sm_expr1, bumped, _sm_expr2;
     ns1_Counter plain;
@@ -573,12 +573,12 @@ Int ns1_partCountedReference() {
     std::cout << std::boolalpha << (_sm_base3) << std::endl;
     return 0;
 }
-// stress/objects/src/main.kt:55
+// stress/objects/src/main.kt
 template <class T>
 T ns1_identity(T value) {
     return value;
 }
-// stress/objects/src/main.kt:59
+// stress/objects/src/main.kt
 Int ns1_partGenerics() {
     Int _sm_base1, _sm_base2, _sm_expr1, _sm_expr2;
     List<Int> numbers;
@@ -597,14 +597,14 @@ Int ns1_partGenerics() {
     std::cout << std::boolalpha << (_sm_expr2) << std::endl;
     return 0;
 }
-// stress/objects/src/main.kt:73
+// stress/objects/src/main.kt
 Int ns1_bump(ns1_CounterHello* self) {
     Int _sm_expr1, _sm_expr2;
     _sm_expr1 = self->value;
     _sm_expr2 = _sm_expr1 + 1;
     return _sm_expr2;
 }
-// stress/objects/src/main.kt:78
+// stress/objects/src/main.kt
 Int ns1_partHello() {
     Int i, total, _sm_expr3;
     Bool _sm_expr1;
@@ -632,13 +632,13 @@ Int ns1_partHello() {
     std::cout << std::boolalpha << (true) << std::endl;
     return 0;
 }
-// stress/objects/src/main.kt:101
+// stress/objects/src/main.kt
 Int ns1_apply(ns1_Mapper f, Int value) {
     Int _sm_expr1;
     _sm_expr1 = f(value);
     return _sm_expr1;
 }
-// stress/objects/src/main.kt:105
+// stress/objects/src/main.kt
 Int ns1_countIf(List<Int>* items, ns1_Predicate predicate) {
     Int _sm_base1, count;
     Span<Int> c;
@@ -661,7 +661,7 @@ Int ns1_countIf(List<Int>* items, ns1_Predicate predicate) {
     L2:;
     return count;
 }
-// stress/objects/src/main.kt:117
+// stress/objects/src/main.kt
 ns1_Mapper ns1_makeAdder() {
 struct ns1_makeAdder_closure1 {
     Int factor;
@@ -679,7 +679,7 @@ struct ns1_makeAdder_closure1 {
     _sm_base1 = ns1_makeAdder_closure1{factor};
     return _sm_base1;
 }
-// stress/objects/src/main.kt:121
+// stress/objects/src/main.kt
 Int ns1_partLambdas() {
 struct ns1_partLambdas_closure1 {
     auto operator()(Int v) {
@@ -766,7 +766,7 @@ struct ns1_partLambdas_closure5 {
     std::cout << std::boolalpha << (_sm_expr7) << std::endl;
     return 0;
 }
-// stress/objects/src/main.kt:167
+// stress/objects/src/main.kt
 Str ns1_label(ns1_Color c) {
     ns1_Color _sm_expr1;
     Bool _sm_expr2;
@@ -786,7 +786,7 @@ Str ns1_label(ns1_Color c) {
     L5:;
     return __sm_stringTable[17];
 }
-// stress/objects/src/main.kt:183
+// stress/objects/src/main.kt
 Str ns1_describe(Int n) {
     Bool _sm_expr1;
     _sm_expr1 = n == 0;
@@ -803,7 +803,7 @@ Str ns1_describe(Int n) {
     L5:;
     return __sm_stringTable[28];
 }
-// stress/objects/src/main.kt:199
+// stress/objects/src/main.kt
 Ref<ns1_Box> ns1_maybeRef(Bool flag) {
     Ref<ns1_Box> _sm_expr1;
     if (flag) goto L1;
@@ -814,7 +814,7 @@ Ref<ns1_Box> ns1_maybeRef(Bool flag) {
     L2:;
     return nullptr;
 }
-// stress/objects/src/main.kt:206
+// stress/objects/src/main.kt
 ns1_Box* ns1_maybePointer(Ref<ns1_Box> box, Bool flag) {
     ns1_Box* _sm_expr1;
     if (flag) goto L1;
@@ -825,7 +825,7 @@ ns1_Box* ns1_maybePointer(Ref<ns1_Box> box, Bool flag) {
     L2:;
     return nullptr;
 }
-// stress/objects/src/main.kt:213
+// stress/objects/src/main.kt
 Int ns1_partLanguageTour() {
     ns1_Color _sm_base1, _sm_base2, _sm_base3, _sm_base4, parsed, _sm_expr8;
     Int _sm_base6, _sm_base9, _sm_expr6, _sm_expr9, _sm_expr14, _sm_expr15, _sm_expr21;
@@ -957,7 +957,7 @@ Int ns1_partLanguageTour() {
     std::cout << std::boolalpha << (_sm_expr34) << std::endl;
     return 0;
 }
-// stress/objects/src/main.kt:296
+// stress/objects/src/main.kt
 Opt<Int> ns1_half(Int n) {
     Int _sm_expr1, _sm_expr4;
     Bool _sm_expr2;
@@ -974,7 +974,7 @@ Opt<Int> ns1_half(Int n) {
     _sm_expr3 = Opt<Int>::some(_sm_expr4);
     return _sm_expr3;
 }
-// stress/objects/src/main.kt:303
+// stress/objects/src/main.kt
 Res<Str> ns1_labelOptionalResult(Int n) {
     Bool _sm_expr1;
     Res<Str> _sm_expr2;
@@ -988,13 +988,13 @@ Res<Str> ns1_labelOptionalResult(Int n) {
     _sm_expr2 = Res<Str>::ok(__sm_stringTable[7]);
     return _sm_expr2;
 }
-// stress/objects/src/main.kt:312
+// stress/objects/src/main.kt
 Res<Int> ns1_longError() {
     Res<Int> _sm_expr1;
     _sm_expr1 = Res<Int>::err(__sm_stringTable[0]);
     return _sm_expr1;
 }
-// stress/objects/src/main.kt:316
+// stress/objects/src/main.kt
 Res<Int> ns1_echo(Res<Int> r) {
     Str _sm_base1;
     Int _sm_base2;
@@ -1014,7 +1014,7 @@ Res<Int> ns1_echo(Res<Int> r) {
     _sm_expr3 = Res<Int>::ok(_sm_base2);
     return _sm_expr3;
 }
-// stress/objects/src/main.kt:324
+// stress/objects/src/main.kt
 Int ns1_partOptionalResult() {
     Str* _sm_base1;
     Str _sm_base2, _sm_base5, _sm_expr5, _sm_expr8;
@@ -1083,21 +1083,21 @@ Int ns1_partOptionalResult() {
     std::cout << std::boolalpha << (_sm_expr20) << std::endl;
     return 0;
 }
-// stress/objects/src/main.kt:383
+// stress/objects/src/main.kt
 void ns1_bump(Int* value) {
     Int _sm_base1, _sm_expr1;
     _sm_expr1 = *value;
     _sm_base1 = _sm_expr1 + 1;
     *value = _sm_base1;
 }
-// stress/objects/src/main.kt:387
+// stress/objects/src/main.kt
 void ns1_bumpCell(ns1_Cell* cell) {
     Int _sm_base1, _sm_expr1;
     _sm_expr1 = cell->value;
     _sm_base1 = _sm_expr1 + 1;
     cell->value = _sm_base1;
 }
-// stress/objects/src/main.kt:391
+// stress/objects/src/main.kt
 Int ns1_partPointerPlace() {
     Int* _sm_base1, * _sm_base4, * _sm_base8, * _sm_base10, * _sm_base11, * _sm_base13, * _sm_base15;
     ns1_Cell* _sm_base2, * _sm_base3, * _sm_base5, * _sm_base6, * _sm_base7, * _sm_base9, * _sm_base12,
@@ -1145,18 +1145,18 @@ Int ns1_partPointerPlace() {
     std::cout << std::boolalpha << (_sm_expr8) << std::endl;
     return 0;
 }
-// stress/objects/src/main.kt:437
+// stress/objects/src/main.kt
 void ns1_bump(ns1_CounterReceiverShapes* self) {
     ns1_add(self, 1);
 }
-// stress/objects/src/main.kt:441
+// stress/objects/src/main.kt
 void ns1_add(ns1_CounterReceiverShapes* self, Int delta) {
     Int _sm_base1, _sm_expr1;
     _sm_expr1 = self->n;
     _sm_base1 = _sm_expr1 + delta;
     self->n = _sm_base1;
 }
-// stress/objects/src/main.kt:445
+// stress/objects/src/main.kt
 Int ns1_twice(ns1_CounterReceiverShapes* self) {
     Int _sm_expr1;
     ns1_bump(self);
@@ -1164,18 +1164,18 @@ Int ns1_twice(ns1_CounterReceiverShapes* self) {
     _sm_expr1 = self->n;
     return _sm_expr1;
 }
-// stress/objects/src/main.kt:451
+// stress/objects/src/main.kt
 ns1_CounterReceiverShapes* ns1_self(ns1_CounterReceiverShapes* self) {
     ns1_CounterReceiverShapes* _sm_expr1;
     _sm_expr1 = self;
     return _sm_expr1;
 }
-// stress/objects/src/main.kt:458
+// stress/objects/src/main.kt
 void ns1_bumpTwice(ns1_CounterReceiverShapes* counter) {
     ns1_bump(counter);
     ns1_bump(counter);
 }
-// stress/objects/src/main.kt:463
+// stress/objects/src/main.kt
 Int ns1_partReceiverShapes() {
     Int* _sm_base1, * _sm_base3, * _sm_base6;
     ns1_CounterReceiverShapes* _sm_base2, * _sm_base4, * _sm_base5, * through;
@@ -1207,7 +1207,7 @@ Int ns1_partReceiverShapes() {
     std::cout << std::boolalpha << (_sm_expr6) << std::endl;
     return 0;
 }
-// stress/objects/src/main.kt:515
+// stress/objects/src/main.kt
 Str ns1_mirror(Str* a, Ref<Str> b) {
     char* __sm_catP;
     Str _sm_base2, _sm_base3, _sm_expr1;
@@ -1226,7 +1226,7 @@ Str ns1_mirror(Str* a, Ref<Str> b) {
     *__sm_catP = (char) (']');
     return _sm_expr1;
 }
-// stress/objects/src/main.kt:521
+// stress/objects/src/main.kt
 Str ns1_parcel(Str after, List<Str>* items) {
     char* __sm_catP;
     Str out, _sm_expr3, _sm_expr4;
@@ -1254,7 +1254,7 @@ Str ns1_parcel(Str after, List<Str>* items) {
     L2:;
     return out;
 }
-// stress/objects/src/main.kt:531
+// stress/objects/src/main.kt
 Int ns1_partRtlSimse() {
     char* __sm_catP;
     List<Str> _sm_base7, _sm_base9, _sm_base16, parts;
@@ -1352,7 +1352,7 @@ Int ns1_partRtlSimse() {
     std::cout << std::boolalpha << (_sm_expr20) << std::endl;
     return 0;
 }
-// stress/objects/src/main.kt:578
+// stress/objects/src/main.kt
 Bool ns1_isEmpty(ns1_Shell* self) {
     Str* _sm_base1;
     Bool _sm_expr1;
@@ -1360,17 +1360,17 @@ Bool ns1_isEmpty(ns1_Shell* self) {
     _sm_expr1 = isEmpty(_sm_base1);
     return _sm_expr1;
 }
-// stress/objects/src/main.kt:589
+// stress/objects/src/main.kt
 Str ns1_describeShapes(Str* self) {
     return (*self);
 }
-// stress/objects/src/main.kt:593
+// stress/objects/src/main.kt
 Int ns1_area(Int height) {
     Int _sm_expr1;
     _sm_expr1 = 3 * height;
     return _sm_expr1;
 }
-// stress/objects/src/main.kt:597
+// stress/objects/src/main.kt
 Int ns1_partShapes() {
     Str name, _sm_expr1;
     Int _sm_expr2;
@@ -1388,13 +1388,13 @@ Int ns1_partShapes() {
     std::cout << std::boolalpha << ('a') << std::endl;
     return 0;
 }
-// stress/objects/src/main.kt:614
+// stress/objects/src/main.kt
 Attribute ns1_attr(Str name, Str value) {
     Attribute _sm_expr1;
     _sm_expr1 = Attribute(name, value);
     return _sm_expr1;
 }
-// stress/objects/src/main.kt:618
+// stress/objects/src/main.kt
 List<Attribute> ns1_attrs3(Attribute a, Attribute b, Attribute c) {
     List<Attribute> list;
     list = List<Attribute>();
@@ -1403,7 +1403,7 @@ List<Attribute> ns1_attrs3(Attribute a, Attribute b, Attribute c) {
     simse_list_append(list, c);
     return list;
 }
-// stress/objects/src/main.kt:626
+// stress/objects/src/main.kt
 List<Attribute> ns1_attrs4(Attribute a, Attribute b, Attribute c, Attribute d) {
     List<Attribute> list;
     list = List<Attribute>();
@@ -1413,13 +1413,13 @@ List<Attribute> ns1_attrs4(Attribute a, Attribute b, Attribute c, Attribute d) {
     simse_list_append(list, d);
     return list;
 }
-// stress/objects/src/main.kt:638
+// stress/objects/src/main.kt
 Array<XmlNode> ns1_noChildren() {
     Array<XmlNode> _sm_expr1;
     _sm_expr1 = Array<XmlNode>();
     return _sm_expr1;
 }
-// stress/objects/src/main.kt:642
+// stress/objects/src/main.kt
 Array<XmlNode> ns1_oneChild(XmlNode child) {
     List<XmlNode> children;
     Array<XmlNode> _sm_expr1;
@@ -1428,7 +1428,7 @@ Array<XmlNode> ns1_oneChild(XmlNode child) {
     _sm_expr1 = simse_list_toArray(children);
     return _sm_expr1;
 }
-// stress/objects/src/main.kt:648
+// stress/objects/src/main.kt
 Str ns1_escapeText(Str text) {
     Str out;
     Int i, _sm_expr1;
@@ -1488,7 +1488,7 @@ Str ns1_escapeText(Str text) {
     L2:;
     return out;
 }
-// stress/objects/src/main.kt:676
+// stress/objects/src/main.kt
 Str ns1_indentation(Int depth) {
     Str out;
     Int i, _sm_expr1;
@@ -1505,7 +1505,7 @@ Str ns1_indentation(Int depth) {
     L2:;
     return out;
 }
-// stress/objects/src/main.kt:686
+// stress/objects/src/main.kt
 Str ns1_dumpNode(XmlNode node, Int depth) {
     char* __sm_catP;
     Int __sm_catAt;
@@ -1578,7 +1578,7 @@ Str ns1_dumpNode(XmlNode node, Int depth) {
     L4:;
     return out;
 }
-// stress/objects/src/main.kt:705
+// stress/objects/src/main.kt
 Int ns1_partXmlTree() {
     Attribute _sm_expr1, _sm_expr2, _sm_expr3, _sm_expr4, _sm_expr7, _sm_expr8, _sm_expr9, _sm_expr10,
         _sm_expr13, _sm_expr14, _sm_expr15, _sm_expr16, _sm_expr19, _sm_expr20, _sm_expr21;
@@ -1617,7 +1617,7 @@ Int ns1_partXmlTree() {
     std::cout << std::boolalpha << (_sm_expr24);
     return 0;
 }
-// stress/objects/src/main.kt:716
+// stress/objects/src/main.kt
 int main() {
     ns1_partCountedReference();
     ns1_partGenerics();
