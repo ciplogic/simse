@@ -1,12 +1,14 @@
 # Sockets and an HTTP/1.1 server in Simse
 
-Two things live here:
+What lives here:
 
 ```
 sockets/     the `sockets` module (package `sockets`): a minimalist *blocking* socket library
   api.kt       a P/Invoke wrapper over Winsock2 (ws2_32.dll), built on the `native` generator
   _res.md      the ABI glue: SOCKADDR_IN/WSADATA layout, the byte swap, the receive buffer
 server/src/  `httpd` - a single-threaded, fully blocking HTTP/1.1 server over `sockets`
+async-server/  the same routes on the task scheduler (`suspend`, `tasksSpawn`, keep-alive)
+  README.md     its benchmark: throughput and memory against a minimal ASP.NET Core server
 client/src/  `httpclient` - a minimal HTTP/1.1 client (or throughput driver) over the same
 demo.bat        build, start the server, and fetch three routes
 bench.bat       build, start a server, and measure requests/second
