@@ -374,6 +374,26 @@ data class Parser(
         this.skipSeparators()
         // `@SmGen(...) data fun f(...)` marks a pure function and `@SmGen(...) suspend fun f(...)`
         // a suspending one (`data`/`suspend` are modifiers, the attribute selects the C++).
+        // A *type* may carry the attribute too (specs/attributes.md): the materialization
+        // marker. An attribute on a data class or enum class names the type C++ that is
+        // hand-written (a header, or a resource section) so the emitter must not generate
+        // the struct; an unmarked prelude type is generated from its declaration.
+        if (this.checkText("data") && this.peek(1).text == "class") {
+            val node: AstXmlNode = this.parseDataClass()
+            if (this.failed) {
+                return this.emptyNode()
+            }
+            this.attachTypeAttribute(node, attrName, args)
+            return node
+        }
+        if (this.checkText("enum") && this.peek(1).text == "class") {
+            val node: AstXmlNode = this.parseEnum()
+            if (this.failed) {
+                return this.emptyNode()
+            }
+            this.attachTypeAttribute(node, attrName, args)
+            return node
+        }
         var isPure: Bool = pure
         var isSuspend: Bool = suspendModifier
         while (this.checkText("data") || this.checkText("suspend")) {
@@ -390,6 +410,28 @@ data class Parser(
             return this.emptyNode()
         }
         return this.parseFunction(attrName, args, isPure, isSuspend)
+    }
+
+    // Records a type attribute the way parseFunction records a method one: Attribute (its
+    // name), Generator (the first argument) and GeneratorArgs (the rest, joined by a comma).
+    // The emitter reads Generator to know the type C++ is elsewhere (Codegen.typeIsRaw).
+    fun attachTypeAttribute(node: *AstXmlNode, attrName: Str, args: *List<Str>): Unit {
+        var generatorName: Str = ""
+        var generatorArgs: Str = ""
+        if (args.size() > 0) {
+            generatorName = attrLiteralText(args[0])
+        }
+        var a: Int = 1
+        while (a < args.size()) {
+            if (a > 1) {
+                generatorArgs = generatorArgs + ","
+            }
+            generatorArgs = generatorArgs + attrLiteralText(args[a])
+            a = a + 1
+        }
+        node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Attribute, attrName))
+        node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Generator, generatorName))
+        node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.GeneratorArgs, generatorArgs))
     }
 
     // A file-level `var`/`val` (specs/statics.md): type required, initializer optional, and

@@ -70,7 +70,7 @@ analogue:
 
 The declaration is an ordinary body-less method with a Simse signature, and the *reader writes
 the ABI's signature* the way a `[DllImport]` declaration does: `Int` is the native `int`, and a
-handle is `*Int8`, crossing as the library's own pointer. Nothing is linked and no header is
+handle is a `RawPtr`, crossing as the library's own pointer. Nothing is linked and no header is
 needed at the call site; what a call reaches is a generated **thunk**, emitted per reached
 declaration into `forward` and `bodies`, with one shared loader in `support`:
 
@@ -98,11 +98,13 @@ Int32 __sm_native_sdlInit(const Int32& flags) {
 - **The cast is the generator's.** The `FARPROC` is cast to the function pointer the
   declaration's signature builds (`(Fn)`), which is where a compatible-but-different ABI type
   (`Uint32` for `Int`, `Uint8` for `Int`) is reconciled - the same latitude P/Invoke takes.
-- **Handles are raw pointers.** A `*T` parameter or return is the native pointer (`void*`
+- **Handles are raw pointers.** A `RawPtr` parameter or return is the native pointer (`void*`
   inside the function pointer), cast at the thunk's edge, so an opaque library type
-  (`SDL_Window*`) is a `*Int8`. This is also how a union-style API is reached: the bytes of an
+  (`SDL_Window*`) is one. This is also how a union-style API is reached: the bytes of an
   `SDL_Event` are owned by a `res` section that includes the real header and reinterprets them,
-  because the language has no cast (`docs/examples/sdl2/wrapper/_res.md`).
+  because a `RawPtr` names the pointer and not the pointee - the one reinterpretation that stays
+  C++ (`docs/examples/sdl2/wrapper/_res.md`). A `*T` in a declaration is a raw pointer too, and
+  `T` may be a layout the language can name.
 - **Types.** The generator maps `Int`/`Int32`/`Int8`/`Int16`/`Int64`, `Float32`/`Float64`,
   `Bool`, `Char`, `Str` (a native `const char*`, a returned one copied into an owned `Str`) and
   `*T`; anything else is a diagnostic naming the declaration.
@@ -116,7 +118,7 @@ Int32 __sm_native_sdlInit(const Int32& flags) {
   belongs in the generator's own text.
 
 Two worked examples ship with it. `docs/examples/sdl2` is a window bound to `SDL2.dll` (an
-opaque `SDL_Window*` as `*Int8`, and a `res` section that owns the `SDL_Event` union and casts
+opaque `SDL_Window*` as a `RawPtr`, and a `res` section that owns the `SDL_Event` union and casts
 its bytes). `docs/examples/http` is the other direction: `sockets`, a minimalist **blocking**
 Winsock2 (`ws2_32.dll`) library whose glue is only `SOCKADDR_IN` layout, a byte swap written out
 so `htons` need not be linked, and one receive buffer - with an HTTP/1.1 server and a client on

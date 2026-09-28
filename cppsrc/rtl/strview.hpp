@@ -48,6 +48,25 @@ inline StrView simse_strView_of(const Str& text) {
     return StrView(const_cast<Char*>(reinterpret_cast<const Char*>(text.data())), (Int) text.size());
 }
 
+// The bytes of a `Str`, borrowed (the prelude's `strBytes`, cppsrc/rtl/intrinsics.kt): the
+// one accessor a Simse text operation needs, because `Str` is opaque to the language. Valid
+// until the string is changed. The cast is the same one `simse_strView_of` makes - the
+// language's mutable `Char` against the standard library's `char`.
+inline Char* simse_str_data(Str* text) {
+    return reinterpret_cast<Char*>(text->data());
+}
+
+// Replaces a string's bytes with a copy of `count` bytes of `src` from `srcIndex`: the
+// owned-copy primitive `StrView.substr` builds through. One `resize` and one block copy
+// (`simse_mem_copy`), where a per-byte `append` would walk the bytes one at a time.
+inline void simse_str_setBytes(Str& out, const Char* src, Int srcIndex, Int count) {
+    if (count <= 0) {
+        return;
+    }
+    out.resize((Str::size_type) count);
+    simse_mem_copy(reinterpret_cast<Char*>(out.data()), 0, src, srcIndex, count);
+}
+
 // Three-way compare, the rule `SmString::compareBytes` uses: the common prefix decides,
 // then the shorter text is the smaller one.
 inline Int simse_strView_compare(StrView left, StrView right) {

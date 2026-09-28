@@ -1,10 +1,9 @@
 // fs.kt
 //
 // The prelude's `FileStream` type. The file and directory *operations* moved to the `io` module
-// (`cppsrc/modules/io/api.kt`); this type stays in the prelude, and the reason is a language
-// limit rather than taste: a type cannot name its C++ with `@SmGen` (attributes are
-// methods-only), so a `data class` declared in a program module would be emitted as a struct of
-// its own and clash with the `FileStream` the RTL's `filestream.hpp` provides.
+// (`cppsrc/modules/io/api.kt`); this type stays in the prelude, and now names its C++ with the
+// materialization marker: `@SmGen("cpp")` keeps the struct the RTL's `filestream.hpp` provides
+// instead of generating one (specs/attributes.md).
 
 package rtl
 
@@ -13,4 +12,5 @@ package rtl
 //
 // Read with ONE of the three reads (all in `io`): `readLine` leaves the position after what it
 // read, while the other two share a readahead buffer, so mixing them skips bytes.
+@SmGen("cpp")
 data class FileStream()

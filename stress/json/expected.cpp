@@ -74,30 +74,24 @@ static struct __SmStringTableInitType {
     }
 } __sm_stringTableInit;
 
-// The operations a view is read through (specs/built-in-types.md, "Views"; the
-// declarations are cppsrc/rtl/StrView.kt). The *type* and the *literal interop* stay in
-// cppsrc/rtl/strview.hpp: `using StrView = Span<Char>`, the comparison operators, `+`,
-// `<<` and the `Str` conversions are reached by C++ overload resolution at a literal
-// site rather than by a prelude declaration, so no declaration could reach a section for
-// them - while these are named, one symbol each (except `spanOfStr`: one symbol, two
-// overloads - a `Str`'s borrow and a `StrView`'s identity) - and a program that calls one
-// pays for this text (`sourcegen/ResGen.kt`).
+// What a view's byte operations still need from C++ (specs/built-in-types.md, "Views").
+// The byte work itself - `find`/`indexOf`, `startsWith`/`startsWithPtr`, `substr`/`toString`
+// - is Simse now, in cppsrc/rtl/StrView.kt over the span and the intrinsics
+// (cppsrc/rtl/intrinsics.kt). What remains here is the `Span` member passthroughs, which
+// cannot be Simse without shadowing the member they call, and `spanOfStr`, whose two
+// overloads are picked by C++ overload resolution at the desugar's site (Parser.kt's
+// `parseWhen`) rather than by a declaration - so a declaration reaches this section, and a
+// program that calls one pays for this text (`sourcegen/ResGen.kt`).
 //
 // `StrView` *is* a `Span<Char>`, so `self.len`, `self[i]` and `self.slice(...)` below are
 // the span's own members (cppsrc/rtl/span.hpp) - and `at` is *not* an operation of its
-// own: the span's member serves it (`cppsrc/rtl/StrView.kt`), as `atPtr` is the
+// own: the span's member serves it (cppsrc/rtl/StrView.kt), as `atPtr` is the
 // language's (cppsrc/rtl/Span.kt).
 Int simse_strView_size(StrView self);
 Bool simse_strView_isEmpty(StrView self);
 StrView simse_strView_slice(StrView self, Int start);
 StrView simse_strView_slice(StrView self, Int start, Int count);
 Char simse_strView_charAt(StrView self, Int index);
-Bool simse_strView_startsWith(StrView self, const Str& text);
-Bool simse_strView_startsWithPtr(StrView self, const Str* text, Int length);
-Int simse_strView_find(StrView self, const Str& sub);
-Int simse_strView_indexOf(StrView self, const Str& sub);
-Str simse_strView_substr(StrView self, Int from, Int count);
-Str simse_strView_toString(StrView self);
 StrView simse_spanOfStr(Str* text);
 StrView simse_spanOfStr(StrView view);
 
@@ -366,6 +360,8 @@ struct ns1_Shape {
 };
 SIMSE_PACK_POP
 
+Str substr(StrView* self, Int from, Int count);
+Str toString(StrView* self);
 Str jsonQuoted(Str value);
 Str toJson(ns1_Point* self);
 Str toJson(Int* self);
@@ -374,6 +370,53 @@ Str toJson(Str* self);
 Str toJson(Bool* self);
 Str toJson(ns1_Shape* self);
 
+Str substr(StrView* self, Int from, Int count) {
+    Int len, begin, end, _sm_expr6;
+    Bool _sm_expr1;
+    len = simse_strView_size((*self));
+    begin = from;
+    _sm_expr1 = begin < 0;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    begin = 0;
+    L2:;
+    _sm_expr1 = begin > len;
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    begin = len;
+    L4:;
+    end = begin + count;
+    _sm_expr1 = count < 0;
+    if (_sm_expr1) goto L5;
+    goto L6;
+    L5:;
+    end = begin;
+    L6:;
+    _sm_expr1 = end > len;
+    if (_sm_expr1) goto L7;
+    goto L8;
+    L7:;
+    end = len;
+    L8:;
+    Str out;
+    _sm_expr1 = end > begin;
+    if (_sm_expr1) goto L9;
+    goto L10;
+    L9:;
+    _sm_expr6 = end - begin;
+    simse_str_setBytes(out, self->ptr, begin, _sm_expr6);
+    L10:;
+    return out;
+}
+Str toString(StrView* self) {
+    Int _sm_expr1;
+    Str _sm_expr2;
+    _sm_expr1 = simse_strView_size((*self));
+    _sm_expr2 = substr(self, 0, _sm_expr1);
+    return _sm_expr2;
+}
 // stress/json/src/main.kt
 int main() {
     ns1_Point p, _sm_expr3;
@@ -577,69 +620,6 @@ inline StrView simse_strView_slice(StrView self, Int start, Int count) {
 
 inline Char simse_strView_charAt(StrView self, Int index) {
     return self[index];
-}
-
-// True when the view begins with `text`.
-inline Bool simse_strView_startsWith(StrView self, const Str& text) {
-    const Int count = text.size();
-    if (count > self.len) return false;
-    for (Int i = 0; i < count; i++) {
-        if ((char) self[i] != text[i]) return false;
-    }
-    return true;
-}
-
-// `startsWithPtr(text, length)`: the same comparison against text this view does not
-// own, reached by raw pointer and with its length already known. `startsWith` would
-// copy the `Str` first, which is what a table lookup cannot afford; the first byte is
-// the caller's cheap test, this does the rest.
-inline Bool simse_strView_startsWithPtr(StrView self, const Str* text, Int length) {
-    if (length > self.len) return false;
-    for (Int i = 1; i < length; i++) {
-        if ((char) self[i] != (*text)[i]) return false;
-    }
-    return true;
-}
-
-// `find(sub)`: the index of the first occurrence of `sub` in the bytes, or -1. The
-// bytes are compared in place: nothing is copied.
-inline Int simse_strView_find(StrView self, const Str& sub) {
-    const Int needle = sub.size();
-    if (needle == 0) return 0;
-    if (needle > self.len) return -1;
-    for (Int i = 0; i + needle <= self.len; i++) {
-        Int j = 0;
-        while (j < needle && (char) self[i + j] == sub[j]) j++;
-        if (j == needle) return i;
-    }
-    return -1;
-}
-
-// `indexOf` is the other spelling of `find`.
-inline Int simse_strView_indexOf(StrView self, const Str& sub) {
-    return simse_strView_find(self, sub);
-}
-
-// The owned copy of `count` bytes from `from`, with `from` clamped to [0, size] and
-// `count` allowed to run to the end, like `Str.substr`.
-inline Str simse_strView_substr(StrView self, Int from, Int count) {
-    const Int len = self.len;
-    Int begin = from < 0 ? 0 : from;
-    if (begin > len) begin = len;
-    Int end = count < 0 ? begin : begin + count;
-    if (end > len) end = len;
-    Str result;
-    if (end > begin) {
-        result.resize(end - begin);
-        std::memcpy(result.data(), self.ptr + begin, (std::size_t) (end - begin));
-    }
-    return result;
-}
-
-// The owned copy of the whole view, as a `Str` (the language's `toString()`
-// convention, like `Int.toString()`).
-inline Str simse_strView_toString(StrView self) {
-    return simse_strView_substr(self, 0, self.len);
 }
 
 // `spanOfStr(text)`: a view over a string's bytes. It borrows the string - the string

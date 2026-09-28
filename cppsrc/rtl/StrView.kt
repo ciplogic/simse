@@ -5,20 +5,24 @@
 // while the bytes it points at are alive; `spanOfStr(text)` borrows its source, which must
 // outlive the view.
 //
-// `slice` stays a view; `substr`/`toString` are the owned copies.
+// The byte operations are Simse, over the span (cppsrc/rtl/span.hpp) and the `setBytes`
+// intrinsic for the owned copy (cppsrc/rtl/intrinsics.kt); only what reaches a `Str`'s
+// internals or a `Span` member stays in C++, in the `strview` section of cppsrc/rtl/_res.md.
+// `slice` stays a view; `substr`/`toString` are the copies. A comparison is an inline loop,
+// not `memCompare`: the compiler's scanner calls `startsWithPtr` per table entry per token,
+// and a `memcmp` call for a few bytes is slower than the loop it replaces.
 
 package rtl
 
 typealias StrView = Span<Char>
 
+// The span's own members under the view's names (cppsrc/rtl/span.hpp). `at` is *not* an
+// operation of its own: the span's member serves it.
 @SmGen("res", "strview", "simse_strView_size")
 data fun size(this: StrView): Int
 
 @SmGen("res", "strview", "simse_strView_isEmpty")
 data fun isEmpty(this: StrView): Bool
-
-// The byte at `index` is the span's own `at` (`Span<T>.at`); a view is a `Span<Char>`, so
-// declaring it here too would be one operation under two names.
 
 // From `start` to the end (unchecked).
 @SmGen("res", "strview", "simse_strView_slice")
@@ -32,29 +36,97 @@ fun slice(this: StrView, start: Int, count: Int): StrView
 @SmGen("res", "strview", "simse_strView_charAt")
 fun charAt(this: StrView, index: Int): Char
 
-@SmGen("res", "strview", "simse_strView_startsWith")
-fun startsWith(this: StrView, text: Str): Bool
+// True when the view begins with `text`. The bytes are compared in place, nothing is copied.
+fun StrView.startsWith(text: Str): Bool {
+    val count = text.size()
+    if (count > this.size()) {
+        return false
+    }
+    var i = 0
+    while (i < count) {
+        if (this.ptr[i] != text.charAt(i)) {
+            return false
+        }
+        i = i + 1
+    }
+    return true
+}
 
-// The same comparison against a text this view does not own, by raw pointer and with its
-// length already known; `startsWith` would copy the `Str` first.
-@SmGen("res", "strview", "simse_strView_startsWithPtr")
-fun startsWithPtr(this: StrView, text: *Str, length: Int): Bool
+// `startsWithPtr(text, length)`: the same comparison against a text this view does not own,
+// reached by raw pointer and with its length already known. The first byte is the caller's
+// cheap test, so the compare starts at 1; `startsWith` would copy the `Str` first, which a
+// table lookup cannot afford.
+fun StrView.startsWithPtr(text: *Str, length: Int): Bool {
+    if (length > this.size()) {
+        return false
+    }
+    var i = 1
+    while (i < length) {
+        if (this.ptr[i] != text.charAt(i)) {
+            return false
+        }
+        i = i + 1
+    }
+    return true
+}
 
 // The index of the first occurrence of `sub`, or -1 (compared in place).
-@SmGen("res", "strview", "simse_strView_find")
-fun find(this: StrView, sub: Str): Int
+fun StrView.find(sub: Str): Int {
+    val needle = sub.size()
+    if (needle == 0) {
+        return 0
+    }
+    val len = this.size()
+    if (needle > len) {
+        return -1
+    }
+    var i = 0
+    while (i + needle <= len) {
+        var j = 0
+        while (j < needle && this.ptr[i + j] == sub.charAt(j)) {
+            j = j + 1
+        }
+        if (j == needle) {
+            return i
+        }
+        i = i + 1
+    }
+    return -1
+}
 
 // `indexOf` is the other spelling of `find`.
-@SmGen("res", "strview", "simse_strView_indexOf")
-fun indexOf(this: StrView, sub: Str): Int
+fun StrView.indexOf(sub: Str): Int {
+    return this.find(sub)
+}
 
 // The owned copy of `count` bytes from `from`, clamped like `Str.substr`.
-@SmGen("res", "strview", "simse_strView_substr")
-fun substr(this: StrView, from: Int, count: Int): Str
+fun StrView.substr(from: Int, count: Int): Str {
+    val len = this.size()
+    var begin = from
+    if (begin < 0) {
+        begin = 0
+    }
+    if (begin > len) {
+        begin = len
+    }
+    var end = begin + count
+    if (count < 0) {
+        end = begin
+    }
+    if (end > len) {
+        end = len
+    }
+    var out: Str
+    if (end > begin) {
+        out.setBytes(this.ptr, begin, end - begin)
+    }
+    return out
+}
 
 // The owned copy of the whole view, as a `Str`.
-@SmGen("res", "strview", "simse_strView_toString")
-fun toString(this: StrView): Str
+fun StrView.toString(): Str {
+    return this.substr(0, this.size())
+}
 
 // A view over a string's bytes, borrowing the string (which must outlive the view).
 @SmGen("res", "strview", "simse_spanOfStr")

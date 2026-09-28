@@ -8,6 +8,10 @@
 
 package rtl
 
+// The type's C++ is the hand-written `span.hpp`, already `#include`d: `@SmGen("cpp")` is
+// the materialization marker (specs/attributes.md), so the emitter must not generate the
+// struct. An *unmarked* prelude type would be generated from its declaration instead.
+@SmGen("cpp")
 data class Span<T>(var ptr: *T, var len: Int) {
     fun size(): Int {
         return this.len

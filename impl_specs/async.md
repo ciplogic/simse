@@ -437,7 +437,7 @@ machine and `emitTask`** have since landed on top of it (`cppsrc/linear/Task.kt`
 (the `ValueTask`-style shortcut is noted in the runtime, not taken). A suspending body lowers to a
 task class; a call becomes `<f>_smNew(args)` then `tasksSuspendAt(handle, k)` then a `return`, with
 the resume label reading `<f>_smResult(handle)` and releasing it; `return v` stores `result` and
-calls `tasksFinish()`. The protocol is free functions over an opaque `*Int8` handle (`tasksBranch`,
+calls `tasksFinish()`. The protocol is free functions over an opaque `RawPtr` handle (`tasksBranch`,
 `tasksSuspendAt`, `tasksFinish`, `tasksReleaseHandle` in the `tasks` section), so the lowering never
 names a task type, and a suspending `main` is the root task (`simse_tasksStart` + `simse_tasksRunLoop`).
 `stress/suspend` (`suspend fun answer(): Int { return 42 }`, called by `main`) runs the whole chain:

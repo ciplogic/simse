@@ -3918,3 +3918,49 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   module - a blocking Winsock2 wrapper - with an HTTP/1.1 server and client on top), both built
   and run on this machine; the server reaches ~9k requests/s with one blocking connection and
   ~33k with ten (`docs/examples/http/bench.bat`).
+- **`RawPtr`, `PtrOf<T>` and `getAs<T>()`; the emitted program drops `<iostream>`.** Three
+  changes that belong together, because each is a spelling that should not be invented twice.
+
+  - **The handle is a type, not a byte pointer.** `RawPtr` is `void*` - an opaque native handle
+    with no pointee - and `PtrOf<T>` is `*T` written with an angle bracket. The parser
+    *desugars* both to the pointer node (`Parser.parseType`), so every stage downstream is
+    right by construction: the compiler reads "is this a pointer?" in ~20 places (`kindOf`,
+    `pointee`, `isHandleType`, `receiverParam`, `outerTypeName`, `unifyType`, the native
+    generator's three mappings), and a *named* type would have to be mirrored into each. The
+    display helpers (`semaTypeText`, `ilTypeText`, `ilReceiverTypeText`) spell `*Unit` back as
+    `RawPtr`, so a diagnostic and the `--showLinearRepresentation` dump read as the language
+    does. `cppsrc/rtl/types.hpp` carries the two C++ aliases, which is what lets a hand-written
+    `_res.md` section name the handle type.
+  - **The cast is the language's one cast.** `handle.getAs<T>()` answers `PtrOf<T>` and is the
+    reinterpretation C++ will not make implicitly. A generic *member* call did not parse at all;
+    `parsePostfix` now takes the same tentative path `parsePrimary` already uses for `name<...>`
+    (the closer must be followed by `(`, or the `<` was a comparison - so `m.branch < 3` is
+    untouched). The lowering turns it into the IL's `Cast`, whose target type is its
+    *destination's*: the IL names a callee and never spells a signature, so the type argument
+    cannot survive to the emitter, and it does not have to - `IlExtractor.call` fixes the
+    destination from the type argument and `ilValueText` renders `reinterpret_cast<T*>(h)`. The
+    op was declared but never emitted or rendered until now.
+  - **Handles re-pointed.** The task protocol (`tasksEnqueue`/`tasksSpawn`/`tasksSuspendAt`/
+    `tasksReleaseHandle`, the generated `<f>Task` factory and `<f>_smResult` accessor, and the
+    lowering's own child-handle field) and the SDL wrapper now say `RawPtr` instead of `*Int8`.
+    The `sockets` module keeps `*Int8` for its *byte* buffers, which is what a byte pointer is;
+    its connection handle is an `Int64` beside that, and neither is opaque.
+  - **`!print`.** `println`/`print` emitted `std::cout << std::boolalpha << ...`; a program that
+    printed pulled in the standard streams' static construction for one value. A `!print`
+    resource (forward-only, `emit: always`) writes one `fwrite`/`fputs` per value instead, so the
+    emitted translation unit no longer includes `<iostream>` at all - measured at **2 KB** of the
+    compiler's 2.36 MB (.text -976, .rdata -1,338), because the build is `/MD` and the STL lives
+    in `msvcp140.dll`. The compiler is 2.0 MB of `.text` for 60k lines of generated C++, and no
+    amount of dropping STL changes that.
+  - **A pre-existing bug the `RawPtr` work surfaced.** `Task.kt` recursed into a block with
+    `xmlChildren(stmt, AstNodeKind.Body)`, which returns the *body container* - a node with no
+    category - rather than its statements, so the walker met `AstNodeCategory.None` and the IL
+    recorded `Unsupported`. It bit exactly one shape: a suspension inside an `if` inside a loop
+    (the async server's main), which had been emitting an `Unsupported` op - silently, because
+    the driver still exits 0. `tskContainerStmts` descends one level the way the extractor's own
+    `StmtBlock` case does, and `collectLocals` now uses it too.
+
+  Verified: `bun tools/stress.js` **51/51**; `bun tools/bootstrap.js` fixed point byte for byte;
+  the async server builds, serves `/`, `/json` and a 404 correctly (Simse client and `curl`), and
+  the SDL demo runs; `getAs` is exercised by a probe that round-trips 41 through a `RawPtr` and
+  prints 42.

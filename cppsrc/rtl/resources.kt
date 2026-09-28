@@ -8,11 +8,13 @@
 package rtl
 
 // The statics' receiver: a type of its own, so `Resources.get(...)` has a type to qualify.
-// Nothing constructs one, which is why it has no fields.
+// Nothing constructs one, which is why it has no fields. Its C++ is `resources.hpp`.
+@SmGen("cpp")
 data class Resources()
 
 // One entry: the key and its value, both views into the program's string table, so reading
 // a resource copies nothing.
+@SmGen("cpp")
 data class ResourceEntry(var key: StrView, var value: StrView)
 
 // Every entry the program carries, in the order the compiler read them. A borrowed view:

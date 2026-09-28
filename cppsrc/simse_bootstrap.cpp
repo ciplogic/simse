@@ -78,30 +78,24 @@ static struct __SmStringTableInitType {
 template <class T>
 Span<T> simse_spanOf(List<T>* items);
 
-// The operations a view is read through (specs/built-in-types.md, "Views"; the
-// declarations are cppsrc/rtl/StrView.kt). The *type* and the *literal interop* stay in
-// cppsrc/rtl/strview.hpp: `using StrView = Span<Char>`, the comparison operators, `+`,
-// `<<` and the `Str` conversions are reached by C++ overload resolution at a literal
-// site rather than by a prelude declaration, so no declaration could reach a section for
-// them - while these are named, one symbol each (except `spanOfStr`: one symbol, two
-// overloads - a `Str`'s borrow and a `StrView`'s identity) - and a program that calls one
-// pays for this text (`sourcegen/ResGen.kt`).
+// What a view's byte operations still need from C++ (specs/built-in-types.md, "Views").
+// The byte work itself - `find`/`indexOf`, `startsWith`/`startsWithPtr`, `substr`/`toString`
+// - is Simse now, in cppsrc/rtl/StrView.kt over the span and the intrinsics
+// (cppsrc/rtl/intrinsics.kt). What remains here is the `Span` member passthroughs, which
+// cannot be Simse without shadowing the member they call, and `spanOfStr`, whose two
+// overloads are picked by C++ overload resolution at the desugar's site (Parser.kt's
+// `parseWhen`) rather than by a declaration - so a declaration reaches this section, and a
+// program that calls one pays for this text (`sourcegen/ResGen.kt`).
 //
 // `StrView` *is* a `Span<Char>`, so `self.len`, `self[i]` and `self.slice(...)` below are
 // the span's own members (cppsrc/rtl/span.hpp) - and `at` is *not* an operation of its
-// own: the span's member serves it (`cppsrc/rtl/StrView.kt`), as `atPtr` is the
+// own: the span's member serves it (cppsrc/rtl/StrView.kt), as `atPtr` is the
 // language's (cppsrc/rtl/Span.kt).
 Int simse_strView_size(StrView self);
 Bool simse_strView_isEmpty(StrView self);
 StrView simse_strView_slice(StrView self, Int start);
 StrView simse_strView_slice(StrView self, Int start, Int count);
 Char simse_strView_charAt(StrView self, Int index);
-Bool simse_strView_startsWith(StrView self, const Str& text);
-Bool simse_strView_startsWithPtr(StrView self, const Str* text, Int length);
-Int simse_strView_find(StrView self, const Str& sub);
-Int simse_strView_indexOf(StrView self, const Str& sub);
-Str simse_strView_substr(StrView self, Int from, Int count);
-Str simse_strView_toString(StrView self);
 StrView simse_spanOfStr(Str* text);
 StrView simse_spanOfStr(StrView view);
 
@@ -420,6 +414,8 @@ inline void simse_println(const T& value, FILE* out) {
     std::fputc('\n', out);
 }
 
+struct AstNodeAttribute;
+struct AstXmlNode;
 struct ns1_StringTable;
 struct ns1_CgInput;
 struct ns1_CgFn;
@@ -492,6 +488,31 @@ struct ns13_SourceGenContext;
 struct ns13_SourceGenerator;
 struct ns13_NamedSection;
 struct ns13_Sections;
+// cppsrc/rtl
+enum class AstNodeKind { None, Module, Import, DataClass, Enum, TypeAlias, Function, Var, TypeParam, Field, Param, EnumMember, Type, Inner, TypeArg, ParamType, ReturnType, TargetType, Receiver, Stmt, Expr, Cond, Then, Else, Body, Label, Init, Value, Target, Operand, Lhs, Rhs, Index, Callee, Arg };
+inline AstNodeKind simse_AstNodeKind_fromInt(Int value) { return (AstNodeKind) value; }
+// cppsrc/rtl
+enum class AstNodeAttributeKind { Line, Column, Name, IsVar, IsNative, HasBody, HasReceiver, HasNativeSymbol, NativeSymbol, Attribute, Generator, GeneratorArgs, Package, Path, Params, Op, Value, Text, HasValue, IsPure, IsSuspend };
+inline AstNodeAttributeKind simse_AstNodeAttributeKind_fromInt(Int value) { return (AstNodeAttributeKind) value; }
+// cppsrc/rtl
+enum class AstNodeCategory { None, Module, DataClass, Enum, TypeAlias, Function, Var, StmtVarDecl, StmtAssign, StmtIf, StmtWhile, StmtReturn, StmtBreak, StmtContinue, StmtExprStmt, StmtLabel, StmtGoto, StmtIfTrue, StmtIfFalse, StmtBlock, StmtYield, ExprIntLit, ExprFloatLit, ExprStrLit, ExprCharLit, ExprBoolLit, ExprNullLit, ExprName, ExprGenericName, ExprMember, ExprCall, ExprIndex, ExprUnary, ExprBinary, ExprLambda, ExprRef, ExprDeref, ExprCopy, TypeIntLit, TypeNamed, TypeGeneric, TypeReference, TypePointer, TypeFunction, TypeYield, ExprPropagate };
+inline AstNodeCategory simse_AstNodeCategory_fromInt(Int value) { return (AstNodeCategory) value; }
+// cppsrc/rtl
+SIMSE_PACK_PUSH
+struct AstNodeAttribute {
+    AstNodeAttributeKind name;
+    Str value;
+};
+SIMSE_PACK_POP
+// cppsrc/rtl
+SIMSE_PACK_PUSH
+struct AstXmlNode {
+    AstNodeKind name;
+    AstNodeCategory kind;
+    List<AstNodeAttribute> attributes;
+    Array<AstXmlNode> Children;
+};
+SIMSE_PACK_POP
 // cppsrc/codegen/CgStringTable.kt
 SIMSE_PACK_PUSH
 struct ns1_StringTable {
@@ -1329,6 +1350,12 @@ List<ns13_SourceGenerator> ns13_sourceGenTable{};
 // cppsrc/sourcegen/SourceGen.kt
 ns13_FullCompiledState ns13_sourceGenState{};
 
+Bool startsWith(StrView* self, Str text);
+Bool startsWithPtr(StrView* self, Str* text, Int length);
+Int find(StrView* self, Str sub);
+Int indexOf(StrView* self, Str sub);
+Str substr(StrView* self, Int from, Int count);
+Str toString(StrView* self);
 template <class T>
 struct List_iter_yieldable {
     Int branch{};
@@ -1657,8 +1684,9 @@ ns1_NameKind ns1_kindOf(ns1_Emitter* self, AstXmlNode* typeExpr);
 void ns1_emitStatics(ns1_Emitter* self);
 Bool ns1_hasStaticInit(ns1_Emitter* self);
 void ns1_emitStaticInit(ns1_Emitter* self);
-void ns1_emitForwardTypes(ns1_Emitter* self);
-void ns1_emitTypes(ns1_Emitter* self);
+Bool ns1_typeIsRaw(ns1_Emitter* self, AstXmlNode* decl);
+void ns1_emitForwardTypes(ns1_Emitter* self, Dictionary<Str, Bool>* emitted);
+void ns1_emitTypes(ns1_Emitter* self, Dictionary<Str, Bool>* emitted);
 void ns1_emitDataClass(ns1_Emitter* self, AstXmlNode* decl);
 void ns1_emitEnum(ns1_Emitter* self, AstXmlNode* decl);
 void ns1_emitEnumConversion(ns1_Emitter* self, AstXmlNode* decl);
@@ -1679,6 +1707,8 @@ Str ns1_receiverParam(ns1_Emitter* self, AstXmlNode* receiverType);
 Str ns1_machineName(ns1_Emitter* self, AstXmlNode* decl);
 Str ns1_outerTypeName(ns1_Emitter* self, AstXmlNode* typeNode);
 void ns1_collectTypeNames(ns1_Emitter* self, AstXmlNode* node);
+Dictionary<Str, Bool> ns1_computeEmittedTypes(ns1_Emitter* self);
+Bool ns1_gatherTypeNames(ns1_Emitter* self, AstXmlNode* node, Dictionary<Str, Bool>* out);
 List<Str> ns1_cgReservedNames(ns1_Emitter* self, AstXmlNode* decl, Bool hasSelf, Bool argv);
 void ns1_emitFunction(ns1_Emitter* self, ns1_CgFn* fn, Bool prototypeOnly, ns12_SemFacts* facts);
 void ns1_emitUninit(ns1_Emitter* self, ns1_CgFn* fn, AstXmlNode* decl, ns12_SemFacts* facts, Bool prototypeOnly);
@@ -2298,6 +2328,7 @@ AstXmlNode ns9_parseRoot(ns9_Parser* self);
 AstXmlNode ns9_parseImport(ns9_Parser* self);
 AstXmlNode ns9_parseDecl(ns9_Parser* self);
 AstXmlNode ns9_parseAttributedDecl(ns9_Parser* self, Bool pure, Bool suspendModifier);
+void ns9_attachTypeAttribute(ns9_Parser* self, AstXmlNode* node, Str attrName, List<Str>* args);
 AstXmlNode ns9_parseStaticVar(ns9_Parser* self);
 AstXmlNode ns9_parseDataClass(ns9_Parser* self);
 AstXmlNode ns9_parseEnum(ns9_Parser* self);
@@ -2591,7 +2622,7 @@ Res<Str> ns13_sourceGenReparseDecl(AstXmlNode* decl);
 void simse_initStatics() {
     ns1_kIlDeclWidth = 100;
     ns2_xmlMissingAttr = __sm_stringTable[809];
-    ns2_xmlMissingNode = AstXmlNode(AstNodeKind::None, AstNodeCategory::None, List<AstNodeAttribute>(), Array<AstXmlNode>());
+    ns2_xmlMissingNode = AstXmlNode{AstNodeKind::None, AstNodeCategory::None, List<AstNodeAttribute>(), Array<AstXmlNode>()};
     ns6_reservedWordTable = ns6_makeReservedWords();
     ns6_multiCharOperatorTable = ns6_makeMultiCharOperators();
     ns6_tokenRuleTable = ns6_makeTokenRules();
@@ -2626,6 +2657,173 @@ void simse_initStatics() {
     ns13_sourceGenState = ns13_makeSourceGenState();
 }
 
+Bool startsWith(StrView* self, Str text) {
+    Int count, _sm_expr1, i;
+    Bool _sm_expr2, _sm_expr6;
+    Char _sm_expr5;
+    count = text.size();
+    _sm_expr1 = simse_strView_size((*self));
+    _sm_expr2 = count > _sm_expr1;
+    if (_sm_expr2) goto L1;
+    goto L2;
+    L1:;
+    return false;
+    L2:;
+    i = 0;
+    L3:;
+    _sm_expr2 = i < count;
+    if (!(_sm_expr2)) goto L4;
+    {
+        auto _sm_expr4 = self->ptr[i];
+        _sm_expr5 = simse_str_charAt(text, i);
+        _sm_expr6 = _sm_expr4 != _sm_expr5;
+        if (_sm_expr6) goto L5;
+        goto L6;
+        L5:;
+        return false;
+        L6:;
+        i = i + 1;
+        goto L3;
+    }
+    L4:;
+    return true;
+}
+Bool startsWithPtr(StrView* self, Str* text, Int length) {
+    Int _sm_expr1, i;
+    Bool _sm_expr2, _sm_expr6;
+    Char _sm_expr5;
+    _sm_expr1 = simse_strView_size((*self));
+    _sm_expr2 = length > _sm_expr1;
+    if (_sm_expr2) goto L1;
+    goto L2;
+    L1:;
+    return false;
+    L2:;
+    i = 1;
+    L3:;
+    _sm_expr2 = i < length;
+    if (!(_sm_expr2)) goto L4;
+    {
+        auto _sm_expr4 = self->ptr[i];
+        _sm_expr5 = simse_str_charAt((*text), i);
+        _sm_expr6 = _sm_expr4 != _sm_expr5;
+        if (_sm_expr6) goto L5;
+        goto L6;
+        L5:;
+        return false;
+        L6:;
+        i = i + 1;
+        goto L3;
+    }
+    L4:;
+    return true;
+}
+Int find(StrView* self, Str sub) {
+    Int needle, len, _sm_expr3, i, j, _sm_expr7;
+    Bool _sm_expr1, _sm_expr10;
+    Char _sm_expr9;
+    needle = sub.size();
+    _sm_expr1 = needle == 0;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    return 0;
+    L2:;
+    len = simse_strView_size((*self));
+    _sm_expr1 = needle > len;
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    _sm_expr3 = -1;
+    return _sm_expr3;
+    L4:;
+    i = 0;
+    L5:;
+    _sm_expr3 = i + needle;
+    _sm_expr1 = _sm_expr3 <= len;
+    if (!(_sm_expr1)) goto L6;
+    j = 0;
+    L7:;
+    _sm_expr1 = j < needle;
+    if (_sm_expr1) goto L10;
+    goto L8;
+    L10:;
+    _sm_expr7 = i + j;
+    {
+        auto _sm_expr8 = self->ptr[_sm_expr7];
+        _sm_expr9 = simse_str_charAt(sub, j);
+        _sm_expr10 = _sm_expr8 == _sm_expr9;
+        if (_sm_expr10) goto L9;
+        goto L8;
+        L9:;
+        j = j + 1;
+        goto L7;
+    }
+    L8:;
+    _sm_expr1 = j == needle;
+    if (_sm_expr1) goto L11;
+    goto L12;
+    L11:;
+    return i;
+    L12:;
+    i = i + 1;
+    goto L5;
+    L6:;
+    _sm_expr3 = -1;
+    return _sm_expr3;
+}
+Int indexOf(StrView* self, Str sub) {
+    Int _sm_expr1;
+    _sm_expr1 = find(self, sub);
+    return _sm_expr1;
+}
+Str substr(StrView* self, Int from, Int count) {
+    Int len, begin, end, _sm_expr6;
+    Bool _sm_expr1;
+    len = simse_strView_size((*self));
+    begin = from;
+    _sm_expr1 = begin < 0;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    begin = 0;
+    L2:;
+    _sm_expr1 = begin > len;
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    begin = len;
+    L4:;
+    end = begin + count;
+    _sm_expr1 = count < 0;
+    if (_sm_expr1) goto L5;
+    goto L6;
+    L5:;
+    end = begin;
+    L6:;
+    _sm_expr1 = end > len;
+    if (_sm_expr1) goto L7;
+    goto L8;
+    L7:;
+    end = len;
+    L8:;
+    Str out;
+    _sm_expr1 = end > begin;
+    if (_sm_expr1) goto L9;
+    goto L10;
+    L9:;
+    _sm_expr6 = end - begin;
+    simse_str_setBytes(out, self->ptr, begin, _sm_expr6);
+    L10:;
+    return out;
+}
+Str toString(StrView* self) {
+    Int _sm_expr1;
+    Str _sm_expr2;
+    _sm_expr1 = simse_strView_size((*self));
+    _sm_expr2 = substr(self, 0, _sm_expr1);
+    return _sm_expr2;
+}
 template <class T>
 List_iter_yieldable<T> iter(List<T>* self) {
     List_iter_yieldable<T> machine{};
@@ -3563,10 +3761,10 @@ AstXmlNode ns1_namedTypeExpr(ns1_Emitter* self, Str* name) {
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base1 = AstNodeKind::Type;
     _sm_base2 = AstNodeCategory::TypeNamed;
-    node = AstXmlNode(_sm_base1, _sm_base2, _sm_expr1, _sm_expr2);
+    node = AstXmlNode{_sm_base1, _sm_base2, _sm_expr1, _sm_expr2};
     _sm_base3 = AstNodeAttributeKind::Name;
     _sm_base4 = *(name);
-    _sm_expr3 = AstNodeAttribute(_sm_base3, _sm_base4);
+    _sm_expr3 = AstNodeAttribute{_sm_base3, _sm_base4};
     _sm_base5 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base5), _sm_expr3);
     return node;
@@ -3586,10 +3784,10 @@ AstXmlNode ns1_genericTypeExpr(ns1_Emitter* self, Str* name, List<AstXmlNode>* a
     _sm_expr2 = simse_list_toArray((*args));
     _sm_base1 = AstNodeKind::Type;
     _sm_base2 = AstNodeCategory::TypeGeneric;
-    node = AstXmlNode(_sm_base1, _sm_base2, _sm_expr1, _sm_expr2);
+    node = AstXmlNode{_sm_base1, _sm_base2, _sm_expr1, _sm_expr2};
     _sm_base3 = AstNodeAttributeKind::Name;
     _sm_base4 = *(name);
-    _sm_expr3 = AstNodeAttribute(_sm_base3, _sm_base4);
+    _sm_expr3 = AstNodeAttribute{_sm_base3, _sm_base4};
     _sm_base5 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base5), _sm_expr3);
     return node;
@@ -4128,7 +4326,7 @@ void ns1_collect(ns1_Emitter* self) {
     if (_sm_expr1) goto L27;
     goto L3;
     L27:;
-    _sm_expr1 = input->prelude;
+    _sm_expr1 = ns1_typeIsRaw(self, decl);
     if (_sm_expr1) goto L3;
     _sm_base52 = simse_addressOf(self->dataClassNames);
     simse_dict_insert((*_sm_base52), declName, true);
@@ -4882,131 +5080,179 @@ void ns1_emitStaticInit(ns1_Emitter* self) {
     ns1_line(self, 0, __sm_stringTable[808]);
 }
 // cppsrc/codegen/Codegen.kt
-void ns1_emitForwardTypes(ns1_Emitter* self) {
+Bool ns1_typeIsRaw(ns1_Emitter* self, AstXmlNode* decl) {
+    AstNodeAttributeKind _sm_base1;
+    Bool _sm_base2, _sm_base3, _sm_base6;
+    StrView _sm_base4, _sm_base7;
+    Str* _sm_base5, * _sm_base8;
+    Str generator;
+    _sm_base1 = AstNodeAttributeKind::Generator;
+    generator = *(ns2_xmlAttr(decl, _sm_base1));
+    _sm_base5 = &generator;
+    _sm_base4 = simse_spanOfStr(_sm_base5);
+    _sm_base3 = _sm_base4 == __sm_stringTable[718];
+    _sm_base8 = &generator;
+    _sm_base7 = simse_spanOfStr(_sm_base8);
+    _sm_base6 = _sm_base7 == __sm_stringTable[723];
+    _sm_base2 = _sm_base3 || _sm_base6;
+    return _sm_base2;
+}
+// cppsrc/codegen/Codegen.kt
+void ns1_emitForwardTypes(ns1_Emitter* self, Dictionary<Str, Bool>* emitted) {
     char* __sm_catP;
     List<ns1_CgInput>* _sm_base1;
     AstXmlNode* _sm_base2, * _sm_base3, * decl;
-    List<Str>* _sm_base4;
-    Str* _sm_base5, * _sm_base7, * _sm_base8, * _sm_base9;
-    AstNodeAttributeKind _sm_base6;
+    AstNodeAttributeKind _sm_base4, _sm_base7;
+    List<Str>* _sm_base5;
+    Str* _sm_base6, * _sm_base8, * _sm_base9, * _sm_base10;
     List_iterPtr_yieldable<ns1_CgInput> _sm_for20;
     Bool _sm_expr1;
     ns1_CgInput* input;
     List<AstXmlNode> decls;
     List_iterPtr_yieldable<AstXmlNode> _sm_for19;
-    AstNodeKind _sm_expr4, _sm_expr5;
-    List<Str> _sm_expr7;
-    Str tmpl, name, _sm_expr10, _sm_expr11, _sm_expr12;
-    StrView _sm_expr8;
+    AstNodeKind _sm_expr3, _sm_expr4;
+    Str fwdName, tmpl, name, _sm_expr12, _sm_expr13, _sm_expr14;
+    List<Str> _sm_expr9;
+    StrView _sm_expr10;
     _sm_base1 = simse_addressOf(self->inputs);
     _sm_for20 = iterPtr(_sm_base1);
     L1:;
     _sm_expr1 = _sm_for20.advance();
     if (!(_sm_expr1)) goto L2;
     input = _sm_for20.current;
-    _sm_expr1 = input->prelude;
-    if (_sm_expr1) goto L1;
     _sm_base3 = simse_addressOf(input->module);
     _sm_base2 = _sm_base3;
     decls = ns2_xmlDecls(_sm_base2);
     _sm_for19 = iterPtr(simse_addressOf(decls));
-    L5:;
+    L3:;
     _sm_expr1 = _sm_for19.advance();
     if (!(_sm_expr1)) goto L1;
     decl = _sm_for19.current;
-    _sm_expr4 = decl->name;
-    _sm_expr5 = AstNodeKind::DataClass;
-    _sm_expr1 = _sm_expr4 != _sm_expr5;
-    if (_sm_expr1) goto L5;
-    _sm_expr7 = ns2_xmlTypeParamNames(decl);
-    _sm_base4 = &_sm_expr7;
-    tmpl = ns1_templateClause(self, _sm_base4);
-    _sm_base5 = &tmpl;
-    _sm_expr8 = simse_spanOfStr(_sm_base5);
-    _sm_expr1 = _sm_expr8 != __sm_stringTable[809];
-    if (_sm_expr1) goto L9;
+    _sm_expr3 = decl->name;
+    _sm_expr4 = AstNodeKind::DataClass;
+    _sm_expr1 = _sm_expr3 != _sm_expr4;
+    if (_sm_expr1) goto L3;
+    _sm_expr1 = ns1_typeIsRaw(self, decl);
+    if (_sm_expr1) goto L3;
+    _sm_base4 = AstNodeAttributeKind::Name;
+    fwdName = *(ns2_xmlAttr(decl, _sm_base4));
+    _sm_expr1 = input->prelude;
+    if (_sm_expr1) goto L11;
     goto L10;
-    L9:;
-    ns1_line(self, 0, tmpl);
+    L11:;
+    _sm_expr1 = simse_dict_has((*emitted), fwdName);
+    if (_sm_expr1) goto L10;
+    goto L3;
     L10:;
-    _sm_base6 = AstNodeAttributeKind::Name;
-    name = *(ns2_xmlAttr(decl, _sm_base6));
-    _sm_base7 = &name;
-    _sm_expr10 = ns1_typePackage(self, _sm_base7);
-    _sm_base8 = &_sm_expr10;
-    _sm_base9 = &name;
-    _sm_expr11 = ns1_qualify(self, _sm_base8, _sm_base9);
-    _sm_expr12.resize(8 + _sm_expr11.size());
-    __sm_catP = _sm_expr12.data();
+    _sm_expr9 = ns2_xmlTypeParamNames(decl);
+    _sm_base5 = &_sm_expr9;
+    tmpl = ns1_templateClause(self, _sm_base5);
+    _sm_base6 = &tmpl;
+    _sm_expr10 = simse_spanOfStr(_sm_base6);
+    _sm_expr1 = _sm_expr10 != __sm_stringTable[809];
+    if (_sm_expr1) goto L12;
+    goto L13;
+    L12:;
+    ns1_line(self, 0, tmpl);
+    L13:;
+    _sm_base7 = AstNodeAttributeKind::Name;
+    name = *(ns2_xmlAttr(decl, _sm_base7));
+    _sm_base8 = &name;
+    _sm_expr12 = ns1_typePackage(self, _sm_base8);
+    _sm_base9 = &_sm_expr12;
+    _sm_base10 = &name;
+    _sm_expr13 = ns1_qualify(self, _sm_base9, _sm_base10);
+    _sm_expr14.resize(8 + _sm_expr13.size());
+    __sm_catP = _sm_expr14.data();
     std::memcpy(__sm_catP, "struct ", 7);
     __sm_catP = __sm_catP + 7;
-    std::memcpy(__sm_catP, _sm_expr11.data(), _sm_expr11.size());
-    __sm_catP = __sm_catP + _sm_expr11.size();
+    std::memcpy(__sm_catP, _sm_expr13.data(), _sm_expr13.size());
+    __sm_catP = __sm_catP + _sm_expr13.size();
     *__sm_catP = (char) (';');
-    ns1_line(self, 0, _sm_expr12);
-    goto L5;
+    ns1_line(self, 0, _sm_expr14);
+    goto L3;
     L2:;
 }
 // cppsrc/codegen/Codegen.kt
-void ns1_emitTypes(ns1_Emitter* self) {
+void ns1_emitTypes(ns1_Emitter* self, Dictionary<Str, Bool>* emitted) {
     List<ns1_CgInput>* _sm_base1;
-    Str _sm_base2;
+    Str _sm_base2, tname;
     AstXmlNode* _sm_base3, * _sm_base4, * decl;
+    AstNodeAttributeKind _sm_base5;
+    Bool _sm_base6, _sm_base7, _sm_base8, _sm_expr1, reachable, _sm_expr15;
     List_iterPtr_yieldable<ns1_CgInput> _sm_for22;
-    Bool _sm_expr1;
     ns1_CgInput* input;
     List<AstXmlNode> decls;
     List_iterPtr_yieldable<AstXmlNode> _sm_for21;
-    AstNodeKind _sm_expr4, _sm_expr5;
+    AstNodeKind _sm_expr3, _sm_expr4;
     _sm_base1 = simse_addressOf(self->inputs);
     _sm_for22 = iterPtr(_sm_base1);
     L1:;
     _sm_expr1 = _sm_for22.advance();
     if (!(_sm_expr1)) goto L2;
     input = _sm_for22.current;
-    _sm_expr1 = input->prelude;
-    if (_sm_expr1) goto L1;
     _sm_base2 = input->fileName;
     self->curFile = _sm_base2;
     _sm_base4 = simse_addressOf(input->module);
     _sm_base3 = _sm_base4;
     decls = ns2_xmlDecls(_sm_base3);
     _sm_for21 = iterPtr(simse_addressOf(decls));
-    L5:;
+    L3:;
     _sm_expr1 = _sm_for21.advance();
     if (!(_sm_expr1)) goto L1;
     decl = _sm_for21.current;
-    _sm_expr4 = decl->name;
-    _sm_expr5 = AstNodeKind::DataClass;
-    _sm_expr1 = _sm_expr4 == _sm_expr5;
-    if (_sm_expr1) goto L7;
-    goto L8;
-    L7:;
+    _sm_base5 = AstNodeAttributeKind::Name;
+    tname = *(ns2_xmlAttr(decl, _sm_base5));
+    _sm_base7 = input->prelude;
+    _sm_base6 = !_sm_base7;
+    _sm_base8 = simse_dict_has((*emitted), tname);
+    reachable = _sm_base6 || _sm_base8;
+    _sm_expr3 = decl->name;
+    _sm_expr4 = AstNodeKind::DataClass;
+    _sm_expr1 = _sm_expr3 == _sm_expr4;
+    if (_sm_expr1) goto L5;
+    goto L6;
+    L5:;
+    if (reachable) goto L9;
+    goto L20;
+    L9:;
+    _sm_expr1 = ns1_typeIsRaw(self, decl);
+    if (_sm_expr1) goto L20;
     ns1_emitDataClass(self, decl);
-    goto L14;
-    L8:;
-    _sm_expr4 = decl->name;
-    _sm_expr5 = AstNodeKind::Enum;
-    _sm_expr1 = _sm_expr4 == _sm_expr5;
-    if (_sm_expr1) goto L10;
-    goto L11;
-    L10:;
+    goto L20;
+    L6:;
+    _sm_expr3 = decl->name;
+    _sm_expr4 = AstNodeKind::Enum;
+    _sm_expr1 = _sm_expr3 == _sm_expr4;
+    if (_sm_expr1) goto L11;
+    goto L12;
+    L11:;
+    if (reachable) goto L15;
+    goto L20;
+    L15:;
+    _sm_expr1 = ns1_typeIsRaw(self, decl);
+    if (_sm_expr1) goto L20;
     ns1_emitEnum(self, decl);
     ns1_emitEnumConversion(self, decl);
-    goto L14;
-    L11:;
-    _sm_expr4 = decl->name;
-    _sm_expr5 = AstNodeKind::TypeAlias;
-    _sm_expr1 = _sm_expr4 == _sm_expr5;
-    if (_sm_expr1) goto L13;
-    goto L14;
-    L13:;
+    goto L20;
+    L12:;
+    _sm_expr3 = decl->name;
+    _sm_expr4 = AstNodeKind::TypeAlias;
+    _sm_expr1 = _sm_expr3 == _sm_expr4;
+    if (_sm_expr1) goto L17;
+    goto L20;
+    L17:;
+    _sm_expr1 = input->prelude;
+    _sm_expr15 = !_sm_expr1;
+    if (_sm_expr15) goto L19;
+    goto L20;
+    L19:;
     ns1_emitTypeAlias(self, decl);
-    L14:;
+    L20:;
     _sm_expr1 = self->failed;
-    if (_sm_expr1) goto L15;
-    goto L5;
-    L15:;
+    if (_sm_expr1) goto L21;
+    goto L3;
+    L21:;
     return;
     L2:;
 }
@@ -6503,13 +6749,168 @@ void ns1_collectTypeNames(ns1_Emitter* self, AstXmlNode* node) {
     L12:;
 }
 // cppsrc/codegen/Codegen.kt
+Dictionary<Str, Bool> ns1_computeEmittedTypes(ns1_Emitter* self) {
+    Dictionary<Str, Bool>* _sm_base1, * _sm_base8;
+    Str _sm_base2, _sm_base4, _sm_expr3;
+    Dictionary<Str, AstXmlNode>* _sm_base3;
+    AstNodeKind _sm_base6, _sm_base7, _sm_expr6, _sm_expr7;
+    Dictionary<Str, Bool> out;
+    List<Str> seed, names;
+    List_iterPtr_yieldable<Str> _sm_for36, _sm_for38;
+    Bool _sm_expr1, changed;
+    Str* name, * _sm_name_2;
+    AstXmlNode* decl, * field, * fieldType;
+    List<AstXmlNode> _sm_expr10;
+    List_iterPtr_yieldable<AstXmlNode> _sm_for37;
+    out = Dictionary<Str, Bool>();
+    _sm_base1 = simse_addressOf(self->referencedTypes);
+    seed = simse_dict_keys((*_sm_base1));
+    _sm_for36 = iterPtr(simse_addressOf(seed));
+    L1:;
+    _sm_expr1 = _sm_for36.advance();
+    if (!(_sm_expr1)) goto L2;
+    name = _sm_for36.current;
+    _sm_base2 = *name;
+    simse_dict_insert(out, _sm_base2, true);
+    goto L1;
+    L2:;
+    changed = true;
+    L3:;
+    if (!(changed)) goto L4;
+    changed = false;
+    names = simse_dict_keys(out);
+    _sm_for38 = iterPtr(simse_addressOf(names));
+    L5:;
+    _sm_expr1 = _sm_for38.advance();
+    if (!(_sm_expr1)) goto L3;
+    _sm_name_2 = _sm_for38.current;
+    _sm_expr3 = ns1_typePackage(self, _sm_name_2);
+    _sm_expr1 = _sm_expr3 != __sm_stringTable[724];
+    if (_sm_expr1) goto L5;
+    _sm_base3 = simse_addressOf(self->types);
+    _sm_base4 = *_sm_name_2;
+    decl = simse_dict_getPtr((*_sm_base3), _sm_base4);
+    _sm_expr1 = decl == nullptr;
+    if (_sm_expr1) goto L5;
+    _sm_expr6 = decl->name;
+    _sm_expr7 = AstNodeKind::DataClass;
+    _sm_expr1 = _sm_expr6 != _sm_expr7;
+    if (_sm_expr1) goto L5;
+    _sm_expr1 = ns1_typeIsRaw(self, decl);
+    if (_sm_expr1) goto L5;
+    _sm_base6 = AstNodeKind::Field;
+    _sm_expr10 = ns2_xmlChildren(decl, _sm_base6);
+    _sm_for37 = iterPtr(simse_addressOf(_sm_expr10));
+    L13:;
+    _sm_expr1 = _sm_for37.advance();
+    if (!(_sm_expr1)) goto L5;
+    field = _sm_for37.current;
+    _sm_base7 = AstNodeKind::Type;
+    fieldType = ns2_xmlChildPtr(field, _sm_base7);
+    _sm_expr1 = ns2_xmlIsEmpty(fieldType);
+    if (_sm_expr1) goto L13;
+    _sm_base8 = &out;
+    _sm_expr1 = ns1_gatherTypeNames(self, fieldType, _sm_base8);
+    if (_sm_expr1) goto L15;
+    goto L13;
+    L15:;
+    changed = true;
+    goto L13;
+    L4:;
+    return out;
+}
+// cppsrc/codegen/Codegen.kt
+Bool ns1_gatherTypeNames(ns1_Emitter* self, AstXmlNode* node, Dictionary<Str, Bool>* out) {
+    AstNodeAttributeKind _sm_base1;
+    Str* _sm_base2, * name;
+    Str _sm_base3;
+    Array<AstXmlNode>* _sm_base4;
+    AstNodeKind role, _sm_expr1;
+    Bool _sm_expr2, added;
+    StrView _sm_expr15;
+    Int at, _sm_expr17;
+    Array_iterPtr_yieldable<AstXmlNode> _sm_for39;
+    AstXmlNode* child;
+    role = node->name;
+    _sm_expr1 = AstNodeKind::Type;
+    _sm_expr2 = role != _sm_expr1;
+    if (_sm_expr2) goto L8;
+    goto L2;
+    L8:;
+    _sm_expr1 = AstNodeKind::Inner;
+    _sm_expr2 = role != _sm_expr1;
+    if (_sm_expr2) goto L7;
+    goto L2;
+    L7:;
+    _sm_expr1 = AstNodeKind::TypeArg;
+    _sm_expr2 = role != _sm_expr1;
+    if (_sm_expr2) goto L6;
+    goto L2;
+    L6:;
+    _sm_expr1 = AstNodeKind::ReturnType;
+    _sm_expr2 = role != _sm_expr1;
+    if (_sm_expr2) goto L5;
+    goto L2;
+    L5:;
+    _sm_expr1 = AstNodeKind::TargetType;
+    _sm_expr2 = role != _sm_expr1;
+    if (_sm_expr2) goto L4;
+    goto L2;
+    L4:;
+    _sm_expr1 = AstNodeKind::ParamType;
+    _sm_expr2 = role != _sm_expr1;
+    if (_sm_expr2) goto L3;
+    goto L2;
+    L3:;
+    _sm_expr1 = AstNodeKind::Receiver;
+    _sm_expr2 = role != _sm_expr1;
+    if (_sm_expr2) goto L1;
+    goto L2;
+    L1:;
+    return false;
+    L2:;
+    added = false;
+    _sm_base1 = AstNodeAttributeKind::Name;
+    name = ns2_xmlAttr(node, _sm_base1);
+    _sm_base2 = name;
+    _sm_expr15 = simse_spanOfStr(_sm_base2);
+    _sm_expr2 = _sm_expr15 != __sm_stringTable[809];
+    if (_sm_expr2) goto L9;
+    goto L12;
+    L9:;
+    at = simse_dict_size((*out));
+    _sm_base3 = *name;
+    simse_dict_insert((*out), _sm_base3, true);
+    _sm_expr17 = simse_dict_size((*out));
+    _sm_expr2 = _sm_expr17 != at;
+    if (_sm_expr2) goto L11;
+    goto L12;
+    L11:;
+    added = true;
+    L12:;
+    _sm_base4 = simse_addressOf(node->Children);
+    _sm_for39 = iterPtr(_sm_base4);
+    L13:;
+    _sm_expr2 = _sm_for39.advance();
+    if (!(_sm_expr2)) goto L14;
+    child = _sm_for39.current;
+    _sm_expr2 = ns1_gatherTypeNames(self, child, out);
+    if (_sm_expr2) goto L15;
+    goto L13;
+    L15:;
+    added = true;
+    goto L13;
+    L14:;
+    return added;
+}
+// cppsrc/codegen/Codegen.kt
 List<Str> ns1_cgReservedNames(ns1_Emitter* self, AstXmlNode* decl, Bool hasSelf, Bool argv) {
     AstNodeKind _sm_base1;
     AstNodeAttributeKind _sm_base2;
     Str _sm_base3;
     List<Str> names;
     List<AstXmlNode> params;
-    List_iterPtr_yieldable<AstXmlNode> _sm_for36;
+    List_iterPtr_yieldable<AstXmlNode> _sm_for40;
     Bool _sm_expr1;
     AstXmlNode* param;
     Str* _sm_expr2;
@@ -6521,11 +6922,11 @@ List<Str> ns1_cgReservedNames(ns1_Emitter* self, AstXmlNode* decl, Bool hasSelf,
     L2:;
     _sm_base1 = AstNodeKind::Param;
     params = ns2_xmlChildren(decl, _sm_base1);
-    _sm_for36 = iterPtr(simse_addressOf(params));
+    _sm_for40 = iterPtr(simse_addressOf(params));
     L3:;
-    _sm_expr1 = _sm_for36.advance();
+    _sm_expr1 = _sm_for40.advance();
     if (!(_sm_expr1)) goto L4;
-    param = _sm_for36.current;
+    param = _sm_for40.current;
     _sm_base2 = AstNodeAttributeKind::Name;
     _sm_expr2 = ns2_xmlAttr(param, _sm_base2);
     _sm_base3 = *(_sm_expr2);
@@ -6572,7 +6973,7 @@ void ns1_emitFunction(ns1_Emitter* self, ns1_CgFn* fn, Bool prototypeOnly, ns12_
     List<AstXmlNode> params0, _sm_expr47, lowered, _sm_expr50, finalBody;
     Int _sm_expr6;
     ns1_NameKind selfK;
-    List_iterPtr_yieldable<AstXmlNode> _sm_for37;
+    List_iterPtr_yieldable<AstXmlNode> _sm_for41;
     Dictionary<Str, AstXmlNode> _sm_expr51, inferred;
     ns12_SemBody semantics;
     ns7_IlFunction _sm_expr55;
@@ -6743,11 +7144,11 @@ void ns1_emitFunction(ns1_Emitter* self, ns1_CgFn* fn, Bool prototypeOnly, ns12_
     if (_sm_expr1) goto L32;
     goto L35;
     L32:;
-    _sm_for37 = iterPtr(simse_addressOf(params0));
+    _sm_for41 = iterPtr(simse_addressOf(params0));
     L34:;
-    _sm_expr1 = _sm_for37.advance();
+    _sm_expr1 = _sm_for41.advance();
     if (!(_sm_expr1)) goto L35;
-    param = _sm_for37.current;
+    param = _sm_for41.current;
     _sm_base43 = AstNodeKind::Type;
     paramType = ns2_xmlChildPtr(param, _sm_base43);
     _sm_expr1 = ns2_xmlIsEmpty(paramType);
@@ -7129,9 +7530,9 @@ void ns1_emitUninit(ns1_Emitter* self, ns1_CgFn* fn, AstXmlNode* decl, ns12_SemF
     _sm_expr15 = Array<AstXmlNode>();
     _sm_base31 = AstNodeKind::Type;
     _sm_base32 = AstNodeCategory::TypeNamed;
-    classType = AstXmlNode(_sm_base31, _sm_base32, _sm_expr14, _sm_expr15);
+    classType = AstXmlNode{_sm_base31, _sm_base32, _sm_expr14, _sm_expr15};
     _sm_base33 = AstNodeAttributeKind::Name;
-    _sm_expr16 = AstNodeAttribute(_sm_base33, className);
+    _sm_expr16 = AstNodeAttribute{_sm_base33, className};
     _sm_base34 = simse_addressOf(classType.attributes);
     simse_list_append((*_sm_base34), _sm_expr16);
     self->selfType = classType;
@@ -7752,16 +8153,16 @@ AstXmlNode ns1_functionReturn(ns1_Emitter* self, Str* name) {
     Str _sm_base2, _sm_expr2;
     AstXmlNode* _sm_base3, * _sm_base4, * ret;
     AstNodeKind _sm_base5;
-    List_iterPtr_yieldable<ns1_CgFn> _sm_for40;
+    List_iterPtr_yieldable<ns1_CgFn> _sm_for44;
     Bool _sm_expr1, _sm_expr5;
     ns1_CgFn* fn;
     AstXmlNode _sm_expr6;
     _sm_base1 = simse_addressOf(self->functions);
-    _sm_for40 = iterPtr(_sm_base1);
+    _sm_for44 = iterPtr(_sm_base1);
     L1:;
-    _sm_expr1 = _sm_for40.advance();
+    _sm_expr1 = _sm_for44.advance();
     if (!(_sm_expr1)) goto L2;
-    fn = _sm_for40.current;
+    fn = _sm_for44.current;
     _sm_expr2 = fn->name;
     _sm_base2 = *(name);
     _sm_expr1 = _sm_expr2 == _sm_base2;
@@ -7806,7 +8207,7 @@ AstXmlNode ns1_memberCallReturn(ns1_Emitter* self, AstXmlNode* callee) {
     Int i, _sm_expr3;
     Bool _sm_expr4;
     List<ns1_CgNativeExt>* extensions;
-    List_iterPtr_yieldable<ns1_CgNativeExt> _sm_for41;
+    List_iterPtr_yieldable<ns1_CgNativeExt> _sm_for45;
     ns1_CgNativeExt* ext;
     AstNodeCategory _sm_expr22, _sm_expr23;
     List<AstXmlNode> typeArgs;
@@ -7867,11 +8268,11 @@ AstXmlNode ns1_memberCallReturn(ns1_Emitter* self, AstXmlNode* callee) {
     if (_sm_expr4) goto L12;
     goto L15;
     L12:;
-    _sm_for41 = iterPtr(extensions);
+    _sm_for45 = iterPtr(extensions);
     L14:;
-    _sm_expr4 = _sm_for41.advance();
+    _sm_expr4 = _sm_for45.advance();
     if (!(_sm_expr4)) goto L15;
-    ext = _sm_for41.current;
+    ext = _sm_for45.current;
     _sm_base22 = &recv;
     _sm_expr4 = ns2_xmlIsEmpty(_sm_base22);
     if (_sm_expr4) goto L14;
@@ -8099,7 +8500,7 @@ AstXmlNode ns1_inferType(ns1_Emitter* self, AstXmlNode* e) {
     StrView _sm_expr21;
     List<AstXmlNode> _sm_expr34, typeArgs, fields, _sm_expr86, _sm_typeArgs_2, paramTypes;
     Int _sm_expr61;
-    List_iterPtr_yieldable<AstXmlNode> _sm_for43;
+    List_iterPtr_yieldable<AstXmlNode> _sm_for47;
     List<AstNodeAttribute> _sm_expr130, _sm_expr145, _sm_expr182;
     Array<AstXmlNode> _sm_expr131, _sm_expr146, _sm_expr183;
     kind = ns2_xmlKind(e);
@@ -8348,11 +8749,11 @@ AstXmlNode ns1_inferType(ns1_Emitter* self, AstXmlNode* e) {
     L57:;
     _sm_base48 = AstNodeKind::Field;
     fields = ns2_xmlChildren(decl, _sm_base48);
-    _sm_for43 = iterPtr(simse_addressOf(fields));
+    _sm_for47 = iterPtr(simse_addressOf(fields));
     L59:;
-    _sm_expr2 = _sm_for43.advance();
+    _sm_expr2 = _sm_for47.advance();
     if (!(_sm_expr2)) goto L60;
-    field = _sm_for43.current;
+    field = _sm_for47.current;
     _sm_base49 = AstNodeAttributeKind::Name;
     _sm_expr41 = ns2_xmlAttr(field, _sm_base49);
     _sm_base50 = *(_sm_expr41);
@@ -8537,7 +8938,7 @@ AstXmlNode ns1_inferType(ns1_Emitter* self, AstXmlNode* e) {
     _sm_expr131 = Array<AstXmlNode>();
     _sm_base81 = AstNodeKind::Type;
     _sm_base82 = AstNodeCategory::TypeReference;
-    node = AstXmlNode(_sm_base81, _sm_base82, _sm_expr130, _sm_expr131);
+    node = AstXmlNode{_sm_base81, _sm_base82, _sm_expr130, _sm_expr131};
     _sm_base83 = AstNodeKind::Operand;
     _sm_expr132 = ns2_xmlChildPtr(e, _sm_base83);
     _sm_expr133 = ns1_inferType(self, _sm_expr132);
@@ -8589,7 +8990,7 @@ AstXmlNode ns1_inferType(ns1_Emitter* self, AstXmlNode* e) {
     _sm_expr146 = Array<AstXmlNode>();
     _sm_base93 = AstNodeKind::Type;
     _sm_base94 = AstNodeCategory::TypePointer;
-    _sm_node_2 = AstXmlNode(_sm_base93, _sm_base94, _sm_expr145, _sm_expr146);
+    _sm_node_2 = AstXmlNode{_sm_base93, _sm_base94, _sm_expr145, _sm_expr146};
     inner = operand;
     _sm_expr1 = AstNodeCategory::TypeReference;
     _sm_expr2 = operandKind == _sm_expr1;
@@ -8690,7 +9091,7 @@ AstXmlNode ns1_inferType(ns1_Emitter* self, AstXmlNode* e) {
     _sm_expr183 = Array<AstXmlNode>();
     _sm_base115 = AstNodeKind::Type;
     _sm_base116 = AstNodeCategory::TypeFunction;
-    fnType = AstXmlNode(_sm_base115, _sm_base116, _sm_expr182, _sm_expr183);
+    fnType = AstXmlNode{_sm_base115, _sm_base116, _sm_expr182, _sm_expr183};
     _sm_base117 = AstNodeKind::ParamType;
     paramTypes = ns2_xmlChildren(e, _sm_base117);
     _sm_base118 = &fnType;
@@ -10123,11 +10524,11 @@ Str ns1_call(ns1_Emitter* self, AstXmlNode* e) {
     List<AstXmlNode> argNodes, _sm_expr16, _sm_expr20, targetParams, _sm_expr115;
     Bool _sm_expr2, hasPlainFunction, _sm_hasPlainFunction_2, _sm_expr120;
     List<Str> args, _sm_args_2, _sm_args_3;
-    List_iterPtr_yieldable<AstXmlNode> _sm_for46, _sm_for49;
+    List_iterPtr_yieldable<AstXmlNode> _sm_for50, _sm_for53;
     AstXmlNode _sm_expr4, _sm_expr32, target, expectedArg, _sm_expr67, _sm_expr71, identityRecv,
         _sm_expr76, _sm_expr80, enumReceiver, _sm_expr87, receiverType, receiver, _sm_expr139, _sm_expr150;
     Opt<Str> nativeOpt, _sm_nativeOpt_2;
-    List_iterPtr_yieldable<ns1_CgFn> _sm_for47, _sm_for48;
+    List_iterPtr_yieldable<ns1_CgFn> _sm_for51, _sm_for52;
     StrView _sm_expr26;
     Int _sm_expr30, _sm_expr37, i, fnIndex, a, extIndex, _sm_a_2, byName, _sm_a_3, _sm_a_4;
     List<ns1_CgNativeExt>* _sm_extensions_2, * extensions;
@@ -10142,11 +10543,11 @@ Str ns1_call(ns1_Emitter* self, AstXmlNode* e) {
     goto L2;
     L1:;
     args = List<Str>();
-    _sm_for46 = iterPtr(simse_addressOf(argNodes));
+    _sm_for50 = iterPtr(simse_addressOf(argNodes));
     L3:;
-    _sm_expr2 = _sm_for46.advance();
+    _sm_expr2 = _sm_for50.advance();
     if (!(_sm_expr2)) goto L4;
-    argNode = _sm_for46.current;
+    argNode = _sm_for50.current;
     _sm_expr4 = ns2_xmlEmptyNode();
     _sm_base3 = &_sm_expr4;
     _sm_expr5 = ns1_expr(self, argNode, 0, _sm_base3);
@@ -10164,11 +10565,11 @@ Str ns1_call(ns1_Emitter* self, AstXmlNode* e) {
     nativeOpt = simse_dict_get((*_sm_base8), name);
     hasPlainFunction = false;
     _sm_base9 = simse_addressOf(self->functions);
-    _sm_for47 = iterPtr(_sm_base9);
+    _sm_for51 = iterPtr(_sm_base9);
     L5:;
-    _sm_expr2 = _sm_for47.advance();
+    _sm_expr2 = _sm_for51.advance();
     if (!(_sm_expr2)) goto L6;
-    candidate = _sm_for47.current;
+    candidate = _sm_for51.current;
     _sm_base11 = simse_addressOf(candidate->decl);
     _sm_base10 = _sm_base11;
     _sm_base12 = AstNodeAttributeKind::IsNative;
@@ -10372,11 +10773,11 @@ Str ns1_call(ns1_Emitter* self, AstXmlNode* e) {
     _sm_nativeOpt_2 = simse_dict_get((*_sm_base66), _sm_name_2);
     _sm_hasPlainFunction_2 = false;
     _sm_base67 = simse_addressOf(self->functions);
-    _sm_for48 = iterPtr(_sm_base67);
+    _sm_for52 = iterPtr(_sm_base67);
     L36:;
-    _sm_expr2 = _sm_for48.advance();
+    _sm_expr2 = _sm_for52.advance();
     if (!(_sm_expr2)) goto L37;
-    _sm_candidate_2 = _sm_for48.current;
+    _sm_candidate_2 = _sm_for52.current;
     _sm_base69 = simse_addressOf(_sm_candidate_2->decl);
     _sm_base68 = _sm_base69;
     _sm_base70 = AstNodeAttributeKind::IsNative;
@@ -10456,11 +10857,11 @@ Str ns1_call(ns1_Emitter* self, AstXmlNode* e) {
     goto L48;
     L47:;
     _sm_args_3 = List<Str>();
-    _sm_for49 = iterPtr(simse_addressOf(argNodes));
+    _sm_for53 = iterPtr(simse_addressOf(argNodes));
     L49:;
-    _sm_expr2 = _sm_for49.advance();
+    _sm_expr2 = _sm_for53.advance();
     if (!(_sm_expr2)) goto L50;
-    _sm_argNode_2 = _sm_for49.current;
+    _sm_argNode_2 = _sm_for53.current;
     _sm_expr67 = ns2_xmlEmptyNode();
     _sm_base93 = &_sm_expr67;
     _sm_expr68 = ns1_expr(self, _sm_argNode_2, 0, _sm_base93);
@@ -11079,23 +11480,23 @@ void ns1_collectAsync(ns1_Emitter* self) {
     List<ns1_CgFn>* _sm_base18, * _sm_base20;
     ns1_CgFn* _sm_base19, * fn;
     List<AstXmlNode> decls;
-    List_iterPtr_yieldable<ns1_CgInput> _sm_for50;
+    List_iterPtr_yieldable<ns1_CgInput> _sm_for54;
     Bool _sm_expr1, _sm_expr4;
     ns1_CgInput* input;
     List<Str> reasons, names;
-    List_iterPtr_yieldable<Str> _sm_for52;
+    List_iterPtr_yieldable<Str> _sm_for56;
     Str* name, * _sm_expr6;
     AstXmlNode ret;
-    List_iterPtr_yieldable<AstXmlNode> _sm_for51;
+    List_iterPtr_yieldable<AstXmlNode> _sm_for55;
     AstNodeCategory _sm_expr8, _sm_expr9;
     Int _sm_expr13, count, i;
     decls = List<AstXmlNode>();
     _sm_base1 = simse_addressOf(self->inputs);
-    _sm_for50 = iterPtr(_sm_base1);
+    _sm_for54 = iterPtr(_sm_base1);
     L1:;
-    _sm_expr1 = _sm_for50.advance();
+    _sm_expr1 = _sm_for54.advance();
     if (!(_sm_expr1)) goto L2;
-    input = _sm_for50.current;
+    input = _sm_for54.current;
     _sm_base3 = simse_addressOf(input->module);
     _sm_base2 = _sm_base3;
     _sm_base4 = &decls;
@@ -11105,20 +11506,20 @@ void ns1_collectAsync(ns1_Emitter* self) {
     reasons = List<Str>();
     _sm_base5 = &reasons;
     names = ns12_asyncColor(decls, _sm_base5);
-    _sm_for52 = iterPtr(simse_addressOf(names));
+    _sm_for56 = iterPtr(simse_addressOf(names));
     L3:;
-    _sm_expr1 = _sm_for52.advance();
+    _sm_expr1 = _sm_for56.advance();
     if (!(_sm_expr1)) goto L4;
-    name = _sm_for52.current;
+    name = _sm_for56.current;
     _sm_expr1 = ns1_asyncEmitted(self, name);
     _sm_expr4 = !_sm_expr1;
     if (_sm_expr4) goto L3;
     ret = ns2_xmlEmptyNode();
-    _sm_for51 = iterPtr(simse_addressOf(decls));
+    _sm_for55 = iterPtr(simse_addressOf(decls));
     L7:;
-    _sm_expr1 = _sm_for51.advance();
+    _sm_expr1 = _sm_for55.advance();
     if (!(_sm_expr1)) goto L8;
-    decl = _sm_for51.current;
+    decl = _sm_for55.current;
     _sm_base6 = AstNodeAttributeKind::Name;
     _sm_expr6 = ns2_xmlAttr(decl, _sm_base6);
     _sm_base7 = *(_sm_expr6);
@@ -11271,7 +11672,7 @@ void ns1_addTaskHelpers(ns1_Emitter* self, ns1_CgFn* fn) {
         accessorReturn, _sm_expr19, _sm_expr22;
     AstNodeAttribute _sm_expr4, _sm_expr13, _sm_expr16;
     List<AstXmlNode> _sm_expr5;
-    List_iterPtr_yieldable<AstXmlNode> _sm_for53;
+    List_iterPtr_yieldable<AstXmlNode> _sm_for57;
     Bool _sm_expr6, hasAccessor, _sm_expr11;
     List<Str> _sm_expr20, _sm_expr23;
     taskName = fn->name;
@@ -11283,23 +11684,23 @@ void ns1_addTaskHelpers(ns1_Emitter* self, ns1_CgFn* fn) {
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base2 = AstNodeKind::Function;
     _sm_base3 = AstNodeCategory::Function;
-    factory = AstXmlNode(_sm_base2, _sm_base3, _sm_expr1, _sm_expr2);
+    factory = AstXmlNode{_sm_base2, _sm_base3, _sm_expr1, _sm_expr2};
     _sm_expr3.resize(4 + taskName.size());
     __sm_catP = _sm_expr3.data();
     std::memcpy(__sm_catP, taskName.data(), taskName.size());
     __sm_catP = __sm_catP + taskName.size();
     std::memcpy(__sm_catP, "Task", 4);
     _sm_base4 = AstNodeAttributeKind::Name;
-    _sm_expr4 = AstNodeAttribute(_sm_base4, _sm_expr3);
+    _sm_expr4 = AstNodeAttribute{_sm_base4, _sm_expr3};
     _sm_base5 = simse_addressOf(factory.attributes);
     simse_list_append((*_sm_base5), _sm_expr4);
     _sm_base6 = AstNodeKind::Param;
     _sm_expr5 = ns2_xmlChildren(decl, _sm_base6);
-    _sm_for53 = iterPtr(simse_addressOf(_sm_expr5));
+    _sm_for57 = iterPtr(simse_addressOf(_sm_expr5));
     L1:;
-    _sm_expr6 = _sm_for53.advance();
+    _sm_expr6 = _sm_for57.advance();
     if (!(_sm_expr6)) goto L2;
-    param = _sm_for53.current;
+    param = _sm_for57.current;
     copied = *(param);
     _sm_base7 = AstNodeKind::Param;
     copied.name = _sm_base7;
@@ -11322,7 +11723,7 @@ void ns1_addTaskHelpers(ns1_Emitter* self, ns1_CgFn* fn) {
     _sm_expr9 = Array<AstXmlNode>();
     _sm_base15 = AstNodeKind::Function;
     _sm_base16 = AstNodeCategory::Function;
-    accessor = AstXmlNode(_sm_base15, _sm_base16, _sm_expr8, _sm_expr9);
+    accessor = AstXmlNode{_sm_base15, _sm_base16, _sm_expr8, _sm_expr9};
     hasAccessor = false;
     _sm_base17 = &ret;
     _sm_expr6 = ns2_xmlIsEmpty(_sm_base17);
@@ -11337,16 +11738,16 @@ void ns1_addTaskHelpers(ns1_Emitter* self, ns1_CgFn* fn) {
     __sm_catP = __sm_catP + taskName.size();
     std::memcpy(__sm_catP, "_smResult", 9);
     _sm_base18 = AstNodeAttributeKind::Name;
-    _sm_expr13 = AstNodeAttribute(_sm_base18, _sm_expr12);
+    _sm_expr13 = AstNodeAttribute{_sm_base18, _sm_expr12};
     _sm_base19 = simse_addressOf(accessor.attributes);
     simse_list_append((*_sm_base19), _sm_expr13);
     _sm_expr14 = List<AstNodeAttribute>();
     _sm_expr15 = Array<AstXmlNode>();
     _sm_base20 = AstNodeKind::Param;
     _sm_base21 = AstNodeCategory::None;
-    handle = AstXmlNode(_sm_base20, _sm_base21, _sm_expr14, _sm_expr15);
+    handle = AstXmlNode{_sm_base20, _sm_base21, _sm_expr14, _sm_expr15};
     _sm_base22 = AstNodeAttributeKind::Name;
-    _sm_expr16 = AstNodeAttribute(_sm_base22, __sm_stringTable[622]);
+    _sm_expr16 = AstNodeAttribute{_sm_base22, __sm_stringTable[622]};
     _sm_base23 = simse_addressOf(handle.attributes);
     simse_list_append((*_sm_base23), _sm_expr16);
     _sm_base25 = __sm_stringTable[664];
@@ -11408,7 +11809,7 @@ void ns1_emitTask(ns1_Emitter* self, ns1_CgFn* fn, AstXmlNode* decl, Bool protot
     ns7_IlFunction* _sm_base40;
     List<AstXmlNode>* _sm_base41, * _sm_base42;
     Int _sm_expr3;
-    List_iterPtr_yieldable<ns7_TskField> _sm_for54;
+    List_iterPtr_yieldable<ns7_TskField> _sm_for58;
     ns7_TskField* field;
     ns7_IlFunction info;
     _sm_base3 = simse_addressOf(fn->receiver);
@@ -11475,11 +11876,11 @@ void ns1_emitTask(ns1_Emitter* self, ns1_CgFn* fn, AstXmlNode* decl, Bool protot
     std::memcpy(__sm_catP, " : simse_tasks::Task {", 22);
     ns1_line(self, 0, _sm_expr7);
     _sm_base19 = simse_addressOf(task.fields);
-    _sm_for54 = iterPtr(_sm_base19);
+    _sm_for58 = iterPtr(_sm_base19);
     L12:;
-    _sm_expr1 = _sm_for54.advance();
+    _sm_expr1 = _sm_for58.advance();
     if (!(_sm_expr1)) goto L13;
-    field = _sm_for54.current;
+    field = _sm_for58.current;
     _sm_base21 = simse_addressOf(field->typeNode);
     _sm_base20 = _sm_base21;
     _sm_expr9 = ns1_type(self, _sm_base20);
@@ -11700,26 +12101,26 @@ void ns1_registerTaskType(ns1_Emitter* self, Str* className, ns7_TskTask task) {
     Array<AstXmlNode> _sm_expr2, _sm_expr5, _sm_expr12;
     AstXmlNode declNode, branchNode, _sm_expr7, _sm_expr8, _sm_expr9, fieldNode, _sm_expr14, _sm_expr15;
     AstNodeAttribute _sm_expr3, _sm_expr6, _sm_expr13;
-    List_iterPtr_yieldable<ns7_TskField> _sm_for55;
+    List_iterPtr_yieldable<ns7_TskField> _sm_for59;
     Bool _sm_expr10;
     ns7_TskField* field;
     _sm_expr1 = List<AstNodeAttribute>();
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base1 = AstNodeKind::DataClass;
     _sm_base2 = AstNodeCategory::DataClass;
-    declNode = AstXmlNode(_sm_base1, _sm_base2, _sm_expr1, _sm_expr2);
+    declNode = AstXmlNode{_sm_base1, _sm_base2, _sm_expr1, _sm_expr2};
     _sm_base3 = AstNodeAttributeKind::Name;
     _sm_base4 = *(className);
-    _sm_expr3 = AstNodeAttribute(_sm_base3, _sm_base4);
+    _sm_expr3 = AstNodeAttribute{_sm_base3, _sm_base4};
     _sm_base5 = simse_addressOf(declNode.attributes);
     simse_list_append((*_sm_base5), _sm_expr3);
     _sm_expr4 = List<AstNodeAttribute>();
     _sm_expr5 = Array<AstXmlNode>();
     _sm_base6 = AstNodeKind::Field;
     _sm_base7 = AstNodeCategory::None;
-    branchNode = AstXmlNode(_sm_base6, _sm_base7, _sm_expr4, _sm_expr5);
+    branchNode = AstXmlNode{_sm_base6, _sm_base7, _sm_expr4, _sm_expr5};
     _sm_base8 = AstNodeAttributeKind::Name;
-    _sm_expr6 = AstNodeAttribute(_sm_base8, __sm_stringTable[570]);
+    _sm_expr6 = AstNodeAttribute{_sm_base8, __sm_stringTable[570]};
     _sm_base9 = simse_addressOf(branchNode.attributes);
     simse_list_append((*_sm_base9), _sm_expr6);
     _sm_base11 = __sm_stringTable[709];
@@ -11736,19 +12137,19 @@ void ns1_registerTaskType(ns1_Emitter* self, Str* className, ns7_TskTask task) {
     _sm_base17 = &declNode;
     ns2_xmlAddChild(_sm_base17, _sm_expr9);
     _sm_base18 = simse_addressOf(task.fields);
-    _sm_for55 = iterPtr(_sm_base18);
+    _sm_for59 = iterPtr(_sm_base18);
     L1:;
-    _sm_expr10 = _sm_for55.advance();
+    _sm_expr10 = _sm_for59.advance();
     if (!(_sm_expr10)) goto L2;
-    field = _sm_for55.current;
+    field = _sm_for59.current;
     _sm_expr11 = List<AstNodeAttribute>();
     _sm_expr12 = Array<AstXmlNode>();
     _sm_base19 = AstNodeKind::Field;
     _sm_base20 = AstNodeCategory::None;
-    fieldNode = AstXmlNode(_sm_base19, _sm_base20, _sm_expr11, _sm_expr12);
+    fieldNode = AstXmlNode{_sm_base19, _sm_base20, _sm_expr11, _sm_expr12};
     _sm_base21 = AstNodeAttributeKind::Name;
     _sm_base22 = field->member;
-    _sm_expr13 = AstNodeAttribute(_sm_base21, _sm_base22);
+    _sm_expr13 = AstNodeAttribute{_sm_base21, _sm_base22};
     _sm_base23 = simse_addressOf(fieldNode.attributes);
     simse_list_append((*_sm_base23), _sm_expr13);
     _sm_base25 = simse_addressOf(field->typeNode);
@@ -11781,7 +12182,7 @@ void ns1_emitTaskFactory(ns1_Emitter* self, ns1_CgFn* fn, AstXmlNode* decl, Str*
     List<Str> params;
     Bool _sm_expr1;
     List<AstXmlNode> _sm_expr6;
-    List_iterPtr_yieldable<AstXmlNode> _sm_for56;
+    List_iterPtr_yieldable<AstXmlNode> _sm_for60;
     AstXmlNode* param;
     params = ns1_parameterList(self, fn, decl);
     _sm_expr1 = self->failed;
@@ -11822,11 +12223,11 @@ void ns1_emitTaskFactory(ns1_Emitter* self, ns1_CgFn* fn, AstXmlNode* decl, Str*
     ns1_line(self, 1, __sm_stringTable[108]);
     _sm_base10 = AstNodeKind::Param;
     _sm_expr6 = ns2_xmlChildren(decl, _sm_base10);
-    _sm_for56 = iterPtr(simse_addressOf(_sm_expr6));
+    _sm_for60 = iterPtr(simse_addressOf(_sm_expr6));
     L3:;
-    _sm_expr1 = _sm_for56.advance();
+    _sm_expr1 = _sm_for60.advance();
     if (!(_sm_expr1)) goto L4;
-    param = _sm_for56.current;
+    param = _sm_for60.current;
     _sm_base11 = AstNodeAttributeKind::Name;
     name = *(ns2_xmlAttr(param, _sm_base11));
     _sm_expr8 = ns7_memberOf(task, name);
@@ -11964,22 +12365,24 @@ void ns1_emitAsyncMain(ns1_Emitter* self, ns1_CgFn* fn, Str* className, ns7_TskT
 }
 // cppsrc/codegen/Codegen.kt
 Res<Str> ns1_run(ns1_Emitter* self) {
-    Dictionary<Str, Bool>* _sm_base1, * _sm_base2, * _sm_base46, * _sm_base47;
+    Dictionary<Str, Bool>* _sm_base1, * _sm_base2, * _sm_base25, * _sm_base27, * _sm_base48,
+        * _sm_base49;
     List<ns1_CgInput>* _sm_base3, * _sm_base6;
-    AstXmlNode* _sm_base4, * _sm_base5, * _sm_base7, * _sm_base8, * _sm_base48;
-    ns13_Sections* _sm_base9, * _sm_base13, * _sm_base16, * _sm_base19, * _sm_base22, * _sm_base27,
-        * _sm_base31, * _sm_base36, * _sm_base40, * _sm_base45, * _sm_base53;
-    Str* _sm_base10, * _sm_base14, * _sm_base17, * _sm_base20, * _sm_base23, * _sm_base28, * _sm_base32,
-        * _sm_base37, * _sm_base41, * _sm_base49, * _sm_base50;
-    Str _sm_base11, _sm_base15, _sm_base18, _sm_base21, _sm_base24, _sm_base25, _sm_base26, _sm_base29,
-        _sm_base30, _sm_base33, _sm_base35, _sm_base38, _sm_base39, _sm_base42, _sm_base44, _sm_base51,
-        _sm_base52, _sm_expr21;
+    AstXmlNode* _sm_base4, * _sm_base5, * _sm_base7, * _sm_base8, * _sm_base50;
+    ns13_Sections* _sm_base9, * _sm_base13, * _sm_base16, * _sm_base19, * _sm_base22, * _sm_base29,
+        * _sm_base33, * _sm_base38, * _sm_base42, * _sm_base47, * _sm_base55;
+    Str* _sm_base10, * _sm_base14, * _sm_base17, * _sm_base20, * _sm_base23, * _sm_base30, * _sm_base34,
+        * _sm_base39, * _sm_base43, * _sm_base51, * _sm_base52;
+    Str _sm_base11, _sm_base15, _sm_base18, _sm_base21, _sm_base24, _sm_base26, _sm_base28, _sm_base31,
+        _sm_base32, _sm_base35, _sm_base37, _sm_base40, _sm_base41, _sm_base44, _sm_base46, _sm_base53,
+        _sm_base54, _sm_expr21;
     ns1_StringTable* _sm_base12;
-    ns12_SemFacts* _sm_base34, * _sm_base43;
-    List_iterPtr_yieldable<ns1_CgInput> _sm_for57, _sm_for58;
+    ns12_SemFacts* _sm_base36, * _sm_base45;
+    List_iterPtr_yieldable<ns1_CgInput> _sm_for61, _sm_for62;
     Bool _sm_expr1, _sm_expr16;
     ns1_CgInput* input, * _sm_input_2;
     ns12_SemFacts facts;
+    Dictionary<Str, Bool> emittedTypes;
     Res<Str> _sm_expr4, generated;
     AstXmlNode _sm_expr17;
     _sm_base1 = simse_addressOf(self->pureCallees);
@@ -11991,22 +12394,22 @@ Res<Str> ns1_run(ns1_Emitter* self) {
     ns1_collectAsync(self);
     ns8_linConstGlobalsReset();
     _sm_base3 = simse_addressOf(self->inputs);
-    _sm_for57 = iterPtr(_sm_base3);
+    _sm_for61 = iterPtr(_sm_base3);
     L1:;
-    _sm_expr1 = _sm_for57.advance();
+    _sm_expr1 = _sm_for61.advance();
     if (!(_sm_expr1)) goto L2;
-    input = _sm_for57.current;
+    input = _sm_for61.current;
     _sm_base5 = simse_addressOf(input->module);
     _sm_base4 = _sm_base5;
     ns8_foldGlobalScanDecls(_sm_base4);
     goto L1;
     L2:;
     _sm_base6 = simse_addressOf(self->inputs);
-    _sm_for58 = iterPtr(_sm_base6);
+    _sm_for62 = iterPtr(_sm_base6);
     L3:;
-    _sm_expr1 = _sm_for58.advance();
+    _sm_expr1 = _sm_for62.advance();
     if (!(_sm_expr1)) goto L4;
-    _sm_input_2 = _sm_for58.current;
+    _sm_input_2 = _sm_for62.current;
     _sm_base8 = simse_addressOf(_sm_input_2->module);
     _sm_base7 = _sm_base8;
     ns8_foldGlobalScanBodies(_sm_base7);
@@ -12038,111 +12441,114 @@ Res<Str> ns1_run(ns1_Emitter* self) {
     _sm_base20 = &_sm_base21;
     ns13_begin(_sm_base19, _sm_base20);
     ns1_emitResourceTable(self);
+    emittedTypes = ns1_computeEmittedTypes(self);
     _sm_base22 = self->sections;
     _sm_base24 = __sm_stringTable[635];
     _sm_base23 = &_sm_base24;
     ns13_begin(_sm_base22, _sm_base23);
-    ns1_emitForwardTypes(self);
+    _sm_base25 = &emittedTypes;
+    ns1_emitForwardTypes(self, _sm_base25);
     _sm_expr1 = self->failed;
     if (_sm_expr1) goto L5;
     goto L6;
     L5:;
-    _sm_base25 = self->error;
-    _sm_expr4 = Res<Str>::err(_sm_base25);
+    _sm_base26 = self->error;
+    _sm_expr4 = Res<Str>::err(_sm_base26);
     return _sm_expr4;
     L6:;
-    ns1_emitTypes(self);
+    _sm_base27 = &emittedTypes;
+    ns1_emitTypes(self, _sm_base27);
     _sm_expr1 = self->failed;
     if (_sm_expr1) goto L7;
     goto L8;
     L7:;
-    _sm_base26 = self->error;
-    _sm_expr4 = Res<Str>::err(_sm_base26);
+    _sm_base28 = self->error;
+    _sm_expr4 = Res<Str>::err(_sm_base28);
     return _sm_expr4;
     L8:;
-    _sm_base27 = self->sections;
-    _sm_base29 = __sm_stringTable[538];
-    _sm_base28 = &_sm_base29;
-    ns13_begin(_sm_base27, _sm_base28);
+    _sm_base29 = self->sections;
+    _sm_base31 = __sm_stringTable[538];
+    _sm_base30 = &_sm_base31;
+    ns13_begin(_sm_base29, _sm_base30);
     ns1_emitStatics(self);
     _sm_expr1 = self->failed;
     if (_sm_expr1) goto L9;
     goto L10;
     L9:;
-    _sm_base30 = self->error;
-    _sm_expr4 = Res<Str>::err(_sm_base30);
+    _sm_base32 = self->error;
+    _sm_expr4 = Res<Str>::err(_sm_base32);
     return _sm_expr4;
     L10:;
-    _sm_base31 = self->sections;
-    _sm_base33 = __sm_stringTable[412];
-    _sm_base32 = &_sm_base33;
-    ns13_begin(_sm_base31, _sm_base32);
-    _sm_base34 = &facts;
-    ns1_emitFunctions(self, true, _sm_base34);
+    _sm_base33 = self->sections;
+    _sm_base35 = __sm_stringTable[412];
+    _sm_base34 = &_sm_base35;
+    ns13_begin(_sm_base33, _sm_base34);
+    _sm_base36 = &facts;
+    ns1_emitFunctions(self, true, _sm_base36);
     _sm_expr1 = self->failed;
     if (_sm_expr1) goto L11;
     goto L12;
     L11:;
-    _sm_base35 = self->error;
-    _sm_expr4 = Res<Str>::err(_sm_base35);
+    _sm_base37 = self->error;
+    _sm_expr4 = Res<Str>::err(_sm_base37);
     return _sm_expr4;
     L12:;
-    _sm_base36 = self->sections;
-    _sm_base38 = __sm_stringTable[673];
-    _sm_base37 = &_sm_base38;
-    ns13_begin(_sm_base36, _sm_base37);
+    _sm_base38 = self->sections;
+    _sm_base40 = __sm_stringTable[673];
+    _sm_base39 = &_sm_base40;
+    ns13_begin(_sm_base38, _sm_base39);
     ns1_emitStaticInit(self);
     _sm_expr1 = self->failed;
     if (_sm_expr1) goto L13;
     goto L14;
     L13:;
-    _sm_base39 = self->error;
-    _sm_expr4 = Res<Str>::err(_sm_base39);
+    _sm_base41 = self->error;
+    _sm_expr4 = Res<Str>::err(_sm_base41);
     return _sm_expr4;
     L14:;
-    _sm_base40 = self->sections;
-    _sm_base42 = __sm_stringTable[568];
-    _sm_base41 = &_sm_base42;
-    ns13_begin(_sm_base40, _sm_base41);
-    _sm_base43 = &facts;
-    ns1_emitFunctions(self, false, _sm_base43);
+    _sm_base42 = self->sections;
+    _sm_base44 = __sm_stringTable[568];
+    _sm_base43 = &_sm_base44;
+    ns13_begin(_sm_base42, _sm_base43);
+    _sm_base45 = &facts;
+    ns1_emitFunctions(self, false, _sm_base45);
     _sm_expr1 = self->failed;
     if (_sm_expr1) goto L15;
     goto L16;
     L15:;
-    _sm_base44 = self->error;
-    _sm_expr4 = Res<Str>::err(_sm_base44);
+    _sm_base46 = self->error;
+    _sm_expr4 = Res<Str>::err(_sm_base46);
     return _sm_expr4;
     L16:;
     ns1_emitProfileNames(self);
-    _sm_base45 = self->sections;
-    _sm_base47 = simse_addressOf(self->referencedNames);
-    _sm_base46 = _sm_base47;
-    generated = ns13_sourceGenEmit(_sm_base45, _sm_base46);
+    _sm_base47 = self->sections;
+    _sm_base49 = simse_addressOf(self->referencedNames);
+    _sm_base48 = _sm_base49;
+    generated = ns13_sourceGenEmit(_sm_base47, _sm_base48);
     _sm_expr1 = generated.isOk();
     _sm_expr16 = !_sm_expr1;
     if (_sm_expr16) goto L17;
     goto L18;
     L17:;
     _sm_expr17 = ns2_xmlEmptyNode();
-    _sm_base48 = &_sm_expr17;
-    _sm_base50 = simse_addressOf(generated.Error);
-    _sm_base49 = _sm_base50;
-    ns1_fail(self, _sm_base48, _sm_base49);
-    _sm_base51 = self->error;
-    _sm_expr4 = Res<Str>::err(_sm_base51);
+    _sm_base50 = &_sm_expr17;
+    _sm_base52 = simse_addressOf(generated.Error);
+    _sm_base51 = _sm_base52;
+    ns1_fail(self, _sm_base50, _sm_base51);
+    _sm_base53 = self->error;
+    _sm_expr4 = Res<Str>::err(_sm_base53);
     return _sm_expr4;
     L18:;
     _sm_expr1 = self->failed;
     if (_sm_expr1) goto L19;
     goto L20;
     L19:;
-    _sm_base52 = self->error;
-    _sm_expr4 = Res<Str>::err(_sm_base52);
+    _sm_base54 = self->error;
+    _sm_expr4 = Res<Str>::err(_sm_base54);
     return _sm_expr4;
     L20:;
-    _sm_base53 = self->sections;
-    _sm_expr21 = ns13_render(_sm_base53);
+    _sm_base55 = self->sections;
+    _sm_expr21 = ns13_render(_sm_base55);
     _sm_expr4 = Res<Str>::ok(_sm_expr21);
     return _sm_expr4;
 }
@@ -12441,10 +12847,10 @@ AstXmlNode ns1_ilNameNode(ns1_Emitter* self, Str* text) {
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base1 = AstNodeKind::Expr;
     _sm_base2 = AstNodeCategory::ExprName;
-    node = AstXmlNode(_sm_base1, _sm_base2, _sm_expr1, _sm_expr2);
+    node = AstXmlNode{_sm_base1, _sm_base2, _sm_expr1, _sm_expr2};
     _sm_base3 = AstNodeAttributeKind::Name;
     _sm_base4 = *(text);
-    _sm_expr3 = AstNodeAttribute(_sm_base3, _sm_base4);
+    _sm_expr3 = AstNodeAttribute{_sm_base3, _sm_base4};
     _sm_base5 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base5), _sm_expr3);
     return node;
@@ -13119,10 +13525,10 @@ AstXmlNode ns1_ilLiteralNode(ns1_Emitter* self, Str* text) {
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base1 = AstNodeKind::Expr;
     _sm_base2 = AstNodeCategory::ExprIntLit;
-    node = AstXmlNode(_sm_base1, _sm_base2, _sm_expr1, _sm_expr2);
+    node = AstXmlNode{_sm_base1, _sm_base2, _sm_expr1, _sm_expr2};
     _sm_base3 = AstNodeAttributeKind::Text;
     _sm_base4 = *(text);
-    _sm_expr3 = AstNodeAttribute(_sm_base3, _sm_base4);
+    _sm_expr3 = AstNodeAttribute{_sm_base3, _sm_base4};
     _sm_base5 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base5), _sm_expr3);
     dot = false;
@@ -13173,7 +13579,7 @@ AstXmlNode ns1_ilLiteralNode(ns1_Emitter* self, Str* text) {
     node.kind = _sm_base8;
     _sm_base9 = AstNodeAttributeKind::Value;
     _sm_base10 = *(text);
-    _sm_expr17 = AstNodeAttribute(_sm_base9, _sm_base10);
+    _sm_expr17 = AstNodeAttribute{_sm_base9, _sm_base10};
     _sm_base11 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base11), _sm_expr17);
     goto L17;
@@ -13295,10 +13701,10 @@ AstXmlNode ns1_ilMemberNode(ns1_Emitter* self, AstXmlNode* base, Str* name) {
     _sm_expr4 = Array<AstXmlNode>();
     _sm_base1 = AstNodeKind::Expr;
     _sm_base2 = AstNodeCategory::ExprMember;
-    node = AstXmlNode(_sm_base1, _sm_base2, _sm_expr3, _sm_expr4);
+    node = AstXmlNode{_sm_base1, _sm_base2, _sm_expr3, _sm_expr4};
     _sm_base3 = AstNodeAttributeKind::Name;
     _sm_base4 = *(name);
-    _sm_expr5 = AstNodeAttribute(_sm_base3, _sm_base4);
+    _sm_expr5 = AstNodeAttribute{_sm_base3, _sm_base4};
     _sm_base5 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base5), _sm_expr5);
     _sm_base6 = AstNodeKind::Receiver;
@@ -13329,7 +13735,7 @@ AstXmlNode ns1_ilBorrowNode(ns1_Emitter* self, AstXmlNode* place, Int depth) {
     _sm_expr5 = Array<AstXmlNode>();
     _sm_base1 = AstNodeKind::Expr;
     _sm_base2 = AstNodeCategory::ExprDeref;
-    node = AstXmlNode(_sm_base1, _sm_base2, _sm_expr4, _sm_expr5);
+    node = AstXmlNode{_sm_base1, _sm_base2, _sm_expr4, _sm_expr5};
     _sm_base3 = AstNodeKind::Operand;
     _sm_expr6 = ns1_renameRole(self, place, _sm_base3);
     _sm_base4 = &node;
@@ -13362,10 +13768,10 @@ AstXmlNode ns1_ilBinaryNode(ns1_Emitter* self, AstXmlNode* lhs, Str* op, AstXmlN
     _sm_expr5 = Array<AstXmlNode>();
     _sm_base1 = AstNodeKind::Expr;
     _sm_base2 = AstNodeCategory::ExprBinary;
-    node = AstXmlNode(_sm_base1, _sm_base2, _sm_expr4, _sm_expr5);
+    node = AstXmlNode{_sm_base1, _sm_base2, _sm_expr4, _sm_expr5};
     _sm_base3 = AstNodeAttributeKind::Op;
     _sm_base4 = *(op);
-    _sm_expr6 = AstNodeAttribute(_sm_base3, _sm_base4);
+    _sm_expr6 = AstNodeAttribute{_sm_base3, _sm_base4};
     _sm_base5 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base5), _sm_expr6);
     _sm_base6 = AstNodeKind::Lhs;
@@ -13496,13 +13902,13 @@ AstXmlNode ns1_ilTypeBaseNode(ns1_Emitter* self, ns7_IlBody* il, Int typeIndex, 
     _sm_expr9 = Array<AstXmlNode>();
     _sm_base5 = AstNodeKind::Expr;
     _sm_base6 = AstNodeCategory::ExprGenericName;
-    node = AstXmlNode(_sm_base5, _sm_base6, _sm_expr8, _sm_expr9);
+    node = AstXmlNode{_sm_base5, _sm_base6, _sm_expr8, _sm_expr9};
     _sm_base7 = &baseType;
     _sm_base8 = AstNodeAttributeKind::Name;
     _sm_expr10 = ns2_xmlAttr(_sm_base7, _sm_base8);
     _sm_base9 = AstNodeAttributeKind::Name;
     _sm_base10 = *(_sm_expr10);
-    _sm_expr11 = AstNodeAttribute(_sm_base9, _sm_base10);
+    _sm_expr11 = AstNodeAttribute{_sm_base9, _sm_base10};
     _sm_base11 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base11), _sm_expr11);
     _sm_for3 = iterPtr(simse_addressOf(args));
@@ -13572,7 +13978,7 @@ AstXmlNode ns1_ilCallNode(ns1_Emitter* self, ns7_IlBody* il, ns1_IlFrame* frame,
     _sm_expr7 = Array<AstXmlNode>();
     _sm_base6 = AstNodeKind::Expr;
     _sm_base7 = AstNodeCategory::ExprCall;
-    call = AstXmlNode(_sm_base6, _sm_base7, _sm_expr6, _sm_expr7);
+    call = AstXmlNode{_sm_base6, _sm_base7, _sm_expr6, _sm_expr7};
     first = methodAt + 1;
     callee = ns2_xmlEmptyNode();
     _sm_expr8 = method->kind;
@@ -13759,7 +14165,7 @@ AstXmlNode ns1_ilOpValueNode(ns1_Emitter* self, ns7_IlBody* il, ns1_IlFrame* fra
     _sm_expr13 = Array<AstXmlNode>();
     _sm_base6 = AstNodeKind::Expr;
     _sm_base7 = AstNodeCategory::ExprNullLit;
-    _sm_expr5 = AstXmlNode(_sm_base6, _sm_base7, _sm_expr12, _sm_expr13);
+    _sm_expr5 = AstXmlNode{_sm_base6, _sm_base7, _sm_expr12, _sm_expr13};
     return _sm_expr5;
     L9:;
     _sm_expr6 = ns7_IlOpKind::BinaryOp;
@@ -13827,11 +14233,11 @@ AstXmlNode ns1_ilOpValueNode(ns1_Emitter* self, ns7_IlBody* il, ns1_IlFrame* fra
     _sm_expr33 = Array<AstXmlNode>();
     _sm_base26 = AstNodeKind::Expr;
     _sm_base27 = AstNodeCategory::ExprUnary;
-    node = AstXmlNode(_sm_base26, _sm_base27, _sm_expr32, _sm_expr33);
+    node = AstXmlNode{_sm_base26, _sm_base27, _sm_expr32, _sm_expr33};
     _sm_base28 = AstNodeAttributeKind::Op;
     _sm_base30 = simse_addressOf(il->pool);
     _sm_base29 = (*_sm_base30)[_sm_opIndex2_2];
-    _sm_expr34 = AstNodeAttribute(_sm_base28, _sm_base29);
+    _sm_expr34 = AstNodeAttribute{_sm_base28, _sm_base29};
     _sm_base31 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base31), _sm_expr34);
     _sm_base32 = &operand;
@@ -13914,7 +14320,7 @@ AstXmlNode ns1_ilOpValueNode(ns1_Emitter* self, ns7_IlBody* il, ns1_IlFrame* fra
     _sm_expr58 = Array<AstXmlNode>();
     _sm_base51 = AstNodeKind::Expr;
     _sm_base52 = AstNodeCategory::ExprIndex;
-    _sm_node_2 = AstXmlNode(_sm_base51, _sm_base52, _sm_expr57, _sm_expr58);
+    _sm_node_2 = AstXmlNode{_sm_base51, _sm_base52, _sm_expr57, _sm_expr58};
     _sm_base53 = &_sm_base_2;
     _sm_base54 = AstNodeKind::Receiver;
     _sm_expr59 = ns1_renameRole(self, _sm_base53, _sm_base54);
@@ -13978,7 +14384,7 @@ AstXmlNode ns1_ilOpValueNode(ns1_Emitter* self, ns7_IlBody* il, ns1_IlFrame* fra
     _sm_expr77 = List<AstNodeAttribute>();
     _sm_expr78 = Array<AstXmlNode>();
     _sm_base63 = AstNodeKind::Expr;
-    _sm_node_3 = AstXmlNode(_sm_base63, category, _sm_expr77, _sm_expr78);
+    _sm_node_3 = AstXmlNode{_sm_base63, category, _sm_expr77, _sm_expr78};
     _sm_base64 = &_sm_operand_2;
     _sm_base65 = AstNodeKind::Operand;
     _sm_expr79 = ns1_renameRole(self, _sm_base64, _sm_base65);
@@ -14036,7 +14442,7 @@ AstXmlNode ns1_ilOpValueNode(ns1_Emitter* self, ns7_IlBody* il, ns1_IlFrame* fra
     _sm_expr97 = Array<AstXmlNode>();
     _sm_base71 = AstNodeKind::Expr;
     _sm_base72 = AstNodeCategory::ExprCall;
-    call = AstXmlNode(_sm_base71, _sm_base72, _sm_expr96, _sm_expr97);
+    call = AstXmlNode{_sm_base71, _sm_base72, _sm_expr96, _sm_expr97};
     _sm_base73 = &callee;
     _sm_base74 = AstNodeKind::Callee;
     _sm_expr98 = ns1_renameRole(self, _sm_base73, _sm_base74);
@@ -16041,7 +16447,7 @@ ns1_IlText ns1_ilEmitOps(ns1_Emitter* self, ns7_IlBody* il, ns1_IlFrame* frame, 
     _sm_expr136 = Array<AstXmlNode>();
     _sm_base107 = AstNodeKind::Expr;
     _sm_base108 = AstNodeCategory::ExprDeref;
-    _sm_target_2 = AstXmlNode(_sm_base107, _sm_base108, _sm_expr135, _sm_expr136);
+    _sm_target_2 = AstXmlNode{_sm_base107, _sm_base108, _sm_expr135, _sm_expr136};
     _sm_base109 = &ptr;
     _sm_base110 = AstNodeKind::Operand;
     _sm_expr137 = ns1_renameRole(self, _sm_base109, _sm_base110);
@@ -16127,7 +16533,7 @@ ns1_IlText ns1_ilEmitOps(ns1_Emitter* self, ns7_IlBody* il, ns1_IlFrame* frame, 
     _sm_expr158 = Array<AstXmlNode>();
     _sm_base135 = AstNodeKind::Expr;
     _sm_base136 = AstNodeCategory::ExprIndex;
-    _sm_target_3 = AstXmlNode(_sm_base135, _sm_base136, _sm_expr157, _sm_expr158);
+    _sm_target_3 = AstXmlNode{_sm_base135, _sm_base136, _sm_expr157, _sm_expr158};
     _sm_base137 = &_sm_base_2;
     _sm_base138 = AstNodeKind::Receiver;
     _sm_expr159 = ns1_renameRole(self, _sm_base137, _sm_base138);
@@ -16508,10 +16914,10 @@ ns1_IlText ns1_emitClosureMethodText(ns1_Emitter* self, ns7_IlUnit* unit, ns7_Il
     _sm_expr9 = Array<AstXmlNode>();
     _sm_base6 = AstNodeKind::Type;
     _sm_base7 = AstNodeCategory::TypeNamed;
-    classType = AstXmlNode(_sm_base6, _sm_base7, _sm_expr8, _sm_expr9);
+    classType = AstXmlNode{_sm_base6, _sm_base7, _sm_expr8, _sm_expr9};
     _sm_base8 = AstNodeAttributeKind::Name;
     _sm_base9 = closure->symbol;
-    _sm_expr10 = AstNodeAttribute(_sm_base8, _sm_base9);
+    _sm_expr10 = AstNodeAttribute{_sm_base8, _sm_base9};
     _sm_base10 = simse_addressOf(classType.attributes);
     simse_list_append((*_sm_base10), _sm_expr10);
     _sm_base11 = ns1_NameKind::Value;
@@ -17034,10 +17440,10 @@ void ns1_registerMachineType(ns1_Emitter* self, Str* className, ns7_Yielded* mac
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base1 = AstNodeKind::DataClass;
     _sm_base2 = AstNodeCategory::DataClass;
-    declNode = AstXmlNode(_sm_base1, _sm_base2, _sm_expr1, _sm_expr2);
+    declNode = AstXmlNode{_sm_base1, _sm_base2, _sm_expr1, _sm_expr2};
     _sm_base3 = AstNodeAttributeKind::Name;
     _sm_base4 = *(className);
-    _sm_expr3 = AstNodeAttribute(_sm_base3, _sm_base4);
+    _sm_expr3 = AstNodeAttribute{_sm_base3, _sm_base4};
     _sm_base5 = simse_addressOf(declNode.attributes);
     simse_list_append((*_sm_base5), _sm_expr3);
     _sm_base6 = simse_addressOf(machine->fields);
@@ -17050,10 +17456,10 @@ void ns1_registerMachineType(ns1_Emitter* self, Str* className, ns7_Yielded* mac
     _sm_expr6 = Array<AstXmlNode>();
     _sm_base7 = AstNodeKind::Field;
     _sm_base8 = AstNodeCategory::None;
-    fieldNode = AstXmlNode(_sm_base7, _sm_base8, _sm_expr5, _sm_expr6);
+    fieldNode = AstXmlNode{_sm_base7, _sm_base8, _sm_expr5, _sm_expr6};
     _sm_base9 = AstNodeAttributeKind::Name;
     _sm_base10 = field->name;
-    _sm_expr7 = AstNodeAttribute(_sm_base9, _sm_base10);
+    _sm_expr7 = AstNodeAttribute{_sm_base9, _sm_base10};
     _sm_base11 = simse_addressOf(fieldNode.attributes);
     simse_list_append((*_sm_base11), _sm_expr7);
     _sm_base13 = simse_addressOf(field->typeNode);
@@ -17262,10 +17668,10 @@ void ns1_emitMachine(ns1_Emitter* self, ns1_CgFn* fn, AstXmlNode* decl, Str* cla
     _sm_expr21 = Array<AstXmlNode>();
     _sm_base38 = AstNodeKind::Type;
     _sm_base39 = AstNodeCategory::TypeNamed;
-    classType = AstXmlNode(_sm_base38, _sm_base39, _sm_expr20, _sm_expr21);
+    classType = AstXmlNode{_sm_base38, _sm_base39, _sm_expr20, _sm_expr21};
     _sm_base40 = AstNodeAttributeKind::Name;
     _sm_base41 = *(className);
-    _sm_expr22 = AstNodeAttribute(_sm_base40, _sm_base41);
+    _sm_expr22 = AstNodeAttribute{_sm_base40, _sm_base41};
     _sm_base42 = simse_addressOf(classType.attributes);
     simse_list_append((*_sm_base42), _sm_expr22);
     self->selfType = classType;
@@ -17876,7 +18282,7 @@ AstXmlNode ns2_xmlEmptyNode() {
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base1 = AstNodeKind::None;
     _sm_base2 = AstNodeCategory::None;
-    _sm_expr3 = AstXmlNode(_sm_base1, _sm_base2, _sm_expr1, _sm_expr2);
+    _sm_expr3 = AstXmlNode{_sm_base1, _sm_base2, _sm_expr1, _sm_expr2};
     return _sm_expr3;
 }
 // cppsrc/common/xmlutil.kt
@@ -18651,7 +19057,7 @@ AstXmlNode ns3_driverNewModule() {
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base1 = AstNodeKind::Module;
     _sm_base2 = AstNodeCategory::None;
-    _sm_expr3 = AstXmlNode(_sm_base1, _sm_base2, _sm_expr1, _sm_expr2);
+    _sm_expr3 = AstXmlNode{_sm_base1, _sm_base2, _sm_expr1, _sm_expr2};
     return _sm_expr3;
 }
 // cppsrc/compiler/Driver.kt
@@ -19935,7 +20341,7 @@ Int ns6_tableMatch(StrView view, List<Str>* table, Bool exact) {
     _sm_expr2 = _sm_expr1 != length;
     if (_sm_expr2) goto L3;
     L9:;
-    _sm_expr2 = simse_strView_startsWithPtr(view, entry, length);
+    _sm_expr2 = startsWithPtr(simse_addressOf(view), entry, length);
     if (_sm_expr2) goto L12;
     goto L3;
     L12:;
@@ -20614,7 +21020,7 @@ Res<ns6_Token> ns6_nextToken(ns6_Scanner* self) {
     _sm_base8 = self->column;
     startPos = ns2_SourcePos{_sm_base6, _sm_base7, _sm_base8};
     matched = simse_strView_slice(view, 0, matchLength);
-    _sm_expr7 = simse_strView_toString(matched);
+    _sm_expr7 = toString(simse_addressOf(matched));
     _sm_base9 = rule->tokenKind;
     token = ns6_Token{_sm_expr7, _sm_base9, startPos};
     ns6_advance(self, matchLength);
@@ -20877,7 +21283,7 @@ AstXmlNode ns7_exprLike(AstXmlNode* like, List<AstXmlNode>* kids) {
     _sm_expr3 = simse_list_toArray((*kids));
     _sm_base1 = like->name;
     _sm_base2 = like->kind;
-    _sm_expr4 = AstXmlNode(_sm_base1, _sm_base2, _sm_expr2, _sm_expr3);
+    _sm_expr4 = AstXmlNode{_sm_base1, _sm_base2, _sm_expr2, _sm_expr3};
     return _sm_expr4;
 }
 // cppsrc/linear/ExpressionLowering.kt
@@ -21562,14 +21968,14 @@ AstXmlNode ns7_linStmt(AstNodeCategory kind, Int line, Int column) {
     AstXmlNode _sm_expr6;
     _sm_expr1 = simse_int_toString(line);
     _sm_base1 = AstNodeAttributeKind::Line;
-    _sm_expr2 = AstNodeAttribute(_sm_base1, _sm_expr1);
+    _sm_expr2 = AstNodeAttribute{_sm_base1, _sm_expr1};
     _sm_expr3 = simse_int_toString(column);
     _sm_base2 = AstNodeAttributeKind::Column;
-    _sm_expr4 = AstNodeAttribute(_sm_base2, _sm_expr3);
+    _sm_expr4 = AstNodeAttribute{_sm_base2, _sm_expr3};
     attrs = List<AstNodeAttribute>{_sm_expr2, _sm_expr4};
     _sm_expr5 = Array<AstXmlNode>();
     _sm_base3 = AstNodeKind::Stmt;
-    _sm_expr6 = AstXmlNode(_sm_base3, kind, attrs, _sm_expr5);
+    _sm_expr6 = AstXmlNode{_sm_base3, kind, attrs, _sm_expr5};
     return _sm_expr6;
 }
 // cppsrc/linear/Linear.kt
@@ -21591,7 +21997,7 @@ AstXmlNode ns7_linLabel(Str* name, Int line, Int column) {
     node = ns7_linStmt(_sm_base1, line, column);
     _sm_base2 = AstNodeAttributeKind::Name;
     _sm_base3 = *(name);
-    _sm_expr1 = AstNodeAttribute(_sm_base2, _sm_base3);
+    _sm_expr1 = AstNodeAttribute{_sm_base2, _sm_base3};
     _sm_base4 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base4), _sm_expr1);
     return node;
@@ -21608,7 +22014,7 @@ AstXmlNode ns7_linGoto(Str* name, Int line, Int column) {
     node = ns7_linStmt(_sm_base1, line, column);
     _sm_base2 = AstNodeAttributeKind::Name;
     _sm_base3 = *(name);
-    _sm_expr1 = AstNodeAttribute(_sm_base2, _sm_base3);
+    _sm_expr1 = AstNodeAttribute{_sm_base2, _sm_base3};
     _sm_base4 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base4), _sm_expr1);
     return node;
@@ -21625,7 +22031,7 @@ AstXmlNode ns7_linCondJump(AstNodeCategory kind, AstXmlNode* cond, Str* name, In
     node = ns7_linStmt(kind, line, column);
     _sm_base1 = AstNodeAttributeKind::Name;
     _sm_base2 = *(name);
-    _sm_expr1 = AstNodeAttribute(_sm_base1, _sm_base2);
+    _sm_expr1 = AstNodeAttribute{_sm_base1, _sm_base2};
     _sm_base3 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base3), _sm_expr1);
     _sm_base4 = AstNodeKind::Cond;
@@ -21648,7 +22054,7 @@ AstXmlNode ns7_linBlock(List<AstXmlNode>* body, Int line, Int column) {
     _sm_expr2 = simse_list_toArray((*body));
     _sm_base2 = AstNodeKind::Body;
     _sm_base3 = AstNodeCategory::None;
-    _sm_expr3 = AstXmlNode(_sm_base2, _sm_base3, _sm_expr1, _sm_expr2);
+    _sm_expr3 = AstXmlNode{_sm_base2, _sm_base3, _sm_expr1, _sm_expr2};
     _sm_base4 = &node;
     ns2_xmlAddChild(_sm_base4, _sm_expr3);
     return node;
@@ -21667,11 +22073,11 @@ AstXmlNode ns7_linSubjectDecl(Str* name, AstXmlNode* init, Int line, Int column)
     node = ns7_linStmt(_sm_base1, line, column);
     _sm_base2 = AstNodeAttributeKind::Name;
     _sm_base3 = *(name);
-    _sm_expr1 = AstNodeAttribute(_sm_base2, _sm_base3);
+    _sm_expr1 = AstNodeAttribute{_sm_base2, _sm_base3};
     _sm_base4 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base4), _sm_expr1);
     _sm_base5 = AstNodeAttributeKind::IsVar;
-    _sm_expr2 = AstNodeAttribute(_sm_base5, __sm_stringTable[628]);
+    _sm_expr2 = AstNodeAttribute{_sm_base5, __sm_stringTable[628]};
     _sm_base6 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base6), _sm_expr2);
     _sm_base7 = AstNodeKind::Init;
@@ -21691,17 +22097,17 @@ AstXmlNode ns7_linName(AstNodeKind role, Str* name, Int line, Int column) {
     AstXmlNode _sm_expr7;
     _sm_expr1 = simse_int_toString(line);
     _sm_base1 = AstNodeAttributeKind::Line;
-    _sm_expr2 = AstNodeAttribute(_sm_base1, _sm_expr1);
+    _sm_expr2 = AstNodeAttribute{_sm_base1, _sm_expr1};
     _sm_expr3 = simse_int_toString(column);
     _sm_base2 = AstNodeAttributeKind::Column;
-    _sm_expr4 = AstNodeAttribute(_sm_base2, _sm_expr3);
+    _sm_expr4 = AstNodeAttribute{_sm_base2, _sm_expr3};
     _sm_base3 = AstNodeAttributeKind::Name;
     _sm_base4 = *(name);
-    _sm_expr5 = AstNodeAttribute(_sm_base3, _sm_base4);
+    _sm_expr5 = AstNodeAttribute{_sm_base3, _sm_base4};
     attrs = List<AstNodeAttribute>{_sm_expr2, _sm_expr4, _sm_expr5};
     _sm_expr6 = Array<AstXmlNode>();
     _sm_base5 = AstNodeCategory::ExprName;
-    _sm_expr7 = AstXmlNode(role, _sm_base5, attrs, _sm_expr6);
+    _sm_expr7 = AstXmlNode{role, _sm_base5, attrs, _sm_expr6};
     return _sm_expr7;
 }
 // cppsrc/linear/Linear.kt
@@ -24842,7 +25248,7 @@ AstXmlNode ns7_ilPointerNode(AstXmlNode* inner) {
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base1 = AstNodeKind::Type;
     _sm_base2 = AstNodeCategory::TypePointer;
-    node = AstXmlNode(_sm_base1, _sm_base2, _sm_expr1, _sm_expr2);
+    node = AstXmlNode{_sm_base1, _sm_base2, _sm_expr1, _sm_expr2};
     renamed = *(inner);
     _sm_base3 = AstNodeKind::Inner;
     renamed.name = _sm_base3;
@@ -24862,7 +25268,7 @@ AstXmlNode ns7_ilDerefNode(AstXmlNode* operand) {
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base1 = AstNodeKind::Expr;
     _sm_base2 = AstNodeCategory::ExprDeref;
-    node = AstXmlNode(_sm_base1, _sm_base2, _sm_expr1, _sm_expr2);
+    node = AstXmlNode{_sm_base1, _sm_base2, _sm_expr1, _sm_expr2};
     renamed = *(operand);
     _sm_base3 = AstNodeKind::Operand;
     renamed.name = _sm_base3;
@@ -25035,9 +25441,9 @@ AstXmlNode ns7_ilNamedTypeNode(Str name) {
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base1 = AstNodeKind::Type;
     _sm_base2 = AstNodeCategory::TypeNamed;
-    node = AstXmlNode(_sm_base1, _sm_base2, _sm_expr1, _sm_expr2);
+    node = AstXmlNode{_sm_base1, _sm_base2, _sm_expr1, _sm_expr2};
     _sm_base3 = AstNodeAttributeKind::Name;
-    _sm_expr3 = AstNodeAttribute(_sm_base3, name);
+    _sm_expr3 = AstNodeAttribute{_sm_base3, name};
     _sm_base4 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base4), _sm_expr3);
     return node;
@@ -27673,9 +28079,9 @@ AstXmlNode ns7_calleeToType(ns7_IlExtractor* self, AstXmlNode* e) {
     _sm_expr5 = Array<AstXmlNode>();
     _sm_base2 = AstNodeKind::Type;
     _sm_base3 = AstNodeCategory::TypeGeneric;
-    node = AstXmlNode(_sm_base2, _sm_base3, _sm_expr4, _sm_expr5);
+    node = AstXmlNode{_sm_base2, _sm_base3, _sm_expr4, _sm_expr5};
     _sm_base4 = AstNodeAttributeKind::Name;
-    _sm_expr6 = AstNodeAttribute(_sm_base4, name);
+    _sm_expr6 = AstNodeAttribute{_sm_base4, name};
     _sm_base5 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base5), _sm_expr6);
     _sm_base6 = AstNodeKind::TypeArg;
@@ -28136,12 +28542,12 @@ AstXmlNode ns7_asConstruction(ns7_IlExtractor* self, AstXmlNode* e) {
     _sm_expr6 = Array<AstXmlNode>();
     _sm_base2 = AstNodeKind::Callee;
     _sm_base3 = AstNodeCategory::ExprGenericName;
-    generic = AstXmlNode(_sm_base2, _sm_base3, _sm_expr5, _sm_expr6);
+    generic = AstXmlNode{_sm_base2, _sm_base3, _sm_expr5, _sm_expr6};
     _sm_base4 = AstNodeAttributeKind::Name;
     _sm_expr7 = ns2_xmlAttr(callee, _sm_base4);
     _sm_base5 = AstNodeAttributeKind::Name;
     _sm_base6 = *(_sm_expr7);
-    _sm_expr8 = AstNodeAttribute(_sm_base5, _sm_base6);
+    _sm_expr8 = AstNodeAttribute{_sm_base5, _sm_base6};
     _sm_base7 = simse_addressOf(generic.attributes);
     simse_list_append((*_sm_base7), _sm_expr8);
     callees = List<AstXmlNode>();
@@ -32656,7 +33062,7 @@ List<AstNodeAttribute> ns7_simNameAttrs(AstXmlNode* like, Str* name) {
     L3:;
     _sm_base2 = AstNodeAttributeKind::Name;
     _sm_base3 = *(name);
-    _sm_expr5 = AstNodeAttribute(_sm_base2, _sm_base3);
+    _sm_expr5 = AstNodeAttribute{_sm_base2, _sm_base3};
     simse_list_append(attrs, _sm_expr5);
     found = true;
     goto L1;
@@ -32671,7 +33077,7 @@ List<AstNodeAttribute> ns7_simNameAttrs(AstXmlNode* like, Str* name) {
     L6:;
     _sm_base5 = AstNodeAttributeKind::Name;
     _sm_base6 = *(name);
-    _sm_expr7 = AstNodeAttribute(_sm_base5, _sm_base6);
+    _sm_expr7 = AstNodeAttribute{_sm_base5, _sm_base6};
     simse_list_append(attrs, _sm_expr7);
     L7:;
     return attrs;
@@ -33256,7 +33662,7 @@ List<AstXmlNode> ns7_linHoistInList(List<AstXmlNode>* stmts, List<AstXmlNode>* d
     _sm_base4 = AstNodeCategory::StmtAssign;
     assignment = ns7_linStmt(_sm_base4, _sm_expr6, _sm_expr7);
     _sm_base5 = AstNodeAttributeKind::Op;
-    _sm_expr8 = AstNodeAttribute(_sm_base5, __sm_stringTable[798]);
+    _sm_expr8 = AstNodeAttribute{_sm_base5, __sm_stringTable[798]};
     _sm_base6 = simse_addressOf(assignment.attributes);
     simse_list_append((*_sm_base6), _sm_expr8);
     _sm_expr9 = ns2_xmlLine(stmt);
@@ -34506,7 +34912,7 @@ AstXmlNode ns7_exprAt(ns7_TskMachinery* self, AstXmlNode node, Bool base) {
     _sm_base7 = copyNode.name;
     _sm_base8 = copyNode.kind;
     _sm_base9 = copyNode.attributes;
-    rebuilt = AstXmlNode(_sm_base7, _sm_base8, _sm_base9, _sm_expr12);
+    rebuilt = AstXmlNode{_sm_base7, _sm_base8, _sm_base9, _sm_expr12};
     _sm_base12 = &node;
     _sm_base11 = ns2_xmlKind(_sm_base12);
     _sm_base13 = AstNodeCategory::ExprMember;
@@ -34561,7 +34967,7 @@ AstXmlNode ns7_yldExpr(AstNodeCategory kind) {
     _sm_expr1 = List<AstNodeAttribute>();
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base1 = AstNodeKind::Expr;
-    _sm_expr3 = AstXmlNode(_sm_base1, kind, _sm_expr1, _sm_expr2);
+    _sm_expr3 = AstXmlNode{_sm_base1, kind, _sm_expr1, _sm_expr2};
     return _sm_expr3;
 }
 // cppsrc/linear/Yield.kt
@@ -34582,7 +34988,7 @@ AstXmlNode ns7_yldIntLiteral(Int value) {
     node = ns7_yldExpr(_sm_base1);
     _sm_expr1 = simse_int_toString(value);
     _sm_base2 = AstNodeAttributeKind::Text;
-    _sm_expr2 = AstNodeAttribute(_sm_base2, _sm_expr1);
+    _sm_expr2 = AstNodeAttribute{_sm_base2, _sm_expr1};
     _sm_base3 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base3), _sm_expr2);
     return node;
@@ -34604,7 +35010,7 @@ AstXmlNode ns7_yldBoolLiteral(Bool value) {
     text = __sm_stringTable[686];
     L2:;
     _sm_base2 = AstNodeAttributeKind::Value;
-    _sm_expr1 = AstNodeAttribute(_sm_base2, text);
+    _sm_expr1 = AstNodeAttribute{_sm_base2, text};
     _sm_base3 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base3), _sm_expr1);
     return node;
@@ -34623,7 +35029,7 @@ AstXmlNode ns7_yldWithChildren(AstXmlNode* like, List<AstXmlNode>* children) {
     _sm_base1 = like->name;
     _sm_base2 = like->kind;
     _sm_base3 = like->attributes;
-    node = AstXmlNode(_sm_base1, _sm_base2, _sm_base3, _sm_expr1);
+    node = AstXmlNode{_sm_base1, _sm_base2, _sm_base3, _sm_expr1};
     i = 0;
     L1:;
     _sm_expr2 = children->size();
@@ -34652,9 +35058,9 @@ AstXmlNode ns7_yldNamedType(Str name) {
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base1 = AstNodeKind::Type;
     _sm_base2 = AstNodeCategory::TypeNamed;
-    node = AstXmlNode(_sm_base1, _sm_base2, _sm_expr1, _sm_expr2);
+    node = AstXmlNode{_sm_base1, _sm_base2, _sm_expr1, _sm_expr2};
     _sm_base3 = AstNodeAttributeKind::Name;
-    _sm_expr3 = AstNodeAttribute(_sm_base3, name);
+    _sm_expr3 = AstNodeAttribute{_sm_base3, name};
     _sm_base4 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base4), _sm_expr3);
     return node;
@@ -34684,7 +35090,7 @@ AstXmlNode ns7_yldMember(AstXmlNode base, Str field) {
     _sm_base1 = AstNodeCategory::ExprMember;
     node = ns7_yldExpr(_sm_base1);
     _sm_base2 = AstNodeAttributeKind::Name;
-    _sm_expr1 = AstNodeAttribute(_sm_base2, field);
+    _sm_expr1 = AstNodeAttribute{_sm_base2, field};
     _sm_base3 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base3), _sm_expr1);
     receiver = base;
@@ -34708,7 +35114,7 @@ AstXmlNode ns7_yldBinary(AstXmlNode lhs, AstXmlNode rhs) {
     _sm_base1 = AstNodeCategory::ExprBinary;
     node = ns7_yldExpr(_sm_base1);
     _sm_base2 = AstNodeAttributeKind::Op;
-    _sm_expr1 = AstNodeAttribute(_sm_base2, op);
+    _sm_expr1 = AstNodeAttribute{_sm_base2, op};
     _sm_base3 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base3), _sm_expr1);
     left = lhs;
@@ -34781,7 +35187,7 @@ AstXmlNode ns7_yldOptionalCall(AstXmlNode elementType, Str method, List<AstXmlNo
     _sm_base1 = AstNodeCategory::ExprGenericName;
     base = ns7_yldExpr(_sm_base1);
     _sm_base2 = AstNodeAttributeKind::Name;
-    _sm_expr1 = AstNodeAttribute(_sm_base2, __sm_stringTable[710]);
+    _sm_expr1 = AstNodeAttribute{_sm_base2, __sm_stringTable[710]};
     _sm_base3 = simse_addressOf(base.attributes);
     simse_list_append((*_sm_base3), _sm_expr1);
     typeArg = elementType;
@@ -34805,7 +35211,7 @@ AstXmlNode ns7_yldAssign(AstXmlNode target, AstXmlNode value) {
     _sm_base1 = AstNodeCategory::StmtAssign;
     node = ns7_yldStmt(_sm_base1);
     _sm_base2 = AstNodeAttributeKind::Op;
-    _sm_expr1 = AstNodeAttribute(_sm_base2, __sm_stringTable[798]);
+    _sm_expr1 = AstNodeAttribute{_sm_base2, __sm_stringTable[798]};
     _sm_base3 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base3), _sm_expr1);
     targetNode = target;
@@ -35654,7 +36060,7 @@ AstXmlNode ns7_exprAt(ns7_YldMachinery* self, AstXmlNode node, Bool base) {
     _sm_base9 = copyNode.name;
     _sm_base10 = copyNode.kind;
     _sm_base11 = copyNode.attributes;
-    rebuilt = AstXmlNode(_sm_base9, _sm_base10, _sm_base11, _sm_expr16);
+    rebuilt = AstXmlNode{_sm_base9, _sm_base10, _sm_base11, _sm_expr16};
     _sm_base14 = &node;
     _sm_base13 = ns2_xmlKind(_sm_base14);
     _sm_base15 = AstNodeCategory::ExprMember;
@@ -36548,11 +36954,11 @@ List<AstNodeAttribute> ns8_foldPosAttrs(AstXmlNode* like) {
     _sm_expr1 = ns2_xmlLine(like);
     _sm_expr2 = simse_int_toString(_sm_expr1);
     _sm_base1 = AstNodeAttributeKind::Line;
-    _sm_expr3 = AstNodeAttribute(_sm_base1, _sm_expr2);
+    _sm_expr3 = AstNodeAttribute{_sm_base1, _sm_expr2};
     _sm_expr4 = ns2_xmlColumn(like);
     _sm_expr5 = simse_int_toString(_sm_expr4);
     _sm_base2 = AstNodeAttributeKind::Column;
-    _sm_expr6 = AstNodeAttribute(_sm_base2, _sm_expr5);
+    _sm_expr6 = AstNodeAttribute{_sm_base2, _sm_expr5};
     _sm_expr7 = List<AstNodeAttribute>{_sm_expr3, _sm_expr6};
     return _sm_expr7;
 }
@@ -36568,9 +36974,9 @@ AstXmlNode ns8_foldAsLiteral(AstXmlNode* like, AstNodeCategory kind, Str text) {
     _sm_expr1 = ns8_foldPosAttrs(like);
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base1 = like->name;
-    node = AstXmlNode(_sm_base1, kind, _sm_expr1, _sm_expr2);
+    node = AstXmlNode{_sm_base1, kind, _sm_expr1, _sm_expr2};
     _sm_base2 = AstNodeAttributeKind::Text;
-    _sm_expr3 = AstNodeAttribute(_sm_base2, text);
+    _sm_expr3 = AstNodeAttribute{_sm_base2, text};
     _sm_base3 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base3), _sm_expr3);
     return node;
@@ -36600,7 +37006,7 @@ AstXmlNode ns8_foldBoolLit(AstXmlNode* like, Bool value) {
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base1 = like->name;
     _sm_base2 = AstNodeCategory::ExprBoolLit;
-    node = AstXmlNode(_sm_base1, _sm_base2, _sm_expr1, _sm_expr2);
+    node = AstXmlNode{_sm_base1, _sm_base2, _sm_expr1, _sm_expr2};
     text = __sm_stringTable[628];
     if (value) goto L1;
     goto L2;
@@ -36608,7 +37014,7 @@ AstXmlNode ns8_foldBoolLit(AstXmlNode* like, Bool value) {
     text = __sm_stringTable[686];
     L2:;
     _sm_base3 = AstNodeAttributeKind::Value;
-    _sm_expr3 = AstNodeAttribute(_sm_base3, text);
+    _sm_expr3 = AstNodeAttribute{_sm_base3, text};
     _sm_base4 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base4), _sm_expr3);
     return node;
@@ -40863,20 +41269,20 @@ AstXmlNode ns9_cpBuildLocal(AstXmlNode* param, AstXmlNode* arg) {
     _sm_expr1 = ns2_xmlLine(param);
     _sm_expr2 = simse_int_toString(_sm_expr1);
     _sm_base2 = AstNodeAttributeKind::Line;
-    _sm_expr3 = AstNodeAttribute(_sm_base2, _sm_expr2);
+    _sm_expr3 = AstNodeAttribute{_sm_base2, _sm_expr2};
     _sm_expr4 = ns2_xmlColumn(param);
     _sm_expr5 = simse_int_toString(_sm_expr4);
     _sm_base3 = AstNodeAttributeKind::Column;
-    _sm_expr6 = AstNodeAttribute(_sm_base3, _sm_expr5);
+    _sm_expr6 = AstNodeAttribute{_sm_base3, _sm_expr5};
     _sm_base4 = AstNodeAttributeKind::Name;
-    _sm_expr7 = AstNodeAttribute(_sm_base4, paramName);
+    _sm_expr7 = AstNodeAttribute{_sm_base4, paramName};
     _sm_base5 = AstNodeAttributeKind::IsVar;
-    _sm_expr8 = AstNodeAttribute(_sm_base5, __sm_stringTable[628]);
+    _sm_expr8 = AstNodeAttribute{_sm_base5, __sm_stringTable[628]};
     attrs = List<AstNodeAttribute>{_sm_expr3, _sm_expr6, _sm_expr7, _sm_expr8};
     _sm_expr9 = Array<AstXmlNode>();
     _sm_base6 = AstNodeKind::Stmt;
     _sm_base7 = AstNodeCategory::StmtVarDecl;
-    node = AstXmlNode(_sm_base6, _sm_base7, attrs, _sm_expr9);
+    node = AstXmlNode{_sm_base6, _sm_base7, attrs, _sm_expr9};
     _sm_base8 = AstNodeKind::Type;
     typeNode = ns2_xmlChild(param, _sm_base8);
     _sm_base9 = &node;
@@ -41154,7 +41560,7 @@ AstXmlNode ns9_cpRewriteCalls(AstXmlNode* node, Dictionary<Str, Int>* folds) {
     _sm_base1 = node->name;
     _sm_base2 = node->kind;
     _sm_base3 = node->attributes;
-    out = AstXmlNode(_sm_base1, _sm_base2, _sm_base3, _sm_expr1);
+    out = AstXmlNode{_sm_base1, _sm_base2, _sm_base3, _sm_expr1};
     kids = List<AstXmlNode>();
     _sm_base4 = simse_addressOf(node->Children);
     _sm_for7 = iterPtr(_sm_base4);
@@ -41204,7 +41610,7 @@ AstXmlNode ns9_cpRewriteFoldDecl(AstXmlNode* decl, Int paramIndex, AstXmlNode* l
     _sm_base1 = decl->name;
     _sm_base2 = decl->kind;
     _sm_base3 = decl->attributes;
-    out = AstXmlNode(_sm_base1, _sm_base2, _sm_base3, _sm_expr1);
+    out = AstXmlNode{_sm_base1, _sm_base2, _sm_base3, _sm_expr1};
     kids = List<AstXmlNode>();
     p = 0;
     _sm_base4 = simse_addressOf(decl->Children);
@@ -41258,7 +41664,7 @@ AstXmlNode ns9_cpRewriteFoldDecl(AstXmlNode* decl, Int paramIndex, AstXmlNode* l
     _sm_base6 = child->name;
     _sm_base7 = child->kind;
     _sm_base8 = child->attributes;
-    _sm_expr14 = AstXmlNode(_sm_base6, _sm_base7, _sm_base8, _sm_expr13);
+    _sm_expr14 = AstXmlNode{_sm_base6, _sm_base7, _sm_base8, _sm_expr13};
     simse_list_append(kids, _sm_expr14);
     goto L1;
     L8:;
@@ -41353,7 +41759,7 @@ AstXmlNode ns9_cpRewriteModule(AstXmlNode* module, Dictionary<Str, Int>* folds, 
     _sm_base8 = module->name;
     _sm_base9 = module->kind;
     _sm_base10 = module->attributes;
-    _sm_expr15 = AstXmlNode(_sm_base8, _sm_base9, _sm_base10, _sm_expr14);
+    _sm_expr15 = AstXmlNode{_sm_base8, _sm_base9, _sm_base10, _sm_expr14};
     return _sm_expr15;
 }
 // cppsrc/parser/ConstParams.kt
@@ -41836,7 +42242,7 @@ AstXmlNode ns9_emptyNode(ns9_Parser* self) {
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base1 = AstNodeKind::None;
     _sm_base2 = AstNodeCategory::None;
-    _sm_expr3 = AstXmlNode(_sm_base1, _sm_base2, _sm_expr1, _sm_expr2);
+    _sm_expr3 = AstXmlNode{_sm_base1, _sm_base2, _sm_expr1, _sm_expr2};
     return _sm_expr3;
 }
 // cppsrc/parser/Parser.kt
@@ -41874,10 +42280,10 @@ List<AstNodeAttribute> ns9_posAttrs(ns9_Parser* self, Int line, Int column) {
     List<AstNodeAttribute> attrs;
     _sm_expr1 = simse_int_toString(line);
     _sm_base1 = AstNodeAttributeKind::Line;
-    _sm_expr2 = AstNodeAttribute(_sm_base1, _sm_expr1);
+    _sm_expr2 = AstNodeAttribute{_sm_base1, _sm_expr1};
     _sm_expr3 = simse_int_toString(column);
     _sm_base2 = AstNodeAttributeKind::Column;
-    _sm_expr4 = AstNodeAttribute(_sm_base2, _sm_expr3);
+    _sm_expr4 = AstNodeAttribute{_sm_base2, _sm_expr3};
     attrs = List<AstNodeAttribute>{_sm_expr2, _sm_expr4};
     return attrs;
 }
@@ -41903,7 +42309,7 @@ AstXmlNode ns9_container(ns9_Parser* self, AstNodeKind name, List<AstXmlNode>* c
     _sm_expr1 = List<AstNodeAttribute>();
     _sm_expr2 = simse_list_toArray((*children));
     _sm_base1 = AstNodeCategory::None;
-    _sm_expr3 = AstXmlNode(name, _sm_base1, _sm_expr1, _sm_expr2);
+    _sm_expr3 = AstXmlNode{name, _sm_base1, _sm_expr1, _sm_expr2};
     return _sm_expr3;
 }
 // cppsrc/parser/Parser.kt
@@ -41929,12 +42335,12 @@ void ns9_appendTypeParams(ns9_Parser* self, AstXmlNode* node, List<Str>* names) 
     attrs = List<AstNodeAttribute>();
     _sm_base1 = AstNodeAttributeKind::Name;
     _sm_base2 = (*names)[i];
-    _sm_expr3 = AstNodeAttribute(_sm_base1, _sm_base2);
+    _sm_expr3 = AstNodeAttribute{_sm_base1, _sm_base2};
     simse_list_append(attrs, _sm_expr3);
     _sm_expr4 = Array<AstXmlNode>();
     _sm_base3 = AstNodeKind::TypeParam;
     _sm_base4 = AstNodeCategory::None;
-    _sm_expr5 = AstXmlNode(_sm_base3, _sm_base4, attrs, _sm_expr4);
+    _sm_expr5 = AstXmlNode{_sm_base3, _sm_base4, attrs, _sm_expr4};
     simse_list_append(params, _sm_expr5);
     i = i + 1;
     goto L1;
@@ -41998,16 +42404,16 @@ AstXmlNode ns9_parseRoot(ns9_Parser* self) {
     L6:;
     ns9_skipSeparators(self);
     _sm_base7 = AstNodeAttributeKind::Line;
-    _sm_expr9 = AstNodeAttribute(_sm_base7, __sm_stringTable[794]);
+    _sm_expr9 = AstNodeAttribute{_sm_base7, __sm_stringTable[794]};
     _sm_base8 = AstNodeAttributeKind::Column;
-    _sm_expr10 = AstNodeAttribute(_sm_base8, __sm_stringTable[794]);
+    _sm_expr10 = AstNodeAttribute{_sm_base8, __sm_stringTable[794]};
     _sm_base9 = AstNodeAttributeKind::Package;
-    _sm_expr11 = AstNodeAttribute(_sm_base9, packageName);
+    _sm_expr11 = AstNodeAttribute{_sm_base9, packageName};
     attrs = List<AstNodeAttribute>{_sm_expr9, _sm_expr10, _sm_expr11};
     _sm_expr12 = Array<AstXmlNode>();
     _sm_base10 = AstNodeKind::Module;
     _sm_base11 = AstNodeCategory::Module;
-    root = AstXmlNode(_sm_base10, _sm_base11, attrs, _sm_expr12);
+    root = AstXmlNode{_sm_base10, _sm_base11, attrs, _sm_expr12};
     imports = List<AstXmlNode>();
     decls = List<AstXmlNode>();
     L9:;
@@ -42088,20 +42494,20 @@ AstXmlNode ns9_parseImport(ns9_Parser* self) {
     goto L2;
     L4:;
     _sm_base3 = AstNodeAttributeKind::Path;
-    _sm_expr8 = AstNodeAttribute(_sm_base3, path);
+    _sm_expr8 = AstNodeAttribute{_sm_base3, path};
     _sm_base4 = simse_addressOf(pos.line);
     _sm_expr9 = simse_int_toString((*_sm_base4));
     _sm_base5 = AstNodeAttributeKind::Line;
-    _sm_expr10 = AstNodeAttribute(_sm_base5, _sm_expr9);
+    _sm_expr10 = AstNodeAttribute{_sm_base5, _sm_expr9};
     _sm_base6 = simse_addressOf(pos.column);
     _sm_expr11 = simse_int_toString((*_sm_base6));
     _sm_base7 = AstNodeAttributeKind::Column;
-    _sm_expr12 = AstNodeAttribute(_sm_base7, _sm_expr11);
+    _sm_expr12 = AstNodeAttribute{_sm_base7, _sm_expr11};
     attrs = List<AstNodeAttribute>{_sm_expr8, _sm_expr10, _sm_expr12};
     _sm_expr13 = Array<AstXmlNode>();
     _sm_base8 = AstNodeKind::Import;
     _sm_base9 = AstNodeCategory::None;
-    _sm_expr3 = AstXmlNode(_sm_base8, _sm_base9, attrs, _sm_expr13);
+    _sm_expr3 = AstXmlNode{_sm_base8, _sm_base9, attrs, _sm_expr13};
     return _sm_expr3;
 }
 // cppsrc/parser/Parser.kt
@@ -42280,17 +42686,20 @@ AstXmlNode ns9_parseDecl(ns9_Parser* self) {
 // cppsrc/parser/Parser.kt
 AstXmlNode ns9_parseAttributedDecl(ns9_Parser* self, Bool pure, Bool suspendModifier) {
     Str* _sm_base1, * _sm_base3, * _sm_base7, * _sm_base9, * _sm_base10, * _sm_base12, * _sm_base14,
-        * _sm_base16, * _sm_base18, * _sm_base20, * _sm_base22, * _sm_base24, * _sm_base26;
-    Str _sm_base2, _sm_base4, _sm_base8, _sm_base11, _sm_base13, _sm_base15, _sm_base17, _sm_base19,
-        _sm_base21, _sm_base23, _sm_base25, attrText, attrName, argText, _sm_expr14;
+        * _sm_base18, * _sm_base22, * _sm_base24, * _sm_base26, * _sm_base28, * _sm_base30, * _sm_base32,
+        * _sm_base34;
+    Str _sm_base2, _sm_base4, _sm_base8, _sm_base11, _sm_base13, _sm_base15, _sm_base19, _sm_base23,
+        _sm_base25, _sm_base27, _sm_base29, _sm_base31, _sm_base33, attrText, attrName, argText, _sm_expr14,
+        _sm_expr22;
     ns6_TokenKind _sm_base5, _sm_base6;
-    List<Str>* _sm_base27;
+    AstXmlNode* _sm_base16, * _sm_base20;
+    List<Str>* _sm_base17, * _sm_base21, * _sm_base35;
     ns6_Token attrToken;
     Int _sm_expr1, _sm_expr6;
     Bool _sm_expr2, _sm_expr16, isPure, isSuspend;
     Char _sm_expr3;
     List<Str> args;
-    AstXmlNode _sm_expr13;
+    AstXmlNode _sm_expr13, node, _sm_node_2;
     attrToken = ns9_advance(self);
     attrText = attrToken.text;
     attrName = attrText;
@@ -42362,53 +42771,158 @@ AstXmlNode ns9_parseAttributedDecl(ns9_Parser* self, Bool pure, Bool suspendModi
     return _sm_expr13;
     L17:;
     ns9_skipSeparators(self);
-    isPure = pure;
-    isSuspend = suspendModifier;
-    L18:;
     _sm_base15 = __sm_stringTable[670];
     _sm_base14 = &_sm_base15;
     _sm_expr2 = ns9_checkText(self, _sm_base14);
-    if (_sm_expr2) goto L23;
-    _sm_base17 = __sm_stringTable[541];
-    _sm_base16 = &_sm_base17;
-    _sm_expr2 = ns9_checkText(self, _sm_base16);
-    if (_sm_expr2) goto L23;
-    goto L19;
-    L23:;
-    _sm_base19 = __sm_stringTable[670];
-    _sm_base18 = &_sm_base19;
-    _sm_expr2 = ns9_matchText(self, _sm_base18);
     if (_sm_expr2) goto L20;
-    goto L21;
+    goto L19;
     L20:;
-    isPure = true;
+    attrToken = ns9_peek(self, 1);
+    _sm_expr22 = attrToken.text;
+    _sm_expr2 = _sm_expr22 == __sm_stringTable[625];
+    if (_sm_expr2) goto L18;
+    goto L19;
+    L18:;
+    node = ns9_parseDataClass(self);
+    _sm_expr2 = self->failed;
+    if (_sm_expr2) goto L21;
     goto L22;
     L21:;
-    _sm_base21 = __sm_stringTable[541];
-    _sm_base20 = &_sm_base21;
-    ns9_matchText(self, _sm_base20);
-    isSuspend = true;
-    L22:;
-    ns9_skipSeparators(self);
-    goto L18;
-    L19:;
-    _sm_base23 = __sm_stringTable[721];
-    _sm_base22 = &_sm_base23;
-    _sm_expr2 = ns9_checkText(self, _sm_base22);
-    _sm_expr16 = !_sm_expr2;
-    if (_sm_expr16) goto L25;
-    goto L26;
-    L25:;
-    _sm_base25 = __sm_stringTable[126];
-    _sm_base24 = &_sm_base25;
-    ns9_fail(self, _sm_base24);
     _sm_expr13 = ns9_emptyNode(self);
     return _sm_expr13;
+    L22:;
+    _sm_base16 = &node;
+    _sm_base17 = &args;
+    ns9_attachTypeAttribute(self, _sm_base16, attrName, _sm_base17);
+    return node;
+    L19:;
+    _sm_base19 = __sm_stringTable[672];
+    _sm_base18 = &_sm_base19;
+    _sm_expr2 = ns9_checkText(self, _sm_base18);
+    if (_sm_expr2) goto L25;
+    goto L24;
+    L25:;
+    attrToken = ns9_peek(self, 1);
+    _sm_expr22 = attrToken.text;
+    _sm_expr2 = _sm_expr22 == __sm_stringTable[625];
+    if (_sm_expr2) goto L23;
+    goto L24;
+    L23:;
+    _sm_node_2 = ns9_parseEnum(self);
+    _sm_expr2 = self->failed;
+    if (_sm_expr2) goto L26;
+    goto L27;
     L26:;
-    _sm_base26 = &attrName;
-    _sm_base27 = &args;
-    _sm_expr13 = ns9_parseFunction(self, _sm_base26, _sm_base27, isPure, isSuspend);
+    _sm_expr13 = ns9_emptyNode(self);
     return _sm_expr13;
+    L27:;
+    _sm_base20 = &_sm_node_2;
+    _sm_base21 = &args;
+    ns9_attachTypeAttribute(self, _sm_base20, attrName, _sm_base21);
+    return _sm_node_2;
+    L24:;
+    isPure = pure;
+    isSuspend = suspendModifier;
+    L28:;
+    _sm_base23 = __sm_stringTable[670];
+    _sm_base22 = &_sm_base23;
+    _sm_expr2 = ns9_checkText(self, _sm_base22);
+    if (_sm_expr2) goto L33;
+    _sm_base25 = __sm_stringTable[541];
+    _sm_base24 = &_sm_base25;
+    _sm_expr2 = ns9_checkText(self, _sm_base24);
+    if (_sm_expr2) goto L33;
+    goto L29;
+    L33:;
+    _sm_base27 = __sm_stringTable[670];
+    _sm_base26 = &_sm_base27;
+    _sm_expr2 = ns9_matchText(self, _sm_base26);
+    if (_sm_expr2) goto L30;
+    goto L31;
+    L30:;
+    isPure = true;
+    goto L32;
+    L31:;
+    _sm_base29 = __sm_stringTable[541];
+    _sm_base28 = &_sm_base29;
+    ns9_matchText(self, _sm_base28);
+    isSuspend = true;
+    L32:;
+    ns9_skipSeparators(self);
+    goto L28;
+    L29:;
+    _sm_base31 = __sm_stringTable[721];
+    _sm_base30 = &_sm_base31;
+    _sm_expr2 = ns9_checkText(self, _sm_base30);
+    _sm_expr16 = !_sm_expr2;
+    if (_sm_expr16) goto L35;
+    goto L36;
+    L35:;
+    _sm_base33 = __sm_stringTable[126];
+    _sm_base32 = &_sm_base33;
+    ns9_fail(self, _sm_base32);
+    _sm_expr13 = ns9_emptyNode(self);
+    return _sm_expr13;
+    L36:;
+    _sm_base34 = &attrName;
+    _sm_base35 = &args;
+    _sm_expr13 = ns9_parseFunction(self, _sm_base34, _sm_base35, isPure, isSuspend);
+    return _sm_expr13;
+}
+// cppsrc/parser/Parser.kt
+void ns9_attachTypeAttribute(ns9_Parser* self, AstXmlNode* node, Str attrName, List<Str>* args) {
+    char* __sm_catP;
+    Int __sm_catAt;
+    Str _sm_base1, _sm_base2, generatorName, generatorArgs, _sm_expr6;
+    AstNodeAttributeKind _sm_base3, _sm_base5, _sm_base7;
+    List<AstNodeAttribute>* _sm_base4, * _sm_base6, * _sm_base8;
+    Int _sm_expr1, a;
+    Bool _sm_expr2;
+    AstNodeAttribute _sm_expr7, _sm_expr8, _sm_expr9;
+    generatorName = __sm_stringTable[809];
+    generatorArgs = __sm_stringTable[809];
+    _sm_expr1 = args->size();
+    _sm_expr2 = _sm_expr1 > 0;
+    if (_sm_expr2) goto L1;
+    goto L2;
+    L1:;
+    _sm_base1 = (*args)[0];
+    generatorName = ns9_attrLiteralText(_sm_base1);
+    L2:;
+    a = 1;
+    L3:;
+    _sm_expr2 = a < _sm_expr1;
+    if (!(_sm_expr2)) goto L4;
+    _sm_expr2 = a > 1;
+    if (_sm_expr2) goto L5;
+    goto L6;
+    L5:;
+    __sm_catAt = generatorArgs.size();
+    generatorArgs.resize(__sm_catAt + 1);
+    __sm_catP = generatorArgs.data() + __sm_catAt;
+    *__sm_catP = (char) (',');
+    L6:;
+    _sm_base2 = (*args)[a];
+    _sm_expr6 = ns9_attrLiteralText(_sm_base2);
+    __sm_catAt = generatorArgs.size();
+    generatorArgs.resize(__sm_catAt + _sm_expr6.size());
+    __sm_catP = generatorArgs.data() + __sm_catAt;
+    std::memcpy(__sm_catP, _sm_expr6.data(), _sm_expr6.size());
+    a = a + 1;
+    goto L3;
+    L4:;
+    _sm_base3 = AstNodeAttributeKind::Attribute;
+    _sm_expr7 = AstNodeAttribute{_sm_base3, attrName};
+    _sm_base4 = simse_addressOf(node->attributes);
+    simse_list_append((*_sm_base4), _sm_expr7);
+    _sm_base5 = AstNodeAttributeKind::Generator;
+    _sm_expr8 = AstNodeAttribute{_sm_base5, generatorName};
+    _sm_base6 = simse_addressOf(node->attributes);
+    simse_list_append((*_sm_base6), _sm_expr8);
+    _sm_base7 = AstNodeAttributeKind::GeneratorArgs;
+    _sm_expr9 = AstNodeAttribute{_sm_base7, generatorArgs};
+    _sm_base8 = simse_addressOf(node->attributes);
+    simse_list_append((*_sm_base8), _sm_expr9);
 }
 // cppsrc/parser/Parser.kt
 AstXmlNode ns9_parseStaticVar(ns9_Parser* self) {
@@ -42493,16 +43007,16 @@ AstXmlNode ns9_parseStaticVar(ns9_Parser* self) {
     _sm_base11 = pos.column;
     attrs = ns9_posAttrs(self, _sm_base10, _sm_base11);
     _sm_base12 = AstNodeAttributeKind::Name;
-    _sm_expr16 = AstNodeAttribute(_sm_base12, name);
+    _sm_expr16 = AstNodeAttribute{_sm_base12, name};
     simse_list_append(attrs, _sm_expr16);
     _sm_expr17 = ns9_boolText(isVar);
     _sm_base13 = AstNodeAttributeKind::IsVar;
-    _sm_expr18 = AstNodeAttribute(_sm_base13, _sm_expr17);
+    _sm_expr18 = AstNodeAttribute{_sm_base13, _sm_expr17};
     simse_list_append(attrs, _sm_expr18);
     _sm_expr19 = Array<AstXmlNode>();
     _sm_base14 = AstNodeKind::Var;
     _sm_base15 = AstNodeCategory::Var;
-    node = AstXmlNode(_sm_base14, _sm_base15, attrs, _sm_expr19);
+    node = AstXmlNode{_sm_base14, _sm_base15, attrs, _sm_expr19};
     _sm_base16 = &node;
     ns2_xmlAddChild(_sm_base16, typeNode);
     _sm_base17 = simse_addressOf(init.node);
@@ -42650,23 +43164,23 @@ AstXmlNode ns9_parseDataClass(ns9_Parser* self) {
     return _sm_expr4;
     L24:;
     _sm_base18 = AstNodeAttributeKind::Name;
-    _sm_expr23 = AstNodeAttribute(_sm_base18, fieldName);
+    _sm_expr23 = AstNodeAttribute{_sm_base18, fieldName};
     _sm_expr24 = ns9_boolText(isVar);
     _sm_base19 = AstNodeAttributeKind::IsVar;
-    _sm_expr25 = AstNodeAttribute(_sm_base19, _sm_expr24);
+    _sm_expr25 = AstNodeAttribute{_sm_base19, _sm_expr24};
     _sm_base20 = simse_addressOf(fieldPos.line);
     _sm_expr26 = simse_int_toString((*_sm_base20));
     _sm_base21 = AstNodeAttributeKind::Line;
-    _sm_expr27 = AstNodeAttribute(_sm_base21, _sm_expr26);
+    _sm_expr27 = AstNodeAttribute{_sm_base21, _sm_expr26};
     _sm_base22 = simse_addressOf(fieldPos.column);
     _sm_expr28 = simse_int_toString((*_sm_base22));
     _sm_base23 = AstNodeAttributeKind::Column;
-    _sm_expr29 = AstNodeAttribute(_sm_base23, _sm_expr28);
+    _sm_expr29 = AstNodeAttribute{_sm_base23, _sm_expr28};
     fattrs = List<AstNodeAttribute>{_sm_expr23, _sm_expr25, _sm_expr27, _sm_expr29};
     _sm_expr30 = Array<AstXmlNode>();
     _sm_base24 = AstNodeKind::Field;
     _sm_base25 = AstNodeCategory::None;
-    fnode = AstXmlNode(_sm_base24, _sm_base25, fattrs, _sm_expr30);
+    fnode = AstXmlNode{_sm_base24, _sm_base25, fattrs, _sm_expr30};
     _sm_expr31 = fieldType.name;
     _sm_expr32 = AstNodeKind::None;
     _sm_expr2 = _sm_expr31 != _sm_expr32;
@@ -42745,12 +43259,12 @@ AstXmlNode ns9_parseDataClass(ns9_Parser* self) {
     _sm_base43 = pos.column;
     attrs = ns9_posAttrs(self, _sm_base42, _sm_base43);
     _sm_base44 = AstNodeAttributeKind::Name;
-    _sm_expr49 = AstNodeAttribute(_sm_base44, name);
+    _sm_expr49 = AstNodeAttribute{_sm_base44, name};
     simse_list_append(attrs, _sm_expr49);
     _sm_expr50 = Array<AstXmlNode>();
     _sm_base45 = AstNodeKind::DataClass;
     _sm_base46 = AstNodeCategory::DataClass;
-    node = AstXmlNode(_sm_base45, _sm_base46, attrs, _sm_expr50);
+    node = AstXmlNode{_sm_base45, _sm_base46, attrs, _sm_expr50};
     _sm_base47 = &node;
     _sm_base48 = &typeParams;
     ns9_appendTypeParams(self, _sm_base47, _sm_base48);
@@ -42898,26 +43412,26 @@ AstXmlNode ns9_parseEnum(ns9_Parser* self) {
     hasValue = true;
     L16:;
     _sm_base16 = AstNodeAttributeKind::Name;
-    _sm_expr29 = AstNodeAttribute(_sm_base16, memberName);
+    _sm_expr29 = AstNodeAttribute{_sm_base16, memberName};
     _sm_expr30 = ns9_boolText(hasValue);
     _sm_base17 = AstNodeAttributeKind::HasValue;
-    _sm_expr31 = AstNodeAttribute(_sm_base17, _sm_expr30);
+    _sm_expr31 = AstNodeAttribute{_sm_base17, _sm_expr30};
     _sm_expr32 = simse_int_toString(memberValue);
     _sm_base18 = AstNodeAttributeKind::Value;
-    _sm_expr33 = AstNodeAttribute(_sm_base18, _sm_expr32);
+    _sm_expr33 = AstNodeAttribute{_sm_base18, _sm_expr32};
     _sm_base19 = simse_addressOf(memberPos.line);
     _sm_expr34 = simse_int_toString((*_sm_base19));
     _sm_base20 = AstNodeAttributeKind::Line;
-    _sm_expr35 = AstNodeAttribute(_sm_base20, _sm_expr34);
+    _sm_expr35 = AstNodeAttribute{_sm_base20, _sm_expr34};
     _sm_base21 = simse_addressOf(memberPos.column);
     _sm_expr36 = simse_int_toString((*_sm_base21));
     _sm_base22 = AstNodeAttributeKind::Column;
-    _sm_expr37 = AstNodeAttribute(_sm_base22, _sm_expr36);
+    _sm_expr37 = AstNodeAttribute{_sm_base22, _sm_expr36};
     mattrs = List<AstNodeAttribute>{_sm_expr29, _sm_expr31, _sm_expr33, _sm_expr35, _sm_expr37};
     _sm_expr38 = Array<AstXmlNode>();
     _sm_base23 = AstNodeKind::EnumMember;
     _sm_base24 = AstNodeCategory::None;
-    _sm_expr39 = AstXmlNode(_sm_base23, _sm_base24, mattrs, _sm_expr38);
+    _sm_expr39 = AstXmlNode{_sm_base23, _sm_base24, mattrs, _sm_expr38};
     simse_list_append(members, _sm_expr39);
     ns9_skipSeparators(self);
     _sm_base26 = __sm_stringTable[790];
@@ -42940,12 +43454,12 @@ AstXmlNode ns9_parseEnum(ns9_Parser* self) {
     _sm_base30 = pos.column;
     attrs = ns9_posAttrs(self, _sm_base29, _sm_base30);
     _sm_base31 = AstNodeAttributeKind::Name;
-    _sm_expr43 = AstNodeAttribute(_sm_base31, name);
+    _sm_expr43 = AstNodeAttribute{_sm_base31, name};
     simse_list_append(attrs, _sm_expr43);
     _sm_expr44 = Array<AstXmlNode>();
     _sm_base32 = AstNodeKind::Enum;
     _sm_base33 = AstNodeCategory::Enum;
-    node = AstXmlNode(_sm_base32, _sm_base33, attrs, _sm_expr44);
+    node = AstXmlNode{_sm_base32, _sm_base33, attrs, _sm_expr44};
     _sm_base34 = &node;
     _sm_base35 = &typeParams;
     ns9_appendTypeParams(self, _sm_base34, _sm_base35);
@@ -43021,12 +43535,12 @@ AstXmlNode ns9_parseTypeAlias(ns9_Parser* self) {
     _sm_base7 = pos.column;
     attrs = ns9_posAttrs(self, _sm_base6, _sm_base7);
     _sm_base8 = AstNodeAttributeKind::Name;
-    _sm_expr12 = AstNodeAttribute(_sm_base8, name);
+    _sm_expr12 = AstNodeAttribute{_sm_base8, name};
     simse_list_append(attrs, _sm_expr12);
     _sm_expr13 = Array<AstXmlNode>();
     _sm_base9 = AstNodeKind::TypeAlias;
     _sm_base10 = AstNodeCategory::TypeAlias;
-    node = AstXmlNode(_sm_base9, _sm_base10, attrs, _sm_expr13);
+    node = AstXmlNode{_sm_base9, _sm_base10, attrs, _sm_expr13};
     _sm_base11 = &node;
     _sm_base12 = &typeParams;
     ns9_appendTypeParams(self, _sm_base11, _sm_base12);
@@ -43289,20 +43803,20 @@ AstXmlNode ns9_parseFunction(ns9_Parser* self, Str* attrName, List<Str>* attrArg
     return _sm_expr4;
     L28:;
     _sm_base15 = AstNodeAttributeKind::Name;
-    _sm_expr28 = AstNodeAttribute(_sm_base15, paramName);
+    _sm_expr28 = AstNodeAttribute{_sm_base15, paramName};
     _sm_base16 = simse_addressOf(paramPos.line);
     _sm_expr29 = simse_int_toString((*_sm_base16));
     _sm_base17 = AstNodeAttributeKind::Line;
-    _sm_expr30 = AstNodeAttribute(_sm_base17, _sm_expr29);
+    _sm_expr30 = AstNodeAttribute{_sm_base17, _sm_expr29};
     _sm_base18 = simse_addressOf(paramPos.column);
     _sm_expr31 = simse_int_toString((*_sm_base18));
     _sm_base19 = AstNodeAttributeKind::Column;
-    _sm_expr32 = AstNodeAttribute(_sm_base19, _sm_expr31);
+    _sm_expr32 = AstNodeAttribute{_sm_base19, _sm_expr31};
     pattrs = List<AstNodeAttribute>{_sm_expr28, _sm_expr30, _sm_expr32};
     _sm_expr33 = Array<AstXmlNode>();
     _sm_base20 = AstNodeKind::Param;
     _sm_base21 = AstNodeCategory::None;
-    pnode = AstXmlNode(_sm_base20, _sm_base21, pattrs, _sm_expr33);
+    pnode = AstXmlNode{_sm_base20, _sm_base21, pattrs, _sm_expr33};
     _sm_expr34 = paramType.name;
     _sm_expr35 = AstNodeKind::None;
     _sm_expr2 = _sm_expr34 != _sm_expr35;
@@ -43465,37 +43979,37 @@ AstXmlNode ns9_parseFunction(ns9_Parser* self, Str* attrName, List<Str>* attrArg
     _sm_base41 = pos.column;
     attrs = ns9_posAttrs(self, _sm_base40, _sm_base41);
     _sm_base42 = AstNodeAttributeKind::Name;
-    _sm_expr68 = AstNodeAttribute(_sm_base42, declName);
+    _sm_expr68 = AstNodeAttribute{_sm_base42, declName};
     simse_list_append(attrs, _sm_expr68);
     _sm_expr69 = ns9_boolText(isNative);
     _sm_base43 = AstNodeAttributeKind::IsNative;
-    _sm_expr70 = AstNodeAttribute(_sm_base43, _sm_expr69);
+    _sm_expr70 = AstNodeAttribute{_sm_base43, _sm_expr69};
     simse_list_append(attrs, _sm_expr70);
     _sm_expr71 = ns9_boolText(hasBody);
     _sm_base44 = AstNodeAttributeKind::HasBody;
-    _sm_expr72 = AstNodeAttribute(_sm_base44, _sm_expr71);
+    _sm_expr72 = AstNodeAttribute{_sm_base44, _sm_expr71};
     simse_list_append(attrs, _sm_expr72);
     _sm_expr73 = ns9_boolText(hasReceiver);
     _sm_base45 = AstNodeAttributeKind::HasReceiver;
-    _sm_expr74 = AstNodeAttribute(_sm_base45, _sm_expr73);
+    _sm_expr74 = AstNodeAttribute{_sm_base45, _sm_expr73};
     simse_list_append(attrs, _sm_expr74);
     _sm_expr75 = ns9_boolText(hasNativeSymbol);
     _sm_base46 = AstNodeAttributeKind::HasNativeSymbol;
-    _sm_expr76 = AstNodeAttribute(_sm_base46, _sm_expr75);
+    _sm_expr76 = AstNodeAttribute{_sm_base46, _sm_expr75};
     simse_list_append(attrs, _sm_expr76);
     _sm_expr77 = ns9_boolText(pure);
     _sm_base47 = AstNodeAttributeKind::IsPure;
-    _sm_expr78 = AstNodeAttribute(_sm_base47, _sm_expr77);
+    _sm_expr78 = AstNodeAttribute{_sm_base47, _sm_expr77};
     simse_list_append(attrs, _sm_expr78);
     _sm_expr79 = ns9_boolText(suspendModifier);
     _sm_base48 = AstNodeAttributeKind::IsSuspend;
-    _sm_expr80 = AstNodeAttribute(_sm_base48, _sm_expr79);
+    _sm_expr80 = AstNodeAttribute{_sm_base48, _sm_expr79};
     simse_list_append(attrs, _sm_expr80);
     if (hasNativeSymbol) goto L68;
     goto L69;
     L68:;
     _sm_base49 = AstNodeAttributeKind::NativeSymbol;
-    _sm_expr81 = AstNodeAttribute(_sm_base49, nativeSymbol);
+    _sm_expr81 = AstNodeAttribute{_sm_base49, nativeSymbol};
     simse_list_append(attrs, _sm_expr81);
     L69:;
     _sm_expr48 = attributeName.size();
@@ -43504,19 +44018,19 @@ AstXmlNode ns9_parseFunction(ns9_Parser* self, Str* attrName, List<Str>* attrArg
     goto L71;
     L70:;
     _sm_base50 = AstNodeAttributeKind::Attribute;
-    _sm_expr84 = AstNodeAttribute(_sm_base50, attributeName);
+    _sm_expr84 = AstNodeAttribute{_sm_base50, attributeName};
     simse_list_append(attrs, _sm_expr84);
     _sm_base51 = AstNodeAttributeKind::Generator;
-    _sm_expr85 = AstNodeAttribute(_sm_base51, generatorName);
+    _sm_expr85 = AstNodeAttribute{_sm_base51, generatorName};
     simse_list_append(attrs, _sm_expr85);
     _sm_base52 = AstNodeAttributeKind::GeneratorArgs;
-    _sm_expr86 = AstNodeAttribute(_sm_base52, generatorArgs);
+    _sm_expr86 = AstNodeAttribute{_sm_base52, generatorArgs};
     simse_list_append(attrs, _sm_expr86);
     L71:;
     _sm_expr87 = Array<AstXmlNode>();
     _sm_base53 = AstNodeKind::Function;
     _sm_base54 = AstNodeCategory::Function;
-    node = AstXmlNode(_sm_base53, _sm_base54, attrs, _sm_expr87);
+    node = AstXmlNode{_sm_base53, _sm_base54, attrs, _sm_expr87};
     if (hasReceiver) goto L72;
     goto L73;
     L72:;
@@ -43562,11 +44076,11 @@ AstXmlNode ns9_namedTypeNode(ns9_Parser* self, AstNodeKind role, Str name, ns2_S
     _sm_base2 = pos.column;
     attrs = ns9_posAttrs(self, _sm_base1, _sm_base2);
     _sm_base3 = AstNodeAttributeKind::Name;
-    _sm_expr1 = AstNodeAttribute(_sm_base3, name);
+    _sm_expr1 = AstNodeAttribute{_sm_base3, name};
     simse_list_append(attrs, _sm_expr1);
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base4 = AstNodeCategory::TypeNamed;
-    _sm_expr3 = AstXmlNode(role, _sm_base4, attrs, _sm_expr2);
+    _sm_expr3 = AstXmlNode{role, _sm_base4, attrs, _sm_expr2};
     return _sm_expr3;
 }
 // cppsrc/parser/Parser.kt
@@ -43586,7 +44100,7 @@ AstXmlNode ns9_pointerTypeNode(ns9_Parser* self, AstNodeKind role, AstXmlNode in
     attrs = ns9_posAttrs(self, _sm_base2, _sm_base3);
     _sm_expr1 = Array<AstXmlNode>();
     _sm_base4 = AstNodeCategory::TypePointer;
-    node = AstXmlNode(role, _sm_base4, attrs, _sm_expr1);
+    node = AstXmlNode{role, _sm_base4, attrs, _sm_expr1};
     _sm_base5 = &node;
     ns2_xmlAddChild(_sm_base5, renamed);
     return node;
@@ -43638,7 +44152,7 @@ AstXmlNode ns9_parseType(ns9_Parser* self, AstNodeKind role) {
     attrs = ns9_posAttrs(self, _sm_base4, _sm_base5);
     _sm_expr5 = Array<AstXmlNode>();
     _sm_base6 = AstNodeCategory::TypeReference;
-    node = AstXmlNode(role, _sm_base6, attrs, _sm_expr5);
+    node = AstXmlNode{role, _sm_base6, attrs, _sm_expr5};
     _sm_base7 = &node;
     ns2_xmlAddChild(_sm_base7, inner);
     return node;
@@ -43663,7 +44177,7 @@ AstXmlNode ns9_parseType(ns9_Parser* self, AstNodeKind role) {
     _sm_attrs_2 = ns9_posAttrs(self, _sm_base11, _sm_base12);
     _sm_expr9 = Array<AstXmlNode>();
     _sm_base13 = AstNodeCategory::TypePointer;
-    _sm_node_2 = AstXmlNode(role, _sm_base13, _sm_attrs_2, _sm_expr9);
+    _sm_node_2 = AstXmlNode{role, _sm_base13, _sm_attrs_2, _sm_expr9};
     _sm_base14 = &_sm_node_2;
     ns2_xmlAddChild(_sm_base14, _sm_inner_2);
     return _sm_node_2;
@@ -43688,7 +44202,7 @@ AstXmlNode ns9_parseType(ns9_Parser* self, AstNodeKind role) {
     _sm_attrs_3 = ns9_posAttrs(self, _sm_base18, _sm_base19);
     _sm_expr13 = Array<AstXmlNode>();
     _sm_base20 = AstNodeCategory::TypeYield;
-    _sm_node_3 = AstXmlNode(role, _sm_base20, _sm_attrs_3, _sm_expr13);
+    _sm_node_3 = AstXmlNode{role, _sm_base20, _sm_attrs_3, _sm_expr13};
     _sm_base21 = &_sm_node_3;
     ns2_xmlAddChild(_sm_base21, _sm_inner_3);
     return _sm_node_3;
@@ -43760,7 +44274,7 @@ AstXmlNode ns9_parseType(ns9_Parser* self, AstNodeKind role) {
     _sm_attrs_4 = ns9_posAttrs(self, _sm_base34, _sm_base35);
     _sm_expr26 = Array<AstXmlNode>();
     _sm_base36 = AstNodeCategory::TypeFunction;
-    _sm_node_4 = AstXmlNode(role, _sm_base36, _sm_attrs_4, _sm_expr26);
+    _sm_node_4 = AstXmlNode{role, _sm_base36, _sm_attrs_4, _sm_expr26};
     renamed = List<AstXmlNode>();
     i = 0;
     L27:;
@@ -43856,11 +44370,11 @@ AstXmlNode ns9_parseType(ns9_Parser* self, AstNodeKind role) {
     _sm_base52 = pos.column;
     _sm_attrs_6 = ns9_posAttrs(self, _sm_base51, _sm_base52);
     _sm_base53 = AstNodeAttributeKind::Name;
-    _sm_expr48 = AstNodeAttribute(_sm_base53, name);
+    _sm_expr48 = AstNodeAttribute{_sm_base53, name};
     simse_list_append(_sm_attrs_6, _sm_expr48);
     _sm_expr49 = Array<AstXmlNode>();
     _sm_base54 = AstNodeCategory::TypeGeneric;
-    _sm_node_5 = AstXmlNode(role, _sm_base54, _sm_attrs_6, _sm_expr49);
+    _sm_node_5 = AstXmlNode{role, _sm_base54, _sm_attrs_6, _sm_expr49};
     _sm_base55 = &_sm_node_5;
     _sm_base56 = &typeArgs;
     ns2_xmlAddChildren(_sm_base55, _sm_base56);
@@ -43870,11 +44384,11 @@ AstXmlNode ns9_parseType(ns9_Parser* self, AstNodeKind role) {
     _sm_base58 = pos.column;
     _sm_attrs_5 = ns9_posAttrs(self, _sm_base57, _sm_base58);
     _sm_base59 = AstNodeAttributeKind::Name;
-    _sm_expr50 = AstNodeAttribute(_sm_base59, name);
+    _sm_expr50 = AstNodeAttribute{_sm_base59, name};
     simse_list_append(_sm_attrs_5, _sm_expr50);
     _sm_expr51 = Array<AstXmlNode>();
     _sm_base60 = AstNodeCategory::TypeNamed;
-    _sm_expr4 = AstXmlNode(role, _sm_base60, _sm_attrs_5, _sm_expr51);
+    _sm_expr4 = AstXmlNode{role, _sm_base60, _sm_attrs_5, _sm_expr51};
     return _sm_expr4;
     L34:;
     _sm_base62 = __sm_stringTable[307];
@@ -43932,12 +44446,12 @@ List<AstXmlNode> ns9_parseGenericArgs(ns9_Parser* self) {
     _sm_expr8 = ns9_advance(self);
     _sm_expr9 = _sm_expr8.text;
     _sm_base6 = AstNodeAttributeKind::Text;
-    _sm_expr10 = AstNodeAttribute(_sm_base6, _sm_expr9);
+    _sm_expr10 = AstNodeAttribute{_sm_base6, _sm_expr9};
     simse_list_append(attrs, _sm_expr10);
     _sm_expr11 = Array<AstXmlNode>();
     _sm_base7 = AstNodeKind::TypeArg;
     _sm_base8 = AstNodeCategory::TypeIntLit;
-    arg = AstXmlNode(_sm_base7, _sm_base8, attrs, _sm_expr11);
+    arg = AstXmlNode{_sm_base7, _sm_base8, attrs, _sm_expr11};
     goto L9;
     L6:;
     _sm_base9 = AstNodeKind::TypeArg;
@@ -44160,7 +44674,7 @@ AstXmlNode ns9_parseStmt(ns9_Parser* self) {
     _sm_expr23 = Array<AstXmlNode>();
     _sm_base4 = AstNodeKind::Stmt;
     _sm_base5 = AstNodeCategory::StmtBreak;
-    _sm_expr6 = AstXmlNode(_sm_base4, _sm_base5, _sm_expr22, _sm_expr23);
+    _sm_expr6 = AstXmlNode{_sm_base4, _sm_base5, _sm_expr22, _sm_expr23};
     return _sm_expr6;
     L24:;
     _sm_expr2 = _sm_when3_n == 8;
@@ -44180,7 +44694,7 @@ AstXmlNode ns9_parseStmt(ns9_Parser* self) {
     _sm_expr29 = Array<AstXmlNode>();
     _sm_base8 = AstNodeKind::Stmt;
     _sm_base9 = AstNodeCategory::StmtContinue;
-    _sm_expr6 = AstXmlNode(_sm_base8, _sm_base9, _sm_expr28, _sm_expr29);
+    _sm_expr6 = AstXmlNode{_sm_base8, _sm_base9, _sm_expr28, _sm_expr29};
     return _sm_expr6;
     L28:;
     _sm_expr2 = _sm_when3_n == 2;
@@ -44239,12 +44753,12 @@ AstXmlNode ns9_parseStmt(ns9_Parser* self) {
     _sm_base16 = &step;
     _sm_expr44 = ns9_stepAssignOp(_sm_base16);
     _sm_base17 = AstNodeAttributeKind::Op;
-    _sm_expr45 = AstNodeAttribute(_sm_base17, _sm_expr44);
+    _sm_expr45 = AstNodeAttribute{_sm_base17, _sm_expr44};
     simse_list_append(_sm_attrs_2, _sm_expr45);
     _sm_expr46 = Array<AstXmlNode>();
     _sm_base18 = AstNodeKind::Stmt;
     _sm_base19 = AstNodeCategory::StmtAssign;
-    _sm_node_2 = AstXmlNode(_sm_base18, _sm_base19, _sm_attrs_2, _sm_expr46);
+    _sm_node_2 = AstXmlNode{_sm_base18, _sm_base19, _sm_attrs_2, _sm_expr46};
     _sm_base20 = &_sm_node_2;
     _sm_base21 = AstNodeKind::Target;
     _sm_base23 = simse_addressOf(expr.node);
@@ -44280,12 +44794,12 @@ AstXmlNode ns9_parseStmt(ns9_Parser* self) {
     _sm_base29 = pos.column;
     _sm_attrs_3 = ns9_posAttrs(self, _sm_base28, _sm_base29);
     _sm_base30 = AstNodeAttributeKind::Op;
-    _sm_expr55 = AstNodeAttribute(_sm_base30, op);
+    _sm_expr55 = AstNodeAttribute{_sm_base30, op};
     simse_list_append(_sm_attrs_3, _sm_expr55);
     _sm_expr56 = Array<AstXmlNode>();
     _sm_base31 = AstNodeKind::Stmt;
     _sm_base32 = AstNodeCategory::StmtAssign;
-    _sm_node_3 = AstXmlNode(_sm_base31, _sm_base32, _sm_attrs_3, _sm_expr56);
+    _sm_node_3 = AstXmlNode{_sm_base31, _sm_base32, _sm_attrs_3, _sm_expr56};
     _sm_base33 = &_sm_node_3;
     _sm_base34 = AstNodeKind::Target;
     _sm_base36 = simse_addressOf(expr.node);
@@ -44304,7 +44818,7 @@ AstXmlNode ns9_parseStmt(ns9_Parser* self) {
     _sm_expr57 = Array<AstXmlNode>();
     _sm_base43 = AstNodeKind::Stmt;
     _sm_base44 = AstNodeCategory::StmtExprStmt;
-    node = AstXmlNode(_sm_base43, _sm_base44, attrs, _sm_expr57);
+    node = AstXmlNode{_sm_base43, _sm_base44, attrs, _sm_expr57};
     _sm_base45 = &node;
     _sm_base46 = AstNodeKind::Expr;
     _sm_base48 = simse_addressOf(expr.node);
@@ -44392,16 +44906,16 @@ AstXmlNode ns9_parseVarDecl(ns9_Parser* self) {
     _sm_base11 = pos.column;
     attrs = ns9_posAttrs(self, _sm_base10, _sm_base11);
     _sm_base12 = AstNodeAttributeKind::Name;
-    _sm_expr14 = AstNodeAttribute(_sm_base12, name);
+    _sm_expr14 = AstNodeAttribute{_sm_base12, name};
     simse_list_append(attrs, _sm_expr14);
     _sm_expr15 = ns9_boolText(isVar);
     _sm_base13 = AstNodeAttributeKind::IsVar;
-    _sm_expr16 = AstNodeAttribute(_sm_base13, _sm_expr15);
+    _sm_expr16 = AstNodeAttribute{_sm_base13, _sm_expr15};
     simse_list_append(attrs, _sm_expr16);
     _sm_expr17 = Array<AstXmlNode>();
     _sm_base14 = AstNodeKind::Stmt;
     _sm_base15 = AstNodeCategory::StmtVarDecl;
-    node = AstXmlNode(_sm_base14, _sm_base15, attrs, _sm_expr17);
+    node = AstXmlNode{_sm_base14, _sm_base15, attrs, _sm_expr17};
     _sm_expr18 = typeNode.name;
     _sm_expr19 = AstNodeKind::None;
     _sm_expr2 = _sm_expr18 != _sm_expr19;
@@ -44522,7 +45036,7 @@ AstXmlNode ns9_parseIf(ns9_Parser* self) {
     _sm_expr18 = Array<AstXmlNode>();
     _sm_base11 = AstNodeKind::Stmt;
     _sm_base12 = AstNodeCategory::StmtIf;
-    node = AstXmlNode(_sm_base11, _sm_base12, attrs, _sm_expr18);
+    node = AstXmlNode{_sm_base11, _sm_base12, attrs, _sm_expr18};
     _sm_base13 = &node;
     _sm_base14 = AstNodeKind::Cond;
     _sm_base16 = simse_addressOf(cond.node);
@@ -44606,7 +45120,7 @@ AstXmlNode ns9_parseWhile(ns9_Parser* self) {
     _sm_expr12 = Array<AstXmlNode>();
     _sm_base7 = AstNodeKind::Stmt;
     _sm_base8 = AstNodeCategory::StmtWhile;
-    node = AstXmlNode(_sm_base7, _sm_base8, attrs, _sm_expr12);
+    node = AstXmlNode{_sm_base7, _sm_base8, attrs, _sm_expr12};
     _sm_base9 = &node;
     _sm_base10 = AstNodeKind::Cond;
     _sm_base12 = simse_addressOf(cond.node);
@@ -44701,12 +45215,12 @@ ns9_ExprNode ns9_receiverCallAt(ns9_Parser* self, ns9_ExprNode* receiver, Str* m
     memberAttrs = ns9_posAttrs(self, _sm_base1, _sm_base2);
     _sm_base3 = AstNodeAttributeKind::Name;
     _sm_base4 = *(method);
-    _sm_expr1 = AstNodeAttribute(_sm_base3, _sm_base4);
+    _sm_expr1 = AstNodeAttribute{_sm_base3, _sm_base4};
     simse_list_append(memberAttrs, _sm_expr1);
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base5 = AstNodeKind::Expr;
     _sm_base6 = AstNodeCategory::ExprMember;
-    member = AstXmlNode(_sm_base5, _sm_base6, memberAttrs, _sm_expr2);
+    member = AstXmlNode{_sm_base5, _sm_base6, memberAttrs, _sm_expr2};
     _sm_base7 = &member;
     _sm_base8 = AstNodeKind::Receiver;
     _sm_base10 = simse_addressOf(receiver->node);
@@ -44718,7 +45232,7 @@ ns9_ExprNode ns9_receiverCallAt(ns9_Parser* self, ns9_ExprNode* receiver, Str* m
     _sm_expr3 = Array<AstXmlNode>();
     _sm_base13 = AstNodeKind::Expr;
     _sm_base14 = AstNodeCategory::ExprCall;
-    call = AstXmlNode(_sm_base13, _sm_base14, callAttrs, _sm_expr3);
+    call = AstXmlNode{_sm_base13, _sm_base14, callAttrs, _sm_expr3};
     _sm_base15 = &call;
     _sm_base16 = AstNodeKind::Callee;
     _sm_base17 = &member;
@@ -44745,7 +45259,7 @@ ns9_ExprNode ns9_freeCallAt(ns9_Parser* self, Str* callee, ns9_ExprNode* arg, ns
     _sm_expr1 = Array<AstXmlNode>();
     _sm_base3 = AstNodeKind::Expr;
     _sm_base4 = AstNodeCategory::ExprCall;
-    call = AstXmlNode(_sm_base3, _sm_base4, callAttrs, _sm_expr1);
+    call = AstXmlNode{_sm_base3, _sm_base4, callAttrs, _sm_expr1};
     _sm_base5 = &call;
     _sm_base6 = AstNodeKind::Callee;
     _sm_base8 = simse_addressOf(calleeExpr.node);
@@ -44777,7 +45291,7 @@ ns9_ExprNode ns9_receiverIndexAt(ns9_Parser* self, ns9_ExprNode* receiver, ns9_E
     _sm_expr1 = Array<AstXmlNode>();
     _sm_base3 = AstNodeKind::Expr;
     _sm_base4 = AstNodeCategory::ExprIndex;
-    node = AstXmlNode(_sm_base3, _sm_base4, attrs, _sm_expr1);
+    node = AstXmlNode{_sm_base3, _sm_base4, attrs, _sm_expr1};
     _sm_base5 = &node;
     _sm_base6 = AstNodeKind::Receiver;
     _sm_base8 = simse_addressOf(receiver->node);
@@ -44960,12 +45474,12 @@ ns9_ExprNode ns9_charLiteralAt(ns9_Parser* self, Str* spelling, ns2_SourcePos po
     attrs = ns9_posAttrs(self, _sm_base1, _sm_base2);
     _sm_base3 = AstNodeAttributeKind::Text;
     _sm_base4 = *(spelling);
-    _sm_expr1 = AstNodeAttribute(_sm_base3, _sm_base4);
+    _sm_expr1 = AstNodeAttribute{_sm_base3, _sm_base4};
     simse_list_append(attrs, _sm_expr1);
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base5 = AstNodeKind::Expr;
     _sm_base6 = AstNodeCategory::ExprCharLit;
-    _sm_expr3 = AstXmlNode(_sm_base5, _sm_base6, attrs, _sm_expr2);
+    _sm_expr3 = AstXmlNode{_sm_base5, _sm_base6, attrs, _sm_expr2};
     _sm_base7 = pos.line;
     _sm_base8 = pos.column;
     _sm_expr4 = ns9_ExprNode{_sm_expr3, _sm_base7, _sm_base8};
@@ -45379,7 +45893,7 @@ AstXmlNode ns9_parseReturn(ns9_Parser* self) {
     _sm_expr6 = Array<AstXmlNode>();
     _sm_base3 = AstNodeKind::Stmt;
     _sm_base4 = AstNodeCategory::StmtReturn;
-    node = AstXmlNode(_sm_base3, _sm_base4, attrs, _sm_expr6);
+    node = AstXmlNode{_sm_base3, _sm_base4, attrs, _sm_expr6};
     _sm_base5 = simse_addressOf(value.node);
     _sm_expr7 = _sm_base5->name;
     _sm_expr8 = AstNodeKind::None;
@@ -45425,7 +45939,7 @@ AstXmlNode ns9_parseYield(ns9_Parser* self) {
     _sm_expr4 = Array<AstXmlNode>();
     _sm_base3 = AstNodeKind::Stmt;
     _sm_base4 = AstNodeCategory::StmtYield;
-    node = AstXmlNode(_sm_base3, _sm_base4, attrs, _sm_expr4);
+    node = AstXmlNode{_sm_base3, _sm_base4, attrs, _sm_expr4};
     _sm_base5 = &node;
     _sm_base6 = AstNodeKind::Value;
     _sm_base8 = simse_addressOf(value.node);
@@ -45451,16 +45965,16 @@ AstXmlNode ns9_varDeclNode(ns9_Parser* self, Str* name, Bool isVar, AstXmlNode* 
     attrs = ns9_posAttrs(self, _sm_base1, _sm_base2);
     _sm_base3 = AstNodeAttributeKind::Name;
     _sm_base4 = *(name);
-    _sm_expr1 = AstNodeAttribute(_sm_base3, _sm_base4);
+    _sm_expr1 = AstNodeAttribute{_sm_base3, _sm_base4};
     simse_list_append(attrs, _sm_expr1);
     _sm_expr2 = ns9_boolText(isVar);
     _sm_base5 = AstNodeAttributeKind::IsVar;
-    _sm_expr3 = AstNodeAttribute(_sm_base5, _sm_expr2);
+    _sm_expr3 = AstNodeAttribute{_sm_base5, _sm_expr2};
     simse_list_append(attrs, _sm_expr3);
     _sm_expr4 = Array<AstXmlNode>();
     _sm_base6 = AstNodeKind::Stmt;
     _sm_base7 = AstNodeCategory::StmtVarDecl;
-    node = AstXmlNode(_sm_base6, _sm_base7, attrs, _sm_expr4);
+    node = AstXmlNode{_sm_base6, _sm_base7, attrs, _sm_expr4};
     _sm_expr5 = typeNode->name;
     _sm_expr6 = AstNodeKind::None;
     _sm_expr7 = _sm_expr5 != _sm_expr6;
@@ -45502,12 +46016,12 @@ AstXmlNode ns9_namedTypeNode(ns9_Parser* self, Str* name, ns2_SourcePos pos) {
     attrs = ns9_posAttrs(self, _sm_base1, _sm_base2);
     _sm_base3 = AstNodeAttributeKind::Name;
     _sm_base4 = *(name);
-    _sm_expr1 = AstNodeAttribute(_sm_base3, _sm_base4);
+    _sm_expr1 = AstNodeAttribute{_sm_base3, _sm_base4};
     simse_list_append(attrs, _sm_expr1);
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base5 = AstNodeKind::Type;
     _sm_base6 = AstNodeCategory::TypeNamed;
-    _sm_expr3 = AstXmlNode(_sm_base5, _sm_base6, attrs, _sm_expr2);
+    _sm_expr3 = AstXmlNode{_sm_base5, _sm_base6, attrs, _sm_expr2};
     return _sm_expr3;
 }
 // cppsrc/parser/Parser.kt
@@ -45525,12 +46039,12 @@ AstXmlNode ns9_assignNode(ns9_Parser* self, ns9_ExprNode* target, ns9_ExprNode* 
     _sm_base2 = pos.column;
     attrs = ns9_posAttrs(self, _sm_base1, _sm_base2);
     _sm_base3 = AstNodeAttributeKind::Op;
-    _sm_expr1 = AstNodeAttribute(_sm_base3, __sm_stringTable[798]);
+    _sm_expr1 = AstNodeAttribute{_sm_base3, __sm_stringTable[798]};
     simse_list_append(attrs, _sm_expr1);
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base4 = AstNodeKind::Stmt;
     _sm_base5 = AstNodeCategory::StmtAssign;
-    node = AstXmlNode(_sm_base4, _sm_base5, attrs, _sm_expr2);
+    node = AstXmlNode{_sm_base4, _sm_base5, attrs, _sm_expr2};
     _sm_base6 = &node;
     _sm_base7 = AstNodeKind::Target;
     _sm_base9 = simse_addressOf(target->node);
@@ -45557,7 +46071,7 @@ AstXmlNode ns9_breakNode(ns9_Parser* self, ns2_SourcePos pos) {
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base3 = AstNodeKind::Stmt;
     _sm_base4 = AstNodeCategory::StmtBreak;
-    _sm_expr3 = AstXmlNode(_sm_base3, _sm_base4, _sm_expr1, _sm_expr2);
+    _sm_expr3 = AstXmlNode{_sm_base3, _sm_base4, _sm_expr1, _sm_expr2};
     return _sm_expr3;
 }
 // cppsrc/parser/Parser.kt
@@ -45575,7 +46089,7 @@ AstXmlNode ns9_ifNode(ns9_Parser* self, ns9_ExprNode* cond, List<AstXmlNode>* th
     _sm_expr1 = Array<AstXmlNode>();
     _sm_base3 = AstNodeKind::Stmt;
     _sm_base4 = AstNodeCategory::StmtIf;
-    node = AstXmlNode(_sm_base3, _sm_base4, attrs, _sm_expr1);
+    node = AstXmlNode{_sm_base3, _sm_base4, attrs, _sm_expr1};
     _sm_base5 = &node;
     _sm_base6 = AstNodeKind::Cond;
     _sm_base8 = simse_addressOf(cond->node);
@@ -45602,7 +46116,7 @@ AstXmlNode ns9_whileNode(ns9_Parser* self, ns9_ExprNode* cond, List<AstXmlNode>*
     _sm_expr1 = Array<AstXmlNode>();
     _sm_base3 = AstNodeKind::Stmt;
     _sm_base4 = AstNodeCategory::StmtWhile;
-    node = AstXmlNode(_sm_base3, _sm_base4, attrs, _sm_expr1);
+    node = AstXmlNode{_sm_base3, _sm_base4, attrs, _sm_expr1};
     _sm_base5 = &node;
     _sm_base6 = AstNodeKind::Cond;
     _sm_base8 = simse_addressOf(cond->node);
@@ -45631,12 +46145,12 @@ ns9_ExprNode ns9_nameExprAt(ns9_Parser* self, Str* text, ns2_SourcePos pos) {
     attrs = ns9_posAttrs(self, _sm_base1, _sm_base2);
     _sm_base3 = AstNodeAttributeKind::Name;
     _sm_base4 = *(text);
-    _sm_expr1 = AstNodeAttribute(_sm_base3, _sm_base4);
+    _sm_expr1 = AstNodeAttribute{_sm_base3, _sm_base4};
     simse_list_append(attrs, _sm_expr1);
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base5 = AstNodeKind::Expr;
     _sm_base6 = AstNodeCategory::ExprName;
-    _sm_expr3 = AstXmlNode(_sm_base5, _sm_base6, attrs, _sm_expr2);
+    _sm_expr3 = AstXmlNode{_sm_base5, _sm_base6, attrs, _sm_expr2};
     _sm_base7 = pos.line;
     _sm_base8 = pos.column;
     _sm_expr4 = ns9_ExprNode{_sm_expr3, _sm_base7, _sm_base8};
@@ -45659,12 +46173,12 @@ ns9_ExprNode ns9_intLiteralAt(ns9_Parser* self, Int value, ns2_SourcePos pos) {
     attrs = ns9_posAttrs(self, _sm_base1, _sm_base2);
     _sm_expr1 = simse_int_toString(value);
     _sm_base3 = AstNodeAttributeKind::Text;
-    _sm_expr2 = AstNodeAttribute(_sm_base3, _sm_expr1);
+    _sm_expr2 = AstNodeAttribute{_sm_base3, _sm_expr1};
     simse_list_append(attrs, _sm_expr2);
     _sm_expr3 = Array<AstXmlNode>();
     _sm_base4 = AstNodeKind::Expr;
     _sm_base5 = AstNodeCategory::ExprIntLit;
-    _sm_expr4 = AstXmlNode(_sm_base4, _sm_base5, attrs, _sm_expr3);
+    _sm_expr4 = AstXmlNode{_sm_base4, _sm_base5, attrs, _sm_expr3};
     _sm_base6 = pos.line;
     _sm_base7 = pos.column;
     _sm_expr5 = ns9_ExprNode{_sm_expr4, _sm_base6, _sm_base7};
@@ -45687,12 +46201,12 @@ ns9_ExprNode ns9_boolLiteralAt(ns9_Parser* self, Bool value, ns2_SourcePos pos) 
     attrs = ns9_posAttrs(self, _sm_base1, _sm_base2);
     _sm_expr1 = ns9_boolText(value);
     _sm_base3 = AstNodeAttributeKind::Value;
-    _sm_expr2 = AstNodeAttribute(_sm_base3, _sm_expr1);
+    _sm_expr2 = AstNodeAttribute{_sm_base3, _sm_expr1};
     simse_list_append(attrs, _sm_expr2);
     _sm_expr3 = Array<AstXmlNode>();
     _sm_base4 = AstNodeKind::Expr;
     _sm_base5 = AstNodeCategory::ExprBoolLit;
-    _sm_expr4 = AstXmlNode(_sm_base4, _sm_base5, attrs, _sm_expr3);
+    _sm_expr4 = AstXmlNode{_sm_base4, _sm_base5, attrs, _sm_expr3};
     _sm_base6 = pos.line;
     _sm_base7 = pos.column;
     _sm_expr5 = ns9_ExprNode{_sm_expr4, _sm_base6, _sm_base7};
@@ -45716,12 +46230,12 @@ ns9_ExprNode ns9_unaryExprAt(ns9_Parser* self, Str* op, ns9_ExprNode* operand, n
     attrs = ns9_posAttrs(self, _sm_base1, _sm_base2);
     _sm_base3 = AstNodeAttributeKind::Op;
     _sm_base4 = *(op);
-    _sm_expr1 = AstNodeAttribute(_sm_base3, _sm_base4);
+    _sm_expr1 = AstNodeAttribute{_sm_base3, _sm_base4};
     simse_list_append(attrs, _sm_expr1);
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base5 = AstNodeKind::Expr;
     _sm_base6 = AstNodeCategory::ExprUnary;
-    node = AstXmlNode(_sm_base5, _sm_base6, attrs, _sm_expr2);
+    node = AstXmlNode{_sm_base5, _sm_base6, attrs, _sm_expr2};
     _sm_base7 = &node;
     _sm_base8 = AstNodeKind::Operand;
     _sm_base10 = simse_addressOf(operand->node);
@@ -45750,12 +46264,12 @@ ns9_ExprNode ns9_binaryExprAt(ns9_Parser* self, Str* op, ns9_ExprNode* lhs, ns9_
     attrs = ns9_posAttrs(self, _sm_base1, _sm_base2);
     _sm_base3 = AstNodeAttributeKind::Op;
     _sm_base4 = *(op);
-    _sm_expr1 = AstNodeAttribute(_sm_base3, _sm_base4);
+    _sm_expr1 = AstNodeAttribute{_sm_base3, _sm_base4};
     simse_list_append(attrs, _sm_expr1);
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base5 = AstNodeKind::Expr;
     _sm_base6 = AstNodeCategory::ExprBinary;
-    node = AstXmlNode(_sm_base5, _sm_base6, attrs, _sm_expr2);
+    node = AstXmlNode{_sm_base5, _sm_base6, attrs, _sm_expr2};
     _sm_base7 = &node;
     _sm_base8 = AstNodeKind::Lhs;
     _sm_base10 = simse_addressOf(lhs->node);
@@ -45789,12 +46303,12 @@ ns9_ExprNode ns9_iterCall(ns9_Parser* self, ns9_ExprNode* target, ns2_SourcePos 
     memberAttrs = ns9_posAttrs(self, _sm_base1, _sm_base2);
     _sm_base3 = AstNodeAttributeKind::Name;
     _sm_base4 = *(wrap);
-    _sm_expr1 = AstNodeAttribute(_sm_base3, _sm_base4);
+    _sm_expr1 = AstNodeAttribute{_sm_base3, _sm_base4};
     simse_list_append(memberAttrs, _sm_expr1);
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base5 = AstNodeKind::Expr;
     _sm_base6 = AstNodeCategory::ExprMember;
-    member = AstXmlNode(_sm_base5, _sm_base6, memberAttrs, _sm_expr2);
+    member = AstXmlNode{_sm_base5, _sm_base6, memberAttrs, _sm_expr2};
     _sm_base7 = &member;
     _sm_base8 = AstNodeKind::Receiver;
     _sm_base10 = simse_addressOf(target->node);
@@ -45806,7 +46320,7 @@ ns9_ExprNode ns9_iterCall(ns9_Parser* self, ns9_ExprNode* target, ns2_SourcePos 
     _sm_expr3 = Array<AstXmlNode>();
     _sm_base13 = AstNodeKind::Expr;
     _sm_base14 = AstNodeCategory::ExprCall;
-    call = AstXmlNode(_sm_base13, _sm_base14, callAttrs, _sm_expr3);
+    call = AstXmlNode{_sm_base13, _sm_base14, callAttrs, _sm_expr3};
     _sm_base15 = &call;
     _sm_base16 = AstNodeKind::Callee;
     _sm_base17 = &member;
@@ -45834,12 +46348,12 @@ ns9_ExprNode ns9_memberExprAt(ns9_Parser* self, Str* target, Str* field, ns2_Sou
     memberAttrs = ns9_posAttrs(self, _sm_base1, _sm_base2);
     _sm_base3 = AstNodeAttributeKind::Name;
     _sm_base4 = *(field);
-    _sm_expr1 = AstNodeAttribute(_sm_base3, _sm_base4);
+    _sm_expr1 = AstNodeAttribute{_sm_base3, _sm_base4};
     simse_list_append(memberAttrs, _sm_expr1);
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base5 = AstNodeKind::Expr;
     _sm_base6 = AstNodeCategory::ExprMember;
-    member = AstXmlNode(_sm_base5, _sm_base6, memberAttrs, _sm_expr2);
+    member = AstXmlNode{_sm_base5, _sm_base6, memberAttrs, _sm_expr2};
     receiver = ns9_nameExprAt(self, target, pos);
     _sm_base7 = &member;
     _sm_base8 = AstNodeKind::Receiver;
@@ -45869,12 +46383,12 @@ ns9_ExprNode ns9_methodCallAt(ns9_Parser* self, Str* target, Str* method, ns2_So
     memberAttrs = ns9_posAttrs(self, _sm_base1, _sm_base2);
     _sm_base3 = AstNodeAttributeKind::Name;
     _sm_base4 = *(method);
-    _sm_expr1 = AstNodeAttribute(_sm_base3, _sm_base4);
+    _sm_expr1 = AstNodeAttribute{_sm_base3, _sm_base4};
     simse_list_append(memberAttrs, _sm_expr1);
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base5 = AstNodeKind::Expr;
     _sm_base6 = AstNodeCategory::ExprMember;
-    member = AstXmlNode(_sm_base5, _sm_base6, memberAttrs, _sm_expr2);
+    member = AstXmlNode{_sm_base5, _sm_base6, memberAttrs, _sm_expr2};
     receiver = ns9_nameExprAt(self, target, pos);
     _sm_base7 = &member;
     _sm_base8 = AstNodeKind::Receiver;
@@ -45887,7 +46401,7 @@ ns9_ExprNode ns9_methodCallAt(ns9_Parser* self, Str* target, Str* method, ns2_So
     _sm_expr3 = Array<AstXmlNode>();
     _sm_base13 = AstNodeKind::Expr;
     _sm_base14 = AstNodeCategory::ExprCall;
-    call = AstXmlNode(_sm_base13, _sm_base14, callAttrs, _sm_expr3);
+    call = AstXmlNode{_sm_base13, _sm_base14, callAttrs, _sm_expr3};
     _sm_base15 = &call;
     _sm_base16 = AstNodeKind::Callee;
     _sm_base17 = &member;
@@ -46267,12 +46781,12 @@ ns9_ExprNode ns9_parseExpr(ns9_Parser* self, Int minBindingPower) {
     _sm_base23 = left.column;
     attrs = ns9_posAttrs(self, _sm_base22, _sm_base23);
     _sm_base24 = AstNodeAttributeKind::Op;
-    _sm_expr32 = AstNodeAttribute(_sm_base24, op);
+    _sm_expr32 = AstNodeAttribute{_sm_base24, op};
     simse_list_append(attrs, _sm_expr32);
     _sm_expr33 = Array<AstXmlNode>();
     _sm_base25 = AstNodeKind::Expr;
     _sm_base26 = AstNodeCategory::ExprBinary;
-    node = AstXmlNode(_sm_base25, _sm_base26, attrs, _sm_expr33);
+    node = AstXmlNode{_sm_base25, _sm_base26, attrs, _sm_expr33};
     _sm_base27 = &node;
     _sm_base28 = AstNodeKind::Lhs;
     _sm_base29 = &lhsNode;
@@ -46347,12 +46861,12 @@ ns9_ExprNode ns9_parseUnary(ns9_Parser* self) {
     _sm_base3 = pos.column;
     attrs = ns9_posAttrs(self, _sm_base2, _sm_base3);
     _sm_base4 = AstNodeAttributeKind::Op;
-    _sm_expr12 = AstNodeAttribute(_sm_base4, op);
+    _sm_expr12 = AstNodeAttribute{_sm_base4, op};
     simse_list_append(attrs, _sm_expr12);
     _sm_expr13 = Array<AstXmlNode>();
     _sm_base5 = AstNodeKind::Expr;
     _sm_base6 = AstNodeCategory::ExprUnary;
-    node = AstXmlNode(_sm_base5, _sm_base6, attrs, _sm_expr13);
+    node = AstXmlNode{_sm_base5, _sm_base6, attrs, _sm_expr13};
     _sm_base7 = &node;
     _sm_base8 = AstNodeKind::Operand;
     _sm_base10 = simse_addressOf(operand.node);
@@ -46387,7 +46901,7 @@ ns9_ExprNode ns9_parseUnary(ns9_Parser* self) {
     _sm_expr20 = Array<AstXmlNode>();
     _sm_base15 = AstNodeKind::Expr;
     _sm_base16 = AstNodeCategory::ExprRef;
-    _sm_node_2 = AstXmlNode(_sm_base15, _sm_base16, _sm_attrs_2, _sm_expr20);
+    _sm_node_2 = AstXmlNode{_sm_base15, _sm_base16, _sm_attrs_2, _sm_expr20};
     _sm_base17 = &_sm_node_2;
     _sm_base18 = AstNodeKind::Operand;
     _sm_base20 = simse_addressOf(_sm_operand_2.node);
@@ -46422,7 +46936,7 @@ ns9_ExprNode ns9_parseUnary(ns9_Parser* self) {
     _sm_expr27 = Array<AstXmlNode>();
     _sm_base25 = AstNodeKind::Expr;
     _sm_base26 = AstNodeCategory::ExprDeref;
-    _sm_node_3 = AstXmlNode(_sm_base25, _sm_base26, _sm_attrs_3, _sm_expr27);
+    _sm_node_3 = AstXmlNode{_sm_base25, _sm_base26, _sm_attrs_3, _sm_expr27};
     _sm_base27 = &_sm_node_3;
     _sm_base28 = AstNodeKind::Operand;
     _sm_base30 = simse_addressOf(_sm_operand_3.node);
@@ -46552,7 +47066,7 @@ ns9_ExprNode ns9_parsePostfix(ns9_Parser* self) {
     _sm_expr18 = simse_list_toArray(kids);
     _sm_base19 = AstNodeKind::Expr;
     _sm_base20 = AstNodeCategory::ExprCall;
-    node = AstXmlNode(_sm_base19, _sm_base20, attrs, _sm_expr18);
+    node = AstXmlNode{_sm_base19, _sm_base20, attrs, _sm_expr18};
     _sm_base21 = expr.line;
     _sm_base22 = expr.column;
     expr = ns9_ExprNode{node, _sm_base21, _sm_base22};
@@ -46589,7 +47103,7 @@ ns9_ExprNode ns9_parsePostfix(ns9_Parser* self) {
     _sm_expr25 = Array<AstXmlNode>();
     _sm_base29 = AstNodeKind::Expr;
     _sm_base30 = AstNodeCategory::ExprIndex;
-    _sm_node_2 = AstXmlNode(_sm_base29, _sm_base30, _sm_attrs_2, _sm_expr25);
+    _sm_node_2 = AstXmlNode{_sm_base29, _sm_base30, _sm_attrs_2, _sm_expr25};
     _sm_base31 = &_sm_node_2;
     _sm_base32 = AstNodeKind::Receiver;
     _sm_base34 = simse_addressOf(expr.node);
@@ -46648,12 +47162,12 @@ ns9_ExprNode ns9_parsePostfix(ns9_Parser* self) {
     _sm_base48 = expr.column;
     _sm_attrs_3 = ns9_posAttrs(self, _sm_base47, _sm_base48);
     _sm_base49 = AstNodeAttributeKind::Name;
-    _sm_expr32 = AstNodeAttribute(_sm_base49, name);
+    _sm_expr32 = AstNodeAttribute{_sm_base49, name};
     simse_list_append(_sm_attrs_3, _sm_expr32);
     _sm_expr33 = Array<AstXmlNode>();
     _sm_base50 = AstNodeKind::Expr;
     _sm_base51 = AstNodeCategory::ExprMember;
-    _sm_node_3 = AstXmlNode(_sm_base50, _sm_base51, _sm_attrs_3, _sm_expr33);
+    _sm_node_3 = AstXmlNode{_sm_base50, _sm_base51, _sm_attrs_3, _sm_expr33};
     _sm_base52 = &_sm_node_3;
     _sm_base53 = AstNodeKind::Receiver;
     _sm_base55 = simse_addressOf(expr.node);
@@ -46693,7 +47207,7 @@ ns9_ExprNode ns9_parsePostfix(ns9_Parser* self) {
     _sm_expr40 = Array<AstXmlNode>();
     _sm_base64 = AstNodeKind::Expr;
     _sm_base65 = AstNodeCategory::ExprPropagate;
-    _sm_node_4 = AstXmlNode(_sm_base64, _sm_base65, _sm_attrs_4, _sm_expr40);
+    _sm_node_4 = AstXmlNode{_sm_base64, _sm_base65, _sm_attrs_4, _sm_expr40};
     _sm_base66 = &_sm_node_4;
     _sm_base67 = AstNodeKind::Operand;
     _sm_base69 = simse_addressOf(expr.node);
@@ -46786,11 +47300,11 @@ ns9_ExprNode ns9_parsePrimary(ns9_Parser* self) {
     _sm_base3 = pos.column;
     attrs = ns9_posAttrs(self, _sm_base2, _sm_base3);
     _sm_base4 = AstNodeAttributeKind::Text;
-    _sm_expr7 = AstNodeAttribute(_sm_base4, text);
+    _sm_expr7 = AstNodeAttribute{_sm_base4, text};
     simse_list_append(attrs, _sm_expr7);
     _sm_expr8 = Array<AstXmlNode>();
     _sm_base5 = AstNodeKind::Expr;
-    _sm_expr9 = AstXmlNode(_sm_base5, kind, attrs, _sm_expr8);
+    _sm_expr9 = AstXmlNode{_sm_base5, kind, attrs, _sm_expr8};
     _sm_base6 = pos.line;
     _sm_base7 = pos.column;
     _sm_expr10 = ns9_ExprNode{_sm_expr9, _sm_base6, _sm_base7};
@@ -46809,12 +47323,12 @@ ns9_ExprNode ns9_parsePrimary(ns9_Parser* self) {
     _sm_base11 = pos.column;
     _sm_attrs_2 = ns9_posAttrs(self, _sm_base10, _sm_base11);
     _sm_base12 = AstNodeAttributeKind::Text;
-    _sm_expr13 = AstNodeAttribute(_sm_base12, _sm_text_2);
+    _sm_expr13 = AstNodeAttribute{_sm_base12, _sm_text_2};
     simse_list_append(_sm_attrs_2, _sm_expr13);
     _sm_expr14 = Array<AstXmlNode>();
     _sm_base13 = AstNodeKind::Expr;
     _sm_base14 = AstNodeCategory::ExprStrLit;
-    _sm_expr15 = AstXmlNode(_sm_base13, _sm_base14, _sm_attrs_2, _sm_expr14);
+    _sm_expr15 = AstXmlNode{_sm_base13, _sm_base14, _sm_attrs_2, _sm_expr14};
     _sm_base15 = pos.line;
     _sm_base16 = pos.column;
     _sm_expr10 = ns9_ExprNode{_sm_expr15, _sm_base15, _sm_base16};
@@ -46831,12 +47345,12 @@ ns9_ExprNode ns9_parsePrimary(ns9_Parser* self) {
     _sm_base19 = pos.column;
     _sm_attrs_3 = ns9_posAttrs(self, _sm_base18, _sm_base19);
     _sm_base20 = AstNodeAttributeKind::Text;
-    _sm_expr19 = AstNodeAttribute(_sm_base20, _sm_text_3);
+    _sm_expr19 = AstNodeAttribute{_sm_base20, _sm_text_3};
     simse_list_append(_sm_attrs_3, _sm_expr19);
     _sm_expr20 = Array<AstXmlNode>();
     _sm_base21 = AstNodeKind::Expr;
     _sm_base22 = AstNodeCategory::ExprCharLit;
-    _sm_expr21 = AstXmlNode(_sm_base21, _sm_base22, _sm_attrs_3, _sm_expr20);
+    _sm_expr21 = AstXmlNode{_sm_base21, _sm_base22, _sm_attrs_3, _sm_expr20};
     _sm_base23 = pos.line;
     _sm_base24 = pos.column;
     _sm_expr10 = ns9_ExprNode{_sm_expr21, _sm_base23, _sm_base24};
@@ -46864,18 +47378,18 @@ ns9_ExprNode ns9_parsePrimary(ns9_Parser* self) {
     goto L13;
     L12:;
     _sm_base32 = AstNodeAttributeKind::Value;
-    _sm_expr28 = AstNodeAttribute(_sm_base32, __sm_stringTable[686]);
+    _sm_expr28 = AstNodeAttribute{_sm_base32, __sm_stringTable[686]};
     simse_list_append(_sm_attrs_4, _sm_expr28);
     goto L14;
     L13:;
     _sm_base33 = AstNodeAttributeKind::Value;
-    _sm_expr29 = AstNodeAttribute(_sm_base33, __sm_stringTable[628]);
+    _sm_expr29 = AstNodeAttribute{_sm_base33, __sm_stringTable[628]};
     simse_list_append(_sm_attrs_4, _sm_expr29);
     L14:;
     _sm_expr30 = Array<AstXmlNode>();
     _sm_base34 = AstNodeKind::Expr;
     _sm_base35 = AstNodeCategory::ExprBoolLit;
-    _sm_expr31 = AstXmlNode(_sm_base34, _sm_base35, _sm_attrs_4, _sm_expr30);
+    _sm_expr31 = AstXmlNode{_sm_base34, _sm_base35, _sm_attrs_4, _sm_expr30};
     _sm_base36 = pos.line;
     _sm_base37 = pos.column;
     _sm_expr10 = ns9_ExprNode{_sm_expr31, _sm_base36, _sm_base37};
@@ -46894,7 +47408,7 @@ ns9_ExprNode ns9_parsePrimary(ns9_Parser* self) {
     _sm_expr34 = Array<AstXmlNode>();
     _sm_base42 = AstNodeKind::Expr;
     _sm_base43 = AstNodeCategory::ExprNullLit;
-    _sm_expr35 = AstXmlNode(_sm_base42, _sm_base43, _sm_attrs_5, _sm_expr34);
+    _sm_expr35 = AstXmlNode{_sm_base42, _sm_base43, _sm_attrs_5, _sm_expr34};
     _sm_base44 = pos.line;
     _sm_base45 = pos.column;
     _sm_expr10 = ns9_ExprNode{_sm_expr35, _sm_base44, _sm_base45};
@@ -46911,12 +47425,12 @@ ns9_ExprNode ns9_parsePrimary(ns9_Parser* self) {
     _sm_base49 = pos.column;
     _sm_attrs_6 = ns9_posAttrs(self, _sm_base48, _sm_base49);
     _sm_base50 = AstNodeAttributeKind::Name;
-    _sm_expr38 = AstNodeAttribute(_sm_base50, __sm_stringTable[685]);
+    _sm_expr38 = AstNodeAttribute{_sm_base50, __sm_stringTable[685]};
     simse_list_append(_sm_attrs_6, _sm_expr38);
     _sm_expr39 = Array<AstXmlNode>();
     _sm_base51 = AstNodeKind::Expr;
     _sm_base52 = AstNodeCategory::ExprName;
-    _sm_expr40 = AstXmlNode(_sm_base51, _sm_base52, _sm_attrs_6, _sm_expr39);
+    _sm_expr40 = AstXmlNode{_sm_base51, _sm_base52, _sm_attrs_6, _sm_expr39};
     _sm_base53 = pos.line;
     _sm_base54 = pos.column;
     _sm_expr10 = ns9_ExprNode{_sm_expr40, _sm_base53, _sm_base54};
@@ -46967,7 +47481,7 @@ ns9_ExprNode ns9_parsePrimary(ns9_Parser* self) {
     _sm_expr54 = Array<AstXmlNode>();
     _sm_base61 = AstNodeKind::Expr;
     _sm_base62 = AstNodeCategory::ExprCopy;
-    node = AstXmlNode(_sm_base61, _sm_base62, _sm_attrs_8, _sm_expr54);
+    node = AstXmlNode{_sm_base61, _sm_base62, _sm_attrs_8, _sm_expr54};
     _sm_base63 = &node;
     _sm_base64 = AstNodeKind::Operand;
     _sm_base66 = simse_addressOf(inner.node);
@@ -47005,12 +47519,12 @@ ns9_ExprNode ns9_parsePrimary(ns9_Parser* self) {
     _sm_base74 = pos.column;
     _sm_attrs_9 = ns9_posAttrs(self, _sm_base73, _sm_base74);
     _sm_base75 = AstNodeAttributeKind::Name;
-    _sm_expr62 = AstNodeAttribute(_sm_base75, name);
+    _sm_expr62 = AstNodeAttribute{_sm_base75, name};
     simse_list_append(_sm_attrs_9, _sm_expr62);
     _sm_expr63 = Array<AstXmlNode>();
     _sm_base76 = AstNodeKind::Expr;
     _sm_base77 = AstNodeCategory::ExprGenericName;
-    gnode = AstXmlNode(_sm_base76, _sm_base77, _sm_attrs_9, _sm_expr63);
+    gnode = AstXmlNode{_sm_base76, _sm_base77, _sm_attrs_9, _sm_expr63};
     _sm_base78 = &gnode;
     _sm_base79 = &typeArgs;
     ns2_xmlAddChildren(_sm_base78, _sm_base79);
@@ -47028,12 +47542,12 @@ ns9_ExprNode ns9_parsePrimary(ns9_Parser* self) {
     _sm_base83 = pos.column;
     _sm_attrs_7 = ns9_posAttrs(self, _sm_base82, _sm_base83);
     _sm_base84 = AstNodeAttributeKind::Name;
-    _sm_expr65 = AstNodeAttribute(_sm_base84, name);
+    _sm_expr65 = AstNodeAttribute{_sm_base84, name};
     simse_list_append(_sm_attrs_7, _sm_expr65);
     _sm_expr66 = Array<AstXmlNode>();
     _sm_base85 = AstNodeKind::Expr;
     _sm_base86 = AstNodeCategory::ExprName;
-    _sm_expr67 = AstXmlNode(_sm_base85, _sm_base86, _sm_attrs_7, _sm_expr66);
+    _sm_expr67 = AstXmlNode{_sm_base85, _sm_base86, _sm_attrs_7, _sm_expr66};
     _sm_base87 = pos.line;
     _sm_base88 = pos.column;
     _sm_expr10 = ns9_ExprNode{_sm_expr67, _sm_base87, _sm_base88};
@@ -47233,7 +47747,7 @@ ns9_ExprNode ns9_tryParseLambda(ns9_Parser* self) {
     _sm_expr29 = Array<AstXmlNode>();
     _sm_base25 = AstNodeKind::Stmt;
     _sm_base26 = AstNodeCategory::StmtExprStmt;
-    snode = AstXmlNode(_sm_base25, _sm_base26, sattrs, _sm_expr29);
+    snode = AstXmlNode{_sm_base25, _sm_base26, sattrs, _sm_expr29};
     _sm_base27 = &snode;
     _sm_base28 = AstNodeKind::Expr;
     _sm_base30 = simse_addressOf(value.node);
@@ -47247,12 +47761,12 @@ ns9_ExprNode ns9_tryParseLambda(ns9_Parser* self) {
     _sm_base33 = &names;
     _sm_expr30 = ns9_joinNames(_sm_base33);
     _sm_base34 = AstNodeAttributeKind::Params;
-    _sm_expr31 = AstNodeAttribute(_sm_base34, _sm_expr30);
+    _sm_expr31 = AstNodeAttribute{_sm_base34, _sm_expr30};
     simse_list_append(attrs, _sm_expr31);
     _sm_expr32 = Array<AstXmlNode>();
     _sm_base35 = AstNodeKind::Expr;
     _sm_base36 = AstNodeCategory::ExprLambda;
-    node = AstXmlNode(_sm_base35, _sm_base36, attrs, _sm_expr32);
+    node = AstXmlNode{_sm_base35, _sm_base36, attrs, _sm_expr32};
     _sm_base37 = &node;
     _sm_base38 = &paramTypes;
     ns2_xmlAddChildren(_sm_base37, _sm_base38);
@@ -47730,10 +48244,10 @@ List<AstNodeAttribute> ns9_propAttrs(Int line, Int column) {
     List<AstNodeAttribute> _sm_expr5;
     _sm_expr1 = simse_int_toString(line);
     _sm_base1 = AstNodeAttributeKind::Line;
-    _sm_expr2 = AstNodeAttribute(_sm_base1, _sm_expr1);
+    _sm_expr2 = AstNodeAttribute{_sm_base1, _sm_expr1};
     _sm_expr3 = simse_int_toString(column);
     _sm_base2 = AstNodeAttributeKind::Column;
-    _sm_expr4 = AstNodeAttribute(_sm_base2, _sm_expr3);
+    _sm_expr4 = AstNodeAttribute{_sm_base2, _sm_expr3};
     _sm_expr5 = List<AstNodeAttribute>{_sm_expr2, _sm_expr4};
     return _sm_expr5;
 }
@@ -47746,7 +48260,7 @@ AstXmlNode ns9_propExpr(AstNodeCategory kind, Int line, Int column) {
     _sm_expr1 = ns9_propAttrs(line, column);
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base1 = AstNodeKind::Expr;
-    _sm_expr3 = AstXmlNode(_sm_base1, kind, _sm_expr1, _sm_expr2);
+    _sm_expr3 = AstXmlNode{_sm_base1, kind, _sm_expr1, _sm_expr2};
     return _sm_expr3;
 }
 // cppsrc/parser/Propagate.kt
@@ -47759,11 +48273,11 @@ AstXmlNode ns9_propName(AstNodeKind role, Str name, Int line, Int column) {
     AstXmlNode _sm_expr3;
     attrs = ns9_propAttrs(line, column);
     _sm_base1 = AstNodeAttributeKind::Name;
-    _sm_expr1 = AstNodeAttribute(_sm_base1, name);
+    _sm_expr1 = AstNodeAttribute{_sm_base1, name};
     simse_list_append(attrs, _sm_expr1);
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base2 = AstNodeCategory::ExprName;
-    _sm_expr3 = AstXmlNode(role, _sm_base2, attrs, _sm_expr2);
+    _sm_expr3 = AstXmlNode{role, _sm_base2, attrs, _sm_expr2};
     return _sm_expr3;
 }
 // cppsrc/parser/Propagate.kt
@@ -47778,12 +48292,12 @@ AstXmlNode ns9_propMember(AstXmlNode base, Str member, Int line, Int column) {
     AstXmlNode node, receiver;
     attrs = ns9_propAttrs(line, column);
     _sm_base1 = AstNodeAttributeKind::Name;
-    _sm_expr1 = AstNodeAttribute(_sm_base1, member);
+    _sm_expr1 = AstNodeAttribute{_sm_base1, member};
     simse_list_append(attrs, _sm_expr1);
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base2 = AstNodeKind::Expr;
     _sm_base3 = AstNodeCategory::ExprMember;
-    node = AstXmlNode(_sm_base2, _sm_base3, attrs, _sm_expr2);
+    node = AstXmlNode{_sm_base2, _sm_base3, attrs, _sm_expr2};
     receiver = base;
     _sm_base4 = AstNodeKind::Receiver;
     receiver.name = _sm_base4;
@@ -47840,12 +48354,12 @@ AstXmlNode ns9_propGenericName(AstXmlNode arg, Int line, Int column) {
     name = __sm_stringTable[711];
     attrs = ns9_propAttrs(line, column);
     _sm_base1 = AstNodeAttributeKind::Name;
-    _sm_expr1 = AstNodeAttribute(_sm_base1, name);
+    _sm_expr1 = AstNodeAttribute{_sm_base1, name};
     simse_list_append(attrs, _sm_expr1);
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base2 = AstNodeKind::Expr;
     _sm_base3 = AstNodeCategory::ExprGenericName;
-    node = AstXmlNode(_sm_base2, _sm_base3, attrs, _sm_expr2);
+    node = AstXmlNode{_sm_base2, _sm_base3, attrs, _sm_expr2};
     typeArg = arg;
     _sm_base4 = AstNodeKind::TypeArg;
     typeArg.name = _sm_base4;
@@ -47865,12 +48379,12 @@ AstXmlNode ns9_propNotOk(Str temp, Int line, Int column) {
     AstXmlNode node, receiver, _sm_expr3, inner;
     attrs = ns9_propAttrs(line, column);
     _sm_base1 = AstNodeAttributeKind::Op;
-    _sm_expr1 = AstNodeAttribute(_sm_base1, __sm_stringTable[782]);
+    _sm_expr1 = AstNodeAttribute{_sm_base1, __sm_stringTable[782]};
     simse_list_append(attrs, _sm_expr1);
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base2 = AstNodeKind::Expr;
     _sm_base3 = AstNodeCategory::ExprUnary;
-    node = AstXmlNode(_sm_base2, _sm_base3, attrs, _sm_expr2);
+    node = AstXmlNode{_sm_base2, _sm_base3, attrs, _sm_expr2};
     _sm_base4 = AstNodeKind::Receiver;
     receiver = ns9_propName(_sm_base4, temp, line, column);
     _sm_expr3 = ns9_propMember(receiver, __sm_stringTable[674], line, column);
@@ -47893,15 +48407,15 @@ AstXmlNode ns9_propTempDecl(Str name, AstXmlNode init, Int line, Int column) {
     AstXmlNode node, value;
     attrs = ns9_propAttrs(line, column);
     _sm_base1 = AstNodeAttributeKind::Name;
-    _sm_expr1 = AstNodeAttribute(_sm_base1, name);
+    _sm_expr1 = AstNodeAttribute{_sm_base1, name};
     simse_list_append(attrs, _sm_expr1);
     _sm_base2 = AstNodeAttributeKind::IsVar;
-    _sm_expr2 = AstNodeAttribute(_sm_base2, __sm_stringTable[628]);
+    _sm_expr2 = AstNodeAttribute{_sm_base2, __sm_stringTable[628]};
     simse_list_append(attrs, _sm_expr2);
     _sm_expr3 = Array<AstXmlNode>();
     _sm_base3 = AstNodeKind::Stmt;
     _sm_base4 = AstNodeCategory::StmtVarDecl;
-    node = AstXmlNode(_sm_base3, _sm_base4, attrs, _sm_expr3);
+    node = AstXmlNode{_sm_base3, _sm_base4, attrs, _sm_expr3};
     value = init;
     _sm_base5 = AstNodeKind::Init;
     value.name = _sm_base5;
@@ -47921,7 +48435,7 @@ AstXmlNode ns9_propReturn(AstXmlNode value, Int line, Int column) {
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base1 = AstNodeKind::Stmt;
     _sm_base2 = AstNodeCategory::StmtReturn;
-    node = AstXmlNode(_sm_base1, _sm_base2, _sm_expr1, _sm_expr2);
+    node = AstXmlNode{_sm_base1, _sm_base2, _sm_expr1, _sm_expr2};
     inner = value;
     _sm_base3 = AstNodeKind::Value;
     inner.name = _sm_base3;
@@ -47942,7 +48456,7 @@ AstXmlNode ns9_propIfReturn(AstXmlNode cond, AstXmlNode ret, Int line, Int colum
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base1 = AstNodeKind::Stmt;
     _sm_base2 = AstNodeCategory::StmtIf;
-    node = AstXmlNode(_sm_base1, _sm_base2, _sm_expr1, _sm_expr2);
+    node = AstXmlNode{_sm_base1, _sm_base2, _sm_expr1, _sm_expr2};
     test = cond;
     _sm_base3 = AstNodeKind::Cond;
     test.name = _sm_base3;
@@ -47954,7 +48468,7 @@ AstXmlNode ns9_propIfReturn(AstXmlNode cond, AstXmlNode ret, Int line, Int colum
     _sm_expr4 = simse_list_toArray(body);
     _sm_base5 = AstNodeKind::Then;
     _sm_base6 = AstNodeCategory::None;
-    _sm_expr5 = AstXmlNode(_sm_base5, _sm_base6, _sm_expr3, _sm_expr4);
+    _sm_expr5 = AstXmlNode{_sm_base5, _sm_base6, _sm_expr3, _sm_expr4};
     _sm_base7 = &node;
     ns2_xmlAddChild(_sm_base7, _sm_expr5);
     return node;
@@ -47974,7 +48488,7 @@ AstXmlNode ns9_propReplaceChild(AstXmlNode* like, AstNodeKind role, AstXmlNode r
     _sm_base1 = like->name;
     _sm_base2 = like->kind;
     _sm_base3 = like->attributes;
-    node = AstXmlNode(_sm_base1, _sm_base2, _sm_base3, _sm_expr1);
+    node = AstXmlNode{_sm_base1, _sm_base2, _sm_base3, _sm_expr1};
     _sm_base4 = simse_addressOf(like->Children);
     _sm_for1 = iterPtr(_sm_base4);
     L1:;
@@ -48444,7 +48958,7 @@ Bool ns9_propExpand(ns9_PropState* state, AstXmlNode* stmt, List<AstXmlNode>* ou
     _sm_base8 = AstNodeKind::Stmt;
     _sm_base9 = AstNodeCategory::StmtExprStmt;
     _sm_base10 = stmt->attributes;
-    node = AstXmlNode(_sm_base8, _sm_base9, _sm_base10, _sm_expr18);
+    node = AstXmlNode{_sm_base8, _sm_base9, _sm_base10, _sm_expr18};
     inner = payload;
     _sm_base11 = AstNodeKind::Expr;
     inner.name = _sm_base11;
@@ -48486,7 +49000,7 @@ void ns9_propAppendList(AstXmlNode* target, AstNodeKind role, AstNodeCategory ki
     L4:;
     _sm_expr4 = List<AstNodeAttribute>();
     _sm_expr5 = simse_list_toArray(kids);
-    _sm_expr6 = AstXmlNode(role, kind, _sm_expr4, _sm_expr5);
+    _sm_expr6 = AstXmlNode{role, kind, _sm_expr4, _sm_expr5};
     ns2_xmlAddChild(target, _sm_expr6);
 }
 // cppsrc/parser/Propagate.kt
@@ -48504,7 +49018,7 @@ AstXmlNode ns9_propRebuild(AstXmlNode* stmt, List<AstXmlNode>* thenOut, List<Ast
     _sm_base1 = stmt->name;
     _sm_base2 = stmt->kind;
     _sm_base3 = stmt->attributes;
-    node = AstXmlNode(_sm_base1, _sm_base2, _sm_base3, _sm_expr1);
+    node = AstXmlNode{_sm_base1, _sm_base2, _sm_base3, _sm_expr1};
     _sm_base4 = simse_addressOf(stmt->Children);
     _sm_for6 = iterPtr(_sm_base4);
     L1:;
@@ -53482,12 +53996,12 @@ AstXmlNode ns12_exprType(ns12_Analyzer* self, AstXmlNode* expr) {
     _sm_expr16 = Array<AstXmlNode>();
     _sm_base3 = AstNodeKind::Type;
     _sm_base4 = AstNodeCategory::TypeGeneric;
-    built = AstXmlNode(_sm_base3, _sm_base4, _sm_expr15, _sm_expr16);
+    built = AstXmlNode{_sm_base3, _sm_base4, _sm_expr15, _sm_expr16};
     _sm_base5 = AstNodeAttributeKind::Name;
     _sm_expr17 = ns2_xmlAttr(callee, _sm_base5);
     _sm_base6 = AstNodeAttributeKind::Name;
     _sm_base7 = *(_sm_expr17);
-    _sm_expr18 = AstNodeAttribute(_sm_base6, _sm_base7);
+    _sm_expr18 = AstNodeAttribute{_sm_base6, _sm_base7};
     _sm_base8 = simse_addressOf(built.attributes);
     simse_list_append((*_sm_base8), _sm_expr18);
     _sm_base9 = AstNodeKind::TypeArg;
@@ -54018,10 +54532,10 @@ AstXmlNode ns12_semNamedType(Str* name) {
     _sm_expr2 = Array<AstXmlNode>();
     _sm_base1 = AstNodeKind::Type;
     _sm_base2 = AstNodeCategory::TypeNamed;
-    node = AstXmlNode(_sm_base1, _sm_base2, _sm_expr1, _sm_expr2);
+    node = AstXmlNode{_sm_base1, _sm_base2, _sm_expr1, _sm_expr2};
     _sm_base3 = AstNodeAttributeKind::Name;
     _sm_base4 = *(name);
-    _sm_expr3 = AstNodeAttribute(_sm_base3, _sm_base4);
+    _sm_expr3 = AstNodeAttribute{_sm_base3, _sm_base4};
     _sm_base5 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base5), _sm_expr3);
     return node;
@@ -54041,10 +54555,10 @@ AstXmlNode ns12_semGenericType(Str* name, List<AstXmlNode>* args) {
     _sm_expr2 = simse_list_toArray((*args));
     _sm_base1 = AstNodeKind::Type;
     _sm_base2 = AstNodeCategory::TypeGeneric;
-    node = AstXmlNode(_sm_base1, _sm_base2, _sm_expr1, _sm_expr2);
+    node = AstXmlNode{_sm_base1, _sm_base2, _sm_expr1, _sm_expr2};
     _sm_base3 = AstNodeAttributeKind::Name;
     _sm_base4 = *(name);
-    _sm_expr3 = AstNodeAttribute(_sm_base3, _sm_base4);
+    _sm_expr3 = AstNodeAttribute{_sm_base3, _sm_base4};
     _sm_base5 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base5), _sm_expr3);
     return node;
@@ -54455,7 +54969,7 @@ AstXmlNode ns12_semReplaceRole(AstXmlNode* like, AstNodeKind role, List<AstXmlNo
     _sm_expr10 = simse_list_toArray(kids);
     _sm_base5 = like->name;
     _sm_base6 = like->kind;
-    _sm_expr11 = AstXmlNode(_sm_base5, _sm_base6, _sm_expr9, _sm_expr10);
+    _sm_expr11 = AstXmlNode{_sm_base5, _sm_base6, _sm_expr9, _sm_expr10};
     return _sm_expr11;
 }
 // cppsrc/sema/TypeInfer.kt
@@ -54498,7 +55012,7 @@ AstXmlNode ns12_semWithType(AstXmlNode* decl, AstXmlNode* typeNode) {
     _sm_expr8 = simse_list_toArray(kids);
     _sm_base5 = decl->name;
     _sm_base6 = decl->kind;
-    _sm_expr9 = AstXmlNode(_sm_base5, _sm_base6, _sm_expr7, _sm_expr8);
+    _sm_expr9 = AstXmlNode{_sm_base5, _sm_base6, _sm_expr7, _sm_expr8};
     return _sm_expr9;
 }
 // cppsrc/sema/TypeInfer.kt
@@ -55690,12 +56204,12 @@ AstXmlNode ns12_semMachineType(AstXmlNode* ret, ns12_SemFnFact* fn, Dictionary<S
     _sm_base17 = &args;
     node = ns12_semReplaceRole(ret, _sm_base16, _sm_base17);
     _sm_base18 = AstNodeAttributeKind::Name;
-    _sm_expr10 = AstNodeAttribute(_sm_base18, machine);
+    _sm_expr10 = AstNodeAttribute{_sm_base18, machine};
     _sm_base19 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base19), _sm_expr10);
     _sm_base20 = AstNodeAttributeKind::Package;
     _sm_base21 = fn->packageName;
-    _sm_expr11 = AstNodeAttribute(_sm_base20, _sm_base21);
+    _sm_expr11 = AstNodeAttribute{_sm_base20, _sm_base21};
     _sm_base22 = simse_addressOf(node.attributes);
     simse_list_append((*_sm_base22), _sm_expr11);
     return node;
@@ -56137,7 +56651,7 @@ AstXmlNode ns12_stmt(ns12_SemInfer* self, AstXmlNode stmtNode) {
     _sm_expr18 = simse_list_toArray(rebuilt);
     _sm_base21 = AstNodeKind::Body;
     _sm_base22 = AstNodeCategory::None;
-    body = AstXmlNode(_sm_base21, _sm_base22, _sm_expr17, _sm_expr18);
+    body = AstXmlNode{_sm_base21, _sm_base22, _sm_expr17, _sm_expr18};
     _sm_base23 = &body;
     _sm_expr19 = ns12_semOne(_sm_base23);
     _sm_base24 = &stmtNode;
@@ -56172,7 +56686,7 @@ AstXmlNode ns12_handle(ns12_SemInfer* self, AstNodeCategory kind, AstXmlNode* in
     _sm_expr5 = ns12_semOne(_sm_base3);
     _sm_expr6 = simse_list_toArray(_sm_expr5);
     _sm_base4 = AstNodeKind::Type;
-    _sm_expr2 = AstXmlNode(_sm_base4, kind, _sm_expr3, _sm_expr6);
+    _sm_expr2 = AstXmlNode{_sm_base4, kind, _sm_expr3, _sm_expr6};
     return _sm_expr2;
 }
 // cppsrc/sema/TypeInfer.kt
@@ -60078,69 +60592,6 @@ inline StrView simse_strView_slice(StrView self, Int start, Int count) {
 
 inline Char simse_strView_charAt(StrView self, Int index) {
     return self[index];
-}
-
-// True when the view begins with `text`.
-inline Bool simse_strView_startsWith(StrView self, const Str& text) {
-    const Int count = text.size();
-    if (count > self.len) return false;
-    for (Int i = 0; i < count; i++) {
-        if ((char) self[i] != text[i]) return false;
-    }
-    return true;
-}
-
-// `startsWithPtr(text, length)`: the same comparison against text this view does not
-// own, reached by raw pointer and with its length already known. `startsWith` would
-// copy the `Str` first, which is what a table lookup cannot afford; the first byte is
-// the caller's cheap test, this does the rest.
-inline Bool simse_strView_startsWithPtr(StrView self, const Str* text, Int length) {
-    if (length > self.len) return false;
-    for (Int i = 1; i < length; i++) {
-        if ((char) self[i] != (*text)[i]) return false;
-    }
-    return true;
-}
-
-// `find(sub)`: the index of the first occurrence of `sub` in the bytes, or -1. The
-// bytes are compared in place: nothing is copied.
-inline Int simse_strView_find(StrView self, const Str& sub) {
-    const Int needle = sub.size();
-    if (needle == 0) return 0;
-    if (needle > self.len) return -1;
-    for (Int i = 0; i + needle <= self.len; i++) {
-        Int j = 0;
-        while (j < needle && (char) self[i + j] == sub[j]) j++;
-        if (j == needle) return i;
-    }
-    return -1;
-}
-
-// `indexOf` is the other spelling of `find`.
-inline Int simse_strView_indexOf(StrView self, const Str& sub) {
-    return simse_strView_find(self, sub);
-}
-
-// The owned copy of `count` bytes from `from`, with `from` clamped to [0, size] and
-// `count` allowed to run to the end, like `Str.substr`.
-inline Str simse_strView_substr(StrView self, Int from, Int count) {
-    const Int len = self.len;
-    Int begin = from < 0 ? 0 : from;
-    if (begin > len) begin = len;
-    Int end = count < 0 ? begin : begin + count;
-    if (end > len) end = len;
-    Str result;
-    if (end > begin) {
-        result.resize(end - begin);
-        std::memcpy(result.data(), self.ptr + begin, (std::size_t) (end - begin));
-    }
-    return result;
-}
-
-// The owned copy of the whole view, as a `Str` (the language's `toString()`
-// convention, like `Int.toString()`).
-inline Str simse_strView_toString(StrView self) {
-    return simse_strView_substr(self, 0, self.len);
 }
 
 // `spanOfStr(text)`: a view over a string's bytes. It borrows the string - the string

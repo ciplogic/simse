@@ -74,32 +74,96 @@ static struct __SmStringTableInitType {
     }
 } __sm_stringTableInit;
 
-// The operations a view is read through (specs/built-in-types.md, "Views"; the
-// declarations are cppsrc/rtl/StrView.kt). The *type* and the *literal interop* stay in
-// cppsrc/rtl/strview.hpp: `using StrView = Span<Char>`, the comparison operators, `+`,
-// `<<` and the `Str` conversions are reached by C++ overload resolution at a literal
-// site rather than by a prelude declaration, so no declaration could reach a section for
-// them - while these are named, one symbol each (except `spanOfStr`: one symbol, two
-// overloads - a `Str`'s borrow and a `StrView`'s identity) - and a program that calls one
-// pays for this text (`sourcegen/ResGen.kt`).
+// What a view's byte operations still need from C++ (specs/built-in-types.md, "Views").
+// The byte work itself - `find`/`indexOf`, `startsWith`/`startsWithPtr`, `substr`/`toString`
+// - is Simse now, in cppsrc/rtl/StrView.kt over the span and the intrinsics
+// (cppsrc/rtl/intrinsics.kt). What remains here is the `Span` member passthroughs, which
+// cannot be Simse without shadowing the member they call, and `spanOfStr`, whose two
+// overloads are picked by C++ overload resolution at the desugar's site (Parser.kt's
+// `parseWhen`) rather than by a declaration - so a declaration reaches this section, and a
+// program that calls one pays for this text (`sourcegen/ResGen.kt`).
 //
 // `StrView` *is* a `Span<Char>`, so `self.len`, `self[i]` and `self.slice(...)` below are
 // the span's own members (cppsrc/rtl/span.hpp) - and `at` is *not* an operation of its
-// own: the span's member serves it (`cppsrc/rtl/StrView.kt`), as `atPtr` is the
+// own: the span's member serves it (cppsrc/rtl/StrView.kt), as `atPtr` is the
 // language's (cppsrc/rtl/Span.kt).
 Int simse_strView_size(StrView self);
 Bool simse_strView_isEmpty(StrView self);
 StrView simse_strView_slice(StrView self, Int start);
 StrView simse_strView_slice(StrView self, Int start, Int count);
 Char simse_strView_charAt(StrView self, Int index);
-Bool simse_strView_startsWith(StrView self, const Str& text);
-Bool simse_strView_startsWithPtr(StrView self, const Str* text, Int length);
-Int simse_strView_find(StrView self, const Str& sub);
-Int simse_strView_indexOf(StrView self, const Str& sub);
-Str simse_strView_substr(StrView self, Int from, Int count);
-Str simse_strView_toString(StrView self);
 StrView simse_spanOfStr(Str* text);
 StrView simse_spanOfStr(StrView view);
+
+#include <algorithm>
+#include <type_traits>
+#include <utility>
+
+// The Dictionary operations and the extra List helpers behind the prelude
+// (impl_specs/native-interop.md), moved out of cppsrc/rtl/dictops.hpp. The key/value
+// parameters are non-deduced (`std::type_identity_t`) so that a literal argument (e.g. a
+// `const char[]` key or an integer value) converts to the element type instead of making
+// the template argument ambiguous.
+//
+// Errors are unchecked, matching the dictionary's own semantics and the language's
+// no-exceptions policy: `get`/`has` on a missing key behave as documented, while `remove`
+// of an absent key is a no-op.
+
+// `dictionaryOf<K, V>()`: the empty-dictionary construction.
+template <class K, class V>
+Dictionary<K, V> simse_dictionaryOf();
+
+// `d.getPtr(key)`: the value's place in the dictionary, or `null` when the key is
+// absent - the read that copies nothing (`get` copies the value out, `has` is this with
+// the pointer tested). The place is the dictionary's own storage, so it is valid until
+// the next `insert`/`remove`/`clear` on that dictionary.
+template <class K, class V>
+V* simse_dict_getPtr(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
+
+// `d.get(key)`: the value for `key`, or an empty `Opt` when absent.
+template <class K, class V>
+Opt<V> simse_dict_get(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
+
+// `d.has(key)`: whether `key` is present.
+template <class K, class V>
+Bool simse_dict_has(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
+
+// `d.insert(key, value)`: insert or replace.
+template <class K, class V>
+void simse_dict_insert(Dictionary<K, V>& self, const std::type_identity_t<K>& key,
+                       const std::type_identity_t<V>& value);
+
+// `d.remove(key)`: erase when present (a no-op otherwise).
+template <class K, class V>
+void simse_dict_remove(Dictionary<K, V>& self, const std::type_identity_t<K>& key);
+
+// `d.size()`: the number of entries.
+template <class K, class V>
+Int simse_dict_size(const Dictionary<K, V>& self);
+
+// `d.keys()`: the keys in the dictionary's iteration order (unspecified; sort for a
+// deterministic order).
+template <class K, class V>
+List<K> simse_dict_keys(const Dictionary<K, V>& self);
+
+// `d.values()`: the values in the dictionary's iteration order (unspecified).
+template <class K, class V>
+List<V> simse_dict_values(const Dictionary<K, V>& self);
+
+// `d.clear()`: remove every entry.
+template <class K, class V>
+void simse_dict_clear(Dictionary<K, V>& self);
+
+// `items.contains(value)`: linear membership test (`operator==` on elements).
+template <class T>
+Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& value);
+
+// `items.sort(less)`: in-place sort using the `(*T, *T) -> Bool` comparator. The comparator
+// comes from a Simse lambda (a C++ lambda or Func), so it is a template parameter rather
+// than a fixed type; it takes its two elements by pointer, so each is read where `std::sort`
+// holds it instead of being copied into the comparison.
+template <class T, class F>
+void simse_list_sort(List<T>& self, F less);
 
 #include <bit>
 #include <cstring>
@@ -130,45 +194,6 @@ StrView simse_spanOfStr(StrView view);
 Int simse_strCountDigits(Int64 value);
 void simse_strAddInt(char* target, Int64 value, Int count);
 StrView simse_strBoolView(Bool value);
-
-#include <cstdint>
-#include <type_traits>
-
-// The List/Array/Str primitives behind the prelude (impl_specs/native-interop.md), moved
-// out of cppsrc/rtl/listops.hpp. Index and range errors are unchecked, matching the
-// language's no-exceptions policy: `removeAt`/`removeRange` with an out-of-range index is
-// undefined behavior (specs/language-decisions.md).
-
-// Appends `value` to the end of `self`. The value is a non-deduced context so a literal
-// argument (e.g. a `const char[]`) converts to the element type instead of making `T`
-// ambiguous.
-template <class T>
-void simse_list_append(List<T>& self, const std::type_identity_t<T>& value);
-
-// The list literal's fallback (cppsrc/rtl/rtl.kt): the compiler turns
-// `listOf<Str>("a", "b")` into the construction itself, so this runs only for a position
-// with no destination slot.
-template <class T>
-List<T> simse_listOf(const List<T>* values);
-
-template <class T>
-void simse_list_removeAt(List<T>& self, Int index);
-template <class T>
-void simse_list_removeRange(List<T>& self, Int start, Int end);
-template <class T>
-Int simse_array_count(const Array<T>& self);
-template <class T>
-Array<T> simse_list_toArray(const List<T>& self);
-template <class T>
-List<T> simse_array_toList(const Array<T>& self);
-template <class T>
-Array<T> simse_arrayEmpty();
-
-void simse_str_append(Str& self, Char value);
-void simse_str_appendStr(Str& self, const Str& value);
-void simse_str_appendStrPtr(Str& self, const Str* value);
-void simse_str_reserve(Str& self, Int count);
-Str simse_int_toString(Int self);
 
 #include <charconv>
 #include <cstddef>
@@ -233,6 +258,45 @@ template <class T>
 Str simse_num_toString(const T& self);
 Str simse_char_toString(Char self);
 Str simse_bool_toString(Bool self);
+
+#include <cstdint>
+#include <type_traits>
+
+// The List/Array/Str primitives behind the prelude (impl_specs/native-interop.md), moved
+// out of cppsrc/rtl/listops.hpp. Index and range errors are unchecked, matching the
+// language's no-exceptions policy: `removeAt`/`removeRange` with an out-of-range index is
+// undefined behavior (specs/language-decisions.md).
+
+// Appends `value` to the end of `self`. The value is a non-deduced context so a literal
+// argument (e.g. a `const char[]`) converts to the element type instead of making `T`
+// ambiguous.
+template <class T>
+void simse_list_append(List<T>& self, const std::type_identity_t<T>& value);
+
+// The list literal's fallback (cppsrc/rtl/rtl.kt): the compiler turns
+// `listOf<Str>("a", "b")` into the construction itself, so this runs only for a position
+// with no destination slot.
+template <class T>
+List<T> simse_listOf(const List<T>* values);
+
+template <class T>
+void simse_list_removeAt(List<T>& self, Int index);
+template <class T>
+void simse_list_removeRange(List<T>& self, Int start, Int end);
+template <class T>
+Int simse_array_count(const Array<T>& self);
+template <class T>
+Array<T> simse_list_toArray(const List<T>& self);
+template <class T>
+List<T> simse_array_toList(const Array<T>& self);
+template <class T>
+Array<T> simse_arrayEmpty();
+
+void simse_str_append(Str& self, Char value);
+void simse_str_appendStr(Str& self, const Str& value);
+void simse_str_appendStrPtr(Str& self, const Str* value);
+void simse_str_reserve(Str& self, Int count);
+Str simse_int_toString(Int self);
 
 #include <cstdio>
 
@@ -300,12 +364,61 @@ inline void simse_println(const T& value, FILE* out) {
     std::fputc('\n', out);
 }
 
+Str substr(StrView* self, Int from, Int count);
+Str toString(StrView* self);
 void ns1_logMe();
 void ns1_maybe(Bool flag);
 void ns1_tag(Str* self, Bool on);
 void ns1_markIt(Int level);
 void ns1_apply(Func<void(Int)> f);
 
+Str substr(StrView* self, Int from, Int count) {
+    Int len, begin, end, _sm_expr6;
+    Bool _sm_expr1;
+    len = simse_strView_size((*self));
+    begin = from;
+    _sm_expr1 = begin < 0;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    begin = 0;
+    L2:;
+    _sm_expr1 = begin > len;
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    begin = len;
+    L4:;
+    end = begin + count;
+    _sm_expr1 = count < 0;
+    if (_sm_expr1) goto L5;
+    goto L6;
+    L5:;
+    end = begin;
+    L6:;
+    _sm_expr1 = end > len;
+    if (_sm_expr1) goto L7;
+    goto L8;
+    L7:;
+    end = len;
+    L8:;
+    Str out;
+    _sm_expr1 = end > begin;
+    if (_sm_expr1) goto L9;
+    goto L10;
+    L9:;
+    _sm_expr6 = end - begin;
+    simse_str_setBytes(out, self->ptr, begin, _sm_expr6);
+    L10:;
+    return out;
+}
+Str toString(StrView* self) {
+    Int _sm_expr1;
+    Str _sm_expr2;
+    _sm_expr1 = simse_strView_size((*self));
+    _sm_expr2 = substr(self, 0, _sm_expr1);
+    return _sm_expr2;
+}
 // stress/fold-const-params/src/main.kt
 void ns1_logMe() {
     simse_println((__sm_stringTable[1]), stdout);
@@ -409,69 +522,6 @@ inline Char simse_strView_charAt(StrView self, Int index) {
     return self[index];
 }
 
-// True when the view begins with `text`.
-inline Bool simse_strView_startsWith(StrView self, const Str& text) {
-    const Int count = text.size();
-    if (count > self.len) return false;
-    for (Int i = 0; i < count; i++) {
-        if ((char) self[i] != text[i]) return false;
-    }
-    return true;
-}
-
-// `startsWithPtr(text, length)`: the same comparison against text this view does not
-// own, reached by raw pointer and with its length already known. `startsWith` would
-// copy the `Str` first, which is what a table lookup cannot afford; the first byte is
-// the caller's cheap test, this does the rest.
-inline Bool simse_strView_startsWithPtr(StrView self, const Str* text, Int length) {
-    if (length > self.len) return false;
-    for (Int i = 1; i < length; i++) {
-        if ((char) self[i] != (*text)[i]) return false;
-    }
-    return true;
-}
-
-// `find(sub)`: the index of the first occurrence of `sub` in the bytes, or -1. The
-// bytes are compared in place: nothing is copied.
-inline Int simse_strView_find(StrView self, const Str& sub) {
-    const Int needle = sub.size();
-    if (needle == 0) return 0;
-    if (needle > self.len) return -1;
-    for (Int i = 0; i + needle <= self.len; i++) {
-        Int j = 0;
-        while (j < needle && (char) self[i + j] == sub[j]) j++;
-        if (j == needle) return i;
-    }
-    return -1;
-}
-
-// `indexOf` is the other spelling of `find`.
-inline Int simse_strView_indexOf(StrView self, const Str& sub) {
-    return simse_strView_find(self, sub);
-}
-
-// The owned copy of `count` bytes from `from`, with `from` clamped to [0, size] and
-// `count` allowed to run to the end, like `Str.substr`.
-inline Str simse_strView_substr(StrView self, Int from, Int count) {
-    const Int len = self.len;
-    Int begin = from < 0 ? 0 : from;
-    if (begin > len) begin = len;
-    Int end = count < 0 ? begin : begin + count;
-    if (end > len) end = len;
-    Str result;
-    if (end > begin) {
-        result.resize(end - begin);
-        std::memcpy(result.data(), self.ptr + begin, (std::size_t) (end - begin));
-    }
-    return result;
-}
-
-// The owned copy of the whole view, as a `Str` (the language's `toString()`
-// convention, like `Int.toString()`).
-inline Str simse_strView_toString(StrView self) {
-    return simse_strView_substr(self, 0, self.len);
-}
-
 // `spanOfStr(text)`: a view over a string's bytes. It borrows the string - the string
 // has to outlive the view - and does not copy it (`&text` would box a copy instead).
 // `Str` is a `char` buffer on the C++ side and the language's `Char` is a signed byte,
@@ -486,6 +536,82 @@ inline StrView simse_spanOfStr(Str* text) {
 // resolution picks the borrowed view or the identity, and the tests compare against it.
 inline StrView simse_spanOfStr(StrView view) {
     return view;
+}
+
+// `dictionaryOf<K, V>()`: `Dictionary<K, V>` is a value type, so this default-constructs
+// one.
+template <class K, class V>
+inline Dictionary<K, V> simse_dictionaryOf() {
+    return Dictionary<K, V>();
+}
+
+template <class K, class V>
+inline V* simse_dict_getPtr(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
+    return self.valuePtr(key);
+}
+
+template <class K, class V>
+inline Opt<V> simse_dict_get(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
+    const V* found = simse_dict_getPtr(self, key);
+    if (found == nullptr) return Opt<V>::none();
+    return Opt<V>::some(*found);
+}
+
+template <class K, class V>
+inline Bool simse_dict_has(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
+    return simse_dict_getPtr(self, key) != nullptr;
+}
+
+template <class K, class V>
+inline void simse_dict_insert(Dictionary<K, V>& self, const std::type_identity_t<K>& key,
+                              const std::type_identity_t<V>& value) {
+    self.insert_or_assign(key, value);
+}
+
+template <class K, class V>
+inline void simse_dict_remove(Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
+    self.erase(key);
+}
+
+template <class K, class V>
+inline Int simse_dict_size(const Dictionary<K, V>& self) {
+    return (Int) self.size();
+}
+
+template <class K, class V>
+inline List<K> simse_dict_keys(const Dictionary<K, V>& self) {
+    List<K> out;
+    out.reserve((Int) self.size());
+    for (const auto& entry : self) out.push_back(entry.first);
+    return out;
+}
+
+template <class K, class V>
+inline List<V> simse_dict_values(const Dictionary<K, V>& self) {
+    List<V> out;
+    out.reserve((Int) self.size());
+    for (const auto& entry : self) out.push_back(entry.second);
+    return out;
+}
+
+template <class K, class V>
+inline void simse_dict_clear(Dictionary<K, V>& self) {
+    self.clear();
+}
+
+template <class T>
+inline Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& value) {
+    for (const T& item : self) {
+        if (item == value) return true;
+    }
+    return false;
+}
+
+template <class T, class F>
+inline void simse_list_sort(List<T>& self, F less) {
+    std::sort(self.begin(), self.end(), [&less](const T& a, const T& b) {
+        return less(const_cast<T*>(&a), const_cast<T*>(&b));
+    });
 }
 
 // The powers of ten the bit scan settles its guess against.
@@ -559,95 +685,6 @@ inline StrView simse_strBoolView(Bool value) {
     static Int lens[2] = {4, 5};
     Int at = value ? 0 : 1;
     return StrView(texts[at], lens[at]);
-}
-
-template <class T>
-inline void simse_list_append(List<T>& self, const std::type_identity_t<T>& value) {
-    self.push_back(value);
-}
-
-template <class T>
-inline List<T> simse_listOf(const List<T>* values) {
-    return *values;
-}
-
-// Removes the single element at `index`.
-template <class T>
-inline void simse_list_removeAt(List<T>& self, Int index) {
-    self.erase(self.begin() + index);
-}
-
-// Removes the half-open range [start, end).
-template <class T>
-inline void simse_list_removeRange(List<T>& self, Int start, Int end) {
-    self.erase(self.begin() + start, self.begin() + end);
-}
-
-// `Array<T>.count()`: the element count stored at the front of the block.
-template <class T>
-inline Int simse_array_count(const Array<T>& self) {
-    return self.count();
-}
-
-// `List<T>.toArray()` (specs/built-in-types.md): copies the elements into one count-first
-// block. Element copies are value copies, like every other copy in the language.
-template <class T>
-inline Array<T> simse_list_toArray(const List<T>& self) {
-    const Int count = self.size();
-    if (count <= 0) {
-        return Array<T>();
-    }
-    Array<T> result(count);
-    for (Int i = 0; i < count; i++) {
-        result[i] = self[i];
-    }
-    return result;
-}
-
-// `Array<T>.toList()`: the growable copy, which is how an element is added to an array.
-template <class T>
-inline List<T> simse_array_toList(const Array<T>& self) {
-    List<T> result;
-    const Int count = self.count();
-    result.reserve(count);
-    for (Int i = 0; i < count; i++) {
-        result.push_back(self[i]);
-    }
-    return result;
-}
-
-// `arrayEmpty<T>()`: the shared, zero-length array of `T` (no allocation).
-template <class T>
-inline Array<T> simse_arrayEmpty() {
-    return Array<T>();
-}
-
-// `Str.append(ch)`: `Str` has no single-character append, so this is `push_back`.
-inline void simse_str_append(Str& self, Char value) {
-    self.push_back(static_cast<char>(value));
-}
-
-// `Str.appendStr(text)`: appends in place, so an emitter accumulates output without
-// `out = out + text` rebuilding the whole buffer on every line (which is quadratic).
-inline void simse_str_appendStr(Str& self, const Str& value) {
-    self.append(value);
-}
-
-// `Str.appendStrPtr(text)`: the same append for a text the caller only *borrows*, so
-// nothing is copied on the way.
-inline void simse_str_appendStrPtr(Str& self, const Str* value) {
-    if (value != nullptr) self.append(*value);
-}
-
-// `Str.reserve(count)`: grows the buffer once, so a run of appends writes the text once
-// instead of copying the accumulated prefix at every growth step. A *hint*, not a length.
-inline void simse_str_reserve(Str& self, Int count) {
-    self.reserve((Str::size_type) count);
-}
-
-// `Int.toString()`: the scalar-to-inline-string conversion (specs/memory-model.md).
-inline Str simse_int_toString(Int self) {
-    return std::to_string(self);
 }
 
 // `Str.isEmpty()` is the prelude's own body (cppsrc/rtl/rtl.kt), not a resource: `size()`
@@ -824,6 +861,95 @@ inline Str simse_char_toString(Char self) {
 
 inline Str simse_bool_toString(Bool self) {
     return self ? "true" : "false";
+}
+
+template <class T>
+inline void simse_list_append(List<T>& self, const std::type_identity_t<T>& value) {
+    self.push_back(value);
+}
+
+template <class T>
+inline List<T> simse_listOf(const List<T>* values) {
+    return *values;
+}
+
+// Removes the single element at `index`.
+template <class T>
+inline void simse_list_removeAt(List<T>& self, Int index) {
+    self.erase(self.begin() + index);
+}
+
+// Removes the half-open range [start, end).
+template <class T>
+inline void simse_list_removeRange(List<T>& self, Int start, Int end) {
+    self.erase(self.begin() + start, self.begin() + end);
+}
+
+// `Array<T>.count()`: the element count stored at the front of the block.
+template <class T>
+inline Int simse_array_count(const Array<T>& self) {
+    return self.count();
+}
+
+// `List<T>.toArray()` (specs/built-in-types.md): copies the elements into one count-first
+// block. Element copies are value copies, like every other copy in the language.
+template <class T>
+inline Array<T> simse_list_toArray(const List<T>& self) {
+    const Int count = self.size();
+    if (count <= 0) {
+        return Array<T>();
+    }
+    Array<T> result(count);
+    for (Int i = 0; i < count; i++) {
+        result[i] = self[i];
+    }
+    return result;
+}
+
+// `Array<T>.toList()`: the growable copy, which is how an element is added to an array.
+template <class T>
+inline List<T> simse_array_toList(const Array<T>& self) {
+    List<T> result;
+    const Int count = self.count();
+    result.reserve(count);
+    for (Int i = 0; i < count; i++) {
+        result.push_back(self[i]);
+    }
+    return result;
+}
+
+// `arrayEmpty<T>()`: the shared, zero-length array of `T` (no allocation).
+template <class T>
+inline Array<T> simse_arrayEmpty() {
+    return Array<T>();
+}
+
+// `Str.append(ch)`: `Str` has no single-character append, so this is `push_back`.
+inline void simse_str_append(Str& self, Char value) {
+    self.push_back(static_cast<char>(value));
+}
+
+// `Str.appendStr(text)`: appends in place, so an emitter accumulates output without
+// `out = out + text` rebuilding the whole buffer on every line (which is quadratic).
+inline void simse_str_appendStr(Str& self, const Str& value) {
+    self.append(value);
+}
+
+// `Str.appendStrPtr(text)`: the same append for a text the caller only *borrows*, so
+// nothing is copied on the way.
+inline void simse_str_appendStrPtr(Str& self, const Str* value) {
+    if (value != nullptr) self.append(*value);
+}
+
+// `Str.reserve(count)`: grows the buffer once, so a run of appends writes the text once
+// instead of copying the accumulated prefix at every growth step. A *hint*, not a length.
+inline void simse_str_reserve(Str& self, Int count) {
+    self.reserve((Str::size_type) count);
+}
+
+// `Int.toString()`: the scalar-to-inline-string conversion (specs/memory-model.md).
+inline Str simse_int_toString(Int self) {
+    return std::to_string(self);
 }
 
 // Expands one run-length encoded series into `out`, which holds `count` values.

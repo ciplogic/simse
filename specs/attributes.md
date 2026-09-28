@@ -23,9 +23,10 @@ skipped.
 
 ## Placement
 
-An attribute precedes a declaration. In this baseline only method declarations take
-attributes; attributes on types, fields, parameters, and statements are deferred, and an
-attribute anywhere else (a file-level `var`, a `data class` member, ...) is a parse error.
+An attribute precedes a declaration: a method or a **type** (`data class`, `enum class`).
+In this baseline attributes on fields, parameters, and statements are deferred, and an
+attribute anywhere else (a file-level `var`, a `data class` field, a parameter, ...) is a
+parse error.
 
 A method that carries an attribute must omit its body, ending at `;` or the line: the
 generator owns the C++ (diagnostic: "a method whose C++ is generated must not have a
@@ -38,6 +39,8 @@ The parser records on the `Function` node: `Attribute` (the attribute's own name
 `Generator` (the generator the first argument names: `cpp`, `res`, `kt`, `json`), and
 `GeneratorArgs` (the remaining arguments, in order, joined by `,`, a string literal
 without its quotes).
+
+A type declaration records the same three on its `DataClass`/`Enum` node.
 
 A generator whose text is not emitted at the declaration - `cpp` and `res` - names the C++
 symbol a call reaches as one of its own arguments: `cpp`'s second (`res` names its section
@@ -56,3 +59,13 @@ declaration is deferred.
 An attribute does not change the declaration's type or its visibility. It selects an
 implementation strategy for the declaration, which the compiler resolves as described in
 `impl_specs/generators.md`.
+
+On a **type**, the attribute selects the type's *materialization*. `@SmGen("cpp")` says the
+C++ is a hand-written header that is already included, and `@SmGen("res", "section")` that
+it is a resource section; either way the emitter does **not** generate the struct, and the
+header/section defines it. A `data class`/`enum class` **without** an attribute is
+*generated* from its declaration like a program's, so a type whose layout only C++ can
+express (`Str`, `Span`, `XmlNode`, `FileStream`, ...) carries its C++ explicitly, while a
+type Simse can express (the compiler's own `AstXmlNode`, in `cppsrc/rtl/astxml.kt`) is
+written in Simse alone. A prelude type is generated only when the program *reaches* it
+(naming it, or naming a type it holds), never into a program that does not use it.

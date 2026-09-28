@@ -596,7 +596,7 @@ data class Emitter(
                 this.enumNames.insert(declName, true)
             }
             if (decl.name == AstNodeKind.DataClass) {
-                if (input.prelude) {
+                if (this.typeIsRaw(decl)) {
                     continue
                 }
                 this.dataClassNames.insert(declName, true)
@@ -888,14 +888,27 @@ data class Emitter(
     // Every aggregate the program declares, named before any is defined: packages are
     // emitted in source order and a generated struct may hold a pointer to another package's
     // type, so the definition would otherwise come too late.
-    fun emitForwardTypes(): Unit {
+    // A type whose C++ is hand-written: a prelude declaration carrying the cpp generator (a
+    // header, already included) or the res generator (a resource section). The emitter skips
+    // it and the header/section defines it. An unmarked type is generated from its
+    // declaration, like a program type (specs/attributes.md).
+    fun typeIsRaw(decl: *AstXmlNode): Bool {
+        val generator: Str = xmlAttr(decl, AstNodeAttributeKind.Generator)
+        return generator == "cpp" || generator == "res"
+    }
+
+    fun emitForwardTypes(emitted: *Dictionary<Str, Bool>): Unit {
         for (*input in this.inputs) {
-            if (input.prelude) {
-                continue
-            }
             val decls: List<AstXmlNode> = xmlDecls(input.module)
             for (*decl in decls) {
             if (decl.name != AstNodeKind.DataClass) {
+                continue
+            }
+            if (this.typeIsRaw(decl)) {
+                continue
+            }
+            val fwdName: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
+            if (input.prelude && !emitted.has(fwdName)) {
                 continue
             }
             val tmpl: Str = this.templateClause(xmlTypeParamNames(decl))
@@ -908,21 +921,27 @@ data class Emitter(
         }
     }
 
-    fun emitTypes(): Unit {
+    fun emitTypes(emitted: *Dictionary<Str, Bool>): Unit {
         for (*input in this.inputs) {
-            if (input.prelude) {
-                continue
-            }
             this.curFile = input.fileName
             val decls: List<AstXmlNode> = xmlDecls(input.module)
             for (*decl in decls) {
+            val tname: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
+            val reachable: Bool = !input.prelude || emitted.has(tname)
             if (decl.name == AstNodeKind.DataClass) {
-                this.emitDataClass(decl)
+                if (reachable && !this.typeIsRaw(decl)) {
+                    this.emitDataClass(decl)
+                }
             } else if (decl.name == AstNodeKind.Enum) {
-                this.emitEnum(decl)
-                this.emitEnumConversion(decl)
+                if (reachable && !this.typeIsRaw(decl)) {
+                    this.emitEnum(decl)
+                    this.emitEnumConversion(decl)
+                }
             } else if (decl.name == AstNodeKind.TypeAlias) {
-                this.emitTypeAlias(decl)
+                // A prelude alias (StrView) is the header one; a program alias is emitted.
+                if (!input.prelude) {
+                    this.emitTypeAlias(decl)
+                }
             }
             if (this.failed) {
                 return
@@ -1560,6 +1579,72 @@ data class Emitter(
             this.collectTypeNames(node.Children[i])
             i = i + 1
         }
+    }
+
+    // The prelude types the program reaches, closed over the field types of the *prelude*
+    // structs it names: naming AstXmlNode reaches AstNodeAttribute, which reaches
+    // AstNodeAttributeKind, and so on. A program that never names the compiler AST carries
+    // none of it; the compiler itself names it everywhere and carries it all. The seed is
+    // `referencedTypes` - which collectProgramNames closed over the reached prelude bodies,
+    // and which collectTypeNames filled from the program itself, so the fields of a program
+    // struct are already here and only the prelude structs need walking.
+    //
+    // The pointer form on every walk: a value binds a copy per element.
+    fun computeEmittedTypes(): Dictionary<Str, Bool> {
+        var out: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+        val seed: List<Str> = this.referencedTypes.keys()
+        for (*name in seed) {
+            out.insert(*name, true)
+        }
+        var changed: Bool = true
+        while (changed) {
+            changed = false
+            val names: List<Str> = out.keys()
+            for (*name in names) {
+                if (this.typePackage(name) != "rtl") {
+                    continue
+                }
+                val decl: *AstXmlNode = this.types.getPtr(*name)
+                if (decl == null || decl.name != AstNodeKind.DataClass || this.typeIsRaw(decl)) {
+                    continue
+                }
+                for (*field in xmlChildren(decl, AstNodeKind.Field)) {
+                    val fieldType: *AstXmlNode = xmlChildPtr(field, AstNodeKind.Type)
+                    if (!xmlIsEmpty(fieldType) && this.gatherTypeNames(fieldType, out)) {
+                        changed = true
+                    }
+                }
+            }
+        }
+        return out
+    }
+
+    // The type names a type node names, nesting included (List<AstXmlNode> names both), added
+    // to `out`; true when a name was added that was not there (the closure walks until no
+    // struct adds one).
+    fun gatherTypeNames(node: *AstXmlNode, out: *Dictionary<Str, Bool>): Bool {
+        val role: AstNodeKind = node.name
+        if (role != AstNodeKind.Type && role != AstNodeKind.Inner && role != AstNodeKind.TypeArg
+            && role != AstNodeKind.ReturnType && role != AstNodeKind.TargetType
+            && role != AstNodeKind.ParamType && role != AstNodeKind.Receiver
+        ) {
+            return false
+        }
+        var added: Bool = false
+        val name: *Str = xmlAttr(node, AstNodeAttributeKind.Name)
+        if (*name != "") {
+            val at: Int = out.size()
+            out.insert(*name, true)
+            if (out.size() != at) {
+                added = true
+            }
+        }
+        for (*child in node.Children) {
+            if (this.gatherTypeNames(child, out)) {
+                added = true
+            }
+        }
+        return added
     }
 
     // The names a body's own C++ scope already has, which a hoisted declaration may not
@@ -3530,12 +3615,13 @@ fun Emitter.emitUninit(fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts, prototype
         this.emitStringTable()
         this.sections.begin("resources")
         this.emitResourceTable()
+        val emittedTypes: Dictionary<Str, Bool> = this.computeEmittedTypes()
         this.sections.begin("types")
-        this.emitForwardTypes()
+        this.emitForwardTypes(emittedTypes)
         if (this.failed) {
             return Res<Str>.err(this.error)
         }
-        this.emitTypes()
+        this.emitTypes(emittedTypes)
         if (this.failed) {
             return Res<Str>.err(this.error)
         }

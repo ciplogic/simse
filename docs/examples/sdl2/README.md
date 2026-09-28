@@ -38,24 +38,25 @@ docs\examples\sdl2\app\sdl2demo.exe        :: ... or, with no argument, until Es
 
 - `wrapper/api.kt` - the declarations. The signatures are the library's ABI written in Simse
   types: `Int` is the native `int`, `Str` is a native `const char*`, and an SDL handle
-  (`SDL_Window*`, `SDL_Renderer*`) is a `*Int8`, the raw pointer the generator casts on the way
-  in and out.
+  (`SDL_Window*`, `SDL_Renderer*`) is a `RawPtr` - a `void*`, the raw pointer the generator casts
+  on the way in and out (`specs/memory-model.md`).
 - The emitted thunk for one of them (in `app/out.cpp`, after transpiling):
 
   ```cpp
-  Int32 __sm_native_SDL_CreateWindow(const Str& title, const Int32& x, /* ... */) {
+  RawPtr __sm_native_SDL_CreateWindow(const Str& title, const Int32& x, /* ... */) {
       using Fn = void* (*)(const char*, Int32, Int32, Int32, Int32, Int32);
       static Fn fn = (Fn) __sm_nativeResolve("SDL2.dll", "SDL_CreateWindow");
       if (fn == nullptr) return nullptr;
-      return (Int8*) fn(title.c_str(), x, y, width, height, flags);
+      return (RawPtr) fn(title.c_str(), x, y, width, height, flags);
   }
   ```
 
   `__sm_nativeResolve` is the shared loader (`LoadLibraryA`/`GetProcAddress`, cached); the
   `(Fn)` cast is the raw-pointer cast P/Invoke makes for you.
 - `wrapper/_res.md` - the one piece that stays C++. `SDL_Event` is a union of every event
-  shape and Simse has no cast, so the glue includes the real SDL header and reinterprets the
-  event bytes (`SDL_Event*` for the type, `SDL_KeyboardEvent*` once the type says `SDL_KEYDOWN`).
+  shape, which a `RawPtr` cannot name (it is the pointer, not the pointee), so the glue includes
+  the real SDL header and reinterprets the event bytes (`SDL_Event*` for the type,
+  `SDL_KeyboardEvent*` once the type says `SDL_KEYDOWN`).
 
 ## Caveats
 

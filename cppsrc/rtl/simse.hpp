@@ -14,6 +14,7 @@
 // Order follows dependencies: types and containers have no RTL-relative
 // dependencies, and the higher-level headers build on them.
 #include "types.hpp"        // scalar aliases and Str
+#include "intrinsics.hpp"   // the byte primitives (memcpy/memcmp/...): the machine, in C++
 #include "ref.hpp"          // Ref<T> (`&T`): SmRef, or the std::shared_ptr shim
 #include "containers.hpp"   // SmallVector, List, PList, Dictionary, Array, RawArray
 #include "span.hpp"         // Span<T> (borrowed view: pointer + length)
@@ -25,4 +26,6 @@
 #include "functional.hpp"   // Func, Action, AutoDefer
 #include "result.hpp"       // Res<T> (Variant2<T, Str>) and the free ok/err forms
 #include "xml.hpp"          // Attribute, XmlNode (the general tree a program builds)
-#include "astxml.hpp"       // AstNodeKind, AstNodeAttributeKind, AstXmlNode (the compiler's AST)
+// The compiler's AST (`AstXmlNode`, `AstNodeKind`, ...) is *generated*: it is declared in
+// cppsrc/rtl/astxml.kt and the emitter writes its structs and enums (specs/attributes.md's
+// type materialization), so there is no header to include for it any more.
