@@ -40,7 +40,7 @@ fun tasksDrain(): Unit
 // Hand a fresh, parentless task to the queues: the one thing `tasksSpawn` does. It resumes nobody,
 // so the thread that runs it to completion frees it.
 @SmGen("res", "tasks", "simse_tasksEnqueue")
-fun tasksEnqueue(child: *Int8): Unit
+fun tasksEnqueue(child: RawPtr): Unit
 
 // Hand `child` to the queues and step aside, so the caller does not wait for it. A `suspend`
 // function like any other - the suspension is what yields the caller's thread so the spawned task
@@ -49,7 +49,7 @@ fun tasksEnqueue(child: *Int8): Unit
 //
 // `Bool`, not `Res<Bool>`: the prelude must not name a bare type a program may redefine (a program
 // declaring its own `Res` with an `unInit` would otherwise bind this return type to it).
-suspend fun tasksSpawn(child: *Int8): Bool {
+suspend fun tasksSpawn(child: RawPtr): Bool {
     tasksEnqueue(child)
     return true
 }
@@ -99,7 +99,7 @@ fun tasksBranch(): Int
 fun tasksFinish(): Unit
 
 @SmGen("res", "tasks", "simse_tasksSuspendAt")
-fun tasksSuspendAt(child: *Int8, at: Int): Unit
+fun tasksSuspendAt(child: RawPtr, at: Int): Unit
 
 @SmGen("res", "tasks", "simse_tasksReleaseHandle")
-fun tasksReleaseHandle(child: *Int8): Unit
+fun tasksReleaseHandle(child: RawPtr): Unit

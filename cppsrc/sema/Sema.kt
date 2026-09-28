@@ -221,6 +221,9 @@ fun semaTypeText(node: *AstXmlNode): Str {
         }
 
         AstNodeCategory.TypePointer -> {
+            if (xmlIsRawPtrType(node)) {
+                return "RawPtr"
+            }
             return "*" + semaTypeText(xmlChildPtr(node, AstNodeKind.Inner))
         }
 

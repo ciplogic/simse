@@ -242,6 +242,19 @@ fun xmlKindText(kind: AstNodeCategory): Str {
     return ""
 }
 
+// `RawPtr` desugars to `*Unit` (Parser.parseType), so this is how a *type node* says "the opaque
+// `void*`" - and how a diagnostic spells it back, because `*Unit` is not a name a reader wrote.
+fun xmlIsRawPtrType(typeNode: *AstXmlNode): Bool {
+    if (xmlIsEmpty(typeNode) || xmlKind(typeNode) != AstNodeCategory.TypePointer) {
+        return false
+    }
+    val inner: AstXmlNode = xmlChild(typeNode, AstNodeKind.Inner)
+    if (xmlIsEmpty(inner) || xmlKind(inner) != AstNodeCategory.TypeNamed) {
+        return false
+    }
+    return xmlAttr(inner, AstNodeAttributeKind.Name) == "Unit"
+}
+
 fun xmlIntAttr(node: *AstXmlNode, name: AstNodeAttributeKind, fallback: Int): Int {
     val parsed: Opt<Int> = xmlAttr(node, name).toInt()
     if (parsed.hasValue()) {

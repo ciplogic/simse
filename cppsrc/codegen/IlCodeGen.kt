@@ -1090,6 +1090,25 @@ fun Emitter.ilValueText(il: *IlBody, frame: *IlFrame, opIndex: Int, expected: *A
         this.ilWhy = "a concatenation in a value position"
         return Opt<Str>.none()
     }
+    if (op.kind == IlOpKind.Cast) {
+        // `h.getAs<T>()`: the destination's type *is* the cast's target - the extractor set it
+        // from the type argument (LinearForm.kt, `IlCallNode`'s sibling in `IlExtractor.call`) -
+        // so `RawPtr` to `*T` is one `reinterpret_cast` and the IL needs no type operand.
+        val dst: Int = this.ilOpOperand(op.operands, 0)
+        val dstType: AstXmlNode = ilVarType(il, dst)
+        if (xmlIsEmpty(dstType)) {
+            this.ilWhy = "a cast with no target type"
+            return Opt<Str>.none()
+        }
+        val operand: AstXmlNode = this.ilOperandNode(il, frame, this.ilOpOperand(op.operands, 1), 0)
+        if (xmlIsEmpty(operand)) {
+            this.ilWhy = "a cast with no operand"
+            return Opt<Str>.none()
+        }
+        return Opt<Str>.some(
+            fmtStr("reinterpret_cast<|>(|)", this.type(dstType), this.expr(operand, 0, xmlEmptyNode()))
+        )
+    }
     if (op.kind == IlOpKind.Pack) {
         // `List<T>{v1, v2, ...}`: `List` is `SmallVector<T, 4>`, so a short list stays
         // inline and allocates nothing - which is why a pack builds a `List`, not an `Array`.

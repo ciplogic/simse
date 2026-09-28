@@ -1147,7 +1147,7 @@ struct Task {
     // One call, so a generated body never touches the protocol's fields directly. Every
     // suspension is a heap task today; a future `ValueTask`-style shortcut could avoid the heap
     // when a callee is known to complete without waiting.
-    void suspendOn(Int8* child, Int at);
+    void suspendOn(RawPtr child, Int at);
 
     // The completion epilogue a generated `run()` ends with: mark the body done, then hand the
     // caller back. The parent reference is dropped *before* the resume - a finished child must
@@ -1166,7 +1166,7 @@ struct Task {
 
     // Drop a child handle the generated body held while it waited. The value it carried was
     // read out first, which is what makes the drop the child's last reference.
-    void releaseHandle(Int8* handle) {
+    void releaseHandle(RawPtr handle) {
         ((Task*) handle)->release();
     }
 };
@@ -1234,7 +1234,7 @@ void Task::resume() {
     this->loop->enqueueHome(this);
 }
 
-void Task::suspendOn(Int8* child, Int at) {
+void Task::suspendOn(RawPtr child, Int at) {
     Task* c = (Task*) child;
     c->parent = this;
     this->retain();
@@ -1261,8 +1261,8 @@ inline Loop& taskLoop() {
 // current task is the caller (`taskCurrent`).
 Int simse_tasksBranch();
 void simse_tasksFinish();
-void simse_tasksSuspendAt(Int8* child, Int at);
-void simse_tasksReleaseHandle(Int8* child);
+void simse_tasksSuspendAt(RawPtr child, Int at);
+void simse_tasksReleaseHandle(RawPtr child);
 
 void simse_tasksQueue(Int id, Int threads);
 // Make `id` a *compute* queue: the scheduler enqueues tasks to it (round-robin) instead of only
@@ -1281,7 +1281,7 @@ void simse_tasksRunLoop();
 void simse_tasksDrain();
 // Hand a fresh, parentless task to the queues: the one thing `tasksSpawn` does. The child resumes
 // nobody, so a task that finishes as an orphan is freed where it stopped.
-void simse_tasksEnqueue(Int8* child);
+void simse_tasksEnqueue(RawPtr child);
 ```
 bodies:
 ```cpp
@@ -1677,7 +1677,7 @@ void simse_tasksDrain() {
 
 // `tasksSpawn`: hand a fresh, parentless task to the queues. It resumes nobody, so the thread that
 // runs it to completion frees it.
-void simse_tasksEnqueue(Int8* child) {
+void simse_tasksEnqueue(RawPtr child) {
     simse_tasks::Task* task = (simse_tasks::Task*) child;
     task->orphan = true;
     task->loop = &simse_tasks::taskLoop();
@@ -1695,11 +1695,11 @@ void simse_tasksFinish() {
     task->loop->completed();
 }
 
-void simse_tasksSuspendAt(Int8* child, Int at) {
+void simse_tasksSuspendAt(RawPtr child, Int at) {
     simse_tasks::taskCurrent()->suspendOn(child, at);
 }
 
-void simse_tasksReleaseHandle(Int8* child) {
+void simse_tasksReleaseHandle(RawPtr child) {
     ((simse_tasks::Task*) child)->release();
 }
 
@@ -1723,5 +1723,82 @@ List<Int> simse_tasksChainTrace() {
     }
     return steps;
 }
+```
+
+!print
+====
+emit: always
+forward:
+```cpp
+#include <cstdio>
+
+// `print` / `println` in C, not C++ streams. The language's formatting is its own (`fmtStr`), and
+// a value is one `fwrite`/`fputs`, so a program that prints never pulls in <iostream> - and with
+// it the standard streams' static construction and the locale facets that drag in. One overload
+// per built-in `println` accepts, so a call spells the same whatever it prints; `bool` prints
+// `true`/`false`, which is what the `std::boolalpha` the emitter used to write gave.
+inline void simse_write(const Str& value, FILE* out) {
+    std::fwrite(value.data(), 1, (std::size_t) value.size(), out);
+}
+
+inline void simse_write(StrView value, FILE* out) {
+    std::fwrite(value.ptr, 1, (std::size_t) value.len, out);
+}
+
+inline void simse_write(bool value, FILE* out) {
+    std::fputs(value ? "true" : "false", out);
+}
+
+inline void simse_write(char value, FILE* out) {
+    std::fputc((int) (unsigned char) value, out);
+}
+
+inline void simse_write(signed char value, FILE* out) {
+    std::fputc((int) (unsigned char) value, out);
+}
+
+inline void simse_write(unsigned char value, FILE* out) {
+    std::fputc((int) value, out);
+}
+
+inline void simse_write(short value, FILE* out) {
+    std::fprintf(out, "%d", (int) value);
+}
+
+inline void simse_write(int value, FILE* out) {
+    std::fprintf(out, "%d", value);
+}
+
+inline void simse_write(long value, FILE* out) {
+    std::fprintf(out, "%ld", value);
+}
+
+inline void simse_write(long long value, FILE* out) {
+    std::fprintf(out, "%lld", value);
+}
+
+inline void simse_write(float value, FILE* out) {
+    std::fprintf(out, "%g", (double) value);
+}
+
+inline void simse_write(double value, FILE* out) {
+    std::fprintf(out, "%g", value);
+}
+
+template <class T>
+inline void simse_print(const T& value, FILE* out) {
+    simse_write(value, out);
+}
+
+template <class T>
+inline void simse_println(const T& value, FILE* out) {
+    simse_write(value, out);
+    std::fputc('\n', out);
+}
+```
+bodies:
+```cpp
+// The `simse_write` overloads and the two printers are all inline in the forward block: nothing
+// here.
 ```
 

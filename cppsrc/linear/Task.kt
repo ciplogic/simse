@@ -82,6 +82,14 @@ fun tskVoidReturn(): AstXmlNode {
     return yldStmt(AstNodeCategory.StmtReturn)
 }
 
+// The statements inside a body or an arm: a block's (or an `if`-arm's) children are the
+// *container's* `Stmt` children, one level below the node itself (`Parser.container`, `linBlock`).
+// Reading the container instead would hand the walker a node with no category at all, which is
+// what the IL turns into an `Unsupported`.
+fun tskContainerStmts(node: *AstXmlNode, role: AstNodeKind): List<AstXmlNode> {
+    return xmlChildren(xmlChildPtr(node, role), AstNodeKind.Stmt)
+}
+
 fun tskCallNamed(name: Str, args: *List<AstXmlNode>): AstXmlNode {
     return yldCall(linName(AstNodeKind.Callee, name, 0, 0), args)
 }
@@ -256,9 +264,9 @@ data class TskMachinery(
                 // field when that statement is lowered, because only then is it sure the value has
                 // to survive the resume label.
             }
-            this.collectLocals(xmlChildren(stmt, AstNodeKind.Body), depth + 1)
-            this.collectLocals(xmlChildren(stmt, AstNodeKind.Then), depth + 1)
-            this.collectLocals(xmlChildren(stmt, AstNodeKind.Else), depth + 1)
+            this.collectLocals(tskContainerStmts(stmt, AstNodeKind.Body), depth + 1)
+            this.collectLocals(tskContainerStmts(stmt, AstNodeKind.Then), depth + 1)
+            this.collectLocals(tskContainerStmts(stmt, AstNodeKind.Else), depth + 1)
         }
     }
 
@@ -334,7 +342,9 @@ data class TskMachinery(
         this.suspensions = this.suspensions + 1
         val at: Int = this.suspensions
         val handleName: Str = tskHandleField(at)
-        this.addField(handleName, ilPointerNode(yldNamedType("Int8")))
+        // The child handle is a `RawPtr` (`void*`): the task type is not a name this lowering
+        // knows, and `*Unit` is exactly the opaque pointer the RTL protocol takes.
+        this.addField(handleName, ilPointerNode(yldNamedType("Unit")))
         val handle: Str = this.member(handleName)
         val calleeReturn: AstXmlNode = tskCalleeReturn(this.asyncNames, calleeName)
         val hasResult: Bool = !xmlIsEmpty(calleeReturn)
@@ -505,7 +515,7 @@ data class TskMachinery(
 
             AstNodeCategory.StmtBlock -> {
                 var inner: List<AstXmlNode> = List<AstXmlNode>()
-                val children: List<AstXmlNode> = xmlChildren(stmt, AstNodeKind.Body)
+                val children: List<AstXmlNode> = tskContainerStmts(stmt, AstNodeKind.Body)
                 for (*child in children) {
                     this.statements(child, inner)
                 }

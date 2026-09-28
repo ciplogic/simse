@@ -18,6 +18,16 @@ using Char    = std::int8_t;
 using Int     = Int32; // default integer type; alias of Int32
 using Bool    = bool;  // two-valued built-in (specs/built-in-types.md)
 
+// The language's pointer spellings (specs/memory-model.md, "Memory operators on types").
+// `RawPtr` is the opaque `void*` a native handle crosses as; the language desugars it to the
+// pointer type with no pointee (Parser.parseType), so its emitted C++ is exactly this alias -
+// and a hand-written `_res.md` section, which is C++ and not Simse, can name it too.
+// `PtrOf<T>` is `T*` written with an angle bracket, and the language resolves it before
+// emission; the alias is here so the two spellings are the same name on both sides.
+using RawPtr = void*;
+template <class T>
+using PtrOf = T*;
+
 // Str is the mutable inline byte-string type. `smstring.hpp` defines SmString
 // (a NUL-terminated SmallVector<kStrInlineCapacity, Char>, the capacity defined in
 // strsmallvector.hpp) and names it `Str`; the `<string>` include above is for the

@@ -379,6 +379,9 @@ fun ilTypeText(typeNode: *AstXmlNode): Str {
         }
 
         AstNodeCategory.TypePointer -> {
+            if (xmlIsRawPtrType(typeNode)) {
+                return "RawPtr"
+            }
             return "*" + ilTypeText(xmlChildPtr(typeNode, AstNodeKind.Inner))
         }
 
@@ -429,6 +432,9 @@ fun ilReceiverTypeText(typeNode: *AstXmlNode): Str {
         }
 
         AstNodeCategory.TypePointer -> {
+            if (xmlIsRawPtrType(typeNode)) {
+                return "RawPtr"
+            }
             return "*" + ilTypeText(xmlChildPtr(typeNode, AstNodeKind.Inner))
         }
     }
@@ -2779,6 +2785,30 @@ data class IlExtractor(
 
         val calleeName: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
         val argNodes: List<AstXmlNode> = xmlChildren(e, AstNodeKind.Arg)
+
+        // `h.getAs<T>()`: the language's one cast (specs/memory-model.md, "Memory operators on
+        // types"). `RawPtr` is a `void*` and C++ will not narrow one implicitly, so this is the
+        // single place the language spells the reinterpretation. The *destination's* type is what
+        // the instruction carries - the `Cast` the IL declares - and the type argument is what
+        // fixes that destination here, so the emitter never needs to see it (`ilValueText`).
+        if (member && !staticCall && calleeName == "getAs") {
+            val typeArgs: List<AstXmlNode> = xmlChildren(callee, AstNodeKind.TypeArg)
+            if (typeArgs.size() == 1 && argNodes.size() == 0) {
+                if (!hasDst) {
+                    this.unsupported("a cast with no destination")
+                    return
+                }
+                var pointed: AstXmlNode = typeArgs[0]
+                if (xmlKind(pointed) != AstNodeCategory.TypePointer
+                    && xmlKind(pointed) != AstNodeCategory.TypeReference
+                ) {
+                    pointed = ilPointerNode(pointed)
+                }
+                this.setSlotType(dst, pointed)
+                this.emit(IlOpKind.Cast, ilOps2(dst, recvSlot))
+                return
+            }
+        }
 
         // The trailing arguments may pack into a list-valued last parameter. A static call
         // (`Res<Str>.ok(x)`) is not looked up: its callee is a type.

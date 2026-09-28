@@ -22,13 +22,13 @@ fun main(args: List<Str>): Int {
         println("SDL_Init failed: " + SDL_GetError())
         return 1
     }
-    val window: *Int8 = sdlCreateWindow("simse + SDL2 - press escape to quit", 640, 480)
+    val window: RawPtr = sdlCreateWindow("simse + SDL2 - press escape to quit", 640, 480)
     if (window == null) {
         println("SDL_CreateWindow failed: " + SDL_GetError())
         SDL_Quit()
         return 1
     }
-    val renderer: *Int8 = sdlCreateRenderer(window)
+    val renderer: RawPtr = sdlCreateRenderer(window)
     if (renderer == null) {
         println("SDL_CreateRenderer failed: " + SDL_GetError())
         SDL_DestroyWindow(window)
@@ -38,7 +38,7 @@ fun main(args: List<Str>): Int {
 
     // The wrapper's glue owns the one `SDL_Event` the program polls into, and reinterprets its
     // bytes as the event it holds (`sdlEventKind`/`sdlKeySymbol`).
-    val eventPtr: *Int8 = sdlEventBuffer()
+    val eventPtr: RawPtr = sdlEventBuffer()
 
     var running: Bool = true
     var frame: Int = 0

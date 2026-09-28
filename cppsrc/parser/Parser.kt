@@ -851,6 +851,23 @@ data class Parser(
         return node
     }
 
+    fun namedTypeNode(role: AstNodeKind, name: Str, pos: SourcePos): AstXmlNode {
+        var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
+        return AstXmlNode(role, AstNodeCategory.TypeNamed, attrs, Array<AstXmlNode>())
+    }
+
+    // A synthesized `*T`: the inner takes the `Inner` role a parsed one gets, so the emitter
+    // reads it the same way.
+    fun pointerTypeNode(role: AstNodeKind, inner: AstXmlNode, pos: SourcePos): AstXmlNode {
+        var renamed: AstXmlNode = inner
+        renamed.name = AstNodeKind.Inner
+        var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        var node: AstXmlNode = AstXmlNode(role, AstNodeCategory.TypePointer, attrs, Array<AstXmlNode>())
+        xmlAddChild(node, renamed)
+        return node
+    }
+
     fun parseType(role: AstNodeKind): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
 
@@ -938,10 +955,20 @@ data class Parser(
         }
         if (this.checkKind(TokenKind.Identifier)) {
             val name: Str = this.advance().text
+            // `RawPtr` is `void*` and `PtrOf<T>` is `*T` (specs/memory-model.md, "Memory
+            // operators on types"). Both desugar to the pointer node *here*, so every stage
+            // downstream - the handle kinds, the native generator's `void*`, the emitter -
+            // already reads them as pointers; the language keeps no second notion of one.
+            if (name == "RawPtr") {
+                return this.pointerTypeNode(role, this.namedTypeNode(AstNodeKind.Inner, "Unit", pos), pos)
+            }
             if (this.checkText("<")) {
                 val typeArgs: List<AstXmlNode> = this.parseGenericArgs()
                 if (this.failed) {
                     return this.emptyNode()
+                }
+                if (name == "PtrOf" && typeArgs.size() == 1) {
+                    return this.pointerTypeNode(role, typeArgs[0], pos)
                 }
                 var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
                 attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
@@ -2012,11 +2039,32 @@ data class Parser(
                 if (this.failed) {
                     return this.emptyExpr()
                 }
+                // A generic member call (`h.getAs<Int8>()`): tentative, the way a leading
+                // `name<...>` is in `parsePrimary` - the closer must be followed by `(`, or the
+                // `<` was a comparison (`m.branch < 3`) and this is a plain member.
+                var typeArgs: List<AstXmlNode> = List<AstXmlNode>()
+                if (this.checkText("<")) {
+                    val savedCursor: Span<Token> = this.cursor
+                    val savedFailed: Bool = this.failed
+                    val savedError: Str = this.error
+                    val savedClosers: Int = this.pendingClosers
+                    typeArgs = this.parseGenericArgs()
+                    if (this.failed || !this.checkText("(")) {
+                        this.cursor = savedCursor
+                        this.failed = savedFailed
+                        this.error = savedError
+                        this.pendingClosers = savedClosers
+                        typeArgs = List<AstXmlNode>()
+                    }
+                }
                 var attrs: List<AstNodeAttribute> = this.posAttrs(expr.line, expr.column)
                 attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
                 var node: AstXmlNode =
                     AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprMember, attrs, Array<AstXmlNode>())
                 this.attach(node, AstNodeKind.Receiver, expr.node)
+                if (typeArgs.size() > 0) {
+                    xmlAddChildren(node, typeArgs)
+                }
                 expr = ExprNode(node, expr.line, expr.column)
             } else if (this.checkText("!") && this.peek(1).text == "!") {
                 // `x!!` (cppsrc/parser/Propagate.kt): the payload of a `Res`, or its failure

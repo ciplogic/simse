@@ -3,7 +3,6 @@
 #include <cstring>
 #include <functional>
 #include <istream>
-#include <ostream>
 #include <string>
 
 #include "strsmallvector.hpp"
@@ -307,8 +306,6 @@ public:
     // `simse_toStdString` helper) so it compiles in either Str configuration.
     std::string toStdString() const { return std::string(data(), (std::size_t) size()); }
 
-    void writeTo(std::ostream& out) const { out.write(data(), (std::streamsize) size()); }
-
 private:
     using Data = StrSmallVector;
 
@@ -452,11 +449,6 @@ inline SmString operator+(const std::string& left, const SmString& right) {
 }
 
 inline void swap(SmString& left, SmString& right) { left.swap(right); }
-
-inline std::ostream& operator<<(std::ostream& out, const SmString& value) {
-    value.writeTo(out);
-    return out;
-}
 
 inline std::istream& getline(std::istream& in, SmString& line) {
     std::string buffer;

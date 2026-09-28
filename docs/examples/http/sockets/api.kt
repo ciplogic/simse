@@ -87,8 +87,11 @@ fun netBytesToStr(bytes: *Int8, count: Int): Str
 @SmGen("res", "netglue", "simse_net_buffer")
 fun netBuffer(size: Int): List<Int8>
 
-@SmGen("res", "netglue", "simse_net_recvCap")
-fun netRecvCap(): Int
+// The conventional read size a caller's `netBuffer` uses: a plain Simse function, not a resource -
+// a constant needs no C++. A caller that needs more reads another chunk into the same buffer.
+fun netRecvCap(): Int {
+    return 2048
+}
 
 // ---- the library surface ----
 //

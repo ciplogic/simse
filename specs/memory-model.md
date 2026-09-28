@@ -82,6 +82,40 @@ unmanaged pointer into the box's storage; it does not participate in
 refcounting. Getting a raw pointer out of a counted reference is analogous to
 `shared_ptr<T>::get()`.
 
+### `RawPtr` and `PtrOf<T>` — the opaque handle, and the typed spelling
+
+A native library's handle (`SDL_Window*`, a task, a socket) has no layout the
+language can name. `RawPtr` is that handle: a raw pointer with **no pointee
+type**, equivalent to C++ `void*`. It is nullable, and any `*T` **widens** to it
+implicitly - adding a pointee type is free - which is what lets one function take
+a handle from any origin (`specs/functions.md`, the native boundary).
+
+```text
+typealias PtrOf<T> = *T          // the typed spelling of a raw pointer
+val window: RawPtr = *value      // a `*Int` widens; no cast is written
+```
+
+`PtrOf<T>` is `*T` written with an angle bracket, so a generic function can name
+its pointer type (`fun deref<T>(p: PtrOf<T>): T`); the two spellings are the same
+type.
+
+The other direction is a **cast**, and it is written explicitly: going from the
+opaque handle back to a typed pointer is the reinterpretation C++ refuses to make
+implicitly, so it is the language's one cast, `handle.getAs<T>()`. It answers
+`PtrOf<T>` - the destination's own type is what the cast targets - and it is
+*unchecked*: the pointer must really point at a `T`.
+
+```text
+val window: RawPtr = sdlCreateWindow(title, 640, 480)
+val key: *SDL_KeyboardEvent = event.getAs<SDL_KeyboardEvent>()
+```
+
+What a `RawPtr` **cannot** express is a *typed* pointee: the union-style
+reinterpretation a native API often needs (SDL's event, whose bytes are read as a
+different member depending on the event type) stays in hand-written C++ behind a
+`@SmGen("res", ...)` section
+(`impl_specs/native-interop.md`, `docs/examples/sdl2/wrapper/_res.md`).
+
 ### Extraction (`copy`)
 
 The underlying value of a reference (`&T`) or a raw pointer (`*T`) is obtained

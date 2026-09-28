@@ -107,14 +107,6 @@ inline Str operator+(const Str& left, StrView right) {
     return result;
 }
 
-// `println` is `std::cout << value`, so a view needs its own writer to stay unowned.
-inline std::ostream& operator<<(std::ostream& out, StrView value) {
-    if (value.len > 0) {
-        out.write(reinterpret_cast<const char*>(value.ptr), (std::streamsize) value.len);
-    }
-    return out;
-}
-
 // The `StrView -> Str` conversion declared in smstring.hpp: a position that wants an
 // owned `Str` where the pool or a view stands. Delegates to the `(text, count)`
 // constructor, so the bytes are copied exactly once.

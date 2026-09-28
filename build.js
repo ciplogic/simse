@@ -160,7 +160,6 @@ function compileFlags(opts) {
   if (opts.pdb || !opts.release) flags.push("/Zi");
   if (opts.pdb) flags.push("/DEBUG");
   if (opts.release && opts.lto) flags.push("/GL");
-  if (process.env.SIMSE_ASAN) flags.push("/fsanitize=address");
   return flags;
 }
 
