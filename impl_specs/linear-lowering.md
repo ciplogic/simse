@@ -446,10 +446,13 @@ call argument, say) stays one jump whose condition holds the operator, which the
 emitter spells as C++ `&&` - `containsShortCircuit`/`isDecomposable` are exactly that
 boundary.
 
-**In a value position** the shape is the one below and it is still open: the result
-has to be materialised in a temporary, and that means binding into a slot from two
-places, which the expression lowering does not do (it is why `exprIsShortCircuit`
-keeps the operators out of its reach).
+**In a value position** the shape is the one below, and it is implemented in the
+expression lowering (`ExpressionLowering.lowerShortCircuit`): the result is materialised
+in a slot written from each operand's guard, and the slot is what the enclosing expression
+reads. A chain of one operator is flattened first (`shortCircuitChain`), so `a || b || c`
+shares **one** slot and **one** label - three assignments and two jumps - instead of the
+per-level nesting the left-associative parse would otherwise produce. The last operand
+carries no guard: its value is the expression's.
 
 ```
 var x = a && b;
@@ -486,6 +489,9 @@ Labels are function-scoped in C++, so per-body numbering cannot collide, and
 re-emitting a body (a generic instantiation) always produces the same names. The
 counter is never reused across constructs inside one body. Exact numbers are not part of
 any contract; the corpus only requires the output to be reproducible.
+
+The value-position short-circuits use their own `_sm_sc<n>` counter (also per body), so
+the two label families can never collide within one body.
 
 ## Non-goals
 

@@ -231,23 +231,89 @@ fun indexOf(this: Str, sub: Str): Int
 @SmGen("res", "strops", "simse_str_lastIndexOf")
 fun lastIndexOf(this: Str, sub: Str): Int
 
-@SmGen("res", "strops", "simse_str_substr")
-fun substr(this: Str, start: Int, len: Int): Str
+// `Str.substr(start, len)` clamps `start` to [0, size]; a `len` of -1 (or one running
+// past the end) takes the rest. One block copy (`setBytes`), not a per-byte append.
+fun Str.substr(start: Int, len: Int): Str {
+    var begin = start
+    if (begin < 0) {
+        begin = 0
+    }
+    if (begin > this.size()) {
+        begin = this.size()
+    }
+    var count = this.size() - begin
+    if (len >= 0 && len < count) {
+        count = len
+    }
+    var out: Str
+    if (count > 0) {
+        out.setBytes(strBytes(this), begin, count)
+    }
+    return out
+}
 
 @SmGen("res", "strops", "simse_str_charAt")
 fun charAt(this: Str, index: Int): Char
 
-@SmGen("res", "strops", "simse_str_startsWith")
-fun startsWith(this: Str, prefix: Str): Bool
+// A byte comparison, prefix first: a longer prefix cannot match.
+fun Str.startsWith(prefix: Str): Bool {
+    val count = prefix.size()
+    if (count > this.size()) {
+        return false
+    }
+    var i = 0
+    while (i < count) {
+        if (this.charAt(i) != prefix.charAt(i)) {
+            return false
+        }
+        i = i + 1
+    }
+    return true
+}
 
-@SmGen("res", "strops", "simse_str_endsWith")
-fun endsWith(this: Str, suffix: Str): Bool
+fun Str.endsWith(suffix: Str): Bool {
+    val count = suffix.size()
+    val len = this.size()
+    if (count > len) {
+        return false
+    }
+    var i = 0
+    while (i < count) {
+        if (this.charAt(len - count + i) != suffix.charAt(i)) {
+            return false
+        }
+        i = i + 1
+    }
+    return true
+}
 
 @SmGen("res", "strops", "simse_str_replace")
 fun replace(this: Str, from: Str, to: Str): Str
 
-@SmGen("res", "strops", "simse_str_trim")
-fun trim(this: Str): Str
+// Leading and trailing space bytes stripped, one block copy of what is left.
+fun Str.trim(): Str {
+    var begin = 0
+    var end = this.size()
+    while (begin < end) {
+        val ch: Char = this.charAt(begin)
+        if (!ch.isSpace()) {
+            break
+        }
+        begin = begin + 1
+    }
+    while (end > begin) {
+        val ch: Char = this.charAt(end - 1)
+        if (!ch.isSpace()) {
+            break
+        }
+        end = end - 1
+    }
+    var out: Str
+    if (end > begin) {
+        out.setBytes(strBytes(this), begin, end - begin)
+    }
+    return out
+}
 
 @SmGen("res", "strops", "simse_str_split")
 fun split(this: Str, separator: Str): List<Str>
@@ -255,11 +321,36 @@ fun split(this: Str, separator: Str): List<Str>
 @SmGen("res", "strops", "simse_str_split")
 fun split(this: Str, separator: Char): List<Str>
 
-@SmGen("res", "strops", "simse_str_toUpper")
-fun toUpper(this: Str): Str
+// ASCII/byte case folding (the string type is a byte string).
+fun Str.toUpper(): Str {
+    var out: Str
+    out.reserve(this.size())
+    var i = 0
+    while (i < this.size()) {
+        var ch = this.charAt(i)
+        if (ch >= 'a' && ch <= 'z') {
+            ch = ch - 32
+        }
+        out.append(ch)
+        i = i + 1
+    }
+    return out
+}
 
-@SmGen("res", "strops", "simse_str_toLower")
-fun toLower(this: Str): Str
+fun Str.toLower(): Str {
+    var out: Str
+    out.reserve(this.size())
+    var i = 0
+    while (i < this.size()) {
+        var ch = this.charAt(i)
+        if (ch >= 'A' && ch <= 'Z') {
+            ch = ch + 32
+        }
+        out.append(ch)
+        i = i + 1
+    }
+    return out
+}
 
 // Written in the language, not C++: `size()` is the built-in it needs. Note the receiver
 // spelling (impl_specs/rtl-abi.md): a body writes the receiver type before the name

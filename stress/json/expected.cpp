@@ -216,21 +216,19 @@ void simse_list_sort(List<T>& self, F less);
 // language's `Int` (`int32_t`), including `Str::npos`, which is `-1`. Index/range errors
 // are unchecked where the underlying operation is unchecked; the `Opt`-returning
 // conversions never throw.
+//
+// What is only a byte loop is Simse now (cppsrc/rtl/rtl.kt: `trim`, `substr`,
+// `startsWith`/`endsWith`, case folding and the `Char` predicates); what stays is what
+// reaches `SmString` internals (`charAt`, `find`, `lastIndexOf`, `split`, `replace`) or the
+// standard library (`std::from_chars`, `std::to_string`).
 
 // `Str.charAt(index)`: the byte at `index` (unchecked; no bounds test).
 Char simse_str_charAt(const Str& self, Int index);
-
-// `Str.trim()` strips leading and trailing whitespace (space, tab, newline, CR).
-Str simse_str_trim(const Str& self);
 
 // `Str.split(separator)` splits on every occurrence. An empty separator returns the whole
 // string as a single element. Two overloads: a separator string and a separator byte.
 List<Str> simse_str_split(const Str& self, const Str& separator);
 List<Str> simse_str_split(const Str& self, Char separator);
-
-// ASCII/byte case folding (the string type is a byte string).
-Str simse_str_toUpper(const Str& self);
-Str simse_str_toLower(const Str& self);
 
 // `Str.find(sub)` returns the first index of `sub`, or -1 when absent (the language's
 // spelling of C++ `npos`).
@@ -238,12 +236,6 @@ Int simse_str_find(const Str& self, const Str& sub);
 
 // `Str.lastIndexOf(sub)` returns the last index of `sub`, or -1 when absent.
 Int simse_str_lastIndexOf(const Str& self, const Str& sub);
-
-// `Str.substr(start, len)` clamps `start` to [0, size]; `len` may run past the end.
-Str simse_str_substr(const Str& self, Int start, Int len);
-
-Bool simse_str_startsWith(const Str& self, const Str& prefix);
-Bool simse_str_endsWith(const Str& self, const Str& suffix);
 
 // `Str.replace(from, to)` replaces every occurrence of `from` with `to`.
 Str simse_str_replace(const Str& self, const Str& from, const Str& to);
@@ -256,7 +248,9 @@ Opt<Float64> simse_str_toFloat(const Str& self);
 
 // `Char` is a signed 8-bit integer; the checks are byte-range tests so they do not depend
 // on the C locale. Space, tab, newline and carriage return count as space; form feed and
-// vertical tab do not.
+// vertical tab do not. They stay here because a body would emit a `Char* self` receiver (a
+// `Char` is a scalar) while the call sites and the `CharPredicate` function values need the
+// byte by value.
 Bool simse_char_isDigit(Char self);
 Bool simse_char_isAlpha(Char self);
 Bool simse_char_isAlphaOrDigit(Char self);
@@ -362,6 +356,7 @@ SIMSE_PACK_POP
 
 Str substr(StrView* self, Int from, Int count);
 Str toString(StrView* self);
+Str substr(Str* self, Int start, Int len);
 Str jsonQuoted(Str value);
 Str toJson(ns1_Point* self);
 Str toJson(Int* self);
@@ -416,6 +411,48 @@ Str toString(StrView* self) {
     _sm_expr1 = simse_strView_size((*self));
     _sm_expr2 = substr(self, 0, _sm_expr1);
     return _sm_expr2;
+}
+Str substr(Str* self, Int start, Int len) {
+    Str* _sm_base1;
+    Int begin, _sm_expr2, count;
+    Bool _sm_expr1;
+    Char* _sm_expr8;
+    begin = start;
+    _sm_expr1 = begin < 0;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    begin = 0;
+    L2:;
+    _sm_expr2 = self->size();
+    _sm_expr1 = begin > _sm_expr2;
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    begin = self->size();
+    L4:;
+    _sm_expr2 = self->size();
+    count = _sm_expr2 - begin;
+    _sm_expr1 = len >= 0;
+    if (_sm_expr1) goto L7;
+    goto L6;
+    L7:;
+    _sm_expr1 = len < count;
+    if (_sm_expr1) goto L5;
+    goto L6;
+    L5:;
+    count = len;
+    L6:;
+    Str out;
+    _sm_expr1 = count > 0;
+    if (_sm_expr1) goto L8;
+    goto L9;
+    L8:;
+    _sm_base1 = self;
+    _sm_expr8 = simse_str_data(_sm_base1);
+    simse_str_setBytes(out, _sm_expr8, begin, count);
+    L9:;
+    return out;
 }
 // stress/json/src/main.kt
 int main() {
@@ -803,23 +840,8 @@ inline void simse_list_sort(List<T>& self, F less) {
     });
 }
 
-// `Str.isEmpty()` is the prelude's own body (cppsrc/rtl/rtl.kt), not a resource: `size()`
-// is the built-in it needs. This one is the shared space test the `Char` predicate below
-// uses too.
-inline Bool simse_str_isSpaceByte(Char ch) {
-    return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r';
-}
-
 inline Char simse_str_charAt(const Str& self, Int index) {
     return (Char) self[index];
-}
-
-inline Str simse_str_trim(const Str& self) {
-    Int begin = 0;
-    Int end = self.size();
-    while (begin < end && simse_str_isSpaceByte((Char) self[begin])) begin++;
-    while (end > begin && simse_str_isSpaceByte((Char) self[end - 1])) end--;
-    return self.substr(begin, end - begin);
 }
 
 inline List<Str> simse_str_split(const Str& self, const Str& separator) {
@@ -870,22 +892,6 @@ inline List<Str> simse_str_split(const Str& self, Char separator) {
     return parts;
 }
 
-inline Str simse_str_toUpper(const Str& self) {
-    Str result = self;
-    for (char& ch : result) {
-        if (ch >= 'a' && ch <= 'z') ch = (char) (ch - 'a' + 'A');
-    }
-    return result;
-}
-
-inline Str simse_str_toLower(const Str& self) {
-    Str result = self;
-    for (char& ch : result) {
-        if (ch >= 'A' && ch <= 'Z') ch = (char) (ch - 'A' + 'a');
-    }
-    return result;
-}
-
 inline Int simse_str_find(const Str& self, const Str& sub) {
     Int found = self.find(sub);
     return found == Str::npos ? -1 : found;
@@ -894,23 +900,6 @@ inline Int simse_str_find(const Str& self, const Str& sub) {
 inline Int simse_str_lastIndexOf(const Str& self, const Str& sub) {
     Int found = self.rfind(sub);
     return found == Str::npos ? -1 : found;
-}
-
-inline Str simse_str_substr(const Str& self, Int start, Int len) {
-    if (start < 0) start = 0;
-    if (start > self.size()) start = self.size();
-    Str result = self.substr(start);
-    if (len >= 0 && len < result.size()) result.resize(len);
-    return result;
-}
-
-inline Bool simse_str_startsWith(const Str& self, const Str& prefix) {
-    return prefix.size() <= self.size() && self.compare(0, prefix.size(), prefix) == 0;
-}
-
-inline Bool simse_str_endsWith(const Str& self, const Str& suffix) {
-    return suffix.size() <= self.size()
-           && self.compare(self.size() - suffix.size(), suffix.size(), suffix) == 0;
 }
 
 inline Str simse_str_replace(const Str& self, const Str& from, const Str& to) {
@@ -948,6 +937,11 @@ inline Opt<Float64> simse_str_toFloat(const Str& self) {
     std::from_chars_result parsed = std::from_chars(begin, end, value);
     if (parsed.ec != std::errc() || parsed.ptr != end) return Opt<Float64>::none();
     return Opt<Float64>::some(value);
+}
+
+// The shared space test, used by `simse_char_isSpace` (and, in Simse, by `Str.trim`).
+inline Bool simse_str_isSpaceByte(Char ch) {
+    return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r';
 }
 
 inline Bool simse_char_isDigit(Char self) {

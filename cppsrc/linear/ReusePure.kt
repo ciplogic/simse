@@ -277,7 +277,7 @@ fun ilReusePure(il: *IlBody, pure: *Dictionary<Str, Bool>): Bool {
             firstOps.insert(key, hitOps[h])
             firstDsts.insert(key, dst)
             sameDsts.insert(key, 1)
-        } else if (dst == *firstDsts.getPtr(key)) {
+        } else if (dst == * firstDsts . getPtr (key)) {
             sameDsts.insert(key, *sameDsts.getPtr(key) + 1)
         }
         h = h + 1
@@ -296,7 +296,7 @@ fun ilReusePure(il: *IlBody, pure: *Dictionary<Str, Bool>): Bool {
         val dst: Int = hitDsts[h]
         val opIndex: Int = hitOps[h]
         if (opIndex != first && first < firstBlockEnd && !replaced.has(firstDst)
-            && defCount[firstDst] == *sameDsts.getPtr(key)
+            && defCount[firstDst] == * sameDsts . getPtr (key)
         ) {
             dropped.insert(opIndex, true)
             if (dst != firstDst) {
@@ -334,7 +334,7 @@ fun ilReusePure(il: *IlBody, pure: *Dictionary<Str, Bool>): Bool {
             if (kind == IlOperandKind.Var || kind == IlOperandKind.Value) {
                 val target: *Int = replaced.getPtr(value)
                 if (target != null) {
-                    value = *target
+                    value = * target
                 }
             }
             operands.append(value)
@@ -352,8 +352,16 @@ fun ilReusePure(il: *IlBody, pure: *Dictionary<Str, Bool>): Bool {
 // Every body of a unit - the function and the lambdas it constructs - since the slots of one
 // are not the slots of another.
 fun ilReuseUnit(unit: *IlUnit, pure: *Dictionary<Str, Bool>): Bool {
-    var changed: Bool = ilReusePure(*unit.body, pure)
+    // The simple expressions first (ReuseExprs.kt): merging an address is what lets a later
+    // pure read name the same slot a write's argument does, so the purity rule sees the alias.
+    var changed: Bool = ilReuseExprs(*unit.body)
+    if (ilReusePure(*unit.body, pure)) {
+        changed = true
+    }
     for (*lambda in unit.lambdas) {
+        if (ilReuseExprs(lambda)) {
+            changed = true
+        }
         if (ilReusePure(lambda, pure)) {
             changed = true
         }

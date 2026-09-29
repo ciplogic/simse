@@ -31,7 +31,8 @@
 //   --release         compile the generated programs with /O2 /Ob3 (default: /MDd)
 //   --define <d[=v]>  extra preprocessor define for the compile (repeatable)
 //   --arch <arch>     vcvarsall target architecture (default: the host's)
-//   --jobs <n>        cases to run at once (default: 1; 0 = one per CPU)
+//   --jobs <n>        cases to run at once (default: auto - one per CPU, capped at 12;
+//                     0 is auto too, 1 runs them one at a time)
 //   --update          rewrite `expected.stdout`/`.stderr`/`.exit` from this run
 //                     (`expected.cpp` is not machine-updated: a changed amalgamation is
 //                     read, then copied over by hand from `stress/.work/<case>/out.cpp`)
@@ -68,7 +69,7 @@ function parseArgs(argv) {
     release: false,
     defines: [],
     arch: null,
-    jobs: 1,
+    jobs: 0,
     update: false,
     list: false,
     keepGoing: false,
@@ -95,7 +96,7 @@ function parseArgs(argv) {
       default: fail(`unknown option '${argv[i]}' (try --help)`);
     }
   }
-  if (opts.jobs === 0) opts.jobs = Math.max(1, (Bun.env.NUMBER_OF_PROCESSORS || 4) - 1);
+  if (opts.jobs === 0) opts.jobs = Math.min(12, Math.max(2, (Bun.env.NUMBER_OF_PROCESSORS || 4) - 1));
   if (opts.jobs < 0 || !Number.isFinite(opts.jobs)) fail("--jobs wants a count");
   return opts;
 }
@@ -155,25 +156,28 @@ function pickCompiler(explicit) {
 // (`impl_specs/generators.md`), so there is no shared object to compile once per flag set
 // and nothing to link beside the program itself.
 
-function runProcess(command, options) {
+// Async on purpose: a case transpiles, compiles and runs, and `--jobs` cases overlap only
+// if each step is awaited on the real process. `Bun.spawnSync` here made the worker pool
+// below a no-op - every case ran one at a time whatever `--jobs` said.
+async function runProcess(command, options) {
   const started = performance.now();
-  const result = Bun.spawnSync(command, {
+  const proc = Bun.spawn(command, {
     cwd: options.cwd ?? REPO,
     env: options.env,
     stdin: options.stdin ? new TextEncoder().encode(options.stdin) : undefined,
     stdout: "pipe",
     stderr: "pipe",
   });
-  return {
-    exit: result.exitCode ?? 1,
-    stdout: result.stdout.toString(),
-    stderr: result.stderr.toString(),
-    ms: performance.now() - started,
-  };
+  const [stdout, stderr] = await Promise.all([
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text(),
+  ]);
+  const exit = await proc.exited;
+  return { exit: exit ?? 1, stdout, stderr, ms: performance.now() - started };
 }
 
 // One case: transpile, compile, run, compare. Returns { name, ok, detail, ms }.
-function runCase(build, study) {
+async function runCase(build, study) {
   const { name, dir } = study;
   const work = path.join(WORK, name);
   rmSync(work, { recursive: true, force: true });
@@ -189,7 +193,7 @@ function runCase(build, study) {
   const stdin = readIfPresent(path.join(dir, "stdin"));
 
   const outCpp = path.join(work, "out.cpp");
-  const transpile = runProcess([build.simse, "--root", path.join("stress", name, "src"), "-o", outCpp, ...compilerArgs], {
+  const transpile = await runProcess([build.simse, "--root", path.join("stress", name, "src"), "-o", outCpp, ...compilerArgs], {
     env: build.env,
   });
   const verbose = build.opts.verbose ? `\n${transpile.stdout}${transpile.stderr}` : "";
@@ -221,13 +225,13 @@ function runCase(build, study) {
   const compileArgs = ["cl", "/nologo", "/std:c++20", "/EHsc", "/W3", ...build.flags,
     `/I${REPO}`, `/Fo${work}${path.sep}`, `/Fe${exe}`, outCpp];
   if (build.opts.verbose) console.log(`  ${compileArgs.join(" ")}`);
-  const compiled = runProcess(compileArgs, { env: build.env });
+  const compiled = await runProcess(compileArgs, { env: build.env });
   if (compiled.exit !== 0) {
     const log = `${compiled.stdout}${compiled.stderr}`.split("\n").slice(0, 40).join("\n");
     return { name, ok: false, detail: `cl.exe failed (the generated C++ did not compile)\n${log}` };
   }
 
-  const program = runProcess([exe, ...args], { env: build.env, stdin });
+  const program = await runProcess([exe, ...args], { env: build.env, stdin });
   const actualOut = normalize(program.stdout);
   const actualErr = normalize(program.stderr);
 
@@ -308,30 +312,45 @@ async function main() {
       `${cases.length} cases${opts.jobs > 1 ? `, ${opts.jobs} at a time` : ""})`);
   const build = { simse, env, flags, opts };
 
-  const results = [];
-  const pending = [...cases];
+  const results = new Array(cases.length);
+  let next = 0;
   let stopped = false;
   const workers = Array.from({ length: Math.max(1, Math.min(opts.jobs, cases.length)) }, async () => {
     while (!stopped) {
-      const study = pending.shift();
-      if (study === undefined) return;
+      const at = next;
+      next = next + 1;
+      if (at >= cases.length) return;
+      const study = cases[at];
       let result;
       try {
-        result = runCase(build, study);
+        result = await runCase(build, study);
       } catch (error) {
         result = { name: study.name, ok: false, detail: `harness error: ${error.message}` };
       }
-      results.push(result);
-      const line = result.ok ? `PASS ${result.name}` : `FAIL ${result.name}`;
-      console.log(`${line}${result.detail ? `  (${result.detail})` : ""}`);
-      // Stop the remaining work at the first failure unless asked to continue.
+      results[at] = result;
+      // Stop the remaining work at the first failure unless asked to continue. Cases
+      // already in flight finish; the ones never started are reported as skipped below.
       if (!result.ok && !opts.keepGoing) stopped = true;
     }
   });
   await Promise.all(workers);
 
-  const passed = results.filter((result) => result.ok).length;
-  const failed = results.filter((result) => !result.ok).length;
+  // Everything above ran overlapped and out of order; report in case order, at the end, so
+  // the transcript reads the same however many ran at once.
+  let passed = 0;
+  let failed = 0;
+  let skipped = 0;
+  for (const result of results) {
+    if (result === undefined) {
+      skipped = skipped + 1;
+      continue;
+    }
+    console.log(`${result.ok ? "PASS" : "FAIL"} ${result.name}${result.detail ? `  (${result.detail})` : ""}`);
+    if (result.ok) passed = passed + 1;
+    else failed = failed + 1;
+  }
+  if (skipped > 0) console.log(`(${skipped} case${skipped === 1 ? "" : "s"} not run${
+    stopped && !opts.keepGoing ? ": stopped at the first failure" : ""})`);
   console.log(`${TOOL}: ${passed} passed, ${failed} failed`);
   if (failed > 0) process.exitCode = 1;
 }

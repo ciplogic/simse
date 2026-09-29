@@ -3964,3 +3964,31 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   the async server builds, serves `/`, `/json` and a 404 correctly (Simse client and `curl`), and
   the SDL demo runs; `getAs` is exercised by a probe that round-trips 41 through a `RawPtr` and
   prints 42.
+- **Simple-expression CSE: a repeated pure, memory-independent expression is one value
+  (`linear/ReuseExprs.kt`).** The first half of the value-numbering design in
+  `impl_specs/expr-reuse.md` ("Purity, effects and value numbering"). The opcodes whose result is a
+  function of their operands' *values* alone and which read no memory - `BinaryOp`, `UnaryOp`,
+  `FieldAddr`, `IndexAddr`, `GetStaticAddr` (the doc's "pure, memory-independent" row) - are
+  numbered by `(opcode, constant operands, each slot operand's last writer)`, and a later number
+  equal to an earlier one **in the same basic block** becomes a read of it. The operands are
+  compared by value (a slot contributes its number *and* the instruction that last wrote it, so an
+  operand reassigned between the two occurrences keeps them apart); the kept and merged-away slots
+  must each be written exactly once in the body, which is what makes redirecting every read of the
+  merged-away slot sound where the local merge reuses a slot. The pass runs before `ReusePure`, so
+  merging `&self->out` is what lets a later address derived from it (or a later read through it)
+  match its twin, and it is iterated to a fixpoint for that cascade. It replaces an earlier
+  address-only pass that scanned the whole body and would merge `&x.f` in the `then` arm with the
+  `else` arm's - neither runs before the other - which miscompiled the compiler's own build
+  (an `L2` block reading a `_sm_base<n>` the `L1` block alone assigned).
+
+  What stayed out is the *memory-reading* class (`x.f`, `x[i]`, a `size`/`spanOfStr` call, `*p`):
+  it needs the kill rule ("a write kills the numbers whose base may alias"), so the
+  `isCompoundAssignOp` `||` chain still views and tests `op` per arm. Those sites lower to `Deref`
+  (a borrow of a value parameter carries the opcode that also spells `*p`'s load), which is where
+  the type-aware split the doc describes comes in.
+
+  Verified: `bun build.js --release --no-lto` twice (the pass is visible in the emitted C++),
+  `bun tools/stress.js` **52/52** (the one golden churn is `stress/objects`, a duplicate
+  `_sm_base13` merged away), and `bun tools/bootstrap.js` fixed point byte for byte. The
+  self-transpile drops 107 `simse_addressOf` sites (1963 -> 1856) and `simse_addressOf(self->out)`
+  from 50 to 36.

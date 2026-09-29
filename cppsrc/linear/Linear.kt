@@ -60,6 +60,25 @@ fun linSubjectDecl(name: *Str, init: *AstXmlNode, line: Int, column: Int): AstXm
     return node
 }
 
+// Like `linSubjectDecl`, but a `var`: a value short-circuit's temporary is assigned
+// twice (the left operand, then the right), so the assignment must be legal.
+fun linVarDecl(name: *Str, init: *AstXmlNode, line: Int, column: Int): AstXmlNode {
+    var node: AstXmlNode = linStmt(AstNodeCategory.StmtVarDecl, line, column)
+    node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
+    node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.IsVar, "true"))
+    xmlAddChild(node, linRole(init, AstNodeKind.Init))
+    return node
+}
+
+// `target = value`, the plain linear assignment (no `Op`): what a short-circuit writes
+// its second operand into.
+fun linAssign(target: *Str, value: *AstXmlNode, line: Int, column: Int): AstXmlNode {
+    var node: AstXmlNode = linStmt(AstNodeCategory.StmtAssign, line, column)
+    xmlAddChild(node, linName(AstNodeKind.Target, target, line, column))
+    xmlAddChild(node, linRole(value, AstNodeKind.Value))
+    return node
+}
+
 fun linName(role: AstNodeKind, name: *Str, line: Int, column: Int): AstXmlNode {
     var attrs: List<AstNodeAttribute> = listOf<AstNodeAttribute>(
         AstNodeAttribute(AstNodeAttributeKind.Line, line.toString()),

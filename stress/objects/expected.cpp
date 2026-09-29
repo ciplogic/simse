@@ -250,21 +250,19 @@ StrView simse_strBoolView(Bool value);
 // language's `Int` (`int32_t`), including `Str::npos`, which is `-1`. Index/range errors
 // are unchecked where the underlying operation is unchecked; the `Opt`-returning
 // conversions never throw.
+//
+// What is only a byte loop is Simse now (cppsrc/rtl/rtl.kt: `trim`, `substr`,
+// `startsWith`/`endsWith`, case folding and the `Char` predicates); what stays is what
+// reaches `SmString` internals (`charAt`, `find`, `lastIndexOf`, `split`, `replace`) or the
+// standard library (`std::from_chars`, `std::to_string`).
 
 // `Str.charAt(index)`: the byte at `index` (unchecked; no bounds test).
 Char simse_str_charAt(const Str& self, Int index);
-
-// `Str.trim()` strips leading and trailing whitespace (space, tab, newline, CR).
-Str simse_str_trim(const Str& self);
 
 // `Str.split(separator)` splits on every occurrence. An empty separator returns the whole
 // string as a single element. Two overloads: a separator string and a separator byte.
 List<Str> simse_str_split(const Str& self, const Str& separator);
 List<Str> simse_str_split(const Str& self, Char separator);
-
-// ASCII/byte case folding (the string type is a byte string).
-Str simse_str_toUpper(const Str& self);
-Str simse_str_toLower(const Str& self);
 
 // `Str.find(sub)` returns the first index of `sub`, or -1 when absent (the language's
 // spelling of C++ `npos`).
@@ -272,12 +270,6 @@ Int simse_str_find(const Str& self, const Str& sub);
 
 // `Str.lastIndexOf(sub)` returns the last index of `sub`, or -1 when absent.
 Int simse_str_lastIndexOf(const Str& self, const Str& sub);
-
-// `Str.substr(start, len)` clamps `start` to [0, size]; `len` may run past the end.
-Str simse_str_substr(const Str& self, Int start, Int len);
-
-Bool simse_str_startsWith(const Str& self, const Str& prefix);
-Bool simse_str_endsWith(const Str& self, const Str& suffix);
 
 // `Str.replace(from, to)` replaces every occurrence of `from` with `to`.
 Str simse_str_replace(const Str& self, const Str& from, const Str& to);
@@ -290,7 +282,9 @@ Opt<Float64> simse_str_toFloat(const Str& self);
 
 // `Char` is a signed 8-bit integer; the checks are byte-range tests so they do not depend
 // on the C locale. Space, tab, newline and carriage return count as space; form feed and
-// vertical tab do not.
+// vertical tab do not. They stay here because a body would emit a `Char* self` receiver (a
+// `Char` is a scalar) while the call sites and the `CharPredicate` function values need the
+// byte by value.
 Bool simse_char_isDigit(Char self);
 Bool simse_char_isAlpha(Char self);
 Bool simse_char_isAlphaOrDigit(Char self);
@@ -450,6 +444,9 @@ Int find(StrView* self, Str sub);
 Str substr(StrView* self, Int from, Int count);
 Str toString(StrView* self);
 Str fmtStr(StrView fmt, List<Str>* items);
+Str substr(Str* self, Int start, Int len);
+Bool startsWith(Str* self, Str prefix);
+Bool endsWith(Str* self, Str suffix);
 Bool isEmpty(Str* self);
 template <class T>
 T min(T a, T b);
@@ -505,10 +502,9 @@ Str ns1_dumpNode(XmlNode node, Int depth);
 Int ns1_partXmlTree();
 
 Bool startsWith(StrView* self, Str text) {
-    Str* _sm_base1;
-    Int count, _sm_expr1;
-    Bool _sm_expr2;
-    Char* _sm_expr4;
+    Int count, _sm_expr1, i;
+    Bool _sm_expr2, _sm_expr6;
+    Char _sm_expr5;
     count = text.size();
     _sm_expr1 = simse_strView_size((*self));
     _sm_expr2 = count > _sm_expr1;
@@ -517,23 +513,29 @@ Bool startsWith(StrView* self, Str text) {
     L1:;
     return false;
     L2:;
-    _sm_expr2 = count <= 0;
-    if (_sm_expr2) goto L3;
-    goto L4;
+    i = 0;
     L3:;
-    return true;
+    _sm_expr2 = i < count;
+    if (!(_sm_expr2)) goto L4;
+    {
+        auto _sm_expr4 = self->ptr[i];
+        _sm_expr5 = simse_str_charAt(text, i);
+        _sm_expr6 = _sm_expr4 != _sm_expr5;
+        if (_sm_expr6) goto L5;
+        goto L6;
+        L5:;
+        return false;
+        L6:;
+        i = i + 1;
+        goto L3;
+    }
     L4:;
-    _sm_base1 = &text;
-    _sm_expr4 = simse_str_data(_sm_base1);
-    _sm_expr1 = simse_mem_compare(self->ptr, 0, _sm_expr4, 0, count);
-    _sm_expr2 = _sm_expr1 == 0;
-    return _sm_expr2;
+    return true;
 }
 Int find(StrView* self, Str sub) {
-    Str* _sm_base1;
-    Int needle, len, _sm_expr3, i;
-    Bool _sm_expr1;
-    Char* _sm_expr6;
+    Int needle, len, _sm_expr3, i, j, _sm_expr7;
+    Bool _sm_expr1, _sm_expr10;
+    Char _sm_expr9;
     needle = sub.size();
     _sm_expr1 = needle == 0;
     if (_sm_expr1) goto L1;
@@ -554,15 +556,30 @@ Int find(StrView* self, Str sub) {
     _sm_expr3 = i + needle;
     _sm_expr1 = _sm_expr3 <= len;
     if (!(_sm_expr1)) goto L6;
-    _sm_base1 = &sub;
-    _sm_expr6 = simse_str_data(_sm_base1);
-    _sm_expr3 = simse_mem_compare(self->ptr, i, _sm_expr6, 0, needle);
-    _sm_expr1 = _sm_expr3 == 0;
-    if (_sm_expr1) goto L7;
-    goto L8;
+    j = 0;
     L7:;
-    return i;
+    _sm_expr1 = j < needle;
+    if (_sm_expr1) goto L10;
+    goto L8;
+    L10:;
+    _sm_expr7 = i + j;
+    {
+        auto _sm_expr8 = self->ptr[_sm_expr7];
+        _sm_expr9 = simse_str_charAt(sub, j);
+        _sm_expr10 = _sm_expr8 == _sm_expr9;
+        if (_sm_expr10) goto L9;
+        goto L8;
+        L9:;
+        j = j + 1;
+        goto L7;
+    }
     L8:;
+    _sm_expr1 = j == needle;
+    if (_sm_expr1) goto L11;
+    goto L12;
+    L11:;
+    return i;
+    L12:;
     i = i + 1;
     goto L5;
     L6:;
@@ -675,6 +692,108 @@ Str fmtStr(StrView fmt, List<Str>* items) {
     goto L9;
     L10:;
     return out;
+}
+Str substr(Str* self, Int start, Int len) {
+    Str* _sm_base1;
+    Int begin, _sm_expr2, count;
+    Bool _sm_expr1;
+    Char* _sm_expr8;
+    begin = start;
+    _sm_expr1 = begin < 0;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    begin = 0;
+    L2:;
+    _sm_expr2 = self->size();
+    _sm_expr1 = begin > _sm_expr2;
+    if (_sm_expr1) goto L3;
+    goto L4;
+    L3:;
+    begin = self->size();
+    L4:;
+    _sm_expr2 = self->size();
+    count = _sm_expr2 - begin;
+    _sm_expr1 = len >= 0;
+    if (_sm_expr1) goto L7;
+    goto L6;
+    L7:;
+    _sm_expr1 = len < count;
+    if (_sm_expr1) goto L5;
+    goto L6;
+    L5:;
+    count = len;
+    L6:;
+    Str out;
+    _sm_expr1 = count > 0;
+    if (_sm_expr1) goto L8;
+    goto L9;
+    L8:;
+    _sm_base1 = self;
+    _sm_expr8 = simse_str_data(_sm_base1);
+    simse_str_setBytes(out, _sm_expr8, begin, count);
+    L9:;
+    return out;
+}
+Bool startsWith(Str* self, Str prefix) {
+    Int count, _sm_expr1, i;
+    Bool _sm_expr2;
+    Char _sm_expr4, _sm_expr5;
+    count = prefix.size();
+    _sm_expr1 = self->size();
+    _sm_expr2 = count > _sm_expr1;
+    if (_sm_expr2) goto L1;
+    goto L2;
+    L1:;
+    return false;
+    L2:;
+    i = 0;
+    L3:;
+    _sm_expr2 = i < count;
+    if (!(_sm_expr2)) goto L4;
+    _sm_expr4 = simse_str_charAt((*self), i);
+    _sm_expr5 = simse_str_charAt(prefix, i);
+    _sm_expr2 = _sm_expr4 != _sm_expr5;
+    if (_sm_expr2) goto L5;
+    goto L6;
+    L5:;
+    return false;
+    L6:;
+    i = i + 1;
+    goto L3;
+    L4:;
+    return true;
+}
+Bool endsWith(Str* self, Str suffix) {
+    Int count, len, i, _sm_expr3, _sm_expr4;
+    Bool _sm_expr1;
+    Char _sm_expr5, _sm_expr6;
+    count = suffix.size();
+    len = self->size();
+    _sm_expr1 = count > len;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    return false;
+    L2:;
+    i = 0;
+    L3:;
+    _sm_expr1 = i < count;
+    if (!(_sm_expr1)) goto L4;
+    _sm_expr3 = len - count;
+    _sm_expr4 = _sm_expr3 + i;
+    _sm_expr5 = simse_str_charAt((*self), _sm_expr4);
+    _sm_expr6 = simse_str_charAt(suffix, i);
+    _sm_expr1 = _sm_expr5 != _sm_expr6;
+    if (_sm_expr1) goto L5;
+    goto L6;
+    L5:;
+    return false;
+    L6:;
+    i = i + 1;
+    goto L3;
+    L4:;
+    return true;
 }
 Bool isEmpty(Str* self) {
     Int _sm_expr1;
@@ -1073,11 +1192,11 @@ Int ns1_partLanguageTour() {
     simse_println((_sm_expr14), stdout);
     _sm_expr15 = simse_str_find(text, __sm_stringTable[39]);
     simse_println((_sm_expr15), stdout);
-    _sm_expr16 = simse_str_substr(text, 0, 5);
+    _sm_expr16 = substr(simse_addressOf(text), 0, 5);
     simse_println((_sm_expr16), stdout);
-    _sm_expr17 = simse_str_startsWith(text, __sm_stringTable[15]);
+    _sm_expr17 = startsWith(simse_addressOf(text), __sm_stringTable[15]);
     simse_println((_sm_expr17), stdout);
-    _sm_expr18 = simse_str_endsWith(text, __sm_stringTable[19]);
+    _sm_expr18 = endsWith(simse_addressOf(text), __sm_stringTable[19]);
     simse_println((_sm_expr18), stdout);
     _sm_expr19 = simse_str_replace(text, __sm_stringTable[19], __sm_stringTable[18]);
     simse_println((_sm_expr19), stdout);
@@ -1275,9 +1394,8 @@ void ns1_bumpCell(ns1_Cell* cell) {
 }
 // stress/objects/src/main.kt
 Int ns1_partPointerPlace() {
-    Int* _sm_base1, * _sm_base4, * _sm_base8, * _sm_base10, * _sm_base11, * _sm_base13, * _sm_base15;
-    ns1_Cell* _sm_base2, * _sm_base3, * _sm_base5, * _sm_base6, * _sm_base7, * _sm_base9, * _sm_base12,
-        * _sm_base14;
+    Int* _sm_base1, * _sm_base4, * _sm_base8, * _sm_base10, * _sm_base11, * _sm_base15;
+    ns1_Cell* _sm_base2, * _sm_base3, * _sm_base6, * _sm_base7, * _sm_base12;
     Int local;
     Str _sm_expr1, _sm_expr4, _sm_expr6, _sm_expr7, _sm_expr8;
     ns1_Cell _sm_expr2, _sm_expr3, _sm_expr5;
@@ -1294,8 +1412,7 @@ Int ns1_partPointerPlace() {
     _sm_base3 = simse_addressOf(cells[0]);
     _sm_base2 = _sm_base3;
     ns1_bumpCell(_sm_base2);
-    _sm_base5 = simse_addressOf(cells[0]);
-    _sm_base4 = simse_addressOf(_sm_base5->value);
+    _sm_base4 = simse_addressOf(_sm_base3->value);
     _sm_expr4 = simse_int_toString((*_sm_base4));
     simse_println((_sm_expr4), stdout);
     _sm_expr5 = ns1_Cell{5};
@@ -1303,17 +1420,14 @@ Int ns1_partPointerPlace() {
     _sm_base7 = simse_addressOf(grid.cell);
     _sm_base6 = _sm_base7;
     ns1_bumpCell(_sm_base6);
-    _sm_base9 = simse_addressOf(grid.cell);
-    _sm_base8 = simse_addressOf(_sm_base9->value);
+    _sm_base8 = simse_addressOf(_sm_base7->value);
     _sm_expr6 = simse_int_toString((*_sm_base8));
     simse_println((_sm_expr6), stdout);
     _sm_base12 = simse_addressOf(cells[1]);
     _sm_base11 = simse_addressOf(_sm_base12->value);
     _sm_base10 = _sm_base11;
     ns1_bump(_sm_base10);
-    _sm_base14 = simse_addressOf(cells[1]);
-    _sm_base13 = simse_addressOf(_sm_base14->value);
-    _sm_expr7 = simse_int_toString((*_sm_base13));
+    _sm_expr7 = simse_int_toString((*_sm_base11));
     simse_println((_sm_expr7), stdout);
     _sm_base15 = &local;
     ns1_bump(_sm_base15);
@@ -1353,8 +1467,8 @@ void ns1_bumpTwice(ns1_CounterReceiverShapes* counter) {
 }
 // stress/objects/src/main.kt
 Int ns1_partReceiverShapes() {
-    Int* _sm_base1, * _sm_base3, * _sm_base6;
-    ns1_CounterReceiverShapes* _sm_base2, * _sm_base4, * _sm_base5, * through;
+    Int* _sm_base1, * _sm_base3;
+    ns1_CounterReceiverShapes* _sm_base2, * _sm_base5, * through;
     ns1_CounterReceiverShapes counter, _sm_expr4;
     Int _sm_expr1;
     Str _sm_expr2, _sm_expr3, _sm_expr5, _sm_expr6;
@@ -1372,14 +1486,12 @@ Int ns1_partReceiverShapes() {
     holder = ns1_Holder{_sm_expr4};
     _sm_base2 = simse_addressOf(holder.counter);
     ns1_bump(_sm_base2);
-    _sm_base4 = simse_addressOf(holder.counter);
-    _sm_base3 = simse_addressOf(_sm_base4->n);
+    _sm_base3 = simse_addressOf(_sm_base2->n);
     _sm_expr5 = simse_int_toString((*_sm_base3));
     simse_println((_sm_expr5), stdout);
     _sm_base5 = &counter;
     ns1_bumpTwice(_sm_base5);
-    _sm_base6 = simse_addressOf(counter.n);
-    _sm_expr6 = simse_int_toString((*_sm_base6));
+    _sm_expr6 = simse_int_toString((*_sm_base1));
     simse_println((_sm_expr6), stdout);
     return 0;
 }
@@ -2092,23 +2204,8 @@ inline StrView simse_strBoolView(Bool value) {
     return StrView(texts[at], lens[at]);
 }
 
-// `Str.isEmpty()` is the prelude's own body (cppsrc/rtl/rtl.kt), not a resource: `size()`
-// is the built-in it needs. This one is the shared space test the `Char` predicate below
-// uses too.
-inline Bool simse_str_isSpaceByte(Char ch) {
-    return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r';
-}
-
 inline Char simse_str_charAt(const Str& self, Int index) {
     return (Char) self[index];
-}
-
-inline Str simse_str_trim(const Str& self) {
-    Int begin = 0;
-    Int end = self.size();
-    while (begin < end && simse_str_isSpaceByte((Char) self[begin])) begin++;
-    while (end > begin && simse_str_isSpaceByte((Char) self[end - 1])) end--;
-    return self.substr(begin, end - begin);
 }
 
 inline List<Str> simse_str_split(const Str& self, const Str& separator) {
@@ -2159,22 +2256,6 @@ inline List<Str> simse_str_split(const Str& self, Char separator) {
     return parts;
 }
 
-inline Str simse_str_toUpper(const Str& self) {
-    Str result = self;
-    for (char& ch : result) {
-        if (ch >= 'a' && ch <= 'z') ch = (char) (ch - 'a' + 'A');
-    }
-    return result;
-}
-
-inline Str simse_str_toLower(const Str& self) {
-    Str result = self;
-    for (char& ch : result) {
-        if (ch >= 'A' && ch <= 'Z') ch = (char) (ch - 'A' + 'a');
-    }
-    return result;
-}
-
 inline Int simse_str_find(const Str& self, const Str& sub) {
     Int found = self.find(sub);
     return found == Str::npos ? -1 : found;
@@ -2183,23 +2264,6 @@ inline Int simse_str_find(const Str& self, const Str& sub) {
 inline Int simse_str_lastIndexOf(const Str& self, const Str& sub) {
     Int found = self.rfind(sub);
     return found == Str::npos ? -1 : found;
-}
-
-inline Str simse_str_substr(const Str& self, Int start, Int len) {
-    if (start < 0) start = 0;
-    if (start > self.size()) start = self.size();
-    Str result = self.substr(start);
-    if (len >= 0 && len < result.size()) result.resize(len);
-    return result;
-}
-
-inline Bool simse_str_startsWith(const Str& self, const Str& prefix) {
-    return prefix.size() <= self.size() && self.compare(0, prefix.size(), prefix) == 0;
-}
-
-inline Bool simse_str_endsWith(const Str& self, const Str& suffix) {
-    return suffix.size() <= self.size()
-           && self.compare(self.size() - suffix.size(), suffix.size(), suffix) == 0;
 }
 
 inline Str simse_str_replace(const Str& self, const Str& from, const Str& to) {
@@ -2237,6 +2301,11 @@ inline Opt<Float64> simse_str_toFloat(const Str& self) {
     std::from_chars_result parsed = std::from_chars(begin, end, value);
     if (parsed.ec != std::errc() || parsed.ptr != end) return Opt<Float64>::none();
     return Opt<Float64>::some(value);
+}
+
+// The shared space test, used by `simse_char_isSpace` (and, in Simse, by `Str.trim`).
+inline Bool simse_str_isSpaceByte(Char ch) {
+    return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r';
 }
 
 inline Bool simse_char_isDigit(Char self) {

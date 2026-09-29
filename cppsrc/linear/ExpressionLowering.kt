@@ -103,6 +103,9 @@ enum class ExprSlot {
 data class ExprFlattener(
     // Per body, like the label counter in the linear pass.
     var next: Int,
+    // A per-body label counter for a value short-circuit's `end` target (`_sm_sc<n>`;
+    // the linear pass's own `L<n>` lives in another counter, so the two never collide).
+    var nextLabel: Int,
     // Set when an expression was bound to a temporary; a body already lowered comes back
     // false (`linLowerForEmission`).
     var changed: Bool,
@@ -115,6 +118,69 @@ data class ExprFlattener(
         val id: Int = this.next
         this.next = this.next + 1
         return "_sm_expr" + id.toString()
+    }
+
+    fun freshLabel(): Str {
+        val id: Int = this.nextLabel
+        this.nextLabel = this.nextLabel + 1
+        return "_sm_sc" + id.toString()
+    }
+
+    // The operands of one `&&`/`||` chain, in source order: `(a || b) || c` is `[a, b, c]`.
+    // Flattening is what keeps a chain to one slot and one label instead of one per level.
+    fun shortCircuitChain(e: *AstXmlNode, op: Str, out: *List<AstXmlNode>): Unit {
+        if (xmlKind(e) == AstNodeCategory.ExprBinary) {
+            val here: Str = xmlAttr(e, AstNodeAttributeKind.Op)
+            if (here == op) {
+                this.shortCircuitChain(xmlChildPtr(e, AstNodeKind.Lhs), op, out)
+                this.shortCircuitChain(xmlChildPtr(e, AstNodeKind.Rhs), op, out)
+                return
+            }
+        }
+        out.append(e)
+    }
+
+    // A `&&`/`||` in a *value* position: its operands are evaluated conditionally, so it is
+    // lowered to the jump shape the spec gives (impl_specs/linear-lowering.md, "Short-circuit
+    // operators, ternary") - each operand into one slot, a guard jump past the rest, and the
+    // slot is the value. The chain is flattened, so `a || b || c` is three assignments and
+    // two jumps sharing one slot and one label, and the last operand needs no guard: its
+    // value already answers the whole expression. In a condition the linear pass has usually
+    // decomposed it already (`LinLowerer.lowerCondition`); this is the shape for
+    // `var x = a && b`, a call argument, and a condition the pass could not decompose.
+    fun lowerShortCircuit(e: *AstXmlNode, temps: *List<AstXmlNode>): AstXmlNode {
+        val line: Int = xmlLine(e)
+        val column: Int = xmlColumn(e)
+        val op: Str = xmlAttr(e, AstNodeAttributeKind.Op)
+        var chain: List<AstXmlNode> = List<AstXmlNode>()
+        this.shortCircuitChain(e, op, chain)
+        val name: Str = this.freshTemp()
+        val end: Str = this.freshLabel()
+        val count: Int = chain.size()
+        var i: Int = 0
+        // The pointer form: a value binds a copy of the node per operand.
+        for (*operand in chain) {
+            val value: AstXmlNode = this.flat(operand, ExprSlot.Value, temps)
+            if (i == 0) {
+                temps.append(linVarDecl(name, value, line, column))
+            } else {
+                temps.append(linAssign(name, value, line, column))
+            }
+            // The operand just evaluated is the guard: `||` is decided by a true one, `&&`
+            // by a false one.
+            if (i + 1 < count) {
+                val test: AstXmlNode = this.roleName(AstNodeKind.Cond, name, line, column)
+                if (op == "||") {
+                    temps.append(linCondJump(AstNodeCategory.StmtIfTrue, test, end, line, column))
+                } else {
+                    temps.append(linCondJump(AstNodeCategory.StmtIfFalse, test, end, line, column))
+                }
+            }
+            i = i + 1
+        }
+        temps.append(linLabel(end, line, column))
+        this.changed = true
+        return this.roleName(e.name, name, line, column)
     }
 
     fun roleName(role: AstNodeKind, name: *Str, line: Int, column: Int): AstXmlNode {
@@ -223,8 +289,11 @@ data class ExprFlattener(
     }
 
     fun flat(e: *AstXmlNode, slot: ExprSlot, temps: *List<AstXmlNode>): AstXmlNode {
-        if (exprIsSimple(e) || exprIsShortCircuit(e)) {
+        if (exprIsSimple(e)) {
             return e
+        }
+        if (exprIsShortCircuit(e)) {
+            return this.lowerShortCircuit(e, temps)
         }
         val built: AstXmlNode = this.rebuild(e, temps)
         if (slot != ExprSlot.Value) {
@@ -368,7 +437,7 @@ data class ExprFlattener(
 
 // Lowers the expressions of one linear body; the counter restarts per body.
 fun linLowerExprs(body: *List<AstXmlNode>): LinLowered {
-    var flattener: ExprFlattener = ExprFlattener(1, false, false)
+    var flattener: ExprFlattener = ExprFlattener(1, 1, false, false)
     var out: List<AstXmlNode> = List<AstXmlNode>()
     flattener.walkStmts(body, out)
     return LinLowered(out, flattener.changed)

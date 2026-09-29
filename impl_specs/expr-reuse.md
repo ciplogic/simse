@@ -76,6 +76,22 @@ checkable the same way the coloring and `!!` passes check their names); and reus
 result means reusing a *copy* unless the reuse is a borrow, which is where B and A meet - A's view
 is what makes B's reuse free.
 
+The mechanism B needs - per-call purity, effect classes and value numbering - is written out under
+"Purity, effects and value numbering" below; the pass itself belongs beside the `usedef/` ones
+(`cppsrc/optimizations/`).
+
+**Landed (the memory-independent half).** `cppsrc/linear/ReuseExprs.kt` implements the value
+numbering for the opcodes that read no memory - `BinaryOp`, `UnaryOp`, `FieldAddr`, `IndexAddr`,
+`GetStaticAddr`. A pure op's key is `(opcode, constant operands, each slot operand's last writer)`;
+a later key equal to an earlier one *in the same basic block* becomes a read of it, and the pass is
+iterated to a fixpoint so `&(a merged address)` matches its twin. The operands are compared by
+value (a slot contributes its number *and* the instruction that last wrote it), and the kept and
+merged-away slots must be written exactly once in the body - the guard that makes redirecting every
+read of the merged-away slot sound where the local merge reuses a slot. It runs before `ReusePure`,
+so merging `&self->out` is what lets a later read through it match. The *memory-reading* class
+(`x.f`, `x[i]`, `size`/`spanOfStr`, `*p`) and the write/kill rule are still open - that is what
+still repeats `spanOfStr(op)` per arm of `isCompoundAssignOp`'s `||` chain.
+
 **C. The branch shape (`if` / `goto` ordering).** The user asked for `ifTrue cond -> then; goto
 else; then:` rather than the negated, branch-swapped form a peephole produces. Worth stating its
 price before doing it, because it is the opposite trade to the other two: it **adds** an instruction,
@@ -99,3 +115,81 @@ then B, then C**:
   self-transpile (`--profile`), which is the published number.
 - **C** last, and priced as a readability change: it adds an instruction and touches the emitted
   C++ everywhere.
+
+## Purity, effects and value numbering
+
+B's property, invariance, needs a mechanism that says *which* expressions may be commoned and
+*what* a write kills. The design makes that one thing, with no per-kind exceptions.
+
+**Purity belongs to a call instance, not to a name.** `setArray(a, i, v)` is impure as a *call* -
+its result is a fresh value and it writes `a` - but `a`, `i` and `v` are pure *expressions*, and
+they are numbered and reused like any other. An impure call is never reused *itself*, and never
+blocks the reuse of its arguments.
+
+**Three effect classes**, the pass's only inputs:
+
+| class | numbered? | killed by a write? | examples |
+| --- | --- | --- | --- |
+| pure, memory-independent | yes | no | `a + b`, `a - 1`, `&x.f`, `&x[i]`, `&Static.m` |
+| pure, memory-reading | yes | yes, when the written location may alias | `x.f`, `x[i]`, `size(x)`, `spanOfStr(x)`, `*p` |
+| impure / writes / fresh identity | no - a new value each time | - | `setArray(...)`, `Store`, `x = ...`, `Pack`, `toArray()` |
+
+**One pass: value numbering.** A pure op's number is `(op, operand numbers, constants)` - the
+constants are part of the key, so `&x.a` and `&x.b` differ - and an impure op gets a fresh number.
+A slot holding a number another slot already holds **is** that slot: every use of the later one
+becomes a use of the earlier, the duplicate op and its `Declare` go, and the pass repeats so merges
+cascade (`&self->out` collapsing is what makes `&(that)->pool` collapse too).
+
+**A write kills by the same numbers.** A store, or a call that may write, kills the numbers of the
+memory-reading ops whose base may alias the written location - and "may alias" *is* the number
+equality, which is where "provably the same pointer" is spelled. `_sm_base4` and `_sm_base7` are
+replacements for each other because one pure op with one set of operands produced both, so the
+write through the one is seen to reach a read through the other. Address computations are
+memory-independent, so they survive the writes that kill the reads through them - which is exactly
+the `self->out` evidence at the top of this file:
+
+```cpp
+_sm_base5 = simse_addressOf(self->out);   // memory-independent: one slot for all three
+simse_list_append((*_sm_base4), text);    // impure: killed nothing above, no number of its own
+_sm_expr2 = _sm_base7->size();            // memory-reading: NOT commoned across the append
+```
+
+**Purity is declared, never listed.** A call's effect comes from its declaration - `data` means
+"writes nothing" - so `size`/`count` stop being the two `pureCallees.insert` lines in
+`Codegen.run` and become declarations like `spanOfStr` and the intrinsics (`strBytes`, `setBytes`).
+An opcode's effect is one table row each. Binary and unary arithmetic stay opcodes, because a
+reader understands `+` where `_sm_Op("+", ...)` would need teaching - and both are pure, so the
+same pass commons `a + b` too, not only calls.
+
+**What must not merge: a fresh identity.** Pure is necessary but not sufficient - an op that yields
+a new ref-counted object (`Array<T>.toArray()`, a `Pack`) would hand both uses the same block, so a
+write through one would show through the other. Value results, views and addresses are shareable;
+fresh `Array`/ref-counted results are not.
+
+**Where a field op can and cannot become a function.** `size(x)`, `getElement(base, i)` and
+`addressOfElement(base, i)` take runtime arguments, so they can be ordinary `data` declarations
+with intrinsic bodies (the `@SmGen("cpp", ...)` route). A *field* selector is a compile-time text
+operand (`FieldAddr Var,Var,Text`), so it cannot be a plain function's argument: the field ops stay
+opcodes, covered by the one effect table. The uniform end state, if it is ever wanted, is a
+generated accessor per (type, field) - `simse_fieldAddr_<T>_<f>(base: *T): *F` - which makes them
+functions too.
+
+## Future: inferring purity
+
+`data` is today a *promise* the writer makes. It can become a *result*: a function is pure when its
+body is - it calls only pure functions, writes nothing, and returns no fresh identity of its own.
+Concretely,
+
+```simse
+fun tan(angle: Float64): Float64 {
+    return Sin(angle) / Cos(angle);
+}
+```
+
+is pure as soon as `Sin` and `Cos` are, by a fixpoint over the call graph: start from the
+intrinsics the compiler knows and the declarations already marked, and keep adding the functions
+whose every call is to a function already known pure and whose own body contains no write. The
+result is bottom-up purity, so `tan` needs no mark - and the optimizer's input stops being a
+promise and becomes a proof. `pureCallees` is then not a list at all: it is the fixpoint's first
+iteration, and the language does not ask an author to remember a mark for a function the compiler
+can see through anyway.
