@@ -155,11 +155,14 @@ _sm_expr2 = _sm_base7->size();            // memory-reading: NOT commoned across
 ```
 
 **Purity is declared, never listed.** A call's effect comes from its declaration - `data` means
-"writes nothing" - so `size`/`count` stop being the two `pureCallees.insert` lines in
-`Codegen.run` and become declarations like `spanOfStr` and the intrinsics (`strBytes`, `setBytes`).
-An opcode's effect is one table row each. Binary and unary arithmetic stay opcodes, because a
-reader understands `+` where `_sm_Op("+", ...)` would need teaching - and both are pure, so the
-same pass commons `a + b` too, not only calls.
+"writes nothing" - so the two `pureCallees.insert` lines for `size`/`count` in `Codegen.run`
+are gone and the length accessors are declarations like `spanOfStr` and the intrinsics
+(`strBytes`, `setBytes`). `lenOf(x)` is the operation for `Str`/`List` (`cppsrc/rtl/rtl.kt`, the
+`lenops` section of `cppsrc/rtl/_res.md`); `Array.count`, `Dictionary.size` and `StrView.size()`
+already had declarations and now carry the mark. `parser/BorrowParams.kt` seeds no name either:
+its `pure` set is exactly the `IsPure` marks. An opcode's effect is one table row each. Binary
+and unary arithmetic stay opcodes, because a reader understands `+` where `_sm_Op("+", ...)`
+would need teaching - and both are pure, so the same pass commons `a + b` too, not only calls.
 
 **What must not merge: a fresh identity.** Pure is necessary but not sufficient - an op that yields
 a new ref-counted object (`Array<T>.toArray()`, a `Pack`) would hand both uses the same block, so a

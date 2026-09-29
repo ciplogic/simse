@@ -516,6 +516,12 @@ fun main(args: List<Str>): Int {
     // rewritten ones (a module no fold reaches is the same node).
     modules = cpFoldConstParams(preludeModules, modules)
 
+    // Auto-borrow (impl_specs/escape-analysis.md): the same whole-program, before-sema shape. A
+    // parameter a body only reads becomes a `*T`, so every call site stops deep-copying the
+    // argument - the checker, the lowering, the emitter and the call sites all see the borrowed
+    // declaration, and nothing downstream knows the optimization exists.
+    modules = bpBorrowParams(preludeModules, modules)
+
     // Compilation-wide name/type resolution over the prelude and every module.
     var semaInputs: List<SemaInput> = List<SemaInput>()
     var s: Int = 0

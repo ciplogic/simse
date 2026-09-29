@@ -146,7 +146,7 @@ driver's - and `build.bat` can compile it.
   | `strview.hpp`, `resources.hpp`,
   `filestream.hpp`, `simse.hpp`), the
   `_res.md` file that holds the RTL's *generated* C++ - one section per header it came
-  from (`strtable`, `timeops`, `listops`, `dictops`, `strops`, `resfmt`, `strcat`, `spanOf`,
+  from (`strtable`, `timeops`, `listops`, `dictops`, `strops`, `lenops`, `resfmt`, `strcat`, `spanOf`,
   `strview`, `filestream`, `resources`, plus a
   `fileio` whose text was the runtime's one hand-written translation unit, plus the
   collision fixture's `spanOfEmpty`) with `symbol:`/`emit: always`/`emit: reached` deciding how a

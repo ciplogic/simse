@@ -169,7 +169,8 @@ pointer or a file-level `var` would make the reuse wrong.
 
 The mark sits on the declaration: `data fun f(...)`, `data fun T.m(...)`, and an attribute
 with it (`@SmGen(...)` on the line above, or `data` first). The language's own read-only
-length accessors (`size`, `count`) are pure without a declaration. Purity is about
+length accessors (`size`, `count`) are `data` declarations too (`cppsrc/rtl/rtl.kt`), so the
+optimizer lists no name by hand. Purity is about
 *observable* effects, so writes to the function's own locals do not matter. It is not
 *checked* yet - a later pass computes purity from the body (only pure calls, no write through
 a `*T`/`&T` parameter or a file-level `var`) and can then flag an over-claimed `data`.

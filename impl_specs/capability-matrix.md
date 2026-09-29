@@ -3865,9 +3865,9 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
     parse. The declaration carries a new `AstNodeAttributeKind.IsPure` (`cppsrc/rtl/astxml.kt`
     and its `.hpp` mirror, appended last).
   - **Plumbing.** `Codegen.addFunction` reads the mark into `CgFn.isPure` and collects the names
-    into the emitter's `pureCallees`; `run` seeds it with the language's read-only length
-    accessors `size`/`count` (built-ins with no declaration to mark). `IlCodeGen`'s two
-    `ilReuseUnit` call sites pass the set, and `ReusePure.ilReuseCall` became a lookup in it.
+    into the emitter's `pureCallees`; `IlCodeGen`'s two `ilReuseUnit` call sites pass the set, and
+    `ReusePure.ilReuseCall` became a lookup in it. (The set no longer seeds `size`/`count` by
+    hand - they are `data` declarations themselves now, `cppsrc/rtl/rtl.kt`.)
   - **Every reuse guard is unchanged** - an argument the body writes, one a callee may write
     through, a first call outside the first block, an untyped slot, an indirect callee, and a
     result slot with another writer all still refuse - so the change only *widens* what may be
@@ -3992,3 +3992,113 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   `_sm_base13` merged away), and `bun tools/bootstrap.js` fixed point byte for byte. The
   self-transpile drops 107 `simse_addressOf` sites (1963 -> 1856) and `simse_addressOf(self->out)`
   from 50 to 36.
+- **Refcount promotion: a non-escaping `&T` local becomes a stack value
+  (`cppsrc/linear/PromoteRefs.kt`).** The first two slices of `impl_specs/escape-analysis.md`. A
+  counted-reference local written exactly once, used only in positions a raw pointer spells the same
+  way, and whose payload has no destructor, is rewritten so the box is built on the stack and the
+  handle is a raw pointer to it (`c = &_sm_stk0`) - one heap allocation and its refcount traffic
+  gone, the value destroyed with the scope. The emitter needed no change: a `&T` and a `*T` already
+  spell `c->value` the same way, a value receiver's C++ parameter already is the `T* self` that
+  fits, and the box-vs-value ctor is already driven by the destination's type (`ilBoxedCtorText`).
+  The pass appends a `*T` type entry (`ilPointerNode`) and repoints the slot in `vars` **and**
+  `inferredTypes` (the emitter seeds its `localTypes`, and `receiverArg`/`ExprIndex` read a
+  receiver's kind, from the latter).
+
+  Two definitions promote, and they differ in where the value lives. `CallCtor c, T, args` (the box
+  built in place) appends a value slot for the payload, retargets the construction to it (so it
+  becomes `T{args}`), and follows it with a `Deref` - and requires the `CallCtor` in the body's first
+  block, since it is a fresh temporary. `Box c, src` (`&src` boxing a copy) requires `src` to be a
+  value slot read *nowhere* else, and then the copy is unnecessary: `Box c, src` becomes
+  `Deref c, src` - no new slot, no copy, no temporary, so its destructor story is untouched. That is
+  the author's `var valList = ...; var list = *valList;` shape, `&List<Int>()` through it.
+
+  A **receiver** on the handle is safe when the callee declares it by value (the C++ parameter is
+  `T* self`); `IlMethod.recvIsValue` carries that, recorded once per method in
+  `IlExtractor.methodIndex` (a class member's receiver is its enclosing class, always a value; an
+  extension's is the parameter named `this`, which may be a handle), and `*c` (a `Deref` of a
+  counted reference is `.get()`, exactly the pointer a promoted handle already is - the op is
+  rewritten to the plain assignment `d = c`). Every other use refuses, so an unmodeled use costs an
+  allocation and never correctness: a counted-reference receiver, a `&T` argument, a
+  store/`Pack`/capture/`return`, a `Box` whose source is read elsewhere, and any second definition
+  (the author's rule - a doubly-assigned handle is not promoted, since `= null` says the object has a
+  life of its own).
+
+  The `CallCtor` payload's `unInit` is refused too, and that is not hypothetical:
+  `stress/uninit`'s `oneOwner` is exactly a promotable `&Res` box, and promoting it would build the
+  stack value from a temporary whose `~Res()` runs, then run it again at scope end - two `close 7`
+  for one box. Unknown is not "safe": a payload that is not a plain named type the facts know is
+  refused. (The `Box` shape is exempt - it reuses a value that already exists.)
+
+  Verified: `bun tools/stress.js` **53/53** - `stress/ref-promote` pins all five shapes in its
+  `expected.cpp` (the promoted `Cell _sm_stk0; Cell* c;`, the same with a receiver `ns1_add(c, 4)`,
+  `*c` as `p = c`, the `Box` shape `List<Int>* xs; xs = &_sm_base4;`, and the returned handle left a
+  `makeRef`) - and `bun tools/bootstrap.js` fixed point byte for byte. Before this work **nothing** in
+  `cppsrc` or `stress` used a counted reference, so the whole `&T` path was untested; `ref-promote` is
+  the first case that pins it.
+- **Auto-borrow: a read-only parameter becomes a `*T` (`cppsrc/parser/BorrowParams.kt`).** A
+  proof-of-concept whole-program rewrite, run from the driver right after `cpFoldConstParams` - the
+  same **before-sema** AST shape, so the checker, the lowering, the emitter and every call site see
+  the borrowed declaration and nothing downstream knows the optimization exists (the existing handle
+  inference already turns a value argument into the address for a `*T` parameter). The parameter
+  becomes `*T`, not `const T&`: `*T` is the language's borrow spelling, and one style of code beats
+  a const that would forbid a mutation the spelling permits.
+
+  The rule is the simplest sound one and refuses by default (*unsure means it escapes*): a body may
+  call only a **pure** callee (`data`) - the same trust the value
+  reuse rests on, since a callee can write through an alias the analysis cannot see; **any**
+  assignment whose target is not a plain name (`x.f = ...`, `x[i] = ...`, `*x = ...`) borrows
+  nothing anywhere in the body (the author's coarse guard); a parameter under `&`/`*`, assigned, or
+  captured by a lambda is not borrowed (a capture would copy the *pointer* into the closure); and
+  `this` is never borrowed, since the emitter already passes a value receiver as `T* self`. A
+  candidate is a function or a `data class` method with a Simse body, not `main`, not native,
+  declared exactly once, and never used as a *value*. Everything else a parameter can do is a read:
+  `p.f`, `p[i]`, `p.size()`, `p` as a value, and `return p` (a value return copies, so the pointer
+  does not escape). That is the authored shape - "string->size() and return".
+
+  Where it pays: a body that only views or re-borrows the parameter loses the copy on *both* sides -
+  `fun width(s: Str): Int { return s.size() }` is `Int ns1_width(Str* s) { ... = s->size(); }` and
+  the caller passes `&w`, `spanOfStr`/`size` taking the pointer straight through. Where it is
+  neutral: a *value* position still reads through (`pair(Str* a, Str* b)` called with addresses, but
+  its `a + "-" + b` materializes `copy(a)`), and a literal argument materializes the call-site
+  temporary (`_sm_base2 = __sm_stringTable[k]; _sm_base1 = &_sm_base2;`) - the "patch the call place
+  with a new temporary" shape, at the cost the callee used to pay. Deliberately not done: no
+  interprocedural summary, no size model, and only a type it can name as heavy (`Str`, a `data
+  class`, a container) - never a scalar, a handle, or `Span`/`Array`.
+
+  Verified: `bun tools/stress.js` **53/53**, `bun tools/bootstrap.js` fixed point byte for byte;
+  `stress/pure-function` grew the shapes and pins them (`Int ns1_sum(ns1_Point* p)` and
+  `Int ns1_width(Str* s)` borrowed, `Int ns1_bumpPoint(ns1_Point p)` and `ns1_impureTwice(Str s)`
+  left by value, the call sites taking addresses `_sm_base2 = &p; ns1_sum(_sm_base2);`). Five corpus
+  programs' `.cpp` moved when the borrow first fired, all with unchanged stdout.
+- **`lenOf`: the length accessors become declared pure operations.** The optimizer's two
+  `pureCallees.insert("size"/"count")` seeds (`Codegen.run`) and `BorrowParams`' twin
+  `pure.insert` lines were the last *name whitelist*: `size`/`count` were built-ins with no
+  declaration to mark. They are declarations now. `Str.size()` and `List.size()` - the two the
+  language could not otherwise spell, because `Str` and `List` are raw types whose C++ `size()` is
+  a member - get one operation, `lenOf` (`cppsrc/rtl/rtl.kt`), backed by a new `lenops` section of
+  `cppsrc/rtl/_res.md`:
+
+  ```cpp
+  Int simse_lenOf(const Str& self);
+  template <class T, int N> Int simse_lenOf(const SmallVector<T, N>& self);
+  ```
+
+  The receiver is borrowed (`const&`): `Str` and `List` are heavy values, and a by-value parameter
+  would copy one per call.
+
+  - **The declarations are `data`.** `data fun size(this: Str)`, `data fun size<T>(this: List<T>)`,
+    and - for honesty - `data` on the already-declared `Array.count` and `Dictionary.size`
+    (`StrView.size()` already carried it). Purity stays *name-keyed* as before; the difference is
+    that every one of those names is now a `data` declaration rather than a hard-coded seed.
+  - **No whitelist anywhere.** `Codegen.run` no longer seeds the set, and `BorrowParams`' `pure`
+    set is exactly the `IsPure` marks it already collected - so an auto-borrow candidate's
+    `s.size()` is trusted because `size` is declared pure, not because a list names it.
+  - **Emission moves.** `s.size()` on a `Str`/`List` now emits `simse_lenOf(s)` where it emitted the
+    C++ member call `s.size()`/`s->size()`; `simse_lenOf` is `inline` and returns `self.size()`, so
+    the C++ compiler inlines it back. The eleven `stress/*/expected.cpp` goldens that reach the RTL
+    forwards moved (the new `lenops` forward renders before `dictops`' `#include <algorithm>`);
+    stdout is unchanged in all of them.
+
+  Verified: `bun build.js --release --no-lto --out cppsrc/simse_bootstrap.cpp` then
+  `bun tools/bootstrap.js` - both fixed points byte for byte; `bun tools/stress.js` **53/53**, the
+  eleven moved `expected.cpp` goldens regenerated from `stress/.work/<case>/out.cpp`.

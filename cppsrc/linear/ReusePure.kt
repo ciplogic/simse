@@ -13,12 +13,12 @@
 // Each restriction is a *refusal* rather than a guess:
 //
 //   - only the callees the emitter called *pure* are reused: the names of the functions
-//     declared `data` (no side effects, the result a function of its arguments) plus the
-//     language's read-only length accessors, collected into `pureCallees` (`Codegen.kt`).
-//     The view of a string's bytes (`spanOfStr`) is the one the `when` lowering and the
-//     `Str`/literal comparison build (`Parser.kt`); `size`/`isEmpty` and any user `data fun`
-//     answer the same way. A result is only reused when its value is known to be a function
-//     of the argument alone;
+//     declared `data` (no side effects, the result a function of its arguments), collected
+//     into `pureCallees` (`Codegen.kt`). The view of a string's bytes (`spanOfStr`) is the
+//     one the `when` lowering and the `Str`/literal comparison build (`Parser.kt`); the
+//     length accessors (`lenOf`, `size`, `isEmpty`) and any user `data fun` answer the same
+//     way. A result is only reused when its value is known to be a function of the argument
+//     alone;
 //   - the argument is a frame slot this body never writes (`defCount`) and never hands to a
 //     call that could write it (`escapes`): a raw pointer or a counted reference a callee
 //     receives may be written through, which would change what a *later* view sees (a view is
@@ -46,10 +46,9 @@ import common
 
 // The callees whose call may be reused - read the argument, answer the same value for the
 // same argument, write nothing. The names are the emitter's `pureCallees`: every `data`
-// function (`spanOfStr`, `isEmpty`, a user's `toLen`, ...) and the built-in `size`/`count`,
-// which have no declaration to mark. A `data` mark is a *promise* - one that writes its
-// receiver would make the reuse wrong - which is why the set is built from explicit marks,
-// never inferred yet.
+// function (`spanOfStr`, `lenOf`, `isEmpty`, a user's `toLen`, ...). A `data` mark is a
+// *promise* - one that writes its receiver would make the reuse wrong - which is why the set
+// is built from explicit marks, never inferred yet.
 fun ilReuseCall(pure: *Dictionary<Str, Bool>, name: *Str): Bool {
     return pure.has(name)
 }

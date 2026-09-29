@@ -95,6 +95,17 @@ Char simse_strView_charAt(StrView self, Int index);
 StrView simse_spanOfStr(Str* text);
 StrView simse_spanOfStr(StrView view);
 
+// `lenOf(x)`: one read-only length operation, declared `data` in the prelude
+// (cppsrc/rtl/rtl.kt) so that a repeated call on an unchanged value is one call
+// (cppsrc/linear/ReusePure.kt) and a borrow proof may call it (cppsrc/parser/BorrowParams.kt).
+// `Str` and `List` are heavy values, so the receiver is taken by reference - a by-value
+// parameter would copy one per call. The containers whose count a declaration already spells
+// (`Array.count`, `Dictionary.size`, `StrView.size`) keep those declarations; this is the
+// operation for the two the language cannot otherwise spell.
+Int simse_lenOf(const Str& self);
+template <class T, int N>
+Int simse_lenOf(const SmallVector<T, N>& self);
+
 #include <algorithm>
 #include <type_traits>
 #include <utility>
@@ -297,7 +308,7 @@ Bool startsWith(StrView* self, Str text) {
     Int count, _sm_expr1, i;
     Bool _sm_expr2, _sm_expr6;
     Char _sm_expr5;
-    count = text.size();
+    count = simse_lenOf(text);
     _sm_expr1 = simse_strView_size((*self));
     _sm_expr2 = count > _sm_expr1;
     if (_sm_expr2) goto L1;
@@ -328,8 +339,8 @@ Bool startsWith(Str* self, Str prefix) {
     Int count, _sm_expr1, i;
     Bool _sm_expr2;
     Char _sm_expr4, _sm_expr5;
-    count = prefix.size();
-    _sm_expr1 = self->size();
+    count = simse_lenOf(prefix);
+    _sm_expr1 = simse_lenOf((*self));
     _sm_expr2 = count > _sm_expr1;
     if (_sm_expr2) goto L1;
     goto L2;
@@ -356,7 +367,7 @@ Bool startsWith(Str* self, Str prefix) {
 Bool isEmpty(Str* self) {
     Int _sm_expr1;
     Bool _sm_expr2;
-    _sm_expr1 = self->size();
+    _sm_expr1 = simse_lenOf((*self));
     _sm_expr2 = _sm_expr1 == 0;
     return _sm_expr2;
 }
@@ -368,11 +379,11 @@ int main() {
     Bool _sm_expr3, _sm_expr5, _sm_expr6, _sm_expr7;
     StrView _sm_expr4, _sm_when1_v;
     text = __sm_stringTable[1];
-    _sm_expr1 = text.size();
+    _sm_expr1 = simse_lenOf(text);
     simse_println((_sm_expr1), stdout);
     simse_println((text), stdout);
     empty = __sm_stringTable[6];
-    _sm_expr2 = empty.size();
+    _sm_expr2 = simse_lenOf(empty);
     simse_println((_sm_expr2), stdout);
     _sm_expr3 = isEmpty(simse_addressOf(empty));
     simse_println((_sm_expr3), stdout);
@@ -399,7 +410,7 @@ int main() {
     simse_println((__sm_stringTable[5]), stdout);
     L4:;
     quoted = __sm_stringTable[2];
-    _sm_expr9 = quoted.size();
+    _sm_expr9 = simse_lenOf(quoted);
     simse_println((_sm_expr9), stdout);
     simse_println((quoted), stdout);
     return 0;
@@ -441,6 +452,17 @@ inline StrView simse_spanOfStr(Str* text) {
 // resolution picks the borrowed view or the identity, and the tests compare against it.
 inline StrView simse_spanOfStr(StrView view) {
     return view;
+}
+
+inline Int simse_lenOf(const Str& self) {
+    return self.size();
+}
+
+// `List<T>` is `SmallVector<T, 4>` (cppsrc/rtl/containers.hpp), so one overload serves every
+// element type and inline capacity.
+template <class T, int N>
+inline Int simse_lenOf(const SmallVector<T, N>& self) {
+    return self.size();
 }
 
 // `dictionaryOf<K, V>()`: `Dictionary<K, V>` is a value type, so this default-constructs

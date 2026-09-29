@@ -134,6 +134,17 @@ void simse_str_appendStrPtr(Str& self, const Str* value);
 void simse_str_reserve(Str& self, Int count);
 Str simse_int_toString(Int self);
 
+// `lenOf(x)`: one read-only length operation, declared `data` in the prelude
+// (cppsrc/rtl/rtl.kt) so that a repeated call on an unchanged value is one call
+// (cppsrc/linear/ReusePure.kt) and a borrow proof may call it (cppsrc/parser/BorrowParams.kt).
+// `Str` and `List` are heavy values, so the receiver is taken by reference - a by-value
+// parameter would copy one per call. The containers whose count a declaration already spells
+// (`Array.count`, `Dictionary.size`, `StrView.size`) keep those declarations; this is the
+// operation for the two the language cannot otherwise spell.
+Int simse_lenOf(const Str& self);
+template <class T, int N>
+Int simse_lenOf(const SmallVector<T, N>& self);
+
 #include <algorithm>
 #include <type_traits>
 #include <utility>
@@ -380,7 +391,7 @@ struct List_iter_yieldable {
         if (_sm_base3) goto LY1;
         this->i = 0;
         _sm_base6 = this->_sm_self;
-        _sm_base5 = _sm_base6->size();
+        _sm_base5 = simse_lenOf((*_sm_base6));
         this->len = _sm_base5;
         L1:;
         _sm_base7 = this->i;
@@ -458,7 +469,7 @@ Int ns1_partDeadCode();
 Opt<Int> ns1_pick(Int i);
 Res<Str> ns1_parse(Int n);
 Str ns1_describe(Int n);
-Int ns1_countUntil(List<Str> names);
+Int ns1_countUntil(List<Str>* names);
 Int ns1_partFlatBlocks();
 // stress/machines/src/main.kt
 template <class T>
@@ -482,7 +493,7 @@ struct ns1_List_everyNth_yieldable {
         this->i = 0;
         L1:;
         _sm_base5 = this->_sm_self;
-        _sm_expr1 = _sm_base5->size();
+        _sm_expr1 = simse_lenOf((*_sm_base5));
         _sm_base6 = this->i;
         _sm_expr2 = _sm_base6 < _sm_expr1;
         if (!(_sm_expr2)) goto L2;
@@ -710,14 +721,14 @@ Str substr(Str* self, Int start, Int len) {
     L1:;
     begin = 0;
     L2:;
-    _sm_expr2 = self->size();
+    _sm_expr2 = simse_lenOf((*self));
     _sm_expr1 = begin > _sm_expr2;
     if (_sm_expr1) goto L3;
     goto L4;
     L3:;
-    begin = self->size();
+    begin = simse_lenOf((*self));
     L4:;
-    _sm_expr2 = self->size();
+    _sm_expr2 = simse_lenOf((*self));
     count = _sm_expr2 - begin;
     _sm_expr1 = len >= 0;
     if (_sm_expr1) goto L7;
@@ -806,13 +817,13 @@ Str ns1_describe(Int n) {
     return _sm_expr3;
 }
 // stress/machines/src/main.kt
-Int ns1_countUntil(List<Str> names) {
+Int ns1_countUntil(List<Str>* names) {
     Int limit, i, _sm_expr1;
     Bool _sm_expr2;
     limit = 2;
     i = 0;
     L1:;
-    _sm_expr1 = names.size();
+    _sm_expr1 = simse_lenOf((*names));
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L2;
     _sm_expr2 = i >= limit;
@@ -824,11 +835,12 @@ Int ns1_countUntil(List<Str> names) {
     i = i + 1;
     goto L1;
     L2:;
-    _sm_expr1 = names.size();
+    _sm_expr1 = simse_lenOf((*names));
     return _sm_expr1;
 }
 // stress/machines/src/main.kt
 Int ns1_partFlatBlocks() {
+    List<Str>* _sm_base1;
     Opt<Int> _sm_expr1, _sm_expr4;
     Int _sm_expr2, _sm_expr3, _sm_expr7, _sm_expr9;
     Bool _sm_expr5;
@@ -850,7 +862,8 @@ Int ns1_partFlatBlocks() {
     simse_list_append(names, __sm_stringTable[16]);
     simse_list_append(names, __sm_stringTable[17]);
     simse_list_append(names, __sm_stringTable[18]);
-    _sm_expr9 = ns1_countUntil(names);
+    _sm_base1 = &names;
+    _sm_expr9 = ns1_countUntil(_sm_base1);
     simse_println((_sm_expr9), stdout);
     return 0;
 }
@@ -1196,6 +1209,17 @@ inline void simse_str_reserve(Str& self, Int count) {
 // `Int.toString()`: the scalar-to-inline-string conversion (specs/memory-model.md).
 inline Str simse_int_toString(Int self) {
     return std::to_string(self);
+}
+
+inline Int simse_lenOf(const Str& self) {
+    return self.size();
+}
+
+// `List<T>` is `SmallVector<T, 4>` (cppsrc/rtl/containers.hpp), so one overload serves every
+// element type and inline capacity.
+template <class T, int N>
+inline Int simse_lenOf(const SmallVector<T, N>& self) {
+    return self.size();
 }
 
 // `dictionaryOf<K, V>()`: `Dictionary<K, V>` is a value type, so this default-constructs

@@ -57,6 +57,7 @@ fun Emitter.dumpIl(
     val unit: IlUnit = ilExtractUnit(this.ilFunctionFor(fn, decl, facts, inferred), body, fn.file)
     // The dump shows the IL the emitter is about to read, so the fusion and the reuse run here too.
     this.ilFuseConcatUnit(unit)
+    ilPromoteRefsUnit(unit, facts)
     ilReuseUnit(unit, *this.pureCallees)
     val text: Str = printIlUnit(unit)
     // `eprintln` adds a newline the dump already ends with: drop that byte.
@@ -1961,6 +1962,7 @@ fun Emitter.ilFuseConcatUnit(unit: *IlUnit): Unit {
 fun Emitter.emitBodyAt(info: *IlFunction, body: *List<AstXmlNode>, file: *Str, level: Int, measure: Bool): Unit {
     val unit: IlUnit = ilExtractUnit(info, body, file)
     this.ilFuseConcatUnit(unit)
+    ilPromoteRefsUnit(unit, info.facts)
     ilReuseUnit(unit, *this.pureCallees)
     val emitted: IlText = this.emitIlBodyText(unit, level)
     if (!emitted.ok) {

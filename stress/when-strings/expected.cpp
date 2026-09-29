@@ -134,6 +134,17 @@ void simse_str_appendStrPtr(Str& self, const Str* value);
 void simse_str_reserve(Str& self, Int count);
 Str simse_int_toString(Int self);
 
+// `lenOf(x)`: one read-only length operation, declared `data` in the prelude
+// (cppsrc/rtl/rtl.kt) so that a repeated call on an unchanged value is one call
+// (cppsrc/linear/ReusePure.kt) and a borrow proof may call it (cppsrc/parser/BorrowParams.kt).
+// `Str` and `List` are heavy values, so the receiver is taken by reference - a by-value
+// parameter would copy one per call. The containers whose count a declaration already spells
+// (`Array.count`, `Dictionary.size`, `StrView.size`) keep those declarations; this is the
+// operation for the two the language cannot otherwise spell.
+Int simse_lenOf(const Str& self);
+template <class T, int N>
+Int simse_lenOf(const SmallVector<T, N>& self);
+
 #include <algorithm>
 #include <type_traits>
 #include <utility>
@@ -320,7 +331,7 @@ struct List_iter_yieldable {
         if (_sm_base3) goto LY1;
         this->i = 0;
         _sm_base6 = this->_sm_self;
-        _sm_base5 = _sm_base6->size();
+        _sm_base5 = simse_lenOf((*_sm_base6));
         this->len = _sm_base5;
         L1:;
         _sm_base7 = this->i;
@@ -346,10 +357,10 @@ struct List_iter_yieldable {
 
 template <class T>
 List_iter_yieldable<T> iter(List<T>* self);
-Str ns1_classify(Str op);
+Str ns1_classify(Str* op);
 Str ns1_classifyPtr(Str* op);
 Str ns1_viewKind(StrView v);
-Str ns1_fixed(Str op);
+Str ns1_fixed(Str* op);
 
 template <class T>
 List_iter_yieldable<T> iter(List<T>* self) {
@@ -359,14 +370,12 @@ List_iter_yieldable<T> iter(List<T>* self) {
     return machine;
 }
 // stress/when-strings/src/main.kt
-Str ns1_classify(Str op) {
-    Str* _sm_base1;
+Str ns1_classify(Str* op) {
     StrView _sm_when1_v;
     Int _sm_when1_n;
     Bool _sm_expr1;
     Char _sm_expr3;
-    _sm_base1 = &op;
-    _sm_when1_v = simse_spanOfStr(_sm_base1);
+    _sm_when1_v = simse_spanOfStr(op);
     _sm_when1_n = simse_strView_size(_sm_when1_v);
     _sm_expr1 = _sm_when1_n == 0;
     if (_sm_expr1) goto L1;
@@ -545,9 +554,11 @@ Str ns1_viewKind(StrView v) {
     return __sm_stringTable[27];
 }
 // stress/when-strings/src/main.kt
-Str ns1_fixed(Str op) {
+Str ns1_fixed(Str* op) {
+    Str _sm_base1;
     Bool _sm_expr1;
-    _sm_expr1 = op == __sm_stringTable[10];
+    _sm_base1 = *(op);
+    _sm_expr1 = _sm_base1 == __sm_stringTable[10];
     if (_sm_expr1) goto L1;
     goto L2;
     L1:;
@@ -558,12 +569,12 @@ Str ns1_fixed(Str op) {
 // stress/when-strings/src/main.kt
 int main() {
     char* __sm_catP;
-    Str* _sm_base1;
+    Str* _sm_base1, * _sm_base2, * _sm_base3, * _sm_base5;
+    Str _sm_base4, _sm_base6, op, _sm_expr2, _sm_expr3, _sm_expr4, _sm_expr7, _sm_expr9, _sm_expr10,
+        _sm_expr11, word, _sm_expr16, _sm_expr20;
     List<Str> ops, words;
     List_iter_yieldable<Str> _sm_for5, _sm_for6;
     Bool _sm_expr1;
-    Str op, _sm_expr2, _sm_expr3, _sm_expr4, _sm_expr7, _sm_expr9, _sm_expr10, _sm_expr11, word,
-        _sm_expr16, _sm_expr20;
     Ref<Str> _sm_expr14;
     ops = List<Str>{__sm_stringTable[31], __sm_stringTable[30], __sm_stringTable[28], __sm_stringTable[24], __sm_stringTable[18], __sm_stringTable[15], __sm_stringTable[25], __sm_stringTable[26], __sm_stringTable[17], __sm_stringTable[19], __sm_stringTable[16], __sm_stringTable[21], __sm_stringTable[22]};
     _sm_for5 = iter(simse_addressOf(ops));
@@ -576,7 +587,8 @@ int main() {
     std::memcpy(__sm_catP, op.data(), op.size());
     __sm_catP = __sm_catP + op.size();
     std::memcpy(__sm_catP, " -> ", 4);
-    _sm_expr3 = ns1_classify(op);
+    _sm_base1 = &op;
+    _sm_expr3 = ns1_classify(_sm_base1);
     _sm_expr4.resize(_sm_expr2.size() + _sm_expr3.size());
     __sm_catP = _sm_expr4.data();
     std::memcpy(__sm_catP, _sm_expr2.data(), _sm_expr2.size());
@@ -618,8 +630,8 @@ int main() {
     __sm_catP = __sm_catP + word.size();
     std::memcpy(__sm_catP, " ~ ", 3);
     _sm_expr14 = makeRef<std::remove_cvref_t<decltype((word))>>(word);
-    _sm_base1 = (_sm_expr14).get();
-    _sm_expr3 = ns1_classifyPtr(_sm_base1);
+    _sm_base2 = (_sm_expr14).get();
+    _sm_expr3 = ns1_classifyPtr(_sm_base2);
     _sm_expr16.resize(_sm_expr2.size() + _sm_expr3.size());
     __sm_catP = _sm_expr16.data();
     std::memcpy(__sm_catP, _sm_expr2.data(), _sm_expr2.size());
@@ -628,13 +640,17 @@ int main() {
     simse_println((_sm_expr16), stdout);
     goto L3;
     L4:;
-    _sm_expr2 = ns1_fixed(__sm_stringTable[10]);
+    _sm_base4 = __sm_stringTable[10];
+    _sm_base3 = &_sm_base4;
+    _sm_expr2 = ns1_fixed(_sm_base3);
     _sm_expr3.resize(1 + _sm_expr2.size());
     __sm_catP = _sm_expr3.data();
     std::memcpy(__sm_catP, _sm_expr2.data(), _sm_expr2.size());
     __sm_catP = __sm_catP + _sm_expr2.size();
     *__sm_catP = (char) (' ');
-    _sm_expr7 = ns1_fixed(__sm_stringTable[6]);
+    _sm_base6 = __sm_stringTable[6];
+    _sm_base5 = &_sm_base6;
+    _sm_expr7 = ns1_fixed(_sm_base5);
     _sm_expr20.resize(_sm_expr3.size() + _sm_expr7.size());
     __sm_catP = _sm_expr20.data();
     std::memcpy(__sm_catP, _sm_expr3.data(), _sm_expr3.size());
@@ -769,6 +785,17 @@ inline void simse_str_reserve(Str& self, Int count) {
 // `Int.toString()`: the scalar-to-inline-string conversion (specs/memory-model.md).
 inline Str simse_int_toString(Int self) {
     return std::to_string(self);
+}
+
+inline Int simse_lenOf(const Str& self) {
+    return self.size();
+}
+
+// `List<T>` is `SmallVector<T, 4>` (cppsrc/rtl/containers.hpp), so one overload serves every
+// element type and inline capacity.
+template <class T, int N>
+inline Int simse_lenOf(const SmallVector<T, N>& self) {
+    return self.size();
 }
 
 // `dictionaryOf<K, V>()`: `Dictionary<K, V>` is a value type, so this default-constructs

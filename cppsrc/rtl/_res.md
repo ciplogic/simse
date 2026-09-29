@@ -281,6 +281,35 @@ inline Str simse_int_toString(Int self) {
 }
 ```
 
+!lenops
+====
+forward:
+```cpp
+// `lenOf(x)`: one read-only length operation, declared `data` in the prelude
+// (cppsrc/rtl/rtl.kt) so that a repeated call on an unchanged value is one call
+// (cppsrc/linear/ReusePure.kt) and a borrow proof may call it (cppsrc/parser/BorrowParams.kt).
+// `Str` and `List` are heavy values, so the receiver is taken by reference - a by-value
+// parameter would copy one per call. The containers whose count a declaration already spells
+// (`Array.count`, `Dictionary.size`, `StrView.size`) keep those declarations; this is the
+// operation for the two the language cannot otherwise spell.
+Int simse_lenOf(const Str& self);
+template <class T, int N>
+Int simse_lenOf(const SmallVector<T, N>& self);
+```
+bodies:
+```cpp
+inline Int simse_lenOf(const Str& self) {
+    return self.size();
+}
+
+// `List<T>` is `SmallVector<T, 4>` (cppsrc/rtl/containers.hpp), so one overload serves every
+// element type and inline capacity.
+template <class T, int N>
+inline Int simse_lenOf(const SmallVector<T, N>& self) {
+    return self.size();
+}
+```
+
 !strcat
 ====
 forward:

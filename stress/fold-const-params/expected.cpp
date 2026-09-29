@@ -134,6 +134,17 @@ void simse_str_appendStrPtr(Str& self, const Str* value);
 void simse_str_reserve(Str& self, Int count);
 Str simse_int_toString(Int self);
 
+// `lenOf(x)`: one read-only length operation, declared `data` in the prelude
+// (cppsrc/rtl/rtl.kt) so that a repeated call on an unchanged value is one call
+// (cppsrc/linear/ReusePure.kt) and a borrow proof may call it (cppsrc/parser/BorrowParams.kt).
+// `Str` and `List` are heavy values, so the receiver is taken by reference - a by-value
+// parameter would copy one per call. The containers whose count a declaration already spells
+// (`Array.count`, `Dictionary.size`, `StrView.size`) keep those declarations; this is the
+// operation for the two the language cannot otherwise spell.
+Int simse_lenOf(const Str& self);
+template <class T, int N>
+Int simse_lenOf(const SmallVector<T, N>& self);
+
 #include <algorithm>
 #include <type_traits>
 #include <utility>
@@ -426,14 +437,14 @@ Str substr(Str* self, Int start, Int len) {
     L1:;
     begin = 0;
     L2:;
-    _sm_expr2 = self->size();
+    _sm_expr2 = simse_lenOf((*self));
     _sm_expr1 = begin > _sm_expr2;
     if (_sm_expr1) goto L3;
     goto L4;
     L3:;
-    begin = self->size();
+    begin = simse_lenOf((*self));
     L4:;
-    _sm_expr2 = self->size();
+    _sm_expr2 = simse_lenOf((*self));
     count = _sm_expr2 - begin;
     _sm_expr1 = len >= 0;
     if (_sm_expr1) goto L7;
@@ -662,6 +673,17 @@ inline void simse_str_reserve(Str& self, Int count) {
 // `Int.toString()`: the scalar-to-inline-string conversion (specs/memory-model.md).
 inline Str simse_int_toString(Int self) {
     return std::to_string(self);
+}
+
+inline Int simse_lenOf(const Str& self) {
+    return self.size();
+}
+
+// `List<T>` is `SmallVector<T, 4>` (cppsrc/rtl/containers.hpp), so one overload serves every
+// element type and inline capacity.
+template <class T, int N>
+inline Int simse_lenOf(const SmallVector<T, N>& self) {
+    return self.size();
 }
 
 // `dictionaryOf<K, V>()`: `Dictionary<K, V>` is a value type, so this default-constructs

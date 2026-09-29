@@ -320,9 +320,9 @@ data class Emitter(
     var profNameIndex: Dictionary<Str, Int>,
 
 // The callees whose repeated call the reuse pass may merge (`linear/ReusePure.kt`): the
-// names of functions declared `data` (pure), filled as the declarations are collected, plus
-// the language's own read-only length accessors - `size`/`count` are built-ins with no
-// declaration to mark. Keyed by *name*: a `data` mark is a promise, and a call is folded
+// names of functions declared `data` (pure), filled as the declarations are collected. The
+// length accessors are declarations too (`size`/`count`, cppsrc/rtl/rtl.kt), so nothing is
+// listed here by hand. Keyed by *name*: a `data` mark is a promise, and a call is folded
 // only between two calls naming the same callee and the same argument.
     var pureCallees: Dictionary<Str, Bool>,
 
@@ -3574,11 +3574,6 @@ fun Emitter.emitUninit(fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts, prototype
     }
 
     fun run(): Res<Str> {
-        // The language's own read-only length accessors, which have no declaration to mark
-        // `data`; a program that declares its own `size`/`count` is trusted the same way the
-        // old name whitelist trusted it.
-        this.pureCallees.insert("size", true)
-        this.pureCallees.insert("count", true)
         this.collect()
         // Reachability before the coloring: `collectAsync` keeps only the suspending declarations
         // the program reaches, which is what tells a prelude `suspend fun` from one of the

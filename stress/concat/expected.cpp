@@ -134,6 +134,17 @@ void simse_str_appendStrPtr(Str& self, const Str* value);
 void simse_str_reserve(Str& self, Int count);
 Str simse_int_toString(Int self);
 
+// `lenOf(x)`: one read-only length operation, declared `data` in the prelude
+// (cppsrc/rtl/rtl.kt) so that a repeated call on an unchanged value is one call
+// (cppsrc/linear/ReusePure.kt) and a borrow proof may call it (cppsrc/parser/BorrowParams.kt).
+// `Str` and `List` are heavy values, so the receiver is taken by reference - a by-value
+// parameter would copy one per call. The containers whose count a declaration already spells
+// (`Array.count`, `Dictionary.size`, `StrView.size`) keep those declarations; this is the
+// operation for the two the language cannot otherwise spell.
+Int simse_lenOf(const Str& self);
+template <class T, int N>
+Int simse_lenOf(const SmallVector<T, N>& self);
+
 #include <algorithm>
 #include <type_traits>
 #include <utility>
@@ -371,7 +382,7 @@ Str substr(StrView* self, Int from, Int count);
 Str toString(StrView* self);
 Str fmtStr(StrView fmt, List<Str>* items);
 Str substr(Str* self, Int start, Int len);
-Str ns1_pair(Str a, Str b);
+Str ns1_pair(Str* a, Str* b);
 
 Str substr(StrView* self, Int from, Int count) {
     Int len, begin, end, _sm_expr6;
@@ -447,7 +458,7 @@ Str fmtStr(StrView fmt, List<Str>* items) {
     i = i + 1;
     goto L3;
     L4:;
-    _sm_expr2 = items->size();
+    _sm_expr2 = simse_lenOf((*items));
     _sm_expr1 = points != _sm_expr2;
     if (_sm_expr1) goto L7;
     goto L8;
@@ -492,14 +503,14 @@ Str substr(Str* self, Int start, Int len) {
     L1:;
     begin = 0;
     L2:;
-    _sm_expr2 = self->size();
+    _sm_expr2 = simse_lenOf((*self));
     _sm_expr1 = begin > _sm_expr2;
     if (_sm_expr1) goto L3;
     goto L4;
     L3:;
-    begin = self->size();
+    begin = simse_lenOf((*self));
     L4:;
-    _sm_expr2 = self->size();
+    _sm_expr2 = simse_lenOf((*self));
     count = _sm_expr2 - begin;
     _sm_expr1 = len >= 0;
     if (_sm_expr1) goto L7;
@@ -523,16 +534,21 @@ Str substr(Str* self, Int start, Int len) {
     return out;
 }
 // stress/concat/src/main.kt
-Str ns1_pair(Str a, Str b) {
+Str ns1_pair(Str* a, Str* b) {
     char* __sm_catP;
-    Str _sm_expr2;
-    _sm_expr2.resize(1 + a.size() + b.size());
-    __sm_catP = _sm_expr2.data();
-    std::memcpy(__sm_catP, a.data(), a.size());
-    __sm_catP = __sm_catP + a.size();
+    Str _sm_base1, _sm_base2, _sm_expr1, _sm_expr2;
+    _sm_base1 = *(a);
+    _sm_expr1.resize(1 + _sm_base1.size());
+    __sm_catP = _sm_expr1.data();
+    std::memcpy(__sm_catP, _sm_base1.data(), _sm_base1.size());
+    __sm_catP = __sm_catP + _sm_base1.size();
     *__sm_catP = (char) ('-');
-    __sm_catP = __sm_catP + 1;
-    std::memcpy(__sm_catP, b.data(), b.size());
+    _sm_base2 = *(b);
+    _sm_expr2.resize(_sm_expr1.size() + _sm_base2.size());
+    __sm_catP = _sm_expr2.data();
+    std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
+    __sm_catP = __sm_catP + _sm_expr1.size();
+    std::memcpy(__sm_catP, _sm_base2.data(), _sm_base2.size());
     return _sm_expr2;
 }
 // stress/concat/src/main.kt
@@ -540,12 +556,13 @@ int main() {
     char* __sm_catP;
     Int __sm_catAt;
     Int __sm_catC0;
-    Int* _sm_base1;
-    List<Str> _sm_base10, _sm_base12;
-    List<Str>* _sm_base11, * _sm_base13;
-    Str a, b, _sm_expr2, _sm_expr3, _sm_expr5, _sm_expr6, _sm_expr7, _sm_expr8, _sm_expr9, _sm_expr10,
-        _sm_expr12, _sm_expr13, acc, _sm_expr17, _sm_expr18, _sm_expr19, _sm_expr20, _sm_expr21, _sm_expr23,
-        _sm_expr24, bare, _sm_expr25, _sm_expr26;
+    Str* _sm_base1, * _sm_base3, * _sm_base5, * _sm_base6;
+    Str _sm_base2, _sm_base4, a, b, _sm_expr2, _sm_expr3, _sm_expr5, _sm_expr6, _sm_expr7, _sm_expr8,
+        _sm_expr9, _sm_expr10, _sm_expr12, _sm_expr13, acc, _sm_expr17, _sm_expr18, _sm_expr19, _sm_expr20,
+        _sm_expr21, _sm_expr23, _sm_expr24, bare, _sm_expr25, _sm_expr26;
+    Int* _sm_base7;
+    List<Str> _sm_base16, _sm_base18;
+    List<Str>* _sm_base17, * _sm_base19;
     ns1_Tag tag;
     StrView format;
     a = __sm_stringTable[1];
@@ -572,14 +589,20 @@ int main() {
     __sm_catP = __sm_catP + 1;
     std::memcpy(__sm_catP, b.data(), b.size());
     simse_println((_sm_expr5), stdout);
-    _sm_expr6 = ns1_pair(__sm_stringTable[17], __sm_stringTable[18]);
+    _sm_base2 = __sm_stringTable[17];
+    _sm_base1 = &_sm_base2;
+    _sm_base4 = __sm_stringTable[18];
+    _sm_base3 = &_sm_base4;
+    _sm_expr6 = ns1_pair(_sm_base1, _sm_base3);
     _sm_expr7.resize(a.size() + _sm_expr6.size());
     __sm_catP = _sm_expr7.data();
     std::memcpy(__sm_catP, a.data(), a.size());
     __sm_catP = __sm_catP + a.size();
     std::memcpy(__sm_catP, _sm_expr6.data(), _sm_expr6.size());
     simse_println((_sm_expr7), stdout);
-    _sm_expr8 = ns1_pair(a, b);
+    _sm_base5 = &a;
+    _sm_base6 = &b;
+    _sm_expr8 = ns1_pair(_sm_base5, _sm_base6);
     simse_println((_sm_expr8), stdout);
     tag = ns1_Tag{__sm_stringTable[19], 3};
     _sm_expr9 = tag.name;
@@ -588,13 +611,13 @@ int main() {
     std::memcpy(__sm_catP, _sm_expr9.data(), _sm_expr9.size());
     __sm_catP = __sm_catP + _sm_expr9.size();
     *__sm_catP = (char) ('=');
-    _sm_base1 = simse_addressOf(tag.count);
-    __sm_catC0 = simse_strCountDigits((*_sm_base1));
+    _sm_base7 = simse_addressOf(tag.count);
+    __sm_catC0 = simse_strCountDigits((*_sm_base7));
     _sm_expr12.resize(_sm_expr10.size() + __sm_catC0);
     __sm_catP = _sm_expr12.data();
     std::memcpy(__sm_catP, _sm_expr10.data(), _sm_expr10.size());
     __sm_catP = __sm_catP + _sm_expr10.size();
-    simse_strAddInt(__sm_catP, (*_sm_base1), __sm_catC0);
+    simse_strAddInt(__sm_catP, (*_sm_base7), __sm_catC0);
     simse_println((_sm_expr12), stdout);
     _sm_expr13.resize(4);
     __sm_catP = _sm_expr13.data();
@@ -659,13 +682,13 @@ int main() {
     bare.resize(__sm_catAt + 0);
     simse_println((bare), stdout);
     format = __sm_stringTable[7];
-    _sm_base10 = List<Str>{a};
-    _sm_base11 = &_sm_base10;
-    _sm_expr25 = fmtStr(format, _sm_base11);
+    _sm_base16 = List<Str>{a};
+    _sm_base17 = &_sm_base16;
+    _sm_expr25 = fmtStr(format, _sm_base17);
     simse_println((_sm_expr25), stdout);
-    _sm_base12 = List<Str>{a};
-    _sm_base13 = &_sm_base12;
-    _sm_expr26 = fmtStr(__sm_stringTable[0], _sm_base13);
+    _sm_base18 = List<Str>{a};
+    _sm_base19 = &_sm_base18;
+    _sm_expr26 = fmtStr(__sm_stringTable[0], _sm_base19);
     simse_println((_sm_expr26), stdout);
     return 0;
 }
@@ -795,6 +818,17 @@ inline void simse_str_reserve(Str& self, Int count) {
 // `Int.toString()`: the scalar-to-inline-string conversion (specs/memory-model.md).
 inline Str simse_int_toString(Int self) {
     return std::to_string(self);
+}
+
+inline Int simse_lenOf(const Str& self) {
+    return self.size();
+}
+
+// `List<T>` is `SmallVector<T, 4>` (cppsrc/rtl/containers.hpp), so one overload serves every
+// element type and inline capacity.
+template <class T, int N>
+inline Int simse_lenOf(const SmallVector<T, N>& self) {
+    return self.size();
 }
 
 // `dictionaryOf<K, V>()`: `Dictionary<K, V>` is a value type, so this default-constructs

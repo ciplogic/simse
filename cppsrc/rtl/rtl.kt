@@ -111,7 +111,18 @@ fun compareLessThan(left: *Str, right: *Str): Bool {
 fun arrayEmpty<T>(): Array<T>
 
 @SmGen("res", "listops", "simse_array_count")
-fun count<T>(this: Array<T>): Int
+data fun count<T>(this: Array<T>): Int
+
+// `lenOf`: the read-only length operation the language cannot otherwise spell for a `Str`
+// or a `List` (`SmallVector`-backed). `data` is what tells the optimizer that a repeated
+// call on an unchanged value is one call, with no name whitelist anywhere
+// (`linear/ReusePure.kt`). The receiver is borrowed: `simse_lenOf` takes it by reference
+// (cppsrc/rtl/_res.md, the `lenops` section).
+@SmGen("res", "lenops", "simse_lenOf")
+data fun size(this: Str): Int
+
+@SmGen("res", "lenops", "simse_lenOf")
+data fun size<T>(this: List<T>): Int
 
 @SmGen("res", "listops", "simse_list_toArray")
 fun toArray<T>(this: List<T>): Array<T>
@@ -144,7 +155,7 @@ fun insert<K, V>(this: Dictionary<K, V>, key: K, value: V): Unit
 fun remove<K, V>(this: Dictionary<K, V>, key: K): Unit
 
 @SmGen("res", "dictops", "simse_dict_size")
-fun size<K, V>(this: Dictionary<K, V>): Int
+data fun size<K, V>(this: Dictionary<K, V>): Int
 
 @SmGen("res", "dictops", "simse_dict_keys")
 fun keys<K, V>(this: Dictionary<K, V>): List<K>

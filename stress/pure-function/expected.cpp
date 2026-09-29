@@ -55,13 +55,13 @@ Int64 simse_nowNanos();
 // The program's string literals: one pool, and two run-length encoded index
 // series (offsets as deltas, then lengths), each as what to subtract from the
 // previous value; strtable.hpp has the stream format.
-static const Int __sm_stringCount = 1;
+static const Int __sm_stringCount = 2;
 static const char __sm_stringPool[] =
-    "hello" 
+    "hello" "world" 
 ;
-static const Int16 __sm_stringStarts[] = {1,1,0};
-static const Int16 __sm_stringLens[] = {1,1,-5};
-static_assert(sizeof(__sm_stringPool) - 1 == 5, "the string pool and its length index disagree");
+static const Int16 __sm_stringStarts[] = {2,2,0,-5};
+static const Int16 __sm_stringLens[] = {2,2,-5,0};
+static_assert(sizeof(__sm_stringPool) - 1 == 10, "the string pool and its length index disagree");
 static StrView __sm_stringTable[__sm_stringCount];
 static struct __SmStringTableInitType {
     __SmStringTableInitType() {
@@ -133,6 +133,17 @@ void simse_str_appendStr(Str& self, const Str& value);
 void simse_str_appendStrPtr(Str& self, const Str* value);
 void simse_str_reserve(Str& self, Int count);
 Str simse_int_toString(Int self);
+
+// `lenOf(x)`: one read-only length operation, declared `data` in the prelude
+// (cppsrc/rtl/rtl.kt) so that a repeated call on an unchanged value is one call
+// (cppsrc/linear/ReusePure.kt) and a borrow proof may call it (cppsrc/parser/BorrowParams.kt).
+// `Str` and `List` are heavy values, so the receiver is taken by reference - a by-value
+// parameter would copy one per call. The containers whose count a declaration already spells
+// (`Array.count`, `Dictionary.size`, `StrView.size`) keep those declarations; this is the
+// operation for the two the language cannot otherwise spell.
+Int simse_lenOf(const Str& self);
+template <class T, int N>
+Int simse_lenOf(const SmallVector<T, N>& self);
 
 #include <algorithm>
 #include <type_traits>
@@ -270,13 +281,26 @@ inline void simse_println(const T& value, FILE* out) {
     std::fputc('\n', out);
 }
 
+struct ns1_Point;
+// stress/pure-function/src/main.kt
+SIMSE_PACK_PUSH
+struct ns1_Point {
+    Int x;
+    Int y;
+};
+SIMSE_PACK_POP
+
 // stress/pure-function/src/main.kt
 Int ns1_bumps{};
 
 Int ns1_toLen(Str* self);
 Int ns1_bump(Str* self);
-Int ns1_pureTwice(Str s);
+Int ns1_pureTwice(Str* s);
 Int ns1_impureTwice(Str s);
+Int ns1_lenTwice(Str* s, List<Int>* xs);
+Int ns1_sum(ns1_Point* p);
+Int ns1_width(Str* s);
+Int ns1_bumpPoint(ns1_Point p);
 
 // File-level static storage (specs/statics.md): initialized before main's body.
 void simse_initStatics() {
@@ -286,7 +310,7 @@ void simse_initStatics() {
 // stress/pure-function/src/main.kt
 Int ns1_toLen(Str* self) {
     Int _sm_expr1;
-    _sm_expr1 = self->size();
+    _sm_expr1 = simse_lenOf((*self));
     return _sm_expr1;
 }
 // stress/pure-function/src/main.kt
@@ -295,15 +319,15 @@ Int ns1_bump(Str* self) {
     _sm_base2 = ns1_bumps;
     _sm_base1 = _sm_base2 + 1;
     ns1_bumps = _sm_base1;
-    _sm_expr1 = self->size();
+    _sm_expr1 = simse_lenOf((*self));
     _sm_base3 = ns1_bumps;
     _sm_expr2 = _sm_expr1 + _sm_base3;
     return _sm_expr2;
 }
 // stress/pure-function/src/main.kt
-Int ns1_pureTwice(Str s) {
+Int ns1_pureTwice(Str* s) {
     Int _sm_expr1, _sm_expr3;
-    _sm_expr1 = ns1_toLen(simse_addressOf(s));
+    _sm_expr1 = ns1_toLen(s);
     _sm_expr3 = _sm_expr1 + _sm_expr1;
     return _sm_expr3;
 }
@@ -316,6 +340,39 @@ Int ns1_impureTwice(Str s) {
     return _sm_expr3;
 }
 // stress/pure-function/src/main.kt
+Int ns1_lenTwice(Str* s, List<Int>* xs) {
+    Int _sm_expr1, _sm_expr3, _sm_expr4, _sm_expr5, _sm_expr7;
+    _sm_expr1 = simse_lenOf((*s));
+    _sm_expr3 = _sm_expr1 + _sm_expr1;
+    _sm_expr4 = simse_lenOf((*xs));
+    _sm_expr5 = _sm_expr3 + _sm_expr4;
+    _sm_expr7 = _sm_expr5 + _sm_expr4;
+    return _sm_expr7;
+}
+// stress/pure-function/src/main.kt
+Int ns1_sum(ns1_Point* p) {
+    Int _sm_expr1, _sm_expr2, _sm_expr3;
+    _sm_expr1 = p->x;
+    _sm_expr2 = p->y;
+    _sm_expr3 = _sm_expr1 + _sm_expr2;
+    return _sm_expr3;
+}
+// stress/pure-function/src/main.kt
+Int ns1_width(Str* s) {
+    Int _sm_expr1;
+    _sm_expr1 = simse_lenOf((*s));
+    return _sm_expr1;
+}
+// stress/pure-function/src/main.kt
+Int ns1_bumpPoint(ns1_Point p) {
+    Int _sm_base1, _sm_expr1, _sm_expr2;
+    _sm_expr1 = p.x;
+    _sm_base1 = _sm_expr1 + 1;
+    p.x = _sm_base1;
+    _sm_expr2 = p.x;
+    return _sm_expr2;
+}
+// stress/pure-function/src/main.kt
 int main(int argc, char** argv) {
     simse_initStatics();
     List<Str> args = List<Str>();
@@ -324,21 +381,44 @@ int main(int argc, char** argv) {
         simse_list_append(args, Str(argv[simse_argIndex]));
         simse_argIndex = simse_argIndex + 1;
     }
-    Str s;
-    Int _sm_expr1, _sm_expr3, _sm_expr4;
+    Str* _sm_base1, * _sm_base2, * _sm_base5;
+    List<Int>* _sm_base3;
+    ns1_Point* _sm_base4;
+    Int _sm_base6, _sm_expr1, _sm_expr3, _sm_expr4, _sm_expr5, _sm_expr6, _sm_expr7, _sm_expr8;
+    Str s, w;
     Bool _sm_expr2;
+    List<Int> xs;
+    ns1_Point p;
     s = __sm_stringTable[0];
-    _sm_expr1 = args.size();
+    _sm_expr1 = simse_lenOf(args);
     _sm_expr2 = _sm_expr1 > 1;
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
     s = args[1];
     L2:;
-    _sm_expr3 = ns1_pureTwice(s);
+    _sm_base1 = &s;
+    _sm_expr3 = ns1_pureTwice(_sm_base1);
     simse_println((_sm_expr3), stdout);
     _sm_expr4 = ns1_impureTwice(s);
     simse_println((_sm_expr4), stdout);
+    xs = List<Int>{1, 2};
+    _sm_base2 = &s;
+    _sm_base3 = &xs;
+    _sm_expr5 = ns1_lenTwice(_sm_base2, _sm_base3);
+    simse_println((_sm_expr5), stdout);
+    p = ns1_Point{1, 2};
+    _sm_base4 = &p;
+    _sm_expr6 = ns1_sum(_sm_base4);
+    simse_println((_sm_expr6), stdout);
+    w = __sm_stringTable[1];
+    _sm_base5 = &w;
+    _sm_expr7 = ns1_width(_sm_base5);
+    simse_println((_sm_expr7), stdout);
+    _sm_expr8 = ns1_bumpPoint(p);
+    simse_println((_sm_expr8), stdout);
+    _sm_base6 = p.x;
+    simse_println((_sm_base6), stdout);
     return 0;
 }
 
@@ -467,6 +547,17 @@ inline void simse_str_reserve(Str& self, Int count) {
 // `Int.toString()`: the scalar-to-inline-string conversion (specs/memory-model.md).
 inline Str simse_int_toString(Int self) {
     return std::to_string(self);
+}
+
+inline Int simse_lenOf(const Str& self) {
+    return self.size();
+}
+
+// `List<T>` is `SmallVector<T, 4>` (cppsrc/rtl/containers.hpp), so one overload serves every
+// element type and inline capacity.
+template <class T, int N>
+inline Int simse_lenOf(const SmallVector<T, N>& self) {
+    return self.size();
 }
 
 // `dictionaryOf<K, V>()`: `Dictionary<K, V>` is a value type, so this default-constructs

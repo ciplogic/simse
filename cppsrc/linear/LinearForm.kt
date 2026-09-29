@@ -91,7 +91,12 @@ data class IlMethod(
     var argCount: Int,
     var staticBase: Int,
     var returnType: Int,
-    var argTypes: List<Int>
+    var argTypes: List<Int>,
+
+// Whether a `Method`'s receiver is one the emitter passes as `T* self` - a value or a raw-pointer
+// receiver. A counted reference (`&T`, `PList`) is the receiver the emitter passes as the handle
+// itself, so `linear/PromoteRefs.kt` must not turn such a receiver into a raw pointer.
+    var recvIsValue: Bool
 )
 
 // One instruction. An operand's meaning is its opcode's operand kind: an index into a table,
@@ -1283,6 +1288,23 @@ fun ilReceiverTypeNode(typeNode: *AstXmlNode): AstXmlNode {
 
 // Whether a type is reached through a handle (`&T`, `*T`, or the `PList<T>` alias of
 // `&List<T>`), the rule the emitter also spells.
+// Whether a receiver declared as `typeNode` is one the emitter passes as the *handle* rather than
+// as `T* self`: a counted reference or the `PList` alias. Those are the shapes a raw pointer
+// cannot stand in for, and an unreadable receiver type is treated as one of them.
+fun ilIsReceiverRef(typeNode: *AstXmlNode): Bool {
+    if (xmlIsEmpty(typeNode)) {
+        return true
+    }
+    val kind: AstNodeCategory = xmlKind(typeNode)
+    if (kind == AstNodeCategory.TypeReference) {
+        return true
+    }
+    if (kind == AstNodeCategory.TypeGeneric && xmlAttr(typeNode, AstNodeAttributeKind.Name) == "PList") {
+        return true
+    }
+    return false
+}
+
 fun ilIsHandleType(typeNode: *AstXmlNode): Bool {
     if (xmlIsEmpty(typeNode)) {
         return false
@@ -1388,7 +1410,7 @@ data class IlExtractor(
     // over two receivers is two entries.
     fun methodIndex(
         name: *Str, kind: IlMethodKind, staticBase: Int, returnType: Int,
-        argTypes: *List<Int>
+        argTypes: *List<Int>, recvIsValue: Bool
     ): Int {
         var key: Str = name + "|" + ilMethodKindText(kind) + "|" + ilIntText(staticBase)
         var i: Int = 0
@@ -1400,7 +1422,9 @@ data class IlExtractor(
         if (found != null) {
             return *found
         }
-        this.out.methods.append(IlMethod(name, kind, argTypes.size(), staticBase, returnType, argTypes))
+        this.out.methods.append(
+            IlMethod(name, kind, argTypes.size(), staticBase, returnType, argTypes, recvIsValue)
+        )
         this.methodAt.insert(key, this.out.methods.size() - 1)
         return this.out.methods.size() - 1
     }
@@ -2867,6 +2891,21 @@ data class IlExtractor(
                 paramNodes = xmlChildren(decl, AstNodeKind.Field)
             }
         }
+        // The receiver's declared kind: a class member's receiver is its enclosing class (a value
+        // type), and an extension's is the parameter named `this`. A value (or raw-pointer)
+        // receiver's C++ parameter is the `T* self` a promoted handle fits; a counted-reference
+        // receiver's is the handle itself. An unresolved callee is the unsafe shape.
+        var recvIsValue: Bool = false
+        if (!receiverCall) {
+            recvIsValue = true
+        } else if (!xmlIsEmpty(target)) {
+            if (semReceiverParams(target) == 0) {
+                recvIsValue = true
+            } else {
+                val recvType: AstXmlNode = semExtensionReceiver(target)
+                recvIsValue = !ilIsReceiverRef(recvType)
+            }
+        }
         var i: Int = 0
         while (i < plain) {
             var param: AstXmlNode = xmlEmptyNode()
@@ -2899,7 +2938,9 @@ data class IlExtractor(
         }
 
         if (receiverCall) {
-            operands.append(this.methodIndex(calleeName, IlMethodKind.Method, -1, returnType, fullTypes))
+            operands.append(
+                this.methodIndex(calleeName, IlMethodKind.Method, -1, returnType, fullTypes, recvIsValue)
+            )
             operands.append(recvSlot)
             i = 0
             while (i < args.size()) {
@@ -2915,7 +2956,7 @@ data class IlExtractor(
                 this.methodIndex(
                     calleeName, IlMethodKind.Function,
                     this.typeIndex(this.baseText(lhs), this.calleeToType(lhs)),
-                    returnType, argTypes
+                    returnType, argTypes, true
                 )
             )
             i = 0
@@ -2945,7 +2986,7 @@ data class IlExtractor(
             return
         }
         // A plain function (or a native - the backend resolves the symbol).
-        operands.append(this.methodIndex(calleeName, IlMethodKind.Function, -1, returnType, argTypes))
+        operands.append(this.methodIndex(calleeName, IlMethodKind.Function, -1, returnType, argTypes, true))
         i = 0
         while (i < args.size()) {
             operands.append(args[i])

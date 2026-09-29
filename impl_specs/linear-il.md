@@ -336,9 +336,10 @@ the local merge re-used for another value refuses the group (its writer set must
 group's own calls). It declines rather than guess - a call whose argument is written, a
 first call outside the first block, an untyped slot, an indirect callee - and leaves the
 code as it was. Which callees it may reuse is the emitter's `pureCallees`: every function
-declared `data` (a *pure* function, `specs/functions.md`), plus the language's read-only
-length accessors `size`/`count`, which are built-ins with no declaration to mark. `spanOfStr`
-and `isEmpty` carry the mark in the prelude, so the shape above folds; a user's
+declared `data` (a *pure* function, `specs/functions.md`), the length accessors among them -
+`lenOf` for `Str`/`List` and `Array.count`/`Dictionary.size`/`StrView.size()`
+(`cppsrc/rtl/rtl.kt`) are `data` declarations, so nothing is listed by hand. `spanOfStr`,
+`lenOf` and `isEmpty` carry the mark in the prelude, so the shape above folds; a user's
 `data fun Str.toLen()` folds the same way (`stress/pure-function`), while an unmarked
 function's two calls are left alone however alike they look.
 - **A call argument's handle is inferred by the extractor** (`specs/functions.md`,

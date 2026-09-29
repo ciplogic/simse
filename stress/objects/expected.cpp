@@ -138,6 +138,17 @@ void simse_str_appendStrPtr(Str& self, const Str* value);
 void simse_str_reserve(Str& self, Int count);
 Str simse_int_toString(Int self);
 
+// `lenOf(x)`: one read-only length operation, declared `data` in the prelude
+// (cppsrc/rtl/rtl.kt) so that a repeated call on an unchanged value is one call
+// (cppsrc/linear/ReusePure.kt) and a borrow proof may call it (cppsrc/parser/BorrowParams.kt).
+// `Str` and `List` are heavy values, so the receiver is taken by reference - a by-value
+// parameter would copy one per call. The containers whose count a declaration already spells
+// (`Array.count`, `Dictionary.size`, `StrView.size`) keep those declarations; this is the
+// operation for the two the language cannot otherwise spell.
+Int simse_lenOf(const Str& self);
+template <class T, int N>
+Int simse_lenOf(const SmallVector<T, N>& self);
+
 #include <algorithm>
 #include <type_traits>
 #include <utility>
@@ -485,7 +496,7 @@ ns1_CounterReceiverShapes* ns1_self(ns1_CounterReceiverShapes* self);
 void ns1_bumpTwice(ns1_CounterReceiverShapes* counter);
 Int ns1_partReceiverShapes();
 Str ns1_mirror(Str* a, Ref<Str> b);
-Str ns1_parcel(Str after, List<Str>* items);
+Str ns1_parcel(Str* after, List<Str>* items);
 Int ns1_partRtlSimse();
 Bool ns1_isEmpty(ns1_Shell* self);
 Str ns1_describeShapes(Str* self);
@@ -505,7 +516,7 @@ Bool startsWith(StrView* self, Str text) {
     Int count, _sm_expr1, i;
     Bool _sm_expr2, _sm_expr6;
     Char _sm_expr5;
-    count = text.size();
+    count = simse_lenOf(text);
     _sm_expr1 = simse_strView_size((*self));
     _sm_expr2 = count > _sm_expr1;
     if (_sm_expr2) goto L1;
@@ -536,7 +547,7 @@ Int find(StrView* self, Str sub) {
     Int needle, len, _sm_expr3, i, j, _sm_expr7;
     Bool _sm_expr1, _sm_expr10;
     Char _sm_expr9;
-    needle = sub.size();
+    needle = simse_lenOf(sub);
     _sm_expr1 = needle == 0;
     if (_sm_expr1) goto L1;
     goto L2;
@@ -660,7 +671,7 @@ Str fmtStr(StrView fmt, List<Str>* items) {
     i = i + 1;
     goto L3;
     L4:;
-    _sm_expr2 = items->size();
+    _sm_expr2 = simse_lenOf((*items));
     _sm_expr1 = points != _sm_expr2;
     if (_sm_expr1) goto L7;
     goto L8;
@@ -705,14 +716,14 @@ Str substr(Str* self, Int start, Int len) {
     L1:;
     begin = 0;
     L2:;
-    _sm_expr2 = self->size();
+    _sm_expr2 = simse_lenOf((*self));
     _sm_expr1 = begin > _sm_expr2;
     if (_sm_expr1) goto L3;
     goto L4;
     L3:;
-    begin = self->size();
+    begin = simse_lenOf((*self));
     L4:;
-    _sm_expr2 = self->size();
+    _sm_expr2 = simse_lenOf((*self));
     count = _sm_expr2 - begin;
     _sm_expr1 = len >= 0;
     if (_sm_expr1) goto L7;
@@ -739,8 +750,8 @@ Bool startsWith(Str* self, Str prefix) {
     Int count, _sm_expr1, i;
     Bool _sm_expr2;
     Char _sm_expr4, _sm_expr5;
-    count = prefix.size();
-    _sm_expr1 = self->size();
+    count = simse_lenOf(prefix);
+    _sm_expr1 = simse_lenOf((*self));
     _sm_expr2 = count > _sm_expr1;
     if (_sm_expr2) goto L1;
     goto L2;
@@ -768,8 +779,8 @@ Bool endsWith(Str* self, Str suffix) {
     Int count, len, i, _sm_expr3, _sm_expr4;
     Bool _sm_expr1;
     Char _sm_expr5, _sm_expr6;
-    count = suffix.size();
-    len = self->size();
+    count = simse_lenOf(suffix);
+    len = simse_lenOf((*self));
     _sm_expr1 = count > len;
     if (_sm_expr1) goto L1;
     goto L2;
@@ -798,7 +809,7 @@ Bool endsWith(Str* self, Str suffix) {
 Bool isEmpty(Str* self) {
     Int _sm_expr1;
     Bool _sm_expr2;
-    _sm_expr1 = self->size();
+    _sm_expr1 = simse_lenOf((*self));
     _sm_expr2 = _sm_expr1 == 0;
     return _sm_expr2;
 }
@@ -888,7 +899,7 @@ Int ns1_partGenerics() {
     simse_println((_sm_base1), stdout);
     _sm_base2 = b.second;
     simse_println((_sm_base2), stdout);
-    _sm_expr2 = numbers.size();
+    _sm_expr2 = simse_lenOf(numbers);
     simse_println((_sm_expr2), stdout);
     return 0;
 }
@@ -1336,7 +1347,7 @@ Int ns1_partOptionalResult() {
     text = Opt<Str>::some(__sm_stringTable[15]);
     copy = text;
     _sm_expr5 = copy.value();
-    _sm_expr6 = _sm_expr5.size();
+    _sm_expr6 = simse_lenOf(_sm_expr5);
     simse_println((_sm_expr6), stdout);
     text = Opt<Str>::none();
     _sm_expr7 = text.hasValue();
@@ -1348,7 +1359,7 @@ Int ns1_partOptionalResult() {
     _sm_expr10 = bad.isOk();
     simse_println((_sm_expr10), stdout);
     _sm_base1 = simse_addressOf(bad.Error);
-    _sm_expr11 = _sm_base1->size();
+    _sm_expr11 = simse_lenOf((*_sm_base1));
     simse_println((_sm_expr11), stdout);
     good = ns1_labelOptionalResult(7);
     _sm_expr12 = good.isOk();
@@ -1515,15 +1526,15 @@ Str ns1_mirror(Str* a, Ref<Str> b) {
     return _sm_expr1;
 }
 // stress/objects/src/main.kt
-Str ns1_parcel(Str after, List<Str>* items) {
+Str ns1_parcel(Str* after, List<Str>* items) {
     char* __sm_catP;
     Str out, _sm_expr3, _sm_expr4;
     Int i, _sm_expr1;
     Bool _sm_expr2;
-    out = after;
+    out = *(after);
     i = 0;
     L1:;
-    _sm_expr1 = items->size();
+    _sm_expr1 = simse_lenOf((*items));
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L2;
     _sm_expr3.resize(1 + out.size());
@@ -1545,16 +1556,16 @@ Str ns1_parcel(Str after, List<Str>* items) {
 // stress/objects/src/main.kt
 Int ns1_partRtlSimse() {
     char* __sm_catP;
-    List<Str> _sm_base7, _sm_base9, _sm_base16, parts;
-    List<Str>* _sm_base8, * _sm_base10, * _sm_base19;
-    Str _sm_base11, _sm_base12, _sm_base13, _sm_base14, _sm_base15, _sm_base17, _sm_base18, _sm_expr1,
-        _sm_expr2, _sm_expr3, _sm_expr4, _sm_expr6, _sm_expr7, _sm_expr8, _sm_expr9, _sm_expr10, _sm_expr11,
-        text, borrowed, _sm_expr17, _sm_expr19, _sm_expr20;
+    List<Str> _sm_base7, _sm_base9, _sm_base18, parts;
+    List<Str>* _sm_base8, * _sm_base10, * _sm_base21;
+    Str _sm_base11, _sm_base12, _sm_base13, _sm_base14, _sm_base15, _sm_base17, _sm_base19, _sm_base20,
+        _sm_expr1, _sm_expr2, _sm_expr3, _sm_expr4, _sm_expr6, _sm_expr7, _sm_expr8, _sm_expr9, _sm_expr10,
+        _sm_expr11, text, borrowed, _sm_expr17, _sm_expr19, _sm_expr20;
+    Str* _sm_base16, * ptr;
     Int least, most, _sm_expr18;
     Float64 _sm_expr5;
     Bool _sm_expr12, _sm_expr13, _sm_expr14, _sm_expr16;
     ns1_Shell _sm_expr15;
-    Str* ptr;
     Ref<Str> boxed;
     least = min(3, 2);
     most = max(3, 2);
@@ -1627,16 +1638,18 @@ Int ns1_partRtlSimse() {
     _sm_base13 = *(ptr);
     _sm_base14 = *(boxed);
     parts = List<Str>{_sm_base13, _sm_base14, __sm_stringTable[26]};
-    _sm_expr18 = parts.size();
+    _sm_expr18 = simse_lenOf(parts);
     _sm_expr19 = simse_int_toString(_sm_expr18);
     simse_println((_sm_expr19), stdout);
     _sm_base15 = parts[0];
     simse_println((_sm_base15), stdout);
-    _sm_base17 = *(ptr);
-    _sm_base18 = *(boxed);
-    _sm_base16 = List<Str>{_sm_base17, _sm_base18, __sm_stringTable[26]};
-    _sm_base19 = &_sm_base16;
-    _sm_expr20 = ns1_parcel(__sm_stringTable[23], _sm_base19);
+    _sm_base17 = __sm_stringTable[23];
+    _sm_base16 = &_sm_base17;
+    _sm_base19 = *(ptr);
+    _sm_base20 = *(boxed);
+    _sm_base18 = List<Str>{_sm_base19, _sm_base20, __sm_stringTable[26]};
+    _sm_base21 = &_sm_base18;
+    _sm_expr20 = ns1_parcel(_sm_base16, _sm_base21);
     simse_println((_sm_expr20), stdout);
     return 0;
 }
@@ -1725,7 +1738,7 @@ Str ns1_escapeText(Str text) {
     out = Str();
     i = 0;
     L1:;
-    _sm_expr1 = text.size();
+    _sm_expr1 = simse_lenOf(text);
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L2;
     ch = text[i];
@@ -1814,7 +1827,7 @@ Str ns1_dumpNode(XmlNode node, Int depth) {
     i = 0;
     L1:;
     _sm_base1 = simse_addressOf(node.attributes);
-    _sm_expr3 = _sm_base1->size();
+    _sm_expr3 = simse_lenOf((*_sm_base1));
     _sm_expr4 = i < _sm_expr3;
     if (!(_sm_expr4)) goto L2;
     _sm_base2 = simse_addressOf(node.attributes);
@@ -2053,6 +2066,17 @@ inline void simse_str_reserve(Str& self, Int count) {
 // `Int.toString()`: the scalar-to-inline-string conversion (specs/memory-model.md).
 inline Str simse_int_toString(Int self) {
     return std::to_string(self);
+}
+
+inline Int simse_lenOf(const Str& self) {
+    return self.size();
+}
+
+// `List<T>` is `SmallVector<T, 4>` (cppsrc/rtl/containers.hpp), so one overload serves every
+// element type and inline capacity.
+template <class T, int N>
+inline Int simse_lenOf(const SmallVector<T, N>& self) {
+    return self.size();
 }
 
 // `dictionaryOf<K, V>()`: `Dictionary<K, V>` is a value type, so this default-constructs
