@@ -100,7 +100,13 @@ data class Parser(
 
     fun expectName(): Str {
         if (this.checkKind(TokenKind.Identifier)) {
-            return this.advance().text
+            val token: Token = this.advance()
+            // The amalgamation is C++, so a name that is a C++ keyword would emit a broken
+            // declaration (`Str long = ...`). Reject it here, where the position is known.
+            if (isCppKeyword(token.text) && !this.failed) {
+                this.setError(token.pos, fmtStr("'|' is a C++ keyword; give it another name", token.text))
+            }
+            return token.text
         }
         this.fail("expected name")
         return ""
