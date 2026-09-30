@@ -294,9 +294,7 @@ fun ilPromoteRefs(il: *IlBody, facts: *SemFacts): Bool {
                 continue
             }
             val writes: Bool = ilWritesDestination(op.kind)
-            var j: Int = 0
-            while (j < op.operands.size()) {
-                val operand: Int = op.operands[j]
+            for ((operand, j) in op.operands) {
                 val operandKind: IlOperandKind = ilReuseOperandKind(op, j)
                 if ((operandKind == IlOperandKind.Var || operandKind == IlOperandKind.Value)
                     && operand >= 0 && operand < slots
@@ -313,7 +311,6 @@ fun ilPromoteRefs(il: *IlBody, facts: *SemFacts): Bool {
                         }
                     }
                 }
-                j = j + 1
             }
             i = i + 1
         }

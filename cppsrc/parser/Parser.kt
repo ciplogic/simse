@@ -234,9 +234,7 @@ fun parseModule(cursor: Span<Token>, fileName: *Str): Res<AstXmlNode> {
 fun parseModule(tokens: *List<Token>, fileName: *Str): Res<AstXmlNode> {
     var toks: List<Token> = List<Token>()
     var bracketed: Int = 0
-    var i: Int = 0
-    while (i < tokens.size()) {
-        val token: Token = tokens[i]
+    for (token in tokens) {
         if (token.kind == TokenKind.Operator) {
             if (token.text == "(" || token.text == "[") {
                 bracketed = bracketed + 1
@@ -251,7 +249,6 @@ fun parseModule(tokens: *List<Token>, fileName: *Str): Res<AstXmlNode> {
                 toks.append(token)
             }
         }
-        i = i + 1
     }
     var eofPos: SourcePos = SourcePos(0, 1, 1)
     if (toks.size() > 0) {

@@ -653,10 +653,7 @@ fun Emitter.collectProgramNames(): Unit {
         changed = false
         val namesBefore: Int = this.referencedNames.size()
         val typesBefore: Int = this.referencedTypes.size()
-        var f: Int = 0
-        while (f < this.functions.size()) {
-            val fn: *CgFn = *this.functions[f]
-            f = f + 1
+        for (*fn in this.functions) {
             if (!fn.prelude) {
                 continue
             }

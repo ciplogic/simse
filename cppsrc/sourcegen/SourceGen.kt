@@ -183,9 +183,7 @@ fun sourceGenDeclare(decl: *AstXmlNode, fileName: *Str, prelude: Bool): Res<Str>
 // skipped, and text only a generator produces here lands. Every generator is then asked once
 // more with an empty declaration, for text no declaration named (`emit: always`).
 fun sourceGenEmit(sections: *Sections, reachedNames: *Dictionary<Str, Bool>): Res<Str> {
-    var i: Int = 0
-    while (i < sourceGenState.requests.size()) {
-        val request: *SourceGenRequest = *sourceGenState.requests[i]
+    for (*request in sourceGenState.requests) {
         var ctx: SourceGenContext = SourceGenContext(
             request.generator,
             SourceGenPhase.Emit,
@@ -205,7 +203,6 @@ fun sourceGenEmit(sections: *Sections, reachedNames: *Dictionary<Str, Bool>): Re
         if (ctx.error.size() > 0) {
             return Res<Str>.err(ctx.error)
         }
-        i = i + 1
     }
     val gens: *List<SourceGenerator> = getSourceGens()
     var g: Int = 0

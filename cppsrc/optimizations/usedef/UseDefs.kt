@@ -266,9 +266,7 @@ fun linUseDefsOf(stmts: *List<AstXmlNode>): LinUseDefs {
     var escapes: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     var captures: Dictionary<Str, Int> = Dictionary<Str, Int>()
     var block: Int = 0
-    var i: Int = 0
-    while (i < stmts.size()) {
-        val stmt: *AstXmlNode = *stmts[i]
+    for (*stmt in stmts) {
         val boundary: Bool = linUseDefIsBoundary(stmt)
         if (boundary) {
             block = block + 1
@@ -280,7 +278,6 @@ fun linUseDefsOf(stmts: *List<AstXmlNode>): LinUseDefs {
         var fact: LinUseDef = LinUseDef(uses, defs, boundary)
         facts.append(fact)
         blocks.append(block)
-        i = i + 1
     }
     return LinUseDefs(stmts, facts, blocks, escapes, captures)
 }
@@ -289,12 +286,9 @@ fun linUseDefsOf(stmts: *List<AstXmlNode>): LinUseDefs {
 // name or a definition of it, so it neither keeps a name alive nor stands as one: the passes
 // that drop storage want the names nothing else names.
 fun linUseDefDeclared(stmts: *List<AstXmlNode>, declared: *Dictionary<Str, Bool>): Unit {
-    var i: Int = 0
-    while (i < stmts.size()) {
-        val stmt: *AstXmlNode = *stmts[i]
+    for (*stmt in stmts) {
         if (xmlKind(stmt) == AstNodeCategory.StmtVarDecl) {
             declared.insert(xmlAttr(stmt, AstNodeAttributeKind.Name), true)
         }
-        i = i + 1
     }
 }

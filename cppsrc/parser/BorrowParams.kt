@@ -518,10 +518,7 @@ fun bpBorrowDecl(
         return decl
     }
     var borrowed: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
-    var p: Int = 0
-    while (p < params.size()) {
-        val param: *AstXmlNode = *params[p]
-        p = p + 1
+    for (*param in params) {
         val name: Str = xmlAttr(param, AstNodeAttributeKind.Name)
         if (name == "this") {
             continue

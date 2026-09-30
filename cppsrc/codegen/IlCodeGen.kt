@@ -179,9 +179,7 @@ fun Emitter.ilSeedFrameTypes(il: *IlBody): Unit {
 }
 
 fun Emitter.ilAnalyze(il: *IlBody, frame: *IlFrame): Unit {
-    var i: Int = 0
-    while (i < il.ops.size()) {
-        val op: *IlOp = *il.ops[i]
+    for ((*op, i) in il.ops) {
         if (op.kind != IlOpKind.Declare) {
             // An instruction that writes memory or jumps has no destination, but its
             // operands are still reads.
@@ -214,7 +212,6 @@ fun Emitter.ilAnalyze(il: *IlBody, frame: *IlFrame): Unit {
                 j = j + 1
             }
         }
-        i = i + 1
     }
 }
 
@@ -808,9 +805,7 @@ data class IlConcatPool(
 
 fun ilConcatPoolOf(il: *IlBody): IlConcatPool {
     var pool: IlConcatPool = IlConcatPool(false, false, 0)
-    var i: Int = 0
-    while (i < il.ops.size()) {
-        val op: *IlOp = *il.ops[i]
+    for (*op in il.ops) {
         if (op.kind == IlOpKind.Concat) {
             val inPlace: Bool = op.operands.size() > 1 && op.operands[1] == ilConcatDst(op)
             var counts: Int = 0
@@ -837,7 +832,6 @@ fun ilConcatPoolOf(il: *IlBody): IlConcatPool {
                 pool.counts = counts
             }
         }
-        i = i + 1
     }
     return pool
 }

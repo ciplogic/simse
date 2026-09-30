@@ -72,15 +72,12 @@ fun resGenAlways(ctx: *SourceGenContext): SourceGenTransform {
         }
     }
     var added: Bool = false
-    var i: Int = 0
-    while (i < sections.size()) {
-        val section: Str = sections[i]
+    for (section in sections) {
         if (!ctx.state.definitions.has(section)) {
             resGenAddSection(ctx, section)
             ctx.state.definitions.insert(section, ctx.name)
             added = true
         }
-        i = i + 1
     }
     if (!added) {
         return SourceGenTransform(SourceTransformation.AlreadyExisting, "")

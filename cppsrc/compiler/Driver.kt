@@ -121,15 +121,12 @@ fun driverGatherFiles(
 
     var chosen: List<Str> = List<Str>()
     var seen: List<Str> = List<Str>()
-    var c: Int = 0
-    while (c < candidates.size()) {
-        val display: Str = candidates[c]
+    for (display in candidates) {
         val canon: Str = pathCanonical(display)
         if (!preludeCanon.contains(canon) && !seen.contains(canon)) {
             seen.append(canon)
             chosen.append(display)
         }
-        c = c + 1
     }
     // Canonical keys are unique after dedup, so this sort is total and the order deterministic.
     chosen.sort((left: * Str, right: *Str) -> pathCanonical(left) < pathCanonical(right))

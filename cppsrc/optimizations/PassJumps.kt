@@ -55,10 +55,7 @@ fun linCollectJumpThreads(stmts: *List<AstXmlNode>, next: *Dictionary<Str, Str>)
 fun linThreadJumpsIn(stmts: *List<AstXmlNode>, threads: *Dictionary<Str, Str>): Bool {
     var changed: Bool = false
     var out: List<AstXmlNode> = List<AstXmlNode>()
-    var i: Int = 0
-    while (i < stmts.size()) {
-        val stmt: *AstXmlNode = *stmts[i]
-        i = i + 1
+    for (*stmt in stmts) {
         if (linIsGoto(stmt) || linIsCondJump(stmt)) {
             val name: Str = xmlAttr(stmt, AstNodeAttributeKind.Name)
             val targetPtr: *Str = threads.getPtr(name)

@@ -1088,15 +1088,12 @@ fun printIlBody(body: *IlBody): Str {
 // The dump of a whole unit: the body, then a section per lambda.
 fun printIlUnit(unit: *IlUnit): Str {
     var out: Str = printIlBody(unit.body)
-    var i: Int = 0
-    while (i < unit.closures.size()) {
-        val closure: IlClosure = unit.closures[i]
+    for (closure in unit.closures) {
         out = out + "\n## closure " + closure.symbol + "  captures ("
         +ilJoinList(closure.captures, ", ") + ")  " + closure.signature + "\n"
         if (closure.bodyIndex >= 0 && closure.bodyIndex < unit.lambdas.size()) {
             out = out + printIlBody(unit.lambdas[closure.bodyIndex])
         }
-        i = i + 1
     }
     return out
 }
@@ -2570,10 +2567,7 @@ data class IlExtractor(
             val receiverType: AstXmlNode = this.exprType(receiver)
             val recv: AstXmlNode = semPointeeOf(receiverType)
             var matching: List<Int> = List<Int>()
-            var m: Int = 0
-            while (m < candidates.size()) {
-                val index: Int = candidates[m]
-                m = m + 1
+            for (index in candidates) {
                 val fact: *SemFnFact = *this.fn.facts.functions[index]
                 val pattern: AstXmlNode = this.receiverPattern(fact)
                 if (!xmlIsEmpty(recv) && !xmlIsEmpty(pattern)
@@ -3095,10 +3089,7 @@ data class IlExtractor(
         // The closure: what the body reads that the *enclosing* frame holds. A static, a type or a
         // function is not captured.
         var captured: List<Str> = List<Str>()
-        var ri: Int = 0
-        while (ri < read.size()) {
-            val name: Str = read[ri]
-            ri = ri + 1
+        for (name in read) {
             if (declared.has(name)) {
                 continue
             }

@@ -569,10 +569,7 @@ fun ilPointerOf(inner: AstXmlNode): AstXmlNode {
 
 // Whether a body yields anywhere: the one test the emitter needs to pick the machine path.
 fun linHasYield(body: List<AstXmlNode>): Bool {
-    var i: Int = 0
-    while (i < body.size()) {
-        val stmt: *AstXmlNode = *body[i]
-        i = i + 1
+    for (*stmt in body) {
         if (xmlKind(stmt) == AstNodeCategory.StmtYield) {
             return true
         }

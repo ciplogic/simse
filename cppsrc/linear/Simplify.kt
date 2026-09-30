@@ -607,9 +607,7 @@ fun linIsHoistable(stmt: *AstXmlNode): Bool {
 // collected - it is where the hoisting puts one.
 fun linHoistInList(stmts: *List<AstXmlNode>, decls: *List<AstXmlNode>, atTop: Bool): List<AstXmlNode> {
     var out: List<AstXmlNode> = List<AstXmlNode>()
-    var i: Int = 0
-    while (i < stmts.size()) {
-        val stmt: *AstXmlNode = *stmts[i]
+    for (*stmt in stmts) {
         if (linIsHoistable(stmt)) {
             val name: Str = xmlAttr(stmt, AstNodeAttributeKind.Name)
             val init: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Init)
@@ -637,7 +635,6 @@ fun linHoistInList(stmts: *List<AstXmlNode>, decls: *List<AstXmlNode>, atTop: Bo
         } else {
             out.append(stmt)
         }
-        i = i + 1
     }
     return out
 }

@@ -38,10 +38,7 @@ fun linFoldBranchStmt(stmt: *AstXmlNode): Opt<AstXmlNode> {
 fun linFoldBranchIn(stmts: *List<AstXmlNode>): Bool {
     var changed: Bool = false
     var out: List<AstXmlNode> = List<AstXmlNode>()
-    var i: Int = 0
-    while (i < stmts.size()) {
-        val stmt: *AstXmlNode = *stmts[i]
-        i = i + 1
+    for (*stmt in stmts) {
         val folded: Opt<AstXmlNode> = linFoldBranchStmt(stmt)
         if (folded.hasValue()) {
             changed = true

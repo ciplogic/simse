@@ -533,9 +533,7 @@ data class Analyzer(
 
         this.pushScope()
         var seen: List<Str> = List<Str>()
-        var p: Int = 0
-        while (p < packages.size()) {
-            val pkg: Str = packages[p]
+        for (pkg in packages) {
             if (!seen.contains(pkg)) {
                 seen.append(pkg)
                 val decls: *List<AstXmlNode> = this.packageDecls.getPtr(pkg)
@@ -558,7 +556,6 @@ data class Analyzer(
                     }
                 }
             }
-            p = p + 1
         }
     }
 
@@ -1365,10 +1362,7 @@ data class Analyzer(
         if (overloads == null) {
             return false
         }
-        var i: Int = 0
-        while (i < overloads.size()) {
-            val candidate: *AstXmlNode = *overloads[i]
-            i = i + 1
+        for (*candidate in overloads) {
             val receiverPattern: *AstXmlNode = xmlChildPtr(candidate, AstNodeKind.Receiver)
             if (xmlIsEmpty(receiverPattern)) {
                 continue

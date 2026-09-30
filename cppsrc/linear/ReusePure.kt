@@ -131,16 +131,13 @@ fun ilReuseHit(il: *IlBody, pure: *Dictionary<Str, Bool>, op: *IlOp): IlReuseHit
 // The index of the body's first control-flow op. The run before it is the first block: the
 // straight-line code under the hoisted declarations, reached before anything can branch.
 fun ilReuseFirstBlockEnd(il: *IlBody): Int {
-    var i: Int = 0
-    while (i < il.ops.size()) {
-        val op: *IlOp = *il.ops[i]
+    for ((*op, i) in il.ops) {
         val kind: IlOpKind = op.kind
         if (kind == IlOpKind.Label || kind == IlOpKind.Goto || kind == IlOpKind.IfTrue
             || kind == IlOpKind.IfFalse || kind == IlOpKind.Return || kind == IlOpKind.ReturnVoid
         ) {
             return i
         }
-        i = i + 1
     }
     return il.ops.size()
 }
@@ -175,10 +172,7 @@ fun ilReuseOperandKind(op: *IlOp, index: Int): IlOperandKind {
 // Whether the body calls a reusable callee at all: the cheap gate in front of the pass - most
 // bodies have no such call, and the scans below are not free.
 fun ilReuseHasCall(il: *IlBody, pure: *Dictionary<Str, Bool>): Bool {
-    var i: Int = 0
-    while (i < il.ops.size()) {
-        val op: *IlOp = *il.ops[i]
-        i = i + 1
+    for (*op in il.ops) {
         if (op.kind != IlOpKind.Call || op.operands.size() < 2) {
             continue
         }

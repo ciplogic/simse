@@ -85,14 +85,11 @@ fun ilReuseExprs(il: *IlBody): Bool {
         // writer elsewhere could carry another value, since the local merge reuses overlapping-free
         // slots).
         var defCount: List<Int> = List<Int>(slots, 0)
-        var d: Int = 0
-        while (d < il.ops.size()) {
-            val op0: *IlOp = *il.ops[d]
+        for (*op0 in il.ops) {
             val written0: Int = ilReuseDst(op0)
             if (written0 >= 0 && written0 < slots) {
                 defCount[written0] = defCount[written0] + 1
             }
-            d = d + 1
         }
         // The tables of the current basic block, dropped at a label or branch (the header's reason).
         var firstDst: Dictionary<Str, Int> = Dictionary<Str, Int>()

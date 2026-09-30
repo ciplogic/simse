@@ -13,9 +13,7 @@ import linear
 // Every merge the body has, `merged name -> the name it stands for`, blocks included.
 fun linCollectLabelMerges(stmts: *List<AstXmlNode>, renames: *Dictionary<Str, Str>): Unit {
     var previous: Str = ""
-    var i: Int = 0
-    while (i < stmts.size()) {
-        val stmt: *AstXmlNode = *stmts[i]
+    for (*stmt in stmts) {
         var name: Str = ""
         if (linIsLabel(stmt)) {
             name = xmlAttr(stmt, AstNodeAttributeKind.Name)
@@ -34,7 +32,6 @@ fun linCollectLabelMerges(stmts: *List<AstXmlNode>, renames: *Dictionary<Str, St
                 linCollectLabelMerges(*inner, renames)
             }
         }
-        i = i + 1
     }
 }
 
@@ -50,10 +47,7 @@ fun linRetargetJump(stmt: *AstXmlNode, target: Str): AstXmlNode {
 fun linFoldLabelsIn(stmts: *List<AstXmlNode>, renames: *Dictionary<Str, Str>): Bool {
     var changed: Bool = false
     var out: List<AstXmlNode> = List<AstXmlNode>()
-    var i: Int = 0
-    while (i < stmts.size()) {
-        val stmt: *AstXmlNode = *stmts[i]
-        i = i + 1
+    for (*stmt in stmts) {
         if (linIsLabel(stmt) && renames.has(xmlAttr(stmt, AstNodeAttributeKind.Name))) {
             changed = true
             continue

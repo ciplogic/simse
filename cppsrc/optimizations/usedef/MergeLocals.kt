@@ -114,9 +114,7 @@ fun linMergeNames(
     var taken: Dictionary<Str, Str> = Dictionary<Str, Str>()
     var reached: Dictionary<Str, Int> = Dictionary<Str, Int>()
     var changed: Bool = false
-    var i: Int = 0
-    while (i < candidates.size()) {
-        val local: *MergeLocal = *candidates[i]
+    for (*local in candidates) {
         val reachedKey: Str = fmtStr("|#|", local.typeKey, local.block.toString())
         val ordinal: Int = linUseDefAt(*reached, reachedKey, 0)
         reached.insert(reachedKey, ordinal + 1)
@@ -134,7 +132,6 @@ fun linMergeNames(
                 changed = true
             }
         }
-        i = i + 1
     }
     return changed
 }

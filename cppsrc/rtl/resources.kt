@@ -37,13 +37,10 @@ fun count(this: Resources): Int
 // comparison, then `startsWith`, so nothing is allocated per entry.
 fun resourcesGet(key: Str): StrView {
     val all: Span<ResourceEntry> = Resources.entries()
-    var i: Int = 0
-    while (i < all.size()) {
-        val entry: ResourceEntry = all[i]
+    for (entry in all) {
         if (entry.key.size() == key.size() && entry.key.startsWith(key)) {
             return entry.value
         }
-        i = i + 1
     }
     // The empty view: a span over nothing (`StrView` is a `Span<Char>`).
     return Span<Char>(null, 0)
@@ -51,13 +48,10 @@ fun resourcesGet(key: Str): StrView {
 
 fun resourcesHas(key: Str): Bool {
     val all: Span<ResourceEntry> = Resources.entries()
-    var i: Int = 0
-    while (i < all.size()) {
-        val entry: ResourceEntry = all[i]
+    for (entry in all) {
         if (entry.key.size() == key.size() && entry.key.startsWith(key)) {
             return true
         }
-        i = i + 1
     }
     return false
 }
