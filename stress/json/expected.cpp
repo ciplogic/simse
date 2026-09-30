@@ -145,6 +145,87 @@ Int simse_lenOf(const Str& self);
 template <class T, int N>
 Int simse_lenOf(const SmallVector<T, N>& self);
 
+// `Opt<T>.hasValue()`: the `Variant2` tag test (specs/core-types.md). The C++ is `variant2.hpp` and
+// the member is `const`, so nothing is copied and nothing is written - the declaration that names
+// this symbol (cppsrc/rtl/rtl.kt) is what lets the auto-borrow proof see it as read-only, because a
+// built-in member has no declaration of its own to carry a mark (impl_specs/escape-analysis.md).
+// `Res<T>.isOk()` is the same test but cannot be declared yet: a receiver must be spelled `Res<T>`
+// to unify in `findNativeExt`, and `Res` carries an `unInit`, so the checker refuses that spelling.
+template <class T>
+Bool simse_opt_hasValue(const Opt<T>& self);
+
+// The `initByValue` construction convention (cppsrc/rtl/rtl.kt): set the instance.
+template <class T>
+void simse_opt_initByValue(Opt<T>& self, const T& value);
+template <class T>
+void simse_opt_initByValueNone(Opt<T>& self);
+
+// The same convention for `Res<T>`: a `return (x)` in a `Res<T>` function is `Res<T>.ok(x)`.
+template <class T>
+void simse_res_initByValue(Res<T>& self, const T& value);
+
+#include <charconv>
+#include <cstddef>
+#include <system_error>
+
+// The string, character, numeric-conversion and min/max operations behind the prelude
+// (impl_specs/native-interop.md, specs/built-in-types.md), moved out of
+// cppsrc/rtl/strops.hpp.
+//
+// `Str` is the inline `SmString` (smstring.hpp): every size, length and index here is the
+// language's `Int` (`int32_t`), including `Str::npos`, which is `-1`. Index/range errors
+// are unchecked where the underlying operation is unchecked; the `Opt`-returning
+// conversions never throw.
+//
+// What is only a byte loop is Simse now (cppsrc/rtl/rtl.kt: `trim`, `substr`,
+// `startsWith`/`endsWith`, case folding and the `Char` predicates); what stays is what
+// reaches `SmString` internals (`charAt`, `find`, `lastIndexOf`, `split`, `replace`) or the
+// standard library (`std::from_chars`, `std::to_string`).
+
+// `Str.charAt(index)`: the byte at `index` (unchecked; no bounds test).
+Char simse_str_charAt(const Str& self, Int index);
+
+// `Str.split(separator)` splits on every occurrence. An empty separator returns the whole
+// string as a single element. Two overloads: a separator string and a separator byte.
+List<Str> simse_str_split(const Str& self, const Str& separator);
+List<Str> simse_str_split(const Str& self, Char separator);
+
+// `Str.find(sub)` returns the first index of `sub`, or -1 when absent (the language's
+// spelling of C++ `npos`).
+Int simse_str_find(const Str& self, const Str& sub);
+
+// `Str.lastIndexOf(sub)` returns the last index of `sub`, or -1 when absent.
+Int simse_str_lastIndexOf(const Str& self, const Str& sub);
+
+// `Str.replace(from, to)` replaces every occurrence of `from` with `to`.
+Str simse_str_replace(const Str& self, const Str& from, const Str& to);
+
+// `Str.toInt()`/`Str.toFloat()` parse the whole string; failure (or a non-empty trailing
+// remainder) yields `Opt.none()`. No exceptions: `std::from_chars` reports errors through
+// its return value.
+Opt<Int> simse_str_toInt(const Str& self);
+Opt<Float64> simse_str_toFloat(const Str& self);
+
+// `Str.initByValue(value)`: the `initByValue` convention for `Str` (cppsrc/rtl/rtl.kt),
+// setting the receiver in place. The empty form is a Simse method (an empty body).
+void simse_str_initByValue(Str& self, const Str& value);
+
+// `Char` is a signed 8-bit integer; the checks are byte-range tests so they do not depend
+// on the C locale. Space, tab, newline and carriage return count as space; form feed and
+// vertical tab do not. They stay here because a body would emit a `Char* self` receiver (a
+// `Char` is a scalar) while the call sites and the `CharPredicate` function values need the
+// byte by value.
+Bool simse_char_isDigit(Char self);
+Bool simse_char_isAlpha(Char self);
+Bool simse_char_isAlphaOrDigit(Char self);
+Bool simse_char_isSpace(Char self);
+
+// Numeric conversions. `Char` is an 8-bit integer, so it stringifies as a number.
+template <class T>
+Str simse_num_toString(const T& self);
+Str simse_char_toString(Char self);
+Str simse_bool_toString(Bool self);
+
 #include <algorithm>
 #include <type_traits>
 #include <utility>
@@ -214,69 +295,6 @@ Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& val
 // holds it instead of being copied into the comparison.
 template <class T, class F>
 void simse_list_sort(List<T>& self, F less);
-
-#include <charconv>
-#include <cstddef>
-#include <system_error>
-
-// The string, character, numeric-conversion and min/max operations behind the prelude
-// (impl_specs/native-interop.md, specs/built-in-types.md), moved out of
-// cppsrc/rtl/strops.hpp.
-//
-// `Str` is the inline `SmString` (smstring.hpp): every size, length and index here is the
-// language's `Int` (`int32_t`), including `Str::npos`, which is `-1`. Index/range errors
-// are unchecked where the underlying operation is unchecked; the `Opt`-returning
-// conversions never throw.
-//
-// What is only a byte loop is Simse now (cppsrc/rtl/rtl.kt: `trim`, `substr`,
-// `startsWith`/`endsWith`, case folding and the `Char` predicates); what stays is what
-// reaches `SmString` internals (`charAt`, `find`, `lastIndexOf`, `split`, `replace`) or the
-// standard library (`std::from_chars`, `std::to_string`).
-
-// `Str.charAt(index)`: the byte at `index` (unchecked; no bounds test).
-Char simse_str_charAt(const Str& self, Int index);
-
-// `Str.split(separator)` splits on every occurrence. An empty separator returns the whole
-// string as a single element. Two overloads: a separator string and a separator byte.
-List<Str> simse_str_split(const Str& self, const Str& separator);
-List<Str> simse_str_split(const Str& self, Char separator);
-
-// `Str.find(sub)` returns the first index of `sub`, or -1 when absent (the language's
-// spelling of C++ `npos`).
-Int simse_str_find(const Str& self, const Str& sub);
-
-// `Str.lastIndexOf(sub)` returns the last index of `sub`, or -1 when absent.
-Int simse_str_lastIndexOf(const Str& self, const Str& sub);
-
-// `Str.replace(from, to)` replaces every occurrence of `from` with `to`.
-Str simse_str_replace(const Str& self, const Str& from, const Str& to);
-
-// `Str.toInt()`/`Str.toFloat()` parse the whole string; failure (or a non-empty trailing
-// remainder) yields `Opt.none()`. No exceptions: `std::from_chars` reports errors through
-// its return value.
-Opt<Int> simse_str_toInt(const Str& self);
-Opt<Float64> simse_str_toFloat(const Str& self);
-
-// `Str.initByValue(value)`/`Str.initByValue()`: the `initByValue` convention for `Str`
-// (cppsrc/rtl/rtl.kt), setting the receiver in place.
-void simse_str_initByValue(Str& self, const Str& value);
-void simse_str_initByValueEmpty(Str& self);
-
-// `Char` is a signed 8-bit integer; the checks are byte-range tests so they do not depend
-// on the C locale. Space, tab, newline and carriage return count as space; form feed and
-// vertical tab do not. They stay here because a body would emit a `Char* self` receiver (a
-// `Char` is a scalar) while the call sites and the `CharPredicate` function values need the
-// byte by value.
-Bool simse_char_isDigit(Char self);
-Bool simse_char_isAlpha(Char self);
-Bool simse_char_isAlphaOrDigit(Char self);
-Bool simse_char_isSpace(Char self);
-
-// Numeric conversions. `Char` is an 8-bit integer, so it stringifies as a number.
-template <class T>
-Str simse_num_toString(const T& self);
-Str simse_char_toString(Char self);
-Str simse_bool_toString(Bool self);
 
 #include <cstdio>
 
@@ -372,6 +390,7 @@ SIMSE_PACK_POP
 
 Str substr(StrView* self, Int from, Int count);
 Str toString(StrView* self);
+void initByValue(Str* self);
 Str substr(Str* self, Int start, Int len);
 Str jsonQuoted(Str value);
 Str toJson(ns1_Point* self);
@@ -427,6 +446,8 @@ Str toString(StrView* self) {
     _sm_expr1 = simse_strView_size((*self));
     _sm_expr2 = substr(self, 0, _sm_expr1);
     return _sm_expr2;
+}
+void initByValue(Str* self) {
 }
 Str substr(Str* self, Int start, Int len) {
     Str* _sm_base1;
@@ -791,81 +812,17 @@ inline Int simse_lenOf(const SmallVector<T, N>& self) {
     return self.size();
 }
 
-// `dictionaryOf<K, V>()`: `Dictionary<K, V>` is a value type, so this default-constructs
-// one.
-template <class K, class V>
-inline Dictionary<K, V> simse_dictionaryOf() {
-    return Dictionary<K, V>();
-}
-
-template <class K, class V>
-inline V* simse_dict_getPtr(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
-    return self.valuePtr(key);
-}
-
-template <class K, class V>
-inline Opt<V> simse_dict_get(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
-    const V* found = simse_dict_getPtr(self, key);
-    if (found == nullptr) return Opt<V>::none();
-    return Opt<V>::some(*found);
-}
-
-template <class K, class V>
-inline Bool simse_dict_has(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
-    return simse_dict_getPtr(self, key) != nullptr;
-}
-
-template <class K, class V>
-inline void simse_dict_insert(Dictionary<K, V>& self, const std::type_identity_t<K>& key,
-                              const std::type_identity_t<V>& value) {
-    self.insert_or_assign(key, value);
-}
-
-template <class K, class V>
-inline void simse_dict_remove(Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
-    self.erase(key);
-}
-
-template <class K, class V>
-inline Int simse_dict_size(const Dictionary<K, V>& self) {
-    return (Int) self.size();
-}
-
-template <class K, class V>
-inline List<K> simse_dict_keys(const Dictionary<K, V>& self) {
-    List<K> out;
-    out.reserve((Int) self.size());
-    for (const auto& entry : self) out.push_back(entry.first);
-    return out;
-}
-
-template <class K, class V>
-inline List<V> simse_dict_values(const Dictionary<K, V>& self) {
-    List<V> out;
-    out.reserve((Int) self.size());
-    for (const auto& entry : self) out.push_back(entry.second);
-    return out;
-}
-
-template <class K, class V>
-inline void simse_dict_clear(Dictionary<K, V>& self) {
-    self.clear();
+template <class T>
+inline Bool simse_opt_hasValue(const Opt<T>& self) {
+    return self.hasValue();
 }
 
 template <class T>
-inline Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& value) {
-    for (const T& item : self) {
-        if (item == value) return true;
-    }
-    return false;
-}
-
-template <class T, class F>
-inline void simse_list_sort(List<T>& self, F less) {
-    std::sort(self.begin(), self.end(), [&less](const T& a, const T& b) {
-        return less(const_cast<T*>(&a), const_cast<T*>(&b));
-    });
-}
+inline void simse_opt_initByValue(Opt<T>& self, const T& value) { self = Opt<T>::some(value); }
+template <class T>
+inline void simse_opt_initByValueNone(Opt<T>& self) { self = Opt<T>(); }
+template <class T>
+inline void simse_res_initByValue(Res<T>& self, const T& value) { self = Res<T>::ok(value); }
 
 inline Char simse_str_charAt(const Str& self, Int index) {
     return (Char) self[index];
@@ -970,10 +927,6 @@ inline void simse_str_initByValue(Str& self, const Str& value) {
     self = value;
 }
 
-inline void simse_str_initByValueEmpty(Str& self) {
-    self = Str();
-}
-
 // The shared space test, used by `simse_char_isSpace` (and, in Simse, by `Str.trim`).
 inline Bool simse_str_isSpaceByte(Char ch) {
     return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r';
@@ -1006,6 +959,82 @@ inline Str simse_char_toString(Char self) {
 
 inline Str simse_bool_toString(Bool self) {
     return self ? "true" : "false";
+}
+
+// `dictionaryOf<K, V>()`: `Dictionary<K, V>` is a value type, so this default-constructs
+// one.
+template <class K, class V>
+inline Dictionary<K, V> simse_dictionaryOf() {
+    return Dictionary<K, V>();
+}
+
+template <class K, class V>
+inline V* simse_dict_getPtr(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
+    return self.valuePtr(key);
+}
+
+template <class K, class V>
+inline Opt<V> simse_dict_get(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
+    const V* found = simse_dict_getPtr(self, key);
+    if (found == nullptr) return Opt<V>::none();
+    return Opt<V>::some(*found);
+}
+
+template <class K, class V>
+inline Bool simse_dict_has(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
+    return simse_dict_getPtr(self, key) != nullptr;
+}
+
+template <class K, class V>
+inline void simse_dict_insert(Dictionary<K, V>& self, const std::type_identity_t<K>& key,
+                              const std::type_identity_t<V>& value) {
+    self.insert_or_assign(key, value);
+}
+
+template <class K, class V>
+inline void simse_dict_remove(Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
+    self.erase(key);
+}
+
+template <class K, class V>
+inline Int simse_dict_size(const Dictionary<K, V>& self) {
+    return (Int) self.size();
+}
+
+template <class K, class V>
+inline List<K> simse_dict_keys(const Dictionary<K, V>& self) {
+    List<K> out;
+    out.reserve((Int) self.size());
+    for (const auto& entry : self) out.push_back(entry.first);
+    return out;
+}
+
+template <class K, class V>
+inline List<V> simse_dict_values(const Dictionary<K, V>& self) {
+    List<V> out;
+    out.reserve((Int) self.size());
+    for (const auto& entry : self) out.push_back(entry.second);
+    return out;
+}
+
+template <class K, class V>
+inline void simse_dict_clear(Dictionary<K, V>& self) {
+    self.clear();
+}
+
+template <class T>
+inline Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& value) {
+    for (const T& item : self) {
+        if (item == value) return true;
+    }
+    return false;
+}
+
+template <class T, class F>
+inline void simse_list_sort(List<T>& self, F less) {
+    std::sort(self.begin(), self.end(), [&less](const T& a, const T& b) {
+        return less(const_cast<T*>(&a), const_cast<T*>(&b));
+    });
 }
 
 // Expands one run-length encoded series into `out`, which holds `count` values.
