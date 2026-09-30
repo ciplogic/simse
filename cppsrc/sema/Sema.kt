@@ -538,9 +538,7 @@ data class Analyzer(
                 seen.append(pkg)
                 val decls: *List<AstXmlNode> = this.packageDecls.getPtr(pkg)
                 if (decls != null) {
-                    var d: Int = 0
-                    while (d < decls.size()) {
-                        val decl: AstXmlNode = decls[d]
+                    for (decl in decls) {
                         val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
                         if (xmlKind(decl) == AstNodeCategory.Function) {
                             this.appendVisibleFunction(name, decl)
@@ -552,7 +550,6 @@ data class Analyzer(
                         } else if (!this.types.has(name)) {
                             this.types.insert(name, decl)
                         }
-                        d = d + 1
                     }
                 }
             }
