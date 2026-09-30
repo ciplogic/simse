@@ -328,23 +328,17 @@ data class LinSimplifier(
     }
 }
 
-// Every declaration of a body - the lowering's temporaries and the program's `val`/`var`
-// alike - moves to the top of the body, and each initializer becomes an assignment where
-// the declaration stood. A declaration at the top is one no jump can bypass, which is what
-// the folding needs (C2362): after it, no block is left for a declaration's sake. The
-// initialization stays where it was, so evaluation order and side effects do not move.
-//
-// Runs after the type pass: a declaration has to keep the type that pass proved (`auto x;`
-// is not a declaration), so one the inference could not spell keeps its place.
+// Every declaration of a body - the lowering's temporaries and the program's `val`/`var` alike -
+// moves to the top, and each initializer becomes an assignment where the declaration stood. A
+// declaration at the top is one no jump can bypass, which is what the folding needs (C2362): after
+// it, no block is left for a declaration's sake. The initialization stays where it was, so evaluation
+// order and side effects do not move. Runs after the type pass, since a declaration has to keep the
+// type that pass proved (`auto x;` is not a declaration).
 
 // Hoisting gives a body one C++ scope, so a name must be unique *in the body*: the second
-// declaration of a name is renamed and the uses that resolve to it move with it, so a name
-// never changes what it means (impl_specs/linear-il.md). A generated name carries the
-// reserved `_sm_` prefix (`_sm_expr1`, `_sm_for1`), so a rename is never mistaken for a
-// source name.
-//
-// `reserved` is what the emitter has already declared in that scope: the parameters and
-// `self`.
+// declaration of a name is renamed with the uses that resolve to it, so a name never changes what it
+// means (impl_specs/linear-il.md). A rename carries the reserved `_sm_` prefix, so it is never
+// mistaken for a source name. `reserved` is what the emitter already declared in that scope.
 
 data class SimRenameScope(var renamed: Dictionary<Str, Str>)
 
@@ -466,10 +460,10 @@ data class SimRenamer(
     fun rewrite(node: *AstXmlNode, nameNested: Bool): AstXmlNode {
         val kind: AstNodeCategory = xmlKind(node)
         val masked: Bool = kind == AstNodeCategory.ExprLambda
-        // Inside a lambda body this body names *nothing*: the lambda is a body of its own, so
-        // its declarations are its own pass's to name. Without this, two lambdas in one body
-        // that each declare the same local would see the *second* one renamed (the enclosing
-        // `used` had already seen the first).
+        // Inside a lambda body this body names *nothing*: the lambda is a body of its own, so its
+        // declarations are its own pass's to name (otherwise two lambdas in one body that each
+        // declare the same local would see the *second* one renamed, the enclosing `used` having
+        // already seen the first).
         var nested: Bool = nameNested
         if (masked) {
             nested = false
@@ -597,6 +591,11 @@ fun linIsSpellableType(typeNode: *AstXmlNode): Bool {
 
 fun linIsHoistable(stmt: *AstXmlNode): Bool {
     if (xmlKind(stmt) != AstNodeCategory.StmtVarDecl) {
+        return false
+    }
+    // A constructed declaration (`var x = T(a)`) stays with its initializer: the backend routes
+    // it through `T.initByValue` rather than hoisting the initializer into an assignment.
+    if (xmlAttr(stmt, AstNodeAttributeKind.InitByValue) == "true") {
         return false
     }
     return linIsSpellableType(xmlChildPtr(stmt, AstNodeKind.Type))

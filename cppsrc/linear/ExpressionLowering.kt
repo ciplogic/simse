@@ -142,12 +142,10 @@ data class ExprFlattener(
 
     // A `&&`/`||` in a *value* position: its operands are evaluated conditionally, so it is
     // lowered to the jump shape the spec gives (impl_specs/linear-lowering.md, "Short-circuit
-    // operators, ternary") - each operand into one slot, a guard jump past the rest, and the
-    // slot is the value. The chain is flattened, so `a || b || c` is three assignments and
-    // two jumps sharing one slot and one label, and the last operand needs no guard: its
-    // value already answers the whole expression. In a condition the linear pass has usually
-    // decomposed it already (`LinLowerer.lowerCondition`); this is the shape for
-    // `var x = a && b`, a call argument, and a condition the pass could not decompose.
+    // operators, ternary") - each operand into one slot, a guard jump past the rest. The chain is
+    // flattened (one slot, one label), and the last operand needs no guard: its value already
+    // answers the whole expression. In a condition the linear pass has usually decomposed it
+    // already (`LinLowerer.lowerCondition`).
     fun lowerShortCircuit(e: *AstXmlNode, temps: *List<AstXmlNode>): AstXmlNode {
         val line: Int = xmlLine(e)
         val column: Int = xmlColumn(e)

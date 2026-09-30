@@ -7,3 +7,6 @@ not a number: abc
 10
 false
 not a number: xyz
+10
+false
+not a number: no

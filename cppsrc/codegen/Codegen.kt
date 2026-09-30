@@ -62,7 +62,9 @@ data class CgNativeExt(
 
     var receiver: AstXmlNode,
     var returnType: AstXmlNode,
-    var typeParams: List<Str>
+    var typeParams: List<Str>,
+    // The number of non-receiver arguments, so two overloads of one name resolve by arity.
+    var argCount: Int
 )
 
 // A file-level static (`Var`, specs/statics.md): storage plus an optional
@@ -578,7 +580,8 @@ data class Emitter(
                         val ext: CgNativeExt = CgNativeExt(
                             symbol, xmlChild(params[0], AstNodeKind.Type),
                             xmlChild(decl, AstNodeKind.ReturnType),
-                            xmlTypeParamNames(decl)
+                            xmlTypeParamNames(decl),
+                            xmlCount(decl, AstNodeKind.Param) - 1
                         )
                         this.addNativeExt(declName, ext)
                     }
@@ -2554,7 +2557,7 @@ fun Emitter.emitUninit(fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts, prototype
     }
 
     // Index into `nativeExtensions[name]` of a matching receiver, or -1.
-    fun findNativeExt(name: *Str, recvExpr: *AstXmlNode): Int {
+    fun findNativeExt(name: *Str, recvExpr: *AstXmlNode, argCount: Int): Int {
         val extensions: *List<CgNativeExt> = this.nativeExtensions.getPtr(name)
         if (extensions == null) {
             return -1
@@ -2567,7 +2570,9 @@ fun Emitter.emitUninit(fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts, prototype
         var i: Int = 0
         while (i < extensions.size()) {
             val ext: *CgNativeExt = *extensions[i]
-            if (!xmlIsEmpty(ext.receiver) && this.unifyType(this.resolveAlias(ext.receiver), recv, ext.typeParams)) {
+            if (!xmlIsEmpty(ext.receiver) && ext.argCount == argCount
+                && this.unifyType(this.resolveAlias(ext.receiver), recv, ext.typeParams)
+            ) {
                 return i
             }
             i = i + 1
@@ -3118,10 +3123,14 @@ fun Emitter.emitUninit(fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts, prototype
                         }
                         return fmtStr("|(|)", this.qualify(fn.packageName, fn.name), all)
                     }
-                    val extIndex: Int = this.findNativeExt(calleeText, receiverExpr)
+                    val extIndex: Int = this.findNativeExt(calleeText, receiverExpr, args.size())
                     if (extIndex >= 0) {
                         val extensions: *List<CgNativeExt> = this.nativeExtensions.getPtr(calleeText)
                         val ext: *CgNativeExt = *extensions[extIndex]
+                        // Record the reach: a native extension call is a symbol use, so the
+                        // section that defines it must be emitted - a setter the lowering
+                        // synthesizes has no call in the AST for `collectNames` to see.
+                        this.referencedNames.insert(ext.symbol, true)
                         var all: Str = this.nativeReceiverArg(ext.receiver, receiverExpr)
                         var a: Int = 0
                         while (a < args.size()) {
@@ -3152,6 +3161,7 @@ fun Emitter.emitUninit(fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts, prototype
                 val extensions: *List<CgNativeExt> = this.nativeExtensions.getPtr(calleeText)
                 if (extensions != null) {
                     if (extensions.size() > 0) {
+                        this.referencedNames.insert(extensions[0].symbol, true)
                         var all: Str = this.expr(receiverExpr, 12, xmlEmptyNode())
                         var a: Int = 0
                         while (a < args.size()) {
@@ -3210,7 +3220,7 @@ fun Emitter.emitUninit(fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts, prototype
         val closureAt: Int = name.indexOf("_closure")
         if (closureAt > 0) {
             val rest: Str = name.substr(closureAt + 8, name.size() - closureAt - 8)
-            var digits: Str = Str()
+            var digits: Str
             var d: Int = 0
             while (d < rest.size()) {
                 val ch: Char = rest.charAt(d)

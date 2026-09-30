@@ -1,10 +1,9 @@
 // astxml.kt
 //
-// The compiler's AST node type (impl_specs/ast-xmlnode.md): the `XmlNode` schema with its
-// two stringly-typed parts - a node's role and an attribute's key - replaced by enums.
-// The emitter generates the structs, the enums and their conversions from these declarations.
-//
-// `AstNodeKind.None` is the absent sentinel: a missing optional child has role `None`.
+// The compiler's AST node type (impl_specs/ast-xmlnode.md): the `XmlNode` schema with its two
+// stringly-typed parts - a node's role and an attribute's key - as enums, from which the
+// emitter generates the structs and conversions. `AstNodeKind.None` is the absent sentinel,
+// the role of a missing optional child.
 
 package rtl
 
@@ -73,24 +72,26 @@ enum class AstNodeAttributeKind {
     Text,
     HasValue,
 
-    // `data fun` (a *pure* function): no side effects, the result a function of its receiver
-    // and arguments. The compiler trusts the mark - it is the only source of truth for a
-    // body-less (`@SmGen`) function - and uses it to reuse a repeated call of an unchanged
-    // argument (`linear/ReusePure.kt`). Appended last so the values already in use do not move.
+    // `data fun`: pure - no side effects, the result a function of its arguments. The mark is
+    // the only source of truth for a body-less (`@SmGen`) function, and a repeated call on an
+    // unchanged argument is reused (`linear/ReusePure.kt`).
     IsPure,
 
-    // `suspend fun` (impl_specs/async.md): the declaration's body may wait, so the lowering
-    // turns it into a ref-counted task and a call to it is a suspension. It is a modifier on
-    // the declaration, not a type - the signature stays the plain one. Appended last, like
-    // `IsPure`.
+    // `suspend fun` (impl_specs/async.md): the body may wait, so the lowering makes it a
+    // ref-counted task and a call to it is a suspension. A modifier, not a type - the signature
+    // stays plain.
     IsSuspend,
 
-    // `borrow fun`: the body reads its receiver and parameters and never writes through them, so
-    // a caller may hand it a pointer (`impl_specs/escape-analysis.md`, the auto-borrow proof).
-    // Weaker than `data`: it constrains what the function does to its arguments, not what it
-    // answers, so a read-only function returning a fresh value may carry it without its calls
-    // being folded. Appended last, like `IsPure`.
-    IsBorrow
+    // `borrow fun`: the body reads its receiver and parameters and never writes through them,
+    // so a caller may hand it a pointer (`impl_specs/escape-analysis.md`). Weaker than `data` -
+    // it constrains the arguments, not the result, so its calls are not folded.
+    // The modifiers are appended last, so the values already in use do not move.
+    IsBorrow,
+
+    // The `initByValue` construction convention's marker on a `var x = T(a)` declaration
+    // (cppsrc/sema/TypeInfer.kt): the initializer constructs through `T.initByValue`, so the
+    // declaration stays where it is and cppsrc/linear/LinearForm.kt routes it.
+    InitByValue
 }
 
 // What a node is - the schema's `kind` - as against its role (`AstNodeKind`, where it

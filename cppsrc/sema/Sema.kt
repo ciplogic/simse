@@ -239,7 +239,7 @@ fun semaTypeText(node: *AstXmlNode): Str {
 }
 
 fun semaTypeTextList(types: *List<AstXmlNode>): Str {
-    var out: Str = Str()
+    var out: Str
     val count: Int = types.size()
     if (count == 0) {
         return out
@@ -600,7 +600,7 @@ data class Analyzer(
             }
             i = i - 1
         }
-        return Opt<ValueBinding>.none()
+        return ()
     }
 
     fun typeParamVisible(name: *Str): Bool {
@@ -779,9 +779,15 @@ data class Analyzer(
         val params: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
         for (*param in params) {
             val paramType: *AstXmlNode = xmlChildPtr(param, AstNodeKind.Type)
+            // The receiver is emitted as a pointer (`T* self`), never a copy, so a type with
+            // an `unInit` may be one (=`fun T.f` / `this: T`); only a held *value* needs the
+            // `*T`/`&T` handle.
+            val isReceiver: Bool = xmlAttr(param, AstNodeAttributeKind.Name) == "this"
             if (!xmlIsEmpty(paramType)) {
                 this.resolveType(paramType)
-                this.checkUninitHolder(paramType, xmlLine(param), xmlColumn(param))
+                if (!isReceiver) {
+                    this.checkUninitHolder(paramType, xmlLine(param), xmlColumn(param))
+                }
             }
             // Parameters are not `val` declarations, so reassigning one is never reported.
             this.declareValue(xmlAttr(param, AstNodeAttributeKind.Name), true, false, paramType)

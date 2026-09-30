@@ -28,7 +28,12 @@ data class Parser(
     var file: Str,
     var nextTemplateId: Int,
     // The `>`s a `>>` closer left over: see `matchGenericCloser`.
-    var pendingClosers: Int
+    var pendingClosers: Int,
+    // The enclosing function's declared return type (empty outside one): what a
+    // parenthesized `return (x)` constructs, via the `initByValue` convention.
+    var returnTypeCtx: AstXmlNode,
+    // Unique suffix for the temporary a `return (...)` construction declares.
+    var ctorCounter: Int
 ) {
 
     fun peek(offset: Int): Token {
@@ -830,7 +835,12 @@ data class Parser(
         var body: List<AstXmlNode> = List<AstXmlNode>()
         var hasBody: Bool = false
         if (this.checkText("{")) {
+            // The body's returns construct this function's return type (the `return (x)`
+            // convention), so the type travels with the parse.
+            val savedReturnType: AstXmlNode = this.returnTypeCtx
+            this.returnTypeCtx = returnType
             body = this.parseBlock()
+            this.returnTypeCtx = savedReturnType
             if (this.failed) {
                 return this.emptyNode()
             }
@@ -1660,6 +1670,12 @@ data class Parser(
         this.advance()
         var value: ExprNode = this.emptyExpr()
         if (!this.atStmtEnd()) {
+            if (this.checkText("(") && this.ctorReturnable()) {
+                val block: AstXmlNode = this.tryParseCtorReturn(pos)
+                if (!xmlIsEmpty(block)) {
+                    return block
+                }
+            }
             value = this.parseExpr(0)
             if (this.failed) {
                 return this.emptyNode()
@@ -1671,6 +1687,90 @@ data class Parser(
             this.attach(node, AstNodeKind.Value, value.node)
         }
         return node
+    }
+
+    // Whether the enclosing return type can be constructed by `initByValue`: a plain named
+    // or generic type (`Opt<Int>`, `Point`), never a pointer or reference.
+    fun ctorReturnable(): Bool {
+        if (xmlIsEmpty(this.returnTypeCtx)) {
+            return false
+        }
+        val kind: AstNodeCategory = xmlKind(this.returnTypeCtx)
+        return kind == AstNodeCategory.TypeNamed || kind == AstNodeCategory.TypeGeneric
+    }
+
+    // `return (a, b)`: `initByValue` constructs the return type. It is an *extension* on the
+    // instance (it sets the receiver and returns nothing), so this lowers to a default-built
+    // `T`, the extension called on it, and the `T` returned. Tries the group and restores the
+    // cursor when it is not the whole statement, so a plain `return (a) || (b)` still parses.
+    fun tryParseCtorReturn(pos: SourcePos): AstXmlNode {
+        val savedCursor: Span<Token> = this.cursor
+        val savedFailed: Bool = this.failed
+        val savedError: Str = this.error
+        val savedClosers: Int = this.pendingClosers
+        this.advance()
+        this.skipNewlines()
+        var args: List<ExprNode> = List<ExprNode>()
+        if (!this.checkText(")")) {
+            while (true) {
+                val arg: ExprNode = this.parseExpr(0)
+                if (this.failed) {
+                    break
+                }
+                args.append(arg)
+                this.skipNewlines()
+                if (!this.matchText(",")) {
+                    break
+                }
+                this.skipNewlines()
+            }
+        }
+        var ok: Bool = !this.failed && this.checkText(")")
+        if (ok) {
+            this.advance()
+            ok = this.atStmtEnd()
+        }
+        if (!ok) {
+            this.cursor = savedCursor
+            this.failed = savedFailed
+            this.error = savedError
+            this.pendingClosers = savedClosers
+            return this.emptyNode()
+        }
+        this.ctorCounter = this.ctorCounter + 1
+        val temp: Str = fmtStr("_sm_ctor|", this.ctorCounter.toString())
+        val tempExpr: ExprNode = this.nameExprAt(temp, pos)
+        val retType: AstXmlNode = this.roleOf(this.returnTypeCtx, AstNodeKind.Type)
+        val decl: AstXmlNode = this.varDeclNode(temp, true, retType, this.emptyExpr(), pos)
+        var memberAttrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        memberAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, "initByValue"))
+        var member: AstXmlNode =
+            AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprMember, memberAttrs, Array<AstXmlNode>())
+        this.attach(member, AstNodeKind.Receiver, tempExpr.node)
+        var kids: List<AstXmlNode> = List<AstXmlNode>()
+        kids.append(this.roleOf(member, AstNodeKind.Callee))
+        var i: Int = 0
+        while (i < args.size()) {
+            kids.append(this.roleOf(args[i].node, AstNodeKind.Arg))
+            i = i + 1
+        }
+        var callAttrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        var call: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCall, callAttrs, kids.toArray())
+        var stmtAttrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        var stmt: AstXmlNode =
+            AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtExprStmt, stmtAttrs, Array<AstXmlNode>())
+        this.attach(stmt, AstNodeKind.Expr, call)
+        var retAttrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        var ret: AstXmlNode = AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtReturn, retAttrs, Array<AstXmlNode>())
+        this.attach(ret, AstNodeKind.Value, tempExpr.node)
+        var body: List<AstXmlNode> = List<AstXmlNode>()
+        body.append(decl)
+        body.append(stmt)
+        body.append(ret)
+        var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+        var block: AstXmlNode = AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtBlock, attrs, Array<AstXmlNode>())
+        xmlAddChild(block, this.container(AstNodeKind.Body, body))
+        return block
     }
 
     // The value the state machine hands out (impl_specs/yield.md); a `return`-like statement
@@ -2341,7 +2441,11 @@ data class Parser(
 
         var body: List<AstXmlNode> = List<AstXmlNode>()
         if (this.checkText("{")) {
+            // A lambda has no declared return type, so its returns construct nothing.
+            val savedReturnType: AstXmlNode = this.returnTypeCtx
+            this.returnTypeCtx = this.emptyNode()
             body = this.parseBlock()
+            this.returnTypeCtx = savedReturnType
             if (this.failed) {
                 return this.emptyExpr()
             }
@@ -2386,7 +2490,7 @@ data fun boolText(value: Bool): Str {
 
 // The names are read only; a `*List<Str>` avoids copying the caller's list.
 fun joinNames(names: *List<Str>): Str {
-    var out: Str = Str()
+    var out: Str
     var i: Int = 0
     while (i < names.size()) {
         if (i > 0) {
@@ -2466,7 +2570,10 @@ fun stepAssignOp(op: *Str): Str {
 
 // Parses a pre-filtered token cursor (with a synthetic Eof already appended).
 fun parseModule(cursor: Span<Token>, fileName: *Str): Res<AstXmlNode> {
-    var parser: Parser = Parser(cursor, false, "", fileName, 1, 0)
+    var parser: Parser = Parser(
+        cursor, false, "", fileName, 1, 0,
+        AstXmlNode(AstNodeKind.None, AstNodeCategory.None, List<AstNodeAttribute>(), Array<AstXmlNode>()), 0
+    )
     val root: AstXmlNode = parser.parseRoot()
     if (parser.failed) {
         return Res<AstXmlNode>.err(parser.error)

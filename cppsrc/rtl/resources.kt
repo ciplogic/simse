@@ -27,11 +27,9 @@ fun entries(this: Resources): Span<ResourceEntry>
 @SmGen("cpp", "resourcesGet")
 fun get(this: Resources, key: Str): StrView
 
-// True when the program carries `key`.
 @SmGen("cpp", "resourcesHas")
 fun has(this: Resources, key: Str): Bool
 
-// How many resources the program carries.
 @SmGen("cpp", "resourcesCount")
 fun count(this: Resources): Int
 

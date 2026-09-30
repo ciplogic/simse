@@ -3,31 +3,19 @@
 // A counted reference (`&T`) is a heap box plus a refcount (`specs/ref-counted-layout.md`). When a
 // local handle never escapes and is bound once, the box can be built on the *stack* and the handle
 // made a raw pointer to it: the refcount traffic disappears and the value is destroyed with the
-// scope - which is what `impl_specs/escape-analysis.md` calls refcount promotion.
+// scope - what `impl_specs/escape-analysis.md` calls refcount promotion.
 //
-// The shape, before and after (the `Cell` program of that doc):
+// The rewrite is a handful of edits on the IL and no new opcode, because the emitter spells every use
+// of the handle the same either way: `c->value` auto-derefs both a counted reference and a raw
+// pointer, `c.add(4)` is the `T* self` a value receiver takes, `*c` is the pointer itself, and the
+// construction is a *value* one because `ilBoxedCtorText` boxes only a `&T` destination.
 //
-//     var c: &Cell = &Cell(7)      c = makeRef<Cell>(7)
-//     c.value = 1                  c->value = 1
+// Two definitions of the handle are promoted, differing in where the value lives:
 //
-//     Cell _sm_stk1;               Cell _sm_stk1; Cell* c;
-//     c = * _sm_stk1               _sm_stk1 = Cell{7}; c = &_sm_stk1;
-//     c.value = 1                  c->value = 1;
-//
-// The emitter spells every use of `c` the same either way: `c->value` is what a counted reference
-// and a raw pointer both produce (it auto-derefs both), `c.add(4)` is the `T* self` a value receiver
-// takes, `*c` is the pointer itself (`Deref d, c` becomes `d = c`), a value receiver's C++ parameter
-// is `T* self` (`receiverArg`), and the construction is a *value* one because `ilBoxedCtorText`
-// boxes only a `&T` destination. So the rewrite is a handful of edits on the IL and no new opcode.
-//
-// Two definitions of the handle are promoted, and the difference is where the value lives:
-//
-//   - `CallCtor c, T, args` - the box built in place. A value slot is appended for the payload, the
-//     construction is retargeted to it (so the boxed spelling goes away), and `Deref c, slot` writes
-//     the handle;
+//   - `CallCtor c, T, args` - the box built in place: a value slot is appended for the payload, the
+//     construction is retargeted to it, and `Deref c, slot` writes the handle;
 //   - `Box c, src` - `&src` boxing a copy. When `src` is a value slot used *nowhere else*, the copy
-//     is unnecessary: `c = &src` points at the very storage `src` already has. No new slot, no
-//     copy - which is the `var valList = ...; var list = *valList;` shape.
+//     is unnecessary: `c = &src` points at the very storage `src` already has.
 //
 // In both cases `c`'s type becomes `*T` (a `*T` entry appended with `ilPointerNode`), in
 // `vars[c].typeIndex` *and* in `inferredTypes[c.name]` - the emitter seeds `localTypes`, and

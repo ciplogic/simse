@@ -14,58 +14,58 @@ import linear
 fun foldIntOp(op: *Str, a: Int, b: Int): Opt<Int> {
     when (op) {
         "+" -> {
-            return Opt<Int>.some(a + b)
+            return (a + b)
         }
 
         "-" -> {
-            return Opt<Int>.some(a - b)
+            return (a - b)
         }
 
         "*" -> {
-            return Opt<Int>.some(a * b)
+            return (a * b)
         }
 
         "/" -> {
             if (b == 0 || b == -1) {
-                return Opt<Int>.none()
+                return ()
             }
-            return Opt<Int>.some(a / b)
+            return (a / b)
         }
 
         "%" -> {
             if (b == 0 || b == -1) {
-                return Opt<Int>.none()
+                return ()
             }
-            return Opt<Int>.some(a % b)
+            return (a % b)
         }
 
         "&" -> {
-            return Opt<Int>.some(a & b)
+            return (a & b)
         }
 
         "|" -> {
-            return Opt<Int>.some(a | b)
+            return (a | b)
         }
 
         "^" -> {
-            return Opt<Int>.some(a ^ b)
+            return (a ^ b)
         }
 
         "<<" -> {
             if (b < 0 || b > 31) {
-                return Opt<Int>.none()
+                return ()
             }
-            return Opt<Int>.some(a << b)
+            return (a << b)
         }
 
         ">>" -> {
             if (b < 0 || b > 31) {
-                return Opt<Int>.none()
+                return ()
             }
-            return Opt<Int>.some(a >> b)
+            return (a >> b)
         }
     }
-    return Opt<Int>.none()
+    return ()
 }
 
 // An integer operation between two integer literals is the integer it computes.
@@ -77,8 +77,8 @@ fun foldArithRule(e: *AstXmlNode): AstXmlNode {
     if (!foldArithOp(op)) {
         return e
     }
-    val lhs: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Lhs)
-    val rhs: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Rhs)
+    val lhs = xmlChildPtr(e, AstNodeKind.Lhs)
+    val rhs = xmlChildPtr(e, AstNodeKind.Rhs)
     if (xmlIsEmpty(lhs) || xmlIsEmpty(rhs)) {
         return e
     }
@@ -93,4 +93,3 @@ fun foldArithRule(e: *AstXmlNode): AstXmlNode {
     }
     return foldIntLit(e, value.value())
 }
-

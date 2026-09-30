@@ -525,6 +525,11 @@ such a type is held only by `*T`/`&T` (a value copy would run the destructor too
 diagnostic), `&Ctor(args)` builds the box in place, and a call `x.unInit()` is a
 diagnostic too (`specs/declarations.md`, `stress/uninit`).
 
+**Construction (`initByValue`)**: a type may declare an extension `initByValue` that sets the
+receiver and returns nothing; `return (a, b)` in a function returning `T` and `var x = T(a, b)`
+with no declared type then construct through it (`specs/declarations.md`, `stress/ctor-return`).
+`Opt<T>` and `Str` provide it in the RTL; `var x: T = T(a, b)` stays an ordinary constructor.
+
 Scalars (`Int8..64`, `Float32/64`, `Char`, `Bool`), `Str` (with a method library:
 `find`, `substr`, `startsWith`, `endsWith`, `replace`, `toInt`, `toFloat`,
 `charAt`, `trim`, `split`, `toUpper`, `toLower`, `isEmpty`, `indexOf`,

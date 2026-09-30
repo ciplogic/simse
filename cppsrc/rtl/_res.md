@@ -618,6 +618,11 @@ Str simse_str_replace(const Str& self, const Str& from, const Str& to);
 Opt<Int> simse_str_toInt(const Str& self);
 Opt<Float64> simse_str_toFloat(const Str& self);
 
+// `Str.initByValue(value)`/`Str.initByValue()`: the `initByValue` convention for `Str`
+// (cppsrc/rtl/rtl.kt), setting the receiver in place.
+void simse_str_initByValue(Str& self, const Str& value);
+void simse_str_initByValueEmpty(Str& self);
+
 // `Char` is a signed 8-bit integer; the checks are byte-range tests so they do not depend
 // on the C locale. Space, tab, newline and carriage return count as space; form feed and
 // vertical tab do not. They stay here because a body would emit a `Char* self` receiver (a
@@ -735,6 +740,14 @@ inline Opt<Float64> simse_str_toFloat(const Str& self) {
     return Opt<Float64>::some(value);
 }
 
+inline void simse_str_initByValue(Str& self, const Str& value) {
+    self = value;
+}
+
+inline void simse_str_initByValueEmpty(Str& self) {
+    self = Str();
+}
+
 // The shared space test, used by `simse_char_isSpace` (and, in Simse, by `Str.trim`).
 inline Bool simse_str_isSpaceByte(Char ch) {
     return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r';
@@ -822,6 +835,16 @@ forward:
 // to unify in `findNativeExt`, and `Res` carries an `unInit`, so the checker refuses that spelling.
 template <class T>
 Bool simse_opt_hasValue(const Opt<T>& self);
+
+// The `initByValue` construction convention (cppsrc/rtl/rtl.kt): set the instance.
+template <class T>
+void simse_opt_initByValue(Opt<T>& self, const T& value);
+template <class T>
+void simse_opt_initByValueNone(Opt<T>& self);
+
+// The same convention for `Res<T>`: a `return (x)` in a `Res<T>` function is `Res<T>.ok(x)`.
+template <class T>
+void simse_res_initByValue(Res<T>& self, const T& value);
 ```
 bodies:
 ```cpp
@@ -829,6 +852,13 @@ template <class T>
 inline Bool simse_opt_hasValue(const Opt<T>& self) {
     return self.hasValue();
 }
+
+template <class T>
+inline void simse_opt_initByValue(Opt<T>& self, const T& value) { self = Opt<T>::some(value); }
+template <class T>
+inline void simse_opt_initByValueNone(Opt<T>& self) { self = Opt<T>(); }
+template <class T>
+inline void simse_res_initByValue(Res<T>& self, const T& value) { self = Res<T>::ok(value); }
 ```
 
 !resfmt

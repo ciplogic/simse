@@ -36,6 +36,15 @@ fun chained(text: Str): Res<Int> {
     return Res<Int>.ok(total)
 }
 
+// A `return (...)` in a function that also propagates: the parenthesized form constructs the
+// return type (`Res<T>` declares `initByValue`, so `return (x)` is `Res<T>.ok(x)`), and the
+// `!!` failure path stands beside it.
+fun passthrough(text: Str): Res<Int> {
+    val first: Res<Int> = readNumber(text)
+    val value: Int = first!!
+    return (value + 1)
+}
+
 fun main(): Int {
     println(doubled("21").value.toString())
     println(describe("7").value)
@@ -53,5 +62,10 @@ fun main(): Int {
     val badChain: Res<Int> = chained("xyz")
     println(badChain.isOk())
     println(badChain.error)
+
+    println(passthrough("9").value.toString())
+    val badPass: Res<Int> = passthrough("no")
+    println(badPass.isOk())
+    println(badPass.error)
     return 0
 }

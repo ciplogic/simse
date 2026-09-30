@@ -275,9 +275,9 @@ fun ilOpKindText(kind: IlOpKind): Str {
 fun ilSignature(kind: IlOpKind): Opt<IlSignature> {
     val index: Int = kind.toInt()
     if (index < 0 || index >= ilSignatureTable.size()) {
-        return Opt<IlSignature>.none()
+        return ()
     }
-    return Opt<IlSignature>.some(ilSignatureTable[index])
+    return (ilSignatureTable[index])
 }
 
 fun ilVarKindText(kind: IlVarKind): Str {
@@ -321,7 +321,7 @@ fun ilMethodKindText(kind: IlMethodKind): Str {
 // The parts, joined by `separator`. Reserves the exact length first and appends through
 // the caller's borrows, so the text is written once.
 fun ilJoinList(parts: *List<Str>, separator: *Str): Str {
-    var out: Str = Str()
+    var out: Str
     val count: Int = parts.size()
     if (count == 0) {
         return out
@@ -370,7 +370,7 @@ fun ilTypeText(typeNode: *AstXmlNode): Str {
             }
             val name: *Str = xmlAttr(typeNode, AstNodeAttributeKind.Name)
             val joined: Str = ilJoinList(args, ", ")
-            var out: Str = Str()
+            var out: Str
             out.reserve(name.size() + joined.size() + 2)
             out.appendStrPtr(name)
             out.append('<')
@@ -416,7 +416,7 @@ fun ilTypeText(typeNode: *AstXmlNode): Str {
             }
             val joined: Str = ilJoinList(params, ", ")
             val ret: Str = ilTypeText(xmlChildPtr(typeNode, AstNodeKind.ReturnType))
-            var out: Str = Str()
+            var out: Str
             out.reserve(joined.size() + ret.size() + 8)
             out.append('(')
             out.appendStr(joined)
@@ -541,7 +541,7 @@ fun ilWritesDestination(kind: IlOpKind): Bool {
 // `"Var,Method,Var..."` -> its tokens.
 fun ilOperandTokens(signature: *IlSignature): List<Str> {
     var tokens: List<Str> = List<Str>()
-    var current: Str = Str()
+    var current: Str
     val spec: Str = signature.operands
     var i: Int = 0
     while (i < spec.size()) {
@@ -899,7 +899,7 @@ fun ilOpComment(body: *IlBody, op: *IlOp): Str {
 
         IlOpKind.Call, IlOpKind.CallVoid -> {
             val hasDst: Bool = kind == IlOpKind.Call
-            var dst: Str = Str()
+            var dst: Str
             if (hasDst) {
                 dst = ilVarName(body, ilOperandAt(operands, 0)) + " = "
             }
@@ -929,7 +929,7 @@ fun ilOpComment(body: *IlBody, op: *IlOp): Str {
 
         IlOpKind.CallIndirect, IlOpKind.CallIndirectVoid -> {
             val hasDst2: Bool = kind == IlOpKind.CallIndirect
-            var dst2: Str = Str()
+            var dst2: Str
             var calleeAt: Int = 0
             if (hasDst2) {
                 dst2 = ilVarName(body, ilOperandAt(operands, 0)) + " = "
@@ -986,7 +986,7 @@ fun ilOpComment(body: *IlBody, op: *IlOp): Str {
 
 // The dump: the tables, then one line per instruction, operands resolved.
 fun printIlBody(body: *IlBody): Str {
-    var out: Str = Str()
+    var out: Str
     out = out + "# " + body.file + ":" + ilIntText(body.line) + "  " + body.symbol + " "
     +body.signature + "\n"
 
@@ -1286,8 +1286,6 @@ fun ilReceiverTypeNode(typeNode: *AstXmlNode): AstXmlNode {
     return ilPointerNode(typeNode)
 }
 
-// Whether a type is reached through a handle (`&T`, `*T`, or the `PList<T>` alias of
-// `&List<T>`), the rule the emitter also spells.
 // Whether a receiver declared as `typeNode` is one the emitter passes as the *handle* rather than
 // as `T* self`: a counted reference or the `PList` alias. Those are the shapes a raw pointer
 // cannot stand in for, and an unreadable receiver type is treated as one of them.
@@ -1726,7 +1724,18 @@ data class IlExtractor(
                     this.emit(IlOpKind.Declare, ilOps1(slot))
                 } else {
                     this.emit(IlOpKind.DeclareInit, ilOps1(slot))
-                    this.into(slot, init)
+                    if (xmlAttr(stmt, AstNodeAttributeKind.InitByValue) == "true") {
+                        // `var x = T(a)`, a construction: the default-built `x` is set by
+                        // `T.initByValue` (the type pass marks the declaration).
+                        val setter: AstXmlNode = this.ilInitByValueStmt(name, init)
+                        if (xmlIsEmpty(setter)) {
+                            this.into(slot, init)
+                        } else {
+                            this.call(-1, setter)
+                        }
+                    } else {
+                        this.into(slot, init)
+                    }
                 }
                 return
             }
@@ -2354,6 +2363,54 @@ data class IlExtractor(
         return fresh
     }
 
+    // `x.initByValue(args)` for `val/var x = T(args)` when `T` declares an `initByValue`
+    // extension; empty otherwise. `initByValue` is an extension on the instance, so `x`
+    // (already default-built) is its receiver.
+    fun ilInitByValueStmt(x: *Str, e: *AstXmlNode): AstXmlNode {
+        if (xmlKind(e) != AstNodeCategory.ExprCall) {
+            return xmlEmptyNode()
+        }
+        val callee: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Callee)
+        val calleeKind: AstNodeCategory = xmlKind(callee)
+        if (calleeKind != AstNodeCategory.ExprName && calleeKind != AstNodeCategory.ExprGenericName) {
+            return xmlEmptyNode()
+        }
+        val typeName: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
+        if (!this.hasInitByValueExt(typeName)) {
+            return xmlEmptyNode()
+        }
+        var recvAttrs: List<AstNodeAttribute> = listOf<AstNodeAttribute>(
+            AstNodeAttribute(AstNodeAttributeKind.Name, x)
+        )
+        var recv: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprName, recvAttrs, Array<AstXmlNode>())
+        var member: AstXmlNode =
+            AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprMember, List<AstNodeAttribute>(), Array<AstXmlNode>())
+        member.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, "initByValue"))
+        xmlAddChild(member, linRole(recv, AstNodeKind.Receiver))
+        var call: AstXmlNode =
+            AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCall, List<AstNodeAttribute>(), Array<AstXmlNode>())
+        xmlAddChild(call, linRole(member, AstNodeKind.Callee))
+        for (*arg in xmlChildren(e, AstNodeKind.Arg)) {
+            xmlAddChild(call, linRole(arg, AstNodeKind.Arg))
+        }
+        return call
+    }
+
+    // Whether the type declares an `initByValue` extension (the construction convention).
+    fun hasInitByValueExt(typeName: *Str): Bool {
+        if (this.fn.facts == null) {
+            return false
+        }
+        for (*fact in this.fn.facts.functions) {
+            if (fact.name == "initByValue"
+                && xmlAttr(this.receiverPattern(fact), AstNodeAttributeKind.Name) == typeName
+            ) {
+                return true
+            }
+        }
+        return false
+    }
+
     fun isTypeBase(e: *AstXmlNode): Bool {
         val kind: AstNodeCategory = xmlKind(e)
         if (kind == AstNodeCategory.ExprGenericName) {
@@ -2719,8 +2776,8 @@ data class IlExtractor(
         }
         val wantPointer: Bool = xmlKind(param) == AstNodeCategory.TypePointer
         val wantShared: Bool = !wantPointer && ilIsHandleType(param)
-        // The argument's type, cheaply where it can be: a local already carries one, so the common
-        // argument costs a lookup; the rest asks the type *rules*, never a materialised value.
+        // The argument's type, cheaply where it can be: the rest asks the type *rules*, never a
+        // materialised value.
         var actual: AstXmlNode = xmlEmptyNode()
         if (xmlKind(arg) == AstNodeCategory.ExprName) {
             val named: Int = this.varIndex(xmlAttr(arg, AstNodeAttributeKind.Name))
@@ -2891,10 +2948,8 @@ data class IlExtractor(
                 paramNodes = xmlChildren(decl, AstNodeKind.Field)
             }
         }
-        // The receiver's declared kind: a class member's receiver is its enclosing class (a value
-        // type), and an extension's is the parameter named `this`. A value (or raw-pointer)
-        // receiver's C++ parameter is the `T* self` a promoted handle fits; a counted-reference
-        // receiver's is the handle itself. An unresolved callee is the unsafe shape.
+        // The receiver's declared kind (see `IlMethod.recvIsValue`); an unresolved callee is
+        // treated as the unsafe shape.
         var recvIsValue: Bool = false
         if (!receiverCall) {
             recvIsValue = true
@@ -3147,7 +3202,7 @@ fun ilSplitParams(text: Str): List<Str> {
     if (text.isEmpty()) {
         return out
     }
-    var current: Str = Str()
+    var current: Str
     var i: Int = 0
     while (i < text.size()) {
         if (text[i] == ',') {

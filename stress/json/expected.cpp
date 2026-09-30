@@ -257,6 +257,11 @@ Str simse_str_replace(const Str& self, const Str& from, const Str& to);
 Opt<Int> simse_str_toInt(const Str& self);
 Opt<Float64> simse_str_toFloat(const Str& self);
 
+// `Str.initByValue(value)`/`Str.initByValue()`: the `initByValue` convention for `Str`
+// (cppsrc/rtl/rtl.kt), setting the receiver in place.
+void simse_str_initByValue(Str& self, const Str& value);
+void simse_str_initByValueEmpty(Str& self);
+
 // `Char` is a signed 8-bit integer; the checks are byte-range tests so they do not depend
 // on the C locale. Space, tab, newline and carriage return count as space; form feed and
 // vertical tab do not. They stay here because a body would emit a `Char* self` receiver (a
@@ -959,6 +964,14 @@ inline Opt<Float64> simse_str_toFloat(const Str& self) {
     std::from_chars_result parsed = std::from_chars(begin, end, value);
     if (parsed.ec != std::errc() || parsed.ptr != end) return Opt<Float64>::none();
     return Opt<Float64>::some(value);
+}
+
+inline void simse_str_initByValue(Str& self, const Str& value) {
+    self = value;
+}
+
+inline void simse_str_initByValueEmpty(Str& self) {
+    self = Str();
 }
 
 // The shared space test, used by `simse_char_isSpace` (and, in Simse, by `Str.trim`).

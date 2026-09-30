@@ -1,14 +1,12 @@
 // MergeConcat.kt
 //
-// The IL's n-ary concatenation (impl_specs/linear-il.md, "Concat"): a `+` chain over `Str`
-// and an `fmtStr` whose format is a literal become *one* `Concat` instruction over every
-// part, which the emitter expands into one length sum, one `resize` and one slot write
-// per part, through a pointer that advances (cppsrc/rtl/_res.md's `strcat` section). The
-// language's `+` is binary, so the lowerer
-// leaves `a + b + c` as two instructions with a `Str` temporary between them, and an
-// `fmtStr` call re-scans its format at run time; merging both back is what lets the emitter
-// sum the lengths once, allocate once and write each part once - the shape Java 9's
-// `StringConcatFactory` has.
+// The IL's n-ary concatenation (impl_specs/linear-il.md, "Concat"): a `+` chain over `Str` and an
+// `fmtStr` whose format is a literal become *one* `Concat` instruction over every part, which the
+// emitter expands into one length sum, one `resize` and one slot write per part, through a pointer
+// that advances (cppsrc/rtl/_res.md's `strcat` section). The language's `+` is binary, so the lowerer
+// leaves `a + b + c` as two instructions with a `Str` temporary between them, and an `fmtStr` call
+// re-scans its format at run time; merging both back lets the emitter sum the lengths once, allocate
+// once and write each part once.
 //
 // Three shapes are rewritten, and each *refuses* rather than guesses:
 //
@@ -23,24 +21,19 @@
 //   Call   s, fmtStr, "<fmt>", list
 //                        ->   s = Concat(piece0, item0, ..., pieceN)
 //
-// A *part* is what the emitter can append: an owned `Str`, a `Char`, a `StrView` that came
-// from the program's *pool* (a literal), or - only from a fold - a number or a bool (the
-// fold's *receiver* may be a handle, a field's address, which the emitter dereferences:
-// `ilConcatPartText`, cppsrc/codegen/IlCodeGen.kt). A `StrView` *slot* refuses the chain,
-// because a view may look into the very `Str` the concat writes into, and so does a `+`
-// operand that is a number: `s + n` in C++ appends
-// `(char) n`, one byte, and that is what must stay - only a fold may turn a number into
-// its digits. Two folds are refused for the same kind of reason: a `Char` (its C++ type is
-// `Int8`, so "one character" and "a number" would be one part kind) and a float (its length
-// is only known by formatting it, so the `toString` call stays and hands over one `Str`,
-// made ahead of time, which is then a text part like any other).
+// A *part* is what the emitter can append: an owned `Str`, a `Char`, a `StrView` from the program's
+// *pool* (a literal), or - only from a fold - a number or a bool (`ilConcatPartText`,
+// cppsrc/codegen/IlCodeGen.kt). A `StrView` *slot* refuses the chain, because a view may look into
+// the very `Str` the concat writes into, and so does a `+` operand that is a number: `s + n` in C++
+// appends `(char) n`, one byte, and that must stay - only a fold may turn a number into its digits.
+// A `Char` and a float fold are refused too: `Char`'s C++ type is `Int8`, so "one character" and "a
+// number" would be one part kind, and a float's length is only known by formatting it.
 //
-// The *destination* is what the emitter writes into where the instruction stands, so it has
-// to be a slot with a declaration of its own (a type node - a slot without one is declared
-// by the instruction that assigns it, and this instruction is not one assignment any more),
-// and the chain may read it at most once, as its *first* part: that is `s = s + x`, where
-// the bytes already there are exactly what the rest is appended to, so the emitter need not
-// clear and copy them.
+// The *destination* is what the emitter writes into where the instruction stands, so it has to be a
+// slot with a declaration of its own (a slot without one is declared by the instruction that assigns
+// it, and this instruction is not one assignment any more), and the chain may read it at most once,
+// as its *first* part: that is `s = s + x`, where the bytes already there are exactly what the rest
+// is appended to, so the emitter need not clear and copy them.
 
 package linear
 
@@ -639,11 +632,8 @@ fun ilFuseConcat(il: *IlBody): Bool {
     return true
 }
 
-// `--no-concat`: skip the pass above, so a `+` chain over `Str` and an `fmtStr` with a
-// literal format keep the shape the lowering gave them (one allocation per `+` link, the
-// format re-scanned by the runtime `fmtStr`) - the fusion `off` side of an A/B, and a way
-// to read what the fusion would have done (`--showLinearRepresentation`). Off by default:
-// the fusion is a pure optimization and this only removes it.
+// `--no-concat`: skip the pass above, keeping the shape the lowering gave (see `ilFuseConcat`).
+// Off by default: the fusion is a pure optimization and this only removes it.
 var ilNoConcatFlag: Bool = false
 
 fun ilNoConcat(): Bool {

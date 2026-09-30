@@ -140,6 +140,27 @@ fun toList<T>(this: Array<T>): List<T>
 @SmGen("res", "optops", "simse_opt_hasValue")
 borrow fun hasValue<T>(this: Opt<T>): Bool
 
+// The construction convention: `initByValue` is an *extension* on the instance - it sets
+// the receiver and returns nothing. `return (x)` (cppsrc/parser/Parser.kt) and
+// `var y = T(x)` (cppsrc/linear/LinearForm.kt) build a `T` and call this on it.
+@SmGen("res", "optops", "simse_opt_initByValue")
+fun initByValue<T>(this: Opt<T>, value: T): Unit
+
+@SmGen("res", "optops", "simse_opt_initByValueNone")
+fun initByValue<T>(this: Opt<T>): Unit
+
+@SmGen("res", "optops", "simse_res_initByValue")
+fun initByValue<T>(this: Res<T>, value: T): Unit
+
+// `Str`'s two constructions: the empty string and a copy of `value`. What *this* spells is
+// exactly what the C++ constructor did, so `var s = Str("text")` keeps its meaning while the
+// constructor itself can go.
+@SmGen("res", "strops", "simse_str_initByValue")
+fun initByValue(this: Str, value: Str): Unit
+
+@SmGen("res", "strops", "simse_str_initByValueEmpty")
+fun initByValue(this: Str): Unit
+
 // `Dictionary<K, V>` is a value type; keys and values come back in its iteration order,
 // which is unspecified - sort for determinism.
 @SmGen("res", "dictops", "simse_dictionaryOf")

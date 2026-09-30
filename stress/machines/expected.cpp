@@ -154,6 +154,16 @@ Int simse_lenOf(const SmallVector<T, N>& self);
 template <class T>
 Bool simse_opt_hasValue(const Opt<T>& self);
 
+// The `initByValue` construction convention (cppsrc/rtl/rtl.kt): set the instance.
+template <class T>
+void simse_opt_initByValue(Opt<T>& self, const T& value);
+template <class T>
+void simse_opt_initByValueNone(Opt<T>& self);
+
+// The same convention for `Res<T>`: a `return (x)` in a `Res<T>` function is `Res<T>.ok(x)`.
+template <class T>
+void simse_res_initByValue(Res<T>& self, const T& value);
+
 #include <algorithm>
 #include <type_traits>
 #include <utility>
@@ -295,6 +305,11 @@ Str simse_str_replace(const Str& self, const Str& from, const Str& to);
 // its return value.
 Opt<Int> simse_str_toInt(const Str& self);
 Opt<Float64> simse_str_toFloat(const Str& self);
+
+// `Str.initByValue(value)`/`Str.initByValue()`: the `initByValue` convention for `Str`
+// (cppsrc/rtl/rtl.kt), setting the receiver in place.
+void simse_str_initByValue(Str& self, const Str& value);
+void simse_str_initByValueEmpty(Str& self);
 
 // `Char` is a signed 8-bit integer; the checks are byte-range tests so they do not depend
 // on the C locale. Space, tab, newline and carriage return count as space; form feed and
@@ -1236,6 +1251,13 @@ inline Bool simse_opt_hasValue(const Opt<T>& self) {
     return self.hasValue();
 }
 
+template <class T>
+inline void simse_opt_initByValue(Opt<T>& self, const T& value) { self = Opt<T>::some(value); }
+template <class T>
+inline void simse_opt_initByValueNone(Opt<T>& self) { self = Opt<T>(); }
+template <class T>
+inline void simse_res_initByValue(Res<T>& self, const T& value) { self = Res<T>::ok(value); }
+
 // `dictionaryOf<K, V>()`: `Dictionary<K, V>` is a value type, so this default-constructs
 // one.
 template <class K, class V>
@@ -1482,6 +1504,14 @@ inline Opt<Float64> simse_str_toFloat(const Str& self) {
     std::from_chars_result parsed = std::from_chars(begin, end, value);
     if (parsed.ec != std::errc() || parsed.ptr != end) return Opt<Float64>::none();
     return Opt<Float64>::some(value);
+}
+
+inline void simse_str_initByValue(Str& self, const Str& value) {
+    self = value;
+}
+
+inline void simse_str_initByValueEmpty(Str& self) {
+    self = Str();
 }
 
 // The shared space test, used by `simse_char_isSpace` (and, in Simse, by `Str.trim`).

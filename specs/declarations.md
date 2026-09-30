@@ -21,6 +21,24 @@ list that runs over several lines continues until the `)`.
 `Point(1, 2)` constructs a value, not a counted reference; `&point` is a fresh, non-null
 boxed copy (boxing copies the value), and a `&T` variable may later be `null`.
 
+### Construction: `initByValue`
+
+A type may declare an extension named `initByValue` - `fun Point.initByValue(x: Int, y: Int)` -
+that sets the receiver's fields and returns nothing. Two forms then read as the value in the
+parentheses:
+
+- `return (a, b)` in a function whose return type is `Point` builds a default `Point` and
+  calls `Point.initByValue(a, b)` on it; `return ()` is the zero-argument form. A lambda has no
+  declared return type, so a parenthesized `return (a)` there is just the value `a`.
+- `var p = Point(a, b)`, with no declared type, does the same, taking `p`'s type from the name
+  in the parentheses.
+
+With an explicit type - `var p: Point = Point(a, b)` - the ordinary constructor runs, and a plain
+assignment `p = Point(a, b)` is an ordinary construction too. When the type declares no
+`initByValue`, `return (e)` is the ordinary value `e` (and a multi-value `return (a, b)` has no
+plain-return spelling). `Opt<T>` and `Str` are built the `initByValue` way in the RTL
+(`cppsrc/rtl/rtl.kt`).
+
 ### Fields and `var`/`val`
 
 Each data-class field is declared with either `var` or `val`:

@@ -442,7 +442,7 @@ fun semBindTypes(
             }
             val patternName: Str = xmlAttr(pattern, AstNodeAttributeKind.Name)
             val actualName: Str = xmlAttr(actualPtr, AstNodeAttributeKind.Name)
-            // `PList<T>` is the alias of `&List<T>`; match it against a `List<T>` pattern.
+            // `PList<T>` is the alias of `&List<T>`: match it against a `List<T>` (see `semUnifyType`).
             if (actualName != patternName
                 && !(patternName == "List" && actualName == "PList")
                 && !(patternName == "PList" && actualName == "List")
@@ -493,7 +493,7 @@ fun semBindTypes(
         }
 
         AstNodeCategory.TypeYield -> {
-            // `..T` carries its element type like a pointer its pointee, so it binds the same way.
+            // `..T` binds like a pointer's pointee (see `semUnifyType`).
             if (ak == AstNodeCategory.TypeYield && !xmlIsEmpty(xmlChildPtr(actualPtr, AstNodeKind.Inner))
                 && !xmlIsEmpty(xmlChildPtr(pattern, AstNodeKind.Inner))
             ) {
@@ -891,11 +891,145 @@ data class SemInfer(
         return this.facts.types.has(name) || semIsRtlTypeName(name)
     }
 
+    // Whether the type `typeName` declares an `initByValue` extension (the construction
+    // convention): the receiver is the fact's own, or the explicit `this` parameter's type.
+    fun isInitByValueType(typeName: *Str): Bool {
+        var i: Int = 0
+        while (i < this.facts.functions.size()) {
+            val fn: *SemFnFact = *this.facts.functions[i]
+            i = i + 1
+            if (fn.name != "initByValue") {
+                continue
+            }
+            var pattern: AstXmlNode = fn.receiver
+            if (xmlIsEmpty(pattern)) {
+                pattern = semExtensionReceiver(fn.decl)
+            }
+            if (xmlAttr(pattern, AstNodeAttributeKind.Name) == typeName) {
+                return true
+            }
+        }
+        return false
+    }
+
+    // Whether `init` is `T(args)` for a type `T` that declares an `initByValue` extension:
+    // the construction convention (`var x = T(a)`), as against a plain constructor call
+    // (`var x: T = T(a)`, the explicit-type form, which is left alone).
+    fun isInitByValueCtor(init: *AstXmlNode): Bool {
+        if (xmlKind(init) != AstNodeCategory.ExprCall) {
+            return false
+        }
+        val callee: *AstXmlNode = xmlChildPtr(init, AstNodeKind.Callee)
+        val calleeKind: AstNodeCategory = xmlKind(callee)
+        if (calleeKind != AstNodeCategory.ExprName && calleeKind != AstNodeCategory.ExprGenericName) {
+            return false
+        }
+        return this.isInitByValueType(xmlAttr(callee, AstNodeAttributeKind.Name))
+    }
+
+    // Whether `stmt` is the `initByValue` call of a `_sm_ctor` temp (`t.initByValue(...)`).
+    fun isCtorCall(stmt: AstXmlNode, name: *Str): Bool {
+        if (xmlKind(stmt) != AstNodeCategory.StmtExprStmt) {
+            return false
+        }
+        val call: AstXmlNode = xmlChild(stmt, AstNodeKind.Expr)
+        if (xmlKind(call) != AstNodeCategory.ExprCall) {
+            return false
+        }
+        val callee: AstXmlNode = xmlChild(call, AstNodeKind.Callee)
+        if (xmlKind(callee) != AstNodeCategory.ExprMember) {
+            return false
+        }
+        if (xmlAttr(callee, AstNodeAttributeKind.Name) != "initByValue") {
+            return false
+        }
+        val recv: AstXmlNode = xmlChild(callee, AstNodeKind.Receiver)
+        return xmlKind(recv) == AstNodeCategory.ExprName
+            && xmlAttr(recv, AstNodeAttributeKind.Name) == name
+    }
+
+    // Whether `stmt` is `return <name>`.
+    fun isCtorReturn(stmt: AstXmlNode, name: *Str): Bool {
+        if (xmlKind(stmt) != AstNodeCategory.StmtReturn) {
+            return false
+        }
+        val value: AstXmlNode = xmlChild(stmt, AstNodeKind.Value)
+        return xmlKind(value) == AstNodeCategory.ExprName
+            && xmlAttr(value, AstNodeAttributeKind.Name) == name
+    }
+
+    // A parenthesized `return (...)` desugars to a `_sm_ctor<n>` temp, its `initByValue` call
+    // and the return (cppsrc/parser/Parser.kt) - the lowering may have put argument temporaries
+    // between them. When the temp's type declares no `initByValue` the parenthesized form is an
+    // ordinary value, so the construction collapses to a plain `return e` (only a single
+    // expression has such a spelling). Marks the temp and the call for dropping and the return
+    // for rewriting; leaves them all alone when the construction stands.
+    fun markCtorFallback(list: *List<AstXmlNode>, i: Int, drop: *List<Bool>, rewrite: *List<AstXmlNode>): Unit {
+        val decl: AstXmlNode = list[i]
+        if (xmlKind(decl) != AstNodeCategory.StmtVarDecl) {
+            return
+        }
+        val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
+        if (!name.startsWith("_sm_ctor")) {
+            return
+        }
+        if (this.isInitByValueType(xmlAttr(xmlChild(decl, AstNodeKind.Type), AstNodeAttributeKind.Name))) {
+            return
+        }
+        var callIndex: Int = -1
+        var retIndex: Int = -1
+        var j: Int = i + 1
+        while (j < list.size()) {
+            if (callIndex < 0 && this.isCtorCall(list[j], name)) {
+                callIndex = j
+            }
+            if (callIndex >= 0 && this.isCtorReturn(list[j], name)) {
+                retIndex = j
+                break
+            }
+            j = j + 1
+        }
+        if (callIndex < 0 || retIndex < 0) {
+            return
+        }
+        val args: List<AstXmlNode> = xmlChildren(xmlChild(list[callIndex], AstNodeKind.Expr), AstNodeKind.Arg)
+        if (args.size() != 1) {
+            return
+        }
+        var node: AstXmlNode =
+            AstXmlNode(AstNodeKind.Stmt, AstNodeCategory.StmtReturn, list[retIndex].attributes, Array<AstXmlNode>())
+        var value: AstXmlNode = args[0]
+        value.name = AstNodeKind.Value
+        xmlAddChild(node, value)
+        drop[i] = true
+        drop[callIndex] = true
+        rewrite[retIndex] = node
+    }
+
     fun stmts(list: *List<AstXmlNode>): List<AstXmlNode> {
-        var out: List<AstXmlNode> = List<AstXmlNode>()
+        var drop: List<Bool> = List<Bool>()
+        var rewrite: List<AstXmlNode> = List<AstXmlNode>()
         var i: Int = 0
         while (i < list.size()) {
-            out.append(this.stmt(list[i]))
+            drop.append(false)
+            rewrite.append(xmlEmptyNode())
+            i = i + 1
+        }
+        i = 0
+        while (i < list.size()) {
+            this.markCtorFallback(list, i, drop, rewrite)
+            i = i + 1
+        }
+        var out: List<AstXmlNode> = List<AstXmlNode>()
+        i = 0
+        while (i < list.size()) {
+            if (!drop[i]) {
+                if (xmlIsEmpty(rewrite[i])) {
+                    out.append(this.stmt(list[i]))
+                } else {
+                    out.append(rewrite[i])
+                }
+            }
             i = i + 1
         }
         return out
@@ -920,7 +1054,13 @@ data class SemInfer(
                 ) {
                     return stmtNode
                 }
-                return semWithType(stmtNode, semReRole(typeNode, AstNodeKind.Type))
+                val typed: AstXmlNode = semWithType(stmtNode, semReRole(typeNode, AstNodeKind.Type))
+                // `var x = T(a)` with no declared type constructs through `initByValue`: mark it
+                // so the lowering keeps the declaration for the backend to route.
+                if (this.isInitByValueCtor(init)) {
+                    typed.attributes.append(AstNodeAttribute(AstNodeAttributeKind.InitByValue, "true"))
+                }
+                return typed
             }
 
             AstNodeCategory.StmtBlock -> {

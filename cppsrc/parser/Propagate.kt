@@ -5,13 +5,6 @@
 // (impl_specs/for.md): `Parser.kt`'s parsePostfix records the operator and this pass expands
 // it *before sema sees the tree*, so no later stage has an operator to know about.
 //
-//     fun test(): Res<Int> {                      fun test(): Res<Int> {
-//         val data: Res<Str> = readFile(name)         val _sm_prop1 = readFile(name)
-//         val text: Str = data!!                      if (!_sm_prop1.isOk()) {
-//                                                         return Res<Int>.err(_sm_prop1.error)
-//                                                     }
-//                                                     val text: Str = _sm_prop1.value
-//
 // `Res`'s error arm is always a `Str` (specs/core-types.md), so a differing return type has
 // nothing to remap on the failure side: the message is carried across as it is, and no
 // `errorAs` wrapper is needed. When the operand's declared type *is* the enclosing return
@@ -401,8 +394,11 @@ fun propStmts(state: *PropState, stmts: *List<AstXmlNode>, out: *List<AstXmlNode
 fun propStmt(state: *PropState, stmt: *AstXmlNode, out: *List<AstXmlNode>): Unit {
     val kind: AstNodeCategory = xmlKind(stmt)
     if (kind == AstNodeCategory.StmtBlock) {
+        // A block's statements sit under its `Body` child (the `return (...)` shape), not as
+        // direct children - the walk has to step through the container.
         var inner: List<AstXmlNode> = List<AstXmlNode>()
-        propStmts(state, xmlChildren(stmt, AstNodeKind.Body), inner)
+        val bodyNode: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Body)
+        propStmts(state, xmlChildren(bodyNode, AstNodeKind.Stmt), inner)
         out.append(propRebuild(stmt, List<AstXmlNode>(), List<AstXmlNode>(), inner))
         return
     }
