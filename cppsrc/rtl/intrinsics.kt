@@ -15,11 +15,11 @@ fun memFill(dst: *Char, from: Int, count: Int, value: Char): Unit
 
 // The three-way compare of `count` bytes: -1, 0 or 1.
 @SmGen("cpp", "simse_mem_compare")
-fun memCompare(a: *Char, aIndex: Int, b: *Char, bIndex: Int, count: Int): Int
+borrow fun memCompare(a: *Char, aIndex: Int, b: *Char, bIndex: Int, count: Int): Int
 
 // The index of the first `value` in the `count` bytes from `from`, or -1.
 @SmGen("cpp", "simse_mem_findByte")
-fun memFindByte(a: *Char, from: Int, count: Int, value: Char): Int
+borrow fun memFindByte(a: *Char, from: Int, count: Int, value: Char): Int
 
 // A `Str`'s bytes, borrowed: valid until the string changes. It is the one place a `Str`'s
 // internals are reached, and the reason the text operations can be written in the language.

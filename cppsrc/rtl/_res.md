@@ -810,6 +810,27 @@ inline Span<T> simse_spanOf(List<T>* items) {
 }
 ```
 
+!optops
+====
+forward:
+```cpp
+// `Opt<T>.hasValue()`: the `Variant2` tag test (specs/core-types.md). The C++ is `variant2.hpp` and
+// the member is `const`, so nothing is copied and nothing is written - the declaration that names
+// this symbol (cppsrc/rtl/rtl.kt) is what lets the auto-borrow proof see it as read-only, because a
+// built-in member has no declaration of its own to carry a mark (impl_specs/escape-analysis.md).
+// `Res<T>.isOk()` is the same test but cannot be declared yet: a receiver must be spelled `Res<T>`
+// to unify in `findNativeExt`, and `Res` carries an `unInit`, so the checker refuses that spelling.
+template <class T>
+Bool simse_opt_hasValue(const Opt<T>& self);
+```
+bodies:
+```cpp
+template <class T>
+inline Bool simse_opt_hasValue(const Opt<T>& self) {
+    return self.hasValue();
+}
+```
+
 !resfmt
 ====
 forward:

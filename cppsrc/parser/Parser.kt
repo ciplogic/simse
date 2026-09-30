@@ -217,7 +217,7 @@ data class Parser(
             this.fail("expected 'package' declaration")
             return this.emptyNode()
         }
-        this.advance() // package
+        this.advance()
         packageName = this.expectName()
         if (!this.failed) {
             while (this.matchText(".")) {
@@ -256,7 +256,7 @@ data class Parser(
 
     fun parseImport(): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
-        this.advance() // import
+        this.advance()
         var path: Str = this.expectName()
         if (this.failed) {
             return this.emptyNode()
@@ -278,7 +278,7 @@ data class Parser(
 
     fun parseDecl(): AstXmlNode {
         if (this.checkKind(TokenKind.Attribute)) {
-            return this.parseAttributedDecl(false, false)
+            return this.parseAttributedDecl(false, false, false)
         }
         val text: Str = this.peek(0).text
         when (text) {
@@ -295,13 +295,13 @@ data class Parser(
                     return this.parseDataClass()
                 }
                 if (this.peek(1).text == "fun") {
-                    this.advance() // data
-                    return this.parseFunction("", List<Str>(), true, false)
+                    this.advance()
+                    return this.parseFunction("", List<Str>(), true, false, false)
                 }
                 if (this.peek(1).kind == TokenKind.Attribute) {
                     // `data @SmGen(...) fun ...`: the mark may precede the attribute.
-                    this.advance() // data
-                    return this.parseAttributedDecl(true, false)
+                    this.advance()
+                    return this.parseAttributedDecl(true, false, false)
                 }
                 this.fail("expected 'class' or 'fun' after 'data'")
                 return this.emptyNode()
@@ -313,14 +313,31 @@ data class Parser(
                 // The modifier is the whole marker - the signature keeps the plain return type
                 // and there is no `Async<T>`.
                 if (this.peek(1).text == "fun") {
-                    this.advance() // suspend
-                    return this.parseFunction("", List<Str>(), false, true)
+                    this.advance()
+                    return this.parseFunction("", List<Str>(), false, true, false)
                 }
                 if (this.peek(1).kind == TokenKind.Attribute) {
-                    this.advance() // suspend
-                    return this.parseAttributedDecl(false, true)
+                    this.advance()
+                    return this.parseAttributedDecl(false, true, false)
                 }
                 this.fail("expected 'fun' or an attribute after 'suspend'")
+                return this.emptyNode()
+            }
+
+            "borrow" -> {
+                // `borrow fun`: the body only *reads* its receiver and parameters and never
+                // writes through them, so a caller may hand it a pointer
+                // (impl_specs/escape-analysis.md). The flag is the *borrowness* proof - weaker
+                // than `data`, which also promises the result is a function of the arguments.
+                if (this.peek(1).text == "fun") {
+                    this.advance()
+                    return this.parseFunction("", List<Str>(), false, false, true)
+                }
+                if (this.peek(1).kind == TokenKind.Attribute) {
+                    this.advance()
+                    return this.parseAttributedDecl(false, false, true)
+                }
+                this.fail("expected 'fun' or an attribute after 'borrow'")
                 return this.emptyNode()
             }
 
@@ -333,7 +350,7 @@ data class Parser(
             }
 
             "fun" -> {
-                return this.parseFunction("", List<Str>(), false, false)
+                return this.parseFunction("", List<Str>(), false, false, false)
             }
         }
         this.fail("expected declaration")
@@ -342,7 +359,7 @@ data class Parser(
 
     // `@SmGen("cpp", "sym") fun f(...)` (specs/attributes.md). Only method declarations take
     // attributes, so `fun` must follow.
-    fun parseAttributedDecl(pure: Bool, suspendModifier: Bool): AstXmlNode {
+    fun parseAttributedDecl(pure: Bool, suspendModifier: Bool, borrowModifier: Bool): AstXmlNode {
         val attrToken: Token = this.advance()
         val attrText: Str = attrToken.text
         var attrName: Str = attrText
@@ -396,12 +413,15 @@ data class Parser(
         }
         var isPure: Bool = pure
         var isSuspend: Bool = suspendModifier
-        while (this.checkText("data") || this.checkText("suspend")) {
+        var isBorrow: Bool = borrowModifier
+        while (this.checkText("data") || this.checkText("suspend") || this.checkText("borrow")) {
             if (this.matchText("data")) {
                 isPure = true
-            } else {
-                this.matchText("suspend")
+            } else if (this.matchText("suspend")) {
                 isSuspend = true
+            } else {
+                this.matchText("borrow")
+                isBorrow = true
             }
             this.skipSeparators()
         }
@@ -409,7 +429,7 @@ data class Parser(
             this.fail("expected 'fun' after an attribute")
             return this.emptyNode()
         }
-        return this.parseFunction(attrName, args, isPure, isSuspend)
+        return this.parseFunction(attrName, args, isPure, isSuspend, isBorrow)
     }
 
     // Records a type attribute the way parseFunction records a method one: Attribute (its
@@ -476,7 +496,7 @@ data class Parser(
 
     fun parseDataClass(): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
-        this.advance() // data
+        this.advance()
         if (!this.expectText("class")) {
             return this.emptyNode()
         }
@@ -546,7 +566,7 @@ data class Parser(
                     this.fail("expected method declaration")
                     return this.emptyNode()
                 }
-                methods.append(this.parseFunction("", List<Str>(), false, false))
+                methods.append(this.parseFunction("", List<Str>(), false, false, false))
                 this.skipSeparators()
             }
             if (!this.expectText("}")) {
@@ -565,7 +585,7 @@ data class Parser(
 
     fun parseEnum(): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
-        this.advance() // enum
+        this.advance()
         // `enum class`: there is no bare `enum`.
         if (!this.expectText("class")) {
             return this.emptyNode()
@@ -637,7 +657,7 @@ data class Parser(
 
     fun parseTypeAlias(): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
-        this.advance() // typealias
+        this.advance()
         val name: Str = this.expectName()
         if (this.failed) {
             return this.emptyNode()
@@ -708,11 +728,12 @@ data class Parser(
 
     // `attrName`/`attrArgs` are the parsed attribute (specs/attributes.md). An attributed
     // method may be body-less; a body-less method with no attribute has no implementation.
-    // `pure` is the `data` modifier: the writer's claim that the function has no side
-    // effects, which the reuse pass reads (`ReusePure.kt`). `suspendModifier` is the `suspend`
-    // modifier: the declaration's body may wait (impl_specs/async.md), carried as the
-    // `IsSuspend` attribute for the coloring pass.
-    fun parseFunction(attrName: *Str, attrArgs: *List<Str>, pure: Bool, suspendModifier: Bool): AstXmlNode {
+    // `pure`/`suspendModifier`/`borrowModifier` are the `data`/`suspend`/`borrow` modifiers,
+    // carried as `IsPure`/`IsSuspend`/`IsBorrow`; `parseDecl` says what each promises.
+    fun parseFunction(
+        attrName: *Str, attrArgs: *List<Str>, pure: Bool, suspendModifier: Bool,
+        borrowModifier: Bool
+    ): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
         var nativeSymbol: Str = ""
         var hasNativeSymbol: Bool = false
@@ -731,7 +752,7 @@ data class Parser(
             val savedError: Str = this.error
             val receiver: AstXmlNode = this.parseType(AstNodeKind.Receiver)
             if (!this.failed && this.checkText(".")) {
-                this.advance() // .
+                this.advance()
                 val name: Str = this.expectName()
                 if (this.failed) {
                     return this.emptyNode()
@@ -870,6 +891,7 @@ data class Parser(
         attrs.append(AstNodeAttribute(AstNodeAttributeKind.HasNativeSymbol, boolText(hasNativeSymbol)))
         attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsPure, boolText(pure)))
         attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsSuspend, boolText(suspendModifier)))
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsBorrow, boolText(borrowModifier)))
         if (hasNativeSymbol) {
             attrs.append(AstNodeAttribute(AstNodeAttributeKind.NativeSymbol, nativeSymbol))
         }
@@ -945,7 +967,7 @@ data class Parser(
             return node
         }
         if (this.checkText("(")) {
-            this.advance() // (
+            this.advance()
             var params: List<AstXmlNode> = List<AstXmlNode>()
             this.skipNewlines()
             if (!this.checkText(")")) {
@@ -1230,7 +1252,7 @@ data class Parser(
 
     fun parseIf(): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
-        this.advance() // if
+        this.advance()
         if (!this.expectText("(")) {
             return this.emptyNode()
         }
@@ -1274,7 +1296,7 @@ data class Parser(
 
     fun parseWhile(): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
-        this.advance() // while
+        this.advance()
         if (!this.expectText("(")) {
             return this.emptyNode()
         }
@@ -1362,7 +1384,16 @@ data class Parser(
     // by its first byte. Both guards are necessary conditions, so the predicate is unchanged
     // and the whole string compare runs only for a label that can still match, which is what
     // turns a `when` over N string labels from N `memcmp` calls into a few integer compares.
-    fun whenCondition(subject: *ExprNode, lengthName: *Str, labels: *List<AstXmlNode>, pos: SourcePos, dispatch: Bool): ExprNode {
+    fun whenCondition(
+        subject: *
+        ExprNode,
+        lengthName: *
+        Str,
+        labels: *
+        List<AstXmlNode>,
+        pos: SourcePos,
+        dispatch: Bool
+    ): ExprNode {
         var cond: ExprNode = this.whenLabelCondition(subject, lengthName, labels[0], pos, dispatch)
         var i: Int = 1
         while (i < labels.size()) {
@@ -1376,7 +1407,16 @@ data class Parser(
     // One label's test: `<subject> == <label>`, guarded when the lowering is on. A label whose
     // first byte has no printable spelling keeps the plain comparison, and a missing guard only
     // costs the `memcmp` it would have saved - so this is always safe, label by label.
-    fun whenLabelCondition(subject: *ExprNode, lengthName: *Str, label: *AstXmlNode, pos: SourcePos, dispatch: Bool): ExprNode {
+    fun whenLabelCondition(
+        subject: *
+        ExprNode,
+        lengthName: *
+        Str,
+        label: *
+        AstXmlNode,
+        pos: SourcePos,
+        dispatch: Bool
+    ): ExprNode {
         val equals: ExprNode = this.binaryExprAt(
             "==", subject, ExprNode(*label, pos.line, pos.column), pos
         )
@@ -1400,7 +1440,10 @@ data class Parser(
             test = this.binaryExprAt(
                 "&&", test,
                 this.binaryExprAt(
-                    "==", this.receiverIndexAt(subject, this.intLiteralAt(0, pos), pos), this.charLiteralAt(ch, pos), pos
+                    "==",
+                    this.receiverIndexAt(subject, this.intLiteralAt(0, pos), pos),
+                    this.charLiteralAt(ch, pos),
+                    pos
                 ),
                 pos
             )
@@ -1438,33 +1481,22 @@ data class Parser(
     }
 
     // `when` (specs/functions.md): desugared here to the `if`/`else` chain it means, so
-    // nothing downstream knows what a `when` is.
+    // nothing downstream knows what a `when` is. The subject is bound once in a template, so it
+    // is evaluated once; arms do not fall through, so a `break`/`continue` in one is the
+    // enclosing loop's. A **place** subject skips the template entirely (`whenSubjectIsPlace`):
+    // reading it again per test is free and cannot change.
     //
-    //   when (kind) { A, B -> { body1 }; C -> { body2 }; else -> { body3 } }
-    //   ->
-    //   var _sm_when1 = kind
-    //   if (_sm_when1 == A || _sm_when1 == B) { body1 }
-    //   else if (_sm_when1 == C) { body2 }
-    //   else { body3 }
-    //
-    // The template exists so the subject is evaluated once; arms do not fall through, so a
-    // `break`/`continue` in one is the enclosing loop's. A **place** subject skips the template
-    // entirely (`whenSubjectIsPlace`): reading it again per test is free and cannot change.
-    //
-    // When *every* arm's labels are string literals - and `--when-dispatch` is on, which it is
-    // by default - the chain also binds a **view** of the subject (`_sm_when1_v`, `spanOfStr`,
-    // cppsrc/rtl/StrView.kt) and its length in a template (`_sm_when1_n`), and each label's test
-    // compares the view and is guarded by the length (`whenLabelCondition`). The view is what
-    // keeps the subject from being copied per label: `subject == "..."` binds the subject to a
-    // `Str` temporary for *every* literal - a heap copy, for a text longer than the inline
-    // buffer - while a view of it is a pointer and a length. A subject that already is a
-    // `StrView` views itself (the same `spanOfStr`, whose `StrView` overload is the identity,
-    // cppsrc/rtl/_res.md), so the desugar never has to know which of the two it got. The arms,
-    // their order, their bodies and the `else` are untouched; only the tests got cheaper, so
-    // the rewrite cannot change which arm matches.
+    // When *every* arm's labels are string literals - and `--when-dispatch` is on, by default -
+    // the chain also binds a **view** of the subject (`_sm_when1_v`, `spanOfStr`,
+    // cppsrc/rtl/StrView.kt) and its length (`_sm_when1_n`), and each label's test compares the
+    // view, guarded by the length (`whenLabelCondition`). The view keeps the subject from being
+    // copied per label, while a subject that already is a `StrView` views itself (the same
+    // `spanOfStr`, whose `StrView` overload is the identity, cppsrc/rtl/_res.md), so the desugar
+    // never has to know which of the two it got. The arms, their order and the `else` are
+    // untouched, so the rewrite cannot change which arm matches.
     fun parseWhen(out: *List<AstXmlNode>): Bool {
         val pos: SourcePos = this.peek(0).pos
-        this.advance() // when
+        this.advance()
         if (!this.expectText("(")) {
             return false
         }
@@ -1568,11 +1600,7 @@ data class Parser(
         }
         val dispatch: Bool = whenDispatch() && literals && armLabels.size() > 0
         if (dispatch) {
-            // The tests read a *view* over the subject (`_sm_when<n>_v`), never the subject
-            // itself: a `Str` subject would be copied into a `Str` temporary for every label
-            // (a heap copy, for a text longer than the inline buffer), while a view of it
-            // compares in place - and a subject that is already a `StrView` views itself, so
-            // the same desugar serves both and never has to know which one it got.
+            // The tests compare a *view* over the subject, not the subject (see the header).
             subjectExpr = this.nameExprAt(viewName, pos)
         }
 
@@ -1603,9 +1631,7 @@ data class Parser(
             out.append(this.varDeclNode(subjectName, true, this.emptyNode(), subject, pos))
         }
         if (dispatch) {
-            // The view the tests compare against, taken once from the subject
-            // (`spanOfStr`, cppsrc/rtl/StrView.kt): a borrowed view of a `Str`, the identity of
-            // a `StrView`, chosen by C++ overload resolution.
+            // The view, taken once from the subject (`spanOfStr`, cppsrc/rtl/StrView.kt).
             out.append(
                 this.varDeclNode(viewName, true, this.emptyNode(), this.freeCallAt("spanOfStr", base, pos), pos)
             )
@@ -1631,7 +1657,7 @@ data class Parser(
 
     fun parseReturn(): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
-        this.advance() // return
+        this.advance()
         var value: ExprNode = this.emptyExpr()
         if (!this.atStmtEnd()) {
             value = this.parseExpr(0)
@@ -1651,7 +1677,7 @@ data class Parser(
     // the state-machine pass replaces.
     fun parseYield(): AstXmlNode {
         val pos: SourcePos = this.peek(0).pos
-        this.advance() // yield
+        this.advance()
         val value: ExprNode = this.parseExpr(0)
         if (this.failed) {
             return this.emptyNode()
@@ -1824,7 +1850,7 @@ data class Parser(
     // `nextTemplateId` counter, so nested loops never collide and two runs agree.
     fun parseFor(out: *List<AstXmlNode>): Bool {
         val pos: SourcePos = this.peek(0).pos
-        this.advance() // for
+        this.advance()
         if (!this.expectText("(")) {
             return false
         }
@@ -2132,7 +2158,7 @@ data class Parser(
         if (text.size() > 0 && text[0] == '`') {
             return litRawString(text)
         }
-        return *text
+        return * text
     }
 
     fun parsePrimary(): ExprNode {
@@ -2204,8 +2230,8 @@ data class Parser(
         if (this.checkKind(TokenKind.Identifier)) {
             val name: Str = this.peek(0).text
             if (name == "copy" && this.peek(1).text == "(") {
-                this.advance() // copy
-                this.advance() // (
+                this.advance()
+                this.advance()
                 val inner: ExprNode = this.parseExpr(0)
                 if (this.failed) {
                     return this.emptyExpr()
@@ -2223,7 +2249,7 @@ data class Parser(
                 val savedCursor: Span<Token> = this.cursor
                 val savedFailed: Bool = this.failed
                 val savedError: Str = this.error
-                this.advance() // name
+                this.advance()
                 val typeArgs: List<AstXmlNode> = this.parseGenericArgs()
                 if (!this.failed && (this.checkText(".") || this.checkText("("))) {
                     var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
@@ -2257,7 +2283,7 @@ data class Parser(
             this.cursor = savedCursor
             this.failed = savedFailed
             this.error = savedError
-            this.advance() // (
+            this.advance()
             this.skipNewlines()
             val inner: ExprNode = this.parseExpr(0)
             if (this.failed) {
@@ -2310,8 +2336,8 @@ data class Parser(
             this.fail("expected '->'")
             return this.emptyExpr()
         }
-        this.advance() // )
-        this.advance() // ->
+        this.advance()
+        this.advance()
 
         var body: List<AstXmlNode> = List<AstXmlNode>()
         if (this.checkText("{")) {

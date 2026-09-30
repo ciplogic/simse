@@ -17,6 +17,20 @@ struct MixedPacked {
 };
 SIMSE_PACK_POP
 
+// `Attribute`/`XmlNode` are generated from their declaration (cppsrc/rtl/xml.kt), so a
+// standalone probe mirrors the emitted shape.
+SIMSE_PACK_PUSH
+struct Attribute {
+    Str name;
+    Str value;
+};
+struct XmlNode {
+    Str name;
+    List<Attribute> attributes;
+    Array<XmlNode> Children;
+};
+SIMSE_PACK_POP
+
 int main() {
     std::printf("SmallVector<int,4>          %zu (align %zu)\n", sizeof(SmallVector<int, 4>),
                 alignof(SmallVector<int, 4>));

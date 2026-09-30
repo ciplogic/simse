@@ -1,54 +1,45 @@
 // ReusePure.kt
 //
-// A *pure* call of an unchanged variable answers the same value every time, so one call is
-// enough: a body that views the same string over and over -
-//
-//     spanOfStr(name) == "Int" || spanOfStr(name) == "Int8" || ...
-//
-// the shape `semIsBuiltinType` has - keeps one view and tests every label against it, instead
-// of building a view per test. The reuse is at the IL (impl_specs/linear-il.md): after the
-// expression lowering every operand is a slot, so "the same call" is two instructions naming
-// the same callee and the same argument slot.
+// A *pure* call of an unchanged variable answers the same value every time, so one call is enough: a
+// body that views the same string over and over (`spanOfStr(name) == "Int" || ...`, the shape
+// `semIsBuiltinType` has) keeps one view and tests every label against it. The reuse is at the IL
+// (impl_specs/linear-il.md): after the expression lowering every operand is a slot, so "the same
+// call" is two instructions naming the same callee and the same argument slot.
 //
 // Each restriction is a *refusal* rather than a guess:
 //
-//   - only the callees the emitter called *pure* are reused: the names of the functions
-//     declared `data` (no side effects, the result a function of its arguments), collected
-//     into `pureCallees` (`Codegen.kt`). The view of a string's bytes (`spanOfStr`) is the
-//     one the `when` lowering and the `Str`/literal comparison build (`Parser.kt`); the
-//     length accessors (`lenOf`, `size`, `isEmpty`) and any user `data fun` answer the same
-//     way. A result is only reused when its value is known to be a function of the argument
-//     alone;
-//   - the argument is a frame slot this body never writes (`defCount`) and never hands to a
-//     call that could write it (`escapes`): a raw pointer or a counted reference a callee
-//     receives may be written through, which would change what a *later* view sees (a view is
-//     valid only while its source is unchanged, specs/built-in-types.md). A by-value parameter
-//     a callee cannot write through is safe (`ilReuseArgSafe`);
+//   - only the callees the emitter called *pure* are reused - the `data` functions collected into
+//     `pureCallees` (`Codegen.kt`), such as `spanOfStr`, the length accessors, and any user `data
+//     fun`. A `data` mark is a *promise* the reuse relies on;
+//   - the argument is a frame slot this body never writes (`defCount`) and never hands to a call
+//     that could write it (`escapes`): a raw pointer or a counted reference a callee receives may
+//     be written through, which would change what a *later* view sees (a view is valid only while
+//     its source is unchanged, specs/built-in-types.md). A by-value parameter a callee cannot
+//     write through is safe (`ilReuseArgSafe`);
 //   - the first call of a key must stand in the body's first block - under the hoisted
-//     declarations, before any label or branch. It is the call that stays, so it has to
-//     dominate every use, and the first block is the one position that does; and
-//   - the slot the first call writes must have no writer outside this key's own calls. The
-//     local merge re-uses a slot whose live ranges do not overlap, so a slot carrying this
-//     view may carry another value somewhere else in the body; dropping a call whose result
-//     that other value clobbered would read the wrong view. When the writers are one group of
-//     calls, the value the first one wrote is still in the slot at every use (`_sm_expr1` in
-//     `semIsBuiltinType` is exactly that: nineteen calls, one slot); and
-//   - nothing is reordered. The kept call stays where it was, and the merged-away ones become
-//     reads of it, so no evaluation moves and no side effect changes.
+//     declarations, before any label or branch. It is the call that stays, so it has to dominate
+//     every use, and the first block is the one position that does; and
+//   - the slot the first call writes must have no writer outside this key's own calls. The local
+//     merge re-uses a slot whose live ranges do not overlap, so a slot carrying this view may carry
+//     another value elsewhere in the body; dropping a call whose result that other value clobbered
+//     would read the wrong view. When the writers are one group of calls, the value the first one
+//     wrote is still in the slot at every use (`_sm_expr1` in `semIsBuiltinType` is exactly that:
+//     nineteen calls, one slot); and
+//   - nothing is reordered, so no evaluation moves and no side effect changes.
 //
 // A slot merged into a *different* slot keeps neither its call nor its `Declaration` (nothing
-// assigns it any more, the same cleanup `MergeConcat` does). A group that shares one slot - the
-// common case - drops the calls and keeps the declaration.
+// assigns it any more); a group that shares one slot - the common case - drops the calls and keeps
+// the declaration.
 
 package linear
 
 import common
 
-// The callees whose call may be reused - read the argument, answer the same value for the
-// same argument, write nothing. The names are the emitter's `pureCallees`: every `data`
-// function (`spanOfStr`, `lenOf`, `isEmpty`, a user's `toLen`, ...). A `data` mark is a
-// *promise* - one that writes its receiver would make the reuse wrong - which is why the set
-// is built from explicit marks, never inferred yet.
+// The callees whose call may be reused - read the argument, answer the same value for the same
+// argument, write nothing. The names are the emitter's `pureCallees`: every `data` function
+// (`spanOfStr`, `lenOf`, `isEmpty`, a user's `toLen`, ...). A `data` mark is a *promise* - one that
+// writes its receiver would make the reuse wrong - which is why the set is built from explicit
+// marks, never inferred yet.
 fun ilReuseCall(pure: *Dictionary<Str, Bool>, name: *Str): Bool {
     return pure.has(name)
 }
@@ -308,8 +299,8 @@ fun ilReusePure(il: *IlBody, pure: *Dictionary<Str, Bool>): Bool {
         return false
     }
 
-    // The reads of a slot merged into another become reads of that one; a merged-away call and
-    // the declaration of a slot nothing writes any more both go.
+    // The reads of a slot merged into another become reads of that one; a merged-away call and the
+    // declaration of a slot nothing writes any more both go.
     var ops: List<IlOp> = List<IlOp>()
     var lines: List<Int> = List<Int>()
     i = 0

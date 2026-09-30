@@ -25,7 +25,7 @@
 #include "filestream.hpp"   // FileStream: simse_fileStream_* native ops (prelude)
 #include "functional.hpp"   // Func, Action, AutoDefer
 #include "result.hpp"       // Res<T> (Variant2<T, Str>) and the free ok/err forms
-#include "xml.hpp"          // Attribute, XmlNode (the general tree a program builds)
 // The compiler's AST (`AstXmlNode`, `AstNodeKind`, ...) is *generated*: it is declared in
 // cppsrc/rtl/astxml.kt and the emitter writes its structs and enums (specs/attributes.md's
-// type materialization), so there is no header to include for it any more.
+// type materialization), so there is no header to include for it any more. The language-level
+// `XmlNode`/`Attribute` (cppsrc/rtl/xml.kt) are generated the same way.

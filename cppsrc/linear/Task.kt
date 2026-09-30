@@ -1,19 +1,18 @@
 // Task.kt
 //
-// The `suspend` lowering (impl_specs/async.md, "The machine is push"): a suspending body becomes
-// a *task* - a state machine of fields the loop drives, in place of the stack a synchronous call
-// would use. It mirrors `Yield.kt` (the field collection, the `branch` dispatcher, the resume
-// labels, the label/goto form) and differs at the two points where the surface differs:
+// The `suspend` lowering (impl_specs/async.md, "The machine is push"): a suspending body becomes a
+// *task* - a state machine of fields the loop drives, in place of the stack a synchronous call would
+// use. It mirrors `Yield.kt` (the field collection, the `branch` dispatcher, the resume labels, the
+// label/goto form) and differs at the two points where the surface differs:
 //
 //   * a *suspension* (`val x = f(args)` / `x = f(args)` / `f(args)` / `return f(args)`, with `f`
 //     suspend): create the child task, suspend on it, and read its `result` at the resume label;
 //   * `return v`: store the result and complete the task.
 //
-// There is no fast path: every suspension is a heap task the loop runs, and the caller always
-// steps aside (a `ValueTask`-style shortcut is a future optimization, noted in the runtime). The
-// protocol is expressed with the RTL's free functions (`tasksBranch`, `tasksSuspendAt`,
-// `tasksFinish`, `tasksReleaseHandle`) plus a per-callee pair the emitter generates
-// (`<f>_smNew`, `<f>_smResult`), so nothing here names a task type.
+// There is no fast path: every suspension is a heap task the loop runs, and the caller always steps
+// aside (a `ValueTask`-style shortcut is a future optimization). The protocol uses the RTL's free
+// functions (`tasksBranch`, `tasksSuspendAt`, `tasksFinish`, `tasksReleaseHandle`) plus a per-callee
+// pair the emitter generates (`<f>_smNew`, `<f>_smResult`), so nothing here names a task type.
 
 package linear
 
@@ -39,8 +38,8 @@ data class TskTask(
     var inferred: Dictionary<Str, AstXmlNode>,
     var error: Str
 ) {
-    // The C++ member a field is emitted as, by its source name (the factory fills parameters, the
-    // accessor and `main` read `result`).
+    // The member a field is emitted as (see `TskField`: by id, never the source name), by the
+    // field's source name (the factory fills parameters, the accessor and `main` read `result`).
     fun memberOf(name: Str): Str {
         for (*field in this.fields) {
             if (field.name == name) {
@@ -136,7 +135,6 @@ fun tskIsSuspension(node: *AstXmlNode, asyncNames: *Dictionary<Str, AstXmlNode>)
     return tskIsAsyncName(asyncNames, name)
 }
 
-// A declaration the lowering passes through for one of its own temporaries (`_sm_expr<n>`): the
 data class TskMachinery(
     var decl: *AstXmlNode,
     var returnType: AstXmlNode,
@@ -166,8 +164,7 @@ data class TskMachinery(
         this.fieldOrder.append(name)
     }
 
-    // The C++ member a field is emitted as: the id, never the source name, so a name cannot alias
-    // the runtime's own `Task` members (there is no reserved-name list to keep in step).
+    // The C++ member a field is emitted as: the id, never the source name (see `TskField`).
     fun member(name: Str): Str {
         if (!this.fieldIds.has(name)) {
             return ""
@@ -261,8 +258,7 @@ data class TskMachinery(
                     this.addField(name, *typeNode)
                 }
                 // A slot the extractor made stays a local here; one a suspension *binds* becomes a
-                // field when that statement is lowered, because only then is it sure the value has
-                // to survive the resume label.
+                // field when that statement is lowered.
             }
             this.collectLocals(tskContainerStmts(stmt, AstNodeKind.Body), depth + 1)
             this.collectLocals(tskContainerStmts(stmt, AstNodeKind.Then), depth + 1)
@@ -277,14 +273,12 @@ data class TskMachinery(
         for (*stmt in body) {
             this.statements(stmt, *rewritten)
         }
-        // The lowering's own temporaries (`_sm_expr<n>`) stay locals, and their declarations are
-        // what the body carries. A jump to a resume label crosses the region they would sit in, so
-        // the emitter - which scopes a declaration a jump crosses in a block of its own - would
-        // put them inside a block that the resume label, and every statement after it, escapes.
-        // The C++ it writes then reads a slot that is out of scope (a suspension *before* a loop
-        // showed it: the loop's own condition reuses the slot name). Hoisting them above the
-        // dispatcher keeps them in the body's outermost scope, which the whole lowered body - the
-        // dispatcher's targets included - can reach.
+        // The lowering's own temporaries (`_sm_expr<n>`) stay locals, and their declarations are what
+        // the body carries. A jump to a resume label crosses the region they would sit in, so the
+        // emitter - which scopes a declaration a jump crosses in a block of its own - would put them
+        // inside a block the resume label, and every statement after it, escapes; the C++ then reads
+        // a slot out of scope. Hoisting them above the dispatcher keeps them in the body's outermost
+        // scope, which the whole lowered body - the dispatcher's targets included - can reach.
         var slots: List<AstXmlNode> = List<AstXmlNode>()
         var rest: List<AstXmlNode> = List<AstXmlNode>()
         for (*stmt in rewritten) {

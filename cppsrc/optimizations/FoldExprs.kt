@@ -10,8 +10,8 @@ package optimizations
 import common
 import linear
 
-// A fold rule: one expression in, the node that stands in its place. A rule answers its input
-// unchanged when it folded nothing, a different *kind* when it did (`foldExprsUnder`).
+// A fold rule: one expression in, the node that stands in its place. A rule reports a fold by
+// answering a node of a different *kind* (`foldExprsUnder`).
 typealias FoldRule = (*AstXmlNode) -> AstXmlNode
 
 // ---- literals --------------------------------------------------------------
@@ -137,10 +137,9 @@ data class FoldState(
     var changed: Bool
 )
 
-// Every expression under `node` through every rule, in the order given; answers the node that
-// stands in its place. The rules share one traversal - each is a bottom-up rewrite of the same
-// nodes, so a walk per rule visited every node once per rule (`foldAllRules`). A rule's output is
-// the next rule's input, so a node one rule just folded is offered, folded, to the rest.
+// Every expression under `node` through every rule, in the order given, and the node that stands
+// in its place. The rules share one traversal - each is a bottom-up rewrite of the same nodes, so
+// a rule's output is the next rule's input (`foldAllRules`).
 fun foldExprsUnder(node: *AstXmlNode, rules: *List<FoldRule>, state: *FoldState): AstXmlNode {
     val kind: AstNodeCategory = xmlKind(node)
     // A fold produces a value, so it may not stand in a place: the walk does not enter a `Target`
@@ -201,7 +200,7 @@ fun foldExprsInList(stmts: *List<AstXmlNode>, rules: *List<FoldRule>): Bool {
 
 // The literal folds as one traversal, in the order the passes used to run: a constant global,
 // then integer arithmetic, then a comparison, then `toString` - so each rule sees what the one
-// before it just spelled. One list, because one walk per rule cost four traversals of every body.
+// before it just spelled.
 fun foldAllRules(): List<FoldRule> {
     var rules: List<FoldRule> = List<FoldRule>()
     rules.append(foldGlobalRule)

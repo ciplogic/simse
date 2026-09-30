@@ -10,7 +10,7 @@ package common
 
 // The "absent" sentinel: the schema has no null, so a missing optional child is a
 // role-less, kind-less node.
-fun xmlEmptyNode(): AstXmlNode {
+borrow fun xmlEmptyNode(): AstXmlNode {
     return AstXmlNode(AstNodeKind.None, AstNodeCategory.None, List<AstNodeAttribute>(), Array<AstXmlNode>())
 }
 
@@ -45,7 +45,7 @@ val xmlMissingAttr: Str = ""
 // compiler's most-called helper, and a `Str` return would construct and destroy a string per
 // call. A caller that only reads copies nothing; do not write through the borrow. The pointer
 // `for` is a measured choice - leave it, the cost is the data it walks (specs/memory-model.md).
-fun xmlAttr(node: *AstXmlNode, name: AstNodeAttributeKind): *Str {
+borrow fun xmlAttr(node: *AstXmlNode, name: AstNodeAttributeKind): *Str {
     for (*attr in node.attributes) {
         if (attr.name == name) {
             return * attr.value
@@ -255,7 +255,7 @@ fun xmlIsRawPtrType(typeNode: *AstXmlNode): Bool {
     return xmlAttr(inner, AstNodeAttributeKind.Name) == "Unit"
 }
 
-fun xmlIntAttr(node: *AstXmlNode, name: AstNodeAttributeKind, fallback: Int): Int {
+borrow fun xmlIntAttr(node: *AstXmlNode, name: AstNodeAttributeKind, fallback: Int): Int {
     val parsed: Opt<Int> = xmlAttr(node, name).toInt()
     if (parsed.hasValue()) {
         return parsed.value()
@@ -263,16 +263,16 @@ fun xmlIntAttr(node: *AstXmlNode, name: AstNodeAttributeKind, fallback: Int): In
     return fallback
 }
 
-fun xmlLine(node: *AstXmlNode): Int {
+borrow fun xmlLine(node: *AstXmlNode): Int {
     return xmlIntAttr(node, AstNodeAttributeKind.Line, 0)
 }
 
-fun xmlColumn(node: *AstXmlNode): Int {
+borrow fun xmlColumn(node: *AstXmlNode): Int {
     return xmlIntAttr(node, AstNodeAttributeKind.Column, 0)
 }
 
 // The first child whose role is `role`, or an empty node.
-fun xmlChild(node: *AstXmlNode, role: AstNodeKind): AstXmlNode {
+borrow fun xmlChild(node: *AstXmlNode, role: AstNodeKind): AstXmlNode {
     // The pointer `for` is deliberate: the value form binds a copy per element, and
     // `Children` is ref-counted, so it churns counts in the compiler's hottest helper.
     for (*child in node.Children) {
@@ -295,7 +295,7 @@ val xmlMissingNode: AstXmlNode = AstXmlNode(
 // The pointer is into the node's own children block: it is valid only while that block is
 // the node's - `xmlAddChild`/`xmlAddChildren` replace it - and a write through it reaches
 // the tree. Read it; do not hold it across a write to the node.
-fun xmlChildPtr(node: *AstXmlNode, role: AstNodeKind): *AstXmlNode {
+borrow fun xmlChildPtr(node: *AstXmlNode, role: AstNodeKind): *AstXmlNode {
     for (*child in node.Children) {
         if (child.name == role) {
             return child
@@ -305,7 +305,7 @@ fun xmlChildPtr(node: *AstXmlNode, role: AstNodeKind): *AstXmlNode {
 }
 
 // Every child whose role is `role`, in order.
-fun xmlChildren(node: *AstXmlNode, role: AstNodeKind): List<AstXmlNode> {
+borrow fun xmlChildren(node: *AstXmlNode, role: AstNodeKind): List<AstXmlNode> {
     var out: List<AstXmlNode> = List<AstXmlNode>()
     for (*child in node.Children) {
         if (child.name == role) {
@@ -315,7 +315,7 @@ fun xmlChildren(node: *AstXmlNode, role: AstNodeKind): List<AstXmlNode> {
     return out
 }
 
-fun xmlCount(node: *AstXmlNode, role: AstNodeKind): Int {
+borrow fun xmlCount(node: *AstXmlNode, role: AstNodeKind): Int {
     var count: Int = 0
     for (*child in node.Children) {
         if (child.name == role) {
@@ -325,7 +325,7 @@ fun xmlCount(node: *AstXmlNode, role: AstNodeKind): Int {
     return count
 }
 
-fun xmlHasChild(node: *AstXmlNode, role: AstNodeKind): Bool {
+borrow fun xmlHasChild(node: *AstXmlNode, role: AstNodeKind): Bool {
     for (*child in node.Children) {
         if (child.name == role) {
             return true
@@ -335,7 +335,7 @@ fun xmlHasChild(node: *AstXmlNode, role: AstNodeKind): Bool {
 }
 
 // The `name` attributes of a declaration's `TypeParam` children, in order.
-fun xmlTypeParamNames(node: *AstXmlNode): List<Str> {
+borrow fun xmlTypeParamNames(node: *AstXmlNode): List<Str> {
     val params: List<AstXmlNode> = xmlChildren(node, AstNodeKind.TypeParam)
     var names: List<Str> = List<Str>()
     for (*param in params) {
@@ -352,7 +352,7 @@ fun xmlIsDecl(node: *AstXmlNode): Bool {
 
 // The declaration children of a Module (imports excluded), in source order. `Var` is a
 // file-level `var`/`val`: static storage (specs/statics.md).
-fun xmlDecls(module: *AstXmlNode): List<AstXmlNode> {
+borrow fun xmlDecls(module: *AstXmlNode): List<AstXmlNode> {
     var out: List<AstXmlNode> = List<AstXmlNode>()
     for (*child in module.Children) {
         if (xmlIsDecl(child)) {
@@ -373,7 +373,7 @@ fun xmlHasImports(module: *AstXmlNode): Bool {
 
 // The comma-joined `params` attribute of a lambda, split back into names. An empty
 // attribute means no parameters, not one empty name.
-fun xmlLambdaParams(expr: *AstXmlNode): List<Str> {
+borrow fun xmlLambdaParams(expr: *AstXmlNode): List<Str> {
     val raw: Str = xmlAttr(expr, AstNodeAttributeKind.Params)
     if (raw == "") {
         return List<Str>()

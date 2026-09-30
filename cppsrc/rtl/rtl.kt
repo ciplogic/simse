@@ -8,7 +8,7 @@ package rtl
 
 // `for (x in c)` is `for (x in c.iter())`: anything with an `iter` in scope is iterable,
 // and a container walks itself in order (impl_specs/for.md).
-fun List<T>.iter<T>(): ..T {
+borrow fun List<T>.iter<T>(): ..T {
     var i: Int = 0
     val len = this.size();
     while (i < len) {
@@ -17,11 +17,10 @@ fun List<T>.iter<T>(): ..T {
     }
 }
 
-// The same walk over the fixed-length sequence and borrowed storage, counted by the
-// operation each provides (`count()` for `Array`, `size()` for `Span`). The count is read
-// once, before the loop: the `while` lives in the machine's `advance()`, so a count in the
+// The same walk over `Array`/`Span` (counted by `count()`/`size()`). The count is read once,
+// before the loop: the `while` lives in the machine's `advance()`, so a count in the
 // condition would be a call on every resumption.
-fun Array<T>.iter<T>(): ..T {
+borrow fun Array<T>.iter<T>(): ..T {
     var i: Int = 0
     val len = this.count();
     while (i < len) {
@@ -30,7 +29,7 @@ fun Array<T>.iter<T>(): ..T {
     }
 }
 
-fun Span<T>.iter<T>(): ..T {
+borrow fun Span<T>.iter<T>(): ..T {
     var i: Int = 0
     val len = this.size();
     while (i < len) {
@@ -39,10 +38,9 @@ fun Span<T>.iter<T>(): ..T {
     }
 }
 
-// The pointer form, `for (*x in c)`: the same walk, handing out each element's *place*
-// (`*this[i]`) instead of a copy, so a mutation through the loop variable reaches the
-// element (impl_specs/for.md).
-fun List<T>.iterPtr<T>(): ..*T {
+// The pointer form, `for (*x in c)`: the same walk handing out each element's *place*
+// (`*this[i]`), so a mutation through the loop variable reaches the element (impl_specs/for.md).
+borrow fun List<T>.iterPtr<T>(): ..*T {
     var i: Int = 0
     val len = this.size();
     while (i < len) {
@@ -51,7 +49,7 @@ fun List<T>.iterPtr<T>(): ..*T {
     }
 }
 
-fun Array<T>.iterPtr<T>(): ..*T {
+borrow fun Array<T>.iterPtr<T>(): ..*T {
     var i: Int = 0
     val len = this.count();
     while (i < len) {
@@ -60,7 +58,7 @@ fun Array<T>.iterPtr<T>(): ..*T {
     }
 }
 
-fun Span<T>.iterPtr<T>(): ..*T {
+borrow fun Span<T>.iterPtr<T>(): ..*T {
     var i: Int = 0
     val len = this.size();
     while (i < len) {
@@ -79,7 +77,7 @@ fun append<T>(this: List<T>, value: T): Unit
 // emitted. The `*List<T>` parameter is what makes the trailing arguments pack, and
 // `List<T>(n, value)` is the count construction rather than a literal (specs/containers.md).
 @SmGen("res", "listops", "simse_listOf")
-fun listOf<T>(values: *List<T>): List<T>
+borrow fun listOf<T>(values: *List<T>): List<T>
 
 @SmGen("res", "listops", "simse_list_removeAt")
 fun removeAt<T>(this: List<T>, index: Int): Unit
@@ -88,19 +86,18 @@ fun removeAt<T>(this: List<T>, index: Int): Unit
 fun removeRange<T>(this: List<T>, start: Int, end: Int): Unit
 
 @SmGen("res", "dictops", "simse_list_contains")
-fun contains<T>(this: List<T>, value: T): Bool
+borrow fun contains<T>(this: List<T>, value: T): Bool
 
 // In-place sort. The comparator takes its two elements *by pointer* (`(*T, *T) -> Bool`):
-// `std::sort` hands each element to it as a `T&`, and a pointer parameter reads the element
-// where it lives - a by-value `(T, T) -> Bool` comparator copies both elements on every
-// comparison, which for a `Str` is a heap copy per compare. `compareLessThan` below is the
-// `Str` ordering to pass for the common case.
+// `std::sort` hands each element as a `T&`, so a pointer reads it where it lives - a by-value
+// comparator copies both elements per comparison, a heap copy per compare for a `Str`.
+// `compareLessThan` below is the `Str` ordering for the common case.
 @SmGen("res", "dictops", "simse_list_sort")
 fun sort<T>(this: List<T>, less: (*T, *T) -> Bool): Unit
 
 // The `Str` ordering for `sort` (`specs/containers.md`): the two strings compared as *views*,
 // in place, so `keys.sort(compareLessThan)` copies nothing per comparison.
-fun compareLessThan(left: *Str, right: *Str): Bool {
+borrow fun compareLessThan(left: *Str, right: *Str): Bool {
     return spanOfStr(left) < spanOfStr(right)
 }
 
@@ -114,10 +111,9 @@ fun arrayEmpty<T>(): Array<T>
 data fun count<T>(this: Array<T>): Int
 
 // `lenOf`: the read-only length operation the language cannot otherwise spell for a `Str`
-// or a `List` (`SmallVector`-backed). `data` is what tells the optimizer that a repeated
-// call on an unchanged value is one call, with no name whitelist anywhere
-// (`linear/ReusePure.kt`). The receiver is borrowed: `simse_lenOf` takes it by reference
-// (cppsrc/rtl/_res.md, the `lenops` section).
+// or a `List` (`SmallVector`-backed). `data` tells the optimizer a repeated call on an
+// unchanged value is one call, with no name whitelist anywhere (`linear/ReusePure.kt`). The
+// receiver is borrowed: `simse_lenOf` takes it by reference (cppsrc/rtl/_res.md, `lenops`).
 @SmGen("res", "lenops", "simse_lenOf")
 data fun size(this: Str): Int
 
@@ -125,10 +121,24 @@ data fun size(this: Str): Int
 data fun size<T>(this: List<T>): Int
 
 @SmGen("res", "listops", "simse_list_toArray")
-fun toArray<T>(this: List<T>): Array<T>
+borrow fun toArray<T>(this: List<T>): Array<T>
 
 @SmGen("res", "listops", "simse_array_toList")
 fun toList<T>(this: Array<T>): List<T>
+
+// `Opt<T>.hasValue()`: the `Variant2` tag test (specs/core-types.md), read only - so a body that
+// tests an optional and reads its parameter is borrow-clean, which is why it is declared instead of
+// left as a built-in member with nothing to mark (cppsrc/rtl/_res.md's `optops`).
+//
+// `Res<T>.isOk()` and `value()` stay built-ins, for two reasons this declaration would hit. `Res`
+// carries an `unInit`, and a receiver must be spelled `Res<T>` to unify with the receiver in
+// `findNativeExt` - while `*Res<T>`/`&Res<T>` do not - so the checker refuses the declaration ("a
+// value copy would run its destructor too", though a value receiver is emitted as `Res* self` and
+// copies nothing). And `value()` answers the type argument, which the emitter writes through
+// without substituting `memberCallReturn`'s return type, so a `T`-returning declaration would emit
+// `T` where a concrete type belongs.
+@SmGen("res", "optops", "simse_opt_hasValue")
+borrow fun hasValue<T>(this: Opt<T>): Bool
 
 // `Dictionary<K, V>` is a value type; keys and values come back in its iteration order,
 // which is unspecified - sort for determinism.
@@ -140,13 +150,13 @@ fun dictionaryOf<K, V>(): Dictionary<K, V>
 // `remove` or `clear`. `get` copies the value out, and `has` is `getPtr` with the pointer
 // tested.
 @SmGen("res", "dictops", "simse_dict_getPtr")
-fun getPtr<K, V>(this: Dictionary<K, V>, key: K): *V
+borrow fun getPtr<K, V>(this: Dictionary<K, V>, key: K): *V
 
 @SmGen("res", "dictops", "simse_dict_get")
-fun get<K, V>(this: Dictionary<K, V>, key: K): Opt<V>
+borrow fun get<K, V>(this: Dictionary<K, V>, key: K): Opt<V>
 
 @SmGen("res", "dictops", "simse_dict_has")
-fun has<K, V>(this: Dictionary<K, V>, key: K): Bool
+borrow fun has<K, V>(this: Dictionary<K, V>, key: K): Bool
 
 @SmGen("res", "dictops", "simse_dict_insert")
 fun insert<K, V>(this: Dictionary<K, V>, key: K, value: V): Unit
@@ -158,10 +168,10 @@ fun remove<K, V>(this: Dictionary<K, V>, key: K): Unit
 data fun size<K, V>(this: Dictionary<K, V>): Int
 
 @SmGen("res", "dictops", "simse_dict_keys")
-fun keys<K, V>(this: Dictionary<K, V>): List<K>
+borrow fun keys<K, V>(this: Dictionary<K, V>): List<K>
 
 @SmGen("res", "dictops", "simse_dict_values")
-fun values<K, V>(this: Dictionary<K, V>): List<V>
+borrow fun values<K, V>(this: Dictionary<K, V>): List<V>
 
 @SmGen("res", "dictops", "simse_dict_clear")
 fun clear<K, V>(this: Dictionary<K, V>): Unit
@@ -182,7 +192,7 @@ fun appendStrPtr(this: Str, value: *Str): Unit
 // The shape must have one `|` per item and the items must all be present; a call whose
 // counts do not line up (or that passes no list) gets the format back, unfilled.
 // `fmt` is a `StrView`, so a literal format is taken as it stands, without a copy.
-fun fmtStr(fmt: StrView, items: *List<Str>): Str {
+borrow fun fmtStr(fmt: StrView, items: *List<Str>): Str {
     if (items == null) {
         return fmt
     }
@@ -234,17 +244,17 @@ fun reserve(this: Str, count: Int): Unit
 
 // `find` returns -1 when `sub` is absent (the language's spelling of npos).
 @SmGen("res", "strops", "simse_str_find")
-fun find(this: Str, sub: Str): Int
+borrow fun find(this: Str, sub: Str): Int
 
 @SmGen("res", "strops", "simse_str_find")
-fun indexOf(this: Str, sub: Str): Int
+borrow fun indexOf(this: Str, sub: Str): Int
 
 @SmGen("res", "strops", "simse_str_lastIndexOf")
-fun lastIndexOf(this: Str, sub: Str): Int
+borrow fun lastIndexOf(this: Str, sub: Str): Int
 
 // `Str.substr(start, len)` clamps `start` to [0, size]; a `len` of -1 (or one running
 // past the end) takes the rest. One block copy (`setBytes`), not a per-byte append.
-fun Str.substr(start: Int, len: Int): Str {
+borrow fun Str.substr(start: Int, len: Int): Str {
     var begin = start
     if (begin < 0) {
         begin = 0
@@ -264,10 +274,10 @@ fun Str.substr(start: Int, len: Int): Str {
 }
 
 @SmGen("res", "strops", "simse_str_charAt")
-fun charAt(this: Str, index: Int): Char
+borrow fun charAt(this: Str, index: Int): Char
 
 // A byte comparison, prefix first: a longer prefix cannot match.
-fun Str.startsWith(prefix: Str): Bool {
+borrow fun Str.startsWith(prefix: Str): Bool {
     val count = prefix.size()
     if (count > this.size()) {
         return false
@@ -282,7 +292,7 @@ fun Str.startsWith(prefix: Str): Bool {
     return true
 }
 
-fun Str.endsWith(suffix: Str): Bool {
+borrow fun Str.endsWith(suffix: Str): Bool {
     val count = suffix.size()
     val len = this.size()
     if (count > len) {
@@ -299,10 +309,10 @@ fun Str.endsWith(suffix: Str): Bool {
 }
 
 @SmGen("res", "strops", "simse_str_replace")
-fun replace(this: Str, from: Str, to: Str): Str
+borrow fun replace(this: Str, from: Str, to: Str): Str
 
 // Leading and trailing space bytes stripped, one block copy of what is left.
-fun Str.trim(): Str {
+borrow fun Str.trim(): Str {
     var begin = 0
     var end = this.size()
     while (begin < end) {
@@ -327,13 +337,13 @@ fun Str.trim(): Str {
 }
 
 @SmGen("res", "strops", "simse_str_split")
-fun split(this: Str, separator: Str): List<Str>
+borrow fun split(this: Str, separator: Str): List<Str>
 
 @SmGen("res", "strops", "simse_str_split")
-fun split(this: Str, separator: Char): List<Str>
+borrow fun split(this: Str, separator: Char): List<Str>
 
 // ASCII/byte case folding (the string type is a byte string).
-fun Str.toUpper(): Str {
+borrow fun Str.toUpper(): Str {
     var out: Str
     out.reserve(this.size())
     var i = 0
@@ -348,7 +358,7 @@ fun Str.toUpper(): Str {
     return out
 }
 
-fun Str.toLower(): Str {
+borrow fun Str.toLower(): Str {
     var out: Str
     out.reserve(this.size())
     var i = 0
@@ -368,57 +378,56 @@ fun Str.toLower(): Str {
 // (`Str.isEmpty`), which is what marks it an extension resolved at a member call, where a
 // body-less declaration writes it as the explicit first parameter (`this: Str`).
 //
-// `data`: a pure function, so a repeated `s.isEmpty()` on an unchanged `s` is one call
-// (`linear/ReusePure.kt`).
+// `data`: a pure function (see `size` above).
 data fun Str.isEmpty(): Bool {
     return this.size() == 0
 }
 
 // Whole-string parses; a malformed string yields `Opt.none()`, not an exception.
 @SmGen("res", "strops", "simse_str_toInt")
-fun toInt(this: Str): Opt<Int>
+borrow fun toInt(this: Str): Opt<Int>
 
 @SmGen("res", "strops", "simse_str_toFloat")
-fun toFloat(this: Str): Opt<Float64>
+borrow fun toFloat(this: Str): Opt<Float64>
 
 @SmGen("res", "strops", "simse_char_isDigit")
-fun isDigit(this: Char): Bool
+borrow fun isDigit(this: Char): Bool
 
 @SmGen("res", "strops", "simse_char_isAlpha")
-fun isAlpha(this: Char): Bool
+borrow fun isAlpha(this: Char): Bool
 
 @SmGen("res", "strops", "simse_char_isAlphaOrDigit")
-fun isAlphaOrDigit(this: Char): Bool
+borrow fun isAlphaOrDigit(this: Char): Bool
 
 @SmGen("res", "strops", "simse_char_isSpace")
-fun isSpace(this: Char): Bool
+borrow fun isSpace(this: Char): Bool
 
 @SmGen("res", "listops", "simse_int_toString")
-fun toString(this: Int): Str
+borrow fun toString(this: Int): Str
 
 @SmGen("res", "strops", "simse_num_toString")
-fun toString(this: Int8): Str
+borrow fun toString(this: Int8): Str
 
 @SmGen("res", "strops", "simse_num_toString")
-fun toString(this: Int16): Str
+borrow fun toString(this: Int16): Str
 
 @SmGen("res", "strops", "simse_num_toString")
-fun toString(this: Int32): Str
+borrow fun toString(this: Int32): Str
 
 @SmGen("res", "strops", "simse_num_toString")
-fun toString(this: Int64): Str
+borrow fun toString(this: Int64): Str
 
 @SmGen("res", "strops", "simse_num_toString")
-fun toString(this: Float32): Str
+borrow fun toString(this: Float32): Str
 
 @SmGen("res", "strops", "simse_num_toString")
-fun toString(this: Float64): Str
+borrow fun toString(this: Float64): Str
 
 @SmGen("res", "strops", "simse_char_toString")
-fun toString(this: Char): Str
+borrow fun toString(this: Char): Str
 
 @SmGen("res", "strops", "simse_bool_toString")
-fun toString(this: Bool): Str
+borrow fun toString(this: Bool): Str
 
 // The smaller/larger of two values: `<` on the type is all the body needs.
 fun min<T>(a: T, b: T): T {

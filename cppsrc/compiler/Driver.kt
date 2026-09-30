@@ -132,7 +132,7 @@ fun driverGatherFiles(
         c = c + 1
     }
     // Canonical keys are unique after dedup, so this sort is total and the order deterministic.
-    chosen.sort((left: *Str, right: *Str) -> pathCanonical(left) < pathCanonical(right))
+    chosen.sort((left: * Str, right: *Str) -> pathCanonical(left) < pathCanonical(right))
     return chosen
 }
 
@@ -180,11 +180,10 @@ fun driverDedupRoots(
 
 // Expands one root into the module roots to scan: the manifest's modules, or the root itself
 // when it names none. `isTree` says a `--root` is scanned whole; a manifest's `module:` entries
-// are *modules* (scanned without their `generators/`). A module's `sourcegen: true` no longer
-// blocks a compilation: the compiler carries the built-in generators, so a module that ships
-// them is usable, and a declaration whose generator the compiler does not have is named at
-// emission (`unknown source generator`). Staging and building a compiler with a module's
-// generators is still the deferred step (`specs/simse-md.md`).
+// are *modules* (scanned without their `generators/`). `sourcegen: true` no longer blocks a
+// compilation - the compiler carries the built-in generators - and a generator the compiler lacks
+// is named at emission (`unknown source generator`); staging a compiler with a module's generators
+// is still the deferred step (`specs/simse-md.md`).
 fun driverExpandRoot(root: *Str, isTree: Bool, out: *List<Str>, outTree: *List<Bool>): Res<Str> {
     val file: Str = manifestFile(root)
     if (!pathExists(file)) {
@@ -274,6 +273,18 @@ fun main(args: List<Str>): Int {
                 ilSetNoConcat(true)
             }
 
+            // Auto-borrow off (cppsrc/parser/BorrowParams.kt, impl_specs/escape-analysis.md):
+            // the analysis still runs, the declaration rewrite does not, so the emitted C++ is
+            // exactly what the author wrote. The escape hatch if a borrow is ever wrong.
+            "--no-borrow" -> {
+                bpSetNoBorrow(true)
+            }
+
+            // The auto-borrow decision for every candidate, on stderr.
+            "--showBorrow" -> {
+                bpSetShow(true)
+            }
+
             // The `when`-over-strings lowering (cppsrc/parser/Parser.kt): off for the A/B,
             // and `--when-first-char` to add the first-byte guard to a longer literal.
             "--no-when-dispatch" -> {
@@ -314,7 +325,7 @@ fun main(args: List<Str>): Int {
             }
 
             "-h", "--help" -> {
-                println("usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module <dir>]... [--no-concat] [--no-when-dispatch] [--when-first-char] [--when-copy-subject] [--showLinearRepresentation] [--showAsync] [--profile] [--profile-file <path>] [--profile-nanos]")
+                println("usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module <dir>]... [--no-concat] [--no-borrow] [--no-when-dispatch] [--when-first-char] [--when-copy-subject] [--showLinearRepresentation] [--showBorrow] [--showAsync] [--profile] [--profile-file <path>] [--profile-nanos]")
                 return 0
             }
 
@@ -358,8 +369,6 @@ fun main(args: List<Str>): Int {
         }
         r = r + 1
     }
-    // The same module named more than once is one module (a `--root` and a `--module` of the same
-    // directory, or a duplicate `--module`): the first spelling wins, compared by canonical path.
     var dedupedRoots: List<Str> = List<Str>()
     var dedupedTrees: List<Bool> = List<Bool>()
     driverDedupRoots(moduleRoots, moduleTrees, *dedupedRoots, *dedupedTrees)
@@ -521,6 +530,13 @@ fun main(args: List<Str>): Int {
     // argument - the checker, the lowering, the emitter and the call sites all see the borrowed
     // declaration, and nothing downstream knows the optimization exists.
     modules = bpBorrowParams(preludeModules, modules)
+    if (bpShow()) {
+        // Bound first: a `for` over a temporary borrows a pointer to it (`guide4ai.md`).
+        val borrowLines: List<Str> = bpReportLines()
+        for (*borrowLine in borrowLines) {
+            eprintln(*borrowLine)
+        }
+    }
 
     // Compilation-wide name/type resolution over the prelude and every module.
     var semaInputs: List<SemaInput> = List<SemaInput>()

@@ -196,3 +196,8 @@ result is bottom-up purity, so `tan` needs no mark - and the optimizer's input s
 promise and becomes a proof. `pureCallees` is then not a list at all: it is the fixpoint's first
 iteration, and the language does not ask an author to remember a mark for a function the compiler
 can see through anyway.
+
+The borrow pass already runs this shape of fixpoint for the *weaker* fact it needs
+(`bpInferReads`, `impl_specs/escape-analysis.md`): "writes nothing" is enough to hand a pointer,
+while folding a call additionally needs the result to be identity-free and the body to read no
+file-level `var`, which is why `pureCallees` is still the `data` marks.

@@ -28,6 +28,27 @@ fun impureTwice(s: Str): Int {
     return s.bump() + s.bump()
 }
 
+// `sum` is not marked `data` either, but its body writes nothing and calls only borrow-clean
+// names, so the fixpoint (`impl_specs/escape-analysis.md`) proves it and this call does not make
+// the parameter escape: `p` is borrowed. Before the fixpoint the unmarked call kept the copy.
+fun viaSum(p: Point): Int {
+    return sum(p) + 1
+}
+
+// `borrow` is the author's word for a body the fixpoint *cannot* prove: this one builds a local
+// string with `appendStr` (a write, so the proof stops there), but it only reads `p`. The mark is
+// about the *caller's* side - it does not borrow `label`'s own parameter (`label` keeps its copy).
+borrow fun label(p: Point): Str {
+    var out: Str = "p="
+    out.appendStr(p.x.toString())
+    return out
+}
+
+// Calls `label`, trusted by its mark, so `p` is borrowed through the call.
+fun viaLabel(p: Point): Str {
+    return label(p)
+}
+
 // The language's own length accessors are `data` declarations now (`lenOf`, cppsrc/rtl/rtl.kt),
 // not a name the optimizer lists: two `size()` calls on one unchanged value fold to one
 // `simse_lenOf`, and a `List` counts through the same operation as a `Str`.
@@ -37,7 +58,8 @@ fun lenTwice(s: Str, xs: List<Int>): Int {
 
 // Auto-borrow (impl_specs/escape-analysis.md) trusts the same mark: a parameter of a heavy value
 // type a body only *reads* becomes a `*T`, so the call stops copying the argument. A body that
-// calls anything not marked pure borrows nothing ("unsure means it escapes").
+// calls anything the fixpoint cannot prove borrow-clean borrows nothing ("unsure means it
+// escapes").
 
 data class Point(var x: Int, var y: Int)
 
@@ -71,6 +93,8 @@ fun main(args: List<Str>): Int {
 
     val p: Point = Point(1, 2)
     println(sum(p))
+    println(viaSum(p))
+    println(viaLabel(p))
     val w: Str = "world"
     println(width(w))
     println(bumpPoint(p))

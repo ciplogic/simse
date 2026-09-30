@@ -82,6 +82,12 @@ bun tools/stress.js --filter modules --jobs 4
 ./simse.exe --root stress/concat/src -o fused.cpp
 ./simse.exe --root stress/concat/src -o unfused.cpp --no-concat
 
+# the auto-borrow rewrite off (cppsrc/parser/BorrowParams.kt, impl_specs/escape-analysis.md): the
+# analysis still runs, the emitted C++ is what the author wrote - the escape hatch if a borrow is
+# wrong - and the per-candidate decision, `borrow+`/`borrow-`, on stderr (a debug view).
+./simse.exe --root cppsrc -o unborrowed.cpp --no-borrow
+./simse.exe --root cppsrc -o a.cpp --showBorrow 2> borrow.txt
+
 # the other A/B switch: the `when`-over-strings lowering (cppsrc/parser/Parser.kt) is on by
 # default; --when-first-char adds its first-byte guard to a longer literal (measured: no gain,
 # which is why it is off), --no-when-dispatch takes the guards off entirely.
@@ -142,7 +148,7 @@ driver's - and `build.bat` can compile it.
 - `cppsrc/rtl/` — the runtime, and the only hand-written C++ besides the bootstrap:
   the headers (`types.hpp`,
   `containers.hpp`, `smstring.hpp`, `strsmallvector.hpp`, `variant2.hpp`,
-  `optional.hpp`, `functional.hpp`, `result.hpp`, `xml.hpp`, `span.hpp`,
+  `optional.hpp`, `functional.hpp`, `result.hpp`, `span.hpp`,
   | `strview.hpp`, `resources.hpp`,
   `filestream.hpp`, `simse.hpp`), the
   `_res.md` file that holds the RTL's *generated* C++ - one section per header it came
@@ -358,8 +364,9 @@ Key design points:
   `emit: always` precisely because a program may name their symbols with a
   declaration of its own. What is left as `@SmGen("cpp", ...)` is the type core -
   `FileStream`'s struct, `Span` (and `StrView`, which *is* `Span<Char>`), the
-  literal interop of `strview.hpp`, `XmlNode`, the `Str`/`List` primitives - whose C++
-  is the RTL headers.
+  literal interop of `strview.hpp`, the `Str`/`List` primitives - whose C++
+  is the RTL headers. (`XmlNode`/`Attribute` left this list: they are *generated*
+  from `cppsrc/rtl/xml.kt`, like the compiler's `AstXmlNode`.)
 - **Prelude**: `cppsrc/rtl/*.kt` is implicitly in scope everywhere; its
   method bodies are NOT emitted (behavior lives in the RTL's C++, which is a header or a
   resource section).
@@ -529,8 +536,8 @@ its trailing arguments, `specs/functions.md`); `Dictionary<K,V>` (`get`/`getPtr`
 `keys`/`values`/`size`/`clear`); `Opt<T>`, `Res<T>` (with `Res<T>.ok/.err`,
 `Opt<T>.some/.none`); `Span<T>` (a borrowed view: pointer + length); `XmlNode`/`Attribute`;
 `data class` (with methods), `enum class` (with `toInt`/`fromInt`), `typealias`
-(incl. generic and function types); functions incl. extension functions and pure (`data`)
-functions (`specs/functions.md`);
+(incl. generic and function types); functions incl. extension functions and pure (`data`) /
+read-only (`borrow`) functions (`specs/functions.md`);
 **attributes** (`@Identifier` + `@SmGen`, one per declaration, methods
 only: `specs/attributes.md`, `impl_specs/generators.md`) with the `cpp` (headers), `res`
 (C++ from a resource), `kt` (generated Simse source), `json` (Simse built in code
@@ -614,8 +621,7 @@ Do these only when asked; roughly prioritized:
    reaches, is one section per platform symbol with `symbol:` reach - not done, because
    it changes that mechanism. The type core (`types.hpp`, `containers.hpp`,
    `smstring.hpp`, `smdictionary.hpp`, `span.hpp`, `strview.hpp`, `strsmallvector.hpp`,
-   `variant2.hpp`, `optional.hpp`, `result.hpp`, `functional.hpp`, `xml.hpp`,
-   `astxml.hpp`) stays: it is
+   `variant2.hpp`, `optional.hpp`, `result.hpp`, `functional.hpp`) stays: it is
    what the amalgamation is compiled *against*, and some of it needs language features
    that do not exist yet (statics in an object, a ref-counted layout). With T82/T83 the
    RTL's C++ is all `res` sections, no prelude declaration spells a keyword any more, and
@@ -821,9 +827,10 @@ Do these only when asked; roughly prioritized:
 - Source-map comments embed the path as given, so absolute and relative runs
   differ — cosmetic, but they are *in* the amalgamation: the bootstrap refresh
   changes with them.
-- **The emitted C++ embeds line numbers as comments**, so adding lines to a source
-  file changes the amalgamation. That is why `cppsrc/simse_bootstrap.cpp` is
-  refreshed (and re-checked) as part of a change rather than at release time.
+- **The emitted C++ carries a source map that names the *file* only**, not the line
+  (`Codegen.kt`'s `sourceComment`), so adding lines or editing comments in a source
+  file does **not** change the amalgamation - only a change to a declaration (or to
+  the code an emitter reads) does.
 - **A jump is not always a sibling of its label.** The expression lowering wraps a
   jump in the block that carries its temporaries, and `break`/`continue` jump out of
   the body they are written in, so any pass that asks "is this label used?" must look

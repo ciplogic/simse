@@ -175,6 +175,30 @@ optimizer lists no name by hand. Purity is about
 *checked* yet - a later pass computes purity from the body (only pure calls, no write through
 a `*T`/`&T` parameter or a file-level `var`) and can then flag an over-claimed `data`.
 
+## Read-only functions (`borrow`)
+
+`borrow` asserts a *weaker* promise than `data`: the function reads its receiver and its
+parameters and never writes through them, so a caller may hand any of them to it by pointer. It
+says nothing about the result or about other effects - a `borrow fun` may write its own locals,
+build and return a fresh value, or print (which is why it is not `data`).
+
+```simse
+@SmGen("res", "strops", "simse_str_charAt")
+borrow fun charAt(this: Str, index: Int): Char
+```
+
+The compiler reads it where a pointer is handed to a callee. The auto-borrow proof
+(`cppsrc/parser/BorrowParams.kt`, `impl_specs/escape-analysis.md`) trusts a call only when the
+callee is *borrow-clean* - it writes nothing observable, so it cannot write through what it is
+given - and a body-less (`@SmGen`) declaration is borrow-clean only by a mark, because its C++ is
+elsewhere. For a declaration *with* a body the same fact is **proved** from the body (it writes
+nothing and calls only borrow-clean names), so a `borrow` there is an override for a body the
+proof cannot see through - a call to an unmarked native that is in fact read-only, say.
+
+Like `data`, the mark is a promise the compiler trusts; unlike `data` it never lets a call be
+folded. The RTL declares its read-only string, container and conversion operations this way
+(`cppsrc/rtl/rtl.kt`).
+
 ## Methods inside classes
 
 Methods written inside a `class` or `data class` body are equivalent to extension

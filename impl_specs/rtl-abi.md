@@ -335,10 +335,9 @@ runtime-alignment task; the shim is not the normative layout.
     alignment (8-byte pointer, `Int`, padding) and **12** under the rule, which is
     what `sizeof` reports now (T74). The hand-written structs that hold *host* types
     keep the host alignment, because those types are 8-aligned and cannot be packed
-    without lying about them: `xml.hpp`'s `XmlNode`/`Attribute` (312/64),
-    `FileStream`'s `std::ifstream`/`std::string`, and the shims built on
-    `std::shared_ptr`/`std::function`. `SIMSE_NO_PACK4` turns the packing off and
-    reverts to host layout.
+    without lying about them: `FileStream`'s `std::ifstream`/`std::string`, and the
+    shims built on `std::shared_ptr`/`std::function`.
+    `SIMSE_NO_PACK4` turns the packing off and reverts to host layout.
 11. **`Dictionary<K, V>` implementation.** Spec: a value dictionary whose hashing,
     buckets and iteration order are deliberately unspecified
     (`specs/dictionary.md`). Shim: `Dictionary<K, V>` is

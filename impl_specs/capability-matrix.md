@@ -2034,8 +2034,9 @@ compiler *did* catch and one it could not:
   parser and the RTL pass around. Measured (`tools/probe_sizes.cpp`, a C++ probe compiled
   through `build.js --cpp`): **16 -> 12** for both, `List<StrView>` 72 -> 56, while `Str`
   stays 32 and the already-packed `AstXmlNode`/`AstNodeAttribute` are untouched at 176/36.
-  `xml.hpp`'s `XmlNode`/`Attribute` (312/64) keep host alignment - they are user-program
-  types and a separate call.
+  `xml.hpp`'s `XmlNode`/`Attribute` (312/64) kept host alignment then - they were user-program
+  types, and generating them was a separate call (taken: see the `XmlNode` entry at the end
+  of this log).
 
   The emitted C++ is **byte-identical** (a layout is not printed), so no golden moved and
   `cppsrc/simse_bootstrap.cpp` did not change; the win is in the compiler's own data and in
@@ -4102,3 +4103,114 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   Verified: `bun build.js --release --no-lto --out cppsrc/simse_bootstrap.cpp` then
   `bun tools/bootstrap.js` - both fixed points byte for byte; `bun tools/stress.js` **53/53**, the
   eleven moved `expected.cpp` goldens regenerated from `stress/.work/<case>/out.cpp`.
+- **Borrowness: the read-only proof looks through bodies (`cppsrc/parser/BorrowParams.kt`).**
+  Auto-borrow trusted a callee only by its `data` mark, so a body that called a *plain* helper
+  borrowed nothing - the one limit the first slice named. It now proves the fact instead:
+  `bpInferReads` runs a name-keyed fixpoint that starts from the `data` marks and adds every
+  declaration whose body writes nothing observable (no field/index/deref store, **and now no
+  file-level `var`**) and whose every call is to a name already in the set. It grows from below, so a
+  recursive cycle is never assumed clean and nothing is added on a guess.
+
+  - **Two flags, not one.** The set is *borrowness* - "the callee cannot write through a parameter" -
+    and it is deliberately separate from the emitter's *purity* flag (`data`/`pureCallees`, the reuse
+    pass's input). Borrowing needs only "writes nothing"; folding needs "the same value, and
+    shareable" (an identity-free result, no file-level `var` read). One flag would have to be the
+    weaker promise for one consumer and the stronger for the other.
+  - **A write the rule used to miss.** `bpBorrowDecl` keyed a write on a non-name assignment target
+    only; a *file-level `var`* write went unseen. That is a real hole: a caller may pass
+    `&shared[i]`, and a callee that reassigned `shared` would dangle that pointer. `BpFacts` gained
+    `staticWrite` and the module's `var` names travel as a set, so a body that writes one borrows
+    nothing.
+  - **Reach.** A body-less native can only be trusted by `data`, so `charAt`/`toString`/`substr`/... -
+    read-only but unmarked - still stop a body that calls them (`charAt` gates `Str.startsWith` and
+    `StrView.find`). A *second declaration flag* (borrowness without purity) is the next step; the
+    fixpoint already covers every helper written in Simse.
+
+  Verified: `bun build.js --release --no-lto --out cppsrc/simse_bootstrap.cpp` then
+  `bun tools/bootstrap.js` - both fixed points byte for byte; `bun tools/stress.js` **53/53** with
+  only `stress/pure-function` moving (it grew `viaSum`, pinned as `Int ns1_viaSum(ns1_Point* p)`).
+  On the compiler's own tree the fixpoint newly borrows `ns7_yldFieldName(Str* name)` and
+  `ns8_linMergeSharesBlock(..., ns8_LinUseDefs* useDefs, Str* typeKey, ...)`, and the self-transpile
+  measured ~1748 ms -> ~1450 ms.
+- **`borrow`, `--no-borrow`, `--showBorrow`: the second flag, its escape hatch and its view.** The
+  borrowness proof could only trust a callee by a `data` mark, so a read-only *native* - `charAt`,
+  `toString`, a `Dictionary` read - stopped every body that called one (the first slice's named
+  limit), and auto-borrow barely fired.
+
+  - **`borrow fun`** is the weaker sibling of `data` (`specs/functions.md`): the body reads its
+    receiver and parameters and writes through neither, and it says nothing about the result, so a
+    read-only `toString` may carry it without its calls being folded. `Parser.parseDecl`/
+    `parseFunction` carry it as `AstNodeAttributeKind.IsBorrow` (appended last, so the values already
+    in use do not move; no `.hpp` mirror - `astxml` is generated), and `bpMarked` seeds the borrow set
+    from either mark. A body-less declaration needs a mark; one with a body is *proved*, so a
+    `borrow` there is an override for a body the proof cannot see through.
+  - **The RTL is marked** (`cppsrc/rtl/rtl.kt`, `StrView.kt`, `Span.kt`, `intrinsics.kt`): the string
+    and character reads and conversions, the `List`/`Dictionary` reads, `iter`/`iterPtr` - and the
+    compiler's own read-only `common` accessors (`cppsrc/common/xmlutil.kt`) plus `fmtStr`.
+  - **The `for` machine is trusted** (`bpMachineStep`): `_sm_for<n>.advance()` is the desugar's own
+    name (the same prefix sema keys its `iter` check on), and a machine can only come from an
+    `iter`/`iterPtr` call in the same body - so the call that built it is what gets weighed, and the
+    step only reads the container.
+  - **`--no-borrow`** disables the rewrite (the analysis still runs, so the dump survives);
+    **`--showBorrow`** prints `borrow+ <name> <params>` / `borrow- <name> <why>` per candidate to
+    stderr, collected by `bpNote` and printed by the driver.
+
+  Verified: `bun build.js --release --no-lto --out cppsrc/simse_bootstrap.cpp` then
+  `bun tools/bootstrap.js` - both fixed points byte for byte, self-transpile ~1431 ms; `bun
+  tools/stress.js` **53/53** - `stress/pure-function` grew `label`/`viaLabel` (the mark's caller-side
+  effect, with `label` itself left by value) and `stress/collections` now carries
+  `compiler-args: --no-borrow`, so its golden is the unborrowed shape and the flag is pinned.
+  Borrowed parameters on the compiler's own tree: **6 -> 24** (`--showBorrow`).
+- **Constructions and the `Opt`/`Res` tag test.** Two shapes kept `borrow-` lines in the dump that
+  should not have been there.
+
+  - **A construction with no type argument is not a call on a parameter.** The rule already allowed
+    `Name<T>(args)` (an `ExprGenericName` callee) and `specs/functions.md` says a construction is
+    not a call on the parameter - but a bare `AstXmlNode(...)`, `AstNodeAttribute(...)`, `Str(...)`
+    was weighed as a call, so `xmlEmptyNode` and every body that builds a value bailed.
+    `bpIsConstruct` now recognizes `Name(args)` when `Name` is a declared data class or a built-in
+    type, plus the `Opt<T>.none()`/`.some(x)` and `Res<T>.ok(x)`/`.err(x)` statics (a member call
+    whose receiver is a type name). A construction *copies* its arguments into the fields, and for
+    the types a parameter may be borrowed *of* (`Str`, a container, an `Opt`/`Res`, a data class)
+    the copy is deep - so nothing is written and nothing aliases.
+  - **`Opt<T>.hasValue()` is declared** (`cppsrc/rtl/_res.md`'s `optops`, `simse_opt_hasValue`): a
+    built-in member has no declaration to carry a mark, so a body that tested an optional and read
+    its parameter refused. The declaration is `borrow`, and it is the `lenOf` treatment applied to
+    the `Opt`/`Res` surface.
+  - **Two members cannot be declared yet, and the dump says why.** `Res<T>.isOk()` needs a receiver
+    spelled `Res<T>` to unify in `findNativeExt`, and `Res` carries an `unInit`, which the checker
+    refuses for a value receiver (the emitter passes `Res* self`, so no copy is actually made - the
+    rule is what would have to change). `value()` answers the type argument, and `memberCallReturn`
+    returns a declaration's return type without substituting it, so a `T`-returning declaration
+    would emit `T` where a concrete type belongs. Both are recorded in
+    `impl_specs/escape-analysis.md`.
+
+  Verified: `bun build.js --release --no-lto --out cppsrc/simse_bootstrap.cpp` then
+  `bun tools/bootstrap.js` - both fixed points byte for byte, self-transpile ~1433 ms; `bun
+  tools/stress.js` **53/53** (`stress/machines` and `stress/objects` goldens re-cut for the new
+  `optops` forward). The dump's blocker list drops `append` 326 -> 161 and the construction names
+  entirely; the borrowed count stays ~25, because what is left is the coarse rule's own writes -
+  which is the next lever (the per-parameter write bail).
+
+- **`XmlNode`/`Attribute` are generated, not a hand-written header.** The language-level tree
+  (`specs/xml-node.md`) was the last value type whose C++ was a header (`cppsrc/rtl/xml.hpp`)
+  for no reason other than history: `@SmGen("cpp")` on the `data class`es in
+  `cppsrc/rtl/xml.kt` told the emitter to skip them. The recursion is broken by the
+  `Array<XmlNode>` field exactly as the compiler's own `AstXmlNode` breaks its own, so dropping
+  the two attributes (and the header, and the `#include "xml.hpp"` in `simse.hpp`) lets the
+  emitter materialize both structs like any program's data class. What that buys is the layout
+  rule (`specs/memory-model.md`): the generated aggregates are wrapped in
+  `SIMSE_PACK_PUSH`/`SIMSE_PACK_POP`, so `XmlNode` is now **304 bytes, 4-byte aligned** (was
+  312, host-aligned) and `Attribute` 64 - the divergence `impl_specs/rtl-abi.md` recorded
+  ("user-program types keep host alignment") is gone.
+
+  No C++ referenced either type (`resources.hpp`, the `_res.md` sections and the compiler's own
+  tree all use `AstXmlNode`), so the only moves are the two declarations losing their attribute,
+  the header's deletion, and `simse.hpp` losing the include. The emitted C++ for `cppsrc` is
+  **unchanged** (`XmlNode` is unreached there - a prelude type is emitted only when a program
+  holds one), so the bootstrap fixed point held with no refresh. `stress/objects` (the one case
+  that builds an `XmlNode`) had its `expected.cpp` re-cut for the new struct lines; its stdout is
+  unchanged. Verified: `./build.bat --release`, `bun tools/stress.js` **53/53**,
+  `bun tools/bootstrap.js` - both fixed points byte for byte. `tools/size_probe.cpp`,
+  `tools/probe_sizes.cpp` and `tools/array_layout_probe.cpp` (scratch, standalone-header probes)
+  now define the generated shape locally instead of reaching for the deleted header.

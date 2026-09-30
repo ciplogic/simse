@@ -1,22 +1,21 @@
 // Async.kt
 //
 // The coloring pass: which functions can suspend, and why. `suspend` on a declaration is the
-// marker - it names a function whose body may wait - and every function that *calls* one can
-// suspend too, transitively, up to `main`. Nothing is annotated by hand except the leaf: the
-// user writes the function that actually suspends, and the least fixed point below carries that
-// outward. A function no suspension reaches keeps its plain signature and its direct call, which
-// is the whole point - coloring stops at the first function that reaches no suspension, so pure
-// helper code never becomes a state machine.
+// marker, and every function that *calls* one can suspend too, transitively, up to `main`. Nothing
+// is annotated by hand except the leaf: the least fixed point below carries that outward. A function
+// no suspension reaches keeps its plain signature and its direct call, which is the whole point -
+// coloring stops at the first function that reaches no suspension, so pure helper code never becomes
+// a state machine.
 //
 // The call graph is *name-level*, the approximation the prelude reachability already uses
-// (impl_specs/for.md): a callee is the name a call spells - `f`, `f<T>`, or the member of
-// `x.f` - so a name two declarations share is one node and the pass colors conservatively.
-// Closed world is what makes the set knowable at all: every module is scanned and nothing
-// links separately, so there is no call that could be async without being visible.
+// (impl_specs/for.md): a callee is the name a call spells - `f`, `f<T>`, or the member of `x.f` - so
+// a name two declarations share is one node and the pass colors conservatively. Closed world is what
+// makes the set knowable at all: every module is scanned and nothing links separately, so there is
+// no call that could be async without being visible.
 //
-// `--showAsync` dumps the result (the debug view this pass exists for). The machine lowering
-// is the next step; until it lands, a program that *calls* a suspending function does not
-// compile - there is no task to run - so the dump is how the inference is checked.
+// `--showAsync` dumps the result (the debug view this pass exists for). Until the machine lowering
+// lands, a program that *calls* a suspending function does not compile - there is no task to run -
+// so the dump is how the inference is checked.
 
 package sema
 
@@ -69,11 +68,10 @@ fun asyncName(fn: *AstXmlNode): Str {
     return xmlAttr(fn, AstNodeAttributeKind.Name)
 }
 
-// The fixed point: a name is async when it is declared async, or when the body of any
-// function with that name calls a name that is. One round can discover more than the last, so
-// the loop runs until a round adds nothing. `reasons` runs parallel to the result: the callee
-// that carried the suspension in, or "" for a declaration that named `Async` itself - which
-// is what makes the dump a path rather than just a set.
+// The fixed point: a name is async when it is declared async, or when the body of any function with
+// that name calls a name that is. `reasons` runs parallel to the result: the callee that carried the
+// suspension in, or "" for a declaration that named `Async` itself - which is what makes the dump a
+// path rather than just a set.
 fun asyncColor(functions: List<AstXmlNode>, reasons: *List<Str>): List<Str> {
     var asyncNames: List<Str> = List<Str>()
     for (*fn in functions) {

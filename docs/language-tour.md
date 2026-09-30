@@ -266,6 +266,19 @@ The mark is a promise rather than a guess: a `data` function that writes through
 a file-level `var` would make the reuse wrong, and a function *without* the mark keeps every
 call (`specs/functions.md`).
 
+A function marked `borrow` makes a *weaker* promise: it reads its receiver and its parameters and
+never writes through them, so a caller may hand it a pointer (no copy), even though it may build
+and return a fresh value. The compiler's auto-borrow proof trusts a callee only when it is
+borrow-clean, and a body-less native - which it cannot see into - is trusted by that mark:
+
+```simse
+@SmGen("res", "strops", "simse_str_charAt")
+borrow fun charAt(this: Str, index: Int): Char
+```
+
+A body can also *read* without being `borrow`; the compiler proves it from the body when it can,
+and the mark is the override for when it cannot (`specs/functions.md`).
+
 A lambda body may also be a block, written on the same line as the arrow:
 
 ```simse

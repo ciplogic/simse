@@ -1,42 +1,25 @@
 // ReuseExprs.kt
 //
-// Two instructions that compute the same expression are one computation, so the second becomes a
-// read of the first. The property is *invariance*: the expression is pure and memory-independent
-// and its operands still hold what they held at the first occurrence. That is one rule with no
-// per-kind exceptions - the opcodes it covers are the ones whose result is a function of their
-// operand *values* alone and which read no memory:
+// Two instructions computing the same expression are one computation, so the second becomes a read
+// of the first. The property is *invariance*: the expression is pure and memory-independent and its
+// operands still hold what they held at the first occurrence. Covered opcodes: BinaryOp, UnaryOp,
+// FieldAddr, IndexAddr, GetStaticAddr (impl_specs/expr-reuse.md, "Purity, effects and value
+// numbering"). Memory-reading ops (`x.f`, `x[i]`, a call) are excluded - a write between two
+// occurrences may change them and the kill analysis is not built yet - and so are ops yielding a
+// fresh identity (`Pack`, `toArray`, the fused `Concat`), since sharing one block would make a write
+// through one show through the other.
 //
-//   BinaryOp        a + b, a < b, ...
-//   UnaryOp         -a, !a, ~a
-//   FieldAddr       &base.field
-//   IndexAddr       &base[i]
-//   GetStaticAddr   &Static.member
+// **One basic block at a time** - the kept instruction surely ran first, and the tables are dropped
+// at every label and branch. That keeps `&x.f` in the `then` and `else` arms two expressions, and is
+// why the pass cannot hoist to the entry block on its own (impl_specs/expr-reuse.md leaves that for
+// later).
 //
-// (impl_specs/expr-reuse.md, "Purity, effects and value numbering": the "pure, memory-independent"
-// row.) A memory-reading op (`x.f`, `x[i]`, a call) is *not* here: a write between its two
-// occurrences may change it, and the kill analysis that would decide that is not built yet - so
-// `_sm_expr2 = _sm_base7->size()` is still recomputed across the append in the evidence. An op
-// that yields a fresh identity (`Pack`, `toArray`, the fused `Concat`) is not here either:
-// sharing one block between two uses would make a write through one show through the other.
+// Operands are compared by *value*: a slot contributes its number and last writer, so a reassignment
+// changes the key. Both slots must be written exactly once in the body, since the local merge reuses
+// a slot whose live ranges do not overlap.
 //
-// **One basic block at a time.** The kept instruction stands in the same straight-line run as the
-// one it replaces, so it surely ran first; the tables are dropped at every label and branch. That
-// is what makes the rule sound where a whole-body scan is not: `&x.f` in the `then` arm and in the
-// `else` arm share a key and their operands, yet neither ran before the other, so they must stay
-// two. It is also why the pass cannot hoist a common expression to the entry block on its own -
-// that is the dominance/entry-hoisting step impl_specs/expr-reuse.md leaves for later.
-//
-// The operands are compared by *value*: a slot contributes its number and the instruction that last
-// wrote it, so an operand reassigned between the two occurrences changes the key and the pair stays
-// two expressions. The destination is not part of the key - it is what the instruction produces -
-// and the slot the first instruction wrote must still hold its value (nothing rewrote it since).
-// Both the kept slot and the merged-away one must also be written exactly once in the body: the
-// local merge reuses a slot whose live ranges do not overlap, and redirecting every read of a
-// slot that is later reused would read the later value.
-//
-// The pass runs before `ilReusePure` (both are `ilReuseUnit`'s): merging the addresses is what makes
-// a later read name the *same* slot a mutation's argument names, so the purity rule sees the alias
-// (impl_specs/expr-reuse.md, "A write kills by the same numbers").
+// Runs before `ilReusePure` (both are `ilReuseUnit`'s): merging the addresses makes a later read name
+// the same slot a mutation's argument names, so the purity rule sees the alias.
 
 package linear
 
@@ -98,10 +81,9 @@ fun ilReuseExprs(il: *IlBody): Bool {
         progress = false
         val slots: Int = il.vars.size()
         var lastWrite: List<Int> = List<Int>(slots, -1)
-        // How many instructions write each slot. A kept or merged-away slot with more than one
-        // writer may carry another value elsewhere in the body (the local merge reuses a slot
-        // whose live ranges do not overlap), so only a singly-written slot may be merged: that
-        // is what makes redirecting every read of the merged-away slot to the kept one sound.
+        // How many instructions write each slot: only a singly-written slot may be merged (a
+        // writer elsewhere could carry another value, since the local merge reuses overlapping-free
+        // slots).
         var defCount: List<Int> = List<Int>(slots, 0)
         var d: Int = 0
         while (d < il.ops.size()) {
@@ -112,8 +94,7 @@ fun ilReuseExprs(il: *IlBody): Bool {
             }
             d = d + 1
         }
-        // The tables of the current basic block - dropped at a label or a branch, since two
-        // instructions can share a value only when the first surely ran before the second.
+        // The tables of the current basic block, dropped at a label or branch (the header's reason).
         var firstDst: Dictionary<Str, Int> = Dictionary<Str, Int>()
         var firstAt: Dictionary<Str, Int> = Dictionary<Str, Int>()
         var drop: Dictionary<Int, Bool> = Dictionary<Int, Bool>()
@@ -137,8 +118,8 @@ fun ilReuseExprs(il: *IlBody): Bool {
                         firstAt.insert(key, i)
                     } else if (defCount[dst] == 1 && defCount[ * keep] == 1
                     && lastWrite[ * keep] == *firstAt.getPtr(key)) {
-                        // The same expression, both slots written nowhere else, and the slot the
-                        // first one wrote still holds its value: this one is a read of that one.
+                        // Both slots written nowhere else, and the first one's slot still holds
+                        // its value: this one is a read of that one.
                         drop.insert(i, true)
                         if (dst != * keep) {
                             replace.insert(dst, *keep)
@@ -156,9 +137,8 @@ fun ilReuseExprs(il: *IlBody): Bool {
         if (!progress) {
             break
         }
-        // The merged-away op goes, and so does the declaration of a slot nothing writes any more;
-        // every read of a merged slot becomes a read of the one it merged into (the same cleanup
-        // `ilReusePure` does).
+        // Drop the merged-away op and the declaration of a slot nothing writes any more; redirect
+        // every read of a merged slot to the one it merged into.
         var ops: List<IlOp> = List<IlOp>()
         var lines: List<Int> = List<Int>()
         i = 0

@@ -1,16 +1,13 @@
 // StrView.kt
 //
 // `StrView` is a `Span<Char>` under a second name: one type, and the text operations below
-// are what the name adds (specs/built-in-types.md). It owns nothing, so it is valid only
-// while the bytes it points at are alive; `spanOfStr(text)` borrows its source, which must
-// outlive the view.
-//
-// The byte operations are Simse, over the span (cppsrc/rtl/span.hpp) and the `setBytes`
-// intrinsic for the owned copy (cppsrc/rtl/intrinsics.kt); only what reaches a `Str`'s
-// internals or a `Span` member stays in C++, in the `strview` section of cppsrc/rtl/_res.md.
-// `slice` stays a view; `substr`/`toString` are the copies. A comparison is an inline loop,
-// not `memCompare`: the compiler's scanner calls `startsWithPtr` per table entry per token,
-// and a `memcmp` call for a few bytes is slower than the loop it replaces.
+// are what the name adds (specs/built-in-types.md). It owns nothing, valid only while the
+// bytes it points at are alive; `spanOfStr(text)` borrows its source, which must outlive the
+// view. Only what reaches a `Str`'s internals or a `Span` member stays in C++, in the
+// `strview` section of cppsrc/rtl/_res.md; the rest is Simse over the span (`span.hpp`) and
+// the `setBytes` intrinsic for the owned copy (`intrinsics.kt`). A comparison is an inline
+// loop, not `memCompare`: the scanner calls `startsWithPtr` per table entry per token, and a
+// `memcmp` call for a few bytes is slower than the loop it replaces.
 
 package rtl
 
@@ -26,18 +23,18 @@ data fun isEmpty(this: StrView): Bool
 
 // From `start` to the end (unchecked).
 @SmGen("res", "strview", "simse_strView_slice")
-fun slice(this: StrView, start: Int): StrView
+borrow fun slice(this: StrView, start: Int): StrView
 
 // `count` bytes from `start` (unchecked).
 @SmGen("res", "strview", "simse_strView_slice")
-fun slice(this: StrView, start: Int, count: Int): StrView
+borrow fun slice(this: StrView, start: Int, count: Int): StrView
 
 // The byte at `index` (unchecked); spelled like `Str.charAt`.
 @SmGen("res", "strview", "simse_strView_charAt")
-fun charAt(this: StrView, index: Int): Char
+borrow fun charAt(this: StrView, index: Int): Char
 
-// True when the view begins with `text`. The bytes are compared in place, nothing is copied.
-fun StrView.startsWith(text: Str): Bool {
+// Compared in place, so nothing is copied.
+borrow fun StrView.startsWith(text: Str): Bool {
     val count = text.size()
     if (count > this.size()) {
         return false
@@ -56,7 +53,7 @@ fun StrView.startsWith(text: Str): Bool {
 // reached by raw pointer and with its length already known. The first byte is the caller's
 // cheap test, so the compare starts at 1; `startsWith` would copy the `Str` first, which a
 // table lookup cannot afford.
-fun StrView.startsWithPtr(text: *Str, length: Int): Bool {
+borrow fun StrView.startsWithPtr(text: *Str, length: Int): Bool {
     if (length > this.size()) {
         return false
     }
@@ -71,7 +68,7 @@ fun StrView.startsWithPtr(text: *Str, length: Int): Bool {
 }
 
 // The index of the first occurrence of `sub`, or -1 (compared in place).
-fun StrView.find(sub: Str): Int {
+borrow fun StrView.find(sub: Str): Int {
     val needle = sub.size()
     if (needle == 0) {
         return 0
@@ -95,12 +92,12 @@ fun StrView.find(sub: Str): Int {
 }
 
 // `indexOf` is the other spelling of `find`.
-fun StrView.indexOf(sub: Str): Int {
+borrow fun StrView.indexOf(sub: Str): Int {
     return this.find(sub)
 }
 
 // The owned copy of `count` bytes from `from`, clamped like `Str.substr`.
-fun StrView.substr(from: Int, count: Int): Str {
+borrow fun StrView.substr(from: Int, count: Int): Str {
     val len = this.size()
     var begin = from
     if (begin < 0) {
@@ -123,8 +120,7 @@ fun StrView.substr(from: Int, count: Int): Str {
     return out
 }
 
-// The owned copy of the whole view, as a `Str`.
-fun StrView.toString(): Str {
+borrow fun StrView.toString(): Str {
     return this.substr(0, this.size())
 }
 

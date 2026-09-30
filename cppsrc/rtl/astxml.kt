@@ -2,7 +2,7 @@
 //
 // The compiler's AST node type (impl_specs/ast-xmlnode.md): the `XmlNode` schema with its
 // two stringly-typed parts - a node's role and an attribute's key - replaced by enums.
-// Declarations only; the concrete types and constructors live in `cppsrc/rtl/astxml.hpp`.
+// The emitter generates the structs, the enums and their conversions from these declarations.
 //
 // `AstNodeKind.None` is the absent sentinel: a missing optional child has role `None`.
 
@@ -81,9 +81,16 @@ enum class AstNodeAttributeKind {
 
     // `suspend fun` (impl_specs/async.md): the declaration's body may wait, so the lowering
     // turns it into a ref-counted task and a call to it is a suspension. It is a modifier on
-    // the declaration, not a type - the signature stays the plain one. Appended last so the
-    // values already in use do not move.
-    IsSuspend
+    // the declaration, not a type - the signature stays the plain one. Appended last, like
+    // `IsPure`.
+    IsSuspend,
+
+    // `borrow fun`: the body reads its receiver and parameters and never writes through them, so
+    // a caller may hand it a pointer (`impl_specs/escape-analysis.md`, the auto-borrow proof).
+    // Weaker than `data`: it constrains what the function does to its arguments, not what it
+    // answers, so a read-only function returning a fresh value may carry it without its calls
+    // being folded. Appended last, like `IsPure`.
+    IsBorrow
 }
 
 // What a node is - the schema's `kind` - as against its role (`AstNodeKind`, where it

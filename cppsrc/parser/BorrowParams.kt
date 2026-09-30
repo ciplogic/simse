@@ -9,24 +9,31 @@
 // The rule is the simplest one that is sound, and it refuses by default ("unsure means it
 // escapes"):
 //
-//   - a call is trusted only when the callee is *pure* (`data`).
-//     A body that calls anything else borrows nothing: a callee can write through an alias the
-//     analysis cannot see, and a `data` promise is the one "writes nothing" fact the language has.
-//     A construction (`Point(1, 2)`) is not a call on the parameter and is allowed;
-//   - any assignment whose target is not a plain name (`x.f = ...`, `x[i] = ...`, `*x = ...`)
-//     borrows nothing, anywhere in the body. The author's own rule, and it covers a write through
-//     an alias without the analysis having to look for one;
-//   - a parameter under `&`/`*`, assigned, or captured by a lambda is not borrowed itself. A
-//     capture would copy the *pointer* into the closure, which is exactly an escape.
+//   - a call is trusted only when the callee is *borrow-clean*: it writes nothing observable, so
+//     it cannot write through a parameter it is handed. `data` is that promise made by an author
+//     (the one source of truth for a body-less declaration); a declaration with a body *proves*
+//     the same fact by the fixpoint below. A construction (`Point(1, 2)`) is not a call on the
+//     parameter;
+//   - any assignment whose target is not a plain name (`x.f = ...`, `x[i] = ...`, `*x = ...`), or
+//     is a file-level `var`, borrows nothing, anywhere in the body. It covers a write through an
+//     alias, and a file-level write is what could invalidate a pointer a *caller* holds into that
+//     global;
+//   - a parameter under `&`/`*`, assigned, or captured by a lambda is not borrowed: a capture
+//     would copy the *pointer* into the closure, which is exactly an escape.
 //
-// Everything else a parameter can do is a *read*: `p.f`, `p[i]`, `p.size()`, `p` as a value, and
-// `return p` (a value return copies, so the pointer does not escape). That is the shape the author
-// named - "string->size() and return" - and few bodies qualify, which is the point: the proof is
-// "this body only reads".
+// Everything else a parameter can do is a *read* (`p.f`, `p[i]`, `p.size()`, `return p`, which
+// copies). That is the shape the author named - "string->size() and return" - and few bodies
+// qualify, which is the point: the proof is "this body only reads".
 //
-// This is a proof of concept: it deliberately does not look through calls (no interprocedural
-// summary), does not measure type sizes, and handles only a type it can name as heavy (`Str`, a
-// `data class`, a container) - never a scalar, a handle or `Span`/`Array`.
+// *borrowness* (this pass) says a callee cannot write through a parameter, so a caller may hand it
+// a pointer; it says nothing about the result, so `Str.size` and a helper returning a fresh `Str`
+// or machine are both borrow-clean. *Purity* (`data`, `Codegen.kt`'s `pureCallees`,
+// `linear/ReusePure.kt`) says the result is a function of the argument, so two calls fold - a
+// stronger fact this pass does not need.
+//
+// The fixpoint is computed *below* and grows from below (see `bpInferReads`): it does not look
+// through a call, does not measure type sizes, and handles only a type it can name as heavy
+// (`Str`, a `data class`, a container) - never a scalar, a handle or `Span`/`Array`.
 
 package parser
 
@@ -43,28 +50,200 @@ fun bpBump(counts: *Dictionary<Str, Int>, name: *Str): Unit {
     counts.insert(name, seen + 1)
 }
 
-// The same declaration counting `cpCountDecls` does, plus the two sets the rule needs: the names a
-// value may be borrowed *of* (a `data class`), and the callees a body may call (`data fun`/`data`
-// methods). `size`/`count` are declarations like any other (cppsrc/rtl/rtl.kt), so no name is
-// seeded.
+// A declaration that carries a borrowness mark: `data` (pure, which implies it) or `borrow`
+// (read-only receiver and parameters, weaker than `data`). A mark is an author's word, needed
+// for a body-less declaration whose C++ is elsewhere; a declaration with a body is *proved*
+// instead (`bpInferReads`).
+fun bpMarked(decl: *AstXmlNode): Bool {
+    if (xmlAttr(decl, AstNodeAttributeKind.IsPure) == "true") {
+        return true
+    }
+    return xmlAttr(decl, AstNodeAttributeKind.IsBorrow) == "true"
+}
+
+// The same declaration counting `cpCountDecls` does, plus the sets the rule needs: the names a
+// value may be borrowed *of* (a `data class`), the callees a body may trust to begin with (the
+// `data` marks - the borrow-clean fixpoint grows this set), and the file-level `var`s (a write to
+// one is not borrow-clean). `size`/`count` are `data` declarations like any other
+// (cppsrc/rtl/rtl.kt), so no name is seeded by hand.
 fun bpCollectDecls(
     module: *AstXmlNode, counts: *Dictionary<Str, Int>, types: *Dictionary<Str, Bool>,
-    pure: *Dictionary<Str, Bool>
+    reads: *Dictionary<Str, Bool>, statics: *Dictionary<Str, Bool>
 ): Unit {
     for (*decl in xmlDecls(module)) {
         val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
         bpBump(counts, name)
+        if (decl.name == AstNodeKind.Var && xmlAttr(decl, AstNodeAttributeKind.IsVar) == "true") {
+            statics.insert(name, true)
+        }
         if (decl.name == AstNodeKind.DataClass) {
             types.insert(name, true)
             for (*method in xmlChildren(decl, AstNodeKind.Function)) {
                 bpBump(counts, xmlAttr(method, AstNodeAttributeKind.Name))
-                if (xmlAttr(method, AstNodeAttributeKind.IsPure) == "true") {
-                    pure.insert(xmlAttr(method, AstNodeAttributeKind.Name), true)
+                if (bpMarked(method)) {
+                    reads.insert(xmlAttr(method, AstNodeAttributeKind.Name), true)
                 }
             }
         }
-        if (decl.name == AstNodeKind.Function && xmlAttr(decl, AstNodeAttributeKind.IsPure) == "true") {
-            pure.insert(name, true)
+        if (decl.name == AstNodeKind.Function && bpMarked(decl)) {
+            reads.insert(name, true)
+        }
+    }
+}
+
+// The language's built-in type names (specs/built-in-types.md, specs/core-types.md): a call to
+// one is a construction or a conversion, which copies what it is given.
+fun bpBuiltinType(name: *Str): Bool {
+    if ( * name == "Str" || * name == "List" || *name == "Dictionary" || *name == "Opt"
+    || *name == "Res" || *name == "Array" || *name == "Span" || *name == "XmlNode"
+    || *name == "Attribute" || *name == "FileStream"
+    ) {
+        return true
+    }
+    return false
+}
+
+// A construction: `Name(args)` where `Name` is a type, `Opt<T>.none()` / `Res<T>.ok(x)`, or any
+// `Name<T>(args)`. Its arguments are *copied* into the fields (a data class has no constructor
+// body) and the built-in conversions copy too, so none of them is a call on a parameter - which
+// is what makes a body that builds a value borrowable.
+fun bpIsConstruct(callee: *AstXmlNode, types: *Dictionary<Str, Bool>): Bool {
+    val ck: AstNodeCategory = xmlKind(callee)
+    if (ck == AstNodeCategory.ExprGenericName) {
+        return true
+    }
+    if (ck == AstNodeCategory.ExprName) {
+        val name: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
+        return types.has(name) || bpBuiltinType(*name)
+    }
+    if (ck != AstNodeCategory.ExprMember) {
+        return false
+    }
+    val member: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
+    if (member != "none" && member != "some" && member != "ok" && member != "err") {
+        return false
+    }
+    val recv: *AstXmlNode = xmlChildPtr(callee, AstNodeKind.Receiver)
+    val rk: AstNodeCategory = xmlKind(recv)
+    if (rk != AstNodeCategory.ExprName && rk != AstNodeCategory.ExprGenericName) {
+        return false
+    }
+    return bpBuiltinType(*xmlAttr(recv, AstNodeAttributeKind.Name))
+}
+
+// One declaration's body, reduced to what the borrow-clean fixpoint reads: whether it writes
+// anything observable (a field/index/deref store, or a file-level `var`), whether a call has no
+// name at all to check (a lambda value called through), and the names of the callees it calls.
+data class BpPure(
+    var name: Str,
+    var hasWrite: Bool,
+    var opaqueCall: Bool,
+    var calls: List<Str>
+)
+
+// The write/callee facts of one body, written in place through the pointer (a *field* of a pointer
+// passed as an argument would be copied - `guide4ai.md`, the `*this.sections` trap).
+fun bpPureWalk(
+    node: *AstXmlNode, out: *BpPure, statics: *Dictionary<Str, Bool>,
+    types: *Dictionary<Str, Bool>
+): Unit {
+    val kind: AstNodeCategory = xmlKind(node)
+    if (kind == AstNodeCategory.StmtAssign) {
+        val target: *AstXmlNode = xmlChildPtr(node, AstNodeKind.Target)
+        if (xmlKind(target) != AstNodeCategory.ExprName) {
+            out.hasWrite = true
+        } else if (statics.has(xmlAttr(target, AstNodeAttributeKind.Name))) {
+            // A file-level `var` (see the header): a caller may hold a pointer into it.
+            out.hasWrite = true
+        }
+    }
+    if (kind == AstNodeCategory.ExprCall) {
+        val callee: *AstXmlNode = xmlChildPtr(node, AstNodeKind.Callee)
+        val ck: AstNodeCategory = xmlKind(callee)
+        if (bpIsConstruct(callee, types)) {
+            // A construction copies what it is given; see `bpIsConstruct`.
+        } else if (bpMachineStep(callee)) {
+            // The `for` machine's own step; see `bpMachineStep`.
+        } else if (ck == AstNodeCategory.ExprName || ck == AstNodeCategory.ExprMember) {
+            out.calls.append(xmlAttr(callee, AstNodeAttributeKind.Name))
+        } else {
+            out.opaqueCall = true
+        }
+    }
+    for (*child in node.Children) {
+        bpPureWalk(child, out, statics, types)
+    }
+}
+
+// One declaration worth proving: it has a body, it is not trusted already (`data`), and its name
+// is declared exactly once (a name over two declarations has no single body to verify).
+fun bpPurConsider(
+    fn: *AstXmlNode, counts: *Dictionary<Str, Int>, statics: *Dictionary<Str, Bool>,
+    types: *Dictionary<Str, Bool>, out: *List<BpPure>
+): Unit {
+    if (xmlAttr(fn, AstNodeAttributeKind.HasBody) != "true"
+        || xmlAttr(fn, AstNodeAttributeKind.IsNative) == "true"
+        || bpMarked(fn)
+    ) {
+        return
+    }
+    val name: Str = xmlAttr(fn, AstNodeAttributeKind.Name)
+    val count: *Int = counts.getPtr(name)
+    if (count == null || * count != 1) {
+        return
+    }
+    val body: *AstXmlNode = xmlChildPtr(fn, AstNodeKind.Body)
+    if (xmlIsEmpty(body)) {
+        return
+    }
+    var fact: BpPure = BpPure(name, false, false, List<Str>())
+    for (*stmt in body.Children) {
+        bpPureWalk(stmt, *fact, statics, types)
+    }
+    out.append(fact)
+}
+
+fun bpPurCollect(
+    module: *AstXmlNode, counts: *Dictionary<Str, Int>, statics: *Dictionary<Str, Bool>,
+    types: *Dictionary<Str, Bool>, out: *List<BpPure>
+): Unit {
+    for (*decl in xmlDecls(module)) {
+        if (decl.name == AstNodeKind.Function) {
+            bpPurConsider(decl, counts, statics, types, out)
+        } else if (decl.name == AstNodeKind.DataClass) {
+            for (*method in xmlChildren(decl, AstNodeKind.Function)) {
+                bpPurConsider(method, counts, statics, types, out)
+            }
+        }
+    }
+}
+
+// The *borrowness* fixpoint (impl_specs/escape-analysis.md): a name is borrow-clean when every
+// declaration with that name is trusted already (`reads` starts as the `data` marks) or has a body
+// that writes nothing observable and calls only borrow-clean names. It grows from *below* - a name
+// joins only once every call its body makes is to a name already in the set - so a recursive cycle
+// is never assumed clean and no name is ever added on a guess. The result is the least fixpoint,
+// the sound direction: a name left out is simply not trusted, and the emitted code is unchanged
+// for it.
+fun bpInferReads(facts: *List<BpPure>, reads: *Dictionary<Str, Bool>): Unit {
+    var changed: Bool = true
+    while (changed) {
+        changed = false
+        for (*fact in facts) {
+            if (reads.has(fact.name) || fact.hasWrite || fact.opaqueCall) {
+                continue
+            }
+            var ok: Bool = true
+            for (*callee in fact.calls) {
+            if (!reads.has(*callee)) {
+                ok = false
+                break
+            }
+        }
+            if (ok) {
+                reads.insert(fact.name, true)
+                changed = true
+            }
         }
     }
 }
@@ -131,14 +310,22 @@ fun bpGatherValueUses(
 // Every fact the decision reads, written in place through the pointer. The marking helpers are
 // methods rather than free functions taking the set: passing a *field* of a pointer as an argument
 // materializes a copy (`guide4ai.md`, the `*this.sections` trap), so the set must be reached
-// through `this`.
+// through `this`. `reads` is the borrowness flag (the fixpoint above); `statics` is the set of
+// file-level `var` names, a write to one of which is a write the rule must see.
 data class BpFacts(
     var fieldWrite: Bool,
+    var staticWrite: Bool,
     var impureCall: Bool,
-    var pure: *Dictionary<Str, Bool>,
+    var statics: *Dictionary<Str, Bool>,
+    var reads: *Dictionary<Str, Bool>,
+    var types: *Dictionary<Str, Bool>,
     var taken: Dictionary<Str, Bool>,
     var written: Dictionary<Str, Bool>,
-    var inLambda: Dictionary<Str, Bool>
+    var inLambda: Dictionary<Str, Bool>,
+
+    // The callee names that made a call untrusted, for `--showBorrow`. The decision itself
+    // reads only `impureCall`.
+    var blocked: List<Str>
 ) {
     // Every name under `node`: an over-approximation is what the rule wants, since it is asked only
     // about names it already cares about.
@@ -169,21 +356,36 @@ data class BpFacts(
                 // A write through a field, an index or a pointer: the coarse bail the rule wants.
                 this.fieldWrite = true
             } else {
-                this.written.insert(xmlAttr(target, AstNodeAttributeKind.Name), true)
+                val targetName: Str = xmlAttr(target, AstNodeAttributeKind.Name)
+                if (this.statics.has(targetName)) {
+                    // A file-level `var` (see the header).
+                    this.staticWrite = true
+                } else {
+                    this.written.insert(targetName, true)
+                }
             }
         }
         if (kind == AstNodeCategory.ExprCall) {
             val callee: *AstXmlNode = xmlChildPtr(node, AstNodeKind.Callee)
             val ck: AstNodeCategory = xmlKind(callee)
             var safe: Bool = false
-            if (ck == AstNodeCategory.ExprName || ck == AstNodeCategory.ExprMember) {
-                safe = this.pure.has(xmlAttr(callee, AstNodeAttributeKind.Name))
-            } else if (ck == AstNodeCategory.ExprGenericName) {
-                // A construction is not a call on the parameter - it copies what it is given.
+            if (bpIsConstruct(callee, this.types)) {
+                // A construction copies what it is given; see `bpIsConstruct`.
+                safe = true
+            } else if (ck == AstNodeCategory.ExprName || ck == AstNodeCategory.ExprMember) {
+                safe = this.reads.has(xmlAttr(callee, AstNodeAttributeKind.Name))
+            }
+            if (!safe && bpMachineStep(callee)) {
+                // The `for` machine's own step; see `bpMachineStep`.
                 safe = true
             }
             if (!safe) {
                 this.impureCall = true
+                if (ck == AstNodeCategory.ExprName || ck == AstNodeCategory.ExprMember) {
+                    this.blocked.append(xmlAttr(callee, AstNodeAttributeKind.Name))
+                } else {
+                    this.blocked.append("(a value call)")
+                }
             }
         }
         if (kind == AstNodeCategory.ExprRef || kind == AstNodeCategory.ExprDeref) {
@@ -196,6 +398,25 @@ data class BpFacts(
             this.walk(child)
         }
     }
+}
+
+// The `for` lowering's machine step (impl_specs/for.md): the desugar declares a local named
+// `_sm_for<n>` and steps it with `_sm_for<n>.advance()`. The prefix is the compiler's own (a
+// program's lowering never writes `_sm_`), and a machine can only come from `iter`/`iterPtr` in
+// the same body - so the call that built it has already been weighed, and `advance` reads the
+// container it was built over. Trusting the step is what lets a body with a `for` borrow.
+fun bpMachineStep(callee: *AstXmlNode): Bool {
+    if (xmlKind(callee) != AstNodeCategory.ExprMember) {
+        return false
+    }
+    if (xmlAttr(callee, AstNodeAttributeKind.Name) != "advance") {
+        return false
+    }
+    val recv: *AstXmlNode = xmlChildPtr(callee, AstNodeKind.Receiver)
+    if (xmlKind(recv) != AstNodeCategory.ExprName) {
+        return false
+    }
+    return xmlAttr(recv, AstNodeAttributeKind.Name).startsWith("_sm_for")
 }
 
 // ---- the decision -----------------------------------------------------------
@@ -216,6 +437,43 @@ fun bpHeavy(typeNode: *AstXmlNode, types: *Dictionary<Str, Bool>): Bool {
         return false
     }
     return name == "Str" || types.has(name)
+}
+
+// Why a candidate was refused, for `--showBorrow`: the first write the rule saw, or the callee
+// names that made a call untrusted.
+fun bpWhy(facts: *BpFacts): Str {
+    if (facts.fieldWrite) {
+        return "writes a field, an index or a pointer"
+    }
+    if (facts.staticWrite) {
+        return "writes a file-level var"
+    }
+    var out: Str = "calls "
+    var first: Bool = true
+    for (*name in facts.blocked) {
+        if (!first) {
+            out = out + ", "
+        }
+        out = out + * name
+                first = false
+    }
+    return out
+}
+
+// The names of a set, comma-separated in insertion order (a small set; determinism is the point).
+fun bpNames(names: *Dictionary<Str, Bool>): Str {
+    // Bound first: a `for` over a temporary would borrow a pointer into it (`guide4ai.md`).
+    val keys: List<Str> = names.keys()
+    var out: Str = ""
+    var first: Bool = true
+    for (*name in keys) {
+        if (!first) {
+            out = out + ", "
+        }
+        out = out + * name
+                first = false
+    }
+    return out
 }
 
 // ---- the rewrite ------------------------------------------------------------
@@ -251,7 +509,8 @@ fun bpBorrowParam(param: *AstXmlNode): AstXmlNode {
 // One function declaration, with the parameters the body only reads borrowed. `this` is a receiver,
 // which the emitter already passes as `T* self`, so it is never borrowed here.
 fun bpBorrowDecl(
-    decl: *AstXmlNode, types: *Dictionary<Str, Bool>, pure: *Dictionary<Str, Bool>
+    decl: *AstXmlNode, types: *Dictionary<Str, Bool>, reads: *Dictionary<Str, Bool>,
+    statics: *Dictionary<Str, Bool>
 ): AstXmlNode {
     val params: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
     if (params.size() == 0) {
@@ -262,14 +521,18 @@ fun bpBorrowDecl(
         return decl
     }
     var facts: BpFacts = BpFacts(
-        false, false, pure, Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), Dictionary<Str, Bool>()
+        false, false, false, statics, reads, types, Dictionary<Str, Bool>(), Dictionary<Str, Bool>(),
+        Dictionary<Str, Bool>(), List<Str>()
     )
     for (*stmt in body.Children) {
         facts.walk(stmt)
     }
-    // A write through a field/index/deref, or a call the analysis cannot trust, borrows nothing:
-    // both are the "unsure" that means escape.
-    if (facts.fieldWrite || facts.impureCall) {
+    // A write through a field/index/deref or a file-level `var`, or a call the analysis cannot
+    // trust, borrows nothing: each is the "unsure" that means escape.
+    if (facts.fieldWrite || facts.staticWrite || facts.impureCall) {
+        if (bpShow()) {
+            bpNote(fmtStr("borrow- | |", xmlAttr(decl, AstNodeAttributeKind.Name), bpWhy(*facts)))
+        }
         return decl
     }
     var borrowed: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
@@ -292,6 +555,14 @@ fun bpBorrowDecl(
     if (borrowed.size() == 0) {
         return decl
     }
+    if (bpShow()) {
+        bpNote(fmtStr("borrow+ | |", xmlAttr(decl, AstNodeAttributeKind.Name), bpNames(*borrowed)))
+    }
+    // `--no-borrow`: the analysis above still runs (so `--showBorrow` reads it), the rewrite does
+    // not - the emitted C++ is what the author wrote.
+    if (bpNoBorrow()) {
+        return decl
+    }
     var out: AstXmlNode = AstXmlNode(decl.name, decl.kind, decl.attributes, Array<AstXmlNode>())
     var kids: List<AstXmlNode> = List<AstXmlNode>()
     for (*child in decl.Children) {
@@ -309,8 +580,8 @@ fun bpBorrowDecl(
 // One module rewritten: a data class rebuilt when a method borrows, a function rebuilt when it
 // borrows, everything else kept as it is.
 fun bpRewriteModule(
-    module: *AstXmlNode, types: *Dictionary<Str, Bool>, pure: *Dictionary<Str, Bool>,
-    counts: *Dictionary<Str, Int>, valueUsed: *Dictionary<Str, Bool>
+    module: *AstXmlNode, types: *Dictionary<Str, Bool>, reads: *Dictionary<Str, Bool>,
+    statics: *Dictionary<Str, Bool>, counts: *Dictionary<Str, Int>, valueUsed: *Dictionary<Str, Bool>
 ): AstXmlNode {
     var changed: Bool = false
     var kids: List<AstXmlNode> = List<AstXmlNode>()
@@ -319,7 +590,7 @@ fun bpRewriteModule(
             val name: Str = xmlAttr(child, AstNodeAttributeKind.Name)
             val count: *Int = counts.getPtr(name)
             if (count != null && * count == 1 && !valueUsed.has(name)) {
-                kids.append(bpBorrowDecl(child, types, pure))
+                kids.append(bpBorrowDecl(child, types, reads, statics))
                 changed = true
                 continue
             }
@@ -332,7 +603,7 @@ fun bpRewriteModule(
                     val name: Str = xmlAttr(method, AstNodeAttributeKind.Name)
                     val count: *Int = counts.getPtr(name)
                     if (count != null && * count == 1 && !valueUsed.has(name)) {
-                        methods.append(bpBorrowDecl(method, types, pure))
+                        methods.append(bpBorrowDecl(method, types, reads, statics))
                         rebuilt = true
                         continue
                     }
@@ -363,12 +634,13 @@ fun bpRewriteModule(
 fun bpBorrowParams(preludeModules: List<AstXmlNode>, modules: List<AstXmlNode>): List<AstXmlNode> {
     var counts: Dictionary<Str, Int> = Dictionary<Str, Int>()
     var types: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
-    var pure: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+    var reads: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+    var statics: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     for (*pre in preludeModules) {
-        bpCollectDecls(pre, *counts, *types, *pure)
+        bpCollectDecls(pre, *counts, *types, *reads, *statics)
     }
     for (*mod in modules) {
-        bpCollectDecls(mod, *counts, *types, *pure)
+        bpCollectDecls(mod, *counts, *types, *reads, *statics)
     }
 
     var candidates: List<AstXmlNode> = List<AstXmlNode>()
@@ -387,11 +659,58 @@ fun bpBorrowParams(preludeModules: List<AstXmlNode>, modules: List<AstXmlNode>):
         bpGatherValueUses(mod, *candidateNames, *valueUsed)
     }
 
+    // Grows `reads` from the `data` marks to every borrow-clean declaration (see `bpInferReads`).
+    var factList: List<BpPure> = List<BpPure>()
+    for (*pre in preludeModules) {
+        bpPurCollect(pre, *counts, *statics, *types, *factList)
+    }
+    for (*mod in modules) {
+        bpPurCollect(mod, *counts, *statics, *types, *factList)
+    }
+    bpInferReads(*factList, *reads)
+
     // The prelude is never rewritten: its bodies are not emitted, and a declaration there has its
     // C++ written by hand.
     var out: List<AstXmlNode> = List<AstXmlNode>()
     for (*mod in modules) {
-        out.append(bpRewriteModule(mod, *types, *pure, *counts, *valueUsed))
+        out.append(bpRewriteModule(mod, *types, *reads, *statics, *counts, *valueUsed))
     }
     return out
+}
+
+// ---- the switches -----------------------------------------------------------
+
+// `--no-borrow`: auto-borrow off. The analysis still runs (so `--showBorrow` can read it); the
+// declaration rewrite is skipped, and the emitted C++ is what the author wrote. The escape
+// hatch for the day a borrow is wrong.
+var bpNoBorrowFlag: Bool = false
+
+fun bpNoBorrow(): Bool {
+    return bpNoBorrowFlag
+}
+
+fun bpSetNoBorrow(value: Bool): Unit {
+    bpNoBorrowFlag = value
+}
+
+// `--showBorrow`: the decision for every candidate. The lines are collected here and printed by
+// the driver (the pass keeps no stderr of its own): `borrow+ <name> <params>` when a declaration
+// borrows, `borrow- <name> <why>` when it refuses. An empty report unless the flag is set.
+var bpShowFlag: Bool = false
+var bpReport: List<Str> = List<Str>()
+
+fun bpShow(): Bool {
+    return bpShowFlag
+}
+
+fun bpSetShow(value: Bool): Unit {
+    bpShowFlag = value
+}
+
+fun bpNote(line: *Str): Unit {
+    bpReport.append(*line)
+}
+
+fun bpReportLines(): List<Str> {
+    return bpReport
 }

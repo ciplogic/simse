@@ -145,6 +145,15 @@ Int simse_lenOf(const Str& self);
 template <class T, int N>
 Int simse_lenOf(const SmallVector<T, N>& self);
 
+// `Opt<T>.hasValue()`: the `Variant2` tag test (specs/core-types.md). The C++ is `variant2.hpp` and
+// the member is `const`, so nothing is copied and nothing is written - the declaration that names
+// this symbol (cppsrc/rtl/rtl.kt) is what lets the auto-borrow proof see it as read-only, because a
+// built-in member has no declaration of its own to carry a mark (impl_specs/escape-analysis.md).
+// `Res<T>.isOk()` is the same test but cannot be declared yet: a receiver must be spelled `Res<T>`
+// to unify in `findNativeExt`, and `Res` carries an `unInit`, so the checker refuses that spelling.
+template <class T>
+Bool simse_opt_hasValue(const Opt<T>& self);
+
 #include <algorithm>
 #include <type_traits>
 #include <utility>
@@ -851,7 +860,7 @@ Int ns1_partFlatBlocks() {
     simse_println((_sm_expr2), stdout);
     _sm_expr3 = -1;
     _sm_expr4 = ns1_pick(_sm_expr3);
-    _sm_expr5 = _sm_expr4.hasValue();
+    _sm_expr5 = simse_opt_hasValue(_sm_expr4);
     simse_println((_sm_expr5), stdout);
     _sm_expr6 = ns1_describe(2);
     simse_println((_sm_expr6), stdout);
@@ -1220,6 +1229,11 @@ inline Int simse_lenOf(const Str& self) {
 template <class T, int N>
 inline Int simse_lenOf(const SmallVector<T, N>& self) {
     return self.size();
+}
+
+template <class T>
+inline Bool simse_opt_hasValue(const Opt<T>& self) {
+    return self.hasValue();
 }
 
 // `dictionaryOf<K, V>()`: `Dictionary<K, V>` is a value type, so this default-constructs

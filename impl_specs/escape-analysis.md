@@ -117,7 +117,7 @@ value (`var valList = List<Int>(); var list = *valList;`).
 Each is a *refusal*, so an unmodeled use is never silently promoted - the failure mode is a box
 that could have been a stack value, never a dangling pointer.
 
-## Auto-borrow: a read-only parameter becomes a `*T` (landed, proof of concept)
+## Auto-borrow: a read-only parameter becomes a `*T` (landed)
 
 `cppsrc/parser/BorrowParams.kt`, run from the driver right after `cpFoldConstParams` - the same
 whole-program, **before-sema** AST rewrite, so the checker, the lowering, the emitter and every call
@@ -128,16 +128,20 @@ language's borrow spelling permits, and would be a second style of code.
 
 The rule is the simplest one that is sound, and it refuses by default - *unsure means it escapes*:
 
-- a body may call only a **pure** callee: `data` (`IsPure`). Any other call borrows nothing. The
-  length accessors are declarations too - `lenOf` for `Str`/`List`, and `Array.count`,
-  `Dictionary.size`, `StrView.size()` (`cppsrc/rtl/rtl.kt`) - so no name is seeded: `pure` is
-  exactly the set of `data` marks, the same set the value reuse reads (`linear/ReusePure.kt`). A
-  callee can write through an alias this analysis cannot see, and a `data` promise is the one
-  "writes nothing" fact the language has. A *construction* (`Point(1, 2)`) is not a call on the
-  parameter and is allowed;
-- **any** assignment whose target is not a plain name (`x.f = ...`, `x[i] = ...`, `*x = ...`)
-  borrows nothing, anywhere in the body - the author's own rule, and the cheap guard against a write
-  through an alias the analysis would otherwise have to hunt for;
+- a body may call only a **borrow-clean** callee: one that writes nothing observable, so it cannot
+  write through a parameter it is handed. The fact is a *mark* for a body-less declaration - `data`
+  (pure) or `borrow` (read-only, the weaker of the two - `specs/functions.md`) - and is **proved**
+  from the body by the borrow-clean fixpoint below for one that has a body, so a plain helper is
+  trusted too. A *construction* (`Point(1, 2)`) is not a call on the parameter and is allowed;
+- **the `for` lowering's machine step is trusted** (`_sm_for<n>.advance()`, `bpMachineStep`): the
+  prefix is the compiler's own and a machine can only come from an `iter`/`iterPtr` call in the same
+  body, so the call that built it has already been weighed and `advance` reads the container it was
+  built over;
+- **any** assignment whose target is not a plain name (`x.f = ...`, `x[i] = ...`, `*x = ...`), **or
+  is a file-level `var`**, borrows nothing, anywhere in the body - the author's own rule, and the
+  cheap guard against a write through an alias the analysis would otherwise have to hunt for. The
+  file-level half is what keeps a *caller's* pointer into a global valid: a caller may pass
+  `&shared[i]`, and a callee that wrote `shared` would dangle it;
 - a parameter under `&`/`*`, an assignment target, or captured by a lambda is not borrowed. A
   capture would copy the *pointer* into the closure, which is exactly an escape;
 - `this` is never borrowed - the emitter already passes a value receiver as `T* self`;
@@ -150,6 +154,43 @@ Everything else a parameter can do is a *read*: `p.f`, `p[i]`, `p.size()`, `p` a
 "string->size() and return" - and few bodies qualify, which is the point: the proof is "this body
 only reads".
 
+### The borrowness fixpoint (two flags, not one)
+
+`bpInferReads` (`cppsrc/parser/BorrowParams.kt`) grows the trusted set from *below*, so the proof no
+longer rests on the author remembering a mark:
+
+- a declaration *with a body* is borrow-clean when it writes nothing observable (no field/index/deref
+  store, no file-level `var`) and every call it makes is to a name already in the set;
+- a declaration *without* a body (a `@SmGen` native) is trusted only by its `data` mark - its C++ is
+  elsewhere and cannot be checked;
+- a name joins only once **every** declaration with that name is trusted or proved, and the fixpoint
+  starts from the `data` marks and iterates to the least fixed point. Growing from below is the sound
+  direction: a name left out is simply not trusted, and a recursive cycle is never assumed clean.
+
+Two facts are at play and they are **not the same flag**:
+
+- **borrowness** (this pass): the callee cannot write through a parameter, so a caller may hand it a
+  pointer. It says nothing about the *result*, so a helper returning a fresh `Str`, a `List` or a
+  yield-machine is borrow-clean;
+- **purity** (`data`, `Codegen.kt`'s `pureCallees`, `linear/ReusePure.kt`): the result is a function
+  of the argument, so a repeated call folds. Folding additionally needs the result to be
+  identity-free and the body to read no file-level `var` (an intervening call could change a global),
+  which the reuse pass owns - so the emitter keeps its own set and this pass does not feed it.
+
+The split matters because the two are satisfied *differently*: a borrow proof needs only "writes
+nothing", while a fold needs "the same value, and shareable". One flag would have to be the weaker
+promise for borrowing and the stronger one for folding, and would be wrong for one of them.
+
+### Switches
+
+- **`--no-borrow`**: the analysis still runs (so the dump is available), the declaration rewrite does
+  not - the emitted C++ is exactly what the author wrote. The escape hatch for a wrong borrow, and
+  it is what `stress/collections` builds with, so the *off* side is pinned by a golden.
+- **`--showBorrow`**: one line per candidate on stderr - `borrow+ <name> <params>` or
+  `borrow- <name> <why>` - the view that turned the next steps from guesses into a histogram
+  (`grep '^borrow-' | ...`). `bpNote` collects the lines and the driver prints them, so the pass
+  keeps no stderr of its own.
+
 **Where it pays, and where it is neutral.** In a body that only views or re-borrows the parameter
 the copy disappears on *both* sides: `fun width(s: Str): Int { return s.size() }` becomes
 `Int ns1_width(Str* s) { ... = s->size(); }` and the caller passes `&w`, where `spanOfStr`/`size`
@@ -160,9 +201,39 @@ callee, so that shape is neutral rather than better. A literal argument material
 the call site needs (`_sm_base2 = __sm_stringTable[k]; _sm_base1 = &_sm_base2;`) - the "patch the
 call place with a new temporary" shape, at the cost the callee used to pay.
 
-**The proof of concept deliberately stops there**: no interprocedural summary (a call is trusted
-only by its `data` mark), no size model, and only a type it can name as heavy (`Str`, a `data
-class`, a container) - never a scalar, a handle, or `Span`/`Array`.
+**Reach.** A body-less declaration is trusted by its mark, so the RTL's read-only operations carry
+`borrow` (`cppsrc/rtl/rtl.kt`: the string and character reads and conversions, the `List`/
+`Dictionary` reads, `iter`/`iterPtr`), as do the compiler's own read-only `common` accessors
+(`cppsrc/common/xmlutil.kt`) and `fmtStr`. Two shapes an earlier pass got wrong are fixed:
+`bpIsConstruct` recognizes a construction with **no type argument** (`AstXmlNode(...)`, `Str(...)`,
+and the `Opt`/`Res` statics) - the `specs` always said a construction is not a call on the
+parameter, the pass weighed a bare `ExprName` callee as a call - and `Opt.hasValue()` is a
+**declared** operation (`cppsrc/rtl/_res.md`'s `optops`) instead of a built-in member with nothing to
+mark, the `lenOf` treatment applied to the `Opt`/`Res` surface.
+
+What is still out of reach, in the order a histogram of the `borrow-` lines puts it:
+
+- **a body that writes its own local through an untrusted call** (`append`, `insert`, `appendStr`):
+  the rule bails on any call it cannot trust, and a writing callee cannot be marked. Over half the
+  candidates now, and the irreducible part of the coarse rule.
+- **a body that writes any field or index at all** (`writes a field, an index or a pointer`, 112):
+  the bail is *body-wide*, so a method that writes `this.<field>` never borrows a parameter it only
+  reads. The next lever is to make it *per-parameter*: a write blocks only the parameters its target
+  subtree mentions - a write to `this.f` or to a local cannot reach a by-value parameter, whose only
+  alias would come from an `&p`/`*p`, which already excludes it - while a target that mentions a
+  module-level `var` blocks everything, for the reason the file-level write rule exists.
+- **the two built-in members that cannot be declared yet.** `Res<T>.isOk()` needs a receiver spelled
+  `Res<T>` to unify in `findNativeExt`, and `Res` carries an `unInit`, which the checker refuses for
+  a value receiver (the emitter passes `Res* self`, so the copy the rule fears is not actually made
+  - the rule is what would have to change, or a declared receiver be pointeed before unifying).
+  `value()` answers the type argument, and `memberCallReturn` returns a declaration's return type
+  without substituting it, so a `T`-returning declaration would emit `T` where a concrete type
+  belongs - a latent emitter gap to close first.
+- and the cascade behind them - `eprintln`, and the emitter's own helpers (`line`, `emit`,
+  `inferType`, `operandOf`, ...), each blocked by one of the above. Nothing is inferred from a
+  whole-program call graph beyond the name-keyed fixpoint, no size model exists, and only a type it
+  can name as heavy (`Str`, a `data class`, a container) is borrowed - never a scalar, a handle, or
+  `Span`/`Array`.
 
 ## Decisions
 
@@ -172,10 +243,19 @@ class`, a container) - never a scalar, a handle, or `Span`/`Array`.
 2. **The "heavy" test is a type test, not a size.** `Str`, a `data class`, or a container
    (`List`/`Dictionary`/`Opt`/`Res`) is heavy; a scalar, a handle, `Span` and `Array` are not. A
    `sizeof`-driven threshold is the eventual refinement.
-3. **Still open: how aggressive the read-only proof should be.** The pure-calls-only rule is what
-   keeps it sound without dataflow, and it is what limits the win; an interprocedural purity
-   fixpoint (`impl_specs/expr-reuse.md`, "Future: inferring purity") would let a plain helper be
-   trusted too.
+3. **Decided: the read-only proof looks through bodies, and borrowness is its own flag.** A
+   name-keyed fixpoint (`bpInferReads`) proves which callees write nothing, so a plain helper is
+   trusted; `data` stays the *declared* input, and the emitter keeps the *purity* flag the reuse
+   pass reads.
+4. **`borrow` is the mark for what the proof cannot see** (the author's suggestion, and the
+   weaker sibling of `data` in `specs/functions.md`): a body-less declaration can only be trusted by
+   a mark, and the RTL's read-only natives are exactly that. Marking them was worth it because
+   `size`-style `data` was the wrong promise - a read-only `toString` returns a fresh `Str` and must
+   not be folded, but a caller may still borrow into it.
+5. **Two switches, not a mode.** `--no-borrow` disables the rewrite (the escape hatch, and what one
+   corpus case builds with so the off side is pinned); `--showBorrow` prints the per-candidate
+   decision. Both are the shape the other passes already use (`--no-concat`,
+   `--showLinearRepresentation`).
 
 ## Validation
 
@@ -190,12 +270,22 @@ returned handle (plus `main`'s `p`) left a `makeRef`. `stress/uninit` is the oth
 `oneOwner` is a promotable `&Res` box, and the `unInit` refusal is what keeps it a box (a stack
 value would run `~Res()` twice).
 
-Auto-borrow: `stress/pure-function` grew the three shapes and pins them - `Int ns1_sum(ns1_Point* p)`
-and `Int ns1_width(Str* s)` borrowed (the body only reads, and `s->size()` takes the pointer with no
-copy either side), `Int ns1_bumpPoint(ns1_Point p)` and `ns1_impureTwice(Str s)` left by value (a
-field write; a call the analysis cannot trust), and the call sites taking addresses
-(`_sm_base2 = &p; ns1_sum(_sm_base2);`). Five corpus programs' `.cpp` moved when the borrow first
-fired, all with unchanged stdout.
+Auto-borrow: `stress/pure-function` pins every shape - `Int ns1_sum(ns1_Point* p)` and
+`Int ns1_width(Str* s)` borrowed (the body only reads, and `simse_lenOf` takes the pointer with no
+copy either side), `Int ns1_viaSum(ns1_Point* p)` borrowed through the *unmarked* `sum` the fixpoint
+proves, `Str ns1_viaLabel(ns1_Point* p)` borrowed through `label` - a body the fixpoint *cannot*
+prove (it builds a local string with `appendStr`) that only carries a `borrow` mark - while
+`Str ns1_label(ns1_Point p)` keeps its copy (the mark is the caller's side, not the declaration's),
+`Int ns1_bumpPoint(ns1_Point p)` and `ns1_impureTwice(Str s)` stay by value (a field write; a call
+to `bump`, which writes the file-level `bumps`) - and the call sites taking addresses
+(`_sm_base4 = &p; ns1_sum(_sm_base4);`). `stress/collections` builds with `--no-borrow`, so its
+golden is the *unborrowed* shape: the flag is pinned by a case.
+
+On the compiler's own tree the borrowed set is 25 parameters (`--showBorrow`; the count is of the
+disposition, not of the win - the shapes above are what unblock the *candidates*); the
+self-transpile measured ~1748 ms before the borrowness work and ~1433 ms after
+(`bun tools/bootstrap.js`, wall clock). The corpus is
+**53/53** and the bootstrap fixed point holds byte for byte.
 
 Note the coverage gap this closes: before this work **nothing** in `cppsrc` or `stress` used a
 counted reference (`&T`), so the whole `&T` path was untested; `ref-promote` is the first case that

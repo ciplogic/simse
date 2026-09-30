@@ -5,21 +5,13 @@
 // whole program, because "every call site" is the premise and Simse is a closed world (every
 // module root is scanned and nothing links separately).
 //
-//     fun logMe(isDebug: Bool) {          fun logMe() {
-//         if (isDebug) {                      val isDebug: Bool = false;
-//             print("is debug")               if (isDebug) {
-//         }                                       print("is debug")
-//     }                                   }
-//     logMe(false)                        logMe()
-//     logMe(false)                        logMe()
-//
 // It runs with the `!!` expansion (cppsrc/compiler/Driver.kt), once every module is parsed and
 // *before* sema, so the checker, the lowering and the emitter all see the rewritten program and
-// nothing downstream knows the optimization exists. The signature is why it cannot live later:
-// the emitter reads a declaration's parameters from the AST at emit time and lowers that AST body
-// into the IL (`Codegen.kt`'s `emitFunction`), and the passes under `cppsrc/optimizations/` see
-// one already-lowered body at a time - a signature is not theirs to move. So this is an
-// AST-to-AST rewrite beside Propagate.kt rather than a linear pass.
+// nothing downstream knows the optimization exists. It cannot live later: the emitter reads a
+// declaration's parameters from the AST at emit time and lowers that AST body into the IL
+// (`Codegen.kt`'s `emitFunction`), and the passes under `cppsrc/optimizations/` see one
+// already-lowered body at a time - a signature is not theirs to move. So this is an AST-to-AST
+// rewrite beside Propagate.kt rather than a linear pass.
 //
 // The resolution is name-level, like the coloring pass (cppsrc/sema/Async.kt) and `!!`
 // (cppsrc/parser/Propagate.kt): a call spells a name and a declaration answers it. Where that
@@ -133,8 +125,8 @@ fun cpCollectCandidates(
         // cannot be attributed, and an overload set would be rewritten wrongly.
         val count: *Int = counts.getPtr(name)
         if (count == null || * count != 1) {
-            continue
-        }
+        continue
+    }
         out.append(decl)
         names.insert(name, true)
     }
@@ -229,7 +221,6 @@ fun cpDecide(
     valueUsed: *Dictionary<Str, Bool>
 ): Opt<ConstFold> {
     val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
-    // The name is never used as a value.
     if (valueUsed.has(name)) {
         return Opt<ConstFold>.none()
     }

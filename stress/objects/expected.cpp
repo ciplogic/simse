@@ -149,6 +149,15 @@ Int simse_lenOf(const Str& self);
 template <class T, int N>
 Int simse_lenOf(const SmallVector<T, N>& self);
 
+// `Opt<T>.hasValue()`: the `Variant2` tag test (specs/core-types.md). The C++ is `variant2.hpp` and
+// the member is `const`, so nothing is copied and nothing is written - the declaration that names
+// this symbol (cppsrc/rtl/rtl.kt) is what lets the auto-borrow proof see it as read-only, because a
+// built-in member has no declaration of its own to carry a mark (impl_specs/escape-analysis.md).
+// `Res<T>.isOk()` is the same test but cannot be declared yet: a receiver must be spelled `Res<T>`
+// to unify in `findNativeExt`, and `Res` carries an `unInit`, so the checker refuses that spelling.
+template <class T>
+Bool simse_opt_hasValue(const Opt<T>& self);
+
 #include <algorithm>
 #include <type_traits>
 #include <utility>
@@ -373,6 +382,8 @@ inline void simse_println(const T& value, FILE* out) {
     std::fputc('\n', out);
 }
 
+struct Attribute;
+struct XmlNode;
 struct ns1_Counter;
 template <class A, class B>
 struct ns1_Pair;
@@ -383,6 +394,21 @@ struct ns1_Grid;
 struct ns1_CounterReceiverShapes;
 struct ns1_Holder;
 struct ns1_Shell;
+// cppsrc/rtl
+SIMSE_PACK_PUSH
+struct Attribute {
+    Str name;
+    Str value;
+};
+SIMSE_PACK_POP
+// cppsrc/rtl
+SIMSE_PACK_PUSH
+struct XmlNode {
+    Str name;
+    List<Attribute> attributes;
+    Array<XmlNode> Children;
+};
+SIMSE_PACK_POP
 // stress/objects/src/main.kt
 SIMSE_PACK_PUSH
 struct ns1_Counter {
@@ -502,7 +528,7 @@ Bool ns1_isEmpty(ns1_Shell* self);
 Str ns1_describeShapes(Str* self);
 Int ns1_area(Int height);
 Int ns1_partShapes();
-Attribute ns1_attr(Str name, Str value);
+Attribute ns1_attr(Str* name, Str* value);
 List<Attribute> ns1_attrs3(Attribute a, Attribute b, Attribute c);
 List<Attribute> ns1_attrs4(Attribute a, Attribute b, Attribute c, Attribute d);
 Array<XmlNode> ns1_noChildren();
@@ -1213,7 +1239,7 @@ Int ns1_partLanguageTour() {
     simse_println((_sm_expr19), stdout);
     _sm_base11 = __sm_stringTable[43];
     number = simse_str_toInt(_sm_base11);
-    _sm_expr10 = number.hasValue();
+    _sm_expr10 = simse_opt_hasValue(number);
     if (_sm_expr10) goto L9;
     goto L10;
     L9:;
@@ -1222,7 +1248,7 @@ Int ns1_partLanguageTour() {
     L10:;
     _sm_base12 = __sm_stringTable[30];
     badNumber = simse_str_toInt(_sm_base12);
-    _sm_expr10 = badNumber.hasValue();
+    _sm_expr10 = simse_opt_hasValue(badNumber);
     _sm_expr23 = !_sm_expr10;
     if (_sm_expr23) goto L11;
     goto L12;
@@ -1231,7 +1257,7 @@ Int ns1_partLanguageTour() {
     L12:;
     _sm_base13 = __sm_stringTable[33];
     fraction = simse_str_toFloat(_sm_base13);
-    _sm_expr10 = fraction.hasValue();
+    _sm_expr10 = simse_opt_hasValue(fraction);
     if (_sm_expr10) goto L13;
     goto L14;
     L13:;
@@ -1333,13 +1359,13 @@ Int ns1_partOptionalResult() {
     List<Opt<Int>> counts;
     Res<Int> failed, again, _sm_expr18, _sm_expr19;
     empty = Opt<Int>();
-    _sm_expr1 = empty.hasValue();
+    _sm_expr1 = simse_opt_hasValue(empty);
     simse_println((_sm_expr1), stdout);
     found = ns1_half(8);
     _sm_expr2 = found.value();
     simse_println((_sm_expr2), stdout);
     found = ns1_half(9);
-    _sm_expr3 = found.hasValue();
+    _sm_expr3 = simse_opt_hasValue(found);
     simse_println((_sm_expr3), stdout);
     found = Opt<Int>::some(3);
     _sm_expr4 = found.value();
@@ -1350,7 +1376,7 @@ Int ns1_partOptionalResult() {
     _sm_expr6 = simse_lenOf(_sm_expr5);
     simse_println((_sm_expr6), stdout);
     text = Opt<Str>::none();
-    _sm_expr7 = text.hasValue();
+    _sm_expr7 = simse_opt_hasValue(text);
     simse_println((_sm_expr7), stdout);
     _sm_expr8 = copy.value();
     simse_println((_sm_expr8), stdout);
@@ -1375,7 +1401,7 @@ Int ns1_partOptionalResult() {
     _sm_expr15 = _sm_base3->value();
     simse_println((_sm_expr15), stdout);
     _sm_base4 = simse_addressOf(counts[1]);
-    _sm_expr16 = _sm_base4->hasValue();
+    _sm_expr16 = simse_opt_hasValue((*_sm_base4));
     simse_println((_sm_expr16), stdout);
     failed = ns1_longError();
     _sm_expr17 = failed.isOk();
@@ -1690,9 +1716,12 @@ Int ns1_partShapes() {
     return 0;
 }
 // stress/objects/src/main.kt
-Attribute ns1_attr(Str name, Str value) {
+Attribute ns1_attr(Str* name, Str* value) {
+    Str _sm_base1, _sm_base2;
     Attribute _sm_expr1;
-    _sm_expr1 = Attribute(name, value);
+    _sm_base1 = *(name);
+    _sm_base2 = *(value);
+    _sm_expr1 = Attribute{_sm_base1, _sm_base2};
     return _sm_expr1;
 }
 // stress/objects/src/main.kt
@@ -1881,39 +1910,107 @@ Str ns1_dumpNode(XmlNode node, Int depth) {
 }
 // stress/objects/src/main.kt
 Int ns1_partXmlTree() {
+    Str* _sm_base1, * _sm_base3, * _sm_base5, * _sm_base7, * _sm_base9, * _sm_base11, * _sm_base13,
+        * _sm_base15, * _sm_base17, * _sm_base19, * _sm_base21, * _sm_base23, * _sm_base25, * _sm_base27,
+        * _sm_base29, * _sm_base31, * _sm_base33, * _sm_base35, * _sm_base37, * _sm_base39, * _sm_base41,
+        * _sm_base43, * _sm_base45, * _sm_base47, * _sm_base49, * _sm_base51, * _sm_base53, * _sm_base55,
+        * _sm_base57, * _sm_base59;
+    Str _sm_base2, _sm_base4, _sm_base6, _sm_base8, _sm_base10, _sm_base12, _sm_base14, _sm_base16,
+        _sm_base18, _sm_base20, _sm_base22, _sm_base24, _sm_base26, _sm_base28, _sm_base30, _sm_base32,
+        _sm_base34, _sm_base36, _sm_base38, _sm_base40, _sm_base42, _sm_base44, _sm_base46, _sm_base48,
+        _sm_base50, _sm_base52, _sm_base54, _sm_base56, _sm_base58, _sm_base60, _sm_expr24;
     Attribute _sm_expr1, _sm_expr2, _sm_expr3, _sm_expr4, _sm_expr7, _sm_expr8, _sm_expr9, _sm_expr10,
         _sm_expr13, _sm_expr14, _sm_expr15, _sm_expr16, _sm_expr19, _sm_expr20, _sm_expr21;
     List<Attribute> _sm_expr5, _sm_expr11, _sm_expr17, _sm_expr22;
     Array<XmlNode> _sm_expr6, _sm_expr12, _sm_expr18, _sm_expr23;
     XmlNode typeNode, fieldNode, dataClassNode, moduleNode;
-    Str _sm_expr24;
-    _sm_expr1 = ns1_attr(__sm_stringTable[25], __sm_stringTable[2]);
-    _sm_expr2 = ns1_attr(__sm_stringTable[27], __sm_stringTable[50]);
-    _sm_expr3 = ns1_attr(__sm_stringTable[12], __sm_stringTable[42]);
-    _sm_expr4 = ns1_attr(__sm_stringTable[29], __sm_stringTable[34]);
+    _sm_base2 = __sm_stringTable[25];
+    _sm_base1 = &_sm_base2;
+    _sm_base4 = __sm_stringTable[2];
+    _sm_base3 = &_sm_base4;
+    _sm_expr1 = ns1_attr(_sm_base1, _sm_base3);
+    _sm_base6 = __sm_stringTable[27];
+    _sm_base5 = &_sm_base6;
+    _sm_base8 = __sm_stringTable[50];
+    _sm_base7 = &_sm_base8;
+    _sm_expr2 = ns1_attr(_sm_base5, _sm_base7);
+    _sm_base10 = __sm_stringTable[12];
+    _sm_base9 = &_sm_base10;
+    _sm_base12 = __sm_stringTable[42];
+    _sm_base11 = &_sm_base12;
+    _sm_expr3 = ns1_attr(_sm_base9, _sm_base11);
+    _sm_base14 = __sm_stringTable[29];
+    _sm_base13 = &_sm_base14;
+    _sm_base16 = __sm_stringTable[34];
+    _sm_base15 = &_sm_base16;
+    _sm_expr4 = ns1_attr(_sm_base13, _sm_base15);
     _sm_expr5 = ns1_attrs4(_sm_expr1, _sm_expr2, _sm_expr3, _sm_expr4);
     _sm_expr6 = ns1_noChildren();
-    typeNode = XmlNode(__sm_stringTable[22], _sm_expr5, _sm_expr6);
-    _sm_expr7 = ns1_attr(__sm_stringTable[29], __sm_stringTable[55]);
-    _sm_expr8 = ns1_attr(__sm_stringTable[16], __sm_stringTable[31]);
-    _sm_expr9 = ns1_attr(__sm_stringTable[27], __sm_stringTable[50]);
-    _sm_expr10 = ns1_attr(__sm_stringTable[12], __sm_stringTable[41]);
+    typeNode = XmlNode{__sm_stringTable[22], _sm_expr5, _sm_expr6};
+    _sm_base18 = __sm_stringTable[29];
+    _sm_base17 = &_sm_base18;
+    _sm_base20 = __sm_stringTable[55];
+    _sm_base19 = &_sm_base20;
+    _sm_expr7 = ns1_attr(_sm_base17, _sm_base19);
+    _sm_base22 = __sm_stringTable[16];
+    _sm_base21 = &_sm_base22;
+    _sm_base24 = __sm_stringTable[31];
+    _sm_base23 = &_sm_base24;
+    _sm_expr8 = ns1_attr(_sm_base21, _sm_base23);
+    _sm_base26 = __sm_stringTable[27];
+    _sm_base25 = &_sm_base26;
+    _sm_base28 = __sm_stringTable[50];
+    _sm_base27 = &_sm_base28;
+    _sm_expr9 = ns1_attr(_sm_base25, _sm_base27);
+    _sm_base30 = __sm_stringTable[12];
+    _sm_base29 = &_sm_base30;
+    _sm_base32 = __sm_stringTable[41];
+    _sm_base31 = &_sm_base32;
+    _sm_expr10 = ns1_attr(_sm_base29, _sm_base31);
     _sm_expr11 = ns1_attrs4(_sm_expr7, _sm_expr8, _sm_expr9, _sm_expr10);
     _sm_expr12 = ns1_oneChild(typeNode);
-    fieldNode = XmlNode(__sm_stringTable[13], _sm_expr11, _sm_expr12);
-    _sm_expr13 = ns1_attr(__sm_stringTable[25], __sm_stringTable[3]);
-    _sm_expr14 = ns1_attr(__sm_stringTable[27], __sm_stringTable[50]);
-    _sm_expr15 = ns1_attr(__sm_stringTable[12], __sm_stringTable[50]);
-    _sm_expr16 = ns1_attr(__sm_stringTable[29], __sm_stringTable[21]);
+    fieldNode = XmlNode{__sm_stringTable[13], _sm_expr11, _sm_expr12};
+    _sm_base34 = __sm_stringTable[25];
+    _sm_base33 = &_sm_base34;
+    _sm_base36 = __sm_stringTable[3];
+    _sm_base35 = &_sm_base36;
+    _sm_expr13 = ns1_attr(_sm_base33, _sm_base35);
+    _sm_base38 = __sm_stringTable[27];
+    _sm_base37 = &_sm_base38;
+    _sm_base40 = __sm_stringTable[50];
+    _sm_base39 = &_sm_base40;
+    _sm_expr14 = ns1_attr(_sm_base37, _sm_base39);
+    _sm_base42 = __sm_stringTable[12];
+    _sm_base41 = &_sm_base42;
+    _sm_base44 = __sm_stringTable[50];
+    _sm_base43 = &_sm_base44;
+    _sm_expr15 = ns1_attr(_sm_base41, _sm_base43);
+    _sm_base46 = __sm_stringTable[29];
+    _sm_base45 = &_sm_base46;
+    _sm_base48 = __sm_stringTable[21];
+    _sm_base47 = &_sm_base48;
+    _sm_expr16 = ns1_attr(_sm_base45, _sm_base47);
     _sm_expr17 = ns1_attrs4(_sm_expr13, _sm_expr14, _sm_expr15, _sm_expr16);
     _sm_expr18 = ns1_oneChild(fieldNode);
-    dataClassNode = XmlNode(__sm_stringTable[3], _sm_expr17, _sm_expr18);
-    _sm_expr19 = ns1_attr(__sm_stringTable[25], __sm_stringTable[9]);
-    _sm_expr20 = ns1_attr(__sm_stringTable[27], __sm_stringTable[50]);
-    _sm_expr21 = ns1_attr(__sm_stringTable[12], __sm_stringTable[50]);
+    dataClassNode = XmlNode{__sm_stringTable[3], _sm_expr17, _sm_expr18};
+    _sm_base50 = __sm_stringTable[25];
+    _sm_base49 = &_sm_base50;
+    _sm_base52 = __sm_stringTable[9];
+    _sm_base51 = &_sm_base52;
+    _sm_expr19 = ns1_attr(_sm_base49, _sm_base51);
+    _sm_base54 = __sm_stringTable[27];
+    _sm_base53 = &_sm_base54;
+    _sm_base56 = __sm_stringTable[50];
+    _sm_base55 = &_sm_base56;
+    _sm_expr20 = ns1_attr(_sm_base53, _sm_base55);
+    _sm_base58 = __sm_stringTable[12];
+    _sm_base57 = &_sm_base58;
+    _sm_base60 = __sm_stringTable[50];
+    _sm_base59 = &_sm_base60;
+    _sm_expr21 = ns1_attr(_sm_base57, _sm_base59);
     _sm_expr22 = ns1_attrs3(_sm_expr19, _sm_expr20, _sm_expr21);
     _sm_expr23 = ns1_oneChild(dataClassNode);
-    moduleNode = XmlNode(__sm_stringTable[9], _sm_expr22, _sm_expr23);
+    moduleNode = XmlNode{__sm_stringTable[9], _sm_expr22, _sm_expr23};
     _sm_expr24 = ns1_dumpNode(moduleNode, 0);
     simse_print((_sm_expr24), stdout);
     return 0;
@@ -2077,6 +2174,11 @@ inline Int simse_lenOf(const Str& self) {
 template <class T, int N>
 inline Int simse_lenOf(const SmallVector<T, N>& self) {
     return self.size();
+}
+
+template <class T>
+inline Bool simse_opt_hasValue(const Opt<T>& self) {
+    return self.hasValue();
 }
 
 // `dictionaryOf<K, V>()`: `Dictionary<K, V>` is a value type, so this default-constructs
