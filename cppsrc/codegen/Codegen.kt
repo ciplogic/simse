@@ -85,25 +85,23 @@ data class CgStatic(
 enum class NameKind { Value, Shared, Pointer }
 
 // Reads the parts only; each is appended through the borrow the pointer `for` hands
-// out (`appendStrPtr`), so no element is copied.
+// out (`appendStrPtr`), so no element is copied. A one-byte separator keeps its own
+// path; everything else is `common.joinStrs`.
 fun cgJoin(parts: *List<Str>, separator: *Str): Str {
     if (separator.size() == 1) {
         return cgJoinChar(parts, separator[0])
     }
-    var out: Str = ""
-    if (parts.size() == 0) {
-        return out
+    return joinStrs(parts, separator)
+}
+
+// A receiver argument followed by the call's own arguments, comma-separated, and the
+// receiver alone when there are none. The receiver is a prefix rather than an element,
+// so it cannot just be prepended to the list `cgJoin` takes.
+fun cgReceiverArgs(receiver: Str, args: *List<Str>): Str {
+    if (args.size() == 0) {
+        return receiver
     }
-    out.reserve(cgJoinLength(parts, separator.size()))
-    var first: Bool = true
-    for (*part in parts) {
-        if (!first) {
-            out.appendStr(separator)
-        }
-        out.appendStrPtr(part)
-        first = false
-    }
-    return out
+    return fmtStr("|, |", receiver, cgJoin(args, ", "))
 }
 
 fun cgJoinChar(parts: *List<Str>, separator: Char): Str {
@@ -3155,12 +3153,7 @@ fun Emitter.emitUninit(fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts, prototype
                     val fnIndex: Int = this.findExtensionFn(calleeText, receiverExpr, args.size())
                     if (fnIndex >= 0) {
                         val fn: *CgFn = *this.functions[fnIndex]
-                        var all: Str = this.receiverArg(fn.receiver, receiverExpr)
-                        var a: Int = 0
-                        while (a < args.size()) {
-                            all = all + ", " + args[a]
-                            a = a + 1
-                        }
+                        val all: Str = cgReceiverArgs(this.receiverArg(fn.receiver, receiverExpr), args)
                         return fmtStr("|(|)", this.qualify(fn.packageName, fn.name), all)
                     }
                     val extIndex: Int = this.findNativeExt(calleeText, receiverExpr, args.size())
@@ -3171,12 +3164,7 @@ fun Emitter.emitUninit(fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts, prototype
                         // section that defines it must be emitted - a setter the lowering
                         // synthesizes has no call in the AST for `collectNames` to see.
                         this.referencedNames.insert(ext.symbol, true)
-                        var all: Str = this.nativeReceiverArg(ext.receiver, receiverExpr)
-                        var a: Int = 0
-                        while (a < args.size()) {
-                            all = all + ", " + args[a]
-                            a = a + 1
-                        }
+                        val all: Str = cgReceiverArgs(this.nativeReceiverArg(ext.receiver, receiverExpr), args)
                         return fmtStr("|(|)", ext.symbol, all)
                     }
                     return fmtStr("|(|)", this.memberAccess(receiverExpr, calleeText), cgJoin(args, ", "))
@@ -3184,30 +3172,21 @@ fun Emitter.emitUninit(fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts, prototype
 
                 if (this.receiverFnNames.has(calleeText)) {
                     val byName: Int = this.findReceiverFnByName(calleeText)
-                    var all: Str = ""
+                    var receiver: Str = ""
                     if (byName >= 0) {
                         val caller: *CgFn = *this.functions[byName]
-                        all = this.receiverArg(caller.receiver, receiverExpr)
+                        receiver = this.receiverArg(caller.receiver, receiverExpr)
                     } else {
-                        all = this.expr(receiverExpr, 12, xmlEmptyNode())
+                        receiver = this.expr(receiverExpr, 12, xmlEmptyNode())
                     }
-                    var a: Int = 0
-                    while (a < args.size()) {
-                        all = all + ", " + args[a]
-                        a = a + 1
-                    }
+                    val all: Str = cgReceiverArgs(receiver, args)
                     return fmtStr("|(|)", this.qualify(this.functionPackage(calleeText), calleeText), all)
                 }
                 val extensions: *List<CgNativeExt> = this.nativeExtensions.getPtr(calleeText)
                 if (extensions != null) {
                     if (extensions.size() > 0) {
                         this.referencedNames.insert(extensions[0].symbol, true)
-                        var all: Str = this.expr(receiverExpr, 12, xmlEmptyNode())
-                        var a: Int = 0
-                        while (a < args.size()) {
-                            all = all + ", " + args[a]
-                            a = a + 1
-                        }
+                        val all: Str = cgReceiverArgs(this.expr(receiverExpr, 12, xmlEmptyNode()), args)
                         return fmtStr("|(|)", extensions[0].symbol, all)
                     }
                 }

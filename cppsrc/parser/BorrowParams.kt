@@ -448,32 +448,14 @@ fun bpWhy(facts: *BpFacts): Str {
     if (facts.staticWrite) {
         return "writes a file-level var"
     }
-    var out: Str = "calls "
-    var first: Bool = true
-    for (*name in facts.blocked) {
-        if (!first) {
-            out = out + ", "
-        }
-        out = out + * name
-                first = false
-    }
-    return out
+    return "calls " + joinStrs(facts.blocked, ", ")
 }
 
 // The names of a set, comma-separated in insertion order (a small set; determinism is the point).
 fun bpNames(names: *Dictionary<Str, Bool>): Str {
     // Bound first: a `for` over a temporary would borrow a pointer into it (`guide4ai.md`).
     val keys: List<Str> = names.keys()
-    var out: Str = ""
-    var first: Bool = true
-    for (*name in keys) {
-        if (!first) {
-            out = out + ", "
-        }
-        out = out + * name
-                first = false
-    }
-    return out
+    return joinStrs(keys, ", ")
 }
 
 // ---- the rewrite ------------------------------------------------------------

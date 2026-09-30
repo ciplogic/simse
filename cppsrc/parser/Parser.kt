@@ -442,18 +442,10 @@ data class Parser(
     // The emitter reads Generator to know the type C++ is elsewhere (Codegen.typeIsRaw).
     fun attachTypeAttribute(node: *AstXmlNode, attrName: Str, args: *List<Str>): Unit {
         var generatorName: Str = ""
-        var generatorArgs: Str = ""
         if (args.size() > 0) {
             generatorName = attrLiteralText(args[0])
         }
-        var a: Int = 1
-        while (a < args.size()) {
-            if (a > 1) {
-                generatorArgs = generatorArgs + ","
-            }
-            generatorArgs = generatorArgs + attrLiteralText(args[a])
-            a = a + 1
-        }
+        val generatorArgs: Str = generatorArgsText(args)
         node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Attribute, attrName))
         node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Generator, generatorName))
         node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.GeneratorArgs, generatorArgs))
@@ -852,20 +844,12 @@ data class Parser(
         // attributes. The arguments are kept as written (a string keeps its quotes).
         var attributeName: Str = attrName
         var generatorName: Str = ""
-        var generatorArgs: Str = ""
         if (attrName.size() > 0) {
             if (attrArgs.size() > 0) {
                 generatorName = attrLiteralText(attrArgs[0])
             }
-            var a: Int = 1
-            while (a < attrArgs.size()) {
-                if (a > 1) {
-                    generatorArgs = generatorArgs + ","
-                }
-                generatorArgs = generatorArgs + attrLiteralText(attrArgs[a])
-                a = a + 1
-            }
         }
+        val generatorArgs: Str = generatorArgsText(attrArgs)
         var isNative: Bool = false
         if (attributeName.size() > 0) {
             isNative = true
@@ -2462,110 +2446,12 @@ data class Parser(
         }
 
         var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
-        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Params, joinNames(names)))
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Params, joinStrs(names, ",")))
         var node: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprLambda, attrs, Array<AstXmlNode>())
         xmlAddChildren(node, paramTypes)
         xmlAddChild(node, this.container(AstNodeKind.Body, body))
         return ExprNode(node, pos.line, pos.column)
     }
-}
-
-// A string literal without its quotes, or an integer literal as written (specs/attributes.md).
-fun attrLiteralText(text: Str): Str {
-    if (text.size() >= 2 && text[0] == '\"' && text[text.size() - 1] == '\"') {
-        return text.substr(1, text.size() - 2)
-    }
-    return text
-}
-
-// `data`: a pure function - no side effects, the result a function of `value` - so the
-// reuse pass may merge two `boolText(x)` calls with the same unchanged `x`
-// (`linear/ReusePure.kt`).
-data fun boolText(value: Bool): Str {
-    if (value) {
-        return "true"
-    }
-    return "false"
-}
-
-// The names are read only; a `*List<Str>` avoids copying the caller's list.
-fun joinNames(names: *List<Str>): Str {
-    var out: Str
-    var i: Int = 0
-    while (i < names.size()) {
-        if (i > 0) {
-            out = out + ","
-        }
-        out = out + names[i]
-        i = i + 1
-    }
-    return out
-}
-
-// Pratt binding powers; left-associative (the recursive call uses bp + 1).
-fun binaryBindingPower(op: *Str): Int {
-    when (op) {
-        "||" -> {
-            return 10
-        }
-
-        "&&" -> {
-            return 20
-        }
-
-        "==", "!=" -> {
-            return 30
-        }
-
-        "<", ">", "<=", ">=" -> {
-            return 40
-        }
-
-        // Bitwise sit between comparison and shift, as in Python and Rust, so `a & b == c` is
-        // `(a & b) == c`; C's opposite order silently means `a & (b == c)`.
-        "|" -> {
-            return 43
-        }
-
-        "^" -> {
-            return 44
-        }
-
-        "&" -> {
-            return 45
-        }
-
-        "<<", ">>" -> {
-            return 47
-        }
-
-        "+", "-" -> {
-            return 50
-        }
-
-        "*", "/", "%" -> {
-            return 60
-        }
-    }
-    return -1
-}
-
-fun isAssignOp(op: *Str): Bool {
-    return op == "=" || op == "+=" || op == "-="
-            || op == "*=" || op == "/=" || op == "%="
-            || op == "&=" || op == "|=" || op == "^="
-            || op == "<<=" || op == ">>="
-}
-
-fun isStepOp(op: *Str): Bool {
-    return op == "++" || op == "--"
-}
-
-fun stepAssignOp(op: *Str): Str {
-    if (op == "++") {
-        return "+="
-    }
-    return "-="
 }
 
 // Parses a pre-filtered token cursor (with a synthetic Eof already appended).
@@ -2611,44 +2497,4 @@ fun parseModule(tokens: *List<Token>, fileName: *Str): Res<AstXmlNode> {
     }
     toks.append(Token("", TokenKind.Eof, eofPos))
     return parseModule(spanOf(*toks), fileName)
-}
-
-// `--no-when-dispatch`: the `when`-over-strings lowering above (a label's test guarded by the
-// subject's length, and by its first byte when that one is printable). **On by default**: the
-// rewrite only makes a test cheaper, so it cannot change which arm matches, and the switch is
-// for the A/B and for an escape hatch. Off also turns off `--when-first-char`.
-var whenDispatchFlag: Bool = true
-
-// `--when-first-char`: guard a label of two or more bytes by the subject's first byte as well.
-// The assumption this exists to validate: the extra `Char` load pays for itself by rejecting a
-// same-length label before the `memcmp`. Off by default - the length guard alone is the one
-// that cannot lose.
-var whenFirstCharFlag: Bool = false
-
-// `--when-copy-subject`: force the template even for a place subject, so the copy it costs can
-// be measured against reading the place again. The A/B for the copy, not a mode to ship.
-var whenCopySubjectFlag: Bool = false
-
-fun whenDispatch(): Bool {
-    return whenDispatchFlag
-}
-
-fun whenCopySubject(): Bool {
-    return whenCopySubjectFlag
-}
-
-fun setWhenCopySubject(value: Bool): Unit {
-    whenCopySubjectFlag = value
-}
-
-fun whenFirstChar(): Bool {
-    return whenFirstCharFlag
-}
-
-fun setWhenDispatch(value: Bool): Unit {
-    whenDispatchFlag = value
-}
-
-fun setWhenFirstChar(value: Bool): Unit {
-    whenFirstCharFlag = value
 }
