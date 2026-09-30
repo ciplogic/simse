@@ -130,13 +130,11 @@ fun toList<T>(this: Array<T>): List<T>
 // tests an optional and reads its parameter is borrow-clean, which is why it is declared instead of
 // left as a built-in member with nothing to mark (cppsrc/rtl/_res.md's `optops`).
 //
-// `Res<T>.isOk()` and `value()` stay built-ins, for two reasons this declaration would hit. `Res`
-// carries an `unInit`, and a receiver must be spelled `Res<T>` to unify with the receiver in
-// `findNativeExt` - while `*Res<T>`/`&Res<T>` do not - so the checker refuses the declaration ("a
-// value copy would run its destructor too", though a value receiver is emitted as `Res* self` and
-// copies nothing). And `value()` answers the type argument, which the emitter writes through
-// without substituting `memberCallReturn`'s return type, so a `T`-returning declaration would emit
-// `T` where a concrete type belongs.
+// A receiver may be a type with an `unInit` - it is emitted as a pointer (`Res* self`), never a
+// copy, so the checker allows it (cppsrc/sema/Sema.kt). `Res<T>.isOk()` and `value()` stay built-ins
+// for the one remaining reason: `value()` answers the type argument, which the emitter writes
+// through without substituting `memberCallReturn`'s return type, so a `T`-returning declaration
+// would emit `T` where a concrete type belongs.
 @SmGen("res", "optops", "simse_opt_hasValue")
 borrow fun hasValue<T>(this: Opt<T>): Bool
 
@@ -149,17 +147,18 @@ fun initByValue<T>(this: Opt<T>, value: T): Unit
 @SmGen("res", "optops", "simse_opt_initByValueNone")
 fun initByValue<T>(this: Opt<T>): Unit
 
+// The same convention for `Res<T>`: `return (x)` in a `Res<T>` function is `Res<T>.ok(x)`.
 @SmGen("res", "optops", "simse_res_initByValue")
 fun initByValue<T>(this: Res<T>, value: T): Unit
 
-// `Str`'s two constructions: the empty string and a copy of `value`. What *this* spells is
-// exactly what the C++ constructor did, so `var s = Str("text")` keeps its meaning while the
-// constructor itself can go.
+// `Str`'s two constructions. The empty one is an empty method - the receiver is already the
+// default (empty) `Str`, so there is nothing to set and `Str`'s own default construction is
+// the RTL's. The copy sets it from `value`.
+fun Str.initByValue(): Unit {
+}
+
 @SmGen("res", "strops", "simse_str_initByValue")
 fun initByValue(this: Str, value: Str): Unit
-
-@SmGen("res", "strops", "simse_str_initByValueEmpty")
-fun initByValue(this: Str): Unit
 
 // `Dictionary<K, V>` is a value type; keys and values come back in its iteration order,
 // which is unspecified - sort for determinism.

@@ -364,7 +364,7 @@ fun getTokenRules(): *List<TokenMatcher> {
 // kept, every other byte as \xNN with two uppercase hex digits, bytes unsigned.
 fun escapedSnippet(view: StrView, maxLen: Int): Str {
     val hexDigits: Str = "0123456789ABCDEF"
-    var snippet: Str = Str()
+    var snippet = Str()
     var count: Int = view.size()
     if (count > maxLen) {
         count = maxLen

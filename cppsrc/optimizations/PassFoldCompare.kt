@@ -14,43 +14,43 @@ import linear
 fun foldCompareValue(op: *Str, a: Int, b: Int): Opt<Bool> {
     when (op) {
         "==" -> {
-            return Opt<Bool>.some(a == b)
+            return (a == b)
         }
 
         "!=" -> {
-            return Opt<Bool>.some(a != b)
+            return (a != b)
         }
 
         "<" -> {
-            return Opt<Bool>.some(a < b)
+            return (a < b)
         }
 
         "<=" -> {
-            return Opt<Bool>.some(a <= b)
+            return (a <= b)
         }
 
         ">" -> {
-            return Opt<Bool>.some(a > b)
+            return (a > b)
         }
 
         ">=" -> {
-            return Opt<Bool>.some(a >= b)
+            return (a >= b)
         }
     }
-    return Opt<Bool>.none()
+    return ()
 }
 
 fun foldCompareBool(op: *Str, a: Bool, b: Bool): Opt<Bool> {
     when (op) {
         "==" -> {
-            return Opt<Bool>.some(a == b)
+            return (a == b)
         }
 
         "!=" -> {
-            return Opt<Bool>.some(a != b)
+            return (a != b)
         }
     }
-    return Opt<Bool>.none()
+    return ()
 }
 
 fun foldCompareRule(e: *AstXmlNode): AstXmlNode {

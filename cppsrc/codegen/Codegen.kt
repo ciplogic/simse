@@ -44,7 +44,11 @@ data class CgFn(
 
     // The `data` modifier: the writer's claim that the function is pure (no side effects,
     // the result a function of its arguments). `pureCallees` collects those names.
-    var isPure: Bool
+    var isPure: Bool,
+
+    // The non-receiver parameter count, read once like the flags above: two same-name extensions
+    // of one receiver (the `initByValue` pair) are told apart by arity.
+    var paramCount: Int
 )
 
 // A `native fun` declaration to emit once at the top (and call by symbol).
@@ -270,6 +274,10 @@ data class Emitter(
 // The names the program calls, for the prelude rule in `emitFunctions`.
     var referencedNames: Dictionary<Str, Bool>,
 
+// The types that declare an `initByValue` extension: a construction of one reaches that
+// convention, which the AST walk records (the setter call is the lowering's, not the AST's).
+    var initByValueTypes: Dictionary<Str, Bool>,
+
 // The program's string literals; the walk below pools them (CgStringTable.kt).
     var literals: StringTable,
 
@@ -431,7 +439,8 @@ data class Emitter(
                 name,
                 xmlAttr(decl, AstNodeAttributeKind.IsNative) == "true",
                 xmlAttr(decl, AstNodeAttributeKind.HasBody) == "true",
-                xmlAttr(decl, AstNodeAttributeKind.IsPure) == "true"
+                xmlAttr(decl, AstNodeAttributeKind.IsPure) == "true",
+                xmlCount(decl, AstNodeKind.Param) - semReceiverParams(decl)
             )
         )
         if (!xmlIsEmpty(receiver)) {
@@ -1179,6 +1188,9 @@ data class Emitter(
             val name: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
             if (name != "") {
                 names.insert(name, true)
+                if (this.initByValueTypes.has(name)) {
+                    names.insert("initByValue", true)
+                }
                 val named: Opt<Str> = this.nativeSymbols.get(name)
                 if (named.hasValue()) {
                     names.insert(named.value(), true)
@@ -1431,10 +1443,38 @@ data class Emitter(
         return false
     }
 
+    // The type names that declare an `initByValue` extension. A construction of one is a call
+    // the lowering turns into a setter, so the AST walk (below) records the convention's name
+    // from the constructor call itself - otherwise the prelude body a synthesized setter reaches
+    // would never be emitted.
+    fun collectInitByValueTypes(): Unit {
+        var i: Int = 0
+        while (i < this.functions.size()) {
+            val fn: *CgFn = *this.functions[i]
+            i = i + 1
+            if (fn.name == "initByValue") {
+                val recv: Str = this.outerTypeName(fn.receiver)
+                if (recv != "") {
+                    this.initByValueTypes.insert(recv, true)
+                }
+            }
+        }
+        val exts: *List<CgNativeExt> = this.nativeExtensions.getPtr("initByValue")
+        if (exts != null) {
+            for (*ext in exts) {
+                val recv: Str = this.outerTypeName(ext.receiver)
+                if (recv != "") {
+                    this.initByValueTypes.insert(recv, true)
+                }
+            }
+        }
+    }
+
     // Fills `referencedNames` and `referencedTypes` from the program, never from the prelude's
     // own unused bodies, then closes them over the prelude it reaches: an emitted body may
     // call another, and a native's signature names the types a call reaches.
     fun collectProgramNames(): Unit {
+        this.collectInitByValueTypes()
         for (*input in this.inputs) {
             if (!input.prelude) {
                 this.collectNames(input.module, *this.referencedNames)
@@ -2529,8 +2569,8 @@ fun Emitter.emitUninit(fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts, prototype
         return -1
     }
 
-    // Index into `functions` of a Simse extension matching the receiver, or -1.
-    fun findExtensionFn(name: *Str, recvExpr: *AstXmlNode): Int {
+    // Index into `functions` of a Simse extension matching the receiver and arity, or -1.
+    fun findExtensionFn(name: *Str, recvExpr: *AstXmlNode, argCount: Int): Int {
         val recvType: AstXmlNode = this.inferType(recvExpr)
         val recv: AstXmlNode = this.resolveAlias(this.pointee(recvType))
         if (xmlIsEmpty(recv)) {
@@ -2543,7 +2583,7 @@ fun Emitter.emitUninit(fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts, prototype
                 i = i + 1
                 continue
             }
-            if (fn.name == name && this.unifyType(
+            if (fn.name == name && fn.paramCount == argCount && this.unifyType(
                     this.resolveAlias(fn.receiver),
                     recv,
                     fn.templateParams
@@ -3112,7 +3152,7 @@ fun Emitter.emitUninit(fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts, prototype
                 val receiverType: AstXmlNode = this.inferType(receiverExpr)
                 val receiver: AstXmlNode = this.pointee(receiverType)
                 if (!xmlIsEmpty(receiver)) {
-                    val fnIndex: Int = this.findExtensionFn(calleeText, receiverExpr)
+                    val fnIndex: Int = this.findExtensionFn(calleeText, receiverExpr, args.size())
                     if (fnIndex >= 0) {
                         val fn: *CgFn = *this.functions[fnIndex]
                         var all: Str = this.receiverArg(fn.receiver, receiverExpr)
@@ -3675,6 +3715,7 @@ fun newEmitter(inputs: *List<CgInput>, resourceStored: *List<Str>): Emitter {
         "",
         "",
         false,
+        Dictionary<Str, Bool>(),
         Dictionary<Str, Bool>(),
         StringTable(List<Str>(), Dictionary<Str, Int>()),
         Dictionary<Str, Bool>(),

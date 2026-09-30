@@ -222,13 +222,13 @@ What is still out of reach, in the order a histogram of the `borrow-` lines puts
   subtree mentions - a write to `this.f` or to a local cannot reach a by-value parameter, whose only
   alias would come from an `&p`/`*p`, which already excludes it - while a target that mentions a
   module-level `var` blocks everything, for the reason the file-level write rule exists.
-- **the two built-in members that cannot be declared yet.** `Res<T>.isOk()` needs a receiver spelled
-  `Res<T>` to unify in `findNativeExt`, and `Res` carries an `unInit`, which the checker refuses for
-  a value receiver (the emitter passes `Res* self`, so the copy the rule fears is not actually made
-  - the rule is what would have to change, or a declared receiver be pointeed before unifying).
-  `value()` answers the type argument, and `memberCallReturn` returns a declaration's return type
-  without substituting it, so a `T`-returning declaration would emit `T` where a concrete type
-  belongs - a latent emitter gap to close first.
+- **the one built-in member that cannot be declared yet.** A receiver may now be a type with an
+  `unInit` - it is emitted as a pointer (`T* self`), never a copy, so the checker allows it
+  (cppsrc/sema/Sema.kt) - and `Res<T>.initByValue` is declared that way. `Res<T>.isOk()` could be
+  declared too; it stays built-in for that one reason only. `value()` still cannot: it answers the
+  type argument, and `memberCallReturn` returns a declaration's return type without substituting
+  it, so a `T`-returning declaration would emit `T` where a concrete type belongs - a latent
+  emitter gap to close first.
 - and the cascade behind them - `eprintln`, and the emitter's own helpers (`line`, `emit`,
   `inferType`, `operandOf`, ...), each blocked by one of the above. Nothing is inferred from a
   whole-program call graph beyond the name-keyed fixpoint, no size model exists, and only a type it

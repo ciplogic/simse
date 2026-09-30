@@ -105,7 +105,7 @@ fun foldStrLit(like: *AstXmlNode, text: Str): AstXmlNode {
 // nothing).
 fun foldIntValue(e: *AstXmlNode): Opt<Int> {
     if (foldKindOf(e) != FoldKind.Int) {
-        return Opt<Int>.none()
+        return ()
     }
     return xmlAttr(e, AstNodeAttributeKind.Text).toInt()
 }

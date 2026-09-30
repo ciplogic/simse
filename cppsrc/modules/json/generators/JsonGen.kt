@@ -303,7 +303,7 @@ fun jsonBuildSource(ctx: *SourceGenContext): Str {
         i = i + 1
     }
 
-    var out: Str = Str()
+    var out = Str()
     i = 0
     while (i < imports.size()) {
         out.appendStr("import ")

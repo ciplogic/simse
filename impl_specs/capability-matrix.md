@@ -4177,12 +4177,11 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
     built-in member has no declaration to carry a mark, so a body that tested an optional and read
     its parameter refused. The declaration is `borrow`, and it is the `lenOf` treatment applied to
     the `Opt`/`Res` surface.
-  - **Two members cannot be declared yet, and the dump says why.** `Res<T>.isOk()` needs a receiver
-    spelled `Res<T>` to unify in `findNativeExt`, and `Res` carries an `unInit`, which the checker
-    refuses for a value receiver (the emitter passes `Res* self`, so no copy is actually made - the
-    rule is what would have to change). `value()` answers the type argument, and `memberCallReturn`
-    returns a declaration's return type without substituting it, so a `T`-returning declaration
-    would emit `T` where a concrete type belongs. Both are recorded in
+  - **`Res` members, since fixed.** A receiver may now be a type with an `unInit` (it is emitted as
+    a pointer, never a copy; cppsrc/sema/Sema.kt), so `Res<T>.initByValue` is declared and
+    `return (x)` constructs a `Res<T>`. `value()` still cannot be declared: it answers the type
+    argument, and `memberCallReturn` returns a declaration's return type without substituting it, so
+    a `T`-returning declaration would emit `T` where a concrete type belongs. Recorded in
     `impl_specs/escape-analysis.md`.
 
   Verified: `bun build.js --release --no-lto --out cppsrc/simse_bootstrap.cpp` then

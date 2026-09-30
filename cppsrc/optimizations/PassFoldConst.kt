@@ -22,13 +22,13 @@ data class FoldConstSlot(
 fun foldConstValue(e: *AstXmlNode): Opt<FoldGlobalConst> {
     val kind: FoldKind = foldKindOf(e)
     if (kind == FoldKind.None) {
-        return Opt<FoldGlobalConst>.none()
+        return ()
     }
     var text: Str = xmlAttr(e, AstNodeAttributeKind.Text)
     if (kind == FoldKind.Bool) {
         text = xmlAttr(e, AstNodeAttributeKind.Value)
     }
-    return Opt<FoldGlobalConst>.some(FoldGlobalConst(kind, text))
+    return (FoldGlobalConst(kind, text))
 }
 
 // The name a statement writes: a declaration's own or an assignment's target; "" otherwise.
@@ -55,23 +55,23 @@ fun foldConstWriteName(stmt: *AstXmlNode): Str {
 fun foldConstWrite(stmt: *AstXmlNode): Opt<FoldConstSlot> {
     val name: Str = foldConstWriteName(stmt)
     if (name == "") {
-        return Opt<FoldConstSlot>.none()
+        return ()
     }
     var value: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Init)
     if (xmlKind(stmt) == AstNodeCategory.StmtAssign) {
         if (xmlAttr(stmt, AstNodeAttributeKind.Op) != "=") {
-            return Opt<FoldConstSlot>.none()
+            return ()
         }
         value = xmlChildPtr(stmt, AstNodeKind.Value)
     }
     if (xmlIsEmpty(value)) {
-        return Opt<FoldConstSlot>.none()
+        return ()
     }
     val literal: Opt<FoldGlobalConst> = foldConstValue(value)
     if (!literal.hasValue()) {
-        return Opt<FoldConstSlot>.none()
+        return ()
     }
-    return Opt<FoldConstSlot>.some(
+    return (
         FoldConstSlot(name, literal.value().kind, literal.value().text)
     )
 }

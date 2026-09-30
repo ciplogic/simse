@@ -306,7 +306,7 @@ fun ilDeclLines(typeText: Str, names: *List<Str>): List<Str> {
         base = base.substr(0, base.size() - 1)
     }
     var out: List<Str> = List<Str>()
-    var line: Str = Str()
+    var line = Str()
     var open: Bool = false
     var i: Int = 0
     while (i < names.size()) {
@@ -1076,7 +1076,7 @@ fun Emitter.ilConcatPartText(il: *IlBody, frame: *IlFrame, part: Int): Str {
 // aggregate construction - the brace form, which has no expression node.
 fun Emitter.ilValueText(il: *IlBody, frame: *IlFrame, opIndex: Int, expected: *AstXmlNode): Opt<Str> {
     if (opIndex < 0 || opIndex >= il.ops.size()) {
-        return Opt<Str>.none()
+        return ()
     }
     val op: *IlOp = *il.ops[opIndex]
     if (op.kind == IlOpKind.CallCtor) {
@@ -1089,7 +1089,7 @@ fun Emitter.ilValueText(il: *IlBody, frame: *IlFrame, opIndex: Int, expected: *A
         // The fusion expands a concatenation where it *writes* it (`ilConcatStatements`), and a
         // destination is always a slot with a type of its own, so this cannot be reached.
         this.ilWhy = "a concatenation in a value position"
-        return Opt<Str>.none()
+        return ()
     }
     if (op.kind == IlOpKind.Cast) {
         // `h.getAs<T>()`: the destination's type *is* the cast's target - the extractor set it
@@ -1099,14 +1099,14 @@ fun Emitter.ilValueText(il: *IlBody, frame: *IlFrame, opIndex: Int, expected: *A
         val dstType: AstXmlNode = ilVarType(il, dst)
         if (xmlIsEmpty(dstType)) {
             this.ilWhy = "a cast with no target type"
-            return Opt<Str>.none()
+            return ()
         }
         val operand: AstXmlNode = this.ilOperandNode(il, frame, this.ilOpOperand(op.operands, 1), 0)
         if (xmlIsEmpty(operand)) {
             this.ilWhy = "a cast with no operand"
-            return Opt<Str>.none()
+            return ()
         }
-        return Opt<Str>.some(
+        return (
             fmtStr("reinterpret_cast<|>(|)", this.type(dstType), this.expr(operand, 0, xmlEmptyNode()))
         )
     }
@@ -1116,19 +1116,19 @@ fun Emitter.ilValueText(il: *IlBody, frame: *IlFrame, opIndex: Int, expected: *A
         val slot: Int = this.ilOpOperand(op.operands, 0)
         val slotType: AstXmlNode = ilVarType(il, slot)
         if (xmlIsEmpty(slotType)) {
-            return Opt<Str>.none()
+            return ()
         }
         var values: List<Str> = List<Str>()
         var j: Int = 1
         while (j < op.operands.size()) {
             val value: AstXmlNode = this.ilOperandNode(il, frame, op.operands[j], 0)
             if (xmlIsEmpty(value)) {
-                return Opt<Str>.none()
+                return ()
             }
             values.append(this.expr(value, 0, xmlEmptyNode()))
             j = j + 1
         }
-        return Opt<Str>.some(fmtStr("|{|}", this.type(slotType), cgJoin(values, ", ")))
+        return (fmtStr("|{|}", this.type(slotType), cgJoin(values, ", ")))
     }
     if (op.kind == IlOpKind.CallCtor) {
         val typeAt: Int = this.ilOpOperand(op.operands, 1)
@@ -1138,19 +1138,19 @@ fun Emitter.ilValueText(il: *IlBody, frame: *IlFrame, opIndex: Int, expected: *A
             while (j < op.operands.size()) {
                 val arg: AstXmlNode = this.ilOperandNode(il, frame, op.operands[j], 0)
                 if (xmlIsEmpty(arg)) {
-                    return Opt<Str>.none()
+                    return ()
                 }
                 captured.append(this.expr(arg, 0, xmlEmptyNode()))
                 j = j + 1
             }
-            return Opt<Str>.some(fmtStr("|{|}", il.types[typeAt], cgJoin(captured, ", ")))
+            return (fmtStr("|{|}", il.types[typeAt], cgJoin(captured, ", ")))
         }
     }
     val node: AstXmlNode = this.ilOpValueNode(il, frame, opIndex, 0)
     if (xmlIsEmpty(node)) {
-        return Opt<Str>.none()
+        return ()
     }
-    return Opt<Str>.some(this.expr(node, 0, expected))
+    return (this.expr(node, 0, expected))
 }
 
 // `&Ctor(args)`: the box built in place, `makeRef<C>(args...)` - the extractor gives the
@@ -1159,27 +1159,27 @@ fun Emitter.ilValueText(il: *IlBody, frame: *IlFrame, opIndex: Int, expected: *A
 fun Emitter.ilBoxedCtorText(il: *IlBody, frame: *IlFrame, op: *IlOp): Opt<Str> {
     val dst: Int = this.ilOpOperand(op.operands, 0)
     if (dst < 0 || dst >= il.vars.size()) {
-        return Opt<Str>.none()
+        return ()
     }
     val dstType: AstXmlNode = ilVarType(il, dst)
     if (xmlIsEmpty(dstType) || xmlKind(dstType) != AstNodeCategory.TypeReference) {
-        return Opt<Str>.none()
+        return ()
     }
     val inner: *AstXmlNode = xmlChildPtr(dstType, AstNodeKind.Inner)
     if (xmlIsEmpty(inner)) {
-        return Opt<Str>.none()
+        return ()
     }
     var args: List<Str> = List<Str>()
     var i: Int = 2
     while (i < op.operands.size()) {
         val arg: AstXmlNode = this.ilOperandNode(il, frame, op.operands[i], 0)
         if (xmlIsEmpty(arg)) {
-            return Opt<Str>.none()
+            return ()
         }
         args.append(this.expr(arg, 0, xmlEmptyNode()))
         i = i + 1
     }
-    return Opt<Str>.some(fmtStr("makeRef<|>(|)", this.type(inner), cgJoin(args, ", ")))
+    return (fmtStr("makeRef<|>(|)", this.type(inner), cgJoin(args, ", ")))
 }
 
 fun Emitter.ilLine(out: *Str, level: Int, text: Str): Unit {
@@ -1233,7 +1233,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
     var scopes: List<IlScope> = List<IlScope>()
     var consumedByDeclare: Int = -1
     var lvl: Int = level
-    var text: Str = Str()
+    var text = Str()
     this.ilConcatPreamble(il, text, lvl)
 
     var i: Int = 0
@@ -1637,7 +1637,7 @@ fun Emitter.emitClosureClass(unit: *IlUnit, closure: *IlClosure): IlText {
 // The classes of every lambda this body constructs, emitted once. A definition must
 // precede its construction, and "just before the body" is reproducible.
 fun Emitter.emitClosureClasses(unit: *IlUnit): IlText {
-    var text: Str = Str()
+    var text = Str()
     for (*closure in unit.closures) {
         if (!this.emittedClosures.has(closure.symbol)) {
             val classText: IlText = this.emitClosureClass(unit, closure)

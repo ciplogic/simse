@@ -14,11 +14,11 @@ import linear
 fun linFoldBranchStmt(stmt: *AstXmlNode): Opt<AstXmlNode> {
     val kind: AstNodeCategory = xmlKind(stmt)
     if (kind != AstNodeCategory.StmtIfTrue && kind != AstNodeCategory.StmtIfFalse) {
-        return Opt<AstXmlNode>.none()
+        return ()
     }
     val cond: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Cond)
     if (xmlIsEmpty(cond) || foldKindOf(cond) != FoldKind.Bool) {
-        return Opt<AstXmlNode>.none()
+        return ()
     }
     val holds: Bool = xmlAttr(cond, AstNodeAttributeKind.Value) == "true"
     // `ifTrue c` jumps when `c` holds, `ifFalse c` when it does not.
@@ -27,12 +27,12 @@ fun linFoldBranchStmt(stmt: *AstXmlNode): Opt<AstXmlNode> {
         taken = !holds
     }
     if (taken) {
-        return Opt<AstXmlNode>.some(
+        return (
             linGoto(xmlAttr(stmt, AstNodeAttributeKind.Name), xmlLine(stmt), xmlColumn(stmt))
         )
     }
     // A never-taken branch answers an empty node, which the walk drops.
-    return Opt<AstXmlNode>.some(linStmt(AstNodeCategory.None, xmlLine(stmt), xmlColumn(stmt)))
+    return (linStmt(AstNodeCategory.None, xmlLine(stmt), xmlColumn(stmt)))
 }
 
 fun linFoldBranchIn(stmts: *List<AstXmlNode>): Bool {

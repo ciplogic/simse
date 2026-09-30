@@ -139,7 +139,7 @@ fun nativeInvokeEmit(ctx: *SourceGenContext): SourceGenTransform {
 fun nativeInvokeBody(
     signature: Str, nativeSig: Str, library: Str, symbol: Str, args: Str, missing: Str, call: Str
 ): Str {
-    var body: Str = Str()
+    var body = Str()
     body.appendStr(signature)
     body.appendStr(" {\n")
     body.appendStr(fmtStr("    using Fn = |;\n", nativeSig))
@@ -260,7 +260,7 @@ fun nativeInvokeArgExpr(typeNode: *AstXmlNode, name: Str): Str {
 }
 
 fun nativeInvokeJoin(parts: *List<Str>, separator: Str): Str {
-    var out: Str = Str()
+    var out = Str()
     var i: Int = 0
     while (i < parts.size()) {
         if (i > 0) {

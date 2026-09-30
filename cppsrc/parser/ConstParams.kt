@@ -201,16 +201,16 @@ fun cpBuildLocal(param: *AstXmlNode, arg: *AstXmlNode): AstXmlNode {
 fun cpUniformLiteral(group: *List<ConstCallSite>, index: Int): Opt<Str> {
     val first: Str = cpLiteralKey(*group[0].args[index])
     if (first == "") {
-        return Opt<Str>.none()
+        return ()
     }
     var k: Int = 1
     while (k < group.size()) {
         if (cpLiteralKey(*group[k].args[index]) != first) {
-            return Opt<Str>.none()
+            return ()
         }
         k = k + 1
     }
-    return Opt<Str>.some(first)
+    return (first)
 }
 
 // One candidate's decision, on the original program: the first parameter that is a value
@@ -222,13 +222,13 @@ fun cpDecide(
 ): Opt<ConstFold> {
     val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
     if (valueUsed.has(name)) {
-        return Opt<ConstFold>.none()
+        return ()
     }
     // At least one call site: zero makes "all of them agree" vacuously true, with no value to
     // fold in.
     val group: *List<ConstCallSite> = sites.getPtr(name)
     if (group == null || group.size() == 0) {
-        return Opt<ConstFold>.none()
+        return ()
     }
     // Every call site passes exactly `Params.size()` arguments, or an index no longer identifies
     // a parameter (a trailing-argument pack, or an overload).
@@ -236,7 +236,7 @@ fun cpDecide(
     var k: Int = 0
     while (k < group.size()) {
         if (group[k].args.size() != params.size()) {
-            return Opt<ConstFold>.none()
+            return ()
         }
         k = k + 1
     }
@@ -247,12 +247,12 @@ fun cpDecide(
             val key: Opt<Str> = cpUniformLiteral(group, i)
             if (key.hasValue()) {
                 val local: AstXmlNode = cpBuildLocal(*params[i], *group[0].args[i])
-                return Opt<ConstFold>.some(ConstFold(name, i, local))
+                return (ConstFold(name, i, local))
             }
         }
         i = i + 1
     }
-    return Opt<ConstFold>.none()
+    return ()
 }
 
 // The children with the `argIndex`-th `Arg` dropped: the parameter's own index identifies the

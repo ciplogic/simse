@@ -95,7 +95,7 @@ data class Sections(
     }
 
     fun render(): Str {
-        var out: Str = Str()
+        var out = Str()
         for (*section in this.sections) {
             this.appendBlock(*out, section.text)
             val keys: List<Str> = section.items.keys()
