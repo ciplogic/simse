@@ -156,30 +156,6 @@ fun ilMethodKindText(kind: IlMethodKind): Str {
     return "?"
 }
 
-// The parts, joined by `separator`. Reserves the exact length first and appends through
-// the caller's borrows, so the text is written once.
-fun ilJoinList(parts: *List<Str>, separator: *Str): Str {
-    var out: Str
-    val count: Int = parts.size()
-    if (count == 0) {
-        return out
-    }
-    var len: Int = separator.size() * (count - 1)
-    for (*part in parts) {
-        len += part.size()
-    }
-    out.reserve(len)
-    var first: Bool = true
-    for (*part in parts) {
-        if (!first) {
-            out.appendStrPtr(separator)
-        }
-        out.appendStrPtr(part)
-        first = false
-    }
-    return out
-}
-
 fun ilIntText(value: Int): Str {
     return value.toString()
 }
@@ -207,7 +183,7 @@ fun ilTypeText(typeNode: *AstXmlNode): Str {
                 args.append(ilTypeText(typeArg))
             }
             val name: *Str = xmlAttr(typeNode, AstNodeAttributeKind.Name)
-            val joined: Str = ilJoinList(args, ", ")
+            val joined: Str = joinStrs(args, ", ")
             var out: Str
             out.reserve(name.size() + joined.size() + 2)
             out.appendStrPtr(name)
@@ -243,7 +219,7 @@ fun ilTypeText(typeNode: *AstXmlNode): Str {
             if (args.size() == 0) {
                 return name
             }
-            return fmtStr("|<|>", name, ilJoinList(args, ", "))
+            return fmtStr("|<|>", name, joinStrs(args, ", "))
         }
 
         AstNodeCategory.TypeFunction -> {
@@ -252,7 +228,7 @@ fun ilTypeText(typeNode: *AstXmlNode): Str {
             for (*paramType in paramTypes) {
                 params.append(ilTypeText(paramType))
             }
-            val joined: Str = ilJoinList(params, ", ")
+            val joined: Str = joinStrs(params, ", ")
             val ret: Str = ilTypeText(xmlChildPtr(typeNode, AstNodeKind.ReturnType))
             var out: Str
             out.reserve(joined.size() + ret.size() + 8)
@@ -561,7 +537,7 @@ fun ilArgList(body: *IlBody, operands: *List<Int>, first: Int): Str {
         args.append(ilVarName(body, operands[i]))
         i = i + 1
     }
-    return ilJoinList(args, ", ")
+    return joinStrs(args, ", ")
 }
 
 fun ilPadRight(text: Str, width: Int): Str {

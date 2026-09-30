@@ -341,7 +341,7 @@ fun printIlBody(body: *IlBody): Str {
 
         var text: Str = fmtStr(
             "|,  ||", ilPadRight(ilIntText(i), 4), ilPadRight(ilOpKindText(op.kind), 16),
-            ilJoinList(rendered, ", ")
+            joinStrs(rendered, ", ")
         )
         val comment: Str = ilOpComment(body, op)
         if (!comment.isEmpty()) {
@@ -365,7 +365,7 @@ fun printIlUnit(unit: *IlUnit): Str {
     var out: Str = printIlBody(unit.body)
     for (closure in unit.closures) {
         out = out + "\n## closure " + closure.symbol + "  captures ("
-        +ilJoinList(closure.captures, ", ") + ")  " + closure.signature + "\n"
+        +joinStrs(closure.captures, ", ") + ")  " + closure.signature + "\n"
         if (closure.bodyIndex >= 0 && closure.bodyIndex < unit.lambdas.size()) {
             out = out + printIlBody(unit.lambdas[closure.bodyIndex])
         }

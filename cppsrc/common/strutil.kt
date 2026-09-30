@@ -30,3 +30,11 @@ fun joinStrs(parts: *List<Str>, separator: *Str): Str {
     }
     return out
 }
+// `text` without one wrapping pair of double quotes (a string literal keeps its quotes in
+// the AST, specs/attributes.md); anything else is returned as it is.
+fun unquoteLiteral(text: Str): Str {
+    if (text.size() >= 2 && text[0] == '\"' && text[text.size() - 1] == '\"') {
+        return text.substr(1, text.size() - 2)
+    }
+    return text
+}

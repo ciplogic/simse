@@ -147,13 +147,6 @@ fun cgIndent(level: Int): Str {
 // The RTL type-name list lives with the semantics that share it: `semIsRtlTypeName`
 // (sema/TypeInfer.kt).
 
-fun cgUnquote(text: Str): Str {
-    if (text.size() >= 2 && text[0] == '\"' && text[text.size() - 1] == '\"') {
-        return text.substr(1, text.size() - 2)
-    }
-    return text
-}
-
 // One argument of a `@SmGen` attribute, from the comma-joined `GeneratorArgs`; an index
 // outside the list is the empty string.
 fun cgGeneratorArg(args: *Str, index: Int): Str {
@@ -167,54 +160,16 @@ fun cgGeneratorArg(args: *Str, index: Int): Str {
     return parts[index]
 }
 
-// Binary operator precedence for wrapping. The numbers are a scale, not levels - their
-// order is what matters, and `12` is the postfix position (at or above it needs no
-// parentheses); the parser's `binaryBindingPower` has the same order.
+// Binary operator precedence for wrapping. The levels are the shared table
+// (`common.opPrecedenceRank`), and `11`/`12` are the unary and postfix positions (at or
+// above one needs no parentheses); the parser's `binaryBindingPower` reads the same table.
 fun cgPrecedence(e: *AstXmlNode): Int {
     if (xmlKind(e) == AstNodeCategory.ExprBinary) {
-        val op: Str = xmlAttr(e, AstNodeAttributeKind.Op)
-        when (op) {
-            "||" -> {
-                return 1
-            }
-
-            "&&" -> {
-                return 2
-            }
-
-            "==", "!=" -> {
-                return 3
-            }
-
-            "<", ">", "<=", ">=" -> {
-                return 4
-            }
-
-            "|" -> {
-                return 5
-            }
-
-            "^" -> {
-                return 6
-            }
-
-            "&" -> {
-                return 7
-            }
-
-            "<<", ">>" -> {
-                return 8
-            }
-
-            "+", "-" -> {
-                return 9
-            }
-
-            "*", "/", "%" -> {
-                return 10
-            }
+        val rank: Int = opPrecedenceRank(xmlAttr(e, AstNodeAttributeKind.Op))
+        if (rank < 0) {
+            return 1
         }
-        return 1
+        return rank
     }
     val kind: AstNodeCategory = xmlKind(e)
     when (kind) {

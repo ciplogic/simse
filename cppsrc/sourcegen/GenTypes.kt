@@ -137,13 +137,10 @@ fun sourceGenArgs(args: *Str): List<Str> {
     return out
 }
 
-// `text` without one wrapping pair of double quotes: a string literal keeps its quotes in the
-// AST (`specs/attributes.md`). `cgUnquote`'s rule, kept here for the same reason.
+// `text` without one wrapping pair of double quotes: a string literal keeps its quotes in
+// the AST (`specs/attributes.md`).
 fun sourceGenUnquote(text: Str): Str {
-    if (text.size() >= 2 && text[0] == '\"' && text[text.size() - 1] == '\"') {
-        return text.substr(1, text.size() - 2)
-    }
-    return text
+    return unquoteLiteral(text)
 }
 
 // The lookup KtGen and ResGen share: the *tree being compiled* first (`_res.md` under its

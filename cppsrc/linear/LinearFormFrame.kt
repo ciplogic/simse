@@ -338,6 +338,6 @@ fun IlExtractor.signatureText(): Str {
             retText = ilTypeText(declared)
         }
     }
-    return fmtStr("(|) -> |", ilJoinList(params, ", "), retText)
+    return fmtStr("(|) -> |", joinStrs(params, ", "), retText)
 }
 

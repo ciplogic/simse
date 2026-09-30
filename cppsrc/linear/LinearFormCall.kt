@@ -338,7 +338,7 @@ fun IlExtractor.lambdaOf(e: *AstXmlNode, dst: Int): Int {
             closure.params.append(slot)
         }
     }
-    closure.signature = fmtStr("(|) |", ilJoinList(captured, ", "), innerBody.signature)
+    closure.signature = fmtStr("(|) |", joinStrs(captured, ", "), innerBody.signature)
     this.unit.lambdas.append(innerBody)
     this.unit.closures.append(closure)
 

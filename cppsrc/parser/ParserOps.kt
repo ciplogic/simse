@@ -24,10 +24,7 @@ fun generatorArgsText(args: *List<Str>): Str {
 
 // A string literal without its quotes, or an integer literal as written (specs/attributes.md).
 fun attrLiteralText(text: Str): Str {
-    if (text.size() >= 2 && text[0] == '\"' && text[text.size() - 1] == '\"') {
-        return text.substr(1, text.size() - 2)
-    }
-    return text
+    return unquoteLiteral(text)
 }
 
 // `data`: a pure function - no side effects, the result a function of `value` - so the
@@ -40,52 +37,15 @@ data fun boolText(value: Bool): Str {
     return "false"
 }
 
-// Pratt binding powers; left-associative (the recursive call uses bp + 1).
+// The Pratt binding power of a binary operator: the shared precedence table
+// (`common.opPrecedenceRank`) scaled by ten, so a right-recursive call at `bp + 1` lands
+// inside its own level. Left-associative; -1 for anything that is not a binary operator.
 fun binaryBindingPower(op: *Str): Int {
-    when (op) {
-        "||" -> {
-            return 10
-        }
-
-        "&&" -> {
-            return 20
-        }
-
-        "==", "!=" -> {
-            return 30
-        }
-
-        "<", ">", "<=", ">=" -> {
-            return 40
-        }
-
-        // Bitwise sit between comparison and shift, as in Python and Rust, so `a & b == c` is
-        // `(a & b) == c`; C's opposite order silently means `a & (b == c)`.
-        "|" -> {
-            return 43
-        }
-
-        "^" -> {
-            return 44
-        }
-
-        "&" -> {
-            return 45
-        }
-
-        "<<", ">>" -> {
-            return 47
-        }
-
-        "+", "-" -> {
-            return 50
-        }
-
-        "*", "/", "%" -> {
-            return 60
-        }
+    val rank: Int = opPrecedenceRank(op)
+    if (rank < 0) {
+        return -1
     }
-    return -1
+    return rank * 10
 }
 
 fun isAssignOp(op: *Str): Bool {
