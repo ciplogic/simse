@@ -115,11 +115,9 @@ fun sourceGenBegin(
     sourceGenState.compilerResources = compilerResources
     sourceGenState.definitions = Dictionary<Str, Str>()
     sourceGenState.requests = List<SourceGenRequest>()
-    var i: Int = 0
-    while (i < modules.size()) {
+    for ((module, i) in modules) {
         sourceGenState.fileNames.append(fileNames[i])
-        sourceGenState.modules.append(modules[i])
-        i = i + 1
+        sourceGenState.modules.append(module)
     }
 }
 

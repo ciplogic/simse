@@ -344,13 +344,13 @@ fun ilAppendTable(out: *Str, label: Str, entries: *List<Str>): Unit {
         return
     }
     out.appendStr(label)
-    var i: Int = 0
-    while (i < entries.size()) {
-        if (i > 0) {
+    var first: Bool = true
+    for (entry in entries) {
+        if (!first) {
             out.appendStr("   ")
         }
-        out.appendStr(entries[i])
-        i = i + 1
+        out.appendStr(entry)
+        first = false
     }
     out.appendStr("\n")
 }

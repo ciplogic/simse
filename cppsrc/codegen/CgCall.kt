@@ -312,8 +312,7 @@ fun Emitter.call(e: *AstXmlNode): Str {
             var args: List<Str> = List<Str>()
             val targetParams: List<AstXmlNode> = xmlChildren(target, AstNodeKind.Param)
             val targetReceiver: *AstXmlNode = xmlChildPtr(target, AstNodeKind.Receiver)
-            var i: Int = 0
-            while (i < argNodes.size()) {
+            for ((*arg, i) in argNodes) {
                 var expectedArg: AstXmlNode = xmlEmptyNode()
                 if (!xmlIsEmpty(target) && i < targetParams.size()) {
                     expectedArg = xmlChild(targetParams[i], AstNodeKind.Type)
@@ -326,9 +325,8 @@ fun Emitter.call(e: *AstXmlNode): Str {
                 ) {
                     args.append(this.receiverArg(targetReceiver, argNodes[0]))
                 } else {
-                    args.append(this.expr(argNodes[i], 0, expectedArg))
+                    args.append(this.expr(arg, 0, expectedArg))
                 }
-                i = i + 1
             }
             val nativeOpt: Opt<Str> = this.nativeSymbols.get(name)
             var hasPlainFunction: Bool = false

@@ -296,13 +296,11 @@ fun Parser.parseWhen(out: *List<AstXmlNode>): Bool {
     }
 
     var arms: List<AstXmlNode> = List<AstXmlNode>()
-    var a: Int = 0
-    while (a < armLabels.size()) {
+    for ((*label, a) in armLabels) {
         val cond: ExprNode = this.whenCondition(
-            subjectExpr, lengthName, *armLabels[a], armPositions[a], dispatch
+            subjectExpr, lengthName, label, armPositions[a], dispatch
         )
         arms.append(this.ifNode(cond, *armBodies[a], armPositions[a]))
-        a = a + 1
     }
 
     // The chain is right-nested, and the tail goes on first: linking copies an arm into

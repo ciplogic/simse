@@ -204,12 +204,10 @@ data class Parser(
     // The names are read only; a `*List<Str>` avoids copying the caller's list.
     fun appendTypeParams(node: *AstXmlNode, names: *List<Str>): Unit {
         var params: List<AstXmlNode> = List<AstXmlNode>()
-        var i: Int = 0
-        while (i < names.size()) {
+        for (name in names) {
             var attrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
-            attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, names[i]))
+            attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, name))
             params.append(AstXmlNode(AstNodeKind.TypeParam, AstNodeCategory.None, attrs, Array<AstXmlNode>()))
-            i = i + 1
         }
         xmlAddChildren(node, params)
     }

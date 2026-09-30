@@ -261,13 +261,13 @@ fun nativeInvokeArgExpr(typeNode: *AstXmlNode, name: Str): Str {
 
 fun nativeInvokeJoin(parts: *List<Str>, separator: Str): Str {
     var out = Str()
-    var i: Int = 0
-    while (i < parts.size()) {
-        if (i > 0) {
+    var first: Bool = true
+    for (*part in parts) {
+        if (!first) {
             out.appendStr(separator)
         }
-        out.appendStrPtr(parts[i])
-        i = i + 1
+        out.appendStrPtr(part)
+        first = false
     }
     return out
 }

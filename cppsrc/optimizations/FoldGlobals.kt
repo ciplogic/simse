@@ -212,17 +212,15 @@ fun foldGlobalScanBodies(module: *AstXmlNode): Unit {
 
 // The candidates left standing, as the table the passes read.
 fun linConstGlobalsBuild(): Unit {
-    var i: Int = 0
-    while (i < linGlobalScan.candidates.size()) {
+    for ((candidate, i) in linGlobalScan.candidates) {
         val name: Str = linGlobalScan.names[i]
         var ok: Bool = !linGlobalScan.written.has(name)
         ok = ok && !linGlobalScan.addressed.has(name)
         ok = ok && !linGlobalScan.bound.has(name)
         ok = ok && !linGlobalScan.borrowed.has(name)
         if (ok) {
-            linConstGlobals.insert(name, linGlobalScan.candidates[i])
+            linConstGlobals.insert(name, candidate)
         }
-        i = i + 1
     }
 }
 
