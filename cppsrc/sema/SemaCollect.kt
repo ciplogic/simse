@@ -230,17 +230,22 @@ fun Analyzer.validateImports(module: *AstXmlNode): Unit {
     }
 }
 
-// Builds the unqualified scope of one file: its own package, then imports, then the
-// implicit `rtl` prelude. Pushes the module scope (with file-level statics as values,
-// specs/statics.md) that `run` pops.
+// Builds the unqualified scope of one file, in decreasing precedence: its own package, then
+// its imports with the *last* written ahead of the earlier ones, then the implicit `rtl`
+// prelude. The first declaration of a name in this order wins, so a later import shadows an
+// earlier one and an explicit import shadows `rtl` (specs/modules.md, "Resolution") - which
+// is how `import xml` replaces the prelude's `XmlNode` with the module's. Pushes the module
+// scope (with file-level statics as values, specs/statics.md) that `run` pops.
 fun Analyzer.buildVisible(module: *AstXmlNode): Unit {
     this.types = Dictionary<Str, AstXmlNode>()
     this.functions = Dictionary<Str, List<AstXmlNode>>()
     var packages: List<Str> = List<Str>()
     packages.append(this.packageOf(module))
     val imports: List<AstXmlNode> = xmlChildren(module, AstNodeKind.Import)
-    for (*importDecl in imports) {
-        packages.append(xmlAttr(importDecl, AstNodeAttributeKind.Path))
+    var importAt: Int = imports.size() - 1
+    while (importAt >= 0) {
+        packages.append(xmlAttr(imports[importAt], AstNodeAttributeKind.Path))
+        importAt = importAt - 1
     }
     packages.append("rtl")
 

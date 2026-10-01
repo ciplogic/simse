@@ -410,17 +410,26 @@ borrow fun toInt(this: Str): Opt<Int>
 @SmGen("res", "strops", "simse_str_toFloat")
 borrow fun toFloat(this: Str): Opt<Float64>
 
-@SmGen("res", "strops", "simse_char_isDigit")
-borrow fun isDigit(this: Char): Bool
+// The `Char` predicates, written in the language: each is a byte-range test (or one of the
+// two checks), so the borrow-cleanliness is *proved* from the body
+// (impl_specs/escape-analysis.md) and no `borrow` mark is needed. A byte test, not the C
+// locale's `isspace`: space, tab, newline and carriage return count, form feed and vertical
+// tab do not.
+fun Char.isDigit(): Bool {
+    return this >= '0' && this <= '9'
+}
 
-@SmGen("res", "strops", "simse_char_isAlpha")
-borrow fun isAlpha(this: Char): Bool
+fun Char.isAlpha(): Bool {
+    return (this >= 'a' && this <= 'z') || (this >= 'A' && this <= 'Z')
+}
 
-@SmGen("res", "strops", "simse_char_isAlphaOrDigit")
-borrow fun isAlphaOrDigit(this: Char): Bool
+fun Char.isAlphaOrDigit(): Bool {
+    return this.isAlpha() || this.isDigit()
+}
 
-@SmGen("res", "strops", "simse_char_isSpace")
-borrow fun isSpace(this: Char): Bool
+fun Char.isSpace(): Bool {
+    return this == ' ' || this == '\t' || this == '\n' || this == '\r'
+}
 
 @SmGen("res", "listops", "simse_int_toString")
 borrow fun toString(this: Int): Str

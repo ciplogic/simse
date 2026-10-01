@@ -759,10 +759,16 @@ Do these only when asked; roughly prioritized:
   tools/vscheck.mjs [Debug|Release]` builds the project from the command line, which is how a
   change to the RTL's includes or to the amalgamation's shape can be caught without opening
   the IDE.
-- **The emitter's type table is flat by name**, so a prelude type and a program type of
-  the same name collide: `cppsrc/resources/Resources.kt`'s reader pair had to be renamed
-  `ResourceItem` when the RTL's `ResourceEntry` arrived (the symptom is the prelude's own
-  code emitted against `nsN_ResourceEntry`). Keep prelude/RTL names unique project-wide.
+- **The emitter's type table is flat by name, and a shared name now *shadows* rather than
+  collides**: the later declaration wins and the shadowed one is not emitted, so a module
+  can replace a prelude type - `cppsrc/modules/xml`'s `XmlNode`/`Attribute` over
+  `cppsrc/rtl/xml.kt`'s, via `import xml` (specs/modules.md, "Shadowing"; the fix is
+  `CgEmitType.kt`'s "only the winner" check, `typePackage(name) == inputPackage(input)`).
+  `cppsrc/resources/Resources.kt`'s reader pair predates that rule and stays renamed
+  `ResourceItem` (the RTL's `ResourceEntry` would otherwise have been emitted against it).
+  **Function names are still not shadowed** - overloads accumulate by name - so keep those
+  unique project-wide: the `lex`/RTL `isDigit`-family clash is why `cppsrc/lex/Scanner.kt`'s
+  helpers are `lexIs*`.
 - **A *static* call's result has no inferred type** (`Resources.entries()` is emitted
   fine, but a member chained straight onto it, `Resources.entries().size()`, resolves
   against nothing and picks the wrong overload). Bind it to a typed local first - that is

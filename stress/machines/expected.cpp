@@ -310,16 +310,6 @@ Opt<Float64> simse_str_toFloat(const Str& self);
 // setting the receiver in place. The empty form is a Simse method (an empty body).
 void simse_str_initByValue(Str& self, const Str& value);
 
-// `Char` is a signed 8-bit integer; the checks are byte-range tests so they do not depend
-// on the C locale. Space, tab, newline and carriage return count as space; form feed and
-// vertical tab do not. They stay here because a body would emit a `Char* self` receiver (a
-// `Char` is a scalar) while the call sites and the `CharPredicate` function values need the
-// byte by value.
-Bool simse_char_isDigit(Char self);
-Bool simse_char_isAlpha(Char self);
-Bool simse_char_isAlphaOrDigit(Char self);
-Bool simse_char_isSpace(Char self);
-
 // Numeric conversions. `Char` is an 8-bit integer, so it stringifies as a number.
 template <class T>
 Str simse_num_toString(const T& self);
@@ -1507,27 +1497,6 @@ inline Opt<Float64> simse_str_toFloat(const Str& self) {
 
 inline void simse_str_initByValue(Str& self, const Str& value) {
     self = value;
-}
-
-// The shared space test, used by `simse_char_isSpace` (and, in Simse, by `Str.trim`).
-inline Bool simse_str_isSpaceByte(Char ch) {
-    return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r';
-}
-
-inline Bool simse_char_isDigit(Char self) {
-    return self >= '0' && self <= '9';
-}
-
-inline Bool simse_char_isAlpha(Char self) {
-    return (self >= 'a' && self <= 'z') || (self >= 'A' && self <= 'Z');
-}
-
-inline Bool simse_char_isAlphaOrDigit(Char self) {
-    return simse_char_isAlpha(self) || simse_char_isDigit(self);
-}
-
-inline Bool simse_char_isSpace(Char self) {
-    return simse_str_isSpaceByte(self);
 }
 
 template <class T>

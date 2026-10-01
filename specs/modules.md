@@ -78,10 +78,28 @@ scanned from the module roots. Resolution never consults the filesystem layout
 of a package or the current working directory, so an import resolves identically
 wherever the compiler is invoked.
 
+### Shadowing
+
+One simple name may be declared in several packages a file can see. The order of
+decreasing precedence is:
+
+1. the file's own package,
+2. its imports, the **last written** ahead of the earlier ones (`import a` then
+   `import b` makes `b` win), and
+3. the implicit `rtl` prelude.
+
+The first declaration of a name in that order wins, so an explicit import shadows
+`rtl` - an `XmlNode` from `import xml` is the `xml` module's, not the prelude's -
+and a file's own declaration shadows both. Only the winner is emitted: the
+shadowed declaration is not generated, so a module can *replace* a prelude type
+rather than collide with it. A duplicate top-level name in the *same* package is
+still an error ("Modules (physical)" above).
+
 ### Implementation status
 
 Implemented: `import`ed packages resolve into unqualified scope, an import of a package no
-scanned file declares is an error, and `rtl` is implicitly in scope. There is no
+scanned file declares is an error, `rtl` is implicitly in scope, and a shared name
+resolves to the winner above (the shadowed declaration is not emitted). There is no
 qualified-name form.
 
 ## External modules (deferred)

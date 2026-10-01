@@ -39,21 +39,24 @@ data class TokenMatcher(
     var match: MatchLenFunc
 )
 
-// Horizontal whitespace only. Line endings are their own token kind.
-fun isSpace(ch: Char): Bool {
+// Horizontal whitespace only. Line endings are their own token kind. The `lex` prefix keeps
+// these out of the way of the RTL's own `Char.isSpace()`/`isDigit()`/... extensions (the
+// emitter's name table is flat, so a shared name would resolve to the wrong one).
+fun lexIsSpace(ch: Char): Bool {
     return ch == ' ' || ch == '\t'
 }
 
-fun isDigit(ch: Char): Bool {
+fun lexIsDigit(ch: Char): Bool {
     return ch >= '0' && ch <= '9'
 }
 
-fun isAlpha(ch: Char): Bool {
+// The identifier rule: letters, digits and `_`.
+fun lexIsAlpha(ch: Char): Bool {
     return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || ch == '_'
 }
 
-fun isAlphaOrDigit(ch: Char): Bool {
-    return isAlpha(ch) || isDigit(ch)
+fun lexIsAlphaOrDigit(ch: Char): Bool {
+    return lexIsAlpha(ch) || lexIsDigit(ch)
 }
 
 fun isOperatorChar(ch: Char): Bool {
@@ -161,7 +164,7 @@ fun isReservedWord(view: StrView): Bool {
 }
 
 fun matchSpaces(view: StrView): Int {
-    return matchAllOfRule(view, isSpace)
+    return matchAllOfRule(view, lexIsSpace)
 }
 
 // A line ending is CRLF, LF, or CR, matched as a whole.
@@ -186,7 +189,7 @@ fun matchEndOfLine(view: StrView): Int {
 }
 
 fun matchIdentifier(view: StrView): Int {
-    return matchAllOfRules(view, isAlpha, isAlphaOrDigit)
+    return matchAllOfRules(view, lexIsAlpha, lexIsAlphaOrDigit)
 }
 
 // `@Identifier` (specs/attributes.md). The token's text keeps the `@` (it is the matched
@@ -195,11 +198,11 @@ fun matchAttribute(view: StrView): Int {
     if (view.size() < 2 || view.at(0) != '@') {
         return 0
     }
-    if (!isAlpha(view.at(1))) {
+    if (!lexIsAlpha(view.at(1))) {
         return 0
     }
     var i: Int = 2
-    while (i < view.size() && isAlphaOrDigit(view.at(i))) {
+    while (i < view.size() && lexIsAlphaOrDigit(view.at(i))) {
         i = i + 1
     }
     return i
@@ -218,15 +221,15 @@ fun matchReservedWord(view: StrView): Int {
 
 fun matchNumber(view: StrView): Int {
     var i = 0
-    while (i < view.size() && isDigit(view.at(i))) {
+    while (i < view.size() && lexIsDigit(view.at(i))) {
         i = i + 1
     }
     if (i == 0) {
         return 0
     }
-    if (i + 1 < view.size() && view.at(i) == '.' && isDigit(view.at(i + 1))) {
+    if (i + 1 < view.size() && view.at(i) == '.' && lexIsDigit(view.at(i + 1))) {
         i = i + 1
-        while (i < view.size() && isDigit(view.at(i))) {
+        while (i < view.size() && lexIsDigit(view.at(i))) {
             i = i + 1
         }
     }

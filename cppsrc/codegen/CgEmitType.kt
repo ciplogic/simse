@@ -97,6 +97,12 @@ fun Emitter.emitForwardTypes(emitted: *Dictionary<Str, Bool>): Unit {
             continue
         }
         val fwdName: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
+        // A name belongs to one declaration: a later module that declares it shadows the
+        // earlier one (`cppsrc/modules/xml` over the `rtl` prelude's `xml.kt`), so only the
+        // winner of the name is emitted (specs/modules.md, "Resolution").
+        if (this.typePackage(fwdName) != this.inputPackage(input)) {
+            continue
+        }
         if (input.prelude && !emitted.has(fwdName)) {
             continue
         }
@@ -116,7 +122,10 @@ fun Emitter.emitTypes(emitted: *Dictionary<Str, Bool>): Unit {
         val decls: List<AstXmlNode> = xmlDecls(input.module)
         for (*decl in decls) {
         val tname: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
-        val reachable: Bool = !input.prelude || emitted.has(tname)
+        // Only the declaration a name resolves to is emitted; a shadowed one is skipped, so a
+        // module's type replaces the prelude's of the same name instead of colliding with it.
+        val shadowed: Bool = this.typePackage(tname) != this.inputPackage(input)
+        val reachable: Bool = !shadowed && (!input.prelude || emitted.has(tname))
         if (decl.name == AstNodeKind.DataClass) {
             if (reachable && !this.typeIsRaw(decl)) {
                 this.emitDataClass(decl)
@@ -128,7 +137,7 @@ fun Emitter.emitTypes(emitted: *Dictionary<Str, Bool>): Unit {
             }
         } else if (decl.name == AstNodeKind.TypeAlias) {
             // A prelude alias (StrView) is the header one; a program alias is emitted.
-            if (!input.prelude) {
+            if (!input.prelude && !shadowed) {
                 this.emitTypeAlias(decl)
             }
         }

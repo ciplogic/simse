@@ -214,16 +214,6 @@ Opt<Float64> simse_str_toFloat(const Str& self);
 // setting the receiver in place. The empty form is a Simse method (an empty body).
 void simse_str_initByValue(Str& self, const Str& value);
 
-// `Char` is a signed 8-bit integer; the checks are byte-range tests so they do not depend
-// on the C locale. Space, tab, newline and carriage return count as space; form feed and
-// vertical tab do not. They stay here because a body would emit a `Char* self` receiver (a
-// `Char` is a scalar) while the call sites and the `CharPredicate` function values need the
-// byte by value.
-Bool simse_char_isDigit(Char self);
-Bool simse_char_isAlpha(Char self);
-Bool simse_char_isAlphaOrDigit(Char self);
-Bool simse_char_isSpace(Char self);
-
 // Numeric conversions. `Char` is an 8-bit integer, so it stringifies as a number.
 template <class T>
 Str simse_num_toString(const T& self);
@@ -500,6 +490,9 @@ Str substr(Str* self, Int start, Int len);
 Bool startsWith(Str* self, Str prefix);
 Bool endsWith(Str* self, Str suffix);
 Bool isEmpty(Str* self);
+Bool isDigit(Char* self);
+Bool isAlpha(Char* self);
+Bool isSpace(Char* self);
 template <class T>
 T min(T a, T b);
 template <class T>
@@ -855,6 +848,65 @@ Bool isEmpty(Str* self) {
     _sm_expr1 = simse_lenOf((*self));
     _sm_expr2 = _sm_expr1 == 0;
     return _sm_expr2;
+}
+Bool isDigit(Char* self) {
+    Char _sm_base1, _sm_base2;
+    Bool _sm_expr2, _sm_expr1;
+    _sm_base1 = ((*self));
+    _sm_expr2 = _sm_base1 >= '0';
+    _sm_expr1 = _sm_expr2;
+    if (!(_sm_expr1)) goto _sm_sc1;
+    _sm_base2 = ((*self));
+    _sm_expr2 = _sm_base2 <= '9';
+    _sm_expr1 = _sm_expr2;
+    _sm_sc1:;
+    return _sm_expr1;
+}
+Bool isAlpha(Char* self) {
+    Char _sm_base1, _sm_base2, _sm_base3, _sm_base4;
+    Bool _sm_expr3, _sm_expr2, _sm_expr1, _sm_expr5;
+    _sm_base1 = ((*self));
+    _sm_expr3 = _sm_base1 >= 'a';
+    _sm_expr2 = _sm_expr3;
+    if (!(_sm_expr2)) goto _sm_sc2;
+    _sm_base2 = ((*self));
+    _sm_expr3 = _sm_base2 <= 'z';
+    _sm_expr2 = _sm_expr3;
+    _sm_sc2:;
+    _sm_expr1 = _sm_expr2;
+    if (_sm_expr1) goto _sm_sc1;
+    _sm_base3 = ((*self));
+    _sm_expr3 = _sm_base3 >= 'A';
+    _sm_expr5 = _sm_expr3;
+    if (!(_sm_expr5)) goto _sm_sc3;
+    _sm_base4 = ((*self));
+    _sm_expr3 = _sm_base4 <= 'Z';
+    _sm_expr5 = _sm_expr3;
+    _sm_sc3:;
+    _sm_expr1 = _sm_expr5;
+    _sm_sc1:;
+    return _sm_expr1;
+}
+Bool isSpace(Char* self) {
+    Char _sm_base1, _sm_base2, _sm_base3, _sm_base4;
+    Bool _sm_expr2, _sm_expr1;
+    _sm_base1 = ((*self));
+    _sm_expr2 = _sm_base1 == ' ';
+    _sm_expr1 = _sm_expr2;
+    if (_sm_expr1) goto _sm_sc1;
+    _sm_base2 = ((*self));
+    _sm_expr2 = _sm_base2 == '\t';
+    _sm_expr1 = _sm_expr2;
+    if (_sm_expr1) goto _sm_sc1;
+    _sm_base3 = ((*self));
+    _sm_expr2 = _sm_base3 == '\n';
+    _sm_expr1 = _sm_expr2;
+    if (_sm_expr1) goto _sm_sc1;
+    _sm_base4 = ((*self));
+    _sm_expr2 = _sm_base4 == '\r';
+    _sm_expr1 = _sm_expr2;
+    _sm_sc1:;
+    return _sm_expr1;
 }
 template <class T>
 T min(T a, T b) {
@@ -1282,15 +1334,15 @@ Int ns1_partLanguageTour() {
     simse_println((_sm_expr25), stdout);
     L14:;
     letter = 'a';
-    _sm_expr26 = simse_char_isAlpha(letter);
+    _sm_expr26 = isAlpha(simse_addressOf(letter));
     simse_println((_sm_expr26), stdout);
-    _sm_expr27 = simse_char_isDigit(letter);
+    _sm_expr27 = isDigit(simse_addressOf(letter));
     simse_println((_sm_expr27), stdout);
     _sm_base14 = '7';
-    _sm_expr28 = simse_char_isDigit(_sm_base14);
+    _sm_expr28 = isDigit(simse_addressOf(_sm_base14));
     simse_println((_sm_expr28), stdout);
     _sm_base15 = ' ';
-    _sm_expr29 = simse_char_isSpace(_sm_base15);
+    _sm_expr29 = isSpace(simse_addressOf(_sm_base15));
     simse_println((_sm_expr29), stdout);
     small = 5;
     _sm_expr30 = simse_num_toString(small);
@@ -2306,27 +2358,6 @@ inline Opt<Float64> simse_str_toFloat(const Str& self) {
 
 inline void simse_str_initByValue(Str& self, const Str& value) {
     self = value;
-}
-
-// The shared space test, used by `simse_char_isSpace` (and, in Simse, by `Str.trim`).
-inline Bool simse_str_isSpaceByte(Char ch) {
-    return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r';
-}
-
-inline Bool simse_char_isDigit(Char self) {
-    return self >= '0' && self <= '9';
-}
-
-inline Bool simse_char_isAlpha(Char self) {
-    return (self >= 'a' && self <= 'z') || (self >= 'A' && self <= 'Z');
-}
-
-inline Bool simse_char_isAlphaOrDigit(Char self) {
-    return simse_char_isAlpha(self) || simse_char_isDigit(self);
-}
-
-inline Bool simse_char_isSpace(Char self) {
-    return simse_str_isSpaceByte(self);
 }
 
 template <class T>
