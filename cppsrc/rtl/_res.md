@@ -576,8 +576,10 @@ inline void simse_list_sort(List<T>& self, F less) {
 ====
 forward:
 ```cpp
+#include <cerrno>
 #include <charconv>
 #include <cstddef>
+#include <cstdlib>
 #include <system_error>
 
 // The string, character, numeric-conversion and min/max operations behind the prelude
@@ -613,8 +615,10 @@ Int simse_str_lastIndexOf(const Str& self, const Str& sub);
 Str simse_str_replace(const Str& self, const Str& from, const Str& to);
 
 // `Str.toInt()`/`Str.toFloat()` parse the whole string; failure (or a non-empty trailing
-// remainder) yields `Opt.none()`. No exceptions: `std::from_chars` reports errors through
-// its return value.
+// remainder) yields `Opt.none()`. No exceptions. `toInt` uses `std::from_chars` (integer
+// `from_chars` is in libstdc++ since GCC 11); `toFloat` uses `std::strtod`, because libstdc++
+// did not ship floating-point `from_chars` until GCC 14 and the language must build on
+// GCC 12 (docs/building-on-linux.md).
 Opt<Int> simse_str_toInt(const Str& self);
 Opt<Float64> simse_str_toFloat(const Str& self);
 
@@ -721,11 +725,11 @@ inline Opt<Int> simse_str_toInt(const Str& self) {
 
 inline Opt<Float64> simse_str_toFloat(const Str& self) {
     if (self.empty()) return Opt<Float64>::none();
-    Float64 value = 0;
     const char* begin = self.data();
-    const char* end = begin + self.size();
-    std::from_chars_result parsed = std::from_chars(begin, end, value);
-    if (parsed.ec != std::errc() || parsed.ptr != end) return Opt<Float64>::none();
+    char* end = nullptr;
+    errno = 0;
+    const Float64 value = std::strtod(begin, &end);
+    if (end != begin + self.size() || errno == ERANGE) return Opt<Float64>::none();
     return Opt<Float64>::some(value);
 }
 

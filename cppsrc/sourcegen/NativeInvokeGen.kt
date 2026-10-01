@@ -3,7 +3,8 @@
 // The `native` generator: `@SmGen("native", library[, symbol])`. The declaration's C++ is a
 // *run-time* binding to a symbol in a native shared library - the P/Invoke shape
 // (impl_specs/native-interop.md): the generator emits a thunk that resolves the symbol once
-// with `LoadLibraryA`/`GetProcAddress` and calls through it, so the program links nothing and
+// with `LoadLibraryA`/`GetProcAddress` on Windows and `dlopen`/`dlsym` elsewhere, and calls
+// through it, so the program links nothing and
 // needs no header. The declaration itself is an ordinary body-less method with a Simse
 // signature; the *thunk* is what a call reaches (`ctx.symbol`).
 //
@@ -287,51 +288,67 @@ fun nativeInvokeRuntime(ctx: *SourceGenContext): Unit {
 fun nativeInvokeIncludesText(): Str {
     return `
 // NativeInvoke (impl_specs/native-interop.md): the shared-library loader a
-// @SmGen("native", ...) declaration binds its symbol with. windows.h is the
-// platform's dynamic loader; LoadLibraryA/GetProcAddress are what make the call a
-// run-time lookup rather than a link-time import, so the program links nothing.
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <windows.h>
-#include <cstring>
-`
+// @SmGen("native", ...) declaration binds its symbol with. Windows loads through
+// windows.h's LoadLibraryA/GetProcAddress, everywhere else through dlfcn.h's
+// dlopen/dlsym; either way the lookup is at run time rather than a link-time
+// import, so the program links nothing.
+    #ifdef _WIN32
+    #ifndef WIN32_LEAN_AND_MEAN
+    #define WIN32_LEAN_AND_MEAN
+    #endif
+    #ifndef NOMINMAX
+    #define NOMINMAX
+    #endif
+    #include<windows.h>
+    #else
+    #include<dlfcn.h>
+    #endif
+    #include<cstring>
+    `
 }
 
 fun nativeInvokeSupportText(): Str {
     return `
 // Resolves 'symbol' from 'library', loading the library once and caching the handle (a small
 // fixed table: a program names a handful of libraries at most). A missing library or symbol
-// answers null, which the thunk turns into the declaration's default value rather than a crash.
-inline FARPROC __sm_nativeResolve(const char* library, const char* symbol) {
-    struct Entry {
-        const char* library;
-        HMODULE module;
-    };
-    static Entry table[16];
-    static int count = 0;
-    HMODULE module = nullptr;
-    for (int i = 0; i < count; i++) {
+// answers null, which the thunk turns into the declaration's default value rather than a
+// crash. The handle is the loader's own (a FARPROC on Windows, a void* from dlsym elsewhere);
+// the thunk casts the result to the declaration's function-pointer type, which is the one
+// object-pointer-to-function-pointer conversion the language cannot spell.
+    inline void * __sm_nativeResolve (const char * library, const char* symbol) {
+        struct Entry {
+            const char * library;
+            void * module;
+        };
+        static Entry table[16];
+        static int count = 0;
+        void * module = nullptr;
+        for (int i = 0; i < count; i++) {
         if (std::strcmp(table[i].library, library) == 0) {
             module = table[i].module;
             break;
         }
     }
-    if (module == nullptr) {
-        module = ::LoadLibraryA(library);
-        if (module != nullptr && count < 16) {
-            table[count].library = library;
-            table[count].module = module;
-            count++;
+        if (module == nullptr) {
+            #ifdef _WIN32
+                    module = (void *)::LoadLibraryA(library);
+            #else
+            module = ::dlopen(library, RTLD_NOW | RTLD_LOCAL);
+            #endif
+            if (module != nullptr && count < 16) {
+                table[count].library = library;
+                table[count].module = module;
+                count++;
+            }
         }
+        if (module == nullptr) {
+            return nullptr;
+        }
+        #ifdef _WIN32
+            return (void *)::GetProcAddress((HMODULE) module, symbol);
+        #else
+        return ::dlsym(module, symbol);
+        #endif
     }
-    if (module == nullptr) {
-        return nullptr;
-    }
-    return ::GetProcAddress(module, symbol);
-}
-`
+    `
 }

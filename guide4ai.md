@@ -28,6 +28,10 @@ the RTL primitives, the platform's file I/O, the clocks - is generated into its 
 translation unit from `cppsrc/rtl/_res.md`, so a build is one `cl.exe` invocation
 over one file with nothing to link.
 
+The same bootstrap builds with GCC 12+ / Clang 15+ on Linux - the emitted C++ is
+portable - though the harness scripts here still drive `cl.exe`. The one-liner, the
+minimum compiler, and what is still Windows-only are `docs/building-on-linux.md`.
+
 ```sh
 # build (from the repo root): cppsrc -> ./simse_out.cpp -> ./simse.exe
 ./build.bat                             # debug (/MDd)
@@ -125,7 +129,8 @@ driver's - and `build.bat` can compile it.
   C++ (`docs/how-it-works.md`), honest status and comparisons
   (`docs/state-of-the-field.md`), and the runnable examples under
   `docs/examples/<name>/src/` (built with the commands in
-  `docs/getting-started.md`). Keep these true when behavior changes.
+  `docs/getting-started.md`), and the Linux/GCC build and portability status
+  (`docs/building-on-linux.md`). Keep these true when behavior changes.
 - `specs/` - the language specification (normative). Start with
   `specs/modules.md` (modules/packages), `specs/declarations.md`,
   `specs/functions.md`, `specs/memory-model.md`, `specs/generics.md`,

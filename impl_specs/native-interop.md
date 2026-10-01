@@ -114,8 +114,9 @@ Int32 __sm_native_sdlInit(const Int32& flags) {
 - **One thunk per declaration name.** The generated symbol is `__sm_native_<declaration>`, so two
   packages that both declare, say, `open` share a thunk only when they name the same library and
   symbol; a different binding is a diagnostic rather than a silent merge.
-- Windows is the only loader today (`LoadLibraryA`/`GetProcAddress`); a `dlopen`/`dlsym` arm
-  belongs in the generator's own text.
+- The loader is Windows' `LoadLibraryA`/`GetProcAddress` and POSIX's `dlopen`/`dlsym`, chosen
+  by `#ifdef _WIN32` in the generator's own text (`cppsrc/sourcegen/NativeInvokeGen.kt`); the
+  `dlopen`/`dlsym` arm is what makes the same `@SmGen("native", ...)` declaration bind on Linux.
 
 Two worked examples ship with it. `docs/examples/sdl2` is a window bound to `SDL2.dll` (an
 opaque `SDL_Window*` as a `RawPtr`, and a `res` section that owns the `SDL_Event` union and casts
