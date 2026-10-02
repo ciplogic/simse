@@ -513,7 +513,9 @@ fun bpBorrowDecl(
     // trust, borrows nothing: each is the "unsure" that means escape.
     if (facts.fieldWrite || facts.staticWrite || facts.impureCall) {
         if (bpShow()) {
-            bpNote(fmtStr("borrow- | |", xmlAttr(decl, AstNodeAttributeKind.Name), bpWhy(*facts)))
+            val xmlAttrText: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
+            val bpWhyText: Str = bpWhy(*facts)
+            bpNote(`borrow- @xmlAttrText @bpWhyText`)
         }
         return decl
     }
@@ -535,7 +537,9 @@ fun bpBorrowDecl(
         return decl
     }
     if (bpShow()) {
-        bpNote(fmtStr("borrow+ | |", xmlAttr(decl, AstNodeAttributeKind.Name), bpNames(*borrowed)))
+        val xmlAttrText2: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
+        val bpNamesText: Str = bpNames(*borrowed)
+        bpNote(`borrow+ @xmlAttrText2 @bpNamesText`)
     }
     // `--no-borrow`: the analysis above still runs (so `--showBorrow` reads it), the rewrite does
     // not - the emitted C++ is what the author wrote.

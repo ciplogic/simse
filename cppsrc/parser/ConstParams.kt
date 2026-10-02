@@ -34,20 +34,25 @@ import common
 fun cpLiteralKey(arg: *AstXmlNode): Str {
     val kind: AstNodeCategory = xmlKind(arg)
     if (kind == AstNodeCategory.ExprIntLit) {
-        return fmtStr("int:|", xmlAttr(arg, AstNodeAttributeKind.Text))
+        val xmlAttrText: Str = xmlAttr(arg, AstNodeAttributeKind.Text)
+        return `int:@xmlAttrText`
     }
     if (kind == AstNodeCategory.ExprFloatLit) {
-        return fmtStr("float:|", xmlAttr(arg, AstNodeAttributeKind.Text))
+        val xmlAttrText2: Str = xmlAttr(arg, AstNodeAttributeKind.Text)
+        return `float:@xmlAttrText2`
     }
     if (kind == AstNodeCategory.ExprStrLit) {
-        return fmtStr("str:|", xmlAttr(arg, AstNodeAttributeKind.Text))
+        val xmlAttrText3: Str = xmlAttr(arg, AstNodeAttributeKind.Text)
+        return `str:@xmlAttrText3`
     }
     if (kind == AstNodeCategory.ExprCharLit) {
-        return fmtStr("char:|", xmlAttr(arg, AstNodeAttributeKind.Text))
+        val xmlAttrText4: Str = xmlAttr(arg, AstNodeAttributeKind.Text)
+        return `char:@xmlAttrText4`
     }
     if (kind == AstNodeCategory.ExprBoolLit) {
         // A bool literal keeps its value in `Value`; every other literal keeps it in `Text`.
-        return fmtStr("bool:|", xmlAttr(arg, AstNodeAttributeKind.Value))
+        val xmlAttrText5: Str = xmlAttr(arg, AstNodeAttributeKind.Value)
+        return `bool:@xmlAttrText5`
     }
     return ""
 }

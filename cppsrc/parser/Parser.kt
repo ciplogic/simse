@@ -81,10 +81,10 @@ data class Parser(
             return
         }
         this.failed = true
-        this.error = fmtStr(
-            "|:|:|: |",
-            this.file, pos.line.toString(), pos.column.toString(), message
-        )
+        val fileText: Str = this.file
+        val lineText: Str = pos.line.toString()
+        val columnText: Str = pos.column.toString()
+        this.error = `@fileText:@lineText:@columnText: @message`
     }
 
     fun fail(message: *Str): Bool {
@@ -96,7 +96,7 @@ data class Parser(
         if (this.matchText(text)) {
             return true
         }
-        return this.fail(fmtStr("expected '|'", text))
+        return this.fail(`expected '@text'`)
     }
 
     fun expectName(): Str {
@@ -105,7 +105,8 @@ data class Parser(
             // The amalgamation is C++, so a name that is a C++ keyword would emit a broken
             // declaration (`Str long = ...`). Reject it here, where the position is known.
             if (isCppKeyword(token.text) && !this.failed) {
-                this.setError(token.pos, fmtStr("'|' is a C++ keyword; give it another name", token.text))
+                val tokenText: Str = token.text
+                this.setError(token.pos, `'@tokenText' is a C++ keyword; give it another name`)
             }
             return token.text
         }

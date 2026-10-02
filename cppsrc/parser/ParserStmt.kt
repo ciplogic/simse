@@ -319,7 +319,8 @@ fun Parser.tryParseCtorReturn(pos: SourcePos): AstXmlNode {
         return this.emptyNode()
     }
     this.ctorCounter = this.ctorCounter + 1
-    val temp: Str = fmtStr("_sm_ctor|", this.ctorCounter.toString())
+    val ctorCounterText: Str = this.ctorCounter.toString()
+    val temp: Str = `_sm_ctor@ctorCounterText`
     val tempExpr: ExprNode = this.nameExprAt(temp, pos)
     val retType: AstXmlNode = this.roleOf(this.returnTypeCtx, AstNodeKind.Type)
     val decl: AstXmlNode = this.varDeclNode(temp, true, retType, this.emptyExpr(), pos)

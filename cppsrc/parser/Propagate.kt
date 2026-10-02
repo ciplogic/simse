@@ -323,7 +323,8 @@ fun propExpand(state: *PropState, stmt: *AstXmlNode, out: *List<AstXmlNode>): Bo
     }
     val line: Int = xmlLine(holder)
     val column: Int = xmlColumn(holder)
-    val temp: Str = fmtStr("_sm_prop|", state.next.toString())
+    val nextText: Str = state.next.toString()
+    val temp: Str = `_sm_prop@nextText`
     state.next = state.next + 1
 
     // The operand first: one evaluation, and both later uses read the temp.
@@ -489,10 +490,10 @@ fun propRewriteLambdaBody(lambda: *AstXmlNode, target: AstXmlNode, fileName: *St
     var out: List<AstXmlNode> = List<AstXmlNode>()
     propStmts(state, xmlChildren(body, AstNodeKind.Stmt), out)
     if (!state.error.isEmpty()) {
-        return fmtStr(
-            "|: |:|: |", fileName, state.errorLine.toString(),
-            state.errorColumn.toString(), state.error
-        )
+        val errorLineText: Str = state.errorLine.toString()
+        val errorColumnText: Str = state.errorColumn.toString()
+        val stateErrorText: Str = state.error
+        return `@fileName: @errorLineText:@errorColumnText: @stateErrorText`
     }
     body.Children = out.toArray()
     return ""
@@ -520,10 +521,10 @@ fun propCallLambdas(call: *AstXmlNode, fileName: *Str, declarations: *List<AstXm
             if (xmlIsEmpty(found)) {
                 continue
             }
-            return fmtStr(
-                "|: |:|: |", fileName, xmlLine(found).toString(), xmlColumn(found).toString(),
-                "`!!` inside a lambda propagates into the lambda's own result, and this parameter's type has none"
-            )
+            val xmlLineText: Str = xmlLine(found).toString()
+            val xmlColumnText: Str = xmlColumn(found).toString()
+            val messageText: Str = "`!!` inside a lambda propagates into the lambda's own result, and this parameter's type has none"
+            return `@fileName: @xmlLineText:@xmlColumnText: @messageText`
         }
         val error: Str = propRewriteLambdaBody(arg, inner, fileName)
         if (error != "") {
@@ -568,17 +569,17 @@ fun propRewriteBody(decl: *AstXmlNode, fileName: *Str, declarations: *List<AstXm
     }
     val returnType: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.ReturnType)
     if (xmlIsEmpty(returnType)) {
-        return fmtStr(
-            "|: |:|: |", fileName, xmlLine(found).toString(), xmlColumn(found).toString(),
-            "`!!` propagates a failure, and this function returns nothing to propagate into"
-        )
+        val xmlLineText2: Str = xmlLine(found).toString()
+        val xmlColumnText2: Str = xmlColumn(found).toString()
+        val messageText2: Str = "`!!` propagates a failure, and this function returns nothing to propagate into"
+        return `@fileName: @xmlLineText2:@xmlColumnText2: @messageText2`
     }
     val inner: AstXmlNode = propResInner(returnType)
     if (xmlIsEmpty(inner)) {
-        return fmtStr(
-            "|: |:|: |", fileName, xmlLine(found).toString(), xmlColumn(found).toString(),
-            "`!!` propagates a failure, so the enclosing function must return `Res<T>`"
-        )
+        val xmlLineText3: Str = xmlLine(found).toString()
+        val xmlColumnText3: Str = xmlColumn(found).toString()
+        val messageText3: Str = "`!!` propagates a failure, so the enclosing function must return `Res<T>`"
+        return `@fileName: @xmlLineText3:@xmlColumnText3: @messageText3`
     }
     var state: PropState = PropState(
         1, dictionaryOf<Str, AstXmlNode>(), List<Str>(), inner, "", 0, 0
@@ -588,10 +589,10 @@ fun propRewriteBody(decl: *AstXmlNode, fileName: *Str, declarations: *List<AstXm
     var out: List<AstXmlNode> = List<AstXmlNode>()
     propStmts(state, xmlChildren(body, AstNodeKind.Stmt), out)
     if (!state.error.isEmpty()) {
-        return fmtStr(
-            "|: |:|: |", fileName, state.errorLine.toString(),
-            state.errorColumn.toString(), state.error
-        )
+        val errorLineText2: Str = state.errorLine.toString()
+        val errorColumnText2: Str = state.errorColumn.toString()
+        val stateErrorText2: Str = state.error
+        return `@fileName: @errorLineText2:@errorColumnText2: @stateErrorText2`
     }
     body.Children = out.toArray()
     return ""
