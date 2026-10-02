@@ -99,7 +99,7 @@ fun foldBoolLit(like: *AstXmlNode, value: Bool): AstXmlNode {
 // A string literal carries its own quotes, because the emitter reads `Text` back as source
 // spelling (`CgStringTable.cgLiteralByteLength`), so a fold builds `"..."`, not bare text.
 fun foldStrLit(like: *AstXmlNode, text: Str): AstXmlNode {
-    return foldAsLiteral(like, AstNodeCategory.ExprStrLit, fmtStr("\"|\"", text))
+    return foldAsLiteral(like, AstNodeCategory.ExprStrLit, `"@text"`)
 }
 
 // The integer a literal holds, or empty (a literal with anything but decimal digits folds

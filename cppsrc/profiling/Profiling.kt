@@ -250,5 +250,5 @@ fun profPreamble(index: Int): Str {
     if (!profEnabledFlag) {
         return ""
     }
-    return fmtStr("auto __smProfile = profileApp.measure(|);", index.toString())
+    return `auto __smProfile = profileApp.measure(@index);`
 }

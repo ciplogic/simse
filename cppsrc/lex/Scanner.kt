@@ -406,7 +406,7 @@ fun escapedSnippet(view: StrView, maxLen: Int): Str {
 }
 
 fun unexpectedCharacterMessage(line: Int, column: Int, snippet: *Str): Str {
-    return fmtStr("|:|: Unexpected character: '|'", line.toString(), column.toString(), snippet)
+    return `@line:@column: Unexpected character: '@snippet'`
 }
 
 data class Scanner(
@@ -472,7 +472,8 @@ fun readFileAsTokens(scanner: *Scanner, fileName: *Str): Res<List<Token>> {
     while (true) {
         val result: Res<Token> = scanner.nextToken()
         if (!result.isOk()) {
-            return Res<List<Token>>.err(fmtStr("|: |", fileName, result.error))
+            val errorText: Str = result.error
+            return Res<List<Token>>.err(`@fileName: @errorText`)
         }
         if (result.value.kind == TokenKind.Eof) {
             return Res<List<Token>>.ok(tokens)

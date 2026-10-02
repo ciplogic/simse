@@ -146,9 +146,7 @@ fun jsonCollect(ctx: *SourceGenContext): JsonTypes {
                 val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
                 if (classes.has(name)) {
                     // Two classes sharing a name cannot both be named by one `import`.
-                    ctx.error = fmtStr(
-                        "json: two data classes are named '|'; a serializer needs one", name
-                    )
+                    ctx.error = `json: two data classes are named '@name'; a serializer needs one`
                     return JsonTypes(classes, packages, order, declared)
                 }
                 classes.insert(name, decl)
@@ -236,11 +234,11 @@ fun jsonEnsure(
     }
     val decl: *AstXmlNode = types.classes.getPtr(name)
     if (decl == null) {
-        ctx.error = fmtStr("json: '|' is not a data class or a supported scalar", name)
+        ctx.error = `json: '@name' is not a data class or a supported scalar`
         return
     }
     if (xmlCount(decl, AstNodeKind.TypeParam) > 0) {
-        ctx.error = fmtStr("json: the generic data class '|' is not supported yet", name)
+        ctx.error = `json: the generic data class '@name' is not supported yet`
         return
     }
     val fields: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Field)
@@ -252,10 +250,7 @@ fun jsonEnsure(
         if (xmlIsEmpty(typeNode) || xmlKind(typeNode) != AstNodeCategory.TypeNamed) {
             // A `List<T>`, a `*T` field or a type alias: the closure needs a serializer for a
             // shape that has no name of its own yet.
-            ctx.error = fmtStr(
-                "json: field '|' of '|' is not a data class or a scalar (a generated serializer for a generic or pointer field is not implemented yet)",
-                fieldName, name
-            )
+            ctx.error = `json: field '@fieldName' of '@name' is not a data class or a scalar (a generated serializer for a generic or pointer field is not implemented yet)`
             return
         }
         jsonEnsure(xmlAttr(typeNode, AstNodeAttributeKind.Name), ctx, types, keys, bodies, flags)

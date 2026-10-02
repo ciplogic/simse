@@ -116,10 +116,13 @@ fun linMergeNames(
     var reached: Dictionary<Str, Int> = Dictionary<Str, Int>()
     var changed: Bool = false
     for (*local in candidates) {
-        val reachedKey: Str = fmtStr("|#|", local.typeKey, local.block.toString())
+        val typeKeyText: Str = local.typeKey
+        val valueText: Str = local.block.toString()
+        val reachedKey: Str = `@typeKeyText#@valueText`
         val ordinal: Int = linUseDefAt(*reached, reachedKey, 0)
         reached.insert(reachedKey, ordinal + 1)
-        val slotKey: Str = fmtStr("|#|", local.typeKey, ordinal.toString())
+        val typeKeyText2: Str = local.typeKey
+        val slotKey: Str = `@typeKeyText2#@ordinal`
         val owner: *Str = taken.getPtr(slotKey)
         if (owner == null) {
             taken.insert(slotKey, local.name)

@@ -101,7 +101,7 @@ fun resQualifiedKey(section: *Str, key: Str): Str {
     if (section.size() == 0) {
         return key
     }
-    return fmtStr("|:|", section, key)
+    return `@section:@key`
 }
 
 // `text` without one wrapping pair of backticks, so `` Key: `text` `` and `Key: text` hold
