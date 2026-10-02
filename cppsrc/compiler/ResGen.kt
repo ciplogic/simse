@@ -106,7 +106,8 @@ fun resGenAddSection(ctx: *SourceGenContext, section: *Str): Bool {
     var added: Bool = false
     var i: Int = 0
     while (i < names.size()) {
-        val key: Str = fmtStr("|:|", section, names[i])
+        val namesText: Str = names[i]
+        val key: Str = `@section:@namesText`
         if (sourceGenResHas(ctx.state, key)) {
             ctx.sections.add(names[i], item, sourceGenResText(ctx.state, key))
             added = true

@@ -73,7 +73,8 @@ fun driverParseSource(text: *Str, fileName: *Str): Res<AstXmlNode> {
     while (true) {
         val result: Res<Token> = scanner.nextToken()
         if (!result.isOk()) {
-            return Res<AstXmlNode>.err(fmtStr("|: |", fileName, result.Error))
+            val errorText: Str = result.Error
+            return Res<AstXmlNode>.err(`@fileName: @errorText`)
         }
         if (result.Value.kind == TokenKind.Eof) {
             break
@@ -196,7 +197,8 @@ fun driverExpandRoot(root: *Str, isTree: Bool, out: *List<Str>, outTree: *List<B
     }
     var i: Int = 0
     while (i < modules.size()) {
-        out.append(fmtStr("|/|", root, modules[i]))
+        val modulesText: Str = modules[i]
+        out.append(`@root/@modulesText`)
         outTree.append(false)
         i = i + 1
     }

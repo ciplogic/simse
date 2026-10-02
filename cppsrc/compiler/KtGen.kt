@@ -30,7 +30,7 @@ fun ktGen(ctx: *SourceGenContext): SourceGenTransform {
 
     // The comment names the section: the generated module is a synthetic file, so that line
     // is what a diagnostic or a source comment can point at.
-    ctx.source = fmtStr("\n// |\n", section)
+    ctx.source = "\n// " + section + "\n"
     ctx.source.appendStr(source)
     if (ctx.source[ctx.source.size() - 1] != '\n') {
         ctx.source.append('\n')

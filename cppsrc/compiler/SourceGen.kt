@@ -132,7 +132,8 @@ fun sourceGenAddModule(fileName: *Str, module: *AstXmlNode): Unit {
 fun runSourceGen(ctx: *SourceGenContext): SourceGenTransform {
     val at: Int = sourceGenFind(ctx.name)
     if (at < 0) {
-        ctx.error = fmtStr("unknown source generator '|'", ctx.name)
+        val ctxNameText: Str = ctx.name
+        ctx.error = `unknown source generator '@ctxNameText'`
         return SourceGenTransform(SourceTransformation.None, "")
     }
     val gen: *SourceGenerator = *getSourceGens()[at]

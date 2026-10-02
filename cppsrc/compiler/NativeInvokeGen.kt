@@ -52,7 +52,7 @@ fun nativeInvokeDeclare(ctx: *SourceGenContext): SourceGenTransform {
 }
 
 fun nativeInvokeThunkName(declName: Str): Str {
-    return fmtStr("__sm_native_|", declName)
+    return `__sm_native_@declName`
 }
 
 // Reach-gated like a module's `emit: reached`: of the declarations a program (or the compiler's
@@ -77,7 +77,8 @@ fun nativeInvokeEmit(ctx: *SourceGenContext): SourceGenTransform {
         val typeNode: *AstXmlNode = xmlChildPtr(param, AstNodeKind.Type)
         val valueType: Str = nativeInvokeValueType(typeNode)
         if (valueType == "") {
-            ctx.error = fmtStr("native: '|' has a parameter type the generator cannot map", ctx.declName)
+            val declNameText: Str = ctx.declName
+            ctx.error = `native: '@declNameText' has a parameter type the generator cannot map`
             return SourceGenTransform(SourceTransformation.None, "")
         }
         var name: Str = xmlAttr(param, AstNodeAttributeKind.Name)
@@ -85,9 +86,9 @@ fun nativeInvokeEmit(ctx: *SourceGenContext): SourceGenTransform {
             name = "self"
         }
         if (xmlKind(typeNode) == AstNodeCategory.TypePointer) {
-            thunkParams.append(fmtStr("| |", valueType, name))
+            thunkParams.append(`@valueType @name`)
         } else {
-            thunkParams.append(fmtStr("const |& |", valueType, name))
+            thunkParams.append(`const @valueType& @name`)
         }
         nativeParams.append(nativeInvokeNativeType(typeNode))
         argExprs.append(nativeInvokeArgExpr(typeNode, name))
@@ -100,13 +101,16 @@ fun nativeInvokeEmit(ctx: *SourceGenContext): SourceGenTransform {
         retValue = nativeInvokeValueType(retNode)
         retNative = nativeInvokeNativeType(retNode)
         if (retValue == "") {
-            ctx.error = fmtStr("native: '|' has a return type the generator cannot map", ctx.declName)
+            val declNameText2: Str = ctx.declName
+            ctx.error = `native: '@declNameText2' has a return type the generator cannot map`
             return SourceGenTransform(SourceTransformation.None, "")
         }
     }
 
-    val thunkSig: Str = fmtStr("| |(|)", retValue, thunk, nativeInvokeJoin(thunkParams, ", "))
-    val nativeSig: Str = fmtStr("| (*)(|)", retNative, nativeInvokeJoin(nativeParams, ", "))
+    val nativeInvokeJoinText: Str = nativeInvokeJoin(thunkParams, ", ")
+    val thunkSig: Str = `@retValue @thunk(@nativeInvokeJoinText)`
+    val nativeInvokeJoinText2: Str = nativeInvokeJoin(nativeParams, ", ")
+    val nativeSig: Str = `@retNative (*)(@nativeInvokeJoinText2)`
     val args: Str = nativeInvokeJoin(argExprs, ", ")
     val forward: Str = thunkSig + ";"
     val body: Str = nativeInvokeBody(
@@ -116,16 +120,15 @@ fun nativeInvokeEmit(ctx: *SourceGenContext): SourceGenTransform {
     // The thunk is named from the declaration, not the package, so two packages may collide on
     // one name. The same binding (library and symbol) shares the thunk; a different one is
     // refused rather than silently mis-bound (`Sections.add` is last-write-wins).
-    val bindKey: Str = fmtStr("|::|", library, symbol)
+    val bindKey: Str = `@library::@symbol`
     val prior: Opt<Str> = ctx.state.definitions.get(thunk)
     if (prior.hasValue()) {
         if (prior.value() == bindKey) {
             return SourceGenTransform(SourceTransformation.AlreadyExisting, "")
         }
-        ctx.error = fmtStr(
-            "native: '|' (|) generates the thunk '|' with a different binding - rename one",
-            ctx.declName, ctx.fileName, thunk
-        )
+        val declNameText3: Str = ctx.declName
+        val fileNameText: Str = ctx.fileName
+        ctx.error = `native: '@declNameText3' (@fileNameText) generates the thunk '@thunk' with a different binding - rename one`
         return SourceGenTransform(SourceTransformation.None, "")
     }
     ctx.state.definitions.insert(thunk, bindKey)
@@ -143,12 +146,12 @@ fun nativeInvokeBody(
     var body = Str()
     body.appendStr(signature)
     body.appendStr(" {\n")
-    body.appendStr(fmtStr("    using Fn = |;\n", nativeSig))
-    body.appendStr(fmtStr("    static Fn fn = (Fn) __sm_nativeResolve(\"|\", \"|\");\n", library, symbol))
+    body.appendStr(`    using Fn = @nativeSig;` + "\n")
+    body.appendStr(`    static Fn fn = (Fn) __sm_nativeResolve("@library", "@symbol");` + "\n")
     body.appendStr("    if (fn == nullptr) {\n")
-    body.appendStr(fmtStr("        |\n", missing))
+    body.appendStr(`        @missing` + "\n")
     body.appendStr("    }\n")
-    body.appendStr(fmtStr("    |\n", call))
+    body.appendStr(`    @call` + "\n")
     body.appendStr("}")
     return body
 }
@@ -164,7 +167,7 @@ fun nativeInvokeDefault(retValue: Str): Str {
     if (retValue.endsWith("*")) {
         return "return nullptr;"
     }
-    return fmtStr("return |{0};", retValue)
+    return `return @retValue{0};`
 }
 
 // The call through the resolved pointer, converted back to the declaration's Simse type: a
@@ -172,15 +175,15 @@ fun nativeInvokeDefault(retValue: Str): Str {
 // native's `const char*`.
 fun nativeInvokeCall(retValue: Str, args: Str): Str {
     if (retValue == "void") {
-        return fmtStr("fn(|);", args)
+        return `fn(@args);`
     }
     if (retValue == "Str") {
-        return fmtStr("return Str(fn(|));", args)
+        return `return Str(fn(@args));`
     }
     if (retValue.endsWith("*")) {
-        return fmtStr("return (|) fn(|);", retValue, args)
+        return `return (@retValue) fn(@args);`
     }
-    return fmtStr("return fn(|);", args)
+    return `return fn(@args);`
 }
 
 // The C++ type of a declaration's Simse type: the spellings the RTL's own declarations use, so a
@@ -252,10 +255,10 @@ fun nativeInvokeNativeType(typeNode: *AstXmlNode): Str {
 // The thunk parameter converted to what the library's function pointer takes.
 fun nativeInvokeArgExpr(typeNode: *AstXmlNode, name: Str): Str {
     if (xmlKind(typeNode) == AstNodeCategory.TypePointer) {
-        return fmtStr("(void*) |", name)
+        return `(void*) @name`
     }
     if (xmlAttr(typeNode, AstNodeAttributeKind.Name) == "Str") {
-        return fmtStr("|.c_str()", name)
+        return `@name.c_str()`
     }
     return name
 }
