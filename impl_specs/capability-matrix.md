@@ -4262,3 +4262,31 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
   both fixed points byte for byte (14.16 s from the published file to a working compiler,
   1515 ms self-transpile).
+
+- **The compiler's own source speaks interpolation (T85).** The ~300 `fmtStr` call sites in
+  `cppsrc` are down to four: every other one is a backtick string now. Items that are not
+  plain names are bound to `val <name>: Str` locals first (the surface is names only), and a
+  placeholder followed by an identifier byte takes the `@(name)` spelling (T84). The four
+  that stay are honest: `KtGen.kt`'s and `NativeInvokeGen.kt`'s `@SmGen` messages hold a
+  literal `@` (a raw string cannot), and `ParserStmt.kt`'s and `SemaCall.kt`'s diagnostics
+  hold backticks. Two rules were learned the hard way:
+
+  - **A template whose pool spelling carries an escape is not fused**, so its items must be
+    `Str` - a `name.toString()` stays a local rather than becoming `@name`. An `Int`
+    interpolated in such a template reaches the runtime `fmtStrWith` as the unfilled
+    template; `CgEmitType.kt`'s string-table `static_assert` caught exactly that in a build
+    (the compiler's own preamble came out with the placeholder in it, which is a C++
+    error), and the site keeps `totalText = total.toString()`.
+  - **A template containing `\n` converts as an interpolated piece `+ "\n"`**; the fusion
+    folds the join into one buffer like any other chain.
+
+  One real bug surfaced on the way: `ilOpComment`'s `Call`/`CallVoid` arm had two `|` for
+  three items, so every call comment in `--showLinearRepresentation` printed the unfilled
+  `|(|)` template; the arm now reads `@dst@methodText(@argsText)`, and the dump shows
+  `tasksJoin(4)`. Committed folder by folder (small folders, parser, sema, linear, codegen,
+  compiler, json), each with its own build, corpus and bootstrap check.
+
+  Verified: `./build.bat --release`, `bun tools/stress.js` **58/58**,
+  `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
+  both fixed points byte for byte (15.02 s from the published file to a working compiler,
+  1722 ms self-transpile).
