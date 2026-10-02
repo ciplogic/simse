@@ -112,11 +112,13 @@ fun asyncDump(functions: List<AstXmlNode>, asyncNames: List<Str>, reasons: List<
     var lines: List<Str> = List<Str>()
     var i: Int = 0
     while (i < asyncNames.size()) {
-        var line: Str = fmtStr("async! |", asyncNames[i])
+        val nameText: Str = asyncNames[i]
+        var line: Str = `async! @nameText`
         if (reasons[i] == "") {
             line = line + "  (declared suspend)"
         } else {
-            line = fmtStr("async  |   <- |", asyncNames[i], reasons[i])
+            val reasonText: Str = reasons[i]
+            line = `async  @nameText   <- @reasonText`
         }
         lines.append(line)
         i = i + 1
@@ -131,6 +133,6 @@ fun asyncDump(functions: List<AstXmlNode>, asyncNames: List<Str>, reasons: List<
             sync = sync + 1
         }
     }
-    eprintln(fmtStr("sync | declarations reach no suspension", sync.toString()))
+    eprintln(`sync @sync declarations reach no suspension`)
     eprintln("legend: async! is declared suspend, async is inferred from the callee it shows")
 }

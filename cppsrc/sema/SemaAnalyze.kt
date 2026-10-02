@@ -168,11 +168,12 @@ fun Analyzer.analyzeStmt(stmt: *AstXmlNode): Unit {
                 this.analyzeExpr(value)
             }
             if (!xmlIsEmpty(target) && xmlKind(target) == AstNodeCategory.ExprName) {
-                val binding: Opt<ValueBinding> = this.lookupValue(xmlAttr(target, AstNodeAttributeKind.Name))
+                val targetName: Str = xmlAttr(target, AstNodeAttributeKind.Name)
+                val binding: Opt<ValueBinding> = this.lookupValue(targetName)
                 if (binding.hasValue() && binding.value().checkAssign && !binding.value().isMutable) {
                     this.diag(
                         xmlLine(target), xmlColumn(target),
-                        fmtStr("cannot assign to val '|'", xmlAttr(target, AstNodeAttributeKind.Name))
+                        `cannot assign to val '@targetName'`
                     )
                 }
             }
@@ -368,7 +369,7 @@ fun Analyzer.checkGenericNameArity(expr: *AstXmlNode): Unit {
         }
         this.diag(
             xmlLine(expr), xmlColumn(expr),
-            fmtStr("no overload of '|' takes | type argument(s)", name, argCount.toString())
+            `no overload of '@name' takes @argCount type argument(s)`
         )
         return
     }
@@ -403,10 +404,7 @@ fun Analyzer.checkHandleArgument(callee: *Str, function: *AstXmlNode, index: Int
         pointeeText = semaTypeText(pointee)
     }
     this.diag(
-        xmlLine(arg), xmlColumn(arg), fmtStr(
-            "'|' takes a counted reference ('&|') and the argument is a raw pointer: a pointer cannot become a reference in place - make a reference variable one line before the call (var ref: &| = &value)",
-            callee, pointeeText, pointeeText
-        )
+        xmlLine(arg), xmlColumn(arg), `'@callee' takes a counted reference ('&@pointeeText') and the argument is a raw pointer: a pointer cannot become a reference in place - make a reference variable one line before the call (var ref: &@pointeeText = &value)`
     )
 }
 

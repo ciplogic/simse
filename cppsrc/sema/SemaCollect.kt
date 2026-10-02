@@ -47,7 +47,7 @@ fun Analyzer.collectUninitTypes(): Unit {
                 if (seen) {
                     this.diag(
                         xmlLine(method), xmlColumn(method),
-                        fmtStr("'|' declares unInit twice: a type has one destructor", className)
+                        `'@className' declares unInit twice: a type has one destructor`
                     )
                 }
                 seen = true
@@ -98,10 +98,7 @@ fun Analyzer.checkUninitHolder(typeNode: *AstXmlNode, line: Int, column: Int): U
         if (this.uninitTypes.has(name)) {
             this.diag(
                 line, column,
-                fmtStr(
-                    "'|' has an unInit: hold it by '*|' or '&|' - a value copy would run its destructor too",
-                    name, name, name
-                )
+                `'@name' has an unInit: hold it by '*@name' or '&@name' - a value copy would run its destructor too`
             )
             return
         }
@@ -114,8 +111,11 @@ fun Analyzer.checkUninitHolder(typeNode: *AstXmlNode, line: Int, column: Int): U
 }
 
 fun Analyzer.diag(line: Int, column: Int, message: *Str): Unit {
+    val fileText: Str = this.file
+    val lineText: Str = line.toString()
+    val columnText: Str = column.toString()
     this.diags.append(
-        fmtStr("|:|:|: |", this.file, line.toString(), column.toString(), message)
+        `@fileText:@lineText:@columnText: @message`
     )
 }
 
@@ -187,7 +187,7 @@ fun Analyzer.collectGlobal(): Unit {
                 if (this.globalTypes.has(key) || this.globalStatics.has(key)) {
                     this.diag(
                         xmlLine(decl), xmlColumn(decl),
-                        fmtStr("duplicate declaration '|'", name)
+                        `duplicate declaration '@name'`
                     )
                 } else {
                     this.appendGlobalFunction(key, decl)
@@ -196,7 +196,7 @@ fun Analyzer.collectGlobal(): Unit {
                 if (nameTaken) {
                     this.diag(
                         xmlLine(decl), xmlColumn(decl),
-                        fmtStr("duplicate declaration '|'", name)
+                        `duplicate declaration '@name'`
                     )
                 } else {
                     this.globalStatics.insert(key, decl)
@@ -205,7 +205,7 @@ fun Analyzer.collectGlobal(): Unit {
                 if (nameTaken) {
                     this.diag(
                         xmlLine(decl), xmlColumn(decl),
-                        fmtStr("duplicate declaration '|'", name)
+                        `duplicate declaration '@name'`
                     )
                 } else {
                     this.globalTypes.insert(key, decl)
@@ -225,7 +225,7 @@ fun Analyzer.validateImports(module: *AstXmlNode): Unit {
         if (!this.declaredPackages.contains(dotted)) {
             this.diag(
                 xmlLine(importDecl), xmlColumn(importDecl),
-                fmtStr("cannot resolve import '|': no file declares package '|'", dotted, dotted)
+                `cannot resolve import '@dotted': no file declares package '@dotted'`
             )
         }
     }
@@ -332,7 +332,7 @@ fun Analyzer.checkTypeName(name: *Str, line: Int, column: Int): Unit {
     if (semaIsBuiltinType(name) || this.types.has(name) || this.typeParamVisible(name)) {
         return
     }
-    this.diag(line, column, fmtStr("unknown type '|'", name))
+    this.diag(line, column, `unknown type '@name'`)
 }
 
 fun Analyzer.checkInstantiationArity(name: *Str, argCount: Int, line: Int, column: Int): Unit {
@@ -345,10 +345,7 @@ fun Analyzer.checkInstantiationArity(name: *Str, argCount: Int, line: Int, colum
     }
     if (expected >= 0 && argCount != expected) {
         this.diag(
-            line, column, fmtStr(
-                "'|' expects | type argument(s) but got |",
-                name, expected.toString(), argCount.toString()
-            )
+            line, column, `'@name' expects @expected type argument(s) but got @argCount`
         )
     }
 }

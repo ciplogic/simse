@@ -210,11 +210,9 @@ fun semaTypeText(node: *AstXmlNode): Str {
         }
 
         AstNodeCategory.TypeGeneric -> {
-            return fmtStr(
-                "|<|>",
-                xmlAttr(node, AstNodeAttributeKind.Name),
-                semaTypeTextList(xmlChildren(node, AstNodeKind.TypeArg))
-            )
+            val nameText: Str = xmlAttr(node, AstNodeAttributeKind.Name)
+            val argsText: Str = semaTypeTextList(xmlChildren(node, AstNodeKind.TypeArg))
+            return `@nameText<@argsText>`
         }
 
         AstNodeCategory.TypeReference -> {
@@ -229,11 +227,9 @@ fun semaTypeText(node: *AstXmlNode): Str {
         }
 
         AstNodeCategory.TypeFunction -> {
-            return fmtStr(
-                "(|) -> |",
-                semaTypeTextList(xmlChildren(node, AstNodeKind.ParamType)),
-                semaTypeText(xmlChildPtr(node, AstNodeKind.ReturnType))
-            )
+            val paramsText: Str = semaTypeTextList(xmlChildren(node, AstNodeKind.ParamType))
+            val retText: Str = semaTypeText(xmlChildPtr(node, AstNodeKind.ReturnType))
+            return `(@paramsText) -> @retText`
         }
     }
     return "?"

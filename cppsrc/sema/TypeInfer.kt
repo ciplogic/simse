@@ -674,9 +674,11 @@ fun semMachineType(
         i = i + 1
     }
     val outer: Str = semOuterTypeName(fn.receiver)
-    var machine: Str = fmtStr("|_yieldable", fn.name)
+    val fnNameText: Str = fn.name
+    var machine: Str = `@(fnNameText)_yieldable`
     if (outer != "") {
-        machine = fmtStr("|_|_yieldable", outer, fn.name)
+        val fnNameText2: Str = fn.name
+        machine = `@(outer)_@(fnNameText2)_yieldable`
     }
     var node: AstXmlNode = semReplaceRole(ret, AstNodeKind.TypeArg, args)
     node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, machine))

@@ -117,11 +117,11 @@ fun Analyzer.checkViewArgument(callee: *Str, function: *AstXmlNode, index: Int, 
     if (this.viewArgHasOverload(callee, params.size(), index, arg)) {
         return
     }
+    val paramText: Str = semaTypeText(param)
+    val actualText: Str = semaTypeText(actual)
     this.diag(
-        xmlLine(arg), xmlColumn(arg), fmtStr(
-            "types are not compatible: '|' takes '|' and the argument is '|'",
-            callee, semaTypeText(param), semaTypeText(actual)
-        )
+        xmlLine(arg), xmlColumn(arg),
+        `types are not compatible: '@callee' takes '@paramText' and the argument is '@actualText'`
     )
 }
 
@@ -148,10 +148,7 @@ fun Analyzer.checkCallArity(call: *AstXmlNode): Unit {
             val fieldCount: Int = xmlCount(decl, AstNodeKind.Field)
             if (fieldCount != argCount) {
                 this.diag(
-                    xmlLine(call), xmlColumn(call), fmtStr(
-                        "data class '|' expects | field(s) but got |",
-                        name, fieldCount.toString(), argCount.toString()
-                    )
+                    xmlLine(call), xmlColumn(call), `data class '@name' expects @fieldCount field(s) but got @argCount`
                 )
             }
             return
@@ -193,7 +190,7 @@ fun Analyzer.checkCallArity(call: *AstXmlNode): Unit {
     }
     this.diag(
         xmlLine(call), xmlColumn(call),
-        fmtStr("no overload of '|' takes | argument(s)", name, argCount.toString())
+        `no overload of '@name' takes @argCount argument(s)`
     )
 }
 
@@ -428,7 +425,7 @@ fun Analyzer.checkExtensionCallArity(call: *AstXmlNode): Unit {
     if (compatible) {
         this.diag(
             xmlLine(call), xmlColumn(call),
-            fmtStr("no overload of '|' takes | argument(s)", name, argCount.toString())
+            `no overload of '@name' takes @argCount argument(s)`
         )
     }
 }
