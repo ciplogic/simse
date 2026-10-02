@@ -244,8 +244,45 @@ borrow fun fmtStr(fmt: StrView, items: *List<Str>): Str {
     return out
 }
 
+// `fmtStr` with the placeholder taken as a parameter - `fmtStrWith('@', "@=@", a, b)` - for a
+// template whose *output* needs a `|` of its own. A literal separator and template are fused
+// into the same one-buffer shape `fmtStr` gets (cppsrc/linear/MergeConcat.kt); a separator or
+// template that is not a literal, a count that does not line up, or no list at all, is
+// answered here, exactly as `fmtStr` answers those.
+borrow fun fmtStrWith(separator: Char, templateText: StrView, items: *List<Str>): Str {
+    if (items == null) {
+        return templateText
+    }
+    var points: Int = 0
+    var i: Int = 0
+    while (i < templateText.size()) {
+        if (templateText.charAt(i) == separator) {
+            points = points + 1
+        }
+        i = i + 1
+    }
+    if (points != items.size()) {
+        return templateText
+    }
+    var out: Str = ""
+    out.reserve(templateText.size())
+    var used: Int = 0
+    i = 0
+    while (i < templateText.size()) {
+        val ch: Char = templateText.charAt(i)
+        if (ch == separator) {
+            out.appendStr(items[used])
+            used = used + 1
+        } else {
+            out.append(ch)
+        }
+        i = i + 1
+    }
+    return out
+}
+
 // The emitter's own concatenation, not the program's: a `+` chain over `Str` and an
-// `fmtStr` whose format is a literal are fused into one `Concat` instruction
+// `fmtStr`/`fmtStrWith` whose format is a literal are fused into one `Concat` instruction
 // (impl_specs/linear-il.md, "Concat"), which the emitter *expands* - one length sum, one
 // `resize`, and one slot write per part through a pointer that advances
 // (cppsrc/codegen/IlCodeGen.kt's `ilConcatStatements`) - and whose reach it records itself.

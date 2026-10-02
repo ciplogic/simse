@@ -319,7 +319,7 @@ fun Emitter.failFromInfo(info: *IlFunction, message: *Str): Unit {
 }
 
 // The IL's own post-pass (cppsrc/linear/MergeConcat.kt): a `+` chain over `Str` and an
-// `fmtStr` whose format is a literal become one `Concat` instruction, which the emitter
+// `fmtStr`/`fmtStrWith` whose format is a literal become one `Concat` instruction, which the emitter
 // expands into one length sum, one `resize` and one slot write per part
 // (`ilConcatStatements`) - one buffer, allocated once, each part written once. The
 // primitives' C++ is a *generated* section, so its reach is recorded as well as spelled: the

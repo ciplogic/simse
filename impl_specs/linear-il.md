@@ -309,7 +309,8 @@ body whose dump has neither is fully covered by the IL.
   `SmallVector<T, 4>`).
 - **`Concat` is the fused string concatenation** (`cppsrc/linear/MergeConcat.kt`). The
   language's `+` is binary, so `a + b + c` is two `BinaryOp`s with a `Str` temporary
-  between them and one allocation per link, and an `fmtStr` whose format is a literal is
+  between them and one allocation per link, and an `fmtStr`/`fmtStrWith` whose format (and
+  separator) is a literal is
   a `Pack`/`Deref`/`Call` that re-scans that format at run time. A post-pass over the
   instruction list - the one place a slot's type and a chain's shape are both visible -
   merges the whole chain, and the split format, into *one* instruction over every part,
@@ -321,8 +322,8 @@ body whose dump has neither is fully covered by the IL.
   `+` operand that is a number (`s + n` appends one *byte*), a format that is not a
   literal or holds an escape, a `+`-count that does not match the packed items, a
   destination the chain reads somewhere but first - and leaves the code as it was, where
-  the runtime's own `fmtStr` still answers. `--no-concat` turns the whole pass off (a `+`
-  chain and a literal `fmtStr` keep the lowering's shape, and the `strcat` section goes
+  the runtime's own `fmtStr`/`fmtStrWith` still answers. `--no-concat` turns the whole pass off (a `+`
+  chain and a literal `fmtStr`/`fmtStrWith` keep the lowering's shape, and the `strcat` section goes
   with it): the A/B switch for what the fusion costs and what it buys, off by default.
 - **A repeated pure call of an unchanged slot is merged into the first one**
   (`cppsrc/linear/ReusePure.kt`). A `Str` tested against literals lowers to a view of it per

@@ -74,7 +74,7 @@ enum class IlOpKind {
     CallCtor,
     Pack,
     // The fused concatenation (MergeConcat.kt): the parts of a `+` chain over `Str`, or of
-    // an `fmtStr`, whose lengths are summed once and whose bytes are appended once
+    // an `fmtStr`/`fmtStrWith`, whose lengths are summed once and whose bytes are appended once
     // (`ilConcatStatements`, cppsrc/codegen/IlCodeGen.kt). The lowerer never builds one;
     // the fusion does.
     Concat,

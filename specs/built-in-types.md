@@ -144,8 +144,14 @@ almost always a literal, which already is a view. The trailing arguments pack in
 `*List<Str>` (`fmtStr("| |", "a", "b")`). The result length is known up front, so it is
 assembled in one buffer with no `reserve`.
 
-A fixed shape means one item per `|`: a call whose points and items do not line up gets
-the format back, unfilled, rather than a half-filled result.
+`fmtStrWith(separator: Char, templateText: StrView, items: *List<Str>): Str` is the same
+with the placeholder taken as a parameter, for a template whose own text needs a `|`:
+`fmtStrWith('@', "|@|", a)` replaces each `@` and leaves the `|` alone. A literal
+separator and template are fused exactly as `fmtStr`'s are; a separator or template that
+is a variable is answered at run time.
+
+A fixed shape means one item per placeholder: a call whose points and items do not line up
+gets the format back, unfilled, rather than a half-filled result.
 
 Indexing and member calls are permitted directly on a `&Str` and on a `*Str`,
 with automatic dereference (see `memory-model.md`).

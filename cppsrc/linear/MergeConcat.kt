@@ -1,8 +1,9 @@
 // MergeConcat.kt
 //
-// The IL's n-ary concatenation (impl_specs/linear-il.md, "Concat"): a `+` chain over `Str` and an
-// `fmtStr` whose format is a literal become *one* `Concat` instruction over every part, which the
-// emitter expands into one length sum, one `resize` and one slot write per part, through a pointer
+// The IL's n-ary concatenation (impl_specs/linear-il.md, "Concat"): a `+` chain over `Str` and
+// an `fmtStr` (or an `fmtStrWith` whose separator is a literal) become *one* `Concat`
+// instruction over every part, which the emitter expands into one length sum, one `resize`
+// and one slot write per part, through a pointer
 // that advances (cppsrc/rtl/_res.md's `strcat` section). The language's `+` is binary, so the lowerer
 // leaves `a + b + c` as two instructions with a `Str` temporary between them, and an `fmtStr` call
 // re-scans its format at run time; merging both back lets the emitter sum the lengths once, allocate
@@ -16,9 +17,10 @@
 //   t = n.toString()                (a number's text, read exactly once)
 //   s = t + c            ->   s = Concat(n, c)
 //
-//   Pack   base, item...            (the `*List<Str>` an `fmtStr` argument packs into)
+//   Pack   base, item...            (the `*List<Str>` an `fmtStr`/`fmtStrWith` argument packs into)
 //   Deref  list, base
 //   Call   s, fmtStr, "<fmt>", list
+//   Call   s, fmtStrWith, '<sep>', "<fmt>", list
 //                        ->   s = Concat(piece0, item0, ..., pieceN)
 //
 // A *part* is what the emitter can append: an owned `Str`, a `Char`, a `StrView` from the program's
@@ -415,10 +417,19 @@ data class IlConcatFuser(
         return parts
     }
 
-    // The `Pack`/`Deref`/`Call` shape of `fmtStr("<literal>", item...)`: the parts, or an
-    // empty list. Consumes the two instructions the call's list took, so it runs only once
-    // every check has passed.
+    // The `Pack`/`Deref`/`Call` shape of `fmtStr("<literal>", item...)` and of
+    // `fmtStrWith('<separator>', "<literal>", item...)`: the parts, or an empty list.
+    // Consumes the two instructions the call's list took, so it runs only once every check
+    // has passed.
     fun fmtStrParts(op: *IlOp): List<Int> {
+        return this.fmtParts(op, false)
+    }
+
+    fun fmtStrWithParts(op: *IlOp): List<Int> {
+        return this.fmtParts(op, true)
+    }
+
+    fun fmtParts(op: *IlOp, withSeparator: Bool): List<Int> {
         var parts: List<Int> = List<Int>()
         if (op.kind != IlOpKind.Call) {
             return parts
@@ -428,13 +439,26 @@ data class IlConcatFuser(
             return parts
         }
         val method: IlMethod = this.il.methods[methodAt]
-        if (method.kind != IlMethodKind.Function || method.argCount != 2) {
+        // `fmtStrWith` carries the separator as its first argument, so its template and list
+        // operands sit one place later than `fmtStr`'s.
+        var wanted: Str = "fmtStr"
+        var argCount: Int = 2
+        var templateAt: Int = 2
+        var listAt: Int = 3
+        var separator: Char = '|'
+        if (withSeparator) {
+            wanted = "fmtStrWith"
+            argCount = 3
+            templateAt = 3
+            listAt = 4
+        }
+        if (method.kind != IlMethodKind.Function || method.argCount != argCount) {
             return parts
         }
-        if (method.name != "fmtStr") {
+        if (method.name != wanted) {
             return parts
         }
-        if (op.operands.size() < 4) {
+        if (op.operands.size() < listAt + 1) {
             return parts
         }
         val dst: Int = ilConcatDst(op)
@@ -449,9 +473,26 @@ data class IlConcatFuser(
         if (xmlIsEmpty(dstType)) {
             return parts
         }
-        // The format must be a literal: a value the emitter can split at compile time.
-        val fmtOperand: Int = ilOperandAt(*op.operands, 2)
-        val listOperand: Int = ilOperandAt(*op.operands, 3)
+        // The separator must be a char literal the pass can read: `'X'`, one byte, no escape
+        // (an escape could stand for any byte, and this pass does not decode literals).
+        if (withSeparator) {
+            val sepOperand: Int = ilOperandAt(*op.operands, 2)
+            if (sepOperand >= 0) {
+                return parts
+            }
+            val sepIndex: Int = -1 - sepOperand
+            if (sepIndex < 0 || sepIndex >= this.il.pool.size()) {
+                return parts
+            }
+            val sepText: Str = this.il.pool[sepIndex]
+            if (sepText.size() != 3 || sepText[0] != '\'' || sepText[2] != '\'') {
+                return parts
+            }
+            separator = sepText[1]
+        }
+        // The template must be a literal: a value the emitter can split at compile time.
+        val fmtOperand: Int = ilOperandAt(*op.operands, templateAt)
+        val listOperand: Int = ilOperandAt(*op.operands, listAt)
         if (fmtOperand >= 0 || listOperand < 0) {
             return parts
         }
@@ -483,11 +524,11 @@ data class IlConcatFuser(
         if (this.uses[derefDst] != 1 || this.uses[packDst] != 1) {
             return parts
         }
-        // One `|` per item is the count the runtime itself checks; the split has to agree.
+        // One separator per item is the count the runtime itself checks; the split has to agree.
         var pipes: Int = 0
         var i: Int = 1
         while (i < fmt.size() - 1) {
-            if (fmt[i] == '|') {
+            if (fmt[i] == separator) {
                 pipes = pipes + 1
             }
             i = i + 1
@@ -510,7 +551,7 @@ data class IlConcatFuser(
         var item: Int = 0
         i = 1
         while (i <= fmt.size() - 1) {
-            if (i == fmt.size() - 1 || fmt[i] == '|') {
+            if (i == fmt.size() - 1 || fmt[i] == separator) {
                 val piece: Str = fmt.substr(start, i - start)
                 if (piece.size() > 0) {
                     parts.append(-1 - ilConcatPoolIndex(this.il, fmtStr("\"|\"", piece)))
@@ -524,7 +565,7 @@ data class IlConcatFuser(
             i = i + 1
         }
         if (parts.size() == 0) {
-            // `fmtStr("")`: one empty part, which is the empty `Str` the runtime answers.
+            // No piece at all: one empty part, which is the empty `Str` the runtime answers.
             parts.append(-1 - ilConcatPoolIndex(this.il, "\"\""))
         }
         if (!ilConcatDstOk(dst, *parts)) {
@@ -547,9 +588,15 @@ data class IlConcatFuser(
             val op: *IlOp = *this.il.ops[i]
             val line: Int = this.il.lines[i]
             if (op.kind == IlOpKind.Call) {
-                val parts: List<Int> = this.fmtStrParts(op)
-                if (parts.size() > 0) {
-                    this.emitConcat(ilConcatDst(op), *parts, line)
+                val fmtParts: List<Int> = this.fmtStrParts(op)
+                if (fmtParts.size() > 0) {
+                    this.emitConcat(ilConcatDst(op), *fmtParts, line)
+                    i = i + 1
+                    continue
+                }
+                val withParts: List<Int> = this.fmtStrWithParts(op)
+                if (withParts.size() > 0) {
+                    this.emitConcat(ilConcatDst(op), *withParts, line)
                     i = i + 1
                     continue
                 }

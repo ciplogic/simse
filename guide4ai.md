@@ -82,7 +82,7 @@ bun tools/stress.js --filter modules --jobs 4
 
 # the string-concat fusion off (the `MergeConcat` pass, cppsrc/linear/MergeConcat.kt): same
 # binary, both shapes, the A/B for what the fusion costs and what it buys. Note a bare
-# non-`Str` `fmtStr` item needs the fusion today (impl_specs/capability-matrix.md).
+# non-`Str` `fmtStr`/`fmtStrWith` item needs the fusion today (impl_specs/capability-matrix.md).
 ./simse.exe --root stress/concat/src -o fused.cpp
 ./simse.exe --root stress/concat/src -o unfused.cpp --no-concat
 
@@ -244,8 +244,8 @@ driver's - and `build.bat` can compile it.
   printer, the extractor - and the backend lives in `Codegen.kt`
   (`emitIlBodyText`/`ilEmitOps`/the closure classes), so **the emitter emits from the IL
   and from nothing else**. `MergeConcat.kt` is the one pass over that instruction list: a
-  `+` chain over `Str`, and an `fmtStr` whose format is a literal, become one `Concat`
-  instruction - one buffer, one `resize` for the summed length, the shape Java 9's
+  `+` chain over `Str`, and an `fmtStr`/`fmtStrWith` whose template (and separator) is a
+  literal, become one `Concat` instruction - one buffer, one `resize` for the summed length, the shape Java 9's
   `StringConcatFactory` has. The emitter *expands* it where it stands (`ilConcatStatements`:
   a length sum, one `resize`, then one slot write per part through a pointer that advances -
   a literal's length a constant and copied by `memcpy`, an integer's counted by a bit scan
@@ -513,7 +513,9 @@ borrow parameter and a read-through for a by-value one.
 - **Build a fixed shape with `fmtStr`, a run of appends with `reserve`.**
   `fmtStr("|.|", a, b)` writes one buffer where `a + "." + b` builds three
   (`specs/built-in-types.md`); its trailing arguments pack into the `*List<Str>` like any
-  pack-taking call, so there is no `listOf` to write. For a join, `out.reserve(len)` then
+  pack-taking call, so there is no `listOf` to write. When the template's own *output* needs
+  a `|`, `fmtStrWith('@', "|@|", a)` is the same one-buffer shape with the placeholder as a
+  parameter. For a join, `out.reserve(len)` then
   `out.appendStrPtr(part)` per part - `out = out + part` rebuilds the buffer per part
   (measured 88x on a 200 KB result).
 - Every `.kt` file must start with a mandatory `package`; update `import`
