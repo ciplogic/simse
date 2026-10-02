@@ -554,7 +554,7 @@ data class IlConcatFuser(
             if (i == fmt.size() - 1 || fmt[i] == separator) {
                 val piece: Str = fmt.substr(start, i - start)
                 if (piece.size() > 0) {
-                    parts.append(-1 - ilConcatPoolIndex(this.il, fmtStr("\"|\"", piece)))
+                    parts.append(-1 - ilConcatPoolIndex(this.il, `"@piece"`))
                 }
                 start = i + 1
                 if (i < fmt.size() - 1) {

@@ -220,7 +220,8 @@ fun ilTypeText(typeNode: *AstXmlNode): Str {
             if (args.size() == 0) {
                 return name
             }
-            return fmtStr("|<|>", name, joinStrs(args, ", "))
+            val joinStrsText: Str = joinStrs(args, ", ")
+            return `@name<@joinStrsText>`
         }
 
         AstNodeCategory.TypeFunction -> {
@@ -498,7 +499,7 @@ fun ilPoolAsText(text: Str): Str {
     if (literal) {
         return text
     }
-    return fmtStr("\"|\"", text)
+    return `"@text"`
 }
 
 // The operand as the reader wants it: the name from the table it indexes.

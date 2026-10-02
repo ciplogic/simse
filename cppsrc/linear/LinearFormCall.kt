@@ -239,7 +239,9 @@ fun IlExtractor.ownerSymbol(): Str {
 fun IlExtractor.lambdaOf(e: *AstXmlNode, dst: Int): Int {
     val counter: Int = this.closureCounter[0]
     this.closureCounter[0] = counter + 1
-    val symbol: Str = fmtStr("|_closure|", this.ownerSymbol(), ilIntText(counter))
+    val ownerSymbolText: Str = this.ownerSymbol()
+    val ilIntTextText: Str = ilIntText(counter)
+    val symbol: Str = `@(ownerSymbolText)_closure@ilIntTextText`
 
     var read: List<Str> = List<Str>()
     var readSeen: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
@@ -339,7 +341,9 @@ fun IlExtractor.lambdaOf(e: *AstXmlNode, dst: Int): Int {
             closure.params.append(slot)
         }
     }
-    closure.signature = fmtStr("(|) |", joinStrs(captured, ", "), innerBody.signature)
+    val joinStrsText: Str = joinStrs(captured, ", ")
+    val signatureText: Str = innerBody.signature
+    closure.signature = `(@joinStrsText) @signatureText`
     this.unit.lambdas.append(innerBody)
     this.unit.closures.append(closure)
 

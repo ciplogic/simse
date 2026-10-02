@@ -154,9 +154,10 @@ fun IlExtractor.assign(stmt: *AstXmlNode, target: *AstXmlNode, value: *AstXmlNod
             val lhs: *AstXmlNode = xmlChildPtr(target, AstNodeKind.Receiver)
             val fieldName: Str = xmlAttr(target, AstNodeAttributeKind.Name)
             if (this.isTypeBase(lhs)) {
+                val baseText: Str = this.baseText(lhs)
                 this.emit(
                     IlOpKind.SetStatic, ilOps2(
-                        this.poolIndex(fmtStr("|.|", this.baseText(lhs), fieldName)),
+                        this.poolIndex(`@baseText.@fieldName`),
                         this.operandOf(value)
                     )
                 )
@@ -239,7 +240,8 @@ fun IlExtractor.assignCompound(target: *AstXmlNode, op: Str, value: *AstXmlNode)
             val lhs: *AstXmlNode = xmlChildPtr(target, AstNodeKind.Receiver)
             val fieldName: Str = xmlAttr(target, AstNodeAttributeKind.Name)
             if (this.isTypeBase(lhs)) {
-                val field: Int = this.poolIndex(fmtStr("|.|", this.baseText(lhs), fieldName))
+                val baseText: Str = this.baseText(lhs)
+                val field: Int = this.poolIndex(`@baseText.@fieldName`)
                 val current: Int = this.readStatic(target, field)
                 this.emit(IlOpKind.SetStatic, ilOps2(field, this.fold(current, op, value, target)))
                 return
@@ -422,9 +424,10 @@ fun IlExtractor.into(slot: Int, e: *AstXmlNode): Unit {
             val lhs: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Receiver)
             val fieldName: Str = xmlAttr(e, AstNodeAttributeKind.Name)
             if (this.isTypeBase(lhs)) {
+                val baseText: Str = this.baseText(lhs)
                 this.emit(
                     IlOpKind.GetStatic,
-                    ilOps2(slot, this.poolIndex(fmtStr("|.|", this.baseText(lhs), fieldName)))
+                    ilOps2(slot, this.poolIndex(`@baseText.@fieldName`))
                 )
                 return
             }

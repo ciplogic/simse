@@ -328,7 +328,9 @@ fun IlExtractor.signatureText(): Str {
     var params: List<Str> = List<Str>()
     for (*slot in this.out.vars) {
         if (slot.kind == IlVarKind.Argument) {
-            params.append(fmtStr("| |", this.out.types[slot.typeIndex], slot.name))
+            val typesText: Str = this.out.types[slot.typeIndex]
+            val slotNameText: Str = slot.name
+            params.append(`@typesText @slotNameText`)
         }
     }
     // A lambda's result is what its body returns; a function's is its declared type.
@@ -339,6 +341,7 @@ fun IlExtractor.signatureText(): Str {
             retText = ilTypeText(declared)
         }
     }
-    return fmtStr("(|) -> |", joinStrs(params, ", "), retText)
+    val joinStrsText: Str = joinStrs(params, ", ")
+    return `(@joinStrsText) -> @retText`
 }
 

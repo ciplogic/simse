@@ -19,9 +19,9 @@ fun ilOpComment(body: *IlBody, op: *IlOp): Str {
     when (kind) {
         IlOpKind.Declare -> {
             val slot: Int = ilOperandAt(operands, 0)
-            return fmtStr(
-                "var |: |", ilVarName(body, slot), ilVarTypeName(body, slot)
-            )
+            val ilVarNameText: Str = ilVarName(body, slot)
+            val ilVarTypeNameText: Str = ilVarTypeName(body, slot)
+            return `var @ilVarNameText: @ilVarTypeNameText`
         }
 
         IlOpKind.Label -> {
@@ -36,16 +36,15 @@ fun ilOpComment(body: *IlBody, op: *IlOp): Str {
             val condition: Str = ilVarName(body, ilOperandAt(operands, 0))
             val target: Str = ilLabelName(body, ilOperandAt(operands, 1))
             if (kind == IlOpKind.IfTrue) {
-                return fmtStr("if (|) goto |", condition, target)
+                return `if (@condition) goto @target`
             }
-            return fmtStr("if (!|) goto |", condition, target)
+            return `if (!@condition) goto @target`
         }
 
         IlOpKind.SetVar -> {
-            return fmtStr(
-                "| = |", ilVarName(body, ilOperandAt(operands, 0)),
-                ilVarName(body, ilOperandAt(operands, 1))
-            )
+            val ilVarNameText2: Str = ilVarName(body, ilOperandAt(operands, 0))
+            val ilVarNameText3: Str = ilVarName(body, ilOperandAt(operands, 1))
+            return `@ilVarNameText2 = @ilVarNameText3`
         }
 
         IlOpKind.SetVar_Null -> {
@@ -53,124 +52,108 @@ fun ilOpComment(body: *IlBody, op: *IlOp): Str {
         }
 
         IlOpKind.BinaryOp -> {
-            return fmtStr(
-                "| = | | |", ilVarName(body, ilOperandAt(operands, 0)),
-                ilVarName(body, ilOperandAt(operands, 2)),
-                ilPoolText(body, ilOperandAt(operands, 1)),
-                ilVarName(body, ilOperandAt(operands, 3))
-            )
+            val ilVarNameText4: Str = ilVarName(body, ilOperandAt(operands, 0))
+            val ilVarNameText5: Str = ilVarName(body, ilOperandAt(operands, 2))
+            val ilPoolTextText: Str = ilPoolText(body, ilOperandAt(operands, 1))
+            val ilVarNameText6: Str = ilVarName(body, ilOperandAt(operands, 3))
+            return `@ilVarNameText4 = @ilVarNameText5 @ilPoolTextText @ilVarNameText6`
         }
 
         IlOpKind.UnaryOp -> {
-            return fmtStr(
-                "| = ||", ilVarName(body, ilOperandAt(operands, 0)),
-                ilPoolText(body, ilOperandAt(operands, 1)),
-                ilVarName(body, ilOperandAt(operands, 2))
-            )
+            val ilVarNameText7: Str = ilVarName(body, ilOperandAt(operands, 0))
+            val ilPoolTextText2: Str = ilPoolText(body, ilOperandAt(operands, 1))
+            val ilVarNameText8: Str = ilVarName(body, ilOperandAt(operands, 2))
+            return `@ilVarNameText7 = @ilPoolTextText2@ilVarNameText8`
         }
 
         IlOpKind.Cast -> {
-            return fmtStr(
-                "| = cast |", ilVarName(body, ilOperandAt(operands, 0)),
-                ilVarName(body, ilOperandAt(operands, 1))
-            )
+            val ilVarNameText9: Str = ilVarName(body, ilOperandAt(operands, 0))
+            val ilVarNameText10: Str = ilVarName(body, ilOperandAt(operands, 1))
+            return `@ilVarNameText9 = cast @ilVarNameText10`
         }
 
         IlOpKind.Box -> {
-            return fmtStr(
-                "| = &|", ilVarName(body, ilOperandAt(operands, 0)),
-                ilVarName(body, ilOperandAt(operands, 1))
-            )
+            val ilVarNameText11: Str = ilVarName(body, ilOperandAt(operands, 0))
+            val ilVarNameText12: Str = ilVarName(body, ilOperandAt(operands, 1))
+            return `@ilVarNameText11 = &@ilVarNameText12`
         }
 
         IlOpKind.Deref -> {
-            return fmtStr(
-                "| = *|", ilVarName(body, ilOperandAt(operands, 0)),
-                ilVarName(body, ilOperandAt(operands, 1))
-            )
+            val ilVarNameText13: Str = ilVarName(body, ilOperandAt(operands, 0))
+            val ilVarNameText14: Str = ilVarName(body, ilOperandAt(operands, 1))
+            return `@ilVarNameText13 = *@ilVarNameText14`
         }
 
         IlOpKind.CopyValue -> {
-            return fmtStr(
-                "| = copy(|)", ilVarName(body, ilOperandAt(operands, 0)),
-                ilVarName(body, ilOperandAt(operands, 1))
-            )
+            val ilVarNameText15: Str = ilVarName(body, ilOperandAt(operands, 0))
+            val ilVarNameText16: Str = ilVarName(body, ilOperandAt(operands, 1))
+            return `@ilVarNameText15 = copy(@ilVarNameText16)`
         }
 
         IlOpKind.Store -> {
-            return fmtStr(
-                "*| = |", ilVarName(body, ilOperandAt(operands, 0)),
-                ilVarName(body, ilOperandAt(operands, 1))
-            )
+            val ilVarNameText17: Str = ilVarName(body, ilOperandAt(operands, 0))
+            val ilVarNameText18: Str = ilVarName(body, ilOperandAt(operands, 1))
+            return `*@ilVarNameText17 = @ilVarNameText18`
         }
 
         IlOpKind.GetField -> {
-            return fmtStr(
-                "| = |.|", ilVarName(body, ilOperandAt(operands, 0)),
-                ilVarName(body, ilOperandAt(operands, 1)),
-                ilPoolText(body, ilOperandAt(operands, 2))
-            )
+            val ilVarNameText19: Str = ilVarName(body, ilOperandAt(operands, 0))
+            val ilVarNameText20: Str = ilVarName(body, ilOperandAt(operands, 1))
+            val ilPoolTextText3: Str = ilPoolText(body, ilOperandAt(operands, 2))
+            return `@ilVarNameText19 = @ilVarNameText20.@ilPoolTextText3`
         }
 
         IlOpKind.SetField -> {
-            return fmtStr(
-                "|.| = |", ilVarName(body, ilOperandAt(operands, 1)),
-                ilPoolText(body, ilOperandAt(operands, 0)),
-                ilVarName(body, ilOperandAt(operands, 2))
-            )
+            val ilVarNameText21: Str = ilVarName(body, ilOperandAt(operands, 1))
+            val ilPoolTextText4: Str = ilPoolText(body, ilOperandAt(operands, 0))
+            val ilVarNameText22: Str = ilVarName(body, ilOperandAt(operands, 2))
+            return `@ilVarNameText21.@ilPoolTextText4 = @ilVarNameText22`
         }
 
         IlOpKind.GetIndex -> {
-            return fmtStr(
-                "| = |[|]", ilVarName(body, ilOperandAt(operands, 0)),
-                ilVarName(body, ilOperandAt(operands, 1)),
-                ilVarName(body, ilOperandAt(operands, 2))
-            )
+            val ilVarNameText23: Str = ilVarName(body, ilOperandAt(operands, 0))
+            val ilVarNameText24: Str = ilVarName(body, ilOperandAt(operands, 1))
+            val ilVarNameText25: Str = ilVarName(body, ilOperandAt(operands, 2))
+            return `@ilVarNameText23 = @ilVarNameText24[@ilVarNameText25]`
         }
 
         IlOpKind.SetIndex -> {
-            return fmtStr(
-                "|[|] = |", ilVarName(body, ilOperandAt(operands, 1)),
-                ilVarName(body, ilOperandAt(operands, 2)),
-                ilVarName(body, ilOperandAt(operands, 3))
-            )
+            val ilVarNameText26: Str = ilVarName(body, ilOperandAt(operands, 1))
+            val ilVarNameText27: Str = ilVarName(body, ilOperandAt(operands, 2))
+            val ilVarNameText28: Str = ilVarName(body, ilOperandAt(operands, 3))
+            return `@ilVarNameText26[@ilVarNameText27] = @ilVarNameText28`
         }
 
         IlOpKind.FieldAddr -> {
-            return fmtStr(
-                "| = &|.|", ilVarName(body, ilOperandAt(operands, 0)),
-                ilVarName(body, ilOperandAt(operands, 1)),
-                ilPoolText(body, ilOperandAt(operands, 2))
-            )
+            val ilVarNameText29: Str = ilVarName(body, ilOperandAt(operands, 0))
+            val ilVarNameText30: Str = ilVarName(body, ilOperandAt(operands, 1))
+            val ilPoolTextText5: Str = ilPoolText(body, ilOperandAt(operands, 2))
+            return `@ilVarNameText29 = &@ilVarNameText30.@ilPoolTextText5`
         }
 
         IlOpKind.IndexAddr -> {
-            return fmtStr(
-                "| = &|[|]", ilVarName(body, ilOperandAt(operands, 0)),
-                ilVarName(body, ilOperandAt(operands, 1)),
-                ilVarName(body, ilOperandAt(operands, 2))
-            )
+            val ilVarNameText31: Str = ilVarName(body, ilOperandAt(operands, 0))
+            val ilVarNameText32: Str = ilVarName(body, ilOperandAt(operands, 1))
+            val ilVarNameText33: Str = ilVarName(body, ilOperandAt(operands, 2))
+            return `@ilVarNameText31 = &@ilVarNameText32[@ilVarNameText33]`
         }
 
         IlOpKind.GetStatic -> {
-            return fmtStr(
-                "| = |", ilVarName(body, ilOperandAt(operands, 0)),
-                ilPoolText(body, ilOperandAt(operands, 1))
-            )
+            val ilVarNameText34: Str = ilVarName(body, ilOperandAt(operands, 0))
+            val ilPoolTextText6: Str = ilPoolText(body, ilOperandAt(operands, 1))
+            return `@ilVarNameText34 = @ilPoolTextText6`
         }
 
         IlOpKind.GetStaticAddr -> {
-            return fmtStr(
-                "| = &|", ilVarName(body, ilOperandAt(operands, 0)),
-                ilPoolText(body, ilOperandAt(operands, 1))
-            )
+            val ilVarNameText35: Str = ilVarName(body, ilOperandAt(operands, 0))
+            val ilPoolTextText7: Str = ilPoolText(body, ilOperandAt(operands, 1))
+            return `@ilVarNameText35 = &@ilPoolTextText7`
         }
 
         IlOpKind.SetStatic -> {
-            return fmtStr(
-                "| = |", ilPoolText(body, ilOperandAt(operands, 0)),
-                ilVarName(body, ilOperandAt(operands, 1))
-            )
+            val ilPoolTextText8: Str = ilPoolText(body, ilOperandAt(operands, 0))
+            val ilVarNameText36: Str = ilVarName(body, ilOperandAt(operands, 1))
+            return `@ilPoolTextText8 = @ilVarNameText36`
         }
 
         IlOpKind.Call, IlOpKind.CallVoid -> {
@@ -186,21 +169,20 @@ fun ilOpComment(body: *IlBody, op: *IlOp): Str {
                 first = 2
             }
             if (methodOp < 0 || methodOp >= body.methods.size()) {
-                return fmtStr(
-                    "|?m|(|)", dst, ilIntText(methodOp),
-                    ilArgList(body, operands, first)
-                )
+                val ilIntTextText: Str = ilIntText(methodOp)
+                val ilArgListText: Str = ilArgList(body, operands, first)
+                return `@dst?m@ilIntTextText(@ilArgListText)`
             }
             val method: IlMethod = body.methods[methodOp]
             if (method.kind == IlMethodKind.Method && first < operands.size()) {
-                return fmtStr(
-                    "||.|(|)", dst, ilVarName(body, operands[first]), method.name,
-                    ilArgList(body, operands, first + 1)
-                )
+                val ilVarNameText37: Str = ilVarName(body, operands[first])
+                val methodNameText: Str = method.name
+                val ilArgListText2: Str = ilArgList(body, operands, first + 1)
+                return `@dst@ilVarNameText37.@methodNameText(@ilArgListText2)`
             }
-            return fmtStr(
-                "|(|)", dst, method.name, ilArgList(body, operands, first)
-            )
+            val methodText: Str = method.name
+            val argsText: Str = ilArgList(body, operands, first)
+            return `@dst@methodText(@argsText)`
         }
 
         IlOpKind.CallIndirect, IlOpKind.CallIndirectVoid -> {
@@ -211,32 +193,28 @@ fun ilOpComment(body: *IlBody, op: *IlOp): Str {
                 dst2 = ilVarName(body, ilOperandAt(operands, 0)) + " = "
                 calleeAt = 1
             }
-            return fmtStr(
-                "|(|)", dst2, ilVarName(body, ilOperandAt(operands, calleeAt)),
-                ilArgList(body, operands, calleeAt + 1)
-            )
+            val calleeText: Str = ilVarName(body, ilOperandAt(operands, calleeAt))
+            val argsText2: Str = ilArgList(body, operands, calleeAt + 1)
+            return `@dst2@calleeText(@argsText2)`
         }
 
         IlOpKind.Pack -> {
-            return fmtStr(
-                "| = [|]", ilVarName(body, ilOperandAt(operands, 0)),
-                ilArgList(body, operands, 1)
-            )
+            val ilVarNameText38: Str = ilVarName(body, ilOperandAt(operands, 0))
+            val ilArgListText3: Str = ilArgList(body, operands, 1)
+            return `@ilVarNameText38 = [@ilArgListText3]`
         }
 
         IlOpKind.Concat -> {
-            return fmtStr(
-                "| = concat(|)", ilVarName(body, ilOperandAt(operands, 0)),
-                ilArgList(body, operands, 1)
-            )
+            val ilVarNameText39: Str = ilVarName(body, ilOperandAt(operands, 0))
+            val ilArgListText4: Str = ilArgList(body, operands, 1)
+            return `@ilVarNameText39 = concat(@ilArgListText4)`
         }
 
         IlOpKind.CallCtor -> {
-            return fmtStr(
-                "| = new |(|)", ilVarName(body, ilOperandAt(operands, 0)),
-                ilTypeName(body, ilOperandAt(operands, 1)),
-                ilArgList(body, operands, 2)
-            )
+            val ilVarNameText40: Str = ilVarName(body, ilOperandAt(operands, 0))
+            val ilTypeNameText: Str = ilTypeName(body, ilOperandAt(operands, 1))
+            val ilArgListText5: Str = ilArgList(body, operands, 2)
+            return `@ilVarNameText40 = new @ilTypeNameText(@ilArgListText5)`
         }
 
         IlOpKind.Return -> {
@@ -252,9 +230,8 @@ fun ilOpComment(body: *IlBody, op: *IlOp): Str {
         }
 
         IlOpKind.Unsupported -> {
-            return fmtStr(
-                "<unsupported: |>", ilPoolText(body, ilOperandAt(operands, 1))
-            )
+            val ilPoolTextText9: Str = ilPoolText(body, ilOperandAt(operands, 1))
+            return `<unsupported: @ilPoolTextText9>`
         }
     }
     return Str()
@@ -269,7 +246,9 @@ fun printIlBody(body: *IlBody): Str {
     var types: List<Str> = List<Str>()
     var i: Int = 0
     while (i < body.types.size()) {
-        types.append(fmtStr("| |", ilIntText(i), body.types[i]))
+        val ilIntTextText2: Str = ilIntText(i)
+        val typesText: Str = body.types[i]
+        types.append(`@ilIntTextText2 @typesText`)
         i = i + 1
     }
     ilAppendTable(out, "types:   ", types)
@@ -278,12 +257,11 @@ fun printIlBody(body: *IlBody): Str {
     i = 0
     while (i < body.vars.size()) {
         val slot: IlVar = body.vars[i]
-        vars.append(
-            fmtStr(
-                "| |:|:|", ilIntText(i), slot.name, ilIntText(slot.typeIndex),
-                ilVarKindText(slot.kind)
-            )
-        )
+        val indexText: Str = ilIntText(i)
+        val slotNameText: Str = slot.name
+        val typeIndexText: Str = ilIntText(slot.typeIndex)
+        val kindText: Str = ilVarKindText(slot.kind)
+        vars.append(`@indexText @slotNameText:@typeIndexText:@kindText`)
         i = i + 1
     }
     ilAppendTable(out, "vars:    ", vars)
@@ -291,7 +269,9 @@ fun printIlBody(body: *IlBody): Str {
     var pool: List<Str> = List<Str>()
     i = 0
     while (i < body.pool.size()) {
-        pool.append(fmtStr("| |", ilIntText(i), ilPoolAsText(body.pool[i])))
+        val ilIntTextText3: Str = ilIntText(i)
+        val ilPoolAsTextText: Str = ilPoolAsText(body.pool[i])
+        pool.append(`@ilIntTextText3 @ilPoolAsTextText`)
         i = i + 1
     }
     ilAppendTable(out, "pool:    ", pool)
@@ -300,10 +280,11 @@ fun printIlBody(body: *IlBody): Str {
     i = 0
     while (i < body.methods.size()) {
         val method: IlMethod = body.methods[i]
-        var text: Str = fmtStr(
-            "| |:|:|", ilIntText(i), method.name, ilMethodKindText(method.kind),
-            ilIntText(method.argCount)
-        )
+        val ilIntTextText4: Str = ilIntText(i)
+        val methodNameText2: Str = method.name
+        val ilMethodKindTextText: Str = ilMethodKindText(method.kind)
+        val ilIntTextText5: Str = ilIntText(method.argCount)
+        var text: Str = `@ilIntTextText4 @methodNameText2:@ilMethodKindTextText:@ilIntTextText5`
         if (method.staticBase >= 0) {
             text = text + ":static=" + ilTypeName(body, method.staticBase)
         }
@@ -318,7 +299,9 @@ fun printIlBody(body: *IlBody): Str {
     var labels: List<Str> = List<Str>()
     i = 0
     while (i < body.labels.size()) {
-        labels.append(fmtStr("| |", ilIntText(i), body.labels[i]))
+        val ilIntTextText6: Str = ilIntText(i)
+        val labelsText: Str = body.labels[i]
+        labels.append(`@ilIntTextText6 @labelsText`)
         i = i + 1
     }
     ilAppendTable(out, "labels:  ", labels)
@@ -340,13 +323,14 @@ fun printIlBody(body: *IlBody): Str {
             j = j + 1
         }
 
-        var text: Str = fmtStr(
-            "|,  ||", ilPadRight(ilIntText(i), 4), ilPadRight(ilOpKindText(op.kind), 16),
-            joinStrs(rendered, ", ")
-        )
+        val ilPadRightText: Str = ilPadRight(ilIntText(i), 4)
+        val ilPadRightText2: Str = ilPadRight(ilOpKindText(op.kind), 16)
+        val joinStrsText: Str = joinStrs(rendered, ", ")
+        var text: Str = `@ilPadRightText,  @ilPadRightText2@joinStrsText`
         val comment: Str = ilOpComment(body, op)
         if (!comment.isEmpty()) {
-            text = fmtStr("|# |", ilPadRight(text, 74), comment)
+            val ilPadRightText3: Str = ilPadRight(text, 74)
+            text = `@ilPadRightText3# @comment`
         }
         var sourceLine: Int = 0
         if (i < body.lines.size()) {

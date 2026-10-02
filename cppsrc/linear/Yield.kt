@@ -306,7 +306,7 @@ data class YldMachinery(
             }
             val typeNode: *AstXmlNode = xmlChildPtr(param, AstNodeKind.Type)
             if (xmlIsEmpty(typeNode)) {
-                this.fail(fmtStr("yield: the parameter '|' has no type", name))
+                this.fail(`yield: the parameter '@name' has no type`)
                 return
             }
             this.fieldTypes.insert(yldFieldName(name), typeNode)
@@ -347,7 +347,7 @@ data class YldMachinery(
                             this.fail(message)
                             return
                         }
-                        this.fail(fmtStr("yield: the local '|' has no type to make a field of", name))
+                        this.fail(`yield: the local '@name' has no type to make a field of`)
                         return
                     }
                     this.fieldTypes.insert(yldFieldName(name), typeNode)

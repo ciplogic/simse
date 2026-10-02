@@ -50,10 +50,10 @@ data class SimRenamer(
     // itself (`_sm_expr1`).
     fun shadowName(name: Str): Str {
         var n: Int = 2
-        var candidate: Str = fmtStr("_sm_|_|", name, n.toString())
+        var candidate: Str = `_sm_@(name)_@n`
         while (this.used.has(candidate)) {
             n = n + 1
-            candidate = fmtStr("_sm_|_|", name, n.toString())
+            candidate = `_sm_@(name)_@n`
         }
         return candidate
     }

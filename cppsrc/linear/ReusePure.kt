@@ -144,7 +144,7 @@ fun ilReuseFirstBlockEnd(il: *IlBody): Int {
 
 // A key for one `(callee, argument)`: the two calls it identifies are the same call.
 fun ilReuseKey(callee: *Str, arg: Int): Str {
-    return fmtStr("|:|", callee, arg.toString())
+    return `@callee:@arg`
 }
 
 // The signature tokens per opcode, built once: `ilOperandKind` re-splits the signature string

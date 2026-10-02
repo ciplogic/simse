@@ -188,7 +188,8 @@ data class TskMachinery(
         var f: Int = 0
         while (f < this.fieldOrder.size()) {
             if (!this.fieldTypes.has(this.fieldOrder[f])) {
-                task.error = fmtStr("internal: task field '|' has no type", this.fieldOrder[f])
+                val fieldOrderText: Str = this.fieldOrder[f]
+                task.error = `internal: task field '@fieldOrderText' has no type`
                 return task
             }
             val fieldType: *AstXmlNode = this.fieldTypes.getPtr(this.fieldOrder[f])
@@ -219,7 +220,7 @@ data class TskMachinery(
             }
             val typeNode: *AstXmlNode = xmlChildPtr(param, AstNodeKind.Type)
             if (xmlIsEmpty(typeNode)) {
-                this.fail(fmtStr("suspend: the parameter '|' has no type", name))
+                this.fail(`suspend: the parameter '@name' has no type`)
                 return
             }
             this.addField(name, *typeNode)
@@ -253,7 +254,7 @@ data class TskMachinery(
                             this.fail("suspend: a `for` over a machine cannot cross a suspension; collect the values into a `List` first")
                             return
                         }
-                        this.fail(fmtStr("suspend: the local '|' has no type to make a field of", name))
+                        this.fail(`suspend: the local '@name' has no type to make a field of`)
                         return
                     }
                     this.addField(name, *typeNode)
