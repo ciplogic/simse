@@ -1,1 +1,1 @@
-invalid interpolation string: `@` must be followed by a name (`@name`); for a literal `@`, write it in a "..." string or in a raw string that does not interpolate
+invalid interpolation string: `@` must be followed by a name (`@name`) or `@(name)`; for a literal `@`, write it in a "..." string or in a raw string that does not interpolate

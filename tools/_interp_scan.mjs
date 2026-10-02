@@ -1,5 +1,5 @@
-// Scans the compiler's own sources for `@identifier` inside backtick strings, which now
-// interpolate: reports file:line and the identifier.
+// Scans the compiler's own sources for `@identifier` (or `@(identifier)`) inside backtick
+// strings, which now interpolate: reports file:line and the identifier.
 import { readdirSync, readFileSync, statSync } from "fs";
 import { join } from "path";
 
@@ -61,6 +61,11 @@ for (const file of files) {
           let j = i + 2;
           while (j < text.length && /[A-Za-z0-9_]/.test(text[j])) j++;
           console.log(`${file}:${line}: @${text.slice(i + 1, j)}`);
+          hits++;
+        } else if (text[i] === "@" && text[i + 1] === "(" && /[A-Za-z_]/.test(text[i + 2] ?? "")) {
+          let j = i + 2;
+          while (j < text.length && /[A-Za-z0-9_]/.test(text[j])) j++;
+          console.log(`${file}:${line}: @(${text.slice(i + 2, j)}`);
           hits++;
         }
         if (text[i] === "\n") { line++; col = 1; }

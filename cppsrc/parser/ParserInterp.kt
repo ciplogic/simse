@@ -12,18 +12,26 @@
 // with the two ways out. A raw string with no `@name` at all never reaches here - it is a
 // plain literal, `@`s and all.
 //
-// `@` is the marker only before an identifier start, and there is no escape for it yet, so a
-// literal `@` immediately before an identifier is not spellable. `"@x"` is the two
-// characters: a double-quoted string never interpolates.
+// A name ends at the first byte an identifier cannot hold, so a name followed by another
+// identifier byte takes the parenthesized spelling `@(name)`: its `)` ends the name, which
+// is what the separator of a generated name needs - `_sm_@(name)_@(n)` is the two names
+// with the `_` between them. The two spellings produce the same `@` in the template and the
+// same item.
+//
+// `@` is the marker only before an identifier start (`@(name)` included), and there is no
+// escape for it yet, so a literal `@` immediately before an identifier is not spellable.
+// `"@x"` is the two characters: a double-quoted string never interpolates.
 
 package parser
+
 import compiler
 
 import lex
 import common
 
-// Whether a raw string token's content interpolates: one `@` followed by an identifier start.
-// Called first, and the desugar below scans the same way, so the pair stays in step.
+// Whether a raw string token's content interpolates: one `@` followed by an identifier
+// start, plain or parenthesized. Called first, and the desugar below scans the same way, so
+// the pair stays in step.
 fun interpHasItem(raw: *Str): Bool {
     if (raw.size() < 2 || raw[0] != '`') {
         return false
@@ -34,14 +42,17 @@ fun interpHasItem(raw: *Str): Bool {
         if (raw[i] == '@' && lexIsAlpha(raw[i + 1])) {
             return true
         }
+        if (raw[i] == '@' && raw[i + 1] == '(' && i + 2 < end && lexIsAlpha(raw[i + 2])) {
+            return true
+        }
         i = i + 1
     }
     return false
 }
 
-// The literal as the `fmtStrWith` call it stands for: one `@` in the template per `@name`,
-// one name expression per item. A `@` that starts no name is an error, and the message names
-// both spellings that work.
+// The literal as the `fmtStrWith` call it stands for: one `@` in the template per name -
+// `@name` or `@(name)` - one name expression per item. A `@` that starts no name is an
+// error, and the message names the spellings that work.
 fun Parser.parseInterpolatedRaw(raw: *Str, pos: SourcePos): ExprNode {
     val end: Int = raw.size() - 1
     var templateText: Str = Str()
@@ -54,10 +65,30 @@ fun Parser.parseInterpolatedRaw(raw: *Str, pos: SourcePos): ExprNode {
             i = i + 1
             continue
         }
+        if (i + 1 < end && raw.charAt(i + 1) == '(') {
+            var close: Int = i + 2
+            while (close < end && lexIsAlphaOrDigit(raw.charAt(close))) {
+                close = close + 1
+            }
+            val closed: Bool = close < end && raw.charAt(close) == ')'
+            val named: Bool = close > i + 2 && lexIsAlpha(raw.charAt(i + 2))
+            if (!closed || !named) {
+                this.setError(
+                    interpPosAt(raw, i, pos),
+                    "invalid interpolation string: `@(` must hold one name and be closed by `)` (`@(name)`); for a literal `@`, write it in a \"...\" string or in a raw string that does not interpolate"
+                )
+                return this.emptyExpr()
+            }
+            templateText.append('@')
+            val nameInParens: Str = raw.substr(i + 2, close - i - 2)
+            items.append(this.nameExprAt(nameInParens, pos).node)
+            i = close + 1
+            continue
+        }
         if (i + 1 >= end || !lexIsAlpha(raw.charAt(i + 1))) {
             this.setError(
                 interpPosAt(raw, i, pos),
-                "invalid interpolation string: `@` must be followed by a name (`@name`); for a literal `@`, write it in a \"...\" string or in a raw string that does not interpolate"
+                "invalid interpolation string: `@` must be followed by a name (`@name`) or `@(name)`; for a literal `@`, write it in a \"...\" string or in a raw string that does not interpolate"
             )
             return this.emptyExpr()
         }

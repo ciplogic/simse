@@ -32,11 +32,11 @@ line "two" with \ back
     println(quoted)
 
     // Interpolation: the literal becomes one `fmtStrWith('@', ...)` call whose template keeps
-    // an `@` per name and whose items are the names - a literal `@` (one not followed by a
-    // name) is the one-byte item `"@"`, so the runtime one-item-per-`@` count always lines up.
-    // A multi-line template carries an escape, which the fusion refuses, so what runs there is
-    // the runtime `fmtStrWith` - which is why every item below is a `Str` (a numeric item
-    // needs the fusion today).
+    // an `@` per name and whose items are the names - a `@` that starts no name is a
+    // diagnostic. A name followed by another identifier byte takes the parenthesized spelling
+    // `@(name)`, whose `)` ends it. A multi-line template carries an escape, which the fusion
+    // refuses, so what runs there is the runtime `fmtStrWith` - which is why every item of a
+    // *multi-line* interpolation below is a `Str` (a numeric item needs the fusion today).
     val who: Str = "world"
     val n: Int = 42
     println(`hello @who`)
@@ -47,6 +47,9 @@ line "two" with \ back
     println(`@`)
     println(`a|b=@who`)
     println(`|@who|`)
+    println(`_sm_@(who)_@(n)`)
+    println(`@(who)@(n)`)
+    println(`(@(who))`)
     // A literal `@` in a string that interpolates is a diagnostic
     // (stress/diagnostic-interpolation): keep it in a `"..."` string instead.
     val at: Str = "a@ b and "

@@ -619,7 +619,9 @@ fun main(): Int {
 
 `print` and `println` take a value and print it, with `Bool` as `true`/`false`;
 scalars have `toString()`, and `Str + Str` concatenates. A backtick string interpolates
-`@name`, which the compiler rewrites to one `fmtStrWith('@', ...)` call; once a string
+`@name` (or `@(name)`, where the `)` ends a name that runs into an identifier byte like the
+`_` of `_sm_@(name)_@(n)`), which the compiler rewrites to one `fmtStrWith('@', ...)` call;
+once a string
 interpolates, every `@` must start a name (a literal `@` there is a diagnostic - keep it
 in a `"..."` string). `println` of your own types is not supported yet (a `Printable`
 protocol is planned).
@@ -654,7 +656,8 @@ These are known rough edges, not design decisions to admire
 - There is no `foreach` keyword (`for` is it, and a container has an `iter` so
   `for (x in list)` works), no `when` pattern labels (`is Type`, `in 1..5`) and no
   subjectless `when`, no default parameter values, no capture-by-reference, and no
-  `Set`. Interpolation exists, but only in backtick strings (`@name`), and only a plain
-  name: `@(expr)` is not there, a member or a longer expression is bound to a local first
-  (`val n: Int = tag.count` then `@n`), and every `@` of an interpolating string must
-  start a name - a literal `@` there is an error, so it goes in a `"..."` string.
+  `Set`. Interpolation exists, but only in backtick strings, and only a plain
+  name: `@name`, or `@(name)` where the `)` must end a name that runs into an identifier
+  byte; an expression (`@(a + b)`) is not there - a member or a longer expression is bound
+  to a local first (`val n: Int = tag.count` then `@n`) - and every `@` of an interpolating
+  string must start a name - a literal `@` there is an error, so it goes in a `"..."` string.

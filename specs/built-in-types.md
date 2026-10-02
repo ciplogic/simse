@@ -57,12 +57,16 @@ form - is what makes a backtick string the way to hold another language's source
 verbatim (the profiler's emitted C++, `cppsrc/profiling/Profiling.kt`).
 
 **Interpolation** is `@name`: the value of `name`, as text. Only a backtick string
-interpolates (`"@x"` is the two characters). A raw string with no `@name` in it is a plain
-literal, `@`s and all (`50% @2` holds them); once a string interpolates, every `@` must
-start a name - one followed by anything else, or by nothing, is an error - and there is no
-escape yet, so a literal `@` next to an interpolation goes in a `"..."` string (or another
-raw string with no interpolation) and is concatenated. The parser rewrites the literal into
-one `fmtStrWith` call before sema (`cppsrc/parser/ParserInterp.kt`): the template is the
+interpolates (`"@x"` is the two characters). A raw string with no `@name` (or `@(name)`) in
+it is a plain literal, `@`s and all (`50% @2` holds them); once a string interpolates, every
+`@` must start a name - one followed by anything else, or by nothing, is an error - and
+there is no escape yet, so a literal `@` next to an interpolation goes in a `"..."` string
+(or another raw string with no interpolation) and is concatenated. A name ends where the
+identifier does, so one followed by another identifier byte - the `_` that separates a
+generated name's parts - takes the parenthesized spelling `@(name)`, whose `)` ends it: in
+`` `_sm_@(x)_@(n)` `` the items are `x` and `n` and the `_` between them is text. The parser
+rewrites the literal into one `fmtStrWith` call before sema
+(`cppsrc/parser/ParserInterp.kt`): the template is the
 content with each `@name` reduced to its `@`, and the items are the names, in order - the
 separator is always `@`, and one placeholder per item always holds. So `` `a=@x b=@y` `` is
 `fmtStrWith('@', "a=@ b=@", x, y)`, and the concatenation fusion turns it into one buffer

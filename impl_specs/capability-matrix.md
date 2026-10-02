@@ -4243,3 +4243,22 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
   both fixed points byte for byte (14.90 s from the published file to a working compiler,
   1576 ms self-transpile).
+
+- **`@(name)`, the parenthesized interpolation spelling (T84).** A name ends at the first
+  byte an identifier cannot hold, so a name the separator of a generated name follows -
+  `_sm_@(name)_@(n)`, the shadow-name shape - could not be spelled at all. `@(name)` ends
+  at the `)`: the same `@` in the template, the same item, the same `fmtStrWith` desugar -
+  the feature is `interpHasItem`/`parseInterpolatedRaw` in `cppsrc/parser/ParserInterp.kt`,
+  and nothing downstream can tell the spellings apart. The plain spelling keeps working,
+  and a `@(` before an identifier start makes a string interpolate, so a malformed `@(`
+  (unclosed, or nothing name-like inside) is the same class of diagnostic -
+  `stress/diagnostic-interpolation-paren` pins that message, and the existing case's
+  message now names both spellings. `stress/raw-strings` grew `_sm_@(who)_@(n)`, `@(who)@(n)` and
+  `(@(who))` (its `expected.cpp` re-cut by hand; stdout is the three new lines), and
+  `tools/_interp_scan.mjs` reports `@(name)` too. `specs/built-in-types.md`,
+  `docs/language-tour.md`, `README.md` and `docs/state-of-the-field.md` name the spelling.
+
+  Verified: `./build.bat --release`, `bun tools/stress.js` **58/58**,
+  `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
+  both fixed points byte for byte (14.16 s from the published file to a working compiler,
+  1515 ms self-transpile).

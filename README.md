@@ -324,8 +324,8 @@ Not there yet, in rough order of how soon a user would miss it: `for` over a
 `Dictionary` and ranges, closed unions with exhaustive `when`, a
 `Printable` protocol (so `println` works for your own types), `Set`, byte buffers, JSON
 encode/decode generated from data classes, sockets and HTTP, and a Linux/macOS
-toolchain. String interpolation (`` `@name` ``, with `fmtStrWith` behind it) landed; a
-format protocol that prints your own types is still open.
+toolchain. String interpolation (`` `@name` `` and `` `@(name)` ``, with `fmtStrWith`
+behind it) landed; a format protocol that prints your own types is still open.
 `docs/state-of-the-field.md` is explicit about each of these, and
 `impl_specs/user-language-roadmap.md` phases them.
 
