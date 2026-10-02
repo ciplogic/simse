@@ -2,7 +2,7 @@
 
 Status: decision recorded for T10; the spelling settled in T83; the run-time `native`
 generator (`LoadLibraryA`/`GetProcAddress`) is implemented
-(`cppsrc/sourcegen/NativeInvokeGen.kt`, `stress/native-invoke`, `docs/examples/sdl2`,
+(`cppsrc/compiler/NativeInvokeGen.kt`, `stress/native-invoke`, `docs/examples/sdl2`,
 `docs/examples/http`).
 
 ## Declaration form
@@ -115,7 +115,7 @@ Int32 __sm_native_sdlInit(const Int32& flags) {
   packages that both declare, say, `open` share a thunk only when they name the same library and
   symbol; a different binding is a diagnostic rather than a silent merge.
 - The loader is Windows' `LoadLibraryA`/`GetProcAddress` and POSIX's `dlopen`/`dlsym`, chosen
-  by `#ifdef _WIN32` in the generator's own text (`cppsrc/sourcegen/NativeInvokeGen.kt`); the
+  by `#ifdef _WIN32` in the generator's own text (`cppsrc/compiler/NativeInvokeGen.kt`); the
   `dlopen`/`dlsym` arm is what makes the same `@SmGen("native", ...)` declaration bind on Linux.
 
 Two worked examples ship with it. `docs/examples/sdl2` is a window bound to `SDL2.dll` (an

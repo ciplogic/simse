@@ -12,7 +12,6 @@ import linear
 import optimizations
 import profiling
 import resources
-import sourcegen
 
 // Re-roots `child` under `role` (a shallow copy whose element name changes).
 fun Emitter.renameRole(child: *AstXmlNode, role: AstNodeKind): AstXmlNode {

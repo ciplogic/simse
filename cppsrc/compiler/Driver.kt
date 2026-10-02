@@ -17,7 +17,6 @@ import common
 import io
 import profiling
 import resources
-import sourcegen
 
 // Where the compiler's *own* resources are read from: the prelude's directory, or the
 // directory a single-file `--prelude` is in, so the `_res.md` beside it is still found.
@@ -86,7 +85,7 @@ fun driverParseSource(text: *Str, fileName: *Str): Res<AstXmlNode> {
 
 // A path under a `generators/` directory of a *module*: the compiler-side sources a module ships
 // (specs/simse-md.md), which a program that names the module must not compile into itself - they
-// are written against the compiler's own packages (`sourcegen`, `common`), not a program's.
+// are written against the compiler's own packages (`compiler`, `common`), not a program's.
 fun driverIsGeneratorSource(path: *Str): Bool {
     return path.find("/generators/") >= 0 || path.find("\\generators\\") >= 0
             || path.startsWith("generators/") || path.startsWith("generators\\")
@@ -419,7 +418,7 @@ fun main(args: List<Str>): Int {
     val resourceStored: List<Str> = resStoredLiterals(resources)
 
     // The compiler's *own* resources (`_res.md` beside the prelude, read here like its `.kt`
-    // files): the second half of the generator lookup (`cppsrc/sourcegen/GenTypes.kt`), which
+    // files): the second half of the generator lookup (`cppsrc/compiler/GenTypes.kt`), which
     // hands a program the RTL's C++ when it carries no section of its own.
     var compilerResources: List<ResourceItem> = List<ResourceItem>()
     if (resolvedPrelude != "") {
@@ -440,7 +439,7 @@ fun main(args: List<Str>): Int {
         f = f + 1
     }
 
-    // The generators' state (`cppsrc/sourcegen/SourceGen.kt`), filled here because the reparse
+    // The generators' state (`cppsrc/compiler/SourceGen.kt`), filled here because the reparse
     // pass below and the emitter's much later pass both read it.
     sourceGenBegin(preludeNames, preludeModules, fileNames, modules, resources, compilerResources)
 

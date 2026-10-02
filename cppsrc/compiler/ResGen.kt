@@ -6,8 +6,7 @@
 // an empty declaration places `<section>:emit`=`always` text (specs/resources.md). The lookup
 // is the tree's resources first, the compiler's own second (`sourceGenResText`, GenTypes.kt).
 
-package sourcegen
-import compiler
+package compiler
 
 // Self-registration (impl_specs/generators.md). `false`/`true`: the section's `forward` text
 // is the declaration, so no prototype of its own; its receiver pattern is registered.

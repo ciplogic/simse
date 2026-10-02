@@ -7,12 +7,11 @@
 //
 // The declarations live here, next to the AST (`cppsrc/modules/compiler/astxml.kt`), so a
 // module's generator source names the compiler surface with one import (`import compiler`).
-// The registry itself and the compilation a generator looks at stay in `cppsrc/sourcegen`
-// (`GenTypes.kt`/`SourceGen.kt`), the compiler's own half of the mechanism.
+// The registry, the compilation a generator looks at and the built-in generators are the
+// same package (`cppsrc/compiler/`), so one import covers everything a generator names.
 
 package compiler
 
-import sourcegen
 
 // A generator's answer: what it did, and the key it is filed under - the generator's own
 // spelling of what it produced (a resource section's name). `FullCompiledState.definitions`

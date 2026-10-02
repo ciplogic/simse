@@ -13,7 +13,6 @@ import linear
 import optimizations
 import profiling
 import resources
-import sourcegen
 
 
 // Storage for every file-level static, value-initialized so a read before the generated

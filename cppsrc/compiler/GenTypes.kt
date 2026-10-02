@@ -9,8 +9,7 @@
 // call reaches must exist before any body), `Reparse` for source the driver will compile,
 // and `Emit` once every body is emitted, when the reach set decides what lands.
 
-package sourcegen
-import compiler
+package compiler
 
 import common
 import resources

@@ -12,7 +12,6 @@ import linear
 import optimizations
 import profiling
 import resources
-import sourcegen
 
 
 // The async side of the program (impl_specs/async.md): which names can suspend and what a call

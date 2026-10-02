@@ -84,10 +84,10 @@ Details worth knowing:
   includes, support, profile, strings, resources, forward, types, statics, prototypes,
   init, bodies - so a generated *declaration* lands in `forward`, a *definition* in
   `bodies`, and text the preamble needs in `support`, without codegen having to know about
-  any of them. The generators are their own package (`cppsrc/sourcegen/`, one file per
-  generator, registered by name) precisely so that a *program's* author can write one
-  without depending on the compiler's internals: a generator sees the AST nodes, the
-  resources and the sections, and calls nothing from the compiler's stages.
+  any of them. The generators live in the `compiler` package (`cppsrc/compiler/`, one file
+  per generator, registered by name) so that a *program's* author can write one against one
+  import: a generator sees the AST nodes, the resources and the sections, and calls nothing
+  from the compiler's stages.
 
 ## What the output looks like
 

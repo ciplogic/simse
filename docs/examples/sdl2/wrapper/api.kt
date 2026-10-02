@@ -1,7 +1,7 @@
 package sdl2
 
 // The `sdl2` module: a minimalist P/Invoke-style binding to SDL2, built on the `native`
-// generator (cppsrc/sourcegen/NativeInvokeGen.kt, impl_specs/native-interop.md). Each
+// generator (cppsrc/compiler/NativeInvokeGen.kt, impl_specs/native-interop.md). Each
 // declaration names the library and the exported symbol, and the compiler emits a thunk that
 // resolves the symbol on first call with `LoadLibraryA`/`GetProcAddress` and calls through it.
 // Nothing is linked and no SDL header is needed at the call site - SDL2.dll only has to sit

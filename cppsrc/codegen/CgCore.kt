@@ -13,7 +13,6 @@ import linear
 import optimizations
 import profiling
 import resources
-import sourcegen
 
 
 fun Emitter.fail(posNode: *AstXmlNode, message: *Str): Unit {

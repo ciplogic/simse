@@ -33,7 +33,7 @@ Per-component status: `impl_specs/capability-matrix.md`.
 | --- | --- | --- | --- |
 | T28 | Per-instantiation generators (`@Json`, enum-to-string, int-to-enum) | T27 | Not started |
 | T29 | The RTL's generated C++ is a resource (`strtable`, `timeops`, `listops`, `spanOf`) | T26, T27 | Done |
-| T30 | The generators are a package of their own (`cppsrc/sourcegen`) | T26, T27 | Done |
+| T30 | The generators live with the compiler in one package (`cppsrc/compiler`) | T26, T27 | Done |
 | T31 | `simse.md`: the project file, and module-declared source generators | T30 | In progress (manifest done; the extension not started) |
 
 ### T26 - Generators: attributes + `@SmGen` + `Sections` - **Done**
@@ -48,7 +48,7 @@ Spec of record: `impl_specs/generators.md`; log: `impl_specs/capability-matrix.m
   spellings fill the same attributes, and `bun tools/smgen.js` asserts their amalgamations are
   byte-identical (modulo the fixture path). The parser synthesizes the attribute for
   `native(...)`, so emissions are unchanged.
-- `Sections` (`cppsrc/sourcegen/Sections.kt`): get-or-create that appends a new section at the
+- `Sections` (`cppsrc/compiler/Sections.kt`): get-or-create that appends a new section at the
   end, last-write-wins `add`, render text-then-items; byte-neutral.
 - `@SmGen("res", section)` reads the compiler's own resources: `stress/smgen-res` (generated
   declaration and definition), `stress/smgen-res-collision` (the double-creation hazard).
@@ -83,7 +83,7 @@ generators. See `specs/attributes.md`.
 
 Spec of record: `impl_specs/generators.md`.
 
-- **Section order** (`cppsrc/sourcegen/Sections.kt`): `support` (text the preamble needs),
+- **Section order** (`cppsrc/compiler/Sections.kt`): `support` (text the preamble needs),
   `profile`, `strings`, `resources`, `forward` (generated declarations), then
   types/statics/prototypes/init/bodies; each block renders with a blank line before it.
 - **Lookup is the tree's own resources first** (`Emitter.resText`/`resHas`), the compiler's
@@ -116,13 +116,13 @@ constructor-like `open` was ever in `fileio`) and the type core (`types.hpp`, `c
 the amalgamation is compiled *against* and which needs language features that do not exist yet
 (statics in an object, a ref-counted layout).
 
-### T30 - The generators are a package of their own - **Done**
+### T30 - The generators are their own files, in the compiler's package - **Done**
 
 The generators are the one part of the compiler meant to be written by a *program's
-author*; they are their own package, with a boundary documented as a rule (spec of record:
+author*; they are a boundary documented as a rule (spec of record:
 `impl_specs/generators.md`, "The generator table").
 
-- **`cppsrc/sourcegen/`** - `Sections.kt` (the sink), `GenTypes.kt` (`SourceTransformation`,
+- **`cppsrc/compiler/`** (package `compiler`) - `Sections.kt` (the sink), `GenTypes.kt` (`SourceTransformation`,
   `SourceGenPhase`, `SourceGenRequest`, `FullCompiledState`, the `OnSourceGen` typealias), one
   file per generator (`CppGen.kt`, `ResGen.kt`, `KtGen.kt`), and `SourceGen.kt` - the manager:
   `addSourceGen`/`makeSourceGens` the way `lex/Scanner.kt` builds its token rules,
@@ -137,10 +137,11 @@ author*; they are their own package, with a boundary documented as a rule (spec 
 - **`codegen` keeps only the caller**: `Emitter.sections` is a `*Sections`, `collect` asks
   `sourceGenHas`/`sourceGenDeclare`, `run` asks `sourceGenEmit`, and the driver asks
   `sourceGenBegin`/`sourceGenReparseSource`.
-- **The interface types are the `compiler` module's** (a later move): `SourceGenContext`
-  and `SourceGenTransform` live in `cppsrc/modules/compiler/gen.kt`, next to the AST
-  (`cppsrc/modules/compiler/astxml.kt`), so a module's `generators/` names the compiler
-  surface with one import (`import compiler`).
+- **The interface types are the same package** (a later move): the whole former `sourcegen`
+  package merged into `compiler` - `SourceGenContext` and `SourceGenTransform` sit with the
+  AST in `cppsrc/modules/compiler/`, the rest in `cppsrc/compiler/` - so a module's
+  `generators/` names the compiler surface with one import (`import compiler`), and nothing
+  imports a `sourcegen` package back.
 
 Trap: in Simse `*p` where `p: *Sections` *reads through*, so `sourceGenEmit(*this.sections,
 ...)` filled a copy of the sink and emitted a file with no generated text. The pointer is

@@ -6,8 +6,7 @@
 // generator-produced Simse source), and `sourceGenEmit` (codegen, places text that needs the
 // reach set). Each generator registers itself from its own file with a file-level static.
 
-package sourcegen
-import compiler
+package compiler
 
 import common
 import resources

@@ -35,7 +35,6 @@ package json
 import compiler
 
 import common
-import sourcegen
 
 // Self-registration (impl_specs/generators.md). `false`/`false`: nothing is emitted for the
 // declaration, not even a prototype - the generated extensions carry their own receiver.

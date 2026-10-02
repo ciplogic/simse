@@ -305,7 +305,7 @@ bootstrap check, troubleshooting - is in
 Working today: data classes, enums, generics, extension functions, pure (`data`)
 functions the compiler may reuse, lambdas, statics,
 `List`/`Array`/`Dictionary`/`Span`/`Opt`/`Res`/`Str`, `Res` propagation (`x!!`), attributes
-and source generators (`cppsrc/sourcegen/`, `_res.md` resources, `native` declarations),
+and source generators (`cppsrc/compiler/`, `_res.md` resources, `native` declarations),
 list literals and trailing-argument packing, `for`/`yield` state machines, file I/O, the
 `main(args)` form, packages and modules, and a project file (`simse.md`). The compiler is
 self-hosted and reproduces the published bootstrap byte for byte, and **61 end-to-end stress
@@ -331,7 +331,7 @@ toolchain. `docs/state-of-the-field.md` is explicit about each of these, and
 
 | Path | Contents |
 | --- | --- |
-| `cppsrc/` | the compiler in Simse (`lex/`, `parser/`, `sema/`, `linear/`, `codegen/`, `compiler/`, `sourcegen/`), plus `cppsrc/rtl/` (the prelude `.kt` files, the runtime headers, and the resource file `_res.md`, which holds the runtime's C++) and `cppsrc/simse_bootstrap.cpp` - the published transpiled compiler, the output proof |
+| `cppsrc/` | the compiler in Simse (`lex/`, `parser/`, `sema/`, `linear/`, `codegen/`, `compiler/` - the source generators' package too), plus `cppsrc/rtl/` (the prelude `.kt` files, the runtime headers, and the resource file `_res.md`, which holds the runtime's C++) and `cppsrc/simse_bootstrap.cpp` - the published transpiled compiler, the output proof |
 | `specs/` | the language specification (normative): types, declarations, functions, memory model, generics, containers, modules, statics, resources |
 | `impl_specs/` | implementation plans and records: the capability matrix, the RTL ABI, generators, the user-facing roadmap |
 | `stress/` | one folder per end-to-end program: source, arguments, expected output, and where the emitted text is the point, an `expected.cpp` golden |

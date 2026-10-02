@@ -14,8 +14,7 @@
 // through a cast, which is exactly the raw-pointer reinterpretation a union-style native API
 // (SDL's event, say) wants and cannot spell in Simse.
 
-package sourcegen
-import compiler
+package compiler
 
 // Self-registration (impl_specs/generators.md). `false`/`false`: the generator emits its own
 // forward declaration and definition (the manager must not emit a second prototype, whose

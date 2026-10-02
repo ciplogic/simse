@@ -208,7 +208,7 @@ bytes smaller). `cppsrc/rtl/_res.md` is the RTL's own generated C++ (`strtable`,
 | --- | --- |
 | the format, the join, the discovery | `cppsrc/resources/Resources.kt` (its `ResourceItem` is the reader's pair - not the RTL's `ResourceEntry`, because the emitter's type table is flat by name) |
 | discovery in the driver | one call to the module: `cppsrc/compiler/Driver.kt` |
-| the lookup a generator reads | `sourcegen`'s `sourceGenResHas`/`sourceGenResText` (`cppsrc/sourcegen/GenTypes.kt`): the tree's own entries first, the compiler's own (read from disk beside the prelude) second |
+| the lookup a generator reads | the `compiler` package's `sourceGenResHas`/`sourceGenResText` (`cppsrc/compiler/GenTypes.kt`): the tree's own entries first, the compiler's own (read from disk beside the prelude) second |
 | pooling and the table | the emitter: `cppsrc/codegen/Codegen.kt`, after `emitStringTable`, over `resourceStored` - the literals `resources.resStoredLiterals` already spelled |
 | the two escape rules, and the flags | `cppsrc/resources/Resources.kt`: `resMarkedName` (the markers), `resStoredLiterals` (`resQuoteLiteral`/`resQuoteBinary`), `resQuoteLiteral` |
 | the format's byte helpers | the `resfmt` section of `cppsrc/rtl/_res.md` (`simse_resHexToBytes`, `simse_resQuoteBinary`), reached only by the compiler's own module |

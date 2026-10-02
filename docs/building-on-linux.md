@@ -37,7 +37,7 @@ cmp cppsrc/simse_bootstrap.cpp /tmp/out.cpp && echo "fixed point holds"
 
 Two places emitted C++ that would not build on a non-MSVC toolchain; both are fixed.
 
-1. **The `native` generator** (`cppsrc/sourcegen/NativeInvokeGen.kt`). `@SmGen("native", ...)`
+1. **The `native` generator** (`cppsrc/compiler/NativeInvokeGen.kt`). `@SmGen("native", ...)`
    emitted a Windows-only loader (`LoadLibraryA`/`GetProcAddress`). It now emits a
    `#ifdef _WIN32` split: `LoadLibraryA`/`GetProcAddress` on Windows, `dlopen`/`dlsym` from
    `<dlfcn.h>` elsewhere. The compiler itself uses no `native` binding, so this only affects

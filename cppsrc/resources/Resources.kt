@@ -316,7 +316,7 @@ fun resValueOf(entries: *List<ResourceItem>, key: *Str): Str {
 
 // True when `entries` carries `key`. `resValueOf` cannot answer it: an *empty* value and an
 // absent key both read as "", so a caller that must tell them apart asks this first
-// (cppsrc/sourcegen/ResGen.kt).
+// (cppsrc/compiler/ResGen.kt).
 fun resHas(entries: *List<ResourceItem>, key: *Str): Bool {
     var i: Int = 0
     while (i < entries.size()) {

@@ -58,7 +58,7 @@ symbol alias to a plain Simse function.
 
 ## The generator table
 
-Every generator is **one file** under `cppsrc/sourcegen/`, and a `SourceGenerator` that
+Every generator is **one file** under `cppsrc/compiler/`, and a `SourceGenerator` that
 **registers itself** by name - the shape `cppsrc/lex/Scanner.kt` gives its token matchers:
 
 | file | name | C++ comes from | `declaresPrototype` | `registersReceiver` |
@@ -71,10 +71,11 @@ Every generator is **one file** under `cppsrc/sourcegen/`, and a `SourceGenerato
 
 Each module's generators live in a `generators/` subfolder - the `json` module's is
 `cppsrc/modules/json/generators/JsonGen.kt` - and the built-in four are one file each under
-`cppsrc/sourcegen/`. A module's `generators/` is **compiler-side**: `--root` scans a tree whole
+`cppsrc/compiler/`. A module's `generators/` is **compiler-side**: `--root` scans a tree whole
 (so the compiler's own build compiles the generators in), while `--module` names a module and
 scans it without its `generators/`, so a program that imports the module gets its declarations and
-never the generator sources (which are written against the compiler's own packages, `import compiler` for the AST and the generator interface). The `json`
+never the generator sources (which are written against the `compiler` package - one
+`import compiler` names the AST and the generator interface). The `json`
 row is the first generator that reads the program's **type structure** instead of a resource; the
 module is where that grows (the per-reach step below).
 
@@ -102,10 +103,11 @@ by one file would have overwritten a registration that ran earlier. The dispatch
 generator up by name, so the order the table ends up in is not observable either; a name
 must simply not repeat. A module's generator registers the same way (`specs/simse-md.md`).
 
-**What a generator may touch** is the boundary the package exists for: it reads and writes
-the AST nodes, the resources and the sections, and it calls nothing from the compiler's
-stages - not the parser, not the emitter, not the semantic pass - so it cannot break when a
-compiler API changes (which is also why `Sections` left `codegen` for this package).
+**What a generator may touch** is a *rule* of the package: it reads and writes the AST
+nodes, the resources and the sections, and it calls nothing from the compiler's stages - not
+the parser, not the emitter, not the semantic pass - so it cannot break when a compiler API
+changes (`Sections` lives beside the generators rather than in `codegen` for exactly that
+reason).
 
 The same generator is asked three times, once per phase:
 
@@ -124,7 +126,7 @@ the rest itself, since a key is one `Str`.
 
 ## `Sections`
 
-`Sections` (`cppsrc/sourcegen/Sections.kt`) is the amalgamation's sink and the one place
+`Sections` (`cppsrc/compiler/Sections.kt`) is the amalgamation's sink and the one place
 that knows the order:
 
     data class NamedSection(name: Str, text: Str, items: Dictionary<Str, Str>)

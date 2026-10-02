@@ -5,8 +5,7 @@
 // declaration needs - the symbol a call reaches, the prototype, the receiver pattern
 // (`sourceGenDeclare`, `sourceGenDeclaresPrototype`).
 
-package sourcegen
-import compiler
+package compiler
 
 // Self-registration (impl_specs/generators.md). `true`/`true`: the C++ is in a header, so the
 // declaration keeps its prototype and its receiver pattern is registered.

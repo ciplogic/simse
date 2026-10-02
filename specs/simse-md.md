@@ -38,7 +38,7 @@ The format is the one `_res.md` already reads (`specs/resources.md`): markdown, 
 | file | key | meaning |
 | --- | --- | --- |
 | root `simse.md` | `module: <dir>` | a module of the project, relative to the file. The entry may repeat. A file with no `module:` entry leaves the root scanned whole - which is what a module's own manifest is |
-| module `simse.md` | `sourcegen: true` | this module ships source generators (`cppsrc/sourcegen`'s kind). A compiler that *carries* them (the built-in ones, today) accepts it; one that does not fails at emission, naming the generator a declaration reaches |
+| module `simse.md` | `sourcegen: true` | this module ships source generators (`cppsrc/compiler`'s kind). A compiler that *carries* them (the built-in ones, today) accepts it; one that does not fails at emission, naming the generator a declaration reaches |
 
 A root with no `simse.md` behaves as before: `--root <dir>` is the single module root. The
 manifest is additive: nothing that works now stops working, and `--root` remains the way a
@@ -93,7 +93,7 @@ extended compiler's build, ending in one line that adds it to the table -
 
     val jsonGenRegistered: Bool = registerSourceGen("json", jsonGen, false, true)
 
-- `registerSourceGen` (`cppsrc/sourcegen/SourceGen.kt`) appends to `sourceGenTable` and
+- `registerSourceGen` (`cppsrc/compiler/SourceGen.kt`) appends to `sourceGenTable` and
   answers `true`, because a file-level static's initializer is an expression and every static
   has a type (`specs/statics.md`). Its arguments after the name are the two facts only the
   generator knows: whether a declaration of it keeps a prototype, and whether its receiver

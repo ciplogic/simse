@@ -13,7 +13,6 @@ import linear
 import optimizations
 import profiling
 import resources
-import sourcegen
 
 
 fun Emitter.expr(e: *AstXmlNode, minPrec: Int, expected: *AstXmlNode): Str {

@@ -8,7 +8,7 @@
 // The predefined sections are the emitter's assembly *phases*; a name the emitter does not
 // know is appended at the end. `add` is last write wins: a generator that cares checks `has`.
 
-package sourcegen
+package compiler
 
 data class NamedSection(
     var name: Str,

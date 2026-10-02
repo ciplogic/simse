@@ -11,7 +11,6 @@ import linear
 import optimizations
 import profiling
 import resources
-import sourcegen
 
 
 fun Emitter.preludeText(): Unit {

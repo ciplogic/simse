@@ -203,9 +203,10 @@ driver's - and `build.bat` can compile it.
 - `cppsrc/lex/`, `cppsrc/parser/`, `cppsrc/sema/`,
   `cppsrc/linear/`, `cppsrc/codegen/`, `cppsrc/compiler/`, `cppsrc/profiling/` -
   the compiler stages, all Simse: scan, parse (AST), resolve/reify, lower to the
-  linear form, emit. `sourcegen/` sits beside them: the source generators, one file per
-  generator plus the manager (`SourceGen.kt`) and the `Sections` sink (`Sections.kt`),
-  which `codegen` calls but which calls nothing back (`impl_specs/generators.md`).
+  linear form, emit. The generators are the `compiler` package's too (`cppsrc/compiler/`:
+  `SourceGen.kt` the manager, `Sections.kt` the sink, `CppGen.kt`/`ResGen.kt`/`KtGen.kt`/
+  `NativeInvokeGen.kt` one file each), which `codegen` calls but which calls nothing back
+  (`impl_specs/generators.md`).
   `cppsrc/modules/` holds the reusable modules (`json`: an `api.kt` plus the
   compiler-side sources in a `generators/` subfolder, `specs/simse-md.md`; `compiler`:
   the compiler-only surface - the AST and the generator vocabulary, `astxml.kt`/`gen.kt`);
@@ -341,14 +342,16 @@ Key design points:
 - **Generics are reified via emitted C++ templates** (see
   `impl_specs/reification.md`): distinct Simse instantiations become distinct
   C++ types; `SmallVector<N,T>` maps to `SmallVector<T,N>`.
-- **Source generators** (`@SmGen`, see `impl_specs/generators.md`) live in
-  `cppsrc/sourcegen/`, one generator per file, and each **registers itself** with one line at
+- **Source generators** (`@SmGen`, see `impl_specs/generators.md`) live in the
+  `compiler` package: `cppsrc/compiler/` holds the manager, the `Sections` sink and the
+  built-in generators, one file per generator, and the interface types (`SourceGenContext`,
+  `SourceGenTransform`, ...) sit with the AST in `cppsrc/modules/compiler/`. Each generator
+  **registers itself** with one line at
   the end of its own file - `val cppGenRegistered: Bool = registerSourceGen("cpp", cppGen,
   true, true)` - whose file-level static initializer appends it to `sourceGenTable` (the
   table has no initializer of its own: static initializers run in an unspecified order, and an
   append onto storage that starts empty cannot lose one). A generator is a lambda over
-  `*SourceGenContext` (the interface types - `SourceGenContext`, `SourceGenTransform` - are
-  the `compiler` module's, `cppsrc/modules/compiler/gen.kt`) and is asked three times - `Declare` (resolve the symbol a call
+  `*SourceGenContext` and is asked three times - `Declare` (resolve the symbol a call
   reaches), `Reparse` (hand back Simse source) and `Emit` (place text, and once more for the
   program itself). It may read and write the AST nodes, the resources and the `Sections` sink,
   and it calls nothing from the compiler's stages: that boundary is what keeps a program
@@ -363,7 +366,7 @@ Key design points:
   reaches hand-written C++ with `@SmGen("cpp", "Symbol")` - the FFI spelling, which the
   deleted `native("Symbol")` keyword used to be sugar for. `@SmGen("native", library[, symbol])`
   is the P/Invoke form: the symbol is a shared library's, resolved at run time with
-  `LoadLibraryA`/`GetProcAddress` (`cppsrc/sourcegen/NativeInvokeGen.kt`, Windows only today),
+  `LoadLibraryA`/`GetProcAddress` (`cppsrc/compiler/NativeInvokeGen.kt`, Windows only today),
   so a program links nothing and needs no header (`docs/examples/sdl2`, `docs/examples/http` - the latter a
   blocking Winsock2 socket library with an HTTP/1.1 server on it). A body that is a
   *resource* is `@SmGen("res", section[, symbol])`
@@ -519,7 +522,11 @@ borrow parameter and a read-through for a by-value one.
   `docs/state-of-the-field.md` (what works, what is rough, the numbers) and
   `docs/language-tour.md` (syntax) carry claims a reader will check; a change that
   makes one of them false is not finished until it is updated.
-- **Do not commit** unless the user explicitly asks.
+- **Commit every validated change, one commit each.** The loop above is the gate: a
+  green build, a green corpus and a green fixed point - then commit, refreshing
+  `cppsrc/simse_bootstrap.cpp` in the same commit when the emitted C++ moved. Do not
+  wait to be asked. Work that is red, or whose validation has not been run, is not
+  committed: say what failed and leave the tree for the user.
 
 ## 7. Language features currently implemented
 
@@ -630,7 +637,7 @@ Do these only when asked; roughly prioritized:
    `@SmGen("cpp", "simse_...")`
    declaration (the FFI `impl_specs/native-interop.md` documents, and
    `stress/native-read-file`), and no `res` declaration reaches the section in that case
-   (`sourcegen/ResGen.kt`). An alternative, if a program should carry only what it
+   (`cppsrc/compiler/ResGen.kt`). An alternative, if a program should carry only what it
    reaches, is one section per platform symbol with `symbol:` reach - not done, because
    it changes that mechanism. The type core (`types.hpp`, `containers.hpp`,
    `smstring.hpp`, `smdictionary.hpp`, `span.hpp`, `strview.hpp`, `strsmallvector.hpp`,
@@ -641,9 +648,9 @@ Do these only when asked; roughly prioritized:
    what is left as `@SmGen("cpp", ...)` is the type core, the literal interop of
    `strview.hpp`, and three `resources.kt` declarations that are merely a symbol alias to
    a plain Simse function.
-2. **Commit the work when asked.** The T35-T40 performance work is committed
-   (`d5de0f8`); anything after it is uncommitted as usual - never commit unless the
-   user asks.
+2. **The tree is committed as it goes.** Each validated change is one commit (the
+   T35-T40 performance work and everything after it), so the log is the record -
+   nothing waits for a "commit" request.
 3. **Stage-2 self-host**: the fixed point runs through the published bootstrap
    (`tools/bootstrap.js`: compile it, transpile `cppsrc`, compare the bytes). A second
    generation (compile the bootstrap's own output, compare again) would strengthen the
@@ -832,11 +839,13 @@ Do these only when asked; roughly prioritized:
   parameter wants the pointer - `this.sections` - never `*this.sections`. The rule of thumb:
   `val p: *T = x` is for a binding that must outlive its expression; passing a pointer that
   is already one is just passing it.
-- **A generator lives in `cppsrc/sourcegen/` and calls nothing from the compiler's stages**
-  (`impl_specs/generators.md`, "The generator table"): it reads and writes AST nodes,
-  resources and the `Sections` sink, and answers a `SourceGenTransform`. That is what keeps
-  a generator from breaking when a compiler API changes - `Sections` moved out of `codegen`
-  for exactly that reason, so do not reach back into the emitter from a generator.
+- **A generator calls nothing from the compiler's stages** (`impl_specs/generators.md`,
+  "The generator table"): it reads and writes AST nodes, resources and the `Sections` sink,
+  and answers a `SourceGenTransform`. The generators share the `compiler` package with the
+  stages now, so the boundary is a *rule*, not a package wall - it is what keeps a generator
+  from breaking when a compiler API changes. `Sections` lives beside the generators rather
+  than in `codegen` for exactly that reason, so do not reach back into the emitter from a
+  generator.
 - **The prelude is read from disk at run time**, so a compiler older than
   `cppsrc/rtl/*.kt` sees a declaration it does not know how to emit (a new
   `@SmGen` declaration on a new type is the shape that bites: it falls back to the

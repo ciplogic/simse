@@ -12,7 +12,6 @@ import linear
 import optimizations
 import profiling
 import resources
-import sourcegen
 
 
 fun Emitter.exprInner(e: *AstXmlNode, expected: *AstXmlNode): Str {

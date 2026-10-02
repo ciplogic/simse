@@ -13,7 +13,6 @@ import linear
 import optimizations
 import profiling
 import resources
-import sourcegen
 
 // One parsed input. `prelude` inputs are collected but emitted only when they carry a
 // body (the RTL's declarations are natives, whose C++ is the header's).
@@ -246,7 +245,7 @@ data class Emitter(
     var nativeDecls: List<CgNativeDecl>,
 
 // The two tables a generator's answer is registered in (impl_specs/generators.md; the
-// pass lives in `cppsrc/sourcegen`).
+// pass lives in `cppsrc/compiler`).
     var nativeSymbols: Dictionary<Str, Str>,
     var nativeExtensions: Dictionary<Str, List<CgNativeExt>>,
     var activeTypeParams: Dictionary<Str, Bool>,
