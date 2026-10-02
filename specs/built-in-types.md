@@ -48,13 +48,28 @@ val text: Str = `first line
 second "line" with a \ backslash`
 ```
 
-There is no escape and no interpolation: the next backtick ends the string, so a
+There is no escape: the next backtick ends the string, so a
 backtick cannot appear inside, and every byte between the two backticks is the content -
 a real newline included, which is what lets a string span lines. A line ending is
 normalized to one `\n` (CRLF and a lone CR both), so a source file's line endings do not
 change the value. A `"` and a `\` are written as they stand; that - and the multi-line
 form - is what makes a backtick string the way to hold another language's source text
 verbatim (the profiler's emitted C++, `cppsrc/profiling/Profiling.kt`).
+
+**Interpolation** is `@name`: the value of `name`, as text. Only a backtick string
+interpolates (`"@x"` is the two characters), and `@` is the marker only before a letter
+or `_`, so `a@ b` and `50% @2` hold `@` literally; a literal `@` immediately before an
+identifier is not spellable yet - write that text in a double-quoted literal
+(with the escapes above) or split the raw string around it. The parser rewrites the
+literal into one `fmtStr` call (`cppsrc/parser/ParserInterp.kt`): each `@name` becomes one
+`|` and the name becomes one item, in order, so `` `a=@x b=@y` `` is
+`fmtStr("a=| b=|", x, y)` - and the concatenation fusion turns it into one buffer exactly
+as for a hand-written call (`cppsrc/linear/MergeConcat.kt`). A piece of the text that
+holds a `|` would collide with the placeholder count, so that rewrite is an `fmtStrWith`
+with a separator the text does not hold. An item is the `Str` the written call takes, so
+a name of another type formats only while the fusion is on - which it is for every
+template without an escape, and a multi-line one has one - and `name.toString()` first is
+always safe.
 
 Both forms are one entry in the program's literal pool, and at a site a `StrView` into
 it, exactly alike (`impl_specs/rtl-abi.md`): a backtick string is spelled as the
@@ -142,7 +157,8 @@ Status: required for the first implementation.
 `|` characters in order with one item each. The format is a `StrView` because a format is
 almost always a literal, which already is a view. The trailing arguments pack into the
 `*List<Str>` (`fmtStr("| |", "a", "b")`). The result length is known up front, so it is
-assembled in one buffer with no `reserve`.
+assembled in one buffer with no `reserve`. A string interpolation is rewritten to exactly
+this call before sema (see "Interpolation" above), so the same fusion applies to both.
 
 `fmtStrWith(separator: Char, templateText: StrView, items: *List<Str>): Str` is the same
 with the placeholder taken as a parameter, for a template whose own text needs a `|`:

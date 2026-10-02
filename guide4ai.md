@@ -533,8 +533,11 @@ borrow parameter and a read-through for a by-value one.
 ## 7. Language features currently implemented
 
 **Literals**: `"..."` with the escape set (`\n \r \t \0 \\ \' \" \xNN`, octal),
-and a backtick string - raw and multi-line, no escape and no interpolation, the next
-backtick ends it (`specs/built-in-types.md`). Both are one pool entry and read as a
+and a backtick string - raw and multi-line, no escape, the next backtick ends it
+(`specs/built-in-types.md`). A backtick string interpolates `@name`: the parser rewrites
+it to one `fmtStr` call (one `|` and one item per name, `fmtStrWith` when a piece of the
+text holds a `|`), so no stage downstream sees the construct (`cppsrc/parser/ParserInterp.kt`,
+`stress/raw-strings`). Both forms are one pool entry and read as a
 `StrView` at a site, exactly alike.
 
 **Destructors**: a data class may declare one `fun unInit()`, emitted as its C++ destructor;
@@ -665,8 +668,7 @@ Do these only when asked; roughly prioritized:
    manifests/versions/transitive resolution; range/`foreach` iteration over
    containers (`for` exists, but only over a machine - `impl_specs/for.md`);
    reference captures
-   and explicit capture lists; `when` pattern labels (`is Type`, `in 1..5`); string
-   interpolation;
+   and explicit capture lists; `when` pattern labels (`is Type`, `in 1..5`);
    interfaces/virtual dispatch; method overriding; default parameter values;
    `unsafe` blocks / raw-pointer escape rules; **static storage** - file-level
    `var`/`val` (done, `impl_specs/statics.md` slice 1) and `object` declarations
@@ -675,7 +677,7 @@ Do these only when asked; roughly prioritized:
    `arrayEmpty<T>()`'s empty block out of hand-written C++.
    The user-facing ordering of these gaps - what a program author is blocked on,
    what gates each phase, and the features not in this list yet (`for`,
-   interpolation, closed unions + exhaustive `when`, static protocols, `Set`, byte buffers,
+   closed unions + exhaustive `when`, static protocols, `Set`, byte buffers,
    JSON codegen, sockets/HTTP, Linux/macOS, user FFI) - is
    `impl_specs/user-language-roadmap.md`, with its own non-goals and open
    questions.
@@ -979,3 +981,10 @@ generated C++ of one translation unit, so nothing can be built against an older 
   (`advance` -> `Bool`, the field `current` -> the element type) precisely so a loop
   variable is a typed binding rather than an `auto` the emitter would resolve the wrong
   overload for.
+- **A backtick string interpolates `@name`, and text that must keep its `@` fails at
+  self-host time**: `NativeInvokeGen.kt`'s generated-C++ comment spelled
+  `@SmGen("native", ...)`, which started emitting `fmtStr("|", SmGen)` the moment the
+  feature landed (the refresh's own `cl.exe` step caught it). Write such text in a `"..."`
+  literal or split the raw string; `bun tools/_interp_scan.mjs cppsrc` lists every `@name`
+  inside a backtick string in a tree. The rule is `cppsrc/parser/ParserInterp.kt`; the scanner
+  never looks inside a string.

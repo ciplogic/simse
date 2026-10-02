@@ -618,11 +618,15 @@ fun main(): Int {
 ## Printing
 
 `print` and `println` take a value and print it, with `Bool` as `true`/`false`;
-scalars have `toString()`, and `Str + Str` concatenates. There is no string
-interpolation or formatting function yet, and `println` of your own types is not
-supported (a `Printable` protocol is planned), so build strings explicitly.
+scalars have `toString()`, and `Str + Str` concatenates. A backtick string interpolates
+`@name` - `@` is the marker only before a letter or `_`, and `"@x"` is literal text -
+and the compiler rewrites it to the `fmtStr` call it stands for, so a `Str` is usable as
+it stands. `println` of your own types is not supported yet (a `Printable` protocol is
+planned).
 
 ```simse
+val who: Str = "world"
+println(`hello @who`)                  // hello world
 println("count = " + count.toString())
 println(2.5.toString())
 println(min(3, 9))
@@ -649,5 +653,7 @@ These are known rough edges, not design decisions to admire
   prints its integer value.
 - There is no `foreach` keyword (`for` is it, and a container has an `iter` so
   `for (x in list)` works), no `when` pattern labels (`is Type`, `in 1..5`) and no
-  subjectless `when`, no string interpolation, no default parameter values, no
-  capture-by-reference, and no `Set`.
+  subjectless `when`, no default parameter values, no capture-by-reference, and no
+  `Set`. Interpolation exists, but only in backtick strings (`@name`), and only a plain
+  name: `@(expr)` is not there, and a member or a longer expression is bound to a local
+  first (`val n: Int = tag.count` then `@n`).

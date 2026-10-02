@@ -29,7 +29,7 @@ frameworks, and (for now) third-party binary packages.
 | --- | --- | --- |
 | Loops | `while`, and `for` over a `yield`ing machine | range/`foreach` over `List`/`Str`/ranges |
 | Branching | `if`/`else`, `when` | closed unions, exhaustive `when` (no dynamic dispatch) |
-| Strings | method library, `+`, `appendStr` | interpolation, `format`, a `toString` protocol for user types |
+| Strings | method library, `+`, `appendStr`, `` `@name` `` interpolation | `format`, a `toString` protocol for user types |
 | Printing | `println`/`print` are *emitter intrinsics* over `std::cout` | a real `Printable` protocol, float formatting with a defined shape |
 | Enums | `toInt`/`fromInt` | the member *name*; `println(Color.Red)` prints a number |
 | Functions | functions, methods, extensions, lambdas | default parameter values, capture by reference |
@@ -97,10 +97,11 @@ no-vtable decision comfortable rather than limiting.
 
 ### 4.3 Text and formatting
 
-String interpolation (`"hi ${name} (${n})"`), a `format` function, `Printable` for user
-types, float printing with a defined shortest-round-trip shape (via `std::cout` defaults),
-`Str` indexing/slicing by characters, and a UTF-8 story (byte-oriented; case mapping is ASCII
-- must be stated).
+A `format` function, `Printable` for user types, float printing with a defined
+shortest-round-trip shape (via `std::cout` defaults), `Str` indexing/slicing by characters,
+and a UTF-8 story (byte-oriented; case mapping is ASCII - must be stated). Interpolation
+is `` `@name` `` in a backtick string (a name; an expression is bound to a local first),
+rewritten to `fmtStr` before sema.
 
 ### 4.4 Bytes and buffers
 

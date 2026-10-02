@@ -55,13 +55,13 @@ Int64 simse_nowNanos();
 // The program's string literals: one pool, and two run-length encoded index
 // series (offsets as deltas, then lengths), each as what to subtract from the
 // previous value; strtable.hpp has the stream format.
-static const Int __sm_stringCount = 7;
+static const Int __sm_stringCount = 20;
 static const char __sm_stringPool[] =
-    "line one\nline \"two\" with \\ back\n\ttabbed" "line one\nline \"two\" with \\ back\n	tabbed" "He said \"hi\" and left \\ right" "line one" "matched" "no" "" 
+    "line one\nline \"two\" with \\ back\n\ttabbed" "line one\nline \"two\" with \\ back\n	tabbed" "He said \"hi\" and left \\ right" "first |\nsecond |" "@ who and @2" "a@ b and ! |" "line one" "hello |" "matched" "x|y\n@" "a|b=@" "world" "@who" "n=|" "|@|" "no" "|!" "||" "@" "" 
 ;
-static const Int16 __sm_stringStarts[] = {7,7,0,-39,0,10,21,1,5};
-static const Int16 __sm_stringLens[] = {7,7,-39,0,10,21,1,5,2};
-static_assert(sizeof(__sm_stringPool) - 1 == 124, "the string pool and its length index disagree");
+static const Int16 __sm_stringStarts[] = {20,11,0,-39,0,10,13,4,0,4,1,0,2,2,2,0,2,1,2,0,1,1,2,0,1,1};
+static const Int16 __sm_stringLens[] = {20,10,-39,0,10,13,4,0,4,1,0,2,2,2,0,2,1,2,0,1,2,2,0,2,1};
+static_assert(sizeof(__sm_stringPool) - 1 == 201, "the string pool and its length index disagree");
 static StrView __sm_stringTable[__sm_stringCount];
 static struct __SmStringTableInitType {
     __SmStringTableInitType() {
@@ -94,6 +94,45 @@ StrView simse_strView_slice(StrView self, Int start, Int count);
 Char simse_strView_charAt(StrView self, Int index);
 StrView simse_spanOfStr(Str* text);
 StrView simse_spanOfStr(StrView view);
+
+#include <cstdint>
+#include <type_traits>
+
+// The List/Array/Str primitives behind the prelude (impl_specs/native-interop.md), moved
+// out of cppsrc/rtl/listops.hpp. Index and range errors are unchecked, matching the
+// language's no-exceptions policy: `removeAt`/`removeRange` with an out-of-range index is
+// undefined behavior (specs/language-decisions.md).
+
+// Appends `value` to the end of `self`. The value is a non-deduced context so a literal
+// argument (e.g. a `const char[]`) converts to the element type instead of making `T`
+// ambiguous.
+template <class T>
+void simse_list_append(List<T>& self, const std::type_identity_t<T>& value);
+
+// The list literal's fallback (cppsrc/rtl/rtl.kt): the compiler turns
+// `listOf<Str>("a", "b")` into the construction itself, so this runs only for a position
+// with no destination slot.
+template <class T>
+List<T> simse_listOf(const List<T>* values);
+
+template <class T>
+void simse_list_removeAt(List<T>& self, Int index);
+template <class T>
+void simse_list_removeRange(List<T>& self, Int start, Int end);
+template <class T>
+Int simse_array_count(const Array<T>& self);
+template <class T>
+Array<T> simse_list_toArray(const List<T>& self);
+template <class T>
+List<T> simse_array_toList(const Array<T>& self);
+template <class T>
+Array<T> simse_arrayEmpty();
+
+void simse_str_append(Str& self, Char value);
+void simse_str_appendStr(Str& self, const Str& value);
+void simse_str_appendStrPtr(Str& self, const Str* value);
+void simse_str_reserve(Str& self, Int count);
+Str simse_int_toString(Int self);
 
 // `lenOf(x)`: one read-only length operation, declared `data` in the prelude
 // (cppsrc/rtl/rtl.kt) so that a repeated call on an unchanged value is one call
@@ -175,6 +214,36 @@ Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& val
 // holds it instead of being copied into the comparison.
 template <class T, class F>
 void simse_list_sort(List<T>& self, F less);
+
+#include <bit>
+#include <cstring>
+
+// The primitives a concatenation is *expanded* into (impl_specs/linear-il.md, "Concat").
+// There is no `cat` function and no per-part `append`: the emitter computes every part's
+// *exact* length, performs one `resize`, and then writes each part straight into the slot it
+// owns while one `char*` advances by that part's length. So a chain of n parts touches the
+// allocator once, computes each part once and copies each part once - the shape Java 9's
+// `StringConcatFactory` has, with the C++ compiler seeing the straight-line form instead of a
+// variadic call.
+//
+// No program names these: the emitter writes the symbols itself, the way it writes
+// `simse_addressOf`. What each kind of part costs:
+//   * a text part (a `Str`, or a literal whose length the lowering already knows) is a
+//     `std::memcpy` - a constant size is one register or vector store, a runtime `Str` size
+//     one call;
+//   * an integer (`Int8`/`Int16`/`Int32`/`Int64`, `Int`) is *counted* by the bit scan below
+//     (`std::bit_width` plus one power-of-ten comparison, never a division loop) and *written*
+//     by `simse_strAddInt` - two digits per step out of a table, right to left inside the slot
+//     that was made for it, so the digits are never built into a second buffer;
+//   * a `Char` is one byte;
+//   * a `Bool` is a `StrView` over a two-entry table ("true"/"false"): it has no digits to
+//     render and is not a hot path, so it goes through the text path.
+// A float is deliberately *absent*: its length is only known by formatting it, so the lowering
+// keeps the `toString()` call (one `Str`, made ahead of time) and the part *is* that `Str` -
+// one conversion, not one for the length and another for the write.
+Int simse_strCountDigits(Int64 value);
+void simse_strAddInt(char* target, Int64 value, Int count);
+StrView simse_strBoolView(Bool value);
 
 #include <cerrno>
 #include <charconv>
@@ -299,6 +368,8 @@ inline void simse_println(const T& value, FILE* out) {
 }
 
 Bool startsWith(StrView* self, Str text);
+Str fmtStr(StrView fmt, List<Str>* items);
+Str fmtStrWith(Char separator, StrView templateText, List<Str>* items);
 Bool startsWith(Str* self, Str prefix);
 Bool isEmpty(Str* self);
 
@@ -332,6 +403,126 @@ Bool startsWith(StrView* self, Str text) {
     }
     L4:;
     return true;
+}
+Str fmtStr(StrView fmt, List<Str>* items) {
+    Str _sm_base2, out;
+    Bool _sm_expr1;
+    Int points, i, _sm_expr2, _sm_expr8, used;
+    Char _sm_expr4, ch;
+    _sm_expr1 = items == nullptr;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    return fmt;
+    L2:;
+    points = 0;
+    i = 0;
+    L3:;
+    _sm_expr2 = simse_strView_size(fmt);
+    _sm_expr1 = i < _sm_expr2;
+    if (!(_sm_expr1)) goto L4;
+    _sm_expr4 = simse_strView_charAt(fmt, i);
+    _sm_expr1 = _sm_expr4 == '|';
+    if (_sm_expr1) goto L5;
+    goto L6;
+    L5:;
+    points = points + 1;
+    L6:;
+    i = i + 1;
+    goto L3;
+    L4:;
+    _sm_expr2 = simse_lenOf((*items));
+    _sm_expr1 = points != _sm_expr2;
+    if (_sm_expr1) goto L7;
+    goto L8;
+    L7:;
+    return fmt;
+    L8:;
+    out = __sm_stringTable[19];
+    _sm_expr8 = simse_strView_size(fmt);
+    simse_str_reserve(out, _sm_expr8);
+    used = 0;
+    i = 0;
+    L9:;
+    _sm_expr2 = simse_strView_size(fmt);
+    _sm_expr1 = i < _sm_expr2;
+    if (!(_sm_expr1)) goto L10;
+    ch = simse_strView_charAt(fmt, i);
+    _sm_expr1 = ch == '|';
+    if (_sm_expr1) goto L11;
+    goto L12;
+    L11:;
+    _sm_base2 = (*items)[used];
+    simse_str_appendStr(out, _sm_base2);
+    used = used + 1;
+    goto L13;
+    L12:;
+    simse_str_append(out, ch);
+    L13:;
+    i = i + 1;
+    goto L9;
+    L10:;
+    return out;
+}
+Str fmtStrWith(Char separator, StrView templateText, List<Str>* items) {
+    Str _sm_base2, out;
+    Bool _sm_expr1;
+    Int points, i, _sm_expr2, _sm_expr8, used;
+    Char _sm_expr4, ch;
+    _sm_expr1 = items == nullptr;
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    return templateText;
+    L2:;
+    points = 0;
+    i = 0;
+    L3:;
+    _sm_expr2 = simse_strView_size(templateText);
+    _sm_expr1 = i < _sm_expr2;
+    if (!(_sm_expr1)) goto L4;
+    _sm_expr4 = simse_strView_charAt(templateText, i);
+    _sm_expr1 = _sm_expr4 == separator;
+    if (_sm_expr1) goto L5;
+    goto L6;
+    L5:;
+    points = points + 1;
+    L6:;
+    i = i + 1;
+    goto L3;
+    L4:;
+    _sm_expr2 = simse_lenOf((*items));
+    _sm_expr1 = points != _sm_expr2;
+    if (_sm_expr1) goto L7;
+    goto L8;
+    L7:;
+    return templateText;
+    L8:;
+    out = __sm_stringTable[19];
+    _sm_expr8 = simse_strView_size(templateText);
+    simse_str_reserve(out, _sm_expr8);
+    used = 0;
+    i = 0;
+    L9:;
+    _sm_expr2 = simse_strView_size(templateText);
+    _sm_expr1 = i < _sm_expr2;
+    if (!(_sm_expr1)) goto L10;
+    ch = simse_strView_charAt(templateText, i);
+    _sm_expr1 = ch == separator;
+    if (_sm_expr1) goto L11;
+    goto L12;
+    L11:;
+    _sm_base2 = (*items)[used];
+    simse_str_appendStr(out, _sm_base2);
+    used = used + 1;
+    goto L13;
+    L12:;
+    simse_str_append(out, ch);
+    L13:;
+    i = i + 1;
+    goto L9;
+    L10:;
+    return out;
 }
 Bool startsWith(Str* self, Str prefix) {
     Int count, _sm_expr1, i;
@@ -371,16 +562,21 @@ Bool isEmpty(Str* self) {
 }
 // stress/raw-strings/src/main.kt
 int main() {
+    char* __sm_catP;
+    Int __sm_catC0;
     Str* _sm_base1, * _sm_base2;
-    Str text, empty, quoted;
-    Int _sm_expr1, _sm_expr2, _sm_when1_n, _sm_expr9;
+    List<Str> _sm_base17, _sm_base19;
+    List<Str>* _sm_base18, * _sm_base20;
+    Str text, empty, quoted, who, _sm_expr10, _sm_expr11, _sm_expr12, _sm_expr13, _sm_expr14, _sm_expr15,
+        _sm_expr16, multi, piped, plain;
+    Int _sm_expr1, _sm_expr2, _sm_when1_n, _sm_expr9, n;
     Bool _sm_expr3, _sm_expr5, _sm_expr6, _sm_expr7;
     StrView _sm_expr4, _sm_when1_v;
     text = __sm_stringTable[1];
     _sm_expr1 = simse_lenOf(text);
     simse_println((_sm_expr1), stdout);
     simse_println((text), stdout);
-    empty = __sm_stringTable[6];
+    empty = __sm_stringTable[19];
     _sm_expr2 = simse_lenOf(empty);
     simse_println((_sm_expr2), stdout);
     _sm_expr3 = isEmpty(simse_addressOf(empty));
@@ -389,7 +585,7 @@ int main() {
     _sm_expr4 = simse_spanOfStr(_sm_base1);
     _sm_expr5 = _sm_expr4 == __sm_stringTable[0];
     simse_println((_sm_expr5), stdout);
-    _sm_expr6 = startsWith(simse_addressOf(text), __sm_stringTable[3]);
+    _sm_expr6 = startsWith(simse_addressOf(text), __sm_stringTable[6]);
     simse_println((_sm_expr6), stdout);
     _sm_base2 = &text;
     _sm_when1_v = simse_spanOfStr(_sm_base2);
@@ -402,15 +598,76 @@ int main() {
     if (_sm_expr7) goto L1;
     goto L2;
     L1:;
-    simse_println((__sm_stringTable[4]), stdout);
+    simse_println((__sm_stringTable[8]), stdout);
     goto L4;
     L2:;
-    simse_println((__sm_stringTable[5]), stdout);
+    simse_println((__sm_stringTable[15]), stdout);
     L4:;
     quoted = __sm_stringTable[2];
     _sm_expr9 = simse_lenOf(quoted);
     simse_println((_sm_expr9), stdout);
     simse_println((quoted), stdout);
+    who = __sm_stringTable[11];
+    n = 42;
+    _sm_expr10.resize(6 + who.size());
+    __sm_catP = _sm_expr10.data();
+    std::memcpy(__sm_catP, "hello ", 6);
+    __sm_catP = __sm_catP + 6;
+    std::memcpy(__sm_catP, who.data(), who.size());
+    simse_println((_sm_expr10), stdout);
+    _sm_expr11.resize(1 + who.size());
+    __sm_catP = _sm_expr11.data();
+    std::memcpy(__sm_catP, who.data(), who.size());
+    __sm_catP = __sm_catP + who.size();
+    *__sm_catP = (char) ('!');
+    simse_println((_sm_expr11), stdout);
+    _sm_expr12.resize(who.size() + who.size());
+    __sm_catP = _sm_expr12.data();
+    std::memcpy(__sm_catP, who.data(), who.size());
+    __sm_catP = __sm_catP + who.size();
+    std::memcpy(__sm_catP, who.data(), who.size());
+    simse_println((_sm_expr12), stdout);
+    __sm_catC0 = simse_strCountDigits(n);
+    _sm_expr13.resize(2 + __sm_catC0);
+    __sm_catP = _sm_expr13.data();
+    std::memcpy(__sm_catP, "n=", 2);
+    __sm_catP = __sm_catP + 2;
+    simse_strAddInt(__sm_catP, n, __sm_catC0);
+    simse_println((_sm_expr13), stdout);
+    simse_println((__sm_stringTable[4]), stdout);
+    simse_println((__sm_stringTable[18]), stdout);
+    _sm_expr14.resize(4 + who.size());
+    __sm_catP = _sm_expr14.data();
+    std::memcpy(__sm_catP, "a|b=", 4);
+    __sm_catP = __sm_catP + 4;
+    std::memcpy(__sm_catP, who.data(), who.size());
+    simse_println((_sm_expr14), stdout);
+    _sm_expr15.resize(2 + who.size());
+    __sm_catP = _sm_expr15.data();
+    *__sm_catP = (char) ('|');
+    __sm_catP = __sm_catP + 1;
+    std::memcpy(__sm_catP, who.data(), who.size());
+    __sm_catP = __sm_catP + who.size();
+    *__sm_catP = (char) ('|');
+    simse_println((_sm_expr15), stdout);
+    _sm_expr16.resize(11 + who.size());
+    __sm_catP = _sm_expr16.data();
+    std::memcpy(__sm_catP, "a@ b and ", 9);
+    __sm_catP = __sm_catP + 9;
+    std::memcpy(__sm_catP, who.data(), who.size());
+    __sm_catP = __sm_catP + who.size();
+    std::memcpy(__sm_catP, " |", 2);
+    simse_println((_sm_expr16), stdout);
+    _sm_base17 = List<Str>{who, who};
+    _sm_base18 = &_sm_base17;
+    multi = fmtStr(__sm_stringTable[3], _sm_base18);
+    simse_println((multi), stdout);
+    _sm_base19 = List<Str>{who};
+    _sm_base20 = &_sm_base19;
+    piped = fmtStrWith('@', __sm_stringTable[9], _sm_base20);
+    simse_println((piped), stdout);
+    plain = __sm_stringTable[12];
+    simse_println((plain), stdout);
     return 0;
 }
 
@@ -450,6 +707,95 @@ inline StrView simse_spanOfStr(Str* text) {
 // resolution picks the borrowed view or the identity, and the tests compare against it.
 inline StrView simse_spanOfStr(StrView view) {
     return view;
+}
+
+template <class T>
+inline void simse_list_append(List<T>& self, const std::type_identity_t<T>& value) {
+    self.push_back(value);
+}
+
+template <class T>
+inline List<T> simse_listOf(const List<T>* values) {
+    return *values;
+}
+
+// Removes the single element at `index`.
+template <class T>
+inline void simse_list_removeAt(List<T>& self, Int index) {
+    self.erase(self.begin() + index);
+}
+
+// Removes the half-open range [start, end).
+template <class T>
+inline void simse_list_removeRange(List<T>& self, Int start, Int end) {
+    self.erase(self.begin() + start, self.begin() + end);
+}
+
+// `Array<T>.count()`: the element count stored at the front of the block.
+template <class T>
+inline Int simse_array_count(const Array<T>& self) {
+    return self.count();
+}
+
+// `List<T>.toArray()` (specs/built-in-types.md): copies the elements into one count-first
+// block. Element copies are value copies, like every other copy in the language.
+template <class T>
+inline Array<T> simse_list_toArray(const List<T>& self) {
+    const Int count = self.size();
+    if (count <= 0) {
+        return Array<T>();
+    }
+    Array<T> result(count);
+    for (Int i = 0; i < count; i++) {
+        result[i] = self[i];
+    }
+    return result;
+}
+
+// `Array<T>.toList()`: the growable copy, which is how an element is added to an array.
+template <class T>
+inline List<T> simse_array_toList(const Array<T>& self) {
+    List<T> result;
+    const Int count = self.count();
+    result.reserve(count);
+    for (Int i = 0; i < count; i++) {
+        result.push_back(self[i]);
+    }
+    return result;
+}
+
+// `arrayEmpty<T>()`: the shared, zero-length array of `T` (no allocation).
+template <class T>
+inline Array<T> simse_arrayEmpty() {
+    return Array<T>();
+}
+
+// `Str.append(ch)`: `Str` has no single-character append, so this is `push_back`.
+inline void simse_str_append(Str& self, Char value) {
+    self.push_back(static_cast<char>(value));
+}
+
+// `Str.appendStr(text)`: appends in place, so an emitter accumulates output without
+// `out = out + text` rebuilding the whole buffer on every line (which is quadratic).
+inline void simse_str_appendStr(Str& self, const Str& value) {
+    self.append(value);
+}
+
+// `Str.appendStrPtr(text)`: the same append for a text the caller only *borrows*, so
+// nothing is copied on the way.
+inline void simse_str_appendStrPtr(Str& self, const Str* value) {
+    if (value != nullptr) self.append(*value);
+}
+
+// `Str.reserve(count)`: grows the buffer once, so a run of appends writes the text once
+// instead of copying the accumulated prefix at every growth step. A *hint*, not a length.
+inline void simse_str_reserve(Str& self, Int count) {
+    self.reserve((Str::size_type) count);
+}
+
+// `Int.toString()`: the scalar-to-inline-string conversion (specs/memory-model.md).
+inline Str simse_int_toString(Int self) {
+    return std::to_string(self);
 }
 
 inline Int simse_lenOf(const Str& self) {
@@ -537,6 +883,79 @@ inline void simse_list_sort(List<T>& self, F less) {
     std::sort(self.begin(), self.end(), [&less](const T& a, const T& b) {
         return less(const_cast<T*>(&a), const_cast<T*>(&b));
     });
+}
+
+// The powers of ten the bit scan settles its guess against.
+static const unsigned long long smStrDigitPow10[20] = {
+    1ull, 10ull, 100ull, 1000ull, 10000ull, 100000ull, 1000000ull, 10000000ull,
+    100000000ull, 1000000000ull, 10000000000ull, 100000000000ull, 1000000000000ull,
+    10000000000000ull, 100000000000000ull, 1000000000000000ull, 10000000000000000ull,
+    100000000000000000ull, 1000000000000000000ull, 10000000000000000000ull
+};
+
+// The digit count, exact for every width (a narrower integer widens to `Int64` with the same
+// digits). `std::bit_width(magnitude)` is the position of the highest set bit plus one - one
+// `clz`/`bsr` - and `1233 / 4096 = 0.3010...` is log10(2), so the product is
+// floor(log10(magnitude)) or one off; the comparison against that power of ten settles which.
+// The early return is the one case the scan cannot answer (`0`), and the sign is a separate
+// term, counted on the widened value so `-INT64_MIN` never overflows.
+inline Int simse_strCountDigits(Int64 value) {
+    unsigned long long magnitude =
+        value < 0 ? 0ull - (unsigned long long) value : (unsigned long long) value;
+    if (magnitude < 10ull) {
+        return value < 0 ? 2 : 1;
+    }
+    Int bits = (Int) std::bit_width(magnitude);
+    Int guess = (Int) (((unsigned int) bits * 1233u) >> 12);
+    Int digits = guess + (magnitude >= smStrDigitPow10[guess] ? 1 : 0);
+    return digits + (value < 0 ? 1 : 0);
+}
+
+// Two digits per step: the table holds "00".."99", so the inner loop never divides by ten.
+struct SmStrDigitPairTable {
+    char text[200];
+    constexpr SmStrDigitPairTable() : text() {
+        for (Int i = 0; i < 100; i = i + 1) {
+            text[i * 2] = (char) ('0' + i / 10);
+            text[i * 2 + 1] = (char) ('0' + i % 10);
+        }
+    }
+};
+
+static constexpr SmStrDigitPairTable smStrDigitPairs{};
+
+// The digits of `value`, written straight into the `count` bytes `target` already owns and
+// walking *back* through them (the least-significant pair first), so no second buffer and no
+// second pass is needed. `count` must be exact - `simse_strCountDigits`'s answer, sign
+// included - because the slots of the parts around this one depend on it.
+inline void simse_strAddInt(char* target, Int64 value, Int count) {
+    unsigned long long magnitude =
+        value < 0 ? 0ull - (unsigned long long) value : (unsigned long long) value;
+    if (value < 0) {
+        target[0] = '-';
+        count = count - 1;
+        target = target + 1;
+    }
+    while (count >= 2) {
+        unsigned int pair = (unsigned int) (magnitude % 100ull);
+        magnitude /= 100ull;
+        count = count - 2;
+        target[count] = smStrDigitPairs.text[pair * 2];
+        target[count + 1] = smStrDigitPairs.text[pair * 2 + 1];
+    }
+    if (count == 1) {
+        target[0] = (char) ('0' + (Int) magnitude);
+    }
+}
+
+// The two texts a bool can be, as a `StrView` over a two-entry table - the string-table shape,
+// so a bool part is just another text part (a `memcpy` of a runtime length) and needs no digits
+// of its own. Cold enough that the two loads the compiler folds it to do not matter.
+inline StrView simse_strBoolView(Bool value) {
+    static Char texts[2][6] = {"true", "false"};
+    static Int lens[2] = {4, 5};
+    Int at = value ? 0 : 1;
+    return StrView(texts[at], lens[at]);
 }
 
 inline Char simse_str_charAt(const Str& self, Int index) {

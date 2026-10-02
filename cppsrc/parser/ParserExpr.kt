@@ -225,7 +225,8 @@ fun Parser.parsePostfix(): ExprNode {
 
 // A string token's text: the ordinary quoted literal as written, or the quoted literal a
 // backtick string's raw content spells (litRawString) - so everything downstream, the
-// when guards and StrView resolution included, sees one kind of text.
+// when guards and StrView resolution included, sees one kind of text. An interpolated
+// backtick string never reaches it: parsePrimary desugars it first (ParserInterp.kt).
 fun Parser.stringTokenText(text: *Str): Str {
     if (text.size() > 0 && text[0] == '`') {
         return litRawString(text)
@@ -247,6 +248,11 @@ fun Parser.parsePrimary(): ExprNode {
     }
     if (this.checkKind(TokenKind.String)) {
         val raw: Str = this.advance().text
+        // A backtick string interpolates `@name`: the desugar (ParserInterp.kt) turns the
+        // literal into an `fmtStr` call, so everything downstream sees ordinary expressions.
+        if (interpHasItem(raw)) {
+            return this.parseInterpolatedRaw(raw, pos)
+        }
         val text: Str = this.stringTokenText(raw)
         var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
         attrs.append(AstNodeAttribute(AstNodeAttributeKind.Text, text))

@@ -281,10 +281,12 @@ fun matchStringLiteral(view: StrView): Int {
     return 0
 }
 
-// A backtick string: a raw, multi-line text with no escape and no interpolation - the next
-// backtick ends it, so a backtick cannot appear inside and there is nothing to escape. The
-// parser stores the ordinary quoted literal litRawString spells from its content
-// (common/literals.kt), so everything downstream sees a plain string literal.
+// A backtick string: a raw, multi-line text with no escape - the next backtick ends it, so a
+// backtick cannot appear inside and there is nothing to escape. Its `@name` interpolation is
+// the parser's desugar (cppsrc/parser/ParserInterp.kt), not the scanner's: the token still
+// runs from backtick to backtick. A string with no `@name` is stored as the ordinary quoted
+// literal litRawString spells from its content (common/literals.kt), so everything downstream
+// sees a plain string literal.
 fun matchRawStringLiteral(view: StrView): Int {
     if (view.size() == 0 || view.at(0) != '`') {
         return 0

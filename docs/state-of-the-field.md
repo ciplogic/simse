@@ -86,7 +86,7 @@ program a user would try to write:
 | Enum printing | `println(Color.Red)` prints an integer; there is no automatic member name | write a `when`-based `label()` function |
 | Float printing | `println` goes through C++'s default formatting | format manually; a defined shortest-round-trip rule is on the roadmap |
 | Error messages | position and message, no source excerpt or caret | read the generated C++ next to it |
-| Vocabulary | no `foreach` over a container (only `for` over a machine), no `when` pattern labels, no interpolation, no default parameter values, no capture-by-reference, no `Set`, no `map`/`filter` | `while` + `Span`, explicit code, `List` helpers |
+| Vocabulary | no `foreach` over a container (only `for` over a machine), no `when` pattern labels, no default parameter values, no capture-by-reference, no `Set`, no `map`/`filter` | `while` + `Span`, explicit code, `List` helpers; interpolation is `@name` in a backtick string |
 | Ownership and borrowing | `&x` on a local boxes a *copy*, so a handle does not alias the local; `&T` cycles are not collected | borrow with `*x` (a raw pointer) when you mean "the original"; break cycles by nulling a handle |
 
 ## What is missing
@@ -99,8 +99,9 @@ these):
    Simse), and a state machine is its own identity. A `Dictionary` and ranges
    (`for (i in (2 .. 5))`) are next; walking a `Dictionary` still means `keys()` and an
    index.
-2. **String interpolation and formatting** - building strings with `+` and
-   `toString()` everywhere.
+2. **String formatting** - `fmtStr` and `@name` interpolation in a backtick string
+   cover the template case; a format protocol that prints your own types is not there,
+   so values of a `data class` are still built with `+` and `toString()`.
 3. **Closed unions + exhaustive `when`** - the replacement for dynamic dispatch;
    needed for JSON, protocol messages and any "one of these shapes" modelling.
 4. **Static interfaces (protocols)** - `Hashable`, `Comparable`, `Printable`

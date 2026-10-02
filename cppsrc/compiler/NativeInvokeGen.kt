@@ -286,9 +286,11 @@ fun nativeInvokeRuntime(ctx: *SourceGenContext): Unit {
 }
 
 fun nativeInvokeIncludesText(): Str {
+    // The `@` of the attribute is not spelled below: a backtick string interpolates
+    // `@name` (cppsrc/parser/ParserInterp.kt), so `@SmGen` there would be a reference.
     return `
 // NativeInvoke (impl_specs/native-interop.md): the shared-library loader a
-// @SmGen("native", ...) declaration binds its symbol with. Windows loads through
+// declaration with the SmGen("native", ...) attribute binds its symbol with. Windows loads through
 // windows.h's LoadLibraryA/GetProcAddress, everywhere else through dlfcn.h's
 // dlopen/dlsym; either way the lookup is at run time rather than a link-time
 // import, so the program links nothing.

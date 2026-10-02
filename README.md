@@ -321,10 +321,12 @@ best of a few runs while idle):
 | **from the published file to a compiler that reproduces it** | **~17 s**, then under a second per self-transpile |
 
 Not there yet, in rough order of how soon a user would miss it: `for` over a
-`Dictionary` and ranges, string interpolation, closed unions with exhaustive `when`, a
+`Dictionary` and ranges, closed unions with exhaustive `when`, a
 `Printable` protocol (so `println` works for your own types), `Set`, byte buffers, JSON
 encode/decode generated from data classes, sockets and HTTP, and a Linux/macOS
-toolchain. `docs/state-of-the-field.md` is explicit about each of these, and
+toolchain. String interpolation (`` `@name` ``, and `fmtStr` behind it) landed; a format
+protocol that prints your own types is still open.
+`docs/state-of-the-field.md` is explicit about each of these, and
 `impl_specs/user-language-roadmap.md` phases them.
 
 ## Repository layout
