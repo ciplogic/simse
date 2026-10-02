@@ -388,7 +388,12 @@ for ((value, index) in source) { ... }
 ```
 
 A `*` in front of the variable binds a pointer to the element instead of a copy, through
-the container's `iterPtr` (the same walk, yielding `*T`).
+the container's `iterPtr` (the same walk, yielding `*T`). The compiler may **promote** a value
+form to this pointer form when the loop variable is only read and the element's copy is deep (a
+`Str`, or a data class holding one) - the value form copies, and for a `Str` allocates, per
+element (`impl_specs/for.md`, `impl_specs/escape-analysis.md`). The promotion is not observable:
+it is applied only when no write through the variable and no call that could change the
+container is in the body. `--no-borrow` turns it off.
 
 ```simse
 for (v in everyOther(10)) { ... }        // a machine

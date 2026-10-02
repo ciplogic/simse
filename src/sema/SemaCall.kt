@@ -431,3 +431,148 @@ fun Analyzer.checkExtensionCallArity(call: *AstXmlNode): Unit {
 }
 
 
+
+// The `for` promotion (impl_specs/for.md, "iterPtr"): a `for (x in c)` over a *deep* element (a
+// `Str`, or a data class holding one) becomes the pointer wrap `iterPtr` when the body only reads
+// `x`. The parser chose the wrap before types were known - a machine has no pointer form - so the
+// choice is made here: the receiver type is resolved, `iterPtr` must exist for it, the element
+// must be worth it (`bpDeepElement`, from the borrow pass's analysis), and the body must prove
+// read-only (`bpLoopReadOnly`, the parameter rule). The value form copies - and, for a `Str`,
+// allocates - on every iteration; the pointer form hands out the element's place instead.
+// `--no-borrow` turns it off with the rest of the rewrite.
+fun Analyzer.promoteForLoops(stmts: *List<AstXmlNode>): Unit {
+    if (bpNoBorrow()) {
+        return
+    }
+    var i: Int = 0
+    while (i < stmts.size()) {
+        val stmt: *AstXmlNode = *stmts[i]
+        for (*child in stmt.Children) {
+            if (child.name != AstNodeKind.Body) {
+                continue
+            }
+            val nested: List<AstXmlNode> = xmlChildren(*child, AstNodeKind.Stmt)
+            if (nested.size() > 0) {
+                this.promoteForLoops(*nested)
+            }
+        }
+        this.promoteForAt(stmts, i)
+        i = i + 1
+    }
+}
+
+// One statement: the machine declaration a `for` desugars to (`var _sm_forN = c.iter()`). Its
+// loop follows in the same list, and the promotion is the wrap's name.
+fun Analyzer.promoteForAt(stmts: *List<AstXmlNode>, index: Int): Unit {
+    val machineDecl: *AstXmlNode = *stmts[index]
+    if (xmlKind(machineDecl) != AstNodeCategory.StmtVarDecl) {
+        return
+    }
+    val machineName: Str = xmlAttr(machineDecl, AstNodeAttributeKind.Name)
+    if (!semaIsForTemplateName(*machineName)) {
+        return
+    }
+    val init: *AstXmlNode = xmlChildPtr(machineDecl, AstNodeKind.Init)
+    if (xmlKind(init) != AstNodeCategory.ExprCall) {
+        return
+    }
+    val callee: *AstXmlNode = xmlChildPtr(init, AstNodeKind.Callee)
+    if (xmlKind(callee) != AstNodeCategory.ExprMember
+        || xmlAttr(callee, AstNodeAttributeKind.Name) != "iter"
+    ) {
+        return
+    }
+    val receiver: *AstXmlNode = xmlChildPtr(callee, AstNodeKind.Receiver)
+    val receiverType: AstXmlNode = this.iteratedType(receiver)
+    if (xmlIsEmpty(receiverType) || xmlKind(receiverType) == AstNodeCategory.TypeYield) {
+        return
+    }
+    var ptrWrap: Str = "iterPtr"
+    if (!this.hasWrap(ptrWrap, receiverType)) {
+        return
+    }
+    if (!this.promoteElementDeep(receiverType)) {
+        return
+    }
+    val loopIndex: Int = this.forLoopIndex(stmts, index)
+    if (loopIndex < 0) {
+        return
+    }
+    val loop: *AstXmlNode = *stmts[loopIndex]
+    val body: List<AstXmlNode> = xmlChildren(xmlChildPtr(loop, AstNodeKind.Body), AstNodeKind.Stmt)
+    val elementName: Str = this.loopElementName(*body, machineName)
+    if (elementName == "") {
+        return
+    }
+    if (!bpLoopReadOnly(*body, *elementName)) {
+        return
+    }
+    var attrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
+    for (*attr in callee.attributes) {
+        if (attr.name == AstNodeAttributeKind.Name) {
+            attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, "iterPtr"))
+        } else {
+            var kept: AstNodeAttribute = attr
+            attrs.append(kept)
+        }
+    }
+    callee.attributes = attrs
+}
+
+// Only a `List`/`Array`/`Span` of a deep element is promoted: a user type's `iterPtr`, a receiver
+// whose element cannot be named, and a non-deep element are all left as written.
+fun Analyzer.promoteElementDeep(receiverType: *AstXmlNode): Bool {
+    if (xmlKind(receiverType) != AstNodeCategory.TypeGeneric) {
+        return false
+    }
+    val base: Str = xmlAttr(receiverType, AstNodeAttributeKind.Name)
+    if (base != "List" && base != "Array" && base != "Span") {
+        return false
+    }
+    val args: List<AstXmlNode> = xmlChildren(receiverType, AstNodeKind.TypeArg)
+    if (args.size() != 1) {
+        return false
+    }
+    return bpDeepElement(*args[0])
+}
+
+// The `while` the parser wrote for this machine: it follows the machine's declaration (an index
+// declaration may sit between) and its condition is the machine's `advance()`.
+fun Analyzer.forLoopIndex(stmts: *List<AstXmlNode>, index: Int): Int {
+    var j: Int = index + 1
+    var guard: Int = 0
+    while (j < stmts.size() && guard < 4) {
+        val stmt: *AstXmlNode = *stmts[j]
+        if (xmlKind(stmt) == AstNodeCategory.StmtWhile) {
+            val cond: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Cond)
+            if (xmlKind(cond) == AstNodeCategory.ExprCall && bpMachineStep(xmlChildPtr(cond, AstNodeKind.Callee))) {
+                return j
+            }
+        }
+        guard = guard + 1
+        j = j + 1
+    }
+    return -1
+}
+
+// The value binding the template wrote first in the loop body: `val x = machine.current`.
+fun Analyzer.loopElementName(body: *List<AstXmlNode>, machineName: Str): Str {
+    for (*stmt in body) {
+        if (xmlKind(stmt) != AstNodeCategory.StmtVarDecl) {
+            continue
+        }
+        val init: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Init)
+        if (xmlKind(init) != AstNodeCategory.ExprMember
+            || xmlAttr(init, AstNodeAttributeKind.Name) != "current"
+        ) {
+            continue
+        }
+        val recv: *AstXmlNode = xmlChildPtr(init, AstNodeKind.Receiver)
+        if (xmlKind(recv) == AstNodeCategory.ExprName
+            && xmlAttr(recv, AstNodeAttributeKind.Name) == machineName
+        ) {
+            return xmlAttr(stmt, AstNodeAttributeKind.Name)
+        }
+    }
+    return ""
+}

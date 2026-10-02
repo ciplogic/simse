@@ -181,6 +181,12 @@ make a wrong one: `startsWith`/`endsWith`/`indexOf` borrow, `find` does not - th
 calls `self.find(` (src/rtl/_res.md), and `--showBorrow` prints the refusal as
 `borrow- find C++ calls it (prelude)`.
 
+The same proof covers a `for` variable: `SemaCall.promoteForLoops` promotes the value form of a
+`for` over a deep element (`bpDeepElement`) to the pointer wrap when `bpLoopReadOnly` (the
+parameter rule, over the loop body) holds - `impl_specs/for.md`, "Auto-promotion". It runs in
+sema, where the receiver's type is known (a machine has no `iterPtr`), against the `reads`/
+`statics`/`types` sets the pass leaves for it (`bpTrustedNames` and friends).
+
 Two facts are at play and they are **not the same flag**:
 
 - **borrowness** (this pass): the callee cannot write through a parameter, so a caller may hand it a
@@ -198,8 +204,9 @@ promise for borrowing and the stronger one for folding, and would be wrong for o
 ### Switches
 
 - **`--no-borrow`**: the analysis still runs (so the dump is available), the declaration rewrite does
-  not - the emitted C++ is exactly what the author wrote. The escape hatch for a wrong borrow, and
-  it is what `stress/collections` builds with, so the *off* side is pinned by a golden.
+  not - the emitted C++ is exactly what the author wrote. It also turns off the `for` promotion
+  (`SemaCall.promoteForLoops`), so it is the escape hatch for either. It is what `stress/collections`
+  builds with, so the *off* side is pinned by a golden.
 - **`--showBorrow`**: one line per candidate on stderr - the prelude first, then the modules, -
   `borrow+ <name> <params>` or `borrow- <name> <why>` - the view that turned the next steps from
   guesses into a histogram (`grep '^borrow-' | ...`). `bpNote` collects the lines and the driver

@@ -126,6 +126,7 @@ fun Analyzer.analyzeFunction(decl: *AstXmlNode): Unit {
     for (*stmtNode in body) {
         this.analyzeStmt(stmtNode)
     }
+    this.promoteForLoops(*body)
     this.loopDepth = savedLoopDepth
 
     this.popScope()
@@ -369,6 +370,7 @@ fun Analyzer.analyzeExpr(expr: *AstXmlNode): Unit {
             for (*stmtNode in body) {
                 this.analyzeStmt(stmtNode)
             }
+            this.promoteForLoops(*body)
             this.loopDepth = savedLoopDepth
             this.popScope()
             return

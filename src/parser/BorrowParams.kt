@@ -484,6 +484,89 @@ fun bpNames(names: *Dictionary<Str, Bool>): Str {
     return joinStrs(keys, ", ")
 }
 
+// The data classes whose *copy* is deep: one with a `Str` field, or a field of another such
+// class. A `List`/`Array`/`&T` field is a refcount, not a copy, so it does not count. This gates
+// the `for` promotion (`bpDeepElement`): a deep element pays for a copy - and, for a `Str`, an
+// allocation - on every iteration of the value form.
+//
+// The set below is the analysis's result, kept for the parts of the compiler that run after the
+// pass: sema's `for` promotion reads it (`bpDeepElement`, `bpLoopReadOnly`).
+var bpDeepTypes: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+var bpTrustedNames: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+var bpStaticNames: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+var bpKnownTypes: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+
+fun bpDeepClasses(modules: *List<AstXmlNode>): Dictionary<Str, Bool> {
+    var deep: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+    var changed: Bool = true
+    while (changed) {
+        changed = false
+        for (*module in modules) {
+            for (*decl in xmlDecls(module)) {
+                if (decl.name != AstNodeKind.DataClass) {
+                    continue
+                }
+                val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
+                if (deep.has(name)) {
+                    continue
+                }
+                var hit: Bool = false
+                for (*field in xmlChildren(decl, AstNodeKind.Field)) {
+                    val fieldType: *AstXmlNode = xmlChildPtr(field, AstNodeKind.Type)
+                    if (xmlKind(fieldType) != AstNodeCategory.TypeNamed) {
+                        continue
+                    }
+                    val fieldName: Str = xmlAttr(fieldType, AstNodeAttributeKind.Name)
+                    if (fieldName == "Str" || deep.has(fieldName)) {
+                        hit = true
+                        break
+                    }
+                }
+                if (hit) {
+                    deep.insert(name, true)
+                    changed = true
+                }
+            }
+        }
+    }
+    return deep
+}
+
+// Whether a `for` variable of this element type is worth the pointer form: the copy is deep
+// (`Str`, or a data class holding one), so the value form copies and allocates per element. A
+// scalar, a handle, a container and a class of those are left as written - `impl_specs/for.md`
+// measured the value form as fast or faster for them.
+fun bpDeepElement(typeNode: *AstXmlNode): Bool {
+    if (xmlIsEmpty(typeNode) || xmlKind(typeNode) != AstNodeCategory.TypeNamed) {
+        return false
+    }
+    val name: Str = xmlAttr(typeNode, AstNodeAttributeKind.Name)
+    if (name == "Str") {
+        return true
+    }
+    return bpDeepTypes.has(name)
+}
+
+// Whether `body` only reads `name`: no write through it, no `&`/`*`, no capture, and no call the
+// fixpoint cannot trust - so the element's place is stable for the whole loop. The same rule the
+// parameter borrow uses, so a `for` promotion and a parameter borrow agree.
+fun bpLoopReadOnly(body: *List<AstXmlNode>, name: *Str): Bool {
+    var facts: BpFacts = BpFacts(
+        false, false, false, *bpStaticNames, *bpTrustedNames, *bpKnownTypes,
+        Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), Dictionary<Str, Bool>(), List<Str>()
+    )
+    for (*stmt in body) {
+        facts.walk(stmt)
+    }
+    if (facts.fieldWrite || facts.staticWrite || facts.impureCall) {
+        return false
+    }
+    if (facts.written.has(*name) || facts.taken.has(*name) || facts.inLambda.has(*name)) {
+        return false
+    }
+    return true
+}
+
 // The names hand-written C++ may call: `<name>` followed by `(` anywhere in a resource body or
 // a prelude header. The scan is coarse on purpose - a member call on another type or a
 // declaration counts too - because a name it misses would be rewritten under C++ that is
@@ -718,9 +801,6 @@ fun bpBorrowParams(
     for (*mod in modules) {
         bpCandidates(mod, *candidates, *candidateNames)
     }
-    if (candidates.size() == 0) {
-        return BpRewrite(preludeModules, modules)
-    }
     var valueUsed: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     for (*pre in preludeModules) {
         bpGatherValueUses(pre, *candidateNames, *valueUsed)
@@ -746,6 +826,20 @@ fun bpBorrowParams(
         bpBlockedNames(mod, *reads, *blocked)
     }
     bpInferReads(*factList, *blocked, *reads)
+
+    // The analysis's results, kept for sema's `for` promotion (the caches above): the trusted
+    // names and file-level vars weigh a loop body, and the deep classes gate the element type.
+    var allModules: List<AstXmlNode> = List<AstXmlNode>()
+    for (*pre in preludeModules) {
+        allModules.append(pre)
+    }
+    for (*mod in modules) {
+        allModules.append(mod)
+    }
+    bpDeepTypes = bpDeepClasses(*allModules)
+    bpTrustedNames = reads
+    bpStaticNames = statics
+    bpKnownTypes = types
 
     // Both sides are rewritten: a Simse-bodied prelude declaration borrows exactly like a module
     // one, and only a name C++ may call keeps its authored signature (inside `bpBorrowDecl`).

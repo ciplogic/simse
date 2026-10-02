@@ -4434,3 +4434,22 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   Verified: `./build.bat --release`, `bun tools/stress.js` **66/66**,
   `bun build.js --release --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js` - both
   fixed points byte for byte.
+
+- **A read-only `for` variable borrows, when the element's copy is deep.** `for (x in c)` binds a
+  copy per iteration; the pointer form `for (*x in c)` hands out the element's place. The parser
+  picks the wrap before types are known, so the choice moved into sema:
+  `SemaCall.promoteForLoops` rewrites the wrap to `iterPtr` when the receiver is a
+  `List`/`Array`/`Span` with an `iterPtr` (a machine has none), the element is deep - a `Str`, or
+  a data class with a `Str` field (`bpDeepClasses`/`bpDeepElement`) - and the body only reads `x`
+  (`bpLoopReadOnly`, the parameter rule, fed the `reads`/`statics`/`types` sets the borrow pass now
+  leaves behind). `--no-borrow` disables it with the rest. The gate is the measurement: on
+  `List<Cell>` (a class with a `Str` field) a read-only walk goes 1,255,621 us -> 27,897 us (~45x);
+  on `List<Small>` (four `Int`s) the forms are a wash, and on `List<AstXmlNode>` the value form is
+  slightly ahead (`for.md`'s table), so those keep the value wrap. That is also why the compiler's
+  own output is unchanged: its value-form loops call the emitter, which the coarse rule refuses.
+  `stress/for-promote` pins all four shapes (deep-`Str`, deep-class, scalar, and a writing body).
+  Verified: `./build.bat --release`, `bun tools/stress.js` **67/67**,
+  `bun build.js --release --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js` - both
+  fixed points byte for byte. A/B on the self-transpile (escape analysis on vs `--no-borrow`):
+  median 1.836 s vs 1.866 s (~1.6%), the same parameter-borrow win as before, so the promotion
+  adds nothing there but costs nothing either.

@@ -54,7 +54,7 @@ the published file and commit it with the source.
 ./simse.exe --root src -o a.cpp --showBorrow 2> borrow.txt             # per-candidate borrow decisions (prelude first)
 ./simse.exe --root stress/concat/src -o fused.cpp                      # the concat fusion (on)
 ./simse.exe --root stress/concat/src -o unfused.cpp --no-concat        # ... and its A/B off
-./simse.exe --root src -o unborrowed.cpp --no-borrow                    # the auto-borrow rewrite off
+./simse.exe --root src -o unborrowed.cpp --no-borrow                    # the auto-borrow rewrite off (params and for)
 ./simse.exe --root stress/when-strings/src -o when.cpp                  # the when-over-strings lowering
 ./simse.exe --root src -o prof.cpp --profile                            # RAII timers (simse_profile.txt)
 ```
