@@ -15,7 +15,7 @@ Runnable sources for the examples used in these documents live in
 
 For working *on* the compiler rather than with the language:
 
-- [../guide4ai.md](../guide4ai.md) - orientation: build, test, invariants, change
+- [../agents.md](../agents.md) - orientation: build, test, invariants, change
   protocol (it is written for an AI session, but it is the shortest path into the
   code either way);
 - [../specs/](../specs/) - the normative language specification;

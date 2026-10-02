@@ -1,4 +1,4 @@
-// Scratch: the sema scaling probe (`guide4ai.md` §8 item 6, T40): one file's declaration
+// Scratch: the sema scaling probe (`agents.md` §8 item 6, T40): one file's declaration
 // count is what made sema quadratic - `collectGlobal` copied the whole key's list out with
 // `get`, appended, and wrote it back with `insert`. This measures the compiler built before
 // the `getPtr` conversion (`build/old_simse.exe`) against the current one on the same input,

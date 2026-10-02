@@ -142,7 +142,7 @@ data class BpPure(
 )
 
 // The write/callee facts of one body, written in place through the pointer (a *field* of a pointer
-// passed as an argument would be copied - `guide4ai.md`, the `*this.sections` trap).
+// passed as an argument would be copied - `agents.md`, the `*this.sections` trap).
 fun bpPureWalk(
     node: *AstXmlNode, out: *BpPure, statics: *Dictionary<Str, Bool>,
     types: *Dictionary<Str, Bool>
@@ -309,7 +309,7 @@ fun bpGatherValueUses(
 
 // Every fact the decision reads, written in place through the pointer. The marking helpers are
 // methods rather than free functions taking the set: passing a *field* of a pointer as an argument
-// materializes a copy (`guide4ai.md`, the `*this.sections` trap), so the set must be reached
+// materializes a copy (`agents.md`, the `*this.sections` trap), so the set must be reached
 // through `this`. `reads` is the borrowness flag (the fixpoint above); `statics` is the set of
 // file-level `var` names, a write to one of which is a write the rule must see.
 data class BpFacts(
@@ -453,7 +453,7 @@ fun bpWhy(facts: *BpFacts): Str {
 
 // The names of a set, comma-separated in insertion order (a small set; determinism is the point).
 fun bpNames(names: *Dictionary<Str, Bool>): Str {
-    // Bound first: a `for` over a temporary would borrow a pointer into it (`guide4ai.md`).
+    // Bound first: a `for` over a temporary would borrow a pointer into it (`agents.md`).
     val keys: List<Str> = names.keys()
     return joinStrs(keys, ", ")
 }

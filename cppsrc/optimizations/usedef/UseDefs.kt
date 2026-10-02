@@ -66,7 +66,7 @@ fun linUseDefMarkNames(node: *AstXmlNode, marks: *Dictionary<Str, Int>): Unit {
 }
 
 // The name a method call is made on, when plain: the emitter hands the receiver as `T* self`
-// (`guide4ai.md`), so `text.appendStr(x)` writes `text`.
+// (`agents.md`), so `text.appendStr(x)` writes `text`.
 fun linUseDefReceiver(callee: *AstXmlNode, unsafe: *Dictionary<Str, Bool>): Unit {
     if (xmlIsEmpty(callee) || xmlKind(callee) != AstNodeCategory.ExprMember) {
         return

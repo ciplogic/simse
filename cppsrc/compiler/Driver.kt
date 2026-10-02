@@ -527,7 +527,7 @@ fun main(args: List<Str>): Int {
     // declaration, and nothing downstream knows the optimization exists.
     modules = bpBorrowParams(preludeModules, modules)
     if (bpShow()) {
-        // Bound first: a `for` over a temporary borrows a pointer to it (`guide4ai.md`).
+        // Bound first: a `for` over a temporary borrows a pointer to it (`agents.md`).
         val borrowLines: List<Str> = bpReportLines()
         for (*borrowLine in borrowLines) {
             eprintln(*borrowLine)

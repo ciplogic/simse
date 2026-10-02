@@ -1,4 +1,4 @@
-# guide4ai.md — orientation for a fresh session
+# agents.md — orientation for a fresh session
 
 Purpose: re-orient a new agent/session fast. Read this first, then
 `impl_specs/capability-matrix.md`, `specs/modules.md`, and

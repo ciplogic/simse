@@ -53,7 +53,7 @@ reference leg as a canary - 673-727 ms). The Simse side is the stable one.
   key type, so it has to become a `Str`) and the temperature (`tenths` takes a
   `Str`). Both are small enough to stay in `Str`'s inline buffer, but they are the
   obvious next thing to remove - `StrView.toInt()` and a `StrView`-keyed lookup
-  would do it. See `guide4ai.md` section 8.
+  would do it. See `agents.md` section 8.
 - **The dictionary costs one lookup per line now.** The program used to do `get` then
   `insert` - two lookups, a copy out and a copy back - because the API had no in-place
   access to a stored value. `Dictionary.getPtr` hands back the value's *place*, so the

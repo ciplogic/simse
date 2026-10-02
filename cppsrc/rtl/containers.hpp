@@ -499,7 +499,7 @@ namespace simse_array_detail {
     // The one shared empty block per element type. This is the per-type static
     // storage `arrayEmpty<T>()` hands out; a language-level spelling of it is the
     // planned `object` declaration, which the RTL needs once the runtime surface
-    // moves out of hand-written C++ (the deferred list in guide4ai.md).
+    // moves out of hand-written C++ (the deferred list in agents.md).
     template <class T>
     Ref<ArrayBlock<T>> emptyBlock() {
         static Ref<ArrayBlock<T>> empty = makeBlock<T>(0);

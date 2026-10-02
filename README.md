@@ -341,7 +341,7 @@ format protocol that prints your own types is still open.
 | `simse.vcxproj`, `simse.slnx` | the Visual Studio profiling project: the published bootstrap (the runtime is generated into it), with the debugger already set to run the compiler over its own tree |
 | `tools/` | the JavaScript harness: the stress runner (`stress.js`), the bootstrap fixed-point check (`bootstrap.js`), the Visual Studio project check (`vscheck.mjs`), `msvc.mjs` |
 | `docs/` | this documentation |
-| `guide4ai.md` | orientation for a fresh contributor or AI session: the build, the invariants, the change protocol, the gotchas |
+| `agents.md` | orientation for a fresh contributor or AI session: the build, the invariants, the change protocol, the gotchas |
 
 ## Design principles
 
@@ -371,7 +371,7 @@ format protocol that prints your own types is still open.
 | [specs/](specs/) | the normative language specification |
 | [impl_specs/user-language-roadmap.md](impl_specs/user-language-roadmap.md) | where the language is going, phased, with the non-goals |
 | [impl_specs/generators.md](impl_specs/generators.md) | `@SmGen`, the source-generator registry, the `Sections` sink, and the bootstrap path for new syntax |
-| [guide4ai.md](guide4ai.md) | orientation for a contributor session: build, invariants, change protocol, gotchas |
+| [agents.md](agents.md) | orientation for a contributor session: build, invariants, change protocol, gotchas |
 
 ## License
 

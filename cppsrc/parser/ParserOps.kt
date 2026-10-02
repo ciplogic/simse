@@ -109,7 +109,7 @@ fun setWhenFirstChar(value: Bool): Unit {
 }
 // A C++ keyword cannot be a Simse name: the amalgamation is C++, so the emitted identifier
 // would not compile. The parser rejects one when it reads a name (`expectName`), which is
-// where the position is known, rather than leaving it to a C++ error (guide4ai.md, "Gotchas").
+// where the position is known, rather than leaving it to a C++ error (agents.md, "Gotchas").
 fun isCppKeyword(text: *Str): Bool {
     when (text) {
         "alignas", "alignof", "and", "and_eq", "asm", "auto", "bitand", "bitor", "bool",

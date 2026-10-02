@@ -1,7 +1,7 @@
 # Capability matrix: the change log
 
 Status: living document - one section per change to the compiler, recording what moved,
-what it cost, and how it was verified. The current state of the language is `guide4ai.md`
+what it cost, and how it was verified. The current state of the language is `agents.md`
 §7 with `README.md` and `specs/`; per-subsystem design is the neighbouring
 `impl_specs/*.md`; this file is the record of how it got there.
 
@@ -563,7 +563,7 @@ they were standing in for.
   deferred, not forgotten - the suspects are the get-append-insert copies into
   `globalFunctions`/`packageDecls` in `collectGlobal`, `buildVisible` re-running
   per file, the per-call overload scans in `analyzeCall`/`markExtensionUsed`, and
-  `lookupValue`'s scope walk, all in `cppsrc/sema/Sema.kt` (`guide4ai.md`
+  `lookupValue`'s scope walk, all in `cppsrc/sema/Sema.kt` (`agents.md`
   section 8).
 - **A custom `Dictionary` exists, and is measured faster (T41).**
   `cppsrc/rtl/smdictionary.hpp` implements `SmDictionary<TKey, TValue>` - the .NET
@@ -637,7 +637,7 @@ they were standing in for.
   `items.size() == 0`, `val p: *List<Int> = *items; items.append(3)` leaves
   `p.size() == 1`); and the two lookups per line (`get` then `insert`, since no
   API exposes a stored value in place) are a library gap, which is the remaining
-  distance to the 727 ms reference - see `guide4ai.md` section 8 item 8.
+  distance to the 727 ms reference - see `agents.md` section 8 item 8.
   `benchmarks/onebrc/benchmark.md` has the method, the notes (tenths as `Int`, the
   half-toward-positive-infinity rounding rule, CRLF vs LF) and the run commands.
 - **`Span<T>`, `StrView`, and the in-place line reader (T43).** One borrowed view
@@ -658,7 +658,7 @@ symbols, which is what gives `view.slice(0, n).toString()` and `"x" +
 view.toString()` their types. (A third, pre-existing edge bit the test: a chained
 call on a handle method - `stream.fileSize().toString()` - has no inferred type and
 now picks the wrong `toString`; bind the middle step to a typed `val`, as
-`guide4ai.md` section 9 already says.)
+`agents.md` section 9 already says.)
   Adding the RTL type name also exposed a name-resolution bug: the emitter consulted
 the RTL *name* list before the program's own declarations, so a declared type of
 the same name (the compiler had a `common.StrView`) was shadowed in every emitted
@@ -706,7 +706,7 @@ numbers shifted with the parser/scanner edits).
   `Stmt.Block` for everything else, so no jump can cross an initialization.
   Temporaries stay *untyped*, so the emitter emits `auto` - the same path the
   hoisted `switch` subject already used, and the reason this pass is not where the
-  types come back (the sema-inference item in `guide4ai.md` section 8). Two
+  types come back (the sema-inference item in `agents.md` section 8). Two
   boundaries are deliberate: an **lvalue path stays a path** (binding it would copy
   what is behind it, and a mutating call on the copy would be lost; only its indices
   and arguments are flattened, so `a[i + 2].append(x)` becomes
@@ -1897,7 +1897,7 @@ compiler *did* catch and one it could not:
     module root in path order and the amalgamation defines types in that order, and
     `Emitter` embeds the table **by value**, so the file has to sort before `Codegen.kt`
     (the same rule as "a data-class field cannot name another package's type", now
-    recorded for sibling files in `guide4ai.md`).
+    recorded for sibling files in `agents.md`).
   - **`'"'` is spelled `'\"'`** in the three char literals whose value is `"`
     (`Scanner.kt` twice, `IlCodeGen.kt` once). Same `Char`, and Kotlin's highlighter stops
     reading `'"'` as an unterminated string. The emitted C++ keeps the *source spelling*
@@ -2209,7 +2209,7 @@ compiler *did* catch and one it could not:
   - *The loop is slow.* It is not: rewriting `xmlAttr` as an index walk over a borrowed
     attribute list (no `Opt<*T>` per element, no machine) measured **neutral** - 15
     interleaved runs of the self-transpile, `762.9/777.3` against `762.3/772.4` ms - so the
-    rewrite was reverted (and the pointer-`for` stays the ring's style, `guide4ai.md`).
+    rewrite was reverted (and the pointer-`for` stays the ring's style, `agents.md`).
   - *The call count is absurd*, which is the answer. Where the calls came from was not
     `expr` (a handful per emitted node) but the **lookup walks**: `findFunction`,
     `findReceiverFnByName`, `findExtensionFn`, `memberCallReturn`, `functionPackage`,
@@ -2502,7 +2502,7 @@ compiler *did* catch and one it could not:
   C++ did - and the static call `Resources.get(k)` now resolves through
   `Emitter.staticCallSymbol` to the prelude function's *symbol* (the name walk records
   the same symbol, which is what makes the prelude body reachable). Two findings from
-  that move, both in `guide4ai.md`'s gotchas now: the emitter's type table is flat by
+  that move, both in `agents.md`'s gotchas now: the emitter's type table is flat by
   name (the compiler's reader type had to become `ResourceItem` so the RTL's
   `ResourceEntry` could exist), and a *static* call's result has no inferred type, so a
   chained member needs a typed local.
@@ -2683,7 +2683,7 @@ compiler *did* catch and one it could not:
   original it mirrored (`SkeletonParser.h`/`.cpp`) had already been deleted. It was compiled
   into every build regardless (the tree is scanned whole), together with the string literals of
   its token tests. Deleted, with the import; the pilot's history is this file's own log and the
-  porting story in guide4ai.md.
+  porting story in agents.md.
 
   Worth knowing as a consequence: the only `&T`/`PList` sites in the compiler's own source were
   in that file (`&List<SkeletonNode>` x11), so `cppsrc` now contains **no counted reference at
@@ -2799,7 +2799,7 @@ compiler *did* catch and one it could not:
   declaration names the `cpp` generator). The narrow alternative - one section per platform
   symbol with `symbol:`, emitted when that symbol is reached - would keep a program to what
   it actually calls, at the cost of changing that mechanism; it is recorded in
-  `guide4ai.md` §8 rather than done. What every program pays for `emit: always` is about
+  `agents.md` §8 rather than done. What every program pays for `emit: always` is about
   4 KB of C++ text, the same functions the linker used to place whether or not they were
   called.
 
@@ -2878,7 +2878,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   `@SmGen` now, so **no file under `cppsrc/` spells `native`**: the keyword stays the
   *program's* FFI spelling, `stress/native-read-file` and the equivalence fixture
   (`stress/smgen-native`, `stress/smgen-cpp`) keep it honest, and dropping it from the
-  language is `guide4ai.md` §8's call rather than this change's.
+  language is `agents.md` §8's call rather than this change's.
 
   The same pass moved the C++ those declarations named out of the headers and into three
   new `cppsrc/rtl/_res.md` sections, because a header is compiled *in* while a section is
@@ -2932,7 +2932,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   the C++ then fails to compile - while the container form `* xs[0]` emits
   `simse_addressOf(xs[0])` correctly (`receiverOf`'s `ExprDeref` case hands the operand's
   *value* to `operandOf`, and only a place-taking index reaches the `IndexAddr` path).
-  Pre-existing, not this change's, and **not fixed**: it is recorded in `guide4ai.md` §9
+  Pre-existing, not this change's, and **not fixed**: it is recorded in `agents.md` §9
   with the repro. `stress/span` covers `atPtr` - `bump` writes through the returned
   pointer into the list the span borrows, and `headByte` reaches it through a *view*.
 
@@ -3208,7 +3208,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   One consequence worth stating, because it is what makes the module's `api.kt` safe to keep in
   the compiler's own tree: the `json` generator acts only on a program that *imports* `json` and
   skips the module's own package, so the compiler building itself generates nothing (the
-  two-phase build that added `api.kt` is the usual surface-change step, `guide4ai.md` §6).
+  two-phase build that added `api.kt` is the usual surface-change step, `agents.md` §6).
 
   The `io` module (the next one: paths, directories and the file operations) is not moved yet for
   two reasons: `FileStream` is a *type*, and a type cannot carry `@SmGen` in the language, so a

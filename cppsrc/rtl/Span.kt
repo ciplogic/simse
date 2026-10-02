@@ -44,7 +44,7 @@ borrow fun spanOf<T>(items: *List<T>): Span<T>
 // `span.atPtr(index)`: the element at `index` as a *place* (`*T`), so a write through it
 // reaches the source (the `*T` the class's own `auto` members cannot name). The body goes
 // through `this[index]`, not `this.ptr[index]`: the *subscript* is the place the emitter can
-// take the address of (`guide4ai.md` §9).
+// take the address of (`agents.md` §9).
 borrow fun Span<T>.atPtr<T>(index: Int): *T {
     return * this[index]
 }

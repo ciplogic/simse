@@ -445,7 +445,7 @@ root enqueued, `answer` created and suspended on, the loop resumes the root, 42 
 label. The *waiting* leaf is what is still missing, which is the next step.
 
 **A documentation step of its own, deliberately last.** While the machinery is being built,
-`guide4ai.md`, `README.md`, `docs/state-of-the-field.md`, `docs/language-tour.md` and
+`agents.md`, `README.md`, `docs/state-of-the-field.md`, `docs/language-tour.md` and
 `docs/examples/async` are *not* chased: the stress counts and the "no threads" sentence have
 already drifted, and the example still writes the body-less leaves. One pass at the end updates
 them together - the counts, the `suspend` story, the runtime's opt-in thread pool, and the

@@ -11,7 +11,7 @@ package fixtures
 // section marks every entry under it - nothing takes a marker back.
 //
 // Every `Resources.get` result is bound to a local before anything is called on it: a member
-// chained straight onto a *static* call has no inferred type (guide4ai.md's gotcha).
+// chained straight onto a *static* call has no inferred type (agents.md's gotcha).
 
 fun main(): Int {
     // `48 69 0a`, written over three lines: the length says three bytes, and each byte is
