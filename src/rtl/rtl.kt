@@ -8,7 +8,7 @@ package rtl
 
 // `for (x in c)` is `for (x in c.iter())`: anything with an `iter` in scope is iterable,
 // and a container walks itself in order (impl_specs/for.md).
-borrow fun List<T>.iter<T>(): ..T {
+fun List<T>.iter<T>(): ..T {
     var i: Int = 0
     val len = this.size();
     while (i < len) {
@@ -20,7 +20,7 @@ borrow fun List<T>.iter<T>(): ..T {
 // The same walk over `Array`/`Span` (counted by `count()`/`size()`). The count is read once,
 // before the loop: the `while` lives in the machine's `advance()`, so a count in the
 // condition would be a call on every resumption.
-borrow fun Array<T>.iter<T>(): ..T {
+fun Array<T>.iter<T>(): ..T {
     var i: Int = 0
     val len = this.count();
     while (i < len) {
@@ -29,7 +29,7 @@ borrow fun Array<T>.iter<T>(): ..T {
     }
 }
 
-borrow fun Span<T>.iter<T>(): ..T {
+fun Span<T>.iter<T>(): ..T {
     var i: Int = 0
     val len = this.size();
     while (i < len) {
@@ -40,7 +40,7 @@ borrow fun Span<T>.iter<T>(): ..T {
 
 // The pointer form, `for (*x in c)`: the same walk handing out each element's *place*
 // (`*this[i]`), so a mutation through the loop variable reaches the element (impl_specs/for.md).
-borrow fun List<T>.iterPtr<T>(): ..*T {
+fun List<T>.iterPtr<T>(): ..*T {
     var i: Int = 0
     val len = this.size();
     while (i < len) {
@@ -49,7 +49,7 @@ borrow fun List<T>.iterPtr<T>(): ..*T {
     }
 }
 
-borrow fun Array<T>.iterPtr<T>(): ..*T {
+fun Array<T>.iterPtr<T>(): ..*T {
     var i: Int = 0
     val len = this.count();
     while (i < len) {
@@ -58,7 +58,7 @@ borrow fun Array<T>.iterPtr<T>(): ..*T {
     }
 }
 
-borrow fun Span<T>.iterPtr<T>(): ..*T {
+fun Span<T>.iterPtr<T>(): ..*T {
     var i: Int = 0
     val len = this.size();
     while (i < len) {
@@ -97,7 +97,7 @@ fun sort<T>(this: List<T>, less: (*T, *T) -> Bool): Unit
 
 // The `Str` ordering for `sort` (`specs/containers.md`): the two strings compared as *views*,
 // in place, so `keys.sort(compareLessThan)` copies nothing per comparison.
-borrow fun compareLessThan(left: *Str, right: *Str): Bool {
+fun compareLessThan(left: *Str, right: *Str): Bool {
     return spanOfStr(left) < spanOfStr(right)
 }
 
@@ -212,7 +212,7 @@ fun appendStrPtr(this: Str, value: *Str): Unit
 // The shape must have one `|` per item and the items must all be present; a call whose
 // counts do not line up (or that passes no list) gets the format back, unfilled.
 // `fmt` is a `StrView`, so a literal format is taken as it stands, without a copy.
-borrow fun fmtStr(fmt: StrView, items: *List<Str>): Str {
+fun fmtStr(fmt: StrView, items: *List<Str>): Str {
     if (items == null) {
         return fmt
     }
@@ -249,7 +249,7 @@ borrow fun fmtStr(fmt: StrView, items: *List<Str>): Str {
 // into the same one-buffer shape `fmtStr` gets (src/linear/MergeConcat.kt); a separator or
 // template that is not a literal, a count that does not line up, or no list at all, is
 // answered here, exactly as `fmtStr` answers those.
-borrow fun fmtStrWith(separator: Char, templateText: StrView, items: *List<Str>): Str {
+fun fmtStrWith(separator: Char, templateText: StrView, items: *List<Str>): Str {
     if (items == null) {
         return templateText
     }
@@ -311,7 +311,7 @@ borrow fun lastIndexOf(this: Str, sub: Str): Int
 
 // `Str.substr(start, len)` clamps `start` to [0, size]; a `len` of -1 (or one running
 // past the end) takes the rest. One block copy (`setBytes`), not a per-byte append.
-borrow fun Str.substr(start: Int, len: Int): Str {
+fun Str.substr(start: Int, len: Int): Str {
     var begin = start
     if (begin < 0) {
         begin = 0
@@ -334,7 +334,7 @@ borrow fun Str.substr(start: Int, len: Int): Str {
 borrow fun charAt(this: Str, index: Int): Char
 
 // A byte comparison, prefix first: a longer prefix cannot match.
-borrow fun Str.startsWith(prefix: Str): Bool {
+fun Str.startsWith(prefix: Str): Bool {
     val count = prefix.size()
     if (count > this.size()) {
         return false
@@ -349,7 +349,7 @@ borrow fun Str.startsWith(prefix: Str): Bool {
     return true
 }
 
-borrow fun Str.endsWith(suffix: Str): Bool {
+fun Str.endsWith(suffix: Str): Bool {
     val count = suffix.size()
     val len = this.size()
     if (count > len) {
@@ -369,7 +369,7 @@ borrow fun Str.endsWith(suffix: Str): Bool {
 borrow fun replace(this: Str, from: Str, to: Str): Str
 
 // Leading and trailing space bytes stripped, one block copy of what is left.
-borrow fun Str.trim(): Str {
+fun Str.trim(): Str {
     var begin = 0
     var end = this.size()
     while (begin < end) {
@@ -400,7 +400,7 @@ borrow fun split(this: Str, separator: Str): List<Str>
 borrow fun split(this: Str, separator: Char): List<Str>
 
 // ASCII/byte case folding (the string type is a byte string).
-borrow fun Str.toUpper(): Str {
+fun Str.toUpper(): Str {
     var out: Str
     out.reserve(this.size())
     var i = 0
@@ -415,7 +415,7 @@ borrow fun Str.toUpper(): Str {
     return out
 }
 
-borrow fun Str.toLower(): Str {
+fun Str.toLower(): Str {
     var out: Str
     out.reserve(this.size())
     var i = 0

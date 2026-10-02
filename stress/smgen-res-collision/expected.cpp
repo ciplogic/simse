@@ -16,14 +16,6 @@ Int64 simse_nowNanos();
 template <class T>
 Span<T> simse_spanOf(List<T>* items);
 
-Int simse_strView_size(StrView self);
-Bool simse_strView_isEmpty(StrView self);
-StrView simse_strView_slice(StrView self, Int start);
-StrView simse_strView_slice(StrView self, Int start, Int count);
-Char simse_strView_charAt(StrView self, Int index);
-StrView simse_spanOfStr(Str* text);
-StrView simse_spanOfStr(StrView view);
-
 #include <cstdint>
 #include <type_traits>
 
@@ -182,34 +174,6 @@ int main() {
 template <class T>
 inline Span<T> simse_spanOf(List<T>* items) {
     return Span<T>(nullptr, -1);
-}
-
-inline Int simse_strView_size(StrView self) {
-    return self.len;
-}
-
-inline Bool simse_strView_isEmpty(StrView self) {
-    return self.len <= 0;
-}
-
-inline StrView simse_strView_slice(StrView self, Int start) {
-    return self.slice(start);
-}
-
-inline StrView simse_strView_slice(StrView self, Int start, Int count) {
-    return self.slice(start, count);
-}
-
-inline Char simse_strView_charAt(StrView self, Int index) {
-    return self[index];
-}
-
-inline StrView simse_spanOfStr(Str* text) {
-    return StrView(reinterpret_cast<Char*>(text->data()), text->size());
-}
-
-inline StrView simse_spanOfStr(StrView view) {
-    return view;
 }
 
 template <class T>

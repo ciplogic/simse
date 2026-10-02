@@ -16,13 +16,13 @@ Int64 simse_nowNanos();
 // The program's string literals: one pool, and two run-length encoded index
 // series (offsets as deltas, then lengths), each as what to subtract from the
 // previous value; strtable.hpp has the stream format.
-static const Int __sm_stringCount = 2;
+static const Int __sm_stringCount = 1;
 static const char __sm_stringPool[] =
-    "The comments a `res` section carries:What a program's own generated C++ looks like" "the declarations and bodies below name the" 
+    "abcd" 
 ;
-static const Int16 __sm_stringStarts[] = {2,2,0,-82};
-static const Int16 __sm_stringLens[] = {2,2,-82,40};
-static_assert(sizeof(__sm_stringPool) - 1 == 124, "the string pool and its length index disagree");
+static const Int16 __sm_stringStarts[] = {1,1,0};
+static const Int16 __sm_stringLens[] = {1,1,-4};
+static_assert(sizeof(__sm_stringPool) - 1 == 4, "the string pool and its length index disagree");
 static StrView __sm_stringTable[__sm_stringCount];
 static struct __SmStringTableInitType {
     __SmStringTableInitType() {
@@ -34,19 +34,6 @@ static struct __SmStringTableInitType {
             __sm_stringCount);
     }
 } __sm_stringTableInit;
-
-// The resources the compiler read from `_res.md` files (specs/resources.md):
-// string-table indices, key then value, and the one installer that builds
-// them into the program's `Resources` table before `main`.
-static const Int __sm_resourceIndex[] = {0,1};
-static const Int __sm_resourceCount = 1;
-namespace {
-    struct __SmResourceInit {
-        __SmResourceInit() {
-            Resources::install(__sm_stringTable, __sm_resourceIndex, __sm_resourceCount);
-        }
-    } __sm_resourceInit;
-}
 
 #include <cstdint>
 #include <type_traits>
@@ -151,8 +138,6 @@ Str simse_num_toString(const T& self);
 Str simse_char_toString(Char self);
 Str simse_bool_toString(Bool self);
 
-Int fixtures_resCom(Int value); 
-
 #include <cstdio>
 
 inline void simse_write(const Str& value, FILE* out) {
@@ -217,6 +202,9 @@ inline void simse_println(const T& value, FILE* out) {
 Str substr(StrView* self, Int from, Int count);
 Str toString(StrView* self);
 Str substr(Str* self, Int start, Int len);
+Int ns1_width(Str* value);
+Int ns1_width(Str* value, Int extra);
+Int ns1_use(Str* text);
 
 Str substr(StrView* self, Int from, Int count) {
     Int len, begin, end, _sm_expr6;
@@ -307,13 +295,41 @@ Str substr(Str* self, Int start, Int len) {
     L9:;
     return out;
 }
-// stress/res-comments/src/main.kt
-int main() {
+// stress/borrow-overload/src/main.kt
+Int ns1_width(Str* value) {
     Int _sm_expr1;
-    Str _sm_expr2;
-    _sm_expr1 = fixtures_resCom(14);
+    _sm_expr1 = simse_lenOf((*value));
+    return _sm_expr1;
+}
+// stress/borrow-overload/src/main.kt
+Int ns1_width(Str* value, Int extra) {
+    Int _sm_expr1, _sm_expr2;
+    _sm_expr1 = simse_lenOf((*value));
+    _sm_expr2 = _sm_expr1 + extra;
+    return _sm_expr2;
+}
+// stress/borrow-overload/src/main.kt
+Int ns1_use(Str* text) {
+    Int _sm_expr1, _sm_expr2, _sm_expr3;
+    _sm_expr1 = ns1_width(text);
+    _sm_expr2 = ns1_width(text, 1);
+    _sm_expr3 = _sm_expr1 + _sm_expr2;
+    return _sm_expr3;
+}
+// stress/borrow-overload/src/main.kt
+int main() {
+    Str* _sm_base1, * _sm_base2;
+    Str name, _sm_expr2, _sm_expr4;
+    Int _sm_expr1, _sm_expr3;
+    name = __sm_stringTable[0];
+    _sm_base1 = &name;
+    _sm_expr1 = ns1_use(_sm_base1);
     _sm_expr2 = simse_int_toString(_sm_expr1);
     simse_println((_sm_expr2), stdout);
+    _sm_base2 = &name;
+    _sm_expr3 = ns1_width(_sm_base2);
+    _sm_expr4 = simse_int_toString(_sm_expr3);
+    simse_println((_sm_expr4), stdout);
     return 0;
 }
 
@@ -588,24 +604,6 @@ inline Str simse_char_toString(Char self) {
 
 inline Str simse_bool_toString(Bool self) {
     return self ? "true" : "false";
-}
-
-inline Int fixtures_resCom(Int value) {
-    const char* url = "http://example.com/a//b";
-    Char slash = '/';
-    const char* raw = R"tag(// data
-still data)tag";
-    Int score = 0;
-    if (slash == '/') {
-        score = score + 1;
-    }
-    if (url[5] == '/' && url[6] == '/') {
-        score = score + 1;
-    }
-    if (raw[0] == '/' && raw[1] == '/') {
-        score = score + 1;
-    }
-    return value + score;
 }
 
 template <class T>

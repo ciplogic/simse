@@ -909,51 +909,18 @@ inline Str simse_resQuoteBinary(const Str& self) {
 ====
 forward:
 ```cpp
-// What a view's byte operations still need from C++ (specs/built-in-types.md, "Views").
-// The byte work itself - `find`/`indexOf`, `startsWith`/`startsWithPtr`, `substr`/`toString`
-// - is Simse now, in src/rtl/StrView.kt over the span and the intrinsics
-// (src/rtl/intrinsics.kt). What remains here is the `Span` member passthroughs, which
-// cannot be Simse without shadowing the member they call, and `spanOfStr`, whose two
-// overloads are picked by C++ overload resolution at the desugar's site (Parser.kt's
-// `parseWhen`) rather than by a declaration - so a declaration reaches this section, and a
-// program that calls one pays for this text (`sourcegen/ResGen.kt`).
-//
-// `StrView` *is* a `Span<Char>`, so `self.len`, `self[i]` and `self.slice(...)` below are
-// the span's own members (src/rtl/span.hpp) - and `at` is *not* an operation of its
-// own: the span's member serves it (src/rtl/StrView.kt), as `atPtr` is the
-// language's (src/rtl/Span.kt).
-Int simse_strView_size(StrView self);
-Bool simse_strView_isEmpty(StrView self);
-StrView simse_strView_slice(StrView self, Int start);
-StrView simse_strView_slice(StrView self, Int start, Int count);
-Char simse_strView_charAt(StrView self, Int index);
+// What a view still needs from C++ (specs/built-in-types.md, "Views"): `spanOfStr`, the
+// borrow constructor - the cast away from `Str`'s buffer and its length cannot be
+// written in the language - and its identity overload, which C++ overload resolution
+// picks when the `when`-over-strings desugar views a subject that already is a view
+// (Parser.kt's `parseWhen`). Everything else the view has is the span's own members
+// (`size`, `isEmpty`, `slice`, `at`, `atPtr` - src/rtl/Span.kt and span.hpp) or a Simse
+// body in src/rtl/StrView.kt.
 StrView simse_spanOfStr(Str* text);
 StrView simse_spanOfStr(StrView view);
 ```
 bodies:
 ```cpp
-inline Int simse_strView_size(StrView self) {
-    return self.len;
-}
-
-inline Bool simse_strView_isEmpty(StrView self) {
-    return self.len <= 0;
-}
-
-// `view.slice(start)`: from `start` to the end (C# `Slice(int)`).
-inline StrView simse_strView_slice(StrView self, Int start) {
-    return self.slice(start);
-}
-
-// `view.slice(start, count)`: `count` bytes from `start` (C# `Slice(int, int)`).
-inline StrView simse_strView_slice(StrView self, Int start, Int count) {
-    return self.slice(start, count);
-}
-
-inline Char simse_strView_charAt(StrView self, Int index) {
-    return self[index];
-}
-
 // `spanOfStr(text)`: a view over a string's bytes. It borrows the string - the string
 // has to outlive the view - and does not copy it (`&text` would box a copy instead).
 // `Str` is a `char` buffer on the C++ side and the language's `Char` is a signed byte,

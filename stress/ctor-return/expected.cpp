@@ -35,14 +35,6 @@ static struct __SmStringTableInitType {
     }
 } __sm_stringTableInit;
 
-Int simse_strView_size(StrView self);
-Bool simse_strView_isEmpty(StrView self);
-StrView simse_strView_slice(StrView self, Int start);
-StrView simse_strView_slice(StrView self, Int start, Int count);
-Char simse_strView_charAt(StrView self, Int index);
-StrView simse_spanOfStr(Str* text);
-StrView simse_spanOfStr(StrView view);
-
 Int simse_lenOf(const Str& self);
 template <class T, int N>
 Int simse_lenOf(const SmallVector<T, N>& self);
@@ -270,34 +262,6 @@ int main() {
     boxed = ns1_Point{1, 2};
     _sm_base5 = boxed.y;
     simse_println((_sm_base5), stdout);
-}
-
-inline Int simse_strView_size(StrView self) {
-    return self.len;
-}
-
-inline Bool simse_strView_isEmpty(StrView self) {
-    return self.len <= 0;
-}
-
-inline StrView simse_strView_slice(StrView self, Int start) {
-    return self.slice(start);
-}
-
-inline StrView simse_strView_slice(StrView self, Int start, Int count) {
-    return self.slice(start, count);
-}
-
-inline Char simse_strView_charAt(StrView self, Int index) {
-    return self[index];
-}
-
-inline StrView simse_spanOfStr(Str* text) {
-    return StrView(reinterpret_cast<Char*>(text->data()), text->size());
-}
-
-inline StrView simse_spanOfStr(StrView view) {
-    return view;
 }
 
 inline Int simse_lenOf(const Str& self) {

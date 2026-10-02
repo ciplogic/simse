@@ -188,16 +188,19 @@ borrow fun charAt(this: Str, index: Int): Char
 ```
 
 The compiler reads it where a pointer is handed to a callee. The auto-borrow proof
-(`src/parser/BorrowParams.kt`, `impl_specs/escape-analysis.md`) trusts a call only when the
-callee is *borrow-clean* - it writes nothing observable, so it cannot write through what it is
-given - and a body-less (`@SmGen`) declaration is borrow-clean only by a mark, because its C++ is
-elsewhere. For a declaration *with* a body the same fact is **proved** from the body (it writes
-nothing and calls only borrow-clean names), so a `borrow` there is an override for a body the
-proof cannot see through - a call to an unmarked native that is in fact read-only, say.
+(`src/parser/BorrowParams.kt`, `impl_specs/escape-analysis.md`) trusts a call by *name* only
+when **every** declaration with that name is borrow-clean - it writes nothing observable, so it
+cannot write through what it is given. A body-less (`@SmGen`) declaration is borrow-clean only
+by a mark, because its C++ is elsewhere; for a declaration *with* a body the same fact is
+**proved** from the body (it writes nothing and calls only borrow-clean names), so the RTL's
+Simse bodies carry no mark at all - the proof covers them. A `borrow` is written where the
+proof cannot read the body: a body-less native, or an overload whose sibling is one.
+A declaration is rewritten only when its name is trusted and is never used as a value, so a
+name the proof cannot cover keeps the signature its callers resolve against.
 
 Like `data`, the mark is a promise the compiler trusts; unlike `data` it never lets a call be
-folded. The RTL declares its read-only string, container and conversion operations this way
-(`src/rtl/rtl.kt`).
+folded. The RTL writes it on the declarations the proof cannot read (its bodyless natives); its
+Simse bodies need no mark.
 
 ## Methods inside classes
 

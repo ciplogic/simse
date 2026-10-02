@@ -35,11 +35,6 @@ static struct __SmStringTableInitType {
     }
 } __sm_stringTableInit;
 
-Int simse_strView_size(StrView self);
-Bool simse_strView_isEmpty(StrView self);
-StrView simse_strView_slice(StrView self, Int start);
-StrView simse_strView_slice(StrView self, Int start, Int count);
-Char simse_strView_charAt(StrView self, Int index);
 StrView simse_spanOfStr(Str* text);
 StrView simse_spanOfStr(StrView view);
 
@@ -214,17 +209,23 @@ inline void simse_println(const T& value, FILE* out) {
     std::fputc('\n', out);
 }
 
+Char charAt(StrView* self, Int index);
 Bool startsWith(StrView* self, Str text);
 Str fmtStrWith(Char separator, StrView templateText, List<Str>* items);
 Bool startsWith(Str* self, Str prefix);
 Bool isEmpty(Str* self);
 
+Char charAt(StrView* self, Int index) {
+    Char _sm_expr1;
+    _sm_expr1 = self->at(index);
+    return _sm_expr1;
+}
 Bool startsWith(StrView* self, Str text) {
     Int count, _sm_expr1, i;
     Bool _sm_expr2, _sm_expr6;
     Char _sm_expr5;
     count = simse_lenOf(text);
-    _sm_expr1 = simse_strView_size((*self));
+    _sm_expr1 = self->size();
     _sm_expr2 = count > _sm_expr1;
     if (_sm_expr2) goto L1;
     goto L2;
@@ -264,10 +265,10 @@ Str fmtStrWith(Char separator, StrView templateText, List<Str>* items) {
     points = 0;
     i = 0;
     L3:;
-    _sm_expr2 = simse_strView_size(templateText);
+    _sm_expr2 = templateText.size();
     _sm_expr1 = i < _sm_expr2;
     if (!(_sm_expr1)) goto L4;
-    _sm_expr4 = simse_strView_charAt(templateText, i);
+    _sm_expr4 = charAt(simse_addressOf(templateText), i);
     _sm_expr1 = _sm_expr4 == separator;
     if (_sm_expr1) goto L5;
     goto L6;
@@ -285,15 +286,15 @@ Str fmtStrWith(Char separator, StrView templateText, List<Str>* items) {
     return templateText;
     L8:;
     out = __sm_stringTable[22];
-    _sm_expr8 = simse_strView_size(templateText);
+    _sm_expr8 = templateText.size();
     simse_str_reserve(out, _sm_expr8);
     used = 0;
     i = 0;
     L9:;
-    _sm_expr2 = simse_strView_size(templateText);
+    _sm_expr2 = templateText.size();
     _sm_expr1 = i < _sm_expr2;
     if (!(_sm_expr1)) goto L10;
-    ch = simse_strView_charAt(templateText, i);
+    ch = charAt(simse_addressOf(templateText), i);
     _sm_expr1 = ch == separator;
     if (_sm_expr1) goto L11;
     goto L12;
@@ -375,7 +376,7 @@ int main() {
     simse_println((_sm_expr6), stdout);
     _sm_base2 = &text;
     _sm_when1_v = simse_spanOfStr(_sm_base2);
-    _sm_when1_n = simse_strView_size(_sm_when1_v);
+    _sm_when1_n = _sm_when1_v.size();
     _sm_expr7 = _sm_when1_n == 39;
     if (_sm_expr7) goto L3;
     goto L2;
@@ -481,26 +482,6 @@ int main() {
     plain = __sm_stringTable[13];
     simse_println((plain), stdout);
     return 0;
-}
-
-inline Int simse_strView_size(StrView self) {
-    return self.len;
-}
-
-inline Bool simse_strView_isEmpty(StrView self) {
-    return self.len <= 0;
-}
-
-inline StrView simse_strView_slice(StrView self, Int start) {
-    return self.slice(start);
-}
-
-inline StrView simse_strView_slice(StrView self, Int start, Int count) {
-    return self.slice(start, count);
-}
-
-inline Char simse_strView_charAt(StrView self, Int index) {
-    return self[index];
 }
 
 inline StrView simse_spanOfStr(Str* text) {

@@ -42,15 +42,6 @@ import common
 
 // ---- the sets the rule reads ------------------------------------------------
 
-fun bpBump(counts: *Dictionary<Str, Int>, name: *Str): Unit {
-    var seen: Int = 0
-    val found: *Int = counts.getPtr(name)
-    if (found != null) {
-        seen = * found
-    }
-    counts.insert(name, seen + 1)
-}
-
 // A declaration that carries a borrowness mark: `data` (pure, which implies it) or `borrow`
 // (read-only receiver and parameters, weaker than `data`). A mark is an author's word, needed
 // for a body-less declaration whose C++ is elsewhere; a declaration with a body is *proved*
@@ -62,25 +53,23 @@ fun bpMarked(decl: *AstXmlNode): Bool {
     return xmlAttr(decl, AstNodeAttributeKind.IsBorrow) == "true"
 }
 
-// The same declaration counting `cpCountDecls` does, plus the sets the rule needs: the names a
-// value may be borrowed *of* (a `data class`), the callees a body may trust to begin with (the
-// `data` marks - the borrow-clean fixpoint grows this set), and the file-level `var`s (a write to
-// one is not borrow-clean). `size`/`count` are `data` declarations like any other
-// (src/rtl/rtl.kt), so no name is seeded by hand.
+// The same declaration walk the fixpoint needs, plus the sets the rule reads: the names a
+// value may be borrowed *of* (a `data class`), the callees a body may trust to begin with
+// (the `data`/`borrow` marks - the borrow-clean fixpoint grows this set), and the file-level
+// `var`s (a write to one is not borrow-clean). `size`/`count` are `data` declarations like
+// any other (src/rtl/rtl.kt), so no name is seeded by hand.
 fun bpCollectDecls(
-    module: *AstXmlNode, counts: *Dictionary<Str, Int>, types: *Dictionary<Str, Bool>,
-    reads: *Dictionary<Str, Bool>, statics: *Dictionary<Str, Bool>
+    module: *AstXmlNode, types: *Dictionary<Str, Bool>, reads: *Dictionary<Str, Bool>,
+    statics: *Dictionary<Str, Bool>
 ): Unit {
     for (*decl in xmlDecls(module)) {
         val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
-        bpBump(counts, name)
         if (decl.name == AstNodeKind.Var && xmlAttr(decl, AstNodeAttributeKind.IsVar) == "true") {
             statics.insert(name, true)
         }
         if (decl.name == AstNodeKind.DataClass) {
             types.insert(name, true)
             for (*method in xmlChildren(decl, AstNodeKind.Function)) {
-                bpBump(counts, xmlAttr(method, AstNodeAttributeKind.Name))
                 if (bpMarked(method)) {
                     reads.insert(xmlAttr(method, AstNodeAttributeKind.Name), true)
                 }
@@ -175,10 +164,13 @@ fun bpPureWalk(
     }
 }
 
-// One declaration worth proving: it has a body, it is not trusted already (`data`), and its name
-// is declared exactly once (a name over two declarations has no single body to verify).
+// One declaration whose body the fixpoint may prove: it has a body, it is not native, and it is
+// not already trusted by an author's mark (`data`/`borrow`). Every declaration of a name has to
+// prove clean before the *name* is trusted (`bpInferReads`), which is what lets an overloaded
+// name be proved - the name is not attributed to one signature, it is a conjunction over all of
+// them.
 fun bpPurConsider(
-    fn: *AstXmlNode, counts: *Dictionary<Str, Int>, statics: *Dictionary<Str, Bool>,
+    fn: *AstXmlNode, statics: *Dictionary<Str, Bool>,
     types: *Dictionary<Str, Bool>, out: *List<BpPure>
 ): Unit {
     if (xmlAttr(fn, AstNodeAttributeKind.HasBody) != "true"
@@ -188,10 +180,6 @@ fun bpPurConsider(
         return
     }
     val name: Str = xmlAttr(fn, AstNodeAttributeKind.Name)
-    val count: *Int = counts.getPtr(name)
-    if (count == null || * count != 1) {
-        return
-    }
     val body: *AstXmlNode = xmlChildPtr(fn, AstNodeKind.Body)
     if (xmlIsEmpty(body)) {
         return
@@ -204,43 +192,52 @@ fun bpPurConsider(
 }
 
 fun bpPurCollect(
-    module: *AstXmlNode, counts: *Dictionary<Str, Int>, statics: *Dictionary<Str, Bool>,
+    module: *AstXmlNode, statics: *Dictionary<Str, Bool>,
     types: *Dictionary<Str, Bool>, out: *List<BpPure>
 ): Unit {
     for (*decl in xmlDecls(module)) {
         if (decl.name == AstNodeKind.Function) {
-            bpPurConsider(decl, counts, statics, types, out)
+            bpPurConsider(decl, statics, types, out)
         } else if (decl.name == AstNodeKind.DataClass) {
             for (*method in xmlChildren(decl, AstNodeKind.Function)) {
-                bpPurConsider(method, counts, statics, types, out)
+                bpPurConsider(method, statics, types, out)
             }
         }
     }
 }
 
 // The *borrowness* fixpoint (impl_specs/escape-analysis.md): a name is borrow-clean when every
-// declaration with that name is trusted already (`reads` starts as the `data` marks) or has a body
-// that writes nothing observable and calls only borrow-clean names. It grows from *below* - a name
-// joins only once every call its body makes is to a name already in the set - so a recursive cycle
-// is never assumed clean and no name is ever added on a guess. The result is the least fixpoint,
-// the sound direction: a name left out is simply not trusted, and the emitted code is unchanged
-// for it.
-fun bpInferReads(facts: *List<BpPure>, reads: *Dictionary<Str, Bool>): Unit {
+// declaration of it that this pass can read has a body that writes nothing observable and calls
+// only borrow-clean names, and every declaration it cannot read (a native, or C++ named by an
+// attribute) is marked by the author (`blocked`). It grows from *below* - a name joins only
+// once every call its bodies make is to a name already in the set - so a recursive cycle is
+// never assumed clean and no name is ever added on a guess. The result is the least fixpoint,
+// the sound direction: a name left out is simply not trusted, and the emitted code is
+// unchanged for it.
+fun bpInferReads(
+    facts: *List<BpPure>, blocked: *Dictionary<Str, Bool>, reads: *Dictionary<Str, Bool>
+): Unit {
     var changed: Bool = true
     while (changed) {
         changed = false
+        // A name is dirty when *any* of its declarations writes, makes an opaque call or
+        // calls a name not trusted yet. Insert only after the whole list is weighed, so two
+        // overloads cannot let each other in on half a proof.
+        var dirty: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
         for (*fact in facts) {
-            if (reads.has(fact.name) || fact.hasWrite || fact.opaqueCall) {
+            if (fact.hasWrite || fact.opaqueCall) {
+                dirty.insert(fact.name, true)
                 continue
             }
-            var ok: Bool = true
             for (*callee in fact.calls) {
-            if (!reads.has(*callee)) {
-                ok = false
-                break
+                if (!reads.has(*callee)) {
+                    dirty.insert(fact.name, true)
+                    break
+                }
             }
         }
-            if (ok) {
+        for (*fact in facts) {
+            if (!reads.has(fact.name) && !dirty.has(fact.name) && !blocked.has(fact.name)) {
                 reads.insert(fact.name, true)
                 changed = true
             }
@@ -248,12 +245,44 @@ fun bpInferReads(facts: *List<BpPure>, reads: *Dictionary<Str, Bool>): Unit {
     }
 }
 
+// A declaration the fixpoint cannot read: no body, or a native. A call by its name may reach
+// it, so unless the author's mark already trusts the name, it blocks the proof - the mark is
+// the author's word for C++ (`BorrowParams.kt`'s header).
+fun bpBlockedOne(
+    fn: *AstXmlNode, reads: *Dictionary<Str, Bool>, blocked: *Dictionary<Str, Bool>
+): Unit {
+    val name: Str = xmlAttr(fn, AstNodeAttributeKind.Name)
+    if (reads.has(name)) {
+        return
+    }
+    if (xmlAttr(fn, AstNodeAttributeKind.HasBody) == "true"
+        && xmlAttr(fn, AstNodeAttributeKind.IsNative) != "true"
+    ) {
+        return
+    }
+    blocked.insert(name, true)
+}
+
+fun bpBlockedNames(
+    module: *AstXmlNode, reads: *Dictionary<Str, Bool>, blocked: *Dictionary<Str, Bool>
+): Unit {
+    for (*decl in xmlDecls(module)) {
+        if (decl.name == AstNodeKind.Function) {
+            bpBlockedOne(decl, reads, blocked)
+        } else if (decl.name == AstNodeKind.DataClass) {
+            for (*method in xmlChildren(decl, AstNodeKind.Function)) {
+                bpBlockedOne(method, reads, blocked)
+            }
+        }
+    }
+}
+
 // One declaration considered: a function with a body, not native, not `main` (the runtime calls
-// it), declared exactly once over the program and the prelude. A name declared twice cannot be
-// attributed to a signature, and a prelude declaration has its C++ written by hand.
+// it). Every declaration of a name is a candidate - an overloaded name is trusted only when
+// all of its bodies prove clean (`bpInferReads`), so no declaration needs an author's mark for
+// the *name* to be usable.
 fun bpConsider(
-    fn: *AstXmlNode, counts: *Dictionary<Str, Int>, out: *List<AstXmlNode>,
-    names: *Dictionary<Str, Bool>
+    fn: *AstXmlNode, out: *List<AstXmlNode>, names: *Dictionary<Str, Bool>
 ): Unit {
     if (xmlAttr(fn, AstNodeAttributeKind.HasBody) != "true"
         || xmlAttr(fn, AstNodeAttributeKind.IsNative) == "true"
@@ -264,10 +293,6 @@ fun bpConsider(
     if (name == "main") {
         return
     }
-    val count: *Int = counts.getPtr(name)
-    if (count == null || * count != 1) {
-        return
-    }
     out.append(fn)
     names.insert(name, true)
 }
@@ -275,15 +300,14 @@ fun bpConsider(
 // The program's candidates, in module then declaration order: every top-level function, and every
 // method of a data class.
 fun bpCandidates(
-    module: *AstXmlNode, counts: *Dictionary<Str, Int>, out: *List<AstXmlNode>,
-    names: *Dictionary<Str, Bool>
+    module: *AstXmlNode, out: *List<AstXmlNode>, names: *Dictionary<Str, Bool>
 ): Unit {
     for (*decl in xmlDecls(module)) {
         if (decl.name == AstNodeKind.Function) {
-            bpConsider(decl, counts, out, names)
+            bpConsider(decl, out, names)
         } else if (decl.name == AstNodeKind.DataClass) {
             for (*method in xmlChildren(decl, AstNodeKind.Function)) {
-                bpConsider(method, counts, out, names)
+                bpConsider(method, out, names)
             }
         }
     }
@@ -561,18 +585,19 @@ fun bpBorrowDecl(
 }
 
 // One module rewritten: a data class rebuilt when a method borrows, a function rebuilt when it
-// borrows, everything else kept as it is.
+// borrows, everything else kept as it is. Only a name the fixpoint trusted is touched: a
+// declaration whose name has a twin the pass could not read (a bodyless prototype beside the
+// body a generator supplied) must keep the signature the twin's callers resolve against.
 fun bpRewriteModule(
     module: *AstXmlNode, types: *Dictionary<Str, Bool>, reads: *Dictionary<Str, Bool>,
-    statics: *Dictionary<Str, Bool>, counts: *Dictionary<Str, Int>, valueUsed: *Dictionary<Str, Bool>
+    statics: *Dictionary<Str, Bool>, valueUsed: *Dictionary<Str, Bool>
 ): AstXmlNode {
     var changed: Bool = false
     var kids: List<AstXmlNode> = List<AstXmlNode>()
     for (*child in module.Children) {
         if (child.name == AstNodeKind.Function) {
             val name: Str = xmlAttr(child, AstNodeAttributeKind.Name)
-            val count: *Int = counts.getPtr(name)
-            if (count != null && * count == 1 && !valueUsed.has(name)) {
+            if (reads.has(name) && !valueUsed.has(name)) {
                 kids.append(bpBorrowDecl(child, types, reads, statics))
                 changed = true
                 continue
@@ -584,8 +609,7 @@ fun bpRewriteModule(
             for (*method in child.Children) {
                 if (method.name == AstNodeKind.Function) {
                     val name: Str = xmlAttr(method, AstNodeAttributeKind.Name)
-                    val count: *Int = counts.getPtr(name)
-                    if (count != null && * count == 1 && !valueUsed.has(name)) {
+                    if (reads.has(name) && !valueUsed.has(name)) {
                         methods.append(bpBorrowDecl(method, types, reads, statics))
                         rebuilt = true
                         continue
@@ -615,21 +639,20 @@ fun bpRewriteModule(
 // fixed (module order, then declaration order) and the decision is a pure function of the module
 // text and the declaration sets, so two runs agree byte for byte.
 fun bpBorrowParams(preludeModules: List<AstXmlNode>, modules: List<AstXmlNode>): List<AstXmlNode> {
-    var counts: Dictionary<Str, Int> = Dictionary<Str, Int>()
     var types: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     var reads: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     var statics: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     for (*pre in preludeModules) {
-        bpCollectDecls(pre, *counts, *types, *reads, *statics)
+        bpCollectDecls(pre, *types, *reads, *statics)
     }
     for (*mod in modules) {
-        bpCollectDecls(mod, *counts, *types, *reads, *statics)
+        bpCollectDecls(mod, *types, *reads, *statics)
     }
 
     var candidates: List<AstXmlNode> = List<AstXmlNode>()
     var candidateNames: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     for (*mod in modules) {
-        bpCandidates(mod, *counts, *candidates, *candidateNames)
+        bpCandidates(mod, *candidates, *candidateNames)
     }
     if (candidates.size() == 0) {
         return modules
@@ -642,21 +665,29 @@ fun bpBorrowParams(preludeModules: List<AstXmlNode>, modules: List<AstXmlNode>):
         bpGatherValueUses(mod, *candidateNames, *valueUsed)
     }
 
-    // Grows `reads` from the `data` marks to every borrow-clean declaration (see `bpInferReads`).
+    // Grows `reads` from the marks to every borrow-clean name (see `bpInferReads`): all the
+    // bodies a name has must prove, and any declaration without a body must be marked.
     var factList: List<BpPure> = List<BpPure>()
     for (*pre in preludeModules) {
-        bpPurCollect(pre, *counts, *statics, *types, *factList)
+        bpPurCollect(pre, *statics, *types, *factList)
     }
     for (*mod in modules) {
-        bpPurCollect(mod, *counts, *statics, *types, *factList)
+        bpPurCollect(mod, *statics, *types, *factList)
     }
-    bpInferReads(*factList, *reads)
+    var blocked: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+    for (*pre in preludeModules) {
+        bpBlockedNames(pre, *reads, *blocked)
+    }
+    for (*mod in modules) {
+        bpBlockedNames(mod, *reads, *blocked)
+    }
+    bpInferReads(*factList, *blocked, *reads)
 
-    // The prelude is never rewritten: its bodies are not emitted, and a declaration there has its
-    // C++ written by hand.
+    // The prelude is never rewritten: a declaration there has its C++ written by hand (and
+    // hand-written C++ may call it by its exact signature).
     var out: List<AstXmlNode> = List<AstXmlNode>()
     for (*mod in modules) {
-        out.append(bpRewriteModule(mod, *types, *reads, *statics, *counts, *valueUsed))
+        out.append(bpRewriteModule(mod, *types, *reads, *statics, *valueUsed))
     }
     return out
 }

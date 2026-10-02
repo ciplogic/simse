@@ -4389,3 +4389,25 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   Verified: `./build.bat --release`, `bun tools/stress.js` **64/64**,
   `bun build.js --release --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
   both fixed points byte for byte.
+
+- **Auto-borrow proves overloaded names, and the view stops shadowing the span.** Two
+  changes to the same corner. `BorrowParams.kt` no longer skips a name declared more than
+  once: a name joins the trusted set when *every* declaration of it is clean (a body proves;
+  a bodyless declaration needs the author's `data`/`borrow` mark, tracked in a `blocked` set),
+  and a declaration is rewritten only when its name is trusted and never used as a value.
+  That is what the design in `impl_specs/escape-analysis.md` already described; the code now
+  matches it. The borrow marks on Simse bodies are gone - `rtl.kt`, `Span.kt` and `StrView.kt`
+  mark only their bodyless natives, and the fixpoint covers the rest (`slice` and friends
+  prove through the span's documented bodies instead of needing a mark).
+  `stress/borrow-overload` pins the conjunction: two clean `width` overloads make `use`'s
+  `Str` parameter borrow, which the old "declared once" rule refused. A bodyless twin
+  (`resources-compileonly`'s `@SmGen("kt")` prototype beside the generated body) keeps the
+  signatures in step because the rewrite follows the fixpoint, not the body alone.
+  And `StrView`'s `size`/`isEmpty`/`slice`/`charAt` resource passthroughs are deleted:
+  `StrView` *is* `Span<Char>`, so the span's own members serve them and the emitter writes
+  the C++ member call (`bytes.size()`), `charAt` is a Simse body over `at(index)`, and the
+  `strview` section shrinks to `spanOfStr` (the borrow constructor, which cannot be Simse).
+  A program that only used a view's `size` no longer carries the section at all.
+  Verified: `./build.bat --release`, `bun tools/stress.js` **65/65**,
+  `bun build.js --release --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
+  both fixed points byte for byte.

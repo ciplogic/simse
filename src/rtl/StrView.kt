@@ -13,28 +13,19 @@ package rtl
 
 typealias StrView = Span<Char>
 
-// The span's own members under the view's names (src/rtl/span.hpp). `at` is *not* an
-// operation of its own: the span's member serves it.
-@SmGen("res", "strview", "simse_strView_size")
-data fun size(this: StrView): Int
+// The span's own members under the view's names (`src/rtl/span.hpp`): `size`, `isEmpty`,
+// `slice`, `at` and `atPtr` are reached through the alias, with their Simse bodies in
+// `Span.kt` and their C++ the span's members (specs/built-in-types.md, "Views"). No
+// passthrough declaration is needed - the alias resolves to the class's method, which the
+// emitter spells as the member call (`view.slice(1)` is `view.slice(1)` in C++ too).
 
-@SmGen("res", "strview", "simse_strView_isEmpty")
-data fun isEmpty(this: StrView): Bool
-
-// From `start` to the end (unchecked).
-@SmGen("res", "strview", "simse_strView_slice")
-borrow fun slice(this: StrView, start: Int): StrView
-
-// `count` bytes from `start` (unchecked).
-@SmGen("res", "strview", "simse_strView_slice")
-borrow fun slice(this: StrView, start: Int, count: Int): StrView
-
-// The byte at `index` (unchecked); spelled like `Str.charAt`.
-@SmGen("res", "strview", "simse_strView_charAt")
-borrow fun charAt(this: StrView, index: Int): Char
+// `charAt` is the view's own spelling of `at` (the byte at `index`, unchecked).
+fun StrView.charAt(index: Int): Char {
+    return this.at(index)
+}
 
 // Compared in place, so nothing is copied.
-borrow fun StrView.startsWith(text: Str): Bool {
+fun StrView.startsWith(text: Str): Bool {
     val count = text.size()
     if (count > this.size()) {
         return false
@@ -53,7 +44,7 @@ borrow fun StrView.startsWith(text: Str): Bool {
 // reached by raw pointer and with its length already known. The first byte is the caller's
 // cheap test, so the compare starts at 1; `startsWith` would copy the `Str` first, which a
 // table lookup cannot afford.
-borrow fun StrView.startsWithPtr(text: *Str, length: Int): Bool {
+fun StrView.startsWithPtr(text: *Str, length: Int): Bool {
     if (length > this.size()) {
         return false
     }
@@ -68,7 +59,7 @@ borrow fun StrView.startsWithPtr(text: *Str, length: Int): Bool {
 }
 
 // The index of the first occurrence of `sub`, or -1 (compared in place).
-borrow fun StrView.find(sub: Str): Int {
+fun StrView.find(sub: Str): Int {
     val needle = sub.size()
     if (needle == 0) {
         return 0
@@ -92,12 +83,12 @@ borrow fun StrView.find(sub: Str): Int {
 }
 
 // `indexOf` is the other spelling of `find`.
-borrow fun StrView.indexOf(sub: Str): Int {
+fun StrView.indexOf(sub: Str): Int {
     return this.find(sub)
 }
 
 // The owned copy of `count` bytes from `from`, clamped like `Str.substr`.
-borrow fun StrView.substr(from: Int, count: Int): Str {
+fun StrView.substr(from: Int, count: Int): Str {
     val len = this.size()
     var begin = from
     if (begin < 0) {
@@ -120,7 +111,7 @@ borrow fun StrView.substr(from: Int, count: Int): Str {
     return out
 }
 
-borrow fun StrView.toString(): Str {
+fun StrView.toString(): Str {
     return this.substr(0, this.size())
 }
 

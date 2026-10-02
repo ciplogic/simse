@@ -35,11 +35,6 @@ static struct __SmStringTableInitType {
     }
 } __sm_stringTableInit;
 
-Int simse_strView_size(StrView self);
-Bool simse_strView_isEmpty(StrView self);
-StrView simse_strView_slice(StrView self, Int start);
-StrView simse_strView_slice(StrView self, Int start, Int count);
-Char simse_strView_charAt(StrView self, Int index);
 StrView simse_spanOfStr(Str* text);
 StrView simse_spanOfStr(StrView view);
 
@@ -251,7 +246,7 @@ Str ns1_classify(Str* op) {
     Bool _sm_expr1;
     Char _sm_expr3;
     _sm_when1_v = simse_spanOfStr(op);
-    _sm_when1_n = simse_strView_size(_sm_when1_v);
+    _sm_when1_n = _sm_when1_v.size();
     _sm_expr1 = _sm_when1_n == 0;
     if (_sm_expr1) goto L1;
     goto L2;
@@ -356,7 +351,7 @@ Str ns1_classifyPtr(Str* op) {
     Char _sm_expr3;
     _sm_base1 = op;
     _sm_when2_v = simse_spanOfStr(_sm_base1);
-    _sm_when2_n = simse_strView_size(_sm_when2_v);
+    _sm_when2_n = _sm_when2_v.size();
     _sm_expr1 = _sm_when2_n == 0;
     if (_sm_expr1) goto L1;
     _sm_expr1 = _sm_when2_n == 1;
@@ -396,7 +391,7 @@ Str ns1_viewKind(StrView v) {
     Bool _sm_expr1;
     Char _sm_expr2;
     _sm_when3_v = simse_spanOfStr(v);
-    _sm_when3_n = simse_strView_size(_sm_when3_v);
+    _sm_when3_n = _sm_when3_v.size();
     _sm_expr1 = _sm_when3_n == 1;
     if (_sm_expr1) goto L4;
     goto L3;
@@ -533,26 +528,6 @@ int main() {
     std::memcpy(__sm_catP, _sm_expr7.data(), _sm_expr7.size());
     simse_println((_sm_expr20), stdout);
     return 0;
-}
-
-inline Int simse_strView_size(StrView self) {
-    return self.len;
-}
-
-inline Bool simse_strView_isEmpty(StrView self) {
-    return self.len <= 0;
-}
-
-inline StrView simse_strView_slice(StrView self, Int start) {
-    return self.slice(start);
-}
-
-inline StrView simse_strView_slice(StrView self, Int start, Int count) {
-    return self.slice(start, count);
-}
-
-inline Char simse_strView_charAt(StrView self, Int index) {
-    return self[index];
 }
 
 inline StrView simse_spanOfStr(Str* text) {

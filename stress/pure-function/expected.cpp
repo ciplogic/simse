@@ -35,14 +35,6 @@ static struct __SmStringTableInitType {
     }
 } __sm_stringTableInit;
 
-Int simse_strView_size(StrView self);
-Bool simse_strView_isEmpty(StrView self);
-StrView simse_strView_slice(StrView self, Int start);
-StrView simse_strView_slice(StrView self, Int start, Int count);
-Char simse_strView_charAt(StrView self, Int index);
-StrView simse_spanOfStr(Str* text);
-StrView simse_spanOfStr(StrView view);
-
 #include <cstdint>
 #include <type_traits>
 
@@ -242,7 +234,7 @@ void simse_initStatics() {
 Str substr(StrView* self, Int from, Int count) {
     Int len, begin, end, _sm_expr6;
     Bool _sm_expr1;
-    len = simse_strView_size((*self));
+    len = self->size();
     begin = from;
     _sm_expr1 = begin < 0;
     if (_sm_expr1) goto L1;
@@ -282,7 +274,7 @@ Str substr(StrView* self, Int from, Int count) {
 Str toString(StrView* self) {
     Int _sm_expr1;
     Str _sm_expr2;
-    _sm_expr1 = simse_strView_size((*self));
+    _sm_expr1 = self->size();
     _sm_expr2 = substr(self, 0, _sm_expr1);
     return _sm_expr2;
 }
@@ -473,34 +465,6 @@ int main(int argc, char** argv) {
     _sm_base8 = p.x;
     simse_println((_sm_base8), stdout);
     return 0;
-}
-
-inline Int simse_strView_size(StrView self) {
-    return self.len;
-}
-
-inline Bool simse_strView_isEmpty(StrView self) {
-    return self.len <= 0;
-}
-
-inline StrView simse_strView_slice(StrView self, Int start) {
-    return self.slice(start);
-}
-
-inline StrView simse_strView_slice(StrView self, Int start, Int count) {
-    return self.slice(start, count);
-}
-
-inline Char simse_strView_charAt(StrView self, Int index) {
-    return self[index];
-}
-
-inline StrView simse_spanOfStr(Str* text) {
-    return StrView(reinterpret_cast<Char*>(text->data()), text->size());
-}
-
-inline StrView simse_spanOfStr(StrView view) {
-    return view;
 }
 
 template <class T>

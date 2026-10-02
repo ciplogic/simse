@@ -38,14 +38,6 @@ static struct __SmStringTableInitType {
 template <class T>
 Span<T> simse_spanOf(List<T>* items);
 
-Int simse_strView_size(StrView self);
-Bool simse_strView_isEmpty(StrView self);
-StrView simse_strView_slice(StrView self, Int start);
-StrView simse_strView_slice(StrView self, Int start, Int count);
-Char simse_strView_charAt(StrView self, Int index);
-StrView simse_spanOfStr(Str* text);
-StrView simse_spanOfStr(StrView view);
-
 #include <cstdint>
 #include <type_traits>
 
@@ -305,6 +297,7 @@ SIMSE_PACK_POP
 enum class ns1_Shape { Circle, Square = 4 };
 inline ns1_Shape ns1_simse_Shape_fromInt(Int value) { return (ns1_Shape) value; }
 
+Char charAt(StrView* self, Int index);
 Bool startsWith(StrView* self, Str text);
 Int find(StrView* self, Str sub);
 Str substr(StrView* self, Int from, Int count);
@@ -456,12 +449,17 @@ Int ns1_partLambdas_closure5_invoke(ns1_partLambdas_closure5 self, Int v) {
     return 0;
 }
 
+Char charAt(StrView* self, Int index) {
+    Char _sm_expr1;
+    _sm_expr1 = self->at(index);
+    return _sm_expr1;
+}
 Bool startsWith(StrView* self, Str text) {
     Int count, _sm_expr1, i;
     Bool _sm_expr2, _sm_expr6;
     Char _sm_expr5;
     count = simse_lenOf(text);
-    _sm_expr1 = simse_strView_size((*self));
+    _sm_expr1 = self->size();
     _sm_expr2 = count > _sm_expr1;
     if (_sm_expr2) goto L1;
     goto L2;
@@ -498,7 +496,7 @@ Int find(StrView* self, Str sub) {
     L1:;
     return 0;
     L2:;
-    len = simse_strView_size((*self));
+    len = self->size();
     _sm_expr1 = needle > len;
     if (_sm_expr1) goto L3;
     goto L4;
@@ -544,7 +542,7 @@ Int find(StrView* self, Str sub) {
 Str substr(StrView* self, Int from, Int count) {
     Int len, begin, end, _sm_expr6;
     Bool _sm_expr1;
-    len = simse_strView_size((*self));
+    len = self->size();
     begin = from;
     _sm_expr1 = begin < 0;
     if (_sm_expr1) goto L1;
@@ -584,7 +582,7 @@ Str substr(StrView* self, Int from, Int count) {
 Str toString(StrView* self) {
     Int _sm_expr1;
     Str _sm_expr2;
-    _sm_expr1 = simse_strView_size((*self));
+    _sm_expr1 = self->size();
     _sm_expr2 = substr(self, 0, _sm_expr1);
     return _sm_expr2;
 }
@@ -602,10 +600,10 @@ Str fmtStr(StrView fmt, List<Str>* items) {
     points = 0;
     i = 0;
     L3:;
-    _sm_expr2 = simse_strView_size(fmt);
+    _sm_expr2 = fmt.size();
     _sm_expr1 = i < _sm_expr2;
     if (!(_sm_expr1)) goto L4;
-    _sm_expr4 = simse_strView_charAt(fmt, i);
+    _sm_expr4 = charAt(simse_addressOf(fmt), i);
     _sm_expr1 = _sm_expr4 == '|';
     if (_sm_expr1) goto L5;
     goto L6;
@@ -623,15 +621,15 @@ Str fmtStr(StrView fmt, List<Str>* items) {
     return fmt;
     L8:;
     out = __sm_stringTable[38];
-    _sm_expr8 = simse_strView_size(fmt);
+    _sm_expr8 = fmt.size();
     simse_str_reserve(out, _sm_expr8);
     used = 0;
     i = 0;
     L9:;
-    _sm_expr2 = simse_strView_size(fmt);
+    _sm_expr2 = fmt.size();
     _sm_expr1 = i < _sm_expr2;
     if (!(_sm_expr1)) goto L10;
-    ch = simse_strView_charAt(fmt, i);
+    ch = charAt(simse_addressOf(fmt), i);
     _sm_expr1 = ch == '|';
     if (_sm_expr1) goto L11;
     goto L12;
@@ -1652,34 +1650,6 @@ int main() {
 template <class T>
 inline Span<T> simse_spanOf(List<T>* items) {
     return Span<T>(items->data(), items->size());
-}
-
-inline Int simse_strView_size(StrView self) {
-    return self.len;
-}
-
-inline Bool simse_strView_isEmpty(StrView self) {
-    return self.len <= 0;
-}
-
-inline StrView simse_strView_slice(StrView self, Int start) {
-    return self.slice(start);
-}
-
-inline StrView simse_strView_slice(StrView self, Int start, Int count) {
-    return self.slice(start, count);
-}
-
-inline Char simse_strView_charAt(StrView self, Int index) {
-    return self[index];
-}
-
-inline StrView simse_spanOfStr(Str* text) {
-    return StrView(reinterpret_cast<Char*>(text->data()), text->size());
-}
-
-inline StrView simse_spanOfStr(StrView view) {
-    return view;
 }
 
 template <class T>

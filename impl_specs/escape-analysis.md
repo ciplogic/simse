@@ -145,9 +145,11 @@ The rule is the simplest one that is sound, and it refuses by default - *unsure 
 - a parameter under `&`/`*`, an assignment target, or captured by a lambda is not borrowed. A
   capture would copy the *pointer* into the closure, which is exactly an escape;
 - `this` is never borrowed - the emitter already passes a value receiver as `T* self`;
-- a candidate is a function or a `data class` method with a Simse body, not `main`, not native, and
-  declared exactly once (a name over two declarations has no signature to attribute), whose name is
-  never used as a *value* (that would put the signature into a function type).
+- a candidate is a function or a `data class` method with a Simse body, not `main`, not native.
+  The rewrite touches a declaration only when its **name** is trusted by the fixpoint and the name
+  is never used as a *value* (that would put the signature into a function type); a name with a
+  declaration the pass cannot read (a bodyless prototype beside a generated body, say) keeps every
+  signature, which is what keeps a call site and its definition in step.
 
 Everything else a parameter can do is a *read*: `p.f`, `p[i]`, `p.size()`, `p` as a value, and
 `return p` (a value return copies, so the pointer does not escape). That is the authored shape -
@@ -161,11 +163,17 @@ longer rests on the author remembering a mark:
 
 - a declaration *with a body* is borrow-clean when it writes nothing observable (no field/index/deref
   store, no file-level `var`) and every call it makes is to a name already in the set;
-- a declaration *without* a body (a `@SmGen` native) is trusted only by its `data` mark - its C++ is
-  elsewhere and cannot be checked;
+- a declaration *without* a body (a `@SmGen` native) is trusted only by a mark - `data` (pure) or
+  `borrow` (read-only, the weaker promise) - because its C++ is elsewhere and cannot be checked;
 - a name joins only once **every** declaration with that name is trusted or proved, and the fixpoint
-  starts from the `data` marks and iterates to the least fixed point. Growing from below is the sound
+  starts from the marks and iterates to the least fixed point. Growing from below is the sound
   direction: a name left out is simply not trusted, and a recursive cycle is never assumed clean.
+  An overloaded name is therefore a conjunction, not a coin toss: `slice` is trusted only when both
+  `slice` bodies prove, and a bodyless overload of it blocks the name unless it carries a mark.
+
+Only *program* modules are rewritten - the prelude is not: its declarations' C++ is hand-written
+(or emitted once for every program), and hand-written C++ in a resource may call a prelude function
+by its exact by-value signature.
 
 Two facts are at play and they are **not the same flag**:
 
