@@ -177,7 +177,7 @@ fun jsonIsScalar(name: *Str): Bool {
 }
 
 fun jsonScalarBody(name: *Str): Str {
-    var out: Str = fmtStr("fun |.toJson(): Str {\n", name)
+    var out: Str = `fun @name.toJson(): Str {` + "\n"
     if (name == "Bool") {
         out.appendStr("    if (this) {\n        return \"true\"\n    }\n    return \"false\"\n")
     } else if (name == "Str") {
@@ -193,7 +193,7 @@ fun jsonScalarBody(name: *Str): Str {
 
 // One object: `{` then `"field":` + the field's own serializer per field, `,` between.
 fun jsonClassBody(name: *Str, fields: *List<AstXmlNode>): Str {
-    var out: Str = fmtStr("fun |.toJson(): Str {\n    var out: Str = \"{\"\n", name)
+    var out: Str = `fun @name.toJson(): Str {` + "\n" + `    var out: Str = "{"` + "\n"
     var i: Int = 0
     while (i < fields.size()) {
         val fieldName: Str = xmlAttr(*fields[i], AstNodeAttributeKind.Name)
