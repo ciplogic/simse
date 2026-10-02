@@ -4220,17 +4220,17 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   rewritten into - `` `a=@x` `` is `fmtStrWith('@', "a=@", x)` - so sema, the linear form and
   the emitter see a call a hand could have written, and the concatenation fusion turns it
   into one buffer like any other (`stress/raw-strings` pins the fused shapes). The separator
-  is always `@` - no `fmtStr`/`fmtStrWith` choice and no search for a free byte - which
-  means a literal `@` of the text is a placeholder too and is passed as the one-byte item
-  `"@"`, so the runtime one-item-per-`@` count always holds ("`a@ b and @who`" is
-  `fmtStrWith('@', "a@ b and @", "@", who)`, fused into one expansion). An item is the
-  `Str` a written call takes, so a name of another type interpolates only while the fusion
-  is on: a multi-line template carries an escape, which `ilConcatSplittable` refuses, and
-  `@n` there needs `n.toString()`. Only `@name` is spelled - an expression is bound to a
-  local first, per the user's call to keep the surface small. The scanner is untouched (`@`
-  inside a string is still one byte); the whole feature is `cppsrc/parser/ParserInterp.kt`
-  plus one call in `parsePrimary`, and `stringTokenText`'s literal path is what an
-  interpolation-free raw string still takes.
+  is always `@` - no `fmtStr`/`fmtStrWith` choice and no search for a free byte - so every
+  `@` of the text is a placeholder: a `@` that starts no name cannot line up and is a
+  diagnostic, with the two spellings that work named in its message
+  (`stress/diagnostic-interpolation` - a raw string with no `@name` at all stays a plain
+  literal, `@`s and all). An item is the `Str` a written call takes, so a name of another
+  type interpolates only while the fusion is on: a multi-line template carries an escape,
+  which `ilConcatSplittable` refuses, and `@n` there needs `n.toString()`. Only `@name` is
+  spelled - an expression is bound to a local first, per the user's call to keep the surface
+  small. The scanner is untouched (`@` inside a string is still one byte); the whole feature
+  is `cppsrc/parser/ParserInterp.kt` plus one call in `parsePrimary`, and
+  `stringTokenText`'s literal path is what an interpolation-free raw string still takes.
 
   One self-hosting bite, caught by the refresh itself: `NativeInvokeGen.kt`'s generated-C++
   comment spelled `@SmGen("native", ...)`, which now interpolates - the refreshed bootstrap
@@ -4239,7 +4239,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   tree for `@name` inside backtick strings, which is the check a compiler source change of
   this shape wants.
 
-  Verified: `./build.bat --release`, `bun tools/stress.js` **56/56**,
+  Verified: `./build.bat --release`, `bun tools/stress.js` **57/57**,
   `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
-  both fixed points byte for byte (14.73 s from the published file to a working compiler,
-  1593 ms self-transpile).
+  both fixed points byte for byte (14.90 s from the published file to a working compiler,
+  1576 ms self-transpile).

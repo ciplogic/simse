@@ -5,16 +5,16 @@
 // literal becomes one `fmtStrWith('@', ...)` call whose template is the content with every
 // `@name` reduced to its `@` and whose items are the names, in order, so `"a=@x b=@y"` is
 // `fmtStrWith('@', "a=@ b=@", x, y)` - and the concatenation fusion
-// (`cppsrc/linear/MergeConcat.kt`) turns it into one buffer like any hand-written call.
+// (cppsrc/linear/MergeConcat.kt) turns it into one buffer like any hand-written call.
 //
-// A literal `@` (one not followed by an identifier start) is a placeholder too: the runtime
-// counts every `@` of the template, so it is passed as the one-byte item `"@"`. That is the
-// only bookkeeping - the separator is `@` always, whatever the text holds.
+// A string that interpolates may not hold a literal `@`: the runtime counts every `@` of the
+// template against the items, so one that starts no name cannot line up and is a parse error
+// with the two ways out. A raw string with no `@name` at all never reaches here - it is a
+// plain literal, `@`s and all.
 //
-// `@` is the marker only before an identifier start; anywhere else it is the literal
-// character, and there is no escape for it yet, so a literal `@` immediately before an
-// identifier is not spellable. `"@x"` is the two characters: a double-quoted string never
-// interpolates.
+// `@` is the marker only before an identifier start, and there is no escape for it yet, so a
+// literal `@` immediately before an identifier is not spellable. `"@x"` is the two
+// characters: a double-quoted string never interpolates.
 
 package parser
 import compiler
@@ -39,12 +39,11 @@ fun interpHasItem(raw: *Str): Bool {
     return false
 }
 
-// The literal as the `fmtStrWith` call it stands for: one `@` in the template per `@` of the
-// content, one item per placeholder - a name expression for `@name`, the one-byte item `"@"`
-// for a bare `@`.
+// The literal as the `fmtStrWith` call it stands for: one `@` in the template per `@name`,
+// one name expression per item. A `@` that starts no name is an error, and the message names
+// both spellings that work.
 fun Parser.parseInterpolatedRaw(raw: *Str, pos: SourcePos): ExprNode {
     val end: Int = raw.size() - 1
-    val atItem: ExprNode = this.interpTemplateNode("@", pos)
     var templateText: Str = Str()
     var items: List<AstXmlNode> = List<AstXmlNode>()
     var i: Int = 1
@@ -55,19 +54,21 @@ fun Parser.parseInterpolatedRaw(raw: *Str, pos: SourcePos): ExprNode {
             i = i + 1
             continue
         }
-        templateText.append('@')
-        if (i + 1 < end && lexIsAlpha(raw.charAt(i + 1))) {
-            var j: Int = i + 1
-            while (j < end && lexIsAlphaOrDigit(raw.charAt(j))) {
-                j = j + 1
-            }
-            val name: Str = raw.substr(i + 1, j - i - 1)
-            items.append(this.nameExprAt(name, pos).node)
-            i = j
-            continue
+        if (i + 1 >= end || !lexIsAlpha(raw.charAt(i + 1))) {
+            this.setError(
+                interpPosAt(raw, i, pos),
+                "invalid interpolation string: `@` must be followed by a name (`@name`); for a literal `@`, write it in a \"...\" string or in a raw string that does not interpolate"
+            )
+            return this.emptyExpr()
         }
-        items.append(atItem.node)
-        i = i + 1
+        var j: Int = i + 1
+        while (j < end && lexIsAlphaOrDigit(raw.charAt(j))) {
+            j = j + 1
+        }
+        templateText.append('@')
+        val name: Str = raw.substr(i + 1, j - i - 1)
+        items.append(this.nameExprAt(name, pos).node)
+        i = j
     }
     var args: List<AstXmlNode> = List<AstXmlNode>()
     args.append(this.interpCharLitAt('@', pos).node)
@@ -78,6 +79,32 @@ fun Parser.parseInterpolatedRaw(raw: *Str, pos: SourcePos): ExprNode {
         k = k + 1
     }
     return this.interpCallAt("fmtStrWith", args, pos)
+}
+
+// The position of the byte at `index` of a raw string token that starts at `pos`: what the
+// diagnostic about one `@` points at. Columns advance one per byte and a line ending is one
+// `\n` - CRLF and a lone CR both - the scanner's own rule.
+fun interpPosAt(raw: *Str, index: Int, pos: SourcePos): SourcePos {
+    var line: Int = pos.line
+    var column: Int = pos.column
+    var i: Int = 0
+    while (i < index) {
+        val ch: Char = raw.charAt(i)
+        if (ch == '\r') {
+            if (i + 1 < raw.size() && raw.charAt(i + 1) == '\n') {
+                i = i + 1
+            }
+            line = line + 1
+            column = 1
+        } else if (ch == '\n') {
+            line = line + 1
+            column = 1
+        } else {
+            column = column + 1
+        }
+        i = i + 1
+    }
+    return SourcePos(pos.offset + index, line, column)
 }
 
 // The template as an ordinary string literal: the content is spelled the way a raw string is,

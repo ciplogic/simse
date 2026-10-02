@@ -55,12 +55,12 @@ Int64 simse_nowNanos();
 // The program's string literals: one pool, and two run-length encoded index
 // series (offsets as deltas, then lengths), each as what to subtract from the
 // previous value; strtable.hpp has the stream format.
-static const Int __sm_stringCount = 20;
+static const Int __sm_stringCount = 21;
 static const char __sm_stringPool[] =
-    "line one\nline \"two\" with \\ back\n\ttabbed" "line one\nline \"two\" with \\ back\n	tabbed" "He said \"hi\" and left \\ right" "first @\nsecond @" "@ who and @2" "a@ b and @ |" "line one" "hello @" "matched" "x|y\n@" "a|b=@" "world" "@who" "n=@" "|@|" "@!" "@@" "no" "@" "" 
+    "line one\nline \"two\" with \\ back\n\ttabbed" "line one\nline \"two\" with \\ back\n	tabbed" "He said \"hi\" and left \\ right" "first @\nsecond @" "@ who and @2" "a@ b and " "line one" "hello @" "matched" "x|y\n@" "a|b=@" "world" "@who" "@ |" "n=@" "|@|" "@!" "@@" "no" "@" "" 
 ;
-static const Int16 __sm_stringStarts[] = {20,11,0,-39,0,10,13,4,0,4,1,0,2,2,2,0,2,1,2,0,1,1,2,0,1,1};
-static const Int16 __sm_stringLens[] = {20,10,-39,0,10,13,4,0,4,1,0,2,2,2,0,2,1,2,0,1,2,2,0,2,1};
+static const Int16 __sm_stringStarts[] = {21,7,0,-39,0,10,13,4,3,1,2,1,2,0,2,3,2,0,2,1,2,0,1,1,1,2,0,1,1};
+static const Int16 __sm_stringLens[] = {21,6,-39,0,10,13,4,3,1,2,1,2,0,2,3,2,0,2,1,2,0,1,1,2,2,0,2,1};
 static_assert(sizeof(__sm_stringPool) - 1 == 201, "the string pool and its length index disagree");
 static StrView __sm_stringTable[__sm_stringCount];
 static struct __SmStringTableInitType {
@@ -437,7 +437,7 @@ Str fmtStrWith(Char separator, StrView templateText, List<Str>* items) {
     L7:;
     return templateText;
     L8:;
-    out = __sm_stringTable[19];
+    out = __sm_stringTable[20];
     _sm_expr8 = simse_strView_size(templateText);
     simse_str_reserve(out, _sm_expr8);
     used = 0;
@@ -507,7 +507,7 @@ int main() {
     List<Str> _sm_base17, _sm_base19;
     List<Str>* _sm_base18, * _sm_base20;
     Str text, empty, quoted, who, _sm_expr10, _sm_expr11, _sm_expr12, _sm_expr13, _sm_expr14, _sm_expr15,
-        _sm_expr16, multi, piped, plain;
+        _sm_expr17, multi, piped, plain;
     Int _sm_expr1, _sm_expr2, _sm_when1_n, _sm_expr9, n;
     Bool _sm_expr3, _sm_expr5, _sm_expr6, _sm_expr7;
     StrView _sm_expr4, _sm_when1_v;
@@ -515,7 +515,7 @@ int main() {
     _sm_expr1 = simse_lenOf(text);
     simse_println((_sm_expr1), stdout);
     simse_println((text), stdout);
-    empty = __sm_stringTable[19];
+    empty = __sm_stringTable[20];
     _sm_expr2 = simse_lenOf(empty);
     simse_println((_sm_expr2), stdout);
     _sm_expr3 = isEmpty(simse_addressOf(empty));
@@ -540,7 +540,7 @@ int main() {
     simse_println((__sm_stringTable[8]), stdout);
     goto L4;
     L2:;
-    simse_println((__sm_stringTable[17]), stdout);
+    simse_println((__sm_stringTable[18]), stdout);
     L4:;
     quoted = __sm_stringTable[2];
     _sm_expr9 = simse_lenOf(quoted);
@@ -574,7 +574,7 @@ int main() {
     simse_strAddInt(__sm_catP, n, __sm_catC0);
     simse_println((_sm_expr13), stdout);
     simse_println((__sm_stringTable[4]), stdout);
-    simse_println((__sm_stringTable[18]), stdout);
+    simse_println((__sm_stringTable[19]), stdout);
     _sm_expr14.resize(4 + who.size());
     __sm_catP = _sm_expr14.data();
     std::memcpy(__sm_catP, "a|b=", 4);
@@ -589,18 +589,14 @@ int main() {
     __sm_catP = __sm_catP + who.size();
     *__sm_catP = (char) ('|');
     simse_println((_sm_expr15), stdout);
-    _sm_expr16.resize(11 + who.size());
-    __sm_catP = _sm_expr16.data();
-    *__sm_catP = (char) ('a');
-    __sm_catP = __sm_catP + 1;
-    *__sm_catP = (char) ('@');
-    __sm_catP = __sm_catP + 1;
-    std::memcpy(__sm_catP, " b and ", 7);
-    __sm_catP = __sm_catP + 7;
+    _sm_expr17.resize(11 + who.size());
+    __sm_catP = _sm_expr17.data();
+    std::memcpy(__sm_catP, "a@ b and ", 9);
+    __sm_catP = __sm_catP + 9;
     std::memcpy(__sm_catP, who.data(), who.size());
     __sm_catP = __sm_catP + who.size();
     std::memcpy(__sm_catP, " |", 2);
-    simse_println((_sm_expr16), stdout);
+    simse_println((_sm_expr17), stdout);
     _sm_base17 = List<Str>{who, who};
     _sm_base18 = &_sm_base17;
     multi = fmtStrWith('@', __sm_stringTable[3], _sm_base18);

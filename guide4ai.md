@@ -535,9 +535,10 @@ borrow parameter and a read-through for a by-value one.
 **Literals**: `"..."` with the escape set (`\n \r \t \0 \\ \' \" \xNN`, octal),
 and a backtick string - raw and multi-line, no escape, the next backtick ends it
 (`specs/built-in-types.md`). A backtick string interpolates `@name`: the parser rewrites
-it to one `fmtStrWith('@', ...)` call (the template keeps one `@` per name, a literal `@`
-is the item `"@"`, the names are the items), so no stage downstream sees the construct
-(`cppsrc/parser/ParserInterp.kt`, `stress/raw-strings`). Both forms are one pool entry and
+it to one `fmtStrWith('@', ...)` call (the template keeps one `@` per name, the names are
+the items), so no stage downstream sees the construct (`cppsrc/parser/ParserInterp.kt`,
+`stress/raw-strings`); in a string that interpolates a `@` that starts no name is a
+diagnostic (`stress/diagnostic-interpolation`). Both forms are one pool entry and
 read as a `StrView` at a site, exactly alike.
 
 **Destructors**: a data class may declare one `fun unInit()`, emitted as its C++ destructor;

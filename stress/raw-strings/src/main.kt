@@ -47,7 +47,10 @@ line "two" with \ back
     println(`@`)
     println(`a|b=@who`)
     println(`|@who|`)
-    println(`a@ b and @who |`)
+    // A literal `@` in a string that interpolates is a diagnostic
+    // (stress/diagnostic-interpolation): keep it in a `"..."` string instead.
+    val at: Str = "a@ b and "
+    println(at + `@who |`)
     val multi: Str = `first @who
 second @who`
     println(multi)

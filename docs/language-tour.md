@@ -619,10 +619,10 @@ fun main(): Int {
 
 `print` and `println` take a value and print it, with `Bool` as `true`/`false`;
 scalars have `toString()`, and `Str + Str` concatenates. A backtick string interpolates
-`@name` - `@` is the marker only before a letter or `_`, and `"@x"` is literal text -
-and the compiler rewrites it to one `fmtStrWith('@', ...)` call, so a `Str` is usable as
-it stands. `println` of your own types is not supported yet (a `Printable` protocol is
-planned).
+`@name`, which the compiler rewrites to one `fmtStrWith('@', ...)` call; once a string
+interpolates, every `@` must start a name (a literal `@` there is a diagnostic - keep it
+in a `"..."` string). `println` of your own types is not supported yet (a `Printable`
+protocol is planned).
 
 ```simse
 val who: Str = "world"
@@ -655,5 +655,6 @@ These are known rough edges, not design decisions to admire
   `for (x in list)` works), no `when` pattern labels (`is Type`, `in 1..5`) and no
   subjectless `when`, no default parameter values, no capture-by-reference, and no
   `Set`. Interpolation exists, but only in backtick strings (`@name`), and only a plain
-  name: `@(expr)` is not there, and a member or a longer expression is bound to a local
-  first (`val n: Int = tag.count` then `@n`).
+  name: `@(expr)` is not there, a member or a longer expression is bound to a local first
+  (`val n: Int = tag.count` then `@n`), and every `@` of an interpolating string must
+  start a name - a literal `@` there is an error, so it goes in a `"..."` string.
