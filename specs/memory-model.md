@@ -259,7 +259,10 @@ adapter owns a copy of the instance), and a call through a callable value reache
 `invoke`. Because the instance is passed to `invoke` **by copy**, every call starts from
 the closure's value as the caller holds it: a mutation of a capture inside a call is not
 visible to the value in the caller, nor to a later call. A `&lambda` is a counted handle to
-the instance (`&T`), which lets a closure outlive the frame that built it.
+the instance (`&T`), which lets a closure outlive the frame that built it. A closure that
+must mutate its owner keeps a *raw pointer*: `var rawThis: *T = *this` captured by the
+closure reaches the original through the pointer, unchecked (`*T` outlives nothing; the
+pointee must still be alive when the closure runs).
 
 A lambda's parameter types come from the explicit annotations, or from the
 expected callable type when the lambda is assigned to a callable-typed variable

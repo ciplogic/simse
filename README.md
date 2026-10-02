@@ -308,7 +308,7 @@ functions the compiler may reuse, lambdas, statics,
 and source generators (`cppsrc/compiler/`, `_res.md` resources, `native` declarations),
 list literals and trailing-argument packing, `for`/`yield` state machines, file I/O, the
 `main(args)` form, packages and modules, and a project file (`simse.md`). The compiler is
-self-hosted and reproduces the published bootstrap byte for byte, and **63 end-to-end stress
+self-hosted and reproduces the published bootstrap byte for byte, and **64 end-to-end stress
 programs** run in the corpus.
 
 On speed (`bun tools/bootstrap.js`, release, this machine - the range is machine load,

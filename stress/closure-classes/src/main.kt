@@ -16,6 +16,27 @@ fun makeAdder(factor: Int): IntFn {
     return (v: Int) -> v+factor
 }
 
+// The by-value `self` means a closure cannot mutate the receiver it was built in. The
+// reference a caller occasionally wants is a *raw pointer*: `*this` is the receiver's
+// address, the closure captures the pointer by value, and a write through it reaches the
+// original (unchecked, like every `*T`; the object must outlive the closure).
+data class Counter(var n: Int) {
+    fun add(v: Int): Int {
+        this.n = this.n + v
+        return this.n
+    }
+
+    fun run(f: IntFn): Int {
+        return f(1)
+    }
+
+    fun bumpThroughPointer(): Int {
+        var rawThis: *Counter = *this
+        val bump: IntFn = (v: Int) -> rawThis.add(v)
+        return this.run(bump)
+    }
+}
+
 fun main(): Int {
     // A declared local: the parameter types come from the callable type on the left.
     val plusOne: IntFn = (v) -> v+1
@@ -71,5 +92,10 @@ fun main(): Int {
     // A closure in a `Func`-typed slot converts at the boundary and calls through it.
     val boxed: IntFn = (v: Int) -> v-1
     println(boxed(42).toString())
+
+    // The owner as a raw pointer: the mutation through the closure stays on the object.
+    val counter: Counter = Counter(10)
+    println(counter.bumpThroughPointer().toString())
+    println(counter.n.toString())
     return 0
 }

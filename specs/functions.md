@@ -246,13 +246,21 @@ call's own explicit type arguments (`identity<Int>(7)`), and the types of the ar
 The result is the callee's return type with those bindings substituted, so `twice(f, 5)`
 is an `Int`, and a method called on it resolves against `Int`.
 
-A **callable** parameter names its own type parameter only through a lambda: `fun
-peek<T>(f: (T) -> T)` has a `T` that no argument fixes - a lambda's parameter types are
-written against `T` and a `Func<...>` value does not fix it either. Every type parameter
-of a call must be fixed by the receiver, another argument, or an explicit type argument;
-a call that leaves one unfixed is a positioned diagnostic rather than a C++ error, and
-`peek<Int>(f)` is the fix. A `Str` literal passed where the parameter is a bare type
-parameter is a `Str`; it is not narrowed to its view (`StrView`).
+A **callable** parameter is the one position the arguments cannot fix a type parameter
+through: `fun peek<T>(f: (T) -> T)` has a `T` that no argument names directly. The compiler
+binds it from the lambda's own annotations (`peek((x: Int) -> x + 1)` is `T = Int`) or from
+the type of a callable value passed there (`peek(fn)`), and emits the instantiation the C++
+call cannot deduce (`peek<Int>(...)`). A call that leaves a type parameter nothing fixes at
+all - most often a lambda with no parameter type written - is a positioned diagnostic
+rather than a C++ error, with `peek<Int>(...)` as the escape.
+
+A lambda argument that fits *several* declarations of one name at once - a plain `T`
+parameter takes the closure as a value, a callable parameter as a lambda - is an `ambiguous
+call` diagnostic as well, because C++ would silently prefer the plain parameter. An
+explicit instantiation (`pick<Int>(lambda)`) chooses the callable one.
+
+A `Str` literal passed where the parameter is a bare type parameter is a `Str`; it is not
+narrowed to its view (`StrView`).
 
 ## Class-body limitations
 

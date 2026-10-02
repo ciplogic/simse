@@ -4368,3 +4368,24 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   Verified: `./build.bat --release`, `bun tools/stress.js` **63/63** (two new cases),
   `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
   both fixed points byte for byte.
+
+- **A callable-only type parameter is inferred and spelled, and a confusable overload is
+  reported.** The follow-up to the deduction round: `LinearFormCall` binds a callable
+  pattern's own type parameters from the lambda's *annotations* (`peek((x: Int) -> x + 1)`
+  fixes `T = Int`, `ilBindLambdaParams`) and from a callable value's own type (`peek(fn)`,
+  `ilBindCallableArg`); where C++ cannot deduce a parameter (`ilCppDeducible`) it spells the
+  instantiation through the last such parameter as a `CallCtor` over the callee's generic
+  name - `peek<Int>(...)`, the same shape a source-written `f<Int>(...)` already used. Only a
+  parameter nothing at all fixes (an unannotated lambda with no other argument) is still a
+  `cannot infer type parameter` report. And a lambda argument that fits *both* a plain `T`
+  declaration and a callable one of the same name is now an `ambiguous call` report
+  (`ilConfusingLambdaOverload`), because C++ would silently take the plain one - the probe
+  printed `value` before; `pick<Int>(lambda)` disambiguates. `stress/generic-callable` grew
+  both shapes; `stress/diagnostic-ambiguous-lambda` is new and
+  `stress/diagnostic-lambda-infer` now uses the unannotated lambda (the annotated one works).
+  The by-value `invoke` `self` stays as designed: a closure that must reach its owner
+  captures a raw pointer (`var rawThis: *T = *this`), which the corpus probe shows mutating
+  the original (`specs/memory-model.md`).
+  Verified: `./build.bat --release`, `bun tools/stress.js` **64/64**,
+  `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
+  both fixed points byte for byte.

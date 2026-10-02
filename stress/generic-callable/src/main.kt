@@ -6,11 +6,28 @@ package fixtures
 // a function a forwarding overload that takes the callable as its own template parameter and
 // converts it (`emitDeducedCallableOverload`), and the const-params pass refuses to fold a
 // parameter whose type names a type parameter - that parameter is how the binding survives.
+// The compiler's own inference is wider: it binds from the arguments and from a lambda's
+// annotations, and spells the instantiation where C++ cannot deduce (`peek<Int>`).
 
 typealias IntFn = (Int) -> Int
 
 fun plusOne(x: Int): Int {
     return x + 1
+}
+
+fun peek<T>(f: (T) -> T): Bool {
+    return true
+}
+
+// Two declarations a lambda fits at once: the callable parameter and the plain `T`. A bare
+// call is the ambiguous case (a diagnostic, `stress/diagnostic-ambiguous-lambda`); the
+// explicit instantiation disambiguates.
+fun pick<T>(x: T): Str {
+    return "value"
+}
+
+fun pick<T>(x: (T) -> T): Str {
+    return "callable"
 }
 
 fun twice<T>(f: (T) -> T, value: T): T {
@@ -78,6 +95,21 @@ fun main(): Int {
     // A generic call as an argument to another: `id(7)` is an `Int` too.
     val nested: Int = twice((x: Int) -> x+1, identity(id(7)))
     println(nested.toString())
+
+    // A type parameter the *callable alone* names, fixed by the lambda's annotation: the
+    // compiler binds `T = Int` and spells `peek<Int>` (C++ deduces nothing through a
+    // callable), so the call needs no type argument of its own.
+    if (peek((x: Int) -> x+1)) {
+        println("peeked")
+    }
+    // The same, with a `Func<...>` value: the binding comes from its type.
+    if (peek(fn)) {
+        println("peeked-fn")
+    }
+
+    // The ambiguous pair with an explicit instantiation: at `T = Int` the plain declaration
+    // cannot take a lambda, so the callable one is the only viable.
+    println(pick<Int>((x: Int) -> x+1))
     return 0
 }
 

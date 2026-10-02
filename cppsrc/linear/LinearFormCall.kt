@@ -116,6 +116,21 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
     }
     val packFrom: Int = this.packStart(target, argNodes)
 
+    // A lambda argument to a name several declarations share: the compiler picked none of them
+    // (`callTarget` answers nothing when the arity alone does not choose), and the C++ overload
+    // resolution would silently take the *plain* parameter - an exact match, no conversion -
+    // while the call plainly asks for a callable. Report it, with the instantiation that
+    // disambiguates (`pick<Int>(lambda)` picks the callable one).
+    if (xmlIsEmpty(target) && packFrom < 0 && callName == calleeName && !staticCall
+        && xmlKind(callee) != AstNodeCategory.ExprGenericName
+    ) {
+        val ambiguity: Str = this.ilConfusingLambdaOverload(callee, receiverCall, *argNodes)
+        if (ambiguity != "") {
+            this.unsupported(ambiguity)
+            return
+        }
+    }
+
     // `listOf<T>(a, b, c)` is the language's list literal: the same `Pack` a packed call builds,
     // so its elements convert the same way. It is not a call - the native it names exists only
     // so the checker has a signature to read.
@@ -176,10 +191,14 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
     }
     // A generic callee's bindings, as far as this call fixes them: used below to substitute a
     // callable parameter's type, so a lambda's *omitted* parameter types can come from the
-    // argument that fixes the type parameter (`twice((x) -> x + 1, 5)`). The emitter still
-    // leaves the C++ deduction to C++; this only types what the compiler itself must know.
+    // argument that fixes the type parameter (`twice((x) -> x + 1, 5)`), and to spell an
+    // explicit instantiation where C++ cannot deduce (`peek((x: Int) -> x + 1)`).
     var genericParams: List<Str> = List<Str>()
     var genericBindings: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
+    // The last type parameter C++ cannot deduce at this call (a callable parameter names it,
+    // and MSVC deduces nothing through a `std::function` shape). The compiler's own binding for
+    // it is spelled as an explicit instantiation through this index; -1 means nothing to spell.
+    var explicitNeeded: Int = -1
     if (!xmlIsEmpty(target)) {
         genericParams = xmlTypeParamNames(target)
         if (genericParams.size() > 0) {
@@ -200,11 +219,24 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
                 g = g + 1
             }
             semBindCallArgs(target, recvType, *argTypes, *genericParams, *genericBindings)
+            // A lambda's own annotations bind what no argument could (`peek((x: Int) -> x + 1)`),
+            // and a callable *value* binds the callable pattern it is passed into (`peek(fn)`).
+            var g2: Int = 0
+            while (g2 < argNodes.size() && paramOffset + g2 < paramNodes.size()) {
+                val pattern: AstXmlNode = xmlChildPtr(paramNodes[paramOffset + g2], AstNodeKind.Type)
+                if (xmlKind(argNodes[g2]) == AstNodeCategory.ExprLambda) {
+                    this.ilBindLambdaParams(pattern, argNodes[g2], *genericParams, *genericBindings)
+                } else if (g2 < argTypes.size() && !xmlIsEmpty(argTypes[g2])) {
+                    this.ilBindCallableArg(pattern, argTypes[g2], *genericParams, *genericBindings)
+                }
+                g2 = g2 + 1
+            }
             // What *C++* can deduce is less: MSVC deduces no template parameter through a
             // `std::function` shape, so a parameter only a callable names has nothing to
-            // instantiate the template with. Report that here, with the explicit
-            // instantiation that fixes it, rather than let the output fail under MSVC's own
-            // wording (a packed call is skipped: its trailing arguments become one list).
+            // instantiate the template with. The compiler's binding for it is spelled as an
+            // explicit instantiation (`peek<Int>(...)`) when the call can carry one - a plain
+            // call with a destination and no type arguments of its own - and reported
+            // otherwise, rather than left to fail under MSVC's own wording.
             //
             // The target is found by name (and receiver, when the names collide), so a member
             // call's target must first *be* this call's callee: `list.clear()` on a `List`
@@ -226,30 +258,50 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
                 var deducible: Dictionary<Str, AstXmlNode> = this.ilCppDeducible(
                     target, recvType, *argTypes, xmlChildren(callee, AstNodeKind.TypeArg), *genericParams
                 )
-                var missing: Str = ""
-                var missingCount: Int = 0
+                var needed: Int = -1
                 var m: Int = 0
                 while (m < genericParams.size()) {
                     if (!deducible.has(genericParams[m])) {
-                        missingCount = missingCount + 1
-                        if (missing != "") {
-                            missing = missing + ", "
-                        }
-                        missing = missing + "'" + genericParams[m] + "'"
+                        needed = m
                     }
                     m = m + 1
                 }
-                if (missingCount > 0) {
-                    var what: Str = "type parameter "
-                    var them: Str = "it"
-                    if (missingCount > 1) {
-                        what = "type parameters "
-                        them = "them"
+                if (needed >= 0) {
+                    var haveAll: Bool = typeArgs.size() == 0
+                    var k: Int = 0
+                    while (k <= needed) {
+                        if (!genericBindings.has(genericParams[k])) {
+                            haveAll = false
+                        }
+                        k = k + 1
                     }
-                    this.unsupported(
-                        `cannot infer @what@missing of '@calleeName': no argument names @them (a callable argument does not); pass @them explicitly ('@calleeName<...>(...)')`
-                    )
-                    return
+                    if (haveAll && hasDst && plain == argNodes.size() && !receiverCall) {
+                        explicitNeeded = needed
+                    } else {
+                        var missing: Str = ""
+                        var missingCount: Int = 0
+                        m = 0
+                        while (m < genericParams.size()) {
+                            if (!deducible.has(genericParams[m])) {
+                                missingCount = missingCount + 1
+                                if (missing != "") {
+                                    missing = missing + ", "
+                                }
+                                missing = missing + "'" + genericParams[m] + "'"
+                            }
+                            m = m + 1
+                        }
+                        var what: Str = "type parameter "
+                        var them: Str = "it"
+                        if (missingCount > 1) {
+                            what = "type parameters "
+                            them = "them"
+                        }
+                        this.unsupported(
+                            `cannot infer @what@missing of '@calleeName': no argument names @them (a callable argument does not); pass @them explicitly ('@calleeName<...>(...)')`
+                        )
+                        return
+                    }
                 }
             }
         }
@@ -321,6 +373,32 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
             i = i + 1
         }
         this.emitCall(hasDst, operands)
+        return
+    }
+    if (explicitNeeded >= 0) {
+        // C++ cannot deduce these (a callable parameter names them) and the compiler knows the
+        // binding: spell the instantiation, a prefix through the last parameter that needs one.
+        // A `CallCtor` is how an explicit instantiation already rides the IL (`f<Int>(...)`).
+        var explicitType: AstXmlNode = AstXmlNode(
+            AstNodeKind.Type, AstNodeCategory.TypeGeneric,
+            List<AstNodeAttribute>(), Array<AstXmlNode>()
+        )
+        explicitType.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, calleeName))
+        var k: Int = 0
+        while (k <= explicitNeeded) {
+            val bound: *AstXmlNode = genericBindings.getPtr(genericParams[k])
+            if (bound != null) {
+                xmlAddChild(explicitType, semReRole(*bound, AstNodeKind.TypeArg))
+            }
+            k = k + 1
+        }
+        operands.append(this.typeIndex(calleeName, explicitType))
+        i = 0
+        while (i < args.size()) {
+            operands.append(args[i])
+            i = i + 1
+        }
+        this.emit(IlOpKind.CallCtor, operands)
         return
     }
     if (xmlKind(callee) == AstNodeCategory.ExprGenericName) {
@@ -407,6 +485,127 @@ fun IlExtractor.ilCppDeducible(
         semBindBestEffort(*pattern, actual, params, *found)
     }
     return found
+}
+
+// A lambda argument's *annotated* parameter types bind the callable parameter's own type
+// parameters (`peek((x: Int) -> x + 1)` fixes `T = Int`): C++ cannot deduce them through the
+// callable, so the binding is what lets the emitter spell `peek<Int>`. A lambda whose
+// parameter types are only partly written, or a pattern that is not a callable type, binds
+// nothing here - the ordinary diagnostic covers it.
+fun IlExtractor.ilBindLambdaParams(
+    pattern: AstXmlNode, lambda: *AstXmlNode, params: *List<Str>,
+    bindings: *Dictionary<Str, AstXmlNode>
+): Unit {
+    if (params.size() == 0 || xmlKind(lambda) != AstNodeCategory.ExprLambda) {
+        return
+    }
+    val callable: AstXmlNode = this.ilCallableOf(pattern)
+    if (xmlIsEmpty(callable)) {
+        return
+    }
+    val annotated: List<AstXmlNode> = xmlChildren(lambda, AstNodeKind.ParamType)
+    if (annotated.size() != ilSplitParams(xmlAttr(lambda, AstNodeAttributeKind.Params)).size()) {
+        return
+    }
+    val expectedParams: List<AstXmlNode> = xmlChildren(callable, AstNodeKind.ParamType)
+    var i: Int = 0
+    while (i < expectedParams.size() && i < annotated.size()) {
+        semBindBestEffort(expectedParams[i], annotated[i], params, bindings)
+        i = i + 1
+    }
+}
+
+// A callable *value* passed into a callable pattern binds the pattern's own parameter and
+// return types (`peek(fn)` with `fn: (Int) -> Int` fixes `T = Int`); both sides follow their
+// `typealias` first. A callable pattern never binds through `semBindTypes` (it has no
+// `TypeFunction` arm), which is why this is here and not in the shared binder.
+fun IlExtractor.ilBindCallableArg(
+    pattern: AstXmlNode, actualType: AstXmlNode, params: *List<Str>,
+    bindings: *Dictionary<Str, AstXmlNode>
+): Unit {
+    val patternCallable: AstXmlNode = this.ilCallableOf(pattern)
+    if (xmlIsEmpty(patternCallable)) {
+        return
+    }
+    val actualCallable: AstXmlNode = this.ilCallableOf(actualType)
+    if (xmlIsEmpty(actualCallable)) {
+        return
+    }
+    val patternParams: List<AstXmlNode> = xmlChildren(patternCallable, AstNodeKind.ParamType)
+    val actualParams: List<AstXmlNode> = xmlChildren(actualCallable, AstNodeKind.ParamType)
+    var i: Int = 0
+    while (i < patternParams.size() && i < actualParams.size()) {
+        semBindBestEffort(patternParams[i], actualParams[i], params, bindings)
+        i = i + 1
+    }
+    val patternReturn: *AstXmlNode = xmlChildPtr(patternCallable, AstNodeKind.ReturnType)
+    val actualReturn: *AstXmlNode = xmlChildPtr(actualCallable, AstNodeKind.ReturnType)
+    if (!xmlIsEmpty(patternReturn) && !xmlIsEmpty(actualReturn)) {
+        semBindBestEffort(*patternReturn, *actualReturn, params, bindings)
+    }
+}
+
+// The report for a lambda argument that several of a name's declarations both accept: the
+// compiler picked none of them (`callTarget` answers nothing when the arity alone does not
+// choose), and the C++ overload resolution would silently take the *plain* parameter - the
+// exact match, no conversion - while the call plainly asks for a callable. The candidate
+// sets must stay apart: one declaration that takes both shapes does not make a call
+// ambiguous. "" when the call is not this shape.
+fun IlExtractor.ilConfusingLambdaOverload(
+    callee: *AstXmlNode, member: Bool, argNodes: *List<AstXmlNode>
+): Str {
+    if (this.fn.facts == null) {
+        return ""
+    }
+    val name: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
+    var callableCandidates: Int = 0
+    var valueCandidates: Int = 0
+    var fi: Int = 0
+    while (fi < this.fn.facts.functions.size()) {
+        val fact: *SemFnFact = *this.fn.facts.functions[fi]
+        fi = fi + 1
+        if (xmlIsEmpty(fact.decl) || fact.name != name) {
+            continue
+        }
+        val factMember: Bool = !xmlIsEmpty(fact.receiver) || (member && fact.isExtension)
+        if (factMember != member) {
+            continue
+        }
+        if (fact.paramCount != argNodes.size()) {
+            continue
+        }
+        val params: List<AstXmlNode> = xmlChildren(fact.decl, AstNodeKind.Param)
+        val offset: Int = semReceiverParams(fact.decl)
+        var takesCallable: Bool = false
+        var takesValue: Bool = false
+        var a: Int = 0
+        while (a < argNodes.size()) {
+            if (xmlKind(argNodes[a]) == AstNodeCategory.ExprLambda) {
+                val at: Int = offset + a
+                if (at < params.size()) {
+                    val pattern: *AstXmlNode = xmlChildPtr(params[at], AstNodeKind.Type)
+                    if (!xmlIsEmpty(pattern)) {
+                        if (!xmlIsEmpty(this.ilCallableOf(*pattern))) {
+                            takesCallable = true
+                        } else if (semIsBareTypeParam(fact.decl, pattern)) {
+                            takesValue = true
+                        }
+                    }
+                }
+            }
+            a = a + 1
+        }
+        if (takesCallable && !takesValue) {
+            callableCandidates = callableCandidates + 1
+        }
+        if (takesValue) {
+            valueCandidates = valueCandidates + 1
+        }
+    }
+    if (callableCandidates > 0 && valueCandidates > 0) {
+        return `ambiguous call of '@name': a lambda argument fits a declaration taking a callable and one taking a plain value (C++ would silently take the plain one); pass the type arguments explicitly ('@name<...>(...)')`
+    }
+    return ""
 }
 
 // The symbol prefix a synthesized class takes: the body's own emitted name.

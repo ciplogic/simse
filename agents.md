@@ -588,8 +588,13 @@ arguments fix (`twice((x) -> x + 1, 5)`), its result from the callable type or t
 body, and a lambda parameter neither names is a positioned diagnostic; a `this` inside a
 lambda is a diagnostic (reference captures are deferred); a generic call's result is typed
 with the callee's type parameters bound from the receiver, explicit type arguments and the
-argument types, so it chains like any other value, and a call that leaves a type parameter
-nothing non-callable fixes is a diagnostic (`peek<Int>(...)` is the escape); generics
+argument types, so it chains like any other value; a type parameter C++ cannot deduce (a
+callable parameter names it) is bound from the lambda's annotations or the callable value's
+type and spelled as an explicit instantiation (`peek((x: Int) -> ...)` emits `peek<Int>`),
+and one nothing fixes is a diagnostic (`stress/diagnostic-lambda-infer`); a lambda argument
+that fits both a callable and a plain parameter of the same-named declarations is an
+`ambiguous call` diagnostic (C++ would silently take the plain one;
+`stress/diagnostic-ambiguous-lambda`); generics
 reified via C++
 templates; modules and
 packages. `yield` and `for` are implemented end to end: the scanner reads `..`/`yield`, the
@@ -1030,11 +1035,17 @@ generated C++ of one translation unit, so nothing can be built against an older 
   them into a callable parameter so a lambda's *omitted* parameter types can come from the
   argument that fixes `T` (`twice((x) -> x + 1, 5)`). A `Str` literal argument against a bare
   type parameter is materialised with `Str(...)` (`CgCall.call`), because the pool entry is a
-  `StrView` and C++ would deduce that instead. What still does not work: `T` that *only* the
-  callable names (`fun <T> peek(f: (T) -> T)` with a lambda) - C++ deduces nothing through a
-  callable parameter - so every call that leaves such a `T` unfixed is a positioned
-  `cannot infer type parameter` report (the lowering's deducibility check,
-  `ilCppDeducible`), and the fix is `peek<Int>(...)` (`stress/diagnostic-lambda-infer`).
+  `StrView` and C++ would deduce that instead. The compiler binds what it can - a lambda's
+  annotations, a callable value's own type, the other arguments - and spells the instantiation
+  for the parameters C++ cannot deduce (`peek((x: Int) -> x + 1)` emits `peek<Int>(...)`, a
+  `CallCtor` through the callee's own generic name). What still does not work: `T` that *only*
+  the callable names and that has no annotation to bind it (`peek((x) -> x + 1)`) - C++
+  deduces nothing through a callable parameter - so that call is a positioned
+  `cannot infer type parameter` report (the lowering's deducibility check, `ilCppDeducible`).
+  And a lambda argument that fits both a callable and a plain `T` declaration of the same name
+  is an `ambiguous call` report, because C++ would silently take the plain one
+  (`ilConfusingLambdaOverload`; `pick<Int>(...)` disambiguates,
+  `stress/diagnostic-ambiguous-lambda`).
 - **A resource's comments do not reach the program**: `resGenAddSection` runs the text a
   `_res.md` section supplies through `resCppStripComments` (`ResComments.kt`) as it places
   it, because the file is written for a reader and every reached section would otherwise
