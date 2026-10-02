@@ -60,13 +60,15 @@ its **source generators**, if it ships any, live in a `generators/` subfolder:
             api.kt              the surface a program imports
             generators/         compiler-side sources; a generator registers itself
                 JsonGen.kt
+        compiler/               the AST and the generator interface (compiler-only)
         io/                     the file/directory operations (next)
 
 `--module <dir>` names a module (repeatable); duplicate directories are merged by canonical
 path, so naming one twice costs nothing. `--root <dir>` is a **tree** and is scanned whole -
 which is what the compiler's own build does (`--root cppsrc`), so `modules/**/generators/*.kt`
 is compiled *into the compiler*. A program that names the module gets the module's declarations
-and never its `generators/`, whose sources are written against the compiler's own packages.
+and never its `generators/`, whose sources are written against the compiler's own packages
+(`import compiler` names the AST and the generator interface).
 Generated output is merged **in memory** by the driver's reparse pass; no directory is written,
 so nothing stale can be picked up by a later build.
 

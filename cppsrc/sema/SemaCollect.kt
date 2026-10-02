@@ -4,6 +4,7 @@
 // the scope stack. Extension methods on `Analyzer` (Sema.kt).
 
 package sema
+import compiler
 
 import parser
 import common
@@ -233,9 +234,8 @@ fun Analyzer.validateImports(module: *AstXmlNode): Unit {
 // Builds the unqualified scope of one file, in decreasing precedence: its own package, then
 // its imports with the *last* written ahead of the earlier ones, then the implicit `rtl`
 // prelude. The first declaration of a name in this order wins, so a later import shadows an
-// earlier one and an explicit import shadows `rtl` (specs/modules.md, "Resolution") - which
-// is how `import xml` replaces the prelude's `XmlNode` with the module's. Pushes the module
-// scope (with file-level statics as values, specs/statics.md) that `run` pops.
+// earlier one and an explicit import shadows `rtl` (specs/modules.md, "Shadowing"). Pushes the
+// module scope (with file-level statics as values, specs/statics.md) that `run` pops.
 fun Analyzer.buildVisible(module: *AstXmlNode): Unit {
     this.types = Dictionary<Str, AstXmlNode>()
     this.functions = Dictionary<Str, List<AstXmlNode>>()

@@ -5,6 +5,7 @@
 // bypass a declaration in scope at its target; labels restart at L1 per body, so C++'s
 // per-function scope cannot collide across bodies.
 package linear
+import compiler
 
 import common
 

@@ -6,6 +6,7 @@
 // The walks are `Emitter` extension functions: a split file cannot reopen the class.
 
 package codegen
+import compiler
 
 import sema
 import common

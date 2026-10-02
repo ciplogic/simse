@@ -4,6 +4,7 @@
 // writes, and the text a dump shows.
 
 package linear
+import compiler
 
 import common
 import sema

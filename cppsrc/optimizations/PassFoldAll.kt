@@ -9,6 +9,7 @@
 // fixpoint runs the round until nothing moves.
 
 package optimizations
+import compiler
 
 import common
 

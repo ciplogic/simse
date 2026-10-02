@@ -6,6 +6,7 @@
 // handle parameter - the AST does not record what a name resolved to.
 
 package optimizations
+import compiler
 
 import common
 import linear

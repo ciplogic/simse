@@ -66,6 +66,6 @@ it is a resource section; either way the emitter does **not** generate the struc
 header/section defines it. A `data class`/`enum class` **without** an attribute is
 *generated* from its declaration like a program's, so a type whose layout only C++ can
 express (`Str`, `Span`, `FileStream`, ...) carries its C++ explicitly, while a
-type Simse can express (the compiler's own `AstXmlNode`, in `cppsrc/rtl/astxml.kt`, or
-the language-level `XmlNode`, in `cppsrc/rtl/xml.kt`) is written in Simse alone. A prelude type is generated only when the program *reaches* it
+type Simse can express (the compiler's own `AstXmlNode`, in `cppsrc/modules/compiler/astxml.kt`, or
+the language-level `XmlNode`, in `cppsrc/modules/xml/api.kt`) is written in Simse alone. A prelude type is generated only when the program *reaches* it
 (naming it, or naming a type it holds), never into a program that does not use it.

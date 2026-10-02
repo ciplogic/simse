@@ -4,6 +4,7 @@
 // including the ones the `for` desugaring uses. Extension methods on `Parser` (Parser.kt).
 
 package parser
+import compiler
 
 import lex
 import common

@@ -4,6 +4,7 @@
 // call return types. Extension methods on `SemInfer` (TypeInfer.kt has the class).
 
 package sema
+import compiler
 
 import common
 

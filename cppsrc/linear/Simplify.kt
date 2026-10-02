@@ -9,6 +9,7 @@
 // past it), rather than being folded into one `ifFalse (c) goto B;`. The fold saved a jump
 // but reordered the emitted text, so it is gone; a `goto` to the next label is still dropped.
 package linear
+import compiler
 
 import common
 import optimizations

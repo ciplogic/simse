@@ -5,6 +5,7 @@
 // `Emitter` (Codegen.kt).
 
 package codegen
+import compiler
 
 import sema
 import common
@@ -97,9 +98,9 @@ fun Emitter.emitForwardTypes(emitted: *Dictionary<Str, Bool>): Unit {
             continue
         }
         val fwdName: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
-        // A name belongs to one declaration: a later module that declares it shadows the
-        // earlier one (`cppsrc/modules/xml` over the `rtl` prelude's `xml.kt`), so only the
-        // winner of the name is emitted (specs/modules.md, "Resolution").
+        // A name belongs to one declaration: a later declaration of it shadows an earlier
+        // one (an explicit import over `rtl`, specs/modules.md "Shadowing"), so only the
+        // winner of the name is emitted.
         if (this.typePackage(fwdName) != this.inputPackage(input)) {
             continue
         }
@@ -116,36 +117,171 @@ fun Emitter.emitForwardTypes(emitted: *Dictionary<Str, Bool>): Unit {
     }
 }
 
+// The aggregate definitions, in scan order except where a declaration must go first: a struct
+// field that holds another declaration's type *by value* needs it complete, so that
+// declaration is pulled forward (`emitTypeByName`). A handle - `*T`, `&T`, `Array<T>`,
+// `Span<T>`, `RawArray<T>`, `PList<T>` - stores a pointer, so its element is no dependency.
+// Without the pull, a declaration that moves later in the scan (a module) makes the generated
+// C++ read "uses undefined struct".
 fun Emitter.emitTypes(emitted: *Dictionary<Str, Bool>): Unit {
+    // The winner of a shared name (`typePackage`) -> the file that declares it, and whether
+    // that file is the prelude (a prelude type is emitted only when the program reaches it).
+    var files: Dictionary<Str, Str> = Dictionary<Str, Str>()
+    var prel: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     for (*input in this.inputs) {
-        this.curFile = input.fileName
+        val pkg: Str = this.inputPackage(input)
         val decls: List<AstXmlNode> = xmlDecls(input.module)
         for (*decl in decls) {
-        val tname: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
-        // Only the declaration a name resolves to is emitted; a shadowed one is skipped, so a
-        // module's type replaces the prelude's of the same name instead of colliding with it.
-        val shadowed: Bool = this.typePackage(tname) != this.inputPackage(input)
-        val reachable: Bool = !shadowed && (!input.prelude || emitted.has(tname))
-        if (decl.name == AstNodeKind.DataClass) {
-            if (reachable && !this.typeIsRaw(decl)) {
-                this.emitDataClass(decl)
+            if (decl.name != AstNodeKind.DataClass && decl.name != AstNodeKind.Enum
+                && decl.name != AstNodeKind.TypeAlias
+            ) {
+                continue
             }
-        } else if (decl.name == AstNodeKind.Enum) {
-            if (reachable && !this.typeIsRaw(decl)) {
-                this.emitEnum(decl)
-                this.emitEnumConversion(decl)
-            }
-        } else if (decl.name == AstNodeKind.TypeAlias) {
-            // A prelude alias (StrView) is the header one; a program alias is emitted.
-            if (!input.prelude && !shadowed) {
-                this.emitTypeAlias(decl)
+            val tname: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
+            if (this.typePackage(tname) == pkg && !files.has(tname)) {
+                files.insert(tname, input.fileName)
+                prel.insert(tname, input.prelude)
             }
         }
+    }
+    var defined: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+    for (*input in this.inputs) {
+        val pkg: Str = this.inputPackage(input)
+        val decls: List<AstXmlNode> = xmlDecls(input.module)
+        for (*decl in decls) {
+            if (decl.name != AstNodeKind.DataClass && decl.name != AstNodeKind.Enum
+                && decl.name != AstNodeKind.TypeAlias
+            ) {
+                continue
+            }
+            val tname: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
+            if (this.typePackage(tname) != pkg) {
+                continue
+            }
+            this.emitTypeByName(tname, files, prel, emitted, defined)
+            if (this.failed) {
+                return
+            }
+        }
+    }
+}
+
+// One declaration, its by-value dependencies first. `defined` also records the declarations
+// that are not written out at all (a raw type's C++ is a header or a section, a shadowed name
+// is not the winner, an unreached prelude type stays out), so every name is decided once.
+fun Emitter.emitTypeByName(
+    name: *Str,
+    files: *Dictionary<Str, Str>,
+    prel: *Dictionary<Str, Bool>,
+    emitted: *Dictionary<Str, Bool>,
+    defined: *Dictionary<Str, Bool>
+): Unit {
+    if (defined.has(name)) {
+        return
+    }
+    val file: *Str = files.getPtr(name)
+    if (file == null) {
+        defined.insert(name, true)
+        return
+    }
+    val decl: *AstXmlNode = this.types.getPtr(name)
+    if (decl == null) {
+        defined.insert(name, true)
+        return
+    }
+    defined.insert(name, true)
+    val preludePtr: *Bool = prel.getPtr(name)
+    val prelude: Bool = *preludePtr
+    if (prelude && !emitted.has(name)) {
+        return
+    }
+    if (this.typeIsRaw(decl)) {
+        return
+    }
+    if (decl.name == AstNodeKind.DataClass) {
+        this.setActiveTypeParams(xmlTypeParamNames(decl))
+        for (*field in xmlChildren(decl, AstNodeKind.Field)) {
+            this.emitTypeDeps(xmlChildPtr(field, AstNodeKind.Type), files, prel, emitted, defined)
+            if (this.failed) {
+                return
+            }
+        }
+        this.curFile = *file
+        this.emitDataClass(decl)
+        return
+    }
+    if (decl.name == AstNodeKind.Enum) {
+        this.curFile = *file
+        this.emitEnum(decl)
+        this.emitEnumConversion(decl)
+        return
+    }
+    // The remaining declaration is a typealias; a prelude alias is the header one (`StrView`).
+    if (prelude) {
+        return
+    }
+    this.setActiveTypeParams(xmlTypeParamNames(decl))
+    this.emitTypeDeps(xmlChildPtr(decl, AstNodeKind.TargetType), files, prel, emitted, defined)
+    if (this.failed) {
+        return
+    }
+    this.curFile = *file
+    this.emitTypeAlias(decl)
+}
+
+// The declared types a type node holds *by value*, so a declaration naming them needs each
+// complete (`List<Foo>` stores its elements inline; `Array<Foo>` and `*Foo` do not).
+fun Emitter.emitTypeDeps(
+    node: *AstXmlNode,
+    files: *Dictionary<Str, Str>,
+    prel: *Dictionary<Str, Bool>,
+    emitted: *Dictionary<Str, Bool>,
+    defined: *Dictionary<Str, Bool>
+): Unit {
+    if (xmlIsEmpty(node)) {
+        return
+    }
+    val kind: AstNodeCategory = xmlKind(node)
+    if (kind == AstNodeCategory.TypeReference || kind == AstNodeCategory.TypePointer
+        || kind == AstNodeCategory.TypeFunction || kind == AstNodeCategory.TypeYield
+    ) {
+        return
+    }
+    if (kind == AstNodeCategory.TypeNamed) {
+        this.emitOneDep(xmlAttr(node, AstNodeAttributeKind.Name), files, prel, emitted, defined)
+        return
+    }
+    if (kind != AstNodeCategory.TypeGeneric) {
+        return
+    }
+    val name: Str = xmlAttr(node, AstNodeAttributeKind.Name)
+    // A handle: the elements live behind a pointer, so they need not be complete.
+    if (name == "Array" || name == "Span" || name == "RawArray" || name == "PList") {
+        return
+    }
+    // A declared generic (`Box<Foo>`) stores its arguments the way `List` stores its element.
+    this.emitOneDep(name, files, prel, emitted, defined)
+    for (*arg in xmlChildren(node, AstNodeKind.TypeArg)) {
+        this.emitTypeDeps(arg, files, prel, emitted, defined)
         if (this.failed) {
             return
         }
     }
+}
+
+// The dependency a name denotes, when it is a declaration of this compilation: a built-in
+// (`Int`, `List`) and a type parameter are not.
+fun Emitter.emitOneDep(
+    name: *Str,
+    files: *Dictionary<Str, Str>,
+    prel: *Dictionary<Str, Bool>,
+    emitted: *Dictionary<Str, Bool>,
+    defined: *Dictionary<Str, Bool>
+): Unit {
+    if (this.activeTypeParams.has(name) || !files.has(name)) {
+        return
     }
+    this.emitTypeByName(name, files, prel, emitted, defined)
 }
 
 fun Emitter.emitDataClass(decl: *AstXmlNode): Unit {

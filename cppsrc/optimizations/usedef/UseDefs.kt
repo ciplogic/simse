@@ -9,6 +9,7 @@
 // it is empty.
 
 package optimizations
+import compiler
 
 import common
 import linear

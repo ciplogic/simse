@@ -45,7 +45,7 @@ Details worth knowing:
   `Stmt.If`, `Expr.IntLit`, ...), a category, an attribute map for the text, and
   children. Because roles and attribute keys are enums, every test on a node in
   the compiler is an integer compare; the emitter generates the structs and enums
-  from the Simse declarations (`cppsrc/rtl/astxml.kt`).
+  from the Simse declarations (`cppsrc/modules/compiler/astxml.kt`).
 - **Generics are reified.** There is no erasure and no boxing: `List<Int>` and
   `List<Str>` become two distinct C++ types (`List<Int>`, `List<Str>`), and a
   generic function becomes a C++ template that is instantiated per concrete call.
@@ -198,7 +198,7 @@ headers:
 | `strview.hpp` | `StrView`: an alias of `Span<Char>` (`typealias StrView = Span<Char>`), plus the *literal interop* only - the comparison operators, `+`, `<<` and the `Str` conversions, which C++ overload resolution reaches at a literal site (the operations are the `strview` section) |
 | `filestream.hpp` | `FileStream`: the struct alone, reading a file line by line (`readLine(): Opt<Str>`, `readLineInto(*Str)` with a recycled buffer, and `readLineView(): Opt<StrView>` in place) - its method bodies are the `filestream` section |
 
-`AstXmlNode` (the compiler's AST, `cppsrc/rtl/astxml.kt`) and the language-level `XmlNode`/`Attribute` (`cppsrc/rtl/xml.kt`) are *generated* from their Simse declarations, not headers.
+`AstXmlNode` (the compiler's AST, `cppsrc/modules/compiler/astxml.kt`, the `compiler` module) and the language-level `XmlNode`/`Attribute` (the `xml` module, `cppsrc/modules/xml/api.kt`) are *generated* from their Simse declarations, not headers.
 
 The C++ that used to need a header of its own is a **resource** now
 (`cppsrc/rtl/_res.md`, read by the `res` generator): the string table's decoder

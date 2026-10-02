@@ -18,6 +18,7 @@
 // so the dump is how the inference is checked.
 
 package sema
+import compiler
 
 import common
 import io

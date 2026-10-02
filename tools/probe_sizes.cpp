@@ -12,7 +12,7 @@
 
 #include <cstdio>
 
-// `Attribute`/`XmlNode` are generated from their declaration (cppsrc/rtl/xml.kt), so a
+// `Attribute`/`XmlNode` are generated from their declaration (cppsrc/modules/xml/api.kt), so a
 // standalone probe mirrors the emitted shape: a 4-byte-packed aggregate whose `Array<XmlNode>`
 // field breaks the recursion.
 SIMSE_PACK_PUSH

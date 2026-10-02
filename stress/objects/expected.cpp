@@ -55,13 +55,13 @@ Int64 simse_nowNanos();
 // The program's string literals: one pool, and two run-length encoded index
 // series (offsets as deltas, then lengths), each as what to subtract from the
 // previous value; strtable.hpp has the stream format.
-static const Int __sm_stringCount = 59;
+static const Int __sm_stringCount = 39;
 static const char __sm_stringPool[] =
-    "a message that does not fit in the inline buffer" "hello world" "Type.Named" "DataClass" "no points" "null raw" "only-one" "positive" "bad int" "Module" "[|::|]" "absent" "column" "Field" "green" "hello" "isVar" "other" "simse" "world" "|,|,|" "Tile" "Type" "head" "item" "kind" "leaf" "line" "many" "name" "nope" "true" "zero" "2.5" "Int" "box" "one" "red" "two" "zzz" "| |" "17" "24" "42" "='" "\n" "||" " " "'" "+" "1" "2" "3" "a" "b" "n" "x" "y" "" 
+    "a message that does not fit in the inline buffer" "hello world" "no points" "null raw" "only-one" "positive" "bad int" "[|::|]" "absent" "green" "hello" "other" "simse" "world" "|,|,|" "head" "item" "leaf" "many" "nope" "zero" "2.5" "box" "one" "red" "two" "zzz" "| |" "42" "||" "+" "1" "2" "3" "a" "b" "x" "y" "" 
 ;
-static const Int16 __sm_stringStarts[] = {59,3,0,-48,37,1,2,1,2,0,1,3,2,0,2,1,3,0,1,1,1,7,0,1,1,1,11,0,1,1,1,7,0,1,1,1,3,0,3,1,-1,1,1,10,0};
-static const Int16 __sm_stringLens[] = {59,2,-48,37,1,2,1,2,0,1,3,2,0,2,1,3,0,1,1,1,7,0,1,1,1,11,0,1,1,1,7,0,1,1,1,3,0,3,1,-1,1,1,10,0,1,1};
-static_assert(sizeof(__sm_stringPool) - 1 == 276, "the string pool and its length index disagree");
+static const Int16 __sm_stringStarts[] = {39,5,0,-48,37,2,1,2,2,0,2,1,2,0,1,1,5,0,1,1,1,5,0,1,1,1,6,0,3,1,0,1,1,7,0};
+static const Int16 __sm_stringLens[] = {39,4,-48,37,2,1,2,2,0,2,1,2,0,1,1,5,0,1,1,1,5,0,1,1,1,6,0,3,1,0,1,1,7,0,1,1};
+static_assert(sizeof(__sm_stringPool) - 1 == 198, "the string pool and its length index disagree");
 static StrView __sm_stringTable[__sm_stringCount];
 static struct __SmStringTableInitType {
     __SmStringTableInitType() {
@@ -168,62 +168,6 @@ void simse_opt_initByValueNone(Opt<T>& self);
 template <class T>
 void simse_res_initByValue(Res<T>& self, const T& value);
 
-#include <cerrno>
-#include <charconv>
-#include <cstddef>
-#include <cstdlib>
-#include <system_error>
-
-// The string, character, numeric-conversion and min/max operations behind the prelude
-// (impl_specs/native-interop.md, specs/built-in-types.md), moved out of
-// cppsrc/rtl/strops.hpp.
-//
-// `Str` is the inline `SmString` (smstring.hpp): every size, length and index here is the
-// language's `Int` (`int32_t`), including `Str::npos`, which is `-1`. Index/range errors
-// are unchecked where the underlying operation is unchecked; the `Opt`-returning
-// conversions never throw.
-//
-// What is only a byte loop is Simse now (cppsrc/rtl/rtl.kt: `trim`, `substr`,
-// `startsWith`/`endsWith`, case folding and the `Char` predicates); what stays is what
-// reaches `SmString` internals (`charAt`, `find`, `lastIndexOf`, `split`, `replace`) or the
-// standard library (`std::from_chars`, `std::to_string`).
-
-// `Str.charAt(index)`: the byte at `index` (unchecked; no bounds test).
-Char simse_str_charAt(const Str& self, Int index);
-
-// `Str.split(separator)` splits on every occurrence. An empty separator returns the whole
-// string as a single element. Two overloads: a separator string and a separator byte.
-List<Str> simse_str_split(const Str& self, const Str& separator);
-List<Str> simse_str_split(const Str& self, Char separator);
-
-// `Str.find(sub)` returns the first index of `sub`, or -1 when absent (the language's
-// spelling of C++ `npos`).
-Int simse_str_find(const Str& self, const Str& sub);
-
-// `Str.lastIndexOf(sub)` returns the last index of `sub`, or -1 when absent.
-Int simse_str_lastIndexOf(const Str& self, const Str& sub);
-
-// `Str.replace(from, to)` replaces every occurrence of `from` with `to`.
-Str simse_str_replace(const Str& self, const Str& from, const Str& to);
-
-// `Str.toInt()`/`Str.toFloat()` parse the whole string; failure (or a non-empty trailing
-// remainder) yields `Opt.none()`. No exceptions. `toInt` uses `std::from_chars` (integer
-// `from_chars` is in libstdc++ since GCC 11); `toFloat` uses `std::strtod`, because libstdc++
-// did not ship floating-point `from_chars` until GCC 14 and the language must build on
-// GCC 12 (docs/building-on-linux.md).
-Opt<Int> simse_str_toInt(const Str& self);
-Opt<Float64> simse_str_toFloat(const Str& self);
-
-// `Str.initByValue(value)`: the `initByValue` convention for `Str` (cppsrc/rtl/rtl.kt),
-// setting the receiver in place. The empty form is a Simse method (an empty body).
-void simse_str_initByValue(Str& self, const Str& value);
-
-// Numeric conversions. `Char` is an 8-bit integer, so it stringifies as a number.
-template <class T>
-Str simse_num_toString(const T& self);
-Str simse_char_toString(Char self);
-Str simse_bool_toString(Bool self);
-
 #include <algorithm>
 #include <type_traits>
 #include <utility>
@@ -324,6 +268,62 @@ Int simse_strCountDigits(Int64 value);
 void simse_strAddInt(char* target, Int64 value, Int count);
 StrView simse_strBoolView(Bool value);
 
+#include <cerrno>
+#include <charconv>
+#include <cstddef>
+#include <cstdlib>
+#include <system_error>
+
+// The string, character, numeric-conversion and min/max operations behind the prelude
+// (impl_specs/native-interop.md, specs/built-in-types.md), moved out of
+// cppsrc/rtl/strops.hpp.
+//
+// `Str` is the inline `SmString` (smstring.hpp): every size, length and index here is the
+// language's `Int` (`int32_t`), including `Str::npos`, which is `-1`. Index/range errors
+// are unchecked where the underlying operation is unchecked; the `Opt`-returning
+// conversions never throw.
+//
+// What is only a byte loop is Simse now (cppsrc/rtl/rtl.kt: `trim`, `substr`,
+// `startsWith`/`endsWith`, case folding and the `Char` predicates); what stays is what
+// reaches `SmString` internals (`charAt`, `find`, `lastIndexOf`, `split`, `replace`) or the
+// standard library (`std::from_chars`, `std::to_string`).
+
+// `Str.charAt(index)`: the byte at `index` (unchecked; no bounds test).
+Char simse_str_charAt(const Str& self, Int index);
+
+// `Str.split(separator)` splits on every occurrence. An empty separator returns the whole
+// string as a single element. Two overloads: a separator string and a separator byte.
+List<Str> simse_str_split(const Str& self, const Str& separator);
+List<Str> simse_str_split(const Str& self, Char separator);
+
+// `Str.find(sub)` returns the first index of `sub`, or -1 when absent (the language's
+// spelling of C++ `npos`).
+Int simse_str_find(const Str& self, const Str& sub);
+
+// `Str.lastIndexOf(sub)` returns the last index of `sub`, or -1 when absent.
+Int simse_str_lastIndexOf(const Str& self, const Str& sub);
+
+// `Str.replace(from, to)` replaces every occurrence of `from` with `to`.
+Str simse_str_replace(const Str& self, const Str& from, const Str& to);
+
+// `Str.toInt()`/`Str.toFloat()` parse the whole string; failure (or a non-empty trailing
+// remainder) yields `Opt.none()`. No exceptions. `toInt` uses `std::from_chars` (integer
+// `from_chars` is in libstdc++ since GCC 11); `toFloat` uses `std::strtod`, because libstdc++
+// did not ship floating-point `from_chars` until GCC 14 and the language must build on
+// GCC 12 (docs/building-on-linux.md).
+Opt<Int> simse_str_toInt(const Str& self);
+Opt<Float64> simse_str_toFloat(const Str& self);
+
+// `Str.initByValue(value)`: the `initByValue` convention for `Str` (cppsrc/rtl/rtl.kt),
+// setting the receiver in place. The empty form is a Simse method (an empty body).
+void simse_str_initByValue(Str& self, const Str& value);
+
+// Numeric conversions. `Char` is an 8-bit integer, so it stringifies as a number.
+template <class T>
+Str simse_num_toString(const T& self);
+Str simse_char_toString(Char self);
+Str simse_bool_toString(Bool self);
+
 #include <cstdio>
 
 // `print` / `println` in C, not C++ streams. The language's formatting is its own (`fmtStr`), and
@@ -390,8 +390,6 @@ inline void simse_println(const T& value, FILE* out) {
     std::fputc('\n', out);
 }
 
-struct Attribute;
-struct XmlNode;
 struct ns1_Counter;
 template <class A, class B>
 struct ns1_Pair;
@@ -402,21 +400,6 @@ struct ns1_Grid;
 struct ns1_CounterReceiverShapes;
 struct ns1_Holder;
 struct ns1_Shell;
-// cppsrc/rtl
-SIMSE_PACK_PUSH
-struct Attribute {
-    Str name;
-    Str value;
-};
-SIMSE_PACK_POP
-// cppsrc/rtl
-SIMSE_PACK_PUSH
-struct XmlNode {
-    Str name;
-    List<Attribute> attributes;
-    Array<XmlNode> Children;
-};
-SIMSE_PACK_POP
 // stress/objects/src/main.kt
 SIMSE_PACK_PUSH
 struct ns1_Counter {
@@ -488,7 +471,6 @@ Bool startsWith(StrView* self, Str text);
 Int find(StrView* self, Str sub);
 Str substr(StrView* self, Int from, Int count);
 Str toString(StrView* self);
-void initByValue(Str* self);
 Str fmtStr(StrView fmt, List<Str>* items);
 Str substr(Str* self, Int start, Int len);
 Bool startsWith(Str* self, Str prefix);
@@ -540,15 +522,6 @@ Bool ns1_isEmpty(ns1_Shell* self);
 Str ns1_describeShapes(Str* self);
 Int ns1_area(Int height);
 Int ns1_partShapes();
-Attribute ns1_attr(Str* name, Str* value);
-List<Attribute> ns1_attrs3(Attribute a, Attribute b, Attribute c);
-List<Attribute> ns1_attrs4(Attribute a, Attribute b, Attribute c, Attribute d);
-Array<XmlNode> ns1_noChildren();
-Array<XmlNode> ns1_oneChild(XmlNode child);
-Str ns1_escapeText(Str text);
-Str ns1_indentation(Int depth);
-Str ns1_dumpNode(XmlNode node, Int depth);
-Int ns1_partXmlTree();
 
 Bool startsWith(StrView* self, Str text) {
     Int count, _sm_expr1, i;
@@ -682,8 +655,6 @@ Str toString(StrView* self) {
     _sm_expr2 = substr(self, 0, _sm_expr1);
     return _sm_expr2;
 }
-void initByValue(Str* self) {
-}
 Str fmtStr(StrView fmt, List<Str>* items) {
     Str _sm_base2, out;
     Bool _sm_expr1;
@@ -718,7 +689,7 @@ Str fmtStr(StrView fmt, List<Str>* items) {
     L7:;
     return fmt;
     L8:;
-    out = __sm_stringTable[58];
+    out = __sm_stringTable[38];
     _sm_expr8 = simse_strView_size(fmt);
     simse_str_reserve(out, _sm_expr8);
     used = 0;
@@ -991,7 +962,7 @@ Int ns1_partGenerics() {
     ns1_Pair<Str, Int> b;
     numbers = List<Int>();
     a = ns1_Pair<Int, Bool>{1, true};
-    b = ns1_Pair<Str, Int>{__sm_stringTable[38], 2};
+    b = ns1_Pair<Str, Int>{__sm_stringTable[25], 2};
     _sm_expr1 = ns1_identity<Int>(7);
     simse_println((_sm_expr1), stdout);
     _sm_base1 = a.first;
@@ -1180,16 +1151,16 @@ Str ns1_label(ns1_Color c) {
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
-    return __sm_stringTable[37];
+    return __sm_stringTable[24];
     L2:;
     _sm_expr1 = ns1_Color::Green;
     _sm_expr2 = c == _sm_expr1;
     if (_sm_expr2) goto L4;
     goto L5;
     L4:;
-    return __sm_stringTable[14];
+    return __sm_stringTable[9];
     L5:;
-    return __sm_stringTable[17];
+    return __sm_stringTable[11];
 }
 // stress/objects/src/main.kt
 Str ns1_describe(Int n) {
@@ -1198,15 +1169,15 @@ Str ns1_describe(Int n) {
     if (_sm_expr1) goto L1;
     goto L2;
     L1:;
-    return __sm_stringTable[32];
+    return __sm_stringTable[20];
     L2:;
     _sm_expr1 = n == 1;
     if (_sm_expr1) goto L4;
     goto L5;
     L4:;
-    return __sm_stringTable[36];
+    return __sm_stringTable[23];
     L5:;
-    return __sm_stringTable[28];
+    return __sm_stringTable[18];
 }
 // stress/objects/src/main.kt
 Ref<ns1_Box> ns1_maybeRef(Bool flag) {
@@ -1279,7 +1250,7 @@ Int ns1_partLanguageTour() {
     if (_sm_expr10) goto L3;
     goto L4;
     L3:;
-    simse_println((__sm_stringTable[11]), stdout);
+    simse_println((__sm_stringTable[8]), stdout);
     L4:;
     boxed = makeRef<ns1_Box>(3);
     rawPresent = ns1_maybePointer(boxed, true);
@@ -1295,22 +1266,22 @@ Int ns1_partLanguageTour() {
     if (_sm_expr10) goto L7;
     goto L8;
     L7:;
-    simse_println((__sm_stringTable[5]), stdout);
+    simse_println((__sm_stringTable[3]), stdout);
     L8:;
     text = __sm_stringTable[1];
-    _sm_expr14 = simse_str_find(text, __sm_stringTable[19]);
+    _sm_expr14 = simse_str_find(text, __sm_stringTable[13]);
     simse_println((_sm_expr14), stdout);
-    _sm_expr15 = simse_str_find(text, __sm_stringTable[39]);
+    _sm_expr15 = simse_str_find(text, __sm_stringTable[26]);
     simse_println((_sm_expr15), stdout);
     _sm_expr16 = substr(simse_addressOf(text), 0, 5);
     simse_println((_sm_expr16), stdout);
-    _sm_expr17 = startsWith(simse_addressOf(text), __sm_stringTable[15]);
+    _sm_expr17 = startsWith(simse_addressOf(text), __sm_stringTable[10]);
     simse_println((_sm_expr17), stdout);
-    _sm_expr18 = endsWith(simse_addressOf(text), __sm_stringTable[19]);
+    _sm_expr18 = endsWith(simse_addressOf(text), __sm_stringTable[13]);
     simse_println((_sm_expr18), stdout);
-    _sm_expr19 = simse_str_replace(text, __sm_stringTable[19], __sm_stringTable[18]);
+    _sm_expr19 = simse_str_replace(text, __sm_stringTable[13], __sm_stringTable[12]);
     simse_println((_sm_expr19), stdout);
-    _sm_base11 = __sm_stringTable[43];
+    _sm_base11 = __sm_stringTable[28];
     number = simse_str_toInt(_sm_base11);
     _sm_expr10 = simse_opt_hasValue(number);
     if (_sm_expr10) goto L9;
@@ -1319,16 +1290,16 @@ Int ns1_partLanguageTour() {
     _sm_expr21 = number.value();
     simse_println((_sm_expr21), stdout);
     L10:;
-    _sm_base12 = __sm_stringTable[30];
+    _sm_base12 = __sm_stringTable[19];
     badNumber = simse_str_toInt(_sm_base12);
     _sm_expr10 = simse_opt_hasValue(badNumber);
     _sm_expr23 = !_sm_expr10;
     if (_sm_expr23) goto L11;
     goto L12;
     L11:;
-    simse_println((__sm_stringTable[8]), stdout);
+    simse_println((__sm_stringTable[6]), stdout);
     L12:;
-    _sm_base13 = __sm_stringTable[33];
+    _sm_base13 = __sm_stringTable[21];
     fraction = simse_str_toFloat(_sm_base13);
     _sm_expr10 = simse_opt_hasValue(fraction);
     if (_sm_expr10) goto L13;
@@ -1351,7 +1322,7 @@ Int ns1_partLanguageTour() {
     small = 5;
     _sm_expr30 = simse_num_toString(small);
     simse_println((_sm_expr30), stdout);
-    _sm_expr31 = __sm_stringTable[31];
+    _sm_expr31 = "true";
     simse_println((_sm_expr31), stdout);
     _sm_base16 = 2.5;
     _sm_expr32 = simse_num_toString(_sm_base16);
@@ -1387,10 +1358,10 @@ Res<Str> ns1_labelOptionalResult(Int n) {
     if (_sm_expr1) goto L1;
     goto L2;
     L1:;
-    _sm_expr2 = Res<Str>::err(__sm_stringTable[58]);
+    _sm_expr2 = Res<Str>::err(__sm_stringTable[38]);
     return _sm_expr2;
     L2:;
-    _sm_expr2 = Res<Str>::ok(__sm_stringTable[7]);
+    _sm_expr2 = Res<Str>::ok(__sm_stringTable[5]);
     return _sm_expr2;
 }
 // stress/objects/src/main.kt
@@ -1443,7 +1414,7 @@ Int ns1_partOptionalResult() {
     found = Opt<Int>::some(3);
     _sm_expr4 = found.value();
     simse_println((_sm_expr4), stdout);
-    text = Opt<Str>::some(__sm_stringTable[15]);
+    text = Opt<Str>::some(__sm_stringTable[10]);
     copy = text;
     _sm_expr5 = copy.value();
     _sm_expr6 = simse_lenOf(_sm_expr5);
@@ -1672,9 +1643,9 @@ Int ns1_partRtlSimse() {
     simse_println((_sm_expr1), stdout);
     _sm_expr2 = simse_int_toString(most);
     simse_println((_sm_expr2), stdout);
-    _sm_expr3 = min<Str>(__sm_stringTable[54], __sm_stringTable[53]);
+    _sm_expr3 = min<Str>(__sm_stringTable[35], __sm_stringTable[34]);
     simse_println((_sm_expr3), stdout);
-    _sm_expr4 = max<Str>(__sm_stringTable[54], __sm_stringTable[53]);
+    _sm_expr4 = max<Str>(__sm_stringTable[35], __sm_stringTable[34]);
     simse_println((_sm_expr4), stdout);
     _sm_expr5 = min<Float64>(2.5, 1.5);
     _sm_expr6 = simse_num_toString(_sm_expr5);
@@ -1709,44 +1680,44 @@ Int ns1_partRtlSimse() {
     __sm_catP = __sm_catP + 1;
     *__sm_catP = (char) ('y');
     simse_println((_sm_expr9), stdout);
-    _sm_base7 = List<Str>{__sm_stringTable[56]};
+    _sm_base7 = List<Str>{__sm_stringTable[36]};
     _sm_base8 = &_sm_base7;
-    _sm_expr10 = fmtStr(__sm_stringTable[4], _sm_base8);
+    _sm_expr10 = fmtStr(__sm_stringTable[2], _sm_base8);
     simse_println((_sm_expr10), stdout);
-    _sm_base9 = List<Str>{__sm_stringTable[6]};
+    _sm_base9 = List<Str>{__sm_stringTable[4]};
     _sm_base10 = &_sm_base9;
-    _sm_expr11 = fmtStr(__sm_stringTable[40], _sm_base10);
+    _sm_expr11 = fmtStr(__sm_stringTable[27], _sm_base10);
     simse_println((_sm_expr11), stdout);
-    _sm_base11 = __sm_stringTable[53];
+    _sm_base11 = __sm_stringTable[34];
     _sm_expr12 = isEmpty(simse_addressOf(_sm_base11));
     simse_println((_sm_expr12), stdout);
-    _sm_base12 = __sm_stringTable[58];
+    _sm_base12 = __sm_stringTable[38];
     _sm_expr13 = isEmpty(simse_addressOf(_sm_base12));
     simse_println((_sm_expr13), stdout);
-    text = __sm_stringTable[54];
+    text = __sm_stringTable[35];
     _sm_expr14 = isEmpty(simse_addressOf(text));
     simse_println((_sm_expr14), stdout);
-    _sm_expr15 = ns1_Shell{__sm_stringTable[58]};
+    _sm_expr15 = ns1_Shell{__sm_stringTable[38]};
     _sm_expr16 = ns1_isEmpty(simse_addressOf(_sm_expr15));
     simse_println((_sm_expr16), stdout);
-    borrowed = __sm_stringTable[24];
+    borrowed = __sm_stringTable[16];
     ptr = &borrowed;
     boxed = makeRef<std::remove_cvref_t<decltype((borrowed))>>(borrowed);
     _sm_expr17 = ns1_mirror(ptr, boxed);
     simse_println((_sm_expr17), stdout);
     _sm_base13 = *(ptr);
     _sm_base14 = *(boxed);
-    parts = List<Str>{_sm_base13, _sm_base14, __sm_stringTable[26]};
+    parts = List<Str>{_sm_base13, _sm_base14, __sm_stringTable[17]};
     _sm_expr18 = simse_lenOf(parts);
     _sm_expr19 = simse_int_toString(_sm_expr18);
     simse_println((_sm_expr19), stdout);
     _sm_base15 = parts[0];
     simse_println((_sm_base15), stdout);
-    _sm_base17 = __sm_stringTable[23];
+    _sm_base17 = __sm_stringTable[15];
     _sm_base16 = &_sm_base17;
     _sm_base19 = *(ptr);
     _sm_base20 = *(boxed);
-    _sm_base18 = List<Str>{_sm_base19, _sm_base20, __sm_stringTable[26]};
+    _sm_base18 = List<Str>{_sm_base19, _sm_base20, __sm_stringTable[17]};
     _sm_base21 = &_sm_base18;
     _sm_expr20 = ns1_parcel(_sm_base16, _sm_base21);
     simse_println((_sm_expr20), stdout);
@@ -1776,7 +1747,7 @@ Int ns1_partShapes() {
     Int _sm_expr2;
     ns1_Shape _sm_expr3, _sm_expr4;
     Bool _sm_expr5;
-    name = __sm_stringTable[35];
+    name = __sm_stringTable[22];
     _sm_expr1 = ns1_describeShapes(simse_addressOf(name));
     simse_println((_sm_expr1), stdout);
     _sm_expr2 = ns1_area(4);
@@ -1786,306 +1757,6 @@ Int ns1_partShapes() {
     _sm_expr5 = _sm_expr3 == _sm_expr4;
     simse_println((_sm_expr5), stdout);
     simse_println(('a'), stdout);
-    return 0;
-}
-// stress/objects/src/main.kt
-Attribute ns1_attr(Str* name, Str* value) {
-    Str _sm_base1, _sm_base2;
-    Attribute _sm_expr1;
-    _sm_base1 = *(name);
-    _sm_base2 = *(value);
-    _sm_expr1 = Attribute{_sm_base1, _sm_base2};
-    return _sm_expr1;
-}
-// stress/objects/src/main.kt
-List<Attribute> ns1_attrs3(Attribute a, Attribute b, Attribute c) {
-    List<Attribute> list;
-    list = List<Attribute>();
-    simse_list_append(list, a);
-    simse_list_append(list, b);
-    simse_list_append(list, c);
-    return list;
-}
-// stress/objects/src/main.kt
-List<Attribute> ns1_attrs4(Attribute a, Attribute b, Attribute c, Attribute d) {
-    List<Attribute> list;
-    list = List<Attribute>();
-    simse_list_append(list, a);
-    simse_list_append(list, b);
-    simse_list_append(list, c);
-    simse_list_append(list, d);
-    return list;
-}
-// stress/objects/src/main.kt
-Array<XmlNode> ns1_noChildren() {
-    Array<XmlNode> _sm_expr1;
-    _sm_expr1 = Array<XmlNode>();
-    return _sm_expr1;
-}
-// stress/objects/src/main.kt
-Array<XmlNode> ns1_oneChild(XmlNode child) {
-    List<XmlNode> children;
-    Array<XmlNode> _sm_expr1;
-    children = List<XmlNode>();
-    simse_list_append(children, child);
-    _sm_expr1 = simse_list_toArray(children);
-    return _sm_expr1;
-}
-// stress/objects/src/main.kt
-Str ns1_escapeText(Str text) {
-    Str out;
-    Int i, _sm_expr1;
-    Bool _sm_expr2;
-    Char ch;
-    out = Str();
-    i = 0;
-    L1:;
-    _sm_expr1 = simse_lenOf(text);
-    _sm_expr2 = i < _sm_expr1;
-    if (!(_sm_expr2)) goto L2;
-    ch = text[i];
-    _sm_expr2 = ch == '\\';
-    if (_sm_expr2) goto L3;
-    goto L4;
-    L3:;
-    simse_str_append(out, '\\');
-    simse_str_append(out, '\\');
-    goto L17;
-    L4:;
-    _sm_expr2 = ch == '\n';
-    if (_sm_expr2) goto L6;
-    goto L7;
-    L6:;
-    simse_str_append(out, '\\');
-    simse_str_append(out, 'n');
-    goto L17;
-    L7:;
-    _sm_expr2 = ch == '\r';
-    if (_sm_expr2) goto L9;
-    goto L10;
-    L9:;
-    simse_str_append(out, '\\');
-    simse_str_append(out, 'r');
-    goto L17;
-    L10:;
-    _sm_expr2 = ch == '\t';
-    if (_sm_expr2) goto L12;
-    goto L13;
-    L12:;
-    simse_str_append(out, '\\');
-    simse_str_append(out, 't');
-    goto L17;
-    L13:;
-    _sm_expr2 = ch == '\'';
-    if (_sm_expr2) goto L15;
-    goto L16;
-    L15:;
-    simse_str_append(out, '\\');
-    simse_str_append(out, '\'');
-    goto L17;
-    L16:;
-    simse_str_append(out, ch);
-    L17:;
-    i = i + 1;
-    goto L1;
-    L2:;
-    return out;
-}
-// stress/objects/src/main.kt
-Str ns1_indentation(Int depth) {
-    Str out;
-    Int i, _sm_expr1;
-    Bool _sm_expr2;
-    out = Str();
-    i = 0;
-    L1:;
-    _sm_expr1 = depth * 2;
-    _sm_expr2 = i < _sm_expr1;
-    if (!(_sm_expr2)) goto L2;
-    simse_str_append(out, ' ');
-    i = i + 1;
-    goto L1;
-    L2:;
-    return out;
-}
-// stress/objects/src/main.kt
-Str ns1_dumpNode(XmlNode node, Int depth) {
-    char* __sm_catP;
-    Int __sm_catAt;
-    List<Attribute>* _sm_base1, * _sm_base2;
-    Str _sm_base3, _sm_expr1, _sm_expr2, out, _sm_expr8, _sm_expr9;
-    XmlNode _sm_base4;
-    Int i, _sm_expr3, j, _sm_expr13;
-    Bool _sm_expr4;
-    Attribute attribute;
-    Array<XmlNode> children;
-    _sm_expr1 = ns1_indentation(depth);
-    _sm_expr2 = node.name;
-    out.resize(_sm_expr1.size() + _sm_expr2.size());
-    __sm_catP = out.data();
-    std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
-    __sm_catP = __sm_catP + _sm_expr1.size();
-    std::memcpy(__sm_catP, _sm_expr2.data(), _sm_expr2.size());
-    i = 0;
-    L1:;
-    _sm_base1 = simse_addressOf(node.attributes);
-    _sm_expr3 = simse_lenOf((*_sm_base1));
-    _sm_expr4 = i < _sm_expr3;
-    if (!(_sm_expr4)) goto L2;
-    _sm_base2 = simse_addressOf(node.attributes);
-    attribute = (*_sm_base2)[i];
-    _sm_expr1.resize(1 + out.size());
-    __sm_catP = _sm_expr1.data();
-    std::memcpy(__sm_catP, out.data(), out.size());
-    __sm_catP = __sm_catP + out.size();
-    *__sm_catP = (char) (' ');
-    _sm_expr2 = attribute.name;
-    _sm_expr8.resize(2 + _sm_expr1.size() + _sm_expr2.size());
-    __sm_catP = _sm_expr8.data();
-    std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
-    __sm_catP = __sm_catP + _sm_expr1.size();
-    std::memcpy(__sm_catP, _sm_expr2.data(), _sm_expr2.size());
-    __sm_catP = __sm_catP + _sm_expr2.size();
-    std::memcpy(__sm_catP, "='", 2);
-    _sm_base3 = attribute.value;
-    _sm_expr9 = ns1_escapeText(_sm_base3);
-    out.resize(1 + _sm_expr8.size() + _sm_expr9.size());
-    __sm_catP = out.data();
-    std::memcpy(__sm_catP, _sm_expr8.data(), _sm_expr8.size());
-    __sm_catP = __sm_catP + _sm_expr8.size();
-    std::memcpy(__sm_catP, _sm_expr9.data(), _sm_expr9.size());
-    __sm_catP = __sm_catP + _sm_expr9.size();
-    *__sm_catP = (char) ('\'');
-    i = i + 1;
-    goto L1;
-    L2:;
-    __sm_catAt = out.size();
-    out.resize(__sm_catAt + 1);
-    __sm_catP = out.data() + __sm_catAt;
-    *__sm_catP = (char) ('\n');
-    children = node.Children;
-    j = 0;
-    L3:;
-    _sm_expr3 = simse_array_count(children);
-    _sm_expr4 = j < _sm_expr3;
-    if (!(_sm_expr4)) goto L4;
-    _sm_expr13 = depth + 1;
-    _sm_base4 = children[j];
-    _sm_expr1 = ns1_dumpNode(_sm_base4, _sm_expr13);
-    __sm_catAt = out.size();
-    out.resize(__sm_catAt + _sm_expr1.size());
-    __sm_catP = out.data() + __sm_catAt;
-    std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
-    j = j + 1;
-    goto L3;
-    L4:;
-    return out;
-}
-// stress/objects/src/main.kt
-Int ns1_partXmlTree() {
-    Str* _sm_base1, * _sm_base3, * _sm_base5, * _sm_base7, * _sm_base9, * _sm_base11, * _sm_base13,
-        * _sm_base15, * _sm_base17, * _sm_base19, * _sm_base21, * _sm_base23, * _sm_base25, * _sm_base27,
-        * _sm_base29, * _sm_base31, * _sm_base33, * _sm_base35, * _sm_base37, * _sm_base39, * _sm_base41,
-        * _sm_base43, * _sm_base45, * _sm_base47, * _sm_base49, * _sm_base51, * _sm_base53, * _sm_base55,
-        * _sm_base57, * _sm_base59;
-    Str _sm_base2, _sm_base4, _sm_base6, _sm_base8, _sm_base10, _sm_base12, _sm_base14, _sm_base16,
-        _sm_base18, _sm_base20, _sm_base22, _sm_base24, _sm_base26, _sm_base28, _sm_base30, _sm_base32,
-        _sm_base34, _sm_base36, _sm_base38, _sm_base40, _sm_base42, _sm_base44, _sm_base46, _sm_base48,
-        _sm_base50, _sm_base52, _sm_base54, _sm_base56, _sm_base58, _sm_base60, _sm_expr24;
-    Attribute _sm_expr1, _sm_expr2, _sm_expr3, _sm_expr4, _sm_expr7, _sm_expr8, _sm_expr9, _sm_expr10,
-        _sm_expr13, _sm_expr14, _sm_expr15, _sm_expr16, _sm_expr19, _sm_expr20, _sm_expr21;
-    List<Attribute> _sm_expr5, _sm_expr11, _sm_expr17, _sm_expr22;
-    Array<XmlNode> _sm_expr6, _sm_expr12, _sm_expr18, _sm_expr23;
-    XmlNode typeNode, fieldNode, dataClassNode, moduleNode;
-    _sm_base2 = __sm_stringTable[25];
-    _sm_base1 = &_sm_base2;
-    _sm_base4 = __sm_stringTable[2];
-    _sm_base3 = &_sm_base4;
-    _sm_expr1 = ns1_attr(_sm_base1, _sm_base3);
-    _sm_base6 = __sm_stringTable[27];
-    _sm_base5 = &_sm_base6;
-    _sm_base8 = __sm_stringTable[50];
-    _sm_base7 = &_sm_base8;
-    _sm_expr2 = ns1_attr(_sm_base5, _sm_base7);
-    _sm_base10 = __sm_stringTable[12];
-    _sm_base9 = &_sm_base10;
-    _sm_base12 = __sm_stringTable[42];
-    _sm_base11 = &_sm_base12;
-    _sm_expr3 = ns1_attr(_sm_base9, _sm_base11);
-    _sm_base14 = __sm_stringTable[29];
-    _sm_base13 = &_sm_base14;
-    _sm_base16 = __sm_stringTable[34];
-    _sm_base15 = &_sm_base16;
-    _sm_expr4 = ns1_attr(_sm_base13, _sm_base15);
-    _sm_expr5 = ns1_attrs4(_sm_expr1, _sm_expr2, _sm_expr3, _sm_expr4);
-    _sm_expr6 = ns1_noChildren();
-    typeNode = XmlNode{__sm_stringTable[22], _sm_expr5, _sm_expr6};
-    _sm_base18 = __sm_stringTable[29];
-    _sm_base17 = &_sm_base18;
-    _sm_base20 = __sm_stringTable[55];
-    _sm_base19 = &_sm_base20;
-    _sm_expr7 = ns1_attr(_sm_base17, _sm_base19);
-    _sm_base22 = __sm_stringTable[16];
-    _sm_base21 = &_sm_base22;
-    _sm_base24 = __sm_stringTable[31];
-    _sm_base23 = &_sm_base24;
-    _sm_expr8 = ns1_attr(_sm_base21, _sm_base23);
-    _sm_base26 = __sm_stringTable[27];
-    _sm_base25 = &_sm_base26;
-    _sm_base28 = __sm_stringTable[50];
-    _sm_base27 = &_sm_base28;
-    _sm_expr9 = ns1_attr(_sm_base25, _sm_base27);
-    _sm_base30 = __sm_stringTable[12];
-    _sm_base29 = &_sm_base30;
-    _sm_base32 = __sm_stringTable[41];
-    _sm_base31 = &_sm_base32;
-    _sm_expr10 = ns1_attr(_sm_base29, _sm_base31);
-    _sm_expr11 = ns1_attrs4(_sm_expr7, _sm_expr8, _sm_expr9, _sm_expr10);
-    _sm_expr12 = ns1_oneChild(typeNode);
-    fieldNode = XmlNode{__sm_stringTable[13], _sm_expr11, _sm_expr12};
-    _sm_base34 = __sm_stringTable[25];
-    _sm_base33 = &_sm_base34;
-    _sm_base36 = __sm_stringTable[3];
-    _sm_base35 = &_sm_base36;
-    _sm_expr13 = ns1_attr(_sm_base33, _sm_base35);
-    _sm_base38 = __sm_stringTable[27];
-    _sm_base37 = &_sm_base38;
-    _sm_base40 = __sm_stringTable[50];
-    _sm_base39 = &_sm_base40;
-    _sm_expr14 = ns1_attr(_sm_base37, _sm_base39);
-    _sm_base42 = __sm_stringTable[12];
-    _sm_base41 = &_sm_base42;
-    _sm_base44 = __sm_stringTable[50];
-    _sm_base43 = &_sm_base44;
-    _sm_expr15 = ns1_attr(_sm_base41, _sm_base43);
-    _sm_base46 = __sm_stringTable[29];
-    _sm_base45 = &_sm_base46;
-    _sm_base48 = __sm_stringTable[21];
-    _sm_base47 = &_sm_base48;
-    _sm_expr16 = ns1_attr(_sm_base45, _sm_base47);
-    _sm_expr17 = ns1_attrs4(_sm_expr13, _sm_expr14, _sm_expr15, _sm_expr16);
-    _sm_expr18 = ns1_oneChild(fieldNode);
-    dataClassNode = XmlNode{__sm_stringTable[3], _sm_expr17, _sm_expr18};
-    _sm_base50 = __sm_stringTable[25];
-    _sm_base49 = &_sm_base50;
-    _sm_base52 = __sm_stringTable[9];
-    _sm_base51 = &_sm_base52;
-    _sm_expr19 = ns1_attr(_sm_base49, _sm_base51);
-    _sm_base54 = __sm_stringTable[27];
-    _sm_base53 = &_sm_base54;
-    _sm_base56 = __sm_stringTable[50];
-    _sm_base55 = &_sm_base56;
-    _sm_expr20 = ns1_attr(_sm_base53, _sm_base55);
-    _sm_base58 = __sm_stringTable[12];
-    _sm_base57 = &_sm_base58;
-    _sm_base60 = __sm_stringTable[50];
-    _sm_base59 = &_sm_base60;
-    _sm_expr21 = ns1_attr(_sm_base57, _sm_base59);
-    _sm_expr22 = ns1_attrs3(_sm_expr19, _sm_expr20, _sm_expr21);
-    _sm_expr23 = ns1_oneChild(dataClassNode);
-    moduleNode = XmlNode{__sm_stringTable[9], _sm_expr22, _sm_expr23};
-    _sm_expr24 = ns1_dumpNode(moduleNode, 0);
-    simse_print((_sm_expr24), stdout);
     return 0;
 }
 // stress/objects/src/main.kt
@@ -2100,7 +1771,6 @@ int main() {
     ns1_partReceiverShapes();
     ns1_partRtlSimse();
     ns1_partShapes();
-    ns1_partXmlTree();
     return 0;
 }
 
@@ -2261,122 +1931,6 @@ inline void simse_opt_initByValueNone(Opt<T>& self) { self = Opt<T>(); }
 template <class T>
 inline void simse_res_initByValue(Res<T>& self, const T& value) { self = Res<T>::ok(value); }
 
-inline Char simse_str_charAt(const Str& self, Int index) {
-    return (Char) self[index];
-}
-
-inline List<Str> simse_str_split(const Str& self, const Str& separator) {
-    List<Str> parts;
-    if (separator.empty()) {
-        parts.push_back(self);
-        return parts;
-    }
-    Int pos = 0;
-    while (true) {
-        Int found = self.find(separator, pos);
-        if (found == Str::npos) {
-            parts.push_back(self.substr(pos));
-            break;
-        }
-        parts.push_back(self.substr(pos, found - pos));
-        pos = found + separator.size();
-    }
-    return parts;
-}
-
-// How many bytes of `self` are `ch`: what the byte-separator split reserves up front.
-inline Int simse_count_char_in_str(const Str* self, char ch) {
-    Int count = 0;
-    const char* data = self->data();
-    Int len = self->size();
-    for (Int i = 0; i < len; i++) {
-        if (data[i] == ch) {
-            count++;
-        }
-    }
-    return count;
-}
-
-inline List<Str> simse_str_split(const Str& self, Char separator) {
-    List<Str> parts;
-    parts.reserve(simse_count_char_in_str(&self, separator));
-    Int pos = 0;
-    while (true) {
-        Int found = self.find(separator, pos);
-        if (found == Str::npos) {
-            parts.push_back(self.substr(pos));
-            break;
-        }
-        parts.push_back(self.substr(pos, found - pos));
-        pos = found + 1;
-    }
-    return parts;
-}
-
-inline Int simse_str_find(const Str& self, const Str& sub) {
-    Int found = self.find(sub);
-    return found == Str::npos ? -1 : found;
-}
-
-inline Int simse_str_lastIndexOf(const Str& self, const Str& sub) {
-    Int found = self.rfind(sub);
-    return found == Str::npos ? -1 : found;
-}
-
-inline Str simse_str_replace(const Str& self, const Str& from, const Str& to) {
-    if (from.empty()) return self;
-    Str result;
-    Int pos = 0;
-    while (true) {
-        Int found = self.find(from, pos);
-        if (found == Str::npos) {
-            result.append(self, pos, Str::npos);
-            break;
-        }
-        result.append(self, pos, found - pos);
-        result += to;
-        pos = found + from.size();
-    }
-    return result;
-}
-
-inline Opt<Int> simse_str_toInt(const Str& self) {
-    if (self.empty()) return Opt<Int>::none();
-    Int value = 0;
-    const char* begin = self.data();
-    const char* end = begin + self.size();
-    std::from_chars_result parsed = std::from_chars(begin, end, value);
-    if (parsed.ec != std::errc() || parsed.ptr != end) return Opt<Int>::none();
-    return Opt<Int>::some(value);
-}
-
-inline Opt<Float64> simse_str_toFloat(const Str& self) {
-    if (self.empty()) return Opt<Float64>::none();
-    const char* begin = self.data();
-    char* end = nullptr;
-    errno = 0;
-    const Float64 value = std::strtod(begin, &end);
-    if (end != begin + self.size() || errno == ERANGE) return Opt<Float64>::none();
-    return Opt<Float64>::some(value);
-}
-
-inline void simse_str_initByValue(Str& self, const Str& value) {
-    self = value;
-}
-
-template <class T>
-inline Str simse_num_toString(const T& self) {
-    return std::to_string(self);
-}
-
-inline Str simse_char_toString(Char self) {
-    return std::to_string((int) self);
-}
-
-inline Str simse_bool_toString(Bool self) {
-    return self ? "true" : "false";
-}
-
 // `dictionaryOf<K, V>()`: `Dictionary<K, V>` is a value type, so this default-constructs
 // one.
 template <class K, class V>
@@ -2524,6 +2078,122 @@ inline StrView simse_strBoolView(Bool value) {
     static Int lens[2] = {4, 5};
     Int at = value ? 0 : 1;
     return StrView(texts[at], lens[at]);
+}
+
+inline Char simse_str_charAt(const Str& self, Int index) {
+    return (Char) self[index];
+}
+
+inline List<Str> simse_str_split(const Str& self, const Str& separator) {
+    List<Str> parts;
+    if (separator.empty()) {
+        parts.push_back(self);
+        return parts;
+    }
+    Int pos = 0;
+    while (true) {
+        Int found = self.find(separator, pos);
+        if (found == Str::npos) {
+            parts.push_back(self.substr(pos));
+            break;
+        }
+        parts.push_back(self.substr(pos, found - pos));
+        pos = found + separator.size();
+    }
+    return parts;
+}
+
+// How many bytes of `self` are `ch`: what the byte-separator split reserves up front.
+inline Int simse_count_char_in_str(const Str* self, char ch) {
+    Int count = 0;
+    const char* data = self->data();
+    Int len = self->size();
+    for (Int i = 0; i < len; i++) {
+        if (data[i] == ch) {
+            count++;
+        }
+    }
+    return count;
+}
+
+inline List<Str> simse_str_split(const Str& self, Char separator) {
+    List<Str> parts;
+    parts.reserve(simse_count_char_in_str(&self, separator));
+    Int pos = 0;
+    while (true) {
+        Int found = self.find(separator, pos);
+        if (found == Str::npos) {
+            parts.push_back(self.substr(pos));
+            break;
+        }
+        parts.push_back(self.substr(pos, found - pos));
+        pos = found + 1;
+    }
+    return parts;
+}
+
+inline Int simse_str_find(const Str& self, const Str& sub) {
+    Int found = self.find(sub);
+    return found == Str::npos ? -1 : found;
+}
+
+inline Int simse_str_lastIndexOf(const Str& self, const Str& sub) {
+    Int found = self.rfind(sub);
+    return found == Str::npos ? -1 : found;
+}
+
+inline Str simse_str_replace(const Str& self, const Str& from, const Str& to) {
+    if (from.empty()) return self;
+    Str result;
+    Int pos = 0;
+    while (true) {
+        Int found = self.find(from, pos);
+        if (found == Str::npos) {
+            result.append(self, pos, Str::npos);
+            break;
+        }
+        result.append(self, pos, found - pos);
+        result += to;
+        pos = found + from.size();
+    }
+    return result;
+}
+
+inline Opt<Int> simse_str_toInt(const Str& self) {
+    if (self.empty()) return Opt<Int>::none();
+    Int value = 0;
+    const char* begin = self.data();
+    const char* end = begin + self.size();
+    std::from_chars_result parsed = std::from_chars(begin, end, value);
+    if (parsed.ec != std::errc() || parsed.ptr != end) return Opt<Int>::none();
+    return Opt<Int>::some(value);
+}
+
+inline Opt<Float64> simse_str_toFloat(const Str& self) {
+    if (self.empty()) return Opt<Float64>::none();
+    const char* begin = self.data();
+    char* end = nullptr;
+    errno = 0;
+    const Float64 value = std::strtod(begin, &end);
+    if (end != begin + self.size() || errno == ERANGE) return Opt<Float64>::none();
+    return Opt<Float64>::some(value);
+}
+
+inline void simse_str_initByValue(Str& self, const Str& value) {
+    self = value;
+}
+
+template <class T>
+inline Str simse_num_toString(const T& self) {
+    return std::to_string(self);
+}
+
+inline Str simse_char_toString(Char self) {
+    return std::to_string((int) self);
+}
+
+inline Str simse_bool_toString(Bool self) {
+    return self ? "true" : "false";
 }
 
 // Expands one run-length encoded series into `out`, which holds `count` values.

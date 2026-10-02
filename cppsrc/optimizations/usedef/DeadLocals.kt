@@ -8,6 +8,7 @@
 // is neither a read nor a write of its own name, which is what leaves the storage behind.
 
 package optimizations
+import compiler
 
 import common
 import linear

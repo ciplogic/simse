@@ -41,13 +41,16 @@ with the operations that come with them:
   `toInt`, `split`, the case predicates, ...);
 - the containers `List<T>`, `Array<T>`, `RawArray<T>`, `SmallVector<N, T>`,
   `Dictionary<K, V>`, `PList<T>`, `Opt<T>`, `Res<T>`, `Span<T>`;
-- the callable type form `(A, B) -> R`;
-- the runtime's tree types `XmlNode` and `Attribute`.
+- the callable type form `(A, B) -> R`.
 
 `rtl` is the **implicit import**: every file is compiled as if it began with `import rtl`,
 so these names need no import and no qualifier. It is the same mechanism as an explicit
 `import` (below), only not written. Nothing else about `rtl` is special: it is an ordinary
 package that several modules may contribute to.
+
+The runtime's tree types `XmlNode` and `Attribute` are **not** built-ins: they live in the
+`xml` module (`cppsrc/modules/xml/api.kt`), so a program reaches them with `import xml` and
+must name that module on the compiler command line (or in its `simse.md` manifest).
 
 ### Deferred: multiple packages per file
 
@@ -89,8 +92,7 @@ decreasing precedence is:
 3. the implicit `rtl` prelude.
 
 The first declaration of a name in that order wins, so an explicit import shadows
-`rtl` - an `XmlNode` from `import xml` is the `xml` module's, not the prelude's -
-and a file's own declaration shadows both. Only the winner is emitted: the
+`rtl` and a file's own declaration shadows both. Only the winner is emitted: the
 shadowed declaration is not generated, so a module can *replace* a prelude type
 rather than collide with it. A duplicate top-level name in the *same* package is
 still an error ("Modules (physical)" above).

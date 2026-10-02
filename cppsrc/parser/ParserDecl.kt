@@ -5,6 +5,7 @@
 // be read in pieces; they use only its public state.
 
 package parser
+import compiler
 
 import lex
 import common

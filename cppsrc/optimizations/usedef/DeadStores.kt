@@ -11,6 +11,7 @@
 // makes *their* stores dead too, so the pass runs again until a round removes nothing.
 
 package optimizations
+import compiler
 
 import common
 import linear

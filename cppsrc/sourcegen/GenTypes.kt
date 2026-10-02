@@ -1,15 +1,16 @@
 // GenTypes.kt
 //
-// The source generators' vocabulary (impl_specs/generators.md): what a generator is told,
-// what it may touch, and what it answers. A generator reads and writes *data* - the AST
-// nodes (`xml*`), the resources, the `Sections` sink - and must not call the compiler's own
-// code; that boundary is why it is handed only the sink and the state.
+// The source generators' registry and state (impl_specs/generators.md): the table, the
+// request record, and the compilation a generator looks at. What a generator is *told* and
+// what it *answers* - `SourceGenContext`, `SourceGenTransform` - lives in the compiler module
+// (`cppsrc/modules/compiler/gen.kt`), next to the AST it manipulates.
 //
 // A generator is asked in *phases*: `Declare` while the program is collected (the symbol a
 // call reaches must exist before any body), `Reparse` for source the driver will compile,
 // and `Emit` once every body is emitted, when the reach set decides what lands.
 
 package sourcegen
+import compiler
 
 import common
 import resources
@@ -29,14 +30,6 @@ enum class SourceGenPhase {
     Reparse,
     Emit
 }
-
-// A generator's answer: what it did, and the key it is filed under - the generator's own
-// spelling of what it produced (a resource section's name). `FullCompiledState.definitions`
-// remembers it, which is what a generator producing the same thing twice reads back.
-data class SourceGenTransform(
-    var change: SourceTransformation,
-    var key: Str
-)
 
 // Kept so the `Emit` phase can ask again, when the program's calls are known.
 data class SourceGenRequest(
@@ -60,44 +53,6 @@ data class FullCompiledState(
     var definitions: Dictionary<Str, Str>,
     var requests: List<SourceGenRequest>
 )
-
-// Everything one dispatch may read or change. `sections` and `reachedNames` are null in the
-// `Reparse` phase (the emitter does not exist yet), so a generator must not touch them there.
-data class SourceGenContext(
-    var name: Str,
-    var phase: SourceGenPhase,
-    var declaration: AstXmlNode,
-    var declName: Str,
-    var parameters: List<Str>,
-    var symbol: Str,
-    var source: Str,
-    var error: Str,
-    var fileName: Str,
-    var prelude: Bool,
-    var state: *FullCompiledState,
-    var sections: *Sections,
-    var reachedNames: *Dictionary<Str, Bool>
-) {
-    // By the name a call spells, or the symbol a call reaches; a *prelude* declaration nothing
-    // reaches is skipped.
-    fun isReached(): Bool {
-        if (this.reachedNames == null) {
-            return true
-        }
-        if (this.reachedNames.has(this.declName)) {
-            return true
-        }
-        return this.reachedNames.has(this.symbol)
-    }
-
-    // Argument `index` (`parameters` holds what follows the generator's name), or "".
-    fun parameter(index: Int): Str {
-        if (index < 0 || index >= this.parameters.size()) {
-            return ""
-        }
-        return this.parameters[index]
-    }
-}
 
 typealias OnSourceGen = (*SourceGenContext) -> SourceGenTransform
 

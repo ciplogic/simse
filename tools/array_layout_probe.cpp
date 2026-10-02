@@ -8,7 +8,7 @@
 
 #include <cstdio>
 
-// `Attribute`/`XmlNode` are generated from their declaration (cppsrc/rtl/xml.kt), so a
+// `Attribute`/`XmlNode` are generated from their declaration (cppsrc/modules/xml/api.kt), so a
 // standalone probe mirrors the emitted shape.
 SIMSE_PACK_PUSH
 struct Attribute {
@@ -87,7 +87,7 @@ int main() {
     std::printf("sizeof(List<Attribute>)       %zu\n", sizeof(List<Attribute>));
     std::printf("children block bytes for 2    %zu\n", ArrayBlock<XmlNode>::blockBytes(2));
 
-    // The compiler's AST node (cppsrc/rtl/astxml.kt): same shape, but the role
+    // The compiler's AST node (cppsrc/modules/compiler/astxml.kt): same shape, but the role
     // and the attribute keys are enums, so the attribute list is much smaller.
     std::printf("sizeof(AstXmlNode)             %zu\n", sizeof(AstXmlNode));
     std::printf("sizeof(AstNodeAttribute)      %zu\n", sizeof(AstNodeAttribute));

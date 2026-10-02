@@ -20,6 +20,7 @@
 // Only `Bool`: a `Str`/object slot wants its block to hold it.
 
 package optimizations
+import compiler
 
 import common
 import linear

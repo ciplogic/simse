@@ -5,6 +5,7 @@
 // IlCodeGen.kt holds the IL model (IlFrame/IlText/...).
 
 package codegen
+import compiler
 
 import sema
 import common

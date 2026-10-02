@@ -36,6 +36,7 @@
 // (`Str`, a `data class`, a container) - never a scalar, a handle or `Span`/`Array`.
 
 package parser
+import compiler
 
 import common
 
@@ -95,8 +96,7 @@ fun bpCollectDecls(
 // one is a construction or a conversion, which copies what it is given.
 fun bpBuiltinType(name: *Str): Bool {
     if ( * name == "Str" || * name == "List" || *name == "Dictionary" || *name == "Opt"
-    || *name == "Res" || *name == "Array" || *name == "Span" || *name == "XmlNode"
-    || *name == "Attribute" || *name == "FileStream"
+    || *name == "Res" || *name == "Array" || *name == "Span" || *name == "FileStream"
     ) {
         return true
     }

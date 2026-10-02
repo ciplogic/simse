@@ -7,6 +7,7 @@
 // `for` and `when` are desugared here, so no stage downstream sees either.
 
 package parser
+import compiler
 
 import lex
 import common

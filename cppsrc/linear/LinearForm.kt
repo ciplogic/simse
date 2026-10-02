@@ -6,6 +6,7 @@
 // `methods`, `labels`, `ops`, `lines` (each op's line). A type is an `AstXmlNode` subtree.
 
 package linear
+import compiler
 
 import common
 import sema

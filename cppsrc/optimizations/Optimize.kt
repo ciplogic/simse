@@ -6,6 +6,7 @@
 // whether it changed it, and sees only a fully linear body (impl_specs/linear-il.md).
 
 package optimizations
+import compiler
 
 import common
 import linear

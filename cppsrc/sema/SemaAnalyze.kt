@@ -4,6 +4,7 @@
 // methods on `Analyzer` (Sema.kt); SemaCollect.kt has the collection and scopes.
 
 package sema
+import compiler
 
 import parser
 import common

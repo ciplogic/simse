@@ -6,6 +6,7 @@
 // honestly without a deep `==`. Bottom-up, in place; a lambda and a type node are not entered.
 
 package optimizations
+import compiler
 
 import common
 import linear

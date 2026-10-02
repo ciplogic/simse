@@ -4,6 +4,7 @@
 // `return (...)` construction convention. Extension methods on `Parser` (Parser.kt).
 
 package parser
+import compiler
 
 import lex
 import common

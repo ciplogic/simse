@@ -4,6 +4,7 @@
 // needs declared at the top of a body. `Emitter` extension functions.
 
 package codegen
+import compiler
 
 import sema
 import common

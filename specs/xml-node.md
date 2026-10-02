@@ -8,6 +8,10 @@ used both to represent parse trees and to render/debug hierarchies. The language
 has no inheritance or dynamic dispatch, so one node type is composed from existing
 declared types; its tag and attributes carry what would otherwise live in a subtype.
 
+The type is not a built-in: `XmlNode` and `Attribute` live in the `xml` module
+(`cppsrc/modules/xml/api.kt`), so a program writes `import xml` and names the module on the
+compiler command line (or in its `simse.md` manifest).
+
 ## `Attribute`
 
 ```text

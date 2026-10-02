@@ -5,6 +5,7 @@
 // `line`/`column` attributes.
 
 package sema
+import compiler
 
 import parser
 import common

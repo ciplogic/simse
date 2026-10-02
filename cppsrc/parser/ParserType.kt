@@ -5,6 +5,7 @@
 // `Parser` (Parser.kt).
 
 package parser
+import compiler
 
 import lex
 import common

@@ -6,6 +6,7 @@
 // fallthrough still has to take the jump, and only `LinSimplifier.labelPass` may drop it.
 
 package optimizations
+import compiler
 
 import common
 import linear

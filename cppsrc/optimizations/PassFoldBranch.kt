@@ -6,6 +6,7 @@
 // and the label is left to `LinSimplifier.prunePass`.
 
 package optimizations
+import compiler
 
 import common
 import linear

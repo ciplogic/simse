@@ -163,8 +163,8 @@ driver's - and `build.bat` can compile it.
   collision fixture's `spanOfEmpty`) with `symbol:`/`emit: always`/`emit: reached` deciding how a
   declaration reaches it
   (`impl_specs/generators.md`) - AND the
-  **prelude** `.kt` files (`rtl.kt`, `Span.kt`, `StrView.kt`, `xml.kt`,
-  `astxml.kt`, `fs.kt`, `resources.kt`) declaring the RTL surface - and, where the only
+  **prelude** `.kt` files (`rtl.kt`, `Span.kt`, `StrView.kt`,
+  `fs.kt`, `resources.kt`) declaring the RTL surface - and, where the only
   thing C++ must supply is a raw pointer, *implementing* it: `resources.kt`'s
   `Resources.entries/get/has/count` are Simse over the `Span<ResourceEntry>`
   `resources.hpp` hands out, and `rtl.kt`'s `append`/`toArray`/`toString`/... reach the
@@ -206,8 +206,10 @@ driver's - and `build.bat` can compile it.
   linear form, emit. `sourcegen/` sits beside them: the source generators, one file per
   generator plus the manager (`SourceGen.kt`) and the `Sections` sink (`Sections.kt`),
   which `codegen` calls but which calls nothing back (`impl_specs/generators.md`).
-  `cppsrc/modules/` holds the reusable modules (`json` first: an `api.kt` plus the
-  compiler-side sources in a `generators/` subfolder, `specs/simse-md.md`); `--module <dir>`
+  `cppsrc/modules/` holds the reusable modules (`json`: an `api.kt` plus the
+  compiler-side sources in a `generators/` subfolder, `specs/simse-md.md`; `compiler`:
+  the compiler-only surface - the AST and the generator vocabulary, `astxml.kt`/`gen.kt`);
+  `--module <dir>`
   names one on the command line (repeatable, duplicates merged), while `--root` scans a tree whole,
   so the module's generators are compiled into the compiler and never into a program that imports
   the module.
@@ -331,7 +333,7 @@ Key design points:
 - **AST carrier is `AstXmlNode`** (see `impl_specs/ast-xmlnode.md`): one uniform
   node; `name` is an `AstNodeKind` (the structural role), `kind` an
   `AstNodeCategory` (the schema's category), an attribute key an
-  `AstNodeAttributeKind` - all enums, in `cppsrc/rtl/astxml.kt` - so every test
+  `AstNodeAttributeKind` - all enums, in `cppsrc/modules/compiler/astxml.kt` - so every test
   on a node is an integer compare. Attribute *values* are text, children are an
   `Array<AstXmlNode>` (one counted block, count first, the shared empty array for a
   leaf). The language-level `XmlNode` (`specs/xml-node.md`) stays the general
@@ -345,7 +347,8 @@ Key design points:
   true, true)` - whose file-level static initializer appends it to `sourceGenTable` (the
   table has no initializer of its own: static initializers run in an unspecified order, and an
   append onto storage that starts empty cannot lose one). A generator is a lambda over
-  `*SourceGenContext` and is asked three times - `Declare` (resolve the symbol a call
+  `*SourceGenContext` (the interface types - `SourceGenContext`, `SourceGenTransform` - are
+  the `compiler` module's, `cppsrc/modules/compiler/gen.kt`) and is asked three times - `Declare` (resolve the symbol a call
   reaches), `Reparse` (hand back Simse source) and `Emit` (place text, and once more for the
   program itself). It may read and write the AST nodes, the resources and the `Sections` sink,
   and it calls nothing from the compiler's stages: that boundary is what keeps a program
@@ -370,8 +373,8 @@ Key design points:
   declaration of its own. What is left as `@SmGen("cpp", ...)` is the type core -
   `FileStream`'s struct, `Span` (and `StrView`, which *is* `Span<Char>`), the
   literal interop of `strview.hpp`, the `Str`/`List` primitives - whose C++
-  is the RTL headers. (`XmlNode`/`Attribute` left this list: they are *generated*
-  from `cppsrc/rtl/xml.kt`, like the compiler's `AstXmlNode`.)
+  is the RTL headers. (`XmlNode`/`Attribute` are not here: they live in the `xml`
+  module, `cppsrc/modules/xml/api.kt`, and are *generated* like the compiler's `AstXmlNode`.)
 - **Prelude**: `cppsrc/rtl/*.kt` is implicitly in scope everywhere; its
   method bodies are NOT emitted (behavior lives in the RTL's C++, which is a header or a
   resource section).
@@ -766,8 +769,7 @@ Do these only when asked; roughly prioritized:
   the IDE.
 - **The emitter's type table is flat by name, and a shared name now *shadows* rather than
   collides**: the later declaration wins and the shadowed one is not emitted, so a module
-  can replace a prelude type - `cppsrc/modules/xml`'s `XmlNode`/`Attribute` over
-  `cppsrc/rtl/xml.kt`'s, via `import xml` (specs/modules.md, "Shadowing"; the fix is
+  can replace a prelude type via `import` (specs/modules.md, "Shadowing"; the fix is
   `CgEmitType.kt`'s "only the winner" check, `typePackage(name) == inputPackage(input)`).
   `cppsrc/resources/Resources.kt`'s reader pair predates that rule and stays renamed
   `ResourceItem` (the RTL's `ResourceEntry` would otherwise have been emitted against it).
@@ -884,18 +886,16 @@ generated C++ of one translation unit, so nothing can be built against an older 
   (`semReRole`, the counterpart of the emitter's `renameRole`). Symptom when it is
   missing: the pass annotates correctly and the emitter emits `auto` anyway, because
   `xmlChild(stmt, AstNodeKind.Type)` does not see a `ReturnType`-rooted child.
-- **A data-class field cannot name another package's type** in the Simse ring: the
-  amalgamated file emits the packages in its own order, so the field's type may not
-  be declared yet (`'facts': unknown override specifier`). Program-level tables
-  passed between stages go as **parameters** (that is why the emitter threads
-  `SemFacts` through `emitFunctions`/`emitFunction`).
-- **Within one package the *file order* is the emitted order**, so the same rule
-  applies to a field whose type is declared in a sibling file: the driver scans a
-  module root by path, and the definition comes out where the file sorted
-  (`cppsrc/codegen/CgStringTable.kt` before `Codegen.kt`, because `Emitter` embeds a
-  `StringTable` by value). A by-value field needs the *complete* type, so a forward
-  declaration is not enough - name the file so it sorts first, or pass the value as
-  a parameter.
+- **A by-value field may name a type declared later in the scan** - another file, another
+  package, another module: `emitTypes` (`CgEmitType.kt`'s `emitTypeByName`) pulls a
+  declaration's by-value field types in front of it, so only the *complete*-type rule
+  matters, never the order. A handle - `*T`, `&T`, `Array<T>`, `Span<T>`, `RawArray<T>`,
+  `PList<T>` - stores a pointer, so it is not a dependency. This is what lets the `compiler`
+  module's AST sit after `codegen` and still be held by value (`CgFn.decl`, `SemBody.decl`,
+  ...); before the pull, such a field was `uses undefined struct` in the generated C++
+  (the `'facts': unknown override specifier` shape). Program-level tables between stages
+  are still *parameters*, not fields of a shared struct - the emitter threads `SemFacts`
+  through `emitFunctions`/`emitFunction`.
 - **Spell a char literal whose value is `"` as `'\"'`, not `'"'`** (three sites did
   the latter): Kotlin's highlighter reads `'"'` as the start of a string and colours
   the rest of the line as text. The emitted C++ keeps the *source spelling* of a char

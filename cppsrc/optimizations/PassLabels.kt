@@ -6,6 +6,7 @@
 // names nothing names any more.
 
 package optimizations
+import compiler
 
 import common
 import linear

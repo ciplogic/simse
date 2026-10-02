@@ -18,6 +18,7 @@
 // the C++ compiler.
 
 package parser
+import compiler
 
 import common
 

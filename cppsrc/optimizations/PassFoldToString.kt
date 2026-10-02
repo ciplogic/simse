@@ -6,6 +6,7 @@
 // (decoding a literal) are other jobs, and a `Str` receiver is left alone.
 
 package optimizations
+import compiler
 
 import common
 import linear

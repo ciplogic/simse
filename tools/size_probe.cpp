@@ -17,7 +17,7 @@ struct MixedPacked {
 };
 SIMSE_PACK_POP
 
-// `Attribute`/`XmlNode` are generated from their declaration (cppsrc/rtl/xml.kt), so a
+// `Attribute`/`XmlNode` are generated from their declaration (cppsrc/modules/xml/api.kt), so a
 // standalone probe mirrors the emitted shape.
 SIMSE_PACK_PUSH
 struct Attribute {

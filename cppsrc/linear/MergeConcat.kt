@@ -36,6 +36,7 @@
 // is appended to, so the emitter need not clear and copy them.
 
 package linear
+import compiler
 
 import common
 

@@ -6,6 +6,7 @@
 // type. `Int` and `Bool` only; a `Str` comparison would have to compare decoded bytes.
 
 package optimizations
+import compiler
 
 import common
 import linear

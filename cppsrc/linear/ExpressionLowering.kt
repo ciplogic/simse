@@ -6,6 +6,7 @@
 // `&&`/`||`, whose operands are conditional, belong to the control-flow lowering.
 
 package linear
+import compiler
 
 // A literal, a name, a qualified name (`Res<T>`), or a lambda (lowered as its own body).
 // The empty `None` node counts too: it is where a child that does not exist sits, and a

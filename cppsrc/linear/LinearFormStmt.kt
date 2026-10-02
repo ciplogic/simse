@@ -4,6 +4,7 @@
 // Extension methods on `IlExtractor` (LinearForm.kt); LinearFormFrame.kt has the frame.
 
 package linear
+import compiler
 
 import common
 import sema

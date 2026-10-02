@@ -4,6 +4,7 @@
 // `impl_specs/async.md`). `Emitter` extension functions.
 
 package codegen
+import compiler
 
 import sema
 import common

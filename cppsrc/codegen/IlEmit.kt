@@ -5,6 +5,7 @@
 // IlConcat.kt the concatenation expansion.
 
 package codegen
+import compiler
 
 import sema
 import common

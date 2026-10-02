@@ -7,6 +7,7 @@
 // declaration is what a call binds to (impl_specs/generators.md).
 
 package sourcegen
+import compiler
 
 // Self-registration (impl_specs/generators.md). `false`/`false`: nothing is emitted for the
 // declaration, not even a prototype, and the generated function carries its own receiver.

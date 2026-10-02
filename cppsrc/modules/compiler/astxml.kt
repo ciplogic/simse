@@ -5,7 +5,7 @@
 // emitter generates the structs and conversions. `AstNodeKind.None` is the absent sentinel,
 // the role of a missing optional child.
 
-package rtl
+package compiler
 
 // The structural role of a node - the schema's fixed set.
 enum class AstNodeKind {

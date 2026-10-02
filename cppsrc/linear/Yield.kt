@@ -6,6 +6,7 @@
 // stores and returns `Opt<T>.some(e)`, and a `return` closes the machine.
 
 package linear
+import compiler
 
 import common
 

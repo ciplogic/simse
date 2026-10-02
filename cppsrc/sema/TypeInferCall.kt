@@ -5,6 +5,7 @@
 // (TypeInfer.kt).
 
 package sema
+import compiler
 
 import common
 

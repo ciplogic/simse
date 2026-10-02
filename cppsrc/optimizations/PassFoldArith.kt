@@ -6,6 +6,7 @@
 // remainder by 0 or -1, or a shift past 31, is left alone: those are undefined, not values.
 
 package optimizations
+import compiler
 
 import common
 import linear

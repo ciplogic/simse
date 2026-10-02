@@ -28,4 +28,5 @@
 // The compiler's AST (`AstXmlNode`, `AstNodeKind`, ...) is *generated*: it is declared in
 // cppsrc/rtl/astxml.kt and the emitter writes its structs and enums (specs/attributes.md's
 // type materialization), so there is no header to include for it any more. The language-level
-// `XmlNode`/`Attribute` (cppsrc/rtl/xml.kt) are generated the same way.
+// `XmlNode`/`Attribute` live in the `xml` module (cppsrc/modules/xml/api.kt) and are generated
+// the same way; nothing in the `rtl` prelude declares them.

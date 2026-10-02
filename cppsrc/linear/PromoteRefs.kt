@@ -29,6 +29,7 @@
 // semantics, the "complex" threshold), are in `impl_specs/escape-analysis.md`.
 
 package linear
+import compiler
 
 import common
 import sema

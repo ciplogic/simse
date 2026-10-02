@@ -4,6 +4,7 @@
 // methods on `Emitter` (Codegen.kt).
 
 package codegen
+import compiler
 
 import sema
 import common

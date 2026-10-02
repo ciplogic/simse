@@ -7,6 +7,7 @@
 // is the tree's resources first, the compiler's own second (`sourceGenResText`, GenTypes.kt).
 
 package sourcegen
+import compiler
 
 // Self-registration (impl_specs/generators.md). `false`/`true`: the section's `forward` text
 // is the declaration, so no prototype of its own; its receiver pattern is registered.

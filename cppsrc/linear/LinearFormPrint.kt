@@ -4,6 +4,7 @@
 // node helpers the extractor builds with.
 
 package linear
+import compiler
 
 import common
 import sema

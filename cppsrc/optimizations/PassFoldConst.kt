@@ -6,6 +6,7 @@
 // write and read). Deliberately not a dataflow analysis.
 
 package optimizations
+import compiler
 
 import common
 import linear

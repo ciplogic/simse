@@ -10,7 +10,8 @@ harnesses in `tools/`; the plan for the rest is
 
 **The language.** Scalars (`Int8`..`Int64`, `Float32/64`, `Char`, `Bool`), `Str`
 with a string library, `List<T>`, `Array<T>`, `SmallVector<N, T>`,
-`Dictionary<K, V>`, `Span<T>`, `Opt<T>`, `Res<T>`, `XmlNode`/`Attribute`,
+`Dictionary<K, V>`, `Span<T>`, `Opt<T>`, `Res<T>`, `XmlNode`/`Attribute` (the
+`xml` module),
 `data class` (with methods), `enum class` (with explicit values and `toInt`/`fromInt`),
 `typealias`, functions, methods, extension methods, lambdas (by-value capture),
 `val`/`var` locals, file-level `var`/`val` statics, `if`/`else`, `when`, `while`,

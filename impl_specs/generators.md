@@ -74,7 +74,7 @@ Each module's generators live in a `generators/` subfolder - the `json` module's
 `cppsrc/sourcegen/`. A module's `generators/` is **compiler-side**: `--root` scans a tree whole
 (so the compiler's own build compiles the generators in), while `--module` names a module and
 scans it without its `generators/`, so a program that imports the module gets its declarations and
-never the generator sources (which are written against the compiler's own packages). The `json`
+never the generator sources (which are written against the compiler's own packages, `import compiler` for the AST and the generator interface). The `json`
 row is the first generator that reads the program's **type structure** instead of a resource; the
 module is where that grows (the per-reach step below).
 
@@ -82,7 +82,8 @@ The last two columns are the two things only the generator can know, so they are
 registration line.
 
 A generator is a `typealias OnSourceGen = (*SourceGenContext) -> SourceGenTransform`
-(`GenTypes.kt`): it takes *data* and answers a transform. The context carries the generator's
+(`GenTypes.kt`; the two interface types are the `compiler` module's,
+`cppsrc/modules/compiler/gen.kt`): it takes *data* and answers a transform. The context carries the generator's
 name, the phase, the declaration node (with its name, its arguments, its resolved symbol), the
 file it came from, and pointers to the two things a generator may touch besides the AST - the
 resources (`FullCompiledState`) and the sink (`Sections`). `SourceGenContext.isReached()` and

@@ -4,6 +4,7 @@
 // renames the peephole (Simplify.kt) needs.
 
 package linear
+import compiler
 
 import common
 import optimizations

@@ -122,9 +122,9 @@ The generators are the one part of the compiler meant to be written by a *progra
 author*; they are their own package, with a boundary documented as a rule (spec of record:
 `impl_specs/generators.md`, "The generator table").
 
-- **`cppsrc/sourcegen/`** - `Sections.kt` (the sink), `GenTypes.kt` (`SourceGenContext`,
-  `SourceGenTransform`, `FullCompiledState`, the `OnSourceGen` typealias), one file per
-  generator (`CppGen.kt`, `ResGen.kt`, `KtGen.kt`), and `SourceGen.kt` - the manager:
+- **`cppsrc/sourcegen/`** - `Sections.kt` (the sink), `GenTypes.kt` (`SourceTransformation`,
+  `SourceGenPhase`, `SourceGenRequest`, `FullCompiledState`, the `OnSourceGen` typealias), one
+  file per generator (`CppGen.kt`, `ResGen.kt`, `KtGen.kt`), and `SourceGen.kt` - the manager:
   `addSourceGen`/`makeSourceGens` the way `lex/Scanner.kt` builds its token rules,
   `sourceGenFind`/`sourceGenHas`, `sourceGenDeclare`/`sourceGenReparseSource`/`sourceGenEmit`.
 - **A generator is a lambda over `*SourceGenContext`** - data in, a transform out - carrying
@@ -137,6 +137,10 @@ author*; they are their own package, with a boundary documented as a rule (spec 
 - **`codegen` keeps only the caller**: `Emitter.sections` is a `*Sections`, `collect` asks
   `sourceGenHas`/`sourceGenDeclare`, `run` asks `sourceGenEmit`, and the driver asks
   `sourceGenBegin`/`sourceGenReparseSource`.
+- **The interface types are the `compiler` module's** (a later move): `SourceGenContext`
+  and `SourceGenTransform` live in `cppsrc/modules/compiler/gen.kt`, next to the AST
+  (`cppsrc/modules/compiler/astxml.kt`), so a module's `generators/` names the compiler
+  surface with one import (`import compiler`).
 
 Trap: in Simse `*p` where `p: *Sections` *reads through*, so `sourceGenEmit(*this.sections,
 ...)` filled a copy of the sink and emitted a file with no generated text. The pointer is

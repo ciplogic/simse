@@ -15,6 +15,7 @@
 // pair the emitter generates (`<f>_smNew`, `<f>_smResult`), so nothing here names a task type.
 
 package linear
+import compiler
 
 import common
 

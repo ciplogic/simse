@@ -1,12 +1,13 @@
 // xmlutil.kt
 //
-// Shared accessors over `AstXmlNode` (cppsrc/rtl/astxml.kt, impl_specs/ast-xmlnode.md): the
+// Shared accessors over `AstXmlNode` (cppsrc/modules/compiler/astxml.kt, impl_specs/ast-xmlnode.md): the
 // read-only ones, so sema and emitter agree on how nodes are read, and `xmlAddChild` for
 // building. Roles and attribute keys are enums, so every lookup is an integer compare.
 //
 // Ordinary `common` functions (not prelude declarations): a file needs the `common` import.
 
 package common
+import compiler
 
 // The "absent" sentinel: the schema has no null, so a missing optional child is a
 // role-less, kind-less node.

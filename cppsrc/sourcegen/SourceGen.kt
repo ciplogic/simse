@@ -7,6 +7,7 @@
 // reach set). Each generator registers itself from its own file with a file-level static.
 
 package sourcegen
+import compiler
 
 import common
 import resources

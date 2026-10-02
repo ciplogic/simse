@@ -6,6 +6,7 @@
 // parameter in scope is a good type to spell. An empty `AstXmlNode` is "no/unknown type".
 
 package sema
+import compiler
 
 import common
 
@@ -40,10 +41,6 @@ fun semIsRtlTypeName(name: *Str): Bool {
         }
 
         "Dictionary", "SmallVector", "PList" -> {
-            return true
-        }
-
-        "Attribute", "XmlNode", "AstXmlNode", "AstNodeAttribute" -> {
             return true
         }
 

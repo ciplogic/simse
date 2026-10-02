@@ -5,6 +5,7 @@
 // type".
 
 package codegen
+import compiler
 
 import sema
 import common

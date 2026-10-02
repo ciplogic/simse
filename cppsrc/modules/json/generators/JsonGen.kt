@@ -32,6 +32,7 @@
 // section of `cppsrc/rtl/_res.md`, so it stays readable Simse rather than an escaped literal.
 
 package json
+import compiler
 
 import common
 import sourcegen

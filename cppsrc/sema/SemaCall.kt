@@ -4,6 +4,7 @@
 // methods on `Analyzer` (Sema.kt).
 
 package sema
+import compiler
 
 import parser
 import common

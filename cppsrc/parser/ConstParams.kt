@@ -24,6 +24,7 @@
 // (`stress/fold-const-params`).
 
 package parser
+import compiler
 
 import common
 
