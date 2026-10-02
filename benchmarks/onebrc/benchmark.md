@@ -53,7 +53,7 @@ reference leg as a canary - 673-727 ms). The Simse side is the stable one.
   key type, so it has to become a `Str`) and the temperature (`tenths` takes a
   `Str`). Both are small enough to stay in `Str`'s inline buffer, but they are the
   obvious next thing to remove - `StrView.toInt()` and a `StrView`-keyed lookup
-  would do it. See `agents.md` section 8.
+  would do it. See `ai/status.md`.
 - **The dictionary costs one lookup per line now.** The program used to do `get` then
   `insert` - two lookups, a copy out and a copy back - because the API had no in-place
   access to a stored value. `Dictionary.getPtr` hands back the value's *place*, so the
@@ -70,7 +70,7 @@ reference leg as a canary - 673-727 ms). The Simse side is the stable one.
   reuse are not free in general, but on this workload they are not visible - the
   reader's advantage is unchanged.
 - **The linear passes added since cost nothing here either.** `mergeLocals`,
-  `deadStores` and `deadLocals` (`cppsrc/optimizations/usedef`) A/B'd the same way:
+  `deadStores` and `deadLocals` (`src/optimizations/usedef`) A/B'd the same way:
   this program built by the compiler from before them ran **1148 / 1154 ms** against
   **1157 / 1167 ms** for the current one (min/median of the same five rounds, the two
   legs' rounds overlapping). A loop bound by the reader and the dictionary does not
@@ -96,7 +96,7 @@ path the table above runs, whose whole-program number in that session was 1093/1
 bun benchmarks\onebrc\onebrc.mjs gen 10000000 benchmarks\onebrc\data\measurements.txt --seed 42
 
 :: the two implementations
-bun build.js --release --root benchmarks\onebrc --module cppsrc\modules\io --out benchmarks\onebrc\onebrc.cpp --exe benchmarks\onebrc\onebrc.exe
+bun build.js --release --root benchmarks\onebrc --module src\modules\io --out benchmarks\onebrc\onebrc.cpp --exe benchmarks\onebrc\onebrc.exe
 benchmarks\onebrc\build_naive.bat
 
 :: each reports its own time; compare the reports against the reference

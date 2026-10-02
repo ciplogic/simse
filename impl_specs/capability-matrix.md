@@ -1,9 +1,9 @@
 # Capability matrix: the change log
 
 Status: living document - one section per change to the compiler, recording what moved,
-what it cost, and how it was verified. The current state of the language is `agents.md`
-§7 with `README.md` and `specs/`; per-subsystem design is the neighbouring
-`impl_specs/*.md`; this file is the record of how it got there.
+what it cost, and how it was verified. The current state of the language is `ai/language.md`
+(use) and `ai/status.md` (implemented/deferred) with `README.md` and `specs/`; per-subsystem
+design is the neighbouring `impl_specs/*.md`; this file is the record of how it got there.
 
 The per-component feature matrices and the port order that opened this file are gone: they
 described a port that finished (the compiler is self-hosting) and had drifted out of date
@@ -15,7 +15,7 @@ they were standing in for.
 
 - Initial matrix created while starting the scanner self-transpile (T11). The
   scanner row is the live status; update it as differential results come in.
-- **Scanner self-transpile succeeded.** `simse_transpile cppsrc/lex/Scanner.kt`
+- **Scanner self-transpile succeeded.** `simse_transpile src/lex/Scanner.kt`
   emits `Scanner.kt.cpp` (about 500 lines); it compiles against the RTL and,
   driven by `tests/scanner_simse_main.cpp`, produces a token dump **byte-identical**
   to the hand-written scanner over every `tests/fixtures/*.kt`. The diff is run
@@ -26,26 +26,26 @@ they were standing in for.
   classes so `Res<T>::err` can hold a payload, and a non-deduced value parameter
   on `simse_list_append` so literal arguments convert.
 - **`common`/`StrView` are ported in effect**: their declarations are merged into
-  the scanner through `import cppsrc.common` and emitted as part of the same
+  the scanner through `import src.common` and emitted as part of the same
   translation unit, and the differential run exercises their methods (`at`,
   `startsWith`, `slice`, `toString`).
 - **Skeleton-parser self-transpile succeeded.** `simse_transpile
-  cppsrc/skelparser/SkeletonParser.kt` emits `SkeletonParser.kt.cpp`; it
+  src/skelparser/SkeletonParser.kt` emits `SkeletonParser.kt.cpp`; it
   compiles against the RTL (with `Scanner.kt` and `common` merged through
-  `import cppsrc.lex`), and the `skel_diff` step shows the generated
+  `import src.lex`), and the `skel_diff` step shows the generated
   `parseSkeleton` produces a tree dump byte-identical to the C++ implementation
-  over every fixture (1508 lines). `cppsrc/main.kt` was repaired and is now a
+  over every fixture (1508 lines). `src/main.kt` was repaired and is now a
   runnable e2e program (`main_program`).
 - **T14 (language features) and T15 (XmlNode carrier) done.** Added `switch`,
   `null` lowering, the `Str`/`Char`/numeric library, `min`/`max`, and enum
-  conversions; the prelude is now a *set* (`cppsrc/rtl/{rtl,xml}.kt`). The AST
+  conversions; the prelude is now a *set* (`src/rtl/{rtl,xml}.kt`). The AST
   converts to `XmlNode` (`ast::toXmlNode`, `.astxml` goldens), and the
   `emit_xmlnode` e2e program builds the same tree in Simse and prints it
   byte-identically to the C++ dump for `xml_probe.kt`. The scanner and
   skeleton-parser differentials still pass.
 - **T16 (Cursor), T17 (Str library), T18 (lambdas) done.** `Cursor<T>` is the
   iteration idiom (`while (c.hasValue()) { ... c = c.next() }`); the prelude set
-  gained `cppsrc/rtl/Cursor.kt` and the `simse_cursorOf` helper, and prelude
+  gained `src/rtl/Cursor.kt` and the `simse_cursorOf` helper, and prelude
   data-class methods now lower to C++ member calls. `Str` gained `charAt`,
   `trim`, `split`, `toUpper`, `toLower`, `isEmpty`, `indexOf`, `lastIndexOf`.
   Lambdas lower to by-value-capturing C++ lambdas assignable to
@@ -54,24 +54,24 @@ they were standing in for.
   range-for remains deferred (`Cursor<T>` is the replacement); the C++ compiler's
   own loops are not yet refactored to `Cursor`.
 - **Parser self-transpile succeeded (T19).** `simse_transpile
-  cppsrc/parser/Parser.kt` emits `Parser.kt.cpp` (with `Scanner.kt` and
-  `common` merged through `import cppsrc.lex`); it compiles against the RTL and
+  src/parser/Parser.kt` emits `Parser.kt.cpp` (with `Scanner.kt` and
+  `common` merged through `import src.lex`); it compiles against the RTL and
   the `parser_diff` step shows the generated `parseModule` produces an XmlNode
   tree **byte-identical** to `ast::toXmlNode` over all 33 fixtures (1908 lines),
   and the reference matches the 19 `tests/golden/*.astxml.expected` goldens. The
   port needed no new compiler/RTL features: the T14-T18 surface (switch, Cursor,
   Str library, lambdas, XmlNode/PList handles) was sufficient. No mirror had to
   change.
-- **Dictionary/List surface added (T20).** `cppsrc/rtl/dictops.hpp` implements
+- **Dictionary/List surface added (T20).** `src/rtl/dictops.hpp` implements
   `simse_dictionaryOf` plus `simse_dict_{get,has,insert,remove,size,keys,values,
   clear}`, `simse_list_contains`, and `simse_list_sort`; the prelude
-  (`cppsrc/rtl/rtl.kt`) declares them as `native("simse_dict_*")` extensions.
+  (`src/rtl/rtl.kt`) declares them as `native("simse_dict_*")` extensions.
   Codegen learned to lower a generic *native* call to its symbol with type
   arguments (`dictionaryOf<Str, Int>()` -> `simse_dictionaryOf<Str, Int>()`). A
   new e2e program `emit_dict` exercises all of it and stdout-diffs clean.
 - **Sema self-transpile succeeded (T21).** `simse_transpile
-  cppsrc/sema/Sema.kt` emits `Sema.kt.cpp` (with the parser, scanner, and
-  common merged through `import cppsrc.parser`); it compiles against the RTL and
+  src/sema/Sema.kt` emits `Sema.kt.cpp` (with the parser, scanner, and
+  common merged through `import src.parser`); it compiles against the RTL and
   the `sema_diff` step shows the generated `analyze` produces diagnostics
   **byte-identical** to `sema::analyze` over every fixture (39 lines, 35
   fixtures), with the reference matching the `.sema.expected` goldens. The port
@@ -79,35 +79,35 @@ they were standing in for.
   needed. A negative fixture (`sema_extension_arity.kt`) pins the prelude
   merge on both sides. No mirror had to change.
 - **XmlNode accessors shared (T22).** The accessors moved from `Sema.kt` into
-  `cppsrc/common/xmlutil.kt` (emitted, non-prelude); the real-source check now
+  `src/common/xmlutil.kt` (emitted, non-prelude); the real-source check now
   merges the RTL prelude for non-prelude mirrors so a helper module that uses
   prelude types resolves without an import. `sema_diff` stayed byte-identical.
 - **Codegen self-transpile succeeded (T22).** `simse_transpile
-  cppsrc/codegen/Codegen.kt` emits `Codegen.kt.cpp` (4789 lines; the parser,
-  scanner, sema, and common/xmlutil merged through `import cppsrc.sema`); it
+  src/codegen/Codegen.kt` emits `Codegen.kt.cpp` (4789 lines; the parser,
+  scanner, sema, and common/xmlutil merged through `import src.sema`); it
   compiles against the RTL and the `codegen_diff` step shows the generated
   `emitProgram` produces C++ **byte-identical** to `codegen::emitProgram` over
   every fixture, with the reference matching all 21 `.cpp.expected` goldens. No
   new compiler/RTL features were needed (one source-level note: chained string
   literals do not fold to `Str`, so the preamble is built with a `Str` variable).
 - **Stage-1 self-host succeeded (T23).** The compiler source set is rooted at
-  `cppsrc/compiler/Driver.kt` (a port of `TranspileMain.cpp` +
+  `src/compiler/Driver.kt` (a port of `TranspileMain.cpp` +
   `parseFileWithImports`); the C++ `simse_transpile` emits `compiler_stage1.cpp`
   (187048 bytes, covering the scanner, parser, sema, codegen, common/xmlutil,
   skeleton-parser mirror, and driver), it compiles into `simse_stage1`, and running
   `simse_stage1` over the same source set reproduces `compiler_stage1.cpp`
   **byte-for-byte** (the `stage1_check` fixed point). It also reproduces the C++
-  output for a real fixture. Added the filesystem/IO prelude natives (`cppsrc/rtl/fs.kt`,
-  `cppsrc/rtl/fs.hpp`, `cppsrc/native/Native.cpp`) and one generic transpiler fix:
+  output for a real fixture. Added the filesystem/IO prelude natives (`src/rtl/fs.kt`,
+  `src/rtl/fs.hpp`, `src/native/Native.cpp`) and one generic transpiler fix:
   the argv form of `main` (`fun main(args: List<Str>): Int` ->
   `int main(int argc, char** argv)` with the list built from argv), implemented
   identically in both emitters. All five differentials and every e2e program stay
   green.
 - **`simse` is now the directory compiler (T24).** The `simse` executable
-  (`cppsrc/main.cpp`) compiles a folder into one amalgamated `.cpp` in the current
+  (`src/main.cpp`) compiles a folder into one amalgamated `.cpp` in the current
   folder: `simse [<dir>] [-o <out.cpp>] [--prelude <p>] [--root <d>]`. The
   parse -> sema -> codegen -> write pipeline moved into a shared
-  `compiler::transpile` (`cppsrc/Compiler.{h,cpp}`), so `simse_transpile` and
+  `compiler::transpile` (`src/Compiler.{h,cpp}`), so `simse_transpile` and
   `simse` agree; `simse_transpile`'s CLI is unchanged (verified by the stage-1
   fixed point). A new additive `parser::collectImportSet` returns the ordered,
   de-duplicated set of participating files, so a scanned directory is compiled
@@ -127,7 +127,7 @@ they were standing in for.
   declarations by package, reports duplicate top-level names within a package
   (across files), reports an import of a package no scanned file declares, and
   builds each file's unqualified scope from its own package, its imports, and the
-  implicit `rtl` prelude. `simse cppsrc` (and `simse .` from inside `cppsrc/`)
+  implicit `rtl` prelude. `simse src` (and `simse .` from inside `src/`)
   now resolves imports identically regardless of the working directory. All five
   differentials stay byte-identical (goldens regenerated for the added package
   line and attribute) and the stage-1 fixed point still holds. Fully-qualified
@@ -156,15 +156,15 @@ they were standing in for.
   writes `stage1/run/simse_out.cpp`, compared **byte-for-byte** (no `--ignore-eol`)
   with `simse_out1.cpp`. The `emit_lang` fixture check is byte-exact too. The
   compilation order is now canonical (kept files sorted by normalized path; scan
-  results use generic `/` separators), so `--root cppsrc` and
-  `simse_transpile cppsrc/compiler/Driver.kt` over the same file set emit
-  identical C++. Stray `cppsrc.cpp` verification outputs were removed.
-- **The sample `cppsrc/main.kt` and its hand-written CLI `cppsrc/main.cpp`
-  were deleted.** `main.kt` was the second `main` in a `simse cppsrc`
+  results use generic `/` separators), so `--root src` and
+  `simse_transpile src/compiler/Driver.kt` over the same file set emit
+  identical C++. Stray `src.cpp` verification outputs were removed.
+- **The sample `src/main.kt` and its hand-written CLI `src/main.cpp`
+  were deleted.** `main.kt` was the second `main` in a `simse src`
   amalgamation, so the whole tree could not be compiled; `main.cpp` was the
-  directory-compiler CLI, superseded by `simse_transpile`. `cppsrc` now scans to
+  directory-compiler CLI, superseded by `simse_transpile`. `src` now scans to
   exactly one program (the `Driver.kt` compiler), and
-  `simse_transpile --root cppsrc` (output `simse_out.cpp`, compiled by
+  `simse_transpile --root src` (output `simse_out.cpp`, compiled by
   `build.bat`) is the whole-compiler command. The `simse` target and the
   `main_program` e2e case were removed with them.
 - **Raw-pointer (`*T`) read-only parameters replace by-value lists.** `*value`
@@ -191,7 +191,7 @@ they were standing in for.
   `pointee`, `unifyType`, `emitStmt`, `emitDataClass`, `emitEnum`, ...; 37
   functions, 205 call-site arguments). Six value contexts keep value semantics
   with `copy(...)` (`CgFn` construction, the emitter's `selfType`, and the
-  `current`/`actualPtr`/`renamed` locals). Measured on `--root cppsrc` (release):
+  `current`/`actualPtr`/`renamed` locals). Measured on `--root src` (release):
   **~340 ms before, ~234 ms with the accessors migrated, ~229 ms with the
   emitter too** — the emitter parameters add no measurable win at this size, so
   the remaining cost is elsewhere (scanner/parser and the linear attribute
@@ -208,18 +208,18 @@ they were standing in for.
   grew `List<XmlNode>` support, CRLF-tolerant brace matching, and no longer strips
   the address-of star in `*param[i]` / `*param.field` (only a bare `*param`).
   The regenerated amalgamation has **zero** by-value `XmlNode` / `List<XmlNode>`
-  parameters. Measured on `--root cppsrc` (release, hand-written transpiler):
+  parameters. Measured on `--root src` (release, hand-written transpiler):
   ~36 ms warm (~88 ms cold); the earlier ~229 ms figure could not be reproduced
   on this machine — the number to profile is the generated compiler
   (`simse.exe` from `simse_out.cpp`), which is what `simse.sln` builds.
 - **Control flow is lowered to labels and gotos before emission (T26).** A new
-  post-sema pass (`cppsrc/linear/Linear.{h,cpp}` and the `linear` package in
-  `cppsrc/linear/Linear.kt`, `impl_specs/linear-lowering.md`) rewrites every
+  post-sema pass (`src/linear/Linear.{h,cpp}` and the `linear` package in
+  `src/linear/Linear.kt`, `impl_specs/linear-lowering.md`) rewrites every
   function/method/lambda body into `Stmt.Label`, `Stmt.Goto`, `Stmt.IfTrue`,
   `Stmt.IfFalse` and `Stmt.Block`; the emitters no longer have If/While/Switch/
   `Stmt.Block` only when the region declares a variable at its own level (a C++
   jump may not bypass an initialization still in scope), so most bodies splice
-  flat; a second pass (`cppsrc/linear/Simplify.{h,cpp}` / `Simplify.kt`,
+  flat; a second pass (`src/linear/Simplify.{h,cpp}` / `Simplify.kt`,
   `linear::simplifyBody`) then prunes the linear form to a fixed point: jumps to
   the next statement, the `ifTrue (c) goto A; goto B; A:` -> `ifFalse (c) goto B:`
   fold, dead statements after a `goto`/`return`, and labels nothing targets.
@@ -230,7 +230,7 @@ they were standing in for.
   construction and the differentials prove it; the compiler's own amalgamation
   now contains no structured control flow from Simse sources (the only `while`
   left is the emitter's hand-written argv loop for `main`). Cost, release on
-  `--root cppsrc`, interleaved runs: self-hosted compiler ~+5% (the machine
+  `--root src`, interleaved runs: self-hosted compiler ~+5% (the machine
   throttled mid-session, so the ratio is the comparable number), amalgamation
   5368 -> 9445 lines before the simplification pass and 7265 after it, `cl.exe`
   compile time ~+2.5%, and the hand-written transpiler stays at ~36 ms. Nine
@@ -240,7 +240,7 @@ they were standing in for.
   `SmallVector<T, N>` is no longer a layout shell: it implements the
   std::vector-compatible surface the compiler uses, with the documented
   `_len`/`_cap`/union layout, explicit element lifetimes and 4 inline slots
-  (`cppsrc/rtl/containers.hpp`). `List<T>` is `SmallVector<T, 4>` unless
+  (`src/rtl/containers.hpp`). `List<T>` is `SmallVector<T, 4>` unless
   `SIMSE_LIST_STD_VECTOR` is defined (CMake option of the same name;
   `build.bat --define SIMSE_LIST_STD_VECTOR`); `build.js` mirrors the CMake cache
   so an amalgamation always matches the RTL libraries it links against. Both
@@ -248,7 +248,7 @@ they were standing in for.
   differentials, two-step bootstrap); `tools/smallvector_stress.cpp` covers the
   inline/heap transitions under AddressSanitizer. Cost: `sizeof(XmlNode)` grows
   72 -> 312 bytes (four inline `Attribute`s), while the self-hosted compiler is
-  ~2% faster on `--root cppsrc` (278 ms vs 283 ms median, interleaved) because
+  ~2% faster on `--root src` (278 ms vs 283 ms median, interleaved) because
   most nodes avoid a heap allocation for their attributes. `tests/
   skel_simse_main.cpp` had to use `List<Token>` instead of `std::vector<Token>`
   for the parseSkeleton boundary. `specs/containers.md` now states the same
@@ -259,7 +259,7 @@ they were standing in for.
 - **4-byte packing is the language's layout rule (T28).** `specs/memory-model.md`
   gained an "Alignment and packing" section: no type is aligned to more than 4
   bytes, aggregate fields sit on 4-byte boundaries, and the ABI promises no
-  8-byte alignment for `Int64`/`Float64`/pointer fields. `cppsrc/rtl/types.hpp`
+  8-byte alignment for `Int64`/`Float64`/pointer fields. `src/rtl/types.hpp`
   defines `SIMSE_PACK_PUSH`/`SIMSE_PACK_POP` (`__pragma(pack(push,4))` under
   MSVC, `_Pragma("pack(push,4)")` elsewhere; `SIMSE_NO_PACK4` reverts to host
   layout). The C++ emitter wraps every generated aggregate in them and
@@ -273,7 +273,7 @@ they were standing in for.
   types declared 8-aligned (`std::string`, `std::shared_ptr`, `std::function`),
   so packed aggregates under-align them — `tools/packed_alignment_probe.cpp`
   exercises that case at 4-mod-8 addresses on the ARM64 target and is clean.
-- **`Str` is the inline `SmString` by default (T29).** `cppsrc/rtl/smstring.hpp`
+- **`Str` is the inline `SmString` by default (T29).** `src/rtl/smstring.hpp`
   defines `SmString`: a `SmallVector<char, 24>` of the bytes plus the terminating
   NUL kept at `data()[size()]`, i.e. the `specs/containers.md` layout (inline up
   to 23 bytes, `size()` excluding the NUL), with the std::string-like surface the
@@ -287,7 +287,7 @@ they were standing in for.
   always matches the RTL libraries it links against. Native code that must talk
   to the standard library goes through `simse_toStdString` /
   `simse_fromStdString`, which are trivial copies in the `std::string`
-  configuration, so `cppsrc/common`, `cppsrc/native`, the driver and the test
+  configuration, so `src/common`, `src/native`, the driver and the test
   harness compile against either backing. Both configurations build and pass
   the full suite (60 tests, e2e, five differentials, two-step bootstrap), and a
   `SmString`-backed `simse_transpile` and a `std::string`-backed one produce
@@ -337,7 +337,7 @@ they were standing in for.
   drops 2.1 s -> 1.9 s and the hand-written `simse_transpile` 313 -> 299 ms.
 - **`Str` got a char-specialized buffer, and it is `constexpr` (T32).**
   `SmString` no longer wraps `SmallVector<char, 24>`:
-  `cppsrc/rtl/strsmallvector.hpp` implements the same 32-byte layout (`Int _len`,
+  `src/rtl/strsmallvector.hpp` implements the same 32-byte layout (`Int _len`,
   `Int _cap`, a 24-byte inline buffer unioned with the heap pointer, 4-byte
   packed) without the per-element lifetime machinery, because `Char` is trivial —
   growing is a length bump, clearing/shrinking/destruction are length updates,
@@ -397,7 +397,7 @@ they were standing in for.
 - **`Str`'s inline capacity is one constant, at the spec's 24 (T33).** The 24 was
   written in two places (`StrSmallVector::inlineCapacity` and the unused
   `SmString::inlineCapacity`/`maxInlineLen` pair); it is now defined once as
-  `kStrInlineCapacity` in `cppsrc/rtl/strsmallvector.hpp`, read by both the buffer
+  `kStrInlineCapacity` in `src/rtl/strsmallvector.hpp`, read by both the buffer
   and `SmString`, and overridable per build with `-DSIMSE_STR_INLINE_CAPACITY=<n>`
   (CMake cache variable; `build.js` mirrors it into the amalgamation compile and
   warns on a mismatch, because the capacity is part of the ABI — see
@@ -469,7 +469,7 @@ they were standing in for.
   and 120.7/131.3 ms** — **~4% faster in both windows**. Peak working set is
   unchanged (the layout is identical: `_len`/`_cap` are still two `Int`s). The
   change is header-only, which is why `tools/stress.js` now invalidates its
-  cached `Native.obj`/`common.obj` on a newer `cppsrc/**` header: a cached object
+  cached `Native.obj`/`common.obj` on a newer `src/**` header: a cached object
   built under the old convention linked into a program compiled under the new one
   is an ODR violation, and it showed up as a 6-byte file reported as 7 bytes.
 - **The AST's roles and attribute keys are enums (`AstXmlNode`, T36).** Profiling
@@ -477,7 +477,7 @@ they were standing in for.
   `xmlAttr` calls, 68,148 child scans and 16,823 temporary child lists for a
   6,357-line self-transpile — every one of them a `Str` key comparison or a list
   allocation, where the hand-written ring reads typed fields. The AST carrier is
-  now `AstXmlNode` (`cppsrc/rtl/astxml.kt` + `.hpp`): the node's role is an
+  now `AstXmlNode` (`src/rtl/astxml.kt` + `.hpp`): the node's role is an
   `AstNodeKind` and an attribute's key an `AstNodeAttributeKind`, so lookups are
   integer compares; attribute *values* stay `Str`, and `ast::astNodeKindText` /
   `ast::astNodeAttributeText` turn an enum back into the schema's spelling for the
@@ -544,7 +544,7 @@ they were standing in for.
   first cut of this change did not compile and had an infinite loop - see the note
   below.
 - **Throughput baseline, and the one phase that is superlinear (T40).** At this
-  commit the self-hosted compiler over its own source set (`cppsrc`, 6,357 lines,
+  commit the self-hosted compiler over its own source set (`src`, 6,357 lines,
   release) runs in **65.1/68.2 ms** (min/median, 7 interleaved pairs,
   `tools/_bench_ab.mjs`) against the hand-written ring's **35.6/42.6 ms** -
   **1.6-1.8x**, where this run started at 3.5-3.7x (T35-T39), or roughly **95k
@@ -563,10 +563,10 @@ they were standing in for.
   deferred, not forgotten - the suspects are the get-append-insert copies into
   `globalFunctions`/`packageDecls` in `collectGlobal`, `buildVisible` re-running
   per file, the per-call overload scans in `analyzeCall`/`markExtensionUsed`, and
-  `lookupValue`'s scope walk, all in `cppsrc/sema/Sema.kt` (`agents.md`
+  `lookupValue`'s scope walk, all in `src/sema/Sema.kt` (`agents.md`
   section 8).
 - **A custom `Dictionary` exists, and is measured faster (T41).**
-  `cppsrc/rtl/smdictionary.hpp` implements `SmDictionary<TKey, TValue>` - the .NET
+  `src/rtl/smdictionary.hpp` implements `SmDictionary<TKey, TValue>` - the .NET
   shape: one `Entry` per row (`hash`, `next`, key, value), chains by row index, a
   power-of-two bucket table whose **mask** is a field (`hash & _mask`; 16 buckets
   growing 4x), the `Str` hash reading **8 bytes at a time** with a shift-xor fold
@@ -604,10 +604,10 @@ they were standing in for.
   pre-test paying an extra compare on hits where MSVC compares the key directly.
   Nothing else in the tree depends on either backing.
 - **The RTL reads files line by line, and a naive 1BRC measures it (T42).**
-  `FileStream` (`cppsrc/rtl/filestream.hpp`, prelude `cppsrc/rtl/fs.kt`) is
+  `FileStream` (`src/rtl/filestream.hpp`, prelude `src/rtl/fs.kt`) is
   `openFileStream(path): *FileStream` plus the **struct methods**
   `readLine(): Opt<Str>`, `readLineInto(buffer: *Str): Bool`, `fileSize(): Int64`,
-  `close()`; `nowMillis()` (`cppsrc/rtl/timeops.hpp`) is the monotonic ms clock
+  `close()`; `nowMillis()` (`src/rtl/timeops.hpp`) is the monotonic ms clock
   the benchmark reports its own time with. The methods have to be members, not
   free natives, because the emitter calls a handle's operations as members
   (`stream.readLine()` on a `*FileStream` emits `(*stream).readLine()`), exactly
@@ -641,9 +641,9 @@ they were standing in for.
   `benchmarks/onebrc/benchmark.md` has the method, the notes (tenths as `Int`, the
   half-toward-positive-infinity rounding rule, CRLF vs LF) and the run commands.
 - **`Span<T>`, `StrView`, and the in-place line reader (T43).** One borrowed view
-era replaced two: `cppsrc/rtl/Span.kt` + `span.hpp` declare `Span<T>` (a `*T`
+era replaced two: `src/rtl/Span.kt` + `span.hpp` declare `Span<T>` (a `*T`
 pointer plus a length, `size`/`isEmpty`/`at`/indexing/`slice` in the C# two forms)
-and `cppsrc/rtl/StrView.kt` + `strview.hpp` declare `StrView` - *embeds* a
+and `src/rtl/StrView.kt` + `strview.hpp` declare `StrView` - *embeds* a
 `Span<Char>` and adds the byte surface (`charAt`, `find`/`indexOf`, `startsWith`,
 `startsWithPtr`, `substr`, `toString`), built by `spanOfStr(*text)`; `spanOf(*items)`
 borrows a list. The old `Cursor<T>` (a `&List<T>` + start + len), the RTL's
@@ -664,7 +664,7 @@ the RTL *name* list before the program's own declarations, so a declared type of
 the same name (the compiler had a `common.StrView`) was shadowed in every emitted
 signature. `typeName` (both rings) now checks the declared types first and lets any
 package other than `rtl` win; T23 and the five differentials stay byte-identical,
-and the tracked `cppsrc/simse_bootstrap.cpp` was regenerated (its embedded source-map line
+and the tracked `src/simse_bootstrap.cpp` was regenerated (its embedded source-map line
 numbers shifted with the parser/scanner edits).
   `FileStream` gained `readLineView(): Opt<StrView>` (T42's reader) on the same
   readahead buffer and the same `nextLineSpan` code path as `readLineInto`, so the
@@ -690,8 +690,8 @@ numbers shifted with the parser/scanner edits).
   `benchmarks/onebrc/benchmark.md` is the write-up.
 
 - **Nested expressions are lowered to temporaries (T44).** The linear pass gave the
-  emitter one *statement* vocabulary; `cppsrc/linear/ExpressionLowering.{h,cpp}`
-  (`linLowerExprs` in `cppsrc/linear/ExpressionLowering.kt`) gives it one
+  emitter one *statement* vocabulary; `src/linear/ExpressionLowering.{h,cpp}`
+  (`linLowerExprs` in `src/linear/ExpressionLowering.kt`) gives it one
   *expression* vocabulary. Together with T26's control-flow lowering, the emitter
   is left with a strictly structural job: no `if`/`while`/`switch`, and no
   expression deeper than one operation, to understand. It runs as
@@ -728,7 +728,7 @@ numbers shifted with the parser/scanner edits).
   above bound nested expressions to `_sm_expr<n>` locals and left them *untyped*, so
   the emitter emitted `auto` for them and guessed the type whenever it needed one
   (the receiver of a chained call, `Res<T>.value`, a native extension's return).
-  `sema::inferTypes` (`cppsrc/sema/TypeInfer.{h,cpp}`, `semInferTypes` in
+  `sema::inferTypes` (`src/sema/TypeInfer.{h,cpp}`, `semInferTypes` in
   `TypeInfer.kt`) now runs as the last step of the lowering
   (`inferTypes(lowerExprs(simplifyBody(lowerBody(body))), facts, body)`) and fills
   in the type of every untyped `VarDecl` it can prove, walking the statements in
@@ -779,14 +779,14 @@ numbers shifted with the parser/scanner edits).
   an **assignment target**, and the operand of `&`/`*` - which the pass calls
   `Path`. One case is excluded from binding because it is not a copy: a **borrow of
   a temporary**. `*f()` is `simse_addressOf(f())`, and the RTL's contract is that
-  such a pointer lasts for the call it is passed to (`cppsrc/rtl/types.hpp`), so
+  such a pointer lasts for the call it is passed to (`src/rtl/types.hpp`), so
   hoisting it into a variable would outlive the pointee; a borrow whose operand is
   an lvalue (`*p`, `*self.field`, `*(list[i])`) is a place and *is* bound. Two more
   things the change had to get right: the Simse ring's `exprIsSimple` now treats the
   *absent* sentinel as simple (a bare `return;` has an empty value node, and the new
   rule promptly bound it, which the emitter printed as `/*unsupported*/`), and the
   ring asymmetry is explicit in the spec (`impl_specs/linear-lowering.md`). The
-  output grows, which is the point: `cppsrc/simse_bootstrap.cpp` went from 12.4k lines and
+  output grows, which is the point: `src/simse_bootstrap.cpp` went from 12.4k lines and
   1,402 `auto`s at T44 to **18.2k lines, 5,157 temporaries and 931 `auto`s**, of
   which 711 are borrows whose type the inference still declines to spell (that is
   the next increment, and it is a `Pointer`/pointee rule away). Verified: both
@@ -992,7 +992,7 @@ numbers shifted with the parser/scanner edits).
   each copy of a heap-backed entry allocating again.
 
   Measured (interleaved A/B, same machine state, two runs of 13 and 19 pairs): the
-  self-transpile of `cppsrc` goes 827/855 ms and 822/841 ms (best/median) **before** to
+  self-transpile of `src` goes 827/855 ms and 822/841 ms (best/median) **before** to
   816/835 ms and 808/824 ms **after** - about 2% faster, and ~1470 sites now read the
   table. A separate experiment that wrapped every literal in a `constexpr`
   `_to_smString(...)` helper instead was **3% slower** and was reverted: the RTL's
@@ -1036,7 +1036,7 @@ numbers shifted with the parser/scanner edits).
   over its element type, so `..*T` gives `Opt<T*>` and `T**` with no special case, and
   sema's `for` gate now takes the wrap *name* from the call the parser wrote. Measured
   on the compiler's own hot walks (`declares`/`lowerStmts`/`containsShortCircuit`,
-  release `./simse.exe` over `--root cppsrc`, interleaved A/B, 11 pairs): `while` +
+  release `./simse.exe` over `--root src`, interleaved A/B, 11 pairs): `while` +
   `*xs[i]` 824.3/839.5 ms (min/median) against `for (*x in xs)` 826.2/835.8 ms - the
   hand-written loop's cost without its index - and the *value* form 810.8/826.8 ms (a
   copy per element is not visible either, which is why the pointer form is a shape
@@ -1096,7 +1096,7 @@ numbers shifted with the parser/scanner edits).
   of them (sema opens one per scope per file). It still grows 4x, so 4 -> 16 -> 64;
   the only cost is one extra rehash for a dictionary that outgrows four entries.
 
-  Measured: `./simse.exe --root cppsrc` goes from 824.3/839.5 ms (min/median,
+  Measured: `./simse.exe --root src` goes from 824.3/839.5 ms (min/median,
   interleaved A/B, 11 pairs, the mixed set of `while`/`for` loop shapes) to
   792.0/798.3 ms now (7 runs) - ~4-5%, which is the dictionary's own win (T41
   measured ~6% end to end) plus the inline first table. `bun tools/bootstrap.js`
@@ -1137,7 +1137,7 @@ numbers shifted with the parser/scanner edits).
   same flags, pre-change (HEAD's published bootstrap) against post-change, 11 pairs then
   15 pairs, each leg alternating run for run. Pre-change min 800.1 / 809.7 ms, median
   857.0 / 833.6 ms; post-change min 775.9 / 783.2 ms, median 823.0 / 807.7 ms. So
-  `./simse.exe --root cppsrc` is **~3% faster at the minimum** (~4% at the median) - the
+  `./simse.exe --root src` is **~3% faster at the minimum** (~4% at the median) - the
   IL is on codegen's hot path, and removing a string from every instruction shows up.
 
 - **Block folding no longer copies a node per block per round (T56).** The fold
@@ -1163,7 +1163,7 @@ numbers shifted with the parser/scanner edits).
   of the *other* items in the sequence, so emitting as you decide silently changes which
   blocks survive (see `impl_specs/linear-lowering.md`, "Block folding").
 
-  Measured: `./simse.exe --root cppsrc` 792.0/794 ms -> **750/769 ms**
+  Measured: `./simse.exe --root src` 792.0/794 ms -> **750/769 ms**
   (`bun tools/bootstrap.js`), and interleaved A/B of two amalgamations built by
   `build.js --release` from the same flags (13 pairs) 777.0/807.3 ms -> **729.3/742.8 ms**
   - **~6% at the minimum, ~8% at the median** from the folding rewrite alone.
@@ -1218,7 +1218,7 @@ numbers shifted with the parser/scanner edits).
   Result: **30 blocks -> 0** in the emitted compiler, and the IL is cleaner for it -
   `DeclareInit` ops **64 -> 7** (only the `for` lowering's own typed locals, none
   crossed), every remaining declaration hoisted to the top of its body. Measured:
-  `./simse.exe --root cppsrc` **750/769 -> 731/738 ms** (`bun tools/bootstrap.js`), so
+  `./simse.exe --root src` **750/769 -> 731/738 ms** (`bun tools/bootstrap.js`), so
   the hoisting costs nothing here.
 
   Sample-first, as asked: `stress/flat-blocks` is the case that pins all three shapes
@@ -1237,15 +1237,15 @@ numbers shifted with the parser/scanner edits).
   - `val attr: AstNodeAttribute = like.attributes[i]` - so every iteration paid for a
   copy of an aggregate:
 
-  - `simNameAttrs` (`cppsrc/linear/Simplify.kt`) - and this one copied **twice** per
+  - `simNameAttrs` (`src/linear/Simplify.kt`) - and this one copied **twice** per
     element, because the `else` branch then put the copy into the result list. It is now
     `for (*attr in like.attributes)` with an explicit `attrs.append(copy(attr))`, so the
     copy that remains is the one the result list actually needs (and the `Name` match
     copies nothing);
-  - `exprReplaceRole` (`cppsrc/linear/ExpressionLowering.kt`) and its sema twin
-    `semReplaceRole` (`cppsrc/sema/TypeInfer.kt`) - `for (*child in existing)` with
+  - `exprReplaceRole` (`src/linear/ExpressionLowering.kt`) and its sema twin
+    `semReplaceRole` (`src/sema/TypeInfer.kt`) - `for (*child in existing)` with
     `kids.append(copy(child))`;
-  - `parseSkeleton`'s token walk (`cppsrc/skelparser/SkeletonParser.kt`) -
+  - `parseSkeleton`'s token walk (`src/skelparser/SkeletonParser.kt`) -
     `for (*token in tokens)` with `addTerminalChild(copy(token))`.
 
   What the pass has to do, since it is not a find-and-replace: the pointer form makes the
@@ -1318,7 +1318,7 @@ numbers shifted with the parser/scanner edits).
   `FieldAddr`, 216 `IndexAddr`, 9 `GetStaticAddr`. The published bootstrap goes 36,696 ->
   **40,943** lines (1.12 -> 1.26 MB) and the two transpiles cost more - the
   address of every place is now a declared slot rather than an expression the emitter
-  rebuilt: `--root cppsrc` **805/808 -> 859/863 ms** self-hosted, **178/187 -> 198/200 ms**
+  rebuilt: `--root src` **805/808 -> 859/863 ms** self-hosted, **178/187 -> 198/200 ms**
   hand-written; the `cl.exe`-only compile of the published file 15.26 -> **15.51 s** and the
   compiled bootstrap reproduces itself in 862 ms (full cycle 16.37 s). Programs behave
   identically (the whole corpus and the suite agree on the output); what changed is the
@@ -1327,8 +1327,8 @@ numbers shifted with the parser/scanner edits).
   Verified: both configurations rebuild clean, the five differentials are byte-identical,
   T23 (`simse_out1.cpp` == the stage-1 regeneration) is byte-identical, `simse_tests.exe`
   **56/56**, `bun tools/stress.js` **33/33** on the self-hosted ring *and* on the
-  hand-written one, the two rings' IL dumps are byte-identical over `cppsrc` (40,136
-  lines), and `cppsrc/simse_bootstrap.cpp` was regenerated with
+  hand-written one, the two rings' IL dumps are byte-identical over `src` (40,136
+  lines), and `src/simse_bootstrap.cpp` was regenerated with
   `bun build.js --release --out ...` so `bun tools/bootstrap.js` reports the fixed point
   byte for byte.
 
@@ -1368,7 +1368,7 @@ numbers shifted with the parser/scanner edits).
 
   Measured, and the honest answer is two different numbers. On the **compiler's own
   workload it is not measurable**: interleaved A/B of two release boot binaries over
-  `--root cppsrc` (12-14 pairs each) reported 857.6/867.0 -> 847.0/858.8 and
+  `--root src` (12-14 pairs each) reported 857.6/867.0 -> 847.0/858.8 and
   864.7/880.0 -> 860.9/876.3 ms - a consistent sign, but inside the machine's wobble - and
   the reason is the RTL: the compiler's own values are small enough to live in the inline
   buffers (`List<T>` is `SmallVector<T, 4>`, `Str` holds 23 characters inline), so their
@@ -1380,7 +1380,7 @@ numbers shifted with the parser/scanner edits).
 
   Verified: both configurations rebuild clean, the five differentials are byte-identical,
   T23 is byte-identical, `simse_tests.exe` **56/56**, `bun tools/stress.js` **33/33** on the
-  self-hosted ring and the hand-written one, and `cppsrc/simse_bootstrap.cpp` regenerated so
+  self-hosted ring and the hand-written one, and `src/simse_bootstrap.cpp` regenerated so
   `bun tools/bootstrap.js` reports the fixed point byte for byte (41,066 lines, 1.26 MB).
   No golden changed: the fixtures' data classes are scalar-only, so their emission is
   identical (and so is every `expected.cpp` in the corpus).
@@ -1465,7 +1465,7 @@ compiler *did* catch and one it could not:
   T23 is byte-identical, `simse_tests.exe` **56/56**, `bun tools/stress.js` **35/35** on
   the self-hosted ring and on the hand-written one (with the new `pack-args` case, and
   `diagnostic-pack-counted` asserting the counted form is still refused), and
-  `cppsrc/simse_bootstrap.cpp` regenerated so `bun tools/bootstrap.js` reports the fixed
+  `src/simse_bootstrap.cpp` regenerated so `bun tools/bootstrap.js` reports the fixed
   point byte for byte. No golden changed.
 
   Docs updated with it: `specs/functions.md` ("Packing the trailing arguments"),
@@ -1486,7 +1486,7 @@ compiler *did* catch and one it could not:
   it, and only where the element is used as a *place* (`*C[i]` becomes the loop variable
   itself - a leftover `*` on a pointer is the one bug this pass produced, and the
   generated C++ caught it: `xmlAttr(*field, ...)` on a `*AstXmlNode`). Nothing outside
-  `cppsrc/**/*.kt` changed in the sweep.
+  `src/**/*.kt` changed in the sweep.
 
 - **The value/handle conversion got its second half, and `xmlAttr` became a borrow (T62).**
   The conversion table was already what a call argument and a binary operand asked for; the
@@ -1520,7 +1520,7 @@ compiler *did* catch and one it could not:
 
   Verified: both configurations rebuild clean, the five differentials are byte-identical,
   T22/T23 pass in both, `simse_tests.exe` **56/56**, `bun tools/stress.js` **40/40** on the
-  self-hosted ring and on the hand-written one, and `cppsrc/simse_bootstrap.cpp` regenerated
+  self-hosted ring and on the hand-written one, and `src/simse_bootstrap.cpp` regenerated
   so `bun tools/bootstrap.js` reports the fixed point byte for byte. No golden changed.
 
   Docs updated with it: `specs/memory-model.md` ("Automatic dereference": the operand rule
@@ -1584,7 +1584,7 @@ compiler *did* catch and one it could not:
   should have to say it twice.
 
   `fmtStr(fmt: *Str, items: *List<Str>): Str` is the fixed-shape joiner
-  (`simse_fmtStr` in `cppsrc/rtl/listops.hpp`): the format's `|` characters are replaced, in
+  (`simse_fmtStr` in `src/rtl/listops.hpp`): the format's `|` characters are replaced, in
   order, by one item each, the length is known before anything is written (the format minus
   the points it fills, plus every item), and the result is assembled in one `reserve`d
   buffer. `Codegen.kt` writes **38** of its string chains as `fmtStr` now, the shape an
@@ -1629,7 +1629,7 @@ compiler *did* catch and one it could not:
   Verified: both rings rebuild clean, T23's two-step bootstrap is byte-identical, T22's
   emission differential is unchanged, `simse_tests.exe` **56/56**, `bun tools/stress.js`
   **40/40** on the self-hosted ring and **40/40** on the hand-written one,
-  `cppsrc/simse_bootstrap.cpp` regenerated so `bun tools/bootstrap.js` reports the fixed
+  `src/simse_bootstrap.cpp` regenerated so `bun tools/bootstrap.js` reports the fixed
   point byte for byte in *both* configurations (release 45,266 lines/1.38 MB, debug with
   assertions on - which is what would have caught an aliasing mistake), and no golden
   changed. A structural diff of the two amalgamations (slot names and string-table indices
@@ -1679,7 +1679,7 @@ compiler *did* catch and one it could not:
 
   Unchanged on purpose: everything about *what* is emitted. The strongest check is
   structural - the pre-change compiler binary and the post-change one transpile the same
-  `cppsrc` tree to **byte-identical** C++ (`cmp`), and the differentials, the two-step
+  `src` tree to **byte-identical** C++ (`cmp`), and the differentials, the two-step
   bootstrap and the goldens agree. Two later attempts were reverted for failing exactly that
   check, and they are the two things worth knowing before trying this again: a `flat` that
   returns the original node when nothing under it was bound (it changes which expressions
@@ -1718,7 +1718,7 @@ compiler *did* catch and one it could not:
 
   Verified: both CMake rings rebuild clean (T22 byte-identical, T23's two-step bootstrap
   byte-identical), `simse_tests.exe` **56/56**, `bun tools/stress.js` **41/41** on the
-  self-hosted ring and **41/41** on the hand-written one, and `cppsrc/simse_bootstrap.cpp`
+  self-hosted ring and **41/41** on the hand-written one, and `src/simse_bootstrap.cpp`
   regenerated so `bun tools/bootstrap.js` reports the fixed point byte for byte.
 
 - **The ring's remaining index walks iterate by pointer (T68).** `for (*x in xs)` binds the
@@ -1752,7 +1752,7 @@ compiler *did* catch and one it could not:
   this, because the two compilers read the *same* sources and only their own code differs.
   Verified as usual: five differentials byte-identical, T23's two-step bootstrap
   byte-identical, `simse_tests.exe` **56/56**, `bun tools/stress.js` **41/41** on both rings,
-  and `cppsrc/simse_bootstrap.cpp` regenerated with the fixed point byte for byte.
+  and `src/simse_bootstrap.cpp` regenerated with the fixed point byte for byte.
 
 - **`fmtStr` fills a matched shape only (T69).** The operation's contract had two edge cases
   ("with no `|` left the remaining items are appended, and with no item left the rest of the
@@ -1765,7 +1765,7 @@ compiler *did* catch and one it could not:
   the write pass behind it is one loop with no per-point condition.
 
   The assumption was checked, not assumed: all **38** literal `fmtStr(...)` call sites in the
-  ring pass exactly one item per `|` (a scratch scan over `cppsrc`), and the compiler built
+  ring pass exactly one item per `|` (a scratch scan over `src`), and the compiler built
   with the change emits **byte-identical** C++ to the one built without it - which is what
   makes "the shape always matches" a fact about the ring rather than a hope. Measured
   **neutral** (`tools/_bench_ab.mjs`, 25 interleaved pairs, the CMake libraries rebuilt on
@@ -1773,9 +1773,9 @@ compiler *did* catch and one it could not:
   removes were never the cost; what the change buys is a function with no edge cases in it.
 
   Docs updated with it: `specs/built-in-types.md` (the shape, and what a mismatch gets),
-  `cppsrc/rtl/rtl.kt`'s prelude comment, and the header's own comment. Verified: both CMake
+  `src/rtl/rtl.kt`'s prelude comment, and the header's own comment. Verified: both CMake
   rings rebuild clean (T22 and T23 byte-identical), `simse_tests.exe` **56/56**,
-  `bun tools/stress.js` **41/41** on both rings, `cppsrc/simse_bootstrap.cpp` regenerated with
+  `bun tools/stress.js` **41/41** on both rings, `src/simse_bootstrap.cpp` regenerated with
   the fixed point byte for byte.
 
 - **`min`, `max` and `fmtStr` are written in the language now (T70).** The RTL's
@@ -1817,7 +1817,7 @@ compiler *did* catch and one it could not:
   included) and its refusal. The migration rule and the `Span`/`StrView` verdict are
   recorded in `impl_specs/rtl-abi.md`. Verified: five differentials byte-identical, T23's
   two-step bootstrap byte-identical, `simse_tests.exe` **56/56**, `bun tools/stress.js`
-  **42/42** on both rings, `cppsrc/simse_bootstrap.cpp` regenerated with the fixed point
+  **42/42** on both rings, `src/simse_bootstrap.cpp` regenerated with the fixed point
   byte for byte.
 
 - **`Str.isEmpty` is the language's own body, and a prelude body is emitted when a call
@@ -1872,7 +1872,7 @@ compiler *did* catch and one it could not:
   ring's output is byte-identical - the two legs of the bench above emit the same file.
   Verified: five differentials byte-identical, T23's two-step bootstrap byte-identical,
   `simse_tests.exe` **56/56**, `bun tools/stress.js` **43/43** on both rings,
-  `cppsrc/simse_bootstrap.cpp` regenerated with the fixed point byte for byte.
+  `src/simse_bootstrap.cpp` regenerated with the fixed point byte for byte.
 
 - **`Codegen.kt` split into three files, and the two resolution bugs the split exposed
   (T72).** The emitter was one 4,423-line file; it is 2,944 lines now, with the rest in
@@ -1926,10 +1926,10 @@ compiler *did* catch and one it could not:
   positioned diagnostic instead. Still open.
 
   Verified: five differentials byte-identical (T22 now transpiles `Codegen.kt` with
-  `--module-root cppsrc/codegen` and depends on the two new files; `SIMSE_ALL_MIRRORS`
+  `--module-root src/codegen` and depends on the two new files; `SIMSE_ALL_MIRRORS`
   lists them), T23's two-step bootstrap byte-identical in release *and* debug,
   `simse_tests.exe` **58/58** (56 + one `PASS source` per new file), `bun tools/stress.js`
-  **43/43** on both rings, `cppsrc/simse_bootstrap.cpp` regenerated and the fixed point
+  **43/43** on both rings, `src/simse_bootstrap.cpp` regenerated and the fixed point
   byte for byte. `tools/_symdiff.mjs` is the check that a move lost nothing: it compares
   the emitted *symbol sets* of two amalgamations, which is how the symbol changes there
   (one rename, one deleted helper, seven new definitions) were confirmed to be the whole
@@ -1938,7 +1938,7 @@ compiler *did* catch and one it could not:
   292 -> 454 ms in the same session - so an A/B there would have measured the machine; the
   refactor's runtime effect is structural (one extra call per pooled literal). The rings
   also agree byte for byte on the compiler's own sources
-  (`simse_transpile --root cppsrc` vs `simse.exe --root cppsrc`), which the fixture
+  (`simse_transpile --root src` vs `simse.exe --root src`), which the fixture
   differentials do not cover.
 
 - **The string-table join, measured before it was built (T73 - the design; the substrate
@@ -1952,7 +1952,7 @@ compiler *did* catch and one it could not:
   `Str`s:
 
   - On the compiler's own table (526 literals, 6638 decoded bytes;
-    `tools/_strtable_gain.mjs` over `cppsrc/simse_bootstrap.cpp`): **344 of 526** literals
+    `tools/_strtable_gain.mjs` over `src/simse_bootstrap.cpp`): **344 of 526** literals
     are appended as pieces (65%), the joined text is **5762** bytes (13% of the text is
     shared), the slices cost 2104 bytes.
   - `Str` is 32 bytes (4 len + 4 cap + 24 inline), so **today's table is ~19.7 KB**
@@ -2039,7 +2039,7 @@ compiler *did* catch and one it could not:
   of this log).
 
   The emitted C++ is **byte-identical** (a layout is not printed), so no golden moved and
-  `cppsrc/simse_bootstrap.cpp` did not change; the win is in the compiler's own data and in
+  `src/simse_bootstrap.cpp` did not change; the win is in the compiler's own data and in
   any program that walks spans. Verified: five differentials and T23 in release **and**
   debug, `simse_tests.exe` **58/58**, `bun tools/stress.js` **43/43** on both rings, and
   `bun tools/bootstrap.js`'s fixed point byte for byte. The two self-transpile timings moved
@@ -2081,7 +2081,7 @@ compiler *did* catch and one it could not:
   } __sm_stringTableInit;
   ```
 
-  `simse_strTableExpand`/`simse_strTableDecode` (`cppsrc/rtl/strtable.hpp`) expand the two
+  `simse_strTableExpand`/`simse_strTableDecode` (`src/rtl/strtable.hpp`) expand the two
   streams into the stack arrays and walk them into the views; `StrView` grew a `toString()`
   member (`strview.hpp`) because the *site* asks for the owned value. Six deliberate
   choices:
@@ -2276,9 +2276,9 @@ compiler *did* catch and one it could not:
     `simse_tests.exe` **58/58** in both configurations, `bun tools/stress.js` **44/44** on
     both rings, and the two rings byte-identical on `stress/yield`. The goldens moved on
     purpose (`tests/golden/{for_iteration,lambda_scopes,program_expr,when}.cpp.expected` and
-    the two `.astxml.expected` of the loops), and `cppsrc/simse_bootstrap.cpp` was refreshed
+    the two `.astxml.expected` of the loops), and `src/simse_bootstrap.cpp` was refreshed
     (`bun tools/bootstrap.js`: fixed point byte for byte). The IL hoisting below is verified
-    the strict way: the compiler before and after it transpile `cppsrc` to **byte-identical
+    the strict way: the compiler before and after it transpile `src` to **byte-identical
     C++** (`cmp` on the two outputs), which is what makes it a backend-internal change.
 
   **The IL backend's per-declaration rescans, hoisted - and that is neutral too (T77b).**
@@ -2337,14 +2337,14 @@ compiler *did* catch and one it could not:
   count**, which is the number a sampling profile cannot give you and the one that
   separates "called once, expensive" from "called a million times, cheap".
 
-  It lives in `cppsrc/profiling/` (`Profiling.kt` for the Simse ring, `Profiling.{h,cpp}`
+  It lives in `src/profiling/` (`Profiling.kt` for the Simse ring, `Profiling.{h,cpp}`
   for the C++ ring, `impl_specs/profiling.md`): the flag, the runtime text, and the three
   one-line hooks (`preludeText`, `emitBodyAt`, `emitClosureClass`). Two details are
   load-bearing and are commented where they sit: the timer is the body's *first*
   statement (nothing precedes it, so no `goto` can cross into its scope - the `C2362` rule
   `ilJumpCrossing` exists for), and the timer name is the body's emitted *symbol*, so a
   row names the function and not its source line. `simse_nowMicros`
-  (`cppsrc/rtl/timeops.hpp` / `Native.cpp` / the `nowMicros()` surface) is the clock.
+  (`src/rtl/timeops.hpp` / `Native.cpp` / the `nowMicros()` surface) is the clock.
 
   Enable it with `bun build.js --release --profile` (the flag is passed through to the
   transpile step) or `simse_transpile --profile` for any program. Off, every hook returns
@@ -2357,10 +2357,10 @@ compiler *did* catch and one it could not:
 
   Not evaluated yet - the flag was added as the *instrument*, and the first reading of its
   numbers is the next step. What it already says about itself: a profiled compiler reports
-  **401 emitted bodies** on `--root cppsrc`, `main` first.
+  **401 emitted bodies** on `--root src`, `main` first.
 
 - **The first reading of the instrument, and the fix it chose (T78 continued).** The
-  profiled compiler reports **526 emitted bodies** on `--root cppsrc`, and the shape
+  profiled compiler reports **526 emitted bodies** on `--root src`, and the shape
   agrees with the sampling profile: `main` -> `emitProgram` (88%) -> `emitFunction` (1214
   calls = 607 functions x 2 passes), and inside one function the lowering + hoist/simplify
   + type pass is **2.22 s (53%)** against `emitBodyAt` **1.90 s (46%)**
@@ -2390,7 +2390,7 @@ compiler *did* catch and one it could not:
   lives in files the compiler reads and embeds in the pool the literals already use, so a
   resource is a `StrView` over that pool at runtime and there is no FFI, no data directory
   and no second copy of the text anywhere (`specs/resources.md`). The parser is a new
-  module, both rings (`cppsrc/resources/Resources.kt`, `Resources.{h,cpp}`), and its
+  module, both rings (`src/resources/Resources.kt`, `Resources.{h,cpp}`), and its
   differential is `resources_diff` (a `_res.md` fixture set dumped as one C++-quoted
   `key<TAB>value` line per entry, plus the joined list): hand-written and transpiled
   byte-identical. The end-to-end case is `stress/resources`, which prints every shape the
@@ -2411,7 +2411,7 @@ compiler *did* catch and one it could not:
   signatures, and only the *emitter* needed the static form, spelled beside
   `Enum.fromInt` (`Resources::get(...)`, the C++ `struct Resources` carrying the statics).
 
-  Verified: `simse_tests.exe` **61/61** (the whole `cppsrc` set still analyzes, and one
+  Verified: `simse_tests.exe` **61/61** (the whole `src` set still analyzes, and one
   more source file), `bun tools/stress.js` **45/45** on the self-hosted ring and 45/45 on
   `simse_transpile.exe`, the new case's emitted C++ byte-identical between the two rings,
   T22/T23 green, and `bun tools/bootstrap.js`'s fixed point byte for byte. A program with
@@ -2427,8 +2427,8 @@ compiler *did* catch and one it could not:
   differentials needed a C++-only `ast::Decl` layer to exist at all, and the ring's own
   fixture/golden harness was the only thing pinning behavior the stress corpus already
   pins end to end. What was *not* removable is the ground the compiler stands on, and that
-  is now the whole of the hand-written C++: the runtime headers (`cppsrc/rtl/*.hpp`), one
-  translation unit of `native(...)` symbols (`cppsrc/rtl/native.cpp`, the old
+  is now the whole of the hand-written C++: the runtime headers (`src/rtl/*.hpp`), one
+  translation unit of `native(...)` symbols (`src/rtl/native.cpp`, the old
   `native/Native.cpp` with `common/common.cpp`'s two filesystem helpers folded in), and
   the published bootstrap.
 
@@ -2447,8 +2447,8 @@ compiler *did* catch and one it could not:
 
   What *replaces* the five differentials and the golden harness is one property, already
   the strongest thing the repo had: **the bootstrap fixed point**. The published
-  `cppsrc/simse_bootstrap.cpp` compiles with `cl.exe` alone (plus `native.cpp`), and the
-  compiler that comes out of it must transpile `cppsrc` back into that same file, byte for
+  `src/simse_bootstrap.cpp` compiles with `cl.exe` alone (plus `native.cpp`), and the
+  compiler that comes out of it must transpile `src` back into that same file, byte for
   byte - `bun tools/bootstrap.js` checks that *and* compares the repo's own `./simse.exe`
   against it, which is what makes a stale compiler say so by name. On this machine
   (release, arm64): bootstrap compile **21.1 s**, self-transpile **1.18 s** for 17,905
@@ -2471,19 +2471,19 @@ compiler *did* catch and one it could not:
   also what `native("sym")` lowers to (`@SmGen("cpp", "sym")`), so
   the two spellings are one declaration (`bun tools/smgen.js` asserts their amalgamations
   are byte-identical). Three generators exist: `cpp` (the C++ is in the headers, i.e.
-  `native`), `res` (the C++ is a resource the *compiler* carries - `cppsrc/rtl/_res.md`,
+  `native`), `res` (the C++ is a resource the *compiler* carries - `src/rtl/_res.md`,
   whose `spanOf` is where the RTL's `spanOf` moved out of `span.hpp`, and whose
   `spanOfEmpty` section pins the documented last-write-wins collision), and `kt` (the
   implementation is *Simse source* from `<section>:source`, which the driver parses and
   compiles with the program).
 
   The amalgamation's assembly is now a first-class object: `Sections`
-  (`cppsrc/sourcegen/Sections.kt`, `cppsrc/codegen/CgSections.kt` when it landed) holds the
+  (`src/sourcegen/Sections.kt`, `src/codegen/CgSections.kt` when it landed) holds the
   named sections in render order
   (`includes -> forward -> types -> statics -> prototypes -> init -> bodies`), a
   generator's addition is a named item inside one of them (last write wins), and a new
   name appends at the end. Routing the emitter through it was verified the strict way -
-  the compiler before and after it transpiles `cppsrc` to identical C++ - and that is why
+  the compiler before and after it transpiles `src` to identical C++ - and that is why
   the emitter's own text stays a sequential buffer inside its section: its bytes cannot
   depend on the item dictionary.
 
@@ -2497,7 +2497,7 @@ compiler *did* catch and one it could not:
 - **The resources API is Simse now.** The lookup was the last part of the feature that
   had to be C++; `resources.hpp` is down to the storage and `install`, plus one accessor,
   `simse_resources_entries()`, that hands the table out as a `Span<ResourceEntry>`. Over
-  that, `cppsrc/rtl/resources.kt` writes `Resources.entries/get/has/count` in the
+  that, `src/rtl/resources.kt` writes `Resources.entries/get/has/count` in the
   language - a size test and `StrView.startsWith` per entry, allocation-free, what the
   C++ did - and the static call `Resources.get(k)` now resolves through
   `Emitter.staticCallSymbol` to the prelude function's *symbol* (the name walk records
@@ -2514,13 +2514,13 @@ compiler *did* catch and one it could not:
 
   Verified after all of the above: `bun tools/stress.js` **55/55** (five `smgen-*` cases,
   five attribute diagnostics, the rest unchanged), `bun tools/smgen.js` 1/1,
-  `bun tools/bootstrap.js` - the published `cppsrc/simse_bootstrap.cpp` refreshed and both
+  `bun tools/bootstrap.js` - the published `src/simse_bootstrap.cpp` refreshed and both
   fixed-point comparisons byte-identical - and `./simse.exe` reproducing `simse_out.cpp`
   (release+`/GL`: 0.86 s for the self-transpile).
 
 - **The RTL's generated C++ is a resource now (T29).** `strtable.hpp`, `timeops.hpp`,
   `listops.hpp`, `dictops.hpp` and `strops.hpp` are gone: their text is the
-  `strtable`/`timeops`/`listops`/`dictops`/`strops` sections of `cppsrc/rtl/_res.md`, and
+  `strtable`/`timeops`/`listops`/`dictops`/`strops` sections of `src/rtl/_res.md`, and
   `rtl.kt`'s declarations reach it with `@SmGen("res", section, symbol)` instead of
   `native(...)` (no prelude string/list/dictionary operation is a `native` any more). The
   emitted assembly grew the
@@ -2560,7 +2560,7 @@ compiler *did* catch and one it could not:
   that is the cost of the header going away), `bun tools/smgen.js` 1/1, and the bootstrap
   fixed point holds byte for byte.
 
-- **The generators are a package of their own now (T30).** `cppsrc/sourcegen/` holds
+- **The generators are a package of their own now (T30).** `src/sourcegen/` holds
   `Sections.kt` (the sink, moved out of `codegen` verbatim), `GenTypes.kt` (the data a
   generator sees: `SourceGenContext`, `SourceGenTransform`, `FullCompiledState`, the
   `OnSourceGen` typealias), one file per generator (`CppGen.kt`, `ResGen.kt`, `KtGen.kt`),
@@ -2585,8 +2585,8 @@ compiler *did* catch and one it could not:
   block" is unchanged, which is why the refactor is byte-neutral.
 
   Verified the strict way, since the refactor should change no bytes: the refactored
-  compiler and the previous one transpile `cppsrc` to *identical* C++ (compared directly,
-  then `bun tools/bootstrap.js` after one `cppsrc/simse_bootstrap.cpp` refresh reports both
+  compiler and the previous one transpile `src` to *identical* C++ (compared directly,
+  then `bun tools/bootstrap.js` after one `src/simse_bootstrap.cpp` refresh reports both
   fixed-point comparisons byte for byte), `bun tools/stress.js` **56/56** with no golden
   re-captured, `bun tools/smgen.js` 1/1.
 
@@ -2598,7 +2598,7 @@ compiler *did* catch and one it could not:
   resource idiom minus its sections: prose lines carry no entry, an entry is `key: value`, a
   repeated key means "one more of these". **A root with a manifest is scanned as exactly the
   modules it names**, so a `stray.kt` beside the manifest is not scanned; a root without one
-  is scanned whole, which is what `--root cppsrc` keeps doing - and what lets the compiler's
+  is scanned whole, which is what `--root src` keeps doing - and what lets the compiler's
   own tree gain a manifest later without a second code path. A module that declares
   generators is a hard error naming it: the extension is not implemented, and a program that
   asked for a generator must not compile silently without it
@@ -2639,8 +2639,8 @@ compiler *did* catch and one it could not:
   from a marked section, the program does not carry that key, it does carry the unmarked
   section beside it, and the count is one).
 
-  One file was left unmarked at that point, `cppsrc/rtl/_res.md`, and the reason was the one
-  trap this feature had: a `_res.md` under `cppsrc` *was* the compiler's own run-time resource
+  One file was left unmarked at that point, `src/rtl/_res.md`, and the reason was the one
+  trap this feature had: a `_res.md` under `src` *was* the compiler's own run-time resource
   table, which is how a program that carries no section of its own received the RTL's C++
   (`Resources.get` was the second half of the generator lookup). Marking those sections would
   have taken the text out of the compiler, and no program would have got its RTL code. That
@@ -2651,9 +2651,9 @@ compiler *did* catch and one it could not:
   diffs are the point: the text and the table are gone), `bun tools/smgen.js` 1/1, and the
   bootstrap fixed point holds byte for byte after one refresh.
 
-- **The compiler stops carrying its own resources (`cppsrc/rtl/_res.md` is `!` throughout).**
+- **The compiler stops carrying its own resources (`src/rtl/_res.md` is `!` throughout).**
   The pool the compiler built into itself was 33,446 bytes, and 23,034 of them were the text of
-  `cppsrc/rtl/_res.md` - text the compiler *also* had as code, since the `res` generator emits
+  `src/rtl/_res.md` - text the compiler *also* had as code, since the `res` generator emits
   it. The marker from the entry above could not simply be applied to that file: the second half
   of the generator lookup *was* the compiler's own pooled table (`Resources.get`), read at run
   time to serve a program that carries no `_res.md` of its own - so marking the file would have
@@ -2665,7 +2665,7 @@ compiler *did* catch and one it could not:
   the compiler's own (`FullCompiledState.compilerResources`) - with `sourceGenResHas`/
   `sourceGenResText` and `resGenAlways` reading the second instead of the RTL's `Resources` API.
   The RTL's `Resources` type is a *program-facing* API now; the compiler reads files, which it
-  already had to do for the prelude. Every section of `cppsrc/rtl/_res.md` is marked `!`, so
+  already had to do for the prelude. Every section of `src/rtl/_res.md` is marked `!`, so
   nothing of it is pooled and the compiler's own `Resources` table is empty.
 
   Verified: pool 33,446 → 11,051 bytes, and the published bootstrap 1,572,537 → 1,548,652 bytes
@@ -2673,11 +2673,11 @@ compiler *did* catch and one it could not:
   and the disk read is exercised by nearly every case, since almost none carries a `_res.md` of
   its own - `bun tools/smgen.js` 1/1, and the bootstrap fixed point holds byte for byte.
 
-- **The skeleton parser is gone.** `cppsrc/skelparser/SkeletonParser.kt` (140 lines) was the
+- **The skeleton parser is gone.** `src/skelparser/SkeletonParser.kt` (140 lines) was the
   first component ported from the hand-written ring - the pilot that proved a Simse source file
   could be transpiled, compiled and differentially checked against its C++ original
   (`skel_diff`, byte-identical tree dumps) - and once `parser/Parser.kt` parsed tokens straight
-  into the AST it had no caller at all: nothing in `cppsrc` named `parseSkeleton`, `foldBack`,
+  into the AST it had no caller at all: nothing in `src` named `parseSkeleton`, `foldBack`,
   `matchingOpenToken`, `blockTypeForOpenToken`, `isClosingToken`, `SkeletonNode` or
   `SkeletonType`, the only link left was an unused `import skelparser` in the driver, and the C++
   original it mirrored (`SkeletonParser.h`/`.cpp`) had already been deleted. It was compiled
@@ -2686,7 +2686,7 @@ compiler *did* catch and one it could not:
   porting story in agents.md.
 
   Worth knowing as a consequence: the only `&T`/`PList` sites in the compiler's own source were
-  in that file (`&List<SkeletonNode>` x11), so `cppsrc` now contains **no counted reference at
+  in that file (`&List<SkeletonNode>` x11), so `src` now contains **no counted reference at
   all** - the emitted `Ref<T>` spelling and the `SmRef`/`std::shared_ptr` switch are exercised by
   the RTL's `Array`/`PList` and by the corpus (`stress/counted-reference`,
   `stress/pack-args`, `stress/language-tour`) rather than by the compiler's own ring.
@@ -2771,24 +2771,24 @@ compiler *did* catch and one it could not:
   holds byte for byte after one refresh.
 
 - **The runtime's last hand-written translation unit is gone: a program is one file (T29
-  finished).** `cppsrc/rtl/native.cpp` - the platform's natives (file I/O, directory
+  finished).** `src/rtl/native.cpp` - the platform's natives (file I/O, directory
   listing, the path tests, `eprintln`, `FileStream::open`) and the two clocks - was the
   repository's second hand-written translation unit, so every build was "compile the
   amalgamation *and* native.cpp, then link", and a build that left the second file out
   failed in the linker (`LNK2019`) rather than in the compiler. Anyone bootstrapping Simse
   had to know that; now there is nothing to know.
 
-  The bodies are resources. `fileio` is a new section of `cppsrc/rtl/_res.md`: the
-  prototypes (which were `cppsrc/rtl/fs.hpp`, plus `simse_fileStream_open` in
+  The bodies are resources. `fileio` is a new section of `src/rtl/_res.md`: the
+  prototypes (which were `src/rtl/fs.hpp`, plus `simse_fileStream_open` in
   `filestream.hpp`) are its `forward:` text and the definitions are its `bodies:` text, with
   `native.cpp`'s two file-local helpers inlined into their one caller each. `timeops` gained
   the clock bodies beside the declarations it already had, and `fs.hpp` is deleted. The
   prelude declarations name their symbol in the section
-  (`@SmGen("res", "fileio", "simse_listFiles")` in `cppsrc/rtl/fs.kt`, and `readFile` in
-  `cppsrc/common/common.kt`), so nothing is linked in beside the program's own translation
+  (`@SmGen("res", "fileio", "simse_listFiles")` in `src/rtl/fs.kt`, and `readFile` in
+  `src/common/common.kt`), so nothing is linked in beside the program's own translation
   unit: `build.js`, `tools/bootstrap.js`, `tools/stress.js`, `simse.vcxproj` and
   `tools/vscheck.mjs` no longer name a second file, and `bun tools/bootstrap.js` compiles
-  `cppsrc/simse_bootstrap.cpp` with `cl.exe` alone.
+  `src/simse_bootstrap.cpp` with `cl.exe` alone.
 
   **`fileio` is `emit: always`**, which is the one decision worth recording. A *program* may
   name any of those symbols with a declaration of its own -
@@ -2807,7 +2807,7 @@ compiler *did* catch and one it could not:
   (`native-read-file` is the case that pins the FFI path; the ten emission goldens were
   re-captured and their only delta is the reworded `timeops` comment plus the `fileio`
   section), and `bun tools/bootstrap.js` reports **one input file** with the fixed point
-  holding byte for byte (`cppsrc\simse_bootstrap.cpp -> simse_boot.exe`, 15.9 s,
+  holding byte for byte (`src\simse_bootstrap.cpp -> simse_boot.exe`, 15.9 s,
   self-transpile 866 ms, 1.49 MB / 49,585 lines checked in).
 
 - **The intrinsics are one union and one span: `Variant2`, and `StrView` is
@@ -2815,7 +2815,7 @@ compiler *did* catch and one it could not:
 each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struct with a
   `T` field beside a `Str` error, so a result was two objects that could disagree - and
   did: `isOk()` was "`Error` is empty", which read `Res<T>.err("")` as a success. Both are
-  now arms of one local tagged union, `Variant2<A, B>` (`cppsrc/rtl/variant2.hpp`):
+  now arms of one local tagged union, `Variant2<A, B>` (`src/rtl/variant2.hpp`):
   `Opt<T>` is `Variant2<T, VoidEnum>` and `Res<T>` is `Variant2<T, Str>`, `VoidEnum` being
   the empty alternative that tells an optional from a result. `std::variant` was rejected
   for two reasons that both matter to this runtime: `std::get` throws (there are no
@@ -2827,8 +2827,8 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
 
   `StrView` was a struct holding a `Span<Char>` plus the text operations, which made a
   `StrView` and a `Span<Char>` different types for no observable reason. It is now
-  `typealias StrView = Span<Char>` on both sides (`cppsrc/rtl/StrView.kt`,
-  `cppsrc/rtl/strview.hpp`), so one type carries both names and the text operations are
+  `typealias StrView = Span<Char>` on both sides (`src/rtl/StrView.kt`,
+  `src/rtl/strview.hpp`), so one type carries both names and the text operations are
   natives *on the span*. Two things had to move with it: the `bytes` member (there is
   none; a view is the span) and `StrView::toString()` (gone - it existed for a `.toString()`
   on a string-pool entry that no emitted code ever wrote; the free `simse_strView_toString`
@@ -2875,13 +2875,13 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   reached hand-written C++ - the `StrView` operations, `FileStream`'s methods and the
   `Resources` accessor - although the two spellings have been one declaration since T26
   (`native("sym")` is sugar for `@SmGen("cpp", "sym")`, `bun tools/smgen.js`). They say
-  `@SmGen` now, so **no file under `cppsrc/` spells `native`**: the keyword stays the
+  `@SmGen` now, so **no file under `src/` spells `native`**: the keyword stays the
   *program's* FFI spelling, `stress/native-read-file` and the equivalence fixture
   (`stress/smgen-native`, `stress/smgen-cpp`) keep it honest, and dropping it from the
   language is `agents.md` §8's call rather than this change's.
 
   The same pass moved the C++ those declarations named out of the headers and into three
-  new `cppsrc/rtl/_res.md` sections, because a header is compiled *in* while a section is
+  new `src/rtl/_res.md` sections, because a header is compiled *in* while a section is
   text a declaration reaches:
 
   - `strview` - the twelve view operations (`size`, `isEmpty`, `at`, `charAt`, `slice`
@@ -2923,7 +2923,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   Three asks, one theme: the intrinsics should say what they are.
 
   **`Span<T>.atPtr(index): *T`** is a *language body* on the span
-  (`cppsrc/rtl/Span.kt`), not a C++ member - the emitter reifies it per instantiation
+  (`src/rtl/Span.kt`), not a C++ member - the emitter reifies it per instantiation
   (`min`/`max`'s shape) and the call site has a **type**, where the class's own methods
   print `auto` because the rules cannot name a member of a prelude data class. Its body
   is `* this[index]` and *not* `* this.ptr[index]`, which is a finding: `*` on an index
@@ -3055,7 +3055,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   the unchecked `fromInt` (`expected.stdout` re-captured). Emitted size: `stress/for-container`
   **38,309 -> 38,280 bytes**, `stress/language-tour` **37,677 -> 37,236**.
 
-- **Comment and formatting pass over every Simse source.** `cppsrc/**/*.kt`: 21,884 ->
+- **Comment and formatting pass over every Simse source.** `src/**/*.kt`: 21,884 ->
   19,610 lines, tokens unchanged. The comments had grown into essays - the history of the
   deleted C++ ring, restatements of the code at hand, a paragraph per spelling decision -
   and the editor's Kotlin formatter had left wrapped call sites behind. Cut: history and
@@ -3123,7 +3123,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   `stress/dictionary`; the parser rule itself is unchanged.
 
 - **A parameter every call site passes the same literal is folded away (constant parameters).**
-  `cppsrc/parser/ConstParams.kt` (`cpFoldConstParams`) is a whole-program AST-to-AST rewrite that
+  `src/parser/ConstParams.kt` (`cpFoldConstParams`) is a whole-program AST-to-AST rewrite that
   runs in the driver with the `!!` expansion, once every module is parsed and before sema
   (`impl_specs/const-params.md`). A name-level gather records every plain-name call site and every
   name read as a value over the prelude and the program; a candidate is a program function with a
@@ -3138,14 +3138,14 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
 
   The signature is why this cannot live later: the emitter reads a declaration's parameters from
   the AST at emit time and lowers that same AST body into the IL (`Codegen.kt`'s `emitFunction`),
-  and the passes under `cppsrc/optimizations/` see one already-lowered body at a time - a signature
+  and the passes under `src/optimizations/` see one already-lowered body at a time - a signature
   is not theirs to move.
 
   The fold is invisible in a program's stdout, so `stress/fold-const-params` pins it: `logMe`
   (the same literal at two call sites) folds to `void ns1_logMe()`, while `maybe` (differing
   literals), `Str.tag` (receiver form only) and `markIt` (also passed as a value) keep their
   parameters - `expected.cpp` is the proof. The pass reaches the compiler's own source too: over
-  `cppsrc` it folds, among others, `xmlIntAttr`'s `fallback` (`0` at both call sites),
+  `src` it folds, among others, `xmlIntAttr`'s `fallback` (`0` at both call sites),
   `escapedSnippet`'s `maxLen` (`10`), `ilSetShow`/`profSetEnabled`'s `value` (`true`) and
   `propGenericName`'s `name` (`"Res"`), and the folded local then feeds the existing linear
   constant propagation (`foldConst`), which collapses `logMe`'s dead branch.
@@ -3157,9 +3157,9 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   (the folded yieldable parameters) - re-captured from the run.
 
 - **A `json` source generator, and the serializers a program's types produce.** The `json`
-  module (`cppsrc/modules/json/`: `api.kt` plus a `generators/JsonGen.kt`) holds the first
+  module (`src/modules/json/`: `api.kt` plus a `generators/JsonGen.kt`) holds the first
   generator whose output is Simse *built in code* rather than read from a resource, so it reads
-  the program's own type structure. A program names the module (`--module cppsrc/modules/json`)
+  the program's own type structure. A program names the module (`--module src/modules/json`)
   and writes `import json` then `value.toJson()`; the declaration it binds to is
   `@SmGen("json") fun T.toJson<T>(): Str`, and the generator emits one concrete
   `fun T.toJson(): Str` per type, recursively: a data class is an object of its fields'
@@ -3179,7 +3179,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   for a receiver type is found first and left alone. `stress/json/expected.cpp` pins it - one
   prototype and one definition per type. The generated module is `rtl` (the driver's synthetic
   reparse module) and begins with one `import` per package a serialized class lives in; the fixed
-  quoting helper is the `json:helpers` section of `cppsrc/rtl/_res.md`, read as Simse text rather
+  quoting helper is the `json:helpers` section of `src/rtl/_res.md`, read as Simse text rather
   than escaped inside the generator. Only *named* types are supported so far (a `List<T>`/`Opt<T>`/
   `*T` field or a generic class is a diagnostic naming it), and generation is program-wide rather
   than per reach - both are the deferred step in `impl_specs/generators.md`.
@@ -3190,12 +3190,12 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   byte for byte after the refresh.
 
 - **The module layout, and a repeatable `--module` list.** Modules are directories under
-  `cppsrc/modules/`, one per module (`json` first), each with its compiler-side sources in a
+  `src/modules/`, one per module (`json` first), each with its compiler-side sources in a
   `generators/` subfolder by convention. The driver gained a repeatable `--module <dir>` (the old
   `--module-root` is the same option) beside `--root`, and the two mean different things:
 
   - **`--root <dir>` is a tree**, scanned whole - what the compiler's own build does
-    (`--root cppsrc`), and why `cppsrc/modules/**/generators/*.kt` is compiled into the compiler.
+    (`--root src`), and why `src/modules/**/generators/*.kt` is compiled into the compiler.
   - **`--module <dir>` is a module**, scanned without its `generators/` - so a program that names
     it gets the module's declarations (`api.kt`) and never its generator sources, which are
     written against the compiler's own packages (`sourcegen`, `common`).
@@ -3219,33 +3219,33 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
 
   `stress/README.md` documents the case's new `compiler-args` file (one line of extra transpiler
   arguments, after `--root src -o out.cpp`), and `stress/json` uses it for
-  `--module cppsrc/modules/json`.
+  `--module src/modules/json`.
 
 - **A module owns its resources, and its declarations are reach-gated.** Four pieces landed
   together, each small and each needed to make the module boundary real:
 
-  - **`emit: reached`** (`cppsrc/sourcegen/ResGen.kt`): a section marked that way is gated by the
+  - **`emit: reached`** (`src/sourcegen/ResGen.kt`): a section marked that way is gated by the
     reach set *even when the declaration that names it is a module's* - a prelude declaration was
     gated already, a program's was not. `filestream` is the first, so the `io` module hands out
     `readLine` without every program that names `io` carrying the stream C++ (the compiler's own
     build proves it: `FileStream::readLine` is absent from its emission).
-  - **The `io` module** (`cppsrc/modules/io/api.kt`): the file and directory operations
+  - **The `io` module** (`src/modules/io/api.kt`): the file and directory operations
     (`listFiles`, `listFilesDirect`, `writeFile`, `pathCanonical`, `pathIsDirectory`,
     `pathExists`, `eprintln`, the three reads and `close`/`fileSize`) moved out of the prelude.
-    `FileStream` is the one thing that stayed (`cppsrc/rtl/fs.kt`): a *type* cannot name its C++
+    `FileStream` is the one thing that stayed (`src/rtl/fs.kt`): a *type* cannot name its C++
     with `@SmGen` in this language - attributes are methods-only - so a `data class` in a program
     module would be emitted as a struct clashing with `filestream.hpp`. `Driver.kt`,
     `resources/Resources.kt`, `sema/Async.kt` and `codegen/IlCodeGen.kt` `import io`; a program
-    reaches the module with `--module cppsrc/modules/io`.
+    reaches the module with `--module src/modules/io`.
   - **A module's C++ is the module's resource.** `fileio` and `filestream` moved from
-    `cppsrc/rtl/_res.md` to `cppsrc/modules/io/_res.md`, and the `json` generator's helper to
-    `cppsrc/modules/json/_res.md`. The RTL's file is the *prelude's* C++ now. The pay-off is the
+    `src/rtl/_res.md` to `src/modules/io/_res.md`, and the `json` generator's helper to
+    `src/modules/json/_res.md`. The RTL's file is the *prelude's* C++ now. The pay-off is the
     size win asked about earlier: **a program that does not name `io` no longer carries the
     ~139 lines / 4 KB of platform file I/O** (nine `expected.cpp` goldens lost exactly that
     block).
   - **`tasks` stopped depending on `fileio`.** The workers' read called
     `simse_native_readFile` by forward declaration, which only worked while `fileio` was
-    force-emitted; it reads its file with `std::ifstream` inline now (`cppsrc/rtl/_res.md`), the
+    force-emitted; it reads its file with `std::ifstream` inline now (`src/rtl/_res.md`), the
     cross-section dependency the move exposed.
 
   Alongside them, **a module's `sourcegen: true` no longer blocks a compilation**
@@ -3259,8 +3259,8 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   out **byte-identical** to the published bootstrap, so no refresh was needed: the move changed
   which resource file a section is read from, not the text the emitter places. Nine
   `expected.cpp` goldens were re-captured for the `fileio` removal, and `stress/native-read-file`,
-  `stress/read-lines`, `benchmarks/onebrc` and `docs/examples/async` gained `--module
-  cppsrc/modules/io` (the first through its `compiler-args`, the examples through their build
+  `stress/read-lines`, `benchmarks/onebrc` and `examples/async` gained `--module
+  src/modules/io` (the first through its `compiler-args`, the examples through their build
   commands).
 
 - **A `+` chain, and an `fmtStr` with a literal format, are one `Concat` instruction - and one
@@ -3272,12 +3272,12 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   lengths, allocate once, write each part into its own slot** - and for `fmtStr` the split
   happens at compile time, so no format is scanned at run time.
 
-  - **A new IL instruction, `Concat`** (`cppsrc/linear/LinearForm.kt`, `impl_specs/linear-il.md`):
+  - **A new IL instruction, `Concat`** (`src/linear/LinearForm.kt`, `impl_specs/linear-il.md`):
     `dst = concat(part, ...)`, one operand per part, signature `Var,Value...`. It is the
     IL's first instruction no *lowering* builds.
-  - **`cppsrc/linear/MergeConcat.kt`** builds it, as a post-pass over the *instruction list* -
+  - **`src/linear/MergeConcat.kt`** builds it, as a post-pass over the *instruction list* -
     the one place a slot's type and a chain's shape are both visible at once, which is why it is
-    not a `cppsrc/optimizations` pass (those see the statement list, where the expression
+    not a `src/optimizations` pass (those see the statement list, where the expression
     lowering has already split the chain) and not the emitter's (a text decision could not reuse
     a slot's type). It runs per body in `ilFuseConcatUnit` (`IlCodeGen.kt`, called from
     `emitBodyAt` and from the `--showLinearRepresentation` dump, so the dump shows exactly the
@@ -3311,7 +3311,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
       the emitted C++ is shorter as well as faster: `stress/objects` lost six `List<Str>*`
       slots and their `Pack`/`Deref` pairs.
   - **The emitter *expands* the instruction - there is no `cat` function**
-    (`ilConcatStatements`, `cppsrc/codegen/IlCodeGen.kt`), so the C++ compiler sees
+    (`ilConcatStatements`, `src/codegen/IlCodeGen.kt`), so the C++ compiler sees
     straight-line code it can fold instead of a variadic call it has to trust. The expansion
     sums the parts' *exact* lengths, performs **one `resize`**, and then fills the slot with a
     pointer that advances by each part's length - `s.resize(<sum>); char* p = s.data();
@@ -3342,12 +3342,12 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
       `StrView` over a two-entry `"true"`/`"false"` table. A float is not folded at all - its
       length is only known by formatting it, so the `toString` call stays and hands over *one*
       `Str`, made ahead of time.
-  - **The primitives are a resource section of their own** (`strcat` in `cppsrc/rtl/_res.md`):
+  - **The primitives are a resource section of their own** (`strcat` in `src/rtl/_res.md`):
     `simse_strCountDigits(Int64)` (the bit scan above), `simse_strAddInt(char*, Int64, Int)`
     (the two-digit writes) and `simse_strBoolView(Bool)` (the two-entry table). No program
     names one, so the emitter records the reach itself (`referencedNames.insert`, the rule the
     `main` argument list's `simse_list_append` already followed); the anchor the section hangs
-    on is `@SmGen("res", "strcat", "simse_strAddInt")` in `cppsrc/rtl/rtl.kt`, and the
+    on is `@SmGen("res", "strcat", "simse_strAddInt")` in `src/rtl/rtl.kt`, and the
     section's `forward` text *is* the declaration, so it places no prototype of its own. Its
     *own* section rather than an addition to `strops`/`listops`, because those are shared -
     reaching one operation carries all of them. A program's own `append`/`appendStr` are
@@ -3368,7 +3368,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
 
   Verified: the compiler was rebuilt from HEAD's published bootstrap (the v2 compiler emits
   symbols this section no longer defines), then `bun build.js --release --out
-  cppsrc/simse_bootstrap.cpp` regenerated the published bootstrap from its own emitted C++,
+  src/simse_bootstrap.cpp` regenerated the published bootstrap from its own emitted C++,
   `bun tools/stress.js --release --jobs 4 --keep-going` is **40/40** (the case is
   `stress/concat`), and `bun tools/bootstrap.js` holds both fixed-point checks byte for byte.
   Four `expected.cpp` goldens were re-captured (`concat`, `fold-const-params`, `machines`,
@@ -3377,8 +3377,8 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
 
 
 - **The fusion has an off switch, and turning it off found a hole.** `--no-concat`
-  (`ilNoConcatFlag` / `ilNoConcat` / `ilSetNoConcat` in `cppsrc/linear/MergeConcat.kt`, parsed
-  in `cppsrc/compiler/Driver.kt`) skips `ilFuseConcat` entirely, so one binary emits both
+  (`ilNoConcatFlag` / `ilNoConcat` / `ilSetNoConcat` in `src/linear/MergeConcat.kt`, parsed
+  in `src/compiler/Driver.kt`) skips `ilFuseConcat` entirely, so one binary emits both
   shapes and the two can be measured against each other. On the same program the `strcat`
   section and every expansion disappear with it: over the five concat-reaching stress cases the
   C++ shrinks by 6.5-8.8 KB, and `stress/json` - which reaches no concatenation at all - is
@@ -3447,7 +3447,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
     (left alone), and the same program run with the guards on, off and with `--when-first-char`,
     all three byte-identical in output.
 
-  Verified: `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js`
+  Verified: `bun build.js --release --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js`
   - both fixed points byte for byte, with the compiler's own string `when`s rewritten in its own
   emitted C++, which is the real test of the rewrite; `bun tools/stress.js` **41/41**.
 
@@ -3473,8 +3473,8 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
     through); `--profile-file -` keeps it on stderr, and an unopenable path falls back there.
     The path is a transpile-time constant (`simse_profiling::kProfileFile`), because `--profile`
     is a build mode and not a program's own argument.
-  - **The proof file.** `cppsrc/simse_profile.txt` sits beside the bootstrap: the CSV a release,
-    profiled compiler wrote about its own `--root cppsrc` run (769 measured bodies; `main` 5.9 s
+  - **The proof file.** `src/simse_profile.txt` sits beside the bootstrap: the CSV a release,
+    profiled compiler wrote about its own `--root src` run (769 measured bodies; `main` 5.9 s
     inclusive, `ns1_emitFunction` 1818 calls, `ns8_foldExprsUnder` 1.86M). The `calls` column is
     exact; `total_us` is one machine.
 
@@ -3482,7 +3482,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   stderr with `--profile-file -`; with the flag off `bun tools/stress.js` is **41/41** (no golden
   moved - the flag returns the empty string at every hook, and `Emitter.profIndexOf` returns
   early, so the emitted C++ is byte-identical), and
-  `bun build.js --release --out cppsrc/simse_bootstrap.cpp` + `bun tools/bootstrap.js` give both
+  `bun build.js --release --out src/simse_bootstrap.cpp` + `bun tools/bootstrap.js` give both
   fixed points byte for byte.
 
 - **The profiler names packages, and it can count nanoseconds.** Two follow-ups on the indexed
@@ -3501,18 +3501,18 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   return/hold `Int64` - so the unit is a display choice, not a range one.
 
   - **A third clock.** `simse_nowNanos` joins `simse_nowMillis` / `simse_nowMicros` in the
-    `timeops` section of `cppsrc/rtl/_res.md` (the section carries `emit: always` precisely
+    `timeops` section of `src/rtl/_res.md` (the section carries `emit: always` precisely
     because the profiler's runtime is emitted by the compiler, so the clock is in every program
     whether or not the program asks for the time). `steady_clock` on Windows resolves to ~100 ns,
     finer than the microsecond reading.
 
   Verified: a profiled `stress/strings` program writes `strings::partStrIsEmpty` names, and with
   `--profile-nanos` the same program writes `name,total_ns,calls` and measures through
-  `simse_nowNanos()`; the checked-in `cppsrc/simse_profile.txt` is regenerated from a release,
+  `simse_nowNanos()`; the checked-in `src/simse_profile.txt` is regenerated from a release,
   profiled compiler (`codegen::emitProgram` 5.3 s inclusive, `codegen::emitFunction` 1826 calls);
   the 11 `.cpp` goldens that carry `timeops` were re-captured (the only change is the added
   clock), `bun tools/stress.js` is **41/41**, and
-  `bun build.js --release --out cppsrc/simse_bootstrap.cpp` + `bun tools/bootstrap.js` give both
+  `bun build.js --release --out src/simse_bootstrap.cpp` + `bun tools/bootstrap.js` give both
   fixed points byte for byte.
 
 - **A backtick string is the language's raw, multi-line literal.** Written between two
@@ -3520,7 +3520,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   cannot appear inside, and every byte between them is the content - a real newline included,
   which is what lets a string span lines (JavaScript's delimiter, C#'s verbatim semantics,
   without the `@`). The scanner has one more matcher (`matchRawStringLiteral`,
-  `cppsrc/lex/Scanner.kt`), ordered *last* in the rule table on purpose: a backtick is the one
+  `src/lex/Scanner.kt`), ordered *last* in the rule table on purpose: a backtick is the one
   character no earlier rule accepts, so only a backtick ever reaches it and no other token pays
   for the rule. The parser then turns the token into an ordinary string literal rather than a
   new node kind: `Parser.stringTokenText` hands a backtick token's raw text to `litRawString`
@@ -3535,7 +3535,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
     lone CR both to one `\n`, so the string is the same whichever line endings the checkout has -
     what JavaScript's template literals do, and what keeps the bootstrap's fixed point byte for
     byte across checkouts.
-  - **It is how the profiler's C++ is now written.** `cppsrc/profiling/Profiling.kt`'s prelude -
+  - **It is how the profiler's C++ is now written.** `src/profiling/Profiling.kt`'s prelude -
     ~110 lines of `appendStr("...\n")` calls, one escaped C++ line each - is one backtick string
     per run, with the four computed pieces (the clock, twice, the unit and the file path)
     concatenated in; `Codegen.preludeText` is the same for its five lines. The only cost is that
@@ -3547,12 +3547,12 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   empty backtick string, equality with the escaped `"..."` form, `startsWith`, and a backtick
   string as a `when` label - with its `expected.cpp`; `bun tools/stress.js` is **42/42** (41 +
   the new case, with no other golden moved); `bun build.js --release --out
-  cppsrc/simse_bootstrap.cpp` + `bun tools/bootstrap.js` give both fixed points byte for byte;
+  src/simse_bootstrap.cpp` + `bun tools/bootstrap.js` give both fixed points byte for byte;
   and a `--profile` build of `stress/strings` emits the same runtime as before apart from the
   reworded comments.
 
 - **The literal folds are one traversal, not four - and the self-transpile drops 8.4%.** The
-  fourth reading of the profile (`cppsrc/simse_profile.csv`) put `foldExprsUnder` at
+  fourth reading of the profile (`src/simse_profile.csv`) put `foldExprsUnder` at
   **1,867,455 calls / 23.2%** of the run, with `foldGlobalRule`, `foldArithRule`,
   `foldCompareRule` and `foldToStringRule` each standing at **368,444** - i.e. the same tree,
   walked once per rule. The four folds were four registered passes inside `linOptimizeBody`'s
@@ -3574,7 +3574,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
     of one traversal rather than one rule per four traversals. `linOptimizeBody` 2,066,594 ->
     1,934,545 us and `linFinishForEmission` 2,415,083 -> 2,303,617 us in the instrumented build.
   - **Equivalence, before speed.** The fold's output is pinned as unchanged: the compiler before
-    and after transpile a frozen copy of the whole tree (`cppsrc`, 23.5k lines of Simse, 49,856
+    and after transpile a frozen copy of the whole tree (`src`, 23.5k lines of Simse, 49,856
     lines of emitted C++) to **byte-identical C++** (`cmp`), every `.cpp` golden passes without
     re-capture, and `bun tools/bootstrap.js`'s fixed point is byte for byte. The pass's *name*
     changed (`foldAll`), so `linOptPassName`'s output moved; no emitted text did.
@@ -3586,7 +3586,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
     alone. `bun tools/bootstrap.js` then reports the self-transpile at 1131 ms.
 
   Verified: `bun tools/stress.js` **42/42**, `bun build.js --release --out
-  cppsrc/simse_bootstrap.cpp` + `bun tools/bootstrap.js` both fixed points byte for byte.
+  src/simse_bootstrap.cpp` + `bun tools/bootstrap.js` both fixed points byte for byte.
 
 - **What is left in the same profile, and why it is next.** Two clusters want the same treatment
   - fusing repeated traversals of one statement's subtree. They are recorded here so the reading
@@ -3610,11 +3610,11 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
     reading fewer attributes and fewer nodes is what pays).
 
 - **`unInit` is a type's destructor, and a type that has one is held by handle only.** A data
-  class's `unInit` method maps to a C++ destructor: `emitDataClass` (`cppsrc/codegen/Codegen.kt`)
+  class's `unInit` method maps to a C++ destructor: `emitDataClass` (`src/codegen/Codegen.kt`)
   declares `~T()` in the struct, and `emitUninit` emits its definition where the bodies go - after
   the prototypes, so the body may call anything the class can. The body is emitted through the
   closure spelling (`inClosureMethod`), because the receiver is C++'s `this` rather than a `self`
-  parameter: the extractor's frame is built by `ilDestructorFor` (`cppsrc/codegen/IlCodeGen.kt`)
+  parameter: the extractor's frame is built by `ilDestructorFor` (`src/codegen/IlCodeGen.kt`)
   with the class as `closureSymbol`/`selfDecl`, so a field reads `this->field`. Nothing about the
   *call* is new - `~T()` is where a C++ destructor is written.
 
@@ -3622,7 +3622,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
     resource would be closed once per copy. `&T` is the counted handle (`Ref<T>::~Ref` destroys
     the box when its last owner goes) and `*T` is the raw pointer that destroys nothing - and the
     type may sit anywhere inside either (`List<&T>` is fine, `List<T>` is not).
-    `Analyzer.checkUninitHolder` (`cppsrc/sema/Sema.kt`, over a `uninitTypes` set built once by
+    `Analyzer.checkUninitHolder` (`src/sema/Sema.kt`, over a `uninitTypes` set built once by
     `collectUninitTypes` in `run`) descends the type and reports a bare `T`:
 
     > `'Res' has an unInit: hold it by '*Res' or '&Res' - a value copy would run its destructor too`
@@ -3644,9 +3644,9 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
     tidy: with `&Box(7)` lowered as a value temporary that `makeRef` then copies, the
     temporary's `~Box()` would run too - observable the moment a type has an `unInit`. So
     `ExprRef` over a construction keeps the construction as its operand
-    (`cppsrc/linear/ExpressionLowering.kt`), and the extractor's `ExprRef` branch
-    (`cppsrc/linear/LinearForm.kt`) makes that construction *the box*: its destination is the
-    `&C` slot, which `ilBoxedCtorText` (`cppsrc/codegen/IlCodeGen.kt`) spells
+    (`src/linear/ExpressionLowering.kt`), and the extractor's `ExprRef` branch
+    (`src/linear/LinearForm.kt`) makes that construction *the box*: its destination is the
+    `&C` slot, which `ilBoxedCtorText` (`src/codegen/IlCodeGen.kt`) spells
     `makeRef<C>(args...)`. The emitted C++, before and after:
 
     ```cpp
@@ -3674,7 +3674,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
 
   Verified: `bun tools/stress.js` **44/44** (the new `stress/uninit` and
   `stress/diagnostic-uninit-value` among them); `bun build.js --release --out
-  cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js` - both fixed points byte for byte.
+  src/simse_bootstrap.cpp` then `bun tools/bootstrap.js` - both fixed points byte for byte.
 
 - **A flag an `if` consumes shares one slot: the block model capped the leak.** The emitted
   compiler had 19 `Bool` slots in one body where one flag is live at a time - the
@@ -3701,7 +3701,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
     `when-strings` - all strictly *fewer* `Bool` slots and no other shape change.
   - **Equivalence.** `bun tools/stress.js` **44/44** - the six re-captured goldens now compile and
     run, so their `expected.stdout` is checked, not skipped by the golden diff. `bun build.js
-    --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js`: both fixed points
+    --release --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js`: both fixed points
     byte for byte.
   - **Size, not speed.** The bootstrap is **50,591 -> 50,392 lines** (1.77 -> 1.73 MB). The
     self-transpile is flat (1.25/1.28 s against 1.23/1.24 s before - within the window's drift):
@@ -3714,13 +3714,13 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
 
 - **The profiler's names are Simse-spelled, and `simse_profile.csv` is the default.** Two
   reader-facing fixes in the `--profile` report (`impl_specs/profiling.md`):
-  - **`.`, not `::`.** `Emitter.prettySymbol` (`cppsrc/codegen/Codegen.kt`) spelled a package
+  - **`.`, not `::`.** `Emitter.prettySymbol` (`src/codegen/Codegen.kt`) spelled a package
     `codegen::emitFunction`; it now writes `codegen.emitFunction`, and `profDots`
-    (`cppsrc/profiling/Profiling.kt`) folds the `::` a lambda symbol reaches the table with
+    (`src/profiling/Profiling.kt`) folds the `::` a lambda symbol reaches the table with
     (`ns1_partTextProcessing_closure1::operator()` -> `strings.partTextProcessing_closure1.operator()`).
     A row reads as Simse, not as mangled C++. Verified in the emitted `kMethodNames[]`: no `::`.
   - **The default file is `simse_profile.csv`** (the flag already was; a stale prologue comment
-    still said `.txt`, now fixed), matching the checked-in `cppsrc/simse_profile.csv`.
+    still said `.txt`, now fixed), matching the checked-in `src/simse_profile.csv`.
 
 - **The use-def facts are one walk - and the instrumented profile's hot rows are not all real.**
   The follow-up to the fold fusion's "the use-def facts are re-walked" note. Each of
@@ -3771,13 +3771,13 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   `_sm_when<n>_v = spanOfStr(<subject>)`, then `<view> == <label>` and `<view>[0]`, with the
   length read from the view (`_sm_when<n>_n = <view>.size()`). `spanOfStr` is total over the
   subject's two spellings now - a second `strview` overload returns a `StrView` as it stands
-  (`cppsrc/rtl/_res.md`), beside the `Str*` one that borrows - so the desugar needs no type and
+  (`src/rtl/_res.md`), beside the `Str*` one that borrows - so the desugar needs no type and
   a `StrView` subject (`viewKind` in `stress/when-strings`) views itself. The arms, their order,
   their bodies and the `else` are byte-identical to the old rewrite; only the tests moved onto
   the view. `--no-when-dispatch` still takes the whole guard off (the plain chain on the
   subject), and `--when-first-char`/`--when-copy-subject` are untouched.
 
-  Verified: `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js`
+  Verified: `bun build.js --release --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js`
   - both fixed points byte for byte; `bun tools/stress.js` **44/44**, the ten `expected.cpp`
   goldens refreshed for the new lowering and the `strview` comment.
 
@@ -3785,18 +3785,18 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   pure call is one call.** Four changes that share one thread - the emitted C++ should read
   the way the program does, and should not copy a string to ask what it is.
 
-  - **The `if` fold is gone.** `linSimplifyBody` (`cppsrc/linear/Simplify.kt`) used to fold
+  - **The `if` fold is gone.** `linSimplifyBody` (`src/linear/Simplify.kt`) used to fold
     `ifTrue (c) goto A; goto B; A:` into `ifFalse (c) goto B;` - one jump fewer, but the
     emitted text then tested the negation of what the source wrote, and the arm was reached
     by falling into it. The fold is removed: a branch names the condition as written
     (`if (c) goto then; goto else; then:; ...`), which is the shape `Parser.kt`'s `when`
     desugar already emits (`impl_specs/linear-lowering.md`, "Simplification stage").
   - **`StrView[i]` is typed `Char`.** `SemInfer.infer`'s index rule now resolves the
-    receiver's `typealias` first (`cppsrc/sema/TypeInfer.kt`), so `StrView` reaches
+    receiver's `typealias` first (`src/sema/TypeInfer.kt`), so `StrView` reaches
     `Span<Char>` and its element is `Char` instead of `?`. A `when` length-one guard therefore
     declares `Char _sm_expr` at the top of the body rather than an untyped `auto` in a block:
     a typed slot is declared once with the frame, an untyped one has to be scoped
-    (`ilDeclaredAtTop`/`ilFolded`, `cppsrc/codegen/IlCodeGen.kt`).
+    (`ilDeclaredAtTop`/`ilFolded`, `src/codegen/IlCodeGen.kt`).
   - **A string comparison against a literal compares views.** `Parser.parseExpr` wraps a
     *place* operand of a comparison with a string literal in `spanOfStr` (`Parser.kt`), so
     `name == "Int"` is `spanOfStr(name) == "Int"` - a view against a view, read in place -
@@ -3807,7 +3807,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
     The comparison rewrite turns `semIsBuiltinType`'s nineteen `name == "<type>"` tests into
     nineteen `spanOfStr(name)` calls; the pass keeps the first and every later one reads its
     slot, so the body builds **one** view and tests every label against it. It is at the IL
-    (`cppsrc/linear/ReusePure.kt`, run beside `ilFuseConcatUnit`), where a slot's defs and uses
+    (`src/linear/ReusePure.kt`, run beside `ilFuseConcatUnit`), where a slot's defs and uses
     are one list. It declines rather than guess: a call whose argument the body writes, an
     argument a callee receives as a raw pointer or counted reference (the callee may write
     through it - a by-value parameter is safe), a first call outside the body's first block
@@ -3816,7 +3816,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
     value, and reading it back would be the wrong value). `spanOfStr` is the only reusable
     callee today; the mechanism is the same for `name.size()` and the rest.
 
-  Verified: `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then
+  Verified: `bun build.js --release --out src/simse_bootstrap.cpp` then
   `bun tools/bootstrap.js` - both fixed points byte for byte; `bun tools/stress.js` **44/44**
   with the ten `expected.cpp` goldens refreshed. The compiler's own transpile went 1.19 s to
   1.30 s (the emitted C++ is ~13% longer from the un-inverted branches), after the reuse pass's
@@ -3829,8 +3829,8 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   so every comparison deep-copied a `Str` (a heap copy past the inline buffer), which is exactly
   what a sort of `Str` calls per comparison. Three changes:
 
-  - **The comparator takes `*T`.** `cppsrc/rtl/rtl.kt`'s `sort<T>(this: List<T>, less: (*T, *T) -> Bool)`
-    hands the comparator its two elements by pointer, and `simse_list_sort` (`cppsrc/rtl/_res.md`)
+  - **The comparator takes `*T`.** `src/rtl/rtl.kt`'s `sort<T>(this: List<T>, less: (*T, *T) -> Bool)`
+    hands the comparator its two elements by pointer, and `simse_list_sort` (`src/rtl/_res.md`)
     adapts `std::sort`'s `const T&` to that `T*` in the wrapper it passes, so no element is copied
     into the comparison. `compareLessThan(left: *Str, right: *Str)` is the `Str` ordering to pass
     (`spanOfStr(left) < spanOfStr(right)` - the bytes read in place); a `*Int` comparator compares
@@ -3840,7 +3840,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
     `asyncDump`, and the stress/docs/benchmark programs. `specs/containers.md`, `impl_specs/rtl-abi.md`
     and `docs/how-it-works.md` carry the new signature.
   - **A bare name in an argument position is a reached name.** `collectNames`
-    (`cppsrc/codegen/Codegen.kt`) now records `items.sort(compareLessThan)`'s `compareLessThan`.
+    (`src/codegen/Codegen.kt`) now records `items.sort(compareLessThan)`'s `compareLessThan`.
     A function passed *as a value* is not a call, so its prelude body was never emitted and the
     generated C++ called an undeclared function - the same hole the "whole group is emitted"
     fallback had closed for calls.
@@ -3848,7 +3848,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
     asks a `*Str` for its size twice (`left.size() > right.size()` then `left.size() == right.size()`)
     keeps one call on each.
 
-  Verified: `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
+  Verified: `bun build.js --release --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
   both fixed points byte for byte; `bun tools/stress.js` **44/44**, the eight `expected.cpp` goldens
   that embed the `dictops` forward text refreshed.
 
@@ -3863,12 +3863,12 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   - **Syntax.** `Parser.parseDecl` accepts `data` before `fun` (`data class` is unchanged) and
     `parseAttributedDecl` accepts it beside an attribute (`@SmGen(...)` on the line above, or
     `data` first), so `data fun Str.toLen(): Int { ... }` and `data fun spanOfStr(...)` both
-    parse. The declaration carries a new `AstNodeAttributeKind.IsPure` (`cppsrc/rtl/astxml.kt`
+    parse. The declaration carries a new `AstNodeAttributeKind.IsPure` (`src/rtl/astxml.kt`
     and its `.hpp` mirror, appended last).
   - **Plumbing.** `Codegen.addFunction` reads the mark into `CgFn.isPure` and collects the names
     into the emitter's `pureCallees`; `IlCodeGen`'s two `ilReuseUnit` call sites pass the set, and
     `ReusePure.ilReuseCall` became a lookup in it. (The set no longer seeds `size`/`count` by
-    hand - they are `data` declarations themselves now, `cppsrc/rtl/rtl.kt`.)
+    hand - they are `data` declarations themselves now, `src/rtl/rtl.kt`.)
   - **Every reuse guard is unchanged** - an argument the body writes, one a callee may write
     through, a first call outside the first block, an untyped slot, an indirect callee, and a
     result slot with another writer all still refuse - so the change only *widens* what may be
@@ -3879,8 +3879,8 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
     unmarked `Str.bump()` - it writes a file-level `var` - still emits both, and the stdout
     check reads their `5 + 1` then `5 + 2` (13).
 
-  Verified: `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
-  both fixed points byte for byte; `bun tools/stress.js` **45/45** (`cppsrc/rtl/*.kt` is read at
+  Verified: `bun build.js --release --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
+  both fixed points byte for byte; `bun tools/stress.js` **45/45** (`src/rtl/*.kt` is read at
   run time, so the marks needed a two-build: a debug compiler that *parses* `data`, then the
   release build that uses it). No existing `expected.cpp` moved - the marks enable exactly the
   reuses the old name whitelist already had, plus `count`, which no case folds twice.
@@ -3889,7 +3889,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   library[, symbol])` declares a body-less method whose implementation is an exported symbol of a
   native DLL, resolved at run time - the C# `[DllImport]` shape, and the one FFI form the five
   generators did not have (`cpp` needs the C++ linked in, `res`/`kt` need a resource). One new
-  file, `cppsrc/sourcegen/NativeInvokeGen.kt`, self-registers as `native` with
+  file, `src/sourcegen/NativeInvokeGen.kt`, self-registers as `native` with
   `declaresPrototype`/`registersReceiver` both `false`.
 
   - **What it emits.** A shared loader into `support` (`__sm_nativeResolve`: `LoadLibraryA` once
@@ -3910,15 +3910,15 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
     and reinterprets the bytes (`SDL_Event*` for the type, `SDL_KeyboardEvent*` once the type says
     `SDL_KEYDOWN`).
 
-  Verified: `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js`
+  Verified: `bun build.js --release --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js`
   - both fixed points byte for byte; `bun tools/stress.js` **48/48**, the three new cases being
   `stress/native-invoke` (binds `kernel32.dll`'s `GetCurrentProcessId`/`GetCommandLineA`, so the
   loader is under test anywhere a Windows toolchain runs), `stress/diagnostic-native-no-library`,
   and `stress/sockets` (a loopback connection inside one process). The worked examples are
-  `docs/examples/sdl2` (a window that Escape quits) and `docs/examples/http` (the `sockets`
+  `examples/sdl2` (a window that Escape quits) and `examples/http` (the `sockets`
   module - a blocking Winsock2 wrapper - with an HTTP/1.1 server and client on top), both built
   and run on this machine; the server reaches ~9k requests/s with one blocking connection and
-  ~33k with ten (`docs/examples/http/bench.bat`).
+  ~33k with ten (`examples/http/bench.bat`).
 - **`RawPtr`, `PtrOf<T>` and `getAs<T>()`; the emitted program drops `<iostream>`.** Three
   changes that belong together, because each is a spelling that should not be invented twice.
 
@@ -3930,7 +3930,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
     generator's three mappings), and a *named* type would have to be mirrored into each. The
     display helpers (`semaTypeText`, `ilTypeText`, `ilReceiverTypeText`) spell `*Unit` back as
     `RawPtr`, so a diagnostic and the `--showLinearRepresentation` dump read as the language
-    does. `cppsrc/rtl/types.hpp` carries the two C++ aliases, which is what lets a hand-written
+    does. `src/rtl/types.hpp` carries the two C++ aliases, which is what lets a hand-written
     `_res.md` section name the handle type.
   - **The cast is the language's one cast.** `handle.getAs<T>()` answers `PtrOf<T>` and is the
     reinterpretation C++ will not make implicitly. A generic *member* call did not parse at all;
@@ -3994,7 +3994,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   self-transpile drops 107 `simse_addressOf` sites (1963 -> 1856) and `simse_addressOf(self->out)`
   from 50 to 36.
 - **Refcount promotion: a non-escaping `&T` local becomes a stack value
-  (`cppsrc/linear/PromoteRefs.kt`).** The first two slices of `impl_specs/escape-analysis.md`. A
+  (`src/linear/PromoteRefs.kt`).** The first two slices of `impl_specs/escape-analysis.md`. A
   counted-reference local written exactly once, used only in positions a raw pointer spells the same
   way, and whose payload has no destructor, is rewritten so the box is built on the stack and the
   handle is a raw pointer to it (`c = &_sm_stk0`) - one heap allocation and its refcount traffic
@@ -4034,9 +4034,9 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   `expected.cpp` (the promoted `Cell _sm_stk0; Cell* c;`, the same with a receiver `ns1_add(c, 4)`,
   `*c` as `p = c`, the `Box` shape `List<Int>* xs; xs = &_sm_base4;`, and the returned handle left a
   `makeRef`) - and `bun tools/bootstrap.js` fixed point byte for byte. Before this work **nothing** in
-  `cppsrc` or `stress` used a counted reference, so the whole `&T` path was untested; `ref-promote` is
+  `src` or `stress` used a counted reference, so the whole `&T` path was untested; `ref-promote` is
   the first case that pins it.
-- **Auto-borrow: a read-only parameter becomes a `*T` (`cppsrc/parser/BorrowParams.kt`).** A
+- **Auto-borrow: a read-only parameter becomes a `*T` (`src/parser/BorrowParams.kt`).** A
   proof-of-concept whole-program rewrite, run from the driver right after `cpFoldConstParams` - the
   same **before-sema** AST shape, so the checker, the lowering, the emitter and every call site see
   the borrowed declaration and nothing downstream knows the optimization exists (the existing handle
@@ -4076,8 +4076,8 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   `pure.insert` lines were the last *name whitelist*: `size`/`count` were built-ins with no
   declaration to mark. They are declarations now. `Str.size()` and `List.size()` - the two the
   language could not otherwise spell, because `Str` and `List` are raw types whose C++ `size()` is
-  a member - get one operation, `lenOf` (`cppsrc/rtl/rtl.kt`), backed by a new `lenops` section of
-  `cppsrc/rtl/_res.md`:
+  a member - get one operation, `lenOf` (`src/rtl/rtl.kt`), backed by a new `lenops` section of
+  `src/rtl/_res.md`:
 
   ```cpp
   Int simse_lenOf(const Str& self);
@@ -4100,10 +4100,10 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
     forwards moved (the new `lenops` forward renders before `dictops`' `#include <algorithm>`);
     stdout is unchanged in all of them.
 
-  Verified: `bun build.js --release --no-lto --out cppsrc/simse_bootstrap.cpp` then
+  Verified: `bun build.js --release --no-lto --out src/simse_bootstrap.cpp` then
   `bun tools/bootstrap.js` - both fixed points byte for byte; `bun tools/stress.js` **53/53**, the
   eleven moved `expected.cpp` goldens regenerated from `stress/.work/<case>/out.cpp`.
-- **Borrowness: the read-only proof looks through bodies (`cppsrc/parser/BorrowParams.kt`).**
+- **Borrowness: the read-only proof looks through bodies (`src/parser/BorrowParams.kt`).**
   Auto-borrow trusted a callee only by its `data` mark, so a body that called a *plain* helper
   borrowed nothing - the one limit the first slice named. It now proves the fact instead:
   `bpInferReads` runs a name-keyed fixpoint that starts from the `data` marks and adds every
@@ -4126,7 +4126,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
     `StrView.find`). A *second declaration flag* (borrowness without purity) is the next step; the
     fixpoint already covers every helper written in Simse.
 
-  Verified: `bun build.js --release --no-lto --out cppsrc/simse_bootstrap.cpp` then
+  Verified: `bun build.js --release --no-lto --out src/simse_bootstrap.cpp` then
   `bun tools/bootstrap.js` - both fixed points byte for byte; `bun tools/stress.js` **53/53** with
   only `stress/pure-function` moving (it grew `viaSum`, pinned as `Int ns1_viaSum(ns1_Point* p)`).
   On the compiler's own tree the fixpoint newly borrows `ns7_yldFieldName(Str* name)` and
@@ -4144,9 +4144,9 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
     in use do not move; no `.hpp` mirror - `astxml` is generated), and `bpMarked` seeds the borrow set
     from either mark. A body-less declaration needs a mark; one with a body is *proved*, so a
     `borrow` there is an override for a body the proof cannot see through.
-  - **The RTL is marked** (`cppsrc/rtl/rtl.kt`, `StrView.kt`, `Span.kt`, `intrinsics.kt`): the string
+  - **The RTL is marked** (`src/rtl/rtl.kt`, `StrView.kt`, `Span.kt`, `intrinsics.kt`): the string
     and character reads and conversions, the `List`/`Dictionary` reads, `iter`/`iterPtr` - and the
-    compiler's own read-only `common` accessors (`cppsrc/common/xmlutil.kt`) plus `fmtStr`.
+    compiler's own read-only `common` accessors (`src/common/xmlutil.kt`) plus `fmtStr`.
   - **The `for` machine is trusted** (`bpMachineStep`): `_sm_for<n>.advance()` is the desugar's own
     name (the same prefix sema keys its `iter` check on), and a machine can only come from an
     `iter`/`iterPtr` call in the same body - so the call that built it is what gets weighed, and the
@@ -4155,7 +4155,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
     **`--showBorrow`** prints `borrow+ <name> <params>` / `borrow- <name> <why>` per candidate to
     stderr, collected by `bpNote` and printed by the driver.
 
-  Verified: `bun build.js --release --no-lto --out cppsrc/simse_bootstrap.cpp` then
+  Verified: `bun build.js --release --no-lto --out src/simse_bootstrap.cpp` then
   `bun tools/bootstrap.js` - both fixed points byte for byte, self-transpile ~1431 ms; `bun
   tools/stress.js` **53/53** - `stress/pure-function` grew `label`/`viaLabel` (the mark's caller-side
   effect, with `label` itself left by value) and `stress/collections` now carries
@@ -4173,18 +4173,18 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
     whose receiver is a type name). A construction *copies* its arguments into the fields, and for
     the types a parameter may be borrowed *of* (`Str`, a container, an `Opt`/`Res`, a data class)
     the copy is deep - so nothing is written and nothing aliases.
-  - **`Opt<T>.hasValue()` is declared** (`cppsrc/rtl/_res.md`'s `optops`, `simse_opt_hasValue`): a
+  - **`Opt<T>.hasValue()` is declared** (`src/rtl/_res.md`'s `optops`, `simse_opt_hasValue`): a
     built-in member has no declaration to carry a mark, so a body that tested an optional and read
     its parameter refused. The declaration is `borrow`, and it is the `lenOf` treatment applied to
     the `Opt`/`Res` surface.
   - **`Res` members, since fixed.** A receiver may now be a type with an `unInit` (it is emitted as
-    a pointer, never a copy; cppsrc/sema/Sema.kt), so `Res<T>.initByValue` is declared and
+    a pointer, never a copy; src/sema/Sema.kt), so `Res<T>.initByValue` is declared and
     `return (x)` constructs a `Res<T>`. `value()` still cannot be declared: it answers the type
     argument, and `memberCallReturn` returns a declaration's return type without substituting it, so
     a `T`-returning declaration would emit `T` where a concrete type belongs. Recorded in
     `impl_specs/escape-analysis.md`.
 
-  Verified: `bun build.js --release --no-lto --out cppsrc/simse_bootstrap.cpp` then
+  Verified: `bun build.js --release --no-lto --out src/simse_bootstrap.cpp` then
   `bun tools/bootstrap.js` - both fixed points byte for byte, self-transpile ~1433 ms; `bun
   tools/stress.js` **53/53** (`stress/machines` and `stress/objects` goldens re-cut for the new
   `optops` forward). The dump's blocker list drops `append` 326 -> 161 and the construction names
@@ -4192,9 +4192,9 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   which is the next lever (the per-parameter write bail).
 
 - **`XmlNode`/`Attribute` are generated, not a hand-written header.** The language-level tree
-  (`specs/xml-node.md`) was the last value type whose C++ was a header (`cppsrc/rtl/xml.hpp`)
+  (`specs/xml-node.md`) was the last value type whose C++ was a header (`src/rtl/xml.hpp`)
   for no reason other than history: `@SmGen("cpp")` on the `data class`es in
-  `cppsrc/rtl/xml.kt` told the emitter to skip them. The recursion is broken by the
+  `src/rtl/xml.kt` told the emitter to skip them. The recursion is broken by the
   `Array<XmlNode>` field exactly as the compiler's own `AstXmlNode` breaks its own, so dropping
   the two attributes (and the header, and the `#include "xml.hpp"` in `simse.hpp`) lets the
   emitter materialize both structs like any program's data class. What that buys is the layout
@@ -4205,7 +4205,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
 
   No C++ referenced either type (`resources.hpp`, the `_res.md` sections and the compiler's own
   tree all use `AstXmlNode`), so the only moves are the two declarations losing their attribute,
-  the header's deletion, and `simse.hpp` losing the include. The emitted C++ for `cppsrc` is
+  the header's deletion, and `simse.hpp` losing the include. The emitted C++ for `src` is
   **unchanged** (`XmlNode` is unreached there - a prelude type is emitted only when a program
   holds one), so the bootstrap fixed point held with no refresh. `stress/objects` (the one case
   that builds an `XmlNode`) had its `expected.cpp` re-cut for the new struct lines; its stdout is
@@ -4229,7 +4229,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   which `ilConcatSplittable` refuses, and `@n` there needs `n.toString()`. Only `@name` is
   spelled - an expression is bound to a local first, per the user's call to keep the surface
   small. The scanner is untouched (`@` inside a string is still one byte); the whole feature
-  is `cppsrc/parser/ParserInterp.kt` plus one call in `parsePrimary`, and
+  is `src/parser/ParserInterp.kt` plus one call in `parsePrimary`, and
   `stringTokenText`'s literal path is what an interpolation-free raw string still takes.
 
   One self-hosting bite, caught by the refresh itself: `NativeInvokeGen.kt`'s generated-C++
@@ -4240,7 +4240,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   this shape wants.
 
   Verified: `./build.bat --release`, `bun tools/stress.js` **57/57**,
-  `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
+  `bun build.js --release --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
   both fixed points byte for byte (14.90 s from the published file to a working compiler,
   1576 ms self-transpile).
 
@@ -4248,7 +4248,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   byte an identifier cannot hold, so a name the separator of a generated name follows -
   `_sm_@(name)_@(n)`, the shadow-name shape - could not be spelled at all. `@(name)` ends
   at the `)`: the same `@` in the template, the same item, the same `fmtStrWith` desugar -
-  the feature is `interpHasItem`/`parseInterpolatedRaw` in `cppsrc/parser/ParserInterp.kt`,
+  the feature is `interpHasItem`/`parseInterpolatedRaw` in `src/parser/ParserInterp.kt`,
   and nothing downstream can tell the spellings apart. The plain spelling keeps working,
   and a `@(` before an identifier start makes a string interpolate, so a malformed `@(`
   (unclosed, or nothing name-like inside) is the same class of diagnostic -
@@ -4259,12 +4259,12 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   `docs/language-tour.md`, `README.md` and `docs/state-of-the-field.md` name the spelling.
 
   Verified: `./build.bat --release`, `bun tools/stress.js` **58/58**,
-  `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
+  `bun build.js --release --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
   both fixed points byte for byte (14.16 s from the published file to a working compiler,
   1515 ms self-transpile).
 
 - **The compiler's own source speaks interpolation (T85).** The ~300 `fmtStr` call sites in
-  `cppsrc` are down to four: every other one is a backtick string now. Items that are not
+  `src` are down to four: every other one is a backtick string now. Items that are not
   plain names are bound to `val <name>: Str` locals first (the surface is names only), and a
   placeholder followed by an identifier byte takes the `@(name)` spelling (T84). The four
   that stay are honest: `KtGen.kt`'s and `NativeInvokeGen.kt`'s `@SmGen` messages hold a
@@ -4287,7 +4287,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   compiler, json), each with its own build, corpus and bootstrap check.
 
   Verified: `./build.bat --release`, `bun tools/stress.js` **58/58**,
-  `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
+  `bun build.js --release --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
   both fixed points byte for byte (15.02 s from the published file to a working compiler,
   1722 ms self-transpile).
 
@@ -4318,7 +4318,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   caller, nor across calls (`specs/memory-model.md`).
   Verified: `./build.bat --release`, `bun tools/stress.js` **60/60** (two new cases:
   `stress/closure-classes`, `stress/diagnostic-lambda-this`),
-  `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
+  `bun build.js --release --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
   both fixed points byte for byte.
 
 - **A callable argument to a generic function works: a forwarding overload plus a refused
@@ -4340,7 +4340,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   lambda - nothing can deduce it), and a string literal argument, which deduces `StrView`
   for `T` (bind it to a `Str` local first). `stress/generic-callable` pins the shapes.
   Verified: `./build.bat --release`, `bun tools/stress.js` **61/61**,
-  `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
+  `bun build.js --release --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
   both fixed points byte for byte.
 
 - **A generic call's result is a real type, and a resource's comments stop at the output.**
@@ -4366,7 +4366,7 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   emitter's own comments are not resource text and stay. Every golden refreshed for the
   comment change (eighteen `expected.cpp` files, comment-only diffs).
   Verified: `./build.bat --release`, `bun tools/stress.js` **63/63** (two new cases),
-  `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
+  `bun build.js --release --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
   both fixed points byte for byte.
 
 - **A callable-only type parameter is inferred and spelled, and a confusable overload is
@@ -4387,5 +4387,5 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   captures a raw pointer (`var rawThis: *T = *this`), which the corpus probe shows mutating
   the original (`specs/memory-model.md`).
   Verified: `./build.bat --release`, `bun tools/stress.js` **64/64**,
-  `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
+  `bun build.js --release --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
   both fixed points byte for byte.

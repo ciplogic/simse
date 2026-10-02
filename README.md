@@ -179,8 +179,8 @@ fun sdlInit(flags: Int): Int
 
 `native` is the P/Invoke form: nothing is linked and no header is included, and the
 emitted thunk loads the library with `LoadLibraryA`, casts the resolved symbol to the
-declaration's own signature, and calls it. `docs/examples/sdl2` is a whole SDL2 window
-written this way, and `docs/examples/http` is a blocking socket library over `ws2_32.dll`
+declaration's own signature, and calls it. `examples/sdl2` is a whole SDL2 window
+written this way, and `examples/http` is a blocking socket library over `ws2_32.dll`
 with a single-threaded HTTP/1.1 server on top - the two ends of what the form is for.
 
 A resource is a Markdown-shaped `_res.md` file: sections, `key: value` entries, fenced
@@ -243,7 +243,7 @@ int main() {
 There is no interpreter, no VM and no runtime library to ship: a Simse program is C++
 with a small prelude of types (`Str`, `List`, `Dictionary`, `Opt`, `Res`, `Array`,
 `Span`) and operations that are themselves written in Simse or live in resource sections
-(`cppsrc/rtl/`). The language's design follows from one constraint - **no runtime**:
+(`src/rtl/`). The language's design follows from one constraint - **no runtime**:
 
 - **No garbage collector.** Values have value semantics; `&T` is an explicit
   reference-counted handle, `*T` a raw pointer (`specs/memory-model.md`).
@@ -259,14 +259,14 @@ The result is a language that reads like Kotlin/.NET and builds like C.
 
 ## The compiler is written in Simse
 
-The compiler *is* its Simse sources (`cppsrc/**/*.kt`): scanner, parser, semantic
+The compiler *is* its Simse sources (`src/**/*.kt`): scanner, parser, semantic
 pass, control-flow lowering, and the C++ emitter. The only hand-written C++ is the
-runtime's headers plus the C++ that lives in resource sections (`cppsrc/rtl/_res.md`:
+runtime's headers plus the C++ that lives in resource sections (`src/rtl/_res.md`:
 file I/O, the clocks, the prelude's primitives) - so a program, and the compiler
 itself, is one translation unit.
 
 That leaves the bootstrap question - how do you build a compiler written in its own
-language, on a machine that has no Simse? The answer is **`cppsrc/simse_bootstrap.cpp`:
+language, on a machine that has no Simse? The answer is **`src/simse_bootstrap.cpp`:
 the transpiled compiler, checked in**. It is the *output* of the compiler, published; a
 fresh checkout compiles it with `cl.exe` alone and gets a working transpiler, which then
 transpiles the tree again.
@@ -288,7 +288,7 @@ Requirements: Windows with Visual Studio (C++ workload) and [bun](https://bun.sh
 build.bat --release
 
 :: 2. compile and run an example with it
-simse.exe --root docs/examples/hello -o hello.cpp
+simse.exe --root examples/hello -o hello.cpp
 build.bat --cpp hello.cpp --exe hello.exe
 hello.exe
 ```
@@ -305,7 +305,7 @@ bootstrap check, troubleshooting - is in
 Working today: data classes, enums, generics, extension functions, pure (`data`)
 functions the compiler may reuse, lambdas, statics,
 `List`/`Array`/`Dictionary`/`Span`/`Opt`/`Res`/`Str`, `Res` propagation (`x!!`), attributes
-and source generators (`cppsrc/compiler/`, `_res.md` resources, `native` declarations),
+and source generators (`src/compiler/`, `_res.md` resources, `native` declarations),
 list literals and trailing-argument packing, `for`/`yield` state machines, file I/O, the
 `main(args)` form, packages and modules, and a project file (`simse.md`). The compiler is
 self-hosted and reproduces the published bootstrap byte for byte, and **64 end-to-end stress
@@ -317,7 +317,7 @@ best of a few runs while idle):
 | | |
 | --- | --- |
 | the compiler transpiling its own source tree | **19,600 lines of Simse in ~0.85 s** (48,800 lines of C++ out, ~24k lines/s) |
-| compiling the published `cppsrc/simse_bootstrap.cpp` with `cl.exe` | ~16 s release (`/O2 /Ob3` with LTO) |
+| compiling the published `src/simse_bootstrap.cpp` with `cl.exe` | ~16 s release (`/O2 /Ob3` with LTO) |
 | **from the published file to a compiler that reproduces it** | **~17 s**, then under a second per self-transpile |
 
 Not there yet, in rough order of how soon a user would miss it: `for` over a
@@ -333,15 +333,16 @@ behind it) landed; a format protocol that prints your own types is still open.
 
 | Path | Contents |
 | --- | --- |
-| `cppsrc/` | the compiler in Simse (`lex/`, `parser/`, `sema/`, `linear/`, `codegen/`, `compiler/` - the source generators' package too), plus `cppsrc/rtl/` (the prelude `.kt` files, the runtime headers, and the resource file `_res.md`, which holds the runtime's C++) and `cppsrc/simse_bootstrap.cpp` - the published transpiled compiler, the output proof |
+| `src/` | the compiler in Simse (`lex/`, `parser/`, `sema/`, `linear/`, `codegen/`, `compiler/` - the source generators' package too), plus `src/rtl/` (the prelude `.kt` files, the runtime headers, and the resource file `_res.md`, which holds the runtime's C++) and `src/simse_bootstrap.cpp` - the published transpiled compiler, the output proof |
 | `specs/` | the language specification (normative): types, declarations, functions, memory model, generics, containers, modules, statics, resources |
 | `impl_specs/` | implementation plans and records: the capability matrix, the RTL ABI, generators, the user-facing roadmap |
 | `stress/` | one folder per end-to-end program: source, arguments, expected output, and where the emitted text is the point, an `expected.cpp` golden |
 | `build.js`, `build.bat`, `stress.bat` | the build and harness entry points: transpile the source tree, compile it with `cl.exe`, run the corpus |
 | `simse.vcxproj`, `simse.slnx` | the Visual Studio profiling project: the published bootstrap (the runtime is generated into it), with the debugger already set to run the compiler over its own tree |
 | `tools/` | the JavaScript harness: the stress runner (`stress.js`), the bootstrap fixed-point check (`bootstrap.js`), the Visual Studio project check (`vscheck.mjs`), `msvc.mjs` |
+| `examples/` | the runnable examples the docs use |
 | `docs/` | this documentation |
-| `agents.md` | orientation for a fresh contributor or AI session: the build, the invariants, the change protocol, the gotchas |
+| `ai/` | orientation for a working session: `language.md` (using Simse), `building.md`, `status.md` (implemented/deferred), `contributing.md` (protocol, invariants, gotchas); `agents.md` is the router |
 
 ## Design principles
 
@@ -367,11 +368,11 @@ behind it) landed; a format protocol that prints your own types is still open.
 | [docs/language-tour.md](docs/language-tour.md) | the language itself, with runnable fragments: values, control flow, data classes, enums, generics, collections, memory, modules |
 | [docs/how-it-works.md](docs/how-it-works.md) | the pipeline, the bootstrap fixed point, the emitted C++, the runtime, and how the build verifies itself |
 | [docs/state-of-the-field.md](docs/state-of-the-field.md) | honest status: what works, what is rough, what is missing, and how it compares to the alternatives |
-| [docs/examples/](docs/examples/) | the example programs used in the docs (`hello`, `tour`, `wordcount`, `sdl2` - the P/Invoke wrapper to SDL2, and `http` - a blocking socket library with an HTTP/1.1 server) |
+| [examples/](examples/) | the example programs used in the docs (`hello`, `tour`, `wordcount`, `sdl2` - the P/Invoke wrapper to SDL2, and `http` - a blocking socket library with an HTTP/1.1 server) |
 | [specs/](specs/) | the normative language specification |
 | [impl_specs/user-language-roadmap.md](impl_specs/user-language-roadmap.md) | where the language is going, phased, with the non-goals |
 | [impl_specs/generators.md](impl_specs/generators.md) | `@SmGen`, the source-generator registry, the `Sections` sink, and the bootstrap path for new syntax |
-| [agents.md](agents.md) | orientation for a contributor session: build, invariants, change protocol, gotchas |
+| [agents.md](agents.md) → [ai/](ai/) | orientation for a working session: [language](ai/language.md), [building](ai/building.md), [status](ai/status.md), [contributing](ai/contributing.md) |
 
 ## License
 

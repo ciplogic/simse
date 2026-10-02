@@ -5,7 +5,7 @@ function coloring C#-style `async`/`await` forces on a codebase. The user writes
 — the functions that actually wait — and the compiler works out which of their callers can
 suspend too, transitively, up to `main`. A function no suspension reaches keeps its signature,
 its direct call and its plain C++: **coloring stops where the suspensions do**, which is the
-whole point. `docs/examples/async/src/main.kt` is the target program (`copyFile` → two file
+whole point. `examples/async/src/main.kt` is the target program (`copyFile` → two file
 leaves, `describe` deliberately synchronous), and `--showAsync` is how the inference is
 inspected.
 
@@ -13,12 +13,12 @@ inspected.
 
 | piece | state |
 | --- | --- |
-| `x!!` — `Res` payload, or an early `return` of the failure | **done**, `cppsrc/parser/Propagate.kt` |
-| the coloring pass + `--showAsync` | **done**, `cppsrc/sema/Async.kt` |
-| the work pool: **named queues** (an `Int` id → that queue's workers) and a structural join | **done**, `cppsrc/rtl/tasks.kt`, the `tasks` section of `cppsrc/rtl/_res.md`, `stress/tasks` |
-| the task header + the loop, proved by a hand-written two-task chain | **done**, the `tasks` section of `cppsrc/rtl/_res.md`, `stress/task-chain` |
-| `suspend` on a declaration, in place of the `Async<T>` marker (below) | **done** - `cppsrc/lex/Scanner.kt`, `cppsrc/parser/Parser.kt` (the `IsSuspend` attribute), `cppsrc/sema/Async.kt`, `cppsrc/parser/Propagate.kt`, `stress/suspend` |
-| a call to a suspending callee is a suspension (the coloring's fixed point) | **done**, `cppsrc/sema/Async.kt`, `--showAsync` |
+| `x!!` — `Res` payload, or an early `return` of the failure | **done**, `src/parser/Propagate.kt` |
+| the coloring pass + `--showAsync` | **done**, `src/sema/Async.kt` |
+| the work pool: **named queues** (an `Int` id → that queue's workers) and a structural join | **done**, `src/rtl/tasks.kt`, the `tasks` section of `src/rtl/_res.md`, `stress/tasks` |
+| the task header + the loop, proved by a hand-written two-task chain | **done**, the `tasks` section of `src/rtl/_res.md`, `stress/task-chain` |
+| `suspend` on a declaration, in place of the `Async<T>` marker (below) | **done** - `src/lex/Scanner.kt`, `src/parser/Parser.kt` (the `IsSuspend` attribute), `src/sema/Async.kt`, `src/parser/Propagate.kt`, `stress/suspend` |
+| a call to a suspending callee is a suspension (the coloring's fixed point) | **done**, `src/sema/Async.kt`, `--showAsync` |
 | the push machine (a body that suspends → a state machine) | next |
 | `asyncRunTransform` / `runAndForget` lowering over the pool | next |
 | the file leaves, suspended rather than blocking | next |
@@ -43,8 +43,8 @@ body cannot show the suspension (a `@SmGen` leaf); an inferred caller may write 
 documentation.
 
 *(Landed: the scanner reserves `suspend`; the parser carries it as the `IsSuspend` attribute
-(`cppsrc/parser/Parser.kt`); the coloring keys on it (`cppsrc/sema/Async.kt`); `Propagate.kt`'s
-one-wrapper hop is gone, so `!!` reads a plain `Res<T>`; and `docs/examples/async/src/main.kt`
+(`src/parser/Parser.kt`); the coloring keys on it (`src/sema/Async.kt`); `Propagate.kt`'s
+one-wrapper hop is gone, so `!!` reads a plain `Res<T>`; and `examples/async/src/main.kt`
 writes `suspend fun readFileTextAsync(path: Str): Res<Str>` - `stress/suspend` pins the syntax.)*
 
 ## No coloring to write
@@ -131,7 +131,7 @@ item; a caller who wants "stop at the first failure" folds the list.
 **`!!` inside a lambda works, so the transformer can be an inline lambda.** A lambda has no
 declared return type, but it does not need one: the target is the `ReturnType` of the *parameter's
 function type*, which is reachable syntactically from the callee's declaration.
-`cppsrc/parser/Propagate.kt` resolves the callee by name, takes its `Param` at the lambda's argument
+`src/parser/Propagate.kt` resolves the callee by name, takes its `Param` at the lambda's argument
 position, and reads the result out of the `TypeFunction` node; the pass runs over lambda arguments
 first, so their `!!` belongs to *their* result and the enclosing function need not answer a `Res`
 itself. `stress/propagate-lambda` covers both paths inside a lambda - the identity one and the
@@ -211,7 +211,7 @@ Where the parent's drop goes is exact, and it is what makes the free lock-free:
   above, because the parent drops its handle while that step's frame is still on the stack.
 - an **awaited child's handle is not user-visible**: it is the compiler's storage for the
   suspension, dropped at the resume label every time. The slot is dead afterwards, so the
-  existing local merging (`cppsrc/optimizations/usedef/MergeLocals.kt`) can reuse it - the
+  existing local merging (`src/optimizations/usedef/MergeLocals.kt`) can reuse it - the
   handle costs a frame slot during the wait and nothing after it. A **`spawn`ed task's handle
   is** user-visible: an ordinary counted value whose lifetime its own scope decides, dropped
   on `join` or when the name goes out of scope. Two constructions, two lifetimes, one rule.
@@ -235,7 +235,7 @@ work that has to block or burn CPU - file reads and writes, gzip. The two sides 
 ### Named queues, and the id is the app's
 
 Work is not one queue but a **table of them, each identified by an `Int` the program chooses**
-(`tasksQueue(id, threads)`, `cppsrc/rtl/tasks.kt`). The runtime creates nothing on its own; these
+(`tasksQueue(id, threads)`, `src/rtl/tasks.kt`). The runtime creates nothing on its own; these
 are the conventional ids and the counts the examples use:
 
 | id | queue | threads | who submits |
@@ -331,7 +331,7 @@ pinned** (FIFO), and nothing depends on an unordered container.
   callback. They are `@SmGen("res", ...)` declarations, so the runtime's C++ lives in a resource
   section like the rest of the platform's operations (`impl_specs/generators.md`).
 
-The corpus case is the program in `docs/examples/async/`, run twice: the file present (the copy
+The corpus case is the program in `examples/async/`, run twice: the file present (the copy
 succeeds and the byte count is printed) and the file absent (the failure propagates out of
 `copyFile` through `!!` and `main` reports it).
 
@@ -382,8 +382,8 @@ The order matters twice over: the parent must not be kept alive by a finished ch
 completing child needs a **self-reference across `p->resume()`** because the parent drops its last
 external reference to it inside that call.
 
-**Where it hooks:** `linLowerYield` is called from the pipeline in `cppsrc/linear/Linear.kt`; this
-lowering goes after it, keyed on the coloring table (`cppsrc/sema/Async.kt`), and refuses a body
+**Where it hooks:** `linLowerYield` is called from the pipeline in `src/linear/Linear.kt`; this
+lowering goes after it, keyed on the coloring table (`src/sema/Async.kt`), and refuses a body
 that also yields - a `for` machine is a local and cannot live across a suspension, which is the
 restriction already recorded above. The emitter gains `emitTask` beside `emitMachine`, and the
 suspension is spelled with instruction forms that already exist (`Call`, `GetField`, `Assign`,
@@ -411,20 +411,20 @@ case; then the socket leaves and the server.
 
 ## Status
 
-Done: `!!` (`cppsrc/parser/Propagate.kt`, `stress/propagate`), **including inside a lambda** -
+Done: `!!` (`src/parser/Propagate.kt`, `stress/propagate`), **including inside a lambda** -
 the target is the parameter's function-type result, so a transformer can be an inline lambda
 (`stress/propagate-lambda`); the coloring with its dump -
-`cppsrc/sema/Async.kt`, `--showAsync`, checked against `docs/examples/async/src/main.kt`
+`src/sema/Async.kt`, `--showAsync`, checked against `examples/async/src/main.kt`
 (`copyFile` and `main` inferred async, the two leaves declared, `describe` and the whole prelude
 synchronous, and the compiler's own 903 declarations all synchronous); and the **work pool as
-named queues** (`cppsrc/rtl/tasks.kt` + the `tasks` section, `stress/tasks`) - the half of the
+named queues** (`src/rtl/tasks.kt` + the `tasks` section, `stress/tasks`) - the half of the
 runtime that has nothing to do with tasks: an `Int`-identified queue per kind with its own
 workers, a reference transferred under the queue's lock, values crossing and handles never, one
 shared completion side, and a structural join. Its surface is synchronous on purpose - submit,
 join, read what settled - so it could be built and verified before any of the machine work
 started. *(The pool was rewritten from one work queue to the named-queue table while the server
 was being designed; the compiler's own emitted bytes did not move, because nothing under
-`cppsrc` reaches the pool.)*
+`src` reaches the pool.)*
 
 The **task header and the loop** are done as well, proved by a hand-written two-task chain rather
 than by the lowering (`stress/task-chain`): the ref-counted frame with a status orthogonal to
@@ -432,8 +432,8 @@ than by the lowering (`stress/task-chain`): the ref-counted frame with a status 
 order - the child drops its parent reference *before* resuming it, and the parent reads the result
 *before* dropping the child - all exercised with no machine, no compiler change and no thread.
 `emitTask` replaces the chain; the header and the loop are what it emits against. The **push
-machine and `emitTask`** have since landed on top of it (`cppsrc/linear/Task.kt`, `emitTask` in
-`cppsrc/codegen/Codegen.kt`), with **no fast path** - every suspension is a heap task the loop runs
+machine and `emitTask`** have since landed on top of it (`src/linear/Task.kt`, `emitTask` in
+`src/codegen/Codegen.kt`), with **no fast path** - every suspension is a heap task the loop runs
 (the `ValueTask`-style shortcut is noted in the runtime, not taken). A suspending body lowers to a
 task class; a call becomes `<f>_smNew(args)` then `tasksSuspendAt(handle, k)` then a `return`, with
 the resume label reading `<f>_smResult(handle)` and releasing it; `return v` stores `result` and
@@ -445,18 +445,18 @@ root enqueued, `answer` created and suspended on, the loop resumes the root, 42 
 label. The *waiting* leaf is what is still missing, which is the next step.
 
 **A documentation step of its own, deliberately last.** While the machinery is being built,
-`agents.md`, `README.md`, `docs/state-of-the-field.md`, `docs/language-tour.md` and
-`docs/examples/async` are *not* chased: the stress counts and the "no threads" sentence have
+`ai/`, `README.md`, `docs/state-of-the-field.md`, `docs/language-tour.md` and
+`examples/async` are *not* chased: the stress counts and the "no threads" sentence have
 already drifted, and the example still writes the body-less leaves. One pass at the end updates
 them together - the counts, the `suspend` story, the runtime's opt-in thread pool, and the
 example's narrative.
 
 **`suspend` is a declaration modifier** now, and `Async<...>` is gone from the language: the
-scanner reserves the keyword, the parser carries the `IsSuspend` attribute (`cppsrc/parser/
-Parser.kt`, with/without an `@SmGen` attribute), the coloring keys on it (`cppsrc/sema/Async.kt`),
+scanner reserves the keyword, the parser carries the `IsSuspend` attribute (`src/parser/
+Parser.kt`, with/without an `@SmGen` attribute), the coloring keys on it (`src/sema/Async.kt`),
 and `Propagate.kt`'s one-wrapper hop is dropped, so `!!` reads a plain `Res<T>`. A declaration's
 signature keeps its plain return type, so there is nothing for a caller to spell and no reserved
-type name - `docs/examples/async/src/main.kt` writes `suspend fun readFileTextAsync(path: Str):
+type name - `examples/async/src/main.kt` writes `suspend fun readFileTextAsync(path: Str):
 Res<Str>`, and `--showAsync` still infers `copyFile` and `main` while `describe` stays
 synchronous. `stress/suspend` pins the syntax (`suspend fun answer(): Int { return 42 }`, called
 by `main`).
