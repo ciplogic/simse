@@ -526,8 +526,32 @@ fun main(args: List<Str>): Int {
     // Auto-borrow (impl_specs/escape-analysis.md): the same whole-program, before-sema shape. A
     // parameter a body only reads becomes a `*T`, so every call site stops deep-copying the
     // argument - the checker, the lowering, the emitter and the call sites all see the borrowed
-    // declaration, and nothing downstream knows the optimization exists.
-    modules = bpBorrowParams(preludeModules, modules)
+    // declaration, and nothing downstream knows the optimization exists. The prelude is rewritten
+    // too; a name hand-written C++ may call is kept by value, which is what the collected texts
+    // are scanned for (the resource bodies the emitted C++ carries, and the runtime headers).
+    var cppTexts: List<Str> = List<Str>()
+    for (*resource in resources) {
+        cppTexts.append(resource.value)
+    }
+    for (*resource in compilerResources) {
+        cppTexts.append(resource.value)
+    }
+    if (resolvedPrelude != "") {
+        for (*resourceRoot in driverResourceRoots(resolvedPrelude)) {
+            for (*header in listFiles(resourceRoot, ".hpp")) {
+                cppTexts.append(readFile(header))
+            }
+        }
+    }
+    val borrowed: BpRewrite = bpBorrowParams(preludeModules, modules, *cppTexts)
+    preludeModules = borrowed.prelude
+    modules = borrowed.modules
+    // The prelude is emitted from the merged node, so it is rebuilt from the rewritten modules.
+    mergedPrelude = driverNewModule()
+    for (*pre in preludeModules) {
+        driverAppendNamed(mergedPrelude, pre, AstNodeKind.Import)
+        driverAppendDecls(mergedPrelude, pre)
+    }
     if (bpShow()) {
         // Bound first: a `for` over a temporary borrows a pointer to it (`agents.md`).
         val borrowLines: List<Str> = bpReportLines()

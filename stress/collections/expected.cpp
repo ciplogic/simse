@@ -727,35 +727,23 @@ Char charAt(StrView* self, Int index) {
     return _sm_expr1;
 }
 Bool startsWith(StrView* self, Str text) {
-    Int count, _sm_expr1, i;
-    Bool _sm_expr2, _sm_expr6;
-    Char _sm_expr5;
+    Str* _sm_base1;
+    Int count, compareResult;
+    Bool _sm_expr1;
+    Char* _sm_expr2;
     count = simse_lenOf(text);
-    _sm_expr1 = self->size();
-    _sm_expr2 = count > _sm_expr1;
-    if (_sm_expr2) goto L1;
+    auto thisLen = self->len;
+    _sm_expr1 = count > thisLen;
+    if (_sm_expr1) goto L1;
     goto L2;
     L1:;
     return false;
     L2:;
-    i = 0;
-    L3:;
-    _sm_expr2 = i < count;
-    if (!(_sm_expr2)) goto L4;
-    {
-        auto _sm_expr4 = self->ptr[i];
-        _sm_expr5 = simse_str_charAt(text, i);
-        _sm_expr6 = _sm_expr4 != _sm_expr5;
-        if (_sm_expr6) goto L5;
-        goto L6;
-        L5:;
-        return false;
-        L6:;
-        i = i + 1;
-        goto L3;
-    }
-    L4:;
-    return true;
+    _sm_base1 = &text;
+    _sm_expr2 = simse_str_data(_sm_base1);
+    compareResult = simse_mem_compare(self->ptr, 0, _sm_expr2, 0, count);
+    _sm_expr1 = compareResult == 0;
+    return _sm_expr1;
 }
 Int find(StrView* self, Str sub) {
     Int needle, len, _sm_expr3, i, j, _sm_expr7;

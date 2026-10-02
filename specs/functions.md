@@ -195,8 +195,10 @@ by a mark, because its C++ is elsewhere; for a declaration *with* a body the sam
 **proved** from the body (it writes nothing and calls only borrow-clean names), so the RTL's
 Simse bodies carry no mark at all - the proof covers them. A `borrow` is written where the
 proof cannot read the body: a body-less native, or an overload whose sibling is one.
-A declaration is rewritten only when its name is trusted and is never used as a value, so a
-name the proof cannot cover keeps the signature its callers resolve against.
+The prelude is rewritten like a module; a prelude name hand-written C++ may call is the one
+case that keeps its authored signature (`bpCppCalled`), because that C++ is compiled against
+it. A declaration is rewritten only when its name is trusted and is never used as a value, so
+a name the proof cannot cover keeps the signature its callers resolve against.
 
 Like `data`, the mark is a promise the compiler trusts; unlike `data` it never lets a call be
 folded. The RTL writes it on the declarations the proof cannot read (its bodyless natives); its

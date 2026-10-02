@@ -145,7 +145,8 @@ The rule is the simplest one that is sound, and it refuses by default - *unsure 
 - a parameter under `&`/`*`, an assignment target, or captured by a lambda is not borrowed. A
   capture would copy the *pointer* into the closure, which is exactly an escape;
 - `this` is never borrowed - the emitter already passes a value receiver as `T* self`;
-- a candidate is a function or a `data class` method with a Simse body, not `main`, not native.
+- a candidate is a function or a `data class` method with a Simse body, in the prelude or a
+  module; not `main`, not native.
   The rewrite touches a declaration only when its **name** is trusted by the fixpoint and the name
   is never used as a *value* (that would put the signature into a function type); a name with a
   declaration the pass cannot read (a bodyless prototype beside a generated body, say) keeps every
@@ -171,9 +172,14 @@ longer rests on the author remembering a mark:
   An overloaded name is therefore a conjunction, not a coin toss: `slice` is trusted only when both
   `slice` bodies prove, and a bodyless overload of it blocks the name unless it carries a mark.
 
-Only *program* modules are rewritten - the prelude is not: its declarations' C++ is hand-written
-(or emitted once for every program), and hand-written C++ in a resource may call a prelude function
-by its exact by-value signature.
+Both sides are rewritten - the prelude's Simse bodies borrow like a module's. The one exception is
+**a prelude name hand-written C++ may call** (`bpCppCalled`): the resource bodies the emitted
+program carries (the `_res.md` sections) and the runtime headers are scanned for `<name>(`, and a
+name the scan finds keeps its authored signature, because that C++ is compiled against it. The scan
+is coarse on purpose (a member call on another type counts), so it can only cost a borrow, never
+make a wrong one: `startsWith`/`endsWith`/`indexOf` borrow, `find` does not - the `strops` section
+calls `self.find(` (src/rtl/_res.md), and `--showBorrow` prints the refusal as
+`borrow- find C++ calls it (prelude)`.
 
 Two facts are at play and they are **not the same flag**:
 
@@ -194,10 +200,10 @@ promise for borrowing and the stronger one for folding, and would be wrong for o
 - **`--no-borrow`**: the analysis still runs (so the dump is available), the declaration rewrite does
   not - the emitted C++ is exactly what the author wrote. The escape hatch for a wrong borrow, and
   it is what `stress/collections` builds with, so the *off* side is pinned by a golden.
-- **`--showBorrow`**: one line per candidate on stderr - `borrow+ <name> <params>` or
-  `borrow- <name> <why>` - the view that turned the next steps from guesses into a histogram
-  (`grep '^borrow-' | ...`). `bpNote` collects the lines and the driver prints them, so the pass
-  keeps no stderr of its own.
+- **`--showBorrow`**: one line per candidate on stderr - the prelude first, then the modules, -
+  `borrow+ <name> <params>` or `borrow- <name> <why>` - the view that turned the next steps from
+  guesses into a histogram (`grep '^borrow-' | ...`). `bpNote` collects the lines and the driver
+  prints them, so the pass keeps no stderr of its own.
 
 **Where it pays, and where it is neutral.** In a body that only views or re-borrows the parameter
 the copy disappears on *both* sides: `fun width(s: Str): Int { return s.size() }` becomes

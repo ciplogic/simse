@@ -143,7 +143,7 @@ fun tableMatch(view: StrView, table: *List<Str>, exact: Bool): Int {
         if (view.size() < length || (exact && view.size() != length)) {
             continue
         }
-        if (view.startsWithPtr(entry, length)) {
+        if (view.startsWith(entry)) {
             return length
         }
     }

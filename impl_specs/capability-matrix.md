@@ -4411,3 +4411,26 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   Verified: `./build.bat --release`, `bun tools/stress.js` **65/65**,
   `bun build.js --release --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
   both fixed points byte for byte.
+
+- **The prelude borrows, `StrView.startsWithPtr` is gone, and `startsWith` compares by intrinsic.**
+  Three edits that are one story. `bpBorrowParams` rewrote only the program modules; the prelude
+  kept its authored signatures because resource C++ may call a prelude function by its exact
+  by-value signature. It now rewrites the prelude's Simse bodies too, with that interop made a
+  per-name fact: `bpCppCalled` scans the resource bodies the emitted program carries and the
+  runtime headers for `<name>(`, and a name the scan finds keeps its authored signature. The scan
+  is coarse on purpose (a member call on another type counts), so it can only cost a borrow:
+  `startsWith`/`endsWith`/`indexOf` take `*Str`; `find` stays by value (the `strops` section calls
+  `self.find(`), which `--showBorrow` prints as `borrow- find C++ calls it (prelude)`. The driver
+  rebuilds `mergedPrelude` from the rewritten modules, so the checker and the emitter both see
+  them. `StrView.startsWith`'s body becomes the `memCompare` intrinsic over `strBytes(text)` - one
+  `std::memcmp` for the prefix instead of a byte loop with a `charAt` call each step - and it is
+  still proved read-only, so the scanner's `tableMatch` calls `startsWith(entry)` with the table
+  pointer: the emitted code is what `startsWithPtr` generated, so the function and its spec
+  mentions are deleted. A/B on the self-transpile (byte loop vs `memcmp`, same sources, release, 5
+  interleaved runs): best/median **1.794/1.800 s vs 1.786/1.800 s** - a wash on this workload, so
+  the intrinsic costs nothing and retires the duplicate. `stress/borrow-prelude` is new and pins
+  the borrowed prelude signatures, the `find` refusal and the absence of `startsWithPtr`;
+  `stress/objects`/`stress/raw-strings` goldens refreshed.
+  Verified: `./build.bat --release`, `bun tools/stress.js` **66/66**,
+  `bun build.js --release --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js` - both
+  fixed points byte for byte.

@@ -51,7 +51,7 @@ the published file and commit it with the source.
 ```sh
 ./simse.exe --root src -o a.cpp --showLinearRepresentation 2> il.txt   # the IL of every body
 ./simse.exe --root examples/async/src --module src/modules/io --showAsync   # suspension coloring
-./simse.exe --root src -o a.cpp --showBorrow 2> borrow.txt             # per-candidate borrow decisions
+./simse.exe --root src -o a.cpp --showBorrow 2> borrow.txt             # per-candidate borrow decisions (prelude first)
 ./simse.exe --root stress/concat/src -o fused.cpp                      # the concat fusion (on)
 ./simse.exe --root stress/concat/src -o unfused.cpp --no-concat        # ... and its A/B off
 ./simse.exe --root src -o unborrowed.cpp --no-borrow                    # the auto-borrow rewrite off

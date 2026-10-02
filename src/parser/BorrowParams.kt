@@ -4,7 +4,9 @@
 // heavy value type becomes a `*T` when the function never writes it and never lets it escape, so
 // every call site stops deep-copying the argument. The pass rewrites the *declaration* before sema
 // runs, so the checker, the lowering and the emitter all see the borrowed program and nothing
-// downstream knows the optimization exists - the same shape `cpFoldConstParams` has.
+// downstream knows the optimization exists - the same shape `cpFoldConstParams` has. The prelude's
+// Simse bodies are rewritten too; a prelude name hand-written C++ may call keeps its authored
+// signature (`bpCppCalled`), and a body-less (`@SmGen`) declaration is never a candidate.
 //
 // The rule is the simplest one that is sound, and it refuses by default ("unsure means it
 // escapes"):
@@ -482,6 +484,46 @@ fun bpNames(names: *Dictionary<Str, Bool>): Str {
     return joinStrs(keys, ", ")
 }
 
+// The names hand-written C++ may call: `<name>` followed by `(` anywhere in a resource body or
+// a prelude header. The scan is coarse on purpose - a member call on another type or a
+// declaration counts too - because a name it misses would be rewritten under C++ that is
+// compiled against the exact signature. A false positive only costs a parameter that stays by
+// value.
+fun bpCppCalled(texts: *List<Str>): Dictionary<Str, Bool> {
+    var out: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+    for (*text in texts) {
+        val len: Int = text.size()
+        var i: Int = 0
+        while (i < len) {
+            val ch: Char = text.charAt(i)
+            if (ch.isAlpha() || ch == '_') {
+                val start: Int = i
+                while (i < len) {
+                    val part: Char = text.charAt(i)
+                    if (!part.isAlphaOrDigit() && part != '_') {
+                        break
+                    }
+                    i = i + 1
+                }
+                var after: Int = i
+                while (after < len) {
+                    val gap: Char = text.charAt(after)
+                    if (gap != ' ' && gap != '\t') {
+                        break
+                    }
+                    after = after + 1
+                }
+                if (after < len && text.charAt(after) == '(') {
+                    out.insert(text.substr(start, i - start), true)
+                }
+            } else {
+                i = i + 1
+            }
+        }
+    }
+    return out
+}
+
 // ---- the rewrite ------------------------------------------------------------
 
 // The parameter's type as a `*T`, the borrow spelling the language already has.
@@ -513,10 +555,12 @@ fun bpBorrowParam(param: *AstXmlNode): AstXmlNode {
 }
 
 // One function declaration, with the parameters the body only reads borrowed. `this` is a receiver,
-// which the emitter already passes as `T* self`, so it is never borrowed here.
+// which the emitter already passes as `T* self`, so it is never borrowed here. A prelude name
+// hand-written C++ may call keeps its exact signature (`bpCppCalled`): the resource bodies and
+// the headers are compiled against it, so the proof is a refusal there, not a rewrite.
 fun bpBorrowDecl(
     decl: *AstXmlNode, types: *Dictionary<Str, Bool>, reads: *Dictionary<Str, Bool>,
-    statics: *Dictionary<Str, Bool>
+    statics: *Dictionary<Str, Bool>, cppCalled: *Dictionary<Str, Bool>, prelude: Bool
 ): AstXmlNode {
     val params: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
     if (params.size() == 0) {
@@ -560,10 +604,16 @@ fun bpBorrowDecl(
     if (borrowed.size() == 0) {
         return decl
     }
+    val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
+    if (prelude && cppCalled.has(name)) {
+        if (bpShow()) {
+            bpNote(`borrow- @name C++ calls it (prelude)`)
+        }
+        return decl
+    }
     if (bpShow()) {
-        val xmlAttrText2: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
         val bpNamesText: Str = bpNames(*borrowed)
-        bpNote(`borrow+ @xmlAttrText2 @bpNamesText`)
+        bpNote(`borrow+ @name @bpNamesText`)
     }
     // `--no-borrow`: the analysis above still runs (so `--showBorrow` reads it), the rewrite does
     // not - the emitted C++ is what the author wrote.
@@ -590,7 +640,8 @@ fun bpBorrowDecl(
 // body a generator supplied) must keep the signature the twin's callers resolve against.
 fun bpRewriteModule(
     module: *AstXmlNode, types: *Dictionary<Str, Bool>, reads: *Dictionary<Str, Bool>,
-    statics: *Dictionary<Str, Bool>, valueUsed: *Dictionary<Str, Bool>
+    statics: *Dictionary<Str, Bool>, valueUsed: *Dictionary<Str, Bool>,
+    cppCalled: *Dictionary<Str, Bool>, prelude: Bool
 ): AstXmlNode {
     var changed: Bool = false
     var kids: List<AstXmlNode> = List<AstXmlNode>()
@@ -598,7 +649,7 @@ fun bpRewriteModule(
         if (child.name == AstNodeKind.Function) {
             val name: Str = xmlAttr(child, AstNodeAttributeKind.Name)
             if (reads.has(name) && !valueUsed.has(name)) {
-                kids.append(bpBorrowDecl(child, types, reads, statics))
+                kids.append(bpBorrowDecl(child, types, reads, statics, cppCalled, prelude))
                 changed = true
                 continue
             }
@@ -610,7 +661,7 @@ fun bpRewriteModule(
                 if (method.name == AstNodeKind.Function) {
                     val name: Str = xmlAttr(method, AstNodeAttributeKind.Name)
                     if (reads.has(name) && !valueUsed.has(name)) {
-                        methods.append(bpBorrowDecl(method, types, reads, statics))
+                        methods.append(bpBorrowDecl(method, types, reads, statics, cppCalled, prelude))
                         rebuilt = true
                         continue
                     }
@@ -635,10 +686,20 @@ fun bpRewriteModule(
     return AstXmlNode(module.name, module.kind, module.attributes, kids.toArray())
 }
 
-// The pass: the program modules, with every parameter a body only reads borrowed. The walk order is
-// fixed (module order, then declaration order) and the decision is a pure function of the module
-// text and the declaration sets, so two runs agree byte for byte.
-fun bpBorrowParams(preludeModules: List<AstXmlNode>, modules: List<AstXmlNode>): List<AstXmlNode> {
+// What the pass produced: the prelude and the modules, both rewritten. The prelude comes back
+// because its Simse bodies borrow like a module's; only a name hand-written C++ may call keeps
+// its authored signature (`bpCppCalled`).
+data class BpRewrite(
+    var prelude: List<AstXmlNode>,
+    var modules: List<AstXmlNode>
+)
+
+// The pass: the prelude and the program modules, with every parameter a body only reads borrowed.
+// The walk order is fixed (module order, then declaration order) and the decision is a pure
+// function of the module text and the declaration sets, so two runs agree byte for byte.
+fun bpBorrowParams(
+    preludeModules: List<AstXmlNode>, modules: List<AstXmlNode>, cppTexts: *List<Str>
+): BpRewrite {
     var types: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     var reads: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     var statics: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
@@ -651,11 +712,14 @@ fun bpBorrowParams(preludeModules: List<AstXmlNode>, modules: List<AstXmlNode>):
 
     var candidates: List<AstXmlNode> = List<AstXmlNode>()
     var candidateNames: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+    for (*pre in preludeModules) {
+        bpCandidates(pre, *candidates, *candidateNames)
+    }
     for (*mod in modules) {
         bpCandidates(mod, *candidates, *candidateNames)
     }
     if (candidates.size() == 0) {
-        return modules
+        return BpRewrite(preludeModules, modules)
     }
     var valueUsed: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     for (*pre in preludeModules) {
@@ -683,13 +747,18 @@ fun bpBorrowParams(preludeModules: List<AstXmlNode>, modules: List<AstXmlNode>):
     }
     bpInferReads(*factList, *blocked, *reads)
 
-    // The prelude is never rewritten: a declaration there has its C++ written by hand (and
-    // hand-written C++ may call it by its exact signature).
+    // Both sides are rewritten: a Simse-bodied prelude declaration borrows exactly like a module
+    // one, and only a name C++ may call keeps its authored signature (inside `bpBorrowDecl`).
+    var cppCalled: Dictionary<Str, Bool> = bpCppCalled(cppTexts)
+    var outPrelude: List<AstXmlNode> = List<AstXmlNode>()
+    for (*pre in preludeModules) {
+        outPrelude.append(bpRewriteModule(pre, *types, *reads, *statics, *valueUsed, *cppCalled, true))
+    }
     var out: List<AstXmlNode> = List<AstXmlNode>()
     for (*mod in modules) {
-        out.append(bpRewriteModule(mod, *types, *reads, *statics, *valueUsed))
+        out.append(bpRewriteModule(mod, *types, *reads, *statics, *valueUsed, *cppCalled, false))
     }
-    return out
+    return BpRewrite(outPrelude, out)
 }
 
 // ---- the switches -----------------------------------------------------------

@@ -506,7 +506,7 @@ The `spanOf(items: *List<T>): Span<T>` helper (RTL `simse_spanOf`) covers all of
 `items` from index 0, and `spanOfStr(text: *Str): StrView` (RTL
 `simse_spanOfStr`) covers a string's bytes. Both **borrow** their source: the
 source must outlive the span, and `&items` would box a *copy*. On `StrView`,
-codegen also maps `charAt`, `find`/`indexOf`, `startsWith`, `startsWithPtr`,
+codegen also maps `charAt`, `find`/`indexOf`, `startsWith`,
 `substr`, and `toString`. The struct is immutable: nothing mutates the receiver.
 
 ### Lambdas

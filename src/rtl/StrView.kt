@@ -5,9 +5,9 @@
 // bytes it points at are alive; `spanOfStr(text)` borrows its source, which must outlive the
 // view. Only what reaches a `Str`'s internals or a `Span` member stays in C++, in the
 // `strview` section of src/rtl/_res.md; the rest is Simse over the span (`span.hpp`) and
-// the `setBytes` intrinsic for the owned copy (`intrinsics.kt`). A comparison is an inline
-// loop, not `memCompare`: the scanner calls `startsWithPtr` per table entry per token, and a
-// `memcmp` call for a few bytes is slower than the loop it replaces.
+// the `setBytes` intrinsic for the owned copy (`intrinsics.kt`). A comparison is the
+// `memCompare` intrinsic (`std::memcmp` behind it, `intrinsics.hpp`), so it compares in word
+// loads and the scanner's per-entry lookups stay cheap.
 
 package rtl
 
@@ -24,38 +24,16 @@ fun StrView.charAt(index: Int): Char {
     return this.at(index)
 }
 
-// Compared in place, so nothing is copied.
+// Read-only, so auto-borrow works the parameter: `text` is a `*Str` in the emitted signature
+// and the scanner's table lookup passes a pointer into the table, with nothing copied.
 fun StrView.startsWith(text: Str): Bool {
     val count = text.size()
-    if (count > this.size()) {
+    val thisLen = this.len
+    if (count > thisLen) {
         return false
     }
-    var i = 0
-    while (i < count) {
-        if (this.ptr[i] != text.charAt(i)) {
-            return false
-        }
-        i = i + 1
-    }
-    return true
-}
-
-// `startsWithPtr(text, length)`: the same comparison against a text this view does not own,
-// reached by raw pointer and with its length already known. The first byte is the caller's
-// cheap test, so the compare starts at 1; `startsWith` would copy the `Str` first, which a
-// table lookup cannot afford.
-fun StrView.startsWithPtr(text: *Str, length: Int): Bool {
-    if (length > this.size()) {
-        return false
-    }
-    var i = 1
-    while (i < length) {
-        if (this.ptr[i] != text.charAt(i)) {
-            return false
-        }
-        i = i + 1
-    }
-    return true
+    val compareResult = memCompare(this.ptr, 0, strBytes(text), 0, count)
+    return compareResult == 0
 }
 
 // The index of the first occurrence of `sub`, or -1 (compared in place).

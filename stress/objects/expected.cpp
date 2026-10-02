@@ -298,14 +298,14 @@ enum class ns1_Shape { Circle, Square = 4 };
 inline ns1_Shape ns1_simse_Shape_fromInt(Int value) { return (ns1_Shape) value; }
 
 Char charAt(StrView* self, Int index);
-Bool startsWith(StrView* self, Str text);
+Bool startsWith(StrView* self, Str* text);
 Int find(StrView* self, Str sub);
 Str substr(StrView* self, Int from, Int count);
 Str toString(StrView* self);
 Str fmtStr(StrView fmt, List<Str>* items);
 Str substr(Str* self, Int start, Int len);
-Bool startsWith(Str* self, Str prefix);
-Bool endsWith(Str* self, Str suffix);
+Bool startsWith(Str* self, Str* prefix);
+Bool endsWith(Str* self, Str* suffix);
 Bool isEmpty(Str* self);
 Bool isDigit(Char* self);
 Bool isAlpha(Char* self);
@@ -454,36 +454,22 @@ Char charAt(StrView* self, Int index) {
     _sm_expr1 = self->at(index);
     return _sm_expr1;
 }
-Bool startsWith(StrView* self, Str text) {
-    Int count, _sm_expr1, i;
-    Bool _sm_expr2, _sm_expr6;
-    Char _sm_expr5;
-    count = simse_lenOf(text);
-    _sm_expr1 = self->size();
-    _sm_expr2 = count > _sm_expr1;
-    if (_sm_expr2) goto L1;
+Bool startsWith(StrView* self, Str* text) {
+    Int count, compareResult;
+    Bool _sm_expr1;
+    Char* _sm_expr2;
+    count = simse_lenOf((*text));
+    auto thisLen = self->len;
+    _sm_expr1 = count > thisLen;
+    if (_sm_expr1) goto L1;
     goto L2;
     L1:;
     return false;
     L2:;
-    i = 0;
-    L3:;
-    _sm_expr2 = i < count;
-    if (!(_sm_expr2)) goto L4;
-    {
-        auto _sm_expr4 = self->ptr[i];
-        _sm_expr5 = simse_str_charAt(text, i);
-        _sm_expr6 = _sm_expr4 != _sm_expr5;
-        if (_sm_expr6) goto L5;
-        goto L6;
-        L5:;
-        return false;
-        L6:;
-        i = i + 1;
-        goto L3;
-    }
-    L4:;
-    return true;
+    _sm_expr2 = simse_str_data(text);
+    compareResult = simse_mem_compare(self->ptr, 0, _sm_expr2, 0, count);
+    _sm_expr1 = compareResult == 0;
+    return _sm_expr1;
 }
 Int find(StrView* self, Str sub) {
     Int needle, len, _sm_expr3, i, j, _sm_expr7;
@@ -688,11 +674,11 @@ Str substr(Str* self, Int start, Int len) {
     L9:;
     return out;
 }
-Bool startsWith(Str* self, Str prefix) {
+Bool startsWith(Str* self, Str* prefix) {
     Int count, _sm_expr1, i;
     Bool _sm_expr2;
     Char _sm_expr4, _sm_expr5;
-    count = simse_lenOf(prefix);
+    count = simse_lenOf((*prefix));
     _sm_expr1 = simse_lenOf((*self));
     _sm_expr2 = count > _sm_expr1;
     if (_sm_expr2) goto L1;
@@ -705,7 +691,7 @@ Bool startsWith(Str* self, Str prefix) {
     _sm_expr2 = i < count;
     if (!(_sm_expr2)) goto L4;
     _sm_expr4 = simse_str_charAt((*self), i);
-    _sm_expr5 = simse_str_charAt(prefix, i);
+    _sm_expr5 = simse_str_charAt((*prefix), i);
     _sm_expr2 = _sm_expr4 != _sm_expr5;
     if (_sm_expr2) goto L5;
     goto L6;
@@ -717,11 +703,11 @@ Bool startsWith(Str* self, Str prefix) {
     L4:;
     return true;
 }
-Bool endsWith(Str* self, Str suffix) {
+Bool endsWith(Str* self, Str* suffix) {
     Int count, len, i, _sm_expr3, _sm_expr4;
     Bool _sm_expr1;
     Char _sm_expr5, _sm_expr6;
-    count = simse_lenOf(suffix);
+    count = simse_lenOf((*suffix));
     len = simse_lenOf((*self));
     _sm_expr1 = count > len;
     if (_sm_expr1) goto L1;
@@ -736,7 +722,7 @@ Bool endsWith(Str* self, Str suffix) {
     _sm_expr3 = len - count;
     _sm_expr4 = _sm_expr3 + i;
     _sm_expr5 = simse_str_charAt((*self), _sm_expr4);
-    _sm_expr6 = simse_str_charAt(suffix, i);
+    _sm_expr6 = simse_str_charAt((*suffix), i);
     _sm_expr1 = _sm_expr5 != _sm_expr6;
     if (_sm_expr1) goto L5;
     goto L6;
@@ -1078,10 +1064,11 @@ Int ns1_partLanguageTour() {
     ns1_Color _sm_base1, _sm_base2, _sm_base3, _sm_base4, parsed, _sm_expr8;
     Int _sm_base6, _sm_base9, _sm_expr6, _sm_expr9, _sm_expr14, _sm_expr15, _sm_expr21, _sm_expr33,
         _sm_expr34;
-    Str _sm_base11, _sm_base12, _sm_base13, _sm_expr1, _sm_expr2, _sm_expr3, _sm_expr4, _sm_expr5,
-        _sm_expr7, text, _sm_expr16, _sm_expr19, _sm_expr30, _sm_expr31, _sm_expr32;
-    Char _sm_base14, _sm_base15, letter;
-    Float64 _sm_base16, _sm_expr25;
+    Str* _sm_base11, * _sm_base13;
+    Str _sm_base12, _sm_base14, _sm_base15, _sm_base16, _sm_base17, _sm_expr1, _sm_expr2, _sm_expr3,
+        _sm_expr4, _sm_expr5, _sm_expr7, text, _sm_expr16, _sm_expr19, _sm_expr30, _sm_expr31, _sm_expr32;
+    Char _sm_base18, _sm_base19, letter;
+    Float64 _sm_base20, _sm_expr25;
     Ref<ns1_Box> present, absent, boxed;
     Bool _sm_expr10, _sm_expr17, _sm_expr18, _sm_expr23, _sm_expr26, _sm_expr27, _sm_expr28, _sm_expr29;
     ns1_Box* rawPresent, * rawAbsent;
@@ -1148,14 +1135,18 @@ Int ns1_partLanguageTour() {
     simse_println((_sm_expr15), stdout);
     _sm_expr16 = substr(simse_addressOf(text), 0, 5);
     simse_println((_sm_expr16), stdout);
-    _sm_expr17 = startsWith(simse_addressOf(text), __sm_stringTable[10]);
+    _sm_base12 = __sm_stringTable[10];
+    _sm_base11 = &_sm_base12;
+    _sm_expr17 = startsWith(simse_addressOf(text), _sm_base11);
     simse_println((_sm_expr17), stdout);
-    _sm_expr18 = endsWith(simse_addressOf(text), __sm_stringTable[13]);
+    _sm_base14 = __sm_stringTable[13];
+    _sm_base13 = &_sm_base14;
+    _sm_expr18 = endsWith(simse_addressOf(text), _sm_base13);
     simse_println((_sm_expr18), stdout);
     _sm_expr19 = simse_str_replace(text, __sm_stringTable[13], __sm_stringTable[12]);
     simse_println((_sm_expr19), stdout);
-    _sm_base11 = __sm_stringTable[28];
-    number = simse_str_toInt(_sm_base11);
+    _sm_base15 = __sm_stringTable[28];
+    number = simse_str_toInt(_sm_base15);
     _sm_expr10 = simse_opt_hasValue(number);
     if (_sm_expr10) goto L9;
     goto L10;
@@ -1163,8 +1154,8 @@ Int ns1_partLanguageTour() {
     _sm_expr21 = number.value();
     simse_println((_sm_expr21), stdout);
     L10:;
-    _sm_base12 = __sm_stringTable[19];
-    badNumber = simse_str_toInt(_sm_base12);
+    _sm_base16 = __sm_stringTable[19];
+    badNumber = simse_str_toInt(_sm_base16);
     _sm_expr10 = simse_opt_hasValue(badNumber);
     _sm_expr23 = !_sm_expr10;
     if (_sm_expr23) goto L11;
@@ -1172,8 +1163,8 @@ Int ns1_partLanguageTour() {
     L11:;
     simse_println((__sm_stringTable[6]), stdout);
     L12:;
-    _sm_base13 = __sm_stringTable[21];
-    fraction = simse_str_toFloat(_sm_base13);
+    _sm_base17 = __sm_stringTable[21];
+    fraction = simse_str_toFloat(_sm_base17);
     _sm_expr10 = simse_opt_hasValue(fraction);
     if (_sm_expr10) goto L13;
     goto L14;
@@ -1186,19 +1177,19 @@ Int ns1_partLanguageTour() {
     simse_println((_sm_expr26), stdout);
     _sm_expr27 = isDigit(simse_addressOf(letter));
     simse_println((_sm_expr27), stdout);
-    _sm_base14 = '7';
-    _sm_expr28 = isDigit(simse_addressOf(_sm_base14));
+    _sm_base18 = '7';
+    _sm_expr28 = isDigit(simse_addressOf(_sm_base18));
     simse_println((_sm_expr28), stdout);
-    _sm_base15 = ' ';
-    _sm_expr29 = isSpace(simse_addressOf(_sm_base15));
+    _sm_base19 = ' ';
+    _sm_expr29 = isSpace(simse_addressOf(_sm_base19));
     simse_println((_sm_expr29), stdout);
     small = 5;
     _sm_expr30 = simse_num_toString(small);
     simse_println((_sm_expr30), stdout);
     _sm_expr31 = "true";
     simse_println((_sm_expr31), stdout);
-    _sm_base16 = 2.5;
-    _sm_expr32 = simse_num_toString(_sm_base16);
+    _sm_base20 = 2.5;
+    _sm_expr32 = simse_num_toString(_sm_base20);
     simse_println((_sm_expr32), stdout);
     _sm_expr33 = min(3, 9);
     simse_println((_sm_expr33), stdout);

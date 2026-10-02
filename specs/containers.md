@@ -152,9 +152,9 @@ list, which must outlive the span (`&items` would box a copy).
 Its full surface (`size`, `isEmpty`, `at`/`span[index]`, `atPtr`, the two unchecked
 `slice` forms) is in `specs/built-in-types.md`, "Views"; `impl_specs/rtl-abi.md` has how
 each one lowers. `StrView` **is** a `Span<Char>` (one type, two names) adding the byte
-operations `charAt`, `find`/`indexOf`, `startsWith`, `startsWithPtr`, `substr`, and
-`toString` (`substr`/`toString` are the owned copies), and `spanOfStr(text: *Str):
-StrView` builds one from a string.
+operations `charAt`, `find`/`indexOf`, `startsWith`, `substr`, and `toString`
+(`substr`/`toString` are the owned copies), and `spanOfStr(text: *Str): StrView`
+builds one from a string.
 
 ## `Str`
 
