@@ -165,9 +165,11 @@ fun Emitter.emitTask(fn: *CgFn, decl: *AstXmlNode, prototypeOnly: Bool, facts: *
     }
     if (prototypeOnly) {
         this.sourceComment(decl)
-        this.line(0, fmtStr("struct | : simse_tasks::Task {", className))
+        this.line(0, `struct @className : simse_tasks::Task {`)
         for (*field in task.fields) {
-            this.line(1, fmtStr("| |{};", this.type(field.typeNode), field.member))
+            val typeText: Str = this.type(field.typeNode)
+            val fieldMemberText: Str = field.member
+            this.line(1, `@typeText @fieldMemberText{};`)
             if (this.failed) {
                 return
             }
@@ -179,7 +181,7 @@ fun Emitter.emitTask(fn: *CgFn, decl: *AstXmlNode, prototypeOnly: Bool, facts: *
     }
     this.registerTaskType(className, *task)
     this.sourceComment(decl)
-    this.line(0, fmtStr("void |::run() {", className))
+    this.line(0, `void @className::run() {`)
     // A C++ member function: the task's own storage is `this->`, the way a machine's method
     // reads it (there is no `self` parameter).
     val savedClosure: Bool = this.inClosureMethod
@@ -290,12 +292,15 @@ fun Emitter.emitTaskFactory(fn: *CgFn, decl: *AstXmlNode, className: *Str, task:
         return
     }
     // The task handle the caller holds is opaque: a `RawPtr`, never the task type.
-    this.line(0, fmtStr("RawPtr |(|) {", this.asyncFactory(fn), cgJoin(params, ", ")))
-    this.line(1, fmtStr("|* task = new |();", className, className))
+    val asyncFactoryText: Str = this.asyncFactory(fn)
+    val cgJoinText: Str = cgJoin(params, ", ")
+    this.line(0, `RawPtr @asyncFactoryText(@cgJoinText) {`)
+    this.line(1, `@className* task = new @className();`)
     this.line(1, "task->loop = &simse_tasks::taskLoop();")
     for (*param in xmlChildren(decl, AstNodeKind.Param)) {
         val name: Str = xmlAttr(param, AstNodeAttributeKind.Name)
-        this.line(1, fmtStr("task->| = |;", task.memberOf(name), name))
+        val memberOfText: Str = task.memberOf(name)
+        this.line(1, `task->@memberOfText = @name;`)
     }
     this.line(1, "return (RawPtr) task;")
     this.line(0, "}")
@@ -312,8 +317,10 @@ fun Emitter.emitTaskAccessor(fn: *CgFn, className: *Str, task: *TskTask): Unit {
     if (this.failed) {
         return
     }
-    this.line(0, fmtStr("| |(RawPtr _sm_h) {", retText, this.asyncResult(fn)))
-    this.line(1, fmtStr("return ((|*) _sm_h)->|;", className, task.memberOf("result")))
+    val asyncResultText: Str = this.asyncResult(fn)
+    this.line(0, `@retText @asyncResultText(RawPtr _sm_h) {`)
+    val memberOfText2: Str = task.memberOf("result")
+    this.line(1, `return ((@className*) _sm_h)->@memberOfText2;`)
     this.line(0, "}")
 }
 
@@ -326,12 +333,14 @@ fun Emitter.emitAsyncMain(fn: *CgFn, className: *Str, task: *TskTask): Unit {
     if (this.hasStaticInit()) {
         this.line(1, "simse_initStatics();")
     }
-    this.line(1, fmtStr("|* simse_root = (|*) |();", className, className, this.asyncFactory(fn)))
+    val asyncFactoryText2: Str = this.asyncFactory(fn)
+    this.line(1, `@className* simse_root = (@className*) @asyncFactoryText2();`)
     this.line(1, "simse_tasksStart(simse_root);")
     this.line(1, "simse_tasksRunLoop();")
     this.line(1, "int simse_rc = 0;")
     if (!xmlIsEmpty(ret)) {
-        this.line(1, fmtStr("simse_rc = (int) simse_root->|;", task.memberOf("result")))
+        val memberOfText3: Str = task.memberOf("result")
+        this.line(1, `simse_rc = (int) simse_root->@memberOfText3;`)
     }
     this.line(1, "simse_root->release();")
     this.line(1, "return simse_rc;")

@@ -27,7 +27,8 @@ fun Emitter.emitStatics(): Unit {
             return
         }
         this.sourceComment(entry.decl)
-        this.line(0, fmtStr("| |{};", this.type(typeNode), storage))
+        val typeText: Str = this.type(typeNode)
+        this.line(0, `@typeText @storage{};`)
         if (this.failed) {
             return
         }
@@ -60,12 +61,10 @@ fun Emitter.emitStaticInit(): Unit {
         }
         this.curFile = entry.file
         val storage: Str = this.qualify(entry.packageName, xmlAttr(entry.decl, AstNodeAttributeKind.Name))
+        val exprText: Str = this.expr(init, 0, xmlChildPtr(entry.decl, AstNodeKind.Type))
         this.line(
             1,
-            fmtStr(
-                "| = |;",
-                storage, this.expr(init, 0, xmlChildPtr(entry.decl, AstNodeKind.Type))
-            )
+            `@storage = @exprText;`
         )
         if (this.failed) {
             return
@@ -111,7 +110,8 @@ fun Emitter.emitForwardTypes(emitted: *Dictionary<Str, Bool>): Unit {
             this.line(0, tmpl)
         }
         val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
-        this.line(0, fmtStr("struct |;", this.qualify(this.typePackage(name), name)))
+        val qualifyText: Str = this.qualify(this.typePackage(name), name)
+        this.line(0, `struct @qualifyText;`)
     }
     }
 }
@@ -288,9 +288,10 @@ fun Emitter.emitDataClass(decl: *AstXmlNode): Unit {
     val fields: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Field)
     for (*field in fields) {
         if (xmlIsEmpty(xmlChildPtr(field, AstNodeKind.Type))) {
+            val xmlAttrText: Str = xmlAttr(field, AstNodeAttributeKind.Name)
             this.fail(
                 field,
-                fmtStr("unsupported: field '|' without a type", xmlAttr(field, AstNodeAttributeKind.Name))
+                `unsupported: field '@xmlAttrText' without a type`
             )
             return
         }
@@ -310,21 +311,19 @@ fun Emitter.emitDataClass(decl: *AstXmlNode): Unit {
     if (tmpl != "") {
         this.line(0, tmpl)
     }
-    this.line(0, fmtStr("struct | {", emittedName))
+    this.line(0, `struct @emittedName {`)
     for (*field in fields) {
+        val typeText2: Str = this.type(xmlChildPtr(field, AstNodeKind.Type))
+        val xmlAttrText2: Str = xmlAttr(field, AstNodeAttributeKind.Name)
         this.line(
             1,
-            fmtStr(
-                "| |;",
-                this.type(xmlChildPtr(field, AstNodeKind.Type)),
-                xmlAttr(field, AstNodeAttributeKind.Name)
-            )
+            `@typeText2 @xmlAttrText2;`
         )
     }
     if (!xmlIsEmpty(this.cgUninitMethod(decl))) {
         // A class with `unInit` has a real destructor: declared here, defined with the
         // bodies (`emitUninit`), so its body may call anything the prototypes declare.
-        this.line(1, fmtStr("~|();", emittedName))
+        this.line(1, `~@emittedName();`)
         if (this.failed) {
             return
         }
@@ -345,23 +344,20 @@ fun Emitter.emitEnum(decl: *AstXmlNode): Unit {
     val members: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.EnumMember)
     for (*member in members) {
         if (xmlAttr(member, AstNodeAttributeKind.HasValue) == "true") {
+            val xmlAttrText3: Str = xmlAttr(member, AstNodeAttributeKind.Name)
+            val xmlAttrText4: Str = xmlAttr(member, AstNodeAttributeKind.Value)
             parts.append(
-                fmtStr(
-                    "| = |",
-                    xmlAttr(member, AstNodeAttributeKind.Name),
-                    xmlAttr(member, AstNodeAttributeKind.Value)
-                )
+                `@xmlAttrText3 = @xmlAttrText4`
             )
         } else {
             parts.append(xmlAttr(member, AstNodeAttributeKind.Name))
         }
     }
+    val qualifyText2: Str = this.qualify(this.typePackage(name), name)
+    val cgJoinText: Str = cgJoin(*parts, ", ")
     this.line(
         0,
-        fmtStr(
-            "enum class | { | };", this.qualify(this.typePackage(name), name),
-            cgJoin(*parts, ", ")
-        )
+        `enum class @qualifyText2 { @cgJoinText };`
     )
 }
 
@@ -379,16 +375,17 @@ fun Emitter.emitEnumConversion(decl: *AstXmlNode): Unit {
         this.qualify(this.typePackage(enumName), "simse_" + enumName + "_fromInt")
     this.line(
         0,
-        fmtStr("inline | |(Int value) { return (|) value; }", emittedName, fromIntName, emittedName)
+        `inline @emittedName @fromIntName(Int value) { return (@emittedName) value; }`
     )
 }
 
 fun Emitter.emitTypeAlias(decl: *AstXmlNode): Unit {
     val target: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.TargetType)
     if (xmlIsEmpty(target)) {
+        val xmlAttrText5: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
         this.fail(
             decl,
-            fmtStr("unsupported: typealias '|' without a target type", xmlAttr(decl, AstNodeAttributeKind.Name))
+            `unsupported: typealias '@xmlAttrText5' without a target type`
         )
         return
     }
@@ -402,16 +399,13 @@ fun Emitter.emitTypeAlias(decl: *AstXmlNode): Unit {
     if (tmpl != "") {
         this.line(0, tmpl)
     }
-    this.line(
-        0,
-        fmtStr(
-            "using | = |;",
-            this.qualify(
+    val qualifyText3: Str = this.qualify(
                 this.typePackage(xmlAttr(decl, AstNodeAttributeKind.Name)),
                 xmlAttr(decl, AstNodeAttributeKind.Name)
-            ),
-            targetText
-        )
+            )
+    this.line(
+        0,
+        `using @qualifyText3 = @targetText;`
     )
 }
 
@@ -425,9 +419,10 @@ fun Emitter.emitNativeDeclarations(): Unit {
         val decl: AstXmlNode = nativeInfo.decl
         this.setActiveTypeParams(xmlTypeParamNames(decl))
         if (nativeInfo.symbol.find("::") != -1) {
+            val nativeInfoSymbolText: Str = nativeInfo.symbol
             this.fail(
                 decl,
-                fmtStr("unsupported: namespaced symbol '|' needs a global wrapper", nativeInfo.symbol)
+                `unsupported: namespaced symbol '@nativeInfoSymbolText' needs a global wrapper`
             )
             return
         }
@@ -444,12 +439,10 @@ fun Emitter.emitNativeDeclarations(): Unit {
         for (*param in params) {
         val paramType: *AstXmlNode = xmlChildPtr(param, AstNodeKind.Type)
         if (xmlIsEmpty(paramType)) {
+            val xmlAttrText6: Str = xmlAttr(param, AstNodeAttributeKind.Name)
             this.fail(
                 param,
-                fmtStr(
-                    "unsupported: generated parameter '|' without a type",
-                    xmlAttr(param, AstNodeAttributeKind.Name)
-                )
+                `unsupported: generated parameter '@xmlAttrText6' without a type`
             )
             return
         }
@@ -463,9 +456,9 @@ fun Emitter.emitNativeDeclarations(): Unit {
         }
         val pk: AstNodeCategory = xmlKind(paramType)
         if (pk == AstNodeCategory.TypePointer || pk == AstNodeCategory.TypeReference) {
-            paramTexts.append(fmtStr("| |", mapped, name))
+            paramTexts.append(`@mapped @name`)
         } else {
-            paramTexts.append(fmtStr("const |& |", mapped, name))
+            paramTexts.append(`const @mapped& @name`)
         }
     }
         this.sourceComment(decl)
@@ -473,9 +466,11 @@ fun Emitter.emitNativeDeclarations(): Unit {
         if (tmpl != "") {
             this.line(0, tmpl)
         }
+        val nativeInfoSymbolText2: Str = nativeInfo.symbol
+        val cgJoinText2: Str = cgJoin(paramTexts, ", ")
         this.line(
             0,
-            fmtStr("| |(|);", ret, nativeInfo.symbol, cgJoin(paramTexts, ", "))
+            `@ret @nativeInfoSymbolText2(@cgJoinText2);`
         )
     }
 }
@@ -569,13 +564,12 @@ fun Emitter.emitResourceTable(): Unit {
     this.line(0, "// The resources the compiler read from `_res.md` files (specs/resources.md):")
     this.line(0, "// string-table indices, key then value, and the one installer that builds")
     this.line(0, "// them into the program's `Resources` table before `main`.")
-    this.line(0, fmtStr("static const Int __sm_resourceIndex[] = |;", cgIntListText(indices)))
+    val cgIntListTextText: Str = cgIntListText(indices)
+    this.line(0, `static const Int __sm_resourceIndex[] = @cgIntListTextText;`)
+    val sizeText: Str = (this.resourceStored.size() / 2).toString()
     this.line(
         0,
-        fmtStr(
-            "static const Int __sm_resourceCount = |;",
-            (this.resourceStored.size() / 2).toString()
-        )
+        `static const Int __sm_resourceCount = @sizeText;`
     )
     this.line(0, "namespace {")
     this.line(1, "struct __SmResourceInit {")
@@ -639,7 +633,7 @@ fun Emitter.emitStringTable(): Unit {
     this.line(0, "// The program's string literals: one pool, and two run-length encoded index")
     this.line(0, "// series (offsets as deltas, then lengths), each as what to subtract from the")
     this.line(0, "// previous value; strtable.hpp has the stream format.")
-    this.line(0, fmtStr("static const Int __sm_stringCount = |;", count.toString()))
+    this.line(0, `static const Int __sm_stringCount = @count;`)
     this.line(0, "static const char __sm_stringPool[] =")
 
     // The literals again, adjacent, a space between so they stay separate tokens; wrapped
@@ -658,28 +652,20 @@ fun Emitter.emitStringTable(): Unit {
     }
     this.line(0, packed)
     this.line(0, ";")
+    val cgIntListTextText2: Str = cgIntListText(startStream)
     this.line(
         0,
-        fmtStr(
-            "static const | __sm_stringStarts[] = |;",
-            element,
-            cgIntListText(startStream)
-        )
+        `static const @element __sm_stringStarts[] = @cgIntListTextText2;`
     )
+    val cgIntListTextText3: Str = cgIntListText(lengthStream)
     this.line(
         0,
-        fmtStr(
-            "static const | __sm_stringLens[] = |;",
-            element,
-            cgIntListText(lengthStream)
-        )
+        `static const @element __sm_stringLens[] = @cgIntListTextText3;`
     )
+    val totalText: Str = total.toString()
     this.line(
         0,
-        fmtStr(
-            "static_assert(sizeof(__sm_stringPool) - 1 == |, \"the string pool and its length index disagree\");",
-            total.toString()
-        )
+        `static_assert(sizeof(__sm_stringPool) - 1 == @totalText, "the string pool and its length index disagree");`
     )
     this.line(0, "static StrView __sm_stringTable[__sm_stringCount];")
     this.line(0, "static struct __SmStringTableInitType {")

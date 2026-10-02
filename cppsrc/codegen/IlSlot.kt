@@ -460,7 +460,8 @@ fun Emitter.ilCallNode(il: *IlBody, frame: *IlFrame, op: *IlOp): AstXmlNode {
     if (method.kind == IlMethodKind.Method) {
         val recv: AstXmlNode = this.ilSlotNode(il, frame, this.ilOpOperand(op.operands, first), 0)
         if (xmlIsEmpty(recv)) {
-            this.ilWhy = fmtStr("the receiver of '|'", method.name)
+            val methodNameText: Str = method.name
+            this.ilWhy = `the receiver of '@methodNameText'`
             return xmlEmptyNode()
         }
         callee = this.ilMemberNode(recv, method.name)
@@ -468,7 +469,8 @@ fun Emitter.ilCallNode(il: *IlBody, frame: *IlFrame, op: *IlOp): AstXmlNode {
     } else if (method.staticBase >= 0) {
         val base: AstXmlNode = this.ilTypeBaseNode(il, method.staticBase, false)
         if (xmlIsEmpty(base)) {
-            this.ilWhy = fmtStr("the type '|' is reached through", method.name)
+            val methodNameText2: Str = method.name
+            this.ilWhy = `the type '@methodNameText2' is reached through`
             return xmlEmptyNode()
         }
         callee = this.ilMemberNode(base, method.name)
@@ -483,7 +485,8 @@ fun Emitter.ilCallNode(il: *IlBody, frame: *IlFrame, op: *IlOp): AstXmlNode {
     while (i < op.operands.size()) {
         val arg: AstXmlNode = this.ilOperandNode(il, frame, op.operands[i], 0)
         if (xmlIsEmpty(arg)) {
-            this.ilWhy = fmtStr("an argument of '|'", method.name)
+            val methodNameText3: Str = method.name
+            this.ilWhy = `an argument of '@methodNameText3'`
             return xmlEmptyNode()
         }
         xmlAddChild(call, this.renameRole(arg, AstNodeKind.Arg))

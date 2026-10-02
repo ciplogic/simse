@@ -133,8 +133,10 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
                 }
                 // A typed slot on its own line: the instruction that computes its value
                 // assigns it where that instruction stands.
+                val ilDeclTypeTextText: Str = this.ilDeclTypeText(il, slot)
+                val nameText: Str = il.vars[slot].name
                 this.ilLine(
-                    text, lvl, fmtStr("| |;", this.ilDeclTypeText(il, slot), il.vars[slot].name)
+                    text, lvl, `@ilDeclTypeTextText @nameText;`
                 )
                 i = i + 1
                 continue
@@ -144,8 +146,9 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
             val def: Int = this.ilIntAt(frame.defOp, slot, -1)
             if (def != i + 1) {
                 if (def < 0) {
+                    val nameText2: Str = il.vars[slot].name
                     return IlText(
-                        false, "", fmtStr("the slot '|' has neither a type nor an initializer", il.vars[slot].name)
+                        false, "", `the slot '@nameText2' has neither a type nor an initializer`
                     )
                 }
                 i = i + 1
@@ -158,7 +161,9 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
                 }
                 return IlText(false, "", "cannot express " + this.ilWhy)
             }
-            this.ilLine(text, lvl, fmtStr("auto | = |;", il.vars[slot].name, valueText.value()))
+            val nameText3: Str = il.vars[slot].name
+            val valueText2: Str = valueText.value()
+            this.ilLine(text, lvl, `auto @nameText3 = @valueText2;`)
             consumedByDeclare = def
             i = i + 1
             continue
@@ -183,7 +188,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
             }
             val target: Str = il.labels[label]
             if (kind == IlOpKind.Goto) {
-                this.ilLine(text, lvl, fmtStr("goto |;", target))
+                this.ilLine(text, lvl, `goto @target;`)
                 i = i + 1
                 continue
             }
@@ -192,9 +197,9 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
                 return IlText(false, "", "a jump with no condition")
             }
             val test: Str = this.expr(cond, 0, xmlEmptyNode())
-            var jumpLine: Str = fmtStr("if (!(|)) goto |;", test, target)
+            var jumpLine: Str = `if (!(@test)) goto @target;`
             if (kind == IlOpKind.IfTrue) {
-                jumpLine = fmtStr("if (|) goto |;", test, target)
+                jumpLine = `if (@test) goto @target;`
             }
             this.ilLine(text, lvl, jumpLine)
             i = i + 1
@@ -225,21 +230,27 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
             val valueText: Opt<Str> = this.ilValueText(il, frame, i, slotType)
             if (!valueText.hasValue()) {
                 if (this.ilWhy.isEmpty()) {
-                    return IlText(false, "", fmtStr("'|' cannot be expressed yet", ilOpKindText(kind)))
+                    val ilOpKindTextText: Str = ilOpKindText(kind)
+                    return IlText(false, "", `'@ilOpKindTextText' cannot be expressed yet`)
                 }
                 return IlText(false, "", "cannot express " + this.ilWhy)
             }
             if (declares) {
-                this.ilLine(text, lvl, fmtStr("auto | = |;", il.vars[dst].name, valueText.value()))
+                val nameText4: Str = il.vars[dst].name
+                val valueText3: Str = valueText.value()
+                this.ilLine(text, lvl, `auto @nameText4 = @valueText3;`)
                 i = i + 1
                 continue
             }
             if (xmlIsEmpty(slotType)) {
+                val nameText5: Str = il.vars[dst].name
                 return IlText(
-                    false, "", fmtStr("the slot '|' has no type to assign", il.vars[dst].name)
+                    false, "", `the slot '@nameText5' has no type to assign`
                 )
             }
-            this.ilLine(text, lvl, fmtStr("| = |;", il.vars[dst].name, valueText.value()))
+            val nameText6: Str = il.vars[dst].name
+            val valueText4: Str = valueText.value()
+            this.ilLine(text, lvl, `@nameText6 = @valueText4;`)
             i = i + 1
             continue
         }
@@ -257,8 +268,10 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
             )
             xmlAddChild(target, this.renameRole(ptr, AstNodeKind.Operand))
             val targetType: AstXmlNode = this.inferType(target)
+            val exprText: Str = this.expr(target, 0, xmlEmptyNode())
+            val exprText2: Str = this.expr(value, 0, targetType)
             this.ilLine(
-                text, lvl, fmtStr("| = |;", this.expr(target, 0, xmlEmptyNode()), this.expr(value, 0, targetType))
+                text, lvl, `@exprText = @exprText2;`
             )
             i = i + 1
             continue
@@ -291,8 +304,10 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
                 return IlText(false, "", "a write with no target")
             }
             val targetType: AstXmlNode = this.inferType(target)
+            val exprText3: Str = this.expr(target, 0, xmlEmptyNode())
+            val exprText4: Str = this.expr(value, 0, targetType)
             this.ilLine(
-                text, lvl, fmtStr("| = |;", this.expr(target, 0, xmlEmptyNode()), this.expr(value, 0, targetType))
+                text, lvl, `@exprText3 = @exprText4;`
             )
             i = i + 1
             continue
@@ -311,8 +326,10 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
                 target = this.ilMemberNode(base, staticText.substr(dot + 1, staticText.size() - dot - 1))
             }
             val targetType: AstXmlNode = this.inferType(target)
+            val exprText5: Str = this.expr(target, 0, xmlEmptyNode())
+            val exprText6: Str = this.expr(value, 0, targetType)
             this.ilLine(
-                text, lvl, fmtStr("| = |;", this.expr(target, 0, xmlEmptyNode()), this.expr(value, 0, targetType))
+                text, lvl, `@exprText5 = @exprText6;`
             )
             i = i + 1
             continue
@@ -339,7 +356,8 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
             if (xmlIsEmpty(value)) {
                 return IlText(false, "", "a return with no value")
             }
-            this.ilLine(text, lvl, fmtStr("return |;", this.expr(value, 0, this.curReturnType)))
+            val exprText7: Str = this.expr(value, 0, this.curReturnType)
+            this.ilLine(text, lvl, `return @exprText7;`)
             i = i + 1
             continue
         }
@@ -349,7 +367,8 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
         if (kind == IlOpKind.Unsupported) {
             return IlText(false, "", "an unsupported shape")
         }
-        return IlText(false, "", fmtStr("the instruction '|'", ilOpKindText(kind)))
+        val ilOpKindTextText2: Str = ilOpKindText(kind)
+        return IlText(false, "", `the instruction '@ilOpKindTextText2'`)
     }
     while (scopes.size() > 0) {
         scopes.removeAt(scopes.size() - 1)
@@ -430,7 +449,8 @@ fun Emitter.emitClosureMethodText(unit: *IlUnit, closure: *IlClosure, level: Int
 // language's `invoke`. An explicit struct is what lets a lambda live in the instruction
 // list.
 fun Emitter.emitClosureClass(unit: *IlUnit, closure: *IlClosure): IlText {
-    var text: Str = fmtStr("struct | {\n", closure.symbol)
+    val closureSymbolText: Str = closure.symbol
+    var text: Str = `struct @closureSymbolText {` + "\n"
     var i: Int = 0
     while (i < closure.captures.size()) {
         var fieldType: AstXmlNode = xmlEmptyNode()
@@ -438,23 +458,31 @@ fun Emitter.emitClosureClass(unit: *IlUnit, closure: *IlClosure): IlText {
             fieldType = closure.captureTypes[i]
         }
         if (xmlIsEmpty(fieldType)) {
-            return IlText(false, "", fmtStr("the capture '|' has no type", closure.captures[i]))
+            val capturesText: Str = closure.captures[i]
+            return IlText(false, "", `the capture '@capturesText' has no type`)
         }
-        text.appendStr(fmtStr("    | |;\n", this.type(fieldType), closure.captures[i]))
+        val fieldTypeText: Str = this.type(fieldType)
+        val captureText: Str = closure.captures[i]
+        text.appendStr(`    @fieldTypeText @captureText;` + "\n")
         i = i + 1
     }
     var params: List<Str> = List<Str>()
     for (*param in closure.params) {
         val paramType: AstXmlNode = ilTypeNode(unit.lambdas[closure.bodyIndex], param.typeIndex)
         if (xmlIsEmpty(paramType)) {
-            return IlText(false, "", fmtStr("the lambda parameter '|' has no type", param.name))
+            val paramNameText: Str = param.name
+            return IlText(false, "", `the lambda parameter '@paramNameText' has no type`)
         }
-        params.append(fmtStr("| |", this.type(paramType), param.name))
+        val typeText: Str = this.type(paramType)
+        val paramNameText2: Str = param.name
+        params.append(`@typeText @paramNameText2`)
     }
-    text.appendStr(fmtStr("    auto operator()(|) {\n", cgJoin(params, ", ")))
+    val paramsText: Str = cgJoin(params, ", ")
+    text.appendStr(`    auto operator()(@paramsText) {` + "\n")
     val preamble: Str = profPreamble(this.profIndexOf(closure.symbol + "::operator()"))
     if (preamble != "") {
-        text.appendStr(fmtStr("||\n", cgIndent(2), preamble))
+        val indentText: Str = cgIndent(2)
+        text.appendStr(`@indentText@preamble` + "\n")
     }
     val bodyText: IlText = this.emitClosureMethodText(unit, closure, 2)
     if (!bodyText.ok) {

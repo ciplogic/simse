@@ -68,7 +68,7 @@ fun Emitter.machineName(decl: *AstXmlNode): Str {
     if (outer == "") {
         return name
     }
-    return fmtStr("|_|", outer, name)
+    return `@(outer)_@name`
 }
 
 // The outer name of a type, ignoring handles and arguments: `*List<Int>` and `List<Str>`
@@ -240,7 +240,8 @@ fun Emitter.emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit
     val yieldClass: Str = this.qualify(fn.packageName, this.machineName(decl)) + "_yieldable"
     var yieldType: Str = yieldClass
     if (yielding && fn.templateParams.size() > 0) {
-        yieldType = fmtStr("|<|>", yieldClass, cgJoin(fn.templateParams, ", "))
+        val cgJoinText: Str = cgJoin(fn.templateParams, ", ")
+        yieldType = `@yieldClass<@cgJoinText>`
     }
     var ret: Str = "void"
     if (isMain) {
@@ -272,9 +273,10 @@ fun Emitter.emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit
         for (*param in params0) {
             val paramType: *AstXmlNode = xmlChildPtr(param, AstNodeKind.Type)
             if (xmlIsEmpty(paramType)) {
+                val xmlAttrText: Str = xmlAttr(param, AstNodeAttributeKind.Name)
                 this.fail(
                     param,
-                    fmtStr("unsupported: parameter '|' without a type", xmlAttr(param, AstNodeAttributeKind.Name))
+                    `unsupported: parameter '@xmlAttrText' without a type`
                 )
                 return
             }
@@ -284,7 +286,9 @@ fun Emitter.emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit
                 selfK = this.kindOf(paramType)
                 selfTypePtr = paramType
             } else {
-                params.append(fmtStr("| |", this.type(paramType), xmlAttr(param, AstNodeAttributeKind.Name)))
+                val typeText: Str = this.type(paramType)
+                val xmlAttrText2: Str = xmlAttr(param, AstNodeAttributeKind.Name)
+                params.append(`@typeText @xmlAttrText2`)
             }
             if (this.failed) {
                 return
@@ -300,7 +304,8 @@ fun Emitter.emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit
     if (!isMain) {
         fnName = this.qualify(fn.packageName, fn.name)
     }
-    var signature: Str = fmtStr("| |(|)", ret, fnName, cgJoin(params, ", "))
+    val cgJoinText2: Str = cgJoin(params, ", ")
+    var signature: Str = `@ret @fnName(@cgJoinText2)`
     if (mainArgs) {
         signature = "int main(int argc, char** argv)"
     }
@@ -337,10 +342,10 @@ fun Emitter.emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit
         // recorded as well as spelled: `append`'s C++ is a generated section.
         val appendSymbol: Str = "simse_list_append"
         this.referencedNames.insert(appendSymbol, true)
-        this.line(1, fmtStr("List<Str> | = List<Str>();", argName))
+        this.line(1, `List<Str> @argName = List<Str>();`)
         this.line(1, "int simse_argIndex = 1;")
         this.line(1, "while (simse_argIndex < argc) {")
-        this.line(2, fmtStr("|(|, Str(argv[simse_argIndex]));", appendSymbol, argName))
+        this.line(2, `@appendSymbol(@argName, Str(argv[simse_argIndex]));`)
         this.line(2, "simse_argIndex = simse_argIndex + 1;")
         this.line(1, "}")
     }
@@ -393,14 +398,15 @@ fun Emitter.emitUninit(fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts, prototype
     }
     val classPtr: *AstXmlNode = this.types.getPtr(className)
     if (classPtr == null) {
-        this.fail(decl, fmtStr("unInit: no declaration of '|'", className))
+        this.fail(decl, `unInit: no declaration of '@className'`)
         return
     }
     val classDecl: AstXmlNode = *classPtr
     val emittedName: Str = this.qualify(this.typePackage(className), className)
     var qualified: Str = emittedName
     if (fn.templateParams.size() > 0) {
-        qualified = fmtStr("|<|>", emittedName, cgJoin(fn.templateParams, ", "))
+        val cgJoinText3: Str = cgJoin(fn.templateParams, ", ")
+        qualified = `@emittedName<@cgJoinText3>`
     }
     this.setActiveTypeParams(fn.templateParams)
     val tmpl: Str = this.templateClause(fn.templateParams)
@@ -408,7 +414,7 @@ fun Emitter.emitUninit(fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts, prototype
     if (tmpl != "") {
         this.line(0, tmpl)
     }
-    this.line(0, fmtStr("|::~|() {", qualified, emittedName))
+    this.line(0, `@qualified::~@emittedName() {`)
 
     val savedClosure: Bool = this.inClosureMethod
     val savedSelfKind: NameKind = this.selfKind
@@ -437,7 +443,7 @@ fun Emitter.emitUninit(fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts, prototype
     // `self` is reserved: the frame has a slot of that name for `this`.
     val finalBody: List<AstXmlNode> = linFinishForEmission(lowered, this.cgReservedNames(decl, true, false))
     this.emitBodyAt(
-        this.ilDestructorFor(fn, decl, classDecl, fmtStr("|::~|()", qualified, emittedName), emittedName, facts, inferred),
+        this.ilDestructorFor(fn, decl, classDecl, `@qualified::~@emittedName()`, emittedName, facts, inferred),
         finalBody, fn.file, 1, false
     )
     this.inClosureMethod = savedClosure

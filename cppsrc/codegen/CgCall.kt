@@ -74,9 +74,10 @@ fun Emitter.exprInner(e: *AstXmlNode, expected: *AstXmlNode): Str {
         }
 
         AstNodeCategory.ExprGenericName -> {
+            val xmlAttrText: Str = xmlAttr(e, AstNodeAttributeKind.Name)
             this.fail(
                 e,
-                fmtStr("unsupported: generic-qualified expression '|<...>'", xmlAttr(e, AstNodeAttributeKind.Name))
+                `unsupported: generic-qualified expression '@xmlAttrText<...>'`
             )
             return "/*unsupported*/"
         }
@@ -93,11 +94,9 @@ fun Emitter.exprInner(e: *AstXmlNode, expected: *AstXmlNode): Str {
                 )
             ) {
                 val enumName: Str = xmlAttr(lhs, AstNodeAttributeKind.Name)
-                return fmtStr(
-                    "|::|",
-                    this.qualify(this.typePackage(enumName), enumName),
-                    xmlAttr(e, AstNodeAttributeKind.Name)
-                )
+                val qualifyText: Str = this.qualify(this.typePackage(enumName), enumName)
+                val xmlAttrText2: Str = xmlAttr(e, AstNodeAttributeKind.Name)
+                return `@qualifyText::@xmlAttrText2`
             }
             return this.memberAccess(lhs, xmlAttr(e, AstNodeAttributeKind.Name))
         }
@@ -119,13 +118,11 @@ fun Emitter.exprInner(e: *AstXmlNode, expected: *AstXmlNode): Str {
                 }
             }
             if (deref) {
-                return fmtStr(
-                    "(*|)[|]",
-                    baseExpr,
-                    this.expr(xmlChildPtr(e, AstNodeKind.Index), 0, xmlEmptyNode())
-                )
+                val exprText: Str = this.expr(xmlChildPtr(e, AstNodeKind.Index), 0, xmlEmptyNode())
+                return `(*@baseExpr)[@exprText]`
             }
-            return fmtStr("|[|]", baseExpr, this.expr(xmlChildPtr(e, AstNodeKind.Index), 0, xmlEmptyNode()))
+            val exprText2: Str = this.expr(xmlChildPtr(e, AstNodeKind.Index), 0, xmlEmptyNode())
+            return `@baseExpr[@exprText2]`
         }
 
         AstNodeCategory.ExprUnary -> {
@@ -151,12 +148,12 @@ fun Emitter.exprInner(e: *AstXmlNode, expected: *AstXmlNode): Str {
                 ) {
                     val hasValue: Str = this.expr(other, 12, xmlEmptyNode()) + ".hasValue()"
                     if (op == "==") {
-                        return fmtStr("(!|)", hasValue)
+                        return `(!@hasValue)`
                     }
                     if (op == "!=") {
-                        return fmtStr("(|)", hasValue)
+                        return `(@hasValue)`
                     }
-                    this.fail(e, fmtStr("unsupported: Opt-vs-null comparison '|'", op))
+                    this.fail(e, `unsupported: Opt-vs-null comparison '@op'`)
                     return "/*unsupported*/"
                 }
             }
@@ -169,7 +166,9 @@ fun Emitter.exprInner(e: *AstXmlNode, expected: *AstXmlNode): Str {
             if (xmlKind(rhs) == AstNodeCategory.ExprNullLit) {
                 rhsExpected = this.inferType(lhs)
             }
-            return fmtStr("| | |", this.expr(lhs, p, lhsExpected), op, this.expr(rhs, p + 1, rhsExpected))
+            val exprText3: Str = this.expr(lhs, p, lhsExpected)
+            val exprText4: Str = this.expr(rhs, p + 1, rhsExpected)
+            return `@exprText3 @op @exprText4`
         }
 
         AstNodeCategory.ExprLambda -> {
@@ -189,17 +188,12 @@ fun Emitter.exprInner(e: *AstXmlNode, expected: *AstXmlNode): Str {
                     ) == "List"
                     && xmlCount(operandNode, AstNodeKind.Arg) == 0
                 ) {
-                    return fmtStr(
-                        "makeList<|>()",
-                        this.typeArgsString("List", xmlChildren(callee, AstNodeKind.TypeArg))
-                    )
+                    val typeArgsStringText: Str = this.typeArgsString("List", xmlChildren(callee, AstNodeKind.TypeArg))
+                    return `makeList<@typeArgsStringText>()`
                 }
             }
             val operand: Str = this.expr(operandNode, 0, xmlEmptyNode())
-            return fmtStr(
-                "makeRef<std::remove_cvref_t<decltype((|))>>(|)",
-                operand, operand
-            )
+            return `makeRef<std::remove_cvref_t<decltype((@operand))>>(@operand)`
         }
 
         AstNodeCategory.ExprDeref -> {
@@ -213,7 +207,7 @@ fun Emitter.exprInner(e: *AstXmlNode, expected: *AstXmlNode): Str {
                 nameKind = this.operandKind(operandNode)
             }
             if (nameKind == NameKind.Shared) {
-                return fmtStr("(|).get()", operand)
+                return `(@operand).get()`
             }
             if (nameKind == NameKind.Value) {
                 // `*value` is the address of the value, no copy (specs/memory-model.md): a
@@ -228,7 +222,7 @@ fun Emitter.exprInner(e: *AstXmlNode, expected: *AstXmlNode): Str {
                 if (xmlKind(operandNode) == AstNodeCategory.ExprName) {
                     return "&" + operand
                 }
-                return fmtStr("simse_addressOf(|)", operand)
+                return `simse_addressOf(@operand)`
             }
             return "*" + operand
         }
@@ -244,9 +238,9 @@ fun Emitter.exprInner(e: *AstXmlNode, expected: *AstXmlNode): Str {
                 nameKind = this.operandKind(operandNode)
             }
             if (nameKind == NameKind.Shared || nameKind == NameKind.Pointer) {
-                return fmtStr("*(|)", operand)
+                return `*(@operand)`
             }
-            return fmtStr("(|)", operand)
+            return `(@operand)`
         }
     }
     return "/*unsupported*/"
@@ -280,19 +274,14 @@ fun Emitter.call(e: *AstXmlNode): Str {
             if (this.dataClassNames.has(name)) {
                 // A construction is the aggregate's brace form, with the type arguments
                 // spelled (`ns1_Box<Int>{1}`); CTAD covers the bare-name arm below.
-                return fmtStr(
-                    "|<|>{|}",
-                    this.qualify(this.typePackage(name), name),
-                    this.typeArgsString(name, xmlChildren(callee, AstNodeKind.TypeArg)),
-                    cgJoin(args, ", ")
-                )
+                val qualifyText2: Str = this.qualify(this.typePackage(name), name)
+                val typeArgsStringText2: Str = this.typeArgsString(name, xmlChildren(callee, AstNodeKind.TypeArg))
+                val cgJoinText: Str = cgJoin(args, ", ")
+                return `@qualifyText2<@typeArgsStringText2>{@cgJoinText}`
             }
-            return fmtStr(
-                "|<|>(|)",
-                calleeName,
-                this.typeArgsString(name, xmlChildren(callee, AstNodeKind.TypeArg)),
-                cgJoin(args, ", ")
-            )
+            val typeArgsStringText3: Str = this.typeArgsString(name, xmlChildren(callee, AstNodeKind.TypeArg))
+            val cgJoinText2: Str = cgJoin(args, ", ")
+            return `@calleeName<@typeArgsStringText3>(@cgJoinText2)`
         }
 
         AstNodeCategory.ExprName -> {
@@ -304,9 +293,9 @@ fun Emitter.call(e: *AstXmlNode): Str {
                 }
                 // C stdio, not `std::cout` (the `print` resource): one `fwrite` per value.
                 if (name == "println") {
-                    return fmtStr("simse_println((|), stdout)", arg)
+                    return `simse_println((@arg), stdout)`
                 }
-                return fmtStr("simse_print((|), stdout)", arg)
+                return `simse_print((@arg), stdout)`
             }
             val target: AstXmlNode = this.findFunction(name, argNodes.size())
             var args: List<Str> = List<Str>()
@@ -344,11 +333,12 @@ fun Emitter.call(e: *AstXmlNode): Str {
             if (this.dataClassNames.has(name)) {
                 // A construction without type arguments: the brace form, with C++20
                 // aggregate CTAD deducing them.
-                return fmtStr(
-                    "|{|}", this.qualify(this.typePackage(name), name), cgJoin(args, ", ")
-                )
+                val qualifyText3: Str = this.qualify(this.typePackage(name), name)
+                val cgJoinText3: Str = cgJoin(args, ", ")
+                return `@qualifyText3{@cgJoinText3}`
             }
-            return fmtStr("|(|)", calleeName, cgJoin(args, ", "))
+            val cgJoinText4: Str = cgJoin(args, ", ")
+            return `@calleeName(@cgJoinText4)`
         }
 
         AstNodeCategory.ExprMember -> {
@@ -379,18 +369,17 @@ fun Emitter.call(e: *AstXmlNode): Str {
                 if (!xmlIsEmpty(enumReceiver) && xmlKind(enumReceiver) == AstNodeCategory.TypeNamed
                     && this.enumNames.has(xmlAttr(enumReceiver, AstNodeAttributeKind.Name))
                 ) {
-                    return fmtStr("static_cast<Int>(|)", this.expr(receiverExpr, 12, xmlEmptyNode()))
+                    val exprText5: Str = this.expr(receiverExpr, 12, xmlEmptyNode())
+                    return `static_cast<Int>(@exprText5)`
                 }
             }
             if (calleeText == "fromInt" && xmlKind(receiverExpr) == AstNodeCategory.ExprName
                 && this.enumNames.has(xmlAttr(receiverExpr, AstNodeAttributeKind.Name))
             ) {
                 val enumName: Str = xmlAttr(receiverExpr, AstNodeAttributeKind.Name)
-                return fmtStr(
-                    "|(|)",
-                    this.qualify(this.typePackage(enumName), fmtStr("simse_|_fromInt", enumName)),
-                    cgJoin(args, ", ")
-                )
+                val qualifyText7: Str = this.qualify(this.typePackage(enumName), `simse_@(enumName)_fromInt`)
+                val cgJoinText9: Str = cgJoin(args, ", ")
+                return `@qualifyText7(@cgJoinText9)`
             }
 
             // The `Resources` API (`cppsrc/rtl/resources.kt`, specs/resources.md): a call
@@ -401,18 +390,16 @@ fun Emitter.call(e: *AstXmlNode): Str {
                     xmlAttr(receiverExpr, AstNodeAttributeKind.Name), calleeText
                 )
                 if (staticSymbol != "") {
-                    return fmtStr("|(|)", staticSymbol, cgJoin(args, ", "))
+                    val cgJoinText5: Str = cgJoin(args, ", ")
+                    return `@staticSymbol(@cgJoinText5)`
                 }
             }
             if (xmlKind(receiverExpr) == AstNodeCategory.ExprGenericName) {
                 val genericName: Str = xmlAttr(receiverExpr, AstNodeAttributeKind.Name)
-                return fmtStr(
-                    "|<|>::|(|)",
-                    this.qualify(this.typePackage(genericName), genericName),
-                    this.typeArgsString(genericName, xmlChildren(receiverExpr, AstNodeKind.TypeArg)),
-                    calleeText,
-                    cgJoin(args, ", ")
-                )
+                val qualifyText4: Str = this.qualify(this.typePackage(genericName), genericName)
+                val typeArgsStringText4: Str = this.typeArgsString(genericName, xmlChildren(receiverExpr, AstNodeKind.TypeArg))
+                val cgJoinText6: Str = cgJoin(args, ", ")
+                return `@qualifyText4<@typeArgsStringText4>::@calleeText(@cgJoinText6)`
             }
 
             val receiverType: AstXmlNode = this.inferType(receiverExpr)
@@ -422,7 +409,8 @@ fun Emitter.call(e: *AstXmlNode): Str {
                 if (fnIndex >= 0) {
                     val fn: *CgFn = *this.functions[fnIndex]
                     val all: Str = cgReceiverArgs(this.receiverArg(fn.receiver, receiverExpr), args)
-                    return fmtStr("|(|)", this.qualify(fn.packageName, fn.name), all)
+                    val qualifyText5: Str = this.qualify(fn.packageName, fn.name)
+                    return `@qualifyText5(@all)`
                 }
                 val extIndex: Int = this.findNativeExt(calleeText, receiverExpr, args.size())
                 if (extIndex >= 0) {
@@ -433,9 +421,12 @@ fun Emitter.call(e: *AstXmlNode): Str {
                     // synthesizes has no call in the AST for `collectNames` to see.
                     this.referencedNames.insert(ext.symbol, true)
                     val all: Str = cgReceiverArgs(this.nativeReceiverArg(ext.receiver, receiverExpr), args)
-                    return fmtStr("|(|)", ext.symbol, all)
+                    val extSymbolText: Str = ext.symbol
+                    return `@extSymbolText(@all)`
                 }
-                return fmtStr("|(|)", this.memberAccess(receiverExpr, calleeText), cgJoin(args, ", "))
+                val memberAccessText: Str = this.memberAccess(receiverExpr, calleeText)
+                val cgJoinText7: Str = cgJoin(args, ", ")
+                return `@memberAccessText(@cgJoinText7)`
             }
 
             if (this.receiverFnNames.has(calleeText)) {
@@ -448,17 +439,21 @@ fun Emitter.call(e: *AstXmlNode): Str {
                     receiver = this.expr(receiverExpr, 12, xmlEmptyNode())
                 }
                 val all: Str = cgReceiverArgs(receiver, args)
-                return fmtStr("|(|)", this.qualify(this.functionPackage(calleeText), calleeText), all)
+                val qualifyText6: Str = this.qualify(this.functionPackage(calleeText), calleeText)
+                return `@qualifyText6(@all)`
             }
             val extensions: *List<CgNativeExt> = this.nativeExtensions.getPtr(calleeText)
             if (extensions != null) {
                 if (extensions.size() > 0) {
                     this.referencedNames.insert(extensions[0].symbol, true)
                     val all: Str = cgReceiverArgs(this.expr(receiverExpr, 12, xmlEmptyNode()), args)
-                    return fmtStr("|(|)", extensions[0].symbol, all)
+                    val symbolText: Str = extensions[0].symbol
+                    return `@symbolText(@all)`
                 }
             }
-            return fmtStr("|(|)", this.memberAccess(receiverExpr, calleeText), cgJoin(args, ", "))
+            val memberAccessText2: Str = this.memberAccess(receiverExpr, calleeText)
+            val cgJoinText8: Str = cgJoin(args, ", ")
+            return `@memberAccessText2(@cgJoinText8)`
         }
     }
     this.fail(e, "unsupported: call target")

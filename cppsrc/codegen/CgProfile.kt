@@ -66,7 +66,8 @@ fun Emitter.prettySymbol(name: *Str): Str {
             d = d + 1
         }
         if (digits.size() > 0) {
-            return fmtStr("|.lambda|", this.packageName(name.substr(0, closureAt)), digits)
+            val packageNameText: Str = this.packageName(name.substr(0, closureAt))
+            return `@packageNameText.lambda@digits`
         }
     }
     return this.packageName(name)

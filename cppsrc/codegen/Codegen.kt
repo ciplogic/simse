@@ -101,7 +101,8 @@ fun cgReceiverArgs(receiver: Str, args: *List<Str>): Str {
     if (args.size() == 0) {
         return receiver
     }
-    return fmtStr("|, |", receiver, cgJoin(args, ", "))
+    val cgJoinText: Str = cgJoin(args, ", ")
+    return `@receiver, @cgJoinText`
 }
 
 fun cgJoinChar(parts: *List<Str>, separator: Char): Str {

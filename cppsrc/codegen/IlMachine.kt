@@ -85,33 +85,38 @@ fun Emitter.emitYieldable(
         }
     }
 
-    val factory: Str = fmtStr("| |", classType, this.qualify(fn.packageName, xmlAttr(decl, AstNodeAttributeKind.Name)))
+    val qualifyText: Str = this.qualify(fn.packageName, xmlAttr(decl, AstNodeAttributeKind.Name))
+    val factory: Str = `@classType @qualifyText`
     val tmpl: Str = this.templateClause(fn.templateParams)
     val factoryParams: List<Str> = this.parameterList(fn, decl)
     if (prototypeOnly) {
         if (tmpl != "") {
             this.line(0, tmpl)
         }
-        this.line(0, fmtStr("|(|);", factory, cgJoin(factoryParams, ", ")))
+        val cgJoinText: Str = cgJoin(factoryParams, ", ")
+        this.line(0, `@factory(@cgJoinText);`)
         return
     }
     this.sourceComment(decl)
     if (tmpl != "") {
         this.line(0, tmpl)
     }
-    this.line(0, fmtStr("|(|) {", factory, cgJoin(factoryParams, ", ")))
+    val cgJoinText2: Str = cgJoin(factoryParams, ", ")
+    this.line(0, `@factory(@cgJoinText2) {`)
     this.line(1, classType + " machine{};")
     val declared: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
     for (*param in declared) {
         val name: Str = xmlAttr(param, AstNodeAttributeKind.Name)
         // The field carries a mangled name when the parameter's own would collide with a
         // machine member (`linear::yldFieldName`), the same rule the body rewrite uses.
-        this.line(1, fmtStr("machine.| = |;", yldFieldName(name), name))
+        val yldFieldNameText: Str = yldFieldName(name)
+        this.line(1, `machine.@yldFieldNameText = @name;`)
     }
     if (!xmlIsEmpty(xmlChildPtr(decl, AstNodeKind.Receiver))) {
         // An extension function's receiver crosses a yield like any other value, so it is
         // a field the factory fills from its own `self` (`yldReceiverField`).
-        this.line(1, fmtStr("machine.| = self;", yldReceiverField()))
+        val yldReceiverFieldText: Str = yldReceiverField()
+        this.line(1, `machine.@yldReceiverFieldText = self;`)
     }
     this.line(1, "machine.branch = 0;")
     this.line(1, "return machine;")
@@ -132,13 +137,16 @@ fun Emitter.parameterList(fn: *CgFn, decl: *AstXmlNode): List<Str> {
     for (*param in declared) {
         val paramType: *AstXmlNode = xmlChildPtr(param, AstNodeKind.Type)
         if (xmlIsEmpty(paramType)) {
+            val xmlAttrText: Str = xmlAttr(param, AstNodeAttributeKind.Name)
             this.fail(
                 param,
-                fmtStr("unsupported: parameter '|' without a type", xmlAttr(param, AstNodeAttributeKind.Name))
+                `unsupported: parameter '@xmlAttrText' without a type`
             )
             return params
         }
-        params.append(fmtStr("| |", this.type(paramType), xmlAttr(param, AstNodeAttributeKind.Name)))
+        val typeText: Str = this.type(paramType)
+        val xmlAttrText2: Str = xmlAttr(param, AstNodeAttributeKind.Name)
+        params.append(`@typeText @xmlAttrText2`)
         if (this.failed) {
             return params
         }
@@ -183,13 +191,16 @@ fun Emitter.emitMachine(
     if (tmpl != "") {
         this.line(0, tmpl)
     }
-    this.line(0, fmtStr("struct | {", className))
+    this.line(0, `struct @className {`)
     for (*field in machine.fields) {
         if (xmlIsEmpty(field.typeNode)) {
-            this.fail(decl, fmtStr("yield: the field '|' has no type", field.name))
+            val fieldNameText: Str = field.name
+            this.fail(decl, `yield: the field '@fieldNameText' has no type`)
             return
         }
-        this.line(1, fmtStr("| |{};", this.type(field.typeNode), field.name))
+        val typeText2: Str = this.type(field.typeNode)
+        val fieldNameText2: Str = field.name
+        this.line(1, `@typeText2 @fieldNameText2{};`)
         if (this.failed) {
             return
         }
@@ -197,7 +208,9 @@ fun Emitter.emitMachine(
     for (*method in machine.methods) {
         var params: List<Str> = List<Str>()
         for (*param in method.params) {
-        params.append(fmtStr("| |", this.type(param.typeNode), param.name))
+        val typeText3: Str = this.type(param.typeNode)
+        val paramNameText: Str = param.name
+        params.append(`@typeText3 @paramNameText`)
         if (this.failed) {
             return
         }
@@ -207,7 +220,9 @@ fun Emitter.emitMachine(
         if (method.name == "advance") {
             result = "Bool"
         }
-        this.line(1, fmtStr("| |(|) {", result, method.name, cgJoin(params, ", ")))
+        val methodNameText: Str = method.name
+        val cgJoinText3: Str = cgJoin(params, ", ")
+        this.line(1, `@result @methodNameText(@cgJoinText3) {`)
         // A C++ member function: the machine's values are reached through `this`.
         val savedClosure: Bool = this.inClosureMethod
         val savedSelfKind: NameKind = this.selfKind
@@ -258,9 +273,10 @@ fun Emitter.ilMachineMethod(
     className: *Str, method: *YldMethod, selfDecl: *AstXmlNode, facts: *SemFacts,
     inferred: *Dictionary<Str, AstXmlNode>
 ): IlFunction {
+    val methodNameText2: Str = method.name
     var info: IlFunction = IlFunction(
         xmlEmptyNode(), xmlEmptyNode(),
-        fmtStr("|::|", className, method.name), Dictionary<Str, Str>(),
+        `@className::@methodNameText2`, Dictionary<Str, Str>(),
         selfDecl, List<Str>(), List<AstXmlNode>(), className,
         Dictionary<Str, Bool>(), Dictionary<Str, AstXmlNode>(),
         facts, List<Str>(), inferred
@@ -294,7 +310,7 @@ fun Emitter.ilTaskMethod(
 ): IlFunction {
     var info: IlFunction = IlFunction(
         xmlEmptyNode(), xmlEmptyNode(),
-        fmtStr("|::run", className), Dictionary<Str, Str>(),
+        `@className::run`, Dictionary<Str, Str>(),
         selfDecl, List<Str>(), List<AstXmlNode>(), className,
         Dictionary<Str, Bool>(), Dictionary<Str, AstXmlNode>(),
         facts, List<Str>(), task.inferred
@@ -345,8 +361,10 @@ fun Emitter.emitBodyAt(info: *IlFunction, body: *List<AstXmlNode>, file: *Str, l
     ilReuseUnit(unit, *this.pureCallees)
     val emitted: IlText = this.emitIlBodyText(unit, level)
     if (!emitted.ok) {
+        val infoSymbolText: Str = info.symbol
+        val emittedReasonText: Str = emitted.reason
         this.failFromInfo(
-            info, fmtStr("internal: the body of '|' is not expressible in the IL (|)", info.symbol, emitted.reason)
+            info, `internal: the body of '@infoSymbolText' is not expressible in the IL (@emittedReasonText)`
         )
         return
     }
@@ -356,8 +374,9 @@ fun Emitter.emitBodyAt(info: *IlFunction, body: *List<AstXmlNode>, file: *Str, l
     if (unit.closures.size() > 0) {
         classes = this.emitClosureClasses(unit)
         if (!classes.ok) {
+            val classesReasonText: Str = classes.reason
             this.failFromInfo(
-                info, fmtStr("internal: a closure class could not be written (|)", classes.reason)
+                info, `internal: a closure class could not be written (@classesReasonText)`
             )
             return
         }

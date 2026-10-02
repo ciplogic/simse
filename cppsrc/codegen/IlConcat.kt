@@ -71,10 +71,11 @@ fun Emitter.ilConcatPreamble(il: *IlBody, out: *Str, level: Int): Unit {
         var names: List<Str> = List<Str>()
         var c: Int = 0
         while (c < pool.counts) {
-            names.append(fmtStr("__sm_catC|", c.toString()))
+            names.append(`__sm_catC@c`)
             c = c + 1
         }
-        this.ilLine(out, level, fmtStr("Int |;", cgJoin(names, ", ")))
+        val cgJoinText: Str = cgJoin(names, ", ")
+        this.ilLine(out, level, `Int @cgJoinText;`)
     }
 }
 
@@ -145,8 +146,8 @@ fun Emitter.ilConcatStatements(il: *IlBody, frame: *IlFrame, op: *IlOp, level: I
             }
             if (text[0] == '\'') {
                 fixed = fixed + 1
-                writes.append(fmtStr("*| = (char) (|);", pName, text))
-                writes.append(fmtStr("| = | + 1;", pName, pName))
+                writes.append(`*@pName = (char) (@text);`)
+                writes.append(`@pName = @pName + 1;`)
             } else if (text[0] == '\"') {
                 val len: Int = cgLiteralByteLength(text)
                 fixed = fixed + len
@@ -156,15 +157,15 @@ fun Emitter.ilConcatStatements(il: *IlBody, frame: *IlFrame, op: *IlOp, level: I
                     // text becomes a character literal - the one shape that would not is a raw
                     // apostrophe, which a string may spell unescaped.
                     val inner: Str = text.substr(1, text.size() - 2)
-                    var ch: Str = fmtStr("'|'", inner)
+                    var ch: Str = `'@inner'`
                     if (inner == "'") {
                         ch = "'\\''"
                     }
-                    writes.append(fmtStr("*| = (char) (|);", pName, ch))
-                    writes.append(fmtStr("| = | + 1;", pName, pName))
+                    writes.append(`*@pName = (char) (@ch);`)
+                    writes.append(`@pName = @pName + 1;`)
                 } else if (len > 1) {
-                    writes.append(fmtStr("std::memcpy(|, |, |);", pName, text, len.toString()))
-                    writes.append(fmtStr("| = | + |;", pName, pName, len.toString()))
+                    writes.append(`std::memcpy(@pName, @text, @len);`)
+                    writes.append(`@pName = @pName + @len;`)
                 }
                 // An empty literal contributes nothing: no count, no write - just the
                 // `resize` that every chain needs, and the part is done.
@@ -180,27 +181,24 @@ fun Emitter.ilConcatStatements(il: *IlBody, frame: *IlFrame, op: *IlOp, level: I
                 return false
             }
             if (kind == "Str") {
-                sums.append(fmtStr("|.size()", value))
-                writes.append(fmtStr("std::memcpy(|, |.data(), |.size());", pName, value, value))
-                writes.append(fmtStr("| = | + |.size();", pName, pName, value))
+                sums.append(`@value.size()`)
+                writes.append(`std::memcpy(@pName, @value.data(), @value.size());`)
+                writes.append(`@pName = @pName + @value.size();`)
             } else if (kind == "Char") {
                 fixed = fixed + 1
-                writes.append(fmtStr("*| = (char) (|);", pName, value))
-                writes.append(fmtStr("| = | + 1;", pName, pName))
+                writes.append(`*@pName = (char) (@value);`)
+                writes.append(`@pName = @pName + 1;`)
             } else if (kind == "Bool") {
-                sums.append(fmtStr("simse_strBoolView(|).len", value))
-                writes.append(fmtStr(
-                    "std::memcpy(|, simse_strBoolView(|).ptr, simse_strBoolView(|).len);",
-                    pName, value, value
-                ))
-                writes.append(fmtStr("| = | + simse_strBoolView(|).len;", pName, pName, value))
+                sums.append(`simse_strBoolView(@value).len`)
+                writes.append(`std::memcpy(@pName, simse_strBoolView(@value).ptr, simse_strBoolView(@value).len);`)
+                writes.append(`@pName = @pName + simse_strBoolView(@value).len;`)
             } else if (ilConcatNumberOk(kind)) {
-                val count: Str = fmtStr("__sm_catC|", counts.toString())
+                val count: Str = `__sm_catC@counts`
                 counts = counts + 1
-                prelude.append(fmtStr("| = simse_strCountDigits(|);", count, value))
+                prelude.append(`@count = simse_strCountDigits(@value);`)
                 sums.append(count)
-                writes.append(fmtStr("simse_strAddInt(|, |, |);", pName, value, count))
-                writes.append(fmtStr("| = | + |;", pName, pName, count))
+                writes.append(`simse_strAddInt(@pName, @value, @count);`)
+                writes.append(`@pName = @pName + @count;`)
             } else {
                 this.ilWhy = "a part of a concatenation"
                 return false
@@ -222,7 +220,8 @@ fun Emitter.ilConcatStatements(il: *IlBody, frame: *IlFrame, op: *IlOp, level: I
         if (rest == "") {
             rest = sums[s]
         } else {
-            rest = fmtStr("| + |", rest, sums[s])
+            val sumsText: Str = sums[s]
+            rest = `@rest + @sumsText`
         }
         s = s + 1
     }
@@ -233,7 +232,7 @@ fun Emitter.ilConcatStatements(il: *IlBody, frame: *IlFrame, op: *IlOp, level: I
         if (declared == "") {
             declared = "Str"
         }
-        this.ilLine(out, level, fmtStr("| |;", declared, name))
+        this.ilLine(out, level, `@declared @name;`)
     }
     // The last write's advance is dead - nothing reads the cursor after it - so it goes.
     if (writes.size() > 0) {
@@ -247,15 +246,15 @@ fun Emitter.ilConcatStatements(il: *IlBody, frame: *IlFrame, op: *IlOp, level: I
     // `at` reads the destination's size *before* the one `resize` moves it, and the counts read
     // only the parts, so the order is: the counts, `at`, the resize, the pointer, the writes.
     if (inPlace) {
-        this.ilLine(out, level, fmtStr("| = |.size();", atName, name))
-        this.ilLine(out, level, fmtStr("|.resize(| + |);", name, atName, rest))
+        this.ilLine(out, level, `@atName = @name.size();`)
+        this.ilLine(out, level, `@name.resize(@atName + @rest);`)
         if (writes.size() > 0) {
-            this.ilLine(out, level, fmtStr("| = |.data() + |;", pName, name, atName))
+            this.ilLine(out, level, `@pName = @name.data() + @atName;`)
         }
     } else {
-        this.ilLine(out, level, fmtStr("|.resize(|);", name, rest))
+        this.ilLine(out, level, `@name.resize(@rest);`)
         if (writes.size() > 0) {
-            this.ilLine(out, level, fmtStr("| = |.data();", pName, name))
+            this.ilLine(out, level, `@pName = @name.data();`)
         }
     }
     p = 0
@@ -280,7 +279,7 @@ fun Emitter.ilConcatPartText(il: *IlBody, frame: *IlFrame, part: Int): Str {
     if (part >= 0) {
         var typeNode: AstXmlNode = ilVarType(il, part)
         if (this.isHandleType(*typeNode)) {
-            return fmtStr("(*|)", text)
+            return `(*@text)`
         }
     }
     return text
@@ -320,8 +319,10 @@ fun Emitter.ilValueText(il: *IlBody, frame: *IlFrame, opIndex: Int, expected: *A
             this.ilWhy = "a cast with no operand"
             return ()
         }
+        val typeText: Str = this.type(dstType)
+        val exprText: Str = this.expr(operand, 0, xmlEmptyNode())
         return (
-            fmtStr("reinterpret_cast<|>(|)", this.type(dstType), this.expr(operand, 0, xmlEmptyNode()))
+            `reinterpret_cast<@typeText>(@exprText)`
         )
     }
     if (op.kind == IlOpKind.Pack) {
@@ -342,7 +343,9 @@ fun Emitter.ilValueText(il: *IlBody, frame: *IlFrame, opIndex: Int, expected: *A
             values.append(this.expr(value, 0, xmlEmptyNode()))
             j = j + 1
         }
-        return (fmtStr("|{|}", this.type(slotType), cgJoin(values, ", ")))
+        val typeText2: Str = this.type(slotType)
+        val cgJoinText2: Str = cgJoin(values, ", ")
+        return (`@typeText2{@cgJoinText2}`)
     }
     if (op.kind == IlOpKind.CallCtor) {
         val typeAt: Int = this.ilOpOperand(op.operands, 1)
@@ -357,7 +360,9 @@ fun Emitter.ilValueText(il: *IlBody, frame: *IlFrame, opIndex: Int, expected: *A
                 captured.append(this.expr(arg, 0, xmlEmptyNode()))
                 j = j + 1
             }
-            return (fmtStr("|{|}", il.types[typeAt], cgJoin(captured, ", ")))
+            val typesText: Str = il.types[typeAt]
+            val cgJoinText3: Str = cgJoin(captured, ", ")
+            return (`@typesText{@cgJoinText3}`)
         }
     }
     val node: AstXmlNode = this.ilOpValueNode(il, frame, opIndex, 0)
@@ -393,5 +398,7 @@ fun Emitter.ilBoxedCtorText(il: *IlBody, frame: *IlFrame, op: *IlOp): Opt<Str> {
         args.append(this.expr(arg, 0, xmlEmptyNode()))
         i = i + 1
     }
-    return (fmtStr("makeRef<|>(|)", this.type(inner), cgJoin(args, ", ")))
+    val typeText3: Str = this.type(inner)
+    val cgJoinText4: Str = cgJoin(args, ", ")
+    return (`makeRef<@typeText3>(@cgJoinText4)`)
 }

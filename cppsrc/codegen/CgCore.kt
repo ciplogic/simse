@@ -20,13 +20,10 @@ fun Emitter.fail(posNode: *AstXmlNode, message: *Str): Unit {
         return
     }
     this.failed = true
-    this.error = fmtStr(
-        "|:|:|: |",
-        this.curFile,
-        xmlLine(posNode).toString(),
-        xmlColumn(posNode).toString(),
-        message
-    )
+    val curFileText: Str = this.curFile
+    val xmlLineText: Str = xmlLine(posNode).toString()
+    val xmlColumnText: Str = xmlColumn(posNode).toString()
+    this.error = `@curFileText:@xmlLineText:@xmlColumnText: @message`
 }
 
 fun Emitter.line(level: Int, text: Str): Unit {
@@ -158,7 +155,7 @@ fun Emitter.collectPackages(): Unit {
     var next: Int = 1
     i = 0
     while (i < names.size()) {
-        this.nsPrefixes.insert(names[i], fmtStr("ns|_", next.toString()))
+        this.nsPrefixes.insert(names[i], `ns@(next)_`)
         next = next + 1
         i = i + 1
     }
@@ -236,7 +233,7 @@ fun Emitter.collect(): Unit {
                 // (impl_specs/generators.md); a generator is handed data, never an API.
                 val generator: Str = xmlAttr(decl, AstNodeAttributeKind.Generator)
                 if (!sourceGenHas(generator)) {
-                    this.fail(decl, fmtStr("unknown source generator '|'", generator))
+                    this.fail(decl, `unknown source generator '@generator'`)
                     return
                 }
                 val declared: Res<Str> = sourceGenDeclare(decl, input.fileName, input.prelude)
@@ -374,7 +371,8 @@ fun Emitter.templateClause(params: *List<Str>): Str {
         parts.append("class " + params[i])
         i = i + 1
     }
-    return fmtStr("template <|>", cgJoin(parts, ", "))
+    val cgJoinText: Str = cgJoin(parts, ", ")
+    return `template <@cgJoinText>`
 }
 
 fun Emitter.typeArgsString(baseName: *Str, args: *List<AstXmlNode>): Str {
@@ -409,7 +407,7 @@ fun Emitter.typeName(name: *Str, posNode: *AstXmlNode): Str {
     if (semIsRtlTypeName(name)) {
         return name
     }
-    this.fail(posNode, fmtStr("unsupported type '|'", name))
+    this.fail(posNode, `unsupported type '@name'`)
     return "/*unsupported*/"
 }
 
@@ -425,14 +423,12 @@ fun Emitter.type(typeExpr: *AstXmlNode): Str {
         }
 
         AstNodeCategory.TypeGeneric -> {
-            return fmtStr(
-                "|<|>",
-                this.typeName(xmlAttr(typeExpr, AstNodeAttributeKind.Name), typeExpr),
-                this.typeArgsString(
+            val typeNameText: Str = this.typeName(xmlAttr(typeExpr, AstNodeAttributeKind.Name), typeExpr)
+            val typeArgsStringText: Str = this.typeArgsString(
                     xmlAttr(typeExpr, AstNodeAttributeKind.Name),
                     xmlChildren(typeExpr, AstNodeKind.TypeArg)
                 )
-            )
+            return `@typeNameText<@typeArgsStringText>`
         }
 
         AstNodeCategory.TypeReference -> {
@@ -444,7 +440,8 @@ fun Emitter.type(typeExpr: *AstXmlNode): Str {
             }
             // `&T` is the counted reference, spelled `Ref<T>` (ref.hpp): `std::shared_ptr`
             // or `SmRef`, chosen at build time, so emitted text does not depend on it.
-            return fmtStr("Ref<|>", this.type(inner))
+            val typeText: Str = this.type(inner)
+            return `Ref<@typeText>`
         }
 
         AstNodeCategory.TypePointer -> {
@@ -471,7 +468,8 @@ fun Emitter.type(typeExpr: *AstXmlNode): Str {
             for (*paramNode in paramNodes) {
                 params.append(this.type(paramNode))
             }
-            return fmtStr("Func<|(|)>", ret, cgJoin(params, ", "))
+            val cgJoinText2: Str = cgJoin(params, ", ")
+            return `Func<@ret(@cgJoinText2)>`
         }
 
         AstNodeCategory.TypeYield -> {
@@ -488,7 +486,8 @@ fun Emitter.type(typeExpr: *AstXmlNode): Str {
             if (args.size() == 0) {
                 return className
             }
-            return fmtStr("|<|>", className, this.typeArgsString(name, args))
+            val typeArgsStringText2: Str = this.typeArgsString(name, args)
+            return `@className<@typeArgsStringText2>`
         }
     }
     return "/*unsupported*/"

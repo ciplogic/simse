@@ -19,7 +19,8 @@ fun Emitter.expr(e: *AstXmlNode, minPrec: Int, expected: *AstXmlNode): Str {
     // The dst-driven half of the conversion table (`impl_specs/linear-il.md`): a `*T`/`&T`
     // spelled where a `T` is expected is read through, so a use need not spell the `*`.
     if (this.cgNeedsReadThrough(e, expected)) {
-        return fmtStr("*(|)", this.expr(e, 0, xmlEmptyNode()))
+        val exprText: Str = this.expr(e, 0, xmlEmptyNode())
+        return `*(@exprText)`
     }
     val p: Int = cgPrecedence(e)
     var s: Str = ""

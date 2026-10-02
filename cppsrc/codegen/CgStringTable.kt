@@ -135,7 +135,8 @@ data class StringTable(
         if (!this.indexAt.has(text)) {
             return text
         }
-        return fmtStr("__sm_stringTable[|]", this.indexOf(text).toString())
+        val indexOfText: Str = this.indexOf(text).toString()
+        return `__sm_stringTable[@indexOfText]`
     }
 
     // The pool index of `text`, or -1 when the walk never pooled it: the raw number, for a

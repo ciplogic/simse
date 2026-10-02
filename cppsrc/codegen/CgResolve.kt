@@ -38,13 +38,15 @@ fun Emitter.receiverArg(pattern: *AstXmlNode, recv: *AstXmlNode): Str {
         if (kind == AstNodeCategory.TypeReference
             || (kind == AstNodeCategory.TypeGeneric && xmlAttr(recvType, AstNodeAttributeKind.Name) == "PList")
         ) {
-            return fmtStr("(|).get()", this.expr(recv, 12, xmlEmptyNode()))
+            val exprText: Str = this.expr(recv, 12, xmlEmptyNode())
+            return `(@exprText).get()`
         }
         if (kind == AstNodeCategory.TypePointer) {
             return this.expr(recv, 12, xmlEmptyNode())
         }
     }
-    return fmtStr("simse_addressOf(|)", this.expr(recv, 12, xmlEmptyNode()))
+    val exprText2: Str = this.expr(recv, 12, xmlEmptyNode())
+    return `simse_addressOf(@exprText2)`
 }
 
 // The emitted receiver as the raw pointer it already is: `self`, or C++'s `this` inside a
@@ -66,7 +68,8 @@ fun Emitter.nativeReceiverArg(pattern: *AstXmlNode, recv: *AstXmlNode): Str {
     }
     val recvType: AstXmlNode = this.inferType(recv)
     if (this.isHandleType(recvType)) {
-        return fmtStr("(*|)", this.expr(recv, 12, xmlEmptyNode()))
+        val exprText3: Str = this.expr(recv, 12, xmlEmptyNode())
+        return `(*@exprText3)`
     }
     return this.expr(recv, 12, xmlEmptyNode())
 }
@@ -185,10 +188,8 @@ fun Emitter.nullTo(expected: *AstXmlNode): Str {
             AstNodeAttributeKind.Name
         ) == "Opt"
     ) {
-        return fmtStr(
-            "Opt<|>()",
-            this.typeArgsString("Opt", xmlChildren(expected, AstNodeKind.TypeArg))
-        )
+        val typeArgsStringText: Str = this.typeArgsString("Opt", xmlChildren(expected, AstNodeKind.TypeArg))
+        return `Opt<@typeArgsStringText>()`
     }
     return "nullptr"
 }
