@@ -57,7 +57,7 @@ Int64 simse_nowNanos();
 // previous value; strtable.hpp has the stream format.
 static const Int __sm_stringCount = 20;
 static const char __sm_stringPool[] =
-    "line one\nline \"two\" with \\ back\n\ttabbed" "line one\nline \"two\" with \\ back\n	tabbed" "He said \"hi\" and left \\ right" "first |\nsecond |" "@ who and @2" "a@ b and ! |" "line one" "hello |" "matched" "x|y\n@" "a|b=@" "world" "@who" "n=|" "|@|" "no" "|!" "||" "@" "" 
+    "line one\nline \"two\" with \\ back\n\ttabbed" "line one\nline \"two\" with \\ back\n	tabbed" "He said \"hi\" and left \\ right" "first @\nsecond @" "@ who and @2" "a@ b and @ |" "line one" "hello @" "matched" "x|y\n@" "a|b=@" "world" "@who" "n=@" "|@|" "@!" "@@" "no" "@" "" 
 ;
 static const Int16 __sm_stringStarts[] = {20,11,0,-39,0,10,13,4,0,4,1,0,2,2,2,0,2,1,2,0,1,1,2,0,1,1};
 static const Int16 __sm_stringLens[] = {20,10,-39,0,10,13,4,0,4,1,0,2,2,2,0,2,1,2,0,1,2,2,0,2,1};
@@ -368,7 +368,6 @@ inline void simse_println(const T& value, FILE* out) {
 }
 
 Bool startsWith(StrView* self, Str text);
-Str fmtStr(StrView fmt, List<Str>* items);
 Str fmtStrWith(Char separator, StrView templateText, List<Str>* items);
 Bool startsWith(Str* self, Str prefix);
 Bool isEmpty(Str* self);
@@ -403,66 +402,6 @@ Bool startsWith(StrView* self, Str text) {
     }
     L4:;
     return true;
-}
-Str fmtStr(StrView fmt, List<Str>* items) {
-    Str _sm_base2, out;
-    Bool _sm_expr1;
-    Int points, i, _sm_expr2, _sm_expr8, used;
-    Char _sm_expr4, ch;
-    _sm_expr1 = items == nullptr;
-    if (_sm_expr1) goto L1;
-    goto L2;
-    L1:;
-    return fmt;
-    L2:;
-    points = 0;
-    i = 0;
-    L3:;
-    _sm_expr2 = simse_strView_size(fmt);
-    _sm_expr1 = i < _sm_expr2;
-    if (!(_sm_expr1)) goto L4;
-    _sm_expr4 = simse_strView_charAt(fmt, i);
-    _sm_expr1 = _sm_expr4 == '|';
-    if (_sm_expr1) goto L5;
-    goto L6;
-    L5:;
-    points = points + 1;
-    L6:;
-    i = i + 1;
-    goto L3;
-    L4:;
-    _sm_expr2 = simse_lenOf((*items));
-    _sm_expr1 = points != _sm_expr2;
-    if (_sm_expr1) goto L7;
-    goto L8;
-    L7:;
-    return fmt;
-    L8:;
-    out = __sm_stringTable[19];
-    _sm_expr8 = simse_strView_size(fmt);
-    simse_str_reserve(out, _sm_expr8);
-    used = 0;
-    i = 0;
-    L9:;
-    _sm_expr2 = simse_strView_size(fmt);
-    _sm_expr1 = i < _sm_expr2;
-    if (!(_sm_expr1)) goto L10;
-    ch = simse_strView_charAt(fmt, i);
-    _sm_expr1 = ch == '|';
-    if (_sm_expr1) goto L11;
-    goto L12;
-    L11:;
-    _sm_base2 = (*items)[used];
-    simse_str_appendStr(out, _sm_base2);
-    used = used + 1;
-    goto L13;
-    L12:;
-    simse_str_append(out, ch);
-    L13:;
-    i = i + 1;
-    goto L9;
-    L10:;
-    return out;
 }
 Str fmtStrWith(Char separator, StrView templateText, List<Str>* items) {
     Str _sm_base2, out;
@@ -601,7 +540,7 @@ int main() {
     simse_println((__sm_stringTable[8]), stdout);
     goto L4;
     L2:;
-    simse_println((__sm_stringTable[15]), stdout);
+    simse_println((__sm_stringTable[17]), stdout);
     L4:;
     quoted = __sm_stringTable[2];
     _sm_expr9 = simse_lenOf(quoted);
@@ -652,15 +591,19 @@ int main() {
     simse_println((_sm_expr15), stdout);
     _sm_expr16.resize(11 + who.size());
     __sm_catP = _sm_expr16.data();
-    std::memcpy(__sm_catP, "a@ b and ", 9);
-    __sm_catP = __sm_catP + 9;
+    *__sm_catP = (char) ('a');
+    __sm_catP = __sm_catP + 1;
+    *__sm_catP = (char) ('@');
+    __sm_catP = __sm_catP + 1;
+    std::memcpy(__sm_catP, " b and ", 7);
+    __sm_catP = __sm_catP + 7;
     std::memcpy(__sm_catP, who.data(), who.size());
     __sm_catP = __sm_catP + who.size();
     std::memcpy(__sm_catP, " |", 2);
     simse_println((_sm_expr16), stdout);
     _sm_base17 = List<Str>{who, who};
     _sm_base18 = &_sm_base17;
-    multi = fmtStr(__sm_stringTable[3], _sm_base18);
+    multi = fmtStrWith('@', __sm_stringTable[3], _sm_base18);
     simse_println((multi), stdout);
     _sm_base19 = List<Str>{who};
     _sm_base20 = &_sm_base19;

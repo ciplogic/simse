@@ -535,10 +535,10 @@ borrow parameter and a read-through for a by-value one.
 **Literals**: `"..."` with the escape set (`\n \r \t \0 \\ \' \" \xNN`, octal),
 and a backtick string - raw and multi-line, no escape, the next backtick ends it
 (`specs/built-in-types.md`). A backtick string interpolates `@name`: the parser rewrites
-it to one `fmtStr` call (one `|` and one item per name, `fmtStrWith` when a piece of the
-text holds a `|`), so no stage downstream sees the construct (`cppsrc/parser/ParserInterp.kt`,
-`stress/raw-strings`). Both forms are one pool entry and read as a
-`StrView` at a site, exactly alike.
+it to one `fmtStrWith('@', ...)` call (the template keeps one `@` per name, a literal `@`
+is the item `"@"`, the names are the items), so no stage downstream sees the construct
+(`cppsrc/parser/ParserInterp.kt`, `stress/raw-strings`). Both forms are one pool entry and
+read as a `StrView` at a site, exactly alike.
 
 **Destructors**: a data class may declare one `fun unInit()`, emitted as its C++ destructor;
 such a type is held only by `*T`/`&T` (a value copy would run the destructor too - a
@@ -983,8 +983,8 @@ generated C++ of one translation unit, so nothing can be built against an older 
   overload for.
 - **A backtick string interpolates `@name`, and text that must keep its `@` fails at
   self-host time**: `NativeInvokeGen.kt`'s generated-C++ comment spelled
-  `@SmGen("native", ...)`, which started emitting `fmtStr("|", SmGen)` the moment the
-  feature landed (the refresh's own `cl.exe` step caught it). Write such text in a `"..."`
-  literal or split the raw string; `bun tools/_interp_scan.mjs cppsrc` lists every `@name`
-  inside a backtick string in a tree. The rule is `cppsrc/parser/ParserInterp.kt`; the scanner
-  never looks inside a string.
+  `@SmGen("native", ...)`, which started emitting a call against the undeclared name
+  `SmGen` the moment the feature landed (the refresh's own `cl.exe` step caught it). Write
+  such text in a `"..."` literal or split the raw string; `bun tools/_interp_scan.mjs cppsrc`
+  lists every `@name` inside a backtick string in a tree. The rule is
+  `cppsrc/parser/ParserInterp.kt`; the scanner never looks inside a string.

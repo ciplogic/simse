@@ -101,7 +101,7 @@ A `format` function, `Printable` for user types, float printing with a defined
 shortest-round-trip shape (via `std::cout` defaults), `Str` indexing/slicing by characters,
 and a UTF-8 story (byte-oriented; case mapping is ASCII - must be stated). Interpolation
 is `` `@name` `` in a backtick string (a name; an expression is bound to a local first),
-rewritten to `fmtStr` before sema.
+rewritten to `fmtStrWith('@', ...)` before sema.
 
 ### 4.4 Bytes and buffers
 

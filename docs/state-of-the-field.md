@@ -99,9 +99,9 @@ these):
    Simse), and a state machine is its own identity. A `Dictionary` and ranges
    (`for (i in (2 .. 5))`) are next; walking a `Dictionary` still means `keys()` and an
    index.
-2. **String formatting** - `fmtStr` and `@name` interpolation in a backtick string
-   cover the template case; a format protocol that prints your own types is not there,
-   so values of a `data class` are still built with `+` and `toString()`.
+2. **String formatting** - `fmtStr`/`fmtStrWith` and `@name` interpolation in a backtick
+   string cover the template case; a format protocol that prints your own types is not
+   there, so values of a `data class` are still built with `+` and `toString()`.
 3. **Closed unions + exhaustive `when`** - the replacement for dynamic dispatch;
    needed for JSON, protocol messages and any "one of these shapes" modelling.
 4. **Static interfaces (protocols)** - `Hashable`, `Comparable`, `Printable`

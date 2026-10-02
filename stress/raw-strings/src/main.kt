@@ -31,11 +31,12 @@ line "two" with \ back
     println(quoted.size())
     println(quoted)
 
-    // Interpolation: a name becomes one `|` and one item of an `fmtStr` call, an `@` before a
-    // non-identifier is the literal character, and a `|` in the text picks `fmtStrWith` with a
-    // separator no piece holds (`@` unless a piece has one). A multi-line template carries an
-    // escape, which the fusion refuses, so what runs there is the runtime `fmtStr` - which is
-    // why every item below is a `Str` (a numeric item needs the fusion today).
+    // Interpolation: the literal becomes one `fmtStrWith('@', ...)` call whose template keeps
+    // an `@` per name and whose items are the names - a literal `@` (one not followed by a
+    // name) is the one-byte item `"@"`, so the runtime one-item-per-`@` count always lines up.
+    // A multi-line template carries an escape, which the fusion refuses, so what runs there is
+    // the runtime `fmtStrWith` - which is why every item below is a `Str` (a numeric item
+    // needs the fusion today).
     val who: Str = "world"
     val n: Int = 42
     println(`hello @who`)
