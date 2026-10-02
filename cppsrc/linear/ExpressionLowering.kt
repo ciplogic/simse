@@ -6,6 +6,7 @@
 // `&&`/`||`, whose operands are conditional, belong to the control-flow lowering.
 
 package linear
+
 import compiler
 
 // A literal, a name, a qualified name (`Res<T>`), or a lambda (lowered as its own body).
@@ -46,6 +47,18 @@ fun exprIsPlace(e: *AstXmlNode): Bool {
 // Whether binding this expression to a temporary is *safe*: a borrow whose operand is not
 // an lvalue (`*f()`) must stay inline, since `simse_addressOf`'s pointer only lasts for the
 // call it is passed to (cppsrc/rtl/types.hpp).
+// `print(...)`/`println(...)` answer nothing: a call to one is a statement in shape, so a
+// value position leaves it where it is and the extractor makes it a void call
+// (`IlExtractor.isUnitValue`).
+fun exprIsVoidCall(e: *AstXmlNode): Bool {
+    if (xmlKind(e) != AstNodeCategory.ExprCall) {
+        return false
+    }
+    val callee: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Callee)
+    val name: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
+    return name == "println" || name == "print"
+}
+
 fun exprIsBindable(e: *AstXmlNode): Bool {
     if (xmlKind(e) != AstNodeCategory.ExprDeref) {
         return true
@@ -299,8 +312,9 @@ data class ExprFlattener(
             return built
         }
         // A *value* position is one operation deep: `self.x` becomes its own temporary,
-        // so only the alias positions above keep a path unbound.
-        if (exprIsSimple(built) || !exprIsBindable(built)) {
+        // so only the alias positions above keep a path unbound. A call that answers
+        // nothing is not a value either.
+        if (exprIsSimple(built) || !exprIsBindable(built) || exprIsVoidCall(built)) {
             return built
         }
         return this.bind(built, temps)

@@ -1,0 +1,1 @@
+a lambda cannot reach `this` yet: a lambda captures by value, and reference captures are deferred

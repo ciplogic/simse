@@ -24,6 +24,7 @@
 // (`stress/fold-const-params`).
 
 package parser
+
 import compiler
 
 import common
@@ -239,6 +240,7 @@ fun cpDecide(
     // Every call site passes exactly `Params.size()` arguments, or an index no longer identifies
     // a parameter (a trailing-argument pack, or an overload).
     val params: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
+    val typeParams: List<Str> = xmlTypeParamNames(decl)
     var k: Int = 0
     while (k < group.size()) {
         if (group[k].args.size() != params.size()) {
@@ -249,7 +251,9 @@ fun cpDecide(
     var i: Int = 0
     while (i < params.size()) {
         val declared: *AstXmlNode = xmlChildPtr(*params[i], AstNodeKind.Type)
-        if (!xmlIsEmpty(declared) && !cpIsPlaceType(declared)) {
+        if (!xmlIsEmpty(declared) && !cpIsPlaceType(declared)
+            && !cpMentionsTypeParam(declared, typeParams)
+        ) {
             val key: Opt<Str> = cpUniformLiteral(group, i)
             if (key.hasValue()) {
                 val local: AstXmlNode = cpBuildLocal(*params[i], *group[0].args[i])
@@ -259,6 +263,29 @@ fun cpDecide(
         i = i + 1
     }
     return ()
+}
+
+// Whether a type node names one of the given type parameters, at any depth. A parameter whose
+// type mentions one is how C++ deduction binds it: folding it away leaves the call with nothing
+// to deduce from (`twice((x: Int) -> x + 1, 5)` folded on `value: T` cannot say `T = Int`), so
+// such a parameter never folds. Conservative on purpose - another parameter may still name the
+// type parameter, but "unsure means no fold".
+fun cpMentionsTypeParam(node: *AstXmlNode, typeParams: *List<Str>): Bool {
+    if (typeParams.size() == 0) {
+        return false
+    }
+    val kind: AstNodeCategory = xmlKind(node)
+    if (kind == AstNodeCategory.TypeNamed || kind == AstNodeCategory.TypeGeneric) {
+        if (xmlIsTypeParam(xmlAttr(node, AstNodeAttributeKind.Name), typeParams)) {
+            return true
+        }
+    }
+    for (*child in node.Children) {
+        if (cpMentionsTypeParam(child, typeParams)) {
+            return true
+        }
+    }
+    return false
 }
 
 // The children with the `argIndex`-th `Arg` dropped: the parameter's own index identifies the

@@ -5,6 +5,7 @@
 // IlConcat.kt the concatenation expansion.
 
 package codegen
+
 import compiler
 
 import sema
@@ -156,6 +157,13 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
             }
             val valueText: Opt<Str> = this.ilValueText(il, frame, def, xmlEmptyNode())
             if (!valueText.hasValue()) {
+                if (def >= 0 && def < il.ops.size()
+                    && il.ops[def].kind == IlOpKind.Unsupported
+                ) {
+                    // The initializer is the extractor's own report: carry it out instead of
+                    // the generic shape message (the report names the construct).
+                    return IlText(false, "", this.ilUnsupportedReason(il, def))
+                }
                 if (this.ilWhy.isEmpty()) {
                     return IlText(false, "", "an initializer with no expression form")
                 }
@@ -365,7 +373,7 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
             return IlText(false, "", "a lambda body")
         }
         if (kind == IlOpKind.Unsupported) {
-            return IlText(false, "", "an unsupported shape")
+            return IlText(false, "", this.ilUnsupportedReason(il, i))
         }
         val ilOpKindTextText2: Str = ilOpKindText(kind)
         return IlText(false, "", `the instruction '@ilOpKindTextText2'`)
@@ -376,6 +384,17 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
         this.ilLine(text, lvl, "}")
     }
     return IlText(true, text, "")
+}
+
+// The report an `Unsupported` instruction carries: the extractor's own reason, as the
+// instruction's text operand.
+fun Emitter.ilUnsupportedReason(il: *IlBody, opIndex: Int): Str {
+    val op: *IlOp = *il.ops[opIndex]
+    val textIndex: Int = this.ilOpOperand(op.operands, 1)
+    if (textIndex >= 0 && textIndex < il.pool.size()) {
+        return "unsupported: " + il.pool[textIndex]
+    }
+    return "an unsupported shape"
 }
 
 // One body's text, with its frame analysed and the type pass's failure state kept out
@@ -395,29 +414,54 @@ fun Emitter.ilEmitOpsChecked(il: *IlBody, level: Int): IlText {
     return final
 }
 
+// The C++ type each of a unit's closure classes prints as: a generic owner's class is a
+// template, so the text carries its arguments.
+fun Emitter.ilClosureTypeTable(unit: *IlUnit): Dictionary<Str, Str> {
+    var table: Dictionary<Str, Str> = Dictionary<Str, Str>()
+    for (*closure in unit.closures) {
+        table.insert(closure.symbol, this.ilClosureTypeText(closure))
+    }
+    return table
+}
+
+fun Emitter.ilClosureTypeText(closure: *IlClosure): Str {
+    var text: Str = closure.symbol
+    if (closure.templateParams.size() > 0) {
+        val cgJoinText: Str = cgJoin(closure.templateParams, ", ")
+        text = `@text<@cgJoinText>`
+    }
+    return text
+}
+
+// A closure class's name spelled by a *type node* (a capture's or a result's, when a nested
+// lambda's class is the type); `closureTypes` is the table of the unit being emitted.
+fun Emitter.ilClosureTypeOfNode(typeNode: AstXmlNode): Str {
+    val found: Opt<Str> = this.ilClosureTypeOfNodeOpt(typeNode)
+    if (found.hasValue()) {
+        return found.value()
+    }
+    return this.type(typeNode)
+}
+
 // The C++ of one function body, from its IL. The frame's types are installed for the
 // spelling helpers, and nothing from a previous body is left behind.
 fun Emitter.emitIlBodyText(unit: *IlUnit, level: Int): IlText {
     val il: *IlBody = *unit.body
     val savedKinds: Dictionary<Str, NameKind> = this.nameKinds
     val savedTypes: Dictionary<Str, AstXmlNode> = this.localTypes
-    val savedClosures: Dictionary<Str, Bool> = this.closureSymbols
+    val savedClosures: Dictionary<Str, Str> = this.closureTypes
     this.ilSeedFrameTypes(il)
-    var closures: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
-    for (*closure in unit.closures) {
-        closures.insert(closure.symbol, true)
-    }
-    this.closureSymbols = closures
+    this.closureTypes = this.ilClosureTypeTable(unit)
     val result: IlText = this.ilEmitOpsChecked(il, level)
     this.nameKinds = savedKinds
     this.localTypes = savedTypes
-    this.closureSymbols = savedClosures
+    this.closureTypes = savedClosures
     return result
 }
 
-// A lambda's body as its class's method: `self` is C++'s `this`, and the frame is the
-// lambda's own.
-fun Emitter.emitClosureMethodText(unit: *IlUnit, closure: *IlClosure, level: Int): IlText {
+// A lambda's body as its class's free method: `self` is the closure *value* (the invoke
+// takes a copy), so a capture reads `self.field`, and the frame is the lambda's own.
+fun Emitter.emitClosureBodyText(unit: *IlUnit, closure: *IlClosure, level: Int): IlText {
     if (closure.bodyIndex < 0 || closure.bodyIndex >= unit.lambdas.size()) {
         return IlText(false, "", "a closure with no body")
     }
@@ -426,31 +470,135 @@ fun Emitter.emitClosureMethodText(unit: *IlUnit, closure: *IlClosure, level: Int
     val savedTypes: Dictionary<Str, AstXmlNode> = this.localTypes
     val savedSelfKind: NameKind = this.selfKind
     val savedSelfType: AstXmlNode = this.selfType
+    val savedReturn: AstXmlNode = this.curReturnType
     val savedClosure: Bool = this.inClosureMethod
     this.nameKinds.clear()
     this.localTypes.clear()
     this.ilSeedFrameTypes(body)
-    var classType: AstXmlNode =
-        AstXmlNode(AstNodeKind.Type, AstNodeCategory.TypeNamed, List<AstNodeAttribute>(), Array<AstXmlNode>())
-    classType.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, closure.symbol))
     this.selfKind = NameKind.Value
-    this.selfType = classType
-    this.inClosureMethod = true
+    this.selfType = ilNamedTypeNode(closure.symbol)
+    // A free function, not a member: `this` is not the instance (`SemaAnalyze` reports a
+    // `this` inside a lambda).
+    this.inClosureMethod = false
+    this.curReturnType = closure.returnType
     val result: IlText = this.ilEmitOpsChecked(body, level)
     this.nameKinds = savedKinds
     this.localTypes = savedTypes
     this.selfKind = savedSelfKind
     this.selfType = savedSelfType
+    this.curReturnType = savedReturn
     this.inClosureMethod = savedClosure
     return result
 }
 
-// The class a lambda is: one field per capture and one `operator()` method - the
-// language's `invoke`. An explicit struct is what lets a lambda live in the instruction
-// list.
-fun Emitter.emitClosureClass(unit: *IlUnit, closure: *IlClosure): IlText {
-    val closureSymbolText: Str = closure.symbol
-    var text: Str = `struct @closureSymbolText {` + "\n"
+// The free method's parameter list: the closure itself (by value) then the lambda's own
+// parameters. Empty when one has no type, with `ilWhy` stating which.
+fun Emitter.ilClosureParamList(closure: *IlClosure): List<Str> {
+    var params: List<Str> = List<Str>()
+    val selfTypeText: Str = this.ilClosureTypeText(closure)
+    params.append(`@selfTypeText self`)
+    var i: Int = 0
+    while (i < closure.params.size()) {
+        var paramType: AstXmlNode = xmlEmptyNode()
+        if (i < closure.paramTypes.size()) {
+            paramType = closure.paramTypes[i]
+        }
+        if (xmlIsEmpty(paramType)) {
+            val paramNameText: Str = closure.params[i].name
+            this.ilWhy =
+                `the lambda parameter '@paramNameText' has no type: annotate it (e.g. '@paramNameText: T') or use the lambda where a callable type expects one`
+            return List<Str>()
+        }
+        val paramNameText2: Str = closure.params[i].name
+        val paramTypeText: Str = this.ilClosureTypeOfNode(paramType)
+        params.append(`@paramTypeText @paramNameText2`)
+        if (this.failed) {
+            return List<Str>()
+        }
+        i = i + 1
+    }
+    return params
+}
+
+// The callable type a closure converts into, as C++ (`Func<Ret(Params)>`); empty when a
+// parameter's type is unknown, with the reason stated.
+fun Emitter.ilClosureFuncType(closure: *IlClosure): Opt<Str> {
+    var retText: Str = "void"
+    if (!xmlIsEmpty(closure.returnType)) {
+        retText = this.ilClosureTypeOfNode(closure.returnType)
+        if (this.failed) {
+            return ()
+        }
+    }
+    var params: List<Str> = List<Str>()
+    var i: Int = 0
+    while (i < closure.params.size()) {
+        var paramType: AstXmlNode = xmlEmptyNode()
+        if (i < closure.paramTypes.size()) {
+            paramType = closure.paramTypes[i]
+        }
+        if (xmlIsEmpty(paramType)) {
+            val paramNameText: Str = closure.params[i].name
+            this.ilWhy =
+                `the lambda parameter '@paramNameText' has no type: annotate it (e.g. '@paramNameText: T') or use the lambda where a callable type expects one`
+            return ()
+        }
+        params.append(this.ilClosureTypeOfNode(paramType))
+        if (this.failed) {
+            return ()
+        }
+        i = i + 1
+    }
+    val cgJoinText: Str = cgJoin(params, ", ")
+    return (`Func<@retText(@cgJoinText)>`)
+}
+
+// The lambda's result type as C++, `void` when it answers nothing.
+fun Emitter.ilClosureReturnTypeText(closure: *IlClosure): Str {
+    if (xmlIsEmpty(closure.returnType)) {
+        return "void"
+    }
+    return this.ilClosureTypeOfNode(closure.returnType)
+}
+
+// The data class a lambda is: one field per capture. The call itself is the free
+// `<symbol>_invoke` below; the one member bridges into the callable representation, so a
+// lambda still converts where a function-typed value is wanted.
+fun Emitter.emitClosureStruct(closure: *IlClosure): IlText {
+    val symbolText: Str = closure.symbol
+    val funcType: Opt<Str> = this.ilClosureFuncType(closure)
+    if (!funcType.hasValue()) {
+        return IlText(false, "", this.ilWhy)
+    }
+    val funcTypeText: Str = funcType.value()
+    val retText: Str = this.ilClosureReturnTypeText(closure)
+    if (this.failed) {
+        return IlText(false, "", this.error)
+    }
+    val params: List<Str> = this.ilClosureParamList(closure)
+    if (params.size() == 0) {
+        return IlText(false, "", this.ilWhy)
+    }
+    var invokeRef: Str = `&@(symbolText)_invoke`
+    if (closure.templateParams.size() > 0) {
+        val cgJoinText: Str = cgJoin(closure.templateParams, ", ")
+        invokeRef = `@invokeRef<@cgJoinText>`
+    }
+    val tmpl: Str = this.templateClause(closure.templateParams)
+    val cgJoinText2: Str = cgJoin(params, ", ")
+    var text = Str()
+    if (tmpl != "") {
+        text.appendStr(tmpl + "\n")
+    }
+    text.appendStr(`struct @symbolText;` + "\n")
+    if (tmpl != "") {
+        text.appendStr(tmpl + "\n")
+    }
+    text.appendStr(`@retText @(symbolText)_invoke(@cgJoinText2);` + "\n")
+    if (tmpl != "") {
+        text.appendStr(tmpl + "\n")
+    }
+    text.appendStr(`struct @symbolText {` + "\n")
     var i: Int = 0
     while (i < closure.captures.size()) {
         var fieldType: AstXmlNode = xmlEmptyNode()
@@ -461,36 +609,47 @@ fun Emitter.emitClosureClass(unit: *IlUnit, closure: *IlClosure): IlText {
             val capturesText: Str = closure.captures[i]
             return IlText(false, "", `the capture '@capturesText' has no type`)
         }
-        val fieldTypeText: Str = this.type(fieldType)
+        val fieldTypeText: Str = this.ilClosureTypeOfNode(fieldType)
         val captureText: Str = closure.captures[i]
         text.appendStr(`    @fieldTypeText @captureText;` + "\n")
         i = i + 1
     }
-    var params: List<Str> = List<Str>()
-    for (*param in closure.params) {
-        val paramType: AstXmlNode = ilTypeNode(unit.lambdas[closure.bodyIndex], param.typeIndex)
-        if (xmlIsEmpty(paramType)) {
-            val paramNameText: Str = param.name
-            return IlText(false, "", `the lambda parameter '@paramNameText' has no type`)
-        }
-        val typeText: Str = this.type(paramType)
-        val paramNameText2: Str = param.name
-        params.append(`@typeText @paramNameText2`)
-    }
-    val paramsText: Str = cgJoin(params, ", ")
-    text.appendStr(`    auto operator()(@paramsText) {` + "\n")
-    val preamble: Str = profPreamble(this.profIndexOf(closure.symbol + "::operator()"))
-    if (preamble != "") {
-        val indentText: Str = cgIndent(2)
-        text.appendStr(`@indentText@preamble` + "\n")
-    }
-    val bodyText: IlText = this.emitClosureMethodText(unit, closure, 2)
-    if (!bodyText.ok) {
-        return bodyText
-    }
-    text.appendStr(bodyText.text)
+    val indent2: Str = cgIndent(2)
+    text.appendStr(`    operator @funcTypeText() const {` + "\n")
+    text.appendStr(`@(indent2)return simse_closureFunc<@funcTypeText>(@invokeRef, *this);` + "\n")
     text.appendStr("    }\n")
     text.appendStr("};\n\n")
     return IlText(true, text, "")
 }
 
+// The free method a lambda is: `<symbol>_invoke(<symbol> self, params) { body }` - a plain
+// function whose first parameter is the closure, passed by copy.
+fun Emitter.emitClosureInvoke(unit: *IlUnit, closure: *IlClosure): IlText {
+    val symbolText: Str = closure.symbol
+    val params: List<Str> = this.ilClosureParamList(closure)
+    if (params.size() == 0) {
+        return IlText(false, "", this.ilWhy)
+    }
+    val retText: Str = this.ilClosureReturnTypeText(closure)
+    if (this.failed) {
+        return IlText(false, "", this.error)
+    }
+    val tmpl: Str = this.templateClause(closure.templateParams)
+    var text = Str()
+    if (tmpl != "") {
+        text.appendStr(tmpl + "\n")
+    }
+    val cgJoinText: Str = cgJoin(params, ", ")
+    text.appendStr(`@retText @(symbolText)_invoke(@cgJoinText) {` + "\n")
+    val preamble: Str = profPreamble(this.profIndexOf(symbolText + "_invoke"))
+    if (preamble != "") {
+        text.appendStr(cgIndent(1) + preamble + "\n")
+    }
+    val bodyText: IlText = this.emitClosureBodyText(unit, closure, 1)
+    if (!bodyText.ok) {
+        return bodyText
+    }
+    text.appendStr(bodyText.text)
+    text.appendStr("}\n\n")
+    return IlText(true, text, "")
+}

@@ -576,7 +576,22 @@ binds *tighter* than a comparison, Python's order, `specs/built-in-types.md`);
 compound assignment (`+= -= *= /= %= &= |= ^= <<= >>=`) and the step
 statements (`i++`, `i--`), which update a place in place - the place is located
 once and nothing is copied (`specs/memory-model.md`); `null`; memory operators `&T`/`*T`/`copy`;
-lambdas with by-value capture; generics reified via C++ templates; modules and
+lambdas - a data class with one field per capture and a free
+`<symbol>_invoke(self, params)` that takes the instance **by value**, emitted into the
+`closures` section at namespace scope (after the prototypes, before the bodies; no
+`auto` block anywhere), so a lambda value works like any other value
+(`stress/closure-classes`); a call through a statically known closure reaches `_invoke`,
+and the class's one member converts it into the callable `Func<...>`
+(`rtl/functional.hpp`'s `simse_closureFunc`); a lambda parameter type comes from its own
+annotation, the expected callable type, or a generic callee's type parameter the other
+arguments fix (`twice((x) -> x + 1, 5)`), its result from the callable type or the
+body, and a lambda parameter neither names is a positioned diagnostic; a `this` inside a
+lambda is a diagnostic (reference captures are deferred); a generic call's result is typed
+with the callee's type parameters bound from the receiver, explicit type arguments and the
+argument types, so it chains like any other value, and a call that leaves a type parameter
+nothing non-callable fixes is a diagnostic (`peek<Int>(...)` is the escape); generics
+reified via C++
+templates; modules and
 packages. `yield` and `for` are implemented end to end: the scanner reads `..`/`yield`, the
 parser handles `..T`, `yield e` and every `for` form (all desugared in the parser), a
 `for` over a non-machine is a diagnostic (`stress/diagnostic-for-not-a-machine`), the
@@ -989,3 +1004,43 @@ generated C++ of one translation unit, so nothing can be built against an older 
   such text in a `"..."` literal or split the raw string; `bun tools/_interp_scan.mjs cppsrc`
   lists every `@name` inside a backtick string in a tree. The rule is
   `cppsrc/parser/ParserInterp.kt`; the scanner never looks inside a string.
+- **A lambda is a data class plus a free invoke, and its `self` is a value**: the class
+  (capture fields plus the conversion into `Func<...>`) and `<symbol>_invoke` are emitted
+  into the `closures` section, all classes before all methods; the invoke's `self` is the
+  closure passed by copy, so a capture reads `self.field`. `ilSlotNode` translates the
+  receiver slot named `self` to C++'s `this` only when its type is a handle - a lambda's
+  value `self` stands as it is, which is what keeps an ordinary method's `(*self)`/
+  `self->field` spelling intact. A call of one of the lambda's *captured* function values
+  (`f(f(x))`) is materialized with a `GetField` first (`IlExtractor.call`), because the C++
+  member lookup that used to find the field is gone; and a call through a known closure
+  spells `_invoke(x, args)`, while a `Func<...>` value calls as it stands.
+- **MSVC will not deduce a template parameter through a dependent `std::function`
+  parameter** when the argument is a closure or a named function: `template <class T>
+  T f(Func<T(T)> g, T v)` called with a lambda fails as `no matching overloaded function`
+  (a `Func<...>` argument is fine). Two things handle that: a generic function whose
+  *declared* parameter type mentions its own type parameters gets a forwarding overload
+  (`emitDeducedCallableOverload`) that takes the callable as its own template parameter and
+  converts it in the call; and the const-params pass refuses to fold such a parameter
+  (`cpMentionsTypeParam`), because the dropped parameter is what bound the type parameter.
+  `simse_list_sort` is the hand-written version of the same trick (`F less` converted inside
+  its body). The compiler's own inference is *wider* than C++'s now: `sema/TypeInferCall`
+  binds a callee's type parameters from the receiver and the argument types
+  (`semBindCallArgs`), so a generic call's result is a real type (`twice(f, 5)` is an `Int`,
+  and `twice(...).toString()` picks the `Int` method), and `LinearFormCall.call` substitutes
+  them into a callable parameter so a lambda's *omitted* parameter types can come from the
+  argument that fixes `T` (`twice((x) -> x + 1, 5)`). A `Str` literal argument against a bare
+  type parameter is materialised with `Str(...)` (`CgCall.call`), because the pool entry is a
+  `StrView` and C++ would deduce that instead. What still does not work: `T` that *only* the
+  callable names (`fun <T> peek(f: (T) -> T)` with a lambda) - C++ deduces nothing through a
+  callable parameter - so every call that leaves such a `T` unfixed is a positioned
+  `cannot infer type parameter` report (the lowering's deducibility check,
+  `ilCppDeducible`), and the fix is `peek<Int>(...)` (`stress/diagnostic-lambda-infer`).
+- **A resource's comments do not reach the program**: `resGenAddSection` runs the text a
+  `_res.md` section supplies through `resCppStripComments` (`ResComments.kt`) as it places
+  it, because the file is written for a reader and every reached section would otherwise
+  carry its prose into the emitted C++. A line comment alone on its line takes the line with
+  it; after code it takes only itself; a `//` inside a string, character or raw-string
+  literal is data and is preserved (`stress/res-comments` pins all three). The emitter's
+  *own* comments (the banner, the string-table note, the `// <file>` markers) are not
+  resource text and stay. The change moves emitted bytes, so every golden and the published
+  bootstrap refresh with it.

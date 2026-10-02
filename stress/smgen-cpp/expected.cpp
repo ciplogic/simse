@@ -5,33 +5,6 @@
 // stress/smgen-cpp/src/main.kt
 Str simse_str_replace(const Str& text, const Str& from, const Str& to);
 
-// The string-literal pool's decoder (impl_specs/rtl-abi.md, "String literals: one
-// table"): the emitter writes one pool of bytes plus two run-length encoded index
-// series - where each entry starts and how long it is - and this expands them into the
-// `StrView` per entry, once, before `main` runs. It was cppsrc/rtl/strtable.hpp.
-//
-// Six things are deliberate in the shape the emitter writes:
-//
-//  - **Both series are stored as "what to subtract from the previous value"**, with an
-//    implicit 0 before the first entry: `value[i] = value[i-1] - series[i]`. The
-//    literals are ordered longest first, so a length series descends slowly and a
-//    *difference* of it is a small number - mostly 0 between the many literals of equal
-//    length (85% of them on the compiler's own table).
-//  - **Each series is run-length encoded**: its length first, then alternating blocks of
-//    non-repeating values (a count, then that many values) and of runs (a count, then
-//    that many `times, value` pairs), until the length is filled. The element type is a
-//    template parameter because the emitter picks the width: `Int16` when every number
-//    fits, `Int` otherwise.
-//  - The pool is the literal texts themselves, adjacent, so the C++ compiler decodes
-//    every escape and the emitter's decoding only has to agree about *how many bytes* an
-//    escape costs. The emitted `static_assert` on the pool's `sizeof` is the check.
-//  - The series are expanded into *stack* arrays in the initializer and dropped when it
-//    returns: no heap, and the encoded statics are all the program carries.
-//  - An entry is a 12-byte `StrView`, not the 32-byte owning `Str` the table used to
-//    hold, and start-up allocates nothing for the literals.
-//  - The pool is `const char` (a string literal, read-only) while `StrView` holds the
-//    language's mutable `Char*`; the constness is cast away here, in the one place the
-//    pool is touched, and nothing writes through it.
 
 template <class T>
 void simse_strTableExpand(const T* stream, Int* out, Int count);
@@ -39,18 +12,6 @@ void simse_strTableDecode(const char* pool, const Int* starts, const Int* length
 
 #include <chrono>
 
-// Time natives (the Simse surface is the prelude file cppsrc/rtl/rtl.kt). All three are
-// monotonic clocks - never going backwards - since an arbitrary fixed point:
-// `simse_nowMillis` for logging, and the finer `simse_nowMicros` / `simse_nowNanos` for
-// the instrumented profiler (`cppsrc/profiling`, and the emitted `profileApp.measure(...)`
-// of a `--profile` build; `--profile-nanos` picks the nanosecond clock). It was
-// cppsrc/rtl/timeops.hpp, and its definitions were the last
-// thing left in cppsrc/rtl/native.cpp - they are this section's now, so the clock is
-// emitted into the program like any other prelude body and there is nothing to link.
-// `emit: always`
-// because the profiler's runtime is emitted by the *compiler* rather than named by
-// the program: a `--profile` build needs these declarations whether or not the program
-// ever asks for the time.
 Int64 simse_nowMillis();
 Int64 simse_nowMicros();
 Int64 simse_nowNanos();
@@ -83,51 +44,23 @@ static struct __SmStringTableInitType {
 #include <cstdlib>
 #include <system_error>
 
-// The string, character, numeric-conversion and min/max operations behind the prelude
-// (impl_specs/native-interop.md, specs/built-in-types.md), moved out of
-// cppsrc/rtl/strops.hpp.
-//
-// `Str` is the inline `SmString` (smstring.hpp): every size, length and index here is the
-// language's `Int` (`int32_t`), including `Str::npos`, which is `-1`. Index/range errors
-// are unchecked where the underlying operation is unchecked; the `Opt`-returning
-// conversions never throw.
-//
-// What is only a byte loop is Simse now (cppsrc/rtl/rtl.kt: `trim`, `substr`,
-// `startsWith`/`endsWith`, case folding and the `Char` predicates); what stays is what
-// reaches `SmString` internals (`charAt`, `find`, `lastIndexOf`, `split`, `replace`) or the
-// standard library (`std::from_chars`, `std::to_string`).
 
-// `Str.charAt(index)`: the byte at `index` (unchecked; no bounds test).
 Char simse_str_charAt(const Str& self, Int index);
 
-// `Str.split(separator)` splits on every occurrence. An empty separator returns the whole
-// string as a single element. Two overloads: a separator string and a separator byte.
 List<Str> simse_str_split(const Str& self, const Str& separator);
 List<Str> simse_str_split(const Str& self, Char separator);
 
-// `Str.find(sub)` returns the first index of `sub`, or -1 when absent (the language's
-// spelling of C++ `npos`).
 Int simse_str_find(const Str& self, const Str& sub);
 
-// `Str.lastIndexOf(sub)` returns the last index of `sub`, or -1 when absent.
 Int simse_str_lastIndexOf(const Str& self, const Str& sub);
 
-// `Str.replace(from, to)` replaces every occurrence of `from` with `to`.
 Str simse_str_replace(const Str& self, const Str& from, const Str& to);
 
-// `Str.toInt()`/`Str.toFloat()` parse the whole string; failure (or a non-empty trailing
-// remainder) yields `Opt.none()`. No exceptions. `toInt` uses `std::from_chars` (integer
-// `from_chars` is in libstdc++ since GCC 11); `toFloat` uses `std::strtod`, because libstdc++
-// did not ship floating-point `from_chars` until GCC 14 and the language must build on
-// GCC 12 (docs/building-on-linux.md).
 Opt<Int> simse_str_toInt(const Str& self);
 Opt<Float64> simse_str_toFloat(const Str& self);
 
-// `Str.initByValue(value)`: the `initByValue` convention for `Str` (cppsrc/rtl/rtl.kt),
-// setting the receiver in place. The empty form is a Simse method (an empty body).
 void simse_str_initByValue(Str& self, const Str& value);
 
-// Numeric conversions. `Char` is an 8-bit integer, so it stringifies as a number.
 template <class T>
 Str simse_num_toString(const T& self);
 Str simse_char_toString(Char self);
@@ -135,11 +68,6 @@ Str simse_bool_toString(Bool self);
 
 #include <cstdio>
 
-// `print` / `println` in C, not C++ streams. The language's formatting is its own (`fmtStr`), and
-// a value is one `fwrite`/`fputs`, so a program that prints never pulls in <iostream> - and with
-// it the standard streams' static construction and the locale facets that drag in. One overload
-// per built-in `println` accepts, so a call spells the same whatever it prints; `bool` prints
-// `true`/`false`, which is what the `std::boolalpha` the emitter used to write gave.
 inline void simse_write(const Str& value, FILE* out) {
     std::fwrite(value.data(), 1, (std::size_t) value.size(), out);
 }
@@ -230,7 +158,6 @@ inline List<Str> simse_str_split(const Str& self, const Str& separator) {
     return parts;
 }
 
-// How many bytes of `self` are `ch`: what the byte-separator split reserves up front.
 inline Int simse_count_char_in_str(const Str* self, char ch) {
     Int count = 0;
     const char* data = self->data();
@@ -323,11 +250,10 @@ inline Str simse_bool_toString(Bool self) {
     return self ? "true" : "false";
 }
 
-// Expands one run-length encoded series into `out`, which holds `count` values.
 template <class T>
 inline void simse_strTableExpand(const T* stream, Int* out, Int count) {
     Int at = 0;
-    Int cursor = 1; // stream[0] is the series' own length
+    Int cursor = 1; 
     while (at < count) {
         const Int literals = (Int) stream[cursor++];
         for (Int i = 0; i < literals && at < count; i++) out[at++] = (Int) stream[cursor++];
@@ -341,12 +267,10 @@ inline void simse_strTableExpand(const T* stream, Int* out, Int count) {
     }
 }
 
-// Fills `table` from the pool and the two expanded series: an offset increment and a
-// byte count per entry, both rebuilt by subtracting the stored value from the one before.
 inline void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, StrView* table, Int count) {
     Char* bytes = const_cast<Char*>(reinterpret_cast<const Char*>(pool));
-    Int delta = 0;  // this entry's offset increment, rebuilt from the start series
-    Int length = 0; // this entry's byte count, rebuilt from the length series
+    Int delta = 0;  
+    Int length = 0; 
     Int at = 0;
     for (Int i = 0; i < count; i++) {
         delta -= starts[i];
@@ -356,9 +280,6 @@ inline void simse_strTableDecode(const char* pool, const Int* starts, const Int*
     }
 }
 
-// The three monotonic clocks. `steady_clock` is the one clock the standard library
-// promises cannot go backwards, which is what makes a duration between two readings
-// meaningful (`impl_specs/profiling.md`).
 Int64 simse_nowMillis() {
     const auto now = std::chrono::steady_clock::now().time_since_epoch();
     return (Int64) std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
@@ -373,6 +294,3 @@ Int64 simse_nowNanos() {
     const auto now = std::chrono::steady_clock::now().time_since_epoch();
     return (Int64) std::chrono::duration_cast<std::chrono::nanoseconds>(now).count();
 }
-
-// The `simse_write` overloads and the two printers are all inline in the forward block: nothing
-// here.

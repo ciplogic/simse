@@ -4,6 +4,7 @@
 // needs declared at the top of a body. `Emitter` extension functions.
 
 package codegen
+
 import compiler
 
 import sema
@@ -322,8 +323,8 @@ fun Emitter.ilValueText(il: *IlBody, frame: *IlFrame, opIndex: Int, expected: *A
         val typeText: Str = this.type(dstType)
         val exprText: Str = this.expr(operand, 0, xmlEmptyNode())
         return (
-            `reinterpret_cast<@typeText>(@exprText)`
-        )
+                `reinterpret_cast<@typeText>(@exprText)`
+                )
     }
     if (op.kind == IlOpKind.Pack) {
         // `List<T>{v1, v2, ...}`: `List` is `SmallVector<T, 4>`, so a short list stays
@@ -349,20 +350,23 @@ fun Emitter.ilValueText(il: *IlBody, frame: *IlFrame, opIndex: Int, expected: *A
     }
     if (op.kind == IlOpKind.CallCtor) {
         val typeAt: Int = this.ilOpOperand(op.operands, 1)
-        if (typeAt >= 0 && typeAt < il.types.size() && this.closureSymbols.has(il.types[typeAt])) {
-            var captured: List<Str> = List<Str>()
-            var j: Int = 2
-            while (j < op.operands.size()) {
-                val arg: AstXmlNode = this.ilOperandNode(il, frame, op.operands[j], 0)
-                if (xmlIsEmpty(arg)) {
-                    return ()
+        if (typeAt >= 0 && typeAt < il.types.size()) {
+            val found: *Str = this.closureTypes.getPtr(il.types[typeAt])
+            if (found != null) {
+                val closureType: Str = *found
+                var captured: List<Str> = List<Str>()
+                var j: Int = 2
+                while (j < op.operands.size()) {
+                    val arg: AstXmlNode = this.ilOperandNode(il, frame, op.operands[j], 0)
+                    if (xmlIsEmpty(arg)) {
+                        return ()
+                    }
+                    captured.append(this.expr(arg, 0, xmlEmptyNode()))
+                    j = j + 1
                 }
-                captured.append(this.expr(arg, 0, xmlEmptyNode()))
-                j = j + 1
+                val cgJoinText3: Str = cgJoin(captured, ", ")
+                return (`@closureType{@cgJoinText3}`)
             }
-            val typesText: Str = il.types[typeAt]
-            val cgJoinText3: Str = cgJoin(captured, ", ")
-            return (`@typesText{@cgJoinText3}`)
         }
     }
     val node: AstXmlNode = this.ilOpValueNode(il, frame, opIndex, 0)

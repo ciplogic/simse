@@ -4,6 +4,7 @@
 // Extension methods on `IlExtractor` (LinearForm.kt); LinearFormFrame.kt has the frame.
 
 package linear
+
 import compiler
 
 import common
@@ -82,6 +83,12 @@ fun IlExtractor.statement(stmt: *AstXmlNode): Unit {
             val value: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Value)
             if (xmlIsEmpty(value)) {
                 this.emit(IlOpKind.ReturnVoid, List<Int>())
+            } else if (this.isUnitValue(value)) {
+                // `return println(x)` (or any call that answers nothing): the call is the
+                // statement and the return answers nothing - a `void` slot is not a value
+                // the emitter can declare.
+                this.call(-1, value)
+                this.emit(IlOpKind.ReturnVoid, List<Int>())
             } else {
                 this.emit(IlOpKind.Return, ilOps1(this.operandOf(value)))
             }
@@ -119,6 +126,20 @@ fun IlExtractor.statement(stmt: *AstXmlNode): Unit {
         }
     }
     this.unsupported("statement")
+}
+
+// Whether an expression answers nothing (`Unit`): a declared `Unit` result, or one of the
+// two builtins the emitter lowers with no value at all (`print`/`println`). `flat` keeps a
+// void call in place (`exprIsVoidCall`), so the extractor sees it here.
+fun IlExtractor.isUnitValue(expr: *AstXmlNode): Bool {
+    if (exprIsVoidCall(expr)) {
+        return true
+    }
+    val proven: AstXmlNode = this.valueType(expr)
+    if (xmlIsEmpty(proven)) {
+        return false
+    }
+    return ilTypeText(proven) == "Unit"
 }
 
 fun IlExtractor.assign(stmt: *AstXmlNode, target: *AstXmlNode, value: *AstXmlNode): Unit {
@@ -376,7 +397,7 @@ fun IlExtractor.operandOf(expr: *AstXmlNode): Int {
         }
 
         AstNodeCategory.ExprLambda -> {
-            return this.lambdaOf(expr, -1)
+            return this.lambdaOf(expr, -1, xmlEmptyNode(), xmlEmptyNode())
         }
 
         AstNodeCategory.ExprGenericName -> {
@@ -520,8 +541,9 @@ fun IlExtractor.into(slot: Int, e: *AstXmlNode): Unit {
         }
 
         AstNodeCategory.ExprLambda -> {
-            // A lambda whose value is dropped still constructs its class.
-            this.lambdaOf(e, slot)
+            // A lambda whose value is dropped still constructs its class; a destination with a
+            // type (`val f: F = lambda`) states the callable type it converts into.
+            this.lambdaOf(e, slot, ilVarTypeNode(this.out, slot), xmlEmptyNode())
             return
         }
 
@@ -689,7 +711,7 @@ fun IlExtractor.nameOf(e: *AstXmlNode): Int {
     if (xmlIsEmpty(typeNode)) {
         val staticType: *Str = this.fn.statics.getPtr(name)
         if (staticType != null) {
-            typeText = *staticType
+            typeText = * staticType
         }
     } else {
         typeText = ilTypeText(typeNode)
@@ -698,5 +720,3 @@ fun IlExtractor.nameOf(e: *AstXmlNode): Int {
     this.emit(IlOpKind.GetStatic, ilOps2(fresh, this.poolIndex(name)))
     return fresh
 }
-
-

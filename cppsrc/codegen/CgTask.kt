@@ -4,6 +4,7 @@
 // methods on `Emitter` (Codegen.kt).
 
 package codegen
+
 import compiler
 
 import sema
@@ -32,11 +33,11 @@ fun Emitter.collectAsync(): Unit {
         }
         var ret: AstXmlNode = xmlEmptyNode()
         for (*decl in decls) {
-            if (xmlAttr(decl, AstNodeAttributeKind.Name) == name) {
-                ret = xmlChild(decl, AstNodeKind.ReturnType)
-                break
-            }
+        if (xmlAttr(decl, AstNodeAttributeKind.Name) == name) {
+            ret = xmlChild(decl, AstNodeKind.ReturnType)
+            break
         }
+    }
         // `Unit` is the absence of a value: the lowering gives such a task no `result` field
         // (`lowerTask`), so the table has to agree here or the accessor reads a field that was
         // never declared (`suspend fun f(): Unit` - the socket server's leaves).
@@ -71,7 +72,7 @@ fun Emitter.asyncReturn(name: *Str): AstXmlNode {
     if (!this.asyncFns.has(name)) {
         return xmlEmptyNode()
     }
-    return *this.asyncFns.getPtr(name)
+    return * this.asyncFns.getPtr(name)
 }
 
 fun Emitter.asyncBase(fn: *CgFn): Str {
@@ -224,11 +225,17 @@ fun Emitter.lowerTask(fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts): TskTask {
     }
     val body: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.Body)
     if (xmlIsEmpty(body)) {
-        this.fail(decl, "suspend: a body-less `suspend` declaration has no lowering yet (the leaves arrive with the file and socket steps)")
+        this.fail(
+            decl,
+            "suspend: a body-less `suspend` declaration has no lowering yet (the leaves arrive with the file and socket steps)"
+        )
         return TskTask(List<TskField>(), List<AstXmlNode>(), Dictionary<Str, AstXmlNode>(), "")
     }
     if (linHasYield(xmlChildren(body, AstNodeKind.Stmt))) {
-        this.fail(decl, "suspend: a body that also yields is not supported (a `for` machine is a local and cannot cross a suspension)")
+        this.fail(
+            decl,
+            "suspend: a body that also yields is not supported (a `for` machine is a local and cannot cross a suspension)"
+        )
         return TskTask(List<TskField>(), List<AstXmlNode>(), Dictionary<Str, AstXmlNode>(), "")
     }
     var lowered: List<AstXmlNode> = linLowerForEmission(xmlChildren(body, AstNodeKind.Stmt))
@@ -244,7 +251,7 @@ fun Emitter.lowerTask(fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts): TskTask {
     val finalBody: List<AstXmlNode> = linFinishForEmission(lowered, reserved)
     var resultType: AstXmlNode = xmlEmptyNode()
     if (hasValue) {
-        resultType = *returnNode
+        resultType = * returnNode
     }
     val task: TskTask = linLowerAsync(decl, resultType, hasValue, *this.asyncFns, finalBody)
     if (!task.error.isEmpty()) {
@@ -370,8 +377,9 @@ fun Emitter.run(): Res<Str> {
     // are threaded to the emitters rather than stored on the emitter.
     val facts: SemFacts = this.collectFacts()
     // The assembly phases, in order (impl_specs/generators.md): includes, support,
-    // profile, strings, resources, forward, types, statics, prototypes, init, bodies.
-    // `support` and `forward` are not begun here because a generator writes them.
+    // profile, strings, resources, forward, types, statics, prototypes, closures, init,
+    // bodies. `support` and `forward` are not begun here because a generator writes them,
+    // and `closures` is written by the emitter's body pass (`emitClosureClasses`).
     this.sections.begin("includes")
     this.preludeText()
     this.emitNativeDeclarations()

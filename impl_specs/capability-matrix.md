@@ -4290,3 +4290,81 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
   both fixed points byte for byte (15.02 s from the published file to a working compiler,
   1722 ms self-transpile).
+
+- **A lambda is a data class and a free invoke, and its captures cross a call by copy.** The
+  closure codegen no longer defines a local `struct ... { auto operator()(...) }` inside the
+  function that builds it: the capture fields are a data class, `<sym>_invoke(self, params)`
+  is a free function whose `self` is the instance passed by value, and both are emitted at
+  namespace scope into their own `closures` section (after the prototypes, before the bodies),
+  all classes before all methods. The class's one member converts into the callable
+  representation, so a `Func<...>` slot still takes a lambda (`rtl/functional.hpp`'s
+  `simse_closureFunc` binds the free method into the `std::function`), and a call through a
+  statically known closure value goes straight to `_invoke`. A lambda inside a generic
+  function makes both the class and the method templates; an omitted parameter type is
+  supplied by the expected callable type (a piece naming the *callee's* own type parameter is
+  not spellable at the lambda and is treated as absent, with the body's inference answering
+  the result), and one that neither names is a positioned diagnostic at the lambda. `this`
+  inside a lambda is now reported by sema instead of silently naming the closure (reference
+  captures are deferred). Three older gaps closed on the way: a call through a closure or
+  `Func` value answers the callee's own result type (a chained `f(x).toString()` no longer
+  guesses an overload), a single-expression lambda body whose expression answers nothing
+  (`{ println(x) }`) is a void call and a void return instead of a `void` slot, and an
+  immediate `((x: Int) -> x + 1)(5)` lowers through the class instead of a call with an
+  empty callee name. `simse_list_sort` converts its `F less` inside its body, because MSVC
+  cannot deduce a template parameter through a dependent `std::function` parameter - which is
+  also why a lambda passed to a *generic function's* callable parameter
+  (`fun <T> twice(f: (T) -> T, ...)`) stays a known gap. The by-value `self` changes one
+  semantic: a mutation of a capture inside a call is not visible to the closure value in the
+  caller, nor across calls (`specs/memory-model.md`).
+  Verified: `./build.bat --release`, `bun tools/stress.js` **60/60** (two new cases:
+  `stress/closure-classes`, `stress/diagnostic-lambda-this`),
+  `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
+  both fixed points byte for byte.
+
+- **A callable argument to a generic function works: a forwarding overload plus a refused
+  fold.** The gap left by the closure-class work was two-layered. `ConstParams.kt` folded a
+  parameter every call site passes the same literal - for a generic function that parameter
+  is how C++ deduction binds the type parameter, so `twice((x: Int) -> x + 1, 5)` folded
+  `value: T` away and left nothing to say `T = Int`; the pass now refuses to fold a
+  parameter whose declared type names one of the function's own type parameters
+  (`cpMentionsTypeParam`). And MSVC will not deduce a type parameter through a dependent
+  `std::function` parameter when the argument is a closure or a named function (a `Func<...>`
+  argument is fine). So a generic function whose declared parameter type mentions its own
+  type parameters gets a second, forwarding overload
+  (`CgEmitFn.kt`'s `emitDeducedCallableOverload`): the callable is taken as its own template
+  parameter, converted in the forwarding call, and the declared signature stays for
+  `Func<...>` arguments - the overload is less specialized, so partial ordering keeps using
+  the declared one there. It covers free functions, extension functions (the receiver rides
+  along as the first argument) and the yielding factory (`emitYieldable`). What still does
+  not work: a type parameter *only* a callable names (`fun <T> id(f: (T) -> T)` with a
+  lambda - nothing can deduce it), and a string literal argument, which deduces `StrView`
+  for `T` (bind it to a `Str` local first). `stress/generic-callable` pins the shapes.
+  Verified: `./build.bat --release`, `bun tools/stress.js` **61/61**,
+  `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
+  both fixed points byte for byte.
+
+- **A generic call's result is a real type, and a resource's comments stop at the output.**
+  Two follow-ups on the closure-class work. First, the inference: `sem/TypeInferCall` now
+  binds a callee's type parameters from the *types of the arguments* (`semBindCallArgs`), not
+  only from an explicit instantiation and the receiver, so `twice(f, 5)` is an `Int` and
+  `twice(...).toString()` resolves against `Int` instead of an arbitrary overload; the
+  lowering substitutes the same bindings into a callable parameter, which is what lets a
+  lambda's *omitted* parameter types come from the argument that fixes `T`
+  (`twice((x) -> x + 1, 5)`), and `CgCall.call` materialises a `Str` for a string literal
+  where the parameter is a bare type parameter (the pool entry is a `StrView`, and C++ would
+  deduce that). A parameter whose value C++ cannot deduce at all - `T` named only by a
+  callable - is now a positioned `cannot infer type parameter` report from the lowering's
+  deducibility check (`LinearFormCall.kt`'s `ilCppDeducible`, which skips member-call
+  targets whose receiver pattern does not unify), with `peek<Int>(...)` as the escape; the
+  `Unsupported` report now survives the untyped-slot path (`IlEmit.kt`). `stress/generic-callable`
+  grew the inferred-lambda, literal-`Str`, chained-result and nested-call shapes, and
+  `stress/diagnostic-lambda-infer` pins the report. Second, the comments: resource text is
+  filtered as the `res` generator places it (`ResComments.kt`, `resGenAddSection`), so the
+  RTL prose in `_res.md` no longer lands in every emitted program - a line comment alone on
+  its line takes the line, a trailing one takes only itself, and `//` inside a string,
+  character or raw-string literal is data (`stress/res-comments` pins all three). The
+  emitter's own comments are not resource text and stay. Every golden refreshed for the
+  comment change (eighteen `expected.cpp` files, comment-only diffs).
+  Verified: `./build.bat --release`, `bun tools/stress.js` **63/63** (two new cases),
+  `bun build.js --release --out cppsrc/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
+  both fixed points byte for byte.

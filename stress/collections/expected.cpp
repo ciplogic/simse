@@ -2,33 +2,6 @@
 #include "cppsrc/rtl/simse.hpp"
 #include <type_traits>
 
-// The string-literal pool's decoder (impl_specs/rtl-abi.md, "String literals: one
-// table"): the emitter writes one pool of bytes plus two run-length encoded index
-// series - where each entry starts and how long it is - and this expands them into the
-// `StrView` per entry, once, before `main` runs. It was cppsrc/rtl/strtable.hpp.
-//
-// Six things are deliberate in the shape the emitter writes:
-//
-//  - **Both series are stored as "what to subtract from the previous value"**, with an
-//    implicit 0 before the first entry: `value[i] = value[i-1] - series[i]`. The
-//    literals are ordered longest first, so a length series descends slowly and a
-//    *difference* of it is a small number - mostly 0 between the many literals of equal
-//    length (85% of them on the compiler's own table).
-//  - **Each series is run-length encoded**: its length first, then alternating blocks of
-//    non-repeating values (a count, then that many values) and of runs (a count, then
-//    that many `times, value` pairs), until the length is filled. The element type is a
-//    template parameter because the emitter picks the width: `Int16` when every number
-//    fits, `Int` otherwise.
-//  - The pool is the literal texts themselves, adjacent, so the C++ compiler decodes
-//    every escape and the emitter's decoding only has to agree about *how many bytes* an
-//    escape costs. The emitted `static_assert` on the pool's `sizeof` is the check.
-//  - The series are expanded into *stack* arrays in the initializer and dropped when it
-//    returns: no heap, and the encoded statics are all the program carries.
-//  - An entry is a 12-byte `StrView`, not the 32-byte owning `Str` the table used to
-//    hold, and start-up allocates nothing for the literals.
-//  - The pool is `const char` (a string literal, read-only) while `StrView` holds the
-//    language's mutable `Char*`; the constness is cast away here, in the one place the
-//    pool is touched, and nothing writes through it.
 
 template <class T>
 void simse_strTableExpand(const T* stream, Int* out, Int count);
@@ -36,18 +9,6 @@ void simse_strTableDecode(const char* pool, const Int* starts, const Int* length
 
 #include <chrono>
 
-// Time natives (the Simse surface is the prelude file cppsrc/rtl/rtl.kt). All three are
-// monotonic clocks - never going backwards - since an arbitrary fixed point:
-// `simse_nowMillis` for logging, and the finer `simse_nowMicros` / `simse_nowNanos` for
-// the instrumented profiler (`cppsrc/profiling`, and the emitted `profileApp.measure(...)`
-// of a `--profile` build; `--profile-nanos` picks the nanosecond clock). It was
-// cppsrc/rtl/timeops.hpp, and its definitions were the last
-// thing left in cppsrc/rtl/native.cpp - they are this section's now, so the clock is
-// emitted into the program like any other prelude body and there is nothing to link.
-// `emit: always`
-// because the profiler's runtime is emitted by the *compiler* rather than named by
-// the program: a `--profile` build needs these declarations whether or not the program
-// ever asks for the time.
 Int64 simse_nowMillis();
 Int64 simse_nowMicros();
 Int64 simse_nowNanos();
@@ -74,23 +35,9 @@ static struct __SmStringTableInitType {
     }
 } __sm_stringTableInit;
 
-// `spanOf(items)`: a span over a list's elements, generated (`cppsrc/rtl/_res.md`).
 template <class T>
 Span<T> simse_spanOf(List<T>* items);
 
-// What a view's byte operations still need from C++ (specs/built-in-types.md, "Views").
-// The byte work itself - `find`/`indexOf`, `startsWith`/`startsWithPtr`, `substr`/`toString`
-// - is Simse now, in cppsrc/rtl/StrView.kt over the span and the intrinsics
-// (cppsrc/rtl/intrinsics.kt). What remains here is the `Span` member passthroughs, which
-// cannot be Simse without shadowing the member they call, and `spanOfStr`, whose two
-// overloads are picked by C++ overload resolution at the desugar's site (Parser.kt's
-// `parseWhen`) rather than by a declaration - so a declaration reaches this section, and a
-// program that calls one pays for this text (`sourcegen/ResGen.kt`).
-//
-// `StrView` *is* a `Span<Char>`, so `self.len`, `self[i]` and `self.slice(...)` below are
-// the span's own members (cppsrc/rtl/span.hpp) - and `at` is *not* an operation of its
-// own: the span's member serves it (cppsrc/rtl/StrView.kt), as `atPtr` is the
-// language's (cppsrc/rtl/Span.kt).
 Int simse_strView_size(StrView self);
 Bool simse_strView_isEmpty(StrView self);
 StrView simse_strView_slice(StrView self, Int start);
@@ -102,20 +49,10 @@ StrView simse_spanOfStr(StrView view);
 #include <cstdint>
 #include <type_traits>
 
-// The List/Array/Str primitives behind the prelude (impl_specs/native-interop.md), moved
-// out of cppsrc/rtl/listops.hpp. Index and range errors are unchecked, matching the
-// language's no-exceptions policy: `removeAt`/`removeRange` with an out-of-range index is
-// undefined behavior (specs/language-decisions.md).
 
-// Appends `value` to the end of `self`. The value is a non-deduced context so a literal
-// argument (e.g. a `const char[]`) converts to the element type instead of making `T`
-// ambiguous.
 template <class T>
 void simse_list_append(List<T>& self, const std::type_identity_t<T>& value);
 
-// The list literal's fallback (cppsrc/rtl/rtl.kt): the compiler turns
-// `listOf<Str>("a", "b")` into the construction itself, so this runs only for a position
-// with no destination slot.
 template <class T>
 List<T> simse_listOf(const List<T>* values);
 
@@ -142,79 +79,44 @@ Str simse_int_toString(Int self);
 #include <type_traits>
 #include <utility>
 
-// The Dictionary operations and the extra List helpers behind the prelude
-// (impl_specs/native-interop.md), moved out of cppsrc/rtl/dictops.hpp. The key/value
-// parameters are non-deduced (`std::type_identity_t`) so that a literal argument (e.g. a
-// `const char[]` key or an integer value) converts to the element type instead of making
-// the template argument ambiguous.
-//
-// Errors are unchecked, matching the dictionary's own semantics and the language's
-// no-exceptions policy: `get`/`has` on a missing key behave as documented, while `remove`
-// of an absent key is a no-op.
 
-// `dictionaryOf<K, V>()`: the empty-dictionary construction.
 template <class K, class V>
 Dictionary<K, V> simse_dictionaryOf();
 
-// `d.getPtr(key)`: the value's place in the dictionary, or `null` when the key is
-// absent - the read that copies nothing (`get` copies the value out, `has` is this with
-// the pointer tested). The place is the dictionary's own storage, so it is valid until
-// the next `insert`/`remove`/`clear` on that dictionary.
 template <class K, class V>
 V* simse_dict_getPtr(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
 
-// `d.get(key)`: the value for `key`, or an empty `Opt` when absent.
 template <class K, class V>
 Opt<V> simse_dict_get(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
 
-// `d.has(key)`: whether `key` is present.
 template <class K, class V>
 Bool simse_dict_has(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
 
-// `d.insert(key, value)`: insert or replace.
 template <class K, class V>
 void simse_dict_insert(Dictionary<K, V>& self, const std::type_identity_t<K>& key,
                        const std::type_identity_t<V>& value);
 
-// `d.remove(key)`: erase when present (a no-op otherwise).
 template <class K, class V>
 void simse_dict_remove(Dictionary<K, V>& self, const std::type_identity_t<K>& key);
 
-// `d.size()`: the number of entries.
 template <class K, class V>
 Int simse_dict_size(const Dictionary<K, V>& self);
 
-// `d.keys()`: the keys in the dictionary's iteration order (unspecified; sort for a
-// deterministic order).
 template <class K, class V>
 List<K> simse_dict_keys(const Dictionary<K, V>& self);
 
-// `d.values()`: the values in the dictionary's iteration order (unspecified).
 template <class K, class V>
 List<V> simse_dict_values(const Dictionary<K, V>& self);
 
-// `d.clear()`: remove every entry.
 template <class K, class V>
 void simse_dict_clear(Dictionary<K, V>& self);
 
-// `items.contains(value)`: linear membership test (`operator==` on elements).
 template <class T>
 Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& value);
 
-// `items.sort(less)`: in-place sort using the `(*T, *T) -> Bool` comparator. The comparator
-// comes from a Simse lambda (a C++ lambda or Func), so it is a template parameter rather
-// than a fixed type; it takes its two elements by pointer, so each is read where `std::sort`
-// holds it instead of being copied into the comparison.
 template <class T, class F>
 void simse_list_sort(List<T>& self, F less);
 
-// `lenOf(x)`: one read-only length operation, declared `data` in the prelude
-// (cppsrc/rtl/rtl.kt) so that a repeated call on an unchanged value is one call
-// (cppsrc/linear/ReusePure.kt) and a borrow proof may call it (cppsrc/parser/BorrowParams.kt).
-// `Str` and `List` are heavy values, so the receiver is taken by reference - a by-value
-// parameter would copy one per call. The containers whose count a declaration already spells
-// (`Array.count`, `Dictionary.size`, `StrView.size`) keep those declarations; this is the
-// operation for the two the language cannot otherwise spell.
 Int simse_lenOf(const Str& self);
 template <class T, int N>
 Int simse_lenOf(const SmallVector<T, N>& self);
@@ -222,29 +124,6 @@ Int simse_lenOf(const SmallVector<T, N>& self);
 #include <bit>
 #include <cstring>
 
-// The primitives a concatenation is *expanded* into (impl_specs/linear-il.md, "Concat").
-// There is no `cat` function and no per-part `append`: the emitter computes every part's
-// *exact* length, performs one `resize`, and then writes each part straight into the slot it
-// owns while one `char*` advances by that part's length. So a chain of n parts touches the
-// allocator once, computes each part once and copies each part once - the shape Java 9's
-// `StringConcatFactory` has, with the C++ compiler seeing the straight-line form instead of a
-// variadic call.
-//
-// No program names these: the emitter writes the symbols itself, the way it writes
-// `simse_addressOf`. What each kind of part costs:
-//   * a text part (a `Str`, or a literal whose length the lowering already knows) is a
-//     `std::memcpy` - a constant size is one register or vector store, a runtime `Str` size
-//     one call;
-//   * an integer (`Int8`/`Int16`/`Int32`/`Int64`, `Int`) is *counted* by the bit scan below
-//     (`std::bit_width` plus one power-of-ten comparison, never a division loop) and *written*
-//     by `simse_strAddInt` - two digits per step out of a table, right to left inside the slot
-//     that was made for it, so the digits are never built into a second buffer;
-//   * a `Char` is one byte;
-//   * a `Bool` is a `StrView` over a two-entry table ("true"/"false"): it has no digits to
-//     render and is not a hot path, so it goes through the text path.
-// A float is deliberately *absent*: its length is only known by formatting it, so the lowering
-// keeps the `toString()` call (one `Str`, made ahead of time) and the part *is* that `Str` -
-// one conversion, not one for the length and another for the write.
 Int simse_strCountDigits(Int64 value);
 void simse_strAddInt(char* target, Int64 value, Int count);
 StrView simse_strBoolView(Bool value);
@@ -255,51 +134,23 @@ StrView simse_strBoolView(Bool value);
 #include <cstdlib>
 #include <system_error>
 
-// The string, character, numeric-conversion and min/max operations behind the prelude
-// (impl_specs/native-interop.md, specs/built-in-types.md), moved out of
-// cppsrc/rtl/strops.hpp.
-//
-// `Str` is the inline `SmString` (smstring.hpp): every size, length and index here is the
-// language's `Int` (`int32_t`), including `Str::npos`, which is `-1`. Index/range errors
-// are unchecked where the underlying operation is unchecked; the `Opt`-returning
-// conversions never throw.
-//
-// What is only a byte loop is Simse now (cppsrc/rtl/rtl.kt: `trim`, `substr`,
-// `startsWith`/`endsWith`, case folding and the `Char` predicates); what stays is what
-// reaches `SmString` internals (`charAt`, `find`, `lastIndexOf`, `split`, `replace`) or the
-// standard library (`std::from_chars`, `std::to_string`).
 
-// `Str.charAt(index)`: the byte at `index` (unchecked; no bounds test).
 Char simse_str_charAt(const Str& self, Int index);
 
-// `Str.split(separator)` splits on every occurrence. An empty separator returns the whole
-// string as a single element. Two overloads: a separator string and a separator byte.
 List<Str> simse_str_split(const Str& self, const Str& separator);
 List<Str> simse_str_split(const Str& self, Char separator);
 
-// `Str.find(sub)` returns the first index of `sub`, or -1 when absent (the language's
-// spelling of C++ `npos`).
 Int simse_str_find(const Str& self, const Str& sub);
 
-// `Str.lastIndexOf(sub)` returns the last index of `sub`, or -1 when absent.
 Int simse_str_lastIndexOf(const Str& self, const Str& sub);
 
-// `Str.replace(from, to)` replaces every occurrence of `from` with `to`.
 Str simse_str_replace(const Str& self, const Str& from, const Str& to);
 
-// `Str.toInt()`/`Str.toFloat()` parse the whole string; failure (or a non-empty trailing
-// remainder) yields `Opt.none()`. No exceptions. `toInt` uses `std::from_chars` (integer
-// `from_chars` is in libstdc++ since GCC 11); `toFloat` uses `std::strtod`, because libstdc++
-// did not ship floating-point `from_chars` until GCC 14 and the language must build on
-// GCC 12 (docs/building-on-linux.md).
 Opt<Int> simse_str_toInt(const Str& self);
 Opt<Float64> simse_str_toFloat(const Str& self);
 
-// `Str.initByValue(value)`: the `initByValue` convention for `Str` (cppsrc/rtl/rtl.kt),
-// setting the receiver in place. The empty form is a Simse method (an empty body).
 void simse_str_initByValue(Str& self, const Str& value);
 
-// Numeric conversions. `Char` is an 8-bit integer, so it stringifies as a number.
 template <class T>
 Str simse_num_toString(const T& self);
 Str simse_char_toString(Char self);
@@ -307,11 +158,6 @@ Str simse_bool_toString(Bool self);
 
 #include <cstdio>
 
-// `print` / `println` in C, not C++ streams. The language's formatting is its own (`fmtStr`), and
-// a value is one `fwrite`/`fputs`, so a program that prints never pulls in <iostream> - and with
-// it the standard streams' static construction and the locale facets that drag in. One overload
-// per built-in `println` accepts, so a call spells the same whatever it prints; `bool` prints
-// `true`/`false`, which is what the `std::boolalpha` the emitter used to write gave.
 inline void simse_write(const Str& value, FILE* out) {
     std::fwrite(value.data(), 1, (std::size_t) value.size(), out);
 }
@@ -751,6 +597,127 @@ void ns1_bumpSpan(Span<Int> span);
 Char* ns1_headByte(Str* text);
 Int ns1_partSpan();
 
+struct ns1_partDictionary_closure1;
+Bool ns1_partDictionary_closure1_invoke(ns1_partDictionary_closure1 self, Int* left, Int* right);
+struct ns1_partDictionary_closure1 {
+    operator Func<Bool(Int*, Int*)>() const {
+        return simse_closureFunc<Func<Bool(Int*, Int*)>>(&ns1_partDictionary_closure1_invoke, *this);
+    }
+};
+
+Bool ns1_partDictionary_closure1_invoke(ns1_partDictionary_closure1 self, Int* left, Int* right) {
+    Int _sm_base1, _sm_base2;
+    Bool _sm_expr1;
+    _sm_base1 = *(left);
+    _sm_base2 = *(right);
+    _sm_expr1 = _sm_base1 < _sm_base2;
+    return _sm_expr1;
+}
+
+struct ns1_partLambdaFor_closure1;
+void ns1_partLambdaFor_closure1_invoke(ns1_partLambdaFor_closure1 self, Int n);
+struct ns1_partLambdaFor_closure1 {
+    List<Int> items;
+    operator Func<void(Int)>() const {
+        return simse_closureFunc<Func<void(Int)>>(&ns1_partLambdaFor_closure1_invoke, *this);
+    }
+};
+
+struct ns1_partLambdaFor_closure2;
+void ns1_partLambdaFor_closure2_invoke(ns1_partLambdaFor_closure2 self, Int n);
+struct ns1_partLambdaFor_closure2 {
+    List<Int> items;
+    operator Func<void(Int)>() const {
+        return simse_closureFunc<Func<void(Int)>>(&ns1_partLambdaFor_closure2_invoke, *this);
+    }
+};
+
+struct ns1_partLambdaFor_closure3;
+void ns1_partLambdaFor_closure3_invoke(ns1_partLambdaFor_closure3 self, Int n);
+struct ns1_partLambdaFor_closure3 {
+    List<Int> items;
+    operator Func<void(Int)>() const {
+        return simse_closureFunc<Func<void(Int)>>(&ns1_partLambdaFor_closure3_invoke, *this);
+    }
+};
+
+void ns1_partLambdaFor_closure1_invoke(ns1_partLambdaFor_closure1 self, Int n) {
+    List<Int> _sm_base1;
+    Int total, value, _sm_expr2;
+    List_iter_yieldable<Int> _sm_for13;
+    Bool _sm_expr1;
+    Str _sm_expr3;
+    total = 0;
+    _sm_base1 = self.items;
+    _sm_for13 = iter(simse_addressOf(_sm_base1));
+    L1:;
+    _sm_expr1 = _sm_for13.advance();
+    if (!(_sm_expr1)) goto L2;
+    value = _sm_for13.current;
+    total = total + value;
+    goto L1;
+    L2:;
+    _sm_expr2 = total + n;
+    _sm_expr3 = simse_int_toString(_sm_expr2);
+    simse_println((_sm_expr3), stdout);
+}
+
+void ns1_partLambdaFor_closure2_invoke(ns1_partLambdaFor_closure2 self, Int n) {
+    List<Int> _sm_base1;
+    ns1_List_everyNth_yieldable _sm_expr1, _sm_for14;
+    Bool _sm_expr2;
+    Int value, _sm_expr3;
+    Str _sm_expr4;
+    _sm_base1 = self.items;
+    _sm_expr1 = ns1_everyNth(simse_addressOf(_sm_base1), 2);
+    _sm_for14 = _sm_expr1;
+    L1:;
+    _sm_expr2 = _sm_for14.advance();
+    if (!(_sm_expr2)) goto L2;
+    value = _sm_for14.current;
+    _sm_expr3 = value + n;
+    _sm_expr4 = simse_int_toString(_sm_expr3);
+    simse_println((_sm_expr4), stdout);
+    goto L1;
+    L2:;
+}
+
+void ns1_partLambdaFor_closure3_invoke(ns1_partLambdaFor_closure3 self, Int n) {
+    char* __sm_catP;
+    Int __sm_catC0;
+    List<Int> _sm_base1;
+    ns1_List_everyNth_yieldable _sm_expr1, _sm_for15;
+    Int _sm_index15, value, index, _sm_expr3;
+    Bool _sm_expr2;
+    Str _sm_expr5, _sm_expr7;
+    _sm_base1 = self.items;
+    _sm_expr1 = ns1_everyNth(simse_addressOf(_sm_base1), 2);
+    _sm_for15 = _sm_expr1;
+    _sm_index15 = -1;
+    L1:;
+    _sm_expr2 = _sm_for15.advance();
+    if (!(_sm_expr2)) goto L2;
+    _sm_index15 = _sm_index15 + 1;
+    value = _sm_for15.current;
+    index = _sm_index15;
+    _sm_expr3 = index + n;
+    __sm_catC0 = simse_strCountDigits(_sm_expr3);
+    _sm_expr5.resize(1 + __sm_catC0);
+    __sm_catP = _sm_expr5.data();
+    simse_strAddInt(__sm_catP, _sm_expr3, __sm_catC0);
+    __sm_catP = __sm_catP + __sm_catC0;
+    *__sm_catP = (char) (':');
+    __sm_catC0 = simse_strCountDigits(value);
+    _sm_expr7.resize(_sm_expr5.size() + __sm_catC0);
+    __sm_catP = _sm_expr7.data();
+    std::memcpy(__sm_catP, _sm_expr5.data(), _sm_expr5.size());
+    __sm_catP = __sm_catP + _sm_expr5.size();
+    simse_strAddInt(__sm_catP, value, __sm_catC0);
+    simse_println((_sm_expr7), stdout);
+    goto L1;
+    L2:;
+}
+
 template <class T>
 T* atPtr(Span<T>* self, Int index) {
     T* _sm_base1, * _sm_expr1;
@@ -1149,17 +1116,6 @@ Int ns1_partContainers() {
 }
 // stress/collections/src/main.kt
 Int ns1_partDictionary() {
-struct ns1_partDictionary_closure1 {
-    auto operator()(Int* left, Int* right) {
-        Int _sm_base1, _sm_base2;
-        Bool _sm_expr1;
-        _sm_base1 = *(left);
-        _sm_base2 = *(right);
-        _sm_expr1 = _sm_base1 < _sm_base2;
-        return _sm_expr1;
-    }
-};
-
     Int _sm_base2, _sm_base7, _sm_expr1, _sm_expr3, _sm_expr7, i, _sm_expr10, j, _sm_expr16, _sm_expr17;
     Str _sm_base5;
     ns1_partDictionary_closure1 _sm_base6;
@@ -1585,92 +1541,6 @@ ns1_List_everyNth_yieldable ns1_everyNth(List<Int>* self, Int step) {
 }
 // stress/collections/src/main.kt
 Int ns1_partLambdaFor() {
-struct ns1_partLambdaFor_closure1 {
-    List<Int> items;
-    auto operator()(Int n) {
-        List<Int> _sm_base1;
-        Int total, value, _sm_expr2;
-        List_iter_yieldable<Int> _sm_for13;
-        Bool _sm_expr1;
-        Str _sm_expr3;
-        total = 0;
-        _sm_base1 = this->items;
-        _sm_for13 = iter(simse_addressOf(_sm_base1));
-        L1:;
-        _sm_expr1 = _sm_for13.advance();
-        if (!(_sm_expr1)) goto L2;
-        value = _sm_for13.current;
-        total = total + value;
-        goto L1;
-        L2:;
-        _sm_expr2 = total + n;
-        _sm_expr3 = simse_int_toString(_sm_expr2);
-        simse_println((_sm_expr3), stdout);
-    }
-};
-
-struct ns1_partLambdaFor_closure2 {
-    List<Int> items;
-    auto operator()(Int n) {
-        List<Int> _sm_base1;
-        ns1_List_everyNth_yieldable _sm_expr1, _sm_for14;
-        Bool _sm_expr2;
-        Int value, _sm_expr3;
-        Str _sm_expr4;
-        _sm_base1 = this->items;
-        _sm_expr1 = ns1_everyNth(simse_addressOf(_sm_base1), 2);
-        _sm_for14 = _sm_expr1;
-        L1:;
-        _sm_expr2 = _sm_for14.advance();
-        if (!(_sm_expr2)) goto L2;
-        value = _sm_for14.current;
-        _sm_expr3 = value + n;
-        _sm_expr4 = simse_int_toString(_sm_expr3);
-        simse_println((_sm_expr4), stdout);
-        goto L1;
-        L2:;
-    }
-};
-
-struct ns1_partLambdaFor_closure3 {
-    List<Int> items;
-    auto operator()(Int n) {
-        char* __sm_catP;
-        Int __sm_catC0;
-        List<Int> _sm_base1;
-        ns1_List_everyNth_yieldable _sm_expr1, _sm_for15;
-        Int _sm_index15, value, index, _sm_expr3;
-        Bool _sm_expr2;
-        Str _sm_expr5, _sm_expr7;
-        _sm_base1 = this->items;
-        _sm_expr1 = ns1_everyNth(simse_addressOf(_sm_base1), 2);
-        _sm_for15 = _sm_expr1;
-        _sm_index15 = -1;
-        L1:;
-        _sm_expr2 = _sm_for15.advance();
-        if (!(_sm_expr2)) goto L2;
-        _sm_index15 = _sm_index15 + 1;
-        value = _sm_for15.current;
-        index = _sm_index15;
-        _sm_expr3 = index + n;
-        __sm_catC0 = simse_strCountDigits(_sm_expr3);
-        _sm_expr5.resize(1 + __sm_catC0);
-        __sm_catP = _sm_expr5.data();
-        simse_strAddInt(__sm_catP, _sm_expr3, __sm_catC0);
-        __sm_catP = __sm_catP + __sm_catC0;
-        *__sm_catP = (char) (':');
-        __sm_catC0 = simse_strCountDigits(value);
-        _sm_expr7.resize(_sm_expr5.size() + __sm_catC0);
-        __sm_catP = _sm_expr7.data();
-        std::memcpy(__sm_catP, _sm_expr5.data(), _sm_expr5.size());
-        __sm_catP = __sm_catP + _sm_expr5.size();
-        simse_strAddInt(__sm_catP, value, __sm_catC0);
-        simse_println((_sm_expr7), stdout);
-        goto L1;
-        L2:;
-    }
-};
-
     List<Int> items;
     ns1_Taker sumWith, eachNth, indexed;
     items = List<Int>();
@@ -2019,8 +1889,6 @@ int main() {
     return 0;
 }
 
-// `spanOf(items)`: a span over a list's elements. It borrows the list - the list has
-// to outlive the span - and does not copy it (`&items` would box a copy instead).
 template <class T>
 inline Span<T> simse_spanOf(List<T>* items) {
     return Span<T>(items->data(), items->size());
@@ -2034,12 +1902,10 @@ inline Bool simse_strView_isEmpty(StrView self) {
     return self.len <= 0;
 }
 
-// `view.slice(start)`: from `start` to the end (C# `Slice(int)`).
 inline StrView simse_strView_slice(StrView self, Int start) {
     return self.slice(start);
 }
 
-// `view.slice(start, count)`: `count` bytes from `start` (C# `Slice(int, int)`).
 inline StrView simse_strView_slice(StrView self, Int start, Int count) {
     return self.slice(start, count);
 }
@@ -2048,18 +1914,10 @@ inline Char simse_strView_charAt(StrView self, Int index) {
     return self[index];
 }
 
-// `spanOfStr(text)`: a view over a string's bytes. It borrows the string - the string
-// has to outlive the view - and does not copy it (`&text` would box a copy instead).
-// `Str` is a `char` buffer on the C++ side and the language's `Char` is a signed byte,
-// hence the cast.
 inline StrView simse_spanOfStr(Str* text) {
     return StrView(reinterpret_cast<Char*>(text->data()), text->size());
 }
 
-// `spanOfStr(view)`: a `StrView` already is a view, so this overload is the identity. It is
-// what lets the `when`-over-strings desugar (`Parser.kt`'s `parseWhen`) extract the subject
-// with `spanOfStr` without knowing whether it is a `Str` or a `StrView` - the C++ overload
-// resolution picks the borrowed view or the identity, and the tests compare against it.
 inline StrView simse_spanOfStr(StrView view) {
     return view;
 }
@@ -2074,26 +1932,21 @@ inline List<T> simse_listOf(const List<T>* values) {
     return *values;
 }
 
-// Removes the single element at `index`.
 template <class T>
 inline void simse_list_removeAt(List<T>& self, Int index) {
     self.erase(self.begin() + index);
 }
 
-// Removes the half-open range [start, end).
 template <class T>
 inline void simse_list_removeRange(List<T>& self, Int start, Int end) {
     self.erase(self.begin() + start, self.begin() + end);
 }
 
-// `Array<T>.count()`: the element count stored at the front of the block.
 template <class T>
 inline Int simse_array_count(const Array<T>& self) {
     return self.count();
 }
 
-// `List<T>.toArray()` (specs/built-in-types.md): copies the elements into one count-first
-// block. Element copies are value copies, like every other copy in the language.
 template <class T>
 inline Array<T> simse_list_toArray(const List<T>& self) {
     const Int count = self.size();
@@ -2107,7 +1960,6 @@ inline Array<T> simse_list_toArray(const List<T>& self) {
     return result;
 }
 
-// `Array<T>.toList()`: the growable copy, which is how an element is added to an array.
 template <class T>
 inline List<T> simse_array_toList(const Array<T>& self) {
     List<T> result;
@@ -2119,42 +1971,31 @@ inline List<T> simse_array_toList(const Array<T>& self) {
     return result;
 }
 
-// `arrayEmpty<T>()`: the shared, zero-length array of `T` (no allocation).
 template <class T>
 inline Array<T> simse_arrayEmpty() {
     return Array<T>();
 }
 
-// `Str.append(ch)`: `Str` has no single-character append, so this is `push_back`.
 inline void simse_str_append(Str& self, Char value) {
     self.push_back(static_cast<char>(value));
 }
 
-// `Str.appendStr(text)`: appends in place, so an emitter accumulates output without
-// `out = out + text` rebuilding the whole buffer on every line (which is quadratic).
 inline void simse_str_appendStr(Str& self, const Str& value) {
     self.append(value);
 }
 
-// `Str.appendStrPtr(text)`: the same append for a text the caller only *borrows*, so
-// nothing is copied on the way.
 inline void simse_str_appendStrPtr(Str& self, const Str* value) {
     if (value != nullptr) self.append(*value);
 }
 
-// `Str.reserve(count)`: grows the buffer once, so a run of appends writes the text once
-// instead of copying the accumulated prefix at every growth step. A *hint*, not a length.
 inline void simse_str_reserve(Str& self, Int count) {
     self.reserve((Str::size_type) count);
 }
 
-// `Int.toString()`: the scalar-to-inline-string conversion (specs/memory-model.md).
 inline Str simse_int_toString(Int self) {
     return std::to_string(self);
 }
 
-// `dictionaryOf<K, V>()`: `Dictionary<K, V>` is a value type, so this default-constructs
-// one.
 template <class K, class V>
 inline Dictionary<K, V> simse_dictionaryOf() {
     return Dictionary<K, V>();
@@ -2224,8 +2065,9 @@ inline Bool simse_list_contains(const List<T>& self, const std::type_identity_t<
 
 template <class T, class F>
 inline void simse_list_sort(List<T>& self, F less) {
-    std::sort(self.begin(), self.end(), [&less](const T& a, const T& b) {
-        return less(const_cast<T*>(&a), const_cast<T*>(&b));
+    Func<Bool(T*, T*)> fn = less;
+    std::sort(self.begin(), self.end(), [&fn](const T& a, const T& b) {
+        return fn(const_cast<T*>(&a), const_cast<T*>(&b));
     });
 }
 
@@ -2233,14 +2075,11 @@ inline Int simse_lenOf(const Str& self) {
     return self.size();
 }
 
-// `List<T>` is `SmallVector<T, 4>` (cppsrc/rtl/containers.hpp), so one overload serves every
-// element type and inline capacity.
 template <class T, int N>
 inline Int simse_lenOf(const SmallVector<T, N>& self) {
     return self.size();
 }
 
-// The powers of ten the bit scan settles its guess against.
 static const unsigned long long smStrDigitPow10[20] = {
     1ull, 10ull, 100ull, 1000ull, 10000ull, 100000ull, 1000000ull, 10000000ull,
     100000000ull, 1000000000ull, 10000000000ull, 100000000000ull, 1000000000000ull,
@@ -2248,12 +2087,6 @@ static const unsigned long long smStrDigitPow10[20] = {
     100000000000000000ull, 1000000000000000000ull, 10000000000000000000ull
 };
 
-// The digit count, exact for every width (a narrower integer widens to `Int64` with the same
-// digits). `std::bit_width(magnitude)` is the position of the highest set bit plus one - one
-// `clz`/`bsr` - and `1233 / 4096 = 0.3010...` is log10(2), so the product is
-// floor(log10(magnitude)) or one off; the comparison against that power of ten settles which.
-// The early return is the one case the scan cannot answer (`0`), and the sign is a separate
-// term, counted on the widened value so `-INT64_MIN` never overflows.
 inline Int simse_strCountDigits(Int64 value) {
     unsigned long long magnitude =
         value < 0 ? 0ull - (unsigned long long) value : (unsigned long long) value;
@@ -2266,7 +2099,6 @@ inline Int simse_strCountDigits(Int64 value) {
     return digits + (value < 0 ? 1 : 0);
 }
 
-// Two digits per step: the table holds "00".."99", so the inner loop never divides by ten.
 struct SmStrDigitPairTable {
     char text[200];
     constexpr SmStrDigitPairTable() : text() {
@@ -2279,10 +2111,6 @@ struct SmStrDigitPairTable {
 
 static constexpr SmStrDigitPairTable smStrDigitPairs{};
 
-// The digits of `value`, written straight into the `count` bytes `target` already owns and
-// walking *back* through them (the least-significant pair first), so no second buffer and no
-// second pass is needed. `count` must be exact - `simse_strCountDigits`'s answer, sign
-// included - because the slots of the parts around this one depend on it.
 inline void simse_strAddInt(char* target, Int64 value, Int count) {
     unsigned long long magnitude =
         value < 0 ? 0ull - (unsigned long long) value : (unsigned long long) value;
@@ -2303,9 +2131,6 @@ inline void simse_strAddInt(char* target, Int64 value, Int count) {
     }
 }
 
-// The two texts a bool can be, as a `StrView` over a two-entry table - the string-table shape,
-// so a bool part is just another text part (a `memcpy` of a runtime length) and needs no digits
-// of its own. Cold enough that the two loads the compiler folds it to do not matter.
 inline StrView simse_strBoolView(Bool value) {
     static Char texts[2][6] = {"true", "false"};
     static Int lens[2] = {4, 5};
@@ -2336,7 +2161,6 @@ inline List<Str> simse_str_split(const Str& self, const Str& separator) {
     return parts;
 }
 
-// How many bytes of `self` are `ch`: what the byte-separator split reserves up front.
 inline Int simse_count_char_in_str(const Str* self, char ch) {
     Int count = 0;
     const char* data = self->data();
@@ -2429,11 +2253,10 @@ inline Str simse_bool_toString(Bool self) {
     return self ? "true" : "false";
 }
 
-// Expands one run-length encoded series into `out`, which holds `count` values.
 template <class T>
 inline void simse_strTableExpand(const T* stream, Int* out, Int count) {
     Int at = 0;
-    Int cursor = 1; // stream[0] is the series' own length
+    Int cursor = 1; 
     while (at < count) {
         const Int literals = (Int) stream[cursor++];
         for (Int i = 0; i < literals && at < count; i++) out[at++] = (Int) stream[cursor++];
@@ -2447,12 +2270,10 @@ inline void simse_strTableExpand(const T* stream, Int* out, Int count) {
     }
 }
 
-// Fills `table` from the pool and the two expanded series: an offset increment and a
-// byte count per entry, both rebuilt by subtracting the stored value from the one before.
 inline void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, StrView* table, Int count) {
     Char* bytes = const_cast<Char*>(reinterpret_cast<const Char*>(pool));
-    Int delta = 0;  // this entry's offset increment, rebuilt from the start series
-    Int length = 0; // this entry's byte count, rebuilt from the length series
+    Int delta = 0;  
+    Int length = 0; 
     Int at = 0;
     for (Int i = 0; i < count; i++) {
         delta -= starts[i];
@@ -2462,9 +2283,6 @@ inline void simse_strTableDecode(const char* pool, const Int* starts, const Int*
     }
 }
 
-// The three monotonic clocks. `steady_clock` is the one clock the standard library
-// promises cannot go backwards, which is what makes a duration between two readings
-// meaningful (`impl_specs/profiling.md`).
 Int64 simse_nowMillis() {
     const auto now = std::chrono::steady_clock::now().time_since_epoch();
     return (Int64) std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
@@ -2479,6 +2297,3 @@ Int64 simse_nowNanos() {
     const auto now = std::chrono::steady_clock::now().time_since_epoch();
     return (Int64) std::chrono::duration_cast<std::chrono::nanoseconds>(now).count();
 }
-
-// The `simse_write` overloads and the two printers are all inline in the forward block: nothing
-// here.

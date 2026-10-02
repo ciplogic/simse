@@ -4,6 +4,7 @@
 // `buildFrame`/`run`. Extension methods on `IlExtractor` (LinearForm.kt).
 
 package linear
+
 import compiler
 
 import common
@@ -53,7 +54,7 @@ fun IlExtractor.typeIndexText(text: *Str): Int {
 fun IlExtractor.poolIndex(text: *Str): Int {
     val found: *Int = this.poolAt.getPtr(text)
     if (found != null) {
-        return *found
+        return * found
     }
     this.out.pool.append(text)
     this.poolAt.insert(text, this.out.pool.size() - 1)
@@ -63,7 +64,7 @@ fun IlExtractor.poolIndex(text: *Str): Int {
 fun IlExtractor.labelIndex(name: *Str): Int {
     val found: *Int = this.labelAt.getPtr(name)
     if (found != null) {
-        return *found
+        return * found
     }
     this.out.labels.append(name)
     this.labelAt.insert(name, this.out.labels.size() - 1)
@@ -84,7 +85,7 @@ fun IlExtractor.methodIndex(
     }
     val found: *Int = this.methodAt.getPtr(key)
     if (found != null) {
-        return *found
+        return * found
     }
     this.out.methods.append(
         IlMethod(name, kind, argTypes.size(), staticBase, returnType, argTypes, recvIsValue)
@@ -100,7 +101,7 @@ fun IlExtractor.hasVar(name: *Str): Bool {
 fun IlExtractor.varIndex(name: *Str): Int {
     val found: *Int = this.varAt.getPtr(name)
     if (found != null) {
-        return *found
+        return * found
     }
     return -1
 }
@@ -271,11 +272,21 @@ fun IlExtractor.run(body: *List<AstXmlNode>): IlBody {
 fun IlExtractor.buildFrame(): Unit {
     if (!this.fn.closureSymbol.isEmpty()) {
         // A lambda (or a machine's method): the receiver is the class instance whose
-        // fields the captures are.
-        this.addVar(
-            "self", "*" + this.fn.closureSymbol, IlVarKind.Argument,
-            ilPointerNode(ilNamedTypeNode(this.fn.closureSymbol))
-        )
+        // fields the captures are. A lambda's `self` is a *value* - the free invoke takes
+        // the closure by copy (`impl_specs/linear-il.md`); a machine's method (or a task's,
+        // or a destructor's) is a C++ member function, so its `self` is a pointer and the
+        // body's fields are reached through C++'s `this`.
+        if (xmlIsEmpty(this.fn.selfDecl)) {
+            this.addVar(
+                "self", this.fn.closureSymbol, IlVarKind.Argument,
+                ilNamedTypeNode(this.fn.closureSymbol)
+            )
+        } else {
+            this.addVar(
+                "self", "*" + this.fn.closureSymbol, IlVarKind.Argument,
+                ilPointerNode(ilNamedTypeNode(this.fn.closureSymbol))
+            )
+        }
         var i: Int = 0
         while (i < this.fn.paramNames.size()) {
             var paramType: AstXmlNode = xmlEmptyNode()
@@ -344,4 +355,3 @@ fun IlExtractor.signatureText(): Str {
     val joinStrsText: Str = joinStrs(params, ", ")
     return `(@joinStrsText) -> @retText`
 }
-

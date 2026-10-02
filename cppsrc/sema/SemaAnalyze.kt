@@ -4,6 +4,7 @@
 // methods on `Analyzer` (Sema.kt); SemaCollect.kt has the collection and scopes.
 
 package sema
+
 import compiler
 
 import parser
@@ -324,6 +325,24 @@ fun Analyzer.analyzeExpr(expr: *AstXmlNode): Unit {
         }
 
         AstNodeCategory.ExprLambda -> {
+            // The enclosing receiver is not captured (reference captures are deferred), and a
+            // lambda's C++ receiver is the closure itself: `this` inside it would silently
+            // name the wrong object, so report it here.
+            val bodyContainer: *AstXmlNode = xmlChildPtr(expr, AstNodeKind.Body)
+            var thisAt: AstXmlNode = xmlEmptyNode()
+            var b: Int = 0
+            while (b < bodyContainer.Children.count()) {
+                if (xmlIsEmpty(thisAt)) {
+                    thisAt = semLambdaThisNode(bodyContainer.Children[b])
+                }
+                b = b + 1
+            }
+            if (!xmlIsEmpty(thisAt)) {
+                this.diag(
+                    xmlLine(thisAt), xmlColumn(thisAt),
+                    "a lambda cannot reach `this` yet: a lambda captures by value, and reference captures are deferred"
+                )
+            }
             this.pushScope()
             val names: List<Str> = xmlLambdaParams(expr)
             val paramTypes: List<AstXmlNode> = xmlChildren(expr, AstNodeKind.ParamType)
@@ -355,6 +374,26 @@ fun Analyzer.analyzeExpr(expr: *AstXmlNode): Unit {
             return
         }
     }
+}
+
+// The first `this` a lambda's own body names, as the node to position the diagnostic at. A
+// nested lambda is its own body and reports its own; empty when there is none.
+fun semLambdaThisNode(node: *AstXmlNode): AstXmlNode {
+    if (xmlKind(node) == AstNodeCategory.ExprLambda) {
+        return xmlEmptyNode()
+    }
+    if (xmlKind(node) == AstNodeCategory.ExprName
+        && xmlAttr(node, AstNodeAttributeKind.Name) == "this"
+    ) {
+        return node
+    }
+    for (*child in node.Children) {
+        val found: AstXmlNode = semLambdaThisNode(child)
+        if (!xmlIsEmpty(found)) {
+            return found
+        }
+    }
+    return xmlEmptyNode()
 }
 
 fun Analyzer.checkGenericNameArity(expr: *AstXmlNode): Unit {
@@ -404,7 +443,8 @@ fun Analyzer.checkHandleArgument(callee: *Str, function: *AstXmlNode, index: Int
         pointeeText = semaTypeText(pointee)
     }
     this.diag(
-        xmlLine(arg), xmlColumn(arg), `'@callee' takes a counted reference ('&@pointeeText') and the argument is a raw pointer: a pointer cannot become a reference in place - make a reference variable one line before the call (var ref: &@pointeeText = &value)`
+        xmlLine(arg),
+        xmlColumn(arg),
+        `'@callee' takes a counted reference ('&@pointeeText') and the argument is a raw pointer: a pointer cannot become a reference in place - make a reference variable one line before the call (var ref: &@pointeeText = &value)`
     )
 }
-

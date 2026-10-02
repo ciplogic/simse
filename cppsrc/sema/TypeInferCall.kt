@@ -5,15 +5,18 @@
 // (TypeInfer.kt).
 
 package sema
+
 import compiler
 
 import common
 
-// The return type of a call, the callee's type parameters bound from an explicit
-// instantiation (`identity<Int>(7)`) or the receiver (`Box<Int>.get()`). A result that
-// still mentions a type parameter stays symbolic (the C++ template specializes it
-// later); a parameter nothing binds leaves no type to spell.
-fun SemInfer.functionReturn(name: *Str, typeArgs: *List<AstXmlNode>, receiver: *AstXmlNode): AstXmlNode {
+// The return type of a call: the callee's type parameters bound from the receiver, an
+// explicit instantiation (`identity<Int>(7)`) or the types of the arguments - the last is
+// what makes `twice(f, 5)` an `Int`. A result that still mentions an unbound parameter has
+// no type to spell; the checker reports that at the call (`checkCallDeduction`).
+fun SemInfer.functionReturn(
+    name: *Str, typeArgs: *List<AstXmlNode>, receiver: *AstXmlNode, argNodes: *List<AstXmlNode>
+): AstXmlNode {
     var i: Int = 0
     while (i < this.facts.functions.size()) {
         val fn: *SemFnFact = *this.facts.functions[i]
@@ -56,12 +59,86 @@ fun SemInfer.functionReturn(name: *Str, typeArgs: *List<AstXmlNode>, receiver: *
                 continue
             }
         }
+        if (fn.templateParams.size() > 0) {
+            var argTypes: List<AstXmlNode> = List<AstXmlNode>()
+            var a: Int = 0
+            while (a < argNodes.size()) {
+                argTypes.append(this.infer(argNodes[a]))
+                a = a + 1
+            }
+            semBindCallArgs(fn.decl, xmlEmptyNode(), *argTypes, *fn.templateParams, *bindings)
+        }
         val result: AstXmlNode = semSubstitute(ret, bindings, fn.templateParams)
         if (!xmlIsEmpty(result)) {
             return semMachineType(result, fn, bindings)
         }
     }
     return xmlEmptyNode()
+}
+
+// Binds a declaration's type parameters from the types of a call's arguments: one more
+// source the emitter's C++ deduction cannot see (a lambda names its contract only against
+// the parameter type, and a `Str` literal is a `StrView` in C++). `argTypes` follows the
+// receiver when the call has one, like `params` does; `decl` is the *callee's*, so the
+// parameter pair is `params[paramOffset + i]`.
+fun semBindCallArgs(
+    decl: *AstXmlNode, receiver: AstXmlNode, argTypes: *List<AstXmlNode>,
+    templateParams: *List<Str>, bindings: *Dictionary<Str, AstXmlNode>
+): Unit {
+    if (templateParams.size() == 0) {
+        return
+    }
+    if (!xmlIsEmpty(receiver)) {
+        // The written receiver (`fun List<T>.mapAll(...)`) or the explicit-`this` one
+        // (`fun toString(this: Int)`), whichever the declaration uses.
+        var pattern: AstXmlNode = xmlChild(decl, AstNodeKind.Receiver)
+        if (xmlIsEmpty(pattern)) {
+            pattern = semExtensionReceiver(decl)
+        }
+        if (!xmlIsEmpty(pattern)) {
+            semBindBestEffort(pattern, receiver, templateParams, bindings)
+        }
+    }
+    val params: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
+    val offset: Int = semReceiverParams(decl)
+    var i: Int = 0
+    while (i < argTypes.size()) {
+        val at: Int = offset + i
+        if (at >= params.size()) {
+            break
+        }
+        val paramType: *AstXmlNode = xmlChildPtr(params[at], AstNodeKind.Type)
+        val argType: AstXmlNode = argTypes[i]
+        i = i + 1
+        if (xmlIsEmpty(paramType) || xmlIsEmpty(argType)) {
+            continue
+        }
+        semBindBestEffort(*paramType, argType, templateParams, bindings)
+    }
+}
+
+// One pattern/actual pair into `bindings`, when their *shapes* match: a pair that does not
+// is either an argument the call converts (an `Int` into a `Float64`) or one another
+// overload takes, and binds nothing. Bindings are collected aside first, so a pair that
+// fails halfway does not leave a half-bound parameter behind.
+fun semBindBestEffort(
+    pattern: AstXmlNode, actual: AstXmlNode, templateParams: *List<Str>,
+    bindings: *Dictionary<Str, AstXmlNode>
+): Unit {
+    var found: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
+    if (!semBindTypes(pattern, actual, templateParams, found)) {
+        return
+    }
+    val names: List<Str> = found.keys()
+    var i: Int = 0
+    while (i < names.size()) {
+        val name: Str = names[i]
+        i = i + 1
+        val bound: *AstXmlNode = found.getPtr(name)
+        if (bound != null) {
+            semBindOne(bindings, name, *bound)
+        }
+    }
 }
 
 // The result of a member call (`recv.name(...)`): a declared extension/method, then a
@@ -93,7 +170,7 @@ fun SemInfer.resolveAlias(typeNode: *AstXmlNode): AstXmlNode {
     return current
 }
 
-fun SemInfer.memberReturn(callee: *AstXmlNode): AstXmlNode {
+fun SemInfer.memberReturn(callee: *AstXmlNode, argNodes: *List<AstXmlNode>): AstXmlNode {
     val receiverType: AstXmlNode = this.infer(xmlChildPtr(callee, AstNodeKind.Receiver))
     val recv: AstXmlNode = this.resolveAlias(semPointee(receiverType))
     if (xmlIsEmpty(recv)) {
@@ -117,6 +194,15 @@ fun SemInfer.memberReturn(callee: *AstXmlNode): AstXmlNode {
         var bindings: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
         if (!semBindTypes(this.resolveAlias(fn.receiver), recv, fn.templateParams, bindings)) {
             continue
+        }
+        if (fn.templateParams.size() > 0) {
+            var argTypes: List<AstXmlNode> = List<AstXmlNode>()
+            var a: Int = 0
+            while (a < argNodes.size()) {
+                argTypes.append(this.infer(argNodes[a]))
+                a = a + 1
+            }
+            semBindCallArgs(fn.decl, xmlEmptyNode(), *argTypes, *fn.templateParams, *bindings)
         }
         val result: AstXmlNode = semSubstitute(ret, bindings, fn.templateParams)
         if (!xmlIsEmpty(result)) {
@@ -269,7 +355,7 @@ fun SemInfer.callableReturn(typeNode: *AstXmlNode): AstXmlNode {
     return xmlEmptyNode()
 }
 
-fun SemInfer.callReturn(callee: *AstXmlNode): AstXmlNode {
+fun SemInfer.callReturn(callee: *AstXmlNode, argNodes: *List<AstXmlNode>): AstXmlNode {
     val kind: AstNodeCategory = xmlKind(callee)
     when (kind) {
         AstNodeCategory.ExprGenericName -> {
@@ -277,7 +363,7 @@ fun SemInfer.callReturn(callee: *AstXmlNode): AstXmlNode {
             if (this.isTypeName(name)) {
                 return semGenericType(name, xmlChildren(callee, AstNodeKind.TypeArg))
             }
-            return this.functionReturn(name, xmlChildren(callee, AstNodeKind.TypeArg), xmlEmptyNode())
+            return this.functionReturn(name, xmlChildren(callee, AstNodeKind.TypeArg), xmlEmptyNode(), argNodes)
         }
 
         AstNodeCategory.ExprName -> {
@@ -285,7 +371,7 @@ fun SemInfer.callReturn(callee: *AstXmlNode): AstXmlNode {
             if (this.isTypeName(name)) {
                 return semNamedType(name)
             }
-            val direct: AstXmlNode = this.functionReturn(name, List<AstXmlNode>(), xmlEmptyNode())
+            val direct: AstXmlNode = this.functionReturn(name, List<AstXmlNode>(), xmlEmptyNode(), argNodes)
             if (!xmlIsEmpty(direct)) {
                 return direct
             }
@@ -293,7 +379,7 @@ fun SemInfer.callReturn(callee: *AstXmlNode): AstXmlNode {
         }
 
         AstNodeCategory.ExprMember -> {
-            return this.memberReturn(callee)
+            return this.memberReturn(callee, argNodes)
         }
     }
     return xmlEmptyNode()
@@ -417,7 +503,7 @@ fun SemInfer.infer(e: *AstXmlNode): AstXmlNode {
         }
 
         AstNodeCategory.ExprCall -> {
-            return this.callReturn(xmlChildPtr(e, AstNodeKind.Callee))
+            return this.callReturn(xmlChildPtr(e, AstNodeKind.Callee), xmlChildren(e, AstNodeKind.Arg))
         }
 
         AstNodeCategory.ExprIndex -> {
@@ -503,4 +589,3 @@ fun SemInfer.infer(e: *AstXmlNode): AstXmlNode {
     // business, which may infer its parameters from there).
     return xmlEmptyNode()
 }
-

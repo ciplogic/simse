@@ -5,6 +5,7 @@
 // (Codegen.kt).
 
 package codegen
+
 import compiler
 
 import sema
@@ -146,11 +147,11 @@ fun Emitter.computeEmittedTypes(): Dictionary<Str, Bool> {
                 continue
             }
             for (*field in xmlChildren(decl, AstNodeKind.Field)) {
-                val fieldType: *AstXmlNode = xmlChildPtr(field, AstNodeKind.Type)
-                if (!xmlIsEmpty(fieldType) && this.gatherTypeNames(fieldType, out)) {
-                    changed = true
-                }
+            val fieldType: *AstXmlNode = xmlChildPtr(field, AstNodeKind.Type)
+            if (!xmlIsEmpty(fieldType) && this.gatherTypeNames(fieldType, out)) {
+                changed = true
             }
+        }
         }
     }
     return out
@@ -169,7 +170,7 @@ fun Emitter.gatherTypeNames(node: *AstXmlNode, out: *Dictionary<Str, Bool>): Boo
     }
     var added: Bool = false
     val name: *Str = xmlAttr(node, AstNodeAttributeKind.Name)
-    if (*name != "") {
+    if ( * name != "") {
         val at: Int = out.size()
         out.insert(*name, true)
         if (out.size() != at) {
@@ -320,6 +321,9 @@ fun Emitter.emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit
             this.line(0, tmpl)
         }
         this.line(0, signature + ";")
+        if (!isMain && !mainArgs) {
+            this.emitDeducedCallableOverload(fn, decl, ret, fnName, true)
+        }
         return
     }
     if (!fn.hasBody) {
@@ -373,6 +377,158 @@ fun Emitter.emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit
         return
     }
     this.line(0, "}")
+    if (!isMain && !mainArgs) {
+        this.emitDeducedCallableOverload(fn, decl, ret, fnName, false)
+    }
+}
+
+// One parameter of a generic function whose declared type is a callable that mentions the
+// function's own type parameters.
+data class CgCallableArg(
+    var name: Str,
+    var typeText: Str
+)
+
+// A generic function whose callable parameter type mentions its own type parameters gets a
+// forwarding overload: the callable is taken as its own template parameter and converted
+// in the forwarding call. MSVC will not deduce a type parameter through a dependent
+// `std::function` argument when the argument is a closure or a named function - it works
+// when the argument already *is* a `Func<...>`, which is why the declared signature stays:
+// the overload is less specialized, so partial ordering keeps using it there.
+fun Emitter.emitDeducedCallableOverload(
+    fn: *CgFn, decl: *AstXmlNode, ret: Str, fnName: Str, prototypeOnly: Bool
+): Unit {
+    if (fn.templateParams.size() == 0 || !fn.hasBody) {
+        return
+    }
+    val callables: List<CgCallableArg> = this.cgDeducedCallables(fn, decl)
+    if (callables.size() == 0) {
+        return
+    }
+    var taken: List<Str> = List<Str>()
+    for (*typeParam in fn.templateParams) {
+        taken.append(typeParam)
+    }
+    for (*param in xmlChildren(decl, AstNodeKind.Param)) {
+        taken.append(xmlAttr(param, AstNodeAttributeKind.Name))
+    }
+    var cbNames: List<Str> = List<Str>()
+    var i: Int = 0
+    while (i < callables.size()) {
+        var cbName: Str = "_sm_cb" + (i + 1).toString()
+        while (taken.contains(cbName)) {
+            cbName = cbName + "_"
+        }
+        taken.append(cbName)
+        cbNames.append(cbName)
+        i = i + 1
+    }
+    var params: List<Str> = List<Str>()
+    var args: List<Str> = List<Str>()
+    if (!xmlIsEmpty(fn.receiver)) {
+        params.append(this.receiverParam(fn.receiver))
+        args.append("self")
+        if (this.failed) {
+            return
+        }
+    }
+    for (*param in xmlChildren(decl, AstNodeKind.Param)) {
+        val name: Str = xmlAttr(param, AstNodeAttributeKind.Name)
+        if (name == "this") {
+            continue
+        }
+        var callableAt: Int = -1
+        var c: Int = 0
+        while (c < callables.size()) {
+            if (callables[c].name == name) {
+                callableAt = c
+            }
+            c = c + 1
+        }
+        if (callableAt >= 0) {
+            val cbName2: Str = cbNames[callableAt]
+            params.append(`@cbName2 @name`)
+            val typeText: Str = callables[callableAt].typeText
+            args.append(`@typeText(@name)`)
+            continue
+        }
+        val paramType: *AstXmlNode = xmlChildPtr(param, AstNodeKind.Type)
+        if (xmlIsEmpty(paramType)) {
+            return // the declared signature reports the missing type
+        }
+        val typeText2: Str = this.type(paramType)
+        if (this.failed) {
+            return
+        }
+        params.append(`@typeText2 @name`)
+        args.append(name)
+    }
+    var all: List<Str> = List<Str>()
+    for (*typeParam2 in fn.templateParams) {
+        all.append(typeParam2)
+    }
+    for (*cbName3 in cbNames) {
+        all.append(cbName3)
+    }
+    val tmpl: Str = this.templateClause(all)
+    val cgJoinText: Str = cgJoin(params, ", ")
+    val cgJoinText2: Str = cgJoin(args, ", ")
+    if (prototypeOnly) {
+        this.line(0, tmpl)
+        this.line(0, `@ret @fnName(@cgJoinText);`)
+        return
+    }
+    this.line(0, tmpl)
+    this.line(0, `@ret @fnName(@cgJoinText) {`)
+    if (ret == "void") {
+        this.line(1, `@fnName(@cgJoinText2);`)
+    } else {
+        this.line(1, `return @fnName(@cgJoinText2);`)
+    }
+    this.line(0, "}")
+}
+
+// The callable parameters that need the forwarding overload: the declared type resolves to
+// a function type and mentions one of the function's own type parameters.
+fun Emitter.cgDeducedCallables(fn: *CgFn, decl: *AstXmlNode): List<CgCallableArg> {
+    var out: List<CgCallableArg> = List<CgCallableArg>()
+    for (*param in xmlChildren(decl, AstNodeKind.Param)) {
+        val name: Str = xmlAttr(param, AstNodeAttributeKind.Name)
+        if (name == "this") {
+            continue
+        }
+        val typeNode: *AstXmlNode = xmlChildPtr(param, AstNodeKind.Type)
+        if (xmlIsEmpty(typeNode)) {
+            continue
+        }
+        if (xmlKind(this.resolveAlias(*typeNode)) != AstNodeCategory.TypeFunction) {
+            continue
+        }
+        if (!cgTypeMentions(typeNode, fn.templateParams)) {
+            continue
+        }
+        out.append(CgCallableArg(name, this.type(typeNode)))
+    }
+    return out
+}
+
+// Whether a type node names one of the given type parameters, at any depth.
+fun cgTypeMentions(node: *AstXmlNode, names: *List<Str>): Bool {
+    if (names.size() == 0) {
+        return false
+    }
+    val kind: AstNodeCategory = xmlKind(node)
+    if (kind == AstNodeCategory.TypeNamed || kind == AstNodeCategory.TypeGeneric) {
+        if (names.contains(xmlAttr(node, AstNodeAttributeKind.Name))) {
+            return true
+        }
+    }
+    for (*child in node.Children) {
+        if (cgTypeMentions(child, names)) {
+            return true
+        }
+    }
+    return false
 }
 
 // The instruction-list backend lives in `cppsrc/codegen/IlCodeGen.kt`: the IL's types and

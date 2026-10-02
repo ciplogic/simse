@@ -4,6 +4,7 @@
 // `impl_specs/async.md`). `Emitter` extension functions.
 
 package codegen
+
 import compiler
 
 import sema
@@ -13,21 +14,66 @@ import linear
 import optimizations
 import profiling
 
-// The classes of every lambda this body constructs, emitted once. A definition must
-// precede its construction, and "just before the body" is reproducible.
+// The closures a body constructs, into their own section: first every data class (so a
+// lambda's body may construct a nested one), then every free invoke method. The class text
+// is emitted once per symbol; a second half marks the methods with a `_invoke` key.
 fun Emitter.emitClosureClasses(unit: *IlUnit): IlText {
-    var text = Str()
-    for (*closure in unit.closures) {
-        if (!this.emittedClosures.has(closure.symbol)) {
-            val classText: IlText = this.emitClosureClass(unit, closure)
-            if (!classText.ok) {
-                return classText
-            }
-            text.appendStr(classText.text)
-            this.emittedClosures.insert(closure.symbol, true)
-        }
+    if (unit.closures.size() == 0) {
+        return IlText(true, "", "")
     }
+    val savedClosures: Dictionary<Str, Str> = this.closureTypes
+    this.closureTypes = this.ilClosureTypeTable(unit)
+    var classesText = Str()
+    var i: Int = 0
+    while (i < unit.closures.size()) {
+        val closure: *IlClosure = *unit.closures[i]
+        i = i + 1
+        if (this.emittedClosures.has(closure.symbol)) {
+            continue
+        }
+        val classText: IlText = this.emitClosureStruct(closure)
+        if (!classText.ok) {
+            this.closureFail(closure, classText.reason)
+            this.closureTypes = savedClosures
+            return classText
+        }
+        classesText.appendStr(classText.text)
+        this.emittedClosures.insert(closure.symbol, true)
+    }
+    var methodsText = Str()
+    i = 0
+    while (i < unit.closures.size()) {
+        val closure: *IlClosure = *unit.closures[i]
+        i = i + 1
+        val methodKey: Str = closure.symbol + "_invoke"
+        if (this.emittedClosures.has(methodKey)) {
+            continue
+        }
+        val methodText: IlText = this.emitClosureInvoke(unit, closure)
+        if (!methodText.ok) {
+            this.closureFail(closure, methodText.reason)
+            this.closureTypes = savedClosures
+            return methodText
+        }
+        methodsText.appendStr(methodText.text)
+        this.emittedClosures.insert(methodKey, true)
+    }
+    this.closureTypes = savedClosures
+    var text = Str()
+    text.appendStr(classesText)
+    text.appendStr(methodsText)
+    this.sections.appendTo("closures", text)
     return IlText(true, text, "")
+}
+
+// A closure failure is the *lambda's*, not the enclosing function's: position it at the
+// lambda expression the author wrote.
+fun Emitter.closureFail(closure: *IlClosure, message: *Str): Unit {
+    var node: AstXmlNode =
+        AstXmlNode(AstNodeKind.Expr, AstNodeCategory.None, List<AstNodeAttribute>(), Array<AstXmlNode>())
+    node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Line, ilIntText(closure.line)))
+    node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Column, ilIntText(closure.column)))
+    this.fail(node, message)
 }
 
 // A yielding function, emitted as the state machine it was lowered to
@@ -95,6 +141,7 @@ fun Emitter.emitYieldable(
         }
         val cgJoinText: Str = cgJoin(factoryParams, ", ")
         this.line(0, `@factory(@cgJoinText);`)
+        this.emitDeducedCallableOverload(fn, decl, *classType, qualifyText, true)
         return
     }
     this.sourceComment(decl)
@@ -121,6 +168,7 @@ fun Emitter.emitYieldable(
     this.line(1, "machine.branch = 0;")
     this.line(1, "return machine;")
     this.line(0, "}")
+    this.emitDeducedCallableOverload(fn, decl, *classType, qualifyText, false)
 }
 
 // The factory's parameters: the receiver first when there is one (an extension function's
@@ -363,25 +411,27 @@ fun Emitter.emitBodyAt(info: *IlFunction, body: *List<AstXmlNode>, file: *Str, l
     if (!emitted.ok) {
         val infoSymbolText: Str = info.symbol
         val emittedReasonText: Str = emitted.reason
-        this.failFromInfo(
-            info, `internal: the body of '@infoSymbolText' is not expressible in the IL (@emittedReasonText)`
-        )
+        // A shape the extractor itself reported is the author's, not an internal one.
+        var message: Str = `internal: the body of '@infoSymbolText' is not expressible in the IL (@emittedReasonText)`
+        if (emittedReasonText.startsWith("unsupported: ")) {
+            message = emittedReasonText
+        }
+        this.failFromInfo(info, message)
         return
     }
-    // A lambda is a closure class, which the text above *constructs* but does not define:
-    // the class goes just above the body that builds it.
-    var classes: IlText = IlText(true, "", "")
-    if (unit.closures.size() > 0) {
-        classes = this.emitClosureClasses(unit)
-        if (!classes.ok) {
+    // A lambda is a data class plus a free invoke method, which the text above *constructs*
+    // but does not define: both go into the `closures` section, all of them before the
+    // bodies, so no body needs a local class with an `auto operator()`.
+    val classes: IlText = this.emitClosureClasses(unit)
+    if (!classes.ok) {
+        if (!this.failed) {
             val classesReasonText: Str = classes.reason
             this.failFromInfo(
                 info, `internal: a closure class could not be written (@classesReasonText)`
             )
-            return
         }
+        return
     }
-    this.sections.appendText(classes.text)
     // The profiler's timer comes before the body's storage, so no jump can cross into its
     // scope (impl_specs/profiling.md). `measure` is false for a machine's methods.
     if (measure) {
@@ -392,6 +442,3 @@ fun Emitter.emitBodyAt(info: *IlFunction, body: *List<AstXmlNode>, file: *Str, l
     }
     this.sections.appendText(emitted.text)
 }
-
-
-

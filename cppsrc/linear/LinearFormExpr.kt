@@ -4,6 +4,7 @@
 // Extension methods on `IlExtractor` (LinearForm.kt).
 
 package linear
+
 import compiler
 
 import common
@@ -286,7 +287,7 @@ fun IlExtractor.isBoxedConstruction(e: *AstXmlNode): Bool {
 fun IlExtractor.asConstruction(e: *AstXmlNode): AstXmlNode {
     val callee: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Callee)
     if (xmlKind(callee) == AstNodeCategory.ExprGenericName) {
-        return *e
+        return * e
     }
     var generic: AstXmlNode =
         AstXmlNode(AstNodeKind.Callee, AstNodeCategory.ExprGenericName, List<AstNodeAttribute>(), Array<AstXmlNode>())
@@ -311,7 +312,7 @@ fun IlExtractor.dataClassDecl(name: *Str): AstXmlNode {
     if (xmlKind(decl) != AstNodeCategory.DataClass) {
         return xmlEmptyNode()
     }
-    return *decl
+    return * decl
 }
 
 // A fact's receiver *pattern*: its recorded receiver, or - for a `native fun` extension,
@@ -347,7 +348,7 @@ fun IlExtractor.packStart(target: *AstXmlNode, args: *List<AstXmlNode>): Int {
     if (params.size() == 0) {
         return -1
     }
-    val wanted: *AstXmlNode = xmlChildPtr(params[params.size() - 1], AstNodeKind.Type)
+    val wanted: *AstXmlNode = xmlChildPtr(params[params.size()-1], AstNodeKind.Type)
     if (!semIsPackTarget(wanted)) {
         return -1
     }
@@ -418,6 +419,13 @@ fun IlExtractor.convertArgument(callee: *AstXmlNode, param: *AstXmlNode, arg: *A
     if (xmlIsEmpty(param)) {
         return this.operandOf(arg)
     }
+    // A lambda takes its contract from the parameter's callable type: an omitted parameter
+    // type and the result type come from there, and the closure is built directly.
+    if (xmlKind(arg) == AstNodeCategory.ExprLambda) {
+        if (!xmlIsEmpty(this.ilCallableOf(param))) {
+            return this.lambdaOf(arg, -1, param, *callee)
+        }
+    }
     val wantPointer: Bool = xmlKind(param) == AstNodeCategory.TypePointer
     val wantShared: Bool = !wantPointer && ilIsHandleType(param)
     // The argument's type, cheaply where it can be: the rest asks the type *rules*, never a
@@ -484,4 +492,3 @@ fun IlExtractor.convertArgument(callee: *AstXmlNode, param: *AstXmlNode, arg: *A
     }
     return this.readThrough(wanted, this.operandOf(arg))
 }
-

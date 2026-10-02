@@ -5,6 +5,7 @@
 // IlCodeGen.kt holds the IL model (IlFrame/IlText/...).
 
 package codegen
+
 import compiler
 
 import sema
@@ -154,7 +155,7 @@ fun Emitter.ilConstructsClosure(op: *IlOp, il: *IlBody): Bool {
     if (typeAt < 0 || typeAt >= il.types.size()) {
         return false
     }
-    return this.closureSymbols.has(il.types[typeAt])
+    return this.closureTypes.has(il.types[typeAt])
 }
 
 fun Emitter.ilSlotHoldsClosure(il: *IlBody, frame: *IlFrame, slot: Int): Bool {
@@ -165,18 +166,47 @@ fun Emitter.ilSlotHoldsClosure(il: *IlBody, frame: *IlFrame, slot: Int): Bool {
     return this.ilConstructsClosure(il.ops[def], il)
 }
 
-// The C++ of a slot's declared type. A closure class is spelled by its own name: it is
-// emitted above the body that constructs it, so no type dictionary knows it.
+// The C++ of a slot's declared type. A closure class is spelled by its own name (with a
+// generic owner's arguments): it is emitted into the `closures` section, so no type
+// dictionary knows it.
 fun Emitter.ilDeclTypeText(il: *IlBody, slot: Int): Str {
     val slotType: AstXmlNode = ilVarType(il, slot)
     if (xmlIsEmpty(slotType)) {
         return ""
     }
-    val typeIndex: Int = il.vars[slot].typeIndex
-    if (typeIndex >= 0 && typeIndex < il.types.size() && this.closureSymbols.has(il.types[typeIndex])) {
-        return il.types[typeIndex]
+    val closureText: Opt<Str> = this.ilClosureTypeOfNodeOpt(slotType)
+    if (closureText.hasValue()) {
+        return closureText.value()
     }
     return this.type(slotType)
+}
+
+// The closure class a type node names, when it names one of the unit's classes.
+fun Emitter.ilClosureTypeOfNodeOpt(typeNode: AstXmlNode): Opt<Str> {
+    if (xmlKind(typeNode) != AstNodeCategory.TypeNamed) {
+        return ()
+    }
+    val name: Str = xmlAttr(typeNode, AstNodeAttributeKind.Name)
+    val found: *Str = this.closureTypes.getPtr(name)
+    if (found == null) {
+        return ()
+    }
+    return ( * found)
+}
+
+// The closure class a local name holds, when it holds one: its call goes to the class's
+// free `_invoke` rather than to C++'s `operator()`. A function-typed value (`Func<...>`) is
+// not one, so a call through it is left as it stands.
+fun Emitter.ilClosureNameOf(name: *Str): Str {
+    val typeNode: *AstXmlNode = this.localTypes.getPtr(name)
+    if (typeNode == null || xmlKind(*typeNode) != AstNodeCategory.TypeNamed) {
+        return ""
+    }
+    val typeName: Str = xmlAttr(*typeNode, AstNodeAttributeKind.Name)
+    if (!this.closureTypes.has(typeName)) {
+        return ""
+    }
+    return typeName
 }
 
 // One declarator of a line that has already written its type: `* b`, or `b`.
@@ -324,10 +354,14 @@ fun Emitter.ilSlotNode(il: *IlBody, frame: *IlFrame, slot: Int, depth: Int): Ast
         return xmlEmptyNode()
     }
     val name: Str = il.vars[slot].name
-    // The receiver slot is the language's `this`, which the emitter spells `(*self)`
-    // (`(*this)` inside a closure class).
+    // A receiver slot is the language's `this`, which the emitter spells `(*self)` /
+    // `this->`. A lambda's free invoke is the one body whose `self` is a real value (its
+    // class passed by copy), so there the name stands as it is (`emitClosureBodyText`).
     if (name == "self") {
-        return this.ilNameNode("this")
+        val selfType: AstXmlNode = ilVarType(il, slot)
+        if (xmlIsEmpty(selfType) || this.isHandleType(selfType)) {
+            return this.ilNameNode("this")
+        }
     }
     if (this.ilFolded(il, frame, slot)) {
         return this.ilOpValueNode(il, frame, this.ilIntAt(frame.defOp, slot, -1), depth + 1)
@@ -457,6 +491,7 @@ fun Emitter.ilCallNode(il: *IlBody, frame: *IlFrame, op: *IlOp): AstXmlNode {
         AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprCall, List<AstNodeAttribute>(), Array<AstXmlNode>())
     var first: Int = methodAt + 1
     var callee: AstXmlNode = xmlEmptyNode()
+    var closureCall: Str = ""
     if (method.kind == IlMethodKind.Method) {
         val recv: AstXmlNode = this.ilSlotNode(il, frame, this.ilOpOperand(op.operands, first), 0)
         if (xmlIsEmpty(recv)) {
@@ -475,12 +510,24 @@ fun Emitter.ilCallNode(il: *IlBody, frame: *IlFrame, op: *IlOp): AstXmlNode {
         }
         callee = this.ilMemberNode(base, method.name)
     } else {
-        callee = this.ilNameNode(method.name)
+        // A call through a closure-typed value reaches the free method its class carries:
+        // `<symbol>_invoke(x, args)`, the instance passed by copy. A `Func<...>` value is
+        // not one - it calls as it stands.
+        closureCall = this.ilClosureNameOf(method.name)
+        if (closureCall != "") {
+            callee = this.ilNameNode(closureCall + "_invoke")
+        } else {
+            callee = this.ilNameNode(method.name)
+        }
     }
     if (xmlIsEmpty(callee)) {
         return xmlEmptyNode()
     }
     xmlAddChild(call, this.renameRole(callee, AstNodeKind.Callee))
+    if (closureCall != "") {
+        val selfNode: AstXmlNode = this.ilNameNode(method.name)
+        xmlAddChild(call, this.renameRole(selfNode, AstNodeKind.Arg))
+    }
     var i: Int = first
     while (i < op.operands.size()) {
         val arg: AstXmlNode = this.ilOperandNode(il, frame, op.operands[i], 0)
@@ -692,5 +739,3 @@ fun Emitter.ilJumpCrossing(il: *IlBody, labelPos: *List<Int>, position: Int): Il
     }
     return crossing
 }
-
-

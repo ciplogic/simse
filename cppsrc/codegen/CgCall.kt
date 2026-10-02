@@ -4,6 +4,7 @@
 // methods on `Emitter` (Codegen.kt).
 
 package codegen
+
 import compiler
 
 import sema
@@ -314,7 +315,17 @@ fun Emitter.call(e: *AstXmlNode): Str {
                 ) {
                     args.append(this.receiverArg(targetReceiver, argNodes[0]))
                 } else {
-                    args.append(this.expr(arg, 0, expectedArg))
+                    var argText: Str = this.expr(arg, 0, expectedArg)
+                    // A string literal is a `Str`: where the parameter is one of the callee's
+                    // bare type parameters, C++ deduces `StrView` from the pool entry and
+                    // instantiates the call at the wrong type. Materialise the value so
+                    // deduction sees `Str` (`stress/generic-callable`).
+                    if (xmlKind(arg) == AstNodeCategory.ExprStrLit
+                        && semIsBareTypeParam(target, expectedArg)
+                    ) {
+                        argText = `Str(@argText)`
+                    }
+                    args.append(argText)
                 }
             }
             val nativeOpt: Opt<Str> = this.nativeSymbols.get(name)
@@ -397,7 +408,8 @@ fun Emitter.call(e: *AstXmlNode): Str {
             if (xmlKind(receiverExpr) == AstNodeCategory.ExprGenericName) {
                 val genericName: Str = xmlAttr(receiverExpr, AstNodeAttributeKind.Name)
                 val qualifyText4: Str = this.qualify(this.typePackage(genericName), genericName)
-                val typeArgsStringText4: Str = this.typeArgsString(genericName, xmlChildren(receiverExpr, AstNodeKind.TypeArg))
+                val typeArgsStringText4: Str =
+                    this.typeArgsString(genericName, xmlChildren(receiverExpr, AstNodeKind.TypeArg))
                 val cgJoinText6: Str = cgJoin(args, ", ")
                 return `@qualifyText4<@typeArgsStringText4>::@calleeText(@cgJoinText6)`
             }
@@ -459,4 +471,3 @@ fun Emitter.call(e: *AstXmlNode): Str {
     this.fail(e, "unsupported: call target")
     return "/*unsupported*/"
 }
-

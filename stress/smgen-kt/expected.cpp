@@ -2,33 +2,6 @@
 #include "cppsrc/rtl/simse.hpp"
 #include <type_traits>
 
-// The string-literal pool's decoder (impl_specs/rtl-abi.md, "String literals: one
-// table"): the emitter writes one pool of bytes plus two run-length encoded index
-// series - where each entry starts and how long it is - and this expands them into the
-// `StrView` per entry, once, before `main` runs. It was cppsrc/rtl/strtable.hpp.
-//
-// Six things are deliberate in the shape the emitter writes:
-//
-//  - **Both series are stored as "what to subtract from the previous value"**, with an
-//    implicit 0 before the first entry: `value[i] = value[i-1] - series[i]`. The
-//    literals are ordered longest first, so a length series descends slowly and a
-//    *difference* of it is a small number - mostly 0 between the many literals of equal
-//    length (85% of them on the compiler's own table).
-//  - **Each series is run-length encoded**: its length first, then alternating blocks of
-//    non-repeating values (a count, then that many values) and of runs (a count, then
-//    that many `times, value` pairs), until the length is filled. The element type is a
-//    template parameter because the emitter picks the width: `Int16` when every number
-//    fits, `Int` otherwise.
-//  - The pool is the literal texts themselves, adjacent, so the C++ compiler decodes
-//    every escape and the emitter's decoding only has to agree about *how many bytes* an
-//    escape costs. The emitted `static_assert` on the pool's `sizeof` is the check.
-//  - The series are expanded into *stack* arrays in the initializer and dropped when it
-//    returns: no heap, and the encoded statics are all the program carries.
-//  - An entry is a 12-byte `StrView`, not the 32-byte owning `Str` the table used to
-//    hold, and start-up allocates nothing for the literals.
-//  - The pool is `const char` (a string literal, read-only) while `StrView` holds the
-//    language's mutable `Char*`; the constness is cast away here, in the one place the
-//    pool is touched, and nothing writes through it.
 
 template <class T>
 void simse_strTableExpand(const T* stream, Int* out, Int count);
@@ -36,18 +9,6 @@ void simse_strTableDecode(const char* pool, const Int* starts, const Int* length
 
 #include <chrono>
 
-// Time natives (the Simse surface is the prelude file cppsrc/rtl/rtl.kt). All three are
-// monotonic clocks - never going backwards - since an arbitrary fixed point:
-// `simse_nowMillis` for logging, and the finer `simse_nowMicros` / `simse_nowNanos` for
-// the instrumented profiler (`cppsrc/profiling`, and the emitted `profileApp.measure(...)`
-// of a `--profile` build; `--profile-nanos` picks the nanosecond clock). It was
-// cppsrc/rtl/timeops.hpp, and its definitions were the last
-// thing left in cppsrc/rtl/native.cpp - they are this section's now, so the clock is
-// emitted into the program like any other prelude body and there is nothing to link.
-// `emit: always`
-// because the profiler's runtime is emitted by the *compiler* rather than named by
-// the program: a `--profile` build needs these declarations whether or not the program
-// ever asks for the time.
 Int64 simse_nowMillis();
 Int64 simse_nowMicros();
 Int64 simse_nowNanos();
@@ -77,20 +38,10 @@ static struct __SmStringTableInitType {
 #include <cstdint>
 #include <type_traits>
 
-// The List/Array/Str primitives behind the prelude (impl_specs/native-interop.md), moved
-// out of cppsrc/rtl/listops.hpp. Index and range errors are unchecked, matching the
-// language's no-exceptions policy: `removeAt`/`removeRange` with an out-of-range index is
-// undefined behavior (specs/language-decisions.md).
 
-// Appends `value` to the end of `self`. The value is a non-deduced context so a literal
-// argument (e.g. a `const char[]`) converts to the element type instead of making `T`
-// ambiguous.
 template <class T>
 void simse_list_append(List<T>& self, const std::type_identity_t<T>& value);
 
-// The list literal's fallback (cppsrc/rtl/rtl.kt): the compiler turns
-// `listOf<Str>("a", "b")` into the construction itself, so this runs only for a position
-// with no destination slot.
 template <class T>
 List<T> simse_listOf(const List<T>* values);
 
@@ -115,11 +66,6 @@ Str simse_int_toString(Int self);
 
 #include <cstdio>
 
-// `print` / `println` in C, not C++ streams. The language's formatting is its own (`fmtStr`), and
-// a value is one `fwrite`/`fputs`, so a program that prints never pulls in <iostream> - and with
-// it the standard streams' static construction and the locale facets that drag in. One overload
-// per built-in `println` accepts, so a call spells the same whatever it prints; `bool` prints
-// `true`/`false`, which is what the `std::boolalpha` the emitter used to write gave.
 inline void simse_write(const Str& value, FILE* out) {
     std::fwrite(value.data(), 1, (std::size_t) value.size(), out);
 }
@@ -209,26 +155,21 @@ inline List<T> simse_listOf(const List<T>* values) {
     return *values;
 }
 
-// Removes the single element at `index`.
 template <class T>
 inline void simse_list_removeAt(List<T>& self, Int index) {
     self.erase(self.begin() + index);
 }
 
-// Removes the half-open range [start, end).
 template <class T>
 inline void simse_list_removeRange(List<T>& self, Int start, Int end) {
     self.erase(self.begin() + start, self.begin() + end);
 }
 
-// `Array<T>.count()`: the element count stored at the front of the block.
 template <class T>
 inline Int simse_array_count(const Array<T>& self) {
     return self.count();
 }
 
-// `List<T>.toArray()` (specs/built-in-types.md): copies the elements into one count-first
-// block. Element copies are value copies, like every other copy in the language.
 template <class T>
 inline Array<T> simse_list_toArray(const List<T>& self) {
     const Int count = self.size();
@@ -242,7 +183,6 @@ inline Array<T> simse_list_toArray(const List<T>& self) {
     return result;
 }
 
-// `Array<T>.toList()`: the growable copy, which is how an element is added to an array.
 template <class T>
 inline List<T> simse_array_toList(const Array<T>& self) {
     List<T> result;
@@ -254,45 +194,35 @@ inline List<T> simse_array_toList(const Array<T>& self) {
     return result;
 }
 
-// `arrayEmpty<T>()`: the shared, zero-length array of `T` (no allocation).
 template <class T>
 inline Array<T> simse_arrayEmpty() {
     return Array<T>();
 }
 
-// `Str.append(ch)`: `Str` has no single-character append, so this is `push_back`.
 inline void simse_str_append(Str& self, Char value) {
     self.push_back(static_cast<char>(value));
 }
 
-// `Str.appendStr(text)`: appends in place, so an emitter accumulates output without
-// `out = out + text` rebuilding the whole buffer on every line (which is quadratic).
 inline void simse_str_appendStr(Str& self, const Str& value) {
     self.append(value);
 }
 
-// `Str.appendStrPtr(text)`: the same append for a text the caller only *borrows*, so
-// nothing is copied on the way.
 inline void simse_str_appendStrPtr(Str& self, const Str* value) {
     if (value != nullptr) self.append(*value);
 }
 
-// `Str.reserve(count)`: grows the buffer once, so a run of appends writes the text once
-// instead of copying the accumulated prefix at every growth step. A *hint*, not a length.
 inline void simse_str_reserve(Str& self, Int count) {
     self.reserve((Str::size_type) count);
 }
 
-// `Int.toString()`: the scalar-to-inline-string conversion (specs/memory-model.md).
 inline Str simse_int_toString(Int self) {
     return std::to_string(self);
 }
 
-// Expands one run-length encoded series into `out`, which holds `count` values.
 template <class T>
 inline void simse_strTableExpand(const T* stream, Int* out, Int count) {
     Int at = 0;
-    Int cursor = 1; // stream[0] is the series' own length
+    Int cursor = 1; 
     while (at < count) {
         const Int literals = (Int) stream[cursor++];
         for (Int i = 0; i < literals && at < count; i++) out[at++] = (Int) stream[cursor++];
@@ -306,12 +236,10 @@ inline void simse_strTableExpand(const T* stream, Int* out, Int count) {
     }
 }
 
-// Fills `table` from the pool and the two expanded series: an offset increment and a
-// byte count per entry, both rebuilt by subtracting the stored value from the one before.
 inline void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, StrView* table, Int count) {
     Char* bytes = const_cast<Char*>(reinterpret_cast<const Char*>(pool));
-    Int delta = 0;  // this entry's offset increment, rebuilt from the start series
-    Int length = 0; // this entry's byte count, rebuilt from the length series
+    Int delta = 0;  
+    Int length = 0; 
     Int at = 0;
     for (Int i = 0; i < count; i++) {
         delta -= starts[i];
@@ -321,9 +249,6 @@ inline void simse_strTableDecode(const char* pool, const Int* starts, const Int*
     }
 }
 
-// The three monotonic clocks. `steady_clock` is the one clock the standard library
-// promises cannot go backwards, which is what makes a duration between two readings
-// meaningful (`impl_specs/profiling.md`).
 Int64 simse_nowMillis() {
     const auto now = std::chrono::steady_clock::now().time_since_epoch();
     return (Int64) std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
@@ -338,6 +263,3 @@ Int64 simse_nowNanos() {
     const auto now = std::chrono::steady_clock::now().time_since_epoch();
     return (Int64) std::chrono::duration_cast<std::chrono::nanoseconds>(now).count();
 }
-
-// The `simse_write` overloads and the two printers are all inline in the forward block: nothing
-// here.

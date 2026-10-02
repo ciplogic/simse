@@ -248,15 +248,18 @@ The set of captured values is computed: it is the free variables of the body - t
 it reads that are not its own parameters and not names it declares. A lambda is modelled
 as
 
-- a class with one field per captured value, and
-- one method, `invoke`, whose parameters are the lambda's and whose body is the lambda's
-  body; inside it a captured name is a field of the instance.
+- a data class with one field per captured value, and
+- a free method, `invoke`, whose first parameter is the closure instance (by value) and
+  whose remaining parameters are the lambda's; inside it a captured name is a field of the
+  instance.
 
 The callable types of `rtl` (`Func<Ret(Params)>` and the `Unit`-returning `IInvocableFunc`
-/ `IInvocableAction`) are exactly that one method, so a lambda value *is* an instance of
-its class and a call through a callable value is a call of `invoke`. A `&lambda` is a
-counted handle to that instance (`&T`), which lets a closure outlive the frame that built
-it.
+/ `IInvocableAction`) are the type-erased form, so a lambda value converts into one (the
+adapter owns a copy of the instance), and a call through a callable value reaches the free
+`invoke`. Because the instance is passed to `invoke` **by copy**, every call starts from
+the closure's value as the caller holds it: a mutation of a capture inside a call is not
+visible to the value in the caller, nor to a later call. A `&lambda` is a counted handle to
+the instance (`&T`), which lets a closure outlive the frame that built it.
 
 A lambda's parameter types come from the explicit annotations, or from the
 expected callable type when the lambda is assigned to a callable-typed variable

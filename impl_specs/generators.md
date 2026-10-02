@@ -146,7 +146,7 @@ The predefined sections are the emitter's assembly *phases*. The order keeps the
 **byte-neutral** (emitting `cppsrc` before and after it is identical C++):
 
     includes -> support -> profile -> strings -> resources -> forward -> types ->
-    statics -> prototypes -> init -> bodies
+    statics -> prototypes -> closures -> init -> bodies
 
 | section | what lands there |
 | --- | --- |
@@ -159,6 +159,7 @@ The predefined sections are the emitter's assembly *phases*. The order keeps the
 | `types` | the forward type declarations and the type definitions |
 | `statics` | file-level static storage |
 | `prototypes` | every function's prototype |
+| `closures` | the lambda data classes and their free invoke methods (`emitClosureClasses`, after the prototypes so an invoke body may call the program's functions) |
 | `init` | the generated static-initialization pass |
 | `bodies` | every function body, and a generated *definition* |
 
@@ -217,6 +218,12 @@ program's types.
   *module* declaration is skipped the same way when its section says `emit: reached`. A
   declaration of the program's own root is always emitted, so one generated text may call
   another; a prelude or gated text must not, because a name inside a resource is never parsed.
+- **The comments a resource carries are dropped where its text is placed**
+  (`resCppStripComments`, `ResComments.kt`): `_res.md` is written for a reader, and the
+  emitted program is not one. A line comment alone on its line takes the line with it;
+  after code it takes only itself; a `//` inside a string, character or raw-string literal
+  is data and is preserved (`stress/res-comments`). Only resource text is filtered - the
+  emitter's own comments stay.
 - **A reach is by name or by symbol.** The set the rule above reads holds the names the
   program calls and the symbols some calls reach: `collectNames` records the symbol of the
   declaration a call *names* (`nativeSymbols`), the symbol of a call on a type name

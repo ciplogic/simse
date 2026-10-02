@@ -58,6 +58,14 @@ data class Sections(
         target.text.append('\n')
     }
 
+    // Append to a named section without moving `current`. The emitter writes the closure
+    // classes and their invoke functions into their own section while it walks the bodies.
+    fun appendTo(name: *Str, text: Str): Unit {
+        val at: Int = this.section(name)
+        val target: *NamedSection = *this.sections[at]
+        target.text.appendStr(text)
+    }
+
     fun add(name: *Str, key: *Str, text: *Str): Unit {
         val at: Int = this.section(name)
         val target: *NamedSection = *this.sections[at]
@@ -123,6 +131,10 @@ fun sourceGenNewSections(): Sections {
     list.append(NamedSection("types", Str(), Dictionary<Str, Str>()))
     list.append(NamedSection("statics", Str(), Dictionary<Str, Str>()))
     list.append(NamedSection("prototypes", Str(), Dictionary<Str, Str>()))
+    // The lambda classes and their free invoke functions: a data class at namespace scope
+    // (so no `auto operator()` inside a function) plus the method that implements it. After
+    // the prototypes, because an invoke body calls the program's functions.
+    list.append(NamedSection("closures", Str(), Dictionary<Str, Str>()))
     list.append(NamedSection("init", Str(), Dictionary<Str, Str>()))
     list.append(NamedSection("bodies", Str(), Dictionary<Str, Str>()))
     return Sections(list, 0)

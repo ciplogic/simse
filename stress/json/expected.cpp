@@ -2,33 +2,6 @@
 #include "cppsrc/rtl/simse.hpp"
 #include <type_traits>
 
-// The string-literal pool's decoder (impl_specs/rtl-abi.md, "String literals: one
-// table"): the emitter writes one pool of bytes plus two run-length encoded index
-// series - where each entry starts and how long it is - and this expands them into the
-// `StrView` per entry, once, before `main` runs. It was cppsrc/rtl/strtable.hpp.
-//
-// Six things are deliberate in the shape the emitter writes:
-//
-//  - **Both series are stored as "what to subtract from the previous value"**, with an
-//    implicit 0 before the first entry: `value[i] = value[i-1] - series[i]`. The
-//    literals are ordered longest first, so a length series descends slowly and a
-//    *difference* of it is a small number - mostly 0 between the many literals of equal
-//    length (85% of them on the compiler's own table).
-//  - **Each series is run-length encoded**: its length first, then alternating blocks of
-//    non-repeating values (a count, then that many values) and of runs (a count, then
-//    that many `times, value` pairs), until the length is filled. The element type is a
-//    template parameter because the emitter picks the width: `Int16` when every number
-//    fits, `Int` otherwise.
-//  - The pool is the literal texts themselves, adjacent, so the C++ compiler decodes
-//    every escape and the emitter's decoding only has to agree about *how many bytes* an
-//    escape costs. The emitted `static_assert` on the pool's `sizeof` is the check.
-//  - The series are expanded into *stack* arrays in the initializer and dropped when it
-//    returns: no heap, and the encoded statics are all the program carries.
-//  - An entry is a 12-byte `StrView`, not the 32-byte owning `Str` the table used to
-//    hold, and start-up allocates nothing for the literals.
-//  - The pool is `const char` (a string literal, read-only) while `StrView` holds the
-//    language's mutable `Char*`; the constness is cast away here, in the one place the
-//    pool is touched, and nothing writes through it.
 
 template <class T>
 void simse_strTableExpand(const T* stream, Int* out, Int count);
@@ -36,18 +9,6 @@ void simse_strTableDecode(const char* pool, const Int* starts, const Int* length
 
 #include <chrono>
 
-// Time natives (the Simse surface is the prelude file cppsrc/rtl/rtl.kt). All three are
-// monotonic clocks - never going backwards - since an arbitrary fixed point:
-// `simse_nowMillis` for logging, and the finer `simse_nowMicros` / `simse_nowNanos` for
-// the instrumented profiler (`cppsrc/profiling`, and the emitted `profileApp.measure(...)`
-// of a `--profile` build; `--profile-nanos` picks the nanosecond clock). It was
-// cppsrc/rtl/timeops.hpp, and its definitions were the last
-// thing left in cppsrc/rtl/native.cpp - they are this section's now, so the clock is
-// emitted into the program like any other prelude body and there is nothing to link.
-// `emit: always`
-// because the profiler's runtime is emitted by the *compiler* rather than named by
-// the program: a `--profile` build needs these declarations whether or not the program
-// ever asks for the time.
 Int64 simse_nowMillis();
 Int64 simse_nowMicros();
 Int64 simse_nowNanos();
@@ -74,19 +35,6 @@ static struct __SmStringTableInitType {
     }
 } __sm_stringTableInit;
 
-// What a view's byte operations still need from C++ (specs/built-in-types.md, "Views").
-// The byte work itself - `find`/`indexOf`, `startsWith`/`startsWithPtr`, `substr`/`toString`
-// - is Simse now, in cppsrc/rtl/StrView.kt over the span and the intrinsics
-// (cppsrc/rtl/intrinsics.kt). What remains here is the `Span` member passthroughs, which
-// cannot be Simse without shadowing the member they call, and `spanOfStr`, whose two
-// overloads are picked by C++ overload resolution at the desugar's site (Parser.kt's
-// `parseWhen`) rather than by a declaration - so a declaration reaches this section, and a
-// program that calls one pays for this text (`sourcegen/ResGen.kt`).
-//
-// `StrView` *is* a `Span<Char>`, so `self.len`, `self[i]` and `self.slice(...)` below are
-// the span's own members (cppsrc/rtl/span.hpp) - and `at` is *not* an operation of its
-// own: the span's member serves it (cppsrc/rtl/StrView.kt), as `atPtr` is the
-// language's (cppsrc/rtl/Span.kt).
 Int simse_strView_size(StrView self);
 Bool simse_strView_isEmpty(StrView self);
 StrView simse_strView_slice(StrView self, Int start);
@@ -98,20 +46,10 @@ StrView simse_spanOfStr(StrView view);
 #include <cstdint>
 #include <type_traits>
 
-// The List/Array/Str primitives behind the prelude (impl_specs/native-interop.md), moved
-// out of cppsrc/rtl/listops.hpp. Index and range errors are unchecked, matching the
-// language's no-exceptions policy: `removeAt`/`removeRange` with an out-of-range index is
-// undefined behavior (specs/language-decisions.md).
 
-// Appends `value` to the end of `self`. The value is a non-deduced context so a literal
-// argument (e.g. a `const char[]`) converts to the element type instead of making `T`
-// ambiguous.
 template <class T>
 void simse_list_append(List<T>& self, const std::type_identity_t<T>& value);
 
-// The list literal's fallback (cppsrc/rtl/rtl.kt): the compiler turns
-// `listOf<Str>("a", "b")` into the construction itself, so this runs only for a position
-// with no destination slot.
 template <class T>
 List<T> simse_listOf(const List<T>* values);
 
@@ -134,33 +72,18 @@ void simse_str_appendStrPtr(Str& self, const Str* value);
 void simse_str_reserve(Str& self, Int count);
 Str simse_int_toString(Int self);
 
-// `lenOf(x)`: one read-only length operation, declared `data` in the prelude
-// (cppsrc/rtl/rtl.kt) so that a repeated call on an unchanged value is one call
-// (cppsrc/linear/ReusePure.kt) and a borrow proof may call it (cppsrc/parser/BorrowParams.kt).
-// `Str` and `List` are heavy values, so the receiver is taken by reference - a by-value
-// parameter would copy one per call. The containers whose count a declaration already spells
-// (`Array.count`, `Dictionary.size`, `StrView.size`) keep those declarations; this is the
-// operation for the two the language cannot otherwise spell.
 Int simse_lenOf(const Str& self);
 template <class T, int N>
 Int simse_lenOf(const SmallVector<T, N>& self);
 
-// `Opt<T>.hasValue()`: the `Variant2` tag test (specs/core-types.md). The C++ is `variant2.hpp` and
-// the member is `const`, so nothing is copied and nothing is written - the declaration that names
-// this symbol (cppsrc/rtl/rtl.kt) is what lets the auto-borrow proof see it as read-only, because a
-// built-in member has no declaration of its own to carry a mark (impl_specs/escape-analysis.md).
-// `Res<T>.isOk()` is the same test but cannot be declared yet: a receiver must be spelled `Res<T>`
-// to unify in `findNativeExt`, and `Res` carries an `unInit`, so the checker refuses that spelling.
 template <class T>
 Bool simse_opt_hasValue(const Opt<T>& self);
 
-// The `initByValue` construction convention (cppsrc/rtl/rtl.kt): set the instance.
 template <class T>
 void simse_opt_initByValue(Opt<T>& self, const T& value);
 template <class T>
 void simse_opt_initByValueNone(Opt<T>& self);
 
-// The same convention for `Res<T>`: a `return (x)` in a `Res<T>` function is `Res<T>.ok(x)`.
 template <class T>
 void simse_res_initByValue(Res<T>& self, const T& value);
 
@@ -170,51 +93,23 @@ void simse_res_initByValue(Res<T>& self, const T& value);
 #include <cstdlib>
 #include <system_error>
 
-// The string, character, numeric-conversion and min/max operations behind the prelude
-// (impl_specs/native-interop.md, specs/built-in-types.md), moved out of
-// cppsrc/rtl/strops.hpp.
-//
-// `Str` is the inline `SmString` (smstring.hpp): every size, length and index here is the
-// language's `Int` (`int32_t`), including `Str::npos`, which is `-1`. Index/range errors
-// are unchecked where the underlying operation is unchecked; the `Opt`-returning
-// conversions never throw.
-//
-// What is only a byte loop is Simse now (cppsrc/rtl/rtl.kt: `trim`, `substr`,
-// `startsWith`/`endsWith`, case folding and the `Char` predicates); what stays is what
-// reaches `SmString` internals (`charAt`, `find`, `lastIndexOf`, `split`, `replace`) or the
-// standard library (`std::from_chars`, `std::to_string`).
 
-// `Str.charAt(index)`: the byte at `index` (unchecked; no bounds test).
 Char simse_str_charAt(const Str& self, Int index);
 
-// `Str.split(separator)` splits on every occurrence. An empty separator returns the whole
-// string as a single element. Two overloads: a separator string and a separator byte.
 List<Str> simse_str_split(const Str& self, const Str& separator);
 List<Str> simse_str_split(const Str& self, Char separator);
 
-// `Str.find(sub)` returns the first index of `sub`, or -1 when absent (the language's
-// spelling of C++ `npos`).
 Int simse_str_find(const Str& self, const Str& sub);
 
-// `Str.lastIndexOf(sub)` returns the last index of `sub`, or -1 when absent.
 Int simse_str_lastIndexOf(const Str& self, const Str& sub);
 
-// `Str.replace(from, to)` replaces every occurrence of `from` with `to`.
 Str simse_str_replace(const Str& self, const Str& from, const Str& to);
 
-// `Str.toInt()`/`Str.toFloat()` parse the whole string; failure (or a non-empty trailing
-// remainder) yields `Opt.none()`. No exceptions. `toInt` uses `std::from_chars` (integer
-// `from_chars` is in libstdc++ since GCC 11); `toFloat` uses `std::strtod`, because libstdc++
-// did not ship floating-point `from_chars` until GCC 14 and the language must build on
-// GCC 12 (docs/building-on-linux.md).
 Opt<Int> simse_str_toInt(const Str& self);
 Opt<Float64> simse_str_toFloat(const Str& self);
 
-// `Str.initByValue(value)`: the `initByValue` convention for `Str` (cppsrc/rtl/rtl.kt),
-// setting the receiver in place. The empty form is a Simse method (an empty body).
 void simse_str_initByValue(Str& self, const Str& value);
 
-// Numeric conversions. `Char` is an 8-bit integer, so it stringifies as a number.
 template <class T>
 Str simse_num_toString(const T& self);
 Str simse_char_toString(Char self);
@@ -224,79 +119,46 @@ Str simse_bool_toString(Bool self);
 #include <type_traits>
 #include <utility>
 
-// The Dictionary operations and the extra List helpers behind the prelude
-// (impl_specs/native-interop.md), moved out of cppsrc/rtl/dictops.hpp. The key/value
-// parameters are non-deduced (`std::type_identity_t`) so that a literal argument (e.g. a
-// `const char[]` key or an integer value) converts to the element type instead of making
-// the template argument ambiguous.
-//
-// Errors are unchecked, matching the dictionary's own semantics and the language's
-// no-exceptions policy: `get`/`has` on a missing key behave as documented, while `remove`
-// of an absent key is a no-op.
 
-// `dictionaryOf<K, V>()`: the empty-dictionary construction.
 template <class K, class V>
 Dictionary<K, V> simse_dictionaryOf();
 
-// `d.getPtr(key)`: the value's place in the dictionary, or `null` when the key is
-// absent - the read that copies nothing (`get` copies the value out, `has` is this with
-// the pointer tested). The place is the dictionary's own storage, so it is valid until
-// the next `insert`/`remove`/`clear` on that dictionary.
 template <class K, class V>
 V* simse_dict_getPtr(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
 
-// `d.get(key)`: the value for `key`, or an empty `Opt` when absent.
 template <class K, class V>
 Opt<V> simse_dict_get(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
 
-// `d.has(key)`: whether `key` is present.
 template <class K, class V>
 Bool simse_dict_has(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
 
-// `d.insert(key, value)`: insert or replace.
 template <class K, class V>
 void simse_dict_insert(Dictionary<K, V>& self, const std::type_identity_t<K>& key,
                        const std::type_identity_t<V>& value);
 
-// `d.remove(key)`: erase when present (a no-op otherwise).
 template <class K, class V>
 void simse_dict_remove(Dictionary<K, V>& self, const std::type_identity_t<K>& key);
 
-// `d.size()`: the number of entries.
 template <class K, class V>
 Int simse_dict_size(const Dictionary<K, V>& self);
 
-// `d.keys()`: the keys in the dictionary's iteration order (unspecified; sort for a
-// deterministic order).
 template <class K, class V>
 List<K> simse_dict_keys(const Dictionary<K, V>& self);
 
-// `d.values()`: the values in the dictionary's iteration order (unspecified).
 template <class K, class V>
 List<V> simse_dict_values(const Dictionary<K, V>& self);
 
-// `d.clear()`: remove every entry.
 template <class K, class V>
 void simse_dict_clear(Dictionary<K, V>& self);
 
-// `items.contains(value)`: linear membership test (`operator==` on elements).
 template <class T>
 Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& value);
 
-// `items.sort(less)`: in-place sort using the `(*T, *T) -> Bool` comparator. The comparator
-// comes from a Simse lambda (a C++ lambda or Func), so it is a template parameter rather
-// than a fixed type; it takes its two elements by pointer, so each is read where `std::sort`
-// holds it instead of being copied into the comparison.
 template <class T, class F>
 void simse_list_sort(List<T>& self, F less);
 
 #include <cstdio>
 
-// `print` / `println` in C, not C++ streams. The language's formatting is its own (`fmtStr`), and
-// a value is one `fwrite`/`fputs`, so a program that prints never pulls in <iostream> - and with
-// it the standard streams' static construction and the locale facets that drag in. One overload
-// per built-in `println` accepts, so a call spells the same whatever it prints; `bool` prints
-// `true`/`false`, which is what the `std::boolalpha` the emitter used to write gave.
 inline void simse_write(const Str& value, FILE* out) {
     std::fwrite(value.data(), 1, (std::size_t) value.size(), out);
 }
@@ -676,12 +538,10 @@ inline Bool simse_strView_isEmpty(StrView self) {
     return self.len <= 0;
 }
 
-// `view.slice(start)`: from `start` to the end (C# `Slice(int)`).
 inline StrView simse_strView_slice(StrView self, Int start) {
     return self.slice(start);
 }
 
-// `view.slice(start, count)`: `count` bytes from `start` (C# `Slice(int, int)`).
 inline StrView simse_strView_slice(StrView self, Int start, Int count) {
     return self.slice(start, count);
 }
@@ -690,18 +550,10 @@ inline Char simse_strView_charAt(StrView self, Int index) {
     return self[index];
 }
 
-// `spanOfStr(text)`: a view over a string's bytes. It borrows the string - the string
-// has to outlive the view - and does not copy it (`&text` would box a copy instead).
-// `Str` is a `char` buffer on the C++ side and the language's `Char` is a signed byte,
-// hence the cast.
 inline StrView simse_spanOfStr(Str* text) {
     return StrView(reinterpret_cast<Char*>(text->data()), text->size());
 }
 
-// `spanOfStr(view)`: a `StrView` already is a view, so this overload is the identity. It is
-// what lets the `when`-over-strings desugar (`Parser.kt`'s `parseWhen`) extract the subject
-// with `spanOfStr` without knowing whether it is a `Str` or a `StrView` - the C++ overload
-// resolution picks the borrowed view or the identity, and the tests compare against it.
 inline StrView simse_spanOfStr(StrView view) {
     return view;
 }
@@ -716,26 +568,21 @@ inline List<T> simse_listOf(const List<T>* values) {
     return *values;
 }
 
-// Removes the single element at `index`.
 template <class T>
 inline void simse_list_removeAt(List<T>& self, Int index) {
     self.erase(self.begin() + index);
 }
 
-// Removes the half-open range [start, end).
 template <class T>
 inline void simse_list_removeRange(List<T>& self, Int start, Int end) {
     self.erase(self.begin() + start, self.begin() + end);
 }
 
-// `Array<T>.count()`: the element count stored at the front of the block.
 template <class T>
 inline Int simse_array_count(const Array<T>& self) {
     return self.count();
 }
 
-// `List<T>.toArray()` (specs/built-in-types.md): copies the elements into one count-first
-// block. Element copies are value copies, like every other copy in the language.
 template <class T>
 inline Array<T> simse_list_toArray(const List<T>& self) {
     const Int count = self.size();
@@ -749,7 +596,6 @@ inline Array<T> simse_list_toArray(const List<T>& self) {
     return result;
 }
 
-// `Array<T>.toList()`: the growable copy, which is how an element is added to an array.
 template <class T>
 inline List<T> simse_array_toList(const Array<T>& self) {
     List<T> result;
@@ -761,36 +607,27 @@ inline List<T> simse_array_toList(const Array<T>& self) {
     return result;
 }
 
-// `arrayEmpty<T>()`: the shared, zero-length array of `T` (no allocation).
 template <class T>
 inline Array<T> simse_arrayEmpty() {
     return Array<T>();
 }
 
-// `Str.append(ch)`: `Str` has no single-character append, so this is `push_back`.
 inline void simse_str_append(Str& self, Char value) {
     self.push_back(static_cast<char>(value));
 }
 
-// `Str.appendStr(text)`: appends in place, so an emitter accumulates output without
-// `out = out + text` rebuilding the whole buffer on every line (which is quadratic).
 inline void simse_str_appendStr(Str& self, const Str& value) {
     self.append(value);
 }
 
-// `Str.appendStrPtr(text)`: the same append for a text the caller only *borrows*, so
-// nothing is copied on the way.
 inline void simse_str_appendStrPtr(Str& self, const Str* value) {
     if (value != nullptr) self.append(*value);
 }
 
-// `Str.reserve(count)`: grows the buffer once, so a run of appends writes the text once
-// instead of copying the accumulated prefix at every growth step. A *hint*, not a length.
 inline void simse_str_reserve(Str& self, Int count) {
     self.reserve((Str::size_type) count);
 }
 
-// `Int.toString()`: the scalar-to-inline-string conversion (specs/memory-model.md).
 inline Str simse_int_toString(Int self) {
     return std::to_string(self);
 }
@@ -799,8 +636,6 @@ inline Int simse_lenOf(const Str& self) {
     return self.size();
 }
 
-// `List<T>` is `SmallVector<T, 4>` (cppsrc/rtl/containers.hpp), so one overload serves every
-// element type and inline capacity.
 template <class T, int N>
 inline Int simse_lenOf(const SmallVector<T, N>& self) {
     return self.size();
@@ -841,7 +676,6 @@ inline List<Str> simse_str_split(const Str& self, const Str& separator) {
     return parts;
 }
 
-// How many bytes of `self` are `ch`: what the byte-separator split reserves up front.
 inline Int simse_count_char_in_str(const Str* self, char ch) {
     Int count = 0;
     const char* data = self->data();
@@ -934,8 +768,6 @@ inline Str simse_bool_toString(Bool self) {
     return self ? "true" : "false";
 }
 
-// `dictionaryOf<K, V>()`: `Dictionary<K, V>` is a value type, so this default-constructs
-// one.
 template <class K, class V>
 inline Dictionary<K, V> simse_dictionaryOf() {
     return Dictionary<K, V>();
@@ -1005,16 +837,16 @@ inline Bool simse_list_contains(const List<T>& self, const std::type_identity_t<
 
 template <class T, class F>
 inline void simse_list_sort(List<T>& self, F less) {
-    std::sort(self.begin(), self.end(), [&less](const T& a, const T& b) {
-        return less(const_cast<T*>(&a), const_cast<T*>(&b));
+    Func<Bool(T*, T*)> fn = less;
+    std::sort(self.begin(), self.end(), [&fn](const T& a, const T& b) {
+        return fn(const_cast<T*>(&a), const_cast<T*>(&b));
     });
 }
 
-// Expands one run-length encoded series into `out`, which holds `count` values.
 template <class T>
 inline void simse_strTableExpand(const T* stream, Int* out, Int count) {
     Int at = 0;
-    Int cursor = 1; // stream[0] is the series' own length
+    Int cursor = 1; 
     while (at < count) {
         const Int literals = (Int) stream[cursor++];
         for (Int i = 0; i < literals && at < count; i++) out[at++] = (Int) stream[cursor++];
@@ -1028,12 +860,10 @@ inline void simse_strTableExpand(const T* stream, Int* out, Int count) {
     }
 }
 
-// Fills `table` from the pool and the two expanded series: an offset increment and a
-// byte count per entry, both rebuilt by subtracting the stored value from the one before.
 inline void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, StrView* table, Int count) {
     Char* bytes = const_cast<Char*>(reinterpret_cast<const Char*>(pool));
-    Int delta = 0;  // this entry's offset increment, rebuilt from the start series
-    Int length = 0; // this entry's byte count, rebuilt from the length series
+    Int delta = 0;  
+    Int length = 0; 
     Int at = 0;
     for (Int i = 0; i < count; i++) {
         delta -= starts[i];
@@ -1043,9 +873,6 @@ inline void simse_strTableDecode(const char* pool, const Int* starts, const Int*
     }
 }
 
-// The three monotonic clocks. `steady_clock` is the one clock the standard library
-// promises cannot go backwards, which is what makes a duration between two readings
-// meaningful (`impl_specs/profiling.md`).
 Int64 simse_nowMillis() {
     const auto now = std::chrono::steady_clock::now().time_since_epoch();
     return (Int64) std::chrono::duration_cast<std::chrono::milliseconds>(now).count();
@@ -1060,6 +887,3 @@ Int64 simse_nowNanos() {
     const auto now = std::chrono::steady_clock::now().time_since_epoch();
     return (Int64) std::chrono::duration_cast<std::chrono::nanoseconds>(now).count();
 }
-
-// The `simse_write` overloads and the two printers are all inline in the forward block: nothing
-// here.

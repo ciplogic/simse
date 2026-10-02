@@ -6,6 +6,7 @@
 // `methods`, `labels`, `ops`, `lines` (each op's line). A type is an `AstXmlNode` subtree.
 
 package linear
+
 import compiler
 
 import common
@@ -73,6 +74,7 @@ enum class IlOpKind {
     CallIndirectVoid,
     CallCtor,
     Pack,
+
     // The fused concatenation (MergeConcat.kt): the parts of a `+` chain over `Str`, or of
     // an `fmtStr`/`fmtStrWith`, whose lengths are summed once and whose bytes are appended once
     // (`ilConcatStatements`, cppsrc/codegen/IlCodeGen.kt). The lowerer never builds one;
@@ -143,7 +145,9 @@ data class IlFunction(
     var inferredTypes: *Dictionary<Str, AstXmlNode>
 )
 
-// A lambda: a class with one field per captured variable and one method.
+// A lambda: a data class with one field per captured variable, and a free method
+// (`<symbol>_invoke(self, params)`) that implements the call. `self` is the closure
+// passed by value: the method copies the instance and the captures are its own.
 data class IlClosure(
     var symbol: Str,
 
@@ -151,6 +155,16 @@ data class IlClosure(
     var captures: List<Str>,
     var captureTypes: List<AstXmlNode>,
     var params: List<IlVar>,
+    var paramTypes: List<AstXmlNode>,
+    // The lambda's result type: from the callable type it is used against, else from its
+    // own `return`s. Empty is a lambda that answers nothing (`void`).
+    var returnType: AstXmlNode,
+    // The owner's type parameters, when the lambda lives in a generic function: the class
+    // and the method are templates too.
+    var templateParams: List<Str>,
+    // The lambda expression's own line/column, so a failure can name the lambda.
+    var line: Int,
+    var column: Int,
     var bodyIndex: Int
 )
 
@@ -355,4 +369,3 @@ fun ilAppendTable(out: *Str, label: Str, entries: *List<Str>): Unit {
     }
     out.appendStr("\n")
 }
-

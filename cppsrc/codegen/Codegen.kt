@@ -5,6 +5,7 @@
 // type".
 
 package codegen
+
 import compiler
 
 import sema
@@ -260,9 +261,10 @@ data class Emitter(
     var statics: List<CgStatic>,
     var staticsByName: Dictionary<Str, CgStatic>,
 
-// The classes this unit constructs, versus the ones already written out: a closure class
-// is emitted just above the body that builds it, once.
-    var closureSymbols: Dictionary<Str, Bool>,
+// The closure classes this unit constructs and the C++ type each prints as (a generic
+// owner's class is a template, so the text carries its arguments); versus the ones
+// already written out: a closure is emitted once, into the `closures` section.
+    var closureTypes: Dictionary<Str, Str>,
     var emittedClosures: Dictionary<Str, Bool>,
     var emittedYieldables: Dictionary<Str, Bool>,
 
@@ -328,7 +330,7 @@ fun newEmitter(inputs: *List<CgInput>, resourceStored: *List<Str>): Emitter {
         Dictionary<Str, Str>(),
         List<CgStatic>(),
         Dictionary<Str, CgStatic>(),
-        Dictionary<Str, Bool>(),
+        Dictionary<Str, Str>(),
         Dictionary<Str, Bool>(),
         Dictionary<Str, Bool>(),
         xmlEmptyNode(),
@@ -351,4 +353,3 @@ fun emitProgram(inputs: *List<CgInput>, resourceStored: *List<Str>): Res<Str> {
     var emitter: Emitter = newEmitter(inputs, resourceStored)
     return emitter.run()
 }
-

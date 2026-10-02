@@ -487,9 +487,10 @@ template <class T>
 Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& value);
 
 // `items.sort(less)`: in-place sort using the `(*T, *T) -> Bool` comparator. The comparator
-// comes from a Simse lambda (a C++ lambda or Func), so it is a template parameter rather
-// than a fixed type; it takes its two elements by pointer, so each is read where `std::sort`
-// holds it instead of being copied into the comparison.
+// comes in as a template parameter so a lambda's data class, a named function and a
+// `Func<...>` all deduce, and it is converted to the language's callable type once, in the
+// body, where a closure data class reaches its free invoke. It takes its two elements by
+// pointer, so each is read where `std::sort` holds it instead of being copied.
 template <class T, class F>
 void simse_list_sort(List<T>& self, F less);
 ```
@@ -566,8 +567,9 @@ inline Bool simse_list_contains(const List<T>& self, const std::type_identity_t<
 
 template <class T, class F>
 inline void simse_list_sort(List<T>& self, F less) {
-    std::sort(self.begin(), self.end(), [&less](const T& a, const T& b) {
-        return less(const_cast<T*>(&a), const_cast<T*>(&b));
+    Func<Bool(T*, T*)> fn = less;
+    std::sort(self.begin(), self.end(), [&fn](const T& a, const T& b) {
+        return fn(const_cast<T*>(&a), const_cast<T*>(&b));
     });
 }
 ```

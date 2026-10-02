@@ -81,7 +81,7 @@ program a user would try to write:
 | Rough edge | What happens | Workaround |
 | --- | --- | --- |
 | Method on a temporary | `"a b".words()` fails to compile: the emitted receiver is a non-const reference | bind it to a `val` first |
-| Chained method on a generic call | `dict.get(k).value().toString()` does not resolve: the type is lost through the chain | assign the middle step to a typed `val` |
+| Chained method on a generic call | a generic call's result is typed from its arguments now (`twice(f, 5).toString()` resolves against `Int`), but a method on a value whose static type is a bare type parameter of the enclosing function (`fun <T> f(x: T) { x.toString() }`) still cannot resolve - there are no constraints to say what `T` has | bind the value to a typed local, or annotate the call's type arguments (`f<Int>(...)`) |
 | Lambda body placement | `(x: Int) ->` followed by a newline is a syntax error | keep the body on the arrow's line, or open a block there |
 | Enum printing | `println(Color.Red)` prints an integer; there is no automatic member name | write a `when`-based `label()` function |
 | Float printing | `println` goes through C++'s default formatting | format manually; a defined shortest-round-trip rule is on the roadmap |

@@ -241,6 +241,19 @@ This is an extension function even though the receiver is written in the paramet
 the special parameter name `this` enables member-call syntax. Generic function type
 aliases are in `memory-model.md`, for example `typealias Action<T> = (T) -> Unit`.
 
+A call fixes each type parameter from, in order: the receiver (for an extension), the
+call's own explicit type arguments (`identity<Int>(7)`), and the types of the arguments.
+The result is the callee's return type with those bindings substituted, so `twice(f, 5)`
+is an `Int`, and a method called on it resolves against `Int`.
+
+A **callable** parameter names its own type parameter only through a lambda: `fun
+peek<T>(f: (T) -> T)` has a `T` that no argument fixes - a lambda's parameter types are
+written against `T` and a `Func<...>` value does not fix it either. Every type parameter
+of a call must be fixed by the receiver, another argument, or an explicit type argument;
+a call that leaves one unfixed is a positioned diagnostic rather than a C++ error, and
+`peek<Int>(f)` is the fix. A `Str` literal passed where the parameter is a bare type
+parameter is a `Str`; it is not narrowed to its view (`StrView`).
+
 ## Class-body limitations
 
 Class bodies are parsed as balanced regions. Method declarations inside them are compiled

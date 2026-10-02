@@ -109,7 +109,9 @@ fun resGenAddSection(ctx: *SourceGenContext, section: *Str): Bool {
         val namesText: Str = names[i]
         val key: Str = `@section:@namesText`
         if (sourceGenResHas(ctx.state, key)) {
-            ctx.sections.add(names[i], item, sourceGenResText(ctx.state, key))
+            // The text is C++ written for a reader: the emitted amalgamation carries the code
+            // without the prose (ResComments.kt).
+            ctx.sections.add(names[i], item, resCppStripComments(sourceGenResText(ctx.state, key)))
             added = true
         }
         i = i + 1

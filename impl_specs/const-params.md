@@ -66,6 +66,11 @@ other.
   receiver is an implicit parameter and is not in `Params` at all.)
 - **Value parameters only.** A `*T`/`&T` parameter takes a *place*, so no literal can be uniform
   for it; test the declared type and skip the parameter rather than trusting the argument shape.
+- **A parameter whose declared type names one of the function's own type parameters never folds.**
+  That parameter is how C++ deduction binds the type parameter: dropping it leaves the call with
+  nothing to deduce from - `twice((x: Int) -> x + 1, 5)` with `value: T` folded cannot say
+  `T = Int`, and the emitted template call fails. Conservative on purpose (another parameter may
+  still name it): "unsure means no fold".
 - **The literals must be identical**, not merely both literal: same kind (int, float, str, char,
   bool) and the same value. Compare the `Text`/`Value` attributes and *exclude* `Line`/`Column`,
   which differ per call site - a comparison that includes them silently never folds anything.

@@ -511,18 +511,39 @@ codegen also maps `charAt`, `find`/`indexOf`, `startsWith`, `startsWithPtr`,
 
 ### Lambdas
 
-A lambda lowers to a C++ lambda with by-value captures, assignable to
-`Func<Ret(Params)>`:
+A lambda is a data class with one field per captured value, plus a free method that
+implements the call - `<symbol>_invoke(<symbol> self, params...)`, with the instance passed
+by copy. Both are emitted at namespace scope into their own `closures` section (after the
+prototypes, before the bodies), so a lambda never needs a local class with an
+`auto operator()` inside a function:
 
 ```text
-(v: Int) -> v * 2      =>  [=](Int v) -> Int { return v * 2; }
-(v: Int) -> { ... }    =>  [=](Int v) -> Ret { ... }
+(v: Int) -> v * 2      =>  struct X { ... };
+                           Int X_invoke(X self, Int v);
+(v: Int) -> { ... }    =>  /* one free method, `self.field` for a capture */
 ```
 
+The class's one member is the conversion into the callable representation, so a lambda
+still fits a `Func<...>` slot (`rtl/functional.hpp`'s `simse_closureFunc` binds the free
+method into the `std::function`):
+
+```text
+struct X { Int factor; operator Func<Int(Int)>() const { ... X_invoke ... } };
+```
+
+A call through a *statically known closure* value reaches the free method directly
+(`X_invoke(x, 5)`); a call through a `Func<...>` goes through `std::function`. A closure's
+`self` parameter is a **value**, so the invoke starts from the closure's own captures and
+a step inside does not reach the caller's value (`specs/memory-model.md`).
+
 Parameter types come from the explicit annotations or from the expected callable
-type (a `typealias` is expanded for this). The return type comes from the
-expected callable type, else from a single trailing expression or a `return`.
-Reference captures and explicit capture syntax are deferred.
+type (a `typealias` is expanded for this); a callable type piece that names the *callee's*
+own type parameters is not usable at the lambda's site and is treated as absent. The
+return type comes from the expected callable type, else from the body's `return`s, else it
+is `Unit`. A lambda inside a generic function makes both the class and the method
+templates. A lambda parameter that neither the annotations nor a callable type names is a
+positioned diagnostic at the lambda. Reference captures are deferred, and a `this` inside
+a lambda is reported rather than silently naming the closure.
 
 ### `print` / `println`
 
