@@ -1,10 +1,10 @@
 package concat
 
-// The emitter's own concatenation (cppsrc/linear/MergeConcat.kt): a `+` chain over `Str`
+// The emitter's own concatenation (src/linear/MergeConcat.kt): a `+` chain over `Str`
 // and an `fmtStr`/`fmtStrWith` whose format and separator are literals are fused into
 // *one* instruction, which the emitter expands - the parts' lengths summed, one `resize`,
 // one slot write per part - so the answer is one buffer with each part written once
-// (`expected.cpp` shows the expansion, and cppsrc/rtl/_res.md's `strcat` section is where
+// (`expected.cpp` shows the expansion, and src/rtl/_res.md's `strcat` section is where
 // its primitives live).
 //
 // This program is the shape that rule has to keep honest: the chains it takes (a literal, a

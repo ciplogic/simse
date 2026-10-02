@@ -4,11 +4,11 @@
 // empty array of a given element type.
 //
 //   tools\_probe.bat array_layout_probe /O2 /DNDEBUG
-#include "cppsrc/rtl/simse.hpp"
+#include "src/rtl/simse.hpp"
 
 #include <cstdio>
 
-// `Attribute`/`XmlNode` are generated from their declaration (cppsrc/modules/xml/api.kt), so a
+// `Attribute`/`XmlNode` are generated from their declaration (src/modules/xml/api.kt), so a
 // standalone probe mirrors the emitted shape.
 SIMSE_PACK_PUSH
 struct Attribute {
@@ -87,7 +87,7 @@ int main() {
     std::printf("sizeof(List<Attribute>)       %zu\n", sizeof(List<Attribute>));
     std::printf("children block bytes for 2    %zu\n", ArrayBlock<XmlNode>::blockBytes(2));
 
-    // The compiler's AST node (cppsrc/modules/compiler/astxml.kt): same shape, but the role
+    // The compiler's AST node (src/modules/compiler/astxml.kt): same shape, but the role
     // and the attribute keys are enums, so the attribute list is much smaller.
     std::printf("sizeof(AstXmlNode)             %zu\n", sizeof(AstXmlNode));
     std::printf("sizeof(AstNodeAttribute)      %zu\n", sizeof(AstNodeAttribute));

@@ -12,7 +12,7 @@
 // that is what the compiler's own hottest loop walks. The machines are hand-written to the
 // shape the emitter generates, and the address of the element is not taken through a
 // `simse_addressOf`-style helper here: the point is the protocol, not the addressing.
-#include "cppsrc/rtl/simse.hpp"
+#include "src/rtl/simse.hpp"
 
 #include <chrono>
 #include <cstdio>

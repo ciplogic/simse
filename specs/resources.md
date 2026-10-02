@@ -143,8 +143,8 @@ hold any of them: printable bytes as themselves, everything else as an octal esc
 
 ## The API
 
-`Resources` is a prelude type (`cppsrc/rtl/resources.kt`), Simse code over the table the
-C++ header (`cppsrc/rtl/resources.hpp`) hands out. `Resources.get(k)` is a static call:
+`Resources` is a prelude type (`src/rtl/resources.kt`), Simse code over the table the
+C++ header (`src/rtl/resources.hpp`) hands out. `Resources.get(k)` is a static call:
 
 ```simse
 fun entries(): Span<ResourceEntry>   // the table, borrowed
@@ -163,8 +163,8 @@ checker a signature and the emitter a symbol to call; the symbol names the plain
 function underneath it (`fun resourcesGet(key: Str): StrView`), where the scan is written.
 The emitter spells such a call as the symbol (`resourcesGet(k)`, `Emitter.staticCallSymbol`)
 rather than as a C++ static. What stays C++ because the language cannot say it: the storage
-and `install` in `cppsrc/rtl/resources.hpp`, and the accessor over it (`entries`) in the
-`resources` section of `cppsrc/rtl/_res.md`.
+and `install` in `src/rtl/resources.hpp`, and the accessor over it (`entries`) in the
+`resources` section of `src/rtl/_res.md`.
 
 The entries are built **once**, at startup, by `install`, which is called by the table
 the emitter writes - a list of `StrView` pairs borrowing the string table.
@@ -183,7 +183,7 @@ compiler emits for every program, with no declaration to hang it on (the string 
 decoder and the clock the profiler reads). `<section>:emit` = `reached` is the other side: the
 section's text is **reach-gated even when the declaration that names it is a module's** - a
 prelude declaration is gated already, a program's is not. A module's C++ then costs a program
-only what it uses; `filestream` (the `FileStream` reads, `cppsrc/rtl/_res.md`) is the first, and
+only what it uses; `filestream` (the `FileStream` reads, `src/rtl/_res.md`) is the first, and
 it is what keeps the `io` module from carrying the stream code into a program that never reads a
 stream. `@SmGen("kt", section)` reads `<section>:source`
 and hands it to the compiler's own front end - the driver parses it, `analyze` checks it,
@@ -192,12 +192,12 @@ codegen emits it - so the generated function is compiled, not pasted.
 The lookup reads the tree being compiled first (the `_res.md` files under its module roots,
 the very list the driver read) and the compiler's own resources second (the `_res.md` files
 beside the compiler's prelude, read from disk by the driver as the prelude's own `.kt` files
-are). The second half gives a program the RTL's C++ (`cppsrc/rtl/_res.md`) without carrying
+are). The second half gives a program the RTL's C++ (`src/rtl/_res.md`) without carrying
 the RTL's resource file; a program that carries a section of the same name supplies it to
 itself. Because the compiler reads that file, its sections are all marked `!`, so the text
 is compiled in and not carried a second time in the compiler's own pool (the pool was 33,446
 bytes, 23,034 of them this text; it is 11,051 now, and the published bootstrap is 23,885
-bytes smaller). `cppsrc/rtl/_res.md` is the RTL's own generated C++ (`strtable`, `timeops`,
+bytes smaller). `src/rtl/_res.md` is the RTL's own generated C++ (`strtable`, `timeops`,
 `listops`, `dictops`, `strops`, `strcat`, `spanOf`); its `spanOfEmpty` section is the decoy
 `stress/smgen-res-collision` pins the last-write-wins rule with, and
 `stress/smgen-res-program` is a program whose own file supplies one.
@@ -206,16 +206,16 @@ bytes smaller). `cppsrc/rtl/_res.md` is the RTL's own generated C++ (`strtable`,
 
 | piece | file |
 | --- | --- |
-| the format, the join, the discovery | `cppsrc/resources/Resources.kt` (its `ResourceItem` is the reader's pair - not the RTL's `ResourceEntry`, because the emitter's type table is flat by name) |
-| discovery in the driver | one call to the module: `cppsrc/compiler/Driver.kt` |
-| the lookup a generator reads | the `compiler` package's `sourceGenResHas`/`sourceGenResText` (`cppsrc/compiler/GenTypes.kt`): the tree's own entries first, the compiler's own (read from disk beside the prelude) second |
-| pooling and the table | the emitter: `cppsrc/codegen/Codegen.kt`, after `emitStringTable`, over `resourceStored` - the literals `resources.resStoredLiterals` already spelled |
-| the two escape rules, and the flags | `cppsrc/resources/Resources.kt`: `resMarkedName` (the markers), `resStoredLiterals` (`resQuoteLiteral`/`resQuoteBinary`), `resQuoteLiteral` |
-| the format's byte helpers | the `resfmt` section of `cppsrc/rtl/_res.md` (`simse_resHexToBytes`, `simse_resQuoteBinary`), reached only by the compiler's own module |
-| the storage and `install` | `cppsrc/rtl/resources.hpp` |
-| the API and the lookup | `cppsrc/rtl/resources.kt` (Simse) |
+| the format, the join, the discovery | `src/resources/Resources.kt` (its `ResourceItem` is the reader's pair - not the RTL's `ResourceEntry`, because the emitter's type table is flat by name) |
+| discovery in the driver | one call to the module: `src/compiler/Driver.kt` |
+| the lookup a generator reads | the `compiler` package's `sourceGenResHas`/`sourceGenResText` (`src/compiler/GenTypes.kt`): the tree's own entries first, the compiler's own (read from disk beside the prelude) second |
+| pooling and the table | the emitter: `src/codegen/Codegen.kt`, after `emitStringTable`, over `resourceStored` - the literals `resources.resStoredLiterals` already spelled |
+| the two escape rules, and the flags | `src/resources/Resources.kt`: `resMarkedName` (the markers), `resStoredLiterals` (`resQuoteLiteral`/`resQuoteBinary`), `resQuoteLiteral` |
+| the format's byte helpers | the `resfmt` section of `src/rtl/_res.md` (`simse_resHexToBytes`, `simse_resQuoteBinary`), reached only by the compiler's own module |
+| the storage and `install` | `src/rtl/resources.hpp` |
+| the API and the lookup | `src/rtl/resources.kt` (Simse) |
 | the static form | `Emitter.call` + `Emitter.staticCallSymbol` |
-| the RTL's generated C++ | `cppsrc/rtl/_res.md`, read by the `res` generator |
+| the RTL's generated C++ | `src/rtl/_res.md`, read by the `res` generator |
 | the end-to-end case | `stress/resources/` (data the program carries) and `stress/resources-compileonly/` (a `!` section: read, not carried) |
 
 ## Status
@@ -226,7 +226,7 @@ hands out), and the `res` generator (`impl_specs/generators.md`). `stress/resour
 every shape the format has: a fenced block, an inline value, an empty value, a missing key, a
 comparison against a literal, and the escapes a value needs on the way into the pool.
 
-`cppsrc/rtl/_res.md` is entirely marked `!`, so the compiler's `Resources` table is empty:
+`src/rtl/_res.md` is entirely marked `!`, so the compiler's `Resources` table is empty:
 the RTL type is a program-facing API, and the compiler reads its own resources from the file
 it needs for the prelude's `.kt` files anyway. The cost of the marker is that requirement;
 the gain is the second copy of the text (the numbers above).
@@ -241,7 +241,7 @@ proves the pool carried it, and a byte above `0x7f` read back as the signed `Cha
 stops emitting a resource table (and a string table) at all.
 
 The format's two byte-level helpers are a section of their own, `resfmt`
-(`cppsrc/rtl/_res.md`), reached by the declarations in `cppsrc/resources/Resources.kt`; they
+(`src/rtl/_res.md`), reached by the declarations in `src/resources/Resources.kt`; they
 are not part of `strops`, because a shared section is emitted whole.
 
 `bun tools/stress.js` is **61/61**, and the bootstrap fixed point (`bun tools/bootstrap.js`)

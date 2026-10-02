@@ -152,7 +152,7 @@ function pickCompiler(explicit) {
 }
 
 // Every generated program is one translation unit: the runtime's primitives, the platform's
-// file I/O and the clocks are generated into it from `cppsrc/rtl/_res.md`
+// file I/O and the clocks are generated into it from `src/rtl/_res.md`
 // (`impl_specs/generators.md`), so there is no shared object to compile once per flag set
 // and nothing to link beside the program itself.
 

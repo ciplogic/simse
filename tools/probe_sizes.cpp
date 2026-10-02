@@ -8,11 +8,11 @@
 //
 // Widths to watch: `Str` 32 (4 len + 4 cap + 24 inline), `StrView`/`Span<Char>` 12 packed
 // (16 under host alignment), `List<StrView>` 56.
-#include "cppsrc/rtl/simse.hpp"
+#include "src/rtl/simse.hpp"
 
 #include <cstdio>
 
-// `Attribute`/`XmlNode` are generated from their declaration (cppsrc/modules/xml/api.kt), so a
+// `Attribute`/`XmlNode` are generated from their declaration (src/modules/xml/api.kt), so a
 // standalone probe mirrors the emitted shape: a 4-byte-packed aggregate whose `Array<XmlNode>`
 // field breaks the recursion.
 SIMSE_PACK_PUSH

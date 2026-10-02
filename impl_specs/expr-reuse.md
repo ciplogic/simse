@@ -1,6 +1,6 @@
 # Reusing values the body already computed
 
-Evidence: `ns12_semaBuiltinGenericArity` in `cppsrc/simse_bootstrap.cpp` (the `when (name)` over a
+Evidence: `ns12_semaBuiltinGenericArity` in `src/simse_bootstrap.cpp` (the `when (name)` over a
 `Str*`, ~L41988). It performs **eight deep `Str` copies of one expression**:
 
 ```cpp
@@ -30,12 +30,12 @@ read that is repeated.
 so `_sm_baseN = *(name)` copies the string (the `Str` is `SmallVector<24, Char>` - a heap allocation
 past 23 bytes), while the comparison against `__sm_stringTable[k]` is already free, because a
 literal at a site *is* a `StrView` and `Str`/`StrView` comparisons have direct overloads
-(`cppsrc/rtl/strview.hpp`). The copy is pure waste: the value is only ever compared.
+(`src/rtl/strview.hpp`). The copy is pure waste: the value is only ever compared.
 
 ## The three fixes, in the order I would do them
 
 **A. The `when` subject is already bound once - and the rule that skips it is why the copies are
-there.** `parseWhen` (`cppsrc/parser/Parser.kt`) binds `var _sm_when1 = <subject>` and makes every
+there.** `parseWhen` (`src/parser/Parser.kt`) binds `var _sm_when1 = <subject>` and makes every
 test read that - *unless* the subject is a **place**, in which case it deliberately skips the
 template and re-reads the subject per test (`whenSubjectIsPlace`, and the rationale is recorded at
 its definition: the template would *copy* a `Str` subject - a heap copy past the inline buffer - on
@@ -56,12 +56,12 @@ using the template, which the flag below already does - trades N copies for 1 on
 yet makes every `Str`-local subject pay a copy it does not pay today. Two sides, so it is a
 measurement before it is a change.
 
-**And that measurement already exists:** `--when-copy-subject` *is* this A/B - `cppsrc/compiler/Driver.kt`
+**And that measurement already exists:** `--when-copy-subject` *is* this A/B - `src/compiler/Driver.kt`
 takes it and `whenCopySubject()` is read by the one predicate that decides - and it is documented at
 its flag as "the A/B for the copy, not a mode to ship". Running the corpus and the self-transpile with
 and without it prices both sides before any of this is written.
 
-**B. Global simple expression elimination** (`cppsrc/optimizations/usedef/`). The framework is
+**B. Global simple expression elimination** (`src/optimizations/usedef/`). The framework is
 already there - `UseDefs.kt`, `DeadLocals.kt`, `DeadStores.kt`, `MergeLocals.kt` - with `FoldExprs.kt`
 for the expression shape, so this is a new pass beside them rather than new machinery. The property
 is **invariance**, which is what "a parameter, or something unchanged from the beginning of the
@@ -78,9 +78,9 @@ is what makes B's reuse free.
 
 The mechanism B needs - per-call purity, effect classes and value numbering - is written out under
 "Purity, effects and value numbering" below; the pass itself belongs beside the `usedef/` ones
-(`cppsrc/optimizations/`).
+(`src/optimizations/`).
 
-**Landed (the memory-independent half).** `cppsrc/linear/ReuseExprs.kt` implements the value
+**Landed (the memory-independent half).** `src/linear/ReuseExprs.kt` implements the value
 numbering for the opcodes that read no memory - `BinaryOp`, `UnaryOp`, `FieldAddr`, `IndexAddr`,
 `GetStaticAddr`. A pure op's key is `(opcode, constant operands, each slot operand's last writer)`;
 a later key equal to an earlier one *in the same basic block* becomes a read of it, and the pass is
@@ -157,8 +157,8 @@ _sm_expr2 = _sm_base7->size();            // memory-reading: NOT commoned across
 **Purity is declared, never listed.** A call's effect comes from its declaration - `data` means
 "writes nothing" - so the two `pureCallees.insert` lines for `size`/`count` in `Codegen.run`
 are gone and the length accessors are declarations like `spanOfStr` and the intrinsics
-(`strBytes`, `setBytes`). `lenOf(x)` is the operation for `Str`/`List` (`cppsrc/rtl/rtl.kt`, the
-`lenops` section of `cppsrc/rtl/_res.md`); `Array.count`, `Dictionary.size` and `StrView.size()`
+(`strBytes`, `setBytes`). `lenOf(x)` is the operation for `Str`/`List` (`src/rtl/rtl.kt`, the
+`lenops` section of `src/rtl/_res.md`); `Array.count`, `Dictionary.size` and `StrView.size()`
 already had declarations and now carry the mark. `parser/BorrowParams.kt` seeds no name either:
 its `pure` set is exactly the `IsPure` marks. An opcode's effect is one table row each. Binary
 and unary arithmetic stay opcodes, because a reader understands `+` where `_sm_Op("+", ...)`

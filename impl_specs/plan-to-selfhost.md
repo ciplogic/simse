@@ -18,7 +18,7 @@ line be rewritten; the C++ implementation remains the bootstrap and debugging re
 Implement the scanner, parser, semantic stages, reifier, C++ lowering, and amalgamator in
 C++. Keep the generated C++ readable and debuggable. Use the `.kt` sources and the
 `tests/fixtures/` programs as input fixtures and comparison cases. The compiler may call
-hand-written C++ runtime code under `cppsrc/rtl`, a native boundary that need not be
+hand-written C++ runtime code under `src/rtl`, a native boundary that need not be
 rewritten for the first self-hosting attempt.
 
 ### Phase 2: Simse implementation candidates
@@ -70,7 +70,7 @@ checking and emits a call to a C++ symbol supplied by the native implementation;
 absent from Simse because C++ owns it.
 
 Native method implementations are compiled in the Simse runtime context, with access to
-`cppsrc/rtl/simse.hpp` (directly or through the generated amalgamated translation unit), so
+`src/rtl/simse.hpp` (directly or through the generated amalgamated translation unit), so
 native code can represent Simse values: `Str`, `List<T>`, `Dictionary<K, V>`, callable types,
 and other RTL-provided helpers.
 
@@ -113,7 +113,7 @@ Until native interoperation is formally specified:
 - Keep native fallbacks small and deterministic.
 - Expose them through typed declarations, not arbitrary embedded C++ text.
 - Keep operating-system and ABI details inside C++ adapters or the RTL.
-- Compile native implementations with access to `cppsrc/rtl/simse.hpp` and the
+- Compile native implementations with access to `src/rtl/simse.hpp` and the
   generated declarations for all Simse-visible parameter and return types.
 - Avoid passing raw pointers across the Simse/native boundary unless required.
 - Prefer copying or ref-counted language values at the boundary.

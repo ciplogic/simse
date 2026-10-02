@@ -9,8 +9,8 @@ with a body inside it. The IL removes both, so a later optimization reads one in
 a time. The model is Smali's (`.method` / `.registers` / `.local` / `const-string` next to the
 `invoke-*` family).
 
-Status: **implemented, and the only codegen.** `cppsrc/linear/LinearForm.kt` holds the model
-(projection, printer, dump flag) and `cppsrc/codegen/IlCodeGen.kt` the backend
+Status: **implemented, and the only codegen.** `src/linear/LinearForm.kt` holds the model
+(projection, printer, dump flag) and `src/codegen/IlCodeGen.kt` the backend
 (`emitIlBodyText` / `ilEmitOps` / `emitClosureClass`); the tables, operand kinds and
 instruction list below are what the code does. `--showLinearRepresentation` dumps the IL; the
 statement emitter and its `--linearCodegen` / `--statementsCodegen` flags are deleted, so what
@@ -73,7 +73,7 @@ IlOpKind     = Label | Goto | IfTrue | IfFalse | ...   # one per row of the tabl
   `IlMethod`, a `BinaryOp` whose operand types make sense.
 - **`inferred` is the type pass's whole record, and it says more than `vars` does.** A
   slot holding a state machine is `..T`, a type a *declaration* is never written with
-  (the emitted C++ types it `auto`, and `cppsrc/linear/Yield.kt` relies on that to reject a
+  (the emitted C++ types it `auto`, and `src/linear/Yield.kt` relies on that to reject a
   `for` over a machine crossing a `yield`), so `vars[i].typeIndex` is `?` for it. The frame
   still has to know: a `for` wraps what it iterates in `iter()` and on a machine that wrap
   is the *identity*, a decision only the receiver's type can make (`impl_specs/for.md`). So
@@ -193,7 +193,7 @@ Two things the unification must **not** blur, because they are per row:
 The table is also what the implicit copy becomes: wherever a `T` is required and the
 expression has type `*T`/`&T`, the same instruction is inserted - no new opcode, and no
 `copy` in the language. `copy(v)` on a value is the first row (the identity), so `copy`
-disappears without the IL gaining anything to replace it - `cppsrc/**/*.kt` spells no
+disappears without the IL gaining anything to replace it - `src/**/*.kt` spells no
 `copy(...)`, and every conversion folds into the destination that asks for it. The positions
 that ask are a call argument (`specs/functions.md`, "Handles at a call") and a **binary
 operand** whose fellow operand is a value (`specs/memory-model.md`): `out + separator` with
@@ -307,7 +307,7 @@ body whose dump has neither is fully covered by the IL.
   copied. A backend spells it as the RTL's initializer-list construction, which is what
   makes a packed list of up to four elements allocate nothing (`List` is
   `SmallVector<T, 4>`).
-- **`Concat` is the fused string concatenation** (`cppsrc/linear/MergeConcat.kt`). The
+- **`Concat` is the fused string concatenation** (`src/linear/MergeConcat.kt`). The
   language's `+` is binary, so `a + b + c` is two `BinaryOp`s with a `Str` temporary
   between them and one allocation per link, and an `fmtStr`/`fmtStrWith` whose format (and
   separator) is a literal is
@@ -316,7 +316,7 @@ body whose dump has neither is fully covered by the IL.
   merges the whole chain, and the split format, into *one* instruction over every part,
   which the backend *expands* into a length sum, one `resize` and one slot write per part
   (the Java 9 `StringConcatFactory` shape, `ilConcatStatements` in
-  `cppsrc/codegen/IlCodeGen.kt`, `cppsrc/rtl/_res.md`'s `strcat` section): no call, so a
+  `src/codegen/IlCodeGen.kt`, `src/rtl/_res.md`'s `strcat` section): no call, so a
   *literal* part contributes a compile-time integer to the sum and a destination that is
   the chain's own first part is appended onto in place. It declines rather than guess - a
   `+` operand that is a number (`s + n` appends one *byte*), a format that is not a
@@ -326,7 +326,7 @@ body whose dump has neither is fully covered by the IL.
   chain and a literal `fmtStr`/`fmtStrWith` keep the lowering's shape, and the `strcat` section goes
   with it): the A/B switch for what the fusion costs and what it buys, off by default.
 - **A repeated pure call of an unchanged slot is merged into the first one**
-  (`cppsrc/linear/ReusePure.kt`). A `Str` tested against literals lowers to a view of it per
+  (`src/linear/ReusePure.kt`). A `Str` tested against literals lowers to a view of it per
 test - `spanOfStr(name) == "Int" || spanOfStr(name) == "Int8" || ...` (`Parser.kt`'s
 comparison rewrite) - and every one of those calls answers the same view, because `name` is
 not written in the body and no call could write through it. The pass keeps the *first* call
@@ -339,7 +339,7 @@ first call outside the first block, an untyped slot, an indirect callee - and le
 code as it was. Which callees it may reuse is the emitter's `pureCallees`: every function
 declared `data` (a *pure* function, `specs/functions.md`), the length accessors among them -
 `lenOf` for `Str`/`List` and `Array.count`/`Dictionary.size`/`StrView.size()`
-(`cppsrc/rtl/rtl.kt`) are `data` declarations, so nothing is listed by hand. `spanOfStr`,
+(`src/rtl/rtl.kt`) are `data` declarations, so nothing is listed by hand. `spanOfStr`,
 `lenOf` and `isEmpty` carry the mark in the prelude, so the shape above folds; a user's
 `data fun Str.toLen()` folds the same way (`stress/pure-function`), while an unmarked
 function's two calls are left alone however alike they look.
@@ -378,7 +378,7 @@ then one line per instruction with the operands resolved and the source line app
 output, verbatim:
 
 ```
-# cppsrc/codegen/Codegen.kt:54  ns1_cgJoin (*List<Str> parts, Str separator) -> Str
+# src/codegen/Codegen.kt:54  ns1_cgJoin (*List<Str> parts, Str separator) -> Str
 types:   0 *List<Str>   1 Str   2 Int   3 Bool
 vars:    0 parts:0:Argument   1 separator:1:Argument   2 _sm_expr1:2:Expression   3 _sm_expr2:3:Expression   4 _sm_expr3:3:Expression   5 _sm_expr4:1:Expression   6 out:1:Local   7 i:2:Local
 pool:    0 ""   1 0   2 "<"   3 ">"   4 "+"   5 1
@@ -409,7 +409,7 @@ stderr, so the emitted C++ is byte-identical with and without the flag (checked)
 
 ## What the corpus says
 
-Measured over the whole compiler (`--root cppsrc`); the numbers come from
+Measured over the whole compiler (`--root src`); the numbers come from
 `bun tools/_il_report.mjs il.txt` over the dump
 (`--showLinearRepresentation 2> il.txt`):
 
@@ -435,7 +435,7 @@ Measured over the whole compiler (`--root cppsrc`); the numbers come from
 ## Codegen from the IL
 
 The emitter reads the instruction list for every body. Over the whole compiler source set
-(`--root cppsrc`, 502 bodies) the record was:
+(`--root src`, 502 bodies) the record was:
 
 | | |
 | --- | --- |
@@ -476,9 +476,9 @@ expression.
 Verified end to end:
 
 ```sh
-./cmake-build-debug/simse_transpile.exe --root cppsrc -o a.cpp   # from the IL
+./cmake-build-debug/simse_transpile.exe --root src -o a.cpp   # from the IL
 bun build.js --cpp a.cpp --exe il_simse.exe     # the compiler, from the bytecode
-./il_simse.exe --root cppsrc -o b.cpp           # it transpiles itself
+./il_simse.exe --root src -o b.cpp           # it transpiles itself
 cmp b.cpp a.cpp                                 # byte-identical
 bun tools/stress.js --simse ./il_simse.exe      # 30/30
 bun tools/bootstrap.js                          # and the fixed point holds (~0.8 s)
@@ -569,7 +569,7 @@ deferred). `&lambda` rides the existing `Box`, i.e. `std::make_shared<Class>(ins
 
 The IL is the *only* input to code generation. Measured:
 
-- **The IL expresses every body of the compiler**: over `cppsrc` the report is
+- **The IL expresses every body of the compiler**: over `src` the report is
   `502 bodies, 276 byte-identical, 224 identical without blocks, 2 differing, 0 not
   expressible`. The two differences are the closure model's (`[=]` capture list against
   the class the language specifies), not gaps in the instruction set.
@@ -578,7 +578,7 @@ The IL is the *only* input to code generation. Measured:
   as the frame's `self`), and `stress/yield` reports `5 bodies, 5 identical without
   blocks, 0 differing, 0 not expressible` - the emitted machine compiles and prints the
   expected output for both `for` forms, `continue` and `break` included.
-- **A compiler built from IL-emitted output works**: transpiling `cppsrc` (the default
+- **A compiler built from IL-emitted output works**: transpiling `src` (the default
   now) and compiling that file gives a compiler that passes the whole stress corpus and
   reproduces its own source byte-for-byte - so the backend is complete for everything the
   compiler's own source needs.

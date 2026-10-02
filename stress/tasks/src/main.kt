@@ -1,6 +1,6 @@
 package fixtures
 
-// The work pool (`cppsrc/rtl/tasks.kt`, the `tasks` section of `cppsrc/rtl/_res.md`,
+// The work pool (`src/rtl/tasks.kt`, the `tasks` section of `src/rtl/_res.md`,
 // impl_specs/async.md): *named queues*, each a small pool of worker threads, and a structural
 // join. The thread that drives the loop is a program's main logic; the workers are the io side.
 // The two meet only at the queues, and only values cross one.

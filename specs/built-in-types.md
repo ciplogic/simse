@@ -39,7 +39,7 @@ Status: implemented (`stress/raw-strings`).
 
 `"..."` is a string literal. Its escapes are the character literals' set, plus `\xNN`
 with any run of hex digits and an octal escape of up to three digits; each denotes one
-byte (`cppsrc/common/literals.kt` is the one decoder).
+byte (`src/common/literals.kt` is the one decoder).
 
 A **backtick string** is the same value written raw:
 
@@ -54,7 +54,7 @@ a real newline included, which is what lets a string span lines. A line ending i
 normalized to one `\n` (CRLF and a lone CR both), so a source file's line endings do not
 change the value. A `"` and a `\` are written as they stand; that - and the multi-line
 form - is what makes a backtick string the way to hold another language's source text
-verbatim (the profiler's emitted C++, `cppsrc/profiling/Profiling.kt`).
+verbatim (the profiler's emitted C++, `src/profiling/Profiling.kt`).
 
 **Interpolation** is `@name`: the value of `name`, as text. Only a backtick string
 interpolates (`"@x"` is the two characters). A raw string with no `@name` (or `@(name)`) in
@@ -66,11 +66,11 @@ identifier does, so one followed by another identifier byte - the `_` that separ
 generated name's parts - takes the parenthesized spelling `@(name)`, whose `)` ends it: in
 `` `_sm_@(x)_@(n)` `` the items are `x` and `n` and the `_` between them is text. The parser
 rewrites the literal into one `fmtStrWith` call before sema
-(`cppsrc/parser/ParserInterp.kt`): the template is the
+(`src/parser/ParserInterp.kt`): the template is the
 content with each `@name` reduced to its `@`, and the items are the names, in order - the
 separator is always `@`, and one placeholder per item always holds. So `` `a=@x b=@y` `` is
 `fmtStrWith('@', "a=@ b=@", x, y)`, and the concatenation fusion turns it into one buffer
-exactly as for a hand-written call (`cppsrc/linear/MergeConcat.kt`). An item is the `Str`
+exactly as for a hand-written call (`src/linear/MergeConcat.kt`). An item is the `Str`
 the written call takes, so a name of another type formats only while the fusion is on -
 which it is for every template without an escape, and a multi-line one has one - and
 `name.toString()` first is always safe.
@@ -82,7 +82,7 @@ them.
 
 A string a literal is compared against is tested as a view of it, not a copy: the parser
 wraps a *place* operand of a comparison with a literal (`name == "Int"`) in `spanOfStr`
-(`cppsrc/rtl/StrView.kt`, `Parser.kt`'s `parseExpr`), so the comparison reads the bytes in
+(`src/rtl/StrView.kt`, `Parser.kt`'s `parseExpr`), so the comparison reads the bytes in
 place - a `*Str` operand is not read through, and a `Str` one is not copied - and the
 comparisons resolve to the view operators. A call's or an operation's result is materialised
 anyway, so it is left as it stands. `when` over string literals does the same for its tests
@@ -150,7 +150,7 @@ Status: required for the first implementation.
 - `data()`, which returns a NUL-terminated buffer for C interop.
 
 `reserve` and the two in-place appends are also on the emitted surface
-(`cppsrc/rtl/rtl.kt`):
+(`src/rtl/rtl.kt`):
 
 - `reserve(count: Int)` grows the buffer once for a run of appends. A hint, not a length:
   the string keeps its size, and appends past the reservation grow it as usual.
@@ -202,8 +202,8 @@ The bootstrap RTL also provides these `Str` operations (native extensions):
 
 ### Views: `Span<T>` and `StrView`
 
-Status: implemented in the bootstrap RTL (`cppsrc/rtl/Span.kt`, `cppsrc/rtl/StrView.kt`,
-`cppsrc/rtl/span.hpp`, `cppsrc/rtl/strview.hpp`).
+Status: implemented in the bootstrap RTL (`src/rtl/Span.kt`, `src/rtl/StrView.kt`,
+`src/rtl/span.hpp`, `src/rtl/strview.hpp`).
 
 A `Span<T>` is a borrowed view over a contiguous run of `T`: a `*T` pointer plus a
 length, nothing else. It copies and owns nothing, so it is valid only while its source is
@@ -224,7 +224,7 @@ outlive the span.
   (unchecked).
 
 `StrView` is the view a string's bytes are read through, and it is a `Span<Char>`:
-`typealias StrView = Span<Char>` (`cppsrc/rtl/StrView.kt`, `cppsrc/rtl/strview.hpp`). It is
+`typealias StrView = Span<Char>` (`src/rtl/StrView.kt`, `src/rtl/strview.hpp`). It is
 what `FileStream.readLineView()` hands back and what `spanOfStr(text: *Str): StrView`
 builds (borrowing the string). `spanOfStr` is total over the two spellings of its subject:
 a `Str`'s bytes are borrowed, and a `StrView` is returned as it stands (the identity), so

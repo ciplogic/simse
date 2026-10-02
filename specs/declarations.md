@@ -37,7 +37,7 @@ With an explicit type - `var p: Point = Point(a, b)` - the ordinary constructor 
 assignment `p = Point(a, b)` is an ordinary construction too. When the type declares no
 `initByValue`, `return (e)` is the ordinary value `e` (and a multi-value `return (a, b)` has no
 plain-return spelling). `Opt<T>` and `Str` are built the `initByValue` way in the RTL
-(`cppsrc/rtl/rtl.kt`).
+(`src/rtl/rtl.kt`).
 
 ### Fields and `var`/`val`
 

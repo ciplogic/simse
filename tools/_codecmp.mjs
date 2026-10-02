@@ -1,6 +1,6 @@
 // Scratch: prove an edit to a Simse file was comments and whitespace only.
 //
-//   bun tools/_codecmp.mjs build/before/cppsrc/codegen/Codegen.kt cppsrc/codegen/Codegen.kt
+//   bun tools/_codecmp.mjs build/before/src/codegen/Codegen.kt src/codegen/Codegen.kt
 //
 // Strips `//` comments and *tokenizes* what is left: string and char literals verbatim,
 // then maximal runs of identifier/number characters and of operator/punctuation characters,
@@ -9,7 +9,7 @@
 // stripping whitespace blindly would hide it.
 import { readFileSync } from "fs";
 
-// The scanner's multi-char operators, longest first (cppsrc/lex/Scanner.kt,
+// The scanner's multi-char operators, longest first (src/lex/Scanner.kt,
 // `makeMultiCharOperators`): an operator is matched greedily against this table, so `<<` is
 // one token while `< <` is two.
 const OPERATORS = [

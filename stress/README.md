@@ -85,7 +85,7 @@ What stays one folder per case, and why:
   no C++ driver.
 * The harness is JavaScript on purpose: the compiler is the artifact under test,
   and everything around it that can be written in a scripted host language keeps
-  the C++ surface down to the runtime (`cppsrc/rtl`, `cppsrc/native`) plus the
+  the C++ surface down to the runtime (`src/rtl`, `src/native`) plus the
   bootstrap ring, which is on its way out (see `impl_specs/roadmap.md`).
 
 ## The work directory
@@ -93,6 +93,6 @@ What stays one folder per case, and why:
 `stress/.work/<name>/` holds `out.cpp`, `prog.exe`, and the run's `actual.*`
 files. It is ignored by git and rebuilt on every run (the shared objects for the
 native translation units are cached per flag set, which is what makes repeated
-runs fast; the cache is invalidated by a newer `cppsrc/**` header too, because
+runs fast; the cache is invalidated by a newer `src/**` header too, because
 `Str`/`List`/`Array` are header-defined and mixing two versions of them in one
 binary is an ODR violation).

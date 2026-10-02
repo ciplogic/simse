@@ -58,8 +58,8 @@ symbol alias to a plain Simse function.
 
 ## The generator table
 
-Every generator is **one file** under `cppsrc/compiler/`, and a `SourceGenerator` that
-**registers itself** by name - the shape `cppsrc/lex/Scanner.kt` gives its token matchers:
+Every generator is **one file** under `src/compiler/`, and a `SourceGenerator` that
+**registers itself** by name - the shape `src/lex/Scanner.kt` gives its token matchers:
 
 | file | name | C++ comes from | `declaresPrototype` | `registersReceiver` |
 | --- | --- | --- | --- | --- |
@@ -70,8 +70,8 @@ Every generator is **one file** under `cppsrc/compiler/`, and a `SourceGenerator
 | `NativeInvokeGen.kt` | `native` | a shared library, resolved at run time (`LoadLibraryA`) | no | no |
 
 Each module's generators live in a `generators/` subfolder - the `json` module's is
-`cppsrc/modules/json/generators/JsonGen.kt` - and the built-in four are one file each under
-`cppsrc/compiler/`. A module's `generators/` is **compiler-side**: `--root` scans a tree whole
+`src/modules/json/generators/JsonGen.kt` - and the built-in four are one file each under
+`src/compiler/`. A module's `generators/` is **compiler-side**: `--root` scans a tree whole
 (so the compiler's own build compiles the generators in), while `--module` names a module and
 scans it without its `generators/`, so a program that imports the module gets its declarations and
 never the generator sources (which are written against the `compiler` package - one
@@ -84,7 +84,7 @@ registration line.
 
 A generator is a `typealias OnSourceGen = (*SourceGenContext) -> SourceGenTransform`
 (`GenTypes.kt`; the two interface types are the `compiler` module's,
-`cppsrc/modules/compiler/gen.kt`): it takes *data* and answers a transform. The context carries the generator's
+`src/modules/compiler/gen.kt`): it takes *data* and answers a transform. The context carries the generator's
 name, the phase, the declaration node (with its name, its arguments, its resolved symbol), the
 file it came from, and pointers to the two things a generator may touch besides the AST - the
 resources (`FullCompiledState`) and the sink (`Sections`). `SourceGenContext.isReached()` and
@@ -126,7 +126,7 @@ the rest itself, since a key is one `Str`.
 
 ## `Sections`
 
-`Sections` (`cppsrc/compiler/Sections.kt`) is the amalgamation's sink and the one place
+`Sections` (`src/compiler/Sections.kt`) is the amalgamation's sink and the one place
 that knows the order:
 
     data class NamedSection(name: Str, text: Str, items: Dictionary<Str, Str>)
@@ -143,7 +143,7 @@ that knows the order:
     appendBlock(out: *Str, text: Str)
 
 The predefined sections are the emitter's assembly *phases*. The order keeps the routing
-**byte-neutral** (emitting `cppsrc` before and after it is identical C++):
+**byte-neutral** (emitting `src` before and after it is identical C++):
 
     includes -> support -> profile -> strings -> resources -> forward -> types ->
     statics -> prototypes -> closures -> init -> bodies
@@ -181,7 +181,7 @@ The predefined sections are the emitter's assembly *phases*. The order keeps the
 ## The `res` generator
 
 `@SmGen("res", section[, symbol])` takes its C++ from a **resource** - the generated
-functions of the RTL come from `cppsrc/rtl/_res.md`, a program's own from its `_res.md`. It is
+functions of the RTL come from `src/rtl/_res.md`, a program's own from its `_res.md`. It is
 for C++ written by hand once and reused: a template whose text does not depend on the
 program's types.
 
@@ -237,7 +237,7 @@ program's types.
 - **Two declarations that name one symbol in one section replace each other** rather than
   emitting two definitions: the item is keyed by the symbol, so the second `add` wins.
   `stress/smgen-res-collision` pins this (the `spanOfEmpty` section of
-  `cppsrc/rtl/_res.md` is its decoy).
+  `src/rtl/_res.md` is its decoy).
 - Resource text is *raw C++*, so it can only name the RTL's types and the declaration's
   own type parameters - a generated body that had to spell a program-defined type would
   have to be a per-instantiation generator (deferred).
@@ -247,10 +247,10 @@ program's types.
   program's own `_res.md` should be marked, because the code is compiled in and storing its
   text too is a second copy of the same bytes (`stress/smgen-res-program`, whose golden shows
   the resource table and the string table it needs disappear). The RTL's own sections are
-  deliberately *not* marked: `cppsrc/rtl/_res.md` is the compiler's run-time table, the second
+  deliberately *not* marked: `src/rtl/_res.md` is the compiler's run-time table, the second
   half of the lookup below, and marking them would leave every program without the RTL's C++.
 
-The RTL's hand-written C++ is here (`cppsrc/rtl/_res.md`), one section per header it came
+The RTL's hand-written C++ is here (`src/rtl/_res.md`), one section per header it came
 from: `strtable` and `timeops` (`emit: always`), `listops`, `dictops` and `strops`
 (shared: the List/Array/Str primitives, the Dictionary operations, and the
 string/character/numeric conversions the headers held), `spanOf` (the first user) and
@@ -258,8 +258,8 @@ string/character/numeric conversions the headers held), `spanOf` (the first user
 reach, and the one declaration it hangs on is shaped so a program cannot usefully call it). A
 module owns its own resource, so `fileio` (`emit: always`: the platform's filesystem/IO
 operations) and `filestream` (`emit: reached`: the `FileStream` reads, a program paying for them
-only when it reads one) are `cppsrc/modules/io/_res.md` now, and the `json` generator's helper is
-`cppsrc/modules/json/_res.md`. A `@SmGen("res", ...)`
+only when it reads one) are `src/modules/io/_res.md` now, and the `json` generator's helper is
+`src/modules/json/_res.md`. A `@SmGen("res", ...)`
 declaration emits no prototype of its own, which is what the `forward` text of its section
 is for. What stays a header is the type core and `filestream.hpp` (the `FileStream` struct
 and its methods, minus the `simse_fileStream_open` prototype): `simse.hpp`'s own includes.
@@ -272,7 +272,7 @@ the published bootstrap cannot do for itself, so the order matters:
 1. The scanner and parser changes land while the compiler's own sources stay `@`-free: the
    bootstrap still parses them, and the resulting compiler understands `@`.
 2. `@` may then appear in the compiler's own sources - including the prelude - and
-   `bun build.js --out cppsrc/simse_bootstrap.cpp` refreshes the published file, which carries
+   `bun build.js --out src/simse_bootstrap.cpp` refreshes the published file, which carries
    the new scanner and parser. No hand-patch of `simse_bootstrap.cpp` is needed;
    `bun tools/bootstrap.js` is the check.
 3. A change the *running* compiler cannot emit yet (the prelude's own declarations, the
@@ -327,9 +327,9 @@ discovery loop: emit, ask the generator for what was reached, re-emit).
 ## The `json` generator
 
 `@SmGen("json") fun T.toJson<T>(): Str` - the declaration the `json` module's `api.kt` carries -
-asks for a JSON serializer, and `cppsrc/modules/json/generators/JsonGen.kt` **builds that Simse
+asks for a JSON serializer, and `src/modules/json/generators/JsonGen.kt` **builds that Simse
 source in code**: it is the one generator that reads the program's own *type structure* rather
-than a resource. A program names the module (`--module cppsrc/modules/json`) and writes
+than a resource. A program names the module (`--module src/modules/json`) and writes
 `import json`, then `value.toJson()`; that becomes `{"x":1,"y":2}` for
 `data class Point(var x: Int, var y: Int)`.
 
@@ -354,7 +354,7 @@ than a resource. A program names the module (`--module cppsrc/modules/json`) and
   type.
 - **The scalars** are `Int`/`Int8..Int64` and `Float32/64` (their own `toString`), `Bool` (the JSON
   literal) and `Str`/`Char` (quoted, with the JSON escapes). The quoting helper is the
-  `json:helpers` section of `cppsrc/modules/json/_res.md` - fixed Simse text the generator reads, so it
+  `json:helpers` section of `src/modules/json/_res.md` - fixed Simse text the generator reads, so it
   stays readable rather than an escaped literal inside the generator.
 - **The generated module is `rtl`** (the driver's synthetic reparse module) and begins with one
   `import` per package a serialized class lives in, which is what lets it name a program-defined
@@ -373,7 +373,7 @@ whose output names neither a resource nor a program type: the shared loader goes
 and each reached declaration's thunk (a `forward` declaration and a `bodies` definition) casts
 the resolved `FARPROC` to the function pointer its own signature builds. A `*T` is `void*`
 inside that pointer and cast at the thunk's edge, which is how a `[DllImport]`-style binding
-reaches an opaque handle. Windows is the only loader today; `docs/examples/sdl2` is the worked
+reaches an opaque handle. Windows is the only loader today; `examples/sdl2` is the worked
 example and `stress/native-invoke` the headless check (it binds `kernel32.dll`, which is always
 there, so the loader is what is under test).
 
@@ -402,7 +402,7 @@ text is the point - an `expected.cpp` golden), or a focused check.
 
 ## Deferred
 
-- **Per-*reach* generation (the `json` generator's next step).** `cppsrc/json/JsonGen.kt`
+- **Per-*reach* generation (the `json` generator's next step).** `src/json/JsonGen.kt`
   already builds the serializer source in code and emits the transitive closure once per type
   (see "The `json` generator"); what it does not do is scope to what the program *serializes* -
   it walks every declared class. A reached generator needs the emitter's discovery loop (emit

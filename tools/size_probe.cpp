@@ -1,5 +1,5 @@
 // Scratch: prints a few RTL type sizes (not part of the build).
-#include "cppsrc/rtl/simse.hpp"
+#include "src/rtl/simse.hpp"
 
 #include <cstdio>
 
@@ -17,7 +17,7 @@ struct MixedPacked {
 };
 SIMSE_PACK_POP
 
-// `Attribute`/`XmlNode` are generated from their declaration (cppsrc/modules/xml/api.kt), so a
+// `Attribute`/`XmlNode` are generated from their declaration (src/modules/xml/api.kt), so a
 // standalone probe mirrors the emitted shape.
 SIMSE_PACK_PUSH
 struct Attribute {

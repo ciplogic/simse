@@ -1,7 +1,7 @@
 # Escape analysis, borrowing, and refcount promotion
 
-Status: **both landed** - refcount promotion (`cppsrc/linear/PromoteRefs.kt`) and a proof-of-concept
-auto-borrow (`cppsrc/parser/BorrowParams.kt`); what is deliberately left out is named in each
+Status: **both landed** - refcount promotion (`src/linear/PromoteRefs.kt`) and a proof-of-concept
+auto-borrow (`src/parser/BorrowParams.kt`); what is deliberately left out is named in each
 section. This is the architecture for the two things the language should do by itself, without
 asking an author to write `*`:
 
@@ -59,7 +59,7 @@ it cannot be. That is `ilReuseArgSafe`.
 
 ## Slices 1-2: stack promotion of a `&T` local (landed)
 
-`cppsrc/linear/PromoteRefs.kt`, run per unit beside the reuse passes
+`src/linear/PromoteRefs.kt`, run per unit beside the reuse passes
 (`IlCodeGen.emitBodyAt`/`dumpIl`, after `ilFuseConcatUnit`, before `ilReuseUnit`).
 
 A slot `c` is promoted when:
@@ -119,7 +119,7 @@ that could have been a stack value, never a dangling pointer.
 
 ## Auto-borrow: a read-only parameter becomes a `*T` (landed)
 
-`cppsrc/parser/BorrowParams.kt`, run from the driver right after `cpFoldConstParams` - the same
+`src/parser/BorrowParams.kt`, run from the driver right after `cpFoldConstParams` - the same
 whole-program, **before-sema** AST rewrite, so the checker, the lowering, the emitter and every call
 site see the borrowed declaration and nothing downstream knows the optimization exists (the
 `specs/functions.md` handle inference already turns a value argument into the address for a `*T`
@@ -156,7 +156,7 @@ only reads".
 
 ### The borrowness fixpoint (two flags, not one)
 
-`bpInferReads` (`cppsrc/parser/BorrowParams.kt`) grows the trusted set from *below*, so the proof no
+`bpInferReads` (`src/parser/BorrowParams.kt`) grows the trusted set from *below*, so the proof no
 longer rests on the author remembering a mark:
 
 - a declaration *with a body* is borrow-clean when it writes nothing observable (no field/index/deref
@@ -202,13 +202,13 @@ the call site needs (`_sm_base2 = __sm_stringTable[k]; _sm_base1 = &_sm_base2;`)
 call place with a new temporary" shape, at the cost the callee used to pay.
 
 **Reach.** A body-less declaration is trusted by its mark, so the RTL's read-only operations carry
-`borrow` (`cppsrc/rtl/rtl.kt`: the string and character reads and conversions, the `List`/
+`borrow` (`src/rtl/rtl.kt`: the string and character reads and conversions, the `List`/
 `Dictionary` reads, `iter`/`iterPtr`), as do the compiler's own read-only `common` accessors
-(`cppsrc/common/xmlutil.kt`) and `fmtStr`. Two shapes an earlier pass got wrong are fixed:
+(`src/common/xmlutil.kt`) and `fmtStr`. Two shapes an earlier pass got wrong are fixed:
 `bpIsConstruct` recognizes a construction with **no type argument** (`AstXmlNode(...)`, `Str(...)`,
 and the `Opt`/`Res` statics) - the `specs` always said a construction is not a call on the
 parameter, the pass weighed a bare `ExprName` callee as a call - and `Opt.hasValue()` is a
-**declared** operation (`cppsrc/rtl/_res.md`'s `optops`) instead of a built-in member with nothing to
+**declared** operation (`src/rtl/_res.md`'s `optops`) instead of a built-in member with nothing to
 mark, the `lenOf` treatment applied to the `Opt`/`Res` surface.
 
 What is still out of reach, in the order a histogram of the `borrow-` lines puts it:
@@ -224,7 +224,7 @@ What is still out of reach, in the order a histogram of the `borrow-` lines puts
   module-level `var` blocks everything, for the reason the file-level write rule exists.
 - **the one built-in member that cannot be declared yet.** A receiver may now be a type with an
   `unInit` - it is emitted as a pointer (`T* self`), never a copy, so the checker allows it
-  (cppsrc/sema/Sema.kt) - and `Res<T>.initByValue` is declared that way. `Res<T>.isOk()` could be
+  (src/sema/Sema.kt) - and `Res<T>.initByValue` is declared that way. `Res<T>.isOk()` could be
   declared too; it stays built-in for that one reason only. `value()` still cannot: it answers the
   type argument, and `memberCallReturn` returns a declaration's return type without substituting
   it, so a `T`-returning declaration would emit `T` where a concrete type belongs - a latent
@@ -287,6 +287,6 @@ self-transpile measured ~1748 ms before the borrowness work and ~1433 ms after
 (`bun tools/bootstrap.js`, wall clock). The corpus is
 **53/53** and the bootstrap fixed point holds byte for byte.
 
-Note the coverage gap this closes: before this work **nothing** in `cppsrc` or `stress` used a
+Note the coverage gap this closes: before this work **nothing** in `src` or `stress` used a
 counted reference (`&T`), so the whole `&T` path was untested; `ref-promote` is the first case that
 pins it.

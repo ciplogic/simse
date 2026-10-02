@@ -9,7 +9,7 @@ The executable breakdown of `impl_specs/plan-to-selfhost.md` and
 
 ## Current state
 
-The compiler is written in Simse (`cppsrc/**/*.kt`) and self-hosts: `cppsrc/simse_bootstrap.cpp`
+The compiler is written in Simse (`src/**/*.kt`) and self-hosts: `src/simse_bootstrap.cpp`
 is one amalgamation of those sources, and the compiler it builds transpiles them back into that
 same file byte for byte (`bun tools/bootstrap.js`). `build.js` / `build.bat` drive the build.
 Per-component status: `impl_specs/capability-matrix.md`.
@@ -33,29 +33,29 @@ Per-component status: `impl_specs/capability-matrix.md`.
 | --- | --- | --- | --- |
 | T28 | Per-instantiation generators (`@Json`, enum-to-string, int-to-enum) | T27 | Not started |
 | T29 | The RTL's generated C++ is a resource (`strtable`, `timeops`, `listops`, `spanOf`) | T26, T27 | Done |
-| T30 | The generators live with the compiler in one package (`cppsrc/compiler`) | T26, T27 | Done |
+| T30 | The generators live with the compiler in one package (`src/compiler`) | T26, T27 | Done |
 | T31 | `simse.md`: the project file, and module-declared source generators | T30 | In progress (manifest done; the extension not started) |
 
 ### T26 - Generators: attributes + `@SmGen` + `Sections` - **Done**
 
 Spec of record: `impl_specs/generators.md`; log: `impl_specs/capability-matrix.md`.
 
-- `@Identifier` token (`cppsrc/lex/Scanner.kt`), attribute parsing and the body-less rules
-  (`cppsrc/parser/Parser.kt`), AST `Attribute`/`Generator`/`GeneratorArgs`; diagnostics
+- `@Identifier` token (`src/lex/Scanner.kt`), attribute parsing and the body-less rules
+  (`src/parser/Parser.kt`), AST `Attribute`/`Generator`/`GeneratorArgs`; diagnostics
   `stress/diagnostic-attribute-{token,arg,body}`, `stress/diagnostic-bodyless-method`.
 - `native` baseline `stress/smgen-native` (`native("simse_str_trim")`, `expected.cpp` golden)
   and its `@SmGen` twin `stress/smgen-cpp` (`@SmGen("cpp", "simse_str_trim")`); the two
   spellings fill the same attributes, and `bun tools/smgen.js` asserts their amalgamations are
   byte-identical (modulo the fixture path). The parser synthesizes the attribute for
   `native(...)`, so emissions are unchanged.
-- `Sections` (`cppsrc/compiler/Sections.kt`): get-or-create that appends a new section at the
+- `Sections` (`src/compiler/Sections.kt`): get-or-create that appends a new section at the
   end, last-write-wins `add`, render text-then-items; byte-neutral.
 - `@SmGen("res", section)` reads the compiler's own resources: `stress/smgen-res` (generated
   declaration and definition), `stress/smgen-res-collision` (the double-creation hazard).
-- `cppsrc/simse_bootstrap.cpp` refreshed; `bun tools/bootstrap.js` reports the fixed point byte
+- `src/simse_bootstrap.cpp` refreshed; `bun tools/bootstrap.js` reports the fixed point byte
   for byte.
-- `spanOf`: declaration and definition moved from `cppsrc/rtl/span.hpp` into
-  `cppsrc/rtl/_res.md`, referenced by `@SmGen("res", "spanOf")` in `cppsrc/rtl/Span.kt`; call
+- `spanOf`: declaration and definition moved from `src/rtl/span.hpp` into
+  `src/rtl/_res.md`, referenced by `@SmGen("res", "spanOf")` in `src/rtl/Span.kt`; call
   sites unchanged (`simse_spanOf(...)`).
 
 ### T27 - Generated Simse sources - **Done**
@@ -83,7 +83,7 @@ generators. See `specs/attributes.md`.
 
 Spec of record: `impl_specs/generators.md`.
 
-- **Section order** (`cppsrc/compiler/Sections.kt`): `support` (text the preamble needs),
+- **Section order** (`src/compiler/Sections.kt`): `support` (text the preamble needs),
   `profile`, `strings`, `resources`, `forward` (generated declarations), then
   types/statics/prototypes/init/bodies; each block renders with a blank line before it.
 - **Lookup is the tree's own resources first** (`Emitter.resText`/`resHas`), the compiler's
@@ -95,7 +95,7 @@ Spec of record: `impl_specs/generators.md`.
   spelled itself (the entry point's `simse_list_append`).
 - **The parser fills `NativeSymbol` for a `res` declaration**, which keeps `listOf<T>` the list
   literal.
-- **`cppsrc/rtl/_res.md`** holds `strtable`, `timeops` (`emit: always`), `listops`, `dictops`,
+- **`src/rtl/_res.md`** holds `strtable`, `timeops` (`emit: always`), `listops`, `dictops`,
   `strops` (shared), `spanOf`; `strtable.hpp`, `timeops.hpp`, `listops.hpp`, `dictops.hpp`,
   `strops.hpp` are deleted. `rtl.kt`'s declarations are `@SmGen("res", ...)`; no prelude
   string/list/dictionary operation is `native`.
@@ -122,7 +122,7 @@ The generators are the one part of the compiler meant to be written by a *progra
 author*; they are a boundary documented as a rule (spec of record:
 `impl_specs/generators.md`, "The generator table").
 
-- **`cppsrc/compiler/`** (package `compiler`) - `Sections.kt` (the sink), `GenTypes.kt` (`SourceTransformation`,
+- **`src/compiler/`** (package `compiler`) - `Sections.kt` (the sink), `GenTypes.kt` (`SourceTransformation`,
   `SourceGenPhase`, `SourceGenRequest`, `FullCompiledState`, the `OnSourceGen` typealias), one
   file per generator (`CppGen.kt`, `ResGen.kt`, `KtGen.kt`), and `SourceGen.kt` - the manager:
   `addSourceGen`/`makeSourceGens` the way `lex/Scanner.kt` builds its token rules,
@@ -139,7 +139,7 @@ author*; they are a boundary documented as a rule (spec of record:
   `sourceGenBegin`/`sourceGenReparseSource`.
 - **The interface types are the same package** (a later move): the whole former `sourcegen`
   package merged into `compiler` - `SourceGenContext` and `SourceGenTransform` sit with the
-  AST in `cppsrc/modules/compiler/`, the rest in `cppsrc/compiler/` - so a module's
+  AST in `src/modules/compiler/`, the rest in `src/compiler/` - so a module's
   `generators/` names the compiler surface with one import (`import compiler`), and nothing
   imports a `sourcegen` package back.
 
@@ -148,7 +148,7 @@ Trap: in Simse `*p` where `p: *Sections` *reads through*, so `sourceGenEmit(*thi
 passed, never dereferenced.
 
 Verified: `bun tools/bootstrap.js` fixed point (after one refresh of
-`cppsrc/simse_bootstrap.cpp`), `bun tools/stress.js` 56/56, `bun tools/smgen.js` 1/1.
+`src/simse_bootstrap.cpp`), `bun tools/stress.js` 56/56, `bun tools/smgen.js` 1/1.
 
 ### T31 - `simse.md`: module-declared source generators - Not started
 
@@ -179,14 +179,14 @@ Steps, in order:
    driver's own small reader (`manifestValues`/`driverExpandRoot`, `Driver.kt`) in the
    resource idiom: prose lines ignored, `key: value`, a repeated key repeating. A root with
    a manifest is scanned as exactly the modules it names; a root without one is scanned
-   whole (this compiler's own `--root cppsrc`). A module declaring `sourcegen: true` is a
+   whole (this compiler's own `--root src`). A module declaring `sourcegen: true` is a
    **hard error** naming it:
    `stress/manifest-modules` and `stress/diagnostic-manifest-sourcegen` pin both halves.
 3. **Two natives** - `system()` (normalizing the exit code, since POSIX packs `system()`'s
    return) and directory creation for staging; the copy itself is `listFiles` +
    `readWholeFile` + `writeFile`, which the RTL already has.
 4. **The extended tree** - stage the compiler's own sources plus the module's generators
-   under `_simse` (never in `cppsrc/`, never inside a scanned root). The module's files are
+   under `_simse` (never in `src/`, never inside a scanned root). The module's files are
    ordinary Simse modules of the compiler's build, and their registration statics are the
    whole registration step - nothing is synthesized. The entry is keyed on the compiler and
    the generator sources, and deleting `_simse` is always safe.

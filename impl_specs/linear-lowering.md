@@ -1,6 +1,6 @@
 # Lowering to linear control flow
 
-`linLowerBody` (`cppsrc/linear/Linear.kt`, called by `cppsrc/codegen/Codegen.kt`) rewrites
+`linLowerBody` (`src/linear/Linear.kt`, called by `src/codegen/Codegen.kt`) rewrites
 every function-like body (function/method or lambda) into a linear sequence of labels, jumps
 and blocks, so the C++ emitter has no structured-control-flow cases. `for` and `when` are
 desugared while parsing (`impl_specs/for.md`, `specs/functions.md`), so this pass owns `while`
@@ -66,7 +66,7 @@ the pass only lowers `if`, `while`, `break` and `continue`.
 
 ## Simplification stage
 
-`linSimplifyBody` (`cppsrc/linear/Simplify.kt`) runs on the lowered body, after
+`linSimplifyBody` (`src/linear/Simplify.kt`) runs on the lowered body, after
 `linLowerBody` in every round of the pipeline below. It is a small fixed-point
 peephole pass whose only job is to keep the linear form close to the structured
 code it came from:
@@ -117,7 +117,7 @@ verify against the un-simplified output.
 
 ## Expression lowering
 
-`linLowerExprs` (`cppsrc/linear/ExpressionLowering.kt`) runs on the lowered body after
+`linLowerExprs` (`src/linear/ExpressionLowering.kt`) runs on the lowered body after
 `linSimplifyBody` in the same round, so the structured form's folds happen before the
 temporaries exist; the peephole runs again only after the block folding, its only chance to
 see a temporary. After it, every **value position** the emitter sees is one operation deep:
@@ -156,7 +156,7 @@ a[i + 2].append(x);         ->  Int _sm_expr1 = i + 2;
 
 One binding stays where it is: a **borrow of a temporary**. `*f()` is
 `simse_addressOf(f())`, whose contract is that the pointer lasts for the call it is passed
-to (`cppsrc/rtl/types.hpp`) - hoisting it would outlive the temporary. A borrow whose
+to (`src/rtl/types.hpp`) - hoisting it would outlive the temporary. A borrow whose
 operand *is* an lvalue (`*p`, `*self.field`, `*(list[i])`) is a place, outlives the
 statement, and is bound like any other value.
 
@@ -185,7 +185,7 @@ from the parameter it binds to - is the natural place for that.
 
 ## Block folding
 
-`linFlattenBlocks` (`cppsrc/linear/Simplify.kt`) folds a nested block into its parent
+`linFlattenBlocks` (`src/linear/Simplify.kt`) folds a nested block into its parent
 sequence, so a block survives only where one is needed:
 
 ```
@@ -244,7 +244,7 @@ Slot hoisting below moves the declaration out of the way, leaving the block noth
 
 ## Slot hoisting: one scope per body
 
-`linHoistSlots` (`cppsrc/linear/Simplify.kt`) moves **every** declaration of a body to the top
+`linHoistSlots` (`src/linear/Simplify.kt`) moves **every** declaration of a body to the top
 of it - the lowering's own temporaries (`_sm_expr<n>`) and the program's `val`/`var` alike (the
 parser's `_sm_when<n>` subject bindings move with them) - and turns each initializer into an
 assignment where the declaration stood:
@@ -312,7 +312,7 @@ while (canChange) {
 }
 ```
 
-`linLowerForEmission` (`cppsrc/linear/Linear.kt`) is that loop, and it is what the
+`linLowerForEmission` (`src/linear/Linear.kt`) is that loop, and it is what the
 emitter calls per body. Every stage returns the body *and* whether it changed
 anything (`LinLowered`), which is what the loop tests: a stage that made no change
 has to say so, or the round would never end. Progress is monotone - no stage adds a
@@ -329,7 +329,7 @@ typed   = inferTypes(lowered, facts, body)
 ready   = finishForEmission(typed)     # hoist the slots, fold what that frees
 ```
 
-`linFinishForEmission` (`cppsrc/linear/Linear.kt`) runs the same shape again - the
+`linFinishForEmission` (`src/linear/Linear.kt`) runs the same shape again - the
 hoisting in the place of the rewriting stages (there is nothing left to rewrite), the
 peephole, and the folding - until a round changes nothing. From there the body is one
 flat sequence of labels, jumps and assignments, which is what the goldens record and
@@ -340,7 +340,7 @@ what the emitter prints.
 `linLowerExprs` gives the emitter one *expression* vocabulary; the semantic step that
 follows gives its declarations a *type*, so the emitter neither guesses one while it
 emits nor falls back to `auto`. That step is `semInferTypes`
-(`cppsrc/sema/TypeInfer.kt`) and it runs last, on the body the emitter is about to
+(`src/sema/TypeInfer.kt`) and it runs last, on the body the emitter is about to
 emit:
 
 ```
@@ -392,7 +392,7 @@ val n = identity<Int>(7);   ->  Int n = identity<Int>(7);
 - **A proven type is returned even when it cannot be spelled.** A name holding a
   state machine is `..T`, which the emitted C++ writes `auto`; `Stmt.type` keeps its
   other meaning ("a type a declaration can be written with"), so it stays out of the
-  declaration - `cppsrc/linear/Yield.kt` relies on that to reject a `for` over a machine
+  declaration - `src/linear/Yield.kt` relies on that to reject a `for` over a machine
   crossing a `yield`. The frame still needs it, so the pass reports every binding it
   proved and the IL carries them (`impl_specs/linear-il.md`).
 

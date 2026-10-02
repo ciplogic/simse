@@ -10,7 +10,7 @@ cd /d "%~dp0.."
 set CAP=%1
 set OUT=%2
 set SRC=%3
-if "%SRC%"=="" set SRC=cppsrc\simse_out.cpp
+if "%SRC%"=="" set SRC=src\simse_out.cpp
 if not exist "tools\hoist%CAP%" mkdir "tools\hoist%CAP%"
 cl /nologo /std:c++20 /EHsc /W3 /MD /O2 /DNDEBUG /I. /DSIMSE_STR_INLINE_CAPACITY=%CAP% %4 %5 %6 %7 %8 ^
-   /Fo:tools\hoist%CAP%\ /Fe:%OUT% %SRC% cppsrc\native\Native.cpp cppsrc\common\common.cpp
+   /Fo:tools\hoist%CAP%\ /Fe:%OUT% %SRC% src\native\Native.cpp src\common\common.cpp

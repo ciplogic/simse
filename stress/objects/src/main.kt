@@ -4,7 +4,7 @@ package objects
 // The counted reference's *sharing* (`&T`, specs/memory-model.md): `&value` boxes a copy,
 // copying a handle adds an owner of the same box, a write through one handle is seen
 // through the other, and a handle that ends does not free a box another one holds. That
-// counting is what the RTL implements (`cppsrc/rtl/ref.hpp`: `SmRef`, or the
+// counting is what the RTL implements (`src/rtl/ref.hpp`: `SmRef`, or the
 // `std::shared_ptr` shim) and what nothing else in the corpus observes.
 //
 // `stress/language-tour` covers the rest of the operator: null handles, the null tests, and
@@ -281,7 +281,7 @@ fun partLanguageTour(): Int {
 
 // ---- optional-result ----
 // `Opt<T>` and `Res<T>` are one storage type with two arms - `Variant2<T, VoidEnum>` and
-// `Variant2<T, Str>` (cppsrc/rtl/variant2.hpp) - so this case pins the states and the
+// `Variant2<T, Str>` (src/rtl/variant2.hpp) - so this case pins the states and the
 // operations that union has to support:
 //
 //   pick     - an empty optional built by `null` (the default-constructed arm, which

@@ -3,7 +3,7 @@
 // being an owned `Str`) is a measured list rather than a guess.
 import { readFileSync } from "fs";
 
-const path = process.argv[2] ?? "cppsrc/simse_bootstrap.cpp";
+const path = process.argv[2] ?? "src/simse_bootstrap.cpp";
 const lines = readFileSync(path, "utf8").split("\n");
 
 const shapes = new Map();

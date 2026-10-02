@@ -36,7 +36,7 @@ should be avoided; give the binding an explicit type.
 ## `Opt<T>`
 
 `Opt<T>` models an optional value: it either holds a `T` or is empty. Its storage is the
-RTL's two-alternative union, `Variant2<T, VoidEnum>` (`cppsrc/rtl/variant2.hpp`), whose
+RTL's two-alternative union, `Variant2<T, VoidEnum>` (`src/rtl/variant2.hpp`), whose
 empty state is the `VoidEnum` arm, so an empty optional builds no payload.
 
 ```text
@@ -63,7 +63,7 @@ The error is always an inline string, so `Res` takes a single type parameter (`T
 success payload), stored by value. `Res<T>` therefore has the same ownership and copy
 semantics as any value containing a `T`; use `Res<&T>` for shared identity.
 
-`Res<T>` is the same two-alternative union (`Variant2<T, Str>`, `cppsrc/rtl/variant2.hpp`)
+`Res<T>` is the same two-alternative union (`Variant2<T, Str>`, `src/rtl/variant2.hpp`)
 with the payload and the message as its arms: a failed result carries no `T` and a
 successful one carries no message, and the union's tag says which arm is live. An empty
 message is therefore not a success - `Res<T>.err("")` is a failure.

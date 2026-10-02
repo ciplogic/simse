@@ -49,7 +49,7 @@ so these names need no import and no qualifier. It is the same mechanism as an e
 package that several modules may contribute to.
 
 The runtime's tree types `XmlNode` and `Attribute` are **not** built-ins: they live in the
-`xml` module (`cppsrc/modules/xml/api.kt`), so a program reaches them with `import xml` and
+`xml` module (`src/modules/xml/api.kt`), so a program reaches them with `import xml` and
 must name that module on the compiler command line (or in its `simse.md` manifest).
 
 ### Deferred: multiple packages per file

@@ -1,5 +1,5 @@
 // Scratch: compare two amalgamations modulo the `// path:line` source comments, with the
-// line numbers masked. Comment and formatting changes in cppsrc cannot reach the emitted
+// line numbers masked. Comment and formatting changes in src cannot reach the emitted
 // C++ except through those numbers, so a masked-equal pair is a behaviour-preserving edit.
 //   bun tools/_maskcmp.mjs build/base.cpp build/new.cpp
 import { readFileSync } from "fs";

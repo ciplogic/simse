@@ -74,7 +74,7 @@ build mode, and `--profile-file` is a flag of the *transpiler*.
 
 ## Where it is written
 
-`cppsrc/profiling/Profiling.kt` owns the flag, the path and the text. The hooks are:
+`src/profiling/Profiling.kt` owns the flag, the path and the text. The hooks are:
 
 | place | what it does |
 | --- | --- |
@@ -89,7 +89,7 @@ cross into its scope (the rule `ilJumpCrossing` exists for), and the frame's hoi
 declarations follow it. The name table is written once every body is written - it is only then
 that the last index exists (`Emitter.emitProfileNames`, after `emitFunctions(false)`).
 
-The clock is the RTL's `simse_nowMicros` or `simse_nowNanos` (`timeops`, `cppsrc/rtl/_res.md`;
+The clock is the RTL's `simse_nowMicros` or `simse_nowNanos` (`timeops`, `src/rtl/_res.md`;
 the prelude surfaces `nowMicros()` / `nowNanos()`), beside `simse_nowMillis` - all monotonic, and
 all `Int64`.
 
@@ -113,20 +113,20 @@ bun build.js --release --profile --profile-nanos          # ... in nanoseconds
 
 `bun build.js --profile` passes the flags (and a `--profile-file`) through to the transpile step,
 so the compiler's own source set is transpiled with the runtime and the timers. The published
-bootstrap (`cppsrc/simse_bootstrap.cpp`) is **not** profiled, so a profiled compiler is a local
+bootstrap (`src/simse_bootstrap.cpp`) is **not** profiled, so a profiled compiler is a local
 artifact, never published.
 
 ## The proof file
 
-`cppsrc/simse_profile.csv` sits beside the bootstrap: it is the CSV a release, profiled compiler
-wrote about its own run of `--root cppsrc`, in the default microseconds. Its `calls` column is
+`src/simse_profile.csv` sits beside the bootstrap: it is the CSV a release, profiled compiler
+wrote about its own run of `--root src`, in the default microseconds. Its `calls` column is
 exact (the compiler's emitted bodies and how often each ran); its `total_us` column is one machine
 on one day. Reproduce it with:
 
 ```sh
 bun build.js --release --profile --exe build/digits/simse_prof.exe --out build/digits/prof_compiler.cpp
-./build/digits/simse_prof.exe --root cppsrc -o build/digits/prof_self_out.cpp
-cp simse_profile.csv cppsrc/simse_profile.csv
+./build/digits/simse_prof.exe --root src -o build/digits/prof_self_out.cpp
+cp simse_profile.csv src/simse_profile.csv
 ```
 
 ## How to read a row
@@ -164,7 +164,7 @@ runtime, the dense `Int` method table with package-qualified `kMethodNames[]`, `
 
 Verified: a profiled `stress/strings` program writes a correct CSV with `strings.partStrings`
 names (and the `-` file prints it to stderr, and `--profile-nanos` writes `total_ns` with
-`simse_nowNanos()`); a profiled release compiler over `--root cppsrc` writes the checked-in
-`cppsrc/simse_profile.csv` (769 measured bodies, `codegen.emitProgram` 5.3 s inclusive); with the
+`simse_nowNanos()`); a profiled release compiler over `--root src` writes the checked-in
+`src/simse_profile.csv` (769 measured bodies, `codegen.emitProgram` 5.3 s inclusive); with the
 flag off `bun tools/stress.js` is **44/44** and `bun tools/bootstrap.js`'s fixed point is byte for
 byte.

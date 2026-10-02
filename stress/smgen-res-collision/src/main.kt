@@ -3,7 +3,7 @@ package fixtures
 // Two declarations that name one symbol. A section's entry is keyed by the symbol
 // (impl_specs/generators.md), so the generator the emitter reaches last wins:
 // `spanOf` carries the real definition and `spanOfEmpty` the decoy - both sections of
-// cppsrc/rtl/_res.md, the decoy second. Both calls below reach `simse_spanOf`, so both
+// src/rtl/_res.md, the decoy second. Both calls below reach `simse_spanOf`, so both
 // spans come from the decoy - that is the documented hazard, and this case pins it: a
 // generator that does not check `has` first overwrites another's implementation, and
 // an `expected.cpp` shows the single definition the amalgamation ends up with.

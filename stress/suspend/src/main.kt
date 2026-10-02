@@ -1,6 +1,6 @@
 package fixtures
 
-// The task machinery (`cppsrc/linear/Task.kt`, `emitTask` in `cppsrc/codegen/Codegen.kt`,
+// The task machinery (`src/linear/Task.kt`, `emitTask` in `src/codegen/Codegen.kt`,
 // impl_specs/async.md): a `suspend` function is a task the loop drives, and every call is a real
 // suspension - there is no fast path - so a call site is `<f>_smNew` / `tasksSuspendAt` /
 // `return` / `LTk:` / `<f>_smResult` / `tasksReleaseHandle`.

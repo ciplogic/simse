@@ -146,7 +146,7 @@ and adds its own `stress/<name>` case.
    `tools/array_layout_probe.cpp` pins the empty-array sharing slice 4 depends on.
 
    *First use in the compiler:* the scanner's three tables (`reservedWordTable`,
-   `multiCharOperatorTable`, `tokenRuleTable` in `cppsrc/lex/Scanner.kt`) are file-level
+   `multiCharOperatorTable`, `tokenRuleTable` in `src/lex/Scanner.kt`) are file-level
    statics: the pass builds each once and the hot comparisons read them through a raw pointer
    (`*List<T>`), where an accessor returning a `List<Str>` rebuilt the table per call -
    `matchOperator` runs for every token, so that was an allocation per token. The driver
@@ -179,7 +179,7 @@ and adds its own `stress/<name>` case.
    nothing below it: there is no circularity between the object and
    `arrayEmpty`. What leaves C++ is the `@SmGen("res", "listops", "simse_arrayEmpty")`
    declaration
-   and its implementation (the `listops` section of `cppsrc/rtl/_res.md`); the shim's
+   and its implementation (the `listops` section of `src/rtl/_res.md`); the shim's
    internal zero-length block
    stays, because it is what a C++ `Array<T>` default-constructs to (the type's
    own default, not a language-level static). The first piece of the *language*
@@ -195,9 +195,9 @@ and adds its own `stress/<name>` case.
 - `simse_tests.exe`: goldens regenerate only where the emission changed on
   purpose (`--update`, then review, then check mode).
 - `bun tools/stress.js` on both rings, including the slice's new case.
-- `cppsrc/simse_bootstrap.cpp` regenerated when the compiler's own emission changes
+- `src/simse_bootstrap.cpp` regenerated when the compiler's own emission changes
   (the tracked amalgamation is the stage-1 output; `bun build.js --release --out
-  cppsrc/simse_bootstrap.cpp` writes it and compiles it).
+  src/simse_bootstrap.cpp` writes it and compiles it).
 
 `tools/statics_probe.cpp` pins the runtime shape of the design - the empty
 storage, the pass, and the per-instantiation generic accessor - before the

@@ -7,7 +7,7 @@ import { spawnSync } from "child_process";
 
 function timeOne(exe, out) {
   const begin = performance.now();
-  const run = spawnSync(exe, ["--root", "cppsrc", "-o", out], { encoding: "utf8" });
+  const run = spawnSync(exe, ["--root", "src", "-o", out], { encoding: "utf8" });
   const ms = performance.now() - begin;
   if (run.status !== 0) {
     console.log(`  ${exe} FAILED: ${(run.stderr || "").slice(0, 200)}`);
@@ -25,5 +25,5 @@ for (let round = 0; round < 4; round++) {
 const best = (a) => Math.min(...a).toFixed(0);
 console.log(
   `pre-merge ${best(before).padStart(6)} ms   post-merge ${best(after).padStart(6)} ms   ` +
-    "(4 interleaved rounds, best of each, transpiling cppsrc)"
+    "(4 interleaved rounds, best of each, transpiling src)"
 );

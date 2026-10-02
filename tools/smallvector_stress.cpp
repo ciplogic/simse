@@ -1,6 +1,6 @@
 // Scratch stress test for SmallVector (not part of the build): exercises the
 // inline/heap transitions, copy/move, erase/insert/resize, nested containers.
-#include "cppsrc/rtl/containers.hpp"
+#include "src/rtl/containers.hpp"
 
 #include <algorithm>
 #include <cstdio>

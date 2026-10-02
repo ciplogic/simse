@@ -3,7 +3,7 @@ package raw
 // A backtick string is raw: no escape, and it may span lines; `@name` interpolates. This
 // case pins what both become - the same bytes as the escaped double-quoted form, an empty
 // one, a `when` label, the `\` and `"` that a normal string would have to escape, and the
-// call an interpolation is desugared into (cppsrc/parser/ParserInterp.kt).
+// call an interpolation is desugared into (src/parser/ParserInterp.kt).
 
 fun main(): Int {
     val text: Str = `line one

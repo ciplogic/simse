@@ -1,6 +1,6 @@
 package whenstrings
 
-// The `when`-over-strings lowering (cppsrc/parser/Parser.kt): a `when` whose subject is a string
+// The `when`-over-strings lowering (src/parser/Parser.kt): a `when` whose subject is a string
 // and whose arms are all string literals tests a *view* of the subject, with each label's test
 // guarded by the subject's length (and, with `--when-first-char`, by its first byte too). The
 // arms, their order, their bodies and the `else` are untouched, so what matches cannot change.

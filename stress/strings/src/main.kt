@@ -1,7 +1,7 @@
 package strings
 
 // ---- str-isempty ----
-// `Str.isEmpty` is a *prelude body*, not a native (`cppsrc/rtl/rtl.kt`,
+// `Str.isEmpty` is a *prelude body*, not a native (`src/rtl/rtl.kt`,
 // `impl_specs/rtl-abi.md` T71), so the compiler emits it - but only when a program reaches
 // it (`Codegen.kt`/`Codegen.cpp`, `reachesPreludeBody`).
 //
@@ -26,7 +26,7 @@ fun partStrIsEmpty(): Int {
 // ---- string-escapes ----
 // The program's string literals, escapes included. The emitter writes every literal into
 // one pool and computes the length index beside it, and the program's own build decodes
-// the pool (`cppsrc/rtl/strtable.hpp`); this pins the two agreeing for the shapes that
+// the pool (`src/rtl/strtable.hpp`); this pins the two agreeing for the shapes that
 // differ - an escape that is two source characters and one byte (`\n`), one that is two
 // and two (`\\n`), a quote that must not end the literal (`\"`), the empty literal, a
 // literal repeated, and prefixes of each other. A length that disagreed would shift every

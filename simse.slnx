@@ -3,7 +3,7 @@
   simse.slnx - the solution for the profiling project (`simse.vcxproj`).
 
   One project, two configurations, both ARM64 (the host this repository is built on; see
-  `simse.vcxproj`). Open this file, pick Release, and profile `simse.exe` over `cppsrc` -
+  `simse.vcxproj`). Open this file, pick Release, and profile `simse.exe` over `src` -
   the debugger arguments are already set to compile the whole tree.
 -->
 <Solution>

@@ -7,7 +7,7 @@
 // see) gets there first.
 //
 //   tools\_probe.bat statics_probe /O2 /DNDEBUG
-#include "cppsrc/rtl/simse.hpp"
+#include "src/rtl/simse.hpp"
 
 #include <cstdio>
 

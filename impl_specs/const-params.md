@@ -22,16 +22,16 @@ call sites a program has are exactly the ones the driver parsed. That is what ma
 checkable at all, and it is the same property the coloring pass and `!!` rely on.
 
 The resolution is **name-level**, like the other whole-program passes here
-(`cppsrc/sema/Async.kt`, `cppsrc/parser/Propagate.kt`): a call spells a name and a declaration
+(`src/sema/Async.kt`, `src/parser/Propagate.kt`): a call spells a name and a declaration
 answers it. Where that approximation is not good enough the pass must *decline*, not guess - see
 the conditions below.
 
 ## Where it runs
 
-In `cppsrc/compiler/Driver.kt`, with the `!!` expansion, **once every module is parsed and before
+In `src/compiler/Driver.kt`, with the `!!` expansion, **once every module is parsed and before
 `sema`** - so the checker, the lowering and the emitter all see the rewritten program and nothing
 downstream needs to know the optimization exists. It is an AST-to-AST rewrite, so it belongs beside
-`Propagate.kt` (which is in package `parser` for that reason) rather than in `cppsrc/optimizations/`,
+`Propagate.kt` (which is in package `parser` for that reason) rather than in `src/optimizations/`,
 where the passes work on the post-sema linear form and cannot change a signature.
 
 The emitted C++ changes, so the published bootstrap is refreshed as part of the change like any
@@ -88,7 +88,7 @@ other.
 **How a node is replaced.** `Children` is a *field* of the node struct, so a copy's
 `copy.Children = ...` does **not** reach the original - copies only share the *block* the field
 points at. So a call site is replaced by writing the element inside its parent's shared block,
-which is exactly the idiom `cppsrc/parser/Propagate.kt` and `cppsrc/linear/Yield.kt` already use
+which is exactly the idiom `src/parser/Propagate.kt` and `src/linear/Yield.kt` already use
 (`bodyPtr.Children = out.toArray()`, where `bodyPtr` came from `xmlChildPtr`). A module's
 declaration list is the other way round: the driver holds the modules as a `List`, index
 assignment on a `List` is not something to rely on, so the pass rebuilds and *returns* the modules

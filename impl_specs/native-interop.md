@@ -2,8 +2,8 @@
 
 Status: decision recorded for T10; the spelling settled in T83; the run-time `native`
 generator (`LoadLibraryA`/`GetProcAddress`) is implemented
-(`cppsrc/compiler/NativeInvokeGen.kt`, `stress/native-invoke`, `docs/examples/sdl2`,
-`docs/examples/http`).
+(`src/compiler/NativeInvokeGen.kt`, `stress/native-invoke`, `examples/sdl2`,
+`examples/http`).
 
 ## Declaration form
 
@@ -55,7 +55,7 @@ generator (`LoadLibraryA`/`GetProcAddress`) is implemented
 Native functions report failure through `Res<T>` (an error `Str`), not C++
 exceptions. A function that returns `Res<T>` maps its error message into the
 `Res` value; the runtime's `isOk()` reads the union's tag, so `Res<T>.err("")` is a
-failure like any other (`cppsrc/rtl/variant2.hpp`, `impl_specs/rtl-abi.md`).
+failure like any other (`src/rtl/variant2.hpp`, `impl_specs/rtl-abi.md`).
 
 ## The `native` generator: P/Invoke
 
@@ -103,7 +103,7 @@ Int32 __sm_native_sdlInit(const Int32& flags) {
   (`SDL_Window*`) is one. This is also how a union-style API is reached: the bytes of an
   `SDL_Event` are owned by a `res` section that includes the real header and reinterprets them,
   because a `RawPtr` names the pointer and not the pointee - the one reinterpretation that stays
-  C++ (`docs/examples/sdl2/wrapper/_res.md`). A `*T` in a declaration is a raw pointer too, and
+  C++ (`examples/sdl2/wrapper/_res.md`). A `*T` in a declaration is a raw pointer too, and
   `T` may be a layout the language can name.
 - **Types.** The generator maps `Int`/`Int32`/`Int8`/`Int16`/`Int64`, `Float32`/`Float64`,
   `Bool`, `Char`, `Str` (a native `const char*`, a returned one copied into an owned `Str`) and
@@ -115,12 +115,12 @@ Int32 __sm_native_sdlInit(const Int32& flags) {
   packages that both declare, say, `open` share a thunk only when they name the same library and
   symbol; a different binding is a diagnostic rather than a silent merge.
 - The loader is Windows' `LoadLibraryA`/`GetProcAddress` and POSIX's `dlopen`/`dlsym`, chosen
-  by `#ifdef _WIN32` in the generator's own text (`cppsrc/compiler/NativeInvokeGen.kt`); the
+  by `#ifdef _WIN32` in the generator's own text (`src/compiler/NativeInvokeGen.kt`); the
   `dlopen`/`dlsym` arm is what makes the same `@SmGen("native", ...)` declaration bind on Linux.
 
-Two worked examples ship with it. `docs/examples/sdl2` is a window bound to `SDL2.dll` (an
+Two worked examples ship with it. `examples/sdl2` is a window bound to `SDL2.dll` (an
 opaque `SDL_Window*` as a `RawPtr`, and a `res` section that owns the `SDL_Event` union and casts
-its bytes). `docs/examples/http` is the other direction: `sockets`, a minimalist **blocking**
+its bytes). `examples/http` is the other direction: `sockets`, a minimalist **blocking**
 Winsock2 (`ws2_32.dll`) library whose glue is only `SOCKADDR_IN` layout, a byte swap written out
 so `htons` need not be linked, and one receive buffer - with an HTTP/1.1 server and a client on
 top (`stress/sockets` is the headless loopback check).
@@ -129,12 +129,12 @@ top (`stress/sockets` is the headless loopback check).
 
 A prelude file is parsed into the same module scope as the program's inputs, so
 its declarations resolve without an `import`. The default is
-`cppsrc/rtl/rtl.kt` (relative to the repository root, baked into the binaries);
+`src/rtl/rtl.kt` (relative to the repository root, baked into the binaries);
 `simse_transpile --prelude <file>` overrides it, and a missing default is skipped
 silently. Prelude declarations are resolved but **never emitted as Simse code**: a
 `native` declaration's body is hand-written C++ pulled in transitively by
-`cppsrc/rtl/simse.hpp`, and a `@SmGen("res", section, symbol)` declaration's body
-is placed in the program's translation unit from its `cppsrc/rtl/_res.md` section
+`src/rtl/simse.hpp`, and a `@SmGen("res", section, symbol)` declaration's body
+is placed in the program's translation unit from its `src/rtl/_res.md` section
 when the program reaches the declaration or its symbol (a section marked
 `emit: always` is placed in every program). This is how the RTL
 surface (for example `List<T>.append`) becomes available to programs.
@@ -145,14 +145,14 @@ first.
 
 ## v1 implementation
 
-`simse_native_readFile` backs `readFile`, declared in `cppsrc/common/common.kt` as
+`simse_native_readFile` backs `readFile`, declared in `src/common/common.kt` as
 `@SmGen("res", "fileio", "simse_native_readFile")`:
 
 ```cpp
 Str simse_native_readFile(const Str& path); // reads the whole file as bytes
 ```
 
-Its prototype and definition are the `fileio` section of `cppsrc/modules/io/_res.md` (the
+Its prototype and definition are the `fileio` section of `src/modules/io/_res.md` (the
 `io` module's own resource), in the
 section's `forward:` and `bodies:` texts. The emitter places the section in the program's own
 translation unit, so there is nothing to link.
@@ -160,8 +160,8 @@ translation unit, so there is nothing to link.
 ## Filesystem / IO natives (T23)
 
 The self-hosted driver needs a small filesystem surface. Declared in the prelude
-(`cppsrc/modules/io/api.kt`) as `@SmGen("res", "fileio", <symbol>)`, prototyped in the
-`forward:` text of the `fileio` section of `cppsrc/modules/io/_res.md` and defined in its
+(`src/modules/io/api.kt`) as `@SmGen("res", "fileio", <symbol>)`, prototyped in the
+`forward:` text of the `fileio` section of `src/modules/io/_res.md` and defined in its
 `bodies:` text:
 
 | Simse | C++ symbol | Semantics |

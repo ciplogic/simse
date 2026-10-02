@@ -1,6 +1,6 @@
 // Scratch: exercise every Str comparison with a raw C string on both sides, for
 // an inline string and a heap (longer than 23 bytes) one. Not part of the build.
-#include "cppsrc/rtl/simse.hpp"
+#include "src/rtl/simse.hpp"
 
 #include <cstdio>
 

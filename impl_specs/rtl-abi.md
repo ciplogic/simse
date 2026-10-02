@@ -7,7 +7,7 @@ The runtime representation generated C++ targets, and where it diverges from `sp
 
 > **The RTL's operation layer lives in the language.** Types, layout and anything
 > hand-written C++ calls stay C++; an operation whose callers are all Simse and whose body
-> the language can express is a prelude `fun` *with a body* (`cppsrc/rtl/rtl.kt`), emitted
+> the language can express is a prelude `fun` *with a body* (`src/rtl/rtl.kt`), emitted
 > by the compiler. Candidate test: a symbol referenced only by the header that defines it.
 > `Span<T>`/`StrView` are the exception - `typealias StrView = Span<Char>`, their operations
 > are the `strview` section of `_res.md`, and the *literal interop* of `strview.hpp` stays
@@ -28,21 +28,21 @@ The runtime representation generated C++ targets, and where it diverges from `sp
 
 ## Decision
 
-Generated C++ targets the **`cppsrc/rtl` shims** as-is:
+Generated C++ targets the **`src/rtl` shims** as-is:
 
 - `Str = SmString` (the spec layout: inline `SmallVector<char, 24>` plus the
-  terminating NUL; `cppsrc/rtl/smstring.hpp`)
-- `List<T> = SmallVector<T, 4>` (the spec layout, `cppsrc/rtl/containers.hpp`)
+  terminating NUL; `src/rtl/smstring.hpp`)
+- `List<T> = SmallVector<T, 4>` (the spec layout, `src/rtl/containers.hpp`)
 - `PList<T> = std::shared_ptr<List<T>>`
 - `Array<T>` = the shim struct: one `std::shared_ptr` handle to a count-first block
-  (`cppsrc/rtl/containers.hpp`)
+  (`src/rtl/containers.hpp`)
 - `Dictionary<K, V> = SmDictionary<K, V>` (the RTL's own row/bucket dictionary,
-  `cppsrc/rtl/smdictionary.hpp`)
+  `src/rtl/smdictionary.hpp`)
 - `Opt<T>` and `Res<T>` = the two arms of one local tagged union (`Variant2<T,
-  VoidEnum>` and `Variant2<T, Str>`, `cppsrc/rtl/variant2.hpp`)
+  VoidEnum>` and `Variant2<T, Str>`, `src/rtl/variant2.hpp`)
 - `&T` lowers to `std::shared_ptr<T>`; `*T` lowers to `T*`
 - `Span<T>` = the borrowed view shim: a `*T` pointer plus a length
-  (`cppsrc/rtl/span.hpp`); `StrView` is its `char` instantiation, the same type
+  (`src/rtl/span.hpp`); `StrView` is its `char` instantiation, the same type
   under a second name
 
 The ref-counted `[refcount][typeId][value]` header is **not** implemented, and nothing in
@@ -120,7 +120,7 @@ Every string literal in the program is emitted **once**, into a pool of bytes at
 of the file; beside it the emitter writes two parallel indexes - where each entry starts
 and how many bytes it is, both stored as *what to subtract from the previous value* and
 both run-length encoded - and startup expands the indexes, drops them, and builds one
-`StrView` per entry (the `strtable` section of `cppsrc/rtl/_res.md`, which the emitter
+`StrView` per entry (the `strtable` section of `src/rtl/_res.md`, which the emitter
 emits into every program's `support` and `bodies`). Each site that mentions a literal reads
 its entry and asks for the owned `Str`:
 
@@ -253,8 +253,8 @@ runtime-alignment task; the shim is not the normative layout.
 
 1. **`Str` layout.** Spec: inline `SmallVector<24, Char>`, reserved NUL, 23-byte inline
    capacity (`specs/containers.md`, `specs/built-in-types.md`). Shim: same shape, capacity
-   a build knob - `SmString` (`cppsrc/rtl/smstring.hpp`) over `StrSmallVector`
-   (`cppsrc/rtl/strsmallvector.hpp`), the char-specialized vector: `Int _len`, `Int _cap`,
+   a build knob - `SmString` (`src/rtl/smstring.hpp`) over `StrSmallVector`
+   (`src/rtl/strsmallvector.hpp`), the char-specialized vector: `Int _len`, `Int _cap`,
    an inline byte buffer unioned with the heap pointer, 4-byte packed, no per-element
    lifetime machinery. Capacity defined once (`kStrInlineCapacity` in `strsmallvector.hpp`);
    default the spec's **24 bytes** (23 chars inline); overridable with
@@ -277,8 +277,8 @@ runtime-alignment task; the shim is not the normative layout.
    `size_t` into an `Int` (this retired the C4267 warnings). `std::string` survives **only
    at the native boundary**: `simse_toStdString`/`simse_fromStdString`,
    `std::getline(std::istream&, Str&)`, `FileStream`'s recycled line buffer
-   (`cppsrc/rtl/filestream.hpp`), and the `std::filesystem`/`<fstream>` use in the `fileio`
-   section of `cppsrc/rtl/_res.md`.
+   (`src/rtl/filestream.hpp`), and the `std::filesystem`/`<fstream>` use in the `fileio`
+   section of `src/rtl/_res.md`.
 2. **`List<T>` implementation.** Spec: `List<T>` *is* `SmallVector<4, T>`
    (`specs/containers.md`). Shim: matches - `SmallVector<T, kListInlineCapacity>` (4), the
    documented layout, and its only implementation (no `std::vector` mode).
@@ -307,7 +307,7 @@ runtime-alignment task; the shim is not the normative layout.
    offsets).
 7. **`Opt<T>` / `Res<T>` representation.** Spec: the core-types representation,
    two states and a tag. Shim: one hand-written tagged union serves both
-   (`Variant2<A, B>`, `cppsrc/rtl/variant2.hpp`) - `Opt<T>` is `Variant2<T,
+   (`Variant2<A, B>`, `src/rtl/variant2.hpp`) - `Opt<T>` is `Variant2<T,
    VoidEnum>` and `Res<T>` is `Variant2<T, Str>` - so an empty optional and a
    failed result hold no payload, and the untaken arm is not constructed. The
    alternatives are managed by hand (`setFirst`/`setSecond`/`clear`); `std::variant`
@@ -329,7 +329,7 @@ runtime-alignment task; the shim is not the normative layout.
    (`impl_specs/reification.md`).
 10. **Alignment.** Spec: every type is 4-byte packed (`specs/memory-model.md`,
     "Alignment and packing"). Shim: generated aggregates are emitted between
-    `SIMSE_PACK_PUSH` / `SIMSE_PACK_POP` (`cppsrc/rtl/types.hpp`), and
+    `SIMSE_PACK_PUSH` / `SIMSE_PACK_POP` (`src/rtl/types.hpp`), and
     `SmallVector`, `Array`, `Span` and `StrView` follow the same rule. The difference
     is a size, not a no-op: a struct holding a pointer is 16 bytes under the host's
     alignment (8-byte pointer, `Int`, padding) and **12** under the rule, which is
@@ -341,7 +341,7 @@ runtime-alignment task; the shim is not the normative layout.
 11. **`Dictionary<K, V>` implementation.** Spec: a value dictionary whose hashing,
     buckets and iteration order are deliberately unspecified
     (`specs/dictionary.md`). Shim: `Dictionary<K, V>` is
-    `cppsrc/rtl/smdictionary.hpp`'s `SmDictionary<TKey, TValue>`, and that is its
+    `src/rtl/smdictionary.hpp`'s `SmDictionary<TKey, TValue>`, and that is its
     only implementation - `std::unordered_map` is not used anywhere in the tree.
     `SmDictionary` is the .NET shape: one `Entry` per row (`hash`, `next`, key,
     value), chains by row index, a bucket table whose length is a power of two with
@@ -371,7 +371,7 @@ runtime-alignment task; the shim is not the normative layout.
 
 ### Reading files line by line, and the clock
 
-`FileStream` (`cppsrc/rtl/filestream.hpp`, prelude `cppsrc/rtl/fs.kt` for the *type*; the
+`FileStream` (`src/rtl/filestream.hpp`, prelude `src/rtl/fs.kt` for the *type*; the
 operations are the `io` module's) is the
 RTL's line reader. `openFileStream(path): *FileStream` is a free native (null when
 the file cannot be opened); the operations are **methods of the struct** -
@@ -392,8 +392,8 @@ without a newline as a line. They differ in what the caller gets:
   the three - mixing `readLine` with the other two skips bytes.
 - `readLineInto` copies the line into the caller's `Str`, whose heap block is
   reused - no allocation after the longest line seen.
-- `readLineView` copies nothing: it returns a `StrView` (`cppsrc/rtl/span.hpp`,
-  prelude `cppsrc/rtl/Span.kt`) into the readahead buffer, valid until the
+- `readLineView` copies nothing: it returns a `StrView` (`src/rtl/span.hpp`,
+  prelude `src/rtl/Span.kt`) into the readahead buffer, valid until the
   next read on that stream, which is the shape a parse loop wants
   (`find`/`slice`/`at` stay in the buffer; `toString` is the owned copy).
 
@@ -415,11 +415,11 @@ the RTL list, so a declared type from any package other than `rtl` wins over a p
 name (`typeName`, `cgIsRtlTypeName` in `Codegen.kt`); T23 and the five differentials stay
 byte-identical.
 
-`simse_nowMillis` (the `timeops` section of `cppsrc/rtl/_res.md`) is a monotonic
+`simse_nowMillis` (the `timeops` section of `src/rtl/_res.md`) is a monotonic
 millisecond clock for logging and for measuring a run.
 
-The Simse surface, with the C++ symbol each one reaches (`cppsrc/modules/io/api.kt`,
-`cppsrc/rtl/rtl.kt`):
+The Simse surface, with the C++ symbol each one reaches (`src/modules/io/api.kt`,
+`src/rtl/rtl.kt`):
 
 | Simse | C++ symbol | Notes |
 | --- | --- | --- |
@@ -436,7 +436,7 @@ The Simse surface, with the C++ symbol each one reaches (`cppsrc/modules/io/api.
 No new RTL operations were required:
 
 - Boxing (`&value`) lowers to `std::make_shared<std::remove_cvref_t<decltype(...)>>(value)`,
-  which comes from `<memory>` via `cppsrc/rtl/simse.hpp`.
+  which comes from `<memory>` via `src/rtl/simse.hpp`.
 - `*value` (address of a value) lowers to `&name` for a plain name and to
   `simse_addressOf(expr)` otherwise. `simse_addressOf` (`rtl/types.hpp`) binds
   lvalues and temporaries, so a call result can be passed as a pointer for the
@@ -452,8 +452,8 @@ No new RTL operations were required:
 ### `Dictionary<K, V>` and the `List` extras (T20)
 
 The front end needs maps, so `Dictionary<K, V>` (`SmDictionary`) gained a native
-surface in the `dictops` section of `cppsrc/rtl/_res.md`, and `List<T>` gained two
-helpers. All are prelude natives with explicit symbols (`cppsrc/rtl/rtl.kt`):
+surface in the `dictops` section of `src/rtl/_res.md`, and `List<T>` gained two
+helpers. All are prelude natives with explicit symbols (`src/rtl/rtl.kt`):
 
 | Simse | C++ symbol | Notes |
 | --- | --- | --- |
@@ -571,7 +571,7 @@ than a crash): namespaced native symbols, untyped parameters/fields, compound
 assignment operators (`+=` etc.), lambda reference captures, and `for`/range-for
 (use `Span<T>` and `while`). `List<T>.append`, `removeAt`, `removeRange`,
 `contains`, and `sort` lower to the native extension symbols of the
-`listops`/`dictops` sections of `cppsrc/rtl/_res.md`, declared in the RTL prelude;
+`listops`/`dictops` sections of `src/rtl/_res.md`, declared in the RTL prelude;
 the remaining `List` methods (`insert`, `clear`) are still emitted as written and
 are not yet mapped.
 

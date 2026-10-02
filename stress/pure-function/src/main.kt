@@ -49,7 +49,7 @@ fun viaLabel(p: Point): Str {
     return label(p)
 }
 
-// The language's own length accessors are `data` declarations now (`lenOf`, cppsrc/rtl/rtl.kt),
+// The language's own length accessors are `data` declarations now (`lenOf`, src/rtl/rtl.kt),
 // not a name the optimizer lists: two `size()` calls on one unchanged value fold to one
 // `simse_lenOf`, and a `List` counts through the same operation as a `Str`.
 fun lenTwice(s: Str, xs: List<Int>): Int {

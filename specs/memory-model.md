@@ -114,7 +114,7 @@ What a `RawPtr` **cannot** express is a *typed* pointee: the union-style
 reinterpretation a native API often needs (SDL's event, whose bytes are read as a
 different member depending on the event type) stays in hand-written C++ behind a
 `@SmGen("res", ...)` section
-(`impl_specs/native-interop.md`, `docs/examples/sdl2/wrapper/_res.md`).
+(`impl_specs/native-interop.md`, `examples/sdl2/wrapper/_res.md`).
 
 ### Extraction (`copy`)
 

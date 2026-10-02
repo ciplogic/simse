@@ -2,10 +2,10 @@ package fixtures
 
 import json
 
-// The `json` module's generator (cppsrc/modules/json/generators/JsonGen.kt): `value.toJson()`
+// The `json` module's generator (src/modules/json/generators/JsonGen.kt): `value.toJson()`
 // serializes a data class to JSON, recursively - a class is an object of its fields' serializers,
 // a scalar a leaf. The module is named here rather than carried by the case
-// (`compiler-args` holds `--module cppsrc/modules/json`), which is what makes it reusable;
+// (`compiler-args` holds `--module src/modules/json`), which is what makes it reusable;
 // `import json` is what makes the generator act on this program's classes.
 //
 // `expected.cpp` is the point: `Point` is named by two classes and `Int`/`Str` are fields of

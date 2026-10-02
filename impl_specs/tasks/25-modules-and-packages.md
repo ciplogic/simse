@@ -67,7 +67,7 @@ Out:
 - Compiler: module-root scanning; mandatory `package` as the first declaration;
   package-index resolution by name with the directory fallback removed; implicit
   `rtl` prelude scope; duplicate-definition and unresolved-import diagnostics.
-- Mirrors: package declarations on every `cppsrc/**/*.kt` file aligned with the
+- Mirrors: package declarations on every `src/**/*.kt` file aligned with the
   mandatory form.
 - Tests: fixtures/goldens covering mandatory packages, unresolved imports,
   and duplicate definitions across a package.
@@ -93,7 +93,7 @@ Out:
   directory, or `--root`) plus each repeatable `--module-root`, scanned recursively; every
   `.kt` found is included, and `simse_transpile` also includes its explicit inputs. `import`
   never adds files. Module scanning is `common::filesInDir` driven by `compiler::transpile`
-  and mirrored in `cppsrc/compiler/Driver.kt` (the earlier
+  and mirrored in `src/compiler/Driver.kt` (the earlier
   `parseFileWithImports`/`collectImportSet`/`ImportLoader` are gone).
 - **Sema is compilation-wide.** `sema::analyze(List<Input>)` (C++) and
   `analyze(List<SemaInput>)` (Simse) collect declarations grouped by declared

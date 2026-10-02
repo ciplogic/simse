@@ -2,10 +2,10 @@ package fixtures
 
 import xml
 
-// The `xml` module supplies `XmlNode`/`Attribute` (cppsrc/modules/xml/api.kt). The types are
+// The `xml` module supplies `XmlNode`/`Attribute` (src/modules/xml/api.kt). The types are
 // not in the `rtl` prelude, so a program reaches them through the module - `import xml` makes
 // them visible unqualified, and the module itself is named on the command line
-// (`compiler-args`: `--module cppsrc/modules/xml`) or by a `simse.md` manifest. This case is
+// (`compiler-args`: `--module src/modules/xml`) or by a `simse.md` manifest. This case is
 // what carries the language-level XmlNode coverage.
 
 // Builds a node, then reads a field, an attribute value and a child.

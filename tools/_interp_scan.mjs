@@ -13,7 +13,7 @@ function walk(dir, out) {
   return out;
 }
 
-const files = walk(process.argv[2] ?? "cppsrc", []);
+const files = walk(process.argv[2] ?? "src", []);
 let hits = 0;
 for (const file of files) {
   const text = readFileSync(file, "utf8");

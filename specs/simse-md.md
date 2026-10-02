@@ -38,7 +38,7 @@ The format is the one `_res.md` already reads (`specs/resources.md`): markdown, 
 | file | key | meaning |
 | --- | --- | --- |
 | root `simse.md` | `module: <dir>` | a module of the project, relative to the file. The entry may repeat. A file with no `module:` entry leaves the root scanned whole - which is what a module's own manifest is |
-| module `simse.md` | `sourcegen: true` | this module ships source generators (`cppsrc/compiler`'s kind). A compiler that *carries* them (the built-in ones, today) accepts it; one that does not fails at emission, naming the generator a declaration reaches |
+| module `simse.md` | `sourcegen: true` | this module ships source generators (`src/compiler`'s kind). A compiler that *carries* them (the built-in ones, today) accepts it; one that does not fails at emission, naming the generator a declaration reaches |
 
 A root with no `simse.md` behaves as before: `--root <dir>` is the single module root. The
 manifest is additive: nothing that works now stops working, and `--root` remains the way a
@@ -51,7 +51,7 @@ empty a scan by accident.
 
 ## The layout
 
-Modules live in a `modules/` directory (this repository keeps it at `cppsrc/modules/`), one
+Modules live in a `modules/` directory (this repository keeps it at `src/modules/`), one
 directory per module. A module's **declarations** - what a program sees - are its `.kt` files;
 its **source generators**, if it ships any, live in a `generators/` subfolder:
 
@@ -65,7 +65,7 @@ its **source generators**, if it ships any, live in a `generators/` subfolder:
 
 `--module <dir>` names a module (repeatable); duplicate directories are merged by canonical
 path, so naming one twice costs nothing. `--root <dir>` is a **tree** and is scanned whole -
-which is what the compiler's own build does (`--root cppsrc`), so `modules/**/generators/*.kt`
+which is what the compiler's own build does (`--root src`), so `modules/**/generators/*.kt`
 is compiled *into the compiler*. A program that names the module gets the module's declarations
 and never its `generators/`, whose sources are written against the compiler's own packages
 (`import compiler` names the AST and the generator interface).
@@ -93,7 +93,7 @@ extended compiler's build, ending in one line that adds it to the table -
 
     val jsonGenRegistered: Bool = registerSourceGen("json", jsonGen, false, true)
 
-- `registerSourceGen` (`cppsrc/compiler/SourceGen.kt`) appends to `sourceGenTable` and
+- `registerSourceGen` (`src/compiler/SourceGen.kt`) appends to `sourceGenTable` and
   answers `true`, because a file-level static's initializer is an expression and every static
   has a type (`specs/statics.md`). Its arguments after the name are the two facts only the
   generator knows: whether a declaration of it keeps a prototype, and whether its receiver
@@ -128,7 +128,7 @@ itself again: it is built with its generators already inside, and it is handed a
 
 Extending the compiler needs a build, and the manifest carries the command. It is a
 convention command - a template with `|` placeholders, filled positionally like `fmtStr`
-fills a format string (`cppsrc/rtl/rtl.kt`) - run with `system()`, so it may be any command
+fills a format string (`src/rtl/rtl.kt`) - run with `system()`, so it may be any command
 line a shell accepts, and its exit code is the answer (0 = the build worked).
 
 The compiler does the transpiling itself, so the command's job is the C++ half: compile the
@@ -169,7 +169,7 @@ the project and never inside it.
 
     _simse/
         <module>/            one directory per generator module that was merged
-            cppsrc/          the staged compiler tree: the compiler's own files + the module's
+            src/          the staged compiler tree: the compiler's own files + the module's
             simse_out.cpp    the amalgamation the compiler generated from them
             simse-self.exe   the extended compiler
             self.md          what was staged - the module, its sources, the command, the fingerprint
@@ -231,5 +231,5 @@ The step list lives in `impl_specs/roadmap.md` (T31).
 The implementation notes so far: staging a tree needs **directory creation** (a native, or
 `simse_writeFile` creating parents) and running the command needs **`system()`** (a native
 returning the normalized exit code, as above); the copy itself is `listFiles` +
-`readWholeFile` + `writeFile`, which the RTL has (`cppsrc/modules/io/api.kt`, whose C++ is the
-`fileio` section of `cppsrc/modules/io/_res.md`).
+`readWholeFile` + `writeFile`, which the RTL has (`src/modules/io/api.kt`, whose C++ is the
+`fileio` section of `src/modules/io/_res.md`).

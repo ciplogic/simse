@@ -2,18 +2,18 @@
 //
 //   bun tools/bootstrap.js [--runs N] [--debug] [--simse <exe>]
 //
-// "Bootstrapping" Simse means: `cppsrc/simse_bootstrap.cpp` - the published amalgamation of
+// "Bootstrapping" Simse means: `src/simse_bootstrap.cpp` - the published amalgamation of
 // the compiler source tree - is checked in, so Simse can be built with a C++ compiler alone;
 // and the compiler that comes out of it must transpile the same sources back into the same
 // bytes. This tool times each step and checks that fixed point:
 //
-//   1. compile     the published `cppsrc/simse_bootstrap.cpp` into `simse_boot.exe`, with
+//   1. compile     the published `src/simse_bootstrap.cpp` into `simse_boot.exe`, with
 //                  cl.exe only - no build system, nothing generated, and no second file to
 //                  link (docs/getting-started.md, "Building the compiler without a
 //                  compiler")
-//   2. transpile   `simse_boot.exe` compiling `cppsrc`, and - when a working compiler
+//   2. transpile   `simse_boot.exe` compiling `src`, and - when a working compiler
 //                  exists - that compiler doing the same, so the two can be compared
-//   3. fixed point the regenerated file must equal `cppsrc/simse_bootstrap.cpp` byte for
+//   3. fixed point the regenerated file must equal `src/simse_bootstrap.cpp` byte for
 //                  byte, whichever compiler produced it. That is what makes the published
 //                  file a *bootstrap* and not a snapshot
 //
@@ -28,7 +28,7 @@ import { developerEnv, fail as failTool, hostArch, normalizeArch, REPO, whichCl 
 
 const TOOL = "bootstrap";
 const fail = (message) => failTool(TOOL, message);
-const BOOTSTRAP = path.join("cppsrc", "simse_bootstrap.cpp");
+const BOOTSTRAP = path.join("src", "simse_bootstrap.cpp");
 
 function parseArgs(argv) {
   const opts = { runs: 3, debug: false, simse: null };
@@ -110,14 +110,14 @@ function main() {
 
   const sourceLines = spawnSync("bun", ["-e",
     `import {execFileSync} from "node:child_process";`
-    + `const out=execFileSync("cmd",["/c","dir /b /s cppsrc\\\\*.kt"],{encoding:"utf8"});`
+    + `const out=execFileSync("cmd",["/c","dir /b /s src\\\\*.kt"],{encoding:"utf8"});`
     + `let n=0;for(const f of out.split(/\\r?\\n/)){if(f.trim())n+=require("fs").readFileSync(f.trim(),"utf8").split("\\n").length;}`
     + `console.log(n);`], { cwd: REPO, encoding: "utf8" });
   const lines = Number((sourceLines.stdout || "0").trim()) || 0;
   const outLines = countLines(bootstrap);
 
   console.log(`${TOOL}: ${mode} build, ${opts.runs} run(s) for the transpiles`);
-  console.log(`  sources    ${lines} lines of Simse under cppsrc`);
+  console.log(`  sources    ${lines} lines of Simse under src`);
   console.log(`  bootstrap  ${BOOTSTRAP}: ${outLines} lines, ` +
               `${(statSync(bootstrap).size / 1048576).toFixed(2)} MB (checked in, do not edit)`);
   console.log("");
@@ -131,12 +131,12 @@ function main() {
   ], 1, env);
   console.log("");
   console.log("2. transpile the compiler's own source tree");
-  const bootTime = timed(`simse_boot.exe (just built) --root cppsrc`,
-        bootExe, ["--root", "cppsrc", "-o", bootOut], opts.runs);
+  const bootTime = timed(`simse_boot.exe (just built) --root src`,
+        bootExe, ["--root", "src", "-o", bootOut], opts.runs);
   let workTime = null;
   if (hasWorking) {
-    workTime = timed(`working compiler (${path.relative(REPO, working)}) --root cppsrc`,
-          working, ["--root", "cppsrc", "-o", workingOut], opts.runs);
+    workTime = timed(`working compiler (${path.relative(REPO, working)}) --root src`,
+          working, ["--root", "src", "-o", workingOut], opts.runs);
   } else {
     console.log(`  ${"(no ./simse.exe to compare with)".padEnd(52)} build one with \`bun build.js\``);
   }

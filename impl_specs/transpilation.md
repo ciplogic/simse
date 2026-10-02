@@ -10,7 +10,7 @@ language source set, e.g.:
 
 ```text
 main.kt
-cppsrc/lex/Scanner.kt
+src/lex/Scanner.kt
 ```
 
 ## Generated C++ output
@@ -67,7 +67,7 @@ The two comparison points:
 
 ## Runtime and RTL boundary
 
-Files under `cppsrc/rtl` are low-level runtime implementation files. They may
+Files under `src/rtl` are low-level runtime implementation files. They may
 remain hand-written C++ and are not required to be implemented in Simse.
 Transpiled Simse code may include and call the RTL, but the RTL itself is an
 implementation boundary rather than part of the self-hosted Simse source set.

@@ -1,5 +1,5 @@
 // Scratch: diagnose the Str inline fast paths (not part of the build).
-#include "cppsrc/rtl/simse.hpp"
+#include "src/rtl/simse.hpp"
 
 #include <cstdio>
 #include <cstring>

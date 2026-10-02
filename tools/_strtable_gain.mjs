@@ -3,7 +3,7 @@
 // algorithm (sort by length desc / text asc, join with substring reuse) and reports sizes.
 import { readFileSync } from "fs";
 
-const path = process.argv[2] ?? "cppsrc/simse_bootstrap.cpp";
+const path = process.argv[2] ?? "src/simse_bootstrap.cpp";
 const text = readFileSync(path, "utf8");
 
 const start = text.indexOf("static const Str __sm_stringTable[");

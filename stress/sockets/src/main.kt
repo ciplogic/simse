@@ -6,7 +6,7 @@ import sockets
 // an ephemeral port (0), read the chosen port back, connect to it, accept, then push a line each
 // way. One thread, every call blocking, so the order is fixed and the output is deterministic -
 // no second process and no timing. The module is named by `compiler-args`
-// (`--module docs/examples/http/sockets`).
+// (`--module examples/http/sockets`).
 
 fun main(): Int {
     if (!netStartup()) {

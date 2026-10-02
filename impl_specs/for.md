@@ -27,7 +27,7 @@ copy of it ("`iterPtr`" below).
 
 ## Where it runs, and why there
 
-`parseFor` (`cppsrc/parser/Parser.kt`), reached through `parseStmtInto` - the one statement
+`parseFor` (`src/parser/Parser.kt`), reached through `parseStmtInto` - the one statement
 slot that can expand to *several* statements, because the machine has to be declared outside
 the loop it runs. Everything the template generates carries the `for` token's position, so a
 diagnostic - from sema or the C++ compiler - points at the line the user wrote.
@@ -51,7 +51,7 @@ template's. Its extra increment on the exhausted iteration is never read again.
 class the *creating function* got, so two functions yielding `Int` have two machine classes and
 `..T` names neither. A name bound to a machine therefore stays `auto`.
 
-So the lowering-time type pass (`cppsrc/sema/TypeInfer.kt`) knows the *one* method of a
+So the lowering-time type pass (`src/sema/TypeInfer.kt`) knows the *one* method of a
 machine's protocol and its one field, which is all the template reads:
 
 | receiver | name | type |
@@ -183,7 +183,7 @@ temporary), so the machine hands out `&(*self)[i]` - into the container's storag
 
 **The measurement.** The three shapes, on the compiler's own hot loops
 (`Linear.kt`'s `declares`/`lowerStmts`/`containsShortCircuit`, release `./simse.exe`
-transpiling `--root cppsrc`, interleaved A/B, 11 pairs):
+transpiling `--root src`, interleaved A/B, 11 pairs):
 
 | shape | min | median |
 | --- | --- | --- |

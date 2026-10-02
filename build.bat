@@ -3,7 +3,7 @@ setlocal
 rem ---------------------------------------------------------------------------
 rem build.bat - thin launcher for build.js (see that file for the options).
 rem
-rem   build.bat                 transpile cppsrc -> simse_out.cpp, compile -> simse.exe
+rem   build.bat                 transpile src -> simse_out.cpp, compile -> simse.exe
 rem   build.bat <output.exe>    same, with a different executable name
 rem   build.bat --help          list all options
 rem

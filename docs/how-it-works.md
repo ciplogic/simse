@@ -36,7 +36,7 @@ happens in between.
         |
         v
    simse_out.cpp    one amalgamated translation unit (published as
-                    cppsrc/simse_bootstrap.cpp: the compiler as C++, checked in)
+                    src/simse_bootstrap.cpp: the compiler as C++, checked in)
 ```
 
 Details worth knowing:
@@ -45,7 +45,7 @@ Details worth knowing:
   `Stmt.If`, `Expr.IntLit`, ...), a category, an attribute map for the text, and
   children. Because roles and attribute keys are enums, every test on a node in
   the compiler is an integer compare; the emitter generates the structs and enums
-  from the Simse declarations (`cppsrc/modules/compiler/astxml.kt`).
+  from the Simse declarations (`src/modules/compiler/astxml.kt`).
 - **Generics are reified.** There is no erasure and no boxing: `List<Int>` and
   `List<Str>` become two distinct C++ types (`List<Int>`, `List<Str>`), and a
   generic function becomes a C++ template that is instantiated per concrete call.
@@ -76,7 +76,7 @@ Details worth knowing:
   `cpp`, whose C++ is hand-written in a header (`@SmGen("cpp"[, symbol])`); `res`,
   whose text is a C++
   *resource* - the tree's own `_res.md` files first, the compiler's second, which is where
-  the RTL's own C++ lives now (`cppsrc/rtl/_res.md`: `strtable`, `timeops`, `listops`,
+  the RTL's own C++ lives now (`src/rtl/_res.md`: `strtable`, `timeops`, `listops`,
   `dictops`, `strops`, `lenops`, `strcat`, `spanOf`, `strview`, `filestream`, `resources`, `fileio`) - and
   `kt`, whose text is *Simse source* the driver hands back to the
   compiler's own front end: parsed, checked and emitted with the program, the call site
@@ -84,7 +84,7 @@ Details worth knowing:
   includes, support, profile, strings, resources, forward, types, statics, prototypes,
   init, bodies - so a generated *declaration* lands in `forward`, a *definition* in
   `bodies`, and text the preamble needs in `support`, without codegen having to know about
-  any of them. The generators live in the `compiler` package (`cppsrc/compiler/`, one file
+  any of them. The generators live in the `compiler` package (`src/compiler/`, one file
   per generator, registered by name) so that a *program's* author can write one against one
   import: a generator sees the AST nodes, the resources and the sections, and calls nothing
   from the compiler's stages.
@@ -99,13 +99,13 @@ labels, gotos and assignments:
 
 ```cpp
 List<Str> ns1_words(Str* self);
-// docs/examples/tour/src/main.kt
+// examples/tour/src/main.kt
 List<Str> ns1_words(Str* self) {
     List<Str> _sm_expr1;
     _sm_expr1 = simse_str_split((*self), __sm_stringTable[2]);
     return _sm_expr1;
 }
-// docs/examples/tour/src/main.kt
+// examples/tour/src/main.kt
 int main() {
     Str text;
     Dictionary<Str, Int> counts;
@@ -159,14 +159,14 @@ The compiler is its Simse sources; there is one implementation.
 
 | Piece | Where | Role |
 | --- | --- | --- |
-| Compiler | `cppsrc/**/*.kt` | lexer, parser, sema, linear lowering, codegen and driver |
-| Runtime | `cppsrc/rtl/` | the headers, the prelude `.kt` files, and the resource file `_res.md` that holds the runtime's C++ |
-| Published bootstrap | `cppsrc/simse_bootstrap.cpp` | the amalgamation of the compiler sources; it is what a checkout with only a C++ compiler builds |
+| Compiler | `src/**/*.kt` | lexer, parser, sema, linear lowering, codegen and driver |
+| Runtime | `src/rtl/` | the headers, the prelude `.kt` files, and the resource file `_res.md` that holds the runtime's C++ |
+| Published bootstrap | `src/simse_bootstrap.cpp` | the amalgamation of the compiler sources; it is what a checkout with only a C++ compiler builds |
 
 The invariant is a **fixed point**, and machines check it, not discipline:
 
-1. **`tools/bootstrap.js`** compiles the published `cppsrc/simse_bootstrap.cpp`
-   with `cl.exe` alone, then has the resulting binary transpile `cppsrc` again.
+1. **`tools/bootstrap.js`** compiles the published `src/simse_bootstrap.cpp`
+   with `cl.exe` alone, then has the resulting binary transpile `src` again.
    The output must equal the published
    file **byte for byte** (and so must `./simse.exe`'s output, when one exists).
    This is the strongest statement the project makes: the compiler built from the
@@ -179,13 +179,13 @@ The invariant is a **fixed point**, and machines check it, not discipline:
 
 Any change to compiler behavior has to keep the fixed point intact: rebuild the
 compiler with itself, refresh the published file
-(`bun build.js --release --out cppsrc/simse_bootstrap.cpp`), and keep the stress
+(`bun build.js --release --out src/simse_bootstrap.cpp`), and keep the stress
 corpus green - which is why the project can move fast without breaking its own
 foundation.
 
 ## The runtime (RTL) and the backings
 
-The generated C++ includes `cppsrc/rtl/simse.hpp`, which pulls in the runtime
+The generated C++ includes `src/rtl/simse.hpp`, which pulls in the runtime
 headers:
 
 | Header | What it provides |
@@ -198,10 +198,10 @@ headers:
 | `strview.hpp` | `StrView`: an alias of `Span<Char>` (`typealias StrView = Span<Char>`), plus the *literal interop* only - the comparison operators, `+`, `<<` and the `Str` conversions, which C++ overload resolution reaches at a literal site (the operations are the `strview` section) |
 | `filestream.hpp` | `FileStream`: the struct alone, reading a file line by line (`readLine(): Opt<Str>`, `readLineInto(*Str)` with a recycled buffer, and `readLineView(): Opt<StrView>` in place) - its method bodies are the `filestream` section |
 
-`AstXmlNode` (the compiler's AST, `cppsrc/modules/compiler/astxml.kt`, the `compiler` module) and the language-level `XmlNode`/`Attribute` (the `xml` module, `cppsrc/modules/xml/api.kt`) are *generated* from their Simse declarations, not headers.
+`AstXmlNode` (the compiler's AST, `src/modules/compiler/astxml.kt`, the `compiler` module) and the language-level `XmlNode`/`Attribute` (the `xml` module, `src/modules/xml/api.kt`) are *generated* from their Simse declarations, not headers.
 
 The C++ that used to need a header of its own is a **resource** now
-(`cppsrc/rtl/_res.md`, read by the `res` generator): the string table's decoder
+(`src/rtl/_res.md`, read by the `res` generator): the string table's decoder
 (`strtable`), the clocks (`timeops`), the `List`/`Array` primitives (`listops`), the
 `Dictionary` operations (`dictops`), the string/character/numeric conversions (`strops`),
 the length accessors (`lenops`), the concatenation (`strcat`), `spanOf`, the view operations (`strview`), the file stream's
@@ -227,7 +227,7 @@ reads the prelude's `.kt` files, so a program which carries no section of its ow
 receives the RTL's C++ - while the compiler no longer carries a second copy of that text in
 its own string pool (23,034 bytes of a 33,446-byte pool, gone).
 
-The prelude (`cppsrc/rtl/*.kt`) declares the surface; its bodies are *not* emitted,
+The prelude (`src/rtl/*.kt`) declares the surface; its bodies are *not* emitted,
 because the behavior lives in those headers or in the resource. Every type follows the
 language's layout model: **4-byte packing** (`SIMSE_PACK_PUSH`/`SIMSE_PACK_POP`),
 32-bit indexes, and no `[refcount][typeId]` header yet - divergences from the
@@ -266,7 +266,7 @@ measured:
 Errors carry a position (`file:line:column`) and a message, printed by the driver:
 
 ```
-docs/examples/wordcount/src/main.kt:37:23: expected ')'
+examples/wordcount/src/main.kt:37:23: expected ')'
 ```
 
 The compiler deliberately does not have a "recover and continue" mode: the first
@@ -280,7 +280,7 @@ machine (an ARM64 laptop; the numbers wobble ~8% between windows):
 
 | Measure | Value |
 | --- | --- |
-| the compiler transpiling `cppsrc/` | ~1.1 s (~16.4k lines/s) |
+| the compiler transpiling `src/` | ~1.1 s (~16.4k lines/s) |
 | `cl.exe` compiling the emitted unit | ~21 s (`/O2 /Ob3`) |
 | peak working set | ~31 MB |
 | emitted translation unit | ~1.38 MB (45,757 lines) for the whole compiler |

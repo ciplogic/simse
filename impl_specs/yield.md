@@ -43,7 +43,7 @@ fun everyOther(n: Int): ..Int {        struct ns1_everyOther_yieldable {
 
 **On the linear body** - after `lowerForEmission` (control flow is already labels and gotos,
 `if`/`while` are gone, the yielded value is one operand) and after the type pass (a local has
-the type its field needs), in `linear::lowerYield` (`cppsrc/linear/Yield.kt`):
+the type its field needs), in `linear::lowerYield` (`src/linear/Yield.kt`):
 
 1. **The fields** are `branch`, `current`, the receiver of an extension function, then the
    parameters and every local the body declares - except the lowering's own storage
@@ -104,15 +104,15 @@ fields, so nothing about the machine points into the frame that built it.
 ## Status
 
 - `yield`/`..T` in the parser, the rewrite in `linear::lowerYield`
-  (`cppsrc/linear/Yield.kt`), the class and factory in `Emitter::emitYieldable`
-  (`cppsrc/codegen/Codegen.kt`), and the cases `stress/yield` (a machine advanced by hand,
+  (`src/linear/Yield.kt`), the class and factory in `Emitter::emitYieldable`
+  (`src/codegen/Codegen.kt`), and the cases `stress/yield` (a machine advanced by hand,
   one advanced after it finished, a body that names every machine member, both `for` forms)
   and `stress/generic-yield` (a generic yielding extension over `List<Int>` and `List<Str>`),
   verified by transpiling, compiling and running them through the self-hosted compiler and
   by byte-identical emission.
 - **The machine's method is optimized like any other body**: the rewrite runs *after* the
   body's own half of the pipeline, so its output (the dispatcher, the label runs) had never
-  been through `cppsrc/optimizations`. `emitMachine` runs `linOptimizeBody` over each method
+  been through `src/optimizations`. `emitMachine` runs `linOptimizeBody` over each method
   body before emitting it, folding the contiguity (`L2:; LYend:;` is one label) and the jumps
   around it.
 - The machine's shape:

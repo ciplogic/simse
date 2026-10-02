@@ -3,7 +3,7 @@
 //   bun tools/vscheck.mjs [Debug|Release]
 //
 // `simse.vcxproj` + `simse.slnx` are the profiling project: they compile the published
-// bootstrap `cppsrc/simse_bootstrap.cpp` - one translation unit, the runtime generated into
+// bootstrap `src/simse_bootstrap.cpp` - one translation unit, the runtime generated into
 // it - into `profile\<Configuration>\simse.exe`, with the debugger arguments already set for running the
 // compiler over its own tree. This tool exists because nothing else in the harness touches
 // those files: without it, a change to the RTL's includes or to the amalgamation's shape could
@@ -12,8 +12,8 @@
 //
 // Exit code 0 when MSBuild succeeded; the last lines of its output are printed either way.
 // The built compiler is the project's own, so it is worth one functional check by hand after a
-// change that moved the amalgamation: `profile/Release/simse.exe --root cppsrc -o out.cpp`
-// reproduces `cppsrc/simse_bootstrap.cpp` byte for byte.
+// change that moved the amalgamation: `profile/Release/simse.exe --root src -o out.cpp`
+// reproduces `src/simse_bootstrap.cpp` byte for byte.
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import * as path from "node:path";

@@ -14,10 +14,10 @@ works; a `cl.exe` already on your `PATH` is used only as a fallback.
 
 ## 1. Build the compiler
 
-`build.js` transpiles the compiler's own Simse sources (`cppsrc/**/*.kt`) into
+`build.js` transpiles the compiler's own Simse sources (`src/**/*.kt`) into
 one `simse_out.cpp` and compiles that one file into `./simse.exe`. It uses
 `./simse.exe` as the transpiler when one exists; on a fresh checkout there is
-none yet, so it first compiles the published `cppsrc/simse_bootstrap.cpp` and
+none yet, so it first compiles the published `src/simse_bootstrap.cpp` and
 uses that (section 2).
 
 ```bat
@@ -45,11 +45,11 @@ bun build.js --release --root my_project --out my_project.cpp --exe my_project.e
 ```
 
 Objects and intermediates go to `build/<debug|release>/`; the generated file
-includes `"cppsrc/rtl/simse.hpp"`, so the repository root is the include path.
+includes `"src/rtl/simse.hpp"`, so the repository root is the include path.
 
 ## 2. Build the compiler *without* a compiler
 
-The amalgamation is checked in as **`cppsrc/simse_bootstrap.cpp`**: the compiler
+The amalgamation is checked in as **`src/simse_bootstrap.cpp`**: the compiler
 source tree as one C++ file, kept in the repository so that Simse can be built by
 someone who has a C++ compiler and nothing else - no `simse.exe`, no previous
 build, no build script. That is what makes the language self-hosting rather than
@@ -57,26 +57,26 @@ a claims file.
 
 ```bat
 cl /nologo /std:c++20 /EHsc /O2 /Ob3 /DNDEBUG /MD /W3 /I. ^
-   cppsrc/simse_bootstrap.cpp ^
+   src/simse_bootstrap.cpp ^
    /Fe:simse.exe
 ```
 
 One translation unit - the amalgamated compiler - plus the RTL headers under
-`cppsrc/rtl/` that the amalgamation includes. The generated symbols it uses
+`src/rtl/` that the amalgamation includes. The generated symbols it uses
 (`simse_native_readFile`, `simse_listFiles`, `simse_writeFile`,
 `simse_pathCanonical`, `simse_eprintln`, `simse_nowMillis`, ...) are not linked
 in from a second file: their C++ lives in the RTL's resource sections
-(`cppsrc/rtl/_res.md`, the `fileio` and `timeops` sections), which are emitted
+(`src/rtl/_res.md`, the `fileio` and `timeops` sections), which are emitted
 into every program's translation unit, so the published bootstrap already carries
 them. The result is a working compiler. Run it from the repository root:
 `simse.exe --root my_project -o my_project.cpp` - the RTL sits at the default
-prelude path `cppsrc/rtl`.
+prelude path `src/rtl`.
 
 To refresh the published file after changing the compiler (it is generated, never
 hand-edited):
 
 ```bat
-bun build.js --release --out cppsrc/simse_bootstrap.cpp   :: also builds ./simse.exe
+bun build.js --release --out src/simse_bootstrap.cpp   :: also builds ./simse.exe
 ```
 
 `bun tools/bootstrap.js` measures the whole story and checks the fixed point - the
@@ -85,15 +85,15 @@ compiler built from the published file must reproduce that file byte for byte:
 ```console
 $ bun tools/bootstrap.js
 bootstrap: release build, 3 run(s) for the transpiles
-  sources    17905 lines of Simse under cppsrc
-  bootstrap  cppsrc\simse_bootstrap.cpp: 45757 lines, 1.38 MB (checked in, do not edit)
+  sources    17905 lines of Simse under src
+  bootstrap  src\simse_bootstrap.cpp: 45757 lines, 1.38 MB (checked in, do not edit)
 
 1. compile the published bootstrap (cl.exe only, no build system)
-  cppsrc\simse_bootstrap.cpp -> simse_boot.exe         best 20713 ms
+  src\simse_bootstrap.cpp -> simse_boot.exe         best 20713 ms
 
 2. transpile the compiler's own source tree
-  simse_boot.exe (just built) --root cppsrc            best 1093 ms, median 1122 ms
-  working compiler (simse.exe) --root cppsrc           best 1042 ms, median 1089 ms
+  simse_boot.exe (just built) --root src            best 1093 ms, median 1122 ms
+  working compiler (simse.exe) --root src           best 1042 ms, median 1089 ms
 
 3. fixed point: both outputs must equal the published bootstrap
   simse_boot.exe's output == the bootstrap             yes, byte for byte
@@ -116,7 +116,7 @@ moves it between 1.0 s and 3.0 s).
 Using the self-hosted compiler on one of the bundled examples:
 
 ```bat
-simse.exe --root docs/examples/hello -o hello.cpp
+simse.exe --root examples/hello -o hello.cpp
 build.bat --cpp hello.cpp --exe hello.exe
 hello.exe
 :: hello, simse
@@ -137,9 +137,9 @@ simse.exe --root <dir> -o <out.cpp> [--prelude <dir>] [--profile] [--profile-fil
 ```
 
 - `--root <dir>` scans a directory tree for `.kt` files (the compiler's own
-  source tree is `cppsrc`);
+  source tree is `src`);
 - `--prelude <dir>` overrides the implicit prelude, which defaults to the
-  relative path `cppsrc/rtl`, so run the compiler from the repository root;
+  relative path `src/rtl`, so run the compiler from the repository root;
 - `--profile` emits the instrumented profiler, whose CSV goes to `simse_profile.txt` (or
   `--profile-file <path>`; `-` is stderr), in microseconds or `--profile-nanos`;
   `--showLinearRepresentation` dumps the linear IL (see
@@ -173,5 +173,5 @@ the runtime knobs are exercised (for example
 | `LNK4272: machine type 'ARM64' conflicts with target machine type 'x86'` followed by many `LNK2019` | your `cl.exe` targets a different architecture than the build. Use a developer prompt with the matching architecture (`vcvarsall arm64` for ARM64) or pass `--arch` to `build.js` |
 | a dialog box about `stream.valid()` or a debug-STL assert | the Debug build has the MSVC debug assertions live, so bad input (e.g. passing a directory where a `.kt` file is expected) trips them. Use `--release` for a build with the assertions compiled out |
 | `transpile failed` while scanning `.` | you are compiling the whole repository: the prelude, the examples and the stress cases are independent programs, not one module. Pass `--root <dir>` |
-| `build: warning: simse.exe is older than cppsrc/rtl` | the compiler predates a prelude change; `build.bat` rebuilds it and replaces the stale compiler |
+| `build: warning: simse.exe is older than src/rtl` | the compiler predates a prelude change; `build.bat` rebuilds it and replaces the stale compiler |
 | `bun: command not found` | install bun from <https://bun.sh> (the harnesses are JavaScript) |

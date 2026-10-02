@@ -1,6 +1,6 @@
 package fixtures
 
-// The task header and the loop (`cppsrc/rtl/tasks.kt`, the `tasks` section of `cppsrc/rtl/_res.md`,
+// The task header and the loop (`src/rtl/tasks.kt`, the `tasks` section of `src/rtl/_res.md`,
 // impl_specs/async.md "The emitted shapes"): step one's proof that the status discipline and the
 // release order hold, before the `suspend` lowering exists.
 //

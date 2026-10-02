@@ -1,6 +1,6 @@
 package fixtures
 
-// `!!` (cppsrc/parser/Propagate.kt): the payload of a `Res`, or its failure propagated out of
+// `!!` (src/parser/Propagate.kt): the payload of a `Res`, or its failure propagated out of
 // the enclosing function. Both failure paths are covered: `doubled` returns the same `Res`
 // type its operand has (so the union is moved), and `describe` returns a different one (the
 // message is carried into a rebuilt `Res<Str>` - nothing has to be remapped, because a

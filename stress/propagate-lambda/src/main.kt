@@ -2,7 +2,7 @@ package fixtures
 
 // `!!` inside a lambda: a lambda has no declared return type, so the failure propagates into the
 // result type its *parameter* names - the `ReturnType` of the function type the lambda is passed
-// to (cppsrc/parser/Propagate.kt). The enclosing function's own return type is irrelevant here,
+// to (src/parser/Propagate.kt). The enclosing function's own return type is irrelevant here,
 // which is why `main` below does not return a `Res`.
 
 fun readNumber(text: Str): Res<Int> {

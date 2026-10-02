@@ -2,10 +2,10 @@
 <!--
   simse.vcxproj - the profiling project (`simse.slnx` is its solution).
 
-  It compiles the *published bootstrap*, `cppsrc\simse_bootstrap.cpp` - the one file
+  It compiles the *published bootstrap*, `src\simse_bootstrap.cpp` - the one file
   `build.js` compiles - so Visual Studio's profiler (Debug > Performance Profiler, Alt+F2) or
   a debugger can be pointed at the compiler itself. The runtime is generated into that file
-  (`cppsrc\rtl\_res.md`), so there is no second translation unit to add.
+  (`src\rtl\_res.md`), so there is no second translation unit to add.
 
   Why the bootstrap rather than the file `build.js` generates (`simse_out.cpp`): the bootstrap
   is checked in, so this project always has a source and needs no generation step. The
@@ -19,8 +19,8 @@
     functions rather than sit inside a link-time-inlined blob.
   - **Debug** is /Od with the debug runtime, for stepping.
   - **F5 and the profiler run the compiler over its own sources**: `LocalDebuggerCommandArguments`
-    below is the `root` option over `cppsrc`, and the working directory is the repository root,
-    because both the prelude's default path (`cppsrc/rtl`) and that root are relative.
+    below is the `root` option over `src`, and the working directory is the repository root,
+    because both the prelude's default path (`src/rtl`) and that root are relative.
   - Output: `profile\<Configuration>\simse.exe` + `.pdb` (git-ignored).
   - `bun tools/vscheck.mjs [Debug|Release]` builds this project from the command line, with
     the same Visual Studio environment the rest of the harness uses.
@@ -84,7 +84,7 @@
          root (the prelude's default path and the root option are both relative to it). -->
     <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
     <LocalDebuggerWorkingDirectory>$(ProjectDir)</LocalDebuggerWorkingDirectory>
-    <LocalDebuggerCommandArguments>--root cppsrc</LocalDebuggerCommandArguments>
+    <LocalDebuggerCommandArguments>--root src</LocalDebuggerCommandArguments>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
     <ClCompile>
@@ -148,15 +148,15 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <!-- The published amalgamation: one file, the runtime included. -->
-    <ClCompile Include="cppsrc\simse_bootstrap.cpp" />
+    <ClCompile Include="src\simse_bootstrap.cpp" />
   </ItemGroup>
   <ItemGroup>
     <!-- For navigation only: the amalgamation includes the RTL through simse.hpp. -->
-    <ClInclude Include="cppsrc\rtl\simse.hpp" />
-    <ClInclude Include="cppsrc\rtl\ref.hpp" />
-    <ClInclude Include="cppsrc\rtl\smref.hpp" />
-    <ClInclude Include="cppsrc\rtl\types.hpp" />
-    <ClInclude Include="cppsrc\rtl\containers.hpp" />
+    <ClInclude Include="src\rtl\simse.hpp" />
+    <ClInclude Include="src\rtl\ref.hpp" />
+    <ClInclude Include="src\rtl\smref.hpp" />
+    <ClInclude Include="src\rtl\types.hpp" />
+    <ClInclude Include="src\rtl\containers.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />

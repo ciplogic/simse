@@ -169,7 +169,7 @@ pointer or a file-level `var` would make the reuse wrong.
 
 The mark sits on the declaration: `data fun f(...)`, `data fun T.m(...)`, and an attribute
 with it (`@SmGen(...)` on the line above, or `data` first). The language's own read-only
-length accessors (`size`, `count`) are `data` declarations too (`cppsrc/rtl/rtl.kt`), so the
+length accessors (`size`, `count`) are `data` declarations too (`src/rtl/rtl.kt`), so the
 optimizer lists no name by hand. Purity is about
 *observable* effects, so writes to the function's own locals do not matter. It is not
 *checked* yet - a later pass computes purity from the body (only pure calls, no write through
@@ -188,7 +188,7 @@ borrow fun charAt(this: Str, index: Int): Char
 ```
 
 The compiler reads it where a pointer is handed to a callee. The auto-borrow proof
-(`cppsrc/parser/BorrowParams.kt`, `impl_specs/escape-analysis.md`) trusts a call only when the
+(`src/parser/BorrowParams.kt`, `impl_specs/escape-analysis.md`) trusts a call only when the
 callee is *borrow-clean* - it writes nothing observable, so it cannot write through what it is
 given - and a body-less (`@SmGen`) declaration is borrow-clean only by a mark, because its C++ is
 elsewhere. For a declaration *with* a body the same fact is **proved** from the body (it writes
@@ -197,7 +197,7 @@ proof cannot see through - a call to an unmarked native that is in fact read-onl
 
 Like `data`, the mark is a promise the compiler trusts; unlike `data` it never lets a call be
 folded. The RTL declares its read-only string, container and conversion operations this way
-(`cppsrc/rtl/rtl.kt`).
+(`src/rtl/rtl.kt`).
 
 ## Methods inside classes
 
@@ -348,7 +348,7 @@ The name is the parser's own (`_sm_when<n>` from the per-file template counter),
 
 **A `when` over string literals compares a view of the subject and guards its tests by
 length.** When every label of every arm is a string literal, the parser binds a **view** of the
-subject (`_sm_when<n>_v = spanOfStr(...)`, `cppsrc/rtl/StrView.kt`) and its length
+subject (`_sm_when<n>_v = spanOfStr(...)`, `src/rtl/StrView.kt`) and its length
 (`_sm_when<n>_n`), and each label's test compares the view instead of the subject:
 `<view> == <label>`, guarded by `<length> == <the label's byte length> && ...`, so a label whose
 length cannot match is rejected by one integer compare instead of a `memcmp`. The view is what

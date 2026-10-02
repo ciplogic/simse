@@ -2,7 +2,7 @@
 
 Status: planning baseline. Companion to `impl_specs/roadmap.md` (compiler internals).
 Tracks the language and library work a *user* is blocked on, in the order the blockers stack.
-What exists is what `cppsrc/rtl/*.kt` says, not what is merely specified.
+What exists is what `src/rtl/*.kt` says, not what is merely specified.
 
 ## 1. The niche
 

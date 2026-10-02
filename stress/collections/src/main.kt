@@ -545,7 +545,7 @@ fun afterColon(text: Str): Str {
 
 // `atPtr(i)`: the element as a *place* - `at`'s `*T` twin, so nothing is copied and a
 // write through it reaches what the span borrows. The body is the language's own
-// (`Span<T>.atPtr`, cppsrc/rtl/Span.kt), which is also why a call site has a type.
+// (`Span<T>.atPtr`, src/rtl/Span.kt), which is also why a call site has a type.
 fun bumpSpan(span: Span<Int>, index: Int): Unit {
     val slot: *Int = span.atPtr(index)
     slot[0] = slot[0] + 100

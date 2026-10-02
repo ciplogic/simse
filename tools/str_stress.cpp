@@ -1,6 +1,6 @@
 // Scratch: soak the Str inline/heap transitions and the "NUL at size()"
 // invariant (not part of the build).
-#include "cppsrc/rtl/simse.hpp"
+#include "src/rtl/simse.hpp"
 
 #include <cstdio>
 #include <cstring>
