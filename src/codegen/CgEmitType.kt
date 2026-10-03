@@ -355,11 +355,11 @@ fun Emitter.emitDataClass(decl: *AstXmlNode): Unit {
 // functions (the method convention: the receiver is the first parameter). The arms live in
 // a generated base (`Sm<Name>Storage`) rather than in the class itself, because *which
 // form* the storage takes follows the arms. When every arm is trivially copyable the base
-// declares nothing and the whole class stays trivially copyable - copies, returns and
-// destruction are the plain value operations. When an arm owns storage (`Str`, a `List`, a
-// handle, ...) the base carries the managed form: a destructor that destroys the live arm
-// by tag, copy/move constructors and assignments, and setters that place the new arm after
-// destroying the old one, reached through `simse_destroy` (src/rtl/types.hpp). A *generic*
+// declares only the empty default constructor and the whole class stays trivially copyable -
+// copies, returns and destruction are the plain value operations. When an arm owns storage
+// (`Str`, a `List`, a handle, ...) the base carries the managed form: a destructor that
+// destroys the live arm by tag, copy/move constructors and assignments, and setters that
+// place the new arm after destroying the old one, reached through `simse_destroy` (src/rtl/types.hpp). A *generic*
 // union cannot decide the form when it is emitted, so it gets `Sm<Name>Storage<SmManaged,
 // T...>` with both partial specializations and picks one from the actual arm types
 // (`SmUnionManaged<...>` in src/rtl/types.hpp): `Opt2<Int>` is the trivial form,
@@ -572,13 +572,16 @@ fun Emitter.emitUnionStorageTemplate(
     this.line(0, "};")
 }
 
-// The storage's members, one indent level inside the struct. The trivial form adds no
-// special member, so the storage - and the class derived from it - stays trivially
-// copyable. The managed form owns the default/copy/move constructors, the destructor and
-// the assignments, because a union's own are deleted as soon as one arm is non-trivial; its
-// default constructor starts no arm at all (the tag is `None` and every path that places an
-// arm does it by hand, so nothing stays constructed). Either form's `set<Field>` moves the
-// tag as it writes, and `setNone` is the empty tag.
+// The storage's members, one indent level inside the struct. Both forms carry a
+// user-provided default constructor whose body starts no arm: the union's implicit one is
+// deleted as soon as an arm has a non-trivial *or absent* default constructor
+// (`Opt<StrView>`'s `Span` has none), and the empty `None` value must not construct an arm
+// at all - the tag's own member initializer is what a fresh value reads. The trivial form
+// adds nothing else, so the storage - and the class derived from it - stays trivially
+// copyable. The managed form owns the copy/move constructors, the destructor and the
+// assignments, because a union's own are deleted as soon as one arm is non-trivial; every
+// path that places an arm does it by hand, so nothing stays constructed. Either form's
+// `set<Field>` moves the tag as it writes, and `setNone` is the empty tag.
 fun Emitter.emitUnionStorageMembers(
     fields: *List<AstXmlNode>, tagType: *Str, storageName: *Str, managed: Bool
 ): Unit {
@@ -592,8 +595,8 @@ fun Emitter.emitUnionStorageMembers(
         }
         this.line(1, "};")
     }
+    this.line(1, `@storageName() {}`)
     if (managed) {
-        this.line(1, `@storageName() {}`)
         this.line(1, `@storageName(const @storageName& other) { this->copyFrom(other); }`)
         this.line(1, `@storageName(@storageName&& other) noexcept { this->moveFrom(other); }`)
         this.line(1, `~@storageName() { this->destroyActive(); }`)

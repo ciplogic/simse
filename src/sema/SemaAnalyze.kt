@@ -167,6 +167,57 @@ fun unionGeneratedName(methodName: *Str, fields: *List<AstXmlNode>): Bool {
     return false
 }
 
+// The static constructor spellings `Opt<T>.some(v)`, `Opt<T>.none()`, `Res<T>.ok(v)` and
+// `Res<T>.err(m)` (specs/core-types.md) name no declaration: the checker rewrites the call
+// onto the prelude functions that build the arm (`simse_optSome`, ..., src/rtl/optres.kt),
+// which the ordinary call path then checks, types, emits and reaches. The rewritten callee
+// keeps the receiver's type arguments (`Res<Str>.ok(x)` becomes `simse_resOk<Str>(x)`), so
+// nothing depends on C++ overload resolution - which matters for `Res<Str>`, whose two arms
+// are both `Str`.
+fun Analyzer.expandResOptCtor(call: *AstXmlNode): Unit {
+    val callee: *AstXmlNode = xmlChildPtr(call, AstNodeKind.Callee)
+    if (xmlKind(callee) != AstNodeCategory.ExprMember) {
+        return
+    }
+    val receiver: *AstXmlNode = xmlChildPtr(callee, AstNodeKind.Receiver)
+    if (xmlKind(receiver) != AstNodeCategory.ExprGenericName) {
+        return
+    }
+    val owner: Str = xmlAttr(receiver, AstNodeAttributeKind.Name)
+    // The receiver must be the prelude union itself: a user type that reuses the name is
+    // the user's own (its `Opt` wins the visible scope), and its members resolve normally.
+    val ownerDecl: *AstXmlNode = this.types.getPtr(owner)
+    if (ownerDecl == null || xmlAttr(ownerDecl, AstNodeAttributeKind.IsUnionClass) != "true") {
+        return
+    }
+    val member: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
+    var symbol: Str = ""
+    if (owner == "Opt" && member == "some") {
+        symbol = "simse_optSome"
+    } else if (owner == "Opt" && member == "none") {
+        symbol = "simse_optNone"
+    } else if (owner == "Res" && member == "ok") {
+        symbol = "simse_resOk"
+    } else if (owner == "Res" && member == "err") {
+        symbol = "simse_resErr"
+    }
+    if (symbol == "") {
+        return
+    }
+    var rewritten: AstXmlNode = AstXmlNode(
+        AstNodeKind.Expr, AstNodeCategory.ExprGenericName,
+        listOf<AstNodeAttribute>(
+            AstNodeAttribute(AstNodeAttributeKind.Name, symbol),
+            AstNodeAttribute(AstNodeAttributeKind.Line, xmlLine(callee).toString()),
+            AstNodeAttribute(AstNodeAttributeKind.Column, xmlColumn(callee).toString())
+        ),
+        Array<AstXmlNode>()
+    )
+    val typeArgs: List<AstXmlNode> = xmlChildren(receiver, AstNodeKind.TypeArg)
+    xmlAddChildren(rewritten, typeArgs)
+    replaceRoleChild(call, AstNodeKind.Callee, rewritten)
+}
+
 // A comparison against a union class is a **tag comparison**: `when (u)`'s arms, which the
 // parser has already desugared into `u == <label>`, and a hand-written `u == A` alike. The
 // class's generated `==`/`!=` operators compare it with its tag enum, so the comparison
@@ -475,6 +526,9 @@ fun Analyzer.analyzeStmt(stmt: *AstXmlNode): Unit {
 // construction a handle-only class allows (`checkValueConstruction`); the rest of the
 // analysis is the same either way.
 fun Analyzer.analyzeCall(expr: *AstXmlNode, boxed: Bool): Unit {
+    // Before the callee is analyzed: the static constructor spellings become ordinary calls
+    // to the prelude builders (`expandResOptCtor`).
+    this.expandResOptCtor(expr)
     val callee: *AstXmlNode = xmlChildPtr(expr, AstNodeKind.Callee)
     if (!xmlIsEmpty(callee)) {
         this.analyzeExpr(callee)

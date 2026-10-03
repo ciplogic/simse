@@ -238,6 +238,7 @@ struct ns1_SmDoubleOrFloatStorage {
         Int IntValue;
         Float64 DoubleValue;
     };
+    ns1_SmDoubleOrFloatStorage() {}
     void setIntValue(Int value) {
         _type = ns1_SmDoubleOrFloatTypes::IntValue;
         IntValue = std::move(value);
@@ -310,6 +311,7 @@ struct ns1_SmSideOrSideStorage {
         ns1_Left L;
         ns1_Right R;
     };
+    ns1_SmSideOrSideStorage() {}
     void setL(ns1_Left value) {
         _type = ns1_SmSideOrSideTypes::L;
         L = std::move(value);
@@ -372,6 +374,7 @@ inline ns1_SmMarkerTypes ns1_simse_SmMarkerTypes_fromInt(Int value) { return (ns
 SIMSE_PACK_PUSH
 struct ns1_SmMarkerStorage {
     ns1_SmMarkerTypes _type = ns1_SmMarkerTypes::None;
+    ns1_SmMarkerStorage() {}
     void setNone() {
         _type = ns1_SmMarkerTypes::None;
     }
@@ -405,6 +408,7 @@ struct ns1_SmWithMethodStorage {
     union {
         Int I;
     };
+    ns1_SmWithMethodStorage() {}
     void setI(Int value) {
         _type = ns1_SmWithMethodTypes::I;
         I = std::move(value);
@@ -688,6 +692,7 @@ template <class T> struct ns1_SmRes2Storage<false, T> {
         T Value;
         Str Error;
     };
+    ns1_SmRes2Storage() {}
     void setValue(T value) {
         _type = ns1_SmRes2Types::Value;
         Value = std::move(value);
@@ -838,6 +843,7 @@ template <class T> struct ns1_SmOpt2Storage<false, T> {
     union {
         T Value;
     };
+    ns1_SmOpt2Storage() {}
     void setValue(T value) {
         _type = ns1_SmOpt2Types::Value;
         Value = std::move(value);

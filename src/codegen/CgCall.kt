@@ -144,9 +144,27 @@ fun Emitter.exprInner(e: *AstXmlNode, expected: *AstXmlNode): Str {
                     other = rhs
                 }
                 val otherType: AstXmlNode = this.pointee(this.inferType(other))
+                val optDecl: *AstXmlNode = this.types.getPtr("Opt")
                 if (!xmlIsEmpty(otherType) && xmlKind(otherType) == AstNodeCategory.TypeGeneric
                     && xmlAttr(otherType, AstNodeAttributeKind.Name) == "Opt"
                 ) {
+                    if (optDecl != null
+                        && xmlAttr(*optDecl, AstNodeAttributeKind.IsUnionClass) == "true"
+                    ) {
+                        // `Opt` is a `union class` now (src/rtl/optres.kt): the emptiness test
+                        // is the tag test, spelled through the generated `isOfType`.
+                        val optExpr: Str = this.expr(other, 12, xmlEmptyNode())
+                        val hasValue: Str = `isOfType(simse_addressOf(@(optExpr)), SmOptTypes::Value)`
+                        if (op == "==") {
+                            return `(!@hasValue)`
+                        }
+                        if (op == "!=") {
+                            return `(@hasValue)`
+                        }
+                        this.fail(e, `unsupported: Opt-vs-null comparison '@op'`)
+                        return "/*unsupported*/"
+                    }
+                    // The built-in `Opt` (before the port): the C++ member has the test.
                     val hasValue: Str = this.expr(other, 12, xmlEmptyNode()) + ".hasValue()"
                     if (op == "==") {
                         return `(!@hasValue)`
