@@ -4621,3 +4621,23 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   Verified: `bun build.js --release --no-lto`, `bun tools/stress.js` **68/68**,
   `bun build.js --release --no-lto --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js`
   - both fixed points byte for byte.
+
+- **The iterate loop: `bun tools/iterate.js` (~22 s) and `--full` (~53 s) instead of four
+  hand-run commands.** One JS-on-bun entry, every step's output captured: a passing run prints
+  one line per step, a failing one prints the failing step's whole output (and stops). The fast
+  loop builds with the new `build.js --fast` (`/MD /O1`, no `/GL`: ~10 s of cl.exe, and the
+  binary still self-transpiles in ~2.4 s, where the `/Od` build took ~16 s), runs the corpus
+  with `stress.js --quiet`, and checks the published bootstrap with the new
+  `bootstrap.js --quick [--write]`: one transpile compared against the file (no cl.exe compile
+  of the bootstrap), the file refreshed when the emission moved. `--full` is the commit loop:
+  the release build, the corpus, `build.js --no-compile --out src/simse_bootstrap.cpp` (the
+  refresh without its redundant second compile), and the full two-way fixed point with
+  `bootstrap.js --fast` (the published file's own compile at `/O1`; optimization cannot move
+  emitted bytes - the debug, fast and release compilers emit the same file, checked). Measured
+  on the trunk with a version-string bump (`--version` is the new CLI flag carrying
+  `simseVersion`): **~22 s fast, ~53 s full**, against **~91 s** for the four commands by hand.
+  `build.js` also gained `--quiet`, and `stress.js` `--quiet` plus a total-time line. `cl`'s
+  `/MP` is for multiple source files (the compiler is one translation unit), and `/cgthreads`
+  (the intra-compile knob) takes the no-colon spelling on this toolchain and already defaults
+  to its maximum - nothing there to turn up.
+  Verified: `bun tools/iterate.js --full` - 68/68 and both fixed points byte for byte.

@@ -18,6 +18,10 @@ import io
 import profiling
 import resources
 
+// The compiler's own version: printed by `--version` and by the help, and the string a
+// release bump edits. `tools/iterate.js`'s fast loop is measured on exactly this edit.
+val simseVersion: Str = "0.1.0"
+
 // Where the compiler's *own* resources are read from: the prelude's directory, or the
 // directory a single-file `--prelude` is in, so the `_res.md` beside it is still found.
 fun driverResourceRoots(prelude: *Str): List<Str> {
@@ -323,7 +327,14 @@ fun main(args: List<Str>): Int {
             }
 
             "-h", "--help" -> {
-                println("usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module <dir>]... [--no-concat] [--no-borrow] [--no-when-dispatch] [--when-first-char] [--when-copy-subject] [--showLinearRepresentation] [--showBorrow] [--showAsync] [--profile] [--profile-file <path>] [--profile-nanos]")
+                println("simse " + simseVersion)
+                println("usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module <dir>]... [--no-concat] [--no-borrow] [--no-when-dispatch] [--when-first-char] [--when-copy-subject] [--showLinearRepresentation] [--showBorrow] [--showAsync] [--profile] [--profile-file <path>] [--profile-nanos] [--version]")
+                return 0
+            }
+
+            // --version: one line, the same string the help prints first.
+            "--version" -> {
+                println("simse " + simseVersion)
                 return 0
             }
 

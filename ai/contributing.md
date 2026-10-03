@@ -10,10 +10,12 @@ inputs to `cl.exe`, not a second implementation.
 After a change run the loop (`ai/building.md`):
 
 ```sh
-./build.bat --release          # then
-bun tools/stress.js            # then
-bun tools/bootstrap.js
+bun tools/iterate.js           # the fast loop (~20 s; --full is the commit loop)
 ```
+
+which is, by hand: `./build.bat --release` (or `--fast` while iterating; the emitted C++ does
+not depend on the optimizer), `bun tools/stress.js` and `bun tools/bootstrap.js`
+(`--quick` for the one-direction check the fast loop uses).
 
 **Never weaken the fixed point** and **never hand-edit `src/simse_bootstrap.cpp`** — it is
 generated, and it is the one file that has to keep building the compiler. When the change is

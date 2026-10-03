@@ -33,6 +33,8 @@
 //   --arch <arch>     vcvarsall target architecture (default: the host's)
 //   --jobs <n>        cases to run at once (default: auto - one per CPU, capped at 12;
 //                     0 is auto too, 1 runs them one at a time)
+//   --quiet           print only the failures and the summary line (the iterate loop's
+//                     output: a run that passes says one line)
 //   --update          rewrite `expected.stdout`/`.stderr`/`.exit` from this run
 //                     (`expected.cpp` is not machine-updated: a changed amalgamation is
 //                     read, then copied over by hand from `stress/.work/<case>/out.cpp`)
@@ -70,6 +72,7 @@ function parseArgs(argv) {
     defines: [],
     arch: null,
     jobs: 0,
+    quiet: false,
     update: false,
     list: false,
     keepGoing: false,
@@ -88,6 +91,7 @@ function parseArgs(argv) {
       case "--define": opts.defines.push(value(i)); i++; break;
       case "--arch": opts.arch = value(i); i++; break;
       case "--jobs": opts.jobs = Number(value(i)); i++; break;
+      case "--quiet": opts.quiet = true; break;
       case "--update": opts.update = true; break;
       case "--list": opts.list = true; break;
       case "--keep-going": opts.keepGoing = true; break;
@@ -310,7 +314,7 @@ async function main() {
 
   console.log(`${TOOL}: ${path.relative(REPO, simse)} (${opts.release ? "release" : "debug"} programs, ` +
       `${cases.length} cases${opts.jobs > 1 ? `, ${opts.jobs} at a time` : ""})`);
-  const build = { simse, env, flags, opts };
+  const build = { simse, env, flags, opts, started: performance.now() };
 
   const results = new Array(cases.length);
   let next = 0;
@@ -345,13 +349,17 @@ async function main() {
       skipped = skipped + 1;
       continue;
     }
-    console.log(`${result.ok ? "PASS" : "FAIL"} ${result.name}${result.detail ? `  (${result.detail})` : ""}`);
+    if (!result.ok || !opts.quiet) {
+      console.log(`${result.ok ? "PASS" : "FAIL"} ${result.name}${result.detail ? `  (${result.detail})` : ""}`);
+    }
     if (result.ok) passed = passed + 1;
     else failed = failed + 1;
   }
   if (skipped > 0) console.log(`(${skipped} case${skipped === 1 ? "" : "s"} not run${
     stopped && !opts.keepGoing ? ": stopped at the first failure" : ""})`);
-  console.log(`${TOOL}: ${passed} passed, ${failed} failed`);
+  const seconds = (performance.now() - build.started) / 1000;
+  console.log(`${TOOL}: ${passed} passed, ${failed} failed (${cases.length} cases, ` +
+      `${seconds < 10 ? seconds.toFixed(1) : Math.round(seconds)}s)`);
   if (failed > 0) process.exitCode = 1;
 }
 

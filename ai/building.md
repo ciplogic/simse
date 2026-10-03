@@ -12,16 +12,25 @@ files — so a build is one `cl.exe` invocation over one file, with nothing to l
 # build (from the repo root): src -> ./simse_out.cpp -> ./simse.exe
 ./build.bat                              # debug (/MDd)
 ./build.bat --release                    # /O2 /Ob3 /DNDEBUG + /GL (LTCG at link; the default)
-./build.bat --release --no-lto           # skip whole-program optimization: quicker to build
+build.bat --release --no-lto   # skip whole-program optimization: quicker to build
+build.bat --fast               # the iterate loop's build: /O1, no /GL (tools/iterate.js)
+build.bat --quiet              # one summary line; cl output only on failure
 ./build.bat --release --pdb               # + /Zi /DEBUG (a .pdb in build/), for a profiler
 ./build.bat my_simse.exe                 # same, different executable name
 ./build.bat --cpp other.cpp --exe x.exe  # compile an existing amalgamation
 ./build.bat --help                       # all options (see build.js)
 
+# the iterate loop: one command, captured output, one line per step (`--help` lists it)
+bun tools/iterate.js              # fast: /O1 build + corpus + bootstrap in-sync check (~20 s)
+bun tools/iterate.js --full       # the commit loop: release build + corpus +
+                                  # bootstrap refresh + the two-way fixed point (~50 s)
+bun tools/iterate.js --filter linq  # the stress corpus, filtered, on the fast loop
+
 # the published bootstrap: the same amalgamation, checked in so the compiler can be built
 # with a C++ compiler alone (docs/getting-started.md). Refresh it whenever emitted C++ moves
 # (the file is generated, never hand-edited):
 bun build.js --release --out src/simse_bootstrap.cpp   # also builds ./simse.exe
+```
 
 # does the fixed point hold? compile the bootstrap, transpile, compare the bytes
 bun tools/bootstrap.js                   # add --debug for the debug flags
@@ -40,8 +49,14 @@ bun tools/stress.js --simse ./other.exe  # test another compiler build
 ./simse.exe --root my/src --module src/modules/json -o out.cpp   # --module repeats
 ```
 
-The verification loop after a compiler change: `./build.bat --release`, `bun tools/stress.js`,
-`bun tools/bootstrap.js`. The two-step property is that the compiler built from the published
+The verification loop after a compiler change is one command: `bun tools/iterate.js` (the fast
+loop — an `/O1` build, the corpus, and one transpile checking that the published bootstrap is
+still what the tree emits, refreshing it when the emission moved; ~20 s) or
+`bun tools/iterate.js --full` (the commit loop — the release build, the corpus, the bootstrap
+refresh and the two-way fixed point; ~50 s). The underlying commands stay
+`./build.bat --release`, `bun tools/stress.js`, `bun tools/bootstrap.js`, and
+`bun tools/bootstrap.js --quick` is the cheap one-direction check the fast loop uses. The
+two-step property is that the compiler built from the published
 bootstrap must reproduce that file byte for byte — the check that catches emitted C++ which
 depends on which compiler emitted it. When the change is visible in the emitted C++, refresh
 the published file and commit it with the source.

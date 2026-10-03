@@ -34,6 +34,13 @@
 //                     (impl_specs/profiling.md)
 //   --profile-file <f>  where that table goes (default simse_profile.csv; '-' is stderr)
 //   --profile-nanos   measure nanoseconds (the total_ns column) instead of microseconds
+//   --quiet           hide cl.exe's output and the step lines: one summary line on
+//                     success, the captured output only when something fails
+//   --no-compile      transpile only (with --out this refreshes the published bootstrap
+//                     without compiling a compiler that was already built)
+//   --fast            a quick iteration build: /MD /O1, no /GL - between --debug and
+//                     --release. The emitted C++ is the same either way; what changes is
+//                     how long cl.exe takes and how fast the compiler runs
 //   --release         release build: /O2 /Ob3 /DNDEBUG, with whole-program
 //                     optimization (/GL, whose link-time codegen is LTCG) unless
 //                     --no-lto says otherwise
@@ -83,6 +90,9 @@ function usage() {
   --profile         transpile with --profile (impl_specs/profiling.md)
   --profile-file <f>  profile table path (default simse_profile.csv; '-' is stderr)
   --profile-nanos   measure nanoseconds instead of microseconds
+  --quiet           one summary line: cl output is captured, shown only on failure
+  --no-compile      transpile only (refresh a --out file without recompiling)
+  --fast            quick iteration build: /MD /O1, no /GL
   --release         release build: /O2 /Ob3 /DNDEBUG, with whole-program
                     optimization (/GL, whose link-time codegen is LTCG) unless
                     --no-lto says otherwise
@@ -106,9 +116,12 @@ function parseArgs(argv) {
     profileFile: null,
     profileNanos: false,
     release: false,
+    fast: false,
     debug: false,
     lto: true,
     pdb: false,
+    quiet: false,
+    compile: true,
     arch: null,
     compiler: null,
     defines: [],
@@ -129,8 +142,11 @@ function parseArgs(argv) {
       case "--profile": opts.profile = true; break;
       case "--profile-file": opts.profileFile = value(i); i++; break;
       case "--profile-nanos": opts.profileNanos = true; break;
-      case "--release": opts.release = true; break;
-      case "--debug": opts.release = false; opts.debug = true; break;
+      case "--release": opts.release = true; opts.fast = false; break;
+      case "--fast": opts.fast = true; break;
+      case "--debug": opts.release = false; opts.fast = false; opts.debug = true; break;
+      case "--quiet": opts.quiet = true; break;
+      case "--no-compile": opts.compile = false; break;
       case "--lto": opts.lto = true; break;
       case "--no-lto": opts.lto = false; break;
       case "--pdb": opts.pdb = true; break;
@@ -156,9 +172,10 @@ function parseArgs(argv) {
 // also why the link prints "Generating code". `--no-lto` is there for a quick build:
 // LTCG dominates a release build's time, and what it buys is run time.
 function compileFlags(opts) {
-  const flags = opts.release ? ["/MD", "/O2", "/Ob3", "/DNDEBUG"] : ["/MDd", "/Od"];
-  if (opts.pdb || !opts.release) flags.push("/Zi");
-  if (opts.pdb) flags.push("/DEBUG");
+  const flags = opts.release ? ["/MD", "/O2", "/Ob3", "/DNDEBUG"]
+      : opts.fast ? ["/MD", "/O1", "/DNDEBUG"] : ["/MDd", "/Od"];
+  if (opts.pdb) flags.push("/Zi", "/DEBUG");
+  else if (!opts.release && !opts.fast) flags.push("/Zi");
   if (opts.release && opts.lto) flags.push("/GL");
   return flags;
 }
@@ -177,6 +194,21 @@ function preludeNewerThan(compiler) {
   return false;
 }
 
+// Run cl.exe. A quiet build captures the output and prints it only on failure: cl's warnings
+// and the linker's chatter are what an iterate loop should not have to parse. A normal build
+// inherits stdio, exactly as it always did.
+function runClWith(env, args, quiet) {
+  if (!quiet) return { code: runCl(env, args), output: "" };
+  const result = Bun.spawnSync(args, { cwd: REPO, env, stdout: "pipe", stderr: "pipe" });
+  const output = result.stdout.toString() + result.stderr.toString();
+  return { code: result.exitCode ?? 1, output };
+}
+
+function elapsed(startedMs) {
+  const seconds = (performance.now() - startedMs) / 1000;
+  return `${seconds < 10 ? seconds.toFixed(1) : Math.round(seconds)}s`;
+}
+
 async function main() {
   const opts = parseArgs(process.argv.slice(2));
   if (opts.help) {
@@ -184,7 +216,7 @@ async function main() {
     return;
   }
   const cwd = process.cwd();
-  const mode = opts.release ? "release" : "debug";
+  const mode = opts.release ? "release" : opts.fast ? "fast" : "debug";
   const work = path.join(REPO, "build", mode);
   const objDir = path.join(work, "obj");
   mkdirSync(objDir, { recursive: true });
@@ -198,8 +230,11 @@ async function main() {
   const env = developerEnv(arch, "build");
   const cl = whichCl(env);
   if (!cl) fail(`cl.exe not found on the Visual Studio PATH (arch ${arch})`);
-  console.log(`build: ${mode} build for ${arch}`);
-  console.log(`build: cl.exe ${cl}`);
+  const started = performance.now();
+  if (!opts.quiet) {
+    console.log(`build: ${mode} build for ${arch}`);
+    console.log(`build: cl.exe ${cl}`);
+  }
 
   // --- step 1: transpile the compiler source tree ----------------------------
   if (opts.gen) {
@@ -211,16 +246,21 @@ async function main() {
       if (!existsSync(bootstrap)) fail(`missing ${BOOTSTRAP} (and no ./simse.exe)`);
       compiler = path.join(work, "simse_boot.exe");
       mkdirSync(path.join(work, "bootobj"), { recursive: true });
-      console.log(`build: no ./simse.exe; compiling the published bootstrap`);
-      console.log(`build:            ${BOOTSTRAP} -> ${path.relative(REPO, compiler)}`);
-      const boot = runCl(env, [
+      if (!opts.quiet) {
+        console.log(`build: no ./simse.exe; compiling the published bootstrap`);
+        console.log(`build:            ${BOOTSTRAP} -> ${path.relative(REPO, compiler)}`);
+      }
+      const boot = runClWith(env, [
         cl, "/nologo", "/std:c++20", "/EHsc", "/W3", ...flags,
         ...defines, `/I${REPO}`,
         `/Fo${path.join(work, "bootobj")}${path.sep}`, `/Fe${compiler}`,
         `/Fd${path.join(work, "bootobj")}${path.sep}boot.pdb`,
         BOOTSTRAP,
-      ]);
-      if (boot !== 0) fail("compiling the bootstrap failed");
+      ], opts.quiet);
+      if (boot.code !== 0) {
+        if (boot.output) console.error(boot.output);
+        fail("compiling the bootstrap failed");
+      }
     }
     // Run from the repository root: the compiler's default prelude is the relative
     // path `src/rtl`, and the source-map comments in the output use the paths it
@@ -229,8 +269,10 @@ async function main() {
       console.warn(`build: warning: ${path.basename(compiler)} is older than src/rtl, ` +
           "so it may not know every declaration the prelude has; this build replaces it");
     }
-    console.log(`build: transpiling ${opts.root} -> ${outCpp}`);
-    console.log(`build:            with ${path.relative(REPO, compiler)}`);
+    if (!opts.quiet) {
+      console.log(`build: transpiling ${opts.root} -> ${outCpp}`);
+      console.log(`build:            with ${path.relative(REPO, compiler)}`);
+    }
     const transpileArgs = [compiler, "--root", opts.root, "-o", outCpp];
     if (opts.profile) transpileArgs.push("--profile");
     if (opts.profileFile) transpileArgs.push("--profile-file", opts.profileFile);
@@ -243,18 +285,30 @@ async function main() {
   if (!existsSync(cpp)) fail(`C++ source not found: ${cpp} (pass --cpp or drop --no-gen)`);
 
   // --- step 2: compile the amalgamation --------------------------------------
-  console.log(`build: compiling ${path.relative(REPO, cpp)}`);
-  console.log(`build:            -> ${exe}`);
-  const args = [
-    cl, "/nologo", "/std:c++20", "/EHsc", "/W3", ...flags,
-    ...defines, `/I${REPO}`,
-    `/Fo${objDir}${path.sep}`, `/Fe${exe}`,
-    `/Fd${path.join(objDir, "build.pdb")}`,
-    cpp,
-  ];
-  const compile = runCl(env, args);
-  if (compile !== 0) fail("cl.exe failed");
-  console.log(`build: wrote ${exe}`);
+  if (opts.compile) {
+    if (!opts.quiet) {
+      console.log(`build: compiling ${path.relative(REPO, cpp)}`);
+      console.log(`build:            -> ${exe}`);
+    }
+    const args = [
+      cl, "/nologo", "/std:c++20", "/EHsc", "/W3", ...flags,
+      ...defines, `/I${REPO}`,
+      `/Fo${objDir}${path.sep}`, `/Fe${exe}`,
+      `/Fd${path.join(objDir, "build.pdb")}`,
+      cpp,
+    ];
+    const compile = runClWith(env, args, opts.quiet);
+    if (compile.code !== 0) {
+      if (compile.output) console.error(compile.output);
+      fail("cl.exe failed");
+    }
+  }
+  if (!opts.quiet) {
+    console.log(`build: wrote ${exe}`);
+    return;
+  }
+  const what = path.relative(cwd, opts.compile ? exe : cpp);
+  console.log(`build: ok ${what} (${mode}${opts.compile ? "" : ", no compile"}, ${elapsed(started)})`);
 }
 
 main();

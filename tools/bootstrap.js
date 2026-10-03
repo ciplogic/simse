@@ -1,6 +1,11 @@
 // bootstrap.js - measure the bootstrap, step by step.
 //
-//   bun tools/bootstrap.js [--runs N] [--debug] [--simse <exe>]
+//   bun tools/bootstrap.js [--runs N] [--debug|--fast] [--simse <exe>]
+//   bun tools/bootstrap.js --quick [--write]     - the iterate loop's one-transpile check:
+//           the working compiler's output is compared with the published file (no cl.exe
+//           compile of the bootstrap); `--write` refreshes the file when they differ, and
+//           without it a difference is a failure ("STALE"). The full two-way fixed point
+//           is the run without --quick.
 //
 // "Bootstrapping" Simse means: `src/simse_bootstrap.cpp` - the published amalgamation of
 // the compiler source tree - is checked in, so Simse can be built with a C++ compiler alone;
@@ -21,7 +26,7 @@
 // because they dominate). Everything lands in `build/<mode>/bootstrap/`.
 
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import * as path from "node:path";
 
 import { developerEnv, fail as failTool, hostArch, normalizeArch, REPO, whichCl } from "./msvc.mjs";
@@ -31,7 +36,7 @@ const fail = (message) => failTool(TOOL, message);
 const BOOTSTRAP = path.join("src", "simse_bootstrap.cpp");
 
 function parseArgs(argv) {
-  const opts = { runs: 3, debug: false, simse: null };
+  const opts = { runs: 3, debug: false, fast: false, simse: null, quick: false, write: false };
   const value = (i) => {
     if (i + 1 >= argv.length) fail(`missing value for ${argv[i]}`);
     return argv[i + 1];
@@ -39,8 +44,11 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i++) {
     switch (argv[i]) {
       case "--runs": opts.runs = Number(value(i)); i++; break;
-      case "--debug": opts.debug = true; break;
+      case "--debug": opts.debug = true; opts.fast = false; break;
+      case "--fast": opts.fast = true; opts.debug = false; break;
       case "--simse": opts.simse = value(i); i++; break;
+      case "--quick": opts.quick = true; break;
+      case "--write": opts.write = true; break;
       case "-h": case "--help":
         console.log(readFileSync(import.meta.path, "utf8").split("\nimport ")[0]
                         .replace(/^\/\/ ?/gm, "").trim());
@@ -88,7 +96,7 @@ function main() {
   const opts = parseArgs(process.argv.slice(2));
   if (!opts) return 0;
 
-  const mode = opts.debug ? "debug" : "release";
+  const mode = opts.debug ? "debug" : opts.fast ? "fast" : "release";
   const work = path.join(REPO, "build", mode, "bootstrap");
   mkdirSync(work, { recursive: true });
 
@@ -103,10 +111,42 @@ function main() {
     if (!existsSync(required)) fail(`missing ${path.relative(REPO, required)}`);
   }
 
+  // --quick: one transpile of the working compiler, compared with the published file. It
+  // answers the iterate loop's question - "is the published bootstrap still what this tree
+  // emits?" - without cl.exe compiling the bootstrap (the ~17 s the full check pays for the
+  // other direction). --write is the refresh: the same transpile, written over the file when
+  // the emission moved. Handled before vcvars: it needs no cl.exe at all.
+  if (opts.quick) {
+    if (!hasWorking) fail("--quick needs a working compiler (build one with `bun build.js`)");
+    const quickOut = path.join(work, "working_out.cpp");
+    const t0 = performance.now();
+    const run = spawnSync(working, ["--root", "src", "-o", quickOut], { cwd: REPO, encoding: "utf8" });
+    const seconds = ((performance.now() - t0) / 1000).toFixed(1);
+    if (run.status !== 0) {
+      console.log(`bootstrap: FAILED - ${path.relative(REPO, working)} could not transpile src`);
+      console.log((run.stderr || run.stdout || "").split("\n").slice(0, 6).join("\n"));
+      return 1;
+    }
+    if (sameBytes(bootstrap, quickOut)) {
+      console.log(`bootstrap: in sync (${path.relative(REPO, working)} reproduces ${BOOTSTRAP}, ${seconds}s)`);
+      return 0;
+    }
+    if (opts.write) {
+      copyFileSync(quickOut, bootstrap);
+      console.log(`bootstrap: refreshed ${BOOTSTRAP} (the emission moved, ${seconds}s)`);
+      return 0;
+    }
+    console.log(`bootstrap: STALE - the working compiler's output differs from ${BOOTSTRAP}`);
+    console.log(`           refresh it: bun tools/bootstrap.js --quick --write`);
+    return 1;
+  }
+
   const arch = normalizeArch(hostArch());
   const env = developerEnv(arch, "build");
   const cl = whichCl(env);
   if (!cl) fail(`cl.exe not found on the Visual Studio PATH (arch ${arch})`);
+
+  // --quick is handled above, before vcvars: it needs no cl.exe at all.
 
   const sourceLines = spawnSync("bun", ["-e",
     `import {execFileSync} from "node:child_process";`
@@ -124,7 +164,9 @@ function main() {
   console.log("1. compile the published bootstrap (cl.exe only, no build system)");
   const compile = timed(`${BOOTSTRAP} -> simse_boot.exe`, cl, [
     "/nologo", "/std:c++20", "/EHsc", "/W3", "/I" + REPO,
-    ...(opts.debug ? ["/MDd", "/Od", "/Zi"] : ["/MD", "/O2", "/Ob3", "/DNDEBUG"]),
+    ...(opts.debug ? ["/MDd", "/Od", "/Zi"]
+        : opts.fast ? ["/MD", "/O1", "/DNDEBUG"]
+            : ["/MD", "/O2", "/Ob3", "/DNDEBUG"]),
     ...(opts.debug ? [`/Fd${bootExe}.pdb`] : []),
     BOOTSTRAP,
     "/Fo" + path.join(work, "") + "\\", "/Fe:" + bootExe,
@@ -163,7 +205,9 @@ function main() {
                 `(${Math.round(outLines / (bootTime / 1000))} lines/s of C++ out)`);
   }
   if (workTime) console.log(`  the working compiler transpiles the same tree in: ${ms(workTime)}`);
+  console.log(`bootstrap: fixed point holds (compile ${seconds(compile ?? 0)}, ` +
+      `self-transpile ${ms(bootTime ?? 0)})`);
   return 0;
 }
 
-process.exit(main());
+process.exitCode = main();
