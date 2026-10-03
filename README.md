@@ -294,9 +294,13 @@ hello.exe
 ```
 
 `build.bat` is a thin wrapper over `build.js` (`build.bat --help` lists the options: `--release`,
-`--no-lto`, `--pdb`, `--define <name>` for the RTL's configuration switches, `--arch`). Once
+`--fast`, `--no-lto`, `--quiet`, `--pdb`, `--define <name>` for the RTL's configuration
+switches, `--arch`). Once
 `./simse.exe` exists, transpiling the whole tree takes about a second; the rest of a build is
-`cl.exe` optimizing the emitted C++. A full walkthrough - prerequisites, the stress corpus, the
+`cl.exe` optimizing the emitted C++. After a change to the compiler, the loop is one command:
+`bun tools/iterate.js` (the fast loop — build, corpus and bootstrap check, ~20 s), and
+`bun tools/iterate.js --full` for the commit loop (the release build plus the two-way bootstrap
+fixed point). A full walkthrough - prerequisites, the stress corpus, the
 bootstrap check, troubleshooting - is in
 [docs/getting-started.md](docs/getting-started.md).
 
@@ -308,7 +312,7 @@ functions the compiler may reuse, lambdas, statics,
 and source generators (`src/compiler/`, `_res.md` resources, `native` declarations),
 list literals and trailing-argument packing, `for`/`yield` state machines, file I/O, the
 `main(args)` form, packages and modules, and a project file (`simse.md`). The compiler is
-self-hosted and reproduces the published bootstrap byte for byte, and **65 end-to-end stress
+self-hosted and reproduces the published bootstrap byte for byte, and **68 end-to-end stress
 programs** run in the corpus.
 
 On speed (`bun tools/bootstrap.js`, release, this machine - the range is machine load,
@@ -339,7 +343,7 @@ behind it) landed; a format protocol that prints your own types is still open.
 | `stress/` | one folder per end-to-end program: source, arguments, expected output, and where the emitted text is the point, an `expected.cpp` golden |
 | `build.js`, `build.bat`, `stress.bat` | the build and harness entry points: transpile the source tree, compile it with `cl.exe`, run the corpus |
 | `simse.vcxproj`, `simse.slnx` | the Visual Studio profiling project: the published bootstrap (the runtime is generated into it), with the debugger already set to run the compiler over its own tree |
-| `tools/` | the JavaScript harness: the stress runner (`stress.js`), the bootstrap fixed-point check (`bootstrap.js`), the Visual Studio project check (`vscheck.mjs`), `msvc.mjs` |
+| `tools/` | the JavaScript harness: `iterate.js` (the loop: build + corpus + bootstrap check), the stress runner (`stress.js`), the bootstrap fixed-point check (`bootstrap.js`), the Visual Studio project check (`vscheck.mjs`), `msvc.mjs` |
 | `examples/` | the runnable examples the docs use |
 | `docs/` | this documentation |
 | `ai/` | orientation for a working session: `language.md` (using Simse), `building.md`, `status.md` (implemented/deferred), `contributing.md` (protocol, invariants, gotchas); `agents.md` is the router |

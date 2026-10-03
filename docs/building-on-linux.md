@@ -60,7 +60,8 @@ The one toolchain-dependent construct — 4-byte packing — already branches in
 These do **not** block building the compiler; they are the remaining portability work, listed
 so a design can be made for each.
 
-1. **The tooling scripts.** `build.js`, `tools/stress.js`, `tools/bootstrap.js`, and
+1. **The tooling scripts.** `build.js`, `tools/stress.js`, `tools/bootstrap.js`,
+   `tools/iterate.js`, and
    `tools/msvc.mjs` drive `cl.exe`/`vcvarsall` and the Windows shell (`fc /b`, `dir /b /s`,
    `.exe` names, `.bat`). Porting them is a toolchain-abstraction job (detect `cl` vs
    `g++`/`clang++`, map `/O2 /Ob3 /DNDEBUG` to `-O2 -DNDEBUG`, `/I` to `-I`, `/Fe` to `-o`,
@@ -78,4 +79,5 @@ so a design can be made for each.
 1. Compile the bootstrap with `g++` (above) — this is the step that proves the C++ is
    portable; it needs no `simse.exe` and no build system.
 2. Run the fixed-point check (`./simse --root src -o /tmp/out.cpp; cmp ...`).
-3. After the tooling scripts are ported: `bun tools/stress.js` and `bun tools/bootstrap.js`.
+3. After the tooling scripts are ported: `bun tools/stress.js`, `bun tools/bootstrap.js`, and
+   the loop `bun tools/iterate.js`.

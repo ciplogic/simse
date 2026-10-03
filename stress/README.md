@@ -14,6 +14,9 @@ bun tools/stress.js --jobs 4            # cases at a time (compiles are slow)
 bun tools/stress.js --simse ./some_other_simse.exe   # test another compiler build
 ```
 
+After a change, the loop is one command: `bun tools/iterate.js` runs this corpus with the build
+and the bootstrap check (`ai/building.md`).
+
 The compiler under test is the point: by default the harness runs `./simse.exe`, the
 compiler built from the published bootstrap (`bun build.js`).
 

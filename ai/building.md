@@ -6,34 +6,37 @@ headers (`src/rtl/*.hpp`) and the published bootstrap (`src/simse_bootstrap.cpp`
 everything else a program needs is generated into its own translation unit from `_res.md`
 files — so a build is one `cl.exe` invocation over one file, with nothing to link.
 
+## The loop
+
+One command after any change, with every step's output captured: a passing run prints one line
+per step, and a failing one prints the failing step's whole output and stops there.
+
+```sh
+bun tools/iterate.js                # the loop: build + corpus + bootstrap check (~20 s)
+bun tools/iterate.js --full         # the commit loop: release build + corpus + refresh +
+                                    # the two-way fixed point (~50 s)
+bun tools/iterate.js --filter linq  # ... on a slice of the corpus
+```
+
+It builds the compiler, runs the whole corpus, and checks the published bootstrap. The **fast**
+loop builds `--fast` (`/MD /O1`, no `/GL`; the emitted C++ does not depend on the optimizer) and
+checks the published file with a single transpile, refreshing it when the emission moved.
+`--full` is the commit loop: the release build, the corpus, the refresh, and the two-step fixed
+point. The commands below are what it runs.
+
 ## The commands
 
 ```sh
 # build (from the repo root): src -> ./simse_out.cpp -> ./simse.exe
 ./build.bat                              # debug (/MDd)
-./build.bat --release                    # /O2 /Ob3 /DNDEBUG + /GL (LTCG at link; the default)
-build.bat --release --no-lto   # skip whole-program optimization: quicker to build
-build.bat --fast               # the iterate loop's build: /O1, no /GL (tools/iterate.js)
-build.bat --quiet              # one summary line; cl output only on failure
-./build.bat --release --pdb               # + /Zi /DEBUG (a .pdb in build/), for a profiler
+./build.bat --release                    # /O2 /Ob3 /DNDEBUG + /GL (LTCG at link)
+./build.bat --release --no-lto           # skip whole-program optimization: quicker to build
+./build.bat --fast                       # /O1, no /GL: the iterate loop's build
+./build.bat --quiet                      # one summary line; cl output only on failure
+./build.bat --release --pdb              # + /Zi /DEBUG (a .pdb in build/), for a profiler
 ./build.bat my_simse.exe                 # same, different executable name
 ./build.bat --cpp other.cpp --exe x.exe  # compile an existing amalgamation
 ./build.bat --help                       # all options (see build.js)
-
-# the iterate loop: one command, captured output, one line per step (`--help` lists it)
-bun tools/iterate.js              # fast: /O1 build + corpus + bootstrap in-sync check (~20 s)
-bun tools/iterate.js --full       # the commit loop: release build + corpus +
-                                  # bootstrap refresh + the two-way fixed point (~50 s)
-bun tools/iterate.js --filter linq  # the stress corpus, filtered, on the fast loop
-
-# the published bootstrap: the same amalgamation, checked in so the compiler can be built
-# with a C++ compiler alone (docs/getting-started.md). Refresh it whenever emitted C++ moves
-# (the file is generated, never hand-edited):
-bun build.js --release --out src/simse_bootstrap.cpp   # also builds ./simse.exe
-```
-
-# does the fixed point hold? compile the bootstrap, transpile, compare the bytes
-bun tools/bootstrap.js                   # add --debug for the debug flags
 
 # the end-to-end corpus: one folder per program under stress/, each with its expected output;
 # the harness transpiles, compiles and runs every one with the compiler under test
@@ -42,6 +45,16 @@ bun tools/stress.js --list               # what the corpus contains
 bun tools/stress.js --filter modules --jobs 4
 bun tools/stress.js --simse ./other.exe  # test another compiler build
 
+# the published bootstrap: the same amalgamation, checked in so the compiler can be built
+# with a C++ compiler alone (docs/getting-started.md). Refresh it whenever emitted C++ moves
+# (the file is generated, never hand-edited):
+bun build.js --release --out src/simse_bootstrap.cpp               # also builds ./simse.exe
+bun build.js --release --no-compile --out src/simse_bootstrap.cpp  # ... without recompiling
+
+# does the fixed point hold? compile the bootstrap, transpile, compare the bytes
+bun tools/bootstrap.js                   # add --debug / --fast for cheaper builds
+bun tools/bootstrap.js --quick [--write]  # one transpile vs the file; --write refreshes it
+
 # the compiler by hand (the compiler *is* the CLI; --prelude defaults to src/rtl, so run it
 # from the repo root)
 ./simse.exe --root src -o simse_out.cpp             # the whole compiler
@@ -49,17 +62,10 @@ bun tools/stress.js --simse ./other.exe  # test another compiler build
 ./simse.exe --root my/src --module src/modules/json -o out.cpp   # --module repeats
 ```
 
-The verification loop after a compiler change is one command: `bun tools/iterate.js` (the fast
-loop — an `/O1` build, the corpus, and one transpile checking that the published bootstrap is
-still what the tree emits, refreshing it when the emission moved; ~20 s) or
-`bun tools/iterate.js --full` (the commit loop — the release build, the corpus, the bootstrap
-refresh and the two-way fixed point; ~50 s). The underlying commands stay
-`./build.bat --release`, `bun tools/stress.js`, `bun tools/bootstrap.js`, and
-`bun tools/bootstrap.js --quick` is the cheap one-direction check the fast loop uses. The
-two-step property is that the compiler built from the published
-bootstrap must reproduce that file byte for byte — the check that catches emitted C++ which
-depends on which compiler emitted it. When the change is visible in the emitted C++, refresh
-the published file and commit it with the source.
+The two-step property is that the compiler built from the published bootstrap must reproduce
+that file byte for byte — the check that catches emitted C++ which depends on which compiler
+emitted it. When the change is visible in the emitted C++, refresh the published file and commit
+it with the source.
 
 ## Debug views (all print to stderr, C++ output unchanged)
 
@@ -91,14 +97,15 @@ the published file and commit it with the source.
 
 - `src/` — the compiler, all Simse: `lex/`, `parser/`, `sema/`, `linear/`, `codegen/`,
   `compiler/` (the source generators), `optimizations/`, `profiling/`, `resources/`,
-  `common/`, plus `src/modules/` (reusable modules: `json`, `compiler`, `xml`) and `src/rtl/`
-  (the prelude `.kt` files, the hand-written headers, and `_res.md`, which holds the runtime's
-  generated C++).
+  `common/`, plus `src/modules/` (reusable modules: `json`, `compiler`, `xml`, `io`, `linq`,
+  `http`) and `src/rtl/` (the prelude `.kt` files, the hand-written headers, and `_res.md`,
+  which holds the runtime's generated C++).
 - `specs/` — the normative language specification. `impl_specs/` — per-subsystem design and
   the change log (`capability-matrix.md`).
 - `stress/` — the end-to-end corpus (`stress/README.md`). `examples/` — the runnable examples.
-- `tools/` — the JavaScript harness (`stress.js`, `bootstrap.js`, `vscheck.mjs`, `msvc.mjs`);
-  the remaining `_*.mjs`/probe files are scratch and not part of any workflow.
+- `tools/` — the JavaScript harness (`iterate.js` is the loop; `stress.js`, `bootstrap.js`,
+  `vscheck.mjs`, `msvc.mjs`); the remaining `_*.mjs`/probe files are scratch and not part of
+  any workflow.
 - `docs/` — the published documentation (tour, how-it-works, state-of-the-field).
 
 ## Profiling

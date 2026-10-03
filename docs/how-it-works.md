@@ -171,11 +171,13 @@ The invariant is a **fixed point**, and machines check it, not discipline:
    file **byte for byte** (and so must `./simse.exe`'s output, when one exists).
    This is the strongest statement the project makes: the compiler built from the
    published file behaves exactly like the one that produced it. `build.js`
-   bootstraps itself the same way on a fresh checkout.
+   bootstraps itself the same way on a fresh checkout, and `bun tools/iterate.js
+   --full` is this whole loop in one command - the release build, the corpus and
+   the fixed point - which is what to run before committing.
 2. **The stress corpus** - `stress/<name>/` is a complete program with its
    expected stdout (and optional args, stdin, expected `.cpp`, or an expected
    transpile error). The harness transpiles, compiles and runs each one with the
-   compiler under test; 45 cases today.
+   compiler under test; 68 cases today.
 
 Any change to compiler behavior has to keep the fixed point intact: rebuild the
 compiler with itself, refresh the published file

@@ -80,7 +80,10 @@ bun build.js --release --out src/simse_bootstrap.cpp   :: also builds ./simse.ex
 ```
 
 `bun tools/bootstrap.js` measures the whole story and checks the fixed point - the
-compiler built from the published file must reproduce that file byte for byte:
+compiler built from the published file must reproduce that file byte for byte. When a change
+is in the tree, the loop is one command: `bun tools/iterate.js` runs the build, the corpus and
+the check (and refreshes the published file when the emission moved); `--full` is the commit
+loop. This is what the check prints on its own:
 
 ```console
 $ bun tools/bootstrap.js
@@ -147,12 +150,23 @@ simse.exe --root <dir> -o <out.cpp> [--prelude <dir>] [--profile] [--profile-fil
 
 ## 4. Run the stress corpus
 
+The loop for a change is one command:
+
 ```bat
-stress.bat                                  :: transpile, compile and run the 45 stress programs
+bun tools/iterate.js                        :: the loop: build + corpus + bootstrap check (~20 s)
+bun tools/iterate.js --full                 :: the commit loop: release build + fixed point (~50 s)
+bun tools/iterate.js --filter strings       :: ... on one case
+```
+
+The individual pieces:
+
+```bat
+stress.bat                                  :: transpile, compile and run the stress programs
 stress.bat --list                           :: what the corpus contains
 stress.bat --filter strings                 :: one case
 stress.bat --release                        :: compile the case programs with /O2 /Ob3
 bun tools\bootstrap.js                      :: time the bootstrap and check its fixed point
+bun tools\bootstrap.js --quick              :: one transpile: is the published file in sync?
 ```
 
 The stress harness (see [`stress/README.md`](../stress/README.md)) transpiles,
