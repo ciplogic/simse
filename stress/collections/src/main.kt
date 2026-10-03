@@ -582,6 +582,79 @@ fun partSpan(): Int {
     return 0
 }
 
+// ---- for-promote ----
+
+// `for (x in c)` over a *deep* element - a `Str`, or a data class holding one - is promoted to the
+// pointer wrap (`iterPtr`) when the body only reads `x`: the value form copies, and for a `Str`
+// allocates, per element, which the pointer form does not (impl_specs/for.md, "iterPtr"). A scalar
+// element, and a body that writes through the variable, keep the value wrap.
+data class Entry(var key: Str, var count: Int)
+
+fun partForPromote(): Int {
+    var entries: List<Entry> = List<Entry>()
+    entries.append(Entry("a", 1))
+    entries.append(Entry("b", 2))
+    var names: List<Str> = List<Str>()
+    names.append("xy")
+    var nums: List<Int> = List<Int>()
+    nums.append(7)
+
+    var total = 0
+    for (e in entries) {
+        total = total + e.count + e.key.size()
+    }
+    for (n in names) {
+        total = total + n.size()
+    }
+    for (i in nums) {
+        total = total + i
+    }
+
+    // A body that writes through the variable is not promoted: the pointer form would mutate the
+    // list, the value form mutates the copy. The second loop reads the (unchanged) elements.
+    var cells: List<Entry> = List<Entry>()
+    cells.append(Entry("c", 3))
+    for (e in cells) {
+        e.count = e.count + 100
+    }
+    for (e in cells) {
+        total = total + e.count
+    }
+    println(total.toString())
+    return 0
+}
+
+// ---- for-temporary ----
+
+// A `for` over a *temporary*: `makeWords()` is a value that dies at the end of the declaration's
+// initializer unless something keeps it alive. The lowering hoists the iterated expression into a
+// function-scope slot (`_sm_exprN`), so the machine's receiver points at storage that outlives the
+// loop - the guard for the "iterate a container through its span" refactor, with more than four
+// elements so a dangling receiver would read a freed heap buffer rather than a stale inline one.
+fun makeWords(): List<Str> {
+    var xs: List<Str> = List<Str>()
+    xs.append("alpha")
+    xs.append("beta")
+    xs.append("gamma")
+    xs.append("delta")
+    xs.append("epsilon")
+    return xs
+}
+
+fun partForTemporary(): Int {
+    // The value form: the loop variable is a fresh copy per iteration.
+    for (word in makeWords()) {
+        println(word)
+    }
+
+    // The pointer form: the same temporary, iterated by place. A write through the loop
+    // variable reaches the temporary (which is fine - it dies with the loop).
+    for (*word in makeWords()) {
+        println(*word)
+    }
+    return 0
+}
+
 // ---- the category's entry ----
 fun main(): Int {
     partArrayLayout()
@@ -594,5 +667,7 @@ fun main(): Int {
     partLambdaFor()
     partPackArgs()
     partSpan()
+    partForPromote()
+    partForTemporary()
     return 0
 }
