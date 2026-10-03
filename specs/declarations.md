@@ -174,9 +174,14 @@ Status: implemented (`stress/unions`, `stress/diagnostic-union-same-type`).
 A `union class` declares a **discriminated union** (a tagged union): a value type with
 several fields of which one is live at a time, selected by an implicit tag enum. It is
 otherwise a data class - fields, methods, `this` - and its generated C++ is the tag beside
-the fields' anonymous union. There is no lifetime machinery: an arm is set by plain
-assignment, and a field type that needs managing (`Str`, `List`, a class holding one) is
-C++'s problem, not the language's.
+the fields' anonymous union. When every arm is trivially copyable the struct stays a plain
+C++ aggregate: no destructor, no copy, nothing to run. When an arm owns storage (`Str`,
+`List`, `Dictionary`, a handle, `Opt` of a managed element, ...) the compiler emits the
+**managed form**: a destructor that destroys the live arm by tag, copy/move constructors and
+assignments, and setters that destroy the arm they replace and place the new one - the shape
+`Variant2Storage<..., true>` uses for `Opt`/`Res` (`src/rtl/variant2.hpp`). A field type the
+compiler cannot prove trivially copyable is treated as managed; that only costs the struct
+its triviality, never correctness.
 
 ```text
 union class DoubleOrFloat(var IntValue: Int, var DoubleValue: Float64)
@@ -212,7 +217,9 @@ apart), while two distinct types - two enums, say - are fine. The construction f
 an expression position has no lowering yet - `f(U(v))`, `u = U(v)` and a static
 initializer are reported rather than mis-built. Direct field access is allowed: a read is
 unchecked like a C++ union member, and a direct write moves the storage without moving the
-tag (`setA` is the tag-aware write).
+tag (`setA` is the tag-aware write). On a managed union a direct write is raw storage as
+well - it neither destroys the arm it replaces nor places a new one - so `setA` is the write
+to use whenever the old arm owns anything.
 
 The generic form is not implemented; a `union class U<T>` is a diagnostic. The language
 does not check a `when` over the tag for exhaustiveness.

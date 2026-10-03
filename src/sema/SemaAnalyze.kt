@@ -116,6 +116,12 @@ fun Analyzer.checkUnionDecl(decl: *AstXmlNode): Unit {
                 `union class '@name': '_type' is the tag's storage; rename the field`
             )
         }
+        if (fieldName == "destroyActive" || fieldName == "copyFrom" || fieldName == "moveFrom") {
+            this.diag(
+                xmlLine(field), xmlColumn(field),
+                `union class '@name': '@fieldName' is a generated member; rename the field`
+            )
+        }
     }
     var i: Int = 0
     while (i < fields.size()) {
@@ -149,11 +155,12 @@ fun Analyzer.checkUnionDecl(decl: *AstXmlNode): Unit {
     }
 }
 
-// Whether `methodName` is one a `union class` generates: the fixed tag surface, or a field's
-// `get<Field>`/`set<Field>` arm.
+// Whether `methodName` is one a `union class` generates: the fixed tag surface, the
+// managed form's members, or a field's `get<Field>`/`set<Field>` arm.
 fun unionGeneratedName(methodName: *Str, fields: *List<AstXmlNode>): Bool {
     if (methodName == "getTypeOf" || methodName == "isOfType" || methodName == "setNone"
-        || methodName == "initByValue"
+        || methodName == "initByValue" || methodName == "destroyActive"
+        || methodName == "copyFrom" || methodName == "moveFrom"
     ) {
         return true
     }

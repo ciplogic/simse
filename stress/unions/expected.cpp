@@ -16,13 +16,13 @@ Int64 simse_nowNanos();
 // The program's string literals: one pool, and two run-length encoded index
 // series (offsets as deltas, then lengths), each as what to subtract from the
 // previous value; strtable.hpp has the stream format.
-static const Int __sm_stringCount = 7;
+static const Int __sm_stringCount = 12;
 static const char __sm_stringPool[] =
-    "float" "none" "int" "d:" "L" "R" "" 
+    "a-string-longer-than-the-inline-buffer" "returned-through-a-function-call" "second" "float" "none" "int" "str" "d:" "?" "L" "R" "" 
 ;
-static const Int16 __sm_stringStarts[] = {7,2,0,-5,1,4,1,1,0};
-static const Int16 __sm_stringLens[] = {7,1,-5,1,4,1,2,0,1};
-static_assert(sizeof(__sm_stringPool) - 1 == 16, "the string pool and its length index disagree");
+static const Int16 __sm_stringStarts[] = {12,4,0,-38,6,26,1,3,1,1,0,2,2,1,2,0};
+static const Int16 __sm_stringLens[] = {12,3,-38,6,26,1,3,1,1,0,2,2,1,2,0,1,1};
+static_assert(sizeof(__sm_stringPool) - 1 == 96, "the string pool and its length index disagree");
 static StrView __sm_stringTable[__sm_stringCount];
 static struct __SmStringTableInitType {
     __SmStringTableInitType() {
@@ -34,6 +34,39 @@ static struct __SmStringTableInitType {
             __sm_stringCount);
     }
 } __sm_stringTableInit;
+
+#include <cstdint>
+#include <type_traits>
+
+
+template <class T>
+void simse_list_append(List<T>& self, const std::type_identity_t<T>& value);
+
+template <class T>
+List<T> simse_listOf(const List<T>* values);
+
+template <class T>
+void simse_list_removeAt(List<T>& self, Int index);
+template <class T>
+void simse_list_removeRange(List<T>& self, Int start, Int end);
+template <class T>
+Int simse_array_count(const Array<T>& self);
+template <class T>
+Array<T> simse_list_toArray(const List<T>& self);
+template <class T>
+List<T> simse_array_toList(const Array<T>& self);
+template <class T>
+Array<T> simse_arrayEmpty();
+
+void simse_str_append(Str& self, Char value);
+void simse_str_appendStr(Str& self, const Str& value);
+void simse_str_appendStrPtr(Str& self, const Str* value);
+void simse_str_reserve(Str& self, Int count);
+Str simse_int_toString(Int self);
+
+Int simse_lenOf(const Str& self);
+template <class T, int N>
+Int simse_lenOf(const SmallVector<T, N>& self);
 
 template <class T>
 Bool simse_opt_hasValue(const Opt<T>& self);
@@ -73,6 +106,48 @@ template <class T>
 Str simse_num_toString(const T& self);
 Str simse_char_toString(Char self);
 Str simse_bool_toString(Bool self);
+
+#include <algorithm>
+#include <type_traits>
+#include <utility>
+
+
+template <class K, class V>
+Dictionary<K, V> simse_dictionaryOf();
+
+template <class K, class V>
+V* simse_dict_getPtr(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
+
+template <class K, class V>
+Opt<V> simse_dict_get(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
+
+template <class K, class V>
+Bool simse_dict_has(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
+
+template <class K, class V>
+void simse_dict_insert(Dictionary<K, V>& self, const std::type_identity_t<K>& key,
+                       const std::type_identity_t<V>& value);
+
+template <class K, class V>
+void simse_dict_remove(Dictionary<K, V>& self, const std::type_identity_t<K>& key);
+
+template <class K, class V>
+Int simse_dict_size(const Dictionary<K, V>& self);
+
+template <class K, class V>
+List<K> simse_dict_keys(const Dictionary<K, V>& self);
+
+template <class K, class V>
+List<V> simse_dict_values(const Dictionary<K, V>& self);
+
+template <class K, class V>
+void simse_dict_clear(Dictionary<K, V>& self);
+
+template <class T>
+Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& value);
+
+template <class T, class F>
+void simse_list_sort(List<T>& self, F less);
 
 #include <bit>
 #include <cstring>
@@ -146,6 +221,8 @@ struct ns1_DoubleOrFloat;
 struct ns1_SideOrSide;
 struct ns1_Marker;
 struct ns1_WithMethod;
+struct ns1_IntOrStr;
+struct ns1_IntOrList;
 // stress/unions/src/main.kt
 enum class ns1_SmDoubleOrFloatTypes { None, IntValue, DoubleValue };
 inline ns1_SmDoubleOrFloatTypes ns1_simse_SmDoubleOrFloatTypes_fromInt(Int value) { return (ns1_SmDoubleOrFloatTypes) value; }
@@ -333,6 +410,240 @@ inline void ns1_initByValue(ns1_WithMethod* self, Int value) {
     self->_type = ns1_SmWithMethodTypes::I;
     self->I = value;
 }
+// stress/unions/src/main.kt
+enum class ns1_SmIntOrStrTypes { None, I, S };
+inline ns1_SmIntOrStrTypes ns1_simse_SmIntOrStrTypes_fromInt(Int value) { return (ns1_SmIntOrStrTypes) value; }
+// stress/unions/src/main.kt
+SIMSE_PACK_PUSH
+struct ns1_IntOrStr {
+    ns1_SmIntOrStrTypes _type = ns1_SmIntOrStrTypes::None;
+    union {
+        Int I;
+        Str S;
+    };
+    ns1_IntOrStr() : I() { simse_destroy(this->I); }
+    ns1_IntOrStr(const ns1_IntOrStr& other) : I() { simse_destroy(this->I); this->copyFrom(other); }
+    ns1_IntOrStr(ns1_IntOrStr&& other) noexcept : I() { simse_destroy(this->I); this->moveFrom(other); }
+    ~ns1_IntOrStr() { this->destroyActive(); }
+    ns1_IntOrStr& operator=(const ns1_IntOrStr& other) {
+        if (this != &other) {
+            this->destroyActive();
+            this->copyFrom(other);
+        }
+        return *this;
+    }
+    ns1_IntOrStr& operator=(ns1_IntOrStr&& other) noexcept {
+        if (this != &other) {
+            this->destroyActive();
+            this->moveFrom(other);
+        }
+        return *this;
+    }
+    void destroyActive() {
+        switch (this->_type) {
+            case ns1_SmIntOrStrTypes::I: simse_destroy(this->I); break;
+            case ns1_SmIntOrStrTypes::S: simse_destroy(this->S); break;
+            default: break;
+        }
+        this->_type = ns1_SmIntOrStrTypes::None;
+    }
+    void copyFrom(const ns1_IntOrStr& other) {
+        switch (other._type) {
+            case ns1_SmIntOrStrTypes::I: ::new ((void *) &this->I) Int(other.I); this->_type = ns1_SmIntOrStrTypes::I; break;
+            case ns1_SmIntOrStrTypes::S: ::new ((void *) &this->S) Str(other.S); this->_type = ns1_SmIntOrStrTypes::S; break;
+            default: break;
+        }
+    }
+    void moveFrom(ns1_IntOrStr& other) {
+        switch (other._type) {
+            case ns1_SmIntOrStrTypes::I: ::new ((void *) &this->I) Int(std::move(other.I)); this->_type = ns1_SmIntOrStrTypes::I; break;
+            case ns1_SmIntOrStrTypes::S: ::new ((void *) &this->S) Str(std::move(other.S)); this->_type = ns1_SmIntOrStrTypes::S; break;
+            default: break;
+        }
+    }
+};
+SIMSE_PACK_POP
+inline Bool operator==(const ns1_IntOrStr& self, ns1_SmIntOrStrTypes tag) { return self._type == tag; }
+inline Bool operator==(const ns1_IntOrStr* self, ns1_SmIntOrStrTypes tag) { return self->_type == tag; }
+inline Bool operator!=(const ns1_IntOrStr& self, ns1_SmIntOrStrTypes tag) { return self._type != tag; }
+inline Bool operator!=(const ns1_IntOrStr* self, ns1_SmIntOrStrTypes tag) { return self->_type != tag; }
+inline ns1_SmIntOrStrTypes ns1_getTypeOf(ns1_IntOrStr* self) {
+    return self->_type;
+}
+inline Bool ns1_isOfType(ns1_IntOrStr* self, ns1_SmIntOrStrTypes typeToCheck) {
+    return self->_type == typeToCheck;
+}
+inline void ns1_setNone(ns1_IntOrStr* self) {
+    self->destroyActive();
+}
+inline void ns1_initByValue(ns1_IntOrStr* self) {
+    self->destroyActive();
+}
+inline void ns1_setI(ns1_IntOrStr* self, Int value) {
+    if (self->_type == ns1_SmIntOrStrTypes::I) {
+        self->I = std::move(value);
+        return;
+    }
+    self->destroyActive();
+    self->_type = ns1_SmIntOrStrTypes::I;
+    ::new ((void *) &self->I) Int(std::move(value));
+}
+inline Opt<Int> ns1_getI(ns1_IntOrStr* self) {
+    if (self->_type == ns1_SmIntOrStrTypes::I) {
+        return Opt<Int>::some(self->I);
+    }
+    return Opt<Int>();
+}
+inline void ns1_initByValue(ns1_IntOrStr* self, Int value) {
+    if (self->_type == ns1_SmIntOrStrTypes::I) {
+        self->I = std::move(value);
+        return;
+    }
+    self->destroyActive();
+    self->_type = ns1_SmIntOrStrTypes::I;
+    ::new ((void *) &self->I) Int(std::move(value));
+}
+inline void ns1_setS(ns1_IntOrStr* self, Str value) {
+    if (self->_type == ns1_SmIntOrStrTypes::S) {
+        self->S = std::move(value);
+        return;
+    }
+    self->destroyActive();
+    self->_type = ns1_SmIntOrStrTypes::S;
+    ::new ((void *) &self->S) Str(std::move(value));
+}
+inline Opt<Str> ns1_getS(ns1_IntOrStr* self) {
+    if (self->_type == ns1_SmIntOrStrTypes::S) {
+        return Opt<Str>::some(self->S);
+    }
+    return Opt<Str>();
+}
+inline void ns1_initByValue(ns1_IntOrStr* self, Str value) {
+    if (self->_type == ns1_SmIntOrStrTypes::S) {
+        self->S = std::move(value);
+        return;
+    }
+    self->destroyActive();
+    self->_type = ns1_SmIntOrStrTypes::S;
+    ::new ((void *) &self->S) Str(std::move(value));
+}
+// stress/unions/src/main.kt
+enum class ns1_SmIntOrListTypes { None, I, L };
+inline ns1_SmIntOrListTypes ns1_simse_SmIntOrListTypes_fromInt(Int value) { return (ns1_SmIntOrListTypes) value; }
+// stress/unions/src/main.kt
+SIMSE_PACK_PUSH
+struct ns1_IntOrList {
+    ns1_SmIntOrListTypes _type = ns1_SmIntOrListTypes::None;
+    union {
+        Int I;
+        List<Int> L;
+    };
+    ns1_IntOrList() : I() { simse_destroy(this->I); }
+    ns1_IntOrList(const ns1_IntOrList& other) : I() { simse_destroy(this->I); this->copyFrom(other); }
+    ns1_IntOrList(ns1_IntOrList&& other) noexcept : I() { simse_destroy(this->I); this->moveFrom(other); }
+    ~ns1_IntOrList() { this->destroyActive(); }
+    ns1_IntOrList& operator=(const ns1_IntOrList& other) {
+        if (this != &other) {
+            this->destroyActive();
+            this->copyFrom(other);
+        }
+        return *this;
+    }
+    ns1_IntOrList& operator=(ns1_IntOrList&& other) noexcept {
+        if (this != &other) {
+            this->destroyActive();
+            this->moveFrom(other);
+        }
+        return *this;
+    }
+    void destroyActive() {
+        switch (this->_type) {
+            case ns1_SmIntOrListTypes::I: simse_destroy(this->I); break;
+            case ns1_SmIntOrListTypes::L: simse_destroy(this->L); break;
+            default: break;
+        }
+        this->_type = ns1_SmIntOrListTypes::None;
+    }
+    void copyFrom(const ns1_IntOrList& other) {
+        switch (other._type) {
+            case ns1_SmIntOrListTypes::I: ::new ((void *) &this->I) Int(other.I); this->_type = ns1_SmIntOrListTypes::I; break;
+            case ns1_SmIntOrListTypes::L: ::new ((void *) &this->L) List<Int>(other.L); this->_type = ns1_SmIntOrListTypes::L; break;
+            default: break;
+        }
+    }
+    void moveFrom(ns1_IntOrList& other) {
+        switch (other._type) {
+            case ns1_SmIntOrListTypes::I: ::new ((void *) &this->I) Int(std::move(other.I)); this->_type = ns1_SmIntOrListTypes::I; break;
+            case ns1_SmIntOrListTypes::L: ::new ((void *) &this->L) List<Int>(std::move(other.L)); this->_type = ns1_SmIntOrListTypes::L; break;
+            default: break;
+        }
+    }
+};
+SIMSE_PACK_POP
+inline Bool operator==(const ns1_IntOrList& self, ns1_SmIntOrListTypes tag) { return self._type == tag; }
+inline Bool operator==(const ns1_IntOrList* self, ns1_SmIntOrListTypes tag) { return self->_type == tag; }
+inline Bool operator!=(const ns1_IntOrList& self, ns1_SmIntOrListTypes tag) { return self._type != tag; }
+inline Bool operator!=(const ns1_IntOrList* self, ns1_SmIntOrListTypes tag) { return self->_type != tag; }
+inline ns1_SmIntOrListTypes ns1_getTypeOf(ns1_IntOrList* self) {
+    return self->_type;
+}
+inline Bool ns1_isOfType(ns1_IntOrList* self, ns1_SmIntOrListTypes typeToCheck) {
+    return self->_type == typeToCheck;
+}
+inline void ns1_setNone(ns1_IntOrList* self) {
+    self->destroyActive();
+}
+inline void ns1_initByValue(ns1_IntOrList* self) {
+    self->destroyActive();
+}
+inline void ns1_setI(ns1_IntOrList* self, Int value) {
+    if (self->_type == ns1_SmIntOrListTypes::I) {
+        self->I = std::move(value);
+        return;
+    }
+    self->destroyActive();
+    self->_type = ns1_SmIntOrListTypes::I;
+    ::new ((void *) &self->I) Int(std::move(value));
+}
+inline Opt<Int> ns1_getI(ns1_IntOrList* self) {
+    if (self->_type == ns1_SmIntOrListTypes::I) {
+        return Opt<Int>::some(self->I);
+    }
+    return Opt<Int>();
+}
+inline void ns1_initByValue(ns1_IntOrList* self, Int value) {
+    if (self->_type == ns1_SmIntOrListTypes::I) {
+        self->I = std::move(value);
+        return;
+    }
+    self->destroyActive();
+    self->_type = ns1_SmIntOrListTypes::I;
+    ::new ((void *) &self->I) Int(std::move(value));
+}
+inline void ns1_setL(ns1_IntOrList* self, List<Int> value) {
+    if (self->_type == ns1_SmIntOrListTypes::L) {
+        self->L = std::move(value);
+        return;
+    }
+    self->destroyActive();
+    self->_type = ns1_SmIntOrListTypes::L;
+    ::new ((void *) &self->L) List<Int>(std::move(value));
+}
+inline Opt<List<Int>> ns1_getL(ns1_IntOrList* self) {
+    if (self->_type == ns1_SmIntOrListTypes::L) {
+        return Opt<List<Int>>::some(self->L);
+    }
+    return Opt<List<Int>>();
+}
+inline void ns1_initByValue(ns1_IntOrList* self, List<Int> value) {
+    if (self->_type == ns1_SmIntOrListTypes::L) {
+        self->L = std::move(value);
+        return;
+    }
+    self->destroyActive();
+    self->_type = ns1_SmIntOrListTypes::L;
+    ::new ((void *) &self->L) List<Int>(std::move(value));
+}
 
 void initByValue(Str* self);
 Int ns1_doubled(ns1_WithMethod* self);
@@ -340,7 +651,11 @@ Str ns1_label(ns1_DoubleOrFloat* u);
 Str ns1_tagged(ns1_DoubleOrFloat* u);
 Str ns1_labelSide(ns1_SideOrSide s);
 Str ns1_describe(ns1_DoubleOrFloat* self);
+Int ns1_strLen(ns1_IntOrStr u);
+Str ns1_strKind(ns1_IntOrStr* u);
+ns1_IntOrStr ns1_mkStr();
 Int ns1_partUnionClass();
+Int ns1_partManaged();
 Int ns1_partConstructionReturn();
 ns1_DoubleOrFloat ns1_make();
 ns1_DoubleOrFloat ns1_makeParen();
@@ -359,13 +674,13 @@ Str ns1_label(ns1_DoubleOrFloat* u) {
     Str out;
     ns1_SmDoubleOrFloatTypes _sm_expr1;
     Bool _sm_expr2;
-    out = __sm_stringTable[6];
+    out = __sm_stringTable[11];
     _sm_expr1 = ns1_SmDoubleOrFloatTypes::IntValue;
     _sm_expr2 = u == _sm_expr1;
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
-    out = __sm_stringTable[2];
+    out = __sm_stringTable[5];
     goto L6;
     L2:;
     _sm_expr1 = ns1_SmDoubleOrFloatTypes::DoubleValue;
@@ -373,10 +688,10 @@ Str ns1_label(ns1_DoubleOrFloat* u) {
     if (_sm_expr2) goto L4;
     goto L5;
     L4:;
-    out = __sm_stringTable[0];
+    out = __sm_stringTable[3];
     goto L6;
     L5:;
-    out = __sm_stringTable[1];
+    out = __sm_stringTable[4];
     L6:;
     return out;
 }
@@ -385,13 +700,13 @@ Str ns1_tagged(ns1_DoubleOrFloat* u) {
     Str out;
     ns1_SmDoubleOrFloatTypes _sm_expr1;
     Bool _sm_expr2;
-    out = __sm_stringTable[6];
+    out = __sm_stringTable[11];
     _sm_expr1 = ns1_SmDoubleOrFloatTypes::None;
     _sm_expr2 = u == _sm_expr1;
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
-    out = __sm_stringTable[1];
+    out = __sm_stringTable[4];
     goto L8;
     L2:;
     _sm_expr1 = ns1_SmDoubleOrFloatTypes::IntValue;
@@ -399,7 +714,7 @@ Str ns1_tagged(ns1_DoubleOrFloat* u) {
     if (_sm_expr2) goto L4;
     goto L5;
     L4:;
-    out = __sm_stringTable[2];
+    out = __sm_stringTable[5];
     goto L8;
     L5:;
     _sm_expr1 = ns1_SmDoubleOrFloatTypes::DoubleValue;
@@ -407,7 +722,7 @@ Str ns1_tagged(ns1_DoubleOrFloat* u) {
     if (_sm_expr2) goto L7;
     goto L8;
     L7:;
-    out = __sm_stringTable[0];
+    out = __sm_stringTable[3];
     L8:;
     return out;
 }
@@ -416,14 +731,14 @@ Str ns1_labelSide(ns1_SideOrSide s) {
     Str out;
     ns1_SmSideOrSideTypes _sm_when3, _sm_expr1;
     Bool _sm_expr2;
-    out = __sm_stringTable[6];
+    out = __sm_stringTable[11];
     _sm_when3 = ns1_getTypeOf(simse_addressOf(s));
     _sm_expr1 = ns1_SmSideOrSideTypes::L;
     _sm_expr2 = _sm_when3 == _sm_expr1;
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
-    out = __sm_stringTable[4];
+    out = __sm_stringTable[9];
     goto L6;
     L2:;
     _sm_expr1 = ns1_SmSideOrSideTypes::R;
@@ -431,10 +746,10 @@ Str ns1_labelSide(ns1_SideOrSide s) {
     if (_sm_expr2) goto L4;
     goto L5;
     L4:;
-    out = __sm_stringTable[5];
+    out = __sm_stringTable[10];
     goto L6;
     L5:;
-    out = __sm_stringTable[1];
+    out = __sm_stringTable[4];
     L6:;
     return out;
 }
@@ -451,6 +766,58 @@ Str ns1_describe(ns1_DoubleOrFloat* self) {
     __sm_catP = __sm_catP + 2;
     std::memcpy(__sm_catP, _sm_expr1.data(), _sm_expr1.size());
     return _sm_expr2;
+}
+// stress/unions/src/main.kt
+Int ns1_strLen(ns1_IntOrStr u) {
+    Opt<Str> s;
+    Bool _sm_expr1;
+    Str _sm_expr2;
+    Int _sm_expr3;
+    s = ns1_getS(simse_addressOf(u));
+    _sm_expr1 = simse_opt_hasValue(s);
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr2 = s.value();
+    _sm_expr3 = simse_lenOf(_sm_expr2);
+    return _sm_expr3;
+    L2:;
+    _sm_expr3 = -1;
+    return _sm_expr3;
+}
+// stress/unions/src/main.kt
+Str ns1_strKind(ns1_IntOrStr* u) {
+    Str out;
+    ns1_SmIntOrStrTypes _sm_expr1;
+    Bool _sm_expr2;
+    out = __sm_stringTable[8];
+    _sm_expr1 = ns1_SmIntOrStrTypes::I;
+    _sm_expr2 = u == _sm_expr1;
+    if (_sm_expr2) goto L1;
+    goto L2;
+    L1:;
+    out = __sm_stringTable[5];
+    goto L6;
+    L2:;
+    _sm_expr1 = ns1_SmIntOrStrTypes::S;
+    _sm_expr2 = u == _sm_expr1;
+    if (_sm_expr2) goto L4;
+    goto L5;
+    L4:;
+    out = __sm_stringTable[6];
+    goto L6;
+    L5:;
+    out = __sm_stringTable[4];
+    L6:;
+    return out;
+}
+// stress/unions/src/main.kt
+ns1_IntOrStr ns1_mkStr() {
+    Str text;
+    text = __sm_stringTable[1];
+    ns1_IntOrStr _sm_ctor1;
+    ns1_initByValue(simse_addressOf(_sm_ctor1), text);
+    return _sm_ctor1;
 }
 // stress/unions/src/main.kt
 Int ns1_partUnionClass() {
@@ -568,6 +935,69 @@ Int ns1_partUnionClass() {
     return 0;
 }
 // stress/unions/src/main.kt
+Int ns1_partManaged() {
+    ns1_IntOrStr* _sm_base1, * _sm_base2;
+    Int _sm_expr1, _sm_expr3, _sm_expr5, _sm_expr7, _sm_expr11, _sm_expr16, _sm_expr20;
+    Str _sm_expr2, _sm_expr10, _sm_expr14;
+    ns1_IntOrStr v, _sm_expr4;
+    Opt<Int> _sm_expr6, _sm_expr19;
+    Opt<Str> _sm_expr8, s2, _sm_expr12;
+    Bool _sm_expr9, _sm_expr13, _sm_expr18;
+    List<Int> numbers, _sm_expr15;
+    Opt<List<Int>> l, _sm_expr17;
+    ns1_IntOrList x;
+    ns1_IntOrStr u;
+    ns1_initByValue(simse_addressOf(u), __sm_stringTable[0]);
+    _sm_expr1 = ns1_strLen(u);
+    simse_println((_sm_expr1), stdout);
+    _sm_base1 = &u;
+    _sm_expr2 = ns1_strKind(_sm_base1);
+    simse_println((_sm_expr2), stdout);
+    v = u;
+    _sm_expr3 = ns1_strLen(v);
+    simse_println((_sm_expr3), stdout);
+    _sm_expr4 = ns1_mkStr();
+    _sm_expr5 = ns1_strLen(_sm_expr4);
+    simse_println((_sm_expr5), stdout);
+    ns1_setI(simse_addressOf(u), 7);
+    _sm_expr6 = ns1_getI(simse_addressOf(u));
+    _sm_expr7 = _sm_expr6.value();
+    simse_println((_sm_expr7), stdout);
+    _sm_expr8 = ns1_getS(simse_addressOf(u));
+    _sm_expr9 = simse_opt_hasValue(_sm_expr8);
+    simse_println((_sm_expr9), stdout);
+    ns1_setS(simse_addressOf(u), __sm_stringTable[2]);
+    s2 = ns1_getS(simse_addressOf(u));
+    _sm_expr10 = s2.value();
+    simse_println((_sm_expr10), stdout);
+    v = u;
+    _sm_expr11 = ns1_strLen(v);
+    simse_println((_sm_expr11), stdout);
+    ns1_setNone(simse_addressOf(u));
+    _sm_expr12 = ns1_getS(simse_addressOf(u));
+    _sm_expr13 = simse_opt_hasValue(_sm_expr12);
+    simse_println((_sm_expr13), stdout);
+    _sm_base2 = &u;
+    _sm_expr14 = ns1_strKind(_sm_base2);
+    simse_println((_sm_expr14), stdout);
+    numbers = List<Int>{1, 2, 3};
+    ns1_IntOrList w;
+    ns1_initByValue(simse_addressOf(w), numbers);
+    l = ns1_getL(simse_addressOf(w));
+    _sm_expr15 = l.value();
+    _sm_expr16 = simse_lenOf(_sm_expr15);
+    simse_println((_sm_expr16), stdout);
+    ns1_setI(simse_addressOf(w), 2);
+    _sm_expr17 = ns1_getL(simse_addressOf(w));
+    _sm_expr18 = simse_opt_hasValue(_sm_expr17);
+    simse_println((_sm_expr18), stdout);
+    x = w;
+    _sm_expr19 = ns1_getI(simse_addressOf(x));
+    _sm_expr20 = _sm_expr19.value();
+    simse_println((_sm_expr20), stdout);
+    return 0;
+}
+// stress/unions/src/main.kt
 Int ns1_partConstructionReturn() {
     ns1_DoubleOrFloat* _sm_base1, * _sm_base2;
     ns1_DoubleOrFloat _sm_expr1, _sm_expr3;
@@ -594,15 +1024,99 @@ ns1_DoubleOrFloat ns1_make() {
 ns1_DoubleOrFloat ns1_makeParen() {
     Int v;
     v = 8;
-    ns1_DoubleOrFloat _sm_ctor1;
-    ns1_initByValue(simse_addressOf(_sm_ctor1), v);
-    return _sm_ctor1;
+    ns1_DoubleOrFloat _sm_ctor2;
+    ns1_initByValue(simse_addressOf(_sm_ctor2), v);
+    return _sm_ctor2;
 }
 // stress/unions/src/main.kt
 int main() {
     ns1_partUnionClass();
+    ns1_partManaged();
     ns1_partConstructionReturn();
     return 0;
+}
+
+template <class T>
+inline void simse_list_append(List<T>& self, const std::type_identity_t<T>& value) {
+    self.push_back(value);
+}
+
+template <class T>
+inline List<T> simse_listOf(const List<T>* values) {
+    return *values;
+}
+
+template <class T>
+inline void simse_list_removeAt(List<T>& self, Int index) {
+    self.erase(self.begin() + index);
+}
+
+template <class T>
+inline void simse_list_removeRange(List<T>& self, Int start, Int end) {
+    self.erase(self.begin() + start, self.begin() + end);
+}
+
+template <class T>
+inline Int simse_array_count(const Array<T>& self) {
+    return self.count();
+}
+
+template <class T>
+inline Array<T> simse_list_toArray(const List<T>& self) {
+    const Int count = self.size();
+    if (count <= 0) {
+        return Array<T>();
+    }
+    Array<T> result(count);
+    for (Int i = 0; i < count; i++) {
+        result[i] = self[i];
+    }
+    return result;
+}
+
+template <class T>
+inline List<T> simse_array_toList(const Array<T>& self) {
+    List<T> result;
+    const Int count = self.count();
+    result.reserve(count);
+    for (Int i = 0; i < count; i++) {
+        result.push_back(self[i]);
+    }
+    return result;
+}
+
+template <class T>
+inline Array<T> simse_arrayEmpty() {
+    return Array<T>();
+}
+
+inline void simse_str_append(Str& self, Char value) {
+    self.push_back(static_cast<char>(value));
+}
+
+inline void simse_str_appendStr(Str& self, const Str& value) {
+    self.append(value);
+}
+
+inline void simse_str_appendStrPtr(Str& self, const Str* value) {
+    if (value != nullptr) self.append(*value);
+}
+
+inline void simse_str_reserve(Str& self, Int count) {
+    self.reserve((Str::size_type) count);
+}
+
+inline Str simse_int_toString(Int self) {
+    return std::to_string(self);
+}
+
+inline Int simse_lenOf(const Str& self) {
+    return self.size();
+}
+
+template <class T, int N>
+inline Int simse_lenOf(const SmallVector<T, N>& self) {
+    return self.size();
 }
 
 template <class T>
@@ -730,6 +1244,81 @@ inline Str simse_char_toString(Char self) {
 
 inline Str simse_bool_toString(Bool self) {
     return self ? "true" : "false";
+}
+
+template <class K, class V>
+inline Dictionary<K, V> simse_dictionaryOf() {
+    return Dictionary<K, V>();
+}
+
+template <class K, class V>
+inline V* simse_dict_getPtr(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
+    return self.valuePtr(key);
+}
+
+template <class K, class V>
+inline Opt<V> simse_dict_get(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
+    const V* found = simse_dict_getPtr(self, key);
+    if (found == nullptr) return Opt<V>::none();
+    return Opt<V>::some(*found);
+}
+
+template <class K, class V>
+inline Bool simse_dict_has(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
+    return simse_dict_getPtr(self, key) != nullptr;
+}
+
+template <class K, class V>
+inline void simse_dict_insert(Dictionary<K, V>& self, const std::type_identity_t<K>& key,
+                              const std::type_identity_t<V>& value) {
+    self.insert_or_assign(key, value);
+}
+
+template <class K, class V>
+inline void simse_dict_remove(Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
+    self.erase(key);
+}
+
+template <class K, class V>
+inline Int simse_dict_size(const Dictionary<K, V>& self) {
+    return (Int) self.size();
+}
+
+template <class K, class V>
+inline List<K> simse_dict_keys(const Dictionary<K, V>& self) {
+    List<K> out;
+    out.reserve((Int) self.size());
+    for (const auto& entry : self) out.push_back(entry.first);
+    return out;
+}
+
+template <class K, class V>
+inline List<V> simse_dict_values(const Dictionary<K, V>& self) {
+    List<V> out;
+    out.reserve((Int) self.size());
+    for (const auto& entry : self) out.push_back(entry.second);
+    return out;
+}
+
+template <class K, class V>
+inline void simse_dict_clear(Dictionary<K, V>& self) {
+    self.clear();
+}
+
+template <class T>
+inline Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& value) {
+    for (const T& item : self) {
+        if (item == value) return true;
+    }
+    return false;
+}
+
+template <class T, class F>
+inline void simse_list_sort(List<T>& self, F less) {
+    Func<Bool(T*, T*)> fn = less;
+    std::sort(self.begin(), self.end(), [&fn](const T& a, const T& b) {
+        return fn(const_cast<T*>(&a), const_cast<T*>(&b));
+    });
 }
 
 static const unsigned long long smStrDigitPow10[20] = {

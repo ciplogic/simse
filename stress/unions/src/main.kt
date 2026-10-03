@@ -31,6 +31,13 @@ union class WithMethod(var I: Int) {
     }
 }
 
+// Arms that own storage switch the generated C++ to the managed form: the live arm is
+// destroyed by tag when the value dies or a setter replaces it, and the copy/move members
+// keep a `Str`'s heap text or a `List`'s block alive.
+union class IntOrStr(var I: Int, var S: Str)
+
+union class IntOrList(var I: Int, var L: List<Int>)
+
 fun label(u: DoubleOrFloat): Str {
     var out: Str = ""
     when (u) {
@@ -91,6 +98,36 @@ fun DoubleOrFloat.describe(): Str {
     return "d:" + label(this)
 }
 
+fun strLen(u: IntOrStr): Int {
+    val s = u.getS()
+    if (s.hasValue()) {
+        return s.value().size()
+    }
+    return -1
+}
+
+fun strKind(u: IntOrStr): Str {
+    var out: Str = "?"
+    when (u) {
+        I -> {
+            out = "int"
+        }
+
+        S -> {
+            out = "str"
+        }
+
+        else -> {
+            out = "none"
+        }
+    }
+    return out
+}
+
+fun mkStr(text: Str): IntOrStr {
+    return (text)
+}
+
 fun partUnionClass(): Int {
     // `U()` is the `None` construction; the tag starts there anyway.
     var a: DoubleOrFloat = DoubleOrFloat()
@@ -148,6 +185,46 @@ fun partUnionClass(): Int {
     return 0
 }
 
+fun partManaged(): Int {
+    // A text longer than the inline buffer: the arm owns heap storage.
+    var u = IntOrStr("a-string-longer-than-the-inline-buffer")
+    println(strLen(u))
+    println(strKind(u))
+
+    // A copy (copy constructor) and a return (move) must keep the text alive.
+    var v = u
+    println(strLen(v))
+    println(strLen(mkStr("returned-through-a-function-call")))
+
+    // Switching arms destroys the old one and places the new; switching back re-places.
+    u.setI(7)
+    println(u.getI().value())
+    println(u.getS().hasValue())
+    u.setS("second")
+    val s2 = u.getS()
+    println(s2.value())
+
+    // Assignment between managed unions.
+    v = u
+    println(strLen(v))
+
+    // `setNone` destroys the live string.
+    u.setNone()
+    println(u.getS().hasValue())
+    println(strKind(u))
+
+    // A `List` arm: the managed path follows the type, not `Str` specifically.
+    var numbers: List<Int> = listOf<Int>(1, 2, 3)
+    var w = IntOrList(numbers)
+    val l = w.getL()
+    println(l.value().size())
+    w.setI(2)
+    println(w.getL().hasValue())
+    var x = w
+    println(x.getI().value())
+    return 0
+}
+
 fun partConstructionReturn(): Int {
     // `return U(value)` and the parenthesized `return (value)` both construct through the
     // arm's `initByValue`.
@@ -166,6 +243,7 @@ fun makeParen(v: Int): DoubleOrFloat {
 
 fun main(): Int {
     partUnionClass()
+    partManaged()
     partConstructionReturn()
     return 0
 }

@@ -4680,3 +4680,20 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   `None` arm in `tagged`, the long form in `labelSide`, and pins `u == A`, `u != A` and
   `u == SmTypes.A`; the emission golden carries the operators.
   Verified: `bun tools/iterate.js --full` - 71/71 and both fixed points byte for byte.
+
+- **`union class` arms that own storage are managed (`Str`, `List`, ...).** Every arm is
+  classified by `unionArmManaged` (codegen): scalars, enums, pointers, `Span`/`StrView` and a
+  data class - or union class - all of whose fields are trivial stay in the plain form, and
+  anything else (`Str`, the containers, handles, `Opt` of a managed element, callables, an
+  unknown name) switches the struct to the managed form. There the compiler writes what C++
+  deletes for a union with a non-trivial member: a default constructor that starts and ends
+  one arm so a fresh value is the empty `None`, `~U()` destroying the live arm by tag,
+  copy/move constructors and assignments (`copyFrom`/`moveFrom`, placement new through the
+  tag), and setters that destroy the arm they replace before placing the new one; `setNone`
+  and the zero-argument `initByValue` destroy too. The new `simse_destroy`
+  (src/rtl/types.hpp) is `if constexpr (!is_trivially_destructible_v<T>) value.~T()`, so one
+  call site serves every arm kind as a no-op for scalars. Trivial unions keep the plain
+  aggregate: the `unions` golden shows `DoubleOrFloat` with no destructor and `IntOrStr`
+  with the managed members. `stress/unions` copies, returns, reassigns and `setNone`s a
+  `Str` arm longer than the inline buffer and a `List` arm.
+  Verified: `bun tools/iterate.js --full` - 71/71 and both fixed points byte for byte.

@@ -33,7 +33,10 @@ Data classes carry fields and methods; enums have explicit values and `toInt()`/
 A `union class U(var A: T, var B: U)` is a discriminated union: one field is live at a time
 under an implicit `SmUTypes` tag enum. `U()` is `None`, `U(v)` picks the arm by `v`'s type,
 and `getTypeOf()`, `isOfType(t)`, `getA(): Opt<T>` and `setA(v)` are generated; direct field
-reads and writes are allowed (a direct write does not move the tag). Matching is `when (u)`
+reads and writes are allowed (a direct write does not move the tag, and on a managed union
+it does not destroy what it replaces either - `setA` does). Arms that own storage (`Str`,
+`List`, a handle) are managed: the generated destructor destroys the live arm by tag, and
+copy/move keep a copied or returned union's data alive. Matching is `when (u)`
 with bare arm names (`IntValue`, `None`, `else`), or `when (u.getTypeOf())` with qualified
 labels: a comparison against a union value is its tag comparison. No generic form yet, and
 no exhaustive `when` (`specs/declarations.md`, `stress/unions`).

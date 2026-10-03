@@ -385,9 +385,12 @@ generates `getTypeOf(): Sm<Name>Types`, `isOfType(t): Bool`, `setNone()`, and pe
 tag says another arm. `U()` is the `None` value; `U(value)` picks the arm whose field type
 is the value's type; `return (value)` constructs the same way. Direct reads and writes of
 the fields are allowed (a direct write does not move the tag), and a user method in the
-body works over the same storage. Matching is `when (u)` with bare arm names - a comparison
-against a union value is its tag comparison, and the generated C++ compares the struct with
-its tag enum. There is no exhaustive matching.
+body works over the same storage. An arm that owns storage (`Str`, `List`) makes the union
+*managed*: the compiler writes the destructor that destroys the live arm by tag and the
+copy/move members, so copying or returning the union keeps its data alive. Matching is
+`when (u)` with bare arm names - a comparison against a union value is its tag comparison,
+and the generated C++ compares the struct with its tag enum. There is no exhaustive
+matching.
 
 ```simse
 union class DoubleOrFloat(var IntValue: Int, var DoubleValue: Float64)

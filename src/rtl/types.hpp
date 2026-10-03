@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <string>
+#include <type_traits>
 
 // Fixed-width scalar types (specs/built-in-types.md).
 // `Int` is the language's default integer type, and every size, length and index
@@ -47,6 +48,16 @@ T* simse_addressOf(T& value) {
 template <class T>
 T* simse_addressOf(T&& value) {
     return &value;
+}
+
+// Destroy a value of any type: the real destructor for a class that has one, nothing for a
+// scalar. The generated `union class` code destroys its live arm by tag through this, and
+// `if constexpr` keeps the pseudo-destructor out of the trivial instantiation entirely.
+template <class T>
+void simse_destroy(T& value) {
+    if constexpr (!std::is_trivially_destructible_v<T>) {
+        value.~T();
+    }
 }
 
 // The language's layout model is 4-byte packing (specs/memory-model.md): every
