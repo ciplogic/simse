@@ -10,6 +10,7 @@ import parser
 import common
 
 fun Analyzer.run(): Unit {
+    this.checkPreludeTypeNames()
     this.collectGlobal()
     this.collectUninitTypes()
     var n: Int = 0
@@ -210,6 +211,51 @@ fun Analyzer.appendVisibleFunction(name: *Str, decl: *AstXmlNode): Unit {
         var fresh: List<AstXmlNode> = List<AstXmlNode>()
         fresh.append(decl)
         this.functions.insert(name, fresh)
+    }
+}
+
+// A program may not redeclare a *prelude type* (`data class Res`, `enum class Span`, ...):
+// the prelude's types are emitted under their bare names, and the prelude's own generated
+// code names them (`Opt<Int> simse_str_toInt(...)`), so a second declaration of the name
+// would make the emitter's name -> package table pick one of the two and misname the other.
+// A *function* may still shadow a prelude function; only declared types are checked, and a
+// builtin (`Str`, `Int`) is no declaration to collide with.
+fun Analyzer.checkPreludeTypeNames(): Unit {
+    var preludeTypes: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+    for (*input in this.inputs) {
+        if (!input.prelude) {
+            continue
+        }
+        for (*decl in xmlDecls(input.module)) {
+            if (decl.name == AstNodeKind.DataClass || decl.name == AstNodeKind.Enum
+                || decl.name == AstNodeKind.TypeAlias
+            ) {
+                preludeTypes.insert(xmlAttr(decl, AstNodeAttributeKind.Name), true)
+            }
+        }
+    }
+    if (preludeTypes.size() == 0) {
+        return
+    }
+    for (*input in this.inputs) {
+        if (input.prelude) {
+            continue
+        }
+        this.file = input.fileName
+        for (*decl in xmlDecls(input.module)) {
+            if (decl.name != AstNodeKind.DataClass && decl.name != AstNodeKind.Enum
+                && decl.name != AstNodeKind.TypeAlias
+            ) {
+                continue
+            }
+            val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
+            if (preludeTypes.has(name)) {
+                this.diag(
+                    xmlLine(decl), xmlColumn(decl),
+                    `'@name' is a prelude type: give the declaration another name (the prelude's types are emitted by name)`
+                )
+            }
+        }
     }
 }
 

@@ -93,9 +93,12 @@ decreasing precedence is:
 
 The first declaration of a name in that order wins, so an explicit import shadows
 `rtl` and a file's own declaration shadows both. Only the winner is emitted: the
-shadowed declaration is not generated, so a module can *replace* a prelude type
-rather than collide with it. A duplicate top-level name in the *same* package is
-still an error ("Modules (physical)" above).
+shadowed declaration is not generated, so a module can replace a prelude declaration
+rather than collide with it - except a prelude **type**, whose name may not be
+redeclared (`data class Res` is a diagnostic): the prelude's types are emitted under
+their bare names and the prelude's own generated code names them, so two declarations
+of one type name would misname one of the two. A duplicate top-level name in the *same*
+package is still an error ("Modules (physical)" above).
 
 ### Implementation status
 

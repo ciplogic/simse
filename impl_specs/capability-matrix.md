@@ -4764,3 +4764,13 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   name resolves to, so a program's own `ref class` shadowing a prelude name no longer
   marks the prelude type.
   Verified: `bun tools/iterate.js --full` - 71/71 and both fixed points byte for byte.
+
+- **A prelude type's name may not be redeclared.** The shadowing rule (`specs/modules.md`)
+  keeps letting a module replace a prelude *function*, but a declared prelude *type* is now
+  an exception: `data class Res` in a program is a diagnostic
+  (`stress/diagnostic-prelude-type`). The emitter's name -> package table is global, and the
+  prelude's types are emitted under their bare names with its own generated code naming
+  them (`Opt<Int> simse_str_toInt(...)`), so a second declaration of one type name would
+  misname one of the two - exactly what a `ref class Res` did to the ported `Res` union
+  before the check. `SemaInput` carries the prelude flag the check reads.
+  Verified: `bun tools/iterate.js --full` - 73/73 and both fixed points byte for byte.

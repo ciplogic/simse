@@ -264,11 +264,13 @@ fun semaTypeTextList(types: *List<AstXmlNode>): Str {
 }
 
 // One participating file and its parsed Module; the Module carries the package that
-// namespaces its declarations.
+// namespaces its declarations. `prelude` marks a file the implicit `rtl` surface came from.
 data class SemaInput(
     var fileName: Str,
 
-    var module: AstXmlNode
+    var module: AstXmlNode,
+
+    var prelude: Bool
 )
 
 data class Analyzer(

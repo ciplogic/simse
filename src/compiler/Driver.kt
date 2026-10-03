@@ -575,12 +575,12 @@ fun main(args: List<Str>): Int {
     var semaInputs: List<SemaInput> = List<SemaInput>()
     var s: Int = 0
     while (s < preludeModules.size()) {
-        semaInputs.append(SemaInput(preludeNames[s], preludeModules[s]))
+        semaInputs.append(SemaInput(preludeNames[s], preludeModules[s], true))
         s = s + 1
     }
     var m: Int = 0
     while (m < modules.size()) {
-        semaInputs.append(SemaInput(fileNames[m], modules[m]))
+        semaInputs.append(SemaInput(fileNames[m], modules[m], false))
         m = m + 1
     }
     val diagnostics: List<Str> = analyze(semaInputs)
