@@ -57,7 +57,7 @@ borrow fun contains<T>(this: List<T>, value: T): Bool
 // comparator copies both elements per comparison, a heap copy per compare for a `Str`.
 // `compareLessThan` below is the `Str` ordering for the common case.
 @SmGen("res", "dictops", "simse_list_sort")
-fun sort<T>(this: List<T>, less: (*T, *T) -> Bool): Unit
+borrow fun sort<T>(this: List<T>, less: (*T, *T) -> Bool): Unit
 
 // The `Str` ordering for `sort` (`specs/containers.md`): the two strings compared as *views*,
 // in place, so `keys.sort(compareLessThan)` copies nothing per comparison.

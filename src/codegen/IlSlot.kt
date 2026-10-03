@@ -359,7 +359,9 @@ fun Emitter.ilSlotNode(il: *IlBody, frame: *IlFrame, slot: Int, depth: Int): Ast
     // class passed by copy), so there the name stands as it is (`emitClosureBodyText`).
     if (name == "self") {
         val selfType: AstXmlNode = ilVarType(il, slot)
-        if (xmlIsEmpty(selfType) || this.isHandleType(selfType)) {
+        // A machine receiver (`this` in `fun ..*T.f()`): `(*self)` reads the machine, and a
+        // step's `&` then addresses it rather than the slot holding the pointer to it.
+        if (xmlIsEmpty(selfType) || this.isHandleType(selfType) || this.machineIter) {
             return this.ilNameNode("this")
         }
     }
@@ -492,12 +494,27 @@ fun Emitter.ilCallNode(il: *IlBody, frame: *IlFrame, op: *IlOp): AstXmlNode {
     var first: Int = methodAt + 1
     var callee: AstXmlNode = xmlEmptyNode()
     var closureCall: Str = ""
+    var recvSlot: Int = -1
     if (method.kind == IlMethodKind.Method) {
-        val recv: AstXmlNode = this.ilSlotNode(il, frame, this.ilOpOperand(op.operands, first), 0)
+        recvSlot = this.ilOpOperand(op.operands, first)
+        var recv: AstXmlNode = this.ilSlotNode(il, frame, recvSlot, 0)
         if (xmlIsEmpty(recv)) {
             val methodNameText: Str = method.name
             this.ilWhy = `the receiver of '@methodNameText'`
             return xmlEmptyNode()
+        }
+        // A machine behind a pointer (`this` in a machine-receiver function): the call
+        // wants the machine itself, so the pointer is read through - the step's `&` then
+        // addresses the machine, not the slot that holds the pointer to it.
+        val recvType: AstXmlNode = this.ilSlotTypeNode(il, recvSlot)
+        if (xmlKind(recvType) == AstNodeCategory.TypePointer
+            && xmlKind(xmlChildPtr(recvType, AstNodeKind.Inner)) == AstNodeCategory.TypeYield
+        ) {
+            var deref: AstXmlNode = AstXmlNode(
+                AstNodeKind.Expr, AstNodeCategory.ExprDeref, List<AstNodeAttribute>(), Array<AstXmlNode>()
+            )
+            xmlAddChild(deref, this.renameRole(recv, AstNodeKind.Operand))
+            recv = deref
         }
         callee = this.ilMemberNode(recv, method.name)
         first = first + 1
@@ -523,6 +540,9 @@ fun Emitter.ilCallNode(il: *IlBody, frame: *IlFrame, op: *IlOp): AstXmlNode {
     if (xmlIsEmpty(callee)) {
         return xmlEmptyNode()
     }
+    if (recvSlot >= 0) {
+        this.attachMachineCallArgs(il, op, recvSlot, callee, method.name, op.operands.size() - first)
+    }
     xmlAddChild(call, this.renameRole(callee, AstNodeKind.Callee))
     if (closureCall != "") {
         val selfNode: AstXmlNode = this.ilNameNode(method.name)
@@ -540,6 +560,51 @@ fun Emitter.ilCallNode(il: *IlBody, frame: *IlFrame, op: *IlOp): AstXmlNode {
         i = i + 1
     }
     return call
+}
+
+// The type node behind a slot's type index, when the extractor recorded one (`IlBody.typeNodes`).
+fun Emitter.ilSlotTypeNode(il: *IlBody, slot: Int): AstXmlNode {
+    if (slot < 0 || slot >= il.vars.size()) {
+        return xmlEmptyNode()
+    }
+    val typeIndex: Int = il.vars[slot].typeIndex
+    if (typeIndex < 0 || typeIndex >= il.typeNodes.size()) {
+        return xmlEmptyNode()
+    }
+    return il.typeNodes[typeIndex]
+}
+
+// A member call to a machine-receiver function (`fun ..*T.select<T, U>(...)`) carries the
+// callee's explicit C++ template arguments as `TypeArg` children: C++ deduces neither the
+// function's own parameters (they live in the machine's class, or in a callable argument)
+// nor the machine's class itself. The bindings are the result type's arguments - what the
+// type pass substituted (`semMachineType`) - and last the receiver's machine type, the
+// parameter the class template adds (`_SmIter`).
+fun Emitter.attachMachineCallArgs(
+    il: *IlBody, op: *IlOp, recvSlot: Int, callee: *AstXmlNode, name: *Str, argCount: Int
+): Unit {
+    val recvType: AstXmlNode = this.ilSlotTypeNode(il, recvSlot)
+    if (xmlIsEmpty(recvType) || !this.machineReceiverFnNames.has(*name)) {
+        return
+    }
+    val fnIndex: Int = this.findExtensionFnByType(name, recvType, argCount)
+    if (fnIndex < 0) {
+        return
+    }
+    val fn: *CgFn = *this.functions[fnIndex]
+    if (!semMachineReceiver(fn.receiver)) {
+        return
+    }
+    val dstArgs: List<AstXmlNode> = xmlChildren(this.ilSlotTypeNode(il, this.ilDst(op)), AstNodeKind.TypeArg)
+    if (dstArgs.size() < fn.templateParams.size()) {
+        return
+    }
+    var i: Int = 0
+    while (i < fn.templateParams.size()) {
+        xmlAddChild(callee, this.renameRole(dstArgs[i], AstNodeKind.TypeArg))
+        i = i + 1
+    }
+    xmlAddChild(callee, this.renameRole(recvType, AstNodeKind.TypeArg))
 }
 
 // The expression a value-producing instruction computes, as a node. Both the

@@ -115,6 +115,9 @@ fun Emitter.addFunction(
     )
     if (!xmlIsEmpty(receiver)) {
         this.receiverFnNames.insert(name, true)
+        if (semMachineReceiver(receiver)) {
+            this.machineReceiverFnNames.insert(name, true)
+        }
     }
     if (xmlAttr(decl, AstNodeAttributeKind.IsPure) == "true") {
         this.pureCallees.insert(name, true)
@@ -375,6 +378,28 @@ fun Emitter.templateClause(params: *List<Str>): Str {
     return `template <@cgJoinText>`
 }
 
+// The C++ template parameter standing for a machine receiver's class: the receiver's class
+// is the *caller's* (`Span_iterPtr_yieldable<Int>`), so a function over a machine pattern
+// takes it as a parameter and the call site spells it (`emitFunction`, `ilCallNode`).
+fun smMachineIterName(): Str {
+    return "_SmIter"
+}
+
+// The C++ template parameters a function is emitted with: its own, then the machine's class
+// when its receiver is a machine pattern (`this.machineIter`).
+fun Emitter.fnTemplateParams(fn: *CgFn): List<Str> {
+    var params: List<Str> = List<Str>()
+    var i: Int = 0
+    while (i < fn.templateParams.size()) {
+        params.append(fn.templateParams[i])
+        i = i + 1
+    }
+    if (this.machineIter) {
+        params.append(smMachineIterName())
+    }
+    return params
+}
+
 fun Emitter.typeArgsString(baseName: *Str, args: *List<AstXmlNode>): Str {
     var rendered: List<Str> = List<Str>()
     for (*arg in args) {
@@ -475,9 +500,14 @@ fun Emitter.type(typeExpr: *AstXmlNode): Str {
         AstNodeCategory.TypeYield -> {
             // A machine (`..T`): the class the lowering built for the creating function.
             // It is registered by the emitter, not declared by the program, so `typeName`
-            // cannot spell it - hence the qualification here (`semMachineType`).
+            // cannot spell it - hence the qualification here (`semMachineType`). A machine
+            // *pattern* inside a machine receiver's own function spells the template
+            // parameter the caller's machine arrived as.
             val name: Str = xmlAttr(typeExpr, AstNodeAttributeKind.Name)
             if (name == "") {
+                if (this.machineIter) {
+                    return smMachineIterName()
+                }
                 this.fail(typeExpr, "unsupported: a machine's type has no class to spell")
                 return "/*machine*/"
             }

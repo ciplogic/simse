@@ -70,7 +70,7 @@ fun SemInfer.functionReturn(
         }
         val result: AstXmlNode = semSubstitute(ret, bindings, fn.templateParams)
         if (!xmlIsEmpty(result)) {
-            return semMachineType(result, fn, bindings)
+            return semMachineType(result, fn, bindings, receiver)
         }
     }
     return xmlEmptyNode()
@@ -224,7 +224,7 @@ fun SemInfer.memberReturn(callee: *AstXmlNode, argNodes: *List<AstXmlNode>): Ast
         }
         val result: AstXmlNode = semSubstitute(ret, bindings, fn.templateParams)
         if (!xmlIsEmpty(result)) {
-            return semMachineType(result, fn, bindings)
+            return semMachineType(result, fn, bindings, recv)
         }
     }
     val extensions: *List<SemExtFact> = this.facts.nativeExtensions.getPtr(calleeText)
@@ -518,6 +518,47 @@ fun SemInfer.infer(e: *AstXmlNode): AstXmlNode {
                 }
             }
             return xmlEmptyNode()
+        }
+
+        AstNodeCategory.ExprLambda -> {
+            // A lambda's type is the callable it is used as: the parameter types it
+            // annotates, plus its *result*, inferred from the body with the lambda's own
+            // parameters in scope. A callable's return has nothing else to name it, and a
+            // generic call that only its result can bind (`select`'s `U`) needs it.
+            var fnType: AstXmlNode = AstXmlNode(
+                AstNodeKind.Type, AstNodeCategory.TypeFunction, List<AstNodeAttribute>(), Array<AstXmlNode>()
+            )
+            val paramTypes: List<AstXmlNode> = xmlChildren(e, AstNodeKind.ParamType)
+            xmlAddChildren(fnType, paramTypes)
+            val paramNames: List<Str> = xmlLambdaParams(e)
+            this.pushScope()
+            var i: Int = 0
+            while (i < paramNames.size() && i < paramTypes.size()) {
+                this.scopes[this.scopes.size() - 1].insert(paramNames[i], paramTypes[i])
+                i = i + 1
+            }
+            var result: AstXmlNode = xmlEmptyNode()
+            for (*stmt in xmlChildren(xmlChildPtr(e, AstNodeKind.Body), AstNodeKind.Stmt)) {
+                if (xmlKind(stmt) == AstNodeCategory.StmtExprStmt) {
+                    val value: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Expr)
+                    if (!xmlIsEmpty(value)) {
+                        result = this.infer(value)
+                    }
+                } else if (xmlKind(stmt) == AstNodeCategory.StmtReturn) {
+                    val value: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Value)
+                    if (!xmlIsEmpty(value)) {
+                        result = this.infer(value)
+                    }
+                }
+                if (!xmlIsEmpty(result)) {
+                    break
+                }
+            }
+            this.popScope()
+            if (!xmlIsEmpty(result)) {
+                xmlAddChild(fnType, semReRole(result, AstNodeKind.ReturnType))
+            }
+            return fnType
         }
 
         AstNodeCategory.ExprCall -> {

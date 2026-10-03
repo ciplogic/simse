@@ -200,7 +200,10 @@ fun Span<T>.iterPtr<T>(): ..*T {
 ```
 
 A container reaches this one through the same span rewrite its value twin uses, so the
-pointer form covers every iterable shape with the one machine.
+pointer form covers every iterable shape with the one machine. The `linq` module
+(`src/modules/linq/linq.kt`) builds its operators on this machine directly: a
+`..*T.select<T, U>` receiver is itself a pointer machine, so a chain copies no element
+(`impl_specs/yield.md`, "A machine as a receiver").
 
 `yield *this[i]` is the language's borrow: `*place` is the place's address and it keeps
 the place in place (`ExpressionLowering` never binds a `Deref`'s operand to a value

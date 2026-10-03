@@ -345,6 +345,10 @@ fun Analyzer.semaMemberCall(call: *AstXmlNode): AstXmlNode {
         }
         val element: AstXmlNode = this.semaSpanElement(receiverType)
         if (!xmlIsEmpty(element)) {
+            // `iterPtr` hands out the element's *place*, so the machine yields `..*T`.
+            if (name == "iterPtr") {
+                return semMachineOfElement(semPointerOf(element))
+            }
             return semMachineOfElement(element)
         }
     }
@@ -380,6 +384,15 @@ fun semMachineOfElement(element: AstXmlNode): AstXmlNode {
         AstNodeKind.Type, AstNodeCategory.TypeYield, List<AstNodeAttribute>(), Array<AstXmlNode>()
     )
     xmlAddChild(node, semReRole(element, AstNodeKind.Inner))
+    return node
+}
+
+// A `*pointee` node for the checker's own bindings (`iterPtr` hands out places).
+fun semPointerOf(pointee: AstXmlNode): AstXmlNode {
+    var node: AstXmlNode = AstXmlNode(
+        AstNodeKind.Type, AstNodeCategory.TypePointer, List<AstNodeAttribute>(), Array<AstXmlNode>()
+    )
+    xmlAddChild(node, semReRole(pointee, AstNodeKind.Inner))
     return node
 }
 

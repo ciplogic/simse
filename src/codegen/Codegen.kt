@@ -244,6 +244,11 @@ data class Emitter(
     var dataClassNames: Dictionary<Str, Bool>,
     var functions: List<CgFn>,
     var receiverFnNames: Dictionary<Str, Bool>,
+
+// The names of functions whose receiver is a machine *pattern* (`fun ..*T.select<T, U>`):
+// their calls spell explicit template arguments, so the call site tests this before any
+// binding walk (`attachMachineCallArgs`).
+    var machineReceiverFnNames: Dictionary<Str, Bool>,
     var nativeDecls: List<CgNativeDecl>,
 
 // The two tables a generator's answer is registered in (impl_specs/generators.md; the
@@ -295,7 +300,12 @@ data class Emitter(
 // The coloring pass's result (impl_specs/async.md): the names that can suspend, each to the type
 // a call to it answers (an empty node for `Unit`). A call whose callee is here is a suspension,
 // and the `suspend` lowering turns the body holding it into a task.
-    var asyncFns: Dictionary<Str, AstXmlNode>
+    var asyncFns: Dictionary<Str, AstXmlNode>,
+
+// Inside a function whose receiver is a machine *pattern* (`fun ..*T.select<T, U>(...)`):
+// the machine's C++ class is a template parameter (`_SmIter`), because the class is the
+// caller's and no declaration can name it (`type`'s TypeYield case, `impl_specs/yield.md`).
+    var machineIter: Bool
 ) {
 }
 
@@ -316,6 +326,7 @@ fun newEmitter(inputs: *List<CgInput>, resourceStored: *List<Str>): Emitter {
         Dictionary<Str, Bool>(),
         Dictionary<Str, Bool>(),
         List<CgFn>(),
+        Dictionary<Str, Bool>(),
         Dictionary<Str, Bool>(),
         List<CgNativeDecl>(),
         Dictionary<Str, Str>(),
@@ -339,7 +350,8 @@ fun newEmitter(inputs: *List<CgInput>, resourceStored: *List<Str>): Emitter {
         List<Str>(),
         Dictionary<Str, Int>(),
         Dictionary<Str, Bool>(),
-        Dictionary<Str, AstXmlNode>()
+        Dictionary<Str, AstXmlNode>(),
+        false
     )
 }
 

@@ -20,6 +20,30 @@ fun Emitter.renameRole(child: *AstXmlNode, role: AstNodeKind): AstXmlNode {
     return renamed
 }
 
+// The extension function a member call names, for a receiver whose type is already known
+// (the IL's slot types - `ilCallNode` attaches the explicit template arguments a
+// machine-receiver call needs).
+fun Emitter.findExtensionFnByType(name: *Str, recv: AstXmlNode, argCount: Int): Int {
+    if (xmlIsEmpty(recv)) {
+        return -1
+    }
+    var i: Int = 0
+    while (i < this.functions.size()) {
+        val fn: *CgFn = *this.functions[i]
+        i = i + 1
+        if (fn.isNative || xmlIsEmpty(fn.receiver)) {
+            continue
+        }
+        if (fn.name != *name || fn.paramCount != argCount) {
+            continue
+        }
+        if (this.unifyType(this.resolveAlias(fn.receiver), recv, fn.templateParams)) {
+            return i - 1
+        }
+    }
+    return -1
+}
+
 // The receiver argument for a lowered Simse call: a value receiver is a raw pointer, so
 // the argument is the receiver's address (`simse_addressOf`, src/rtl/types.hpp); a
 // counted reference is unwrapped with `.get()`, and a bare `this` is already that pointer.
@@ -251,4 +275,3 @@ fun Emitter.isUnitType(typeNode: *AstXmlNode): Bool {
     }
     return xmlKind(typeNode) == AstNodeCategory.TypeNamed && xmlAttr(typeNode, AstNodeAttributeKind.Name) == "Unit"
 }
-

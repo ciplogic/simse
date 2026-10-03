@@ -226,6 +226,7 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
                 val pattern: AstXmlNode = xmlChildPtr(paramNodes[paramOffset + g2], AstNodeKind.Type)
                 if (xmlKind(argNodes[g2]) == AstNodeCategory.ExprLambda) {
                     this.ilBindLambdaParams(pattern, argNodes[g2], *genericParams, *genericBindings)
+                    this.ilBindLambdaReturn(pattern, argNodes[g2], *genericParams, *genericBindings)
                 } else if (g2 < argTypes.size() && !xmlIsEmpty(argTypes[g2])) {
                     this.ilBindCallableArg(pattern, argTypes[g2], *genericParams, *genericBindings)
                 }
@@ -254,7 +255,7 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
                     )
                 }
             }
-            if (targetIsCallee && packFrom < 0) {
+            if (targetIsCallee && packFrom < 0 && !semMachineReceiverDecl(target)) {
                 var deducible: Dictionary<Str, AstXmlNode> = this.ilCppDeducible(
                     target, recvType, *argTypes, xmlChildren(callee, AstNodeKind.TypeArg), *genericParams
                 )
@@ -523,6 +524,36 @@ fun IlExtractor.ilBindLambdaParams(
         semBindBestEffort(expectedParams[i], annotated[i], params, bindings)
         i = i + 1
     }
+}
+
+// A lambda argument's *result* binds the callable pattern's return type where only the body
+// can name it (`select<T, U>((x: *Int) -> *x * 2)` fixes `U = Int`): the type pass infers a
+// lambda's result (`SemInfer.infer`'s ExprLambda case), and this is the one place the call
+// can take it from.
+fun IlExtractor.ilBindLambdaReturn(
+    pattern: AstXmlNode, lambda: *AstXmlNode, params: *List<Str>,
+    bindings: *Dictionary<Str, AstXmlNode>
+): Unit {
+    if (params.size() == 0 || xmlKind(lambda) != AstNodeCategory.ExprLambda) {
+        return
+    }
+    val callable: AstXmlNode = this.ilCallableOf(pattern)
+    if (xmlIsEmpty(callable)) {
+        return
+    }
+    val patternReturn: *AstXmlNode = xmlChildPtr(callable, AstNodeKind.ReturnType)
+    if (xmlIsEmpty(patternReturn)) {
+        return
+    }
+    val inferred: AstXmlNode = this.exprType(lambda)
+    if (xmlIsEmpty(inferred) || xmlKind(inferred) != AstNodeCategory.TypeFunction) {
+        return
+    }
+    val actualReturn: *AstXmlNode = xmlChildPtr(inferred, AstNodeKind.ReturnType)
+    if (xmlIsEmpty(actualReturn)) {
+        return
+    }
+    semBindBestEffort(*patternReturn, *actualReturn, params, bindings)
 }
 
 // A callable *value* passed into a callable pattern binds the pattern's own parameter and

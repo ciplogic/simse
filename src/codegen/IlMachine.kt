@@ -133,7 +133,7 @@ fun Emitter.emitYieldable(
 
     val qualifyText: Str = this.qualify(fn.packageName, xmlAttr(decl, AstNodeAttributeKind.Name))
     val factory: Str = `@classType @qualifyText`
-    val tmpl: Str = this.templateClause(fn.templateParams)
+    val tmpl: Str = this.templateClause(this.fnTemplateParams(fn))
     val factoryParams: List<Str> = this.parameterList(fn, decl)
     if (prototypeOnly) {
         if (tmpl != "") {
@@ -235,7 +235,9 @@ fun Emitter.emitMachine(
     }
     // A generic function's machine is a class template: its fields are typed with the
     // function's type parameters, so they are declared where used (impl_specs/yield.md).
-    val tmpl: Str = this.templateClause(fn.templateParams)
+    // A machine receiver adds its own class parameter to both (`fnTemplateParams`).
+    val tmplParams: List<Str> = this.fnTemplateParams(fn)
+    val tmpl: Str = this.templateClause(tmplParams)
     // The class carries the values that cross a yield and nothing else: the method that
     // advances it is a free *extension* function below (`advance(M* self)`), the shape a
     // lambda's call has (`<sym>_invoke`), so the class is an ordinary data class.
@@ -261,8 +263,8 @@ fun Emitter.emitMachine(
     // A generic machine's class is a template, so its use as a *type* carries the
     // parameters: `List_iterPtr_yieldable<T>* self`.
     var classTypeText: Str = className
-    if (fn.templateParams.size() > 0) {
-        val cgJoinText: Str = cgJoin(fn.templateParams, ", ")
+    if (tmplParams.size() > 0) {
+        val cgJoinText: Str = cgJoin(tmplParams, ", ")
         classTypeText = `@className<@cgJoinText>`
     }
     for (*method in machine.methods) {

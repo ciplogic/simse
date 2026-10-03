@@ -383,6 +383,15 @@ fun Analyzer.resolveType(type: *AstXmlNode): Unit {
             return
         }
 
+        // `..T`: the machine itself is not a type to check, its *element* is (`..*T`'s `T`).
+        AstNodeCategory.TypeYield -> {
+            val inner: *AstXmlNode = xmlChildPtr(type, AstNodeKind.Inner)
+            if (!xmlIsEmpty(inner)) {
+                this.resolveType(inner)
+            }
+            return
+        }
+
         AstNodeCategory.TypeFunction -> {
             val params: List<AstXmlNode> = xmlChildren(type, AstNodeKind.ParamType)
             for (*param in params) {
@@ -396,4 +405,3 @@ fun Analyzer.resolveType(type: *AstXmlNode): Unit {
         }
     }
 }
-

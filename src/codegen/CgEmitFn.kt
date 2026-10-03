@@ -233,6 +233,11 @@ fun Emitter.emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit
     }
 
     this.setActiveTypeParams(fn.templateParams)
+    // A machine receiver (`fun ..*T.select<T, U>(...)`): the receiver's machine class is
+    // the caller's, so the function is a C++ template over it (`_SmIter`) and a machine
+    // pattern in the signature spells that parameter (`type`).
+    this.machineIter = semMachineReceiver(fn.receiver)
+    val tmplParams: List<Str> = this.fnTemplateParams(fn)
     val returnNode: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.ReturnType)
     // A yielding body is lowered to a state machine and the function to a factory for it
     // (impl_specs/yield.md): the emitted return type is the machine's class, not `..T`;
@@ -240,8 +245,8 @@ fun Emitter.emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit
     val yielding: Bool = !xmlIsEmpty(returnNode) && xmlKind(returnNode) == AstNodeCategory.TypeYield
     val yieldClass: Str = this.qualify(fn.packageName, this.machineName(decl)) + "_yieldable"
     var yieldType: Str = yieldClass
-    if (yielding && fn.templateParams.size() > 0) {
-        val cgJoinText: Str = cgJoin(fn.templateParams, ", ")
+    if (yielding && tmplParams.size() > 0) {
+        val cgJoinText: Str = cgJoin(tmplParams, ", ")
         yieldType = `@yieldClass<@cgJoinText>`
     }
     var ret: Str = "void"
@@ -310,7 +315,7 @@ fun Emitter.emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit
     if (mainArgs) {
         signature = "int main(int argc, char** argv)"
     }
-    val tmpl: Str = this.templateClause(fn.templateParams)
+    val tmpl: Str = this.templateClause(tmplParams)
     if (yielding) {
         // The machine plus the factory, nothing else: the source body *is* the machine.
         this.emitYieldable(fn, decl, yieldClass, yieldType, prototypeOnly, selfK, selfTypePtr, facts)
@@ -463,10 +468,7 @@ fun Emitter.emitDeducedCallableOverload(
         params.append(`@typeText2 @name`)
         args.append(name)
     }
-    var all: List<Str> = List<Str>()
-    for (*typeParam2 in fn.templateParams) {
-        all.append(typeParam2)
-    }
+    var all: List<Str> = this.fnTemplateParams(fn)
     for (*cbName3 in cbNames) {
         all.append(cbName3)
     }
@@ -478,12 +480,20 @@ fun Emitter.emitDeducedCallableOverload(
         this.line(0, `@ret @fnName(@cgJoinText);`)
         return
     }
+    // The forwarding call spells the function's template arguments when a machine
+    // receiver is involved: neither the machine's class nor a parameter that lives only
+    // in the machine is deducible from a callable argument.
+    var callee: Str = fnName
+    if (this.machineIter) {
+        val explicitText: Str = cgJoin(this.fnTemplateParams(fn), ", ")
+        callee = `@fnName<@explicitText>`
+    }
     this.line(0, tmpl)
     this.line(0, `@ret @fnName(@cgJoinText) {`)
     if (ret == "void") {
-        this.line(1, `@fnName(@cgJoinText2);`)
+        this.line(1, `@callee(@cgJoinText2);`)
     } else {
-        this.line(1, `return @fnName(@cgJoinText2);`)
+        this.line(1, `return @callee(@cgJoinText2);`)
     }
     this.line(0, "}")
 }

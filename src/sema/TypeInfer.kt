@@ -383,6 +383,32 @@ fun semUnifyType(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *List<St
             }
             return false
         }
+
+        AstNodeCategory.TypeFunction -> {
+            // A callable matches a callable: the parameter and return types element-wise,
+            // so a pattern `(*T) -> U` accepts a lambda's inferred `(*Int) -> Int`.
+            if (ak != AstNodeCategory.TypeFunction) {
+                return false
+            }
+            val patternParams: List<AstXmlNode> = xmlChildren(pattern, AstNodeKind.ParamType)
+            val actualParams: List<AstXmlNode> = xmlChildren(actualPtr, AstNodeKind.ParamType)
+            if (patternParams.size() != actualParams.size()) {
+                return false
+            }
+            var i: Int = 0
+            while (i < patternParams.size()) {
+                if (!semUnifyType(patternParams[i], actualParams[i], typeParams)) {
+                    return false
+                }
+                i = i + 1
+            }
+            val patternReturn: *AstXmlNode = xmlChildPtr(pattern, AstNodeKind.ReturnType)
+            val actualReturn: *AstXmlNode = xmlChildPtr(actualPtr, AstNodeKind.ReturnType)
+            if (xmlIsEmpty(patternReturn) || xmlIsEmpty(actualReturn)) {
+                return xmlIsEmpty(patternReturn) && xmlIsEmpty(actualReturn)
+            }
+            return semUnifyType(patternReturn, actualReturn, typeParams)
+        }
     }
     return false
 }
@@ -502,6 +528,32 @@ fun semBindTypes(
                 )
             }
             return false
+        }
+
+        AstNodeCategory.TypeFunction -> {
+            // A callable binds a callable (see `semUnifyType`): a lambda's inferred result
+            // is what binds a pattern's return parameter (`select`'s `U`).
+            if (ak != AstNodeCategory.TypeFunction) {
+                return false
+            }
+            val patternParams: List<AstXmlNode> = xmlChildren(pattern, AstNodeKind.ParamType)
+            val actualParams: List<AstXmlNode> = xmlChildren(actualPtr, AstNodeKind.ParamType)
+            if (patternParams.size() != actualParams.size()) {
+                return false
+            }
+            var i: Int = 0
+            while (i < patternParams.size()) {
+                if (!semBindTypes(patternParams[i], actualParams[i], typeParams, bindings)) {
+                    return false
+                }
+                i = i + 1
+            }
+            val patternReturn: *AstXmlNode = xmlChildPtr(pattern, AstNodeKind.ReturnType)
+            val actualReturn: *AstXmlNode = xmlChildPtr(actualPtr, AstNodeKind.ReturnType)
+            if (xmlIsEmpty(patternReturn) || xmlIsEmpty(actualReturn)) {
+                return xmlIsEmpty(patternReturn) && xmlIsEmpty(actualReturn)
+            }
+            return semBindTypes(patternReturn, actualReturn, typeParams, bindings)
         }
     }
     return false
@@ -654,10 +706,16 @@ fun semOuterTypeName(typeNode: *AstXmlNode): Str {
 }
 
 // The machine a call creates, as a *spellable* type: `ret` is the answered `..T`,
-// `bindings` what the call site bound. An unspellable result (not yielding, or an
-// unbound class argument) leaves the declaration an `auto`.
+// `bindings` what the call site bound, `receiver` the call's receiver type (empty for a
+// plain call). An unspellable result (not yielding, an unbound class argument) leaves the
+// declaration an `auto`.
+//
+// A receiver that is itself a machine (`fun ..*T.select<T, U>(...)`) makes the machine a
+// template over the source machine's class, so that class rides last (`emitFunction`
+// appends `_SmIter`); a call site can only spell it because it knows the receiver's type.
 fun semMachineType(
-    ret: *AstXmlNode, fn: *SemFnFact, bindings: *Dictionary<Str, AstXmlNode>
+    ret: *AstXmlNode, fn: *SemFnFact, bindings: *Dictionary<Str, AstXmlNode>,
+    receiver: AstXmlNode
 ): AstXmlNode {
     if (xmlKind(ret) != AstNodeCategory.TypeYield) {
         return ret
@@ -673,6 +731,12 @@ fun semMachineType(
         args.append(semReRole(*bound, AstNodeKind.TypeArg))
         i = i + 1
     }
+    if (semMachineReceiver(fn.receiver)) {
+        if (xmlIsEmpty(receiver)) {
+            return ret
+        }
+        args.append(semReRole(receiver, AstNodeKind.TypeArg))
+    }
     val outer: Str = semOuterTypeName(fn.receiver)
     val fnNameText: Str = fn.name
     var machine: Str = `@(fnNameText)_yieldable`
@@ -684,6 +748,25 @@ fun semMachineType(
     node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, machine))
     node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Package, fn.packageName))
     return node
+}
+
+// Whether a declaration's receiver is a machine *pattern* (`..T` written by the author, not
+// a class the pass named): such a function is a template over the receiver's machine class.
+fun semMachineReceiver(receiver: *AstXmlNode): Bool {
+    return !xmlIsEmpty(receiver) && xmlKind(receiver) == AstNodeCategory.TypeYield
+            && xmlAttr(receiver, AstNodeAttributeKind.Name) == ""
+}
+
+// The same over a declaration, whichever receiver spelling it uses (`fun ..T.f()` or
+// `fun f(this: ..T)`).
+fun semMachineReceiverDecl(decl: *AstXmlNode): Bool {
+    if (xmlIsEmpty(decl)) {
+        return false
+    }
+    if (semMachineReceiver(xmlChildPtr(decl, AstNodeKind.Receiver))) {
+        return true
+    }
+    return semMachineReceiver(semExtensionReceiver(decl))
 }
 
 // A `native fun` extension (`this` first parameter): its receiver picks the overload,
@@ -841,4 +924,3 @@ fun semTypeOfExpr(
     }
     return infer.typeOf(expr, names)
 }
-

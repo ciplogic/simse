@@ -4501,3 +4501,27 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   Verified: `bun build.js --release --no-lto`, `bun tools/stress.js` **63/63**,
   `bun build.js --release --no-lto --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
   both fixed points byte for byte.
+
+- **A machine can be a receiver; `src/modules/linq` is the pipeline built on it.**
+  `fun ..*T.select<T, U>(f: (*T) -> U): ..*U` is written in the language, and the compiler
+  had to learn two things to emit it. The receiver's machine class belongs to the *caller*
+  (`Span_iterPtr_yieldable<Int>`), so a machine receiver makes the function a C++ template
+  over it: the emitter spells the parameter `_SmIter* self`, the machine class carries the
+  class parameter (`fnTemplateParams`), and a nameless `..T` in the body's frame spells
+  `_SmIter` (`type`). The call site cannot deduce its way there - `U` lives in a callable
+  and `T` in the machine's class - so it spells every argument: `ilCallNode` attaches the
+  type pass's bindings to the callee (the result type's arguments in order, then the
+  receiver's machine type, `attachMachineCallArgs`), and the linear pass skips its
+  C++-deducibility check for such a callee (`semMachineReceiverDecl`). Two supporting
+  pieces: `SemInfer.infer` now types a lambda with the *result* its body infers (nothing
+  else can bind `select`'s `U`; the callable binders gained a `TypeFunction` arm), and the
+  step inside such a body addresses the machine the receiver already is (`advance(self)`,
+  not `&self`; a machine behind a pointer is deref-wrapped in `ilCallNode`). The module
+  (`src/modules/linq/linq.kt`, `import linq`, `--module src/modules/linq`) holds `select`,
+  `where` (not `when`: a keyword), `take`, `skip` and `toList`, all over `..*T` so a chain
+  copies no element; `select` stores the mapped value in a machine field and yields its
+  place, keeping the chain pointer-typed. `stress/linq` pins the lambdas, the chains, a
+  `Str` element, a view's bytes, an array's span, a temporary and an empty chain.
+  Verified: `bun build.js --release --no-lto`, `bun tools/stress.js` **64/64**,
+  `bun build.js --release --no-lto --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
+  both fixed points byte for byte.

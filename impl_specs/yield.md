@@ -96,6 +96,33 @@ than a copy.
 `*T`), so one member read is the whole conversion; a `value()` accessor would copy the element
 twice (field into the temporary, temporary into the loop variable).
 
+## A machine as a receiver
+
+A yielding *extension* can take a machine as its receiver
+(`fun ..*T.select<T, U>(f: (*T) -> U): ..*U`), which is the shape a LINQ-style pipeline is
+built from (`src/modules/linq/linq.kt`). Two rules make it express:
+
+- **The receiver's type parameter is listed in the function's own `<...>`**
+  (`..*T.select<T, U>`): the parser reads type parameters from that list, and the receiver
+  spelling contributes none - the same rule `Span<T>.iter<T>` follows.
+- **The receiver's machine class is a C++ template parameter.** The class belongs to the
+  *caller* (`Span_iterPtr_yieldable<Int>`), and no declaration can name it, so a machine
+  receiver makes the function a template over it:
+  `template <class T, class U, class _SmIter> ... select(_SmIter* self, ...)`
+  (`Emitter.machineIter`/`fnTemplateParams`, `type`'s nameless-`TypeYield` case). The call
+  spells its template arguments, because C++ deduces neither the function's own parameters
+  (they live in the machine's class, or in a callable argument) nor the machine's class:
+  `ilCallNode` attaches them to the callee from what the type pass made - the result type's
+  arguments in order, then the receiver's machine type (`attachMachineCallArgs`) - and the
+  linear pass skips its own C++-deducibility check for such a call
+  (`semMachineReceiverDecl`). A lambda argument's *result* binds the pattern's return
+  parameter (`select`'s `U`), which is why `SemInfer.infer` types a lambda with its body's
+  result.
+
+Inside the body `this.advance()` steps the caller's machine (`advance(self)` - the receiver
+already *is* the machine's address) and `this.current` reads its element. A `for` over
+`this` is still out (the machine would have to be a field); the adapters step by hand.
+
 ## What the caller gets
 
 The function becomes a **factory** that builds the machine on the stack and returns it by value:
@@ -155,6 +182,11 @@ fields, so nothing about the machine points into the frame that built it.
 - Constraints: a condition a *lowering* builds carries the `Expr` role while the emitter finds
 a statement's condition under `Cond` (`linCondJump` re-roots it); and a `yield`'s value is
 hoisted like a `return`'s (`ExpressionLowering.kt`'s `StmtYield` case).
+- **A machine can be a receiver** (`fun ..*T.select<T, U>(...)`): the operator's machine is a
+  template over the source machine's class (`_SmIter`), and the call site spells its arguments
+  (`ilCallNode`). `src/modules/linq/linq.kt` is the library built on it (`select`, `where`,
+  `take`, `skip`, `toList` - pointer machines end to end, so a chain copies no element), with
+  `stress/linq` pinning the lambdas and the chains.
 - Not supported (reported, not left to the C++ compiler):
   - a local that the type pass could not spell (a field needs a type, and the pass says so
     instead of guessing) - which is what a machine local is, so a machine **cannot live

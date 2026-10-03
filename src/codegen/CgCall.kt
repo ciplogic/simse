@@ -422,6 +422,31 @@ fun Emitter.call(e: *AstXmlNode): Str {
                 // spelled, `advance(&m)`. The machine's C++ type is the lowering's, so no
                 // declaration is collected to resolve against here.
                 if (calleeText == "advance" && xmlKind(receiver) == AstNodeCategory.TypeYield) {
+                    // The step takes the machine's *address*. A receiver that already is the
+                    // machine behind its pointer - `this` in a machine-receiver function, or
+                    // a deref of a machine-pointer slot - spells that address directly; a
+                    // machine *value* has its address taken.
+                    if (xmlKind(receiverExpr) == AstNodeCategory.ExprDeref) {
+                        val operand: *AstXmlNode = xmlChildPtr(receiverExpr, AstNodeKind.Operand)
+                        if (xmlKind(operand) == AstNodeCategory.ExprName
+                            && xmlAttr(operand, AstNodeAttributeKind.Name) == "this"
+                            && this.selfKind == NameKind.Value
+                        ) {
+                            val selfText: Str = this.selfPointer()
+                            return `advance(@selfText)`
+                        }
+                        if (xmlKind(this.inferType(operand)) == AstNodeCategory.TypePointer) {
+                            val ptrText: Str = this.expr(operand, 12, xmlEmptyNode())
+                            return `advance(@(ptrText))`
+                        }
+                    }
+                    if (xmlKind(receiverExpr) == AstNodeCategory.ExprName
+                        && xmlAttr(receiverExpr, AstNodeAttributeKind.Name) == "this"
+                        && this.selfKind == NameKind.Value
+                    ) {
+                        val selfText2: Str = this.selfPointer()
+                        return `advance(@selfText2)`
+                    }
                     val machineText: Str = this.expr(receiverExpr, 12, xmlEmptyNode())
                     return `advance(&@(machineText))`
                 }
@@ -430,6 +455,13 @@ fun Emitter.call(e: *AstXmlNode): Str {
                     val fn: *CgFn = *this.functions[fnIndex]
                     val all: Str = cgReceiverArgs(this.receiverArg(fn.receiver, receiverExpr), args)
                     val qualifyText5: Str = this.qualify(fn.packageName, fn.name)
+                    // A machine-receiver callee's explicit template arguments, attached by
+                    // `ilCallNode`: C++ cannot deduce them through a machine.
+                    val explicitArgs: List<AstXmlNode> = xmlChildren(callee, AstNodeKind.TypeArg)
+                    if (explicitArgs.size() > 0) {
+                        val explicitText: Str = this.typeArgsString(fn.name, explicitArgs)
+                        return `@qualifyText5<@explicitText>(@all)`
+                    }
                     return `@qualifyText5(@all)`
                 }
                 val extIndex: Int = this.findNativeExt(calleeText, receiverExpr, args.size())
