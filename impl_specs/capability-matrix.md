@@ -4590,3 +4590,19 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   Verified: `bun build.js --release --no-lto`, `bun tools/stress.js` **66/66**,
   `bun build.js --release --no-lto --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js`
   - both fixed points byte for byte.
+
+- **`ref class` has no value form: a construction is `&C(...)`, or a diagnostic.** The second
+  class word added last change now means what it exists for. Sema's expression walk marks an
+  `ExprRef` operand as boxed (`SemaAnalyze.analyzeCall`'s flag), and `checkRefConstruction`
+  reports every other construction of a ref class at the construction's position:
+  `'Node' is a ref class: build it as '&Node(...)' - a ref class is held by '&Node' or '*Node'`.
+  That is the rule the two use cases need: a recursive type cannot hold itself by value (a
+  tree's child is `&Node`/`*Node`), and a resource-owning class is destroyed once, by the box
+  (`unInit` gets the same guarantee from a destructor). Deliberately no type-position
+  collection: only the construction is checked, so `&Node(1)` and `*h` stay legal while
+  `Node(1)` in a local, an argument or a field initializer is not. `stress/diagnostic-ref-value`
+  pins the error, and `stress/native-class`'s `Handle` is now built as `&Handle(11, 3)` - its
+  emission golden shows the promoted box (`ns1_Handle _sm_stk3; ns1_Handle* handle;`).
+  Verified: `bun build.js --release --no-lto`, `bun tools/stress.js` **67/67**,
+  `bun build.js --release --no-lto --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js`
+  - both fixed points byte for byte.

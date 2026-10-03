@@ -81,6 +81,30 @@ fun Analyzer.checkUninitCall(call: *AstXmlNode, callee: *AstXmlNode): Unit {
     )
 }
 
+// A `ref class` has no value form (`specs/declarations.md`): the only way to build one is the
+// boxed construction `&C(...)` (`analyzeCall`'s `boxed` flag marks it), so any other
+// construction - a local, an argument, a field - is a value and a diagnostic. The two reasons
+// the word exists are recursion (a tree's children are `&Node`/`*Node`, not `Node`) and
+// destructors (a class that closes a resource is held once, by a handle).
+fun Analyzer.checkRefConstruction(call: *AstXmlNode, callee: *AstXmlNode): Unit {
+    val kind: AstNodeCategory = xmlKind(callee)
+    if (kind != AstNodeCategory.ExprName && kind != AstNodeCategory.ExprGenericName) {
+        return
+    }
+    val name: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
+    val decl: *AstXmlNode = this.types.getPtr(name)
+    if (decl == null || decl.name != AstNodeKind.DataClass) {
+        return
+    }
+    if (xmlAttr(decl, AstNodeAttributeKind.IsRefClass) != "true") {
+        return
+    }
+    this.diag(
+        xmlLine(call), xmlColumn(call),
+        `'@name' is a ref class: build it as '&@name(...)' - a ref class is held by '&@name' or '*@name'`
+    )
+}
+
 // A `*T` or `&T` holds a type with a destructor; a value does not. A `T` value is a copy,
 // and every copy runs `~T()` - the resource closed once per copy - which is what the
 // handle is for (`&T` destroys the box when its last owner goes). A `*`/`&` anywhere in

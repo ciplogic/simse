@@ -1,0 +1,1 @@
+'Node' is a ref class: build it as '&Node(...)' - a ref class is held by '&Node' or '*Node'

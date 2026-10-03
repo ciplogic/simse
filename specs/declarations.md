@@ -17,8 +17,13 @@ data class Point(var x: Int, var y: Int)
 Two layout words may replace `data`: `native class C(...)` is the same value/layout type, but
 its generated struct is emitted with the host's own alignment - the language's 4-byte packing
 is not applied to it - because the class exists to mirror a native layout
-(`memory-model.md`, "Alignment and packing"). `ref class C(...)` is the second word: parsed
-and recorded, and it changes nothing yet.
+(`memory-model.md`, "Alignment and packing"). `ref class C(...)` declares a **handle-only**
+type: it has no value form, so the only construction is the boxed `&C(...)` - any other
+construction is a diagnostic (`'C' is a ref class: build it as '&C(...)' - a ref class is
+held by '&C' or '*C'`), and a value of it is reached through `&C` (counted) or `*C` (raw).
+The two reasons the word exists: a recursive type cannot hold itself by value (a tree's child
+is `&Node`/`*Node`, not `Node`), and a class that owns a resource is destroyed once, by the
+box (`unInit` below makes the same guarantee through a destructor).
 
 Fields are separated by `,` (Kotlin's spelling; the list may be wrapped across lines,
 and a `;` is accepted there too). The declaration is otherwise line-oriented: a field

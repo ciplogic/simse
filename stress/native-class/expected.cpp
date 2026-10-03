@@ -294,7 +294,8 @@ int main() {
     Int* _sm_base3;
     ns1_SockAddr addr;
     Str _sm_expr1, _sm_expr2, _sm_expr3;
-    ns1_Handle handle;
+    ns1_Handle _sm_stk3;
+    ns1_Handle* handle;
     addr = ns1_SockAddr{2, 80, 16843009, 7};
     _sm_base1 = simse_addressOf(addr.port);
     _sm_expr1 = simse_num_toString((*_sm_base1));
@@ -302,8 +303,9 @@ int main() {
     _sm_base2 = simse_addressOf(addr.extra);
     _sm_expr2 = simse_num_toString((*_sm_base2));
     simse_println((_sm_expr2), stdout);
-    handle = ns1_Handle{11, 3};
-    _sm_base3 = simse_addressOf(handle.id);
+    _sm_stk3 = ns1_Handle{11, 3};
+    handle = &_sm_stk3;
+    _sm_base3 = simse_addressOf(handle->id);
     _sm_expr3 = simse_int_toString((*_sm_base3));
     simse_println((_sm_expr3), stdout);
     return 0;

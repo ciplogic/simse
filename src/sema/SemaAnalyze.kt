@@ -269,6 +269,26 @@ fun Analyzer.analyzeStmt(stmt: *AstXmlNode): Unit {
     }
 }
 
+// One `ExprCall`, with `boxed` saying it is the operand of `&` (`&C(...)`) - the one
+// construction a ref class allows (`checkRefConstruction`); the rest of the analysis is the
+// same either way.
+fun Analyzer.analyzeCall(expr: *AstXmlNode, boxed: Bool): Unit {
+    val callee: *AstXmlNode = xmlChildPtr(expr, AstNodeKind.Callee)
+    if (!xmlIsEmpty(callee)) {
+        this.analyzeExpr(callee)
+    }
+    val args: List<AstXmlNode> = xmlChildren(expr, AstNodeKind.Arg)
+    for (*arg in args) {
+        this.analyzeExpr(arg)
+    }
+    this.checkCallArity(expr)
+    this.checkExtensionCallArity(expr)
+    this.checkUninitCall(expr, callee)
+    if (!boxed) {
+        this.checkRefConstruction(expr, callee)
+    }
+}
+
 fun Analyzer.analyzeExpr(expr: *AstXmlNode): Unit {
     val kind: AstNodeCategory = xmlKind(expr)
     when (kind) {
@@ -295,17 +315,7 @@ fun Analyzer.analyzeExpr(expr: *AstXmlNode): Unit {
         }
 
         AstNodeCategory.ExprCall -> {
-            val callee: *AstXmlNode = xmlChildPtr(expr, AstNodeKind.Callee)
-            if (!xmlIsEmpty(callee)) {
-                this.analyzeExpr(callee)
-            }
-            val args: List<AstXmlNode> = xmlChildren(expr, AstNodeKind.Arg)
-            for (*arg in args) {
-                this.analyzeExpr(arg)
-            }
-            this.checkCallArity(expr)
-            this.checkExtensionCallArity(expr)
-            this.checkUninitCall(expr, callee)
+            this.analyzeCall(expr, false)
             return
         }
 
@@ -321,10 +331,24 @@ fun Analyzer.analyzeExpr(expr: *AstXmlNode): Unit {
             return
         }
 
-        AstNodeCategory.ExprUnary, AstNodeCategory.ExprRef, AstNodeCategory.ExprDeref, AstNodeCategory.ExprCopy -> {
+        AstNodeCategory.ExprUnary, AstNodeCategory.ExprDeref, AstNodeCategory.ExprCopy -> {
             val operand: *AstXmlNode = xmlChildPtr(expr, AstNodeKind.Operand)
             if (!xmlIsEmpty(operand)) {
                 this.analyzeExpr(operand)
+            }
+            return
+        }
+
+        AstNodeCategory.ExprRef -> {
+            // `&C(...)` is the *one* construction a ref class allows (`checkRefConstruction`):
+            // the operand is analyzed in "boxed" context, so the rule lets the construction be.
+            val operand: *AstXmlNode = xmlChildPtr(expr, AstNodeKind.Operand)
+            if (!xmlIsEmpty(operand)) {
+                if (xmlKind(operand) == AstNodeCategory.ExprCall) {
+                    this.analyzeCall(operand, true)
+                } else {
+                    this.analyzeExpr(operand)
+                }
             }
             return
         }
