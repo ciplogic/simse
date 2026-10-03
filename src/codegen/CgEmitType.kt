@@ -472,10 +472,46 @@ fun Emitter.emitUnionClass(decl: *AstXmlNode): Unit {
         if (tmpl != "") {
             this.line(0, tmpl)
         }
+        // A generic union's one-argument `initByValue` arms are picked at C++ by the
+        // argument's type; an instantiation that makes two arms' types equal (`Res2<Str>`)
+        // would be an ambiguous call, so every arm but the first is constrained out when an
+        // earlier arm has the same type - the earlier arm wins. A concrete union needs no
+        // constraint: its field types are equal only if the declaration says so.
+        if (generic && methodName == "initByValue" && xmlCount(method, AstNodeKind.Param) == 1) {
+            val constraint: Str = this.unionInitConstraint(fields, xmlAttr(method, AstNodeAttributeKind.Text))
+            if (constraint != "") {
+                this.line(0, constraint)
+            }
+        }
         this.line(0, `inline @ret @symbol(@params) {`)
         this.emitUnionMethodBody(method, methodName, tagType)
         this.line(0, "}")
     }
+}
+
+// The `requires` clause that keeps a generic union's arm constructors distinguishable: for
+// the arm `fieldName`, every *earlier* arm's type is excluded, so an instantiation where
+// they coincide resolves to the earlier arm (`Res2<Str>(text)` builds `Value`) instead of
+// failing as an ambiguous call. Empty for the first arm and for a single-arm union.
+fun Emitter.unionInitConstraint(fields: *List<AstXmlNode>, fieldName: *Str): Str {
+    var earlier: List<Str> = List<Str>()
+    var armType: Str = ""
+    for (*field in fields) {
+        val name: Str = xmlAttr(field, AstNodeAttributeKind.Name)
+        if (name == fieldName) {
+            armType = this.type(xmlChildPtr(field, AstNodeKind.Type))
+            break
+        }
+        earlier.append(this.type(xmlChildPtr(field, AstNodeKind.Type)))
+    }
+    if (armType == "" || earlier.size() == 0) {
+        return ""
+    }
+    var conditions: List<Str> = List<Str>()
+    for (*other in earlier) {
+        conditions.append("!std::is_same_v<" + armType + ", " + other + ">")
+    }
+    return "requires (" + cgJoin(conditions, " && ") + ")"
 }
 
 // One generated method's C++ body. The arm comes from the method's `Text` attribute (the

@@ -4716,3 +4716,29 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   Known gap, recorded in `specs/declarations.md`: `Res2<Str>` (an instantiation whose
   argument equals another arm's type) collides in the generated overloads at C++ level.
   Verified: `bun tools/iterate.js --full` - 71/71 and both fixed points byte for byte.
+
+- **The union class storage is chosen per instantiation.** The arms moved into a generated
+  base (`Sm<Name>Storage`) and the class derives from it, so *which form* the storage takes
+  follows the arms: a concrete union decides at emit time (`unionArmManaged`, unchanged),
+  and a generic union emits `Sm<Name>Storage<SmManaged, T...>` with both partial
+  specializations and names one from its base clause. The form comes from the new
+  `SmUnionManaged<Ts...>` (src/rtl/types.hpp), so `Opt2<Int>` stays a trivially copyable
+  aggregate while `Opt2<Str>` gets the destructor and copy/move members. The managed
+  default constructor now starts no arm at all - the tag alone is `None`, proven legal for
+  an anonymous union of non-trivial arms - instead of constructing and destroying a
+  placeholder, and every arm write goes through the storage's own `set<Field>`, so the
+  free-function bodies are the same C++ for both forms. `stress/unions` pins the forms
+  with `std::is_trivially_copyable_v` facts on `Opt2<Int>`, `Opt2<Str>`, `DoubleOrFloat`
+  and `IntOrStr`.
+  Verified: `bun tools/iterate.js --full` - 71/71 and both fixed points byte for byte.
+
+- **A colliding union instantiation resolves to the earlier arm.** An instantiation that
+  makes two arms' types equal (`Res2<Str>`: `Value: T` and `Error: Str` are both `Str`)
+  cannot be caught at the declaration, and the generated one-argument `initByValue` arms
+  used to be an ambiguous C++ call. Every arm but the first now carries a `requires`
+  clause excluding the earlier arms' types (`requires (!std::is_same_v<Str, T>)`), so the
+  *earlier* arm wins: `Res2<Str>(text)` and `return (text)` build `Value`, the convention
+  `Res<Str>` always had. A construction whose ambiguity is visible in the source - both
+  arms spelled concretely, `Res<Str>(text)` - is still the "several fields have type"
+  diagnostic. `stress/unions` constructs `Res2<Str>` and asserts the `Value` arm.
+  Verified: `bun tools/iterate.js --full` - 71/71 and both fixed points byte for byte.

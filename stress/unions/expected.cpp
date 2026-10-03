@@ -16,13 +16,13 @@ Int64 simse_nowNanos();
 // The program's string literals: one pool, and two run-length encoded index
 // series (offsets as deltas, then lengths), each as what to subtract from the
 // previous value; strtable.hpp has the stream format.
-static const Int __sm_stringCount = 17;
+static const Int __sm_stringCount = 19;
 static const char __sm_stringPool[] =
-    "a-string-longer-than-the-inline-buffer" "payload-longer-than-the-inline-buffer!" "returned-through-a-function-call" "second" "error" "float" "later" "value" "none" "int" "str" "d:" "no" "?" "L" "R" "" 
+    "a-string-longer-than-the-inline-buffer" "payload-longer-than-the-inline-buffer!" "returned-through-a-function-call" "collided" "second" "error" "float" "later" "value" "boom" "none" "int" "str" "d:" "no" "?" "L" "R" "" 
 ;
-static const Int16 __sm_stringStarts[] = {17,6,0,-38,0,6,26,1,2,3,0,2,1,4,0,1,0,1,1,2,0};
-static const Int16 __sm_stringLens[] = {17,5,-38,0,6,26,1,2,3,0,2,1,4,0,1,0,1,1,2,0,1,1};
-static_assert(sizeof(__sm_stringPool) - 1 == 151, "the string pool and its length index disagree");
+static const Int16 __sm_stringStarts[] = {19,7,0,-38,0,6,24,2,1,1,3,0,7,1,0,1,0,1,0,1,1,2,0};
+static const Int16 __sm_stringLens[] = {19,6,-38,0,6,24,2,1,1,3,0,7,1,0,1,0,1,0,1,1,2,0,1,1};
+static_assert(sizeof(__sm_stringPool) - 1 == 163, "the string pool and its length index disagree");
 static StrView __sm_stringTable[__sm_stringCount];
 static struct __SmStringTableInitType {
     __SmStringTableInitType() {
@@ -823,6 +823,7 @@ inline Opt<Str> ns1_getError(ns1_Res2<T>* self) {
     return Opt<Str>();
 }
 template <class T>
+requires (!std::is_same_v<Str, T>)
 inline void ns1_initByValue(ns1_Res2<T>* self, Str value) {
     self->setError(std::move(value));
 }
@@ -957,6 +958,7 @@ template <class T>
 ns1_Res2<T> ns1_ok2(T value);
 template <class T>
 ns1_Res2<T> ns1_err2(Str message);
+ns1_Res2<Str> ns1_okStr2();
 template <class T>
 Bool ns1_isOk2(ns1_Res2<T> r);
 template <class T>
@@ -982,13 +984,13 @@ Str ns1_label(ns1_DoubleOrFloat* u) {
     Str out;
     ns1_SmDoubleOrFloatTypes _sm_expr1;
     Bool _sm_expr2;
-    out = __sm_stringTable[16];
+    out = __sm_stringTable[18];
     _sm_expr1 = ns1_SmDoubleOrFloatTypes::IntValue;
     _sm_expr2 = u == _sm_expr1;
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
-    out = __sm_stringTable[9];
+    out = __sm_stringTable[11];
     goto L6;
     L2:;
     _sm_expr1 = ns1_SmDoubleOrFloatTypes::DoubleValue;
@@ -996,10 +998,10 @@ Str ns1_label(ns1_DoubleOrFloat* u) {
     if (_sm_expr2) goto L4;
     goto L5;
     L4:;
-    out = __sm_stringTable[5];
+    out = __sm_stringTable[6];
     goto L6;
     L5:;
-    out = __sm_stringTable[8];
+    out = __sm_stringTable[10];
     L6:;
     return out;
 }
@@ -1008,13 +1010,13 @@ Str ns1_tagged(ns1_DoubleOrFloat* u) {
     Str out;
     ns1_SmDoubleOrFloatTypes _sm_expr1;
     Bool _sm_expr2;
-    out = __sm_stringTable[16];
+    out = __sm_stringTable[18];
     _sm_expr1 = ns1_SmDoubleOrFloatTypes::None;
     _sm_expr2 = u == _sm_expr1;
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
-    out = __sm_stringTable[8];
+    out = __sm_stringTable[10];
     goto L8;
     L2:;
     _sm_expr1 = ns1_SmDoubleOrFloatTypes::IntValue;
@@ -1022,7 +1024,7 @@ Str ns1_tagged(ns1_DoubleOrFloat* u) {
     if (_sm_expr2) goto L4;
     goto L5;
     L4:;
-    out = __sm_stringTable[9];
+    out = __sm_stringTable[11];
     goto L8;
     L5:;
     _sm_expr1 = ns1_SmDoubleOrFloatTypes::DoubleValue;
@@ -1030,7 +1032,7 @@ Str ns1_tagged(ns1_DoubleOrFloat* u) {
     if (_sm_expr2) goto L7;
     goto L8;
     L7:;
-    out = __sm_stringTable[5];
+    out = __sm_stringTable[6];
     L8:;
     return out;
 }
@@ -1039,14 +1041,14 @@ Str ns1_labelSide(ns1_SideOrSide s) {
     Str out;
     ns1_SmSideOrSideTypes _sm_when3, _sm_expr1;
     Bool _sm_expr2;
-    out = __sm_stringTable[16];
+    out = __sm_stringTable[18];
     _sm_when3 = ns1_getTypeOf(simse_addressOf(s));
     _sm_expr1 = ns1_SmSideOrSideTypes::L;
     _sm_expr2 = _sm_when3 == _sm_expr1;
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
-    out = __sm_stringTable[14];
+    out = __sm_stringTable[16];
     goto L6;
     L2:;
     _sm_expr1 = ns1_SmSideOrSideTypes::R;
@@ -1054,10 +1056,10 @@ Str ns1_labelSide(ns1_SideOrSide s) {
     if (_sm_expr2) goto L4;
     goto L5;
     L4:;
-    out = __sm_stringTable[15];
+    out = __sm_stringTable[17];
     goto L6;
     L5:;
-    out = __sm_stringTable[8];
+    out = __sm_stringTable[10];
     L6:;
     return out;
 }
@@ -1098,13 +1100,13 @@ Str ns1_strKind(ns1_IntOrStr* u) {
     Str out;
     ns1_SmIntOrStrTypes _sm_expr1;
     Bool _sm_expr2;
-    out = __sm_stringTable[13];
+    out = __sm_stringTable[15];
     _sm_expr1 = ns1_SmIntOrStrTypes::I;
     _sm_expr2 = u == _sm_expr1;
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
-    out = __sm_stringTable[9];
+    out = __sm_stringTable[11];
     goto L6;
     L2:;
     _sm_expr1 = ns1_SmIntOrStrTypes::S;
@@ -1112,10 +1114,10 @@ Str ns1_strKind(ns1_IntOrStr* u) {
     if (_sm_expr2) goto L4;
     goto L5;
     L4:;
-    out = __sm_stringTable[10];
+    out = __sm_stringTable[12];
     goto L6;
     L5:;
-    out = __sm_stringTable[8];
+    out = __sm_stringTable[10];
     L6:;
     return out;
 }
@@ -1140,6 +1142,14 @@ ns1_Res2<T> ns1_err2(Str message) {
     ns1_Res2<T> _sm_ctor3;
     ns1_initByValue(simse_addressOf(_sm_ctor3), message);
     return _sm_ctor3;
+}
+// stress/unions/src/main.kt
+ns1_Res2<Str> ns1_okStr2() {
+    Str text;
+    text = __sm_stringTable[3];
+    ns1_Res2<Str> _sm_ctor4;
+    ns1_initByValue(simse_addressOf(_sm_ctor4), text);
+    return _sm_ctor4;
 }
 // stress/unions/src/main.kt
 template <class T>
@@ -1304,7 +1314,7 @@ Int ns1_partManaged() {
     _sm_expr8 = ns1_getS(simse_addressOf(u));
     _sm_expr9 = simse_opt_hasValue(_sm_expr8);
     simse_println((_sm_expr9), stdout);
-    ns1_setS(simse_addressOf(u), __sm_stringTable[3]);
+    ns1_setS(simse_addressOf(u), __sm_stringTable[4]);
     s2 = ns1_getS(simse_addressOf(u));
     _sm_expr10 = s2.value();
     simse_println((_sm_expr10), stdout);
@@ -1362,24 +1372,25 @@ ns1_DoubleOrFloat ns1_make() {
 ns1_DoubleOrFloat ns1_makeParen() {
     Int v;
     v = 8;
-    ns1_DoubleOrFloat _sm_ctor4;
-    ns1_initByValue(simse_addressOf(_sm_ctor4), v);
-    return _sm_ctor4;
+    ns1_DoubleOrFloat _sm_ctor5;
+    ns1_initByValue(simse_addressOf(_sm_ctor5), v);
+    return _sm_ctor5;
 }
 // stress/unions/src/main.kt
 Int ns1_partUnionGenerics() {
     Int _sm_base1, _sm_expr3, _sm_expr17, _sm_expr18, _sm_expr23, _sm_expr25;
-    Str _sm_base2, _sm_expr6, out, _sm_expr12, _sm_expr22;
+    Str _sm_base2, _sm_expr6, out, _sm_expr12, _sm_expr22, _sm_expr28, _sm_expr31;
     Res<Int> a, e;
     ns1_Res2<Int> b, e2;
     Bool _sm_expr1, _sm_expr2, _sm_expr4, _sm_expr5, _sm_expr8, _sm_expr11, _sm_expr13, _sm_expr16,
-        _sm_expr19, _sm_expr21;
+        _sm_expr19, _sm_expr21, _sm_expr26, _sm_expr29;
     Opt<Int> bv, _sm_expr15, o, o2v, empty, _sm_expr20;
-    Opt<Str> e2e, later, sv;
+    Opt<Str> e2e, later, sv, _sm_expr27, _sm_expr30;
     ns1_SmRes2Types _sm_expr7;
     List<Int> numbers, _sm_expr24;
     ns1_Res2<List<Int>> l;
     Opt<List<Int>> lv;
+    ns1_Res2<Str> collided;
     a = Res<Int>::ok(7);
     b = ns1_ok2(7);
     _sm_expr1 = a.isOk();
@@ -1391,8 +1402,8 @@ Int ns1_partUnionGenerics() {
     bv = ns1_getValue(simse_addressOf(b));
     _sm_expr3 = bv.value();
     simse_println((_sm_expr3), stdout);
-    e = Res<Int>::err(__sm_stringTable[12]);
-    e2 = ns1_err2<Int>(__sm_stringTable[12]);
+    e = Res<Int>::err(__sm_stringTable[14]);
+    e2 = ns1_err2<Int>(__sm_stringTable[14]);
     _sm_expr4 = e.isOk();
     simse_println((_sm_expr4), stdout);
     _sm_expr5 = ns1_isOk2(e2);
@@ -1402,13 +1413,13 @@ Int ns1_partUnionGenerics() {
     e2e = ns1_getError(simse_addressOf(e2));
     _sm_expr6 = e2e.value();
     simse_println((_sm_expr6), stdout);
-    out = __sm_stringTable[16];
+    out = __sm_stringTable[18];
     _sm_expr7 = ns1_SmRes2Types::Value;
     _sm_expr8 = b == _sm_expr7;
     if (_sm_expr8) goto L1;
     goto L2;
     L1:;
-    out = __sm_stringTable[7];
+    out = __sm_stringTable[8];
     goto L6;
     L2:;
     _sm_expr7 = ns1_SmRes2Types::Error;
@@ -1416,13 +1427,13 @@ Int ns1_partUnionGenerics() {
     if (_sm_expr8) goto L4;
     goto L5;
     L4:;
-    out = __sm_stringTable[4];
+    out = __sm_stringTable[5];
     goto L6;
     L5:;
-    out = __sm_stringTable[8];
+    out = __sm_stringTable[10];
     L6:;
     simse_println((out), stdout);
-    ns1_setError(simse_addressOf(b), __sm_stringTable[6]);
+    ns1_setError(simse_addressOf(b), __sm_stringTable[7]);
     _sm_expr11 = ns1_isOk2(b);
     simse_println((_sm_expr11), stdout);
     later = ns1_getError(simse_addressOf(b));
@@ -1465,6 +1476,18 @@ Int ns1_partUnionGenerics() {
     _sm_expr24 = lv.value();
     _sm_expr25 = simse_lenOf(_sm_expr24);
     simse_println((_sm_expr25), stdout);
+    collided = ns1_okStr2();
+    _sm_expr26 = ns1_isOk2(collided);
+    simse_println((_sm_expr26), stdout);
+    _sm_expr27 = ns1_getValue(simse_addressOf(collided));
+    _sm_expr28 = _sm_expr27.value();
+    simse_println((_sm_expr28), stdout);
+    ns1_setError(simse_addressOf(collided), __sm_stringTable[9]);
+    _sm_expr29 = ns1_isOk2(collided);
+    simse_println((_sm_expr29), stdout);
+    _sm_expr30 = ns1_getError(simse_addressOf(collided));
+    _sm_expr31 = _sm_expr30.value();
+    simse_println((_sm_expr31), stdout);
     return 0;
 }
 // stress/unions/src/main.kt

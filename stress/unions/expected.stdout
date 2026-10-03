@@ -57,5 +57,9 @@ false
 false
 38
 2
+true
+collided
+false
+boom
 int
 int

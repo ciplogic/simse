@@ -189,10 +189,12 @@ struct and its generated members are C++ templates, and a construction's explici
 arguments bind the fields for type matching (`Res2<Int>(5)` matches `Value: T` as `Int`).
 A generic union's form is chosen **per instantiation**, from the arm types the instantiation
 actually has: a one-arm union over `T` is a trivially copyable aggregate at `T = Int` and
-takes the managed form at `T = Str`. Known gap: an instantiation whose type argument equals
-another arm's type (`Res2<Str>` with `Error: Str`) collides in the generated `initByValue`
-overloads at C++ level - the non-generic duplicate-field diagnostic cannot see it - so such
-an instance cannot be constructed yet.
+takes the managed form at `T = Str`. An instantiation that makes two arms' types equal
+(`Res2<Str>` with `Error: Str`) cannot be caught at the declaration, so an arm constructor
+resolves to the **earlier** arm: `Res2<Str>(text)` builds `Value`, the `Res<Str>`
+convention for `return (text)`; a construction whose ambiguity is visible in the source
+(`Res<Str>(text)`, both arms spelled `Str`) is still the "several fields have type"
+diagnostic.
 
 ```text
 union class DoubleOrFloat(var IntValue: Int, var DoubleValue: Float64)

@@ -145,6 +145,13 @@ fun err2<T>(message: Str): Res2<T> {
     return (message)
 }
 
+// The instantiation where two arms' types coincide: at `Res2<Str>` the `Value: T` and
+// `Error: Str` arms are both `Str`, and the arm constructor picks the *earlier* one - so
+// this is the `Value` arm, the convention `Res<Str>` always had for `return (text)`.
+fun okStr2(text: Str): Res2<Str> {
+    return (text)
+}
+
 fun isOk2<T>(r: Res2<T>): Bool {
     return r.isOfType(SmRes2Types.Value)
 }
@@ -320,7 +327,8 @@ fun partUnionGenerics(): Int {
     println(empty2.getValue().hasValue())
 
     // A `Str` payload through the single-arm `Opt2<T>`, and a managed element through
-    // `Res2<T>` (`T = Str` would collide with the `Error: Str` arm in C++).
+    // `Res2<T>`, including the colliding instantiation (`T = Str` coincides with the
+    // `Error: Str` arm; the arm constructor picks the earlier `Value` arm).
     var s: Opt2<Str> = Opt2<Str>("payload-longer-than-the-inline-buffer!")
     val sv = s.getValue()
     println(sv.value().size())
@@ -328,6 +336,12 @@ fun partUnionGenerics(): Int {
     var l: Res2<List<Int>> = ok2(numbers)
     val lv = l.getValue()
     println(lv.value().size())
+    var collided = okStr2("collided")
+    println(isOk2(collided))
+    println(collided.getValue().value())
+    collided.setError("boom")
+    println(isOk2(collided))
+    println(collided.getError().value())
     return 0
 }
 
