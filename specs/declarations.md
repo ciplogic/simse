@@ -167,6 +167,50 @@ var other: Color = Color.fromInt(4)         // Color.Green
 var any: Color = Color.fromInt(9)           // the cast's value, no member named
 ```
 
+## `union class`
+
+Status: implemented (`stress/unions`, `stress/diagnostic-union-same-type`).
+
+A `union class` declares a **discriminated union** (a tagged union): a value type with
+several fields of which one is live at a time, selected by an implicit tag enum. It is
+otherwise a data class - fields, methods, `this` - and its generated C++ is the tag beside
+the fields' anonymous union. There is no lifetime machinery: an arm is set by plain
+assignment, and a field type that needs managing (`Str`, `List`, a class holding one) is
+C++'s problem, not the language's.
+
+```text
+union class DoubleOrFloat(var IntValue: Int, var DoubleValue: Float64)
+```
+
+For a `union class U`, the compiler defines beside the class:
+
+- an enum `SmUTypes` - a normal enum in the same package, members `None` (0) and then the
+  field names in declaration order;
+- `getTypeOf(): SmUTypes` - the live arm's tag;
+- `isOfType(t: SmUTypes): Bool` - the tag test;
+- `setNone(): Unit` - back to the empty tag;
+- per field `A: T`, `setA(value: T): Unit` (writes the tag and the arm) and
+  `getA(): Opt<T>` (the value when the tag is `A`, an empty `Opt` otherwise).
+
+The generated members are ordinary declarations to the checker and to `when`; a user
+method that reuses one of their names is a diagnostic.
+
+### Construction
+
+`U()` is the `None` value, and `U(v)` picks the arm whose field type *is* `v`'s type: two
+fields of one type are a declaration diagnostic (the construction could not tell them
+apart), while two distinct types - two enums, say - are fine. The construction follows the
+`initByValue` convention: `var u = U(v)`, the explicit-type `var u: U = U(v)` and
+`return (v)` all build the arm through its generated `initByValue`. Unlike a data class,
+an expression position has no lowering yet - `f(U(v))`, `u = U(v)` and a static
+initializer are reported rather than mis-built. Direct field access is allowed: a read is
+unchecked like a C++ union member, and a direct write moves the storage without moving the
+tag (`setA` is the tag-aware write).
+
+The generic form is not implemented; a `union class U<T>` is a diagnostic. A `when` over
+`getTypeOf()` is an ordinary enum `when`; the language does not check it for
+exhaustiveness.
+
 ## Package declarations
 
 Status: required for the first implementation.
@@ -181,7 +225,8 @@ full rules.
 
 Status: required for the first implementation.
 
-Module-level declarations (functions, `data class`, `enum class`, `typealias`, and the
+Module-level declarations (functions, `data class`, `union class` with its implicit tag
+enum, `enum class`, `typealias`, and the
 file-level `var`/`val` of `specs/statics.md`) are hoisted: visible throughout the module
 regardless of textual order. Declarations may be referenced before their textual
 definition, and mutually recursive functions need no forward declaration. Methods within

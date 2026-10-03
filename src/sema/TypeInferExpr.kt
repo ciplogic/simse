@@ -164,6 +164,20 @@ fun SemInfer.isInitByValueType(typeName: *Str): Bool {
     return false
 }
 
+// Whether `typeNode` names a `union class` declaration: a construction of one routes
+// through the generated `initByValue` arms even in the explicit-type form
+// (`var x: U = U(1)`), which is otherwise left as a plain constructor call.
+fun SemInfer.isUnionClassType(typeNode: *AstXmlNode): Bool {
+    if (xmlKind(typeNode) != AstNodeCategory.TypeNamed) {
+        return false
+    }
+    val decl: *AstXmlNode = this.facts.types.getPtr(xmlAttr(typeNode, AstNodeAttributeKind.Name))
+    if (decl == null) {
+        return false
+    }
+    return xmlAttr(decl, AstNodeAttributeKind.IsUnionClass) == "true"
+}
+
 // Whether `init` is `T(args)` for a type `T` that declares an `initByValue` extension:
 // the construction convention (`var x = T(a)`), as against a plain constructor call
 // (`var x: T = T(a)`, the explicit-type form, which is left alone).
@@ -301,6 +315,16 @@ fun SemInfer.stmt(stmtNode: AstXmlNode): AstXmlNode {
             if (!xmlIsEmpty(typeNode)) {
                 this.mark(name, typeNode)
             }
+            // `var x: U = U(a)` on a `union class` is a construction like the inferred form:
+            // its aggregate spelling would put the argument in the tag, so the declaration is
+            // marked and the backend routes it through the generated `initByValue` arm.
+            if (!xmlIsEmpty(declared) && !xmlIsEmpty(init) && this.isUnionClassType(declared)
+                && this.isInitByValueCtor(init)
+            ) {
+                val typedDecl: AstXmlNode = semWithType(stmtNode, semReRole(declared, AstNodeKind.Type))
+                typedDecl.attributes.append(AstNodeAttribute(AstNodeAttributeKind.InitByValue, "true"))
+                return typedDecl
+            }
             if (!xmlIsEmpty(declared) || xmlIsEmpty(typeNode) || xmlIsEmpty(init)
                 || !this.declarable(init) || !this.spellable(typeNode)
             ) {
@@ -363,4 +387,3 @@ fun SemInfer.instantiate(decl: *AstXmlNode, base: *AstXmlNode, memberType: AstXm
     }
     return semSubstitute(memberType, bindings, classParams)
 }
-

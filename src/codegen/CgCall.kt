@@ -273,6 +273,9 @@ fun Emitter.call(e: *AstXmlNode): Str {
                 calleeName = nativeOpt.value()
             }
             if (this.dataClassNames.has(name)) {
+                if (this.unionConstructionUnsupported(name, e)) {
+                    return "/*unsupported*/"
+                }
                 // A construction is the aggregate's brace form, with the type arguments
                 // spelled (`ns1_Box<Int>{1}`); CTAD covers the bare-name arm below.
                 val qualifyText2: Str = this.qualify(this.typePackage(name), name)
@@ -342,6 +345,9 @@ fun Emitter.call(e: *AstXmlNode): Str {
                 calleeName = nativeOpt.value()
             }
             if (this.dataClassNames.has(name)) {
+                if (this.unionConstructionUnsupported(name, e)) {
+                    return "/*unsupported*/"
+                }
                 // A construction without type arguments: the brace form, with C++20
                 // aggregate CTAD deducing them.
                 val qualifyText3: Str = this.qualify(this.typePackage(name), name)
@@ -510,4 +516,18 @@ fun Emitter.call(e: *AstXmlNode): Str {
     }
     this.fail(e, "unsupported: call target")
     return "/*unsupported*/"
+}
+
+// A `union class` construction in an expression position (`return U(2)`, `x = U(2)`, a
+// static initializer): the supported forms are the `var`/`val` declaration and the
+// parenthesized `return (...)` of the construction convention, both routed through the
+// generated `initByValue` arm. The aggregate spelling would put the argument in the tag, so
+// this is a hard error rather than a wrong shape.
+fun Emitter.unionConstructionUnsupported(name: *Str, e: *AstXmlNode): Bool {
+    val decl: *AstXmlNode = this.types.getPtr(name)
+    if (decl == null || xmlAttr(decl, AstNodeAttributeKind.IsUnionClass) != "true") {
+        return false
+    }
+    this.fail(e, "unsupported: construct a union class in a 'var'/'val' declaration ('var x = U(...)') or as 'return (value)'")
+    return true
 }

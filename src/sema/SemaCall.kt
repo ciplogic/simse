@@ -145,6 +145,10 @@ fun Analyzer.checkCallArity(call: *AstXmlNode): Unit {
     val decl: *AstXmlNode = this.types.getPtr(name)
     if (decl != null) {
         if (xmlKind(decl) == AstNodeCategory.DataClass) {
+            if (xmlAttr(decl, AstNodeAttributeKind.IsUnionClass) == "true") {
+                this.checkUnionConstruction(call, name, decl, argCount)
+                return
+            }
             val fieldCount: Int = xmlCount(decl, AstNodeKind.Field)
             if (fieldCount != argCount) {
                 this.diag(
@@ -192,6 +196,130 @@ fun Analyzer.checkCallArity(call: *AstXmlNode): Unit {
         xmlLine(call), xmlColumn(call),
         `no overload of '@name' takes @argCount argument(s)`
     )
+}
+
+// A `union class` construction (`specs/declarations.md`): at most one value, chosen by its
+// type, because only one arm can be live. Zero arguments construct `None`; one argument
+// must match exactly one field's type - the call is then routed through that field's
+// generated `initByValue` arm (`var x = U(v)`).
+fun Analyzer.checkUnionConstruction(
+    call: *AstXmlNode, name: *Str, decl: *AstXmlNode, argCount: Int
+): Unit {
+    if (argCount == 0) {
+        return
+    }
+    if (argCount > 1) {
+        this.diag(
+            xmlLine(call), xmlColumn(call),
+            `union class '@name' takes at most one value`
+        )
+        return
+    }
+    val argType: AstXmlNode = this.unionArgType(xmlChildPtr(call, AstNodeKind.Arg))
+    if (xmlIsEmpty(argType)) {
+        this.diag(
+            xmlLine(call), xmlColumn(call),
+            `union class '@name': the argument's type is unknown`
+        )
+        return
+    }
+    val fields: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Field)
+    var count: Int = 0
+    for (*field in fields) {
+        val fieldType: AstXmlNode =
+            this.unionResolveAlias(xmlChildPtr(field, AstNodeKind.Type))
+        if (semaSameType(fieldType, argType)) {
+            count = count + 1
+        }
+    }
+    if (count == 1) {
+        return
+    }
+    val argText: Str = semaTypeText(argType)
+    if (count == 0) {
+        this.diag(
+            xmlLine(call), xmlColumn(call),
+            `union class '@name' has no field of type '@argText'`
+        )
+        return
+    }
+    this.diag(
+        xmlLine(call), xmlColumn(call),
+        `union class '@name': several fields have type '@argText'`
+    )
+}
+
+// The type of a construction argument, literals and enum members included: `exprType`
+// resolves a binding or a field, but neither a literal nor `Enum.Member` has a declaration
+// to read.
+fun Analyzer.unionArgType(arg: *AstXmlNode): AstXmlNode {
+    val kind: AstNodeCategory = xmlKind(arg)
+    if (kind == AstNodeCategory.ExprIntLit) {
+        return semNamedType("Int")
+    }
+    if (kind == AstNodeCategory.ExprFloatLit) {
+        return semNamedType("Float64")
+    }
+    if (kind == AstNodeCategory.ExprBoolLit) {
+        return semNamedType("Bool")
+    }
+    if (kind == AstNodeCategory.ExprMember) {
+        val recv: *AstXmlNode = xmlChildPtr(arg, AstNodeKind.Receiver)
+        if (xmlKind(recv) == AstNodeCategory.ExprName) {
+            val recvName: Str = xmlAttr(recv, AstNodeAttributeKind.Name)
+            val decl: *AstXmlNode = this.types.getPtr(recvName)
+            if (decl != null && xmlKind(decl) == AstNodeCategory.Enum) {
+                return semNamedType(recvName)
+            }
+        }
+    }
+    return this.exprType(arg)
+}
+
+// A type node through its `typealias`es, one hop at a time (the shape `isViewType` follows):
+// `typealias MyInt = Int` and `Int` are one field type, while two enums never are.
+fun Analyzer.unionResolveAlias(typeNode: *AstXmlNode): AstXmlNode {
+    var current: AstXmlNode = typeNode
+    var guard: Int = 0
+    while (!xmlIsEmpty(current) && guard < 16) {
+        guard = guard + 1
+        if (xmlKind(current) != AstNodeCategory.TypeNamed) {
+            return current
+        }
+        val decl: *AstXmlNode = this.types.getPtr(xmlAttr(current, AstNodeAttributeKind.Name))
+        if (decl == null || xmlKind(decl) != AstNodeCategory.TypeAlias) {
+            return current
+        }
+        val target: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.TargetType)
+        if (xmlIsEmpty(target)) {
+            return current
+        }
+        current = target
+    }
+    return current
+}
+
+// Whether two type nodes denote the same written type: kind, name (and integer literal, for
+// `SmallVector<4, T>`) per node, children recursively. Roles and positions differ between a
+// declaration's own type and an inferred one, so neither is compared.
+fun semaSameType(a: *AstXmlNode, b: *AstXmlNode): Bool {
+    if (xmlKind(a) != xmlKind(b)
+        || xmlAttr(a, AstNodeAttributeKind.Name) != xmlAttr(b, AstNodeAttributeKind.Name)
+        || xmlAttr(a, AstNodeAttributeKind.Text) != xmlAttr(b, AstNodeAttributeKind.Text)
+    ) {
+        return false
+    }
+    if (a.Children.count() != b.Children.count()) {
+        return false
+    }
+    var i: Int = 0
+    while (i < a.Children.count()) {
+        if (!semaSameType(a.Children[i], b.Children[i])) {
+            return false
+        }
+        i = i + 1
+    }
+    return true
 }
 
 // The receiver's type when the checker tracks it (a local/parameter, a literal, a field

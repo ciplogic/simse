@@ -46,7 +46,17 @@ fun Parser.parseRoot(): AstXmlNode {
         if (this.checkText("import")) {
             imports.append(this.parseImport())
         } else {
-            decls.append(this.parseDecl())
+            val decl: AstXmlNode = this.parseDecl()
+            // A `union class` carries its implicit tag enum as a `UnionTag` child; hoist it
+            // to the module as an ordinary `Enum` declaration, before the class, so sema
+            // and the emitter see one top-level enum and the class beside it.
+            val tag: AstXmlNode = xmlChild(decl, AstNodeKind.UnionTag)
+            if (!xmlIsEmpty(tag)) {
+                var top: AstXmlNode = tag
+                top.name = AstNodeKind.Enum
+                decls.append(top)
+            }
+            decls.append(decl)
         }
         this.skipSeparators()
     }
@@ -145,6 +155,17 @@ fun Parser.parseDecl(): AstXmlNode {
 
         "enum" -> {
             return this.parseEnum()
+        }
+
+        "union" -> {
+            // `union class` (specs/declarations.md): a data class one field of which is live
+            // at a time, selected by an implicit `Sm<Name>Types` tag enum the parser
+            // synthesizes beside it.
+            if (this.peek(1).text != "class") {
+                this.fail("expected 'class' after 'union'")
+                return this.emptyNode()
+            }
+            return this.parseUnionClass()
         }
 
         "native", "ref" -> {
@@ -400,6 +421,137 @@ fun Parser.parseDataClass(): AstXmlNode {
     xmlAddChildren(node, methods)
     return node
 }
+
+// `union class U(var A: T, ...)` (specs/declarations.md): a discriminated union - one field
+// is live at a time, named by the tag enum. Beyond parsing the class itself (the shape is a
+// data class's), this synthesizes two things:
+//
+//   - the implicit `Sm<Name>Types` enum (`None` first, then one member per field), carried
+//     as a `UnionTag` child for `parseRoot` to hoist beside the class; and
+//   - the tag surface as ordinary method declarations, marked `IsUnionGenerated`:
+//     `getTypeOf()`, `isOfType(typeToCheck)`, `setNone()`, and per field a `get<Field>()`
+//     (an `Opt<T>`: empty when the tag says another arm), a `set<Field>(value)` that also
+//     moves the tag, and an `initByValue(value)` arm constructor.
+//
+// The emitter writes their C++ inline with the struct (`emitUnionClass`) because the tag is
+// not a Simse field its IL could name; the checker resolves them like any method.
+fun Parser.parseUnionClass(): AstXmlNode {
+    val pos: SourcePos = this.peek(0).pos
+    var node: AstXmlNode = this.parseDataClass()
+    if (this.failed) {
+        return this.emptyNode()
+    }
+    node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.IsUnionClass, "true"))
+    val name: Str = xmlAttr(node, AstNodeAttributeKind.Name)
+    val tagName: Str = unionTagName(name)
+    xmlAddChild(node, this.unionTagEnum(name, node, pos))
+
+    val unitType: AstXmlNode = this.namedTypeNode(AstNodeKind.ReturnType, "Unit", pos)
+    val boolType: AstXmlNode = this.namedTypeNode(AstNodeKind.ReturnType, "Bool", pos)
+    val tagType: AstXmlNode = this.namedTypeNode(AstNodeKind.ReturnType, tagName, pos)
+    var generated: List<AstXmlNode> = List<AstXmlNode>()
+    generated.append(this.unionMethod("getTypeOf", List<AstXmlNode>(), tagType, pos, ""))
+    var checkParams: List<AstXmlNode> = List<AstXmlNode>()
+    checkParams.append(
+        this.unionParam("typeToCheck", this.namedTypeNode(AstNodeKind.Type, tagName, pos), pos)
+    )
+    generated.append(this.unionMethod("isOfType", checkParams, boolType, pos, ""))
+    generated.append(this.unionMethod("setNone", List<AstXmlNode>(), unitType, pos, ""))
+    generated.append(this.unionMethod("initByValue", List<AstXmlNode>(), unitType, pos, ""))
+    for (*field in xmlChildren(node, AstNodeKind.Field)) {
+        val fieldName: Str = xmlAttr(field, AstNodeAttributeKind.Name)
+        val fieldPos: SourcePos = SourcePos(0, xmlLine(field), xmlColumn(field))
+        val suffix: Str = upperFirst(fieldName)
+        val fieldType: AstXmlNode = xmlChild(field, AstNodeKind.Type)
+        var params: List<AstXmlNode> = List<AstXmlNode>()
+        params.append(this.unionParam("value", fieldType, fieldPos))
+        generated.append(this.unionMethod("set" + suffix, params, unitType, fieldPos, fieldName))
+        generated.append(
+            this.unionMethod("get" + suffix, List<AstXmlNode>(), this.unionOptType(fieldType, fieldPos), fieldPos, fieldName)
+        )
+        var initParams: List<AstXmlNode> = List<AstXmlNode>()
+        initParams.append(this.unionParam("value", fieldType, fieldPos))
+        generated.append(this.unionMethod("initByValue", initParams, unitType, fieldPos, fieldName))
+    }
+    xmlAddChildren(node, generated)
+    return node
+}
+
+// The implicit tag enum, as a `UnionTag` child of the class: `Sm<Name>Types`, members `None`
+// (0) and the field names in declaration order.
+fun Parser.unionTagEnum(className: *Str, decl: *AstXmlNode, pos: SourcePos): AstXmlNode {
+    var members: List<AstXmlNode> = List<AstXmlNode>()
+    members.append(this.unionEnumMember("None", pos))
+    for (*field in xmlChildren(decl, AstNodeKind.Field)) {
+        members.append(this.unionEnumMember(xmlAttr(field, AstNodeAttributeKind.Name), pos))
+    }
+    var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, unionTagName(className)))
+    var node: AstXmlNode = AstXmlNode(AstNodeKind.UnionTag, AstNodeCategory.Enum, attrs, Array<AstXmlNode>())
+    xmlAddChildren(node, members)
+    return node
+}
+
+fun Parser.unionEnumMember(memberName: *Str, pos: SourcePos): AstXmlNode {
+    var attrs: List<AstNodeAttribute> = listOf<AstNodeAttribute>(
+        AstNodeAttribute(AstNodeAttributeKind.Name, memberName),
+        AstNodeAttribute(AstNodeAttributeKind.HasValue, "false"),
+        AstNodeAttribute(AstNodeAttributeKind.Value, "0"),
+        AstNodeAttribute(AstNodeAttributeKind.Line, pos.line.toString()),
+        AstNodeAttribute(AstNodeAttributeKind.Column, pos.column.toString())
+    )
+    return AstXmlNode(AstNodeKind.EnumMember, AstNodeCategory.None, attrs, Array<AstXmlNode>())
+}
+
+// One generated method declaration: no body (the emitter writes it), no receiver child (the
+// checker reads `this` as the enclosing class), marked `IsUnionGenerated`. `fieldName` is the
+// arm the method belongs to, carried as `Text` so the emitter writes `_type = Tag::<field>`
+// without re-deriving it (empty for the tag-wide methods).
+fun Parser.unionMethod(
+    methodName: *Str, params: *List<AstXmlNode>, ret: AstXmlNode, pos: SourcePos, fieldName: *Str
+): AstXmlNode {
+    var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, methodName))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Text, fieldName))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsNative, "false"))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.HasBody, "false"))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.HasReceiver, "false"))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsPure, "false"))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsSuspend, "false"))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsBorrow, "false"))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsUnionGenerated, "true"))
+    var node: AstXmlNode = AstXmlNode(AstNodeKind.Function, AstNodeCategory.Function, attrs, Array<AstXmlNode>())
+    xmlAddChildren(node, params)
+    xmlAddChild(node, ret)
+    return node
+}
+
+fun Parser.unionParam(paramName: *Str, typeNode: AstXmlNode, pos: SourcePos): AstXmlNode {
+    var attrs: List<AstNodeAttribute> = listOf<AstNodeAttribute>(
+        AstNodeAttribute(AstNodeAttributeKind.Name, paramName),
+        AstNodeAttribute(AstNodeAttributeKind.Line, pos.line.toString()),
+        AstNodeAttribute(AstNodeAttributeKind.Column, pos.column.toString())
+    )
+    var node: AstXmlNode = AstXmlNode(AstNodeKind.Param, AstNodeCategory.None, attrs, Array<AstXmlNode>())
+    xmlAddChild(node, typeNode)
+    return node
+}
+
+// `Opt<T>` as a return type: the field's type node re-roled to a `TypeArg`.
+fun Parser.unionOptType(inner: AstXmlNode, pos: SourcePos): AstXmlNode {
+    var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, "Opt"))
+    var node: AstXmlNode = AstXmlNode(
+        AstNodeKind.ReturnType, AstNodeCategory.TypeGeneric, attrs, Array<AstXmlNode>()
+    )
+    var arg: AstXmlNode = inner
+    arg.name = AstNodeKind.TypeArg
+    xmlAddChild(node, arg)
+    return node
+}
+
+// `IntValue` -> `IntValue` (unchanged), `x` -> `X`: the suffix a field contributes to
+// `get<Field>`/`set<Field>` (the shared `common.upperFirst`).
 
 fun Parser.parseEnum(): AstXmlNode {
     val pos: SourcePos = this.peek(0).pos

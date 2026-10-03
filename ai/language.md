@@ -30,6 +30,12 @@ mutable, inline byte string (`s[i]`, `s.size()`, `s.substr(...)`, ...). Containe
 locals infer from the initializer, or write the type. `null` is for handles only.
 
 Data classes carry fields and methods; enums have explicit values and `toInt()`/`fromInt`.
+A `union class U(var A: T, var B: U)` is a discriminated union: one field is live at a time
+under an implicit `SmUTypes` tag enum. `U()` is `None`, `U(v)` picks the arm by `v`'s type,
+and `getTypeOf()`, `isOfType(t)`, `getA(): Opt<T>` and `setA(v)` are generated; direct field
+reads and writes are allowed (a direct write does not move the tag). No generic form yet,
+and no exhaustive `when` - matching is `when` over `getTypeOf()` (`specs/declarations.md`,
+`stress/unions`).
 `typealias` names a type or a callable (`typealias IntFn = (Int) -> Int`). `native class` is
 the same value type with the host's alignment instead of the 4-byte packing (for mirroring a
 native layout); `ref class` has no value form - it is built as `&C(...)` and held by `&C`/`*C` -

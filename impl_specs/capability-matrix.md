@@ -4641,3 +4641,28 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   (the intra-compile knob) takes the no-colon spelling on this toolchain and already defaults
   to its maximum - nothing there to turn up.
   Verified: `bun tools/iterate.js --full` - 68/68 and both fixed points byte for byte.
+
+- **`union class` - a discriminated union (`specs/declarations.md`).**
+  `union class U(var A: T, ...)` parses as a data class marked `IsUnionClass`. The parser
+  synthesizes the implicit tag enum `Sm<Name>Types` (`None` + the field names in declaration
+  order), carried as a `UnionTag` child and hoisted by `parseRoot` to the module, so sema and
+  the emitter see an ordinary enum; it also synthesizes the tag surface as body-less method
+  declarations marked `IsUnionGenerated` (`getTypeOf`, `isOfType`, `setNone`, per field a
+  `set<Field>` and an `Opt<T>`-returning `get<Field>`, and an `initByValue` arm). The checker
+  resolves them like any method (a user method reusing a generated name is a diagnostic); the
+  emitter writes the struct (tag + anonymous union) and their C++ inline as free functions -
+  the method convention, receiver first - and skips them in the prototype/body pass
+  (`emitUnionClass`, `emitFunction`). The arm a generated method belongs to rides as its
+  `Text` attribute. `U()` constructs `None`, `U(v)` picks the arm whose field type is `v`'s
+  type - two fields of one type are a declaration diagnostic, two distinct types (two enums,
+  say) are fine - and the construction routes through the existing `initByValue` convention
+  in both declaration forms and in `return (v)`; other expression positions are reported as
+  user errors by the extractor, not mis-built. Direct read/write of the fields is allowed and
+  unchecked: a direct write moves the storage without moving the tag (`set<Field>` is the
+  tag-aware write, `setNone` resets). No generic form (diagnostic) and no lifetime machinery -
+  a `Str` arm makes the generated struct non-copyable under C++'s union rules, recorded as
+  accepted breakage. `stress/unions` (tag, getters, setters, construction forms, direct
+  access, body and extension methods, zero-field union, two enum arms, `when` over the tag;
+  emission golden), `stress/diagnostic-union-same-type` and
+  `stress/diagnostic-union-field-name` pin it.
+  Verified: `bun tools/iterate.js --full` - 71/71 and both fixed points byte for byte.

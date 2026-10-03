@@ -12,7 +12,9 @@ harnesses in `tools/`; the plan for the rest is
 with a string library, `List<T>`, `Array<T>`, `SmallVector<N, T>`,
 `Dictionary<K, V>`, `Span<T>`, `Opt<T>`, `Res<T>`, `XmlNode`/`Attribute` (the
 `xml` module),
-`data class` (with methods), `enum class` (with explicit values and `toInt`/`fromInt`),
+`data class` (with methods), `union class` (a discriminated union: one field live at a time
+under a generated `Sm<Name>Types` tag enum), `enum class` (with explicit values and
+`toInt`/`fromInt`),
 `typealias`, functions, methods, extension methods, lambdas (by-value capture),
 `val`/`var` locals, file-level `var`/`val` statics, `if`/`else`, `when`, `while`,
 `break`/`continue`, `return`, `yield` (a body that yields becomes a state
@@ -30,7 +32,7 @@ server).
 `src/simse_bootstrap.cpp` builds a compiler with a C++ compiler alone, and
 that compiler transpiles the sources back into the same file byte for byte. One
 implementation, checked by `bun tools/iterate.js --full` - the bootstrap fixed
-point and the end-to-end stress corpus (68 programs) in one command, with
+point and the end-to-end stress corpus (71 programs) in one command, with
 `tools/bootstrap.js` and `tools/stress.js` as the tools underneath.
 
 **The performance story.** Transpiling the compiler's own 17,905-line source
@@ -104,8 +106,10 @@ these):
 2. **String formatting** - `fmtStr`/`fmtStrWith` and `@name`/`@(name)` interpolation in a
    backtick string cover the template case; a format protocol that prints your own types is
    not there, so values of a `data class` are still built with `+` and `toString()`.
-3. **Closed unions + exhaustive `when`** - the replacement for dynamic dispatch;
-   needed for JSON, protocol messages and any "one of these shapes" modelling.
+3. **Pattern matching** - `union class` landed (a discriminated union, `specs/declarations.md`),
+   so "one of these shapes" payloads exist; an exhaustive `when` is not planned - matching is
+   `when` over the generated `getTypeOf()` tag. Richer pattern labels (`is T`, `in 1..5`) are
+   still open.
 4. **Static interfaces (protocols)** - `Hashable`, `Comparable`, `Printable`
    resolved at reification, so dictionaries, sorting, printing and JSON work for
    *your* types with no runtime support. `data class` should satisfy the first

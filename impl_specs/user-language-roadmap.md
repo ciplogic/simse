@@ -79,8 +79,12 @@ closed unions with `when`, or a hand-written tagged struct.
 
 ### 4.1 Data modelling: closed unions and `when`
 
-Needed: a closed union (`sealed`-like) plus `when` with exhaustive matching, so payloads can
-differ per case (`when` on an `Int` is not enough). Unblocks: `JsonValue`, protocol messages,
+Landed: `union class` (`specs/declarations.md`) - a discriminated union with a generated
+`Sm<Name>Types` tag enum, per-field `get`/`set` accessors, and `U()` / `U(value)`
+construction; matching is `when` over `getTypeOf()`. An exhaustive `when` is deliberately
+out of scope - there will never be one; the tag enum is the selector. Still open: pattern
+labels (`is T`, `in 1..5`) and the positions a union class cannot be built in yet
+(`f(U(v))`, `x = U(v)`, static initializers). Unblocks: `JsonValue`, protocol messages,
 ASTs, result types richer than `Res`, and the interface-as-value workaround above. Makes the
 no-vtable decision comfortable rather than limiting.
 
@@ -183,7 +187,7 @@ mean "drop to C for one function" (only the RTL can today).
 
 | Phase | Contents | Gate |
 | --- | --- | --- |
-| 1. Ergonomics | `for`, interpolation, default args, reference captures, `when` + closed unions, `Printable` + `data class` defaults, `panic`/`assert`, enum names | a 300-line CLI tool reads files, parses text, prints well-formatted output - no `while` boilerplate, no `println` limits |
+| 1. Ergonomics | `for`, interpolation, default args, reference captures, closed unions (`union class`), `Printable` + `data class` defaults, `panic`/`assert`, enum names | a 300-line CLI tool reads files, parses text, prints well-formatted output - no `while` boilerplate, no `println` limits |
 | 2. Protocols | constraint checking + `Hashable`/`Comparable`, `Set`, `List.reserve`, functional helpers | a `Dictionary<MyKey, V>` over a user `data class`, sorted sets, a word-count program that beats the scripting version |
 | 3. Texts and bytes | `format`, UTF-8 rules, `Buffer`, hex/base64/CRC, clock, randomness, env/stdin/logging | a tool that parses a binary file format and logs a report with timings |
 | 4. JSON | `json.encode`/`json.decode<T>` derived from data classes, `JsonValue`, error paths | a CLI that converts between JSON and a text format, round-tripping a nested structure |

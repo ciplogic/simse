@@ -28,6 +28,11 @@ enum class AstNodeKind {
     ReturnType,
     TargetType,
     Receiver,
+
+    // The implicit tag enum a `union class` carries, generated beside it and hoisted to the
+    // module's declarations by the parser so sema and the emitter treat it as an ordinary
+    // enum (name `Sm<Type>Types`, members `None` + the field names).
+    UnionTag,
     Stmt,
     Expr,
     Cond,
@@ -98,7 +103,17 @@ enum class AstNodeAttributeKind {
     IsNativeClass,
 
     // `ref class`: the second class word - parsed and recorded, and nothing reads it yet.
-    IsRefClass
+    IsRefClass,
+
+    // `union class` (specs/declarations.md): a discriminated union - one field live at a
+    // time, chosen by an implicit `Sm<Type>Types` tag enum. The class is otherwise a data
+    // class (fields, methods), with generated tag accessors and per-field arms.
+    IsUnionClass,
+
+    // One of a `union class`'s generated members (`getTypeOf`, `isOfType`, `get<Field>`,
+    // `set<Field>`, `setNone`, `initByValue`): a real declaration to sema, skipped by the
+    // emitter's body pass because class emission writes the C++ by hand (`emitUnionClass`).
+    IsUnionGenerated
 }
 
 // What a node is - the schema's `kind` - as against its role (`AstNodeKind`, where it

@@ -378,6 +378,34 @@ fun label(c: Color): Str {
 }
 ```
 
+A `union class` is a discriminated union: several fields, **one** live at a time, under an
+implicit `Sm<Name>Types` tag enum (`None` first, then the field names). The compiler
+generates `getTypeOf(): Sm<Name>Types`, `isOfType(t): Bool`, `setNone()`, and per field a
+`set<Field>(value)` that moves the tag and a `get<Field>(): Opt<T>` that is empty when the
+tag says another arm. `U()` is the `None` value; `U(value)` picks the arm whose field type
+is the value's type; `return (value)` constructs the same way. Direct reads and writes of
+the fields are allowed (a direct write does not move the tag), and a user method in the
+body works over the same storage. There is no exhaustive matching: `when` over
+`getTypeOf()` is the ordinary enum `when`.
+
+```simse
+union class DoubleOrFloat(var IntValue: Int, var DoubleValue: Float64)
+
+fun label(u: DoubleOrFloat): Str {
+    when (u.getTypeOf()) {
+        SmDoubleOrFloatTypes.IntValue -> {
+            return "int"
+        }
+        SmDoubleOrFloatTypes.DoubleValue -> {
+            return "float"
+        }
+        else -> {
+            return "none"
+        }
+    }
+}
+```
+
 ## Generics and collections
 
 `List<T>` is a growable, deep-copying sequence; `Array<T>` is a fixed-length

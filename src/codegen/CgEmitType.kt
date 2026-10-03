@@ -206,6 +206,14 @@ fun Emitter.emitTypeByName(
             }
         }
         this.curFile = *file
+        // A `union class`'s struct holds the tag enum by value, so the enum is pulled in
+        // first even though it is not a field.
+        if (xmlAttr(decl, AstNodeAttributeKind.IsUnionClass) == "true") {
+            this.emitOneDep(unionTagName(xmlAttr(decl, AstNodeAttributeKind.Name)), files, prel, emitted, defined)
+            if (this.failed) {
+                return
+            }
+        }
         this.emitDataClass(decl)
         return
     }
@@ -284,6 +292,10 @@ fun Emitter.emitOneDep(
 }
 
 fun Emitter.emitDataClass(decl: *AstXmlNode): Unit {
+    if (xmlAttr(decl, AstNodeAttributeKind.IsUnionClass) == "true") {
+        this.emitUnionClass(decl)
+        return
+    }
     this.setActiveTypeParams(xmlTypeParamNames(decl))
     val fields: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Field)
     for (*field in fields) {
@@ -337,6 +349,92 @@ fun Emitter.emitDataClass(decl: *AstXmlNode): Unit {
     if (!nativeLayout) {
         this.line(0, "SIMSE_PACK_POP")
     }
+}
+
+// A `union class`: the tag, the anonymous union of the arms, and the generated surface as
+// free functions (the method convention: the receiver is the first parameter). No lifetime
+// machinery: an arm is set by plain assignment to the union member, which is what direct
+// access does too; a field type that needs managing is C++'s problem, not this emitter's.
+// The tag enum itself is a separate declaration, emitted just before by `emitTypeByName`.
+fun Emitter.emitUnionClass(decl: *AstXmlNode): Unit {
+    this.setActiveTypeParams(xmlTypeParamNames(decl))
+    val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
+    val emittedName: Str = this.qualify(this.typePackage(name), name)
+    val tagType: Str = this.qualify(this.typePackage(name), unionTagName(name))
+    val fields: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Field)
+    this.sourceComment(decl)
+    this.line(0, "SIMSE_PACK_PUSH")
+    this.line(0, `struct @emittedName {`)
+    this.line(1, `@tagType _type = @tagType::None;`)
+    if (fields.size() > 0) {
+        this.line(1, "union {")
+        for (*field in fields) {
+            val fieldType: Str = this.type(xmlChildPtr(field, AstNodeKind.Type))
+            val fieldName: Str = xmlAttr(field, AstNodeAttributeKind.Name)
+            this.line(2, `@fieldType @fieldName;`)
+        }
+        this.line(1, "};")
+    }
+    this.line(0, "};")
+    this.line(0, "SIMSE_PACK_POP")
+    if (this.failed) {
+        return
+    }
+    for (*method in xmlChildren(decl, AstNodeKind.Function)) {
+        if (xmlAttr(method, AstNodeAttributeKind.IsUnionGenerated) != "true") {
+            continue
+        }
+        val methodName: Str = xmlAttr(method, AstNodeAttributeKind.Name)
+        val symbol: Str = this.qualify(this.typePackage(name), methodName)
+        val ret: Str = this.type(xmlChildPtr(method, AstNodeKind.ReturnType))
+        var params: Str = emittedName + "* self"
+        for (*param in xmlChildren(method, AstNodeKind.Param)) {
+            val paramType: Str = this.type(xmlChildPtr(param, AstNodeKind.Type))
+            val paramName: Str = xmlAttr(param, AstNodeAttributeKind.Name)
+            params = params + ", " + paramType + " " + paramName
+        }
+        if (this.failed) {
+            return
+        }
+        this.line(0, `inline @ret @symbol(@params) {`)
+        this.emitUnionMethodBody(method, methodName, tagType)
+        this.line(0, "}")
+    }
+}
+
+// One generated method's C++ body. The arm comes from the method's `Text` attribute (the
+// field name the parser recorded), so `set`/`get`/`initByValue` never re-match types here.
+fun Emitter.emitUnionMethodBody(
+    method: *AstXmlNode, methodName: *Str, tagType: *Str
+): Unit {
+    val fieldName: Str = xmlAttr(method, AstNodeAttributeKind.Text)
+    if (methodName == "getTypeOf") {
+        this.line(1, "return self->_type;")
+        return
+    }
+    if (methodName == "isOfType") {
+        this.line(1, "return self->_type == typeToCheck;")
+        return
+    }
+    if (methodName == "setNone") {
+        this.line(1, `self->_type = @tagType::None;`)
+        return
+    }
+    if (methodName == "initByValue" && xmlCount(method, AstNodeKind.Param) == 0) {
+        this.line(1, `self->_type = @tagType::None;`)
+        return
+    }
+    if (methodName == "initByValue" || methodName.startsWith("set")) {
+        this.line(1, `self->_type = @tagType::@fieldName;`)
+        this.line(1, `self->@fieldName = value;`)
+        return
+    }
+    // `get<Field>`: the value when the tag says this arm, an empty `Opt` otherwise.
+    val ret: Str = this.type(xmlChildPtr(method, AstNodeKind.ReturnType))
+    this.line(1, `if (self->_type == @tagType::@fieldName) {`)
+    this.line(2, `return @ret::some(self->@fieldName);`)
+    this.line(1, "}")
+    this.line(1, `return @ret();`)
 }
 
 fun Emitter.emitEnum(decl: *AstXmlNode): Unit {

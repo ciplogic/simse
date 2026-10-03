@@ -38,3 +38,19 @@ fun unquoteLiteral(text: Str): Str {
     }
     return text
 }
+
+// `text` with its first byte uppercased (`x` -> `X`, `intValue` -> `IntValue`): the suffix a
+// `union class` field contributes to its generated `get<Field>`/`set<Field>` names, which
+// the parser synthesizes and the checker diagnoses.
+fun upperFirst(text: *Str): Str {
+    if (text.size() == 0) {
+        return ""
+    }
+    return text.substr(0, 1).toUpper() + text.substr(1, -1)
+}
+
+// The implicit tag enum's name for a `union class` `typeName` (`Sm<Name>Types`): the parser
+// synthesizes it, the emitter looks it up, so the spelling lives in one place.
+fun unionTagName(typeName: *Str): Str {
+    return "Sm" + typeName + "Types"
+}

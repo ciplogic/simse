@@ -208,6 +208,11 @@ fun Emitter.emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit
     if (fn.isNative) {
         return
     }
+    // A `union class`'s generated member: resolved and called like any method, but its C++
+    // is written inline with the struct (`emitUnionClass`), so no prototype or body here.
+    if (xmlAttr(decl, AstNodeAttributeKind.IsUnionGenerated) == "true") {
+        return
+    }
     // `unInit` is the type's destructor, not a callable function: the struct declares
     // `~T()` and the definition is emitted where a body belongs (`emitUninit`).
     if (!xmlIsEmpty(fn.receiver) && fn.name == "unInit") {

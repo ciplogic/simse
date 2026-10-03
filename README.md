@@ -306,13 +306,14 @@ bootstrap check, troubleshooting - is in
 
 ## Status
 
-Working today: data classes, enums, generics, extension functions, pure (`data`)
+Working today: data classes, enums, `union class` (a discriminated union), generics,
+extension functions, pure (`data`)
 functions the compiler may reuse, lambdas, statics,
 `List`/`Array`/`Dictionary`/`Span`/`Opt`/`Res`/`Str`, `Res` propagation (`x!!`), attributes
 and source generators (`src/compiler/`, `_res.md` resources, `native` declarations),
 list literals and trailing-argument packing, `for`/`yield` state machines, file I/O, the
 `main(args)` form, packages and modules, and a project file (`simse.md`). The compiler is
-self-hosted and reproduces the published bootstrap byte for byte, and **68 end-to-end stress
+self-hosted and reproduces the published bootstrap byte for byte, and **71 end-to-end stress
 programs** run in the corpus.
 
 On speed (`bun tools/bootstrap.js`, release, this machine - the range is machine load,
@@ -325,7 +326,7 @@ best of a few runs while idle):
 | **from the published file to a compiler that reproduces it** | **~17 s**, then under a second per self-transpile |
 
 Not there yet, in rough order of how soon a user would miss it: `for` over a
-`Dictionary` and ranges, closed unions with exhaustive `when`, a
+`Dictionary` and ranges, pattern matching beyond `union class`'s tag `when`, a
 `Printable` protocol (so `println` works for your own types), `Set`, byte buffers, JSON
 encode/decode generated from data classes, sockets and HTTP, and a Linux/macOS
 toolchain. String interpolation (`` `@name` `` and `` `@(name)` ``, with `fmtStrWith`

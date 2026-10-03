@@ -29,6 +29,9 @@ fun Analyzer.analyzeDecl(decl: *AstXmlNode): Unit {
         }
 
         AstNodeCategory.DataClass -> {
+            if (xmlAttr(decl, AstNodeAttributeKind.IsUnionClass) == "true") {
+                this.checkUnionDecl(decl)
+            }
             this.pushTypeScope()
             val typeParams: List<Str> = xmlTypeParamNames(decl)
             var i: Int = 0
@@ -84,6 +87,83 @@ fun Analyzer.analyzeDecl(decl: *AstXmlNode): Unit {
             return
         }
     }
+}
+
+// The declaration-time `union class` rules (`specs/declarations.md`): no generic form yet,
+// no two fields of one type (the arm constructor could not tell them apart - distinct types,
+// two different enums included, are fine), and no user method that collides with a generated
+// name. The construction rules are `checkUnionConstruction` (SemaCall.kt).
+fun Analyzer.checkUnionDecl(decl: *AstXmlNode): Unit {
+    val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
+    if (xmlTypeParamNames(decl).size() > 0) {
+        this.diag(
+            xmlLine(decl), xmlColumn(decl),
+            `unsupported: a generic union class ('@name')`
+        )
+    }
+    val fields: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Field)
+    for (*field in fields) {
+        val fieldName: Str = xmlAttr(field, AstNodeAttributeKind.Name)
+        if (fieldName == "None") {
+            this.diag(
+                xmlLine(field), xmlColumn(field),
+                `union class '@name': 'None' is the tag's empty state; rename the field`
+            )
+        }
+        if (fieldName == "_type") {
+            this.diag(
+                xmlLine(field), xmlColumn(field),
+                `union class '@name': '_type' is the tag's storage; rename the field`
+            )
+        }
+    }
+    var i: Int = 0
+    while (i < fields.size()) {
+        val left: AstXmlNode = this.unionResolveAlias(xmlChildPtr(fields[i], AstNodeKind.Type))
+        var j: Int = i + 1
+        while (j < fields.size()) {
+            val right: AstXmlNode = this.unionResolveAlias(xmlChildPtr(fields[j], AstNodeKind.Type))
+            if (semaSameType(left, right)) {
+                val leftName: Str = xmlAttr(fields[i], AstNodeAttributeKind.Name)
+                val rightName: Str = xmlAttr(fields[j], AstNodeAttributeKind.Name)
+                this.diag(
+                    xmlLine(fields[j]), xmlColumn(fields[j]),
+                    `union class '@name': fields '@leftName' and '@rightName' have the same type`
+                )
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+    for (*method in xmlChildren(decl, AstNodeKind.Function)) {
+        if (xmlAttr(method, AstNodeAttributeKind.IsUnionGenerated) == "true") {
+            continue
+        }
+        val methodName: Str = xmlAttr(method, AstNodeAttributeKind.Name)
+        if (unionGeneratedName(methodName, fields)) {
+            this.diag(
+                xmlLine(method), xmlColumn(method),
+                `union class '@name' generates '@methodName': rename the method`
+            )
+        }
+    }
+}
+
+// Whether `methodName` is one a `union class` generates: the fixed tag surface, or a field's
+// `get<Field>`/`set<Field>` arm.
+fun unionGeneratedName(methodName: *Str, fields: *List<AstXmlNode>): Bool {
+    if (methodName == "getTypeOf" || methodName == "isOfType" || methodName == "setNone"
+        || methodName == "initByValue"
+    ) {
+        return true
+    }
+    for (*field in fields) {
+        val suffix: Str = upperFirst(xmlAttr(field, AstNodeAttributeKind.Name))
+        if (methodName == "get" + suffix || methodName == "set" + suffix) {
+            return true
+        }
+    }
+    return false
 }
 
 fun Analyzer.analyzeFunction(decl: *AstXmlNode): Unit {

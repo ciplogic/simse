@@ -177,7 +177,7 @@ The invariant is a **fixed point**, and machines check it, not discipline:
 2. **The stress corpus** - `stress/<name>/` is a complete program with its
    expected stdout (and optional args, stdin, expected `.cpp`, or an expected
    transpile error). The harness transpiles, compiles and runs each one with the
-   compiler under test; 68 cases today.
+   compiler under test; 71 cases today.
 
 Any change to compiler behavior has to keep the fixed point intact: rebuild the
 compiler with itself, refresh the published file

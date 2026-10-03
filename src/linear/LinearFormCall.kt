@@ -176,6 +176,16 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
             paramNodes = xmlChildren(decl, AstNodeKind.Field)
         }
     }
+    // A `union class` construction has no aggregate spelling and no plain-call form: the two
+    // supported spellings - the declaration (`var x = U(v)`) and `return (v)` - are routed
+    // through the generated `initByValue` arms by the statement lowering. Reaching here means
+    // an expression position (`f(U(v))`, `x = U(v)`, a static initializer), which has none.
+    if (this.ilIsUnionCtor(callee, paramOwner)) {
+        this.unsupported(
+            "construct a union class in a 'var'/'val' declaration ('var x = U(...)') or as 'return (value)'"
+        )
+        return
+    }
     // The receiver's declared kind (see `IlMethod.recvIsValue`); an unresolved callee is
     // treated as the unsafe shape.
     var recvIsValue: Bool = false
@@ -439,6 +449,18 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
         i = i + 1
     }
     this.emitCall(hasDst, operands)
+}
+
+// Whether this call is a `union class` construction: a bare callee naming the class whose
+// fields the argument conversion is against (the shape a data class construction takes).
+fun IlExtractor.ilIsUnionCtor(callee: *AstXmlNode, paramOwner: AstXmlNode): Bool {
+    if (xmlKind(callee) != AstNodeCategory.ExprName || xmlIsEmpty(paramOwner)) {
+        return false
+    }
+    if (xmlAttr(paramOwner, AstNodeAttributeKind.IsUnionClass) != "true") {
+        return false
+    }
+    return xmlAttr(callee, AstNodeAttributeKind.Name) == xmlAttr(paramOwner, AstNodeAttributeKind.Name)
 }
 
 fun IlExtractor.emitCall(hasDst: Bool, operands: *List<Int>): Unit {

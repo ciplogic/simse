@@ -109,7 +109,8 @@ fun makeReservedWords(): List<Str> {
     var words: List<Str> = listOf<Str>(
         "class", "data", "val", "var", "fun", "return", "while", "for",
         "if", "else", "true", "false", "null", "enum", "typealias",
-        "import", "this", "break", "continue", "when", "yield", "package", "suspend"
+        "import", "this", "break", "continue", "when", "yield", "package", "suspend",
+        "union"
     )
     return words
 }
