@@ -36,7 +36,9 @@ The rule is the default, not a cage: a class declared `native class C(...)` (the
 in place of `data`, `declarations.md`) is emitted with the **host's own alignment** instead of
 the packing, because its generated struct exists to mirror a native layout. `ref class C(...)`
 is the second class word: such a class **has no value form** - it is built as `&C(...)` and
-held by `&C` or `*C` (`declarations.md`), so a value of it is never laid out at all.
+held by `&C` or `*C` (`declarations.md`), so a value of it is never laid out at all. A class
+that declares an `unInit` destructor must be one as well: a destructor makes the class
+handle-only.
 
 Status: the bootstrap shims spell `Str` as the inline `SmString` (not `std::string`),
 `&T` as `std::shared_ptr`, and callables as `std::function`. Those host types are declared

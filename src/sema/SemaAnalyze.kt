@@ -270,8 +270,8 @@ fun Analyzer.analyzeStmt(stmt: *AstXmlNode): Unit {
 }
 
 // One `ExprCall`, with `boxed` saying it is the operand of `&` (`&C(...)`) - the one
-// construction a ref class allows (`checkRefConstruction`); the rest of the analysis is the
-// same either way.
+// construction a handle-only class allows (`checkValueConstruction`); the rest of the
+// analysis is the same either way.
 fun Analyzer.analyzeCall(expr: *AstXmlNode, boxed: Bool): Unit {
     val callee: *AstXmlNode = xmlChildPtr(expr, AstNodeKind.Callee)
     if (!xmlIsEmpty(callee)) {
@@ -285,7 +285,7 @@ fun Analyzer.analyzeCall(expr: *AstXmlNode, boxed: Bool): Unit {
     this.checkExtensionCallArity(expr)
     this.checkUninitCall(expr, callee)
     if (!boxed) {
-        this.checkRefConstruction(expr, callee)
+        this.checkValueConstruction(expr, callee)
     }
 }
 
@@ -340,8 +340,9 @@ fun Analyzer.analyzeExpr(expr: *AstXmlNode): Unit {
         }
 
         AstNodeCategory.ExprRef -> {
-            // `&C(...)` is the *one* construction a ref class allows (`checkRefConstruction`):
-            // the operand is analyzed in "boxed" context, so the rule lets the construction be.
+            // `&C(...)` is the *one* construction a handle-only class allows
+            // (`checkValueConstruction`): the operand is analyzed in "boxed" context, so the
+            // rule lets the construction be.
             val operand: *AstXmlNode = xmlChildPtr(expr, AstNodeKind.Operand)
             if (!xmlIsEmpty(operand)) {
                 if (xmlKind(operand) == AstNodeCategory.ExprCall) {

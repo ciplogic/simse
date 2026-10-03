@@ -4606,3 +4606,18 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   Verified: `bun build.js --release --no-lto`, `bun tools/stress.js` **67/67**,
   `bun build.js --release --no-lto --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js`
   - both fixed points byte for byte.
+
+- **A class with an `unInit` must be a `ref class`; `data class` + `unInit` is a diagnostic.**
+  The destructor rule already held such a type only by `&T`/`*T`, and `ref class` is the word
+  for that, so the declaration now carries it: `collectUninitTypes` reports
+  `'Res' declares unInit: a class with a destructor must be a 'ref class'` at the method. A
+  legal `ref class Res` gets both halves - the holder rule for *declared* value positions
+  (`checkUninitHolder`, unchanged) and the ref construction rule for value constructions
+  (`'Res' is a ref class: build it as '&Res(...)'`; the inferred-local hole closes with it).
+  `stress/uninit` moved to `ref class` with no emission change (only `native class` moves the
+  packing - the case's golden is the same file), and `stress/diagnostic-uninit-data-class`
+  pins the new error. `checkValueConstruction` stays ref-only: the requirement is in the
+  declaration, so no `unInit` branch is needed there.
+  Verified: `bun build.js --release --no-lto`, `bun tools/stress.js` **68/68**,
+  `bun build.js --release --no-lto --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js`
+  - both fixed points byte for byte.

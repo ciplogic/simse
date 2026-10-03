@@ -78,13 +78,15 @@ is the one exception, because it is a destructor and not a callable.
 ### Destructors: `unInit`
 
 Status: implemented (the by-value rule, the destructor, in-place boxing of a
-constructed box, and the shape checks; `stress/uninit`,
-`stress/diagnostic-uninit-value`).
+constructed box, the `ref class` requirement, and the shape checks; `stress/uninit`,
+`stress/diagnostic-uninit-value`, `stress/diagnostic-uninit-data-class`).
 
-A data class may declare one method named `unInit` - its **destructor**:
+A `ref class` may declare one method named `unInit` - its **destructor** (a `data class`
+that declares one is a diagnostic: the destructor makes the class handle-only, and
+`ref class` is the word for that):
 
 ```
-data class Res(var id: Int) {
+ref class Res(var id: Int) {
     fun unInit(): Unit {
         println("close " + this.id.toString())
     }

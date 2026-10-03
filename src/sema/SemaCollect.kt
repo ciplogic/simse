@@ -28,7 +28,9 @@ fun Analyzer.run(): Unit {
 }
 
 // Every class that declares `unInit`, before anything is analyzed: the rule below reads
-// the set, and a declaration may name a type from any module.
+// the set, and a declaration may name a type from any module. A destructor makes a class
+// handle-only, and that is `ref class`'s word - a `data class` with an `unInit` is a
+// diagnostic, so one declaration carries both the destructor and the no-value rule.
 fun Analyzer.collectUninitTypes(): Unit {
     var n: Int = 0
     while (n < this.inputs.size()) {
@@ -59,6 +61,13 @@ fun Analyzer.collectUninitTypes(): Unit {
                 if (!xmlIsEmpty(ret) && semaTypeText(ret) != "Unit") {
                     this.diag(xmlLine(method), xmlColumn(method), "unInit returns nothing")
                 }
+                // A destructor means the class is handle-only, and that is `ref class`'s word.
+                if (xmlAttr(decl, AstNodeAttributeKind.IsRefClass) != "true") {
+                    this.diag(
+                        xmlLine(method), xmlColumn(method),
+                        `'@className' declares unInit: a class with a destructor must be a 'ref class'`
+                    )
+                }
                 this.uninitTypes.insert(className, true)
             }
         }
@@ -81,12 +90,12 @@ fun Analyzer.checkUninitCall(call: *AstXmlNode, callee: *AstXmlNode): Unit {
     )
 }
 
-// A `ref class` has no value form (`specs/declarations.md`): the only way to build one is the
-// boxed construction `&C(...)` (`analyzeCall`'s `boxed` flag marks it), so any other
-// construction - a local, an argument, a field - is a value and a diagnostic. The two reasons
-// the word exists are recursion (a tree's children are `&Node`/`*Node`, not `Node`) and
-// destructors (a class that closes a resource is held once, by a handle).
-fun Analyzer.checkRefConstruction(call: *AstXmlNode, callee: *AstXmlNode): Unit {
+// A `ref class` has no value form (`specs/declarations.md`): the boxed `&C(...)`
+// (`analyzeCall`'s `boxed` flag marks it) is the one construction allowed, so any other
+// construction - a local, an argument, a field - is a value and a diagnostic. A class that
+// declares `unInit` must be a ref class (`collectUninitTypes`), so its constructions land
+// here too; the holder rule (`checkUninitHolder`) covers the *declared* value positions.
+fun Analyzer.checkValueConstruction(call: *AstXmlNode, callee: *AstXmlNode): Unit {
     val kind: AstNodeCategory = xmlKind(callee)
     if (kind != AstNodeCategory.ExprName && kind != AstNodeCategory.ExprGenericName) {
         return

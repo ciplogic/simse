@@ -3,12 +3,13 @@ package uninit
 // `unInit` is a type's destructor: the emitted struct gets a real `~T()`, whose body is this
 // method, and the language holds such a type only through a handle (`&T`) or a raw pointer
 // (`*T`) - a *value* of it would be a copy, and every copy would run the destructor: that is
-// what `stress/diagnostic-uninit-value` reports.
+// what `stress/diagnostic-uninit-value` reports. A destructor makes the class handle-only, so
+// it must be declared `ref class` (`stress/diagnostic-uninit-data-class` pins the diagnostic).
 //
 // `&T(...)` builds the box in place (`makeRef<T>(...)`, specs/memory-model.md), so there is no
 // temporary: the destructor runs exactly once, when the box's last owner goes.
 
-data class Res(var id: Int) {
+ref class Res(var id: Int) {
     fun unInit(): Unit {
         println("close " + this.id.toString())
     }
