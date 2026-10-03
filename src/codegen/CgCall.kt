@@ -459,7 +459,8 @@ fun Emitter.call(e: *AstXmlNode): Str {
                 val fnIndex: Int = this.findExtensionFn(calleeText, receiverExpr, args.size())
                 if (fnIndex >= 0) {
                     val fn: *CgFn = *this.functions[fnIndex]
-                    val all: Str = cgReceiverArgs(this.receiverArg(fn.receiver, receiverExpr), args)
+                    val fixedArgs: List<Str> = this.cgMethodStrArgs(fn, argNodes, args)
+                    val all: Str = cgReceiverArgs(this.receiverArg(fn.receiver, receiverExpr), fixedArgs)
                     val qualifyText5: Str = this.qualify(fn.packageName, fn.name)
                     // A machine-receiver callee's explicit template arguments, attached by
                     // `ilCallNode`: C++ cannot deduce them through a machine.
@@ -516,6 +517,43 @@ fun Emitter.call(e: *AstXmlNode): Str {
     }
     this.fail(e, "unsupported: call target")
     return "/*unsupported*/"
+}
+
+// A method call's arguments with the literal fix a plain call already gets: where a generic
+// method's parameter is one of the method's own type parameters (the class's included) and
+// the argument is a string literal, the value is materialized (`Str("...")`). Without it,
+// C++ deduces the type parameter as `StrView` from the literal and conflicts with the
+// receiver's deduction - `Opt2<Str>("text")` cannot pick `initByValue(Opt2<T>*, T)`.
+fun Emitter.cgMethodStrArgs(
+    fn: *CgFn, argNodes: *List<AstXmlNode>, args: *List<Str>
+): List<Str> {
+    if (fn.templateParams.size() == 0) {
+        var same: List<Str> = List<Str>()
+        for (*existing in args) {
+            same.append(existing)
+        }
+        return same
+    }
+    val params: List<AstXmlNode> = xmlChildren(fn.decl, AstNodeKind.Param)
+    val offset: Int = semReceiverParams(fn.decl)
+    var fixed: List<Str> = List<Str>()
+    var i: Int = 0
+    while (i < args.size()) {
+        var text: Str = args[i]
+        if (i < argNodes.size() && xmlKind(argNodes[i]) == AstNodeCategory.ExprStrLit
+            && i + offset < params.size()
+        ) {
+            val paramType: *AstXmlNode = xmlChildPtr(params[i + offset], AstNodeKind.Type)
+            if (xmlKind(paramType) == AstNodeCategory.TypeNamed
+                && xmlIsTypeParam(xmlAttr(paramType, AstNodeAttributeKind.Name), fn.templateParams)
+            ) {
+                text = `Str(@text)`
+            }
+        }
+        fixed.append(text)
+        i = i + 1
+    }
+    return fixed
 }
 
 // A `union class` construction in an expression position (`return U(2)`, `x = U(2)`, a

@@ -95,12 +95,6 @@ fun Analyzer.analyzeDecl(decl: *AstXmlNode): Unit {
 // name. The construction rules are `checkUnionConstruction` (SemaCall.kt).
 fun Analyzer.checkUnionDecl(decl: *AstXmlNode): Unit {
     val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
-    if (xmlTypeParamNames(decl).size() > 0) {
-        this.diag(
-            xmlLine(decl), xmlColumn(decl),
-            `unsupported: a generic union class ('@name')`
-        )
-    }
     val fields: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Field)
     for (*field in fields) {
         val fieldName: Str = xmlAttr(field, AstNodeAttributeKind.Name)
@@ -215,7 +209,8 @@ fun Analyzer.unionDeclOf(expr: *AstXmlNode): AstXmlNode {
         return xmlEmptyNode()
     }
     val outer: AstXmlNode = this.semaReceiverOuter(type)
-    if (xmlKind(outer) != AstNodeCategory.TypeNamed) {
+    val outerKind: AstNodeCategory = xmlKind(outer)
+    if (outerKind != AstNodeCategory.TypeNamed && outerKind != AstNodeCategory.TypeGeneric) {
         return xmlEmptyNode()
     }
     val decl: *AstXmlNode = this.types.getPtr(xmlAttr(outer, AstNodeAttributeKind.Name))

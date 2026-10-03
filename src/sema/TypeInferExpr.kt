@@ -164,11 +164,13 @@ fun SemInfer.isInitByValueType(typeName: *Str): Bool {
     return false
 }
 
-// Whether `typeNode` names a `union class` declaration: a construction of one routes
-// through the generated `initByValue` arms even in the explicit-type form
-// (`var x: U = U(1)`), which is otherwise left as a plain constructor call.
+// Whether `typeNode` names a `union class` declaration (a generic instantiation included):
+// a construction of one routes through the generated `initByValue` arms even in the
+// explicit-type form (`var x: U = U(1)`), which is otherwise left as a plain constructor
+// call.
 fun SemInfer.isUnionClassType(typeNode: *AstXmlNode): Bool {
-    if (xmlKind(typeNode) != AstNodeCategory.TypeNamed) {
+    val kind: AstNodeCategory = xmlKind(typeNode)
+    if (kind != AstNodeCategory.TypeNamed && kind != AstNodeCategory.TypeGeneric) {
         return false
     }
     val decl: *AstXmlNode = this.facts.types.getPtr(xmlAttr(typeNode, AstNodeAttributeKind.Name))

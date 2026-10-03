@@ -38,6 +38,15 @@ union class IntOrStr(var I: Int, var S: Str)
 
 union class IntOrList(var I: Int, var L: List<Int>)
 
+// ---- union-class-generics ----
+// A generic union class: one non-generic `SmRes2Types` tag enum, a C++ template struct and
+// template methods, and a construction whose explicit type arguments bind the fields for
+// type matching. `Res2<T>` is the shape the built-in `Res<T>` would have written in Simse;
+// `Opt2<T>` is `Opt<T>` as a single `Value` arm plus the implicit `None` tag.
+union class Res2<T>(var Value: T, var Error: Str)
+
+union class Opt2<T>(var Value: T)
+
 fun label(u: DoubleOrFloat): Str {
     var out: Str = ""
     when (u) {
@@ -126,6 +135,22 @@ fun strKind(u: IntOrStr): Str {
 
 fun mkStr(text: Str): IntOrStr {
     return (text)
+}
+
+fun ok2<T>(value: T): Res2<T> {
+    return (value)
+}
+
+fun err2<T>(message: Str): Res2<T> {
+    return (message)
+}
+
+fun isOk2<T>(r: Res2<T>): Bool {
+    return r.isOfType(SmRes2Types.Value)
+}
+
+fun optValue2<T>(o: Opt2<T>): Opt<T> {
+    return o.getValue()
 }
 
 fun partUnionClass(): Int {
@@ -241,9 +266,75 @@ fun makeParen(v: Int): DoubleOrFloat {
     return (v)
 }
 
+fun partUnionGenerics(): Int {
+    // Side by side with the built-in `Res<T>` in the same shapes.
+    var a: Res<Int> = Res<Int>.ok(7)
+    var b: Res2<Int> = ok2(7)
+    println(a.isOk())
+    println(isOk2(b))
+    println(a.Value)
+    val bv = b.getValue()
+    println(bv.value())
+
+    var e: Res<Int> = Res<Int>.err("no")
+    var e2: Res2<Int> = err2<Int>("no")
+    println(e.isOk())
+    println(isOk2(e2))
+    println(e.Error)
+    val e2e = e2.getError()
+    println(e2e.value())
+
+    // The tag `when` over the generic union, and a setter switch.
+    var out: Str = ""
+    when (b) {
+        Value -> {
+            out = "value"
+        }
+
+        Error -> {
+            out = "error"
+        }
+
+        else -> {
+            out = "none"
+        }
+    }
+    println(out)
+    b.setError("later")
+    println(isOk2(b))
+    val later = b.getError()
+    println(later.value())
+    var none2 = Res2<Int>()
+    println(isOk2(none2))
+    println(optValue2(Opt2<Int>()).hasValue())
+
+    // The built-in `Opt<T>` side by side with `Opt2<T>`.
+    var o: Opt<Int> = Opt<Int>.some(9)
+    var o2: Opt2<Int> = Opt2<Int>(9)
+    println(o.value())
+    val o2v = o2.getValue()
+    println(o2v.value())
+    var empty: Opt<Int> = Opt<Int>.none()
+    var empty2: Opt2<Int> = Opt2<Int>()
+    println(empty.hasValue())
+    println(empty2.getValue().hasValue())
+
+    // A `Str` payload through the single-arm `Opt2<T>`, and a managed element through
+    // `Res2<T>` (`T = Str` would collide with the `Error: Str` arm in C++).
+    var s: Opt2<Str> = Opt2<Str>("payload-longer-than-the-inline-buffer!")
+    val sv = s.getValue()
+    println(sv.value().size())
+    var numbers: List<Int> = listOf<Int>(4, 5)
+    var l: Res2<List<Int>> = ok2(numbers)
+    val lv = l.getValue()
+    println(lv.value().size())
+    return 0
+}
+
 fun main(): Int {
     partUnionClass()
     partManaged()
+    partUnionGenerics()
     partConstructionReturn()
     return 0
 }

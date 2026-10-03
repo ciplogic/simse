@@ -183,6 +183,15 @@ assignments, and setters that destroy the arm they replace and place the new one
 compiler cannot prove trivially copyable is treated as managed; that only costs the struct
 its triviality, never correctness.
 
+A `union class` may declare **type parameters** (`union class Res2<T>(var Value: T, var
+Error: Str)`). One non-generic `SmRes2Types` tag enum is shared by every instantiation, the
+struct and its generated members are C++ templates, and a construction's explicit type
+arguments bind the fields for type matching (`Res2<Int>(5)` matches `Value: T` as `Int`). A
+bare type parameter counts as managed. Known gap: an instantiation whose type argument equals
+another arm's type (`Res2<Str>` with `Error: Str`) collides in the generated `initByValue`
+overloads at C++ level - the non-generic duplicate-field diagnostic cannot see it - so such
+an instance cannot be constructed yet.
+
 ```text
 union class DoubleOrFloat(var IntValue: Int, var DoubleValue: Float64)
 ```
@@ -221,8 +230,7 @@ tag (`setA` is the tag-aware write). On a managed union a direct write is raw st
 well - it neither destroys the arm it replaces nor places a new one - so `setA` is the write
 to use whenever the old arm owns anything.
 
-The generic form is not implemented; a `union class U<T>` is a diagnostic. The language
-does not check a `when` over the tag for exhaustiveness.
+The language does not check a `when` over the tag for exhaustiveness.
 
 ## Package declarations
 

@@ -366,6 +366,14 @@ fun Emitter.emitUnionClass(decl: *AstXmlNode): Unit {
     val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
     val emittedName: Str = this.qualify(this.typePackage(name), name)
     val tagType: Str = this.qualify(this.typePackage(name), unionTagName(name))
+    val typeParams: List<Str> = xmlTypeParamNames(decl)
+    val tmpl: Str = this.templateClause(typeParams)
+    // The name to spell outside the class body: a generic struct is `Res2<T>`, and its
+    // injected-class-name is not visible to the free functions below.
+    var emittedRef: Str = emittedName
+    if (typeParams.size() > 0) {
+        emittedRef = emittedName + "<" + cgJoin(typeParams, ", ") + ">"
+    }
     val fields: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Field)
     var managed: Bool = false
     for (*field in fields) {
@@ -375,6 +383,9 @@ fun Emitter.emitUnionClass(decl: *AstXmlNode): Unit {
     }
     this.sourceComment(decl)
     this.line(0, "SIMSE_PACK_PUSH")
+    if (tmpl != "") {
+        this.line(0, tmpl)
+    }
     this.line(0, `struct @emittedName {`)
     this.line(1, `@tagType _type = @tagType::None;`)
     if (fields.size() > 0) {
@@ -400,21 +411,33 @@ fun Emitter.emitUnionClass(decl: *AstXmlNode): Unit {
     // The tag comparison: the struct against its tag enum, so `when (u)`'s `u == SmUTypes.A`
     // is this operator and no operand moves. The pointer form is the one a borrowed
     // parameter uses (`u: *U`), the reference form a local's (`u: U`).
+    if (tmpl != "") {
+        this.line(0, tmpl)
+    }
     this.line(
         0,
-        `inline Bool operator==(const @emittedName& self, @tagType tag) { return self._type == tag; }`
+        `inline Bool operator==(const @emittedRef& self, @tagType tag) { return self._type == tag; }`
     )
+    if (tmpl != "") {
+        this.line(0, tmpl)
+    }
     this.line(
         0,
-        `inline Bool operator==(const @emittedName* self, @tagType tag) { return self->_type == tag; }`
+        `inline Bool operator==(const @emittedRef* self, @tagType tag) { return self->_type == tag; }`
     )
+    if (tmpl != "") {
+        this.line(0, tmpl)
+    }
     this.line(
         0,
-        `inline Bool operator!=(const @emittedName& self, @tagType tag) { return self._type != tag; }`
+        `inline Bool operator!=(const @emittedRef& self, @tagType tag) { return self._type != tag; }`
     )
+    if (tmpl != "") {
+        this.line(0, tmpl)
+    }
     this.line(
         0,
-        `inline Bool operator!=(const @emittedName* self, @tagType tag) { return self->_type != tag; }`
+        `inline Bool operator!=(const @emittedRef* self, @tagType tag) { return self->_type != tag; }`
     )
     for (*method in xmlChildren(decl, AstNodeKind.Function)) {
         if (xmlAttr(method, AstNodeAttributeKind.IsUnionGenerated) != "true") {
@@ -423,7 +446,7 @@ fun Emitter.emitUnionClass(decl: *AstXmlNode): Unit {
         val methodName: Str = xmlAttr(method, AstNodeAttributeKind.Name)
         val symbol: Str = this.qualify(this.typePackage(name), methodName)
         val ret: Str = this.type(xmlChildPtr(method, AstNodeKind.ReturnType))
-        var params: Str = emittedName + "* self"
+        var params: Str = emittedRef + "* self"
         for (*param in xmlChildren(method, AstNodeKind.Param)) {
             val paramType: Str = this.type(xmlChildPtr(param, AstNodeKind.Type))
             val paramName: Str = xmlAttr(param, AstNodeAttributeKind.Name)
@@ -431,6 +454,9 @@ fun Emitter.emitUnionClass(decl: *AstXmlNode): Unit {
         }
         if (this.failed) {
             return
+        }
+        if (tmpl != "") {
+            this.line(0, tmpl)
         }
         this.line(0, `inline @ret @symbol(@params) {`)
         this.emitUnionMethodBody(method, methodName, tagType, managed)

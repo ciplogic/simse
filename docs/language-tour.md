@@ -390,7 +390,8 @@ body works over the same storage. An arm that owns storage (`Str`, `List`) makes
 copy/move members, so copying or returning the union keeps its data alive. Matching is
 `when (u)` with bare arm names - a comparison against a union value is its tag comparison,
 and the generated C++ compares the struct with its tag enum. There is no exhaustive
-matching.
+matching. A union class may be generic (`union class Res2<T>(var Value: T)`); one tag enum
+serves every instantiation and `Res2<Int>(5)` binds `T` for the construction.
 
 ```simse
 union class DoubleOrFloat(var IntValue: Int, var DoubleValue: Float64)

@@ -4697,3 +4697,22 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   with the managed members. `stress/unions` copies, returns, reassigns and `setNone`s a
   `Str` arm longer than the inline buffer and a `List` arm.
   Verified: `bun tools/iterate.js --full` - 71/71 and both fixed points byte for byte.
+
+- **Generic `union class`es, and the `Res2<T>`/`Opt2<T>` prototypes.** A union class may take
+  type parameters now: the tag enum stays non-generic (one `SmRes2Types` serves every
+  instantiation), the struct and its generated members are emitted as C++ templates
+  (`emitUnionClass`'s template clause, `Res2<T>` receivers), and a construction's explicit
+  type arguments are substituted into the fields before type matching
+  (`checkUnionConstruction`). `isUnionClassType`/`unionDeclOf` accept a `TypeGeneric`, so the
+  explicit-type construction and the bare-arm `when` work for instantiated unions too.
+  Two generic gaps surfaced and were fixed: the emitter's `classReceiver` gave a class
+  method's type arguments the `Type` role instead of `TypeArg`, so `unifyType` could not
+  match `Res2<T>` against `Res2<Int>` and every method call fell back to C++ member syntax;
+  and a string literal passed to a bare type-parameter parameter was left a `StrView`, which
+  C++ cannot deduce (`Opt2<Str>("text")`) - `cgMethodStrArgs` materializes `Str(...)` the way
+  the plain-call path already did. `stress/unions` carries `Res2<T>` beside the built-in
+  `Res<T>` and `Opt2<T>` beside `Opt<T>` (construction, `when`, setters, error and value
+  reads, a `Str` payload through `Opt2`, a `List<Int>` payload through `Res2`).
+  Known gap, recorded in `specs/declarations.md`: `Res2<Str>` (an instantiation whose
+  argument equals another arm's type) collides in the generated overloads at C++ level.
+  Verified: `bun tools/iterate.js --full` - 71/71 and both fixed points byte for byte.

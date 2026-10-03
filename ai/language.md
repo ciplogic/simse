@@ -38,8 +38,10 @@ it does not destroy what it replaces either - `setA` does). Arms that own storag
 `List`, a handle) are managed: the generated destructor destroys the live arm by tag, and
 copy/move keep a copied or returned union's data alive. Matching is `when (u)`
 with bare arm names (`IntValue`, `None`, `else`), or `when (u.getTypeOf())` with qualified
-labels: a comparison against a union value is its tag comparison. No generic form yet, and
-no exhaustive `when` (`specs/declarations.md`, `stress/unions`).
+labels: a comparison against a union value is its tag comparison. Type parameters work
+(`union class Res2<T>(var Value: T, var Error: Str)`; `Res2<Int>(5)` binds `T`), and one
+non-generic tag enum is shared by every instantiation. No exhaustive `when`
+(`specs/declarations.md`, `stress/unions`).
 `typealias` names a type or a callable (`typealias IntFn = (Int) -> Int`). `native class` is
 the same value type with the host's alignment instead of the 4-byte packing (for mirroring a
 native layout); `ref class` has no value form - it is built as `&C(...)` and held by `&C`/`*C` -

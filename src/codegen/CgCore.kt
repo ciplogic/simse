@@ -60,7 +60,10 @@ fun Emitter.genericTypeExpr(name: *Str, args: *List<AstXmlNode>): AstXmlNode {
     return node
 }
 
-// The receiver type of a class method: `Name<A, B>` for a generic class.
+// The receiver type of a class method: `Name<A, B>` for a generic class. Each argument
+// takes the `TypeArg` role a written one has, so the receiver unifies with a concrete
+// `Name<Int>` (`unifyType` reads the arguments by role, and a `Type`-roled one would look
+// like a receiver with no arguments at all).
 fun Emitter.classReceiver(decl: *AstXmlNode): AstXmlNode {
     val typeParams: List<Str> = xmlTypeParamNames(decl)
     if (typeParams.size() == 0) {
@@ -69,7 +72,9 @@ fun Emitter.classReceiver(decl: *AstXmlNode): AstXmlNode {
     var args: List<AstXmlNode> = List<AstXmlNode>()
     var i: Int = 0
     while (i < typeParams.size()) {
-        args.append(this.namedTypeExpr(typeParams[i]))
+        var arg: AstXmlNode = this.namedTypeExpr(typeParams[i])
+        arg.name = AstNodeKind.TypeArg
+        args.append(arg)
         i = i + 1
     }
     return this.genericTypeExpr(xmlAttr(decl, AstNodeAttributeKind.Name), args)

@@ -223,11 +223,27 @@ fun Analyzer.checkUnionConstruction(
         )
         return
     }
+    // A generic class's fields mention its type parameters; the construction's explicit
+    // arguments bind them, so `Res2<Int>(5)` matches `Value: T` as `Int`.
+    val params: List<Str> = xmlTypeParamNames(decl)
+    var bindings: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
+    val callee: *AstXmlNode = xmlChildPtr(call, AstNodeKind.Callee)
+    val typeArgs: List<AstXmlNode> = xmlChildren(callee, AstNodeKind.TypeArg)
+    if (params.size() == typeArgs.size()) {
+        var t: Int = 0
+        while (t < params.size()) {
+            bindings.insert(params[t], typeArgs[t])
+            t = t + 1
+        }
+    }
     val fields: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Field)
     var count: Int = 0
     for (*field in fields) {
-        val fieldType: AstXmlNode =
+        var fieldType: AstXmlNode =
             this.unionResolveAlias(xmlChildPtr(field, AstNodeKind.Type))
+        if (bindings.size() > 0) {
+            fieldType = semSubstitute(fieldType, *bindings, *params)
+        }
         if (semaSameType(fieldType, argType)) {
             count = count + 1
         }
