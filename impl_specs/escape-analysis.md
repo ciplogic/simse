@@ -229,8 +229,9 @@ call place with a new temporary" shape, at the cost the callee used to pay.
 `bpIsConstruct` recognizes a construction with **no type argument** (`AstXmlNode(...)`, `Str(...)`,
 and the `Opt`/`Res` statics) - the `specs` always said a construction is not a call on the
 parameter, the pass weighed a bare `ExprName` callee as a call - and `Opt.hasValue()` is a
-**declared** operation (`src/rtl/_res.md`'s `optops`) instead of a built-in member with nothing to
-mark, the `lenOf` treatment applied to the `Opt`/`Res` surface.
+**declared** operation (the `union class`'s own method, `src/rtl/optres.kt`) instead of a
+built-in member with nothing to mark, the `lenOf` treatment applied to the `Opt`/`Res`
+surface.
 
 What is still out of reach, in the order a histogram of the `borrow-` lines puts it:
 
@@ -243,13 +244,10 @@ What is still out of reach, in the order a histogram of the `borrow-` lines puts
   subtree mentions - a write to `this.f` or to a local cannot reach a by-value parameter, whose only
   alias would come from an `&p`/`*p`, which already excludes it - while a target that mentions a
   module-level `var` blocks everything, for the reason the file-level write rule exists.
-- **the one built-in member that cannot be declared yet.** A receiver may now be a type with an
-  `unInit` - it is emitted as a pointer (`T* self`), never a copy, so the checker allows it
-  (src/sema/Sema.kt) - and `Res<T>.initByValue` is declared that way. `Res<T>.isOk()` could be
-  declared too; it stays built-in for that one reason only. `value()` still cannot: it answers the
-  type argument, and `memberCallReturn` returns a declaration's return type without substituting
-  it, so a `T`-returning declaration would emit `T` where a concrete type belongs - a latent
-  emitter gap to close first.
+- *(closed by the `Opt`/`Res` port)* **the one built-in member that could not be declared.**
+  `hasValue()`, `isOk()`, `value()` and `error()` are `union class` methods now
+  (`src/rtl/optres.kt`), so each carries a declaration the proof reads, and `value()`'s `T`
+  comes from the declared method with the receiver's type argument substituted at the call.
 - and the cascade behind them - `eprintln`, and the emitter's own helpers (`line`, `emit`,
   `inferType`, `operandOf`, ...), each blocked by one of the above. Nothing is inferred from a
   whole-program call graph beyond the name-keyed fixpoint, no size model exists, and only a type it

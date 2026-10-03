@@ -13,18 +13,15 @@
 
 // Order follows dependencies: types and containers have no RTL-relative
 // dependencies, and the higher-level headers build on them.
-#include "types.hpp"        // scalar aliases and Str
+#include "types.hpp"        // scalar aliases, Str, and the Opt/Res forward declarations
 #include "intrinsics.hpp"   // the byte primitives (memcpy/memcmp/...): the machine, in C++
 #include "ref.hpp"          // Ref<T> (`&T`): SmRef, or the std::shared_ptr shim
 #include "containers.hpp"   // SmallVector, List, PList, Dictionary, Array, RawArray
 #include "span.hpp"         // Span<T> (borrowed view: pointer + length)
 #include "strview.hpp"      // StrView (an alias of Span<Char>, plus the text operations)
 #include "resources.hpp"    // the `_res.md` resources a program carries
-#include "variant2.hpp"     // Variant2<A, B>, VoidEnum: the storage of Opt and Res
-#include "optional.hpp"     // Opt<T> (Variant2<T, VoidEnum>)
 #include "filestream.hpp"   // FileStream: simse_fileStream_* native ops (prelude)
 #include "functional.hpp"   // Func, Action, AutoDefer
-#include "result.hpp"       // Res<T> (Variant2<T, Str>) and the free ok/err forms
 // The compiler's AST (`AstXmlNode`, `AstNodeKind`, ...) is *generated*: it is declared in
 // src/rtl/astxml.kt and the emitter writes its structs and enums (specs/attributes.md's
 // type materialization), so there is no header to include for it any more. The language-level

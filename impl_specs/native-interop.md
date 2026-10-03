@@ -55,7 +55,7 @@ generator (`LoadLibraryA`/`GetProcAddress`) is implemented
 Native functions report failure through `Res<T>` (an error `Str`), not C++
 exceptions. A function that returns `Res<T>` maps its error message into the
 `Res` value; the runtime's `isOk()` reads the union's tag, so `Res<T>.err("")` is a
-failure like any other (`src/rtl/variant2.hpp`, `impl_specs/rtl-abi.md`).
+failure like any other (`src/rtl/optres.kt`, `impl_specs/rtl-abi.md`).
 
 ## The `native` generator: P/Invoke
 

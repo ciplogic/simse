@@ -381,8 +381,14 @@ fun Emitter.call(e: *AstXmlNode): Str {
             for (*argNode in argNodes) {
                 args.append(this.expr(argNode, 0, xmlEmptyNode()))
             }
-            val calleeText: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
+            var calleeText: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
             val receiverExpr: *AstXmlNode = xmlChildPtr(callee, AstNodeKind.Receiver)
+            // A member of the ported `Opt`/`Res` is declared under a collision-safe name
+            // (src/rtl/optres.kt); the checker renames the calls its statement walk checks,
+            // and this maps the rest - a call inside the desugared `return (...)` block,
+            // which the walk does not visit - so every emitted call reaches the declared
+            // function and no bare `value` ever lands in C++.
+            calleeText = this.resOptMemberName(receiverExpr, calleeText)
 
             // `getAs` is not a call: the extractor turns `h.getAs<T>()` into the IL's `Cast`
             // (`IlExtractor.call`), whose target is the destination's type - the IL names a
@@ -431,6 +437,33 @@ fun Emitter.call(e: *AstXmlNode): Str {
             }
             if (xmlKind(receiverExpr) == AstNodeCategory.ExprGenericName) {
                 val genericName: Str = xmlAttr(receiverExpr, AstNodeAttributeKind.Name)
+                // A static constructor spelling (`Opt<Int>.some(x)`, `Res<Str>.err(m)`) the
+                // checker's `return (...)` block hid from `expandResOptCtor`: build through
+                // the prelude's arm builders, exactly as the rewritten call would
+                // (src/rtl/optres.kt).
+                val ownerDecl: *AstXmlNode = this.types.getPtr(genericName)
+                if (ownerDecl != null
+                    && xmlAttr(*ownerDecl, AstNodeAttributeKind.IsUnionClass) == "true"
+                ) {
+                    var factory: Str = ""
+                    if (genericName == "Opt" && calleeText == "some") {
+                        factory = "simse_optSome"
+                    } else if (genericName == "Opt" && calleeText == "none") {
+                        factory = "simse_optNone"
+                    } else if (genericName == "Res" && calleeText == "ok") {
+                        factory = "simse_resOk"
+                    } else if (genericName == "Res" && calleeText == "err") {
+                        factory = "simse_resErr"
+                    }
+                    if (factory != "") {
+                        this.referencedNames.insert(factory, true)
+                        val factoryArgs: Str = this.typeArgsString(
+                            genericName, xmlChildren(receiverExpr, AstNodeKind.TypeArg)
+                        )
+                        val cgJoinFactory: Str = cgJoin(args, ", ")
+                        return `@factory<@factoryArgs>(@cgJoinFactory)`
+                    }
+                }
                 val qualifyText4: Str = this.qualify(this.typePackage(genericName), genericName)
                 val typeArgsStringText4: Str =
                     this.typeArgsString(genericName, xmlChildren(receiverExpr, AstNodeKind.TypeArg))
@@ -586,4 +619,41 @@ fun Emitter.unionConstructionUnsupported(name: *Str, e: *AstXmlNode): Bool {
     }
     this.fail(e, "unsupported: construct a union class in a 'var'/'val' declaration ('var x = U(...)') or as 'return (value)'")
     return true
+}
+
+// The declared name of a member call on a ported `Opt`/`Res`: `value()`, `hasValue()`,
+// `isOk()` and `error()` are declared as `simse_*` functions (src/rtl/optres.kt) so that a
+// generated local named `value` cannot shadow them in the emitted C++. The checker renames
+// the calls it checks (`expandResOptMember`); this is the emission-side map for the ones it
+// does not - a call inside the desugared `return (...)` block. A name that is not one of
+// the four, on a receiver that is not the union, comes back as it was.
+fun Emitter.resOptMemberName(receiverExpr: *AstXmlNode, name: *Str): Str {
+    if (name != "value" && name != "error" && name != "hasValue" && name != "isOk") {
+        return name
+    }
+    val recv: AstXmlNode = this.resolveAlias(this.pointee(this.inferType(receiverExpr)))
+    if (xmlIsEmpty(recv) || xmlKind(recv) != AstNodeCategory.TypeGeneric) {
+        return name
+    }
+    val owner: Str = xmlAttr(recv, AstNodeAttributeKind.Name)
+    val decl: *AstXmlNode = this.types.getPtr(owner)
+    if (decl == null || xmlAttr(*decl, AstNodeAttributeKind.IsUnionClass) != "true") {
+        return name
+    }
+    if (owner == "Opt" && name == "value") {
+        return "simse_optValue"
+    }
+    if (owner == "Opt" && (name == "hasValue" || name == "isOk")) {
+        return "simse_optHasValue"
+    }
+    if (owner == "Res" && name == "value") {
+        return "simse_resValue"
+    }
+    if (owner == "Res" && (name == "hasValue" || name == "isOk")) {
+        return "simse_resHasValue"
+    }
+    if (owner == "Res" && name == "error") {
+        return "simse_resError"
+    }
+    return name
 }

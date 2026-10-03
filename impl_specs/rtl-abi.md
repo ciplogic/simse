@@ -38,8 +38,8 @@ Generated C++ targets the **`src/rtl` shims** as-is:
   (`src/rtl/containers.hpp`)
 - `Dictionary<K, V> = SmDictionary<K, V>` (the RTL's own row/bucket dictionary,
   `src/rtl/smdictionary.hpp`)
-- `Opt<T>` and `Res<T>` = the two arms of one local tagged union (`Variant2<T,
-  VoidEnum>` and `Variant2<T, Str>`, `src/rtl/variant2.hpp`)
+- `Opt<T>` and `Res<T>` = prelude `union class`es the emitter writes into the program
+  (`src/rtl/optres.kt`): the payload arm (`Value`) and, for `Res`, `Error: Str`
 - `&T` lowers to `std::shared_ptr<T>`; `*T` lowers to `T*`
 - `Span<T>` = the borrowed view shim: a `*T` pointer plus a length
   (`src/rtl/span.hpp`); `StrView` is its `char` instantiation, the same type
@@ -104,8 +104,8 @@ change.
 | `RawArray<T>` | `RawArray<T>` (`T*`) | unmanaged pointer |
 | `&T` | `std::shared_ptr<T>` | counted reference |
 | `*T` | `T*` | raw pointer |
-| `Opt<T>` | `Opt<T>` (`Variant2<T, VoidEnum>`) | `hasValue()`, `value()`, `some`, `none` |
-| `Res<T>` | `Res<T>` (`Variant2<T, Str>`) | `isOk()` reads the tag; `Value`/`Error` |
+| `Opt<T>` | `Opt<T>` (generated union) | `hasValue()`, `value()`, `some`, `none` |
+| `Res<T>` | `Res<T>` (generated union) | `isOk()` reads the tag; `Value`/`Error` |
 | `Dictionary<K, V>` | `Dictionary<K, V>` (`SmDictionary`) | the RTL's own rows + power-of-two bucket table; sizes are `Int` |
 | `PList<T>` | `PList<T>` (`std::shared_ptr<List<T>>`) | the `&List<T>` spelling |
 | `Span<T>` | `Span<T>` (shim struct) | borrowed view: `ptr` + `len`; `slice` returns a new span; `StrView` is `Span<Char>` |
@@ -306,14 +306,13 @@ runtime-alignment task; the shim is not the normative layout.
    `Array.toList()` are the surface (`tools/array_layout_probe.cpp` pins the
    offsets).
 7. **`Opt<T>` / `Res<T>` representation.** Spec: the core-types representation,
-   two states and a tag. Shim: one hand-written tagged union serves both
-   (`Variant2<A, B>`, `src/rtl/variant2.hpp`) - `Opt<T>` is `Variant2<T,
-   VoidEnum>` and `Res<T>` is `Variant2<T, Str>` - so an empty optional and a
-   failed result hold no payload, and the untaken arm is not constructed. The
-   alternatives are managed by hand (`setFirst`/`setSecond`/`clear`); `std::variant`
-   was rejected because its accessors throw and its valueless state is a third
-   state this type cannot enter. Behavior (`hasValue`, `value`) matches the
-   documented API.
+   two states and a tag. Shim: they are prelude `union class`es (`src/rtl/optres.kt`),
+   generated with the same two-form storage as any union - `Opt<Int>` is trivially
+   copyable, `Opt<Str>`/`Res<T>` are managed - so an empty optional and a failed result
+   hold no payload, and the untaken arm is not constructed. The compiler's checker
+   rewrites the static constructor spellings (`Opt<T>.some(x)`, `Res<T>.ok(x)`, ...)
+   onto the builder functions beside the declarations. Behavior (`hasValue`, `value`)
+   matches the documented API.
 8. **`Res<T>` failure sentinel.** `isOk()` reads the union's tag, not the message, so
    `err("")` is a failure. Generated code only calls `isOk()`.
 9. **`SmallVector` operations.** The shim implements the std::vector-compatible

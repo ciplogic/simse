@@ -175,13 +175,16 @@ A `union class` declares a **discriminated union** (a tagged union): a value typ
 several fields of which one is live at a time, selected by an implicit tag enum. It is
 otherwise a data class - fields, methods, `this` - and its generated C++ is the tag beside
 the fields' anonymous union, in a generated storage base (`Sm<Name>Storage`) that the class
-derives from. When every arm is trivially copyable the base declares no special member, so
-the whole class stays a plain trivially copyable aggregate: no destructor, no copy, nothing
-to run. When an arm owns storage (`Str`, `List`, `Dictionary`, a handle, ...) the compiler
-emits the **managed form** in the base: a destructor that destroys the live arm by tag,
-copy/move constructors and assignments, and setters that destroy the arm they replace and
-place the new one. For a concrete union a field type the compiler cannot prove trivially
-copyable is treated as managed; that only costs the class its triviality, never correctness.
+derives from. The base always declares one constructor of its own - the empty default
+constructor, which starts no arm - because a fresh value is the tag's `None` and a union's
+implicit default constructor is deleted as soon as an arm has no (or no trivial) default
+constructor. When every arm is trivially copyable the base declares nothing else, so the
+whole class stays trivially copyable: no destructor, no copy, nothing to run. When an arm
+owns storage (`Str`, `List`, `Dictionary`, a handle, ...) the compiler emits the **managed
+form** in the base: a destructor that destroys the live arm by tag, copy/move constructors
+and assignments, and setters that destroy the arm they replace and place the new one. For a
+concrete union a field type the compiler cannot prove trivially copyable is treated as
+managed; that only costs the class its triviality, never correctness.
 
 A `union class` may declare **type parameters** (`union class Res2<T>(var Value: T, var
 Error: Str)`). One non-generic `SmRes2Types` tag enum is shared by every instantiation, the

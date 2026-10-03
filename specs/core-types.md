@@ -26,7 +26,7 @@ context. Its meaning is fixed by the expected type:
 - in a `&T` (counted reference) context it lowers to an empty reference (a null
   `shared_ptr`, which owns no box); and
 - in an `Opt<T>` context it lowers to `Opt<T>()` (a default-constructed optional,
-  which is the empty one: the union's `VoidEnum` arm).
+  which is the empty one: the tag's `None`).
 
 Comparisons `x == null` and `x != null` test the reference directly for `*T` and
 `&T`, and test `hasValue()` for `Opt<T>`. Because the meaning is context-driven, a
@@ -35,9 +35,12 @@ should be avoided; give the binding an explicit type.
 
 ## `Opt<T>`
 
-`Opt<T>` models an optional value: it either holds a `T` or is empty. Its storage is the
-RTL's two-alternative union, `Variant2<T, VoidEnum>` (`src/rtl/variant2.hpp`), whose
-empty state is the `VoidEnum` arm, so an empty optional builds no payload.
+`Opt<T>` models an optional value: it either holds a `T` or is empty. It is a prelude
+`union class` (`src/rtl/optres.kt`): its one arm carries the payload (`Value: T`) and its
+empty state is the tag's `None`, so an empty optional builds nothing. The generated
+storage picks its form per instantiation - `Opt<Int>` is a trivially copyable aggregate,
+`Opt<Str>` carries the destructor and copy/move members - so an optional of a scalar costs
+nothing.
 
 ```text
 var found: Opt<Point> = table.find(id)   // Opt: has a Point, or empty
@@ -63,10 +66,10 @@ The error is always an inline string, so `Res` takes a single type parameter (`T
 success payload), stored by value. `Res<T>` therefore has the same ownership and copy
 semantics as any value containing a `T`; use `Res<&T>` for shared identity.
 
-`Res<T>` is the same two-alternative union (`Variant2<T, Str>`, `src/rtl/variant2.hpp`)
-with the payload and the message as its arms: a failed result carries no `T` and a
-successful one carries no message, and the union's tag says which arm is live. An empty
-message is therefore not a success - `Res<T>.err("")` is a failure.
+`Res<T>` is a prelude `union class` too (`src/rtl/optres.kt`), with the payload and the
+message as its arms (`Value: T`, `Error: Str`): a failed result carries no `T` and a
+successful one carries no message, and the tag says which arm is live. An empty message is
+therefore not a success - `Res<T>.err("")` is a failure.
 
 `Opt<T>` also stores its payload by value. It has exactly two states, `none` and
 `some(T)`, and copying it copies the contained value. `Opt<&T>` is therefore a valid way
@@ -98,8 +101,8 @@ Status: required for the first implementation.
 - `value: T` (the success payload); and
 - `error: Str` (the failure message).
 
-The RTL's own fields are spelled `Value`/`Error` (`result.hpp`); the emitter remaps only the
-lowercase pair, so both spellings compile, but the sources use `Value`/`Error` and one should
+The `union class`'s arms are spelled `Value`/`Error`; the checker remaps the lowercase
+pair, so both spellings compile, but the sources use `Value`/`Error` and one should
 go (`impl_specs/capability-matrix.md`, T57).
 
 `Opt<T>` exposes the state and payload as:

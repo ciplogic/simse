@@ -110,30 +110,11 @@ borrow fun toArray<T>(this: List<T>): Array<T>
 @SmGen("res", "listops", "simse_array_toList")
 fun toList<T>(this: Array<T>): List<T>
 
-// `Opt<T>.hasValue()`: the `Variant2` tag test (specs/core-types.md), read only - so a body that
-// tests an optional and reads its parameter is borrow-clean, which is why it is declared instead of
-// left as a built-in member with nothing to mark (src/rtl/_res.md's `optops`).
-//
-// A receiver may be a type with an `unInit` - it is emitted as a pointer (`Res* self`), never a
-// copy, so the checker allows it (src/sema/Sema.kt). `Res<T>.isOk()` and `value()` stay built-ins
-// for the one remaining reason: `value()` answers the type argument, which the emitter writes
-// through without substituting `memberCallReturn`'s return type, so a `T`-returning declaration
-// would emit `T` where a concrete type belongs.
-@SmGen("res", "optops", "simse_opt_hasValue")
-borrow fun hasValue<T>(this: Opt<T>): Bool
-
 // The construction convention: `initByValue` is an *extension* on the instance - it sets
 // the receiver and returns nothing. `return (x)` (src/parser/Parser.kt) and
-// `var y = T(x)` (src/linear/LinearForm.kt) build a `T` and call this on it.
-@SmGen("res", "optops", "simse_opt_initByValue")
-fun initByValue<T>(this: Opt<T>, value: T): Unit
-
-@SmGen("res", "optops", "simse_opt_initByValueNone")
-fun initByValue<T>(this: Opt<T>): Unit
-
-// The same convention for `Res<T>`: `return (x)` in a `Res<T>` function is `Res<T>.ok(x)`.
-@SmGen("res", "optops", "simse_res_initByValue")
-fun initByValue<T>(this: Res<T>, value: T): Unit
+// `var y = T(x)` (src/linear/LinearForm.kt) build a `T` and call this on it. `Opt<T>` and
+// `Res<T>` declare it through their `union class` bodies (src/rtl/optres.kt), so their
+// arm constructors are the generated ones and no native stands for the convention here.
 
 // `Str`'s two constructions. The empty one is an empty method - the receiver is already the
 // default (empty) `Str`, so there is nothing to set and `Str`'s own default construction is

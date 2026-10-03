@@ -275,8 +275,14 @@ fun Emitter.memberCallReturn(callee: *AstXmlNode): AstXmlNode {
     }
     if (!xmlIsEmpty(recv) && xmlKind(recv) == AstNodeCategory.TypeGeneric) {
         val typeArgs: List<AstXmlNode> = xmlChildren(recv, AstNodeKind.TypeArg)
-        if (calleeText == "value" && xmlAttr(recv, AstNodeAttributeKind.Name) == "Opt" && typeArgs.size() > 0) {
+        val recvName: Str = xmlAttr(recv, AstNodeAttributeKind.Name)
+        if (calleeText == "value" && (recvName == "Opt" || recvName == "Res")
+            && typeArgs.size() > 0
+        ) {
             return typeArgs[0]
+        }
+        if (calleeText == "error" && recvName == "Res") {
+            return this.namedType("Str")
         }
     }
     if (!xmlIsEmpty(recv) && (calleeText == "size" || calleeText == "count")) {
@@ -549,4 +555,3 @@ fun Emitter.inferType(e: *AstXmlNode): AstXmlNode {
     }
     return xmlEmptyNode()
 }
-

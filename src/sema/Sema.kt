@@ -25,8 +25,8 @@ fun semaIsBuiltinType(name: *Str): Bool {
     if (name == "Int" || name == "Int8" || name == "Int16" || name == "Int32"
         || name == "Int64" || name == "Float32" || name == "Float64" || name == "Char"
         || name == "Str" || name == "Bool" || name == "Unit" || name == "List"
-        || name == "Array" || name == "RawArray" || name == "Opt" || name == "Res"
-        || name == "Dictionary" || name == "SmallVector" || name == "PList"
+        || name == "Array" || name == "RawArray" || name == "Dictionary"
+        || name == "SmallVector" || name == "PList"
     ) {
         return true
     }
@@ -35,7 +35,7 @@ fun semaIsBuiltinType(name: *Str): Bool {
 
 fun semaBuiltinGenericArity(name: *Str): Int {
     when (name) {
-        "List", "Array", "RawArray", "Opt", "Res", "PList" -> {
+        "List", "Array", "RawArray", "PList" -> {
             return 1
         }
 
@@ -287,10 +287,6 @@ data class Analyzer(
     var loopDepth: Int,
     var diags: List<Str>,
 
-// The type names that declare `unInit` (`collectUninitTypes`): such a type has a C++
-// destructor, so a value of it would run that destructor once per copy.
-    var uninitTypes: Dictionary<Str, Bool>,
-
 // The class a method body is analyzed inside, so `this.field` has a type: the `for` rewrite
 // resolves an iterated *field* (`this.functions`) like any other receiver. Empty outside a
 // data class's methods.
@@ -314,7 +310,6 @@ fun newAnalyzer(inputs: *List<SemaInput>): Analyzer {
         List<List<Str>>(),
         0,
         List<Str>(),
-        Dictionary<Str, Bool>(),
         xmlEmptyNode()
     )
 }

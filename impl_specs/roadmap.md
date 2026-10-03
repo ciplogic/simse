@@ -112,9 +112,11 @@ Hand-written C++ (deferred), in order of ease: `filestream.hpp` (the `FileStream
 its fields - its method bodies are the `filestream` section of `_res.md`; only the
 constructor-like `open` was ever in `fileio`) and the type core (`types.hpp`, `containers.hpp`,
 `smstring.hpp`, `smdictionary.hpp`, `span.hpp`, `strview.hpp`, `strsmallvector.hpp`,
-`variant2.hpp`, `optional.hpp`, `result.hpp`, `functional.hpp`), which
+`functional.hpp`), which
 the amalgamation is compiled *against* and which needs language features that do not exist yet
-(statics in an object, a ref-counted layout).
+(statics in an object, a ref-counted layout). (`variant2.hpp`, `optional.hpp` and
+`result.hpp` left the list when `Opt`/`Res` became prelude `union class`es,
+`src/rtl/optres.kt`.)
 
 ### T30 - The generators are their own files, in the compiler's package - **Done**
 

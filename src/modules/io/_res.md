@@ -170,12 +170,14 @@ bodies:
 // The next line without its line ending, or an empty `Opt` at end of file.
 Opt<Str> FileStream::readLine() {
     if (!std::getline(file, line)) {
-        return Opt<Str>::none();
+        return Opt<Str>();
     }
     if (!line.empty() && line.back() == '\r') {
         line.pop_back();
     }
-    return Opt<Str>::some(simse_fromStdString(line));
+    Opt<Str> result;
+    result.setValue(simse_fromStdString(line));
+    return result;
 }
 
 // The next line into the caller's buffer (reused across calls), `false` at end of
@@ -197,9 +199,11 @@ Bool FileStream::readLineInto(Str* buffer) {
 Opt<StrView> FileStream::readLineView() {
     Int from = 0;
     Int count = 0;
-    if (!nextLineSpan(&from, &count)) return Opt<StrView>::none();
+    if (!nextLineSpan(&from, &count)) return Opt<StrView>();
     Char* base = const_cast<Char*>(reinterpret_cast<const Char*>(chunk.data()));
-    return Opt<StrView>::some(StrView(base + from, count));
+    Opt<StrView> result;
+    result.setValue(StrView(base + from, count));
+    return result;
 }
 
 // The file's size in bytes (0 when it is unknown).

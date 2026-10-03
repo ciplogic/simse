@@ -270,8 +270,13 @@ fun SemInfer.memberReturn(callee: *AstXmlNode, argNodes: *List<AstXmlNode>): Ast
         ) {
             return semReRole(recv, AstNodeKind.Type)
         }
-        if (calleeText == "value" && recvName == "Opt" && typeArgs.size() > 0) {
+        if (calleeText == "value" && (recvName == "Opt" || recvName == "Res")
+            && typeArgs.size() > 0
+        ) {
             return semReRole(typeArgs[0], AstNodeKind.Type)
+        }
+        if (calleeText == "error" && recvName == "Res") {
+            return semNamedType("Str")
         }
         if ((calleeText == "size" || calleeText == "count")
             && (recvName == "List" || recvName == "Array" || recvName == "Dictionary"

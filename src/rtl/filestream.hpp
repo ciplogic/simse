@@ -5,7 +5,6 @@
 #include <string>
 
 #include "containers.hpp"
-#include "optional.hpp"
 #include "span.hpp"
 #include "types.hpp"
 

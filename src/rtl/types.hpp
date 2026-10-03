@@ -36,6 +36,15 @@ using PtrOf = T*;
 // `simse_fromStdString` convert at. This header deliberately does not define `Str`
 // itself; containers.hpp pulls smstring.hpp in once SmallVector exists.
 
+// `Opt<T>` and `Res<T>` are prelude `union class`es (src/rtl/optres.kt): the emitter writes
+// their definitions into the program from the declarations, so this header forward-declares
+// the templates for the hand-written C++ that names them before that (the FileStream member
+// declarations in filestream.hpp, the `_res.md` section signatures and bodies).
+template <class T>
+struct Opt;
+template <class T>
+struct Res;
+
 // `*value` in Simse is the raw-pointer (address-of) form (specs/memory-model.md).
 // The lvalue overload covers ordinary expressions; the forwarding overload binds
 // temporaries. A pointer to a temporary is valid until the end of the full

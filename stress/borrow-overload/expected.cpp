@@ -68,6 +68,34 @@ Int simse_lenOf(const Str& self);
 template <class T, int N>
 Int simse_lenOf(const SmallVector<T, N>& self);
 
+#include <cerrno>
+#include <charconv>
+#include <cstddef>
+#include <cstdlib>
+#include <system_error>
+
+
+Char simse_str_charAt(const Str& self, Int index);
+
+List<Str> simse_str_split(const Str& self, const Str& separator);
+List<Str> simse_str_split(const Str& self, Char separator);
+
+Int simse_str_find(const Str& self, const Str& sub);
+
+Int simse_str_lastIndexOf(const Str& self, const Str& sub);
+
+Str simse_str_replace(const Str& self, const Str& from, const Str& to);
+
+Opt<Int> simse_str_toInt(const Str& self);
+Opt<Float64> simse_str_toFloat(const Str& self);
+
+void simse_str_initByValue(Str& self, const Str& value);
+
+template <class T>
+Str simse_num_toString(const T& self);
+Str simse_char_toString(Char self);
+Str simse_bool_toString(Bool self);
+
 #include <algorithm>
 #include <type_traits>
 #include <utility>
@@ -109,34 +137,6 @@ Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& val
 
 template <class T, class F>
 void simse_list_sort(List<T>& self, F less);
-
-#include <cerrno>
-#include <charconv>
-#include <cstddef>
-#include <cstdlib>
-#include <system_error>
-
-
-Char simse_str_charAt(const Str& self, Int index);
-
-List<Str> simse_str_split(const Str& self, const Str& separator);
-List<Str> simse_str_split(const Str& self, Char separator);
-
-Int simse_str_find(const Str& self, const Str& sub);
-
-Int simse_str_lastIndexOf(const Str& self, const Str& sub);
-
-Str simse_str_replace(const Str& self, const Str& from, const Str& to);
-
-Opt<Int> simse_str_toInt(const Str& self);
-Opt<Float64> simse_str_toFloat(const Str& self);
-
-void simse_str_initByValue(Str& self, const Str& value);
-
-template <class T>
-Str simse_num_toString(const T& self);
-Str simse_char_toString(Char self);
-Str simse_bool_toString(Bool self);
 
 #include <cstdio>
 
@@ -199,8 +199,308 @@ inline void simse_println(const T& value, FILE* out) {
     std::fputc('\n', out);
 }
 
+template <class T>
+struct Opt;
+template <class T>
+struct Res;
+// src/rtl
+enum class SmOptTypes { None, Value };
+inline SmOptTypes simse_SmOptTypes_fromInt(Int value) { return (SmOptTypes) value; }
+// src/rtl
+SIMSE_PACK_PUSH
+template <Bool SmManaged, class T> struct SmOptStorage;
+template <class T> struct SmOptStorage<false, T> {
+    SmOptTypes _type = SmOptTypes::None;
+    union {
+        T Value;
+    };
+    SmOptStorage() {}
+    void setValue(T value) {
+        _type = SmOptTypes::Value;
+        Value = std::move(value);
+    }
+    void setNone() {
+        _type = SmOptTypes::None;
+    }
+};
+template <class T> struct SmOptStorage<true, T> {
+    SmOptTypes _type = SmOptTypes::None;
+    union {
+        T Value;
+    };
+    SmOptStorage() {}
+    SmOptStorage(const SmOptStorage& other) { this->copyFrom(other); }
+    SmOptStorage(SmOptStorage&& other) noexcept { this->moveFrom(other); }
+    ~SmOptStorage() { this->destroyActive(); }
+    SmOptStorage& operator=(const SmOptStorage& other) {
+        if (this != &other) {
+            this->destroyActive();
+            this->copyFrom(other);
+        }
+        return *this;
+    }
+    SmOptStorage& operator=(SmOptStorage&& other) noexcept {
+        if (this != &other) {
+            this->destroyActive();
+            this->moveFrom(other);
+        }
+        return *this;
+    }
+    void destroyActive() {
+        switch (this->_type) {
+            case SmOptTypes::Value: simse_destroy(this->Value); break;
+            default: break;
+        }
+        this->_type = SmOptTypes::None;
+    }
+    void copyFrom(const SmOptStorage& other) {
+        switch (other._type) {
+            case SmOptTypes::Value: ::new ((void *) &this->Value) T(other.Value); this->_type = SmOptTypes::Value; break;
+            default: break;
+        }
+    }
+    void moveFrom(SmOptStorage& other) {
+        switch (other._type) {
+            case SmOptTypes::Value: ::new ((void *) &this->Value) T(std::move(other.Value)); this->_type = SmOptTypes::Value; break;
+            default: break;
+        }
+    }
+    void setValue(T value) {
+        if (_type == SmOptTypes::Value) {
+            Value = std::move(value);
+            return;
+        }
+        this->destroyActive();
+        _type = SmOptTypes::Value;
+        ::new ((void *) &Value) T(std::move(value));
+    }
+    void setNone() {
+        this->destroyActive();
+    }
+};
+template <class T>
+struct Opt : SmOptStorage<SmUnionManaged<T>, T> {
+};
+SIMSE_PACK_POP
+template <class T>
+inline Bool operator==(const Opt<T>& self, SmOptTypes tag) { return self._type == tag; }
+template <class T>
+inline Bool operator==(const Opt<T>* self, SmOptTypes tag) { return self->_type == tag; }
+template <class T>
+inline Bool operator!=(const Opt<T>& self, SmOptTypes tag) { return self._type != tag; }
+template <class T>
+inline Bool operator!=(const Opt<T>* self, SmOptTypes tag) { return self->_type != tag; }
+template <class T>
+inline SmOptTypes getTypeOf(Opt<T>* self) {
+    return self->_type;
+}
+template <class T>
+inline Bool isOfType(Opt<T>* self, SmOptTypes typeToCheck) {
+    return self->_type == typeToCheck;
+}
+template <class T>
+inline void setNone(Opt<T>* self) {
+    self->setNone();
+}
+template <class T>
+inline void initByValue(Opt<T>* self) {
+    self->setNone();
+}
+template <class T>
+inline void setValue(Opt<T>* self, T value) {
+    self->setValue(std::move(value));
+}
+template <class T>
+inline Opt<T> getValue(Opt<T>* self) {
+    if (self->_type == SmOptTypes::Value) {
+        Opt<T> result;
+        result.setValue(self->Value);
+        return result;
+    }
+    return Opt<T>();
+}
+template <class T>
+inline void initByValue(Opt<T>* self, T value) {
+    self->setValue(std::move(value));
+}
+// src/rtl
+enum class SmResTypes { None, Value, Error };
+inline SmResTypes simse_SmResTypes_fromInt(Int value) { return (SmResTypes) value; }
+// src/rtl
+SIMSE_PACK_PUSH
+template <Bool SmManaged, class T> struct SmResStorage;
+template <class T> struct SmResStorage<false, T> {
+    SmResTypes _type = SmResTypes::None;
+    union {
+        T Value;
+        Str Error;
+    };
+    SmResStorage() {}
+    void setValue(T value) {
+        _type = SmResTypes::Value;
+        Value = std::move(value);
+    }
+    void setError(Str value) {
+        _type = SmResTypes::Error;
+        Error = std::move(value);
+    }
+    void setNone() {
+        _type = SmResTypes::None;
+    }
+};
+template <class T> struct SmResStorage<true, T> {
+    SmResTypes _type = SmResTypes::None;
+    union {
+        T Value;
+        Str Error;
+    };
+    SmResStorage() {}
+    SmResStorage(const SmResStorage& other) { this->copyFrom(other); }
+    SmResStorage(SmResStorage&& other) noexcept { this->moveFrom(other); }
+    ~SmResStorage() { this->destroyActive(); }
+    SmResStorage& operator=(const SmResStorage& other) {
+        if (this != &other) {
+            this->destroyActive();
+            this->copyFrom(other);
+        }
+        return *this;
+    }
+    SmResStorage& operator=(SmResStorage&& other) noexcept {
+        if (this != &other) {
+            this->destroyActive();
+            this->moveFrom(other);
+        }
+        return *this;
+    }
+    void destroyActive() {
+        switch (this->_type) {
+            case SmResTypes::Value: simse_destroy(this->Value); break;
+            case SmResTypes::Error: simse_destroy(this->Error); break;
+            default: break;
+        }
+        this->_type = SmResTypes::None;
+    }
+    void copyFrom(const SmResStorage& other) {
+        switch (other._type) {
+            case SmResTypes::Value: ::new ((void *) &this->Value) T(other.Value); this->_type = SmResTypes::Value; break;
+            case SmResTypes::Error: ::new ((void *) &this->Error) Str(other.Error); this->_type = SmResTypes::Error; break;
+            default: break;
+        }
+    }
+    void moveFrom(SmResStorage& other) {
+        switch (other._type) {
+            case SmResTypes::Value: ::new ((void *) &this->Value) T(std::move(other.Value)); this->_type = SmResTypes::Value; break;
+            case SmResTypes::Error: ::new ((void *) &this->Error) Str(std::move(other.Error)); this->_type = SmResTypes::Error; break;
+            default: break;
+        }
+    }
+    void setValue(T value) {
+        if (_type == SmResTypes::Value) {
+            Value = std::move(value);
+            return;
+        }
+        this->destroyActive();
+        _type = SmResTypes::Value;
+        ::new ((void *) &Value) T(std::move(value));
+    }
+    void setError(Str value) {
+        if (_type == SmResTypes::Error) {
+            Error = std::move(value);
+            return;
+        }
+        this->destroyActive();
+        _type = SmResTypes::Error;
+        ::new ((void *) &Error) Str(std::move(value));
+    }
+    void setNone() {
+        this->destroyActive();
+    }
+};
+template <class T>
+struct Res : SmResStorage<SmUnionManaged<T, Str>, T> {
+};
+SIMSE_PACK_POP
+template <class T>
+inline Bool operator==(const Res<T>& self, SmResTypes tag) { return self._type == tag; }
+template <class T>
+inline Bool operator==(const Res<T>* self, SmResTypes tag) { return self->_type == tag; }
+template <class T>
+inline Bool operator!=(const Res<T>& self, SmResTypes tag) { return self._type != tag; }
+template <class T>
+inline Bool operator!=(const Res<T>* self, SmResTypes tag) { return self->_type != tag; }
+template <class T>
+inline SmResTypes getTypeOf(Res<T>* self) {
+    return self->_type;
+}
+template <class T>
+inline Bool isOfType(Res<T>* self, SmResTypes typeToCheck) {
+    return self->_type == typeToCheck;
+}
+template <class T>
+inline void setNone(Res<T>* self) {
+    self->setNone();
+}
+template <class T>
+inline void initByValue(Res<T>* self) {
+    self->setNone();
+}
+template <class T>
+inline void setValue(Res<T>* self, T value) {
+    self->setValue(std::move(value));
+}
+template <class T>
+inline Opt<T> getValue(Res<T>* self) {
+    if (self->_type == SmResTypes::Value) {
+        Opt<T> result;
+        result.setValue(self->Value);
+        return result;
+    }
+    return Opt<T>();
+}
+template <class T>
+inline void initByValue(Res<T>* self, T value) {
+    self->setValue(std::move(value));
+}
+template <class T>
+inline void setError(Res<T>* self, Str value) {
+    self->setError(std::move(value));
+}
+template <class T>
+inline Opt<Str> getError(Res<T>* self) {
+    if (self->_type == SmResTypes::Error) {
+        Opt<Str> result;
+        result.setValue(self->Error);
+        return result;
+    }
+    return Opt<Str>();
+}
+template <class T>
+requires (!std::is_same_v<Str, T>)
+inline void initByValue(Res<T>* self, Str value) {
+    self->setError(std::move(value));
+}
+
 Str substr(StrView* self, Int from, Int count);
 Str toString(StrView* self);
+template <class T>
+Bool simse_optHasValue(Opt<T>* self);
+template <class T>
+T simse_optValue(Opt<T>* self);
+template <class T>
+Bool simse_resHasValue(Res<T>* self);
+template <class T>
+T simse_resValue(Res<T>* self);
+template <class T>
+Str simse_resError(Res<T>* self);
+template <class T>
+Opt<T> simse_optSome(T value);
+template <class T>
+Opt<T> simse_optNone();
+template <class T>
+Res<T> simse_resOk(T value);
+template <class T>
+Res<T> simse_resErr(Str message);
+void initByValue(Str* self);
 Str substr(Str* self, Int start, Int len);
 Int ns1_width(Str* value);
 Int ns1_width(Str* value, Int extra);
@@ -252,6 +552,69 @@ Str toString(StrView* self) {
     _sm_expr1 = self->size();
     _sm_expr2 = substr(self, 0, _sm_expr1);
     return _sm_expr2;
+}
+template <class T>
+Bool simse_optHasValue(Opt<T>* self) {
+    SmOptTypes _sm_base1;
+    Bool _sm_expr1;
+    _sm_base1 = SmOptTypes::Value;
+    _sm_expr1 = isOfType(self, _sm_base1);
+    return _sm_expr1;
+}
+template <class T>
+T simse_optValue(Opt<T>* self) {
+    T _sm_expr1;
+    _sm_expr1 = self->Value;
+    return _sm_expr1;
+}
+template <class T>
+Bool simse_resHasValue(Res<T>* self) {
+    SmResTypes _sm_base1;
+    Bool _sm_expr1;
+    _sm_base1 = SmResTypes::Value;
+    _sm_expr1 = isOfType(self, _sm_base1);
+    return _sm_expr1;
+}
+template <class T>
+T simse_resValue(Res<T>* self) {
+    T _sm_expr1;
+    _sm_expr1 = self->Value;
+    return _sm_expr1;
+}
+template <class T>
+Str simse_resError(Res<T>* self) {
+    Str _sm_expr1;
+    _sm_expr1 = self->Error;
+    return _sm_expr1;
+}
+template <class T>
+Opt<T> simse_optSome(T value) {
+    Opt<T> result;
+    initByValue(simse_addressOf(result));
+    setValue(simse_addressOf(result), value);
+    return result;
+}
+template <class T>
+Opt<T> simse_optNone() {
+    Opt<T> result;
+    initByValue(simse_addressOf(result));
+    return result;
+}
+template <class T>
+Res<T> simse_resOk(T value) {
+    Res<T> result;
+    initByValue(simse_addressOf(result));
+    setValue(simse_addressOf(result), value);
+    return result;
+}
+template <class T>
+Res<T> simse_resErr(Str message) {
+    Res<T> result;
+    initByValue(simse_addressOf(result));
+    setError(simse_addressOf(result), message);
+    return result;
+}
+void initByValue(Str* self) {
 }
 Str substr(Str* self, Int start, Int len) {
     Str* _sm_base1;
@@ -416,81 +779,6 @@ inline Int simse_lenOf(const SmallVector<T, N>& self) {
     return self.size();
 }
 
-template <class K, class V>
-inline Dictionary<K, V> simse_dictionaryOf() {
-    return Dictionary<K, V>();
-}
-
-template <class K, class V>
-inline V* simse_dict_getPtr(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
-    return self.valuePtr(key);
-}
-
-template <class K, class V>
-inline Opt<V> simse_dict_get(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
-    const V* found = simse_dict_getPtr(self, key);
-    if (found == nullptr) return Opt<V>::none();
-    return Opt<V>::some(*found);
-}
-
-template <class K, class V>
-inline Bool simse_dict_has(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
-    return simse_dict_getPtr(self, key) != nullptr;
-}
-
-template <class K, class V>
-inline void simse_dict_insert(Dictionary<K, V>& self, const std::type_identity_t<K>& key,
-                              const std::type_identity_t<V>& value) {
-    self.insert_or_assign(key, value);
-}
-
-template <class K, class V>
-inline void simse_dict_remove(Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
-    self.erase(key);
-}
-
-template <class K, class V>
-inline Int simse_dict_size(const Dictionary<K, V>& self) {
-    return (Int) self.size();
-}
-
-template <class K, class V>
-inline List<K> simse_dict_keys(const Dictionary<K, V>& self) {
-    List<K> out;
-    out.reserve((Int) self.size());
-    for (const auto& entry : self) out.push_back(entry.first);
-    return out;
-}
-
-template <class K, class V>
-inline List<V> simse_dict_values(const Dictionary<K, V>& self) {
-    List<V> out;
-    out.reserve((Int) self.size());
-    for (const auto& entry : self) out.push_back(entry.second);
-    return out;
-}
-
-template <class K, class V>
-inline void simse_dict_clear(Dictionary<K, V>& self) {
-    self.clear();
-}
-
-template <class T>
-inline Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& value) {
-    for (const T& item : self) {
-        if (item == value) return true;
-    }
-    return false;
-}
-
-template <class T, class F>
-inline void simse_list_sort(List<T>& self, F less) {
-    Func<Bool(T*, T*)> fn = less;
-    std::sort(self.begin(), self.end(), [&fn](const T& a, const T& b) {
-        return fn(const_cast<T*>(&a), const_cast<T*>(&b));
-    });
-}
-
 inline Char simse_str_charAt(const Str& self, Int index) {
     return (Char) self[index];
 }
@@ -570,23 +858,27 @@ inline Str simse_str_replace(const Str& self, const Str& from, const Str& to) {
 }
 
 inline Opt<Int> simse_str_toInt(const Str& self) {
-    if (self.empty()) return Opt<Int>::none();
+    if (self.empty()) return Opt<Int>();
     Int value = 0;
     const char* begin = self.data();
     const char* end = begin + self.size();
     std::from_chars_result parsed = std::from_chars(begin, end, value);
-    if (parsed.ec != std::errc() || parsed.ptr != end) return Opt<Int>::none();
-    return Opt<Int>::some(value);
+    if (parsed.ec != std::errc() || parsed.ptr != end) return Opt<Int>();
+    Opt<Int> result;
+    result.setValue(value);
+    return result;
 }
 
 inline Opt<Float64> simse_str_toFloat(const Str& self) {
-    if (self.empty()) return Opt<Float64>::none();
+    if (self.empty()) return Opt<Float64>();
     const char* begin = self.data();
     char* end = nullptr;
     errno = 0;
     const Float64 value = std::strtod(begin, &end);
-    if (end != begin + self.size() || errno == ERANGE) return Opt<Float64>::none();
-    return Opt<Float64>::some(value);
+    if (end != begin + self.size() || errno == ERANGE) return Opt<Float64>();
+    Opt<Float64> result;
+    result.setValue(value);
+    return result;
 }
 
 inline void simse_str_initByValue(Str& self, const Str& value) {
@@ -604,6 +896,83 @@ inline Str simse_char_toString(Char self) {
 
 inline Str simse_bool_toString(Bool self) {
     return self ? "true" : "false";
+}
+
+template <class K, class V>
+inline Dictionary<K, V> simse_dictionaryOf() {
+    return Dictionary<K, V>();
+}
+
+template <class K, class V>
+inline V* simse_dict_getPtr(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
+    return self.valuePtr(key);
+}
+
+template <class K, class V>
+inline Opt<V> simse_dict_get(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
+    const V* found = simse_dict_getPtr(self, key);
+    if (found == nullptr) return Opt<V>();
+    Opt<V> result;
+    result.setValue(*found);
+    return result;
+}
+
+template <class K, class V>
+inline Bool simse_dict_has(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
+    return simse_dict_getPtr(self, key) != nullptr;
+}
+
+template <class K, class V>
+inline void simse_dict_insert(Dictionary<K, V>& self, const std::type_identity_t<K>& key,
+                              const std::type_identity_t<V>& value) {
+    self.insert_or_assign(key, value);
+}
+
+template <class K, class V>
+inline void simse_dict_remove(Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
+    self.erase(key);
+}
+
+template <class K, class V>
+inline Int simse_dict_size(const Dictionary<K, V>& self) {
+    return (Int) self.size();
+}
+
+template <class K, class V>
+inline List<K> simse_dict_keys(const Dictionary<K, V>& self) {
+    List<K> out;
+    out.reserve((Int) self.size());
+    for (const auto& entry : self) out.push_back(entry.first);
+    return out;
+}
+
+template <class K, class V>
+inline List<V> simse_dict_values(const Dictionary<K, V>& self) {
+    List<V> out;
+    out.reserve((Int) self.size());
+    for (const auto& entry : self) out.push_back(entry.second);
+    return out;
+}
+
+template <class K, class V>
+inline void simse_dict_clear(Dictionary<K, V>& self) {
+    self.clear();
+}
+
+template <class T>
+inline Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& value) {
+    for (const T& item : self) {
+        if (item == value) return true;
+    }
+    return false;
+}
+
+template <class T, class F>
+inline void simse_list_sort(List<T>& self, F less) {
+    Func<Bool(T*, T*)> fn = less;
+    std::sort(self.begin(), self.end(), [&fn](const T& a, const T& b) {
+        return fn(const_cast<T*>(&a), const_cast<T*>(&b));
+    });
 }
 
 template <class T>

@@ -516,10 +516,11 @@ whose `Value` or `Error` hold the outcome (`isOk()`), used throughout the
 compiler for parsing and file work. `null` is a literal for `&T` and `*T` in a
 nullable context, so `x == null` tests a handle.
 
-Both are arms of one tagged union in the runtime (`Variant2<A, B>`,
-`src/rtl/variant2.hpp`): an `Opt<T>` is `Variant2<T, VoidEnum>` and a `Res<T>`
-is `Variant2<T, Str>`, and the tag - not the message - says which arm is live, so
-a result whose message happens to be empty is still a failure.
+Both are `union class`es in the prelude (`src/rtl/optres.kt`): an `Opt<T>` is one
+`Value` arm under the tag's `None`, and a `Res<T>` adds the `Error: Str` arm. The tag -
+not the message - says which arm is live, so a result whose message happens to be empty is
+still a failure. The generated storage follows the instantiation, so an `Opt<Int>` stays a
+trivially copyable aggregate while an `Opt<Str>` destroys its text.
 
 ```simse
 fun describe(n: Int): Opt<Str> {

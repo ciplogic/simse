@@ -9,7 +9,7 @@ package uninit
 // `&T(...)` builds the box in place (`makeRef<T>(...)`, specs/memory-model.md), so there is no
 // temporary: the destructor runs exactly once, when the box's last owner goes.
 
-ref class Res(var id: Int) {
+ref class Box(var id: Int) {
     fun unInit(): Unit {
         println("close " + this.id.toString())
     }
@@ -17,14 +17,14 @@ ref class Res(var id: Int) {
 
 // One owner: the box closes when the handle goes, at the end of the call.
 fun oneOwner(): Unit {
-    val a: &Res = &Res(7)
+    val a: &Box = &Box(7)
     println("open " + a.id.toString())
 }
 
 // Two owners of one box: the handle is copied, the box is not - the destructor still runs once.
 fun twoOwners(): Unit {
-    val b: &Res = &Res(9)
-    val c: &Res = b
+    val b: &Box = &Box(9)
+    val c: &Box = b
     println("share " + c.id.toString())
 }
 

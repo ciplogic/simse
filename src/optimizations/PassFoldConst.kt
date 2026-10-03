@@ -72,8 +72,12 @@ fun foldConstWrite(stmt: *AstXmlNode): Opt<FoldConstSlot> {
     if (!literal.hasValue()) {
         return ()
     }
+    // The read is hoisted out of the parenthesized return: a call inside its desugared
+    // block is not visited by the checker's statement walk, so the ported `Opt` members
+    // would not be renamed there (`expandResOptMember`).
+    val lit: FoldGlobalConst = literal.value()
     return (
-        FoldConstSlot(name, literal.value().kind, literal.value().text)
+        FoldConstSlot(name, lit.kind, lit.text)
     )
 }
 

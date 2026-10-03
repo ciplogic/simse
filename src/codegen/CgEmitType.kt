@@ -542,10 +542,14 @@ fun Emitter.emitUnionMethodBody(method: *AstXmlNode, methodName: *Str, tagType: 
         this.line(1, `self->@setter(std::move(value));`)
         return
     }
-    // `get<Field>`: the value when the tag says this arm, an empty `Opt` otherwise.
+    // `get<Field>`: the value when the tag says this arm, an empty `Opt` otherwise. The
+    // result is built through the `Opt`'s own setter (a `union class` too, src/rtl/optres.kt),
+    // not an old-style static constructor: `some` is not C++ any more.
     val ret: Str = this.type(xmlChildPtr(method, AstNodeKind.ReturnType))
     this.line(1, `if (self->_type == @tagType::@fieldName) {`)
-    this.line(2, `return @ret::some(self->@fieldName);`)
+    this.line(2, `@ret result;`)
+    this.line(2, `result.setValue(self->@fieldName);`)
+    this.line(2, "return result;")
     this.line(1, "}")
     this.line(1, `return @ret();`)
 }
@@ -1214,10 +1218,48 @@ fun Emitter.collectProgramNames(): Unit {
         }
     }
     var changed: Bool = true
+    var reachedSections: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     while (changed) {
         changed = false
         val namesBefore: Int = this.referencedNames.size()
         val typesBefore: Int = this.referencedTypes.size()
+        // The ported `Opt`/`Res` members and builders are declared under collision-safe
+        // names (src/rtl/optres.kt). A call inside a `return (...)` block is mapped only at
+        // emission, too late for the prelude-body rule, so a named union pulls its whole
+        // small set: `Opt` its two members and two builders, `Res` its three and two.
+        if (this.referencedTypes.has("Opt")) {
+            this.referencedNames.insert("simse_optValue", true)
+            this.referencedNames.insert("simse_optHasValue", true)
+            this.referencedNames.insert("simse_optSome", true)
+            this.referencedNames.insert("simse_optNone", true)
+        }
+        if (this.referencedTypes.has("Res")) {
+            this.referencedNames.insert("simse_resValue", true)
+            this.referencedNames.insert("simse_resHasValue", true)
+            this.referencedNames.insert("simse_resError", true)
+            this.referencedNames.insert("simse_resOk", true)
+            this.referencedNames.insert("simse_resErr", true)
+        }
+        // A shared resource section (`strops`, `dictops`, ...) is emitted whole once any of
+        // its symbols is reached, so every declaration its text holds is emitted with it -
+        // and every signature's types come along (`Opt<Int> simse_str_toInt(...)`). The
+        // section is the first `@SmGen("res", ...)` argument.
+        for (*fn in this.functions) {
+            if (!fn.prelude || fn.hasBody) {
+                continue
+            }
+            val genArgs: Str = xmlAttr(fn.decl, AstNodeAttributeKind.GeneratorArgs)
+            val section: Str = cgGeneratorArg(genArgs, 0)
+            val symbol: Str = cgGeneratorArg(genArgs, 1)
+            if (section == "") {
+                continue
+            }
+            if (this.referencedNames.has(fn.name) || this.referencedNames.has(symbol)) {
+                if (!reachedSections.has(section)) {
+                    reachedSections.insert(section, true)
+                }
+            }
+        }
         for (*fn in this.functions) {
             if (!fn.prelude) {
                 continue
@@ -1229,7 +1271,26 @@ fun Emitter.collectProgramNames(): Unit {
                 this.collectNames(fn.decl, *this.referencedNames)
                 continue
             }
-            if (!this.referencedNames.has(fn.name)) {
+            // A native extension is reached by its *symbol* (`simse_str_toInt`), which a
+            // call site records, not always by its language name; either one - or a
+            // sibling in the same emitted section - marks the declaration's own types as
+            // reached, so the `Opt` its signature returns is emitted with it.
+            var reachedName: Bool = this.referencedNames.has(fn.name)
+            if (!reachedName) {
+                val symbol: Opt<Str> = this.nativeSymbols.get(fn.name)
+                if (symbol.hasValue()) {
+                    reachedName = this.referencedNames.has(symbol.value())
+                }
+            }
+            if (!reachedName) {
+                val section: Str = cgGeneratorArg(
+                    xmlAttr(fn.decl, AstNodeAttributeKind.GeneratorArgs), 0
+                )
+                if (section != "") {
+                    reachedName = reachedSections.has(section)
+                }
+            }
+            if (!reachedName) {
                 continue
             }
             this.collectTypeNames(fn.receiver)

@@ -41,8 +41,10 @@ union class IntOrList(var I: Int, var L: List<Int>)
 // ---- union-class-generics ----
 // A generic union class: one non-generic `SmRes2Types` tag enum, a C++ template struct and
 // template methods, and a construction whose explicit type arguments bind the fields for
-// type matching. `Res2<T>` is the shape the built-in `Res<T>` would have written in Simse;
-// `Opt2<T>` is `Opt<T>` as a single `Value` arm plus the implicit `None` tag.
+// type matching. `Res2<T>` has the same shape the prelude's `Res<T>` is written with
+// (src/rtl/optres.kt); `Opt2<T>` is `Opt<T>` as a single `Value` arm plus the implicit
+// `None` tag. The generated storage picks its form per instantiation, so `Opt2<Int>` stays
+// trivially copyable while `Opt2<Str>` is managed.
 union class Res2<T>(var Value: T, var Error: Str)
 
 union class Opt2<T>(var Value: T)
@@ -274,7 +276,8 @@ fun makeParen(v: Int): DoubleOrFloat {
 }
 
 fun partUnionGenerics(): Int {
-    // Side by side with the built-in `Res<T>` in the same shapes.
+    // Side by side with the prelude's own `Res<T>` (the same shape, src/rtl/optres.kt) in
+    // the same uses.
     var a: Res<Int> = Res<Int>.ok(7)
     var b: Res2<Int> = ok2(7)
     println(a.isOk())

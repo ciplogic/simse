@@ -4742,3 +4742,25 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   arms spelled concretely, `Res<Str>(text)` - is still the "several fields have type"
   diagnostic. `stress/unions` constructs `Res2<Str>` and asserts the `Value` arm.
   Verified: `bun tools/iterate.js --full` - 71/71 and both fixed points byte for byte.
+
+- **`Opt<T>` and `Res<T>` are prelude `union class`es, and `variant2.hpp` is gone.** The two
+  core types are declared in `src/rtl/optres.kt` (`union class Opt<T>(var Value: T)` and
+  `union class Res<T>(var Value: T, var Error: Str)`) and generated with the same two-form
+  storage as any union, so `Opt<Int>` stays trivially copyable while `Res<T>` is managed.
+  `variant2.hpp`, `optional.hpp`, `result.hpp` and the `_res.md` `optops` section are
+  deleted; `types.hpp` keeps the forward declarations the hand-written C++ needs, and the
+  `dictops`/`strops`/`ilestream` bodies build their `Opt`s through the generated setter.
+  The member surface (`hasValue`, `isOk`, `value`, `error`) is declared in the union body
+  under collision-safe `simse_*` names - a prelude function is bare in C++, and generated
+  bodies are full of locals named `value` - with the checker renaming the calls it checks
+  (`expandResOptMember`) and the emitter mapping the calls inside the desugared
+  `return (...)` blocks, which the checker's statement walk does not visit. The static
+  spellings (`Opt<T>.some(x)`, `Opt<T>.none()`, `Res<T>.ok(x)`, `Res<T>.err(m)`) are
+  rewritten onto builder functions (`simse_optSome`, ...), by arm, so `Res<Str>` cannot make
+  a construction ambiguous. Reach is type-driven for them: a named `Opt`/`Res` pulls its
+  members' and builders' bodies, and a reached *section* pulls its signatures' types
+  (`Opt<Int> simse_str_toInt(...)`), because a `return (...)` call is mapped only at
+  emission, after the reach fixpoint. The `unInit` holder rule reads the declaration a
+  name resolves to, so a program's own `ref class` shadowing a prelude name no longer
+  marks the prelude type.
+  Verified: `bun tools/iterate.js --full` - 71/71 and both fixed points byte for byte.

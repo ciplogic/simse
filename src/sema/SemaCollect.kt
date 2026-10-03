@@ -27,10 +27,12 @@ fun Analyzer.run(): Unit {
     }
 }
 
-// Every class that declares `unInit`, before anything is analyzed: the rule below reads
-// the set, and a declaration may name a type from any module. A destructor makes a class
-// handle-only, and that is `ref class`'s word - a `data class` with an `unInit` is a
-// diagnostic, so one declaration carries both the destructor and the no-value rule.
+// Every class that declares `unInit`, before anything is analyzed: the declarations are
+// still checked first, whichever order they come in, and a declaration may name a type from
+// any module. A destructor makes a class handle-only, and that is `ref class`'s word - a
+// `data class` with an `unInit` is a diagnostic, so one declaration carries both the
+// destructor and the no-value rule. The holder rule itself (`checkUninitHolder`) reads the
+// declaration a name resolves to, not a global set of names.
 fun Analyzer.collectUninitTypes(): Unit {
     var n: Int = 0
     while (n < this.inputs.size()) {
@@ -68,11 +70,24 @@ fun Analyzer.collectUninitTypes(): Unit {
                         `'@className' declares unInit: a class with a destructor must be a 'ref class'`
                     )
                 }
-                this.uninitTypes.insert(className, true)
             }
         }
         n = n + 1
     }
+}
+
+// Whether the class declares `unInit` (its destructor): read from the declaration itself,
+// so the holder rule follows what the type name resolves to in the file being analyzed.
+fun semaDeclaresUninit(decl: AstXmlNode): Bool {
+    if (decl.name != AstNodeKind.DataClass) {
+        return false
+    }
+    for (*method in xmlChildren(decl, AstNodeKind.Function)) {
+        if (xmlAttr(method, AstNodeAttributeKind.Name) == "unInit") {
+            return true
+        }
+    }
+    return false
 }
 
 // `unInit` is a destructor, not a callable (`specs/declarations.md`): `x.unInit()` is the
@@ -128,7 +143,13 @@ fun Analyzer.checkUninitHolder(typeNode: *AstXmlNode, line: Int, column: Int): U
     }
     if (kind == AstNodeCategory.TypeNamed || kind == AstNodeCategory.TypeGeneric) {
         val name: Str = xmlAttr(typeNode, AstNodeAttributeKind.Name)
-        if (this.uninitTypes.has(name)) {
+        // The declaration the name actually resolves to decides: a program type may shadow
+        // a prelude name (`ref class Res`), and only its own uses are value-unsafe. A
+        // global set of names would mark the prelude `Res` for the *program's* unInit too -
+        // the prelude union's generated C++ has a destructor (the managed storage) but no
+        // language-level `unInit`.
+        val decl: *AstXmlNode = this.types.getPtr(name)
+        if (decl != null && semaDeclaresUninit(*decl)) {
             this.diag(
                 line, column,
                 `'@name' has an unInit: hold it by '*@name' or '&@name' - a value copy would run its destructor too`

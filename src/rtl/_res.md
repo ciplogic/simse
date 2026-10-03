@@ -511,8 +511,10 @@ inline V* simse_dict_getPtr(const Dictionary<K, V>& self, const std::type_identi
 template <class K, class V>
 inline Opt<V> simse_dict_get(const Dictionary<K, V>& self, const std::type_identity_t<K>& key) {
     const V* found = simse_dict_getPtr(self, key);
-    if (found == nullptr) return Opt<V>::none();
-    return Opt<V>::some(*found);
+    if (found == nullptr) return Opt<V>();
+    Opt<V> result;
+    result.setValue(*found);
+    return result;
 }
 
 template <class K, class V>
@@ -716,23 +718,27 @@ inline Str simse_str_replace(const Str& self, const Str& from, const Str& to) {
 }
 
 inline Opt<Int> simse_str_toInt(const Str& self) {
-    if (self.empty()) return Opt<Int>::none();
+    if (self.empty()) return Opt<Int>();
     Int value = 0;
     const char* begin = self.data();
     const char* end = begin + self.size();
     std::from_chars_result parsed = std::from_chars(begin, end, value);
-    if (parsed.ec != std::errc() || parsed.ptr != end) return Opt<Int>::none();
-    return Opt<Int>::some(value);
+    if (parsed.ec != std::errc() || parsed.ptr != end) return Opt<Int>();
+    Opt<Int> result;
+    result.setValue(value);
+    return result;
 }
 
 inline Opt<Float64> simse_str_toFloat(const Str& self) {
-    if (self.empty()) return Opt<Float64>::none();
+    if (self.empty()) return Opt<Float64>();
     const char* begin = self.data();
     char* end = nullptr;
     errno = 0;
     const Float64 value = std::strtod(begin, &end);
-    if (end != begin + self.size() || errno == ERANGE) return Opt<Float64>::none();
-    return Opt<Float64>::some(value);
+    if (end != begin + self.size() || errno == ERANGE) return Opt<Float64>();
+    Opt<Float64> result;
+    result.setValue(value);
+    return result;
 }
 
 inline void simse_str_initByValue(Str& self, const Str& value) {
@@ -801,44 +807,6 @@ template <class T>
 inline Span<T> simse_spanOf(List<T>* items) {
     return Span<T>(nullptr, -1);
 }
-```
-
-!optops
-====
-forward:
-```cpp
-// `Opt<T>.hasValue()`: the `Variant2` tag test (specs/core-types.md). The C++ is `variant2.hpp` and
-// the member is `const`, so nothing is copied and nothing is written - the declaration that names
-// this symbol (src/rtl/rtl.kt) is what lets the auto-borrow proof see it as read-only, because a
-// built-in member has no declaration of its own to carry a mark (impl_specs/escape-analysis.md).
-// `Res<T>.isOk()` is the same test but cannot be declared yet: a receiver must be spelled `Res<T>`
-// to unify in `findNativeExt`, and `Res` carries an `unInit`, so the checker refuses that spelling.
-template <class T>
-Bool simse_opt_hasValue(const Opt<T>& self);
-
-// The `initByValue` construction convention (src/rtl/rtl.kt): set the instance.
-template <class T>
-void simse_opt_initByValue(Opt<T>& self, const T& value);
-template <class T>
-void simse_opt_initByValueNone(Opt<T>& self);
-
-// The same convention for `Res<T>`: a `return (x)` in a `Res<T>` function is `Res<T>.ok(x)`.
-template <class T>
-void simse_res_initByValue(Res<T>& self, const T& value);
-```
-bodies:
-```cpp
-template <class T>
-inline Bool simse_opt_hasValue(const Opt<T>& self) {
-    return self.hasValue();
-}
-
-template <class T>
-inline void simse_opt_initByValue(Opt<T>& self, const T& value) { self = Opt<T>::some(value); }
-template <class T>
-inline void simse_opt_initByValueNone(Opt<T>& self) { self = Opt<T>(); }
-template <class T>
-inline void simse_res_initByValue(Res<T>& self, const T& value) { self = Res<T>::ok(value); }
 ```
 
 !resfmt

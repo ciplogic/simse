@@ -139,12 +139,24 @@ fun Emitter.computeEmittedTypes(): Dictionary<Str, Bool> {
         changed = false
         val names: List<Str> = out.keys()
         for (*name in names) {
-            if (this.typePackage(name) != "rtl") {
+            // The merged prelude's declarations carry no package (all of them are bare), so
+            // both spellings of "prelude" are walked here.
+            val pkg: Str = this.typePackage(name)
+            if (pkg != "rtl" && pkg != "") {
                 continue
             }
             val decl: *AstXmlNode = this.types.getPtr(*name)
             if (decl == null || decl.name != AstNodeKind.DataClass || this.typeIsRaw(decl)) {
                 continue
+            }
+            // A union class is emitted with its implicit tag enum, which is a declaration of
+            // its own: reaching `Opt` has to reach `SmOptTypes` too.
+            if (xmlAttr(decl, AstNodeAttributeKind.IsUnionClass) == "true") {
+                val tag: Str = unionTagName(*name)
+                if (!out.has(tag)) {
+                    out.insert(tag, true)
+                    changed = true
+                }
             }
             for (*field in xmlChildren(decl, AstNodeKind.Field)) {
             val fieldType: *AstXmlNode = xmlChildPtr(field, AstNodeKind.Type)

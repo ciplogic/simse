@@ -192,13 +192,17 @@ headers:
 
 | Header | What it provides |
 | --- | --- |
+| `types.hpp` | scalar aliases (`Int`, `Float64`, ...), `simse_destroy`, the forward declarations of `Opt`/`Res`, and `SmUnionManaged`, the trait a generic `union class` picks its storage form with |
 | `containers.hpp` | `SmallVector<T, N>` with a small-buffer optimization, `List<T>`, `Array<T>` (count-first block), `Dictionary<K, V>`, `PList<T>`, `RawArray<T>` |
 | `smstring.hpp`, `strsmallvector.hpp` | `Str`: an inline, NUL-terminated byte string with a 24-byte inline buffer |
 | `smdictionary.hpp` | `SmDictionary<TKey, TValue>`: the RTL's own dictionary (rows chained by index over a power-of-two bucket table), and the only implementation of `Dictionary<K, V>` |
-| `variant2.hpp`, `optional.hpp`, `result.hpp` | `Variant2<A, B>`: the tagged union of two alternatives, plus `VoidEnum`; `Opt<T>` is `Variant2<T, VoidEnum>` and `Res<T>` is `Variant2<T, Str>` |
 | `span.hpp` | `Span<T>`: a borrowed view over a contiguous run of `T` (`at`, `slice`) |
 | `strview.hpp` | `StrView`: an alias of `Span<Char>` (`typealias StrView = Span<Char>`), plus the *literal interop* only - the comparison operators, `+`, `<<` and the `Str` conversions, which C++ overload resolution reaches at a literal site (the operations are the `strview` section) |
 | `filestream.hpp` | `FileStream`: the struct alone, reading a file line by line (`readLine(): Opt<Str>`, `readLineInto(*Str)` with a recycled buffer, and `readLineView(): Opt<StrView>` in place) - its method bodies are the `filestream` section |
+
+`Opt<T>` and `Res<T>` no longer have a header at all: they are prelude `union class`es
+(`src/rtl/optres.kt`), generated into the program like every other union - `Opt<T>` is one
+`Value` arm under the tag's `None`, and `Res<T>` adds `Error: Str`.
 
 `AstXmlNode` (the compiler's AST, `src/modules/compiler/astxml.kt`, the `compiler` module) and the language-level `XmlNode`/`Attribute` (the `xml` module, `src/modules/xml/api.kt`) are *generated* from their Simse declarations, not headers.
 
