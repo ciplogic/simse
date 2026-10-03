@@ -655,6 +655,26 @@ fun partForTemporary(): Int {
     return 0
 }
 
+// ---- span-convert ----
+
+// A container reaches its span through the *conversion*: `spanOf(xs)` with a value argument
+// takes that argument's address (the parameter is `*List<T>`), and `T` is deduced from the
+// pointee (`List<Int>` names it). The type parameter is bound through the pointee too, so the
+// slot is typed `*List<Int>` - the shape the `for`-over-a-span rewrite will emit.
+fun partSpanConvert(): Int {
+    var xs: List<Int> = List<Int>()
+    xs.append(3)
+    xs.append(4)
+    val s: Span<Int> = spanOf(xs)
+    println(s.size())
+    println(s[0] + s[1])
+
+    var text: Str = "abc"
+    val v: StrView = spanOfStr(text)
+    println(v.size())
+    return 0
+}
+
 // ---- the category's entry ----
 fun main(): Int {
     partArrayLayout()
@@ -667,6 +687,7 @@ fun main(): Int {
     partLambdaFor()
     partPackArgs()
     partSpan()
+    partSpanConvert()
     partForPromote()
     partForTemporary()
     return 0

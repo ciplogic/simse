@@ -81,6 +81,24 @@ fun SemInfer.functionReturn(
 // the parameter type, and a `Str` literal is a `StrView` in C++). `argTypes` follows the
 // receiver when the call has one, like `params` does; `decl` is the *callee's*, so the
 // parameter pair is `params[paramOffset + i]`.
+// A parameter/argument pair as the *conversion* sees it: a pointer parameter receives the
+// address of a value argument (`convertArgument`), so binding goes through the pointee. A
+// pointer (or handle) argument binds as written.
+fun semBindArgShape(pattern: AstXmlNode, actual: AstXmlNode): AstXmlNode {
+    if (xmlKind(pattern) != AstNodeCategory.TypePointer || xmlIsEmpty(actual)) {
+        return pattern
+    }
+    val actualKind: AstNodeCategory = xmlKind(actual)
+    if (actualKind == AstNodeCategory.TypePointer || actualKind == AstNodeCategory.TypeReference) {
+        return pattern
+    }
+    val inner: AstXmlNode = xmlChild(pattern, AstNodeKind.Inner)
+    if (xmlIsEmpty(inner)) {
+        return pattern
+    }
+    return inner
+}
+
 fun semBindCallArgs(
     decl: *AstXmlNode, receiver: AstXmlNode, argTypes: *List<AstXmlNode>,
     templateParams: *List<Str>, bindings: *Dictionary<Str, AstXmlNode>
@@ -113,7 +131,7 @@ fun semBindCallArgs(
         if (xmlIsEmpty(paramType) || xmlIsEmpty(argType)) {
             continue
         }
-        semBindBestEffort(*paramType, argType, templateParams, bindings)
+        semBindBestEffort(semBindArgShape(*paramType, argType), argType, templateParams, bindings)
     }
 }
 

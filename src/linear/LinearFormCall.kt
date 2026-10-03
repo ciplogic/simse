@@ -320,7 +320,17 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
                 param = mapped
             }
         }
-        val slot: Int = this.convertArgument(paramOwner, param, argNodes[i])
+        // The parameter with the call's bindings substituted: a generic parameter's slot must
+        // be typed with `*List<Int>`, not the declaration's `*List<T>` (there is no `T` at the
+        // call).
+        var paramType: AstXmlNode = param
+        if (!xmlIsEmpty(param) && genericParams.size() > 0 && genericBindings.size() > 0) {
+            val mapped: AstXmlNode = semSubstitute(param, *genericBindings, *genericParams)
+            if (!xmlIsEmpty(mapped)) {
+                paramType = mapped
+            }
+        }
+        val slot: Int = this.convertArgument(paramOwner, paramType, argNodes[i])
         args.append(slot)
         argTypes.append(this.operandType(slot, argNodes[i]))
         i = i + 1
@@ -482,7 +492,7 @@ fun IlExtractor.ilCppDeducible(
         if (!xmlIsEmpty(this.ilCallableOf(actual))) {
             continue
         }
-        semBindBestEffort(*pattern, actual, params, *found)
+        semBindBestEffort(semBindArgShape(*pattern, actual), actual, params, *found)
     }
     return found
 }

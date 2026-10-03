@@ -466,7 +466,11 @@ fun IlExtractor.convertArgument(callee: *AstXmlNode, param: *AstXmlNode, arg: *A
     if (xmlIsEmpty(wanted)) {
         return this.operandOf(arg)
     }
-    if (ilTypeText(wanted) != ilTypeText(given)) {
+    // The pointee comparison follows the callee's own type parameters: `spanOf(xs)` with
+    // `items: *List<T>` must see `List<T>` and `List<Int>` as the same shape, which a textual
+    // comparison cannot (the non-generic `spanOfStr` matched by accident). Without this the
+    // address is never taken and the argument is passed by value.
+    if (!semUnifyType(wanted, given, xmlTypeParamNames(callee))) {
         return this.operandOf(arg) // not the same type
     }
     if (wantPointer) {
