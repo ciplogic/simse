@@ -220,7 +220,7 @@ inline void simse_println(const T& value, FILE* out) {
 Str substr(StrView* self, Int from, Int count);
 Str toString(StrView* self);
 template <class T>
-struct Span_iter_yieldable {
+struct Span_iterValues_yieldable {
     Int branch{};
     T current{};
     Span<T>* _sm_self{};
@@ -229,7 +229,7 @@ struct Span_iter_yieldable {
 };
 
 template <class T>
-Bool advance(Span_iter_yieldable<T>* self) {
+Bool advance(Span_iterValues_yieldable<T>* self) {
     Bool _sm_base1, _sm_base3, _sm_expr1;
     Int _sm_base2, _sm_base4, _sm_base5, _sm_base7, _sm_base8, _sm_base10, _sm_base11, _sm_base12;
     Span<T>* _sm_base6, * _sm_base9;
@@ -266,7 +266,7 @@ Bool advance(Span_iter_yieldable<T>* self) {
 }
 
 template <class T>
-Span_iter_yieldable<T> iter(Span<T>* self);
+Span_iterValues_yieldable<T> iterValues(Span<T>* self);
 Str substr(Str* self, Int start, Int len);
 Int ns1_compute();
 Int ns1_partDeadCode();
@@ -505,8 +505,8 @@ Str toString(StrView* self) {
     return _sm_expr2;
 }
 template <class T>
-Span_iter_yieldable<T> iter(Span<T>* self) {
-    Span_iter_yieldable<T> machine{};
+Span_iterValues_yieldable<T> iterValues(Span<T>* self) {
+    Span_iterValues_yieldable<T> machine{};
     machine._sm_self = self;
     machine.branch = 0;
     return machine;

@@ -378,7 +378,7 @@ Status: implemented; lowered to `while` in the parser (`impl_specs/for.md`).
 
 `for` iterates whatever has an **`iter`**: an `in`-scope extension function returning a
 state machine (`..T` in its signature, `impl_specs/yield.md`). The prelude writes one on the
-span (`Span<T>.iter`), and a `List`/`Array`/`Str` receiver is viewed as its span first
+span (`Span<T>.iterValues`), and a `List`/`Array`/`Str` receiver is viewed as its span first
 (`spanOf`/`spanOfArray`/`spanOfStr`, `impl_specs/for.md`), so every container shares the one
 machine; `Dictionary<K, V>` and ranges are not iterable yet. A state machine is its own
 identity, so both of these work:
@@ -389,7 +389,7 @@ for ((value, index) in source) { ... }
 ```
 
 A `*` in front of the variable binds a pointer to the element instead of a copy, through
-the container's `iterPtr` (the same walk, yielding `*T`). The compiler may **promote** a value
+the container's `iter` (the same walk, yielding `*T`). The compiler may **promote** a value
 form to this pointer form when the loop variable is only read and the element's copy is deep (a
 `Str`, or a data class holding one) - the value form copies, and for a `Str` allocates, per
 element (`impl_specs/for.md`, `impl_specs/escape-analysis.md`). The promotion is not observable:
@@ -402,11 +402,11 @@ for ((v, i) in words) { ... }            // a List<Str>, indexed from 0
 for (*cell in cells) { ... }             // a List<Cell>: the write reaches the list
 ```
 
-The construct is `source.iter()`, and the loop is the `while` the language writes around
+The construct is `source.iterValues()`, and the loop is the `while` the language writes around
 it (`impl_specs/for.md`):
 
 - `for` is a reserved keyword; `in` is only special in the header.
-- What is iterated is the machine `source.iter()` produces, created once before the loop
+- What is iterated is the machine `source.iterValues()` produces, created once before the loop
   starts and advanced once per iteration; for a machine argument that call *is* the
   argument.
 - `value` is bound once per iteration, and so is `index`. Both are fresh `val`s: the loop
@@ -423,14 +423,14 @@ it (`impl_specs/for.md`):
   the field of the pointed-to `Cell`); a scalar is read with `*value`. It costs no more
   than `while` with an index (`impl_specs/for.md`, the measurement there). In the indexed
   form `index` stays an `Int` copy; only the *value* is a pointer.
-- **A type is iterable when it has an `iter`** (or an `iterPtr`, for the `*v` forms): an
+- **A type is iterable when it has an `iterValues`** (or an `iter`, for the `*v` forms): an
   extension returning `..T` / `..*T`, which any type may add by writing a `yield`ing
   function, so the shape is the interface, not a runtime one. A type with none is an error,
   reported at the `for`:
 
   ```text
   stress/diagnostic-not-iterable/src/main.kt:11:5: a `for` iterates a machine
-  (`..T`) or a type with an `iter`, and Int has neither; iterate a container with
+  (`..T`) or a type with an `iterValues`, and Int has neither; iterate a container with
   `while` and an index
   ```
 
@@ -439,7 +439,7 @@ it (`impl_specs/for.md`):
 
 - A `for` inside a body that itself yields is not supported yet; the diagnosed
   alternative is to collect the values into a `List` first (`impl_specs/yield.md`).
-- Ranges are next: `for (i in (2 .. 5))` is one more `iter` whose machine holds the
+- Ranges are next: `for (i in (2 .. 5))` is one more `iterValues` whose machine holds the
   two bounds (`impl_specs/for.md`).
 
 ## Default parameter values

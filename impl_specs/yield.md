@@ -44,7 +44,7 @@ site spells `advance(&m)`.
 - `..T` in a return position - a marker type: "this body yields `T`". It is **not a
   value type** on its own (`spellable()` refuses a nameless one), but the type pass names the
   machine's class from the creating function (`semMachineType`: `everyOther_yieldable`,
-  `Span_iterPtr_yieldable<T>`), so a binding's declaration spells the class rather than an
+  `Span_iter_yieldable<T>`), so a binding's declaration spells the class rather than an
   `auto`. The parser produces it, the emitter maps it to the machine's class.
 
 ## Where the rewrite runs, and why there
@@ -88,9 +88,11 @@ ask `hasValue()` of, and unwrap. All four `for` forms use it (`impl_specs/for.md
 
 `current` has the *element* type (`..T`'s inner), not `Opt<T>`: the type pass (`sema::Infer`)
 types it that way, which makes a `for`'s loop variable a typed binding rather than an `auto`
-the emitter would resolve the wrong native for. For the pointer wrap (`iterPtr`) the element
+the emitter would resolve the wrong native for. For the pointer wrap (`iter`) the element
 type *is* `*T`, so `current` holds the place, which makes `for (*v in xs)` a borrow rather
-than a copy.
+than a copy. The two prelude conversions between the forms - `toValues`/`toPtrs` - are
+machines themselves, so they change a chain's element without draining it (`impl_specs/for.md`,
+"The two conversions").
 
 **There is no `value()`.** `current` is a field of every element type (a scalar, an aggregate,
 `*T`), so one member read is the whole conversion; a `value()` accessor would copy the element
@@ -106,7 +108,7 @@ built from (`src/modules/linq/linq.kt`). Two rules make it express:
   (`..*T.select<T, U>`): the parser reads type parameters from that list, and the receiver
   spelling contributes none - the same rule `Span<T>.iter<T>` follows.
 - **The receiver's machine class is a C++ template parameter.** The class belongs to the
-  *caller* (`Span_iterPtr_yieldable<Int>`), and no declaration can name it, so a machine
+  *caller* (`Span_iter_yieldable<Int>`), and no declaration can name it, so a machine
   receiver makes the function a template over it:
   `template <class T, class U, class _SmIter> ... select(_SmIter* self, ...)`
   (`Emitter.machineIter`/`fnTemplateParams`, `type`'s nameless-`TypeYield` case). The call
@@ -120,7 +122,8 @@ built from (`src/modules/linq/linq.kt`). Two rules make it express:
   result.
 
 Inside the body `this.advance()` steps the caller's machine (`advance(self)` - the receiver
-already *is* the machine's address) and `this.current` reads its element. A `for` over
+already *is* the machine's address) and `this.current` reads its element; `yield *this.current`
+hands out its place (`toPtrs`, `src/rtl/rtl.kt`). A `for` over
 `this` is still out (the machine would have to be a field); the adapters step by hand.
 
 ## What the caller gets

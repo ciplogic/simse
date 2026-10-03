@@ -326,8 +326,8 @@ fun semaReceiverPattern(fn: *AstXmlNode): AstXmlNode {
 
 // The result type of a member call (`recv.name(...)`), when the receiver's type and the
 // declaration are known: the declared function's return type with the receiver's type
-// parameters substituted. A wrap (`iter`/`iterPtr`) answers with the machine it builds: the
-// container's element through its span, a machine itself (identity), or the declared wrap.
+// parameters substituted. A wrap (`iterValues`/`iter`) answers with the machine it builds:
+// the container's element through its span, a machine itself (identity), or the declared wrap.
 // Empty when the checker cannot name it; the rewrite stays silent then.
 fun Analyzer.semaMemberCall(call: *AstXmlNode): AstXmlNode {
     val callee: *AstXmlNode = xmlChildPtr(call, AstNodeKind.Callee)
@@ -339,14 +339,14 @@ fun Analyzer.semaMemberCall(call: *AstXmlNode): AstXmlNode {
         return xmlEmptyNode()
     }
     val name: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
-    if (name == "iter" || name == "iterPtr") {
+    if (name == "iterValues" || name == "iter") {
         if (xmlKind(receiverType) == AstNodeCategory.TypeYield) {
             return receiverType
         }
         val element: AstXmlNode = this.semaSpanElement(receiverType)
         if (!xmlIsEmpty(element)) {
-            // `iterPtr` hands out the element's *place*, so the machine yields `..*T`.
-            if (name == "iterPtr") {
+            // `iter` hands out the element's *place*, so the machine yields `..*T`.
+            if (name == "iter") {
                 return semMachineOfElement(semPointerOf(element))
             }
             return semMachineOfElement(element)
@@ -387,7 +387,7 @@ fun semMachineOfElement(element: AstXmlNode): AstXmlNode {
     return node
 }
 
-// A `*pointee` node for the checker's own bindings (`iterPtr` hands out places).
+// A `*pointee` node for the checker's own bindings (`iter` hands out places).
 fun semPointerOf(pointee: AstXmlNode): AstXmlNode {
     var node: AstXmlNode = AstXmlNode(
         AstNodeKind.Type, AstNodeCategory.TypePointer, List<AstNodeAttribute>(), Array<AstXmlNode>()
@@ -397,7 +397,7 @@ fun semPointerOf(pointee: AstXmlNode): AstXmlNode {
 }
 
 // `for` is lowered into the declaration of the machine it iterates (`_sm_for<n>`,
-// impl_specs/for.md), whose initializer is an invisible `iter()`/`iterPtr()` wrap:
+// impl_specs/for.md), whose initializer is an invisible `iterValues()`/`iter()` wrap:
 // the template names are the marker, and something is iterable when that wrap
 // resolves. Reporting here names the user's line rather than the generated statement.
 fun Analyzer.checkForIterable(stmt: *AstXmlNode): Unit {
@@ -419,14 +419,14 @@ fun Analyzer.checkForIterable(stmt: *AstXmlNode): Unit {
         return
     }
     if (xmlKind(receiverType) == AstNodeCategory.TypeYield) {
-        // A machine is the identity for `iter`: it hands out values, not places, so
+        // A machine is the identity for `iterValues`: it hands out values, not places, so
         // it has no pointer form.
-        if (wrap == "iter") {
+        if (wrap == "iterValues") {
             return
         }
         this.diag(
             xmlLine(stmt), xmlColumn(stmt),
-            "a `for (*x in m)` needs an `iterPtr`, and a machine yields values "
+            "a `for (*x in m)` needs an `iter`, and a machine yields values "
                     + "rather than places: iterate it with `for (x in m)`"
         )
         return
@@ -448,7 +448,7 @@ fun Analyzer.checkForIterable(stmt: *AstXmlNode): Unit {
     )
 }
 
-// Whether a wrap (`iter`, `iterPtr`) takes this receiver, by receiver *name* only:
+// Whether a wrap (`iterValues`, `iter`) takes this receiver, by receiver *name* only:
 // `List<T>` takes any `List<...>`, a type parameter takes anything. An undecidable
 // name stays silent; the emitted call is resolved with full unification in `codegen`.
 fun Analyzer.hasWrap(wrap: *Str, receiverType: *AstXmlNode): Bool {
@@ -527,7 +527,7 @@ fun Analyzer.spanConversion(receiverType: *AstXmlNode): Str {
 }
 
 // A `for` over a `List`/`Array`/`Str` iterates its *span*: the wrap's receiver becomes
-// `spanOf(c)` (or `spanOfArray(c)`/`spanOfStr(c)`), so the span's `iter`/`iterPtr` is the one
+// `spanOf(c)` (or `spanOfArray(c)`/`spanOfStr(c)`), so the span's `iterValues`/`iter` is the one
 // iterator machine a program carries, and the machine's C++ class is named after the span
 // (`semMachineType`), not the container. The lowering hoists the view into a function-scope
 // slot, so it outlives the loop (`stress/collections`'s for-temporary part). A `Span`/`StrView`
@@ -550,7 +550,7 @@ fun Analyzer.spanForAt(stmts: *List<AstXmlNode>, index: Int): Unit {
         return
     }
     val wrap: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
-    if (wrap != "iter" && wrap != "iterPtr") {
+    if (wrap != "iterValues" && wrap != "iter") {
         return
     }
     val receiver: *AstXmlNode = xmlChildPtr(callee, AstNodeKind.Receiver)
@@ -731,10 +731,10 @@ fun Analyzer.checkExtensionCallArity(call: *AstXmlNode): Unit {
 
 
 
-// The `for` promotion (impl_specs/for.md, "iterPtr"): a `for (x in c)` over a *deep* element (a
-// `Str`, or a data class holding one) becomes the pointer wrap `iterPtr` when the body only reads
+// The `for` promotion (impl_specs/for.md, "iter"): a `for (x in c)` over a *deep* element (a
+// `Str`, or a data class holding one) becomes the pointer wrap `iter` when the body only reads
 // `x`. The parser chose the wrap before types were known - a machine has no pointer form - so the
-// choice is made here: the receiver type is resolved, `iterPtr` must exist for it, the element
+// choice is made here: the receiver type is resolved, `iter` must exist for it, the element
 // must be worth it (`bpDeepElement`, from the borrow pass's analysis), and the body must prove
 // read-only (`bpLoopReadOnly`, the parameter rule). The value form copies - and, for a `Str`,
 // allocates - on every iteration; the pointer form hands out the element's place instead.
@@ -766,7 +766,7 @@ fun Analyzer.promoteForLoops(stmts: *List<AstXmlNode>): Unit {
     }
 }
 
-// One statement: the machine declaration a `for` desugars to (`var _sm_forN = c.iter()`). Its
+// One statement: the machine declaration a `for` desugars to (`var _sm_forN = c.iterValues()`). Its
 // loop follows in the same list, and the promotion is the wrap's name.
 fun Analyzer.promoteForAt(stmts: *List<AstXmlNode>, index: Int): Unit {
     val machineDecl: *AstXmlNode = *stmts[index]
@@ -783,7 +783,7 @@ fun Analyzer.promoteForAt(stmts: *List<AstXmlNode>, index: Int): Unit {
     }
     val callee: *AstXmlNode = xmlChildPtr(init, AstNodeKind.Callee)
     if (xmlKind(callee) != AstNodeCategory.ExprMember
-        || xmlAttr(callee, AstNodeAttributeKind.Name) != "iter"
+        || xmlAttr(callee, AstNodeAttributeKind.Name) != "iterValues"
     ) {
         return
     }
@@ -792,7 +792,7 @@ fun Analyzer.promoteForAt(stmts: *List<AstXmlNode>, index: Int): Unit {
     if (xmlIsEmpty(receiverType) || xmlKind(receiverType) == AstNodeCategory.TypeYield) {
         return
     }
-    var ptrWrap: Str = "iterPtr"
+    var ptrWrap: Str = "iter"
     if (!this.hasWrap(ptrWrap, receiverType)) {
         return
     }
@@ -815,7 +815,7 @@ fun Analyzer.promoteForAt(stmts: *List<AstXmlNode>, index: Int): Unit {
     var attrs: List<AstNodeAttribute> = List<AstNodeAttribute>()
     for (*attr in callee.attributes) {
         if (attr.name == AstNodeAttributeKind.Name) {
-            attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, "iterPtr"))
+            attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, "iter"))
         } else {
             var kept: AstNodeAttribute = attr
             attrs.append(kept)
@@ -824,7 +824,7 @@ fun Analyzer.promoteForAt(stmts: *List<AstXmlNode>, index: Int): Unit {
     callee.attributes = attrs
 }
 
-// Only a `List`/`Array`/`Span` of a deep element is promoted: a user type's `iterPtr`, a receiver
+// Only a `List`/`Array`/`Span` of a deep element is promoted: a user type's `iter`, a receiver
 // whose element cannot be named, and a non-deep element are all left as written.
 fun Analyzer.promoteElementDeep(receiverType: *AstXmlNode): Bool {
     if (xmlKind(receiverType) != AstNodeCategory.TypeGeneric) {

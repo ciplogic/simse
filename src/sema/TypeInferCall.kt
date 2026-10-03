@@ -252,9 +252,9 @@ fun SemInfer.memberReturn(callee: *AstXmlNode, argNodes: *List<AstXmlNode>): Ast
         if (calleeText == "advance") {
             return semNamedType("Bool")
         }
-        // A machine is already iterable: `x.iter()` is `x` (`impl_specs/for.md`); `..T`
+        // A machine is already iterable: `x.iterValues()` is `x` (`impl_specs/for.md`); `..T`
         // is not spellable, so no function could take one.
-        if (calleeText == "iter") {
+        if (calleeText == "iterValues") {
             return receiverType
         }
     }
@@ -475,7 +475,7 @@ fun SemInfer.infer(e: *AstXmlNode): AstXmlNode {
             val memberText: Str = xmlAttr(e, AstNodeAttributeKind.Name)
             if (xmlKind(base) == AstNodeCategory.TypeYield) {
                 // A machine's `current` field (`impl_specs/for.md`): what it last yielded.
-                // For `iterPtr` the element type *is* `*T`, a place rather than a copy.
+                // For `iter` the element type *is* `*T`, a place rather than a copy.
                 if (memberText == "current") {
                     return semReRole(xmlChild(base, AstNodeKind.Inner), AstNodeKind.Type)
                 }

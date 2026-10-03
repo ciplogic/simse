@@ -428,8 +428,8 @@ data class BpFacts(
 
 // The `for` lowering's machine step (impl_specs/for.md): the desugar declares a local named
 // `_sm_for<n>` and steps it with `_sm_for<n>.advance()`. The prefix is the compiler's own (a
-// program's lowering never writes `_sm_`), and a machine can only come from `iter`/`iterPtr` in
-// the same body - so the call that built it has already been weighed, and `advance` reads the
+// program's lowering never writes `_sm_`), and a machine can only come from `iterValues`/`iter`
+// in the same body - so the call that built it has already been weighed, and `advance` reads the
 // container it was built over. Trusting the step is what lets a body with a `for` borrow.
 fun bpMachineStep(callee: *AstXmlNode): Bool {
     if (xmlKind(callee) != AstNodeCategory.ExprMember) {

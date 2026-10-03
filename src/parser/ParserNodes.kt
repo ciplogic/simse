@@ -114,7 +114,7 @@ fun Parser.binaryExprAt(op: *Str, lhs: *ExprNode, rhs: *ExprNode, pos: SourcePos
     return ExprNode(node, pos.line, pos.column)
 }
 
-// The `<target>.<wrap>()` wrap a `for` puts around what it iterates (`iter`/`iterPtr`).
+// The `<target>.<wrap>()` wrap a `for` puts around what it iterates (`iterValues`/`iter`).
 fun Parser.iterCall(target: *ExprNode, pos: SourcePos, wrap: *Str): ExprNode {
     var memberAttrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
     memberAttrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, wrap))

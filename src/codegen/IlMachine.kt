@@ -261,7 +261,7 @@ fun Emitter.emitMachine(
     this.line(0, "};")
     this.line(0, "")
     // A generic machine's class is a template, so its use as a *type* carries the
-    // parameters: `List_iterPtr_yieldable<T>* self`.
+    // parameters: `List_iter_yieldable<T>* self`.
     var classTypeText: Str = className
     if (tmplParams.size() > 0) {
         val cgJoinText: Str = cgJoin(tmplParams, ", ")

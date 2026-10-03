@@ -16,8 +16,8 @@ with a string library, `List<T>`, `Array<T>`, `SmallVector<N, T>`,
 `typealias`, functions, methods, extension methods, lambdas (by-value capture),
 `val`/`var` locals, file-level `var`/`val` statics, `if`/`else`, `when`, `while`,
 `break`/`continue`, `return`, `yield` (a body that yields becomes a state
-machine) and `for` (two forms, over anything with an `iter` - a container, or
-a machine itself),
+machine) and `for` (two forms, over anything with an `iterValues` - the `*x` form's `iter` -
+be it a container, or a machine itself),
 `null` for handles, memory operators (`&T` handles, `*T` pointers, `copy`),
 reified generics, packages and imports, `main()` and `main(args)`, and an
 `@SmGen` attribute to reach the implementation of a declaration wherever it lives: hand-written

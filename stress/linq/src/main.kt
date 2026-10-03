@@ -4,9 +4,14 @@ import linq
 
 // The LINQ-style pipeline (src/modules/linq/linq.kt): every operator takes and hands out
 // a `..*T` machine, so a chain copies no element and each lambda reads the element where
-// it lives. The entry is the list's own `iterPtr()` - the same walk the `for` rewrite
-// spells `spanOf(xs).iterPtr()` - and a chain ends in a `for`, whose variable binds each
+// it lives. The entry is the list's own `iter()` - the same pointer walk the `for` rewrite
+// spells `spanOf(xs).iter()` - and a chain ends in a `for`, whose variable binds each
 // element's place, or in `toList`.
+//
+// `toValues()` and `toPtrs()` (the prelude's two conversions) switch a machine's element
+// between a copy and a place: `select(...).toValues()` lets the loop read an `Int`, while
+// `spanOf(xs).iterValues().toPtrs()` is the value walk again as places, ready for `where`
+// and `select`.
 //
 // Lambdas are the point of the case: `select`'s result type is the one the lambda's body
 // infers, so the call spells its template arguments (`select<Int, Int, ...>`) with
@@ -43,7 +48,7 @@ fun main(): Int {
 
     // select: a lambda from `*Int` to `Int`; the loop variable is the place.
     var first: Bool = true
-    for (y in xs.iterPtr().select((x: *Int) -> *x * 2)) {
+    for (y in xs.iter().select((x: *Int) -> *x * 2)) {
         if (!first) {
             print(" ")
         }
@@ -53,22 +58,22 @@ fun main(): Int {
     println("")
 
     // where + take: stop at the first accepted element.
-    for (y in xs.iterPtr().where((x: *Int) -> *x > 2).take(1)) {
+    for (y in xs.iter().where((x: *Int) -> *x > 2).take(1)) {
         println((*y).toString())
     }
 
     // skip + where + select, drained by `toList`.
-    val picked: List<Int> = xs.iterPtr().skip(1).where((x: *Int) -> *x % 2 == 0).select((x: *Int) -> *x * 10).toList()
+    val picked: List<Int> = xs.iter().skip(1).where((x: *Int) -> *x % 2 == 0).select((x: *Int) -> *x * 10).toList()
     printRow(*picked)
 
     // A `*Str` element read in place: `w.size()` copies nothing; the chain's own
     // elements are places too, so the drain copies once, at the end.
-    printRow(*makeWords().iterPtr().select((w: *Str) -> w.size()).toList())
+    printRow(*makeWords().iter().select((w: *Str) -> w.size()).toList())
 
     // A view's machine: the same operators over a string's bytes.
     val text = "a b c"
     var letters: Int = 0
-    for (ch in spanOfStr(text).iterPtr().where((c: *Char) -> *c != ' ')) {
+    for (ch in spanOfStr(text).iter().where((c: *Char) -> *c != ' ')) {
         letters = letters + 1
     }
     println(letters.toString())
@@ -76,13 +81,29 @@ fun main(): Int {
     // An array's block through its span, and a `take` that runs past the end.
     var arr: Array<Int> = xs.toArray()
     var total: Int = 0
-    for (y in spanOfArray(arr).iterPtr().select((x: *Int) -> *x + 1).take(9)) {
+    for (y in spanOfArray(arr).iter().select((x: *Int) -> *x + 1).take(9)) {
         total = total + *y
     }
     println(total.toString())
 
     // An empty chain: a filter nothing passes.
-    val none: List<Int> = xs.iterPtr().where((x: *Int) -> *x > 100).toList()
+    val none: List<Int> = xs.iter().where((x: *Int) -> *x > 100).toList()
     println(none.size().toString())
+
+    // `toValues`: the chain's places as copies. `v` is an `Int`, so the loop adds values,
+    // not places - one copy per element, taken where the machine yielded it.
+    var sum: Int = 0
+    for (v in xs.iter().select((x: *Int) -> *x * 2).toValues()) {
+        sum = sum + v
+    }
+    println(sum.toString())
+
+    // `iterValues` walks a span as values; `toPtrs` recovers the places, so the operators
+    // take them again (`where` is `..*T`). One element at a time, no list in between.
+    var odd: Int = 0
+    for (p in spanOf(xs).iterValues().toPtrs().where((x: *Int) -> *x % 2 == 1)) {
+        odd = odd + 1
+    }
+    println(odd.toString())
     return 0
 }

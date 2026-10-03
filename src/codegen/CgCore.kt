@@ -379,7 +379,7 @@ fun Emitter.templateClause(params: *List<Str>): Str {
 }
 
 // The C++ template parameter standing for a machine receiver's class: the receiver's class
-// is the *caller's* (`Span_iterPtr_yieldable<Int>`), so a function over a machine pattern
+// is the *caller's* (`Span_iter_yieldable<Int>`), so a function over a machine pattern
 // takes it as a parameter and the call site spells it (`emitFunction`, `ilCallNode`).
 fun smMachineIterName(): Str {
     return "_SmIter"

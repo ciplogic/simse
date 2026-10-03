@@ -1,1 +1,1 @@
-a `for` iterates a machine (`..T`) or a type with a `iter`, and Int has neither
+a `for` iterates a machine (`..T`) or a type with a `iterValues`, and Int has neither

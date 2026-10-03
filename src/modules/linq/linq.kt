@@ -23,9 +23,9 @@
 package linq
 
 // A list as the pointer machine the operators take. A container's `for` is rewritten to
-// its span's machine (`spanOf(xs).iterPtr()`, impl_specs/for.md); this is that same walk
+// its span's machine (`spanOf(xs).iter()`, impl_specs/for.md); this is that same walk
 // spelled as an ordinary extension, so a pipeline can start at the list itself.
-fun List<T>.iterPtr<T>(): ..*T {
+fun List<T>.iter<T>(): ..*T {
     var i: Int = 0
     val len = this.size()
     while (i < len) {

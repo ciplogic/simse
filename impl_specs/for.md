@@ -5,13 +5,13 @@ checker, the linear pass, the emitters, the IL - has a `for` statement kind to k
 `break`/`continue` are the `while`'s own machinery.
 
 ```text
-for (v in m) { body }              var _sm_for1 = m.iter()
+for (v in m) { body }              var _sm_for1 = m.iterValues()
                                    while (_sm_for1.advance()) {
                                        val v = _sm_for1.current
                                        body
                                    }
 
-for ((v, i) in m) { body }         var _sm_for1 = m.iter()
+for ((v, i) in m) { body }         var _sm_for1 = m.iterValues()
                                    var _sm_index1: Int = -1
                                    while (_sm_for1.advance()) {
                                        _sm_index1 = _sm_index1 + 1
@@ -22,8 +22,8 @@ for ((v, i) in m) { body }         var _sm_for1 = m.iter()
 ```
 
 A `*` on the variable is the same template with the *pointer* wrap
-(`m.iterPtr()`), whose element type is `*T` - so `v` is the element's place, not a
-copy of it ("`iterPtr`" below).
+(`m.iter()`), whose element type is `*T` - so `v` is the element's place, not a
+copy of it ("`iter`" below).
 
 ## Where it runs, and why there
 
@@ -50,7 +50,7 @@ template's. Its extra increment on the exhausted iteration is never read again.
 `..T` is deliberately **not spellable on its own** (`spellable()` refuses a nameless one),
 but the type pass *names* the machine at the call site (`semMachineType`): the class is the
 creating function's, qualified by its package and prefixed with the receiver's outer type
-(`Span_iterPtr_yieldable<T>`), so a binding's declaration spells the class rather than falling
+(`Span_iter_yieldable<T>`), so a binding's declaration spells the class rather than falling
 back to `auto`. A name bound to a machine therefore stays `auto`.
 
 So the lowering-time type pass (`src/sema/TypeInfer.kt`) knows the *one* method of a
@@ -73,35 +73,36 @@ element type before reaching that rule.
 
 The parser cannot tell what a `for` iterates, so sema's checker (`Analyzer::checkForIterable`)
 uses the recognizable machine name (`_sm_for<n>`, the lowering's `_sm_expr<n>` convention) and
-the invisible `iter()` wrap: a known receiver that is neither a machine, a type with an `iter`,
-nor a container with a span view (below) is the error - at the `for`, naming the type the user
-wrote, not the generated call:
+the invisible `iterValues()`/`iter()` wrap: a known receiver that is neither a machine, a type
+with an `iterValues`, nor a container with a span view (below) is the error - at the `for`,
+naming the type the user wrote, not the generated call:
 
 ```text
 stress/diagnostic-not-iterable/src/main.kt:11:5: a `for` iterates a machine (`..T`)
-or a type with an `iter`, and Int has neither; iterate a container with `while` and
+or a type with an `iterValues`, and Int has neither; iterate a container with `while` and
 an index
 ```
 
 An unknown receiver type stays silent (the C++ compiler gets the last word).
 
-## `iter`: what can be iterated
+## `iterValues`: what can be iterated
 
 The construct stays two forms - `for (v in x)` and `for ((v, i) in x)` - but *what can be
 iterated* is a convention instead of "a machine": the iterated expression is wrapped in an
-invisible call to a function named **`iter`**, so
+invisible call to a function named **`iterValues`** (the `*v` forms use **`iter`**, below), so
 
 ```simse
 for (item in x) { ... }      // is the same program as
-for (item in x.iter()) { ... }
+for (item in x.iterValues()) { ... }
 ```
 
-and anything the language can find an `iter` for is iterable. The call is a *member* call
-(`x.iter()`, not `iter(x)`): the type pass binds a receiver function's type parameter from the
-receiver, which is what types the loop variable.
+and anything the language can find an `iterValues` for is iterable. The call is a *member* call
+(`x.iterValues()`, not `iterValues(x)`): the type pass binds a receiver function's type parameter
+from the receiver, which is what types the loop variable.
 
-**The prelude declares exactly one `iter`, on the span**, and a *container* is rewritten to
-iterate its span first (`SemaCall.spanForAt`, in sema, on the desugared `_sm_for<n>`):
+**The prelude declares exactly one `iterValues` and one `iter`, both on the span**, and a
+*container* is rewritten to iterate its span first (`SemaCall.spanForAt`, in sema, on the
+desugared `_sm_for<n>`):
 
 | receiver | rewrite | element |
 | --- | --- | --- |
@@ -111,13 +112,14 @@ iterate its span first (`SemaCall.spanForAt`, in sema, on the desugared `_sm_for
 | `Span<T>` / `StrView` | already a span | `T` |
 
 so `for (x in list)`, `for (x in array)` and `for (ch in text)` walk the *same* machine
-(`Span<T>.iter` below), and a program carries one iterator class (`Span_iter_yieldable<T>`)
-rather than one per container. The lowering hoists the view into a function-scope slot, so
+(`Span<T>.iterValues` below), and a program carries one iterator class *per walk*
+(`Span_iterValues_yieldable<T>`, or `Span_iter_yieldable<T>` for the pointer form) rather than
+one per container. The lowering hoists the view into a function-scope slot, so
 `for (x in makeList())` iterates storage that outlives the loop (`stress/collections`'s
 `for-temporary` part).
 
 ```simse
-fun Span<T>.iter<T>(): ..T {
+fun Span<T>.iterValues<T>(): ..T {
     var i: Int = 0
     val len = this.size();
     while (i < len) {
@@ -131,10 +133,10 @@ The length is read **once**, before the loop, and lives in a machine field (`len
 ends up inside `advance()`, so a `this.size()` in its condition would be a call per element
 (re-read on every resume) where the length is a constant of the walk.
 
-**A machine's class carries its receiver's name** (`Span_iter_yieldable<T>`, and for a
+**A machine's class carries its receiver's name** (`Span_iterValues_yieldable<T>`, and for a
 container the receiver *is* the rewritten span): `semMachineType` builds it from the function
 and the receiver's outer type, which is what makes the `_sm_for<n>` slot spellable. The
-rewritten call resolves like any other (`Span<T>.iter`), so a program that iterates a list
+rewritten call resolves like any other (`Span<T>.iterValues`), so a program that iterates a list
 carries the span machine and nothing of the container.
 
 For the rewrite to fire, the checker has to know the iterated expression's type. `exprType`
@@ -150,19 +152,19 @@ receiver through the outer variable.
   author writes (`fun Point.walk(): ..Point`), not by a runtime interface. The machine is
   reified per element type like any other generic function, so the "interface" is the
   *shape* and its witness is a concrete class.
-- **A machine**, which is already what `for` wants: `x.iter()` on a `..T` receiver is
-  the *identity* (no wrapper object, no extra step). `..T` is not a spellable type, so the
-  identity is the compiler's rather than a function's.
+- **A machine**, which is already what `for` wants: `x.iterValues()` on a `..T` receiver is
+  the *identity* (no wrapper object, no extra step); the pointer wrap has no machine form.
+  `..T` is not a spellable type, so the identity is the compiler's rather than a function's.
 - **A range, later**: `for (i in (2 .. 5))` becomes an iterator over the two bounds, i.e.
-  one more `iter` whose machine holds `2` and `5` as its parameters.
+  one more `iterValues` whose machine holds `2` and `5` as its parameters.
 
-What remains: `iter` for `Dictionary<K, V>` (a `while` over `keys()` walks it; what a
+What remains: an iterator for `Dictionary<K, V>` (a `while` over `keys()` walks it; what a
 dictionary's element should be - its keys, or a key/value pair - is the open question), and the
 range above.
 
-## `iterPtr`: iterating without copying
+## `iter`: iterating without copying
 
-`iter` hands out *values*, so `for (v in xs)` copies each element into `v` - a copy per
+`iterValues` hands out *values*, so `for (v in xs)` copies each element into `v` - a copy per
 iteration for a container of aggregates, where a hand-written `while (i < xs.size())` +
 `*xs[i]` loop borrows the element in place. The pointer form closes that gap and takes the
 index bookkeeping with it:
@@ -175,7 +177,7 @@ for ((*cell, i) in cells) { ... }  // the same, plus the iteration index
 ```
 
 It is one more *wrap*, not a second `for`: `parseFor` sees the `*` and wraps what is iterated
-in `iterPtr()` instead of `iter()`. Everything downstream is existing machinery, because the
+in `iter()` instead of `iterValues()`. Everything downstream is existing machinery, because the
 machine is generic over its element type and `..*T` is a `..T` whose element is `*T`:
 
 - the element type is the `..T`'s `Inner` (`Codegen`'s `emitYieldable`), so `..*T` gives
@@ -183,13 +185,13 @@ machine is generic over its element type and `..*T` is a `..T` whose element is 
 - `TypeInfer` types `current` as that same `Inner`, so the loop
   variable is typed `*T` - a pointer variable the emitter reads *through* (`cell.value` is
   `cell->value`), which is exactly what a `*T` parameter does everywhere else;
-- a machine is still the identity for `iter`, and has none for `iterPtr`: it
+- a machine is still the identity for `iterValues`, and has none for `iter`: it
   hands out values, not places, so `for (*v in someMachine)` is a diagnostic;
 - sema's gate (`checkForIterable`) takes the wrap *name* from the call the parser wrote,
   so it reports the right one (`hasWrap`).
 
 ```simse
-fun Span<T>.iterPtr<T>(): ..*T {
+fun Span<T>.iter<T>(): ..*T {
     var i: Int = 0
     val len = this.size();
     while (i < len) {
@@ -209,6 +211,33 @@ pointer form covers every iterable shape with the one machine. The `linq` module
 the place in place (`ExpressionLowering` never binds a `Deref`'s operand to a value
 temporary), so the machine hands out `&(*self)[i]` - into the container's storage.
 
+### The two conversions: `toValues` and `toPtrs`
+
+A machine's element crosses the yield as whatever the creating function yielded - a value for
+`iterValues`, a place for `iter` - and the prelude's two extension functions change that in the
+middle of a pipeline (both `yield`ing themselves, so neither drains anything):
+
+```simse
+fun ..*T.toValues<T>(): ..T {
+    while (this.advance()) {
+        var value: T = *this.current
+        yield value
+    }
+}
+
+fun ..T.toPtrs<T>(): ..*T {
+    while (this.advance()) {
+        yield *this.current
+    }
+}
+```
+
+`toValues` is how a pointer chain hands out copies (`xs.iter().select(f).toValues()`); the
+copy lives in the machine's `value` field, so it is taken once, where the element was
+yielded. `toPtrs` goes the other way and points at the receiver's `current` field, so a value
+walk feeds the pointer operators (`spanOf(xs).iterValues().toPtrs().where(...)`) without a
+`toList` round trip - one element at a time, and the place is valid until the next step.
+
 **The measurement.** The three shapes, on the compiler's own hot loops
 (`Linear.kt`'s `declares`/`lowerStmts`/`containsShortCircuit`, release `./simse.exe`
 transpiling `--root src`, interleaved A/B, 11 pairs):
@@ -227,10 +256,10 @@ scalar element is read with `*value`).
 ### Auto-promotion (the value form, where it costs nothing)
 
 The parser picks the wrap before types are known, so the choice is made in sema
-(`SemaCall.promoteForLoops`): a `for (x in c)` becomes `iterPtr` when
+(`SemaCall.promoteForLoops`): a `for (x in c)` becomes `iter` when
 
 - the receiver resolves to a `List`/`Array`/`Span` (a container is already its span by this
-  point in the pass: the rewrite above runs first) with an `iterPtr` (a machine has none), and
+  point in the pass: the rewrite above runs first) with an `iter` (a machine has none), and
 - the element is *deep* - a `Str`, or a data class with a `Str` field (`bpDeepElement`, from
   the borrow pass's `bpDeepClasses` fixpoint) - and
 - the body only reads `x` (`bpLoopReadOnly`, the parameter rule: no write through it, no
@@ -251,21 +280,21 @@ compiler-wide speedup.
 
 ## Status
 
-`for (x in source)` is `source.iter()` plus the `while` the parser writes (`parseFor`); the
-prelude provides `Span<T>.iter()` (a `yield`ing function in Simse) and a `List`/`Array`/`Str`
-receiver is rewritten to its span view first (`spanForAt`); a *machine* is its own identity,
-so `for (x in m)` iterates `m` itself.
+`for (x in source)` is `source.iterValues()` plus the `while` the parser writes (`parseFor`);
+the prelude provides `Span<T>.iterValues()` and `Span<T>.iter()` (both `yield`ing functions in
+Simse) and a `List`/`Array`/`Str` receiver is rewritten to its span view first (`spanForAt`);
+a *machine* is its own identity for `iterValues`, so `for (x in m)` iterates `m` itself.
 
 - The machine's shape and lowering rules are in `impl_specs/yield.md` (`<fn>_yieldable`
   carrying the arguments, `_sm_for<n>` typed by `semMachineType`, the receiver field
   `_sm_self` / `linear::yieldReceiverField`, `emitMachine`, the dispatcher's `C2362` placement,
   `ExpressionLowering`'s `StmtYield`).
-- **the wrap is a member call** (`source.iter()`): the type pass binds a receiver function's
+- **the wrap is a member call** (`source.iterValues()`): the type pass binds a receiver function's
   type parameter from the receiver (`memberReturn` -> `bindTypes`), so the loop variable is
-  typed; a plain `iter(source)` would leave it untyped. `Yield` patterns unify and bind like a
-  pointer's pointee (`sema::unifyType`, `bindTypes`).
+  typed; a plain `iterValues(source)` would leave it untyped. `Yield` patterns unify and bind
+  like a pointer's pointee (`sema::unifyType`, `bindTypes`).
 - **the gate is `Sema.kt`'s** (`checkForIterable`): it asks "is this a machine, a type with
-  an `iter`, or a container with a span view?", names the receiver's type otherwise
+  an `iterValues`, or a container with a span view?", names the receiver's type otherwise
   (`stress/diagnostic-not-iterable`), and compares receiver *names* (`List<T>` takes any
   `List<...>`); an unknown receiver stays silent (the C++ compiler gets the last word). The
   call itself resolves with the full unification in `codegen`.
@@ -280,8 +309,8 @@ so `for (x in m)` iterates `m` itself.
 
 Still open:
 
-- **other containers**: `Dictionary<K, V>` has no `iter` yet (a `while` over `keys()` walks it);
-  it is also the one common container with no span view to fall back on.
-- **ranges**: `for (i in (2 .. 5))` - one more `iter` whose machine holds the two bounds.
+- **other containers**: `Dictionary<K, V>` has no `iterValues` yet (a `while` over `keys()`
+  walks it); it is also the one common container with no span view to fall back on.
+- **ranges**: `for (i in (2 .. 5))` - one more `iterValues` whose machine holds the two bounds.
 - **a `for` inside a yielding body**: the machine would have to be a *field*, and a field needs
   a nameable type (`impl_specs/yield.md`).

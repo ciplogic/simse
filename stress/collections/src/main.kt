@@ -275,7 +275,7 @@ fun partForContainer(): Int {
 // ---- for-pointer ----
 
 // `for (*x in c)` and `for ((*x, i) in c)`: the pointer forms of `for`. The loop
-// variable is a *pointer to the element* (a `*T`, the prelude's `iterPtr`) rather
+// variable is a *pointer to the element* (a `*T`, the prelude's `iter`) rather
 // than a copy of it, so a loop over a container of aggregates copies nothing per
 // iteration and a mutation through the loop variable reaches the container
 // (impl_specs/for.md). A pointer to an aggregate reads through itself (`cell.value`),
@@ -585,8 +585,8 @@ fun partSpan(): Int {
 // ---- for-promote ----
 
 // `for (x in c)` over a *deep* element - a `Str`, or a data class holding one - is promoted to the
-// pointer wrap (`iterPtr`) when the body only reads `x`: the value form copies, and for a `Str`
-// allocates, per element, which the pointer form does not (impl_specs/for.md, "iterPtr"). A scalar
+// pointer wrap (`iter`) when the body only reads `x`: the value form copies, and for a `Str`
+// allocates, per element, which the pointer form does not (impl_specs/for.md, "iter"). A scalar
 // element, and a body that writes through the variable, keep the value wrap.
 data class Entry(var key: Str, var count: Int)
 

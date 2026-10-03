@@ -118,11 +118,12 @@ fun sum(items: &List<Int>): Int {
 }
 ```
 
-`for` iterates **whatever has an `iter`** in one of exactly two forms: a state
-machine - the value a function whose body `yield`s produces - or a container, which the
-prelude gives one per container (`List<T>`, `Array<T>`, `Span<T>`; a `Dictionary` and a
-range are not iterable yet). (A `iter` is an ordinary extension function returning
-`..T`, so your own type can have one too; see `specs/functions.md`.)
+`for` iterates **whatever has an `iterValues`** (the `*x` form uses `iter`) in one of
+exactly two forms: a state machine - the value a function whose body `yield`s produces - or a
+container, which is viewed as its span and walked by the span's one pair of walks (`List`,
+`Array`, `Str` and `Span`; a `Dictionary` and a range are not iterable yet). (A walk is an
+ordinary extension function returning `..T`, so your own type can have one too; see
+`specs/functions.md`.)
 
 ```simse
 fun everyOther(n: Int): ..Int {
@@ -653,7 +654,7 @@ These are known rough edges, not design decisions to admire
   open a block there.
 - `println` of a float uses the C++ default formatting, and `println` of an enum
   prints its integer value.
-- There is no `foreach` keyword (`for` is it, and a container has an `iter` so
+- There is no `foreach` keyword (`for` is it, and a container has an `iterValues` so
   `for (x in list)` works), no `when` pattern labels (`is Type`, `in 1..5`) and no
   subjectless `when`, no default parameter values, no capture-by-reference, and no
   `Set`. Interpolation exists, but only in backtick strings, and only a plain

@@ -241,7 +241,7 @@ Int indexOf(StrView* self, Str* sub);
 Str substr(StrView* self, Int from, Int count);
 Str toString(StrView* self);
 template <class T>
-struct Span_iter_yieldable {
+struct Span_iterValues_yieldable {
     Int branch{};
     T current{};
     Span<T>* _sm_self{};
@@ -250,7 +250,7 @@ struct Span_iter_yieldable {
 };
 
 template <class T>
-Bool advance(Span_iter_yieldable<T>* self) {
+Bool advance(Span_iterValues_yieldable<T>* self) {
     Bool _sm_base1, _sm_base3, _sm_expr1;
     Int _sm_base2, _sm_base4, _sm_base5, _sm_base7, _sm_base8, _sm_base10, _sm_base11, _sm_base12;
     Span<T>* _sm_base6, * _sm_base9;
@@ -287,7 +287,7 @@ Bool advance(Span_iter_yieldable<T>* self) {
 }
 
 template <class T>
-Span_iter_yieldable<T> iter(Span<T>* self);
+Span_iterValues_yieldable<T> iterValues(Span<T>* self);
 Bool compareLessThan(Str* left, Str* right);
 void initByValue(Str* self);
 Str fmtStr(StrView fmt, List<Str>* items);
@@ -444,8 +444,8 @@ Str toString(StrView* self) {
     return _sm_expr2;
 }
 template <class T>
-Span_iter_yieldable<T> iter(Span<T>* self) {
-    Span_iter_yieldable<T> machine{};
+Span_iterValues_yieldable<T> iterValues(Span<T>* self) {
+    Span_iterValues_yieldable<T> machine{};
     machine._sm_self = self;
     machine.branch = 0;
     return machine;
@@ -1543,13 +1543,13 @@ Int ns1_partWhenStrings() {
         _sm_expr12, word, _sm_expr18, _sm_expr22;
     List<Str> ops, words;
     Span<Str> _sm_expr1, _sm_expr13;
-    Span_iter_yieldable<Str> _sm_for6, _sm_for7;
+    Span_iterValues_yieldable<Str> _sm_for6, _sm_for7;
     Bool _sm_expr2;
     Ref<Str> _sm_expr16;
     ops = List<Str>{__sm_stringTable[96], __sm_stringTable[95], __sm_stringTable[88], __sm_stringTable[77], __sm_stringTable[64], __sm_stringTable[61], __sm_stringTable[80], __sm_stringTable[82], __sm_stringTable[63], __sm_stringTable[65], __sm_stringTable[62], __sm_stringTable[73], __sm_stringTable[74]};
     _sm_base1 = &ops;
     _sm_expr1 = simse_spanOf(_sm_base1);
-    _sm_for6 = iter(simse_addressOf(_sm_expr1));
+    _sm_for6 = iterValues(simse_addressOf(_sm_expr1));
     L1:;
     _sm_expr2 = advance(&_sm_for6);
     if (!(_sm_expr2)) goto L2;
@@ -1593,7 +1593,7 @@ Int ns1_partWhenStrings() {
     words = List<Str>{__sm_stringTable[96], __sm_stringTable[95], __sm_stringTable[70], __sm_stringTable[73]};
     _sm_base3 = &words;
     _sm_expr13 = simse_spanOf(_sm_base3);
-    _sm_for7 = iter(simse_addressOf(_sm_expr13));
+    _sm_for7 = iterValues(simse_addressOf(_sm_expr13));
     L3:;
     _sm_expr2 = advance(&_sm_for7);
     if (!(_sm_expr2)) goto L4;

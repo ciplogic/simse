@@ -4525,3 +4525,27 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   Verified: `bun build.js --release --no-lto`, `bun tools/stress.js` **64/64**,
   `bun build.js --release --no-lto --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
   both fixed points byte for byte.
+
+- **The iterator walks are named for what they hand out: `iterValues` and `iter`; two machine
+  conversions join them.** The pointer walk - the one a LINQ-style pipeline starts from - took the
+  short name: `Span<T>.iter<T>(): ..*T`, beside `Span<T>.iterValues<T>(): ..T` for the value walk.
+  The parser writes `iterValues()` for `for (x in c)` and `iter()` for `for (*x in c)`; sema's
+  identity rule moved to `iterValues` (a machine is its own value walk; `for (*x in m)` still
+  reports that a machine yields values, not places), the auto-promotion rewrites
+  `iterValues` -> `iter`, and `checkForIterable`/`spanForAt`/`semaMemberCall`/`memberReturn`/the
+  codegen identity (`CgCall.kt`) follow. The linq module's entry is now `List<T>.iter<T>(): ..*T`,
+  so a pipeline reads `xs.iter().select(...)`.
+  Two prelude extensions move a machine's element between a copy and a place, and one direction
+  feeds the other's operators: `..*T.toValues<T>(): ..T` (the copy lives in the machine's `value`
+  field across the yield) and `..T.toPtrs<T>(): ..*T` (`yield *this.current` hands out the
+  receiver's own field). Both are machines themselves, so a chain still copies nothing and
+  `spanOf(xs).iterValues().toPtrs().where(...)` is one element at a time.
+  `stress/linq` gained both directions - `select(...).toValues()` summed as `Int`s, and the
+  `iterValues().toPtrs().where(...)` chain - and the `collections`, `machines` and `strings`
+  emission goldens were re-captured; a canonical diff (every name mapped to a placeholder) over
+  each is empty, so the move is the rename and nothing else. `stress/diagnostic-not-iterable`'s
+  expected text follows the new wrap name.
+  Verified: `bun build.js --release --no-lto` (two-build staged: first with the old prelude
+  spelling so the running compiler could build the tree, then the final names),
+  `bun tools/stress.js` **64/64**, `bun build.js --release --no-lto --out src/simse_bootstrap.cpp`
+  then `bun tools/bootstrap.js` - both fixed points byte for byte.

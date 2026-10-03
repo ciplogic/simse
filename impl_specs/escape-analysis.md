@@ -134,8 +134,8 @@ The rule is the simplest one that is sound, and it refuses by default - *unsure 
   from the body by the borrow-clean fixpoint below for one that has a body, so a plain helper is
   trusted too. A *construction* (`Point(1, 2)`) is not a call on the parameter and is allowed;
 - **the `for` lowering's machine step is trusted** (`_sm_for<n>.advance()`, `bpMachineStep`): the
-  prefix is the compiler's own and a machine can only come from an `iter`/`iterPtr` call in the same
-  body, so the call that built it has already been weighed and `advance` reads the container it was
+  prefix is the compiler's own and a machine can only come from an `iterValues`/`iter` call in the
+  same body, so the call that built it has already been weighed and `advance` reads the container it was
   built over;
 - **any** assignment whose target is not a plain name (`x.f = ...`, `x[i] = ...`, `*x = ...`), **or
   is a file-level `var`**, borrows nothing, anywhere in the body - the author's own rule, and the
@@ -184,7 +184,7 @@ calls `self.find(` (src/rtl/_res.md), and `--showBorrow` prints the refusal as
 The same proof covers a `for` variable: `SemaCall.promoteForLoops` promotes the value form of a
 `for` over a deep element (`bpDeepElement`) to the pointer wrap when `bpLoopReadOnly` (the
 parameter rule, over the loop body) holds - `impl_specs/for.md`, "Auto-promotion". It runs in
-sema, where the receiver's type is known (a machine has no `iterPtr`), against the `reads`/
+sema, where the receiver's type is known (a machine has no `iter`), against the `reads`/
 `statics`/`types` sets the pass leaves for it (`bpTrustedNames` and friends).
 
 Two facts are at play and they are **not the same flag**:
@@ -224,7 +224,7 @@ call place with a new temporary" shape, at the cost the callee used to pay.
 
 **Reach.** A body-less declaration is trusted by its mark, so the RTL's read-only operations carry
 `borrow` (`src/rtl/rtl.kt`: the string and character reads and conversions, the `List`/
-`Dictionary` reads, `iter`/`iterPtr`), as do the compiler's own read-only `common` accessors
+`Dictionary` reads, `iterValues`/`iter`), as do the compiler's own read-only `common` accessors
 (`src/common/xmlutil.kt`) and `fmtStr`. Two shapes an earlier pass got wrong are fixed:
 `bpIsConstruct` recognizes a construction with **no type argument** (`AstXmlNode(...)`, `Str(...)`,
 and the `Opt`/`Res` statics) - the `specs` always said a construction is not a call on the

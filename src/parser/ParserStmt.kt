@@ -443,11 +443,11 @@ fun Parser.parseFor(out: *List<AstXmlNode>): Bool {
     val machineName: Str = "_sm_for" + id.toString()
     val counterName: Str = "_sm_index" + id.toString()
 
-    // A *member* `iter()` call, not `iter(x)`: that is what binds the function's type
-    // parameter from the receiver, leaving the loop variable typed.
-    var wrap: Str = "iter"
+    // A *member* `iterValues()`/`iter()` call, not `iter(x)`: that is what binds the
+    // function's type parameter from the receiver, leaving the loop variable typed.
+    var wrap: Str = "iterValues"
     if (valueIsPointer) {
-        wrap = "iterPtr"
+        wrap = "iter"
     }
     val iterated: ExprNode = this.iterCall(machine, pos, wrap)
     out.append(this.varDeclNode(machineName, true, this.emptyNode(), iterated, pos))

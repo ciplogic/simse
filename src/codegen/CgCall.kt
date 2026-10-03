@@ -364,10 +364,10 @@ fun Emitter.call(e: *AstXmlNode): Str {
             // (`IlExtractor.call`), whose target is the destination's type - the IL names a
             // callee and never spells a signature, so the type argument cannot reach here.
 
-            // `x.iter()` on a machine *is* `x` - the wrap a `for` puts around what it
+            // `x.iterValues()` on a machine *is* `x` - the wrap a `for` puts around what it
             // iterates; `..T` is not spellable, so the identity is the backend's
             // (impl_specs/for.md).
-            if (calleeText == "iter") {
+            if (calleeText == "iterValues") {
                 val identityRecv: AstXmlNode = this.pointee(this.inferType(receiverExpr))
                 if (!xmlIsEmpty(identityRecv) && xmlKind(identityRecv) == AstNodeCategory.TypeYield) {
                     return this.expr(receiverExpr, 0, xmlEmptyNode())

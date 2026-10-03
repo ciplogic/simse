@@ -6,12 +6,12 @@
 
 package rtl
 
-// `for (x in c)` is `for (x in c.iter())`: anything with an `iter` in scope is iterable,
-// and a container walks itself in order (impl_specs/for.md). A *container's* `for` is
-// rewritten to iterate its span (`spanOf`/`spanOfArray`/`spanOfStr`, sema's `for` rewrite),
-// so the span's walk below is the only iterator machine a program carries - `List`, `Array`
+// `for (x in c)` is `for (x in c.iterValues())`: anything with an `iterValues` in scope is
+// iterable, and a container walks itself in order (impl_specs/for.md). A *container's* `for`
+// is rewritten to iterate its span (`spanOf`/`spanOfArray`/`spanOfStr`, sema's `for` rewrite),
+// so the span's walks below are the only iterator machines a program carries - `List`, `Array`
 // and `Str` name none of their own.
-fun Span<T>.iter<T>(): ..T {
+fun Span<T>.iterValues<T>(): ..T {
     var i: Int = 0
     val len = this.size();
     while (i < len) {
@@ -21,8 +21,10 @@ fun Span<T>.iter<T>(): ..T {
 }
 
 // The pointer form, `for (*x in c)`: the same walk handing out each element's *place*
-// (`*this[i]`), so a mutation through the loop variable reaches the element (impl_specs/for.md).
-fun Span<T>.iterPtr<T>(): ..*T {
+// (`*this[i]`), so a mutation through the loop variable reaches the element. It is the
+// short name because a pipeline (`src/modules/linq`) is pointer-typed end to end
+// (impl_specs/for.md).
+fun Span<T>.iter<T>(): ..*T {
     var i: Int = 0
     val len = this.size();
     while (i < len) {
@@ -31,7 +33,25 @@ fun Span<T>.iterPtr<T>(): ..*T {
     }
 }
 
-// A machine is already iterable: `x.iter()` on one *is* `x`, so `for (x in m)` and
+// The element as a *copy*: `..*T.toValues()` is the value machine a `for (x in m)` walks,
+// spelled as a pipeline step. The copy lives in the machine's `value` field across the
+// yield, so the place the machine hands out is the copy itself.
+fun ..*T.toValues<T>(): ..T {
+    while (this.advance()) {
+        var value: T = *this.current
+        yield value
+    }
+}
+
+// And back: the place of what a value machine yielded (`this.current`), so a chain that
+// needs `..*T` again (`select`, `where`) takes it without a `toList` round trip.
+fun ..T.toPtrs<T>(): ..*T {
+    while (this.advance()) {
+        yield *this.current
+    }
+}
+
+// A machine is already iterable: `x.iterValues()` on one *is* `x`, so `for (x in m)` and
 // iterating `m` in a `while` see the same values with no wrapper object.
 
 @SmGen("res", "listops", "simse_list_append")
