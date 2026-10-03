@@ -1,0 +1,6 @@
+status not-ok
+step InternetOpenUrl
+message present
+text not-ok
+text step InternetOpenUrl
+bad not-ok

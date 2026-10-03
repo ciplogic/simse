@@ -4549,3 +4549,30 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   spelling so the running compiler could build the tree, then the final names),
   `bun tools/stress.js` **64/64**, `bun build.js --release --no-lto --out src/simse_bootstrap.cpp`
   then `bun tools/bootstrap.js` - both fixed points byte for byte.
+
+- **`src/modules/http`: a WinINet web client, `httpGet(url): Res<List<Char>>`.** The
+  `sockets` split applied to HTTP: the exports are `@SmGen("native", "wininet.dll", ...)`
+  declarations (`InternetOpenA`/`InternetOpenUrlA`/`InternetReadFile`/`InternetCloseHandle`/
+  `InternetSetOptionA`), so nothing is linked and no import library is needed, and the only C++
+  (`httpglue`, `emit: reached`) holds the `wininet.h` constants, the read buffer, the two block
+  copies (buffer -> `List<Char>`, `List<Char>` -> `Str`) and the error text (`GetLastError` +
+  `FormatMessageA`, behind the step prefix `httpGet` writes). The download loop is Simse: one
+  16 KB buffer, one `httpAppend` per chunk, both handles closed on every path, and a 15 s
+  connect/receive bound through `InternetSetOptionA`, so a host that answers nothing cannot hold
+  a caller for WinINet's own minute. The calls are the ANSI spellings - a `Str` is the byte
+  string the `A`-suffixed APIs take, and a caller percent-encodes a non-ASCII URL. A non-2xx
+  status is an `ok` (WinINet hands the body over either way); the raw natives are exposed for
+  headers or the status code, and `httpGetText` returns the same bytes as an owned `Str`.
+  `stress/http` is error-path-only and hermetic: a loopback port nothing listens on and a string
+  with no URL shape answer `Res.err` whose text starts with the step (the platform's message is
+  localized, so the case checks the shape and never the message). The success path was verified
+  by hand outside the corpus: `https://example.com/` came back as 577 bytes containing
+  `Example Domain` (WinINet reads `http:`/`https:` only - a `file:` URL is an invalid name to
+  it - so a self-contained success case is not possible). The read buffer is an `init` on a
+  local (`httpBufferInit`) rather than a returned `List<Char>`: the by-value return made MSVC
+  trace the constant chunk size through the move's inline-arm `memcpy` and emit a C4789 false
+  positive.
+  Verified: `bun build.js --release --no-lto`, `bun tools/stress.js` **65/65**,
+  `bun build.js --release --no-lto --out src/simse_bootstrap.cpp` (the module's `_res.md` is
+  embedded in the compiler's resources, so the published file moved) then `bun tools/bootstrap.js`
+  - both fixed points byte for byte.
