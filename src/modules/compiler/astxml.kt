@@ -91,7 +91,14 @@ enum class AstNodeAttributeKind {
     // The `initByValue` construction convention's marker on a `var x = T(a)` declaration
     // (src/sema/TypeInfer.kt): the initializer constructs through `T.initByValue`, so the
     // declaration stays where it is and src/linear/LinearForm.kt routes it.
-    InitByValue
+    InitByValue,
+
+    // `native class` (specs/memory-model.md): the class's generated struct exists to mirror a
+    // native layout, so the emitter does not wrap it in the language's 4-byte packing.
+    IsNativeClass,
+
+    // `ref class`: the second class word - parsed and recorded, and nothing reads it yet.
+    IsRefClass
 }
 
 // What a node is - the schema's `kind` - as against its role (`AstNodeKind`, where it

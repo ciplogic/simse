@@ -32,6 +32,11 @@ fields, pointer fields, or any aggregate member, and code relying on the host's 
 (8-byte) alignment is outside the specification. `Str` and `&T` are built from 4-aligned
 pieces too, so the rule is uniform.
 
+The rule is the default, not a cage: a class declared `native class C(...)` (the layout word
+in place of `data`, `declarations.md`) is emitted with the **host's own alignment** instead of
+the packing, because its generated struct exists to mirror a native layout. `ref class C(...)`
+is the second class word: it is parsed and recorded, and it changes nothing yet.
+
 Status: the bootstrap shims spell `Str` as the inline `SmString` (not `std::string`),
 `&T` as `std::shared_ptr`, and callables as `std::function`. Those host types are declared
 with 8-byte alignment, so 4-byte packing under-aligns them; that is accepted for now

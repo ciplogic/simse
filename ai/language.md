@@ -30,7 +30,9 @@ mutable, inline byte string (`s[i]`, `s.size()`, `s.substr(...)`, ...). Containe
 locals infer from the initializer, or write the type. `null` is for handles only.
 
 Data classes carry fields and methods; enums have explicit values and `toInt()`/`fromInt`.
-`typealias` names a type or a callable (`typealias IntFn = (Int) -> Int`).
+`typealias` names a type or a callable (`typealias IntFn = (Int) -> Int`). `native class` is
+the same value type with the host's alignment instead of the 4-byte packing (for mirroring a
+native layout); `ref class` is accepted and does nothing yet.
 
 ```text
 data class Point(var x: Int, var y: Int) {

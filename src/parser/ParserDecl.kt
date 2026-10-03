@@ -147,6 +147,30 @@ fun Parser.parseDecl(): AstXmlNode {
             return this.parseEnum()
         }
 
+        "native", "ref" -> {
+            // `native class` / `ref class` (specs/memory-model.md): the layout word replaces
+            // `data` - a native class is a data class whose generated struct keeps the host's
+            // alignment instead of the language's 4-byte packing, and a ref class is recorded
+            // and changes nothing yet. `parseDataClass` consumes the word itself, expecting
+            // `class` after it.
+            if (this.peek(1).text != "class") {
+                this.fail("expected 'class' after '" + text + "'")
+                return this.emptyNode()
+            }
+            val isNativeClass: Bool = text == "native"
+            val node: AstXmlNode = this.parseDataClass()
+            if (this.failed) {
+                return this.emptyNode()
+            }
+            node.attributes.append(
+                AstNodeAttribute(AstNodeAttributeKind.IsNativeClass, boolText(isNativeClass))
+            )
+            node.attributes.append(
+                AstNodeAttribute(AstNodeAttributeKind.IsRefClass, boolText(!isNativeClass))
+            )
+            return node
+        }
+
         "typealias" -> {
             return this.parseTypeAlias()
         }
@@ -503,4 +527,3 @@ fun Parser.parseTypeParams(): List<Str> {
     this.matchGenericCloser()
     return out
 }
-

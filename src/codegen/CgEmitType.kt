@@ -306,8 +306,13 @@ fun Emitter.emitDataClass(decl: *AstXmlNode): Unit {
     this.sourceComment(decl)
     val tmpl: Str = this.templateClause(typeParams)
     // Generated aggregates follow the language's 4-byte packing rule
-    // (specs/memory-model.md).
-    this.line(0, "SIMSE_PACK_PUSH")
+    // (specs/memory-model.md) - except a `native class`, whose whole point is to mirror a
+    // native layout, so the packing is not applied and the struct keeps the host's
+    // alignment.
+    val nativeLayout: Bool = xmlAttr(decl, AstNodeAttributeKind.IsNativeClass) == "true"
+    if (!nativeLayout) {
+        this.line(0, "SIMSE_PACK_PUSH")
+    }
     if (tmpl != "") {
         this.line(0, tmpl)
     }
@@ -329,7 +334,9 @@ fun Emitter.emitDataClass(decl: *AstXmlNode): Unit {
         }
     }
     this.line(0, "};")
-    this.line(0, "SIMSE_PACK_POP")
+    if (!nativeLayout) {
+        this.line(0, "SIMSE_PACK_POP")
+    }
 }
 
 fun Emitter.emitEnum(decl: *AstXmlNode): Unit {

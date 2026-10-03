@@ -4576,3 +4576,17 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   `bun build.js --release --no-lto --out src/simse_bootstrap.cpp` (the module's `_res.md` is
   embedded in the compiler's resources, so the published file moved) then `bun tools/bootstrap.js`
   - both fixed points byte for byte.
+
+- **`native class` / `ref class`: the two class layout words.** `native class C(...)` is a data
+  class whose *generated* struct is emitted with the host's own alignment: the emitter skips the
+  `SIMSE_PACK_PUSH`/`SIMSE_PACK_POP` wrapping it applies to every other aggregate
+  (`CgEmitType.emitDataClass`), which is what a class mirroring a native layout needs.
+  `ref class C(...)` is the second word - parsed and recorded (`IsRefClass`), read by nothing
+  yet. Either word stands where `data` does (`ParserDecl.parseDecl`; `parseDataClass` consumes
+  the word and expects `class`), so `data` stays the 4-byte-packed default and `@SmGen` is not
+  involved; `specs/memory-model.md` and `specs/declarations.md` carry the rule.
+  `stress/native-class` pins the split in an emission golden: `SockAddr` is written outside the
+  packing macros, `Handle` inside them.
+  Verified: `bun build.js --release --no-lto`, `bun tools/stress.js` **66/66**,
+  `bun build.js --release --no-lto --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js`
+  - both fixed points byte for byte.

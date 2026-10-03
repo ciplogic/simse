@@ -14,6 +14,12 @@ use `&T` when shared identity is required.
 data class Point(var x: Int, var y: Int)
 ```
 
+Two layout words may replace `data`: `native class C(...)` is the same value/layout type, but
+its generated struct is emitted with the host's own alignment - the language's 4-byte packing
+is not applied to it - because the class exists to mirror a native layout
+(`memory-model.md`, "Alignment and packing"). `ref class C(...)` is the second word: parsed
+and recorded, and it changes nothing yet.
+
 Fields are separated by `,` (Kotlin's spelling; the list may be wrapped across lines,
 and a `;` is accepted there too). The declaration is otherwise line-oriented: a field
 list that runs over several lines continues until the `)`.
