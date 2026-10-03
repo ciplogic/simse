@@ -4666,3 +4666,17 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   emission golden), `stress/diagnostic-union-same-type` and
   `stress/diagnostic-union-field-name` pin it.
   Verified: `bun tools/iterate.js --full` - 71/71 and both fixed points byte for byte.
+
+- **`when` over a union directly, through generated tag operators.** `when (u)` with bare arm
+  names is the `when` the user writes as `when (u.getTypeOf())`: the checker qualifies a bare
+  arm name to its tag member (`IntValue` -> `SmUTypes.IntValue`), and the union class's
+  generated C++ gains `operator==`/`operator!=` between the struct and its tag enum (value
+  and pointer receivers - a borrowed parameter is a `U*`). The comparison itself is not
+  rewritten and no `getTypeOf()` call is synthesized; `A` shadowed by a local, parameter or
+  static stays that value, and an unbound name that is no arm is reported with the arm list.
+  Along the way the checker's argument walk was fixed: `analyzeCall` iterated `xmlChildren`,
+  i.e. *copies*, so any rewrite inside `f(u == A)` was dropped before the emitter - it now
+  walks the call's children by pointer. `stress/unions` uses the shorthand in `label`, a
+  `None` arm in `tagged`, the long form in `labelSide`, and pins `u == A`, `u != A` and
+  `u == SmTypes.A`; the emission golden carries the operators.
+  Verified: `bun tools/iterate.js --full` - 71/71 and both fixed points byte for byte.

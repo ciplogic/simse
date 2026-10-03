@@ -81,10 +81,11 @@ closed unions with `when`, or a hand-written tagged struct.
 
 Landed: `union class` (`specs/declarations.md`) - a discriminated union with a generated
 `Sm<Name>Types` tag enum, per-field `get`/`set` accessors, and `U()` / `U(value)`
-construction; matching is `when` over `getTypeOf()`. An exhaustive `when` is deliberately
-out of scope - there will never be one; the tag enum is the selector. Still open: pattern
-labels (`is T`, `in 1..5`) and the positions a union class cannot be built in yet
-(`f(U(v))`, `x = U(v)`, static initializers). Unblocks: `JsonValue`, protocol messages,
+construction; matching is `when (u)` with bare arm names (a comparison against a union
+value is its tag comparison), or `when (u.getTypeOf())`. An exhaustive `when` is
+deliberately out of scope - there will never be one; the tag enum is the selector. Still
+open: pattern labels (`is T`, `in 1..5`) and the positions a union class cannot be built in
+yet (`f(U(v))`, `x = U(v)`, static initializers). Unblocks: `JsonValue`, protocol messages,
 ASTs, result types richer than `Res`, and the interface-as-value workaround above. Makes the
 no-vtable decision comfortable rather than limiting.
 

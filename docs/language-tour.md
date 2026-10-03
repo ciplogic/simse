@@ -385,18 +385,19 @@ generates `getTypeOf(): Sm<Name>Types`, `isOfType(t): Bool`, `setNone()`, and pe
 tag says another arm. `U()` is the `None` value; `U(value)` picks the arm whose field type
 is the value's type; `return (value)` constructs the same way. Direct reads and writes of
 the fields are allowed (a direct write does not move the tag), and a user method in the
-body works over the same storage. There is no exhaustive matching: `when` over
-`getTypeOf()` is the ordinary enum `when`.
+body works over the same storage. Matching is `when (u)` with bare arm names - a comparison
+against a union value is its tag comparison, and the generated C++ compares the struct with
+its tag enum. There is no exhaustive matching.
 
 ```simse
 union class DoubleOrFloat(var IntValue: Int, var DoubleValue: Float64)
 
 fun label(u: DoubleOrFloat): Str {
-    when (u.getTypeOf()) {
-        SmDoubleOrFloatTypes.IntValue -> {
+    when (u) {
+        IntValue -> {
             return "int"
         }
-        SmDoubleOrFloatTypes.DoubleValue -> {
+        DoubleValue -> {
             return "float"
         }
         else -> {

@@ -1,9 +1,14 @@
 true
 true
 false
+none
 5
 false
 true
+true
+true
+true
+int
 int
 d:int
 true
@@ -13,6 +18,7 @@ int
 5
 11
 int
+none
 none
 true
 R

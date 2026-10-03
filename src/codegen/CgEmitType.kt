@@ -380,6 +380,25 @@ fun Emitter.emitUnionClass(decl: *AstXmlNode): Unit {
     if (this.failed) {
         return
     }
+    // The tag comparison: the struct against its tag enum, so `when (u)`'s `u == SmUTypes.A`
+    // is this operator and no operand moves. The pointer form is the one a borrowed
+    // parameter uses (`u: *U`), the reference form a local's (`u: U`).
+    this.line(
+        0,
+        `inline Bool operator==(const @emittedName& self, @tagType tag) { return self._type == tag; }`
+    )
+    this.line(
+        0,
+        `inline Bool operator==(const @emittedName* self, @tagType tag) { return self->_type == tag; }`
+    )
+    this.line(
+        0,
+        `inline Bool operator!=(const @emittedName& self, @tagType tag) { return self._type != tag; }`
+    )
+    this.line(
+        0,
+        `inline Bool operator!=(const @emittedName* self, @tagType tag) { return self->_type != tag; }`
+    )
     for (*method in xmlChildren(decl, AstNodeKind.Function)) {
         if (xmlAttr(method, AstNodeAttributeKind.IsUnionGenerated) != "true") {
             continue

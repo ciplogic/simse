@@ -6,7 +6,9 @@ package fixtures
 // generated `get<Field>` answers an `Opt` (empty when the tag says another arm), and
 // `set<Field>` moves the tag as it writes. `U()` starts `None`; `U(value)` picks the arm by
 // the value's type; direct field reads and writes reach the storage under the same rules.
-// `when` over `getTypeOf()` is the ordinary enum `when` - the language never checks it for
+// A comparison against a union value is its tag comparison - the generated `==`/`!=`
+// against the tag enum - so `when (u)` with bare arm names is the same `when` as
+// `when (u.getTypeOf())` with qualified labels; the language never checks either for
 // exhaustiveness.
 
 union class DoubleOrFloat(var IntValue: Int, var DoubleValue: Float64)
@@ -31,17 +33,36 @@ union class WithMethod(var I: Int) {
 
 fun label(u: DoubleOrFloat): Str {
     var out: Str = ""
-    when (u.getTypeOf()) {
-        SmDoubleOrFloatTypes.IntValue -> {
+    when (u) {
+        IntValue -> {
             out = "int"
         }
 
-        SmDoubleOrFloatTypes.DoubleValue -> {
+        DoubleValue -> {
             out = "float"
         }
 
         else -> {
             out = "none"
+        }
+    }
+    return out
+}
+
+// The same shorthand with every arm named: `None` is a tag member like any other.
+fun tagged(u: DoubleOrFloat): Str {
+    var out: Str = ""
+    when (u) {
+        None -> {
+            out = "none"
+        }
+
+        IntValue -> {
+            out = "int"
+        }
+
+        DoubleValue -> {
+            out = "float"
         }
     }
     return out
@@ -76,13 +97,18 @@ fun partUnionClass(): Int {
     println(a.isOfType(SmDoubleOrFloatTypes.None))
     println(a.getTypeOf() == SmDoubleOrFloatTypes.None)
     println(a.getIntValue().hasValue())
+    println(tagged(a))
 
     a.setIntValue(5)
     val i = a.getIntValue()
     println(i.value())
     println(a.getDoubleValue().hasValue())
     println(a.isOfType(SmDoubleOrFloatTypes.IntValue))
+    println(a == IntValue)
+    println(a != DoubleValue)
+    println(a == SmDoubleOrFloatTypes.IntValue)
     println(label(a))
+    println(tagged(a))
     println(a.describe())
 
     // `U(value)`: the argument's type picks the arm.
@@ -104,6 +130,7 @@ fun partUnionClass(): Int {
     println(label(c))
     c.setNone()
     println(label(c))
+    println(tagged(c))
 
     // Two distinct enum arms.
     var s = SideOrSide(Left.L)

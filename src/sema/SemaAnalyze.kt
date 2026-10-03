@@ -166,6 +166,126 @@ fun unionGeneratedName(methodName: *Str, fields: *List<AstXmlNode>): Bool {
     return false
 }
 
+// A comparison against a union class is a **tag comparison**: `when (u)`'s arms, which the
+// parser has already desugared into `u == <label>`, and a hand-written `u == A` alike. The
+// class's generated `==`/`!=` operators compare it with its tag enum, so the comparison
+// needs no rewriting at all - except that a bare arm name (`A`, `None`) has to be spelled
+// as the tag member `SmUTypes.A`, which only the checker can qualify. A name bound as a
+// local, parameter or static stays the user's own expression (shadowing), and an unbound
+// name that is no arm is reported rather than left to fail in C++.
+fun Analyzer.expandUnionTagTest(expr: *AstXmlNode, lhs: *AstXmlNode, rhs: *AstXmlNode): Unit {
+    val unionDecl: AstXmlNode = this.unionDeclOf(lhs)
+    if (xmlIsEmpty(unionDecl)) {
+        return
+    }
+    if (xmlKind(rhs) != AstNodeCategory.ExprName) {
+        // A qualified tag member (`SmUTypes.A`) is already an enum value; the operator takes
+        // it from there.
+        return
+    }
+    val member: Str = xmlAttr(rhs, AstNodeAttributeKind.Name)
+    if (this.lookupValue(member).hasValue()) {
+        return
+    }
+    if (!unionHasArm(unionDecl, member)) {
+        val unionName: Str = xmlAttr(unionDecl, AstNodeAttributeKind.Name)
+        val arms: Str = unionArmList(unionDecl)
+        this.diag(
+            xmlLine(rhs), xmlColumn(rhs),
+            `union class '@unionName' has no arm '@member'; the arms are @arms`
+        )
+        return
+    }
+    val tagName: Str = unionTagName(xmlAttr(unionDecl, AstNodeAttributeKind.Name))
+    replaceRoleChild(expr, AstNodeKind.Rhs, unionEnumMemberAccess(tagName, member, rhs))
+}
+
+// The union class `expr` is a value of, or empty: through handles, pointers and aliases, the
+// same peeling a member call does.
+fun Analyzer.unionDeclOf(expr: *AstXmlNode): AstXmlNode {
+    val type: AstXmlNode = this.exprType(expr)
+    if (xmlIsEmpty(type)) {
+        return xmlEmptyNode()
+    }
+    val outer: AstXmlNode = this.semaReceiverOuter(type)
+    if (xmlKind(outer) != AstNodeCategory.TypeNamed) {
+        return xmlEmptyNode()
+    }
+    val decl: *AstXmlNode = this.types.getPtr(xmlAttr(outer, AstNodeAttributeKind.Name))
+    if (decl == null || decl.name != AstNodeKind.DataClass
+        || xmlAttr(decl, AstNodeAttributeKind.IsUnionClass) != "true"
+    ) {
+        return xmlEmptyNode()
+    }
+    return *decl
+}
+
+// Whether `member` names an arm: a field, or the tag's `None`.
+fun unionHasArm(decl: *AstXmlNode, member: *Str): Bool {
+    if (member == "None") {
+        return true
+    }
+    for (*field in xmlChildren(decl, AstNodeKind.Field)) {
+        if (xmlAttr(field, AstNodeAttributeKind.Name) == member) {
+            return true
+        }
+    }
+    return false
+}
+
+// The arms as `a == b` lists them in the "no arm" diagnostic: `None` first, then the fields.
+fun unionArmList(decl: *AstXmlNode): Str {
+    var arms: List<Str> = List<Str>()
+    arms.append("None")
+    for (*field in xmlChildren(decl, AstNodeKind.Field)) {
+        arms.append(xmlAttr(field, AstNodeAttributeKind.Name))
+    }
+    return joinStrs(arms, ", ")
+}
+
+// One child of `node` replaced in place; the role keeps its position, so the tree shape the
+// later stages walk is the parsed one. The replacement takes the role it is placed in
+// (`Rhs`, `Lhs`), exactly as the parser's `attach` does.
+fun replaceRoleChild(node: *AstXmlNode, role: AstNodeKind, child: AstXmlNode): Unit {
+    var placed: AstXmlNode = child
+    placed.name = role
+    var replaced: Bool = false
+    var kids: List<AstXmlNode> = List<AstXmlNode>()
+    for (*existing in node.Children) {
+        if (!replaced && existing.name == role) {
+            kids.append(placed)
+            replaced = true
+        } else {
+            kids.append(existing)
+        }
+    }
+    if (!replaced) {
+        kids.append(placed)
+    }
+    node.Children = kids.toArray()
+}
+
+// `SmUTypes.<member>`, at `at`'s position: the shape a parsed `Enum.Member` has.
+fun unionEnumMemberAccess(tagName: *Str, member: *Str, at: *AstXmlNode): AstXmlNode {
+    var recvAttrs: List<AstNodeAttribute> = listOf<AstNodeAttribute>(
+        AstNodeAttribute(AstNodeAttributeKind.Name, tagName),
+        AstNodeAttribute(AstNodeAttributeKind.Line, xmlLine(at).toString()),
+        AstNodeAttribute(AstNodeAttributeKind.Column, xmlColumn(at).toString())
+    )
+    var recv: AstXmlNode = AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprName, recvAttrs, Array<AstXmlNode>())
+    recv.name = AstNodeKind.Receiver
+    var memberAttrs: List<AstNodeAttribute> = listOf<AstNodeAttribute>(
+        AstNodeAttribute(AstNodeAttributeKind.Name, member),
+        AstNodeAttribute(AstNodeAttributeKind.Line, xmlLine(at).toString()),
+        AstNodeAttribute(AstNodeAttributeKind.Column, xmlColumn(at).toString())
+    )
+    var access: AstXmlNode =
+        AstXmlNode(AstNodeKind.Expr, AstNodeCategory.ExprMember, memberAttrs, Array<AstXmlNode>())
+    xmlAddChild(access, recv)
+    return access
+}
+
+// `<lhs>.getTypeOf()`, for a comparison that named a qualified tag member.
 fun Analyzer.analyzeFunction(decl: *AstXmlNode): Unit {
     this.pushTypeScope()
     val typeParams: List<Str> = xmlTypeParamNames(decl)
@@ -357,9 +477,13 @@ fun Analyzer.analyzeCall(expr: *AstXmlNode, boxed: Bool): Unit {
     if (!xmlIsEmpty(callee)) {
         this.analyzeExpr(callee)
     }
-    val args: List<AstXmlNode> = xmlChildren(expr, AstNodeKind.Arg)
-    for (*arg in args) {
-        this.analyzeExpr(arg)
+    // The pointer walk is deliberate: `xmlChildren` would hand the checker *copies* of the
+    // arguments, and a rewrite of one (a `union class` tag comparison, say) would be dropped
+    // instead of reaching the emitter.
+    for (*arg in expr.Children) {
+        if (arg.name == AstNodeKind.Arg) {
+            this.analyzeExpr(arg)
+        }
     }
     this.checkCallArity(expr)
     this.checkExtensionCallArity(expr)
@@ -442,6 +566,10 @@ fun Analyzer.analyzeExpr(expr: *AstXmlNode): Unit {
             val rhs: *AstXmlNode = xmlChildPtr(expr, AstNodeKind.Rhs)
             if (!xmlIsEmpty(rhs)) {
                 this.analyzeExpr(rhs)
+            }
+            val op: Str = xmlAttr(expr, AstNodeAttributeKind.Op)
+            if ((op == "==" || op == "!=") && !xmlIsEmpty(lhs) && !xmlIsEmpty(rhs)) {
+                this.expandUnionTagTest(expr, lhs, rhs)
             }
             return
         }

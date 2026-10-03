@@ -195,6 +195,13 @@ For a `union class U`, the compiler defines beside the class:
 The generated members are ordinary declarations to the checker and to `when`; a user
 method that reuses one of their names is a diagnostic.
 
+A comparison against a union value is a **tag comparison**: `u == A` and `u != A` (with `A`
+a field name or `None`; a name bound as a local, parameter or static stays that value), and
+the already-qualified `u == SmUTypes.A`, both compile to the tag test - the generated
+operators compare the struct with its tag enum. `when (u)` with bare arm names is therefore
+the same `when` as `when (u.getTypeOf())` with qualified labels; a bare name that is no arm
+is a diagnostic with the arm list.
+
 ### Construction
 
 `U()` is the `None` value, and `U(v)` picks the arm whose field type *is* `v`'s type: two
@@ -207,9 +214,8 @@ initializer are reported rather than mis-built. Direct field access is allowed: 
 unchecked like a C++ union member, and a direct write moves the storage without moving the
 tag (`setA` is the tag-aware write).
 
-The generic form is not implemented; a `union class U<T>` is a diagnostic. A `when` over
-`getTypeOf()` is an ordinary enum `when`; the language does not check it for
-exhaustiveness.
+The generic form is not implemented; a `union class U<T>` is a diagnostic. The language
+does not check a `when` over the tag for exhaustiveness.
 
 ## Package declarations
 

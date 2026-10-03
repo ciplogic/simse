@@ -108,8 +108,8 @@ these):
    not there, so values of a `data class` are still built with `+` and `toString()`.
 3. **Pattern matching** - `union class` landed (a discriminated union, `specs/declarations.md`),
    so "one of these shapes" payloads exist; an exhaustive `when` is not planned - matching is
-   `when` over the generated `getTypeOf()` tag. Richer pattern labels (`is T`, `in 1..5`) are
-   still open.
+   `when (u)` with bare arm names (a comparison against a union value is its tag comparison),
+   or `when (u.getTypeOf())`. Richer pattern labels (`is T`, `in 1..5`) are still open.
 4. **Static interfaces (protocols)** - `Hashable`, `Comparable`, `Printable`
    resolved at reification, so dictionaries, sorting, printing and JSON work for
    *your* types with no runtime support. `data class` should satisfy the first
