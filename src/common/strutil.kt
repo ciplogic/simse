@@ -54,3 +54,9 @@ fun upperFirst(text: *Str): Str {
 fun unionTagName(typeName: *Str): Str {
     return "Sm" + typeName + "Types"
 }
+
+// The generated C++ storage type's name for a `union class` (`Sm<Name>Storage`): the arms,
+// the tag and the setters live there, in the trivial or the managed form (`emitUnionClass`).
+fun unionStorageName(typeName: *Str): Str {
+    return "Sm" + typeName + "Storage"
+}

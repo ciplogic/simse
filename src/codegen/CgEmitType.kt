@@ -351,59 +351,73 @@ fun Emitter.emitDataClass(decl: *AstXmlNode): Unit {
     }
 }
 
-// A `union class`: the tag, the anonymous union of the arms, the tag comparison, and the
-// generated surface as free functions (the method convention: the receiver is the first
-// parameter). When every arm is trivially copyable the struct stays what it was - C++
-// declares nothing - and copies, returns and destruction are the plain value operations.
-// When an arm owns storage (`Str`, `List`, a handle, ...) the union's own special members
-// are C++-deleted, so the struct carries the managed form: a destructor that destroys the
-// live arm by tag, copy/move constructors and assignments, and setters that place the new
-// arm after destroying the old one - the shape `Variant2Storage<..., true>` uses
-// (src/rtl/variant2.hpp), reached through `simse_destroy` (src/rtl/types.hpp). The tag enum
-// itself is a separate declaration, emitted just before by `emitTypeByName`.
+// A `union class`: the tag, the arms, the tag comparison, and the generated surface as free
+// functions (the method convention: the receiver is the first parameter). The arms live in
+// a generated base (`Sm<Name>Storage`) rather than in the class itself, because *which
+// form* the storage takes follows the arms. When every arm is trivially copyable the base
+// declares nothing and the whole class stays trivially copyable - copies, returns and
+// destruction are the plain value operations. When an arm owns storage (`Str`, a `List`, a
+// handle, ...) the base carries the managed form: a destructor that destroys the live arm
+// by tag, copy/move constructors and assignments, and setters that place the new arm after
+// destroying the old one, reached through `simse_destroy` (src/rtl/types.hpp). A *generic*
+// union cannot decide the form when it is emitted, so it gets `Sm<Name>Storage<SmManaged,
+// T...>` with both partial specializations and picks one from the actual arm types
+// (`SmUnionManaged<...>` in src/rtl/types.hpp): `Opt2<Int>` is the trivial form,
+// `Opt2<Str>` the managed one. The tag enum itself is a separate declaration, emitted just
+// before by `emitTypeByName`.
 fun Emitter.emitUnionClass(decl: *AstXmlNode): Unit {
     this.setActiveTypeParams(xmlTypeParamNames(decl))
     val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
     val emittedName: Str = this.qualify(this.typePackage(name), name)
     val tagType: Str = this.qualify(this.typePackage(name), unionTagName(name))
+    val storageName: Str = this.qualify(this.typePackage(name), unionStorageName(name))
     val typeParams: List<Str> = xmlTypeParamNames(decl)
     val tmpl: Str = this.templateClause(typeParams)
+    val generic: Bool = typeParams.size() > 0
     // The name to spell outside the class body: a generic struct is `Res2<T>`, and its
     // injected-class-name is not visible to the free functions below.
     var emittedRef: Str = emittedName
-    if (typeParams.size() > 0) {
+    if (generic) {
         emittedRef = emittedName + "<" + cgJoin(typeParams, ", ") + ">"
     }
     val fields: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Field)
+    // A concrete union's form is decided here, from the declared arm types
+    // (`unionArmManaged`); a generic union's is decided in C++ per instantiation, from the
+    // emitted arm types in declaration order.
     var managed: Bool = false
     for (*field in fields) {
         if (this.unionArmManaged(xmlChildPtr(field, AstNodeKind.Type))) {
             managed = true
         }
     }
+    var managedArgs: List<Str> = List<Str>()
+    if (generic) {
+        for (*field in fields) {
+            managedArgs.append(this.type(xmlChildPtr(field, AstNodeKind.Type)))
+        }
+    }
+    val managedText: Str = "SmUnionManaged<" + cgJoin(managedArgs, ", ") + ">"
+    val typeArgs: Str = cgJoin(typeParams, ", ")
     this.sourceComment(decl)
     this.line(0, "SIMSE_PACK_PUSH")
-    if (tmpl != "") {
+    if (generic) {
+        this.emitUnionStorageTemplate(fields, tagType, storageName, typeParams)
+    } else {
+        this.line(0, `struct @storageName {`)
+        this.emitUnionStorageMembers(fields, tagType, storageName, managed)
+        this.line(0, "};")
+    }
+    if (this.failed) {
+        return
+    }
+    if (generic) {
         this.line(0, tmpl)
+        this.line(0, `struct @emittedName : @storageName<@managedText, @typeArgs> {`)
+        this.line(0, "};")
+    } else {
+        this.line(0, `struct @emittedName : @storageName {`)
+        this.line(0, "};")
     }
-    this.line(0, `struct @emittedName {`)
-    this.line(1, `@tagType _type = @tagType::None;`)
-    if (fields.size() > 0) {
-        this.line(1, "union {")
-        for (*field in fields) {
-            val fieldType: Str = this.type(xmlChildPtr(field, AstNodeKind.Type))
-            val fieldName: Str = xmlAttr(field, AstNodeAttributeKind.Name)
-            this.line(2, `@fieldType @fieldName;`)
-        }
-        this.line(1, "};")
-    }
-    if (managed) {
-        this.emitUnionManagedMembers(fields, emittedName, tagType)
-        if (this.failed) {
-            return
-        }
-    }
-    this.line(0, "};")
     this.line(0, "SIMSE_PACK_POP")
     if (this.failed) {
         return
@@ -459,18 +473,17 @@ fun Emitter.emitUnionClass(decl: *AstXmlNode): Unit {
             this.line(0, tmpl)
         }
         this.line(0, `inline @ret @symbol(@params) {`)
-        this.emitUnionMethodBody(method, methodName, tagType, managed)
+        this.emitUnionMethodBody(method, methodName, tagType)
         this.line(0, "}")
     }
 }
 
 // One generated method's C++ body. The arm comes from the method's `Text` attribute (the
 // field name the parser recorded), so `set`/`get`/`initByValue` never re-match types here.
-// In the managed form a setter destroys the arm it replaces and placement-news the new one
-// (assignment into an inactive union member would never start its lifetime).
-fun Emitter.emitUnionMethodBody(
-    method: *AstXmlNode, methodName: *Str, tagType: *Str, managed: Bool
-): Unit {
+// Every arm write goes through the storage's own `set<Field>` - plain assignment in the
+// trivial form, destroy-and-place in the managed one - so a generic union's body is the
+// same C++ for every instantiation and the form stays the storage's business.
+fun Emitter.emitUnionMethodBody(method: *AstXmlNode, methodName: *Str, tagType: *Str): Unit {
     val fieldName: Str = xmlAttr(method, AstNodeAttributeKind.Text)
     if (methodName == "getTypeOf") {
         this.line(1, "return self->_type;")
@@ -481,36 +494,16 @@ fun Emitter.emitUnionMethodBody(
         return
     }
     if (methodName == "setNone") {
-        if (managed) {
-            this.line(1, "self->destroyActive();")
-            return
-        }
-        this.line(1, `self->_type = @tagType::None;`)
+        this.line(1, "self->setNone();")
         return
     }
     if (methodName == "initByValue" && xmlCount(method, AstNodeKind.Param) == 0) {
-        if (managed) {
-            this.line(1, "self->destroyActive();")
-            return
-        }
-        this.line(1, `self->_type = @tagType::None;`)
+        this.line(1, "self->setNone();")
         return
     }
     if (methodName == "initByValue" || methodName.startsWith("set")) {
-        if (!managed) {
-            this.line(1, `self->_type = @tagType::@fieldName;`)
-            this.line(1, `self->@fieldName = value;`)
-            return
-        }
-        val paramType: Str =
-            this.type(xmlChildPtr(xmlChildPtr(method, AstNodeKind.Param), AstNodeKind.Type))
-        this.line(1, `if (self->_type == @tagType::@fieldName) {`)
-        this.line(2, `self->@fieldName = std::move(value);`)
-        this.line(2, "return;")
-        this.line(1, "}")
-        this.line(1, "self->destroyActive();")
-        this.line(1, `self->_type = @tagType::@fieldName;`)
-        this.line(1, `::new ((void *) &self->@fieldName) @paramType(std::move(value));`)
+        val setter: Str = "set" + upperFirst(fieldName)
+        this.line(1, `self->@setter(std::move(value));`)
         return
     }
     // `get<Field>`: the value when the tag says this arm, an empty `Opt` otherwise.
@@ -521,94 +514,140 @@ fun Emitter.emitUnionMethodBody(
     this.line(1, `return @ret();`)
 }
 
-// The managed form's special members, inside the struct: the anonymous union's own are
-// deleted as soon as one arm is non-trivial, so every one of them is written here and the
-// live arm is chosen by the tag. The default constructor starts a trivial arm's lifetime
-// (or the first arm's, when all are managed) and ends it again, so a fresh value is the
-// empty `None` and nothing stays constructed.
-fun Emitter.emitUnionManagedMembers(
-    fields: *List<AstXmlNode>, emittedName: *Str, tagType: *Str
+// A generic union's storage: both forms, as partial specializations of
+// `Sm<Name>Storage<SmManaged, T...>`, declared before the class that names one of them as
+// its base. The public struct's base clause passes `SmUnionManaged<...>`, so the form
+// follows the instantiation's actual arm types (src/rtl/types.hpp).
+fun Emitter.emitUnionStorageTemplate(
+    fields: *List<AstXmlNode>, tagType: *Str, storageName: *Str, typeParams: *List<Str>
 ): Unit {
-    var initArm: Str = ""
-    for (*field in fields) {
-        val fieldName: Str = xmlAttr(field, AstNodeAttributeKind.Name)
-        if (initArm == "") {
-            initArm = fieldName
-        }
-        if (!this.unionArmManaged(xmlChildPtr(field, AstNodeKind.Type))) {
-            initArm = fieldName
-            break
-        }
+    var paramParts: List<Str> = List<Str>()
+    for (*param in typeParams) {
+        paramParts.append("class " + param)
     }
-    this.line(1, `@emittedName() : @initArm() { simse_destroy(this->@initArm); }`)
-    this.line(
-        1,
-        `@emittedName(const @emittedName& other) : @initArm() { simse_destroy(this->@initArm); this->copyFrom(other); }`
-    )
-    this.line(
-        1,
-        `@emittedName(@emittedName&& other) noexcept : @initArm() { simse_destroy(this->@initArm); this->moveFrom(other); }`
-    )
-    this.line(1, `~@emittedName() { this->destroyActive(); }`)
-    this.line(1, `@emittedName& operator=(const @emittedName& other) {`)
-    this.line(2, "if (this != &other) {")
-    this.line(3, "this->destroyActive();")
-    this.line(3, "this->copyFrom(other);")
-    this.line(2, "}")
-    this.line(2, "return *this;")
-    this.line(1, "}")
-    this.line(1, `@emittedName& operator=(@emittedName&& other) noexcept {`)
-    this.line(2, "if (this != &other) {")
-    this.line(3, "this->destroyActive();")
-    this.line(3, "this->moveFrom(other);")
-    this.line(2, "}")
-    this.line(2, "return *this;")
-    this.line(1, "}")
-    this.line(1, "void destroyActive() {")
-    this.line(2, "switch (this->_type) {")
-    for (*field in fields) {
-        val fieldName: Str = xmlAttr(field, AstNodeAttributeKind.Name)
-        this.line(3, `case @tagType::@fieldName: simse_destroy(this->@fieldName); break;`)
+    val paramsText: Str = cgJoin(paramParts, ", ")
+    val typeArgs: Str = cgJoin(typeParams, ", ")
+    this.line(0, `template <Bool SmManaged, @paramsText> struct @storageName;`)
+    this.line(0, `template <@paramsText> struct @storageName<false, @typeArgs> {`)
+    this.emitUnionStorageMembers(fields, tagType, storageName, false)
+    this.line(0, "};")
+    this.line(0, `template <@paramsText> struct @storageName<true, @typeArgs> {`)
+    this.emitUnionStorageMembers(fields, tagType, storageName, true)
+    this.line(0, "};")
+}
+
+// The storage's members, one indent level inside the struct. The trivial form adds no
+// special member, so the storage - and the class derived from it - stays trivially
+// copyable. The managed form owns the default/copy/move constructors, the destructor and
+// the assignments, because a union's own are deleted as soon as one arm is non-trivial; its
+// default constructor starts no arm at all (the tag is `None` and every path that places an
+// arm does it by hand, so nothing stays constructed). Either form's `set<Field>` moves the
+// tag as it writes, and `setNone` is the empty tag.
+fun Emitter.emitUnionStorageMembers(
+    fields: *List<AstXmlNode>, tagType: *Str, storageName: *Str, managed: Bool
+): Unit {
+    this.line(1, `@tagType _type = @tagType::None;`)
+    if (fields.size() > 0) {
+        this.line(1, "union {")
+        for (*field in fields) {
+            val fieldType: Str = this.type(xmlChildPtr(field, AstNodeKind.Type))
+            val fieldName: Str = xmlAttr(field, AstNodeAttributeKind.Name)
+            this.line(2, `@fieldType @fieldName;`)
+        }
+        this.line(1, "};")
     }
-    this.line(3, "default: break;")
-    this.line(2, "}")
-    this.line(2, `this->_type = @tagType::None;`)
-    this.line(1, "}")
-    this.line(1, `void copyFrom(const @emittedName& other) {`)
-    this.line(2, "switch (other._type) {")
+    if (managed) {
+        this.line(1, `@storageName() {}`)
+        this.line(1, `@storageName(const @storageName& other) { this->copyFrom(other); }`)
+        this.line(1, `@storageName(@storageName&& other) noexcept { this->moveFrom(other); }`)
+        this.line(1, `~@storageName() { this->destroyActive(); }`)
+        this.line(1, `@storageName& operator=(const @storageName& other) {`)
+        this.line(2, "if (this != &other) {")
+        this.line(3, "this->destroyActive();")
+        this.line(3, "this->copyFrom(other);")
+        this.line(2, "}")
+        this.line(2, "return *this;")
+        this.line(1, "}")
+        this.line(1, `@storageName& operator=(@storageName&& other) noexcept {`)
+        this.line(2, "if (this != &other) {")
+        this.line(3, "this->destroyActive();")
+        this.line(3, "this->moveFrom(other);")
+        this.line(2, "}")
+        this.line(2, "return *this;")
+        this.line(1, "}")
+        this.line(1, "void destroyActive() {")
+        this.line(2, "switch (this->_type) {")
+        for (*field in fields) {
+            val fieldName: Str = xmlAttr(field, AstNodeAttributeKind.Name)
+            this.line(3, `case @tagType::@fieldName: simse_destroy(this->@fieldName); break;`)
+        }
+        this.line(3, "default: break;")
+        this.line(2, "}")
+        this.line(2, `this->_type = @tagType::None;`)
+        this.line(1, "}")
+        this.line(1, `void copyFrom(const @storageName& other) {`)
+        this.line(2, "switch (other._type) {")
+        for (*field in fields) {
+            val fieldName: Str = xmlAttr(field, AstNodeAttributeKind.Name)
+            val fieldType: Str = this.type(xmlChildPtr(field, AstNodeKind.Type))
+            this.line(
+                3,
+                `case @tagType::@fieldName: ::new ((void *) &this->@fieldName) @fieldType(other.@fieldName); this->_type = @tagType::@fieldName; break;`
+            )
+        }
+        this.line(3, "default: break;")
+        this.line(2, "}")
+        this.line(1, "}")
+        this.line(1, `void moveFrom(@storageName& other) {`)
+        this.line(2, "switch (other._type) {")
+        for (*field in fields) {
+            val fieldName: Str = xmlAttr(field, AstNodeAttributeKind.Name)
+            val fieldType: Str = this.type(xmlChildPtr(field, AstNodeKind.Type))
+            this.line(
+                3,
+                `case @tagType::@fieldName: ::new ((void *) &this->@fieldName) @fieldType(std::move(other.@fieldName)); this->_type = @tagType::@fieldName; break;`
+            )
+        }
+        this.line(3, "default: break;")
+        this.line(2, "}")
+        this.line(1, "}")
+    }
     for (*field in fields) {
         val fieldName: Str = xmlAttr(field, AstNodeAttributeKind.Name)
         val fieldType: Str = this.type(xmlChildPtr(field, AstNodeKind.Type))
-        this.line(
-            3,
-            `case @tagType::@fieldName: ::new ((void *) &this->@fieldName) @fieldType(other.@fieldName); this->_type = @tagType::@fieldName; break;`
-        )
+        val setter: Str = "set" + upperFirst(fieldName)
+        this.line(1, `void @setter(@fieldType value) {`)
+        if (!managed) {
+            this.line(2, `_type = @tagType::@fieldName;`)
+            this.line(2, `@fieldName = std::move(value);`)
+        } else {
+            this.line(2, `if (_type == @tagType::@fieldName) {`)
+            this.line(3, `@fieldName = std::move(value);`)
+            this.line(3, "return;")
+            this.line(2, "}")
+            this.line(2, "this->destroyActive();")
+            this.line(2, `_type = @tagType::@fieldName;`)
+            this.line(2, `::new ((void *) &@fieldName) @fieldType(std::move(value));`)
+        }
+        this.line(1, "}")
     }
-    this.line(3, "default: break;")
-    this.line(2, "}")
-    this.line(1, "}")
-    this.line(1, `void moveFrom(@emittedName& other) {`)
-    this.line(2, "switch (other._type) {")
-    for (*field in fields) {
-        val fieldName: Str = xmlAttr(field, AstNodeAttributeKind.Name)
-        val fieldType: Str = this.type(xmlChildPtr(field, AstNodeKind.Type))
-        this.line(
-            3,
-            `case @tagType::@fieldName: ::new ((void *) &this->@fieldName) @fieldType(std::move(other.@fieldName)); this->_type = @tagType::@fieldName; break;`
-        )
+    this.line(1, "void setNone() {")
+    if (managed) {
+        this.line(2, "this->destroyActive();")
+    } else {
+        this.line(2, `_type = @tagType::None;`)
     }
-    this.line(3, "default: break;")
-    this.line(2, "}")
     this.line(1, "}")
 }
 
-// Whether an arm's C++ type is *not* trivially copyable, so the union needs the managed
-// form. Conservative by design: only a type proven trivial stays in the plain form, and
-// guessing managed for a trivial type costs the struct its triviality, never correctness.
-// A `typealias` is followed, a data class (a union class included) is trivial when every
-// field is, an enum and the scalars are, and `Span`/`StrView` are; everything else - `Str`,
-// the containers, the handles, `Opt` of a managed element, the callables, an unknown name -
-// is managed.
+// Whether an arm's C++ type is *not* trivially copyable, so a *concrete* union gets the
+// managed form (a generic union decides per instantiation in C++, with `SmUnionManaged`,
+// because a bare type parameter's triviality is only known there). Conservative by design:
+// only a type proven trivial stays in the plain form, and guessing managed for a trivial
+// type costs the struct its triviality, never correctness. A `typealias` is followed, a
+// data class (a union class included) is trivial when every field is, an enum and the
+// scalars are, and `Span`/`StrView` are; everything else - `Str`, the containers, the
+// handles, the callables, an unknown name - is managed.
 fun Emitter.unionArmManaged(typeNode: *AstXmlNode): Bool {
     var guard: Int = 0
     var current: AstXmlNode = typeNode

@@ -232,12 +232,25 @@ enum class ns1_SmDoubleOrFloatTypes { None, IntValue, DoubleValue };
 inline ns1_SmDoubleOrFloatTypes ns1_simse_SmDoubleOrFloatTypes_fromInt(Int value) { return (ns1_SmDoubleOrFloatTypes) value; }
 // stress/unions/src/main.kt
 SIMSE_PACK_PUSH
-struct ns1_DoubleOrFloat {
+struct ns1_SmDoubleOrFloatStorage {
     ns1_SmDoubleOrFloatTypes _type = ns1_SmDoubleOrFloatTypes::None;
     union {
         Int IntValue;
         Float64 DoubleValue;
     };
+    void setIntValue(Int value) {
+        _type = ns1_SmDoubleOrFloatTypes::IntValue;
+        IntValue = std::move(value);
+    }
+    void setDoubleValue(Float64 value) {
+        _type = ns1_SmDoubleOrFloatTypes::DoubleValue;
+        DoubleValue = std::move(value);
+    }
+    void setNone() {
+        _type = ns1_SmDoubleOrFloatTypes::None;
+    }
+};
+struct ns1_DoubleOrFloat : ns1_SmDoubleOrFloatStorage {
 };
 SIMSE_PACK_POP
 inline Bool operator==(const ns1_DoubleOrFloat& self, ns1_SmDoubleOrFloatTypes tag) { return self._type == tag; }
@@ -251,14 +264,13 @@ inline Bool ns1_isOfType(ns1_DoubleOrFloat* self, ns1_SmDoubleOrFloatTypes typeT
     return self->_type == typeToCheck;
 }
 inline void ns1_setNone(ns1_DoubleOrFloat* self) {
-    self->_type = ns1_SmDoubleOrFloatTypes::None;
+    self->setNone();
 }
 inline void ns1_initByValue(ns1_DoubleOrFloat* self) {
-    self->_type = ns1_SmDoubleOrFloatTypes::None;
+    self->setNone();
 }
 inline void ns1_setIntValue(ns1_DoubleOrFloat* self, Int value) {
-    self->_type = ns1_SmDoubleOrFloatTypes::IntValue;
-    self->IntValue = value;
+    self->setIntValue(std::move(value));
 }
 inline Opt<Int> ns1_getIntValue(ns1_DoubleOrFloat* self) {
     if (self->_type == ns1_SmDoubleOrFloatTypes::IntValue) {
@@ -267,12 +279,10 @@ inline Opt<Int> ns1_getIntValue(ns1_DoubleOrFloat* self) {
     return Opt<Int>();
 }
 inline void ns1_initByValue(ns1_DoubleOrFloat* self, Int value) {
-    self->_type = ns1_SmDoubleOrFloatTypes::IntValue;
-    self->IntValue = value;
+    self->setIntValue(std::move(value));
 }
 inline void ns1_setDoubleValue(ns1_DoubleOrFloat* self, Float64 value) {
-    self->_type = ns1_SmDoubleOrFloatTypes::DoubleValue;
-    self->DoubleValue = value;
+    self->setDoubleValue(std::move(value));
 }
 inline Opt<Float64> ns1_getDoubleValue(ns1_DoubleOrFloat* self) {
     if (self->_type == ns1_SmDoubleOrFloatTypes::DoubleValue) {
@@ -281,8 +291,7 @@ inline Opt<Float64> ns1_getDoubleValue(ns1_DoubleOrFloat* self) {
     return Opt<Float64>();
 }
 inline void ns1_initByValue(ns1_DoubleOrFloat* self, Float64 value) {
-    self->_type = ns1_SmDoubleOrFloatTypes::DoubleValue;
-    self->DoubleValue = value;
+    self->setDoubleValue(std::move(value));
 }
 // stress/unions/src/main.kt
 enum class ns1_Left { L };
@@ -295,12 +304,25 @@ enum class ns1_SmSideOrSideTypes { None, L, R };
 inline ns1_SmSideOrSideTypes ns1_simse_SmSideOrSideTypes_fromInt(Int value) { return (ns1_SmSideOrSideTypes) value; }
 // stress/unions/src/main.kt
 SIMSE_PACK_PUSH
-struct ns1_SideOrSide {
+struct ns1_SmSideOrSideStorage {
     ns1_SmSideOrSideTypes _type = ns1_SmSideOrSideTypes::None;
     union {
         ns1_Left L;
         ns1_Right R;
     };
+    void setL(ns1_Left value) {
+        _type = ns1_SmSideOrSideTypes::L;
+        L = std::move(value);
+    }
+    void setR(ns1_Right value) {
+        _type = ns1_SmSideOrSideTypes::R;
+        R = std::move(value);
+    }
+    void setNone() {
+        _type = ns1_SmSideOrSideTypes::None;
+    }
+};
+struct ns1_SideOrSide : ns1_SmSideOrSideStorage {
 };
 SIMSE_PACK_POP
 inline Bool operator==(const ns1_SideOrSide& self, ns1_SmSideOrSideTypes tag) { return self._type == tag; }
@@ -314,14 +336,13 @@ inline Bool ns1_isOfType(ns1_SideOrSide* self, ns1_SmSideOrSideTypes typeToCheck
     return self->_type == typeToCheck;
 }
 inline void ns1_setNone(ns1_SideOrSide* self) {
-    self->_type = ns1_SmSideOrSideTypes::None;
+    self->setNone();
 }
 inline void ns1_initByValue(ns1_SideOrSide* self) {
-    self->_type = ns1_SmSideOrSideTypes::None;
+    self->setNone();
 }
 inline void ns1_setL(ns1_SideOrSide* self, ns1_Left value) {
-    self->_type = ns1_SmSideOrSideTypes::L;
-    self->L = value;
+    self->setL(std::move(value));
 }
 inline Opt<ns1_Left> ns1_getL(ns1_SideOrSide* self) {
     if (self->_type == ns1_SmSideOrSideTypes::L) {
@@ -330,12 +351,10 @@ inline Opt<ns1_Left> ns1_getL(ns1_SideOrSide* self) {
     return Opt<ns1_Left>();
 }
 inline void ns1_initByValue(ns1_SideOrSide* self, ns1_Left value) {
-    self->_type = ns1_SmSideOrSideTypes::L;
-    self->L = value;
+    self->setL(std::move(value));
 }
 inline void ns1_setR(ns1_SideOrSide* self, ns1_Right value) {
-    self->_type = ns1_SmSideOrSideTypes::R;
-    self->R = value;
+    self->setR(std::move(value));
 }
 inline Opt<ns1_Right> ns1_getR(ns1_SideOrSide* self) {
     if (self->_type == ns1_SmSideOrSideTypes::R) {
@@ -344,16 +363,20 @@ inline Opt<ns1_Right> ns1_getR(ns1_SideOrSide* self) {
     return Opt<ns1_Right>();
 }
 inline void ns1_initByValue(ns1_SideOrSide* self, ns1_Right value) {
-    self->_type = ns1_SmSideOrSideTypes::R;
-    self->R = value;
+    self->setR(std::move(value));
 }
 // stress/unions/src/main.kt
 enum class ns1_SmMarkerTypes { None };
 inline ns1_SmMarkerTypes ns1_simse_SmMarkerTypes_fromInt(Int value) { return (ns1_SmMarkerTypes) value; }
 // stress/unions/src/main.kt
 SIMSE_PACK_PUSH
-struct ns1_Marker {
+struct ns1_SmMarkerStorage {
     ns1_SmMarkerTypes _type = ns1_SmMarkerTypes::None;
+    void setNone() {
+        _type = ns1_SmMarkerTypes::None;
+    }
+};
+struct ns1_Marker : ns1_SmMarkerStorage {
 };
 SIMSE_PACK_POP
 inline Bool operator==(const ns1_Marker& self, ns1_SmMarkerTypes tag) { return self._type == tag; }
@@ -367,21 +390,30 @@ inline Bool ns1_isOfType(ns1_Marker* self, ns1_SmMarkerTypes typeToCheck) {
     return self->_type == typeToCheck;
 }
 inline void ns1_setNone(ns1_Marker* self) {
-    self->_type = ns1_SmMarkerTypes::None;
+    self->setNone();
 }
 inline void ns1_initByValue(ns1_Marker* self) {
-    self->_type = ns1_SmMarkerTypes::None;
+    self->setNone();
 }
 // stress/unions/src/main.kt
 enum class ns1_SmWithMethodTypes { None, I };
 inline ns1_SmWithMethodTypes ns1_simse_SmWithMethodTypes_fromInt(Int value) { return (ns1_SmWithMethodTypes) value; }
 // stress/unions/src/main.kt
 SIMSE_PACK_PUSH
-struct ns1_WithMethod {
+struct ns1_SmWithMethodStorage {
     ns1_SmWithMethodTypes _type = ns1_SmWithMethodTypes::None;
     union {
         Int I;
     };
+    void setI(Int value) {
+        _type = ns1_SmWithMethodTypes::I;
+        I = std::move(value);
+    }
+    void setNone() {
+        _type = ns1_SmWithMethodTypes::None;
+    }
+};
+struct ns1_WithMethod : ns1_SmWithMethodStorage {
 };
 SIMSE_PACK_POP
 inline Bool operator==(const ns1_WithMethod& self, ns1_SmWithMethodTypes tag) { return self._type == tag; }
@@ -395,14 +427,13 @@ inline Bool ns1_isOfType(ns1_WithMethod* self, ns1_SmWithMethodTypes typeToCheck
     return self->_type == typeToCheck;
 }
 inline void ns1_setNone(ns1_WithMethod* self) {
-    self->_type = ns1_SmWithMethodTypes::None;
+    self->setNone();
 }
 inline void ns1_initByValue(ns1_WithMethod* self) {
-    self->_type = ns1_SmWithMethodTypes::None;
+    self->setNone();
 }
 inline void ns1_setI(ns1_WithMethod* self, Int value) {
-    self->_type = ns1_SmWithMethodTypes::I;
-    self->I = value;
+    self->setI(std::move(value));
 }
 inline Opt<Int> ns1_getI(ns1_WithMethod* self) {
     if (self->_type == ns1_SmWithMethodTypes::I) {
@@ -411,32 +442,31 @@ inline Opt<Int> ns1_getI(ns1_WithMethod* self) {
     return Opt<Int>();
 }
 inline void ns1_initByValue(ns1_WithMethod* self, Int value) {
-    self->_type = ns1_SmWithMethodTypes::I;
-    self->I = value;
+    self->setI(std::move(value));
 }
 // stress/unions/src/main.kt
 enum class ns1_SmIntOrStrTypes { None, I, S };
 inline ns1_SmIntOrStrTypes ns1_simse_SmIntOrStrTypes_fromInt(Int value) { return (ns1_SmIntOrStrTypes) value; }
 // stress/unions/src/main.kt
 SIMSE_PACK_PUSH
-struct ns1_IntOrStr {
+struct ns1_SmIntOrStrStorage {
     ns1_SmIntOrStrTypes _type = ns1_SmIntOrStrTypes::None;
     union {
         Int I;
         Str S;
     };
-    ns1_IntOrStr() : I() { simse_destroy(this->I); }
-    ns1_IntOrStr(const ns1_IntOrStr& other) : I() { simse_destroy(this->I); this->copyFrom(other); }
-    ns1_IntOrStr(ns1_IntOrStr&& other) noexcept : I() { simse_destroy(this->I); this->moveFrom(other); }
-    ~ns1_IntOrStr() { this->destroyActive(); }
-    ns1_IntOrStr& operator=(const ns1_IntOrStr& other) {
+    ns1_SmIntOrStrStorage() {}
+    ns1_SmIntOrStrStorage(const ns1_SmIntOrStrStorage& other) { this->copyFrom(other); }
+    ns1_SmIntOrStrStorage(ns1_SmIntOrStrStorage&& other) noexcept { this->moveFrom(other); }
+    ~ns1_SmIntOrStrStorage() { this->destroyActive(); }
+    ns1_SmIntOrStrStorage& operator=(const ns1_SmIntOrStrStorage& other) {
         if (this != &other) {
             this->destroyActive();
             this->copyFrom(other);
         }
         return *this;
     }
-    ns1_IntOrStr& operator=(ns1_IntOrStr&& other) noexcept {
+    ns1_SmIntOrStrStorage& operator=(ns1_SmIntOrStrStorage&& other) noexcept {
         if (this != &other) {
             this->destroyActive();
             this->moveFrom(other);
@@ -451,20 +481,43 @@ struct ns1_IntOrStr {
         }
         this->_type = ns1_SmIntOrStrTypes::None;
     }
-    void copyFrom(const ns1_IntOrStr& other) {
+    void copyFrom(const ns1_SmIntOrStrStorage& other) {
         switch (other._type) {
             case ns1_SmIntOrStrTypes::I: ::new ((void *) &this->I) Int(other.I); this->_type = ns1_SmIntOrStrTypes::I; break;
             case ns1_SmIntOrStrTypes::S: ::new ((void *) &this->S) Str(other.S); this->_type = ns1_SmIntOrStrTypes::S; break;
             default: break;
         }
     }
-    void moveFrom(ns1_IntOrStr& other) {
+    void moveFrom(ns1_SmIntOrStrStorage& other) {
         switch (other._type) {
             case ns1_SmIntOrStrTypes::I: ::new ((void *) &this->I) Int(std::move(other.I)); this->_type = ns1_SmIntOrStrTypes::I; break;
             case ns1_SmIntOrStrTypes::S: ::new ((void *) &this->S) Str(std::move(other.S)); this->_type = ns1_SmIntOrStrTypes::S; break;
             default: break;
         }
     }
+    void setI(Int value) {
+        if (_type == ns1_SmIntOrStrTypes::I) {
+            I = std::move(value);
+            return;
+        }
+        this->destroyActive();
+        _type = ns1_SmIntOrStrTypes::I;
+        ::new ((void *) &I) Int(std::move(value));
+    }
+    void setS(Str value) {
+        if (_type == ns1_SmIntOrStrTypes::S) {
+            S = std::move(value);
+            return;
+        }
+        this->destroyActive();
+        _type = ns1_SmIntOrStrTypes::S;
+        ::new ((void *) &S) Str(std::move(value));
+    }
+    void setNone() {
+        this->destroyActive();
+    }
+};
+struct ns1_IntOrStr : ns1_SmIntOrStrStorage {
 };
 SIMSE_PACK_POP
 inline Bool operator==(const ns1_IntOrStr& self, ns1_SmIntOrStrTypes tag) { return self._type == tag; }
@@ -478,19 +531,13 @@ inline Bool ns1_isOfType(ns1_IntOrStr* self, ns1_SmIntOrStrTypes typeToCheck) {
     return self->_type == typeToCheck;
 }
 inline void ns1_setNone(ns1_IntOrStr* self) {
-    self->destroyActive();
+    self->setNone();
 }
 inline void ns1_initByValue(ns1_IntOrStr* self) {
-    self->destroyActive();
+    self->setNone();
 }
 inline void ns1_setI(ns1_IntOrStr* self, Int value) {
-    if (self->_type == ns1_SmIntOrStrTypes::I) {
-        self->I = std::move(value);
-        return;
-    }
-    self->destroyActive();
-    self->_type = ns1_SmIntOrStrTypes::I;
-    ::new ((void *) &self->I) Int(std::move(value));
+    self->setI(std::move(value));
 }
 inline Opt<Int> ns1_getI(ns1_IntOrStr* self) {
     if (self->_type == ns1_SmIntOrStrTypes::I) {
@@ -499,22 +546,10 @@ inline Opt<Int> ns1_getI(ns1_IntOrStr* self) {
     return Opt<Int>();
 }
 inline void ns1_initByValue(ns1_IntOrStr* self, Int value) {
-    if (self->_type == ns1_SmIntOrStrTypes::I) {
-        self->I = std::move(value);
-        return;
-    }
-    self->destroyActive();
-    self->_type = ns1_SmIntOrStrTypes::I;
-    ::new ((void *) &self->I) Int(std::move(value));
+    self->setI(std::move(value));
 }
 inline void ns1_setS(ns1_IntOrStr* self, Str value) {
-    if (self->_type == ns1_SmIntOrStrTypes::S) {
-        self->S = std::move(value);
-        return;
-    }
-    self->destroyActive();
-    self->_type = ns1_SmIntOrStrTypes::S;
-    ::new ((void *) &self->S) Str(std::move(value));
+    self->setS(std::move(value));
 }
 inline Opt<Str> ns1_getS(ns1_IntOrStr* self) {
     if (self->_type == ns1_SmIntOrStrTypes::S) {
@@ -523,37 +558,31 @@ inline Opt<Str> ns1_getS(ns1_IntOrStr* self) {
     return Opt<Str>();
 }
 inline void ns1_initByValue(ns1_IntOrStr* self, Str value) {
-    if (self->_type == ns1_SmIntOrStrTypes::S) {
-        self->S = std::move(value);
-        return;
-    }
-    self->destroyActive();
-    self->_type = ns1_SmIntOrStrTypes::S;
-    ::new ((void *) &self->S) Str(std::move(value));
+    self->setS(std::move(value));
 }
 // stress/unions/src/main.kt
 enum class ns1_SmIntOrListTypes { None, I, L };
 inline ns1_SmIntOrListTypes ns1_simse_SmIntOrListTypes_fromInt(Int value) { return (ns1_SmIntOrListTypes) value; }
 // stress/unions/src/main.kt
 SIMSE_PACK_PUSH
-struct ns1_IntOrList {
+struct ns1_SmIntOrListStorage {
     ns1_SmIntOrListTypes _type = ns1_SmIntOrListTypes::None;
     union {
         Int I;
         List<Int> L;
     };
-    ns1_IntOrList() : I() { simse_destroy(this->I); }
-    ns1_IntOrList(const ns1_IntOrList& other) : I() { simse_destroy(this->I); this->copyFrom(other); }
-    ns1_IntOrList(ns1_IntOrList&& other) noexcept : I() { simse_destroy(this->I); this->moveFrom(other); }
-    ~ns1_IntOrList() { this->destroyActive(); }
-    ns1_IntOrList& operator=(const ns1_IntOrList& other) {
+    ns1_SmIntOrListStorage() {}
+    ns1_SmIntOrListStorage(const ns1_SmIntOrListStorage& other) { this->copyFrom(other); }
+    ns1_SmIntOrListStorage(ns1_SmIntOrListStorage&& other) noexcept { this->moveFrom(other); }
+    ~ns1_SmIntOrListStorage() { this->destroyActive(); }
+    ns1_SmIntOrListStorage& operator=(const ns1_SmIntOrListStorage& other) {
         if (this != &other) {
             this->destroyActive();
             this->copyFrom(other);
         }
         return *this;
     }
-    ns1_IntOrList& operator=(ns1_IntOrList&& other) noexcept {
+    ns1_SmIntOrListStorage& operator=(ns1_SmIntOrListStorage&& other) noexcept {
         if (this != &other) {
             this->destroyActive();
             this->moveFrom(other);
@@ -568,20 +597,43 @@ struct ns1_IntOrList {
         }
         this->_type = ns1_SmIntOrListTypes::None;
     }
-    void copyFrom(const ns1_IntOrList& other) {
+    void copyFrom(const ns1_SmIntOrListStorage& other) {
         switch (other._type) {
             case ns1_SmIntOrListTypes::I: ::new ((void *) &this->I) Int(other.I); this->_type = ns1_SmIntOrListTypes::I; break;
             case ns1_SmIntOrListTypes::L: ::new ((void *) &this->L) List<Int>(other.L); this->_type = ns1_SmIntOrListTypes::L; break;
             default: break;
         }
     }
-    void moveFrom(ns1_IntOrList& other) {
+    void moveFrom(ns1_SmIntOrListStorage& other) {
         switch (other._type) {
             case ns1_SmIntOrListTypes::I: ::new ((void *) &this->I) Int(std::move(other.I)); this->_type = ns1_SmIntOrListTypes::I; break;
             case ns1_SmIntOrListTypes::L: ::new ((void *) &this->L) List<Int>(std::move(other.L)); this->_type = ns1_SmIntOrListTypes::L; break;
             default: break;
         }
     }
+    void setI(Int value) {
+        if (_type == ns1_SmIntOrListTypes::I) {
+            I = std::move(value);
+            return;
+        }
+        this->destroyActive();
+        _type = ns1_SmIntOrListTypes::I;
+        ::new ((void *) &I) Int(std::move(value));
+    }
+    void setL(List<Int> value) {
+        if (_type == ns1_SmIntOrListTypes::L) {
+            L = std::move(value);
+            return;
+        }
+        this->destroyActive();
+        _type = ns1_SmIntOrListTypes::L;
+        ::new ((void *) &L) List<Int>(std::move(value));
+    }
+    void setNone() {
+        this->destroyActive();
+    }
+};
+struct ns1_IntOrList : ns1_SmIntOrListStorage {
 };
 SIMSE_PACK_POP
 inline Bool operator==(const ns1_IntOrList& self, ns1_SmIntOrListTypes tag) { return self._type == tag; }
@@ -595,19 +647,13 @@ inline Bool ns1_isOfType(ns1_IntOrList* self, ns1_SmIntOrListTypes typeToCheck) 
     return self->_type == typeToCheck;
 }
 inline void ns1_setNone(ns1_IntOrList* self) {
-    self->destroyActive();
+    self->setNone();
 }
 inline void ns1_initByValue(ns1_IntOrList* self) {
-    self->destroyActive();
+    self->setNone();
 }
 inline void ns1_setI(ns1_IntOrList* self, Int value) {
-    if (self->_type == ns1_SmIntOrListTypes::I) {
-        self->I = std::move(value);
-        return;
-    }
-    self->destroyActive();
-    self->_type = ns1_SmIntOrListTypes::I;
-    ::new ((void *) &self->I) Int(std::move(value));
+    self->setI(std::move(value));
 }
 inline Opt<Int> ns1_getI(ns1_IntOrList* self) {
     if (self->_type == ns1_SmIntOrListTypes::I) {
@@ -616,22 +662,10 @@ inline Opt<Int> ns1_getI(ns1_IntOrList* self) {
     return Opt<Int>();
 }
 inline void ns1_initByValue(ns1_IntOrList* self, Int value) {
-    if (self->_type == ns1_SmIntOrListTypes::I) {
-        self->I = std::move(value);
-        return;
-    }
-    self->destroyActive();
-    self->_type = ns1_SmIntOrListTypes::I;
-    ::new ((void *) &self->I) Int(std::move(value));
+    self->setI(std::move(value));
 }
 inline void ns1_setL(ns1_IntOrList* self, List<Int> value) {
-    if (self->_type == ns1_SmIntOrListTypes::L) {
-        self->L = std::move(value);
-        return;
-    }
-    self->destroyActive();
-    self->_type = ns1_SmIntOrListTypes::L;
-    ::new ((void *) &self->L) List<Int>(std::move(value));
+    self->setL(std::move(value));
 }
 inline Opt<List<Int>> ns1_getL(ns1_IntOrList* self) {
     if (self->_type == ns1_SmIntOrListTypes::L) {
@@ -640,38 +674,50 @@ inline Opt<List<Int>> ns1_getL(ns1_IntOrList* self) {
     return Opt<List<Int>>();
 }
 inline void ns1_initByValue(ns1_IntOrList* self, List<Int> value) {
-    if (self->_type == ns1_SmIntOrListTypes::L) {
-        self->L = std::move(value);
-        return;
-    }
-    self->destroyActive();
-    self->_type = ns1_SmIntOrListTypes::L;
-    ::new ((void *) &self->L) List<Int>(std::move(value));
+    self->setL(std::move(value));
 }
 // stress/unions/src/main.kt
 enum class ns1_SmRes2Types { None, Value, Error };
 inline ns1_SmRes2Types ns1_simse_SmRes2Types_fromInt(Int value) { return (ns1_SmRes2Types) value; }
 // stress/unions/src/main.kt
 SIMSE_PACK_PUSH
-template <class T>
-struct ns1_Res2 {
+template <Bool SmManaged, class T> struct ns1_SmRes2Storage;
+template <class T> struct ns1_SmRes2Storage<false, T> {
     ns1_SmRes2Types _type = ns1_SmRes2Types::None;
     union {
         T Value;
         Str Error;
     };
-    ns1_Res2() : Value() { simse_destroy(this->Value); }
-    ns1_Res2(const ns1_Res2& other) : Value() { simse_destroy(this->Value); this->copyFrom(other); }
-    ns1_Res2(ns1_Res2&& other) noexcept : Value() { simse_destroy(this->Value); this->moveFrom(other); }
-    ~ns1_Res2() { this->destroyActive(); }
-    ns1_Res2& operator=(const ns1_Res2& other) {
+    void setValue(T value) {
+        _type = ns1_SmRes2Types::Value;
+        Value = std::move(value);
+    }
+    void setError(Str value) {
+        _type = ns1_SmRes2Types::Error;
+        Error = std::move(value);
+    }
+    void setNone() {
+        _type = ns1_SmRes2Types::None;
+    }
+};
+template <class T> struct ns1_SmRes2Storage<true, T> {
+    ns1_SmRes2Types _type = ns1_SmRes2Types::None;
+    union {
+        T Value;
+        Str Error;
+    };
+    ns1_SmRes2Storage() {}
+    ns1_SmRes2Storage(const ns1_SmRes2Storage& other) { this->copyFrom(other); }
+    ns1_SmRes2Storage(ns1_SmRes2Storage&& other) noexcept { this->moveFrom(other); }
+    ~ns1_SmRes2Storage() { this->destroyActive(); }
+    ns1_SmRes2Storage& operator=(const ns1_SmRes2Storage& other) {
         if (this != &other) {
             this->destroyActive();
             this->copyFrom(other);
         }
         return *this;
     }
-    ns1_Res2& operator=(ns1_Res2&& other) noexcept {
+    ns1_SmRes2Storage& operator=(ns1_SmRes2Storage&& other) noexcept {
         if (this != &other) {
             this->destroyActive();
             this->moveFrom(other);
@@ -686,20 +732,44 @@ struct ns1_Res2 {
         }
         this->_type = ns1_SmRes2Types::None;
     }
-    void copyFrom(const ns1_Res2& other) {
+    void copyFrom(const ns1_SmRes2Storage& other) {
         switch (other._type) {
             case ns1_SmRes2Types::Value: ::new ((void *) &this->Value) T(other.Value); this->_type = ns1_SmRes2Types::Value; break;
             case ns1_SmRes2Types::Error: ::new ((void *) &this->Error) Str(other.Error); this->_type = ns1_SmRes2Types::Error; break;
             default: break;
         }
     }
-    void moveFrom(ns1_Res2& other) {
+    void moveFrom(ns1_SmRes2Storage& other) {
         switch (other._type) {
             case ns1_SmRes2Types::Value: ::new ((void *) &this->Value) T(std::move(other.Value)); this->_type = ns1_SmRes2Types::Value; break;
             case ns1_SmRes2Types::Error: ::new ((void *) &this->Error) Str(std::move(other.Error)); this->_type = ns1_SmRes2Types::Error; break;
             default: break;
         }
     }
+    void setValue(T value) {
+        if (_type == ns1_SmRes2Types::Value) {
+            Value = std::move(value);
+            return;
+        }
+        this->destroyActive();
+        _type = ns1_SmRes2Types::Value;
+        ::new ((void *) &Value) T(std::move(value));
+    }
+    void setError(Str value) {
+        if (_type == ns1_SmRes2Types::Error) {
+            Error = std::move(value);
+            return;
+        }
+        this->destroyActive();
+        _type = ns1_SmRes2Types::Error;
+        ::new ((void *) &Error) Str(std::move(value));
+    }
+    void setNone() {
+        this->destroyActive();
+    }
+};
+template <class T>
+struct ns1_Res2 : ns1_SmRes2Storage<SmUnionManaged<T, Str>, T> {
 };
 SIMSE_PACK_POP
 template <class T>
@@ -720,21 +790,15 @@ inline Bool ns1_isOfType(ns1_Res2<T>* self, ns1_SmRes2Types typeToCheck) {
 }
 template <class T>
 inline void ns1_setNone(ns1_Res2<T>* self) {
-    self->destroyActive();
+    self->setNone();
 }
 template <class T>
 inline void ns1_initByValue(ns1_Res2<T>* self) {
-    self->destroyActive();
+    self->setNone();
 }
 template <class T>
 inline void ns1_setValue(ns1_Res2<T>* self, T value) {
-    if (self->_type == ns1_SmRes2Types::Value) {
-        self->Value = std::move(value);
-        return;
-    }
-    self->destroyActive();
-    self->_type = ns1_SmRes2Types::Value;
-    ::new ((void *) &self->Value) T(std::move(value));
+    self->setValue(std::move(value));
 }
 template <class T>
 inline Opt<T> ns1_getValue(ns1_Res2<T>* self) {
@@ -745,23 +809,11 @@ inline Opt<T> ns1_getValue(ns1_Res2<T>* self) {
 }
 template <class T>
 inline void ns1_initByValue(ns1_Res2<T>* self, T value) {
-    if (self->_type == ns1_SmRes2Types::Value) {
-        self->Value = std::move(value);
-        return;
-    }
-    self->destroyActive();
-    self->_type = ns1_SmRes2Types::Value;
-    ::new ((void *) &self->Value) T(std::move(value));
+    self->setValue(std::move(value));
 }
 template <class T>
 inline void ns1_setError(ns1_Res2<T>* self, Str value) {
-    if (self->_type == ns1_SmRes2Types::Error) {
-        self->Error = std::move(value);
-        return;
-    }
-    self->destroyActive();
-    self->_type = ns1_SmRes2Types::Error;
-    ::new ((void *) &self->Error) Str(std::move(value));
+    self->setError(std::move(value));
 }
 template <class T>
 inline Opt<Str> ns1_getError(ns1_Res2<T>* self) {
@@ -772,37 +824,44 @@ inline Opt<Str> ns1_getError(ns1_Res2<T>* self) {
 }
 template <class T>
 inline void ns1_initByValue(ns1_Res2<T>* self, Str value) {
-    if (self->_type == ns1_SmRes2Types::Error) {
-        self->Error = std::move(value);
-        return;
-    }
-    self->destroyActive();
-    self->_type = ns1_SmRes2Types::Error;
-    ::new ((void *) &self->Error) Str(std::move(value));
+    self->setError(std::move(value));
 }
 // stress/unions/src/main.kt
 enum class ns1_SmOpt2Types { None, Value };
 inline ns1_SmOpt2Types ns1_simse_SmOpt2Types_fromInt(Int value) { return (ns1_SmOpt2Types) value; }
 // stress/unions/src/main.kt
 SIMSE_PACK_PUSH
-template <class T>
-struct ns1_Opt2 {
+template <Bool SmManaged, class T> struct ns1_SmOpt2Storage;
+template <class T> struct ns1_SmOpt2Storage<false, T> {
     ns1_SmOpt2Types _type = ns1_SmOpt2Types::None;
     union {
         T Value;
     };
-    ns1_Opt2() : Value() { simse_destroy(this->Value); }
-    ns1_Opt2(const ns1_Opt2& other) : Value() { simse_destroy(this->Value); this->copyFrom(other); }
-    ns1_Opt2(ns1_Opt2&& other) noexcept : Value() { simse_destroy(this->Value); this->moveFrom(other); }
-    ~ns1_Opt2() { this->destroyActive(); }
-    ns1_Opt2& operator=(const ns1_Opt2& other) {
+    void setValue(T value) {
+        _type = ns1_SmOpt2Types::Value;
+        Value = std::move(value);
+    }
+    void setNone() {
+        _type = ns1_SmOpt2Types::None;
+    }
+};
+template <class T> struct ns1_SmOpt2Storage<true, T> {
+    ns1_SmOpt2Types _type = ns1_SmOpt2Types::None;
+    union {
+        T Value;
+    };
+    ns1_SmOpt2Storage() {}
+    ns1_SmOpt2Storage(const ns1_SmOpt2Storage& other) { this->copyFrom(other); }
+    ns1_SmOpt2Storage(ns1_SmOpt2Storage&& other) noexcept { this->moveFrom(other); }
+    ~ns1_SmOpt2Storage() { this->destroyActive(); }
+    ns1_SmOpt2Storage& operator=(const ns1_SmOpt2Storage& other) {
         if (this != &other) {
             this->destroyActive();
             this->copyFrom(other);
         }
         return *this;
     }
-    ns1_Opt2& operator=(ns1_Opt2&& other) noexcept {
+    ns1_SmOpt2Storage& operator=(ns1_SmOpt2Storage&& other) noexcept {
         if (this != &other) {
             this->destroyActive();
             this->moveFrom(other);
@@ -816,18 +875,33 @@ struct ns1_Opt2 {
         }
         this->_type = ns1_SmOpt2Types::None;
     }
-    void copyFrom(const ns1_Opt2& other) {
+    void copyFrom(const ns1_SmOpt2Storage& other) {
         switch (other._type) {
             case ns1_SmOpt2Types::Value: ::new ((void *) &this->Value) T(other.Value); this->_type = ns1_SmOpt2Types::Value; break;
             default: break;
         }
     }
-    void moveFrom(ns1_Opt2& other) {
+    void moveFrom(ns1_SmOpt2Storage& other) {
         switch (other._type) {
             case ns1_SmOpt2Types::Value: ::new ((void *) &this->Value) T(std::move(other.Value)); this->_type = ns1_SmOpt2Types::Value; break;
             default: break;
         }
     }
+    void setValue(T value) {
+        if (_type == ns1_SmOpt2Types::Value) {
+            Value = std::move(value);
+            return;
+        }
+        this->destroyActive();
+        _type = ns1_SmOpt2Types::Value;
+        ::new ((void *) &Value) T(std::move(value));
+    }
+    void setNone() {
+        this->destroyActive();
+    }
+};
+template <class T>
+struct ns1_Opt2 : ns1_SmOpt2Storage<SmUnionManaged<T>, T> {
 };
 SIMSE_PACK_POP
 template <class T>
@@ -848,21 +922,15 @@ inline Bool ns1_isOfType(ns1_Opt2<T>* self, ns1_SmOpt2Types typeToCheck) {
 }
 template <class T>
 inline void ns1_setNone(ns1_Opt2<T>* self) {
-    self->destroyActive();
+    self->setNone();
 }
 template <class T>
 inline void ns1_initByValue(ns1_Opt2<T>* self) {
-    self->destroyActive();
+    self->setNone();
 }
 template <class T>
 inline void ns1_setValue(ns1_Opt2<T>* self, T value) {
-    if (self->_type == ns1_SmOpt2Types::Value) {
-        self->Value = std::move(value);
-        return;
-    }
-    self->destroyActive();
-    self->_type = ns1_SmOpt2Types::Value;
-    ::new ((void *) &self->Value) T(std::move(value));
+    self->setValue(std::move(value));
 }
 template <class T>
 inline Opt<T> ns1_getValue(ns1_Opt2<T>* self) {
@@ -873,13 +941,7 @@ inline Opt<T> ns1_getValue(ns1_Opt2<T>* self) {
 }
 template <class T>
 inline void ns1_initByValue(ns1_Opt2<T>* self, T value) {
-    if (self->_type == ns1_SmOpt2Types::Value) {
-        self->Value = std::move(value);
-        return;
-    }
-    self->destroyActive();
-    self->_type = ns1_SmOpt2Types::Value;
-    ::new ((void *) &self->Value) T(std::move(value));
+    self->setValue(std::move(value));
 }
 
 void initByValue(Str* self);

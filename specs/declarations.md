@@ -174,20 +174,22 @@ Status: implemented (`stress/unions`, `stress/diagnostic-union-same-type`).
 A `union class` declares a **discriminated union** (a tagged union): a value type with
 several fields of which one is live at a time, selected by an implicit tag enum. It is
 otherwise a data class - fields, methods, `this` - and its generated C++ is the tag beside
-the fields' anonymous union. When every arm is trivially copyable the struct stays a plain
-C++ aggregate: no destructor, no copy, nothing to run. When an arm owns storage (`Str`,
-`List`, `Dictionary`, a handle, `Opt` of a managed element, ...) the compiler emits the
-**managed form**: a destructor that destroys the live arm by tag, copy/move constructors and
-assignments, and setters that destroy the arm they replace and place the new one - the shape
-`Variant2Storage<..., true>` uses for `Opt`/`Res` (`src/rtl/variant2.hpp`). A field type the
-compiler cannot prove trivially copyable is treated as managed; that only costs the struct
-its triviality, never correctness.
+the fields' anonymous union, in a generated storage base (`Sm<Name>Storage`) that the class
+derives from. When every arm is trivially copyable the base declares no special member, so
+the whole class stays a plain trivially copyable aggregate: no destructor, no copy, nothing
+to run. When an arm owns storage (`Str`, `List`, `Dictionary`, a handle, ...) the compiler
+emits the **managed form** in the base: a destructor that destroys the live arm by tag,
+copy/move constructors and assignments, and setters that destroy the arm they replace and
+place the new one. For a concrete union a field type the compiler cannot prove trivially
+copyable is treated as managed; that only costs the class its triviality, never correctness.
 
 A `union class` may declare **type parameters** (`union class Res2<T>(var Value: T, var
 Error: Str)`). One non-generic `SmRes2Types` tag enum is shared by every instantiation, the
 struct and its generated members are C++ templates, and a construction's explicit type
-arguments bind the fields for type matching (`Res2<Int>(5)` matches `Value: T` as `Int`). A
-bare type parameter counts as managed. Known gap: an instantiation whose type argument equals
+arguments bind the fields for type matching (`Res2<Int>(5)` matches `Value: T` as `Int`).
+A generic union's form is chosen **per instantiation**, from the arm types the instantiation
+actually has: a one-arm union over `T` is a trivially copyable aggregate at `T = Int` and
+takes the managed form at `T = Str`. Known gap: an instantiation whose type argument equals
 another arm's type (`Res2<Str>` with `Error: Str`) collides in the generated `initByValue`
 overloads at C++ level - the non-generic duplicate-field diagnostic cannot see it - so such
 an instance cannot be constructed yet.

@@ -60,6 +60,12 @@ void simse_destroy(T& value) {
     }
 }
 
+// Whether a generated `union class` needs the managed form: one arm that is not trivially
+// copyable is enough. A *generic* union picks its storage with this, so `Opt<Int>` stays a
+// trivially copyable aggregate while `Opt<Str>` gets the destructor and copy/move members.
+template <class... Ts>
+inline constexpr Bool SmUnionManaged = !(std::is_trivially_copyable_v<Ts> && ...);
+
 // The language's layout model is 4-byte packing (specs/memory-model.md): every
 // type is aligned to at most 4 bytes. Definitions that follow the rule are
 // bracketed with SIMSE_PACK_PUSH / SIMSE_PACK_POP; the C++ emitter wraps every
