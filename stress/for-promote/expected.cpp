@@ -217,42 +217,44 @@ struct List_iter_yieldable {
     List<T>* _sm_self{};
     Int i{};
     Int len{};
-    Bool advance() {
-        Bool _sm_base1, _sm_base3, _sm_expr1;
-        Int _sm_base2, _sm_base4, _sm_base5, _sm_base7, _sm_base8, _sm_base10, _sm_base11, _sm_base12;
-        List<T>* _sm_base6, * _sm_base9;
-        T _sm_expr2;
-        _sm_base2 = this->branch;
-        _sm_base1 = _sm_base2 == -1;
-        if (_sm_base1) goto L2;
-        _sm_base4 = this->branch;
-        _sm_base3 = _sm_base4 == 1;
-        if (_sm_base3) goto LY1;
-        this->i = 0;
-        _sm_base6 = this->_sm_self;
-        _sm_base5 = simse_lenOf((*_sm_base6));
-        this->len = _sm_base5;
-        L1:;
-        _sm_base7 = this->i;
-        _sm_base8 = this->len;
-        _sm_expr1 = _sm_base7 < _sm_base8;
-        if (!(_sm_expr1)) goto L2;
-        _sm_base9 = this->_sm_self;
-        _sm_base10 = this->i;
-        _sm_expr2 = (*_sm_base9)[_sm_base10];
-        this->current = _sm_expr2;
-        this->branch = 1;
-        return true;
-        LY1:;
-        _sm_base12 = this->i;
-        _sm_base11 = _sm_base12 + 1;
-        this->i = _sm_base11;
-        goto L1;
-        L2:;
-        this->branch = -1;
-        return false;
-    }
 };
+
+template <class T>
+Bool advance(List_iter_yieldable<T>* self) {
+    Bool _sm_base1, _sm_base3, _sm_expr1;
+    Int _sm_base2, _sm_base4, _sm_base5, _sm_base7, _sm_base8, _sm_base10, _sm_base11, _sm_base12;
+    List<T>* _sm_base6, * _sm_base9;
+    T _sm_expr2;
+    _sm_base2 = self->branch;
+    _sm_base1 = _sm_base2 == -1;
+    if (_sm_base1) goto L2;
+    _sm_base4 = self->branch;
+    _sm_base3 = _sm_base4 == 1;
+    if (_sm_base3) goto LY1;
+    self->i = 0;
+    _sm_base6 = self->_sm_self;
+    _sm_base5 = simse_lenOf((*_sm_base6));
+    self->len = _sm_base5;
+    L1:;
+    _sm_base7 = self->i;
+    _sm_base8 = self->len;
+    _sm_expr1 = _sm_base7 < _sm_base8;
+    if (!(_sm_expr1)) goto L2;
+    _sm_base9 = self->_sm_self;
+    _sm_base10 = self->i;
+    _sm_expr2 = (*_sm_base9)[_sm_base10];
+    self->current = _sm_expr2;
+    self->branch = 1;
+    return true;
+    LY1:;
+    _sm_base12 = self->i;
+    _sm_base11 = _sm_base12 + 1;
+    self->i = _sm_base11;
+    goto L1;
+    L2:;
+    self->branch = -1;
+    return false;
+}
 
 template <class T>
 List_iter_yieldable<T> iter(List<T>* self);
@@ -263,42 +265,44 @@ struct Array_iter_yieldable {
     Array<T>* _sm_self{};
     Int i{};
     Int len{};
-    Bool advance() {
-        Bool _sm_base1, _sm_base3, _sm_expr1;
-        Int _sm_base2, _sm_base4, _sm_base5, _sm_base7, _sm_base8, _sm_base10, _sm_base11, _sm_base12;
-        Array<T>* _sm_base6, * _sm_base9;
-        T _sm_expr2;
-        _sm_base2 = this->branch;
-        _sm_base1 = _sm_base2 == -1;
-        if (_sm_base1) goto L2;
-        _sm_base4 = this->branch;
-        _sm_base3 = _sm_base4 == 1;
-        if (_sm_base3) goto LY1;
-        this->i = 0;
-        _sm_base6 = this->_sm_self;
-        _sm_base5 = simse_array_count((*_sm_base6));
-        this->len = _sm_base5;
-        L1:;
-        _sm_base7 = this->i;
-        _sm_base8 = this->len;
-        _sm_expr1 = _sm_base7 < _sm_base8;
-        if (!(_sm_expr1)) goto L2;
-        _sm_base9 = this->_sm_self;
-        _sm_base10 = this->i;
-        _sm_expr2 = (*_sm_base9)[_sm_base10];
-        this->current = _sm_expr2;
-        this->branch = 1;
-        return true;
-        LY1:;
-        _sm_base12 = this->i;
-        _sm_base11 = _sm_base12 + 1;
-        this->i = _sm_base11;
-        goto L1;
-        L2:;
-        this->branch = -1;
-        return false;
-    }
 };
+
+template <class T>
+Bool advance(Array_iter_yieldable<T>* self) {
+    Bool _sm_base1, _sm_base3, _sm_expr1;
+    Int _sm_base2, _sm_base4, _sm_base5, _sm_base7, _sm_base8, _sm_base10, _sm_base11, _sm_base12;
+    Array<T>* _sm_base6, * _sm_base9;
+    T _sm_expr2;
+    _sm_base2 = self->branch;
+    _sm_base1 = _sm_base2 == -1;
+    if (_sm_base1) goto L2;
+    _sm_base4 = self->branch;
+    _sm_base3 = _sm_base4 == 1;
+    if (_sm_base3) goto LY1;
+    self->i = 0;
+    _sm_base6 = self->_sm_self;
+    _sm_base5 = simse_array_count((*_sm_base6));
+    self->len = _sm_base5;
+    L1:;
+    _sm_base7 = self->i;
+    _sm_base8 = self->len;
+    _sm_expr1 = _sm_base7 < _sm_base8;
+    if (!(_sm_expr1)) goto L2;
+    _sm_base9 = self->_sm_self;
+    _sm_base10 = self->i;
+    _sm_expr2 = (*_sm_base9)[_sm_base10];
+    self->current = _sm_expr2;
+    self->branch = 1;
+    return true;
+    LY1:;
+    _sm_base12 = self->i;
+    _sm_base11 = _sm_base12 + 1;
+    self->i = _sm_base11;
+    goto L1;
+    L2:;
+    self->branch = -1;
+    return false;
+}
 
 template <class T>
 Array_iter_yieldable<T> iter(Array<T>* self);
@@ -309,43 +313,45 @@ struct List_iterPtr_yieldable {
     List<T>* _sm_self{};
     Int i{};
     Int len{};
-    Bool advance() {
-        Bool _sm_base1, _sm_base3, _sm_expr1;
-        Int _sm_base2, _sm_base4, _sm_base5, _sm_base7, _sm_base8, _sm_base11, _sm_base12, _sm_base13;
-        List<T>* _sm_base6, * _sm_base10;
-        T* _sm_base9, * _sm_expr2;
-        _sm_base2 = this->branch;
-        _sm_base1 = _sm_base2 == -1;
-        if (_sm_base1) goto L2;
-        _sm_base4 = this->branch;
-        _sm_base3 = _sm_base4 == 1;
-        if (_sm_base3) goto LY1;
-        this->i = 0;
-        _sm_base6 = this->_sm_self;
-        _sm_base5 = simse_lenOf((*_sm_base6));
-        this->len = _sm_base5;
-        L1:;
-        _sm_base7 = this->i;
-        _sm_base8 = this->len;
-        _sm_expr1 = _sm_base7 < _sm_base8;
-        if (!(_sm_expr1)) goto L2;
-        _sm_base10 = this->_sm_self;
-        _sm_base11 = this->i;
-        _sm_base9 = simse_addressOf((*_sm_base10)[_sm_base11]);
-        _sm_expr2 = _sm_base9;
-        this->current = _sm_expr2;
-        this->branch = 1;
-        return true;
-        LY1:;
-        _sm_base13 = this->i;
-        _sm_base12 = _sm_base13 + 1;
-        this->i = _sm_base12;
-        goto L1;
-        L2:;
-        this->branch = -1;
-        return false;
-    }
 };
+
+template <class T>
+Bool advance(List_iterPtr_yieldable<T>* self) {
+    Bool _sm_base1, _sm_base3, _sm_expr1;
+    Int _sm_base2, _sm_base4, _sm_base5, _sm_base7, _sm_base8, _sm_base11, _sm_base12, _sm_base13;
+    List<T>* _sm_base6, * _sm_base10;
+    T* _sm_base9, * _sm_expr2;
+    _sm_base2 = self->branch;
+    _sm_base1 = _sm_base2 == -1;
+    if (_sm_base1) goto L2;
+    _sm_base4 = self->branch;
+    _sm_base3 = _sm_base4 == 1;
+    if (_sm_base3) goto LY1;
+    self->i = 0;
+    _sm_base6 = self->_sm_self;
+    _sm_base5 = simse_lenOf((*_sm_base6));
+    self->len = _sm_base5;
+    L1:;
+    _sm_base7 = self->i;
+    _sm_base8 = self->len;
+    _sm_expr1 = _sm_base7 < _sm_base8;
+    if (!(_sm_expr1)) goto L2;
+    _sm_base10 = self->_sm_self;
+    _sm_base11 = self->i;
+    _sm_base9 = simse_addressOf((*_sm_base10)[_sm_base11]);
+    _sm_expr2 = _sm_base9;
+    self->current = _sm_expr2;
+    self->branch = 1;
+    return true;
+    LY1:;
+    _sm_base13 = self->i;
+    _sm_base12 = _sm_base13 + 1;
+    self->i = _sm_base12;
+    goto L1;
+    L2:;
+    self->branch = -1;
+    return false;
+}
 
 template <class T>
 List_iterPtr_yieldable<T> iterPtr(List<T>* self);
@@ -356,43 +362,45 @@ struct Array_iterPtr_yieldable {
     Array<T>* _sm_self{};
     Int i{};
     Int len{};
-    Bool advance() {
-        Bool _sm_base1, _sm_base3, _sm_expr1;
-        Int _sm_base2, _sm_base4, _sm_base5, _sm_base7, _sm_base8, _sm_base11, _sm_base12, _sm_base13;
-        Array<T>* _sm_base6, * _sm_base10;
-        T* _sm_base9, * _sm_expr2;
-        _sm_base2 = this->branch;
-        _sm_base1 = _sm_base2 == -1;
-        if (_sm_base1) goto L2;
-        _sm_base4 = this->branch;
-        _sm_base3 = _sm_base4 == 1;
-        if (_sm_base3) goto LY1;
-        this->i = 0;
-        _sm_base6 = this->_sm_self;
-        _sm_base5 = simse_array_count((*_sm_base6));
-        this->len = _sm_base5;
-        L1:;
-        _sm_base7 = this->i;
-        _sm_base8 = this->len;
-        _sm_expr1 = _sm_base7 < _sm_base8;
-        if (!(_sm_expr1)) goto L2;
-        _sm_base10 = this->_sm_self;
-        _sm_base11 = this->i;
-        _sm_base9 = simse_addressOf((*_sm_base10)[_sm_base11]);
-        _sm_expr2 = _sm_base9;
-        this->current = _sm_expr2;
-        this->branch = 1;
-        return true;
-        LY1:;
-        _sm_base13 = this->i;
-        _sm_base12 = _sm_base13 + 1;
-        this->i = _sm_base12;
-        goto L1;
-        L2:;
-        this->branch = -1;
-        return false;
-    }
 };
+
+template <class T>
+Bool advance(Array_iterPtr_yieldable<T>* self) {
+    Bool _sm_base1, _sm_base3, _sm_expr1;
+    Int _sm_base2, _sm_base4, _sm_base5, _sm_base7, _sm_base8, _sm_base11, _sm_base12, _sm_base13;
+    Array<T>* _sm_base6, * _sm_base10;
+    T* _sm_base9, * _sm_expr2;
+    _sm_base2 = self->branch;
+    _sm_base1 = _sm_base2 == -1;
+    if (_sm_base1) goto L2;
+    _sm_base4 = self->branch;
+    _sm_base3 = _sm_base4 == 1;
+    if (_sm_base3) goto LY1;
+    self->i = 0;
+    _sm_base6 = self->_sm_self;
+    _sm_base5 = simse_array_count((*_sm_base6));
+    self->len = _sm_base5;
+    L1:;
+    _sm_base7 = self->i;
+    _sm_base8 = self->len;
+    _sm_expr1 = _sm_base7 < _sm_base8;
+    if (!(_sm_expr1)) goto L2;
+    _sm_base10 = self->_sm_self;
+    _sm_base11 = self->i;
+    _sm_base9 = simse_addressOf((*_sm_base10)[_sm_base11]);
+    _sm_expr2 = _sm_base9;
+    self->current = _sm_expr2;
+    self->branch = 1;
+    return true;
+    LY1:;
+    _sm_base13 = self->i;
+    _sm_base12 = _sm_base13 + 1;
+    self->i = _sm_base12;
+    goto L1;
+    L2:;
+    self->branch = -1;
+    return false;
+}
 
 template <class T>
 Array_iterPtr_yieldable<T> iterPtr(Array<T>* self);
@@ -542,7 +550,7 @@ int main() {
     total = 0;
     _sm_for1 = iterPtr(simse_addressOf(entries));
     L1:;
-    _sm_expr3 = _sm_for1.advance();
+    _sm_expr3 = advance(&_sm_for1);
     if (!(_sm_expr3)) goto L2;
     e = _sm_for1.current;
     _sm_expr4 = e->count;
@@ -554,7 +562,7 @@ int main() {
     L2:;
     _sm_for2 = iterPtr(simse_addressOf(names));
     L3:;
-    _sm_expr3 = _sm_for2.advance();
+    _sm_expr3 = advance(&_sm_for2);
     if (!(_sm_expr3)) goto L4;
     n = _sm_for2.current;
     _sm_expr4 = simse_lenOf((*n));
@@ -563,7 +571,7 @@ int main() {
     L4:;
     _sm_for3 = iter(simse_addressOf(nums));
     L5:;
-    _sm_expr3 = _sm_for3.advance();
+    _sm_expr3 = advance(&_sm_for3);
     if (!(_sm_expr3)) goto L6;
     _sm_expr4 = _sm_for3.current;
     total = total + _sm_expr4;
@@ -574,7 +582,7 @@ int main() {
     simse_list_append(cells, _sm_expr10);
     _sm_for4 = iter(simse_addressOf(cells));
     L7:;
-    _sm_expr3 = _sm_for4.advance();
+    _sm_expr3 = advance(&_sm_for4);
     if (!(_sm_expr3)) goto L8;
     _sm_e_2 = _sm_for4.current;
     _sm_expr4 = _sm_e_2.count;
@@ -584,7 +592,7 @@ int main() {
     L8:;
     _sm_for5 = iterPtr(simse_addressOf(cells));
     L9:;
-    _sm_expr3 = _sm_for5.advance();
+    _sm_expr3 = advance(&_sm_for5);
     if (!(_sm_expr3)) goto L10;
     _sm_e_3 = _sm_for5.current;
     _sm_expr4 = _sm_e_3->count;

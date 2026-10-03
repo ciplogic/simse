@@ -4453,3 +4453,26 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   fixed points byte for byte. A/B on the self-transpile (escape analysis on vs `--no-borrow`):
   median 1.836 s vs 1.866 s (~1.6%), the same parameter-borrow win as before, so the promotion
   adds nothing there but costs nothing either.
+
+- **A machine is a data class plus an extension `advance`, the shape a lambda already has.** The
+  yielding function's machine no longer carries its stepping method as a C++ *member*:
+  `emitMachine` (`src/codegen/IlMachine.kt`) writes the fields-only `struct M { ... };`, then a free
+  `Bool advance(M<T>* self)` beside it (a template beside a generic machine's class), and the body
+  is emitted with the extension frame (`inClosureMethod = false`) so its fields read `self->field`
+  rather than `this->field`. A call site spells `advance(&m)` (`CgCall.kt`, the machine's C++ type is
+  the lowering's so there is no collected declaration to resolve against), which is what a receiver
+  function's call already lowers to. The `for` template and a hand-written `m.advance()` both reach
+  it through the same IL `Method` call, so the reshape is one emission path and one spelling. This
+  is the first step toward the machine being an ordinary class and `advance` an ordinary extension
+  function everywhere: the class no longer has a member the type pass never saw, and the stepping
+  body is a free function like a lambda's `_invoke`.
+  The yield rewrite also goes through a named suspend point now: `linear::yldSuspendPoint` leaves a
+  `sm_suspend_point(<branch>, <value>)` marker and `linear::yldExpandSuspend` is the single place
+  it becomes the store, the branch write, the `return true` and the resumption label - the
+  transformation is named instead of inlined per statement, so a later pass can see where a body
+  suspends before those points are gotos. Emitted output is unchanged by it.
+  Verified: `./build.bat --release`, `bun tools/stress.js` **67/67** (four emission goldens
+  re-captured: `collections`, `for-promote`, `machines`, `when-strings` - the machine shape,
+  comment-only or `this->` -> `self->` and an indent, nothing else),
+  `bun build.js --release --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js` - both fixed
+  points byte for byte.

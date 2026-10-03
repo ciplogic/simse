@@ -226,42 +226,44 @@ struct List_iter_yieldable {
     List<T>* _sm_self{};
     Int i{};
     Int len{};
-    Bool advance() {
-        Bool _sm_base1, _sm_base3, _sm_expr1;
-        Int _sm_base2, _sm_base4, _sm_base5, _sm_base7, _sm_base8, _sm_base10, _sm_base11, _sm_base12;
-        List<T>* _sm_base6, * _sm_base9;
-        T _sm_expr2;
-        _sm_base2 = this->branch;
-        _sm_base1 = _sm_base2 == -1;
-        if (_sm_base1) goto L2;
-        _sm_base4 = this->branch;
-        _sm_base3 = _sm_base4 == 1;
-        if (_sm_base3) goto LY1;
-        this->i = 0;
-        _sm_base6 = this->_sm_self;
-        _sm_base5 = simse_lenOf((*_sm_base6));
-        this->len = _sm_base5;
-        L1:;
-        _sm_base7 = this->i;
-        _sm_base8 = this->len;
-        _sm_expr1 = _sm_base7 < _sm_base8;
-        if (!(_sm_expr1)) goto L2;
-        _sm_base9 = this->_sm_self;
-        _sm_base10 = this->i;
-        _sm_expr2 = (*_sm_base9)[_sm_base10];
-        this->current = _sm_expr2;
-        this->branch = 1;
-        return true;
-        LY1:;
-        _sm_base12 = this->i;
-        _sm_base11 = _sm_base12 + 1;
-        this->i = _sm_base11;
-        goto L1;
-        L2:;
-        this->branch = -1;
-        return false;
-    }
 };
+
+template <class T>
+Bool advance(List_iter_yieldable<T>* self) {
+    Bool _sm_base1, _sm_base3, _sm_expr1;
+    Int _sm_base2, _sm_base4, _sm_base5, _sm_base7, _sm_base8, _sm_base10, _sm_base11, _sm_base12;
+    List<T>* _sm_base6, * _sm_base9;
+    T _sm_expr2;
+    _sm_base2 = self->branch;
+    _sm_base1 = _sm_base2 == -1;
+    if (_sm_base1) goto L2;
+    _sm_base4 = self->branch;
+    _sm_base3 = _sm_base4 == 1;
+    if (_sm_base3) goto LY1;
+    self->i = 0;
+    _sm_base6 = self->_sm_self;
+    _sm_base5 = simse_lenOf((*_sm_base6));
+    self->len = _sm_base5;
+    L1:;
+    _sm_base7 = self->i;
+    _sm_base8 = self->len;
+    _sm_expr1 = _sm_base7 < _sm_base8;
+    if (!(_sm_expr1)) goto L2;
+    _sm_base9 = self->_sm_self;
+    _sm_base10 = self->i;
+    _sm_expr2 = (*_sm_base9)[_sm_base10];
+    self->current = _sm_expr2;
+    self->branch = 1;
+    return true;
+    LY1:;
+    _sm_base12 = self->i;
+    _sm_base11 = _sm_base12 + 1;
+    self->i = _sm_base11;
+    goto L1;
+    L2:;
+    self->branch = -1;
+    return false;
+}
 
 template <class T>
 List_iter_yieldable<T> iter(List<T>* self);
@@ -272,42 +274,44 @@ struct Array_iter_yieldable {
     Array<T>* _sm_self{};
     Int i{};
     Int len{};
-    Bool advance() {
-        Bool _sm_base1, _sm_base3, _sm_expr1;
-        Int _sm_base2, _sm_base4, _sm_base5, _sm_base7, _sm_base8, _sm_base10, _sm_base11, _sm_base12;
-        Array<T>* _sm_base6, * _sm_base9;
-        T _sm_expr2;
-        _sm_base2 = this->branch;
-        _sm_base1 = _sm_base2 == -1;
-        if (_sm_base1) goto L2;
-        _sm_base4 = this->branch;
-        _sm_base3 = _sm_base4 == 1;
-        if (_sm_base3) goto LY1;
-        this->i = 0;
-        _sm_base6 = this->_sm_self;
-        _sm_base5 = simse_array_count((*_sm_base6));
-        this->len = _sm_base5;
-        L1:;
-        _sm_base7 = this->i;
-        _sm_base8 = this->len;
-        _sm_expr1 = _sm_base7 < _sm_base8;
-        if (!(_sm_expr1)) goto L2;
-        _sm_base9 = this->_sm_self;
-        _sm_base10 = this->i;
-        _sm_expr2 = (*_sm_base9)[_sm_base10];
-        this->current = _sm_expr2;
-        this->branch = 1;
-        return true;
-        LY1:;
-        _sm_base12 = this->i;
-        _sm_base11 = _sm_base12 + 1;
-        this->i = _sm_base11;
-        goto L1;
-        L2:;
-        this->branch = -1;
-        return false;
-    }
 };
+
+template <class T>
+Bool advance(Array_iter_yieldable<T>* self) {
+    Bool _sm_base1, _sm_base3, _sm_expr1;
+    Int _sm_base2, _sm_base4, _sm_base5, _sm_base7, _sm_base8, _sm_base10, _sm_base11, _sm_base12;
+    Array<T>* _sm_base6, * _sm_base9;
+    T _sm_expr2;
+    _sm_base2 = self->branch;
+    _sm_base1 = _sm_base2 == -1;
+    if (_sm_base1) goto L2;
+    _sm_base4 = self->branch;
+    _sm_base3 = _sm_base4 == 1;
+    if (_sm_base3) goto LY1;
+    self->i = 0;
+    _sm_base6 = self->_sm_self;
+    _sm_base5 = simse_array_count((*_sm_base6));
+    self->len = _sm_base5;
+    L1:;
+    _sm_base7 = self->i;
+    _sm_base8 = self->len;
+    _sm_expr1 = _sm_base7 < _sm_base8;
+    if (!(_sm_expr1)) goto L2;
+    _sm_base9 = self->_sm_self;
+    _sm_base10 = self->i;
+    _sm_expr2 = (*_sm_base9)[_sm_base10];
+    self->current = _sm_expr2;
+    self->branch = 1;
+    return true;
+    LY1:;
+    _sm_base12 = self->i;
+    _sm_base11 = _sm_base12 + 1;
+    self->i = _sm_base11;
+    goto L1;
+    L2:;
+    self->branch = -1;
+    return false;
+}
 
 template <class T>
 Array_iter_yieldable<T> iter(Array<T>* self);
@@ -327,41 +331,43 @@ struct ns1_List_everyNth_yieldable {
     List<T>* _sm_self{};
     Int step{};
     Int i{};
-    Bool advance() {
-        Bool _sm_base1, _sm_base3, _sm_expr2;
-        Int _sm_base2, _sm_base4, _sm_base6, _sm_base8, _sm_base9, _sm_base10, _sm_base11, _sm_expr1;
-        List<T>* _sm_base5, * _sm_base7;
-        T _sm_expr3;
-        _sm_base2 = this->branch;
-        _sm_base1 = _sm_base2 == -1;
-        if (_sm_base1) goto L2;
-        _sm_base4 = this->branch;
-        _sm_base3 = _sm_base4 == 1;
-        if (_sm_base3) goto LY1;
-        this->i = 0;
-        L1:;
-        _sm_base5 = this->_sm_self;
-        _sm_expr1 = simse_lenOf((*_sm_base5));
-        _sm_base6 = this->i;
-        _sm_expr2 = _sm_base6 < _sm_expr1;
-        if (!(_sm_expr2)) goto L2;
-        _sm_base7 = this->_sm_self;
-        _sm_base8 = this->i;
-        _sm_expr3 = (*_sm_base7)[_sm_base8];
-        this->current = _sm_expr3;
-        this->branch = 1;
-        return true;
-        LY1:;
-        _sm_base10 = this->i;
-        _sm_base11 = this->step;
-        _sm_base9 = _sm_base10 + _sm_base11;
-        this->i = _sm_base9;
-        goto L1;
-        L2:;
-        this->branch = -1;
-        return false;
-    }
 };
+
+template <class T>
+Bool advance(ns1_List_everyNth_yieldable<T>* self) {
+    Bool _sm_base1, _sm_base3, _sm_expr2;
+    Int _sm_base2, _sm_base4, _sm_base6, _sm_base8, _sm_base9, _sm_base10, _sm_base11, _sm_expr1;
+    List<T>* _sm_base5, * _sm_base7;
+    T _sm_expr3;
+    _sm_base2 = self->branch;
+    _sm_base1 = _sm_base2 == -1;
+    if (_sm_base1) goto L2;
+    _sm_base4 = self->branch;
+    _sm_base3 = _sm_base4 == 1;
+    if (_sm_base3) goto LY1;
+    self->i = 0;
+    L1:;
+    _sm_base5 = self->_sm_self;
+    _sm_expr1 = simse_lenOf((*_sm_base5));
+    _sm_base6 = self->i;
+    _sm_expr2 = _sm_base6 < _sm_expr1;
+    if (!(_sm_expr2)) goto L2;
+    _sm_base7 = self->_sm_self;
+    _sm_base8 = self->i;
+    _sm_expr3 = (*_sm_base7)[_sm_base8];
+    self->current = _sm_expr3;
+    self->branch = 1;
+    return true;
+    LY1:;
+    _sm_base10 = self->i;
+    _sm_base11 = self->step;
+    _sm_base9 = _sm_base10 + _sm_base11;
+    self->i = _sm_base9;
+    goto L1;
+    L2:;
+    self->branch = -1;
+    return false;
+}
 
 template <class T>
 ns1_List_everyNth_yieldable<T> ns1_everyNth(List<T>* self, Int step);
@@ -372,43 +378,44 @@ struct ns1_everyOther_yieldable {
     Int current{};
     Int n{};
     Int i{};
-    Bool advance() {
-        Bool _sm_base1, _sm_base3, _sm_expr1;
-        Int _sm_base2, _sm_base4, _sm_base5, _sm_base6, _sm_base7, _sm_base8, _sm_base9, _sm_base10,
-            _sm_expr2;
-        _sm_base2 = this->branch;
-        _sm_base1 = _sm_base2 == -1;
-        if (_sm_base1) goto L2;
-        _sm_base4 = this->branch;
-        _sm_base3 = _sm_base4 == 1;
-        if (_sm_base3) goto LY1;
-        this->n = 10;
-        this->i = 0;
-        L1:;
-        _sm_base5 = this->i;
-        _sm_base6 = this->n;
-        _sm_expr1 = _sm_base5 < _sm_base6;
-        if (!(_sm_expr1)) goto L2;
-        _sm_base7 = this->i;
-        _sm_expr2 = _sm_base7 % 2;
-        _sm_expr1 = _sm_expr2 == 0;
-        if (_sm_expr1) goto L3;
-        goto LY1;
-        L3:;
-        _sm_base8 = this->i;
-        this->current = _sm_base8;
-        this->branch = 1;
-        return true;
-        LY1:;
-        _sm_base10 = this->i;
-        _sm_base9 = _sm_base10 + 1;
-        this->i = _sm_base9;
-        goto L1;
-        L2:;
-        this->branch = -1;
-        return false;
-    }
 };
+
+Bool advance(ns1_everyOther_yieldable* self) {
+    Bool _sm_base1, _sm_base3, _sm_expr1;
+    Int _sm_base2, _sm_base4, _sm_base5, _sm_base6, _sm_base7, _sm_base8, _sm_base9, _sm_base10,
+        _sm_expr2;
+    _sm_base2 = self->branch;
+    _sm_base1 = _sm_base2 == -1;
+    if (_sm_base1) goto L2;
+    _sm_base4 = self->branch;
+    _sm_base3 = _sm_base4 == 1;
+    if (_sm_base3) goto LY1;
+    self->n = 10;
+    self->i = 0;
+    L1:;
+    _sm_base5 = self->i;
+    _sm_base6 = self->n;
+    _sm_expr1 = _sm_base5 < _sm_base6;
+    if (!(_sm_expr1)) goto L2;
+    _sm_base7 = self->i;
+    _sm_expr2 = _sm_base7 % 2;
+    _sm_expr1 = _sm_expr2 == 0;
+    if (_sm_expr1) goto L3;
+    goto LY1;
+    L3:;
+    _sm_base8 = self->i;
+    self->current = _sm_base8;
+    self->branch = 1;
+    return true;
+    LY1:;
+    _sm_base10 = self->i;
+    _sm_base9 = _sm_base10 + 1;
+    self->i = _sm_base9;
+    goto L1;
+    L2:;
+    self->branch = -1;
+    return false;
+}
 
 ns1_everyOther_yieldable ns1_everyOther();
 // stress/machines/src/main.kt
@@ -416,34 +423,35 @@ struct ns1_countdown_yieldable {
     Int branch{};
     Int current{};
     Int value{};
-    Bool advance() {
-        Bool _sm_base1, _sm_base3, _sm_expr1;
-        Int _sm_base2, _sm_base4, _sm_base5, _sm_base6, _sm_base7, _sm_base8;
-        _sm_base2 = this->branch;
-        _sm_base1 = _sm_base2 == -1;
-        if (_sm_base1) goto L2;
-        _sm_base4 = this->branch;
-        _sm_base3 = _sm_base4 == 1;
-        if (_sm_base3) goto LY1;
-        this->value = 3;
-        L1:;
-        _sm_base5 = this->value;
-        _sm_expr1 = _sm_base5 > 0;
-        if (!(_sm_expr1)) goto L2;
-        _sm_base6 = this->value;
-        this->current = _sm_base6;
-        this->branch = 1;
-        return true;
-        LY1:;
-        _sm_base8 = this->value;
-        _sm_base7 = _sm_base8 - 1;
-        this->value = _sm_base7;
-        goto L1;
-        L2:;
-        this->branch = -1;
-        return false;
-    }
 };
+
+Bool advance(ns1_countdown_yieldable* self) {
+    Bool _sm_base1, _sm_base3, _sm_expr1;
+    Int _sm_base2, _sm_base4, _sm_base5, _sm_base6, _sm_base7, _sm_base8;
+    _sm_base2 = self->branch;
+    _sm_base1 = _sm_base2 == -1;
+    if (_sm_base1) goto L2;
+    _sm_base4 = self->branch;
+    _sm_base3 = _sm_base4 == 1;
+    if (_sm_base3) goto LY1;
+    self->value = 3;
+    L1:;
+    _sm_base5 = self->value;
+    _sm_expr1 = _sm_base5 > 0;
+    if (!(_sm_expr1)) goto L2;
+    _sm_base6 = self->value;
+    self->current = _sm_base6;
+    self->branch = 1;
+    return true;
+    LY1:;
+    _sm_base8 = self->value;
+    _sm_base7 = _sm_base8 - 1;
+    self->value = _sm_base7;
+    goto L1;
+    L2:;
+    self->branch = -1;
+    return false;
+}
 
 ns1_countdown_yieldable ns1_countdown();
 // stress/machines/src/main.kt
@@ -454,44 +462,45 @@ struct ns1_shadowing_yieldable {
     Int _sm_f_advance{};
     Int _sm_branch_2{};
     Int value{};
-    Bool advance() {
-        Bool _sm_base1, _sm_base3, _sm_expr1;
-        Int _sm_base2, _sm_base4, _sm_base5, _sm_base6, _sm_base7, _sm_base8, _sm_base9, _sm_base10,
-            _sm_base11, _sm_expr2, _sm_expr3, _sm_expr4;
-        _sm_base2 = this->branch;
-        _sm_base1 = _sm_base2 == -1;
-        if (_sm_base1) goto L2;
-        _sm_base4 = this->branch;
-        _sm_base3 = _sm_base4 == 1;
-        if (_sm_base3) goto LY1;
-        this->_sm_current_2 = 10;
-        this->_sm_f_advance = 1;
-        this->_sm_branch_2 = 2;
-        this->value = 3;
-        L1:;
-        _sm_base5 = this->value;
-        _sm_expr1 = _sm_base5 > 0;
-        if (!(_sm_expr1)) goto L2;
-        _sm_base6 = this->_sm_current_2;
-        _sm_base7 = this->_sm_f_advance;
-        _sm_expr2 = _sm_base6 + _sm_base7;
-        _sm_base8 = this->_sm_branch_2;
-        _sm_expr3 = _sm_expr2 + _sm_base8;
-        _sm_base9 = this->value;
-        _sm_expr4 = _sm_expr3 + _sm_base9;
-        this->current = _sm_expr4;
-        this->branch = 1;
-        return true;
-        LY1:;
-        _sm_base11 = this->value;
-        _sm_base10 = _sm_base11 - 1;
-        this->value = _sm_base10;
-        goto L1;
-        L2:;
-        this->branch = -1;
-        return false;
-    }
 };
+
+Bool advance(ns1_shadowing_yieldable* self) {
+    Bool _sm_base1, _sm_base3, _sm_expr1;
+    Int _sm_base2, _sm_base4, _sm_base5, _sm_base6, _sm_base7, _sm_base8, _sm_base9, _sm_base10,
+        _sm_base11, _sm_expr2, _sm_expr3, _sm_expr4;
+    _sm_base2 = self->branch;
+    _sm_base1 = _sm_base2 == -1;
+    if (_sm_base1) goto L2;
+    _sm_base4 = self->branch;
+    _sm_base3 = _sm_base4 == 1;
+    if (_sm_base3) goto LY1;
+    self->_sm_current_2 = 10;
+    self->_sm_f_advance = 1;
+    self->_sm_branch_2 = 2;
+    self->value = 3;
+    L1:;
+    _sm_base5 = self->value;
+    _sm_expr1 = _sm_base5 > 0;
+    if (!(_sm_expr1)) goto L2;
+    _sm_base6 = self->_sm_current_2;
+    _sm_base7 = self->_sm_f_advance;
+    _sm_expr2 = _sm_base6 + _sm_base7;
+    _sm_base8 = self->_sm_branch_2;
+    _sm_expr3 = _sm_expr2 + _sm_base8;
+    _sm_base9 = self->value;
+    _sm_expr4 = _sm_expr3 + _sm_base9;
+    self->current = _sm_expr4;
+    self->branch = 1;
+    return true;
+    LY1:;
+    _sm_base11 = self->value;
+    _sm_base10 = _sm_base11 - 1;
+    self->value = _sm_base10;
+    goto L1;
+    L2:;
+    self->branch = -1;
+    return false;
+}
 
 ns1_shadowing_yieldable ns1_shadowing();
 Int ns1_partYield();
@@ -745,7 +754,7 @@ Int ns1_partGenericYield() {
     _sm_expr1 = ns1_everyNth(simse_addressOf(numbers), 2);
     _sm_for1 = _sm_expr1;
     L1:;
-    _sm_expr2 = _sm_for1.advance();
+    _sm_expr2 = advance(&_sm_for1);
     if (!(_sm_expr2)) goto L2;
     value = _sm_for1.current;
     _sm_expr3 = simse_int_toString(value);
@@ -760,7 +769,7 @@ Int ns1_partGenericYield() {
     _sm_for2 = _sm_expr4;
     _sm_index2 = -1;
     L3:;
-    _sm_expr2 = _sm_for2.advance();
+    _sm_expr2 = advance(&_sm_for2);
     if (!(_sm_expr2)) goto L4;
     _sm_index2 = _sm_index2 + 1;
     word = _sm_for2.current;
@@ -779,7 +788,7 @@ Int ns1_partGenericYield() {
     byOne = ns1_everyNth(simse_addressOf(numbers), 1);
     total = 0;
     L5:;
-    _sm_expr2 = byOne.advance();
+    _sm_expr2 = advance(&byOne);
     if (!(_sm_expr2)) goto L6;
     _sm_expr10 = byOne.current;
     total = total + _sm_expr10;
@@ -787,7 +796,7 @@ Int ns1_partGenericYield() {
     L6:;
     _sm_expr11 = simse_int_toString(total);
     simse_println((_sm_expr11), stdout);
-    _sm_expr12 = byOne.advance();
+    _sm_expr12 = advance(&byOne);
     _sm_expr13 = simse_bool_toString(_sm_expr12);
     simse_println((_sm_expr13), stdout);
     return 0;
@@ -824,7 +833,7 @@ Int ns1_partYield() {
     simse_println((__sm_stringTable[1]), stdout);
     evens = ns1_everyOther();
     L1:;
-    _sm_expr1 = evens.advance();
+    _sm_expr1 = advance(&evens);
     if (!(_sm_expr1)) goto L2;
     _sm_base1 = simse_addressOf(evens.current);
     _sm_expr2 = simse_int_toString((*_sm_base1));
@@ -834,7 +843,7 @@ Int ns1_partYield() {
     simse_println((__sm_stringTable[4]), stdout);
     down = ns1_countdown();
     L3:;
-    _sm_expr1 = down.advance();
+    _sm_expr1 = advance(&down);
     if (!(_sm_expr1)) goto L4;
     _sm_base2 = simse_addressOf(down.current);
     _sm_expr4 = simse_int_toString((*_sm_base2));
@@ -842,14 +851,14 @@ Int ns1_partYield() {
     goto L3;
     L4:;
     simse_println((__sm_stringTable[5]), stdout);
-    _sm_expr5 = down.advance();
+    _sm_expr5 = advance(&down);
     _sm_expr6 = simse_bool_toString(_sm_expr5);
     simse_println((_sm_expr6), stdout);
     simse_println((__sm_stringTable[0]), stdout);
     _sm_expr7 = ns1_shadowing();
     _sm_for3 = _sm_expr7;
     L5:;
-    _sm_expr1 = _sm_for3.advance();
+    _sm_expr1 = advance(&_sm_for3);
     if (!(_sm_expr1)) goto L6;
     total = _sm_for3.current;
     _sm_expr9 = simse_int_toString(total);
@@ -860,7 +869,7 @@ Int ns1_partYield() {
     _sm_expr10 = ns1_everyOther();
     _sm_for4 = _sm_expr10;
     L7:;
-    _sm_expr1 = _sm_for4.advance();
+    _sm_expr1 = advance(&_sm_for4);
     if (!(_sm_expr1)) goto L8;
     value = _sm_for4.current;
     _sm_expr12 = simse_int_toString(value);
@@ -872,7 +881,7 @@ Int ns1_partYield() {
     _sm_for5 = _sm_expr13;
     _sm_index5 = -1;
     L9:;
-    _sm_expr1 = _sm_for5.advance();
+    _sm_expr1 = advance(&_sm_for5);
     if (!(_sm_expr1)) goto L10;
     _sm_index5 = _sm_index5 + 1;
     _sm_value_2 = _sm_for5.current;
@@ -897,7 +906,7 @@ Int ns1_partYield() {
     _sm_for6 = _sm_expr19;
     _sm_index6 = -1;
     L11:;
-    _sm_expr1 = _sm_for6.advance();
+    _sm_expr1 = advance(&_sm_for6);
     if (!(_sm_expr1)) goto L12;
     _sm_index6 = _sm_index6 + 1;
     _sm_value_3 = _sm_for6.current;

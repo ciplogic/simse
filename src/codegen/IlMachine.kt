@@ -236,6 +236,9 @@ fun Emitter.emitMachine(
     // A generic function's machine is a class template: its fields are typed with the
     // function's type parameters, so they are declared where used (impl_specs/yield.md).
     val tmpl: Str = this.templateClause(fn.templateParams)
+    // The class carries the values that cross a yield and nothing else: the method that
+    // advances it is a free *extension* function below (`advance(M* self)`), the shape a
+    // lambda's call has (`<sym>_invoke`), so the class is an ordinary data class.
     if (tmpl != "") {
         this.line(0, tmpl)
     }
@@ -253,8 +256,19 @@ fun Emitter.emitMachine(
             return
         }
     }
+    this.line(0, "};")
+    this.line(0, "")
+    // A generic machine's class is a template, so its use as a *type* carries the
+    // parameters: `List_iterPtr_yieldable<T>* self`.
+    var classTypeText: Str = className
+    if (fn.templateParams.size() > 0) {
+        val cgJoinText: Str = cgJoin(fn.templateParams, ", ")
+        classTypeText = `@className<@cgJoinText>`
+    }
     for (*method in machine.methods) {
+        // The receiver rides first, the way every receiver function's `self` does.
         var params: List<Str> = List<Str>()
+        params.append(`@classTypeText* self`)
         for (*param in method.params) {
         val typeText3: Str = this.type(param.typeNode)
         val paramNameText: Str = param.name
@@ -270,15 +284,19 @@ fun Emitter.emitMachine(
         }
         val methodNameText: Str = method.name
         val cgJoinText3: Str = cgJoin(params, ", ")
-        this.line(1, `@result @methodNameText(@cgJoinText3) {`)
-        // A C++ member function: the machine's values are reached through `this`.
+        if (tmpl != "") {
+            this.line(0, tmpl)
+        }
+        this.line(0, `@result @methodNameText(@cgJoinText3) {`)
+        // An extension function: the receiver is a `self` parameter (`M*`), so the machine's
+        // fields are reached through `self->`, exactly as any receiver function's are.
         val savedClosure: Bool = this.inClosureMethod
         val savedSelfKind: NameKind = this.selfKind
         val savedSelfType: AstXmlNode = this.selfType
         val savedReturn: AstXmlNode = this.curReturnType
         val savedKinds: Dictionary<Str, NameKind> = this.nameKinds
         val savedTypes: Dictionary<Str, AstXmlNode> = this.localTypes
-        this.inClosureMethod = true
+        this.inClosureMethod = false
         this.selfKind = NameKind.Value
         var classType: AstXmlNode =
             AstXmlNode(AstNodeKind.Type, AstNodeCategory.TypeNamed, List<AstNodeAttribute>(), Array<AstXmlNode>())
@@ -296,7 +314,7 @@ fun Emitter.emitMachine(
         // its fields are read and written through `self`, as a lambda body reads captures.
         this.emitBodyAt(
             this.ilMachineMethod(className, method, this.machineDecl, facts, inferred), method.body,
-            fn.file, 2, false
+            fn.file, 1, false
         )
         this.inClosureMethod = savedClosure
         this.selfKind = savedSelfKind
@@ -307,10 +325,9 @@ fun Emitter.emitMachine(
         if (this.failed) {
             return
         }
-        this.line(1, "}")
+        this.line(0, "}")
+        this.line(0, "")
     }
-    this.line(0, "};")
-    this.line(0, "")
 }
 
 // A machine method as the extractor's body context: no declaration, the method's

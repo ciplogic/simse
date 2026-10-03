@@ -10,26 +10,33 @@ fun everyOther(n: Int): ..Int {        struct ns1_everyOther_yieldable {
     while (i < n) {                        Int current{};  // what it last yielded
         if (i % 2 == 0) {                  Int n{};
             yield i                        Int i{};
-        }                                  Bool advance() {
-        i = i + 1                              if (this->branch == -1) goto LYend;
-    }                                          if (this->branch == 1) goto LY1;
-}                                              this->i = 0;        // branch 0: the start
-                                           L1:;
-                                           _sm_expr1 = this->i < this->n;
-                                           if (!(_sm_expr1)) goto L2;
-                                           ...                     // the loop, as labels
-                                           this->current = this->i;
-                                           this->branch = 1;
-                                           return true;
-                                       LY1:;                       // the resumption point
-                                           ...
-                                       LYend:;
-                                           this->branch = -1;
-                                           return false;
-                                       }
-                                   };
+        }                              };
+        i = i + 1                      Bool advance(ns1_everyOther_yieldable* self) {
+    }                                      if (self->branch == -1) goto LYend;
+}                                          if (self->branch == 1) goto LY1;
+                                           self->i = 0;        // branch 0: the start
+                                       L1:;
+                                       _sm_expr1 = self->i < self->n;
+                                       if (!(_sm_expr1)) goto L2;
+                                       ...                     // the loop, as labels
+                                       self->current = self->i;
+                                       self->branch = 1;
+                                       return true;
+                                   LY1:;                       // the resumption point
+                                       ...
+                                   LYend:;
+                                       self->branch = -1;
+                                       return false;
+                                   }
                                    ns1_everyOther_yieldable ns1_everyOther(Int n) { ... }
 ```
+
+The class carries the values that cross a yield and nothing else: it is a plain data class.
+The step that advances it is a **free extension function** (`advance(M* self)`), the shape a
+lambda's call has (`<sym>_invoke`, `impl_specs/memory-model.md`), so the fields are reached
+through `self->` exactly as any receiver function reaches its receiver's. A *generic* machine
+is a class template, and the method is a template beside it (`advance(M<T>* self)`); a call
+site spells `advance(&m)`.
 
 ## The two pieces of syntax
 
@@ -52,8 +59,12 @@ the type its field needs), in `linear::lowerYield` (`src/linear/Yield.kt`):
 2. **The dispatcher** is a chain of conditional jumps: `if (branch == -1) goto LYend;` then
    `if (branch == n) goto LYn;` for every yield. Branch `0` falls through, so it is the start.
    There is no `switch`: a `when` is already an `if`/`else` chain by this stage.
-3. **`yield e`** becomes `current = e; branch = n; return true; LYn:;` - the label *is* the
-   resumption point.
+3. **`yield e`** becomes a named marker, `sm_suspend_point(n, e)`, which `YldMachinery.method`
+   then expands to `current = e; branch = n; return true; LYn:;` - the label *is* the
+   resumption point. Keeping the suspension distinct from what it lowers to
+   (`linear::yldSuspendPoint` / `yldExpandSuspend`) means the control flow around it and the
+   suspension itself are lowered separately, so the shape a suspend point takes lives in one
+   place and a later pass can see where a body suspends before those points become gotos.
 4. **A `return`**, or the end of the body, finishes the machine:
    `branch = -1; return false;` - `yield break`.
 5. **A reference of a field** - read or written - is `this.<name>`, so a name that lives
@@ -110,11 +121,22 @@ fields, so nothing about the machine points into the frame that built it.
   and `stress/generic-yield` (a generic yielding extension over `List<Int>` and `List<Str>`),
   verified by transpiling, compiling and running them through the self-hosted compiler and
   by byte-identical emission.
+- **The class and the step are separate declarations.** The machine is a fields-only data class
+  (`struct M { ... };`) and `advance` is a free *extension* function (`Bool advance(M* self)`, a
+  template beside a generic machine's class) - the shape a lambda has (a data class plus a free
+  invoke). The lowering still writes field accesses as `this.<name>`; the extension frame spells
+  them `self-><name>` (the emitter's `inClosureMethod = false`), and a call site spells
+  `advance(&m)` (`CgCall.kt`).
 - **The machine's method is optimized like any other body**: the rewrite runs *after* the
   body's own half of the pipeline, so its output (the dispatcher, the label runs) had never
   been through `src/optimizations`. `emitMachine` runs `linOptimizeBody` over each method
   body before emitting it, folding the contiguity (`L2:; LYend:;` is one label) and the jumps
   around it.
+- **A `yield` lowers through a named suspend point.** `linear::yldSuspendPoint` leaves a
+  `sm_suspend_point(<branch>, <value>)` marker where the yield was, and `linear::yldExpandSuspend`
+  is the one place it becomes `current`/`branch`/`return true`/`LYn:` - so the transformation is
+  named and reusable rather than inlined per statement, and a later pass can see a body's suspend
+  points before they are gotos. Emitted output is unchanged.
 - The machine's shape:
   - **a generic function can yield**: the machine is a class template, and its name carries
     the function's type parameters wherever it is a *type*.

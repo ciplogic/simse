@@ -176,6 +176,60 @@ fun yldExprStmt(expr: AstXmlNode): AstXmlNode {
     return node
 }
 
+// The name of the marker a `yield` lowers to before its machine mechanics replace it
+// (`YldMachinery.method`).
+fun yldSuspendPointName(): Str {
+    return "sm_suspend_point"
+}
+
+// `sm_suspend_point(<branch>, <value>)` - a `yield` as a *named* suspend point. The branch
+// travels as the marker's `Text`, the yielded value as its one argument. Keeping the point
+// distinct from what it lowers to means the control flow around a suspension and the
+// suspension itself are lowered separately: the store into `current`, the branch write, the
+// `return true` and the resumption label live in one place, and a later pass can see where a
+// body suspends before those points become gotos.
+fun yldSuspendPoint(branch: Int, value: AstXmlNode): AstXmlNode {
+    var callee: AstXmlNode = yldExpr(AstNodeCategory.ExprName)
+    callee.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, yldSuspendPointName()))
+    var args: List<AstXmlNode> = List<AstXmlNode>()
+    args.append(value)
+    var call: AstXmlNode = yldCall(callee, args)
+    call.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Text, branch.toString()))
+    return yldExprStmt(call)
+}
+
+// Whether a statement is a suspend marker.
+fun yldIsSuspendPoint(stmt: *AstXmlNode): Bool {
+    if (xmlKind(stmt) != AstNodeCategory.StmtExprStmt) {
+        return false
+    }
+    val expr: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Expr)
+    if (xmlIsEmpty(expr) || xmlKind(expr) != AstNodeCategory.ExprCall) {
+        return false
+    }
+    val callee: *AstXmlNode = xmlChildPtr(expr, AstNodeKind.Callee)
+    if (xmlKind(callee) != AstNodeCategory.ExprName) {
+        return false
+    }
+    return xmlAttr(callee, AstNodeAttributeKind.Name) == yldSuspendPointName()
+}
+
+// The marker's expansion: `current = value; branch = k; return true; LYk:;` - the one shape
+// a suspend point lowers to (`impl_specs/yield.md`). The label *is* the resumption point.
+fun yldExpandSuspend(stmt: AstXmlNode, out: *List<AstXmlNode>): Unit {
+    if (!yldIsSuspendPoint(stmt)) {
+        out.append(stmt)
+        return
+    }
+    val expr: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Expr)
+    val branch: Int = xmlIntAttr(expr, AstNodeAttributeKind.Text, 0)
+    var value: AstXmlNode = xmlChild(expr, AstNodeKind.Arg)
+    out.append(yldAssign(yldThisMember(yldCurrentField()), value))
+    out.append(yldAssign(yldThisMember(yldBranchField()), yldIntLiteral(branch)))
+    out.append(yldReturn(yldBoolLiteral(true)))
+    out.append(linLabel(yldLabel(branch), xmlLine(stmt), xmlColumn(stmt)))
+}
+
 // Whether a receiver is a *handle*: a bare `this` is then already the value the caller
 // passed, while a value receiver's `this` has to be read back out of the pointer the
 // machine holds.
@@ -401,7 +455,7 @@ data class YldMachinery(
         }
         i = first
         while (i < rewritten.size()) {
-            methodBody.append(rewritten[i])
+            yldExpandSuspend(rewritten[i], methodBody)
             i = i + 1
         }
         methodBody.append(linLabel(yldEndLabel(), 0, 0))
@@ -420,11 +474,8 @@ data class YldMachinery(
                 this.yields = this.yields + 1
                 val branch: Int = this.yields
                 val value: AstXmlNode = this.expr(xmlChildPtr(stmt, AstNodeKind.Value))
-                // `current = e; branch = k; return true;`
-                out.append(yldAssign(yldThisMember(yldCurrentField()), value))
-                out.append(yldAssign(yldThisMember(yldBranchField()), yldIntLiteral(branch)))
-                out.append(yldReturn(yldBoolLiteral(true)))
-                out.append(linLabel(yldLabel(branch), 0, 0))
+                // A named suspend point; `method` expands it into the machine's mechanics.
+                out.append(yldSuspendPoint(branch, value))
                 return
             }
 

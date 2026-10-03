@@ -188,42 +188,44 @@ struct List_iter_yieldable {
     List<T>* _sm_self{};
     Int i{};
     Int len{};
-    Bool advance() {
-        Bool _sm_base1, _sm_base3, _sm_expr1;
-        Int _sm_base2, _sm_base4, _sm_base5, _sm_base7, _sm_base8, _sm_base10, _sm_base11, _sm_base12;
-        List<T>* _sm_base6, * _sm_base9;
-        T _sm_expr2;
-        _sm_base2 = this->branch;
-        _sm_base1 = _sm_base2 == -1;
-        if (_sm_base1) goto L2;
-        _sm_base4 = this->branch;
-        _sm_base3 = _sm_base4 == 1;
-        if (_sm_base3) goto LY1;
-        this->i = 0;
-        _sm_base6 = this->_sm_self;
-        _sm_base5 = simse_lenOf((*_sm_base6));
-        this->len = _sm_base5;
-        L1:;
-        _sm_base7 = this->i;
-        _sm_base8 = this->len;
-        _sm_expr1 = _sm_base7 < _sm_base8;
-        if (!(_sm_expr1)) goto L2;
-        _sm_base9 = this->_sm_self;
-        _sm_base10 = this->i;
-        _sm_expr2 = (*_sm_base9)[_sm_base10];
-        this->current = _sm_expr2;
-        this->branch = 1;
-        return true;
-        LY1:;
-        _sm_base12 = this->i;
-        _sm_base11 = _sm_base12 + 1;
-        this->i = _sm_base11;
-        goto L1;
-        L2:;
-        this->branch = -1;
-        return false;
-    }
 };
+
+template <class T>
+Bool advance(List_iter_yieldable<T>* self) {
+    Bool _sm_base1, _sm_base3, _sm_expr1;
+    Int _sm_base2, _sm_base4, _sm_base5, _sm_base7, _sm_base8, _sm_base10, _sm_base11, _sm_base12;
+    List<T>* _sm_base6, * _sm_base9;
+    T _sm_expr2;
+    _sm_base2 = self->branch;
+    _sm_base1 = _sm_base2 == -1;
+    if (_sm_base1) goto L2;
+    _sm_base4 = self->branch;
+    _sm_base3 = _sm_base4 == 1;
+    if (_sm_base3) goto LY1;
+    self->i = 0;
+    _sm_base6 = self->_sm_self;
+    _sm_base5 = simse_lenOf((*_sm_base6));
+    self->len = _sm_base5;
+    L1:;
+    _sm_base7 = self->i;
+    _sm_base8 = self->len;
+    _sm_expr1 = _sm_base7 < _sm_base8;
+    if (!(_sm_expr1)) goto L2;
+    _sm_base9 = self->_sm_self;
+    _sm_base10 = self->i;
+    _sm_expr2 = (*_sm_base9)[_sm_base10];
+    self->current = _sm_expr2;
+    self->branch = 1;
+    return true;
+    LY1:;
+    _sm_base12 = self->i;
+    _sm_base11 = _sm_base12 + 1;
+    self->i = _sm_base11;
+    goto L1;
+    L2:;
+    self->branch = -1;
+    return false;
+}
 
 template <class T>
 List_iter_yieldable<T> iter(List<T>* self);
@@ -449,7 +451,7 @@ int main() {
     ops = List<Str>{__sm_stringTable[31], __sm_stringTable[30], __sm_stringTable[28], __sm_stringTable[24], __sm_stringTable[18], __sm_stringTable[15], __sm_stringTable[25], __sm_stringTable[26], __sm_stringTable[17], __sm_stringTable[19], __sm_stringTable[16], __sm_stringTable[21], __sm_stringTable[22]};
     _sm_for5 = iter(simse_addressOf(ops));
     L1:;
-    _sm_expr1 = _sm_for5.advance();
+    _sm_expr1 = advance(&_sm_for5);
     if (!(_sm_expr1)) goto L2;
     op = _sm_for5.current;
     _sm_expr2.resize(4 + op.size());
@@ -491,7 +493,7 @@ int main() {
     words = List<Str>{__sm_stringTable[31], __sm_stringTable[30], __sm_stringTable[20], __sm_stringTable[21]};
     _sm_for6 = iter(simse_addressOf(words));
     L3:;
-    _sm_expr1 = _sm_for6.advance();
+    _sm_expr1 = advance(&_sm_for6);
     if (!(_sm_expr1)) goto L4;
     word = _sm_for6.current;
     _sm_expr2.resize(3 + word.size());

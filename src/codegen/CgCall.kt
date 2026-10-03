@@ -417,6 +417,14 @@ fun Emitter.call(e: *AstXmlNode): Str {
             val receiverType: AstXmlNode = this.inferType(receiverExpr)
             val receiver: AstXmlNode = this.pointee(receiverType)
             if (!xmlIsEmpty(receiver)) {
+                // A machine's step is an *extension* function on its class, not a member
+                // (`impl_specs/yield.md`): spell the call the way any receiver function's is
+                // spelled, `advance(&m)`. The machine's C++ type is the lowering's, so no
+                // declaration is collected to resolve against here.
+                if (calleeText == "advance" && xmlKind(receiver) == AstNodeCategory.TypeYield) {
+                    val machineText: Str = this.expr(receiverExpr, 12, xmlEmptyNode())
+                    return `advance(&@(machineText))`
+                }
                 val fnIndex: Int = this.findExtensionFn(calleeText, receiverExpr, args.size())
                 if (fnIndex >= 0) {
                     val fn: *CgFn = *this.functions[fnIndex]
