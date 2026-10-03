@@ -675,6 +675,86 @@ fun partSpanConvert(): Int {
     return 0
 }
 
+// ---- for-str ----
+
+// A `Str` iterates as its bytes: the `for` rewrite views it with `spanOfStr` (a `StrView`
+// *is* a `Span<Char>`), so a string, a view and a container all walk the same span
+// machine. The chained part pins the loop variable's type carrying the inner receiver
+// (`line.text`), and the `if` arm pins the rewrite reaching a loop whose local is declared
+// where the loop is - the traversal the checker had to learn for both.
+
+data class Line(var text: Str)
+
+data class Rack(var slots: Array<Int>)
+
+fun rackTotal(rack: *Rack): Int {
+    var sum = 0
+    for (slot in rack.slots) {
+        sum = sum + slot
+    }
+    return sum
+}
+
+fun partForStr(): Int {
+    val phrase = "hi!"
+    var count = 0
+    for (ch in phrase) {
+        count = count + 1
+    }
+    println(count.toString())
+
+    // The pointer form hands out the character's place inside the string.
+    var upper = ""
+    for (*ch in phrase) {
+        val c: Char = *ch
+        if (c == 'i') {
+            upper = upper + 'I'
+        } else {
+            upper = upper + c
+        }
+    }
+    println(upper)
+
+    // A `StrView` is a `Span<Char>`: the span's own `iter` walks it.
+    val view: StrView = spanOfStr(phrase)
+    var same = 0
+    for (ch in view) {
+        same = same + 1
+    }
+    println(same.toString())
+
+    // Chained: the outer loop variable's type carries the inner receiver.
+    var lines: List<Line> = List<Line>()
+    lines.append(Line("ab"))
+    lines.append(Line("cde"))
+    var hits = 0
+    for (line in lines) {
+        for (ch in line.text) {
+            if (ch == 'c') {
+                hits = hits + 1
+            }
+        }
+    }
+    println(hits.toString())
+
+    // An `Array` field (`rack.slots`) iterates its block through the span.
+    var room: List<Int> = List<Int>()
+    room.append(4)
+    room.append(5)
+    var rack = Rack(room.toArray())
+    println(rackTotal(*rack).toString())
+
+    // A `for` inside an `if`, over a local the arm declares.
+    if (phrase.size() > 0) {
+        var ys: List<Int> = List<Int>()
+        ys.append(7)
+        for (y in ys) {
+            println(y.toString())
+        }
+    }
+    return 0
+}
+
 // ---- the category's entry ----
 fun main(): Int {
     partArrayLayout()
@@ -690,5 +770,6 @@ fun main(): Int {
     partSpanConvert()
     partForPromote()
     partForTemporary()
+    partForStr()
     return 0
 }

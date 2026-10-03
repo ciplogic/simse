@@ -105,11 +105,12 @@ but not yet mapped by the bootstrap emitter.
 ### Iteration
 
 A container is iterable by `for`, in order and without an index of its own (both loop
-forms are specified in `specs/functions.md`, "`for`"). The prelude writes `List<T>.iter():
-..T` in Simse, and one per container besides it (`Array<T>`, `Span<T>`): a state machine
-that walks the container in order (`specs/functions.md`, `impl_specs/for.md`). Iteration is
-over the container's own order, reading each element once. `Dictionary<K, V>` has no `iter`
-yet, so it is walked with an index loop over `keys()`.
+forms are specified in `specs/functions.md`, "`for`"). The prelude writes one `iter` in
+Simse, on the span (`Span<T>.iter(): ..T`); a `List`/`Array`/`Str` is viewed as its span
+first (`spanOf`/`spanOfArray`/`spanOfStr`), so every container shares that one state
+machine (`specs/functions.md`, `impl_specs/for.md`). Iteration is over the container's own
+order, reading each element once. `Dictionary<K, V>` has no `iter` yet, so it is walked
+with an index loop over `keys()`.
 
 ## `Dictionary<K, V>`
 

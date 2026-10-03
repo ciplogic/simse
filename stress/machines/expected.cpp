@@ -220,19 +220,19 @@ inline void simse_println(const T& value, FILE* out) {
 Str substr(StrView* self, Int from, Int count);
 Str toString(StrView* self);
 template <class T>
-struct List_iter_yieldable {
+struct Span_iter_yieldable {
     Int branch{};
     T current{};
-    List<T>* _sm_self{};
+    Span<T>* _sm_self{};
     Int i{};
     Int len{};
 };
 
 template <class T>
-Bool advance(List_iter_yieldable<T>* self) {
+Bool advance(Span_iter_yieldable<T>* self) {
     Bool _sm_base1, _sm_base3, _sm_expr1;
     Int _sm_base2, _sm_base4, _sm_base5, _sm_base7, _sm_base8, _sm_base10, _sm_base11, _sm_base12;
-    List<T>* _sm_base6, * _sm_base9;
+    Span<T>* _sm_base6, * _sm_base9;
     T _sm_expr2;
     _sm_base2 = self->branch;
     _sm_base1 = _sm_base2 == -1;
@@ -242,7 +242,7 @@ Bool advance(List_iter_yieldable<T>* self) {
     if (_sm_base3) goto LY1;
     self->i = 0;
     _sm_base6 = self->_sm_self;
-    _sm_base5 = simse_lenOf((*_sm_base6));
+    _sm_base5 = _sm_base6->size();
     self->len = _sm_base5;
     L1:;
     _sm_base7 = self->i;
@@ -266,55 +266,7 @@ Bool advance(List_iter_yieldable<T>* self) {
 }
 
 template <class T>
-List_iter_yieldable<T> iter(List<T>* self);
-template <class T>
-struct Array_iter_yieldable {
-    Int branch{};
-    T current{};
-    Array<T>* _sm_self{};
-    Int i{};
-    Int len{};
-};
-
-template <class T>
-Bool advance(Array_iter_yieldable<T>* self) {
-    Bool _sm_base1, _sm_base3, _sm_expr1;
-    Int _sm_base2, _sm_base4, _sm_base5, _sm_base7, _sm_base8, _sm_base10, _sm_base11, _sm_base12;
-    Array<T>* _sm_base6, * _sm_base9;
-    T _sm_expr2;
-    _sm_base2 = self->branch;
-    _sm_base1 = _sm_base2 == -1;
-    if (_sm_base1) goto L2;
-    _sm_base4 = self->branch;
-    _sm_base3 = _sm_base4 == 1;
-    if (_sm_base3) goto LY1;
-    self->i = 0;
-    _sm_base6 = self->_sm_self;
-    _sm_base5 = simse_array_count((*_sm_base6));
-    self->len = _sm_base5;
-    L1:;
-    _sm_base7 = self->i;
-    _sm_base8 = self->len;
-    _sm_expr1 = _sm_base7 < _sm_base8;
-    if (!(_sm_expr1)) goto L2;
-    _sm_base9 = self->_sm_self;
-    _sm_base10 = self->i;
-    _sm_expr2 = (*_sm_base9)[_sm_base10];
-    self->current = _sm_expr2;
-    self->branch = 1;
-    return true;
-    LY1:;
-    _sm_base12 = self->i;
-    _sm_base11 = _sm_base12 + 1;
-    self->i = _sm_base11;
-    goto L1;
-    L2:;
-    self->branch = -1;
-    return false;
-}
-
-template <class T>
-Array_iter_yieldable<T> iter(Array<T>* self);
+Span_iter_yieldable<T> iter(Span<T>* self);
 Str substr(Str* self, Int start, Int len);
 Int ns1_compute();
 Int ns1_partDeadCode();
@@ -553,15 +505,8 @@ Str toString(StrView* self) {
     return _sm_expr2;
 }
 template <class T>
-List_iter_yieldable<T> iter(List<T>* self) {
-    List_iter_yieldable<T> machine{};
-    machine._sm_self = self;
-    machine.branch = 0;
-    return machine;
-}
-template <class T>
-Array_iter_yieldable<T> iter(Array<T>* self) {
-    Array_iter_yieldable<T> machine{};
+Span_iter_yieldable<T> iter(Span<T>* self) {
+    Span_iter_yieldable<T> machine{};
     machine._sm_self = self;
     machine.branch = 0;
     return machine;

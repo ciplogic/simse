@@ -758,9 +758,11 @@ inline Str simse_bool_toString(Bool self) {
 symbol: simse_spanOf
 forward:
 ```cpp
-// `spanOf(items)`: a span over a list's elements, generated (`src/rtl/_res.md`).
+// `spanOf(items)`: a span over a list's or an array's elements, generated (`src/rtl/_res.md`).
 template <class T>
 Span<T> simse_spanOf(List<T>* items);
+template <class T>
+Span<T> simse_spanOf(Array<T>* items);
 ```
 bodies:
 ```cpp
@@ -769,6 +771,14 @@ bodies:
 template <class T>
 inline Span<T> simse_spanOf(List<T>* items) {
     return Span<T>(items->data(), items->size());
+}
+
+// `spanOf(items)`: the same over an array's block. The count leads, so the span is the
+// first element's address - `nullptr` when empty, because `items[0]` has no place.
+template <class T>
+inline Span<T> simse_spanOf(Array<T>* items) {
+    const Int count = items->count();
+    return Span<T>(count > 0 ? &(*items)[0] : nullptr, count);
 }
 ```
 

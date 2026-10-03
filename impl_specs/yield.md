@@ -42,9 +42,10 @@ site spells `advance(&m)`.
 
 - `yield <expr>` - a statement, parsed like `return`.
 - `..T` in a return position - a marker type: "this body yields `T`". It is **not a
-  value type**: `spellable()` rejects it, so a name bound to a call of such a function
-  stays untyped and the C++ compiler types it (`auto`). The parser produces it, the
-  emitter maps it to the machine's class.
+  value type** on its own (`spellable()` refuses a nameless one), but the type pass names the
+  machine's class from the creating function (`semMachineType`: `everyOther_yieldable`,
+  `Span_iterPtr_yieldable<T>`), so a binding's declaration spells the class rather than an
+  `auto`. The parser produces it, the emitter maps it to the machine's class.
 
 ## Where the rewrite runs, and why there
 

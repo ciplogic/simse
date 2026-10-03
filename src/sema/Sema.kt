@@ -289,7 +289,12 @@ data class Analyzer(
 
 // The type names that declare `unInit` (`collectUninitTypes`): such a type has a C++
 // destructor, so a value of it would run that destructor once per copy.
-    var uninitTypes: Dictionary<Str, Bool>
+    var uninitTypes: Dictionary<Str, Bool>,
+
+// The class a method body is analyzed inside, so `this.field` has a type: the `for` rewrite
+// resolves an iterated *field* (`this.functions`) like any other receiver. Empty outside a
+// data class's methods.
+    var classType: AstXmlNode
 ) {
 }
 
@@ -309,7 +314,8 @@ fun newAnalyzer(inputs: *List<SemaInput>): Analyzer {
         List<List<Str>>(),
         0,
         List<Str>(),
-        Dictionary<Str, Bool>()
+        Dictionary<Str, Bool>(),
+        xmlEmptyNode()
     )
 }
 
@@ -320,4 +326,3 @@ fun analyze(inputs: *List<SemaInput>): List<Str> {
     analyzer.run()
     return analyzer.diags
 }
-

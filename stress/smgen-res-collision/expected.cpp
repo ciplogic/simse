@@ -15,6 +15,8 @@ Int64 simse_nowNanos();
 
 template <class T>
 Span<T> simse_spanOf(List<T>* items);
+template <class T>
+Span<T> simse_spanOf(Array<T>* items);
 
 #include <cstdint>
 #include <type_traits>

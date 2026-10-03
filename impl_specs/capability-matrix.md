@@ -4476,3 +4476,28 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   comment-only or `this->` -> `self->` and an indent, nothing else),
   `bun build.js --release --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js` - both fixed
   points byte for byte.
+
+- **The `for` machine is one span machine; a container is rewritten to its span first.**
+  The prelude declared `List<T>.iter`/`Array<T>.iter` (and the `iterPtr` twins) beside
+  `Span<T>.iter`: six walks for what is one. They are gone. `SemaCall.spanForAt` rewrites the
+  desugared `_sm_for<n> = c.iter()` receiver in place - `List` -> `spanOf(c)`, `Array` ->
+  `spanOfArray(c)`, `Str` -> `spanOfStr(c)` (a `StrView` already *is* a `Span<Char>`) - so the
+  call really is `Span<T>.iter()`, the machine class is `Span_iter_yieldable<T>`
+  (`semMachineType` names it from the rewritten receiver), and a program carries the one class.
+  `spanOfArray` is a Simse name of its own because the extractor refuses two same-arity
+  overloads of a plain call, while both map to the overloaded C++ `simse_spanOf`. For the
+  rewrite to reach its receiver, sema's `exprType` grew the shapes a loop nest reads through: a
+  literal (`val s = "x"` is a `Str`), a field read (`this.functions`, `box.items`), a machine's
+  element (`_sm_for1.current`), a member call (`xs.toArray()`, through `semaMemberCall`, which
+  resolves either receiver spelling), and a construction. `promoteForLoops` now walks `Body`,
+  `Then` and `Else` and runs inside each scope *before* it pops (`if` arms, `while` bodies),
+  because `val xs = ...; for (x in xs)` resolves from a binding a function-level pass would
+  find already gone. Container `for`s that resolve emit a spelled `Span_iter*_yieldable<T>`
+  slot: in the compiler's own emission, `auto _sm_for` declarations and `List_iter`/`Array_iter`
+  classes are both zero. `stress/collections` gained `for-str` (a `Str`, a `StrView`, an
+  `Array` field, a chained `for` over a loop variable's field, and a `for` inside an `if`); the
+  `collections`, `machines`, `objects`, `strings` and `smgen-res*` C++ goldens were re-captured
+  for the new class names and the `spanOf(Array<T>*)` overload.
+  Verified: `bun build.js --release --no-lto`, `bun tools/stress.js` **63/63**,
+  `bun build.js --release --no-lto --out src/simse_bootstrap.cpp` then `bun tools/bootstrap.js` -
+  both fixed points byte for byte.

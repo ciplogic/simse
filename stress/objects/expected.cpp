@@ -37,6 +37,8 @@ static struct __SmStringTableInitType {
 
 template <class T>
 Span<T> simse_spanOf(List<T>* items);
+template <class T>
+Span<T> simse_spanOf(Array<T>* items);
 
 #include <cstdint>
 #include <type_traits>
@@ -1641,6 +1643,12 @@ int main() {
 template <class T>
 inline Span<T> simse_spanOf(List<T>* items) {
     return Span<T>(items->data(), items->size());
+}
+
+template <class T>
+inline Span<T> simse_spanOf(Array<T>* items) {
+    const Int count = items->count();
+    return Span<T>(count > 0 ? &(*items)[0] : nullptr, count);
 }
 
 template <class T>

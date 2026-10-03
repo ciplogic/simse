@@ -377,10 +377,11 @@ Not implemented, and reported rather than misparsed: Kotlin's pattern labels
 Status: implemented; lowered to `while` in the parser (`impl_specs/for.md`).
 
 `for` iterates whatever has an **`iter`**: an `in`-scope extension function returning a
-state machine (`..T` in its signature, `impl_specs/yield.md`). A container is iterable
-(the prelude writes one `iter` per container in Simse: `List<T>`, `Array<T>`, and
-`Span<T>` today; `Dictionary<K, V>` and ranges are not iterable yet), and a state machine
-is its own identity, so both of these work:
+state machine (`..T` in its signature, `impl_specs/yield.md`). The prelude writes one on the
+span (`Span<T>.iter`), and a `List`/`Array`/`Str` receiver is viewed as its span first
+(`spanOf`/`spanOfArray`/`spanOfStr`, `impl_specs/for.md`), so every container shares the one
+machine; `Dictionary<K, V>` and ranges are not iterable yet. A state machine is its own
+identity, so both of these work:
 
 ```text
 for (value in source) { ... }

@@ -194,8 +194,8 @@ fun Analyzer.checkCallArity(call: *AstXmlNode): Unit {
     )
 }
 
-// The receiver's type when the checker tracks it (a local/parameter or a generic
-// construction); empty when unknown.
+// The receiver's type when the checker tracks it (a local/parameter, a literal, a field
+// read, a member call, or the machine a wrap builds); empty when unknown.
 fun Analyzer.exprType(expr: *AstXmlNode): AstXmlNode {
     if (xmlKind(expr) == AstNodeCategory.ExprName) {
         val binding: Opt<ValueBinding> = this.lookupValue(xmlAttr(expr, AstNodeAttributeKind.Name))
@@ -203,6 +203,27 @@ fun Analyzer.exprType(expr: *AstXmlNode): AstXmlNode {
             return binding.value().type
         }
         return xmlEmptyNode()
+    }
+    // A literal's type is its spelling; an unannotated `val s = "x"` is a `Str`, and the
+    // `for` rewrite needs it to see the string through `spanOfStr`.
+    if (xmlKind(expr) == AstNodeCategory.ExprStrLit) {
+        return semNamedType("Str")
+    }
+    if (xmlKind(expr) == AstNodeCategory.ExprCharLit) {
+        return semNamedType("Char")
+    }
+    if (xmlKind(expr) == AstNodeCategory.ExprMember) {
+        // A field read (`this.functions`, `box.items`) or a machine's element
+        // (`_sm_for1.current`): the base carries the type both are read through.
+        val base: AstXmlNode = this.exprType(xmlChildPtr(expr, AstNodeKind.Receiver))
+        if (xmlIsEmpty(base)) {
+            return xmlEmptyNode()
+        }
+        val member: Str = xmlAttr(expr, AstNodeAttributeKind.Name)
+        if (xmlKind(base) == AstNodeCategory.TypeYield && member == "current") {
+            return this.semaYieldElement(base)
+        }
+        return this.semaFieldType(base, member)
     }
     if (xmlKind(expr) == AstNodeCategory.ExprCall) {
         val callee: *AstXmlNode = xmlChildPtr(expr, AstNodeKind.Callee)
@@ -223,8 +244,143 @@ fun Analyzer.exprType(expr: *AstXmlNode): AstXmlNode {
             xmlAddChildren(built, args)
             return built
         }
+        if (xmlKind(callee) == AstNodeCategory.ExprMember) {
+            // A member call (`xs.toArray()`, `c.iter()`): the declared extension's return
+            // type, or the machine a wrap builds. Naming the wrap's machine is what lets a
+            // loop variable (`_sm_forN.current`) and every field read through it carry the
+            // element type - the chain the `for` rewrite follows.
+            return this.semaMemberCall(expr)
+        }
+        if (xmlKind(callee) == AstNodeCategory.ExprName) {
+            // A construction (`Rack(...)`) builds a value of the name it calls.
+            val builtName: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
+            if (this.types.has(builtName)) {
+                return semNamedType(builtName)
+            }
+        }
+        return xmlEmptyNode()
     }
     return xmlEmptyNode()
+}
+
+// The declared type of the field `member` on a base of type `base`, when both are known.
+fun Analyzer.semaFieldType(base: AstXmlNode, member: Str): AstXmlNode {
+    val outer: AstXmlNode = this.semaReceiverOuter(base)
+    val kind: AstNodeCategory = xmlKind(outer)
+    if (kind != AstNodeCategory.TypeNamed && kind != AstNodeCategory.TypeGeneric) {
+        return xmlEmptyNode()
+    }
+    val decl: *AstXmlNode = this.types.getPtr(xmlAttr(outer, AstNodeAttributeKind.Name))
+    if (decl == null || decl.name != AstNodeKind.DataClass) {
+        return xmlEmptyNode()
+    }
+    for (*field in xmlChildren(decl, AstNodeKind.Field)) {
+        if (xmlAttr(field, AstNodeAttributeKind.Name) == member) {
+            return xmlChild(field, AstNodeKind.Type)
+        }
+    }
+    return xmlEmptyNode()
+}
+
+// The element a machine hands out: the `Inner` of its `..T`, as a value type.
+fun Analyzer.semaYieldElement(machine: AstXmlNode): AstXmlNode {
+    val inner: AstXmlNode = xmlChild(machine, AstNodeKind.Inner)
+    if (xmlIsEmpty(inner)) {
+        return xmlEmptyNode()
+    }
+    return semReRole(inner, AstNodeKind.Type)
+}
+
+// The element a container's span iterates, or empty when the container has no span view:
+// `List<T>`/`Array<T>`/`Span<T>` hold `T`, `Str` holds `Char` (`spanConversion`). A `StrView`
+// is `Span<Char>` through its alias, so it lands on the `Span` arm.
+fun Analyzer.semaSpanElement(containerType: AstXmlNode): AstXmlNode {
+    val outer: AstXmlNode = this.semaReceiverOuter(containerType)
+    val kind: AstNodeCategory = xmlKind(outer)
+    if (kind != AstNodeCategory.TypeNamed && kind != AstNodeCategory.TypeGeneric) {
+        return xmlEmptyNode()
+    }
+    val name: Str = xmlAttr(outer, AstNodeAttributeKind.Name)
+    if (name == "Str") {
+        return semNamedType("Char")
+    }
+    if (name != "Span" && this.spanConversion(containerType) == "") {
+        return xmlEmptyNode()
+    }
+    val args: List<AstXmlNode> = xmlChildren(outer, AstNodeKind.TypeArg)
+    if (args.size() == 1) {
+        return semReRole(args[0], AstNodeKind.Type)
+    }
+    return xmlEmptyNode()
+}
+
+// The receiver a function declares, whichever spelling: the `fun T.f()` receiver child, or
+// the first parameter named `this` (`fun f(this: T)`). Empty when the function has none.
+fun semaReceiverPattern(fn: *AstXmlNode): AstXmlNode {
+    val receiver: *AstXmlNode = xmlChildPtr(fn, AstNodeKind.Receiver)
+    if (!xmlIsEmpty(receiver)) {
+        return *receiver
+    }
+    return semExtensionReceiver(fn)
+}
+
+// The result type of a member call (`recv.name(...)`), when the receiver's type and the
+// declaration are known: the declared function's return type with the receiver's type
+// parameters substituted. A wrap (`iter`/`iterPtr`) answers with the machine it builds: the
+// container's element through its span, a machine itself (identity), or the declared wrap.
+// Empty when the checker cannot name it; the rewrite stays silent then.
+fun Analyzer.semaMemberCall(call: *AstXmlNode): AstXmlNode {
+    val callee: *AstXmlNode = xmlChildPtr(call, AstNodeKind.Callee)
+    if (xmlKind(callee) != AstNodeCategory.ExprMember) {
+        return xmlEmptyNode()
+    }
+    val receiverType: AstXmlNode = this.iteratedType(xmlChildPtr(callee, AstNodeKind.Receiver))
+    if (xmlIsEmpty(receiverType)) {
+        return xmlEmptyNode()
+    }
+    val name: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
+    if (name == "iter" || name == "iterPtr") {
+        if (xmlKind(receiverType) == AstNodeCategory.TypeYield) {
+            return receiverType
+        }
+        val element: AstXmlNode = this.semaSpanElement(receiverType)
+        if (!xmlIsEmpty(element)) {
+            return semMachineOfElement(element)
+        }
+    }
+    val overloads: *List<AstXmlNode> = this.functions.getPtr(name)
+    if (overloads == null) {
+        return xmlEmptyNode()
+    }
+    for (*candidate in overloads) {
+        val pattern: AstXmlNode = semaReceiverPattern(candidate)
+        if (xmlIsEmpty(pattern)) {
+            continue
+        }
+        val params: List<Str> = xmlTypeParamNames(candidate)
+        if (!this.semaReceiverNameMatches(pattern, receiverType, params)) {
+            continue
+        }
+        var bindings: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
+        if (!semBindTypes(pattern, receiverType, params, bindings)) {
+            continue
+        }
+        val ret: AstXmlNode = semSubstitute(xmlChildPtr(candidate, AstNodeKind.ReturnType), bindings, params)
+        if (!xmlIsEmpty(ret)) {
+            return ret
+        }
+    }
+    return xmlEmptyNode()
+}
+
+// A `..element` node for the checker's own bindings. The C++ class is named by
+// `semMachineType` at the call site; the checker only needs the element type.
+fun semMachineOfElement(element: AstXmlNode): AstXmlNode {
+    var node: AstXmlNode = AstXmlNode(
+        AstNodeKind.Type, AstNodeCategory.TypeYield, List<AstNodeAttribute>(), Array<AstXmlNode>()
+    )
+    xmlAddChild(node, semReRole(element, AstNodeKind.Inner))
+    return node
 }
 
 // `for` is lowered into the declaration of the machine it iterates (`_sm_for<n>`,
@@ -265,6 +421,11 @@ fun Analyzer.checkForIterable(stmt: *AstXmlNode): Unit {
     if (this.hasWrap(wrap, receiverType)) {
         return
     }
+    // A container's `for` is rewritten to iterate its span (`spanForAt`), so it is iterable
+    // even though the prelude declares no `iter` of its own for it.
+    if (this.spanConversion(receiverType) != "") {
+        return
+    }
     this.diag(
         xmlLine(stmt), xmlColumn(stmt),
         fmtStr(
@@ -294,46 +455,171 @@ fun Analyzer.hasWrap(wrap: *Str, receiverType: *AstXmlNode): Bool {
     return false
 }
 
-// The receiver's outer type, ignoring handles and type arguments.
-fun Analyzer.semaReceiverNameMatches(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *List<Str>): Bool {
-    var actualPtr: *AstXmlNode = actual
-    while (true) {
-        val kind: AstNodeCategory = xmlKind(actualPtr)
-        if (kind != AstNodeCategory.TypeReference && kind != AstNodeCategory.TypePointer) {
-            break
+// The receiver's outer type, ignoring handles and type arguments - and following a
+// `typealias`, so a view (`StrView` is `Span<Char>`) matches the span's own extensions.
+fun Analyzer.semaReceiverOuter(actual: AstXmlNode): AstXmlNode {
+    var current: AstXmlNode = actual
+    var guard: Int = 0
+    while (guard < 32) {
+        guard = guard + 1
+        val kind: AstNodeCategory = xmlKind(current)
+        if (kind == AstNodeCategory.TypeReference || kind == AstNodeCategory.TypePointer) {
+            val inner: AstXmlNode = xmlChild(current, AstNodeKind.Inner)
+            if (xmlIsEmpty(inner)) {
+                return current
+            }
+            current = inner
+            continue
         }
-        val inner: *AstXmlNode = xmlChildPtr(actualPtr, AstNodeKind.Inner)
-        if (xmlIsEmpty(inner)) {
-            break
+        if (kind == AstNodeCategory.TypeNamed) {
+            val name: Str = xmlAttr(current, AstNodeAttributeKind.Name)
+            val decl: *AstXmlNode = this.types.getPtr(name)
+            if (decl != null && decl.name == AstNodeKind.TypeAlias) {
+                val target: AstXmlNode = xmlChild(decl, AstNodeKind.TargetType)
+                if (!xmlIsEmpty(target)) {
+                    current = target
+                    continue
+                }
+            }
         }
-        actualPtr = inner
+        return current
     }
+    return current
+}
+
+// The span a container's `for` iterates through, or "" when the receiver is not a container
+// the prelude can view: `List` through `spanOf`, `Array` through `spanOfArray` (a name of its
+// own - the extractor refuses two same-arity overloads of a plain call), `Str` through
+// `spanOfStr`. A `Span`/`StrView` is already a span, and a machine or a user type is somebody
+// else's `iter`.
+fun Analyzer.spanConversion(receiverType: *AstXmlNode): Str {
+    val outer: AstXmlNode = this.semaReceiverOuter(*receiverType)
+    val kind: AstNodeCategory = xmlKind(outer)
+    if (kind != AstNodeCategory.TypeNamed && kind != AstNodeCategory.TypeGeneric) {
+        return ""
+    }
+    val name: Str = xmlAttr(outer, AstNodeAttributeKind.Name)
+    if (name == "List") {
+        return "spanOf"
+    }
+    if (name == "Array") {
+        return "spanOfArray"
+    }
+    // A `Str` iterates its bytes: `spanOfStr` borrows the string into a view, so a `for`
+    // over a `Str` is the same span machine a `StrView` uses.
+    if (name == "Str") {
+        return "spanOfStr"
+    }
+    return ""
+}
+
+// A `for` over a `List`/`Array`/`Str` iterates its *span*: the wrap's receiver becomes
+// `spanOf(c)` (or `spanOfArray(c)`/`spanOfStr(c)`), so the span's `iter`/`iterPtr` is the one
+// iterator machine a program carries, and the machine's C++ class is named after the span
+// (`semMachineType`), not the container. The lowering hoists the view into a function-scope
+// slot, so it outlives the loop (`stress/collections`'s for-temporary part). A `Span`/`StrView`
+// receiver is already a span; a machine or a user type is left as written.
+fun Analyzer.spanForAt(stmts: *List<AstXmlNode>, index: Int): Unit {
+    val machineDecl: *AstXmlNode = *stmts[index]
+    if (xmlKind(machineDecl) != AstNodeCategory.StmtVarDecl) {
+        return
+    }
+    val machineName: Str = xmlAttr(machineDecl, AstNodeAttributeKind.Name)
+    if (!semaIsForTemplateName(*machineName)) {
+        return
+    }
+    val init: *AstXmlNode = xmlChildPtr(machineDecl, AstNodeKind.Init)
+    if (xmlKind(init) != AstNodeCategory.ExprCall) {
+        return
+    }
+    val callee: *AstXmlNode = xmlChildPtr(init, AstNodeKind.Callee)
+    if (xmlKind(callee) != AstNodeCategory.ExprMember) {
+        return
+    }
+    val wrap: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
+    if (wrap != "iter" && wrap != "iterPtr") {
+        return
+    }
+    val receiver: *AstXmlNode = xmlChildPtr(callee, AstNodeKind.Receiver)
+    val receiverType: AstXmlNode = this.iteratedType(receiver)
+    if (xmlIsEmpty(receiverType) || xmlKind(receiverType) == AstNodeCategory.TypeYield) {
+        return
+    }
+    val conversion: Str = this.spanConversion(receiverType)
+    if (conversion == "") {
+        return
+    }
+    // The receiver *becomes* `conversion(receiver)`, in place: the machine declaration, the
+    // wrap and the loop are untouched, so only the iterated expression changes.
+    val original: AstXmlNode = *receiver
+    var conversionName: AstXmlNode = AstXmlNode(
+        AstNodeKind.Callee, AstNodeCategory.ExprName, List<AstNodeAttribute>(), Array<AstXmlNode>()
+    )
+    conversionName.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, conversion))
+    var call: AstXmlNode = AstXmlNode(
+        AstNodeKind.Expr, AstNodeCategory.ExprCall, List<AstNodeAttribute>(), Array<AstXmlNode>()
+    )
+    xmlAddChild(call, conversionName)
+    var argument: AstXmlNode = original
+    argument.name = AstNodeKind.Arg
+    xmlAddChild(call, argument)
+    receiver.kind = AstNodeCategory.ExprCall
+    receiver.attributes = call.attributes
+    receiver.Children = call.Children
+}
+
+fun Analyzer.semaReceiverNameMatches(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *List<Str>): Bool {
+    val current: AstXmlNode = this.semaReceiverOuter(*actual)
     val patternKind: AstNodeCategory = xmlKind(pattern)
     if (patternKind == AstNodeCategory.TypeNamed) {
-        return xmlKind(actualPtr) == AstNodeCategory.TypeNamed
-                && xmlAttr(actualPtr, AstNodeAttributeKind.Name) == xmlAttr(pattern, AstNodeAttributeKind.Name)
+        return xmlKind(current) == AstNodeCategory.TypeNamed
+                && xmlAttr(current, AstNodeAttributeKind.Name) == xmlAttr(pattern, AstNodeAttributeKind.Name)
     }
     if (patternKind == AstNodeCategory.TypeGeneric) {
         val patternName: Str = xmlAttr(pattern, AstNodeAttributeKind.Name)
         if (xmlIsTypeParam(patternName, typeParams)) {
             return true
         }
-        return xmlKind(actualPtr) == AstNodeCategory.TypeGeneric
-                && xmlAttr(actualPtr, AstNodeAttributeKind.Name) == patternName
+        return xmlKind(current) == AstNodeCategory.TypeGeneric
+                && xmlAttr(current, AstNodeAttributeKind.Name) == patternName
     }
     return false
 }
 
-// The type a `for` iterates, for the shapes the checker can name: a tracked binding,
-// a type construction, or a declared function's return type. Unknown stays silent.
+// The type a `for` iterates, for the shapes the checker can name: a tracked binding (with
+// `this`), a field read (`this.functions`, `box.items`), an indexed element (`lists[0]`),
+// a member call (`xs.toArray()`), a type construction, or a declared function's return
+// type. Unknown stays silent.
 fun Analyzer.iteratedType(expr: *AstXmlNode): AstXmlNode {
     if (xmlKind(expr) == AstNodeCategory.ExprName) {
         return this.exprType(expr)
+    }
+    if (xmlKind(expr) == AstNodeCategory.ExprMember) {
+        // A field read: the field's declared type, reached through the base's.
+        val base: AstXmlNode = this.iteratedType(xmlChildPtr(expr, AstNodeKind.Receiver))
+        return this.semaFieldType(base, xmlAttr(expr, AstNodeAttributeKind.Name))
+    }
+    if (xmlKind(expr) == AstNodeCategory.ExprIndex) {
+        // The element of the indexed container (`lists[0]` is what `lists` holds).
+        val base: AstXmlNode = this.iteratedType(xmlChildPtr(expr, AstNodeKind.Receiver))
+        val outer: AstXmlNode = this.semaReceiverOuter(base)
+        if (xmlKind(outer) == AstNodeCategory.TypeGeneric) {
+            val args: List<AstXmlNode> = xmlChildren(outer, AstNodeKind.TypeArg)
+            if (args.size() == 1) {
+                return args[0]
+            }
+        }
+        return xmlEmptyNode()
     }
     if (xmlKind(expr) != AstNodeCategory.ExprCall) {
         return xmlEmptyNode()
     }
     val callee: *AstXmlNode = xmlChildPtr(expr, AstNodeKind.Callee)
+    if (xmlKind(callee) == AstNodeCategory.ExprMember) {
+        // A member call (`xs.toArray()`, `words.keys()`): the declared return type,
+        // resolved through the receiver (`exprType`).
+        return this.exprType(expr)
+    }
     var name: Str = ""
     if (xmlKind(callee) == AstNodeCategory.ExprGenericName) {
         name = xmlAttr(callee, AstNodeAttributeKind.Name)
@@ -441,14 +727,15 @@ fun Analyzer.checkExtensionCallArity(call: *AstXmlNode): Unit {
 // allocates - on every iteration; the pointer form hands out the element's place instead.
 // `--no-borrow` turns it off with the rest of the rewrite.
 fun Analyzer.promoteForLoops(stmts: *List<AstXmlNode>): Unit {
-    if (bpNoBorrow()) {
-        return
-    }
     var i: Int = 0
     while (i < stmts.size()) {
         val stmt: *AstXmlNode = *stmts[i]
+        // Every place a statement list can hide: a block's body, and an `if`'s arms. Missing
+        // `Then`/`Else` is why a `for` inside an `if` used to keep its container wrap.
         for (*child in stmt.Children) {
-            if (child.name != AstNodeKind.Body) {
+            if (child.name != AstNodeKind.Body && child.name != AstNodeKind.Then
+                && child.name != AstNodeKind.Else
+            ) {
                 continue
             }
             val nested: List<AstXmlNode> = xmlChildren(*child, AstNodeKind.Stmt)
@@ -456,7 +743,12 @@ fun Analyzer.promoteForLoops(stmts: *List<AstXmlNode>): Unit {
                 this.promoteForLoops(*nested)
             }
         }
-        this.promoteForAt(stmts, i)
+        // The span rewrite is the lowering, not the borrow optimization below: a `for` over
+        // a container iterates the span's one iterator machine.
+        this.spanForAt(stmts, i)
+        if (!bpNoBorrow()) {
+            this.promoteForAt(stmts, i)
+        }
         i = i + 1
     }
 }

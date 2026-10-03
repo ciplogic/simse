@@ -41,6 +41,13 @@ data class Span<T>(var ptr: *T, var len: Int) {
 @SmGen("res", "spanOf")
 borrow fun spanOf<T>(items: *List<T>): Span<T>
 
+// The same over an array's block: `for (x in array)` iterates this span
+// (`impl_specs/for.md`), so the array and the list share one iterator machine. A name of its
+// own, not a second `spanOf`: the extractor's plain-call resolution refuses two same-arity
+// overloads (it disambiguates *members* by receiver, not arguments by type).
+@SmGen("res", "spanOf", "simse_spanOf")
+borrow fun spanOfArray<T>(items: *Array<T>): Span<T>
+
 // `span.atPtr(index)`: the element at `index` as a *place* (`*T`), so a write through it
 // reaches the source (the `*T` the class's own `auto` members cannot name). The body goes
 // through `this[index]`, not `this.ptr[index]`: the *subscript* is the place the emitter can

@@ -7,28 +7,10 @@
 package rtl
 
 // `for (x in c)` is `for (x in c.iter())`: anything with an `iter` in scope is iterable,
-// and a container walks itself in order (impl_specs/for.md).
-fun List<T>.iter<T>(): ..T {
-    var i: Int = 0
-    val len = this.size();
-    while (i < len) {
-        yield this[i]
-        i = i + 1
-    }
-}
-
-// The same walk over `Array`/`Span` (counted by `count()`/`size()`). The count is read once,
-// before the loop: the `while` lives in the machine's `advance()`, so a count in the
-// condition would be a call on every resumption.
-fun Array<T>.iter<T>(): ..T {
-    var i: Int = 0
-    val len = this.count();
-    while (i < len) {
-        yield this[i]
-        i = i + 1
-    }
-}
-
+// and a container walks itself in order (impl_specs/for.md). A *container's* `for` is
+// rewritten to iterate its span (`spanOf`/`spanOfArray`/`spanOfStr`, sema's `for` rewrite),
+// so the span's walk below is the only iterator machine a program carries - `List`, `Array`
+// and `Str` name none of their own.
 fun Span<T>.iter<T>(): ..T {
     var i: Int = 0
     val len = this.size();
@@ -40,24 +22,6 @@ fun Span<T>.iter<T>(): ..T {
 
 // The pointer form, `for (*x in c)`: the same walk handing out each element's *place*
 // (`*this[i]`), so a mutation through the loop variable reaches the element (impl_specs/for.md).
-fun List<T>.iterPtr<T>(): ..*T {
-    var i: Int = 0
-    val len = this.size();
-    while (i < len) {
-        yield * this[i]
-        i = i + 1
-    }
-}
-
-fun Array<T>.iterPtr<T>(): ..*T {
-    var i: Int = 0
-    val len = this.count();
-    while (i < len) {
-        yield * this[i]
-        i = i + 1
-    }
-}
-
 fun Span<T>.iterPtr<T>(): ..*T {
     var i: Int = 0
     val len = this.size();

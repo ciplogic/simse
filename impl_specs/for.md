@@ -47,9 +47,11 @@ template's. Its extra increment on the exhausted iteration is never read again.
 
 ## The machine's interface, and the one rule sema needed
 
-`..T` is deliberately **not spellable** (`spellable()` refuses it): a machine's C++ type is the
-class the *creating function* got, so two functions yielding `Int` have two machine classes and
-`..T` names neither. A name bound to a machine therefore stays `auto`.
+`..T` is deliberately **not spellable on its own** (`spellable()` refuses a nameless one),
+but the type pass *names* the machine at the call site (`semMachineType`): the class is the
+creating function's, qualified by its package and prefixed with the receiver's outer type
+(`Span_iterPtr_yieldable<T>`), so a binding's declaration spells the class rather than falling
+back to `auto`. A name bound to a machine therefore stays `auto`.
 
 So the lowering-time type pass (`src/sema/TypeInfer.kt`) knows the *one* method of a
 machine's protocol and its one field, which is all the template reads:
@@ -71,8 +73,9 @@ element type before reaching that rule.
 
 The parser cannot tell what a `for` iterates, so sema's checker (`Analyzer::checkForIterable`)
 uses the recognizable machine name (`_sm_for<n>`, the lowering's `_sm_expr<n>` convention) and
-the invisible `iter()` wrap: a known receiver that is neither a machine nor a type with an
-`iter` is the error - at the `for`, naming the type the user wrote, not the generated call:
+the invisible `iter()` wrap: a known receiver that is neither a machine, a type with an `iter`,
+nor a container with a span view (below) is the error - at the `for`, naming the type the user
+wrote, not the generated call:
 
 ```text
 stress/diagnostic-not-iterable/src/main.kt:11:5: a `for` iterates a machine (`..T`)
@@ -95,11 +98,26 @@ for (item in x.iter()) { ... }
 
 and anything the language can find an `iter` for is iterable. The call is a *member* call
 (`x.iter()`, not `iter(x)`): the type pass binds a receiver function's type parameter from the
-receiver, which is what types the loop variable. The prelude's, one per container - with
-`Array<T>` counting with `count()` and `Span<T>` with `size()`:
+receiver, which is what types the loop variable.
+
+**The prelude declares exactly one `iter`, on the span**, and a *container* is rewritten to
+iterate its span first (`SemaCall.spanForAt`, in sema, on the desugared `_sm_for<n>`):
+
+| receiver | rewrite | element |
+| --- | --- | --- |
+| `List<T>` | `spanOf(x)` | `T` |
+| `Array<T>` | `spanOfArray(x)` | `T` |
+| `Str` | `spanOfStr(x)` | `Char` |
+| `Span<T>` / `StrView` | already a span | `T` |
+
+so `for (x in list)`, `for (x in array)` and `for (ch in text)` walk the *same* machine
+(`Span<T>.iter` below), and a program carries one iterator class (`Span_iter_yieldable<T>`)
+rather than one per container. The lowering hoists the view into a function-scope slot, so
+`for (x in makeList())` iterates storage that outlives the loop (`stress/collections`'s
+`for-temporary` part).
 
 ```simse
-fun List<T>.iter<T>(): ..T {
+fun Span<T>.iter<T>(): ..T {
     var i: Int = 0
     val len = this.size();
     while (i < len) {
@@ -113,13 +131,19 @@ The length is read **once**, before the loop, and lives in a machine field (`len
 ends up inside `advance()`, so a `this.size()` in its condition would be a call per element
 (re-read on every resume) where the length is a constant of the walk.
 
-**A machine's class carries its receiver's name** (`List_iter_yieldable`, `Array_iter_yieldable`):
-the prelude has one `iter` per container, so the function name alone would name every
-container's machine the same way. Because the name is the receiver's, **a prelude body is
-emitted for the receiver the program names**: the reachability over the program's calls (by
-name) is closed over the types it spells, including the signatures of the prelude functions it
-calls - `xs.toArray()` reaches an `Array` because the prelude says `toArray` returns one. A
-program that iterates a list therefore carries the list machine only.
+**A machine's class carries its receiver's name** (`Span_iter_yieldable<T>`, and for a
+container the receiver *is* the rewritten span): `semMachineType` builds it from the function
+and the receiver's outer type, which is what makes the `_sm_for<n>` slot spellable. The
+rewritten call resolves like any other (`Span<T>.iter`), so a program that iterates a list
+carries the span machine and nothing of the container.
+
+For the rewrite to fire, the checker has to know the iterated expression's type. `exprType`
+(`src/sema/SemaCall.kt`) resolves the shapes a loop nest actually reads through: a tracked
+binding (with `this`), a literal (`val s = "x"` is a `Str`), a field read (`this.functions`,
+`box.items`), a machine's element (`_sm_for1.current`), a member call (`xs.toArray()`,
+`words.keys()`), and a construction. A loop variable binds the element of the machine its
+`...current` comes from, so `for (line in lines) for (ch in line.text)` resolves the inner
+receiver through the outer variable.
 
 - **A user's own type**, by the same convention (an extension function returning `..T`),
   which is the static-interface idea: iteration is *satisfied* by a function the type's
@@ -164,10 +188,8 @@ machine is generic over its element type and `..*T` is a `..T` whose element is 
 - sema's gate (`checkForIterable`) takes the wrap *name* from the call the parser wrote,
   so it reports the right one (`hasWrap`).
 
-The prelude writes one per container, next to its value twin:
-
 ```simse
-fun List<T>.iterPtr<T>(): ..*T {
+fun Span<T>.iterPtr<T>(): ..*T {
     var i: Int = 0
     val len = this.size();
     while (i < len) {
@@ -176,6 +198,9 @@ fun List<T>.iterPtr<T>(): ..*T {
     }
 }
 ```
+
+A container reaches this one through the same span rewrite its value twin uses, so the
+pointer form covers every iterable shape with the one machine.
 
 `yield *this[i]` is the language's borrow: `*place` is the place's address and it keeps
 the place in place (`ExpressionLowering` never binds a `Deref`'s operand to a value
@@ -201,7 +226,8 @@ scalar element is read with `*value`).
 The parser picks the wrap before types are known, so the choice is made in sema
 (`SemaCall.promoteForLoops`): a `for (x in c)` becomes `iterPtr` when
 
-- the receiver resolves to a `List`/`Array`/`Span` with an `iterPtr` (a machine has none), and
+- the receiver resolves to a `List`/`Array`/`Span` (a container is already its span by this
+  point in the pass: the rewrite above runs first) with an `iterPtr` (a machine has none), and
 - the element is *deep* - a `Str`, or a data class with a `Str` field (`bpDeepElement`, from
   the borrow pass's `bpDeepClasses` fixpoint) - and
 - the body only reads `x` (`bpLoopReadOnly`, the parameter rule: no write through it, no
@@ -223,22 +249,28 @@ compiler-wide speedup.
 ## Status
 
 `for (x in source)` is `source.iter()` plus the `while` the parser writes (`parseFor`); the
-prelude provides `List<T>.iter()` (a `yield`ing function in Simse); a *machine* is its own
-identity, so `for (x in m)` iterates `m` itself.
+prelude provides `Span<T>.iter()` (a `yield`ing function in Simse) and a `List`/`Array`/`Str`
+receiver is rewritten to its span view first (`spanForAt`); a *machine* is its own identity,
+so `for (x in m)` iterates `m` itself.
 
 - The machine's shape and lowering rules are in `impl_specs/yield.md` (`<fn>_yieldable`
-  carrying the arguments, `_sm_for<n>` left `auto`, the receiver field `_sm_self` /
-  `linear::yieldReceiverField`, `emitMachine`, the dispatcher's `C2362` placement,
+  carrying the arguments, `_sm_for<n>` typed by `semMachineType`, the receiver field
+  `_sm_self` / `linear::yieldReceiverField`, `emitMachine`, the dispatcher's `C2362` placement,
   `ExpressionLowering`'s `StmtYield`).
 - **the wrap is a member call** (`source.iter()`): the type pass binds a receiver function's
   type parameter from the receiver (`memberReturn` -> `bindTypes`), so the loop variable is
   typed; a plain `iter(source)` would leave it untyped. `Yield` patterns unify and bind like a
   pointer's pointee (`sema::unifyType`, `bindTypes`).
-- **the gate is `Sema.kt`'s** (`checkForIterable`): it asks "is this a machine, or a type with
-  an `iter`?", names the receiver's type otherwise (`stress/diagnostic-not-iterable`), and
-  compares receiver *names* (`List<T>` takes any `List<...>`); an unknown receiver stays silent
-  (the C++ compiler gets the last word). The call itself resolves with the full unification in
-  `codegen`.
+- **the gate is `Sema.kt`'s** (`checkForIterable`): it asks "is this a machine, a type with
+  an `iter`, or a container with a span view?", names the receiver's type otherwise
+  (`stress/diagnostic-not-iterable`), and compares receiver *names* (`List<T>` takes any
+  `List<...>`); an unknown receiver stays silent (the C++ compiler gets the last word). The
+  call itself resolves with the full unification in `codegen`.
+- **the rewrite runs per scope, before the scope pops** (`promoteForLoops` is called at the
+  end of a function body, a lambda body, an `if` arm and a `while` body): resolving
+  `val xs = ...; for (x in xs)` needs the binding that a body's own scope holds, so a pass
+  that ran only at function level could not see it. The walk also reaches the `Body`,
+  `Then` and `Else` children, which is what lets it find a `for` inside an `if` arm.
 - **a prelude body is emitted when the program reaches it by name**: a name reachability over
   the calls (a callee is a `Name`, `GenericName` or `Member`), closed over the prelude bodies
   themselves emitted, so a program that never iterates carries none of it.
@@ -246,7 +278,7 @@ identity, so `for (x in m)` iterates `m` itself.
 Still open:
 
 - **other containers**: `Dictionary<K, V>` has no `iter` yet (a `while` over `keys()` walks it);
-  `Array<T>` and `Span<T>` landed with it.
+  it is also the one common container with no span view to fall back on.
 - **ranges**: `for (i in (2 .. 5))` - one more `iter` whose machine holds the two bounds.
 - **a `for` inside a yielding body**: the machine would have to be a *field*, and a field needs
   a nameable type (`impl_specs/yield.md`).

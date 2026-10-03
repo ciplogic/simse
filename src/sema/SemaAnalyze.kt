@@ -47,9 +47,13 @@ fun Analyzer.analyzeDecl(decl: *AstXmlNode): Unit {
                 }
             }
             val methods: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Function)
+            // A method's `this` is an instance of *this* class, so `this.field` resolves.
+            val savedClassType: AstXmlNode = this.classType
+            this.classType = semNamedType(xmlAttr(decl, AstNodeAttributeKind.Name))
             for (*method in methods) {
                 this.analyzeFunction(method)
             }
+            this.classType = savedClassType
             this.popScope()
             this.popTypeScope()
             return
@@ -91,13 +95,17 @@ fun Analyzer.analyzeFunction(decl: *AstXmlNode): Unit {
         i = i + 1
     }
     this.pushScope()
-    this.declareValue("this", true, false, xmlEmptyNode())
+    // `this` is the receiver for an extension function, and the enclosing class's instance
+    // for a method - so a `for` over `this.field` has a type to resolve (`iteratedType`).
+    var thisType: AstXmlNode = this.classType
     if (xmlAttr(decl, AstNodeAttributeKind.HasReceiver) == "true") {
         val receiver: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.Receiver)
         if (!xmlIsEmpty(receiver)) {
             this.resolveType(receiver)
+            thisType = *receiver
         }
     }
+    this.declareValue("this", true, false, thisType)
     val params: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
     for (*param in params) {
         val paramType: *AstXmlNode = xmlChildPtr(param, AstNodeKind.Type)
@@ -192,6 +200,10 @@ fun Analyzer.analyzeStmt(stmt: *AstXmlNode): Unit {
             for (*thenStmt in thenBody) {
                 this.analyzeStmt(thenStmt)
             }
+            // The `for` rewrite resolves the iterated expression (`spanForAt`), so it has to
+            // run while the scope that declares the receiver is still up - a `for` over a
+            // local of the arm's own (`val xs = ...; for (x in xs)`) is the common case.
+            this.promoteForLoops(*thenBody)
             this.popScope()
             val elseBlock: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Else)
             if (!xmlIsEmpty(elseBlock)) {
@@ -200,6 +212,7 @@ fun Analyzer.analyzeStmt(stmt: *AstXmlNode): Unit {
                 for (*elseStmt in elseBody) {
                     this.analyzeStmt(elseStmt)
                 }
+                this.promoteForLoops(*elseBody)
                 this.popScope()
             }
             return
@@ -216,6 +229,9 @@ fun Analyzer.analyzeStmt(stmt: *AstXmlNode): Unit {
             for (*bodyStmt in body) {
                 this.analyzeStmt(bodyStmt)
             }
+            // Same as the `if` arms: the rewrite runs in the scope that declares the
+            // iterated local, before the scope goes away.
+            this.promoteForLoops(*body)
             this.loopDepth = this.loopDepth - 1
             this.popScope()
             return
