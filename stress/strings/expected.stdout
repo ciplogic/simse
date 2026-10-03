@@ -37,3 +37,76 @@ false
 extraordinary
 true
 true
+alphabeta!
+xalpha
+alpha:beta
+alphap-q
+alpha-beta
+t=3
+aabb
+run-alphabeta
+[run-alphabeta]
+plain
+a=alpha
+alphaxbeta
+b=alpha=beta
+alpha
+
+Z
+v=alpha
+a=|b=|
+x=alpha
+|alpha|
+c=alpha:beta
+plain
+n=3
+w=alpha
+s=alpha
+a=@b=@
+39
+line one
+line "two" with \ back
+	tabbed
+0
+true
+true
+true
+matched
+29
+He said "hi" and left \ right
+hello world
+world!
+worldworld
+n=42
+@ who and @2
+@
+a|b=world
+|world|
+_sm_world_42
+world42
+(world)
+a@ b and world |
+first world
+second world
+x|y
+world
+@who
+ -> empty
+| -> bitwise
+^ -> bitwise
+& -> bitwise
+== -> equality
+!= -> equality
+< -> relational
+> -> relational
+<= -> relational
+>= -> relational
+<< -> shift
+zz -> other
+|| -> other
+letter pair ?
+ ~ empty-or-bar
+| ~ empty-or-bar
+ab ~ two
+zz ~ other
+HEAD other
