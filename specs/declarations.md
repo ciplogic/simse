@@ -104,7 +104,7 @@ value of it is a copy, and every copy would run the destructor - the same resour
 once per copy - so a declaration, field, parameter or return type that names the type (or
 a container of it) is a diagnostic:
 
-```
+```kt
 val r: &Res = &Res(7)     // ok: the box's last owner destroys it, once
 val p: *Res = *r          // ok: a raw pointer owns nothing
 val bad: Res = Res(7)     // error: 'Res' has an unInit: hold it by '*Res' or '&Res'

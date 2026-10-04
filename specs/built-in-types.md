@@ -43,7 +43,7 @@ byte (`src/common/literals.kt` is the one decoder).
 
 A **backtick string** is the same value written raw:
 
-```
+```kt
 val text: Str = `first line
 second "line" with a \ backslash`
 ```

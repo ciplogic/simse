@@ -5,7 +5,7 @@ status; `specs/` is normative. This file is the short version for writing or rev
 
 ## A program
 
-```text
+```kt
 package fixtures                // mandatory, first declaration in every file
 
 fun main(): Int {               // the entry point; also `fun main(args: List<Str>): Int`
@@ -50,7 +50,7 @@ the same value type with the host's alignment instead of the 4-byte packing (for
 native layout); `ref class` has no value form - it is built as `&C(...)` and held by `&C`/`*C` -
 and a class with an `unInit` destructor must be declared `ref class`.
 
-```text
+```kt
 data class Point(var x: Int, var y: Int) {
     fun shift(dx: Int): Point { return Point(x+dx, y) }
 }
@@ -93,7 +93,7 @@ declaration of the same name is an `ambiguous call` report (`pick<Int>(...)` dis
 A **protocol** is a named method signature a type parameter can require - a static
 interface, not a type and not an existential:
 
-```text
+```kt
 protocol Printable fun <T> T.toString(): Str
 protocol Equality fun <T, TDest> T.equalsWith(other: *TDest): Bool
 
