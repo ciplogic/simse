@@ -280,6 +280,13 @@ The common thread is **value semantics, static dispatch, and one output file**: 
 write, small to build, small to run - and what it compiles to is code you can read,
 profile and step through.
 
+And it is not a toy where the runtime would show: the express-like JSON server in
+[`examples/express`](examples/express/README.md) serves real HTTP/1.1 with keep-alive and JSON in
+and out at **~2.5x Bun's `Bun.serve` on the same machine** (~350k vs ~140k req/s on 18 cores,
+zero errors, one binary with no runtime to load) - and its
+[`examples/express-nonblocking`](examples/express-nonblocking/README.md) twin is the same server
+on a single `WSAPoll` event loop. `Bun.serve` is a fast baseline; it is the one being beaten.
+
 ## The compiler is written in Simse
 
 The compiler *is* its Simse sources (`src/**/*.kt`): scanner, parser, semantic
@@ -356,7 +363,7 @@ best of a few runs while idle):
 | compiling the published `src/simse_bootstrap.cpp` with `cl.exe` | ~16 s release (`/O2 /Ob3` with LTO) |
 | **from the published file to a compiler that reproduces it** | **~17 s**, then under a second per self-transpile |
 
-The whole corpus - **86 end-to-end programs**, one folder each with its expected output -
+The whole corpus - **92 end-to-end programs**, one folder each with its expected output -
 runs green on every build, alongside the bootstrap fixed point.
 
 ## Repository layout
@@ -398,7 +405,7 @@ runs green on every build, alongside the bootstrap fixed point.
 | [docs/language-tour.md](docs/language-tour.md) | the language itself, with runnable fragments: values, control flow, data classes, enums, generics, protocols, collections, memory, modules |
 | [docs/how-it-works.md](docs/how-it-works.md) | the pipeline, the bootstrap fixed point, the emitted C++, the runtime, and how the build verifies itself |
 | [docs/state-of-the-field.md](docs/state-of-the-field.md) | the long-form status: what works, how it compares to the alternatives, and the rough edges to expect |
-| [examples/](examples/) | the example programs used in the docs (`hello`, `tour`, `wordcount`, `sdl2` - the P/Invoke wrapper to SDL2, and `http` - a blocking socket library with an HTTP/1.1 server) |
+| [examples/](examples/) | the example programs used in the docs (`hello`, `tour`, `wordcount`, `sdl2` - the P/Invoke wrapper to SDL2, and the HTTP servers: `http` - a blocking socket library and servers, [`express`](examples/express/README.md) - an express-like JSON server at ~2.5x `Bun.serve`, and [`express-nonblocking`](examples/express-nonblocking/README.md) - the same on a `WSAPoll` loop) |
 | [specs/](specs/) | the normative language specification |
 | [impl_specs/user-language-roadmap.md](impl_specs/user-language-roadmap.md) | where the language is going, phased, with the non-goals |
 | [impl_specs/generators.md](impl_specs/generators.md) | `@SmGen`, the source-generator registry, the `Sections` sink, and the bootstrap path for new syntax |

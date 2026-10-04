@@ -7,6 +7,9 @@ feels like Node", built from parts the language already has: the `sockets` modul
 scheduler for the transport, the `http` module for the outbound request, and a `JsonNode` tagged
 union for the payload.
 
+It is also fast: on the same machine it serves about **2.5x what `Bun.serve` does** - see the
+[benchmark](#at-the-machines-real-ceiling).
+
 ## The layers
 
 ```
@@ -101,6 +104,24 @@ handshake) and one compute queue of workers (`tasksCompute`, one line).
 The last column is the control: force `Connection: close` and `Bun.serve` falls to the
 connection-setup cost (~12k) exactly as the example would - the ~10x there was never request
 handling.
+
+### At the machine's real ceiling
+
+The `fetch` pool above is one JavaScript client, and it compresses the gap: it caps both servers
+near its own ceiling, not theirs. Driven by a native load generator instead (bombardier,
+`-c <n> -d 3s`, 3 s per run, 0 errors, same machine):
+
+| concurrency | this example (16 workers) | `Bun.serve` |
+| --- | --- | --- |
+| 16 | ~372,000 req/s | ~140,000 req/s |
+| 64 | ~348,000 req/s | ~142,000 req/s |
+| 128 | ~345,000 req/s | ~137,000 req/s |
+| 256 | ~356,000 req/s | ~136,000 req/s |
+
+That is **~2.5x `Bun.serve`** on the same box, and it holds from 16 to 256 connections. The
+reason is the one the `fetch` table already shows, without the client in the way: keep-alive makes
+the per-request cost the handler, and the handler is straight-line native code with no GC, no JIT
+warmup and no event loop. `Bun.serve` is a fast baseline - it is the one being beaten here.
 
 Two design notes the numbers make concrete:
 
