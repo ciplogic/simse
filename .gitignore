@@ -53,6 +53,11 @@ Release
 ### (build.js, tools/bootstrap.js) ###
 /build/
 
+### The instrumented profiler's reports (impl_specs/profiling.md): large and one machine's,
+### written beside the running program (default simse_profile.txt) - never tracked ###
+simse_profile.txt
+simse_profile.csv
+
 ### The `_simse` cache: a project's extended compiler and the sources staged for it
 ### (specs/simse-md.md) - written beside a project's root, never inside it ###
 _simse/

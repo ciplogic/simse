@@ -140,22 +140,13 @@ bun build.js --release --profile --profile-nanos          # ... in nanoseconds
 `bun build.js --profile` passes the flags (and a `--profile-file`) through to the transpile step,
 so the compiler's own source set is transpiled with the runtime and the timers. The published
 bootstrap (`src/simse_bootstrap.cpp`) is **not** profiled, so a profiled compiler is a local
-artifact, never published.
-
-## The proof file
-
-`src/simse_profile.txt` sits beside the bootstrap: the tree a release, profiled compiler wrote
-about its own `--root src` run. Its `calls` column is exact (the compiler's emitted bodies and
-how often each ran); its totals are one machine on one day. Regenerate it with:
+artifact, never published - and a report is never committed (it is large and one machine's; the
+names in both are gitignored). Regenerate one for a given source tree with:
 
 ```sh
 bun build.js --release --profile --exe build/digits/simse_prof.exe --out build/digits/prof_compiler.cpp
 ./build/digits/simse_prof.exe --root src -o build/digits/prof_self_out.cpp
-cp simse_profile.txt src/simse_profile.txt
 ```
-
-(The checked-in copy still predates the call-tree format; refresh it when a run is worth
-pinning.)
 
 ## How to read a line
 
