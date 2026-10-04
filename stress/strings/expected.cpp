@@ -513,6 +513,9 @@ Int find(StrView* self, Str sub);
 Int indexOf(StrView* self, Str* sub);
 Str substr(StrView* self, Int from, Int count);
 Str toString(StrView* self);
+Int compareTo(StrView* self, StrView other);
+Bool equals(StrView* self, StrView other);
+Str plus(StrView* self, StrView other);
 template <class T>
 Bool simse_optHasValue(Opt<T>* self);
 template <class T>
@@ -747,6 +750,83 @@ Str toString(StrView* self) {
     _sm_expr2 = substr(self, 0, _sm_expr1);
     return _sm_expr2;
 }
+Int compareTo(StrView* self, StrView other) {
+    Bool _sm_expr3, _sm_expr4, _sm_expr7;
+    Int _sm_diff_2, _sm_expr8, diff;
+    auto _sm_expr1 = self->len;
+    auto _sm_expr2 = other.len;
+    _sm_expr3 = _sm_expr1 <= _sm_expr2;
+    if (_sm_expr3) goto L1;
+    goto L2;
+    L1:;
+    _sm_diff_2 = simse_mem_compare(self->ptr, 0, other.ptr, 0, self->len);
+    _sm_expr4 = _sm_diff_2 != 0;
+    if (_sm_expr4) goto L3;
+    goto L4;
+    L3:;
+    return _sm_diff_2;
+    L4:;
+    {
+        auto _sm_expr5 = self->len;
+        auto _sm_expr6 = other.len;
+        _sm_expr7 = _sm_expr5 == _sm_expr6;
+        if (_sm_expr7) goto L5;
+        goto L6;
+        L5:;
+        return 0;
+        L6:;
+        _sm_expr8 = -1;
+        return _sm_expr8;
+    }
+    L2:;
+    diff = simse_mem_compare(self->ptr, 0, other.ptr, 0, other.len);
+    _sm_expr3 = diff != 0;
+    if (_sm_expr3) goto L7;
+    goto L8;
+    L7:;
+    return diff;
+    L8:;
+    return 1;
+}
+Bool equals(StrView* self, StrView other) {
+    Bool _sm_expr3;
+    Int _sm_expr4;
+    auto _sm_expr1 = self->len;
+    auto _sm_expr2 = other.len;
+    _sm_expr3 = _sm_expr1 != _sm_expr2;
+    if (_sm_expr3) goto L1;
+    goto L2;
+    L1:;
+    return false;
+    L2:;
+    _sm_expr4 = simse_mem_compare(self->ptr, 0, other.ptr, 0, self->len);
+    _sm_expr3 = _sm_expr4 == 0;
+    return _sm_expr3;
+}
+Str plus(StrView* self, StrView other) {
+    Str* _sm_base3;
+    Bool _sm_expr2;
+    Int at, _sm_expr4;
+    Char* _sm_expr5;
+    Str result;
+    simse_str_setBytes(result, self->ptr, 0, self->len);
+    auto _sm_expr1 = other.len;
+    _sm_expr2 = _sm_expr1 > 0;
+    if (_sm_expr2) goto L1;
+    goto L2;
+    L1:;
+    at = simse_lenOf(result);
+    {
+        auto _sm_expr3 = other.len;
+        _sm_expr4 = at + _sm_expr3;
+        result.resize(_sm_expr4);
+        _sm_base3 = &result;
+        _sm_expr5 = simse_str_data(_sm_base3);
+        simse_mem_copy(_sm_expr5, at, other.ptr, 0, other.len);
+    }
+    L2:;
+    return result;
+}
 template <class T>
 Bool simse_optHasValue(Opt<T>* self) {
     SmOptTypes _sm_base1;
@@ -820,7 +900,7 @@ Bool compareLessThan(Str* left, Str* right) {
     Bool _sm_expr3;
     _sm_expr1 = simse_spanOfStr(left);
     _sm_expr2 = simse_spanOfStr(right);
-    _sm_expr3 = _sm_expr1 < _sm_expr2;
+    _sm_expr3 = (compareTo(simse_addressOf(_sm_expr1), _sm_expr2) < 0);
     return _sm_expr3;
 }
 void initByValue(Str* self) {
@@ -1587,7 +1667,7 @@ Int ns1_partRawStrings() {
     simse_println((_sm_expr3), stdout);
     _sm_base1 = &text;
     _sm_expr4 = simse_spanOfStr(_sm_base1);
-    _sm_expr5 = _sm_expr4 == __sm_stringTable[2];
+    _sm_expr5 = equals(simse_addressOf(_sm_expr4), __sm_stringTable[2]);
     simse_println((_sm_expr5), stdout);
     _sm_base3 = __sm_stringTable[13];
     _sm_base2 = &_sm_base3;
@@ -1600,7 +1680,7 @@ Int ns1_partRawStrings() {
     if (_sm_expr7) goto L3;
     goto L2;
     L3:;
-    _sm_expr7 = _sm_when1_v == __sm_stringTable[3];
+    _sm_expr7 = equals(simse_addressOf(_sm_when1_v), __sm_stringTable[3]);
     if (_sm_expr7) goto L1;
     goto L2;
     L1:;
@@ -1747,14 +1827,14 @@ Str ns1_classify(Str* op) {
     if (_sm_expr1) goto L15;
     goto L14;
     L15:;
-    _sm_expr1 = _sm_when2_v == __sm_stringTable[64];
+    _sm_expr1 = equals(simse_addressOf(_sm_when2_v), __sm_stringTable[64]);
     if (_sm_expr1) goto L12;
     L14:;
     _sm_expr1 = _sm_when2_n == 2;
     if (_sm_expr1) goto L16;
     goto L13;
     L16:;
-    _sm_expr1 = _sm_when2_v == __sm_stringTable[61];
+    _sm_expr1 = equals(simse_addressOf(_sm_when2_v), __sm_stringTable[61]);
     if (_sm_expr1) goto L12;
     goto L13;
     L12:;
@@ -1780,14 +1860,14 @@ Str ns1_classify(Str* op) {
     if (_sm_expr1) goto L25;
     goto L20;
     L25:;
-    _sm_expr1 = _sm_when2_v == __sm_stringTable[63];
+    _sm_expr1 = equals(simse_addressOf(_sm_when2_v), __sm_stringTable[63]);
     if (_sm_expr1) goto L18;
     L20:;
     _sm_expr1 = _sm_when2_n == 2;
     if (_sm_expr1) goto L26;
     goto L19;
     L26:;
-    _sm_expr1 = _sm_when2_v == __sm_stringTable[65];
+    _sm_expr1 = equals(simse_addressOf(_sm_when2_v), __sm_stringTable[65]);
     if (_sm_expr1) goto L18;
     goto L19;
     L18:;
@@ -1797,7 +1877,7 @@ Str ns1_classify(Str* op) {
     if (_sm_expr1) goto L30;
     goto L29;
     L30:;
-    _sm_expr1 = _sm_when2_v == __sm_stringTable[62];
+    _sm_expr1 = equals(simse_addressOf(_sm_when2_v), __sm_stringTable[62]);
     if (_sm_expr1) goto L28;
     goto L29;
     L28:;
@@ -1832,14 +1912,14 @@ Str ns1_classifyPtr(Str* op) {
     if (_sm_expr1) goto L9;
     goto L8;
     L9:;
-    _sm_expr1 = _sm_when3_v == __sm_stringTable[64];
+    _sm_expr1 = equals(simse_addressOf(_sm_when3_v), __sm_stringTable[64]);
     if (_sm_expr1) goto L6;
     L8:;
     _sm_expr1 = _sm_when3_n == 2;
     if (_sm_expr1) goto L10;
     goto L7;
     L10:;
-    _sm_expr1 = _sm_when3_v == __sm_stringTable[70];
+    _sm_expr1 = equals(simse_addressOf(_sm_when3_v), __sm_stringTable[70]);
     if (_sm_expr1) goto L6;
     goto L7;
     L6:;
@@ -1878,7 +1958,7 @@ Str ns1_viewKind(StrView v) {
     if (_sm_expr1) goto L9;
     goto L8;
     L9:;
-    _sm_expr1 = _sm_when4_v == __sm_stringTable[70];
+    _sm_expr1 = equals(simse_addressOf(_sm_when4_v), __sm_stringTable[70]);
     if (_sm_expr1) goto L7;
     goto L8;
     L7:;
@@ -1891,7 +1971,7 @@ Str ns1_fixed(Str* op) {
     Str _sm_base1;
     Bool _sm_expr1;
     _sm_base1 = *(op);
-    _sm_expr1 = _sm_base1 == __sm_stringTable[40];
+    _sm_expr1 = equals(simse_addressOf(simse_spanOfStr(simse_addressOf(_sm_base1))), __sm_stringTable[40]);
     if (_sm_expr1) goto L1;
     goto L2;
     L1:;

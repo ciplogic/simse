@@ -89,8 +89,8 @@ fun Parser.whenCondition(
     var cond: ExprNode = this.whenLabelCondition(subject, lengthName, labels[0], pos, dispatch)
     var i: Int = 1
     while (i < labels.size()) {
-        val equals: ExprNode = this.whenLabelCondition(subject, lengthName, labels[i], pos, dispatch)
-        cond = this.binaryExprAt("||", cond, equals, pos)
+        val same: ExprNode = this.whenLabelCondition(subject, lengthName, labels[i], pos, dispatch)
+        cond = this.binaryExprAt("||", cond, same, pos)
         i = i + 1
     }
     return cond
@@ -109,11 +109,13 @@ fun Parser.whenLabelCondition(
     pos: SourcePos,
     dispatch: Bool
 ): ExprNode {
-    val equals: ExprNode = this.binaryExprAt(
+    // `same`, not `equals`: a prelude function is bare in the emitted C++, so a local named
+    // `equals` would shadow the view equality this test reaches.
+    val same: ExprNode = this.binaryExprAt(
         "==", subject, ExprNode(*label, pos.line, pos.column), pos
     )
     if (!dispatch) {
-        return equals
+        return same
     }
     val text: Str = xmlAttr(label, AstNodeAttributeKind.Text)
     val length: Int = litByteLength(text)
@@ -126,7 +128,7 @@ fun Parser.whenLabelCondition(
     }
     val ch: Str = litCharSpelling(text)
     if (ch == "") {
-        return this.binaryExprAt("&&", test, equals, pos)
+        return this.binaryExprAt("&&", test, same, pos)
     }
     if (length == 1 || whenFirstChar()) {
         test = this.binaryExprAt(
@@ -144,7 +146,7 @@ fun Parser.whenLabelCondition(
             return test
         }
     }
-    return this.binaryExprAt("&&", test, equals, pos)
+    return this.binaryExprAt("&&", test, same, pos)
 }
 
 // Whether every one of an arm's labels is a string literal: what the guarded tests need,

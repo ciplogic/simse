@@ -191,7 +191,7 @@ fun Emitter.exprInner(e: *AstXmlNode, expected: *AstXmlNode): Str {
             if (binaryName != "" && xmlKind(lhs) != AstNodeCategory.ExprNullLit
                 && xmlKind(rhs) != AstNodeCategory.ExprNullLit
             ) {
-                val binaryAt: Int = this.operatorFn(binaryName, lhs, 1)
+                val binaryAt: Int = this.operatorBinaryFn(binaryName, lhs, 1)
                 if (binaryAt >= 0) {
                     return this.operatorBinaryText(binaryAt, op, lhs, rhs)
                 }

@@ -4929,3 +4929,38 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   `diagnostic-operator-name` now pins `times` - a Kotlin name with no lowering yet - and the
   new operator list in its text; the tree at 79 cases. Verified: `bun tools/iterate.js --full`
   - 79/79 and both fixed points hold; no `expected.cpp` moved.
+
+- **The view operators, and a `Str` operand read as a view.** `StrView` declares `compareTo`,
+  `equals` and `plus` in the prelude (src/rtl/StrView.kt), so the six comparisons and `+` on
+  strings are the language's own code over `memCompare`/`memCopy` - the overloads
+  `strview.hpp` grew for the literal sites have a Simse owner now. One implicit conversion
+  goes with them: a `Str` operand of an operator declared on a `Span<Char>` reads as a view
+  of itself (`spanOfStr`), so `str == view`, `view + "lit"` and `f() < "lit"` all reach the
+  same declaration without copying. A literal is a string-table entry already, a `Str`
+  borrows by its address, a `*Str` passes as it is, a `&Str` unwraps - `operatorBinaryFn`'s
+  view fallback and `isViewableStringOperand`/`stringOperandView`/`operatorParamIsView`
+  (src/codegen/CgResolve.kt); the synthesized `spanOfStr` records its own reach
+  (`simse_spanOfStr`), the rule the indexers follow. Typing needed no change: the
+  comparisons answer `Bool` unconditionally, and the emitter's `+` inference mirrors the
+  fallback (`CgExpr.inferType`), where the operator and the built-in rule agree on `Str`
+  anyway.
+
+  Two findings, neither fixed for its own sake:
+  - **A prelude function is bare in the emitted C++**, so a local shadows it:
+    `val equals: ExprNode` in the `when` lowering's `whenLabelCondition`
+    (src/parser/ParserWhen.kt) made `ch == ""` emit `equals(...)` that named the local. The
+    local is now `same`. The general hazard - a local named `get`/`equals`/`min`/
+    `compareTo` in the same body as a call to the prelude function - stays for the operators
+    added earlier the same way, and is a candidate for a general fix (a `::`-qualified call
+    name for the prelude).
+  - **A `var` initialized from a parameter's field does not type in the IL extractor**
+    (`var common = other.len` reports "the slot 'common' has no type to assign", while
+    `val x = b.len` works), so `compareTo` branches on the lengths instead of computing the
+    common one into a local.
+
+  `stress/operator-strview` is the fixture: view against literal and literal against view,
+  both mixed directions, equal prefixes of different lengths, the empty view, a call's
+  temporary, `*Str` operands, `+` with a literal on either side, and an unannotated local
+  inferring `plus`'s `Str`. Verified: `bun tools/iterate.js --full` - 80/80 and both fixed
+  points hold; twelve goldens moved (the three operator prototypes and bodies, and the
+  comparisons they replaced).

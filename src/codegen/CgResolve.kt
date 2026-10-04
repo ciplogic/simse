@@ -150,6 +150,93 @@ fun Emitter.operatorFn(name: *Str, recvExpr: *AstXmlNode, argCount: Int): Int {
     return at
 }
 
+// The binary-operator lookup for `a < b`/`a == b`/`a + b`: the ordinary receiver match,
+// then the view fallback. A `Str` or literal operand of an operator declared on a
+// `Span<Char>` (`StrView`, src/rtl/StrView.kt) reads as a view of itself (`spanOfStr`),
+// so `str == view`, `view + "lit"` and `f() < "lit"` all reach the view declaration and
+// no C++ overload has to exist for a mixed pair.
+fun Emitter.operatorBinaryFn(name: *Str, recvExpr: *AstXmlNode, argCount: Int): Int {
+    val direct: Int = this.operatorFn(name, recvExpr, argCount)
+    if (direct >= 0) {
+        return direct
+    }
+    if (!this.isViewableStringOperand(recvExpr)) {
+        return -1
+    }
+    var i: Int = 0
+    while (i < this.functions.size()) {
+        val fn: *CgFn = *this.functions[i]
+        i = i + 1
+        if (fn.isNative || xmlIsEmpty(fn.receiver)) {
+            continue
+        }
+        if (fn.name != *name || fn.paramCount != argCount) {
+            continue
+        }
+        if (xmlAttr(fn.decl, AstNodeAttributeKind.IsOperator) != "true") {
+            continue
+        }
+        if (this.isCharSpanType(fn.receiver)) {
+            return i - 1
+        }
+    }
+    return -1
+}
+
+// Whether a type node is a `Span<Char>` after aliases (`StrView`): the target a string
+// operand's view conversion produces. A `Span<Int>` is not a string view, so a `Str`
+// operand does not convert to it.
+fun Emitter.isCharSpanType(typeNode: *AstXmlNode): Bool {
+    val resolved: AstXmlNode = this.resolveAlias(typeNode)
+    if (xmlIsEmpty(resolved) || xmlKind(resolved) != AstNodeCategory.TypeGeneric) {
+        return false
+    }
+    if (xmlAttr(resolved, AstNodeAttributeKind.Name) != "Span") {
+        return false
+    }
+    val args: List<AstXmlNode> = xmlChildren(resolved, AstNodeKind.TypeArg)
+    if (args.size() != 1) {
+        return false
+    }
+    val element: AstXmlNode = this.resolveAlias(args[0])
+    return xmlKind(element) == AstNodeCategory.TypeNamed
+        && xmlAttr(element, AstNodeAttributeKind.Name) == "Char"
+}
+
+// Whether an operand can be read as a `StrView` (`spanOfStr`): a string literal is
+// already a pool entry at emission, and a `Str` is borrowed, through a pointer or a
+// reference the same way. Anything else is not a string.
+fun Emitter.isViewableStringOperand(expr: *AstXmlNode): Bool {
+    if (xmlKind(expr) == AstNodeCategory.ExprStrLit) {
+        return true
+    }
+    val type: AstXmlNode = this.resolveAlias(this.pointee(this.inferType(expr)))
+    if (xmlIsEmpty(type) || xmlKind(type) != AstNodeCategory.TypeNamed) {
+        return false
+    }
+    return xmlAttr(type, AstNodeAttributeKind.Name) == "Str"
+}
+
+// One string operand read as a view: a literal as it stands (the string table's entry
+// *is* a `StrView`), a `Str` borrowed by its address, a `*Str` as it is, a `&Str`
+// unwrapped. The `spanOfStr` reach is recorded here: the conversion is synthesized, so
+// no call node exists for `collectNames` to see (the rule the indexers follow).
+fun Emitter.stringOperandView(expr: *AstXmlNode): Str {
+    val text: Str = this.expr(expr, 12, xmlEmptyNode())
+    if (xmlKind(expr) == AstNodeCategory.ExprStrLit) {
+        return text
+    }
+    this.referencedNames.insert("simse_spanOfStr", true)
+    val type: AstXmlNode = this.inferType(expr)
+    if (xmlKind(type) == AstNodeCategory.TypePointer) {
+        return `simse_spanOfStr(@text)`
+    }
+    if (xmlKind(type) == AstNodeCategory.TypeReference) {
+        return `simse_spanOfStr(simse_addressOf((@text).get()))`
+    }
+    return `simse_spanOfStr(simse_addressOf(@text))`
+}
+
 // The synthesized call for one index operator, as the receiver argument the method
 // convention takes (`T* self`) plus the index and - for `set` - the value. The reach is
 // recorded here because the AST has no call node for `collectNames` to see: a prelude
@@ -195,13 +282,22 @@ fun Emitter.operatorIndexSetText(
 // recorded here for the same reason the indexers' is: no call node exists for
 // `collectNames` to see. The right operand converts against the *emitted* parameter the
 // way `convertArgument` converts a written one: the auto-borrow pass may have turned it
-// into a `*T`, and the argument is then its address.
+// into a `*T`, and the argument is then its address. An operand of a view operator that
+// is a `Str` (or a literal) reads as a view of itself (`spanOfStr`).
 fun Emitter.operatorBinaryText(at: Int, op: *Str, lhsExpr: *AstXmlNode, rhsExpr: *AstXmlNode): Str {
     val fn: *CgFn = *this.functions[at]
     this.referencedNames.insert(fn.name, true)
-    val recvText: Str = this.receiverArg(fn.receiver, lhsExpr)
+    var recvText: Str = ""
+    if (this.isCharSpanType(fn.receiver) && this.isViewableStringOperand(lhsExpr)) {
+        val recvView: Str = this.stringOperandView(lhsExpr)
+        recvText = `simse_addressOf(@recvView)`
+    } else {
+        recvText = this.receiverArg(fn.receiver, lhsExpr)
+    }
     var rhsText: Str = ""
-    if (this.operatorParamIsPointer(fn, rhsExpr)) {
+    if (this.operatorParamIsView(fn, rhsExpr)) {
+        rhsText = this.stringOperandView(rhsExpr)
+    } else if (this.operatorParamIsPointer(fn, rhsExpr)) {
         var borrowed: AstXmlNode = this.ilBorrowNode(rhsExpr, 0)
         rhsText = this.expr(borrowed, 0, xmlEmptyNode())
     } else {
@@ -231,6 +327,20 @@ fun Emitter.operatorBinaryText(at: Int, op: *Str, lhsExpr: *AstXmlNode, rhsExpr:
         return `(@call > 0)`
     }
     return `(@call >= 0)`
+}
+
+// Whether one operator's only parameter is a view while the argument is a `Str` (or a
+// literal): the argument is then read through `spanOfStr` rather than passed as it is.
+fun Emitter.operatorParamIsView(fn: *CgFn, argExpr: *AstXmlNode): Bool {
+    val params: List<AstXmlNode> = xmlChildren(fn.decl, AstNodeKind.Param)
+    if (params.size() == 0) {
+        return false
+    }
+    val paramType: AstXmlNode = xmlChildPtr(params[0], AstNodeKind.Type)
+    if (!this.isCharSpanType(paramType)) {
+        return false
+    }
+    return this.isViewableStringOperand(argExpr)
 }
 
 // Whether one operator's only parameter is a pointer while the argument is a value: the

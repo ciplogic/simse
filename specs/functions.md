@@ -260,6 +260,17 @@ class body itself is the hand-written header's documentation). The place form is
 span's own `atPtr(i): *T`, which reads through the pointer field because the index read
 is a value.
 
+The view also declares the three value operators (`src/rtl/StrView.kt`), so `==`, `!=`,
+`<`, `<=`, `>` and `>=` compare bytes in place and `+` builds the owned `Str` - in the
+language, over `memCompare`, not in C++. One implicit conversion goes with them: **a
+`Str` operand of an operator declared on a `Span<Char>` is read as a view of itself**
+(`spanOfStr`), borrowing its bytes for the operation and copying nothing; a literal needs
+no borrow at all, because a literal already is a view into the string table. That is why
+`str == view`, `view + "lit"` and `f() < "lit"` all reach the same declaration. A
+comparison whose operands are both `Str` resolves the same way (the built-in `SmString`
+operators are then unused); the rule applies to the comparisons and `+` only, and only to
+a `Span<Char>` target.
+
 ## Methods inside classes
 
 Methods written inside a `class` or `data class` body are equivalent to extension

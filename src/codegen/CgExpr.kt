@@ -540,7 +540,7 @@ fun Emitter.inferType(e: *AstXmlNode): AstXmlNode {
             // specs/functions.md) where the built-in rule answers the left operand.
             val operatorName: Str = semBinaryOperatorName(op)
             if (operatorName != "") {
-                val at: Int = this.findExtensionFn(
+                val at: Int = this.operatorBinaryFn(
                     operatorName, xmlChildPtr(e, AstNodeKind.Lhs), 1
                 )
                 if (at >= 0) {

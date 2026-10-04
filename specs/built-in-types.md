@@ -239,8 +239,11 @@ reached through the alias; it adds the byte surface below:
 - `startsWith(text: Str): Bool` - the prefix test; the parameter is read-only,
   so auto-borrow emits it as `*Str` and a table scan copies nothing;
 - `substr(from: Int, count: Int): Str` - the owned copy, with `from` clamped to
-  `[0, size]` and `count` allowed to run to the end, like `Str.substr`; and
-- `toString(): Str` - the owned copy of the whole view.
+  `[0, size]` and `count` allowed to run to the end, like `Str.substr`;
+- `toString(): Str` - the owned copy of the whole view; and
+- `compareTo`/`equals`/`plus` (`specs/functions.md`, "Operator functions") - the six
+  comparison operators compare the bytes in place and `+` builds the owned `Str`; a `Str`
+  operand is read as a view of itself (`spanOfStr`), so a mixed comparison copies nothing.
 
 ### String parsing
 

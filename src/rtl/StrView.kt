@@ -93,6 +93,52 @@ fun StrView.toString(): Str {
     return this.substr(0, this.size())
 }
 
+// `a < b` and its family: the byte compare lives here now, not in the C++ header
+// (specs/functions.md, "Operator functions"). The rule is the one `SmString::compareBytes`
+// uses - the common prefix decides, then the shorter text is the smaller one - and
+// `memCompare` is the primitive (`std::memcmp` behind it). A `Str` operand is read as a
+// view of itself at the call site, so this only ever sees views.
+operator fun StrView.compareTo(other: StrView): Int {
+    if (this.len <= other.len) {
+        val diff = memCompare(this.ptr, 0, other.ptr, 0, this.len)
+        if (diff != 0) {
+            return diff
+        }
+        if (this.len == other.len) {
+            return 0
+        }
+        return -1
+    }
+    val diff = memCompare(this.ptr, 0, other.ptr, 0, other.len)
+    if (diff != 0) {
+        return diff
+    }
+    return 1
+}
+
+// `a == b`: the lengths must agree and then the bytes (`count == 0` compares nothing,
+// which is what makes two empty views equal). Never compares past the shorter text.
+operator fun StrView.equals(other: StrView): Bool {
+    if (this.len != other.len) {
+        return false
+    }
+    return memCompare(this.ptr, 0, other.ptr, 0, this.len) == 0
+}
+
+// `a + b`: one owned `Str` of both views, a block copy each - the first is placed by
+// `setBytes`, the second is appended into the tail `resize` made. The result type is what
+// an unannotated local infers (`val joined = view + "!"`).
+operator fun StrView.plus(other: StrView): Str {
+    var result: Str
+    result.setBytes(this.ptr, 0, this.len)
+    if (other.len > 0) {
+        val at = result.size()
+        result.resize(at + other.len)
+        memCopy(strBytes(*result), at, other.ptr, 0, other.len)
+    }
+    return result
+}
+
 // A view over a string's bytes, borrowing the string (which must outlive the view).
 @SmGen("res", "strview", "simse_spanOfStr")
 data fun spanOfStr(text: *Str): StrView
