@@ -1,0 +1,10 @@
+Ada
+36.000000
+2
+y
+true
+true
+{"name":"Ada","age":36,"frac":1.25,"tags":["x","y"],"ok":true,"note":null}
+{"hello":"a\"b","n":3,"empty":[]}
+false
+json: expected a value at byte 6
