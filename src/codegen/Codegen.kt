@@ -254,6 +254,11 @@ data class Emitter(
     var dataClassNames: Dictionary<Str, Bool>,
     var functions: List<CgFn>,
 
+// Indices into `functions` per collected name, in list order: every resolution walk
+// (`findFunction`, `memberCallReturn`, `findExtensionFn`, ...) scans for one name, so
+// the walk starts at that name's declarations instead of the whole list.
+    var functionsByName: Dictionary<Str, List<Int>>,
+
 // The plain-function resolution tables, filled as declarations are collected
 // (`addFunction`): `plainFunctionNames` holds every non-native function's name and
 // `functionPackages` the package of the first non-native, non-method one. Lookups that
@@ -361,6 +366,7 @@ fun newEmitter(inputs: *List<CgInput>, resourceStored: *List<Str>): Emitter {
         Dictionary<Str, Bool>(),
         Dictionary<Str, Bool>(),
         List<CgFn>(),
+        Dictionary<Str, List<Int>>(),
         Dictionary<Str, Bool>(),
         Dictionary<Str, Str>(),
         Dictionary<Str, Bool>(),

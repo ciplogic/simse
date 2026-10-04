@@ -27,18 +27,20 @@ fun Emitter.findExtensionFnByType(name: *Str, recv: AstXmlNode, argCount: Int): 
     if (xmlIsEmpty(recv)) {
         return -1
     }
-    var i: Int = 0
-    while (i < this.functions.size()) {
+    val named: *List<Int> = this.functionsByName.getPtr(name)
+    if (named == null) {
+        return -1
+    }
+    for (i in named) {
         val fn: *CgFn = *this.functions[i]
-        i = i + 1
         if (fn.isNative || xmlIsEmpty(fn.receiver)) {
             continue
         }
-        if (fn.name != *name || fn.paramCount != argCount) {
+        if (fn.paramCount != argCount) {
             continue
         }
         if (this.unifyType(this.resolveAlias(fn.receiver), recv, fn.templateParams)) {
-            return i - 1
+            return i
         }
     }
     return -1
@@ -184,13 +186,16 @@ fun Emitter.nativeReceiverArg(pattern: *AstXmlNode, recv: *AstXmlNode): Str {
 
 // Index into `functions` of the first Simse-declared receiver function with this name, or -1.
 fun Emitter.findReceiverFnByName(name: *Str): Int {
-    for ((*fn, i) in this.functions) {
+    val named: *List<Int> = this.functionsByName.getPtr(name)
+    if (named == null) {
+        return -1
+    }
+    for (i in named) {
+        val fn: *CgFn = *this.functions[i]
         if (fn.isNative || xmlIsEmpty(fn.receiver)) {
             continue
         }
-        if (fn.name == name) {
-            return i
-        }
+        return i
     }
     return -1
 }
@@ -202,11 +207,16 @@ fun Emitter.findExtensionFn(name: *Str, recvExpr: *AstXmlNode, argCount: Int): I
     if (xmlIsEmpty(recv)) {
         return -1
     }
-    for ((*fn, i) in this.functions) {
+    val named: *List<Int> = this.functionsByName.getPtr(name)
+    if (named == null) {
+        return -1
+    }
+    for (i in named) {
+        val fn: *CgFn = *this.functions[i]
         if (fn.isNative || xmlIsEmpty(fn.receiver)) {
             continue
         }
-        if (fn.name == name && fn.paramCount == argCount && this.unifyType(
+        if (fn.paramCount == argCount && this.unifyType(
                 this.resolveAlias(fn.receiver),
                 recv,
                 fn.templateParams
@@ -247,21 +257,23 @@ fun Emitter.operatorBinaryFn(name: *Str, recvExpr: *AstXmlNode, argCount: Int): 
     if (!this.isViewableStringOperand(recvExpr)) {
         return -1
     }
-    var i: Int = 0
-    while (i < this.functions.size()) {
+    val named: *List<Int> = this.functionsByName.getPtr(name)
+    if (named == null) {
+        return -1
+    }
+    for (i in named) {
         val fn: *CgFn = *this.functions[i]
-        i = i + 1
         if (fn.isNative || xmlIsEmpty(fn.receiver)) {
             continue
         }
-        if (fn.name != *name || fn.paramCount != argCount) {
+        if (fn.paramCount != argCount) {
             continue
         }
         if (xmlAttr(fn.decl, AstNodeAttributeKind.IsOperator) != "true") {
             continue
         }
         if (this.isCharSpanType(fn.receiver)) {
-            return i - 1
+            return i
         }
     }
     return -1
@@ -569,10 +581,13 @@ fun Emitter.expectedCallable(expected: *AstXmlNode): AstXmlNode {
 
 // A non-native function with the given name and parameter count; a method is not one.
 fun Emitter.findFunction(name: *Str, argCount: Int): AstXmlNode {
-    for (*fn in this.functions) {
-        if (fn.isNative || fn.isMethod
-            || fn.name != name
-        ) {
+    val named: *List<Int> = this.functionsByName.getPtr(name)
+    if (named == null) {
+        return xmlEmptyNode()
+    }
+    for (i in named) {
+        val fn: *CgFn = *this.functions[i]
+        if (fn.isNative || fn.isMethod) {
             continue
         }
         if (xmlCount(fn.decl, AstNodeKind.Param) == argCount) {

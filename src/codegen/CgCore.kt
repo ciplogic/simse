@@ -110,6 +110,7 @@ fun Emitter.addFunction(
     val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
     val isNative: Bool = xmlAttr(decl, AstNodeAttributeKind.IsNative) == "true"
     val isPure: Bool = xmlAttr(decl, AstNodeAttributeKind.IsPure) == "true"
+    val index: Int = this.functions.size()
     this.functions.append(
         CgFn(
             decl,
@@ -127,8 +128,16 @@ fun Emitter.addFunction(
             ""
         )
     )
-    // The resolution tables the call sites read instead of walking `functions`
-    // (`Emitter`'s field comment).
+    // The name index beside the list, and the resolution tables the call sites read
+    // instead of walking `functions` (`Emitter`'s field comment).
+    val named: *List<Int> = this.functionsByName.getPtr(name)
+    if (named != null) {
+        named.append(index)
+    } else {
+        var fresh: List<Int> = List<Int>()
+        fresh.append(index)
+        this.functionsByName.insert(name, fresh)
+    }
     if (!isNative) {
         this.plainFunctionNames.insert(name, true)
         if (!isMethod && !this.functionPackages.has(name)) {
@@ -356,9 +365,14 @@ fun Emitter.computeMachineSuffixes(): Unit {
         }
         val outer: Str = semOuterTypeName(fn.receiver)
         var count: Int = 0
-        for (*other in this.functions) {
-            if (other.name == fn.name && semMachineYielder(other.decl)
-                && semOuterTypeName(other.receiver) == outer
+        val named: *List<Int> = this.functionsByName.getPtr(fn.name)
+        if (named == null) {
+            continue
+        }
+        for (other in named) {
+            val candidate: *CgFn = *this.functions[other]
+            if (semMachineYielder(candidate.decl)
+                && semOuterTypeName(candidate.receiver) == outer
             ) {
                 count = count + 1
             }

@@ -82,12 +82,13 @@ fun Emitter.protocolImpls(protocolDecl: *AstXmlNode): List<CgProtocolImpl> {
     var out: List<CgProtocolImpl> = List<CgProtocolImpl>()
     val method: Str = semProtocolMethodName(protocolDecl)
     val arity: Int = semProtocolValueParams(protocolDecl).size()
-    var i: Int = 0
-    while (i < this.functions.size()) {
-        val index: Int = i
-        i = i + 1
+    val named: *List<Int> = this.functionsByName.getPtr(method)
+    if (named == null) {
+        return out
+    }
+    for (index in named) {
         val fn: *CgFn = *this.functions[index]
-        if (fn.name != method || fn.paramCount != arity) {
+        if (fn.paramCount != arity) {
             continue
         }
         val receiverPattern: AstXmlNode = cgReceiverPattern(fn)

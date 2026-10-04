@@ -233,12 +233,15 @@ fun Emitter.unifyType(pattern: *AstXmlNode, actual: *AstXmlNode, typeParams: *Li
 }
 
 fun Emitter.functionReturn(name: *Str): AstXmlNode {
-    for (*fn in this.functions) {
-        if (fn.name == name) {
-            val ret: *AstXmlNode = xmlChildPtr(fn.decl, AstNodeKind.ReturnType)
-            if (!xmlIsEmpty(ret)) {
-                return ret
-            }
+    val named: *List<Int> = this.functionsByName.getPtr(name)
+    if (named == null) {
+        return xmlEmptyNode()
+    }
+    for (i in named) {
+        val fn: *CgFn = *this.functions[i]
+        val ret: *AstXmlNode = xmlChildPtr(fn.decl, AstNodeKind.ReturnType)
+        if (!xmlIsEmpty(ret)) {
+            return ret
         }
     }
     return xmlEmptyNode()
@@ -248,18 +251,19 @@ fun Emitter.memberCallReturn(callee: *AstXmlNode): AstXmlNode {
     val receiverType: AstXmlNode = this.inferType(xmlChildPtr(callee, AstNodeKind.Receiver))
     val recv: AstXmlNode = this.resolveAlias(this.pointee(receiverType))
     val calleeText: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
-    for (*fn in this.functions) {
-        if (fn.isNative || xmlIsEmpty(fn.receiver)) {
-            continue
-        }
-        if (fn.name != calleeText) {
-            continue
-        }
-        val ret: *AstXmlNode = xmlChildPtr(fn.decl, AstNodeKind.ReturnType)
-        if (!xmlIsEmpty(recv) && this.unifyType(this.resolveAlias(fn.receiver), recv, fn.templateParams)
-            && !xmlIsEmpty(ret)
-        ) {
-            return ret
+    val named: *List<Int> = this.functionsByName.getPtr(calleeText)
+    if (named != null) {
+        for (i in named) {
+            val fn: *CgFn = *this.functions[i]
+            if (fn.isNative || xmlIsEmpty(fn.receiver)) {
+                continue
+            }
+            val ret: *AstXmlNode = xmlChildPtr(fn.decl, AstNodeKind.ReturnType)
+            if (!xmlIsEmpty(recv) && this.unifyType(this.resolveAlias(fn.receiver), recv, fn.templateParams)
+                && !xmlIsEmpty(ret)
+            ) {
+                return ret
+            }
         }
     }
     val extensions: *List<CgNativeExt> = this.nativeExtensions.getPtr(calleeText)
