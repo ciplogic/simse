@@ -3429,6 +3429,7 @@ ns3_AstXmlNode ns11_propReplaceChild(ns3_AstXmlNode* like, ns3_AstNodeKind role,
 ns3_AstXmlNode ns11_propFind(ns3_AstXmlNode node);
 Bool ns11_propTypeEqual(ns3_AstXmlNode a, ns3_AstXmlNode b);
 ns3_AstXmlNode ns11_propResInner(ns3_AstXmlNode* typeNode);
+List<ns3_AstXmlNode> ns11_propRegionStmts(ns3_AstXmlNode* owner, ns3_AstNodeKind role);
 void ns11_propCollectLocals(ns11_PropState* state, List<ns3_AstXmlNode>* stmts);
 void ns11_propCollectParams(ns11_PropState* state, ns3_AstXmlNode* decl);
 ns3_AstXmlNode ns11_propFailure(ns11_PropState* state, Str temp, ns3_AstXmlNode* operand, Int line, Int column);
@@ -71289,6 +71290,24 @@ ns3_AstXmlNode ns11_propResInner(ns3_AstXmlNode* typeNode) {
     return arg;
 }
 // src/parser/Propagate.kt
+List<ns3_AstXmlNode> ns11_propRegionStmts(ns3_AstXmlNode* owner, ns3_AstNodeKind role) {
+    ns3_AstNodeKind _sm_base1;
+    ns3_AstXmlNode* region;
+    Bool _sm_expr1;
+    List<ns3_AstXmlNode> _sm_expr2;
+    region = ns2_xmlChildPtr(owner, role);
+    _sm_expr1 = ns2_xmlIsEmpty(region);
+    if (_sm_expr1) goto L1;
+    goto L2;
+    L1:;
+    _sm_expr2 = List<ns3_AstXmlNode>();
+    return _sm_expr2;
+    L2:;
+    _sm_base1 = ns3_AstNodeKind::Stmt;
+    _sm_expr2 = ns2_xmlChildren(region, _sm_base1);
+    return _sm_expr2;
+}
+// src/parser/Propagate.kt
 void ns11_propCollectLocals(ns11_PropState* state, List<ns3_AstXmlNode>* stmts) {
     ns3_AstNodeAttributeKind _sm_base1;
     ns3_AstNodeKind _sm_base2, _sm_base7, _sm_base9, _sm_base11;
@@ -71337,15 +71356,15 @@ void ns11_propCollectLocals(ns11_PropState* state, List<ns3_AstXmlNode>* stmts) 
     simse_dict_insert((*_sm_base6), name, declared);
     L6:;
     _sm_base7 = ns3_AstNodeKind::Body;
-    _sm_expr9 = ns2_xmlChildren(stmt, _sm_base7);
+    _sm_expr9 = ns11_propRegionStmts(stmt, _sm_base7);
     _sm_base8 = &_sm_expr9;
     ns11_propCollectLocals(state, _sm_base8);
     _sm_base9 = ns3_AstNodeKind::Then;
-    _sm_expr10 = ns2_xmlChildren(stmt, _sm_base9);
+    _sm_expr10 = ns11_propRegionStmts(stmt, _sm_base9);
     _sm_base10 = &_sm_expr10;
     ns11_propCollectLocals(state, _sm_base10);
     _sm_base11 = ns3_AstNodeKind::Else;
-    _sm_expr11 = ns2_xmlChildren(stmt, _sm_base11);
+    _sm_expr11 = ns11_propRegionStmts(stmt, _sm_base11);
     _sm_base12 = &_sm_expr11;
     ns11_propCollectLocals(state, _sm_base12);
     goto L1;
@@ -71749,19 +71768,19 @@ void ns11_propStmt(ns11_PropState* state, ns3_AstXmlNode* stmt, List<ns3_AstXmlN
     L7:;
     thenOut = List<ns3_AstXmlNode>();
     _sm_base14 = ns3_AstNodeKind::Then;
-    _sm_expr14 = ns2_xmlChildren(stmt, _sm_base14);
+    _sm_expr14 = ns11_propRegionStmts(stmt, _sm_base14);
     _sm_base15 = &_sm_expr14;
     _sm_base16 = &thenOut;
     ns11_propStmts(state, _sm_base15, _sm_base16);
     elseOut = List<ns3_AstXmlNode>();
     _sm_base17 = ns3_AstNodeKind::Else;
-    _sm_expr15 = ns2_xmlChildren(stmt, _sm_base17);
+    _sm_expr15 = ns11_propRegionStmts(stmt, _sm_base17);
     _sm_base18 = &_sm_expr15;
     _sm_base19 = &elseOut;
     ns11_propStmts(state, _sm_base18, _sm_base19);
     bodyOut = List<ns3_AstXmlNode>();
     _sm_base20 = ns3_AstNodeKind::Body;
-    _sm_expr16 = ns2_xmlChildren(stmt, _sm_base20);
+    _sm_expr16 = ns11_propRegionStmts(stmt, _sm_base20);
     _sm_base21 = &_sm_expr16;
     _sm_base22 = &bodyOut;
     ns11_propStmts(state, _sm_base21, _sm_base22);

@@ -243,6 +243,19 @@ fun propResInner(typeNode: *AstXmlNode): AstXmlNode {
 }
 
 // Every typed local of a function body, by name.
+// The statements of a `Then`/`Else`/`Body` region. The parser wraps a region's statements in
+// one container node whose category is `None` (`Parser.container`), so stepping into a region
+// means reading the container's `Stmt` children - passing the container on as if it were a
+// statement is what made a `!!` inside an `if`/`while` body report "must be the whole
+// right-hand side".
+fun propRegionStmts(owner: *AstXmlNode, role: AstNodeKind): List<AstXmlNode> {
+    val region: *AstXmlNode = xmlChildPtr(owner, role)
+    if (xmlIsEmpty(region)) {
+        return List<AstXmlNode>()
+    }
+    return xmlChildren(region, AstNodeKind.Stmt)
+}
+
 fun propCollectLocals(state: *PropState, stmts: *List<AstXmlNode>): Unit {
     for (*stmt in stmts) {
         if (xmlKind(stmt) == AstNodeCategory.StmtVarDecl) {
@@ -255,9 +268,9 @@ fun propCollectLocals(state: *PropState, stmts: *List<AstXmlNode>): Unit {
                 state.locals.insert(name, declared)
             }
         }
-        propCollectLocals(state, xmlChildren(stmt, AstNodeKind.Body))
-        propCollectLocals(state, xmlChildren(stmt, AstNodeKind.Then))
-        propCollectLocals(state, xmlChildren(stmt, AstNodeKind.Else))
+        propCollectLocals(state, propRegionStmts(stmt, AstNodeKind.Body))
+        propCollectLocals(state, propRegionStmts(stmt, AstNodeKind.Then))
+        propCollectLocals(state, propRegionStmts(stmt, AstNodeKind.Else))
     }
 }
 
@@ -413,11 +426,11 @@ fun propStmt(state: *PropState, stmt: *AstXmlNode, out: *List<AstXmlNode>): Unit
             return
         }
         var thenOut: List<AstXmlNode> = List<AstXmlNode>()
-        propStmts(state, xmlChildren(stmt, AstNodeKind.Then), thenOut)
+        propStmts(state, propRegionStmts(stmt, AstNodeKind.Then), thenOut)
         var elseOut: List<AstXmlNode> = List<AstXmlNode>()
-        propStmts(state, xmlChildren(stmt, AstNodeKind.Else), elseOut)
+        propStmts(state, propRegionStmts(stmt, AstNodeKind.Else), elseOut)
         var bodyOut: List<AstXmlNode> = List<AstXmlNode>()
-        propStmts(state, xmlChildren(stmt, AstNodeKind.Body), bodyOut)
+        propStmts(state, propRegionStmts(stmt, AstNodeKind.Body), bodyOut)
         out.append(propRebuild(stmt, thenOut, elseOut, bodyOut))
         return
     }

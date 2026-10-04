@@ -45,6 +45,35 @@ fun passthrough(text: Str): Res<Int> {
     return (value + 1)
 }
 
+// `!!` inside an `if` body: the region is a container of statements, and the expansion steps
+// through it. Before, the container was read as one statement, so a `!!` in a control-flow
+// body was reported "must be the whole right-hand side" instead of expanded.
+fun pick(text: Str, fallback: Int): Res<Int> {
+    val parsed: Res<Int> = readNumber(text)
+    if (fallback > 0) {
+        val value: Int = parsed!!
+        return Res<Int>.ok(value * 2)
+    }
+    return Res<Int>.ok(fallback)
+}
+
+// The same under a `while` and a nested `if`: a local declared *inside* the body is in scope
+// for the operand's type, which is why the local walk steps through the regions too.
+fun sumAll(texts: List<Str>): Res<Int> {
+    var total: Int = 0
+    var i: Int = 0
+    while (i < texts.size()) {
+        val item: Str = texts[i]
+        if (item != "skip") {
+            val count: Res<Int> = readNumber(item)
+            val value: Int = count!!
+            total = total + value
+        }
+        i = i + 1
+    }
+    return Res<Int>.ok(total)
+}
+
 fun main(): Int {
     println(doubled("21").value.toString())
     println(describe("7").value)
@@ -67,5 +96,22 @@ fun main(): Int {
     val badPass: Res<Int> = passthrough("no")
     println(badPass.isOk())
     println(badPass.error)
+
+    println(pick("5", 1).value.toString())
+    val badPick: Res<Int> = pick("no", 1)
+    println(badPick.isOk())
+    println(badPick.error)
+
+    var texts: List<Str> = List<Str>()
+    texts.append("1")
+    texts.append("skip")
+    texts.append("3")
+    println(sumAll(texts).value.toString())
+    var badTexts: List<Str> = List<Str>()
+    badTexts.append("1")
+    badTexts.append("x")
+    val badSum: Res<Int> = sumAll(badTexts)
+    println(badSum.isOk())
+    println(badSum.error)
     return 0
 }

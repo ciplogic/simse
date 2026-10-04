@@ -10,3 +10,9 @@ not a number: xyz
 10
 false
 not a number: no
+10
+false
+not a number: no
+4
+false
+not a number: x
