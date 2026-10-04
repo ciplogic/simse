@@ -69,11 +69,11 @@ Out:
 
 ## Implementation notes
 
-Five changes, each a clean-release A/B with `bun tools/iterate.js --full` green (88/88 and both
+Six changes, each a clean-release A/B with `bun tools/iterate.js --full` green (88/88 and both
 bootstrap fixed points); the numbers are in the commit messages (`83d8a52`, `bb46399`,
-`344b800`, `53f9cff`, `16f7524`). Cumulative against the pre-task compiler: self-transpile
-min/median **2390/2401 ms -> 1727/1785 ms (~26-28%)**, 13 interleaved pairs, plus ~1% from the
-last commit.
+`344b800`, `53f9cff`, `16f7524`, `42918af`). Cumulative against the pre-task compiler:
+self-transpile min/median **2516.9/2720.7 ms -> 1737.9/1847.8 ms (~31-32%)**, 13 interleaved
+pairs.
 
 - **Collected resolution tables.** `addFunction` records `plainFunctionNames` and
   `functionPackages`, so the two `hasPlainFunction` scans per named call and `functionPackage`'s
@@ -93,13 +93,19 @@ last commit.
   lazily (children are read through their places), where it used to copy every visited node's
   children. In-place mutation was deliberately not used: ref-counted arrays can be shared, so it
   would invite aliasing bugs for a couple of percent more.
+- **One use-def table per body, shared across the linear passes.** The three use-def passes
+  rebuilt `linUseDefsOf` per pass per round; a pass that found nothing leaves the body
+  byte-identical, so the next pass now reads the body's cache box instead. The box is keyed by
+  the emitted signature (function signature, destructor symbol, machine class, closure symbol,
+  task declaration) and is a counted reference, so it cannot dangle; `linOptimizeBody` drops it
+  at entry and after any pass that reports a change.
 - **Attempted and reverted:** a jump-free fast path in `flattenPass` that skips
   `linSpliceIsSafe` - neutral in the clean A/B, so it was not kept (`flattenPass`'s cost is
   mostly profiler call overhead; the instrumented tree overstates it).
 
-Next candidates, in profile order: the four use-def passes each rebuild `linUseDefsOf` per
-round (sharing one per round is the shape, but a mutation between passes invalidates it), and
-`epAnalyze` still walks each body once up front (the event lists removed the per-round walks).
+Next candidates, in profile order: `linFoldConstBody` walks every statement twice plus a third
+walk per candidate; `epAnalyze` still walks each body once up front (the event lists removed the
+per-round walks); parsing (`lex.nextToken` + `parseModule`) is the largest untouched block.
 
 ## Steps
 
