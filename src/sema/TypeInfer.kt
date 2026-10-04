@@ -425,7 +425,15 @@ fun semBindTypes(
 ): Bool {
     var actualPtr: *AstXmlNode = actual
     val patternKind: AstNodeCategory = xmlKind(pattern)
-    if (patternKind != AstNodeCategory.TypeReference && patternKind != AstNodeCategory.TypePointer) {
+    // A bare type parameter binds the argument's type *as written*: a `List<&Box>` receiver
+    // binds its element `T` to `&Box`, not to the `Box` inside the reference - the reference
+    // is part of the type argument, not a passing conversion (see `convertArgument`).
+    val patternIsTypeParam: Bool =
+        (patternKind == AstNodeCategory.TypeNamed || patternKind == AstNodeCategory.TypeGeneric)
+        && xmlIsTypeParam(xmlAttr(pattern, AstNodeAttributeKind.Name), typeParams)
+    if (patternKind != AstNodeCategory.TypeReference && patternKind != AstNodeCategory.TypePointer
+        && !patternIsTypeParam
+    ) {
         while (true) {
             val actualKind: AstNodeCategory = xmlKind(actualPtr)
             if (actualKind == AstNodeCategory.TypeReference || actualKind == AstNodeCategory.TypePointer) {
