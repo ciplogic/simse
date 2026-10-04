@@ -5152,3 +5152,21 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   over `--root src` writes a verified report (378,842 nodes, depth 143) whose top-25 lists read
   `codegen.emitProgram` 27.6 s total, and `atPtr` 5.0 s over 163.5 M calls (with
   `common.xmlAttr` 4.4 s and `equals` 3.0 s) by self.
+
+- **The profiler's node map is the RTL Dictionary - and the RTL one is the faster one.** The
+  runtime's `std::unordered_map<unsigned long long, Int>` became `Dictionary<Int64, Int>`, key
+  unchanged: the parent node's ordinal and the body id packed `(parent << 32) | body`
+  (`impl_specs/profiling.md`). This was measured, not assumed. `tools/_profile_ab.mjs` runs
+  profiled builds round-robin and reports min/median of each report's `main():` line - and the
+  two-build rule matters here: the emitted runtime text is the *running* compiler's, so each
+  variant's release profiled compiler must be built by a fast compiler carrying that variant's
+  text. The first attempt reused one `simse.exe` for all variants and compared identical
+  runtimes (the giveaway: three variants "differing" only by noise). The proper run,
+  `bun tools/_profile_ab.mjs --runs 5` on the three release profiled compilers over
+  `--root src`: packed `Dictionary<Int64, Int>` min 31.09 s / median 32.27 s,
+  `std::unordered_map` min 32.74 s / median 32.93 s (the RTL map faster in all five rounds),
+  and `Dictionary<Str, Int>` keyed by the whole stack as text ("3,17,4", append on enter, cut
+  at the last comma on leave) min 40.58 s / median 41.49 s - building the key on every entry
+  costs about a quarter of the run, so the packed ordinal pair stayed and the string-keyed
+  variant was dropped. Verified: `bun tools/iterate.js --full` - **88/88** and both fixed
+  points.

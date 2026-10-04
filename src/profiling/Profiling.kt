@@ -98,7 +98,6 @@ fun profPreludeText(): Str {
     }
     var text: Str
     text.appendStr(`#include <cstdio>
-#include <unordered_map>
 
 // ---- profiling (--profile) ------------------------------------------------
 // Every emitted body starts with a profileApp.measure(<index>) whose constructor counts the
@@ -167,17 +166,17 @@ namespace simse_profiling {
             if (stack.size() > 0) {
                 parent = stack.back();
             }
-            unsigned long long key = ((unsigned long long) parent << 32) | (unsigned long long) index;
-            std::unordered_map<unsigned long long, Int>::iterator it = nodeOf.find(key);
+            Int64 key = ((Int64) parent << 32) | (Int64) index;
+            Int *found = nodeOf.valuePtr(key);
             Int node = 0;
-            if (it == nodeOf.end()) {
+            if (found == nullptr) {
                 node = (Int) nodes.size();
                 nodes.push_back(CallNode());
                 nodes[node].body = index;
-                nodeOf[key] = node;
+                nodeOf.insert_or_assign(key, node);
                 nodes[parent].children.push_back(node);
             } else {
-                node = it->second;
+                node = *found;
             }
             nodes[node].calls = nodes[node].calls + 1;
             stack.push_back(node);
@@ -210,7 +209,7 @@ namespace simse_profiling {
 
     private:
         List<CallNode> nodes;
-        std::unordered_map<unsigned long long, Int> nodeOf;
+        Dictionary<Int64, Int> nodeOf;
         List<Int> stack;
 
         void reportNode(FILE *out, Int node, Int depth) {

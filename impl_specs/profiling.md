@@ -31,12 +31,16 @@ Int ns1_bump(ns1_Counter* self) {
 
 An entry lands on a node of a call tree, and a node is one *exact call stack*: the runtime keeps
 the ordinals of the nodes it is in, and the node for this body under that stack - keyed
-`(parent ordinal, body id)` in one `std::unordered_map`, created the first time that stack
-reaches that body. Two call sites of one body are two nodes, so a node's totals are exactly the
-calls that reached it. The constructor pushes the node and bumps its call count; the destructor
-adds `simse_nowMicros() - start_` (or `simse_nowNanos()` - see *Units*) to the node and pops.
-A measurement is one dictionary lookup and two clock reads; nothing is allocated after the
-first sight of a path.
+`(parent ordinal, body id)` in one RTL `Dictionary`, created the first time that stack reaches
+that body. Two call sites of one body are two nodes, so a node's totals are exactly the calls
+that reached it. The constructor pushes the node and bumps its call count; the destructor adds
+`simse_nowMicros() - start_` (or `simse_nowNanos()` - see *Units*) to the node and pops. A
+measurement is one dictionary lookup and two clock reads; nothing is allocated after the first
+sight of a path. The key is the packed ordinal pair, not the stack as text: a
+`Dictionary<Str, Int>` of path strings was measured 27% *slower* on the self-run (40.6-41.5 s
+vs 32.7-32.9 s - the string is built on every one of the run's hundreds of millions of
+entries), while the packed `Int64` key is 2-5% faster than the `std::unordered_map` it
+replaced.
 
 Every total and every count is `Int64` (`CallNode.total`, `CallNode.calls`,
 `ProfileScope::start_`, and both clocks). A nanosecond count is ~1000x a microsecond one, so the
@@ -183,14 +187,16 @@ pinning.)
 
 Implemented: the flag (`Request.profile`, `--profile` in both drivers), the report (the two
 top-25 summaries and the call tree), `--profile-file` (default `simse_profile.txt`, `-` for
-stderr) and `--profile-nanos`, the emitted runtime (path-keyed `CallNode`s), the dense `Int`
-method table with package-qualified `kMethodNames[]`, `simse_nowMicros` / `simse_nowNanos`, and
-`bun build.js --profile` / `--profile-file` / `--profile-nanos`.
+stderr) and `--profile-nanos`, the emitted runtime (path-keyed `CallNode`s in one RTL
+`Dictionary`), the dense `Int` method table with package-qualified `kMethodNames[]`,
+`simse_nowMicros` / `simse_nowNanos`, and `bun build.js --profile` / `--profile-file` /
+`--profile-nanos`.
 
 Verified: a profiled `stress/linq` program writes the summaries and the tree (lambdas and all)
 to a named file, and to stderr with `--profile-file -`, and in `ns` with `--profile-nanos`; a
 profiled release compiler over `--root src` writes a 378,842-node tree (depth 143, `main()`
 32.3 s instrumented); `tools/_check_tree.mjs <file> 0` walks a report and reports **0
 violations** - the two summaries descend, every node's total is at least the sum of its
-children's, and no child exceeds its parent; with the flag off `bun tools/stress.js` is
-**88/88** and `bun tools/bootstrap.js`'s fixed point is byte for byte.
+children's, and no child exceeds its parent; `tools/_profile_ab.mjs` interleaves profiled runs
+and reports min/median for each variant; with the flag off `bun tools/stress.js` is **88/88**
+and `bun tools/bootstrap.js`'s fixed point is byte for byte.
