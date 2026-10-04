@@ -54,8 +54,8 @@ fun jsonResponse(status: Int, node: JsonNode): Response {
 
 // `{"error": message}` - the one shape every failing handler answers with.
 fun jsonError(status: Int, message: Str): Response {
-    var members: List<JsonMember> = List<JsonMember>()
-    members.append(JsonMember("error", jsonText(message)))
+    var members: List<&JsonMember> = List<&JsonMember>()
+    members.append(jsonField("error", jsonText(message)))
     return jsonResponse(status, jsonObject(members))
 }
 

@@ -1077,8 +1077,8 @@ struct ns7_SmJsonNodeStorage {
         Bool Boolean;
         Float64 Number;
         Str Text;
-        Array<ns7_JsonNode> Items;
-        Array<ns7_JsonMember> Members;
+        List<Ref<ns7_JsonNode>> Items;
+        List<Ref<ns7_JsonMember>> Members;
     };
     ns7_SmJsonNodeStorage() {}
     ns7_SmJsonNodeStorage(const ns7_SmJsonNodeStorage& other) { this->copyFrom(other); }
@@ -1114,8 +1114,8 @@ struct ns7_SmJsonNodeStorage {
             case ns7_SmJsonNodeTypes::Boolean: ::new ((void *) &this->Boolean) Bool(other.Boolean); this->_type = ns7_SmJsonNodeTypes::Boolean; break;
             case ns7_SmJsonNodeTypes::Number: ::new ((void *) &this->Number) Float64(other.Number); this->_type = ns7_SmJsonNodeTypes::Number; break;
             case ns7_SmJsonNodeTypes::Text: ::new ((void *) &this->Text) Str(other.Text); this->_type = ns7_SmJsonNodeTypes::Text; break;
-            case ns7_SmJsonNodeTypes::Items: ::new ((void *) &this->Items) Array<ns7_JsonNode>(other.Items); this->_type = ns7_SmJsonNodeTypes::Items; break;
-            case ns7_SmJsonNodeTypes::Members: ::new ((void *) &this->Members) Array<ns7_JsonMember>(other.Members); this->_type = ns7_SmJsonNodeTypes::Members; break;
+            case ns7_SmJsonNodeTypes::Items: ::new ((void *) &this->Items) List<Ref<ns7_JsonNode>>(other.Items); this->_type = ns7_SmJsonNodeTypes::Items; break;
+            case ns7_SmJsonNodeTypes::Members: ::new ((void *) &this->Members) List<Ref<ns7_JsonMember>>(other.Members); this->_type = ns7_SmJsonNodeTypes::Members; break;
             default: break;
         }
     }
@@ -1124,8 +1124,8 @@ struct ns7_SmJsonNodeStorage {
             case ns7_SmJsonNodeTypes::Boolean: ::new ((void *) &this->Boolean) Bool(std::move(other.Boolean)); this->_type = ns7_SmJsonNodeTypes::Boolean; break;
             case ns7_SmJsonNodeTypes::Number: ::new ((void *) &this->Number) Float64(std::move(other.Number)); this->_type = ns7_SmJsonNodeTypes::Number; break;
             case ns7_SmJsonNodeTypes::Text: ::new ((void *) &this->Text) Str(std::move(other.Text)); this->_type = ns7_SmJsonNodeTypes::Text; break;
-            case ns7_SmJsonNodeTypes::Items: ::new ((void *) &this->Items) Array<ns7_JsonNode>(std::move(other.Items)); this->_type = ns7_SmJsonNodeTypes::Items; break;
-            case ns7_SmJsonNodeTypes::Members: ::new ((void *) &this->Members) Array<ns7_JsonMember>(std::move(other.Members)); this->_type = ns7_SmJsonNodeTypes::Members; break;
+            case ns7_SmJsonNodeTypes::Items: ::new ((void *) &this->Items) List<Ref<ns7_JsonNode>>(std::move(other.Items)); this->_type = ns7_SmJsonNodeTypes::Items; break;
+            case ns7_SmJsonNodeTypes::Members: ::new ((void *) &this->Members) List<Ref<ns7_JsonMember>>(std::move(other.Members)); this->_type = ns7_SmJsonNodeTypes::Members; break;
             default: break;
         }
     }
@@ -1156,23 +1156,23 @@ struct ns7_SmJsonNodeStorage {
         _type = ns7_SmJsonNodeTypes::Text;
         ::new ((void *) &Text) Str(std::move(value));
     }
-    void setItems(Array<ns7_JsonNode> value) {
+    void setItems(List<Ref<ns7_JsonNode>> value) {
         if (_type == ns7_SmJsonNodeTypes::Items) {
             Items = std::move(value);
             return;
         }
         this->destroyActive();
         _type = ns7_SmJsonNodeTypes::Items;
-        ::new ((void *) &Items) Array<ns7_JsonNode>(std::move(value));
+        ::new ((void *) &Items) List<Ref<ns7_JsonNode>>(std::move(value));
     }
-    void setMembers(Array<ns7_JsonMember> value) {
+    void setMembers(List<Ref<ns7_JsonMember>> value) {
         if (_type == ns7_SmJsonNodeTypes::Members) {
             Members = std::move(value);
             return;
         }
         this->destroyActive();
         _type = ns7_SmJsonNodeTypes::Members;
-        ::new ((void *) &Members) Array<ns7_JsonMember>(std::move(value));
+        ::new ((void *) &Members) List<Ref<ns7_JsonMember>>(std::move(value));
     }
     void setNone() {
         this->destroyActive();
@@ -1233,35 +1233,35 @@ inline Str* ns7_getText(ns7_JsonNode* self) {
 inline void ns7_initByValue(ns7_JsonNode* self, Str value) {
     self->setText(std::move(value));
 }
-inline void ns7_setItems(ns7_JsonNode* self, Array<ns7_JsonNode> value) {
+inline void ns7_setItems(ns7_JsonNode* self, List<Ref<ns7_JsonNode>> value) {
     self->setItems(std::move(value));
 }
-inline Array<ns7_JsonNode>* ns7_getItems(ns7_JsonNode* self) {
+inline List<Ref<ns7_JsonNode>>* ns7_getItems(ns7_JsonNode* self) {
     if (self->_type == ns7_SmJsonNodeTypes::Items) {
         return &self->Items;
     }
     return nullptr;
 }
-inline void ns7_initByValue(ns7_JsonNode* self, Array<ns7_JsonNode> value) {
+inline void ns7_initByValue(ns7_JsonNode* self, List<Ref<ns7_JsonNode>> value) {
     self->setItems(std::move(value));
 }
-inline void ns7_setMembers(ns7_JsonNode* self, Array<ns7_JsonMember> value) {
+inline void ns7_setMembers(ns7_JsonNode* self, List<Ref<ns7_JsonMember>> value) {
     self->setMembers(std::move(value));
 }
-inline Array<ns7_JsonMember>* ns7_getMembers(ns7_JsonNode* self) {
+inline List<Ref<ns7_JsonMember>>* ns7_getMembers(ns7_JsonNode* self) {
     if (self->_type == ns7_SmJsonNodeTypes::Members) {
         return &self->Members;
     }
     return nullptr;
 }
-inline void ns7_initByValue(ns7_JsonNode* self, Array<ns7_JsonMember> value) {
+inline void ns7_initByValue(ns7_JsonNode* self, List<Ref<ns7_JsonMember>> value) {
     self->setMembers(std::move(value));
 }
 // src/modules/jsonnode/jsonnode.kt
 SIMSE_PACK_PUSH
 struct ns7_JsonMember {
     Str key;
-    ns7_JsonNode value;
+    Ref<ns7_JsonNode> value;
 };
 SIMSE_PACK_POP
 // src/modules/jsonnode/jsonnode.kt
@@ -2931,9 +2931,9 @@ ns7_JsonNode ns7_jsonNull();
 ns7_JsonNode ns7_jsonBool(Bool value);
 ns7_JsonNode ns7_jsonNumber(Float64 value);
 ns7_JsonNode ns7_jsonText(Str value);
+Ref<ns7_JsonMember> ns7_jsonField(Str key, ns7_JsonNode* value);
 ns7_JsonNode ns7_jsonArray(List<ns7_JsonNode> items);
-ns7_JsonNode ns7_jsonObject(List<ns7_JsonMember> members);
-ns7_JsonMember ns7_jsonMember(Str* key, ns7_JsonNode* value);
+ns7_JsonNode ns7_jsonObject(List<Ref<ns7_JsonMember>> members);
 Str ns7_jsonNumberText(Float64 value);
 void ns7_jsonWriteQuoted(Str* out, Str value);
 void ns7_write(ns7_JsonWriter* self, ns7_JsonNode node);
@@ -2949,6 +2949,7 @@ Res<ns7_JsonNode> ns7_parseNumber(ns7_JsonReader* self);
 Res<Str> ns7_parseString(ns7_JsonReader* self);
 Res<Char> ns7_parseUnicodeEscape(ns7_JsonReader* self);
 Res<ns7_JsonNode> ns7_parseArray(ns7_JsonReader* self);
+ns7_JsonNode ns7_arrayNode(ns7_JsonReader* self, List<Ref<ns7_JsonNode>> items);
 Res<ns7_JsonNode> ns7_parseObject(ns7_JsonReader* self);
 Int ns7_jsonHexValue(Char ch);
 Res<ns7_JsonNode> ns7_parseJson(Str text);
@@ -53651,8 +53652,8 @@ Bool ns7_boolean(ns7_JsonNode* self) {
 // src/modules/jsonnode/jsonnode.kt
 Int ns7_size(ns7_JsonNode* self) {
     ns7_SmJsonNodeTypes _sm_base1, _sm_base3;
-    Array<ns7_JsonNode>* _sm_base2;
-    Array<ns7_JsonMember>* _sm_base4;
+    List<Ref<ns7_JsonNode>>* _sm_base2;
+    List<Ref<ns7_JsonMember>>* _sm_base4;
     Bool _sm_expr1;
     Int _sm_expr2;
     _sm_base1 = ns7_SmJsonNodeTypes::Items;
@@ -53661,7 +53662,7 @@ Int ns7_size(ns7_JsonNode* self) {
     goto L2;
     L1:;
     _sm_base2 = simse_addressOf(self->Items);
-    _sm_expr2 = simse_array_count((*_sm_base2));
+    _sm_expr2 = simse_lenOf((*_sm_base2));
     return _sm_expr2;
     L2:;
     _sm_base3 = ns7_SmJsonNodeTypes::Members;
@@ -53670,7 +53671,7 @@ Int ns7_size(ns7_JsonNode* self) {
     goto L4;
     L3:;
     _sm_base4 = simse_addressOf(self->Members);
-    _sm_expr2 = simse_array_count((*_sm_base4));
+    _sm_expr2 = simse_lenOf((*_sm_base4));
     return _sm_expr2;
     L4:;
     return 0;
@@ -53678,10 +53679,11 @@ Int ns7_size(ns7_JsonNode* self) {
 // src/modules/jsonnode/jsonnode.kt
 ns7_JsonNode ns7_at(ns7_JsonNode* self, Int index) {
     ns7_SmJsonNodeTypes _sm_base1;
-    Array<ns7_JsonNode>* _sm_base2, * _sm_base3;
+    List<Ref<ns7_JsonNode>>* _sm_base2, * _sm_base3;
     Bool _sm_expr1;
     Int _sm_expr3;
-    ns7_JsonNode _sm_expr5;
+    Ref<ns7_JsonNode> handle;
+    ns7_JsonNode* _sm_expr5;
     _sm_base1 = ns7_SmJsonNodeTypes::Items;
     _sm_expr1 = ns7_isOfType(self, _sm_base1);
     if (_sm_expr1) goto L4;
@@ -53692,14 +53694,15 @@ ns7_JsonNode ns7_at(ns7_JsonNode* self, Int index) {
     goto L2;
     L3:;
     _sm_base2 = simse_addressOf(self->Items);
-    _sm_expr3 = simse_array_count((*_sm_base2));
+    _sm_expr3 = simse_lenOf((*_sm_base2));
     _sm_expr1 = index < _sm_expr3;
     if (_sm_expr1) goto L1;
     goto L2;
     L1:;
     _sm_base3 = simse_addressOf(self->Items);
-    _sm_expr5 = (*_sm_base3)[index];
-    return _sm_expr5;
+    handle = (*_sm_base3)[index];
+    _sm_expr5 = (handle).get();
+    return *(_sm_expr5);
     L2:;
     ns7_JsonNode _sm_expr6;
     ns7_initByValue(simse_addressOf(_sm_expr6));
@@ -53708,12 +53711,13 @@ ns7_JsonNode ns7_at(ns7_JsonNode* self, Int index) {
 // src/modules/jsonnode/jsonnode.kt
 ns7_JsonNode ns7_get(ns7_JsonNode* self, Str key) {
     ns7_SmJsonNodeTypes _sm_base1;
-    Array<ns7_JsonMember>* _sm_base2, * _sm_base4, * _sm_base6;
-    ns7_JsonMember* _sm_base3, * _sm_base5;
+    List<Ref<ns7_JsonMember>>* _sm_base2, * _sm_base3;
     Bool _sm_expr1, _sm_expr2;
     Int i, _sm_expr4;
+    Ref<ns7_JsonMember> member;
     Str _sm_expr6;
-    ns7_JsonNode _sm_expr8;
+    Ref<ns7_JsonNode> handle;
+    ns7_JsonNode* _sm_expr8;
     _sm_base1 = ns7_SmJsonNodeTypes::Members;
     _sm_expr1 = ns7_isOfType(self, _sm_base1);
     _sm_expr2 = !_sm_expr1;
@@ -53729,20 +53733,19 @@ ns7_JsonNode ns7_get(ns7_JsonNode* self, Str key) {
     i = 0;
     L3:;
     _sm_base2 = simse_addressOf(self->Members);
-    _sm_expr4 = simse_array_count((*_sm_base2));
+    _sm_expr4 = simse_lenOf((*_sm_base2));
     _sm_expr1 = i < _sm_expr4;
     if (!(_sm_expr1)) goto L4;
-    _sm_base4 = simse_addressOf(self->Members);
-    _sm_base3 = simse_addressOf((*_sm_base4)[i]);
-    _sm_expr6 = _sm_base3->key;
+    _sm_base3 = simse_addressOf(self->Members);
+    member = (*_sm_base3)[i];
+    _sm_expr6 = member->key;
     _sm_expr1 = equals(simse_addressOf(simse_spanOfStr(simse_addressOf(_sm_expr6))), simse_spanOfStr(simse_addressOf(key)));
     if (_sm_expr1) goto L5;
     goto L6;
     L5:;
-    _sm_base6 = simse_addressOf(self->Members);
-    _sm_base5 = simse_addressOf((*_sm_base6)[i]);
-    _sm_expr8 = _sm_base5->value;
-    return _sm_expr8;
+    handle = member->value;
+    _sm_expr8 = (handle).get();
+    return *(_sm_expr8);
     L6:;
     i = i + 1;
     goto L3;
@@ -53754,10 +53757,10 @@ ns7_JsonNode ns7_get(ns7_JsonNode* self, Str key) {
 // src/modules/jsonnode/jsonnode.kt
 Bool ns7_has(ns7_JsonNode* self, Str key) {
     ns7_SmJsonNodeTypes _sm_base1;
-    Array<ns7_JsonMember>* _sm_base2, * _sm_base4;
-    ns7_JsonMember* _sm_base3;
+    List<Ref<ns7_JsonMember>>* _sm_base2, * _sm_base3;
     Bool _sm_expr1, _sm_expr2;
     Int i, _sm_expr3;
+    Ref<ns7_JsonMember> member;
     Str _sm_expr5;
     _sm_base1 = ns7_SmJsonNodeTypes::Members;
     _sm_expr1 = ns7_isOfType(self, _sm_base1);
@@ -53770,12 +53773,12 @@ Bool ns7_has(ns7_JsonNode* self, Str key) {
     i = 0;
     L3:;
     _sm_base2 = simse_addressOf(self->Members);
-    _sm_expr3 = simse_array_count((*_sm_base2));
+    _sm_expr3 = simse_lenOf((*_sm_base2));
     _sm_expr1 = i < _sm_expr3;
     if (!(_sm_expr1)) goto L4;
-    _sm_base4 = simse_addressOf(self->Members);
-    _sm_base3 = simse_addressOf((*_sm_base4)[i]);
-    _sm_expr5 = _sm_base3->key;
+    _sm_base3 = simse_addressOf(self->Members);
+    member = (*_sm_base3)[i];
+    _sm_expr5 = member->key;
     _sm_expr1 = equals(simse_addressOf(simse_spanOfStr(simse_addressOf(_sm_expr5))), simse_spanOfStr(simse_addressOf(key)));
     if (_sm_expr1) goto L5;
     goto L6;
@@ -53815,32 +53818,45 @@ ns7_JsonNode ns7_jsonText(Str value) {
     return node;
 }
 // src/modules/jsonnode/jsonnode.kt
+Ref<ns7_JsonMember> ns7_jsonField(Str key, ns7_JsonNode* value) {
+    ns7_JsonNode boxed;
+    Ref<ns7_JsonNode> _sm_expr1;
+    Ref<ns7_JsonMember> _sm_expr2;
+    boxed = *(value);
+    _sm_expr1 = makeRef<std::remove_cvref_t<decltype((boxed))>>(boxed);
+    _sm_expr2 = makeRef<ns7_JsonMember>(key, _sm_expr1);
+    return _sm_expr2;
+}
+// src/modules/jsonnode/jsonnode.kt
 ns7_JsonNode ns7_jsonArray(List<ns7_JsonNode> items) {
-    Array<ns7_JsonNode> _sm_expr1;
+    List<Ref<ns7_JsonNode>> handles;
+    Int i, _sm_expr1;
+    Bool _sm_expr2;
+    ns7_JsonNode boxed;
+    Ref<ns7_JsonNode> _sm_expr3;
+    handles = List<Ref<ns7_JsonNode>>();
+    i = 0;
+    L1:;
+    _sm_expr1 = simse_lenOf(items);
+    _sm_expr2 = i < _sm_expr1;
+    if (!(_sm_expr2)) goto L2;
+    boxed = items[i];
+    _sm_expr3 = makeRef<std::remove_cvref_t<decltype((boxed))>>(boxed);
+    simse_list_append(handles, _sm_expr3);
+    i = i + 1;
+    goto L1;
+    L2:;
     ns7_JsonNode node;
     ns7_initByValue(simse_addressOf(node));
-    _sm_expr1 = simse_list_toArray(items);
-    ns7_setItems(simse_addressOf(node), _sm_expr1);
+    ns7_setItems(simse_addressOf(node), handles);
     return node;
 }
 // src/modules/jsonnode/jsonnode.kt
-ns7_JsonNode ns7_jsonObject(List<ns7_JsonMember> members) {
-    Array<ns7_JsonMember> _sm_expr1;
+ns7_JsonNode ns7_jsonObject(List<Ref<ns7_JsonMember>> members) {
     ns7_JsonNode node;
     ns7_initByValue(simse_addressOf(node));
-    _sm_expr1 = simse_list_toArray(members);
-    ns7_setMembers(simse_addressOf(node), _sm_expr1);
+    ns7_setMembers(simse_addressOf(node), members);
     return node;
-}
-// src/modules/jsonnode/jsonnode.kt
-ns7_JsonMember ns7_jsonMember(Str* key, ns7_JsonNode* value) {
-    Str _sm_base1;
-    ns7_JsonNode _sm_base2;
-    ns7_JsonMember _sm_expr1;
-    _sm_base1 = *(key);
-    _sm_base2 = *(value);
-    _sm_expr1 = ns7_JsonMember{_sm_base1, _sm_base2};
-    return _sm_expr1;
 }
 // src/modules/jsonnode/jsonnode.kt
 Str ns7_jsonNumberText(Float64 value) {
@@ -53948,16 +53964,18 @@ void ns7_jsonWriteQuoted(Str* out, Str value) {
 // src/modules/jsonnode/jsonnode.kt
 void ns7_write(ns7_JsonWriter* self, ns7_JsonNode node) {
     Str* _sm_base1, * _sm_base2, * _sm_base3, * _sm_base5, * _sm_base6, * _sm_base7, * _sm_base9,
-        * _sm_base11, * _sm_base14, * _sm_base15, * _sm_base17, * _sm_base18, * _sm_base19, * _sm_base27;
+        * _sm_base11, * _sm_base15, * _sm_base16, * _sm_base18, * _sm_base20, * _sm_base21, * _sm_base26;
     Float64 _sm_base4;
-    Str _sm_base8, _sm_base20, _sm_expr8;
-    Array<ns7_JsonNode>* _sm_base10, * _sm_base13;
-    ns7_JsonNode _sm_base12, _sm_base24;
-    Array<ns7_JsonMember>* _sm_base16, * _sm_base22;
-    ns7_JsonMember* _sm_base21;
+    Str _sm_base8, _sm_base22, _sm_expr8;
+    List<Ref<ns7_JsonNode>>* _sm_base10, * _sm_base12;
+    ns7_JsonNode* _sm_base13, * _sm_base24;
+    ns7_JsonNode _sm_base14, _sm_base25;
+    List<Ref<ns7_JsonMember>>* _sm_base17, * _sm_base19;
     ns7_SmJsonNodeTypes _sm_expr1;
     Bool _sm_expr2;
     Int i, _sm_expr13, _sm_i_2;
+    Ref<ns7_JsonNode> handle, _sm_handle_2;
+    Ref<ns7_JsonMember> member;
     _sm_expr1 = ns7_SmJsonNodeTypes::None;
     _sm_expr2 = node == _sm_expr1;
     if (_sm_expr2) goto L1;
@@ -54016,7 +54034,7 @@ void ns7_write(ns7_JsonWriter* self, ns7_JsonNode node) {
     i = 0;
     L18:;
     _sm_base10 = simse_addressOf(node.Items);
-    _sm_expr13 = simse_array_count((*_sm_base10));
+    _sm_expr13 = simse_lenOf((*_sm_base10));
     _sm_expr2 = i < _sm_expr13;
     if (!(_sm_expr2)) goto L19;
     _sm_expr2 = i > 0;
@@ -54026,14 +54044,16 @@ void ns7_write(ns7_JsonWriter* self, ns7_JsonNode node) {
     _sm_base11 = simse_addressOf(self->out);
     simse_str_append((*_sm_base11), ',');
     L21:;
-    _sm_base13 = simse_addressOf(node.Items);
-    _sm_base12 = (*_sm_base13)[i];
-    ns7_write(self, _sm_base12);
+    _sm_base12 = simse_addressOf(node.Items);
+    handle = (*_sm_base12)[i];
+    _sm_base13 = (handle).get();
+    _sm_base14 = *(_sm_base13);
+    ns7_write(self, _sm_base14);
     i = i + 1;
     goto L18;
     L19:;
-    _sm_base14 = simse_addressOf(self->out);
-    simse_str_append((*_sm_base14), ']');
+    _sm_base15 = simse_addressOf(self->out);
+    simse_str_append((*_sm_base15), ']');
     goto L24;
     L17:;
     _sm_expr1 = ns7_SmJsonNodeTypes::Members;
@@ -54041,35 +54061,37 @@ void ns7_write(ns7_JsonWriter* self, ns7_JsonNode node) {
     if (_sm_expr2) goto L23;
     goto L24;
     L23:;
-    _sm_base15 = simse_addressOf(self->out);
-    simse_str_append((*_sm_base15), '{');
+    _sm_base16 = simse_addressOf(self->out);
+    simse_str_append((*_sm_base16), '{');
     _sm_i_2 = 0;
     L25:;
-    _sm_base16 = simse_addressOf(node.Members);
-    _sm_expr13 = simse_array_count((*_sm_base16));
+    _sm_base17 = simse_addressOf(node.Members);
+    _sm_expr13 = simse_lenOf((*_sm_base17));
     _sm_expr2 = _sm_i_2 < _sm_expr13;
     if (!(_sm_expr2)) goto L26;
     _sm_expr2 = _sm_i_2 > 0;
     if (_sm_expr2) goto L27;
     goto L28;
     L27:;
-    _sm_base17 = simse_addressOf(self->out);
-    simse_str_append((*_sm_base17), ',');
+    _sm_base18 = simse_addressOf(self->out);
+    simse_str_append((*_sm_base18), ',');
     L28:;
-    _sm_base19 = simse_addressOf(self->out);
-    _sm_base18 = _sm_base19;
-    _sm_base22 = simse_addressOf(node.Members);
-    _sm_base21 = simse_addressOf((*_sm_base22)[_sm_i_2]);
-    _sm_base20 = _sm_base21->key;
-    ns7_jsonWriteQuoted(_sm_base18, _sm_base20);
-    simse_str_append((*_sm_base19), ':');
-    _sm_base24 = _sm_base21->value;
-    ns7_write(self, _sm_base24);
+    _sm_base19 = simse_addressOf(node.Members);
+    member = (*_sm_base19)[_sm_i_2];
+    _sm_base21 = simse_addressOf(self->out);
+    _sm_base20 = _sm_base21;
+    _sm_base22 = member->key;
+    ns7_jsonWriteQuoted(_sm_base20, _sm_base22);
+    simse_str_append((*_sm_base21), ':');
+    _sm_handle_2 = member->value;
+    _sm_base24 = (_sm_handle_2).get();
+    _sm_base25 = *(_sm_base24);
+    ns7_write(self, _sm_base25);
     _sm_i_2 = _sm_i_2 + 1;
     goto L25;
     L26:;
-    _sm_base27 = simse_addressOf(self->out);
-    simse_str_append((*_sm_base27), '}');
+    _sm_base26 = simse_addressOf(self->out);
+    simse_str_append((*_sm_base26), '}');
     L24:;
 }
 // src/modules/jsonnode/jsonnode.kt
@@ -54564,15 +54586,16 @@ Res<Char> ns7_parseUnicodeEscape(ns7_JsonReader* self) {
 Res<ns7_JsonNode> ns7_parseArray(ns7_JsonReader* self) {
     Int _sm_base1, _sm_base4, _sm_base5, _sm_base8, _sm_base9, _sm_expr1, _sm_expr2, _sm_expr3;
     Str* _sm_base2, * _sm_base3, * _sm_base6, * _sm_base7;
-    List<ns7_JsonNode> items;
+    List<Ref<ns7_JsonNode>> items;
     Bool _sm_expr4, _sm_expr11;
     Char _sm_expr5, ch;
-    ns7_JsonNode _sm_expr8, value, _sm_expr18;
+    ns7_JsonNode _sm_expr8, value, _sm_expr19;
     Res<ns7_JsonNode> _sm_expr9, _sm_prop1;
+    Ref<ns7_JsonNode> _sm_expr12;
     _sm_expr1 = self->at;
     _sm_base1 = _sm_expr1 + 1;
     self->at = _sm_base1;
-    items = List<ns7_JsonNode>();
+    items = List<Ref<ns7_JsonNode>>();
     ns7_skipSpace(self);
     _sm_expr2 = self->at;
     _sm_base2 = simse_addressOf(self->text);
@@ -54591,7 +54614,7 @@ Res<ns7_JsonNode> ns7_parseArray(ns7_JsonReader* self) {
     _sm_expr1 = self->at;
     _sm_base5 = _sm_expr1 + 1;
     self->at = _sm_base5;
-    _sm_expr8 = ns7_jsonArray(items);
+    _sm_expr8 = ns7_arrayNode(self, items);
     _sm_expr9 = simse_resOk<ns7_JsonNode>(_sm_expr8);
     return _sm_expr9;
     L2:;
@@ -54605,7 +54628,8 @@ Res<ns7_JsonNode> ns7_parseArray(ns7_JsonReader* self) {
     return _sm_prop1;
     L7:;
     value = _sm_prop1.Value;
-    simse_list_append(items, value);
+    _sm_expr12 = makeRef<std::remove_cvref_t<decltype((value))>>(value);
+    simse_list_append(items, _sm_expr12);
     ns7_skipSpace(self);
     _sm_expr1 = self->at;
     _sm_base6 = simse_addressOf(self->text);
@@ -54627,8 +54651,8 @@ Res<ns7_JsonNode> ns7_parseArray(ns7_JsonReader* self) {
     if (_sm_expr4) goto L10;
     goto L11;
     L10:;
-    _sm_expr18 = ns7_jsonArray(items);
-    _sm_expr9 = simse_resOk<ns7_JsonNode>(_sm_expr18);
+    _sm_expr19 = ns7_arrayNode(self, items);
+    _sm_expr9 = simse_resOk<ns7_JsonNode>(_sm_expr19);
     return _sm_expr9;
     L11:;
     _sm_expr4 = ch != ',';
@@ -54639,23 +54663,31 @@ Res<ns7_JsonNode> ns7_parseArray(ns7_JsonReader* self) {
     return _sm_expr9;
 }
 // src/modules/jsonnode/jsonnode.kt
+ns7_JsonNode ns7_arrayNode(ns7_JsonReader* self, List<Ref<ns7_JsonNode>> items) {
+    ns7_JsonNode node;
+    ns7_initByValue(simse_addressOf(node));
+    ns7_setItems(simse_addressOf(node), items);
+    return node;
+}
+// src/modules/jsonnode/jsonnode.kt
 Res<ns7_JsonNode> ns7_parseObject(ns7_JsonReader* self) {
     Int _sm_base1, _sm_base4, _sm_base5, _sm_base8, _sm_base12, _sm_base13, _sm_base16, _sm_base17,
         _sm_expr1, _sm_expr2, _sm_expr3;
     Str* _sm_base2, * _sm_base3, * _sm_base6, * _sm_base7, * _sm_base10, * _sm_base11, * _sm_base14,
         * _sm_base15;
     Str _sm_base9, key;
-    List<ns7_JsonMember> members;
+    List<Ref<ns7_JsonMember>> members;
     Bool _sm_expr4, _sm_expr17;
     Char _sm_expr5, ch;
-    ns7_JsonNode _sm_expr8, value, _sm_expr35;
+    ns7_JsonNode _sm_expr8, value, _sm_expr36;
     Res<ns7_JsonNode> _sm_expr9, _sm_prop2;
     Res<Str> parsedKey, _sm_prop1;
-    ns7_JsonMember _sm_expr28;
+    Ref<ns7_JsonNode> _sm_expr28;
+    Ref<ns7_JsonMember> _sm_expr29;
     _sm_expr1 = self->at;
     _sm_base1 = _sm_expr1 + 1;
     self->at = _sm_base1;
-    members = List<ns7_JsonMember>();
+    members = List<Ref<ns7_JsonMember>>();
     ns7_skipSpace(self);
     _sm_expr2 = self->at;
     _sm_base2 = simse_addressOf(self->text);
@@ -54735,8 +54767,9 @@ Res<ns7_JsonNode> ns7_parseObject(ns7_JsonReader* self) {
     return _sm_prop2;
     L15:;
     value = _sm_prop2.Value;
-    _sm_expr28 = ns7_JsonMember{key, value};
-    simse_list_append(members, _sm_expr28);
+    _sm_expr28 = makeRef<std::remove_cvref_t<decltype((value))>>(value);
+    _sm_expr29 = makeRef<ns7_JsonMember>(key, _sm_expr28);
+    simse_list_append(members, _sm_expr29);
     ns7_skipSpace(self);
     _sm_expr1 = self->at;
     _sm_base14 = simse_addressOf(self->text);
@@ -54758,8 +54791,8 @@ Res<ns7_JsonNode> ns7_parseObject(ns7_JsonReader* self) {
     if (_sm_expr4) goto L18;
     goto L19;
     L18:;
-    _sm_expr35 = ns7_jsonObject(members);
-    _sm_expr9 = simse_resOk<ns7_JsonNode>(_sm_expr35);
+    _sm_expr36 = ns7_jsonObject(members);
+    _sm_expr9 = simse_resOk<ns7_JsonNode>(_sm_expr36);
     return _sm_expr9;
     L19:;
     _sm_expr4 = ch != ',';

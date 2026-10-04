@@ -107,6 +107,20 @@ Two design notes the numbers make concrete:
   reaches ~111k on the same machine. This example trades that for straight-line handler code and
   a tiny transport.
 
+### Memory
+
+Under the same 4-second load at 16 connections, the server process stays small (sampled with
+`Get-Process`, `bench/memory.mjs`):
+
+| | private bytes (idle -> peak) | working set (idle -> peak) |
+| --- | --- | --- |
+| this example | ~1.6 MB -> ~10 MB | ~7 MB -> ~16 MB |
+| `Bun.serve` | ~75 MB -> ~96 MB | ~29 MB -> ~42 MB |
+
+About a tenth of the private bytes and a third of the working set. The example is
+native with no runtime to load and no per-request allocation kept; `Bun.serve` carries the
+JavaScript runtime and its heap.
+
 ## What to look at
 
 - `src/router.kt` - the whole express-like idea is a `List<Route>` of `(method, path, handler)`
@@ -118,8 +132,10 @@ Two design notes the numbers make concrete:
 - `src/http.kt` - `parseRequest` is the only place a raw byte becomes a `Request`, and
   `formatResponse` the only place a `Response` becomes bytes.
 - `src/modules/jsonnode/jsonnode.kt` - `JsonNode` is a `union class` (one shape live at a time,
-  `None` is JSON `null`), `parseJson` is the reader, `JsonNode.toJson()` the writer. The round
-  trip is `{"a":1}` -> `JsonNode` -> `{"a":1}`, and it is what makes a handler shape-agnostic.
+  `None` is JSON `null`), `parseJson` is the reader, `JsonNode.toJson()` the writer. The
+  recursive arms are `List<&JsonNode>` / `List<&JsonMember>` - a list of handles, so the type is
+  complete where its own definition names it, and a default-constructed list is safe. The round
+  trip is `{"a":1}` -> `JsonNode` -> `{"a":1}`.
 
 ## Caveats
 

@@ -7,19 +7,22 @@ import http
 // the pipeline. `greet` and `echo` are the request->JSON->transform->response loop; `fetch`
 // adds an outbound web request (`http`'s `httpGetText`) whose JSON is decoded and re-shaped.
 // A handler never touches the socket, a header, or a byte - `http.kt` owns those boundaries.
+//
+// A response object is built with `jsonField` (one key and a node) into a `List<&JsonMember>`,
+// then `jsonObject`; the recursive storage is handles, and the call site stays value-shaped.
 
 // GET /health -> {"status":"ok"}
 fun healthHandler(req: Request): Response {
-    var members: List<JsonMember> = List<JsonMember>()
-    members.append(JsonMember("status", jsonText("ok")))
+    var members: List<&JsonMember> = List<&JsonMember>()
+    members.append(jsonField("status", jsonText("ok")))
     return jsonResponse(200, jsonObject(members))
 }
 
 // GET /json -> {"message":"Hello, World!"} - the constant JSON a hello-world throughput
 // benchmark hits (`bench/`).
 fun jsonHandler(req: Request): Response {
-    var members: List<JsonMember> = List<JsonMember>()
-    members.append(JsonMember("message", jsonText("Hello, World!")))
+    var members: List<&JsonMember> = List<&JsonMember>()
+    members.append(jsonField("message", jsonText("Hello, World!")))
     return jsonResponse(200, jsonObject(members))
 }
 
@@ -36,8 +39,8 @@ fun greetHandler(req: Request): Response {
     if (!name.isText()) {
         return jsonError(400, "expected a string 'name'")
     }
-    var members: List<JsonMember> = List<JsonMember>()
-    members.append(JsonMember("greeting", jsonText("Hello, " + name.text() + "!")))
+    var members: List<&JsonMember> = List<&JsonMember>()
+    members.append(jsonField("greeting", jsonText("Hello, " + name.text() + "!")))
     return jsonResponse(200, jsonObject(members))
 }
 
@@ -49,9 +52,9 @@ fun echoHandler(req: Request): Response {
         return jsonError(400, "body is not json: " + parsed.error)
     }
     val node: JsonNode = parsed.value
-    var members: List<JsonMember> = List<JsonMember>()
-    members.append(JsonMember("received", node))
-    members.append(JsonMember("kind", jsonText(kindName(node))))
+    var members: List<&JsonMember> = List<&JsonMember>()
+    members.append(jsonField("received", node))
+    members.append(jsonField("kind", jsonText(kindName(node))))
     return jsonResponse(200, jsonObject(members))
 }
 
@@ -68,11 +71,11 @@ fun fetchHandler(req: Request): Response {
         return jsonError(502, "upstream was not json: " + parsed.error)
     }
     val node: JsonNode = parsed.value
-    var members: List<JsonMember> = List<JsonMember>()
-    members.append(JsonMember("upstream", jsonText(upstreamUrl())))
-    members.append(JsonMember("kind", jsonText(kindName(node))))
-    members.append(JsonMember("size", jsonNumber(node.size())))
-    members.append(JsonMember("body", node))
+    var members: List<&JsonMember> = List<&JsonMember>()
+    members.append(jsonField("upstream", jsonText(upstreamUrl())))
+    members.append(jsonField("kind", jsonText(kindName(node))))
+    members.append(jsonField("size", jsonNumber(node.size())))
+    members.append(jsonField("body", node))
     return jsonResponse(200, jsonObject(members))
 }
 

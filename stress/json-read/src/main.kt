@@ -27,11 +27,11 @@ fun main(): Int {
     println(node.get("note").isNull().toString())
     println(node.toJson())
 
-    var members: List<JsonMember> = List<JsonMember>()
-    members.append(JsonMember("hello", jsonText("a\"b")))
-    members.append(JsonMember("n", jsonNumber(3.0)))
+    var members: List<&JsonMember> = List<&JsonMember>()
+    members.append(jsonField("hello", jsonText("a\"b")))
+    members.append(jsonField("n", jsonNumber(3.0)))
     var empty: List<JsonNode> = List<JsonNode>()
-    members.append(JsonMember("empty", jsonArray(empty)))
+    members.append(jsonField("empty", jsonArray(empty)))
     println(jsonObject(members).toJson())
 
     val bad: Res<JsonNode> = parseJson("{\"a\": }")

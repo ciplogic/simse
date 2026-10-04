@@ -9,14 +9,14 @@ package jsonnode
 // lands in `JsonNode` first: a tagged union (`union class`, specs/declarations.md) where one
 // of the six JSON shapes is live - `None` is JSON `null`, the other five are the arms.
 // `parseJson` is the reader (`text -> Res<JsonNode>`), `JsonNode.toJson()` is the writer
-// (`JsonNode -> text`), and the accessors below are how a handler reaches into a node. That
-// is the pair the generator's typed writer sits beside: decode to a node, transform, encode.
+// (`JsonNode -> text`), and the accessors below are how a handler reaches into a node.
 //
-// Arrays and objects recurse through `Array<T>` rather than `List<T>`: `Array` is a
-// ref-counted *block* reached through a pointer, so `JsonNode` can name itself and
-// `JsonMember` without embedding an incomplete type (a `List<JsonNode>` field would ask for
-// `JsonNode`'s size while it is still being defined). Build a node's arms with `jsonArray`/
-// `jsonObject`, which take the growable `List` and hand back the block.
+// The recursive arms are `List<&JsonNode>` / `List<&JsonMember>`: a list of counted *handles*
+// (pointers), so the type is complete where its own definition names it. `List<JsonNode>`
+// (inline storage) is not - `SmallVector` embeds its elements - and neither is `PList<JsonNode>`
+// (`&List<JsonNode>`), whose generated destructor instantiates `List<JsonNode>`. A list of
+// handles also keeps the runtime to `List` alone (no `Array`), and a default-constructed list
+// is safe with no shared block (see `containers.hpp`).
 
 // ---- the value ----
 
@@ -24,15 +24,14 @@ union class JsonNode(
     var Boolean: Bool,
     var Number: Float64,
     var Text: Str,
-    var Items: Array<JsonNode>,
-    var Members: Array<JsonMember>
+    var Items: List<&JsonNode>,
+    var Members: List<&JsonMember>
 )
 
-data class JsonMember(var key: Str, var value: JsonNode)
+data class JsonMember(var key: Str, var value: &JsonNode)
 
 // ---- reading a node ----
 
-// JSON `null`, and the tag every fresh node starts on.
 fun JsonNode.isNull(): Bool {
     return this.isOfType(SmJsonNodeTypes.None)
 }
@@ -84,10 +83,10 @@ fun JsonNode.boolean(): Bool {
 // The element count of an array or object, and `0` for anything else.
 fun JsonNode.size(): Int {
     if (this.isOfType(SmJsonNodeTypes.Items)) {
-        return this.Items.count()
+        return this.Items.size()
     }
     if (this.isOfType(SmJsonNodeTypes.Members)) {
-        return this.Members.count()
+        return this.Members.size()
     }
     return 0
 }
@@ -95,21 +94,24 @@ fun JsonNode.size(): Int {
 // The array's element at `index`, or JSON `null` when this is not an array or the index is
 // out of range - so a chain of reads never fails, it just stops at a `null` node.
 fun JsonNode.at(index: Int): JsonNode {
-    if (this.isOfType(SmJsonNodeTypes.Items) && index >= 0 && index < this.Items.count()) {
-        return this.Items[index]
+    if (this.isOfType(SmJsonNodeTypes.Items) && index >= 0 && index < this.Items.size()) {
+        val handle: &JsonNode = this.Items[index]
+        return *handle
     }
     return JsonNode()
 }
 
-// The object's member named `key`, or JSON `null`. A `Str` comparison is the language's.
+// The object's member named `key`, or JSON `null`.
 fun JsonNode.get(key: Str): JsonNode {
     if (!this.isOfType(SmJsonNodeTypes.Members)) {
         return JsonNode()
     }
     var i: Int = 0
-    while (i < this.Members.count()) {
-        if (this.Members[i].key == key) {
-            return this.Members[i].value
+    while (i < this.Members.size()) {
+        val member: &JsonMember = this.Members[i]
+        if (member.key == key) {
+            val handle: &JsonNode = member.value
+            return *handle
         }
         i = i + 1
     }
@@ -121,8 +123,9 @@ fun JsonNode.has(key: Str): Bool {
         return false
     }
     var i: Int = 0
-    while (i < this.Members.count()) {
-        if (this.Members[i].key == key) {
+    while (i < this.Members.size()) {
+        val member: &JsonMember = this.Members[i]
+        if (member.key == key) {
             return true
         }
         i = i + 1
@@ -154,20 +157,32 @@ fun jsonText(value: Str): JsonNode {
     return node
 }
 
+// A field: the value is boxed into a handle, so a caller writes `jsonField("k", jsonText(..))`
+// and never spells the `&`.
+fun jsonField(key: Str, value: JsonNode): &JsonMember {
+    var boxed: JsonNode = value
+    return &JsonMember(key, &boxed)
+}
+
+// An array: each element is boxed into a handle, so the call site passes plain `JsonNode`s.
 fun jsonArray(items: List<JsonNode>): JsonNode {
+    var handles: List<&JsonNode> = List<&JsonNode>()
+    var i: Int = 0
+    while (i < items.size()) {
+        var boxed: JsonNode = items[i]
+        handles.append(&boxed)
+        i = i + 1
+    }
     var node: JsonNode = JsonNode()
-    node.setItems(items.toArray())
+    node.setItems(handles)
     return node
 }
 
-fun jsonObject(members: List<JsonMember>): JsonNode {
+// An object: the members are already handles (`jsonField` builds them).
+fun jsonObject(members: List<&JsonMember>): JsonNode {
     var node: JsonNode = JsonNode()
-    node.setMembers(members.toArray())
+    node.setMembers(members)
     return node
-}
-
-fun jsonMember(key: Str, value: JsonNode): JsonMember {
-    return JsonMember(key, value)
 }
 
 // ---- writing a node ----
@@ -247,11 +262,12 @@ data class JsonWriter(var out: Str) {
             Items -> {
                 this.out.append('[')
                 var i: Int = 0
-                while (i < node.Items.count()) {
+                while (i < node.Items.size()) {
                     if (i > 0) {
                         this.out.append(',')
                     }
-                    this.write(node.Items[i])
+                    val handle: &JsonNode = node.Items[i]
+                    this.write(*handle)
                     i = i + 1
                 }
                 this.out.append(']')
@@ -260,13 +276,15 @@ data class JsonWriter(var out: Str) {
             Members -> {
                 this.out.append('{')
                 var i: Int = 0
-                while (i < node.Members.count()) {
+                while (i < node.Members.size()) {
                     if (i > 0) {
                         this.out.append(',')
                     }
-                    jsonWriteQuoted(*this.out, node.Members[i].key)
+                    val member: &JsonMember = node.Members[i]
+                    jsonWriteQuoted(*this.out, member.key)
                     this.out.append(':')
-                    this.write(node.Members[i].value)
+                    val handle: &JsonNode = member.value
+                    this.write(*handle)
                     i = i + 1
                 }
                 this.out.append('}')
@@ -451,16 +469,16 @@ data class JsonReader(var text: Str, var at: Int) {
     // The cursor is on `[`.
     fun parseArray(): Res<JsonNode> {
         this.at = this.at + 1
-        var items: List<JsonNode> = List<JsonNode>()
+        var items: List<&JsonNode> = List<&JsonNode>()
         this.skipSpace()
         if (this.at < this.text.size() && this.text.charAt(this.at) == ']') {
             this.at = this.at + 1
-            return Res<JsonNode>.ok(jsonArray(items))
+            return Res<JsonNode>.ok(this.arrayNode(items))
         }
         while (true) {
             val parsedValue: Res<JsonNode> = this.parseValue()
-            val value: JsonNode = parsedValue!!
-            items.append(value)
+            var value: JsonNode = parsedValue!!
+            items.append(&value)
             this.skipSpace()
             if (this.at >= this.text.size()) {
                 return this.fail("unterminated array")
@@ -468,7 +486,7 @@ data class JsonReader(var text: Str, var at: Int) {
             val ch: Char = this.text.charAt(this.at)
             this.at = this.at + 1
             if (ch == ']') {
-                return Res<JsonNode>.ok(jsonArray(items))
+                return Res<JsonNode>.ok(this.arrayNode(items))
             }
             if (ch != ',') {
                 return this.fail("expected ',' or ']'")
@@ -476,10 +494,18 @@ data class JsonReader(var text: Str, var at: Int) {
         }
     }
 
+    // A node over the array's handles (the parser builds handles directly; `jsonArray` takes
+    // values for a call site).
+    fun arrayNode(items: List<&JsonNode>): JsonNode {
+        var node: JsonNode = JsonNode()
+        node.setItems(items)
+        return node
+    }
+
     // The cursor is on `{`.
     fun parseObject(): Res<JsonNode> {
         this.at = this.at + 1
-        var members: List<JsonMember> = List<JsonMember>()
+        var members: List<&JsonMember> = List<&JsonMember>()
         this.skipSpace()
         if (this.at < this.text.size() && this.text.charAt(this.at) == '}') {
             this.at = this.at + 1
@@ -498,8 +524,8 @@ data class JsonReader(var text: Str, var at: Int) {
             }
             this.at = this.at + 1
             val parsedValue: Res<JsonNode> = this.parseValue()
-            val value: JsonNode = parsedValue!!
-            members.append(JsonMember(key, value))
+            var value: JsonNode = parsedValue!!
+            members.append(&JsonMember(key, &value))
             this.skipSpace()
             if (this.at >= this.text.size()) {
                 return this.fail("unterminated object")
