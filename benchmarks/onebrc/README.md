@@ -26,7 +26,7 @@ the same data.
 bun benchmarks\onebrc\onebrc.mjs gen 10000000 benchmarks\onebrc\data\measurements.txt --seed 42
 
 :: the Simse implementation (release build; it reports its own time on stderr)
-bun build.js --release --root benchmarks\onebrc --module src\modules\io --out benchmarks\onebrc\onebrc.cpp --exe benchmarks\onebrc\onebrc.exe
+bun build.js --release --root benchmarks\onebrc --module src\modules\io --module src\modules\streams --out benchmarks\onebrc\onebrc.cpp --exe benchmarks\onebrc\onebrc.exe
 benchmarks\onebrc\onebrc.exe benchmarks\onebrc\data\measurements.txt
 
 :: the C++ baseline
@@ -40,11 +40,12 @@ bun benchmarks\onebrc\onebrc.mjs check benchmarks\onebrc\data\measurements.txt
 The data file and the built binaries are ignored by git
 (`benchmarks/onebrc/data/`, `onebrc.cpp`, `*.exe`, `*.obj`).
 
-## The reader, in the RTL
+## The reader, in the `streams` module
 
 The benchmark uses the in-place reader, `FileStream.readLineView(): Opt<StrView>`,
 which hands back a view into the stream's 256 KiB readahead buffer instead of
-copying the line. The RTL also has the two earlier reads - `readLine(): Opt<Str>`
+copying the line. The `streams` module also has the two earlier reads - `readLine(): Opt<Str>`
 (one `Str` per line) and `readLineInto(*Str)` (one recycled buffer) - and
 `benchmark.md` records what each of them costs; all three are covered by
-`stress/read-lines` and documented in `impl_specs/rtl-abi.md`.
+`stress/read-lines` and documented in `impl_specs/rtl-abi.md`. (The program names `io` too,
+for `eprintln`.)

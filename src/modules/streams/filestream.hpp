@@ -4,20 +4,27 @@
 #include <fstream>
 #include <string>
 
-#include "containers.hpp"
-#include "span.hpp"
-#include "types.hpp"
+#include "../../rtl/containers.hpp"
+#include "../../rtl/span.hpp"
+#include "../../rtl/types.hpp"
 
-// Reading a file line by line. The Simse surface is the prelude file src/rtl/fs.kt,
-// and **this header is the struct alone**: its fields, its method declarations and the
-// three reads' contract. The bodies are the `filestream` section of src/rtl/_res.md -
-// the emitter calls a handle's methods as members (`stream->readLine()`), so the class
-// declares them here and the section defines them, and a program carries the text only
-// when it calls one. `<fstream>`/`<string>` are the fields' includes and `<cstring>` is
-// the section's (`memchr`/`memmove`/`memcpy`), since this header is compiled first.
+// Reading a file line by line. The Simse surface is the `streams` module
+// (src/modules/streams/fs.kt), and **this header is the struct alone**: its fields, its method
+// declarations and the three reads' contract. The bodies are the `filestream` section of
+// src/modules/streams/_res.md - the emitter calls a handle's methods as members
+// (`stream->readLine()`), so the class declares them here and the section defines them, and a
+// program carries the text only when it calls one. `<fstream>`/`<string>` are the fields'
+// includes and `<cstring>` is the section's (`memchr`/`memmove`/`memcpy`), since this header is
+// compiled first.
 //
-// `simse_fileStream_open` is *not* a method: it is a free function in the always-emitted
-// `fileio` section, because a program may name it with a declaration of its own.
+// The header is placed by the `filestreamhpp` section of the module's `_res.md` (`emit:
+// always`), so a program that names the module carries it and a program that does not, does
+// not. The RTL headers above are spelled relative to this header (`../../rtl/...`) rather than
+// to the repository root, because the include is emitted into arbitrary output directories and
+// only the header's own location is fixed.
+//
+// `simse_fileStream_open` is *not* a method: it is a free function in the same `filestream`
+// section, reached when a program opens a stream.
 //
 // The handle is a raw pointer: `openFileStream` creates it (null when the file
 // cannot be opened), `close` releases it - there is no destructor to run for a handle

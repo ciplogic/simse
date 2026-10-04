@@ -432,6 +432,14 @@ fun Emitter.typeName(name: *Str, posNode: *AstXmlNode): Str {
         if (packageName == "rtl") {
             return name
         }
+        // A *materialized* type (`@SmGen("cpp")`/`@SmGen("res")`) keeps its bare name in any
+        // package: its C++ is hand-written and cannot know the per-compilation `nsN_` prefix,
+        // so a module can carry one under its declared name (`streams`' `FileStream`) exactly
+        // as the prelude does.
+        val decl: *AstXmlNode = this.types.getPtr(name)
+        if (decl != null && this.typeIsRaw(decl)) {
+            return name
+        }
         return this.qualify(packageName, name)
     }
     if (semIsRtlTypeName(name)) {

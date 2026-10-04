@@ -208,11 +208,12 @@ program's types.
   its symbol (the attribute's third argument), because the section cannot.
 - `<section>:emit` = `always` is the marker for text with no declaration to hang it on:
   the compiler emits the section for every program. `strtable` (the string table's decoder)
-  and `timeops` (the clock the profiler reads) are the two.
+  and `timeops` (the clock the profiler reads) are the two prelude ones; `streams`'
+  `filestreamhpp` (the include of the module's hand-written header) is the module-side case.
 - `<section>:emit` = `reached` gates a section for a *module's* declarations too: the text lands
   only when a call reaches the declaration, so a module costs a program only what it uses.
-  `filestream` is the first - it is what lets the `io` module hand out `readLine` without every
-  program that names `io` carrying the stream code.
+  `filestream` is the first - it is what lets the `streams` module hand out `readLine` without
+  every program that names `streams` carrying the stream code.
 - A *prelude* declaration the program never names is skipped, so a prelude generator
   costs a program only what it uses - the rule a prelude function with a body follows. A
   *module* declaration is skipped the same way when its section says `emit: reached`. A
@@ -256,13 +257,16 @@ from: `strtable` and `timeops` (`emit: always`), `listops`, `dictops` and `strop
 string/character/numeric conversions the headers held), `spanOf` (the first user) and
 `strcat` (the emitter's own concatenation: no *program* names it, the emitter records its
 reach, and the one declaration it hangs on is shaped so a program cannot usefully call it). A
-module owns its own resource, so `fileio` (`emit: always`: the platform's filesystem/IO
-operations) and `filestream` (`emit: reached`: the `FileStream` reads, a program paying for them
-only when it reads one) are `src/modules/io/_res.md` now, and the `json` generator's helper is
+module owns its own resource: `fileio` (`emit: always`: the platform's filesystem/IO
+operations) is `src/modules/io/_res.md`, and `streams`' `_res.md`
+(src/modules/streams/_res.md) holds `filestreamhpp` (`emit: always`: the include of the module's
+header) and `filestream` (`emit: reached`: the open and the method bodies, a program paying for
+them only when it opens or reads one); the `json` generator's helper is
 `src/modules/json/_res.md`. A `@SmGen("res", ...)`
 declaration emits no prototype of its own, which is what the `forward` text of its section
-is for. What stays a header is the type core and `filestream.hpp` (the `FileStream` struct
-and its methods, minus the `simse_fileStream_open` prototype): `simse.hpp`'s own includes.
+is for. What stays a header is the type core (`simse.hpp`'s own includes) and, outside the RTL,
+`streams`' `filestream.hpp` (the `FileStream` struct and its method declarations, placed by the
+module's `filestreamhpp` section).
 
 ## Bootstrap
 

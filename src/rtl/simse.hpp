@@ -7,9 +7,11 @@
 //
 // What a program's *generated* C++ needs is not necessarily here: the primitives the
 // prelude operations reach live in `src/rtl/_res.md` (the `strtable`, `timeops`,
-// `listops`, `dictops`, `strops`, `resfmt` and `fileio` sections), which the emitter places
+// `listops`, `dictops`, `strops` and `resfmt` sections), which the emitter places
 // in the amalgamation's own sections - a program that reaches one of them carries its
 // prototype and its definition, and has nothing to link (`impl_specs/generators.md`).
+// A module owns the same way; the `streams` module's `FileStream` header is placed by
+// that module's `filestreamhpp` section, not by this umbrella (src/modules/streams/_res.md).
 
 // Order follows dependencies: types and containers have no RTL-relative
 // dependencies, and the higher-level headers build on them.
@@ -20,10 +22,10 @@
 #include "span.hpp"         // Span<T> (borrowed view: pointer + length)
 #include "strview.hpp"      // StrView (an alias of Span<Char>, plus the text operations)
 #include "resources.hpp"    // the `_res.md` resources a program carries
-#include "filestream.hpp"   // FileStream: simse_fileStream_* native ops (prelude)
 #include "functional.hpp"   // Func, Action, AutoDefer
 // The compiler's AST (`AstXmlNode`, `AstNodeKind`, ...) is *generated*: it is declared in
-// src/rtl/astxml.kt and the emitter writes its structs and enums (specs/attributes.md's
-// type materialization), so there is no header to include for it any more. The language-level
-// `XmlNode`/`Attribute` live in the `xml` module (src/modules/xml/api.kt) and are generated
-// the same way; nothing in the `rtl` prelude declares them.
+// src/modules/compiler/astxml.kt and the emitter writes its structs and enums
+// (specs/attributes.md's type materialization), so there is no header to include for it any
+// more. The language-level `XmlNode`/`Attribute` live in the `xml` module
+// (src/modules/xml/api.kt) and are generated the same way; nothing in the `rtl` prelude
+// declares them.

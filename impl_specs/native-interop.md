@@ -159,7 +159,7 @@ translation unit, so there is nothing to link.
 
 ## Filesystem / IO natives (T23)
 
-The self-hosted driver needs a small filesystem surface. Declared in the prelude
+The self-hosted driver needs a small filesystem surface. Declared in the `io` module
 (`src/modules/io/api.kt`) as `@SmGen("res", "fileio", <symbol>)`, prototyped in the
 `forward:` text of the `fileio` section of `src/modules/io/_res.md` and defined in its
 `bodies:` text:
@@ -174,7 +174,8 @@ The self-hosted driver needs a small filesystem surface. Declared in the prelude
 | `pathExists(path)` | `simse_pathExists` | |
 | `eprintln(text)` | `simse_eprintln` | one line to stderr |
 
-These are prelude declarations (available without an import) whose prototypes and
+These are `io` module declarations (a program reaches them with `--module src/modules/io` and
+`import io`) whose prototypes and
 definitions the emitter places in the program's own translation unit. The section
 is `emit: always` because a program may also name one of these symbols with a
 native declaration of its own, and then no `@SmGen` declaration reaches the

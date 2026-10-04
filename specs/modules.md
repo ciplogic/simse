@@ -51,6 +51,9 @@ package that several modules may contribute to.
 The runtime's tree types `XmlNode` and `Attribute` are **not** built-ins: they live in the
 `xml` module (`src/modules/xml/api.kt`), so a program reaches them with `import xml` and
 must name that module on the compiler command line (or in its `simse.md` manifest).
+`FileStream` is the same shape: it is the `streams` module's type
+(`src/modules/streams/fs.kt`), reached with `import streams` and `--module
+src/modules/streams`, while the path and whole-file operations stay the `io` module's.
 
 ### Deferred: multiple packages per file
 

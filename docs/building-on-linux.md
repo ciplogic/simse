@@ -49,8 +49,10 @@ Two places emitted C++ that would not build on a non-MSVC toolchain; both are fi
 
 ## What was already portable (no change needed)
 
-The runtime headers (`src/rtl/*.hpp`) and the resource text (`src/rtl/_res.md`,
-`src/modules/io/_res.md`, `src/modules/json/_res.md`) are plain standard C++20:
+The runtime headers (`src/rtl/*.hpp`, plus the `streams` module's
+`src/modules/streams/filestream.hpp`) and the resource text (`src/rtl/_res.md`,
+`src/modules/io/_res.md`, `src/modules/streams/_res.md`, `src/modules/json/_res.md`) are plain
+standard C++20:
 `std::chrono`, `std::filesystem`, `std::bit_width`, `std::type_identity_t`, `std::to_string`.
 The one toolchain-dependent construct — 4-byte packing — already branches in
 `src/rtl/types.hpp` (`__pragma(pack(...))` on MSVC, `_Pragma("pack(...)")` elsewhere).

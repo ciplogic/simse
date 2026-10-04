@@ -87,7 +87,7 @@ fun bpCollectDecls(
 // one is a construction or a conversion, which copies what it is given.
 fun bpBuiltinType(name: *Str): Bool {
     if ( * name == "Str" || * name == "List" || *name == "Dictionary" || *name == "Opt"
-    || *name == "Res" || *name == "Array" || *name == "Span" || *name == "FileStream"
+    || *name == "Res" || *name == "Array" || *name == "Span"
     ) {
         return true
     }

@@ -277,8 +277,8 @@ runtime-alignment task; the shim is not the normative layout.
    `size_t` into an `Int` (this retired the C4267 warnings). `std::string` survives **only
    at the native boundary**: `simse_toStdString`/`simse_fromStdString`,
    `std::getline(std::istream&, Str&)`, `FileStream`'s recycled line buffer
-   (`src/rtl/filestream.hpp`), and the `std::filesystem`/`<fstream>` use in the `fileio`
-   section of `src/rtl/_res.md`.
+   (`src/modules/streams/filestream.hpp`), and the `std::filesystem` use in the
+   `fileio`/`filestream` sections of `src/modules/io/_res.md`/`src/modules/streams/_res.md`.
 2. **`List<T>` implementation.** Spec: `List<T>` *is* `SmallVector<4, T>`
    (`specs/containers.md`). Shim: matches - `SmallVector<T, kListInlineCapacity>` (4), the
    documented layout, and its only implementation (no `std::vector` mode).
@@ -370,9 +370,11 @@ runtime-alignment task; the shim is not the normative layout.
 
 ### Reading files line by line, and the clock
 
-`FileStream` (`src/rtl/filestream.hpp`, prelude `src/rtl/fs.kt` for the *type*; the
-operations are the `io` module's) is the
-RTL's line reader. `openFileStream(path): *FileStream` is a free native (null when
+`FileStream` (`src/modules/streams/filestream.hpp`, the file and type declarations
+`src/modules/streams/fs.kt`) is the line reader. The type and its operations are the `streams`
+module's - the header is placed by the module's `filestreamhpp` section (`emit: always`) and the
+method bodies are its `filestream` section (`emit: reached`) - and `simse.hpp` no longer includes
+it. `openFileStream(path): *FileStream` is a free native (null when
 the file cannot be opened); the operations are **methods of the struct** -
 `readLine(): Opt<Str>`, `readLineInto(buffer: *Str): Bool`,
 `readLineView(): Opt<StrView>`, `fileSize(): Int64`, `close()` - because the
@@ -411,13 +413,15 @@ removing those is the next step, together with in-place dictionary access (item
 
 The emitter resolves a type name by consulting the program's own declarations *before*
 the RTL list, so a declared type from any package other than `rtl` wins over a prelude
-name (`typeName`, `cgIsRtlTypeName` in `Codegen.kt`); T23 and the five differentials stay
-byte-identical.
+name (`typeName`, `semIsRtlTypeName`); a *materialized* type (`@SmGen("cpp")`/
+`@SmGen("res")`, the emitter must not generate its struct) keeps its declared name in any
+package, because its C++ is hand-written and cannot know the per-compilation `nsN_` prefix -
+which is what lets a module carry one (`streams`' `FileStream`) exactly as the prelude does.
 
 `simse_nowMillis` (the `timeops` section of `src/rtl/_res.md`) is a monotonic
 millisecond clock for logging and for measuring a run.
 
-The Simse surface, with the C++ symbol each one reaches (`src/modules/io/api.kt`,
+The Simse surface, with the C++ symbol each one reaches (`src/modules/streams/fs.kt`,
 `src/rtl/rtl.kt`):
 
 | Simse | C++ symbol | Notes |

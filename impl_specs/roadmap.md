@@ -108,15 +108,15 @@ Spec of record: `impl_specs/generators.md`.
 Verified: `bun tools/stress.js` 56/56, `bun tools/smgen.js` byte-identical, bootstrap fixed
 point (`bun tools/bootstrap.js`).
 
-Hand-written C++ (deferred), in order of ease: `filestream.hpp` (the `FileStream` struct and
-its fields - its method bodies are the `filestream` section of `_res.md`; only the
-constructor-like `open` was ever in `fileio`) and the type core (`types.hpp`, `containers.hpp`,
+Hand-written C++ (deferred), in order of ease: the type core (`types.hpp`, `containers.hpp`,
 `smstring.hpp`, `smdictionary.hpp`, `span.hpp`, `strview.hpp`, `strsmallvector.hpp`,
 `functional.hpp`), which
 the amalgamation is compiled *against* and which needs language features that do not exist yet
 (statics in an object, a ref-counted layout). (`variant2.hpp`, `optional.hpp` and
 `result.hpp` left the list when `Opt`/`Res` became prelude `union class`es,
-`src/rtl/optres.kt`.)
+`src/rtl/optres.kt`; `filestream.hpp` left the RTL when the `streams` module took the
+`FileStream` type - it is src/modules/streams/filestream.hpp now, placed by that module's
+`filestreamhpp` section.)
 
 ### T30 - The generators are their own files, in the compiler's package - **Done**
 

@@ -180,12 +180,14 @@ the second argument is what a *shared* section needs, since one section cannot c
 `symbol:` for many declarations) and `<section>:<name>` for each section name, adding the
 text it finds to that section. A section may declare `<section>:emit` = `always`: text the
 compiler emits for every program, with no declaration to hang it on (the string table's own
-decoder and the clock the profiler reads). `<section>:emit` = `reached` is the other side: the
+decoder and the clock the profiler reads; a module's header include, like `streams`'
+`filestreamhpp`, is the same shape). `<section>:emit` = `reached` is the other side: the
 section's text is **reach-gated even when the declaration that names it is a module's** - a
 prelude declaration is gated already, a program's is not. A module's C++ then costs a program
-only what it uses; `filestream` (the `FileStream` reads, `src/rtl/_res.md`) is the first, and
-it is what keeps the `io` module from carrying the stream code into a program that never reads a
-stream. `@SmGen("kt", section)` reads `<section>:source`
+only what it uses; `filestream` (the `FileStream` open and method bodies,
+src/modules/streams/_res.md) is the first, and
+it is what keeps the `streams` module from carrying the stream code into a program that never
+opens or reads a stream. `@SmGen("kt", section)` reads `<section>:source`
 and hands it to the compiler's own front end - the driver parses it, `analyze` checks it,
 codegen emits it - so the generated function is compiled, not pasted.
 

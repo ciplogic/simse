@@ -554,6 +554,14 @@ fun main(args: List<Str>): Int {
             }
         }
     }
+    // A module's headers are compiled against its declarations the same way the RTL's are
+    // (`streams`' filestream.hpp is the first), so they join the scan; a root the prelude
+    // already covers is read twice, which the scan's dictionary absorbs.
+    for (*moduleRoot in moduleRoots) {
+        for (*header in listFiles(moduleRoot, ".hpp")) {
+            cppTexts.append(readFile(header))
+        }
+    }
     val borrowed: BpRewrite = bpBorrowParams(preludeModules, modules, *cppTexts)
     preludeModules = borrowed.prelude
     modules = borrowed.modules

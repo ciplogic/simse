@@ -77,7 +77,8 @@ Details worth knowing:
   whose text is a C++
   *resource* - the tree's own `_res.md` files first, the compiler's second, which is where
   the RTL's own C++ lives now (`src/rtl/_res.md`: `strtable`, `timeops`, `listops`,
-  `dictops`, `strops`, `lenops`, `strcat`, `spanOf`, `strview`, `filestream`, `resources`, `fileio`) - and
+  `dictops`, `strops`, `lenops`, `strcat`, `spanOf`, `strview`, `resources`; a module owns its
+  own, like `io`'s `fileio` and `streams`' `filestream`) - and
   `kt`, whose text is *Simse source* the driver hands back to the
   compiler's own front end: parsed, checked and emitted with the program, the call site
   unchanged (`stress/smgen-kt`). The emitted file assembles from named **sections** -
@@ -198,7 +199,15 @@ headers:
 | `smdictionary.hpp` | `SmDictionary<TKey, TValue>`: the RTL's own dictionary (rows chained by index over a power-of-two bucket table), and the only implementation of `Dictionary<K, V>` |
 | `span.hpp` | `Span<T>`: a borrowed view over a contiguous run of `T` (`at`, `slice`) |
 | `strview.hpp` | `StrView`: an alias of `Span<Char>` (`typealias StrView = Span<Char>`), plus the *literal interop* only - the comparison operators, `+`, `<<` and the `Str` conversions, which C++ overload resolution reaches at a literal site (the operations are the `strview` section) |
-| `filestream.hpp` | `FileStream`: the struct alone, reading a file line by line (`readLine(): Opt<Str>`, `readLineInto(*Str)` with a recycled buffer, and `readLineView(): Opt<StrView>` in place) - its method bodies are the `filestream` section |
+
+The `streams` module's `filestream.hpp` is the one header outside the RTL: `FileStream`, the
+struct alone, reading a file line by line (`readLine(): Opt<Str>`, `readLineInto(*Str)` with a
+recycled buffer, and `readLineView(): Opt<StrView>` in place). Its declaration carries the
+materialization marker (`@SmGen("cpp")`), so the emitter never generates the struct, and the
+module's `filestreamhpp` section places the header for every program that names the module
+(`emit: always`); its method bodies are the module's `filestream` section, reached only when a
+program reads one. The `..`-relative includes inside it point back at `src/rtl` (`../../rtl/`),
+which is what lets the header live outside the RTL's directory.
 
 `Opt<T>` and `Res<T>` no longer have a header at all: they are prelude `union class`es
 (`src/rtl/optres.kt`), generated into the program like every other union - `Opt<T>` is one
@@ -210,11 +219,12 @@ The C++ that used to need a header of its own is a **resource** now
 (`src/rtl/_res.md`, read by the `res` generator): the string table's decoder
 (`strtable`), the clocks (`timeops`), the `List`/`Array` primitives (`listops`), the
 `Dictionary` operations (`dictops`), the string/character/numeric conversions (`strops`),
-the length accessors (`lenops`), the concatenation (`strcat`), `spanOf`, the view operations (`strview`), the file stream's
-methods (`filestream`), the resource table's accessor (`resources`), and the platform's
-file I/O (`fileio`, which
-carries its own prototypes). Each is a
-section of that file - a declaration in its `forward:`, a definition in its `bodies:` - and
+the length accessors (`lenops`), the concatenation (`strcat`), `spanOf`, the view operations (`strview`), and
+the resource table's accessor (`resources`). A module owns its C++ the same way, in its own
+`_res.md`: `io`'s `fileio` is the platform's file I/O (it
+carries its own prototypes) and `streams`' `filestream` is the file stream's open and method
+bodies, beside `filestreamhpp`'s include of the module's header. Each is a
+section of its file - a declaration in its `forward:`, a definition in its `bodies:` - and
 the emitter places a section's texts in the emitted file's section of the same name, so
 `strtable`'s decoder is emitted into every program (it is what the preamble needs) while
 `strops`' text is emitted only into a program that reaches one of its symbols.

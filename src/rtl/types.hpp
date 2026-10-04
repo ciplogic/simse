@@ -38,8 +38,9 @@ using PtrOf = T*;
 
 // `Opt<T>` and `Res<T>` are prelude `union class`es (src/rtl/optres.kt): the emitter writes
 // their definitions into the program from the declarations, so this header forward-declares
-// the templates for the hand-written C++ that names them before that (the FileStream member
-// declarations in filestream.hpp, the `_res.md` section signatures and bodies).
+// the templates for the hand-written C++ that names them before that (the `FileStream` member
+// declarations in the `streams` module's filestream.hpp, the `_res.md` section signatures and
+// bodies).
 template <class T>
 struct Opt;
 template <class T>

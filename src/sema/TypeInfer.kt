@@ -44,7 +44,7 @@ fun semIsRtlTypeName(name: *Str): Bool {
             return true
         }
 
-        "Span", "StrView", "FileStream" -> {
+        "Span", "StrView" -> {
             return true
         }
     }

@@ -1,13 +1,16 @@
 package readlines
 
 import io
+import streams
 
 // `FileStream`'s three readers over one awkward little file: short and long lines
 // (one of each straddles `Str`'s 23-byte inline capacity), a CRLF line, empty
 // lines, trailing spaces, and a final line with no newline. `data.txt` is read
 // three times - with `readLine(): Opt<Str>`, into one recycled `Str` with
 // `readLineInto(*buffer)`, and in place with `readLineView(): Opt<StrView>` - and
-// the passes must agree line for line.
+// the passes must agree line for line. The reader and its type are the `streams`
+// module's (`--module src/modules/streams`, beside `io` for the fixture write and
+// the diagnostics, both in `compiler-args`).
 //
 // Then a line longer than the 256 KiB readahead buffer, after a line that leaves a
 // partial tail behind, so the buffer has to shift its tail, grow and refill. That

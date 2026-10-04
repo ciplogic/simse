@@ -4774,3 +4774,26 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   misname one of the two - exactly what a `ref class Res` did to the ported `Res` union
   before the check. `SemaInput` carries the prelude flag the check reads.
   Verified: `bun tools/iterate.js --full` - 73/73 and both fixed points byte for byte.
+
+- **`FileStream` is the `streams` module's now, header and all.** `src/rtl/fs.kt` and
+  `src/rtl/filestream.hpp` moved to `src/modules/streams/` (the file's package is `streams`,
+  reached with `import streams` and `--module src/modules/streams`), and the six operations
+  moved with the type out of `io`: `openFileStream`, `readLine`, `readLineInto`,
+  `readLineView`, `close` and `fileSize` are `src/modules/streams/fs.kt`, and the `filestream`
+  section (the open - formerly the `fileio` section's - plus the method bodies) is the
+  module's `_res.md`, beside `filestreamhpp` (`emit: always`), which places
+  `#include "src/modules/streams/filestream.hpp"` for every program that names the module.
+  The header's RTL includes are `../../rtl/...` (relative to the header, since the include
+  lands in arbitrary output directories); `simse.hpp` no longer includes it, `io` keeps the
+  path and whole-file operations (`fileio`), and a program that reads lines names both modules
+  (`stress/read-lines`, `benchmarks/onebrc`), one that only stats paths names `io` alone.
+  Two compiler rules came with the move: **a materialized type keeps its declared name in any
+  package** (`typeName`, src/codegen/CgCore.kt) - the emitter must generate neither the struct
+  nor an `nsN_`-prefixed spelling of it, because the hand-written C++ cannot know the
+  per-compilation prefix, so a module can carry a `@SmGen("cpp")` type exactly as the prelude
+  does - and `semIsRtlTypeName` dropped `FileStream`, so an un-scanned module is a diagnostic
+  rather than a bare C++ name with no declaration. The borrow pass scans module headers too
+  (`Driver.kt`), the same protection the RTL's got.
+  Verified: `bun tools/iterate.js --full` - 73/73 and both fixed points byte for byte.
+  No `expected.cpp` moved (the stream text never was in one); the refreshed bootstrap carries
+  the module include and the shifted `ns` prefixes (package `streams` sorts before `xml`).

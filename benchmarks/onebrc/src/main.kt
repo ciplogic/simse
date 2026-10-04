@@ -1,6 +1,7 @@
 package onebrc
 
 import io
+import streams
 
 // The 1 Billion Row Challenge, written the naive way: a line at a time, a `Str` key
 // per station, a `Dictionary` of aggregates, and a sorted report at the end. No
