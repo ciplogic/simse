@@ -9,6 +9,7 @@ package sema
 import compiler
 
 import common
+import linq
 
 fun semNamedType(name: *Str): AstXmlNode {
     var node: AstXmlNode =
@@ -116,12 +117,13 @@ fun semOne(node: *AstXmlNode): List<AstXmlNode> {
 }
 
 // The same node with every child whose role is `role` replaced, in order, by
-// `replacements`. The lowering's `exprReplaceRole`, which this package cannot import.
+// `replacements`. The lowering's `exprReplaceRole`, which this package cannot import. The
+// children are read in place (`iter`): the copy this used to take was one `AstXmlNode` per
+// child, attributes included, on a path the type pass walks heavily.
 fun semReplaceRole(like: *AstXmlNode, role: AstNodeKind, replacements: *List<AstXmlNode>): AstXmlNode {
     var kids: List<AstXmlNode> = List<AstXmlNode>()
-    val existing: List<AstXmlNode> = like.Children.toList()
     var seen: Int = 0
-    for (*child in existing) {
+    for (child in spanOfArray(like.Children).iter()) {
         if (child.name == role) {
             if (seen < replacements.size()) {
                 kids.append(replacements[seen])
@@ -142,13 +144,8 @@ fun semReplaceRole(like: *AstXmlNode, role: AstNodeKind, replacements: *List<Ast
 fun semWithType(decl: *AstXmlNode, typeNode: *AstXmlNode): AstXmlNode {
     var kids: List<AstXmlNode> = List<AstXmlNode>()
     kids.append(typeNode)
-    val existing: List<AstXmlNode> = decl.Children.toList()
-    var i: Int = 0
-    while (i < existing.size()) {
-        if (existing[i].name != AstNodeKind.Type) {
-            kids.append(existing[i])
-        }
-        i = i + 1
+    for (child in spanOfArray(decl.Children).iter().where((c: *AstXmlNode) -> c.name != AstNodeKind.Type)) {
+        kids.append(child)
     }
     return AstXmlNode(decl.name, decl.kind, copy(decl.attributes), kids.toArray())
 }

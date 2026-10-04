@@ -3782,6 +3782,23 @@ Bool ns14_analyzeFunction_closure1_invoke(ns14_analyzeFunction_closure1 self, ns
     return _sm_expr3;
 }
 
+struct ns14_semWithType_closure1;
+Bool ns14_semWithType_closure1_invoke(ns14_semWithType_closure1 self, ns3_AstXmlNode* c);
+struct ns14_semWithType_closure1 {
+    operator Func<Bool(ns3_AstXmlNode*)>() const {
+        return simse_closureFunc<Func<Bool(ns3_AstXmlNode*)>>(&ns14_semWithType_closure1_invoke, *this);
+    }
+};
+
+Bool ns14_semWithType_closure1_invoke(ns14_semWithType_closure1 self, ns3_AstXmlNode* c) {
+    ns3_AstNodeKind _sm_expr1, _sm_expr2;
+    Bool _sm_expr3;
+    _sm_expr1 = c->name;
+    _sm_expr2 = ns3_AstNodeKind::Type;
+    _sm_expr3 = _sm_expr1 != _sm_expr2;
+    return _sm_expr3;
+}
+
 // File-level static storage (specs/statics.md): initialized before main's body.
 void simse_initStatics() {
     resourcesInstall(__sm_stringTable, __sm_stringCount, __sm_resourceIndex, __sm_resourceCount);
@@ -32796,35 +32813,35 @@ ns3_AstXmlNode ns8_exprLike(ns3_AstXmlNode* like, List<ns3_AstXmlNode>* kids) {
 }
 // src/linear/ExpressionLowering.kt
 ns3_AstXmlNode ns8_exprReplaceRole(ns3_AstXmlNode* like, ns3_AstNodeKind role, List<ns3_AstXmlNode>* replacements) {
-    Array<ns3_AstXmlNode>* _sm_base1;
-    List<ns3_AstXmlNode>* _sm_base2, * _sm_base6;
-    ns3_AstXmlNode _sm_base3, _sm_base4, _sm_base5, _sm_expr9;
-    List<ns3_AstXmlNode> kids, existing;
-    Int seen, _sm_expr5;
+    Array<ns3_AstXmlNode>* _sm_base1, * _sm_base2;
+    ns3_AstXmlNode _sm_base3, _sm_base4, _sm_base5, _sm_expr10;
+    List<ns3_AstXmlNode>* _sm_base6;
+    List<ns3_AstXmlNode> kids;
+    Int seen, _sm_expr6;
     Span<ns3_AstXmlNode> _sm_expr1;
-    Span_iter_yieldable<ns3_AstXmlNode> _sm_for3;
-    Bool _sm_expr2;
+    Span_iter_yieldable<ns3_AstXmlNode> _sm_expr2, _sm_for3;
+    Bool _sm_expr3;
     ns3_AstXmlNode* child;
-    ns3_AstNodeKind _sm_expr3;
+    ns3_AstNodeKind _sm_expr4;
     kids = List<ns3_AstXmlNode>();
-    _sm_base1 = simse_addressOf(like->Children);
-    existing = simse_array_toList((*_sm_base1));
     seen = 0;
-    _sm_base2 = &existing;
-    _sm_expr1 = simse_spanOf(_sm_base2);
-    _sm_for3 = iter(simse_addressOf(_sm_expr1));
+    _sm_base2 = simse_addressOf(like->Children);
+    _sm_base1 = _sm_base2;
+    _sm_expr1 = simse_spanOf(_sm_base1);
+    _sm_expr2 = iter(simse_addressOf(_sm_expr1));
+    _sm_for3 = _sm_expr2;
     L1:;
-    _sm_expr2 = advance(&_sm_for3);
-    if (!(_sm_expr2)) goto L2;
+    _sm_expr3 = advance(&_sm_for3);
+    if (!(_sm_expr3)) goto L2;
     child = _sm_for3.current;
-    _sm_expr3 = child->name;
-    _sm_expr2 = _sm_expr3 == role;
-    if (_sm_expr2) goto L3;
+    _sm_expr4 = child->name;
+    _sm_expr3 = _sm_expr4 == role;
+    if (_sm_expr3) goto L3;
     goto L4;
     L3:;
-    _sm_expr5 = simse_lenOf((*replacements));
-    _sm_expr2 = seen < _sm_expr5;
-    if (_sm_expr2) goto L5;
+    _sm_expr6 = simse_lenOf((*replacements));
+    _sm_expr3 = seen < _sm_expr6;
+    if (_sm_expr3) goto L5;
     goto L6;
     L5:;
     _sm_base3 = (*replacements)[seen];
@@ -32837,17 +32854,17 @@ ns3_AstXmlNode ns8_exprReplaceRole(ns3_AstXmlNode* like, ns3_AstNodeKind role, L
     simse_list_append(kids, _sm_base4);
     goto L1;
     L2:;
-    _sm_expr5 = simse_lenOf((*replacements));
-    _sm_expr2 = seen < _sm_expr5;
-    if (!(_sm_expr2)) goto L9;
+    _sm_expr6 = simse_lenOf((*replacements));
+    _sm_expr3 = seen < _sm_expr6;
+    if (!(_sm_expr3)) goto L9;
     _sm_base5 = (*replacements)[seen];
     simse_list_append(kids, _sm_base5);
     seen = seen + 1;
     goto L2;
     L9:;
     _sm_base6 = &kids;
-    _sm_expr9 = ns8_exprLike(like, _sm_base6);
-    return _sm_expr9;
+    _sm_expr10 = ns8_exprLike(like, _sm_base6);
+    return _sm_expr10;
 }
 // src/linear/ExpressionLowering.kt
 Str ns8_freshTemp(ns8_ExprFlattener* self) {
@@ -81526,38 +81543,37 @@ List<ns3_AstXmlNode> ns14_semOne(ns3_AstXmlNode* node) {
 }
 // src/sema/TypeInfer.kt
 ns3_AstXmlNode ns14_semReplaceRole(ns3_AstXmlNode* like, ns3_AstNodeKind role, List<ns3_AstXmlNode>* replacements) {
-    Array<ns3_AstXmlNode>* _sm_base1;
-    List<ns3_AstXmlNode>* _sm_base2;
-    ns3_AstXmlNode _sm_base3, _sm_base4, _sm_base5, _sm_expr12;
-    ns3_AstNodeKind _sm_base6, _sm_expr3;
+    Array<ns3_AstXmlNode>* _sm_base1, * _sm_base2;
+    ns3_AstXmlNode _sm_base3, _sm_base4, _sm_base5, _sm_expr13;
+    ns3_AstNodeKind _sm_base6, _sm_expr4;
     ns3_AstNodeCategory _sm_base7;
-    List<ns3_AstXmlNode> kids, existing;
-    Int seen, _sm_expr5;
+    List<ns3_AstXmlNode> kids;
+    Int seen, _sm_expr6;
     Span<ns3_AstXmlNode> _sm_expr1;
-    Span_iter_yieldable<ns3_AstXmlNode> _sm_for4;
-    Bool _sm_expr2;
+    Span_iter_yieldable<ns3_AstXmlNode> _sm_expr2, _sm_for4;
+    Bool _sm_expr3;
     ns3_AstXmlNode* child;
-    List<ns3_AstNodeAttribute> _sm_expr9, _sm_expr10;
-    Array<ns3_AstXmlNode> _sm_expr11;
+    List<ns3_AstNodeAttribute> _sm_expr10, _sm_expr11;
+    Array<ns3_AstXmlNode> _sm_expr12;
     kids = List<ns3_AstXmlNode>();
-    _sm_base1 = simse_addressOf(like->Children);
-    existing = simse_array_toList((*_sm_base1));
     seen = 0;
-    _sm_base2 = &existing;
-    _sm_expr1 = simse_spanOf(_sm_base2);
-    _sm_for4 = iter(simse_addressOf(_sm_expr1));
+    _sm_base2 = simse_addressOf(like->Children);
+    _sm_base1 = _sm_base2;
+    _sm_expr1 = simse_spanOf(_sm_base1);
+    _sm_expr2 = iter(simse_addressOf(_sm_expr1));
+    _sm_for4 = _sm_expr2;
     L1:;
-    _sm_expr2 = advance(&_sm_for4);
-    if (!(_sm_expr2)) goto L2;
+    _sm_expr3 = advance(&_sm_for4);
+    if (!(_sm_expr3)) goto L2;
     child = _sm_for4.current;
-    _sm_expr3 = child->name;
-    _sm_expr2 = _sm_expr3 == role;
-    if (_sm_expr2) goto L3;
+    _sm_expr4 = child->name;
+    _sm_expr3 = _sm_expr4 == role;
+    if (_sm_expr3) goto L3;
     goto L4;
     L3:;
-    _sm_expr5 = simse_lenOf((*replacements));
-    _sm_expr2 = seen < _sm_expr5;
-    if (_sm_expr2) goto L5;
+    _sm_expr6 = simse_lenOf((*replacements));
+    _sm_expr3 = seen < _sm_expr6;
+    if (_sm_expr3) goto L5;
     goto L6;
     L5:;
     _sm_base3 = (*replacements)[seen];
@@ -81570,64 +81586,62 @@ ns3_AstXmlNode ns14_semReplaceRole(ns3_AstXmlNode* like, ns3_AstNodeKind role, L
     simse_list_append(kids, _sm_base4);
     goto L1;
     L2:;
-    _sm_expr5 = simse_lenOf((*replacements));
-    _sm_expr2 = seen < _sm_expr5;
-    if (!(_sm_expr2)) goto L9;
+    _sm_expr6 = simse_lenOf((*replacements));
+    _sm_expr3 = seen < _sm_expr6;
+    if (!(_sm_expr3)) goto L9;
     _sm_base5 = (*replacements)[seen];
     simse_list_append(kids, _sm_base5);
     seen = seen + 1;
     goto L2;
     L9:;
-    _sm_expr9 = like->attributes;
-    _sm_expr10 = (_sm_expr9);
-    _sm_expr11 = simse_list_toArray(kids);
+    _sm_expr10 = like->attributes;
+    _sm_expr11 = (_sm_expr10);
+    _sm_expr12 = simse_list_toArray(kids);
     _sm_base6 = like->name;
     _sm_base7 = like->kind;
-    _sm_expr12 = ns3_AstXmlNode{_sm_base6, _sm_base7, _sm_expr10, _sm_expr11};
-    return _sm_expr12;
+    _sm_expr13 = ns3_AstXmlNode{_sm_base6, _sm_base7, _sm_expr11, _sm_expr12};
+    return _sm_expr13;
 }
 // src/sema/TypeInfer.kt
 ns3_AstXmlNode ns14_semWithType(ns3_AstXmlNode* decl, ns3_AstXmlNode* typeNode) {
-    ns3_AstXmlNode _sm_base1, _sm_base4, _sm_expr9;
-    Array<ns3_AstXmlNode>* _sm_base2;
-    ns3_AstXmlNode* _sm_base3;
-    ns3_AstNodeKind _sm_base5, _sm_expr3, _sm_expr4;
-    ns3_AstNodeCategory _sm_base6;
-    List<ns3_AstXmlNode> kids, existing;
-    Int i, _sm_expr1;
-    Bool _sm_expr2;
-    List<ns3_AstNodeAttribute> _sm_expr6, _sm_expr7;
-    Array<ns3_AstXmlNode> _sm_expr8;
+    ns3_AstXmlNode _sm_base1, _sm_base5, _sm_expr8;
+    Array<ns3_AstXmlNode>* _sm_base2, * _sm_base3;
+    ns14_semWithType_closure1 _sm_base4;
+    ns3_AstNodeKind _sm_base6;
+    ns3_AstNodeCategory _sm_base7;
+    List<ns3_AstXmlNode> kids;
+    Span<ns3_AstXmlNode> _sm_expr1;
+    Span_iter_yieldable<ns3_AstXmlNode> _sm_expr2;
+    ns9_where_yieldable<ns3_AstXmlNode, Span_iter_yieldable<ns3_AstXmlNode>> _sm_expr3, _sm_for5;
+    Bool _sm_expr4;
+    ns3_AstXmlNode* child;
+    List<ns3_AstNodeAttribute> _sm_expr5, _sm_expr6;
+    Array<ns3_AstXmlNode> _sm_expr7;
     kids = List<ns3_AstXmlNode>();
     _sm_base1 = *(typeNode);
     simse_list_append(kids, _sm_base1);
-    _sm_base2 = simse_addressOf(decl->Children);
-    existing = simse_array_toList((*_sm_base2));
-    i = 0;
+    _sm_base3 = simse_addressOf(decl->Children);
+    _sm_base2 = _sm_base3;
+    _sm_expr1 = simse_spanOf(_sm_base2);
+    _sm_expr2 = iter(simse_addressOf(_sm_expr1));
+    _sm_base4 = ns14_semWithType_closure1{};
+    _sm_expr3 = ns9_where<ns3_AstXmlNode, Span_iter_yieldable<ns3_AstXmlNode>>(simse_addressOf(_sm_expr2), _sm_base4);
+    _sm_for5 = _sm_expr3;
     L1:;
-    _sm_expr1 = simse_lenOf(existing);
-    _sm_expr2 = i < _sm_expr1;
-    if (!(_sm_expr2)) goto L2;
-    _sm_base3 = simse_addressOf(existing[i]);
-    _sm_expr3 = _sm_base3->name;
-    _sm_expr4 = ns3_AstNodeKind::Type;
-    _sm_expr2 = _sm_expr3 != _sm_expr4;
-    if (_sm_expr2) goto L3;
-    goto L4;
-    L3:;
-    _sm_base4 = existing[i];
-    simse_list_append(kids, _sm_base4);
-    L4:;
-    i = i + 1;
+    _sm_expr4 = advance(&_sm_for5);
+    if (!(_sm_expr4)) goto L2;
+    child = _sm_for5.current;
+    _sm_base5 = *(child);
+    simse_list_append(kids, _sm_base5);
     goto L1;
     L2:;
-    _sm_expr6 = decl->attributes;
-    _sm_expr7 = (_sm_expr6);
-    _sm_expr8 = simse_list_toArray(kids);
-    _sm_base5 = decl->name;
-    _sm_base6 = decl->kind;
-    _sm_expr9 = ns3_AstXmlNode{_sm_base5, _sm_base6, _sm_expr7, _sm_expr8};
-    return _sm_expr9;
+    _sm_expr5 = decl->attributes;
+    _sm_expr6 = (_sm_expr5);
+    _sm_expr7 = simse_list_toArray(kids);
+    _sm_base6 = decl->name;
+    _sm_base7 = decl->kind;
+    _sm_expr8 = ns3_AstXmlNode{_sm_base6, _sm_base7, _sm_expr6, _sm_expr7};
+    return _sm_expr8;
 }
 // src/sema/TypeInfer.kt
 ns3_AstXmlNode ns14_semPointee(ns3_AstXmlNode* typeNode) {
@@ -82623,7 +82637,7 @@ ns3_AstXmlNode ns14_semSubstitute(ns3_AstXmlNode* typeNode, Dictionary<Str, ns3_
     Str name;
     List<ns3_AstXmlNode> args, existing, _sm_expr33, params, existingParams, _sm_expr47;
     Span<ns3_AstXmlNode> _sm_expr16, _sm_expr38;
-    Span_iter_yieldable<ns3_AstXmlNode> _sm_for9, _sm_for10;
+    Span_iter_yieldable<ns3_AstXmlNode> _sm_for10, _sm_for11;
     _sm_expr1 = ns2_xmlIsEmpty(typeNode);
     if (_sm_expr1) goto L1;
     goto L2;
@@ -82683,11 +82697,11 @@ ns3_AstXmlNode ns14_semSubstitute(ns3_AstXmlNode* typeNode, Dictionary<Str, ns3_
     existing = ns2_xmlChildren(typeNode, _sm_base10);
     _sm_base11 = &existing;
     _sm_expr16 = simse_spanOf(_sm_base11);
-    _sm_for9 = iter(simse_addressOf(_sm_expr16));
+    _sm_for10 = iter(simse_addressOf(_sm_expr16));
     L15:;
-    _sm_expr1 = advance(&_sm_for9);
+    _sm_expr1 = advance(&_sm_for10);
     if (!(_sm_expr1)) goto L16;
-    arg = _sm_for9.current;
+    arg = _sm_for10.current;
     mapped = ns14_semSubstitute(arg, bindings, typeParams);
     _sm_base12 = &mapped;
     _sm_expr1 = ns2_xmlIsEmpty(_sm_base12);
@@ -82752,11 +82766,11 @@ ns3_AstXmlNode ns14_semSubstitute(ns3_AstXmlNode* typeNode, Dictionary<Str, ns3_
     existingParams = ns2_xmlChildren(typeNode, _sm_base24);
     _sm_base25 = &existingParams;
     _sm_expr38 = simse_spanOf(_sm_base25);
-    _sm_for10 = iter(simse_addressOf(_sm_expr38));
+    _sm_for11 = iter(simse_addressOf(_sm_expr38));
     L29:;
-    _sm_expr1 = advance(&_sm_for10);
+    _sm_expr1 = advance(&_sm_for11);
     if (!(_sm_expr1)) goto L30;
-    existingParam = _sm_for10.current;
+    existingParam = _sm_for11.current;
     _sm_mapped_2 = ns14_semSubstitute(existingParam, bindings, typeParams);
     _sm_base26 = &_sm_mapped_2;
     _sm_expr1 = ns2_xmlIsEmpty(_sm_base26);
@@ -83034,7 +83048,7 @@ Str ns14_semMachineParamSuffix(ns3_AstXmlNode* decl) {
     Str out, _sm_expr4, _sm_expr6;
     List<ns3_AstXmlNode> _sm_expr1;
     Span<ns3_AstXmlNode> _sm_expr2;
-    Span_iter_yieldable<ns3_AstXmlNode> _sm_for11;
+    Span_iter_yieldable<ns3_AstXmlNode> _sm_for12;
     Bool _sm_expr3;
     ns3_AstXmlNode* param, * _sm_expr5;
     out = __sm_stringTable[1091];
@@ -83042,11 +83056,11 @@ Str ns14_semMachineParamSuffix(ns3_AstXmlNode* decl) {
     _sm_expr1 = ns2_xmlChildren(decl, _sm_base1);
     _sm_base2 = &_sm_expr1;
     _sm_expr2 = simse_spanOf(_sm_base2);
-    _sm_for11 = iter(simse_addressOf(_sm_expr2));
+    _sm_for12 = iter(simse_addressOf(_sm_expr2));
     L1:;
-    _sm_expr3 = advance(&_sm_for11);
+    _sm_expr3 = advance(&_sm_for12);
     if (!(_sm_expr3)) goto L2;
-    param = _sm_for11.current;
+    param = _sm_for12.current;
     _sm_expr4.resize(1 + out.size());
     __sm_catP = _sm_expr4.data();
     std::memcpy(__sm_catP, out.data(), out.size());
@@ -83245,7 +83259,7 @@ List<ns3_AstXmlNode> ns14_semInferTypes(List<ns3_AstXmlNode>* body, ns14_SemFact
     List<ns3_AstXmlNode> params, out;
     Int i, _sm_expr8;
     Span<ns3_AstXmlNode> _sm_expr3;
-    Span_iter_yieldable<ns3_AstXmlNode> _sm_for12;
+    Span_iter_yieldable<ns3_AstXmlNode> _sm_for13;
     Bool _sm_expr4, _sm_expr6;
     List<Str> captureNames, proven;
     _sm_expr1 = List<Dictionary<Str, ns3_AstXmlNode>>();
@@ -83260,11 +83274,11 @@ List<ns3_AstXmlNode> ns14_semInferTypes(List<ns3_AstXmlNode>* body, ns14_SemFact
     i = 0;
     _sm_base5 = &params;
     _sm_expr3 = simse_spanOf(_sm_base5);
-    _sm_for12 = iter(simse_addressOf(_sm_expr3));
+    _sm_for13 = iter(simse_addressOf(_sm_expr3));
     L1:;
-    _sm_expr4 = advance(&_sm_for12);
+    _sm_expr4 = advance(&_sm_for13);
     if (!(_sm_expr4)) goto L2;
-    param = _sm_for12.current;
+    param = _sm_for13.current;
     _sm_base6 = ns3_AstNodeKind::Type;
     paramType = ns2_xmlChildPtr(param, _sm_base6);
     _sm_expr4 = ns2_xmlIsEmpty(paramType);
@@ -83358,7 +83372,7 @@ ns3_AstXmlNode ns14_semTypeOfExpr(ns3_AstXmlNode* expr, ns14_SemFacts* facts, ns
     List<ns3_AstXmlNode> params;
     Int i, _sm_expr8;
     Span<ns3_AstXmlNode> _sm_expr3;
-    Span_iter_yieldable<ns3_AstXmlNode> _sm_for13;
+    Span_iter_yieldable<ns3_AstXmlNode> _sm_for14;
     Bool _sm_expr4, _sm_expr6;
     List<Str> captureNames;
     ns3_AstXmlNode _sm_expr16;
@@ -83374,11 +83388,11 @@ ns3_AstXmlNode ns14_semTypeOfExpr(ns3_AstXmlNode* expr, ns14_SemFacts* facts, ns
     i = 0;
     _sm_base5 = &params;
     _sm_expr3 = simse_spanOf(_sm_base5);
-    _sm_for13 = iter(simse_addressOf(_sm_expr3));
+    _sm_for14 = iter(simse_addressOf(_sm_expr3));
     L1:;
-    _sm_expr4 = advance(&_sm_for13);
+    _sm_expr4 = advance(&_sm_for14);
     if (!(_sm_expr4)) goto L2;
-    param = _sm_for13.current;
+    param = _sm_for14.current;
     _sm_base6 = ns3_AstNodeKind::Type;
     paramType = ns2_xmlChildPtr(param, _sm_base6);
     _sm_expr4 = ns2_xmlIsEmpty(paramType);

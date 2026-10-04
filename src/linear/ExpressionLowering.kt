@@ -82,12 +82,12 @@ fun exprLike(like: *AstXmlNode, kids: *List<AstXmlNode>): AstXmlNode {
 }
 
 // The same node with every `role` child replaced, in order, by `replacements`; `like` is
-// never modified.
+// never modified. The children are read in place (`iter`): a `Children.toList` copy here is
+// one `AstXmlNode` per child, attributes included, and the pass runs it per rebuilt node.
 fun exprReplaceRole(like: *AstXmlNode, role: AstNodeKind, replacements: *List<AstXmlNode>): AstXmlNode {
     var kids: List<AstXmlNode> = List<AstXmlNode>()
-    val existing: List<AstXmlNode> = like.Children.toList()
     var seen: Int = 0
-    for (*child in existing) {
+    for (child in spanOfArray(like.Children).iter()) {
         if (child.name == role) {
             if (seen < replacements.size()) {
                 kids.append(replacements[seen])
