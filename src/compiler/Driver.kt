@@ -282,9 +282,21 @@ fun main(args: List<Str>): Int {
                 bpSetNoBorrow(true)
             }
 
+            // The escape-parameter optimization off (src/parser/EscapeParams.kt): no analysis, so
+            // the promotion keeps only its structural rules and `print`/`println` are not mapped.
+            "--no-escape" -> {
+                epSetNoEscape(true)
+            }
+
             // The auto-borrow decision for every candidate, on stderr.
             "--showBorrow" -> {
                 bpSetShow(true)
+            }
+
+            // The escape-parameter decision for every name the analysis weighed, on stderr
+            // (`src/parser/EscapeParams.kt`).
+            "--showEscape" -> {
+                epSetShow(true)
             }
 
             // The `when`-over-strings lowering (src/parser/Parser.kt): off for the A/B,
@@ -328,7 +340,7 @@ fun main(args: List<Str>): Int {
 
             "-h", "--help" -> {
                 println("simse " + simseVersion)
-                println("usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module <dir>]... [--no-concat] [--no-borrow] [--no-when-dispatch] [--when-first-char] [--when-copy-subject] [--showLinearRepresentation] [--showBorrow] [--showAsync] [--profile] [--profile-file <path>] [--profile-nanos] [--version]")
+                println("usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module <dir>]... [--no-concat] [--no-borrow] [--no-escape] [--no-when-dispatch] [--when-first-char] [--when-copy-subject] [--showLinearRepresentation] [--showBorrow] [--showEscape] [--showAsync] [--profile] [--profile-file <path>] [--profile-nanos] [--version]")
                 return 0
             }
 
@@ -565,6 +577,10 @@ fun main(args: List<Str>): Int {
     val borrowed: BpRewrite = bpBorrowParams(preludeModules, modules, *cppTexts)
     preludeModules = borrowed.prelude
     modules = borrowed.modules
+    // Escape parameters (src/parser/EscapeParams.kt, impl_specs/escape-analysis.md): the
+    // per-parameter retention facts the stack promotion reads (linear/PromoteRefs.kt). It runs
+    // on the rewritten modules, so a parameter the borrow pass made a `*T` is one entry here.
+    epAnalyze(preludeModules, modules)
     // The prelude is emitted from the merged node, so it is rebuilt from the rewritten modules.
     mergedPrelude = driverNewModule()
     for (*pre in preludeModules) {
@@ -576,6 +592,12 @@ fun main(args: List<Str>): Int {
         val borrowLines: List<Str> = bpReportLines()
         for (*borrowLine in borrowLines) {
             eprintln(*borrowLine)
+        }
+    }
+    if (epShow()) {
+        val escapeLines: List<Str> = epReportLines()
+        for (*escapeLine in escapeLines) {
+            eprintln(*escapeLine)
         }
     }
 

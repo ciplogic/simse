@@ -176,11 +176,23 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
             paramNodes = xmlChildren(decl, AstNodeKind.Field)
         }
     }
-    // A `union class` construction has no aggregate spelling and no plain-call form: the two
-    // supported spellings - the declaration (`var x = U(v)`) and `return (v)` - are routed
-    // through the generated `initByValue` arms by the statement lowering. Reaching here means
-    // an expression position (`f(U(v))`, `x = U(v)`, a static initializer), which has none.
+    // A `union class` construction has no aggregate spelling and no plain-call form: it is
+    // built through the generated `initByValue` arms. The statement lowering routes the two
+    // authored declaration forms (`var x = U(v)`, `return (value)`) through them; an
+    // expression destination that is a *value* (`&U(v)`, `f(U(v))`, `x = U(v)`) reaches
+    // here, so the same arms are the construction - the aggregate spelling the generic
+    // branch below would build puts the argument in the tag, not in the arm.
     if (this.ilIsUnionCtor(callee, paramOwner)) {
+        if (hasDst) {
+            val dstType: AstXmlNode = ilVarType(this.out, dst)
+            if (!xmlIsEmpty(dstType) && !ilIsHandleType(dstType)) {
+                val setter: AstXmlNode = this.ilInitByValueStmt(this.out.vars[dst].name, e)
+                if (!xmlIsEmpty(setter)) {
+                    this.call(-1, setter)
+                    return
+                }
+            }
+        }
         this.unsupported(
             "construct a union class in a 'var'/'val' declaration ('var x = U(...)') or as 'return (value)'"
         )
@@ -454,7 +466,10 @@ fun IlExtractor.call(dst: Int, e: *AstXmlNode): Unit {
 // Whether this call is a `union class` construction: a bare callee naming the class whose
 // fields the argument conversion is against (the shape a data class construction takes).
 fun IlExtractor.ilIsUnionCtor(callee: *AstXmlNode, paramOwner: AstXmlNode): Bool {
-    if (xmlKind(callee) != AstNodeCategory.ExprName || xmlIsEmpty(paramOwner)) {
+    val kind: AstNodeCategory = xmlKind(callee)
+    if ((kind != AstNodeCategory.ExprName && kind != AstNodeCategory.ExprGenericName)
+        || xmlIsEmpty(paramOwner)
+    ) {
         return false
     }
     if (xmlAttr(paramOwner, AstNodeAttributeKind.IsUnionClass) != "true") {

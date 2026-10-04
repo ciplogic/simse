@@ -23,9 +23,10 @@ string library, modules/packages and `simse.md` manifests, `main(args)`, resourc
 `Resources.get`), source generators (`@SmGen("cpp")`, `@SmGen("kt")`, `@SmGen("res")`,
 `@SmGen("native", ...)` on Windows), diagnostics with positions.
 
-Toolchain: `--showLinearRepresentation`, `--showAsync`, `--showBorrow`, `--no-concat`,
-`--no-borrow`, `--profile`, `--version`, the stress corpus, the bootstrap fixed point, and the
-iterate loop that runs them (`bun tools/iterate.js`, `--full` before committing).
+Toolchain: `--showLinearRepresentation`, `--showAsync`, `--showBorrow`, `--showEscape`,
+`--no-concat`, `--no-borrow`, `--no-escape`, `--profile`, `--version`, the stress corpus, the
+bootstrap fixed point, and the iterate loop that runs them (`bun tools/iterate.js`, `--full`
+before committing).
 
 ## Deferred (specified or planned, not implemented)
 

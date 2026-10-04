@@ -265,7 +265,10 @@ fun IlExtractor.callTarget(callee: *AstXmlNode, receiver: *AstXmlNode, argCount:
 
 // Whether `e` builds a value of a declared data class - `Box<Int>(3)` by its generic
 // name, `Res(7)` by a bare one - which is what makes `&e` a box to build in place. A
-// container's construction (`List<Int>(n)`) is not one: it is boxed like any value.
+// container's construction (`List<Int>(n)`) is not one: it is boxed like any value, and
+// neither is a `union class` construction, whose only spelling is the generated
+// `initByValue` arms - so `&U(v)` boxes a *value* like the container, the shape the
+// promotion can turn into a stack pointer (`PromoteRefs.kt`).
 fun IlExtractor.isBoxedConstruction(e: *AstXmlNode): Bool {
     if (xmlKind(e) != AstNodeCategory.ExprCall) {
         return false
@@ -279,7 +282,11 @@ fun IlExtractor.isBoxedConstruction(e: *AstXmlNode): Bool {
     if (name == "") {
         return false
     }
-    return !xmlIsEmpty(this.dataClassDecl(name))
+    val decl: AstXmlNode = this.dataClassDecl(name)
+    if (xmlIsEmpty(decl)) {
+        return false
+    }
+    return xmlAttr(decl, AstNodeAttributeKind.IsUnionClass) != "true"
 }
 
 // `Ctor(args)` as the construction it is: a generic name already is one, and a bare name

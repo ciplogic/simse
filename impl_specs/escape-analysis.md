@@ -1,8 +1,9 @@
 # Escape analysis, borrowing, and refcount promotion
 
-Status: **both landed** - refcount promotion (`src/linear/PromoteRefs.kt`) and a proof-of-concept
-auto-borrow (`src/parser/BorrowParams.kt`); what is deliberately left out is named in each
-section. This is the architecture for the two things the language should do by itself, without
+Status: **all three landed** - refcount promotion (`src/linear/PromoteRefs.kt`), a proof-of-concept
+auto-borrow (`src/parser/BorrowParams.kt`), and the escape-parameter analysis the promotion's
+call rules read (`src/parser/EscapeParams.kt`); what is deliberately left out is named in each
+section. This is the architecture for the things the language should do by itself, without
 asking an author to write `*`:
 
 1. **Auto-borrow** - a value that does not escape is passed/held by pointer instead of by value,
@@ -41,8 +42,8 @@ is not, marks it. The rules, and why each is one:
 | use | escapes? | why |
 | --- | --- | --- |
 | a base of `x.f`, `x[i]`, `&x.f`, `&x[i]` (`GetField`/`SetField`/`GetIndex`/`SetIndex`/`FieldAddr`/`IndexAddr`, the base operand) | no | the emitter auto-derefs a `&T` and a `*T` to the same `x->f` |
-| a receiver of a call whose receiver is a **value** parameter (`T* self`) | no | `receiverArg` unwraps a `&T` with `.get()` and passes a `*T` as it is |
-| an argument of a call whose parameter is `*T` or a value `T` | no | automatic dereference reads through / takes the address |
+| a receiver of a call whose receiver is a **value** parameter (`T* self`) | no | `receiverArg` unwraps a `&T` with `.get()` and passes a `*T` as it is - unless the escape analysis proved the callee retains the receiver (`EscapeParams.kt`) |
+| an argument of a call whose parameter is `*T` or a value `T` | no | automatic dereference reads through / takes the address - unless the analysis proved the parameter retains it |
 | `*x` (`Deref`) | **yes** | `*` on a `&T` is `.get()`; on a `*T` it is the value - a different meaning |
 | an argument of a call whose parameter is `&T` | yes | a raw pointer cannot become a counted reference |
 | a field/array/static store of the handle, a `Pack` element | yes | the box would outlive the frame once stored |
@@ -69,19 +70,28 @@ A slot `c` is promoted when:
   - a `CallCtor` (the `&Ctor(args)` box, `ilBoxedCtorText`) standing in the body's **first block**
     (`ilReuseFirstBlockEnd`), so the stack value is built on every path before any branch and no
     jump crosses its declaration; or
-  - a `Box c, src` (`&src`) whose source `src` is a value slot written once and read *nowhere*
-    else - pointing at `src`'s own storage then drops the copy the box made, and no temporary is
-    created, so the destructor story is unchanged;
+  - a `Box c, src` (`&src`) whose source `src` is a value slot built once - by its own `CallCtor`,
+    or by a single `initByValue` call (the `union class` path below) - and used *nowhere else*:
+    pointing at `src`'s own storage then drops the copy the box made, and no temporary is created,
+    so the destructor story is unchanged;
 - every occurrence of `c` is a **safe** position:
   - a **base** (`GetField`/`GetIndex`/`FieldAddr`/`IndexAddr` operand 1, `SetField`/`SetIndex`
-    operand 0); or
+    operand 0);
+  - a copy of the pointee read out of `c` (`CopyValue`, and a `SetVar` into a *value*
+    destination): the emitter reads through and nothing stores the handle;
+  - a `*c` (`.get()`) whose destination is a raw pointer (`Deref` to a `TypePointer` slot), and a
+    null test against `c` (the `SetVar_Null` placeholder): a promoted pointer spells both the same
+    way;
   - a **receiver** of a call whose receiver is declared by value (or as a raw pointer) - the
     emitter's `T* self`, which a raw pointer already is. A counted-reference receiver is the handle
     itself and refuses. `IlMethod.recvIsValue` carries the distinction, recorded once per method in
-    `IlExtractor.methodIndex`;
-- its payload type declares no `unInit` **and** is a plain named type the facts know (a `CallCtor`
-  payload becomes a fresh temporary, so a destructor would run twice; the `Box` shape reuses an
-  existing value and so is exempt).
+    `IlExtractor.methodIndex` - and the escape analysis must not have proved the callee retains the
+    receiver (`EscapeParams.kt`);
+  - the argument of `print`/`println` - mapped as borrows by the escape analysis;
+- its payload type declares no `unInit` and is a named type the facts know, `TypeNamed` or
+  `TypeGeneric` (a `CallCtor` payload becomes a fresh temporary, so a destructor would run twice;
+  the `Box` shape reuses an existing value and so is exempt). A `union class` payload is refused
+  here - `&U(v)` reaches the arms of the value path below instead.
 
 The `CallCtor` rewrite is four edits on the IL, no new opcodes:
 
@@ -105,17 +115,80 @@ The `Box` rewrite is smaller still: `Box c, src` becomes `Deref c, src` (`c = &s
 becomes `*T`. There is no new slot and no type entry for the payload - `src` already is the stack
 value (`var valList = List<Int>(); var list = *valList;`).
 
+Two payloads the earlier slices refused are carried now. A **generic data class**
+(`&Gen<Int>(v)`) is retargeted to `Gen<Int>{v}` like a plain one. A **`union class`** never builds
+in place at all: `isBoxedConstruction` excludes it, so `&Opt<Int>(v)` lowers as the construction
+into a value temp (`CallVoid initByValue, temp, args` - the arm is picked by the generated
+overload) and a `Box` of that temp. `call` routes an expression-position union construction
+(`&U(v)`, `f(U(v))`, `x = U(v)`) through the same arms, which is what also fixes the boxed form:
+`o = makeRef<Opt<Int>>(temp)` copies the constructed value, where the old in-place
+`makeRef<Opt<Int>>(v)` was C++ that could not compile.
+
+One safe position is conditional on the escape analysis: the `Deref` that takes a handle's address
+for a `*T` argument is safe only while the analysis has not proved the parameter retains it.
+`ilPromoteRefs` marks such temps first (`argEscape`) and `ilPromoteUseSafe` reads the mark.
+
 ### What it does not model (refuses, so stays a box)
 
 - `c` as a `&T` argument, a store of `c` into a field/array/static, a `Pack` element, a `return`,
   a capture, and any second definition;
-- a receiver whose declared type is a counted reference (`&T`/`PList`);
+- a receiver whose declared type is a counted reference (`&T`/`PList`) - and a value receiver the
+  escape analysis proved retains its receiver;
 - a `Box` whose source is read anywhere else (the box's copy is observable there);
-- an in-place `CallCtor` payload with an `unInit`, or one the facts cannot name;
-- a `&T` **parameter** (the argument side is the call site's, and the promotion is intraprocedural).
+- an in-place `CallCtor` payload with an `unInit`, or one the facts cannot name (a `union class`
+  is routed through `initByValue`, not refused);
+- a `&T` **parameter**: the parameter is the callee's, and the ABI binds it to a `Ref<T>` at the
+  call - a raw pointer cannot stand in for it even when the escape analysis proves the body never
+  retains it. Auto-borrow is what turns such a parameter into a `*T`.
 
 Each is a *refusal*, so an unmodeled use is never silently promoted - the failure mode is a box
 that could have been a stack value, never a dangling pointer.
+
+## The escape-parameter analysis (landed)
+
+`src/parser/EscapeParams.kt`, run from the driver right after `BorrowParams` - the same whole-program,
+before-sema shape, and the piece the promotion's call rules read (`linear/PromoteRefs.kt`). The
+question is *retention*, not writes: may the callee keep what a parameter refers to past the call?
+The answer is three states per `(name, index)` - a method's receiver is index 0, so a call's operand
+positions map straight onto it:
+
+- **Clean** - every declaration of the name proved it never retains the value, and every call
+  position it reaches is Clean;
+- **Escapes** - some occurrence hands it out: `return p`, `yield p`, a store of it as a value into a
+  field/index/static, `&p`, `*p` as a value, a lambda capture, a construction that stores it in a
+  field, or an argument/receiver position whose callee parameter is already Escapes;
+- **Unknown** - everything else: a call the table has no proof for, a body-less declaration with no
+  mark, a recursive cycle. The promotion keeps its structural rules for Unknown.
+
+A member read is *not* an escape: `return u.Value` copies the arm, and only `&p.f`, `*p.f` and the
+`*` spellings derive the base's address. A write through a parameter is not one either.
+
+The fixpoint grows from below like `bpInferReads` - a name joins Clean only when every declaration
+of it voted clean in one round, and neither set ever loses a member - so a cycle is never assumed
+clean, and a name that was Clean and later turns Escapes reads as Escapes. Trust:
+
+- a body-less declaration is trusted only by a mark: `borrow`/`data` (read-only, so it cannot
+  store), or a `union class`'s generated accessors (the compiler's own shapes);
+- `print`/`println` are mapped as borrows (`epBuiltinBorrow`): the emitter spells them with no
+  declaration, and `simse_print` takes the value by `const T&` (`CgCall.kt`);
+- a body-less `@SmGen` native without a mark stays Unknown - the structural rules are the fallback,
+  which is what keeps `xs.append(3)` promoting.
+
+**What the promotion reads it for.**
+
+- a method receiver: `T* self` is only right when the analysis has not proved the method hands the
+  receiver out - `stress/escape-params`' `stash`/`leak` keep their caller's box (`makeRef` and
+  `.get()` in the golden) while a method that only writes through `this` still promotes;
+- a `*T` argument: `ilPromoteRefs` marks the pointer temp of a parameter proved Escapes
+  (`argEscape`), and the `Deref` that took the handle's address is then not a safe use;
+- `print`/`println`: the mapped borrow is the allowance (the old name test is gone).
+
+`--showEscape` prints one line per name the analysis weighed, `escape <name> <kind>,<kind>...` - the
+same view `--showBorrow` gives. `--no-escape` is its escape hatch (and the A/B switch): the pass
+returns no table, so every call position falls back to the structural rules and `print`/`println`
+are not mapped. `stress/escape-params` pins every shape: the two retained parameters, the promoted
+`keep`, the print read-through, `&Opt<Int>(v)` through `initByValue`, and `&Gen<Int>(v)` through
+the value `CallCtor`.
 
 ## Auto-borrow: a read-only parameter becomes a `*T` (landed)
 
@@ -274,12 +347,22 @@ What is still out of reach, in the order a histogram of the `borrow-` lines puts
 5. **Two switches, not a mode.** `--no-borrow` disables the rewrite (the escape hatch, and what one
    corpus case builds with so the off side is pinned); `--showBorrow` prints the per-candidate
    decision. Both are the shape the other passes already use (`--no-concat`,
-   `--showLinearRepresentation`).
+   `--showLinearRepresentation`). The escape-parameter pass follows with `--showEscape` and
+   `--no-escape`.
+6. **Escape parameters are their own whole-program pass, not a flag on the borrow fixpoint.**
+   Retention and read-only-ness are different properties - `xs.append(1)` writes through its
+   receiver without retaining it - so the promotion reads a second table (`EscapeParams.kt`), grown
+   from below like the first.
+7. **`print`/`println` are borrows, and unmarked natives are `Unknown`.** The builtins have no
+   declaration to mark, so the analysis maps them (`epBuiltinBorrow`); a body-less `@SmGen` native
+   without a mark is not assumed either way, and the promotion's structural rules remain the
+   fallback - which is what keeps a native's receiver (`xs.append(3)`) promotable. A `borrow`/`data`
+   mark is the author's word that the C++ never retains what it receives.
 
 ## Validation
 
 Proved by the compiler's own build (`bun build.js --release`, twice, since the change is visible in
-the emitted C++), the corpus (`bun tools/stress.js`, **53/53**) and the bootstrap fixed point
+the emitted C++), the corpus (`bun tools/stress.js`, **88/88**) and the bootstrap fixed point
 (`bun tools/bootstrap.js`, byte for byte).
 
 Promotion: `stress/ref-promote`'s `expected.cpp` pins every shape - `bump()`'s `Cell _sm_stk0;
@@ -300,11 +383,28 @@ to `bump`, which writes the file-level `bumps`) - and the call sites taking addr
 (`_sm_base4 = &p; ns1_sum(_sm_base4);`). `stress/collections` builds with `--no-borrow`, so its
 golden is the *unborrowed* shape: the flag is pinned by a case.
 
+Escape parameters and the promotion shapes that grew with them: `stress/escape-params` pins the
+whole set - `stash(p: *Cell)` stores its parameter and `Cell.leak()` hands the receiver to it, so
+both callers keep their boxes (`c = makeRef<ns1_Cell>(1); _sm_base1 = (c).get(); ns1_stash(_sm_base1);`
+and `ns1_leak((c).get());`), while `kept` promotes (`ns1_Cell _sm_stk0; ns1_Cell* c;`) and `printed`
+shows the mapped borrow (`Str* x; x = &_sm_base1; simse_print((*(x)), stdout);`). The same golden
+carries the type shapes: `&Opt<Int>(7)` through the generated arm
+(`initByValue(simse_addressOf(_sm_base1), 7); o = &_sm_base1;`) and `&Gen<Int>(9)` through the value
+`CallCtor` (`_sm_stk0 = ns1_Gen<Int>{9}; g = &_sm_stk0;`). On the compiler's own tree the table holds 2513 parameter positions across 1198 names
+(`--showEscape`; 847 Escapes, 1571 Clean, 95 Unknown) - the counts are of the disposition, not of
+the win. The same tree carries no promotable `&T` local, so the emitted compiler is byte-identical
+with the analysis on and off (`cmp`), and the self-transpile A/B (release, `tools/_bench_ab.mjs`,
+interleaved) is pure analysis cost - about **+3-4%** (a 9-run sample on a warm machine: 2473 ms
+with it, 2393 ms without; a throttled machine keeps the ratio and moves the absolute numbers).
+The coverage it *enables* shows on a program instead: a million iterations that box, print and drop
+a `&Str` run **196 ms** with the `print` mapping and **212 ms** without (~16 ns of
+allocation+refcount per iteration).
+
 On the compiler's own tree the borrowed set is 25 parameters (`--showBorrow`; the count is of the
 disposition, not of the win - the shapes above are what unblock the *candidates*); the
 self-transpile measured ~1748 ms before the borrowness work and ~1433 ms after
 (`bun tools/bootstrap.js`, wall clock). The corpus is
-**53/53** and the bootstrap fixed point holds byte for byte.
+**88/88** and the bootstrap fixed point holds byte for byte.
 
 Note the coverage gap this closes: before this work **nothing** in `src` or `stress` used a
 counted reference (`&T`), so the whole `&T` path was untested; `ref-promote` is the first case that

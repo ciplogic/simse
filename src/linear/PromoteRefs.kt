@@ -14,8 +14,9 @@
 //
 //   - `CallCtor c, T, args` - the box built in place: a value slot is appended for the payload, the
 //     construction is retargeted to it, and `Deref c, slot` writes the handle;
-//   - `Box c, src` - `&src` boxing a copy. When `src` is a value slot used *nowhere else*, the copy
-//     is unnecessary: `c = &src` points at the very storage `src` already has.
+//   - `Box c, src` - `&src` boxing a copy. When `src` is a value slot used *nowhere else* - built by
+//     its own `CallCtor`, or by the single `initByValue` call a `union class` construction lowers
+//     to - the copy is unnecessary: `c = &src` points at the very storage `src` already has.
 //
 // In both cases `c`'s type becomes `*T` (a `*T` entry appended with `ilPointerNode`), in
 // `vars[c].typeIndex` *and* in `inferredTypes[c.name]` - the emitter seeds `localTypes`, and
@@ -24,15 +25,20 @@
 // What it refuses, it refuses by *not promoting*, never by guessing: an argument, a store, a capture,
 // a `return`, a second definition, a receiver declared as a counted reference, a `Box` whose source
 // is read elsewhere, and - for the in-place `CallCtor` only - a payload whose type declares `unInit`
-// (a fresh stack value would run its destructor twice) all stay a box. An unmodeled use therefore
-// costs an allocation, never correctness. The exact set, and the decisions still open (auto-borrow
-// semantics, the "complex" threshold), are in `impl_specs/escape-analysis.md`.
+// (a fresh stack value would run its destructor twice) all stay a box. The call positions the *escape
+// analysis* (`parser/EscapeParams.kt`, `--showEscape`) proves retain the value are refusals too: a
+// receiver whose method hands `this` out, and the `*T` address a retaining parameter receives
+// (`argEscape`). `print`/`println` are mapped as borrows there, so `print(x)` on a `&Str` both
+// promotes and reads through. An unmodeled use therefore costs an allocation, never correctness. The
+// exact set, and the decisions still open (auto-borrow semantics, the "complex" threshold), are in
+// `impl_specs/escape-analysis.md`.
 
 package linear
 import compiler
 
 import common
 import sema
+import parser
 
 // Whether operand `j` of `op` is a base the emitter spells the same way for a `&T` and a `*T`:
 // `x.f`, `x.f = v`, `&x.f`, `x[i]`, `x[i] = v`, `&x[i]` - the base operand of each.
@@ -50,37 +56,116 @@ fun ilPromoteIsBase(op: *IlOp, j: Int): Bool {
 }
 
 // Whether operand `j` of `op` is a position a counted reference and a promoted raw pointer spell
-// the same way: a base, a `*c`, or a method's receiver when the receiver is declared by value.
-fun ilPromoteUseSafe(il: *IlBody, op: *IlOp, j: Int): Bool {
+// the same way: a base, a `*c` an address was taken of, a copy of the pointee, or a call position
+// that only reads - the `print`/`println` builtins' argument (mapped as borrows by
+// `parser/EscapeParams.kt`), or a method's receiver when the analysis has not proved the callee
+// retains it.
+fun ilPromoteUseSafe(il: *IlBody, op: *IlOp, j: Int, argEscape: *List<Bool>): Bool {
     if (ilPromoteIsBase(op, j)) {
         return true
     }
     val kind: IlOpKind = op.kind
     // `*c` on a counted reference is `.get()` - exactly the pointer a promoted handle already is.
     // The op is rewritten to a plain assignment `d = c` (`ilPromoteApply`), so it is safe when `d`
-    // is the raw pointer it must be.
+    // is the raw pointer it must be - and when the address never reaches a parameter the escape
+    // analysis proved may retain it (`argEscape`, the call below).
     if (kind == IlOpKind.Deref) {
         if (j != 1 || op.operands.size() < 2) {
             return false
         }
         val dstType: AstXmlNode = ilVarType(il, op.operands[0])
-        return !xmlIsEmpty(dstType) && xmlKind(dstType) == AstNodeCategory.TypePointer
+        if (xmlIsEmpty(dstType) || xmlKind(dstType) != AstNodeCategory.TypePointer) {
+            return false
+        }
+        val dst: Int = op.operands[0]
+        return !(dst >= 0 && dst < argEscape.size() && ( * argEscape)[dst])
     }
-    // A value receiver's C++ parameter is `T* self`, and `receiverArg` passes a raw pointer as it
-    // is (it unwraps a counted reference with `.get()`), so a promoted handle fits. A
-    // counted-reference receiver's parameter *is* the handle, so a raw pointer would not convert -
-    // `IlMethod.recvIsValue` is what tells the two apart (`LinearForm.kt`).
+    // A copy of the pointee out of the handle (`readThrough`): a by-value parameter, a binary
+    // operand, a `copy(...)`. The handle itself is only read - nothing stores it.
+    if (kind == IlOpKind.CopyValue) {
+        return j == 1
+    }
+    // `d = c` where `d` is a *value*: the destination's type drives the read-through
+    // (`cgNeedsReadThrough`), so the pointee is copied and the handle is not stored. A `d`
+    // that is itself a handle is the handle copy that is the escape, and stays unsafe.
+    if (kind == IlOpKind.SetVar) {
+        if (j != 1 || op.operands.size() < 2) {
+            return false
+        }
+        val dstType: AstXmlNode = ilVarType(il, op.operands[0])
+        return !xmlIsEmpty(dstType) && !ilIsHandleType(dstType)
+    }
     if (kind == IlOpKind.Call || kind == IlOpKind.CallVoid) {
-        if (j != ilReuseArgBase(kind)) {
+        val base: Int = ilReuseArgBase(kind)
+        if (j < base) {
             return false
         }
         val at: Int = ilReuseMethodIndex(op)
-        if (at >= 0 && at < il.methods.size()) {
-            val method: IlMethod = il.methods[at]
-            return method.kind == IlMethodKind.Method && method.recvIsValue
+        if (at < 0 || at >= il.methods.size()) {
+            return false
+        }
+        val method: IlMethod = il.methods[at]
+        // `print`/`println` are the emitter's own builtins (`CgCall.kt`): the value is written
+        // where it stands (`simse_print` takes it by `const T&`), and the analysis maps them as
+        // borrows (`epBuiltinBorrow`) - exactly the allowance a marked native gets.
+        if (method.kind == IlMethodKind.Function && epBuiltinBorrow(method.name)) {
+            return true
+        }
+        if (j != base) {
+            return false
+        }
+        // The receiver position: `T* self` (what a value receiver takes) is what a promoted
+        // handle is, unless the analysis proved the callee hands the receiver out. A
+        // counted-reference receiver's parameter *is* the handle, so a raw pointer would not
+        // convert - `IlMethod.recvIsValue` tells the two apart (`LinearForm.kt`).
+        if (method.kind == IlMethodKind.Method) {
+            if (epKindAt(method.name, 0) == EpKind.Escapes) {
+                return false
+            }
+            return method.recvIsValue
         }
     }
     return false
+}
+
+// Whether operand `j` of `op` is the handle side of a null test: a `BinaryOp` whose *other*
+// operand is the placeholder `SetVar_Null` wrote (the `?`-typed temporary the lowering makes
+// of `null`). A promoted raw pointer tests against `nullptr` exactly as the handle does.
+fun ilPromoteNullTest(op: *IlOp, j: Int, nulls: *List<Bool>): Bool {
+    if (op.kind != IlOpKind.BinaryOp || j < 2 || op.operands.size() < 4) {
+        return false
+    }
+    var other: Int = op.operands[2]
+    if (j == 2) {
+        other = op.operands[3]
+    }
+    return other >= 0 && other < nulls.size() && ( * nulls)[other]
+}
+
+// The slot a construction call *writes*, or -1: the receiver of an `initByValue` call, the
+// `union class` construction convention the lowering routes a `&U(v)` through. The receiver is
+// storage the call sets, so the `Box` rule below counts it as a definition of the slot - the
+// opcode's own destination (`ilWritesDestination`) is not involved.
+fun ilPromoteInitReceiver(op: *IlOp, il: *IlBody): Int {
+    if (op.kind != IlOpKind.Call && op.kind != IlOpKind.CallVoid) {
+        return -1
+    }
+    val at: Int = ilReuseMethodIndex(op)
+    if (at < 0 || at >= il.methods.size()) {
+        return -1
+    }
+    if (il.methods[at].name != "initByValue") {
+        return -1
+    }
+    val method: IlMethod = il.methods[at]
+    if (method.kind != IlMethodKind.Method || !method.recvIsValue) {
+        return -1
+    }
+    val base: Int = ilReuseArgBase(op.kind)
+    if (op.operands.size() <= base) {
+        return -1
+    }
+    return op.operands[base]
 }
 
 // A slot name nothing in the body already uses.
@@ -110,14 +195,23 @@ fun ilPromoteNameTaken(il: *IlBody, name: Str): Bool {
 // destructor (`src/codegen/Codegen.kt`, `emitDataClass`), and a stack value is built from a
 // temporary - the temporary's destructor runs, then the stack value's runs again at scope end,
 // where the box ran it once. A payload that is not a plain named type the facts know is refused
-// too: unknown is not "safe".
+// too: unknown is not "safe". A generic data class (`Gen<Int>`) is carried by its declaration,
+// and a `union class` is refused - its only construction is the generated `initByValue` arms,
+// so a value `CallCtor` could only spell an aggregate that puts the argument in the tag.
 fun ilPromotePayloadRefused(inner: *AstXmlNode, facts: *SemFacts): Bool {
-    if (xmlIsEmpty(inner) || xmlKind(inner) != AstNodeCategory.TypeNamed) {
+    if (xmlIsEmpty(inner)) {
+        return true
+    }
+    val kind: AstNodeCategory = xmlKind(inner)
+    if (kind != AstNodeCategory.TypeNamed && kind != AstNodeCategory.TypeGeneric) {
         return true
     }
     val name: Str = xmlAttr(inner, AstNodeAttributeKind.Name)
     val decl: *AstXmlNode = facts.types.getPtr(name)
     if (decl == null) {
+        return true
+    }
+    if (xmlAttr(*decl, AstNodeAttributeKind.IsUnionClass) == "true") {
         return true
     }
     for (*member in xmlChildren(decl, AstNodeKind.Function)) {
@@ -143,7 +237,7 @@ fun ilPromoteIsValueSlot(il: *IlBody, slot: Int): Bool {
 // no use outside the safe set.
 fun ilPromoteFind(
     il: *IlBody, bad: *List<Bool>, defCount: *List<Int>, defOp: *List<Int>,
-    useCount: *List<Int>, facts: *SemFacts
+    useCount: *List<Int>, initCount: *List<Int>, initOp: *List<Int>, facts: *SemFacts
 ): Int {
     val slots: Int = il.vars.size()
     val firstBlockEnd: Int = ilReuseFirstBlockEnd(il)
@@ -163,16 +257,25 @@ fun ilPromoteFind(
                         return c
                     }
                 }
-                // `&src` boxing a copy: pointing at `src` itself drops the copy, so long as nothing
-                // else reads `src` (an aliased read would see what the box does not). No temporary
-                // is built here - `src` is already a value local, destroyed exactly as before - so
-                // the destructor question does not arise.
+                // `&src` boxing a copy: pointing at `src` itself drops the copy, so long as that
+                // changes nothing observable - `src` is built before the box (once, by its own
+                // definition or by a single construction call), and the box is the only use of
+                // it that is not the construction itself. A read anywhere is the same value
+                // through the box; a write or a second construction after the box would not be.
                 if (def.kind == IlOpKind.Box && def.operands.size() >= 2 && def.operands[0] == c) {
                     val src: Int = def.operands[1]
-                    if (src >= 0 && src < slots && src != c && ( * defCount) [src] == 1
-                            && ( * useCount)[src] == 1 && ilPromoteIsValueSlot(il, src)
-                    ) {
-                        return c
+                    if (src >= 0 && src < slots && src != c && ilPromoteIsValueSlot(il, src)) {
+                        val inits: Int = (*initCount)[src]
+                        val otherUses: Int = (*useCount)[src] - inits
+                        var built: Bool = (*defCount)[src] == 1 && (*defOp)[src] < at && inits == 0
+                        if (!built && (*defCount)[src] == 0 && inits == 1
+                            && (*initOp)[src] < at
+                        ) {
+                            built = true
+                        }
+                        if (otherUses == 1 && built) {
+                            return c
+                        }
                     }
                 }
             }
@@ -284,7 +387,35 @@ fun ilPromoteRefs(il: *IlBody, facts: *SemFacts): Bool {
         var defCount: List<Int> = List<Int>(slots, 0)
         var defOp: List<Int> = List<Int>(slots, -1)
         var useCount: List<Int> = List<Int>(slots, 0)
+        var initCount: List<Int> = List<Int>(slots, 0)
+        var initOp: List<Int> = List<Int>(slots, -1)
+        var nullSlots: List<Bool> = List<Bool>(slots, false)
         var bad: List<Bool> = List<Bool>(slots, false)
+        // The `*T` addresses this body hands to a call: when the escape analysis proved the
+        // parameter may retain what it receives (`epKindAt`), the pointer's own slot is marked,
+        // so the `Deref` that took its address is not a safe use (`ilPromoteUseSafe`).
+        var argEscape: List<Bool> = List<Bool>(slots, false)
+        var ai: Int = 0
+        while (ai < il.ops.size()) {
+            val aop: *IlOp = *il.ops[ai]
+            if (aop.kind == IlOpKind.Call || aop.kind == IlOpKind.CallVoid) {
+                val at: Int = ilReuseMethodIndex(aop)
+                if (at >= 0 && at < il.methods.size()) {
+                    val base: Int = ilReuseArgBase(aop.kind)
+                    var j: Int = base
+                    while (j < aop.operands.size()) {
+                        val slot: Int = aop.operands[j]
+                        if (slot >= 0 && slot < slots
+                            && epKindAt(il.methods[at].name, j - base) == EpKind.Escapes
+                        ) {
+                            argEscape[slot] = true
+                        }
+                        j = j + 1
+                    }
+                }
+            }
+            ai = ai + 1
+        }
         var i: Int = 0
         while (i < il.ops.size()) {
             val op: *IlOp = *il.ops[i]
@@ -293,6 +424,11 @@ fun ilPromoteRefs(il: *IlBody, facts: *SemFacts): Bool {
             if (op.kind == IlOpKind.Declare || op.kind == IlOpKind.DeclareInit) {
                 i = i + 1
                 continue
+            }
+            val built: Int = ilPromoteInitReceiver(op, il)
+            if (built >= 0 && built < slots) {
+                initCount[built] = initCount[built] + 1
+                initOp[built] = i
             }
             val writes: Bool = ilWritesDestination(op.kind)
             for ((operand, j) in op.operands) {
@@ -303,9 +439,14 @@ fun ilPromoteRefs(il: *IlBody, facts: *SemFacts): Bool {
                     if (j == 0 && writes) {
                         defCount[operand] = defCount[operand] + 1
                         defOp[operand] = i
+                        // The `?`-typed placeholder a null test reads: set by `SetVar_Null`, and
+                        // unset by any other writer (the local merge reuses slots).
+                        nullSlots[operand] = op.kind == IlOpKind.SetVar_Null
                     } else {
                         useCount[operand] = useCount[operand] + 1
-                        if (!ilPromoteUseSafe(il, op, j)) {
+                        if (!ilPromoteUseSafe(il, op, j, *argEscape)
+                            && !ilPromoteNullTest(op, j, *nullSlots)
+                        ) {
                             // A read that is not a safe spelling: the handle is observed (copied,
                             // stored, captured, `*`-ed, or handed to a `&T`) - never promote it.
                             bad[operand] = true
@@ -315,7 +456,9 @@ fun ilPromoteRefs(il: *IlBody, facts: *SemFacts): Bool {
             }
             i = i + 1
         }
-        val c: Int = ilPromoteFind(il, *bad, *defCount, *defOp, *useCount, facts)
+        val c: Int = ilPromoteFind(
+            il, *bad, *defCount, *defOp, *useCount, *initCount, *initOp, facts
+        )
         if (c >= 0) {
             ilPromoteApply(il, c, defOp[c])
             changed = true

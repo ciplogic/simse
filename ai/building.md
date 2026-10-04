@@ -73,9 +73,11 @@ it with the source.
 ./simse.exe --root src -o a.cpp --showLinearRepresentation 2> il.txt   # the IL of every body
 ./simse.exe --root examples/async/src --module src/modules/io --showAsync   # suspension coloring
 ./simse.exe --root src -o a.cpp --showBorrow 2> borrow.txt             # per-candidate borrow decisions (prelude first)
+./simse.exe --root src -o a.cpp --showEscape 2> escape.txt             # per-name escape-parameter kinds (prelude + modules)
 ./simse.exe --root stress/concat/src -o fused.cpp                      # the concat fusion (on)
 ./simse.exe --root stress/concat/src -o unfused.cpp --no-concat        # ... and its A/B off
 ./simse.exe --root src -o unborrowed.cpp --no-borrow                    # the auto-borrow rewrite off (params and for)
+./simse.exe --root src -o noescape.cpp --no-escape                      # the escape-parameter analysis off (promotion's call rules)
 ./simse.exe --root stress/when-strings/src -o when.cpp                  # the when-over-strings lowering
 ./simse.exe --root src -o prof.cpp --profile                            # RAII timers (simse_profile.txt)
 ```

@@ -331,7 +331,18 @@ fun Emitter.call(e: *AstXmlNode): Str {
             if (name == "println" || name == "print") {
                 var arg: Str = ""
                 if (argNodes.size() > 0) {
-                    arg = this.expr(argNodes[0], 0, xmlEmptyNode())
+                    // The printer takes the value by `const T&`, so a handle is read
+                    // through - `print(x)` on a `&Str`/`*Str` prints the pointee. The
+                    // promotion pass relies on the same reading (`PromoteRefs.kt`).
+                    var expected: AstXmlNode = xmlEmptyNode()
+                    val have: AstXmlNode = this.inferType(argNodes[0])
+                    val haveKind: AstNodeCategory = xmlKind(have)
+                    if (haveKind == AstNodeCategory.TypeReference
+                        || haveKind == AstNodeCategory.TypePointer
+                    ) {
+                        expected = xmlChild(have, AstNodeKind.Inner)
+                    }
+                    arg = this.expr(argNodes[0], 0, expected)
                 }
                 // C stdio, not `std::cout` (the `print` resource): one `fwrite` per value.
                 if (name == "println") {
