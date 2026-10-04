@@ -52,11 +52,11 @@ seconds - and `total`/`calls`/`start_` are all `Int64` for exactly that reason, 
 The report opens with the two summaries, then marks the tree with a `tree:` line:
 
 ```text
-top 25 methods by total:
+top 50 methods by total:
   1. codegen.emitProgram                  28475834 us:        1 calls
   2. codegen.emitFunction                 28179729 us:     2690 calls
   ...
-top 25 methods by self:
+top 50 methods by self:
   1. common.xmlAttr                        ... us: 20219264 calls
   ...
 tree:
@@ -71,7 +71,7 @@ main():32284475 us: 1 calls
 A summary is one row per body summed over every path it ran on: `total` is the inclusive time
 (the number a flat table has), `self` is the same minus the totals of the nodes under it - the
 time the body itself carried, its own code plus whatever no body measured. Each list is the
-biggest 25, biggest first; a body the run never entered is not listed. They answer "what is
+biggest 50, biggest first; a body the run never entered is not listed. They answer "what is
 hot", while the tree answers "through where".
 
 The tree is depth first, largest child first: one line per node,
@@ -177,7 +177,7 @@ bun build.js --release --profile --exe build/digits/simse_prof.exe --out build/d
 ## Status
 
 Implemented: the flag (`Request.profile`, `--profile` in both drivers), the report (the two
-top-25 summaries and the call tree), `--profile-file` (default `simse_profile.txt`, `-` for
+top-50 summaries and the call tree), `--profile-file` (default `simse_profile.txt`, `-` for
 stderr) and `--profile-nanos`, the emitted runtime (path-keyed `CallNode`s in one RTL
 `Dictionary`), the dense `Int` method table with package-qualified `kMethodNames[]`,
 `simse_nowMicros` / `simse_nowNanos`, and `bun build.js --profile` / `--profile-file` /

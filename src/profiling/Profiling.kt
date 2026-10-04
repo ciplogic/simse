@@ -106,7 +106,7 @@ fun profPreludeText(): Str {
 // below, so a measurement is one array index and no string compare. An entry lands on a
 // *node* of a call tree: a node is one exact call stack - the pair (the stack it was reached
 // through, the body) - so two call sites of one body are two nodes, and a node's totals are
-// exactly the calls that reached it. The report prints the two top-25 summaries (by
+// exactly the calls that reached it. The report prints the two top-50 summaries (by
 // inclusive total, by self time), then every node's children beneath it, largest total
 // first: a child is time inside its own line, never more.
 namespace simse_profiling {
@@ -191,7 +191,7 @@ namespace simse_profiling {
             stack.pop_back();
         }
 
-        // The report, to the profile file: the two top-25 summaries first (every body
+        // The report, to the profile file: the two top-50 summaries first (every body
         // aggregated over all its paths, by inclusive total and by self time), then the call
         // tree. A node is one exact stack, so a child's total is time inside its line's, and
         // the file needs no sharing rules: nothing is unfolded twice.
@@ -252,7 +252,7 @@ namespace simse_profiling {
 
         // The two summaries: one row per body, summed over every path it ran on - the
         // inclusive total, and the self time (each node's total minus what its children
-        // covered: the time the body itself carried). Biggest 25 of each, in order; a body
+        // covered: the time the body itself carried). Biggest 50 of each, in order; a body
         // the run never entered has no calls and is not listed.
         void reportTopLists(FILE *out) {
             Int methodCount = 0;
@@ -284,7 +284,7 @@ namespace simse_profiling {
         }
 
         void reportTop(FILE *out, const char *label, List<Int64> &values, List<Int64> &calls, Int methodCount) {
-            Int limit = 25;
+            Int limit = 50;
             if (methodCount < limit) {
                 limit = methodCount;
             }

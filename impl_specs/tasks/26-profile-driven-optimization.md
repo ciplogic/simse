@@ -8,7 +8,7 @@ Blocks: none
 ## Goal
 
 Cut the compiler's self-transpile time using the `--profile` report
-(`impl_specs/profiling.md`): start from the report's two top-25 lists, follow a hot body's path
+(`impl_specs/profiling.md`): start from the report's two top-50 lists, follow a hot body's path
 down the tree, and change one thing at a time. A candidate is only a change once a *clean*
 release A/B shows it.
 
