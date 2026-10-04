@@ -19,9 +19,9 @@ union for the payload.
 | file | what it owns |
 | --- | --- |
 | `src/main.kt` | the composition root: wire the routes into the `App`, accept and fan each connection to a 16-worker compute queue |
-| `src/router.kt` | `Handler = Request -> Response`, `Route`, `App` (`get`/`post`/`route`) |
-| `src/http.kt` | `Request`/`Response`, `parseRequest`/`formatResponse`, and the JSON boundary (`Request.json()`, `jsonResponse`) |
-| `src/handlers.kt` | the four route handlers - the actual transformations |
+| `layers/router.kt` | `Handler = Request -> Response`, `Route`, `App` (`get`/`post`/`route`) |
+| `layers/http.kt` | `Request`/`Response`, `parseRequest`/`formatResponse`, and the JSON boundary (`Request.json()`, `jsonResponse`) |
+| `layers/handlers.kt` | the four route handlers - the actual transformations |
 | `src/modules/jsonnode` | the intermediate `JsonNode` union and its reader (`parseJson`) and writer (`JsonNode.toJson()`) |
 
 A handler sees only `Request` and `Response`. It reaches into the payload with `get`/`at`/`text`/
@@ -30,6 +30,11 @@ never touches a socket, a header, or a byte. The concurrency is one line in `mai
 `tasksCompute(16, workers)` makes a compute queue of workers and
 `tasksEnqueue(handleTask(conn, *app))` hands each connection to it - the same shape
 `examples/http/async-server` uses, and the JSON/router layers above are untouched by it.
+
+The three layers above the composition root (`layers/router.kt`, `layers/http.kt`,
+`layers/handlers.kt`) are transport-neutral and shared with the non-blocking server in
+[`examples/express-nonblocking`](../express-nonblocking/README.md), which replaces the worker
+pool with a single `WSAPoll` event loop.
 
 ## Routes
 
@@ -48,7 +53,8 @@ From the repository root (the compiler must be built first: `build.bat --release
 
 ```bat
 simse.exe --root examples/express/src ^
-    --module examples/http/sockets --module src/modules/http --module src/modules/jsonnode ^
+    --module examples/express/layers --module examples/http/sockets ^
+    --module src/modules/http --module src/modules/jsonnode ^
     -o examples/express/out.cpp
 bun build.js --release --cpp examples/express/out.cpp --exe examples/express/express.exe
 
@@ -101,8 +107,9 @@ Two design notes the numbers make concrete:
 - **The worker count is the ceiling.** With keep-alive a blocking `netReceive` holds its worker
   for the whole connection, so a 16-worker server serving 32 connections leaves 16 of them in the
   queue - and a client waiting on them sees stalled or reset sockets. Match workers to expected
-  concurrent connections (here, one per connection; the machine has 18 cores). Non-blocking I/O
-  (IOCP), not more workers, is what would lift the per-core ceiling.
+  concurrent connections (here, one per connection; the machine has 18 cores). Non-blocking I/O,
+  not more workers, is what lifts the per-core ceiling; [`examples/express-nonblocking`](../express-nonblocking/README.md)
+  is this same server on one `WSAPoll` loop, holding 256 connections on one thread.
 - **`Bun.serve` scales past the worker count** because it is event-driven: at 32 connections it
   reaches ~111k on the same machine. This example trades that for straight-line handler code and
   a tiny transport.
@@ -123,13 +130,13 @@ JavaScript runtime and its heap.
 
 ## What to look at
 
-- `src/router.kt` - the whole express-like idea is a `List<Route>` of `(method, path, handler)`
+- `layers/router.kt` - the whole express-like idea is a `List<Route>` of `(method, path, handler)`
   and a first-match loop. A handler is an ordinary callable value (a named function or a lambda),
   which is why a route table is just a list and dispatch is a call - no vtable, no registration
   magic.
 - `src/main.kt` - the transport: one `tasksCompute(16, workers)` call and one `tasksEnqueue`
   per accepted connection, then `tasksDrain()` when the accept loop ends.
-- `src/http.kt` - `parseRequest` is the only place a raw byte becomes a `Request`, and
+- `layers/http.kt` - `parseRequest` is the only place a raw byte becomes a `Request`, and
   `formatResponse` the only place a `Response` becomes bytes.
 - `src/modules/jsonnode/jsonnode.kt` - `JsonNode` is a `union class` (one shape live at a time,
   `None` is JSON `null`), `parseJson` is the reader, `JsonNode.toJson()` the writer. The

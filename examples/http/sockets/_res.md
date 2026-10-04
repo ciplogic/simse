@@ -38,6 +38,17 @@ Int32 simse_net_fillAddr(Int8* addr, Int32 ip, Int32 port);
 Int32 simse_net_readPort(const Int8* addr);
 Str simse_net_bytesToStr(const Int8* bytes, Int32 count);
 List<Int8> simse_net_buffer(Int32 size);
+Int32 simse_net_fionbio();
+Int8* simse_net_pollBuf();
+Int32 simse_net_pollCapacity();
+void simse_net_pollSet(Int32 index, Int64 socket, Int32 events);
+Int64 simse_net_pollFd(Int32 index);
+Int32 simse_net_pollRevents(Int32 index);
+Int32 simse_net_pollReadEvent();
+Int32 simse_net_pollWriteEvent();
+Int32 simse_net_pollCanRead(Int32 revents);
+Int32 simse_net_pollCanWrite(Int32 revents);
+Int32 simse_net_pollError(Int32 revents);
 ```
 bodies:
 ```cpp
@@ -106,4 +117,53 @@ List<Int8> simse_net_buffer(Int32 size) {
     buffer.resize(size);
     return buffer;
 }
+
+// The poll set a non-blocking server drives: a `WSAPOLLFD` array the module owns, so `WSAPoll`
+// (a `native` declaration, resolved at run time like every other Winsock call) reads a layout
+// at the platform's alignment. The glue only fills and reads it - no Winsock function is called
+// from here, so nothing has to be linked.
+static const Int32 kNetPollCapacity = 1024;
+static WSAPOLLFD g_netPoll[kNetPollCapacity];
+
+// `FIONBIO` does not fit a positive `Int` literal, so the constant comes from C++.
+Int32 simse_net_fionbio() {
+    return (Int32) FIONBIO;
+}
+
+Int8* simse_net_pollBuf() {
+    return reinterpret_cast<Int8*>(g_netPoll);
+}
+
+Int32 simse_net_pollCapacity() {
+    return kNetPollCapacity;
+}
+
+void simse_net_pollSet(Int32 index, Int64 socket, Int32 events) {
+    if (index < 0 || index >= kNetPollCapacity) {
+        return;
+    }
+    g_netPoll[index].fd = (SOCKET) socket;
+    g_netPoll[index].events = (SHORT) events;
+    g_netPoll[index].revents = 0;
+}
+
+Int64 simse_net_pollFd(Int32 index) {
+    if (index < 0 || index >= kNetPollCapacity) {
+        return -1;
+    }
+    return (Int64) g_netPoll[index].fd;
+}
+
+Int32 simse_net_pollRevents(Int32 index) {
+    if (index < 0 || index >= kNetPollCapacity) {
+        return 0;
+    }
+    return (Int32) g_netPoll[index].revents;
+}
+
+Int32 simse_net_pollReadEvent() { return (Int32) POLLRDNORM; }
+Int32 simse_net_pollWriteEvent() { return (Int32) POLLWRNORM; }
+Int32 simse_net_pollCanRead(Int32 revents) { return (revents & (POLLRDNORM | POLLHUP)) != 0 ? 1 : 0; }
+Int32 simse_net_pollCanWrite(Int32 revents) { return (revents & POLLWRNORM) != 0 ? 1 : 0; }
+Int32 simse_net_pollError(Int32 revents) { return (revents & (POLLERR | POLLHUP | POLLNVAL)) != 0 ? 1 : 0; }
 ```

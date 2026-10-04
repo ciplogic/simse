@@ -208,3 +208,94 @@ fun netReceivedText(buffer: *List<Int8>, count: Int): Str {
 fun netClose(s: Int64): Unit {
     wsaClose(s)
 }
+
+// ---- non-blocking sockets (the poll-driven server in examples/express-nonblocking) ----
+//
+// The Winsock calls stay `native` (resolved from ws2_32.dll at run time, nothing linked); the
+// glue only holds the `WSAPOLLFD` array, whose layout Simse cannot spell.
+
+@SmGen("native", "ws2_32.dll", "ioctlsocket")
+fun wsaIoctlSocket(socket: Int64, command: Int, value: *Int): Int
+
+@SmGen("native", "ws2_32.dll", "WSAGetLastError")
+fun wsaLastError(): Int
+
+@SmGen("native", "ws2_32.dll", "WSAPoll")
+fun wsaPoll(fds: *Int8, count: Int, timeoutMs: Int): Int
+
+@SmGen("res", "netglue", "simse_net_fionbio")
+fun netFionbio(): Int
+
+@SmGen("res", "netglue", "simse_net_pollBuf")
+fun netPollBuf(): *Int8
+
+@SmGen("res", "netglue", "simse_net_pollCapacity")
+fun netPollCapacity(): Int
+
+@SmGen("res", "netglue", "simse_net_pollSet")
+fun netPollSet(index: Int, socket: Int64, events: Int): Unit
+
+@SmGen("res", "netglue", "simse_net_pollRevents")
+fun netPollRevents(index: Int): Int
+
+@SmGen("res", "netglue", "simse_net_pollReadEvent")
+fun netPollReadEvent(): Int
+
+@SmGen("res", "netglue", "simse_net_pollWriteEvent")
+fun netPollWriteEvent(): Int
+
+@SmGen("res", "netglue", "simse_net_pollCanRead")
+fun netPollCanRead(revents: Int): Bool
+
+@SmGen("res", "netglue", "simse_net_pollCanWrite")
+fun netPollCanWrite(revents: Int): Bool
+
+@SmGen("res", "netglue", "simse_net_pollError")
+fun netPollError(revents: Int): Bool
+
+// `WSAEWOULDBLOCK`: a non-blocking read/write with nothing to do yet.
+fun netWouldBlock(): Int {
+    return 10035
+}
+
+// A non-blocking socket: every `recv`/`send` answers immediately instead of parking a thread.
+fun netSetNonBlocking(socket: Int64): Unit {
+    var on: Int = 1
+    wsaIoctlSocket(socket, netFionbio(), *on)
+}
+
+// `netReceive`'s non-blocking twin: the byte count, `0` when the peer closed, `-1` when there is
+// nothing to read yet (`WouldBlock`), `-2` on a real error.
+fun netRecvNonBlocking(socket: Int64, buffer: *Int8, capacity: Int): Int {
+    val count: Int = wsaRecv(socket, buffer, capacity, 0)
+    if (count == 0 - 1) {
+        if (wsaLastError() == netWouldBlock()) {
+            return 0 - 1
+        }
+        return 0 - 2
+    }
+    return count
+}
+
+// `netSend`'s non-blocking twin for the bytes of `text` from `offset`: the bytes sent, `-1` when
+// the send buffer is full, `-2` on a real error. The caller keeps the unsent tail.
+fun netSendNonBlocking(socket: Int64, text: *Str, offset: Int): Int {
+    val remaining: Int = text.size() - offset
+    if (remaining <= 0) {
+        return 0
+    }
+    val count: Int = wsaSend(socket, spanOfStr(text).atPtr(offset), remaining, 0)
+    if (count == 0 - 1) {
+        if (wsaLastError() == netWouldBlock()) {
+            return 0 - 1
+        }
+        return 0 - 2
+    }
+    return count
+}
+
+// One `WSAPoll` over the first `count` slots of the module's array: the ready count, `0` on
+// timeout, `-1` on error. Callers fill the slots with `netPollSet` first.
+fun netPoll(count: Int, timeoutMs: Int): Int {
+    return wsaPoll(netPollBuf(), count, timeoutMs)
+}
