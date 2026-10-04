@@ -17,13 +17,12 @@ import common
 fun SemInfer.functionReturn(
     name: *Str, typeArgs: *List<AstXmlNode>, receiver: *AstXmlNode, argNodes: *List<AstXmlNode>
 ): AstXmlNode {
-    var i: Int = 0
-    while (i < this.facts.functions.size()) {
+    val named: *List<Int> = this.facts.functionsByName.getPtr(name)
+    if (named == null) {
+        return xmlEmptyNode()
+    }
+    for (i in named) {
         val fn: *SemFnFact = *this.facts.functions[i]
-        i = i + 1
-        if (fn.name != name) {
-            continue
-        }
         val ret: *AstXmlNode = xmlChildPtr(fn.decl, AstNodeKind.ReturnType)
         if (xmlIsEmpty(ret)) {
             continue
@@ -196,14 +195,16 @@ fun SemInfer.operatorGetReturn(recvExpr: *AstXmlNode, indexNode: *AstXmlNode): A
     if (xmlIsEmpty(recv)) {
         return xmlEmptyNode()
     }
-    var i: Int = 0
-    while (i < this.facts.functions.size()) {
+    val named: *List<Int> = this.facts.functionsByName.getPtr("get")
+    if (named == null) {
+        return xmlEmptyNode()
+    }
+    for (i in named) {
         val fn: *SemFnFact = *this.facts.functions[i]
-        i = i + 1
         if (fn.isNative || xmlIsEmpty(fn.receiver)) {
             continue
         }
-        if (fn.name != "get" || fn.paramCount != 1
+        if (fn.paramCount != 1
             || xmlAttr(fn.decl, AstNodeAttributeKind.IsOperator) != "true"
         ) {
             continue
@@ -238,14 +239,16 @@ fun SemInfer.operatorBinaryReturn(name: *Str, lhsExpr: *AstXmlNode, rhsExpr: *As
     if (xmlIsEmpty(recv)) {
         return xmlEmptyNode()
     }
-    var i: Int = 0
-    while (i < this.facts.functions.size()) {
+    val named: *List<Int> = this.facts.functionsByName.getPtr(name)
+    if (named == null) {
+        return xmlEmptyNode()
+    }
+    for (i in named) {
         val fn: *SemFnFact = *this.facts.functions[i]
-        i = i + 1
         if (fn.isNative || xmlIsEmpty(fn.receiver)) {
             continue
         }
-        if (fn.name != name || fn.paramCount != 1
+        if (fn.paramCount != 1
             || xmlAttr(fn.decl, AstNodeAttributeKind.IsOperator) != "true"
         ) {
             continue
@@ -283,43 +286,41 @@ fun SemInfer.memberReturn(callee: *AstXmlNode, argNodes: *List<AstXmlNode>): Ast
     // reach. A candidate the arguments cannot tell about (an untyped lambda, say) keeps the
     // old behavior - the first receiver match answers - so only real overloads move.
     var fallback: AstXmlNode = xmlEmptyNode()
-    var i: Int = 0
-    while (i < this.facts.functions.size()) {
-        val fn: *SemFnFact = *this.facts.functions[i]
-        i = i + 1
-        if (fn.isNative || xmlIsEmpty(fn.receiver)) {
-            continue
-        }
-        if (fn.name != calleeText) {
-            continue
-        }
-        val ret: *AstXmlNode = xmlChildPtr(fn.decl, AstNodeKind.ReturnType)
-        if (xmlIsEmpty(ret)) {
-            continue
-        }
-        var bindings: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
-        if (!semBindTypes(this.resolveAlias(fn.receiver), recv, fn.templateParams, bindings)) {
-            continue
-        }
-        if (fn.templateParams.size() > 0) {
-            var argTypes: List<AstXmlNode> = List<AstXmlNode>()
-            var a: Int = 0
-            while (a < argNodes.size()) {
-                argTypes.append(this.infer(argNodes[a]))
-                a = a + 1
+    val named: *List<Int> = this.facts.functionsByName.getPtr(calleeText)
+    if (named != null) {
+        for (i in named) {
+            val fn: *SemFnFact = *this.facts.functions[i]
+            if (fn.isNative || xmlIsEmpty(fn.receiver)) {
+                continue
             }
-            semBindCallArgs(fn.decl, xmlEmptyNode(), *argTypes, *fn.templateParams, *bindings)
-        }
-        val result: AstXmlNode = semSubstitute(ret, bindings, fn.templateParams)
-        if (xmlIsEmpty(result)) {
-            continue
-        }
-        val machine: AstXmlNode = semMachineType(result, fn, bindings, recv)
-        if (this.callArgsReach(fn, argNodes)) {
-            return machine
-        }
-        if (xmlIsEmpty(fallback)) {
-            fallback = machine
+            val ret: *AstXmlNode = xmlChildPtr(fn.decl, AstNodeKind.ReturnType)
+            if (xmlIsEmpty(ret)) {
+                continue
+            }
+            var bindings: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
+            if (!semBindTypes(this.resolveAlias(fn.receiver), recv, fn.templateParams, bindings)) {
+                continue
+            }
+            if (fn.templateParams.size() > 0) {
+                var argTypes: List<AstXmlNode> = List<AstXmlNode>()
+                var a: Int = 0
+                while (a < argNodes.size()) {
+                    argTypes.append(this.infer(argNodes[a]))
+                    a = a + 1
+                }
+                semBindCallArgs(fn.decl, xmlEmptyNode(), *argTypes, *fn.templateParams, *bindings)
+            }
+            val result: AstXmlNode = semSubstitute(ret, bindings, fn.templateParams)
+            if (xmlIsEmpty(result)) {
+                continue
+            }
+            val machine: AstXmlNode = semMachineType(result, fn, bindings, recv)
+            if (this.callArgsReach(fn, argNodes)) {
+                return machine
+            }
+            if (xmlIsEmpty(fallback)) {
+                fallback = machine
+            }
         }
     }
     if (!xmlIsEmpty(fallback)) {

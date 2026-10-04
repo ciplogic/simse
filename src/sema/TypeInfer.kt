@@ -834,6 +834,11 @@ data class SemFacts(
 
     var enumNames: Dictionary<Str, Bool>,
     var functions: List<SemFnFact>,
+
+// Indices into `functions` per function name, in list order: the walks that resolve a
+// call, a return or an `initByValue` extension all scan for one name, and the list is
+// every function in the program (2690 on the self-transpile), so the scan was the cost.
+    var functionsByName: Dictionary<Str, List<Int>>,
     var nativeExtensions: Dictionary<Str, List<SemExtFact>>,
     var statics: Dictionary<Str, AstXmlNode>
 )
@@ -841,6 +846,7 @@ data class SemFacts(
 fun semNewFacts(): SemFacts {
     return SemFacts(
         Dictionary<Str, AstXmlNode>(), Dictionary<Str, Bool>(), List<SemFnFact>(),
+        Dictionary<Str, List<Int>>(),
         Dictionary<Str, List<SemExtFact>>(), Dictionary<Str, AstXmlNode>()
     )
 }

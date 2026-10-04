@@ -146,13 +146,12 @@ fun SemInfer.isTypeName(name: *Str): Bool {
 // Whether the type `typeName` declares an `initByValue` extension (the construction
 // convention): the receiver is the fact's own, or the explicit `this` parameter's type.
 fun SemInfer.isInitByValueType(typeName: *Str): Bool {
-    var i: Int = 0
-    while (i < this.facts.functions.size()) {
+    val named: *List<Int> = this.facts.functionsByName.getPtr("initByValue")
+    if (named == null) {
+        return false
+    }
+    for (i in named) {
         val fn: *SemFnFact = *this.facts.functions[i]
-        i = i + 1
-        if (fn.name != "initByValue") {
-            continue
-        }
         var pattern: AstXmlNode = fn.receiver
         if (xmlIsEmpty(pattern)) {
             pattern = semExtensionReceiver(fn.decl)

@@ -634,8 +634,13 @@ fun IlExtractor.isOperatorIndex(e: *AstXmlNode): Bool {
         return false
     }
     val resolved: AstXmlNode = ilAliasTarget(this.fn.facts, recvType)
-    for (*fn in this.fn.facts.functions) {
-        if (fn.name != "get" || fn.paramCount != 1 || fn.isNative) {
+    val named: *List<Int> = this.fn.facts.functionsByName.getPtr("get")
+    if (named == null) {
+        return false
+    }
+    for (index in named) {
+        val fn: *SemFnFact = *this.fn.facts.functions[index]
+        if (fn.paramCount != 1 || fn.isNative) {
             continue
         }
         if (xmlAttr(fn.decl, AstNodeAttributeKind.IsOperator) != "true") {

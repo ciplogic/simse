@@ -638,11 +638,14 @@ fun IlExtractor.ilConfusingLambdaOverload(
     val name: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
     var callableCandidates: Int = 0
     var valueCandidates: Int = 0
-    var fi: Int = 0
-    while (fi < this.fn.facts.functions.size()) {
+    // Only this name's declarations can match (`SemFacts.functionsByName`).
+    val named: *List<Int> = this.fn.facts.functionsByName.getPtr(name)
+    if (named == null) {
+        return ""
+    }
+    for (fi in named) {
         val fact: *SemFnFact = *this.fn.facts.functions[fi]
-        fi = fi + 1
-        if (xmlIsEmpty(fact.decl) || fact.name != name) {
+        if (xmlIsEmpty(fact.decl)) {
             continue
         }
         val factMember: Bool = !xmlIsEmpty(fact.receiver) || (member && fact.isExtension)

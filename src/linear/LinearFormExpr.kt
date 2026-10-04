@@ -49,10 +49,13 @@ fun IlExtractor.hasInitByValueExt(typeName: *Str): Bool {
     if (this.fn.facts == null) {
         return false
     }
-    for (*fact in this.fn.facts.functions) {
-        if (fact.name == "initByValue"
-            && xmlAttr(this.receiverPattern(fact), AstNodeAttributeKind.Name) == typeName
-        ) {
+    val named: *List<Int> = this.fn.facts.functionsByName.getPtr("initByValue")
+    if (named == null) {
+        return false
+    }
+    for (index in named) {
+        val fact: *SemFnFact = *this.fn.facts.functions[index]
+        if (xmlAttr(this.receiverPattern(fact), AstNodeAttributeKind.Name) == typeName) {
             return true
         }
     }
@@ -196,15 +199,16 @@ fun IlExtractor.callTarget(callee: *AstXmlNode, receiver: *AstXmlNode, argCount:
     val name: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
     // The candidates are *indices* into the facts, not the facts themselves: a `SemFnFact`
     // carries its declaration node and attribute list, so a copy per candidate would be work.
+    // The name index narrows the walk to this name's declarations; receiver form and arity
+    // stay per candidate below.
+    val named: *List<Int> = this.fn.facts.functionsByName.getPtr(name)
+    if (named == null) {
+        return xmlEmptyNode()
+    }
     var candidates: List<Int> = List<Int>()
-    var i: Int = 0
-    while (i < this.fn.facts.functions.size()) {
-        val index: Int = i
-        i = i + 1
+    for (index in named) {
         val fact: *SemFnFact = *this.fn.facts.functions[index]
-        // The name, receiver form and parameter count are the fact's own, read once when it
-        // was built (`SemFnFact`): this walk runs over every collected function for every call.
-        if (xmlIsEmpty(fact.decl) || fact.name != name) {
+        if (xmlIsEmpty(fact.decl)) {
             continue
         }
         val factMember: Bool = !xmlIsEmpty(fact.receiver)

@@ -384,12 +384,22 @@ fun Emitter.fillFacts(facts: *SemFacts): Unit {
         e = e + 1
     }
     for (*fn in this.functions) {
+        val index: Int = facts.functions.size()
         facts.functions.append(
             semFnFact(
                 copy(fn.decl), copy(fn.receiver), fn.templateParams, fn.name,
                 fn.packageName, fn.isNative, fn.machineSuffix
             )
         )
+        // The name index beside the list (`SemFacts.functionsByName`).
+        val named: *List<Int> = facts.functionsByName.getPtr(fn.name)
+        if (named != null) {
+            named.append(index)
+        } else {
+            var fresh: List<Int> = List<Int>()
+            fresh.append(index)
+            facts.functionsByName.insert(fn.name, fresh)
+        }
     }
     val extensionNames: List<Str> = this.nativeExtensions.keys()
     var x: Int = 0
