@@ -35,7 +35,7 @@ Studio through `tools/msvc.mjs` and reports what it is doing. `--define` reaches
 the whole translation unit - the amalgamation and the RTL C++ it carries are
 compiled together - so the `SIMSE_STR_INLINE_CAPACITY` / `SIMSE_NO_PACK4` knobs
 apply consistently. `--profile` transpiles with the instrumented profiler, which writes
-its CSV to `simse_profile.txt` when the program runs (`--profile-file <path>`; `-` is
+its call tree to `simse_profile.txt` when the program runs (`--profile-file <path>`; `-` is
 stderr), and `--profile-file` / `--profile-nanos` pass through from `build.bat`
 (`impl_specs/profiling.md`).
 The same script can transpile any other module root:
@@ -143,7 +143,7 @@ simse.exe --root <dir> -o <out.cpp> [--prelude <dir>] [--profile] [--profile-fil
   source tree is `src`);
 - `--prelude <dir>` overrides the implicit prelude, which defaults to the
   relative path `src/rtl`, so run the compiler from the repository root;
-- `--profile` emits the instrumented profiler, whose CSV goes to `simse_profile.txt` (or
+- `--profile` emits the instrumented profiler, whose call tree goes to `simse_profile.txt` (or
   `--profile-file <path>`; `-` is stderr), in microseconds or `--profile-nanos`;
   `--showLinearRepresentation` dumps the linear IL (see
   `impl_specs/profiling.md` and `impl_specs/linear-il.md`).

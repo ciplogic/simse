@@ -5115,3 +5115,24 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   the diagnostics, `specs/declarations.md`, the tour, `ai/language.md`, the README);
   `stress/protocols-legacy` pins the old position and is deleted with it. Verified:
   `bun tools/iterate.js --full` - **87/87**, both fixed points.
+
+- **The profiler writes a call tree, keyed by the whole stack.** The edge-keyed report read as a
+  tree but was not one: a body expanded at its first occurrence showed its *incoming edge* on
+  the line while the children beneath it were the body's *global* outgoing edges, so a small
+  call site looked like it contained a huge subtree (`codegen.cgJoin`: one line at 22 us over
+  58 calls, and under it `common.joinStrs` at 12.4 ms over 24,939 calls - the *global* edge,
+  every `cgJoin` entry, not the 58's share). A node is now one *exact stack* - the pair (the
+  node the stack is in, the body) - found-or-created in one `unordered_map<unsigned long long,
+  Int>` keyed `(parent ordinal << 32) | body`, its ordinal standing for the whole path
+  (`CallNode`, `nodes`, `nodeOf`; 0 is the root, the frame outside `main`). `ProfileScope`
+  pushes the node and banks its elapsed time there, so a line is that path's inclusive time, a
+  child's total is always inside its parent's, and two call sites of one body are two nodes -
+  the file is a true call tree, one line per distinct path, with no `(recursive)`/`(shown
+  above)` folding. The flat `FunctionData` table and `EdgeData` map are gone; the report drops
+  `name,total_us,calls` for `name():<total> <us|ns>: <calls> calls` and one space of indent per
+  level, and the default path is `simse_profile.txt`. `tools/_check_tree.mjs` walks a tree and
+  checks the nesting invariant (every node's total is at least the sum of its children's).
+  Verified: `bun tools/iterate.js --full` - **88/88** and both fixed points; a profiled release
+  compiler over `--root src` writes 378,842 nodes at depth 143 (`main()` 32.3 s instrumented),
+  and `_check_tree.mjs` reports **0 violations at tolerance 0** on it; `stress/linq` writes its
+  tree to a named file, to stderr with `--profile-file -`, and in `ns` with `--profile-nanos`.

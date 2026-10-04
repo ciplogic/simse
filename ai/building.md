@@ -79,7 +79,7 @@ it with the source.
 ./simse.exe --root src -o unborrowed.cpp --no-borrow                    # the auto-borrow rewrite off (params and for)
 ./simse.exe --root src -o noescape.cpp --no-escape                      # the escape-parameter analysis off (promotion's call rules)
 ./simse.exe --root stress/when-strings/src -o when.cpp                  # the when-over-strings lowering
-./simse.exe --root src -o prof.cpp --profile                            # RAII timers (simse_profile.txt)
+./simse.exe --root src -o prof.cpp --profile                            # RAII timers + call tree (simse_profile.txt)
 ```
 
 ## Troubleshooting
@@ -109,7 +109,8 @@ it with the source.
   `bootstrap.js` (the fixed point), `vscheck.mjs` (the VS project check) and `msvc.mjs` (the
   MSVC toolchain they share, also used by `build.js`). A few **evidence probes** a design doc
   cites sit beside them and are run by hand, never by the loop: `_bench_ab.mjs` (interleaved
-  A/B timing), `_strtable_runs.mjs`, `_pe_sections.mjs` (`impl_specs/rtl-abi.md`),
+  A/B timing), `_strtable_runs.mjs`, `_check_tree.mjs` (verifies that a `--profile` call tree
+  nests correctly), `_pe_sections.mjs` (`impl_specs/rtl-abi.md`),
   `array_layout_probe.cpp`, `smallvector_stress.cpp`, `statics_probe.cpp`
   (`impl_specs/statics.md`) and `memrun.cpp` (`benchmarks/onebrc/benchmark.md`).
 - `docs/` — the published documentation (tour, how-it-works, state-of-the-field).
@@ -117,7 +118,8 @@ it with the source.
 ## Profiling
 
 `bun build.js --release --profile` builds an instrumented compiler (or pass `--profile` on the
-CLI to any program): every emitted body carries an RAII timer and the program writes a CSV of
-inclusive totals and call counts on exit (`--profile-file`, default `simse_profile.txt`;
-`--profile-nanos`). With the flag off the emitted file is byte-identical. `impl_specs/profiling.md`
-has the format; `build.bat --release --pdb` feeds the VS sampling profiler instead.
+CLI to any program): every emitted body carries an RAII timer and the program writes its call
+tree - one line per exact stack, inclusive totals and call counts - on exit (`--profile-file`,
+default `simse_profile.txt`; `--profile-nanos`). With the flag off the emitted file is
+byte-identical. `impl_specs/profiling.md` has the format; `build.bat --release --pdb` feeds the
+VS sampling profiler instead.

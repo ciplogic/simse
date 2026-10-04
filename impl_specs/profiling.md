@@ -1,17 +1,19 @@
 # The instrumented profiler (`--profile`)
 
 A flag on the transpiler that makes the *emitted program* measure itself: every emitted body
-starts with an RAII timer, and the table lands in a CSV file when the program exits. A sampling
-profile says where the *samples* are, not where the *calls* are; this one counts calls, and
-its totals are inclusive, so a caller and its callees can be compared directly.
+starts with an RAII timer, and the **call tree** lands in a text file when the program exits. A
+sampling profile says where the *samples* are, not where the *calls* are; this one counts calls,
+and every line is one exact call stack - a child's total is time inside its parent's, never
+more. The tree is what a flat table cannot show: not just *that* `xmlAttr` is hot, but which
+path to it is.
 
 ## What is emitted
 
 With `--profile` (and **nothing at all** without it):
 
-1. **the prologue** gains the runtime - `<cstdio>`, `simse_profiling::FunctionData`,
+1. **the prologue** gains the runtime - `<cstdio>`, `simse_profiling::CallNode`,
    `simse_profiling::ProfileScope`, `simse_profiling::ProfileApp`, the one `profileApp`, and the
-   static `profileReport` whose destructor writes the table;
+   static `profileReport` whose destructor writes the tree;
 2. **every emitted body** gains one first statement,
    `auto __smProfile = profileApp.measure(<index>);`, where `<index>` is a dense `Int` constant;
 3. **the names** are one table of constants, `simse_profiling::kMethodNames[]`, written with the
@@ -27,44 +29,49 @@ Int ns1_bump(ns1_Counter* self) {
 }
 ```
 
-A measurement is one array index and two clock reads. The constructor increments
-`functions[index].calls`, the destructor adds `simse_nowMicros() - start_` (or
-`simse_nowNanos()` - see *Units*) to `functions[index].total`; `measure` grows the
-`List<FunctionData>` to the index the first time it sees it. There is no dictionary, no `Str`,
-no per-entry allocation and no string compare - the runtime holds one `List<FunctionData>`
-indexed by the constant. The scope is destroyed when the body leaves through any `return`, so a
-total is that body's *whole* run - nested calls included - and the row carries its call count
-beside it.
+An entry lands on a node of a call tree, and a node is one *exact call stack*: the runtime keeps
+the ordinals of the nodes it is in, and the node for this body under that stack - keyed
+`(parent ordinal, body id)` in one `std::unordered_map`, created the first time that stack
+reaches that body. Two call sites of one body are two nodes, so a node's totals are exactly the
+calls that reached it. The constructor pushes the node and bumps its call count; the destructor
+adds `simse_nowMicros() - start_` (or `simse_nowNanos()` - see *Units*) to the node and pops.
+There is no name to compare and no allocation after the first sight of a path: a measurement is
+one hash and two clock reads.
 
-Every total and every count is `Int64` (`FunctionData.total`, `FunctionData.calls`,
+Every total and every count is `Int64` (`CallNode.total`, `CallNode.calls`,
 `ProfileScope::start_`, and both clocks). A nanosecond count is ~1000x a microsecond one, so the
 wider unit has to be `Int64` to stay meaningful - it would overflow an `Int32` in about two
 seconds - and `total`/`calls`/`start_` are all `Int64` for exactly that reason, in both units.
 
-## The table
+## The report
 
-The report is **CSV**, biggest total first, with one header line:
+The report is the **call tree**, depth first, largest child first:
 
-```csv
-name,total_us,calls
-main,6013955,1
-codegen.emitProgram,5327680,1
-linear.linFinishForEmission,2415083,901
-codegen.emitBodyAt,1998447,896
-optimizations.foldExprsUnder,1392667,1867455
+```text
+main():32284475 us: 1 calls
++codegen.emitProgram():28475834 us: 1 calls
+ +codegen.run():28475590 us: 1 calls
+  +codegen.emitFunctions():28180686 us: 2 calls
+   +codegen.emitFunction():28179729 us: 2690 calls
+    +codegen.emitBodyAt():19407474 us: 1306 calls
 ```
 
-A row with `calls == 0` (a measured body the run never entered) is left out. The `calls` column
-is exact; `total_us` is wall time and machine-dependent. The name column is the body's symbol
+One line per node: `name():<total> <unit>: <calls> calls`, indented one space per level with a
+`+` on every line below the first (there is no line for the root itself, the frame outside
+`main`). The numbers are the node's own - that path's inclusive time and call count - so a
+line's total is at least the sum of everything printed under it, and a recursive body appears
+once per *depth* it reached: the recursion is the nesting.
+
+A body the run never entered has no node and no line. The names are the body's symbols
 with the compiler's `nsN_` package prefix spelled out (`Emitter.prettySymbol`: `ns1_` is
 `codegen.`), Simse-spelled - a namespace separates with `.`, not C++'s `::` (`profDots` folds
-the `::` a lambda symbol carries) - so a row names a package and a function a reader can find;
+the `::` a lambda symbol carries) - so a line names a package and a function a reader can find;
 `rtl` and `main` are unprefixed and unchanged. A lambda's synthesized `<owner>_closure<N>`
 class is named for what was written: `ns1_foo_closure1::operator()` reads `pkg.foo.lambda1`.
 
 ## Where it goes
 
-The default is the file **`simse_profile.csv`** in the working directory; `--profile-file <path>`
+The default is the file **`simse_profile.txt`** in the working directory; `--profile-file <path>`
 overrides it, and `--profile-file -` (an empty path too) keeps it on **stderr**. A path that
 cannot be opened falls back to stderr.
 
@@ -95,8 +102,8 @@ all `Int64`.
 
 ## Units
 
-`--profile-nanos` switches the emitted timer to `simse_nowNanos()` and the CSV column to
-`total_ns`; the default is microseconds and `total_us`. It is a display choice, not a range one:
+`--profile-nanos` switches the emitted timer to `simse_nowNanos()` and the line's unit token from
+`us` to `ns`; the default is microseconds and `us`. It is a display choice, not a range one:
 the totals and the counts are `Int64` in both units, so nothing narrows or overflows by switching
 (a nanosecond total is ~1000x the microsecond one, and an `Int32` would wrap it in ~2 s). The
 resolution is the platform's `steady_clock` - on Windows typically ~100 ns, finer than the
@@ -106,7 +113,7 @@ microsecond reading needs.
 
 ```sh
 bun build.js --release --profile                          # a profiled compiler: simse.exe
-bun build.js --release --profile --profile-file p.csv     # ... into a named file
+bun build.js --release --profile --profile-file p.txt     # ... into a named file
 bun build.js --release --profile --profile-nanos          # ... in nanoseconds
 ./simse_transpile.exe --root <dir> -o out.cpp --profile [--profile-file <path>] [--profile-nanos]
 ```
@@ -118,28 +125,31 @@ artifact, never published.
 
 ## The proof file
 
-`src/simse_profile.csv` sits beside the bootstrap: it is the CSV a release, profiled compiler
-wrote about its own run of `--root src`, in the default microseconds. Its `calls` column is
-exact (the compiler's emitted bodies and how often each ran); its `total_us` column is one machine
-on one day. Reproduce it with:
+`src/simse_profile.txt` sits beside the bootstrap: the tree a release, profiled compiler wrote
+about its own `--root src` run. Its `calls` column is exact (the compiler's emitted bodies and
+how often each ran); its totals are one machine on one day. Regenerate it with:
 
 ```sh
 bun build.js --release --profile --exe build/digits/simse_prof.exe --out build/digits/prof_compiler.cpp
 ./build/digits/simse_prof.exe --root src -o build/digits/prof_self_out.cpp
-cp simse_profile.csv src/simse_profile.csv
+cp simse_profile.txt src/simse_profile.txt
 ```
 
-## How to read a row
+(The checked-in copy still predates the call-tree format; refresh it when a run is worth
+pinning.)
 
-- **An entry is now ~two clock reads.** The dictionary lookup that used to make an entry cost
-  ~40 ns is gone; `xmlKind` (a one-field compare) still measures tens of nanoseconds a call, so
-  any row at that scale is a **call count**, not a time. The instrumented run is several times
-  the clean one, and its `main` is not the clean `main`.
+## How to read a line
+
+- **An entry is one hash and two clock reads.** The map holds one entry per *distinct path*, not
+  per call, so a `calls` column is exact and a `total` is wall time; the instrumented run is
+  several times the clean one, and its `main` is not the clean `main`.
 - **Nothing is inlined.** The flag gives every body a real function, so the small helpers the
   optimizer would fold away are measured as calls. That is why a fix can be worth a lot in the
-  instrumented run and little in the optimized one: a *time* is trustworthy for the big rows, a
-  *share* of a small hot helper is not. Use the table for who-calls-whom and how-often, and for
-  the big rows' totals.
+  instrumented run and little in the optimized one: a *time* is trustworthy for the big lines, a
+  *share* of a small hot helper is not.
+- **The lines are paths, not functions.** The same function appears once per distinct stack that
+  reaches it, so "how expensive is `xmlAttr`" is a question for the sum over its lines, not for
+  one line; what one line answers is "how expensive is `xmlAttr` *when called from here*".
 
 ## What it is not
 
@@ -147,24 +157,25 @@ cp simse_profile.csv src/simse_profile.csv
   everything that is not one: the scanner's per-character work before a body is entered, the
   `main` prologue, static initialization, and a state machine's *factory* (which has no IL
   body).
-- **Not free.** A measurement costs two clock calls and one array index per *body
-  entry* - `xmlKind` at millions of calls pays it millions of times - so a `--profile` build is
-  slower than a clean one by construction. Read *shares* of the big rows, and *call counts*
-  everywhere.
+- **Not free.** A measurement costs two clock calls and one hash per *body entry* - `xmlKind`
+  at millions of calls pays it millions of times - so a `--profile` build is slower than a clean
+  one by construction. Read *shares* of the big lines, and *call counts* everywhere.
 - **Not on by default, and not a cost when off**: with the flag off the emitter returns the
   empty string at every hook, so the emitted file is byte-identical to what it was before the
   flag existed (the goldens say so).
 
 ## Status
 
-Implemented: the flag (`Request.profile`, `--profile` in both drivers), the CSV report,
-`--profile-file` (default `simse_profile.csv`, `-` for stderr) and `--profile-nanos`, the emitted
-runtime, the dense `Int` method table with package-qualified `kMethodNames[]`, `simse_nowMicros` /
-`simse_nowNanos`, and `bun build.js --profile` / `--profile-file` / `--profile-nanos`.
+Implemented: the flag (`Request.profile`, `--profile` in both drivers), the call-tree report,
+`--profile-file` (default `simse_profile.txt`, `-` for stderr) and `--profile-nanos`, the
+emitted runtime (path-keyed `CallNode`s), the dense `Int` method table with package-qualified
+`kMethodNames[]`, `simse_nowMicros` / `simse_nowNanos`, and `bun build.js --profile` /
+`--profile-file` / `--profile-nanos`.
 
-Verified: a profiled `stress/strings` program writes a correct CSV with `strings.partStrings`
-names (and the `-` file prints it to stderr, and `--profile-nanos` writes `total_ns` with
-`simse_nowNanos()`); a profiled release compiler over `--root src` writes the checked-in
-`src/simse_profile.csv` (769 measured bodies, `codegen.emitProgram` 5.3 s inclusive); with the
-flag off `bun tools/stress.js` is **44/44** and `bun tools/bootstrap.js`'s fixed point is byte for
-byte.
+Verified: a profiled `stress/linq` program writes the tree (lambdas and all) to a named file,
+and to stderr with `--profile-file -`, and in `ns` with `--profile-nanos`; a profiled release
+compiler over `--root src` writes a 378,842-node tree (depth 143, `main()` 32.3 s instrumented);
+`tools/_check_tree.mjs <file> 0` walks a tree and reports **0 violations** - every node's total
+is at least the sum of its children's, and no child exceeds its parent (378,842 nodes checked);
+with the flag off `bun tools/stress.js` is **88/88** and `bun tools/bootstrap.js`'s fixed point
+is byte for byte.

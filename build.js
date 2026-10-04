@@ -30,10 +30,10 @@
 //                     else the bootstrap compiled for this build)
 //   --no-gen          skip transpiling; compile the existing/--cpp file
 //   --profile         transpile with --profile: the emitted program carries the
-//                     instrumented profiler and writes its table at the end of main
+//                     instrumented profiler and writes its call tree at the end of main
 //                     (impl_specs/profiling.md)
-//   --profile-file <f>  where that table goes (default simse_profile.csv; '-' is stderr)
-//   --profile-nanos   measure nanoseconds (the total_ns column) instead of microseconds
+//   --profile-file <f>  where that tree goes (default simse_profile.txt; '-' is stderr)
+//   --profile-nanos   measure nanoseconds (the ns unit) instead of microseconds
 //   --quiet           hide cl.exe's output and the step lines: one summary line on
 //                     success, the captured output only when something fails
 //   --no-compile      transpile only (with --out this refreshes the published bootstrap
@@ -88,7 +88,7 @@ function usage() {
                     else the bootstrap compiled for this build)
   --no-gen          skip transpiling; compile the existing/--cpp file
   --profile         transpile with --profile (impl_specs/profiling.md)
-  --profile-file <f>  profile table path (default simse_profile.csv; '-' is stderr)
+  --profile-file <f>  profile tree path (default simse_profile.txt; '-' is stderr)
   --profile-nanos   measure nanoseconds instead of microseconds
   --quiet           one summary line: cl output is captured, shown only on failure
   --no-compile      transpile only (refresh a --out file without recompiling)

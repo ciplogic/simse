@@ -332,7 +332,7 @@ fun main(args: List<Str>): Int {
                 profSetFile(args[i])
             }
 
-            // --profile-nanos: emit the nanosecond clock and the total_ns column (the totals
+            // --profile-nanos: emit the nanosecond clock and the ns unit (the totals
             // are Int64 either way).
             "--profile-nanos" -> {
                 profSetNanos(true)
