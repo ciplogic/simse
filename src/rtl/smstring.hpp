@@ -5,6 +5,7 @@
 #include <istream>
 #include <string>
 
+#include "intrinsics.hpp"
 #include "strsmallvector.hpp"
 
 // SmString is the language's inline byte string (specs/built-in-types.md,
@@ -31,10 +32,8 @@
 // existing string code compiles against it.
 //
 // One name this header needs before its definition: `Span<Char>` is the view a program's
-// string literals are (the span itself is generated from src/rtl/Span.kt, so hand-written
-// C++ forward-declares it - this header and types.hpp).
-template <class T>
-struct Span;
+// string literals are. The span itself is generated from src/rtl/Span.kt, so hand-written
+// C++ forward-declares it - types.hpp, which this header reaches through strsmallvector.hpp.
 
 SIMSE_PACK_PUSH
 class SmString {
@@ -461,6 +460,27 @@ inline std::istream& getline(std::istream& in, SmString& line) {
 // The language's `Str` is SmString: an inline SmallVector<char, N> with the
 // terminating NUL one past the text (smstring.hpp, strsmallvector.hpp).
 using Str = SmString;
+
+// The two `Str`-internals primitives the language's text operations are written over
+// (declared as intrinsics in src/rtl/intrinsics.kt): the bytes, borrowed, and the
+// owned-copy replacement. They live here because `Str`'s internals are this header's.
+//
+// The bytes of a `Str`, borrowed: valid until the string changes. The cast is the
+// language's mutable `Char` against the standard library's `char`.
+inline Char* simse_str_data(Str* text) {
+    return reinterpret_cast<Char*>(text->data());
+}
+
+// Replaces a string's bytes with a copy of `count` bytes of `src` from `srcIndex`: one
+// `resize` and one block copy (`simse_mem_copy`), where a per-byte `append` would walk the
+// bytes one at a time.
+inline void simse_str_setBytes(Str& out, const Char* src, Int srcIndex, Int count) {
+    if (count <= 0) {
+        return;
+    }
+    out.resize((Str::size_type) count);
+    simse_mem_copy(reinterpret_cast<Char*>(out.data()), 0, src, srcIndex, count);
+}
 
 // Native-code boundary helpers (impl_specs/rtl-abi.md): standard-library APIs
 // take/return `std::string` - the filesystem, `<fstream>`, `std::getline` - while

@@ -203,7 +203,8 @@ The bootstrap RTL also provides these `Str` operations (native extensions):
 ### Views: `Span<T>` and `StrView`
 
 Status: implemented in the bootstrap RTL (`src/rtl/Span.kt`, `src/rtl/StrView.kt`;
-`Span<T>` and the alias are generated, `src/rtl/strview.hpp` names the alias).
+`Span<T>` is generated from the declaration, the alias is spelled as its target in generated
+code and types.hpp keeps the `using` for hand-written C++).
 
 A `Span<T>` is a borrowed view over a contiguous run of `T`: a `*T` pointer plus a
 length, nothing else. It copies and owns nothing, so it is valid only while its source is
@@ -224,7 +225,9 @@ outlive the span.
   (unchecked).
 
 `StrView` is the view a string's bytes are read through, and it is a `Span<Char>`:
-`typealias StrView = Span<Char>` (`src/rtl/StrView.kt`, `src/rtl/strview.hpp`). It is
+`typealias StrView = Span<Char>` (`src/rtl/StrView.kt`; the alias is a language-level name -
+generated C++ spells `Span<Char>`, and types.hpp carries the `using` for hand-written C++).
+It is
 what `FileStream.readLineView()` hands back and what `spanOfStr(text: *Str): StrView`
 builds (borrowing the string). `spanOfStr` is total over the two spellings of its subject:
 a `Str`'s bytes are borrowed, and a `StrView` is returned as it stands (the identity), so

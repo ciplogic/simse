@@ -134,10 +134,10 @@ fun Emitter.computeEmittedTypes(): Dictionary<Str, Bool> {
     for (*name in seed) {
         out.insert(*name, true)
     }
-    // `Span` and its `StrView` alias are named by the runtime's own sections (`strtable`,
-    // `strops`, the print overloads), not only by a program's declarations, so they are
-    // emitted for every program - the role the headers had.
-    out.insert("StrView", true)
+    // `Span` is named by the runtime's own sections (`strtable`, `strops`, the print
+    // overloads), not only by a program's declarations, so it is emitted for every program -
+    // the role the header had. (`StrView`, the alias, has no C++ name: every spelling is
+    // emitted as `Span<Char>`.)
     out.insert("Span", true)
     var changed: Bool = true
     while (changed) {

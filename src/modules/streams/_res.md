@@ -85,13 +85,13 @@ Bool FileStream::readLineInto(Str* buffer) {
 // The one cast `simse_spanOfStr` makes is spelled here too, so that a program reading
 // views does not also have to carry the `strview` section: `StrView` is a `Span<Char>`
 // and this view's bytes are the readahead buffer's, which nothing writes through.
-Opt<StrView> FileStream::readLineView() {
+Opt<Span<Char>> FileStream::readLineView() {
     Int from = 0;
     Int count = 0;
-    if (!nextLineSpan(&from, &count)) return Opt<StrView>();
+    if (!nextLineSpan(&from, &count)) return Opt<Span<Char>>();
     Char* base = const_cast<Char*>(reinterpret_cast<const Char*>(chunk.data()));
-    Opt<StrView> result;
-    result.setValue(StrView(base + from, count));
+    Opt<Span<Char>> result;
+    result.setValue(Span<Char>{base + from, count});
     return result;
 }
 

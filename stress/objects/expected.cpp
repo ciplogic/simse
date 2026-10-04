@@ -390,7 +390,7 @@ static const char __sm_stringPool[] =
 static const Int16 __sm_stringStarts[] = {39,5,0,-48,37,2,1,2,2,0,2,1,2,0,1,1,5,0,1,1,1,5,0,1,1,1,6,0,3,1,0,1,1,7,0};
 static const Int16 __sm_stringLens[] = {39,4,-48,37,2,1,2,2,0,2,1,2,0,1,1,5,0,1,1,1,5,0,1,1,1,6,0,3,1,0,1,1,7,0,1,1};
 static_assert(sizeof(__sm_stringPool) - 1 == 198, "the string pool and its length index disagree");
-static StrView __sm_stringTable[__sm_stringCount];
+static Span<Char> __sm_stringTable[__sm_stringCount];
 static struct __SmStringTableInitType {
     __SmStringTableInitType() {
         Int starts[__sm_stringCount];
@@ -515,7 +515,7 @@ void simse_list_sort(List<T>& self, F less);
 
 Int simse_strCountDigits(Int64 value);
 void simse_strAddInt(char* target, Int64 value, Int count);
-StrView simse_strBoolView(Bool value);
+Span<Char> simse_strBoolView(Bool value);
 
 #include <cstdio>
 
@@ -523,7 +523,7 @@ inline void simse_write(const Str& value, FILE* out) {
     std::fwrite(value.data(), 1, (std::size_t) value.size(), out);
 }
 
-inline void simse_write(StrView value, FILE* out) {
+inline void simse_write(Span<Char> value, FILE* out) {
     std::fwrite(value.ptr, 1, (std::size_t) value.len, out);
 }
 
@@ -592,14 +592,14 @@ template <class T>
 T get(Span<T>* self, Int index);
 template <class T>
 void set(Span<T>* self, Int index, T value);
-Char charAt(StrView* self, Int index);
-Bool startsWith(StrView* self, Str* text);
-Int find(StrView* self, Str sub);
-Str substr(StrView* self, Int from, Int count);
-Str toString(StrView* self);
-Int compareTo(StrView* self, StrView other);
-Bool equals(StrView* self, StrView other);
-Str plus(StrView* self, StrView other);
+Char charAt(Span<Char>* self, Int index);
+Bool startsWith(Span<Char>* self, Str* text);
+Int find(Span<Char>* self, Str sub);
+Str substr(Span<Char>* self, Int from, Int count);
+Str toString(Span<Char>* self);
+Int compareTo(Span<Char>* self, Span<Char> other);
+Bool equals(Span<Char>* self, Span<Char> other);
+Str plus(Span<Char>* self, Span<Char> other);
 template <class T>
 Bool simse_optHasValue(Opt<T>* self);
 template <class T>
@@ -619,7 +619,7 @@ Res<T> simse_resOk(T value);
 template <class T>
 Res<T> simse_resErr(Str message);
 void initByValue(Str* self);
-Str fmtStr(StrView fmt, List<Str>* items);
+Str fmtStr(Span<Char> fmt, List<Str>* items);
 Str substr(Str* self, Int start, Int len);
 Bool startsWith(Str* self, Str* prefix);
 Bool endsWith(Str* self, Str* suffix);
@@ -640,9 +640,9 @@ T ns1_identity(T value);
 Int ns1_partGenerics();
 Int ns1_bump(ns1_CounterHello* self);
 Int ns1_partHello();
-Int ns1_apply(ns1_Mapper f, Int value);
-Int ns1_countIf(List<Int>* items, ns1_Predicate predicate);
-ns1_Mapper ns1_makeAdder();
+Int ns1_apply(Func<Int(Int)> f, Int value);
+Int ns1_countIf(List<Int>* items, Func<Bool(Int)> predicate);
+Func<Int(Int)> ns1_makeAdder();
 Int ns1_partLambdas();
 Str ns1_label(ns1_Color c);
 Str ns1_describe(Int n);
@@ -819,12 +819,12 @@ void set(Span<T>* self, Int index, T value) {
     _sm_base1 = self->ptr;
     _sm_base1[index] = value;
 }
-Char charAt(StrView* self, Int index) {
+Char charAt(Span<Char>* self, Int index) {
     Char _sm_expr1;
     _sm_expr1 = at(self, index);
     return _sm_expr1;
 }
-Bool startsWith(StrView* self, Str* text) {
+Bool startsWith(Span<Char>* self, Str* text) {
     Int count, compareResult;
     Bool _sm_expr1;
     Char* _sm_expr2;
@@ -841,7 +841,7 @@ Bool startsWith(StrView* self, Str* text) {
     _sm_expr1 = compareResult == 0;
     return _sm_expr1;
 }
-Int find(StrView* self, Str sub) {
+Int find(Span<Char>* self, Str sub) {
     Int needle, len, _sm_expr3, i, j, _sm_expr7;
     Bool _sm_expr1, _sm_expr10;
     Char _sm_expr9;
@@ -895,7 +895,7 @@ Int find(StrView* self, Str sub) {
     _sm_expr3 = -1;
     return _sm_expr3;
 }
-Str substr(StrView* self, Int from, Int count) {
+Str substr(Span<Char>* self, Int from, Int count) {
     Int len, begin, end, _sm_expr6;
     Bool _sm_expr1;
     len = size(self);
@@ -935,14 +935,14 @@ Str substr(StrView* self, Int from, Int count) {
     L10:;
     return out;
 }
-Str toString(StrView* self) {
+Str toString(Span<Char>* self) {
     Int _sm_expr1;
     Str _sm_expr2;
     _sm_expr1 = size(self);
     _sm_expr2 = substr(self, 0, _sm_expr1);
     return _sm_expr2;
 }
-Int compareTo(StrView* self, StrView other) {
+Int compareTo(Span<Char>* self, Span<Char> other) {
     Bool _sm_expr3, _sm_expr4, _sm_expr7;
     Int _sm_diff_2, _sm_expr8, diff;
     auto _sm_expr1 = self->len;
@@ -980,7 +980,7 @@ Int compareTo(StrView* self, StrView other) {
     L8:;
     return 1;
 }
-Bool equals(StrView* self, StrView other) {
+Bool equals(Span<Char>* self, Span<Char> other) {
     Bool _sm_expr3;
     Int _sm_expr4;
     auto _sm_expr1 = self->len;
@@ -995,7 +995,7 @@ Bool equals(StrView* self, StrView other) {
     _sm_expr3 = _sm_expr4 == 0;
     return _sm_expr3;
 }
-Str plus(StrView* self, StrView other) {
+Str plus(Span<Char>* self, Span<Char> other) {
     Str* _sm_base3;
     Bool _sm_expr2;
     Int at, _sm_expr4;
@@ -1082,7 +1082,7 @@ Res<T> simse_resErr(Str message) {
 }
 void initByValue(Str* self) {
 }
-Str fmtStr(StrView fmt, List<Str>* items) {
+Str fmtStr(Span<Char> fmt, List<Str>* items) {
     Str _sm_base2, out;
     Bool _sm_expr1;
     Int points, i, _sm_expr2, _sm_expr8, used;
@@ -1436,13 +1436,13 @@ Int ns1_partHello() {
     return 0;
 }
 // stress/objects/src/main.kt
-Int ns1_apply(ns1_Mapper f, Int value) {
+Int ns1_apply(Func<Int(Int)> f, Int value) {
     Int _sm_expr1;
     _sm_expr1 = f(value);
     return _sm_expr1;
 }
 // stress/objects/src/main.kt
-Int ns1_countIf(List<Int>* items, ns1_Predicate predicate) {
+Int ns1_countIf(List<Int>* items, Func<Bool(Int)> predicate) {
     Int _sm_base1, count;
     Span<Int> c;
     Bool _sm_expr1, _sm_expr2;
@@ -1465,7 +1465,7 @@ Int ns1_countIf(List<Int>* items, ns1_Predicate predicate) {
     return count;
 }
 // stress/objects/src/main.kt
-ns1_Mapper ns1_makeAdder() {
+Func<Int(Int)> ns1_makeAdder() {
     ns1_makeAdder_closure1 _sm_base1;
     Int factor;
     factor = 10;
@@ -1477,10 +1477,10 @@ Int ns1_partLambdas() {
     ns1_partLambdas_closure2 _sm_base1;
     List<Int>* _sm_base2, * _sm_base3;
     ns1_partLambdas_closure4 _sm_base4;
-    ns1_Mapper doubler, add10, big;
+    Func<Int(Int)> doubler, add10, big;
     Int _sm_expr1, _sm_expr2, _sm_expr3, _sm_expr4, _sm_expr5, _sm_expr6, _sm_expr7;
     List<Int> items;
-    ns1_Predicate isEven;
+    Func<Bool(Int)> isEven;
     doubler = ns1_partLambdas_closure1{};
     _sm_expr1 = doubler(21);
     simse_println((_sm_expr1), stdout);
@@ -2489,11 +2489,11 @@ inline void simse_strAddInt(char* target, Int64 value, Int count) {
     }
 }
 
-inline StrView simse_strBoolView(Bool value) {
+inline Span<Char> simse_strBoolView(Bool value) {
     static Char texts[2][6] = {"true", "false"};
     static Int lens[2] = {4, 5};
     Int at = value ? 0 : 1;
-    return StrView(texts[at], lens[at]);
+    return Span<Char>{texts[at], lens[at]};
 }
 
 template <class T>
@@ -2513,7 +2513,7 @@ inline void simse_strTableExpand(const T* stream, Int* out, Int count) {
     }
 }
 
-inline void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, StrView* table, Int count) {
+inline void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, Span<Char>* table, Int count) {
     Char* bytes = const_cast<Char*>(reinterpret_cast<const Char*>(pool));
     Int delta = 0;  
     Int length = 0; 
@@ -2522,7 +2522,7 @@ inline void simse_strTableDecode(const char* pool, const Int* starts, const Int*
         delta -= starts[i];
         length -= lengths[i];
         at += delta;
-        table[i] = StrView(bytes + at, length);
+        table[i] = Span<Char>{bytes + at, length};
     }
 }
 

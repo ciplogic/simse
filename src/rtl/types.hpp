@@ -49,6 +49,11 @@ struct Res;
 template <class T>
 struct Span;
 
+// `StrView` is the language's `typealias StrView = Span<Char>` (src/rtl/StrView.kt). The
+// emitter spells a non-generic alias as its target in generated code, and this name is here
+// for the hand-written C++ that prefers the view's spelling - one alias, one type.
+using StrView = Span<Char>;
+
 // `*value` in Simse is the raw-pointer (address-of) form (specs/memory-model.md).
 // The lvalue overload covers ordinary expressions; the forwarding overload binds
 // temporaries. A pointer to a temporary is valid until the end of the full

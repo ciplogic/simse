@@ -322,7 +322,7 @@ static const char __sm_stringPool[] =
 static const Int16 __sm_stringStarts[] = {2,2,0,-3};
 static const Int16 __sm_stringLens[] = {2,2,-3,0};
 static_assert(sizeof(__sm_stringPool) - 1 == 6, "the string pool and its length index disagree");
-static StrView __sm_stringTable[__sm_stringCount];
+static Span<Char> __sm_stringTable[__sm_stringCount];
 static struct __SmStringTableInitType {
     __SmStringTableInitType() {
         Int starts[__sm_stringCount];
@@ -414,7 +414,7 @@ inline void simse_write(const Str& value, FILE* out) {
     std::fwrite(value.data(), 1, (std::size_t) value.size(), out);
 }
 
-inline void simse_write(StrView value, FILE* out) {
+inline void simse_write(Span<Char> value, FILE* out) {
     std::fwrite(value.ptr, 1, (std::size_t) value.len, out);
 }
 
@@ -852,7 +852,7 @@ inline void simse_strTableExpand(const T* stream, Int* out, Int count) {
     }
 }
 
-inline void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, StrView* table, Int count) {
+inline void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, Span<Char>* table, Int count) {
     Char* bytes = const_cast<Char*>(reinterpret_cast<const Char*>(pool));
     Int delta = 0;  
     Int length = 0; 
@@ -861,7 +861,7 @@ inline void simse_strTableDecode(const char* pool, const Int* starts, const Int*
         delta -= starts[i];
         length -= lengths[i];
         at += delta;
-        table[i] = StrView(bytes + at, length);
+        table[i] = Span<Char>{bytes + at, length};
     }
 }
 

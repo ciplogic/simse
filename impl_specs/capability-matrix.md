@@ -4998,6 +4998,21 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   commit), then the prelude switch. Verified: `bun tools/iterate.js --full` - 80/80 and both
   fixed points hold.
 
+- **`strview.hpp` is gone.** Its alias is resolved by the emitter now: `type` follows a
+  non-generic `typealias` to its target (`typeAliasTarget`, src/codegen/CgCore.kt),
+  so every spelling of `StrView` is emitted as `Span<Char>` - the string table included,
+  which was the one hardcoded `StrView` in the emitter's own text. The two `Str`-boundary
+  primitives moved to smstring.hpp (they are `Str`'s internals: `simse_str_data`,
+  `simse_str_setBytes`), and types.hpp carries a permanent `using StrView = Span<Char>;`
+  for hand-written C++ that prefers the view's spelling. A *generic* alias keeps its name
+  and its emitted `using` template - substituting its parameters is a job of its own.
+
+  Staging: the previous compiler emitted the old spelling from its own compiled text, so
+  the alias lived in types.hpp for one intermediate build; the final generated code spells
+  `Span<Char>` and the `using` stays on purpose. Verified: `bun tools/iterate.js --full` -
+  80/80 and both fixed points hold; the twenty goldens that spell the view moved `StrView`
+  to `Span<Char>` line for line (the table declaration too), no other content.
+
 - **The view comparison overloads are deleted from `strview.hpp`.** With the operators in
   the prelude, nothing reaches `simse_strView_compare`, the eighteen `operator` overloads or
   the three `operator+` any more, so they are gone - with `simse_strView_of`, the mixed

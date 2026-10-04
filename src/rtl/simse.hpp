@@ -19,12 +19,13 @@
 #include "intrinsics.hpp"   // the byte primitives (memcpy/memcmp/...): the machine, in C++
 #include "ref.hpp"          // Ref<T> (`&T`): SmRef, or the std::shared_ptr shim
 #include "containers.hpp"   // SmallVector, List, PList, Dictionary, Array, RawArray
-#include "strview.hpp"      // the `StrView` alias and the two `Str`-boundary primitives
 #include "functional.hpp"   // Func, Action, AutoDefer
-// `Span<T>` is *generated* now (src/rtl/Span.kt): the emitter writes the struct into the
-// program's `types` section, after this header; above, only its declaration. Its operations
-// are prelude functions, and the converting constructor is the `strconv` section
-// (src/rtl/_res.md).
+// `Span<T>` is *generated* (src/rtl/Span.kt): the emitter writes the struct into the
+// program's `types` section, after this header; above, only its declaration. `StrView` is
+// the language's alias for `Span<Char>` (types.hpp carries the `using` for hand-written C++,
+// and the emitter spells the target in generated code - `type` resolves a non-generic
+// typealias). Its operations are prelude functions, the byte-boundary primitives live in
+// smstring.hpp and the converting constructor is the `strconv` section (src/rtl/_res.md).
 // The compiler's AST (`AstXmlNode`, `AstNodeKind`, ...) is *generated*: it is declared in
 // src/modules/compiler/astxml.kt and the emitter writes its structs and enums
 // (specs/attributes.md's type materialization), so there is no header to include for it any

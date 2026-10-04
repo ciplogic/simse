@@ -1,7 +1,10 @@
 // StrView.kt
 //
 // `StrView` is a `Span<Char>` under a second name: one type, and the text operations below
-// are what the name adds (specs/built-in-types.md). It owns nothing, valid only while the
+// are what the name adds (specs/built-in-types.md). The alias is a language-level name - the
+// emitted C++ spells `Span<Char>` everywhere (the emitter resolves a non-generic typealias),
+// and types.hpp keeps a `using StrView = Span<Char>;` for the hand-written C++ that prefers
+// the view's spelling. It owns nothing, valid only while the
 // bytes it points at are alive; `spanOfStr(text)` borrows its source, which must outlive the
 // view. Only what reaches a `Str`'s internals or a `Span` member stays in C++, in the
 // `strview`/`strconv` sections of src/rtl/_res.md; the rest is Simse over the generated span

@@ -9,10 +9,12 @@ The runtime representation generated C++ targets, and where it diverges from `sp
 > hand-written C++ calls stay C++; an operation whose callers are all Simse and whose body
 > the language can express is a prelude `fun` *with a body* (`src/rtl/rtl.kt`), emitted
 > by the compiler. Candidate test: a symbol referenced only by the header that defines it.
-> `Span<T>`/`StrView` are on their way there: `typealias StrView = Span<Char>`, the
-> comparisons and `+` are the prelude's operators (`src/rtl/StrView.kt`), and what stays in
-> `strview.hpp` is the alias, the converting constructor a literal position materializes
-> through, and the two `Str`-internals primitives. What is left of the `cpp`
+> `Span<T>`/`StrView` are there now: `Span<T>` is generated from `src/rtl/Span.kt`,
+> `StrView` is a language `typealias` the emitter spells as `Span<Char>` (types.hpp keeps
+> the `using` for hand-written C++), the comparisons
+> and `+` are the prelude's operators (`src/rtl/StrView.kt`), the two `Str`-internals
+> primitives are in smstring.hpp and the converting constructor a literal position
+> materializes through is the `strconv` section. What is left of the `cpp`
 > generator is the type core (`impl_specs/generators.md`).
 >
 > **Receiver spelling.** A body-less attributed method writes its receiver as the explicit
@@ -211,9 +213,9 @@ literal`, `literal + text` and `println(literal)` all reach view-taking prelude 
 (`compareTo`/`equals`/`plus`, src/rtl/StrView.kt - a `Str` operand is read as a view of
 itself through `spanOfStr` - and `simse_println`'s `Str` parameter is materialized as it
 always was). Everything else (a slot, a `return`, a by-value parameter, a `const Str&`
-argument, a list pack) reaches the converting constructor (`SmString(const StrView&)`,
-declared in `smstring.hpp`, defined in `strview.hpp`) and materializes the same copy as
-before.
+argument, a list pack) reaches the converting constructor (`SmString(const Span<Char>&)`,
+declared in `smstring.hpp`, defined in the `strconv` section) and materializes the same copy
+as before.
 
 Measured with `tools/_bench_ab.mjs` (15 interleaved self-transpile runs, previous published
 bootstrap vs new, same flags): the `toString()` cut was **~7.5-9% slower**
@@ -394,10 +396,10 @@ without a newline as a line. They differ in what the caller gets:
   the three - mixing `readLine` with the other two skips bytes.
 - `readLineInto` copies the line into the caller's `Str`, whose heap block is
   reused - no allocation after the longest line seen.
-- `readLineView` copies nothing: it returns a `StrView` (generated from
-  `src/rtl/Span.kt`; the header `src/rtl/strview.hpp` names it) into the readahead
-  buffer, valid until the next read on that stream, which is the shape a parse loop
-  wants (`find`/`slice`/`at` stay in the buffer; `toString` is the owned copy).
+- `readLineView` copies nothing: it returns a `Span<Char>` (the language's `StrView`,
+  generated from `src/rtl/Span.kt`) into the readahead buffer, valid until the next read on
+  that stream, which is the shape a parse loop wants
+  (`find`/`slice`/`at` stay in the buffer; `toString` is the owned copy).
 
 Measured on `benchmarks/onebrc` (10M rows, 127.7 MiB, release, interleaved
 min/median, all reports byte-identical, all at a 6.5 MB peak working set):

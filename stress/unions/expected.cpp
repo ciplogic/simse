@@ -1071,7 +1071,7 @@ static const char __sm_stringPool[] =
 static const Int16 __sm_stringStarts[] = {19,7,0,-38,0,6,24,2,1,1,3,0,7,1,0,1,0,1,0,1,1,2,0};
 static const Int16 __sm_stringLens[] = {19,6,-38,0,6,24,2,1,1,3,0,7,1,0,1,0,1,0,1,1,2,0,1,1};
 static_assert(sizeof(__sm_stringPool) - 1 == 163, "the string pool and its length index disagree");
-static StrView __sm_stringTable[__sm_stringCount];
+static Span<Char> __sm_stringTable[__sm_stringCount];
 static struct __SmStringTableInitType {
     __SmStringTableInitType() {
         Int starts[__sm_stringCount];
@@ -1191,7 +1191,7 @@ void simse_list_sort(List<T>& self, F less);
 
 Int simse_strCountDigits(Int64 value);
 void simse_strAddInt(char* target, Int64 value, Int count);
-StrView simse_strBoolView(Bool value);
+Span<Char> simse_strBoolView(Bool value);
 
 #include <cstdio>
 
@@ -1199,7 +1199,7 @@ inline void simse_write(const Str& value, FILE* out) {
     std::fwrite(value.data(), 1, (std::size_t) value.size(), out);
 }
 
-inline void simse_write(StrView value, FILE* out) {
+inline void simse_write(Span<Char> value, FILE* out) {
     std::fwrite(value.ptr, 1, (std::size_t) value.len, out);
 }
 
@@ -2225,11 +2225,11 @@ inline void simse_strAddInt(char* target, Int64 value, Int count) {
     }
 }
 
-inline StrView simse_strBoolView(Bool value) {
+inline Span<Char> simse_strBoolView(Bool value) {
     static Char texts[2][6] = {"true", "false"};
     static Int lens[2] = {4, 5};
     Int at = value ? 0 : 1;
-    return StrView(texts[at], lens[at]);
+    return Span<Char>{texts[at], lens[at]};
 }
 
 template <class T>
@@ -2249,7 +2249,7 @@ inline void simse_strTableExpand(const T* stream, Int* out, Int count) {
     }
 }
 
-inline void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, StrView* table, Int count) {
+inline void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, Span<Char>* table, Int count) {
     Char* bytes = const_cast<Char*>(reinterpret_cast<const Char*>(pool));
     Int delta = 0;  
     Int length = 0; 
@@ -2258,7 +2258,7 @@ inline void simse_strTableDecode(const char* pool, const Int* starts, const Int*
         delta -= starts[i];
         length -= lengths[i];
         at += delta;
-        table[i] = StrView(bytes + at, length);
+        table[i] = Span<Char>{bytes + at, length};
     }
 }
 

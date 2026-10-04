@@ -448,6 +448,37 @@ fun Emitter.typeName(name: *Str, posNode: *AstXmlNode): Str {
     return "/*unsupported*/"
 }
 
+// The target of a non-generic `typealias` a spelling resolves through: the alias is a
+// language-level name, and the emitted C++ spells what it names (`StrView` is
+// `Span<Char>` everywhere), so no `using` has to be carried for it. A *generic* alias keeps
+// its name (the emitted `using` template) - substituting its parameters here is a job of its
+// own. Empty when the type is not such an alias.
+fun Emitter.typeAliasTarget(typeNode: *AstXmlNode): AstXmlNode {
+    var current: AstXmlNode = typeNode
+    var resolved: Bool = false
+    var guard: Int = 0
+    while (guard < 64 && xmlKind(current) == AstNodeCategory.TypeNamed) {
+        guard = guard + 1
+        val name: Str = xmlAttr(current, AstNodeAttributeKind.Name)
+        val decl: *AstXmlNode = this.types.getPtr(name)
+        if (decl == null || decl.name != AstNodeKind.TypeAlias
+            || xmlTypeParamNames(decl).size() > 0
+        ) {
+            break
+        }
+        val target: AstXmlNode = xmlChildPtr(decl, AstNodeKind.TargetType)
+        if (xmlIsEmpty(target)) {
+            break
+        }
+        current = target
+        resolved = true
+    }
+    if (!resolved) {
+        return xmlEmptyNode()
+    }
+    return current
+}
+
 fun Emitter.type(typeExpr: *AstXmlNode): Str {
     val kind: AstNodeCategory = xmlKind(typeExpr)
     when (kind) {
@@ -456,6 +487,10 @@ fun Emitter.type(typeExpr: *AstXmlNode): Str {
         }
 
         AstNodeCategory.TypeNamed -> {
+            val aliasTarget: AstXmlNode = this.typeAliasTarget(typeExpr)
+            if (!xmlIsEmpty(aliasTarget)) {
+                return this.type(aliasTarget)
+            }
             return this.typeName(xmlAttr(typeExpr, AstNodeAttributeKind.Name), typeExpr)
         }
 

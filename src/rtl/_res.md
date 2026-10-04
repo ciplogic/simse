@@ -90,7 +90,7 @@ inline void simse_strTableExpand(const T* stream, Int* out, Int count) {
 
 // Fills `table` from the pool and the two expanded series: an offset increment and a
 // byte count per entry, both rebuilt by subtracting the stored value from the one before.
-inline void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, StrView* table, Int count) {
+inline void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, Span<Char>* table, Int count) {
     Char* bytes = const_cast<Char*>(reinterpret_cast<const Char*>(pool));
     Int delta = 0;  // this entry's offset increment, rebuilt from the start series
     Int length = 0; // this entry's byte count, rebuilt from the length series
@@ -99,7 +99,7 @@ inline void simse_strTableDecode(const char* pool, const Int* starts, const Int*
         delta -= starts[i];
         length -= lengths[i];
         at += delta;
-        table[i] = StrView(bytes + at, length);
+        table[i] = Span<Char>{bytes + at, length};
     }
 }
 ```
@@ -344,7 +344,7 @@ forward:
 // one conversion, not one for the length and another for the write.
 Int simse_strCountDigits(Int64 value);
 void simse_strAddInt(char* target, Int64 value, Int count);
-StrView simse_strBoolView(Bool value);
+Span<Char> simse_strBoolView(Bool value);
 ```
 bodies:
 ```cpp
@@ -414,11 +414,11 @@ inline void simse_strAddInt(char* target, Int64 value, Int count) {
 // The two texts a bool can be, as a `StrView` over a two-entry table - the string-table shape,
 // so a bool part is just another text part (a `memcpy` of a runtime length) and needs no digits
 // of its own. Cold enough that the two loads the compiler folds it to do not matter.
-inline StrView simse_strBoolView(Bool value) {
+inline Span<Char> simse_strBoolView(Bool value) {
     static Char texts[2][6] = {"true", "false"};
     static Int lens[2] = {4, 5};
     Int at = value ? 0 : 1;
-    return StrView(texts[at], lens[at]);
+    return Span<Char>{texts[at], lens[at]};
 }
 ```
 !dictops
@@ -896,8 +896,8 @@ forward:
 // (Parser.kt's `parseWhen`). Everything else the view has is the span's own members
 // (`size`, `isEmpty`, `slice`, `at`, `atPtr` - generated from src/rtl/Span.kt) or a Simse
 // body in src/rtl/StrView.kt.
-StrView simse_spanOfStr(Str* text);
-StrView simse_spanOfStr(StrView view);
+Span<Char> simse_spanOfStr(Str* text);
+Span<Char> simse_spanOfStr(Span<Char> view);
 ```
 bodies:
 ```cpp
@@ -905,15 +905,15 @@ bodies:
 // has to outlive the view - and does not copy it (`&text` would box a copy instead).
 // `Str` is a `char` buffer on the C++ side and the language's `Char` is a signed byte,
 // hence the cast.
-inline StrView simse_spanOfStr(Str* text) {
-    return StrView(reinterpret_cast<Char*>(text->data()), text->size());
+inline Span<Char> simse_spanOfStr(Str* text) {
+    return Span<Char>{reinterpret_cast<Char*>(text->data()), text->size()};
 }
 
 // `spanOfStr(view)`: a `StrView` already is a view, so this overload is the identity. It is
 // what lets the `when`-over-strings desugar (`Parser.kt`'s `parseWhen`) extract the subject
 // with `spanOfStr` without knowing whether it is a `Str` or a `StrView` - the C++ overload
 // resolution picks the borrowed view or the identity, and the tests compare against it.
-inline StrView simse_spanOfStr(StrView view) {
+inline Span<Char> simse_spanOfStr(Span<Char> view) {
     return view;
 }
 ```
@@ -1618,7 +1618,7 @@ inline void simse_write(const Str& value, FILE* out) {
     std::fwrite(value.data(), 1, (std::size_t) value.size(), out);
 }
 
-inline void simse_write(StrView value, FILE* out) {
+inline void simse_write(Span<Char> value, FILE* out) {
     std::fwrite(value.ptr, 1, (std::size_t) value.len, out);
 }
 

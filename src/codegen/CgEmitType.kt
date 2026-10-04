@@ -258,7 +258,9 @@ fun Emitter.emitTypeByName(
         this.emitEnumConversion(decl)
         return
     }
-    // The remaining declaration is a typealias; a prelude alias is the header one (`StrView`).
+    // The remaining declaration is a typealias. A prelude alias is never written out: its
+    // spellings resolve to the target (`type`), so the C++ has no `using` and no header for
+    // one (`StrView` is `Span<Char>` everywhere). A program's alias keeps its `using`.
     if (prelude) {
         return
     }
@@ -1137,7 +1139,7 @@ fun Emitter.emitStringTable(): Unit {
         0,
         `static_assert(sizeof(__sm_stringPool) - 1 == @totalText, "the string pool and its length index disagree");`
     )
-    this.line(0, "static StrView __sm_stringTable[__sm_stringCount];")
+    this.line(0, "static Span<Char> __sm_stringTable[__sm_stringCount];")
     this.line(0, "static struct __SmStringTableInitType {")
     this.line(1, "__SmStringTableInitType() {")
     this.line(2, "Int starts[__sm_stringCount];")

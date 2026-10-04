@@ -195,11 +195,11 @@ headers:
 
 | Header | What it provides |
 | --- | --- |
-| `types.hpp` | scalar aliases (`Int`, `Float64`, ...), `simse_destroy`, the forward declarations of `Opt`/`Res`/`Span`, and `SmUnionManaged`, the trait a generic `union class` picks its storage form with |
+| `types.hpp` | scalar aliases (`Int`, `Float64`, ...), `simse_destroy`, the forward declarations of `Opt`/`Res`/`Span` (and the `StrView` alias) for hand-written C++, and `SmUnionManaged`, the trait a generic `union class` picks its storage form with |
 | `containers.hpp` | `SmallVector<T, N>` with a small-buffer optimization, `List<T>`, `Array<T>` (count-first block), `Dictionary<K, V>`, `PList<T>`, `RawArray<T>` |
 | `smstring.hpp`, `strsmallvector.hpp` | `Str`: an inline, NUL-terminated byte string with a 24-byte inline buffer, plus the two `Str`-boundary primitives (`simse_str_data`, `simse_str_setBytes`) |
 | `smdictionary.hpp` | `SmDictionary<TKey, TValue>`: the RTL's own dictionary (rows chained by index over a power-of-two bucket table), and the only implementation of `Dictionary<K, V>` |
-| `strview.hpp` | `StrView`: the alias of `Span<Char>` (`typealias StrView = Span<Char>`, src/rtl/StrView.kt) the resource texts and generated signatures spell; the span itself is generated (`src/rtl/Span.kt`) and the converting constructor that materializes a literal or view as an owned `Str` is the `strconv` section |
+| `strview.hpp` | gone: `StrView` is the language's alias of `Span<Char>` (`typealias StrView = Span<Char>`, src/rtl/StrView.kt); generated code spells `Span<Char>` and the `using` for hand-written C++ is types.hpp. The converting constructor that materializes a literal or view as an owned `Str` is the `strconv` section |
 
 `Span<T>` has no header any more: `src/rtl/Span.kt` declares it and the emitter writes the
 struct into the `types` section like any other data class, with its methods as free
