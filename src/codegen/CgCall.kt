@@ -112,7 +112,7 @@ fun Emitter.exprInner(e: *AstXmlNode, expected: *AstXmlNode): Str {
             // The index syntax on a type that declares `operator get` (specs/functions.md)
             // is that call: `x[i]` is `get(x, i)`, with the receiver the method convention
             // takes. The built-in shapes below apply when the type declares none.
-            val getAt: Int = this.operatorIndexFn("get", lhs, 1)
+            val getAt: Int = this.operatorFn("get", lhs, 1)
             if (getAt >= 0) {
                 return this.operatorIndexGetText(getAt, lhs, indexNode)
             }
@@ -182,6 +182,18 @@ fun Emitter.exprInner(e: *AstXmlNode, expected: *AstXmlNode): Str {
                     }
                     this.fail(e, `unsupported: Opt-vs-null comparison '@op'`)
                     return "/*unsupported*/"
+                }
+            }
+            // A binary syntax a type declares an operator for (`a < b` is `compareTo`,
+            // `a == b` `equals`, `a + b` `plus`; specs/functions.md): the declaration's
+            // call replaces the built-in C++ spelling. `null` keeps its own tests.
+            val binaryName: Str = semBinaryOperatorName(op)
+            if (binaryName != "" && xmlKind(lhs) != AstNodeCategory.ExprNullLit
+                && xmlKind(rhs) != AstNodeCategory.ExprNullLit
+            ) {
+                val binaryAt: Int = this.operatorFn(binaryName, lhs, 1)
+                if (binaryAt >= 0) {
+                    return this.operatorBinaryText(binaryAt, op, lhs, rhs)
                 }
             }
             val p: Int = cgPrecedence(e)

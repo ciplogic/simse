@@ -206,8 +206,9 @@ Simse bodies need no mark.
 
 ## Operator functions (`operator`)
 
-`operator` marks an indexer - the Kotlin convention, and the modifier is contextual like
-`borrow`: a program may still use `operator` as an ordinary name.
+`operator` marks a function the language's syntax resolves - the Kotlin convention, and the
+modifier is contextual like `borrow`: a program may still use `operator` as an ordinary name.
+Two families have a lowering: the **indexers** and the **value operators**.
 
 ```kt
 data class Span2<T>(var items: List<T>) {
@@ -216,21 +217,37 @@ data class Span2<T>(var items: List<T>) {
     operator fun set(index: Int, value: T): Unit { this.items[index] = value }
 }
 
+data class Version(var major: Int, var minor: Int) {
+    operator fun compareTo(other: Version): Int { ... }   // <, <=, >, >=
+    operator fun equals(other: Version): Bool { ... }     // ==, !=
+    operator fun plus(other: Version): Version { ... }    // +
+}
+
 operator fun Point.get(index: Int): Int { ... }
 operator fun Point.set(index: Int, value: Int): Unit { ... }
 ```
 
-The two spellings an indexer has are the two an extension has: a method in the class body,
-or an extension (`fun T.get(...)`, `this: T`). The names and their shapes are fixed:
+The two spellings an operator has are the two an extension has: a method in the class body,
+or an extension (`fun T.get(...)`, `this: T`). A binary operator resolves against the **left
+operand's** type. The names and their shapes are fixed:
 
-- `get` takes the index and answers the element: `x[i]` is `x.get(i)`;
-- `set` takes the index and the value and answers nothing: `x[i] = v` is `x.set(i, v)`,
-  and `x[i] op= v` reads through `get` and writes through `set`.
+- `get` takes the index and answers the element: `x[i]` is `x.get(i)`; `set` takes the index
+  and the value and answers nothing: `x[i] = v` is `x.set(i, v)`, and `x[i] op= v` reads
+  through `get` and writes through `set`.
+- `compareTo` takes the other value and answers an **`Int`**: `a < b` is
+  `a.compareTo(b) < 0`, and `<=`, `>` and `>=` derive from the same answer.
+- `equals` takes the other value and answers a **`Bool`**: `a == b` is `a.equals(b)`, and
+  `a != b` its negation.
+- `plus` takes the other value: `a + b` is `a.plus(b)`, and the expression's type is
+  `plus`'s return type. `a += b` folds to `a = a + b`, so one `plus` serves both.
 
-A declaration whose receiver has no `operator get`/`set` is refused rather than silently
-ignored (a name without a lowering, a `get` with the wrong number of parameters, or an
-operator with no receiver). When a type declares neither, the index syntax keeps its
-built-in meanings (a container's element, a `Str`'s `Char`).
+A declaration whose name has no lowering is refused rather than silently ignored (the
+operators are `get`, `set`, `compareTo`, `equals` and `plus`), as are a wrong parameter count,
+an operator with no receiver, and a `compareTo`/`equals` whose answer is not the `Int`/`Bool`
+the syntax derives from. When a type declares no operator for a syntax, that syntax keeps its
+built-in meaning (a container's element, a `Str`'s `Char`, `Int` arithmetic, the runtime
+types' own `==`/`<`/`+`). Kotlin's other operators (`minus`, `times`, `div`, `rem`, unary
+`minus`, `not`, `contains`, `invoke`, `rangeTo`) have no lowering yet.
 
 An index read through `operator get` is a **value**: the getter answers a fresh `T`, so
 `x[i]` is not a place into `x` - it cannot be assigned to through an alias and it may be

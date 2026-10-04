@@ -1,0 +1,10 @@
+lt true
+le true
+gt true
+ge true
+eq true
+ne true
+sum 2.5
+step 1.2
+tag x+y
+ordered

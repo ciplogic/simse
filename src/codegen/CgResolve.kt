@@ -134,10 +134,11 @@ fun Emitter.findExtensionFn(name: *Str, recvExpr: *AstXmlNode, argCount: Int): I
     return -1
 }
 
-// The `operator get`/`set` a receiver's type declares, for the index syntax
-// (specs/functions.md): `x[i]` is `get(x, i)` and `x[i] = v` is `set(x, i, v)`. -1 when the
-// type declares none - the built-in index shapes apply then.
-fun Emitter.operatorIndexFn(name: *Str, recvExpr: *AstXmlNode, argCount: Int): Int {
+// The operator a receiver's type declares for a syntax (specs/functions.md): `get`/`set`
+// for the indexers, `compareTo`/`equals`/`plus` for a binary one (`a < b` is `compareTo`,
+// `a == b` `equals`, `a + b` `plus`). -1 when the type declares none - the built-in
+// meaning applies then.
+fun Emitter.operatorFn(name: *Str, recvExpr: *AstXmlNode, argCount: Int): Int {
     val at: Int = this.findExtensionFn(name, recvExpr, argCount)
     if (at < 0) {
         return -1
@@ -185,6 +186,71 @@ fun Emitter.operatorIndexSetText(
     val qualifyText: Str = this.qualify(fn.packageName, fn.name)
     val cgJoinText: Str = cgJoin(fixed, ", ")
     return `@qualifyText(@recvText, @cgJoinText)`
+}
+
+// One synthesized binary-operator call (specs/functions.md): the receiver argument the
+// method convention takes (`T* self`), the right operand, and the syntax's derivation from
+// the operator's answer - `<` is `compareTo(...) < 0` (`<=`, `>`, `>=` with their own
+// test), `==` is `equals(...)`, `!=` its negation, `+` is `plus(...)`. The reach is
+// recorded here for the same reason the indexers' is: no call node exists for
+// `collectNames` to see. The right operand converts against the *emitted* parameter the
+// way `convertArgument` converts a written one: the auto-borrow pass may have turned it
+// into a `*T`, and the argument is then its address.
+fun Emitter.operatorBinaryText(at: Int, op: *Str, lhsExpr: *AstXmlNode, rhsExpr: *AstXmlNode): Str {
+    val fn: *CgFn = *this.functions[at]
+    this.referencedNames.insert(fn.name, true)
+    val recvText: Str = this.receiverArg(fn.receiver, lhsExpr)
+    var rhsText: Str = ""
+    if (this.operatorParamIsPointer(fn, rhsExpr)) {
+        var borrowed: AstXmlNode = this.ilBorrowNode(rhsExpr, 0)
+        rhsText = this.expr(borrowed, 0, xmlEmptyNode())
+    } else {
+        rhsText = this.expr(rhsExpr, 0, xmlEmptyNode())
+    }
+    var rendered: List<Str> = List<Str>()
+    rendered.append(rhsText)
+    var argNodes: List<AstXmlNode> = List<AstXmlNode>()
+    argNodes.append(*rhsExpr)
+    val fixed: List<Str> = this.cgMethodStrArgs(fn, *argNodes, *rendered)
+    val qualifyText: Str = this.qualify(fn.packageName, fn.name)
+    val cgJoinText: Str = cgJoin(fixed, ", ")
+    val call: Str = `@qualifyText(@recvText, @cgJoinText)`
+    if (op == "==" || op == "+") {
+        return call
+    }
+    if (op == "!=") {
+        return `(!@call)`
+    }
+    if (op == "<") {
+        return `(@call < 0)`
+    }
+    if (op == "<=") {
+        return `(@call <= 0)`
+    }
+    if (op == ">") {
+        return `(@call > 0)`
+    }
+    return `(@call >= 0)`
+}
+
+// Whether one operator's only parameter is a pointer while the argument is a value: the
+// auto-borrow signature `convertArgument` would address at a written call site.
+fun Emitter.operatorParamIsPointer(fn: *CgFn, argExpr: *AstXmlNode): Bool {
+    val params: List<AstXmlNode> = xmlChildren(fn.decl, AstNodeKind.Param)
+    if (params.size() == 0) {
+        return false
+    }
+    val paramType: AstXmlNode = xmlChildPtr(params[0], AstNodeKind.Type)
+    if (xmlKind(paramType) != AstNodeCategory.TypePointer) {
+        return false
+    }
+    val argType: AstXmlNode = this.inferType(argExpr)
+    if (xmlIsEmpty(argType) || xmlKind(argType) == AstNodeCategory.TypePointer
+        || this.isHandleType(argType)
+    ) {
+        return false
+    }
+    return semUnifyType(semPointeeOf(paramType), semPointeeOf(argType), xmlTypeParamNames(fn.decl))
 }
 
 // Index into `nativeExtensions[name]` of a matching receiver, or -1.

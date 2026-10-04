@@ -536,6 +536,23 @@ fun Emitter.inferType(e: *AstXmlNode): AstXmlNode {
             ) {
                 return this.namedType("Bool")
             }
+            // A declared operator answers the expression's type (`a + b` is `a.plus(b)`,
+            // specs/functions.md) where the built-in rule answers the left operand.
+            val operatorName: Str = semBinaryOperatorName(op)
+            if (operatorName != "") {
+                val at: Int = this.findExtensionFn(
+                    operatorName, xmlChildPtr(e, AstNodeKind.Lhs), 1
+                )
+                if (at >= 0) {
+                    val fn: *CgFn = *this.functions[at]
+                    if (xmlAttr(fn.decl, AstNodeAttributeKind.IsOperator) == "true") {
+                        val ret: *AstXmlNode = xmlChildPtr(fn.decl, AstNodeKind.ReturnType)
+                        if (!xmlIsEmpty(ret)) {
+                            return ret
+                        }
+                    }
+                }
+            }
             // The operation is on values: a handle operand is read through to its pointee -
             // the `*T -> T` row, spelled at the operand (`binaryOperand`).
             return this.pointee(this.inferType(xmlChildPtr(e, AstNodeKind.Lhs)))

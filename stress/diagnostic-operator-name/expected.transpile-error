@@ -1,1 +1,1 @@
-'plus' is not an operator: 'get' and 'set' are the indexers
+'times' is not an operator: 'get', 'set', 'compareTo', 'equals' and 'plus' are the operators

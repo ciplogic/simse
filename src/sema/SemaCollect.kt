@@ -52,6 +52,40 @@ fun Analyzer.checkOperators(): Unit {
     }
 }
 
+// The operator names the language gives a lowering, and the number of parameters each takes
+// (the receiver is not one: a class body supplies it, an extension names it). `get`/`set`
+// are the index syntax; `compareTo`/`equals`/`plus` are the Kotlin operators behind
+// `<`/`<=`/`>`/`>=`, `==`/`!=` and `+` (specs/functions.md, "Operator functions"). -1 for a
+// name with no lowering.
+fun semOperatorArity(name: *Str): Int {
+    if (name == "get") {
+        return 1
+    }
+    if (name == "set") {
+        return 2
+    }
+    if (name == "compareTo" || name == "equals" || name == "plus") {
+        return 1
+    }
+    return -1
+}
+
+// The operator a binary syntax resolves to, or "": `a < b` is `a.compareTo(b)` - and `<=`,
+// `>`, `>=` likewise, each derived from the Int it answers - `a == b` is `a.equals(b)` and
+// `a + b` is `a.plus(b)`. The right operand is the operator's one parameter.
+fun semBinaryOperatorName(op: *Str): Str {
+    if (op == "<" || op == "<=" || op == ">" || op == ">=") {
+        return "compareTo"
+    }
+    if (op == "==" || op == "!=") {
+        return "equals"
+    }
+    if (op == "+") {
+        return "plus"
+    }
+    return ""
+}
+
 // One declaration, when it carries `operator`. `inClass` says a class body supplies the
 // receiver; a top-level operator must name its own (`fun T.get(...)` or `this: T`).
 fun Analyzer.checkOperatorDecl(decl: *AstXmlNode, inClass: Bool): Unit {
@@ -61,8 +95,12 @@ fun Analyzer.checkOperatorDecl(decl: *AstXmlNode, inClass: Bool): Unit {
     val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
     val line: Int = xmlLine(decl)
     val column: Int = xmlColumn(decl)
-    if (name != "get" && name != "set") {
-        this.diag(line, column, `'@name' is not an operator: 'get' and 'set' are the indexers`)
+    val arity: Int = semOperatorArity(name)
+    if (arity < 0) {
+        this.diag(
+            line, column,
+            `'@name' is not an operator: 'get', 'set', 'compareTo', 'equals' and 'plus' are the operators`
+        )
         return
     }
     if (!inClass && xmlAttr(decl, AstNodeAttributeKind.HasReceiver) != "true"
@@ -74,13 +112,49 @@ fun Analyzer.checkOperatorDecl(decl: *AstXmlNode, inClass: Bool): Unit {
     // The receiver is not a parameter in either spelling: an explicit `this` is skipped by
     // `semReceiverParams`, a Kotlin-style receiver is not a `Param` at all.
     val count: Int = xmlCount(decl, AstNodeKind.Param) - semReceiverParams(decl)
-    if (name == "get" && count != 1) {
-        this.diag(line, column, "'get' takes one index parameter")
+    if (count != arity) {
+        if (name == "get") {
+            this.diag(line, column, "'get' takes one index parameter")
+        } else if (name == "set") {
+            this.diag(line, column, "'set' takes an index and a value")
+        } else {
+            this.diag(line, column, `'@name' takes the other operand`)
+        }
         return
     }
-    if (name == "set" && count != 2) {
-        this.diag(line, column, "'set' takes an index and a value")
+    this.checkOperatorReturn(decl, name, line, column)
+}
+
+// The contract the syntax leans on: the four comparisons derive from the Int `compareTo`
+// answers, and `==`/`!=` use `equals`'s Bool; `plus`'s result is the expression's type, so
+// anything fits it. An alias is followed the way receiver matching follows one, and a name
+// that resolves to nothing (an unresolved alias) stays silent rather than guessing.
+fun Analyzer.checkOperatorReturn(decl: *AstXmlNode, name: *Str, line: Int, column: Int): Unit {
+    var want: Str = ""
+    if (name == "compareTo") {
+        want = "Int"
+    }
+    if (name == "equals") {
+        want = "Bool"
+    }
+    if (want == "") {
         return
+    }
+    val ret: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.ReturnType)
+    if (xmlIsEmpty(ret)) {
+        return
+    }
+    val resolved: AstXmlNode = this.unionResolveAlias(ret)
+    if (xmlIsEmpty(resolved) || xmlKind(resolved) != AstNodeCategory.TypeNamed) {
+        return
+    }
+    val got: Str = xmlAttr(resolved, AstNodeAttributeKind.Name)
+    val target: *AstXmlNode = this.types.getPtr(got)
+    if (target != null && target.name == AstNodeKind.TypeAlias) {
+        return
+    }
+    if (got != want) {
+        this.diag(line, column, `'@name' must answer @want`)
     }
 }
 

@@ -11,9 +11,10 @@ Language: values and locals (`val`/`var`, inferred or declared), file-level stat
 `List`/`Array`/`Span` and machines (`..T`, both value and pointer forms), `break`/`continue`,
 `yield` (a state machine — `impl_specs/yield.md`), functions, extension methods, `data` pure
 functions, lambdas (block bodies, by-value capture), reified generics with call inference,
-data classes with methods, `operator` indexers (`get`/`set`), `union class` (a discriminated
-union: the implicit `Sm<Name>Types` tag enum, generated `getTypeOf`/`isOfType`/
-`get<Field>`/`set<Field>`/`setNone`, `U()`/`U(value)` construction), enums, `typealias`,
+data classes with methods, `operator` functions (`get`/`set` indexers, `compareTo`/
+`equals`/`plus`), `union class` (a discriminated union: the implicit `Sm<Name>Types` tag
+enum, generated `getTypeOf`/`isOfType`/`get<Field>`/`set<Field>`/`setNone`,
+`U()`/`U(value)` construction), enums, `typealias`,
 `Opt`/`Res` and `!!`, `null` for handles,
 memory operators (`*T`, `&T`, `copy`), string interpolation (`` `n=@n` ``), containers and the
 string library, modules/packages and `simse.md` manifests, `main(args)`, resources (`_res.md`,

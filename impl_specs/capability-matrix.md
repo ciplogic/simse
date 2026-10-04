@@ -4901,3 +4901,31 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   Verified: `bun tools/iterate.js --full` - 77/77 and both fixed points hold; the two moved
   goldens (`collections`: the deleted `simse_resources_entries` text; `res-comments`: the
   table comment, the non-`const` array, the generated install) carry nothing else.
+
+- **The value operators: `compareTo`, `equals` and `plus`.** The operator table grew from
+  the two indexers to the Kotlin operators behind `<`/`<=`/`>`/`>=`, `==`/`!=` and `+`
+  (specs/functions.md, "Operator functions"). `operator` stays a contextual modifier with no
+  parser change: one table (`semOperatorArity`) owns the names and arities, and
+  `semBinaryOperatorName` owns the syntax-to-operator mapping, both in src/sema/SemaCollect.kt
+  where codegen reads them too. The checker refuses a name with no lowering, a wrong
+  parameter count, an operator with no receiver and - new - a `compareTo` whose answer is not
+  `Int` or an `equals` whose answer is not `Bool` (`checkOperatorReturn`, aliases followed the
+  way receiver matching follows them; `stress/diagnostic-operator-return`).
+
+  A binary operator resolves against the **left operand's** type and is emitted as that call
+  plus the syntax's derivation: `<` is `compareTo(...) < 0` (the other three comparisons the
+  same way), `==` is `equals(...)`, `!=` its negation, `+` is `plus(...)`
+  (`operatorFn`/`operatorBinaryText`, src/codegen/CgResolve.kt - the indexers' function
+  renamed, since it is now both; typing in `SemInfer.operatorBinaryReturn` and the emitter's
+  mirror). Two things the echo of the indexers' path does not cover: the right operand
+  converts against the *emitted* parameter, which auto-borrow may have turned into a `*T`
+  (the argument is then its address, the shape `convertArgument` gives a written call at
+  linearing time), and a declared `plus` answers the expression's type where the built-in
+  rule answered the left operand, so an unannotated local infers the operator's return type.
+
+  `stress/operator-binary` is the fixture: class-body `compareTo`/`equals`/`plus` on a
+  `Version` (all four comparisons, equality, `+`, `+=` and a condition) and an extension
+  `Tag.plus` answering `Str`, which is also the different-return-type case.
+  `diagnostic-operator-name` now pins `times` - a Kotlin name with no lowering yet - and the
+  new operator list in its text; the tree at 79 cases. Verified: `bun tools/iterate.js --full`
+  - 79/79 and both fixed points hold; no `expected.cpp` moved.

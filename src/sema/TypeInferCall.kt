@@ -229,6 +229,48 @@ fun SemInfer.operatorGetReturn(recvExpr: *AstXmlNode, indexNode: *AstXmlNode): A
     return xmlEmptyNode()
 }
 
+// `a < b`/`a == b`/`a + b` for a left operand whose type declares the operator
+// (specs/functions.md): the expression's type is the operator's return type - Bool for the
+// comparisons and `equals` by contract, whatever `plus` answers for `+`. Empty when no
+// operator matches: the built-in rule decides then.
+fun SemInfer.operatorBinaryReturn(name: *Str, lhsExpr: *AstXmlNode, rhsExpr: *AstXmlNode): AstXmlNode {
+    val recv: AstXmlNode = this.resolveAlias(semPointee(this.infer(lhsExpr)))
+    if (xmlIsEmpty(recv)) {
+        return xmlEmptyNode()
+    }
+    var i: Int = 0
+    while (i < this.facts.functions.size()) {
+        val fn: *SemFnFact = *this.facts.functions[i]
+        i = i + 1
+        if (fn.isNative || xmlIsEmpty(fn.receiver)) {
+            continue
+        }
+        if (fn.name != name || fn.paramCount != 1
+            || xmlAttr(fn.decl, AstNodeAttributeKind.IsOperator) != "true"
+        ) {
+            continue
+        }
+        val ret: *AstXmlNode = xmlChildPtr(fn.decl, AstNodeKind.ReturnType)
+        if (xmlIsEmpty(ret)) {
+            continue
+        }
+        var bindings: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
+        if (!semBindTypes(this.resolveAlias(fn.receiver), recv, fn.templateParams, bindings)) {
+            continue
+        }
+        if (fn.templateParams.size() > 0) {
+            var argTypes: List<AstXmlNode> = List<AstXmlNode>()
+            argTypes.append(this.infer(rhsExpr))
+            semBindCallArgs(fn.decl, xmlEmptyNode(), *argTypes, *fn.templateParams, *bindings)
+        }
+        val result: AstXmlNode = semSubstitute(ret, bindings, fn.templateParams)
+        if (!xmlIsEmpty(result)) {
+            return semMachineType(result, fn, bindings, recv)
+        }
+    }
+    return xmlEmptyNode()
+}
+
 fun SemInfer.memberReturn(callee: *AstXmlNode, argNodes: *List<AstXmlNode>): AstXmlNode {
     val receiverType: AstXmlNode = this.infer(xmlChildPtr(callee, AstNodeKind.Receiver))
     val recv: AstXmlNode = this.resolveAlias(semPointee(receiverType))
@@ -692,6 +734,17 @@ fun SemInfer.infer(e: *AstXmlNode): AstXmlNode {
                 || op == "&&" || op == "||"
             ) {
                 return semNamedType("Bool")
+            }
+            // A declared operator answers the expression's type (`a + b` is `a.plus(b)`,
+            // specs/functions.md); the built-in rule below answers the left operand.
+            val operatorName: Str = semBinaryOperatorName(op)
+            if (operatorName != "") {
+                val operatorType: AstXmlNode = this.operatorBinaryReturn(
+                    operatorName, xmlChildPtr(e, AstNodeKind.Lhs), xmlChildPtr(e, AstNodeKind.Rhs)
+                )
+                if (!xmlIsEmpty(operatorType)) {
+                    return operatorType
+                }
             }
             // The operation is on *values*: a handle operand is read through to its
             // pointee, so the result is the left operand as a value. Returning the handle
