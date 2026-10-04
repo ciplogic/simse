@@ -253,6 +253,13 @@ data class Emitter(
     var enumNames: Dictionary<Str, Bool>,
     var dataClassNames: Dictionary<Str, Bool>,
     var functions: List<CgFn>,
+
+// The plain-function resolution tables, filled as declarations are collected
+// (`addFunction`): `plainFunctionNames` holds every non-native function's name and
+// `functionPackages` the package of the first non-native, non-method one. Lookups that
+// used to walk every collected function per call site read these instead.
+    var plainFunctionNames: Dictionary<Str, Bool>,
+    var functionPackages: Dictionary<Str, Str>,
     var receiverFnNames: Dictionary<Str, Bool>,
 
 // The names of functions whose receiver is a machine *pattern* (`fun ..*T.select<T, U>`):
@@ -354,6 +361,8 @@ fun newEmitter(inputs: *List<CgInput>, resourceStored: *List<Str>): Emitter {
         Dictionary<Str, Bool>(),
         Dictionary<Str, Bool>(),
         List<CgFn>(),
+        Dictionary<Str, Bool>(),
+        Dictionary<Str, Str>(),
         Dictionary<Str, Bool>(),
         Dictionary<Str, Bool>(),
         List<CgNativeDecl>(),

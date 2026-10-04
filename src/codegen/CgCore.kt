@@ -108,6 +108,8 @@ fun Emitter.addFunction(
 ): Unit {
     // Read once here rather than on every lookup walk (`CgFn` documents why).
     val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
+    val isNative: Bool = xmlAttr(decl, AstNodeAttributeKind.IsNative) == "true"
+    val isPure: Bool = xmlAttr(decl, AstNodeAttributeKind.IsPure) == "true"
     this.functions.append(
         CgFn(
             decl,
@@ -118,20 +120,28 @@ fun Emitter.addFunction(
             packageName,
             isMethod,
             name,
-            xmlAttr(decl, AstNodeAttributeKind.IsNative) == "true",
+            isNative,
             xmlAttr(decl, AstNodeAttributeKind.HasBody) == "true",
-            xmlAttr(decl, AstNodeAttributeKind.IsPure) == "true",
+            isPure,
             xmlCount(decl, AstNodeKind.Param) - semReceiverParams(decl),
             ""
         )
     )
+    // The resolution tables the call sites read instead of walking `functions`
+    // (`Emitter`'s field comment).
+    if (!isNative) {
+        this.plainFunctionNames.insert(name, true)
+        if (!isMethod && !this.functionPackages.has(name)) {
+            this.functionPackages.insert(name, packageName)
+        }
+    }
     if (!xmlIsEmpty(receiver)) {
         this.receiverFnNames.insert(name, true)
         if (semMachineReceiver(receiver)) {
             this.machineReceiverFnNames.insert(name, true)
         }
     }
-    if (xmlAttr(decl, AstNodeAttributeKind.IsPure) == "true") {
+    if (isPure) {
         this.pureCallees.insert(name, true)
     }
 }
@@ -200,15 +210,13 @@ fun Emitter.typePackage(name: *Str): Str {
 }
 
 // The package of the plain (non-native) function `name`, or "". A method is not a
-// plain function, so a call by name cannot resolve to one.
+// plain function, so a call by name cannot resolve to one. The table is the first such
+// declaration in collection order (`addFunction`), which is the declaration the walk
+// that used to run here returned.
 fun Emitter.functionPackage(name: *Str): Str {
-    for (*fn in this.functions) {
-        if (fn.isNative || fn.isMethod) {
-            continue
-        }
-        if (fn.name == name) {
-            return fn.packageName
-        }
+    val packageName: *Str = this.functionPackages.getPtr(name)
+    if (packageName != null) {
+        return *packageName
     }
     return ""
 }

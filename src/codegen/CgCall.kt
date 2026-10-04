@@ -299,14 +299,7 @@ fun Emitter.call(e: *AstXmlNode): Str {
             val name: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
             var calleeName: Str = this.qualify(this.functionPackage(name), name)
             val nativeOpt: Opt<Str> = this.nativeSymbols.get(name)
-            var hasPlainFunction: Bool = false
-            for (*candidate in this.functions) {
-                if (xmlAttr(candidate.decl, AstNodeAttributeKind.IsNative) != "true"
-                    && xmlAttr(candidate.decl, AstNodeAttributeKind.Name) == name
-                ) {
-                    hasPlainFunction = true
-                }
-            }
+            val hasPlainFunction: Bool = this.plainFunctionNames.has(name)
             if (!hasPlainFunction && nativeOpt.hasValue()) {
                 calleeName = nativeOpt.value()
             }
@@ -381,14 +374,7 @@ fun Emitter.call(e: *AstXmlNode): Str {
                 }
             }
             val nativeOpt: Opt<Str> = this.nativeSymbols.get(name)
-            var hasPlainFunction: Bool = false
-            for (*candidate in this.functions) {
-                if (xmlAttr(candidate.decl, AstNodeAttributeKind.IsNative) != "true"
-                    && xmlAttr(candidate.decl, AstNodeAttributeKind.Name) == name
-                ) {
-                    hasPlainFunction = true
-                }
-            }
+            val hasPlainFunction: Bool = this.plainFunctionNames.has(name)
             var calleeName: Str = this.qualify(this.functionPackage(name), name)
             if (!hasPlainFunction && nativeOpt.hasValue()) {
                 calleeName = nativeOpt.value()
