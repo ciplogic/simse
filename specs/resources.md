@@ -6,7 +6,7 @@ no data directory, no file at runtime.
 
 ## The shape: one flat list of (Key, Value)
 
-```simse
+```kt
 List<(Str, Str)>   // every resource, in the order it was first written
 ```
 
@@ -149,7 +149,7 @@ hold any of them: printable bytes as themselves, everything else as an octal esc
 type, the storage (`resourceStore`, a reach-gated file-level static) and the install
 (`resourcesInstall`) - `resources.hpp` is gone. `Resources.get(k)` is a static call:
 
-```simse
+```kt
 fun entries(): Span<ResourceEntry>   // the table, borrowed
 fun get(key: Str): StrView           // the value, empty when the key is absent
 fun has(key: Str): Bool

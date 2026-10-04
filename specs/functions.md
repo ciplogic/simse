@@ -153,7 +153,7 @@ is a function of its receiver and its arguments alone. The compiler trusts the c
 the only source of truth for a body-less `@SmGen` function - and uses it to fold a repeated
 call of an unchanged argument into the first one, so
 
-```simse
+```kt
 data fun Str.toLen(): Int {
     return this.size()
 }
@@ -182,7 +182,7 @@ parameters and never writes through them, so a caller may hand any of them to it
 says nothing about the result or about other effects - a `borrow fun` may write its own locals,
 build and return a fresh value, or print (which is why it is not `data`).
 
-```simse
+```kt
 @SmGen("res", "strops", "simse_str_charAt")
 borrow fun charAt(this: Str, index: Int): Char
 ```
@@ -463,7 +463,7 @@ element (`impl_specs/for.md`, `impl_specs/escape-analysis.md`). The promotion is
 it is applied only when no write through the variable and no call that could change the
 container is in the body. `--no-borrow` turns it off.
 
-```simse
+```kt
 for (v in everyOther(10)) { ... }        // a machine
 for ((v, i) in words) { ... }            // a List<Str>, indexed from 0
 for (*cell in cells) { ... }             // a List<Cell>: the write reaches the list

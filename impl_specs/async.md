@@ -29,7 +29,7 @@ inspected.
 A body that suspends says so with the `suspend` modifier, and its *signature stays the plain
 one* — the payload type, no wrapper:
 
-```simse
+```kt
 @SmGen("res", "asyncfs", "simse_async_readFileText")
 suspend fun readFileTextAsync(path: Str): Res<Str>
 ```
@@ -93,7 +93,7 @@ one, and it is where a suspension comes from. **Concurrency has exactly one cons
 `asyncRunTransform`: a list of items, a transformer, one task per item, joined structurally, one
 result per item in input order.
 
-```simse
+```kt
 fun asyncRunTransform<T, TResult>(
     items: *List<T>, transformer: (T, *TaskToken) -> Res<TResult>
 ): List<Res<TResult>>

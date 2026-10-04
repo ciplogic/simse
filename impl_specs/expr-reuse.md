@@ -184,7 +184,7 @@ functions too.
 body is - it calls only pure functions, writes nothing, and returns no fresh identity of its own.
 Concretely,
 
-```simse
+```kt
 fun tan(angle: Float64): Float64 {
     return Sin(angle) / Cos(angle);
 }

@@ -14,7 +14,7 @@ What follows documents the iteration half - it was `stress/for-array`'s README.
 `for` iterates whatever has an `iter` in scope (`specs/functions.md`), and the prelude
 writes one, on the span:
 
-```simse
+```kt
 fun Span<T>.iter<T>(): ..T { ... }
 ```
 

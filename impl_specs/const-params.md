@@ -3,7 +3,7 @@
 A parameter every call site passes the *same literal* is that constant, so it becomes a local in
 the body and the parameter goes away.
 
-```simse
+```kt
 fun logMe(isDebug: Bool) {          //  fun logMe() {
     if (isDebug) {                  //      val isDebug: Bool = false;
         print("is debug")           //      if (isDebug) {

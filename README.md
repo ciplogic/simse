@@ -13,7 +13,7 @@ Simse sources use the **`.kt` extension** - Kotlin's - because Simse is a
 Kotlin-flavored dialect: your editor's Kotlin mode highlights it, and the language is
 still Simse.
 
-```simse
+```kt
 package tour
 
 fun Str.words(): List<Str> {
@@ -54,7 +54,7 @@ fun main(): Int {
 copies, a `List` is a list, a `data class` is its fields. There is no object header, no
 identity to leak, and no garbage collector deciding when your data goes away.
 
-```simse
+```kt
 data class Point(var x: Int, var y: Int) {
     fun movedBy(dx: Int, dy: Int): Point {
         return Point(this.x + dx, this.y + dy)
@@ -77,7 +77,7 @@ call, resolved to the concrete declaration, never a vtable.
 
 **Functions are the unit of behavior, and extensions are how you add to a type.**
 
-```simse
+```kt
 fun Str.shout(): Str {
     return this.toUpper()
 }
@@ -99,7 +99,7 @@ different types all the way down, with no boxing and no type erasure.
 can be called with the elements written out, which is what makes `listOf`, `println`
 style helpers and variadic-looking APIs pleasant:
 
-```simse
+```kt
 fun addAll(start: Int, rest: *List<Int>): Int { ... }
 
 val total: Int = addAll(10, 1, 2, 3)   // rest is the list [1, 2, 3]
@@ -110,7 +110,7 @@ val justTen: Int = addAll(10)          // rest is empty
 that can miss returns `Opt<T>`, and an operation that can fail returns `Res<T>`. Both are
 ordinary values you can pass around, and both say what they are at the call site.
 
-```simse
+```kt
 val found: Opt<Int> = counts.get("two")
 if (found.hasValue()) {
     println(found.value().toString())
@@ -129,7 +129,7 @@ one word of count next to the value), `*T` is a raw pointer, and `T` is a value.
 is spelled `&value`, and reading through a handle happens on its own where the type is
 known:
 
-```simse
+```kt
 val counter: &Counter = &Counter(1)
 counter.bump()          // a call through the handle
 val here: Int = counter.value
@@ -139,7 +139,7 @@ val here: Int = counter.value
 anything that provides a state machine; `yield` lets you *write* such a machine without
 turning your function inside out.
 
-```simse
+```kt
 for (line in lines) {
     println(line)
 }
@@ -164,7 +164,7 @@ own `simse.md`; `rtl` is imported implicitly and holds the built-in types.
 different from a transpiler with a fixed library: a declaration can say that its
 implementation is *somewhere else*, and the compiler will go and get it.
 
-```simse
+```kt
 // The body is hand-written C++ that is linked in.
 @SmGen("cpp", "simse_str_trim")
 fun trimmed(text: Str): Str

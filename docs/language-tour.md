@@ -12,7 +12,7 @@ dialect, so an editor's Kotlin mode highlights them - the language is Simse).
 A file declares a package, then declarations. `main` is the entry point; its
 `return` value becomes the process exit code.
 
-```simse
+```kt
 package hello
 
 fun main(): Int {
@@ -23,7 +23,7 @@ fun main(): Int {
 
 The other `main` form takes the command-line arguments (`stress/main-args`):
 
-```simse
+```kt
 package app
 
 fun main(args: List<Str>): Int {
@@ -39,7 +39,7 @@ Scalars are `Int8`, `Int16`, `Int32`, `Int64`, `Float32`, `Float64`, `Char`
 mutable, inline byte-string type. `val` binds once, `var` is reassignable;
 locals are inferred from the initializer or declared explicitly.
 
-```simse
+```kt
 val name: Str = "box"
 var count: Int = 0
 count = count + 1
@@ -52,7 +52,7 @@ Strings carry the usual library: `find`/`indexOf`, `substr`, `startsWith`,
 `endsWith`, `replace`, `trim`, `split`, `toUpper`, `toLower`, `charAt`,
 `isEmpty`, `size`, `+`, and the `Opt`-returning parses `toInt()`/`toFloat()`.
 
-```simse
+```kt
 val text: Str = "the quick brown fox"
 println(text.startsWith("the"))          // true
 println(text.replace("fox", "cat"))
@@ -70,7 +70,7 @@ a state machine, below), `break` and `continue`; conditions are `Bool` expressio
 (`&&`, `||`, `!`). A `when` arm tests `subject == label`, several labels on one arm
 run that body once, `else` must be last, and arms never fall through.
 
-```simse
+```kt
 fun classify(n: Int): Str {
     when (n) {
         0 -> {
@@ -107,7 +107,7 @@ machine (below). When you want to walk storage by hand, a `Span<T>` (`stress/col
 is the borrowed view to reach for - a pointer plus a length, with `size()`, `isEmpty()`,
 `at(i)`/`span[i]` and `slice(start)`/`slice(start, count)`:
 
-```simse
+```kt
 fun sum(items: &List<Int>): Int {
     var total: Int = 0
     var span: Span<Int> = spanOf(*items)
@@ -126,7 +126,7 @@ span's one pair of walks. (A walk is an
 ordinary extension function returning `..T`, so your own type can have one too; see
 `specs/functions.md`.)
 
-```simse
+```kt
 fun everyOther(n: Int): ..Int {
     var i: Int = 0
     while (i < n) {
@@ -162,7 +162,7 @@ A `*` in front of the variable binds a **pointer to the element** instead of a c
 it - the form for a container of values, where a copy per iteration is waste and the loop
 may want to write through what it walks:
 
-```simse
+```kt
 data class Cell(var value: Int)
 
 fun bumpAll(cells: *List<Cell>): Unit {
@@ -182,7 +182,7 @@ the shape to prefer in a hot loop (`specs/functions.md`).
 A variable - or any other place - is updated in place with `+=`, `-=`, `*=`, `/=`, `%=`,
 and stepped with `i++` / `i--`:
 
-```simse
+```kt
 var i: Int = 1
 i += 2                          // i is 3 now
 
@@ -201,7 +201,7 @@ assignment has no value they stand on their own as a statement - the prefix form
 The same places take the bitwise operators `& | ^ << >>` and their compound forms
 (`&= |= ^= <<= >>=`), on integers:
 
-```simse
+```kt
 val high: Int = 2
 val low: Int = 5
 val packed: Int = (high << 4) | low     // 37
@@ -220,7 +220,7 @@ Functions are top-level or methods; the receiver may be declared as an
 extension, which is how the standard library is written. Generics are reified:
 `identity<Int>(7)` calls a function specialized for `Int`.
 
-```simse
+```kt
 fun identity<T>(value: T): T {
     return value
 }
@@ -254,7 +254,7 @@ A function marked `data` is **pure** - no side effects, and its result a functio
 arguments - which lets the compiler fold two identical calls on an unchanged receiver into
 one:
 
-```simse
+```kt
 data fun Str.toLen(): Int {
     return this.size()
 }
@@ -273,7 +273,7 @@ never writes through them, so a caller may hand it a pointer (no copy), even tho
 and return a fresh value. The compiler's auto-borrow proof trusts a callee only when it is
 borrow-clean, and a body-less native - which it cannot see into - is trusted by that mark:
 
-```simse
+```kt
 @SmGen("res", "strops", "simse_str_charAt")
 borrow fun charAt(this: Str, index: Int): Char
 ```
@@ -283,7 +283,7 @@ and the mark is the override for when it cannot (`specs/functions.md`).
 
 A lambda body may also be a block, written on the same line as the arrow:
 
-```simse
+```kt
 val big: Mapper = (v: Int) -> {
     if (v > 0) {
         return v * 100
@@ -296,7 +296,7 @@ A block body is a body like any other: it has its own scope, its own locals, and
 own control flow, so it can loop over what it captured. Two lambdas may even each
 declare a local of the same name, because neither is naming the other's:
 
-```simse
+```kt
 typealias Taker = (Int) -> Unit
 
 fun main(): Int {
@@ -327,7 +327,7 @@ A `data class` is a value type with named fields (separated by `,`, as in Kotlin
 implicit constructor, value semantics, and methods that may use `this`. Fields are
 accessed with `.`.
 
-```simse
+```kt
 data class Point(var x: Int, var y: Int) {
     fun manhattan(): Int {
         var total: Int = this.x
@@ -357,7 +357,7 @@ direct cast back, so it asks for no `Opt` and checks nothing. There is no automa
 member *name* yet, so a `when` function is the way to print one
 (`stress/objects`).
 
-```simse
+```kt
 enum class Color {
     Red,
     Green = 4,
@@ -397,7 +397,7 @@ and the generated C++ compares the struct with its tag enum. There is no exhaust
 matching. A union class may be generic (`union class Res2<T>(var Value: T)`); one tag enum
 serves every instantiation and `Res2<Int>(5)` binds `T` for the construction.
 
-```simse
+```kt
 union class DoubleOrFloat(var IntValue: Int, var DoubleValue: Float64)
 
 fun label(u: DoubleOrFloat): Str {
@@ -422,7 +422,7 @@ reference-counted block (one allocation, count first) that supports `count()`,
 indexing, `toArray()`/`toList()` and the shared `arrayEmpty<T>()`;
 `SmallVector<4, T>` keeps up to four elements inline.
 
-```simse
+```kt
 val values: List<Int> = listOf(10, 20)     // one instruction, elements inline
 values.removeAt(0)
 println(values.size())                   // 1
@@ -437,7 +437,7 @@ A list is built from its elements with `listOf(a, b, c)` - one instruction, and 
 four elements live inside the list, so a short literal allocates nothing - or from a
 count with the type's own construction:
 
-```simse
+```kt
 val keywords: List<Str> = listOf<Str>("static", "var", "val")
 val primes: List<Int> = listOf(2, 3, 5, 7)          // the type is inferred
 val zeros: List<Int> = List<Int>(3)                 // three default elements
@@ -448,7 +448,7 @@ val none: List<Str> = listOf<Str>()
 And a call **packs its trailing arguments** into a last parameter that is a list, so a
 function can take "all the rest" the way `printf` does:
 
-```simse
+```kt
 fun addAll(values: *List<Int>): Int {
     var total: Int = 0
     for (*value in values) {
@@ -477,7 +477,7 @@ the end of the statement would be cost with no use - so `sum(1, 2, 3)` against a
 The handle in a **call argument** is inferred when both sides are the same type, which
 is what lets a parameter move from a copy to a borrow without breaking its callers:
 
-```simse
+```kt
 val xs: List<Int> = listOf(4, 5)
 addAll(xs)      // the compiler passes `*xs`: the list itself, borrowed
 addAll(*xs)     // the same call, written out
@@ -496,7 +496,7 @@ borrow, a box) is the parameter's business, and only a box needs the writer's wo
 `keys`/`values`/`clear`); `get` returns an `Opt<V>`. Iteration order is an
 implementation detail, so sort the keys when order matters.
 
-```simse
+```kt
 val counts: Dictionary<Str, Int> = dictionaryOf<Str, Int>()
 counts.insert("b", 2)
 counts.insert("a", 1)
@@ -520,7 +520,7 @@ answer to an interface without a vtable and without boxing: the requirement is c
 every call of the generic function, and the call resolves to the concrete type's own
 declaration once the type argument is known.
 
-```simse
+```kt
 protocol Printable fun <T> T.toString(): Str
 protocol Countable fun <T> T.countItems(): Int
 
@@ -567,7 +567,7 @@ not the message - says which arm is live, so a result whose message happens to b
 still a failure. The generated storage follows the instantiation, so an `Opt<Int>` stays a
 trivially copyable aggregate while an `Opt<Str>` destroys its text.
 
-```simse
+```kt
 fun describe(n: Int): Opt<Str> {
     if (n < 0) {
         return Opt<Str>.none()
@@ -576,7 +576,7 @@ fun describe(n: Int): Opt<Str> {
 }
 ```
 
-```simse
+```kt
 // The failure half is a value too: `ok` carries the payload, `err` a message.
 fun parse(text: Str): Res<Int> {
     val n: Opt<Int> = text.toInt()
@@ -600,7 +600,7 @@ fun main(): Int {
 Propagating a failure is the common case, so a postfix `!!` on a `Res` is the payload or
 an early `return` of the failure from the enclosing function:
 
-```simse
+```kt
 fun readValue(text: Str): Res<Str> {
     val parsed: Res<Int> = parse(text)
     val n: Int = parsed!!              // the payload, or `parse`'s failure, returned here
@@ -624,7 +624,7 @@ Assignment copies values. `&value` boxes a value in a reference-counted handle
 original, so a write through it is visible there. Member access, indexing and
 calls auto-dereference both.
 
-```simse
+```kt
 data class Box(var value: Int)
 
 fun maybeRef(flag: Bool): &Box {
@@ -669,7 +669,7 @@ each file. The compiler scans a module root and links every file it finds;
 `import` only brings a package's names into unqualified scope. File-level `var`
 declarations are statics, initialized before `main` runs.
 
-```simse
+```kt
 // src/util/util.kt
 package util
 
@@ -680,7 +680,7 @@ fun twice(value: Int): Int {
 }
 ```
 
-```simse
+```kt
 // src/app/main.kt
 package app
 
@@ -707,7 +707,7 @@ in a `"..."` string). `println` prints the built-ins; for your own type, print w
 `toString()` answers (`println(value.toString())`), and a **protocol** is how you turn that
 into a requirement a generic function can rely on (`specs/declarations.md`, "Protocols").
 
-```simse
+```kt
 val who: Str = "world"
 println(`hello @who`)                  // hello world
 println("count = " + count.toString())

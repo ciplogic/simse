@@ -16,7 +16,7 @@ A function whose body yields is a small state machine: the compiler lowers the b
 labels and gotos, gives the machine one field per value that lives across a yield, and
 returns it by value. `..Int` in the signature says what it hands out.
 
-```simse
+```kt
 fun everyOther(n: Int): ..Int {
     var i: Int = 0
     while (i < n) {
@@ -31,7 +31,7 @@ fun everyOther(n: Int): ..Int {
 Advance it with `advance()`, which answers `Bool` and leaves what it yielded in the
 machine's `current` field:
 
-```simse
+```kt
 val evens = everyOther(10)
 while (evens.advance()) {
     println(evens.current.toString())

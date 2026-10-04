@@ -75,7 +75,7 @@ the type its field needs), in `linear::lowerYield` (`src/linear/Yield.kt`):
 
 ## One protocol
 
-```simse
+```kt
 val evens = everyOther(10)          // a machine on the stack
 while (evens.advance()) {           // step it, and ask whether it yielded
     println(evens.current.toString())

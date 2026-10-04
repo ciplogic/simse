@@ -91,7 +91,7 @@ The construct stays two forms - `for (v in x)` and `for ((v, i) in x)` - but *wh
 iterated* is a convention instead of "a machine": the iterated expression is wrapped in an
 invisible call to a function named **`iterValues`** (the `*v` forms use **`iter`**, below), so
 
-```simse
+```kt
 for (item in x) { ... }      // is the same program as
 for (item in x.iterValues()) { ... }
 ```
@@ -118,7 +118,7 @@ one per container. The lowering hoists the view into a function-scope slot, so
 `for (x in makeList())` iterates storage that outlives the loop (`stress/collections`'s
 `for-temporary` part).
 
-```simse
+```kt
 fun Span<T>.iterValues<T>(): ..T {
     var i: Int = 0
     val len = this.size();
@@ -169,7 +169,7 @@ iteration for a container of aggregates, where a hand-written `while (i < xs.siz
 `*xs[i]` loop borrows the element in place. The pointer form closes that gap and takes the
 index bookkeeping with it:
 
-```simse
+```kt
 for (*cell in cells) {            // cells: List<Cell>
     cell.value = cell.value + 1   // reads and writes the Cell in the list
 }
@@ -190,7 +190,7 @@ machine is generic over its element type and `..*T` is a `..T` whose element is 
 - sema's gate (`checkForIterable`) takes the wrap *name* from the call the parser wrote,
   so it reports the right one (`hasWrap`).
 
-```simse
+```kt
 fun Span<T>.iter<T>(): ..*T {
     var i: Int = 0
     val len = this.size();
@@ -217,7 +217,7 @@ A machine's element crosses the yield as whatever the creating function yielded 
 `iterValues`, a place for `iter` - and the prelude's two extension functions change that in the
 middle of a pipeline (both `yield`ing themselves, so neither drains anything):
 
-```simse
+```kt
 fun ..*T.toValues<T>(): ..T {
     while (this.advance()) {
         var value: T = *this.current

@@ -62,7 +62,7 @@ mutations that relocate storage.
 instruction (`Pack`, `impl_specs/linear-il.md`). Up to four elements live in the
 list's inline buffer, so a short literal allocates nothing:
 
-```simse
+```kt
 val keywords: List<Str> = listOf<Str>("static", "var", "val")
 val primes: List<Int> = listOf(2, 3, 5, 7)   // the element type is inferred
 val empty: List<Str> = listOf<Str>()

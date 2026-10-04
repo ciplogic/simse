@@ -8,7 +8,7 @@ queue's thread while the root goes back to `accept`. Four compute queues (`tasks
 `(19, 1)`) mean four requests in flight. The blocking `netReceive`/`netSend` are ordinary code
 inside `handle`; the task is *suspended* while it waits, which is the whole point.
 
-```simse
+```kt
 suspend fun handle(conn: Int64): Unit {
     ...
     val body: Str = bodyFor(path)          // a suspension: the dispatch is a task of its own
