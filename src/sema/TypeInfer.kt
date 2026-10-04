@@ -118,12 +118,13 @@ fun semOne(node: *AstXmlNode): List<AstXmlNode> {
 
 // The same node with every child whose role is `role` replaced, in order, by
 // `replacements`. The lowering's `exprReplaceRole`, which this package cannot import. The
-// children are read in place (`iter`): the copy this used to take was one `AstXmlNode` per
-// child, attributes included, on a path the type pass walks heavily.
+// children are walked as places (`for (*child in ...)`, the `for` rewrite's span walk): the
+// copy this used to take was one `AstXmlNode` per child, attributes included, on a path the
+// type pass walks heavily.
 fun semReplaceRole(like: *AstXmlNode, role: AstNodeKind, replacements: *List<AstXmlNode>): AstXmlNode {
     var kids: List<AstXmlNode> = List<AstXmlNode>()
     var seen: Int = 0
-    for (child in spanOfArray(like.Children).iter()) {
+    for (*child in like.Children) {
         if (child.name == role) {
             if (seen < replacements.size()) {
                 kids.append(replacements[seen])
@@ -144,7 +145,7 @@ fun semReplaceRole(like: *AstXmlNode, role: AstNodeKind, replacements: *List<Ast
 fun semWithType(decl: *AstXmlNode, typeNode: *AstXmlNode): AstXmlNode {
     var kids: List<AstXmlNode> = List<AstXmlNode>()
     kids.append(typeNode)
-    for (child in spanOfArray(decl.Children).iter().where((c: *AstXmlNode) -> c.name != AstNodeKind.Type)) {
+    for (child in decl.Children.iterOf().where((c: *AstXmlNode) -> c.name != AstNodeKind.Type)) {
         kids.append(child)
     }
     return AstXmlNode(decl.name, decl.kind, copy(decl.attributes), kids.toArray())

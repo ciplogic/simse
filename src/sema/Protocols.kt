@@ -78,7 +78,7 @@ fun semIsValueParam(child: *AstXmlNode, skipsReceiver: Bool): Bool {
 // the `toList` drain, so the parameters the predicate rejects never reach a list.
 fun semProtocolValueParams(decl: *AstXmlNode): List<AstXmlNode> {
     val skipsReceiver: Bool = !xmlIsEmpty(semExtensionReceiver(decl))
-    return spanOfArray(decl.Children).iter().where((child: *AstXmlNode) -> semIsValueParam(child, skipsReceiver)).toList()
+    return decl.Children.iterOf().where((child: *AstXmlNode) -> semIsValueParam(child, skipsReceiver)).toList()
 }
 
 // Whether a type node is `Unit` or absent - "nothing returned".

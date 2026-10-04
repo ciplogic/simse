@@ -95,10 +95,10 @@ fun cpBump(counts: *Dictionary<Str, Int>, name: *Str): Unit {
 // construction from being read as a call to a function of the same name. Both walks are lazy
 // (`where`): the pass reads declarations, it does not need a list of them.
 fun cpCountDecls(module: *AstXmlNode, counts: *Dictionary<Str, Int>): Unit {
-    for (decl in spanOfArray(module.Children).iter().where((child: *AstXmlNode) -> xmlIsDecl(child))) {
+    for (decl in module.Children.iterOf().where((child: *AstXmlNode) -> xmlIsDecl(child))) {
         cpBump(counts, xmlAttr(decl, AstNodeAttributeKind.Name))
         if (decl.name == AstNodeKind.DataClass) {
-            for (method in spanOfArray(decl.Children).iter().where((child: *AstXmlNode) -> child.name == AstNodeKind.Function)) {
+            for (method in decl.Children.iterOf().where((child: *AstXmlNode) -> child.name == AstNodeKind.Function)) {
                 cpBump(counts, xmlAttr(method, AstNodeAttributeKind.Name))
             }
         }
@@ -113,7 +113,7 @@ fun cpCollectCandidates(
     module: *AstXmlNode, counts: *Dictionary<Str, Int>,
     out: *List<AstXmlNode>, names: *Dictionary<Str, Bool>
 ): Unit {
-    for (decl in spanOfArray(module.Children).iter().where((child: *AstXmlNode) -> child.name == AstNodeKind.Function)) {
+    for (decl in module.Children.iterOf().where((child: *AstXmlNode) -> child.name == AstNodeKind.Function)) {
         // The declaration has a body: a native declaration has nowhere to put the local.
         if (xmlAttr(decl, AstNodeAttributeKind.HasBody) != "true"
             || xmlAttr(decl, AstNodeAttributeKind.IsNative) == "true"

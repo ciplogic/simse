@@ -87,7 +87,7 @@ fun exprLike(like: *AstXmlNode, kids: *List<AstXmlNode>): AstXmlNode {
 fun exprReplaceRole(like: *AstXmlNode, role: AstNodeKind, replacements: *List<AstXmlNode>): AstXmlNode {
     var kids: List<AstXmlNode> = List<AstXmlNode>()
     var seen: Int = 0
-    for (child in spanOfArray(like.Children).iter()) {
+    for (*child in like.Children) {
         if (child.name == role) {
             if (seen < replacements.size()) {
                 kids.append(replacements[seen])

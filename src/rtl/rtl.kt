@@ -35,6 +35,19 @@ fun Span<T>.iter<T>(): ..*T {
     }
 }
 
+// `array.iterOf()`: the array's walk as a source of its own, the machine
+// `spanOfArray(arr).iter()` builds (`for (*x in arr)` spells the same walk). It is the short
+// form a *pipeline* starts from, where `spanOfArray(x).iter()` is the long one.
+fun Array<T>.iterOf<T>(): ..*T {
+    var view: Span<T> = spanOfArray(this)
+    var i: Int = 0
+    val len: Int = view.size()
+    while (i < len) {
+        yield view.atPtr(i)
+        i = i + 1
+    }
+}
+
 // The element as a *copy*: `..*T.toValues()` is the value machine a `for (x in m)` walks,
 // spelled as a pipeline step. The copy lives in the machine's `value` field across the
 // yield, so the place the machine hands out is the copy itself.

@@ -42,7 +42,7 @@ fun Analyzer.analyzeDecl(decl: *AstXmlNode): Unit {
             }
             this.pushScope()
             this.declareValue("this", true, false, xmlEmptyNode())
-            for (field in spanOfArray(decl.Children).iter().where((child: *AstXmlNode) -> child.name == AstNodeKind.Field)) {
+            for (field in decl.Children.iterOf().where((child: *AstXmlNode) -> child.name == AstNodeKind.Field)) {
                 val fieldType: *AstXmlNode = xmlChildPtr(field, AstNodeKind.Type)
                 if (!xmlIsEmpty(fieldType)) {
                     this.resolveType(fieldType)
@@ -52,7 +52,7 @@ fun Analyzer.analyzeDecl(decl: *AstXmlNode): Unit {
             // A method's `this` is an instance of *this* class, so `this.field` resolves.
             val savedClassType: AstXmlNode = this.classType
             this.classType = semNamedType(xmlAttr(decl, AstNodeAttributeKind.Name))
-            for (method in spanOfArray(decl.Children).iter().where((child: *AstXmlNode) -> child.name == AstNodeKind.Function)) {
+            for (method in decl.Children.iterOf().where((child: *AstXmlNode) -> child.name == AstNodeKind.Function)) {
                 this.analyzeFunction(method)
             }
             this.classType = savedClassType
@@ -397,7 +397,7 @@ fun Analyzer.analyzeFunction(decl: *AstXmlNode): Unit {
         }
     }
     this.declareValue("this", true, false, thisType)
-    for (param in spanOfArray(decl.Children).iter().where((child: *AstXmlNode) -> child.name == AstNodeKind.Param)) {
+    for (param in decl.Children.iterOf().where((child: *AstXmlNode) -> child.name == AstNodeKind.Param)) {
         val paramType: *AstXmlNode = xmlChildPtr(param, AstNodeKind.Type)
         // The receiver is emitted as a pointer (`T* self`), never a copy, so a type with
         // an `unInit` may be one (=`fun T.f` / `this: T`); only a held *value* needs the

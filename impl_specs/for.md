@@ -195,11 +195,17 @@ fun Span<T>.iter<T>(): ..*T {
     var i: Int = 0
     val len = this.size();
     while (i < len) {
-        yield *this[i]        // the element's place, not a copy
+        yield this.atPtr(i)   // the element's place, not a copy
         i = i + 1
     }
 }
 ```
+
+`Array<T>.iterOf()` (`src/rtl/rtl.kt`) is that walk as a source of its own: the same few lines,
+so a *pipeline* can start at an array without spelling the span (`arr.iterOf().where(...)`),
+while a plain loop can simply use the pointer `for` (`for (*x in arr)`). A chain that starts at
+`iterOf` carries `Array_iterOf_yieldable<T>` rather than `Span_iter_yieldable<T>` - one class
+per creating function, as always - so it is a named source, not a second span.
 
 A container reaches this one through the same span rewrite its value twin uses, so the
 pointer form covers every iterable shape with the one machine. The `linq` module

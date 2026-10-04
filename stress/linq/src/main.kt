@@ -91,10 +91,11 @@ fun main(): Int {
     }
     println(letters.toString())
 
-    // An array's block through its span, and a `take` that runs past the end.
+    // An array's block through its own source (`iterOf`, the `spanOfArray(arr).iter()` walk
+    // with a shorter name), and a `take` that runs past the end.
     var arr: Array<Int> = xs.toArray()
     var total: Int = 0
-    for (y in spanOfArray(arr).iter().select((x: *Int) -> *x + 1).take(9)) {
+    for (y in arr.iterOf().select((x: *Int) -> *x + 1).take(9)) {
         total = total + *y
     }
     println(total.toString())
