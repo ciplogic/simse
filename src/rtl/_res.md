@@ -916,24 +916,6 @@ inline StrView simse_spanOfStr(StrView view) {
 }
 ```
 
-!resources
-====
-forward:
-```cpp
-// `Resources.entries()` (src/rtl/resources.kt): a borrowed view of the entries a
-// program carries. The storage stays in src/rtl/resources.hpp - `install`, which the
-// table the emitter writes calls before `main`, and the function-local static it fills -
-// because both are reached before any declaration is; this is the one accessor over it.
-Span<ResourceEntry> simse_resources_entries();
-```
-bodies:
-```cpp
-inline Span<ResourceEntry> simse_resources_entries() {
-    List<ResourceEntry>& entries = simse_resourcesStorage();
-    return Span<ResourceEntry>(entries.data(), entries.size());
-}
-```
-
 !tasks
 ====
 forward:

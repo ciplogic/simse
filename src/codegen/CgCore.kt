@@ -226,13 +226,12 @@ fun Emitter.collect(): Unit {
         val declName: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
         if (decl.name == AstNodeKind.Var) {
             // A file-level static: storage and an initializer for the generated pass
-            // (specs/statics.md); prelude inputs declare the runtime surface, not
-            // program statics, so they are skipped.
-            if (!input.prelude) {
-                val entry: CgStatic = CgStatic(decl, pkg, input.fileName)
-                this.statics.append(entry)
-                this.staticsByName.insert(declName, entry)
-            }
+            // (specs/statics.md). A prelude static (the resources table's storage) is
+            // collected too - the rules type it the same - and its emission is
+            // reach-gated instead (`Emitter.staticReached`).
+            val entry: CgStatic = CgStatic(decl, pkg, input.fileName, input.prelude)
+            this.statics.append(entry)
+            this.staticsByName.insert(declName, entry)
             continue
         }
         if (decl.name == AstNodeKind.Function) {

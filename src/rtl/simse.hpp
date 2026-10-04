@@ -21,7 +21,6 @@
 #include "containers.hpp"   // SmallVector, List, PList, Dictionary, Array, RawArray
 #include "span.hpp"         // Span<T> (borrowed view: pointer + length)
 #include "strview.hpp"      // StrView (an alias of Span<Char>, plus the text operations)
-#include "resources.hpp"    // the `_res.md` resources a program carries
 #include "functional.hpp"   // Func, Action, AutoDefer
 // The compiler's AST (`AstXmlNode`, `AstNodeKind`, ...) is *generated*: it is declared in
 // src/modules/compiler/astxml.kt and the emitter writes its structs and enums

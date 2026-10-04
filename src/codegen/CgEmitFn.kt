@@ -358,8 +358,9 @@ fun Emitter.emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit
     }
     this.line(0, signature + " {")
     this.beginScope(fn, selfK, selfTypePtr)
-    if (isMain && this.hasStaticInit()) {
-        // Static storage is initialized before the body runs (specs/statics.md).
+    if (isMain && this.needsStaticInit()) {
+        // Static storage is initialized before the body runs (specs/statics.md), the
+        // resources among them (specs/resources.md).
         this.line(1, "simse_initStatics();")
     }
     if (mainArgs) {

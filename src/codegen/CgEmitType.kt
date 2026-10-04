@@ -17,9 +17,12 @@ import resources
 
 // Storage for every file-level static, value-initialized so a read before the generated
 // pass below fills in the initializers yields the empty value, not indeterminate data
-// (specs/statics.md).
+// (specs/statics.md). A prelude static is emitted only when a reached body reads it.
 fun Emitter.emitStatics(): Unit {
     for (*entry in this.statics) {
+        if (entry.prelude && !this.staticReached(entry)) {
+            continue
+        }
         this.curFile = entry.file
         val typeNode: *AstXmlNode = xmlChildPtr(entry.decl, AstNodeKind.Type)
         val storage: Str = this.qualify(entry.packageName, xmlAttr(entry.decl, AstNodeAttributeKind.Name))
@@ -35,9 +38,25 @@ fun Emitter.emitStatics(): Unit {
     }
 }
 
-// Whether any static has an initializer, i.e. whether the pass is needed.
+// Whether a prelude static's storage is emitted. `collectNames` records calls, not variable
+// reads, so a prelude static's reach is the reach of the code that reads it: the storage and
+// the install that fills it are the resources pair (`resourcesInstall` is recorded when the
+// program carries a table, `resourcesEntries` when the API is called).
+fun Emitter.staticReached(entry: *CgStatic): Bool {
+    val name: Str = xmlAttr(entry.decl, AstNodeAttributeKind.Name)
+    if (name == "resourceStore") {
+        return this.referencedNames.has("resourcesInstall")
+                || this.referencedNames.has("resourcesEntries")
+    }
+    return false
+}
+
+// Whether any emitted static has an initializer, i.e. whether the pass is needed.
 fun Emitter.hasStaticInit(): Bool {
     for (*entry in this.statics) {
+        if (entry.prelude && !this.staticReached(entry)) {
+            continue
+        }
         if (!xmlIsEmpty(xmlChildPtr(entry.decl, AstNodeKind.Init))) {
             return true
         }
@@ -45,16 +64,32 @@ fun Emitter.hasStaticInit(): Bool {
     return false
 }
 
+// Whether the generated initialization pass is needed at all: a static initializer, or the
+// resource table's install, which is its first step (`specs/resources.md`).
+fun Emitter.needsStaticInit(): Bool {
+    return this.hasStaticInit() || this.resourceStored.size() > 0
+}
+
 // The generated initialization pass (specs/statics.md), run before `main`'s body so the
 // language owns the order; a program must not depend on one static initializing before
-// another.
+// another. The resource table is built first: `Resources` is an API over it, not a program
+// static, so a static initializer that reads a resource sees the install already done.
 fun Emitter.emitStaticInit(): Unit {
-    if (!this.hasStaticInit()) {
+    if (!this.needsStaticInit()) {
         return
     }
     this.line(0, "// File-level static storage (specs/statics.md): initialized before main's body.")
     this.line(0, "void simse_initStatics() {")
+    if (this.resourceStored.size() > 0) {
+        this.line(
+            1,
+            "resourcesInstall(__sm_stringTable, __sm_stringCount, __sm_resourceIndex, __sm_resourceCount);"
+        )
+    }
     for (*entry in this.statics) {
+        if (entry.prelude && !this.staticReached(entry)) {
+            continue
+        }
         val init: *AstXmlNode = xmlChildPtr(entry.decl, AstNodeKind.Init)
         if (xmlIsEmpty(init)) {
             continue
@@ -947,7 +982,10 @@ fun Emitter.collectNames(node: *AstXmlNode, names: *Dictionary<Str, Bool>): Unit
                 names.insert("initByValue", true)
             }
             val named: Opt<Str> = this.nativeSymbols.get(name)
-            if (named.hasValue()) {
+            if (named.hasValue() && !this.nativeExtensions.has(name)) {
+                // The flat symbol map holds one symbol per name, so it is only unambiguous
+                // for a plain native; an explicit-`this` extension's symbol comes from
+                // `staticCallSymbol` at the call site that has a receiver type to match.
                 names.insert(named.value(), true)
             }
         }
@@ -1001,25 +1039,15 @@ fun Emitter.emitResourceTable(): Unit {
         indices.append(this.literals.indexOf(text))
     }
     this.line(0, "// The resources the compiler read from `_res.md` files (specs/resources.md):")
-    this.line(0, "// string-table indices, key then value, and the one installer that builds")
-    this.line(0, "// them into the program's `Resources` table before `main`.")
+    this.line(0, "// string-table indices, key then value; the generated initialization pass builds")
+    this.line(0, "// them into the program's `Resources` table (`resourcesInstall`, src/rtl/resources.kt).")
     val cgIntListTextText: Str = cgIntListText(indices)
-    this.line(0, `static const Int __sm_resourceIndex[] = @cgIntListTextText;`)
+    this.line(0, `static Int __sm_resourceIndex[] = @cgIntListTextText;`)
     val sizeText: Str = (this.resourceStored.size() / 2).toString()
     this.line(
         0,
         `static const Int __sm_resourceCount = @sizeText;`
     )
-    this.line(0, "namespace {")
-    this.line(1, "struct __SmResourceInit {")
-    this.line(2, "__SmResourceInit() {")
-    this.line(
-        3,
-        "Resources::install(__sm_stringTable, __sm_resourceIndex, __sm_resourceCount);"
-    )
-    this.line(2, "}")
-    this.line(1, "} __sm_resourceInit;")
-    this.line(0, "}")
     this.line(0, "")
 }
 
@@ -1217,6 +1245,12 @@ fun Emitter.collectProgramNames(): Unit {
             this.collectNames(input.module, *this.referencedNames)
         }
     }
+    // The resource table's installer is a generated call (the initialization pass), not the
+    // program's own, so the reach is recorded here (the rule `simse_list_append`'s `main`
+    // argument list follows); the storage it fills is gated with it (`staticReached`).
+    if (this.resourceStored.size() > 0) {
+        this.referencedNames.insert("resourcesInstall", true)
+    }
     var changed: Bool = true
     var reachedSections: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     while (changed) {
@@ -1260,9 +1294,13 @@ fun Emitter.collectProgramNames(): Unit {
         // A shared resource section (`strops`, `dictops`, ...) is emitted whole once any of
         // its symbols is reached, so every declaration its text holds is emitted with it -
         // and every signature's types come along (`Opt<Int> simse_str_toInt(...)`). The
-        // section is the first `@SmGen("res", ...)` argument.
+        // section is the first `@SmGen("res", ...)` argument; a `cpp` declaration's
+        // arguments name a symbol, not a section, so it is left out here.
         for (*fn in this.functions) {
             if (!fn.prelude || fn.hasBody) {
+                continue
+            }
+            if (xmlAttr(fn.decl, AstNodeAttributeKind.Generator) != "res") {
                 continue
             }
             val genArgs: Str = xmlAttr(fn.decl, AstNodeAttributeKind.GeneratorArgs)
@@ -1292,19 +1330,29 @@ fun Emitter.collectProgramNames(): Unit {
             // call site records, not always by its language name; either one - or a
             // sibling in the same emitted section - marks the declaration's own types as
             // reached, so the `Opt` its signature returns is emitted with it.
-            var reachedName: Bool = this.referencedNames.has(fn.name)
-            if (!reachedName) {
-                val symbol: Opt<Str> = this.nativeSymbols.get(fn.name)
-                if (symbol.hasValue()) {
-                    reachedName = this.referencedNames.has(symbol.value())
-                }
+            //
+            // A declaration with an *explicit* symbol (`@SmGen("cpp", "resourcesGet")`) is
+            // reached by that symbol and not by its language name: many declarations share a
+            // language name (`get`, `has`, `count`), so the name alone would drag one in
+            // when an unrelated declaration of the same name is reached - `Span.get`, the
+            // operator, would carry the resources API into every program that indexes a
+            // span.
+            var reachedName: Bool = false
+            if (xmlAttr(fn.decl, AstNodeAttributeKind.HasNativeSymbol) == "true") {
+                reachedName = this.referencedNames.has(
+                    sourceGenUnquote(xmlAttr(fn.decl, AstNodeAttributeKind.NativeSymbol))
+                )
+            } else {
+                reachedName = this.referencedNames.has(fn.name)
             }
             if (!reachedName) {
-                val section: Str = cgGeneratorArg(
-                    xmlAttr(fn.decl, AstNodeAttributeKind.GeneratorArgs), 0
-                )
-                if (section != "") {
-                    reachedName = reachedSections.has(section)
+                if (xmlAttr(fn.decl, AstNodeAttributeKind.Generator) == "res") {
+                    val section: Str = cgGeneratorArg(
+                        xmlAttr(fn.decl, AstNodeAttributeKind.GeneratorArgs), 0
+                    )
+                    if (section != "") {
+                        reachedName = reachedSections.has(section)
+                    }
                 }
             }
             if (!reachedName) {

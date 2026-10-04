@@ -43,8 +43,6 @@ Span<T> simse_spanOf(Array<T>* items);
 StrView simse_spanOfStr(Str* text);
 StrView simse_spanOfStr(StrView view);
 
-Span<ResourceEntry> simse_resources_entries();
-
 #include <cstdint>
 #include <type_traits>
 
@@ -2459,11 +2457,6 @@ inline StrView simse_spanOfStr(Str* text) {
 
 inline StrView simse_spanOfStr(StrView view) {
     return view;
-}
-
-inline Span<ResourceEntry> simse_resources_entries() {
-    List<ResourceEntry>& entries = simse_resourcesStorage();
-    return Span<ResourceEntry>(entries.data(), entries.size());
 }
 
 template <class T>

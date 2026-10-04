@@ -36,17 +36,10 @@ static struct __SmStringTableInitType {
 } __sm_stringTableInit;
 
 // The resources the compiler read from `_res.md` files (specs/resources.md):
-// string-table indices, key then value, and the one installer that builds
-// them into the program's `Resources` table before `main`.
-static const Int __sm_resourceIndex[] = {0,1};
+// string-table indices, key then value; the generated initialization pass builds
+// them into the program's `Resources` table (`resourcesInstall`, src/rtl/resources.kt).
+static Int __sm_resourceIndex[] = {0,1};
 static const Int __sm_resourceCount = 1;
-namespace {
-    struct __SmResourceInit {
-        __SmResourceInit() {
-            Resources::install(__sm_stringTable, __sm_resourceIndex, __sm_resourceCount);
-        }
-    } __sm_resourceInit;
-}
 
 #include <cstdint>
 #include <type_traits>
@@ -218,6 +211,7 @@ template <class T>
 struct Opt;
 template <class T>
 struct Res;
+struct ResourceEntry;
 // src/rtl
 enum class SmOptTypes { None, Value };
 inline SmOptTypes simse_SmOptTypes_fromInt(Int value) { return (SmOptTypes) value; }
@@ -494,7 +488,21 @@ requires (!std::is_same_v<Str, T>)
 inline void initByValue(Res<T>* self, Str value) {
     self->setError(std::move(value));
 }
+// src/rtl
+SIMSE_PACK_PUSH
+struct ResourceEntry {
+    StrView key;
+    StrView value;
+};
+SIMSE_PACK_POP
 
+// src/rtl
+List<ResourceEntry> resourceStore{};
+
+template <class T>
+T get(Span<T>* self, Int index);
+template <class T>
+void set(Span<T>* self, Int index, T value);
 Str substr(StrView* self, Int from, Int count);
 Str toString(StrView* self);
 template <class T>
@@ -515,9 +523,28 @@ template <class T>
 Res<T> simse_resOk(T value);
 template <class T>
 Res<T> simse_resErr(Str message);
+void resourcesInstall(StrView* table, Int tableCount, Int* index, Int count);
 void initByValue(Str* self);
 Str substr(Str* self, Int start, Int len);
 
+// File-level static storage (specs/statics.md): initialized before main's body.
+void simse_initStatics() {
+    resourcesInstall(__sm_stringTable, __sm_stringCount, __sm_resourceIndex, __sm_resourceCount);
+}
+
+template <class T>
+T get(Span<T>* self, Int index) {
+    T* _sm_base1;
+    _sm_base1 = self->ptr;
+    auto _sm_expr1 = _sm_base1[index];
+    return _sm_expr1;
+}
+template <class T>
+void set(Span<T>* self, Int index, T value) {
+    T* _sm_base1;
+    _sm_base1 = self->ptr;
+    _sm_base1[index] = value;
+}
 Str substr(StrView* self, Int from, Int count) {
     Int len, begin, end, _sm_expr6;
     Bool _sm_expr1;
@@ -626,6 +653,33 @@ Res<T> simse_resErr(Str message) {
     setError(simse_addressOf(result), message);
     return result;
 }
+void resourcesInstall(StrView* table, Int tableCount, Int* index, Int count) {
+    StrView _sm_base1, _sm_base2;
+    List<ResourceEntry>* _sm_base3;
+    Span<StrView> views;
+    Int i, _sm_expr2, _sm_expr5;
+    Bool _sm_expr1;
+    ResourceEntry entry;
+    views = Span<StrView>(table, tableCount);
+    i = 0;
+    L1:;
+    _sm_expr1 = i < count;
+    if (!(_sm_expr1)) goto L2;
+    _sm_expr2 = i * 2;
+    {
+        auto _sm_expr3 = index[_sm_expr2];
+        _sm_expr5 = _sm_expr2 + 1;
+        auto _sm_expr6 = index[_sm_expr5];
+        _sm_base1 = get(simse_addressOf(views), _sm_expr3);
+        _sm_base2 = get(simse_addressOf(views), _sm_expr6);
+        entry = ResourceEntry{_sm_base1, _sm_base2};
+        _sm_base3 = &resourceStore;
+        simse_list_append((*_sm_base3), entry);
+        i = i + 1;
+        goto L1;
+    }
+    L2:;
+}
 void initByValue(Str* self) {
 }
 Str substr(Str* self, Int start, Int len) {
@@ -672,6 +726,7 @@ Str substr(Str* self, Int start, Int len) {
 }
 // stress/res-comments/src/main.kt
 int main() {
+    simse_initStatics();
     Int _sm_expr1;
     Str _sm_expr2;
     _sm_expr1 = fixtures_resCom(14);

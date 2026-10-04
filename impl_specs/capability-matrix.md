@@ -2505,7 +2505,8 @@ compiler *did* catch and one it could not:
   that move, both in `agents.md`'s gotchas now: the emitter's type table is flat by
   name (the compiler's reader type had to become `ResourceItem` so the RTL's
   `ResourceEntry` could exist), and a *static* call's result has no inferred type, so a
-  chained member needs a typed local.
+  chained member needs a typed local. (The header that remained - `install` and the storage -
+  is gone later; the last entry of this log is that move.)
 - **Release builds default to whole-program optimization** (`/GL`, whose link-time codegen
   is LTCG; `--no-lto` opts out). Measured here: transpile 0.87 s vs 0.86 s with and
   without, compile+link 16.4 s vs 19.2 s - neutral on this machine, and now the default
@@ -4861,3 +4862,42 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   moved goldens (`collections`, `machines`, `objects`, `smgen-res`, `smgen-res-collision`,
   `strings`) carry only the `get`/`set` prototypes and bodies, the `get(...)` call sites,
   and the `atPtr`/`advance` rewrites.
+
+- **The resource table's storage and install are the language's too.** `resources.hpp` is
+  gone: `ResourceEntry` and `Resources` are ordinary prelude data classes (generated, packed
+  like every aggregate), `resourceStore` is a file-level static in `src/rtl/resources.kt`,
+  and `resourcesInstall(table, tableCount, index, count)` - the loop that appends a
+  `ResourceEntry` per key and value, with the table bound as a `Span<StrView>` first - is a
+  Simse body. The emitter writes only the table (`__sm_resourceIndex`, now non-`const`, and
+  `__sm_resourceCount`) and one call, the first step of the generated initialization pass
+  (`simse_initStatics`, specs/statics.md), where the old pre-main `__SmResourceInit` static
+  called `Resources::install`. `entries()` follows the established `@SmGen("cpp", symbol)`
+  shape: the member names `fun resourcesEntries(): Span<ResourceEntry>`, which is
+  `spanOf(resourceStore)`; the `resources` section of `_res.md` is deleted, so the feature
+  carries no C++ of its own at all. `specs/resources.md` has the new shape.
+
+  Three emitter findings came out of it, all fixed on the way:
+  - **A prelude static is reach-gated** like a prelude body (`CgStatic.prelude` and
+    `Emitter.staticReached`): the storage costs a program only when reached code reads it.
+    `collectNames` records calls, not variable reads, so the two readers
+    (`resourcesInstall`, `resourcesEntries`) are the gate.
+  - **A declaration with an explicit symbol is reached by its symbol, not its language
+    name** (`collectProgramNames`): `Resources.get` shares the name `get` with `Span.get`,
+    the operator, so the name alone carried `Resources` into every program that indexes a
+    span (invisible before, because both types were `@SmGen("cpp")` and the emitter skips
+    raw types). The flat `nativeSymbols` map holds one symbol per name, so `collectNames`
+    no longer inserts a symbol for an explicit-`this` extension - `staticCallSymbol`
+    supplies the right one per receiver.
+  - **The section-reach loop only looks at `res` declarations**: a `cpp` declaration's
+    argument was read as a *section* named after the symbol, a second path that let the
+    name `get` leak reach into the resources natives.
+  The install body's typed local (`var entry: ResourceEntry = ...`) is what reaches the
+  generated type from the body; `resourcesEntries`' signature reaches it for the API.
+
+  The build again needed staging: the published bootstrap's own C++ carries the old
+  `simse_resources_entries` and `Resources::install`, so the header and the section could
+  only go after a compiler built from the new prelude existed (compiler changes first, then
+  the prelude switch, then the refresh).
+  Verified: `bun tools/iterate.js --full` - 77/77 and both fixed points hold; the two moved
+  goldens (`collections`: the deleted `simse_resources_entries` text; `res-comments`: the
+  table comment, the non-`const` array, the generated install) carry nothing else.

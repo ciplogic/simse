@@ -337,7 +337,7 @@ fun Emitter.emitAsyncMain(fn: *CgFn, className: *Str, task: *TskTask): Unit {
     var ret: AstXmlNode = this.asyncReturn(fn.name)
     this.line(0, "")
     this.line(0, "int main() {")
-    if (this.hasStaticInit()) {
+    if (this.needsStaticInit()) {
         this.line(1, "simse_initStatics();")
     }
     val asyncFactoryText2: Str = this.asyncFactory(fn)

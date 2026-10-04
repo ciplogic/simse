@@ -104,7 +104,16 @@ changes, so refresh the bootstrap too.
 - **Golden `expected.cpp` files are byte-compared** and `--update` never rewrites them; copy
   from `stress/.work/<case>/out.cpp` after reading the output.
 - **`Dictionary.getPtr(key)`** is the value's place (or `null`); `get` copies and `has` is the
-  pointer test — use `getPtr` for lookups whose values are big (an `AstXmlNode`, a `List`).
+  pointer test - use `getPtr` for lookups whose values are big (an `AstXmlNode`, a `List`).
+- **A prelude `var` is a static too** (`CgStatic.prelude`): collected so the rules type it,
+  emitted only when reached (`Emitter.staticReached`). `collectNames` records calls, not
+  variable reads, so a prelude static's readers are named in `staticReached`
+  (`resourceStore`'s are `resourcesInstall`/`resourcesEntries`).
+- **A `@SmGen` declaration with an explicit symbol is reached by that symbol, not by its
+  language name** (`collectProgramNames`): names like `get`/`has`/`count` are shared, and the
+  name alone would carry one declaration in when an unrelated one is reached (`Span.get`, the
+  operator, for `Resources.get`). The section-reach loop looks only at `res` declarations for
+  the same reason - a `cpp` argument is a symbol, not a section.
 - The auto-borrow rewrite (`BorrowParams.kt`) binds a receiver to a local before a `for` over
   it, which is the shape to keep in compiler code that walks a container it is also passing
   on; `--no-borrow` is the escape hatch if a borrow is ever wrong.

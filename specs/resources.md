@@ -118,17 +118,19 @@ can read it:
 static const char __sm_stringPool[] = "...";           // keys and values are in here
 static StrView __sm_stringTable[__sm_stringCount];
 // ... the table's own init ...
-static const Int __sm_resourceIndex[] = { 12, 3, 14, 9 };   // key, value, key, value, ...
+static Int __sm_resourceIndex[] = { 12, 3, 14, 9 };    // key, value, key, value, ...
 static const Int __sm_resourceCount = 2;
-namespace {
-    struct __SmResourceInit {
-        __SmResourceInit() { Resources::install(__sm_stringTable, __sm_resourceIndex, __sm_resourceCount); }
-    } __sm_resourceInit;
-}
+// The generated initialization pass (specs/statics.md) builds the table first:
+//     void simse_initStatics() {
+//         resourcesInstall(__sm_stringTable, __sm_stringCount, __sm_resourceIndex, __sm_resourceCount);
+//     }
 ```
 
 The indices are positions in the string table, and the count is *entries*, not indices. A
-program with no `_res.md` file emits no table and no install.
+program with no `_res.md` file emits no table and no install. `resourcesInstall` is Simse
+(`src/rtl/resources.kt`): the emitter writes the *data* - the one part it can spell and the
+language cannot - and the language reads it. A program that reaches the table or the API
+carries the storage too (a reach-gated static, `src/rtl/resources.kt`).
 
 A section marked `!` is read and not stored: its entries stay in the list the compiler
 works from (a generator looks its keys up; the emitter finds its text and emits it as code)
@@ -143,8 +145,9 @@ hold any of them: printable bytes as themselves, everything else as an octal esc
 
 ## The API
 
-`Resources` is a prelude type (`src/rtl/resources.kt`), Simse code over the table the
-C++ header (`src/rtl/resources.hpp`) hands out. `Resources.get(k)` is a static call:
+`Resources` is a prelude type (`src/rtl/resources.kt`), and everything over it is Simse: the
+type, the storage (`resourceStore`, a reach-gated file-level static) and the install
+(`resourcesInstall`) - `resources.hpp` is gone. `Resources.get(k)` is a static call:
 
 ```simse
 fun entries(): Span<ResourceEntry>   // the table, borrowed
@@ -162,12 +165,15 @@ The declarations carry an explicit `this` and name their implementation with `@S
 checker a signature and the emitter a symbol to call; the symbol names the plain prelude
 function underneath it (`fun resourcesGet(key: Str): StrView`), where the scan is written.
 The emitter spells such a call as the symbol (`resourcesGet(k)`, `Emitter.staticCallSymbol`)
-rather than as a C++ static. What stays C++ because the language cannot say it: the storage
-and `install` in `src/rtl/resources.hpp`, and the accessor over it (`entries`) in the
-`resources` section of `src/rtl/_res.md`.
+rather than as a C++ static. `entries()` follows the same shape - its member names
+`fun resourcesEntries(): Span<ResourceEntry>`, which borrows the storage
+(`spanOf(resourceStore)`). The emitter's only part left is the table itself: the indices
+and the count, and the install call first in the generated initialization pass.
 
-The entries are built **once**, at startup, by `install`, which is called by the table
-the emitter writes - a list of `StrView` pairs borrowing the string table.
+The entries are built **once**, as the first step of the generated initialization pass
+(`specs/statics.md`), by `resourcesInstall`, which walks the indices the emitter writes and
+appends a `ResourceEntry` - a pair of `StrView`s borrowing the string table - per key and
+value.
 
 A section is the keys' prefix, so a section query is a query over keys, written by the
 program (`Resources.entries()`, or `Resources.get("Profiling:...")`).
@@ -214,7 +220,7 @@ bytes smaller). `src/rtl/_res.md` is the RTL's own generated C++ (`strtable`, `t
 | pooling and the table | the emitter: `src/codegen/Codegen.kt`, after `emitStringTable`, over `resourceStored` - the literals `resources.resStoredLiterals` already spelled |
 | the two escape rules, and the flags | `src/resources/Resources.kt`: `resMarkedName` (the markers), `resStoredLiterals` (`resQuoteLiteral`/`resQuoteBinary`), `resQuoteLiteral` |
 | the format's byte helpers | the `resfmt` section of `src/rtl/_res.md` (`simse_resHexToBytes`, `simse_resQuoteBinary`), reached only by the compiler's own module |
-| the storage and `install` | `src/rtl/resources.hpp` |
+| the storage and `install` | `src/rtl/resources.kt` (Simse: `resourceStore`, `resourcesInstall`) |
 | the API and the lookup | `src/rtl/resources.kt` (Simse) |
 | the static form | `Emitter.call` + `Emitter.staticCallSymbol` |
 | the RTL's generated C++ | `src/rtl/_res.md`, read by the `res` generator |
@@ -223,10 +229,13 @@ bytes smaller). `src/rtl/_res.md` is the RTL's own generated C++ (`strtable`, `t
 ## Status
 
 Implemented for the whole path: discovery, parse, join, pooling, the emitted table, the
-`Resources` API (the lookup written in Simse over the `Span<ResourceEntry>` the C++ storage
-hands out), and the `res` generator (`impl_specs/generators.md`). `stress/resources` prints
-every shape the format has: a fenced block, an inline value, an empty value, a missing key, a
-comparison against a literal, and the escapes a value needs on the way into the pool.
+`Resources` API (the lookup over the `Span<ResourceEntry>` the install builds into
+`resourceStore`), and the `res` generator (`impl_specs/generators.md`). The header that held
+the last C++ of the feature (`resources.hpp`) is gone: the emitter writes the table data and
+the install call, and the storage, the install and the lookup are the language's.
+`stress/resources` prints every shape the format has: a fenced block, an inline value, an
+empty value, a missing key, a comparison against a literal, and the escapes a value needs on
+the way into the pool.
 
 `src/rtl/_res.md` is entirely marked `!`, so the compiler's `Resources` table is empty:
 the RTL type is a program-facing API, and the compiler reads its own resources from the file

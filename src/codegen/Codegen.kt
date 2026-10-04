@@ -78,7 +78,11 @@ data class CgStatic(
     var decl: AstXmlNode,
 
     var packageName: Str,
-    var file: Str
+    var file: Str,
+    // A prelude static (`var` in `src/rtl/*.kt`): collected like a program's - the rules
+    // type it the same - but its storage and initializer are emitted only when reached
+    // (`Emitter.staticReached`), the rule a prelude body follows.
+    var prelude: Bool
 )
 
 
