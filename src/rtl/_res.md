@@ -938,6 +938,7 @@ inline SmString::SmString(const Span<Char>& view)
 ====
 forward:
 ```cpp
+#include <atomic>
 #include <condition_variable>
 #include <deque>
 #include <fstream>
@@ -947,12 +948,12 @@ forward:
 #include <vector>
 
 // The work pool (impl_specs/async.md, "The runtime"): a table of *named queues*, each with its
-// own worker threads. The thread that drives the loop is a program's main logic and is not a
-// worker; workers are the io side, and they meet the loop only at the queues. Only *values*
-// cross a queue, never a counted handle, and a reference is transferred under the queue's own
-// lock, which is what lets the language's reference counts stay non-atomic: one owner at a time.
-// A worker touches its job and the queues and nothing else, which is what makes it
-// pool-schedulable.
+// own worker threads. A queue is one of two kinds: an *io* queue carries functional jobs (a
+// value in, a value out) and its workers never touch a task; a *compute* queue carries tasks
+// (`simse_tasksCompute`) and its workers run them, one task at a time, each handed over under
+// the queue's lock. Only *values* cross a queue, never a counted handle, and a reference is
+// transferred under the queue's own lock, which is what lets the language's reference counts
+// stay non-atomic: one owner at a time.
 //
 // A queue is identified by an `Int` (`simse_tasksQueue`), so a program picks its own ids and
 // the thread count is the whole knob: a queue's threads are that queue's concurrency, since a
@@ -960,11 +961,13 @@ forward:
 // capacity. Completion is one shared side: whichever queue ran a job, the loop is what reads the
 // result, so there is one place to wait and one place a task is written.
 //
-// **The queues are the only thing locked.** Nothing that runs inside a task is: a task's state
-// belongs to the loop thread (single-threaded logic), and a worker's job is functional - a pure
+// **The queues are the only thing locked.** A task's own state belongs to the thread running it
+// and moves under the queue's lock; the one field two threads can touch at once is the task
+// header's count (the worker's guard release and a resumed parent's handle release), which is
+// why it is atomic. Nothing else inside a task is locked: the pool's job is functional - a pure
 // function of the values it was handed, in and out by value, no `&T`, no file-level static - so
-// there is no shared mutable state for a lock to protect and no race to lose. A socket is an
-// `Int64` and crosses like any other value.
+// there is no shared mutable state for a lock to protect. A socket is an `Int64` and crosses
+// like any other value.
 //
 // The task ABI a suspending body is lowered against (impl_specs/async.md, "The machine is
 // push"). A `suspend` function becomes a task - a ref-counted heap frame the loop drives, in
@@ -986,7 +989,11 @@ struct Loop;
 // any of the named queues' threads (impl_specs/async.md).
 
 struct Task {
-    Int refcount = 1;
+    // Atomic, unlike the language's `&T` counts: a task is run on one queue's worker while the
+    // parent it resumes may already be running on another, and the parent's handle release and
+    // this worker's guard release can meet on two threads. A count that is only ever touched by
+    // one thread (a `Job`, a value) needs no atomic; a task's does.
+    std::atomic<Int> refcount{1};
     TaskStatus status = TaskStatus::Runnable;
     // The task to resume when this one completes, held as a counted reference; null for the root.
     Task* parent = nullptr;
@@ -999,12 +1006,12 @@ struct Task {
     // A `forget`ed task: nobody holds a handle to it, so the thread that finishes it frees it.
     bool orphan = false;
 
-    // The count is non-atomic on purpose: only the loop thread touches a task
-    // (impl_specs/async.md, "Synchronization is the queue's, and nothing else's").
-    void retain() { refcount = refcount + 1; }
+    // The count is atomic on purpose: a completion's guard release (the worker that ran the
+    // task) and the handle release (the resumed parent, on another worker) are the two threads
+    // that can meet (impl_specs/async.md).
+    void retain() { refcount.fetch_add(1, std::memory_order_relaxed); }
     void release() {
-        refcount = refcount - 1;
-        if (refcount <= 0) {
+        if (refcount.fetch_sub(1, std::memory_order_acq_rel) == 1) {
             delete this;
         }
     }
@@ -1089,15 +1096,19 @@ struct Loop {
             if (task->status != TaskStatus::Runnable) {
                 continue;
             }
+            // The same guard the pool's worker takes: the run may hand control to another
+            // thread, and this one still has to read the task afterwards.
+            task->retain();
             task->status = TaskStatus::Running;
             taskCurrent() = task;
             task->run();
             taskCurrent() = nullptr;
-            // A spawned task resumes nobody, so the thread that finished it owns the last
-            // reference (the pool's worker frees its own the same way).
+            // A spawned task resumes nobody, so the thread that finished it drops the last
+            // reference (the pool's worker does the same).
             if (task->orphan && task->status == TaskStatus::Done) {
-                delete task;
+                task->release();
             }
+            task->release();
         }
     }
 };
@@ -1261,14 +1272,21 @@ void taskWorker(Pool* shared, Queue* queue) {
         if (task->status != TaskStatus::Runnable) {
             continue;
         }
+        // The worker holds a reference across the run: a task may resume its parent on another
+        // worker of this queue, and that parent's handle release must not free the frame while
+        // this thread is still in `run()` or reading the status below.
+        task->retain();
         task->status = TaskStatus::Running;
         taskCurrent() = task;
         task->run();
         taskCurrent() = nullptr;
-        // A forgotten task resumes nobody, so whoever finished it owns the last reference.
+        // A spawned task's creation reference is nobody's, so a worker that finished one drops
+        // it together with the guard; otherwise the guard is the release, and whoever dropped
+        // the handle last frees the frame.
         if (task->orphan && task->status == TaskStatus::Done) {
-            delete task;
+            task->release();
         }
+        task->release();
     }
 }
 

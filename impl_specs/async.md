@@ -195,9 +195,11 @@ after the child finishes) and the child holds one to the parent (it must resume 
 a suspension the two hold each other. The order of release is what keeps that from being a leak:
 the child **drops its parent reference before resuming the parent**, and the parent **drops its
 child reference after reading the result**. The only interval in which both counts are live is
-the suspension, and it always ends in one of those two releases. The child additionally needs a
-**self-reference for the duration of its completion step** (the parent may drop the last
-external reference to the child while the child's own frame is on the stack).
+the suspension, and it always ends in one of those two releases. The child's death is deferred to
+the end of its **completion step** by the **worker's guard**: the thread that runs a task retains
+it across `run()` and reads its status before releasing, because the parent - on another worker,
+under a compute queue - may drop the last external reference to the child while the child's own
+frame is still on the stack.
 
 Where the parent's drop goes is exact, and it is what makes the free lock-free:
 
@@ -207,7 +209,7 @@ Where the parent's drop goes is exact, and it is what makes the free lock-free:
   parent can let the child go immediately.
 - the last release then happens **on the loop thread, at the resume label**, in ordinary
   single-threaded code, which is the whole reason no lock is needed to free a task.
-- the child's death is deferred to the end of its **completion step** by the self-reference
+- the child's death is deferred to the end of its **completion step** by the worker's guard
   above, because the parent drops its handle while that step's frame is still on the stack.
 - an **awaited child's handle is not user-visible**: it is the compiler's storage for the
   suspension, dropped at the resume label every time. The slot is dead afterwards, so the
@@ -265,32 +267,33 @@ there is one place to wait and one place a task is written. The item is *tagged*
 work it answers — a read's text, an accept's socket — because the loop has to deliver it to the
 right sort of waiting task; today only file reads exist, so today it is a slot and a `Str`.
 
-**Synchronization is the queue's, and nothing else's.** Nothing that runs *inside* a task is
-locked, and that is the point: a task's state is the *loop's* (single-threaded), and the code a
-worker runs is **functional** — a pure function of the values it was handed, in and out by value,
-no `&T` and no file-level static — so there is no shared mutable state for a lock to protect and
-no race to lose, by construction rather than by luck. A socket is an `Int64` and crosses like any
-other value; what two jobs on one socket do concurrently (a read and a write) is the kernel's own
-serialization, not something the pool arbitrates. The counts stay non-atomic: a
-non-atomic count is only wrong when two threads touch it at once, and the design makes that
-impossible rather than making it cheap to do. A reference is **transferred under the queue's
-lock** - the enqueue retains, the dequeue takes ownership, both inside the same critical
-section - and otherwise a task has exactly one owner. That is the whole of the requirement, and
-it is affordable exactly where it is paid: a mutex is tens of nanoseconds uncontended, and the
-two acquisitions a job costs sit next to a file read or a socket send.
+**Synchronization is the queue's, and nothing else's.** The code a *job* runs is **functional** - a
+pure function of the values it was handed, in and out by value, no `&T` and no file-level
+static - so there is no shared mutable state for a lock to protect and no race to lose, by
+construction rather than by luck. A socket is an `Int64` and crosses like any other value; what
+two jobs on one socket do concurrently (a read and a write) is the kernel's own serialization,
+not something the pool arbitrates. The language's counts stay **non-atomic**: only values cross a
+queue, never a counted handle, so no `&T` is ever reachable from two threads. A reference is
+**transferred under the queue's lock** - the enqueue retains, the dequeue takes ownership, both
+inside the same critical section - and otherwise a value has exactly one owner. That is the whole
+of the requirement, and it is affordable exactly where it is paid: a mutex is tens of nanoseconds
+uncontended, and the two acquisitions a job costs sit next to a file read or a socket send.
 
-The lock covers the queue *item*, never a task. A worker never reads or writes a task field: it
-puts the result value into the completion item and the loop copies it into the task. So no task
-state is shared, no ordering question arises about it, and `free` needs no lock of its own -
-because **only the loop destroys a task**. A per-task mutex would buy nothing and add a
-re-entrancy hazard: a free that runs under a lock is a deadlock waiting for a destructor to touch
-the same queue, and the loop, being single-threaded, can free in the ordinary way.
+A **compute** queue carries tasks rather than jobs (`tasksCompute`), so a task may run on one of
+its workers and be resumed by another; a task's state is owned by whichever thread is running it,
+handed over under the same queue lock. That is why the task header's own count must be **atomic**
+(`src/rtl/_res.md`): the worker that runs a task's completion and the parent it resumes are two
+threads, and either may be the one that drops the last reference. The worker holds a reference
+across `run()`, so a task cannot be freed under its own completion step; no per-task mutex is
+needed, because the count is the only shared field and it is one atomic word.
 
 Three structures, and only two of them are shared:
 
 | structure | who touches it | protection |
 | --- | --- | --- |
 | ready queue (which task runs next) | the loop only | none - single-threaded, and the FIFO order determinism rests on |
+| a compute queue's task list | that queue's workers | one mutex + condition variable |
+| a task header's count | the worker running it and the parent it resumes | one atomic word |
 | work queue | loop -> pool | one mutex + condition variable |
 | completion queue | pool -> loop | one mutex + condition variable |
 
