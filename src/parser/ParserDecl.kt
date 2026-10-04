@@ -311,14 +311,18 @@ fun Parser.parseAttributedDecl(
     return this.parseFunction(attrName, args, isPure, isSuspend, isBorrow, isOperator)
 }
 
-// `protocol [Name] fun <T, ...> T.method(params): Ret` (specs/declarations.md, "Protocols"):
-// a named single-method contract, satisfied by any extension or class-body method that
-// matches the signature.
-// The type parameters may be spelled after `fun` (the protocol's own, the subject first),
-// the way a function spells them after its name (`T.toString<T>()`), or both. The protocol
-// name defaults to the method name, so an unnamed `protocol fun T.toString(): Str` is the
-// `toString` protocol. The declaration is a Function node with no body: the checker reads
-// its signature, the emitter never writes C++ for it.
+// `protocol [Name] fun [Name] [<T, ...>] T.method(params): Ret` (specs/declarations.md,
+// "Protocols"): a named single-method contract, satisfied by any extension or class-body
+// method that matches the signature.
+// The name may precede `fun` (`protocol Printable fun ...`) or follow it (`protocol fun
+// Printable<T> T.toString() ...`), the spelling the language is migrating to; the token
+// after `fun` is the name only when it is not the receiver's own type (a receiver type is
+// followed by `.`). The type parameters may be spelled after the name/`fun` - the protocol's
+// own, the subject first - the way a function spells them after its name
+// (`T.toString<T>()`), or both. The protocol name defaults to the method name, so an
+// unnamed `protocol fun T.toString(): Str` is the `toString` protocol. The declaration is a
+// Function node with no body: the checker reads its signature, the emitter never writes C++
+// for it.
 fun Parser.parseProtocol(): AstXmlNode {
     val pos: SourcePos = this.peek(0).pos
     this.advance()
@@ -328,6 +332,16 @@ fun Parser.parseProtocol(): AstXmlNode {
     }
     if (!this.expectText("fun")) {
         return this.emptyNode()
+    }
+    // The name after `fun`: an identifier that is not the start of the receiver
+    // (`Foo.` is a receiver, `Foo<T>`/`Foo T.` a name). Both positions together are one
+    // name too many.
+    if (this.checkKind(TokenKind.Identifier) && this.peek(1).text != ".") {
+        if (protocolName != "") {
+            this.fail("name the protocol before 'fun' or after it, not both")
+            return this.emptyNode()
+        }
+        protocolName = this.advance().text
     }
     var typeParams: List<Str> = List<Str>()
     if (this.checkText("<")) {

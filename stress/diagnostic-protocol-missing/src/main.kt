@@ -3,7 +3,7 @@ package fixtures
 // A concrete type that does not have the protocol's method is a diagnostic *at the call*,
 // not a C++ error on the emitted dispatch (specs/declarations.md, "Protocols").
 
-protocol Printable fun <T> T.toString(): Str
+protocol fun Printable<T> T.toString(): Str
 
 data class Rock(var weight: Int)
 

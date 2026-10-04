@@ -5103,3 +5103,15 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   build-harness limit: the compiler's one amalgamated translation unit crossed MSVC's
   65,534-section COFF limit in optimized builds (C1128), so `build.js` now passes
   `/bigobj` (object format only, no code change).
+
+- **A protocol's name follows `fun`, and the old position is a migration bridge.** The
+  canonical spelling is `protocol fun Printable<T> T.toString(): Str` - `protocol` and
+  `fun` are the introducer, and the name (optional; the method's name when omitted) comes
+  right after `fun`, its type parameters attached to it. The pre-`fun` position,
+  `protocol Printable fun <T> T.toString(): Str`, stays accepted so uses can migrate; it is
+  parsed the same way (an identifier before `fun` names the protocol, an identifier after
+  `fun` does unless the receiver's `.` follows) and is reported as one name too many when
+  both positions are written. All in-tree uses moved to the new spelling (`stress/protocols`,
+  the diagnostics, `specs/declarations.md`, the tour, `ai/language.md`, the README);
+  `stress/protocols-legacy` pins the old position and is deleted with it. Verified:
+  `bun tools/iterate.js --full` - **87/87**, both fixed points.

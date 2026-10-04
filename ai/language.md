@@ -94,8 +94,8 @@ A **protocol** is a named method signature a type parameter can require - a stat
 interface, not a type and not an existential:
 
 ```kt
-protocol Printable fun <T> T.toString(): Str
-protocol Equality fun <T, TDest> T.equalsWith(other: *TDest): Bool
+protocol fun Printable<T> T.toString(): Str
+protocol fun Equality<T, TDest> T.equalsWith(other: *TDest): Bool
 
 fun printBoth<T>(value: *T) when T: Printable, Countable {
     val text: Str = value.toString()
@@ -104,7 +104,7 @@ fun printBoth<T>(value: *T) when T: Printable, Countable {
 }
 ```
 
-The type parameters after `fun` are the protocol's, the first one being the subject (the
+The type parameters after the name are the protocol's, the first one being the subject (the
 receiver); the protocol is unnamed when the method's name is enough (`protocol fun <T>
 T.toString(): Str`). A type satisfies it structurally when an extension or class-body
 method matching the signature exists - no `implements` clause. The `when` clause after a

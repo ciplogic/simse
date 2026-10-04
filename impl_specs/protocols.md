@@ -14,10 +14,12 @@ The compile pipeline carries that in four small pieces:
 
 - **Parser** (`src/parser/ParserDecl.kt`, `ParserType.kt`): `parseProtocol` builds the
   protocol as an ordinary `Function` node with no body plus an `AstNodeAttributeKind.Protocol`
-  attribute (its value is the protocol's name; the node's `Name` is the method). The type
-  parameters sit after `fun` (`protocol P fun <T, TDest> T.equalsWith(...)`) or after the
-  method name, the function spelling (`T.equalsWith<TDest>(...)`); both merge.
-  `parseProtocolConstraints` reads a function's `when T: P, Q, U: R` clause into the
+  attribute (its value is the protocol's name; the node's `Name` is the method). The name
+  follows `fun` (`protocol fun Printable<T> T.toString(): Str`); the older pre-`fun`
+  position (`protocol Printable fun <T> T.toString(): Str`) is still accepted while uses
+  migrate, and is dropped with `stress/protocols-legacy`. The type parameters may sit after
+  the name, after an unnamed `fun`, or after the method name (`T.toString<T>()`); all
+  merge. `parseProtocolConstraints` reads a function's `when T: P, Q, U: R` clause into the
   `AstNodeAttributeKind.Protocols` attribute as `param:protocol` items joined by commas.
 - **Checker** (`src/sema/Protocols.kt`, `SemaCollect.kt`, `SemaAnalyze.kt`): protocols are
   collected into one program-wide `globalProtocols` table (they are *not* functions or types,

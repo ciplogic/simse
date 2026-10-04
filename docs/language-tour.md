@@ -521,8 +521,8 @@ every call of the generic function, and the call resolves to the concrete type's
 declaration once the type argument is known.
 
 ```kt
-protocol Printable fun <T> T.toString(): Str
-protocol Countable fun <T> T.countItems(): Int
+protocol fun Printable<T> T.toString(): Str
+protocol fun Countable<T> T.countItems(): Int
 
 data class Crate(var apples: Int, var pears: Int)
 
@@ -540,11 +540,12 @@ val c = Crate(2, 3)
 describe(*c)                 // Crate holds 5 items
 ```
 
-The type parameters after `fun` are the protocol's own; the first one is the **subject** -
-the type that must have the method - and any others are matched together with it, so
-`protocol Equality fun <T, TDest> T.equalsWith(other: *TDest): Bool` requires both sides.
-An unnamed declaration takes the method's name: `protocol fun <T> T.toString(): Str`
-declares the `toString` protocol.
+The protocol's name follows `fun`, with its type parameters; the first one is the
+**subject** - the type that must have the method - and any others are matched together with
+it, so `protocol fun Equality<T, TDest> T.equalsWith(other: *TDest): Bool` requires both
+sides. An unnamed declaration takes the method's name: `protocol fun <T> T.toString(): Str`
+declares the `toString` protocol. (The older spelling with the name before `fun`,
+`protocol Printable fun <T> ...`, is still accepted while code migrates.)
 
 Any receiver function that fits satisfies the protocol - an extension or a class-body
 method, and the prelude's own declarations count (`Int` already has `toString`), so no

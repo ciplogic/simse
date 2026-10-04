@@ -249,17 +249,19 @@ Status: implemented.
 A protocol is a *named method signature*: a static contract a type parameter can require.
 It is written like a body-less function whose receiver is the protocol's subject:
 
-```text
-protocol Printable fun <T> T.toString(): Str
-protocol Equality fun <T, TDest> T.equalsWith(other: *TDest): Bool
+```kt
+protocol fun Printable<T> T.toString(): Str
+protocol fun Equality<T, TDest> T.equalsWith(other: *TDest): Bool
 ```
 
 - `protocol` is a contextual keyword (the word stays usable as a name). The protocol's name
-  follows it; an unnamed declaration (`protocol fun <T> T.toString(): Str`) takes the
-  method's name, so that one is the `toString` protocol.
-- The type-parameter list after `fun` declares the protocol's parameters; the receiver must
-  name the **first** one (the subject, `T`). The remaining parameters (`TDest`) are matched
-  together with the subject at every implementation.
+  follows `fun`; an unnamed declaration (`protocol fun <T> T.toString(): Str`) takes the
+  method's name, so that one is the `toString` protocol. The older position - the name
+  before `fun`, `protocol Printable fun <T> ...` - is still accepted while uses migrate,
+  and is dropped afterwards.
+- The type-parameter list after the name (or after an unnamed `fun`) declares the protocol's
+  parameters; the receiver must name the **first** one (the subject, `T`). The remaining
+  parameters (`TDest`) are matched together with the subject at every implementation.
 - A protocol declares exactly one method, and its parameters need types. An implementation
   takes the subject as an emitted `T*` first parameter (a value receiver is passed by its
   address).
@@ -273,7 +275,7 @@ from the whole program: a call site's imports do not hide an implementation.
 A generic function declares the protocols its type parameters must satisfy with a `when`
 clause between the signature and the body:
 
-```text
+```kt
 fun printBoth<T>(value: *T) when T: Printable, Countable {
     val text: Str = value.toString()
     val count: Int = value.countItems()

@@ -71,7 +71,7 @@ enum class Color {
 `data class` gets you a constructor, field access and a copy-on-assign value;
 `enum class` gets you `toInt()` and `fromInt()` for free. There are no base classes and
 no `interface`: code is reused by *composition* and by *extension*, dispatch is resolved at
-compile time, and a **protocol** (`protocol Printable fun <T> T.toString(): Str`, with
+compile time, and a **protocol** (`protocol fun Printable<T> T.toString(): Str`, with
 `when T: Printable` on a generic function) is the structural interface - checked at every
 call, resolved to the concrete declaration, never a vtable.
 
@@ -334,9 +334,10 @@ the published bootstrap byte for byte. What the surface holds today:
 
 - **Types and data** - `data class`, `enum class`, `union class` (a discriminated union),
   `typealias`, and value semantics throughout.
-- **Generics** - reified, with call inference, and **protocols**: `protocol Printable fun
-  <T> T.toString(): Str` plus `when T: Printable` on a generic function, checked at every
-  call and resolved to the concrete declaration, never a vtable (`specs/declarations.md`).
+- **Generics** - reified, with call inference, and **protocols**: `protocol fun
+  Printable<T> T.toString(): Str` plus `when T: Printable` on a generic function, checked at
+  every call and resolved to the concrete declaration, never a vtable
+  (`specs/declarations.md`).
 - **Functions** - extensions, `data` pure functions the compiler may reuse, `borrow`
   read-only functions, and lambdas.
 - **Containers and text** - `List`, `Array`, `Dictionary`, `Span`, `Opt`, `Res`, `Str`

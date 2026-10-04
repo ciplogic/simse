@@ -6,12 +6,12 @@ package fixtures
 // checked at every instantiation; it is not an existential: `T` always names a concrete
 // type when the body's C++ is written, and the call resolves to that type's declaration.
 
-protocol Printable fun <T> T.toString(): Str
+protocol fun Printable<T> T.toString(): Str
 
-protocol Countable fun <T> T.countItems(): Int
+protocol fun Countable<T> T.countItems(): Int
 
 // A generic protocol: `TDest` is the other side's type, matched together with the subject.
-protocol Equality fun <T, TDest> T.equalsWith(other: *TDest): Bool
+protocol fun Equality<T, TDest> T.equalsWith(other: *TDest): Bool
 
 data class Crate(var apples: Int, var pears: Int) {
     // A class-body method satisfies the protocol the same way an extension does.

@@ -41,7 +41,7 @@ fun semProtocolConstraints(decl: *AstXmlNode): List<ProtocolConstraint> {
 }
 
 // The protocol's name (`Printable`) and the method name its signature declares
-// (`protocol Printable fun <T> T.toString(): Str` is `Printable`/`toString`).
+// (`protocol fun Printable<T> T.toString(): Str` is `Printable`/`toString`).
 fun semProtocolName(decl: *AstXmlNode): Str {
     return xmlAttr(decl, AstNodeAttributeKind.Protocol)
 }
