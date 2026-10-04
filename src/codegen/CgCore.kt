@@ -121,7 +121,8 @@ fun Emitter.addFunction(
             xmlAttr(decl, AstNodeAttributeKind.IsNative) == "true",
             xmlAttr(decl, AstNodeAttributeKind.HasBody) == "true",
             xmlAttr(decl, AstNodeAttributeKind.IsPure) == "true",
-            xmlCount(decl, AstNodeKind.Param) - semReceiverParams(decl)
+            xmlCount(decl, AstNodeKind.Param) - semReceiverParams(decl),
+            ""
         )
     )
     if (!xmlIsEmpty(receiver)) {
@@ -328,8 +329,36 @@ fun Emitter.collect(): Unit {
 // tables `collect` filled; the nodes are shared, not copied.
 fun Emitter.collectFacts(): SemFacts {
     val facts: SemFacts = semNewFacts()
+    this.computeMachineSuffixes()
     this.fillFacts(facts)
     return facts
+}
+
+// A machine class is named after its creating function (`Str_splitIter_yieldable`), so two
+// yielding overloads of one name would claim one class and the second factory would write
+// fields the first typed (`splitIter(StrView)` / `splitIter(Char)`). For an overloaded name
+// the parameter types are appended (`semMachineParamSuffix`); the field is what
+// `emitFunction` and `semMachineType` both read, so a slot's class is the struct's name. Runs
+// before anything reads a suffix; idempotent, so a second `collectFacts` recomputes it.
+fun Emitter.computeMachineSuffixes(): Unit {
+    for (*fn in this.functions) {
+        fn.machineSuffix = ""
+        if (!semMachineYielder(fn.decl)) {
+            continue
+        }
+        val outer: Str = semOuterTypeName(fn.receiver)
+        var count: Int = 0
+        for (*other in this.functions) {
+            if (other.name == fn.name && semMachineYielder(other.decl)
+                && semOuterTypeName(other.receiver) == outer
+            ) {
+                count = count + 1
+            }
+        }
+        if (count > 1) {
+            fn.machineSuffix = semMachineParamSuffix(fn.decl)
+        }
+    }
 }
 
 fun Emitter.fillFacts(facts: *SemFacts): Unit {
@@ -350,7 +379,7 @@ fun Emitter.fillFacts(facts: *SemFacts): Unit {
         facts.functions.append(
             semFnFact(
                 copy(fn.decl), copy(fn.receiver), fn.templateParams, fn.name,
-                fn.packageName, fn.isNative
+                fn.packageName, fn.isNative, fn.machineSuffix
             )
         )
     }

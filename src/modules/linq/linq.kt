@@ -128,3 +128,26 @@ fun Str.splitIter(separator: StrView): ..*StrView {
         yield *head
     }
 }
+
+// The byte-separator form: one byte compare per position instead of `findView`'s windowed
+// compare, and the split the parser's comma-separated lists want. The two overloads are two
+// machine classes (`Str_splitIter_yieldable_StrView` and `..._Char`), so each has its own
+// separator field (`semMachineParamSuffix`).
+fun Str.splitIter(separator: Char): ..*StrView {
+    var source: StrView = spanOfStr(this)
+    var len: Int = source.size()
+    var pos: Int = 0
+    while (true) {
+        var end: Int = pos
+        while (end < len && source.charAt(end) != separator) {
+            end = end + 1
+        }
+        var part: StrView = source.slice(pos, end - pos)
+        if (end >= len) {
+            yield *part
+            return
+        }
+        pos = end + 1
+        yield *part
+    }
+}

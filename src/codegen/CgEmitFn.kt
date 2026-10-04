@@ -267,7 +267,7 @@ fun Emitter.emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit
     // (impl_specs/yield.md): the emitted return type is the machine's class, not `..T`;
     // for a generic function the class is a template, so its name carries the parameters.
     val yielding: Bool = !xmlIsEmpty(returnNode) && xmlKind(returnNode) == AstNodeCategory.TypeYield
-    val yieldClass: Str = this.qualify(fn.packageName, this.machineName(decl)) + "_yieldable"
+    val yieldClass: Str = this.qualify(fn.packageName, this.machineName(decl)) + "_yieldable" + fn.machineSuffix
     var yieldType: Str = yieldClass
     if (yielding && tmplParams.size() > 0) {
         val cgJoinText: Str = cgJoin(tmplParams, ", ")

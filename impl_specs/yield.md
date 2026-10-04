@@ -47,6 +47,13 @@ site spells `advance(&m)`.
   `Span_iter_yieldable<T>`), so a binding's declaration spells the class rather than an
   `auto`. The parser produces it, the emitter maps it to the machine's class.
 
+A name declared on one receiver **more than once** would give two machines one class, so for
+those the parameter types are appended (`Str_splitIter_yieldable_StrView` /
+`..._Char`, `semMachineParamSuffix`). `Emitter.computeMachineSuffixes` fills the suffix once,
+and both `CgFn.machineSuffix` and `SemFnFact.machineSuffix` carry it, so the struct the factory
+defines is the class a slot spells; `SemInfer.memberReturn` prefers the candidate whose
+parameters the arguments can reach, which is what picks `Char` for `splitIter(';')`.
+
 ## Where the rewrite runs, and why there
 
 **On the linear body** - after `lowerForEmission` (control flow is already labels and gotos,

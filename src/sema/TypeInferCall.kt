@@ -278,6 +278,11 @@ fun SemInfer.memberReturn(callee: *AstXmlNode, argNodes: *List<AstXmlNode>): Ast
         return xmlEmptyNode()
     }
     val calleeText: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
+    // A name declared more than once on this receiver (`splitIter(StrView)` / `splitIter(Char)`)
+    // is decided by the arguments: the first candidate whose parameters the arguments can
+    // reach. A candidate the arguments cannot tell about (an untyped lambda, say) keeps the
+    // old behavior - the first receiver match answers - so only real overloads move.
+    var fallback: AstXmlNode = xmlEmptyNode()
     var i: Int = 0
     while (i < this.facts.functions.size()) {
         val fn: *SemFnFact = *this.facts.functions[i]
@@ -306,9 +311,19 @@ fun SemInfer.memberReturn(callee: *AstXmlNode, argNodes: *List<AstXmlNode>): Ast
             semBindCallArgs(fn.decl, xmlEmptyNode(), *argTypes, *fn.templateParams, *bindings)
         }
         val result: AstXmlNode = semSubstitute(ret, bindings, fn.templateParams)
-        if (!xmlIsEmpty(result)) {
-            return semMachineType(result, fn, bindings, recv)
+        if (xmlIsEmpty(result)) {
+            continue
         }
+        val machine: AstXmlNode = semMachineType(result, fn, bindings, recv)
+        if (this.callArgsReach(fn, argNodes)) {
+            return machine
+        }
+        if (xmlIsEmpty(fallback)) {
+            fallback = machine
+        }
+    }
+    if (!xmlIsEmpty(fallback)) {
+        return fallback
     }
     val extensions: *List<SemExtFact> = this.facts.nativeExtensions.getPtr(calleeText)
     if (extensions != null) {
@@ -389,6 +404,73 @@ fun SemInfer.memberReturn(callee: *AstXmlNode, argNodes: *List<AstXmlNode>): Ast
         }
     }
     return this.classMemberReturn(*recv, calleeText)
+}
+
+// Whether every argument can reach this declaration's parameter: the test that decides
+// between two overloads on one receiver (`splitIter(StrView)` / `splitIter(Char)`). False
+// when a type cannot be told (an untyped lambda), so the caller keeps its fallback.
+fun SemInfer.callArgsReach(fn: *SemFnFact, argNodes: *List<AstXmlNode>): Bool {
+    val params: List<AstXmlNode> = xmlChildren(fn.decl, AstNodeKind.Param)
+    var base: Int = 0
+    if (params.size() > 0 && xmlAttr(params[0], AstNodeAttributeKind.Name) == "this") {
+        base = 1
+    }
+    if (params.size() - base != argNodes.size()) {
+        return false
+    }
+    var i: Int = 0
+    while (i < argNodes.size()) {
+        val pattern: *AstXmlNode = xmlChildPtr(params[base + i], AstNodeKind.Type)
+        if (xmlIsEmpty(pattern)) {
+            return false
+        }
+        val actual: AstXmlNode = this.infer(argNodes[i])
+        if (xmlIsEmpty(actual) || !this.argReachesParam(pattern, actual, fn.templateParams)) {
+            return false
+        }
+        i = i + 1
+    }
+    return true
+}
+
+fun SemInfer.argReachesParam(pattern: *AstXmlNode, actual: AstXmlNode, typeParams: *List<Str>): Bool {
+    if (semUnifyType(pattern, actual, typeParams)) {
+        return true
+    }
+    // A `Str` argument reaches a view parameter as a view of itself (`spanOfStr`): a string
+    // literal is a `Str` to the pass, and the call site views it.
+    return this.paramIsView(pattern) && semIsStrType(actual)
+}
+
+// A view parameter: `Span<T>`, `StrView`, or a `typealias` reaching one, followed the way
+// `Analyzer.isViewType` follows them.
+fun SemInfer.paramIsView(pattern: *AstXmlNode): Bool {
+    var current: AstXmlNode = *pattern
+    var guard: Int = 0
+    while (guard < 32) {
+        guard = guard + 1
+        if (semaIsSpanType(current)) {
+            return true
+        }
+        if (xmlKind(current) != AstNodeCategory.TypeNamed) {
+            return false
+        }
+        val decl: *AstXmlNode = this.facts.types.getPtr(xmlAttr(current, AstNodeAttributeKind.Name))
+        if (decl == null || xmlKind(*decl) != AstNodeCategory.TypeAlias) {
+            return false
+        }
+        val target: AstXmlNode = xmlChild(*decl, AstNodeKind.TargetType)
+        if (xmlIsEmpty(target)) {
+            return false
+        }
+        current = target
+    }
+    return false
+}
+
+fun semIsStrType(typeNode: AstXmlNode): Bool {
+    return xmlKind(typeNode) == AstNodeCategory.TypeNamed
+            && xmlAttr(typeNode, AstNodeAttributeKind.Name) == "Str"
 }
 
 // A member of a data class no `SemFnFact` stands for: a *prelude* class's methods

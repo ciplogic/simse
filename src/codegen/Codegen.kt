@@ -49,7 +49,13 @@ data class CgFn(
 
     // The non-receiver parameter count, read once like the flags above: two same-name extensions
     // of one receiver (the `initByValue` pair) are told apart by arity.
-    var paramCount: Int
+    var paramCount: Int,
+
+    // A machine class is named after its creating function, so two yielding overloads of one
+    // name would claim one class. When that happens the parameter types are appended
+    // (`semMachineParamSuffix`), and `emitFunction` and `semMachineType` both read this field
+    // so the class the slot spells is the struct the factory defines. Empty when unique.
+    var machineSuffix: Str
 )
 
 // A `native fun` declaration to emit once at the top (and call by symbol).

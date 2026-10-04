@@ -76,8 +76,8 @@ fun Emitter.findMachineCreator(recvType: AstXmlNode): *CgFn {
         if (fn.isNative || xmlIsEmpty(fn.receiver)) {
             continue
         }
-        val bare: Str = this.machineName(fn.decl) + "_yieldable"
-        val qualified: Str = this.qualify(fn.packageName, this.machineName(fn.decl)) + "_yieldable"
+        val bare: Str = this.machineName(fn.decl) + "_yieldable" + fn.machineSuffix
+        val qualified: Str = this.qualify(fn.packageName, this.machineName(fn.decl)) + "_yieldable" + fn.machineSuffix
         if (name == bare || name == qualified) {
             return fn
         }

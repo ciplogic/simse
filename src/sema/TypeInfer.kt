@@ -653,14 +653,18 @@ data class SemFnFact(
     // The parameters a call's arguments convert against: its own, after the receiver.
     var paramCount: Int,
     // Whether its last parameter packs (a `List<T>`/`*List<T>`), from `semIsPackTarget`.
-    var packTarget: Bool
+    var packTarget: Bool,
+    // A yielding function's machine class carries its parameter types when the name is
+    // declared more than once on one receiver (`Emitter.computeMachineSuffixes`); the same
+    // field is what `emitFunction` reads, so a slot's class is the struct's name.
+    var machineSuffix: Str
 )
 
 // The fact for one collected function: everything above, read from the declaration once.
 // `name` and `isNative` come from the emitter's `CgFn`, which read them the same way.
 fun semFnFact(
     decl: *AstXmlNode, receiver: *AstXmlNode, templateParams: *List<Str>, name: *Str,
-    packageName: *Str, isNative: Bool
+    packageName: *Str, isNative: Bool, machineSuffix: Str
 ): SemFnFact {
     val params: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
     var packTarget: Bool = false
@@ -669,7 +673,7 @@ fun semFnFact(
     }
     return SemFnFact(
         decl, receiver, templateParams, name, packageName, isNative, semIsExtensionDecl(decl),
-        params.size() - semReceiverParams(decl), packTarget
+        params.size() - semReceiverParams(decl), packTarget, machineSuffix
     )
 }
 
@@ -744,10 +748,57 @@ fun semMachineType(
         val fnNameText2: Str = fn.name
         machine = `@(outer)_@(fnNameText2)_yieldable`
     }
+    machine = machine + fn.machineSuffix
     var node: AstXmlNode = semReplaceRole(ret, AstNodeKind.TypeArg, args)
     node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Name, machine))
     node.attributes.append(AstNodeAttribute(AstNodeAttributeKind.Package, fn.packageName))
     return node
+}
+
+// Whether a declaration's body is a machine (`..T` in return position): the functions a
+// machine class is named after.
+fun semMachineYielder(decl: *AstXmlNode): Bool {
+    val ret: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.ReturnType)
+    return !xmlIsEmpty(ret) && xmlKind(ret) == AstNodeCategory.TypeYield
+}
+
+// The parameter types a machine class carries when its creator's name is declared more than
+// once on one receiver: `Str_splitIter_yieldable_StrView` and `..._Char` are two classes. A
+// kind prefix keeps a handle apart from its pointee (`*T` is `PT`), so the names a
+// declaration can spell almost never collide.
+fun semMachineParamSuffix(decl: *AstXmlNode): Str {
+    var out: Str = ""
+    for (*param in xmlChildren(decl, AstNodeKind.Param)) {
+        out = out + "_" + semTypeMangle(xmlChildPtr(param, AstNodeKind.Type))
+    }
+    return out
+}
+
+fun semTypeMangle(typeNode: *AstXmlNode): Str {
+    if (xmlIsEmpty(typeNode)) {
+        return "x"
+    }
+    val kind: AstNodeCategory = xmlKind(typeNode)
+    if (kind == AstNodeCategory.TypeNamed || kind == AstNodeCategory.TypeGeneric) {
+        val name: Str = semOuterTypeName(typeNode)
+        if (name == "") {
+            return "x"
+        }
+        return name
+    }
+    if (kind == AstNodeCategory.TypePointer) {
+        return "P" + semTypeMangle(xmlChildPtr(typeNode, AstNodeKind.Inner))
+    }
+    if (kind == AstNodeCategory.TypeReference) {
+        return "R" + semTypeMangle(xmlChildPtr(typeNode, AstNodeKind.Inner))
+    }
+    if (kind == AstNodeCategory.TypeYield) {
+        return "Y" + semTypeMangle(xmlChildPtr(typeNode, AstNodeKind.Inner))
+    }
+    if (kind == AstNodeCategory.TypeFunction) {
+        return "F" + xmlCount(typeNode, AstNodeKind.ParamType).toString()
+    }
+    return "u"
 }
 
 // Whether a declaration's receiver is a machine *pattern* (`..T` written by the author, not

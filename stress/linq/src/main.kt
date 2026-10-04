@@ -135,12 +135,11 @@ fun main(): Int {
     println(sizes.toString())
     printWords(*"a,b,c,d".splitIter(",").take(2).select((p: *StrView) -> p.toString()).toList())
 
-    // A one-byte separator is the byte-separator case: a `StrView` of one byte, found with
-    // a byte compare per position.
-    printWords(*"1;2;;3".splitIter(";").select((p: *StrView) -> p.toString()).toList())
-    printWords(*"a;b;".splitIter(";").select((p: *StrView) -> p.toString()).toList())
-    printWords(*"abc".splitIter(";").select((p: *StrView) -> p.toString()).toList())
-    printWords(*"".splitIter(";").select((p: *StrView) -> p.toString()).toList())
+    // The byte-separator overload: one byte compare per position, no needle view at all.
+    printWords(*"1;2;;3".splitIter(';').select((p: *StrView) -> p.toString()).toList())
+    printWords(*"a;b;".splitIter(';').select((p: *StrView) -> p.toString()).toList())
+    printWords(*"abc".splitIter(';').select((p: *StrView) -> p.toString()).toList())
+    printWords(*"".splitIter(';').select((p: *StrView) -> p.toString()).toList())
 
     // ... and the lazy chain agrees element for element with `split`'s list.
     val fromSplit: List<Str> = "x,,y,".split(",")
