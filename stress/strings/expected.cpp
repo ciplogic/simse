@@ -503,6 +503,10 @@ struct ns1_Tag {
 };
 SIMSE_PACK_POP
 
+template <class T>
+T get(Span<T>* self, Int index);
+template <class T>
+void set(Span<T>* self, Int index, T value);
 Char charAt(StrView* self, Int index);
 Bool startsWith(StrView* self, Str* text);
 Int find(StrView* self, Str sub);
@@ -559,7 +563,7 @@ Bool advance(Span_iterValues_yieldable<T>* self) {
     if (!(_sm_expr1)) goto L2;
     _sm_base9 = self->_sm_self;
     _sm_base10 = self->i;
-    _sm_expr2 = (*_sm_base9)[_sm_base10];
+    _sm_expr2 = get(_sm_base9, _sm_base10);
     self->current = _sm_expr2;
     self->branch = 1;
     return true;
@@ -600,6 +604,19 @@ Str ns1_viewKind(StrView v);
 Str ns1_fixed(Str* op);
 Int ns1_partWhenStrings();
 
+template <class T>
+T get(Span<T>* self, Int index) {
+    T* _sm_base1;
+    _sm_base1 = self->ptr;
+    auto _sm_expr1 = _sm_base1[index];
+    return _sm_expr1;
+}
+template <class T>
+void set(Span<T>* self, Int index, T value) {
+    T* _sm_base1;
+    _sm_base1 = self->ptr;
+    _sm_base1[index] = value;
+}
 Char charAt(StrView* self, Int index) {
     Char _sm_expr1;
     _sm_expr1 = self->at(index);
@@ -1703,7 +1720,7 @@ Str ns1_classify(Str* op) {
     if (_sm_expr1) goto L8;
     goto L7;
     L8:;
-    _sm_expr3 = _sm_when2_v[0];
+    _sm_expr3 = get(simse_addressOf(_sm_when2_v), 0);
     _sm_expr1 = _sm_expr3 == '|';
     if (_sm_expr1) goto L4;
     L7:;
@@ -1711,7 +1728,7 @@ Str ns1_classify(Str* op) {
     if (_sm_expr1) goto L9;
     goto L6;
     L9:;
-    _sm_expr3 = _sm_when2_v[0];
+    _sm_expr3 = get(simse_addressOf(_sm_when2_v), 0);
     _sm_expr1 = _sm_expr3 == '^';
     if (_sm_expr1) goto L4;
     L6:;
@@ -1719,7 +1736,7 @@ Str ns1_classify(Str* op) {
     if (_sm_expr1) goto L10;
     goto L5;
     L10:;
-    _sm_expr3 = _sm_when2_v[0];
+    _sm_expr3 = get(simse_addressOf(_sm_when2_v), 0);
     _sm_expr1 = _sm_expr3 == '&';
     if (_sm_expr1) goto L4;
     goto L5;
@@ -1747,7 +1764,7 @@ Str ns1_classify(Str* op) {
     if (_sm_expr1) goto L23;
     goto L22;
     L23:;
-    _sm_expr3 = _sm_when2_v[0];
+    _sm_expr3 = get(simse_addressOf(_sm_when2_v), 0);
     _sm_expr1 = _sm_expr3 == '<';
     if (_sm_expr1) goto L18;
     L22:;
@@ -1755,7 +1772,7 @@ Str ns1_classify(Str* op) {
     if (_sm_expr1) goto L24;
     goto L21;
     L24:;
-    _sm_expr3 = _sm_when2_v[0];
+    _sm_expr3 = get(simse_addressOf(_sm_when2_v), 0);
     _sm_expr1 = _sm_expr3 == '>';
     if (_sm_expr1) goto L18;
     L21:;
@@ -1804,7 +1821,7 @@ Str ns1_classifyPtr(Str* op) {
     if (_sm_expr1) goto L4;
     goto L2;
     L4:;
-    _sm_expr3 = _sm_when3_v[0];
+    _sm_expr3 = get(simse_addressOf(_sm_when3_v), 0);
     _sm_expr1 = _sm_expr3 == '|';
     if (_sm_expr1) goto L1;
     goto L2;
@@ -1842,7 +1859,7 @@ Str ns1_viewKind(StrView v) {
     if (_sm_expr1) goto L4;
     goto L3;
     L4:;
-    _sm_expr2 = _sm_when4_v[0];
+    _sm_expr2 = get(simse_addressOf(_sm_when4_v), 0);
     _sm_expr1 = _sm_expr2 == 'a';
     if (_sm_expr1) goto L1;
     L3:;
@@ -1850,7 +1867,7 @@ Str ns1_viewKind(StrView v) {
     if (_sm_expr1) goto L5;
     goto L2;
     L5:;
-    _sm_expr2 = _sm_when4_v[0];
+    _sm_expr2 = get(simse_addressOf(_sm_when4_v), 0);
     _sm_expr1 = _sm_expr2 == 'b';
     if (_sm_expr1) goto L1;
     goto L2;

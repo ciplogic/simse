@@ -538,6 +538,10 @@ SIMSE_PACK_POP
 
 template <class T>
 T* atPtr(Span<T>* self, Int index);
+template <class T>
+T get(Span<T>* self, Int index);
+template <class T>
+void set(Span<T>* self, Int index, T value);
 Char charAt(StrView* self, Int index);
 Bool startsWith(StrView* self, Str text);
 Int find(StrView* self, Str sub);
@@ -593,7 +597,7 @@ Bool advance(Span_iterValues_yieldable<T>* self) {
     if (!(_sm_expr1)) goto L2;
     _sm_base9 = self->_sm_self;
     _sm_base10 = self->i;
-    _sm_expr2 = (*_sm_base9)[_sm_base10];
+    _sm_expr2 = get(_sm_base9, _sm_base10);
     self->current = _sm_expr2;
     self->branch = 1;
     return true;
@@ -621,9 +625,9 @@ struct Span_iter_yieldable {
 template <class T>
 Bool advance(Span_iter_yieldable<T>* self) {
     Bool _sm_base1, _sm_base3, _sm_expr1;
-    Int _sm_base2, _sm_base4, _sm_base5, _sm_base7, _sm_base8, _sm_base11, _sm_base12, _sm_base13;
-    Span<T>* _sm_base6, * _sm_base10;
-    T* _sm_base9, * _sm_expr2;
+    Int _sm_base2, _sm_base4, _sm_base5, _sm_base7, _sm_base8, _sm_base10, _sm_base11, _sm_base12;
+    Span<T>* _sm_base6, * _sm_base9;
+    T* _sm_expr2;
     _sm_base2 = self->branch;
     _sm_base1 = _sm_base2 == -1;
     if (_sm_base1) goto L2;
@@ -639,17 +643,16 @@ Bool advance(Span_iter_yieldable<T>* self) {
     _sm_base8 = self->len;
     _sm_expr1 = _sm_base7 < _sm_base8;
     if (!(_sm_expr1)) goto L2;
-    _sm_base10 = self->_sm_self;
-    _sm_base11 = self->i;
-    _sm_base9 = simse_addressOf((*_sm_base10)[_sm_base11]);
-    _sm_expr2 = _sm_base9;
+    _sm_base9 = self->_sm_self;
+    _sm_base10 = self->i;
+    _sm_expr2 = atPtr(_sm_base9, _sm_base10);
     self->current = _sm_expr2;
     self->branch = 1;
     return true;
     LY1:;
-    _sm_base13 = self->i;
-    _sm_base12 = _sm_base13 + 1;
-    self->i = _sm_base12;
+    _sm_base12 = self->i;
+    _sm_base11 = _sm_base12 + 1;
+    self->i = _sm_base11;
     goto L1;
     L2:;
     self->branch = -1;
@@ -870,10 +873,23 @@ void ns1_partLambdaFor_closure3_invoke(ns1_partLambdaFor_closure3 self, Int n) {
 
 template <class T>
 T* atPtr(Span<T>* self, Int index) {
-    T* _sm_base1, * _sm_expr1;
-    _sm_base1 = simse_addressOf((*self)[index]);
-    _sm_expr1 = _sm_base1;
+    T* _sm_base2;
+    _sm_base2 = self->ptr;
+    auto _sm_expr1 = simse_addressOf(_sm_base2[index]);
     return _sm_expr1;
+}
+template <class T>
+T get(Span<T>* self, Int index) {
+    T* _sm_base1;
+    _sm_base1 = self->ptr;
+    auto _sm_expr1 = _sm_base1[index];
+    return _sm_expr1;
+}
+template <class T>
+void set(Span<T>* self, Int index, T value) {
+    T* _sm_base1;
+    _sm_base1 = self->ptr;
+    _sm_base1[index] = value;
 }
 Char charAt(StrView* self, Int index) {
     Char _sm_expr1;
@@ -1949,7 +1965,7 @@ Int ns1_sum(List<Int>* items) {
     _sm_expr1 = span.isEmpty();
     _sm_expr2 = !_sm_expr1;
     if (!(_sm_expr2)) goto L2;
-    _sm_expr3 = span[0];
+    _sm_expr3 = get(simse_addressOf(span), 0);
     total = total + _sm_expr3;
     span = span.slice(1);
     goto L1;
@@ -1988,7 +2004,7 @@ Int ns1_middleSum(List<Int>* items) {
     _sm_expr1 = middle.size();
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L2;
-    _sm_expr1 = middle[i];
+    _sm_expr1 = get(simse_addressOf(middle), i);
     total = total + _sm_expr1;
     i = i + 1;
     goto L1;
@@ -2240,8 +2256,8 @@ Int ns1_partSpanConvert() {
     s = simse_spanOf(_sm_base1);
     _sm_expr1 = s.size();
     simse_println((_sm_expr1), stdout);
-    _sm_expr2 = s[0];
-    _sm_expr3 = s[1];
+    _sm_expr2 = get(simse_addressOf(s), 0);
+    _sm_expr3 = get(simse_addressOf(s), 1);
     _sm_expr4 = _sm_expr2 + _sm_expr3;
     simse_println((_sm_expr4), stdout);
     text = __sm_stringTable[9];

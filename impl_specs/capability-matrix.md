@@ -2932,9 +2932,11 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   the C++ then fails to compile - while the container form `* xs[0]` emits
   `simse_addressOf(xs[0])` correctly (`receiverOf`'s `ExprDeref` case hands the operand's
   *value* to `operandOf`, and only a place-taking index reaches the `IndexAddr` path).
-  Pre-existing, not this change's, and **not fixed**: it is recorded in `agents.md` §9
-  with the repro. `stress/span` covers `atPtr` - `bump` writes through the returned
-  pointer into the list the span borrows, and `headByte` reaches it through a *view*.
+  Pre-existing, not this change's - it is recorded in `agents.md` §9 with the repro (now
+  `ai/contributing.md`) - and **fixed later** by `isPointerIndex` and the `atPtr` rewrite
+  (the indexer entry at the end of this log). `stress/span` covers `atPtr` - `bump`
+  writes through the returned pointer into the list the span borrows, and `headByte`
+  reaches it through a *view*.
 
   **`at` is not redeclared on `StrView`.** A view *is* a `Span<Char>`, so the span's own
   member serves it: `view.at(i)`, emitted as a member call whose type the rules cannot
@@ -4827,3 +4829,35 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   operator is marked by its receiver type (`collectProgramNames`), because the index site has
   no call node for the walk to see.
   Verified: `bun tools/iterate.js --full` - 76/76 and both fixed points byte for byte.
+
+- **The span's indexers are the `operator` extensions, and the pointer walk goes through
+  `atPtr`.** `Span<T>`'s class body is documentation (`@SmGen("cpp")` is the hand-written
+  header's marker), so its indexers are the extensions `operator fun Span<T>.get<T>(index): T`
+  and `operator fun Span<T>.set<T>(index, value)` in `src/rtl/Span.kt` - emitted like any
+  other function - and every `span[i]` read in a program now lowers to a `get(...)` call
+  (a write, `set(...)`); the header's `operator[]` is no longer what the language spells.
+  Two consequences, and one build note:
+
+  **`atPtr` reads through the pointer field** (`*this.ptr[index]`, not `* this[index]`): an
+  index through `operator get` is a *value* (specs/functions.md), so `* this[i]` would take
+  the address of a temporary - the exact dropped-address-of the T83 note above recorded.
+  The fix is `isPointerIndex` (src/linear/LinearFormStmt.kt, committed alone first): a
+  raw-pointer index is always a place, whatever the rules can name its element, so the
+  address-of path takes `IndexAddr` and emits `simse_addressOf(_sm_base2[index])`.
+
+  **The pointer iterator yields `this.atPtr(i)`**, not `* this[i]`. In a machine's `advance`
+  the old spelling had become `_sm_base9 = get(...); self->current = &_sm_base9` - a pointer
+  to a local that dies when `advance` returns, which every `for (*x in ...)` in the
+  compiler's own sources then read. `atPtr` keeps the place in the span.
+
+  **The build needed a staged build.** The published bootstrap predated
+  `isPointerIndex`, so it could not transpile the new prelude: it emitted the dropped
+  address (`auto _sm_expr1 = _sm_base2[index]`) and the compiler built through that chain
+  misparsed every `Span.kt` ("expected 'package' declaration" at 1:1 - the misleading
+  poisoned-binary symptom). The way through: build the tree once with the *old* Span.kt
+  (a compiler that has `isPointerIndex`), rebuild with the new prelude, refresh the
+  bootstrap.
+  Verified: `bun tools/iterate.js --full` - 77/77 and both fixed points hold; the six
+  moved goldens (`collections`, `machines`, `objects`, `smgen-res`, `smgen-res-collision`,
+  `strings`) carry only the `get`/`set` prototypes and bodies, the `get(...)` call sites,
+  and the `atPtr`/`advance` rewrites.

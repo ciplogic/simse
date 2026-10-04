@@ -487,6 +487,10 @@ inline void initByValue(Res<T>* self, Str value) {
     self->setError(std::move(value));
 }
 
+template <class T>
+T get(Span<T>* self, Int index);
+template <class T>
+void set(Span<T>* self, Int index, T value);
 Str substr(StrView* self, Int from, Int count);
 Str toString(StrView* self);
 template <class T>
@@ -539,7 +543,7 @@ Bool advance(Span_iterValues_yieldable<T>* self) {
     if (!(_sm_expr1)) goto L2;
     _sm_base9 = self->_sm_self;
     _sm_base10 = self->i;
-    _sm_expr2 = (*_sm_base9)[_sm_base10];
+    _sm_expr2 = get(_sm_base9, _sm_base10);
     self->current = _sm_expr2;
     self->branch = 1;
     return true;
@@ -746,6 +750,19 @@ Bool advance(ns1_shadowing_yieldable* self) {
 ns1_shadowing_yieldable ns1_shadowing();
 Int ns1_partYield();
 
+template <class T>
+T get(Span<T>* self, Int index) {
+    T* _sm_base1;
+    _sm_base1 = self->ptr;
+    auto _sm_expr1 = _sm_base1[index];
+    return _sm_expr1;
+}
+template <class T>
+void set(Span<T>* self, Int index, T value) {
+    T* _sm_base1;
+    _sm_base1 = self->ptr;
+    _sm_base1[index] = value;
+}
 Str substr(StrView* self, Int from, Int count) {
     Int len, begin, end, _sm_expr6;
     Bool _sm_expr1;

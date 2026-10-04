@@ -1642,6 +1642,10 @@ Dictionary<Str, ns3_AstXmlNode> ns14_semNoScope{};
 
 template <class T>
 T* atPtr(Span<T>* self, Int index);
+template <class T>
+T get(Span<T>* self, Int index);
+template <class T>
+void set(Span<T>* self, Int index, T value);
 Char charAt(StrView* self, Int index);
 Bool startsWith(StrView* self, Str* text);
 Int find(StrView* self, Str sub);
@@ -1698,7 +1702,7 @@ Bool advance(Span_iterValues_yieldable<T>* self) {
     if (!(_sm_expr1)) goto L2;
     _sm_base9 = self->_sm_self;
     _sm_base10 = self->i;
-    _sm_expr2 = (*_sm_base9)[_sm_base10];
+    _sm_expr2 = get(_sm_base9, _sm_base10);
     self->current = _sm_expr2;
     self->branch = 1;
     return true;
@@ -1726,9 +1730,9 @@ struct Span_iter_yieldable {
 template <class T>
 Bool advance(Span_iter_yieldable<T>* self) {
     Bool _sm_base1, _sm_base3, _sm_expr1;
-    Int _sm_base2, _sm_base4, _sm_base5, _sm_base7, _sm_base8, _sm_base11, _sm_base12, _sm_base13;
-    Span<T>* _sm_base6, * _sm_base10;
-    T* _sm_base9, * _sm_expr2;
+    Int _sm_base2, _sm_base4, _sm_base5, _sm_base7, _sm_base8, _sm_base10, _sm_base11, _sm_base12;
+    Span<T>* _sm_base6, * _sm_base9;
+    T* _sm_expr2;
     _sm_base2 = self->branch;
     _sm_base1 = _sm_base2 == -1;
     if (_sm_base1) goto L2;
@@ -1744,17 +1748,16 @@ Bool advance(Span_iter_yieldable<T>* self) {
     _sm_base8 = self->len;
     _sm_expr1 = _sm_base7 < _sm_base8;
     if (!(_sm_expr1)) goto L2;
-    _sm_base10 = self->_sm_self;
-    _sm_base11 = self->i;
-    _sm_base9 = simse_addressOf((*_sm_base10)[_sm_base11]);
-    _sm_expr2 = _sm_base9;
+    _sm_base9 = self->_sm_self;
+    _sm_base10 = self->i;
+    _sm_expr2 = atPtr(_sm_base9, _sm_base10);
     self->current = _sm_expr2;
     self->branch = 1;
     return true;
     LY1:;
-    _sm_base13 = self->i;
-    _sm_base12 = _sm_base13 + 1;
-    self->i = _sm_base12;
+    _sm_base12 = self->i;
+    _sm_base11 = _sm_base12 + 1;
+    self->i = _sm_base11;
     goto L1;
     L2:;
     self->branch = -1;
@@ -2312,6 +2315,7 @@ void ns8_into(ns8_IlExtractor* self, Int slot, ns3_AstXmlNode* e);
 Int ns8_valueOf(ns8_IlExtractor* self, ns3_AstXmlNode* e);
 Bool ns8_isHandleExpr(ns8_IlExtractor* self, ns3_AstXmlNode e);
 Bool ns8_needsPlace(ns8_IlExtractor* self, ns3_AstXmlNode* e);
+Bool ns8_isPointerIndex(ns8_IlExtractor* self, ns3_AstXmlNode* e);
 ns3_AstXmlNode ns8_ilAliasTarget(ns14_SemFacts* facts, ns3_AstXmlNode* typeNode);
 Bool ns8_isOperatorIndex(ns8_IlExtractor* self, ns3_AstXmlNode* e);
 Int ns8_place(ns8_IlExtractor* self, ns8_IlOpKind kind, ns3_AstXmlNode* baseExpr, ns3_AstXmlNode* whole, Str* field, ns3_AstXmlNode* indexExpr);
@@ -3314,10 +3318,23 @@ void simse_initStatics() {
 
 template <class T>
 T* atPtr(Span<T>* self, Int index) {
-    T* _sm_base1, * _sm_expr1;
-    _sm_base1 = simse_addressOf((*self)[index]);
-    _sm_expr1 = _sm_base1;
+    T* _sm_base2;
+    _sm_base2 = self->ptr;
+    auto _sm_expr1 = simse_addressOf(_sm_base2[index]);
     return _sm_expr1;
+}
+template <class T>
+T get(Span<T>* self, Int index) {
+    T* _sm_base1;
+    _sm_base1 = self->ptr;
+    auto _sm_expr1 = _sm_base1[index];
+    return _sm_expr1;
+}
+template <class T>
+void set(Span<T>* self, Int index, T value) {
+    T* _sm_base1;
+    _sm_base1 = self->ptr;
+    _sm_base1[index] = value;
 }
 Char charAt(StrView* self, Int index) {
     Char _sm_expr1;
@@ -23609,7 +23626,7 @@ Int ns2_opPrecedenceRank(Str* op) {
     if (_sm_expr1) goto L20;
     goto L19;
     L20:;
-    _sm_expr10 = _sm_when1_v[0];
+    _sm_expr10 = get(simse_addressOf(_sm_when1_v), 0);
     _sm_expr1 = _sm_expr10 == '<';
     if (_sm_expr1) goto L15;
     L19:;
@@ -23617,7 +23634,7 @@ Int ns2_opPrecedenceRank(Str* op) {
     if (_sm_expr1) goto L21;
     goto L18;
     L21:;
-    _sm_expr10 = _sm_when1_v[0];
+    _sm_expr10 = get(simse_addressOf(_sm_when1_v), 0);
     _sm_expr1 = _sm_expr10 == '>';
     if (_sm_expr1) goto L15;
     L18:;
@@ -23642,7 +23659,7 @@ Int ns2_opPrecedenceRank(Str* op) {
     if (_sm_expr1) goto L27;
     goto L26;
     L27:;
-    _sm_expr10 = _sm_when1_v[0];
+    _sm_expr10 = get(simse_addressOf(_sm_when1_v), 0);
     _sm_expr1 = _sm_expr10 == '|';
     if (_sm_expr1) goto L25;
     goto L26;
@@ -23653,7 +23670,7 @@ Int ns2_opPrecedenceRank(Str* op) {
     if (_sm_expr1) goto L31;
     goto L30;
     L31:;
-    _sm_expr10 = _sm_when1_v[0];
+    _sm_expr10 = get(simse_addressOf(_sm_when1_v), 0);
     _sm_expr1 = _sm_expr10 == '^';
     if (_sm_expr1) goto L29;
     goto L30;
@@ -23664,7 +23681,7 @@ Int ns2_opPrecedenceRank(Str* op) {
     if (_sm_expr1) goto L35;
     goto L34;
     L35:;
-    _sm_expr10 = _sm_when1_v[0];
+    _sm_expr10 = get(simse_addressOf(_sm_when1_v), 0);
     _sm_expr1 = _sm_expr10 == '&';
     if (_sm_expr1) goto L33;
     goto L34;
@@ -23692,7 +23709,7 @@ Int ns2_opPrecedenceRank(Str* op) {
     if (_sm_expr1) goto L46;
     goto L45;
     L46:;
-    _sm_expr10 = _sm_when1_v[0];
+    _sm_expr10 = get(simse_addressOf(_sm_when1_v), 0);
     _sm_expr1 = _sm_expr10 == '+';
     if (_sm_expr1) goto L43;
     L45:;
@@ -23700,7 +23717,7 @@ Int ns2_opPrecedenceRank(Str* op) {
     if (_sm_expr1) goto L47;
     goto L44;
     L47:;
-    _sm_expr10 = _sm_when1_v[0];
+    _sm_expr10 = get(simse_addressOf(_sm_when1_v), 0);
     _sm_expr1 = _sm_expr10 == '-';
     if (_sm_expr1) goto L43;
     goto L44;
@@ -23711,7 +23728,7 @@ Int ns2_opPrecedenceRank(Str* op) {
     if (_sm_expr1) goto L53;
     goto L52;
     L53:;
-    _sm_expr10 = _sm_when1_v[0];
+    _sm_expr10 = get(simse_addressOf(_sm_when1_v), 0);
     _sm_expr1 = _sm_expr10 == '*';
     if (_sm_expr1) goto L49;
     L52:;
@@ -23719,7 +23736,7 @@ Int ns2_opPrecedenceRank(Str* op) {
     if (_sm_expr1) goto L54;
     goto L51;
     L54:;
-    _sm_expr10 = _sm_when1_v[0];
+    _sm_expr10 = get(simse_addressOf(_sm_when1_v), 0);
     _sm_expr1 = _sm_expr10 == '/';
     if (_sm_expr1) goto L49;
     L51:;
@@ -23727,7 +23744,7 @@ Int ns2_opPrecedenceRank(Str* op) {
     if (_sm_expr1) goto L55;
     goto L50;
     L55:;
-    _sm_expr10 = _sm_when1_v[0];
+    _sm_expr10 = get(simse_addressOf(_sm_when1_v), 0);
     _sm_expr1 = _sm_expr10 == '%';
     if (_sm_expr1) goto L49;
     goto L50;
@@ -40387,6 +40404,37 @@ Bool ns8_needsPlace(ns8_IlExtractor* self, ns3_AstXmlNode* e) {
     return _sm_expr3;
 }
 // src/linear/LinearFormStmt.kt
+Bool ns8_isPointerIndex(ns8_IlExtractor* self, ns3_AstXmlNode* e) {
+    ns3_AstNodeKind _sm_base1;
+    ns3_AstXmlNode* _sm_base2, * _sm_base3, * _sm_expr4;
+    ns3_AstNodeCategory _sm_expr1, _sm_expr2;
+    Bool _sm_expr3, _sm_expr7, _sm_expr5;
+    ns3_AstXmlNode recvType;
+    _sm_expr1 = ns2_xmlKind(e);
+    _sm_expr2 = ns3_AstNodeCategory::ExprIndex;
+    _sm_expr3 = _sm_expr1 != _sm_expr2;
+    if (_sm_expr3) goto L1;
+    goto L2;
+    L1:;
+    return false;
+    L2:;
+    _sm_base1 = ns3_AstNodeKind::Receiver;
+    _sm_expr4 = ns2_xmlChildPtr(e, _sm_base1);
+    recvType = ns8_exprType(self, _sm_expr4);
+    _sm_base2 = &recvType;
+    _sm_expr3 = ns2_xmlIsEmpty(_sm_base2);
+    _sm_expr7 = !_sm_expr3;
+    _sm_expr5 = _sm_expr7;
+    if (!(_sm_expr5)) goto _sm_sc1;
+    _sm_base3 = &recvType;
+    _sm_expr1 = ns2_xmlKind(_sm_base3);
+    _sm_expr2 = ns3_AstNodeCategory::TypePointer;
+    _sm_expr3 = _sm_expr1 == _sm_expr2;
+    _sm_expr5 = _sm_expr3;
+    _sm_sc1:;
+    return _sm_expr5;
+}
+// src/linear/LinearFormStmt.kt
 ns3_AstXmlNode ns8_ilAliasTarget(ns14_SemFacts* facts, ns3_AstXmlNode* typeNode) {
     ns3_AstXmlNode* _sm_base1, * _sm_base2, * decl, * target;
     ns3_AstNodeAttributeKind _sm_base3;
@@ -40620,11 +40668,11 @@ Int ns8_receiverOf(ns8_IlExtractor* self, ns3_AstXmlNode* e) {
     ns3_AstXmlNode _sm_base2, _sm_expr15;
     ns3_AstNodeKind _sm_base3, _sm_base7, _sm_base8, _sm_base11;
     ns8_IlOpKind _sm_base5, _sm_base9;
-    ns3_AstXmlNode* _sm_base6, * lhs, * _sm_expr22, * _sm_expr24, * _sm_expr28;
+    ns3_AstXmlNode* _sm_base6, * lhs, * _sm_expr23, * _sm_expr25, * _sm_expr29;
     Str* _sm_base10, * _sm_expr3, * _sm_expr14;
     ns3_AstNodeCategory kind, _sm_expr1;
     Bool _sm_expr2, _sm_expr12;
-    Int _sm_expr5, _sm_expr25;
+    Int _sm_expr5, _sm_expr26;
     kind = ns2_xmlKind(e);
     _sm_expr1 = ns3_AstNodeCategory::ExprName;
     _sm_expr2 = kind == _sm_expr1;
@@ -40683,33 +40731,35 @@ Int ns8_receiverOf(ns8_IlExtractor* self, ns3_AstXmlNode* e) {
     if (_sm_expr2) goto L15;
     _sm_expr2 = ns8_needsPlace(self, e);
     if (_sm_expr2) goto L16;
+    _sm_expr2 = ns8_isPointerIndex(self, e);
+    if (_sm_expr2) goto L16;
     L15:;
     _sm_expr5 = ns8_valueOf(self, e);
     return _sm_expr5;
     L16:;
     _sm_base7 = ns3_AstNodeKind::Receiver;
-    _sm_expr22 = ns2_xmlChildPtr(e, _sm_base7);
+    _sm_expr23 = ns2_xmlChildPtr(e, _sm_base7);
     {
-        Str _sm_expr23;
-        initByValue(simse_addressOf(_sm_expr23));
+        Str _sm_expr24;
+        initByValue(simse_addressOf(_sm_expr24));
         _sm_base8 = ns3_AstNodeKind::Index;
-        _sm_expr24 = ns2_xmlChildPtr(e, _sm_base8);
+        _sm_expr25 = ns2_xmlChildPtr(e, _sm_base8);
         _sm_base9 = ns8_IlOpKind::IndexAddr;
-        _sm_base10 = &_sm_expr23;
-        _sm_expr25 = ns8_place(self, _sm_base9, _sm_expr22, e, _sm_base10, _sm_expr24);
-        return _sm_expr25;
+        _sm_base10 = &_sm_expr24;
+        _sm_expr26 = ns8_place(self, _sm_base9, _sm_expr23, e, _sm_base10, _sm_expr25);
+        return _sm_expr26;
     }
     L14:;
     _sm_expr1 = ns3_AstNodeCategory::ExprDeref;
     _sm_expr2 = kind == _sm_expr1;
-    if (_sm_expr2) goto L19;
-    goto L20;
-    L19:;
-    _sm_base11 = ns3_AstNodeKind::Operand;
-    _sm_expr28 = ns2_xmlChildPtr(e, _sm_base11);
-    _sm_expr5 = ns8_operandOf(self, _sm_expr28);
-    return _sm_expr5;
+    if (_sm_expr2) goto L20;
+    goto L21;
     L20:;
+    _sm_base11 = ns3_AstNodeKind::Operand;
+    _sm_expr29 = ns2_xmlChildPtr(e, _sm_base11);
+    _sm_expr5 = ns8_operandOf(self, _sm_expr29);
+    return _sm_expr5;
+    L21:;
     _sm_expr5 = ns8_valueOf(self, e);
     return _sm_expr5;
 }
@@ -49520,7 +49570,7 @@ Bool ns10_foldArithOp(Str* op) {
     if (_sm_expr1) goto L12;
     goto L11;
     L12:;
-    _sm_expr2 = _sm_when2_v[0];
+    _sm_expr2 = get(simse_addressOf(_sm_when2_v), 0);
     _sm_expr1 = _sm_expr2 == '+';
     if (_sm_expr1) goto L1;
     L11:;
@@ -49528,7 +49578,7 @@ Bool ns10_foldArithOp(Str* op) {
     if (_sm_expr1) goto L13;
     goto L10;
     L13:;
-    _sm_expr2 = _sm_when2_v[0];
+    _sm_expr2 = get(simse_addressOf(_sm_when2_v), 0);
     _sm_expr1 = _sm_expr2 == '-';
     if (_sm_expr1) goto L1;
     L10:;
@@ -49536,7 +49586,7 @@ Bool ns10_foldArithOp(Str* op) {
     if (_sm_expr1) goto L14;
     goto L9;
     L14:;
-    _sm_expr2 = _sm_when2_v[0];
+    _sm_expr2 = get(simse_addressOf(_sm_when2_v), 0);
     _sm_expr1 = _sm_expr2 == '*';
     if (_sm_expr1) goto L1;
     L9:;
@@ -49544,7 +49594,7 @@ Bool ns10_foldArithOp(Str* op) {
     if (_sm_expr1) goto L15;
     goto L8;
     L15:;
-    _sm_expr2 = _sm_when2_v[0];
+    _sm_expr2 = get(simse_addressOf(_sm_when2_v), 0);
     _sm_expr1 = _sm_expr2 == '/';
     if (_sm_expr1) goto L1;
     L8:;
@@ -49552,7 +49602,7 @@ Bool ns10_foldArithOp(Str* op) {
     if (_sm_expr1) goto L16;
     goto L7;
     L16:;
-    _sm_expr2 = _sm_when2_v[0];
+    _sm_expr2 = get(simse_addressOf(_sm_when2_v), 0);
     _sm_expr1 = _sm_expr2 == '%';
     if (_sm_expr1) goto L1;
     L7:;
@@ -49560,7 +49610,7 @@ Bool ns10_foldArithOp(Str* op) {
     if (_sm_expr1) goto L17;
     goto L6;
     L17:;
-    _sm_expr2 = _sm_when2_v[0];
+    _sm_expr2 = get(simse_addressOf(_sm_when2_v), 0);
     _sm_expr1 = _sm_expr2 == '&';
     if (_sm_expr1) goto L1;
     L6:;
@@ -49568,7 +49618,7 @@ Bool ns10_foldArithOp(Str* op) {
     if (_sm_expr1) goto L18;
     goto L5;
     L18:;
-    _sm_expr2 = _sm_when2_v[0];
+    _sm_expr2 = get(simse_addressOf(_sm_when2_v), 0);
     _sm_expr1 = _sm_expr2 == '|';
     if (_sm_expr1) goto L1;
     L5:;
@@ -49576,7 +49626,7 @@ Bool ns10_foldArithOp(Str* op) {
     if (_sm_expr1) goto L19;
     goto L4;
     L19:;
-    _sm_expr2 = _sm_when2_v[0];
+    _sm_expr2 = get(simse_addressOf(_sm_when2_v), 0);
     _sm_expr1 = _sm_expr2 == '^';
     if (_sm_expr1) goto L1;
     L4:;
@@ -49625,7 +49675,7 @@ Bool ns10_foldCompareOp(Str* op) {
     if (_sm_expr1) goto L10;
     goto L5;
     L10:;
-    _sm_expr6 = _sm_when3_v[0];
+    _sm_expr6 = get(simse_addressOf(_sm_when3_v), 0);
     _sm_expr1 = _sm_expr6 == '<';
     if (_sm_expr1) goto L1;
     L5:;
@@ -49640,7 +49690,7 @@ Bool ns10_foldCompareOp(Str* op) {
     if (_sm_expr1) goto L12;
     goto L3;
     L12:;
-    _sm_expr6 = _sm_when3_v[0];
+    _sm_expr6 = get(simse_addressOf(_sm_when3_v), 0);
     _sm_expr1 = _sm_expr6 == '>';
     if (_sm_expr1) goto L1;
     L3:;
@@ -50560,7 +50610,7 @@ Opt<Int> ns10_foldIntOp(Str* op, Int a, Int b) {
     if (_sm_expr1) goto L3;
     goto L2;
     L3:;
-    _sm_expr2 = _sm_when1_v[0];
+    _sm_expr2 = get(simse_addressOf(_sm_when1_v), 0);
     _sm_expr1 = _sm_expr2 == '+';
     if (_sm_expr1) goto L1;
     goto L2;
@@ -50573,7 +50623,7 @@ Opt<Int> ns10_foldIntOp(Str* op, Int a, Int b) {
     if (_sm_expr1) goto L7;
     goto L6;
     L7:;
-    _sm_expr2 = _sm_when1_v[0];
+    _sm_expr2 = get(simse_addressOf(_sm_when1_v), 0);
     _sm_expr1 = _sm_expr2 == '-';
     if (_sm_expr1) goto L5;
     goto L6;
@@ -50586,7 +50636,7 @@ Opt<Int> ns10_foldIntOp(Str* op, Int a, Int b) {
     if (_sm_expr1) goto L11;
     goto L10;
     L11:;
-    _sm_expr2 = _sm_when1_v[0];
+    _sm_expr2 = get(simse_addressOf(_sm_when1_v), 0);
     _sm_expr1 = _sm_expr2 == '*';
     if (_sm_expr1) goto L9;
     goto L10;
@@ -50599,7 +50649,7 @@ Opt<Int> ns10_foldIntOp(Str* op, Int a, Int b) {
     if (_sm_expr1) goto L15;
     goto L14;
     L15:;
-    _sm_expr2 = _sm_when1_v[0];
+    _sm_expr2 = get(simse_addressOf(_sm_when1_v), 0);
     _sm_expr1 = _sm_expr2 == '/';
     if (_sm_expr1) goto L13;
     goto L14;
@@ -50622,7 +50672,7 @@ Opt<Int> ns10_foldIntOp(Str* op, Int a, Int b) {
     if (_sm_expr1) goto L22;
     goto L21;
     L22:;
-    _sm_expr2 = _sm_when1_v[0];
+    _sm_expr2 = get(simse_addressOf(_sm_when1_v), 0);
     _sm_expr1 = _sm_expr2 == '%';
     if (_sm_expr1) goto L20;
     goto L21;
@@ -50645,7 +50695,7 @@ Opt<Int> ns10_foldIntOp(Str* op, Int a, Int b) {
     if (_sm_expr1) goto L29;
     goto L28;
     L29:;
-    _sm_expr2 = _sm_when1_v[0];
+    _sm_expr2 = get(simse_addressOf(_sm_when1_v), 0);
     _sm_expr1 = _sm_expr2 == '&';
     if (_sm_expr1) goto L27;
     goto L28;
@@ -50658,7 +50708,7 @@ Opt<Int> ns10_foldIntOp(Str* op, Int a, Int b) {
     if (_sm_expr1) goto L33;
     goto L32;
     L33:;
-    _sm_expr2 = _sm_when1_v[0];
+    _sm_expr2 = get(simse_addressOf(_sm_when1_v), 0);
     _sm_expr1 = _sm_expr2 == '|';
     if (_sm_expr1) goto L31;
     goto L32;
@@ -50671,7 +50721,7 @@ Opt<Int> ns10_foldIntOp(Str* op, Int a, Int b) {
     if (_sm_expr1) goto L37;
     goto L36;
     L37:;
-    _sm_expr2 = _sm_when1_v[0];
+    _sm_expr2 = get(simse_addressOf(_sm_when1_v), 0);
     _sm_expr1 = _sm_expr2 == '^';
     if (_sm_expr1) goto L35;
     goto L36;
@@ -50986,7 +51036,7 @@ Opt<Bool> ns10_foldCompareValue(Str* op, Int a, Int b) {
     if (_sm_expr1) goto L11;
     goto L10;
     L11:;
-    _sm_expr8 = _sm_when1_v[0];
+    _sm_expr8 = get(simse_addressOf(_sm_when1_v), 0);
     _sm_expr1 = _sm_expr8 == '<';
     if (_sm_expr1) goto L9;
     goto L10;
@@ -51011,7 +51061,7 @@ Opt<Bool> ns10_foldCompareValue(Str* op, Int a, Int b) {
     if (_sm_expr1) goto L19;
     goto L18;
     L19:;
-    _sm_expr8 = _sm_when1_v[0];
+    _sm_expr8 = get(simse_addressOf(_sm_when1_v), 0);
     _sm_expr1 = _sm_expr8 == '>';
     if (_sm_expr1) goto L17;
     goto L18;
@@ -56497,7 +56547,7 @@ ns7_Token ns11_peek(ns11_Parser* self, Int offset) {
     goto L2;
     L1:;
     _sm_base1 = simse_addressOf(self->cursor);
-    _sm_expr2 = (*_sm_base1)[0];
+    _sm_expr2 = get(_sm_base1, 0);
     return _sm_expr2;
     L2:;
     _sm_base2 = simse_addressOf(self->cursor);
@@ -56507,13 +56557,13 @@ ns7_Token ns11_peek(ns11_Parser* self, Int offset) {
     if (_sm_expr4) goto L3;
     goto L4;
     L3:;
-    _sm_expr2 = rest[0];
+    _sm_expr2 = get(simse_addressOf(rest), 0);
     return _sm_expr2;
     L4:;
     _sm_base3 = simse_addressOf(self->cursor);
     _sm_expr6 = _sm_base3->size();
     _sm_expr7 = _sm_expr6 - 1;
-    _sm_expr2 = (*_sm_base3)[_sm_expr7];
+    _sm_expr2 = get(_sm_base3, _sm_expr7);
     return _sm_expr2;
 }
 // src/parser/Parser.kt
@@ -56524,7 +56574,7 @@ ns7_Token ns11_advance(ns11_Parser* self) {
     Int _sm_expr1;
     Bool _sm_expr2;
     _sm_base1 = simse_addressOf(self->cursor);
-    token = (*_sm_base1)[0];
+    token = get(_sm_base1, 0);
     _sm_expr1 = _sm_base1->size();
     _sm_expr2 = _sm_expr1 > 1;
     if (_sm_expr2) goto L1;
@@ -59105,7 +59155,7 @@ ns11_ExprNode ns11_parseUnary(ns11_Parser* self) {
     if (_sm_expr3) goto L4;
     goto L3;
     L4:;
-    _sm_expr4 = _sm_when1_v[0];
+    _sm_expr4 = get(simse_addressOf(_sm_when1_v), 0);
     _sm_expr3 = _sm_expr4 == '!';
     if (_sm_expr3) goto L1;
     L3:;
@@ -59113,7 +59163,7 @@ ns11_ExprNode ns11_parseUnary(ns11_Parser* self) {
     if (_sm_expr3) goto L5;
     goto L2;
     L5:;
-    _sm_expr4 = _sm_when1_v[0];
+    _sm_expr4 = get(simse_addressOf(_sm_when1_v), 0);
     _sm_expr3 = _sm_expr4 == '-';
     if (_sm_expr3) goto L1;
     goto L2;
@@ -59152,7 +59202,7 @@ ns11_ExprNode ns11_parseUnary(ns11_Parser* self) {
     if (_sm_expr3) goto L11;
     goto L10;
     L11:;
-    _sm_expr4 = _sm_when1_v[0];
+    _sm_expr4 = get(simse_addressOf(_sm_when1_v), 0);
     _sm_expr3 = _sm_expr4 == '&';
     if (_sm_expr3) goto L9;
     goto L10;
@@ -59187,7 +59237,7 @@ ns11_ExprNode ns11_parseUnary(ns11_Parser* self) {
     if (_sm_expr3) goto L17;
     goto L16;
     L17:;
-    _sm_expr4 = _sm_when1_v[0];
+    _sm_expr4 = get(simse_addressOf(_sm_when1_v), 0);
     _sm_expr3 = _sm_expr4 == '*';
     if (_sm_expr3) goto L15;
     goto L16;
@@ -60987,7 +61037,7 @@ Bool ns11_isAssignOp(Str* op) {
     if (_sm_expr1) goto L13;
     goto L12;
     L13:;
-    _sm_expr2 = _sm_when1_v[0];
+    _sm_expr2 = get(simse_addressOf(_sm_when1_v), 0);
     _sm_expr1 = _sm_expr2 == '=';
     if (_sm_expr1) goto L1;
     L12:;

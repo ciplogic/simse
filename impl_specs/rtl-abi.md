@@ -501,16 +501,26 @@ codegen maps member calls to the C++ members:
 | --- | --- | --- |
 | `size(): Int` | `len` | element count |
 | `isEmpty(): Bool` | `len <= 0` | true when nothing remains |
-| `at(index): T` | `ptr[index]` | the element at `index` (unchecked; `span[index]` is the same) |
+| `at(index): T` | `ptr[index]` | the element at `index` (unchecked) |
 | `slice(start): Span<T>` | `{ptr + start, len - start}` | from `start` to the end (unchecked) |
 | `slice(start, count): Span<T>` | `{ptr + start, count}` | `count` elements from `start` (unchecked) |
+| `atPtr(index): *T` | `&ptr[index]` | the same element as a *place* (unchecked) |
+| `get(index): T` | `ptr[index]` | `span[index]`: the `operator get` extension in `src/rtl/Span.kt` |
+| `set(index, value)` | `ptr[index] = value` | `span[index] = value`: its `operator set` twin |
+
+The last three rows are *extension bodies* in `src/rtl/Span.kt`, not header members: the
+emitter reifies them per instantiation like any generic function, and the index syntax
+resolves to `get`/`set` (`specs/functions.md`). `atPtr` takes its address through the
+pointer field because an index read through `get` answers a value - the address of the
+temporary would not be a place in the span.
 
 The `spanOf(items: *List<T>): Span<T>` helper (RTL `simse_spanOf`) covers all of
 `items` from index 0, and `spanOfStr(text: *Str): StrView` (RTL
 `simse_spanOfStr`) covers a string's bytes. Both **borrow** their source: the
 source must outlive the span, and `&items` would box a *copy*. On `StrView`,
 codegen also maps `charAt`, `find`/`indexOf`, `startsWith`,
-`substr`, and `toString`. The struct is immutable: nothing mutates the receiver.
+`substr`, and `toString`. The struct is immutable: nothing mutates the receiver
+(a `set` writes the pointee).
 
 ### Lambdas
 

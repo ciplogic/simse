@@ -10,6 +10,10 @@ package rtl
 // The type's C++ is the hand-written `span.hpp`, already `#include`d: `@SmGen("cpp")` is
 // the materialization marker (specs/attributes.md), so the emitter must not generate the
 // struct. An *unmarked* prelude type would be generated from its declaration instead.
+// The class-body members below document the header's members; the *indexers* are the
+// `operator` extensions at the end, which are emitted (an extension with a body is a
+// function like any other), so a program's `span[index]` lowers through `get`/`set`
+// rather than the header's `operator[]`.
 @SmGen("cpp")
 data class Span<T>(var ptr: *T, var len: Int) {
     fun size(): Int {
@@ -50,8 +54,22 @@ borrow fun spanOfArray<T>(items: *Array<T>): Span<T>
 
 // `span.atPtr(index)`: the element at `index` as a *place* (`*T`), so a write through it
 // reaches the source (the `*T` the class's own `auto` members cannot name). The body goes
-// through `this[index]`, not `this.ptr[index]`: the *subscript* is the place the emitter can
-// take the address of (`agents.md` §9).
+// through the pointer field, not the index syntax: an index read through `operator get`
+// is a *value* - the address of it would be the address of a temporary
+// (specs/functions.md). A raw-pointer index is always a place (`isPointerIndex`).
 fun Span<T>.atPtr<T>(index: Int): *T {
-    return * this[index]
+    return *this.ptr[index]
+}
+
+// The indexer, the Kotlin convention (specs/functions.md): `span[index]` is `get`, the
+// element as a value. The class-body `at` is the same read; the language spells the
+// subscript through here now.
+operator fun Span<T>.get<T>(index: Int): T {
+    return this.ptr[index]
+}
+
+// The assignable indexer: `span[index] = value` is `set`, a write through the borrowed
+// pointer.
+operator fun Span<T>.set<T>(index: Int, value: T): Unit {
+    this.ptr[index] = value
 }

@@ -464,6 +464,10 @@ inline void initByValue(Res<T>* self, Str value) {
 }
 
 template <class T>
+T get(Span<T>* self, Int index);
+template <class T>
+void set(Span<T>* self, Int index, T value);
+template <class T>
 Bool simse_optHasValue(Opt<T>* self);
 template <class T>
 T simse_optValue(Opt<T>* self);
@@ -483,6 +487,19 @@ template <class T>
 Res<T> simse_resErr(Str message);
 void initByValue(Str* self);
 
+template <class T>
+T get(Span<T>* self, Int index) {
+    T* _sm_base1;
+    _sm_base1 = self->ptr;
+    auto _sm_expr1 = _sm_base1[index];
+    return _sm_expr1;
+}
+template <class T>
+void set(Span<T>* self, Int index, T value) {
+    T* _sm_base1;
+    _sm_base1 = self->ptr;
+    _sm_base1[index] = value;
+}
 template <class T>
 Bool simse_optHasValue(Opt<T>* self) {
     SmOptTypes _sm_base1;

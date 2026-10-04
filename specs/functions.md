@@ -230,12 +230,18 @@ or an extension (`fun T.get(...)`, `this: T`). The names and their shapes are fi
 A declaration whose receiver has no `operator get`/`set` is refused rather than silently
 ignored (a name without a lowering, a `get` with the wrong number of parameters, or an
 operator with no receiver). When a type declares neither, the index syntax keeps its
-built-in meanings (a container's element, a `Str`'s `Char`, a span's `T`).
+built-in meanings (a container's element, a `Str`'s `Char`).
 
 An index read through `operator get` is a **value**: the getter answers a fresh `T`, so
 `x[i]` is not a place into `x` - it cannot be assigned to through an alias and it may be
 passed to a `borrow` parameter only as a materialized temporary. A write needs its own
 `operator set`; `x[i] = v` on a type with only `get` is an error.
+
+The prelude's view declares both indexers, so `span[i]` and `span[i] = v` on a
+`Span<T>`/`StrView` resolve through `src/rtl/Span.kt`'s `operator fun get`/`set` (the
+class body itself is the hand-written header's documentation). The place form is the
+span's own `atPtr(i): *T`, which reads through the pointer field because the index read
+is a value.
 
 ## Methods inside classes
 

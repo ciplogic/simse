@@ -568,6 +568,10 @@ SIMSE_PACK_POP
 enum class ns1_Shape { Circle, Square = 4 };
 inline ns1_Shape ns1_simse_Shape_fromInt(Int value) { return (ns1_Shape) value; }
 
+template <class T>
+T get(Span<T>* self, Int index);
+template <class T>
+void set(Span<T>* self, Int index, T value);
 Char charAt(StrView* self, Int index);
 Bool startsWith(StrView* self, Str* text);
 Int find(StrView* self, Str sub);
@@ -739,6 +743,19 @@ Int ns1_partLambdas_closure5_invoke(ns1_partLambdas_closure5 self, Int v) {
     return 0;
 }
 
+template <class T>
+T get(Span<T>* self, Int index) {
+    T* _sm_base1;
+    _sm_base1 = self->ptr;
+    auto _sm_expr1 = _sm_base1[index];
+    return _sm_expr1;
+}
+template <class T>
+void set(Span<T>* self, Int index, T value) {
+    T* _sm_base1;
+    _sm_base1 = self->ptr;
+    _sm_base1[index] = value;
+}
 Char charAt(StrView* self, Int index) {
     Char _sm_expr1;
     _sm_expr1 = self->at(index);
@@ -1295,7 +1312,7 @@ Int ns1_countIf(List<Int>* items, ns1_Predicate predicate) {
     _sm_expr1 = c.isEmpty();
     _sm_expr2 = !_sm_expr1;
     if (!(_sm_expr2)) goto L2;
-    _sm_base1 = c[0];
+    _sm_base1 = get(simse_addressOf(c), 0);
     _sm_expr1 = predicate(_sm_base1);
     if (_sm_expr1) goto L3;
     goto L4;
