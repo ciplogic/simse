@@ -73,7 +73,8 @@ Six changes, each a clean-release A/B with `bun tools/iterate.js --full` green (
 bootstrap fixed points); the numbers are in the commit messages (`83d8a52`, `bb46399`,
 `344b800`, `53f9cff`, `16f7524`, `42918af`). Cumulative against the pre-task compiler:
 self-transpile min/median **2516.9/2720.7 ms -> 1737.9/1847.8 ms (~31-32%)**, 13 interleaved
-pairs.
+pairs. The report itself is now top-50 (`c8fc026`), so the next session sees the whole
+`emitFunction` subtree instead of the first 25 rows.
 
 - **Collected resolution tables.** `addFunction` records `plainFunctionNames` and
   `functionPackages`, so the two `hasPlainFunction` scans per named call and `functionPackage`'s
@@ -103,9 +104,7 @@ pairs.
   `linSpliceIsSafe` - neutral in the clean A/B, so it was not kept (`flattenPass`'s cost is
   mostly profiler call overhead; the instrumented tree overstates it).
 
-Next candidates, in profile order: `linFoldConstBody` walks every statement twice plus a third
-walk per candidate; `epAnalyze` still walks each body once up front (the event lists removed the
-per-round walks); parsing (`lex.nextToken` + `parseModule`) is the largest untouched block.
+The follow-ups this shape of profile suggests are in "Next candidates" below.
 
 ## Steps
 
@@ -142,6 +141,59 @@ per-round walks); parsing (`lex.nextToken` + `parseModule`) is the largest untou
   is real, replacing the helper body is not necessarily a win.
 - The report's `self` for a leaf in the emitter path is inflated by the profiler itself; prefer
   the call count and the clean A/B over the instrumented seconds.
+
+## Next candidates (top-50 analysis)
+
+The numbers below are the report's *root-most* per-method inclusive cost with the recursion rows
+folded out (`tools/_cost.mjs`; the summary's by-total double-counts a recursive body, so
+`codegen.collectNames` reads 0.69 s there but is really 0.08 s). Run `bun build.js --release
+--no-lto --profile --compiler <new compiler>` and regenerate the report before trusting any of
+them, and remember the standing caveat: the self list's flat helpers (`atPtr` 0.96 s / 30.7 M,
+`xmlKind` 0.90 s / 28.9 M, `xmlAttr` 1.38 s / 5.3 M, `size` 0.60 s / 19.2 M) are call overhead
+that `/Ob3` inlines away in a clean build - chase repeated *work*, not call counts.
+
+At `c8fc026`, `main()` is 11.96 s instrumented: `codegen.emitProgram` 8.98 s, parsing
+(`driverParseFile`) 1.93 s, `sema.analyze` 0.44 s, then `bpBorrowParams` 0.18 s, `epAnalyze`
+0.13 s, `cpFoldConstParams` 0.12 s, `propRewriteModule` 0.11 s.
+
+1. **The splice-safety check (`linSpliceIsSafe` 0.93 s, `linItemCrosses` 0.72 s,
+   `linStmtCrosses` 0.64 s).** `flattenPass` asks `linSpliceIsSafe` per block, and each call
+   re-collects every label in the sequence (O(n)) and re-walks every other statement's subtree
+   for jumps (`linItemCrosses`, which recurses into nested blocks). That is
+   O(blocks x statements x subtree) for a fact - which jumps and labels the sequence has - that
+   does not change during the pass. Collect the jump/label table once per `flattenPass` and
+   evaluate the crossing condition per block against it. Caution: the earlier *no-jump fast
+   path* here was neutral, so A/B early and abandon if it does not move; the win has to come
+   from removing the per-block walks, not from skipping a check.
+2. **`linFoldConstBody`'s two walks (0.81 s, `foldConstCountWrites` 0.58 s `+`
+   `linUseDefMarkEscapes` 0.11 s).** It walks every statement's subtree twice per round with two
+   predicates over the same nodes (counting writes, marking escapes). One recursion updating
+   both dictionaries halves the visits. Free the same pass: `linUseDefWalk` reads
+   `xmlAttr(node, Name)` twice for a name in `Arg` role (once into `uses`, once into `escapes`) -
+   read it once.
+3. **The lexer's matcher chain (`lex.nextToken` 1.25 s / 342 k tokens).** Every token tries up
+   to eleven matchers in order, an identifier is scanned twice (`matchReservedWord` then
+   `matchIdentifier`), and the reserved-word check is a linear ~24-entry table. Dispatch on the
+   first byte (space / quote / backtick / digit / alpha / `@` / operator) and run only that
+   byte's matchers, and look a candidate reserved word up by length and first byte. Parsing is
+   16% of the run and the chain is most of it. The rule table's shape is why the double scan
+   exists; a matcher that answers a *kind* as well as a length would let one scan report both.
+4. **The extractor re-derives types sema already proved** (`linear.convertArgument` 0.18 s `+`
+   `operandOf`/`valueType`/`exprType`/`semTypeOfExpr`/`sema.infer` beneath it, inside
+   `ilExtractUnit` 0.83 s). `semInferTypes` filled `inferred` for every body before extraction,
+   so `linear.exprType`/`semTypeOfExpr` recomputing a type per argument is repeated work;
+   reading the inferred map (or a per-node memo) is the shape. Read `LinearFormExpr.exprType`
+   first to see which queries are not already answered.
+5. **The emitter's per-instruction text** (`emitIlBodyText` 0.85 s -> `ilEmitOpsChecked` 0.83 s ->
+   `ilEmitOps` 0.67 s). Not read yet; look for operand text (`ilValueText`) rebuilt for the same
+   slot or constant across instructions, and for string concatenation per op where a
+   `reserve` + `appendStrPtr` run belongs.
+6. **`linLowerExprs` (0.53 s, `walkStmts`/`walkStmt` -> `flat`/`rebuild`)** and the parse proper
+   (`parseBlock`/`parseStmtInto`/`parseStmt`/`parseExpr` ~0.9 s, `parseModule` 0.63 s): both
+   unread; look for list rebuilding and token-text copies the same way.
+
+Each is a candidate, not a change: the loop is `tools/_bench_ab.mjs` (interleaved, min/median)
+before anything is kept.
 
 ## References
 

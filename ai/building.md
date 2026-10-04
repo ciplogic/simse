@@ -110,7 +110,8 @@ it with the source.
   MSVC toolchain they share, also used by `build.js`). A few **evidence probes** a design doc
   cites sit beside them and are run by hand, never by the loop: `_bench_ab.mjs` (interleaved
   A/B timing), `_strtable_runs.mjs`, `_check_tree.mjs` (verifies a `--profile` report: the two
-  summaries against the tree, and the nesting), `_profile_ab.mjs` (round-robin A/B of profiled
+  summaries against the tree, and the nesting), `_cost.mjs` (a report's true per-method cost,
+  recursion folded out), `_profile_ab.mjs` (round-robin A/B of profiled
   builds by their reports' `main():` line), `_pe_sections.mjs` (`impl_specs/rtl-abi.md`),
   `array_layout_probe.cpp`, `smallvector_stress.cpp`, `statics_probe.cpp`
   (`impl_specs/statics.md`) and `memrun.cpp` (`benchmarks/onebrc/benchmark.md`).
