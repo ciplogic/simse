@@ -157,12 +157,27 @@ fun foldExprsUnder(node: *AstXmlNode, rules: *List<FoldRule>, state: *FoldState)
         return node
     }
     // A folded child rebuilds its parent; the flag is read before the children, so a fold deeper
-    // down is what says "rebuild me".
+    // down is what says "rebuild me". The children list is built on the first child that folds -
+    // a visit that folds nothing copies no children (`node.Children.toList()` used to copy the
+    // whole list of every visited node).
     val before: Bool = state.changed
-    var kids: List<AstXmlNode> = node.Children.toList()
+    var kids: List<AstXmlNode> = List<AstXmlNode>()
+    var rebuilt: Bool = false
     var i: Int = 0
-    while (i < kids.size()) {
-        kids[i] = foldExprsUnder(*kids[i], rules, state)
+    while (i < node.Children.count()) {
+        val childBefore: Bool = state.changed
+        val rewritten: AstXmlNode = foldExprsUnder(*node.Children[i], rules, state)
+        if (state.changed != childBefore || rebuilt) {
+            if (!rebuilt) {
+                var j: Int = 0
+                while (j < i) {
+                    kids.append(node.Children[j])
+                    j = j + 1
+                }
+                rebuilt = true
+            }
+            kids.append(rewritten)
+        }
         i = i + 1
     }
     var here: AstXmlNode = node
