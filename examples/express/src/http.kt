@@ -11,7 +11,7 @@ import jsonnode
 // `jsonResponse` runs the *writer* (`JsonNode.toJson()`) on the way out. A handler therefore
 // transforms a `JsonNode` and knows nothing about bytes.
 
-data class Request(var method: Str, var path: Str, var query: Str, var body: Str) {
+data class Request(var method: Str, var path: Str, var query: Str, var body: Str, var keepAlive: Bool) {
     // The body decoded to the intermediate `JsonNode`. A malformed body is a `Res` error the
     // handler turns into a 400, not a crash (there are no exceptions).
     fun json(): Res<JsonNode> {
@@ -70,7 +70,9 @@ fun requestLine(raw: Str): Str {
 
 // "GET /greet?name=ada HTTP/1.1" -> method, path and query, and the body past the blank line.
 // The request is one `recv` at the call site, so a body that arrived split across reads is out
-// of scope, exactly as in `examples/http/server`.
+// of scope, exactly as in `examples/http/server`. `keepAlive` is the one header the server
+// reads: a client that says `Connection: close` gets one request per connection, anything else
+// keeps the socket for the next request (which is what lets the workers hold connections).
 fun parseRequest(raw: Str): Request {
     val line: Str = requestLine(raw)
     val parts: List<Str> = line.split(" ")
@@ -90,18 +92,25 @@ fun parseRequest(raw: Str): Request {
         query = target.substr(q + 1, target.size() - q - 1)
     }
     var body: Str = ""
+    var headers: Str = raw
     val headerEnd: Int = raw.find("\r\n\r\n")
     if (headerEnd >= 0) {
+        headers = raw.substr(0, headerEnd)
         body = raw.substr(headerEnd + 4, raw.size() - headerEnd - 4)
     }
-    return Request(method, path, query, body)
+    val keepAlive: Bool = headers.toLower().find("connection: close") < 0
+    return Request(method, path, query, body, keepAlive)
 }
 
-// The head is a fixed shape, so it is one `fmtStr`; `Connection: close` is why the length is
-// the only framing the client needs.
-fun formatResponse(res: Response): Str {
+// The head is a fixed shape, so it is one `fmtStr`; the length frames the body, which is what
+// the next request on a kept-alive connection needs to find its start.
+fun formatResponse(res: Response, keepAlive: Bool): Str {
+    var connection: Str = "close"
+    if (keepAlive) {
+        connection = "keep-alive"
+    }
     return fmtStr(
-        "HTTP/1.1 |\r\nContent-Type: |\r\nContent-Length: |\r\nConnection: close\r\n\r\n|",
-        statusText(res.status), res.contentType, res.body.size().toString(), res.body
+        "HTTP/1.1 |\r\nContent-Type: |\r\nContent-Length: |\r\nConnection: |\r\n\r\n|",
+        statusText(res.status), res.contentType, res.body.size().toString(), connection, res.body
     )
 }

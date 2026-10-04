@@ -40,17 +40,21 @@ async function load(url, close) {
   let next = 0;
   let ok = 0;
   let errors = 0;
+  let firstError = "";
   const worker = async () => {
     for (;;) {
       const i = next++;
       if (i >= total) return;
-      try { await hit(url, close); ok++; } catch { errors++; }
+      try { await hit(url, close); ok++; } catch (e) {
+        errors++;
+        if (!firstError) firstError = String(e?.cause?.code ?? e?.message ?? e);
+      }
     }
   };
   const t0 = performance.now();
   await Promise.all(Array.from({ length: concurrency }, () => worker()));
   const ms = performance.now() - t0;
-  return { ok, errors, ms, rps: total / (ms / 1000) };
+  return { ok, errors, ms, rps: total / (ms / 1000), firstError };
 }
 
 async function waitReady(url, timeoutMs = 10000) {
@@ -74,11 +78,14 @@ async function run(name, cmd, port, close) {
   child.kill();
   console.log(
     `${name.padEnd(10)} ${String(Math.round(r.rps)).padStart(9)} req/s  ` +
-    `(${r.ok} ok, ${r.errors} errors, ${Math.round(r.ms)} ms, c=${concurrency}${close ? ", close" : ""})`
+    `(${r.ok} ok, ${r.errors} errors, ${Math.round(r.ms)} ms, c=${concurrency}${close ? ", close" : ""})` +
+    (r.errors > 0 ? `  first: ${r.firstError}` : "")
   );
 }
 
 console.log(`GET /json {"message":"Hello, World!"} - ${total} requests, concurrency ${concurrency}`);
-await run("simse", [simseExe, "8097", "0"], 8097, false);
+// The Simse server gets as many workers as the client has connections: with keep-alive a worker
+// holds its connection for the whole run, so the worker count is the concurrency ceiling.
+await run("simse", [simseExe, "8097", "0", String(concurrency)], 8097, false);
 await run("bun", [process.execPath, "run", bunServer, "8098"], 8098, false);
 await run("bun-close", [process.execPath, "run", bunServer, "8099"], 8099, true);
