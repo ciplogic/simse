@@ -220,13 +220,22 @@ fun epIsConstruct(callee: *AstXmlNode, types: *Dictionary<Str, Bool>): Bool {
 
 // One declaration's body scan: the parameter names under analysis, their declared types, and
 // the per-name verdicts the walk fills in.
+// One call-argument mention whose vote depends on the current table: the parameter named, and
+// the callee position `epKindNow` reads. A round re-evaluates these instead of walking the body
+// again (`EpDecl.scanEvents`).
+data class EpEvent(
+    var name: Str,
+    var callee: Str,
+    var at: Int
+)
+
 data class EpScan(
     var params: Dictionary<Str, Bool>,
     var handles: Dictionary<Str, Bool>,
     var types: *Dictionary<Str, Bool>,
     var typeParams: List<Str>,
     var escapes: Dictionary<Str, Bool>,
-    var unknown: Dictionary<Str, Bool>
+    var events: List<EpEvent>
 ) {
     // One mention of `name` reached in `ctx`. `callee`/`at` say which call position, for the
     // CallArg context; `at` is the declared parameter index (a method's receiver is 0).
@@ -250,13 +259,7 @@ data class EpScan(
         if (epBuiltinBorrow(callee)) {
             return
         }
-        val kind: EpKind = epKindNow(callee, at)
-        if (kind == EpKind.Escapes) {
-            this.escapes.insert(*name, true)
-        }
-        if (kind == EpKind.Unknown) {
-            this.unknown.insert(*name, true)
-        }
+        this.events.append(EpEvent(*name, *callee, at))
     }
 
     // Every mention under a lambda: the closure stores the capture, so all of them escape.
@@ -419,15 +422,18 @@ data class EpScan(
 }
 
 // One declaration considered: its body (empty when body-less), the mark that trusts a
-// body-less one, and the parameters, their handle-ness, and the type parameters (a bare type
-// parameter may be instantiated with a handle).
+// body-less one, the parameters, their handle-ness, and the type parameters (a bare type
+// parameter may be instantiated with a handle). `scanEscapes`/`scanEvents` are the body's
+// table-independent scan, filled once before the fixpoint (`epPreScanDecls`).
 data class EpDecl(
     var name: Str,
     var body: AstXmlNode,
     var trusted: Bool,
     var params: List<Str>,
     var handles: List<Bool>,
-    var typeParams: List<Str>
+    var typeParams: List<Str>,
+    var scanEscapes: Dictionary<Str, Bool>,
+    var scanEvents: List<EpEvent>
 )
 
 fun epCollectFn(fn: *AstXmlNode, method: Bool, out: *List<EpDecl>, types: *Dictionary<Str, Bool>): Unit {
@@ -466,7 +472,12 @@ fun epCollectFn(fn: *AstXmlNode, method: Bool, out: *List<EpDecl>, types: *Dicti
             handles.append(epHandleType(xmlChildPtr(param, AstNodeKind.Type), typeParams))
         }
     }
-    out.append(EpDecl(name, *body, generated || bpMarked(fn), params, handles, typeParams))
+    out.append(
+        EpDecl(
+            name, *body, generated || bpMarked(fn), params, handles, typeParams,
+            Dictionary<Str, Bool>(), List<EpEvent>()
+        )
+    )
 }
 
 fun epCollectModule(module: *AstXmlNode, out: *List<EpDecl>, types: *Dictionary<Str, Bool>): Unit {
@@ -479,6 +490,33 @@ fun epCollectModule(module: *AstXmlNode, out: *List<EpDecl>, types: *Dictionary<
                 epCollectFn(method, true, out, types)
             }
         }
+    }
+}
+
+// The table-independent half of every declaration's scan, once per analysis: the mentions that
+// escape by shape (an `Escape`/`Addr` context, a store into a handle, a lambda capture) and the
+// call-argument mentions whose vote `epKindNow` decides. A fixpoint round then re-evaluates the
+// events against the table instead of walking every body again.
+fun epPreScanDecls(decls: *List<EpDecl>, types: *Dictionary<Str, Bool>): Unit {
+    for (*decl in decls) {
+        if (decl.params.size() == 0 || xmlIsEmpty(decl.body)) {
+            continue
+        }
+        var params: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+        var handles: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+        var k: Int = 0
+        while (k < decl.params.size()) {
+            params.insert(decl.params[k], true)
+            handles.insert(decl.params[k], decl.handles[k])
+            k = k + 1
+        }
+        var scan: EpScan =
+            EpScan(params, handles, types, decl.typeParams, Dictionary<Str, Bool>(), List<EpEvent>())
+        for (*stmt in decl.body.Children) {
+            scan.walk(stmt, EpCtx.Read, "", -1)
+        }
+        decl.scanEscapes = scan.escapes
+        decl.scanEvents = scan.events
     }
 }
 
@@ -503,6 +541,9 @@ fun epAnalyze(preludeModules: List<AstXmlNode>, modules: List<AstXmlNode>): Unit
     for (*mod in modules) {
         epCollectModule(mod, *decls, *types)
     }
+    // One body scan per declaration, before the fixpoint: a round only re-reads the events the
+    // table decides.
+    epPreScanDecls(*decls, *types)
     var changed: Bool = true
     var guard: Int = 0
     while (changed && guard < 64) {
@@ -529,27 +570,28 @@ fun epAnalyze(preludeModules: List<AstXmlNode>, modules: List<AstXmlNode>): Unit
                 }
                 continue
             }
-            var params: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
-            var handles: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
             var k: Int = 0
             for (pname in decl.params) {
-                params.insert(pname, true)
-                handles.insert(pname, decl.handles[k])
                 epMarkOr(*seen, *decl.name, k)
                 k = k + 1
             }
-            var scan: EpScan = EpScan(
-                params, handles, *types, decl.typeParams,
-                Dictionary<Str, Bool>(), Dictionary<Str, Bool>()
-            )
-            for (*stmt in decl.body.Children) {
-                scan.walk(stmt, EpCtx.Read, "", -1)
+            // The body's shape was scanned once (`epPreScanDecls`): the round collects the
+            // events the table now classifies as escaping or unknown.
+            var eventEscapes: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+            var eventUnknown: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+            for (*event in decl.scanEvents) {
+                val kind: EpKind = epKindNow(event.callee, event.at)
+                if (kind == EpKind.Escapes) {
+                    eventEscapes.insert(event.name, true)
+                } else if (kind == EpKind.Unknown) {
+                    eventUnknown.insert(event.name, true)
+                }
             }
             k = 0
             for (pname in decl.params) {
-                if (scan.escapes.has(pname)) {
+                if (decl.scanEscapes.has(pname) || eventEscapes.has(pname)) {
                     epMarkOr(*roundEsc, *decl.name, k)
-                } else if (scan.unknown.has(pname)) {
+                } else if (eventUnknown.has(pname)) {
                     epMarkOr(*roundBad, *decl.name, k)
                 }
                 k = k + 1
