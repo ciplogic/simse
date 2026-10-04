@@ -118,7 +118,7 @@ fun Str.splitIter(separator: StrView): ..*StrView {
     var pos: Int = 0
     while (true) {
         var rest: StrView = source.slice(pos, source.size() - pos)
-        var found: Int = rest.find(separator)
+        var found: Int = rest.findView(separator)
         if (found < 0) {
             yield *rest
             return

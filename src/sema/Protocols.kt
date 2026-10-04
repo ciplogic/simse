@@ -22,7 +22,7 @@ data class ProtocolConstraint(
 // One `param:protocol` item of a declaration's `Protocols` attribute. `slice` is the view's
 // own shape: one argument takes the tail, two take a window (no `-1` sentinel).
 fun semProtocolConstraintOf(item: *StrView): ProtocolConstraint {
-    val at: Int = item.indexOf(":")
+    val at: Int = item.indexOfView(":")
     return ProtocolConstraint(item.slice(0, at).toString(), item.slice(at + 1).toString())
 }
 
@@ -38,7 +38,7 @@ fun semProtocolConstraints(decl: *AstXmlNode): List<ProtocolConstraint> {
     if (raw == "") {
         return List<ProtocolConstraint>()
     }
-    return raw.splitIter(",").where((item: *StrView) -> item.indexOf(":") >= 0).select((item: *StrView) -> semProtocolConstraintOf(item)).toList()
+    return raw.splitIter(",").where((item: *StrView) -> item.indexOfView(":") >= 0).select((item: *StrView) -> semProtocolConstraintOf(item)).toList()
 }
 
 // The protocol's name (`Printable`) and the method name its signature declares

@@ -107,15 +107,13 @@ fun IlExtractor.statement(stmt: *AstXmlNode): Unit {
         }
 
         AstNodeCategory.StmtBlock -> {
+            // The block's statements, walked in place through the span: the copy this used to
+            // build was one of the extractor's largest list sources, and every `AstXmlNode`
+            // copied deep-copies its attributes.
             val container: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Body)
-            var i: Int = 0
-            val children: Array<AstXmlNode> = container.Children
-            var body: List<AstXmlNode> = List<AstXmlNode>()
-            while (i < children.count()) {
-                body.append(children[i])
-                i = i + 1
+            for (child in spanOfArray(container.Children).iter()) {
+                this.statement(child)
             }
-            this.stmts(body)
             return
         }
 

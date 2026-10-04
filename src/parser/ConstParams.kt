@@ -28,6 +28,7 @@ package parser
 import compiler
 
 import common
+import linq
 
 // The identity of a literal argument: its kind and its text, never its line/column - those
 // differ per call site, and a comparison that included them would silently never fold anything.
@@ -91,14 +92,13 @@ fun cpBump(counts: *Dictionary<Str, Int>, name: *Str): Unit {
 // Every declaration a module contributes, by name: its top-level declarations and a data class's
 // methods. "Declared exactly once" is what lets a call site's name be attributed to one
 // declaration, and counting a data class (or an enum, or a type alias) as well is what keeps a
-// construction from being read as a call to a function of the same name.
+// construction from being read as a call to a function of the same name. Both walks are lazy
+// (`where`): the pass reads declarations, it does not need a list of them.
 fun cpCountDecls(module: *AstXmlNode, counts: *Dictionary<Str, Int>): Unit {
-    val top: List<AstXmlNode> = xmlDecls(module)
-    for (*decl in top) {
+    for (decl in spanOfArray(module.Children).iter().where((child: *AstXmlNode) -> xmlIsDecl(child))) {
         cpBump(counts, xmlAttr(decl, AstNodeAttributeKind.Name))
         if (decl.name == AstNodeKind.DataClass) {
-            val methods: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Function)
-            for (*method in methods) {
+            for (method in spanOfArray(decl.Children).iter().where((child: *AstXmlNode) -> child.name == AstNodeKind.Function)) {
                 cpBump(counts, xmlAttr(method, AstNodeAttributeKind.Name))
             }
         }
@@ -113,11 +113,7 @@ fun cpCollectCandidates(
     module: *AstXmlNode, counts: *Dictionary<Str, Int>,
     out: *List<AstXmlNode>, names: *Dictionary<Str, Bool>
 ): Unit {
-    val top: List<AstXmlNode> = xmlDecls(module)
-    for (*decl in top) {
-        if (decl.name != AstNodeKind.Function) {
-            continue
-        }
+    for (decl in spanOfArray(module.Children).iter().where((child: *AstXmlNode) -> child.name == AstNodeKind.Function)) {
         // The declaration has a body: a native declaration has nowhere to put the local.
         if (xmlAttr(decl, AstNodeAttributeKind.HasBody) != "true"
             || xmlAttr(decl, AstNodeAttributeKind.IsNative) == "true"

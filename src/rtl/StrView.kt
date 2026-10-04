@@ -68,6 +68,39 @@ fun StrView.indexOf(sub: Str): Int {
     return this.find(sub)
 }
 
+// The view needle: compared in place, so a call site that already has a view (a literal, a
+// part of a `splitIter`) copies nothing. `find`'s `Str` parameter makes the caller
+// materialize an owned `Str` for the needle once per call. A name of its own, not a second
+// `find`: the two same-arity overloads leave the emitted call to C++, whose resolution does
+// not know the receiver's `Str` parameter was borrowed (`src/rtl/Span.kt` follows the same
+// rule for `spanOf`/`spanOfArray`).
+fun StrView.findView(sub: StrView): Int {
+    val needle = sub.size()
+    if (needle == 0) {
+        return 0
+    }
+    val len = this.size()
+    if (needle > len) {
+        return -1
+    }
+    var i = 0
+    while (i + needle <= len) {
+        var j = 0
+        while (j < needle && this.ptr[i + j] == sub.ptr[j]) {
+            j = j + 1
+        }
+        if (j == needle) {
+            return i
+        }
+        i = i + 1
+    }
+    return -1
+}
+
+fun StrView.indexOfView(sub: StrView): Int {
+    return this.findView(sub)
+}
+
 // The owned copy of `count` bytes from `from`, clamped like `Str.substr` (`rtl.kt`):
 // `from` is clamped to [0, size], and a negative count takes the rest.
 fun StrView.substr(from: Int, count: Int): Str {
