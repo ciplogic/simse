@@ -29,8 +29,9 @@ read that is repeated.
 **2. Every hoisted temporary is a `Str`, so every hoist is a deep copy.** `*(name)` has type `Str`,
 so `_sm_baseN = *(name)` copies the string (the `Str` is `SmallVector<24, Char>` - a heap allocation
 past 23 bytes), while the comparison against `__sm_stringTable[k]` is already free, because a
-literal at a site *is* a `StrView` and `Str`/`StrView` comparisons have direct overloads
-(`src/rtl/strview.hpp`). The copy is pure waste: the value is only ever compared.
+literal at a site *is* a `StrView` and the comparison is the prelude's view `equals`/`compareTo`
+(`src/rtl/StrView.kt`), which reads both operands in place. The copy is pure waste: the value is
+only ever compared.
 
 ## The three fixes, in the order I would do them
 

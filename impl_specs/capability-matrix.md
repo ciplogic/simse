@@ -4964,3 +4964,13 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   inferring `plus`'s `Str`. Verified: `bun tools/iterate.js --full` - 80/80 and both fixed
   points hold; twelve goldens moved (the three operator prototypes and bodies, and the
   comparisons they replaced).
+
+- **The view comparison overloads are deleted from `strview.hpp`.** With the operators in
+  the prelude, nothing reaches `simse_strView_compare`, the eighteen `operator` overloads or
+  the three `operator+` any more, so they are gone - with `simse_strView_of`, the mixed
+  overloads' only caller. What remains in the header is the alias, the converting
+  constructor `SmString(const Span<Char>&)` and the two `Str`-boundary primitives
+  (`simse_str_data`, `simse_str_setBytes`); `docs/how-it-works.md`,
+  `impl_specs/rtl-abi.md` and `impl_specs/expr-reuse.md` say so now, and the header's own
+  comment keeps the history. Verified: `bun tools/iterate.js --full` - 80/80 and both fixed
+  points hold; no emission moved.

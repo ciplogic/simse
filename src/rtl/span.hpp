@@ -12,7 +12,7 @@
 // A span is how a buffer is walked without allocating: `slice` advances the pointer
 // (the two-argument form takes a start and a count, the one-argument form runs to the
 // end). The text-specific operations a buffer of bytes needs are `StrView`
-// (strview.hpp), which holds a `Span<Char>` - this type stays uniform over `T`.
+// (strview.hpp), the same span under a string name - this type stays uniform over `T`.
 //
 // The Simse surface is the prelude file src/rtl/Span.simse: it declares the fields
 // and the members, and codegen emits member calls onto this struct. Bounds are

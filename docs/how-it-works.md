@@ -198,7 +198,7 @@ headers:
 | `smstring.hpp`, `strsmallvector.hpp` | `Str`: an inline, NUL-terminated byte string with a 24-byte inline buffer |
 | `smdictionary.hpp` | `SmDictionary<TKey, TValue>`: the RTL's own dictionary (rows chained by index over a power-of-two bucket table), and the only implementation of `Dictionary<K, V>` |
 | `span.hpp` | `Span<T>`: a borrowed view over a contiguous run of `T` (`at`, `slice`) |
-| `strview.hpp` | `StrView`: an alias of `Span<Char>` (`typealias StrView = Span<Char>`), plus the *literal interop* only - the comparison operators, `+`, `<<` and the `Str` conversions, which C++ overload resolution reaches at a literal site (the operations are the `strview` section) |
+| `strview.hpp` | `StrView`: an alias of `Span<Char>` (`typealias StrView = Span<Char>`), the converting constructor that materializes a literal or view as an owned `Str`, and the two `Str`-boundary primitives (`simse_str_data`, `simse_str_setBytes`); the comparisons and `+` are the prelude's operators (`src/rtl/StrView.kt`) |
 
 The `streams` module's `filestream.hpp` is the one header outside the RTL: `FileStream`, the
 struct alone, reading a file line by line (`readLine(): Opt<Str>`, `readLineInto(*Str)` with a

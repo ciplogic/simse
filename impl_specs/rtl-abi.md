@@ -9,9 +9,10 @@ The runtime representation generated C++ targets, and where it diverges from `sp
 > hand-written C++ calls stay C++; an operation whose callers are all Simse and whose body
 > the language can express is a prelude `fun` *with a body* (`src/rtl/rtl.kt`), emitted
 > by the compiler. Candidate test: a symbol referenced only by the header that defines it.
-> `Span<T>`/`StrView` are the exception - `typealias StrView = Span<Char>`, their operations
-> are the `strview` section of `_res.md`, and the *literal interop* of `strview.hpp` stays
-> C++ because overload resolution reaches it, not a declaration. What is left of the `cpp`
+> `Span<T>`/`StrView` are on their way there: `typealias StrView = Span<Char>`, the
+> comparisons and `+` are the prelude's operators (`src/rtl/StrView.kt`), and what stays in
+> `strview.hpp` is the alias, the converting constructor a literal position materializes
+> through, and the two `Str`-internals primitives. What is left of the `cpp`
 > generator is the type core (`impl_specs/generators.md`).
 >
 > **Receiver spelling.** A body-less attributed method writes its receiver as the explicit
@@ -204,15 +205,15 @@ The entries are sorted **longest first, then text, alphabetically** (`val` < `va
 spelling at the site, and the prelude's literals are not emitted (the prelude is included, not
 transpiled).
 
-**The sites use the view; the interop is `strview.hpp`.** A literal site reads its entry as it
-stands, so **a comparison or `+` builds no `Str`** - `str == literal`, `literal == literal`,
-`literal + text`, `println(literal)` have direct `StrView` overloads (`operator==`/`!=`/`<`/`<=`/
-`>`/`>=`, `+` in all three pairings, plus the `std::ostream` writer). Everything else (a slot, a
-`return`, a by-value parameter, a `const Str&` argument, a list pack) reaches the converting
-constructor (`SmString(const StrView&)`, declared in `smstring.hpp`, defined in `strview.hpp`)
-and materializes the same copy as before. The *mixed* overloads matter: without
-`operator==(const Str&, StrView)` and its mirror, `str == literal` is ambiguous, because both
-`const char* -> Str` and `StrView -> Str` exist.
+**The sites use the view; the comparisons are operators.** A literal site reads its entry as
+it stands, so **a comparison or `+` builds no `Str`**: `str == literal`, `literal ==
+literal`, `literal + text` and `println(literal)` all reach view-taking prelude operations
+(`compareTo`/`equals`/`plus`, src/rtl/StrView.kt - a `Str` operand is read as a view of
+itself through `spanOfStr` - and `simse_println`'s `Str` parameter is materialized as it
+always was). Everything else (a slot, a `return`, a by-value parameter, a `const Str&`
+argument, a list pack) reaches the converting constructor (`SmString(const StrView&)`,
+declared in `smstring.hpp`, defined in `strview.hpp`) and materializes the same copy as
+before.
 
 Measured with `tools/_bench_ab.mjs` (15 interleaved self-transpile runs, previous published
 bootstrap vs new, same flags): the `toString()` cut was **~7.5-9% slower**
