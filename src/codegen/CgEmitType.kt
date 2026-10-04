@@ -499,6 +499,17 @@ fun Emitter.emitUnionClass(decl: *AstXmlNode): Unit {
         }
         val methodName: Str = xmlAttr(method, AstNodeAttributeKind.Name)
         val symbol: Str = this.qualify(this.typePackage(name), methodName)
+        // Two arms of one type (`union class U(var User: Str, var Email: Str)`) would share
+        // one C++ `initByValue` signature, so only the first such arm is emitted: a by-value
+        // construction resolves to the earlier field, the `Res2<Str>` convention. A generic
+        // union keeps both and constrains the later one out (below), because its arm types
+        // are only known per instantiation. The later field stays reachable through
+        // `set<Field>`.
+        if (!generic && methodName == "initByValue" && xmlCount(method, AstNodeKind.Param) == 1
+            && this.unionArmTypeSeen(fields, xmlAttr(method, AstNodeAttributeKind.Text))
+        ) {
+            continue
+        }
         val ret: Str = this.type(xmlChildPtr(method, AstNodeKind.ReturnType))
         var params: Str = emittedRef + "* self"
         for (*param in xmlChildren(method, AstNodeKind.Param)) {
@@ -515,8 +526,9 @@ fun Emitter.emitUnionClass(decl: *AstXmlNode): Unit {
         // A generic union's one-argument `initByValue` arms are picked at C++ by the
         // argument's type; an instantiation that makes two arms' types equal (`Res2<Str>`)
         // would be an ambiguous call, so every arm but the first is constrained out when an
-        // earlier arm has the same type - the earlier arm wins. A concrete union needs no
-        // constraint: its field types are equal only if the declaration says so.
+        // earlier arm has the same type - the earlier arm wins. A concrete union with two
+        // same-typed arms was already handled above (the later arm's `initByValue` is not
+        // emitted), so it needs no constraint here.
         if (generic && methodName == "initByValue" && xmlCount(method, AstNodeKind.Param) == 1) {
             val constraint: Str = this.unionInitConstraint(fields, xmlAttr(method, AstNodeAttributeKind.Text))
             if (constraint != "") {
@@ -554,6 +566,28 @@ fun Emitter.unionInitConstraint(fields: *List<AstXmlNode>, fieldName: *Str): Str
     return "requires (" + cgJoin(conditions, " && ") + ")"
 }
 
+// Whether an earlier field than `fieldName` has the same emitted C++ type. A concrete
+// union's second such arm would emit a duplicate `initByValue` overload, so it is skipped
+// and the earlier arm wins the by-value construction (the `unionInitConstraint` convention,
+// resolved at emit time instead of in C++).
+fun Emitter.unionArmTypeSeen(fields: *List<AstXmlNode>, fieldName: *Str): Bool {
+    var seen: List<Str> = List<Str>()
+    for (*field in fields) {
+        val name: Str = xmlAttr(field, AstNodeAttributeKind.Name)
+        val armType: Str = this.type(xmlChildPtr(field, AstNodeKind.Type))
+        if (name == fieldName) {
+            for (*other in seen) {
+                if (other == armType) {
+                    return true
+                }
+            }
+            return false
+        }
+        seen.append(armType)
+    }
+    return false
+}
+
 // One generated method's C++ body. The arm comes from the method's `Text` attribute (the
 // field name the parser recorded), so `set`/`get`/`initByValue` never re-match types here.
 // Every arm write goes through the storage's own `set<Field>` - plain assignment in the
@@ -582,16 +616,13 @@ fun Emitter.emitUnionMethodBody(method: *AstXmlNode, methodName: *Str, tagType: 
         this.line(1, `self->@setter(std::move(value));`)
         return
     }
-    // `get<Field>`: the value when the tag says this arm, an empty `Opt` otherwise. The
-    // result is built through the `Opt`'s own setter (a `union class` too, src/rtl/optres.kt),
-    // not an old-style static constructor: `some` is not C++ any more.
-    val ret: Str = this.type(xmlChildPtr(method, AstNodeKind.ReturnType))
+    // `get<Field>`: the live arm's address when the tag says this arm, `null` otherwise. A
+    // C++ union's arms share their address, so every matching getter hands back the same
+    // pointer and no arm is copied; the tag test is what makes a wrong-arm read `null`.
     this.line(1, `if (self->_type == @tagType::@fieldName) {`)
-    this.line(2, `@ret result;`)
-    this.line(2, `result.setValue(self->@fieldName);`)
-    this.line(2, "return result;")
+    this.line(2, `return &self->@fieldName;`)
     this.line(1, "}")
-    this.line(1, `return @ret();`)
+    this.line(1, "return nullptr;")
 }
 
 // A generic union's storage: both forms, as partial specializations of

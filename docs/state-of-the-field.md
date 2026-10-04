@@ -84,7 +84,7 @@ program a user would try to write:
 | Rough edge | What happens | Workaround |
 | --- | --- | --- |
 | Method on a temporary | `"a b".words()` fails to compile: the emitted receiver is a non-const reference | bind it to a `val` first |
-| Chained method on a generic call | a generic call's result is typed from its arguments now (`twice(f, 5).toString()` resolves against `Int`), but a method on a value whose static type is a bare type parameter of the enclosing function (`fun <T> f(x: T) { x.toString() }`) still cannot resolve - there are no constraints to say what `T` has | bind the value to a typed local, or annotate the call's type arguments (`f<Int>(...)`) |
+| Chained method on a generic call | a generic call's result is typed from its arguments now (`twice(f, 5).toString()` resolves against `Int`), and a method on a function's own type parameter resolves through a protocol when the declaration constrains it (`when T: Printable`) | a bare type parameter with no protocol has no method to resolve: constrain it, bind the value to a typed local, or annotate the call's type arguments (`f<Int>(...)`) |
 | Lambda body placement | `(x: Int) ->` followed by a newline is a syntax error | keep the body on the arrow's line, or open a block there |
 | Enum printing | `println(Color.Red)` prints an integer; there is no automatic member name | write a `when`-based `label()` function |
 | Float printing | `println` goes through C++'s default formatting | format manually; a defined shortest-round-trip rule is on the roadmap |
@@ -104,16 +104,20 @@ these):
    (`for (i in (2 .. 5))`) are next; walking a `Dictionary` still means `keys()` and an
    index.
 2. **String formatting** - `fmtStr`/`fmtStrWith` and `@name`/`@(name)` interpolation in a
-   backtick string cover the template case; a format protocol that prints your own types is
-   not there, so values of a `data class` are still built with `+` and `toString()`.
+   backtick string cover the template case, and a protocol (`Printable`) is now the way to
+   write your own type's rendering - but the prelude protocols and a `println` that goes
+   through them are not there yet, so values of a `data class` are still built with `+` and
+   `toString()`.
 3. **Pattern matching** - `union class` landed (a discriminated union, `specs/declarations.md`),
    so "one of these shapes" payloads exist; an exhaustive `when` is not planned - matching is
    `when (u)` with bare arm names (a comparison against a union value is its tag comparison),
    or `when (u.getTypeOf())`. Richer pattern labels (`is T`, `in 1..5`) are still open.
-4. **Static interfaces (protocols)** - `Hashable`, `Comparable`, `Printable`
-   resolved at reification, so dictionaries, sorting, printing and JSON work for
-   *your* types with no runtime support. `data class` should satisfy the first
-   three implicitly.
+4. **The standard protocols** - the mechanism landed (`protocol` signatures and
+   `when T: P` constraints, `specs/declarations.md`), so a `Printable`/`Hashable`/
+   `Comparable` of your own is a declaration away and resolves at reification with no
+   runtime support. What is missing is the *prelude* set (`Displayable`, `Hashable`,
+   `Comparable` that `Dictionary`/`sort`/JSON read) and `data class` satisfying them
+   implicitly.
 5. **JSON** - `json.encode`/`json.decode<T>` generated from the types, plus a
    `JsonValue` for dynamic payloads. This is the flagship "Node-like" feature.
 6. **Bytes and buffers** - endian-aware `Buffer`, hex/base64, checksums; HTTP
@@ -142,7 +146,7 @@ principle; nothing has been exercised on another platform.
 | If you reach for | Simse gives you | Simse does not give you |
 | --- | --- | --- |
 | **Node.js / Python** for a small JSON service or a CLI tool | types, a native binary, no runtime to install, no GC pauses, ~50x less memory than a runtime that carries an interpreter | threads, an ecosystem of packages, a REPL, hand-rolled dynamic dispatch, `JSON.parse` of anything (yet) |
-| **Go** | similar simple syntax and static dispatch; smaller surface; a transpiled artifact you can profile and step through | goroutines, channels, a GC, a `go build`-sized toolchain, method sets, interfaces as values |
+| **Go** | similar simple syntax and static dispatch, with protocol constraints playing the method-set role; smaller surface; a transpiled artifact you can profile and step through | goroutines, channels, a GC, a `go build`-sized toolchain, interfaces as values |
 | **Rust** | the same "no GC, no runtime" spirit; far fewer concepts (no lifetimes, no traits as types, no macros, no unsafe blocks to write); output is C++ you can inspect | the borrow checker's safety guarantees, the crate ecosystem, `cargo`, exhaustive pattern matching, zero-cost abstractions at Rust's level |
 | **C++** | no UB-by-default, no template metaprogramming, no build system archaeology, one output file with source maps | the full language, libraries, and tooling; manual control over allocation and layout |
 | **Kotlin / C#** | a familiar surface (data classes, extensions, `List`/`Dictionary`/`Opt`/`Res`) with a native, allocation-light backend | interfaces with dynamic dispatch, generics without reification, exceptions, an IDE today |

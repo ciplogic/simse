@@ -140,13 +140,11 @@ inline void setValue(Opt<T>* self, T value) {
     self->setValue(std::move(value));
 }
 template <class T>
-inline Opt<T> getValue(Opt<T>* self) {
+inline T* getValue(Opt<T>* self) {
     if (self->_type == SmOptTypes::Value) {
-        Opt<T> result;
-        result.setValue(self->Value);
-        return result;
+        return &self->Value;
     }
-    return Opt<T>();
+    return nullptr;
 }
 template <class T>
 inline void initByValue(Opt<T>* self, T value) {
@@ -278,13 +276,11 @@ inline void setValue(Res<T>* self, T value) {
     self->setValue(std::move(value));
 }
 template <class T>
-inline Opt<T> getValue(Res<T>* self) {
+inline T* getValue(Res<T>* self) {
     if (self->_type == SmResTypes::Value) {
-        Opt<T> result;
-        result.setValue(self->Value);
-        return result;
+        return &self->Value;
     }
-    return Opt<T>();
+    return nullptr;
 }
 template <class T>
 inline void initByValue(Res<T>* self, T value) {
@@ -295,13 +291,11 @@ inline void setError(Res<T>* self, Str value) {
     self->setError(std::move(value));
 }
 template <class T>
-inline Opt<Str> getError(Res<T>* self) {
+inline Str* getError(Res<T>* self) {
     if (self->_type == SmResTypes::Error) {
-        Opt<Str> result;
-        result.setValue(self->Error);
-        return result;
+        return &self->Error;
     }
-    return Opt<Str>();
+    return nullptr;
 }
 template <class T>
 requires (!std::is_same_v<Str, T>)

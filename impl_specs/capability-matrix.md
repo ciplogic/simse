@@ -5039,3 +5039,67 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   `impl_specs/rtl-abi.md` and `impl_specs/expr-reuse.md` say so now, and the header's own
   comment keeps the history. Verified: `bun tools/iterate.js --full` - 80/80 and both fixed
   points hold; no emission moved.
+
+- **A union class's `get<Field>` hands back a raw pointer, and two fields may share a type.**
+  The generated getter used to copy: it built an `Opt<T>` through the arm's own setter
+  (`result.setValue(self->Field); return result;`), so a read in a hot loop copied the
+  payload. It is now `getA(): *T` - `&self->A` when the tag is `A`, `nullptr` otherwise
+  (`emitUnionMethodBody`) - and the parser synthesizes the pointer return type
+  (`unionPtrType`, re-roling the field type into the pointer's `Inner`). A C++ union's arms
+  share their address, so every matching getter returns that same pointer and nothing is
+  copied, while a wrong-arm read is `null`; `Opt`/`Res`'s generated `getValue`/`getError`
+  move with the shared generator. The same change lifts the declaration rule: two fields of
+  one type are now allowed - the storage is one anonymous `union { Str User; Str Email; }`,
+  the tag tells the arms apart, and `setUser`/`setEmail` move distinct tags. The one real
+  C++ cost was the arm constructor: two same-typed arms would emit two identical
+  `initByValue` overloads, so a *concrete* union emits only the first and the later arm's
+  constructor is skipped (`unionArmTypeSeen`). `checkUnionConstruction` therefore drops its
+  "several fields have type" diagnostic and accepts the earlier matching field - the very
+  convention a generic `Res2<Str>` already had through `unionInitConstraint`. The `Res`
+  shape is the motivating case: `Value` is first, so a by-value construction is `Value` and
+  the failure arm is always set by name (`setError`). `stress/unions` gains a same-typed
+  `UserOrEmail` part and moves to the pointer getters; `stress/diagnostic-union-same-type`
+  is renamed `stress/union-same-type` and becomes a positive case (empty union,
+  `setUser`/`setEmail`, null checking, earlier-arm construction).
+  Verified: `./build.bat --release`, `bun tools/stress.js` **80/80**, and
+  `bun tools/bootstrap.js` both fixed points byte for byte; seventeen `expected.cpp` goldens
+  were re-captured (sixteen for the moved `Opt`/`Res` getter signature, plus `stress/unions`).
+
+- **Protocols: `when T: P` constraints, checked at instantiation, dispatched statically.**
+  A `protocol` declaration is a named method signature - `protocol Printable fun <T>
+  T.toString(): Str`, with the type parameters after `fun`, the first one the subject, or
+  the function spelling after the method name; an unnamed declaration takes the method's
+  name. It is parsed as a body-less Function carrying a `Protocol` attribute (`parseProtocol`)
+  and collected into one program-wide table - never a callable and never a type, which is
+  what keeps `val x: Printable` an `unknown type` (there is deliberately no existential
+  form). A generic function's `when T: Printable, Countable` clause parses into a `Protocols`
+  attribute (`param:protocol` items); the checker resolves it (`checkProtocolDeclShape`,
+  `checkProtocolConstraints`, `checkProtocolCall`) and every call with a bound type argument
+  is checked at the call site - `'Rock' does not satisfy protocol 'Printable': no 'toString'
+  matching 'fun T.toString(): Str' is in scope` - including the caller's own constraints
+  when a type parameter is passed on. Inside a constrained body, `value.toString()` on a
+  `*T` receiver has no declaration to name, so the emitter writes it against the protocol's
+  *dispatch overload set*: one overload per implementation under
+  `<pkg>_proto_<Protocol>_<method>`, forwarding to the concrete function (or a native's
+  symbol, the receiver read through the pointer) - `ns1_Printable_proto_toString(ns1_Point*
+  self)`, with a generic implementation's overload a template. C++ overload resolution picks
+  the one matching the instantiated `T`, so dispatch stays direct and no vtable, no boxing
+  and no dead overload per instantiation appear. `semProtocolMatches` is the one matcher the
+  checker and the emitter share; two implementations rendering one C++ signature collapse
+  (the prelude's `toString(Int)`/`toString(Int32)` aliases fold), only protocols a `when`
+  clause names get a set, a prelude implementation a set reaches is marked reached before
+  the prototype pass, and a closure's body keeps the enclosing constraints. An emitter
+  report raised while spelling a body now survives as the positioned `unsupported:` message
+  it is instead of being wrapped as `internal:` (the IL-reconstructed call node has no
+  position, so `Emitter.fail` falls back to the declaration being emitted). Tests:
+  `stress/protocols` (a class-body method and an extension satisfying two protocols, a
+  value receiver, the generic two-parameter `Equality`, a prelude type, plus an
+  `expected.cpp` golden) and five diagnostics (`missing`, `unknown`, `not-a-type`,
+  `receiver`, `ambiguous`). Deferred, with the reasoning in `impl_specs/protocols.md`:
+  blanket implementations, explicit type arguments on a protocol member call, per-package
+  protocol visibility, more than one method per protocol.
+  Verified: `./build.bat --release`, `bun tools/stress.js` **86/86**, and
+  `bun tools/bootstrap.js` both fixed points byte for byte. The change also surfaced a
+  build-harness limit: the compiler's one amalgamated translation unit crossed MSVC's
+  65,534-section COFF limit in optimized builds (C1128), so `build.js` now passes
+  `/bigobj` (object format only, no code change).

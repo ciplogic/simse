@@ -11,6 +11,8 @@ Language: values and locals (`val`/`var`, inferred or declared), file-level stat
 `List`/`Array`/`Span` and machines (`..T`, both value and pointer forms), `break`/`continue`,
 `yield` (a state machine — `impl_specs/yield.md`), functions, extension methods, `data` pure
 functions, lambdas (block bodies, by-value capture), reified generics with call inference,
+protocols (`protocol` signatures and `when T: P` constraints, checked at instantiation;
+static dispatch, no vtables — `impl_specs/protocols.md`),
 data classes with methods, `operator` functions (`get`/`set` indexers, `compareTo`/
 `equals`/`plus`), `union class` (a discriminated union: the implicit `Sm<Name>Types` tag
 enum, generated `getTypeOf`/`isOfType`/`get<Field>`/`set<Field>`/`setNone`,
@@ -37,8 +39,8 @@ iterate loop that runs them (`bun tools/iterate.js`, `--full` before committing)
   generators** (`impl_specs/generators.md`'s "Deferred": `@Json`, enum-to-string, ...).
 - **Interfaces/virtual dispatch, method overriding, default parameter values, `when` pattern
   labels (`is T`, `in 1..5`), multiple packages per file, external-module manifests.**
-- **Feature work the user roadmap orders**: closed unions with exhaustive `when`, static
-  protocols, `Set`, byte buffers, JSON codegen, sockets/HTTP polish, Linux/macOS, user FFI.
+- **Feature work the user roadmap orders**: closed unions with exhaustive `when`, `Set`,
+  byte buffers, JSON codegen, sockets/HTTP polish, Linux/macOS, user FFI.
 
 ## Open engineering notes
 

@@ -3,9 +3,11 @@ package fixtures
 // ---- union-class ----
 // `union class` (specs/declarations.md): a discriminated union - one field live at a time,
 // named by the implicit `Sm<Name>Types` tag enum. `getTypeOf`/`isOfType` read the tag, a
-// generated `get<Field>` answers an `Opt` (empty when the tag says another arm), and
-// `set<Field>` moves the tag as it writes. `U()` starts `None`; `U(value)` picks the arm by
-// the value's type; direct field reads and writes reach the storage under the same rules.
+// generated `get<Field>` answers a raw pointer to the live arm (`null` when the tag says
+// another arm; the arms share the union's address, so nothing is copied), and `set<Field>`
+// moves the tag as it writes. `U()` starts `None`; `U(value)` picks the arm by the value's
+// type - when two fields share the type the earlier field is the arm; direct field reads and
+// writes reach the storage under the same rules.
 // A comparison against a union value is its tag comparison - the generated `==`/`!=`
 // against the tag enum - so `when (u)` with bare arm names is the same `when` as
 // `when (u.getTypeOf())` with qualified labels; the language never checks either for
@@ -20,6 +22,10 @@ enum class Left { L }
 enum class Right { R }
 
 union class SideOrSide(var L: Left, var R: Right)
+
+// Two fields of *one* type: the storage is shared, the tag tells them apart, and a by-value
+// construction picks the earlier field. The later arm is reached by name (`setEmail`).
+union class UserOrEmail(var User: Str, var Email: Str)
 
 // A zero-field union: the tag alone, always `None`.
 union class Marker()
@@ -111,8 +117,8 @@ fun DoubleOrFloat.describe(): Str {
 
 fun strLen(u: IntOrStr): Int {
     val s = u.getS()
-    if (s.hasValue()) {
-        return s.value().size()
+    if (s != null) {
+        return s.size()
     }
     return -1
 }
@@ -158,7 +164,8 @@ fun isOk2<T>(r: Res2<T>): Bool {
     return r.isOfType(SmRes2Types.Value)
 }
 
-fun optValue2<T>(o: Opt2<T>): Opt<T> {
+// The generated getter as a raw pointer: non-null when the arm is live, `null` otherwise.
+fun optValue2<T>(o: Opt2<T>): *T {
     return o.getValue()
 }
 
@@ -167,13 +174,13 @@ fun partUnionClass(): Int {
     var a: DoubleOrFloat = DoubleOrFloat()
     println(a.isOfType(SmDoubleOrFloatTypes.None))
     println(a.getTypeOf() == SmDoubleOrFloatTypes.None)
-    println(a.getIntValue().hasValue())
+    println(a.getIntValue() != null)
     println(tagged(a))
 
     a.setIntValue(5)
     val i = a.getIntValue()
-    println(i.value())
-    println(a.getDoubleValue().hasValue())
+    println(*i)
+    println(a.getDoubleValue() != null)
     println(a.isOfType(SmDoubleOrFloatTypes.IntValue))
     println(a == IntValue)
     println(a != DoubleValue)
@@ -185,8 +192,8 @@ fun partUnionClass(): Int {
     // `U(value)`: the argument's type picks the arm.
     var b = DoubleOrFloat(2.5)
     val d = b.getDoubleValue()
-    println(d.hasValue())
-    println(d.value())
+    println(d != null)
+    println(*d)
     println(label(b))
 
     // A value of an arm's type in a variable, and the explicit-type declaration form.
@@ -219,6 +226,31 @@ fun partUnionClass(): Int {
     return 0
 }
 
+// Two fields of one type share the storage: the tag picks which `get<Field>` is non-null,
+// the setters move the tag between the arms, and a by-value construction picks the earlier
+// field - the later arm is set by name.
+fun partSameType(): Int {
+    var u: UserOrEmail = UserOrEmail()
+    println(u.isOfType(SmUserOrEmailTypes.None))
+
+    u.setUser("ada")
+    println(u.isOfType(SmUserOrEmailTypes.User))
+    println(u.getUser().size())
+    println(u.getEmail() != null)
+
+    u.setEmail("ada@example.com")
+    println(u.isOfType(SmUserOrEmailTypes.Email))
+    println(u.getUser() != null)
+    println(u.getEmail().size())
+
+    // `UserOrEmail(v)` (and `return (v)`) picks the earlier `User` arm.
+    var v: UserOrEmail = UserOrEmail("first")
+    println(v.isOfType(SmUserOrEmailTypes.User))
+    println(v.getUser().size())
+    println(v.getEmail() != null)
+    return 0
+}
+
 fun partManaged(): Int {
     // A text longer than the inline buffer: the arm owns heap storage.
     var u = IntOrStr("a-string-longer-than-the-inline-buffer")
@@ -232,11 +264,11 @@ fun partManaged(): Int {
 
     // Switching arms destroys the old one and places the new; switching back re-places.
     u.setI(7)
-    println(u.getI().value())
-    println(u.getS().hasValue())
+    println(*u.getI())
+    println(u.getS() != null)
     u.setS("second")
     val s2 = u.getS()
-    println(s2.value())
+    println(*s2)
 
     // Assignment between managed unions.
     v = u
@@ -244,18 +276,18 @@ fun partManaged(): Int {
 
     // `setNone` destroys the live string.
     u.setNone()
-    println(u.getS().hasValue())
+    println(u.getS() != null)
     println(strKind(u))
 
     // A `List` arm: the managed path follows the type, not `Str` specifically.
     var numbers: List<Int> = listOf<Int>(1, 2, 3)
     var w = IntOrList(numbers)
     val l = w.getL()
-    println(l.value().size())
+    println(l.size())
     w.setI(2)
-    println(w.getL().hasValue())
+    println(w.getL() != null)
     var x = w
-    println(x.getI().value())
+    println(*x.getI())
     return 0
 }
 
@@ -284,7 +316,7 @@ fun partUnionGenerics(): Int {
     println(isOk2(b))
     println(a.Value)
     val bv = b.getValue()
-    println(bv.value())
+    println(*bv)
 
     var e: Res<Int> = Res<Int>.err("no")
     var e2: Res2<Int> = err2<Int>("no")
@@ -292,7 +324,7 @@ fun partUnionGenerics(): Int {
     println(isOk2(e2))
     println(e.Error)
     val e2e = e2.getError()
-    println(e2e.value())
+    println(*e2e)
 
     // The tag `when` over the generic union, and a setter switch.
     var out: Str = ""
@@ -313,43 +345,44 @@ fun partUnionGenerics(): Int {
     b.setError("later")
     println(isOk2(b))
     val later = b.getError()
-    println(later.value())
+    println(*later)
     var none2 = Res2<Int>()
     println(isOk2(none2))
-    println(optValue2(Opt2<Int>()).hasValue())
+    println(optValue2(Opt2<Int>()) != null)
 
     // The built-in `Opt<T>` side by side with `Opt2<T>`.
     var o: Opt<Int> = Opt<Int>.some(9)
     var o2: Opt2<Int> = Opt2<Int>(9)
     println(o.value())
     val o2v = o2.getValue()
-    println(o2v.value())
+    println(*o2v)
     var empty: Opt<Int> = Opt<Int>.none()
     var empty2: Opt2<Int> = Opt2<Int>()
     println(empty.hasValue())
-    println(empty2.getValue().hasValue())
+    println(empty2.getValue() != null)
 
     // A `Str` payload through the single-arm `Opt2<T>`, and a managed element through
     // `Res2<T>`, including the colliding instantiation (`T = Str` coincides with the
     // `Error: Str` arm; the arm constructor picks the earlier `Value` arm).
     var s: Opt2<Str> = Opt2<Str>("payload-longer-than-the-inline-buffer!")
     val sv = s.getValue()
-    println(sv.value().size())
+    println(sv.size())
     var numbers: List<Int> = listOf<Int>(4, 5)
     var l: Res2<List<Int>> = ok2(numbers)
     val lv = l.getValue()
-    println(lv.value().size())
+    println(lv.size())
     var collided = okStr2("collided")
     println(isOk2(collided))
-    println(collided.getValue().value())
+    println(*collided.getValue())
     collided.setError("boom")
     println(isOk2(collided))
-    println(collided.getError().value())
+    println(*collided.getError())
     return 0
 }
 
 fun main(): Int {
     partUnionClass()
+    partSameType()
     partManaged()
     partUnionGenerics()
     partConstructionReturn()

@@ -1,0 +1,1 @@
+protocol 'Bad': the receiver must be the first type parameter

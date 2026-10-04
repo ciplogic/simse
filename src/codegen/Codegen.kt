@@ -309,7 +309,25 @@ data class Emitter(
 // Inside a function whose receiver is a machine *pattern* (`fun ..*T.select<T, U>(...)`):
 // the machine's C++ class is a template parameter (`_SmIter`), because the class is the
 // caller's and no declaration can name it (`type`'s TypeYield case, `impl_specs/yield.md`).
-    var machineIter: Bool
+    var machineIter: Bool,
+
+// The declaration of the function whose body is being emitted: `fail` falls back to it
+// when the node it is given carries no position (an IL-reconstructed call site, say).
+    var curDecl: AstXmlNode,
+
+// The `protocol` declarations, by protocol name (collected in `collect`), and each one's
+// package, which prefixes its dispatch overload set (`CgProtocol.kt`).
+    var protocols: Dictionary<Str, AstXmlNode>,
+    var protocolPackages: Dictionary<Str, Str>,
+
+// The `when T: P` constraints of the function whose body is being emitted: each of its type
+// parameters to the protocols it must satisfy. A member call on such a parameter whose name
+// one of the protocols declares is written against that protocol's dispatch set.
+    var activeConstraints: Dictionary<Str, List<Str>>,
+
+// The dispatch signatures already written this pass, so two implementations that emit one
+// shape write it once (a C++ redefinition otherwise).
+    var emittedProtocols: Dictionary<Str, Bool>
 ) {
 }
 
@@ -355,7 +373,12 @@ fun newEmitter(inputs: *List<CgInput>, resourceStored: *List<Str>): Emitter {
         Dictionary<Str, Int>(),
         Dictionary<Str, Bool>(),
         Dictionary<Str, AstXmlNode>(),
-        false
+        false,
+        xmlEmptyNode(),
+        Dictionary<Str, AstXmlNode>(),
+        Dictionary<Str, Str>(),
+        Dictionary<Str, List<Str>>(),
+        Dictionary<Str, Bool>()
     )
 }
 

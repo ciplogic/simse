@@ -21,6 +21,7 @@ template <class T>
 struct Res;
 struct ns1_DoubleOrFloat;
 struct ns1_SideOrSide;
+struct ns1_UserOrEmail;
 struct ns1_Marker;
 struct ns1_WithMethod;
 struct ns1_IntOrStr;
@@ -145,13 +146,11 @@ inline void setValue(Opt<T>* self, T value) {
     self->setValue(std::move(value));
 }
 template <class T>
-inline Opt<T> getValue(Opt<T>* self) {
+inline T* getValue(Opt<T>* self) {
     if (self->_type == SmOptTypes::Value) {
-        Opt<T> result;
-        result.setValue(self->Value);
-        return result;
+        return &self->Value;
     }
-    return Opt<T>();
+    return nullptr;
 }
 template <class T>
 inline void initByValue(Opt<T>* self, T value) {
@@ -283,13 +282,11 @@ inline void setValue(Res<T>* self, T value) {
     self->setValue(std::move(value));
 }
 template <class T>
-inline Opt<T> getValue(Res<T>* self) {
+inline T* getValue(Res<T>* self) {
     if (self->_type == SmResTypes::Value) {
-        Opt<T> result;
-        result.setValue(self->Value);
-        return result;
+        return &self->Value;
     }
-    return Opt<T>();
+    return nullptr;
 }
 template <class T>
 inline void initByValue(Res<T>* self, T value) {
@@ -300,13 +297,11 @@ inline void setError(Res<T>* self, Str value) {
     self->setError(std::move(value));
 }
 template <class T>
-inline Opt<Str> getError(Res<T>* self) {
+inline Str* getError(Res<T>* self) {
     if (self->_type == SmResTypes::Error) {
-        Opt<Str> result;
-        result.setValue(self->Error);
-        return result;
+        return &self->Error;
     }
-    return Opt<Str>();
+    return nullptr;
 }
 template <class T>
 requires (!std::is_same_v<Str, T>)
@@ -359,13 +354,11 @@ inline void ns1_initByValue(ns1_DoubleOrFloat* self) {
 inline void ns1_setIntValue(ns1_DoubleOrFloat* self, Int value) {
     self->setIntValue(std::move(value));
 }
-inline Opt<Int> ns1_getIntValue(ns1_DoubleOrFloat* self) {
+inline Int* ns1_getIntValue(ns1_DoubleOrFloat* self) {
     if (self->_type == ns1_SmDoubleOrFloatTypes::IntValue) {
-        Opt<Int> result;
-        result.setValue(self->IntValue);
-        return result;
+        return &self->IntValue;
     }
-    return Opt<Int>();
+    return nullptr;
 }
 inline void ns1_initByValue(ns1_DoubleOrFloat* self, Int value) {
     self->setIntValue(std::move(value));
@@ -373,13 +366,11 @@ inline void ns1_initByValue(ns1_DoubleOrFloat* self, Int value) {
 inline void ns1_setDoubleValue(ns1_DoubleOrFloat* self, Float64 value) {
     self->setDoubleValue(std::move(value));
 }
-inline Opt<Float64> ns1_getDoubleValue(ns1_DoubleOrFloat* self) {
+inline Float64* ns1_getDoubleValue(ns1_DoubleOrFloat* self) {
     if (self->_type == ns1_SmDoubleOrFloatTypes::DoubleValue) {
-        Opt<Float64> result;
-        result.setValue(self->DoubleValue);
-        return result;
+        return &self->DoubleValue;
     }
-    return Opt<Float64>();
+    return nullptr;
 }
 inline void ns1_initByValue(ns1_DoubleOrFloat* self, Float64 value) {
     self->setDoubleValue(std::move(value));
@@ -436,13 +427,11 @@ inline void ns1_initByValue(ns1_SideOrSide* self) {
 inline void ns1_setL(ns1_SideOrSide* self, ns1_Left value) {
     self->setL(std::move(value));
 }
-inline Opt<ns1_Left> ns1_getL(ns1_SideOrSide* self) {
+inline ns1_Left* ns1_getL(ns1_SideOrSide* self) {
     if (self->_type == ns1_SmSideOrSideTypes::L) {
-        Opt<ns1_Left> result;
-        result.setValue(self->L);
-        return result;
+        return &self->L;
     }
-    return Opt<ns1_Left>();
+    return nullptr;
 }
 inline void ns1_initByValue(ns1_SideOrSide* self, ns1_Left value) {
     self->setL(std::move(value));
@@ -450,16 +439,127 @@ inline void ns1_initByValue(ns1_SideOrSide* self, ns1_Left value) {
 inline void ns1_setR(ns1_SideOrSide* self, ns1_Right value) {
     self->setR(std::move(value));
 }
-inline Opt<ns1_Right> ns1_getR(ns1_SideOrSide* self) {
+inline ns1_Right* ns1_getR(ns1_SideOrSide* self) {
     if (self->_type == ns1_SmSideOrSideTypes::R) {
-        Opt<ns1_Right> result;
-        result.setValue(self->R);
-        return result;
+        return &self->R;
     }
-    return Opt<ns1_Right>();
+    return nullptr;
 }
 inline void ns1_initByValue(ns1_SideOrSide* self, ns1_Right value) {
     self->setR(std::move(value));
+}
+// stress/unions/src/main.kt
+enum class ns1_SmUserOrEmailTypes { None, User, Email };
+inline ns1_SmUserOrEmailTypes ns1_simse_SmUserOrEmailTypes_fromInt(Int value) { return (ns1_SmUserOrEmailTypes) value; }
+// stress/unions/src/main.kt
+SIMSE_PACK_PUSH
+struct ns1_SmUserOrEmailStorage {
+    ns1_SmUserOrEmailTypes _type = ns1_SmUserOrEmailTypes::None;
+    union {
+        Str User;
+        Str Email;
+    };
+    ns1_SmUserOrEmailStorage() {}
+    ns1_SmUserOrEmailStorage(const ns1_SmUserOrEmailStorage& other) { this->copyFrom(other); }
+    ns1_SmUserOrEmailStorage(ns1_SmUserOrEmailStorage&& other) noexcept { this->moveFrom(other); }
+    ~ns1_SmUserOrEmailStorage() { this->destroyActive(); }
+    ns1_SmUserOrEmailStorage& operator=(const ns1_SmUserOrEmailStorage& other) {
+        if (this != &other) {
+            this->destroyActive();
+            this->copyFrom(other);
+        }
+        return *this;
+    }
+    ns1_SmUserOrEmailStorage& operator=(ns1_SmUserOrEmailStorage&& other) noexcept {
+        if (this != &other) {
+            this->destroyActive();
+            this->moveFrom(other);
+        }
+        return *this;
+    }
+    void destroyActive() {
+        switch (this->_type) {
+            case ns1_SmUserOrEmailTypes::User: simse_destroy(this->User); break;
+            case ns1_SmUserOrEmailTypes::Email: simse_destroy(this->Email); break;
+            default: break;
+        }
+        this->_type = ns1_SmUserOrEmailTypes::None;
+    }
+    void copyFrom(const ns1_SmUserOrEmailStorage& other) {
+        switch (other._type) {
+            case ns1_SmUserOrEmailTypes::User: ::new ((void *) &this->User) Str(other.User); this->_type = ns1_SmUserOrEmailTypes::User; break;
+            case ns1_SmUserOrEmailTypes::Email: ::new ((void *) &this->Email) Str(other.Email); this->_type = ns1_SmUserOrEmailTypes::Email; break;
+            default: break;
+        }
+    }
+    void moveFrom(ns1_SmUserOrEmailStorage& other) {
+        switch (other._type) {
+            case ns1_SmUserOrEmailTypes::User: ::new ((void *) &this->User) Str(std::move(other.User)); this->_type = ns1_SmUserOrEmailTypes::User; break;
+            case ns1_SmUserOrEmailTypes::Email: ::new ((void *) &this->Email) Str(std::move(other.Email)); this->_type = ns1_SmUserOrEmailTypes::Email; break;
+            default: break;
+        }
+    }
+    void setUser(Str value) {
+        if (_type == ns1_SmUserOrEmailTypes::User) {
+            User = std::move(value);
+            return;
+        }
+        this->destroyActive();
+        _type = ns1_SmUserOrEmailTypes::User;
+        ::new ((void *) &User) Str(std::move(value));
+    }
+    void setEmail(Str value) {
+        if (_type == ns1_SmUserOrEmailTypes::Email) {
+            Email = std::move(value);
+            return;
+        }
+        this->destroyActive();
+        _type = ns1_SmUserOrEmailTypes::Email;
+        ::new ((void *) &Email) Str(std::move(value));
+    }
+    void setNone() {
+        this->destroyActive();
+    }
+};
+struct ns1_UserOrEmail : ns1_SmUserOrEmailStorage {
+};
+SIMSE_PACK_POP
+inline Bool operator==(const ns1_UserOrEmail& self, ns1_SmUserOrEmailTypes tag) { return self._type == tag; }
+inline Bool operator==(const ns1_UserOrEmail* self, ns1_SmUserOrEmailTypes tag) { return self->_type == tag; }
+inline Bool operator!=(const ns1_UserOrEmail& self, ns1_SmUserOrEmailTypes tag) { return self._type != tag; }
+inline Bool operator!=(const ns1_UserOrEmail* self, ns1_SmUserOrEmailTypes tag) { return self->_type != tag; }
+inline ns1_SmUserOrEmailTypes ns1_getTypeOf(ns1_UserOrEmail* self) {
+    return self->_type;
+}
+inline Bool ns1_isOfType(ns1_UserOrEmail* self, ns1_SmUserOrEmailTypes typeToCheck) {
+    return self->_type == typeToCheck;
+}
+inline void ns1_setNone(ns1_UserOrEmail* self) {
+    self->setNone();
+}
+inline void ns1_initByValue(ns1_UserOrEmail* self) {
+    self->setNone();
+}
+inline void ns1_setUser(ns1_UserOrEmail* self, Str value) {
+    self->setUser(std::move(value));
+}
+inline Str* ns1_getUser(ns1_UserOrEmail* self) {
+    if (self->_type == ns1_SmUserOrEmailTypes::User) {
+        return &self->User;
+    }
+    return nullptr;
+}
+inline void ns1_initByValue(ns1_UserOrEmail* self, Str value) {
+    self->setUser(std::move(value));
+}
+inline void ns1_setEmail(ns1_UserOrEmail* self, Str value) {
+    self->setEmail(std::move(value));
+}
+inline Str* ns1_getEmail(ns1_UserOrEmail* self) {
+    if (self->_type == ns1_SmUserOrEmailTypes::Email) {
+        return &self->Email;
+    }
+    return nullptr;
 }
 // stress/unions/src/main.kt
 enum class ns1_SmMarkerTypes { None };
@@ -533,13 +633,11 @@ inline void ns1_initByValue(ns1_WithMethod* self) {
 inline void ns1_setI(ns1_WithMethod* self, Int value) {
     self->setI(std::move(value));
 }
-inline Opt<Int> ns1_getI(ns1_WithMethod* self) {
+inline Int* ns1_getI(ns1_WithMethod* self) {
     if (self->_type == ns1_SmWithMethodTypes::I) {
-        Opt<Int> result;
-        result.setValue(self->I);
-        return result;
+        return &self->I;
     }
-    return Opt<Int>();
+    return nullptr;
 }
 inline void ns1_initByValue(ns1_WithMethod* self, Int value) {
     self->setI(std::move(value));
@@ -639,13 +737,11 @@ inline void ns1_initByValue(ns1_IntOrStr* self) {
 inline void ns1_setI(ns1_IntOrStr* self, Int value) {
     self->setI(std::move(value));
 }
-inline Opt<Int> ns1_getI(ns1_IntOrStr* self) {
+inline Int* ns1_getI(ns1_IntOrStr* self) {
     if (self->_type == ns1_SmIntOrStrTypes::I) {
-        Opt<Int> result;
-        result.setValue(self->I);
-        return result;
+        return &self->I;
     }
-    return Opt<Int>();
+    return nullptr;
 }
 inline void ns1_initByValue(ns1_IntOrStr* self, Int value) {
     self->setI(std::move(value));
@@ -653,13 +749,11 @@ inline void ns1_initByValue(ns1_IntOrStr* self, Int value) {
 inline void ns1_setS(ns1_IntOrStr* self, Str value) {
     self->setS(std::move(value));
 }
-inline Opt<Str> ns1_getS(ns1_IntOrStr* self) {
+inline Str* ns1_getS(ns1_IntOrStr* self) {
     if (self->_type == ns1_SmIntOrStrTypes::S) {
-        Opt<Str> result;
-        result.setValue(self->S);
-        return result;
+        return &self->S;
     }
-    return Opt<Str>();
+    return nullptr;
 }
 inline void ns1_initByValue(ns1_IntOrStr* self, Str value) {
     self->setS(std::move(value));
@@ -759,13 +853,11 @@ inline void ns1_initByValue(ns1_IntOrList* self) {
 inline void ns1_setI(ns1_IntOrList* self, Int value) {
     self->setI(std::move(value));
 }
-inline Opt<Int> ns1_getI(ns1_IntOrList* self) {
+inline Int* ns1_getI(ns1_IntOrList* self) {
     if (self->_type == ns1_SmIntOrListTypes::I) {
-        Opt<Int> result;
-        result.setValue(self->I);
-        return result;
+        return &self->I;
     }
-    return Opt<Int>();
+    return nullptr;
 }
 inline void ns1_initByValue(ns1_IntOrList* self, Int value) {
     self->setI(std::move(value));
@@ -773,13 +865,11 @@ inline void ns1_initByValue(ns1_IntOrList* self, Int value) {
 inline void ns1_setL(ns1_IntOrList* self, List<Int> value) {
     self->setL(std::move(value));
 }
-inline Opt<List<Int>> ns1_getL(ns1_IntOrList* self) {
+inline List<Int>* ns1_getL(ns1_IntOrList* self) {
     if (self->_type == ns1_SmIntOrListTypes::L) {
-        Opt<List<Int>> result;
-        result.setValue(self->L);
-        return result;
+        return &self->L;
     }
-    return Opt<List<Int>>();
+    return nullptr;
 }
 inline void ns1_initByValue(ns1_IntOrList* self, List<Int> value) {
     self->setL(std::move(value));
@@ -910,13 +1000,11 @@ inline void ns1_setValue(ns1_Res2<T>* self, T value) {
     self->setValue(std::move(value));
 }
 template <class T>
-inline Opt<T> ns1_getValue(ns1_Res2<T>* self) {
+inline T* ns1_getValue(ns1_Res2<T>* self) {
     if (self->_type == ns1_SmRes2Types::Value) {
-        Opt<T> result;
-        result.setValue(self->Value);
-        return result;
+        return &self->Value;
     }
-    return Opt<T>();
+    return nullptr;
 }
 template <class T>
 inline void ns1_initByValue(ns1_Res2<T>* self, T value) {
@@ -927,13 +1015,11 @@ inline void ns1_setError(ns1_Res2<T>* self, Str value) {
     self->setError(std::move(value));
 }
 template <class T>
-inline Opt<Str> ns1_getError(ns1_Res2<T>* self) {
+inline Str* ns1_getError(ns1_Res2<T>* self) {
     if (self->_type == ns1_SmRes2Types::Error) {
-        Opt<Str> result;
-        result.setValue(self->Error);
-        return result;
+        return &self->Error;
     }
-    return Opt<Str>();
+    return nullptr;
 }
 template <class T>
 requires (!std::is_same_v<Str, T>)
@@ -1048,13 +1134,11 @@ inline void ns1_setValue(ns1_Opt2<T>* self, T value) {
     self->setValue(std::move(value));
 }
 template <class T>
-inline Opt<T> ns1_getValue(ns1_Opt2<T>* self) {
+inline T* ns1_getValue(ns1_Opt2<T>* self) {
     if (self->_type == ns1_SmOpt2Types::Value) {
-        Opt<T> result;
-        result.setValue(self->Value);
-        return result;
+        return &self->Value;
     }
-    return Opt<T>();
+    return nullptr;
 }
 template <class T>
 inline void ns1_initByValue(ns1_Opt2<T>* self, T value) {
@@ -1064,13 +1148,13 @@ inline void ns1_initByValue(ns1_Opt2<T>* self, T value) {
 // The program's string literals: one pool, and two run-length encoded index
 // series (offsets as deltas, then lengths), each as what to subtract from the
 // previous value; strtable.hpp has the stream format.
-static const Int __sm_stringCount = 19;
+static const Int __sm_stringCount = 22;
 static const char __sm_stringPool[] =
-    "a-string-longer-than-the-inline-buffer" "payload-longer-than-the-inline-buffer!" "returned-through-a-function-call" "collided" "second" "error" "float" "later" "value" "boom" "none" "int" "str" "d:" "no" "?" "L" "R" "" 
+    "a-string-longer-than-the-inline-buffer" "payload-longer-than-the-inline-buffer!" "returned-through-a-function-call" "ada@example.com" "collided" "second" "error" "first" "float" "later" "value" "boom" "none" "ada" "int" "str" "d:" "no" "?" "L" "R" "" 
 ;
-static const Int16 __sm_stringStarts[] = {19,7,0,-38,0,6,24,2,1,1,3,0,7,1,0,1,0,1,0,1,1,2,0};
-static const Int16 __sm_stringLens[] = {19,6,-38,0,6,24,2,1,1,3,0,7,1,0,1,0,1,0,1,1,2,0,1,1};
-static_assert(sizeof(__sm_stringPool) - 1 == 163, "the string pool and its length index disagree");
+static const Int16 __sm_stringStarts[] = {22,8,0,-38,0,6,17,7,2,1,1,4,0,3,1,0,1,1,2,0,3,1,0,1,1,2,0};
+static const Int16 __sm_stringLens[] = {22,7,-38,0,6,17,7,2,1,1,4,0,3,1,0,1,1,2,0,3,1,0,1,1,2,0,1,1};
+static_assert(sizeof(__sm_stringPool) - 1 == 186, "the string pool and its length index disagree");
 static Span<Char> __sm_stringTable[__sm_stringCount];
 static struct __SmStringTableInitType {
     __SmStringTableInitType() {
@@ -1291,8 +1375,9 @@ ns1_Res2<Str> ns1_okStr2();
 template <class T>
 Bool ns1_isOk2(ns1_Res2<T> r);
 template <class T>
-Opt<T> ns1_optValue2(ns1_Opt2<T> o);
+T* ns1_optValue2(ns1_Opt2<T> o);
 Int ns1_partUnionClass();
+Int ns1_partSameType();
 Int ns1_partManaged();
 Int ns1_partConstructionReturn();
 ns1_DoubleOrFloat ns1_make();
@@ -1380,13 +1465,13 @@ Str ns1_label(ns1_DoubleOrFloat* u) {
     Str out;
     ns1_SmDoubleOrFloatTypes _sm_expr1;
     Bool _sm_expr2;
-    out = __sm_stringTable[18];
+    out = __sm_stringTable[21];
     _sm_expr1 = ns1_SmDoubleOrFloatTypes::IntValue;
     _sm_expr2 = u == _sm_expr1;
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
-    out = __sm_stringTable[11];
+    out = __sm_stringTable[14];
     goto L6;
     L2:;
     _sm_expr1 = ns1_SmDoubleOrFloatTypes::DoubleValue;
@@ -1394,10 +1479,10 @@ Str ns1_label(ns1_DoubleOrFloat* u) {
     if (_sm_expr2) goto L4;
     goto L5;
     L4:;
-    out = __sm_stringTable[6];
+    out = __sm_stringTable[8];
     goto L6;
     L5:;
-    out = __sm_stringTable[10];
+    out = __sm_stringTable[12];
     L6:;
     return out;
 }
@@ -1406,13 +1491,13 @@ Str ns1_tagged(ns1_DoubleOrFloat* u) {
     Str out;
     ns1_SmDoubleOrFloatTypes _sm_expr1;
     Bool _sm_expr2;
-    out = __sm_stringTable[18];
+    out = __sm_stringTable[21];
     _sm_expr1 = ns1_SmDoubleOrFloatTypes::None;
     _sm_expr2 = u == _sm_expr1;
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
-    out = __sm_stringTable[10];
+    out = __sm_stringTable[12];
     goto L8;
     L2:;
     _sm_expr1 = ns1_SmDoubleOrFloatTypes::IntValue;
@@ -1420,7 +1505,7 @@ Str ns1_tagged(ns1_DoubleOrFloat* u) {
     if (_sm_expr2) goto L4;
     goto L5;
     L4:;
-    out = __sm_stringTable[11];
+    out = __sm_stringTable[14];
     goto L8;
     L5:;
     _sm_expr1 = ns1_SmDoubleOrFloatTypes::DoubleValue;
@@ -1428,7 +1513,7 @@ Str ns1_tagged(ns1_DoubleOrFloat* u) {
     if (_sm_expr2) goto L7;
     goto L8;
     L7:;
-    out = __sm_stringTable[6];
+    out = __sm_stringTable[8];
     L8:;
     return out;
 }
@@ -1437,14 +1522,14 @@ Str ns1_labelSide(ns1_SideOrSide s) {
     Str out;
     ns1_SmSideOrSideTypes _sm_when3, _sm_expr1;
     Bool _sm_expr2;
-    out = __sm_stringTable[18];
+    out = __sm_stringTable[21];
     _sm_when3 = ns1_getTypeOf(simse_addressOf(s));
     _sm_expr1 = ns1_SmSideOrSideTypes::L;
     _sm_expr2 = _sm_when3 == _sm_expr1;
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
-    out = __sm_stringTable[16];
+    out = __sm_stringTable[19];
     goto L6;
     L2:;
     _sm_expr1 = ns1_SmSideOrSideTypes::R;
@@ -1452,10 +1537,10 @@ Str ns1_labelSide(ns1_SideOrSide s) {
     if (_sm_expr2) goto L4;
     goto L5;
     L4:;
-    out = __sm_stringTable[17];
+    out = __sm_stringTable[20];
     goto L6;
     L5:;
-    out = __sm_stringTable[10];
+    out = __sm_stringTable[12];
     L6:;
     return out;
 }
@@ -1475,34 +1560,32 @@ Str ns1_describe(ns1_DoubleOrFloat* self) {
 }
 // stress/unions/src/main.kt
 Int ns1_strLen(ns1_IntOrStr u) {
-    Opt<Str> s;
+    Str* s;
     Bool _sm_expr1;
-    Str _sm_expr2;
-    Int _sm_expr3;
+    Int _sm_expr2;
     s = ns1_getS(simse_addressOf(u));
-    _sm_expr1 = simse_optHasValue(simse_addressOf(s));
+    _sm_expr1 = s != nullptr;
     if (_sm_expr1) goto L1;
     goto L2;
     L1:;
-    _sm_expr2 = simse_optValue(simse_addressOf(s));
-    _sm_expr3 = simse_lenOf(_sm_expr2);
-    return _sm_expr3;
+    _sm_expr2 = simse_lenOf((*s));
+    return _sm_expr2;
     L2:;
-    _sm_expr3 = -1;
-    return _sm_expr3;
+    _sm_expr2 = -1;
+    return _sm_expr2;
 }
 // stress/unions/src/main.kt
 Str ns1_strKind(ns1_IntOrStr* u) {
     Str out;
     ns1_SmIntOrStrTypes _sm_expr1;
     Bool _sm_expr2;
-    out = __sm_stringTable[15];
+    out = __sm_stringTable[18];
     _sm_expr1 = ns1_SmIntOrStrTypes::I;
     _sm_expr2 = u == _sm_expr1;
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
-    out = __sm_stringTable[11];
+    out = __sm_stringTable[14];
     goto L6;
     L2:;
     _sm_expr1 = ns1_SmIntOrStrTypes::S;
@@ -1510,10 +1593,10 @@ Str ns1_strKind(ns1_IntOrStr* u) {
     if (_sm_expr2) goto L4;
     goto L5;
     L4:;
-    out = __sm_stringTable[12];
+    out = __sm_stringTable[15];
     goto L6;
     L5:;
-    out = __sm_stringTable[10];
+    out = __sm_stringTable[12];
     L6:;
     return out;
 }
@@ -1542,7 +1625,7 @@ ns1_Res2<T> ns1_err2(Str message) {
 // stress/unions/src/main.kt
 ns1_Res2<Str> ns1_okStr2() {
     Str text;
-    text = __sm_stringTable[3];
+    text = __sm_stringTable[4];
     ns1_Res2<Str> _sm_ctor4;
     ns1_initByValue(simse_addressOf(_sm_ctor4), text);
     return _sm_ctor4;
@@ -1558,29 +1641,29 @@ Bool ns1_isOk2(ns1_Res2<T> r) {
 }
 // stress/unions/src/main.kt
 template <class T>
-Opt<T> ns1_optValue2(ns1_Opt2<T> o) {
-    Opt<T> _sm_expr1;
+T* ns1_optValue2(ns1_Opt2<T> o) {
+    T* _sm_expr1;
     _sm_expr1 = ns1_getValue(simse_addressOf(o));
     return _sm_expr1;
 }
 // stress/unions/src/main.kt
 Int ns1_partUnionClass() {
-    ns1_SmDoubleOrFloatTypes _sm_base1, _sm_base3, _sm_expr2, _sm_expr3, _sm_expr12, _sm_expr14,
-        _sm_expr16;
-    ns1_DoubleOrFloat* _sm_base2, * _sm_base4, * _sm_base5, * _sm_base6, * _sm_base7, * _sm_base10,
-        * _sm_base11, * _sm_base12;
-    Int _sm_base8, _sm_base9, _sm_expr8, five, _sm_expr31, _sm_expr32;
-    ns1_Left _sm_base13;
-    ns1_SmSideOrSideTypes _sm_base14;
-    ns1_Right _sm_base15;
-    ns1_SmMarkerTypes _sm_base16;
-    Bool _sm_expr1, _sm_expr4, _sm_expr6, _sm_expr10, _sm_expr11, _sm_expr13, _sm_expr15, _sm_expr17,
-        _sm_expr21, _sm_expr28, _sm_expr30;
-    Opt<Int> _sm_expr5, i;
-    Str _sm_expr7, _sm_expr18, _sm_expr19, _sm_expr20, _sm_expr23, _sm_expr24, _sm_expr25, _sm_expr26,
-        _sm_expr27, _sm_expr29;
-    Opt<Float64> _sm_expr9, d;
-    Float64 _sm_expr22;
+    ns1_SmDoubleOrFloatTypes _sm_base1, _sm_base6, _sm_expr2, _sm_expr3, _sm_expr11, _sm_expr13,
+        _sm_expr15;
+    ns1_DoubleOrFloat* _sm_base3, * _sm_base7, * _sm_base8, * _sm_base11, * _sm_base12, * _sm_base15,
+        * _sm_base16, * _sm_base17;
+    Int _sm_base4, _sm_base13, _sm_base14, five, _sm_expr29, _sm_expr30;
+    Float64 _sm_base10;
+    ns1_Left _sm_base18;
+    ns1_SmSideOrSideTypes _sm_base19;
+    ns1_Right _sm_base20;
+    ns1_SmMarkerTypes _sm_base21;
+    Bool _sm_expr1, _sm_expr4, _sm_expr6, _sm_expr9, _sm_expr10, _sm_expr12, _sm_expr14, _sm_expr16,
+        _sm_expr20, _sm_expr26, _sm_expr28;
+    Int* _sm_expr5, * i;
+    Str _sm_expr7, _sm_expr17, _sm_expr18, _sm_expr19, _sm_expr21, _sm_expr22, _sm_expr23, _sm_expr24,
+        _sm_expr25, _sm_expr27;
+    Float64* _sm_expr8, * d;
     ns1_DoubleOrFloat a;
     ns1_initByValue(simse_addressOf(a));
     _sm_base1 = ns1_SmDoubleOrFloatTypes::None;
@@ -1591,104 +1674,148 @@ Int ns1_partUnionClass() {
     _sm_expr4 = _sm_expr2 == _sm_expr3;
     simse_println((_sm_expr4), stdout);
     _sm_expr5 = ns1_getIntValue(simse_addressOf(a));
-    _sm_expr6 = simse_optHasValue(simse_addressOf(_sm_expr5));
+    _sm_expr6 = _sm_expr5 != nullptr;
     simse_println((_sm_expr6), stdout);
-    _sm_base2 = &a;
-    _sm_expr7 = ns1_tagged(_sm_base2);
+    _sm_base3 = &a;
+    _sm_expr7 = ns1_tagged(_sm_base3);
     simse_println((_sm_expr7), stdout);
     ns1_setIntValue(simse_addressOf(a), 5);
     i = ns1_getIntValue(simse_addressOf(a));
-    _sm_expr8 = simse_optValue(simse_addressOf(i));
-    simse_println((_sm_expr8), stdout);
-    _sm_expr9 = ns1_getDoubleValue(simse_addressOf(a));
-    _sm_expr10 = simse_optHasValue(simse_addressOf(_sm_expr9));
+    _sm_base4 = *i;
+    simse_println((_sm_base4), stdout);
+    _sm_expr8 = ns1_getDoubleValue(simse_addressOf(a));
+    _sm_expr9 = _sm_expr8 != nullptr;
+    simse_println((_sm_expr9), stdout);
+    _sm_base6 = ns1_SmDoubleOrFloatTypes::IntValue;
+    _sm_expr10 = ns1_isOfType(simse_addressOf(a), _sm_base6);
     simse_println((_sm_expr10), stdout);
-    _sm_base3 = ns1_SmDoubleOrFloatTypes::IntValue;
-    _sm_expr11 = ns1_isOfType(simse_addressOf(a), _sm_base3);
-    simse_println((_sm_expr11), stdout);
-    _sm_expr12 = ns1_SmDoubleOrFloatTypes::IntValue;
-    _sm_expr13 = a == _sm_expr12;
-    simse_println((_sm_expr13), stdout);
-    _sm_expr14 = ns1_SmDoubleOrFloatTypes::DoubleValue;
-    _sm_expr15 = a != _sm_expr14;
-    simse_println((_sm_expr15), stdout);
-    _sm_expr16 = ns1_SmDoubleOrFloatTypes::IntValue;
-    _sm_expr17 = a == _sm_expr16;
+    _sm_expr11 = ns1_SmDoubleOrFloatTypes::IntValue;
+    _sm_expr12 = a == _sm_expr11;
+    simse_println((_sm_expr12), stdout);
+    _sm_expr13 = ns1_SmDoubleOrFloatTypes::DoubleValue;
+    _sm_expr14 = a != _sm_expr13;
+    simse_println((_sm_expr14), stdout);
+    _sm_expr15 = ns1_SmDoubleOrFloatTypes::IntValue;
+    _sm_expr16 = a == _sm_expr15;
+    simse_println((_sm_expr16), stdout);
+    _sm_base7 = &a;
+    _sm_expr17 = ns1_label(_sm_base7);
     simse_println((_sm_expr17), stdout);
-    _sm_base4 = &a;
-    _sm_expr18 = ns1_label(_sm_base4);
+    _sm_base8 = &a;
+    _sm_expr18 = ns1_tagged(_sm_base8);
     simse_println((_sm_expr18), stdout);
-    _sm_base5 = &a;
-    _sm_expr19 = ns1_tagged(_sm_base5);
+    _sm_expr19 = ns1_describe(simse_addressOf(a));
     simse_println((_sm_expr19), stdout);
-    _sm_expr20 = ns1_describe(simse_addressOf(a));
-    simse_println((_sm_expr20), stdout);
     ns1_DoubleOrFloat b;
     ns1_initByValue(simse_addressOf(b), 2.5);
     d = ns1_getDoubleValue(simse_addressOf(b));
-    _sm_expr21 = simse_optHasValue(simse_addressOf(d));
+    _sm_expr20 = d != nullptr;
+    simse_println((_sm_expr20), stdout);
+    _sm_base10 = *d;
+    simse_println((_sm_base10), stdout);
+    _sm_base11 = &b;
+    _sm_expr21 = ns1_label(_sm_base11);
     simse_println((_sm_expr21), stdout);
-    _sm_expr22 = simse_optValue(simse_addressOf(d));
-    simse_println((_sm_expr22), stdout);
-    _sm_base6 = &b;
-    _sm_expr23 = ns1_label(_sm_base6);
-    simse_println((_sm_expr23), stdout);
     five = 5;
     ns1_DoubleOrFloat c;
     ns1_initByValue(simse_addressOf(c), five);
-    _sm_base7 = &c;
-    _sm_expr24 = ns1_label(_sm_base7);
-    simse_println((_sm_expr24), stdout);
-    _sm_base8 = c.IntValue;
-    simse_println((_sm_base8), stdout);
-    c.IntValue = 11;
-    _sm_base9 = c.IntValue;
-    simse_println((_sm_base9), stdout);
-    _sm_base10 = &c;
-    _sm_expr25 = ns1_label(_sm_base10);
-    simse_println((_sm_expr25), stdout);
-    ns1_setNone(simse_addressOf(c));
-    _sm_base11 = &c;
-    _sm_expr26 = ns1_label(_sm_base11);
-    simse_println((_sm_expr26), stdout);
     _sm_base12 = &c;
-    _sm_expr27 = ns1_tagged(_sm_base12);
-    simse_println((_sm_expr27), stdout);
+    _sm_expr22 = ns1_label(_sm_base12);
+    simse_println((_sm_expr22), stdout);
+    _sm_base13 = c.IntValue;
+    simse_println((_sm_base13), stdout);
+    c.IntValue = 11;
+    _sm_base14 = c.IntValue;
+    simse_println((_sm_base14), stdout);
+    _sm_base15 = &c;
+    _sm_expr23 = ns1_label(_sm_base15);
+    simse_println((_sm_expr23), stdout);
+    ns1_setNone(simse_addressOf(c));
+    _sm_base16 = &c;
+    _sm_expr24 = ns1_label(_sm_base16);
+    simse_println((_sm_expr24), stdout);
+    _sm_base17 = &c;
+    _sm_expr25 = ns1_tagged(_sm_base17);
+    simse_println((_sm_expr25), stdout);
     ns1_SideOrSide s;
-    _sm_base13 = ns1_Left::L;
-    ns1_initByValue(simse_addressOf(s), _sm_base13);
-    _sm_base14 = ns1_SmSideOrSideTypes::L;
-    _sm_expr28 = ns1_isOfType(simse_addressOf(s), _sm_base14);
-    simse_println((_sm_expr28), stdout);
-    _sm_base15 = ns1_Right::R;
-    ns1_setR(simse_addressOf(s), _sm_base15);
-    _sm_expr29 = ns1_labelSide(s);
-    simse_println((_sm_expr29), stdout);
+    _sm_base18 = ns1_Left::L;
+    ns1_initByValue(simse_addressOf(s), _sm_base18);
+    _sm_base19 = ns1_SmSideOrSideTypes::L;
+    _sm_expr26 = ns1_isOfType(simse_addressOf(s), _sm_base19);
+    simse_println((_sm_expr26), stdout);
+    _sm_base20 = ns1_Right::R;
+    ns1_setR(simse_addressOf(s), _sm_base20);
+    _sm_expr27 = ns1_labelSide(s);
+    simse_println((_sm_expr27), stdout);
     ns1_Marker m;
     ns1_initByValue(simse_addressOf(m));
-    _sm_base16 = ns1_SmMarkerTypes::None;
-    _sm_expr30 = ns1_isOfType(simse_addressOf(m), _sm_base16);
-    simse_println((_sm_expr30), stdout);
+    _sm_base21 = ns1_SmMarkerTypes::None;
+    _sm_expr28 = ns1_isOfType(simse_addressOf(m), _sm_base21);
+    simse_println((_sm_expr28), stdout);
     ns1_WithMethod w;
     ns1_initByValue(simse_addressOf(w), 4);
-    _sm_expr31 = ns1_doubled(simse_addressOf(w));
-    simse_println((_sm_expr31), stdout);
+    _sm_expr29 = ns1_doubled(simse_addressOf(w));
+    simse_println((_sm_expr29), stdout);
     w.I = 6;
-    _sm_expr32 = ns1_doubled(simse_addressOf(w));
-    simse_println((_sm_expr32), stdout);
+    _sm_expr30 = ns1_doubled(simse_addressOf(w));
+    simse_println((_sm_expr30), stdout);
+    return 0;
+}
+// stress/unions/src/main.kt
+Int ns1_partSameType() {
+    ns1_SmUserOrEmailTypes _sm_base1, _sm_base2, _sm_base4, _sm_base6;
+    Bool _sm_expr1, _sm_expr2, _sm_expr6, _sm_expr7, _sm_expr9, _sm_expr12, _sm_expr16;
+    Str* _sm_expr3, * _sm_expr5, * _sm_expr8, * _sm_expr10, * _sm_expr13, * _sm_expr15;
+    Int _sm_expr4, _sm_expr11, _sm_expr14;
+    ns1_UserOrEmail u;
+    ns1_initByValue(simse_addressOf(u));
+    _sm_base1 = ns1_SmUserOrEmailTypes::None;
+    _sm_expr1 = ns1_isOfType(simse_addressOf(u), _sm_base1);
+    simse_println((_sm_expr1), stdout);
+    ns1_setUser(simse_addressOf(u), __sm_stringTable[13]);
+    _sm_base2 = ns1_SmUserOrEmailTypes::User;
+    _sm_expr2 = ns1_isOfType(simse_addressOf(u), _sm_base2);
+    simse_println((_sm_expr2), stdout);
+    _sm_expr3 = ns1_getUser(simse_addressOf(u));
+    _sm_expr4 = simse_lenOf((*_sm_expr3));
+    simse_println((_sm_expr4), stdout);
+    _sm_expr5 = ns1_getEmail(simse_addressOf(u));
+    _sm_expr6 = _sm_expr5 != nullptr;
+    simse_println((_sm_expr6), stdout);
+    ns1_setEmail(simse_addressOf(u), __sm_stringTable[3]);
+    _sm_base4 = ns1_SmUserOrEmailTypes::Email;
+    _sm_expr7 = ns1_isOfType(simse_addressOf(u), _sm_base4);
+    simse_println((_sm_expr7), stdout);
+    _sm_expr8 = ns1_getUser(simse_addressOf(u));
+    _sm_expr9 = _sm_expr8 != nullptr;
+    simse_println((_sm_expr9), stdout);
+    _sm_expr10 = ns1_getEmail(simse_addressOf(u));
+    _sm_expr11 = simse_lenOf((*_sm_expr10));
+    simse_println((_sm_expr11), stdout);
+    ns1_UserOrEmail v;
+    ns1_initByValue(simse_addressOf(v), __sm_stringTable[7]);
+    _sm_base6 = ns1_SmUserOrEmailTypes::User;
+    _sm_expr12 = ns1_isOfType(simse_addressOf(v), _sm_base6);
+    simse_println((_sm_expr12), stdout);
+    _sm_expr13 = ns1_getUser(simse_addressOf(v));
+    _sm_expr14 = simse_lenOf((*_sm_expr13));
+    simse_println((_sm_expr14), stdout);
+    _sm_expr15 = ns1_getEmail(simse_addressOf(v));
+    _sm_expr16 = _sm_expr15 != nullptr;
+    simse_println((_sm_expr16), stdout);
     return 0;
 }
 // stress/unions/src/main.kt
 Int ns1_partManaged() {
-    ns1_IntOrStr* _sm_base1, * _sm_base2;
-    Int _sm_expr1, _sm_expr3, _sm_expr5, _sm_expr7, _sm_expr11, _sm_expr16, _sm_expr20;
-    Str _sm_expr2, _sm_expr10, _sm_expr14;
+    ns1_IntOrStr* _sm_base1, * _sm_base6;
+    Int _sm_base2, _sm_base8, _sm_expr1, _sm_expr3, _sm_expr5, _sm_expr9, _sm_expr13;
+    Str _sm_base4, _sm_expr2, _sm_expr12;
     ns1_IntOrStr v, _sm_expr4;
-    Opt<Int> _sm_expr6, _sm_expr19;
-    Opt<Str> _sm_expr8, s2, _sm_expr12;
-    Bool _sm_expr9, _sm_expr13, _sm_expr18;
-    List<Int> numbers, _sm_expr15;
-    Opt<List<Int>> l, _sm_expr17;
+    Int* _sm_expr6, * _sm_expr16;
+    Str* _sm_expr7, * s2, * _sm_expr10;
+    Bool _sm_expr8, _sm_expr11, _sm_expr15;
+    List<Int> numbers;
+    List<Int>* l, * _sm_expr14;
     ns1_IntOrList x;
     ns1_IntOrStr u;
     ns1_initByValue(simse_addressOf(u), __sm_stringTable[0]);
@@ -1705,40 +1832,39 @@ Int ns1_partManaged() {
     simse_println((_sm_expr5), stdout);
     ns1_setI(simse_addressOf(u), 7);
     _sm_expr6 = ns1_getI(simse_addressOf(u));
-    _sm_expr7 = simse_optValue(simse_addressOf(_sm_expr6));
-    simse_println((_sm_expr7), stdout);
-    _sm_expr8 = ns1_getS(simse_addressOf(u));
-    _sm_expr9 = simse_optHasValue(simse_addressOf(_sm_expr8));
-    simse_println((_sm_expr9), stdout);
-    ns1_setS(simse_addressOf(u), __sm_stringTable[4]);
+    _sm_base2 = *_sm_expr6;
+    simse_println((_sm_base2), stdout);
+    _sm_expr7 = ns1_getS(simse_addressOf(u));
+    _sm_expr8 = _sm_expr7 != nullptr;
+    simse_println((_sm_expr8), stdout);
+    ns1_setS(simse_addressOf(u), __sm_stringTable[5]);
     s2 = ns1_getS(simse_addressOf(u));
-    _sm_expr10 = simse_optValue(simse_addressOf(s2));
-    simse_println((_sm_expr10), stdout);
+    _sm_base4 = *s2;
+    simse_println((_sm_base4), stdout);
     v = u;
-    _sm_expr11 = ns1_strLen(v);
-    simse_println((_sm_expr11), stdout);
+    _sm_expr9 = ns1_strLen(v);
+    simse_println((_sm_expr9), stdout);
     ns1_setNone(simse_addressOf(u));
-    _sm_expr12 = ns1_getS(simse_addressOf(u));
-    _sm_expr13 = simse_optHasValue(simse_addressOf(_sm_expr12));
-    simse_println((_sm_expr13), stdout);
-    _sm_base2 = &u;
-    _sm_expr14 = ns1_strKind(_sm_base2);
-    simse_println((_sm_expr14), stdout);
+    _sm_expr10 = ns1_getS(simse_addressOf(u));
+    _sm_expr11 = _sm_expr10 != nullptr;
+    simse_println((_sm_expr11), stdout);
+    _sm_base6 = &u;
+    _sm_expr12 = ns1_strKind(_sm_base6);
+    simse_println((_sm_expr12), stdout);
     numbers = List<Int>{1, 2, 3};
     ns1_IntOrList w;
     ns1_initByValue(simse_addressOf(w), numbers);
     l = ns1_getL(simse_addressOf(w));
-    _sm_expr15 = simse_optValue(simse_addressOf(l));
-    _sm_expr16 = simse_lenOf(_sm_expr15);
-    simse_println((_sm_expr16), stdout);
+    _sm_expr13 = simse_lenOf((*l));
+    simse_println((_sm_expr13), stdout);
     ns1_setI(simse_addressOf(w), 2);
-    _sm_expr17 = ns1_getL(simse_addressOf(w));
-    _sm_expr18 = simse_optHasValue(simse_addressOf(_sm_expr17));
-    simse_println((_sm_expr18), stdout);
+    _sm_expr14 = ns1_getL(simse_addressOf(w));
+    _sm_expr15 = _sm_expr14 != nullptr;
+    simse_println((_sm_expr15), stdout);
     x = w;
-    _sm_expr19 = ns1_getI(simse_addressOf(x));
-    _sm_expr20 = simse_optValue(simse_addressOf(_sm_expr19));
-    simse_println((_sm_expr20), stdout);
+    _sm_expr16 = ns1_getI(simse_addressOf(x));
+    _sm_base8 = *_sm_expr16;
+    simse_println((_sm_base8), stdout);
     return 0;
 }
 // stress/unions/src/main.kt
@@ -1774,18 +1900,19 @@ ns1_DoubleOrFloat ns1_makeParen() {
 }
 // stress/unions/src/main.kt
 Int ns1_partUnionGenerics() {
-    Int _sm_base1, _sm_expr3, _sm_expr17, _sm_expr18, _sm_expr23, _sm_expr25;
-    Str _sm_base2, _sm_expr6, out, _sm_expr12, _sm_expr22, _sm_expr28, _sm_expr31;
+    Int _sm_base1, _sm_base2, _sm_base7, _sm_expr14, _sm_expr18, _sm_expr19;
+    Str _sm_base3, _sm_base4, _sm_base5, _sm_base9, _sm_base10, out;
     Res<Int> a, e;
     ns1_Res2<Int> b, e2;
-    Bool _sm_expr1, _sm_expr2, _sm_expr4, _sm_expr5, _sm_expr8, _sm_expr11, _sm_expr13, _sm_expr16,
-        _sm_expr19, _sm_expr21, _sm_expr26, _sm_expr29;
-    Opt<Int> bv, _sm_expr15, o, o2v, empty, _sm_expr20;
-    Opt<Str> e2e, later, sv, _sm_expr27, _sm_expr30;
-    ns1_SmRes2Types _sm_expr7;
-    List<Int> numbers, _sm_expr24;
+    Bool _sm_expr1, _sm_expr2, _sm_expr3, _sm_expr4, _sm_expr6, _sm_expr9, _sm_expr10, _sm_expr13,
+        _sm_expr15, _sm_expr17, _sm_expr20, _sm_expr22;
+    Int* bv, * _sm_expr12, * o2v, * _sm_expr16;
+    Str* e2e, * later, * sv, * _sm_expr21, * _sm_expr23;
+    ns1_SmRes2Types _sm_expr5;
+    Opt<Int> o, empty;
+    List<Int> numbers;
     ns1_Res2<List<Int>> l;
-    Opt<List<Int>> lv;
+    List<Int>* lv;
     ns1_Res2<Str> collided;
     a = simse_resOk<Int>(7);
     b = ns1_ok2(7);
@@ -1796,99 +1923,98 @@ Int ns1_partUnionGenerics() {
     _sm_base1 = a.Value;
     simse_println((_sm_base1), stdout);
     bv = ns1_getValue(simse_addressOf(b));
-    _sm_expr3 = simse_optValue(simse_addressOf(bv));
-    simse_println((_sm_expr3), stdout);
-    e = simse_resErr<Int>(__sm_stringTable[14]);
-    e2 = ns1_err2<Int>(__sm_stringTable[14]);
-    _sm_expr4 = simse_resHasValue(simse_addressOf(e));
-    simse_println((_sm_expr4), stdout);
-    _sm_expr5 = ns1_isOk2(e2);
-    simse_println((_sm_expr5), stdout);
-    _sm_base2 = e.Error;
+    _sm_base2 = *bv;
     simse_println((_sm_base2), stdout);
+    e = simse_resErr<Int>(__sm_stringTable[17]);
+    e2 = ns1_err2<Int>(__sm_stringTable[17]);
+    _sm_expr3 = simse_resHasValue(simse_addressOf(e));
+    simse_println((_sm_expr3), stdout);
+    _sm_expr4 = ns1_isOk2(e2);
+    simse_println((_sm_expr4), stdout);
+    _sm_base3 = e.Error;
+    simse_println((_sm_base3), stdout);
     e2e = ns1_getError(simse_addressOf(e2));
-    _sm_expr6 = simse_optValue(simse_addressOf(e2e));
-    simse_println((_sm_expr6), stdout);
-    out = __sm_stringTable[18];
-    _sm_expr7 = ns1_SmRes2Types::Value;
-    _sm_expr8 = b == _sm_expr7;
-    if (_sm_expr8) goto L1;
+    _sm_base4 = *e2e;
+    simse_println((_sm_base4), stdout);
+    out = __sm_stringTable[21];
+    _sm_expr5 = ns1_SmRes2Types::Value;
+    _sm_expr6 = b == _sm_expr5;
+    if (_sm_expr6) goto L1;
     goto L2;
     L1:;
-    out = __sm_stringTable[8];
+    out = __sm_stringTable[10];
     goto L6;
     L2:;
-    _sm_expr7 = ns1_SmRes2Types::Error;
-    _sm_expr8 = b == _sm_expr7;
-    if (_sm_expr8) goto L4;
+    _sm_expr5 = ns1_SmRes2Types::Error;
+    _sm_expr6 = b == _sm_expr5;
+    if (_sm_expr6) goto L4;
     goto L5;
     L4:;
-    out = __sm_stringTable[5];
+    out = __sm_stringTable[6];
     goto L6;
     L5:;
-    out = __sm_stringTable[10];
+    out = __sm_stringTable[12];
     L6:;
     simse_println((out), stdout);
-    ns1_setError(simse_addressOf(b), __sm_stringTable[7]);
-    _sm_expr11 = ns1_isOk2(b);
-    simse_println((_sm_expr11), stdout);
+    ns1_setError(simse_addressOf(b), __sm_stringTable[9]);
+    _sm_expr9 = ns1_isOk2(b);
+    simse_println((_sm_expr9), stdout);
     later = ns1_getError(simse_addressOf(b));
-    _sm_expr12 = simse_optValue(simse_addressOf(later));
-    simse_println((_sm_expr12), stdout);
+    _sm_base5 = *later;
+    simse_println((_sm_base5), stdout);
     ns1_Res2<Int> none2;
     ns1_initByValue(simse_addressOf(none2));
-    _sm_expr13 = ns1_isOk2(none2);
+    _sm_expr10 = ns1_isOk2(none2);
+    simse_println((_sm_expr10), stdout);
+    ns1_Opt2<Int> _sm_expr11;
+    ns1_initByValue(simse_addressOf(_sm_expr11));
+    _sm_expr12 = ns1_optValue2(_sm_expr11);
+    _sm_expr13 = _sm_expr12 != nullptr;
     simse_println((_sm_expr13), stdout);
-    ns1_Opt2<Int> _sm_expr14;
-    ns1_initByValue(simse_addressOf(_sm_expr14));
-    _sm_expr15 = ns1_optValue2(_sm_expr14);
-    _sm_expr16 = simse_optHasValue(simse_addressOf(_sm_expr15));
-    simse_println((_sm_expr16), stdout);
     o = simse_optSome<Int>(9);
     ns1_Opt2<Int> o2;
     ns1_initByValue(simse_addressOf(o2), 9);
-    _sm_expr17 = simse_optValue(simse_addressOf(o));
-    simse_println((_sm_expr17), stdout);
+    _sm_expr14 = simse_optValue(simse_addressOf(o));
+    simse_println((_sm_expr14), stdout);
     o2v = ns1_getValue(simse_addressOf(o2));
-    _sm_expr18 = simse_optValue(simse_addressOf(o2v));
-    simse_println((_sm_expr18), stdout);
+    _sm_base7 = *o2v;
+    simse_println((_sm_base7), stdout);
     empty = simse_optNone<Int>();
     ns1_Opt2<Int> empty2;
     ns1_initByValue(simse_addressOf(empty2));
-    _sm_expr19 = simse_optHasValue(simse_addressOf(empty));
-    simse_println((_sm_expr19), stdout);
-    _sm_expr20 = ns1_getValue(simse_addressOf(empty2));
-    _sm_expr21 = simse_optHasValue(simse_addressOf(_sm_expr20));
-    simse_println((_sm_expr21), stdout);
+    _sm_expr15 = simse_optHasValue(simse_addressOf(empty));
+    simse_println((_sm_expr15), stdout);
+    _sm_expr16 = ns1_getValue(simse_addressOf(empty2));
+    _sm_expr17 = _sm_expr16 != nullptr;
+    simse_println((_sm_expr17), stdout);
     ns1_Opt2<Str> s;
     ns1_initByValue(simse_addressOf(s), Str(__sm_stringTable[1]));
     sv = ns1_getValue(simse_addressOf(s));
-    _sm_expr22 = simse_optValue(simse_addressOf(sv));
-    _sm_expr23 = simse_lenOf(_sm_expr22);
-    simse_println((_sm_expr23), stdout);
+    _sm_expr18 = simse_lenOf((*sv));
+    simse_println((_sm_expr18), stdout);
     numbers = List<Int>{4, 5};
     l = ns1_ok2(numbers);
     lv = ns1_getValue(simse_addressOf(l));
-    _sm_expr24 = simse_optValue(simse_addressOf(lv));
-    _sm_expr25 = simse_lenOf(_sm_expr24);
-    simse_println((_sm_expr25), stdout);
+    _sm_expr19 = simse_lenOf((*lv));
+    simse_println((_sm_expr19), stdout);
     collided = ns1_okStr2();
-    _sm_expr26 = ns1_isOk2(collided);
-    simse_println((_sm_expr26), stdout);
-    _sm_expr27 = ns1_getValue(simse_addressOf(collided));
-    _sm_expr28 = simse_optValue(simse_addressOf(_sm_expr27));
-    simse_println((_sm_expr28), stdout);
-    ns1_setError(simse_addressOf(collided), __sm_stringTable[9]);
-    _sm_expr29 = ns1_isOk2(collided);
-    simse_println((_sm_expr29), stdout);
-    _sm_expr30 = ns1_getError(simse_addressOf(collided));
-    _sm_expr31 = simse_optValue(simse_addressOf(_sm_expr30));
-    simse_println((_sm_expr31), stdout);
+    _sm_expr20 = ns1_isOk2(collided);
+    simse_println((_sm_expr20), stdout);
+    _sm_expr21 = ns1_getValue(simse_addressOf(collided));
+    _sm_base9 = *_sm_expr21;
+    simse_println((_sm_base9), stdout);
+    ns1_setError(simse_addressOf(collided), __sm_stringTable[11]);
+    _sm_expr22 = ns1_isOk2(collided);
+    simse_println((_sm_expr22), stdout);
+    _sm_expr23 = ns1_getError(simse_addressOf(collided));
+    _sm_base10 = *_sm_expr23;
+    simse_println((_sm_base10), stdout);
     return 0;
 }
 // stress/unions/src/main.kt
 int main() {
     ns1_partUnionClass();
+    ns1_partSameType();
     ns1_partManaged();
     ns1_partUnionGenerics();
     ns1_partConstructionReturn();

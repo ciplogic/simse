@@ -428,7 +428,10 @@ fun Emitter.ilEmitOpsChecked(il: *IlBody, level: Int): IlText {
     val result: IlText = this.ilEmitOps(il, frame, level)
     var final: IlText = result
     if (result.ok && this.failed) {
-        final = IlText(false, "", "the emitter reported: " + this.error)
+        // The emitter's own `fail` already names the file, line and column (and falls back
+        // to the declaration being emitted when the node is IL-reconstructed): the message
+        // must survive as it is, not be re-wrapped as an extractor report.
+        final = IlText(false, "", this.error)
     }
     this.failed = savedFailed
     this.error = savedError
@@ -493,6 +496,18 @@ fun Emitter.emitClosureBodyText(unit: *IlUnit, closure: *IlClosure, level: Int):
     val savedSelfType: AstXmlNode = this.selfType
     val savedReturn: AstXmlNode = this.curReturnType
     val savedClosure: Bool = this.inClosureMethod
+    // The closure's own template parameters name the enclosing function's type parameters
+    // when the lambda is inside a generic one, so the protocol constraints of the enclosing
+    // context still apply inside the body (a captured `*T` can call its protocol methods).
+    val savedActiveParams: Dictionary<Str, Bool> = this.activeTypeParams
+    var closureParams: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
+    for (*name in savedActiveParams.keys()) {
+        closureParams.insert(*name, true)
+    }
+    for (*name in closure.templateParams) {
+        closureParams.insert(*name, true)
+    }
+    this.activeTypeParams = closureParams
     this.nameKinds.clear()
     this.localTypes.clear()
     this.ilSeedFrameTypes(body)
@@ -509,6 +524,7 @@ fun Emitter.emitClosureBodyText(unit: *IlUnit, closure: *IlClosure, level: Int):
     this.selfType = savedSelfType
     this.curReturnType = savedReturn
     this.inClosureMethod = savedClosure
+    this.activeTypeParams = savedActiveParams
     return result
 }
 

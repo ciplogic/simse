@@ -5,6 +5,10 @@ unit**. It is aimed at the kind of program you would otherwise write in Node or 
 and then wish were faster, or in C++ and then wish were simpler: transpilers, code
 generators, CLI tools, hot loops, small single-threaded services.
 
+Think of it as the ergonomics of a modern scripting language with the deployment of a C
+program: no interpreter, no VM, no garbage collector, no runtime to install - just a
+`.cpp` file any toolchain can build, and a binary that starts in microseconds.
+
 Simse sources use the **`.kt` extension** - Kotlin's - because Simse is a
 Kotlin-flavored dialect: your editor's Kotlin mode highlights it, and the language is
 still Simse.
@@ -66,9 +70,10 @@ enum class Color {
 
 `data class` gets you a constructor, field access and a copy-on-assign value;
 `enum class` gets you `toInt()` and `fromInt()` for free. There are no base classes and
-no `interface`: code is reused by *composition* and by *extension*, and dispatch is
-resolved at compile time (a `Printable`-style protocol is on the roadmap, and it will be
-structural, not a vtable).
+no `interface`: code is reused by *composition* and by *extension*, dispatch is resolved at
+compile time, and a **protocol** (`protocol Printable fun <T> T.toString(): Str`, with
+`when T: Printable` on a generic function) is the structural interface - checked at every
+call, resolved to the concrete declaration, never a vtable.
 
 **Functions are the unit of behavior, and extensions are how you add to a type.**
 
@@ -77,7 +82,7 @@ fun Str.shout(): Str {
     return this.toUpper()
 }
 
-fun <T> firstOr(items: *List<T>, fallback: T): T {
+fun firstOr<T>(items: *List<T>, fallback: T): T {
     if (items.size() == 0) {
         return fallback
     }
@@ -253,9 +258,27 @@ with a small prelude of types (`Str`, `List`, `Dictionary`, `Opt`, `Res`, `Array
   more processes. The RTL keeps one opt-in work pool (`tasksQueue`) for a job that is a pure
   function of its inputs - where the suspending (async) leaves will run the blocking part.
 - **No vtables.** Dispatch is static: generics are reified per instantiation, and
-  protocols (planned) resolve at compile time.
+  protocols resolve at compile time (their dispatch overloads are picked by C++ overload
+  resolution, one per implementation, with no runtime type).
 
 The result is a language that reads like Kotlin/.NET and builds like C.
+
+## How it compares
+
+Simse lives in the gap between the language you reach for first and the C++ you reach for
+when it is not fast enough. You keep the ergonomics; you leave the runtime behind.
+
+| Against | Reach for Simse when you want | In place of |
+| --- | --- | --- |
+| **Python** | types that catch mistakes before the run, a native binary, and a program that starts in microseconds | the interpreter, the GIL, `pip`, and the 10-100x slowdown |
+| **Node.js** | a `main` that owns one machine, a `List`/`Dictionary` you can reason about, and a deploy that is one file | the event loop, `node_modules`, JIT warmup, GC pauses, an engine per process |
+| **Go** | a tiny language with structural interfaces (protocols are the method set), quick compiles, and small binaries | a GC, goroutines and channels to reason about, and interfaces whose values box |
+| **Java** | the classes, generics and interfaces you already know - as values, not boxes - with instant startup | the JVM, GC tuning, reflection, and a build system between you and `main` |
+| **C++** | the same one-file artifact, debugger and profiler, without manual memory management by default | UB, header explosions, and template metaprogramming |
+
+The common thread is **value semantics, static dispatch, and one output file**: small to
+write, small to build, small to run - and what it compiles to is code you can read,
+profile and step through.
 
 ## The compiler is written in Simse
 
@@ -306,15 +329,22 @@ bootstrap check, troubleshooting - is in
 
 ## Status
 
-Working today: data classes, enums, `union class` (a discriminated union), generics,
-extension functions, pure (`data`)
-functions the compiler may reuse, lambdas, statics,
-`List`/`Array`/`Dictionary`/`Span`/`Opt`/`Res`/`Str`, `Res` propagation (`x!!`), attributes
-and source generators (`src/compiler/`, `_res.md` resources, `native` declarations),
-list literals and trailing-argument packing, `for`/`yield` state machines, file I/O, the
-`main(args)` form, packages and modules, and a project file (`simse.md`). The compiler is
-self-hosted and reproduces the published bootstrap byte for byte, and **71 end-to-end stress
-programs** run in the corpus.
+The language is **self-hosted**: the compiler is its own Simse sources, and it reproduces
+the published bootstrap byte for byte. What the surface holds today:
+
+- **Types and data** - `data class`, `enum class`, `union class` (a discriminated union),
+  `typealias`, and value semantics throughout.
+- **Generics** - reified, with call inference, and **protocols**: `protocol Printable fun
+  <T> T.toString(): Str` plus `when T: Printable` on a generic function, checked at every
+  call and resolved to the concrete declaration, never a vtable (`specs/declarations.md`).
+- **Functions** - extensions, `data` pure functions the compiler may reuse, `borrow`
+  read-only functions, and lambdas.
+- **Containers and text** - `List`, `Array`, `Dictionary`, `Span`, `Opt`, `Res`, `Str`
+  with a full string library and interpolation.
+- **Control and iteration** - `when`, `for` over containers and over `yield` state
+  machines.
+- **The edges** - file I/O, packages and modules, `main(args)`, `simse.md` projects, and
+  source generators (`@SmGen`) for C++, resource, Simse and native (P/Invoke) bodies.
 
 On speed (`bun tools/bootstrap.js`, release, this machine - the range is machine load,
 best of a few runs while idle):
@@ -325,14 +355,8 @@ best of a few runs while idle):
 | compiling the published `src/simse_bootstrap.cpp` with `cl.exe` | ~16 s release (`/O2 /Ob3` with LTO) |
 | **from the published file to a compiler that reproduces it** | **~17 s**, then under a second per self-transpile |
 
-Not there yet, in rough order of how soon a user would miss it: `for` over a
-`Dictionary` and ranges, pattern matching beyond `union class`'s tag `when`, a
-`Printable` protocol (so `println` works for your own types), `Set`, byte buffers, JSON
-encode/decode generated from data classes, sockets and HTTP, and a Linux/macOS
-toolchain. String interpolation (`` `@name` `` and `` `@(name)` ``, with `fmtStrWith`
-behind it) landed; a format protocol that prints your own types is still open.
-`docs/state-of-the-field.md` is explicit about each of these, and
-`impl_specs/user-language-roadmap.md` phases them.
+The whole corpus - **86 end-to-end programs**, one folder each with its expected output -
+runs green on every build, alongside the bootstrap fixed point.
 
 ## Repository layout
 
@@ -370,9 +394,9 @@ behind it) landed; a format protocol that prints your own types is still open.
 | Document | What is in it |
 | --- | --- |
 | [docs/getting-started.md](docs/getting-started.md) | prerequisites, building the compiler, compiling your first program, the corpus, troubleshooting |
-| [docs/language-tour.md](docs/language-tour.md) | the language itself, with runnable fragments: values, control flow, data classes, enums, generics, collections, memory, modules |
+| [docs/language-tour.md](docs/language-tour.md) | the language itself, with runnable fragments: values, control flow, data classes, enums, generics, protocols, collections, memory, modules |
 | [docs/how-it-works.md](docs/how-it-works.md) | the pipeline, the bootstrap fixed point, the emitted C++, the runtime, and how the build verifies itself |
-| [docs/state-of-the-field.md](docs/state-of-the-field.md) | honest status: what works, what is rough, what is missing, and how it compares to the alternatives |
+| [docs/state-of-the-field.md](docs/state-of-the-field.md) | the long-form status: what works, how it compares to the alternatives, and the rough edges to expect |
 | [examples/](examples/) | the example programs used in the docs (`hello`, `tour`, `wordcount`, `sdl2` - the P/Invoke wrapper to SDL2, and `http` - a blocking socket library with an HTTP/1.1 server) |
 | [specs/](specs/) | the normative language specification |
 | [impl_specs/user-language-roadmap.md](impl_specs/user-language-roadmap.md) | where the language is going, phased, with the non-goals |

@@ -45,6 +45,11 @@ Generic aliases are transparent names for the fully substituted target type; the
 prevent reification (`Action<Point>` is `(Point) -> Unit`, `PtrAction<List<Int32>>` is
 `(*List<Int32>) -> Unit`).
 
+A type parameter may **require protocols** with a `when` clause on the declaration
+(`fun f<T>(value: *T) when T: Printable`); each call must satisfy them with its concrete
+type argument. The protocol form and its checking are `specs/declarations.md`,
+"Protocols".
+
 ### Closing a nested type-argument list
 
 A type-argument list is closed by `>`, and `>>` is a token of its own (the shift

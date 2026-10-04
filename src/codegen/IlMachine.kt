@@ -431,10 +431,20 @@ fun Emitter.emitBodyAt(info: *IlFunction, body: *List<AstXmlNode>, file: *Str, l
         val infoSymbolText: Str = info.symbol
         val emittedReasonText: Str = emitted.reason
         // A shape the extractor itself reported is the author's, not an internal one.
-        var message: Str = `internal: the body of '@infoSymbolText' is not expressible in the IL (@emittedReasonText)`
         if (emittedReasonText.startsWith("unsupported: ")) {
-            message = emittedReasonText
+            this.failFromInfo(info, emittedReasonText)
+            return
         }
+        // A report the *emitter* wrote carries its own position (`file:line:col:
+        // unsupported: ...`): it is the author's too, and re-positioning it at the
+        // declaration would lose the call site's line.
+        if (emittedReasonText.indexOf(": unsupported: ") >= 0) {
+            this.failed = true
+            this.error = emittedReasonText
+            return
+        }
+        val message: Str =
+            `internal: the body of '@infoSymbolText' is not expressible in the IL (@emittedReasonText)`
         this.failFromInfo(info, message)
         return
     }

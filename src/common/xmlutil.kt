@@ -351,6 +351,16 @@ fun xmlIsDecl(node: *AstXmlNode): Bool {
             || name == AstNodeKind.Function || name == AstNodeKind.Var
 }
 
+// `protocol ...` (specs/declarations.md): a Function declaration whose `Protocol` attribute
+// names the protocol. Its signature is the contract; it is not a callable function and is
+// never emitted.
+fun xmlIsProtocolDecl(node: *AstXmlNode): Bool {
+    if (xmlKind(node) != AstNodeCategory.Function) {
+        return false
+    }
+    return xmlAttr(node, AstNodeAttributeKind.Protocol) != ""
+}
+
 // The declaration children of a Module (imports excluded), in source order. `Var` is a
 // file-level `var`/`val`: static storage (specs/statics.md).
 borrow fun xmlDecls(module: *AstXmlNode): List<AstXmlNode> {

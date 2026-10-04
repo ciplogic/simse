@@ -172,8 +172,11 @@ function parseArgs(argv) {
 // also why the link prints "Generating code". `--no-lto` is there for a quick build:
 // LTCG dominates a release build's time, and what it buys is run time.
 function compileFlags(opts) {
-  const flags = opts.release ? ["/MD", "/O2", "/Ob3", "/DNDEBUG"]
-      : opts.fast ? ["/MD", "/O1", "/DNDEBUG"] : ["/MDd", "/Od"];
+  // `/bigobj` is not optional: the compiler is one amalgamated translation unit, and an
+  // optimized build of it crosses the 65,534-section limit of the default COFF object
+  // (C1128). It changes no code, only the object format's section count.
+  const flags = opts.release ? ["/bigobj", "/MD", "/O2", "/Ob3", "/DNDEBUG"]
+      : opts.fast ? ["/bigobj", "/MD", "/O1", "/DNDEBUG"] : ["/bigobj", "/MDd", "/Od"];
   if (opts.pdb) flags.push("/Zi", "/DEBUG");
   else if (!opts.release && !opts.fast) flags.push("/Zi");
   if (opts.release && opts.lto) flags.push("/GL");

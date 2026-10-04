@@ -283,7 +283,18 @@ data class Analyzer(
     var globalFunctions: Dictionary<Str, List<AstXmlNode>>,
     var globalStatics: Dictionary<Str, AstXmlNode>,
     var packageDecls: Dictionary<Str, List<AstXmlNode>>,
+
+// The `protocol` declarations, by protocol name (specs/declarations.md, "Protocols"):
+// collected once for the whole compilation, like the `unInit` types, because a constraint
+// (`when T: Printable`) may name one from any module. A protocol's *method* name is its
+// node's `Name` attribute; the `Protocol` attribute is the protocol's own name.
+    var globalProtocols: Dictionary<Str, AstXmlNode>,
     var declaredPackages: List<Str>,
+
+// The `when` constraints of the function being analyzed (`T` -> its protocols): what a
+// call inside its body may rely on when it passes the function's own type parameter on to
+// another constrained call. Empty outside a function body.
+    var currentConstraints: Dictionary<Str, List<Str>>,
     var scopes: List<Dictionary<Str, ValueBinding>>,
     var typeScopes: List<List<Str>>,
     var loopDepth: Int,
@@ -307,7 +318,9 @@ fun newAnalyzer(inputs: *List<SemaInput>): Analyzer {
         Dictionary<Str, List<AstXmlNode>>(),
         Dictionary<Str, AstXmlNode>(),
         Dictionary<Str, List<AstXmlNode>>(),
+        Dictionary<Str, AstXmlNode>(),
         List<Str>(),
+        Dictionary<Str, List<Str>>(),
         List<Dictionary<Str, ValueBinding>>(),
         List<List<Str>>(),
         0,

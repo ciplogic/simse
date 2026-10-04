@@ -83,16 +83,20 @@ fun Analyzer.analyzeDecl(decl: *AstXmlNode): Unit {
         }
 
         AstNodeCategory.Function -> {
+            if (xmlIsProtocolDecl(decl)) {
+                this.checkProtocolDeclShape(decl)
+            }
             this.analyzeFunction(decl)
             return
         }
     }
 }
 
-// The declaration-time `union class` rules (`specs/declarations.md`): no generic form yet,
-// no two fields of one type (the arm constructor could not tell them apart - distinct types,
-// two different enums included, are fine), and no user method that collides with a generated
-// name. The construction rules are `checkUnionConstruction` (SemaCall.kt).
+// The declaration-time `union class` rules (`specs/declarations.md`): no user-declared
+// fields named like the tag's storage or a generated member, and no user method that
+// collides with a generated name. Two fields of one type are allowed: a by-value
+// construction picks the earlier one (`checkUnionConstruction`), and the later arm stays
+// reachable through its `set<Field>`.
 fun Analyzer.checkUnionDecl(decl: *AstXmlNode): Unit {
     val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
     val fields: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Field)
@@ -116,24 +120,6 @@ fun Analyzer.checkUnionDecl(decl: *AstXmlNode): Unit {
                 `union class '@name': '@fieldName' is a generated member; rename the field`
             )
         }
-    }
-    var i: Int = 0
-    while (i < fields.size()) {
-        val left: AstXmlNode = this.unionResolveAlias(xmlChildPtr(fields[i], AstNodeKind.Type))
-        var j: Int = i + 1
-        while (j < fields.size()) {
-            val right: AstXmlNode = this.unionResolveAlias(xmlChildPtr(fields[j], AstNodeKind.Type))
-            if (semaSameType(left, right)) {
-                val leftName: Str = xmlAttr(fields[i], AstNodeAttributeKind.Name)
-                val rightName: Str = xmlAttr(fields[j], AstNodeAttributeKind.Name)
-                this.diag(
-                    xmlLine(fields[j]), xmlColumn(fields[j]),
-                    `union class '@name': fields '@leftName' and '@rightName' have the same type`
-                )
-            }
-            j = j + 1
-        }
-        i = i + 1
     }
     for (*method in xmlChildren(decl, AstNodeKind.Function)) {
         if (xmlAttr(method, AstNodeAttributeKind.IsUnionGenerated) == "true") {
@@ -398,6 +384,8 @@ fun Analyzer.analyzeFunction(decl: *AstXmlNode): Unit {
         this.declareType(typeParams[i])
         i = i + 1
     }
+    this.checkProtocolConstraints(decl)
+    this.collectCurrentConstraints(decl)
     this.pushScope()
     // `this` is the receiver for an extension function, and the enclosing class's instance
     // for a method - so a `for` over `this.field` has a type to resolve (`iteratedType`).
@@ -443,6 +431,271 @@ fun Analyzer.analyzeFunction(decl: *AstXmlNode): Unit {
 
     this.popScope()
     this.popTypeScope()
+    this.currentConstraints = Dictionary<Str, List<Str>>()
+}
+
+// The declaration's `when` clause, as the constraints available to calls in its body
+// (`typeSatisfiesProtocol` reads it when a parameter is passed on).
+fun Analyzer.collectCurrentConstraints(decl: *AstXmlNode): Unit {
+    this.currentConstraints = Dictionary<Str, List<Str>>()
+    for (*constraint in semProtocolConstraints(decl)) {
+        val existing: *List<Str> = this.currentConstraints.getPtr(constraint.param)
+        if (existing != null) {
+            existing.append(constraint.protocol)
+        } else {
+            var fresh: List<Str> = List<Str>()
+            fresh.append(constraint.protocol)
+            this.currentConstraints.insert(constraint.param, fresh)
+        }
+    }
+}
+
+// The shape a `protocol` declaration must have (specs/declarations.md, "Protocols"): the
+// receiver is the subject - a type parameter when the protocol declares type parameters,
+// any type name otherwise - and every signature parameter has a type, because the matcher
+// reads those types.
+fun Analyzer.checkProtocolDeclShape(decl: *AstXmlNode): Unit {
+    val nameText: Str = semProtocolName(decl)
+    val typeParams: List<Str> = xmlTypeParamNames(decl)
+    val receiver: AstXmlNode = semaReceiverPattern(decl)
+    val line: Int = xmlLine(decl)
+    val column: Int = xmlColumn(decl)
+    val receiverKind: AstNodeCategory = xmlKind(receiver)
+    if (typeParams.size() > 0) {
+        if (receiverKind != AstNodeCategory.TypeNamed
+            || xmlAttr(receiver, AstNodeAttributeKind.Name) != typeParams[0]
+        ) {
+            val subjectText: Str = typeParams[0]
+            this.diag(
+                line, column,
+                `protocol '@nameText': the receiver must be the first type parameter ('fun <@subjectText> @subjectText.method(...)')`
+            )
+        }
+    } else if (receiverKind != AstNodeCategory.TypeNamed) {
+        this.diag(line, column, `protocol '@nameText': the receiver must name the implemented type`)
+    }
+    for (*param in semProtocolValueParams(decl)) {
+        if (xmlIsEmpty(xmlChildPtr(param, AstNodeKind.Type))) {
+            val paramName: Str = xmlAttr(param, AstNodeAttributeKind.Name)
+            this.diag(
+                xmlLine(param), xmlColumn(param),
+                `protocol '@nameText': parameter '@paramName' needs a type`
+            )
+        }
+    }
+}
+
+// The `when T: P` constraints a declaration carries: each names one of the declaration's
+// own type parameters and a declared protocol (specs/declarations.md, "Protocols"). The
+// diagnostic position is the declaration's: the clause has no node of its own.
+fun Analyzer.checkProtocolConstraints(decl: *AstXmlNode): Unit {
+    val constraints: List<ProtocolConstraint> = semProtocolConstraints(decl)
+    if (constraints.size() == 0) {
+        return
+    }
+    val typeParams: List<Str> = xmlTypeParamNames(decl)
+    val line: Int = xmlLine(decl)
+    val column: Int = xmlColumn(decl)
+    for (*constraint in constraints) {
+        val paramName: Str = constraint.param
+        val protocolName: Str = constraint.protocol
+        if (!typeParams.contains(paramName)) {
+            this.diag(
+                line, column,
+                `'@paramName' is not a type parameter of this declaration; a protocol constraint names one of its own`
+            )
+            continue
+        }
+        if (!this.globalProtocols.has(protocolName)) {
+            this.diag(
+                line, column,
+                `unknown protocol '@protocolName': declare it with 'protocol @protocolName fun ...'`
+            )
+        }
+    }
+    // Two protocols of one type parameter that declare the same method: the call would
+    // have two candidate implementations, so it is reported where the clause is.
+    var i: Int = 0
+    while (i < constraints.size()) {
+        var j: Int = i + 1
+        while (j < constraints.size()) {
+            if (constraints[i].param == constraints[j].param) {
+                val first: *AstXmlNode = this.globalProtocols.getPtr(constraints[i].protocol)
+                val second: *AstXmlNode = this.globalProtocols.getPtr(constraints[j].protocol)
+                if (first != null && second != null) {
+                    val method: Str = semProtocolMethodName(*first)
+                    if (method == semProtocolMethodName(*second) && method != "") {
+                        val paramNameText: Str = constraints[i].param
+                        val firstName: Str = constraints[i].protocol
+                        val secondName: Str = constraints[j].protocol
+                        this.diag(
+                            line, column,
+                            `'@paramNameText' is constrained by both '@firstName' and '@secondName', which declare '@method': the call would be ambiguous`
+                        )
+                    }
+                }
+            }
+            j = j + 1
+        }
+        i = i + 1
+    }
+}
+
+// Whether one type (as written at a call) satisfies a protocol: some declaration in the
+// program matches the protocol's signature on that type. A bound that is the *caller's*
+// own type parameter is satisfied when the caller's `when` clause requires the protocol.
+fun Analyzer.typeSatisfiesProtocol(actual: AstXmlNode, protocolName: Str): Bool {
+    val protocolPtr: *AstXmlNode = this.globalProtocols.getPtr(protocolName)
+    if (protocolPtr == null) {
+        // An unknown protocol is `checkProtocolConstraints`'s report, not this one's.
+        return true
+    }
+    val protocolDecl: AstXmlNode = * protocolPtr
+    val methodName: Str = semProtocolMethodName(protocolDecl)
+    val outer: AstXmlNode = this.semaReceiverOuter(actual)
+    val outerName: Str = xmlAttr(outer, AstNodeAttributeKind.Name)
+    if (this.typeParamVisible(outerName)) {
+        val covered: *List<Str> = this.currentConstraints.getPtr(outerName)
+        if (covered != null && covered.contains(protocolName)) {
+            return true
+        }
+        return false
+    }
+    // The type's own methods: a class body supplies the receiver.
+    val typeDecl: AstXmlNode = this.protocolTypeDecl(outerName)
+    if (!xmlIsEmpty(typeDecl) && xmlKind(typeDecl) == AstNodeCategory.DataClass) {
+        val receiver: AstXmlNode = semClassReceiver(typeDecl)
+        if (semaUnifyReceiver(receiver, actual, xmlTypeParamNames(typeDecl))) {
+            for (*method in xmlChildren(typeDecl, AstNodeKind.Function)) {
+                if (xmlAttr(method, AstNodeAttributeKind.Name) == methodName
+                    && semProtocolMatches(protocolDecl, method, receiver)
+                ) {
+                    return true
+                }
+            }
+        }
+    }
+    // Receiver functions declared anywhere in the program.
+    val keys: List<Str> = this.globalFunctions.keys()
+    for (*key in keys) {
+        val overloads: *List<AstXmlNode> = this.globalFunctions.getPtr(*key)
+        if (overloads == null) {
+            continue
+        }
+        for (*fn in overloads) {
+            if (xmlAttr(fn, AstNodeAttributeKind.Name) != methodName) {
+                continue
+            }
+            val receiver: AstXmlNode = semaReceiverPattern(fn)
+            if (xmlIsEmpty(receiver)) {
+                continue
+            }
+            // The implementation must be written on *this* type, not another one that
+            // happens to match the protocol's shape.
+            if (!semaUnifyReceiver(receiver, actual, xmlTypeParamNames(fn))) {
+                continue
+            }
+            if (semProtocolMatches(protocolDecl, fn, receiver)) {
+                return true
+            }
+        }
+    }
+    return false
+}
+
+// The declaration of a type name, from what is visible first and the whole program second:
+// a protocol is satisfied by declarations the call site may not import.
+fun Analyzer.protocolTypeDecl(name: *Str): AstXmlNode {
+    val visible: *AstXmlNode = this.types.getPtr(name)
+    if (visible != null) {
+        return * visible
+    }
+    val keys: List<Str> = this.globalTypes.keys()
+    for (*key in keys) {
+        val decl: *AstXmlNode = this.globalTypes.getPtr(*key)
+        if (decl != null && xmlAttr(decl, AstNodeAttributeKind.Name) == name) {
+            return * decl
+        }
+    }
+    return xmlEmptyNode()
+}
+
+// The receiver a class method is written on: the class itself, generic when it is.
+fun semClassReceiver(decl: *AstXmlNode): AstXmlNode {
+    val typeParams: List<Str> = xmlTypeParamNames(decl)
+    if (typeParams.size() == 0) {
+        return semNamedType(xmlAttr(decl, AstNodeAttributeKind.Name))
+    }
+    var args: List<AstXmlNode> = List<AstXmlNode>()
+    for (*param in typeParams) {
+        var arg: AstXmlNode = semNamedType(*param)
+        arg.name = AstNodeKind.TypeArg
+        args.append(arg)
+    }
+    return semGenericType(xmlAttr(decl, AstNodeAttributeKind.Name), args)
+}
+
+// A call to a constrained generic function: every constraint the call's own type arguments
+// or arguments fix is checked here, so a type that does not satisfy a protocol is a
+// language diagnostic instead of a C++ error on the emitted dispatch call. A constraint no
+// argument fixes is left to instantiation.
+fun Analyzer.checkProtocolCall(call: *AstXmlNode, callee: *AstXmlNode): Unit {
+    val kind: AstNodeCategory = xmlKind(callee)
+    if (kind != AstNodeCategory.ExprName && kind != AstNodeCategory.ExprGenericName) {
+        return
+    }
+    val name: Str = xmlAttr(callee, AstNodeAttributeKind.Name)
+    val overloads: *List<AstXmlNode> = this.functions.getPtr(name)
+    if (overloads == null) {
+        return
+    }
+    val argNodes: List<AstXmlNode> = xmlChildren(call, AstNodeKind.Arg)
+    val argCount: Int = argNodes.size()
+    for (*target in overloads) {
+        val constraints: List<ProtocolConstraint> = semProtocolConstraints(target)
+        if (constraints.size() == 0) {
+            continue
+        }
+        // The overload's own arity (the receiver is not a parameter).
+        if (xmlCount(target, AstNodeKind.Param) - semReceiverParams(target) != argCount) {
+            continue
+        }
+        val typeParams: List<Str> = xmlTypeParamNames(target)
+        var bindings: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
+        val typeArgs: List<AstXmlNode> = xmlChildren(callee, AstNodeKind.TypeArg)
+        var t: Int = 0
+        while (t < typeArgs.size() && t < typeParams.size()) {
+            semBindOne(*bindings, typeParams[t], typeArgs[t])
+            t = t + 1
+        }
+        var argTypes: List<AstXmlNode> = List<AstXmlNode>()
+        for (*arg in argNodes) {
+            argTypes.append(this.exprType(arg))
+        }
+        semBindCallArgs(target, xmlEmptyNode(), *argTypes, *typeParams, *bindings)
+        for (*constraint in constraints) {
+            val boundPtr: *AstXmlNode = bindings.getPtr(constraint.param)
+            if (boundPtr == null || xmlIsEmpty(*boundPtr)) {
+                continue
+            }
+            if (this.typeSatisfiesProtocol(*boundPtr, constraint.protocol)) {
+                continue
+            }
+            val protocolPtr: *AstXmlNode = this.globalProtocols.getPtr(constraint.protocol)
+            if (protocolPtr == null) {
+                continue
+            }
+            val protocolDecl: AstXmlNode = * protocolPtr
+            val protocolText: Str = constraint.protocol
+            val methodName: Str = semProtocolMethodName(protocolDecl)
+            val signature: Str = semProtocolSignatureText(protocolDecl)
+            val actualText: Str = semaTypeText(*boundPtr)
+            this.diag(
+                xmlLine(call), xmlColumn(call),
+                `'@actualText' does not satisfy protocol '@protocolText': no '@methodName' matching '@signature' is in scope`
+            )
+        }
+    }
 }
 
 fun Analyzer.analyzeStmt(stmt: *AstXmlNode): Unit {
@@ -601,6 +854,7 @@ fun Analyzer.analyzeCall(expr: *AstXmlNode, boxed: Bool): Unit {
     }
     this.checkCallArity(expr)
     this.checkExtensionCallArity(expr)
+    this.checkProtocolCall(expr, callee)
     this.checkUninitCall(expr, callee)
     if (!boxed) {
         this.checkValueConstruction(expr, callee)

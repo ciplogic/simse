@@ -169,7 +169,7 @@ var any: Color = Color.fromInt(9)           // the cast's value, no member named
 
 ## `union class`
 
-Status: implemented (`stress/unions`, `stress/diagnostic-union-same-type`).
+Status: implemented (`stress/unions`, `stress/union-same-type`).
 
 A `union class` declares a **discriminated union** (a tagged union): a value type with
 several fields of which one is live at a time, selected by an implicit tag enum. It is
@@ -193,11 +193,10 @@ arguments bind the fields for type matching (`Res2<Int>(5)` matches `Value: T` a
 A generic union's form is chosen **per instantiation**, from the arm types the instantiation
 actually has: a one-arm union over `T` is a trivially copyable aggregate at `T = Int` and
 takes the managed form at `T = Str`. An instantiation that makes two arms' types equal
-(`Res2<Str>` with `Error: Str`) cannot be caught at the declaration, so an arm constructor
-resolves to the **earlier** arm: `Res2<Str>(text)` builds `Value`, the `Res<Str>`
-convention for `return (text)`; a construction whose ambiguity is visible in the source
-(`Res<Str>(text)`, both arms spelled `Str`) is still the "several fields have type"
-diagnostic.
+(`Res2<Str>` with `Error: Str`) cannot be caught at the declaration; a by-value construction
+then resolves to the **earlier** arm (`Res2<Str>(text)` builds `Value`, the `Res<Str>`
+convention for `return (text)`). Two arms of one type are allowed in any union - the earlier
+arm is the one a by-value construction builds; the later arm is reached by name.
 
 ```text
 union class DoubleOrFloat(var IntValue: Int, var DoubleValue: Float64)
@@ -211,7 +210,9 @@ For a `union class U`, the compiler defines beside the class:
 - `isOfType(t: SmUTypes): Bool` - the tag test;
 - `setNone(): Unit` - back to the empty tag;
 - per field `A: T`, `setA(value: T): Unit` (writes the tag and the arm) and
-  `getA(): Opt<T>` (the value when the tag is `A`, an empty `Opt` otherwise).
+  `getA(): *T` (the address of the live arm when the tag is `A`, `null` otherwise). The arms
+  share the union's storage, so a matching getter hands back that same address and no value
+  is copied; a wrong-arm getter is `null`.
 
 The generated members are ordinary declarations to the checker and to `when`; a user
 method that reuses one of their names is a diagnostic.
@@ -225,19 +226,75 @@ is a diagnostic with the arm list.
 
 ### Construction
 
-`U()` is the `None` value, and `U(v)` picks the arm whose field type *is* `v`'s type: two
-fields of one type are a declaration diagnostic (the construction could not tell them
-apart), while two distinct types - two enums, say - are fine. The construction follows the
-`initByValue` convention: `var u = U(v)`, the explicit-type `var u: U = U(v)` and
-`return (v)` all build the arm through its generated `initByValue`. Unlike a data class,
-an expression position has no lowering yet - `f(U(v))`, `u = U(v)` and a static
-initializer are reported rather than mis-built. Direct field access is allowed: a read is
-unchecked like a C++ union member, and a direct write moves the storage without moving the
-tag (`setA` is the tag-aware write). On a managed union a direct write is raw storage as
-well - it neither destroys the arm it replaces nor places a new one - so `setA` is the write
-to use whenever the old arm owns anything.
+Two fields may share a type. They are distinct arms - the tag tells them apart, `setA`/`setB`
+write each, and `getA`/`getB` answer the address only for the live one - but a by-value
+construction (`U(v)`, `return (v)`) can name only one: it picks the **earlier** field. That is
+why `Res`'s `Value` (first) is the default and the later `Error` is reached by name
+(`setError`). `U()` is the `None` value, and `U(v)` picks the arm whose field type *is* `v`'s
+type. The construction follows the `initByValue` convention: `var u = U(v)`, the explicit-type
+`var u: U = U(v)` and `return (v)` all build the arm through its generated `initByValue`.
+Unlike a data class, an expression position has no lowering yet - `f(U(v))`, `u = U(v)` and a
+static initializer are reported rather than mis-built. Direct field access is allowed: a read
+is unchecked like a C++ union member, and a direct write moves the storage without moving the
+tag (`setA` is the tag-aware write). On a managed union a direct write is raw storage as well
+- it neither destroys the arm it replaces nor places a new one - so `setA` is the write to use
+whenever the old arm owns anything.
 
 The language does not check a `when` over the tag for exhaustiveness.
+
+## Protocols
+
+Status: implemented.
+
+A protocol is a *named method signature*: a static contract a type parameter can require.
+It is written like a body-less function whose receiver is the protocol's subject:
+
+```text
+protocol Printable fun <T> T.toString(): Str
+protocol Equality fun <T, TDest> T.equalsWith(other: *TDest): Bool
+```
+
+- `protocol` is a contextual keyword (the word stays usable as a name). The protocol's name
+  follows it; an unnamed declaration (`protocol fun <T> T.toString(): Str`) takes the
+  method's name, so that one is the `toString` protocol.
+- The type-parameter list after `fun` declares the protocol's parameters; the receiver must
+  name the **first** one (the subject, `T`). The remaining parameters (`TDest`) are matched
+  together with the subject at every implementation.
+- A protocol declares exactly one method, and its parameters need types. An implementation
+  takes the subject as an emitted `T*` first parameter (a value receiver is passed by its
+  address).
+
+A type **satisfies** a protocol when a receiver function matching the signature exists -
+an extension or a class-body method - with the same method name and parameter count and
+with every parameter and return type equal after the protocol's parameters are
+substituted. Satisfaction is structural (there is no `implements` clause) and it is read
+from the whole program: a call site's imports do not hide an implementation.
+
+A generic function declares the protocols its type parameters must satisfy with a `when`
+clause between the signature and the body:
+
+```text
+fun printBoth<T>(value: *T) when T: Printable, Countable {
+    val text: Str = value.toString()
+    val count: Int = value.countItems()
+    ...
+}
+```
+
+Several parameters take several subjects (`when T: Printable, U: Countable`), and the
+protocols of one subject separate on commas.
+
+Every call of a constrained function is checked where the call is: each bound type
+argument must satisfy each protocol, reported as `'Point' does not satisfy protocol
+'Printable': no 'toString' matching 'fun T.toString(): Str' is in scope`. A member call on
+a type parameter that no protocol of the function declares is reported at the function.
+Two protocols of one type parameter declaring the same method are reported where the
+`when` clause is: the call would be ambiguous.
+
+A protocol is **not a type**: `val x: Printable` is `unknown type 'Printable'`. There is
+no existential form, no runtime representation, no vtable, and no boxing. Generics are
+reified, so each instantiation resolves its protocol calls to the concrete declaration
+(impl_specs/protocols.md).
 
 ## Package declarations
 

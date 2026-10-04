@@ -200,8 +200,10 @@ fun Analyzer.checkCallArity(call: *AstXmlNode): Unit {
 
 // A `union class` construction (`specs/declarations.md`): at most one value, chosen by its
 // type, because only one arm can be live. Zero arguments construct `None`; one argument
-// must match exactly one field's type - the call is then routed through that field's
-// generated `initByValue` arm (`var x = U(v)`).
+// must match a field's type - the call is then routed through that field's generated
+// `initByValue` arm (`var x = U(v)`). When several fields share the argument's type the
+// earlier one is the arm (`Res2<Str>`'s convention), so no diagnostic: the later field is
+// set by name (`set<Field>`).
 fun Analyzer.checkUnionConstruction(
     call: *AstXmlNode, name: *Str, decl: *AstXmlNode, argCount: Int
 ): Unit {
@@ -248,20 +250,15 @@ fun Analyzer.checkUnionConstruction(
             count = count + 1
         }
     }
-    if (count == 1) {
+    if (count > 0) {
+        // One match, or several of one type: either way the earlier matching field is the
+        // arm the construction builds (the convention a generic `Res2<Str>` already had).
         return
     }
     val argText: Str = semaTypeText(argType)
-    if (count == 0) {
-        this.diag(
-            xmlLine(call), xmlColumn(call),
-            `union class '@name' has no field of type '@argText'`
-        )
-        return
-    }
     this.diag(
         xmlLine(call), xmlColumn(call),
-        `union class '@name': several fields have type '@argText'`
+        `union class '@name' has no field of type '@argText'`
     )
 }
 
@@ -355,6 +352,28 @@ fun Analyzer.exprType(expr: *AstXmlNode): AstXmlNode {
     }
     if (xmlKind(expr) == AstNodeCategory.ExprCharLit) {
         return semNamedType("Char")
+    }
+    // `*x` is the address of a value and the read-through of a pointer (`specs/memory-model.md`),
+    // so the operand's type decides which: through a handle it is the pointee, otherwise a
+    // pointer to the value. The checker needs it to type a `*p` argument (`checkProtocolCall`).
+    if (xmlKind(expr) == AstNodeCategory.ExprDeref) {
+        val operand: *AstXmlNode = xmlChildPtr(expr, AstNodeKind.Operand)
+        val inner: AstXmlNode = this.exprType(operand)
+        if (xmlIsEmpty(inner)) {
+            return xmlEmptyNode()
+        }
+        if (semaIsHandleType(inner)) {
+            return semPointeeOf(inner)
+        }
+        return semPointerOf(inner)
+    }
+    if (xmlKind(expr) == AstNodeCategory.ExprRef) {
+        val operand: *AstXmlNode = xmlChildPtr(expr, AstNodeKind.Operand)
+        val inner: AstXmlNode = this.exprType(operand)
+        if (xmlIsEmpty(inner)) {
+            return xmlEmptyNode()
+        }
+        return semReferenceOf(inner)
     }
     if (xmlKind(expr) == AstNodeCategory.ExprMember) {
         // A field read (`this.functions`, `box.items`) or a machine's element
@@ -528,6 +547,15 @@ fun semMachineOfElement(element: AstXmlNode): AstXmlNode {
         AstNodeKind.Type, AstNodeCategory.TypeYield, List<AstNodeAttribute>(), Array<AstXmlNode>()
     )
     xmlAddChild(node, semReRole(element, AstNodeKind.Inner))
+    return node
+}
+
+// A `&pointee` node for the checker's own bindings (`&x` boxes a copy).
+fun semReferenceOf(pointee: AstXmlNode): AstXmlNode {
+    var node: AstXmlNode = AstXmlNode(
+        AstNodeKind.Type, AstNodeCategory.TypeReference, List<AstNodeAttribute>(), Array<AstXmlNode>()
+    )
+    xmlAddChild(node, semReRole(pointee, AstNodeKind.Inner))
     return node
 }
 

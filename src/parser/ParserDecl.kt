@@ -213,6 +213,14 @@ fun Parser.parseDecl(): AstXmlNode {
             return this.parseTypeAlias()
         }
 
+        "protocol" -> {
+            // `protocol [Name] fun <T, ...> T.method(params): Ret` (specs/declarations.md,
+            // "Protocols"): a named single-method contract. The declaration is a Function
+            // whose `Protocol` attribute names the contract; it is never emitted. Contextual
+            // keyword, like `borrow`/`operator`, so the word stays usable as a name.
+            return this.parseProtocol()
+        }
+
         "fun" -> {
             return this.parseFunction("", List<Str>(), false, false, false, false)
         }
@@ -301,6 +309,131 @@ fun Parser.parseAttributedDecl(
         return this.emptyNode()
     }
     return this.parseFunction(attrName, args, isPure, isSuspend, isBorrow, isOperator)
+}
+
+// `protocol [Name] fun <T, ...> T.method(params): Ret` (specs/declarations.md, "Protocols"):
+// a named single-method contract, satisfied by any extension or class-body method that
+// matches the signature.
+// The type parameters may be spelled after `fun` (the protocol's own, the subject first),
+// the way a function spells them after its name (`T.toString<T>()`), or both. The protocol
+// name defaults to the method name, so an unnamed `protocol fun T.toString(): Str` is the
+// `toString` protocol. The declaration is a Function node with no body: the checker reads
+// its signature, the emitter never writes C++ for it.
+fun Parser.parseProtocol(): AstXmlNode {
+    val pos: SourcePos = this.peek(0).pos
+    this.advance()
+    var protocolName: Str = ""
+    if (this.checkKind(TokenKind.Identifier) && this.peek(1).text == "fun") {
+        protocolName = this.advance().text
+    }
+    if (!this.expectText("fun")) {
+        return this.emptyNode()
+    }
+    var typeParams: List<Str> = List<Str>()
+    if (this.checkText("<")) {
+        typeParams = this.parseTypeParams()
+        if (this.failed) {
+            return this.emptyNode()
+        }
+    }
+    if (!this.looksLikeTypeStart()) {
+        this.fail("expected the receiver of the protocol's method ('T.toString')")
+        return this.emptyNode()
+    }
+    val receiver: AstXmlNode = this.parseType(AstNodeKind.Receiver)
+    if (this.failed) {
+        return this.emptyNode()
+    }
+    if (!this.expectText(".")) {
+        return this.emptyNode()
+    }
+    val methodName: Str = this.expectName()
+    if (this.failed) {
+        return this.emptyNode()
+    }
+    if (this.checkText("<")) {
+        val extra: List<Str> = this.parseTypeParams()
+        if (this.failed) {
+            return this.emptyNode()
+        }
+        for (*name in extra) {
+            if (!typeParams.contains(*name)) {
+                typeParams.append(*name)
+            }
+        }
+    }
+    if (!this.expectText("(")) {
+        return this.emptyNode()
+    }
+    this.skipNewlines()
+    var params: List<AstXmlNode> = List<AstXmlNode>()
+    while (!this.checkText(")") && !this.atEnd() && !this.failed) {
+        val paramPos: SourcePos = this.peek(0).pos
+        val paramName: Str = this.parseParamName()
+        if (this.failed) {
+            return this.emptyNode()
+        }
+        var paramType: AstXmlNode = this.emptyNode()
+        if (this.matchText(":")) {
+            paramType = this.parseType(AstNodeKind.Type)
+            if (this.failed) {
+                return this.emptyNode()
+            }
+        }
+        var pattrs: List<AstNodeAttribute> = listOf<AstNodeAttribute>(
+            AstNodeAttribute(AstNodeAttributeKind.Name, paramName),
+            AstNodeAttribute(AstNodeAttributeKind.Line, paramPos.line.toString()),
+            AstNodeAttribute(AstNodeAttributeKind.Column, paramPos.column.toString())
+        )
+        var pnode: AstXmlNode = AstXmlNode(AstNodeKind.Param, AstNodeCategory.None, pattrs, Array<AstXmlNode>())
+        if (paramType.name != AstNodeKind.None) {
+            xmlAddChild(pnode, paramType)
+        }
+        params.append(pnode)
+        this.skipNewlines()
+        if (!this.matchText(",")) {
+            break
+        }
+        this.skipNewlines()
+    }
+    if (!this.expectText(")")) {
+        return this.emptyNode()
+    }
+    var returnType: AstXmlNode = this.emptyNode()
+    if (this.matchText(":")) {
+        returnType = this.parseType(AstNodeKind.ReturnType)
+        if (this.failed) {
+            return this.emptyNode()
+        }
+    }
+    if (this.checkText("{")) {
+        this.fail("a protocol declares a signature, not a body")
+        return this.emptyNode()
+    }
+    if (protocolName == "") {
+        protocolName = methodName
+    }
+    var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, methodName))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Protocol, protocolName))
+    // The same shape `parseFunction` writes, without a body: the checker and the emitter
+    // read a protocol's receiver, parameters and return type like a function's.
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsNative, "true"))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.HasBody, "false"))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.HasReceiver, "true"))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.HasNativeSymbol, "false"))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsPure, "false"))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsSuspend, "false"))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsBorrow, "false"))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsOperator, "false"))
+    var node: AstXmlNode = AstXmlNode(AstNodeKind.Function, AstNodeCategory.Function, attrs, Array<AstXmlNode>())
+    xmlAddChild(node, receiver)
+    this.appendTypeParams(node, typeParams)
+    xmlAddChildren(node, params)
+    if (returnType.name != AstNodeKind.None) {
+        xmlAddChild(node, returnType)
+    }
+    return node
 }
 
 // Records a type attribute the way parseFunction records a method one: Attribute (its
@@ -462,8 +595,9 @@ fun Parser.parseDataClass(): AstXmlNode {
 //     as a `UnionTag` child for `parseRoot` to hoist beside the class; and
 //   - the tag surface as ordinary method declarations, marked `IsUnionGenerated`:
 //     `getTypeOf()`, `isOfType(typeToCheck)`, `setNone()`, and per field a `get<Field>()`
-//     (an `Opt<T>`: empty when the tag says another arm), a `set<Field>(value)` that also
-//     moves the tag, and an `initByValue(value)` arm constructor.
+//     (a `*T`: the live arm's address, or `null` when the tag says another arm), a
+//     `set<Field>(value)` that also moves the tag, and an `initByValue(value)` arm
+//     constructor.
 //
 // The emitter writes their C++ inline with the struct (`emitUnionClass`) because the tag is
 // not a Simse field its IL could name; the checker resolves them like any method.
@@ -499,7 +633,7 @@ fun Parser.parseUnionClass(): AstXmlNode {
         params.append(this.unionParam("value", fieldType, fieldPos))
         generated.append(this.unionMethod("set" + suffix, params, unitType, fieldPos, fieldName))
         generated.append(
-            this.unionMethod("get" + suffix, List<AstXmlNode>(), this.unionOptType(fieldType, fieldPos), fieldPos, fieldName)
+            this.unionMethod("get" + suffix, List<AstXmlNode>(), this.unionPtrType(fieldType, fieldPos), fieldPos, fieldName)
         )
         var initParams: List<AstXmlNode> = List<AstXmlNode>()
         initParams.append(this.unionParam("value", fieldType, fieldPos))
@@ -570,15 +704,16 @@ fun Parser.unionParam(paramName: *Str, typeNode: AstXmlNode, pos: SourcePos): As
     return node
 }
 
-// `Opt<T>` as a return type: the field's type node re-roled to a `TypeArg`.
-fun Parser.unionOptType(inner: AstXmlNode, pos: SourcePos): AstXmlNode {
+// `*T` as a return type: the field's type node re-roled to the pointer's `Inner` child. A
+// generated `get<Field>` hands back the live arm's address rather than a copy, so it is a
+// raw pointer - `null` when the tag says another arm.
+fun Parser.unionPtrType(inner: AstXmlNode, pos: SourcePos): AstXmlNode {
     var attrs: List<AstNodeAttribute> = this.posAttrs(pos.line, pos.column)
-    attrs.append(AstNodeAttribute(AstNodeAttributeKind.Name, "Opt"))
     var node: AstXmlNode = AstXmlNode(
-        AstNodeKind.ReturnType, AstNodeCategory.TypeGeneric, attrs, Array<AstXmlNode>()
+        AstNodeKind.ReturnType, AstNodeCategory.TypePointer, attrs, Array<AstXmlNode>()
     )
     var arg: AstXmlNode = inner
-    arg.name = AstNodeKind.TypeArg
+    arg.name = AstNodeKind.Inner
     xmlAddChild(node, arg)
     return node
 }

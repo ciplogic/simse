@@ -476,6 +476,21 @@ fun Analyzer.collectGlobal(): Unit {
             val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
             val key: Str = pkg + "|" + name
             val kind: AstNodeCategory = xmlKind(decl)
+            // A protocol is a Function node but not a callable one: it is registered under
+            // its *protocol* name and never enters the function or type tables.
+            if (xmlIsProtocolDecl(decl)) {
+                val protocolName: Str = xmlAttr(decl, AstNodeAttributeKind.Protocol)
+                if (this.globalProtocols.has(protocolName)) {
+                    this.diag(
+                        xmlLine(decl), xmlColumn(decl),
+                        `duplicate protocol '@protocolName'`
+                    )
+                } else {
+                    this.globalProtocols.insert(protocolName, decl)
+                }
+                i = i + 1
+                continue
+            }
             val isFunction: Bool = kind == AstNodeCategory.Function
             val isStatic: Bool = kind == AstNodeCategory.Var
             val nameTaken: Bool = this.globalTypes.has(key) || this.globalFunctions.has(key)
@@ -555,6 +570,11 @@ fun Analyzer.buildVisible(module: *AstXmlNode): Unit {
             if (decls != null) {
                 for (decl in decls) {
                     val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
+                    if (xmlIsProtocolDecl(decl)) {
+                        // A protocol never enters a file's type/function scope; a constraint
+                        // names it through the global protocol table.
+                        continue
+                    }
                     if (xmlKind(decl) == AstNodeCategory.Function) {
                         this.appendVisibleFunction(name, decl)
                     } else if (xmlKind(decl) == AstNodeCategory.Var) {

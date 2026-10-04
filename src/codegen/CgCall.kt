@@ -554,6 +554,30 @@ fun Emitter.call(e: *AstXmlNode): Str {
                     val extSymbolText: Str = ext.symbol
                     return `@extSymbolText(@all)`
                 }
+                // A member call on a constrained type parameter is a protocol call: the
+                // receiver's type is only known at instantiation, so the call names the
+                // protocol's dispatch overload set (`CgProtocol.kt`) and C++ picks the
+                // implementation. A parameter no protocol covers is the diagnostic below
+                // instead of a C++ error about a missing member.
+                val protocolText: Str = this.protocolCall(receiverExpr, calleeText, args)
+                if (protocolText != "") {
+                    return protocolText
+                }
+                val bareParam: Str = this.bareTypeParamReceiver(receiverExpr)
+                if (bareParam != "") {
+                    if (this.activeConstraints.has(bareParam)) {
+                        this.fail(
+                            e,
+                            `unsupported: no protocol of '@bareParam' declares '@calleeText'; add it to a protocol in the 'when' clause`
+                        )
+                    } else {
+                        this.fail(
+                            e,
+                            `unsupported: '@calleeText' on type parameter '@bareParam' needs a protocol: 'fun f<@bareParam>(...) when @bareParam: P'`
+                        )
+                    }
+                    return "/*unsupported*/"
+                }
                 val memberAccessText: Str = this.memberAccess(receiverExpr, calleeText)
                 val cgJoinText7: Str = cgJoin(args, ", ")
                 return `@memberAccessText(@cgJoinText7)`

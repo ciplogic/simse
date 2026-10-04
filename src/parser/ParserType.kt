@@ -128,6 +128,14 @@ fun Parser.parseFunction(
         }
     }
 
+    // `when T: Printable, Countable` (specs/declarations.md, "Protocols"): the constraints a
+    // generic function's type parameters must satisfy at every instantiation. Parsed here,
+    // where the signature ends and the body has not begun.
+    val constraintsText: Str = this.parseProtocolConstraints()
+    if (this.failed) {
+        return this.emptyNode()
+    }
+
     var body: List<AstXmlNode> = List<AstXmlNode>()
     var hasBody: Bool = false
     if (this.checkText("{")) {
@@ -191,6 +199,9 @@ fun Parser.parseFunction(
     attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsSuspend, boolText(suspendModifier)))
     attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsBorrow, boolText(borrowModifier)))
     attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsOperator, boolText(operatorModifier)))
+    if (constraintsText != "") {
+        attrs.append(AstNodeAttribute(AstNodeAttributeKind.Protocols, constraintsText))
+    }
     if (hasNativeSymbol) {
         attrs.append(AstNodeAttribute(AstNodeAttributeKind.NativeSymbol, nativeSymbol))
     }
@@ -212,6 +223,44 @@ fun Parser.parseFunction(
         xmlAddChild(node, this.container(AstNodeKind.Body, body))
     }
     return node
+}
+
+// The optional `when <typeParam>: <Protocol>[, <Protocol>][, <typeParam>: ...]` clause a
+// signature may carry (specs/declarations.md, "Protocols"). A bare protocol name continues
+// the subject last written, so `when T: Printable, Countable` is two requirements of `T`.
+// Answers the attribute text (`"T:Printable,T:Countable"`, one `param:protocol` item per
+// entry), or "" when there is no clause.
+fun Parser.parseProtocolConstraints(): Str {
+    if (!this.checkText("when")) {
+        return ""
+    }
+    this.advance()
+    var items: List<Str> = List<Str>()
+    var subject: Str = ""
+    while (!this.atStmtEnd() && !this.checkText("{") && !this.failed) {
+        if (this.checkKind(TokenKind.Identifier) && this.peek(1).text == ":") {
+            subject = this.advance().text
+            this.advance()
+        } else if (subject == "") {
+            this.fail("expected 'TypeParameter: Protocol' after 'when'")
+            return ""
+        }
+        if (!this.checkKind(TokenKind.Identifier)) {
+            this.fail("expected a protocol name")
+            return ""
+        }
+        val protocolName: Str = this.advance().text
+        items.append(subject + ":" + protocolName)
+        if (!this.matchText(",")) {
+            break
+        }
+        this.skipNewlines()
+    }
+    if (items.size() == 0) {
+        this.fail("expected 'TypeParameter: Protocol' after 'when'")
+        return ""
+    }
+    return joinStrs(items, ",")
 }
 
 fun Parser.namedTypeNode(role: AstNodeKind, name: Str, pos: SourcePos): AstXmlNode {

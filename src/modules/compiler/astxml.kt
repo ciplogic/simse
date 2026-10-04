@@ -118,7 +118,19 @@ enum class AstNodeAttributeKind {
     // One of a `union class`'s generated members (`getTypeOf`, `isOfType`, `get<Field>`,
     // `set<Field>`, `setNone`, `initByValue`): a real declaration to sema, skipped by the
     // emitter's body pass because class emission writes the C++ by hand (`emitUnionClass`).
-    IsUnionGenerated
+    IsUnionGenerated,
+
+    // `protocol Name fun ...` (specs/declarations.md, "Protocols"): the declaration is a
+    // Function whose *signature* is the protocol - the attribute carries the protocol's name
+    // (the method name when the declaration is unnamed). Nothing is emitted for it; an
+    // implementation is any function that satisfies the signature. Appended last, so the
+    // values already in use do not move.
+    Protocol,
+
+    // `fun f<T>(...) when T: Printable, Countable`: the type parameter's protocol
+    // requirements, one `<param>:<protocol>` item per entry, joined by a comma (the parser
+    // writes it; `sema.Protocols` reads it back). Appended last for the same reason.
+    Protocols
 }
 
 // What a node is - the schema's `kind` - as against its role (`AstNodeKind`, where it

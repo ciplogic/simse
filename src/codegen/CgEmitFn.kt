@@ -222,6 +222,7 @@ fun Emitter.cgReservedNames(decl: *AstXmlNode, hasSelf: Bool, argv: Bool): List<
 fun Emitter.emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit {
     // Read-only here: borrow instead of copying the whole function AST out of the CgFn.
     val decl: *AstXmlNode = *fn.decl
+    this.curDecl = * fn.decl
     if (fn.isNative) {
         return
     }
@@ -255,6 +256,7 @@ fun Emitter.emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit
     }
 
     this.setActiveTypeParams(fn.templateParams)
+    this.setActiveConstraints(decl)
     // A machine receiver (`fun ..*T.select<T, U>(...)`): the receiver's machine class is
     // the caller's, so the function is a C++ template over it (`_SmIter`) and a machine
     // pattern in the signature spells that parameter (`type`).

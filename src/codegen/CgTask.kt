@@ -408,8 +408,15 @@ fun Emitter.run(): Res<Str> {
     if (this.failed) {
         return Res<Str>.err(this.error)
     }
+    // The protocol implementations the dispatch sets will reach must count as reached
+    // before the prototype pass decides which prelude bodies to emit (`CgProtocol.kt`).
+    this.collectProtocolReach()
     this.sections.begin("prototypes")
     this.emitFunctions(true, facts)
+    if (this.failed) {
+        return Res<Str>.err(this.error)
+    }
+    this.emitProtocolDispatches(true)
     if (this.failed) {
         return Res<Str>.err(this.error)
     }
@@ -420,6 +427,10 @@ fun Emitter.run(): Res<Str> {
     }
     this.sections.begin("bodies")
     this.emitFunctions(false, facts)
+    if (this.failed) {
+        return Res<Str>.err(this.error)
+    }
+    this.emitProtocolDispatches(false)
     if (this.failed) {
         return Res<Str>.err(this.error)
     }

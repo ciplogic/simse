@@ -102,9 +102,10 @@ fun main(): Int {
 }
 ```
 
-There is no `foreach` over containers: storage is walked with an index and `while`,
-or with `Span<T>` (`stress/collections`) - a borrowed view (pointer plus length) with
-`size()`, `isEmpty()`, `at(i)`/`span[i]` and `slice(start)`/`slice(start, count)`:
+The loop keyword is `for`, and it walks a container, a `Span<T>`, or a `yield`ing
+machine (below). When you want to walk storage by hand, a `Span<T>` (`stress/collections`)
+is the borrowed view to reach for - a pointer plus a length, with `size()`, `isEmpty()`,
+`at(i)`/`span[i]` and `slice(start)`/`slice(start, count)`:
 
 ```simse
 fun sum(items: &List<Int>): Int {
@@ -120,8 +121,8 @@ fun sum(items: &List<Int>): Int {
 
 `for` iterates **whatever has an `iterValues`** (the `*x` form uses `iter`) in one of
 exactly two forms: a state machine - the value a function whose body `yield`s produces - or a
-container, which is viewed as its span and walked by the span's one pair of walks (`List`,
-`Array`, `Str` and `Span`; a `Dictionary` and a range are not iterable yet). (A walk is an
+container (`List`, `Array`, `Str`, `Span`), which is viewed as its span and walked by the
+span's one pair of walks. (A walk is an
 ordinary extension function returning `..T`, so your own type can have one too; see
 `specs/functions.md`.)
 
@@ -381,9 +382,12 @@ fun label(c: Color): Str {
 A `union class` is a discriminated union: several fields, **one** live at a time, under an
 implicit `Sm<Name>Types` tag enum (`None` first, then the field names). The compiler
 generates `getTypeOf(): Sm<Name>Types`, `isOfType(t): Bool`, `setNone()`, and per field a
-`set<Field>(value)` that moves the tag and a `get<Field>(): Opt<T>` that is empty when the
-tag says another arm. `U()` is the `None` value; `U(value)` picks the arm whose field type
-is the value's type; `return (value)` constructs the same way. Direct reads and writes of
+`set<Field>(value)` that moves the tag and a `get<Field>(): *T` - a raw pointer to the live
+arm, `null` when the tag says another arm, so a read never copies the payload. `U()` is the
+`None` value; `U(value)` picks the arm whose field type
+is the value's type; `return (value)` constructs the same way. Two fields may share a type -
+the earlier one is the arm a by-value construction builds, the later is reached by name
+(`set<Field>`). Direct reads and writes of
 the fields are allowed (a direct write does not move the tag), and a user method in the
 body works over the same storage. An arm that owns storage (`Str`, `List`) makes the union
 *managed*: the compiler writes the destructor that destroys the live arm by tag and the
@@ -508,6 +512,47 @@ println(keys[0] + " " + keys[1])         // a b
 lives instead of copying it: `compareLessThan` is the built-in `Str` ordering (the two
 strings compared as views), and a custom comparator spells the pointers -
 `items.sort((left: *T, right: *T) -> ...)`.
+
+### Protocols: the static interface
+
+A **protocol** names a method signature a type parameter can require. It is the language's
+answer to an interface without a vtable and without boxing: the requirement is checked at
+every call of the generic function, and the call resolves to the concrete type's own
+declaration once the type argument is known.
+
+```simse
+protocol Printable fun <T> T.toString(): Str
+protocol Countable fun <T> T.countItems(): Int
+
+data class Crate(var apples: Int, var pears: Int)
+
+fun Crate.toString(): Str { return "Crate" }
+fun Crate.countItems(): Int { return this.apples + this.pears }
+
+fun describe<T>(value: *T) when T: Printable, Countable {
+    print(value.toString())
+    print(" holds ")
+    print(value.countItems())
+    print(" items\n")
+}
+
+val c = Crate(2, 3)
+describe(*c)                 // Crate holds 5 items
+```
+
+The type parameters after `fun` are the protocol's own; the first one is the **subject** -
+the type that must have the method - and any others are matched together with it, so
+`protocol Equality fun <T, TDest> T.equalsWith(other: *TDest): Bool` requires both sides.
+An unnamed declaration takes the method's name: `protocol fun <T> T.toString(): Str`
+declares the `toString` protocol.
+
+Any receiver function that fits satisfies the protocol - an extension or a class-body
+method, and the prelude's own declarations count (`Int` already has `toString`), so no
+`implements` clause is ever written. `when T: Printable, Countable` lists what each type
+parameter must satisfy; the call `describe(*rock)` on a type without the methods is
+reported there (`'Rock' does not satisfy protocol 'Printable': ...`), and a method call on
+a parameter no protocol covers is reported at the function. A protocol is **not a type**:
+`val x: Printable` is an `unknown type` - there is no existential form and no runtime value.
 
 ## Absence and failure
 
@@ -658,8 +703,9 @@ scalars have `toString()`, and `Str + Str` concatenates. A backtick string inter
 `_` of `_sm_@(name)_@(n)`), which the compiler rewrites to one `fmtStrWith('@', ...)` call;
 once a string
 interpolates, every `@` must start a name (a literal `@` there is a diagnostic - keep it
-in a `"..."` string). `println` of your own types is not supported yet (a `Printable`
-protocol is planned).
+in a `"..."` string). `println` prints the built-ins; for your own type, print what
+`toString()` answers (`println(value.toString())`), and a **protocol** is how you turn that
+into a requirement a generic function can rely on (`specs/declarations.md`, "Protocols").
 
 ```simse
 val who: Str = "world"

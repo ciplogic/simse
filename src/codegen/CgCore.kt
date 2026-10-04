@@ -20,9 +20,15 @@ fun Emitter.fail(posNode: *AstXmlNode, message: *Str): Unit {
         return
     }
     this.failed = true
+    // A node the IL reconstructed carries no position; the declaration being emitted is
+    // the closest thing to it that a reader can act on.
+    var at: *AstXmlNode = posNode
+    if (xmlIsEmpty(at) || xmlLine(at) == 0) {
+        at = * this.curDecl
+    }
     val curFileText: Str = this.curFile
-    val xmlLineText: Str = xmlLine(posNode).toString()
-    val xmlColumnText: Str = xmlColumn(posNode).toString()
+    val xmlLineText: Str = xmlLine(at).toString()
+    val xmlColumnText: Str = xmlColumn(at).toString()
     this.error = `@curFileText:@xmlLineText:@xmlColumnText: @message`
 }
 
@@ -223,6 +229,15 @@ fun Emitter.collect(): Unit {
         val pkg: Str = this.inputPackage(input)
         val decls: List<AstXmlNode> = xmlDecls(input.module)
         for (*decl in decls) {
+        // A `protocol` is a signature for the checker, not a declaration to emit: no struct,
+        // no prototype, no body. Collecting it here is what the dispatch generation
+        // (`CgProtocol.kt`) reads to find a constrained call's overload set.
+        if (xmlIsProtocolDecl(decl)) {
+            val protocolName: Str = xmlAttr(decl, AstNodeAttributeKind.Protocol)
+            this.protocols.insert(protocolName, decl)
+            this.protocolPackages.insert(protocolName, pkg)
+            continue
+        }
         val declName: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
         if (decl.name == AstNodeKind.Var) {
             // A file-level static: storage and an initializer for the generated pass

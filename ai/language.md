@@ -32,9 +32,12 @@ locals infer from the initializer, or write the type. `null` is for handles only
 Data classes carry fields and methods; enums have explicit values and `toInt()`/`fromInt`.
 A `union class U(var A: T, var B: U)` is a discriminated union: one field is live at a time
 under an implicit `SmUTypes` tag enum. `U()` is `None`, `U(v)` picks the arm by `v`'s type,
-and `getTypeOf()`, `isOfType(t)`, `getA(): Opt<T>` and `setA(v)` are generated; direct field
+and `getTypeOf()`, `isOfType(t)`, `getA(): *T` and `setA(v)` are generated. A getter is a raw
+pointer to the live arm - `null` when the tag says another arm - so reading never copies the
+payload; `null` is for handles only. Direct field
 reads and writes are allowed (a direct write does not move the tag, and on a managed union
-it does not destroy what it replaces either - `setA` does). Arms that own storage (`Str`,
+it does not destroy what it replaces either - `setA` does). Two fields may share a type: the
+earlier one is the arm a by-value construction builds, the later is reached by name. Arms that own storage (`Str`,
 `List`, a handle) are managed: the generated destructor destroys the live arm by tag, and
 copy/move keep a copied or returned union's data alive. Matching is `when (u)`
 with bare arm names (`IntValue`, `None`, `else`), or `when (u.getTypeOf())` with qualified
@@ -85,6 +88,32 @@ callable value's type and spells the instantiation (`peek((x: Int) -> ...)` emit
 `cannot infer type parameter` report. A lambda that fits both a callable and a plain `T`
 declaration of the same name is an `ambiguous call` report (`pick<Int>(...)` disambiguates).
 
+## Protocols
+
+A **protocol** is a named method signature a type parameter can require - a static
+interface, not a type and not an existential:
+
+```text
+protocol Printable fun <T> T.toString(): Str
+protocol Equality fun <T, TDest> T.equalsWith(other: *TDest): Bool
+
+fun printBoth<T>(value: *T) when T: Printable, Countable {
+    val text: Str = value.toString()
+    val count: Int = value.countItems()
+    print(text)
+}
+```
+
+The type parameters after `fun` are the protocol's, the first one being the subject (the
+receiver); the protocol is unnamed when the method's name is enough (`protocol fun <T>
+T.toString(): Str`). A type satisfies it structurally when an extension or class-body
+method matching the signature exists - no `implements` clause. The `when` clause after a
+function's signature lists what each type parameter must satisfy; several constraints
+separate on commas (`when T: Printable, Countable`). A constrained call resolves
+`value.toString()` through the protocol, and every call of the function checks the concrete
+type argument (`'Rock' does not satisfy protocol 'Printable': ...`). `val x: Printable` is
+an `unknown type`: a protocol never names a value's type (`specs/declarations.md`).
+
 ## Handles, pointers, ownership
 
 `*x` is the address of a value; a `*T` raw pointer is unchecked and unowned. `&x` boxes a copy
@@ -114,6 +143,7 @@ state machine and is what powers `for` over `..T` (`impl_specs/yield.md`, `impl_
 - A lambda body must start on the arrow's line (or open a block there), and a `when` subject
   must be a local.
 - A method on a temporary (`"a b".split(" ")`) fails: bind it to a `val` first.
-- A method on a bare type-parameter receiver (`fun <T> f(x: T) { x.toString() }`) has no type
-  to resolve against — bind it to a typed local or annotate the call's type arguments.
+- A method on a bare type-parameter receiver (`fun <T> f(x: T) { x.toString() }`) needs a
+  protocol: constrain the parameter (`when T: Printable`) or the call has nothing to
+  resolve against (a diagnostic).
 - `println` of a float is C++'s default formatting; enums print their integer value.
