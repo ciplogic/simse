@@ -297,8 +297,11 @@ fun Emitter.emitTypeDeps(
         return
     }
     val name: Str = xmlAttr(node, AstNodeAttributeKind.Name)
-    // A handle: the elements live behind a pointer, so they need not be complete.
+    // A handle: the elements live behind a pointer, so they need not be complete - but the
+    // handle's own declaration does, so a field naming one pulls it in like any other type
+    // (the prelude's `Span` is generated from its declaration, so it needs this).
     if (name == "Array" || name == "Span" || name == "RawArray" || name == "PList") {
+        this.emitOneDep(name, files, prel, emitted, defined)
         return
     }
     // A declared generic (`Box<Foo>`) stores its arguments the way `List` stores its element.

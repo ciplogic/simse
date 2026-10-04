@@ -82,249 +82,6 @@ Int64 simse_nowMillis();
 Int64 simse_nowMicros();
 Int64 simse_nowNanos();
 
-// The program's string literals: one pool, and two run-length encoded index
-// series (offsets as deltas, then lengths), each as what to subtract from the
-// previous value; strtable.hpp has the stream format.
-static const Int __sm_stringCount = 1064;
-static const char __sm_stringPool[] =
-    "\n// Resolves 'symbol' from 'library', loading the library once and caching the handle (a small\n// fixed table: a program names a handful of libraries at most). A missing library or symbol\n// answers null, which the thunk turns into the declaration's default value rather than a\n// crash. The handle is the loader's own (a FARPROC on Windows, a void* from dlsym elsewhere);\n// the thunk casts the result to the declaration's function-pointer type, which is the one\n// object-pointer-to-function-pointer conversion the language cannot spell.\n    inline void * __sm_nativeResolve (const char * library, const char* symbol) {\n        struct Entry {\n            const char * library;\n            void * module;\n        };\n        static Entry table[16];\n        static int count = 0;\n        void * module = nullptr;\n        for (int i = 0; i < count; i++) {\n        if (std::strcmp(table[i].library, library) == 0) {\n            module = table[i].module;\n            break;\n        }\n    }\n        if (module == nullptr) {\n            #ifdef _WIN32\n                    module = (void *)::LoadLibraryA(library);\n            #else\n            module = ::dlopen(library, RTLD_NOW | RTLD_LOCAL);\n            #endif\n            if (module != nullptr && count < 16) {\n                table[count].library = library;\n                table[count].module = module;\n                count++;\n            }\n        }\n        if (module == nullptr) {\n            return nullptr;\n        }\n        #ifdef _WIN32\n            return (void *)::GetProcAddress((HMODULE) module, symbol);\n        #else\n        return ::dlsym(module, symbol);\n        #endif\n    }\n    " "() - start_);\n        }\n\n    private:\n        Int index_;\n        List<FunctionData> *functions_;\n        Int64 start_;\n    };\n\n    class ProfileApp {\n    public:\n        ProfileScope measure(Int index) {\n            if (functions.size() <= index) {\n                functions.resize(index + 1);\n            }\n            return ProfileScope(index, &functions);\n        }\n\n        // Biggest total first, as CSV, to the profile file: the timings measure the\n        // program, they are not output of it, and a tool reads them, not an eye.\n        void report() {\n            FILE *out = stderr;\n            if (kProfileFile[0] != 0 && kProfileFile[0] != '-') {\n                FILE *opened = fopen(kProfileFile, \"w\");\n                if (opened != NULL) out = opened;\n            }\n            List<Int> order;\n            for (Int i = 0; i < functions.size(); i++) {\n                if (functions[i].calls > 0) order.push_back(i);\n            }\n            for (Int i = 0; i < order.size(); i++) {\n                Int best = i;\n                for (Int j = i + 1; j < order.size(); j++) {\n                    if (functions[order[j]].total > functions[order[best]].total) best = j;\n                }\n                if (best != i) {\n                    Int swap = order[i];\n                    order[i] = order[best];\n                    order[best] = swap;\n                }\n            }\n            fprintf(out, \"name," "#include <cstdio>\n\n// ---- profiling (--profile) ------------------------------------------------\n// Every emitted body starts with a profileApp.measure(<index>) whose constructor counts the\n// entry and whose destructor banks the elapsed time; the table prints when the program\n// leaves. The index is a compile-time constant and the names are the table of constants\n// below, so a measurement is one array index, no lookup.\nnamespace simse_profiling {\n    struct FunctionData {\n        Int64 total;\n        Int64 calls;\n        FunctionData() : total(0), calls(0) {}\n    };\n\n    // Index -> name, by the same constant measure receives; defined with the bodies.\n    extern const char *const kMethodNames[];\n\n    // Where the table goes when the program leaves (--profile-file, default\n    // simse_profile.csv; a lone '-' keeps it on stderr).\n    static const char *const kProfileFile = \"" ",calls\\n\");\n            for (Int i = 0; i < order.size(); i++) {\n                FunctionData &row = functions[order[i]];\n                fprintf(out, \"%s,%lld,%lld\\n\", kMethodNames[order[i]],\n                    (long long) row.total, (long long) row.calls);\n            }\n            if (out != stderr) fclose(out);\n        }\n\n    private:\n        List<FunctionData> functions;\n    };\n}\n\nnamespace {\n    simse_profiling::ProfileApp profileApp;\n\n    // The table, when the program leaves: a static outlives every automatic scope,\n    // so this runs after main returned - whichever return it took.\n    struct ProfileReport {\n        ~ProfileReport() { profileApp.report(); }\n    } profileReport;\n}\n\n" "\n// NativeInvoke (impl_specs/native-interop.md): the shared-library loader a\n// declaration with the SmGen(\"native\", ...) attribute binds its symbol with. Windows loads through\n// windows.h's LoadLibraryA/GetProcAddress, everywhere else through dlfcn.h's\n// dlopen/dlsym; either way the lookup is at run time rather than a link-time\n// import, so the program links nothing.\n    #ifdef _WIN32\n    #ifndef WIN32_LEAN_AND_MEAN\n    #define WIN32_LEAN_AND_MEAN\n    #endif\n    #ifndef NOMINMAX\n    #define NOMINMAX\n    #endif\n    #include<windows.h>\n    #else\n    #include<dlfcn.h>\n    #endif\n    #include<cstring>\n    " "()) {\n            FunctionData &row = (*functions_)[index_];\n            row.calls = row.calls + 1;\n        }\n        ProfileScope(const ProfileScope &) = delete;\n        ProfileScope &operator=(const ProfileScope &) = delete;\n        ~ProfileScope() {\n            FunctionData &row = (*functions_)[index_];\n            row.total = row.total + (" "usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module <dir>]... [--no-concat] [--no-borrow] [--no-when-dispatch] [--when-first-char] [--when-copy-subject] [--showLinearRepresentation] [--showBorrow] [--showAsync] [--profile] [--profile-file <path>] [--profile-nanos] [--version]" "ambiguous call of '@': a lambda argument fits a declaration taking a callable and one taking a plain value (C++ would silently take the plain one); pass the type arguments explicitly ('@<...>(...)')" "'@' takes a counted reference ('&@') and the argument is a raw pointer: a pointer cannot become a reference in place - make a reference variable one line before the call (var ref: &@ = &value)" "invalid interpolation string: `@(` must hold one name and be closed by `)` (`@(name)`); for a literal `@`, write it in a \"...\" string or in a raw string that does not interpolate" "invalid interpolation string: `@` must be followed by a name (`@name`) or `@(name)`; for a literal `@`, write it in a \"...\" string or in a raw string that does not interpolate" "\";\n\n    class ProfileScope {\n    public:\n        ProfileScope(Int index, List<FunctionData> *functions)\n            : index_(index), functions_(functions), start_(" "json: field '@' of '@' is not a data class or a scalar (a generated serializer for a generic or pointer field is not implemented yet)" "a `for` iterates a machine (`..T`) or a type with a `|`, and | has neither; iterate a container with `while` and an index" "the lambda parameter '@' has no type: annotate it (e.g. '@: T') or use the lambda where a callable type expects one" "suspend: a body-less `suspend` declaration has no lowering yet (the leaves arrive with the file and socket steps)" "cannot infer @@ of '@': no argument names @ (a callable argument does not); pass @ explicitly ('@<...>(...)')" "// Generated by the Simse compiler. Do not edit.\n#include \"src/rtl/simse.hpp\"\n#include <type_traits>\n\n" "suspend: a body that also yields is not supported (a `for` machine is a local and cannot cross a suspension)" "unsupported: construct a union class in a 'var'/'val' declaration ('var x = U(...)') or as 'return (value)'" "yield: a `this` parameter cannot be a field; write the receiver before the name (`fun T.name`) instead" "static_assert(sizeof(__sm_stringPool) - 1 == @, \"the string pool and its length index disagree\");" "'@' is a prelude type: give the declaration another name (the prelude's types are emitted by name)" "a lambda cannot reach `this` yet: a lambda captures by value, and reference captures are deferred" "suspend: a `for` over a machine cannot cross a suspension; collect the values into a `List` first" "`!!` inside a lambda propagates into the lambda's own result, and this parameter's type has none" "construct a union class in a 'var'/'val' declaration ('var x = U(...)') or as 'return (value)'" "resourcesInstall(__sm_stringTable, __sm_stringCount, __sm_resourceIndex, __sm_resourceCount);" "'set' is not declared for this receiver: an index write needs 'operator set(index, value)'" "'@' is not an operator: 'get', 'set', 'compareTo', 'equals' and 'plus' are the operators" "// them into the program's `Resources` table (`resourcesInstall`, src/rtl/resources.kt)." "'@' has an unInit: hold it by '*@' or '&@' - a value copy would run its destructor too" "Generated C++:may name one of its symbols itself. (`filestream` moved on with the type" "case @::@: ::new ((void *) &this->@) @(std::move(other.@)); this->_type = @::@; break;" "unInit is a type's destructor: it is not called - the value's last owner destroys it" "// string-table indices, key then value; the generated initialization pass builds" "// File-level static storage (specs/statics.md): initialized before main's body." "'@' is a ref class: build it as '&@(...)' - a ref class is held by '&@' or '*@'" "// series (offsets as deltas, then lengths), each as what to subtract from the" "`!!` propagates a failure, and this function returns nothing to propagate into" "legend: async! is declared suspend, async is inferred from the callee it shows" "native: '|' names no library (@SmGen(\"native\", \"<library>\", \"<symbol>\"))" "// The resources the compiler read from `_res.md` files (specs/resources.md):" "native: '@' (@) generates the thunk '@' with a different binding - rename one" "suspend: the body nests deeper than the lowering allows (a cycle in the AST?)" "// The program's string literals: one pool, and two run-length encoded index" "case @::@: ::new ((void *) &this->@) @(other.@); this->_type = @::@; break;" "inline Bool operator!=(const @* self, @ tag) { return self->_type != tag; }" "inline Bool operator==(const @* self, @ tag) { return self->_type == tag; }" "inline Bool operator!=(const @& self, @ tag) { return self._type != tag; }" "inline Bool operator==(const @& self, @ tag) { return self._type == tag; }" "`!!` propagates a failure, so the enclosing function must return `Res<T>`" "json: the json:helpers resource is missing (a section of src/rtl/_res.md)" "`!!` must be the whole right-hand side of a `val`/`var`, an assignment, " "this index has no 'operator set(index, value)': an index write needs one" "    if (this) {\n        return \"true\"\n    }\n    return \"false\"\n" "namespace simse_profiling {\n    const char *const kMethodNames[] = {\n" "suspend: a `return` of a suspension in a function that answers nothing" "simse_strTableDecode(__sm_stringPool, starts, lens, __sm_stringTable," "'@' declares unInit: a class with a destructor must be a 'ref class'" "std::memcpy(@, simse_strBoolView(@).ptr, simse_strBoolView(@).len);" "simse_strTableExpand(__sm_stringStarts, starts, __sm_stringCount);" "union class '@': 'None' is the tag's empty state; rename the field" "a `for (*x in m)` needs an `iter`, and a machine yields values " "types are not compatible: '@' takes '@' and the argument is '@'" "union class '@': '_type' is the tag's storage; rename the field" "simse_strTableExpand(__sm_stringLens, lens, __sm_stringCount);" "suspend: an extension function's receiver is not supported yet" "Generated C++:marker (`@SmGen(\"cpp\")`, specs/attributes.md)" "reached`, so a program that never fetches carries none of it." "json: two data classes are named '@'; a serializer needs one" "suspend: a suspension's callee must be a plain function name" "union class '@': '@' is a generated member; rename the field" "Generated C++:type* whose layout only C++ can express (`std" "suspend: a generic suspending function is not supported yet" "internal: the body of '@' is not expressible in the IL (@)" "no source for @SmGen(\"kt\", \"|\") (needs the resource |)" "suspend: a `main(args)` that suspends is not supported yet" "    static Fn fn = (Fn) __sm_nativeResolve(\"@\", \"@\");" "native: '@' has a parameter type the generator cannot map" "unsupported: namespaced symbol '@' needs a global wrapper" "cannot resolve import '@': no file declares package '@'" "// previous value; strtable.hpp has the stream format." "native: '@' has a return type the generator cannot map" "union class '@': fields '@' and '@' have the same type" "an operator function needs a receiver: 'fun T.@(...)'" "json: the generic data class '@' is not supported yet" "suspend: the local '@' has no type to make a field of" "'@' declares unInit twice: a type has one destructor" "a method whose C++ is generated must not have a body" "unsupported: a lambda outside a closure construction" "json: '@' is not a data class or a supported scalar" "suspend: an extension function is not supported yet" "unsupported: a machine's type has no class to spell" "unsupported: generated parameter '@' without a type" "yield: a `for` over a machine cannot cross a yield " "yield: the local '@' has no type to make a field of" "(the machine a call creates has no type to make a " "a `>` closer ran into `=`: write a space before it" "attribute arguments are string or integer literals" "internal: a closure class could not be written (@)" "rather than places: iterate it with `for (x in m)`" "static StrView __sm_stringTable[__sm_stringCount];" "the emitter must not generate one. `filestreamhpp`" "the slot '@' has neither a type nor an initializer" "unsupported: generic-qualified expression '@<...>'" "field of); collect the values into a `List` first" "@(@&& other) noexcept { this->moveFrom(other); }" "suspend: a `this` parameter is not supported yet" "union class '@' generates '@': rename the method" "unsupported: typealias '@' without a target type" "'when' matches a value or 'else', not a pattern" "expected 'fun' or an attribute after 'operator'" "isOfType(simse_addressOf(@), SmOptTypes::Value)" "union class '@': the argument's type is unknown" "expected 'fun' or an attribute after 'suspend'" "makeRef<std::remove_cvref_t<decltype((@))>>(@)" "union class '@' has no arm '@'; the arms are @" "expected 'fun' or an attribute after 'borrow'" "union class '@': several fields have type '@'" "@(const @& other) { this->copyFrom(other); }" "    out.append('\"')\n    out.append(':')\n" "`|` stands on its own as a statement (`i|`)" "a concatenation into a slot with no storage" "data class '@' expects @ field(s) but got @" "inline @ @(Int value) { return (@) value; }" "no overload of '@' takes @ type argument(s)" "simse_spanOfStr(simse_addressOf((@).get()))" "'@' is a C++ keyword; give it another name" "an index write with no operator arguments" "auto __smProfile = profileApp.measure(@);" "case @::@: simse_destroy(this->@); break;" "unsupported: '..' without an element type" "unsupported: parameter '@' without a type" "    out.append('}')\n    return out\n}\n" "    return jsonQuoted(this.toString())\n" "'@' expects @ type argument(s) but got @" "::new ((void *) &@) @(std::move(value));" "static const Int __sm_resourceCount = @;" "union class '@' has no field of type '@'" "'else' must be the last arm of a 'when'" "@return simse_closureFunc<@>(@, *this);" "static const @ __sm_stringStarts[] = @;" "static struct __SmStringTableInitType {" "sync @ declarations reach no suspension" "union class '@' takes at most one value" "unsupported: Opt-vs-null comparison '@'" "`!!` is not allowed inside a condition" "an initializer with no expression form" "expected 'class' or 'fun' after 'data'" "no overload of '@' takes @ argument(s)" "static const Int __sm_stringCount = @;" "suspend: the parameter '@' has no type" "task->loop = &simse_tasks::taskLoop();" "template <Bool SmManaged, @> struct @;" "a body-less method needs an attribute" "simse: --profile-file requires a path" "static const @ __sm_stringLens[] = @;" "static const char __sm_stringPool[] =" "unInit: the receiver has no type name" "unsupported: field '@' without a type" "writes a field, an index or a pointer" "constructor call with no destination" "internal: task field '@' has no type" "simse_argIndex = simse_argIndex + 1;" "static Int __sm_resourceIndex[] = @;" "yield: the parameter '@' has no type" "'when' can have only one 'else' arm" "a concatenation in a value position" "a concatenation with no destination" "simse_spanOfStr(simse_addressOf(@))" "std::memcpy(@, @.data(), @.size());" "structured statement reached the IL" "@& operator=(@&& other) noexcept {" "return self->_type == typeToCheck;" "the slot '@' has no type to assign" "@ = @ + simse_strBoolView(@).len;" "expected 'fun' after an attribute" "template <@> struct @<false, @> {" "unsupported: main with parameters" "'set' takes an index and a value" "@(@, Str(argv[simse_argIndex]));" "borrow- @ C++ calls it (prelude)" "simse: --prelude requires a path" "template <@> struct @<true, @> {" "yield: the field '@' has no type" "'get' takes one index parameter" "int main(int argc, char** argv)" "simse: --module requires a path" "simse_rc = (int) simse_root->@;" "the type '@' is reached through" "void copyFrom(const @& other) {" "while (simse_argIndex < argc) {" "~@() { this->destroyActive(); }" "@& operator=(const @& other) {" "@:@: Unexpected character: '@'" "Generated C++:section is `emit" "expected '->' in function type" "expected 'class' after 'union'" "expected 'package' declaration" "struct @ : simse_tasks::Task {" "    return jsonQuoted(this)\n" "Int starts[__sm_stringCount];" "a static write with no target" "enum value must be an integer" "simse: --root requires a path" "simse_tasksStart(simse_root);" "type name in a value position" "unInit: no declaration of '@'" "    return this.toString()\n" "@ = simse_strCountDigits(@);" "a concatenation with no part" "unknown source generator '@'" "'@' cannot be expressed yet" "'@' takes the other operand" "Int lens[__sm_stringCount];" "__SmStringTableInitType() {" "expected method declaration" "the capture '@' has no type" "    if (fn == nullptr) {\n" "--showLinearRepresentation" "List<Str> @ = List<Str>();" "a cast with no destination" "a cast with no target type" "a field write with no name" "compound assignment target" "if (self->_type == @::@) {" "self->@(std::move(value));" "simse: prelude not found: " "simse_println((@), stdout)" "unInit takes no parameters" "void simse_initStatics() {" "'continue' outside a loop" "@* simse_root = (@*) @();" "a part of a concatenation" "duplicate declaration '@'" "expected lambda parameter" "or a statement of its own" "result.setValue(self->@);" "simse: -o requires a path" "simse_strAddInt(@, @, @);" "void moveFrom(@& other) {" "    operator @() const {" "    var out: Str = \"{\"" "a jump with no condition" "cannot assign to val '@'" "expected 'class' after '" "simse_print((@), stdout)" "simse_strBoolView(@).len" "unsupported: call target" "    out.appendStr(this." "a store with no pointer" "expected 'val' or 'var'" "expected parameter name" "int simse_argIndex = 1;" "return ((@*) _sm_h)->@;" "writes a file-level var" "} __sm_stringTableInit;" "    out.append('\"')\n" "'break' outside a loop" "`FileStream`, the open" "a cast with no operand" "a closure with no body" "a declare with no slot" "a return with no value" "a write with no target" "reinterpret_cast<@>(@)" "simse_root->release();" "switch (other._type) {" "switch (this->_type) {" "the emitter reported: " "this->_type = @::None;" "this->copyFrom(other);" "this->destroyActive();" "this->moveFrom(other);" "unInit returns nothing" "void destroyActive() {" "    out.append(',')\n" "@ = std::move(value);" "a call with no callee" "fun @.toJson(): Str {" "if (this != &other) {" "return (RawPtr) task;" "simse_tasksRunLoop();" "std::memcpy(@, @, @);" "    out.appendStr(\"" "  (declared suspend)" "Var,Text,Value,Value" "a jump with no label" "a label with no name" "an unsupported shape" "expected declaration" "expression statement" "if (_type == @::@) {" "simse: cannot write " "simse_initStatics();" "struct @ : @<@, @> {" "unsupported type '@'" "void run() override;" "--when-copy-subject" "@ @(RawPtr _sm_h) {" "Var,Method,Value..." "__sm_stringTable[@]" "enum class @ { @ };" "expected enum value" "expected expression" "machine.branch = 0;" "return self->_type;" "static_cast<Int>(@)" "the instruction '@'" "the receiver of '@'" "--no-when-dispatch" "@ _type = @::None;" "@* task = new @();" "__sm_stringCount);" "an argument of '@'" "return Str(fn(@));" "simse_addressOf(@)" "simse_spanOfStr(@)" "tasksReleaseHandle" "    using Fn = @;" "'@' must answer @" "--when-first-char" "<generated>/kt.kt" "@ = @ + @.size();" "@ = @.data() + @;" "Var,Type,Value..." "assignment target" "if (!(@)) goto @;" "int simse_rc = 0;" "machine.@ = self;" "return (@) fn(@);" "simse_list_append" "simse_optHasValue" "simse_profile.csv" "simse_resHasValue" "simse_tasksFinish" "void @(@ value) {" "!std::is_same_v<" "*@ = (char) (@);" "0123456789ABCDEF" "<unsupported: @>" "@.resize(@ + @);" "CallIndirectVoid" "Expr.GenericName" "InternetReadFile" "Var,Var,Value..." "_type = @::None;" "char* __sm_catP;" "reinterpret_cast" "resourcesEntries" "resourcesInstall" "return simse_rc;" "self->setNone();" "sm_suspend_point" "type parameters " "unknown type '@'" "void setNone() {" "--profile-nanos" "/*unsupported*/" "@ @_invoke(@) {" "Int __sm_catAt;" "InternetOpenUrl" "Method,Value..." "SIMSE_PACK_PUSH" "SmUnionManaged<" "Var,Value,Value" "a concatenation" "async  @   <- @" "cannot express " "default: break;" "inline @ @(@) {" "return machine;" "return nullptr;" "simse_@_fromInt" "simse_nowMicros" "simse_spanOfStr" "simse_strAddInt" "type parameter " "void @::run() {" "        \"\"\n" "(a value call)" "--profile-file" "@ @_invoke(@);" "SIMSE_PACK_POP" "Type.Reference" "Var,Text,Value" "\\generators\\" "_closure_owner" "if (!@) goto @" "if (@) goto @;" "machine.@ = @;" "return result;" "simse_argIndex" "simse_nowNanos" "simse_optValue" "simse_resError" "simse_resValue" "struct @ : @ {" "tasksSuspendAt" "--module-root" "@ = @.data();" "@ = @.size();" "@ = concat(@)" "@_@_yieldable" "Expr.FloatLit" "GetStaticAddr" "RawPtr @(@) {" "Stmt.Continue" "Stmt.ExprStmt" "Type.Function" "Var,Var,Value" "\n## closure " "__sm_native_@" "_type = @::@;" "a lambda body" "destroyActive" "expected '->'" "expected 'in'" "expected name" "expected type" "if (@) goto @" "makeList<@>()" "makeRef<@>(@)" "package rtl\n" "resourceStore" "return *this;" "return Str();" "return fn(@);" "simse_optNone" "simse_optSome" "simse_out.cpp" "static_assert" "unsupported: " "  captures (" "(@) (@) -> @" "--showBorrow" ".toJson())\n" "/generators/" "@ = new @(@)" "@.resize(@);" "CallIndirect" "Expr.BoolLit" "Expr.CharLit" "Expr.NullLit" "InternetOpen" "Stmt.IfFalse" "Stmt.VarDecl" "Type.Generic" "Type.Pointer" "Var,Value..." "Var,Var,Text" "dynamic_cast" "expected '('" "expected ')'" "expected '>'" "expected '@'" "generators\\" "int main() {" "json:helpers" "nativeinvoke" "return @(@);" "return @{0};" "simse_listOf" "simse_resErr" "task->@ = @;" "template <@>" "thread_local" "using @ = @;" "    };\n}\n" " = <lambda>" " machine{};" "--no-borrow" "--no-concat" "--showAsync" ".hasValue()" "/*machine*/" "@ = copy(@)" "@_yieldable" "Constructor" "DeclareInit" "Expr.Binary" "Expr.IntLit" "Expr.Lambda" "Expr.Member" "Expr.StrLit" "SetVar_Null" "SmallVector" "Stmt.Assign" "Stmt.IfTrue" "Stmt.Return" "Type.IntLit" "Unsupported" "Value,Label" "a void call" "advance(&@)" "auto @ = @;" "borrow+ @ @" "borrow- @ @" "const char*" "generators/" "initByValue" "json:source" "mergeLocals" "return @();" "simse_resOk" "spanOfArray" "static_cast" "tasksFinish" "threadJumps" "typeToCheck" "        \"" "@ = @ + 1;" "@ = @ + @;" "@ = cast @" "@<@>::@(@)" "@_closure@" "Dictionary" "Expr.Deref" "Expr.Index" "Expr.Unary" "Expression" "Func<@(@)>" "ReturnVoid" "Stmt.Block" "Stmt.Break" "Stmt.Label" "Stmt.While" "Stmt.Yield" "Text,Value" "Type.Named" "Type.Yield" "__sm_catAt" "__sm_catC@" "_yieldable" "advance(@)" "const @& @" "const_cast" "deadLocals" "deadStores" "expression" "fmtStrWith" "foldBranch" "foldLabels" "iterValues" "prototypes" "requires (" "struct @ {" "        @" "&@_invoke" "(@).get()" "(void*) @" "--prelude" "--profile" "--version" "/simse.md" "@ = &@[@]" "@ = @ @ @" "@ result;" "@.c_str()" "@.lambda@" "@: @:@: @" "@::~@() {" "CopyValue" "DataClass" "Expr.Call" "Expr.Copy" "Expr.Name" "FieldAddr" "GetStatic" "IndexAddr" "Ref<void>" "SetStatic" "Simse/1.0" "Stmt.Goto" "TypeAlias" "Var,Value" "__sm_catP" "_smResult" "_sm_ctor@" "_sm_index" "_sm_prop@" "co_return" "compareTo" "consteval" "constexpr" "constinit" "foldConst" "getTypeOf" "labels:  " "methods: " "namespace" "pool:    " "protected" "resources" "return @;" "spanOfStr" "statement" "struct @;" "typealias" "types:   " "vars:    " "    @ @;" "  (line " "(@ <= 0)" "(@ >= 0)" "(@) -> @" "--module" ":static=" "@ (*)(@)" "@ = &@.@" "@ = @[@]" "@ @(@) {" "@.size()" "@:@:@: @" "@[@] = @" "Argument" "BinaryOp" "CallCtor" "CallVoid" "Expr.Ref" "Function" "GetField" "GetIndex" "Opt<@>()" "RawArray" "SetField" "SetIndex" "Var,Text" "_closure" "_fromInt" "_sm_base" "_sm_ctor" "_sm_expr" "_sm_self" "_sm_task" "_sm_when" "async! @" "char16_t" "char32_t" "closures" "co_await" "co_yield" "continue" "copyFrom" "decltype" "explicit" "hasValue" "includes" "isOfType" "moveFrom" "noexcept" "operator" "refcount" "register" "requires" "template" "toString" "total_ns" "total_us" "typename" "unsigned" "var @: @" "volatile" "    }\n" " = null" "(*@)[@]" "(*self)" "(*this)" "(@ < 0)" "(@ > 0)" ":source" ":symbol" "@ = @.@" "@ = [@]" "@ @(@);" "@ @:@:@" "@(@, @)" "@* self" "@.@ = @" "@::~@()" "@<@>(@)" "@<@>{@}" "@?m@(@)" "@@.@(@)" "Declare" "Float32" "Float64" "IfFalse" "Stmt.If" "Storage" "StrView" "UnaryOp" "Var,Var" "_SmIter" "_invoke" "_res.md" "_sm_@_@" "_sm_for" "_sm_stk" "advance" "alignas" "alignof" "char8_t" "concept" "current" "default" "float:@" "foldAll" "forward" "fromInt" "goto @;" "import " "mutable" "nullptr" "package" "println" "private" "profile" "reached" "return " "return;" "setNone" "simse: " "src/rtl" "statics" "strings" "support" "suspend" "typedef" "union {" "virtual" "wchar_t" "* self" "*@ = @" "--help" "--root" "@ = &@" "@ = *@" "@ = @;" "@ = @@" "@ @(@)" "@ @{};" "@ self" "@() {}" "@(@) {" "@,  @@" "@::run" "Concat" "IfTrue" "Int @;" "Lambda" "Method" "Module" "RawPtr" "Ref<@>" "Return" "SetVar" "Str(@)" "_sm_cb" "_sm_f_" "_sm_sc" "always" "and_eq" "bitand" "bodies" "bool:@" "borrow" "branch" "calls " "char:@" "class " "delete" "double" "equals" "export" "extern" "fmtStr" "fn(@);" "friend" "import" "inline" "module" "native" "not_eq" "parent" "public" "quoted" "result" "return" "self->" "signed" "simse " "simse_" "sizeof" "spanOf" "static" "status" "struct" "switch" "this->" "toJson" "typeid" "unInit" "xor_eq" "};\n\n" "    @" " self" "'\\''" ") -> " "0.1.0" ":emit" ":ret=" "@ + @" "@ = @" "@ @ @" "@(@);" "@@(@)" "Array" "Deref" "Error" "Int16" "Int32" "Int64" "LTend" "LYend" "Label" "Local" "PList" "PtrOf" "Store" "Types" "Value" "\")\n" "\",\n" "\"@\"" "\n// " "_sm_f" "_sm_h" "_task" "_type" "bitor" "break" "catch" "class" "compl" "const" "count" "error" "false" "float" "getAs" "goto " "int:@" "or_eq" "print" "short" "str:@" "throw" "toInt" "types" "union" "using" "value" "void*" "while" "yield" "}\n\n" "~@();" "    " " && " " {\n" "(!@)" "(*@)" "*(@)" ".hpp" "@ @;" "@# @" "@(@)" "@, @" "@: @" "@::@" "@<@>" "@[@]" "@{@}" "Bool" "Call" "Cast" "Char" "Enum" "Goto" "Int8" "List" "None" "Pack" "Span" "Task" "Temp" "Text" "Type" "Unit" "\"\"" "\\\"" "\\\\" "\n\n" "auto" "bool" "case" "char" "copy" "data" "else" "enum" "goto" "init" "isOk" "iter" "json" "long" "loop" "main" "none" "ns@_" "null" "plus" "self" "size" "some" "them" "this" "true" "void" "when" "   " " = " "'@'" "(@)" ")  " ".kt" ".md" "// " "<<=" ">>=" "@ @" "@#@" "@.@" "@/@" "@:@" "@_@" "Box" "Int" "Opt" "Res" "Str" "Var" "\\n" "\\r" "\\t" "```" "and" "asm" "cpp" "err" "for" "fun" "get" "int" "new" "not" "ref" "res" "rtl" "set" "try" "val" "var" "xor" "}\n" "  " " {" "!=" "# " "%=" "&&" "&=" "*=" "*?" "++" "+=" ", " "--" "-=" "->" "-h" "-o" ".." "/=" "::" ":;" "<<" "<=" "==" ">=" ">>" "?L" "?m" "?p" "?t" "?v" "@;" "LT" "LY" "Sm" "\"" "\\" "\n" "^=" "_n" "_v" "do" "if" "in" "is" "it" "kt" "ok" "or" "|#" "|=" "||" "};" " " "!" "%" "&" "'" "(" ")" "*" "+" "," "-" "." "/" "0" "1" ":" ";" "<" "=" ">" "?" "@" "L" "T" "[" "]" "^" "_" "`" "{" "|" "}" "" 
-;
-static const Int16 __sm_stringStarts[] = {1064,21,0,-1644,223,532,189,87,268,32,115,6,14,3,12,30,12,6,2,4,7,-6,1,1,2,5,10,-1,1,0,1,2,1,3,2,0,2,1,2,0,2,2,3,2,3,1,2,0,2,6,-5,3,2,0,2,1,2,0,9,1,0,1,0,1,0,9,-6,-1,1,4,1,2,0,3,1,2,0,5,1,0,3,-2,1,1,2,0,10,1,0,1,4,-4,5,-4,0,2,1,1,2,0,1,1,1,2,0,1,1,1,2,0,1,1,1,5,0,1,1,3,8,0,2,1,3,0,1,1,1,3,0,1,1,1,2,0,5,1,0,1,4,-3,3,5,0,2,1,4,0,3,4,-2,-1,1,3,0,1,1,1,6,0,1,1,1,7,0,1,1,1,6,0,1,1,1,4,0,1,1,1,5,0,1,1,1,2,0,1,1,1,3,0,1,1,1,5,0,1,1,1,7,0,1,1,1,6,0,2,2,-1,1,6,0,2,2,-1,1,2,0,1,1,1,5,0,2,2,-1,1,11,0,1,1,1,9,0,3,1,2,-2,1,5,0,1,1,1,7,0,2,3,-2,1,17,0,2,2,-1,1,6,0,2,2,-1,1,12,0,1,1,1,11,0,1,1,1,8,0,1,1,1,17,0,1,1,1,19,0,1,1,1,21,0,2,4,-3,1,5,0,2,2,-2,1,11,0,1,1,1,11,0,2,1,-1,1,10,0,2,1,-1,1,8,0,1,1,1,2,0,2,1,-1,1,18,0,2,1,-1,1,10,0,2,3,-2,1,40,0,2,2,-1,1,35,0,1,1,1,53,0,1,1,1,61,0,2,2,-1,1,67,0,1,1,1,71,0,5,2,-1,0,1,-1,1,23,0,1,2,3,2,0,2,-1,29,0,6,2,-2,1,0,1,-1,1,28,0,1,2,1,3,0,1,-2,1,27,0,1,1,1,21,0,1,1,1,2,0,1,-1,1,18,0,1,1,1,35,0,1,1,1,2,0,1,-1,1,14,0,1,1,1,31,0};
-static const Int16 __sm_stringLens[] = {1064,20,-1644,223,532,189,87,268,32,115,6,14,3,12,30,12,6,2,4,7,-6,1,1,2,5,10,-1,1,0,1,2,1,3,2,0,2,1,2,0,2,2,3,2,3,1,2,0,2,6,-5,3,2,0,2,1,2,0,9,1,0,1,0,1,0,9,-6,-1,1,4,1,2,0,3,1,2,0,5,1,0,3,-2,1,1,2,0,10,1,0,1,4,-4,5,-4,0,2,1,1,2,0,1,1,1,2,0,1,1,1,2,0,1,1,1,5,0,1,1,3,8,0,2,1,3,0,1,1,1,3,0,1,1,1,2,0,5,1,0,1,4,-3,3,5,0,2,1,4,0,3,4,-2,-1,1,3,0,1,1,1,6,0,1,1,1,7,0,1,1,1,6,0,1,1,1,4,0,1,1,1,5,0,1,1,1,2,0,1,1,1,3,0,1,1,1,5,0,1,1,1,7,0,1,1,1,6,0,2,2,-1,1,6,0,2,2,-1,1,2,0,1,1,1,5,0,2,2,-1,1,11,0,1,1,1,9,0,3,1,2,-2,1,5,0,1,1,1,7,0,2,3,-2,1,17,0,2,2,-1,1,6,0,2,2,-1,1,12,0,1,1,1,11,0,1,1,1,8,0,1,1,1,17,0,1,1,1,19,0,1,1,1,21,0,2,4,-3,1,5,0,2,2,-2,1,11,0,1,1,1,11,0,2,1,-1,1,10,0,2,1,-1,1,8,0,1,1,1,2,0,2,1,-1,1,18,0,2,1,-1,1,10,0,2,3,-2,1,40,0,2,2,-1,1,35,0,1,1,1,53,0,1,1,1,61,0,2,2,-1,1,67,0,1,1,1,71,0,5,2,-1,0,1,-1,1,23,0,1,2,3,2,0,2,-1,29,0,6,2,-2,1,0,1,-1,1,28,0,1,2,1,3,0,1,-2,1,27,0,1,1,1,21,0,1,1,1,2,0,1,-1,1,18,0,1,1,1,35,0,1,1,1,2,0,1,-1,1,14,0,1,1,1,31,0,1,1};
-static_assert(sizeof(__sm_stringPool) - 1 == 25476, "the string pool and its length index disagree");
-static StrView __sm_stringTable[__sm_stringCount];
-static struct __SmStringTableInitType {
-    __SmStringTableInitType() {
-        Int starts[__sm_stringCount];
-        Int lens[__sm_stringCount];
-        simse_strTableExpand(__sm_stringStarts, starts, __sm_stringCount);
-        simse_strTableExpand(__sm_stringLens, lens, __sm_stringCount);
-        simse_strTableDecode(__sm_stringPool, starts, lens, __sm_stringTable,
-            __sm_stringCount);
-    }
-} __sm_stringTableInit;
-
-// The resources the compiler read from `_res.md` files (specs/resources.md):
-// string-table indices, key then value; the generated initialization pass builds
-// them into the program's `Resources` table (`resourcesInstall`, src/rtl/resources.kt).
-static Int __sm_resourceIndex[] = {196,69,32,260,73,1063,68,103};
-static const Int __sm_resourceCount = 4;
-
-template <class T>
-Span<T> simse_spanOf(List<T>* items);
-template <class T>
-Span<T> simse_spanOf(Array<T>* items);
-
-StrView simse_spanOfStr(Str* text);
-StrView simse_spanOfStr(StrView view);
-
-#include <cstdint>
-#include <type_traits>
-
-
-template <class T>
-void simse_list_append(List<T>& self, const std::type_identity_t<T>& value);
-
-template <class T>
-List<T> simse_listOf(const List<T>* values);
-
-template <class T>
-void simse_list_removeAt(List<T>& self, Int index);
-template <class T>
-void simse_list_removeRange(List<T>& self, Int start, Int end);
-template <class T>
-Int simse_array_count(const Array<T>& self);
-template <class T>
-Array<T> simse_list_toArray(const List<T>& self);
-template <class T>
-List<T> simse_array_toList(const Array<T>& self);
-template <class T>
-Array<T> simse_arrayEmpty();
-
-void simse_str_append(Str& self, Char value);
-void simse_str_appendStr(Str& self, const Str& value);
-void simse_str_appendStrPtr(Str& self, const Str* value);
-void simse_str_reserve(Str& self, Int count);
-Str simse_int_toString(Int self);
-
-#include <algorithm>
-#include <type_traits>
-#include <utility>
-
-
-template <class K, class V>
-Dictionary<K, V> simse_dictionaryOf();
-
-template <class K, class V>
-V* simse_dict_getPtr(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
-
-template <class K, class V>
-Opt<V> simse_dict_get(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
-
-template <class K, class V>
-Bool simse_dict_has(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
-
-template <class K, class V>
-void simse_dict_insert(Dictionary<K, V>& self, const std::type_identity_t<K>& key,
-                       const std::type_identity_t<V>& value);
-
-template <class K, class V>
-void simse_dict_remove(Dictionary<K, V>& self, const std::type_identity_t<K>& key);
-
-template <class K, class V>
-Int simse_dict_size(const Dictionary<K, V>& self);
-
-template <class K, class V>
-List<K> simse_dict_keys(const Dictionary<K, V>& self);
-
-template <class K, class V>
-List<V> simse_dict_values(const Dictionary<K, V>& self);
-
-template <class K, class V>
-void simse_dict_clear(Dictionary<K, V>& self);
-
-template <class T>
-Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& value);
-
-template <class T, class F>
-void simse_list_sort(List<T>& self, F less);
-
-Int simse_lenOf(const Str& self);
-template <class T, int N>
-Int simse_lenOf(const SmallVector<T, N>& self);
-
-#include <cerrno>
-#include <charconv>
-#include <cstddef>
-#include <cstdlib>
-#include <system_error>
-
-
-Char simse_str_charAt(const Str& self, Int index);
-
-List<Str> simse_str_split(const Str& self, const Str& separator);
-List<Str> simse_str_split(const Str& self, Char separator);
-
-Int simse_str_find(const Str& self, const Str& sub);
-
-Int simse_str_lastIndexOf(const Str& self, const Str& sub);
-
-Str simse_str_replace(const Str& self, const Str& from, const Str& to);
-
-Opt<Int> simse_str_toInt(const Str& self);
-Opt<Float64> simse_str_toFloat(const Str& self);
-
-void simse_str_initByValue(Str& self, const Str& value);
-
-template <class T>
-Str simse_num_toString(const T& self);
-Str simse_char_toString(Char self);
-Str simse_bool_toString(Bool self);
-
-#include <bit>
-#include <cstring>
-
-Int simse_strCountDigits(Int64 value);
-void simse_strAddInt(char* target, Int64 value, Int count);
-StrView simse_strBoolView(Bool value);
-
-#include <algorithm>
-#include <cstdio>
-#include <filesystem>
-#include <system_error>
-
-
-Str simse_native_readFile(const Str& path);
-List<Str> simse_listFiles(const Str& dir, const Str& ext);
-List<Str> simse_listFilesDirect(const Str& dir, const Str& ext);
-Bool simse_writeFile(const Str& path, const Str& content);
-Str simse_pathCanonical(const Str& path);
-Bool simse_pathIsDirectory(const Str& path);
-Bool simse_pathExists(const Str& path);
-void simse_eprintln(const Str& text);
-
-void* __sm_native_internetOpen(const Str& agent, const Int32& accessType, Int8* proxy, Int8* proxyBypass, const Int32& flags);
-void* __sm_native_internetOpenUrl(void* session, const Str& url, Int8* headers, const Int32& headersLength, const Int32& flags, void* context);
-Int32 __sm_native_internetReadFile(void* request, Char* buffer, const Int32& toRead, Int32* read);
-Int32 __sm_native_internetCloseHandle(void* handle);
-Int32 __sm_native_internetSetOption(void* handle, const Int32& option, Int32* value, const Int32& length);
-Int32 simse_http_flags();
-Int32 simse_http_connectTimeout();
-Int32 simse_http_receiveTimeout();
-Str simse_http_errorText(const Str& step);
-void simse_http_bufferInit(List<Char>* buffer, Int32 size);
-void simse_http_append(List<Char>* out, const Char* bytes, Int32 count);
-Str simse_http_charsToStr(const List<Char>* chars);
-
-#include <filesystem>
-#include <system_error>
-
-FileStream* simse_fileStream_open(const Str& path);
-
-Str simse_resHexToBytes(const Str& self);
-Str simse_resQuoteBinary(const Str& self);
-
-#include <cstdio>
-
-inline void simse_write(const Str& value, FILE* out) {
-    std::fwrite(value.data(), 1, (std::size_t) value.size(), out);
-}
-
-inline void simse_write(StrView value, FILE* out) {
-    std::fwrite(value.ptr, 1, (std::size_t) value.len, out);
-}
-
-inline void simse_write(bool value, FILE* out) {
-    std::fputs(value ? "true" : "false", out);
-}
-
-inline void simse_write(char value, FILE* out) {
-    std::fputc((int) (unsigned char) value, out);
-}
-
-inline void simse_write(signed char value, FILE* out) {
-    std::fputc((int) (unsigned char) value, out);
-}
-
-inline void simse_write(unsigned char value, FILE* out) {
-    std::fputc((int) value, out);
-}
-
-inline void simse_write(short value, FILE* out) {
-    std::fprintf(out, "%d", (int) value);
-}
-
-inline void simse_write(int value, FILE* out) {
-    std::fprintf(out, "%d", value);
-}
-
-inline void simse_write(long value, FILE* out) {
-    std::fprintf(out, "%ld", value);
-}
-
-inline void simse_write(long long value, FILE* out) {
-    std::fprintf(out, "%lld", value);
-}
-
-inline void simse_write(float value, FILE* out) {
-    std::fprintf(out, "%g", (double) value);
-}
-
-inline void simse_write(double value, FILE* out) {
-    std::fprintf(out, "%g", value);
-}
-
-template <class T>
-inline void simse_print(const T& value, FILE* out) {
-    simse_write(value, out);
-}
-
-template <class T>
-inline void simse_println(const T& value, FILE* out) {
-    simse_write(value, out);
-    std::fputc('\n', out);
-}
-
 template <class T>
 struct Opt;
 template <class T>
@@ -1542,6 +1299,249 @@ struct ns14_SemInfer {
     Dictionary<Str, ns3_AstXmlNode>* baseScope;
 };
 SIMSE_PACK_POP
+
+// The program's string literals: one pool, and two run-length encoded index
+// series (offsets as deltas, then lengths), each as what to subtract from the
+// previous value; strtable.hpp has the stream format.
+static const Int __sm_stringCount = 1064;
+static const char __sm_stringPool[] =
+    "\n// Resolves 'symbol' from 'library', loading the library once and caching the handle (a small\n// fixed table: a program names a handful of libraries at most). A missing library or symbol\n// answers null, which the thunk turns into the declaration's default value rather than a\n// crash. The handle is the loader's own (a FARPROC on Windows, a void* from dlsym elsewhere);\n// the thunk casts the result to the declaration's function-pointer type, which is the one\n// object-pointer-to-function-pointer conversion the language cannot spell.\n    inline void * __sm_nativeResolve (const char * library, const char* symbol) {\n        struct Entry {\n            const char * library;\n            void * module;\n        };\n        static Entry table[16];\n        static int count = 0;\n        void * module = nullptr;\n        for (int i = 0; i < count; i++) {\n        if (std::strcmp(table[i].library, library) == 0) {\n            module = table[i].module;\n            break;\n        }\n    }\n        if (module == nullptr) {\n            #ifdef _WIN32\n                    module = (void *)::LoadLibraryA(library);\n            #else\n            module = ::dlopen(library, RTLD_NOW | RTLD_LOCAL);\n            #endif\n            if (module != nullptr && count < 16) {\n                table[count].library = library;\n                table[count].module = module;\n                count++;\n            }\n        }\n        if (module == nullptr) {\n            return nullptr;\n        }\n        #ifdef _WIN32\n            return (void *)::GetProcAddress((HMODULE) module, symbol);\n        #else\n        return ::dlsym(module, symbol);\n        #endif\n    }\n    " "() - start_);\n        }\n\n    private:\n        Int index_;\n        List<FunctionData> *functions_;\n        Int64 start_;\n    };\n\n    class ProfileApp {\n    public:\n        ProfileScope measure(Int index) {\n            if (functions.size() <= index) {\n                functions.resize(index + 1);\n            }\n            return ProfileScope(index, &functions);\n        }\n\n        // Biggest total first, as CSV, to the profile file: the timings measure the\n        // program, they are not output of it, and a tool reads them, not an eye.\n        void report() {\n            FILE *out = stderr;\n            if (kProfileFile[0] != 0 && kProfileFile[0] != '-') {\n                FILE *opened = fopen(kProfileFile, \"w\");\n                if (opened != NULL) out = opened;\n            }\n            List<Int> order;\n            for (Int i = 0; i < functions.size(); i++) {\n                if (functions[i].calls > 0) order.push_back(i);\n            }\n            for (Int i = 0; i < order.size(); i++) {\n                Int best = i;\n                for (Int j = i + 1; j < order.size(); j++) {\n                    if (functions[order[j]].total > functions[order[best]].total) best = j;\n                }\n                if (best != i) {\n                    Int swap = order[i];\n                    order[i] = order[best];\n                    order[best] = swap;\n                }\n            }\n            fprintf(out, \"name," "#include <cstdio>\n\n// ---- profiling (--profile) ------------------------------------------------\n// Every emitted body starts with a profileApp.measure(<index>) whose constructor counts the\n// entry and whose destructor banks the elapsed time; the table prints when the program\n// leaves. The index is a compile-time constant and the names are the table of constants\n// below, so a measurement is one array index, no lookup.\nnamespace simse_profiling {\n    struct FunctionData {\n        Int64 total;\n        Int64 calls;\n        FunctionData() : total(0), calls(0) {}\n    };\n\n    // Index -> name, by the same constant measure receives; defined with the bodies.\n    extern const char *const kMethodNames[];\n\n    // Where the table goes when the program leaves (--profile-file, default\n    // simse_profile.csv; a lone '-' keeps it on stderr).\n    static const char *const kProfileFile = \"" ",calls\\n\");\n            for (Int i = 0; i < order.size(); i++) {\n                FunctionData &row = functions[order[i]];\n                fprintf(out, \"%s,%lld,%lld\\n\", kMethodNames[order[i]],\n                    (long long) row.total, (long long) row.calls);\n            }\n            if (out != stderr) fclose(out);\n        }\n\n    private:\n        List<FunctionData> functions;\n    };\n}\n\nnamespace {\n    simse_profiling::ProfileApp profileApp;\n\n    // The table, when the program leaves: a static outlives every automatic scope,\n    // so this runs after main returned - whichever return it took.\n    struct ProfileReport {\n        ~ProfileReport() { profileApp.report(); }\n    } profileReport;\n}\n\n" "\n// NativeInvoke (impl_specs/native-interop.md): the shared-library loader a\n// declaration with the SmGen(\"native\", ...) attribute binds its symbol with. Windows loads through\n// windows.h's LoadLibraryA/GetProcAddress, everywhere else through dlfcn.h's\n// dlopen/dlsym; either way the lookup is at run time rather than a link-time\n// import, so the program links nothing.\n    #ifdef _WIN32\n    #ifndef WIN32_LEAN_AND_MEAN\n    #define WIN32_LEAN_AND_MEAN\n    #endif\n    #ifndef NOMINMAX\n    #define NOMINMAX\n    #endif\n    #include<windows.h>\n    #else\n    #include<dlfcn.h>\n    #endif\n    #include<cstring>\n    " "()) {\n            FunctionData &row = (*functions_)[index_];\n            row.calls = row.calls + 1;\n        }\n        ProfileScope(const ProfileScope &) = delete;\n        ProfileScope &operator=(const ProfileScope &) = delete;\n        ~ProfileScope() {\n            FunctionData &row = (*functions_)[index_];\n            row.total = row.total + (" "usage: simse <input.kt>... [-o <output.cpp>] [--prelude <file>] [--root <dir>] [--module <dir>]... [--no-concat] [--no-borrow] [--no-when-dispatch] [--when-first-char] [--when-copy-subject] [--showLinearRepresentation] [--showBorrow] [--showAsync] [--profile] [--profile-file <path>] [--profile-nanos] [--version]" "ambiguous call of '@': a lambda argument fits a declaration taking a callable and one taking a plain value (C++ would silently take the plain one); pass the type arguments explicitly ('@<...>(...)')" "'@' takes a counted reference ('&@') and the argument is a raw pointer: a pointer cannot become a reference in place - make a reference variable one line before the call (var ref: &@ = &value)" "invalid interpolation string: `@(` must hold one name and be closed by `)` (`@(name)`); for a literal `@`, write it in a \"...\" string or in a raw string that does not interpolate" "invalid interpolation string: `@` must be followed by a name (`@name`) or `@(name)`; for a literal `@`, write it in a \"...\" string or in a raw string that does not interpolate" "\";\n\n    class ProfileScope {\n    public:\n        ProfileScope(Int index, List<FunctionData> *functions)\n            : index_(index), functions_(functions), start_(" "json: field '@' of '@' is not a data class or a scalar (a generated serializer for a generic or pointer field is not implemented yet)" "a `for` iterates a machine (`..T`) or a type with a `|`, and | has neither; iterate a container with `while` and an index" "the lambda parameter '@' has no type: annotate it (e.g. '@: T') or use the lambda where a callable type expects one" "suspend: a body-less `suspend` declaration has no lowering yet (the leaves arrive with the file and socket steps)" "cannot infer @@ of '@': no argument names @ (a callable argument does not); pass @ explicitly ('@<...>(...)')" "// Generated by the Simse compiler. Do not edit.\n#include \"src/rtl/simse.hpp\"\n#include <type_traits>\n\n" "suspend: a body that also yields is not supported (a `for` machine is a local and cannot cross a suspension)" "unsupported: construct a union class in a 'var'/'val' declaration ('var x = U(...)') or as 'return (value)'" "yield: a `this` parameter cannot be a field; write the receiver before the name (`fun T.name`) instead" "static_assert(sizeof(__sm_stringPool) - 1 == @, \"the string pool and its length index disagree\");" "'@' is a prelude type: give the declaration another name (the prelude's types are emitted by name)" "a lambda cannot reach `this` yet: a lambda captures by value, and reference captures are deferred" "suspend: a `for` over a machine cannot cross a suspension; collect the values into a `List` first" "`!!` inside a lambda propagates into the lambda's own result, and this parameter's type has none" "construct a union class in a 'var'/'val' declaration ('var x = U(...)') or as 'return (value)'" "resourcesInstall(__sm_stringTable, __sm_stringCount, __sm_resourceIndex, __sm_resourceCount);" "'set' is not declared for this receiver: an index write needs 'operator set(index, value)'" "'@' is not an operator: 'get', 'set', 'compareTo', 'equals' and 'plus' are the operators" "// them into the program's `Resources` table (`resourcesInstall`, src/rtl/resources.kt)." "'@' has an unInit: hold it by '*@' or '&@' - a value copy would run its destructor too" "Generated C++:may name one of its symbols itself. (`filestream` moved on with the type" "case @::@: ::new ((void *) &this->@) @(std::move(other.@)); this->_type = @::@; break;" "unInit is a type's destructor: it is not called - the value's last owner destroys it" "// string-table indices, key then value; the generated initialization pass builds" "// File-level static storage (specs/statics.md): initialized before main's body." "'@' is a ref class: build it as '&@(...)' - a ref class is held by '&@' or '*@'" "// series (offsets as deltas, then lengths), each as what to subtract from the" "`!!` propagates a failure, and this function returns nothing to propagate into" "legend: async! is declared suspend, async is inferred from the callee it shows" "native: '|' names no library (@SmGen(\"native\", \"<library>\", \"<symbol>\"))" "// The resources the compiler read from `_res.md` files (specs/resources.md):" "native: '@' (@) generates the thunk '@' with a different binding - rename one" "suspend: the body nests deeper than the lowering allows (a cycle in the AST?)" "// The program's string literals: one pool, and two run-length encoded index" "case @::@: ::new ((void *) &this->@) @(other.@); this->_type = @::@; break;" "inline Bool operator!=(const @* self, @ tag) { return self->_type != tag; }" "inline Bool operator==(const @* self, @ tag) { return self->_type == tag; }" "inline Bool operator!=(const @& self, @ tag) { return self._type != tag; }" "inline Bool operator==(const @& self, @ tag) { return self._type == tag; }" "`!!` propagates a failure, so the enclosing function must return `Res<T>`" "json: the json:helpers resource is missing (a section of src/rtl/_res.md)" "`!!` must be the whole right-hand side of a `val`/`var`, an assignment, " "this index has no 'operator set(index, value)': an index write needs one" "    if (this) {\n        return \"true\"\n    }\n    return \"false\"\n" "namespace simse_profiling {\n    const char *const kMethodNames[] = {\n" "suspend: a `return` of a suspension in a function that answers nothing" "simse_strTableDecode(__sm_stringPool, starts, lens, __sm_stringTable," "'@' declares unInit: a class with a destructor must be a 'ref class'" "std::memcpy(@, simse_strBoolView(@).ptr, simse_strBoolView(@).len);" "simse_strTableExpand(__sm_stringStarts, starts, __sm_stringCount);" "union class '@': 'None' is the tag's empty state; rename the field" "a `for (*x in m)` needs an `iter`, and a machine yields values " "types are not compatible: '@' takes '@' and the argument is '@'" "union class '@': '_type' is the tag's storage; rename the field" "simse_strTableExpand(__sm_stringLens, lens, __sm_stringCount);" "suspend: an extension function's receiver is not supported yet" "Generated C++:marker (`@SmGen(\"cpp\")`, specs/attributes.md)" "reached`, so a program that never fetches carries none of it." "json: two data classes are named '@'; a serializer needs one" "suspend: a suspension's callee must be a plain function name" "union class '@': '@' is a generated member; rename the field" "Generated C++:type* whose layout only C++ can express (`std" "suspend: a generic suspending function is not supported yet" "internal: the body of '@' is not expressible in the IL (@)" "no source for @SmGen(\"kt\", \"|\") (needs the resource |)" "suspend: a `main(args)` that suspends is not supported yet" "    static Fn fn = (Fn) __sm_nativeResolve(\"@\", \"@\");" "native: '@' has a parameter type the generator cannot map" "unsupported: namespaced symbol '@' needs a global wrapper" "cannot resolve import '@': no file declares package '@'" "// previous value; strtable.hpp has the stream format." "native: '@' has a return type the generator cannot map" "union class '@': fields '@' and '@' have the same type" "an operator function needs a receiver: 'fun T.@(...)'" "json: the generic data class '@' is not supported yet" "suspend: the local '@' has no type to make a field of" "'@' declares unInit twice: a type has one destructor" "a method whose C++ is generated must not have a body" "unsupported: a lambda outside a closure construction" "json: '@' is not a data class or a supported scalar" "suspend: an extension function is not supported yet" "unsupported: a machine's type has no class to spell" "unsupported: generated parameter '@' without a type" "yield: a `for` over a machine cannot cross a yield " "yield: the local '@' has no type to make a field of" "(the machine a call creates has no type to make a " "a `>` closer ran into `=`: write a space before it" "attribute arguments are string or integer literals" "internal: a closure class could not be written (@)" "rather than places: iterate it with `for (x in m)`" "static StrView __sm_stringTable[__sm_stringCount];" "the emitter must not generate one. `filestreamhpp`" "the slot '@' has neither a type nor an initializer" "unsupported: generic-qualified expression '@<...>'" "field of); collect the values into a `List` first" "@(@&& other) noexcept { this->moveFrom(other); }" "suspend: a `this` parameter is not supported yet" "union class '@' generates '@': rename the method" "unsupported: typealias '@' without a target type" "'when' matches a value or 'else', not a pattern" "expected 'fun' or an attribute after 'operator'" "isOfType(simse_addressOf(@), SmOptTypes::Value)" "union class '@': the argument's type is unknown" "expected 'fun' or an attribute after 'suspend'" "makeRef<std::remove_cvref_t<decltype((@))>>(@)" "union class '@' has no arm '@'; the arms are @" "expected 'fun' or an attribute after 'borrow'" "union class '@': several fields have type '@'" "@(const @& other) { this->copyFrom(other); }" "    out.append('\"')\n    out.append(':')\n" "`|` stands on its own as a statement (`i|`)" "a concatenation into a slot with no storage" "data class '@' expects @ field(s) but got @" "inline @ @(Int value) { return (@) value; }" "no overload of '@' takes @ type argument(s)" "simse_spanOfStr(simse_addressOf((@).get()))" "'@' is a C++ keyword; give it another name" "an index write with no operator arguments" "auto __smProfile = profileApp.measure(@);" "case @::@: simse_destroy(this->@); break;" "unsupported: '..' without an element type" "unsupported: parameter '@' without a type" "    out.append('}')\n    return out\n}\n" "    return jsonQuoted(this.toString())\n" "'@' expects @ type argument(s) but got @" "::new ((void *) &@) @(std::move(value));" "static const Int __sm_resourceCount = @;" "union class '@' has no field of type '@'" "'else' must be the last arm of a 'when'" "@return simse_closureFunc<@>(@, *this);" "static const @ __sm_stringStarts[] = @;" "static struct __SmStringTableInitType {" "sync @ declarations reach no suspension" "union class '@' takes at most one value" "unsupported: Opt-vs-null comparison '@'" "`!!` is not allowed inside a condition" "an initializer with no expression form" "expected 'class' or 'fun' after 'data'" "no overload of '@' takes @ argument(s)" "static const Int __sm_stringCount = @;" "suspend: the parameter '@' has no type" "task->loop = &simse_tasks::taskLoop();" "template <Bool SmManaged, @> struct @;" "a body-less method needs an attribute" "simse: --profile-file requires a path" "static const @ __sm_stringLens[] = @;" "static const char __sm_stringPool[] =" "unInit: the receiver has no type name" "unsupported: field '@' without a type" "writes a field, an index or a pointer" "constructor call with no destination" "internal: task field '@' has no type" "simse_argIndex = simse_argIndex + 1;" "static Int __sm_resourceIndex[] = @;" "yield: the parameter '@' has no type" "'when' can have only one 'else' arm" "a concatenation in a value position" "a concatenation with no destination" "simse_spanOfStr(simse_addressOf(@))" "std::memcpy(@, @.data(), @.size());" "structured statement reached the IL" "@& operator=(@&& other) noexcept {" "return self->_type == typeToCheck;" "the slot '@' has no type to assign" "@ = @ + simse_strBoolView(@).len;" "expected 'fun' after an attribute" "template <@> struct @<false, @> {" "unsupported: main with parameters" "'set' takes an index and a value" "@(@, Str(argv[simse_argIndex]));" "borrow- @ C++ calls it (prelude)" "simse: --prelude requires a path" "template <@> struct @<true, @> {" "yield: the field '@' has no type" "'get' takes one index parameter" "int main(int argc, char** argv)" "simse: --module requires a path" "simse_rc = (int) simse_root->@;" "the type '@' is reached through" "void copyFrom(const @& other) {" "while (simse_argIndex < argc) {" "~@() { this->destroyActive(); }" "@& operator=(const @& other) {" "@:@: Unexpected character: '@'" "Generated C++:section is `emit" "expected '->' in function type" "expected 'class' after 'union'" "expected 'package' declaration" "struct @ : simse_tasks::Task {" "    return jsonQuoted(this)\n" "Int starts[__sm_stringCount];" "a static write with no target" "enum value must be an integer" "simse: --root requires a path" "simse_tasksStart(simse_root);" "type name in a value position" "unInit: no declaration of '@'" "    return this.toString()\n" "@ = simse_strCountDigits(@);" "a concatenation with no part" "unknown source generator '@'" "'@' cannot be expressed yet" "'@' takes the other operand" "Int lens[__sm_stringCount];" "__SmStringTableInitType() {" "expected method declaration" "the capture '@' has no type" "    if (fn == nullptr) {\n" "--showLinearRepresentation" "List<Str> @ = List<Str>();" "a cast with no destination" "a cast with no target type" "a field write with no name" "compound assignment target" "if (self->_type == @::@) {" "self->@(std::move(value));" "simse: prelude not found: " "simse_println((@), stdout)" "unInit takes no parameters" "void simse_initStatics() {" "'continue' outside a loop" "@* simse_root = (@*) @();" "a part of a concatenation" "duplicate declaration '@'" "expected lambda parameter" "or a statement of its own" "result.setValue(self->@);" "simse: -o requires a path" "simse_strAddInt(@, @, @);" "void moveFrom(@& other) {" "    operator @() const {" "    var out: Str = \"{\"" "a jump with no condition" "cannot assign to val '@'" "expected 'class' after '" "simse_print((@), stdout)" "simse_strBoolView(@).len" "unsupported: call target" "    out.appendStr(this." "a store with no pointer" "expected 'val' or 'var'" "expected parameter name" "int simse_argIndex = 1;" "return ((@*) _sm_h)->@;" "writes a file-level var" "} __sm_stringTableInit;" "    out.append('\"')\n" "'break' outside a loop" "`FileStream`, the open" "a cast with no operand" "a closure with no body" "a declare with no slot" "a return with no value" "a write with no target" "reinterpret_cast<@>(@)" "simse_root->release();" "switch (other._type) {" "switch (this->_type) {" "the emitter reported: " "this->_type = @::None;" "this->copyFrom(other);" "this->destroyActive();" "this->moveFrom(other);" "unInit returns nothing" "void destroyActive() {" "    out.append(',')\n" "@ = std::move(value);" "a call with no callee" "fun @.toJson(): Str {" "if (this != &other) {" "return (RawPtr) task;" "simse_tasksRunLoop();" "std::memcpy(@, @, @);" "    out.appendStr(\"" "  (declared suspend)" "Var,Text,Value,Value" "a jump with no label" "a label with no name" "an unsupported shape" "expected declaration" "expression statement" "if (_type == @::@) {" "simse: cannot write " "simse_initStatics();" "struct @ : @<@, @> {" "unsupported type '@'" "void run() override;" "--when-copy-subject" "@ @(RawPtr _sm_h) {" "Var,Method,Value..." "__sm_stringTable[@]" "enum class @ { @ };" "expected enum value" "expected expression" "machine.branch = 0;" "return self->_type;" "static_cast<Int>(@)" "the instruction '@'" "the receiver of '@'" "--no-when-dispatch" "@ _type = @::None;" "@* task = new @();" "__sm_stringCount);" "an argument of '@'" "return Str(fn(@));" "simse_addressOf(@)" "simse_spanOfStr(@)" "tasksReleaseHandle" "    using Fn = @;" "'@' must answer @" "--when-first-char" "<generated>/kt.kt" "@ = @ + @.size();" "@ = @.data() + @;" "Var,Type,Value..." "assignment target" "if (!(@)) goto @;" "int simse_rc = 0;" "machine.@ = self;" "return (@) fn(@);" "simse_list_append" "simse_optHasValue" "simse_profile.csv" "simse_resHasValue" "simse_tasksFinish" "void @(@ value) {" "!std::is_same_v<" "*@ = (char) (@);" "0123456789ABCDEF" "<unsupported: @>" "@.resize(@ + @);" "CallIndirectVoid" "Expr.GenericName" "InternetReadFile" "Var,Var,Value..." "_type = @::None;" "char* __sm_catP;" "reinterpret_cast" "resourcesEntries" "resourcesInstall" "return simse_rc;" "self->setNone();" "sm_suspend_point" "type parameters " "unknown type '@'" "void setNone() {" "--profile-nanos" "/*unsupported*/" "@ @_invoke(@) {" "Int __sm_catAt;" "InternetOpenUrl" "Method,Value..." "SIMSE_PACK_PUSH" "SmUnionManaged<" "Var,Value,Value" "a concatenation" "async  @   <- @" "cannot express " "default: break;" "inline @ @(@) {" "return machine;" "return nullptr;" "simse_@_fromInt" "simse_nowMicros" "simse_spanOfStr" "simse_strAddInt" "type parameter " "void @::run() {" "        \"\"\n" "(a value call)" "--profile-file" "@ @_invoke(@);" "SIMSE_PACK_POP" "Type.Reference" "Var,Text,Value" "\\generators\\" "_closure_owner" "if (!@) goto @" "if (@) goto @;" "machine.@ = @;" "return result;" "simse_argIndex" "simse_nowNanos" "simse_optValue" "simse_resError" "simse_resValue" "struct @ : @ {" "tasksSuspendAt" "--module-root" "@ = @.data();" "@ = @.size();" "@ = concat(@)" "@_@_yieldable" "Expr.FloatLit" "GetStaticAddr" "RawPtr @(@) {" "Stmt.Continue" "Stmt.ExprStmt" "Type.Function" "Var,Var,Value" "\n## closure " "__sm_native_@" "_type = @::@;" "a lambda body" "destroyActive" "expected '->'" "expected 'in'" "expected name" "expected type" "if (@) goto @" "makeList<@>()" "makeRef<@>(@)" "package rtl\n" "resourceStore" "return *this;" "return Str();" "return fn(@);" "simse_optNone" "simse_optSome" "simse_out.cpp" "static_assert" "unsupported: " "  captures (" "(@) (@) -> @" "--showBorrow" ".toJson())\n" "/generators/" "@ = new @(@)" "@.resize(@);" "CallIndirect" "Expr.BoolLit" "Expr.CharLit" "Expr.NullLit" "InternetOpen" "Stmt.IfFalse" "Stmt.VarDecl" "Type.Generic" "Type.Pointer" "Var,Value..." "Var,Var,Text" "dynamic_cast" "expected '('" "expected ')'" "expected '>'" "expected '@'" "generators\\" "int main() {" "json:helpers" "nativeinvoke" "return @(@);" "return @{0};" "simse_listOf" "simse_resErr" "task->@ = @;" "template <@>" "thread_local" "using @ = @;" "    };\n}\n" " = <lambda>" " machine{};" "--no-borrow" "--no-concat" "--showAsync" ".hasValue()" "/*machine*/" "@ = copy(@)" "@_yieldable" "Constructor" "DeclareInit" "Expr.Binary" "Expr.IntLit" "Expr.Lambda" "Expr.Member" "Expr.StrLit" "SetVar_Null" "SmallVector" "Stmt.Assign" "Stmt.IfTrue" "Stmt.Return" "Type.IntLit" "Unsupported" "Value,Label" "a void call" "advance(&@)" "auto @ = @;" "borrow+ @ @" "borrow- @ @" "const char*" "generators/" "initByValue" "json:source" "mergeLocals" "return @();" "simse_resOk" "spanOfArray" "static_cast" "tasksFinish" "threadJumps" "typeToCheck" "        \"" "@ = @ + 1;" "@ = @ + @;" "@ = cast @" "@<@>::@(@)" "@_closure@" "Dictionary" "Expr.Deref" "Expr.Index" "Expr.Unary" "Expression" "Func<@(@)>" "ReturnVoid" "Stmt.Block" "Stmt.Break" "Stmt.Label" "Stmt.While" "Stmt.Yield" "Text,Value" "Type.Named" "Type.Yield" "__sm_catAt" "__sm_catC@" "_yieldable" "advance(@)" "const @& @" "const_cast" "deadLocals" "deadStores" "expression" "fmtStrWith" "foldBranch" "foldLabels" "iterValues" "prototypes" "requires (" "struct @ {" "        @" "&@_invoke" "(@).get()" "(void*) @" "--prelude" "--profile" "--version" "/simse.md" "@ = &@[@]" "@ = @ @ @" "@ result;" "@.c_str()" "@.lambda@" "@: @:@: @" "@::~@() {" "CopyValue" "DataClass" "Expr.Call" "Expr.Copy" "Expr.Name" "FieldAddr" "GetStatic" "IndexAddr" "Ref<void>" "SetStatic" "Simse/1.0" "Stmt.Goto" "TypeAlias" "Var,Value" "__sm_catP" "_smResult" "_sm_ctor@" "_sm_index" "_sm_prop@" "co_return" "compareTo" "consteval" "constexpr" "constinit" "foldConst" "getTypeOf" "labels:  " "methods: " "namespace" "pool:    " "protected" "resources" "return @;" "spanOfStr" "statement" "struct @;" "typealias" "types:   " "vars:    " "    @ @;" "  (line " "(@ <= 0)" "(@ >= 0)" "(@) -> @" "--module" ":static=" "@ (*)(@)" "@ = &@.@" "@ = @[@]" "@ @(@) {" "@.size()" "@:@:@: @" "@[@] = @" "Argument" "BinaryOp" "CallCtor" "CallVoid" "Expr.Ref" "Function" "GetField" "GetIndex" "Opt<@>()" "RawArray" "SetField" "SetIndex" "Var,Text" "_closure" "_fromInt" "_sm_base" "_sm_ctor" "_sm_expr" "_sm_self" "_sm_task" "_sm_when" "async! @" "char16_t" "char32_t" "closures" "co_await" "co_yield" "continue" "copyFrom" "decltype" "explicit" "hasValue" "includes" "isOfType" "moveFrom" "noexcept" "operator" "refcount" "register" "requires" "template" "toString" "total_ns" "total_us" "typename" "unsigned" "var @: @" "volatile" "    }\n" " = null" "(*@)[@]" "(*self)" "(*this)" "(@ < 0)" "(@ > 0)" ":source" ":symbol" "@ = @.@" "@ = [@]" "@ @(@);" "@ @:@:@" "@(@, @)" "@* self" "@.@ = @" "@::~@()" "@<@>(@)" "@<@>{@}" "@?m@(@)" "@@.@(@)" "Declare" "Float32" "Float64" "IfFalse" "Stmt.If" "Storage" "StrView" "UnaryOp" "Var,Var" "_SmIter" "_invoke" "_res.md" "_sm_@_@" "_sm_for" "_sm_stk" "advance" "alignas" "alignof" "char8_t" "concept" "current" "default" "float:@" "foldAll" "forward" "fromInt" "goto @;" "import " "mutable" "nullptr" "package" "println" "private" "profile" "reached" "return " "return;" "setNone" "simse: " "src/rtl" "statics" "strings" "support" "suspend" "typedef" "union {" "virtual" "wchar_t" "* self" "*@ = @" "--help" "--root" "@ = &@" "@ = *@" "@ = @;" "@ = @@" "@ @(@)" "@ @{};" "@ self" "@() {}" "@(@) {" "@,  @@" "@::run" "Concat" "IfTrue" "Int @;" "Lambda" "Method" "Module" "RawPtr" "Ref<@>" "Return" "SetVar" "Str(@)" "_sm_cb" "_sm_f_" "_sm_sc" "always" "and_eq" "bitand" "bodies" "bool:@" "borrow" "branch" "calls " "char:@" "class " "delete" "double" "equals" "export" "extern" "fmtStr" "fn(@);" "friend" "import" "inline" "module" "native" "not_eq" "parent" "public" "quoted" "result" "return" "self->" "signed" "simse " "simse_" "sizeof" "spanOf" "static" "status" "struct" "switch" "this->" "toJson" "typeid" "unInit" "xor_eq" "};\n\n" "    @" " self" "'\\''" ") -> " "0.1.0" ":emit" ":ret=" "@ + @" "@ = @" "@ @ @" "@(@);" "@@(@)" "Array" "Deref" "Error" "Int16" "Int32" "Int64" "LTend" "LYend" "Label" "Local" "PList" "PtrOf" "Store" "Types" "Value" "\")\n" "\",\n" "\"@\"" "\n// " "_sm_f" "_sm_h" "_task" "_type" "bitor" "break" "catch" "class" "compl" "const" "count" "error" "false" "float" "getAs" "goto " "int:@" "or_eq" "print" "short" "str:@" "throw" "toInt" "types" "union" "using" "value" "void*" "while" "yield" "}\n\n" "~@();" "    " " && " " {\n" "(!@)" "(*@)" "*(@)" ".hpp" "@ @;" "@# @" "@(@)" "@, @" "@: @" "@::@" "@<@>" "@[@]" "@{@}" "Bool" "Call" "Cast" "Char" "Enum" "Goto" "Int8" "List" "None" "Pack" "Span" "Task" "Temp" "Text" "Type" "Unit" "\"\"" "\\\"" "\\\\" "\n\n" "auto" "bool" "case" "char" "copy" "data" "else" "enum" "goto" "init" "isOk" "iter" "json" "long" "loop" "main" "none" "ns@_" "null" "plus" "self" "size" "some" "them" "this" "true" "void" "when" "   " " = " "'@'" "(@)" ")  " ".kt" ".md" "// " "<<=" ">>=" "@ @" "@#@" "@.@" "@/@" "@:@" "@_@" "Box" "Int" "Opt" "Res" "Str" "Var" "\\n" "\\r" "\\t" "```" "and" "asm" "cpp" "err" "for" "fun" "get" "int" "new" "not" "ref" "res" "rtl" "set" "try" "val" "var" "xor" "}\n" "  " " {" "!=" "# " "%=" "&&" "&=" "*=" "*?" "++" "+=" ", " "--" "-=" "->" "-h" "-o" ".." "/=" "::" ":;" "<<" "<=" "==" ">=" ">>" "?L" "?m" "?p" "?t" "?v" "@;" "LT" "LY" "Sm" "\"" "\\" "\n" "^=" "_n" "_v" "do" "if" "in" "is" "it" "kt" "ok" "or" "|#" "|=" "||" "};" " " "!" "%" "&" "'" "(" ")" "*" "+" "," "-" "." "/" "0" "1" ":" ";" "<" "=" ">" "?" "@" "L" "T" "[" "]" "^" "_" "`" "{" "|" "}" "" 
+;
+static const Int16 __sm_stringStarts[] = {1064,21,0,-1644,223,532,189,87,268,32,115,6,14,3,12,30,12,6,2,4,7,-6,1,1,2,5,10,-1,1,0,1,2,1,3,2,0,2,1,2,0,2,2,3,2,3,1,2,0,2,6,-5,3,2,0,2,1,2,0,9,1,0,1,0,1,0,9,-6,-1,1,4,1,2,0,3,1,2,0,5,1,0,3,-2,1,1,2,0,10,1,0,1,4,-4,5,-4,0,2,1,1,2,0,1,1,1,2,0,1,1,1,2,0,1,1,1,5,0,1,1,3,8,0,2,1,3,0,1,1,1,3,0,1,1,1,2,0,5,1,0,1,4,-3,3,5,0,2,1,4,0,3,4,-2,-1,1,3,0,1,1,1,6,0,1,1,1,7,0,1,1,1,6,0,1,1,1,4,0,1,1,1,5,0,1,1,1,2,0,1,1,1,3,0,1,1,1,5,0,1,1,1,7,0,1,1,1,6,0,2,2,-1,1,6,0,2,2,-1,1,2,0,1,1,1,5,0,2,2,-1,1,11,0,1,1,1,9,0,3,1,2,-2,1,5,0,1,1,1,7,0,2,3,-2,1,17,0,2,2,-1,1,6,0,2,2,-1,1,12,0,1,1,1,11,0,1,1,1,8,0,1,1,1,17,0,1,1,1,19,0,1,1,1,21,0,2,4,-3,1,5,0,2,2,-2,1,11,0,1,1,1,11,0,2,1,-1,1,10,0,2,1,-1,1,8,0,1,1,1,2,0,2,1,-1,1,18,0,2,1,-1,1,10,0,2,3,-2,1,40,0,2,2,-1,1,35,0,1,1,1,53,0,1,1,1,61,0,2,2,-1,1,67,0,1,1,1,71,0,5,2,-1,0,1,-1,1,23,0,1,2,3,2,0,2,-1,29,0,6,2,-2,1,0,1,-1,1,28,0,1,2,1,3,0,1,-2,1,27,0,1,1,1,21,0,1,1,1,2,0,1,-1,1,18,0,1,1,1,35,0,1,1,1,2,0,1,-1,1,14,0,1,1,1,31,0};
+static const Int16 __sm_stringLens[] = {1064,20,-1644,223,532,189,87,268,32,115,6,14,3,12,30,12,6,2,4,7,-6,1,1,2,5,10,-1,1,0,1,2,1,3,2,0,2,1,2,0,2,2,3,2,3,1,2,0,2,6,-5,3,2,0,2,1,2,0,9,1,0,1,0,1,0,9,-6,-1,1,4,1,2,0,3,1,2,0,5,1,0,3,-2,1,1,2,0,10,1,0,1,4,-4,5,-4,0,2,1,1,2,0,1,1,1,2,0,1,1,1,2,0,1,1,1,5,0,1,1,3,8,0,2,1,3,0,1,1,1,3,0,1,1,1,2,0,5,1,0,1,4,-3,3,5,0,2,1,4,0,3,4,-2,-1,1,3,0,1,1,1,6,0,1,1,1,7,0,1,1,1,6,0,1,1,1,4,0,1,1,1,5,0,1,1,1,2,0,1,1,1,3,0,1,1,1,5,0,1,1,1,7,0,1,1,1,6,0,2,2,-1,1,6,0,2,2,-1,1,2,0,1,1,1,5,0,2,2,-1,1,11,0,1,1,1,9,0,3,1,2,-2,1,5,0,1,1,1,7,0,2,3,-2,1,17,0,2,2,-1,1,6,0,2,2,-1,1,12,0,1,1,1,11,0,1,1,1,8,0,1,1,1,17,0,1,1,1,19,0,1,1,1,21,0,2,4,-3,1,5,0,2,2,-2,1,11,0,1,1,1,11,0,2,1,-1,1,10,0,2,1,-1,1,8,0,1,1,1,2,0,2,1,-1,1,18,0,2,1,-1,1,10,0,2,3,-2,1,40,0,2,2,-1,1,35,0,1,1,1,53,0,1,1,1,61,0,2,2,-1,1,67,0,1,1,1,71,0,5,2,-1,0,1,-1,1,23,0,1,2,3,2,0,2,-1,29,0,6,2,-2,1,0,1,-1,1,28,0,1,2,1,3,0,1,-2,1,27,0,1,1,1,21,0,1,1,1,2,0,1,-1,1,18,0,1,1,1,35,0,1,1,1,2,0,1,-1,1,14,0,1,1,1,31,0,1,1};
+static_assert(sizeof(__sm_stringPool) - 1 == 25476, "the string pool and its length index disagree");
+static StrView __sm_stringTable[__sm_stringCount];
+static struct __SmStringTableInitType {
+    __SmStringTableInitType() {
+        Int starts[__sm_stringCount];
+        Int lens[__sm_stringCount];
+        simse_strTableExpand(__sm_stringStarts, starts, __sm_stringCount);
+        simse_strTableExpand(__sm_stringLens, lens, __sm_stringCount);
+        simse_strTableDecode(__sm_stringPool, starts, lens, __sm_stringTable,
+            __sm_stringCount);
+    }
+} __sm_stringTableInit;
+
+// The resources the compiler read from `_res.md` files (specs/resources.md):
+// string-table indices, key then value; the generated initialization pass builds
+// them into the program's `Resources` table (`resourcesInstall`, src/rtl/resources.kt).
+static Int __sm_resourceIndex[] = {196,69,32,260,73,1063,68,103};
+static const Int __sm_resourceCount = 4;
+
+template <class T>
+Span<T> simse_spanOf(List<T>* items);
+template <class T>
+Span<T> simse_spanOf(Array<T>* items);
+
+StrView simse_spanOfStr(Str* text);
+StrView simse_spanOfStr(StrView view);
+
+#include <cstdint>
+#include <type_traits>
+
+
+template <class T>
+void simse_list_append(List<T>& self, const std::type_identity_t<T>& value);
+
+template <class T>
+List<T> simse_listOf(const List<T>* values);
+
+template <class T>
+void simse_list_removeAt(List<T>& self, Int index);
+template <class T>
+void simse_list_removeRange(List<T>& self, Int start, Int end);
+template <class T>
+Int simse_array_count(const Array<T>& self);
+template <class T>
+Array<T> simse_list_toArray(const List<T>& self);
+template <class T>
+List<T> simse_array_toList(const Array<T>& self);
+template <class T>
+Array<T> simse_arrayEmpty();
+
+void simse_str_append(Str& self, Char value);
+void simse_str_appendStr(Str& self, const Str& value);
+void simse_str_appendStrPtr(Str& self, const Str* value);
+void simse_str_reserve(Str& self, Int count);
+Str simse_int_toString(Int self);
+
+#include <algorithm>
+#include <type_traits>
+#include <utility>
+
+
+template <class K, class V>
+Dictionary<K, V> simse_dictionaryOf();
+
+template <class K, class V>
+V* simse_dict_getPtr(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
+
+template <class K, class V>
+Opt<V> simse_dict_get(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
+
+template <class K, class V>
+Bool simse_dict_has(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
+
+template <class K, class V>
+void simse_dict_insert(Dictionary<K, V>& self, const std::type_identity_t<K>& key,
+                       const std::type_identity_t<V>& value);
+
+template <class K, class V>
+void simse_dict_remove(Dictionary<K, V>& self, const std::type_identity_t<K>& key);
+
+template <class K, class V>
+Int simse_dict_size(const Dictionary<K, V>& self);
+
+template <class K, class V>
+List<K> simse_dict_keys(const Dictionary<K, V>& self);
+
+template <class K, class V>
+List<V> simse_dict_values(const Dictionary<K, V>& self);
+
+template <class K, class V>
+void simse_dict_clear(Dictionary<K, V>& self);
+
+template <class T>
+Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& value);
+
+template <class T, class F>
+void simse_list_sort(List<T>& self, F less);
+
+Int simse_lenOf(const Str& self);
+template <class T, int N>
+Int simse_lenOf(const SmallVector<T, N>& self);
+
+#include <cerrno>
+#include <charconv>
+#include <cstddef>
+#include <cstdlib>
+#include <system_error>
+
+
+Char simse_str_charAt(const Str& self, Int index);
+
+List<Str> simse_str_split(const Str& self, const Str& separator);
+List<Str> simse_str_split(const Str& self, Char separator);
+
+Int simse_str_find(const Str& self, const Str& sub);
+
+Int simse_str_lastIndexOf(const Str& self, const Str& sub);
+
+Str simse_str_replace(const Str& self, const Str& from, const Str& to);
+
+Opt<Int> simse_str_toInt(const Str& self);
+Opt<Float64> simse_str_toFloat(const Str& self);
+
+void simse_str_initByValue(Str& self, const Str& value);
+
+template <class T>
+Str simse_num_toString(const T& self);
+Str simse_char_toString(Char self);
+Str simse_bool_toString(Bool self);
+
+#include <bit>
+#include <cstring>
+
+Int simse_strCountDigits(Int64 value);
+void simse_strAddInt(char* target, Int64 value, Int count);
+StrView simse_strBoolView(Bool value);
+
+#include <algorithm>
+#include <cstdio>
+#include <filesystem>
+#include <system_error>
+
+
+Str simse_native_readFile(const Str& path);
+List<Str> simse_listFiles(const Str& dir, const Str& ext);
+List<Str> simse_listFilesDirect(const Str& dir, const Str& ext);
+Bool simse_writeFile(const Str& path, const Str& content);
+Str simse_pathCanonical(const Str& path);
+Bool simse_pathIsDirectory(const Str& path);
+Bool simse_pathExists(const Str& path);
+void simse_eprintln(const Str& text);
+
+void* __sm_native_internetOpen(const Str& agent, const Int32& accessType, Int8* proxy, Int8* proxyBypass, const Int32& flags);
+void* __sm_native_internetOpenUrl(void* session, const Str& url, Int8* headers, const Int32& headersLength, const Int32& flags, void* context);
+Int32 __sm_native_internetReadFile(void* request, Char* buffer, const Int32& toRead, Int32* read);
+Int32 __sm_native_internetCloseHandle(void* handle);
+Int32 __sm_native_internetSetOption(void* handle, const Int32& option, Int32* value, const Int32& length);
+Int32 simse_http_flags();
+Int32 simse_http_connectTimeout();
+Int32 simse_http_receiveTimeout();
+Str simse_http_errorText(const Str& step);
+void simse_http_bufferInit(List<Char>* buffer, Int32 size);
+void simse_http_append(List<Char>* out, const Char* bytes, Int32 count);
+Str simse_http_charsToStr(const List<Char>* chars);
+
+#include <filesystem>
+#include <system_error>
+
+FileStream* simse_fileStream_open(const Str& path);
+
+Str simse_resHexToBytes(const Str& self);
+Str simse_resQuoteBinary(const Str& self);
+
+#include <cstdio>
+
+inline void simse_write(const Str& value, FILE* out) {
+    std::fwrite(value.data(), 1, (std::size_t) value.size(), out);
+}
+
+inline void simse_write(StrView value, FILE* out) {
+    std::fwrite(value.ptr, 1, (std::size_t) value.len, out);
+}
+
+inline void simse_write(bool value, FILE* out) {
+    std::fputs(value ? "true" : "false", out);
+}
+
+inline void simse_write(char value, FILE* out) {
+    std::fputc((int) (unsigned char) value, out);
+}
+
+inline void simse_write(signed char value, FILE* out) {
+    std::fputc((int) (unsigned char) value, out);
+}
+
+inline void simse_write(unsigned char value, FILE* out) {
+    std::fputc((int) value, out);
+}
+
+inline void simse_write(short value, FILE* out) {
+    std::fprintf(out, "%d", (int) value);
+}
+
+inline void simse_write(int value, FILE* out) {
+    std::fprintf(out, "%d", value);
+}
+
+inline void simse_write(long value, FILE* out) {
+    std::fprintf(out, "%ld", value);
+}
+
+inline void simse_write(long long value, FILE* out) {
+    std::fprintf(out, "%lld", value);
+}
+
+inline void simse_write(float value, FILE* out) {
+    std::fprintf(out, "%g", (double) value);
+}
+
+inline void simse_write(double value, FILE* out) {
+    std::fprintf(out, "%g", value);
+}
+
+template <class T>
+inline void simse_print(const T& value, FILE* out) {
+    simse_write(value, out);
+}
+
+template <class T>
+inline void simse_println(const T& value, FILE* out) {
+    simse_write(value, out);
+    std::fputc('\n', out);
+}
 
 // src/rtl
 List<ResourceEntry> resourceStore{};
@@ -9780,9 +9780,9 @@ void ns1_emitTypeByName(ns1_Emitter* self, Str* name, Dictionary<Str, Str>* file
 // src/codegen/CgEmitType.kt
 void ns1_emitTypeDeps(ns1_Emitter* self, ns3_AstXmlNode* node, Dictionary<Str, Str>* files, Dictionary<Str, Bool>* prel, Dictionary<Str, Bool>* emitted, Dictionary<Str, Bool>* defined) {
     ns3_AstNodeAttributeKind _sm_base1, _sm_base2;
-    Str* _sm_base3, * _sm_base4, * _sm_base5, * _sm_base6, * _sm_base7, * _sm_expr12;
-    ns3_AstNodeKind _sm_base8;
-    List<ns3_AstXmlNode>* _sm_base9;
+    Str* _sm_base3, * _sm_base4, * _sm_base5, * _sm_base6, * _sm_base7, * _sm_base8, * _sm_expr12;
+    ns3_AstNodeKind _sm_base9;
+    List<ns3_AstXmlNode>* _sm_base10;
     Bool _sm_expr1;
     ns3_AstNodeCategory kind, _sm_expr2;
     Str name;
@@ -9851,14 +9851,16 @@ void ns1_emitTypeDeps(ns1_Emitter* self, ns3_AstXmlNode* node, Dictionary<Str, S
     if (_sm_expr1) goto L12;
     goto L13;
     L12:;
-    return;
-    L13:;
     _sm_base7 = &name;
     ns1_emitOneDep(self, _sm_base7, files, prel, emitted, defined);
-    _sm_base8 = ns3_AstNodeKind::TypeArg;
-    _sm_expr23 = ns2_xmlChildren(node, _sm_base8);
-    _sm_base9 = &_sm_expr23;
-    _sm_expr24 = simse_spanOf(_sm_base9);
+    return;
+    L13:;
+    _sm_base8 = &name;
+    ns1_emitOneDep(self, _sm_base8, files, prel, emitted, defined);
+    _sm_base9 = ns3_AstNodeKind::TypeArg;
+    _sm_expr23 = ns2_xmlChildren(node, _sm_base9);
+    _sm_base10 = &_sm_expr23;
+    _sm_expr24 = simse_spanOf(_sm_base10);
     _sm_for11 = iter(simse_addressOf(_sm_expr24));
     L17:;
     _sm_expr1 = advance(&_sm_for11);
@@ -28646,22 +28648,22 @@ ns3_Sections ns3_sourceGenNewSections() {
     Str _sm_expr10;
     initByValue(simse_addressOf(_sm_expr10));
     _sm_expr11 = Dictionary<Str, Str>();
-    _sm_expr12 = ns3_NamedSection{__sm_stringTable[726], _sm_expr10, _sm_expr11};
+    _sm_expr12 = ns3_NamedSection{__sm_stringTable[860], _sm_expr10, _sm_expr11};
     simse_list_append(list, _sm_expr12);
     Str _sm_expr13;
     initByValue(simse_addressOf(_sm_expr13));
     _sm_expr14 = Dictionary<Str, Str>();
-    _sm_expr15 = ns3_NamedSection{__sm_stringTable[594], _sm_expr13, _sm_expr14};
+    _sm_expr15 = ns3_NamedSection{__sm_stringTable[726], _sm_expr13, _sm_expr14};
     simse_list_append(list, _sm_expr15);
     Str _sm_expr16;
     initByValue(simse_addressOf(_sm_expr16));
     _sm_expr17 = Dictionary<Str, Str>();
-    _sm_expr18 = ns3_NamedSection{__sm_stringTable[709], _sm_expr16, _sm_expr17};
+    _sm_expr18 = ns3_NamedSection{__sm_stringTable[594], _sm_expr16, _sm_expr17};
     simse_list_append(list, _sm_expr18);
     Str _sm_expr19;
     initByValue(simse_addressOf(_sm_expr19));
     _sm_expr20 = Dictionary<Str, Str>();
-    _sm_expr21 = ns3_NamedSection{__sm_stringTable[860], _sm_expr19, _sm_expr20};
+    _sm_expr21 = ns3_NamedSection{__sm_stringTable[709], _sm_expr19, _sm_expr20};
     simse_list_append(list, _sm_expr21);
     Str _sm_expr22;
     initByValue(simse_addressOf(_sm_expr22));

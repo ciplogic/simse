@@ -119,16 +119,18 @@ data class Sections(
 }
 
 // The predefined sections in assembly order (`impl_specs/generators.md`); `current` starts at
-// `includes`, the emitter's first stage.
+// `includes`, the emitter's first stage. `types` comes before `strings` because the string
+// table is an array of `StrView` (a generated `Span<Char>`), and before `forward`/`resources`
+// so a hand-written section can spell the alias.
 fun sourceGenNewSections(): Sections {
     var list: List<NamedSection> = List<NamedSection>()
     list.append(NamedSection("includes", Str(), Dictionary<Str, Str>()))
     list.append(NamedSection("support", Str(), Dictionary<Str, Str>()))
     list.append(NamedSection("profile", Str(), Dictionary<Str, Str>()))
+    list.append(NamedSection("types", Str(), Dictionary<Str, Str>()))
     list.append(NamedSection("strings", Str(), Dictionary<Str, Str>()))
     list.append(NamedSection("resources", Str(), Dictionary<Str, Str>()))
     list.append(NamedSection("forward", Str(), Dictionary<Str, Str>()))
-    list.append(NamedSection("types", Str(), Dictionary<Str, Str>()))
     list.append(NamedSection("statics", Str(), Dictionary<Str, Str>()))
     list.append(NamedSection("prototypes", Str(), Dictionary<Str, Str>()))
     // The lambda classes and their free invoke functions: a data class at namespace scope

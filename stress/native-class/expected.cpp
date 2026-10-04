@@ -13,170 +13,6 @@ Int64 simse_nowMillis();
 Int64 simse_nowMicros();
 Int64 simse_nowNanos();
 
-#include <cstdint>
-#include <type_traits>
-
-
-template <class T>
-void simse_list_append(List<T>& self, const std::type_identity_t<T>& value);
-
-template <class T>
-List<T> simse_listOf(const List<T>* values);
-
-template <class T>
-void simse_list_removeAt(List<T>& self, Int index);
-template <class T>
-void simse_list_removeRange(List<T>& self, Int start, Int end);
-template <class T>
-Int simse_array_count(const Array<T>& self);
-template <class T>
-Array<T> simse_list_toArray(const List<T>& self);
-template <class T>
-List<T> simse_array_toList(const Array<T>& self);
-template <class T>
-Array<T> simse_arrayEmpty();
-
-void simse_str_append(Str& self, Char value);
-void simse_str_appendStr(Str& self, const Str& value);
-void simse_str_appendStrPtr(Str& self, const Str* value);
-void simse_str_reserve(Str& self, Int count);
-Str simse_int_toString(Int self);
-
-Int simse_lenOf(const Str& self);
-template <class T, int N>
-Int simse_lenOf(const SmallVector<T, N>& self);
-
-#include <cerrno>
-#include <charconv>
-#include <cstddef>
-#include <cstdlib>
-#include <system_error>
-
-
-Char simse_str_charAt(const Str& self, Int index);
-
-List<Str> simse_str_split(const Str& self, const Str& separator);
-List<Str> simse_str_split(const Str& self, Char separator);
-
-Int simse_str_find(const Str& self, const Str& sub);
-
-Int simse_str_lastIndexOf(const Str& self, const Str& sub);
-
-Str simse_str_replace(const Str& self, const Str& from, const Str& to);
-
-Opt<Int> simse_str_toInt(const Str& self);
-Opt<Float64> simse_str_toFloat(const Str& self);
-
-void simse_str_initByValue(Str& self, const Str& value);
-
-template <class T>
-Str simse_num_toString(const T& self);
-Str simse_char_toString(Char self);
-Str simse_bool_toString(Bool self);
-
-#include <algorithm>
-#include <type_traits>
-#include <utility>
-
-
-template <class K, class V>
-Dictionary<K, V> simse_dictionaryOf();
-
-template <class K, class V>
-V* simse_dict_getPtr(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
-
-template <class K, class V>
-Opt<V> simse_dict_get(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
-
-template <class K, class V>
-Bool simse_dict_has(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
-
-template <class K, class V>
-void simse_dict_insert(Dictionary<K, V>& self, const std::type_identity_t<K>& key,
-                       const std::type_identity_t<V>& value);
-
-template <class K, class V>
-void simse_dict_remove(Dictionary<K, V>& self, const std::type_identity_t<K>& key);
-
-template <class K, class V>
-Int simse_dict_size(const Dictionary<K, V>& self);
-
-template <class K, class V>
-List<K> simse_dict_keys(const Dictionary<K, V>& self);
-
-template <class K, class V>
-List<V> simse_dict_values(const Dictionary<K, V>& self);
-
-template <class K, class V>
-void simse_dict_clear(Dictionary<K, V>& self);
-
-template <class T>
-Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& value);
-
-template <class T, class F>
-void simse_list_sort(List<T>& self, F less);
-
-#include <cstdio>
-
-inline void simse_write(const Str& value, FILE* out) {
-    std::fwrite(value.data(), 1, (std::size_t) value.size(), out);
-}
-
-inline void simse_write(StrView value, FILE* out) {
-    std::fwrite(value.ptr, 1, (std::size_t) value.len, out);
-}
-
-inline void simse_write(bool value, FILE* out) {
-    std::fputs(value ? "true" : "false", out);
-}
-
-inline void simse_write(char value, FILE* out) {
-    std::fputc((int) (unsigned char) value, out);
-}
-
-inline void simse_write(signed char value, FILE* out) {
-    std::fputc((int) (unsigned char) value, out);
-}
-
-inline void simse_write(unsigned char value, FILE* out) {
-    std::fputc((int) value, out);
-}
-
-inline void simse_write(short value, FILE* out) {
-    std::fprintf(out, "%d", (int) value);
-}
-
-inline void simse_write(int value, FILE* out) {
-    std::fprintf(out, "%d", value);
-}
-
-inline void simse_write(long value, FILE* out) {
-    std::fprintf(out, "%ld", value);
-}
-
-inline void simse_write(long long value, FILE* out) {
-    std::fprintf(out, "%lld", value);
-}
-
-inline void simse_write(float value, FILE* out) {
-    std::fprintf(out, "%g", (double) value);
-}
-
-inline void simse_write(double value, FILE* out) {
-    std::fprintf(out, "%g", value);
-}
-
-template <class T>
-inline void simse_print(const T& value, FILE* out) {
-    simse_write(value, out);
-}
-
-template <class T>
-inline void simse_println(const T& value, FILE* out) {
-    simse_write(value, out);
-    std::fputc('\n', out);
-}
-
 template <class T>
 struct Opt;
 template <class T>
@@ -473,6 +309,170 @@ struct ns1_Handle {
     Int flags;
 };
 SIMSE_PACK_POP
+
+#include <cstdint>
+#include <type_traits>
+
+
+template <class T>
+void simse_list_append(List<T>& self, const std::type_identity_t<T>& value);
+
+template <class T>
+List<T> simse_listOf(const List<T>* values);
+
+template <class T>
+void simse_list_removeAt(List<T>& self, Int index);
+template <class T>
+void simse_list_removeRange(List<T>& self, Int start, Int end);
+template <class T>
+Int simse_array_count(const Array<T>& self);
+template <class T>
+Array<T> simse_list_toArray(const List<T>& self);
+template <class T>
+List<T> simse_array_toList(const Array<T>& self);
+template <class T>
+Array<T> simse_arrayEmpty();
+
+void simse_str_append(Str& self, Char value);
+void simse_str_appendStr(Str& self, const Str& value);
+void simse_str_appendStrPtr(Str& self, const Str* value);
+void simse_str_reserve(Str& self, Int count);
+Str simse_int_toString(Int self);
+
+Int simse_lenOf(const Str& self);
+template <class T, int N>
+Int simse_lenOf(const SmallVector<T, N>& self);
+
+#include <cerrno>
+#include <charconv>
+#include <cstddef>
+#include <cstdlib>
+#include <system_error>
+
+
+Char simse_str_charAt(const Str& self, Int index);
+
+List<Str> simse_str_split(const Str& self, const Str& separator);
+List<Str> simse_str_split(const Str& self, Char separator);
+
+Int simse_str_find(const Str& self, const Str& sub);
+
+Int simse_str_lastIndexOf(const Str& self, const Str& sub);
+
+Str simse_str_replace(const Str& self, const Str& from, const Str& to);
+
+Opt<Int> simse_str_toInt(const Str& self);
+Opt<Float64> simse_str_toFloat(const Str& self);
+
+void simse_str_initByValue(Str& self, const Str& value);
+
+template <class T>
+Str simse_num_toString(const T& self);
+Str simse_char_toString(Char self);
+Str simse_bool_toString(Bool self);
+
+#include <algorithm>
+#include <type_traits>
+#include <utility>
+
+
+template <class K, class V>
+Dictionary<K, V> simse_dictionaryOf();
+
+template <class K, class V>
+V* simse_dict_getPtr(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
+
+template <class K, class V>
+Opt<V> simse_dict_get(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
+
+template <class K, class V>
+Bool simse_dict_has(const Dictionary<K, V>& self, const std::type_identity_t<K>& key);
+
+template <class K, class V>
+void simse_dict_insert(Dictionary<K, V>& self, const std::type_identity_t<K>& key,
+                       const std::type_identity_t<V>& value);
+
+template <class K, class V>
+void simse_dict_remove(Dictionary<K, V>& self, const std::type_identity_t<K>& key);
+
+template <class K, class V>
+Int simse_dict_size(const Dictionary<K, V>& self);
+
+template <class K, class V>
+List<K> simse_dict_keys(const Dictionary<K, V>& self);
+
+template <class K, class V>
+List<V> simse_dict_values(const Dictionary<K, V>& self);
+
+template <class K, class V>
+void simse_dict_clear(Dictionary<K, V>& self);
+
+template <class T>
+Bool simse_list_contains(const List<T>& self, const std::type_identity_t<T>& value);
+
+template <class T, class F>
+void simse_list_sort(List<T>& self, F less);
+
+#include <cstdio>
+
+inline void simse_write(const Str& value, FILE* out) {
+    std::fwrite(value.data(), 1, (std::size_t) value.size(), out);
+}
+
+inline void simse_write(StrView value, FILE* out) {
+    std::fwrite(value.ptr, 1, (std::size_t) value.len, out);
+}
+
+inline void simse_write(bool value, FILE* out) {
+    std::fputs(value ? "true" : "false", out);
+}
+
+inline void simse_write(char value, FILE* out) {
+    std::fputc((int) (unsigned char) value, out);
+}
+
+inline void simse_write(signed char value, FILE* out) {
+    std::fputc((int) (unsigned char) value, out);
+}
+
+inline void simse_write(unsigned char value, FILE* out) {
+    std::fputc((int) value, out);
+}
+
+inline void simse_write(short value, FILE* out) {
+    std::fprintf(out, "%d", (int) value);
+}
+
+inline void simse_write(int value, FILE* out) {
+    std::fprintf(out, "%d", value);
+}
+
+inline void simse_write(long value, FILE* out) {
+    std::fprintf(out, "%ld", value);
+}
+
+inline void simse_write(long long value, FILE* out) {
+    std::fprintf(out, "%lld", value);
+}
+
+inline void simse_write(float value, FILE* out) {
+    std::fprintf(out, "%g", (double) value);
+}
+
+inline void simse_write(double value, FILE* out) {
+    std::fprintf(out, "%g", value);
+}
+
+template <class T>
+inline void simse_print(const T& value, FILE* out) {
+    simse_write(value, out);
+}
+
+template <class T>
+inline void simse_println(const T& value, FILE* out) {
+    simse_write(value, out);
+    std::fputc('\n', out);
+}
 
 Str substr(StrView* self, Int from, Int count);
 Str toString(StrView* self);

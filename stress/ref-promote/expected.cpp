@@ -13,6 +13,14 @@ Int64 simse_nowMillis();
 Int64 simse_nowMicros();
 Int64 simse_nowNanos();
 
+struct ns1_Cell;
+// stress/ref-promote/src/main.kt
+SIMSE_PACK_PUSH
+struct ns1_Cell {
+    Int value;
+};
+SIMSE_PACK_POP
+
 #include <cstdint>
 #include <type_traits>
 
@@ -102,14 +110,6 @@ inline void simse_println(const T& value, FILE* out) {
     simse_write(value, out);
     std::fputc('\n', out);
 }
-
-struct ns1_Cell;
-// stress/ref-promote/src/main.kt
-SIMSE_PACK_PUSH
-struct ns1_Cell {
-    Int value;
-};
-SIMSE_PACK_POP
 
 void ns1_add(ns1_Cell* self, Int n);
 Int ns1_bump();

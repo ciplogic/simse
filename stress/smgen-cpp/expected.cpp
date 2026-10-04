@@ -16,117 +16,6 @@ Int64 simse_nowMillis();
 Int64 simse_nowMicros();
 Int64 simse_nowNanos();
 
-// The program's string literals: one pool, and two run-length encoded index
-// series (offsets as deltas, then lengths), each as what to subtract from the
-// previous value; strtable.hpp has the stream format.
-static const Int __sm_stringCount = 3;
-static const char __sm_stringPool[] =
-    "banana" "NA" "na" 
-;
-static const Int16 __sm_stringStarts[] = {3,3,0,-6,4};
-static const Int16 __sm_stringLens[] = {3,3,-6,4,0};
-static_assert(sizeof(__sm_stringPool) - 1 == 10, "the string pool and its length index disagree");
-static StrView __sm_stringTable[__sm_stringCount];
-static struct __SmStringTableInitType {
-    __SmStringTableInitType() {
-        Int starts[__sm_stringCount];
-        Int lens[__sm_stringCount];
-        simse_strTableExpand(__sm_stringStarts, starts, __sm_stringCount);
-        simse_strTableExpand(__sm_stringLens, lens, __sm_stringCount);
-        simse_strTableDecode(__sm_stringPool, starts, lens, __sm_stringTable,
-            __sm_stringCount);
-    }
-} __sm_stringTableInit;
-
-#include <cerrno>
-#include <charconv>
-#include <cstddef>
-#include <cstdlib>
-#include <system_error>
-
-
-Char simse_str_charAt(const Str& self, Int index);
-
-List<Str> simse_str_split(const Str& self, const Str& separator);
-List<Str> simse_str_split(const Str& self, Char separator);
-
-Int simse_str_find(const Str& self, const Str& sub);
-
-Int simse_str_lastIndexOf(const Str& self, const Str& sub);
-
-Str simse_str_replace(const Str& self, const Str& from, const Str& to);
-
-Opt<Int> simse_str_toInt(const Str& self);
-Opt<Float64> simse_str_toFloat(const Str& self);
-
-void simse_str_initByValue(Str& self, const Str& value);
-
-template <class T>
-Str simse_num_toString(const T& self);
-Str simse_char_toString(Char self);
-Str simse_bool_toString(Bool self);
-
-#include <cstdio>
-
-inline void simse_write(const Str& value, FILE* out) {
-    std::fwrite(value.data(), 1, (std::size_t) value.size(), out);
-}
-
-inline void simse_write(StrView value, FILE* out) {
-    std::fwrite(value.ptr, 1, (std::size_t) value.len, out);
-}
-
-inline void simse_write(bool value, FILE* out) {
-    std::fputs(value ? "true" : "false", out);
-}
-
-inline void simse_write(char value, FILE* out) {
-    std::fputc((int) (unsigned char) value, out);
-}
-
-inline void simse_write(signed char value, FILE* out) {
-    std::fputc((int) (unsigned char) value, out);
-}
-
-inline void simse_write(unsigned char value, FILE* out) {
-    std::fputc((int) value, out);
-}
-
-inline void simse_write(short value, FILE* out) {
-    std::fprintf(out, "%d", (int) value);
-}
-
-inline void simse_write(int value, FILE* out) {
-    std::fprintf(out, "%d", value);
-}
-
-inline void simse_write(long value, FILE* out) {
-    std::fprintf(out, "%ld", value);
-}
-
-inline void simse_write(long long value, FILE* out) {
-    std::fprintf(out, "%lld", value);
-}
-
-inline void simse_write(float value, FILE* out) {
-    std::fprintf(out, "%g", (double) value);
-}
-
-inline void simse_write(double value, FILE* out) {
-    std::fprintf(out, "%g", value);
-}
-
-template <class T>
-inline void simse_print(const T& value, FILE* out) {
-    simse_write(value, out);
-}
-
-template <class T>
-inline void simse_println(const T& value, FILE* out) {
-    simse_write(value, out);
-    std::fputc('\n', out);
-}
-
 template <class T>
 struct Opt;
 template <class T>
@@ -406,6 +295,117 @@ template <class T>
 requires (!std::is_same_v<Str, T>)
 inline void initByValue(Res<T>* self, Str value) {
     self->setError(std::move(value));
+}
+
+// The program's string literals: one pool, and two run-length encoded index
+// series (offsets as deltas, then lengths), each as what to subtract from the
+// previous value; strtable.hpp has the stream format.
+static const Int __sm_stringCount = 3;
+static const char __sm_stringPool[] =
+    "banana" "NA" "na" 
+;
+static const Int16 __sm_stringStarts[] = {3,3,0,-6,4};
+static const Int16 __sm_stringLens[] = {3,3,-6,4,0};
+static_assert(sizeof(__sm_stringPool) - 1 == 10, "the string pool and its length index disagree");
+static StrView __sm_stringTable[__sm_stringCount];
+static struct __SmStringTableInitType {
+    __SmStringTableInitType() {
+        Int starts[__sm_stringCount];
+        Int lens[__sm_stringCount];
+        simse_strTableExpand(__sm_stringStarts, starts, __sm_stringCount);
+        simse_strTableExpand(__sm_stringLens, lens, __sm_stringCount);
+        simse_strTableDecode(__sm_stringPool, starts, lens, __sm_stringTable,
+            __sm_stringCount);
+    }
+} __sm_stringTableInit;
+
+#include <cerrno>
+#include <charconv>
+#include <cstddef>
+#include <cstdlib>
+#include <system_error>
+
+
+Char simse_str_charAt(const Str& self, Int index);
+
+List<Str> simse_str_split(const Str& self, const Str& separator);
+List<Str> simse_str_split(const Str& self, Char separator);
+
+Int simse_str_find(const Str& self, const Str& sub);
+
+Int simse_str_lastIndexOf(const Str& self, const Str& sub);
+
+Str simse_str_replace(const Str& self, const Str& from, const Str& to);
+
+Opt<Int> simse_str_toInt(const Str& self);
+Opt<Float64> simse_str_toFloat(const Str& self);
+
+void simse_str_initByValue(Str& self, const Str& value);
+
+template <class T>
+Str simse_num_toString(const T& self);
+Str simse_char_toString(Char self);
+Str simse_bool_toString(Bool self);
+
+#include <cstdio>
+
+inline void simse_write(const Str& value, FILE* out) {
+    std::fwrite(value.data(), 1, (std::size_t) value.size(), out);
+}
+
+inline void simse_write(StrView value, FILE* out) {
+    std::fwrite(value.ptr, 1, (std::size_t) value.len, out);
+}
+
+inline void simse_write(bool value, FILE* out) {
+    std::fputs(value ? "true" : "false", out);
+}
+
+inline void simse_write(char value, FILE* out) {
+    std::fputc((int) (unsigned char) value, out);
+}
+
+inline void simse_write(signed char value, FILE* out) {
+    std::fputc((int) (unsigned char) value, out);
+}
+
+inline void simse_write(unsigned char value, FILE* out) {
+    std::fputc((int) value, out);
+}
+
+inline void simse_write(short value, FILE* out) {
+    std::fprintf(out, "%d", (int) value);
+}
+
+inline void simse_write(int value, FILE* out) {
+    std::fprintf(out, "%d", value);
+}
+
+inline void simse_write(long value, FILE* out) {
+    std::fprintf(out, "%ld", value);
+}
+
+inline void simse_write(long long value, FILE* out) {
+    std::fprintf(out, "%lld", value);
+}
+
+inline void simse_write(float value, FILE* out) {
+    std::fprintf(out, "%g", (double) value);
+}
+
+inline void simse_write(double value, FILE* out) {
+    std::fprintf(out, "%g", value);
+}
+
+template <class T>
+inline void simse_print(const T& value, FILE* out) {
+    simse_write(value, out);
+}
+
+template <class T>
+inline void simse_println(const T& value, FILE* out) {
+    simse_write(value, out);
+    std::fputc('\n', out);
 }
 
 template <class T>

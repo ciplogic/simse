@@ -377,7 +377,7 @@ fun Emitter.run(): Res<Str> {
     // are threaded to the emitters rather than stored on the emitter.
     val facts: SemFacts = this.collectFacts()
     // The assembly phases, in order (impl_specs/generators.md): includes, support,
-    // profile, strings, resources, forward, types, statics, prototypes, closures, init,
+    // profile, types, strings, resources, forward, statics, prototypes, closures, init,
     // bodies. `support` and `forward` are not begun here because a generator writes them,
     // and `closures` is written by the emitter's body pass (`emitClosureClasses`).
     this.sections.begin("includes")
