@@ -5,7 +5,7 @@
 
 template <class T>
 void simse_strTableExpand(const T* stream, Int* out, Int count);
-void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, StrView* table, Int count);
+void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, Span<Char>* table, Int count);
 
 #include <chrono>
 
@@ -14,10 +14,20 @@ Int64 simse_nowMicros();
 Int64 simse_nowNanos();
 
 template <class T>
+struct Span;
+template <class T>
 struct Opt;
 template <class T>
 struct Res;
 struct ns1_Tag;
+// src/rtl
+SIMSE_PACK_PUSH
+template <class T>
+struct Span {
+    T* ptr;
+    Int len;
+};
+SIMSE_PACK_POP
 // src/rtl
 enum class SmOptTypes { None, Value };
 inline SmOptTypes simse_SmOptTypes_fromInt(Int value) { return (SmOptTypes) value; }
@@ -504,6 +514,12 @@ inline void simse_println(const T& value, FILE* out) {
 }
 
 template <class T>
+Int size(Span<T>* self);
+template <class T>
+Bool isEmpty(Span<T>* self);
+template <class T>
+T at(Span<T>* self, Int index);
+template <class T>
 T get(Span<T>* self, Int index);
 template <class T>
 void set(Span<T>* self, Int index, T value);
@@ -557,7 +573,7 @@ Bool advance(Span_iterValues_yieldable<T>* self) {
     if (_sm_base3) goto LY1;
     self->i = 0;
     _sm_base6 = self->_sm_self;
-    _sm_base5 = _sm_base6->size();
+    _sm_base5 = size(_sm_base6);
     self->len = _sm_base5;
     L1:;
     _sm_base7 = self->i;
@@ -608,6 +624,27 @@ Str ns1_fixed(Str* op);
 Int ns1_partWhenStrings();
 
 template <class T>
+Int size(Span<T>* self) {
+    Int _sm_expr1;
+    _sm_expr1 = self->len;
+    return _sm_expr1;
+}
+template <class T>
+Bool isEmpty(Span<T>* self) {
+    Int _sm_expr1;
+    Bool _sm_expr2;
+    _sm_expr1 = self->len;
+    _sm_expr2 = _sm_expr1 <= 0;
+    return _sm_expr2;
+}
+template <class T>
+T at(Span<T>* self, Int index) {
+    T* _sm_base1;
+    _sm_base1 = self->ptr;
+    auto _sm_expr1 = _sm_base1[index];
+    return _sm_expr1;
+}
+template <class T>
 T get(Span<T>* self, Int index) {
     T* _sm_base1;
     _sm_base1 = self->ptr;
@@ -622,7 +659,7 @@ void set(Span<T>* self, Int index, T value) {
 }
 Char charAt(StrView* self, Int index) {
     Char _sm_expr1;
-    _sm_expr1 = self->at(index);
+    _sm_expr1 = at(self, index);
     return _sm_expr1;
 }
 Bool startsWith(StrView* self, Str* text) {
@@ -653,7 +690,7 @@ Int find(StrView* self, Str sub) {
     L1:;
     return 0;
     L2:;
-    len = self->size();
+    len = size(self);
     _sm_expr1 = needle > len;
     if (_sm_expr1) goto L3;
     goto L4;
@@ -706,7 +743,7 @@ Int indexOf(StrView* self, Str* sub) {
 Str substr(StrView* self, Int from, Int count) {
     Int len, begin, end, _sm_expr6;
     Bool _sm_expr1;
-    len = self->size();
+    len = size(self);
     begin = from;
     _sm_expr1 = begin < 0;
     if (_sm_expr1) goto L1;
@@ -746,7 +783,7 @@ Str substr(StrView* self, Int from, Int count) {
 Str toString(StrView* self) {
     Int _sm_expr1;
     Str _sm_expr2;
-    _sm_expr1 = self->size();
+    _sm_expr1 = size(self);
     _sm_expr2 = substr(self, 0, _sm_expr1);
     return _sm_expr2;
 }
@@ -919,7 +956,7 @@ Str fmtStr(StrView fmt, List<Str>* items) {
     points = 0;
     i = 0;
     L3:;
-    _sm_expr2 = fmt.size();
+    _sm_expr2 = size(simse_addressOf(fmt));
     _sm_expr1 = i < _sm_expr2;
     if (!(_sm_expr1)) goto L4;
     _sm_expr4 = charAt(simse_addressOf(fmt), i);
@@ -940,12 +977,12 @@ Str fmtStr(StrView fmt, List<Str>* items) {
     return fmt;
     L8:;
     out = __sm_stringTable[96];
-    _sm_expr8 = fmt.size();
+    _sm_expr8 = size(simse_addressOf(fmt));
     simse_str_reserve(out, _sm_expr8);
     used = 0;
     i = 0;
     L9:;
-    _sm_expr2 = fmt.size();
+    _sm_expr2 = size(simse_addressOf(fmt));
     _sm_expr1 = i < _sm_expr2;
     if (!(_sm_expr1)) goto L10;
     ch = charAt(simse_addressOf(fmt), i);
@@ -979,7 +1016,7 @@ Str fmtStrWith(Char separator, StrView templateText, List<Str>* items) {
     points = 0;
     i = 0;
     L3:;
-    _sm_expr2 = templateText.size();
+    _sm_expr2 = size(simse_addressOf(templateText));
     _sm_expr1 = i < _sm_expr2;
     if (!(_sm_expr1)) goto L4;
     _sm_expr4 = charAt(simse_addressOf(templateText), i);
@@ -1000,12 +1037,12 @@ Str fmtStrWith(Char separator, StrView templateText, List<Str>* items) {
     return templateText;
     L8:;
     out = __sm_stringTable[96];
-    _sm_expr8 = templateText.size();
+    _sm_expr8 = size(simse_addressOf(templateText));
     simse_str_reserve(out, _sm_expr8);
     used = 0;
     i = 0;
     L9:;
-    _sm_expr2 = templateText.size();
+    _sm_expr2 = size(simse_addressOf(templateText));
     _sm_expr1 = i < _sm_expr2;
     if (!(_sm_expr1)) goto L10;
     ch = charAt(simse_addressOf(templateText), i);
@@ -1675,7 +1712,7 @@ Int ns1_partRawStrings() {
     simse_println((_sm_expr6), stdout);
     _sm_base4 = &text;
     _sm_when1_v = simse_spanOfStr(_sm_base4);
-    _sm_when1_n = _sm_when1_v.size();
+    _sm_when1_n = size(simse_addressOf(_sm_when1_v));
     _sm_expr7 = _sm_when1_n == 39;
     if (_sm_expr7) goto L3;
     goto L2;
@@ -1789,7 +1826,7 @@ Str ns1_classify(Str* op) {
     Bool _sm_expr1;
     Char _sm_expr3;
     _sm_when2_v = simse_spanOfStr(op);
-    _sm_when2_n = _sm_when2_v.size();
+    _sm_when2_n = size(simse_addressOf(_sm_when2_v));
     _sm_expr1 = _sm_when2_n == 0;
     if (_sm_expr1) goto L1;
     goto L2;
@@ -1894,7 +1931,7 @@ Str ns1_classifyPtr(Str* op) {
     Char _sm_expr3;
     _sm_base1 = op;
     _sm_when3_v = simse_spanOfStr(_sm_base1);
-    _sm_when3_n = _sm_when3_v.size();
+    _sm_when3_n = size(simse_addressOf(_sm_when3_v));
     _sm_expr1 = _sm_when3_n == 0;
     if (_sm_expr1) goto L1;
     _sm_expr1 = _sm_when3_n == 1;
@@ -1934,7 +1971,7 @@ Str ns1_viewKind(StrView v) {
     Bool _sm_expr1;
     Char _sm_expr2;
     _sm_when4_v = simse_spanOfStr(v);
-    _sm_when4_n = _sm_when4_v.size();
+    _sm_when4_n = size(simse_addressOf(_sm_when4_v));
     _sm_expr1 = _sm_when4_n == 1;
     if (_sm_expr1) goto L4;
     goto L3;
@@ -2489,4 +2526,8 @@ Int64 simse_nowMicros() {
 Int64 simse_nowNanos() {
     const auto now = std::chrono::steady_clock::now().time_since_epoch();
     return (Int64) std::chrono::duration_cast<std::chrono::nanoseconds>(now).count();
+}
+
+inline SmString::SmString(const Span<Char>& view)
+    : SmString(reinterpret_cast<const char*>(view.ptr), view.len) {
 }

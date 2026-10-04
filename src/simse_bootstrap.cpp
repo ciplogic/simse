@@ -74,7 +74,7 @@
 
 template <class T>
 void simse_strTableExpand(const T* stream, Int* out, Int count);
-void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, StrView* table, Int count);
+void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, Span<Char>* table, Int count);
 
 #include <chrono>
 
@@ -82,6 +82,8 @@ Int64 simse_nowMillis();
 Int64 simse_nowMicros();
 Int64 simse_nowNanos();
 
+template <class T>
+struct Span;
 template <class T>
 struct Opt;
 template <class T>
@@ -167,6 +169,14 @@ struct ns14_SemExtFact;
 struct ns14_SemFacts;
 struct ns14_SemBody;
 struct ns14_SemInfer;
+// src/rtl
+SIMSE_PACK_PUSH
+template <class T>
+struct Span {
+    T* ptr;
+    Int len;
+};
+SIMSE_PACK_POP
 // src/rtl
 enum class SmOptTypes { None, Value };
 inline SmOptTypes simse_SmOptTypes_fromInt(Int value) { return (SmOptTypes) value; }
@@ -1643,6 +1653,16 @@ Bool ns12_profNanosFlag{};
 Dictionary<Str, ns3_AstXmlNode> ns14_semNoScope{};
 
 template <class T>
+Int size(Span<T>* self);
+template <class T>
+Bool isEmpty(Span<T>* self);
+template <class T>
+T at(Span<T>* self, Int index);
+template <class T>
+Span<T> slice(Span<T>* self, Int start);
+template <class T>
+Span<T> slice(Span<T>* self, Int start, Int count);
+template <class T>
 T* atPtr(Span<T>* self, Int index);
 template <class T>
 T get(Span<T>* self, Int index);
@@ -1699,7 +1719,7 @@ Bool advance(Span_iterValues_yieldable<T>* self) {
     if (_sm_base3) goto LY1;
     self->i = 0;
     _sm_base6 = self->_sm_self;
-    _sm_base5 = _sm_base6->size();
+    _sm_base5 = size(_sm_base6);
     self->len = _sm_base5;
     L1:;
     _sm_base7 = self->i;
@@ -1747,7 +1767,7 @@ Bool advance(Span_iter_yieldable<T>* self) {
     if (_sm_base3) goto LY1;
     self->i = 0;
     _sm_base6 = self->_sm_self;
-    _sm_base5 = _sm_base6->size();
+    _sm_base5 = size(_sm_base6);
     self->len = _sm_base5;
     L1:;
     _sm_base7 = self->i;
@@ -3337,6 +3357,46 @@ void simse_initStatics() {
 }
 
 template <class T>
+Int size(Span<T>* self) {
+    Int _sm_expr1;
+    _sm_expr1 = self->len;
+    return _sm_expr1;
+}
+template <class T>
+Bool isEmpty(Span<T>* self) {
+    Int _sm_expr1;
+    Bool _sm_expr2;
+    _sm_expr1 = self->len;
+    _sm_expr2 = _sm_expr1 <= 0;
+    return _sm_expr2;
+}
+template <class T>
+T at(Span<T>* self, Int index) {
+    T* _sm_base1;
+    _sm_base1 = self->ptr;
+    auto _sm_expr1 = _sm_base1[index];
+    return _sm_expr1;
+}
+template <class T>
+Span<T> slice(Span<T>* self, Int start) {
+    T* _sm_base3;
+    Int _sm_expr1, _sm_expr2;
+    Span<T> _sm_expr3;
+    _sm_expr1 = self->len;
+    _sm_expr2 = _sm_expr1 - start;
+    _sm_base3 = self->ptr;
+    _sm_expr3 = Span<T>{simse_addressOf(_sm_base3[start]), _sm_expr2};
+    return _sm_expr3;
+}
+template <class T>
+Span<T> slice(Span<T>* self, Int start, Int count) {
+    T* _sm_base3;
+    Span<T> _sm_expr1;
+    _sm_base3 = self->ptr;
+    _sm_expr1 = Span<T>{simse_addressOf(_sm_base3[start]), count};
+    return _sm_expr1;
+}
+template <class T>
 T* atPtr(Span<T>* self, Int index) {
     T* _sm_base2;
     _sm_base2 = self->ptr;
@@ -3358,7 +3418,7 @@ void set(Span<T>* self, Int index, T value) {
 }
 Char charAt(StrView* self, Int index) {
     Char _sm_expr1;
-    _sm_expr1 = self->at(index);
+    _sm_expr1 = at(self, index);
     return _sm_expr1;
 }
 Bool startsWith(StrView* self, Str* text) {
@@ -3389,7 +3449,7 @@ Int find(StrView* self, Str sub) {
     L1:;
     return 0;
     L2:;
-    len = self->size();
+    len = size(self);
     _sm_expr1 = needle > len;
     if (_sm_expr1) goto L3;
     goto L4;
@@ -3442,7 +3502,7 @@ Int indexOf(StrView* self, Str* sub) {
 Str substr(StrView* self, Int from, Int count) {
     Int len, begin, end, _sm_expr6;
     Bool _sm_expr1;
-    len = self->size();
+    len = size(self);
     begin = from;
     _sm_expr1 = begin < 0;
     if (_sm_expr1) goto L1;
@@ -3482,7 +3542,7 @@ Str substr(StrView* self, Int from, Int count) {
 Str toString(StrView* self) {
     Int _sm_expr1;
     Str _sm_expr2;
-    _sm_expr1 = self->size();
+    _sm_expr1 = size(self);
     _sm_expr2 = substr(self, 0, _sm_expr1);
     return _sm_expr2;
 }
@@ -3631,7 +3691,7 @@ void resourcesInstall(StrView* table, Int tableCount, Int* index, Int count) {
     Int i, _sm_expr2, _sm_expr5;
     Bool _sm_expr1;
     ResourceEntry entry;
-    views = Span<StrView>(table, tableCount);
+    views = Span<StrView>{table, tableCount};
     i = 0;
     L1:;
     _sm_expr1 = i < count;
@@ -3689,7 +3749,7 @@ Str fmtStr(StrView fmt, List<Str>* items) {
     points = 0;
     i = 0;
     L3:;
-    _sm_expr2 = fmt.size();
+    _sm_expr2 = size(simse_addressOf(fmt));
     _sm_expr1 = i < _sm_expr2;
     if (!(_sm_expr1)) goto L4;
     _sm_expr4 = charAt(simse_addressOf(fmt), i);
@@ -3710,12 +3770,12 @@ Str fmtStr(StrView fmt, List<Str>* items) {
     return fmt;
     L8:;
     out = __sm_stringTable[1063];
-    _sm_expr8 = fmt.size();
+    _sm_expr8 = size(simse_addressOf(fmt));
     simse_str_reserve(out, _sm_expr8);
     used = 0;
     i = 0;
     L9:;
-    _sm_expr2 = fmt.size();
+    _sm_expr2 = size(simse_addressOf(fmt));
     _sm_expr1 = i < _sm_expr2;
     if (!(_sm_expr1)) goto L10;
     ch = charAt(simse_addressOf(fmt), i);
@@ -3749,7 +3809,7 @@ Str fmtStrWith(Char separator, StrView templateText, List<Str>* items) {
     points = 0;
     i = 0;
     L3:;
-    _sm_expr2 = templateText.size();
+    _sm_expr2 = size(simse_addressOf(templateText));
     _sm_expr1 = i < _sm_expr2;
     if (!(_sm_expr1)) goto L4;
     _sm_expr4 = charAt(simse_addressOf(templateText), i);
@@ -3770,12 +3830,12 @@ Str fmtStrWith(Char separator, StrView templateText, List<Str>* items) {
     return templateText;
     L8:;
     out = __sm_stringTable[1063];
-    _sm_expr8 = templateText.size();
+    _sm_expr8 = size(simse_addressOf(templateText));
     simse_str_reserve(out, _sm_expr8);
     used = 0;
     i = 0;
     L9:;
-    _sm_expr2 = templateText.size();
+    _sm_expr2 = size(simse_addressOf(templateText));
     _sm_expr1 = i < _sm_expr2;
     if (!(_sm_expr1)) goto L10;
     ch = charAt(simse_addressOf(templateText), i);
@@ -7847,6 +7907,8 @@ Dictionary<Str, Bool> ns1_computeEmittedTypes(ns1_Emitter* self) {
     simse_dict_insert(out, _sm_base3, true);
     goto L1;
     L2:;
+    simse_dict_insert(out, __sm_stringTable[691], true);
+    simse_dict_insert(out, __sm_stringTable[895], true);
     changed = true;
     L3:;
     if (!(changed)) goto L4;
@@ -24402,7 +24464,7 @@ Int ns2_opPrecedenceRank(Str* op) {
     Bool _sm_expr1;
     Char _sm_expr10;
     _sm_when1_v = simse_spanOfStr(op);
-    _sm_when1_n = _sm_when1_v.size();
+    _sm_when1_n = size(simse_addressOf(_sm_when1_v));
     _sm_expr1 = _sm_when1_n == 2;
     if (_sm_expr1) goto L3;
     goto L2;
@@ -25951,7 +26013,7 @@ int main(int argc, char** argv) {
     arg = args[i];
     _sm_base1 = &arg;
     _sm_when2_v = simse_spanOfStr(_sm_base1);
-    _sm_when2_n = _sm_when2_v.size();
+    _sm_when2_n = size(simse_addressOf(_sm_when2_v));
     _sm_expr2 = _sm_when2_n == 2;
     if (_sm_expr2) goto L5;
     goto L4;
@@ -29409,10 +29471,10 @@ Int ns7_matchAllOfRule(StrView view, ns7_CharPredicate predicate) {
     Char _sm_expr3;
     i = 0;
     L1:;
-    _sm_expr1 = view.size();
+    _sm_expr1 = size(simse_addressOf(view));
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L2;
-    _sm_expr3 = view.at(i);
+    _sm_expr3 = at(simse_addressOf(view), i);
     _sm_expr2 = predicate(_sm_expr3);
     _sm_expr5 = !_sm_expr2;
     if (_sm_expr5) goto L3;
@@ -29423,7 +29485,7 @@ Int ns7_matchAllOfRule(StrView view, ns7_CharPredicate predicate) {
     i = i + 1;
     goto L1;
     L2:;
-    _sm_expr1 = view.size();
+    _sm_expr1 = size(simse_addressOf(view));
     return _sm_expr1;
 }
 // src/lex/Scanner.kt
@@ -29431,14 +29493,14 @@ Int ns7_matchAllOfRules(StrView view, ns7_CharPredicate first, ns7_CharPredicate
     Int _sm_expr1, i;
     Bool _sm_expr2, _sm_expr5;
     Char _sm_expr3, _sm_expr8;
-    _sm_expr1 = view.size();
+    _sm_expr1 = size(simse_addressOf(view));
     _sm_expr2 = _sm_expr1 == 0;
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
     return 0;
     L2:;
-    _sm_expr3 = view.at(0);
+    _sm_expr3 = at(simse_addressOf(view), 0);
     _sm_expr2 = first(_sm_expr3);
     _sm_expr5 = !_sm_expr2;
     if (_sm_expr5) goto L3;
@@ -29450,7 +29512,7 @@ Int ns7_matchAllOfRules(StrView view, ns7_CharPredicate first, ns7_CharPredicate
     L5:;
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L6;
-    _sm_expr8 = view.at(i);
+    _sm_expr8 = at(simse_addressOf(view), i);
     _sm_expr2 = rest(_sm_expr8);
     _sm_expr5 = !_sm_expr2;
     if (_sm_expr5) goto L7;
@@ -29481,14 +29543,14 @@ Int ns7_tableMatch(StrView view, List<Str>* table, Bool exact) {
     Int _sm_expr1, i, length;
     Bool _sm_expr2;
     Char first, _sm_expr6;
-    _sm_expr1 = view.size();
+    _sm_expr1 = size(simse_addressOf(view));
     _sm_expr2 = _sm_expr1 == 0;
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
     return 0;
     L2:;
-    first = view.at(0);
+    first = at(simse_addressOf(view), 0);
     i = 0;
     L3:;
     _sm_expr1 = simse_lenOf((*table));
@@ -29503,13 +29565,13 @@ Int ns7_tableMatch(StrView view, List<Str>* table, Bool exact) {
     _sm_expr6 = (*entry)[0];
     _sm_expr2 = _sm_expr6 != first;
     if (_sm_expr2) goto L3;
-    _sm_expr1 = view.size();
+    _sm_expr1 = size(simse_addressOf(view));
     _sm_expr2 = _sm_expr1 < length;
     if (_sm_expr2) goto L3;
     if (exact) goto L11;
     goto L9;
     L11:;
-    _sm_expr1 = view.size();
+    _sm_expr1 = size(simse_addressOf(view));
     _sm_expr2 = _sm_expr1 != length;
     if (_sm_expr2) goto L3;
     L9:;
@@ -29554,14 +29616,14 @@ Int ns7_matchEndOfLine(StrView view) {
     Int _sm_expr1;
     Bool _sm_expr2;
     Char ch, _sm_expr7;
-    _sm_expr1 = view.size();
+    _sm_expr1 = size(simse_addressOf(view));
     _sm_expr2 = _sm_expr1 == 0;
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
     return 0;
     L2:;
-    ch = view.at(0);
+    ch = at(simse_addressOf(view), 0);
     _sm_expr2 = ch == '\n';
     if (_sm_expr2) goto L3;
     goto L4;
@@ -29576,7 +29638,7 @@ Int ns7_matchEndOfLine(StrView view) {
     if (_sm_expr2) goto L10;
     goto L9;
     L10:;
-    _sm_expr7 = view.at(1);
+    _sm_expr7 = at(simse_addressOf(view), 1);
     _sm_expr2 = _sm_expr7 == '\n';
     if (_sm_expr2) goto L8;
     goto L9;
@@ -29598,17 +29660,17 @@ Int ns7_matchAttribute(StrView view) {
     Int _sm_expr1, i;
     Bool _sm_expr2, _sm_expr7;
     Char _sm_expr3, _sm_expr5, _sm_expr10;
-    _sm_expr1 = view.size();
+    _sm_expr1 = size(simse_addressOf(view));
     _sm_expr2 = _sm_expr1 < 2;
     if (_sm_expr2) goto L1;
-    _sm_expr3 = view.at(0);
+    _sm_expr3 = at(simse_addressOf(view), 0);
     _sm_expr2 = _sm_expr3 != '@';
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
     return 0;
     L2:;
-    _sm_expr5 = view.at(1);
+    _sm_expr5 = at(simse_addressOf(view), 1);
     _sm_expr2 = ns7_lexIsAlpha(_sm_expr5);
     _sm_expr7 = !_sm_expr2;
     if (_sm_expr7) goto L4;
@@ -29622,7 +29684,7 @@ Int ns7_matchAttribute(StrView view) {
     if (_sm_expr2) goto L9;
     goto L7;
     L9:;
-    _sm_expr10 = view.at(i);
+    _sm_expr10 = at(simse_addressOf(view), i);
     _sm_expr2 = ns7_lexIsAlphaOrDigit(_sm_expr10);
     if (_sm_expr2) goto L8;
     goto L7;
@@ -29644,7 +29706,7 @@ Int ns7_matchReservedWord(StrView view) {
     L1:;
     return 0;
     L2:;
-    _sm_expr2 = view.slice(0, length);
+    _sm_expr2 = slice(simse_addressOf(view), 0, length);
     _sm_expr1 = ns7_isReservedWord(_sm_expr2);
     if (_sm_expr1) goto L3;
     goto L4;
@@ -29660,12 +29722,12 @@ Int ns7_matchNumber(StrView view) {
     Char _sm_expr3, _sm_expr9, _sm_expr12, _sm_expr16;
     i = 0;
     L1:;
-    _sm_expr1 = view.size();
+    _sm_expr1 = size(simse_addressOf(view));
     _sm_expr2 = i < _sm_expr1;
     if (_sm_expr2) goto L4;
     goto L2;
     L4:;
-    _sm_expr3 = view.at(i);
+    _sm_expr3 = at(simse_addressOf(view), i);
     _sm_expr2 = ns7_lexIsDigit(_sm_expr3);
     if (_sm_expr2) goto L3;
     goto L2;
@@ -29680,30 +29742,30 @@ Int ns7_matchNumber(StrView view) {
     return 0;
     L6:;
     _sm_expr1 = i + 1;
-    _sm_expr7 = view.size();
+    _sm_expr7 = size(simse_addressOf(view));
     _sm_expr2 = _sm_expr1 < _sm_expr7;
     if (_sm_expr2) goto L10;
     goto L12;
     L10:;
-    _sm_expr9 = view.at(i);
+    _sm_expr9 = at(simse_addressOf(view), i);
     _sm_expr2 = _sm_expr9 == '.';
     if (_sm_expr2) goto L9;
     goto L12;
     L9:;
     _sm_expr11 = i + 1;
-    _sm_expr12 = view.at(_sm_expr11);
+    _sm_expr12 = at(simse_addressOf(view), _sm_expr11);
     _sm_expr2 = ns7_lexIsDigit(_sm_expr12);
     if (_sm_expr2) goto L7;
     goto L12;
     L7:;
     i = i + 1;
     L11:;
-    _sm_expr1 = view.size();
+    _sm_expr1 = size(simse_addressOf(view));
     _sm_expr2 = i < _sm_expr1;
     if (_sm_expr2) goto L14;
     goto L12;
     L14:;
-    _sm_expr16 = view.at(i);
+    _sm_expr16 = at(simse_addressOf(view), i);
     _sm_expr2 = ns7_lexIsDigit(_sm_expr16);
     if (_sm_expr2) goto L13;
     goto L12;
@@ -29718,34 +29780,34 @@ Int ns7_matchComment(StrView view) {
     Int _sm_expr1, i, _sm_i_2, _sm_expr16, _sm_expr20;
     Bool _sm_expr2;
     Char _sm_expr3;
-    _sm_expr1 = view.size();
+    _sm_expr1 = size(simse_addressOf(view));
     _sm_expr2 = _sm_expr1 < 2;
     if (_sm_expr2) goto L1;
-    _sm_expr3 = view.at(0);
+    _sm_expr3 = at(simse_addressOf(view), 0);
     _sm_expr2 = _sm_expr3 != '/';
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
     return 0;
     L2:;
-    _sm_expr3 = view.at(1);
+    _sm_expr3 = at(simse_addressOf(view), 1);
     _sm_expr2 = _sm_expr3 == '/';
     if (_sm_expr2) goto L4;
     goto L5;
     L4:;
     i = 2;
     L6:;
-    _sm_expr1 = view.size();
+    _sm_expr1 = size(simse_addressOf(view));
     _sm_expr2 = i < _sm_expr1;
     if (_sm_expr2) goto L10;
     goto L7;
     L10:;
-    _sm_expr3 = view.at(i);
+    _sm_expr3 = at(simse_addressOf(view), i);
     _sm_expr2 = _sm_expr3 != '\n';
     if (_sm_expr2) goto L9;
     goto L7;
     L9:;
-    _sm_expr3 = view.at(i);
+    _sm_expr3 = at(simse_addressOf(view), i);
     _sm_expr2 = _sm_expr3 != '\r';
     if (_sm_expr2) goto L8;
     goto L7;
@@ -29755,7 +29817,7 @@ Int ns7_matchComment(StrView view) {
     L7:;
     return i;
     L5:;
-    _sm_expr3 = view.at(1);
+    _sm_expr3 = at(simse_addressOf(view), 1);
     _sm_expr2 = _sm_expr3 == '*';
     if (_sm_expr2) goto L11;
     goto L14;
@@ -29763,16 +29825,16 @@ Int ns7_matchComment(StrView view) {
     _sm_i_2 = 2;
     L13:;
     _sm_expr1 = _sm_i_2 + 1;
-    _sm_expr16 = view.size();
+    _sm_expr16 = size(simse_addressOf(view));
     _sm_expr2 = _sm_expr1 < _sm_expr16;
     if (!(_sm_expr2)) goto L14;
-    _sm_expr3 = view.at(_sm_i_2);
+    _sm_expr3 = at(simse_addressOf(view), _sm_i_2);
     _sm_expr2 = _sm_expr3 == '*';
     if (_sm_expr2) goto L17;
     goto L16;
     L17:;
     _sm_expr20 = _sm_i_2 + 1;
-    _sm_expr3 = view.at(_sm_expr20);
+    _sm_expr3 = at(simse_addressOf(view), _sm_expr20);
     _sm_expr2 = _sm_expr3 == '/';
     if (_sm_expr2) goto L15;
     goto L16;
@@ -29790,10 +29852,10 @@ Int ns7_matchStringLiteral(StrView view) {
     Int _sm_expr1, i;
     Bool _sm_expr2;
     Char _sm_expr3, ch;
-    _sm_expr1 = view.size();
+    _sm_expr1 = size(simse_addressOf(view));
     _sm_expr2 = _sm_expr1 == 0;
     if (_sm_expr2) goto L1;
-    _sm_expr3 = view.at(0);
+    _sm_expr3 = at(simse_addressOf(view), 0);
     _sm_expr2 = _sm_expr3 != '\"';
     if (_sm_expr2) goto L1;
     goto L2;
@@ -29802,10 +29864,10 @@ Int ns7_matchStringLiteral(StrView view) {
     L2:;
     i = 1;
     L4:;
-    _sm_expr1 = view.size();
+    _sm_expr1 = size(simse_addressOf(view));
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L5;
-    ch = view.at(i);
+    ch = at(simse_addressOf(view), i);
     _sm_expr2 = ch == '\\';
     if (_sm_expr2) goto L6;
     goto L7;
@@ -29830,10 +29892,10 @@ Int ns7_matchRawStringLiteral(StrView view) {
     Int _sm_expr1, i;
     Bool _sm_expr2;
     Char _sm_expr3;
-    _sm_expr1 = view.size();
+    _sm_expr1 = size(simse_addressOf(view));
     _sm_expr2 = _sm_expr1 == 0;
     if (_sm_expr2) goto L1;
-    _sm_expr3 = view.at(0);
+    _sm_expr3 = at(simse_addressOf(view), 0);
     _sm_expr2 = _sm_expr3 != '`';
     if (_sm_expr2) goto L1;
     goto L2;
@@ -29842,10 +29904,10 @@ Int ns7_matchRawStringLiteral(StrView view) {
     L2:;
     i = 1;
     L4:;
-    _sm_expr1 = view.size();
+    _sm_expr1 = size(simse_addressOf(view));
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L5;
-    _sm_expr3 = view.at(i);
+    _sm_expr3 = at(simse_addressOf(view), i);
     _sm_expr2 = _sm_expr3 == '`';
     if (_sm_expr2) goto L6;
     goto L7;
@@ -29863,10 +29925,10 @@ Int ns7_matchCharLiteral(StrView view) {
     Int _sm_expr1, i;
     Bool _sm_expr2;
     Char _sm_expr3, ch;
-    _sm_expr1 = view.size();
+    _sm_expr1 = size(simse_addressOf(view));
     _sm_expr2 = _sm_expr1 == 0;
     if (_sm_expr2) goto L1;
-    _sm_expr3 = view.at(0);
+    _sm_expr3 = at(simse_addressOf(view), 0);
     _sm_expr2 = _sm_expr3 != '\'';
     if (_sm_expr2) goto L1;
     goto L2;
@@ -29875,10 +29937,10 @@ Int ns7_matchCharLiteral(StrView view) {
     L2:;
     i = 1;
     L4:;
-    _sm_expr1 = view.size();
+    _sm_expr1 = size(simse_addressOf(view));
     _sm_expr2 = i < _sm_expr1;
     if (!(_sm_expr2)) goto L5;
-    ch = view.at(i);
+    ch = at(simse_addressOf(view), i);
     _sm_expr2 = ch == '\\';
     if (_sm_expr2) goto L6;
     goto L7;
@@ -29918,12 +29980,12 @@ Int ns7_matchOperator(StrView view) {
     L1:;
     return matched;
     L2:;
-    _sm_expr2 = view.size();
+    _sm_expr2 = size(simse_addressOf(view));
     _sm_expr1 = _sm_expr2 > 0;
     if (_sm_expr1) goto L5;
     goto L4;
     L5:;
-    _sm_expr4 = view.at(0);
+    _sm_expr4 = at(simse_addressOf(view), 0);
     _sm_expr1 = ns7_isOperatorChar(_sm_expr4);
     if (_sm_expr1) goto L3;
     goto L4;
@@ -29997,7 +30059,7 @@ Str ns7_escapedSnippet(StrView view) {
     hexDigits = __sm_stringTable[340];
     Str snippet;
     initByValue(simse_addressOf(snippet));
-    count = view.size();
+    count = size(simse_addressOf(view));
     _sm_expr1 = count > 10;
     if (_sm_expr1) goto L1;
     goto L2;
@@ -30008,7 +30070,7 @@ Str ns7_escapedSnippet(StrView view) {
     L3:;
     _sm_expr1 = i < count;
     if (!(_sm_expr1)) goto L4;
-    byte = view.at(i);
+    byte = at(simse_addressOf(view), i);
     _sm_expr1 = byte < 0;
     if (_sm_expr1) goto L5;
     goto L6;
@@ -30055,7 +30117,7 @@ Str ns7_escapedSnippet(StrView view) {
     if (_sm_expr1) goto L19;
     goto L20;
     L19:;
-    _sm_expr10 = view.at(i);
+    _sm_expr10 = at(simse_addressOf(view), i);
     simse_str_append(snippet, _sm_expr10);
     goto L22;
     L20:;
@@ -30180,7 +30242,7 @@ Res<ns7_Token> ns7_nextToken(ns7_Scanner* self) {
     _sm_base2 = _sm_base3;
     _sm_expr4 = simse_spanOfStr(_sm_base2);
     _sm_base4 = self->pos;
-    view = _sm_expr4.slice(_sm_base4);
+    view = slice(simse_addressOf(_sm_expr4), _sm_base4);
     _sm_base5 = self->rules;
     _sm_expr5 = simse_spanOf(_sm_base5);
     _sm_for4 = iter(simse_addressOf(_sm_expr5));
@@ -30197,7 +30259,7 @@ Res<ns7_Token> ns7_nextToken(ns7_Scanner* self) {
     _sm_base7 = self->line;
     _sm_base8 = self->column;
     startPos = ns2_SourcePos{_sm_base6, _sm_base7, _sm_base8};
-    matched = view.slice(0, matchLength);
+    matched = slice(simse_addressOf(view), 0, matchLength);
     _sm_expr8 = toString(simse_addressOf(matched));
     _sm_base9 = rule->tokenKind;
     token = ns7_Token{_sm_expr8, _sm_base9, startPos};
@@ -38629,7 +38691,7 @@ Str ns8_compoundBinaryOp(Str* op) {
     Int _sm_when5_n;
     Bool _sm_expr1;
     _sm_when5_v = simse_spanOfStr(op);
-    _sm_when5_n = _sm_when5_v.size();
+    _sm_when5_n = size(simse_addressOf(_sm_when5_v));
     _sm_expr1 = _sm_when5_n == 2;
     if (_sm_expr1) goto L3;
     goto L2;
@@ -39546,7 +39608,7 @@ ns8_IlOperandKind ns8_ilKindOfToken(Str* token) {
     L2:;
     _sm_base2 = &base;
     _sm_when9_v = simse_spanOfStr(_sm_base2);
-    _sm_when9_n = _sm_when9_v.size();
+    _sm_when9_n = size(simse_addressOf(_sm_when9_v));
     _sm_expr1 = _sm_when9_n == 3;
     if (_sm_expr1) goto L5;
     goto L4;
@@ -50383,7 +50445,7 @@ Bool ns10_foldArithOp(Str* op) {
     Bool _sm_expr1;
     Char _sm_expr2;
     _sm_when2_v = simse_spanOfStr(op);
-    _sm_when2_n = _sm_when2_v.size();
+    _sm_when2_n = size(simse_addressOf(_sm_when2_v));
     _sm_expr1 = _sm_when2_n == 1;
     if (_sm_expr1) goto L12;
     goto L11;
@@ -50474,7 +50536,7 @@ Bool ns10_foldCompareOp(Str* op) {
     Bool _sm_expr1;
     Char _sm_expr6;
     _sm_when3_v = simse_spanOfStr(op);
-    _sm_when3_n = _sm_when3_v.size();
+    _sm_when3_n = size(simse_addressOf(_sm_when3_v));
     _sm_expr1 = _sm_when3_n == 2;
     if (_sm_expr1) goto L8;
     goto L7;
@@ -51423,7 +51485,7 @@ Opt<Int> ns10_foldIntOp(Str* op, Int a, Int b) {
     Opt<Int> _sm_ctor1, _sm_ctor2, _sm_ctor3, _sm_ctor4, _sm_ctor5, _sm_ctor6, _sm_ctor7, _sm_ctor8,
         _sm_ctor9, _sm_ctor10, _sm_ctor11, _sm_ctor12, _sm_ctor13, _sm_ctor14;
     _sm_when1_v = simse_spanOfStr(op);
-    _sm_when1_n = _sm_when1_v.size();
+    _sm_when1_n = size(simse_addressOf(_sm_when1_v));
     _sm_expr1 = _sm_when1_n == 1;
     if (_sm_expr1) goto L3;
     goto L2;
@@ -51825,7 +51887,7 @@ Opt<Bool> ns10_foldCompareValue(Str* op, Int a, Int b) {
     Opt<Bool> _sm_ctor1, _sm_ctor2, _sm_ctor3, _sm_ctor4, _sm_ctor5, _sm_ctor6;
     Char _sm_expr8;
     _sm_when1_v = simse_spanOfStr(op);
-    _sm_when1_n = _sm_when1_v.size();
+    _sm_when1_n = size(simse_addressOf(_sm_when1_v));
     _sm_expr1 = _sm_when1_n == 2;
     if (_sm_expr1) goto L3;
     goto L2;
@@ -51911,7 +51973,7 @@ Opt<Bool> ns10_foldCompareBool(Str* op, Bool a, Bool b) {
     Bool _sm_expr1, _sm_expr3, _sm_expr6;
     Opt<Bool> _sm_ctor8, _sm_ctor9;
     _sm_when2_v = simse_spanOfStr(op);
-    _sm_when2_n = _sm_when2_v.size();
+    _sm_when2_n = size(simse_addressOf(_sm_when2_v));
     _sm_expr1 = _sm_when2_n == 2;
     if (_sm_expr1) goto L3;
     goto L2;
@@ -57369,8 +57431,8 @@ ns7_Token ns11_peek(ns11_Parser* self, Int offset) {
     return _sm_expr2;
     L2:;
     _sm_base2 = simse_addressOf(self->cursor);
-    rest = _sm_base2->slice(offset);
-    _sm_expr1 = rest.isEmpty();
+    rest = slice(_sm_base2, offset);
+    _sm_expr1 = isEmpty(simse_addressOf(rest));
     _sm_expr4 = !_sm_expr1;
     if (_sm_expr4) goto L3;
     goto L4;
@@ -57379,7 +57441,7 @@ ns7_Token ns11_peek(ns11_Parser* self, Int offset) {
     return _sm_expr2;
     L4:;
     _sm_base3 = simse_addressOf(self->cursor);
-    _sm_expr6 = _sm_base3->size();
+    _sm_expr6 = size(_sm_base3);
     _sm_expr7 = _sm_expr6 - 1;
     _sm_expr2 = get(_sm_base3, _sm_expr7);
     return _sm_expr2;
@@ -57393,13 +57455,13 @@ ns7_Token ns11_advance(ns11_Parser* self) {
     Bool _sm_expr2;
     _sm_base1 = simse_addressOf(self->cursor);
     token = get(_sm_base1, 0);
-    _sm_expr1 = _sm_base1->size();
+    _sm_expr1 = size(_sm_base1);
     _sm_expr2 = _sm_expr1 > 1;
     if (_sm_expr2) goto L1;
     goto L2;
     L1:;
     _sm_base4 = simse_addressOf(self->cursor);
-    _sm_base3 = _sm_base4->slice(1);
+    _sm_base3 = slice(_sm_base4, 1);
     self->cursor = _sm_base3;
     L2:;
     return token;
@@ -58184,7 +58246,7 @@ ns3_AstXmlNode ns11_parseDecl(ns11_Parser* self) {
     text = _sm_expr3.text;
     _sm_base2 = &text;
     _sm_when1_v = simse_spanOfStr(_sm_base2);
-    _sm_when1_n = _sm_when1_v.size();
+    _sm_when1_n = size(simse_addressOf(_sm_when1_v));
     _sm_expr1 = _sm_when1_n == 3;
     if (_sm_expr1) goto L6;
     goto L5;
@@ -59968,7 +60030,7 @@ ns11_ExprNode ns11_parseUnary(ns11_Parser* self) {
     text = _sm_expr2.text;
     _sm_base1 = &text;
     _sm_when1_v = simse_spanOfStr(_sm_base1);
-    _sm_when1_n = _sm_when1_v.size();
+    _sm_when1_n = size(simse_addressOf(_sm_when1_v));
     _sm_expr3 = _sm_when1_n == 1;
     if (_sm_expr3) goto L4;
     goto L3;
@@ -61850,7 +61912,7 @@ Bool ns11_isAssignOp(Str* op) {
     Bool _sm_expr1;
     Char _sm_expr2;
     _sm_when1_v = simse_spanOfStr(op);
-    _sm_when1_n = _sm_when1_v.size();
+    _sm_when1_n = size(simse_addressOf(_sm_when1_v));
     _sm_expr1 = _sm_when1_n == 1;
     if (_sm_expr1) goto L13;
     goto L12;
@@ -61996,7 +62058,7 @@ Bool ns11_isCppKeyword(Str* text) {
     Int _sm_when2_n;
     Bool _sm_expr1;
     _sm_when2_v = simse_spanOfStr(text);
-    _sm_when2_n = _sm_when2_v.size();
+    _sm_when2_n = size(simse_addressOf(_sm_when2_v));
     _sm_expr1 = _sm_when2_n == 7;
     if (_sm_expr1) goto L94;
     goto L93;
@@ -62703,7 +62765,7 @@ Bool ns11_parseStmtInto(ns11_Parser* self, List<ns3_AstXmlNode>* out) {
     text = _sm_expr1.text;
     _sm_base1 = &text;
     _sm_when1_v = simse_spanOfStr(_sm_base1);
-    _sm_when1_n = _sm_when1_v.size();
+    _sm_when1_n = size(simse_addressOf(_sm_when1_v));
     _sm_expr2 = _sm_when1_n == 3;
     if (_sm_expr2) goto L3;
     goto L2;
@@ -62763,7 +62825,7 @@ ns3_AstXmlNode ns11_parseStmt(ns11_Parser* self) {
     text = _sm_expr1.text;
     _sm_base1 = &text;
     _sm_when2_v = simse_spanOfStr(_sm_base1);
-    _sm_when2_n = _sm_when2_v.size();
+    _sm_when2_n = size(simse_addressOf(_sm_when2_v));
     _sm_expr2 = _sm_when2_n == 3;
     if (_sm_expr2) goto L4;
     goto L3;
@@ -68250,7 +68312,7 @@ Int ns14_semaBuiltinGenericArity(Str* name) {
     Int _sm_when1_n, _sm_expr13;
     Bool _sm_expr1;
     _sm_when1_v = simse_spanOfStr(name);
-    _sm_when1_n = _sm_when1_v.size();
+    _sm_when1_n = size(simse_addressOf(_sm_when1_v));
     _sm_expr1 = _sm_when1_n == 4;
     if (_sm_expr1) goto L6;
     goto L5;
@@ -75393,7 +75455,7 @@ Bool ns14_semIsRtlTypeName(Str* name) {
     Int _sm_when1_n;
     Bool _sm_expr1;
     _sm_when1_v = simse_spanOfStr(name);
-    _sm_when1_n = _sm_when1_v.size();
+    _sm_when1_n = size(simse_addressOf(_sm_when1_v));
     _sm_expr1 = _sm_when1_n == 3;
     if (_sm_expr1) goto L7;
     goto L6;
@@ -81225,4 +81287,8 @@ Int64 simse_nowMicros() {
 Int64 simse_nowNanos() {
     const auto now = std::chrono::steady_clock::now().time_since_epoch();
     return (Int64) std::chrono::duration_cast<std::chrono::nanoseconds>(now).count();
+}
+
+inline SmString::SmString(const Span<Char>& view)
+    : SmString(reinterpret_cast<const char*>(view.ptr), view.len) {
 }

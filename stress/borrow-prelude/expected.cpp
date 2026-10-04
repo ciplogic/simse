@@ -5,7 +5,7 @@
 
 template <class T>
 void simse_strTableExpand(const T* stream, Int* out, Int count);
-void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, StrView* table, Int count);
+void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, Span<Char>* table, Int count);
 
 #include <chrono>
 
@@ -14,9 +14,19 @@ Int64 simse_nowMicros();
 Int64 simse_nowNanos();
 
 template <class T>
+struct Span;
+template <class T>
 struct Opt;
 template <class T>
 struct Res;
+// src/rtl
+SIMSE_PACK_PUSH
+template <class T>
+struct Span {
+    T* ptr;
+    Int len;
+};
+SIMSE_PACK_POP
 // src/rtl
 enum class SmOptTypes { None, Value };
 inline SmOptTypes simse_SmOptTypes_fromInt(Int value) { return (SmOptTypes) value; }
@@ -483,6 +493,10 @@ inline void simse_println(const T& value, FILE* out) {
     std::fputc('\n', out);
 }
 
+template <class T>
+Int size(Span<T>* self);
+template <class T>
+T at(Span<T>* self, Int index);
 Char charAt(StrView* self, Int index);
 Bool startsWith(StrView* self, Str* text);
 Int compareTo(StrView* self, StrView other);
@@ -510,9 +524,22 @@ void initByValue(Str* self);
 Bool startsWith(Str* self, Str* prefix);
 Bool endsWith(Str* self, Str* suffix);
 
+template <class T>
+Int size(Span<T>* self) {
+    Int _sm_expr1;
+    _sm_expr1 = self->len;
+    return _sm_expr1;
+}
+template <class T>
+T at(Span<T>* self, Int index) {
+    T* _sm_base1;
+    _sm_base1 = self->ptr;
+    auto _sm_expr1 = _sm_base1[index];
+    return _sm_expr1;
+}
 Char charAt(StrView* self, Int index) {
     Char _sm_expr1;
-    _sm_expr1 = self->at(index);
+    _sm_expr1 = at(self, index);
     return _sm_expr1;
 }
 Bool startsWith(StrView* self, Str* text) {
@@ -1097,4 +1124,8 @@ Int64 simse_nowMicros() {
 Int64 simse_nowNanos() {
     const auto now = std::chrono::steady_clock::now().time_since_epoch();
     return (Int64) std::chrono::duration_cast<std::chrono::nanoseconds>(now).count();
+}
+
+inline SmString::SmString(const Span<Char>& view)
+    : SmString(reinterpret_cast<const char*>(view.ptr), view.len) {
 }

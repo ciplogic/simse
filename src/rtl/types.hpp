@@ -36,15 +36,18 @@ using PtrOf = T*;
 // `simse_fromStdString` convert at. This header deliberately does not define `Str`
 // itself; containers.hpp pulls smstring.hpp in once SmallVector exists.
 
-// `Opt<T>` and `Res<T>` are prelude `union class`es (src/rtl/optres.kt): the emitter writes
-// their definitions into the program from the declarations, so this header forward-declares
-// the templates for the hand-written C++ that names them before that (the `FileStream` member
-// declarations in the `streams` module's filestream.hpp, the `_res.md` section signatures and
-// bodies).
+// `Opt<T>` and `Res<T>` are prelude `union class`es (src/rtl/optres.kt) and `Span<T>` is a
+// prelude data class (src/rtl/Span.kt): the emitter writes their definitions into the
+// program from the declarations, in the `types` section, so this header forward-declares
+// them for the hand-written C++ that names one before that (the `FileStream` member
+// declarations in the `streams` module's filestream.hpp, the `_res.md` section signatures
+// and bodies, the string table).
 template <class T>
 struct Opt;
 template <class T>
 struct Res;
+template <class T>
+struct Span;
 
 // `*value` in Simse is the raw-pointer (address-of) form (specs/memory-model.md).
 // The lvalue overload covers ordinary expressions; the forwarding overload binds

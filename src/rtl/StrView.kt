@@ -4,20 +4,20 @@
 // are what the name adds (specs/built-in-types.md). It owns nothing, valid only while the
 // bytes it points at are alive; `spanOfStr(text)` borrows its source, which must outlive the
 // view. Only what reaches a `Str`'s internals or a `Span` member stays in C++, in the
-// `strview` section of src/rtl/_res.md; the rest is Simse over the span (`span.hpp`) and
-// the `setBytes` intrinsic for the owned copy (`intrinsics.kt`). A comparison is the
-// `memCompare` intrinsic (`std::memcmp` behind it, `intrinsics.hpp`), so it compares in word
-// loads and the scanner's per-entry lookups stay cheap.
+// `strview`/`strconv` sections of src/rtl/_res.md; the rest is Simse over the generated span
+// (`src/rtl/Span.kt`) and the `setBytes` intrinsic for the owned copy (`intrinsics.kt`). A
+// comparison is the `memCompare` intrinsic (`std::memcmp` behind it, `intrinsics.hpp`), so
+// it compares in word loads and the scanner's per-entry lookups stay cheap.
 
 package rtl
 
 typealias StrView = Span<Char>
 
-// The span's own members under the view's names (`src/rtl/span.hpp`): `size`, `isEmpty`,
-// `slice`, `at` and `atPtr` are reached through the alias, with their Simse bodies in
-// `Span.kt` and their C++ the span's members (specs/built-in-types.md, "Views"). No
-// passthrough declaration is needed - the alias resolves to the class's method, which the
-// emitter spells as the member call (`view.slice(1)` is `view.slice(1)` in C++ too).
+// The span's own members under the view's names (generated from `src/rtl/Span.kt`):
+// `size`, `isEmpty`, `slice`, `at` and `atPtr` are reached through the alias, with their
+// Simse bodies in `Span.kt` and their C++ the free functions the emitter writes for a
+// generated class (`view.slice(1)` is `slice(&view, 1)` in C++). No passthrough
+// declaration is needed - the alias resolves to the class's method.
 
 // `charAt` is the view's own spelling of `at` (the byte at `index`, unchecked).
 fun StrView.charAt(index: Int): Char {

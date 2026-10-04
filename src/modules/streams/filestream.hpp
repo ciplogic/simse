@@ -5,7 +5,6 @@
 #include <string>
 
 #include "../../rtl/containers.hpp"
-#include "../../rtl/span.hpp"
 #include "../../rtl/types.hpp"
 
 // Reading a file line by line. The Simse surface is the `streams` module
@@ -46,9 +45,9 @@
 //                           allocation at all, and the per-line cost is one `memcpy`.
 //
 //   readLineView()          the in-place one. The line is not copied at all: the
-//                           result is a `StrView` (a span of bytes) into the same
-//                           readahead buffer, so it is valid only until the next read
-//                           on this stream (a refill moves the bytes). Parsing
+//                           result is a `Span<Char>` (the language's `StrView`) into the
+//                           same readahead buffer, so it is valid only until the next
+//                           read on this stream (a refill moves the bytes). Parsing
 //                           straight from it is what a scanner wants; keep a copy when
 //                           the line must outlive the next read.
 //
@@ -72,7 +71,9 @@ struct FileStream {
 
     // The next line as a view into the readahead buffer, or an empty `Opt` at end of
     // file. Nothing is copied; the span is valid until the next read on this stream.
-    Opt<StrView> readLineView();
+    // `Span<Char>` rather than the `StrView` alias: this header compiles with the
+    // includes, before the generated code the alias is for.
+    Opt<Span<Char>> readLineView();
 
     // The file's size in bytes (0 when it is unknown).
     Int64 fileSize() const;

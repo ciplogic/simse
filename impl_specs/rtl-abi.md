@@ -42,9 +42,9 @@ Generated C++ targets the **`src/rtl` shims** as-is:
 - `Opt<T>` and `Res<T>` = prelude `union class`es the emitter writes into the program
   (`src/rtl/optres.kt`): the payload arm (`Value`) and, for `Res`, `Error: Str`
 - `&T` lowers to `std::shared_ptr<T>`; `*T` lowers to `T*`
-- `Span<T>` = the borrowed view shim: a `*T` pointer plus a length
-  (`src/rtl/span.hpp`); `StrView` is its `char` instantiation, the same type
-  under a second name
+- `Span<T>` = the borrowed view shim: a `*T` pointer plus a length, generated from
+  `src/rtl/Span.kt` into the program's `types` section; `StrView` is its `char`
+  instantiation, the same type under a second name
 
 The ref-counted `[refcount][typeId][value]` header is **not** implemented, and nothing in
 the runtime allocates one; `typeId` is unused and not stored (no virtual dispatch or
@@ -394,10 +394,10 @@ without a newline as a line. They differ in what the caller gets:
   the three - mixing `readLine` with the other two skips bytes.
 - `readLineInto` copies the line into the caller's `Str`, whose heap block is
   reused - no allocation after the longest line seen.
-- `readLineView` copies nothing: it returns a `StrView` (`src/rtl/span.hpp`,
-  prelude `src/rtl/Span.kt`) into the readahead buffer, valid until the
-  next read on that stream, which is the shape a parse loop wants
-  (`find`/`slice`/`at` stay in the buffer; `toString` is the owned copy).
+- `readLineView` copies nothing: it returns a `StrView` (generated from
+  `src/rtl/Span.kt`; the header `src/rtl/strview.hpp` names it) into the readahead
+  buffer, valid until the next read on that stream, which is the shape a parse loop
+  wants (`find`/`slice`/`at` stay in the buffer; `toString` is the owned copy).
 
 Measured on `benchmarks/onebrc` (10M rows, 127.7 MiB, release, interleaved
 min/median, all reports byte-identical, all at a 6.5 MB peak working set):

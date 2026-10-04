@@ -64,7 +64,9 @@ support:
 
 template <class T>
 void simse_strTableExpand(const T* stream, Int* out, Int count);
-void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, StrView* table, Int count);
+// `Span<Char>`, not the `StrView` alias: this support text is placed before the generated
+// types section, where only the forward declaration (types.hpp) is visible.
+void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, Span<Char>* table, Int count);
 ```
 bodies:
 ```cpp
@@ -892,7 +894,7 @@ forward:
 // written in the language - and its identity overload, which C++ overload resolution
 // picks when the `when`-over-strings desugar views a subject that already is a view
 // (Parser.kt's `parseWhen`). Everything else the view has is the span's own members
-// (`size`, `isEmpty`, `slice`, `at`, `atPtr` - src/rtl/Span.kt and span.hpp) or a Simse
+// (`size`, `isEmpty`, `slice`, `at`, `atPtr` - generated from src/rtl/Span.kt) or a Simse
 // body in src/rtl/StrView.kt.
 StrView simse_spanOfStr(Str* text);
 StrView simse_spanOfStr(StrView view);
@@ -913,6 +915,22 @@ inline StrView simse_spanOfStr(Str* text) {
 // resolution picks the borrowed view or the identity, and the tests compare against it.
 inline StrView simse_spanOfStr(StrView view) {
     return view;
+}
+```
+
+!strconv
+====
+emit: always
+bodies:
+```cpp
+// The `StrView -> Str` conversion declared in smstring.hpp: a position that wants an owned
+// `Str` where the program's pool or a view stands materializes through here, and the bytes
+// are copied exactly once. The *definition* cannot live in a header: `Span<Char>` is
+// generated from src/rtl/Span.kt, and only a section placed with the bodies sees it
+// complete. `emit: always`, because the conversion is reached by C++'s own conversion
+// lookup, not by a declaration a call site could mark.
+inline SmString::SmString(const Span<Char>& view)
+    : SmString(reinterpret_cast<const char*>(view.ptr), view.len) {
 }
 ```
 

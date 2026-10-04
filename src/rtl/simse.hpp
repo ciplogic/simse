@@ -15,13 +15,16 @@
 
 // Order follows dependencies: types and containers have no RTL-relative
 // dependencies, and the higher-level headers build on them.
-#include "types.hpp"        // scalar aliases, Str, and the Opt/Res forward declarations
+#include "types.hpp"        // scalar aliases, Str, the Opt/Res/Span forward declarations
 #include "intrinsics.hpp"   // the byte primitives (memcpy/memcmp/...): the machine, in C++
 #include "ref.hpp"          // Ref<T> (`&T`): SmRef, or the std::shared_ptr shim
 #include "containers.hpp"   // SmallVector, List, PList, Dictionary, Array, RawArray
-#include "span.hpp"         // Span<T> (borrowed view: pointer + length)
-#include "strview.hpp"      // StrView (an alias of Span<Char>, plus the text operations)
+#include "strview.hpp"      // the `StrView` alias and the two `Str`-boundary primitives
 #include "functional.hpp"   // Func, Action, AutoDefer
+// `Span<T>` is *generated* now (src/rtl/Span.kt): the emitter writes the struct into the
+// program's `types` section, after this header; above, only its declaration. Its operations
+// are prelude functions, and the converting constructor is the `strconv` section
+// (src/rtl/_res.md).
 // The compiler's AST (`AstXmlNode`, `AstNodeKind`, ...) is *generated*: it is declared in
 // src/modules/compiler/astxml.kt and the emitter writes its structs and enums
 // (specs/attributes.md's type materialization), so there is no header to include for it any

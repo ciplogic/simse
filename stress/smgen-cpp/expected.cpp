@@ -8,7 +8,7 @@ Str simse_str_replace(const Str& text, const Str& from, const Str& to);
 
 template <class T>
 void simse_strTableExpand(const T* stream, Int* out, Int count);
-void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, StrView* table, Int count);
+void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, Span<Char>* table, Int count);
 
 #include <chrono>
 
@@ -17,9 +17,19 @@ Int64 simse_nowMicros();
 Int64 simse_nowNanos();
 
 template <class T>
+struct Span;
+template <class T>
 struct Opt;
 template <class T>
 struct Res;
+// src/rtl
+SIMSE_PACK_PUSH
+template <class T>
+struct Span {
+    T* ptr;
+    Int len;
+};
+SIMSE_PACK_POP
 // src/rtl
 enum class SmOptTypes { None, Value };
 inline SmOptTypes simse_SmOptTypes_fromInt(Int value) { return (SmOptTypes) value; }
@@ -661,4 +671,8 @@ Int64 simse_nowMicros() {
 Int64 simse_nowNanos() {
     const auto now = std::chrono::steady_clock::now().time_since_epoch();
     return (Int64) std::chrono::duration_cast<std::chrono::nanoseconds>(now).count();
+}
+
+inline SmString::SmString(const Span<Char>& view)
+    : SmString(reinterpret_cast<const char*>(view.ptr), view.len) {
 }

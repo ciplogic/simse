@@ -4965,6 +4965,39 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   points hold; twelve goldens moved (the three operator prototypes and bodies, and the
   comparisons they replaced).
 
+- **`Span<T>` is generated, and the string table moves after the types.** `Span` lost its
+  `@SmGen("cpp")` marker (src/rtl/Span.kt): the struct, its fields and its methods - free
+  functions taking the receiver by pointer - are emitted into the program's `types` section
+  like any other data class, and `span.hpp` is deleted. The string table is an array of
+  `StrView`, so it cannot precede the generated span: the `strings` section moved after
+  `types` (a pure move - the goldens kept the same lines), and `types` before
+  `resources`/`forward` so a hand-written section may spell the alias. Two reach rules went
+  with it: a handle field pulls its own type in (`emitTypeDeps`, so a struct naming a
+  `Span<T>` declares it), and `Span`/`StrView` are emitted for *every* program
+  (`computeEmittedTypes`) because the runtime's own sections name them - the role the
+  header had.
+
+  Three details the move surfaced:
+  - **The class-body method bodies in `Span.kt` were documentation, not code.** They never
+    emitted before; `slice` was written as `Span<T>(this.ptr, ...)` and now *is* the body,
+    so every slice returned a view of the source's start - the poisoned-compiler symptom
+    was `src/rtl/Span.kt:1:1: expected 'package' declaration` on every file. The bodies
+    advance through the element's address (`*this.ptr[start]`), the language's spelling of
+    `ptr + start`.
+  - **The `StrView -> Str` converting constructor cannot live in a header any more**: the
+    span is generated after every include, so its definition is the `strconv` section of
+    src/rtl/_res.md (`emit: always`, placed with the bodies, where the type is complete);
+    smstring.hpp keeps the declaration.
+  - The two `Str`-boundary primitives stay in `strview.hpp`, which is now the alias and
+    those two functions; `types.hpp` forward-declares `Span` for the hand-written C++ that
+    names it early, and the `streams` module's header spells `Opt<Span<Char>>` in its
+    declarations (it compiles with the includes, before the generated alias).
+
+  The build needed staging: the running compiler emitted the string table before the types
+  and could not build the new tree at all, so the section move landed first (its own
+  commit), then the prelude switch. Verified: `bun tools/iterate.js --full` - 80/80 and both
+  fixed points hold.
+
 - **The view comparison overloads are deleted from `strview.hpp`.** With the operators in
   the prelude, nothing reaches `simse_strView_compare`, the eighteen `operator` overloads or
   the three `operator+` any more, so they are gone - with `simse_strView_of`, the mixed

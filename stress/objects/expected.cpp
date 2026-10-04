@@ -5,7 +5,7 @@
 
 template <class T>
 void simse_strTableExpand(const T* stream, Int* out, Int count);
-void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, StrView* table, Int count);
+void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, Span<Char>* table, Int count);
 
 #include <chrono>
 
@@ -13,6 +13,8 @@ Int64 simse_nowMillis();
 Int64 simse_nowMicros();
 Int64 simse_nowNanos();
 
+template <class T>
+struct Span;
 template <class T>
 struct Opt;
 template <class T>
@@ -27,6 +29,14 @@ struct ns1_Grid;
 struct ns1_CounterReceiverShapes;
 struct ns1_Holder;
 struct ns1_Shell;
+// src/rtl
+SIMSE_PACK_PUSH
+template <class T>
+struct Span {
+    T* ptr;
+    Int len;
+};
+SIMSE_PACK_POP
 // src/rtl
 enum class SmOptTypes { None, Value };
 inline SmOptTypes simse_SmOptTypes_fromInt(Int value) { return (SmOptTypes) value; }
@@ -569,6 +579,16 @@ inline void simse_println(const T& value, FILE* out) {
 }
 
 template <class T>
+Int size(Span<T>* self);
+template <class T>
+Bool isEmpty(Span<T>* self);
+template <class T>
+T at(Span<T>* self, Int index);
+template <class T>
+Span<T> slice(Span<T>* self, Int start);
+template <class T>
+Span<T> slice(Span<T>* self, Int start, Int count);
+template <class T>
 T get(Span<T>* self, Int index);
 template <class T>
 void set(Span<T>* self, Int index, T value);
@@ -747,6 +767,46 @@ Int ns1_partLambdas_closure5_invoke(ns1_partLambdas_closure5 self, Int v) {
 }
 
 template <class T>
+Int size(Span<T>* self) {
+    Int _sm_expr1;
+    _sm_expr1 = self->len;
+    return _sm_expr1;
+}
+template <class T>
+Bool isEmpty(Span<T>* self) {
+    Int _sm_expr1;
+    Bool _sm_expr2;
+    _sm_expr1 = self->len;
+    _sm_expr2 = _sm_expr1 <= 0;
+    return _sm_expr2;
+}
+template <class T>
+T at(Span<T>* self, Int index) {
+    T* _sm_base1;
+    _sm_base1 = self->ptr;
+    auto _sm_expr1 = _sm_base1[index];
+    return _sm_expr1;
+}
+template <class T>
+Span<T> slice(Span<T>* self, Int start) {
+    T* _sm_base3;
+    Int _sm_expr1, _sm_expr2;
+    Span<T> _sm_expr3;
+    _sm_expr1 = self->len;
+    _sm_expr2 = _sm_expr1 - start;
+    _sm_base3 = self->ptr;
+    _sm_expr3 = Span<T>{simse_addressOf(_sm_base3[start]), _sm_expr2};
+    return _sm_expr3;
+}
+template <class T>
+Span<T> slice(Span<T>* self, Int start, Int count) {
+    T* _sm_base3;
+    Span<T> _sm_expr1;
+    _sm_base3 = self->ptr;
+    _sm_expr1 = Span<T>{simse_addressOf(_sm_base3[start]), count};
+    return _sm_expr1;
+}
+template <class T>
 T get(Span<T>* self, Int index) {
     T* _sm_base1;
     _sm_base1 = self->ptr;
@@ -761,7 +821,7 @@ void set(Span<T>* self, Int index, T value) {
 }
 Char charAt(StrView* self, Int index) {
     Char _sm_expr1;
-    _sm_expr1 = self->at(index);
+    _sm_expr1 = at(self, index);
     return _sm_expr1;
 }
 Bool startsWith(StrView* self, Str* text) {
@@ -792,7 +852,7 @@ Int find(StrView* self, Str sub) {
     L1:;
     return 0;
     L2:;
-    len = self->size();
+    len = size(self);
     _sm_expr1 = needle > len;
     if (_sm_expr1) goto L3;
     goto L4;
@@ -838,7 +898,7 @@ Int find(StrView* self, Str sub) {
 Str substr(StrView* self, Int from, Int count) {
     Int len, begin, end, _sm_expr6;
     Bool _sm_expr1;
-    len = self->size();
+    len = size(self);
     begin = from;
     _sm_expr1 = begin < 0;
     if (_sm_expr1) goto L1;
@@ -878,7 +938,7 @@ Str substr(StrView* self, Int from, Int count) {
 Str toString(StrView* self) {
     Int _sm_expr1;
     Str _sm_expr2;
-    _sm_expr1 = self->size();
+    _sm_expr1 = size(self);
     _sm_expr2 = substr(self, 0, _sm_expr1);
     return _sm_expr2;
 }
@@ -1036,7 +1096,7 @@ Str fmtStr(StrView fmt, List<Str>* items) {
     points = 0;
     i = 0;
     L3:;
-    _sm_expr2 = fmt.size();
+    _sm_expr2 = size(simse_addressOf(fmt));
     _sm_expr1 = i < _sm_expr2;
     if (!(_sm_expr1)) goto L4;
     _sm_expr4 = charAt(simse_addressOf(fmt), i);
@@ -1057,12 +1117,12 @@ Str fmtStr(StrView fmt, List<Str>* items) {
     return fmt;
     L8:;
     out = __sm_stringTable[38];
-    _sm_expr8 = fmt.size();
+    _sm_expr8 = size(simse_addressOf(fmt));
     simse_str_reserve(out, _sm_expr8);
     used = 0;
     i = 0;
     L9:;
-    _sm_expr2 = fmt.size();
+    _sm_expr2 = size(simse_addressOf(fmt));
     _sm_expr1 = i < _sm_expr2;
     if (!(_sm_expr1)) goto L10;
     ch = charAt(simse_addressOf(fmt), i);
@@ -1389,7 +1449,7 @@ Int ns1_countIf(List<Int>* items, ns1_Predicate predicate) {
     count = 0;
     c = simse_spanOf(items);
     L1:;
-    _sm_expr1 = c.isEmpty();
+    _sm_expr1 = isEmpty(simse_addressOf(c));
     _sm_expr2 = !_sm_expr1;
     if (!(_sm_expr2)) goto L2;
     _sm_base1 = get(simse_addressOf(c), 0);
@@ -1399,7 +1459,7 @@ Int ns1_countIf(List<Int>* items, ns1_Predicate predicate) {
     L3:;
     count = count + 1;
     L4:;
-    c = c.slice(1);
+    c = slice(simse_addressOf(c), 1);
     goto L1;
     L2:;
     return count;
@@ -2479,4 +2539,8 @@ Int64 simse_nowMicros() {
 Int64 simse_nowNanos() {
     const auto now = std::chrono::steady_clock::now().time_since_epoch();
     return (Int64) std::chrono::duration_cast<std::chrono::nanoseconds>(now).count();
+}
+
+inline SmString::SmString(const Span<Char>& view)
+    : SmString(reinterpret_cast<const char*>(view.ptr), view.len) {
 }

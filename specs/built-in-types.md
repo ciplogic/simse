@@ -202,8 +202,8 @@ The bootstrap RTL also provides these `Str` operations (native extensions):
 
 ### Views: `Span<T>` and `StrView`
 
-Status: implemented in the bootstrap RTL (`src/rtl/Span.kt`, `src/rtl/StrView.kt`,
-`src/rtl/span.hpp`, `src/rtl/strview.hpp`).
+Status: implemented in the bootstrap RTL (`src/rtl/Span.kt`, `src/rtl/StrView.kt`;
+`Span<T>` and the alias are generated, `src/rtl/strview.hpp` names the alias).
 
 A `Span<T>` is a borrowed view over a contiguous run of `T`: a `*T` pointer plus a
 length, nothing else. It copies and owns nothing, so it is valid only while its source is

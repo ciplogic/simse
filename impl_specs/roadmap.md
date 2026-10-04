@@ -109,7 +109,7 @@ Verified: `bun tools/stress.js` 56/56, `bun tools/smgen.js` byte-identical, boot
 point (`bun tools/bootstrap.js`).
 
 Hand-written C++ (deferred), in order of ease: the type core (`types.hpp`, `containers.hpp`,
-`smstring.hpp`, `smdictionary.hpp`, `span.hpp`, `strview.hpp`, `strsmallvector.hpp`,
+`smstring.hpp`, `smdictionary.hpp`, `strview.hpp`, `strsmallvector.hpp`,
 `functional.hpp`), which
 the amalgamation is compiled *against* and which needs language features that do not exist yet
 (statics in an object, a ref-counted layout). (`variant2.hpp`, `optional.hpp` and

@@ -2,19 +2,14 @@
 //
 // `Span<T>` is a borrowed view over a contiguous run of `T`: a pointer and a length, owning
 // nothing (specs/containers.md), valid only while its memory is alive and unmodified; a
-// `spanOf(items)` borrow must outlive the span. Codegen maps the type onto the RTL one, so
-// these bodies document it, not emit.
+// `spanOf(items)` borrow must outlive the span. The struct is generated from the
+// declaration below like any other data class (specs/attributes.md): the fields, and the
+// class-body members as free functions taking the receiver by pointer. Hand-written C++ that
+// names the type early - the `streams` module's `FileStream` header, the string table's
+// decoder - forward-declares it in types.hpp.
 
 package rtl
 
-// The type's C++ is the hand-written `span.hpp`, already `#include`d: `@SmGen("cpp")` is
-// the materialization marker (specs/attributes.md), so the emitter must not generate the
-// struct. An *unmarked* prelude type would be generated from its declaration instead.
-// The class-body members below document the header's members; the *indexers* are the
-// `operator` extensions at the end, which are emitted (an extension with a body is a
-// function like any other), so a program's `span[index]` lowers through `get`/`set`
-// rather than the header's `operator[]`.
-@SmGen("cpp")
 data class Span<T>(var ptr: *T, var len: Int) {
     fun size(): Int {
         return this.len
@@ -29,14 +24,15 @@ data class Span<T>(var ptr: *T, var len: Int) {
         return this.ptr[index]
     }
 
-    // From `start` to the end (unchecked).
+    // From `start` to the end (unchecked). The pointer advances through the element's
+    // address (`*ptr[index]`), the language's spelling of `ptr + start`.
     fun slice(start: Int): Span<T> {
-        return Span<T>(this.ptr, this.len - start)
+        return Span<T>(*this.ptr[start], this.len - start)
     }
 
     // `count` elements from `start` (unchecked).
     fun slice(start: Int, count: Int): Span<T> {
-        return Span<T>(this.ptr, count)
+        return Span<T>(*this.ptr[start], count)
     }
 }
 

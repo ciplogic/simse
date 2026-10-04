@@ -5,7 +5,7 @@
 
 template <class T>
 void simse_strTableExpand(const T* stream, Int* out, Int count);
-void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, StrView* table, Int count);
+void simse_strTableDecode(const char* pool, const Int* starts, const Int* lengths, Span<Char>* table, Int count);
 
 #include <chrono>
 
@@ -14,10 +14,20 @@ Int64 simse_nowMicros();
 Int64 simse_nowNanos();
 
 template <class T>
+struct Span;
+template <class T>
 struct Opt;
 template <class T>
 struct Res;
 struct ns1_Point;
+// src/rtl
+SIMSE_PACK_PUSH
+template <class T>
+struct Span {
+    T* ptr;
+    Int len;
+};
+SIMSE_PACK_POP
 // src/rtl
 enum class SmOptTypes { None, Value };
 inline SmOptTypes simse_SmOptTypes_fromInt(Int value) { return (SmOptTypes) value; }
@@ -460,6 +470,8 @@ inline void simse_println(const T& value, FILE* out) {
 }
 
 template <class T>
+Int size(Span<T>* self);
+template <class T>
 Bool simse_optHasValue(Opt<T>* self);
 template <class T>
 T simse_optValue(Opt<T>* self);
@@ -483,6 +495,12 @@ Opt<Int> ns1_three();
 Opt<Int> ns1_nothing();
 ns1_Point ns1_pair();
 
+template <class T>
+Int size(Span<T>* self) {
+    Int _sm_expr1;
+    _sm_expr1 = self->len;
+    return _sm_expr1;
+}
 template <class T>
 Bool simse_optHasValue(Opt<T>* self) {
     SmOptTypes _sm_base1;
@@ -860,4 +878,8 @@ Int64 simse_nowMicros() {
 Int64 simse_nowNanos() {
     const auto now = std::chrono::steady_clock::now().time_since_epoch();
     return (Int64) std::chrono::duration_cast<std::chrono::nanoseconds>(now).count();
+}
+
+inline SmString::SmString(const Span<Char>& view)
+    : SmString(reinterpret_cast<const char*>(view.ptr), view.len) {
 }

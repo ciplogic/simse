@@ -82,10 +82,12 @@ Details worth knowing:
   `kt`, whose text is *Simse source* the driver hands back to the
   compiler's own front end: parsed, checked and emitted with the program, the call site
   unchanged (`stress/smgen-kt`). The emitted file assembles from named **sections** -
-  includes, support, profile, strings, resources, forward, types, statics, prototypes,
-  init, bodies - so a generated *declaration* lands in `forward`, a *definition* in
+  includes, support, profile, types, strings, resources, forward, statics, prototypes,
+  closures, init, bodies - so a generated *declaration* lands in `forward`, a *definition* in
   `bodies`, and text the preamble needs in `support`, without codegen having to know about
-  any of them. The generators live in the `compiler` package (`src/compiler/`, one file
+  any of them. `types` precedes `strings` because the string table is an array of `StrView`
+  (a generated `Span<Char>`), and precedes the resource texts so they can spell the alias.
+  The generators live in the `compiler` package (`src/compiler/`, one file
   per generator, registered by name) so that a *program's* author can write one against one
   import: a generator sees the AST nodes, the resources and the sections, and calls nothing
   from the compiler's stages.
@@ -193,12 +195,17 @@ headers:
 
 | Header | What it provides |
 | --- | --- |
-| `types.hpp` | scalar aliases (`Int`, `Float64`, ...), `simse_destroy`, the forward declarations of `Opt`/`Res`, and `SmUnionManaged`, the trait a generic `union class` picks its storage form with |
+| `types.hpp` | scalar aliases (`Int`, `Float64`, ...), `simse_destroy`, the forward declarations of `Opt`/`Res`/`Span`, and `SmUnionManaged`, the trait a generic `union class` picks its storage form with |
 | `containers.hpp` | `SmallVector<T, N>` with a small-buffer optimization, `List<T>`, `Array<T>` (count-first block), `Dictionary<K, V>`, `PList<T>`, `RawArray<T>` |
-| `smstring.hpp`, `strsmallvector.hpp` | `Str`: an inline, NUL-terminated byte string with a 24-byte inline buffer |
+| `smstring.hpp`, `strsmallvector.hpp` | `Str`: an inline, NUL-terminated byte string with a 24-byte inline buffer, plus the two `Str`-boundary primitives (`simse_str_data`, `simse_str_setBytes`) |
 | `smdictionary.hpp` | `SmDictionary<TKey, TValue>`: the RTL's own dictionary (rows chained by index over a power-of-two bucket table), and the only implementation of `Dictionary<K, V>` |
-| `span.hpp` | `Span<T>`: a borrowed view over a contiguous run of `T` (`at`, `slice`) |
-| `strview.hpp` | `StrView`: an alias of `Span<Char>` (`typealias StrView = Span<Char>`), the converting constructor that materializes a literal or view as an owned `Str`, and the two `Str`-boundary primitives (`simse_str_data`, `simse_str_setBytes`); the comparisons and `+` are the prelude's operators (`src/rtl/StrView.kt`) |
+| `strview.hpp` | `StrView`: the alias of `Span<Char>` (`typealias StrView = Span<Char>`, src/rtl/StrView.kt) the resource texts and generated signatures spell; the span itself is generated (`src/rtl/Span.kt`) and the converting constructor that materializes a literal or view as an owned `Str` is the `strconv` section |
+
+`Span<T>` has no header any more: `src/rtl/Span.kt` declares it and the emitter writes the
+struct into the `types` section like any other data class, with its methods as free
+functions (`view.slice(1)` is `slice(&view, 1)` in C++). Hand-written C++ that names the
+type early - the string table, the `streams` header - uses the `types.hpp` forward
+declaration.
 
 The `streams` module's `filestream.hpp` is the one header outside the RTL: `FileStream`, the
 struct alone, reading a file line by line (`readLine(): Opt<Str>`, `readLineInto(*Str)` with a
