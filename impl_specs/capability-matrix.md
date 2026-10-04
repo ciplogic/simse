@@ -5013,6 +5013,23 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   80/80 and both fixed points hold; the twenty goldens that spell the view moved `StrView`
   to `Span<Char>` line for line (the table declaration too), no other content.
 
+- **`tools/` is the harness and its evidence probes.** The scratch that had accumulated -
+  one-off migrations (`xmlnode-migrate.mjs`, `mkxmlcount.mjs`), superseded A/B and diff
+  scripts (`_codecmp`, `_maskcmp`, `_symdiff`, `_quad`, `_interp_scan`, `_strtable_gain`,
+  `_strtable_shapes`, `_merge_ab`, `_coalesce`, `_amalgdiff`, `_bench_out`, `_bench_run`,
+  `_brc_ab`), the probe launchers (`_ab.bat`, `_cap_ab.bat`, `_hoist_ab.bat`, `_probe.bat`,
+  `_probe_ab.bat`), the two perl checks, the probes the kept ones supersede
+  (`constexpr_probe.cpp`, `constexpr_union_probe.cpp`, `constexpr_write_probe.cpp`,
+  `compare_probe.cpp`, `str_diag.cpp`, `str_stress.cpp`, `size_probe.cpp`,
+  `packed_alignment_probe.cpp`, `probe_sizes.cpp`, `_loop_protocol.cpp`) and the two
+  committed `.exe` files - is removed. What stays is the five-file harness
+  (`iterate.js`, `stress.js`, `bootstrap.js`, `vscheck.mjs`, `msvc.mjs`) and the standalone
+  tools a current design doc cites as its evidence: `_bench_ab.mjs`, `_strtable_runs.mjs`,
+  `_pe_sections.mjs`, `array_layout_probe.cpp`, `smallvector_stress.cpp`
+  (`impl_specs/rtl-abi.md`), `statics_probe.cpp` (`impl_specs/statics.md`) and `memrun.cpp`
+  (`benchmarks/onebrc/benchmark.md`). No build, test or doc reference changed; the log's
+  older entries name a few of the removed one-offs, and the measurements they record stand.
+
 - **The view comparison overloads are deleted from `strview.hpp`.** With the operators in
   the prelude, nothing reaches `simse_strView_compare`, the eighteen `operator` overloads or
   the three `operator+` any more, so they are gone - with `simse_strView_of`, the mixed

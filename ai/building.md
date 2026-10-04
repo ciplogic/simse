@@ -103,9 +103,13 @@ it with the source.
 - `specs/` — the normative language specification. `impl_specs/` — per-subsystem design and
   the change log (`capability-matrix.md`).
 - `stress/` — the end-to-end corpus (`stress/README.md`). `examples/` — the runnable examples.
-- `tools/` — the JavaScript harness (`iterate.js` is the loop; `stress.js`, `bootstrap.js`,
-  `vscheck.mjs`, `msvc.mjs`); the remaining `_*.mjs`/probe files are scratch and not part of
-  any workflow.
+- `tools/` — the JavaScript harness: `iterate.js` (the loop), `stress.js` (the corpus),
+  `bootstrap.js` (the fixed point), `vscheck.mjs` (the VS project check) and `msvc.mjs` (the
+  MSVC toolchain they share, also used by `build.js`). A few **evidence probes** a design doc
+  cites sit beside them and are run by hand, never by the loop: `_bench_ab.mjs` (interleaved
+  A/B timing), `_strtable_runs.mjs`, `_pe_sections.mjs` (`impl_specs/rtl-abi.md`),
+  `array_layout_probe.cpp`, `smallvector_stress.cpp`, `statics_probe.cpp`
+  (`impl_specs/statics.md`) and `memrun.cpp` (`benchmarks/onebrc/benchmark.md`).
 - `docs/` — the published documentation (tour, how-it-works, state-of-the-field).
 
 ## Profiling
