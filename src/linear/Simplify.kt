@@ -107,27 +107,51 @@ fun linStmtCrosses(
     return false
 }
 
-// The same test for item `p`. A block's body is `bodies[p]`, not `stmts[p]`: the wrapper is
-// built only when the block survives, so `stmts[p]` still carries the parsed tree.
-fun linItemCrosses(
-    stmts: *List<AstXmlNode>, bodies: *List<List<AstXmlNode>>, p: Int, at: Int,
-    decls: *List<Int>, labelNames: *List<Str>, labelAt: *List<Int>
-): Bool {
-    if (!linIsBlock(stmts[p])) {
-        return linStmtCrosses(stmts[p], at, decls, labelNames, labelAt)
+// Every jump name in `stmt`'s subtree, in pre-order; the walk mirrors `linStmtCrosses` (a
+// jump is its own name, a block recurses into its statements).
+fun linStmtJumpNames(stmt: *AstXmlNode, out: *List<Str>): Unit {
+    if (linIsGoto(stmt) || linIsCondJump(stmt)) {
+        out.append(xmlAttr(stmt, AstNodeAttributeKind.Name))
     }
-    for (*item in bodies[p]) {
-        if (linStmtCrosses(item, at, decls, labelNames, labelAt)) {
-            return true
+    if (!linIsBlock(stmt)) {
+        return
+    }
+    for (*child in stmt.Children) {
+        if (child.name == AstNodeKind.Body) {
+            for (*item in child.Children) {
+                if (item.name == AstNodeKind.Stmt) {
+                    linStmtJumpNames(item, out)
+                }
+            }
         }
     }
-    return false
+}
+
+// Every jump name item `p` contributes - a block's flattened body is `bodies[p]`, not
+// `stmts[p]`, because the wrapper node is built only where the block survives the splice.
+// Collected once per sequence, so the safety test never re-walks an item's subtree.
+fun linItemJumpNames(
+    stmts: *List<AstXmlNode>, bodies: *List<List<AstXmlNode>>, p: Int
+): List<Str> {
+    var out: List<Str> = List<Str>()
+    if (linIsBlock(stmts[p])) {
+        for (*item in bodies[p]) {
+            linStmtJumpNames(item, out)
+        }
+    } else {
+        linStmtJumpNames(*stmts[p], out)
+    }
+    return out
 }
 
 // Whether the block at `i` can be spliced into `stmts`: after the splice its declarations
 // are in the parent's scope, so it is legal exactly when no jump `J` and label `L` satisfy
-// `pos (J) < pos (D) <= pos (L)` for a declaration `D` it brings up.
-fun linSpliceIsSafe(stmts: *List<AstXmlNode>, bodies: *List<List<AstXmlNode>>, i: Int): Bool {
+// `pos (J) < pos (D) <= pos (L)` for a declaration `D` it brings up. `itemJumps[p]` holds
+// item `p`'s jump names (`linItemJumpNames`), read once per sequence.
+fun linSpliceIsSafe(
+    stmts: *List<AstXmlNode>, bodies: *List<List<AstXmlNode>>, i: Int,
+    itemJumps: *List<List<Str>>
+): Bool {
     val body: *List<AstXmlNode> = *bodies[i]
     val len: Int = body.size()
     if (len == 0) {
@@ -166,13 +190,18 @@ fun linSpliceIsSafe(stmts: *List<AstXmlNode>, bodies: *List<List<AstXmlNode>>, i
         k = k + 1
     }
 
-    // ... and every jump that stays in it.
+    // ... and every jump that stays in it. Only an item *before* the block can cross a
+    // declaration the splice brings up: an item after it lands at `p + len - 1`, past every
+    // `i + k` a declaration occupies, so its jumps can never satisfy `at < decl`.
     p = 0
-    while (p < stmts.size()) {
-        if (p != i
-            && linItemCrosses(stmts, bodies, p, linMergedIndex(p, i, len), decls, labelNames, labelAt)
-        ) {
-            return false
+    while (p < i) {
+        val names: *List<Str> = *itemJumps[p]
+        var j: Int = 0
+        while (j < names.size()) {
+            if (linJumpCrosses(*names[j], p, decls, labelNames, labelAt)) {
+                return false
+            }
+            j = j + 1
         }
         p = p + 1
     }
@@ -280,10 +309,19 @@ data class LinSimplifier(
             i = i + 1
         }
 
+        // The jump names each item contributes, collected once: the safety test below would
+        // otherwise re-walk every item's subtree for every candidate block.
+        var itemJumps: List<List<Str>> = List<List<Str>>(count)
+        i = 0
+        while (i < count) {
+            itemJumps[i] = linItemJumpNames(stmts, bodies, i)
+            i = i + 1
+        }
+
         var splicing: List<Bool> = List<Bool>(count, false)
         i = 0
         while (i < count) {
-            if (linIsBlock(stmts[i]) && linSpliceIsSafe(stmts, bodies, i)) {
+            if (linIsBlock(stmts[i]) && linSpliceIsSafe(stmts, bodies, i, itemJumps)) {
                 splicing[i] = true
                 this.changed = true
             }
