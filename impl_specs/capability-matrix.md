@@ -5136,3 +5136,19 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   compiler over `--root src` writes 378,842 nodes at depth 143 (`main()` 32.3 s instrumented),
   and `_check_tree.mjs` reports **0 violations at tolerance 0** on it; `stress/linq` writes its
   tree to a named file, to stderr with `--profile-file -`, and in `ns` with `--profile-nanos`.
+
+- **The profile report lists its top functions.** `impl_specs/profiling.md`: the report now
+  opens with two summaries before the `tree:` line - the top 25 bodies by **inclusive total**
+  (every one of a body's nodes summed: the number the old flat table carried) and the top 25 by
+  **self time** (each node's total minus its direct children's: the time the body itself
+  carried). Rows read `name  <total> <us|ns>: <calls> calls`, biggest first, and nothing is
+  measured per entry for them: `reportTopLists` walks the finished node tree once at exit
+  (totals and calls per body, self per node, all in that pass). A first cut of the self
+  arithmetic subtracted each child's total from its body's aggregate instead of inside its
+  parent node, which nets every body below the top level to zero - caught by
+  `tools/_check_tree.mjs`, which now also recomputes both summaries from the tree and checks the
+  printed lists against them (and that they descend), beside the nesting check. Verified:
+  `bun tools/iterate.js --full` - **88/88** and both fixed points; a profiled release compiler
+  over `--root src` writes a verified report (378,842 nodes, depth 143) whose top-25 lists read
+  `codegen.emitProgram` 27.6 s total, and `atPtr` 5.0 s over 163.5 M calls (with
+  `common.xmlAttr` 4.4 s and `equals` 3.0 s) by self.

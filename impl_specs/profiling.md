@@ -35,8 +35,8 @@ the ordinals of the nodes it is in, and the node for this body under that stack 
 reaches that body. Two call sites of one body are two nodes, so a node's totals are exactly the
 calls that reached it. The constructor pushes the node and bumps its call count; the destructor
 adds `simse_nowMicros() - start_` (or `simse_nowNanos()` - see *Units*) to the node and pops.
-There is no name to compare and no allocation after the first sight of a path: a measurement is
-one hash and two clock reads.
+A measurement is one dictionary lookup and two clock reads; nothing is allocated after the
+first sight of a path.
 
 Every total and every count is `Int64` (`CallNode.total`, `CallNode.calls`,
 `ProfileScope::start_`, and both clocks). A nanosecond count is ~1000x a microsecond one, so the
@@ -45,9 +45,17 @@ seconds - and `total`/`calls`/`start_` are all `Int64` for exactly that reason, 
 
 ## The report
 
-The report is the **call tree**, depth first, largest child first:
+The report opens with the two summaries, then marks the tree with a `tree:` line:
 
 ```text
+top 25 methods by total:
+  1. codegen.emitProgram                  28475834 us:        1 calls
+  2. codegen.emitFunction                 28179729 us:     2690 calls
+  ...
+top 25 methods by self:
+  1. common.xmlAttr                        ... us: 20219264 calls
+  ...
+tree:
 main():32284475 us: 1 calls
 +codegen.emitProgram():28475834 us: 1 calls
  +codegen.run():28475590 us: 1 calls
@@ -56,11 +64,18 @@ main():32284475 us: 1 calls
     +codegen.emitBodyAt():19407474 us: 1306 calls
 ```
 
-One line per node: `name():<total> <unit>: <calls> calls`, indented one space per level with a
-`+` on every line below the first (there is no line for the root itself, the frame outside
-`main`). The numbers are the node's own - that path's inclusive time and call count - so a
-line's total is at least the sum of everything printed under it, and a recursive body appears
-once per *depth* it reached: the recursion is the nesting.
+A summary is one row per body summed over every path it ran on: `total` is the inclusive time
+(the number a flat table has), `self` is the same minus the totals of the nodes under it - the
+time the body itself carried, its own code plus whatever no body measured. Each list is the
+biggest 25, biggest first; a body the run never entered is not listed. They answer "what is
+hot", while the tree answers "through where".
+
+The tree is depth first, largest child first: one line per node,
+`name():<total> <unit>: <calls> calls`, indented one space per level with a `+` on every line
+below the first (there is no line for the root itself, the frame outside `main`). The numbers
+are the node's own - that path's inclusive time and call count - so a line's total is at least
+the sum of everything printed under it, and a recursive body appears once per *depth* it
+reached: the recursion is the nesting.
 
 A body the run never entered has no node and no line. The names are the body's symbols
 with the compiler's `nsN_` package prefix spelled out (`Emitter.prettySymbol`: `ns1_` is
@@ -166,16 +181,16 @@ pinning.)
 
 ## Status
 
-Implemented: the flag (`Request.profile`, `--profile` in both drivers), the call-tree report,
-`--profile-file` (default `simse_profile.txt`, `-` for stderr) and `--profile-nanos`, the
-emitted runtime (path-keyed `CallNode`s), the dense `Int` method table with package-qualified
-`kMethodNames[]`, `simse_nowMicros` / `simse_nowNanos`, and `bun build.js --profile` /
-`--profile-file` / `--profile-nanos`.
+Implemented: the flag (`Request.profile`, `--profile` in both drivers), the report (the two
+top-25 summaries and the call tree), `--profile-file` (default `simse_profile.txt`, `-` for
+stderr) and `--profile-nanos`, the emitted runtime (path-keyed `CallNode`s), the dense `Int`
+method table with package-qualified `kMethodNames[]`, `simse_nowMicros` / `simse_nowNanos`, and
+`bun build.js --profile` / `--profile-file` / `--profile-nanos`.
 
-Verified: a profiled `stress/linq` program writes the tree (lambdas and all) to a named file,
-and to stderr with `--profile-file -`, and in `ns` with `--profile-nanos`; a profiled release
-compiler over `--root src` writes a 378,842-node tree (depth 143, `main()` 32.3 s instrumented);
-`tools/_check_tree.mjs <file> 0` walks a tree and reports **0 violations** - every node's total
-is at least the sum of its children's, and no child exceeds its parent (378,842 nodes checked);
-with the flag off `bun tools/stress.js` is **88/88** and `bun tools/bootstrap.js`'s fixed point
-is byte for byte.
+Verified: a profiled `stress/linq` program writes the summaries and the tree (lambdas and all)
+to a named file, and to stderr with `--profile-file -`, and in `ns` with `--profile-nanos`; a
+profiled release compiler over `--root src` writes a 378,842-node tree (depth 143, `main()`
+32.3 s instrumented); `tools/_check_tree.mjs <file> 0` walks a report and reports **0
+violations** - the two summaries descend, every node's total is at least the sum of its
+children's, and no child exceeds its parent; with the flag off `bun tools/stress.js` is
+**88/88** and `bun tools/bootstrap.js`'s fixed point is byte for byte.
