@@ -1,6 +1,6 @@
 # T26 - Profile-driven optimization
 
-Status: Not started
+Status: Done
 Phase: E - Performance
 Depends on: -
 Blocks: none
@@ -63,9 +63,43 @@ Out:
 
 ## Acceptance criteria
 
-- [ ] At least one workstream below shows a clean-build win outside the interleaved noise, with
+- [x] At least one workstream below shows a clean-build win outside the interleaved noise, with
       the fixed point intact.
-- [ ] No unexplained golden churn, and the stress corpus stays green.
+- [x] No unexplained golden churn, and the stress corpus stays green.
+
+## Implementation notes
+
+Five changes, each a clean-release A/B with `bun tools/iterate.js --full` green (88/88 and both
+bootstrap fixed points); the numbers are in the commit messages (`83d8a52`, `bb46399`,
+`344b800`, `53f9cff`, `16f7524`). Cumulative against the pre-task compiler: self-transpile
+min/median **2390/2401 ms -> 1727/1785 ms (~26-28%)**, 13 interleaved pairs, plus ~1% from the
+last commit.
+
+- **Collected resolution tables.** `addFunction` records `plainFunctionNames` and
+  `functionPackages`, so the two `hasPlainFunction` scans per named call and `functionPackage`'s
+  walk are dictionary reads. The call path's 20M `xmlAttr` reads were the single largest profile
+  path.
+- **Name indices.** `SemFacts.functionsByName` and `Emitter.functionsByName` hold each name's
+  indices in collection order; `callTarget`, `functionReturn`, `memberReturn`, the operator
+  returns, `isInitByValue*`, `ilConfusingLambdaOverload`, `findFunction`, `memberCallReturn`,
+  `findExtensionFn(ByType)`, `findReceiverFnByName`, `functionReturn`, `operatorBinaryFn`'s view
+  fallback, `protocolImpls` and `computeMachineSuffixes` start from a name's declarations
+  instead of the whole program.
+- **Escape analysis scans each body once.** `epPreScanDecls` records the table-independent
+  escapes and one event per call-argument mention; the fixpoint rounds re-evaluate the events
+  instead of walking every body again. A two-build comparison over an identical source snapshot
+  emits byte-identical C++.
+- **The fold walk copies children only when one folds.** `foldExprsUnder` builds the child list
+  lazily (children are read through their places), where it used to copy every visited node's
+  children. In-place mutation was deliberately not used: ref-counted arrays can be shared, so it
+  would invite aliasing bugs for a couple of percent more.
+- **Attempted and reverted:** a jump-free fast path in `flattenPass` that skips
+  `linSpliceIsSafe` - neutral in the clean A/B, so it was not kept (`flattenPass`'s cost is
+  mostly profiler call overhead; the instrumented tree overstates it).
+
+Next candidates, in profile order: the four use-def passes each rebuild `linUseDefsOf` per
+round (sharing one per round is the shape, but a mutation between passes invalidates it), and
+`epAnalyze` still walks each body once up front (the event lists removed the per-round walks).
 
 ## Steps
 
