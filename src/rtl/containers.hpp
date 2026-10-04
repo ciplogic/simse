@@ -439,8 +439,10 @@ using RawArray = T*;
 // deleter at all (`makeRefSized`, ref.hpp) - the cleanup a `shared_ptr` would type-erase is
 // the block's destructor.
 //
-// An empty array refers to the one shared empty block per element type, so
-// `Array<T>()` (and `arrayEmpty<T>()`) never allocate.
+// An empty array holds **no block**: `count()` reads 0 through the null handle and nothing is
+// allocated or counted. There is deliberately no per-type *shared* empty block - a count is
+// local to one thread (`smref.hpp`), and a static `Ref` would be reached from every thread at
+// once, racing its count.
 SIMSE_PACK_PUSH
 template <class T>
 struct ArrayBlock {
@@ -495,16 +497,6 @@ namespace simse_array_detail {
         }
         return block;
     }
-
-    // The one shared empty block per element type. This is the per-type static
-    // storage `arrayEmpty<T>()` hands out; a language-level spelling of it is the
-    // planned `object` declaration, which the RTL needs once the runtime surface
-    // moves out of hand-written C++ (the deferred list in agents.md).
-    template <class T>
-    Ref<ArrayBlock<T>> emptyBlock() {
-        static Ref<ArrayBlock<T>> empty = makeBlock<T>(0);
-        return empty;
-    }
 }
 
 SIMSE_PACK_PUSH
@@ -512,11 +504,14 @@ template <class T>
 struct Array {
     Ref<ArrayBlock<T>> _block{};
 
-    Array() : _block(simse_array_detail::emptyBlock<T>()) {}
+    // The empty array is a null handle: no allocation, and no count to race (see above).
+    Array() noexcept = default;
 
-    explicit Array(Int count)
-        : _block(count <= 0 ? simse_array_detail::emptyBlock<T>()
-                            : simse_array_detail::makeBlock<T>(count)) {}
+    explicit Array(Int count) {
+        if (count > 0) {
+            _block = simse_array_detail::makeBlock<T>(count);
+        }
+    }
 
     Int count() const { return _block ? _block->_len : 0; }
 
@@ -525,9 +520,8 @@ struct Array {
 };
 SIMSE_PACK_POP
 
-// `arrayEmpty<T>()` (specs/built-in-types.md): the shared empty array of `T`. Every
-// call returns a handle to the same zero-length block, so empty arrays cost no
-// allocation - the point of pointing a defaulted `Array<T>` at it.
+// `arrayEmpty<T>()` (specs/built-in-types.md): the empty array of `T`. It is a null block - no
+// allocation and no shared static (see the note on `Array`).
 template <class T>
 Array<T> arrayEmpty() {
     return Array<T>();
