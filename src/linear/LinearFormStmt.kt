@@ -589,6 +589,16 @@ fun IlExtractor.needsPlace(e: *AstXmlNode): Bool {
     return !ilIsHandleType(typeNode)
 }
 
+// Whether the index's receiver is a raw pointer (`p[i]`): the element is the pointee and
+// the index is a place at that address, whatever the rules can name it.
+fun IlExtractor.isPointerIndex(e: *AstXmlNode): Bool {
+    if (xmlKind(e) != AstNodeCategory.ExprIndex) {
+        return false
+    }
+    val recvType: AstXmlNode = this.exprType(xmlChildPtr(e, AstNodeKind.Receiver))
+    return !xmlIsEmpty(recvType) && xmlKind(recvType) == AstNodeCategory.TypePointer
+}
+
 // The type through a `typealias` (`StrView` is `Span<Char>`): a receiver pattern matches
 // the alias's target, the way the emitter's `resolveAlias` does before its own match.
 fun ilAliasTarget(facts: *SemFacts, typeNode: AstXmlNode): AstXmlNode {
@@ -719,7 +729,9 @@ fun IlExtractor.receiverOf(e: *AstXmlNode): Int {
         AstNodeCategory.ExprIndex -> {
             // An index through `operator get` is a value, not a place into the receiver
             // (specs/functions.md): its address does not exist, so it is read as a value.
-            if (this.isOperatorIndex(e) || !this.needsPlace(e)) {
+            // A raw-pointer index is always a place, even when the element's type has no
+            // name the rules can spell (`atPtr` over `Span<T>`'s `*T ptr`).
+            if (this.isOperatorIndex(e) || (!this.needsPlace(e) && !this.isPointerIndex(e))) {
                 return this.valueOf(e)
             }
             return this.place(
