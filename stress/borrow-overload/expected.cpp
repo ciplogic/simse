@@ -531,7 +531,7 @@ T at(Span<T>* self, Int index) {
     return _sm_expr1;
 }
 Str substr(Span<Char>* self, Int from, Int count) {
-    Int len, begin, end, _sm_expr6;
+    Int len, begin, take;
     Bool _sm_expr1;
     len = size(self);
     begin = from;
@@ -547,27 +547,24 @@ Str substr(Span<Char>* self, Int from, Int count) {
     L3:;
     begin = len;
     L4:;
-    end = begin + count;
-    _sm_expr1 = count < 0;
+    take = len - begin;
+    _sm_expr1 = count >= 0;
+    if (_sm_expr1) goto L7;
+    goto L6;
+    L7:;
+    _sm_expr1 = count < take;
     if (_sm_expr1) goto L5;
     goto L6;
     L5:;
-    end = begin;
+    take = count;
     L6:;
-    _sm_expr1 = end > len;
-    if (_sm_expr1) goto L7;
-    goto L8;
-    L7:;
-    end = len;
-    L8:;
     Str out;
-    _sm_expr1 = end > begin;
-    if (_sm_expr1) goto L9;
-    goto L10;
+    _sm_expr1 = take > 0;
+    if (_sm_expr1) goto L8;
+    goto L9;
+    L8:;
+    simse_str_setBytes(out, self->ptr, begin, take);
     L9:;
-    _sm_expr6 = end - begin;
-    simse_str_setBytes(out, self->ptr, begin, _sm_expr6);
-    L10:;
     return out;
 }
 Str toString(Span<Char>* self) {

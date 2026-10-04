@@ -38,6 +38,19 @@ fun printRow(values: *List<Int>): Unit {
     println("")
 }
 
+// One `|`-separated row of split parts, so an empty part is visible (`a||b`).
+fun printWords(values: *List<Str>): Unit {
+    var i: Int = 0
+    while (i < values.size()) {
+        if (i > 0) {
+            print("|")
+        }
+        print(values[i])
+        i = i + 1
+    }
+    println("")
+}
+
 fun main(): Int {
     var xs: List<Int> = List<Int>()
     xs.append(1)
@@ -105,5 +118,52 @@ fun main(): Int {
         odd = odd + 1
     }
     println(odd.toString())
+    // `splitIter`: the same split as `split`, one part at a time, and each part is a
+    // `StrView` into the source - only `toString()` at the drain copies. Nothing is built
+    // between the source and the drain, so a `where` upstream reads parts the drain never sees.
+    printWords(*"a,bb,,ccc".splitIter(",").select((p: *StrView) -> p.toString()).toList())
+    printWords(*"a,bb,,ccc".splitIter(",").where((p: *StrView) -> p.size() > 0).select((p: *StrView) -> p.toString()).toList())
+    printWords(*"a,,b,".splitIter(",").select((p: *StrView) -> p.toString()).toList())
+    printWords(*"solo".splitIter(",").select((p: *StrView) -> p.toString()).toList())
+    printWords(*"abc".splitIter("").select((p: *StrView) -> p.toString()).toList())
+    printWords(*"".splitIter(",").select((p: *StrView) -> p.toString()).toList())
+    printWords(*"a::b::c".splitIter("::").select((p: *StrView) -> p.toString()).toList())
+    var sizes: Int = 0
+    for (n in "one,two,three".splitIter(",").select((p: *StrView) -> p.size())) {
+        sizes = sizes + *n
+    }
+    println(sizes.toString())
+    printWords(*"a,b,c,d".splitIter(",").take(2).select((p: *StrView) -> p.toString()).toList())
+
+    // A one-byte separator is the byte-separator case: a `StrView` of one byte, found with
+    // a byte compare per position.
+    printWords(*"1;2;;3".splitIter(";").select((p: *StrView) -> p.toString()).toList())
+    printWords(*"a;b;".splitIter(";").select((p: *StrView) -> p.toString()).toList())
+    printWords(*"abc".splitIter(";").select((p: *StrView) -> p.toString()).toList())
+    printWords(*"".splitIter(";").select((p: *StrView) -> p.toString()).toList())
+
+    // ... and the lazy chain agrees element for element with `split`'s list.
+    val fromSplit: List<Str> = "x,,y,".split(",")
+    val fromIter: List<Str> = "x,,y,".splitIter(",").select((p: *StrView) -> p.toString()).toList()
+    var same: Bool = fromSplit.size() == fromIter.size()
+    var at: Int = 0
+    while (at < fromSplit.size() && at < fromIter.size()) {
+        if (fromSplit[at] != fromIter[at]) {
+            same = false
+        }
+        at = at + 1
+    }
+    println(same.toString())
+
+    // `forEach`: the effect terminal. Nothing is built or drained; the lambda receives each
+    // element in place. Captures are by value, so the accumulator is a counted reference:
+    // the copy shares its storage, so the appends are visible outside.
+    xs.iter().where((x: *Int) -> *x > 3).forEach((x: *Int) -> println((*x).toString()))
+    var sink: &List<Int> = &List<Int>()
+    xs.iter().where((x: *Int) -> *x % 2 == 0).forEach((x: *Int) -> {
+        sink.append(*x * 100)
+    })
+    printRow(*sink)
+
     return 0
 }

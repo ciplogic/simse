@@ -88,3 +88,43 @@ fun ..*T.toList<T>(): List<T> {
     }
     return out
 }
+
+// `forEach`: the effect terminal. The elements are handed to `action` for its side effects
+// and nothing is collected - a loop that wants no result at all (a call, a print, an append)
+// ends here instead of draining into a list it would discard. The lambda captures by value,
+// so an accumulator it writes is captured as a pointer (`&target`).
+fun ..*T.forEach<T>(action: (*T) -> Unit): Unit {
+    while (this.advance()) {
+        action(this.current)
+    }
+}
+
+// `splitIter`: `Str.split` as a source machine, yielding each part as it is found - a
+// `StrView` into the receiver, so a part costs no allocation at all (`toString()` is the one
+// call that copies) and a pipeline drains or filters the parts without the `List<Str>`
+// `split` builds first. The separator is a view, not a `Str`: every call site passes a
+// literal, and a literal already is a view, so a separator is never copied and a one-byte
+// separator is a byte scan inside `find`. The separation rule is `split`'s
+// (`simse_str_split`, src/rtl/_res.md): an empty separator is the whole string as one part,
+// and an empty part is yielded like any other (`"a,,b,"` is four parts). The views borrow
+// the receiver, which must outlive the chain, as with every source (`List.iter`'s contract).
+fun Str.splitIter(separator: StrView): ..*StrView {
+    var source: StrView = spanOfStr(this)
+    if (separator.size() == 0) {
+        var whole: StrView = source
+        yield *whole
+        return
+    }
+    var pos: Int = 0
+    while (true) {
+        var rest: StrView = source.slice(pos, source.size() - pos)
+        var found: Int = rest.find(separator)
+        if (found < 0) {
+            yield *rest
+            return
+        }
+        var head: StrView = rest.slice(0, found)
+        pos = pos + found + separator.size()
+        yield *head
+    }
+}

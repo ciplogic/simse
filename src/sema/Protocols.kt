@@ -10,6 +10,7 @@ package sema
 import compiler
 
 import common
+import linq
 
 // One `when T: P` requirement: a type parameter and the protocol it must satisfy.
 data class ProtocolConstraint(
@@ -18,26 +19,26 @@ data class ProtocolConstraint(
     var protocol: Str
 )
 
+// One `param:protocol` item of a declaration's `Protocols` attribute. `slice` is the view's
+// own shape: one argument takes the tail, two take a window (no `-1` sentinel).
+fun semProtocolConstraintOf(item: *StrView): ProtocolConstraint {
+    val at: Int = item.indexOf(":")
+    return ProtocolConstraint(item.slice(0, at).toString(), item.slice(at + 1).toString())
+}
+
 // The constraints a declaration carries, in written order (empty when it has no `when`).
-// The parser writes the attribute as `param:protocol` items joined by a comma.
+// The parser writes the attribute as `param:protocol` items joined by a comma. The split is a
+// lazy chain: an item that carries no `:` is filtered out before the `Str` copy the
+// `ProtocolConstraint` needs, and no `List<Str>` of items is built at all.
 fun semProtocolConstraints(decl: *AstXmlNode): List<ProtocolConstraint> {
-    var out: List<ProtocolConstraint> = List<ProtocolConstraint>()
     if (xmlIsEmpty(decl)) {
-        return out
+        return List<ProtocolConstraint>()
     }
     val raw: Str = xmlAttr(decl, AstNodeAttributeKind.Protocols)
     if (raw == "") {
-        return out
+        return List<ProtocolConstraint>()
     }
-    val items: List<Str> = raw.split(",")
-    for (*item in items) {
-        val at: Int = item.indexOf(":")
-        if (at < 0) {
-            continue
-        }
-        out.append(ProtocolConstraint(item.substr(0, at), item.substr(at + 1, -1)))
-    }
-    return out
+    return raw.splitIter(",").where((item: *StrView) -> item.indexOf(":") >= 0).select((item: *StrView) -> semProtocolConstraintOf(item)).toList()
 }
 
 // The protocol's name (`Printable`) and the method name its signature declares
@@ -64,19 +65,20 @@ fun semProtocolSubject(decl: *AstXmlNode): Str {
     return xmlAttr(receiver, AstNodeAttributeKind.Name)
 }
 
-// The non-receiver parameters of a declaration, in order: the explicit `this` the receiver
-// spelling adds is skipped.
-fun semProtocolValueParams(decl: *AstXmlNode): List<AstXmlNode> {
-    var out: List<AstXmlNode> = List<AstXmlNode>()
-    val params: List<AstXmlNode> = xmlChildren(decl, AstNodeKind.Param)
-    val skipsReceiver: Bool = !xmlIsEmpty(semExtensionReceiver(decl))
-    for (*param in params) {
-        if (skipsReceiver && xmlAttr(param, AstNodeAttributeKind.Name) == "this") {
-            continue
-        }
-        out.append(param)
+// One `Param` child that is a *value* parameter: the explicit `this` the receiver spelling
+// adds is skipped.
+fun semIsValueParam(child: *AstXmlNode, skipsReceiver: Bool): Bool {
+    if (child.name != AstNodeKind.Param) {
+        return false
     }
-    return out
+    return !(skipsReceiver && xmlAttr(child, AstNodeAttributeKind.Name) == "this")
+}
+
+// The non-receiver parameters of a declaration, in order. The walk is lazy (`where`) up to
+// the `toList` drain, so the parameters the predicate rejects never reach a list.
+fun semProtocolValueParams(decl: *AstXmlNode): List<AstXmlNode> {
+    val skipsReceiver: Bool = !xmlIsEmpty(semExtensionReceiver(decl))
+    return spanOfArray(decl.Children).iter().where((child: *AstXmlNode) -> semIsValueParam(child, skipsReceiver)).toList()
 }
 
 // Whether a type node is `Unit` or absent - "nothing returned".

@@ -44,6 +44,90 @@ fun Emitter.findExtensionFnByType(name: *Str, recv: AstXmlNode, argCount: Int): 
     return -1
 }
 
+// The type-parameter name a machine pattern yields (`..*T`'s `T`, through the pointer a
+// `..*T` writes), or "" when the node is not a machine pattern over a parameter.
+fun machinePatternElement(typeNode: *AstXmlNode): Str {
+    if (xmlIsEmpty(typeNode) || xmlKind(typeNode) != AstNodeCategory.TypeYield) {
+        return ""
+    }
+    var inner: *AstXmlNode = xmlChildPtr(typeNode, AstNodeKind.Inner)
+    while (!xmlIsEmpty(inner)
+        && (xmlKind(inner) == AstNodeCategory.TypePointer || xmlKind(inner) == AstNodeCategory.TypeReference)
+    ) {
+        inner = xmlChildPtr(inner, AstNodeKind.Inner)
+    }
+    if (xmlIsEmpty(inner) || xmlKind(inner) != AstNodeCategory.TypeNamed) {
+        return ""
+    }
+    return xmlAttr(inner, AstNodeAttributeKind.Name)
+}
+
+// The function whose yielding body created a machine class (`where_yieldable` -> `where`),
+// the inverse of `machineName(...) + "_yieldable"`. Null when nothing matches.
+fun Emitter.findMachineCreator(recvType: AstXmlNode): *CgFn {
+    val name: Str = xmlAttr(recvType, AstNodeAttributeKind.Name)
+    if (name == "") {
+        return null
+    }
+    var i: Int = 0
+    while (i < this.functions.size()) {
+        val fn: *CgFn = *this.functions[i]
+        i = i + 1
+        if (fn.isNative || xmlIsEmpty(fn.receiver)) {
+            continue
+        }
+        val bare: Str = this.machineName(fn.decl) + "_yieldable"
+        val qualified: Str = this.qualify(fn.packageName, this.machineName(fn.decl)) + "_yieldable"
+        if (name == bare || name == qualified) {
+            return fn
+        }
+    }
+    return null
+}
+
+// The callee's type arguments for a call whose *result* does not name them: a `Unit`-terminal
+// like `forEach` (`fun ..*T.forEach<T>(action: (*T) -> Unit)`) has no machine type to copy
+// them from, so the element parameter is read from the receiver machine's own creating
+// function (`where_yieldable<Int, ...>` yields `Int`) and bound by name. Answers `out` in
+// `fn.templateParams` order; false - do not attach - when a parameter is not the element.
+fun Emitter.machineCallArgsFromReceiver(fn: *CgFn, recvType: AstXmlNode, out: *List<AstXmlNode>): Bool {
+    val calleeElement: Str = machinePatternElement(fn.receiver)
+    if (calleeElement == "") {
+        return false
+    }
+    val creator: *CgFn = this.findMachineCreator(recvType)
+    if (creator == null) {
+        return false
+    }
+    val creatorReturn: *AstXmlNode = xmlChildPtr(creator.decl, AstNodeKind.ReturnType)
+    val creatorElement: Str = machinePatternElement(creatorReturn)
+    if (creatorElement == "") {
+        return false
+    }
+    var elementAt: Int = -1
+    var e: Int = 0
+    while (e < creator.templateParams.size()) {
+        if (creator.templateParams[e] == creatorElement) {
+            elementAt = e
+        }
+        e = e + 1
+    }
+    val recvArgs: List<AstXmlNode> = xmlChildren(recvType, AstNodeKind.TypeArg)
+    if (elementAt < 0 || elementAt >= recvArgs.size()) {
+        return false
+    }
+    val element: AstXmlNode = recvArgs[elementAt]
+    var i: Int = 0
+    while (i < fn.templateParams.size()) {
+        if (fn.templateParams[i] != calleeElement) {
+            return false
+        }
+        out.append(element)
+        i = i + 1
+    }
+    return true
+}
+
 // The receiver argument for a lowered Simse call: a value receiver is a raw pointer, so
 // the argument is the receiver's address (`simse_addressOf`, src/rtl/types.hpp); a
 // counted reference is unwrapped with `.get()`, and a bare `this` is already that pointer.

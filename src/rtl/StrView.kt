@@ -68,7 +68,8 @@ fun StrView.indexOf(sub: Str): Int {
     return this.find(sub)
 }
 
-// The owned copy of `count` bytes from `from`, clamped like `Str.substr`.
+// The owned copy of `count` bytes from `from`, clamped like `Str.substr` (`rtl.kt`):
+// `from` is clamped to [0, size], and a negative count takes the rest.
 fun StrView.substr(from: Int, count: Int): Str {
     val len = this.size()
     var begin = from
@@ -78,16 +79,13 @@ fun StrView.substr(from: Int, count: Int): Str {
     if (begin > len) {
         begin = len
     }
-    var end = begin + count
-    if (count < 0) {
-        end = begin
-    }
-    if (end > len) {
-        end = len
+    var take = len - begin
+    if (count >= 0 && count < take) {
+        take = count
     }
     var out: Str
-    if (end > begin) {
-        out.setBytes(this.ptr, begin, end - begin)
+    if (take > 0) {
+        out.setBytes(this.ptr, begin, take)
     }
     return out
 }

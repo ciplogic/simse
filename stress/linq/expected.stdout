@@ -7,3 +7,20 @@
 0
 30
 3
+a|bb||ccc
+a|bb|ccc
+a||b|
+solo
+abc
+
+a|b|c
+11
+a|b
+1|2||3
+a|b|
+abc
+
+true
+4
+5
+200 400

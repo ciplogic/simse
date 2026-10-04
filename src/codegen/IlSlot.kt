@@ -596,12 +596,21 @@ fun Emitter.attachMachineCallArgs(
         return
     }
     val dstArgs: List<AstXmlNode> = xmlChildren(this.ilSlotTypeNode(il, this.ilDst(op)), AstNodeKind.TypeArg)
-    if (dstArgs.size() < fn.templateParams.size()) {
+    var wanted: List<AstXmlNode> = List<AstXmlNode>()
+    if (dstArgs.size() >= fn.templateParams.size()) {
+        var i: Int = 0
+        while (i < fn.templateParams.size()) {
+            wanted.append(dstArgs[i])
+            i = i + 1
+        }
+    } else if (!this.machineCallArgsFromReceiver(fn, recvType, wanted)) {
+        // The result names no parameter (a `Unit` terminal) and the receiver does not yield
+        // the element: leave the call as C++ sees it, the way it was before.
         return
     }
     var i: Int = 0
-    while (i < fn.templateParams.size()) {
-        xmlAddChild(callee, this.renameRole(dstArgs[i], AstNodeKind.TypeArg))
+    while (i < wanted.size()) {
+        xmlAddChild(callee, this.renameRole(wanted[i], AstNodeKind.TypeArg))
         i = i + 1
     }
     xmlAddChild(callee, this.renameRole(recvType, AstNodeKind.TypeArg))

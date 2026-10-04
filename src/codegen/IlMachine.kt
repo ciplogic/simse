@@ -229,9 +229,13 @@ fun Emitter.emitMachine(
     this.registerMachineType(className, machine)
     // A machine's methods are the lowering's output (linear/Yield.kt), so they have not been
     // optimized: a machine method is a body like any other (`Optimize.kt`), and its own
-    // control flow is what the passes are careful never to disturb.
+    // control flow is what the passes are careful never to disturb. `threadJumps` retargets a
+    // jump through a suspend point's trampoline (`LYk: goto Lx`), which orphans the label;
+    // the simplifier then drops the label, and the unreachable `goto` it guarded, before the
+    // body is emitted (a `C4102` otherwise).
     for (*method in machine.methods) {
         linOptimizeBody(*method.body)
+        method.body = linSimplifyBody(*method.body).body
     }
     // A generic function's machine is a class template: its fields are typed with the
     // function's type parameters, so they are declared where used (impl_specs/yield.md).

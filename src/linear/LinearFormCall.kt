@@ -791,8 +791,11 @@ fun IlExtractor.lambdaOf(e: *AstXmlNode, dst: Int, expected: AstXmlNode, owner: 
 
     // The lambda's body has a frame of its own, so it is lowered and *typed* here, with that
     // frame: parameters and captures. Without this pass its declarations stay untyped, and a
-    // slot the frame cannot name sends every spelling decision the wrong way.
-    var lowered: List<AstXmlNode> = ilLambdaLower(bodyList)
+    // slot the frame cannot name sends every spelling decision the wrong way. A `Unit`
+    // result keeps a single expression a statement instead of making it the return value.
+    val unitResult: Bool = !xmlIsEmpty(callable)
+        && semReturnsNothing(xmlChildPtr(callable, AstNodeKind.ReturnType))
+    var lowered: List<AstXmlNode> = ilLambdaLower(bodyList, unitResult)
     val lambdaSemantics: SemBody = SemBody(
         xmlEmptyNode(), this.fn.typeParams, ilNamedTypeNode(symbol), xmlEmptyNode(),
         paramNames, paramTypes, info.captureTypes

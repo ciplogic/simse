@@ -238,10 +238,13 @@ fun ilSplitParams(text: Str): List<Str> {
 }
 
 // A lambda's body, lowered the way the emitter lowers it (impl_specs/linear-lowering.md),
-// with a single-expression body rewritten to the `return` it stands for.
-fun ilLambdaLower(body: *List<AstXmlNode>): List<AstXmlNode> {
+// with a single-expression body rewritten to the `return` it stands for. A lambda the
+// expected callable types as answering `Unit` keeps its single expression as a *statement*:
+// a `return <void call>` is not a value the emitter can declare (`isUnitValue` sees the
+// print/println shape, not an arbitrary void member call).
+fun ilLambdaLower(body: *List<AstXmlNode>, unitResult: Bool): List<AstXmlNode> {
     var out: List<AstXmlNode> = List<AstXmlNode>()
-    if (body.size() == 1 && xmlKind(body[0]) == AstNodeCategory.StmtExprStmt) {
+    if (!unitResult && body.size() == 1 && xmlKind(body[0]) == AstNodeCategory.StmtExprStmt) {
         val expr: *AstXmlNode = xmlChildPtr(body[0], AstNodeKind.Expr)
         if (!xmlIsEmpty(expr)) {
             var ret: AstXmlNode = linStmt(
