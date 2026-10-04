@@ -108,7 +108,7 @@ Out:
 - `impl_specs/profiling.md` - the report, the summaries, where the file goes.
 - `tools/_check_tree.mjs` (verifies a report), `tools/_profile_ab.mjs` (profiled A/B),
   `tools/_bench_ab.mjs` (clean A/B).
-- `ai/contributing.md` - the attribute-read guidance; `impl_specs/codegen` work lives in
-  `src/codegen/Codegen.kt`, the linear passes in `src/linear/`.
+- `ai/contributing.md` - the attribute-read guidance; the emitter is
+  `src/codegen/Codegen.kt`, the linear passes `src/linear/`.
 - Regenerate the report: `bun build.js --release --profile --exe build/digits/simse_prof.exe
   --out build/digits/prof_compiler.cpp`, then run it over `--root src`.
