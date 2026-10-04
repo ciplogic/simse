@@ -23,6 +23,10 @@ The loop that verifies any compiler change, and the only one that counts:
 ./build.bat --release && bun tools/stress.js && bun tools/bootstrap.js
 ```
 
+A passing loop is the point to commit it and push: one commit per validated change, in the
+style `ai/contributing.md` describes. A change that is believed better does not wait for a
+review request.
+
 References to the old numbered sections of this file map as: §1/§3/§4 → this file and
 `impl_specs/`, §2 → `ai/building.md`, §5/§6 → `ai/contributing.md`, §7 → `ai/language.md`,
 §8 → `ai/status.md`, §9 → `ai/contributing.md` (gotchas).
