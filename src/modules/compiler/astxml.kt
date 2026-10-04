@@ -93,6 +93,11 @@ enum class AstNodeAttributeKind {
     // The modifiers are appended last, so the values already in use do not move.
     IsBorrow,
 
+    // `operator fun get`/`set` (specs/functions.md, "Operator functions"): the index syntax
+    // is the call - `x[i]` is `x.get(i)` and `x[i] = v` is `x.set(i, v)` - for a receiver
+    // whose type declares the operator. Kotlin's convention is the spelling.
+    IsOperator,
+
     // The `initByValue` construction convention's marker on a `var x = T(a)` declaration
     // (src/sema/TypeInfer.kt): the initializer constructs through `T.initByValue`, so the
     // declaration stays where it is and src/linear/LinearForm.kt routes it.

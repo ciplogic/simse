@@ -12,6 +12,7 @@ import common
 fun Analyzer.run(): Unit {
     this.checkPreludeTypeNames()
     this.collectGlobal()
+    this.checkOperators()
     this.collectUninitTypes()
     var n: Int = 0
     while (n < this.inputs.size()) {
@@ -26,6 +27,128 @@ fun Analyzer.run(): Unit {
         this.popScope()
         n = n + 1
     }
+}
+
+// The operator functions (`operator fun get`/`set`, specs/functions.md): the index syntax
+// resolves them, so their shape is fixed - `get` takes the index, `set` the index and the
+// value - and only the names with a lowering are let through. A top-level one must have a
+// receiver (a class-body method has its class), because the syntax needs a value to index.
+fun Analyzer.checkOperators(): Unit {
+    var n: Int = 0
+    while (n < this.inputs.size()) {
+        val input: SemaInput = this.inputs[n]
+        this.file = input.fileName
+        for (*decl in xmlDecls(input.module)) {
+            if (decl.name == AstNodeKind.Function) {
+                this.checkOperatorDecl(decl, false)
+            }
+            if (decl.name == AstNodeKind.DataClass) {
+                for (*method in xmlChildren(decl, AstNodeKind.Function)) {
+                    this.checkOperatorDecl(method, true)
+                }
+            }
+        }
+        n = n + 1
+    }
+}
+
+// One declaration, when it carries `operator`. `inClass` says a class body supplies the
+// receiver; a top-level operator must name its own (`fun T.get(...)` or `this: T`).
+fun Analyzer.checkOperatorDecl(decl: *AstXmlNode, inClass: Bool): Unit {
+    if (xmlAttr(decl, AstNodeAttributeKind.IsOperator) != "true") {
+        return
+    }
+    val name: Str = xmlAttr(decl, AstNodeAttributeKind.Name)
+    val line: Int = xmlLine(decl)
+    val column: Int = xmlColumn(decl)
+    if (name != "get" && name != "set") {
+        this.diag(line, column, `'@name' is not an operator: 'get' and 'set' are the indexers`)
+        return
+    }
+    if (!inClass && xmlAttr(decl, AstNodeAttributeKind.HasReceiver) != "true"
+        && xmlIsEmpty(semExtensionReceiver(decl))
+    ) {
+        this.diag(line, column, `an operator function needs a receiver: 'fun T.@name(...)'`)
+        return
+    }
+    // The receiver is not a parameter in either spelling: an explicit `this` is skipped by
+    // `semReceiverParams`, a Kotlin-style receiver is not a `Param` at all.
+    val count: Int = xmlCount(decl, AstNodeKind.Param) - semReceiverParams(decl)
+    if (name == "get" && count != 1) {
+        this.diag(line, column, "'get' takes one index parameter")
+        return
+    }
+    if (name == "set" && count != 2) {
+        this.diag(line, column, "'set' takes an index and a value")
+        return
+    }
+}
+
+// `x[i] = v` on a type that declares `operator get` but no `operator set`: a getter answers
+// a *value*, so there is no place to write (specs/functions.md). The write needs its own
+// operator; the diagnostic lives here because only the checker can see this much before
+// the body is lowered.
+fun Analyzer.checkOperatorIndexWrite(target: *AstXmlNode): Unit {
+    val actual: AstXmlNode = this.exprType(xmlChildPtr(target, AstNodeKind.Receiver))
+    if (xmlIsEmpty(actual)) {
+        return
+    }
+    if (!this.hasOperatorFn("get", actual) || this.hasOperatorFn("set", actual)) {
+        return
+    }
+    this.diag(
+        xmlLine(target), xmlColumn(target),
+        "'set' is not declared for this receiver: an index write needs 'operator set(index, value)'"
+    )
+}
+
+// Whether the type `actual` declares the operator `name`, in either spelling: a class-body
+// method (found through the type's declaration) or a visible extension (found through the
+// functions table). `semaReceiverOuter` follows aliases, so `StrView` matches a `Span`
+// operator too.
+fun Analyzer.hasOperatorFn(name: *Str, actual: AstXmlNode): Bool {
+    val outer: AstXmlNode = this.semaReceiverOuter(actual)
+    val decl: *AstXmlNode = this.types.getPtr(xmlAttr(outer, AstNodeAttributeKind.Name))
+    if (decl != null) {
+        for (*method in xmlChildren(*decl, AstNodeKind.Function)) {
+            if (xmlAttr(method, AstNodeAttributeKind.Name) == name && xmlAttr(
+                    method,
+                    AstNodeAttributeKind.IsOperator
+                ) == "true"
+            ) {
+                return true
+            }
+        }
+    }
+    val overloads: *List<AstXmlNode> = this.functions.getPtr(name)
+    if (overloads == null) {
+        return false
+    }
+    for (*fn in overloads) {
+        if (xmlAttr(fn, AstNodeAttributeKind.IsOperator) != "true") {
+            continue
+        }
+        var receiver: AstXmlNode = xmlEmptyNode()
+        val params: List<AstXmlNode> = xmlChildren(fn, AstNodeKind.Param)
+        if (xmlAttr(fn, AstNodeAttributeKind.HasReceiver) == "true" && !xmlIsEmpty(
+                xmlChildPtr(fn, AstNodeKind.Receiver)
+            )
+        ) {
+            receiver = xmlChild(fn, AstNodeKind.Receiver)
+        } else if (params.size() > 0 && xmlAttr(params[0], AstNodeAttributeKind.Name) == "this"
+            && !xmlIsEmpty(xmlChildPtr(params[0], AstNodeKind.Type))
+        ) {
+            receiver = xmlChild(params[0], AstNodeKind.Type)
+        }
+        if (xmlIsEmpty(receiver)) {
+            continue
+        }
+        val typeParams: List<Str> = xmlTypeParamNames(fn)
+        if (semaUnifyReceiver(*receiver, *actual, *typeParams)) {
+            return true
+        }
+    }
+    return false
 }
 
 // Every class that declares `unInit`, before anything is analyzed: the declarations are

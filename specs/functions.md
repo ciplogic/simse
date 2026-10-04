@@ -204,6 +204,39 @@ Like `data`, the mark is a promise the compiler trusts; unlike `data` it never l
 folded. The RTL writes it on the declarations the proof cannot read (its bodyless natives); its
 Simse bodies need no mark.
 
+## Operator functions (`operator`)
+
+`operator` marks an indexer - the Kotlin convention, and the modifier is contextual like
+`borrow`: a program may still use `operator` as an ordinary name.
+
+```kt
+data class Span2<T>(var items: List<T>) {
+    operator fun get(index: Int): T { return this.items[index] }
+
+    operator fun set(index: Int, value: T): Unit { this.items[index] = value }
+}
+
+operator fun Point.get(index: Int): Int { ... }
+operator fun Point.set(index: Int, value: Int): Unit { ... }
+```
+
+The two spellings an indexer has are the two an extension has: a method in the class body,
+or an extension (`fun T.get(...)`, `this: T`). The names and their shapes are fixed:
+
+- `get` takes the index and answers the element: `x[i]` is `x.get(i)`;
+- `set` takes the index and the value and answers nothing: `x[i] = v` is `x.set(i, v)`,
+  and `x[i] op= v` reads through `get` and writes through `set`.
+
+A declaration whose receiver has no `operator get`/`set` is refused rather than silently
+ignored (a name without a lowering, a `get` with the wrong number of parameters, or an
+operator with no receiver). When a type declares neither, the index syntax keeps its
+built-in meanings (a container's element, a `Str`'s `Char`, a span's `T`).
+
+An index read through `operator get` is a **value**: the getter answers a fresh `T`, so
+`x[i]` is not a place into `x` - it cannot be assigned to through an alias and it may be
+passed to a `borrow` parameter only as a materialized temporary. A write needs its own
+`operator set`; `x[i] = v` on a type with only `get` is an error.
+
 ## Methods inside classes
 
 Methods written inside a `class` or `data class` body are equivalent to extension

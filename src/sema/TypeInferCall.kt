@@ -188,6 +188,47 @@ fun SemInfer.resolveAlias(typeNode: *AstXmlNode): AstXmlNode {
     return current
 }
 
+// `x[i]` for a receiver whose type declares `operator fun get` (specs/functions.md): the
+// index syntax is the call, so the read's type is that `get`'s return type. Empty when no
+// operator matches - a built-in index shape decides then.
+fun SemInfer.operatorGetReturn(recvExpr: *AstXmlNode, indexNode: *AstXmlNode): AstXmlNode {
+    val recv: AstXmlNode = this.resolveAlias(semPointee(this.infer(recvExpr)))
+    if (xmlIsEmpty(recv)) {
+        return xmlEmptyNode()
+    }
+    var i: Int = 0
+    while (i < this.facts.functions.size()) {
+        val fn: *SemFnFact = *this.facts.functions[i]
+        i = i + 1
+        if (fn.isNative || xmlIsEmpty(fn.receiver)) {
+            continue
+        }
+        if (fn.name != "get" || fn.paramCount != 1
+            || xmlAttr(fn.decl, AstNodeAttributeKind.IsOperator) != "true"
+        ) {
+            continue
+        }
+        val ret: *AstXmlNode = xmlChildPtr(fn.decl, AstNodeKind.ReturnType)
+        if (xmlIsEmpty(ret)) {
+            continue
+        }
+        var bindings: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
+        if (!semBindTypes(this.resolveAlias(fn.receiver), recv, fn.templateParams, bindings)) {
+            continue
+        }
+        if (fn.templateParams.size() > 0) {
+            var argTypes: List<AstXmlNode> = List<AstXmlNode>()
+            argTypes.append(this.infer(indexNode))
+            semBindCallArgs(fn.decl, xmlEmptyNode(), *argTypes, *fn.templateParams, *bindings)
+        }
+        val result: AstXmlNode = semSubstitute(ret, bindings, fn.templateParams)
+        if (!xmlIsEmpty(result)) {
+            return semMachineType(result, fn, bindings, recv)
+        }
+    }
+    return xmlEmptyNode()
+}
+
 fun SemInfer.memberReturn(callee: *AstXmlNode, argNodes: *List<AstXmlNode>): AstXmlNode {
     val receiverType: AstXmlNode = this.infer(xmlChildPtr(callee, AstNodeKind.Receiver))
     val recv: AstXmlNode = this.resolveAlias(semPointee(receiverType))
@@ -571,6 +612,15 @@ fun SemInfer.infer(e: *AstXmlNode): AstXmlNode {
         }
 
         AstNodeCategory.ExprIndex -> {
+            // An `operator fun get` on the receiver's type is the index syntax's meaning
+            // (specs/functions.md): the result is that `get`'s return type. The built-in
+            // container shapes below decide when nothing declares one.
+            val operatorType: AstXmlNode = this.operatorGetReturn(
+                xmlChildPtr(e, AstNodeKind.Receiver), xmlChildPtr(e, AstNodeKind.Index)
+            )
+            if (!xmlIsEmpty(operatorType)) {
+                return operatorType
+            }
             // The receiver through a `typealias`: `StrView` is `Span<Char>`, so a view's
             // index is the span's element (`Char`) where the bare alias would leave it `?`.
             val baseType: AstXmlNode =

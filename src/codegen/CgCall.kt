@@ -108,6 +108,14 @@ fun Emitter.exprInner(e: *AstXmlNode, expected: *AstXmlNode): Str {
 
         AstNodeCategory.ExprIndex -> {
             val lhs: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Receiver)
+            val indexNode: *AstXmlNode = xmlChildPtr(e, AstNodeKind.Index)
+            // The index syntax on a type that declares `operator get` (specs/functions.md)
+            // is that call: `x[i]` is `get(x, i)`, with the receiver the method convention
+            // takes. The built-in shapes below apply when the type declares none.
+            val getAt: Int = this.operatorIndexFn("get", lhs, 1)
+            if (getAt >= 0) {
+                return this.operatorIndexGetText(getAt, lhs, indexNode)
+            }
             val baseExpr: Str = this.expr(lhs, 12, xmlEmptyNode())
             val baseType: AstXmlNode = this.inferType(lhs)
             var deref: Bool = false

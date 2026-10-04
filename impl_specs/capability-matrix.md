@@ -4797,3 +4797,33 @@ each. `Opt<T>` was a struct wrapping `std::optional<T>` and `Res<T>` was a struc
   Verified: `bun tools/iterate.js --full` - 73/73 and both fixed points byte for byte.
   No `expected.cpp` moved (the stream text never was in one); the refreshed bootstrap carries
   the module include and the shifted `ns` prefixes (package `streams` sorts before `xml`).
+
+- **`operator fun get`/`set`: the Kotlin indexer convention.** `operator` is a contextual
+  declaration modifier like `borrow` (not a reserved word): `operator fun get(index)` and
+  `operator fun set(index, value)` - in a class body or as an extension - are what the index
+  syntax resolves against, so `x[i]` is `x.get(i)` and `x[i] = v` is `x.set(i, v)`
+  (specs/functions.md, "Operator functions"). The parser accepts the modifier on its own, with
+  `data`/`suspend`/`borrow`, and before an attribute; the declaration carries it as
+  `IsOperator`, a new AST attribute (src/modules/compiler/astxml.kt). The checker validates the
+  shape where the declarations are collected (`SemaCollect.checkOperators`): only `get`/`set`
+  have a lowering, a top-level operator needs a receiver, and the arity is fixed - so a `plus`
+  or a zero-parameter `get` is a diagnostic (`stress/diagnostic-operator-name`,
+  `diagnostic-operator-arity`). Three parts resolve the syntax:
+  - **Typing** (`TypeInferCall.operatorGetReturn`): the read's type is the matched `get`'s
+    return type with the class's parameters substituted, so an unannotated
+    `val first = numbers[0]` infers `Int` (`Span2<T>`).
+  - **Emission** (`operatorIndexFn`/`operatorIndexGetText`/`operatorIndexSetText`,
+    src/codegen/CgResolve.kt): a receiver whose type declares the operator is called through
+    the method convention (`get(simse_addressOf(x), i)`), recording the reach the way a
+    synthesized call must; arguments go through `cgMethodStrArgs`, so a string literal into a
+    bare type parameter materializes `Str(...)` instead of failing C++ deduction. A write on a
+    type with only `get` is a checker diagnostic (`diagnostic-operator-no-set`).
+  - **Places** (src/linear/LinearFormStmt.kt): a read through `operator get` is a *value*, not
+    a place into the receiver - `isOperatorIndex` keeps `receiverOf` and the address-of path
+    (`*x[i]`) from taking an address that does not exist, which is what `borrow` parameters
+    used to do (`simse_addressOf(get(...))`, a dangling temporary).
+  A program-typed `Span2<T>` with both operators, an extension `Point.get/set`, compound
+  assignment and a `Span2<Str>` write are `stress/operator-index`. Reach for a *prelude*
+  operator is marked by its receiver type (`collectProgramNames`), because the index site has
+  no call node for the walk to see.
+  Verified: `bun tools/iterate.js --full` - 76/76 and both fixed points byte for byte.

@@ -28,11 +28,12 @@ fun Parser.parseParamName(): Str {
 
 // `attrName`/`attrArgs` are the parsed attribute (specs/attributes.md). An attributed
 // method may be body-less; a body-less method with no attribute has no implementation.
-// `pure`/`suspendModifier`/`borrowModifier` are the `data`/`suspend`/`borrow` modifiers,
-// carried as `IsPure`/`IsSuspend`/`IsBorrow`; `parseDecl` says what each promises.
+// `pure`/`suspendModifier`/`borrowModifier`/`operatorModifier` are the
+// `data`/`suspend`/`borrow`/`operator` modifiers, carried as
+// `IsPure`/`IsSuspend`/`IsBorrow`/`IsOperator`; `parseDecl` says what each promises.
 fun Parser.parseFunction(
     attrName: *Str, attrArgs: *List<Str>, pure: Bool, suspendModifier: Bool,
-    borrowModifier: Bool
+    borrowModifier: Bool, operatorModifier: Bool
 ): AstXmlNode {
     val pos: SourcePos = this.peek(0).pos
     var nativeSymbol: Str = ""
@@ -189,6 +190,7 @@ fun Parser.parseFunction(
     attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsPure, boolText(pure)))
     attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsSuspend, boolText(suspendModifier)))
     attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsBorrow, boolText(borrowModifier)))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsOperator, boolText(operatorModifier)))
     if (hasNativeSymbol) {
         attrs.append(AstNodeAttribute(AstNodeAttributeKind.NativeSymbol, nativeSymbol))
     }
@@ -378,4 +380,3 @@ fun Parser.parseGenericArgs(): List<AstXmlNode> {
     this.matchGenericCloser()
     return out
 }
-

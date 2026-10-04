@@ -1240,6 +1240,23 @@ fun Emitter.collectProgramNames(): Unit {
             this.referencedNames.insert("simse_resOk", true)
             this.referencedNames.insert("simse_resErr", true)
         }
+        // An `operator fun get`/`set` (specs/functions.md) is reached through the *index*
+        // syntax: the emitter synthesizes the call at the index site, so no call node exists
+        // for the walk above to see. A program that names the receiver's type can index one
+        // of its values, so the type's operators are marked reached with it; a program that
+        // names none cannot call them at all.
+        for (*fn in this.functions) {
+            if (!fn.prelude || !fn.hasBody) {
+                continue
+            }
+            if (xmlAttr(fn.decl, AstNodeAttributeKind.IsOperator) != "true") {
+                continue
+            }
+            val receiverName: Str = this.outerTypeName(fn.receiver)
+            if (receiverName != "" && this.referencedTypes.has(receiverName)) {
+                this.referencedNames.insert(fn.name, true)
+            }
+        }
         // A shared resource section (`strops`, `dictops`, ...) is emitted whole once any of
         // its symbols is reached, so every declaration its text holds is emitted with it -
         // and every signature's types come along (`Opt<Int> simse_str_toInt(...)`). The

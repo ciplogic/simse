@@ -296,6 +296,27 @@ fun Emitter.ilEmitOps(il: *IlBody, frame: *IlFrame, level: Int): IlText {
             } else {
                 val base: AstXmlNode = this.ilSlotNode(il, frame, this.ilOpOperand(op.operands, 0), 0)
                 val index: AstXmlNode = this.ilOperandNode(il, frame, this.ilOpOperand(op.operands, 1), 0)
+                // The index syntax on a type that declares `operator set`
+                // (specs/functions.md) is that call: `x[i] = v` is `set(x, i, v)`.
+                val setAt: Int = this.operatorIndexFn("set", base, 2)
+                if (setAt >= 0) {
+                    val setValue: AstXmlNode = this.ilOperandNode(il, frame, this.ilOpOperand(op.operands, 2), 0)
+                    if (xmlIsEmpty(base) || xmlIsEmpty(index) || xmlIsEmpty(setValue)) {
+                        return IlText(false, "", "an index write with no operator arguments")
+                    }
+                    val callText: Str = this.operatorIndexSetText(setAt, base, index, setValue)
+                    this.ilLine(text, lvl, `@callText;`)
+                    i = i + 1
+                    continue
+                }
+                if (this.operatorIndexFn("get", base, 1) >= 0) {
+                    // The type reads through `get` but declares no write: an index write
+                    // needs its own operator, the way Kotlin's indexers work.
+                    return IlText(
+                        false, "",
+                        "this index has no 'operator set(index, value)': an index write needs one"
+                    )
+                }
                 if (!xmlIsEmpty(base) && !xmlIsEmpty(index)) {
                     target = AstXmlNode(
                         AstNodeKind.Expr,

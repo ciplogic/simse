@@ -90,7 +90,7 @@ fun Parser.parseImport(): AstXmlNode {
 
 fun Parser.parseDecl(): AstXmlNode {
     if (this.checkKind(TokenKind.Attribute)) {
-        return this.parseAttributedDecl(false, false, false)
+        return this.parseAttributedDecl(false, false, false, false)
     }
     val text: Str = this.peek(0).text
     when (text) {
@@ -108,12 +108,12 @@ fun Parser.parseDecl(): AstXmlNode {
             }
             if (this.peek(1).text == "fun") {
                 this.advance()
-                return this.parseFunction("", List<Str>(), true, false, false)
+                return this.parseFunction("", List<Str>(), true, false, false, false)
             }
             if (this.peek(1).kind == TokenKind.Attribute) {
                 // `data @SmGen(...) fun ...`: the mark may precede the attribute.
                 this.advance()
-                return this.parseAttributedDecl(true, false, false)
+                return this.parseAttributedDecl(true, false, false, false)
             }
             this.fail("expected 'class' or 'fun' after 'data'")
             return this.emptyNode()
@@ -126,11 +126,11 @@ fun Parser.parseDecl(): AstXmlNode {
             // and there is no `Async<T>`.
             if (this.peek(1).text == "fun") {
                 this.advance()
-                return this.parseFunction("", List<Str>(), false, true, false)
+                return this.parseFunction("", List<Str>(), false, true, false, false)
             }
             if (this.peek(1).kind == TokenKind.Attribute) {
                 this.advance()
-                return this.parseAttributedDecl(false, true, false)
+                return this.parseAttributedDecl(false, true, false, false)
             }
             this.fail("expected 'fun' or an attribute after 'suspend'")
             return this.emptyNode()
@@ -143,13 +143,30 @@ fun Parser.parseDecl(): AstXmlNode {
             // than `data`, which also promises the result is a function of the arguments.
             if (this.peek(1).text == "fun") {
                 this.advance()
-                return this.parseFunction("", List<Str>(), false, false, true)
+                return this.parseFunction("", List<Str>(), false, false, true, false)
             }
             if (this.peek(1).kind == TokenKind.Attribute) {
                 this.advance()
-                return this.parseAttributedDecl(false, false, true)
+                return this.parseAttributedDecl(false, false, true, false)
             }
             this.fail("expected 'fun' or an attribute after 'borrow'")
+            return this.emptyNode()
+        }
+
+        "operator" -> {
+            // `operator fun get`/`set` (specs/functions.md, "Operator functions"): the
+            // declaration implements the index syntax - `x[i]` is `x.get(i)` and
+            // `x[i] = v` is `x.set(i, v)` - the way Kotlin's operator convention spells
+            // it. The modifier is contextual (not a reserved word), like `borrow`.
+            if (this.peek(1).text == "fun") {
+                this.advance()
+                return this.parseFunction("", List<Str>(), false, false, false, true)
+            }
+            if (this.peek(1).kind == TokenKind.Attribute) {
+                this.advance()
+                return this.parseAttributedDecl(false, false, false, true)
+            }
+            this.fail("expected 'fun' or an attribute after 'operator'")
             return this.emptyNode()
         }
 
@@ -197,7 +214,7 @@ fun Parser.parseDecl(): AstXmlNode {
         }
 
         "fun" -> {
-            return this.parseFunction("", List<Str>(), false, false, false)
+            return this.parseFunction("", List<Str>(), false, false, false, false)
         }
     }
     this.fail("expected declaration")
@@ -206,7 +223,9 @@ fun Parser.parseDecl(): AstXmlNode {
 
 // `@SmGen("cpp", "sym") fun f(...)` (specs/attributes.md). Only method declarations take
 // attributes, so `fun` must follow.
-fun Parser.parseAttributedDecl(pure: Bool, suspendModifier: Bool, borrowModifier: Bool): AstXmlNode {
+fun Parser.parseAttributedDecl(
+    pure: Bool, suspendModifier: Bool, borrowModifier: Bool, operatorModifier: Bool
+): AstXmlNode {
     val attrToken: Token = this.advance()
     val attrText: Str = attrToken.text
     var attrName: Str = attrText
@@ -261,14 +280,19 @@ fun Parser.parseAttributedDecl(pure: Bool, suspendModifier: Bool, borrowModifier
     var isPure: Bool = pure
     var isSuspend: Bool = suspendModifier
     var isBorrow: Bool = borrowModifier
-    while (this.checkText("data") || this.checkText("suspend") || this.checkText("borrow")) {
+    var isOperator: Bool = operatorModifier
+    while (this.checkText("data") || this.checkText("suspend") || this.checkText("borrow")
+        || this.checkText("operator")
+    ) {
         if (this.matchText("data")) {
             isPure = true
         } else if (this.matchText("suspend")) {
             isSuspend = true
-        } else {
-            this.matchText("borrow")
+        } else if (this.matchText("borrow")) {
             isBorrow = true
+        } else {
+            this.matchText("operator")
+            isOperator = true
         }
         this.skipSeparators()
     }
@@ -276,7 +300,7 @@ fun Parser.parseAttributedDecl(pure: Bool, suspendModifier: Bool, borrowModifier
         this.fail("expected 'fun' after an attribute")
         return this.emptyNode()
     }
-    return this.parseFunction(attrName, args, isPure, isSuspend, isBorrow)
+    return this.parseFunction(attrName, args, isPure, isSuspend, isBorrow, isOperator)
 }
 
 // Records a type attribute the way parseFunction records a method one: Attribute (its
@@ -401,11 +425,19 @@ fun Parser.parseDataClass(): AstXmlNode {
         this.advance()
         this.skipSeparators()
         while (!this.checkText("}") && !this.atEnd() && !this.failed) {
+            var isOperator: Bool = false
+            if (this.checkText("operator")) {
+                // `operator fun get`/`set` in a class body: the receiver is the class, and
+                // the index syntax resolves the member (specs/functions.md).
+                this.advance()
+                isOperator = true
+                this.skipNewlines()
+            }
             if (!this.checkText("fun")) {
                 this.fail("expected method declaration")
                 return this.emptyNode()
             }
-            methods.append(this.parseFunction("", List<Str>(), false, false, false))
+            methods.append(this.parseFunction("", List<Str>(), false, false, false, isOperator))
             this.skipSeparators()
         }
         if (!this.expectText("}")) {
@@ -519,6 +551,7 @@ fun Parser.unionMethod(
     attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsPure, "false"))
     attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsSuspend, "false"))
     attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsBorrow, "false"))
+    attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsOperator, "false"))
     attrs.append(AstNodeAttribute(AstNodeAttributeKind.IsUnionGenerated, "true"))
     var node: AstXmlNode = AstXmlNode(AstNodeKind.Function, AstNodeCategory.Function, attrs, Array<AstXmlNode>())
     xmlAddChildren(node, params)

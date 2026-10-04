@@ -134,6 +134,59 @@ fun Emitter.findExtensionFn(name: *Str, recvExpr: *AstXmlNode, argCount: Int): I
     return -1
 }
 
+// The `operator get`/`set` a receiver's type declares, for the index syntax
+// (specs/functions.md): `x[i]` is `get(x, i)` and `x[i] = v` is `set(x, i, v)`. -1 when the
+// type declares none - the built-in index shapes apply then.
+fun Emitter.operatorIndexFn(name: *Str, recvExpr: *AstXmlNode, argCount: Int): Int {
+    val at: Int = this.findExtensionFn(name, recvExpr, argCount)
+    if (at < 0) {
+        return -1
+    }
+    val fn: *CgFn = *this.functions[at]
+    if (xmlAttr(fn.decl, AstNodeAttributeKind.IsOperator) != "true") {
+        return -1
+    }
+    return at
+}
+
+// The synthesized call for one index operator, as the receiver argument the method
+// convention takes (`T* self`) plus the index and - for `set` - the value. The reach is
+// recorded here because the AST has no call node for `collectNames` to see: a prelude
+// `get`/`set` is emitted only when reached, and this is its only caller. The arguments go
+// through `cgMethodStrArgs`: a string literal into a bare type parameter must materialize
+// the way a method call's does, or C++ cannot deduce the operator's `T`.
+fun Emitter.operatorIndexGetText(at: Int, recvExpr: *AstXmlNode, indexNode: *AstXmlNode): Str {
+    val fn: *CgFn = *this.functions[at]
+    this.referencedNames.insert(fn.name, true)
+    val recvText: Str = this.receiverArg(fn.receiver, recvExpr)
+    var rendered: List<Str> = List<Str>()
+    rendered.append(this.expr(indexNode, 0, xmlEmptyNode()))
+    var argNodes: List<AstXmlNode> = List<AstXmlNode>()
+    argNodes.append(*indexNode)
+    val fixed: List<Str> = this.cgMethodStrArgs(fn, *argNodes, *rendered)
+    val qualifyText: Str = this.qualify(fn.packageName, fn.name)
+    val cgJoinText: Str = cgJoin(fixed, ", ")
+    return `@qualifyText(@recvText, @cgJoinText)`
+}
+
+fun Emitter.operatorIndexSetText(
+    at: Int, recvExpr: *AstXmlNode, indexNode: *AstXmlNode, valueNode: *AstXmlNode
+): Str {
+    val fn: *CgFn = *this.functions[at]
+    this.referencedNames.insert(fn.name, true)
+    val recvText: Str = this.receiverArg(fn.receiver, recvExpr)
+    var rendered: List<Str> = List<Str>()
+    rendered.append(this.expr(indexNode, 0, xmlEmptyNode()))
+    rendered.append(this.expr(valueNode, 0, xmlEmptyNode()))
+    var argNodes: List<AstXmlNode> = List<AstXmlNode>()
+    argNodes.append(*indexNode)
+    argNodes.append(*valueNode)
+    val fixed: List<Str> = this.cgMethodStrArgs(fn, *argNodes, *rendered)
+    val qualifyText: Str = this.qualify(fn.packageName, fn.name)
+    val cgJoinText: Str = cgJoin(fixed, ", ")
+    return `@qualifyText(@recvText, @cgJoinText)`
+}
+
 // Index into `nativeExtensions[name]` of a matching receiver, or -1.
 fun Emitter.findNativeExt(name: *Str, recvExpr: *AstXmlNode, argCount: Int): Int {
     val extensions: *List<CgNativeExt> = this.nativeExtensions.getPtr(name)

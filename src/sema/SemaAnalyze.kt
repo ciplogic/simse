@@ -476,6 +476,11 @@ fun Analyzer.analyzeStmt(stmt: *AstXmlNode): Unit {
             val target: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Target)
             if (!xmlIsEmpty(target)) {
                 this.analyzeExpr(target)
+                // A write through an indexer needs `operator set`; only `get` declared is a
+                // read (specs/functions.md, "Operator functions").
+                if (xmlKind(target) == AstNodeCategory.ExprIndex) {
+                    this.checkOperatorIndexWrite(target)
+                }
             }
             val value: *AstXmlNode = xmlChildPtr(stmt, AstNodeKind.Value)
             if (!xmlIsEmpty(value)) {

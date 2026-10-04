@@ -518,11 +518,13 @@ fun IlExtractor.into(slot: Int, e: *AstXmlNode): Unit {
                         || xmlKind(operand) == AstNodeCategory.ExprIndex
                         || xmlKind(operand) == AstNodeCategory.ExprDeref)
                 && !this.isHandleExpr(operand)
+                && !this.isOperatorIndex(operand)
             ) {
                 // A chain that is a place: the address *is* the place slot. (A call's result is not a
                 // place.) A deref's slot is the pointer it reads through (`receiverOf`), so `*(*p)`
                 // is `p` - never the address of a copy of the pointee, which is what an argument
-                // converted to a `*T` parameter used to build.
+                // converted to a `*T` parameter used to build. An operator index is not a place:
+                // the value slot below is addressed instead.
                 this.emit(IlOpKind.SetVar, ilOps2(slot, this.receiverOf(operand)))
                 return
             }
@@ -585,6 +587,60 @@ fun IlExtractor.needsPlace(e: *AstXmlNode): Bool {
         return false
     }
     return !ilIsHandleType(typeNode)
+}
+
+// The type through a `typealias` (`StrView` is `Span<Char>`): a receiver pattern matches
+// the alias's target, the way the emitter's `resolveAlias` does before its own match.
+fun ilAliasTarget(facts: *SemFacts, typeNode: AstXmlNode): AstXmlNode {
+    var current: AstXmlNode = typeNode
+    var guard: Int = 0
+    while (xmlKind(current) == AstNodeCategory.TypeNamed) {
+        guard = guard + 1
+        if (guard >= 100) {
+            break
+        }
+        val decl: *AstXmlNode = facts.types.getPtr(xmlAttr(current, AstNodeAttributeKind.Name))
+        if (decl == null || decl.name != AstNodeKind.TypeAlias) {
+            break
+        }
+        val target: *AstXmlNode = xmlChildPtr(decl, AstNodeKind.TargetType)
+        if (xmlIsEmpty(target)) {
+            break
+        }
+        current = *target
+    }
+    return current
+}
+
+// Whether `e[i]` reads through an `operator get` (specs/functions.md): the result is the
+// getter's *value* - a temporary - not a place into the receiver, so the address-of paths
+// must not take its address. `set` needs no such check here: an index write is lowered
+// base-and-index, never by taking the whole index's address.
+fun IlExtractor.isOperatorIndex(e: *AstXmlNode): Bool {
+    if (xmlKind(e) != AstNodeCategory.ExprIndex) {
+        return false
+    }
+    val recvType: AstXmlNode = this.exprType(xmlChildPtr(e, AstNodeKind.Receiver))
+    if (xmlIsEmpty(recvType)) {
+        return false
+    }
+    val resolved: AstXmlNode = ilAliasTarget(this.fn.facts, recvType)
+    for (*fn in this.fn.facts.functions) {
+        if (fn.name != "get" || fn.paramCount != 1 || fn.isNative) {
+            continue
+        }
+        if (xmlAttr(fn.decl, AstNodeAttributeKind.IsOperator) != "true") {
+            continue
+        }
+        // Bound first: the matcher takes pointers, and `*` of a field of a pointed-to fact
+        // is the copy trap (`agents.md`).
+        val pattern: AstXmlNode = fn.receiver
+        val params: List<Str> = fn.templateParams
+        if (semaUnifyReceiver(*pattern, *resolved, *params)) {
+            return true
+        }
+    }
+    return false
 }
 
 // The address of an inline value's storage, as one instruction: the slot holds the pointer,
@@ -661,7 +717,9 @@ fun IlExtractor.receiverOf(e: *AstXmlNode): Int {
         }
 
         AstNodeCategory.ExprIndex -> {
-            if (!this.needsPlace(e)) {
+            // An index through `operator get` is a value, not a place into the receiver
+            // (specs/functions.md): its address does not exist, so it is read as a value.
+            if (this.isOperatorIndex(e) || !this.needsPlace(e)) {
                 return this.valueOf(e)
             }
             return this.place(
