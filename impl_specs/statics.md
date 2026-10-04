@@ -146,7 +146,7 @@ and adds its own `stress/<name>` case.
    `tools/array_layout_probe.cpp` pins the empty-array sharing slice 4 depends on.
 
    *First use in the compiler:* the scanner's three tables (`reservedWordTable`,
-   `multiCharOperatorTable`, `tokenRuleTable` in `src/lex/Scanner.kt`) are file-level
+   `multiCharOperatorTable`, `tokenStartTable` in `src/lex/Scanner.kt`) are file-level
    statics: the pass builds each once and the hot comparisons read them through a raw pointer
    (`*List<T>`), where an accessor returning a `List<Str>` rebuilt the table per call -
    `matchOperator` runs for every token, so that was an allocation per token. The driver

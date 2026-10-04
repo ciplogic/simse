@@ -100,6 +100,11 @@ pairs. The report itself is now top-50 (`c8fc026`), so the next session sees the
   the emitted signature (function signature, destructor symbol, machine class, closure symbol,
   task declaration) and is a counted reference, so it cannot dangle; `linOptimizeBody` drops it
   at entry and after any pass that reports a change.
+- **The scanner dispatches on the first byte.** `nextToken` looks the byte up in
+  `tokenStartTable` and runs one matcher, each answering a `ScanMatch` (length and kind), where
+  the old rule walk tried every registered matcher and scanned a name twice. The clean A/B is
+  neutral: matcher selection was not the lexer's cost (the remaining one is described under
+  "Next candidates"). Kept for the shape - one scan per name, no rule table - not for seconds.
 - **Attempted and reverted:** a jump-free fast path in `flattenPass` that skips
   `linSpliceIsSafe` - neutral in the clean A/B, so it was not kept (`flattenPass`'s cost is
   mostly profiler call overhead; the instrumented tree overstates it).
@@ -171,13 +176,15 @@ At `c8fc026`, `main()` is 11.96 s instrumented: `codegen.emitProgram` 8.98 s, pa
    both dictionaries halves the visits. Free the same pass: `linUseDefWalk` reads
    `xmlAttr(node, Name)` twice for a name in `Arg` role (once into `uses`, once into `escapes`) -
    read it once.
-3. **The lexer's matcher chain (`lex.nextToken` 1.25 s / 342 k tokens).** Every token tries up
-   to eleven matchers in order, an identifier is scanned twice (`matchReservedWord` then
-   `matchIdentifier`), and the reserved-word check is a linear ~24-entry table. Dispatch on the
-   first byte (space / quote / backtick / digit / alpha / `@` / operator) and run only that
-   byte's matchers, and look a candidate reserved word up by length and first byte. Parsing is
-   16% of the run and the chain is most of it. The rule table's shape is why the double scan
-   exists; a matcher that answers a *kind* as well as a length would let one scan report both.
+3. **The lexer (dispatch table done, and it was not the cost).** `nextToken` now reads its
+   first byte through `tokenStartTable`, one matcher per byte, each answering a `ScanMatch`
+   (length + kind): `/` has one joined matcher (`matchCommentOrOperator`) and a letter one
+   (`matchName`, which scans the name once and decides keyword-or-identifier), where the rule
+   walk tried up to eleven matchers and scanned a name twice. The clean A/B is **neutral**
+   (three windows ~0.3% at median, then 0.0% over 21 pairs), so matcher *selection* was not
+   the lexer's cost. What is left to try: the per-token `toString()` (every token, including
+   the Space and Comment tokens `readFileAndSkipSpacesTokens` then drops, materializes its
+   text), and the per-byte work inside `matchName`/`matchSpaces`/`matchComment`.
 4. **The extractor re-derives types sema already proved** (`linear.convertArgument` 0.18 s `+`
    `operandOf`/`valueType`/`exprType`/`semTypeOfExpr`/`sema.infer` beneath it, inside
    `ilExtractUnit` 0.83 s). `semInferTypes` filled `inferred` for every body before extraction,

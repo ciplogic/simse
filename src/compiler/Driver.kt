@@ -71,7 +71,7 @@ fun driverParseFile(fileName: *Str): Res<AstXmlNode> {
 
 // For source text that is not a file: `fileName` is what every diagnostic calls it.
 fun driverParseSource(text: *Str, fileName: *Str): Res<AstXmlNode> {
-    var scanner: Scanner = Scanner(getTokenRules(), 0, 1, 1, Str())
+    var scanner: Scanner = Scanner(0, 1, 1, Str())
     scanner.setSource(text)
     var raw: List<Token> = List<Token>()
     while (true) {
