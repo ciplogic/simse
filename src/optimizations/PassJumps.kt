@@ -93,7 +93,7 @@ fun linThreadJumpsIn(stmts: *List<AstXmlNode>, threads: *Dictionary<Str, Str>): 
 }
 
 // One body's jump chains, threaded. Two walks: the whole body is read before any jump moves.
-fun linThreadJumps(stmts: *List<AstXmlNode>): Bool {
+fun linThreadJumps(stmts: *List<AstXmlNode>, useDefs: &LinUseDefs): Bool {
     var next: Dictionary<Str, Str> = Dictionary<Str, Str>()
     linCollectJumpThreads(stmts, *next)
     if (next.size() == 0) {
@@ -109,5 +109,6 @@ fun linThreadJumps(stmts: *List<AstXmlNode>): Bool {
     return linThreadJumpsIn(stmts, *threads)
 }
 
-// Self-registration (`Optimize.kt`).
+// Self-registration (`Optimize.kt`). The jump threading reads no use-def facts, so the box
+// passes through untouched.
 val linThreadJumpsPass: Bool = registerLinOptPass("threadJumps", linThreadJumps)

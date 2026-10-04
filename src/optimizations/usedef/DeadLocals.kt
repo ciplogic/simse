@@ -14,8 +14,8 @@ import common
 import linear
 
 // The declaration of a name nothing names: not read, not written, not captured by a lambda.
-fun linDeadLocalsOptimization(stmts: *List<AstXmlNode>): Bool {
-    val useDefs: LinUseDefs = linUseDefsOf(stmts)
+fun linDeadLocalsOptimization(stmts: *List<AstXmlNode>, cache: &LinUseDefs): Bool {
+    val useDefs: &LinUseDefs = linUseDefsOf(stmts, cache)
     var named: Dictionary<Str, Int> = Dictionary<Str, Int>()
     var declared: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     linUseDefDeclared(stmts, *declared)
@@ -62,6 +62,7 @@ fun linDeadLocalsOptimization(stmts: *List<AstXmlNode>): Bool {
     for (*stmt in out) {
         stmts.append(stmt)
     }
+    linUseDefsInvalidate(cache)
     return true
 }
 

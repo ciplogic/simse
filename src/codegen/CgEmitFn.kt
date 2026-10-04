@@ -399,7 +399,8 @@ fun Emitter.emitFunction(fn: *CgFn, prototypeOnly: Bool, facts: *SemFacts): Unit
     lowered = semInferTypes(lowered, facts, semantics, inferred)
     val finalBody: List<AstXmlNode> = linFinishForEmission(
         lowered,
-        this.cgReservedNames(decl, !xmlIsEmpty(fn.receiver), mainArgs)
+        this.cgReservedNames(decl, !xmlIsEmpty(fn.receiver), mainArgs),
+        `fn:@signature`
     )
     this.dumpIl(fn, decl, finalBody, facts, inferred)
     this.emitBodyAt(this.ilFunctionFor(fn, decl, facts, inferred), finalBody, fn.file, 1, true)
@@ -599,6 +600,7 @@ fun Emitter.emitUninit(fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts, prototype
         val cgJoinText3: Str = cgJoin(fn.templateParams, ", ")
         qualified = `@emittedName<@cgJoinText3>`
     }
+    val dtorSignature: Str = `@qualified::~@emittedName()`
     this.setActiveTypeParams(fn.templateParams)
     val tmpl: Str = this.templateClause(fn.templateParams)
     this.sourceComment(decl)
@@ -631,10 +633,12 @@ fun Emitter.emitUninit(fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts, prototype
     )
     var inferred: Dictionary<Str, AstXmlNode> = Dictionary<Str, AstXmlNode>()
     lowered = semInferTypes(lowered, facts, semantics, inferred)
-    // `self` is reserved: the frame has a slot of that name for `this`.
-    val finalBody: List<AstXmlNode> = linFinishForEmission(lowered, this.cgReservedNames(decl, true, false))
+    // `self` is reserved: the frame has a slot of that name for `this`. The destructor's emitted
+    // symbol is the body's cache key.
+    val finalBody: List<AstXmlNode> =
+        linFinishForEmission(lowered, this.cgReservedNames(decl, true, false), `dtor:@dtorSignature`)
     this.emitBodyAt(
-        this.ilDestructorFor(fn, decl, classDecl, `@qualified::~@emittedName()`, emittedName, facts, inferred),
+        this.ilDestructorFor(fn, decl, classDecl, dtorSignature, emittedName, facts, inferred),
         finalBody, fn.file, 1, false
     )
     this.inClosureMethod = savedClosure

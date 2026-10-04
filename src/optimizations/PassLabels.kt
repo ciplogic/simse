@@ -88,7 +88,7 @@ fun linFoldLabelsIn(stmts: *List<AstXmlNode>, renames: *Dictionary<Str, Str>): B
 }
 
 // One body's contiguous labels, folded. Two walks: every sequence is read before a jump moves.
-fun linFoldLabels(stmts: *List<AstXmlNode>): Bool {
+fun linFoldLabels(stmts: *List<AstXmlNode>, useDefs: &LinUseDefs): Bool {
     var renames: Dictionary<Str, Str> = Dictionary<Str, Str>()
     linCollectLabelMerges(stmts, *renames)
     if (renames.size() == 0) {
@@ -97,5 +97,6 @@ fun linFoldLabels(stmts: *List<AstXmlNode>): Bool {
     return linFoldLabelsIn(stmts, *renames)
 }
 
-// Self-registration (`Optimize.kt`).
+// Self-registration (`Optimize.kt`). The label fold reads no use-def facts, so the box passes
+// through untouched.
 val linFoldLabelsPass: Bool = registerLinOptPass("foldLabels", linFoldLabels)

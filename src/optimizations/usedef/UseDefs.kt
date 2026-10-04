@@ -122,7 +122,10 @@ data class LinUseDefs(
     var facts: List<LinUseDef>,
     var blocks: List<Int>,
     var escapes: Dictionary<Str, Bool>,
-    var captures: Dictionary<Str, Int>
+    var captures: Dictionary<Str, Int>,
+    // Whether the facts describe the body as it stands: a pass that changed nothing leaves them
+    // true for the next, any rewrite flips them false (`linUseDefsInvalidate`).
+    var valid: Bool
 ) {
     fun usesAt(i: Int): List<Str> {
         if (i < 0 || i >= this.facts.size()) {
@@ -259,9 +262,55 @@ fun linUseDefWrites(stmt: *AstXmlNode, names: *List<Str>): Unit {
     }
 }
 
-// One body read once: every statement's names - reads, escapes and captures in one walk - and
-// the block it falls in.
-fun linUseDefsOf(stmts: *List<AstXmlNode>): LinUseDefs {
+// One body's cache box, keyed by the body's signature. The three use-def passes each need the
+// same facts, and a pass that found no rewrite leaves the body byte-identical - so the next
+// pass reads the box instead of walking every statement again. The box is a counted reference:
+// a pass that holds it can never outlive the data. `linOptimizeBody` invalidates at entry (a
+// call may see a changed body) and after every pass that reports a change; a pass that rewrites
+// the body inside itself invalidates at the rewrite.
+// The box a cache entry holds: a plain value whose `box` field is the counted reference. A
+// dictionary entry holding a bare `&LinUseDefs` does not compile (the generic insert reads the
+// handle through), so the reference travels as an ordinary field, the shape `Array`'s block
+// takes.
+data class LinUseDefCache(
+    var box: &LinUseDefs
+)
+
+var linUseDefCaches: Dictionary<Str, LinUseDefCache> = Dictionary<Str, LinUseDefCache>()
+
+// The box for `signature`, created empty on first sight: one box per body, so two bodies can
+// never read each other's facts.
+fun linUseDefsFor(signature: *Str): &LinUseDefs {
+    val found: *LinUseDefCache = linUseDefCaches.getPtr(signature)
+    if (found != null) {
+        return found.box
+    }
+    var fresh: &LinUseDefs = linEmptyUseDefs()
+    linUseDefCaches.insert(signature, LinUseDefCache(fresh))
+    return fresh
+}
+
+// The empty facts a cache box starts as. `stmts` points at a shared empty list so the raw
+// pointer is never dangling, even before the first fetch overwrites the box.
+var linEmptyStmts: List<AstXmlNode>
+
+fun linEmptyUseDefs(): &LinUseDefs {
+    return &LinUseDefs(
+        *linEmptyStmts, List<LinUseDef>(), List<Int>(),
+        Dictionary<Str, Bool>(), Dictionary<Str, Int>(), false
+    )
+}
+
+fun linUseDefsInvalidate(cache: &LinUseDefs): Unit {
+    cache.valid = false
+}
+
+// One body read once, kept in `cache` while it stays valid: every statement's names - reads,
+// escapes and captures in one walk - and the block it falls in.
+fun linUseDefsOf(stmts: *List<AstXmlNode>, cache: &LinUseDefs): &LinUseDefs {
+    if (cache.valid) {
+        return cache
+    }
     var facts: List<LinUseDef> = List<LinUseDef>()
     var blocks: List<Int> = List<Int>()
     var escapes: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
@@ -280,7 +329,13 @@ fun linUseDefsOf(stmts: *List<AstXmlNode>): LinUseDefs {
         facts.append(fact)
         blocks.append(block)
     }
-    return LinUseDefs(stmts, facts, blocks, escapes, captures)
+    cache.stmts = stmts
+    cache.facts = facts
+    cache.blocks = blocks
+    cache.escapes = escapes
+    cache.captures = captures
+    cache.valid = true
+    return cache
 }
 
 // The names the body declares at its own level. A declaration is the storage, not a use of the

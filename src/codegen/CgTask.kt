@@ -248,7 +248,11 @@ fun Emitter.lowerTask(fn: *CgFn, decl: *AstXmlNode, facts: *SemFacts): TskTask {
     val reserved: List<Str> = listOf<Str>(
         "branch", "status", "parent", "refcount", "loop", "result"
     )
-    val finalBody: List<AstXmlNode> = linFinishForEmission(lowered, reserved)
+    // The task body's cache key: the declaration's own name and position (a task has no emitted
+    // symbol yet - the lowering below builds it).
+    val taskKey: Str = "task:" + fn.packageName + "." + fn.name + ":" + xmlLine(decl).toString() + ":"
+        + xmlColumn(decl).toString()
+    val finalBody: List<AstXmlNode> = linFinishForEmission(lowered, reserved, taskKey)
     var resultType: AstXmlNode = xmlEmptyNode()
     if (hasValue) {
         resultType = * returnNode

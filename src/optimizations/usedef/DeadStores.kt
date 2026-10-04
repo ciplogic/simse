@@ -81,12 +81,12 @@ fun linDeadStoreCallOf(stmt: *AstXmlNode, value: *AstXmlNode): AstXmlNode {
 
 // One body's dead stores removed, to a fixed point: a round removes every store nothing reads at
 // that point, which is what exposes the stores its value was read by.
-fun linDeadStoresOptimization(stmts: *List<AstXmlNode>): Bool {
+fun linDeadStoresOptimization(stmts: *List<AstXmlNode>, cache: &LinUseDefs): Bool {
     var changed: Bool = false
     var guard: Int = 0
     while (guard < 32) {
         guard = guard + 1
-        val useDefs: LinUseDefs = linUseDefsOf(stmts)
+        val useDefs: &LinUseDefs = linUseDefsOf(stmts, cache)
         var declared: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
         var reads: Dictionary<Str, Int> = Dictionary<Str, Int>()
         linUseDefDeclared(stmts, *declared)
@@ -126,6 +126,7 @@ fun linDeadStoresOptimization(stmts: *List<AstXmlNode>): Bool {
             stmts.append(stmt)
         }
         changed = true
+        linUseDefsInvalidate(cache)
     }
     return changed
 }

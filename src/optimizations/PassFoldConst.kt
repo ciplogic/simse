@@ -124,7 +124,7 @@ fun foldConstReadRule(e: *AstXmlNode): AstXmlNode {
     return foldGlobalLiteral(e, *lit)
 }
 
-fun linFoldConstBody(stmts: *List<AstXmlNode>): Bool {
+fun linFoldConstBody(stmts: *List<AstXmlNode>, useDefs: &LinUseDefs): Bool {
     var counts: Dictionary<Str, Int> = Dictionary<Str, Int>()
     var unsafe: Dictionary<Str, Bool> = Dictionary<Str, Bool>()
     var i: Int = 0
@@ -178,5 +178,6 @@ fun linFoldConstBody(stmts: *List<AstXmlNode>): Bool {
     return changed
 }
 
-// Self-registration (`Optimize.kt`).
+// Self-registration (`Optimize.kt`). The constant walk keeps its own counts, so the use-def box
+// passes through untouched.
 val linFoldConstPass: Bool = registerLinOptPass("foldConst", linFoldConstBody)

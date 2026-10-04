@@ -815,7 +815,8 @@ fun IlExtractor.lambdaOf(e: *AstXmlNode, dst: Int, expected: AstXmlNode, owner: 
         }
     }
 
-    lowered = linFinishForEmission(lowered, paramNames)
+    // The closure's emitted symbol is the body's cache key.
+    lowered = linFinishForEmission(lowered, paramNames, `lambda:@symbol`)
 
     // Type context for the inner extractor, borrowed as `unit` and `closureCounter` are.
     var innerContext: SemBody = ilEmptySemantics()

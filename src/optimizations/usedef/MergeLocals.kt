@@ -49,7 +49,7 @@ fun linMergeCount(
 }
 
 // The body's reads, writes and escaped names, then the locals that may share storage.
-fun linMergeCandidates(stmts: *List<AstXmlNode>, useDefs: LinUseDefs): List<MergeLocal> {
+fun linMergeCandidates(stmts: *List<AstXmlNode>, useDefs: &LinUseDefs): List<MergeLocal> {
     var writes: Dictionary<Str, Int> = Dictionary<Str, Int>()
     var reads: Dictionary<Str, Int> = Dictionary<Str, Int>()
     var writeAt: Dictionary<Str, Int> = Dictionary<Str, Int>()
@@ -95,7 +95,7 @@ fun linMergeCandidates(stmts: *List<AstXmlNode>, useDefs: LinUseDefs): List<Merg
 // block and reads it there (`linIsCondJump`), and the flag is dead once that branch decided - so a
 // write whose only read is that closing conditional shares too.
 fun linMergeSharesBlock(
-    stmts: *List<AstXmlNode>, useDefs: LinUseDefs, typeKey: Str, write: Int, read: Int
+    stmts: *List<AstXmlNode>, useDefs: &LinUseDefs, typeKey: Str, write: Int, read: Int
 ): Bool {
     if (useDefs.blockAt(write) == useDefs.blockAt(read)) {
         return true
@@ -142,8 +142,8 @@ fun linMergeNames(
 
 // One body's locals sharing a declaration per type and block, with the declarations they leave
 // behind dropped. A write keeps its place, so evaluation order and side effects do not move.
-fun linMergeLocalsOptimization(stmts: *List<AstXmlNode>): Bool {
-    val useDefs: LinUseDefs = linUseDefsOf(stmts)
+fun linMergeLocalsOptimization(stmts: *List<AstXmlNode>, cache: &LinUseDefs): Bool {
+    val useDefs: &LinUseDefs = linUseDefsOf(stmts, cache)
     val candidates: List<MergeLocal> = linMergeCandidates(stmts, useDefs)
     if (candidates.size() < 2) {
         return false
@@ -188,6 +188,7 @@ fun linMergeLocalsOptimization(stmts: *List<AstXmlNode>): Bool {
     for (*stmt in out) {
         stmts.append(stmt)
     }
+    linUseDefsInvalidate(cache)
     return true
 }
 

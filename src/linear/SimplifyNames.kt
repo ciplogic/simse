@@ -313,9 +313,11 @@ fun linHoistSlots(body: *List<AstXmlNode>): LinLowered {
 // declarations: shadowing resolved, declarations hoisted to the top (which lets the folding
 // fold the blocks they forced), then the peephole again. The loop is `linLowerForEmission`'s
 // shape with hoisting in place of the rewriting stages. `reserved` is what the emitter has
-// already declared in the body's scope (its parameters, `self`).
-fun linFinishForEmission(body: *List<AstXmlNode>, reserved: *List<Str>): List<AstXmlNode> {
+// already declared in the body's scope (its parameters, `self`); `signature` is the body's
+// emitted identity, the key its use-def cache box lives under (`UseDefs.kt`).
+fun linFinishForEmission(body: *List<AstXmlNode>, reserved: *List<Str>, signature: *Str): List<AstXmlNode> {
     var current: List<AstXmlNode> = linRenameShadowed(body, reserved)
+    val useDefs: &LinUseDefs = linUseDefsFor(signature)
     var canChange: Bool = true
     var guard: Int = 0
     while (canChange && guard < 256) {
@@ -332,7 +334,7 @@ fun linFinishForEmission(body: *List<AstXmlNode>, reserved: *List<Str>): List<As
         canChange = canChange || folded.changed
         // The linear form's own passes (src/optimizations) rewrite the body in place and
         // answer whether it moved.
-        if (linOptimizeBody(*current)) {
+        if (linOptimizeBody(*current, useDefs)) {
             canChange = true
         }
     }
@@ -350,4 +352,3 @@ fun linFlattenBlocks(body: *List<AstXmlNode>): LinLowered {
     val flattened: List<AstXmlNode> = flattener.flattenPass(body)
     return LinLowered(flattened, flattener.changed)
 }
-

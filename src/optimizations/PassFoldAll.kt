@@ -16,9 +16,10 @@ import common
 // Built once: the walk reads it per body and the list never changes.
 var foldAllRuleList: List<FoldRule> = foldAllRules()
 
-fun linFoldAllBody(stmts: *List<AstXmlNode>): Bool {
+fun linFoldAllBody(stmts: *List<AstXmlNode>, useDefs: &LinUseDefs): Bool {
     return foldExprsInList(stmts, *foldAllRuleList)
 }
 
-// Self-registration (`Optimize.kt`).
+// Self-registration (`Optimize.kt`). The fold walk reads no use-def facts, so the box passes
+// through untouched.
 val linFoldAllPass: Bool = registerLinOptPass("foldAll", linFoldAllBody)

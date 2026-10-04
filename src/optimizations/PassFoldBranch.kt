@@ -36,7 +36,7 @@ fun linFoldBranchStmt(stmt: *AstXmlNode): Opt<AstXmlNode> {
     return (linStmt(AstNodeCategory.None, xmlLine(stmt), xmlColumn(stmt)))
 }
 
-fun linFoldBranchIn(stmts: *List<AstXmlNode>): Bool {
+fun linFoldBranchIn(stmts: *List<AstXmlNode>, useDefs: &LinUseDefs): Bool {
     var changed: Bool = false
     var out: List<AstXmlNode> = List<AstXmlNode>()
     for (*stmt in stmts) {
@@ -51,7 +51,7 @@ fun linFoldBranchIn(stmts: *List<AstXmlNode>): Bool {
         }
         if (linIsBlock(stmt)) {
             var inner: List<AstXmlNode> = linBlockStmts(stmt)
-            if (linFoldBranchIn(*inner)) {
+            if (linFoldBranchIn(*inner, useDefs)) {
                 val bodyNode: AstXmlNode = exprLike(xmlChildPtr(stmt, AstNodeKind.Body), inner)
                 out.append(exprReplaceRole(stmt, AstNodeKind.Body, linOne(bodyNode)))
                 changed = true
@@ -71,5 +71,6 @@ fun linFoldBranchIn(stmts: *List<AstXmlNode>): Bool {
     return true
 }
 
-// Self-registration (`Optimize.kt`).
+// Self-registration (`Optimize.kt`). The branch fold reads no use-def facts, so the box passes
+// through untouched.
 val linFoldBranchPass: Bool = registerLinOptPass("foldBranch", linFoldBranchIn)

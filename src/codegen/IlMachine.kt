@@ -119,7 +119,8 @@ fun Emitter.emitYieldable(
         // The machine's method storage is the machine's fields (`this->`). These names
         // are reserved: a local of any of them would alias the machine's own.
         var machineReserved: List<Str> = listOf<Str>("current", "branch", "_sm_self")
-        val finalBody: List<AstXmlNode> = linFinishForEmission(lowered, machineReserved)
+        // The machine class's name is the factory body's cache key.
+        val finalBody: List<AstXmlNode> = linFinishForEmission(lowered, machineReserved, `machine:@className`)
         val machine: Yielded = linLowerYield(decl, elementType, finalBody, "advance")
         if (!machine.error.isEmpty()) {
             this.fail(decl, machine.error)
@@ -234,7 +235,9 @@ fun Emitter.emitMachine(
     // the simplifier then drops the label, and the unreachable `goto` it guarded, before the
     // body is emitted (a `C4102` otherwise).
     for (*method in machine.methods) {
-        linOptimizeBody(*method.body)
+        // A method body has no signature of its own to key a cache under: a fresh box, which the
+        // entry invalidation leaves empty until the first pass needs it (`UseDefs.kt`).
+        linOptimizeBody(*method.body, linEmptyUseDefs())
         method.body = linSimplifyBody(*method.body).body
     }
     // A generic function's machine is a class template: its fields are typed with the
